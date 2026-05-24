@@ -7,6 +7,32 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.2.2] - 2026-05-24
+
+### Added
+- Setup wizard now copies your SSH private key (and `.pub` if present)
+  into the `dune-admin` install folder so `dune-admin.exe` can SSH to the
+  VM out of the box without extra configuration. Always pulls the
+  freshest key (compares `%LOCALAPPDATA%\DuneAwakeningServer\sshKey`
+  &mdash; where `rotate-ssh-key` writes &mdash; against the path stored in
+  `dune-server.config` and picks whichever is newer).
+- `f. rotate-ssh-key` now also refreshes the copy of the key in the
+  `dune-admin` folder so it stays in sync after a rotation.
+- Setup wizard ends with an optional "create a desktop shortcut?" prompt.
+  Answering yes drops a `Dune Server (Admin).lnk` on the desktop that
+  targets `dune-server.bat` with the **Run as Administrator** flag set
+  (so SSH-key file permissions and Hyper-V cmdlets work without extra
+  prompts).
+
+### Fixed
+- Wrapped the setup wizard in a top-level try/catch so failures show a
+  readable error + stack trace and pause for `Enter` before exiting,
+  instead of vanishing in a closing console window.
+
+### Internal
+- New helpers: `Resolve-FreshSshKey`, `Copy-SshKeyToDir`,
+  `New-DuneDesktopShortcut`.
+
 ## [1.2.1] - 2026-05-24
 
 ### Fixed
@@ -138,7 +164,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Hardened the post-reboot readiness check to verify webhook Service endpoints
   are populated (not just pods Running) before calling battlegroup start.
 
-[Unreleased]: https://github.com/coastal-ms/Simple-Dune-Server-Management-Tool/compare/v1.2.1...HEAD
+[Unreleased]: https://github.com/coastal-ms/Simple-Dune-Server-Management-Tool/compare/v1.2.2...HEAD
+[1.2.2]: https://github.com/coastal-ms/Simple-Dune-Server-Management-Tool/compare/v1.2.1...v1.2.2
 [1.2.1]: https://github.com/coastal-ms/Simple-Dune-Server-Management-Tool/compare/v1.2.0...v1.2.1
 [1.2.0]: https://github.com/coastal-ms/Simple-Dune-Server-Management-Tool/compare/v1.1.1...v1.2.0
 [1.1.1]: https://github.com/coastal-ms/Simple-Dune-Server-Management-Tool/compare/v1.1.0...v1.1.1

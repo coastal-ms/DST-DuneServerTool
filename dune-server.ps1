@@ -13,7 +13,7 @@ param(
 # Wraps the original battlegroup.ps1 menu and adds extra tools
 # ============================================================
 
-$script:ToolVersion = "1.2.1"
+$script:ToolVersion = "1.2.2"
 
 # Resize console window so the full menu is visible
 try {
@@ -150,7 +150,25 @@ function Run-Setup {
         if ($existingAdmin) { $defaultAdmin = $existingAdmin }
         $adminExe = Ask -Label "dune-admin.exe path" -Default $defaultAdmin
         if ($adminExe -and -not (Test-Path $adminExe)) {
-            Write-Warning "File not found — dune-admin option will be hidden until the file exists."
+            Write-Warning "File not found - dune-admin option will be hidden until the file exists."
+        }
+    }
+
+    # ── Copy SSH key alongside dune-admin.exe ──
+    # dune-admin needs to SSH to the VM the same way this tool does, so
+    # seed its install folder with the same key. We prefer the live key
+    # at %LOCALAPPDATA%\DuneAwakeningServer\sshKey (where rotate-ssh-key
+    # writes new keys) over the configured $sshKeyPath, which can drift
+    # if the user rotates after picking a different path in setup.
+    if ($adminExe) {
+        try {
+            $adminDir = Split-Path $adminExe -Parent
+            $srcKey   = Resolve-FreshSshKey -ConfiguredPath $sshKeyPath
+            if ($srcKey -and $adminDir) {
+                Copy-SshKeyToDir -SourceKey $srcKey -DestDir $adminDir | Out-Null
+            }
+        } catch {
+            Write-Warning "Could not copy SSH key to dune-admin folder: $($_.Exception.Message)"
         }
     }
     Write-Host ""
@@ -224,6 +242,21 @@ function Run-Setup {
     Write-Host "==========================================" -ForegroundColor Green
     Write-Host ""
 
+    # ── Optional desktop shortcut (Run as Administrator) ──
+    Write-Host "6. Desktop Shortcut (optional)" -ForegroundColor Yellow
+    Write-Host "   Create an icon on your desktop that launches dune-server.bat" -ForegroundColor Gray
+    Write-Host "   pre-elevated (so SSH key permissions and Hyper-V calls just work)." -ForegroundColor Gray
+    Write-Host ""
+    $shortcutAnswer = Ask -Label "Create desktop shortcut? (Y/n)" -Default "Y"
+    if ($shortcutAnswer -match '^(y|yes)$') {
+        try {
+            New-DuneDesktopShortcut -BatPath (Join-Path $scriptDir 'dune-server.bat')
+        } catch {
+            Write-Warning "Could not create shortcut: $($_.Exception.Message)"
+        }
+    }
+    Write-Host ""
+
     return @{
         SteamPath            = $steamPath
         SshKey               = $sshKeyPath
@@ -232,6 +265,43 @@ function Run-Setup {
         PortCheckMode        = $portCheckMode
         PortCheckUrlTemplate = $portCheckUrlTemplate
     }
+}
+
+function New-DuneDesktopShortcut {
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory)][string]$BatPath,
+        [string]$LinkName  = "Dune Server (Admin)",
+        [string]$IconPath  = "$env:SystemRoot\System32\imageres.dll,109"
+    )
+
+    if (-not (Test-Path $BatPath)) {
+        throw "dune-server.bat not found at $BatPath."
+    }
+
+    $desktop  = [Environment]::GetFolderPath('Desktop')
+    $linkPath = Join-Path $desktop "$LinkName.lnk"
+
+    $wsh = New-Object -ComObject WScript.Shell
+    $sc  = $wsh.CreateShortcut($linkPath)
+    $sc.TargetPath       = $BatPath
+    $sc.WorkingDirectory = Split-Path $BatPath -Parent
+    $sc.WindowStyle      = 1
+    $sc.Description      = "Dune Awakening - Server Management (launched as Administrator)"
+    $sc.IconLocation     = $IconPath
+    $sc.Save()
+
+    # Set the "Run as Administrator" flag in the .lnk binary.
+    # Per the Shell Link Binary File Format (MS-SHLLINK), byte 0x15 contains
+    # the upper byte of LinkFlags; the RunAsAdmin bit is 0x20.
+    $bytes = [System.IO.File]::ReadAllBytes($linkPath)
+    if ($bytes.Length -gt 0x15) {
+        $bytes[0x15] = $bytes[0x15] -bor 0x20
+        [System.IO.File]::WriteAllBytes($linkPath, $bytes)
+    }
+
+    Write-Host "   Created: $linkPath" -ForegroundColor Green
+    Write-Host "   (Double-click it - Windows will prompt for elevation.)" -ForegroundColor DarkGray
 }
 
 function Install-DuneAdminLatest {
@@ -274,6 +344,56 @@ function Install-DuneAdminLatest {
     return $exe
 }
 
+function Resolve-FreshSshKey {
+    # Picks the most recently modified SSH private key out of:
+    #   1) %LOCALAPPDATA%\DuneAwakeningServer\sshKey  (rotate-ssh-key writes here)
+    #   2) the path stored in dune-server.config        (what setup asked for)
+    # Returns the full path or $null if neither exists.
+    [CmdletBinding()]
+    param([string]$ConfiguredPath)
+
+    $appDataKey = Join-Path $env:LOCALAPPDATA 'DuneAwakeningServer\sshKey'
+    $candidates = @()
+    if (Test-Path $appDataKey)                          { $candidates += Get-Item $appDataKey }
+    if ($ConfiguredPath -and (Test-Path $ConfiguredPath)) {
+        $resolved = (Resolve-Path $ConfiguredPath).Path
+        if (-not ($candidates | Where-Object { $_.FullName -eq $resolved })) {
+            $candidates += Get-Item $ConfiguredPath
+        }
+    }
+    if (-not $candidates) { return $null }
+    return ($candidates | Sort-Object LastWriteTime -Descending | Select-Object -First 1).FullName
+}
+
+function Copy-SshKeyToDir {
+    # Copies an SSH private key (and its .pub if present) into a destination
+    # directory, skipping when source and destination point at the same place.
+    # Returns $true on success, $false on skip, throws on failure.
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory)][string]$SourceKey,
+        [Parameter(Mandatory)][string]$DestDir
+    )
+
+    if (-not (Test-Path $SourceKey)) { return $false }
+    if (-not (Test-Path $DestDir))   { return $false }
+
+    $srcDir  = (Resolve-Path (Split-Path $SourceKey -Parent)).Path
+    $dstDir  = (Resolve-Path $DestDir).Path
+    if ($srcDir -eq $dstDir) { return $false }
+
+    $keyName = Split-Path $SourceKey -Leaf
+    $destKey = Join-Path $DestDir $keyName
+    Copy-Item -Path $SourceKey -Destination $destKey -Force
+    Write-Host "   Copied SSH key -> $destKey" -ForegroundColor DarkGray
+
+    $pubSrc = "$SourceKey.pub"
+    if (Test-Path $pubSrc) {
+        Copy-Item -Path $pubSrc -Destination (Join-Path $DestDir "$keyName.pub") -Force
+    }
+    return $true
+}
+
 function Load-Config {
     $cfg = @{}
     if (-not (Test-Path $configFile)) { return $null }
@@ -290,7 +410,21 @@ function Load-Config {
 # ── Load or run setup ──
 $cfg = Load-Config
 if (-not $cfg) {
-    $cfg = Run-Setup -existing @{}
+    try {
+        $cfg = Run-Setup -existing @{}
+    } catch {
+        Write-Host ""
+        Write-Host "==========================================" -ForegroundColor Red
+        Write-Host "  Setup failed:" -ForegroundColor Red
+        Write-Host "  $($_.Exception.Message)" -ForegroundColor Red
+        Write-Host "==========================================" -ForegroundColor Red
+        Write-Host ""
+        Write-Host "Stack trace:" -ForegroundColor DarkGray
+        Write-Host $_.ScriptStackTrace -ForegroundColor DarkGray
+        Write-Host ""
+        Read-Host "Press Enter to exit"
+        exit 1
+    }
 }
 
 # ── Apply config ──
@@ -1161,6 +1295,18 @@ while ($true) {
     if ($cmd -eq "rotate-ssh-key") {
         . "$bgSetupPath\vm-utilities.ps1"
         Update-SshKey -Ip $ip | Out-Null
+        # Keep dune-admin's copy of the SSH key in sync with the rotated one
+        if ($cfg.DuneAdminExe -and (Test-Path $cfg.DuneAdminExe)) {
+            try {
+                $freshKey = Resolve-FreshSshKey -ConfiguredPath $sshKey
+                if ($freshKey) {
+                    Copy-SshKeyToDir -SourceKey $freshKey `
+                                     -DestDir (Split-Path $cfg.DuneAdminExe -Parent) | Out-Null
+                }
+            } catch {
+                Write-Warning "Could not refresh dune-admin's SSH key copy: $($_.Exception.Message)"
+            }
+        }
         continue
     }
 
