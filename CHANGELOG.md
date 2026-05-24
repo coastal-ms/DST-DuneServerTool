@@ -23,6 +23,21 @@ Patch release: better feedback during long boot waits, a real fix for the DB-pod
 
 ### Fixed
 
+- **DB-pod discovery awk script no longer fails with "Unexpected token".**
+  The awk one-liner used to print `namespace/podname` with `print $1"/"$2`,
+  but PowerShell mangled the embedded `\"` inside the double-quoted ssh
+  command string, so awk received broken syntax and matched zero pods
+  (silent fallback: "No DB pods detected"). The awk now emits
+  `namespace podname` space-separated and the PowerShell side splits on
+  whitespace - no embedded double quotes to mangle.
+- **All duration displays are now MM:SS.** Every elapsed-time and
+  estimate value across `startup`, `reboot`, `shutdown` (the live wait
+  counter, the "(last: ~Xs, avg ~Ys of last N)" estimate, the per-phase
+  "ready in" lines, and the "complete in" summaries) renders via
+  `Format-Duration` as MM:SS instead of raw seconds. So
+  `Startup complete in 99s` is now `Startup complete in 01:39`, and
+  `(last: ~99s, avg ~156s of last 2)` is now
+  `(last: ~01:39, avg ~02:36 of last 2)`.
 - **Background helpers are now cleaned up on crash.** When the script
   exits abnormally (unhandled exception, Ctrl+C, window close), any
   `Start-Job` helpers spawned by the new live wait counters are stopped
