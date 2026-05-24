@@ -1469,10 +1469,13 @@ while ($true) {
         Write-Host "  1. Stop battlegroup (waits for game/mq/gateway/director pods to terminate)" -ForegroundColor DarkGray
         Write-Host "  2. Power off the VM" -ForegroundColor DarkGray
         Write-Host "  Use this when shutting down for the night - player data is persisted to DB." -ForegroundColor DarkGray
+        $estTotalShut = Format-PhaseEstimate 'total-shutdown'
+        if ($estTotalShut) { Write-Host "  Total shutdown $estTotalShut" -ForegroundColor DarkGray }
         Write-Host ""
         if (-not (Confirm-NoPlayersOnline -ActionLabel "shutdown")) {
             Write-Host "Aborted." -ForegroundColor Cyan; continue
         }
+        $t0 = Get-Date
 
         # ---- Step 1: stop battlegroup ----
         Write-Host ""
@@ -1485,42 +1488,52 @@ while ($true) {
         }
 
         # Wait for game/infra pods to terminate so player data is fully persisted to DB.
-        Write-Host "  Waiting for pods to terminate..." -ForegroundColor DarkGray
+        $estTerm = Format-PhaseEstimate 'pods-terminate'
         $waitStart = Get-Date
         $maxWaitSec = 360
+        $finalCount = $null
         while ($true) {
             $remainRaw = ssh -o StrictHostKeyChecking=no -o LogLevel=QUIET -i "$sshKey" "$sshUser@$ip" `
                 "sudo k3s kubectl get pods -A --no-headers 2>/dev/null | grep -E '(-sg-|-mq-|-sgw-|-tr-|-bgd-)' | wc -l"
             $remain = ($remainRaw -replace '\D','')
             if (-not $remain) { $remain = '0' }
             $elapsed = [int]((Get-Date) - $waitStart).TotalSeconds
-            if ($remain -eq '0') {
-                Write-Host ("`r  All game/infra pods terminated after {0}s.{1}" -f $elapsed, (' ' * 30)) -ForegroundColor Green
-                break
+            if ($remain -eq '0') { $finalCount = 0; break }
+            if ($elapsed -gt $maxWaitSec) { $finalCount = [int]$remain; break }
+            Write-WaitCounter -Start $waitStart -Label "Waiting for pods to terminate ($remain remaining)..." -EstimateText $estTerm
+            for ($i = 0; $i -lt 5 -and ((Get-Date) - $waitStart).TotalSeconds -le $maxWaitSec; $i++) {
+                Start-Sleep -Seconds 1
+                Write-WaitCounter -Start $waitStart -Label "Waiting for pods to terminate ($remain remaining)..." -EstimateText $estTerm
             }
-            if ($elapsed -gt $maxWaitSec) {
-                Write-Host ""
-                Write-Warning "$remain pod(s) still present after ${maxWaitSec}s. Proceeding with VM shutdown anyway."
-                break
-            }
-            Write-Host -NoNewline ("`r  $remain pod(s) still running... [${elapsed}s]" + (' ' * 10))
-            Start-Sleep -Seconds 5
+        }
+        $elapsed = [int]((Get-Date) - $waitStart).TotalSeconds
+        if ($finalCount -eq 0) {
+            Save-PhaseTiming 'pods-terminate' $elapsed
+            Complete-WaitCounter -Message "All game/infra pods terminated after ${elapsed}s."
+        } else {
+            Complete-WaitCounter -Message "$finalCount pod(s) still present after ${elapsed}s. Proceeding with VM shutdown anyway." -Color Yellow
         }
 
         # ---- Step 2: power off VM ----
         Write-Host ""
         Write-Host "[2/2] Stopping VM '$vmName'..." -ForegroundColor Cyan
+        $t_vmStop = Get-Date
         Stop-VM -Name $vmName -Force | Out-Null
         do { Start-Sleep -Seconds 2; $vm = Get-VM -Name $vmName } while ($vm.State -ne 'Off')
+        Save-PhaseTiming 'vm-stop' ([int]((Get-Date) - $t_vmStop).TotalSeconds)
         Write-Host "  VM stopped." -ForegroundColor Green
 
         # Invalidate cached director port + port-check results (no longer meaningful)
         $directorPort = $null
         $script:portCheckCache = $null
 
+        $totalSec = [int]((Get-Date) - $t0).TotalSeconds
+        Save-PhaseTiming 'total-shutdown' $totalSec
+        $estTotalDone = Format-PhaseEstimate 'total-shutdown'
         Write-Host ""
-        Write-Host "=== Shutdown complete ===" -ForegroundColor Green
-        Write-Host "Use option 'b. start-vm' (and then '2. start') when you're ready to bring it back up." -ForegroundColor DarkGray
+        Write-Host "=== Shutdown complete in ${totalSec}s ===" -ForegroundColor Green
+        if ($estTotalDone) { Write-Host "  $estTotalDone" -ForegroundColor DarkGray }
+        Write-Host "Use option 'c. startup' when you're ready to bring it back up." -ForegroundColor DarkGray
         continue
     }
 

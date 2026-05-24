@@ -13,6 +13,13 @@ Patch release: better feedback during long boot waits, and a real fix for the DB
 
 ### Fixed
 
+- **`shutdown` now tracks timings and shows estimates** like `startup` and
+  `reboot` do. The shutdown handler was never instrumented in the v2.0.5
+  boot-time-tracking work, so subsequent shutdowns showed no
+  `(last: ~Xs)` hint and no total-time print at the end. Now records
+  `pods-terminate`, `vm-stop`, and `total-shutdown` to `.boot-times.json`,
+  shows the estimated total up front, prints the actual total at the end,
+  and gets the live in-place elapsed counter during the pod-termination wait.
 - **DB-pod readiness check no longer waits on the wrong pods.** The previous
   logic ran `kubectl wait --all -n <db-namespace>`, which would happily block
   on completed backup `Jobs` (`...-dump-...`), the file-browser deploy
