@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+- Port-check status in the menu header now refreshes after running any
+  battlegroup CLI command (`1. status`, `2. start`, `3. restart`, `4. stop`).
+  Previously the cached results were keyed only by public IP with no TTL, so
+  the `[OPEN]` / `[CLOSED]` indicators would stick at their first observed
+  values for the entire session even when the server's actual port state
+  changed.
+
 ## [1.1.0] - 2026-05-24
 
 ### Added
