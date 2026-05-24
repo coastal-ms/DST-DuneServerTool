@@ -7,6 +7,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2.0.1] - 2026-05-24
+
+### Fixed
+
+- **Script exited after a single menu command**, closing the console window
+  on every selection. The dispatch loop's local `$cmd = $entry.Name`
+  collided with the script's `$Cmd` parameter (PowerShell variables are
+  case-insensitive), so the `if ($Cmd) { break }` at the bottom of the
+  loop fired after every interactive command. Renamed the loop-local to
+  `$cmdName`. Web UI (`-Cmd` mode) is unaffected and still exits once
+  per invocation via the `$cmdHasRun` flag.
+
 ## [2.0.0] - 2026-05-24
 
 Consolidation release. Supersedes all prior 1.x releases &mdash; the 1.x
@@ -81,5 +93,6 @@ patch releases follow as `2.0.1`, `2.0.2`, etc.
   `Copy-SshKeyToDir`, `New-DuneDesktopShortcut`.
 - `web/` folder structure added.
 
-[Unreleased]: https://github.com/coastal-ms/Simple-Dune-Server-Management-Tool/compare/v2.0.0...HEAD
+[Unreleased]: https://github.com/coastal-ms/Simple-Dune-Server-Management-Tool/compare/v2.0.1...HEAD
+[2.0.1]: https://github.com/coastal-ms/Simple-Dune-Server-Management-Tool/compare/v2.0.0...v2.0.1
 [2.0.0]: https://github.com/coastal-ms/Simple-Dune-Server-Management-Tool/releases/tag/v2.0.0
