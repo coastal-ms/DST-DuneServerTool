@@ -7,6 +7,55 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [3.1.0] - 2026-05-24
+
+Minor release: on-demand "start map pod" controls.
+
+Three new menu items &mdash; `17. start-deepdesert`, `18. start-arrakeen`,
+`19. start-harko` &mdash; sit in a new **Maps (on-demand)** section between
+Battlegroup and Tools (in both the console menu and the web portal). Each
+command spins up the corresponding map pod by patching `replicas: 0 -> 1`
+on the matching set in the live `ServerGroup` CR; the Funcom operator
+handles the rest (creating the `ServerSet` and pod).
+
+### Added
+
+- `dune-server.ps1`: `$mapCommands` definition (keys 17/18/19),
+  `Get-MapCmdAvailability` (same gating as battlegroup commands &mdash;
+  requires the VM to be running), and `Invoke-MapScale` helper that does
+  the actual work via a single piped `bash -s` over SSH (uses `jq` already
+  present on the VM).
+- `dune-server.ps1`: dispatch handlers for `start-deepdesert`,
+  `start-arrakeen`, `start-harko` placed in their own new **MAPS COMMANDS**
+  block above the **TOOLS COMMANDS** block.
+- `web/Start-DuneWeb.ps1`: `$script:MapCommands` mirror, `Set-PodeState`
+  publish, new `Maps (on-demand)` section in `/api/commands`, and inclusion
+  in the `/api/exec/:name` allow-list.
+
+### Notes
+
+- **No persistence and no VM-side install.** Nothing is written to disk on
+  the VM, no scripts are deployed, no cron / OpenRC / systemd is touched,
+  and no Funcom config files are modified. The whole interaction is a
+  one-shot `kubectl patch` against the cluster's live CR.
+- **Idempotent.** If the map is already running (`replicas=1`), the command
+  no-ops with a green confirmation; nothing is patched.
+- **By design, ephemeral.** A future `battlegroup restart` or
+  `battlegroup update` will reapply Funcom's defaults and snap replicas
+  back to `0` for these maps. Re-trigger the menu item to bring them up
+  again. This is exactly what "on-demand" means here.
+- **No new dependencies on Windows.** The new `Invoke-MapScale` function
+  reuses the existing `ssh`, `$sshKey`, and `$sshUser` plumbing already
+  used elsewhere in the script.
+
+### Switched to canonical SemVer releases
+
+Earlier in the day this project briefly used "rolling v3.0.1" mode (folding
+multiple changes into the same tag, with re-tags and re-publishes). That
+mode is now retired. From v3.1.0 onward, each shipped change set gets its
+own tag and GitHub release in normal SemVer fashion (MAJOR.MINOR.PATCH,
+never moving published tags).
+
 ## [3.0.1] - 2026-05-24
 
 Patch release: better feedback during long boot waits, a real fix for the DB-pod readiness check that was silently lying about success, and a new menu option to power on the VM without touching battlegroup.
@@ -226,6 +275,7 @@ entry. From here on, patch releases follow as `3.0.1`, `3.0.2`, etc.
 - Boot-time history stored at `<scriptDir>\.boot-times.json` (rolling
   window of last 20 entries per phase).
 
-[Unreleased]: https://github.com/coastal-ms/Simple-Dune-Server-Management-Tool/compare/v3.0.1...HEAD
+[Unreleased]: https://github.com/coastal-ms/Simple-Dune-Server-Management-Tool/compare/v3.1.0...HEAD
+[3.1.0]: https://github.com/coastal-ms/Simple-Dune-Server-Management-Tool/compare/v3.0.1...v3.1.0
 [3.0.1]: https://github.com/coastal-ms/Simple-Dune-Server-Management-Tool/compare/v3.0.0...v3.0.1
 [3.0.0]: https://github.com/coastal-ms/Simple-Dune-Server-Management-Tool/releases/tag/v3.0.0

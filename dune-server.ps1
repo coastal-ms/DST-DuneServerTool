@@ -13,7 +13,7 @@ param(
 # Wraps the original battlegroup.ps1 menu and adds extra tools
 # ============================================================
 
-$script:ToolVersion = "3.0.1"
+$script:ToolVersion = "3.1.0"
 
 # ============================================================
 #  CRASH / EXIT CLEANUP
@@ -836,6 +836,12 @@ $bgCommands = @(
     [pscustomobject]@{ Key = "16"; SubSection = "Monitoring";   Name = "shell-pod";                 Desc = "Connect to a pod in the battlegroup via commandline" }
 )
 
+$mapCommands = @(
+    [pscustomobject]@{ Key = "17"; Name = "start-deepdesert"; Desc = "On-demand: spin up the Deep Desert map pod" }
+    [pscustomobject]@{ Key = "18"; Name = "start-arrakeen";   Desc = "On-demand: spin up the Arrakeen hub map pod" }
+    [pscustomobject]@{ Key = "19"; Name = "start-harko";      Desc = "On-demand: spin up the Harko Village hub map pod" }
+)
+
 $toolCommands = @(
     [pscustomobject]@{ Key = "20"; Name = "ssh";             Desc = "Open an SSH terminal to the VM" }
 )
@@ -891,6 +897,74 @@ function Get-BgCmdAvailability {
     if (-not $info.Exists)  { return @{ Available = $false; Reason = "VM '$vmName' does not exist." } }
     if (-not $info.Running) { return @{ Available = $false; Reason = "VM '$vmName' is not running." } }
     return @{ Available = $true; Reason = $null }
+}
+
+function Get-MapCmdAvailability {
+    param($info)
+    if (-not $info.Exists)  { return @{ Available = $false; Reason = "VM '$vmName' does not exist." } }
+    if (-not $info.Running) { return @{ Available = $false; Reason = "VM '$vmName' is not running." } }
+    return @{ Available = $true; Reason = $null }
+}
+
+# Scales a single map set on the ServerGroup CR from replicas=0 to replicas=1
+# so the operator spins up the corresponding pod. One-shot, on-demand only:
+# no persistence, no auto-restart, no watchdog. Idempotent (no-op if already
+# running). Requires `jq` on the VM (Alpine: present by default with k3s).
+function Invoke-MapScale {
+    param(
+        [Parameter(Mandatory)][string]$MapName,
+        [Parameter(Mandatory)][string]$Ip,
+        [Parameter(Mandatory)][string]$SshKey,
+        [Parameter(Mandatory)][string]$SshUser
+    )
+    $sshOpts = @('-o','StrictHostKeyChecking=no','-o','LogLevel=QUIET','-i',$SshKey)
+    $remote  = "$SshUser@$Ip"
+
+    Write-Host ""
+    Write-Host "Looking up ServerGroup for map '$MapName'..." -ForegroundColor DarkGray
+
+    $script = @"
+set -e
+NS=`$(sudo k3s kubectl get servergroup -A -o jsonpath='{.items[0].metadata.namespace}' 2>/dev/null)
+SG=`$(sudo k3s kubectl get servergroup -A -o jsonpath='{.items[0].metadata.name}' 2>/dev/null)
+if [ -z "`$NS" ] || [ -z "`$SG" ]; then echo "ERROR no ServerGroup found"; exit 1; fi
+JSON=`$(sudo k3s kubectl get servergroup -n "`$NS" "`$SG" -o json)
+IDX=`$(echo "`$JSON" | jq -r '.spec.sets | map(.map) | index("$MapName")')
+if [ "`$IDX" = "null" ] || [ -z "`$IDX" ]; then echo "ERROR map '$MapName' not in ServerGroup"; exit 2; fi
+CUR=`$(echo "`$JSON" | jq -r ".spec.sets[`$IDX].replicas // 0")
+echo "STATE NS=`$NS SG=`$SG IDX=`$IDX CUR=`$CUR"
+if [ "`$CUR" = "1" ]; then echo "RESULT ALREADY_RUNNING"; exit 0; fi
+sudo k3s kubectl patch servergroup -n "`$NS" "`$SG" --type=json -p="[{\"op\":\"replace\",\"path\":\"/spec/sets/`$IDX/replicas\",\"value\":1}]" >/dev/null
+echo "RESULT SCALED"
+"@
+
+    $output = $script | ssh @sshOpts $remote 'bash -s' 2>&1
+    $lines  = @($output -split "`n" | ForEach-Object { $_.TrimEnd() } | Where-Object { $_ })
+
+    $stateLine  = $lines | Where-Object { $_ -like 'STATE *' }    | Select-Object -First 1
+    $resultLine = $lines | Where-Object { $_ -like 'RESULT *' }   | Select-Object -First 1
+    $errorLine  = $lines | Where-Object { $_ -like 'ERROR *' }    | Select-Object -First 1
+
+    if ($errorLine) {
+        Write-Warning ($errorLine -replace '^ERROR ', '')
+        return
+    }
+    if ($stateLine) {
+        $stateLine -replace '^STATE ', '  ' | Write-Host -ForegroundColor DarkGray
+    }
+    switch -Regex ($resultLine) {
+        '^RESULT ALREADY_RUNNING' {
+            Write-Host "Map '$MapName' is already running (replicas=1). No action taken." -ForegroundColor Green
+        }
+        '^RESULT SCALED' {
+            Write-Host "Scaled '$MapName' to replicas=1. The operator should spin up the pod within ~30s." -ForegroundColor Green
+            Write-Host "Tip: use option 1 (status) or the web portal Battlegroup Status panel to watch it come up." -ForegroundColor DarkGray
+        }
+        default {
+            Write-Warning "Unexpected response from VM. Raw output:"
+            $lines | ForEach-Object { Write-Host "  $_" -ForegroundColor DarkGray }
+        }
+    }
 }
 
 function Get-ToolCmdAvailability {
@@ -950,6 +1024,10 @@ while ($true) {
     foreach ($c in $bgCommands) {
         $avail = Get-BgCmdAvailability -info $info
         $entries += [pscustomobject]@{ Section = 'battlegroup'; SubSection = $c.SubSection; Key = $c.Key; Name = $c.Name; Desc = $c.Desc; Available = $avail.Available; Reason = $avail.Reason }
+    }
+    foreach ($c in $mapCommands) {
+        $avail = Get-MapCmdAvailability -info $info
+        $entries += [pscustomobject]@{ Section = 'maps'; SubSection = $null; Key = $c.Key; Name = $c.Name; Desc = $c.Desc; Available = $avail.Available; Reason = $avail.Reason }
     }
     foreach ($c in $toolCommands) {
         $avail = Get-ToolCmdAvailability -cmdName $c.Name -info $info
@@ -1015,6 +1093,7 @@ while ($true) {
                 switch ($e.Section) {
                     'vm'          { Write-Host "VM commands:" -ForegroundColor Yellow }
                     'battlegroup' { Write-Host "Battlegroup commands:" -ForegroundColor Yellow }
+                    'maps'        { Write-Host "Maps (on-demand):" -ForegroundColor Yellow }
                     'tools'       { Write-Host "Tools:" -ForegroundColor Yellow }
                 }
             }
@@ -1784,6 +1863,21 @@ while ($true) {
         if ($proc.ExitCode -ne 0) { Write-Host "Error: Failed to download operator log files." -ForegroundColor Red; Remove-Item $tarPath -ErrorAction SilentlyContinue; continue }
         tar -xzf $tarPath -C $localDir; Remove-Item $tarPath
         Write-Host "Operator logs saved to: $localDir" -ForegroundColor Green
+        continue
+    }
+
+    # ========================================================
+    #  MAPS COMMANDS (on-demand pod start)
+    # ========================================================
+
+    if ($cmdName -in @("start-deepdesert","start-arrakeen","start-harko")) {
+        $mapName = switch ($cmdName) {
+            "start-deepdesert" { "DeepDesert_1" }
+            "start-arrakeen"   { "SH_Arrakeen" }
+            "start-harko"      { "SH_HarkoVillage" }
+        }
+        Invoke-MapScale -MapName $mapName -Ip $ip -SshKey $sshKey -SshUser $sshUser
+        if ($Cmd) { break }
         continue
     }
 
