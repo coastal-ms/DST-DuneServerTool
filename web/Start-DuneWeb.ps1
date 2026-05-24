@@ -59,13 +59,14 @@ function Get-VmStatus {
 # $toolCommands in dune-server.ps1. Keep in sync when adding new menu items.
 $script:VmCommands = @(
     @{ key='a'; name='initial-setup';     desc='Run the initial VM setup';                                                requires='none' }
-    # 'b' (web) intentionally omitted from the web UI itself.
-    @{ key='c'; name='start-vm';          desc='Power on VM only (no battlegroup commands)';                              requires='exists' }
-    @{ key='d'; name='startup';           desc='Power on VM, start battlegroup, wait for overmap + survival maps';        requires='exists' }
-    @{ key='e'; name='shutdown';          desc='Stop battlegroup, power off VM';                                          requires='running'; confirm=$true }
-    @{ key='f'; name='reboot';            desc='Stop battlegroup, restart VM, start battlegroup (clean cycle)';           requires='running'; confirm=$true }
-    @{ key='g'; name='rotate-ssh-key';    desc='Generate a new SSH key and replace the authorized one on the VM';        requires='running' }
-    @{ key='h'; name='change-password';   desc="Change the password of the 'dune' user on the VM";                        requires='running' }
+    # 'b' (web) intentionally omitted from the web UI itself; remaining keys
+    # are re-sequenced so the displayed list has no gap.
+    @{ key='b'; name='start-vm';          desc='Power on VM only (no battlegroup commands)';                              requires='exists' }
+    @{ key='c'; name='startup';           desc='Power on VM, start battlegroup, wait for overmap + survival maps';        requires='exists' }
+    @{ key='d'; name='shutdown';          desc='Stop battlegroup, power off VM';                                          requires='running'; confirm=$true }
+    @{ key='e'; name='reboot';            desc='Stop battlegroup, restart VM, start battlegroup (clean cycle)';           requires='running'; confirm=$true }
+    @{ key='f'; name='rotate-ssh-key';    desc='Generate a new SSH key and replace the authorized one on the VM';        requires='running' }
+    @{ key='g'; name='change-password';   desc="Change the password of the 'dune' user on the VM";                        requires='running' }
 )
 
 $script:BgCommands = @(
