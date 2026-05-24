@@ -1,0 +1,32 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Dune Awakening — Server Management</title>
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <header>
+    <h1>Dune Awakening &mdash; Server Management</h1>
+    <div id="vm-status" class="vm-status">
+      <span class="dot" id="vm-dot"></span>
+      <span id="vm-text">Loading&hellip;</span>
+      <span class="ts" id="ts"></span>
+    </div>
+  </header>
+
+  <main id="sections" aria-live="polite">
+    <p class="hint">Loading commands&hellip;</p>
+  </main>
+
+  <footer>
+    <p>
+      Localhost only &middot;
+      <a href="https://github.com/coastal-ms/Simple-Dune-Server-Management-Tool" target="_blank" rel="noopener">Simple Dune Server Management Tool</a>
+    </p>
+  </footer>
+
+  <script src="app.js"></script>
+</body>
+</html>
