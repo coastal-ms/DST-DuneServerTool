@@ -43,8 +43,9 @@ Patch release: better feedback during long boot waits, and a real fix for the DB
 
 - **Live "elapsed" counters on every long boot wait.** During `startup` and
   `reboot`, each "Waiting for..." line now updates in place once per
-  second showing how long the current phase has been running alongside the
-  existing `(last: ~Xs, avg ~Ys of last N)` estimate from boot-time history.
+  second, showing how long the current phase has been running as a
+  **MM:SS** playback timer alongside the existing
+  `(last: ~Xs, avg ~Ys of last N)` estimate from boot-time history.
   No more wondering whether the script is stuck. Applies to: SSH
   readiness, k3s API, DB pods, operator pods, webhook endpoints, and the
   reboot's pod-termination wait. The non-polling waits
