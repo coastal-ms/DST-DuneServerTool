@@ -1174,6 +1174,11 @@ while ($true) {
     # --- Fallback: delegate to battlegroup CLI on VM ---
     ssh -t -o StrictHostKeyChecking=no -o LogLevel=QUIET -i "$sshKey" "$sshUser@$ip" "$bgBinPath $cmd"
 
+    # Battlegroup commands (status/start/restart/stop) can change observable
+    # port state, so invalidate the cached external port-check results to
+    # force a fresh check on the next menu render.
+    $script:portCheckCache = $null
+
     # After start/restart, resolve director port
     if ($cmd -eq "start" -or $cmd -eq "restart") {
         $elapsed = 0; $timeout = 60
