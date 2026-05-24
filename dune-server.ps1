@@ -13,7 +13,7 @@ param(
 # Wraps the original battlegroup.ps1 menu and adds extra tools
 # ============================================================
 
-$script:ToolVersion = "1.2.2"
+$script:ToolVersion = "1.2.3"
 
 # Resize console window so the full menu is visible
 try {
@@ -123,7 +123,7 @@ function Run-Setup {
     $adminChoice = Ask -Label "Choose 1, 2, or 3" -Default $defaultAdminChoice
     $adminExe = ""
     if ($adminChoice -eq '1') {
-        $defaultInstallDir = if ($existingAdmin) { Split-Path $existingAdmin -Parent } else { "$env:USERPROFILE\dune-admin" }
+        $defaultInstallDir = if ($existingAdmin) { Split-Path $existingAdmin -Parent } else { Join-Path ([Environment]::GetFolderPath('Desktop')) 'dune-admin' }
         $installDir = Ask -Label "Install directory" -Default $defaultInstallDir
         try {
             $adminExe = Install-DuneAdminLatest -InstallDir $installDir
@@ -139,9 +139,9 @@ function Run-Setup {
     } elseif ($adminChoice -eq '2') {
         $defaultAdmin = $null
         $adminCandidates = @(
+            (Join-Path ([Environment]::GetFolderPath('Desktop')) 'dune-admin\dune-admin.exe'),
             "$env:USERPROFILE\dune-admin\dune-admin.exe",
             "$env:USERPROFILE\Desktop\dune-admin-main\dune-admin.exe",
-            "$env:USERPROFILE\Desktop\dune-admin\dune-admin.exe",
             "$scriptDir\dune-admin\dune-admin.exe"
         )
         foreach ($a in $adminCandidates) {
