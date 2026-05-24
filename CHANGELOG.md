@@ -7,6 +7,39 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [3.1.1] - 2026-05-24
+
+Patch release: fix v3.1.0's on-demand map start commands, which were
+silently no-oping in production.
+
+### Fixed
+
+- `Invoke-MapScale` in `dune-server.ps1` was patching the wrong CRD. v3.1.0
+  tried to patch `spec.sets[*].replicas` on the `ServerGroup` CR, but the
+  cluster's admission webhook (`vservergroup.kb.io`) rejects that with
+  `"owned resources can only be modified by the operator"` because
+  `ServerGroup` is owned by `BattleGroup`. The patch never landed; the
+  command appeared to succeed only because v3.1.0's bash `set -e` happened
+  *after* the error line was already emitted, and the parser interpreted
+  the lack of an explicit `ERROR` marker as success. Net result: pods
+  never spun up.
+- Fix: patch the dedicated `ServerSetScale` (`igwsss`) CRD instead. The
+  Funcom operator pre-creates one `ServerSetScale` per map at battlegroup
+  boot specifically for runtime scaling, and every social-hub/deep-desert
+  `ServerSet` has `dedicatedScaling: true` enabled so the SSS patch
+  actually takes effect. New flow: look up the matching `ServerSet` by
+  `spec.map`, find its `ServerSetScale` via the `serverset` label, then
+  `kubectl patch --type=merge -p '{"spec":{"replicas":1}}'`. Verified
+  end-to-end against `SH_Arrakeen` &mdash; pod
+  `sg-sh-arrakeen-pod-1000000` came up `1/1 Running` within ~20s of the
+  patch.
+
+### Notes
+
+- Still touches no files on the VM, still no persistence, still
+  idempotent, still ephemeral (next `battlegroup restart` clears it).
+  Only the CRD being patched has changed.
+
 ## [3.1.0] - 2026-05-24
 
 Minor release: on-demand "start map pod" controls.
@@ -275,7 +308,8 @@ entry. From here on, patch releases follow as `3.0.1`, `3.0.2`, etc.
 - Boot-time history stored at `<scriptDir>\.boot-times.json` (rolling
   window of last 20 entries per phase).
 
-[Unreleased]: https://github.com/coastal-ms/Simple-Dune-Server-Management-Tool/compare/v3.1.0...HEAD
+[Unreleased]: https://github.com/coastal-ms/Simple-Dune-Server-Management-Tool/compare/v3.1.1...HEAD
+[3.1.1]: https://github.com/coastal-ms/Simple-Dune-Server-Management-Tool/compare/v3.1.0...v3.1.1
 [3.1.0]: https://github.com/coastal-ms/Simple-Dune-Server-Management-Tool/compare/v3.0.1...v3.1.0
 [3.0.1]: https://github.com/coastal-ms/Simple-Dune-Server-Management-Tool/compare/v3.0.0...v3.0.1
 [3.0.0]: https://github.com/coastal-ms/Simple-Dune-Server-Management-Tool/releases/tag/v3.0.0

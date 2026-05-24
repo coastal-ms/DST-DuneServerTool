@@ -13,7 +13,7 @@ param(
 # Wraps the original battlegroup.ps1 menu and adds extra tools
 # ============================================================
 
-$script:ToolVersion = "3.1.0"
+$script:ToolVersion = "3.1.1"
 
 # ============================================================
 #  CRASH / EXIT CLEANUP
@@ -906,10 +906,19 @@ function Get-MapCmdAvailability {
     return @{ Available = $true; Reason = $null }
 }
 
-# Scales a single map set on the ServerGroup CR from replicas=0 to replicas=1
-# so the operator spins up the corresponding pod. One-shot, on-demand only:
+# Scales a single map's ServerSetScale CR from replicas=0 to replicas=1 so
+# the operator spins up the corresponding pod. One-shot, on-demand only:
 # no persistence, no auto-restart, no watchdog. Idempotent (no-op if already
 # running). Requires `jq` on the VM (Alpine: present by default with k3s).
+#
+# Why ServerSetScale and not ServerGroup? The cluster's admission webhook
+# blocks direct edits on owned resources (ServerGroup is owned by
+# BattleGroup), so a `kubectl patch` on the ServerGroup gets rejected with
+# "owned resources can only be modified by the operator". ServerSetScale is
+# the dedicated runtime-scaling CRD provided by the operator for exactly
+# this purpose -- one SSS per map, pre-created by the operator on
+# battlegroup boot, ready to accept `spec.replicas` patches. Works because
+# every social-hub/deep-desert ServerSet has `dedicatedScaling: true`.
 function Invoke-MapScale {
     param(
         [Parameter(Mandatory)][string]$MapName,
@@ -921,24 +930,33 @@ function Invoke-MapScale {
     $remote  = "$SshUser@$Ip"
 
     Write-Host ""
-    Write-Host "Looking up ServerGroup for map '$MapName'..." -ForegroundColor DarkGray
+    Write-Host "Looking up ServerSetScale for map '$MapName'..." -ForegroundColor DarkGray
 
-    $script = @"
+    # Single-quoted here-string -> no PowerShell expansion, plain bash with $VAR.
+    # Avoids backtick-escaping every $ in the script. We substitute the map
+    # name with -replace and ship the whole thing base64-encoded to dodge
+    # CRLF / quoting issues that surface when piping multi-line strings to
+    # `ssh ... bash -s` from PowerShell on Windows.
+    $bashTemplate = @'
 set -e
-NS=`$(sudo k3s kubectl get servergroup -A -o jsonpath='{.items[0].metadata.namespace}' 2>/dev/null)
-SG=`$(sudo k3s kubectl get servergroup -A -o jsonpath='{.items[0].metadata.name}' 2>/dev/null)
-if [ -z "`$NS" ] || [ -z "`$SG" ]; then echo "ERROR no ServerGroup found"; exit 1; fi
-JSON=`$(sudo k3s kubectl get servergroup -n "`$NS" "`$SG" -o json)
-IDX=`$(echo "`$JSON" | jq -r '.spec.sets | map(.map) | index("$MapName")')
-if [ "`$IDX" = "null" ] || [ -z "`$IDX" ]; then echo "ERROR map '$MapName' not in ServerGroup"; exit 2; fi
-CUR=`$(echo "`$JSON" | jq -r ".spec.sets[`$IDX].replicas // 0")
-echo "STATE NS=`$NS SG=`$SG IDX=`$IDX CUR=`$CUR"
-if [ "`$CUR" = "1" ]; then echo "RESULT ALREADY_RUNNING"; exit 0; fi
-sudo k3s kubectl patch servergroup -n "`$NS" "`$SG" --type=json -p="[{\"op\":\"replace\",\"path\":\"/spec/sets/`$IDX/replicas\",\"value\":1}]" >/dev/null
+SS_JSON=$(sudo k3s kubectl get serverset -A -o json)
+SS_NAME=$(echo "$SS_JSON" | jq -r '.items[] | select(.spec.map=="__MAP__") | .metadata.name' | head -n1)
+NS=$(echo "$SS_JSON" | jq -r '.items[] | select(.spec.map=="__MAP__") | .metadata.namespace' | head -n1)
+if [ -z "$SS_NAME" ] || [ -z "$NS" ]; then echo "ERROR no ServerSet found for map __MAP__"; exit 1; fi
+SSS_NAME=$(sudo k3s kubectl get serversetscale -n "$NS" -o json | jq -r --arg ss "$SS_NAME" '.items[] | select(.metadata.labels.serverset==$ss) | .metadata.name' | head -n1)
+if [ -z "$SSS_NAME" ]; then echo "ERROR no ServerSetScale found for ServerSet $SS_NAME"; exit 2; fi
+CUR=$(sudo k3s kubectl get serversetscale -n "$NS" "$SSS_NAME" -o jsonpath='{.spec.replicas}')
+[ -z "$CUR" ] && CUR=0
+echo "STATE NS=$NS SS=$SS_NAME SSS=$SSS_NAME CUR=$CUR"
+if [ "$CUR" = "1" ]; then echo "RESULT ALREADY_RUNNING"; exit 0; fi
+sudo k3s kubectl patch serversetscale -n "$NS" "$SSS_NAME" --type=merge -p='{"spec":{"replicas":1}}' >/dev/null
 echo "RESULT SCALED"
-"@
+'@
 
-    $output = $script | ssh @sshOpts $remote 'bash -s' 2>&1
+    $bash = ($bashTemplate -replace '__MAP__', $MapName) -replace "`r", ""
+    $b64  = [Convert]::ToBase64String([Text.Encoding]::UTF8.GetBytes($bash))
+
+    $output = ssh @sshOpts $remote "echo $b64 | base64 -d | bash" 2>&1
     $lines  = @($output -split "`n" | ForEach-Object { $_.TrimEnd() } | Where-Object { $_ })
 
     $stateLine  = $lines | Where-Object { $_ -like 'STATE *' }    | Select-Object -First 1
@@ -947,6 +965,7 @@ echo "RESULT SCALED"
 
     if ($errorLine) {
         Write-Warning ($errorLine -replace '^ERROR ', '')
+        $lines | Where-Object { $_ -notmatch '^(STATE|RESULT|ERROR) ' } | ForEach-Object { Write-Host "  $_" -ForegroundColor DarkGray }
         return
     }
     if ($stateLine) {
