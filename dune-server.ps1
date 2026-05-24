@@ -574,6 +574,16 @@ function Format-PhaseEstimate {
     return "(last: ~${last}s, avg ~${avg}s of last $($recent.Count))"
 }
 
+function Format-Duration {
+    # Format an integer-seconds duration as MM:SS for live playback timers
+    # that update in place while a long wait is in progress.
+    param([int]$Seconds)
+    if ($Seconds -lt 0) { $Seconds = 0 }
+    $m = [int][Math]::Floor($Seconds / 60)
+    $s = $Seconds % 60
+    return ('{0:D2}:{1:D2}' -f $m, $s)
+}
+
 function Save-PhaseTiming {
     param([string]$Phase, [int]$Seconds)
     if ($Seconds -lt 0) { return }
@@ -602,7 +612,7 @@ function Write-WaitCounter {
         [string]$EstimateText
     )
     $sec = [int]((Get-Date) - $Start).TotalSeconds
-    $line = "  $Label ${sec}s"
+    $line = "  $Label $(Format-Duration $sec)"
     if ($EstimateText) { $line += " $EstimateText" }
     Write-Host -NoNewline ("`r" + $line.PadRight(100))
 }
