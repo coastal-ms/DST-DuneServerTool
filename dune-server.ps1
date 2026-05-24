@@ -13,7 +13,7 @@ param(
 # Wraps the original battlegroup.ps1 menu and adds extra tools
 # ============================================================
 
-$script:ToolVersion = "2.0.3"
+$script:ToolVersion = "2.0.4"
 
 # Resize console window so the full menu is visible
 try {
@@ -954,8 +954,6 @@ while ($true) {
         Write-Host "  3. Start battlegroup" -ForegroundColor DarkGray
         Write-Host "  4. Wait for overmap and survival map pods to be Ready" -ForegroundColor DarkGray
         Write-Host ""
-        $confirm = Read-Host "Type YES to continue"
-        if ($confirm -ne "YES") { Write-Host "Aborted." -ForegroundColor Cyan; continue }
 
         $t0 = Get-Date
 
