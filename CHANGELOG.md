@@ -7,6 +7,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+- Menu UI is now visually compact (~14 fewer rows): merged the double `===`
+  header bar into a single line, removed cosmetic blank lines between sections,
+  dropped the redundant `(checking via ...)` preamble and the UDP-not-verifiable
+  disclaimer from the port block, replaced the dashed separator before `Tools:`
+  with just the section header, and removed the `Database:` / `Logs:` /
+  `Monitoring:` sub-section headers (the entries are still numbered the same).
+  All functionality, key bindings, and color coding are unchanged.
+
 ## [1.0.1] - 2026-05-24
 
 ### Fixed
