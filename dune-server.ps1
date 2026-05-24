@@ -13,7 +13,7 @@ param(
 # Wraps the original battlegroup.ps1 menu and adds extra tools
 # ============================================================
 
-$script:ToolVersion = "4.0.0"
+$script:ToolVersion = "4.0.2"
 
 # ============================================================
 #  CRASH / EXIT CLEANUP
@@ -1145,7 +1145,7 @@ while ($true) {
         }
 
         Write-Host "Opening $url in your default browser..." -ForegroundColor Cyan
-        Start-Process $url
+        Start-Process "$env:SystemRoot\explorer.exe" $url
         if ($Cmd) { break }
         continue
     }
@@ -1723,7 +1723,7 @@ while ($true) {
     # ========================================================
 
     if ($cmdName -eq "open-file-browser") {
-        Start-Process "http://${ip}:18888/"
+        Start-Process "$env:SystemRoot\explorer.exe" "http://${ip}:18888/"
         continue
     }
 
@@ -1734,7 +1734,7 @@ while ($true) {
             if ($directorNodePort -match '^\d+$') { $directorPort = $directorNodePort.Trim() }
         }
         if (-not $directorPort) { Write-Warning "Could not determine Director port."; continue }
-        Start-Process "http://${ip}:${directorPort}/"
+        Start-Process "$env:SystemRoot\explorer.exe" "http://${ip}:${directorPort}/"
         continue
     }
 
@@ -1851,7 +1851,7 @@ while ($true) {
     }
 
     if ($cmdName -eq "setup-guide") {
-        Start-Process "https://duneawakening.com/self-hosted-servers/"
+        Start-Process "$env:SystemRoot\explorer.exe" "https://duneawakening.com/self-hosted-servers/"
         continue
     }
 
@@ -1881,7 +1881,7 @@ while ($true) {
         $url = "https://github.com/coastal-ms/Simple-Dune-Server-Management-Tool/issues/new?$params"
 
         Write-Host "  $url" -ForegroundColor DarkGray
-        Start-Process $url
+        Start-Process "$env:SystemRoot\explorer.exe" $url
         continue
     }
 

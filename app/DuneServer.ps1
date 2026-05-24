@@ -93,6 +93,12 @@ if (-not (Test-Path $script:DataDir)) {
     New-Item -ItemType Directory -Force -Path $script:DataDir | Out-Null
 }
 
+# Hyper-V module is in C:\Windows\System32\WindowsPowerShell\v1.0\Modules\ but
+# in compiled (ps2exe) mode auto-discovery sometimes fails. Import explicitly.
+try { Import-Module Hyper-V -ErrorAction Stop } catch {
+    # Will be surfaced when Refresh-StatusHeader calls Get-VM
+}
+
 # ────────────────────────────────────────────────────────────────────────────
 #  WPF / XAML
 # ────────────────────────────────────────────────────────────────────────────
@@ -106,8 +112,8 @@ Add-Type -AssemblyName System.Xaml
 <Window xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         Title="Dune Server"
-        Height="780" Width="1180"
-        MinHeight="520" MinWidth="900"
+        Height="900" Width="1180"
+        MinHeight="700" MinWidth="900"
         WindowStartupLocation="CenterScreen"
         Background="#1E1E1E">
   <Window.Resources>
@@ -120,10 +126,10 @@ Add-Type -AssemblyName System.Xaml
     <Style x:Key="CmdButton" TargetType="Button">
       <Setter Property="Background"      Value="#2D2D30"/>
       <Setter Property="Foreground"      Value="#DDDDDD"/>
-      <Setter Property="BorderBrush"     Value="#3F3F46"/>
+      <Setter Property="BorderBrush"     Value="#4A4A52"/>
       <Setter Property="BorderThickness" Value="1"/>
-      <Setter Property="Padding"         Value="10,6"/>
-      <Setter Property="Margin"          Value="4,2"/>
+      <Setter Property="Padding"         Value="10,7"/>
+      <Setter Property="Margin"          Value="4,3"/>
       <Setter Property="HorizontalContentAlignment" Value="Left"/>
       <Setter Property="Cursor"          Value="Hand"/>
       <Setter Property="FontFamily"      Value="Segoe UI"/>
@@ -135,21 +141,43 @@ Add-Type -AssemblyName System.Xaml
                     Background="{TemplateBinding Background}"
                     BorderBrush="{TemplateBinding BorderBrush}"
                     BorderThickness="{TemplateBinding BorderThickness}"
-                    CornerRadius="3">
+                    CornerRadius="4">
+              <Border.Effect>
+                <DropShadowEffect Color="Black" Direction="270" ShadowDepth="2" BlurRadius="4" Opacity="0.55"/>
+              </Border.Effect>
               <ContentPresenter Margin="{TemplateBinding Padding}"
                                 HorizontalAlignment="Stretch"
                                 VerticalAlignment="Center"/>
             </Border>
             <ControlTemplate.Triggers>
               <Trigger Property="IsMouseOver" Value="True">
-                <Setter TargetName="border" Property="Background" Value="#3E3E42"/>
+                <Setter TargetName="border" Property="Background" Value="#3E3E48"/>
+                <Setter TargetName="border" Property="BorderBrush" Value="#E0B341"/>
+                <Setter TargetName="border" Property="BorderThickness" Value="2"/>
+                <Setter TargetName="border" Property="Effect">
+                  <Setter.Value>
+                    <DropShadowEffect Color="#E0B341" Direction="270" ShadowDepth="3" BlurRadius="8" Opacity="0.6"/>
+                  </Setter.Value>
+                </Setter>
               </Trigger>
               <Trigger Property="IsPressed" Value="True">
-                <Setter TargetName="border" Property="Background" Value="#094771"/>
+                <Setter TargetName="border" Property="Background" Value="#0E639C"/>
+                <Setter TargetName="border" Property="BorderBrush" Value="#FFFFFF"/>
+                <Setter TargetName="border" Property="BorderThickness" Value="2"/>
+                <Setter TargetName="border" Property="Effect">
+                  <Setter.Value>
+                    <DropShadowEffect Color="#0E639C" Direction="270" ShadowDepth="1" BlurRadius="10" Opacity="0.9"/>
+                  </Setter.Value>
+                </Setter>
               </Trigger>
               <Trigger Property="IsEnabled" Value="False">
                 <Setter Property="Foreground" Value="#666666"/>
                 <Setter TargetName="border" Property="Background" Value="#252526"/>
+                <Setter TargetName="border" Property="Effect">
+                  <Setter.Value>
+                    <DropShadowEffect Color="Black" Direction="270" ShadowDepth="0" BlurRadius="0" Opacity="0"/>
+                  </Setter.Value>
+                </Setter>
               </Trigger>
             </ControlTemplate.Triggers>
           </ControlTemplate>
@@ -198,7 +226,7 @@ Add-Type -AssemblyName System.Xaml
 
         <TextBox x:Name="StatusPane" Grid.Row="1" Grid.ColumnSpan="2"
                  Style="{StaticResource MonoText}"
-                 Height="140" Margin="0,6,0,0"
+                 Height="332" Margin="0,6,0,0"
                  Text="Loading cluster status..."/>
       </Grid>
     </Border>
@@ -397,7 +425,10 @@ $script:Commands = @(
     @{ Section='VM';          Key='h'; Name='change-password';      Mode='Console'; Requires='running'; Desc="Change the password of the 'dune' user on the VM" }
 
     # ─── Battlegroup commands ───
-    @{ Section='Battlegroup'; Key='1';  Name='status';                   Mode='InApp';   Requires='running'; Desc='Status of the selected battlegroup' }
+    # NOTE: 'status' is intentionally NOT listed here. The top header panel
+    # already shows live battlegroup status with a 30s auto-refresh and a
+    # manual Refresh button, so a duplicate button would just dump the same
+    # text into the output pane.
     @{ Section='Battlegroup'; Key='2';  Name='start';                    Mode='Console'; Requires='running'; Desc='Start the selected battlegroup' }
     @{ Section='Battlegroup'; Key='3';  Name='restart';                  Mode='Console'; Requires='running'; Desc='Restart the selected battlegroup' }
     @{ Section='Battlegroup'; Key='4';  Name='stop';                     Mode='Console'; Requires='running'; Desc='Stop the selected battlegroup' }
@@ -436,6 +467,7 @@ function Test-CmdAvailable {
 # ────────────────────────────────────────────────────────────────────────────
 
 $script:CurrentProc = $null   # Process for the active InApp command (so we can prevent overlap)
+$script:ProcEventId = 0       # Counter so each invocation gets unique SourceIdentifiers
 
 function Invoke-Command-InApp {
     param([hashtable]$Cmd)
@@ -468,36 +500,92 @@ function Invoke-Command-InApp {
     $proc.StartInfo            = $psi
     $proc.EnableRaisingEvents  = $true
 
-    # .NET events (.add_*) keep closure over the calling scope, unlike
-    # Register-ObjectEvent which spawns an isolated subscriber runspace.
-    # This lets the handlers call Write-Output-Line / Set-Footer directly.
-    $proc.add_OutputDataReceived({
-        param($sender, $e)
-        if ($null -ne $e.Data) {
-            $line = $e.Data -replace "`e\[[0-9;]*[A-Za-z]", ''
-            Write-Output-Line $line
+    # IMPORTANT: We CANNOT use $proc.add_OutputDataReceived({...}) here.
+    # In ps2exe + WPF, those .add_* callbacks fire on threadpool threads that
+    # have no PowerShell runspace TLS context. The first stdout line crashes
+    # the app with:
+    #     System.Management.Automation.PSInvalidOperationException
+    #     at System.Management.Automation.ScriptBlock.GetContextFromTLS()
+    #     at System.Diagnostics.Process.OutputReadNotifyUser(...)
+    #
+    # Workaround: use a thread-safe queue + Register-ObjectEvent (handler
+    # runs in the engine event pump, which DOES have a runspace) to enqueue
+    # lines, then drain the queue from a DispatcherTimer on the UI thread.
+    $queue = [System.Collections.Concurrent.ConcurrentQueue[hashtable]]::new()
+    $script:ProcEventId++
+    $sidOut  = "DuneOut_$($script:ProcEventId)"
+    $sidErr  = "DuneErr_$($script:ProcEventId)"
+    $sidExit = "DuneExit_$($script:ProcEventId)"
+
+    $null = Register-ObjectEvent -InputObject $proc -EventName OutputDataReceived `
+        -SourceIdentifier $sidOut -MessageData $queue -Action {
+            $d = $EventArgs.Data
+            if ($null -ne $d) { [void]$Event.MessageData.Enqueue(@{ kind='out'; line=$d }) }
         }
-    })
-    $proc.add_ErrorDataReceived({
-        param($sender, $e)
-        if ($null -ne $e.Data) {
-            $line = $e.Data -replace "`e\[[0-9;]*[A-Za-z]", ''
-            Write-Output-Line "[err] $line"
+
+    $null = Register-ObjectEvent -InputObject $proc -EventName ErrorDataReceived `
+        -SourceIdentifier $sidErr -MessageData $queue -Action {
+            $d = $EventArgs.Data
+            if ($null -ne $d) { [void]$Event.MessageData.Enqueue(@{ kind='err'; line=$d }) }
         }
-    })
-    $proc.add_Exited({
-        param($sender, $e)
-        $ec = $sender.ExitCode
-        Write-Output-Line ""
-        if ($ec -eq 0) {
-            Write-Output-Line "[exit 0] OK"
-            Set-Footer "Done."
-        } else {
-            Write-Output-Line "[exit $ec]"
-            Set-Footer "Failed (exit $ec)."
+
+    $null = Register-ObjectEvent -InputObject $proc -EventName Exited `
+        -SourceIdentifier $sidExit -MessageData $queue -Action {
+            [void]$Event.MessageData.Enqueue(@{ kind='exit'; code=$Sender.ExitCode })
         }
-        $script:CurrentProc = $null
-    })
+
+    # Drain timer runs on the UI thread (has runspace TLS, so the Tick
+    # scriptblock invocation is safe).
+    $drain = New-Object System.Windows.Threading.DispatcherTimer
+    $drain.Interval = [TimeSpan]::FromMilliseconds(75)
+    $tick = {
+        $item = $null
+        $sawExit = $false
+        while ($queue.TryDequeue([ref]$item)) {
+            switch ($item.kind) {
+                'out' {
+                    $clean = $item.line -replace "`e\[[0-9;]*[A-Za-z]", ''
+                    Write-Output-Line $clean
+                }
+                'err' {
+                    $clean = $item.line -replace "`e\[[0-9;]*[A-Za-z]", ''
+                    Write-Output-Line "[err] $clean"
+                }
+                'exit' {
+                    $sawExit = $true
+                    Write-Output-Line ""
+                    if ($item.code -eq 0) {
+                        Write-Output-Line "[exit 0] OK"
+                        Set-Footer "Done."
+                    } else {
+                        Write-Output-Line "[exit $($item.code)]"
+                        Set-Footer "Failed (exit $($item.code))."
+                    }
+                    $script:CurrentProc = $null
+                }
+            }
+        }
+        if ($sawExit) {
+            # Drain any remaining queued items one more time, then stop.
+            while ($queue.TryDequeue([ref]$item)) {
+                if ($item.kind -eq 'out') {
+                    Write-Output-Line ($item.line -replace "`e\[[0-9;]*[A-Za-z]", '')
+                } elseif ($item.kind -eq 'err') {
+                    Write-Output-Line "[err] " + ($item.line -replace "`e\[[0-9;]*[A-Za-z]", '')
+                }
+            }
+            $drain.Stop()
+            Unregister-Event -SourceIdentifier $sidOut  -ErrorAction SilentlyContinue
+            Unregister-Event -SourceIdentifier $sidErr  -ErrorAction SilentlyContinue
+            Unregister-Event -SourceIdentifier $sidExit -ErrorAction SilentlyContinue
+            # Clean up the corresponding background jobs that Register-ObjectEvent creates
+            Get-Job -ErrorAction SilentlyContinue |
+                Where-Object { $_.Name -in @($sidOut, $sidErr, $sidExit) } |
+                ForEach-Object { Remove-Job -Job $_ -Force -ErrorAction SilentlyContinue }
+        }
+    }.GetNewClosure()
+    $drain.Add_Tick($tick)
+    $drain.Start()
 
     $script:CurrentProc = $proc
     [void]$proc.Start()
@@ -541,77 +629,111 @@ function Invoke-DuneCmd {
 
 function Refresh-StatusHeader {
     Set-Footer "Refreshing status..."
-    $ui.Window.Dispatcher.Invoke([action]{ $ui.StatusMeta.Text = "(fetching...)" })
+    $ui.StatusMeta.Text = "(fetching...)"
 
-    # Status fetch on a background job to avoid blocking the UI thread (~10s for SSH).
-    $job = Start-Job -ScriptBlock {
-        param($cfgFile, $vmName)
+    # Step 1: Get-VM runs synchronously on the UI thread. It's fast (~200ms)
+    # and MUST run in this elevated process - Start-Job spawns a child
+    # powershell.exe that does NOT reliably inherit the parent's admin token
+    # when the parent is a ps2exe-compiled binary (manifests as
+    # "You do not have the required permission" from Hyper-V).
+    $vmInfo = Get-VmStatus
+    $stamp  = (Get-Date).ToString('HH:mm:ss')
 
-        $cfg = @{}
-        if (Test-Path $cfgFile) {
-            Get-Content $cfgFile | ForEach-Object {
-                if ($_ -match '^([^#=]+)=(.*)$') { $cfg[$Matches[1].Trim()] = $Matches[2].Trim() }
-            }
-        }
-        try {
-            $vm = Get-VM -Name $vmName -ErrorAction Stop
-            $ip = ($vm | Get-VMNetworkAdapter).IPAddresses |
-                  Where-Object { $_ -match '^\d+\.\d+\.\d+\.\d+$' } | Select-Object -First 1
-            $vmInfo = @{ exists=$true; state=$vm.State.ToString(); running=($vm.State -eq 'Running'); ip=$ip }
-        } catch {
-            $vmInfo = @{ exists=$false; state='NotFound'; running=$false; ip=$null }
-        }
+    if (-not $vmInfo.exists) {
+        $ui.StatusPane.Text = "VM '$($script:VmName)' does not exist."
+        $ui.StatusMeta.Text = "(no VM)  -  checked $stamp"
+        Build-ButtonPanel -Vm $vmInfo
+        Set-Footer "Idle"
+        return
+    }
+    if (-not $vmInfo.running) {
+        $ui.StatusPane.Text = "VM '$($script:VmName)' is not running (state: $($vmInfo.state))."
+        $ui.StatusMeta.Text = "VM $($vmInfo.state)  -  checked $stamp"
+        Build-ButtonPanel -Vm $vmInfo
+        Set-Footer "Idle"
+        return
+    }
+    if (-not $vmInfo.ip) {
+        $ui.StatusPane.Text = 'VM running but has no IP yet.'
+        $ui.StatusMeta.Text = "VM running  -  checked $stamp"
+        Build-ButtonPanel -Vm $vmInfo
+        Set-Footer "Idle"
+        return
+    }
 
-        if (-not $vmInfo.exists)  { return @{ available=$false; reason="VM '$vmName' does not exist."; vm=$vmInfo } }
-        if (-not $vmInfo.running) { return @{ available=$false; reason="VM '$vmName' is not running (state: $($vmInfo.state))."; vm=$vmInfo } }
-        if (-not $vmInfo.ip)      { return @{ available=$false; reason='VM running but has no IP yet.'; vm=$vmInfo } }
-        if (-not $cfg.SshKey -or -not (Test-Path $cfg.SshKey)) {
-            return @{ available=$false; reason="SSH key not configured or missing: $($cfg.SshKey)"; vm=$vmInfo }
-        }
+    # Refresh button panel now that we know VM state (don't wait for SSH)
+    Build-ButtonPanel -Vm $vmInfo
+    $ui.StatusMeta.Text = "VM running ($($vmInfo.ip))  -  fetching status..."
 
+    $cfg    = Read-Config
+    $sshKey = $cfg.SshKey
+    if (-not $sshKey -or -not (Test-Path $sshKey)) {
+        $ui.StatusPane.Text = "SSH key not configured or missing: $sshKey`r`n`r`nRun the 'initial-setup' command to configure."
+        $ui.StatusMeta.Text = "VM running ($($vmInfo.ip))  -  no SSH key  -  checked $stamp"
+        Set-Footer "Idle"
+        return
+    }
+
+    # Step 2: SSH battlegroup status on a background runspace. Runspaces run
+    # in-process, so they inherit the parent's elevation token and credentials.
+    # (SSH itself doesn't need admin, but using a runspace avoids the same
+    # elevation pitfall Start-Job hits, and is much faster to start.)
+    $rs = [RunspaceFactory]::CreateRunspace()
+    $rs.ApartmentState = 'STA'
+    $rs.ThreadOptions  = 'ReuseThread'
+    $rs.Open()
+    $ps = [PowerShell]::Create()
+    $ps.Runspace = $rs
+    [void]$ps.AddScript({
+        param($SshKey, $VmIp)
         $bgBinPath = '/home/dune/.dune/bin/battlegroup'
         try {
             $raw = & ssh -o StrictHostKeyChecking=no -o LogLevel=QUIET `
                          -o ConnectTimeout=10 -o BatchMode=yes `
-                         -i $cfg.SshKey "dune@$($vmInfo.ip)" "$bgBinPath status" 2>&1
+                         -i $SshKey "dune@$VmIp" "$bgBinPath status" 2>&1
             $text = ($raw | Out-String).TrimEnd()
             $text = $text -replace "`e\[[0-9;]*[A-Za-z]", ''
-            return @{ available=$true; exitCode=$LASTEXITCODE; output=$text; vm=$vmInfo }
+            return @{ ok=$true; output=$text; exitCode=$LASTEXITCODE }
         } catch {
-            return @{ available=$false; reason="SSH error: $($_.Exception.Message)"; vm=$vmInfo }
+            return @{ ok=$false; reason="SSH error: $($_.Exception.Message)" }
         }
-    } -ArgumentList $script:ConfigFile, $script:VmName
+    }).AddArgument($sshKey).AddArgument($vmInfo.ip)
 
-    # Poll the job from a UI timer instead of blocking
+    $asyncResult = $ps.BeginInvoke()
+
+    # Poll completion from a UI timer (don't block the dispatcher).
+    # GetNewClosure() is REQUIRED here so the Tick scriptblock can see the
+    # function-scoped vars ($asyncResult, $ps, $rs, $timer, $vmInfo). Without
+    # it, the scriptblock fires but those vars are $null, IsCompleted never
+    # registers true, and the status header stays on "fetching..." forever.
     $timer = New-Object System.Windows.Threading.DispatcherTimer
     $timer.Interval = [TimeSpan]::FromMilliseconds(250)
-    $timer.Add_Tick({
-        if ($job.State -eq 'Completed' -or $job.State -eq 'Failed') {
+    $tickHandler = {
+        if ($asyncResult.IsCompleted) {
             $timer.Stop()
             try {
-                $r = Receive-Job -Job $job
-                $stamp = (Get-Date).ToString('HH:mm:ss')
-                if ($r.available) {
+                $r = $ps.EndInvoke($asyncResult) | Select-Object -First 1
+                $stamp2 = (Get-Date).ToString('HH:mm:ss')
+                if ($r -and $r.ok) {
                     $ui.StatusPane.Text = $r.output
-                    $vmTxt = if ($r.vm.running) { "VM running ($($r.vm.ip))" } else { "VM $($r.vm.state)" }
-                    $ui.StatusMeta.Text = "$vmTxt  -  updated $stamp"
-                    Set-Footer "Idle"
-                    # Refresh button list now that we know VM state
-                    Build-ButtonPanel -Vm $r.vm
+                    $ui.StatusMeta.Text = "VM running ($($vmInfo.ip))  -  updated $stamp2"
                 } else {
-                    $ui.StatusPane.Text = $r.reason
-                    $ui.StatusMeta.Text = "(no battlegroup status)  -  checked $stamp"
-                    Set-Footer "Idle"
-                    Build-ButtonPanel -Vm $r.vm
+                    $reason = if ($r) { $r.reason } else { 'SSH returned no result.' }
+                    $ui.StatusPane.Text = $reason
+                    $ui.StatusMeta.Text = "VM running ($($vmInfo.ip))  -  ssh failed  -  $stamp2"
                 }
+                Set-Footer "Idle"
             } catch {
-                $ui.StatusPane.Text = "Error reading status job: $($_.Exception.Message)"
+                $ui.StatusPane.Text = "Error reading status: $($_.Exception.Message)"
                 Set-Footer "Idle"
             } finally {
-                Remove-Job -Job $job -Force -ErrorAction SilentlyContinue
+                $ps.Dispose()
+                $rs.Close()
+                $rs.Dispose()
             }
         }
-    })
+    }.GetNewClosure()
+    $timer.Add_Tick($tickHandler)
     $timer.Start()
 }
 
@@ -678,7 +800,7 @@ $autoRefresh.Add_Tick({ Refresh-StatusHeader })
 
 # Initial paint
 Build-ButtonPanel -Vm $script:LastVmKnown
-$ui.FooterVersion.Text = "Dune Server v4.0.0"
+$ui.FooterVersion.Text = "Dune Server v4.0.2"
 
 # Kick off first status fetch on window load
 $ui.Window.Add_Loaded({
