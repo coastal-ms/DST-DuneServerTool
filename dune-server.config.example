@@ -1,0 +1,15 @@
+# Example dune-server.config
+# Copy to `dune-server.config` (same folder as dune-server.bat) and edit, OR
+# just delete `dune-server.config` and the setup wizard will recreate it on next run.
+
+SteamPath=C:\Program Files (x86)\Steam\steamapps\common\Dune Awakening Self-Hosted Server
+SshKey=C:\Users\<you>\AppData\Local\DuneAwakeningServer\sshKey
+DuneAdminExe=C:\path\to\dune-admin.exe
+WindowsUser=<your-windows-username>
+
+# Port verification mode: builtin | custom | disabled
+#   builtin  - uses yougetsignal.com (TCP only, UDP shown as skipped)
+#   custom   - uses PortCheckUrlTemplate below; supports {ip} {port} {protocol}
+#   disabled - no checks; menu shows nothing for ports
+PortCheckMode=builtin
+PortCheckUrlTemplate=
