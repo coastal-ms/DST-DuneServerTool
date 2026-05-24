@@ -7,6 +7,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2.0.2] - 2026-05-24
+
+### Fixed
+
+- **Script still exited after every interactive menu command (v2.0.1 hotfix
+  was incomplete).** The v2.0.1 rename used a case-insensitive
+  `-replace`, which also clobbered the five `if ($Cmd) { break }`
+  param-guards down to `if ($cmdName) { break }`. Since `$cmdName` is
+  set to the selected command name (e.g. `"status"`), those guards
+  fired on every iteration and exited the loop. Restored the guards
+  to `$Cmd` with a case-sensitive replace. Confirmed via parse +
+  `Select-String -CaseSensitive` audit that every remaining
+  `$cmdName` is either a parameter, an assignment, or an `-eq`
+  comparison against a string literal.
+
 ## [2.0.1] - 2026-05-24
 
 ### Fixed
@@ -93,6 +108,7 @@ patch releases follow as `2.0.1`, `2.0.2`, etc.
   `Copy-SshKeyToDir`, `New-DuneDesktopShortcut`.
 - `web/` folder structure added.
 
-[Unreleased]: https://github.com/coastal-ms/Simple-Dune-Server-Management-Tool/compare/v2.0.1...HEAD
+[Unreleased]: https://github.com/coastal-ms/Simple-Dune-Server-Management-Tool/compare/v2.0.2...HEAD
+[2.0.2]: https://github.com/coastal-ms/Simple-Dune-Server-Management-Tool/compare/v2.0.1...v2.0.2
 [2.0.1]: https://github.com/coastal-ms/Simple-Dune-Server-Management-Tool/compare/v2.0.0...v2.0.1
 [2.0.0]: https://github.com/coastal-ms/Simple-Dune-Server-Management-Tool/releases/tag/v2.0.0
