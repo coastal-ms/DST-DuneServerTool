@@ -13,7 +13,7 @@ param(
 # Wraps the original battlegroup.ps1 menu and adds extra tools
 # ============================================================
 
-$script:ToolVersion = "2.0.0"
+$script:ToolVersion = "2.0.1"
 
 # Resize console window so the full menu is visible
 try {
@@ -858,29 +858,29 @@ while ($true) {
         if ($Cmd) { exit 1 } else { continue }
     }
 
-    $cmd = $entry.Name
+    $cmdName = $entry.Name
     $ip  = $info.Ip
 
     # ========================================================
     #  VM COMMANDS
     # ========================================================
 
-    if ($cmd -eq "initial-setup") {
+    if ($cmdName -eq "initial-setup") {
         . "$bgSetupPath\initial-setup.ps1"
-        if ($Cmd) { break }
+        if ($cmdName) { break }
         continue
     }
 
-    if ($cmd -eq "web") {
+    if ($cmdName -eq "web") {
         $webScript = Join-Path $scriptDir 'web\Start-DuneWeb.ps1'
         if (-not (Test-Path $webScript)) {
             Write-Warning "Web UI script not found at $webScript"
-            if ($Cmd) { break } else { continue }
+            if ($cmdName) { break } else { continue }
         }
         if (-not (Get-Module -ListAvailable Pode)) {
             Write-Warning "Pode PowerShell module is not installed. Install with:"
             Write-Host "    Install-Module Pode -Scope CurrentUser" -ForegroundColor Cyan
-            if ($Cmd) { break } else { continue }
+            if ($cmdName) { break } else { continue }
         }
 
         $port = 8765
@@ -915,11 +915,11 @@ while ($true) {
 
         Write-Host "Opening $url in your default browser..." -ForegroundColor Cyan
         Start-Process $url
-        if ($Cmd) { break }
+        if ($cmdName) { break }
         continue
     }
 
-    if ($cmd -eq "start-vm") {
+    if ($cmdName -eq "start-vm") {
         Write-Host "Starting VM '$vmName'..." -ForegroundColor Cyan
         Start-VM -Name $vmName | Out-Null
         do { Start-Sleep -Seconds 2; $vm = Get-VM -Name $vmName } while ($vm.State -ne 'Running')
@@ -939,14 +939,14 @@ while ($true) {
         continue
     }
 
-    if ($cmd -eq "stop-vm") {
+    if ($cmdName -eq "stop-vm") {
         Write-Host "Stopping VM '$vmName'..." -ForegroundColor Cyan
         Stop-VM -Name $vmName -Force | Out-Null
         Write-Host "VM stopped." -ForegroundColor Green
         continue
     }
 
-    if ($cmd -eq "startup") {
+    if ($cmdName -eq "startup") {
         Write-Host ""
         Write-Host "=== Startup ===" -ForegroundColor Cyan
         Write-Host "  1. Start VM (skipped if already running)" -ForegroundColor DarkGray
@@ -1084,7 +1084,7 @@ while ($true) {
         continue
     }
 
-    if ($cmd -eq "graceful-reboot") {
+    if ($cmdName -eq "graceful-reboot") {
         Write-Host ""
         Write-Host "=== Graceful Reboot ===" -ForegroundColor Cyan
         Write-Host "  1. Stop battlegroup (waits for game/mq/gateway/director pods to terminate)" -ForegroundColor DarkGray
@@ -1231,7 +1231,7 @@ while ($true) {
         continue
     }
 
-    if ($cmd -eq "graceful-shutdown") {
+    if ($cmdName -eq "graceful-shutdown") {
         Write-Host ""
         Write-Host "=== Graceful Shutdown ===" -ForegroundColor Cyan
         Write-Host "  1. Stop battlegroup (waits for game/mq/gateway/director pods to terminate)" -ForegroundColor DarkGray
@@ -1292,7 +1292,7 @@ while ($true) {
         continue
     }
 
-    if ($cmd -eq "rotate-ssh-key") {
+    if ($cmdName -eq "rotate-ssh-key") {
         . "$bgSetupPath\vm-utilities.ps1"
         Update-SshKey -Ip $ip | Out-Null
         # Keep dune-admin's copy of the SSH key in sync with the rotated one
@@ -1310,7 +1310,7 @@ while ($true) {
         continue
     }
 
-    if ($cmd -eq "change-password") {
+    if ($cmdName -eq "change-password") {
         . "$bgSetupPath\vm-utilities.ps1"
         $pw1Sec = Read-Host "Enter new password for 'dune'" -AsSecureString
         $pw2Sec = Read-Host "Confirm new password" -AsSecureString
@@ -1326,12 +1326,12 @@ while ($true) {
     #  BATTLEGROUP COMMANDS
     # ========================================================
 
-    if ($cmd -eq "open-file-browser") {
+    if ($cmdName -eq "open-file-browser") {
         Start-Process "http://${ip}:18888/"
         continue
     }
 
-    if ($cmd -eq "open-director") {
+    if ($cmdName -eq "open-director") {
         if (-not $directorPort) {
             $directorNodePort = ssh -o StrictHostKeyChecking=no -o LogLevel=QUIET -i "$sshKey" "$sshUser@$ip" `
                 "sudo kubectl get svc -A -o jsonpath='{.items[*].spec.ports[?(@.port==11717)].nodePort}' 2>&1"
@@ -1342,13 +1342,13 @@ while ($true) {
         continue
     }
 
-    if ($cmd -eq "shell-vm") {
+    if ($cmdName -eq "shell-vm") {
         Write-Host "Opening shell in the VM. Type 'exit' to return." -ForegroundColor Cyan
         ssh -t -o StrictHostKeyChecking=no -o LogLevel=QUIET -i "$sshKey" "$sshUser@$ip"
         continue
     }
 
-    if ($cmd -eq "shell-pod") {
+    if ($cmdName -eq "shell-pod") {
         $bgPrefix = "funcom-seabass-"
         $nsList = ssh -o StrictHostKeyChecking=no -o LogLevel=QUIET -i "$sshKey" "$sshUser@$ip" "sudo kubectl get ns --no-headers -o custom-columns=NAME:.metadata.name | grep '^$bgPrefix'"
         $namespaces = @($nsList -split "`n" | ForEach-Object { $_.Trim() } | Where-Object { $_ })
@@ -1389,7 +1389,7 @@ while ($true) {
         continue
     }
 
-    if ($cmd -eq "edit-advanced") {
+    if ($cmdName -eq "edit-advanced") {
         Write-Host ""
         Write-Host "WARNING:" -ForegroundColor Red -NoNewline
         Write-Host " You are about to edit the live battlegroup YAML directly in Kubernetes." -ForegroundColor Yellow
@@ -1399,7 +1399,7 @@ while ($true) {
         if ($confirm -ne "YES") { Write-Host "Aborted." -ForegroundColor Cyan; continue }
     }
 
-    if ($cmd -eq "logs-export") {
+    if ($cmdName -eq "logs-export") {
         ssh -t -o StrictHostKeyChecking=no -i "$sshKey" "$sshUser@$ip" "$bgBinPath logs-export"
         $timestamp = Get-Date -Format "yyyy-MM-dd_HH-mm-ss"
         $localDir = Join-Path $env:USERPROFILE "Documents\BattlegroupLogs\Battlegroup_$timestamp"
@@ -1413,7 +1413,7 @@ while ($true) {
         continue
     }
 
-    if ($cmd -eq "operator-logs-export") {
+    if ($cmdName -eq "operator-logs-export") {
         ssh -t -o StrictHostKeyChecking=no -i "$sshKey" "$sshUser@$ip" "$bgBinPath operator-logs-export"
         $timestamp = Get-Date -Format "yyyy-MM-dd_HH-mm-ss"
         $localDir = Join-Path $env:USERPROFILE "Documents\OperatorLogs\Operators_$timestamp"
@@ -1431,13 +1431,13 @@ while ($true) {
     #  TOOLS COMMANDS
     # ========================================================
 
-    if ($cmd -eq "ssh") {
+    if ($cmdName -eq "ssh") {
         Write-Host "Connecting to VM via SSH... Type 'exit' to return." -ForegroundColor Cyan
         ssh -t -o StrictHostKeyChecking=no -o LogLevel=QUIET -i "$sshKey" "$sshUser@$ip"
         continue
     }
 
-    if ($cmd -eq "dune-admin") {
+    if ($cmdName -eq "dune-admin") {
         Write-Host "Launching dune-admin.exe and web UI as $windowsUser..." -ForegroundColor Cyan
         $duneAdminDir = Split-Path $duneAdminExe -Parent
         $duneAdminName = Split-Path $duneAdminExe -Leaf
@@ -1454,13 +1454,13 @@ while ($true) {
         continue
     }
 
-    if ($cmd -eq "setup-guide") {
+    if ($cmdName -eq "setup-guide") {
         Start-Process "https://duneawakening.com/self-hosted-servers/"
         continue
     }
 
     # --- Fallback: delegate to battlegroup CLI on VM ---
-    ssh -t -o StrictHostKeyChecking=no -o LogLevel=QUIET -i "$sshKey" "$sshUser@$ip" "$bgBinPath $cmd"
+    ssh -t -o StrictHostKeyChecking=no -o LogLevel=QUIET -i "$sshKey" "$sshUser@$ip" "$bgBinPath $cmdName"
 
     # Battlegroup commands (status/start/restart/stop) can change observable
     # port state, so invalidate the cached external port-check results to
@@ -1468,7 +1468,7 @@ while ($true) {
     $script:portCheckCache = $null
 
     # After start/restart, resolve director port
-    if ($cmd -eq "start" -or $cmd -eq "restart") {
+    if ($cmdName -eq "start" -or $cmdName -eq "restart") {
         $elapsed = 0; $timeout = 60
         while (-not $directorPort -and $elapsed -lt $timeout) {
             $directorNodePort = ssh -o StrictHostKeyChecking=no -o LogLevel=QUIET -i "$sshKey" "$sshUser@$ip" `
@@ -1479,7 +1479,7 @@ while ($true) {
         if (-not $directorPort) { Write-Warning "Could not determine Director port after $timeout seconds." }
     }
 
-    if ($Cmd) { break }
+    if ($cmdName) { break }
 }
 
 Stop-Transcript | Out-Null
