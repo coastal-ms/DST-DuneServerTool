@@ -13,7 +13,7 @@ param(
 # Wraps the original battlegroup.ps1 menu and adds extra tools
 # ============================================================
 
-$script:ToolVersion = "1.2.0"
+$script:ToolVersion = "1.2.1"
 
 # Resize console window so the full menu is visible
 try {
@@ -599,8 +599,15 @@ function Get-ToolCmdAvailability {
 
 $directorPort = $null
 $bgBinPath    = '/home/dune/.dune/bin/battlegroup'
+$cmdHasRun    = $false
 
 while ($true) {
+    # In -Cmd (non-interactive) mode, exit after exactly one handler runs.
+    # Handlers use `continue` which would otherwise skip the bottom-of-loop
+    # `if ($Cmd) { break }` and cause an infinite re-dispatch.
+    if ($Cmd -and $cmdHasRun) { break }
+    if ($Cmd) { $cmdHasRun = $true }
+
     $info = Get-VmInfo
 
     # Build entries list

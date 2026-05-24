@@ -7,6 +7,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.2.1] - 2026-05-24
+
+### Fixed
+- `-Cmd <name>` mode (used by every web UI button) would infinite-loop
+  re-running the same command. Handlers use `continue` to skip the
+  remaining loop body, which also skipped the bottom-of-loop `break`
+  intended to exit after one dispatch. Visible symptom: clicking
+  `dune-admin` (or any other) button spawned launch attempts repeatedly
+  until the process was killed. Now gated at the top of the loop so
+  exactly one handler runs per `-Cmd` invocation.
+
 ## [1.2.0] - 2026-05-24
 
 ### Added
@@ -127,7 +138,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Hardened the post-reboot readiness check to verify webhook Service endpoints
   are populated (not just pods Running) before calling battlegroup start.
 
-[Unreleased]: https://github.com/coastal-ms/Simple-Dune-Server-Management-Tool/compare/v1.2.0...HEAD
+[Unreleased]: https://github.com/coastal-ms/Simple-Dune-Server-Management-Tool/compare/v1.2.1...HEAD
+[1.2.1]: https://github.com/coastal-ms/Simple-Dune-Server-Management-Tool/compare/v1.2.0...v1.2.1
 [1.2.0]: https://github.com/coastal-ms/Simple-Dune-Server-Management-Tool/compare/v1.1.1...v1.2.0
 [1.1.1]: https://github.com/coastal-ms/Simple-Dune-Server-Management-Tool/compare/v1.1.0...v1.1.1
 [1.1.0]: https://github.com/coastal-ms/Simple-Dune-Server-Management-Tool/compare/v1.0.1...v1.1.0
