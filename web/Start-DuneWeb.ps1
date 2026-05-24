@@ -88,6 +88,12 @@ $script:BgCommands = @(
     @{ key='16'; name='shell-pod';                 desc='Open a shell to a pod in the battlegroup';            sub='Monitoring' }
 )
 
+$script:MapCommands = @(
+    @{ key='17'; name='start-deepdesert'; desc='On-demand: spin up the Deep Desert map pod';      requires='running' }
+    @{ key='18'; name='start-arrakeen';   desc='On-demand: spin up the Arrakeen hub map pod';      requires='running' }
+    @{ key='19'; name='start-harko';      desc='On-demand: spin up the Harko Village hub map pod'; requires='running' }
+)
+
 function Get-ToolCommandList {
     $cfg = Read-Config
     $list = @(
@@ -198,6 +204,7 @@ Start-PodeServer {
     Set-PodeState -Name 'VmName'      -Value $script:VmName     | Out-Null
     Set-PodeState -Name 'VmCommands'  -Value $script:VmCommands | Out-Null
     Set-PodeState -Name 'BgCommands'  -Value $script:BgCommands | Out-Null
+    Set-PodeState -Name 'MapCommands' -Value $script:MapCommands | Out-Null
 
     Add-PodeEndpoint -Address 127.0.0.1 -Port $Port -Protocol Http
 
@@ -232,6 +239,11 @@ Start-PodeServer {
         }
         $sections += @{ name='Battlegroup'; items=@($bgList) }
 
+        $mapList = foreach ($c in (Get-PodeState -Name 'MapCommands')) {
+            @{ key=$c.key; name=$c.name; desc=$c.desc; available=(Resolve-Available -cmd $c -vm $vm); confirm=$false }
+        }
+        $sections += @{ name='Maps (on-demand)'; items=@($mapList) }
+
         $toolList = foreach ($c in (Get-ToolCommandList)) {
             @{ key=$c.key; name=$c.name; desc=$c.desc; available=(Resolve-Available -cmd $c -vm $vm); confirm=$false }
         }
@@ -246,6 +258,7 @@ Start-PodeServer {
         $allNames = @()
         $allNames += (Get-PodeState -Name 'VmCommands').name
         $allNames += (Get-PodeState -Name 'BgCommands').name
+        $allNames += (Get-PodeState -Name 'MapCommands').name
         $allNames += (Get-ToolCommandList).name
         if ($allNames -notcontains $name) {
             Set-PodeResponseStatus -Code 400
