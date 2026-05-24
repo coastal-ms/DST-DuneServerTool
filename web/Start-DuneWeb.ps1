@@ -27,9 +27,10 @@ $script:ConfigFile = Join-Path $script:Root 'dune-server.config'
 $script:VmName     = 'dune-awakening'
 
 function Read-Config {
+    $cfgFile = (Get-PodeState -Name 'ConfigFile')
     $cfg = @{}
-    if (Test-Path $script:ConfigFile) {
-        Get-Content $script:ConfigFile | ForEach-Object {
+    if ($cfgFile -and (Test-Path $cfgFile)) {
+        Get-Content $cfgFile | ForEach-Object {
             if ($_ -match '^([^#=]+)=(.*)$') { $cfg[$Matches[1].Trim()] = $Matches[2].Trim() }
         }
     }
@@ -37,8 +38,9 @@ function Read-Config {
 }
 
 function Get-VmStatus {
+    $vmName = (Get-PodeState -Name 'VmName')
     try {
-        $vm = Get-VM -Name $script:VmName -ErrorAction Stop
+        $vm = Get-VM -Name $vmName -ErrorAction Stop
         $ip = ($vm | Get-VMNetworkAdapter).IPAddresses |
               Where-Object { $_ -match '^\d+\.\d+\.\d+\.\d+$' } |
               Select-Object -First 1
@@ -107,6 +109,14 @@ function Resolve-Available {
 }
 
 Start-PodeServer {
+    # Publish shared state for the route runspaces (they can't see $script:* vars).
+    Set-PodeState -Name 'Root'        -Value $script:Root       | Out-Null
+    Set-PodeState -Name 'MainScript'  -Value $script:MainScript | Out-Null
+    Set-PodeState -Name 'ConfigFile'  -Value $script:ConfigFile | Out-Null
+    Set-PodeState -Name 'VmName'      -Value $script:VmName     | Out-Null
+    Set-PodeState -Name 'VmCommands'  -Value $script:VmCommands | Out-Null
+    Set-PodeState -Name 'BgCommands'  -Value $script:BgCommands | Out-Null
+
     Add-PodeEndpoint -Address 127.0.0.1 -Port $Port -Protocol Http
 
     Add-PodeStaticRoute -Path '/' -Source (Join-Path $script:Root 'web\public') -Defaults @('index.html')
@@ -123,20 +133,20 @@ Start-PodeServer {
         $vm = Get-VmStatus
         $sections = @()
 
-        $vmList = foreach ($c in $script:VmCommands) {
+        $vmList = foreach ($c in (Get-PodeState -Name 'VmCommands')) {
             @{ key=$c.key; name=$c.name; desc=$c.desc; available=(Resolve-Available -cmd $c -vm $vm); confirm=([bool]$c.confirm) }
         }
-        $sections += @{ name='VM';          items=$vmList }
+        $sections += @{ name='VM';          items=@($vmList) }
 
-        $bgList = foreach ($c in $script:BgCommands) {
+        $bgList = foreach ($c in (Get-PodeState -Name 'BgCommands')) {
             @{ key=$c.key; name=$c.name; desc=$c.desc; sub=$c.sub; available=[bool]$vm.running; confirm=$false }
         }
-        $sections += @{ name='Battlegroup'; items=$bgList }
+        $sections += @{ name='Battlegroup'; items=@($bgList) }
 
         $toolList = foreach ($c in (Get-ToolCommandList)) {
             @{ key=$c.key; name=$c.name; desc=$c.desc; available=(Resolve-Available -cmd $c -vm $vm); confirm=$false }
         }
-        $sections += @{ name='Tools';       items=$toolList }
+        $sections += @{ name='Tools';       items=@($toolList) }
 
         Write-PodeJsonResponse -Value @{ sections = $sections }
     }
@@ -145,8 +155,8 @@ Start-PodeServer {
         $name = $WebEvent.Parameters['name']
 
         $allNames = @()
-        $allNames += $script:VmCommands.name
-        $allNames += $script:BgCommands.name
+        $allNames += (Get-PodeState -Name 'VmCommands').name
+        $allNames += (Get-PodeState -Name 'BgCommands').name
         $allNames += (Get-ToolCommandList).name
         if ($allNames -notcontains $name) {
             Set-PodeResponseStatus -Code 400
@@ -154,12 +164,13 @@ Start-PodeServer {
             return
         }
 
+        $mainScript = (Get-PodeState -Name 'MainScript')
         try {
             Start-Process pwsh -Verb RunAs -ArgumentList @(
                 '-NoExit',
                 '-NoProfile',
                 '-ExecutionPolicy','Bypass',
-                '-File',"`"$script:MainScript`"",
+                '-File',"`"$mainScript`"",
                 '-Cmd',$name
             ) | Out-Null
             Set-PodeResponseStatus -Code 202
