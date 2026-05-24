@@ -1,0 +1,89 @@
+name: 🐛 Tool bug report
+description: Report a bug or unexpected behavior in the Simple Dune Server Management Tool itself (the PowerShell script, the .bat launcher, or the web UI).
+title: "[Bug] "
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        ## What this tracker is for
+
+        This issue tracker is for **bugs in this tool's code** — the
+        PowerShell script, the `.bat` launcher, the localhost web UI,
+        and the setup wizard.
+
+        **Please do _not_ open issues here for:**
+        - VM connectivity / SSH / network / port-forwarding problems
+        - Hyper-V configuration or performance tuning
+        - Funcom dedicated-server bugs (game crashes, missing pods,
+          `battlegroup` CLI errors that aren't caused by this tool)
+        - General "how do I play / host" questions
+
+        For those, ping `@allcoast` on Discord or check the
+        [Funcom Self-Hosted Server docs](https://duneawakening.com/self-hosted-servers/).
+
+        ---
+
+  - type: checkboxes
+    id: scope
+    attributes:
+      label: Scope check
+      description: Please confirm this is actually a bug in the tool's code.
+      options:
+        - label: This is a bug in the tool itself (script crashes, menu option misbehaves, web UI broken, setup wizard fails, etc.) — **not** a VM/network/Funcom-server issue.
+          required: true
+
+  - type: input
+    id: tool_version
+    attributes:
+      label: Tool version
+      description: Shown in the menu header (e.g. `v3.0.0`). Find it on line 16 of `dune-server.ps1` (`$script:ToolVersion`).
+      placeholder: "v3.0.0"
+    validations:
+      required: true
+
+  - type: input
+    id: menu_option
+    attributes:
+      label: Menu option / command
+      description: Which menu letter/number or `-Cmd <name>` triggered the bug?
+      placeholder: "e.g. e. reboot, or -Cmd startup, or b. web"
+    validations:
+      required: true
+
+  - type: textarea
+    id: what_happened
+    attributes:
+      label: What happened
+      description: Paste the actual error message or unexpected output from the console. Screenshots also welcome.
+      placeholder: |
+        e.g. "After selecting 'e. reboot' the script printed
+        'Waiting for k3s API...' and never advanced."
+      render: shell
+    validations:
+      required: true
+
+  - type: textarea
+    id: expected
+    attributes:
+      label: What you expected to happen
+    validations:
+      required: true
+
+  - type: textarea
+    id: transcript
+    attributes:
+      label: Transcript / log excerpt
+      description: |
+        Every run is auto-logged to `.logs\dune-server-<timestamp>.log`
+        next to `dune-server.bat`. Paste the relevant section (last 30-50
+        lines around the failure is usually enough — please **redact**
+        public IPs, SSH key paths, and any secrets first).
+      render: shell
+
+  - type: input
+    id: env
+    attributes:
+      label: Environment
+      description: Windows version + PowerShell version (`$PSVersionTable.PSVersion`).
+      placeholder: "Windows 11 23H2, PowerShell 7.4.1"
