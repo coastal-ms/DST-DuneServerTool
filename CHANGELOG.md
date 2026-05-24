@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.2.3] - 2026-05-24
+
+### Changed
+- Setup wizard now defaults the `dune-admin` install directory to
+  `%USERPROFILE%\Desktop\dune-admin` (was `%USERPROFILE%\dune-admin`)
+  so the tool is more visible after install. The desktop location is
+  also checked first when offering to point at an existing install.
+
 ## [1.2.2] - 2026-05-24
 
 ### Added
@@ -164,7 +172,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Hardened the post-reboot readiness check to verify webhook Service endpoints
   are populated (not just pods Running) before calling battlegroup start.
 
-[Unreleased]: https://github.com/coastal-ms/Simple-Dune-Server-Management-Tool/compare/v1.2.2...HEAD
+[Unreleased]: https://github.com/coastal-ms/Simple-Dune-Server-Management-Tool/compare/v1.2.3...HEAD
+[1.2.3]: https://github.com/coastal-ms/Simple-Dune-Server-Management-Tool/compare/v1.2.2...v1.2.3
 [1.2.2]: https://github.com/coastal-ms/Simple-Dune-Server-Management-Tool/compare/v1.2.1...v1.2.2
 [1.2.1]: https://github.com/coastal-ms/Simple-Dune-Server-Management-Tool/compare/v1.2.0...v1.2.1
 [1.2.0]: https://github.com/coastal-ms/Simple-Dune-Server-Management-Tool/compare/v1.1.1...v1.2.0
