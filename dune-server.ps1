@@ -15,6 +15,31 @@ param(
 
 $script:ToolVersion = "3.0.1"
 
+# ============================================================
+#  CRASH / EXIT CLEANUP
+# ============================================================
+# Any helper objects created during a run (background jobs spawned by
+# Invoke-WithLiveCounter for live boot counters, etc.) must not orphan if
+# the script crashes, is Ctrl+C'd, or the user closes the window. The
+# EngineEvent fires on normal exit, Ctrl+C, and unhandled exceptions.
+# The Pode web server is intentionally NOT killed - it runs as a separate
+# detached process the user manages independently.
+function Invoke-DuneCleanup {
+    try {
+        $jobs = @(Get-Job -ErrorAction SilentlyContinue)
+        if ($jobs.Count -gt 0) {
+            $jobs | Stop-Job -ErrorAction SilentlyContinue
+            $jobs | Remove-Job -Force -ErrorAction SilentlyContinue
+        }
+    } catch { }
+}
+Register-EngineEvent -SourceIdentifier PowerShell.Exiting -SupportEvent -Action {
+    try {
+        Get-Job -ErrorAction SilentlyContinue | Stop-Job -ErrorAction SilentlyContinue
+        Get-Job -ErrorAction SilentlyContinue | Remove-Job -Force -ErrorAction SilentlyContinue
+    } catch { }
+} | Out-Null
+
 # Resize console window so the full menu is visible
 try {
     $bufWidth  = [Math]::Max($Host.UI.RawUI.BufferSize.Width, 120)
@@ -831,6 +856,18 @@ function Get-ToolCmdAvailability {
 $directorPort = $null
 $bgBinPath    = '/home/dune/.dune/bin/battlegroup'
 $cmdHasRun    = $false
+
+# Top-level trap: on any unhandled exception, clean up background helpers
+# before bubbling out so the script exits with a non-zero code (the .bat
+# file then pauses so the user can read the error).
+trap {
+    Write-Host ""
+    Write-Host "FATAL: $($_.Exception.Message)" -ForegroundColor Red
+    Write-Host "  at: $($_.InvocationInfo.PositionMessage)" -ForegroundColor DarkGray
+    Write-Host "Cleaning up background helpers..." -ForegroundColor Yellow
+    Invoke-DuneCleanup
+    exit 1
+}
 
 while ($true) {
     # In -Cmd (non-interactive) mode, exit after exactly one handler runs.

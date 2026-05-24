@@ -13,6 +13,14 @@ Patch release: better feedback during long boot waits, and a real fix for the DB
 
 ### Fixed
 
+- **Background helpers are now cleaned up on crash.** When the script
+  exits abnormally (unhandled exception, Ctrl+C, window close), any
+  `Start-Job` helpers spawned by the new live wait counters are stopped
+  and removed via a `PowerShell.Exiting` engine event plus a top-level
+  `trap` in the main loop. Previously a mid-wait crash could leave an
+  orphaned background pwsh process holding the SSH connection. The
+  `dune-server.bat` wrapper also now reports the PowerShell exit code
+  before pausing so the user can see what went wrong.
 - **`shutdown` now tracks timings and shows estimates** like `startup` and
   `reboot` do. The shutdown handler was never instrumented in the v2.0.5
   boot-time-tracking work, so subsequent shutdowns showed no
