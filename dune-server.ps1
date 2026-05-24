@@ -13,7 +13,7 @@ param(
 # Wraps the original battlegroup.ps1 menu and adds extra tools
 # ============================================================
 
-$script:ToolVersion = "2.0.6"
+$script:ToolVersion = "3.0.0"
 
 # Resize console window so the full menu is visible
 try {
