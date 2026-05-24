@@ -7,6 +7,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.2.4] - 2026-05-24
+
+### Fixed
+- `dune-server.bat` no longer pauses with "Press any key to continue"
+  after a clean exit (e.g. after picking `q. quit` or finishing a `1.
+  status` run). The `pause` now only fires when the PowerShell script
+  exits with a non-zero error code, which is its original purpose:
+  keep the window open so a startup crash is readable. Also forwards
+  `%*` to the script so command-line arguments (`-Cmd <name>`) work
+  when invoked via the .bat.
+
 ## [1.2.3] - 2026-05-24
 
 ### Changed
@@ -172,7 +183,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Hardened the post-reboot readiness check to verify webhook Service endpoints
   are populated (not just pods Running) before calling battlegroup start.
 
-[Unreleased]: https://github.com/coastal-ms/Simple-Dune-Server-Management-Tool/compare/v1.2.3...HEAD
+[Unreleased]: https://github.com/coastal-ms/Simple-Dune-Server-Management-Tool/compare/v1.2.4...HEAD
+[1.2.4]: https://github.com/coastal-ms/Simple-Dune-Server-Management-Tool/compare/v1.2.3...v1.2.4
 [1.2.3]: https://github.com/coastal-ms/Simple-Dune-Server-Management-Tool/compare/v1.2.2...v1.2.3
 [1.2.2]: https://github.com/coastal-ms/Simple-Dune-Server-Management-Tool/compare/v1.2.1...v1.2.2
 [1.2.1]: https://github.com/coastal-ms/Simple-Dune-Server-Management-Tool/compare/v1.2.0...v1.2.1
