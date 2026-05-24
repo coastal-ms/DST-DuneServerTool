@@ -705,6 +705,7 @@ if ($duneAdminExe) {
     $toolCommands += [pscustomobject]@{ Key = "21"; Name = "dune-admin";      Desc = "Launch dune-admin.exe  +  Open dune-admin web UI" }
 }
 $toolCommands += [pscustomobject]@{ Key = "22"; Name = "setup-guide";    Desc = "Open Funcom Self-Hosted Server Setup Instructions" }
+$toolCommands += [pscustomobject]@{ Key = "23"; Name = "report-issue";   Desc = "Report a bug in this tool (opens prefilled GitHub issue in browser)" }
 
 # ============================================================
 #  AVAILABILITY CHECKS
@@ -1577,6 +1578,36 @@ while ($true) {
 
     if ($cmdName -eq "setup-guide") {
         Start-Process "https://duneawakening.com/self-hosted-servers/"
+        continue
+    }
+
+    if ($cmdName -eq "report-issue") {
+        Write-Host ""
+        Write-Host "=== Report an Issue ===" -ForegroundColor Cyan
+        Write-Host "  Opening a prefilled bug report in your browser." -ForegroundColor DarkGray
+        Write-Host "  This tracker is for bugs in the TOOL ITSELF -" -ForegroundColor Yellow
+        Write-Host "  not for VM connectivity, Hyper-V, port forwarding, or Funcom server issues." -ForegroundColor Yellow
+        Write-Host "  For those, ping @allcoast on Discord." -ForegroundColor DarkGray
+        Write-Host ""
+
+        # GitHub issue forms accept URL params keyed by the input id in the
+        # YAML form. Prefill what we already know so the user only fills in
+        # what they hit. Values must be URL-encoded.
+        Add-Type -AssemblyName System.Web -ErrorAction SilentlyContinue
+        function Get-EncodedParam([string]$v) {
+            if ([string]::IsNullOrEmpty($v)) { return "" }
+            return [System.Web.HttpUtility]::UrlEncode($v)
+        }
+        $envStr = "Windows $([System.Environment]::OSVersion.Version), PowerShell $($PSVersionTable.PSVersion)"
+        $params = @(
+            "template=bug_report.yml"
+            "tool_version=" + (Get-EncodedParam "v$script:ToolVersion")
+            "env="          + (Get-EncodedParam $envStr)
+        ) -join "&"
+        $url = "https://github.com/coastal-ms/Simple-Dune-Server-Management-Tool/issues/new?$params"
+
+        Write-Host "  $url" -ForegroundColor DarkGray
+        Start-Process $url
         continue
     }
 

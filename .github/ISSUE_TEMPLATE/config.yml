@@ -1,0 +1,12 @@
+blank_issues_enabled: false
+contact_links:
+  - name: 💬 Discord (general questions, hosting help)
+    url: https://discord.com/users/allcoast
+    about: |
+      For "how do I host", VM/network connectivity, port-forwarding,
+      Hyper-V tuning, or general Dune dedicated-server questions,
+      ping @allcoast on Discord. The GitHub issue tracker is for
+      bugs in this tool's code only.
+  - name: 📘 Funcom Self-Hosted Server docs
+    url: https://duneawakening.com/self-hosted-servers/
+    about: Official setup instructions for the dedicated server itself.

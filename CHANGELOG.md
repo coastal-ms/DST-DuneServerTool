@@ -50,6 +50,11 @@ entry. From here on, patch releases follow as `3.0.1`, `3.0.2`, etc.
   hint based on prior runs so you know roughly how long to wait.
 - **Total elapsed time** displayed at the end of both `c. startup`
   and `e. reboot`, with an estimate line based on prior runs.
+- **`23. report-issue` menu option.** Opens a prefilled GitHub bug-report
+  form in your browser (tool version + OS/PowerShell auto-filled). The
+  issue template + `.github/ISSUE_TEMPLATE/config.yml` scope the tracker
+  to bugs in this tool's code; VM/network/Hyper-V/Funcom-server
+  questions are redirected to Discord via the "blank issue" config.
 
 ### Changed
 

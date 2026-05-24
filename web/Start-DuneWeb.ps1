@@ -94,7 +94,8 @@ function Get-ToolCommandList {
     if ($cfg.DuneAdminExe -and (Test-Path $cfg.DuneAdminExe)) {
         $list += @{ key='21'; name='dune-admin';  desc='Launch dune-admin.exe + open dune-admin web UI'; requires='running' }
     }
-    $list += @{ key='22'; name='setup-guide'; desc='Open Funcom Self-Hosted Server Setup Instructions'; requires='none' }
+    $list += @{ key='22'; name='setup-guide';  desc='Open Funcom Self-Hosted Server Setup Instructions'; requires='none' }
+    $list += @{ key='23'; name='report-issue'; desc='Report a bug in this tool (opens prefilled GitHub issue)'; requires='none' }
     return $list
 }
 
