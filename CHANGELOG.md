@@ -19,7 +19,8 @@ Patch release: better feedback during long boot waits, a real fix for the DB-pod
   or just bringing the host online without spinning up the game server. Pairs
   with the existing internal `stop-vm` handler. Shifts the menu keys: `startup`
   is now `d`, `shutdown` is `e`, `reboot` is `f`, `rotate-ssh-key` is `g`,
-  `change-password` is `h`.
+  `change-password` is `h`. The web portal mirrors the new key layout and gets
+  its own **start-vm** row above **startup**.
 
 ### Fixed
 
