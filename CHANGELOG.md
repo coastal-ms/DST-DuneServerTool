@@ -7,6 +7,48 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.2.0] - 2026-05-24
+
+### Added
+- **Localhost web UI** (`b. web` menu option). Spins up a [Pode](https://github.com/Badgerati/Pode)
+  server on `http://127.0.0.1:8765` and opens your default browser to a
+  button panel that mirrors the console menu. Each click POSTs to
+  `/api/exec/{name}`, which spawns `dune-server.ps1 -Cmd <name>` in a new
+  console window so interactive prompts (battlegroup picker, password entry,
+  confirmations) keep working. Status panel polls every 5 seconds.
+  Confirmation dialog on `graceful-reboot` and `graceful-shutdown`.
+  Lives under `web/` &mdash; `Start-DuneWeb.ps1` + `public/{index.html,app.js,styles.css}`.
+- **`-Cmd <name>` parameter** on `dune-server.ps1` for non-interactive
+  dispatch. Skips the menu, looks up the command by name, runs the handler
+  once, and exits. Used by the web UI; also handy for shortcuts and scripts.
+- **`dune-admin` install offer during setup** (step 3). Prompts to either
+  download the latest release from
+  [`Icehunter/dune-admin`](https://github.com/Icehunter/dune-admin)
+  to a directory you choose (default `%USERPROFILE%\dune-admin`), use an
+  existing local install, or skip. The chosen `dune-admin.exe` path is stored
+  in `dune-server.config` exactly as before; this repo does not bundle the
+  binary.
+
+### Changed
+- VM section re-lettered sequentially so the section ends cleanly at
+  `g. change-password` before the numbered Battlegroup commands begin:
+  - `a. initial-setup`
+  - `b. web` *(new)*
+  - `c. startup` *(was `h`)*
+  - `d. graceful-reboot` *(was `f`)*
+  - `e. graceful-shutdown` *(was `g`)*
+  - `f. rotate-ssh-key` *(was `d`)*
+  - `g. change-password` *(was `e`)*
+- Post-menu hint when the VM isn't running now reads "Press 'c' to run
+  'startup'" instead of the removed "Press 'b' to start it".
+
+### Removed
+- `b. start-vm` and `c. stop-vm` menu entries. The graceful counterparts
+  (`c. startup` cold-starts the full stack; `e. graceful-shutdown` stops
+  battlegroup and powers off) cover everything they did without leaving
+  pods in inconsistent state. The underlying handlers remain in the script
+  so existing automation calling them by name still works.
+
 ## [1.1.1] - 2026-05-24
 
 ### Fixed
@@ -85,7 +127,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Hardened the post-reboot readiness check to verify webhook Service endpoints
   are populated (not just pods Running) before calling battlegroup start.
 
-[Unreleased]: https://github.com/coastal-ms/Simple-Dune-Server-Management-Tool/compare/v1.1.1...HEAD
+[Unreleased]: https://github.com/coastal-ms/Simple-Dune-Server-Management-Tool/compare/v1.2.0...HEAD
+[1.2.0]: https://github.com/coastal-ms/Simple-Dune-Server-Management-Tool/compare/v1.1.1...v1.2.0
 [1.1.1]: https://github.com/coastal-ms/Simple-Dune-Server-Management-Tool/compare/v1.1.0...v1.1.1
 [1.1.0]: https://github.com/coastal-ms/Simple-Dune-Server-Management-Tool/compare/v1.0.1...v1.1.0
 [1.0.1]: https://github.com/coastal-ms/Simple-Dune-Server-Management-Tool/compare/v1.0.0...v1.0.1
