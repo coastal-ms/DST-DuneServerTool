@@ -668,6 +668,53 @@ function Get-VmInfo {
     return @{ Exists = $exists; State = $state; Running = $running; Ip = $ip }
 }
 
+# Issue Stop-VM as a background job, render a live MM:SS counter while the VM
+# transitions to Off, and escalate to a hard power-off (-TurnOff) if the
+# graceful shutdown stalls past $GracefulSec. Throws if the VM never reaches
+# Off within $TotalSec. Returns elapsed seconds on success.
+function Stop-VmWithEscalation {
+    param(
+        [Parameter(Mandatory)][string]$Name,
+        [string]$Label = "Stopping VM",
+        [string]$EstimateText,
+        [int]$GracefulSec = 90,
+        [int]$TotalSec = 240
+    )
+    $start = Get-Date
+    $jobs = @()
+    $jobs += Start-Job -ScriptBlock {
+        param($n) Stop-VM -Name $n -Force -ErrorAction SilentlyContinue
+    } -ArgumentList $Name
+    $escalated = $false
+    try {
+        while ($true) {
+            $vm = Get-VM -Name $Name -ErrorAction SilentlyContinue
+            if (-not $vm -or $vm.State -eq 'Off') { break }
+            $elapsed = [int]((Get-Date) - $start).TotalSeconds
+            if (-not $escalated -and $elapsed -ge $GracefulSec) {
+                Complete-WaitCounter -Message "Graceful shutdown still running after $(Format-Duration $elapsed) (state: $($vm.State)) - escalating to hard power-off." -Color Yellow
+                $jobs += Start-Job -ScriptBlock {
+                    param($n) Stop-VM -Name $n -TurnOff -Force -ErrorAction SilentlyContinue
+                } -ArgumentList $Name
+                $escalated = $true
+            }
+            if ($elapsed -ge $TotalSec) {
+                throw "VM '$Name' did not reach Off state within $(Format-Duration $elapsed) (last state: $($vm.State))."
+            }
+            Write-WaitCounter -Start $start -Label "$Label (state: $($vm.State))..." -EstimateText $EstimateText
+            Start-Sleep -Seconds 2
+        }
+    } finally {
+        foreach ($j in $jobs) {
+            try {
+                Stop-Job -Job $j -ErrorAction SilentlyContinue | Out-Null
+                Remove-Job -Job $j -Force -ErrorAction SilentlyContinue | Out-Null
+            } catch {}
+        }
+    }
+    return [int]((Get-Date) - $start).TotalSeconds
+}
+
 # --- Online-player lookup (for safety check before shutdown commands) ---
 # Queries the Postgres DB inside the cluster via `kubectl exec`. Returns
 # @{ Names=@(string); Error=$null|string }. On any failure returns Error set
@@ -1358,9 +1405,16 @@ while ($true) {
         $estVm = Format-PhaseEstimate 'vm-start'
         $vmHint = if ($estVm) { " $estVm" } else { "" }
         Write-Host "[2/3] Restarting VM '$vmName'...$vmHint" -ForegroundColor Cyan
-        Stop-VM -Name $vmName -Force | Out-Null
-        do { Start-Sleep -Seconds 2; $vm = Get-VM -Name $vmName } while ($vm.State -ne 'Off')
-        Write-Host "  VM stopped." -ForegroundColor Green
+        $estVmStop = Format-PhaseEstimate 'vm-stop'
+        try {
+            $vmStopSec = Stop-VmWithEscalation -Name $vmName -Label "Stopping VM" -EstimateText $estVmStop
+            Save-PhaseTiming 'vm-stop' $vmStopSec
+            Complete-WaitCounter -Message "VM stopped in $(Format-Duration $vmStopSec)." -Color Green
+        } catch {
+            Complete-WaitCounter -Message $_.Exception.Message -Color Red
+            Write-Warning "VM may still be in a stuck state - aborting reboot. Check Hyper-V Manager."
+            continue
+        }
         $t_vm = Get-Date
         Start-VM -Name $vmName | Out-Null
         do { Start-Sleep -Seconds 2; $vm = Get-VM -Name $vmName } while ($vm.State -ne 'Running')
@@ -1573,11 +1627,16 @@ while ($true) {
         # ---- Step 2: power off VM ----
         Write-Host ""
         Write-Host "[2/2] Stopping VM '$vmName'..." -ForegroundColor Cyan
-        $t_vmStop = Get-Date
-        Stop-VM -Name $vmName -Force | Out-Null
-        do { Start-Sleep -Seconds 2; $vm = Get-VM -Name $vmName } while ($vm.State -ne 'Off')
-        Save-PhaseTiming 'vm-stop' ([int]((Get-Date) - $t_vmStop).TotalSeconds)
-        Write-Host "  VM stopped." -ForegroundColor Green
+        $estVmStop = Format-PhaseEstimate 'vm-stop'
+        if ($estVmStop) { Write-Host "  $estVmStop" -ForegroundColor DarkGray }
+        try {
+            $vmStopSec = Stop-VmWithEscalation -Name $vmName -Label "Stopping VM" -EstimateText $estVmStop
+            Save-PhaseTiming 'vm-stop' $vmStopSec
+            Complete-WaitCounter -Message "VM stopped in $(Format-Duration $vmStopSec)." -Color Green
+        } catch {
+            Complete-WaitCounter -Message $_.Exception.Message -Color Red
+            Write-Warning "VM may still be in a stuck state - check Hyper-V Manager."
+        }
 
         # Invalidate cached director port + port-check results (no longer meaningful)
         $directorPort = $null

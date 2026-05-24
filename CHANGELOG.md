@@ -23,6 +23,17 @@ Patch release: better feedback during long boot waits, a real fix for the DB-pod
 
 ### Fixed
 
+- **`shutdown` and `reboot` no longer hang forever on a stuck VM power-off.**
+  The old code issued `Stop-VM -Force` synchronously and then polled
+  `Get-VM` until state hit `Off` with no timeout and no visible counter,
+  so a guest that wouldn't respond to the integration-services shutdown
+  signal (e.g. Linux kernel stuck, networking dead) would freeze the
+  script silently. The new `Stop-VmWithEscalation` helper issues the
+  graceful stop as a background job, renders a live MM:SS counter with
+  the current VM state, and automatically escalates to a hard
+  `Stop-VM -TurnOff` if the VM is still not `Off` after 90s. Absolute
+  ceiling of 240s before giving up with an error (shutdown reports it;
+  reboot aborts so it doesn't try to start a VM that didn't fully stop).
 - **DB-pod discovery awk script no longer fails with "Unexpected token".**
   The awk one-liner used to print `namespace/podname` with `print $1"/"$2`,
   but PowerShell mangled the embedded `\"` inside the double-quoted ssh
