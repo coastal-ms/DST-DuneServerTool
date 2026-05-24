@@ -7,6 +7,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2.0.5] - 2026-05-24
+
+### Added
+
+- **Per-phase boot-time tracking** for `c. startup` and `d. graceful-reboot`.
+  Each wait (VM start, IP acquisition, SSH, k3s API, DB pods, operator
+  pods, webhook endpoints, battlegroup start, map pods, pod termination)
+  is now timed and persisted to `.boot-times.json` (last 20 runs per
+  phase). Before each wait, the tool prints a `(last: ~Xs, avg ~Ys of N)`
+  hint based on prior runs so you know roughly how long to wait.
+- **Total elapsed time** is now displayed at the end of `graceful-reboot`
+  too (already shown for `startup` since v2.0.0). Both totals are also
+  tracked in the history so you see your typical end-to-end boot time.
+
 ## [2.0.4] - 2026-05-24
 
 ### Changed
@@ -132,7 +146,8 @@ patch releases follow as `2.0.1`, `2.0.2`, etc.
   `Copy-SshKeyToDir`, `New-DuneDesktopShortcut`.
 - `web/` folder structure added.
 
-[Unreleased]: https://github.com/coastal-ms/Simple-Dune-Server-Management-Tool/compare/v2.0.4...HEAD
+[Unreleased]: https://github.com/coastal-ms/Simple-Dune-Server-Management-Tool/compare/v2.0.5...HEAD
+[2.0.5]: https://github.com/coastal-ms/Simple-Dune-Server-Management-Tool/compare/v2.0.4...v2.0.5
 [2.0.4]: https://github.com/coastal-ms/Simple-Dune-Server-Management-Tool/compare/v2.0.3...v2.0.4
 [2.0.3]: https://github.com/coastal-ms/Simple-Dune-Server-Management-Tool/compare/v2.0.2...v2.0.3
 [2.0.2]: https://github.com/coastal-ms/Simple-Dune-Server-Management-Tool/compare/v2.0.1...v2.0.2

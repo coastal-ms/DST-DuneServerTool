@@ -13,7 +13,7 @@ param(
 # Wraps the original battlegroup.ps1 menu and adds extra tools
 # ============================================================
 
-$script:ToolVersion = "2.0.4"
+$script:ToolVersion = "2.0.5"
 
 # Resize console window so the full menu is visible
 try {
@@ -522,6 +522,50 @@ $logFile = "$scriptDir\.logs\dune-server-$(Get-Date -Format 'yyyy-MM-dd_HH-mm-ss
 New-Item -ItemType Directory -Force -Path (Split-Path $logFile) | Out-Null
 Start-Transcript -Path $logFile -Append | Out-Null
 
+# --- Boot-time history (per-phase timing for startup and graceful-reboot) ---
+# Persists wait-times for each phase to .boot-times.json (last 20 runs per phase)
+# so subsequent runs can display an estimate before each wait.
+$script:BootTimesFile = Join-Path $scriptDir ".boot-times.json"
+
+function Get-BootTimes {
+    if (-not (Test-Path $script:BootTimesFile)) { return @{ phases = @{} } }
+    try {
+        $obj = Get-Content $script:BootTimesFile -Raw | ConvertFrom-Json -AsHashtable
+        if (-not $obj.phases) { $obj.phases = @{} }
+        return $obj
+    } catch { return @{ phases = @{} } }
+}
+
+function Format-PhaseEstimate {
+    param([string]$Phase)
+    $data = Get-BootTimes
+    if (-not $data.phases.ContainsKey($Phase)) { return $null }
+    $arr = @($data.phases[$Phase])
+    if ($arr.Count -eq 0) { return $null }
+    $recent = @($arr | Select-Object -Last 5)
+    $last = [int]$recent[-1].seconds
+    if ($recent.Count -eq 1) { return "(last: ~${last}s)" }
+    $avg = [int](($recent | Measure-Object seconds -Average).Average)
+    return "(last: ~${last}s, avg ~${avg}s of last $($recent.Count))"
+}
+
+function Save-PhaseTiming {
+    param([string]$Phase, [int]$Seconds)
+    if ($Seconds -lt 0) { return }
+    try {
+        $data = Get-BootTimes
+        if (-not $data.phases) { $data.phases = @{} }
+        $cur = @()
+        if ($data.phases.ContainsKey($Phase)) { $cur = @($data.phases[$Phase]) }
+        $cur += @{ ts = (Get-Date).ToString("o"); seconds = $Seconds }
+        if ($cur.Count -gt 20) { $cur = @($cur | Select-Object -Last 20) }
+        $data.phases[$Phase] = $cur
+        $data | ConvertTo-Json -Depth 5 | Set-Content $script:BootTimesFile -Encoding UTF8
+    } catch {
+        Write-Host "  (warn: could not save boot timing for '$Phase': $_)" -ForegroundColor DarkYellow
+    }
+}
+
 # --- Detect VM state ---
 function Get-VmInfo {
     $vm = Get-VM -Name $vmName -ErrorAction SilentlyContinue
@@ -964,11 +1008,18 @@ while ($true) {
             $ip = $info.Ip
         } else {
             Write-Host "[1/4] Starting VM '$vmName'..." -ForegroundColor Cyan
+            $estVm = Format-PhaseEstimate 'vm-start'
+            if ($estVm) { Write-Host "  $estVm" -ForegroundColor DarkGray }
+            $t_vm = Get-Date
             Start-VM -Name $vmName | Out-Null
             do { Start-Sleep -Seconds 2; $vm = Get-VM -Name $vmName } while ($vm.State -ne 'Running')
-            Write-Host "  VM running. Waiting for IP..." -ForegroundColor DarkGray
+            Save-PhaseTiming 'vm-start' ([int]((Get-Date) - $t_vm).TotalSeconds)
+            $estIp = Format-PhaseEstimate 'vm-ip'
+            $ipHint = if ($estIp) { " $estIp" } else { "" }
+            Write-Host "  VM running. Waiting for IP...$ipHint" -ForegroundColor DarkGray
 
             $newIp = $null; $timeout = 180; $elapsed = 0; $dots = 0
+            $t_ip = Get-Date
             while (-not $newIp -and $elapsed -lt $timeout) {
                 $dots = ($dots % 3) + 1
                 Write-Host -NoNewline ("`r  Waiting for IP$('.' * $dots)   ")
@@ -978,6 +1029,7 @@ while ($true) {
             }
             Write-Host ""
             if (-not $newIp) { Write-Warning "VM did not acquire IP within ${timeout}s. Aborting."; continue }
+            Save-PhaseTiming 'vm-ip' ([int]((Get-Date) - $t_ip).TotalSeconds)
             $ip = $newIp
             Write-Host "  VM IP: $ip" -ForegroundColor Green
         }
@@ -987,6 +1039,9 @@ while ($true) {
         Write-Host "[2/4] Waiting for cluster readiness..." -ForegroundColor Cyan
 
         # 2a. SSH responsive
+        $estSsh = Format-PhaseEstimate 'ssh-ready'
+        if ($estSsh) { Write-Host "  Waiting for SSH... $estSsh" -ForegroundColor DarkGray }
+        $t_ssh = Get-Date
         $elapsed = 0; $sshReady = $false
         while ($elapsed -lt 180) {
             $probe = ssh -o StrictHostKeyChecking=no -o LogLevel=QUIET -o ConnectTimeout=3 -i "$sshKey" "$sshUser@$ip" "echo ok" 2>$null
@@ -994,10 +1049,14 @@ while ($true) {
             Start-Sleep -Seconds 3; $elapsed += 3
         }
         if (-not $sshReady) { Write-Warning "SSH not responsive after 180s. Aborting."; continue }
+        Save-PhaseTiming 'ssh-ready' ([int]((Get-Date) - $t_ssh).TotalSeconds)
         Write-Host "  SSH responsive (${elapsed}s)." -ForegroundColor Green
 
         # 2b. k3s API
-        Write-Host "  Waiting for k3s API..." -ForegroundColor DarkGray
+        $estApi = Format-PhaseEstimate 'k3s-api'
+        $apiHint = if ($estApi) { " $estApi" } else { "" }
+        Write-Host "  Waiting for k3s API...$apiHint" -ForegroundColor DarkGray
+        $t_api = Get-Date
         $elapsed = 0
         while ($elapsed -lt 180) {
             $apiOk = ssh -o StrictHostKeyChecking=no -o LogLevel=QUIET -i "$sshKey" "$sshUser@$ip" `
@@ -1005,32 +1064,44 @@ while ($true) {
             if ($apiOk -match 'ok') { break }
             Start-Sleep -Seconds 3; $elapsed += 3
         }
+        Save-PhaseTiming 'k3s-api' ([int]((Get-Date) - $t_api).TotalSeconds)
         Write-Host "  k3s API ready (${elapsed}s)." -ForegroundColor Green
 
         # 2c. DB pod(s) Ready (auto-discover namespace)
-        Write-Host "  Waiting for DB pod(s) Ready..." -ForegroundColor DarkGray
+        $estDb = Format-PhaseEstimate 'db-pods'
+        $dbHint = if ($estDb) { " $estDb" } else { "" }
+        Write-Host "  Waiting for DB pod(s) Ready...$dbHint" -ForegroundColor DarkGray
+        $t_db = Get-Date
         $dbNs = ssh -o StrictHostKeyChecking=no -o LogLevel=QUIET -i "$sshKey" "$sshUser@$ip" `
             "sudo k3s kubectl get pods -A --no-headers 2>/dev/null | awk '`$2 ~ /(-db-|postgres|^pg-|-pg-)/ {print `$1}' | sort -u | head -1"
         $dbNs = ($dbNs | Out-String).Trim()
         if ($dbNs) {
             ssh -o StrictHostKeyChecking=no -o LogLevel=QUIET -i "$sshKey" "$sshUser@$ip" `
                 "sudo k3s kubectl wait --for=condition=Ready pods --all -n '$dbNs' --timeout=180s 2>&1 | tail -n 3"
+            Save-PhaseTiming 'db-pods' ([int]((Get-Date) - $t_db).TotalSeconds)
             Write-Host "  DB pods Ready (namespace: $dbNs)." -ForegroundColor Green
         } else {
             Write-Host "  No dedicated DB namespace detected - skipping." -ForegroundColor DarkGray
         }
 
         # 2d. operator pods Ready
-        Write-Host "  Waiting for operator pods Ready..." -ForegroundColor DarkGray
+        $estOp = Format-PhaseEstimate 'operators'
+        $opHint = if ($estOp) { " $estOp" } else { "" }
+        Write-Host "  Waiting for operator pods Ready...$opHint" -ForegroundColor DarkGray
+        $t_op = Get-Date
         ssh -o StrictHostKeyChecking=no -o LogLevel=QUIET -i "$sshKey" "$sshUser@$ip" `
             "sudo k3s kubectl wait --for=condition=Ready pods --all -n funcom-operators --timeout=180s 2>&1 | tail -n 5"
         if ($LASTEXITCODE -ne 0) {
             Write-Warning "Operator pods did not become Ready within 180s. Aborting battlegroup start."
             continue
         }
+        Save-PhaseTiming 'operators' ([int]((Get-Date) - $t_op).TotalSeconds)
 
         # 2e. webhook Service endpoints
-        Write-Host "  Waiting for webhook Service endpoints..." -ForegroundColor DarkGray
+        $estWh = Format-PhaseEstimate 'webhook-endpoints'
+        $whHint = if ($estWh) { " $estWh" } else { "" }
+        Write-Host "  Waiting for webhook Service endpoints...$whHint" -ForegroundColor DarkGray
+        $t_wh = Get-Date
         $elapsed = 0; $epReady = $false
         while ($elapsed -lt 120) {
             $epOut = ssh -o StrictHostKeyChecking=no -o LogLevel=QUIET -i "$sshKey" "$sshUser@$ip" `
@@ -1042,23 +1113,31 @@ while ($true) {
             Write-Warning "battlegroupoperator-webhook-svc has no endpoints after 120s. Aborting."
             continue
         }
+        Save-PhaseTiming 'webhook-endpoints' ([int]((Get-Date) - $t_wh).TotalSeconds)
         Write-Host "  Webhook endpoints populated (${elapsed}s). Settling 10s..." -ForegroundColor Green
         Start-Sleep -Seconds 10
 
         # ---- Step 3: battlegroup start ----
         Write-Host ""
-        Write-Host "[3/4] Starting battlegroup..." -ForegroundColor Cyan
+        $estBg = Format-PhaseEstimate 'battlegroup-start'
+        $bgHint = if ($estBg) { " $estBg" } else { "" }
+        Write-Host "[3/4] Starting battlegroup...$bgHint" -ForegroundColor Cyan
+        $t_bg = Get-Date
         ssh -t -o StrictHostKeyChecking=no -o LogLevel=QUIET -i "$sshKey" "$sshUser@$ip" "$bgBinPath start"
+        Save-PhaseTiming 'battlegroup-start' ([int]((Get-Date) - $t_bg).TotalSeconds)
 
         # ---- Step 4: wait for map pods ----
         Write-Host ""
         Write-Host "[4/4] Waiting for map pods to be Ready..." -ForegroundColor Cyan
         $mapResults = @{}
         foreach ($map in 'overmap','survival') {
-            Write-Host "  Waiting for $map pod (timeout 300s)..." -ForegroundColor DarkGray
+            $estMap = Format-PhaseEstimate "map-$map"
+            $mapHint = if ($estMap) { " $estMap" } else { "" }
+            Write-Host "  Waiting for $map pod (timeout 300s)...$mapHint" -ForegroundColor DarkGray
             $r = Wait-MapPodReady -Ip $ip -MapName $map -TimeoutSec 300
             $mapResults[$map] = $r
             if ($r.Success) {
+                Save-PhaseTiming "map-$map" ([int]$r.Elapsed)
                 Write-Host "  $map -> $($r.Pod) is Ready ($($r.Ready)) in $($r.Elapsed)s" -ForegroundColor Green
             } else {
                 if ($r.Pod) {
@@ -1070,6 +1149,8 @@ while ($true) {
         }
 
         $totalSec = [int]((Get-Date) - $t0).TotalSeconds
+        Save-PhaseTiming 'total-startup' $totalSec
+        $estTotal = Format-PhaseEstimate 'total-startup'
         Write-Host ""
         $allOk = ($mapResults.Values | Where-Object { -not $_.Success } | Measure-Object).Count -eq 0
         if ($allOk) {
@@ -1078,6 +1159,7 @@ while ($true) {
             Write-Host "=== Startup finished in ${totalSec}s with WARNINGS - see above ===" -ForegroundColor Yellow
             Write-Host "Use 'status' (1) or 'shell-pod' (16) to investigate any map that didn't reach Ready." -ForegroundColor DarkGray
         }
+        if ($estTotal) { Write-Host "  $estTotal" -ForegroundColor DarkGray }
         $directorPort = $null
         continue
     }
@@ -1093,6 +1175,8 @@ while ($true) {
             Write-Host "Aborted." -ForegroundColor Cyan; continue
         }
 
+        $t0 = Get-Date
+
         # ---- Step 1: stop battlegroup ----
         Write-Host ""
         Write-Host "[1/3] Stopping battlegroup..." -ForegroundColor Cyan
@@ -1105,7 +1189,9 @@ while ($true) {
         # Wait for game/infra pods to fully terminate (only db/fb/operator pods should remain).
         # Pattern matches the dynamic Funcom pod families: sg-* (servers), mq-* (rabbitmq),
         # sgw-* (gateway), tr-* (traffic router), bgd-* (battlegroup director).
-        Write-Host "  Waiting for pods to terminate..." -ForegroundColor DarkGray
+        $estTerm = Format-PhaseEstimate 'pods-terminate'
+        $termHint = if ($estTerm) { " $estTerm" } else { "" }
+        Write-Host "  Waiting for pods to terminate...$termHint" -ForegroundColor DarkGray
         $waitStart = Get-Date
         $maxWaitSec = 360
         while ($true) {
@@ -1115,6 +1201,7 @@ while ($true) {
             if (-not $remain) { $remain = '0' }
             $elapsed = [int]((Get-Date) - $waitStart).TotalSeconds
             if ($remain -eq '0') {
+                Save-PhaseTiming 'pods-terminate' $elapsed
                 Write-Host ("`r  All game/infra pods terminated after {0}s.{1}" -f $elapsed, (' ' * 30)) -ForegroundColor Green
                 break
             }
@@ -1129,15 +1216,22 @@ while ($true) {
 
         # ---- Step 2: VM restart ----
         Write-Host ""
-        Write-Host "[2/3] Restarting VM '$vmName'..." -ForegroundColor Cyan
+        $estVm = Format-PhaseEstimate 'vm-start'
+        $vmHint = if ($estVm) { " $estVm" } else { "" }
+        Write-Host "[2/3] Restarting VM '$vmName'...$vmHint" -ForegroundColor Cyan
         Stop-VM -Name $vmName -Force | Out-Null
         do { Start-Sleep -Seconds 2; $vm = Get-VM -Name $vmName } while ($vm.State -ne 'Off')
         Write-Host "  VM stopped." -ForegroundColor Green
+        $t_vm = Get-Date
         Start-VM -Name $vmName | Out-Null
         do { Start-Sleep -Seconds 2; $vm = Get-VM -Name $vmName } while ($vm.State -ne 'Running')
-        Write-Host "  VM running. Waiting for IP..." -ForegroundColor DarkGray
+        Save-PhaseTiming 'vm-start' ([int]((Get-Date) - $t_vm).TotalSeconds)
+        $estIp = Format-PhaseEstimate 'vm-ip'
+        $ipHint = if ($estIp) { " $estIp" } else { "" }
+        Write-Host "  VM running. Waiting for IP...$ipHint" -ForegroundColor DarkGray
 
         $newIp = $null; $timeout = 180; $elapsed = 0; $dots = 0
+        $t_ip = Get-Date
         while (-not $newIp -and $elapsed -lt $timeout) {
             $dots = ($dots % 3) + 1
             Write-Host -NoNewline ("`r  Waiting for IP$('.' * $dots)   ")
@@ -1147,10 +1241,14 @@ while ($true) {
         }
         Write-Host ""
         if (-not $newIp) { Write-Warning "VM did not acquire IP within ${timeout}s. Aborting."; continue }
+        Save-PhaseTiming 'vm-ip' ([int]((Get-Date) - $t_ip).TotalSeconds)
         $ip = $newIp
         Write-Host "  VM IP: $ip" -ForegroundColor Green
 
         # Wait for SSH to be responsive
+        $estSsh = Format-PhaseEstimate 'ssh-ready'
+        if ($estSsh) { Write-Host "  Waiting for SSH... $estSsh" -ForegroundColor DarkGray }
+        $t_ssh = Get-Date
         $elapsed = 0; $sshReady = $false
         while ($elapsed -lt 180) {
             $probe = ssh -o StrictHostKeyChecking=no -o LogLevel=QUIET -o ConnectTimeout=3 -i "$sshKey" "$sshUser@$ip" "echo ok" 2>$null
@@ -1158,6 +1256,7 @@ while ($true) {
             Start-Sleep -Seconds 3; $elapsed += 3
         }
         if (-not $sshReady) { Write-Warning "SSH not responsive after 180s. Aborting."; continue }
+        Save-PhaseTiming 'ssh-ready' ([int]((Get-Date) - $t_ssh).TotalSeconds)
         Write-Host "  SSH responsive after ${elapsed}s." -ForegroundColor Green
 
         # Wait for k3s API + DB + operator webhook to be FULLY ready.
@@ -1166,7 +1265,10 @@ while ($true) {
         # 'battlegroup start' fails with: 502 Bad Gateway from the API-server proxy.
 
         # 2a. k3s API responsive
-        Write-Host "  Waiting for k3s API..." -ForegroundColor DarkGray
+        $estApi = Format-PhaseEstimate 'k3s-api'
+        $apiHint = if ($estApi) { " $estApi" } else { "" }
+        Write-Host "  Waiting for k3s API...$apiHint" -ForegroundColor DarkGray
+        $t_api = Get-Date
         $elapsed = 0
         while ($elapsed -lt 180) {
             $apiOk = ssh -o StrictHostKeyChecking=no -o LogLevel=QUIET -i "$sshKey" "$sshUser@$ip" `
@@ -1174,33 +1276,45 @@ while ($true) {
             if ($apiOk -match 'ok') { break }
             Start-Sleep -Seconds 3; $elapsed += 3
         }
+        Save-PhaseTiming 'k3s-api' ([int]((Get-Date) - $t_api).TotalSeconds)
         Write-Host "  k3s API ready (${elapsed}s)." -ForegroundColor Green
 
         # 2b. DB pod(s) Ready (operator queries DB on startup). Auto-discover the namespace
         # since it varies by install (could be funcom-db, funcom-pg, default, or the bg namespace).
-        Write-Host "  Waiting for DB pod(s) Ready..." -ForegroundColor DarkGray
+        $estDb = Format-PhaseEstimate 'db-pods'
+        $dbHint = if ($estDb) { " $estDb" } else { "" }
+        Write-Host "  Waiting for DB pod(s) Ready...$dbHint" -ForegroundColor DarkGray
+        $t_db = Get-Date
         $dbNs = ssh -o StrictHostKeyChecking=no -o LogLevel=QUIET -i "$sshKey" "$sshUser@$ip" `
             "sudo k3s kubectl get pods -A --no-headers 2>/dev/null | awk '`$2 ~ /(-db-|postgres|^pg-|-pg-)/ {print `$1}' | sort -u | head -1"
         $dbNs = ($dbNs | Out-String).Trim()
         if ($dbNs) {
             ssh -o StrictHostKeyChecking=no -o LogLevel=QUIET -i "$sshKey" "$sshUser@$ip" `
                 "sudo k3s kubectl wait --for=condition=Ready pods --all -n '$dbNs' --timeout=180s 2>&1 | tail -n 3"
+            Save-PhaseTiming 'db-pods' ([int]((Get-Date) - $t_db).TotalSeconds)
             Write-Host "  DB pods Ready (namespace: $dbNs)." -ForegroundColor Green
         } else {
             Write-Host "  No dedicated DB namespace detected - skipping (operator readiness will catch DB issues)." -ForegroundColor DarkGray
         }
 
         # 2c. ALL funcom-operators pods Ready (not just Running)
-        Write-Host "  Waiting for operator pods Ready..." -ForegroundColor DarkGray
+        $estOp = Format-PhaseEstimate 'operators'
+        $opHint = if ($estOp) { " $estOp" } else { "" }
+        Write-Host "  Waiting for operator pods Ready...$opHint" -ForegroundColor DarkGray
+        $t_op = Get-Date
         ssh -o StrictHostKeyChecking=no -o LogLevel=QUIET -i "$sshKey" "$sshUser@$ip" `
             "sudo k3s kubectl wait --for=condition=Ready pods --all -n funcom-operators --timeout=180s 2>&1 | tail -n 5"
         if ($LASTEXITCODE -ne 0) {
             Write-Warning "Operator pods did not become Ready within 180s. Aborting battlegroup start."
             continue
         }
+        Save-PhaseTiming 'operators' ([int]((Get-Date) - $t_op).TotalSeconds)
 
         # 2d. Webhook Service must have endpoints populated, else API-server proxy returns 502
-        Write-Host "  Waiting for webhook Service endpoints..." -ForegroundColor DarkGray
+        $estWh = Format-PhaseEstimate 'webhook-endpoints'
+        $whHint = if ($estWh) { " $estWh" } else { "" }
+        Write-Host "  Waiting for webhook Service endpoints...$whHint" -ForegroundColor DarkGray
+        $t_wh = Get-Date
         $elapsed = 0; $epReady = $false
         while ($elapsed -lt 120) {
             $epOut = ssh -o StrictHostKeyChecking=no -o LogLevel=QUIET -i "$sshKey" "$sshUser@$ip" `
@@ -1212,19 +1326,28 @@ while ($true) {
             Write-Warning "battlegroupoperator-webhook-svc has no endpoints after 120s. Aborting."
             continue
         }
+        Save-PhaseTiming 'webhook-endpoints' ([int]((Get-Date) - $t_wh).TotalSeconds)
         Write-Host "  Webhook endpoints populated (${elapsed}s). Settling 10s..." -ForegroundColor Green
         Start-Sleep -Seconds 10
 
         # ---- Step 3: start battlegroup ----
         Write-Host ""
-        Write-Host "[3/3] Starting battlegroup..." -ForegroundColor Cyan
+        $estBg = Format-PhaseEstimate 'battlegroup-start'
+        $bgHint = if ($estBg) { " $estBg" } else { "" }
+        Write-Host "[3/3] Starting battlegroup...$bgHint" -ForegroundColor Cyan
+        $t_bg = Get-Date
         ssh -t -o StrictHostKeyChecking=no -o LogLevel=QUIET -i "$sshKey" "$sshUser@$ip" "$bgBinPath start"
+        Save-PhaseTiming 'battlegroup-start' ([int]((Get-Date) - $t_bg).TotalSeconds)
 
         # Reset cached director port; it'll be resolved on next 'open-director'
         $directorPort = $null
 
+        $totalSec = [int]((Get-Date) - $t0).TotalSeconds
+        Save-PhaseTiming 'total-reboot' $totalSec
+        $estTotal = Format-PhaseEstimate 'total-reboot'
         Write-Host ""
-        Write-Host "=== Graceful reboot complete ===" -ForegroundColor Green
+        Write-Host "=== Graceful reboot complete in ${totalSec}s ===" -ForegroundColor Green
+        if ($estTotal) { Write-Host "  $estTotal" -ForegroundColor DarkGray }
         Write-Host "Pods may take another 1-2 min to all reach Healthy. Check with 'status'." -ForegroundColor DarkGray
         continue
     }
