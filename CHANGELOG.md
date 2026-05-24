@@ -7,6 +7,97 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [4.0.2] - 2026-05-24
+
+Patch release: fix two more desktop app crashes/bugs discovered immediately
+after the v4.0.1 ship, plus UI polish.
+
+### Fixed
+
+- **App crashed on first stdout line from any in-app command** (clicking
+  any `InApp`-mode button — Status, start-vm, open-file-browser, etc. —
+  killed the process within milliseconds). Cause: `Process.add_OutputDataReceived(
+  {...})`, `add_ErrorDataReceived({...})`, and `add_Exited({...})` callbacks
+  fire on .NET ThreadPool threads, which in ps2exe-compiled binaries have
+  no PowerShell runspace TLS context. The first invocation of any of those
+  scriptblock-as-delegate handlers threw an unhandled
+  `System.Management.Automation.PSInvalidOperationException` at
+  `ScriptBlock.GetContextFromTLS()` → `InvokeAsDelegateHelper(...)`.
+  Rewrote `Invoke-Command-InApp` to use `Register-ObjectEvent` (action runs
+  in the PowerShell engine event pump, which has a valid runspace) feeding
+  a `System.Collections.Concurrent.ConcurrentQueue[hashtable]`, drained by
+  a `DispatcherTimer` running on the UI thread (UI thread is the script's
+  main thread, so its TLS is intact — Tick handlers are safe). Output lines,
+  error lines, and the exit code are tagged in the queue and rendered in
+  order. SourceIdentifiers are unique per invocation and unregistered on
+  process exit so subscriptions don't leak.
+- **Top status header showed "Loading cluster status..." forever and never
+  updated.** Cause: the `DispatcherTimer.Tick` scriptblock inside
+  `Refresh-StatusHeader` referenced function-scoped variables
+  (`$asyncResult`, `$ps`, `$rs`, `$timer`, `$vmInfo`) but was not wrapped
+  in `.GetNewClosure()`. By the time the tick fired (250 ms later, after
+  `Refresh-StatusHeader` had returned), those locals were out of scope and
+  resolved as `$null`, so `$asyncResult.IsCompleted` was always false and
+  the timer polled forever. Wrapping the handler in `.GetNewClosure()` and
+  assigning via a captured `$tickHandler` variable preserves the closure.
+
+### Changed
+
+- **Removed redundant "Status" button (Battlegroup key `1`) from the
+  desktop app command catalog.** The top header panel already displays
+  live battlegroup status with a 30-second auto-refresh and a manual
+  Refresh button, so a duplicate button that dumped the same text into
+  the output pane was just noise. The underlying `status` CLI command
+  still exists in `dune-server.ps1` for the legacy `.bat` / web-portal
+  entry points.
+- **Status header pane is ~2 inches taller** (`Height` 140 → 332 WPF DIPs)
+  so the full multi-pod battlegroup status output fits without scrolling.
+- **Window default size bumped** from 780×1180 to 900×1180 to accommodate
+  the taller header; `MinHeight` raised 520 → 700.
+- **`CmdButton` style overhauled** for better visual feedback:
+    - Drop-shadow effect for a raised "card" look.
+    - Hover: 2 px amber (`#E0B341`) border + amber glow.
+    - Press: 2 px white border on a VS-blue (`#0E639C`) background + blue glow.
+    - Slightly more padding (`10,7`) and margin (`4,3`); corner radius 4 px.
+- Version string bumped: `4.0.1 → 4.0.2`.
+
+## [4.0.1] - 2026-05-24
+
+Patch release: fix two desktop app (v4.0.0) regressions discovered immediately
+after ship.
+
+### Fixed
+
+- **Battlegroup status header never populated** ("not fetching VM info"). The
+  background `Start-Job` used to call `Get-VM` spawned a child `powershell.exe`
+  that did not reliably inherit the parent's elevation token when the parent
+  was a ps2exe-compiled binary, surfacing as `Microsoft.HyperV.PowerShell.VirtualizationException:
+  "You do not have the required permission..."` inside the job (the job state
+  was Completed, so the UI just showed the static "Loading cluster status..."
+  placeholder). Refactored `Refresh-StatusHeader` in `app/DuneServer.ps1` to
+  call `Get-VM` synchronously on the (already-elevated) UI thread — it's
+  ~200 ms, the dispatcher stays responsive — and only the slow SSH
+  `battlegroup status` call runs on a background runspace (in-process,
+  inherits the parent's token automatically). Hyper-V module now also
+  imported explicitly at app startup since ps2exe auto-discovery is unreliable.
+- **`setup-guide`, `open-file-browser`, `open-director`, `web`, and `report-issue`
+  crashed/no-opped from the desktop app.** All five used bare
+  `Start-Process "https://..."` to open a URL in the default browser. The
+  default-browser association lives in the per-user `HKCU\Software\Classes`
+  hive, which is not visible to an elevated process running under the SYSTEM
+  hive view; the call either silently does nothing or throws `"This command
+  cannot be run due to the error: The system cannot find the file specified"`.
+  Switched all five to launch via Explorer instead
+  (`Start-Process "$env:SystemRoot\explorer.exe" $url`), which is the same
+  trick the existing `dune-admin` handler was already using. This is the
+  standard Windows workaround for opening per-user shell associations from
+  an elevated process.
+
+### Changed
+
+- Version string bumped: `4.0.0 → 4.0.1` (`$script:ToolVersion`, footer
+  text, installer `MyAppVersion`, `Build-Exe.ps1 -Version` default).
+
 ## [4.0.0] - 2026-05-24
 
 Major release: native Windows desktop app as the new primary entry point.
@@ -321,7 +412,10 @@ entry. From here on, patch releases follow as `3.0.1`, `3.0.2`, etc.
 - Boot-time history stored at `<scriptDir>\.boot-times.json` (rolling
   window of last 20 entries per phase).
 
-[Unreleased]: https://github.com/coastal-ms/Simple-Dune-Server-Management-Tool/compare/v3.1.2...HEAD
+[Unreleased]: https://github.com/coastal-ms/Simple-Dune-Server-Management-Tool/compare/v4.0.2...HEAD
+[4.0.2]: https://github.com/coastal-ms/Simple-Dune-Server-Management-Tool/compare/v4.0.1...v4.0.2
+[4.0.1]: https://github.com/coastal-ms/Simple-Dune-Server-Management-Tool/compare/v4.0.0...v4.0.1
+[4.0.0]: https://github.com/coastal-ms/Simple-Dune-Server-Management-Tool/compare/v3.1.2...v4.0.0
 [3.1.2]: https://github.com/coastal-ms/Simple-Dune-Server-Management-Tool/compare/v3.0.1...v3.1.2
 [3.0.1]: https://github.com/coastal-ms/Simple-Dune-Server-Management-Tool/compare/v3.0.0...v3.0.1
 [3.0.0]: https://github.com/coastal-ms/Simple-Dune-Server-Management-Tool/releases/tag/v3.0.0
