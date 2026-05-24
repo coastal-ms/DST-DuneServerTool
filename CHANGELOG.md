@@ -7,6 +7,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2.0.3] - 2026-05-24
+
+### Fixed
+
+- **Web UI showed "Error fetching status" and rendered no command buttons.**
+  Pode route scriptblocks run in isolated runspaces and can't see
+  `$script:`-scoped variables defined at file scope. `Get-VmStatus` was
+  calling `Get-VM -Name $null` (always returned NotFound), and the
+  command-list routes iterated `$null`, returning `items: null`, which
+  blew up the front-end. Refactored to publish shared state via
+  `Set-PodeState` at server start and `Get-PodeState` inside the routes
+  and helper functions. JSON arrays are also wrapped in `@(...)` so
+  single-item lists don't get unrolled to scalars.
+
 ## [2.0.2] - 2026-05-24
 
 ### Fixed
@@ -108,7 +122,8 @@ patch releases follow as `2.0.1`, `2.0.2`, etc.
   `Copy-SshKeyToDir`, `New-DuneDesktopShortcut`.
 - `web/` folder structure added.
 
-[Unreleased]: https://github.com/coastal-ms/Simple-Dune-Server-Management-Tool/compare/v2.0.2...HEAD
+[Unreleased]: https://github.com/coastal-ms/Simple-Dune-Server-Management-Tool/compare/v2.0.3...HEAD
+[2.0.3]: https://github.com/coastal-ms/Simple-Dune-Server-Management-Tool/compare/v2.0.2...v2.0.3
 [2.0.2]: https://github.com/coastal-ms/Simple-Dune-Server-Management-Tool/compare/v2.0.1...v2.0.2
 [2.0.1]: https://github.com/coastal-ms/Simple-Dune-Server-Management-Tool/compare/v2.0.0...v2.0.1
 [2.0.0]: https://github.com/coastal-ms/Simple-Dune-Server-Management-Tool/releases/tag/v2.0.0
