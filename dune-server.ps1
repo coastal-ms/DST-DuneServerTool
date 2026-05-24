@@ -13,7 +13,7 @@ param(
 # Wraps the original battlegroup.ps1 menu and adds extra tools
 # ============================================================
 
-$script:ToolVersion = "3.1.2"
+$script:ToolVersion = "4.0.0"
 
 # ============================================================
 #  CRASH / EXIT CLEANUP
@@ -50,7 +50,43 @@ try {
 } catch {}
 
 $scriptDir = Split-Path -Parent $MyInvocation.MyCommand.Path
-$configFile = "$scriptDir\dune-server.config"
+
+# ============================================================
+#  WRITABLE DATA DIRECTORY  (APPDATA migration)
+# ============================================================
+# Writable files (config, logs, boot-times) live in %APPDATA%\DuneServer\
+# so the tool can run from a read-only install location (Program Files via
+# the v4 desktop app installer). Legacy files next to the script are
+# auto-migrated on first run; the legacy files are left in place as a
+# fallback in case migration fails or the user rolls back.
+$script:DuneDataDir = Join-Path $env:APPDATA 'DuneServer'
+if (-not (Test-Path $script:DuneDataDir)) {
+    try { New-Item -ItemType Directory -Force -Path $script:DuneDataDir | Out-Null } catch {}
+}
+$script:DuneLogsDir = Join-Path $script:DuneDataDir '.logs'
+if (-not (Test-Path $script:DuneLogsDir)) {
+    try { New-Item -ItemType Directory -Force -Path $script:DuneLogsDir | Out-Null } catch {}
+}
+
+function Resolve-DuneDataFile {
+    param(
+        [Parameter(Mandatory)][string]$FileName,
+        [string]$LegacyDir = $scriptDir
+    )
+    $appDataPath = Join-Path $script:DuneDataDir $FileName
+    $legacyPath  = Join-Path $LegacyDir $FileName
+    if (-not (Test-Path $appDataPath) -and (Test-Path $legacyPath)) {
+        try {
+            Copy-Item -Path $legacyPath -Destination $appDataPath -Force -ErrorAction Stop
+            Write-Host "Migrated $FileName from $LegacyDir to $script:DuneDataDir" -ForegroundColor DarkGray
+        } catch {
+            return $legacyPath
+        }
+    }
+    return $appDataPath
+}
+
+$configFile = Resolve-DuneDataFile 'dune-server.config'
 
 # ============================================================
 #  FIRST-RUN SETUP
@@ -543,14 +579,14 @@ function Get-PortCheckStatus {
     return @{ PublicIp = $pubIp; Results = $results }
 }
 
-$logFile = "$scriptDir\.logs\dune-server-$(Get-Date -Format 'yyyy-MM-dd_HH-mm-ss').log"
+$logFile = Join-Path $script:DuneLogsDir "dune-server-$(Get-Date -Format 'yyyy-MM-dd_HH-mm-ss').log"
 New-Item -ItemType Directory -Force -Path (Split-Path $logFile) | Out-Null
 Start-Transcript -Path $logFile -Append | Out-Null
 
 # --- Boot-time history (per-phase timing for startup and reboot) ---
 # Persists wait-times for each phase to .boot-times.json (last 20 runs per phase)
 # so subsequent runs can display an estimate before each wait.
-$script:BootTimesFile = Join-Path $scriptDir ".boot-times.json"
+$script:BootTimesFile = Resolve-DuneDataFile '.boot-times.json'
 
 function Get-BootTimes {
     if (-not (Test-Path $script:BootTimesFile)) { return @{ phases = @{} } }

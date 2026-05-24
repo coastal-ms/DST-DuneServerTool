@@ -33,12 +33,49 @@ public so other server admins can find the same answer.
 
 ---
 
+## Installing
+
+There are three ways to run this tool, in order of preference:
+
+### 1. Desktop app (recommended, v4.0.0+)
+
+Download **`DuneServerSetup.exe`** from the [latest GitHub release](https://github.com/coastal-ms/Simple-Dune-Server-Management-Tool/releases/latest)
+and double-click. A normal Windows installer walks you through it. Once
+installed:
+
+- Launch from **Start Menu → Dune Server** (or the optional desktop shortcut)
+- Sticky battlegroup status panel at the top (auto-refresh every 30s)
+- Every CLI menu item is a button on the left
+- Output streams into the right panel as commands run
+- All your config + logs live in `%APPDATA%\DuneServer\` (preserved across reinstalls)
+
+Existing users: the installer detects your old `dune-server.config` (Desktop,
+common folders) and offers to copy it to `%APPDATA%\DuneServer\` so nothing
+gets re-asked.
+
+See [`app/README.md`](app/README.md) for how the desktop app is built and
+how to ship a new release.
+
+### 2. The .bat launcher (classic, still supported)
+
+Clone the repo (or download a zip), then double-click `dune-server.bat`.
+This is the original entry point; the desktop app calls into the exact same
+`dune-server.ps1` underneath.
+
+### 3. Web portal (legacy, browser-based UI)
+
+Run `web\Start-DuneWeb.ps1` to start the local browser UI. Each command click
+spawns its own elevated PowerShell window. Still ships; not actively
+recommended for new users.
+
+---
+
 ## What You Need
 
-Before using this tool, make sure you have the following:
+Before using **any** of the three install paths above:
 
 - **Windows 10/11** with Hyper-V enabled
-- **PowerShell 7** (`pwsh`) installed — [Download here](https://github.com/PowerShell/PowerShell/releases)
+- **PowerShell 7** (`pwsh`) installed — [Download here](https://github.com/PowerShell/PowerShell/releases) (the desktop app will prompt you with the same link on first launch if missing)
 - **Dune Awakening Self-Hosted Server** installed via Steam
 - **SSH private key** for connecting to your VM (created during the official battlegroup setup)
 - **(Optional)** [dune-admin](https://github.com/icehunter/dune-admin) — a community admin panel for managing players, inventory, and more
@@ -49,10 +86,11 @@ Before using this tool, make sure you have the following:
 
 | File | Purpose |
 |------|---------|
-| `dune-server.bat` | Double-click this to launch the tool |
-| `dune-server.ps1` | The main script (don't run this directly — use the .bat) |
-| `dune-server.config` | Your saved settings (created automatically on first run) |
-| `readmez.md` | Ummm...... yeah.... |
+| `app/DuneServer.ps1` | Desktop app (compiled into `DuneServer.exe` via ps2exe and packaged into `DuneServerSetup.exe`) |
+| `dune-server.ps1` | The main script — business logic for every command (don't run directly) |
+| `dune-server.bat` | Classic launcher — double-click this if you're not using the installer |
+| `web/Start-DuneWeb.ps1` | Legacy web portal launcher |
+| `%APPDATA%\DuneServer\dune-server.config` | Your saved settings (auto-created on first run; auto-migrated from any prior location next to `dune-server.bat`) |
 
 ---
 
