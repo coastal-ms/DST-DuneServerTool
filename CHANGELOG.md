@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.0.1] - 2026-05-24
+
 ### Fixed
 - Menu option `21. dune-admin` is now correctly disabled (greyed out with a reason)
   when the Hyper-V VM does not exist or is not running, matching the behavior of
@@ -46,5 +48,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Hardened the post-reboot readiness check to verify webhook Service endpoints
   are populated (not just pods Running) before calling battlegroup start.
 
-[Unreleased]: https://github.com/coastal-ms/Simple-Dune-Server-Management-Tool/compare/v1.0.0...HEAD
+[Unreleased]: https://github.com/coastal-ms/Simple-Dune-Server-Management-Tool/compare/v1.0.1...HEAD
+[1.0.1]: https://github.com/coastal-ms/Simple-Dune-Server-Management-Tool/compare/v1.0.0...v1.0.1
 [1.0.0]: https://github.com/coastal-ms/Simple-Dune-Server-Management-Tool/releases/tag/v1.0.0

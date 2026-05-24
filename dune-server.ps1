@@ -5,7 +5,7 @@
 # Wraps the original battlegroup.ps1 menu and adds extra tools
 # ============================================================
 
-$script:ToolVersion = "1.0.0"
+$script:ToolVersion = "1.0.1"
 
 # Resize console window so the full menu is visible
 try {
