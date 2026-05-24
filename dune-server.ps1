@@ -382,6 +382,36 @@ function Confirm-NoPlayersOnline {
     return ($proceed -eq "YES")
 }
 
+function Wait-MapPodReady {
+    param(
+        [Parameter(Mandatory)] [string] $Ip,
+        [Parameter(Mandatory)] [string] $MapName,
+        [int] $TimeoutSec = 300
+    )
+    $elapsed = 0
+    $lastPod = $null
+    $lastStatus = $null
+    while ($elapsed -lt $TimeoutSec) {
+        $line = ssh -o StrictHostKeyChecking=no -o LogLevel=QUIET -i "$sshKey" "$sshUser@$Ip" `
+            "sudo k3s kubectl get pods -A --no-headers 2>/dev/null | grep -E -i '$MapName' | head -1"
+        $line = ($line | Out-String).Trim()
+        if ($line) {
+            $cols = $line -split '\s+'
+            $podName = $cols[1]
+            $ready   = $cols[2]
+            $status  = $cols[3]
+            $lastPod = $podName
+            $lastStatus = "$status $ready"
+            if ($status -eq 'Running' -and $ready -match '^(\d+)/\1$' -and $Matches[1] -gt 0) {
+                return @{ Success = $true; Elapsed = $elapsed; Pod = $podName; Ready = $ready }
+            }
+        }
+        Start-Sleep -Seconds 5
+        $elapsed += 5
+    }
+    return @{ Success = $false; Elapsed = $elapsed; Pod = $lastPod; LastStatus = $lastStatus }
+}
+
 # ============================================================
 #  MENU DEFINITIONS
 # ============================================================
@@ -390,6 +420,7 @@ $vmCommands = @(
     [pscustomobject]@{ Key = "a"; Name = "initial-setup";    Desc = "Run the initial VM setup" }
     [pscustomobject]@{ Key = "b"; Name = "start-vm";         Desc = "Start the VM" }
     [pscustomobject]@{ Key = "c"; Name = "stop-vm";          Desc = "Stop the VM" }
+    [pscustomobject]@{ Key = "h"; Name = "startup";            Desc = "Power on VM -> start battlegroup -> wait for overmap + survival maps" }
     [pscustomobject]@{ Key = "f"; Name = "graceful-reboot";    Desc = "Stop battlegroup -> restart VM -> start battlegroup (clean cycle)" }
     [pscustomobject]@{ Key = "g"; Name = "graceful-shutdown";  Desc = "Stop battlegroup -> power off VM (e.g. shut down for the night)" }
     [pscustomobject]@{ Key = "d"; Name = "rotate-ssh-key";   Desc = "Generate a new SSH key and replace the one authorized on the VM" }
@@ -449,6 +480,10 @@ function Get-VmCmdAvailability {
         "graceful-shutdown" {
             if (-not $info.Exists)  { return @{ Available = $false; Reason = "VM '$vmName' does not exist." } }
             if (-not $info.Running) { return @{ Available = $false; Reason = "VM '$vmName' is not running." } }
+            return @{ Available = $true; Reason = $null }
+        }
+        "startup" {
+            if (-not $info.Exists) { return @{ Available = $false; Reason = "VM '$vmName' does not exist. Run 'initial-setup' first." } }
             return @{ Available = $true; Reason = $null }
         }
         default {
@@ -632,6 +667,144 @@ while ($true) {
         Write-Host "Stopping VM '$vmName'..." -ForegroundColor Cyan
         Stop-VM -Name $vmName -Force | Out-Null
         Write-Host "VM stopped." -ForegroundColor Green
+        continue
+    }
+
+    if ($cmd -eq "startup") {
+        Write-Host ""
+        Write-Host "=== Startup ===" -ForegroundColor Cyan
+        Write-Host "  1. Start VM (skipped if already running)" -ForegroundColor DarkGray
+        Write-Host "  2. Wait for SSH + k3s + DB + operator webhook readiness" -ForegroundColor DarkGray
+        Write-Host "  3. Start battlegroup" -ForegroundColor DarkGray
+        Write-Host "  4. Wait for overmap and survival map pods to be Ready" -ForegroundColor DarkGray
+        Write-Host ""
+        $confirm = Read-Host "Type YES to continue"
+        if ($confirm -ne "YES") { Write-Host "Aborted." -ForegroundColor Cyan; continue }
+
+        $t0 = Get-Date
+
+        # ---- Step 1: VM ----
+        Write-Host ""
+        if ($info.Running) {
+            Write-Host "[1/4] VM '$vmName' already running ($($info.Ip))." -ForegroundColor Green
+            $ip = $info.Ip
+        } else {
+            Write-Host "[1/4] Starting VM '$vmName'..." -ForegroundColor Cyan
+            Start-VM -Name $vmName | Out-Null
+            do { Start-Sleep -Seconds 2; $vm = Get-VM -Name $vmName } while ($vm.State -ne 'Running')
+            Write-Host "  VM running. Waiting for IP..." -ForegroundColor DarkGray
+
+            $newIp = $null; $timeout = 180; $elapsed = 0; $dots = 0
+            while (-not $newIp -and $elapsed -lt $timeout) {
+                $dots = ($dots % 3) + 1
+                Write-Host -NoNewline ("`r  Waiting for IP$('.' * $dots)   ")
+                Start-Sleep -Seconds 1; $elapsed += 1
+                $newIp = (Get-VMNetworkAdapter -VMName $vmName).IPAddresses |
+                          Where-Object { $_ -match '^\d+\.\d+\.\d+\.\d+$' } | Select-Object -First 1
+            }
+            Write-Host ""
+            if (-not $newIp) { Write-Warning "VM did not acquire IP within ${timeout}s. Aborting."; continue }
+            $ip = $newIp
+            Write-Host "  VM IP: $ip" -ForegroundColor Green
+        }
+
+        # ---- Step 2: SSH + cluster readiness ----
+        Write-Host ""
+        Write-Host "[2/4] Waiting for cluster readiness..." -ForegroundColor Cyan
+
+        # 2a. SSH responsive
+        $elapsed = 0; $sshReady = $false
+        while ($elapsed -lt 180) {
+            $probe = ssh -o StrictHostKeyChecking=no -o LogLevel=QUIET -o ConnectTimeout=3 -i "$sshKey" "$sshUser@$ip" "echo ok" 2>$null
+            if ($probe -match 'ok') { $sshReady = $true; break }
+            Start-Sleep -Seconds 3; $elapsed += 3
+        }
+        if (-not $sshReady) { Write-Warning "SSH not responsive after 180s. Aborting."; continue }
+        Write-Host "  SSH responsive (${elapsed}s)." -ForegroundColor Green
+
+        # 2b. k3s API
+        Write-Host "  Waiting for k3s API..." -ForegroundColor DarkGray
+        $elapsed = 0
+        while ($elapsed -lt 180) {
+            $apiOk = ssh -o StrictHostKeyChecking=no -o LogLevel=QUIET -i "$sshKey" "$sshUser@$ip" `
+                "sudo k3s kubectl get --raw='/readyz' 2>/dev/null"
+            if ($apiOk -match 'ok') { break }
+            Start-Sleep -Seconds 3; $elapsed += 3
+        }
+        Write-Host "  k3s API ready (${elapsed}s)." -ForegroundColor Green
+
+        # 2c. DB pod(s) Ready (auto-discover namespace)
+        Write-Host "  Waiting for DB pod(s) Ready..." -ForegroundColor DarkGray
+        $dbNs = ssh -o StrictHostKeyChecking=no -o LogLevel=QUIET -i "$sshKey" "$sshUser@$ip" `
+            "sudo k3s kubectl get pods -A --no-headers 2>/dev/null | awk '`$2 ~ /(-db-|postgres|^pg-|-pg-)/ {print `$1}' | sort -u | head -1"
+        $dbNs = ($dbNs | Out-String).Trim()
+        if ($dbNs) {
+            ssh -o StrictHostKeyChecking=no -o LogLevel=QUIET -i "$sshKey" "$sshUser@$ip" `
+                "sudo k3s kubectl wait --for=condition=Ready pods --all -n '$dbNs' --timeout=180s 2>&1 | tail -n 3"
+            Write-Host "  DB pods Ready (namespace: $dbNs)." -ForegroundColor Green
+        } else {
+            Write-Host "  No dedicated DB namespace detected - skipping." -ForegroundColor DarkGray
+        }
+
+        # 2d. operator pods Ready
+        Write-Host "  Waiting for operator pods Ready..." -ForegroundColor DarkGray
+        ssh -o StrictHostKeyChecking=no -o LogLevel=QUIET -i "$sshKey" "$sshUser@$ip" `
+            "sudo k3s kubectl wait --for=condition=Ready pods --all -n funcom-operators --timeout=180s 2>&1 | tail -n 5"
+        if ($LASTEXITCODE -ne 0) {
+            Write-Warning "Operator pods did not become Ready within 180s. Aborting battlegroup start."
+            continue
+        }
+
+        # 2e. webhook Service endpoints
+        Write-Host "  Waiting for webhook Service endpoints..." -ForegroundColor DarkGray
+        $elapsed = 0; $epReady = $false
+        while ($elapsed -lt 120) {
+            $epOut = ssh -o StrictHostKeyChecking=no -o LogLevel=QUIET -i "$sshKey" "$sshUser@$ip" `
+                "sudo k3s kubectl -n funcom-operators get endpoints battlegroupoperator-webhook-svc -o jsonpath='{.subsets[*].addresses[*].ip}' 2>/dev/null"
+            if ($epOut -match '\d+\.\d+\.\d+\.\d+') { $epReady = $true; break }
+            Start-Sleep -Seconds 3; $elapsed += 3
+        }
+        if (-not $epReady) {
+            Write-Warning "battlegroupoperator-webhook-svc has no endpoints after 120s. Aborting."
+            continue
+        }
+        Write-Host "  Webhook endpoints populated (${elapsed}s). Settling 10s..." -ForegroundColor Green
+        Start-Sleep -Seconds 10
+
+        # ---- Step 3: battlegroup start ----
+        Write-Host ""
+        Write-Host "[3/4] Starting battlegroup..." -ForegroundColor Cyan
+        ssh -t -o StrictHostKeyChecking=no -o LogLevel=QUIET -i "$sshKey" "$sshUser@$ip" "$bgBinPath start"
+
+        # ---- Step 4: wait for map pods ----
+        Write-Host ""
+        Write-Host "[4/4] Waiting for map pods to be Ready..." -ForegroundColor Cyan
+        $mapResults = @{}
+        foreach ($map in 'overmap','survival') {
+            Write-Host "  Waiting for $map pod (timeout 300s)..." -ForegroundColor DarkGray
+            $r = Wait-MapPodReady -Ip $ip -MapName $map -TimeoutSec 300
+            $mapResults[$map] = $r
+            if ($r.Success) {
+                Write-Host "  $map -> $($r.Pod) is Ready ($($r.Ready)) in $($r.Elapsed)s" -ForegroundColor Green
+            } else {
+                if ($r.Pod) {
+                    Write-Warning "  $map ($($r.Pod)) did not become Ready within $($r.Elapsed)s (last seen: $($r.LastStatus))"
+                } else {
+                    Write-Warning "  $map pod was never found within $($r.Elapsed)s"
+                }
+            }
+        }
+
+        $totalSec = [int]((Get-Date) - $t0).TotalSeconds
+        Write-Host ""
+        $allOk = ($mapResults.Values | Where-Object { -not $_.Success } | Measure-Object).Count -eq 0
+        if ($allOk) {
+            Write-Host "=== Startup complete in ${totalSec}s (overmap + survival Ready) ===" -ForegroundColor Green
+        } else {
+            Write-Host "=== Startup finished in ${totalSec}s with WARNINGS - see above ===" -ForegroundColor Yellow
+            Write-Host "Use 'status' (1) or 'shell-pod' (16) to investigate any map that didn't reach Ready." -ForegroundColor DarkGray
+        }
+        $directorPort = $null
         continue
     }
 

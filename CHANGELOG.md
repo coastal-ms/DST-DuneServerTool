@@ -7,6 +7,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- New `h. startup` menu option (and matching handler) that orchestrates a clean
+  cold-start of the server with timed gates at each step:
+  1. Powers on the Hyper-V VM (skipped if already running) and waits for an IP.
+  2. Waits for SSH, the k3s API (`/readyz`), the DB pod(s) Ready,
+     `funcom-operators` pods Ready, and the
+     `battlegroupoperator-webhook-svc` Service endpoints to be populated
+     (the same gate `f. graceful-reboot` uses to avoid the `502 Bad Gateway`
+     mutating-webhook race).
+  3. Runs `battlegroup start`.
+  4. Polls until the `overmap` and `survival` map pods are both
+     `Running` with all containers Ready (timeout 300s each).
+  Prints elapsed seconds for each phase and a total at the end.
+- New `Wait-MapPodReady` helper used by step 4 above. Generic enough to be
+  reused by any future "wait for a named pod" feature.
+
 ### Changed
 - Menu UI is now visually compact (~14 fewer rows): merged the double `===`
   header bar into a single line, removed cosmetic blank lines between sections,
