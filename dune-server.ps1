@@ -1,11 +1,19 @@
 #Requires -RunAsAdministrator
 
+[CmdletBinding()]
+param(
+    # When set, skip the interactive menu and dispatch directly to the named
+    # command. Used by the web UI (web/Start-DuneWeb.ps1) to invoke commands
+    # in a fresh console window per click.
+    [string]$Cmd
+)
+
 # ============================================================
 # Dune Awakening Server Management — Extended Menu
 # Wraps the original battlegroup.ps1 menu and adds extra tools
 # ============================================================
 
-$script:ToolVersion = "1.1.1"
+$script:ToolVersion = "1.2.0"
 
 # Resize console window so the full menu is visible
 try {
@@ -102,21 +110,48 @@ function Run-Setup {
 
     # ── 3. dune-admin.exe ──
     Write-Host "3. Dune Admin Tool (optional)" -ForegroundColor Yellow
-    Write-Host "   Path to dune-admin.exe. Leave blank to skip." -ForegroundColor Gray
+    Write-Host "   The dune-admin tool (by Icehunter) provides extra utilities for managing" -ForegroundColor Gray
+    Write-Host "   your battlegroup. Repo: https://github.com/Icehunter/dune-admin" -ForegroundColor Gray
     Write-Host ""
-    $defaultAdmin = $null
-    $adminCandidates = @(
-        "$env:USERPROFILE\Desktop\dune-admin-main\dune-admin.exe",
-        "$env:USERPROFILE\Desktop\dune-admin\dune-admin.exe",
-        "$scriptDir\dune-admin\dune-admin.exe"
-    )
-    foreach ($a in $adminCandidates) {
-        if (Test-Path $a) { $defaultAdmin = $a; break }
-    }
-    if ($existing.DuneAdminExe) { $defaultAdmin = $existing.DuneAdminExe }
-    $adminExe = Ask -Label "dune-admin.exe path" -Default $defaultAdmin
-    if ($adminExe -and -not (Test-Path $adminExe)) {
-        Write-Warning "File not found — dune-admin option will be hidden until the file exists."
+    Write-Host "   You can either:" -ForegroundColor Gray
+    Write-Host "     1. Download latest release now (recommended)" -ForegroundColor Gray
+    Write-Host "     2. Point at an existing dune-admin.exe you already have" -ForegroundColor Gray
+    Write-Host "     3. Skip — option 21 will be hidden" -ForegroundColor Gray
+    Write-Host ""
+    $existingAdmin = $existing.DuneAdminExe
+    $defaultAdminChoice = if ($existingAdmin -and (Test-Path $existingAdmin)) { '2' } else { '1' }
+    $adminChoice = Ask -Label "Choose 1, 2, or 3" -Default $defaultAdminChoice
+    $adminExe = ""
+    if ($adminChoice -eq '1') {
+        $defaultInstallDir = if ($existingAdmin) { Split-Path $existingAdmin -Parent } else { "$env:USERPROFILE\dune-admin" }
+        $installDir = Ask -Label "Install directory" -Default $defaultInstallDir
+        try {
+            $adminExe = Install-DuneAdminLatest -InstallDir $installDir
+            if ($adminExe) {
+                Write-Host "   dune-admin installed at $adminExe" -ForegroundColor Green
+            }
+        } catch {
+            Write-Warning "Download failed: $($_.Exception.Message)"
+            Write-Host "   You can re-run setup later or manually grab a release from:" -ForegroundColor Gray
+            Write-Host "   https://github.com/Icehunter/dune-admin/releases" -ForegroundColor Gray
+            $adminExe = ""
+        }
+    } elseif ($adminChoice -eq '2') {
+        $defaultAdmin = $null
+        $adminCandidates = @(
+            "$env:USERPROFILE\dune-admin\dune-admin.exe",
+            "$env:USERPROFILE\Desktop\dune-admin-main\dune-admin.exe",
+            "$env:USERPROFILE\Desktop\dune-admin\dune-admin.exe",
+            "$scriptDir\dune-admin\dune-admin.exe"
+        )
+        foreach ($a in $adminCandidates) {
+            if (Test-Path $a) { $defaultAdmin = $a; break }
+        }
+        if ($existingAdmin) { $defaultAdmin = $existingAdmin }
+        $adminExe = Ask -Label "dune-admin.exe path" -Default $defaultAdmin
+        if ($adminExe -and -not (Test-Path $adminExe)) {
+            Write-Warning "File not found — dune-admin option will be hidden until the file exists."
+        }
     }
     Write-Host ""
 
@@ -197,6 +232,46 @@ function Run-Setup {
         PortCheckMode        = $portCheckMode
         PortCheckUrlTemplate = $portCheckUrlTemplate
     }
+}
+
+function Install-DuneAdminLatest {
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory)][string]$InstallDir
+    )
+
+    Write-Host ""
+    Write-Host "   Fetching latest release info from Icehunter/dune-admin..." -ForegroundColor Cyan
+
+    $headers = @{ 'User-Agent' = 'Simple-Dune-Server-Management-Tool' }
+    $release = Invoke-RestMethod -Uri 'https://api.github.com/repos/Icehunter/dune-admin/releases/latest' -Headers $headers -TimeoutSec 15
+    $tag = $release.tag_name
+    Write-Host "   Latest release: $tag" -ForegroundColor DarkGray
+
+    $asset = $release.assets | Where-Object { $_.name -like '*windows_amd64.zip' } | Select-Object -First 1
+    if (-not $asset) {
+        throw "No Windows amd64 .zip asset found in release $tag."
+    }
+    Write-Host "   Asset: $($asset.name) ($([Math]::Round($asset.size/1MB,1)) MB)" -ForegroundColor DarkGray
+
+    if (-not (Test-Path $InstallDir)) {
+        New-Item -ItemType Directory -Force -Path $InstallDir | Out-Null
+    }
+
+    $tempZip = Join-Path $env:TEMP $asset.name
+    Write-Host "   Downloading..." -ForegroundColor Cyan
+    Invoke-WebRequest -Uri $asset.browser_download_url -OutFile $tempZip -Headers $headers -UseBasicParsing -TimeoutSec 120
+
+    Write-Host "   Extracting to $InstallDir..." -ForegroundColor Cyan
+    Expand-Archive -Path $tempZip -DestinationPath $InstallDir -Force
+    Remove-Item $tempZip -ErrorAction SilentlyContinue
+
+    $exe = Get-ChildItem -Path $InstallDir -Filter 'dune-admin.exe' -Recurse -ErrorAction SilentlyContinue |
+           Select-Object -First 1 -ExpandProperty FullName
+    if (-not $exe) {
+        throw "dune-admin.exe was not found in the extracted contents at $InstallDir."
+    }
+    return $exe
 }
 
 function Load-Config {
@@ -417,14 +492,13 @@ function Wait-MapPodReady {
 # ============================================================
 
 $vmCommands = @(
-    [pscustomobject]@{ Key = "a"; Name = "initial-setup";    Desc = "Run the initial VM setup" }
-    [pscustomobject]@{ Key = "b"; Name = "start-vm";         Desc = "Start the VM" }
-    [pscustomobject]@{ Key = "c"; Name = "stop-vm";          Desc = "Stop the VM" }
-    [pscustomobject]@{ Key = "h"; Name = "startup";            Desc = "Power on VM -> start battlegroup -> wait for overmap + survival maps" }
-    [pscustomobject]@{ Key = "f"; Name = "graceful-reboot";    Desc = "Stop battlegroup -> restart VM -> start battlegroup (clean cycle)" }
-    [pscustomobject]@{ Key = "g"; Name = "graceful-shutdown";  Desc = "Stop battlegroup -> power off VM (e.g. shut down for the night)" }
-    [pscustomobject]@{ Key = "d"; Name = "rotate-ssh-key";   Desc = "Generate a new SSH key and replace the one authorized on the VM" }
-    [pscustomobject]@{ Key = "e"; Name = "change-password";  Desc = "Change the password of the 'dune' user on the VM" }
+    [pscustomobject]@{ Key = "a"; Name = "initial-setup";      Desc = "Run the initial VM setup" }
+    [pscustomobject]@{ Key = "b"; Name = "web";                Desc = "Open the web UI in your browser (button panel for these commands)" }
+    [pscustomobject]@{ Key = "c"; Name = "startup";            Desc = "Power on VM -> start battlegroup -> wait for overmap + survival maps" }
+    [pscustomobject]@{ Key = "d"; Name = "graceful-reboot";    Desc = "Stop battlegroup -> restart VM -> start battlegroup (clean cycle)" }
+    [pscustomobject]@{ Key = "e"; Name = "graceful-shutdown";  Desc = "Stop battlegroup -> power off VM (e.g. shut down for the night)" }
+    [pscustomobject]@{ Key = "f"; Name = "rotate-ssh-key";     Desc = "Generate a new SSH key and replace the one authorized on the VM" }
+    [pscustomobject]@{ Key = "g"; Name = "change-password";    Desc = "Change the password of the 'dune' user on the VM" }
 )
 
 $bgCommands = @(
@@ -462,6 +536,7 @@ function Get-VmCmdAvailability {
     param($cmdName, $info)
     switch ($cmdName) {
         "initial-setup" { return @{ Available = $true; Reason = $null } }
+        "web"           { return @{ Available = $true; Reason = $null } }
         "start-vm" {
             if (-not $info.Exists)  { return @{ Available = $false; Reason = "VM '$vmName' does not exist. Run 'initial-setup' first." } }
             if ($info.Running)      { return @{ Available = $false; Reason = "VM '$vmName' is already running." } }
@@ -474,7 +549,7 @@ function Get-VmCmdAvailability {
         }
         "graceful-reboot" {
             if (-not $info.Exists)  { return @{ Available = $false; Reason = "VM '$vmName' does not exist." } }
-            if (-not $info.Running) { return @{ Available = $false; Reason = "VM '$vmName' is not running. Start it first with 'start-vm'." } }
+            if (-not $info.Running) { return @{ Available = $false; Reason = "VM '$vmName' is not running. Use 'c. startup' to cold-start." } }
             return @{ Available = $true; Reason = $null }
         }
         "graceful-shutdown" {
@@ -547,88 +622,99 @@ while ($true) {
 
     foreach ($e in $entries) { $entryByKey[$e.Key.ToLower()] = $e }
 
-    # --- Render menu ---
-    Write-Host ""
-    Write-Host "===  Dune Awakening - Server Management  ===" -ForegroundColor Cyan
-    Write-Host "  Brought to you by Coastal (Discord @allcoast)" -ForegroundColor DarkGray
-    $vmStatusColor = if ($info.Running) { 'Green' } elseif ($info.Exists) { 'Yellow' } else { 'Red' }
-    $vmStatusText  = if ($info.Running) { "Running ($($info.Ip))" } elseif ($info.Exists) { "$($info.State)" } else { "Not found" }
-    Write-Host "  VM: " -NoNewline; Write-Host $vmStatusText -ForegroundColor $vmStatusColor
-    Write-Host "  Required Port Forwarding:" -ForegroundColor DarkGray
-    if ($portCheckMode -ne 'disabled' -and $info.Running) {
-        $check = Get-PortCheckStatus -Force:$false
-        if ($check -and $check.PublicIp) {
-            foreach ($r in $check.Results) {
-                $tag = switch ($r.Status) {
-                    'open'     { '[OPEN]'              }
-                    'closed'   { '[CLOSED]'            }
-                    'udp-skip' { '[UDP - skipped]'     }
-                    default    { '[UNKNOWN]'           }
-                }
-                $color = switch ($r.Status) {
-                    'open'     { 'Green'    }
-                    'closed'   { 'Red'      }
-                    'udp-skip' { 'DarkGray' }
-                    default    { 'Yellow'   }
-                }
-                Write-Host ("    {0,-45} " -f $r.Label) -ForegroundColor DarkGray -NoNewline
-                Write-Host $tag -ForegroundColor $color
-            }
-        } else {
-            Write-Host "    UDP  7777-7810   Game servers     [check failed - no public IP]" -ForegroundColor Yellow
-            Write-Host "    TCP  31982       RabbitMQ         [check failed - no public IP]" -ForegroundColor Yellow
+    if ($Cmd) {
+        # Non-interactive dispatch (called by web UI). Skip menu render +
+        # interactive selection; look up the entry by command name and fall
+        # through to the handler block.
+        $entry = $entries | Where-Object { $_.Name -eq $Cmd } | Select-Object -First 1
+        if (-not $entry) {
+            Write-Error "Unknown command: $Cmd"
+            exit 1
         }
     } else {
-        Write-Host "    UDP  7777-7810   Game servers" -ForegroundColor DarkGray
-        Write-Host "    TCP  31982       RabbitMQ" -ForegroundColor DarkGray
-        if ($portCheckMode -eq 'disabled') {
-            Write-Host "    (port verification disabled)" -ForegroundColor DarkGray
-        }
-    }
-    Write-Host ""
-
-    $prevSection = $null
-    foreach ($e in $entries) {
-        if ($e.Section -ne $prevSection) {
-            if ($null -ne $prevSection) { Write-Host "" }
-            switch ($e.Section) {
-                'vm'          { Write-Host "VM commands:" -ForegroundColor Yellow }
-                'battlegroup' { Write-Host "Battlegroup commands:" -ForegroundColor Yellow }
-                'tools'       { Write-Host "Tools:" -ForegroundColor Yellow }
+        # --- Render menu ---
+        Write-Host ""
+        Write-Host "===  Dune Awakening - Server Management  ===" -ForegroundColor Cyan
+        Write-Host "  Brought to you by Coastal (Discord @allcoast)" -ForegroundColor DarkGray
+        $vmStatusColor = if ($info.Running) { 'Green' } elseif ($info.Exists) { 'Yellow' } else { 'Red' }
+        $vmStatusText  = if ($info.Running) { "Running ($($info.Ip))" } elseif ($info.Exists) { "$($info.State)" } else { "Not found" }
+        Write-Host "  VM: " -NoNewline; Write-Host $vmStatusText -ForegroundColor $vmStatusColor
+        Write-Host "  Required Port Forwarding:" -ForegroundColor DarkGray
+        if ($portCheckMode -ne 'disabled' -and $info.Running) {
+            $check = Get-PortCheckStatus -Force:$false
+            if ($check -and $check.PublicIp) {
+                foreach ($r in $check.Results) {
+                    $tag = switch ($r.Status) {
+                        'open'     { '[OPEN]'              }
+                        'closed'   { '[CLOSED]'            }
+                        'udp-skip' { '[UDP - skipped]'     }
+                        default    { '[UNKNOWN]'           }
+                    }
+                    $color = switch ($r.Status) {
+                        'open'     { 'Green'    }
+                        'closed'   { 'Red'      }
+                        'udp-skip' { 'DarkGray' }
+                        default    { 'Yellow'   }
+                    }
+                    Write-Host ("    {0,-45} " -f $r.Label) -ForegroundColor DarkGray -NoNewline
+                    Write-Host $tag -ForegroundColor $color
+                }
+            } else {
+                Write-Host "    UDP  7777-7810   Game servers     [check failed - no public IP]" -ForegroundColor Yellow
+                Write-Host "    TCP  31982       RabbitMQ         [check failed - no public IP]" -ForegroundColor Yellow
+            }
+        } else {
+            Write-Host "    UDP  7777-7810   Game servers" -ForegroundColor DarkGray
+            Write-Host "    TCP  31982       RabbitMQ" -ForegroundColor DarkGray
+            if ($portCheckMode -eq 'disabled') {
+                Write-Host "    (port verification disabled)" -ForegroundColor DarkGray
             }
         }
-        $color = if ($e.Available) { 'White' } else { 'DarkGray' }
-        Write-Host ("  {0,2}. {1,-30} {2}" -f $e.Key, $e.Name, $e.Desc) -ForegroundColor $color
-        $prevSection = $e.Section
-    }
-
-    Write-Host ("  {0,2}. {1,-30} {2}" -f "q", "quit", "Exit this script")
-    Write-Host ""
-
-    if (-not $info.Exists) {
-        Write-Host "Some options are unavailable because VM '$vmName' does not exist. Press 'a' to run 'initial-setup'" -ForegroundColor Yellow
         Write-Host ""
-    } elseif (-not $info.Running) {
-        Write-Host "Some options are unavailable because VM '$vmName' is currently $($info.State). Press 'b' to start it" -ForegroundColor Yellow
-        Write-Host ""
-    }
 
-    # --- Selection ---
-    $entry = $null
-    while ($null -eq $entry) {
-        $selection = (Read-Host "Select an option").Trim().ToLower()
-        if ($selection -eq 'q' -or $selection -eq 'quit') { $entry = 'quit'; break }
-        if ($entryByKey.ContainsKey($selection)) {
-            $entry = $entryByKey[$selection]
-        } else {
-            Write-Warning "Invalid selection."
+        $prevSection = $null
+        foreach ($e in $entries) {
+            if ($e.Section -ne $prevSection) {
+                if ($null -ne $prevSection) { Write-Host "" }
+                switch ($e.Section) {
+                    'vm'          { Write-Host "VM commands:" -ForegroundColor Yellow }
+                    'battlegroup' { Write-Host "Battlegroup commands:" -ForegroundColor Yellow }
+                    'tools'       { Write-Host "Tools:" -ForegroundColor Yellow }
+                }
+            }
+            $color = if ($e.Available) { 'White' } else { 'DarkGray' }
+            Write-Host ("  {0,2}. {1,-30} {2}" -f $e.Key, $e.Name, $e.Desc) -ForegroundColor $color
+            $prevSection = $e.Section
         }
+
+        Write-Host ("  {0,2}. {1,-30} {2}" -f "q", "quit", "Exit this script")
+        Write-Host ""
+
+        if (-not $info.Exists) {
+            Write-Host "Some options are unavailable because VM '$vmName' does not exist. Press 'a' to run 'initial-setup'" -ForegroundColor Yellow
+            Write-Host ""
+        } elseif (-not $info.Running) {
+            Write-Host "Some options are unavailable because VM '$vmName' is currently $($info.State). Press 'c' to run 'startup'" -ForegroundColor Yellow
+            Write-Host ""
+        }
+
+        # --- Selection ---
+        $entry = $null
+        while ($null -eq $entry) {
+            $selection = (Read-Host "Select an option").Trim().ToLower()
+            if ($selection -eq 'q' -or $selection -eq 'quit') { $entry = 'quit'; break }
+            if ($entryByKey.ContainsKey($selection)) {
+                $entry = $entryByKey[$selection]
+            } else {
+                Write-Warning "Invalid selection."
+            }
+        }
+        if ($entry -eq 'quit') { break }
     }
-    if ($entry -eq 'quit') { break }
 
     if (-not $entry.Available) {
         Write-Warning $entry.Reason
-        continue
+        if ($Cmd) { exit 1 } else { continue }
     }
 
     $cmd = $entry.Name
@@ -640,6 +726,55 @@ while ($true) {
 
     if ($cmd -eq "initial-setup") {
         . "$bgSetupPath\initial-setup.ps1"
+        if ($Cmd) { break }
+        continue
+    }
+
+    if ($cmd -eq "web") {
+        $webScript = Join-Path $scriptDir 'web\Start-DuneWeb.ps1'
+        if (-not (Test-Path $webScript)) {
+            Write-Warning "Web UI script not found at $webScript"
+            if ($Cmd) { break } else { continue }
+        }
+        if (-not (Get-Module -ListAvailable Pode)) {
+            Write-Warning "Pode PowerShell module is not installed. Install with:"
+            Write-Host "    Install-Module Pode -Scope CurrentUser" -ForegroundColor Cyan
+            if ($Cmd) { break } else { continue }
+        }
+
+        $port = 8765
+        $url  = "http://127.0.0.1:$port"
+
+        $alreadyRunning = $false
+        try {
+            $tcp = New-Object System.Net.Sockets.TcpClient
+            $iar = $tcp.BeginConnect('127.0.0.1', $port, $null, $null)
+            $alreadyRunning = $iar.AsyncWaitHandle.WaitOne(300) -and $tcp.Connected
+            $tcp.Close()
+        } catch {}
+
+        if (-not $alreadyRunning) {
+            Write-Host "Starting Pode web server on $url (minimized)..." -ForegroundColor Cyan
+            Start-Process pwsh `
+                -ArgumentList '-NoProfile','-ExecutionPolicy','Bypass','-File',"`"$webScript`"" `
+                -WindowStyle Minimized
+            $waited = 0
+            while ($waited -lt 8) {
+                Start-Sleep -Milliseconds 500; $waited++
+                try {
+                    $tcp = New-Object System.Net.Sockets.TcpClient
+                    $iar = $tcp.BeginConnect('127.0.0.1', $port, $null, $null)
+                    if ($iar.AsyncWaitHandle.WaitOne(200) -and $tcp.Connected) { $tcp.Close(); break }
+                    $tcp.Close()
+                } catch {}
+            }
+        } else {
+            Write-Host "Web server already running at $url" -ForegroundColor DarkGray
+        }
+
+        Write-Host "Opening $url in your default browser..." -ForegroundColor Cyan
+        Start-Process $url
+        if ($Cmd) { break }
         continue
     }
 
@@ -1190,6 +1325,8 @@ while ($true) {
         }
         if (-not $directorPort) { Write-Warning "Could not determine Director port after $timeout seconds." }
     }
+
+    if ($Cmd) { break }
 }
 
 Stop-Transcript | Out-Null

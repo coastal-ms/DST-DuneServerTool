@@ -1,0 +1,176 @@
+#Requires -Version 7.0
+
+<#
+.SYNOPSIS
+    Localhost web UI for the Dune Awakening Server Management Tool.
+
+.DESCRIPTION
+    Mirrors the dune-server.ps1 console menu as a button panel served at
+    http://127.0.0.1:8765. Each button POSTs to /api/exec/{name}, which
+    spawns dune-server.ps1 -Cmd <name> in a new console window so any
+    interactive prompts (battlegroup picker, password entry, confirms)
+    still work.
+
+    No authentication. Binds 127.0.0.1 only.
+#>
+
+[CmdletBinding()]
+param(
+    [int]$Port = 8765
+)
+
+Import-Module Pode -ErrorAction Stop
+
+$script:Root       = Split-Path -Parent (Split-Path -Parent $MyInvocation.MyCommand.Path)
+$script:MainScript = Join-Path $script:Root 'dune-server.ps1'
+$script:ConfigFile = Join-Path $script:Root 'dune-server.config'
+$script:VmName     = 'dune-awakening'
+
+function Read-Config {
+    $cfg = @{}
+    if (Test-Path $script:ConfigFile) {
+        Get-Content $script:ConfigFile | ForEach-Object {
+            if ($_ -match '^([^#=]+)=(.*)$') { $cfg[$Matches[1].Trim()] = $Matches[2].Trim() }
+        }
+    }
+    return $cfg
+}
+
+function Get-VmStatus {
+    try {
+        $vm = Get-VM -Name $script:VmName -ErrorAction Stop
+        $ip = ($vm | Get-VMNetworkAdapter).IPAddresses |
+              Where-Object { $_ -match '^\d+\.\d+\.\d+\.\d+$' } |
+              Select-Object -First 1
+        return @{
+            exists  = $true
+            state   = $vm.State.ToString()
+            running = ($vm.State -eq 'Running')
+            ip      = $ip
+        }
+    } catch {
+        return @{ exists = $false; state = 'NotFound'; running = $false; ip = $null }
+    }
+}
+
+# Commands exposed in the web UI. Mirrors $vmCommands / $bgCommands /
+# $toolCommands in dune-server.ps1. Keep in sync when adding new menu items.
+$script:VmCommands = @(
+    @{ key='a'; name='initial-setup';     desc='Run the initial VM setup';                                                requires='none' }
+    # 'b' (web) intentionally omitted from the web UI itself.
+    @{ key='c'; name='startup';           desc='Power on VM, start battlegroup, wait for overmap + survival maps';        requires='exists' }
+    @{ key='d'; name='graceful-reboot';   desc='Stop battlegroup, restart VM, start battlegroup (clean cycle)';           requires='running'; confirm=$true }
+    @{ key='e'; name='graceful-shutdown'; desc='Stop battlegroup, power off VM';                                          requires='running'; confirm=$true }
+    @{ key='f'; name='rotate-ssh-key';    desc='Generate a new SSH key and replace the authorized one on the VM';        requires='running' }
+    @{ key='g'; name='change-password';   desc="Change the password of the 'dune' user on the VM";                        requires='running' }
+)
+
+$script:BgCommands = @(
+    @{ key='1';  name='status';                    desc='Status of the selected battlegroup';                  sub=$null }
+    @{ key='2';  name='start';                     desc='Start the selected battlegroup';                      sub=$null }
+    @{ key='3';  name='restart';                   desc='Restart the selected battlegroup';                    sub=$null }
+    @{ key='4';  name='stop';                      desc='Stop the selected battlegroup';                       sub=$null }
+    @{ key='5';  name='update';                    desc='Check for new versions and apply them';               sub=$null }
+    @{ key='6';  name='edit';                      desc='Edit battlegroup via utilities interface';            sub=$null }
+    @{ key='7';  name='edit-advanced';             desc='(Advanced) Edit battlegroup YAML directly';           sub=$null }
+    @{ key='8';  name='enable-experimental-swap'; desc='(Experimental) Enable experimental swap memory';      sub=$null }
+    @{ key='9';  name='backup';                    desc="Back up the battlegroup's database";                  sub='Database' }
+    @{ key='10'; name='import';                    desc='Import a database backup';                            sub='Database' }
+    @{ key='11'; name='logs-export';               desc='Retrieve logs from all pods in the battlegroup';      sub='Logs' }
+    @{ key='12'; name='operator-logs-export';      desc='Retrieve logs from all operator pods';                sub='Logs' }
+    @{ key='13'; name='open-file-browser';         desc='Open battlegroup file browser (configs/logs)';        sub='Monitoring' }
+    @{ key='14'; name='open-director';             desc='Open battlegroup director page';                      sub='Monitoring' }
+    @{ key='15'; name='shell-vm';                  desc='Open a shell to the VM';                              sub='Monitoring' }
+    @{ key='16'; name='shell-pod';                 desc='Open a shell to a pod in the battlegroup';            sub='Monitoring' }
+)
+
+function Get-ToolCommandList {
+    $cfg = Read-Config
+    $list = @(
+        @{ key='20'; name='ssh';         desc='Open an SSH terminal to the VM';                       requires='running' }
+    )
+    if ($cfg.DuneAdminExe -and (Test-Path $cfg.DuneAdminExe)) {
+        $list += @{ key='21'; name='dune-admin';  desc='Launch dune-admin.exe + open dune-admin web UI'; requires='running' }
+    }
+    $list += @{ key='22'; name='setup-guide'; desc='Open Funcom Self-Hosted Server Setup Instructions'; requires='none' }
+    return $list
+}
+
+function Resolve-Available {
+    param([hashtable]$cmd, [hashtable]$vm)
+    switch ($cmd.requires) {
+        'none'    { return $true }
+        'exists'  { return [bool]$vm.exists }
+        'running' { return [bool]$vm.running }
+        default   { return [bool]$vm.running }
+    }
+}
+
+Start-PodeServer {
+    Add-PodeEndpoint -Address 127.0.0.1 -Port $Port -Protocol Http
+
+    Add-PodeStaticRoute -Path '/' -Source (Join-Path $script:Root 'web\public') -Defaults @('index.html')
+
+    Add-PodeRoute -Method Get -Path '/api/status' -ScriptBlock {
+        $vm = Get-VmStatus
+        Write-PodeJsonResponse -Value @{
+            vm        = $vm
+            timestamp = (Get-Date).ToString('s')
+        }
+    }
+
+    Add-PodeRoute -Method Get -Path '/api/commands' -ScriptBlock {
+        $vm = Get-VmStatus
+        $sections = @()
+
+        $vmList = foreach ($c in $script:VmCommands) {
+            @{ key=$c.key; name=$c.name; desc=$c.desc; available=(Resolve-Available -cmd $c -vm $vm); confirm=([bool]$c.confirm) }
+        }
+        $sections += @{ name='VM';          items=$vmList }
+
+        $bgList = foreach ($c in $script:BgCommands) {
+            @{ key=$c.key; name=$c.name; desc=$c.desc; sub=$c.sub; available=[bool]$vm.running; confirm=$false }
+        }
+        $sections += @{ name='Battlegroup'; items=$bgList }
+
+        $toolList = foreach ($c in (Get-ToolCommandList)) {
+            @{ key=$c.key; name=$c.name; desc=$c.desc; available=(Resolve-Available -cmd $c -vm $vm); confirm=$false }
+        }
+        $sections += @{ name='Tools';       items=$toolList }
+
+        Write-PodeJsonResponse -Value @{ sections = $sections }
+    }
+
+    Add-PodeRoute -Method Post -Path '/api/exec/:name' -ScriptBlock {
+        $name = $WebEvent.Parameters['name']
+
+        $allNames = @()
+        $allNames += $script:VmCommands.name
+        $allNames += $script:BgCommands.name
+        $allNames += (Get-ToolCommandList).name
+        if ($allNames -notcontains $name) {
+            Set-PodeResponseStatus -Code 400
+            Write-PodeJsonResponse -Value @{ ok=$false; error="Unknown command: $name" }
+            return
+        }
+
+        try {
+            Start-Process pwsh -Verb RunAs -ArgumentList @(
+                '-NoExit',
+                '-NoProfile',
+                '-ExecutionPolicy','Bypass',
+                '-File',"`"$script:MainScript`"",
+                '-Cmd',$name
+            ) | Out-Null
+            Set-PodeResponseStatus -Code 202
+            Write-PodeJsonResponse -Value @{ ok=$true; spawned=$name }
+        } catch {
+            Set-PodeResponseStatus -Code 500
+            Write-PodeJsonResponse -Value @{ ok=$false; error=$_.Exception.Message }
+        }
+    }
+
+    Write-Host ""
+    Write-Host "Dune Server Web UI listening on http://127.0.0.1:$Port" -ForegroundColor Green
+    Write-Host "Press Ctrl+C to stop." -ForegroundColor DarkGray
+}
