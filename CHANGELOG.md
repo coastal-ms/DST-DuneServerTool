@@ -7,6 +7,91 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [4.0.0] - 2026-05-24
+
+Major release: native Windows desktop app as the new primary entry point.
+
+The `.bat` launcher and web portal still ship (parallel options, no breakage),
+but new users are pointed at `DuneServerSetup.exe` for a normal Windows
+installer experience.
+
+### Added
+
+- **Desktop app (`app/DuneServer.ps1` → `DuneServer.exe` → `DuneServerSetup.exe`).**
+  PowerShell + WPF host that frames every existing CLI command in a
+  single window:
+    - Sticky **battlegroup status** panel at the top, auto-refreshed every
+      30 seconds via direct SSH (same path the web portal uses)
+    - Left panel: every command from the CLI menu rendered as a labeled
+      button, grouped by section (VM / Battlegroup / Tools); buttons
+      grey out when their requirements aren't met (e.g. "VM not running")
+    - Right panel: live-streaming output from whichever command was clicked
+    - Footer status bar: current operation, exit codes, app version
+  - **Two dispatch modes per command** (chosen automatically per command):
+    - `InApp` — hidden child `pwsh` process, stdout/stderr captured into
+      the output pane (no console window pops up). Used for plain text
+      commands like `status`, `start-vm`, `open-file-browser`, etc.
+    - `Console` — visible elevated `pwsh` window. Used for any command that
+      needs interactive input (`Read-Host`), a TTY (`ssh -t`), or fancy
+      console manipulation (spinners, screen clears). Buttons that open
+      in a console are labeled `[console]` for transparency.
+  - **Admin enforced at every layer:** installer requires admin (Program
+    Files writes), `DuneServer.exe` carries an embedded UAC manifest
+    (ps2exe `-requireAdmin`), and `dune-server.ps1` keeps its existing
+    `#Requires -RunAsAdministrator`. One UAC prompt at app launch; no
+    per-button prompts after that.
+  - **PowerShell 7 prerequisite check at startup** — if `pwsh.exe` isn't
+    installed, the app shows a friendly dialog with the download URL and
+    `winget install --id Microsoft.PowerShell` snippet, then exits.
+
+- **Inno Setup installer (`app/installer/DuneServer.iss` → `DuneServerSetup.exe`).**
+  Standard Windows installer (~2 MB) with:
+    - Install dir: `C:\Program Files\Dune Server\`
+    - Start Menu shortcut (always) + optional desktop shortcut
+    - Add/Remove Programs entry, clean uninstaller
+    - **Legacy config auto-detection:** during install, scans common
+      locations (Desktop, OneDrive subfolders) for an existing
+      `dune-server.config` and offers to copy it to
+      `%APPDATA%\DuneServer\` so the new app picks up your existing
+      settings.
+    - **User data preserved on uninstall** — the uninstaller removes the
+      install dir but never touches `%APPDATA%\DuneServer\`.
+
+- **Build pipeline** under `app/build/` and `app/installer/`:
+    - `Build-Exe.ps1` — wraps ps2exe with all the right flags
+      (`-noConsole`, `-requireAdmin`, `-STA`)
+    - `Build-Installer.ps1` — wraps `ISCC.exe`, auto-detects ISCC
+      across Program Files / `%LOCALAPPDATA%`, auto-runs `Build-Exe.ps1`
+      first by default
+    - `app/assets/Build-Icon.ps1` — regenerates the 6-resolution
+      `icon.ico` via System.Drawing (no external tools)
+
+### Changed
+
+- **`dune-server.ps1` writable files moved to `%APPDATA%\DuneServer\`.**
+  Needed so the script can run from a read-only install location
+  (Program Files via the new installer). Affects:
+    - `dune-server.config`
+    - `.boot-times.json`
+    - `.logs\dune-server-*.log` transcripts
+  - Backward-compatible: on first run after upgrade, legacy files next
+    to the script auto-migrate to `%APPDATA%\DuneServer\` (legacy copies
+    are left in place as a rollback safety net).
+  - Version string bumped: `3.1.2 → 4.0.0`.
+
+- **`README.md`** — installer is now the primary recommended install
+  path, with the `.bat` and web portal explicitly called out as classic
+  / legacy options.
+
+### Notes
+
+- `dune-server.bat` and `web/Start-DuneWeb.ps1` are **unchanged** and
+  remain fully supported. Anyone preferring those paths can keep using
+  them; nothing about this release breaks the existing workflow.
+- The compiled `DuneServer.exe` is unsigned for now — Windows SmartScreen
+  will warn on first run ("Unknown publisher"). Click "More info" → "Run
+  anyway". Code signing is a separate decision.
+
 ## [3.1.2] - 2026-05-24
 
 Internal cleanup release. No user-facing functional changes from v3.0.1.
