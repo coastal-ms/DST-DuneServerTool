@@ -13,7 +13,7 @@ param(
 # Wraps the original battlegroup.ps1 menu and adds extra tools
 # ============================================================
 
-$script:ToolVersion = "2.0.1"
+$script:ToolVersion = "2.0.2"
 
 # Resize console window so the full menu is visible
 try {
@@ -867,7 +867,7 @@ while ($true) {
 
     if ($cmdName -eq "initial-setup") {
         . "$bgSetupPath\initial-setup.ps1"
-        if ($cmdName) { break }
+        if ($Cmd) { break }
         continue
     }
 
@@ -875,12 +875,12 @@ while ($true) {
         $webScript = Join-Path $scriptDir 'web\Start-DuneWeb.ps1'
         if (-not (Test-Path $webScript)) {
             Write-Warning "Web UI script not found at $webScript"
-            if ($cmdName) { break } else { continue }
+            if ($Cmd) { break } else { continue }
         }
         if (-not (Get-Module -ListAvailable Pode)) {
             Write-Warning "Pode PowerShell module is not installed. Install with:"
             Write-Host "    Install-Module Pode -Scope CurrentUser" -ForegroundColor Cyan
-            if ($cmdName) { break } else { continue }
+            if ($Cmd) { break } else { continue }
         }
 
         $port = 8765
@@ -915,7 +915,7 @@ while ($true) {
 
         Write-Host "Opening $url in your default browser..." -ForegroundColor Cyan
         Start-Process $url
-        if ($cmdName) { break }
+        if ($Cmd) { break }
         continue
     }
 
@@ -1479,7 +1479,7 @@ while ($true) {
         if (-not $directorPort) { Write-Warning "Could not determine Director port after $timeout seconds." }
     }
 
-    if ($cmdName) { break }
+    if ($Cmd) { break }
 }
 
 Stop-Transcript | Out-Null
