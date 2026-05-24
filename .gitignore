@@ -1,0 +1,34 @@
+# User-generated config (contains local paths — never commit)
+dune-server.config
+
+# Logs
+*.log
+.logs/
+
+# Local SSH keys — never commit
+sshKey
+sshKey.pub
+*.pem
+*.key
+
+# Local environment overrides
+.env
+.env.*
+!.env.example
+
+# Windows
+Thumbs.db
+desktop.ini
+
+# macOS
+.DS_Store
+
+# Editor / IDE
+.vscode/
+.idea/
+*.swp
+*~
+
+# Session / scratch
+scratch/
+tmp/

@@ -1,0 +1,45 @@
+# Changelog
+
+All notable changes to this project will be documented in this file.
+
+The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
+and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
+
+## [Unreleased]
+
+## [1.0.0] - 2026-05-24
+
+### Added
+- Initial public release.
+- Menu-driven launcher (`dune-server.bat` + `dune-server.ps1`) that wraps Funcom's
+  `battlegroup.ps1` and adds extra utilities.
+- First-time setup wizard (`Run-Setup`) that writes `dune-server.config`.
+- VM management commands (a–g): start, stop, restart, hard-reset, status, console,
+  graceful-reboot, graceful-shutdown.
+- **Graceful reboot** (`f`): stops battlegroup, waits for game/mq/gateway/director
+  pods to drain, hard-resets the VM, then restarts battlegroup with a strong
+  readiness gate (k3s API `/readyz` + DB pods Ready + operator pods Ready +
+  webhook service endpoints populated + settle delay). Fixes the
+  `failed calling webhook "mbattlegroup.kb.io": 502 Bad Gateway` race.
+- **Graceful shutdown** (`g`): stops battlegroup cleanly, then powers off the VM.
+  Intended for nightly shutdowns; player data persists to the DB.
+- **Online-player safety check**: graceful-reboot and graceful-shutdown query
+  the Postgres `player_state` table over `kubectl exec`, list any online
+  players by character name, and require a `YES` confirmation before
+  disconnecting them.
+- **Port verification** in the menu header: color-coded `[OPEN]` / `[CLOSED]` /
+  `[UNKNOWN]` / `[UDP - skipped]` status for required game ports. Three modes
+  selectable in setup: built-in (yougetsignal.com, TCP only), custom URL
+  template with `{ip}` / `{port}` / `{protocol}` placeholders, or disabled.
+- Public IP lookup via `api.ipify.org` with 5s timeout and per-session cache.
+- DB namespace auto-discovery (matches pod names containing `-db-`, `postgres`,
+  or `-pg-`); silently skips when not present.
+- Setup wizard now records `PortCheckMode` and `PortCheckUrlTemplate` in
+  `dune-server.config`. Existing installs default to `builtin` silently.
+
+### Changed
+- Hardened the post-reboot readiness check to verify webhook Service endpoints
+  are populated (not just pods Running) before calling battlegroup start.
+
+[Unreleased]: https://github.com/neil-microsoft/Simple-Dune-Server-Management-Tool/compare/v1.0.0...HEAD
+[1.0.0]: https://github.com/neil-microsoft/Simple-Dune-Server-Management-Tool/releases/tag/v1.0.0
