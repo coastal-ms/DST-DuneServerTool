@@ -1,9 +1,14 @@
 const POLL_MS = 5000;
+const BG_STATUS_POLL_MS = 30000;
 
 const $sections = document.getElementById('sections');
 const $vmDot = document.getElementById('vm-dot');
 const $vmText = document.getElementById('vm-text');
 const $ts = document.getElementById('ts');
+const $bgOut = document.getElementById('bg-status-output');
+const $bgTs  = document.getElementById('bg-status-ts');
+const $bgBtn = document.getElementById('bg-status-refresh');
+let bgInflight = false;
 
 async function refresh() {
   try {
@@ -104,5 +109,39 @@ function escapeHtml(s) {
   }[c]));
 }
 
+async function refreshBgStatus({ fresh = false } = {}) {
+  if (bgInflight) return;
+  bgInflight = true;
+  if (fresh) {
+    $bgOut.textContent = 'Refreshing\u2026';
+    $bgOut.classList.remove('bg-status-unavailable');
+  }
+  $bgBtn.disabled = true;
+  try {
+    const url = fresh ? '/api/bg-status?fresh=1' : '/api/bg-status';
+    const r = await fetch(url);
+    const data = await r.json();
+    if (data.available) {
+      $bgOut.textContent = data.output && data.output.length ? data.output : '(no output)';
+      $bgOut.classList.remove('bg-status-unavailable');
+    } else {
+      $bgOut.textContent = data.reason || 'Status unavailable.';
+      $bgOut.classList.add('bg-status-unavailable');
+    }
+    $bgTs.textContent = `(as of ${new Date().toLocaleTimeString()})`;
+  } catch (err) {
+    $bgOut.textContent = `Error fetching status: ${err.message}`;
+    $bgOut.classList.add('bg-status-unavailable');
+  } finally {
+    bgInflight = false;
+    $bgBtn.disabled = false;
+  }
+}
+
+$bgBtn.addEventListener('click', () => refreshBgStatus({ fresh: true }));
+
 refresh();
 setInterval(refresh, POLL_MS);
+
+refreshBgStatus();
+setInterval(() => refreshBgStatus(), BG_STATUS_POLL_MS);
