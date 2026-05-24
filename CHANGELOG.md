@@ -7,6 +7,53 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [3.0.1] - 2026-05-24
+
+Patch release: better feedback during long boot waits, and a real fix for the DB-pod readiness check that was silently lying about success.
+
+### Fixed
+
+- **Background helpers are now cleaned up on crash.** When the script
+  exits abnormally (unhandled exception, Ctrl+C, window close), any
+  `Start-Job` helpers spawned by the new live wait counters are stopped
+  and removed via a `PowerShell.Exiting` engine event plus a top-level
+  `trap` in the main loop. Previously a mid-wait crash could leave an
+  orphaned background pwsh process holding the SSH connection. The
+  `dune-server.bat` wrapper also now reports the PowerShell exit code
+  before pausing so the user can see what went wrong.
+- **`shutdown` now tracks timings and shows estimates** like `startup` and
+  `reboot` do. The shutdown handler was never instrumented in the v2.0.5
+  boot-time-tracking work, so subsequent shutdowns showed no
+  `(last: ~Xs)` hint and no total-time print at the end. Now records
+  `pods-terminate`, `vm-stop`, and `total-shutdown` to `.boot-times.json`,
+  shows the estimated total up front, prints the actual total at the end,
+  and gets the live in-place elapsed counter during the pod-termination wait.
+- **DB-pod readiness check no longer waits on the wrong pods.** The previous
+  logic ran `kubectl wait --all -n <db-namespace>`, which would happily block
+  on completed backup `Jobs` (`...-dump-...`), the file-browser deploy
+  (`...-fb-...`), and any other unrelated pod that happened to live in the
+  battlegroup namespace. The wait would time out at the full 180s and the
+  script still printed a green "DB pods Ready" success line because the
+  `kubectl wait` exit code was never checked. The check now targets pods by
+  name pattern (`-db-`, `postgres`, `pg-` minus the obvious noise) and
+  honors the exit code &mdash; success is reported truthfully, and a
+  timeout warns and proceeds instead of pretending nothing happened.
+
+### Changed
+
+- **Live "elapsed" counters on every long boot wait.** During `startup` and
+  `reboot`, each "Waiting for..." line now updates in place once per
+  second showing how long the current phase has been running alongside the
+  existing `(last: ~Xs, avg ~Ys of last N)` estimate from boot-time history.
+  No more wondering whether the script is stuck. Applies to: SSH
+  readiness, k3s API, DB pods, operator pods, webhook endpoints, and the
+  reboot's pod-termination wait. The non-polling waits
+  (`kubectl wait` calls) now run in a background job so the foreground can
+  paint the counter.
+- **Web portal layout**: each menu item is now a labeled row with a
+  dedicated **Go** button on the right, instead of the entire row being a
+  single clickable button. Easier to read, easier to click intentionally.
+
 ## [3.0.0] - 2026-05-24
 
 Consolidation release. Supersedes all prior 2.x releases &mdash; the
@@ -131,5 +178,6 @@ entry. From here on, patch releases follow as `3.0.1`, `3.0.2`, etc.
 - Boot-time history stored at `<scriptDir>\.boot-times.json` (rolling
   window of last 20 entries per phase).
 
-[Unreleased]: https://github.com/coastal-ms/Simple-Dune-Server-Management-Tool/compare/v3.0.0...HEAD
+[Unreleased]: https://github.com/coastal-ms/Simple-Dune-Server-Management-Tool/compare/v3.0.1...HEAD
+[3.0.1]: https://github.com/coastal-ms/Simple-Dune-Server-Management-Tool/compare/v3.0.0...v3.0.1
 [3.0.0]: https://github.com/coastal-ms/Simple-Dune-Server-Management-Tool/releases/tag/v3.0.0
