@@ -514,26 +514,15 @@ while ($true) {
 
     # --- Render menu ---
     Write-Host ""
-    Write-Host "==========================================" -ForegroundColor DarkCyan
-    Write-Host "  Dune Awakening — Server Management" -ForegroundColor Cyan
+    Write-Host "===  Dune Awakening - Server Management  ===" -ForegroundColor Cyan
     Write-Host "  Brought to you by Coastal (Discord @allcoast)" -ForegroundColor DarkGray
-    Write-Host "==========================================" -ForegroundColor DarkCyan
-    Write-Host ""
-
     $vmStatusColor = if ($info.Running) { 'Green' } elseif ($info.Exists) { 'Yellow' } else { 'Red' }
     $vmStatusText  = if ($info.Running) { "Running ($($info.Ip))" } elseif ($info.Exists) { "$($info.State)" } else { "Not found" }
     Write-Host "  VM: " -NoNewline; Write-Host $vmStatusText -ForegroundColor $vmStatusColor
-    Write-Host ""
     Write-Host "  Required Port Forwarding:" -ForegroundColor DarkGray
     if ($portCheckMode -ne 'disabled' -and $info.Running) {
         $check = Get-PortCheckStatus -Force:$false
         if ($check -and $check.PublicIp) {
-            $modeLabel = if ($portCheckMode -eq 'builtin') { 'yougetsignal.com' } else { 'custom URL' }
-            Write-Host "    (checking via " -ForegroundColor DarkGray -NoNewline
-            Write-Host $modeLabel -ForegroundColor Gray -NoNewline
-            Write-Host " against public IP " -ForegroundColor DarkGray -NoNewline
-            Write-Host $check.PublicIp -ForegroundColor Gray -NoNewline
-            Write-Host " -> VM $($info.Ip))" -ForegroundColor DarkGray
             foreach ($r in $check.Results) {
                 $tag = switch ($r.Status) {
                     'open'     { '[OPEN]'              }
@@ -550,9 +539,6 @@ while ($true) {
                 Write-Host ("    {0,-45} " -f $r.Label) -ForegroundColor DarkGray -NoNewline
                 Write-Host $tag -ForegroundColor $color
             }
-            if ($portCheckMode -eq 'builtin') {
-                Write-Host "    (UDP not externally verifiable; check in-game or use a custom URL service)" -ForegroundColor DarkGray
-            }
         } else {
             Write-Host "    UDP  7777-7810   Game servers     [check failed - no public IP]" -ForegroundColor Yellow
             Write-Host "    TCP  31982       RabbitMQ         [check failed - no public IP]" -ForegroundColor Yellow
@@ -566,33 +552,21 @@ while ($true) {
     }
     Write-Host ""
 
-    $prevSection    = $null
-    $prevSubSection = $null
+    $prevSection = $null
     foreach ($e in $entries) {
         if ($e.Section -ne $prevSection) {
             if ($null -ne $prevSection) { Write-Host "" }
             switch ($e.Section) {
                 'vm'          { Write-Host "VM commands:" -ForegroundColor Yellow }
                 'battlegroup' { Write-Host "Battlegroup commands:" -ForegroundColor Yellow }
-                'tools'       {
-                    Write-Host ("  " + ("-" * 50)) -ForegroundColor DarkGray
-                    Write-Host ""
-                    Write-Host "Tools:" -ForegroundColor Yellow
-                }
+                'tools'       { Write-Host "Tools:" -ForegroundColor Yellow }
             }
-            Write-Host ""
-            $prevSubSection = $null
-        }
-        if ($e.SubSection -and $e.SubSection -ne $prevSubSection) {
-            Write-Host (" {0}:" -f $e.SubSection) -ForegroundColor DarkYellow
         }
         $color = if ($e.Available) { 'White' } else { 'DarkGray' }
         Write-Host ("  {0,2}. {1,-30} {2}" -f $e.Key, $e.Name, $e.Desc) -ForegroundColor $color
-        $prevSection    = $e.Section
-        $prevSubSection = $e.SubSection
+        $prevSection = $e.Section
     }
 
-    Write-Host ""
     Write-Host ("  {0,2}. {1,-30} {2}" -f "q", "quit", "Exit this script")
     Write-Host ""
 
