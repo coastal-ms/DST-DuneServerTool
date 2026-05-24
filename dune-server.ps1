@@ -569,9 +569,9 @@ function Format-PhaseEstimate {
     if ($arr.Count -eq 0) { return $null }
     $recent = @($arr | Select-Object -Last 5)
     $last = [int]$recent[-1].seconds
-    if ($recent.Count -eq 1) { return "(last: ~${last}s)" }
+    if ($recent.Count -eq 1) { return "(last: ~$(Format-Duration $last))" }
     $avg = [int](($recent | Measure-Object seconds -Average).Average)
-    return "(last: ~${last}s, avg ~${avg}s of last $($recent.Count))"
+    return "(last: ~$(Format-Duration $last), avg ~$(Format-Duration $avg) of last $($recent.Count))"
 }
 
 function Format-Duration {
@@ -676,8 +676,11 @@ function Get-OnlinePlayers {
     if (-not $ip) { return @{ Names = @(); Error = 'VM IP not set' } }
 
     # Locate the Postgres pod (name typically contains "-db-", "postgres", or "-pg-")
+    # Awk prints "namespace podname" space-separated; we avoid embedded double
+    # quotes in the awk script because PowerShell mangles \" inside the
+    # double-quoted command string.
     $pgInfo = ssh -o StrictHostKeyChecking=no -o LogLevel=QUIET -i "$sshKey" "$sshUser@$ip" `
-        "sudo k3s kubectl get pods -A --no-headers 2>/dev/null | awk '`$2 ~ /(-db-|postgres|-pg-)/ {print `$1`" `"`$2; exit}'"
+        "sudo k3s kubectl get pods -A --no-headers 2>/dev/null | awk '`$2 ~ /(-db-|postgres|-pg-)/ {print `$1, `$2; exit}'"
     $pgInfo = ($pgInfo | Out-String).Trim()
     if (-not $pgInfo) { return @{ Names = @(); Error = 'Postgres pod not found' } }
     $parts = $pgInfo -split '\s+', 2
@@ -1129,7 +1132,7 @@ while ($true) {
                           Where-Object { $_ -match '^\d+\.\d+\.\d+\.\d+$' } | Select-Object -First 1
             }
             Write-Host ""
-            if (-not $newIp) { Write-Warning "VM did not acquire IP within ${timeout}s. Aborting."; continue }
+            if (-not $newIp) { Write-Warning "VM did not acquire IP within $(Format-Duration $timeout). Aborting."; continue }
             Save-PhaseTiming 'vm-ip' ([int]((Get-Date) - $t_ip).TotalSeconds)
             $ip = $newIp
             Write-Host "  VM IP: $ip" -ForegroundColor Green
@@ -1152,9 +1155,9 @@ while ($true) {
             }
         }
         $elapsed = [int]((Get-Date) - $t_ssh).TotalSeconds
-        if (-not $sshReady) { Complete-WaitCounter -Message "SSH not responsive after ${elapsed}s. Aborting." -Color Red; continue }
+        if (-not $sshReady) { Complete-WaitCounter -Message "SSH not responsive after $(Format-Duration $elapsed). Aborting." -Color Red; continue }
         Save-PhaseTiming 'ssh-ready' $elapsed
-        Complete-WaitCounter -Message "SSH responsive (${elapsed}s)."
+        Complete-WaitCounter -Message "SSH responsive ($(Format-Duration $elapsed))."
 
         # 2b. k3s API
         $estApi = Format-PhaseEstimate 'k3s-api'
@@ -1170,20 +1173,23 @@ while ($true) {
             }
         }
         $elapsed = [int]((Get-Date) - $t_api).TotalSeconds
-        if (-not $apiReady) { Complete-WaitCounter -Message "k3s API not ready after ${elapsed}s. Aborting." -Color Red; continue }
+        if (-not $apiReady) { Complete-WaitCounter -Message "k3s API not ready after $(Format-Duration $elapsed). Aborting." -Color Red; continue }
         Save-PhaseTiming 'k3s-api' $elapsed
-        Complete-WaitCounter -Message "k3s API ready (${elapsed}s)."
+        Complete-WaitCounter -Message "k3s API ready ($(Format-Duration $elapsed))."
 
         # 2c. DB pod(s) Ready - find ACTUAL db pods by name pattern (not "all pods in namespace",
         # which would also wait on backup Jobs, file-browser deploys, etc. and time out incorrectly).
+        # Awk prints "namespace podname" space-separated; embedded double quotes in
+        # an awk script get mangled by PowerShell when the script is in a double-
+        # quoted string passed to ssh, so we split on whitespace in PS instead.
         $estDb = Format-PhaseEstimate 'db-pods'
         $dbPodList = ssh -o StrictHostKeyChecking=no -o LogLevel=QUIET -i "$sshKey" "$sshUser@$ip" `
-            "sudo k3s kubectl get pods -A --no-headers 2>/dev/null | awk '`$2 ~ /(-db-|postgres|^pg-|-pg-)/ && `$2 !~ /(dump|backup|fb-|migration)/ {print `$1\"/\"`$2}'"
+            "sudo k3s kubectl get pods -A --no-headers 2>/dev/null | awk '`$2 ~ /(-db-|postgres|^pg-|-pg-)/ && `$2 !~ /(dump|backup|fb-|migration)/ {print `$1, `$2}'"
         $dbPodList = ($dbPodList | Out-String).Trim()
         if ($dbPodList) {
-            $dbPods = $dbPodList -split "`r?`n" | Where-Object { $_ }
-            $dbNs = ($dbPods[0] -split '/')[0]
-            $podArgs = ($dbPods | ForEach-Object { "pod/$(($_ -split '/',2)[1])" }) -join ' '
+            $dbPods = $dbPodList -split "`r?`n" | Where-Object { $_.Trim() }
+            $dbNs = ($dbPods[0] -split '\s+', 2)[0]
+            $podArgs = ($dbPods | ForEach-Object { "pod/$(($_ -split '\s+', 2)[1])" }) -join ' '
             $dbResult = Invoke-WithLiveCounter -Label "Waiting for DB pod(s) Ready..." -EstimateText $estDb `
                 -ArgumentList $sshKey,$sshUser,$ip,$dbNs,$podArgs `
                 -Action {
@@ -1196,9 +1202,9 @@ while ($true) {
             $podLabel = if ($podCount -eq 1) { "1 pod" } else { "$podCount pods" }
             if ($dbResult.Output.ExitCode -eq 0) {
                 Save-PhaseTiming 'db-pods' $dbResult.Elapsed
-                Complete-WaitCounter -Message "DB ready in $($dbResult.Elapsed)s ($podLabel in $dbNs)."
+                Complete-WaitCounter -Message "DB ready in $(Format-Duration $dbResult.Elapsed) ($podLabel in $dbNs)."
             } else {
-                Complete-WaitCounter -Message "DB wait failed after $($dbResult.Elapsed)s ($podLabel in $dbNs) - proceeding anyway." -Color Yellow
+                Complete-WaitCounter -Message "DB wait failed after $(Format-Duration $dbResult.Elapsed) ($podLabel in $dbNs) - proceeding anyway." -Color Yellow
                 if ($dbResult.Output.Output) { $dbResult.Output.Output | Select-Object -Last 5 | ForEach-Object { Write-Host "    $_" -ForegroundColor DarkGray } }
             }
         } else {
@@ -1216,12 +1222,12 @@ while ($true) {
                 return [pscustomobject]@{ ExitCode = $LASTEXITCODE; Output = $output }
             }
         if ($opResult.Output.ExitCode -ne 0) {
-            Complete-WaitCounter -Message "Operator pods not Ready after $($opResult.Elapsed)s. Aborting battlegroup start." -Color Red
+            Complete-WaitCounter -Message "Operator pods not Ready after $(Format-Duration $opResult.Elapsed). Aborting battlegroup start." -Color Red
             if ($opResult.Output.Output) { $opResult.Output.Output | Select-Object -Last 5 | ForEach-Object { Write-Host "    $_" -ForegroundColor DarkGray } }
             continue
         }
         Save-PhaseTiming 'operators' $opResult.Elapsed
-        Complete-WaitCounter -Message "Operator pods Ready ($($opResult.Elapsed)s)."
+        Complete-WaitCounter -Message "Operator pods Ready ($(Format-Duration $opResult.Elapsed))."
 
         # 2e. webhook Service endpoints
         $estWh = Format-PhaseEstimate 'webhook-endpoints'
@@ -1238,11 +1244,11 @@ while ($true) {
         }
         $elapsed = [int]((Get-Date) - $t_wh).TotalSeconds
         if (-not $epReady) {
-            Complete-WaitCounter -Message "battlegroupoperator-webhook-svc has no endpoints after ${elapsed}s. Aborting." -Color Red
+            Complete-WaitCounter -Message "battlegroupoperator-webhook-svc has no endpoints after $(Format-Duration $elapsed). Aborting." -Color Red
             continue
         }
         Save-PhaseTiming 'webhook-endpoints' $elapsed
-        Complete-WaitCounter -Message "Webhook endpoints populated (${elapsed}s). Settling 10s..."
+        Complete-WaitCounter -Message "Webhook endpoints populated ($(Format-Duration $elapsed)). Settling 10s..."
         Start-Sleep -Seconds 10
 
         # ---- Step 3: battlegroup start ----
@@ -1266,12 +1272,12 @@ while ($true) {
             $mapResults[$map] = $r
             if ($r.Success) {
                 Save-PhaseTiming "map-$map" ([int]$r.Elapsed)
-                Write-Host "  $map -> $($r.Pod) is Ready ($($r.Ready)) in $($r.Elapsed)s" -ForegroundColor Green
+                Write-Host "  $map -> $($r.Pod) is Ready ($($r.Ready)) in $(Format-Duration $r.Elapsed)" -ForegroundColor Green
             } else {
                 if ($r.Pod) {
-                    Write-Warning "  $map ($($r.Pod)) did not become Ready within $($r.Elapsed)s (last seen: $($r.LastStatus))"
+                    Write-Warning "  $map ($($r.Pod)) did not become Ready within $(Format-Duration $r.Elapsed) (last seen: $($r.LastStatus))"
                 } else {
-                    Write-Warning "  $map pod was never found within $($r.Elapsed)s"
+                    Write-Warning "  $map pod was never found within $(Format-Duration $r.Elapsed)"
                 }
             }
         }
@@ -1282,9 +1288,9 @@ while ($true) {
         Write-Host ""
         $allOk = ($mapResults.Values | Where-Object { -not $_.Success } | Measure-Object).Count -eq 0
         if ($allOk) {
-            Write-Host "=== Startup complete in ${totalSec}s (overmap + survival Ready) ===" -ForegroundColor Green
+            Write-Host "=== Startup complete in $(Format-Duration $totalSec) (overmap + survival Ready) ===" -ForegroundColor Green
         } else {
-            Write-Host "=== Startup finished in ${totalSec}s with WARNINGS - see above ===" -ForegroundColor Yellow
+            Write-Host "=== Startup finished in $(Format-Duration $totalSec) with WARNINGS - see above ===" -ForegroundColor Yellow
             Write-Host "Use 'status' (1) or 'shell-pod' (16) to investigate any map that didn't reach Ready." -ForegroundColor DarkGray
         }
         if ($estTotal) { Write-Host "  $estTotal" -ForegroundColor DarkGray }
@@ -1342,9 +1348,9 @@ while ($true) {
         $elapsed = [int]((Get-Date) - $waitStart).TotalSeconds
         if ($finalCount -eq 0) {
             Save-PhaseTiming 'pods-terminate' $elapsed
-            Complete-WaitCounter -Message "All game/infra pods terminated after ${elapsed}s."
+            Complete-WaitCounter -Message "All game/infra pods terminated after $(Format-Duration $elapsed)."
         } else {
-            Complete-WaitCounter -Message "$finalCount pod(s) still present after ${elapsed}s. Proceeding with VM restart anyway." -Color Yellow
+            Complete-WaitCounter -Message "$finalCount pod(s) still present after $(Format-Duration $elapsed). Proceeding with VM restart anyway." -Color Yellow
         }
 
         # ---- Step 2: VM restart ----
@@ -1373,7 +1379,7 @@ while ($true) {
                       Where-Object { $_ -match '^\d+\.\d+\.\d+\.\d+$' } | Select-Object -First 1
         }
         Write-Host ""
-        if (-not $newIp) { Write-Warning "VM did not acquire IP within ${timeout}s. Aborting."; continue }
+        if (-not $newIp) { Write-Warning "VM did not acquire IP within $(Format-Duration $timeout). Aborting."; continue }
         Save-PhaseTiming 'vm-ip' ([int]((Get-Date) - $t_ip).TotalSeconds)
         $ip = $newIp
         Write-Host "  VM IP: $ip" -ForegroundColor Green
@@ -1391,9 +1397,9 @@ while ($true) {
             }
         }
         $elapsed = [int]((Get-Date) - $t_ssh).TotalSeconds
-        if (-not $sshReady) { Complete-WaitCounter -Message "SSH not responsive after ${elapsed}s. Aborting." -Color Red; continue }
+        if (-not $sshReady) { Complete-WaitCounter -Message "SSH not responsive after $(Format-Duration $elapsed). Aborting." -Color Red; continue }
         Save-PhaseTiming 'ssh-ready' $elapsed
-        Complete-WaitCounter -Message "SSH responsive after ${elapsed}s."
+        Complete-WaitCounter -Message "SSH responsive after $(Format-Duration $elapsed)."
 
         # Wait for k3s API + DB + operator webhook to be FULLY ready.
         # "Pod Running" is not enough: the mutating webhook needs the operator
@@ -1414,20 +1420,22 @@ while ($true) {
             }
         }
         $elapsed = [int]((Get-Date) - $t_api).TotalSeconds
-        if (-not $apiReady) { Complete-WaitCounter -Message "k3s API not ready after ${elapsed}s. Aborting." -Color Red; continue }
+        if (-not $apiReady) { Complete-WaitCounter -Message "k3s API not ready after $(Format-Duration $elapsed). Aborting." -Color Red; continue }
         Save-PhaseTiming 'k3s-api' $elapsed
-        Complete-WaitCounter -Message "k3s API ready (${elapsed}s)."
+        Complete-WaitCounter -Message "k3s API ready ($(Format-Duration $elapsed))."
 
         # 2b. DB pod(s) Ready - target actual DB pods by name pattern, not "--all" in the namespace
         # (which would also wait on backup Jobs, file-browser deployments, etc).
+        # Awk prints space-separated to avoid embedded double quotes (PowerShell
+        # mangles \" inside a double-quoted string passed to ssh).
         $estDb = Format-PhaseEstimate 'db-pods'
         $dbPodList = ssh -o StrictHostKeyChecking=no -o LogLevel=QUIET -i "$sshKey" "$sshUser@$ip" `
-            "sudo k3s kubectl get pods -A --no-headers 2>/dev/null | awk '`$2 ~ /(-db-|postgres|^pg-|-pg-)/ && `$2 !~ /(dump|backup|fb-|migration)/ {print `$1\"/\"`$2}'"
+            "sudo k3s kubectl get pods -A --no-headers 2>/dev/null | awk '`$2 ~ /(-db-|postgres|^pg-|-pg-)/ && `$2 !~ /(dump|backup|fb-|migration)/ {print `$1, `$2}'"
         $dbPodList = ($dbPodList | Out-String).Trim()
         if ($dbPodList) {
-            $dbPods = $dbPodList -split "`r?`n" | Where-Object { $_ }
-            $dbNs = ($dbPods[0] -split '/')[0]
-            $podArgs = ($dbPods | ForEach-Object { "pod/$(($_ -split '/',2)[1])" }) -join ' '
+            $dbPods = $dbPodList -split "`r?`n" | Where-Object { $_.Trim() }
+            $dbNs = ($dbPods[0] -split '\s+', 2)[0]
+            $podArgs = ($dbPods | ForEach-Object { "pod/$(($_ -split '\s+', 2)[1])" }) -join ' '
             $dbResult = Invoke-WithLiveCounter -Label "Waiting for DB pod(s) Ready..." -EstimateText $estDb `
                 -ArgumentList $sshKey,$sshUser,$ip,$dbNs,$podArgs `
                 -Action {
@@ -1440,9 +1448,9 @@ while ($true) {
             $podLabel = if ($podCount -eq 1) { "1 pod" } else { "$podCount pods" }
             if ($dbResult.Output.ExitCode -eq 0) {
                 Save-PhaseTiming 'db-pods' $dbResult.Elapsed
-                Complete-WaitCounter -Message "DB ready in $($dbResult.Elapsed)s ($podLabel in $dbNs)."
+                Complete-WaitCounter -Message "DB ready in $(Format-Duration $dbResult.Elapsed) ($podLabel in $dbNs)."
             } else {
-                Complete-WaitCounter -Message "DB wait failed after $($dbResult.Elapsed)s ($podLabel in $dbNs) - proceeding anyway." -Color Yellow
+                Complete-WaitCounter -Message "DB wait failed after $(Format-Duration $dbResult.Elapsed) ($podLabel in $dbNs) - proceeding anyway." -Color Yellow
                 if ($dbResult.Output.Output) { $dbResult.Output.Output | Select-Object -Last 5 | ForEach-Object { Write-Host "    $_" -ForegroundColor DarkGray } }
             }
         } else {
@@ -1460,12 +1468,12 @@ while ($true) {
                 return [pscustomobject]@{ ExitCode = $LASTEXITCODE; Output = $output }
             }
         if ($opResult.Output.ExitCode -ne 0) {
-            Complete-WaitCounter -Message "Operator pods not Ready after $($opResult.Elapsed)s. Aborting battlegroup start." -Color Red
+            Complete-WaitCounter -Message "Operator pods not Ready after $(Format-Duration $opResult.Elapsed). Aborting battlegroup start." -Color Red
             if ($opResult.Output.Output) { $opResult.Output.Output | Select-Object -Last 5 | ForEach-Object { Write-Host "    $_" -ForegroundColor DarkGray } }
             continue
         }
         Save-PhaseTiming 'operators' $opResult.Elapsed
-        Complete-WaitCounter -Message "Operator pods Ready ($($opResult.Elapsed)s)."
+        Complete-WaitCounter -Message "Operator pods Ready ($(Format-Duration $opResult.Elapsed))."
 
         # 2d. Webhook Service must have endpoints populated, else API-server proxy returns 502
         $estWh = Format-PhaseEstimate 'webhook-endpoints'
@@ -1482,11 +1490,11 @@ while ($true) {
         }
         $elapsed = [int]((Get-Date) - $t_wh).TotalSeconds
         if (-not $epReady) {
-            Complete-WaitCounter -Message "battlegroupoperator-webhook-svc has no endpoints after ${elapsed}s. Aborting." -Color Red
+            Complete-WaitCounter -Message "battlegroupoperator-webhook-svc has no endpoints after $(Format-Duration $elapsed). Aborting." -Color Red
             continue
         }
         Save-PhaseTiming 'webhook-endpoints' $elapsed
-        Complete-WaitCounter -Message "Webhook endpoints populated (${elapsed}s). Settling 10s..."
+        Complete-WaitCounter -Message "Webhook endpoints populated ($(Format-Duration $elapsed)). Settling 10s..."
         Start-Sleep -Seconds 10
 
         # ---- Step 3: start battlegroup ----
@@ -1505,7 +1513,7 @@ while ($true) {
         Save-PhaseTiming 'total-reboot' $totalSec
         $estTotal = Format-PhaseEstimate 'total-reboot'
         Write-Host ""
-        Write-Host "=== Reboot complete in ${totalSec}s ===" -ForegroundColor Green
+        Write-Host "=== Reboot complete in $(Format-Duration $totalSec) ===" -ForegroundColor Green
         if ($estTotal) { Write-Host "  $estTotal" -ForegroundColor DarkGray }
         Write-Host "Pods may take another 1-2 min to all reach Healthy. Check with 'status'." -ForegroundColor DarkGray
         continue
@@ -1557,9 +1565,9 @@ while ($true) {
         $elapsed = [int]((Get-Date) - $waitStart).TotalSeconds
         if ($finalCount -eq 0) {
             Save-PhaseTiming 'pods-terminate' $elapsed
-            Complete-WaitCounter -Message "All game/infra pods terminated after ${elapsed}s."
+            Complete-WaitCounter -Message "All game/infra pods terminated after $(Format-Duration $elapsed)."
         } else {
-            Complete-WaitCounter -Message "$finalCount pod(s) still present after ${elapsed}s. Proceeding with VM shutdown anyway." -Color Yellow
+            Complete-WaitCounter -Message "$finalCount pod(s) still present after $(Format-Duration $elapsed). Proceeding with VM shutdown anyway." -Color Yellow
         }
 
         # ---- Step 2: power off VM ----
@@ -1579,7 +1587,7 @@ while ($true) {
         Save-PhaseTiming 'total-shutdown' $totalSec
         $estTotalDone = Format-PhaseEstimate 'total-shutdown'
         Write-Host ""
-        Write-Host "=== Shutdown complete in ${totalSec}s ===" -ForegroundColor Green
+        Write-Host "=== Shutdown complete in $(Format-Duration $totalSec) ===" -ForegroundColor Green
         if ($estTotalDone) { Write-Host "  $estTotalDone" -ForegroundColor DarkGray }
         Write-Host "Use option 'd. startup' when you're ready to bring it back up." -ForegroundColor DarkGray
         continue
