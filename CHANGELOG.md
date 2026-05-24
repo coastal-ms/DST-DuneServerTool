@@ -7,6 +7,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2.0.6] - 2026-05-24
+
+### Changed
+
+- **Menu rename + reorder.** `graceful-shutdown` is now just `shutdown`
+  (menu key `d`, moved directly under `c. startup`), and `graceful-reboot`
+  is now just `reboot` (menu key `e`). Behavior is unchanged - same
+  safety checks, same phases, same boot-time tracking. Headings and
+  status messages updated accordingly (e.g. `=== Reboot complete in Xs ===`).
+- **Web UI** mirrors the rename and reorder.
+
 ## [2.0.5] - 2026-05-24
 
 ### Added
@@ -146,7 +157,8 @@ patch releases follow as `2.0.1`, `2.0.2`, etc.
   `Copy-SshKeyToDir`, `New-DuneDesktopShortcut`.
 - `web/` folder structure added.
 
-[Unreleased]: https://github.com/coastal-ms/Simple-Dune-Server-Management-Tool/compare/v2.0.5...HEAD
+[Unreleased]: https://github.com/coastal-ms/Simple-Dune-Server-Management-Tool/compare/v2.0.6...HEAD
+[2.0.6]: https://github.com/coastal-ms/Simple-Dune-Server-Management-Tool/compare/v2.0.5...v2.0.6
 [2.0.5]: https://github.com/coastal-ms/Simple-Dune-Server-Management-Tool/compare/v2.0.4...v2.0.5
 [2.0.4]: https://github.com/coastal-ms/Simple-Dune-Server-Management-Tool/compare/v2.0.3...v2.0.4
 [2.0.3]: https://github.com/coastal-ms/Simple-Dune-Server-Management-Tool/compare/v2.0.2...v2.0.3

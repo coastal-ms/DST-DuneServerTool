@@ -37,7 +37,7 @@ Install-Module Pode -Scope CurrentUser
   password entry, confirmations) appear in that console naturally, so no
   output streaming is required from the web side.
 
-`graceful-reboot` and `graceful-shutdown` show a JS `confirm()` dialog before
+`reboot` and `shutdown` show a JS `confirm()` dialog before
 the POST is issued.
 
 ## Files

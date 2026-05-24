@@ -13,7 +13,7 @@ param(
 # Wraps the original battlegroup.ps1 menu and adds extra tools
 # ============================================================
 
-$script:ToolVersion = "2.0.5"
+$script:ToolVersion = "2.0.6"
 
 # Resize console window so the full menu is visible
 try {
@@ -522,7 +522,7 @@ $logFile = "$scriptDir\.logs\dune-server-$(Get-Date -Format 'yyyy-MM-dd_HH-mm-ss
 New-Item -ItemType Directory -Force -Path (Split-Path $logFile) | Out-Null
 Start-Transcript -Path $logFile -Append | Out-Null
 
-# --- Boot-time history (per-phase timing for startup and graceful-reboot) ---
+# --- Boot-time history (per-phase timing for startup and reboot) ---
 # Persists wait-times for each phase to .boot-times.json (last 20 runs per phase)
 # so subsequent runs can display an estimate before each wait.
 $script:BootTimesFile = Join-Path $scriptDir ".boot-times.json"
@@ -610,7 +610,7 @@ function Get-OnlinePlayers {
     return @{ Names = $names; Error = $null }
 }
 
-# Helper used by both graceful-reboot and graceful-shutdown handlers.
+# Helper used by both reboot and shutdown handlers.
 # Returns $true if user confirmed (or no players online), $false to abort.
 function Confirm-NoPlayersOnline {
     param([string]$ActionLabel)
@@ -673,8 +673,8 @@ $vmCommands = @(
     [pscustomobject]@{ Key = "a"; Name = "initial-setup";      Desc = "Run the initial VM setup" }
     [pscustomobject]@{ Key = "b"; Name = "web";                Desc = "Open the web UI in your browser (button panel for these commands)" }
     [pscustomobject]@{ Key = "c"; Name = "startup";            Desc = "Power on VM -> start battlegroup -> wait for overmap + survival maps" }
-    [pscustomobject]@{ Key = "d"; Name = "graceful-reboot";    Desc = "Stop battlegroup -> restart VM -> start battlegroup (clean cycle)" }
-    [pscustomobject]@{ Key = "e"; Name = "graceful-shutdown";  Desc = "Stop battlegroup -> power off VM (e.g. shut down for the night)" }
+    [pscustomobject]@{ Key = "d"; Name = "shutdown";           Desc = "Stop battlegroup -> power off VM (e.g. shut down for the night)" }
+    [pscustomobject]@{ Key = "e"; Name = "reboot";             Desc = "Stop battlegroup -> restart VM -> start battlegroup (clean cycle)" }
     [pscustomobject]@{ Key = "f"; Name = "rotate-ssh-key";     Desc = "Generate a new SSH key and replace the one authorized on the VM" }
     [pscustomobject]@{ Key = "g"; Name = "change-password";    Desc = "Change the password of the 'dune' user on the VM" }
 )
@@ -725,12 +725,12 @@ function Get-VmCmdAvailability {
             if (-not $info.Running) { return @{ Available = $false; Reason = "VM '$vmName' is not running (currently $($info.State))." } }
             return @{ Available = $true; Reason = $null }
         }
-        "graceful-reboot" {
+        "reboot" {
             if (-not $info.Exists)  { return @{ Available = $false; Reason = "VM '$vmName' does not exist." } }
             if (-not $info.Running) { return @{ Available = $false; Reason = "VM '$vmName' is not running. Use 'c. startup' to cold-start." } }
             return @{ Available = $true; Reason = $null }
         }
-        "graceful-shutdown" {
+        "shutdown" {
             if (-not $info.Exists)  { return @{ Available = $false; Reason = "VM '$vmName' does not exist." } }
             if (-not $info.Running) { return @{ Available = $false; Reason = "VM '$vmName' is not running." } }
             return @{ Available = $true; Reason = $null }
@@ -1164,14 +1164,14 @@ while ($true) {
         continue
     }
 
-    if ($cmdName -eq "graceful-reboot") {
+    if ($cmdName -eq "reboot") {
         Write-Host ""
-        Write-Host "=== Graceful Reboot ===" -ForegroundColor Cyan
+        Write-Host "=== Reboot ===" -ForegroundColor Cyan
         Write-Host "  1. Stop battlegroup (waits for game/mq/gateway/director pods to terminate)" -ForegroundColor DarkGray
         Write-Host "  2. Hard-stop and restart the VM" -ForegroundColor DarkGray
         Write-Host "  3. Start battlegroup again" -ForegroundColor DarkGray
         Write-Host ""
-        if (-not (Confirm-NoPlayersOnline -ActionLabel "graceful-reboot")) {
+        if (-not (Confirm-NoPlayersOnline -ActionLabel "reboot")) {
             Write-Host "Aborted." -ForegroundColor Cyan; continue
         }
 
@@ -1182,7 +1182,7 @@ while ($true) {
         Write-Host "[1/3] Stopping battlegroup..." -ForegroundColor Cyan
         ssh -t -o StrictHostKeyChecking=no -o LogLevel=QUIET -i "$sshKey" "$sshUser@$ip" "$bgBinPath stop"
         if ($LASTEXITCODE -ne 0) {
-            Write-Warning "battlegroup stop returned exit code $LASTEXITCODE. Aborting graceful-reboot."
+            Write-Warning "battlegroup stop returned exit code $LASTEXITCODE. Aborting reboot."
             continue
         }
 
@@ -1346,20 +1346,20 @@ while ($true) {
         Save-PhaseTiming 'total-reboot' $totalSec
         $estTotal = Format-PhaseEstimate 'total-reboot'
         Write-Host ""
-        Write-Host "=== Graceful reboot complete in ${totalSec}s ===" -ForegroundColor Green
+        Write-Host "=== Reboot complete in ${totalSec}s ===" -ForegroundColor Green
         if ($estTotal) { Write-Host "  $estTotal" -ForegroundColor DarkGray }
         Write-Host "Pods may take another 1-2 min to all reach Healthy. Check with 'status'." -ForegroundColor DarkGray
         continue
     }
 
-    if ($cmdName -eq "graceful-shutdown") {
+    if ($cmdName -eq "shutdown") {
         Write-Host ""
-        Write-Host "=== Graceful Shutdown ===" -ForegroundColor Cyan
+        Write-Host "=== Shutdown ===" -ForegroundColor Cyan
         Write-Host "  1. Stop battlegroup (waits for game/mq/gateway/director pods to terminate)" -ForegroundColor DarkGray
         Write-Host "  2. Power off the VM" -ForegroundColor DarkGray
         Write-Host "  Use this when shutting down for the night - player data is persisted to DB." -ForegroundColor DarkGray
         Write-Host ""
-        if (-not (Confirm-NoPlayersOnline -ActionLabel "graceful-shutdown")) {
+        if (-not (Confirm-NoPlayersOnline -ActionLabel "shutdown")) {
             Write-Host "Aborted." -ForegroundColor Cyan; continue
         }
 
@@ -1408,7 +1408,7 @@ while ($true) {
         $script:portCheckCache = $null
 
         Write-Host ""
-        Write-Host "=== Graceful shutdown complete ===" -ForegroundColor Green
+        Write-Host "=== Shutdown complete ===" -ForegroundColor Green
         Write-Host "Use option 'b. start-vm' (and then '2. start') when you're ready to bring it back up." -ForegroundColor DarkGray
         continue
     }

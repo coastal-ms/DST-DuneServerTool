@@ -92,8 +92,8 @@ VM commands:
    c. stop-vm                      Stop the VM
    d. rotate-ssh-key               Generate a new SSH key
    e. change-password              Change the 'dune' user password
-   f. graceful-reboot              Stop battlegroup -> restart VM -> start battlegroup (clean cycle)
-   g. graceful-shutdown            Stop battlegroup -> power off VM (e.g. shut down for the night)
+   f. shutdown                     Stop battlegroup -> power off VM (e.g. shut down for the night)
+   g. reboot                       Stop battlegroup -> restart VM -> start battlegroup (clean cycle)
 
 Battlegroup commands:
 
@@ -132,9 +132,9 @@ Type a letter or number and press **Enter** to run that option.
 
 ### What each section does
 
-**VM commands (a–g)** — Control the Hyper-V virtual machine itself. Start it, stop it, rotate SSH keys, change the VM password, run a graceful reboot, or shut down for the night.
+**VM commands (a–g)** — Control the Hyper-V virtual machine itself. Start it, stop it, rotate SSH keys, change the VM password, run a clean reboot, or shut down for the night.
 
-> **Graceful reboot (`f`)** — Use this when the server is misbehaving (lag, memory pressure, stuck pods) and you want a clean cycle without losing player data. It will:
+> **Reboot (`e`)** — Use this when the server is misbehaving (lag, memory pressure, stuck pods) and you want a clean cycle without losing player data. It will:
 > 1. Stop the battlegroup so all maps enter PreShutdown and persist player state to the database.
 > 2. Wait for the game, RabbitMQ, gateway, traffic-router, and director pods to fully terminate (up to 6 minutes).
 > 3. Hard-stop and restart the Hyper-V VM.
@@ -143,7 +143,7 @@ Type a letter or number and press **Enter** to run that option.
 >
 > The whole cycle typically takes 5–10 minutes. Warn your players in Discord first — there is no in-game broadcast mechanism.
 
-> **Graceful shutdown (`g`)** — Use this when you want to shut the server down for the night (or any extended period). It does the same first two phases as graceful reboot — stop the battlegroup and wait for player data to fully persist to the DB — then powers off the VM and stops there. Bring it back up with `b. start-vm` followed by `2. start`.
+> **Shutdown (`d`)** — Use this when you want to shut the server down for the night (or any extended period). It does the same first two phases as reboot — stop the battlegroup and wait for player data to fully persist to the DB — then powers off the VM and stops there. Bring it back up with `c. startup`.
 
 **Battlegroup commands (1–16)** — Manage the game server running inside the VM. These are the same options from the official Funcom `battlegroup.bat`, including starting/stopping the server, updating, editing config, backups, logs, and connecting to pods.
 
@@ -209,11 +209,11 @@ This happens if dune-admin is running as administrator. The tool already handles
 - Delete or blank the `PortCheckUrlTemplate=` line in `dune-server.config`, or delete the config file and re-run setup leaving question #5 blank.
 
 ### Graceful reboot fails at "Starting battlegroup" with `502 Bad Gateway`
-The mutating webhook from the battlegroup operator was not reachable when `battlegroup start` was called. The graceful-reboot option now waits for the webhook service endpoints to be populated before starting, but if you triggered `start` manually too soon you'll see:
+The mutating webhook from the battlegroup operator was not reachable when `battlegroup start` was called. The `reboot` option now waits for the webhook service endpoints to be populated before starting, but if you triggered `start` manually too soon you'll see:
 ```
 failed calling webhook "mbattlegroup.kb.io": ... 502 Bad Gateway
 ```
-Wait 30–60 seconds and try option `2. start` again, or just rerun option `f. graceful-reboot` from the beginning.
+Wait 30–60 seconds and try option `2. start` again, or just rerun option `e. reboot` from the beginning.
 
 ### I want to change my settings
 Delete `dune-server.config` (in the same folder as the scripts) and run `dune-server.bat` again. The setup wizard will re-appear.
