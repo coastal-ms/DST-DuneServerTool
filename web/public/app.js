@@ -52,32 +52,37 @@ function renderCommands(c) {
         ? item.desc
         : `${item.desc}  —  Currently unavailable (VM not in required state).`;
       const confirmAttr = item.confirm ? ' data-confirm="true"' : '';
+      const rowDisabled = item.available ? '' : ' data-disabled="true"';
       return `${subHeader}
-        <button class="cmd"${confirmAttr} data-name="${escapeHtml(item.name)}" ${disabled} title="${escapeHtml(title)}">
+        <div class="row"${confirmAttr}${rowDisabled} data-name="${escapeHtml(item.name)}" title="${escapeHtml(title)}">
           <span class="key">${escapeHtml(item.key)}.</span>
-          <span class="name">${escapeHtml(item.name)}</span>
-          <span class="desc">${escapeHtml(item.desc)}</span>
-        </button>`;
+          <div class="info">
+            <span class="name">${escapeHtml(item.name)}</span>
+            <span class="desc">${escapeHtml(item.desc)}</span>
+          </div>
+          <button class="go" data-name="${escapeHtml(item.name)}" ${disabled}>Go</button>
+        </div>`;
     }).join('');
     return `<section><h2>${escapeHtml(sec.name)}</h2><div class="grid">${items}</div></section>`;
   }).join('');
   $sections.innerHTML = html;
 
-  $sections.querySelectorAll('button.cmd').forEach(btn => {
+  $sections.querySelectorAll('button.go').forEach(btn => {
     btn.addEventListener('click', () => onExec(btn));
   });
 }
 
 async function onExec(btn) {
+  const row = btn.closest('.row');
   const name = btn.dataset.name;
-  const needsConfirm = btn.dataset.confirm === 'true';
+  const needsConfirm = row && row.dataset.confirm === 'true';
   if (needsConfirm) {
     const ok = confirm(`Run "${name}"?\n\nThis will affect the live server.`);
     if (!ok) return;
   }
   btn.disabled = true;
-  const prev = btn.innerHTML;
-  btn.innerHTML = `<span class="name">Launching ${escapeHtml(name)}…</span>`;
+  const prev = btn.textContent;
+  btn.textContent = 'Launching…';
   try {
     const res = await fetch(`/api/exec/${encodeURIComponent(name)}`, { method: 'POST' });
     const data = await res.json().catch(() => ({}));
@@ -86,7 +91,7 @@ async function onExec(btn) {
     alert(`Failed to launch ${name}: ${err.message}`);
   } finally {
     setTimeout(() => {
-      btn.innerHTML = prev;
+      btn.textContent = prev;
       btn.disabled = false;
       refresh();
     }, 1500);
