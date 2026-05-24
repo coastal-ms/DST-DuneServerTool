@@ -7,6 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+- Menu option `21. dune-admin` is now correctly disabled (greyed out with a reason)
+  when the Hyper-V VM does not exist or is not running, matching the behavior of
+  every other VM-dependent menu item. Previously it was always shown as available.
+
 ## [1.0.0] - 2026-05-24
 
 ### Added
