@@ -11,6 +11,25 @@ A menu-driven tool for managing your Dune Awakening self-hosted dedicated server
 See [`CHANGELOG.md`](CHANGELOG.md) for release history and
 [`CONTRIBUTING.md`](CONTRIBUTING.md) for the change-control workflow.
 
+## Reporting issues
+
+Hit a bug, error, or unexpected behavior? **Please open a GitHub issue**
+so it can be tracked and fixed:
+
+> 👉 [**Open an issue**](https://github.com/coastal-ms/Simple-Dune-Server-Management-Tool/issues/new/choose) &nbsp;·&nbsp;
+> [Browse existing issues](https://github.com/coastal-ms/Simple-Dune-Server-Management-Tool/issues)
+
+When filing, please include:
+
+- The tool version (shown in the menu header, e.g. `v3.0.0`)
+- The exact menu option you ran (e.g. `e. reboot`)
+- The error message or unexpected output (copy-paste from the console)
+- Anything in the transcript log (`.logs\dune-server-*.log` next to `dune-server.bat`)
+
+Discord pings to `@allcoast` are fine for quick questions, but use the
+issue tracker for anything that needs a fix &mdash; it keeps the history
+public so other server admins can find the same answer.
+
 
 ---
 
