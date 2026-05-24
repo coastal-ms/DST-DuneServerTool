@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.1.0] - 2026-05-24
+
 ### Added
 - New `h. startup` menu option (and matching handler) that orchestrates a clean
   cold-start of the server with timed gates at each step:
@@ -73,6 +75,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Hardened the post-reboot readiness check to verify webhook Service endpoints
   are populated (not just pods Running) before calling battlegroup start.
 
-[Unreleased]: https://github.com/coastal-ms/Simple-Dune-Server-Management-Tool/compare/v1.0.1...HEAD
+[Unreleased]: https://github.com/coastal-ms/Simple-Dune-Server-Management-Tool/compare/v1.1.0...HEAD
+[1.1.0]: https://github.com/coastal-ms/Simple-Dune-Server-Management-Tool/compare/v1.0.1...v1.1.0
 [1.0.1]: https://github.com/coastal-ms/Simple-Dune-Server-Management-Tool/compare/v1.0.0...v1.0.1
 [1.0.0]: https://github.com/coastal-ms/Simple-Dune-Server-Management-Tool/releases/tag/v1.0.0
