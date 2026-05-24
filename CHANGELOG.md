@@ -91,6 +91,16 @@ Patch release: better feedback during long boot waits, a real fix for the DB-pod
 - **Web portal layout**: each menu item is now a labeled row with a
   dedicated **Go** button on the right, instead of the entire row being a
   single clickable button. Easier to read, easier to click intentionally.
+- **Web portal: new always-visible Battlegroup Status panel.** Pinned at the
+  top of the page (above the VM / Battlegroup / Tools command sections),
+  the panel shows the live output of the battlegroup `status` command
+  (option `1` from the console menu) in a monospace block. It auto-polls
+  every 30 seconds and has a manual **Refresh** button. The backend caches
+  the SSH result for 25 seconds so multiple browser tabs / quick polls
+  don't repeatedly hit the VM. When the VM is off, the panel shows the
+  reason (e.g. `VM not running (state: Off).`) in amber instead of an
+  error. Powered by a new `GET /api/bg-status` endpoint in
+  `web/Start-DuneWeb.ps1`.
 
 ## [3.0.0] - 2026-05-24
 
