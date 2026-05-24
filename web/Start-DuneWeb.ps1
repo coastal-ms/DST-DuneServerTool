@@ -88,22 +88,16 @@ $script:BgCommands = @(
     @{ key='16'; name='shell-pod';                 desc='Open a shell to a pod in the battlegroup';            sub='Monitoring' }
 )
 
-$script:MapCommands = @(
-    @{ key='17'; name='start-deepdesert'; desc='On-demand: spin up the Deep Desert map pod';      requires='running' }
-    @{ key='18'; name='start-arrakeen';   desc='On-demand: spin up the Arrakeen hub map pod';      requires='running' }
-    @{ key='19'; name='start-harko';      desc='On-demand: spin up the Harko Village hub map pod'; requires='running' }
-)
-
 function Get-ToolCommandList {
     $cfg = Read-Config
     $list = @(
-        @{ key='20'; name='ssh';         desc='Open an SSH terminal to the VM';                       requires='running' }
+        @{ key='17'; name='ssh';         desc='Open an SSH terminal to the VM';                       requires='running' }
     )
     if ($cfg.DuneAdminExe -and (Test-Path $cfg.DuneAdminExe)) {
-        $list += @{ key='21'; name='dune-admin';  desc='Launch dune-admin.exe + open dune-admin web UI'; requires='running' }
+        $list += @{ key='18'; name='dune-admin';  desc='Launch dune-admin.exe + open dune-admin web UI'; requires='running' }
     }
-    $list += @{ key='22'; name='setup-guide';  desc='Open Funcom Self-Hosted Server Setup Instructions'; requires='none' }
-    $list += @{ key='23'; name='report-issue'; desc='Report a bug in this tool (opens prefilled GitHub issue)'; requires='none' }
+    $list += @{ key='19'; name='setup-guide';  desc='Open Funcom Self-Hosted Server Setup Instructions'; requires='none' }
+    $list += @{ key='20'; name='report-issue'; desc='Report a bug in this tool (opens prefilled GitHub issue)'; requires='none' }
     return $list
 }
 
@@ -204,7 +198,6 @@ Start-PodeServer {
     Set-PodeState -Name 'VmName'      -Value $script:VmName     | Out-Null
     Set-PodeState -Name 'VmCommands'  -Value $script:VmCommands | Out-Null
     Set-PodeState -Name 'BgCommands'  -Value $script:BgCommands | Out-Null
-    Set-PodeState -Name 'MapCommands' -Value $script:MapCommands | Out-Null
 
     Add-PodeEndpoint -Address 127.0.0.1 -Port $Port -Protocol Http
 
@@ -239,11 +232,6 @@ Start-PodeServer {
         }
         $sections += @{ name='Battlegroup'; items=@($bgList) }
 
-        $mapList = foreach ($c in (Get-PodeState -Name 'MapCommands')) {
-            @{ key=$c.key; name=$c.name; desc=$c.desc; available=(Resolve-Available -cmd $c -vm $vm); confirm=$false }
-        }
-        $sections += @{ name='Maps (on-demand)'; items=@($mapList) }
-
         $toolList = foreach ($c in (Get-ToolCommandList)) {
             @{ key=$c.key; name=$c.name; desc=$c.desc; available=(Resolve-Available -cmd $c -vm $vm); confirm=$false }
         }
@@ -258,7 +246,6 @@ Start-PodeServer {
         $allNames = @()
         $allNames += (Get-PodeState -Name 'VmCommands').name
         $allNames += (Get-PodeState -Name 'BgCommands').name
-        $allNames += (Get-PodeState -Name 'MapCommands').name
         $allNames += (Get-ToolCommandList).name
         if ($allNames -notcontains $name) {
             Set-PodeResponseStatus -Code 400

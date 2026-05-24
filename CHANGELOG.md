@@ -7,6 +7,44 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [3.1.2] - 2026-05-24
+
+Patch release: **remove the on-demand map start feature entirely** (the three
+`start-deepdesert` / `start-arrakeen` / `start-harko` menu items added in
+v3.1.0 and fixed in v3.1.1). The mechanism worked correctly at the
+Kubernetes/operator layer, but the underlying Funcom game server has a
+**cross-server crash dependency** that makes the feature unsafe.
+
+### Removed
+
+- `dune-server.ps1`: `$mapCommands` array, `Get-MapCmdAvailability` helper,
+  `Invoke-MapScale` function, the **Maps (on-demand)** menu section, and the
+  dispatch handler for `start-deepdesert` / `start-arrakeen` / `start-harko`.
+- `web/Start-DuneWeb.ps1`: `$script:MapCommands` state, the
+  `Maps (on-demand)` section in `/api/commands`, and the corresponding
+  entries in the `/api/exec` allow-list.
+- Tool command keys renumbered back to 17/18/19/20 (`ssh`, `dune-admin`,
+  `setup-guide`, `report-issue`) to fill the gap left by the removed map
+  commands.
+
+### Why pulled
+
+- Bringing `DeepDesert_1` or `SH_HarkoVillage` up from cold state on a
+  battlegroup that didn't boot with them caused the new pods to crash-loop
+  with `BackOff` &mdash; their persistent state isn't initialized through
+  the proper Funcom flow (battlegroup config + `battlegroup restart`).
+- Worse, those crash-loops triggered **SIGSEGV (exit 139) in the main
+  `Survival_1` and `Overmap` pods within seconds**, taking the whole game
+  server down. Observed timeline: DeepDesert/Harko BackOff at ~T+30s
+  &rarr; Survival_1 SIGSEGV at T+50s &rarr; Overmap SIGSEGV at T+54s.
+- This is a Funcom-side cross-server messaging dependency, not a tooling
+  bug. The operator auto-recovered Survival/Overmap within ~50s, but
+  active players got dropped.
+- `SH_Arrakeen` did *not* trigger the cascade in testing, but it's not
+  worth shipping a partial feature that can take the server down if the
+  user picks the wrong map. Use the normal Funcom flow (battlegroup
+  config + restart) to add maps; the operator initializes them safely.
+
 ## [3.1.1] - 2026-05-24
 
 Patch release: fix v3.1.0's on-demand map start commands, which were
@@ -308,7 +346,8 @@ entry. From here on, patch releases follow as `3.0.1`, `3.0.2`, etc.
 - Boot-time history stored at `<scriptDir>\.boot-times.json` (rolling
   window of last 20 entries per phase).
 
-[Unreleased]: https://github.com/coastal-ms/Simple-Dune-Server-Management-Tool/compare/v3.1.1...HEAD
+[Unreleased]: https://github.com/coastal-ms/Simple-Dune-Server-Management-Tool/compare/v3.1.2...HEAD
+[3.1.2]: https://github.com/coastal-ms/Simple-Dune-Server-Management-Tool/compare/v3.1.1...v3.1.2
 [3.1.1]: https://github.com/coastal-ms/Simple-Dune-Server-Management-Tool/compare/v3.1.0...v3.1.1
 [3.1.0]: https://github.com/coastal-ms/Simple-Dune-Server-Management-Tool/compare/v3.0.1...v3.1.0
 [3.0.1]: https://github.com/coastal-ms/Simple-Dune-Server-Management-Tool/compare/v3.0.0...v3.0.1
