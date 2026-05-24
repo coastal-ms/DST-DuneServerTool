@@ -9,7 +9,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [3.0.1] - 2026-05-24
 
-Patch release: better feedback during long boot waits, and a real fix for the DB-pod readiness check that was silently lying about success.
+Patch release: better feedback during long boot waits, a real fix for the DB-pod readiness check that was silently lying about success, and a new menu option to power on the VM without touching battlegroup.
+
+### Added
+
+- **New menu option `c. start-vm`** (sits directly above `d. startup`). Powers on the
+  Hyper-V VM and waits for it to acquire an IP, but does **not** run any battlegroup
+  commands. Useful for maintenance, OS updates inside the VM, manual k3s pokes,
+  or just bringing the host online without spinning up the game server. Pairs
+  with the existing internal `stop-vm` handler. Shifts the menu keys: `startup`
+  is now `d`, `shutdown` is `e`, `reboot` is `f`, `rotate-ssh-key` is `g`,
+  `change-password` is `h`.
 
 ### Fixed
 

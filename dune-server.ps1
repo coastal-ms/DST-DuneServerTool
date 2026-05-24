@@ -759,11 +759,12 @@ function Wait-MapPodReady {
 $vmCommands = @(
     [pscustomobject]@{ Key = "a"; Name = "initial-setup";      Desc = "Run the initial VM setup" }
     [pscustomobject]@{ Key = "b"; Name = "web";                Desc = "Open the web UI in your browser (button panel for these commands)" }
-    [pscustomobject]@{ Key = "c"; Name = "startup";            Desc = "Power on VM -> start battlegroup -> wait for overmap + survival maps" }
-    [pscustomobject]@{ Key = "d"; Name = "shutdown";           Desc = "Stop battlegroup -> power off VM (e.g. shut down for the night)" }
-    [pscustomobject]@{ Key = "e"; Name = "reboot";             Desc = "Stop battlegroup -> restart VM -> start battlegroup (clean cycle)" }
-    [pscustomobject]@{ Key = "f"; Name = "rotate-ssh-key";     Desc = "Generate a new SSH key and replace the one authorized on the VM" }
-    [pscustomobject]@{ Key = "g"; Name = "change-password";    Desc = "Change the password of the 'dune' user on the VM" }
+    [pscustomobject]@{ Key = "c"; Name = "start-vm";           Desc = "Power on the VM only (no battlegroup) - useful for maintenance" }
+    [pscustomobject]@{ Key = "d"; Name = "startup";            Desc = "Power on VM -> start battlegroup -> wait for overmap + survival maps" }
+    [pscustomobject]@{ Key = "e"; Name = "shutdown";           Desc = "Stop battlegroup -> power off VM (e.g. shut down for the night)" }
+    [pscustomobject]@{ Key = "f"; Name = "reboot";             Desc = "Stop battlegroup -> restart VM -> start battlegroup (clean cycle)" }
+    [pscustomobject]@{ Key = "g"; Name = "rotate-ssh-key";     Desc = "Generate a new SSH key and replace the one authorized on the VM" }
+    [pscustomobject]@{ Key = "h"; Name = "change-password";    Desc = "Change the password of the 'dune' user on the VM" }
 )
 
 $bgCommands = @(
@@ -815,7 +816,7 @@ function Get-VmCmdAvailability {
         }
         "reboot" {
             if (-not $info.Exists)  { return @{ Available = $false; Reason = "VM '$vmName' does not exist." } }
-            if (-not $info.Running) { return @{ Available = $false; Reason = "VM '$vmName' is not running. Use 'c. startup' to cold-start." } }
+            if (-not $info.Running) { return @{ Available = $false; Reason = "VM '$vmName' is not running. Use 'd. startup' to cold-start." } }
             return @{ Available = $true; Reason = $null }
         }
         "shutdown" {
@@ -1580,7 +1581,7 @@ while ($true) {
         Write-Host ""
         Write-Host "=== Shutdown complete in ${totalSec}s ===" -ForegroundColor Green
         if ($estTotalDone) { Write-Host "  $estTotalDone" -ForegroundColor DarkGray }
-        Write-Host "Use option 'c. startup' when you're ready to bring it back up." -ForegroundColor DarkGray
+        Write-Host "Use option 'd. startup' when you're ready to bring it back up." -ForegroundColor DarkGray
         continue
     }
 
