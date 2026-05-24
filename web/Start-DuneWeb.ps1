@@ -111,6 +111,85 @@ function Resolve-Available {
     }
 }
 
+# Runs the battlegroup `status` command on the VM and returns the captured
+# text. Cached in Pode state for 25s so multiple browser tabs / quick polls
+# don't repeatedly hammer SSH. Pass -Fresh to bypass the cache (used by the
+# manual "Refresh" button in the UI).
+function Get-BattlegroupStatus {
+    param([switch]$Fresh)
+
+    $now = [int][DateTimeOffset]::UtcNow.ToUnixTimeSeconds()
+
+    if (-not $Fresh) {
+        $cached = Get-PodeState -Name 'BgStatusCache'
+        if ($cached -and ($now - [int]$cached.fetched) -lt 25) {
+            return $cached
+        }
+    }
+
+    $vm = Get-VmStatus
+    if (-not $vm.running) {
+        return @{
+            available = $false
+            reason    = "VM not running (state: $($vm.state))."
+            fetched   = $now
+            timestamp = (Get-Date).ToString('s')
+        }
+    }
+
+    $cfg    = Read-Config
+    $sshKey = $cfg.SshKey
+    if (-not $sshKey -or -not (Test-Path $sshKey)) {
+        return @{
+            available = $false
+            reason    = "SSH key not configured or missing: $sshKey"
+            fetched   = $now
+            timestamp = (Get-Date).ToString('s')
+        }
+    }
+    if (-not $vm.ip) {
+        return @{
+            available = $false
+            reason    = 'VM is running but has no IP yet.'
+            fetched   = $now
+            timestamp = (Get-Date).ToString('s')
+        }
+    }
+
+    $bgBinPath = '/home/dune/.dune/bin/battlegroup'
+    $result = $null
+    try {
+        $raw = & ssh `
+            -o StrictHostKeyChecking=no `
+            -o LogLevel=QUIET `
+            -o ConnectTimeout=10 `
+            -o BatchMode=yes `
+            -i $sshKey "dune@$($vm.ip)" "$bgBinPath status" 2>&1
+        $exitCode = $LASTEXITCODE
+        $text = ($raw | Out-String).TrimEnd()
+        # Strip ANSI escape sequences in case battlegroup emits color codes
+        # without a TTY (it shouldn't, but be defensive).
+        $text = $text -replace "`e\[[0-9;]*[A-Za-z]", ''
+        $result = @{
+            available = $true
+            exitCode  = $exitCode
+            output    = $text
+            fetched   = $now
+            timestamp = (Get-Date).ToString('s')
+        }
+    } catch {
+        $result = @{
+            available = $false
+            reason    = "SSH error: $($_.Exception.Message)"
+            fetched   = $now
+            timestamp = (Get-Date).ToString('s')
+        }
+    }
+
+    Set-PodeState -Name 'BgStatusCache' -Value $result | Out-Null
+    return $result
+}
+
 Start-PodeServer {
     # Publish shared state for the route runspaces (they can't see $script:* vars).
     Set-PodeState -Name 'Root'        -Value $script:Root       | Out-Null
@@ -130,6 +209,13 @@ Start-PodeServer {
             vm        = $vm
             timestamp = (Get-Date).ToString('s')
         }
+    }
+
+    Add-PodeRoute -Method Get -Path '/api/bg-status' -ScriptBlock {
+        $fresh = ($WebEvent.Query['fresh'] -eq '1')
+        if ($fresh) { $r = Get-BattlegroupStatus -Fresh }
+        else        { $r = Get-BattlegroupStatus }
+        Write-PodeJsonResponse -Value $r
     }
 
     Add-PodeRoute -Method Get -Path '/api/commands' -ScriptBlock {

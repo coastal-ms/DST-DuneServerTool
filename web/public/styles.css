@@ -35,7 +35,57 @@ header h1 { margin: 0; font-size: 18px; font-weight: 600; letter-spacing: 0.02em
 .dot-red    { background: var(--red);    box-shadow: 0 0 8px rgba(255,111,111,0.4); }
 .ts { font-size: 12px; color: var(--muted); margin-left: 6px; }
 
-main { padding: 18px 24px 40px; max-width: 1200px; margin: 0 auto; }
+main { padding: 0 24px 40px; max-width: 1200px; margin: 0 auto; }
+
+.bg-status-section {
+  max-width: 1200px;
+  margin: 18px auto 0;
+  padding: 0 24px;
+}
+.bg-status-header {
+  display: flex; justify-content: space-between; align-items: center;
+  margin-bottom: 8px; gap: 12px; flex-wrap: wrap;
+}
+.bg-status-header h2 {
+  margin: 0;
+  font-size: 12px; font-weight: 700;
+  letter-spacing: 0.12em; text-transform: uppercase;
+  color: var(--accent);
+}
+.bg-status-meta {
+  display: flex; align-items: center; gap: 10px;
+  color: var(--muted); font-size: 12px;
+}
+.bg-status-meta button {
+  background: transparent;
+  color: var(--accent);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  padding: 3px 12px;
+  font-size: 11px;
+  letter-spacing: 0.04em;
+  cursor: pointer;
+  font-weight: 600;
+}
+.bg-status-meta button:hover:not([disabled]) {
+  filter: brightness(1.2);
+  border-color: var(--accent);
+}
+.bg-status-meta button[disabled] { opacity: 0.5; cursor: wait; }
+.bg-status-output {
+  margin: 0 0 18px;
+  background: #0b0f13;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 10px 12px;
+  font: 12px/1.45 ui-monospace, "Cascadia Mono", Menlo, Consolas, monospace;
+  color: var(--text);
+  max-height: 360px;
+  overflow: auto;
+  white-space: pre-wrap;
+  word-wrap: break-word;
+}
+.bg-status-output.bg-status-unavailable { color: var(--yellow); }
 
 section { margin-bottom: 28px; }
 section h2 {
