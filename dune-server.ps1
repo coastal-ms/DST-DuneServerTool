@@ -475,6 +475,8 @@ function Get-ToolCmdAvailability {
             return @{ Available = $true; Reason = $null }
         }
         "dune-admin" {
+            if (-not $info.Exists)  { return @{ Available = $false; Reason = "VM '$vmName' does not exist." } }
+            if (-not $info.Running) { return @{ Available = $false; Reason = "VM '$vmName' is not running." } }
             return @{ Available = $true; Reason = $null }
         }
         default { return @{ Available = $true; Reason = $null } }
