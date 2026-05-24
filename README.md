@@ -3,7 +3,7 @@
 > By Coastal (discord `@allcoast`). Menu-driven admin tool for a self-hosted
 > Dune Awakening dedicated server.
 
-[![Lint PowerShell](https://github.com/the maintainer-microsoft/Simple-Dune-Server-Management-Tool/actions/workflows/lint.yml/badge.svg)](https://github.com/the maintainer-microsoft/Simple-Dune-Server-Management-Tool/actions/workflows/lint.yml)
+[![Lint PowerShell](https://github.com/coastal-ms/Simple-Dune-Server-Management-Tool/actions/workflows/lint.yml/badge.svg)](https://github.com/coastal-ms/Simple-Dune-Server-Management-Tool/actions/workflows/lint.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 
 A menu-driven tool for managing your Dune Awakening self-hosted dedicated server. It wraps the official Funcom battlegroup scripts and adds extra utilities like SSH access and the dune-admin panel.
