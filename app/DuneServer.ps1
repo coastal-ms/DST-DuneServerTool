@@ -36,7 +36,7 @@ param()
 # check (Check-ForUpdates) and the "Installed: x.y.z" header label. Must be
 # bumped in lock-step with the other 3 version constants (dune-server.ps1,
 # Build-Exe.ps1, installer .iss).
-$script:ToolVersion = "4.3.3"
+$script:ToolVersion = "4.4.0"
 
 # ────────────────────────────────────────────────────────────────────────────
 #  Prerequisite check: PowerShell 7 (pwsh.exe)
@@ -442,6 +442,7 @@ Add-Type -AssemblyName System.Xaml
         <Grid.RowDefinitions>
           <RowDefinition Height="Auto"/>
           <RowDefinition Height="Auto"/>
+          <RowDefinition Height="Auto"/>
         </Grid.RowDefinitions>
         <Grid.ColumnDefinitions>
           <ColumnDefinition Width="*"/>
@@ -460,7 +461,11 @@ Add-Type -AssemblyName System.Xaml
         <Button x:Name="BtnCheckUpdate" Grid.Row="0" Grid.Column="3" Content="Check for Updates" Style="{StaticResource UtilButton}" Padding="14,4" Margin="0,0,6,0"/>
         <Button x:Name="BtnRefreshStatus" Grid.Row="0" Grid.Column="4" Content="Refresh" Style="{StaticResource UtilButton}" Padding="14,4"/>
 
-        <Border Grid.Row="1" Grid.ColumnSpan="5" Height="332" Margin="0,6,0,0"
+        <TextBlock x:Name="PortStatusLbl" Grid.Row="1" Grid.ColumnSpan="5"
+                   FontFamily="Consolas" FontSize="11" Foreground="#888"
+                   Margin="0,6,0,0" Text="Ports: (waiting for first check)"/>
+
+        <Border Grid.Row="2" Grid.ColumnSpan="5" Height="332" Margin="0,6,0,0"
                 Background="#0C0C0C" BorderBrush="#3F3F46" BorderThickness="1">
           <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Auto"
                         Focusable="False" Padding="4,2">
@@ -562,6 +567,7 @@ $ui = @{
     BtnCheckUpdate = $window.FindName('BtnCheckUpdate')
     InstalledLbl   = $window.FindName('InstalledVersionLbl')
     LatestLbl      = $window.FindName('LatestVersionLbl')
+    PortStatusLbl  = $window.FindName('PortStatusLbl')
     StatusPane     = $window.FindName('StatusPane')
     ButtonPanelCol1  = $window.FindName('ButtonPanelCol1')
     ButtonPanelCol2  = $window.FindName('ButtonPanelCol2')
@@ -1018,6 +1024,212 @@ function Refresh-StatusHeader {
 }
 
 # ────────────────────────────────────────────────────────────────────────────
+#  Port-check header (mirrors CLI's Get-PortCheckStatus)
+# ────────────────────────────────────────────────────────────────────────────
+#
+# Shows external-reachability for forwarded ports as a colored single line:
+#
+#   Ports: TCP 31982 [OPEN]   UDP 7777 [OPEN]   UDP 7810 [OPEN]
+#
+# - TCP 31982 (RabbitMQ) always shown — works via the free yougetsignal.com
+#   built-in checker (the default).
+# - UDP 7777 + 7810 (game-server range first/last) only shown when
+#   PortCheckMode=custom in config (i.e. the user pointed initial-setup at
+#   a UDP-capable checker URL). Public free services don't support UDP, so
+#   we don't bother with placeholder rows in the default 'builtin' case.
+# - PortCheckMode=disabled hides the line entirely.
+#
+# Runs on a runspace because each yougetsignal request takes 5-10s and we
+# don't want to block the UI thread. Result is cached for 5 min so the 30s
+# auto-refresh repaints from cache; only the explicit Refresh button (or
+# the initial paint) forces a fresh hit.
+
+$script:RequiredPorts = @(
+    [pscustomobject]@{ Port = 31982; Protocol = 'TCP'; Label = 'TCP 31982 RabbitMQ';        AlwaysShow = $true  }
+    [pscustomobject]@{ Port = 7777;  Protocol = 'UDP'; Label = 'UDP 7777 (game first)';     AlwaysShow = $false }
+    [pscustomobject]@{ Port = 7810;  Protocol = 'UDP'; Label = 'UDP 7810 (game last)';      AlwaysShow = $false }
+)
+$script:PortCheckCache     = $null
+$script:PortCheckCacheTtl  = [TimeSpan]::FromMinutes(5)
+$script:PortCheckInFlight  = $false
+
+function Set-PortLblPlain {
+    param([string]$Text, [string]$Color = '#888')
+    $ui.PortStatusLbl.Inlines.Clear()
+    $run = New-Object System.Windows.Documents.Run
+    $run.Text = $Text
+    $run.Foreground = (New-Object System.Windows.Media.BrushConverter).ConvertFromString($Color)
+    [void]$ui.PortStatusLbl.Inlines.Add($run)
+    $ui.PortStatusLbl.Visibility = 'Visible'
+}
+
+function Add-PortLblRun {
+    param([string]$Text, [string]$Color, [bool]$Bold = $false)
+    $run = New-Object System.Windows.Documents.Run
+    $run.Text = $Text
+    $run.Foreground = (New-Object System.Windows.Media.BrushConverter).ConvertFromString($Color)
+    if ($Bold) { $run.FontWeight = 'Bold' }
+    [void]$ui.PortStatusLbl.Inlines.Add($run)
+}
+
+function Render-PortStatus {
+    param($Snapshot)  # @{ ports = @(@{Label;Status}); publicIp = '...'; stamp = '...' } or $null
+    $ui.PortStatusLbl.Inlines.Clear()
+    if (-not $Snapshot) {
+        Set-PortLblPlain "Ports: (verification disabled in config — run 'initial-setup' to change)" '#666'
+        return
+    }
+    if (-not $Snapshot.publicIp) {
+        Set-PortLblPlain "Ports: (no public IP — check failed)" '#E0B341'
+        return
+    }
+    Add-PortLblRun "Ports ($($Snapshot.publicIp)): " '#888'
+    $first = $true
+    foreach ($p in $Snapshot.ports) {
+        if (-not $first) { Add-PortLblRun "   " '#888' }
+        Add-PortLblRun "$($p.Label) " '#B8A88F'
+        $tag = switch ($p.Status) {
+            'open'     { '[OPEN]'   }
+            'closed'   { '[CLOSED]' }
+            'udp-skip' { '[UDP - skipped]' }
+            default    { '[UNKNOWN]' }
+        }
+        $color = switch ($p.Status) {
+            'open'     { '#9EBE6B' }   # green
+            'closed'   { '#E07A4F' }   # red
+            'udp-skip' { '#666'    }   # dim
+            default    { '#E0B341' }   # amber
+        }
+        Add-PortLblRun $tag $color $true
+        $first = $false
+    }
+    if ($Snapshot.stamp) { Add-PortLblRun "   updated $($Snapshot.stamp)" '#666' }
+}
+
+function Refresh-PortStatus {
+    param([switch]$Force)
+
+    $cfg  = Read-Config
+    $mode = if ($cfg.PortCheckMode) { $cfg.PortCheckMode } else { 'builtin' }
+    $url  = $cfg.PortCheckUrlTemplate
+
+    if ($mode -eq 'disabled') {
+        Render-PortStatus $null
+        return
+    }
+    if ($mode -eq 'custom' -and -not $url) {
+        Set-PortLblPlain "Ports: (PortCheckMode=custom but no PortCheckUrlTemplate — fix in config)" '#E0B341'
+        return
+    }
+
+    # Repaint from cache if fresh and not forced.
+    if (-not $Force -and $script:PortCheckCache `
+        -and ((Get-Date) - $script:PortCheckCache.fetched) -lt $script:PortCheckCacheTtl `
+        -and $script:PortCheckCache.mode -eq $mode) {
+        Render-PortStatus $script:PortCheckCache
+        return
+    }
+
+    if ($script:PortCheckInFlight) { return }
+    $script:PortCheckInFlight = $true
+
+    # Build the list of ports we'll probe (UDP only in custom mode).
+    $probe = @($script:RequiredPorts | Where-Object { $_.AlwaysShow -or $mode -eq 'custom' })
+
+    Set-PortLblPlain "Ports: checking..." '#888'
+
+    $rs = [RunspaceFactory]::CreateRunspace()
+    $rs.ApartmentState = 'STA'
+    $rs.ThreadOptions  = 'ReuseThread'
+    $rs.Open()
+    $ps = [PowerShell]::Create()
+    $ps.Runspace = $rs
+    [void]$ps.AddScript({
+        param($Mode, $UrlTemplate, $Probe)
+
+        function Get-PublicIp {
+            try {
+                $ip = (Invoke-WebRequest -Uri 'https://api.ipify.org' -UseBasicParsing -TimeoutSec 5).Content.Trim()
+                if ($ip -match '^\d+\.\d+\.\d+\.\d+$') { return $ip }
+            } catch {}
+            return $null
+        }
+
+        function Test-Builtin {
+            param([string]$PublicIp, [int]$Port, [string]$Protocol)
+            if ($Protocol -ne 'TCP') { return 'udp-skip' }
+            try {
+                $resp = Invoke-WebRequest -Uri 'https://ports.yougetsignal.com/check-port.php' `
+                    -Method POST -UseBasicParsing -TimeoutSec 10 -ErrorAction Stop `
+                    -Body @{ remoteAddress = $PublicIp; portNumber = "$Port" } `
+                    -Headers @{ 'User-Agent' = 'Mozilla/5.0 (dune-server-app)' }
+                $body = "$($resp.Content)"
+                if ($body -match '(?i)is\s+open|"open"\s*:\s*true')   { return 'open' }
+                if ($body -match '(?i)is\s+(closed|not\s+visible|not\s+open)|"open"\s*:\s*false') { return 'closed' }
+                return 'unknown'
+            } catch { return 'unknown' }
+        }
+
+        function Test-Custom {
+            param([string]$Template, [string]$PublicIp, [int]$Port, [string]$Protocol)
+            if (-not $Template -or -not $PublicIp) { return 'unknown' }
+            $u = $Template.Replace('{ip}', $PublicIp).Replace('{port}', "$Port").Replace('{protocol}', $Protocol.ToLower())
+            try {
+                $resp = Invoke-WebRequest -Uri $u -UseBasicParsing -TimeoutSec 8 -ErrorAction Stop
+                $body = "$($resp.Content)"
+                if ($body -match '(?i)"open"\s*:\s*true|"reachable"\s*:\s*true|"status"\s*:\s*"open"|\bopen\b')   { return 'open' }
+                if ($body -match '(?i)"open"\s*:\s*false|"reachable"\s*:\s*false|"status"\s*:\s*"closed"|\bclosed\b') { return 'closed' }
+                return 'unknown'
+            } catch { return 'unknown' }
+        }
+
+        $pubIp = Get-PublicIp
+        $results = @()
+        if ($pubIp) {
+            foreach ($p in $Probe) {
+                $status = if ($Mode -eq 'builtin') {
+                    Test-Builtin -PublicIp $pubIp -Port $p.Port -Protocol $p.Protocol
+                } else {
+                    Test-Custom -Template $UrlTemplate -PublicIp $pubIp -Port $p.Port -Protocol $p.Protocol
+                }
+                $results += [pscustomobject]@{ Port = $p.Port; Protocol = $p.Protocol; Label = $p.Label; Status = $status }
+            }
+        }
+        return @{ publicIp = $pubIp; ports = $results }
+    }).AddArgument($mode).AddArgument($url).AddArgument($probe)
+
+    $async = $ps.BeginInvoke()
+
+    $timer = New-Object System.Windows.Threading.DispatcherTimer
+    $timer.Interval = [TimeSpan]::FromMilliseconds(300)
+    $tick = {
+        if ($async.IsCompleted) {
+            $timer.Stop()
+            try {
+                $r = $ps.EndInvoke($async) | Select-Object -First 1
+                $stamp = (Get-Date).ToString('HH:mm:ss')
+                $snap = @{
+                    fetched  = Get-Date
+                    mode     = $mode
+                    publicIp = $r.publicIp
+                    ports    = $r.ports
+                    stamp    = $stamp
+                }
+                $script:PortCheckCache = $snap
+                Render-PortStatus $snap
+            } catch {
+                Set-PortLblPlain "Ports: check failed - $($_.Exception.Message)" '#E07A4F'
+            } finally {
+                $script:PortCheckInFlight = $false
+                $ps.Dispose(); $rs.Close(); $rs.Dispose()
+            }
+        }
+    }.GetNewClosure()
+    $timer.Add_Tick($tick)
+    $timer.Start()
+}
+
+# ────────────────────────────────────────────────────────────────────────────
 #  Button order persistence + drag-reorder support
 # ────────────────────────────────────────────────────────────────────────────
 
@@ -1335,7 +1547,11 @@ function Build-ButtonPanel {
 #  Wire UI events
 # ────────────────────────────────────────────────────────────────────────────
 
-$ui.BtnRefreshStat.Add_Click({ Refresh-StatusHeader })
+$ui.BtnRefreshStat.Add_Click({
+    Refresh-StatusHeader
+    # Explicit refresh -> bypass the 5-min cache and hit the port-check service again.
+    Refresh-PortStatus -Force
+})
 $ui.BtnClearOutput.Add_Click({ Clear-Output })
 $ui.BtnCopyOutput.Add_Click({
     try { [Windows.Clipboard]::SetText($ui.OutputPane.Text) } catch {}
@@ -1533,16 +1749,22 @@ function Set-OutputInputMode {
 # Status auto-refresh timer (30s)
 $autoRefresh = New-Object System.Windows.Threading.DispatcherTimer
 $autoRefresh.Interval = [TimeSpan]::FromSeconds(30)
-$autoRefresh.Add_Tick({ Refresh-StatusHeader })
+$autoRefresh.Add_Tick({
+    Refresh-StatusHeader
+    # Auto-refresh paints port-status from the 5-min cache; only triggers a
+    # fresh hit when the cache has aged out (avoids hammering yougetsignal).
+    Refresh-PortStatus
+})
 
 # Initial paint
 Build-ButtonPanel -Vm $script:LastVmKnown
-$ui.FooterVersion.Text = "Dune Server v4.3.3"
+$ui.FooterVersion.Text = "Dune Server v4.4.0"
 $ui.InstalledLbl.Text  = "Installed: $script:ToolVersion"
 
 # Kick off first status fetch on window load
 $ui.Window.Add_Loaded({
     Refresh-StatusHeader
+    Refresh-PortStatus
     $autoRefresh.Start()
     # Silent update check on launch — populates the Latest label, only
     # prompts the user if a newer release is actually available.

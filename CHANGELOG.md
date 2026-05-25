@@ -7,6 +7,33 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [4.4.0] - 2026-05-24
+
+Minor release: brings the **external port-check** feature from the CLI menu into the WPF app's top bar.
+
+### Added
+
+- **Port-check status line** in the header (above the battlegroup status
+  pane). Shows external reachability for the forwarded ports as a single
+  colored line with the public IP and a timestamp, e.g.
+  `Ports (15.218.94.154): TCP 31982 RabbitMQ [OPEN]   updated 21:15:29`.
+- **TCP 31982 (RabbitMQ)** is always checked via the built-in
+  `yougetsignal.com` service (no UDP support there).
+- **UDP 7777 and 7810 (game-server range first/last)** are only shown
+  when the user pointed `initial-setup` at a UDP-capable checker (i.e.
+  `PortCheckMode=custom` with a `PortCheckUrlTemplate` set in
+  `dune-server.config`). Free public services don't support UDP, so
+  there's no point showing placeholder rows in the default `builtin`
+  case.
+- **`PortCheckMode=disabled`** hides the line entirely (rendered as
+  `Ports: (verification disabled in config — run 'initial-setup' to change)`).
+- Each port renders with a colored status pill: `[OPEN]` (green),
+  `[CLOSED]` (red), `[UDP - skipped]` (dim), `[UNKNOWN]` (amber).
+- The check runs on a background runspace (each yougetsignal request
+  takes 5-10s) so the UI never blocks. The **Refresh** button forces a
+  fresh hit; the 30s auto-refresh paints from a 5-minute cache so we
+  don't hammer the public service.
+
 ## [4.3.3] - 2026-05-24
 
 Patch on top of v4.3.2.
@@ -733,7 +760,8 @@ entry. From here on, patch releases follow as `3.0.1`, `3.0.2`, etc.
 - Boot-time history stored at `<scriptDir>\.boot-times.json` (rolling
   window of last 20 entries per phase).
 
-[Unreleased]: https://github.com/coastal-ms/Simple-Dune-Server-Management-Tool/compare/v4.3.3...HEAD
+[Unreleased]: https://github.com/coastal-ms/Simple-Dune-Server-Management-Tool/compare/v4.4.0...HEAD
+[4.4.0]: https://github.com/coastal-ms/Simple-Dune-Server-Management-Tool/compare/v4.3.3...v4.4.0
 [4.3.3]: https://github.com/coastal-ms/Simple-Dune-Server-Management-Tool/compare/v4.3.2...v4.3.3
 [4.3.2]: https://github.com/coastal-ms/Simple-Dune-Server-Management-Tool/compare/v4.3.1...v4.3.2
 [4.3.1]: https://github.com/coastal-ms/Simple-Dune-Server-Management-Tool/compare/v4.3.0...v4.3.1
