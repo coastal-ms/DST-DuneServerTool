@@ -36,7 +36,7 @@ param()
 # check (Check-ForUpdates) and the "Installed: x.y.z" header label. Must be
 # bumped in lock-step with the other 3 version constants (dune-server.ps1,
 # Build-Exe.ps1, installer .iss).
-$script:ToolVersion = "4.3.2"
+$script:ToolVersion = "4.3.3"
 
 # ────────────────────────────────────────────────────────────────────────────
 #  Prerequisite check: PowerShell 7 (pwsh.exe)
@@ -651,9 +651,17 @@ function Get-BattlegroupStatusSnapshot {
 
     $bgBinPath = '/home/dune/.dune/bin/battlegroup'
     try {
+        # 2>&1 merges stderr into the pipeline as ErrorRecord objects;
+        # Out-String would then render them with the full "At line:N char:M"
+        # call-site dump. Flatten any ErrorRecord to plain string first so
+        # benign stderr lines (e.g. kubectl's "No resources found in <ns>
+        # namespace." when the battlegroup is Stopped) appear as text only.
         $raw = & ssh -o StrictHostKeyChecking=no -o LogLevel=QUIET `
                      -o ConnectTimeout=10 -o BatchMode=yes `
-                     -i $sshKey "dune@$($vm.ip)" "$bgBinPath status" 2>&1
+                     -i $sshKey "dune@$($vm.ip)" "$bgBinPath status" 2>&1 |
+               ForEach-Object {
+                   if ($_ -is [System.Management.Automation.ErrorRecord]) { $_.Exception.Message } else { $_ }
+               }
         $exit = $LASTEXITCODE
         $text = ($raw | Out-String).TrimEnd()
         $text = $text -replace "`e\[[0-9;]*[A-Za-z]", ''
@@ -953,9 +961,16 @@ function Refresh-StatusHeader {
         param($SshKey, $VmIp)
         $bgBinPath = '/home/dune/.dune/bin/battlegroup'
         try {
+            # Flatten any ErrorRecord on the merged pipeline to plain strings
+            # so benign stderr (e.g. kubectl's "No resources found in <ns>
+            # namespace." when the battlegroup is Stopped) doesn't render
+            # with PowerShell's "At line:N char:M" call-site dump.
             $raw = & ssh -o StrictHostKeyChecking=no -o LogLevel=QUIET `
                          -o ConnectTimeout=10 -o BatchMode=yes `
-                         -i $SshKey "dune@$VmIp" "$bgBinPath status" 2>&1
+                         -i $SshKey "dune@$VmIp" "$bgBinPath status" 2>&1 |
+                   ForEach-Object {
+                       if ($_ -is [System.Management.Automation.ErrorRecord]) { $_.Exception.Message } else { $_ }
+                   }
             $text = ($raw | Out-String).TrimEnd()
             $text = $text -replace "`e\[[0-9;]*[A-Za-z]", ''
             return @{ ok=$true; output=$text; exitCode=$LASTEXITCODE }
@@ -1353,6 +1368,10 @@ function Check-ForUpdates {
 
     $ui.LatestLbl.Text       = 'Latest: checking...'
     $ui.LatestLbl.Foreground = '#B8A88F'
+    # Clear the clickable affordance until we know we have a real tag to link to.
+    $ui.LatestLbl.Cursor          = [System.Windows.Input.Cursors]::Arrow
+    $ui.LatestLbl.TextDecorations = $null
+    $ui.LatestLbl.ToolTip         = $null
     $ui.BtnCheckUpdate.IsEnabled = $false
     try {
         $rel = Get-LatestRelease
@@ -1362,17 +1381,20 @@ function Check-ForUpdates {
         if (-not $latest) {
             $ui.LatestLbl.Text       = "Latest: $($rel.tag_name)"
             $ui.LatestLbl.Foreground = '#B8A88F'
+            Enable-LatestLblLink $rel.tag_name
             return
         }
         if (-not $current) {
             $ui.LatestLbl.Text       = "Latest: $latest (installed version unknown)"
             $ui.LatestLbl.Foreground = '#E07A4F'
+            Enable-LatestLblLink $rel.tag_name
             return
         }
 
         if ($latest -gt $current) {
             $ui.LatestLbl.Text       = "Latest: $latest (update available)"
             $ui.LatestLbl.Foreground = '#4FC3F7'
+            Enable-LatestLblLink $rel.tag_name
             if (-not $Silent) {
                 $msg = "A new version is available.`n`nInstalled: $current`nLatest:    $latest`n`nDownload and install now? The app will close while the installer runs."
                 $btn = [Windows.MessageBox]::Show($ui.Window, $msg, 'Update Available', 'YesNo', 'Information')
@@ -1382,6 +1404,7 @@ function Check-ForUpdates {
         elseif ($latest -eq $current) {
             $ui.LatestLbl.Text       = "Latest: $latest (up to date)"
             $ui.LatestLbl.Foreground = '#9EBE6B'
+            Enable-LatestLblLink $rel.tag_name
             if (-not $Silent) {
                 [Windows.MessageBox]::Show($ui.Window, "You're on the latest version ($current).", 'No Updates', 'OK', 'Information') | Out-Null
             }
@@ -1389,6 +1412,7 @@ function Check-ForUpdates {
         else {
             $ui.LatestLbl.Text       = "Latest: $latest (you are ahead)"
             $ui.LatestLbl.Foreground = '#E0B341'
+            Enable-LatestLblLink $rel.tag_name
         }
     }
     catch {
@@ -1401,6 +1425,18 @@ function Check-ForUpdates {
     finally {
         $ui.BtnCheckUpdate.IsEnabled = $true
     }
+}
+
+# Turns the "Latest: vX.Y.Z" label into a clickable link that opens the
+# matching GitHub release notes page. Called from each Check-ForUpdates
+# branch that has a real tag to point at; skipped on the "check failed"
+# branch (no tag = no link).
+function Enable-LatestLblLink {
+    param([string]$Tag)
+    if (-not $Tag) { return }
+    $ui.LatestLbl.Cursor          = [System.Windows.Input.Cursors]::Hand
+    $ui.LatestLbl.TextDecorations = [System.Windows.TextDecorations]::Underline
+    $ui.LatestLbl.ToolTip         = "Open release notes for $Tag on GitHub"
 }
 
 function Invoke-UpdateDownload {
@@ -1438,6 +1474,17 @@ function Invoke-UpdateDownload {
 }
 
 $ui.BtnCheckUpdate.Add_Click({ Check-ForUpdates })
+
+# Click-through on the "Latest: vX.Y.Z" label -> opens the release notes
+# page for the latest tag. No-op until a successful release fetch sets
+# $script:LatestRelease (until then the label has no link affordance).
+$ui.LatestLbl.Add_MouseLeftButtonUp({
+    $rel = $script:LatestRelease
+    if ($rel -and $rel.tag_name) {
+        $url = "https://github.com/$($script:UpdateRepo)/releases/tag/$($rel.tag_name)"
+        try { Start-Process $url } catch {}
+    }
+})
 
 # Output pane is non-interactive by default: swallow mouse-down so no caret/
 # selection appears. The mouse wheel still scrolls via WPF's bubble routing.
@@ -1490,7 +1537,7 @@ $autoRefresh.Add_Tick({ Refresh-StatusHeader })
 
 # Initial paint
 Build-ButtonPanel -Vm $script:LastVmKnown
-$ui.FooterVersion.Text = "Dune Server v4.3.2"
+$ui.FooterVersion.Text = "Dune Server v4.3.3"
 $ui.InstalledLbl.Text  = "Installed: $script:ToolVersion"
 
 # Kick off first status fetch on window load
