@@ -7,6 +7,72 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [4.5.2] - 2026-05-25
+
+Patch on top of v4.5.1.
+
+### Fixed
+
+- **"Report an Issue" (and other URL-opening menu items) now open the
+  user's default browser on Windows 11 24H2.** The previous pattern
+  `Start-Process "$env:SystemRoot\explorer.exe" $url` stopped working
+  correctly on 24H2 — `explorer.exe` now ignores the system default
+  browser and either silently fails (from an elevated PowerShell host)
+  or forces Microsoft Edge regardless of the user's preference. Switched
+  every URL launch in `dune-server.ps1` to `Start-Process $url`, which
+  dispatches through the registered `https://` protocol handler and
+  honors the user's default browser. Affects: `report-issue`,
+  `setup-guide`, `dune-admin` (web UI), `open-file-browser`,
+  `open-director`.
+
+## [4.5.1] - 2026-05-25
+
+Patch on top of v4.5.0.
+
+### Fixed
+
+- **Separators (and any card) can now be reordered regardless of VM state.**
+  Previously, when the VM was off, the greyed-out command buttons stopped
+  receiving mouse events, which meant the user could not drag separators
+  across them — the only valid drop targets were other separators and the
+  few always-available commands. Now every card stays enabled for
+  drag/drop at all times; unavailable commands are visually muted
+  (foreground colors + reduced opacity) and the click handler short-circuits
+  with a friendly message if the command can't run yet (e.g.
+  `[Cannot run 'startup' - the VM is not running.]`).
+- Tooltips on unavailable commands now mention that drag-reorder still
+  works ("You can still drag this card to reorder the list.").
+
+## [4.5.0] - 2026-05-25
+
+Minor release: **draggable separators** in the command list, so the user can
+visually group commands without changing what each command does.
+
+### Added
+
+- **Four draggable separators** (`Separator 1` … `Separator 4`) at the end of
+  the command list. Each one renders as a slim horizontal divider chip with
+  grip dots on either side.
+- Separators **participate in the existing drag-reorder system**: drag any
+  separator up into the list to insert a visual break between commands, and
+  drag it back down (or onto another row) to move it. They share the same
+  drop-indicator behavior as regular command cards.
+- **Persistence**: separator positions are saved to
+  `%APPDATA%\DuneServer\button-order.json` alongside the command order, so
+  groupings survive restarts and updates.
+- **Right-click → "Reset separator positions"** on any separator sends all
+  four back to the bottom of the list without touching the user's command
+  order. The existing "Reset button order to default" entry is also still
+  available on every separator's context menu.
+
+### Notes
+
+- Separators are not clickable — they exist purely to organize the list.
+- The 3-column layout still distributes items left-to-right, so a separator
+  occupies one cell in whichever column it lands in. If you want a separator
+  to fully span all three columns, drop one near the same position in each
+  column (e.g., positions 6, 13, 20 in a 20-command catalog).
+
 ## [4.4.0] - 2026-05-24
 
 Minor release: brings the **external port-check** feature from the CLI menu into the WPF app's top bar.
@@ -760,7 +826,10 @@ entry. From here on, patch releases follow as `3.0.1`, `3.0.2`, etc.
 - Boot-time history stored at `<scriptDir>\.boot-times.json` (rolling
   window of last 20 entries per phase).
 
-[Unreleased]: https://github.com/coastal-ms/Simple-Dune-Server-Management-Tool/compare/v4.4.0...HEAD
+[Unreleased]: https://github.com/coastal-ms/Simple-Dune-Server-Management-Tool/compare/v4.5.2...HEAD
+[4.5.2]: https://github.com/coastal-ms/Simple-Dune-Server-Management-Tool/compare/v4.5.1...v4.5.2
+[4.5.1]: https://github.com/coastal-ms/Simple-Dune-Server-Management-Tool/compare/v4.5.0...v4.5.1
+[4.5.0]: https://github.com/coastal-ms/Simple-Dune-Server-Management-Tool/compare/v4.4.0...v4.5.0
 [4.4.0]: https://github.com/coastal-ms/Simple-Dune-Server-Management-Tool/compare/v4.3.3...v4.4.0
 [4.3.3]: https://github.com/coastal-ms/Simple-Dune-Server-Management-Tool/compare/v4.3.2...v4.3.3
 [4.3.2]: https://github.com/coastal-ms/Simple-Dune-Server-Management-Tool/compare/v4.3.1...v4.3.2
