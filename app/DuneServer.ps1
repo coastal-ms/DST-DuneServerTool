@@ -112,8 +112,8 @@ Add-Type -AssemblyName System.Xaml
 <Window xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         Title="Dune Server"
-        Height="900" Width="1840"
-        MinHeight="700" MinWidth="1540"
+        Height="900" Width="1640"
+        MinHeight="700" MinWidth="1340"
         WindowStartupLocation="CenterScreen"
         Background="#14110D">
   <Window.Resources>
@@ -165,7 +165,6 @@ Add-Type -AssemblyName System.Xaml
                 <Grid>
                   <Grid.ColumnDefinitions>
                     <ColumnDefinition Width="6"/>
-                    <ColumnDefinition Width="44"/>
                     <ColumnDefinition Width="*"/>
                     <ColumnDefinition Width="6"/>
                   </Grid.ColumnDefinitions>
@@ -181,36 +180,11 @@ Add-Type -AssemblyName System.Xaml
                     </Rectangle.Fill>
                   </Rectangle>
 
-                  <!-- Number badge area: etched-recess look with subtle bronze divider on right -->
-                  <Border x:Name="badge" Grid.Column="1" BorderThickness="0,0,1,0">
-                    <Border.BorderBrush>
-                      <LinearGradientBrush StartPoint="0,0" EndPoint="0,1">
-                        <GradientStop Color="Transparent" Offset="0"/>
-                        <GradientStop Color="#4A3520" Offset="0.5"/>
-                        <GradientStop Color="Transparent" Offset="1"/>
-                      </LinearGradientBrush>
-                    </Border.BorderBrush>
-                    <Border.Background>
-                      <LinearGradientBrush StartPoint="0,0" EndPoint="0,1">
-                        <GradientStop Color="#1F1813" Offset="0"/>
-                        <GradientStop Color="#0E0905" Offset="1"/>
-                      </LinearGradientBrush>
-                    </Border.Background>
-                    <TextBlock x:Name="badgeText"
-                               Text="{TemplateBinding Tag}"
-                               HorizontalAlignment="Center"
-                               VerticalAlignment="Center"
-                               Foreground="#E8B872"
-                               FontFamily="Consolas"
-                               FontWeight="Bold"
-                               FontSize="16"/>
-                  </Border>
-
                   <!-- Top hairline highlight across the whole button (sci-fi etched edge) -->
-                  <Rectangle x:Name="topLine" Grid.ColumnSpan="4" Height="1" VerticalAlignment="Top" Fill="#33C28840"/>
+                  <Rectangle x:Name="topLine" Grid.ColumnSpan="3" Height="1" VerticalAlignment="Top" Fill="#33C28840"/>
 
                   <!-- Right-edge status pip (small diamond) - subtle by default, glows on hover -->
-                  <Path x:Name="pip" Grid.Column="3" Width="6" Height="6"
+                  <Path x:Name="pip" Grid.Column="2" Width="6" Height="6"
                         Stretch="Fill"
                         VerticalAlignment="Center"
                         HorizontalAlignment="Center"
@@ -218,7 +192,7 @@ Add-Type -AssemblyName System.Xaml
                         Fill="#6A4818"
                         Opacity="0.7"/>
 
-                  <ContentPresenter Grid.Column="2" Margin="12,8,8,8"
+                  <ContentPresenter Grid.Column="1" Margin="14,10,10,10"
                                     HorizontalAlignment="Stretch"
                                     VerticalAlignment="Center"/>
                 </Grid>
@@ -260,7 +234,6 @@ Add-Type -AssemblyName System.Xaml
                   </Setter.Value>
                 </Setter>
                 <Setter TargetName="topLine" Property="Fill" Value="#CCFFD9A0"/>
-                <Setter TargetName="badgeText" Property="Foreground" Value="#FFE8B8"/>
                 <Setter TargetName="pip" Property="Fill" Value="#FFD9A0"/>
                 <Setter TargetName="pip" Property="Opacity" Value="1"/>
               </Trigger>
@@ -290,7 +263,6 @@ Add-Type -AssemblyName System.Xaml
                 </Setter>
                 <Setter TargetName="accent" Property="Fill" Value="#FFFFFF"/>
                 <Setter TargetName="topLine" Property="Fill" Value="#FFFFFF"/>
-                <Setter TargetName="badgeText" Property="Foreground" Value="#FFFFFF"/>
                 <Setter TargetName="pip" Property="Fill" Value="#FFFFFF"/>
                 <Setter TargetName="pip" Property="Opacity" Value="1"/>
               </Trigger>
@@ -311,12 +283,6 @@ Add-Type -AssemblyName System.Xaml
                     <SolidColorBrush Color="#3A2D1E"/>
                   </Setter.Value>
                 </Setter>
-                <Setter TargetName="badge" Property="Background">
-                  <Setter.Value>
-                    <SolidColorBrush Color="#0A0805"/>
-                  </Setter.Value>
-                </Setter>
-                <Setter TargetName="badgeText" Property="Foreground" Value="#4A3D2A"/>
                 <Setter TargetName="topLine" Property="Fill" Value="Transparent"/>
                 <Setter TargetName="pip" Property="Fill" Value="#2A2117"/>
                 <Setter TargetName="pip" Property="Opacity" Value="0.5"/>
@@ -476,24 +442,22 @@ Add-Type -AssemblyName System.Xaml
     <!-- ═══ Main split: buttons | output ═══ -->
     <Grid Grid.Row="1">
       <Grid.ColumnDefinitions>
-        <ColumnDefinition Width="980" MinWidth="800"/>
+        <ColumnDefinition Width="820" MinWidth="640"/>
         <ColumnDefinition Width="5"/>
         <ColumnDefinition Width="*"/>
       </Grid.ColumnDefinitions>
 
-      <!-- Left: buttons - section-based columns (Battlegroup split into 2 for balance), like the old bat menu -->
+      <!-- Left: 3-column drag-reorderable button grid (flat order, no sections) -->
       <ScrollViewer Grid.Column="0" VerticalScrollBarVisibility="Auto" Background="#14110D">
         <Grid Margin="6,4,6,12">
           <Grid.ColumnDefinitions>
             <ColumnDefinition Width="*"/>
             <ColumnDefinition Width="*"/>
             <ColumnDefinition Width="*"/>
-            <ColumnDefinition Width="*"/>
           </Grid.ColumnDefinitions>
-          <StackPanel x:Name="ButtonPanelVM"    Grid.Column="0" Margin="0,0,3,0"/>
-          <StackPanel x:Name="ButtonPanelBG"    Grid.Column="1" Margin="3,0,3,0"/>
-          <StackPanel x:Name="ButtonPanelBG2"   Grid.Column="2" Margin="3,0,3,0"/>
-          <StackPanel x:Name="ButtonPanelTools" Grid.Column="3" Margin="3,0,0,0"/>
+          <StackPanel x:Name="ButtonPanelCol1" Grid.Column="0" Margin="0,0,3,0"/>
+          <StackPanel x:Name="ButtonPanelCol2" Grid.Column="1" Margin="3,0,3,0"/>
+          <StackPanel x:Name="ButtonPanelCol3" Grid.Column="2" Margin="3,0,0,0"/>
         </Grid>
       </ScrollViewer>
 
@@ -563,10 +527,9 @@ $ui = @{
     StatusMeta     = $window.FindName('StatusMeta')
     BtnRefreshStat = $window.FindName('BtnRefreshStatus')
     StatusPane     = $window.FindName('StatusPane')
-    ButtonPanelVM    = $window.FindName('ButtonPanelVM')
-    ButtonPanelBG    = $window.FindName('ButtonPanelBG')
-    ButtonPanelBG2   = $window.FindName('ButtonPanelBG2')
-    ButtonPanelTools = $window.FindName('ButtonPanelTools')
+    ButtonPanelCol1  = $window.FindName('ButtonPanelCol1')
+    ButtonPanelCol2  = $window.FindName('ButtonPanelCol2')
+    ButtonPanelCol3  = $window.FindName('ButtonPanelCol3')
     OutputTitle    = $window.FindName('OutputTitle')
     BtnCopyOutput  = $window.FindName('BtnCopyOutput')
     BtnClearOutput = $window.FindName('BtnClearOutput')
@@ -994,6 +957,75 @@ function Refresh-StatusHeader {
 }
 
 # ────────────────────────────────────────────────────────────────────────────
+#  Button order persistence + drag-reorder support
+# ────────────────────────────────────────────────────────────────────────────
+
+$script:ButtonOrderPath = Join-Path $env:APPDATA 'DuneServer\button-order.json'
+$script:DragStartPoint  = $null
+
+function Get-ButtonOrderList {
+    if (-not (Test-Path $script:ButtonOrderPath)) { return @() }
+    try {
+        $raw = Get-Content -LiteralPath $script:ButtonOrderPath -Raw -ErrorAction Stop
+        $obj = $raw | ConvertFrom-Json -ErrorAction Stop
+        if ($obj.order) { return @($obj.order) }
+        return @()
+    } catch { return @() }
+}
+
+function Save-ButtonOrderList {
+    param([string[]]$Order)
+    try {
+        $dir = Split-Path -Parent $script:ButtonOrderPath
+        if (-not (Test-Path $dir)) { [void](New-Item -ItemType Directory -Path $dir -Force) }
+        (@{ order = $Order } | ConvertTo-Json -Depth 4) | Set-Content -LiteralPath $script:ButtonOrderPath -Encoding UTF8
+    } catch { }
+}
+
+function Get-OrderedCommands {
+    # Returns a flat array of $script:Commands in user-saved order.
+    # Commands not yet in saved order (e.g. newly added in an update) are appended
+    # at the end in their catalog-default position.
+    $savedNames = Get-ButtonOrderList
+    $byName = @{}
+    foreach ($c in $script:Commands) { $byName[$c.Name] = $c }
+    $result = New-Object System.Collections.Generic.List[object]
+    foreach ($n in $savedNames) {
+        if ($byName.ContainsKey($n)) {
+            $result.Add($byName[$n])
+            [void]$byName.Remove($n)
+        }
+    }
+    foreach ($c in $script:Commands) {
+        if ($byName.ContainsKey($c.Name)) { $result.Add($c) }
+    }
+    return $result.ToArray()
+}
+
+function Move-Command {
+    param([string]$SourceName, [string]$TargetName)
+    if ($SourceName -eq $TargetName) { return }
+    $ordered = @(Get-OrderedCommands)
+    $list = New-Object System.Collections.Generic.List[string]
+    foreach ($c in $ordered) { $list.Add($c.Name) }
+    $srcIdx = $list.IndexOf($SourceName)
+    $tgtIdx = $list.IndexOf($TargetName)
+    if ($srcIdx -lt 0 -or $tgtIdx -lt 0) { return }
+    $list.RemoveAt($srcIdx)
+    if ($srcIdx -lt $tgtIdx) { $tgtIdx-- }
+    $list.Insert($tgtIdx, $SourceName)
+    Save-ButtonOrderList -Order $list.ToArray()
+    Build-ButtonPanel
+}
+
+function Reset-ButtonOrder {
+    if (Test-Path $script:ButtonOrderPath) {
+        Remove-Item -LiteralPath $script:ButtonOrderPath -Force -ErrorAction SilentlyContinue
+    }
+    Build-ButtonPanel
+}
+
+# ────────────────────────────────────────────────────────────────────────────
 #  Button panel builder
 # ────────────────────────────────────────────────────────────────────────────
 
@@ -1004,47 +1036,30 @@ function Build-ButtonPanel {
     if ($Vm) { $script:LastVmKnown = $Vm }
     $vm = $script:LastVmKnown
 
-    $ui.ButtonPanelVM.Children.Clear()
-    $ui.ButtonPanelBG.Children.Clear()
-    $ui.ButtonPanelBG2.Children.Clear()
-    $ui.ButtonPanelTools.Children.Clear()
+    $ui.ButtonPanelCol1.Children.Clear()
+    $ui.ButtonPanelCol2.Children.Clear()
+    $ui.ButtonPanelCol3.Children.Clear()
 
     $spice       = [Windows.Media.BrushConverter]::new().ConvertFromString('#E8B872')
-    $bronzeDim   = [Windows.Media.BrushConverter]::new().ConvertFromString('#6A4818')
-    $textBright  = [Windows.Media.BrushConverter]::new().ConvertFromString('#F0E8D8')
-    $textMuted   = [Windows.Media.BrushConverter]::new().ConvertFromString('#998878')
-    $textDisable = [Windows.Media.BrushConverter]::new().ConvertFromString('#4A3D2A')
-
-    $addHeader = {
-        param($panel, $label)
-        $hdrWrap = New-Object Windows.Controls.Border
-        $hdrWrap.BorderThickness = New-Object Windows.Thickness 0,0,0,1
-        $hdrWrap.BorderBrush = $bronzeDim
-        $hdrWrap.Margin = New-Object Windows.Thickness 4,14,4,4
-        $hdrWrap.Padding = New-Object Windows.Thickness 2,0,2,3
-        $hdr = New-Object Windows.Controls.TextBlock
-        $hdr.Text  = $label
-        $hdr.Foreground = $spice
-        $hdr.FontWeight = 'Bold'
-        $hdr.FontSize = 11
-        $hdrWrap.Child = $hdr
-        [void]$panel.Children.Add($hdrWrap)
-    }
+    $textBright  = [Windows.Media.BrushConverter]::new().ConvertFromString('#F5EFE0')
+    $textMuted   = [Windows.Media.BrushConverter]::new().ConvertFromString('#B8A88F')
+    $textDisable = [Windows.Media.BrushConverter]::new().ConvertFromString('#5A4A35')
 
     $addButton = {
         param($panel, $cmd)
         $btn = New-Object Windows.Controls.Button
         $btn.Style = $ui.Window.FindResource('CmdButton')
-        $btn.Tag = $cmd.Key.ToUpper()
+        $btn.DataContext = $cmd
         $btn.HorizontalAlignment = 'Stretch'
         $btn.HorizontalContentAlignment = 'Left'
+        $btn.AllowDrop = $true
 
         $stack = New-Object Windows.Controls.StackPanel
         $stack.Orientation = 'Vertical'
         $stack.HorizontalAlignment = 'Left'
 
         $nameLine = New-Object Windows.Controls.TextBlock
-        $nameLine.FontSize = 12.5
+        $nameLine.FontSize = 15
         $nameLine.FontWeight = 'SemiBold'
         $nameLine.Foreground = $textBright
         $nameLine.TextAlignment = 'Left'
@@ -1053,7 +1068,7 @@ function Build-ButtonPanel {
         if ($cmd.Mode -eq 'Console') {
             $tag = New-Object Windows.Documents.Run
             $tag.Text = '   〔 CONSOLE 〕'
-            $tag.FontSize = 9.5
+            $tag.FontSize = 10
             $tag.FontWeight = 'Bold'
             $tag.Foreground = $spice
             $nameLine.Inlines.Add($tag)
@@ -1062,16 +1077,16 @@ function Build-ButtonPanel {
 
         $descLine = New-Object Windows.Controls.TextBlock
         $descLine.Text = $cmd.Desc
-        $descLine.FontSize = 10.5
+        $descLine.FontSize = 11.5
         $descLine.Foreground = $textMuted
         $descLine.TextWrapping = 'Wrap'
         $descLine.TextAlignment = 'Left'
         $descLine.HorizontalAlignment = 'Left'
-        $descLine.Margin = New-Object Windows.Thickness 0,1,0,0
+        $descLine.Margin = New-Object Windows.Thickness 0,3,0,0
         [void]$stack.Children.Add($descLine)
 
         $btn.Content = $stack
-        $btn.ToolTip = "$($cmd.Desc)`n`nMode: $($cmd.Mode)  -  Requires: $($cmd.Requires)"
+        $btn.ToolTip = "$($cmd.Desc)`n`nMode: $($cmd.Mode)  -  Requires: $($cmd.Requires)`n`n(Drag any button to reorder. Right-click for options.)"
 
         $available = Test-CmdAvailable -Cmd $cmd -Vm $vm
         $btn.IsEnabled = $available
@@ -1083,37 +1098,78 @@ function Build-ButtonPanel {
                 'running' { "VM not running" }
                 default   { '' }
             }
-            if ($reason) { $btn.ToolTip = "$($btn.ToolTip)`n`nUnavailable: $reason" }
+            if ($reason) { $btn.ToolTip = "$($cmd.Desc)`n`nUnavailable: $reason" }
         }
+
+        # Right-click "Reset order" menu (always available, even when button disabled)
+        $ctxMenu = New-Object Windows.Controls.ContextMenu
+        $miReset = New-Object Windows.Controls.MenuItem
+        $miReset.Header = 'Reset button order to default'
+        $miReset.Add_Click({ Reset-ButtonOrder })
+        [void]$ctxMenu.Items.Add($miReset)
+        $btn.ContextMenu = $ctxMenu
+
+        # Drag-reorder handlers. WPF's drag-detection threshold prevents
+        # a regular click from initiating a drag.
+        $btn.Add_PreviewMouseLeftButtonDown({
+            param($s, $e)
+            $script:DragStartPoint = $e.GetPosition($null)
+        })
+        $btn.Add_PreviewMouseMove({
+            param($s, $e)
+            if ($e.LeftButton -ne [System.Windows.Input.MouseButtonState]::Pressed) { return }
+            if (-not $script:DragStartPoint) { return }
+            $pos = $e.GetPosition($null)
+            $dx = [Math]::Abs($pos.X - $script:DragStartPoint.X)
+            $dy = [Math]::Abs($pos.Y - $script:DragStartPoint.Y)
+            if ($dx -lt [System.Windows.SystemParameters]::MinimumHorizontalDragDistance -and
+                $dy -lt [System.Windows.SystemParameters]::MinimumVerticalDragDistance) { return }
+            $c = $s.DataContext
+            if (-not $c) { return }
+            $script:DragStartPoint = $null
+            try {
+                [void][System.Windows.DragDrop]::DoDragDrop($s, $c.Name, [System.Windows.DragDropEffects]::Move)
+            } catch {}
+        })
+        $btn.Add_DragOver({
+            param($s, $e)
+            $srcName = $null
+            try { $srcName = $e.Data.GetData([System.Windows.DataFormats]::Text) } catch {}
+            $tgt = $s.DataContext
+            if ($srcName -and $tgt -and $srcName -ne $tgt.Name) {
+                $e.Effects = [System.Windows.DragDropEffects]::Move
+            } else {
+                $e.Effects = [System.Windows.DragDropEffects]::None
+            }
+            $e.Handled = $true
+        })
+        $btn.Add_Drop({
+            param($s, $e)
+            $srcName = $null
+            try { $srcName = $e.Data.GetData([System.Windows.DataFormats]::Text) } catch {}
+            $tgt = $s.DataContext
+            if ($srcName -and $tgt) { Move-Command -SourceName $srcName -TargetName $tgt.Name }
+            $e.Handled = $true
+        })
 
         $cmdCopy = $cmd
         $btn.Add_Click({ Invoke-DuneCmd -Cmd $cmdCopy }.GetNewClosure())
         [void]$panel.Children.Add($btn)
     }
 
-    # Pre-group commands by section into simple arrays
-    $vmCmds    = @($script:Commands | Where-Object { $_.Section -eq 'VM' })
-    $bgCmds    = @($script:Commands | Where-Object { $_.Section -eq 'Battlegroup' })
-    $toolsCmds = @($script:Commands | Where-Object { $_.Section -eq 'Tools' })
-
-    # Column 1: VM
-    & $addHeader $ui.ButtonPanelVM '◆  VM  COMMANDS'
-    foreach ($cmd in $vmCmds) { & $addButton $ui.ButtonPanelVM $cmd }
-
-    # Columns 2 & 3: Battlegroup, split in half
-    $bgHalf = [int][Math]::Ceiling($bgCmds.Count / 2.0)
-    & $addHeader $ui.ButtonPanelBG '◆  BATTLEGROUP  COMMANDS'
-    for ($i = 0; $i -lt $bgHalf -and $i -lt $bgCmds.Count; $i++) {
-        & $addButton $ui.ButtonPanelBG $bgCmds[$i]
+    # Flat ordered command list (saved order from %APPDATA%, fall back to catalog order).
+    # Distributed sequentially across 3 columns so adjacency in the list matches
+    # adjacency in the UI (makes drag-reorder feel natural).
+    $ordered = @(Get-OrderedCommands)
+    $n = $ordered.Count
+    if ($n -eq 0) { return }
+    $per = [int][Math]::Ceiling($n / 3.0)
+    $panels = @($ui.ButtonPanelCol1, $ui.ButtonPanelCol2, $ui.ButtonPanelCol3)
+    for ($i = 0; $i -lt $n; $i++) {
+        $col = [int][Math]::Floor($i / $per)
+        if ($col -gt 2) { $col = 2 }
+        & $addButton $panels[$col] $ordered[$i]
     }
-    & $addHeader $ui.ButtonPanelBG2 '◆  BATTLEGROUP  (CONT.)'
-    for ($i = $bgHalf; $i -lt $bgCmds.Count; $i++) {
-        & $addButton $ui.ButtonPanelBG2 $bgCmds[$i]
-    }
-
-    # Column 4: Tools
-    & $addHeader $ui.ButtonPanelTools '◆  TOOLS  COMMANDS'
-    foreach ($cmd in $toolsCmds) { & $addButton $ui.ButtonPanelTools $cmd }
 }
 
 # ────────────────────────────────────────────────────────────────────────────
@@ -1133,7 +1189,7 @@ $autoRefresh.Add_Tick({ Refresh-StatusHeader })
 
 # Initial paint
 Build-ButtonPanel -Vm $script:LastVmKnown
-$ui.FooterVersion.Text = "Dune Server v4.0.3"
+$ui.FooterVersion.Text = "Dune Server v4.0.4"
 
 # Kick off first status fetch on window load
 $ui.Window.Add_Loaded({
