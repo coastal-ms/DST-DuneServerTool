@@ -7,6 +7,37 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [4.0.5] - 2026-05-24
+
+Patch release: drag-and-drop visual feedback and human-friendly button
+labels.
+
+### Added
+
+- **Drag-source ghost effect**: the button you pick up drops to 35%
+  opacity for the duration of the drag, so you can clearly see which
+  card you're moving.
+- **Drop-target halo + scale**: when you drag over a valid target, that
+  button lights up with a bright Eyes-of-Ibad cyan glow and scales up
+  6% to make the destination unambiguous.
+
+### Changed
+
+- **Button labels now render in normal English Title Case** instead of
+  the raw kebab-case command names. A new `Format-CmdLabel` helper
+  expands hyphenated command names and preserves standard acronyms in
+  uppercase (`VM`, `SSH`, `BG`, `URL`, `API`, `JSON`, etc.). Examples:
+  - `initial-setup` → `Initial Setup`
+  - `start-vm` → `Start VM`
+  - `rotate-ssh-key` → `Rotate SSH Key`
+  - `enable-experimental-swap` → `Enable Experimental Swap`
+  - `dune-admin` → `Dune Admin`
+  - `report-issue` → `Report an Issue`
+  - `web` → `Web Portal`
+  - The raw command name is still passed to `dune-server.ps1 -Cmd` and
+    appears in tooltips / saved button order JSON; only the visible
+    label changes.
+
 ## [4.0.4] - 2026-05-24
 
 Patch release: simplified flat menu layout with drag-to-reorder, larger
@@ -507,7 +538,8 @@ entry. From here on, patch releases follow as `3.0.1`, `3.0.2`, etc.
 - Boot-time history stored at `<scriptDir>\.boot-times.json` (rolling
   window of last 20 entries per phase).
 
-[Unreleased]: https://github.com/coastal-ms/Simple-Dune-Server-Management-Tool/compare/v4.0.4...HEAD
+[Unreleased]: https://github.com/coastal-ms/Simple-Dune-Server-Management-Tool/compare/v4.0.5...HEAD
+[4.0.5]: https://github.com/coastal-ms/Simple-Dune-Server-Management-Tool/compare/v4.0.4...v4.0.5
 [4.0.4]: https://github.com/coastal-ms/Simple-Dune-Server-Management-Tool/compare/v4.0.3...v4.0.4
 [4.0.3]: https://github.com/coastal-ms/Simple-Dune-Server-Management-Tool/compare/v4.0.2...v4.0.3
 [4.0.2]: https://github.com/coastal-ms/Simple-Dune-Server-Management-Tool/compare/v4.0.1...v4.0.2
