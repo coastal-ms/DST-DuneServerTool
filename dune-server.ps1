@@ -13,7 +13,7 @@ param(
 # Wraps the original battlegroup.ps1 menu and adds extra tools
 # ============================================================
 
-$script:ToolVersion = "4.0.6"
+$script:ToolVersion = "4.0.7"
 
 # ============================================================
 #  CRASH / EXIT CLEANUP
@@ -493,7 +493,7 @@ $vmName        = 'dune-awakening'
 $sshKey        = $cfg.SshKey
 $sshUser       = 'dune'
 $duneAdminExe  = $cfg.DuneAdminExe
-$duneAdminWeb  = 'https://dune-admin.layout.tools/'
+$duneAdminWeb  = 'https://dune-admin.layout.tools/#/players'
 $bgSetupPath   = "$($cfg.SteamPath)\battlegroup-management"
 $windowsUser   = $cfg.WindowsUser
 # Default existing installs (no PortCheckMode in config) to built-in.
