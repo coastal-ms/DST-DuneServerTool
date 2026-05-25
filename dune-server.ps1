@@ -3,8 +3,8 @@
 [CmdletBinding()]
 param(
     # When set, skip the interactive menu and dispatch directly to the named
-    # command. Used by the web UI (web/Start-DuneWeb.ps1) to invoke commands
-    # in a fresh console window per click.
+    # command. Used by the desktop app (app\DuneServer.ps1) to invoke commands
+    # inside its embedded terminal pane.
     [string]$Cmd
 )
 
@@ -13,7 +13,7 @@ param(
 # Wraps the original battlegroup.ps1 menu and adds extra tools
 # ============================================================
 
-$script:ToolVersion = "4.5.2"
+$script:ToolVersion = "5.0.0"
 
 # ============================================================
 #  CRASH / EXIT CLEANUP
@@ -993,9 +993,9 @@ while ($true) {
     foreach ($e in $entries) { $entryByKey[$e.Key.ToLower()] = $e }
 
     if ($Cmd) {
-        # Non-interactive dispatch (called by web UI). Skip menu render +
-        # interactive selection; look up the entry by command name and fall
-        # through to the handler block.
+        # Non-interactive dispatch (called by the desktop app's terminal pane).
+        # Skip menu render + interactive selection; look up the entry by
+        # command name and fall through to the handler block.
         $entry = $entries | Where-Object { $_.Name -eq $Cmd } | Select-Object -First 1
         if (-not $entry) {
             Write-Error "Unknown command: $Cmd"

@@ -1,0 +1,144 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8" />
+  <title>Dune Terminal</title>
+  <link rel="stylesheet" href="xterm.css" />
+  <style>
+    html, body {
+      margin: 0;
+      padding: 0;
+      height: 100%;
+      width: 100%;
+      overflow: hidden;
+      background: #0a0e14;
+      font-family: Consolas, 'Cascadia Mono', 'Courier New', monospace;
+    }
+    #terminal {
+      position: absolute;
+      inset: 0;
+      padding: 6px;
+      box-sizing: border-box;
+    }
+    /* Match xterm.js viewport padding with body */
+    .xterm .xterm-viewport { background-color: transparent !important; }
+  </style>
+</head>
+<body>
+  <div id="terminal"></div>
+
+  <script src="xterm.js"></script>
+  <script src="xterm-addon-fit.js"></script>
+  <script>
+    // ============================================================
+    //  Dune Server Tool - embedded terminal (xterm.js host)
+    //
+    //  Communicates with the WPF host via:
+    //    in:  window.chrome.webview.addEventListener('message', ...)
+    //    out: window.chrome.webview.postMessage({...})
+    //
+    //  Message shapes:
+    //    PS -> JS:  { kind:'data',   text:'...' }    // write to terminal
+    //               { kind:'clear' }                  // clear screen
+    //               { kind:'theme',  theme:{...} }    // restyle
+    //               { kind:'reset' }                  // reset state
+    //
+    //    JS -> PS:  { kind:'input',  text:'...' }    // user typed
+    //               { kind:'resize', cols:N, rows:N } // viewport size changed
+    //               { kind:'ready' }                  // terminal initialized
+    // ============================================================
+
+    const term = new Terminal({
+      cursorBlink: true,
+      cursorStyle: 'block',
+      fontFamily: "Consolas, 'Cascadia Mono', 'Courier New', monospace",
+      fontSize: 13,
+      lineHeight: 1.0,
+      scrollback: 5000,
+      convertEol: false,    // PTY already emits CRLF
+      allowProposedApi: true,
+      theme: {
+        // Dark palette tuned to match the WPF app's status pane
+        background: '#0a0e14',
+        foreground: '#e6e1cf',
+        cursor:     '#ffcc66',
+        selectionBackground: '#3a4150',
+        black:   '#0a0e14', brightBlack:   '#5c6773',
+        red:     '#f07178', brightRed:     '#f07178',
+        green:   '#c2d94c', brightGreen:   '#c2d94c',
+        yellow:  '#ffb454', brightYellow:  '#ffcc66',
+        blue:    '#59c2ff', brightBlue:    '#59c2ff',
+        magenta: '#d4bfff', brightMagenta: '#d4bfff',
+        cyan:    '#95e6cb', brightCyan:    '#95e6cb',
+        white:   '#bfbdb6', brightWhite:   '#ffffff'
+      }
+    });
+
+    const fitAddon = new FitAddon.FitAddon();
+    term.loadAddon(fitAddon);
+
+    term.open(document.getElementById('terminal'));
+
+    function postToHost(msg) {
+      if (window.chrome && window.chrome.webview) {
+        window.chrome.webview.postMessage(msg);
+      }
+    }
+
+    // User typed in the terminal -> forward to PS host
+    term.onData(data => postToHost({ kind: 'input', text: data }));
+
+    // Fit and notify host of new dimensions
+    function refit() {
+      try {
+        fitAddon.fit();
+        postToHost({ kind: 'resize', cols: term.cols, rows: term.rows });
+      } catch (e) {
+        // Container may not have layout yet on first load
+      }
+    }
+
+    // Receive messages from PS host
+    if (window.chrome && window.chrome.webview) {
+      window.chrome.webview.addEventListener('message', evt => {
+        const m = evt.data;
+        if (!m || !m.kind) return;
+        switch (m.kind) {
+          case 'data':
+            term.write(m.text);
+            break;
+          case 'clear':
+            term.clear();
+            break;
+          case 'reset':
+            term.reset();
+            break;
+          case 'theme':
+            if (m.theme) term.options.theme = m.theme;
+            break;
+          case 'copy-request': {
+            // PS asked us for the current selection. Send it back so PS
+            // can put it on the OS clipboard.
+            const sel = term.getSelection();
+            postToHost({ kind: 'clipboard', text: sel || '' });
+            break;
+          }
+        }
+      });
+    }
+
+    // Initial fit + tell PS we're alive
+    requestAnimationFrame(() => {
+      refit();
+      postToHost({ kind: 'ready' });
+    });
+
+    // Refit when window resizes (PS host posts a resize message OR DOM resize fires)
+    let resizeTimer = null;
+    new ResizeObserver(() => {
+      if (resizeTimer) clearTimeout(resizeTimer);
+      resizeTimer = setTimeout(refit, 60);
+    }).observe(document.getElementById('terminal'));
+  </script>
+</body>
+</html>

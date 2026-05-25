@@ -7,6 +7,78 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [5.0.0] - 2026-05-26
+
+Major release: **embedded terminal pane**. The right pane is now a real
+ConPTY-backed xterm.js terminal. Every command — including interactive ones
+that previously required a popup PowerShell window — runs inside the app's
+own window. The two-mode (InApp / Console) dispatch split is gone. The
+legacy localhost web portal that shipped alongside the CLI is also gone now
+that the desktop app covers every workflow.
+
+### Added
+
+- **Embedded terminal renderer** in the right pane, backed by a real
+  ConPTY. Implemented with:
+    - **Pty.Net** (0.1.16-pre) — managed wrapper over the Windows
+      pseudoterminal API; what the VS Code PowerShell extension uses
+    - **WebView2** + **xterm.js** (5.5.0) + **xterm-addon-fit** (0.10.0) —
+      the same renderer stack VS Code uses for its integrated terminal
+  All three are bundled with the installer (no internet at install time).
+- **JS ↔ PowerShell bridge** over `CoreWebView2.WebMessageReceived` /
+  `PostWebMessageAsJson`. Carries input keystrokes, viewport resizes,
+  and clipboard-copy round-trips between xterm.js and the PowerShell host.
+- **WebView2 runtime check** at startup. If the Evergreen runtime is
+  missing (rare on Win11, possible on minimal Win10 / Windows Server),
+  a friendly prompt links the user to the official Microsoft installer.
+
+### Changed
+
+- **Every command now runs inside the embedded terminal**, including
+  commands that previously opened a separate PowerShell window:
+  `startup`, `shutdown`, `reboot`, `rotate-ssh-key`, `change-password`,
+  `start`, `restart`, `stop`, `update`, `edit`, `edit-advanced`,
+  `enable-experimental-swap`, `backup`, `import`, `logs-export`,
+  `operator-logs-export`, `shell-vm`, `shell-pod`, `ssh`,
+  `initial-setup`. Interactive prompts, SSH sessions, TUI editors,
+  spinners, and ANSI cursor moves all work — the PTY gives them a
+  real TTY.
+- **Output rendering matches a real terminal.** ANSI colors are now
+  honored (the old InApp pane was stripping them); cursor-move
+  sequences work; line wrapping respects the actual viewport.
+- **App docstring** updated to reflect the new single-mode dispatch.
+- **App and CLI READMEs** updated; install paths reduced from three
+  (desktop app / .bat / web portal) to two.
+
+### Removed
+
+- **Legacy web portal** — the entire `web/` directory (`Start-DuneWeb.ps1`,
+  `public/index.html`, `public/app.js`, `public/styles.css`, `web/README.md`)
+  is gone. The desktop app covers every workflow the portal did, so
+  maintaining two parallel UIs is no longer worth it. **Breaking change**
+  for the (likely zero) users still launching `Start-DuneWeb.ps1`
+  directly. The `Mode='Console'` / `Mode='InApp'` distinction in the
+  command catalog is also functionally gone (the field is still tolerated
+  for backward compat but ignored at dispatch time).
+- **`Invoke-Command-InApp`** and **`Invoke-Command-Console`** are gone,
+  replaced by a single **`Invoke-Command-Terminal`** that spawns pwsh
+  under a PTY and pipes its byte stream into xterm.js.
+- **Mouse-down swallow handler** on the output pane (only needed because
+  the old `TextBox`-based pane needed to look non-interactive). The
+  terminal handles its own mouse routing.
+
+### Notes for developers
+
+- The full dependency bundle adds ~2.7 MB to the installer (Pty.Net +
+  WebView2 managed/native + xterm.js assets).
+- ps2exe compiles `DuneServer.exe` as PowerShell 5.1 Desktop. Both DLL
+  sets are netstandard2.0 / net46 and load cleanly there. `BackendOptions::ConPty`
+  is passed explicitly when spawning PTYs.
+- Pty.Net event handlers cannot use `$script:*` from their callbacks
+  (the scope is the event handler's, not the outer script's). Use the
+  existing `Register-ObjectEvent -MessageData` + `ConcurrentQueue` +
+  `DispatcherTimer` drain pattern (see `Start-PtyDrainTimer`).
+
 ## [4.5.2] - 2026-05-25
 
 Patch on top of v4.5.1.

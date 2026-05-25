@@ -13,15 +13,11 @@
     dune-server.ps1 command set in a single window:
       - Sticky Battlegroup Status panel at top (auto-refreshes every 30s)
       - Left panel: every menu item from the CLI, grouped by section
-      - Right panel: live-streaming output from whichever command was clicked
+      - Right panel: embedded xterm.js terminal driven by a real ConPTY
+        (via Pty.Net + WebView2). Every command — including interactive
+        ones (ssh, shell-vm, shell-pod, edit, change-password, Y/N prompts) —
+        runs inside this terminal. No popup PowerShell windows.
       - Bottom status bar: current operation, VM state
-
-    Command dispatch uses two modes per command:
-      - InApp:   stdout/stderr captured from a hidden child pwsh process
-                 and rendered into the output pane (no console window)
-      - Console: spawn a visible elevated pwsh window (matches the existing
-                 web portal behavior; required for commands that prompt for
-                 input via Read-Host or use 'ssh -t' for an interactive TTY)
 
     Runs elevated (Hyper-V cmdlets require admin). The bundled installer
     ships this script compiled to DuneServer.exe via ps2exe with the
@@ -36,7 +32,7 @@ param()
 # check (Check-ForUpdates) and the "Installed: x.y.z" header label. Must be
 # bumped in lock-step with the other 3 version constants (dune-server.ps1,
 # Build-Exe.ps1, installer .iss).
-$script:ToolVersion = "4.5.2"
+$script:ToolVersion = "5.0.0"
 
 # ────────────────────────────────────────────────────────────────────────────
 #  Prerequisite check: PowerShell 7 (pwsh.exe)
@@ -106,6 +102,85 @@ try { Import-Module Hyper-V -ErrorAction Stop } catch {
 }
 
 # ────────────────────────────────────────────────────────────────────────────
+#  WebView2 + Pty.Net (embedded terminal)
+# ────────────────────────────────────────────────────────────────────────────
+#
+#  The right pane is a WebView2 control hosting xterm.js, fed by a real PTY
+#  via Pty.Net (a managed wrapper around ConPTY). Both assemblies + their
+#  native loader are bundled under .\lib\. Web assets (xterm.js / .css / fit
+#  addon / terminal.html) live under .\web\.
+#
+#  ps2exe runs in PowerShell 5.1 Desktop. Both DLL sets are loadable there.
+
+$script:LibDir = Join-Path $script:AppDir 'lib'
+$script:WebDir = Join-Path $script:AppDir 'web'
+$script:WebView2Dir = Join-Path $script:LibDir 'WebView2'
+$script:PtyNetDir   = Join-Path $script:LibDir 'Pty.Net'
+
+# WebView2.Core.dll P/Invokes into WebView2Loader.dll. Windows DLL search
+# normally won't find it adjacent to the managed DLL — point SetDllDirectory
+# at lib\WebView2\ so the loader is discoverable. (We ship WebView2Loader.dll
+# at the WebView2 dir root in addition to the runtimes\ tree for clarity.)
+if (-not ('DuneServer.Native' -as [type])) {
+    Add-Type -TypeDefinition @'
+using System.Runtime.InteropServices;
+namespace DuneServer {
+    public static class Native {
+        [DllImport("kernel32.dll", SetLastError=true, CharSet=CharSet.Unicode)]
+        public static extern bool SetDllDirectory(string lpPathName);
+    }
+}
+'@
+}
+[DuneServer.Native]::SetDllDirectory($script:WebView2Dir) | Out-Null
+
+# Load WebView2 (managed) and Pty.Net. Both are netstandard2.0 / net46 -
+# they load cleanly in PS 5.1 Desktop.
+try {
+    Add-Type -Path (Join-Path $script:WebView2Dir 'Microsoft.Web.WebView2.Core.dll')
+    Add-Type -Path (Join-Path $script:WebView2Dir 'Microsoft.Web.WebView2.Wpf.dll')
+    Add-Type -Path (Join-Path $script:PtyNetDir   'Pty.Net.dll')
+} catch {
+    Add-Type -AssemblyName System.Windows.Forms
+    [System.Windows.Forms.MessageBox]::Show(
+        "Dune Server failed to load its embedded-terminal dependencies.`r`n`r`n" +
+        "Missing or unreadable files under: $script:LibDir`r`n`r`n" +
+        "Details: $($_.Exception.Message)",
+        'Dune Server - startup error', 'OK', 'Error') | Out-Null
+    exit 1
+}
+
+# WebView2 runtime check. The Evergreen runtime is shipped with current
+# Edge/Win11 but not guaranteed on bare Win10. If missing, prompt to install
+# the Evergreen Bootstrapper and exit.
+function Test-WebView2Runtime {
+    $paths = @(
+        'HKLM:\SOFTWARE\WOW6432Node\Microsoft\EdgeUpdate\Clients\{F3017226-FE2A-4295-8BDF-00C3A9A7E4C5}',
+        'HKLM:\SOFTWARE\Microsoft\EdgeUpdate\Clients\{F3017226-FE2A-4295-8BDF-00C3A9A7E4C5}',
+        'HKCU:\SOFTWARE\Microsoft\EdgeUpdate\Clients\{F3017226-FE2A-4295-8BDF-00C3A9A7E4C5}'
+    )
+    foreach ($p in $paths) {
+        try {
+            $v = (Get-ItemProperty -Path $p -Name 'pv' -ErrorAction Stop).pv
+            if ($v -and $v -ne '0.0.0.0') { return $v }
+        } catch {}
+    }
+    return $null
+}
+
+if (-not (Test-WebView2Runtime)) {
+    Add-Type -AssemblyName System.Windows.Forms
+    $msg  = "Dune Server requires the Microsoft Edge WebView2 Runtime, which doesn't appear to be installed.`r`n`r`n"
+    $msg += "It's a free Microsoft component — Edge installs it automatically, but minimal/server Windows builds may be missing it.`r`n`r`n"
+    $msg += "Click OK to open the WebView2 Evergreen Bootstrapper download page, install it, then re-launch Dune Server."
+    $r = [System.Windows.Forms.MessageBox]::Show($msg, 'Dune Server - WebView2 Runtime required', 'OKCancel', 'Warning')
+    if ($r -eq 'OK') {
+        Start-Process 'https://go.microsoft.com/fwlink/p/?LinkId=2124703'
+    }
+    exit 1
+}
+
+# ────────────────────────────────────────────────────────────────────────────
 #  WPF / XAML
 # ────────────────────────────────────────────────────────────────────────────
 
@@ -117,6 +192,7 @@ Add-Type -AssemblyName System.Xaml
 [xml]$xaml = @'
 <Window xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:wv2="clr-namespace:Microsoft.Web.WebView2.Wpf;assembly=Microsoft.Web.WebView2.Wpf"
         Title="Dune Server"
         Height="900" Width="1640"
         MinHeight="700" MinWidth="1340"
@@ -515,16 +591,12 @@ Add-Type -AssemblyName System.Xaml
               <ColumnDefinition Width="Auto"/>
             </Grid.ColumnDefinitions>
             <TextBlock x:Name="OutputTitle" Text="Output" Foreground="#E0B341" FontWeight="Bold" FontSize="13" VerticalAlignment="Center"/>
-            <Button x:Name="BtnCopyOutput" Grid.Column="1" Content="Copy" Style="{StaticResource UtilButton}" Padding="10,4" Margin="4,0"/>
-            <Button x:Name="BtnClearOutput" Grid.Column="2" Content="Clear" Style="{StaticResource UtilButton}" Padding="10,4" Margin="4,0"/>
-          </Grid>
-        </Border>
+                <Button x:Name="BtnCopyOutput" Grid.Column="1" Content="Copy" Style="{StaticResource UtilButton}" Padding="10,4" Margin="4,0"/>
+                <Button x:Name="BtnClearOutput" Grid.Column="2" Content="Clear" Style="{StaticResource UtilButton}" Padding="10,4" Margin="4,0"/>
+              </Grid>
+            </Border>
 
-        <TextBox x:Name="OutputPane" Grid.Row="1"
-                 Style="{StaticResource MonoText}"
-                 BorderThickness="0"
-                 Focusable="False" IsTabStop="False" Cursor="Arrow"
-                 Text="Click a command on the left to run it.&#x0a;&#x0a;Commands marked [console] open in a separate elevated console window (they need interactive input or a TTY). All other commands stream their output here.&#x0a;"/>
+            <wv2:WebView2 x:Name="Terminal" Grid.Row="1"/>
       </Grid>
     </Grid>
 
@@ -575,25 +647,54 @@ $ui = @{
     OutputTitle    = $window.FindName('OutputTitle')
     BtnCopyOutput  = $window.FindName('BtnCopyOutput')
     BtnClearOutput = $window.FindName('BtnClearOutput')
-    OutputPane     = $window.FindName('OutputPane')
+    Terminal       = $window.FindName('Terminal')
     FooterStatus   = $window.FindName('FooterStatus')
     FooterVersion  = $window.FindName('FooterVersion')
 }
 
 # ────────────────────────────────────────────────────────────────────────────
-#  Output pane helpers (thread-safe via Dispatcher)
+#  Terminal pane helpers (WebView2 + xterm.js bridge)
 # ────────────────────────────────────────────────────────────────────────────
+#
+#  The right pane is a WebView2 hosting web/terminal.html, which runs xterm.js.
+#  We talk to it via the standard WebView2 message channel:
+#      PS -> JS : CoreWebView2.PostWebMessageAsJson(jsonString)
+#      JS -> PS : WebMessageReceived event (fires on UI thread)
+#
+#  Message shapes are documented in web/terminal.html.
 
-function Write-Output-Line {
-    param([string]$Line)
-    $ui.Window.Dispatcher.Invoke([action]{
-        $ui.OutputPane.AppendText($Line + [Environment]::NewLine)
-        $ui.OutputPane.ScrollToEnd()
-    })
+$script:TerminalReady = $false        # set when terminal.html sends {kind:'ready'}
+$script:PendingTermWrites = New-Object System.Collections.Generic.List[string]
+$script:LastTermCols = 100
+$script:LastTermRows = 30
+
+function Send-TerminalMessage {
+    param([hashtable]$Payload)
+    if (-not $script:TerminalReady) {
+        # Buffer until xterm.js signals it's ready
+        $script:PendingTermWrites.Add((ConvertTo-Json $Payload -Compress -Depth 4)) | Out-Null
+        return
+    }
+    $json = ConvertTo-Json $Payload -Compress -Depth 4
+    try {
+        $ui.Window.Dispatcher.Invoke([action]{
+            $ui.Terminal.CoreWebView2.PostWebMessageAsJson($json)
+        })
+    } catch {}
 }
 
-function Clear-Output {
-    $ui.Window.Dispatcher.Invoke([action]{ $ui.OutputPane.Clear() })
+function Write-Terminal {
+    param([Parameter(ValueFromPipeline=$true)][string]$Text)
+    process { Send-TerminalMessage @{ kind='data'; text=$Text } }
+}
+
+function Write-TerminalLine {
+    param([string]$Line = '')
+    Send-TerminalMessage @{ kind='data'; text=($Line + "`r`n") }
+}
+
+function Clear-Terminal {
+    Send-TerminalMessage @{ kind='clear' }
 }
 
 function Set-Footer {
@@ -607,7 +708,7 @@ function Set-OutputTitle {
 }
 
 # ────────────────────────────────────────────────────────────────────────────
-#  VM / config probes (mirror web portal's Read-Config, Get-VmStatus)
+#  VM / config probes (mirror dune-server.ps1 Read-Config / Get-VmStatus)
 # ────────────────────────────────────────────────────────────────────────────
 
 function Read-Config {
@@ -641,7 +742,7 @@ function Get-VmStatus {
     }
 }
 
-# Snapshot of battlegroup status via direct SSH (same logic as web portal).
+# Snapshot of battlegroup status via direct SSH (same logic as the CLI's `status`).
 # Returns a hashtable with .available, .output (text), .reason (when not available).
 function Get-BattlegroupStatusSnapshot {
     $vm = Get-VmStatus
@@ -695,7 +796,6 @@ function Get-BattlegroupStatusSnapshot {
 $script:Commands = @(
     # ─── VM commands ───
     @{ Section='VM';          Key='a'; Name='initial-setup';        Mode='Console'; Requires='none';    Desc='Run the initial VM setup wizard' }
-    @{ Section='VM';          Key='b'; Name='web';                  Mode='Console'; Requires='none';    Desc='Open the legacy web UI in your browser' }
     @{ Section='VM';          Key='c'; Name='start-vm';             Mode='InApp';   Requires='exists';  Desc='Power on the VM only (no battlegroup)' }
     @{ Section='VM';          Key='d'; Name='startup';              Mode='Console'; Requires='exists';  Desc='Power on VM, start battlegroup, wait for maps Ready' }
     @{ Section='VM';          Key='e'; Name='shutdown';             Mode='Console'; Requires='running'; Desc='Stop battlegroup, power off VM' }
@@ -756,164 +856,138 @@ function Test-CmdAvailable {
 }
 
 # ────────────────────────────────────────────────────────────────────────────
-#  Command dispatch
+#  Command dispatch — single mode: PTY into the embedded xterm.js terminal
 # ────────────────────────────────────────────────────────────────────────────
+#
+#  v5.0 collapsed the old InApp/Console split into one path. Every command
+#  spawns pwsh under a real ConPTY (via Pty.Net), and the PTY's byte stream
+#  is forwarded to xterm.js in the right pane. Interactive prompts, ssh,
+#  TUI editors, ANSI cursor moves — all just work because there's a real
+#  TTY between pwsh and the terminal renderer.
 
-$script:CurrentProc = $null   # Process for the active InApp command (so we can prevent overlap)
-$script:ProcEventId = 0       # Counter so each invocation gets unique SourceIdentifiers
+$script:CurrentPty       = $null   # Active Pty.Net.IPtyConnection (single command at a time)
+$script:CurrentPtyName   = $null   # Display name of the running command (for guard messages)
+$script:PtyDataHandler   = $null   # Strong reference to the PtyData delegate (so GC doesn't reap it)
+$script:PtyExitHandler   = $null   # Strong reference to the PtyDisconnected delegate
+$script:PtyDataQueue     = [System.Collections.Concurrent.ConcurrentQueue[hashtable]]::new()
+$script:PtyDrainTimer    = $null   # DispatcherTimer that drains $PtyDataQueue on UI thread
 
-function Invoke-Command-InApp {
+function Start-PtyDrainTimer {
+    if ($script:PtyDrainTimer) { return }
+    $script:PtyDrainTimer = New-Object System.Windows.Threading.DispatcherTimer
+    $script:PtyDrainTimer.Interval = [TimeSpan]::FromMilliseconds(40)
+    $script:PtyDrainTimer.Add_Tick({
+        $item = $null
+        while ($script:PtyDataQueue.TryDequeue([ref]$item)) {
+            switch ($item.kind) {
+                'data' {
+                    Send-TerminalMessage @{ kind='data'; text=$item.text }
+                }
+                'exit' {
+                    $banner =
+                        "`r`n`e[90m──────────────────────────────────────────────`e[0m`r`n" +
+                        "`e[32m[process ended]`e[0m`r`n"
+                    Send-TerminalMessage @{ kind='data'; text=$banner }
+                    Set-Footer "Done: $script:CurrentPtyName"
+
+                    # Drop strong refs so the delegates can be GC'd along with the connection.
+                    $script:CurrentPty       = $null
+                    $script:CurrentPtyName   = $null
+                    $script:PtyDataHandler   = $null
+                    $script:PtyExitHandler   = $null
+                }
+            }
+        }
+    })
+    $script:PtyDrainTimer.Start()
+}
+
+function Invoke-Command-Terminal {
     param([hashtable]$Cmd)
 
-    if ($script:CurrentProc -and -not $script:CurrentProc.HasExited) {
-        Write-Output-Line ""
-        Write-Output-Line "[A command is already running. Wait for it to finish, or close the app to cancel.]"
+    if ($script:CurrentPty) {
+        Send-TerminalMessage @{ kind='data'; text="`r`n`e[33m[A command is already running ($script:CurrentPtyName). Wait for it to finish.]`e[0m`r`n" }
         return
     }
 
     Set-OutputTitle "Output  -  $($Cmd.Name)"
     Set-Footer "Running: $($Cmd.Name)..."
-    Write-Output-Line ""
-    Write-Output-Line "════════════════════════════════════════════════════════════════"
-    Write-Output-Line ("  > {0}    [in-app, {1}]" -f $Cmd.Name, (Get-Date).ToString('HH:mm:ss'))
-    Write-Output-Line "════════════════════════════════════════════════════════════════"
 
-    $psi = New-Object System.Diagnostics.ProcessStartInfo
-    $psi.FileName               = $script:PwshExe
-    $psi.Arguments              = "-NoProfile -ExecutionPolicy Bypass -File `"$($script:MainScript)`" -Cmd $($Cmd.Name)"
-    $psi.WorkingDirectory       = $script:AppDir
-    $psi.UseShellExecute        = $false
-    $psi.RedirectStandardOutput = $true
-    $psi.RedirectStandardError  = $true
-    $psi.CreateNoWindow         = $true
-    $psi.StandardOutputEncoding = [System.Text.Encoding]::UTF8
-    $psi.StandardErrorEncoding  = [System.Text.Encoding]::UTF8
+    $headerBanner =
+        "`r`n`e[90m══════════════════════════════════════════════`e[0m`r`n" +
+        ("  `e[33m> {0}`e[0m    `e[90m[{1}]`e[0m`r`n" -f $Cmd.Name, (Get-Date).ToString('HH:mm:ss')) +
+        "`e[90m══════════════════════════════════════════════`e[0m`r`n"
+    Send-TerminalMessage @{ kind='data'; text=$headerBanner }
 
-    $proc = New-Object System.Diagnostics.Process
-    $proc.StartInfo            = $psi
-    $proc.EnableRaisingEvents  = $true
+    # Build the command line. Pty.Net.PtyProvider.Spawn takes one combined
+    # string (CreateProcess-style) — quote the exe so spaces in the install
+    # path don't break parsing, but pass the -File argument's path bare
+    # because dune-server.ps1 lives in {app}\ which we control.
+    $cmdLine = '"{0}" -NoProfile -ExecutionPolicy Bypass -File "{1}" -Cmd {2}' -f `
+        $script:PwshExe, $script:MainScript, $Cmd.Name
 
-    # IMPORTANT: We CANNOT use $proc.add_OutputDataReceived({...}) here.
-    # In ps2exe + WPF, those .add_* callbacks fire on threadpool threads that
-    # have no PowerShell runspace TLS context. The first stdout line crashes
-    # the app with:
-    #     System.Management.Automation.PSInvalidOperationException
-    #     at System.Management.Automation.ScriptBlock.GetContextFromTLS()
-    #     at System.Diagnostics.Process.OutputReadNotifyUser(...)
-    #
-    # Workaround: use a thread-safe queue + Register-ObjectEvent (handler
-    # runs in the engine event pump, which DOES have a runspace) to enqueue
-    # lines, then drain the queue from a DispatcherTimer on the UI thread.
-    $queue = [System.Collections.Concurrent.ConcurrentQueue[hashtable]]::new()
-    $script:ProcEventId++
-    $sidOut  = "DuneOut_$($script:ProcEventId)"
-    $sidErr  = "DuneErr_$($script:ProcEventId)"
-    $sidExit = "DuneExit_$($script:ProcEventId)"
-
-    $null = Register-ObjectEvent -InputObject $proc -EventName OutputDataReceived `
-        -SourceIdentifier $sidOut -MessageData $queue -Action {
-            $d = $EventArgs.Data
-            if ($null -ne $d) { [void]$Event.MessageData.Enqueue(@{ kind='out'; line=$d }) }
-        }
-
-    $null = Register-ObjectEvent -InputObject $proc -EventName ErrorDataReceived `
-        -SourceIdentifier $sidErr -MessageData $queue -Action {
-            $d = $EventArgs.Data
-            if ($null -ne $d) { [void]$Event.MessageData.Enqueue(@{ kind='err'; line=$d }) }
-        }
-
-    $null = Register-ObjectEvent -InputObject $proc -EventName Exited `
-        -SourceIdentifier $sidExit -MessageData $queue -Action {
-            [void]$Event.MessageData.Enqueue(@{ kind='exit'; code=$Sender.ExitCode })
-        }
-
-    # Drain timer runs on the UI thread (has runspace TLS, so the Tick
-    # scriptblock invocation is safe).
-    $drain = New-Object System.Windows.Threading.DispatcherTimer
-    $drain.Interval = [TimeSpan]::FromMilliseconds(75)
-    $tick = {
-        $item = $null
-        $sawExit = $false
-        while ($queue.TryDequeue([ref]$item)) {
-            switch ($item.kind) {
-                'out' {
-                    $clean = $item.line -replace "`e\[[0-9;]*[A-Za-z]", ''
-                    Write-Output-Line $clean
-                }
-                'err' {
-                    $clean = $item.line -replace "`e\[[0-9;]*[A-Za-z]", ''
-                    Write-Output-Line "[err] $clean"
-                }
-                'exit' {
-                    $sawExit = $true
-                    Write-Output-Line ""
-                    if ($item.code -eq 0) {
-                        Write-Output-Line "[exit 0] OK"
-                        Set-Footer "Done."
-                    } else {
-                        Write-Output-Line "[exit $($item.code)]"
-                        Set-Footer "Failed (exit $($item.code))."
-                    }
-                    $script:CurrentProc = $null
-                }
-            }
-        }
-        if ($sawExit) {
-            # Drain any remaining queued items one more time, then stop.
-            while ($queue.TryDequeue([ref]$item)) {
-                if ($item.kind -eq 'out') {
-                    Write-Output-Line ($item.line -replace "`e\[[0-9;]*[A-Za-z]", '')
-                } elseif ($item.kind -eq 'err') {
-                    Write-Output-Line "[err] " + ($item.line -replace "`e\[[0-9;]*[A-Za-z]", '')
-                }
-            }
-            $drain.Stop()
-            Unregister-Event -SourceIdentifier $sidOut  -ErrorAction SilentlyContinue
-            Unregister-Event -SourceIdentifier $sidErr  -ErrorAction SilentlyContinue
-            Unregister-Event -SourceIdentifier $sidExit -ErrorAction SilentlyContinue
-            # Clean up the corresponding background jobs that Register-ObjectEvent creates
-            Get-Job -ErrorAction SilentlyContinue |
-                Where-Object { $_.Name -in @($sidOut, $sidErr, $sidExit) } |
-                ForEach-Object { Remove-Job -Job $_ -Force -ErrorAction SilentlyContinue }
-        }
-    }.GetNewClosure()
-    $drain.Add_Tick($tick)
-    $drain.Start()
-
-    $script:CurrentProc = $proc
-    [void]$proc.Start()
-    $proc.BeginOutputReadLine()
-    $proc.BeginErrorReadLine()
-}
-
-function Invoke-Command-Console {
-    param([hashtable]$Cmd)
-
-    Set-Footer "Launched in console window: $($Cmd.Name)"
-    Write-Output-Line ""
-    Write-Output-Line "════════════════════════════════════════════════════════════════"
-    Write-Output-Line ("  > {0}    [opens console window, {1}]" -f $Cmd.Name, (Get-Date).ToString('HH:mm:ss'))
-    Write-Output-Line "════════════════════════════════════════════════════════════════"
-    Write-Output-Line "Output appears in the new console window."
-    Write-Output-Line "Close the console window when done; this app keeps running."
+    $cols = [Math]::Max($script:LastTermCols, 40)
+    $rows = [Math]::Max($script:LastTermRows, 10)
 
     try {
-        Start-Process $script:PwshExe -ArgumentList @(
-            '-NoExit',
-            '-NoProfile',
-            '-ExecutionPolicy','Bypass',
-            '-File',"`"$($script:MainScript)`"",
-            '-Cmd',$Cmd.Name
-        ) | Out-Null
+        $pty = [Pty.Net.PtyProvider]::Spawn(
+            $cmdLine,
+            [int]$cols, [int]$rows,
+            $script:AppDir,
+            [Pty.Net.BackendOptions]::ConPty)
     } catch {
-        Write-Output-Line "[err] Failed to launch console: $($_.Exception.Message)"
-        Set-Footer "Launch failed."
+        Send-TerminalMessage @{ kind='data'; text="`r`n`e[31m[PTY spawn failed: $($_.Exception.Message)]`e[0m`r`n" }
+        Set-Footer "Spawn failed."
+        return
+    }
+
+    $script:CurrentPty     = $pty
+    $script:CurrentPtyName = $Cmd.Name
+
+    # Pty.Net events use custom non-EventHandler delegate types
+    # (PtyDataEventArgs(object,string) and PtyDisconnectedEventArgs(object)),
+    # so Register-ObjectEvent doesn't work — use add_* directly. PS converts
+    # the scriptblock to the matching delegate automatically. Handlers run on
+    # the PTY reader thread, so funnel through a thread-safe queue + the
+    # DispatcherTimer above to marshal back onto the UI thread.
+    $queue = $script:PtyDataQueue
+    $script:PtyDataHandler = [Pty.Net.PtyDataEventArgs]{
+        param($sender, $data)
+        if ($data) {
+            [void]$queue.Enqueue(@{ kind='data'; text=[string]$data })
+        }
+    }.GetNewClosure()
+    $script:PtyExitHandler = [Pty.Net.PtyDisconnectedEventArgs]{
+        param($sender)
+        [void]$queue.Enqueue(@{ kind='exit' })
+    }.GetNewClosure()
+
+    $pty.add_PtyData($script:PtyDataHandler)
+    $pty.add_PtyDisconnected($script:PtyExitHandler)
+}
+
+# Forward user keystrokes from xterm.js (relayed via WebView2 WebMessageReceived)
+# into the active PTY's stdin.
+function Send-PtyInput {
+    param([string]$Text)
+    if (-not $script:CurrentPty) { return }
+    try { $script:CurrentPty.Write($Text) } catch {}
+}
+
+# Tell the PTY about a new viewport size (driven by xterm.js fit-addon).
+function Resize-Pty {
+    param([int]$Cols, [int]$Rows)
+    $script:LastTermCols = $Cols
+    $script:LastTermRows = $Rows
+    if ($script:CurrentPty) {
+        try { $script:CurrentPty.Resize($Cols, $Rows) } catch {}
     }
 }
 
+# Compatibility shim — keep the old name for the click handler.
 function Invoke-DuneCmd {
     param([hashtable]$Cmd)
-    if ($Cmd.Mode -eq 'InApp') { Invoke-Command-InApp -Cmd $Cmd } else { Invoke-Command-Console -Cmd $Cmd }
+    Invoke-Command-Terminal -Cmd $Cmd
 }
 
 # ────────────────────────────────────────────────────────────────────────────
@@ -1715,8 +1789,8 @@ function Build-ButtonPanel {
                     'running' { "the VM is not running" }
                     default   { 'the command is unavailable' }
                 }
-                Write-Output-Line ""
-                Write-Output-Line "[Cannot run '$($cmdCopy.Name)' - $reason.]"
+                Write-TerminalLine ""
+                Write-TerminalLine "[Cannot run '$($cmdCopy.Name)' - $reason.]"
                 return
             }
             Invoke-DuneCmd -Cmd $cmdCopy
@@ -1748,9 +1822,12 @@ $ui.BtnRefreshStat.Add_Click({
     # Explicit refresh -> bypass the 5-min cache and hit the port-check service again.
     Refresh-PortStatus -Force
 })
-$ui.BtnClearOutput.Add_Click({ Clear-Output })
+$ui.BtnClearOutput.Add_Click({ Clear-Terminal })
 $ui.BtnCopyOutput.Add_Click({
-    try { [Windows.Clipboard]::SetText($ui.OutputPane.Text) } catch {}
+    # xterm.js's selection lives in the WebView. Ask it to read getSelection()
+    # and post it back as {kind:'clipboard',text:...}; the WebMessageReceived
+    # handler below copies it to the OS clipboard.
+    Send-TerminalMessage @{ kind='copy-request' }
 })
 
 # ────────────────────────────────────────────────────────────────────────────
@@ -1898,50 +1975,6 @@ $ui.LatestLbl.Add_MouseLeftButtonUp({
     }
 })
 
-# Output pane is non-interactive by default: swallow mouse-down so no caret/
-# selection appears. The mouse wheel still scrolls via WPF's bubble routing.
-# When a future InApp command needs to collect input from the user, call
-# Set-OutputInputMode -Enabled $true to re-enable focus + selection.
-$script:OutputMouseSwallow = [Windows.Input.MouseButtonEventHandler]{
-    param($sender, $e)
-    $e.Handled = $true
-}
-$ui.OutputPane.AddHandler(
-    [Windows.UIElement]::PreviewMouseLeftButtonDownEvent,
-    $script:OutputMouseSwallow)
-$ui.OutputPane.AddHandler(
-    [Windows.UIElement]::PreviewMouseRightButtonDownEvent,
-    $script:OutputMouseSwallow)
-$script:OutputInputEnabled = $false
-
-function Set-OutputInputMode {
-    param([bool]$Enabled)
-    if ($Enabled -and -not $script:OutputInputEnabled) {
-        $ui.OutputPane.Focusable = $true
-        $ui.OutputPane.IsTabStop = $true
-        $ui.OutputPane.Cursor    = [Windows.Input.Cursors]::IBeam
-        $ui.OutputPane.RemoveHandler(
-            [Windows.UIElement]::PreviewMouseLeftButtonDownEvent,
-            $script:OutputMouseSwallow)
-        $ui.OutputPane.RemoveHandler(
-            [Windows.UIElement]::PreviewMouseRightButtonDownEvent,
-            $script:OutputMouseSwallow)
-        $script:OutputInputEnabled = $true
-    }
-    elseif (-not $Enabled -and $script:OutputInputEnabled) {
-        $ui.OutputPane.Focusable = $false
-        $ui.OutputPane.IsTabStop = $false
-        $ui.OutputPane.Cursor    = [Windows.Input.Cursors]::Arrow
-        $ui.OutputPane.AddHandler(
-            [Windows.UIElement]::PreviewMouseLeftButtonDownEvent,
-            $script:OutputMouseSwallow)
-        $ui.OutputPane.AddHandler(
-            [Windows.UIElement]::PreviewMouseRightButtonDownEvent,
-            $script:OutputMouseSwallow)
-        $script:OutputInputEnabled = $false
-    }
-}
-
 # Status auto-refresh timer (30s)
 $autoRefresh = New-Object System.Windows.Threading.DispatcherTimer
 $autoRefresh.Interval = [TimeSpan]::FromSeconds(30)
@@ -1954,8 +1987,96 @@ $autoRefresh.Add_Tick({
 
 # Initial paint
 Build-ButtonPanel -Vm $script:LastVmKnown
-$ui.FooterVersion.Text = "Dune Server v4.5.2"
+$ui.FooterVersion.Text = "Dune Server v$script:ToolVersion"
 $ui.InstalledLbl.Text  = "Installed: $script:ToolVersion"
+
+# ────────────────────────────────────────────────────────────────────────────
+#  WebView2 / xterm.js initialization
+# ────────────────────────────────────────────────────────────────────────────
+#
+#  WebView2 init is async. We set CreationProperties (user-data folder under
+#  %APPDATA%\DuneServer\webview2 so we don't try to write under Program Files),
+#  then call EnsureCoreWebView2Async — the CoreWebView2InitializationCompleted
+#  event fires when ready, at which point we wire up the JS bridge and load
+#  terminal.html.
+
+$script:WebView2UserData = Join-Path $script:DataDir 'webview2'
+if (-not (Test-Path $script:WebView2UserData)) {
+    New-Item -ItemType Directory -Force -Path $script:WebView2UserData | Out-Null
+}
+
+$cp = New-Object Microsoft.Web.WebView2.Wpf.CoreWebView2CreationProperties
+$cp.UserDataFolder = $script:WebView2UserData
+$ui.Terminal.CreationProperties = $cp
+
+# Handler for messages FROM xterm.js (JS -> PS). Dispatched on the UI thread.
+$ui.Terminal.add_CoreWebView2InitializationCompleted({
+    param($sender, $e)
+    if (-not $e.IsSuccess) {
+        Add-Type -AssemblyName System.Windows.Forms
+        [System.Windows.Forms.MessageBox]::Show(
+            "WebView2 failed to initialize:`r`n`r`n$($e.InitializationException.Message)",
+            'Dune Server - terminal error', 'OK', 'Error') | Out-Null
+        return
+    }
+
+    $core = $sender.CoreWebView2
+
+    # Lock down the embedded browser surface — we only load our own local page.
+    try {
+        $core.Settings.AreDevToolsEnabled         = $false
+        $core.Settings.AreDefaultContextMenusEnabled = $true   # keep right-click for copy/paste
+        $core.Settings.IsStatusBarEnabled         = $false
+        $core.Settings.AreBrowserAcceleratorKeysEnabled = $false
+    } catch {}
+
+    $core.add_WebMessageReceived({
+        param($s2, $e2)
+        try {
+            # JS sends objects via postMessage({...}); WebView2 surfaces them
+            # as a JSON string via WebMessageAsJson. (TryGetWebMessageAsString
+            # only works for primitive string posts.)
+            $json = $e2.WebMessageAsJson
+            if (-not $json) { return }
+            $msg = ConvertFrom-Json $json -ErrorAction Stop
+            switch ($msg.kind) {
+                'ready' {
+                    $script:TerminalReady = $true
+                    # Flush any buffered writes that landed before the page loaded.
+                    foreach ($pending in $script:PendingTermWrites) {
+                        try { $core.PostWebMessageAsJson($pending) } catch {}
+                    }
+                    $script:PendingTermWrites.Clear()
+                    $banner = "`e[36mDune Server v$script:ToolVersion`e[0m`r`n" +
+                              "`e[90mClick a command on the left to run it. Interactive prompts, SSH, and TUI editors all work here.`e[0m`r`n"
+                    $core.PostWebMessageAsJson((ConvertTo-Json @{ kind='data'; text=$banner } -Compress))
+                }
+                'input' {
+                    if ($msg.text) { Send-PtyInput $msg.text }
+                }
+                'resize' {
+                    Resize-Pty -Cols ([int]$msg.cols) -Rows ([int]$msg.rows)
+                }
+                'clipboard' {
+                    if ($msg.text) {
+                        try { [Windows.Clipboard]::SetText([string]$msg.text) } catch {}
+                    }
+                }
+            }
+        } catch {}
+    })
+
+    # Navigate to the bundled terminal host page.
+    $htmlPath = Join-Path $script:WebDir 'terminal.html'
+    $uri = ([Uri](New-Object Uri ([System.IO.Path]::GetFullPath($htmlPath)))).AbsoluteUri
+    $core.Navigate($uri)
+})
+
+# Kick init. Returns immediately; completion fires the handler above.
+$null = $ui.Terminal.EnsureCoreWebView2Async($null)
+
+# Start the PTY -> terminal drain pump (created idle, runs continuously).
+Start-PtyDrainTimer
 
 # Kick off first status fetch on window load
 $ui.Window.Add_Loaded({
@@ -1969,12 +2090,16 @@ $ui.Window.Add_Loaded({
 
 $ui.Window.Add_Closed({
     $autoRefresh.Stop()
-    # Clean up any background jobs
+    if ($script:PtyDrainTimer) { $script:PtyDrainTimer.Stop() }
+    # Tear down any active PTY child
+    if ($script:CurrentPty) {
+        try { $script:CurrentPty.Dispose() } catch {}
+        $script:CurrentPty = $null
+    }
+    # Clean up any background jobs (event handlers, etc)
     Get-Job -ErrorAction SilentlyContinue | Stop-Job -ErrorAction SilentlyContinue
     Get-Job -ErrorAction SilentlyContinue | Remove-Job -Force -ErrorAction SilentlyContinue
-    if ($script:CurrentProc -and -not $script:CurrentProc.HasExited) {
-        try { $script:CurrentProc.Kill() } catch {}
-    }
+    try { $ui.Terminal.Dispose() } catch {}
 })
 
 # ────────────────────────────────────────────────────────────────────────────

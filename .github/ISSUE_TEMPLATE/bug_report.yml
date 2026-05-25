@@ -1,5 +1,5 @@
 name: 🐛 Tool bug report
-description: Report a bug or unexpected behavior in the Simple Dune Server Management Tool itself (the PowerShell script, the .bat launcher, or the web UI).
+description: Report a bug or unexpected behavior in the Simple Dune Server Management Tool itself (the desktop app, the PowerShell script, or the .bat launcher).
 title: "[Bug] "
 labels: ["bug"]
 body:
@@ -9,7 +9,7 @@ body:
         ## What this tracker is for
 
         This issue tracker is for **bugs in this tool's code** — the
-        PowerShell script, the `.bat` launcher, the localhost web UI,
+        desktop app, the PowerShell script, the `.bat` launcher,
         and the setup wizard.
 
         **Please do _not_ open issues here for:**
@@ -30,7 +30,7 @@ body:
       label: Scope check
       description: Please confirm this is actually a bug in the tool's code.
       options:
-        - label: This is a bug in the tool itself (script crashes, menu option misbehaves, web UI broken, setup wizard fails, etc.) — **not** a VM/network/Funcom-server issue.
+        - label: This is a bug in the tool itself (app crashes, menu option misbehaves, terminal pane broken, setup wizard fails, etc.) — **not** a VM/network/Funcom-server issue.
           required: true
 
   - type: input
