@@ -111,7 +111,7 @@ Before using either install path above:
    | 1 | **Server install folder** | The folder where Steam installed the Dune server. It contains a `battlegroup-management` subfolder. The script tries to auto-detect this. |
    | 2 | **SSH private key** | Path to your SSH private key for the VM. Usually in `%LOCALAPPDATA%\DuneAwakeningServer\sshKey` or `~\.ssh\dune`. |
    | 3 | **dune-admin.exe path** | Path to `dune-admin.exe` if you use the community admin panel. Leave blank to skip — you can always add it later. |
-   | 4 | **Windows username** | Your Windows login name (e.g., `Neil`). Used to launch dune-admin without admin elevation. |
+   | 4 | **Windows username** | Your Windows login name (e.g., `Coastal`). Used to launch dune-admin without admin elevation. |
    | 5 | **Port verification** | Choose `1` (Built-in, default — uses [yougetsignal.com](https://www.yougetsignal.com/tools/open-ports/) for TCP), `2` (Custom URL — provide your own service that supports `{ip}`, `{port}`, `{protocol}` placeholders), or `3` (Disabled). The check runs once per launch and shows a color-coded status next to each required port in the menu header. |
 
 5. Your answers are saved to `dune-server.config`. To change them later, delete that file and re-run the tool.
@@ -128,10 +128,10 @@ After setup, you'll see the main menu every time you launch:
   Brought to you by Coastal (Discord @allcoast)
 ==========================================
 
-  VM: Running (192.168.23.219)
+  VM: Running (192.168.1.50)
 
   Required Port Forwarding:
-    (checking against public IP 203.0.113.45 -> VM 192.168.23.219)
+    (checking against public IP 203.0.113.45 -> VM 192.168.1.50)
     UDP  7777-7810   Game servers (first port)     [OPEN]
     UDP  7777-7810   Game servers (last port)      [OPEN]
     TCP  31982       RabbitMQ                      [OPEN]

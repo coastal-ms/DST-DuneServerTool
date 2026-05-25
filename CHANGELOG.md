@@ -7,6 +7,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [5.0.2] - 2026-05-25
+
+Docs cleanup release. No functional changes.
+
+### Changed
+
+- Scrubbed example PII from the public documentation surface:
+    - `LICENSE` copyright holder now reads `Coastal` only.
+    - `README.md` example-output block uses RFC1918 placeholder
+      (`192.168.1.50`) instead of a real LAN IP, and the setup-wizard
+      "Windows username" example is now `Coastal`.
+    - `CHANGELOG.md` v4.4.0 entry uses an RFC5737 documentation IP
+      (`203.0.113.45`) instead of a real public IP.
+    - `app/installer/DuneServer.iss` `MyAppURL` points to the actual
+      `coastal-ms` GitHub org (was a stale pre-rename URL).
+
 ## [5.0.1] - 2026-05-25
 
 Patch release: prevent accidental re-runs of `initial-setup` once the game
@@ -225,7 +241,7 @@ Minor release: brings the **external port-check** feature from the CLI menu into
 - **Port-check status line** in the header (above the battlegroup status
   pane). Shows external reachability for the forwarded ports as a single
   colored line with the public IP and a timestamp, e.g.
-  `Ports (15.218.94.154): TCP 31982 RabbitMQ [OPEN]   updated 21:15:29`.
+  `Ports (203.0.113.45): TCP 31982 RabbitMQ [OPEN]   updated 21:15:29`.
 - **TCP 31982 (RabbitMQ)** is always checked via the built-in
   `yougetsignal.com` service (no UDP support there).
 - **UDP 7777 and 7810 (game-server range first/last)** are only shown
@@ -969,7 +985,8 @@ entry. From here on, patch releases follow as `3.0.1`, `3.0.2`, etc.
 - Boot-time history stored at `<scriptDir>\.boot-times.json` (rolling
   window of last 20 entries per phase).
 
-[Unreleased]: https://github.com/coastal-ms/Simple-Dune-Server-Management-Tool/compare/v5.0.1...HEAD
+[Unreleased]: https://github.com/coastal-ms/Simple-Dune-Server-Management-Tool/compare/v5.0.2...HEAD
+[5.0.2]: https://github.com/coastal-ms/Simple-Dune-Server-Management-Tool/compare/v5.0.1...v5.0.2
 [5.0.1]: https://github.com/coastal-ms/Simple-Dune-Server-Management-Tool/compare/v5.0.0...v5.0.1
 [5.0.0]: https://github.com/coastal-ms/Simple-Dune-Server-Management-Tool/compare/v4.5.2...v5.0.0
 [4.5.2]: https://github.com/coastal-ms/Simple-Dune-Server-Management-Tool/compare/v4.5.1...v4.5.2
