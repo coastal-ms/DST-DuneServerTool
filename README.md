@@ -284,4 +284,4 @@ You left the dune-admin path blank during setup. Delete `dune-server.config` and
 
 - All actions are logged to the `.logs` folder next to the script.
 - The VM name is always `dune-awakening` and the SSH user is always `dune` — these match the official Funcom setup and cannot be changed.
-- The web UI for dune-admin is at [https://dune-admin.layout.tools/](https://dune-admin.layout.tools/).
+- The web UI for dune-admin is at [https://dune-admin.layout.tools/#/players](https://dune-admin.layout.tools/#/players).
