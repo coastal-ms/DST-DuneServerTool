@@ -7,6 +7,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [4.3.0] - 2026-05-24
+
+Minor release: drops the legacy web portal as a user-facing option.
+
+### Removed
+
+- **Web Portal menu entry** (`web` / key `b`) is gone from both the
+  desktop app's button grid and the legacy CLI menu. The `web/`
+  folder + `Start-DuneWeb.ps1` script still exist in the repo for
+  archival reference but are no longer launchable from the app.
+- Dead handler for the `web` command in `dune-server.ps1` (the
+  Pode-bootstrap block) removed.
+- `web` -> `Web Portal` entry removed from the app's `LabelOverrides`
+  hashtable.
+
 ## [4.2.0] - 2026-05-24
 
 Minor release: in-app update checking.
@@ -657,7 +672,8 @@ entry. From here on, patch releases follow as `3.0.1`, `3.0.2`, etc.
 - Boot-time history stored at `<scriptDir>\.boot-times.json` (rolling
   window of last 20 entries per phase).
 
-[Unreleased]: https://github.com/coastal-ms/Simple-Dune-Server-Management-Tool/compare/v4.2.0...HEAD
+[Unreleased]: https://github.com/coastal-ms/Simple-Dune-Server-Management-Tool/compare/v4.3.0...HEAD
+[4.3.0]: https://github.com/coastal-ms/Simple-Dune-Server-Management-Tool/compare/v4.2.0...v4.3.0
 [4.2.0]: https://github.com/coastal-ms/Simple-Dune-Server-Management-Tool/compare/v4.1.0...v4.2.0
 [4.1.0]: https://github.com/coastal-ms/Simple-Dune-Server-Management-Tool/compare/v4.0.8...v4.1.0
 [4.0.8]: https://github.com/coastal-ms/Simple-Dune-Server-Management-Tool/compare/v4.0.7...v4.0.8
