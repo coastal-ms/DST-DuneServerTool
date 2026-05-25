@@ -7,6 +7,31 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [4.0.6] - 2026-05-24
+
+Patch release: precise drop-position indicator and exact-position
+insertion semantics for drag-to-reorder.
+
+### Added
+
+- **Insertion-line indicator** on drag-over: a bright cyan bar appears
+  at the **top** of the target button if you're dragging into its upper
+  half (drop *before*), or at the **bottom** if you're in its lower
+  half (drop *after*). The line glows with the Eyes-of-Ibad halo so the
+  drop position is unambiguous at a glance.
+
+### Changed
+
+- `Move-Command` now takes a `-Position` parameter (`before` / `after`)
+  so the dragged button lands on the exact side of the target the
+  insertion line was showing, instead of always landing above.
+- Drop-target whole-button glow + scale-up (added in v4.0.5) is
+  replaced by the more precise insertion-line indicator. No more layout
+  shift, no more flicker between adjacent buttons.
+- Insertion-line `Rectangle`s are baked into the `CmdButton` control
+  template with `IsHitTestVisible="False"` so they overlay the button
+  edges without disturbing drag hit-testing.
+
 ## [4.0.5] - 2026-05-24
 
 Patch release: drag-and-drop visual feedback and human-friendly button
@@ -538,7 +563,8 @@ entry. From here on, patch releases follow as `3.0.1`, `3.0.2`, etc.
 - Boot-time history stored at `<scriptDir>\.boot-times.json` (rolling
   window of last 20 entries per phase).
 
-[Unreleased]: https://github.com/coastal-ms/Simple-Dune-Server-Management-Tool/compare/v4.0.5...HEAD
+[Unreleased]: https://github.com/coastal-ms/Simple-Dune-Server-Management-Tool/compare/v4.0.6...HEAD
+[4.0.6]: https://github.com/coastal-ms/Simple-Dune-Server-Management-Tool/compare/v4.0.5...v4.0.6
 [4.0.5]: https://github.com/coastal-ms/Simple-Dune-Server-Management-Tool/compare/v4.0.4...v4.0.5
 [4.0.4]: https://github.com/coastal-ms/Simple-Dune-Server-Management-Tool/compare/v4.0.3...v4.0.4
 [4.0.3]: https://github.com/coastal-ms/Simple-Dune-Server-Management-Tool/compare/v4.0.2...v4.0.3
