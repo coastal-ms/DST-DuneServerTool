@@ -7,6 +7,26 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [5.0.1] - 2026-05-25
+
+Patch release: prevent accidental re-runs of `initial-setup` once the game
+server is live.
+
+### Changed
+
+- `initial-setup` now greys out when the battlegroup status shows both core
+  game-server pods (**Overmap** and **Survival_1**) in a `Running` phase.
+  Hovering / clicking the disabled button reports
+  `[Cannot run 'initial-setup' - Overmap and Survival_1 pods are running.]`.
+  Buttons stay clickable on `unknown` state (cold-start / SSH timeout) so the
+  command isn't gated out before the first status poll completes.
+
+### Internal
+
+- New `Test-CorePodsRunningFromText` parser + `$script:LastCorePodsRunning`
+  state mirror, wired into the same status-callback path as `Set-BgState`
+  and synced through the click-handler closure shim.
+
 ## [5.0.0] - 2026-05-25
 
 Major release: **embedded terminal pane**. The right pane is now a real
@@ -949,7 +969,9 @@ entry. From here on, patch releases follow as `3.0.1`, `3.0.2`, etc.
 - Boot-time history stored at `<scriptDir>\.boot-times.json` (rolling
   window of last 20 entries per phase).
 
-[Unreleased]: https://github.com/coastal-ms/Simple-Dune-Server-Management-Tool/compare/v4.5.2...HEAD
+[Unreleased]: https://github.com/coastal-ms/Simple-Dune-Server-Management-Tool/compare/v5.0.1...HEAD
+[5.0.1]: https://github.com/coastal-ms/Simple-Dune-Server-Management-Tool/compare/v5.0.0...v5.0.1
+[5.0.0]: https://github.com/coastal-ms/Simple-Dune-Server-Management-Tool/compare/v4.5.2...v5.0.0
 [4.5.2]: https://github.com/coastal-ms/Simple-Dune-Server-Management-Tool/compare/v4.5.1...v4.5.2
 [4.5.1]: https://github.com/coastal-ms/Simple-Dune-Server-Management-Tool/compare/v4.5.0...v4.5.1
 [4.5.0]: https://github.com/coastal-ms/Simple-Dune-Server-Management-Tool/compare/v4.4.0...v4.5.0

@@ -32,7 +32,7 @@ param()
 # check (Check-ForUpdates) and the "Installed: x.y.z" header label. Must be
 # bumped in lock-step with the other 3 version constants (dune-server.ps1,
 # Build-Exe.ps1, installer .iss).
-$script:ToolVersion = "5.0.0"
+$script:ToolVersion = "5.0.1"
 
 # ANSI escape character (0x1B). The ps2exe-compiled binary runs in
 # PowerShell 5.1 (Desktop), which does NOT support the `e backtick-e
@@ -856,7 +856,7 @@ function Get-BattlegroupStatusSnapshot {
 
 $script:Commands = @(
     # ─── VM commands ───
-    @{ Section='VM';          Key='a'; Name='initial-setup';        Mode='Console'; Requires='none';    Desc='Run the initial VM setup wizard' }
+    @{ Section='VM';          Key='a'; Name='initial-setup';        Mode='Console'; Requires='none';    DisabledWhen='core-pods-running'; Desc='Run the initial VM setup wizard' }
     @{ Section='VM';          Key='c'; Name='start-vm';             Mode='InApp';   Requires='exists';  DisabledWhen='vm-running';  Desc='Power on the VM only (no battlegroup)' }
     @{ Section='VM';          Key='d'; Name='startup';              Mode='Console'; Requires='exists';  DisabledWhen='bg-running';  Desc='Power on VM, start battlegroup, wait for maps Ready' }
     @{ Section='VM';          Key='e'; Name='shutdown';             Mode='Console'; Requires='running'; Desc='Stop battlegroup, power off VM' }
@@ -945,6 +945,14 @@ function Test-CmdAvailable {
             # flicker as disabled on every refresh.
             if ($bgState -eq 'stopped') { return @{ ok=$false; reason='Battlegroup is not running' } }
         }
+        'core-pods-running' {
+            # Disable initial-setup once the core game-server pods (Overmap +
+            # Survival_1) are live. Detected from `battlegroup status` text in
+            # Test-CorePodsRunningFromText. Only disable when we KNOW it's true
+            # — never on the default $false (treat as 'unknown' if no status
+            # text has been parsed yet) to avoid flicker on cold start.
+            if ($script:LastCorePodsRunning) { return @{ ok=$false; reason='Overmap and Survival_1 pods are running' } }
+        }
     }
     return @{ ok=$true }
 }
@@ -987,6 +995,19 @@ function Get-BgStateFromStatusText {
     if ($Text -match '(?m)^\s*\S+\s+Running\b')                 { return 'running' }
 
     return 'unknown'
+}
+
+# Returns $true if the `battlegroup status` text shows BOTH the core game
+# server pods (Overmap and Survival_1) in a Running phase. Used to gate
+# `initial-setup` (no point letting a user run it once the server is live).
+# Matches table rows like "Survival_1  Running" or "Overmap  Running" —
+# case-insensitive, tolerant of trailing extra columns / ANSI escapes.
+function Test-CorePodsRunningFromText {
+    param([string]$Text)
+    if (-not $Text) { return $false }
+    $hasOvermap   = $Text -match '(?im)^\s*Overmap\b[^\r\n]*\bRunning\b'
+    $hasSurvival1 = $Text -match '(?im)^\s*Survival_1\b[^\r\n]*\bRunning\b'
+    return ($hasOvermap -and $hasSurvival1)
 }
 
 # ────────────────────────────────────────────────────────────────────────────
@@ -1321,6 +1342,7 @@ function Refresh-StatusHeader {
                     $ui.StatusPane.Text = $r.output
                     $ui.StatusMeta.Text = "VM running ($($vmInfo.ip))  -  updated $stamp2"
                     Set-BgState (Get-BgStateFromStatusText $r.output)
+                    Set-CorePodsRunning (Test-CorePodsRunningFromText $r.output)
                     # Rebuild the button panel so commands gated on bg-state
                     # (start/stop battlegroup, startup wizard, etc.) reflect
                     # the just-discovered state. Cheap — it just re-renders WPF.
@@ -1330,6 +1352,7 @@ function Refresh-StatusHeader {
                     $ui.StatusPane.Text = $reason
                     $ui.StatusMeta.Text = "VM running ($($vmInfo.ip))  -  ssh failed  -  $stamp2"
                     Set-BgState 'unknown'
+                    Set-CorePodsRunning $false
                     Build-ButtonPanel -Vm $vmInfo
                 }
                 Set-Footer "Idle"
@@ -1693,6 +1716,7 @@ function Format-CmdLabel {
 
 $script:LastVmKnown = @{ exists=$false; running=$false; state='?'; ip=$null }
 $script:LastBgState = 'unknown'   # 'running' | 'stopped' | 'unknown'
+$script:LastCorePodsRunning = $false  # $true when Overmap AND Survival_1 are both in Running phase
 
 # Live state hashtable. A *single* hashtable instance whose contents are
 # mutated in place — NEVER reassigned. Click-handler closures created via
@@ -1704,6 +1728,7 @@ $script:LastBgState = 'unknown'   # 'running' | 'stopped' | 'unknown'
 $script:State = @{
     Vm = $script:LastVmKnown   # same reference
     Bg = 'unknown'
+    CorePodsRunning = $false
 }
 
 function Set-VmState {
@@ -1719,6 +1744,12 @@ function Set-BgState {
     if (-not $BgState) { $BgState = 'unknown' }
     $script:State.Bg    = $BgState
     $script:LastBgState = $BgState
+}
+
+function Set-CorePodsRunning {
+    param([bool]$Running)
+    $script:State.CorePodsRunning = $Running
+    $script:LastCorePodsRunning   = $Running
 }
 
 function Build-ButtonPanel {
@@ -2051,10 +2082,13 @@ function Build-ButtonPanel {
         $btn.Add_Click({
             $liveVm = $stateRef.Vm
             $liveBg = $stateRef.Bg
-            try { Write-Diag ("Click[{0}]: stateRef.Vm.running={1} bg={2}" -f $cmdCopy.Name, [bool]$liveVm.running, $liveBg) } catch {}
+            $liveCore = [bool]$stateRef.CorePodsRunning
+            try { Write-Diag ("Click[{0}]: stateRef.Vm.running={1} bg={2} corePods={3}" -f $cmdCopy.Name, [bool]$liveVm.running, $liveBg, $liveCore) } catch {}
             # Temporarily sync the script-scope cache so Test-CmdAvailable
-            # (which reads $script:LastBgState) sees the live value too.
-            $script:LastBgState = $liveBg
+            # (which reads $script:LastBgState / LastCorePodsRunning) sees
+            # the live value too.
+            $script:LastBgState         = $liveBg
+            $script:LastCorePodsRunning = $liveCore
             $avail = Test-CmdAvailable -Cmd $cmdCopy -Vm $liveVm
             if (-not $avail.ok) {
                 $reason = $avail.reason
@@ -2384,7 +2418,7 @@ $ui.Terminal.add_CoreWebView2InitializationCompleted({
                         $script:PendingTermWrites.Clear()
                     }
                     $ver = $script:ToolVersion
-                    if (-not $ver) { $ver = '5.0.0' }
+                    if (-not $ver) { $ver = '5.0.1' }
                     $ESC = $script:ESC
                     if (-not $ESC) { $ESC = [char]27 }
                     $banner = "$ESC[36mDune Server v$ver$ESC[0m`r`n" +
