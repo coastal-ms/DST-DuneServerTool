@@ -4,26 +4,21 @@ Native Windows desktop app (PowerShell + WPF, compiled with ps2exe, packaged
 with Inno Setup) that wraps the existing `dune-server.ps1` business logic in
 a single window with point-and-click buttons instead of the menu-driven CLI.
 
-This is the **v4.0.0** entry point. The `dune-server.bat` launcher and the
-web portal (`web/Start-DuneWeb.ps1`) remain available as parallel options.
+This is the **v4.0.0+** entry point. The `dune-server.bat` launcher remains
+available as a parallel option for users who prefer the CLI.
 
 ## What the app gives you
 
 - **Sticky status header** at the top — battlegroup status auto-refreshed
-  every 30 seconds via direct SSH (same mechanism as the web portal)
+  every 30 seconds via direct SSH
 - **Left panel** — every command from the CLI menu as a labeled button,
   grouped by section (VM / Battlegroup / Tools); disabled buttons grey out
   when their requirements aren't met (e.g. "VM not running")
-- **Right panel** — live-streaming output from whichever command was clicked
+- **Right panel** — embedded xterm.js terminal driven by a real ConPTY
+  (Pty.Net + WebView2). Every command runs here, including interactive
+  ones (`ssh`, `shell-vm`, `shell-pod`, `edit`, `change-password`, Y/N
+  prompts) — no popup PowerShell windows
 - **Footer status bar** — current operation, version, exit codes
-- **Two dispatch modes per command** (transparent to the user):
-    - **InApp** — stdout/stderr captured from a hidden child `pwsh` process
-      and rendered into the output pane (no console window pops up). Used
-      for plain text-output commands like `status`, `start-vm`, etc.
-    - **Console** — spawns a visible elevated `pwsh` window. Used for any
-      command that needs interactive input (`Read-Host`), a TTY (`ssh -t`),
-      or fancy console manipulation (spinners, screen clears). Buttons that
-      open in console mode are labeled `[console]` for transparency.
 
 ## Where things live
 
