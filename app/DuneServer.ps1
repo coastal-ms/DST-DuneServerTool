@@ -596,6 +596,16 @@ function Read-Config {
     return $cfg
 }
 
+# Treat the install as "set up" only when the config file exists AND has the
+# minimum credentials this app needs (SSH key path + battlegroup.bat).
+function Test-DuneConfigPresent {
+    if (-not (Test-Path $script:ConfigFile)) { return $false }
+    $cfg = Read-Config
+    if (-not $cfg.SshKey -or -not (Test-Path $cfg.SshKey)) { return $false }
+    if (-not $cfg.BgBat  -or -not (Test-Path $cfg.BgBat))  { return $false }
+    return $true
+}
+
 function Get-VmStatus {
     try {
         $vm = Get-VM -Name $script:VmName -ErrorAction Stop
@@ -1306,7 +1316,7 @@ $autoRefresh.Add_Tick({ Refresh-StatusHeader })
 
 # Initial paint
 Build-ButtonPanel -Vm $script:LastVmKnown
-$ui.FooterVersion.Text = "Dune Server v4.0.7"
+$ui.FooterVersion.Text = "Dune Server v4.0.8"
 
 # Kick off first status fetch on window load
 $ui.Window.Add_Loaded({

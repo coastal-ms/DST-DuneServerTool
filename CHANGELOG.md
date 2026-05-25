@@ -7,6 +7,41 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [4.0.8] - 2026-05-24
+
+Patch release: the installer now collects all configuration up-front so
+new users land in a fully working app on first launch.
+
+### Added
+
+- **Installer config wizard.** Five new pages in `DuneServerSetup.exe`
+  collect everything the app needs using native Windows directory and
+  file pickers (Browse buttons):
+  1. Dune Awakening server folder (the one containing
+     `battlegroup-management`)
+  2. SSH private key for the Hyper-V VM
+  3. `dune-admin.exe` (optional - leave blank to hide the Dune Admin
+     button until you set it later)
+  4. Windows username (for launching dune-admin un-elevated)
+  5. Port-verification mode (built-in / custom URL / disabled)
+- All values are written to `%APPDATA%\DuneServer\dune-server.config`
+  at install time, so the app launches fully configured - no more
+  "SSH key not configured" message on first run.
+- **Smart defaults.** Each page is pre-filled by auto-detecting common
+  paths (Steam library, `%LOCALAPPDATA%\DuneAwakeningServer\sshKey`,
+  `Desktop\dune-admin\`, current Windows username).
+- **Legacy import.** If a previous `dune-server.config` is found on the
+  Desktop / OneDrive / Documents, the installer offers to use those
+  values as the defaults on the new pages (still editable).
+
+### Changed
+
+- The post-install legacy-config copy prompt has been replaced by the
+  new wizard flow described above.
+- If `%APPDATA%\DuneServer\dune-server.config` already exists, the
+  installer skips all five config pages (upgrade path - never
+  overwrites an existing config).
+
 ## [4.0.7] - 2026-05-24
 
 Patch release: dune-admin web UI opens directly to the Players page.
@@ -574,7 +609,8 @@ entry. From here on, patch releases follow as `3.0.1`, `3.0.2`, etc.
 - Boot-time history stored at `<scriptDir>\.boot-times.json` (rolling
   window of last 20 entries per phase).
 
-[Unreleased]: https://github.com/coastal-ms/Simple-Dune-Server-Management-Tool/compare/v4.0.7...HEAD
+[Unreleased]: https://github.com/coastal-ms/Simple-Dune-Server-Management-Tool/compare/v4.0.8...HEAD
+[4.0.8]: https://github.com/coastal-ms/Simple-Dune-Server-Management-Tool/compare/v4.0.7...v4.0.8
 [4.0.7]: https://github.com/coastal-ms/Simple-Dune-Server-Management-Tool/compare/v4.0.6...v4.0.7
 [4.0.6]: https://github.com/coastal-ms/Simple-Dune-Server-Management-Tool/compare/v4.0.5...v4.0.6
 [4.0.5]: https://github.com/coastal-ms/Simple-Dune-Server-Management-Tool/compare/v4.0.4...v4.0.5
