@@ -16,7 +16,7 @@
 ;                 -> NOT touched by install or uninstall (preserves user config)
 
 #define MyAppName        "Dune Server"
-#define MyAppVersion "4.5.2"
+#define MyAppVersion "5.0.0"
 #define MyAppPublisher   "Dune Awakening Self-Hosted Tool"
 #define MyAppURL         "https://github.com/Neil-PSP/Simple-Dune-Server-Management-Tool"
 #define MyAppExeName     "DuneServer.exe"
@@ -71,6 +71,22 @@ Source: "..\..\dune-server.ps1"; DestDir: "{app}"; Flags: ignoreversion
 
 ; Standalone icon for shortcuts that point at the .ps1 etc.
 Source: "..\assets\icon.ico"; DestDir: "{app}\assets"; Flags: ignoreversion
+
+; v5.0 embedded-terminal dependencies: managed assemblies + native loaders
+; Loaded at runtime via Add-Type. Layout under {app}\lib\... must match
+; what app/DuneServer.ps1 expects.
+Source: "..\lib\Pty.Net\*";                                 DestDir: "{app}\lib\Pty.Net";                                 Flags: ignoreversion recursesubdirs
+Source: "..\lib\WebView2\Microsoft.Web.WebView2.Core.dll";  DestDir: "{app}\lib\WebView2";                                Flags: ignoreversion
+Source: "..\lib\WebView2\Microsoft.Web.WebView2.Wpf.dll";   DestDir: "{app}\lib\WebView2";                                Flags: ignoreversion
+; WebView2Loader.dll at the root of lib\WebView2 is the one our SetDllDirectory
+; points at — ConPty/WebView2 won't init if it's missing here.
+Source: "..\lib\WebView2\WebView2Loader.dll";               DestDir: "{app}\lib\WebView2";                                Flags: ignoreversion
+Source: "..\lib\WebView2\runtimes\win-x64\native\WebView2Loader.dll";   DestDir: "{app}\lib\WebView2\runtimes\win-x64\native";   Flags: ignoreversion
+Source: "..\lib\WebView2\runtimes\win-x86\native\WebView2Loader.dll";   DestDir: "{app}\lib\WebView2\runtimes\win-x86\native";   Flags: ignoreversion
+Source: "..\lib\WebView2\runtimes\win-arm64\native\WebView2Loader.dll"; DestDir: "{app}\lib\WebView2\runtimes\win-arm64\native"; Flags: ignoreversion
+
+; v5.0 terminal renderer: xterm.js + addons + host HTML
+Source: "..\web\*"; DestDir: "{app}\web"; Flags: ignoreversion recursesubdirs
 
 [Icons]
 ; Start Menu shortcut (always created)
