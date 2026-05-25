@@ -129,7 +129,6 @@ Add-Type -AssemblyName System.Xaml
       <Setter Property="Padding"         Value="0"/>
       <Setter Property="Margin"          Value="3,4"/>
       <Setter Property="HorizontalContentAlignment" Value="Stretch"/>
-      <Setter Property="Cursor"          Value="Hand"/>
       <Setter Property="FontFamily"      Value="Segoe UI"/>
       <Setter Property="FontSize"        Value="12"/>
       <Setter Property="SnapsToDevicePixels"      Value="True"/>
@@ -323,7 +322,6 @@ Add-Type -AssemblyName System.Xaml
       <Setter Property="Margin"          Value="3,2"/>
       <Setter Property="HorizontalContentAlignment" Value="Center"/>
       <Setter Property="VerticalContentAlignment"   Value="Center"/>
-      <Setter Property="Cursor"          Value="Hand"/>
       <Setter Property="FontFamily"      Value="Segoe UI"/>
       <Setter Property="FontSize"        Value="12"/>
       <Setter Property="FontWeight"      Value="SemiBold"/>
@@ -450,10 +448,14 @@ Add-Type -AssemblyName System.Xaml
         </StackPanel>
         <Button x:Name="BtnRefreshStatus" Grid.Row="0" Grid.Column="1" Content="Refresh" Style="{StaticResource UtilButton}" Padding="14,4"/>
 
-        <TextBox x:Name="StatusPane" Grid.Row="1" Grid.ColumnSpan="2"
-                 Style="{StaticResource MonoText}"
-                 Height="332" Margin="0,6,0,0"
-                 Text="Loading cluster status..."/>
+        <Border Grid.Row="1" Grid.ColumnSpan="2" Height="332" Margin="0,6,0,0"
+                Background="#0C0C0C" BorderBrush="#3F3F46" BorderThickness="1">
+          <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Auto"
+                        Focusable="False" Padding="4,2">
+            <TextBlock x:Name="StatusPane" FontFamily="Consolas" FontSize="12"
+                       Foreground="#E5E5E5" Text="Loading cluster status..."/>
+          </ScrollViewer>
+        </Border>
       </Grid>
     </Border>
 
@@ -504,6 +506,7 @@ Add-Type -AssemblyName System.Xaml
         <TextBox x:Name="OutputPane" Grid.Row="1"
                  Style="{StaticResource MonoText}"
                  BorderThickness="0"
+                 Focusable="False" IsTabStop="False" Cursor="Arrow"
                  Text="Click a command on the left to run it.&#x0a;&#x0a;Commands marked [console] open in a separate elevated console window (they need interactive input or a TTY). All other commands stream their output here.&#x0a;"/>
       </Grid>
     </Grid>
@@ -1308,6 +1311,50 @@ $ui.BtnClearOutput.Add_Click({ Clear-Output })
 $ui.BtnCopyOutput.Add_Click({
     try { [Windows.Clipboard]::SetText($ui.OutputPane.Text) } catch {}
 })
+
+# Output pane is non-interactive by default: swallow mouse-down so no caret/
+# selection appears. The mouse wheel still scrolls via WPF's bubble routing.
+# When a future InApp command needs to collect input from the user, call
+# Set-OutputInputMode -Enabled $true to re-enable focus + selection.
+$script:OutputMouseSwallow = [Windows.Input.MouseButtonEventHandler]{
+    param($sender, $e)
+    $e.Handled = $true
+}
+$ui.OutputPane.AddHandler(
+    [Windows.UIElement]::PreviewMouseLeftButtonDownEvent,
+    $script:OutputMouseSwallow)
+$ui.OutputPane.AddHandler(
+    [Windows.UIElement]::PreviewMouseRightButtonDownEvent,
+    $script:OutputMouseSwallow)
+$script:OutputInputEnabled = $false
+
+function Set-OutputInputMode {
+    param([bool]$Enabled)
+    if ($Enabled -and -not $script:OutputInputEnabled) {
+        $ui.OutputPane.Focusable = $true
+        $ui.OutputPane.IsTabStop = $true
+        $ui.OutputPane.Cursor    = [Windows.Input.Cursors]::IBeam
+        $ui.OutputPane.RemoveHandler(
+            [Windows.UIElement]::PreviewMouseLeftButtonDownEvent,
+            $script:OutputMouseSwallow)
+        $ui.OutputPane.RemoveHandler(
+            [Windows.UIElement]::PreviewMouseRightButtonDownEvent,
+            $script:OutputMouseSwallow)
+        $script:OutputInputEnabled = $true
+    }
+    elseif (-not $Enabled -and $script:OutputInputEnabled) {
+        $ui.OutputPane.Focusable = $false
+        $ui.OutputPane.IsTabStop = $false
+        $ui.OutputPane.Cursor    = [Windows.Input.Cursors]::Arrow
+        $ui.OutputPane.AddHandler(
+            [Windows.UIElement]::PreviewMouseLeftButtonDownEvent,
+            $script:OutputMouseSwallow)
+        $ui.OutputPane.AddHandler(
+            [Windows.UIElement]::PreviewMouseRightButtonDownEvent,
+            $script:OutputMouseSwallow)
+        $script:OutputInputEnabled = $false
+    }
+}
 
 # Status auto-refresh timer (30s)
 $autoRefresh = New-Object System.Windows.Threading.DispatcherTimer
