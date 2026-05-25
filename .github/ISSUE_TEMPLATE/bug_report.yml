@@ -1,5 +1,5 @@
 name: 🐛 Tool bug report
-description: Report a bug or unexpected behavior in the Simple Dune Server Management Tool itself (the PowerShell script, the .bat launcher, or the web UI).
+description: Report a bug or unexpected behavior in the Simple Dune Server Management Tool itself (the desktop app, the PowerShell script, or the .bat launcher).
 title: "[Bug] "
 labels: ["bug"]
 body:
@@ -9,7 +9,7 @@ body:
         ## What this tracker is for
 
         This issue tracker is for **bugs in this tool's code** — the
-        PowerShell script, the `.bat` launcher, the localhost web UI,
+        desktop app, the PowerShell script, the `.bat` launcher,
         and the setup wizard.
 
         **Please do _not_ open issues here for:**
@@ -30,15 +30,15 @@ body:
       label: Scope check
       description: Please confirm this is actually a bug in the tool's code.
       options:
-        - label: This is a bug in the tool itself (script crashes, menu option misbehaves, web UI broken, setup wizard fails, etc.) — **not** a VM/network/Funcom-server issue.
+        - label: This is a bug in the tool itself (app crashes, menu option misbehaves, terminal pane broken, setup wizard fails, etc.) — **not** a VM/network/Funcom-server issue.
           required: true
 
   - type: input
     id: tool_version
     attributes:
       label: Tool version
-      description: Shown in the menu header (e.g. `v3.0.0`). Find it on line 16 of `dune-server.ps1` (`$script:ToolVersion`).
-      placeholder: "v3.0.0"
+      description: Shown in the menu header / app footer (e.g. `v5.0.0`). Auto-filled when launched from `Report Issue` in the desktop app or CLI.
+      placeholder: "v5.0.0"
     validations:
       required: true
 
@@ -47,7 +47,7 @@ body:
     attributes:
       label: Menu option / command
       description: Which menu letter/number or `-Cmd <name>` triggered the bug?
-      placeholder: "e.g. e. reboot, or -Cmd startup, or b. web"
+      placeholder: "e.g. e. reboot, or -Cmd startup, or 'SSH' button in the app"
     validations:
       required: true
 
@@ -55,10 +55,10 @@ body:
     id: what_happened
     attributes:
       label: What happened
-      description: Paste the actual error message or unexpected output from the console. Screenshots also welcome.
+      description: Paste the actual error message or unexpected output from the terminal pane. Screenshots also welcome.
       placeholder: |
-        e.g. "After selecting 'e. reboot' the script printed
-        'Waiting for k3s API...' and never advanced."
+        e.g. "After clicking 'SSH' the terminal pane went blank and
+        the footer said 'Terminal not ready after 8s'."
       render: shell
     validations:
       required: true
@@ -75,15 +75,26 @@ body:
     attributes:
       label: Transcript / log excerpt
       description: |
-        Every run is auto-logged to `.logs\dune-server-<timestamp>.log`
+        Every CLI run is auto-logged to `.logs\dune-server-<timestamp>.log`
         next to `dune-server.bat`. Paste the relevant section (last 30-50
         lines around the failure is usually enough — please **redact**
         public IPs, SSH key paths, and any secrets first).
+      render: shell
+
+  - type: textarea
+    id: diagnostics
+    attributes:
+      label: Auto-collected diagnostics
+      description: |
+        Auto-filled by the `Report Issue` button / `report-issue` command. Includes:
+        environment (Windows + PowerShell + WebView2 runtime version), app paths,
+        and the tail of `%APPDATA%\DuneServer\webview2-debug.log` if present.
+        Leave as-is unless you want to redact something.
       render: shell
 
   - type: input
     id: env
     attributes:
       label: Environment
-      description: Windows version + PowerShell version (`$PSVersionTable.PSVersion`).
+      description: Windows version + PowerShell version (`$PSVersionTable.PSVersion`). Auto-filled.
       placeholder: "Windows 11 23H2, PowerShell 7.4.1"
