@@ -440,15 +440,21 @@ Add-Type -AssemblyName System.Xaml
         <Grid.ColumnDefinitions>
           <ColumnDefinition Width="*"/>
           <ColumnDefinition Width="Auto"/>
+          <ColumnDefinition Width="Auto"/>
+          <ColumnDefinition Width="Auto"/>
+          <ColumnDefinition Width="Auto"/>
         </Grid.ColumnDefinitions>
 
         <StackPanel Grid.Row="0" Grid.Column="0" Orientation="Horizontal">
           <TextBlock Text="Battlegroup Status" Foreground="#E0B341" FontWeight="Bold" FontSize="14" VerticalAlignment="Center"/>
           <TextBlock x:Name="StatusMeta" Text="" Foreground="#888" FontSize="11" Margin="12,0,0,0" VerticalAlignment="Center"/>
         </StackPanel>
-        <Button x:Name="BtnRefreshStatus" Grid.Row="0" Grid.Column="1" Content="Refresh" Style="{StaticResource UtilButton}" Padding="14,4"/>
+        <TextBlock x:Name="InstalledVersionLbl" Grid.Row="0" Grid.Column="1" Text="Installed: -" Foreground="#B8A88F" FontSize="11" VerticalAlignment="Center" Margin="0,0,10,0"/>
+        <TextBlock x:Name="LatestVersionLbl"    Grid.Row="0" Grid.Column="2" Text="Latest: checking..." Foreground="#B8A88F" FontSize="11" VerticalAlignment="Center" Margin="0,0,10,0"/>
+        <Button x:Name="BtnCheckUpdate" Grid.Row="0" Grid.Column="3" Content="Check for Updates" Style="{StaticResource UtilButton}" Padding="14,4" Margin="0,0,6,0"/>
+        <Button x:Name="BtnRefreshStatus" Grid.Row="0" Grid.Column="4" Content="Refresh" Style="{StaticResource UtilButton}" Padding="14,4"/>
 
-        <Border Grid.Row="1" Grid.ColumnSpan="2" Height="332" Margin="0,6,0,0"
+        <Border Grid.Row="1" Grid.ColumnSpan="5" Height="332" Margin="0,6,0,0"
                 Background="#0C0C0C" BorderBrush="#3F3F46" BorderThickness="1">
           <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Auto"
                         Focusable="False" Padding="4,2">
@@ -547,6 +553,9 @@ $ui = @{
     Window         = $window
     StatusMeta     = $window.FindName('StatusMeta')
     BtnRefreshStat = $window.FindName('BtnRefreshStatus')
+    BtnCheckUpdate = $window.FindName('BtnCheckUpdate')
+    InstalledLbl   = $window.FindName('InstalledVersionLbl')
+    LatestLbl      = $window.FindName('LatestVersionLbl')
     StatusPane     = $window.FindName('StatusPane')
     ButtonPanelCol1  = $window.FindName('ButtonPanelCol1')
     ButtonPanelCol2  = $window.FindName('ButtonPanelCol2')
@@ -1312,6 +1321,112 @@ $ui.BtnCopyOutput.Add_Click({
     try { [Windows.Clipboard]::SetText($ui.OutputPane.Text) } catch {}
 })
 
+# ────────────────────────────────────────────────────────────────────────────
+#  Update checking (against coastal-ms/Simple-Dune-Server-Management-Tool)
+# ────────────────────────────────────────────────────────────────────────────
+
+$script:UpdateRepo = 'coastal-ms/Simple-Dune-Server-Management-Tool'
+$script:LatestRelease = $null
+
+function Get-LatestRelease {
+    [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
+    $hdr = @{ 'User-Agent' = 'DuneServerApp' }
+    Invoke-RestMethod -Headers $hdr -Uri "https://api.github.com/repos/$($script:UpdateRepo)/releases/latest" -TimeoutSec 15
+}
+
+function ConvertTo-CleanVersion {
+    param([string]$Tag)
+    $clean = ($Tag -replace '^v', '').Trim()
+    # Pad to at least 3 parts so [Version] always parses (e.g. "4.1" -> "4.1.0")
+    $parts = $clean.Split('.')
+    while ($parts.Count -lt 3) { $parts += '0' }
+    try { return [Version]($parts -join '.') } catch { return $null }
+}
+
+function Check-ForUpdates {
+    param([switch]$Silent)
+
+    $ui.LatestLbl.Text       = 'Latest: checking...'
+    $ui.LatestLbl.Foreground = '#B8A88F'
+    $ui.BtnCheckUpdate.IsEnabled = $false
+    try {
+        $rel = Get-LatestRelease
+        $script:LatestRelease = $rel
+        $latest  = ConvertTo-CleanVersion $rel.tag_name
+        $current = ConvertTo-CleanVersion $script:ToolVersion
+        if (-not $latest) {
+            $ui.LatestLbl.Text       = "Latest: $($rel.tag_name)"
+            $ui.LatestLbl.Foreground = '#B8A88F'
+            return
+        }
+
+        if ($latest -gt $current) {
+            $ui.LatestLbl.Text       = "Latest: $latest (update available)"
+            $ui.LatestLbl.Foreground = '#4FC3F7'
+            $msg = "A new version is available.`n`nInstalled: $current`nLatest:    $latest`n`nDownload and install now? The app will close while the installer runs."
+            $btn = [Windows.MessageBox]::Show($ui.Window, $msg, 'Update Available', 'YesNo', 'Information')
+            if ($btn -eq 'Yes') { Invoke-UpdateDownload -Release $rel }
+        }
+        elseif ($latest -eq $current) {
+            $ui.LatestLbl.Text       = "Latest: $latest (up to date)"
+            $ui.LatestLbl.Foreground = '#9EBE6B'
+            if (-not $Silent) {
+                [Windows.MessageBox]::Show($ui.Window, "You're on the latest version ($current).", 'No Updates', 'OK', 'Information') | Out-Null
+            }
+        }
+        else {
+            $ui.LatestLbl.Text       = "Latest: $latest (you are ahead)"
+            $ui.LatestLbl.Foreground = '#E0B341'
+        }
+    }
+    catch {
+        $ui.LatestLbl.Text       = 'Latest: check failed'
+        $ui.LatestLbl.Foreground = '#E07A4F'
+        if (-not $Silent) {
+            [Windows.MessageBox]::Show($ui.Window, "Couldn't check for updates:`n$($_.Exception.Message)", 'Update Check Failed', 'OK', 'Warning') | Out-Null
+        }
+    }
+    finally {
+        $ui.BtnCheckUpdate.IsEnabled = $true
+    }
+}
+
+function Invoke-UpdateDownload {
+    param($Release)
+    $asset = $Release.assets | Where-Object { $_.name -like '*Setup*.exe' } | Select-Object -First 1
+    if (-not $asset) {
+        [Windows.MessageBox]::Show($ui.Window,
+            "The latest release has no installer asset attached. Download manually from:`nhttps://github.com/$($script:UpdateRepo)/releases",
+            'No Installer Asset', 'OK', 'Warning') | Out-Null
+        return
+    }
+    $dest = Join-Path $env:TEMP $asset.name
+    try {
+        $ui.Window.Cursor = [Windows.Input.Cursors]::Wait
+        $ui.BtnCheckUpdate.IsEnabled = $false
+        [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
+        Invoke-WebRequest -Uri $asset.browser_download_url -OutFile $dest `
+                          -Headers @{ 'User-Agent' = 'DuneServerApp' } `
+                          -UseBasicParsing -TimeoutSec 300
+    }
+    catch {
+        [Windows.MessageBox]::Show($ui.Window, "Download failed: $($_.Exception.Message)", 'Update Failed', 'OK', 'Error') | Out-Null
+        return
+    }
+    finally {
+        $ui.Window.Cursor = $null
+        $ui.BtnCheckUpdate.IsEnabled = $true
+    }
+
+    [Windows.MessageBox]::Show($ui.Window,
+        "Installer downloaded to:`n$dest`n`nThe app will now close and the installer will start. Follow the prompts to upgrade.",
+        'Ready to Install', 'OK', 'Information') | Out-Null
+    try { Start-Process -FilePath $dest } catch {}
+    $ui.Window.Close()
+}
+
+$ui.BtnCheckUpdate.Add_Click({ Check-ForUpdates })
+
 # Output pane is non-interactive by default: swallow mouse-down so no caret/
 # selection appears. The mouse wheel still scrolls via WPF's bubble routing.
 # When a future InApp command needs to collect input from the user, call
@@ -1363,12 +1478,16 @@ $autoRefresh.Add_Tick({ Refresh-StatusHeader })
 
 # Initial paint
 Build-ButtonPanel -Vm $script:LastVmKnown
-$ui.FooterVersion.Text = "Dune Server v4.1.0"
+$ui.FooterVersion.Text = "Dune Server v4.2.0"
+$ui.InstalledLbl.Text  = "Installed: $script:ToolVersion"
 
 # Kick off first status fetch on window load
 $ui.Window.Add_Loaded({
     Refresh-StatusHeader
     $autoRefresh.Start()
+    # Silent update check on launch — populates the Latest label, only
+    # prompts the user if a newer release is actually available.
+    try { Check-ForUpdates -Silent } catch {}
 })
 
 $ui.Window.Add_Closed({

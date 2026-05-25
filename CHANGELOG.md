@@ -7,6 +7,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [4.2.0] - 2026-05-24
+
+Minor release: in-app update checking.
+
+### Added
+
+- **"Check for Updates" button** in the status header. Hits the GitHub
+  Releases API for `coastal-ms/Simple-Dune-Server-Management-Tool`,
+  compares the latest release tag to the installed version, and offers
+  to download + launch the installer if a newer build is available.
+- **Installed / Latest version labels** next to the new button, so the
+  user can see at a glance which version they're on and what's current
+  upstream.
+- **Silent update check on launch** — the Latest label is populated
+  automatically when the window opens, and a prompt is shown only when
+  a newer release actually exists. Errors are swallowed silently on
+  startup; explicit button clicks still surface failures via dialog.
+
 ## [4.1.0] - 2026-05-24
 
 Minor release: installer can now download dune-admin for you, and the
@@ -639,7 +657,8 @@ entry. From here on, patch releases follow as `3.0.1`, `3.0.2`, etc.
 - Boot-time history stored at `<scriptDir>\.boot-times.json` (rolling
   window of last 20 entries per phase).
 
-[Unreleased]: https://github.com/coastal-ms/Simple-Dune-Server-Management-Tool/compare/v4.1.0...HEAD
+[Unreleased]: https://github.com/coastal-ms/Simple-Dune-Server-Management-Tool/compare/v4.2.0...HEAD
+[4.2.0]: https://github.com/coastal-ms/Simple-Dune-Server-Management-Tool/compare/v4.1.0...v4.2.0
 [4.1.0]: https://github.com/coastal-ms/Simple-Dune-Server-Management-Tool/compare/v4.0.8...v4.1.0
 [4.0.8]: https://github.com/coastal-ms/Simple-Dune-Server-Management-Tool/compare/v4.0.7...v4.0.8
 [4.0.7]: https://github.com/coastal-ms/Simple-Dune-Server-Management-Tool/compare/v4.0.6...v4.0.7
