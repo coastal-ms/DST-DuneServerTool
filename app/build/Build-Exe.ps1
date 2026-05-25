@@ -14,7 +14,7 @@
 
 [CmdletBinding()]
 param(
-    [string]$Version = '4.3.1',
+    [string]$Version = '4.3.2',
     [switch]$Quiet
 )
 
