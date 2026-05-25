@@ -7,6 +7,44 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [4.0.4] - 2026-05-24
+
+Patch release: simplified flat menu layout with drag-to-reorder, larger
+button labels, and per-user button-order persistence.
+
+### Added
+
+- **Drag-to-reorder**: any command button can be dragged onto any other
+  command button to swap positions. The new order is persisted to
+  `%APPDATA%\DuneServer\button-order.json` and is restored on next launch.
+  - Right-click any button → "Reset button order to default" to wipe the
+    saved order and fall back to the catalog default.
+  - If a future release adds new commands, they're appended to the end of
+    the saved order automatically (no migration needed).
+
+### Changed
+
+- **Menu layout simplified to a flat 3-column grid** with no section
+  headers and no hotkey letter/number badges. The numbered/lettered hotkey
+  badge column has been removed from the `CmdButton` template entirely -
+  buttons now show only the command name + description.
+- **Larger, more legible button text**: command name bumped from 12.5pt to
+  15pt SemiBold; description from 10.5pt to 11.5pt with brighter foreground
+  (`#F5EFE0` / `#B8A88F`) for better contrast against the dark Dune palette.
+- Button padding increased (14,10,10,10) for more breathing room around the
+  larger text.
+- Window default size: `1840x900` → `1640x900` (menu area shrunk from 980px
+  to 820px since no badge column is needed). MinWidth: 1540 → 1340.
+- Tooltips include "(Drag any button to reorder. Right-click for options.)"
+  hint so the drag feature is discoverable.
+
+### Notes
+
+- Hotkey-based dispatch from the underlying `dune-server.ps1` CLI still
+  works (the `Key` field is preserved internally and used by `-Cmd <name>`
+  invocation); the badges were only ever a visual aid in the desktop app
+  and are gone from the UI but not from the data model.
+
 ## [4.0.3] - 2026-05-24
 
 Patch release: four-column section-based menu layout + Dune-movie-themed
@@ -469,7 +507,8 @@ entry. From here on, patch releases follow as `3.0.1`, `3.0.2`, etc.
 - Boot-time history stored at `<scriptDir>\.boot-times.json` (rolling
   window of last 20 entries per phase).
 
-[Unreleased]: https://github.com/coastal-ms/Simple-Dune-Server-Management-Tool/compare/v4.0.3...HEAD
+[Unreleased]: https://github.com/coastal-ms/Simple-Dune-Server-Management-Tool/compare/v4.0.4...HEAD
+[4.0.4]: https://github.com/coastal-ms/Simple-Dune-Server-Management-Tool/compare/v4.0.3...v4.0.4
 [4.0.3]: https://github.com/coastal-ms/Simple-Dune-Server-Management-Tool/compare/v4.0.2...v4.0.3
 [4.0.2]: https://github.com/coastal-ms/Simple-Dune-Server-Management-Tool/compare/v4.0.1...v4.0.2
 [4.0.1]: https://github.com/coastal-ms/Simple-Dune-Server-Management-Tool/compare/v4.0.0...v4.0.1
