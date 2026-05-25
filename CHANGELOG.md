@@ -7,6 +7,25 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [4.1.0] - 2026-05-24
+
+Minor release: installer can now download dune-admin for you.
+
+### Added
+
+- **"Download Latest from GitHub..." button** on the Dune Admin Tool
+  page of the installer. Pick a folder, and the installer fetches the
+  latest `windows_amd64.zip` from
+  [Icehunter/dune-admin](https://github.com/Icehunter/dune-admin/releases),
+  extracts it, and auto-fills the path field with the resulting
+  `dune-admin.exe`. The chosen folder is what gets saved as
+  `DuneAdminExe` in `dune-server.config`.
+
+### Changed
+
+- Help text on the Dune Admin Tool page now points at the download
+  button instead of asking the user to grab a release manually.
+
 ## [4.0.8] - 2026-05-24
 
 Patch release: the installer now collects all configuration up-front so
@@ -609,7 +628,8 @@ entry. From here on, patch releases follow as `3.0.1`, `3.0.2`, etc.
 - Boot-time history stored at `<scriptDir>\.boot-times.json` (rolling
   window of last 20 entries per phase).
 
-[Unreleased]: https://github.com/coastal-ms/Simple-Dune-Server-Management-Tool/compare/v4.0.8...HEAD
+[Unreleased]: https://github.com/coastal-ms/Simple-Dune-Server-Management-Tool/compare/v4.1.0...HEAD
+[4.1.0]: https://github.com/coastal-ms/Simple-Dune-Server-Management-Tool/compare/v4.0.8...v4.1.0
 [4.0.8]: https://github.com/coastal-ms/Simple-Dune-Server-Management-Tool/compare/v4.0.7...v4.0.8
 [4.0.7]: https://github.com/coastal-ms/Simple-Dune-Server-Management-Tool/compare/v4.0.6...v4.0.7
 [4.0.6]: https://github.com/coastal-ms/Simple-Dune-Server-Management-Tool/compare/v4.0.5...v4.0.6
