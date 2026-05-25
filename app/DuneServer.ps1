@@ -1316,7 +1316,7 @@ $autoRefresh.Add_Tick({ Refresh-StatusHeader })
 
 # Initial paint
 Build-ButtonPanel -Vm $script:LastVmKnown
-$ui.FooterVersion.Text = "Dune Server v4.0.8"
+$ui.FooterVersion.Text = "Dune Server v4.1.0"
 
 # Kick off first status fetch on window load
 $ui.Window.Add_Loaded({
