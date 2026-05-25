@@ -7,6 +7,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [4.5.2] - 2026-05-25
+
+Patch on top of v4.5.1.
+
+### Fixed
+
+- **"Report an Issue" (and other URL-opening menu items) now open the
+  user's default browser on Windows 11 24H2.** The previous pattern
+  `Start-Process "$env:SystemRoot\explorer.exe" $url` stopped working
+  correctly on 24H2 — `explorer.exe` now ignores the system default
+  browser and either silently fails (from an elevated PowerShell host)
+  or forces Microsoft Edge regardless of the user's preference. Switched
+  every URL launch in `dune-server.ps1` to `Start-Process $url`, which
+  dispatches through the registered `https://` protocol handler and
+  honors the user's default browser. Affects: `report-issue`,
+  `setup-guide`, `dune-admin` (web UI), `open-file-browser`,
+  `open-director`.
+
 ## [4.5.1] - 2026-05-25
 
 Patch on top of v4.5.0.
@@ -808,7 +826,8 @@ entry. From here on, patch releases follow as `3.0.1`, `3.0.2`, etc.
 - Boot-time history stored at `<scriptDir>\.boot-times.json` (rolling
   window of last 20 entries per phase).
 
-[Unreleased]: https://github.com/coastal-ms/Simple-Dune-Server-Management-Tool/compare/v4.5.1...HEAD
+[Unreleased]: https://github.com/coastal-ms/Simple-Dune-Server-Management-Tool/compare/v4.5.2...HEAD
+[4.5.2]: https://github.com/coastal-ms/Simple-Dune-Server-Management-Tool/compare/v4.5.1...v4.5.2
 [4.5.1]: https://github.com/coastal-ms/Simple-Dune-Server-Management-Tool/compare/v4.5.0...v4.5.1
 [4.5.0]: https://github.com/coastal-ms/Simple-Dune-Server-Management-Tool/compare/v4.4.0...v4.5.0
 [4.4.0]: https://github.com/coastal-ms/Simple-Dune-Server-Management-Tool/compare/v4.3.3...v4.4.0

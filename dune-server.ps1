@@ -13,7 +13,7 @@ param(
 # Wraps the original battlegroup.ps1 menu and adds extra tools
 # ============================================================
 
-$script:ToolVersion = "4.5.1"
+$script:ToolVersion = "4.5.2"
 
 # ============================================================
 #  CRASH / EXIT CLEANUP
@@ -1673,7 +1673,7 @@ while ($true) {
     # ========================================================
 
     if ($cmdName -eq "open-file-browser") {
-        Start-Process "$env:SystemRoot\explorer.exe" "http://${ip}:18888/"
+        Start-Process "http://${ip}:18888/"
         continue
     }
 
@@ -1684,7 +1684,7 @@ while ($true) {
             if ($directorNodePort -match '^\d+$') { $directorPort = $directorNodePort.Trim() }
         }
         if (-not $directorPort) { Write-Warning "Could not determine Director port."; continue }
-        Start-Process "$env:SystemRoot\explorer.exe" "http://${ip}:${directorPort}/"
+        Start-Process "http://${ip}:${directorPort}/"
         continue
     }
 
@@ -1794,14 +1794,16 @@ while ($true) {
         Start-ScheduledTask -TaskName "DuneAdminLaunch"
         Start-Sleep -Seconds 1
         Unregister-ScheduledTask -TaskName "DuneAdminLaunch" -Confirm:$false
-        # Open web UI via explorer (always runs as logged-in user)
-        Start-Process "$env:SystemRoot\explorer.exe" $duneAdminWeb
+        # Open web UI in default browser (Start-Process <url> uses the
+        # registered https:// protocol handler, honoring the user's default
+        # browser. Avoids Windows 11 24H2's explorer.exe-forces-Edge bug.)
+        Start-Process $duneAdminWeb
         Write-Host "Done. dune-admin.exe is running and web UI opened in browser." -ForegroundColor Green
         continue
     }
 
     if ($cmdName -eq "setup-guide") {
-        Start-Process "$env:SystemRoot\explorer.exe" "https://duneawakening.com/self-hosted-servers/"
+        Start-Process "https://duneawakening.com/self-hosted-servers/"
         continue
     }
 
@@ -1831,7 +1833,7 @@ while ($true) {
         $url = "https://github.com/coastal-ms/Simple-Dune-Server-Management-Tool/issues/new?$params"
 
         Write-Host "  $url" -ForegroundColor DarkGray
-        Start-Process "$env:SystemRoot\explorer.exe" $url
+        Start-Process $url
         continue
     }
 

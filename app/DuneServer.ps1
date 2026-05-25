@@ -36,7 +36,7 @@ param()
 # check (Check-ForUpdates) and the "Installed: x.y.z" header label. Must be
 # bumped in lock-step with the other 3 version constants (dune-server.ps1,
 # Build-Exe.ps1, installer .iss).
-$script:ToolVersion = "4.5.1"
+$script:ToolVersion = "4.5.2"
 
 # ────────────────────────────────────────────────────────────────────────────
 #  Prerequisite check: PowerShell 7 (pwsh.exe)
@@ -1954,7 +1954,7 @@ $autoRefresh.Add_Tick({
 
 # Initial paint
 Build-ButtonPanel -Vm $script:LastVmKnown
-$ui.FooterVersion.Text = "Dune Server v4.5.1"
+$ui.FooterVersion.Text = "Dune Server v4.5.2"
 $ui.InstalledLbl.Text  = "Installed: $script:ToolVersion"
 
 # Kick off first status fetch on window load
