@@ -7,6 +7,34 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [4.3.3] - 2026-05-24
+
+Patch on top of v4.3.2.
+
+### Added
+
+- **"Latest: vX.Y.Z" header label is now clickable** — opens the matching
+  GitHub release notes page in your browser. Hover gives a hand cursor,
+  underline, and tooltip ("Open release notes for vX.Y.Z on GitHub").
+  The link affordance is only shown after a successful update check
+  populates a tag; the "Latest: checking..." and "Latest: check failed"
+  states render as plain text.
+
+### Fixed
+
+- **Battlegroup status panel no longer renders a red `NativeCommandError`
+  when the battlegroup is Stopped.** Funcom's `battlegroup status` writes
+  kubectl's benign "No resources found in <namespace> namespace." line to
+  stderr whenever there are no game-server pods (i.e. after a stop or
+  fresh reboot before maps come up). The SSH wrapper merged stderr with
+  `2>&1`, which arrives as `ErrorRecord` objects; `Out-String` then
+  rendered each one with the full `At line:N char:M / CategoryInfo /
+  FullyQualifiedErrorId : NativeCommandError` call-site dump.
+  Both the snapshot helper (`Get-BattlegroupStatusSnapshot`) and the
+  runspace status-fetch now flatten any `ErrorRecord` on the merged
+  pipeline to plain strings before stringification, so the empty
+  "Game Servers" section just shows the plain text line.
+
 ## [4.3.2] - 2026-05-24
 
 Patch on top of v4.3.1.
@@ -705,7 +733,8 @@ entry. From here on, patch releases follow as `3.0.1`, `3.0.2`, etc.
 - Boot-time history stored at `<scriptDir>\.boot-times.json` (rolling
   window of last 20 entries per phase).
 
-[Unreleased]: https://github.com/coastal-ms/Simple-Dune-Server-Management-Tool/compare/v4.3.2...HEAD
+[Unreleased]: https://github.com/coastal-ms/Simple-Dune-Server-Management-Tool/compare/v4.3.3...HEAD
+[4.3.3]: https://github.com/coastal-ms/Simple-Dune-Server-Management-Tool/compare/v4.3.2...v4.3.3
 [4.3.2]: https://github.com/coastal-ms/Simple-Dune-Server-Management-Tool/compare/v4.3.1...v4.3.2
 [4.3.1]: https://github.com/coastal-ms/Simple-Dune-Server-Management-Tool/compare/v4.3.0...v4.3.1
 [4.3.0]: https://github.com/coastal-ms/Simple-Dune-Server-Management-Tool/compare/v4.2.0...v4.3.0
