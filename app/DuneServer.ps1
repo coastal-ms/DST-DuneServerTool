@@ -32,7 +32,7 @@ param()
 # check (Check-ForUpdates) and the "Installed: x.y.z" header label. Must be
 # bumped in lock-step with the other 3 version constants (dune-server.ps1,
 # Build-Exe.ps1, installer .iss).
-$script:ToolVersion = "5.0.1"
+$script:ToolVersion = "5.0.2"
 
 # ANSI escape character (0x1B). The ps2exe-compiled binary runs in
 # PowerShell 5.1 (Desktop), which does NOT support the `e backtick-e
@@ -2320,7 +2320,7 @@ $ui.InstalledLbl.Text  = "Installed: $script:ToolVersion"
 # with E_ABORT (0x80004004) — the broker/zygote silently aborts during sandbox
 # bootstrap. UserDataFolder ALSO lives under %PROGRAMDATA% so the elevated
 # host and any future non-elevated subprocesses can both reach it, and so
-# OneDrive (which redirects parts of Coastal's user profile) never touches it.
+# OneDrive (which redirects parts of the user's profile) never touches it.
 $script:WebView2UserData = Join-Path $env:PROGRAMDATA 'DuneServer\webview2'
 if (-not (Test-Path $script:WebView2UserData)) {
     New-Item -ItemType Directory -Force -Path $script:WebView2UserData | Out-Null
@@ -2418,7 +2418,7 @@ $ui.Terminal.add_CoreWebView2InitializationCompleted({
                         $script:PendingTermWrites.Clear()
                     }
                     $ver = $script:ToolVersion
-                    if (-not $ver) { $ver = '5.0.1' }
+                    if (-not $ver) { $ver = '5.0.2' }
                     $ESC = $script:ESC
                     if (-not $ESC) { $ESC = [char]27 }
                     $banner = "$ESC[36mDune Server v$ver$ESC[0m`r`n" +
