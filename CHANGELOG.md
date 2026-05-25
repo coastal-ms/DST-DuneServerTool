@@ -7,6 +7,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [4.3.1] - 2026-05-24
+
+Patch on top of v4.3.0.
+
+### Fixed
+
+- **Silent startup update check no longer nags.** The
+  `Check-ForUpdates -Silent` path (run automatically on
+  `Window.Loaded`) was still showing the YesNo "Update Available"
+  prompt every launch. It now only paints the Latest label blue when
+  a newer release is available; the download prompt only appears when
+  you click the **Check for Updates** button explicitly.
+
 ## [4.3.0] - 2026-05-24
 
 Minor release: drops the legacy web portal as a user-facing option.
@@ -672,7 +685,8 @@ entry. From here on, patch releases follow as `3.0.1`, `3.0.2`, etc.
 - Boot-time history stored at `<scriptDir>\.boot-times.json` (rolling
   window of last 20 entries per phase).
 
-[Unreleased]: https://github.com/coastal-ms/Simple-Dune-Server-Management-Tool/compare/v4.3.0...HEAD
+[Unreleased]: https://github.com/coastal-ms/Simple-Dune-Server-Management-Tool/compare/v4.3.1...HEAD
+[4.3.1]: https://github.com/coastal-ms/Simple-Dune-Server-Management-Tool/compare/v4.3.0...v4.3.1
 [4.3.0]: https://github.com/coastal-ms/Simple-Dune-Server-Management-Tool/compare/v4.2.0...v4.3.0
 [4.2.0]: https://github.com/coastal-ms/Simple-Dune-Server-Management-Tool/compare/v4.1.0...v4.2.0
 [4.1.0]: https://github.com/coastal-ms/Simple-Dune-Server-Management-Tool/compare/v4.0.8...v4.1.0
