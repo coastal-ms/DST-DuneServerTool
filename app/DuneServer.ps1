@@ -197,6 +197,24 @@ Add-Type -AssemblyName System.Xaml
                                     VerticalAlignment="Center"/>
                 </Grid>
               </Border>
+
+              <!-- Drag-reorder insertion indicators: bright cyan bars at the
+                   very top / bottom of the button, hidden by default; one is
+                   shown via Opacity=1 by the drag handlers in code. -->
+              <Rectangle x:Name="topInsert" Height="5" VerticalAlignment="Top"
+                         Margin="2,0,2,0" RadiusX="2" RadiusY="2"
+                         Fill="#4FC3F7" Opacity="0" IsHitTestVisible="False">
+                <Rectangle.Effect>
+                  <DropShadowEffect Color="#4FC3F7" ShadowDepth="0" BlurRadius="18" Opacity="1"/>
+                </Rectangle.Effect>
+              </Rectangle>
+              <Rectangle x:Name="bottomInsert" Height="5" VerticalAlignment="Bottom"
+                         Margin="2,0,2,0" RadiusX="2" RadiusY="2"
+                         Fill="#4FC3F7" Opacity="0" IsHitTestVisible="False">
+                <Rectangle.Effect>
+                  <DropShadowEffect Color="#4FC3F7" ShadowDepth="0" BlurRadius="18" Opacity="1"/>
+                </Rectangle.Effect>
+              </Rectangle>
             </Grid>
 
             <ControlTemplate.Triggers>
@@ -1003,7 +1021,7 @@ function Get-OrderedCommands {
 }
 
 function Move-Command {
-    param([string]$SourceName, [string]$TargetName)
+    param([string]$SourceName, [string]$TargetName, [string]$Position = 'before')
     if ($SourceName -eq $TargetName) { return }
     $ordered = @(Get-OrderedCommands)
     $list = New-Object System.Collections.Generic.List[string]
@@ -1013,10 +1031,16 @@ function Move-Command {
     if ($srcIdx -lt 0 -or $tgtIdx -lt 0) { return }
     $list.RemoveAt($srcIdx)
     if ($srcIdx -lt $tgtIdx) { $tgtIdx-- }
+    if ($Position -eq 'after') { $tgtIdx++ }
+    if ($tgtIdx -lt 0) { $tgtIdx = 0 }
+    if ($tgtIdx -gt $list.Count) { $tgtIdx = $list.Count }
     $list.Insert($tgtIdx, $SourceName)
     Save-ButtonOrderList -Order $list.ToArray()
     Build-ButtonPanel
 }
+
+# Currently-shown insertion line so we can clear it from any handler.
+$script:DropPosition = 'before'
 
 function Reset-ButtonOrder {
     if (Test-Path $script:ButtonOrderPath) {
@@ -1184,20 +1208,6 @@ function Build-ButtonPanel {
         })
         $btn.Add_DragEnter({
             param($s, $e)
-            $srcName = $null
-            try { $srcName = $e.Data.GetData([System.Windows.DataFormats]::Text) } catch {}
-            $tgt = $s.DataContext
-            if ($srcName -and $tgt -and $srcName -ne $tgt.Name) {
-                # Bright Eyes-of-Ibad halo + slight scale-up to show "drop here".
-                $glow = New-Object System.Windows.Media.Effects.DropShadowEffect
-                $glow.Color = [System.Windows.Media.ColorConverter]::ConvertFromString('#4FC3F7')
-                $glow.BlurRadius = 42
-                $glow.ShadowDepth = 0
-                $glow.Opacity = 1.0
-                $s.Effect = $glow
-                $s.RenderTransformOrigin = New-Object System.Windows.Point 0.5, 0.5
-                $s.RenderTransform = New-Object System.Windows.Media.ScaleTransform 1.06, 1.06
-            }
             $e.Handled = $true
         })
         $btn.Add_DragOver({
@@ -1205,27 +1215,57 @@ function Build-ButtonPanel {
             $srcName = $null
             try { $srcName = $e.Data.GetData([System.Windows.DataFormats]::Text) } catch {}
             $tgt = $s.DataContext
+            $topR    = $null
+            $bottomR = $null
+            try {
+                $topR    = $s.Template.FindName('topInsert',    $s)
+                $bottomR = $s.Template.FindName('bottomInsert', $s)
+            } catch {}
             if ($srcName -and $tgt -and $srcName -ne $tgt.Name) {
                 $e.Effects = [System.Windows.DragDropEffects]::Move
+                $pos = $e.GetPosition($s)
+                $h = $s.ActualHeight
+                if ($h -le 0) { $h = 1 }
+                if ($pos.Y -ge ($h / 2.0)) {
+                    if ($topR)    { $topR.Opacity    = 0 }
+                    if ($bottomR) { $bottomR.Opacity = 1 }
+                    $script:DropPosition = 'after'
+                } else {
+                    if ($topR)    { $topR.Opacity    = 1 }
+                    if ($bottomR) { $bottomR.Opacity = 0 }
+                    $script:DropPosition = 'before'
+                }
             } else {
                 $e.Effects = [System.Windows.DragDropEffects]::None
+                if ($topR)    { $topR.Opacity    = 0 }
+                if ($bottomR) { $bottomR.Opacity = 0 }
             }
             $e.Handled = $true
         })
         $btn.Add_DragLeave({
             param($s, $e)
-            $s.Effect = $null
-            $s.RenderTransform = [System.Windows.Media.Transform]::Identity
+            try {
+                $topR    = $s.Template.FindName('topInsert',    $s)
+                $bottomR = $s.Template.FindName('bottomInsert', $s)
+                if ($topR)    { $topR.Opacity    = 0 }
+                if ($bottomR) { $bottomR.Opacity = 0 }
+            } catch {}
             $e.Handled = $true
         })
         $btn.Add_Drop({
             param($s, $e)
-            $s.Effect = $null
-            $s.RenderTransform = [System.Windows.Media.Transform]::Identity
+            try {
+                $topR    = $s.Template.FindName('topInsert',    $s)
+                $bottomR = $s.Template.FindName('bottomInsert', $s)
+                if ($topR)    { $topR.Opacity    = 0 }
+                if ($bottomR) { $bottomR.Opacity = 0 }
+            } catch {}
             $srcName = $null
             try { $srcName = $e.Data.GetData([System.Windows.DataFormats]::Text) } catch {}
             $tgt = $s.DataContext
-            if ($srcName -and $tgt) { Move-Command -SourceName $srcName -TargetName $tgt.Name }
+            if ($srcName -and $tgt) {
+                Move-Command -SourceName $srcName -TargetName $tgt.Name -Position $script:DropPosition
+            }
             $e.Handled = $true
         })
 
@@ -1266,7 +1306,7 @@ $autoRefresh.Add_Tick({ Refresh-StatusHeader })
 
 # Initial paint
 Build-ButtonPanel -Vm $script:LastVmKnown
-$ui.FooterVersion.Text = "Dune Server v4.0.5"
+$ui.FooterVersion.Text = "Dune Server v4.0.6"
 
 # Kick off first status fetch on window load
 $ui.Window.Add_Loaded({

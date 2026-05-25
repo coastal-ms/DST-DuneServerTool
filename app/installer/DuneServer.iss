@@ -16,7 +16,7 @@
 ;                 -> NOT touched by install or uninstall (preserves user config)
 
 #define MyAppName        "Dune Server"
-#define MyAppVersion "4.0.5"
+#define MyAppVersion "4.0.6"
 #define MyAppPublisher   "Dune Awakening Self-Hosted Tool"
 #define MyAppURL         "https://github.com/coastal-ms/Simple-Dune-Server-Management-Tool"
 #define MyAppExeName     "DuneServer.exe"
