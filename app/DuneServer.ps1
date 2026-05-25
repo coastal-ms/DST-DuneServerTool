@@ -112,72 +112,314 @@ Add-Type -AssemblyName System.Xaml
 <Window xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         Title="Dune Server"
-        Height="900" Width="1180"
-        MinHeight="700" MinWidth="900"
+        Height="900" Width="1840"
+        MinHeight="700" MinWidth="1540"
         WindowStartupLocation="CenterScreen"
-        Background="#1E1E1E">
+        Background="#14110D">
   <Window.Resources>
     <Style x:Key="SectionHeader" TargetType="TextBlock">
-      <Setter Property="Foreground" Value="#E0B341"/>
+      <Setter Property="Foreground" Value="#E8B872"/>
       <Setter Property="FontWeight" Value="Bold"/>
       <Setter Property="FontSize"   Value="11"/>
-      <Setter Property="Margin"     Value="6,10,6,4"/>
+      <Setter Property="Margin"     Value="6,12,6,4"/>
     </Style>
     <Style x:Key="CmdButton" TargetType="Button">
-      <Setter Property="Background"      Value="#2D2D30"/>
-      <Setter Property="Foreground"      Value="#DDDDDD"/>
-      <Setter Property="BorderBrush"     Value="#4A4A52"/>
-      <Setter Property="BorderThickness" Value="1"/>
-      <Setter Property="Padding"         Value="10,7"/>
-      <Setter Property="Margin"          Value="4,3"/>
-      <Setter Property="HorizontalContentAlignment" Value="Left"/>
+      <Setter Property="Foreground"      Value="#F0E8D8"/>
+      <Setter Property="BorderThickness" Value="0"/>
+      <Setter Property="Padding"         Value="0"/>
+      <Setter Property="Margin"          Value="3,4"/>
+      <Setter Property="HorizontalContentAlignment" Value="Stretch"/>
       <Setter Property="Cursor"          Value="Hand"/>
       <Setter Property="FontFamily"      Value="Segoe UI"/>
       <Setter Property="FontSize"        Value="12"/>
+      <Setter Property="SnapsToDevicePixels"      Value="True"/>
+      <Setter Property="UseLayoutRounding"        Value="True"/>
+      <Setter Property="TextOptions.TextRenderingMode"   Value="ClearType"/>
+      <Setter Property="TextOptions.TextFormattingMode"  Value="Display"/>
       <Setter Property="Template">
         <Setter.Value>
           <ControlTemplate TargetType="Button">
-            <Border x:Name="border"
-                    Background="{TemplateBinding Background}"
-                    BorderBrush="{TemplateBinding BorderBrush}"
-                    BorderThickness="{TemplateBinding BorderThickness}"
-                    CornerRadius="4">
-              <Border.Effect>
-                <DropShadowEffect Color="Black" Direction="270" ShadowDepth="2" BlurRadius="4" Opacity="0.55"/>
-              </Border.Effect>
-              <ContentPresenter Margin="{TemplateBinding Padding}"
-                                HorizontalAlignment="Stretch"
-                                VerticalAlignment="Center"/>
-            </Border>
+            <Grid>
+              <!-- Outer halo: invisible until hover/press; drop shadow w/ ShadowDepth=0 = outer glow -->
+              <Border x:Name="halo" CornerRadius="0" Background="Transparent"/>
+              <!-- Main button body: brushed bronze edge, warm-stone interior (Dune sietch wall) -->
+              <Border x:Name="border" CornerRadius="0" BorderThickness="1">
+                <Border.BorderBrush>
+                  <LinearGradientBrush StartPoint="0,0" EndPoint="0,1">
+                    <GradientStop Color="#7A5524" Offset="0"/>
+                    <GradientStop Color="#3A2818" Offset="0.5"/>
+                    <GradientStop Color="#1A100A" Offset="1"/>
+                  </LinearGradientBrush>
+                </Border.BorderBrush>
+                <Border.Background>
+                  <LinearGradientBrush StartPoint="0,0" EndPoint="1,1">
+                    <GradientStop Color="#2A2018" Offset="0"/>
+                    <GradientStop Color="#18120D" Offset="0.55"/>
+                    <GradientStop Color="#0D0907" Offset="1"/>
+                  </LinearGradientBrush>
+                </Border.Background>
+                <Border.Effect>
+                  <DropShadowEffect Color="#000000" Direction="270" ShadowDepth="3" BlurRadius="7" Opacity="0.75"/>
+                </Border.Effect>
+
+                <Grid>
+                  <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="6"/>
+                    <ColumnDefinition Width="44"/>
+                    <ColumnDefinition Width="*"/>
+                    <ColumnDefinition Width="6"/>
+                  </Grid.ColumnDefinitions>
+
+                  <!-- Left accent bar: spice gradient, glows on hover -->
+                  <Rectangle x:Name="accent" Grid.Column="0">
+                    <Rectangle.Fill>
+                      <LinearGradientBrush StartPoint="0,0" EndPoint="0,1">
+                        <GradientStop Color="#FFD9A0" Offset="0"/>
+                        <GradientStop Color="#C28840" Offset="0.5"/>
+                        <GradientStop Color="#6A4818" Offset="1"/>
+                      </LinearGradientBrush>
+                    </Rectangle.Fill>
+                  </Rectangle>
+
+                  <!-- Number badge area: etched-recess look with subtle bronze divider on right -->
+                  <Border x:Name="badge" Grid.Column="1" BorderThickness="0,0,1,0">
+                    <Border.BorderBrush>
+                      <LinearGradientBrush StartPoint="0,0" EndPoint="0,1">
+                        <GradientStop Color="Transparent" Offset="0"/>
+                        <GradientStop Color="#4A3520" Offset="0.5"/>
+                        <GradientStop Color="Transparent" Offset="1"/>
+                      </LinearGradientBrush>
+                    </Border.BorderBrush>
+                    <Border.Background>
+                      <LinearGradientBrush StartPoint="0,0" EndPoint="0,1">
+                        <GradientStop Color="#1F1813" Offset="0"/>
+                        <GradientStop Color="#0E0905" Offset="1"/>
+                      </LinearGradientBrush>
+                    </Border.Background>
+                    <TextBlock x:Name="badgeText"
+                               Text="{TemplateBinding Tag}"
+                               HorizontalAlignment="Center"
+                               VerticalAlignment="Center"
+                               Foreground="#E8B872"
+                               FontFamily="Consolas"
+                               FontWeight="Bold"
+                               FontSize="16"/>
+                  </Border>
+
+                  <!-- Top hairline highlight across the whole button (sci-fi etched edge) -->
+                  <Rectangle x:Name="topLine" Grid.ColumnSpan="4" Height="1" VerticalAlignment="Top" Fill="#33C28840"/>
+
+                  <!-- Right-edge status pip (small diamond) - subtle by default, glows on hover -->
+                  <Path x:Name="pip" Grid.Column="3" Width="6" Height="6"
+                        Stretch="Fill"
+                        VerticalAlignment="Center"
+                        HorizontalAlignment="Center"
+                        Data="M 3,0 L 6,3 L 3,6 L 0,3 Z"
+                        Fill="#6A4818"
+                        Opacity="0.7"/>
+
+                  <ContentPresenter Grid.Column="2" Margin="12,8,8,8"
+                                    HorizontalAlignment="Stretch"
+                                    VerticalAlignment="Center"/>
+                </Grid>
+              </Border>
+            </Grid>
+
             <ControlTemplate.Triggers>
               <Trigger Property="IsMouseOver" Value="True">
-                <Setter TargetName="border" Property="Background" Value="#3E3E48"/>
-                <Setter TargetName="border" Property="BorderBrush" Value="#E0B341"/>
-                <Setter TargetName="border" Property="BorderThickness" Value="2"/>
-                <Setter TargetName="border" Property="Effect">
+                <Setter TargetName="halo" Property="Effect">
                   <Setter.Value>
-                    <DropShadowEffect Color="#E0B341" Direction="270" ShadowDepth="3" BlurRadius="8" Opacity="0.6"/>
+                    <DropShadowEffect Color="#4FC3F7" Direction="0" ShadowDepth="0" BlurRadius="26" Opacity="0.95"/>
                   </Setter.Value>
                 </Setter>
+                <Setter TargetName="border" Property="BorderBrush">
+                  <Setter.Value>
+                    <LinearGradientBrush StartPoint="0,0" EndPoint="0,1">
+                      <GradientStop Color="#FFE8B8" Offset="0"/>
+                      <GradientStop Color="#C28840" Offset="0.5"/>
+                      <GradientStop Color="#6A4818" Offset="1"/>
+                    </LinearGradientBrush>
+                  </Setter.Value>
+                </Setter>
+                <Setter TargetName="border" Property="Background">
+                  <Setter.Value>
+                    <LinearGradientBrush StartPoint="0,0" EndPoint="1,1">
+                      <GradientStop Color="#3A2D20" Offset="0"/>
+                      <GradientStop Color="#1F1813" Offset="0.55"/>
+                      <GradientStop Color="#14100C" Offset="1"/>
+                    </LinearGradientBrush>
+                  </Setter.Value>
+                </Setter>
+                <Setter TargetName="accent" Property="Fill">
+                  <Setter.Value>
+                    <LinearGradientBrush StartPoint="0,0" EndPoint="0,1">
+                      <GradientStop Color="#FFFFE8" Offset="0"/>
+                      <GradientStop Color="#FFD9A0" Offset="0.5"/>
+                      <GradientStop Color="#C28840" Offset="1"/>
+                    </LinearGradientBrush>
+                  </Setter.Value>
+                </Setter>
+                <Setter TargetName="topLine" Property="Fill" Value="#CCFFD9A0"/>
+                <Setter TargetName="badgeText" Property="Foreground" Value="#FFE8B8"/>
+                <Setter TargetName="pip" Property="Fill" Value="#FFD9A0"/>
+                <Setter TargetName="pip" Property="Opacity" Value="1"/>
               </Trigger>
               <Trigger Property="IsPressed" Value="True">
-                <Setter TargetName="border" Property="Background" Value="#0E639C"/>
-                <Setter TargetName="border" Property="BorderBrush" Value="#FFFFFF"/>
-                <Setter TargetName="border" Property="BorderThickness" Value="2"/>
+                <Setter TargetName="halo" Property="Effect">
+                  <Setter.Value>
+                    <DropShadowEffect Color="#4FC3F7" Direction="0" ShadowDepth="0" BlurRadius="32" Opacity="1.0"/>
+                  </Setter.Value>
+                </Setter>
+                <Setter TargetName="border" Property="BorderBrush">
+                  <Setter.Value>
+                    <LinearGradientBrush StartPoint="0,0" EndPoint="0,1">
+                      <GradientStop Color="#D4F4FF" Offset="0"/>
+                      <GradientStop Color="#4FC3F7" Offset="0.5"/>
+                      <GradientStop Color="#1E5C8C" Offset="1"/>
+                    </LinearGradientBrush>
+                  </Setter.Value>
+                </Setter>
+                <Setter TargetName="border" Property="Background">
+                  <Setter.Value>
+                    <LinearGradientBrush StartPoint="0,0" EndPoint="1,1">
+                      <GradientStop Color="#1E5C8C" Offset="0"/>
+                      <GradientStop Color="#0A2E4A" Offset="0.55"/>
+                      <GradientStop Color="#06182E" Offset="1"/>
+                    </LinearGradientBrush>
+                  </Setter.Value>
+                </Setter>
+                <Setter TargetName="accent" Property="Fill" Value="#FFFFFF"/>
+                <Setter TargetName="topLine" Property="Fill" Value="#FFFFFF"/>
+                <Setter TargetName="badgeText" Property="Foreground" Value="#FFFFFF"/>
+                <Setter TargetName="pip" Property="Fill" Value="#FFFFFF"/>
+                <Setter TargetName="pip" Property="Opacity" Value="1"/>
+              </Trigger>
+              <Trigger Property="IsEnabled" Value="False">
+                <Setter Property="Foreground" Value="#4A3D2A"/>
+                <Setter TargetName="border" Property="Background">
+                  <Setter.Value>
+                    <SolidColorBrush Color="#0F0C09"/>
+                  </Setter.Value>
+                </Setter>
+                <Setter TargetName="border" Property="BorderBrush">
+                  <Setter.Value>
+                    <SolidColorBrush Color="#2A2117"/>
+                  </Setter.Value>
+                </Setter>
+                <Setter TargetName="accent" Property="Fill">
+                  <Setter.Value>
+                    <SolidColorBrush Color="#3A2D1E"/>
+                  </Setter.Value>
+                </Setter>
+                <Setter TargetName="badge" Property="Background">
+                  <Setter.Value>
+                    <SolidColorBrush Color="#0A0805"/>
+                  </Setter.Value>
+                </Setter>
+                <Setter TargetName="badgeText" Property="Foreground" Value="#4A3D2A"/>
+                <Setter TargetName="topLine" Property="Fill" Value="Transparent"/>
+                <Setter TargetName="pip" Property="Fill" Value="#2A2117"/>
+                <Setter TargetName="pip" Property="Opacity" Value="0.5"/>
                 <Setter TargetName="border" Property="Effect">
                   <Setter.Value>
-                    <DropShadowEffect Color="#0E639C" Direction="270" ShadowDepth="1" BlurRadius="10" Opacity="0.9"/>
+                    <DropShadowEffect ShadowDepth="0" BlurRadius="0" Opacity="0"/>
                   </Setter.Value>
                 </Setter>
               </Trigger>
-              <Trigger Property="IsEnabled" Value="False">
-                <Setter Property="Foreground" Value="#666666"/>
-                <Setter TargetName="border" Property="Background" Value="#252526"/>
-                <Setter TargetName="border" Property="Effect">
+            </ControlTemplate.Triggers>
+          </ControlTemplate>
+        </Setter.Value>
+      </Setter>
+    </Style>
+    <!-- UtilButton: simplified CmdButton for header/footer utility buttons (Refresh/Copy/Clear) - no badge column -->
+    <Style x:Key="UtilButton" TargetType="Button">
+      <Setter Property="Foreground"      Value="#F0E8D8"/>
+      <Setter Property="BorderThickness" Value="0"/>
+      <Setter Property="Padding"         Value="14,4"/>
+      <Setter Property="Margin"          Value="3,2"/>
+      <Setter Property="HorizontalContentAlignment" Value="Center"/>
+      <Setter Property="VerticalContentAlignment"   Value="Center"/>
+      <Setter Property="Cursor"          Value="Hand"/>
+      <Setter Property="FontFamily"      Value="Segoe UI"/>
+      <Setter Property="FontSize"        Value="12"/>
+      <Setter Property="FontWeight"      Value="SemiBold"/>
+      <Setter Property="SnapsToDevicePixels"      Value="True"/>
+      <Setter Property="UseLayoutRounding"        Value="True"/>
+      <Setter Property="Template">
+        <Setter.Value>
+          <ControlTemplate TargetType="Button">
+            <Grid>
+              <Border x:Name="halo" CornerRadius="0" Background="Transparent"/>
+              <Border x:Name="border" CornerRadius="0" BorderThickness="1">
+                <Border.BorderBrush>
+                  <LinearGradientBrush StartPoint="0,0" EndPoint="0,1">
+                    <GradientStop Color="#7A5524" Offset="0"/>
+                    <GradientStop Color="#3A2818" Offset="0.5"/>
+                    <GradientStop Color="#1A100A" Offset="1"/>
+                  </LinearGradientBrush>
+                </Border.BorderBrush>
+                <Border.Background>
+                  <LinearGradientBrush StartPoint="0,0" EndPoint="1,1">
+                    <GradientStop Color="#2A2018" Offset="0"/>
+                    <GradientStop Color="#18120D" Offset="0.55"/>
+                    <GradientStop Color="#0D0907" Offset="1"/>
+                  </LinearGradientBrush>
+                </Border.Background>
+                <Border.Effect>
+                  <DropShadowEffect Color="#000000" Direction="270" ShadowDepth="2" BlurRadius="5" Opacity="0.7"/>
+                </Border.Effect>
+                <Grid>
+                  <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="4"/>
+                    <ColumnDefinition Width="*"/>
+                  </Grid.ColumnDefinitions>
+                  <Rectangle x:Name="accent" Grid.Column="0">
+                    <Rectangle.Fill>
+                      <LinearGradientBrush StartPoint="0,0" EndPoint="0,1">
+                        <GradientStop Color="#FFD9A0" Offset="0"/>
+                        <GradientStop Color="#C28840" Offset="0.5"/>
+                        <GradientStop Color="#6A4818" Offset="1"/>
+                      </LinearGradientBrush>
+                    </Rectangle.Fill>
+                  </Rectangle>
+                  <Rectangle x:Name="topLine" Grid.ColumnSpan="2" Height="1" VerticalAlignment="Top" Fill="#33C28840"/>
+                  <ContentPresenter Grid.Column="1" Margin="8,2,8,2"
+                                    HorizontalAlignment="Center"
+                                    VerticalAlignment="Center"/>
+                </Grid>
+              </Border>
+            </Grid>
+            <ControlTemplate.Triggers>
+              <Trigger Property="IsMouseOver" Value="True">
+                <Setter TargetName="halo" Property="Effect">
                   <Setter.Value>
-                    <DropShadowEffect Color="Black" Direction="270" ShadowDepth="0" BlurRadius="0" Opacity="0"/>
+                    <DropShadowEffect Color="#4FC3F7" Direction="0" ShadowDepth="0" BlurRadius="20" Opacity="0.9"/>
                   </Setter.Value>
                 </Setter>
+                <Setter TargetName="border" Property="BorderBrush">
+                  <Setter.Value>
+                    <LinearGradientBrush StartPoint="0,0" EndPoint="0,1">
+                      <GradientStop Color="#FFD9A0" Offset="0"/>
+                      <GradientStop Color="#C28840" Offset="0.5"/>
+                      <GradientStop Color="#6A4818" Offset="1"/>
+                    </LinearGradientBrush>
+                  </Setter.Value>
+                </Setter>
+                <Setter TargetName="topLine" Property="Fill" Value="#CCFFD9A0"/>
+              </Trigger>
+              <Trigger Property="IsPressed" Value="True">
+                <Setter TargetName="halo" Property="Effect">
+                  <Setter.Value>
+                    <DropShadowEffect Color="#4FC3F7" Direction="0" ShadowDepth="0" BlurRadius="24" Opacity="1.0"/>
+                  </Setter.Value>
+                </Setter>
+                <Setter TargetName="accent" Property="Fill" Value="#FFFFFF"/>
+                <Setter Property="Foreground" Value="#FFFFFF"/>
+              </Trigger>
+              <Trigger Property="IsEnabled" Value="False">
+                <Setter Property="Foreground" Value="#4A3D2A"/>
+                <Setter TargetName="accent" Property="Fill" Value="#2A2117"/>
+                <Setter TargetName="topLine" Property="Fill" Value="Transparent"/>
               </Trigger>
             </ControlTemplate.Triggers>
           </ControlTemplate>
@@ -222,7 +464,7 @@ Add-Type -AssemblyName System.Xaml
           <TextBlock Text="Battlegroup Status" Foreground="#E0B341" FontWeight="Bold" FontSize="14" VerticalAlignment="Center"/>
           <TextBlock x:Name="StatusMeta" Text="" Foreground="#888" FontSize="11" Margin="12,0,0,0" VerticalAlignment="Center"/>
         </StackPanel>
-        <Button x:Name="BtnRefreshStatus" Grid.Row="0" Grid.Column="1" Content="Refresh" Style="{StaticResource CmdButton}" Padding="14,4"/>
+        <Button x:Name="BtnRefreshStatus" Grid.Row="0" Grid.Column="1" Content="Refresh" Style="{StaticResource UtilButton}" Padding="14,4"/>
 
         <TextBox x:Name="StatusPane" Grid.Row="1" Grid.ColumnSpan="2"
                  Style="{StaticResource MonoText}"
@@ -234,14 +476,25 @@ Add-Type -AssemblyName System.Xaml
     <!-- ═══ Main split: buttons | output ═══ -->
     <Grid Grid.Row="1">
       <Grid.ColumnDefinitions>
-        <ColumnDefinition Width="320" MinWidth="240"/>
+        <ColumnDefinition Width="980" MinWidth="800"/>
         <ColumnDefinition Width="5"/>
         <ColumnDefinition Width="*"/>
       </Grid.ColumnDefinitions>
 
-      <!-- Left: buttons -->
-      <ScrollViewer Grid.Column="0" VerticalScrollBarVisibility="Auto" Background="#1E1E1E">
-        <StackPanel x:Name="ButtonPanel" Margin="6,4,6,12"/>
+      <!-- Left: buttons - section-based columns (Battlegroup split into 2 for balance), like the old bat menu -->
+      <ScrollViewer Grid.Column="0" VerticalScrollBarVisibility="Auto" Background="#14110D">
+        <Grid Margin="6,4,6,12">
+          <Grid.ColumnDefinitions>
+            <ColumnDefinition Width="*"/>
+            <ColumnDefinition Width="*"/>
+            <ColumnDefinition Width="*"/>
+            <ColumnDefinition Width="*"/>
+          </Grid.ColumnDefinitions>
+          <StackPanel x:Name="ButtonPanelVM"    Grid.Column="0" Margin="0,0,3,0"/>
+          <StackPanel x:Name="ButtonPanelBG"    Grid.Column="1" Margin="3,0,3,0"/>
+          <StackPanel x:Name="ButtonPanelBG2"   Grid.Column="2" Margin="3,0,3,0"/>
+          <StackPanel x:Name="ButtonPanelTools" Grid.Column="3" Margin="3,0,0,0"/>
+        </Grid>
       </ScrollViewer>
 
       <GridSplitter Grid.Column="1" Width="5" Background="#2D2D30" HorizontalAlignment="Stretch"/>
@@ -261,8 +514,8 @@ Add-Type -AssemblyName System.Xaml
               <ColumnDefinition Width="Auto"/>
             </Grid.ColumnDefinitions>
             <TextBlock x:Name="OutputTitle" Text="Output" Foreground="#E0B341" FontWeight="Bold" FontSize="13" VerticalAlignment="Center"/>
-            <Button x:Name="BtnCopyOutput" Grid.Column="1" Content="Copy" Style="{StaticResource CmdButton}" Padding="10,4" Margin="4,0"/>
-            <Button x:Name="BtnClearOutput" Grid.Column="2" Content="Clear" Style="{StaticResource CmdButton}" Padding="10,4" Margin="4,0"/>
+            <Button x:Name="BtnCopyOutput" Grid.Column="1" Content="Copy" Style="{StaticResource UtilButton}" Padding="10,4" Margin="4,0"/>
+            <Button x:Name="BtnClearOutput" Grid.Column="2" Content="Clear" Style="{StaticResource UtilButton}" Padding="10,4" Margin="4,0"/>
           </Grid>
         </Border>
 
@@ -310,7 +563,10 @@ $ui = @{
     StatusMeta     = $window.FindName('StatusMeta')
     BtnRefreshStat = $window.FindName('BtnRefreshStatus')
     StatusPane     = $window.FindName('StatusPane')
-    ButtonPanel    = $window.FindName('ButtonPanel')
+    ButtonPanelVM    = $window.FindName('ButtonPanelVM')
+    ButtonPanelBG    = $window.FindName('ButtonPanelBG')
+    ButtonPanelBG2   = $window.FindName('ButtonPanelBG2')
+    ButtonPanelTools = $window.FindName('ButtonPanelTools')
     OutputTitle    = $window.FindName('OutputTitle')
     BtnCopyOutput  = $window.FindName('BtnCopyOutput')
     BtnClearOutput = $window.FindName('BtnClearOutput')
@@ -748,39 +1004,116 @@ function Build-ButtonPanel {
     if ($Vm) { $script:LastVmKnown = $Vm }
     $vm = $script:LastVmKnown
 
-    $ui.ButtonPanel.Children.Clear()
+    $ui.ButtonPanelVM.Children.Clear()
+    $ui.ButtonPanelBG.Children.Clear()
+    $ui.ButtonPanelBG2.Children.Clear()
+    $ui.ButtonPanelTools.Children.Clear()
 
-    $sections = $script:Commands | Group-Object -Property Section
-    foreach ($section in $sections) {
+    $spice       = [Windows.Media.BrushConverter]::new().ConvertFromString('#E8B872')
+    $bronzeDim   = [Windows.Media.BrushConverter]::new().ConvertFromString('#6A4818')
+    $textBright  = [Windows.Media.BrushConverter]::new().ConvertFromString('#F0E8D8')
+    $textMuted   = [Windows.Media.BrushConverter]::new().ConvertFromString('#998878')
+    $textDisable = [Windows.Media.BrushConverter]::new().ConvertFromString('#4A3D2A')
+
+    $addHeader = {
+        param($panel, $label)
+        $hdrWrap = New-Object Windows.Controls.Border
+        $hdrWrap.BorderThickness = New-Object Windows.Thickness 0,0,0,1
+        $hdrWrap.BorderBrush = $bronzeDim
+        $hdrWrap.Margin = New-Object Windows.Thickness 4,14,4,4
+        $hdrWrap.Padding = New-Object Windows.Thickness 2,0,2,3
         $hdr = New-Object Windows.Controls.TextBlock
-        $hdr.Text  = $section.Name + ' commands'
-        $hdr.Style = $ui.Window.FindResource('SectionHeader')
-        [void]$ui.ButtonPanel.Children.Add($hdr)
-
-        foreach ($cmd in $section.Group) {
-            $btn = New-Object Windows.Controls.Button
-            $btn.Style = $ui.Window.FindResource('CmdButton')
-
-            $modeTag = if ($cmd.Mode -eq 'Console') { '  [console]' } else { '' }
-            $btn.Content = "{0,3}.  {1}{2}`r`n        {3}" -f $cmd.Key, $cmd.Name, $modeTag, $cmd.Desc
-            $btn.ToolTip = "$($cmd.Desc)`n`nMode: $($cmd.Mode)  -  Requires: $($cmd.Requires)"
-
-            $available = Test-CmdAvailable -Cmd $cmd -Vm $vm
-            $btn.IsEnabled = $available
-            if (-not $available) {
-                $reason = switch ($cmd.Requires) {
-                    'exists'  { "VM '$($script:VmName)' does not exist" }
-                    'running' { "VM not running" }
-                    default   { '' }
-                }
-                if ($reason) { $btn.ToolTip = "$($btn.ToolTip)`n`nUnavailable: $reason" }
-            }
-
-            $cmdCopy = $cmd
-            $btn.Add_Click({ Invoke-DuneCmd -Cmd $cmdCopy }.GetNewClosure())
-            [void]$ui.ButtonPanel.Children.Add($btn)
-        }
+        $hdr.Text  = $label
+        $hdr.Foreground = $spice
+        $hdr.FontWeight = 'Bold'
+        $hdr.FontSize = 11
+        $hdrWrap.Child = $hdr
+        [void]$panel.Children.Add($hdrWrap)
     }
+
+    $addButton = {
+        param($panel, $cmd)
+        $btn = New-Object Windows.Controls.Button
+        $btn.Style = $ui.Window.FindResource('CmdButton')
+        $btn.Tag = $cmd.Key.ToUpper()
+        $btn.HorizontalAlignment = 'Stretch'
+        $btn.HorizontalContentAlignment = 'Left'
+
+        $stack = New-Object Windows.Controls.StackPanel
+        $stack.Orientation = 'Vertical'
+        $stack.HorizontalAlignment = 'Left'
+
+        $nameLine = New-Object Windows.Controls.TextBlock
+        $nameLine.FontSize = 12.5
+        $nameLine.FontWeight = 'SemiBold'
+        $nameLine.Foreground = $textBright
+        $nameLine.TextAlignment = 'Left'
+        $nameLine.HorizontalAlignment = 'Left'
+        $nameLine.Text = $cmd.Name
+        if ($cmd.Mode -eq 'Console') {
+            $tag = New-Object Windows.Documents.Run
+            $tag.Text = '   〔 CONSOLE 〕'
+            $tag.FontSize = 9.5
+            $tag.FontWeight = 'Bold'
+            $tag.Foreground = $spice
+            $nameLine.Inlines.Add($tag)
+        }
+        [void]$stack.Children.Add($nameLine)
+
+        $descLine = New-Object Windows.Controls.TextBlock
+        $descLine.Text = $cmd.Desc
+        $descLine.FontSize = 10.5
+        $descLine.Foreground = $textMuted
+        $descLine.TextWrapping = 'Wrap'
+        $descLine.TextAlignment = 'Left'
+        $descLine.HorizontalAlignment = 'Left'
+        $descLine.Margin = New-Object Windows.Thickness 0,1,0,0
+        [void]$stack.Children.Add($descLine)
+
+        $btn.Content = $stack
+        $btn.ToolTip = "$($cmd.Desc)`n`nMode: $($cmd.Mode)  -  Requires: $($cmd.Requires)"
+
+        $available = Test-CmdAvailable -Cmd $cmd -Vm $vm
+        $btn.IsEnabled = $available
+        if (-not $available) {
+            $nameLine.Foreground = $textDisable
+            $descLine.Foreground = $textDisable
+            $reason = switch ($cmd.Requires) {
+                'exists'  { "VM '$($script:VmName)' does not exist" }
+                'running' { "VM not running" }
+                default   { '' }
+            }
+            if ($reason) { $btn.ToolTip = "$($btn.ToolTip)`n`nUnavailable: $reason" }
+        }
+
+        $cmdCopy = $cmd
+        $btn.Add_Click({ Invoke-DuneCmd -Cmd $cmdCopy }.GetNewClosure())
+        [void]$panel.Children.Add($btn)
+    }
+
+    # Pre-group commands by section into simple arrays
+    $vmCmds    = @($script:Commands | Where-Object { $_.Section -eq 'VM' })
+    $bgCmds    = @($script:Commands | Where-Object { $_.Section -eq 'Battlegroup' })
+    $toolsCmds = @($script:Commands | Where-Object { $_.Section -eq 'Tools' })
+
+    # Column 1: VM
+    & $addHeader $ui.ButtonPanelVM '◆  VM  COMMANDS'
+    foreach ($cmd in $vmCmds) { & $addButton $ui.ButtonPanelVM $cmd }
+
+    # Columns 2 & 3: Battlegroup, split in half
+    $bgHalf = [int][Math]::Ceiling($bgCmds.Count / 2.0)
+    & $addHeader $ui.ButtonPanelBG '◆  BATTLEGROUP  COMMANDS'
+    for ($i = 0; $i -lt $bgHalf -and $i -lt $bgCmds.Count; $i++) {
+        & $addButton $ui.ButtonPanelBG $bgCmds[$i]
+    }
+    & $addHeader $ui.ButtonPanelBG2 '◆  BATTLEGROUP  (CONT.)'
+    for ($i = $bgHalf; $i -lt $bgCmds.Count; $i++) {
+        & $addButton $ui.ButtonPanelBG2 $bgCmds[$i]
+    }
+
+    # Column 4: Tools
+    & $addHeader $ui.ButtonPanelTools '◆  TOOLS  COMMANDS'
+    foreach ($cmd in $toolsCmds) { & $addButton $ui.ButtonPanelTools $cmd }
 }
 
 # ────────────────────────────────────────────────────────────────────────────
@@ -800,7 +1133,7 @@ $autoRefresh.Add_Tick({ Refresh-StatusHeader })
 
 # Initial paint
 Build-ButtonPanel -Vm $script:LastVmKnown
-$ui.FooterVersion.Text = "Dune Server v4.0.2"
+$ui.FooterVersion.Text = "Dune Server v4.0.3"
 
 # Kick off first status fetch on window load
 $ui.Window.Add_Loaded({

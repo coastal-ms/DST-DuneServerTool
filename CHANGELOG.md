@@ -7,6 +7,63 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [4.0.3] - 2026-05-24
+
+Patch release: four-column section-based menu layout + Dune-movie-themed
+futuristic button styling.
+
+### Changed
+
+- **Left-pane menu reorganized into four section-based columns** mirroring
+  the layout of the original `dune-server.bat` menu where each section was a
+  labeled block:
+  - Column 1: **VM** commands (initial-setup, start-vm, startup, etc.)
+  - Column 2: **Battlegroup** commands part 1 (status, start, restart, ...)
+  - Column 3: **Battlegroup** commands part 2 (database, logs, shells, ...)
+  - Column 4: **Tools** (ssh, dune-admin, setup-guide, report-issue)
+
+  Battlegroup is split across two columns because it has 16+ commands - more
+  than the other two sections combined. Each column gets its own HUD-style
+  section header (◆ glyph + uppercase + spice-gold text + bronze underline).
+  Window default size widened to 1840×900 (min 1540) to fit four columns
+  without crowding the output pane on the right.
+- **Button visual style overhauled with a Dune-movie aesthetic** matching the
+  Dune Awakening self-hosted server page color story (spice gold + bronze +
+  warm bone-white on stillsuit black):
+  - Spice-gold vertical accent bar on the left of each button (`#FFD9A0` →
+    `#C28840` → `#6A4818` gradient).
+  - Bronze gradient border + sand-shadow background gradient.
+  - Recessed badge area on the inner-left for the hotkey number in Consolas
+    Bold spice-copper (`#E8B872`).
+  - Top hairline bronze highlight + right-edge diamond status pip.
+  - Hover: Eyes-of-Ibad cyan-blue halo glow (`#4FC3F7`, 26px blur) -
+    cool-tone highlight that pops against the warm Dune palette.
+  - Press: deeper Eyes-of-Ibad blue treatment (32px blur halo + full blue
+    gradient border/bg + white accent + text + pip).
+  - Disabled: muted dust palette throughout.
+- **New `UtilButton` style** for header/footer utility buttons (Refresh,
+  Copy, Clear) - same Dune palette and accent bar as `CmdButton` but with
+  no number-badge column, since those buttons don't have a hotkey letter
+  or number associated with them. Smaller halo (20px) to match their lower
+  visual weight.
+- **Main window background** changed from `#1E1E1E` to `#14110D` (warm
+  stillsuit black) for better contrast against the new spice palette.
+
+### Fixed
+
+- Resolved a WPF `KeyNotFoundException: 'haloEffect'` that crashed the app
+  at startup. Cause: cannot apply `Setter TargetName=` to a `Freezable`
+  (e.g. `DropShadowEffect`) nested inside a templated element's property -
+  the name is not registered in the template's name scope. Fix: name the
+  parent `Border` instead, and have hover/press triggers replace the entire
+  `Effect` property via `<Setter.Value><DropShadowEffect .../></Setter.Value>`.
+- Fixed silent failure of the menu builder where Battlegroup and Tools
+  columns were left empty. The earlier implementation used a `segments`
+  array-of-arrays with `+= ,@(...)` accumulation pattern that interacted
+  badly with the inner loop. Rewrote with explicit per-section loops and
+  inline scriptblocks for `addHeader`/`addButton`, which makes the column
+  population direct and unambiguous.
+
 ## [4.0.2] - 2026-05-24
 
 Patch release: fix two more desktop app crashes/bugs discovered immediately
@@ -412,7 +469,8 @@ entry. From here on, patch releases follow as `3.0.1`, `3.0.2`, etc.
 - Boot-time history stored at `<scriptDir>\.boot-times.json` (rolling
   window of last 20 entries per phase).
 
-[Unreleased]: https://github.com/coastal-ms/Simple-Dune-Server-Management-Tool/compare/v4.0.2...HEAD
+[Unreleased]: https://github.com/coastal-ms/Simple-Dune-Server-Management-Tool/compare/v4.0.3...HEAD
+[4.0.3]: https://github.com/coastal-ms/Simple-Dune-Server-Management-Tool/compare/v4.0.2...v4.0.3
 [4.0.2]: https://github.com/coastal-ms/Simple-Dune-Server-Management-Tool/compare/v4.0.1...v4.0.2
 [4.0.1]: https://github.com/coastal-ms/Simple-Dune-Server-Management-Tool/compare/v4.0.0...v4.0.1
 [4.0.0]: https://github.com/coastal-ms/Simple-Dune-Server-Management-Tool/compare/v3.1.2...v4.0.0
