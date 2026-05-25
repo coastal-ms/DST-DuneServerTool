@@ -1086,7 +1086,6 @@ $script:LabelAcronyms = @{
 
 # Specific overrides where simple word-by-word title-casing reads awkwardly.
 $script:LabelOverrides = @{
-    'web'                     = 'Web Portal'
     'edit-advanced'           = 'Advanced Edit'
     'enable-experimental-swap'= 'Enable Experimental Swap'
     'logs-export'             = 'Export Logs'
@@ -1478,7 +1477,7 @@ $autoRefresh.Add_Tick({ Refresh-StatusHeader })
 
 # Initial paint
 Build-ButtonPanel -Vm $script:LastVmKnown
-$ui.FooterVersion.Text = "Dune Server v4.2.0"
+$ui.FooterVersion.Text = "Dune Server v4.3.0"
 $ui.InstalledLbl.Text  = "Installed: $script:ToolVersion"
 
 # Kick off first status fetch on window load

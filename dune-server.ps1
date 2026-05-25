@@ -13,7 +13,7 @@ param(
 # Wraps the original battlegroup.ps1 menu and adds extra tools
 # ============================================================
 
-$script:ToolVersion = "4.2.0"
+$script:ToolVersion = "4.3.0"
 
 # ============================================================
 #  CRASH / EXIT CLEANUP
@@ -844,7 +844,6 @@ function Wait-MapPodReady {
 
 $vmCommands = @(
     [pscustomobject]@{ Key = "a"; Name = "initial-setup";      Desc = "Run the initial VM setup" }
-    [pscustomobject]@{ Key = "b"; Name = "web";                Desc = "Open the web UI in your browser (button panel for these commands)" }
     [pscustomobject]@{ Key = "c"; Name = "start-vm";           Desc = "Power on the VM only (no battlegroup) - useful for maintenance" }
     [pscustomobject]@{ Key = "d"; Name = "startup";            Desc = "Power on VM -> start battlegroup -> wait for overmap + survival maps" }
     [pscustomobject]@{ Key = "e"; Name = "shutdown";           Desc = "Stop battlegroup -> power off VM (e.g. shut down for the night)" }
@@ -889,7 +888,6 @@ function Get-VmCmdAvailability {
     param($cmdName, $info)
     switch ($cmdName) {
         "initial-setup" { return @{ Available = $true; Reason = $null } }
-        "web"           { return @{ Available = $true; Reason = $null } }
         "start-vm" {
             if (-not $info.Exists)  { return @{ Available = $false; Reason = "VM '$vmName' does not exist. Run 'initial-setup' first." } }
             if ($info.Running)      { return @{ Available = $false; Reason = "VM '$vmName' is already running." } }
@@ -1098,54 +1096,6 @@ while ($true) {
 
     if ($cmdName -eq "initial-setup") {
         . "$bgSetupPath\initial-setup.ps1"
-        if ($Cmd) { break }
-        continue
-    }
-
-    if ($cmdName -eq "web") {
-        $webScript = Join-Path $scriptDir 'web\Start-DuneWeb.ps1'
-        if (-not (Test-Path $webScript)) {
-            Write-Warning "Web UI script not found at $webScript"
-            if ($Cmd) { break } else { continue }
-        }
-        if (-not (Get-Module -ListAvailable Pode)) {
-            Write-Warning "Pode PowerShell module is not installed. Install with:"
-            Write-Host "    Install-Module Pode -Scope CurrentUser" -ForegroundColor Cyan
-            if ($Cmd) { break } else { continue }
-        }
-
-        $port = 8765
-        $url  = "http://127.0.0.1:$port"
-
-        $alreadyRunning = $false
-        try {
-            $tcp = New-Object System.Net.Sockets.TcpClient
-            $iar = $tcp.BeginConnect('127.0.0.1', $port, $null, $null)
-            $alreadyRunning = $iar.AsyncWaitHandle.WaitOne(300) -and $tcp.Connected
-            $tcp.Close()
-        } catch {}
-
-        if (-not $alreadyRunning) {
-            Write-Host "Starting Pode web server on $url (minimized)..." -ForegroundColor Cyan
-            Start-Process pwsh `
-                -ArgumentList '-NoProfile','-ExecutionPolicy','Bypass','-File',"`"$webScript`"" `
-                -WindowStyle Minimized
-            $waited = 0
-            while ($waited -lt 8) {
-                Start-Sleep -Milliseconds 500; $waited++
-                try {
-                    $tcp = New-Object System.Net.Sockets.TcpClient
-                    $iar = $tcp.BeginConnect('127.0.0.1', $port, $null, $null)
-                    if ($iar.AsyncWaitHandle.WaitOne(200) -and $tcp.Connected) { $tcp.Close(); break }
-                    $tcp.Close()
-                } catch {}
-            }
-        } else {
-            Write-Host "Web server already running at $url" -ForegroundColor DarkGray
-        }
-
-        Write-Host "Opening $url in your default browser..." -ForegroundColor Cyan
-        Start-Process "$env:SystemRoot\explorer.exe" $url
         if ($Cmd) { break }
         continue
     }
