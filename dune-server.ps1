@@ -13,7 +13,7 @@ param(
 # Wraps the original battlegroup.ps1 menu and adds extra tools
 # ============================================================
 
-$script:ToolVersion = "4.4.0"
+$script:ToolVersion = "4.5.1"
 
 # ============================================================
 #  CRASH / EXIT CLEANUP
