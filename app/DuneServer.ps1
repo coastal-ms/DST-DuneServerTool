@@ -32,6 +32,12 @@
 [CmdletBinding()]
 param()
 
+# Single source of truth for the app's own version. Read by the in-app update
+# check (Check-ForUpdates) and the "Installed: x.y.z" header label. Must be
+# bumped in lock-step with the other 3 version constants (dune-server.ps1,
+# Build-Exe.ps1, installer .iss).
+$script:ToolVersion = "4.3.2"
+
 # ────────────────────────────────────────────────────────────────────────────
 #  Prerequisite check: PowerShell 7 (pwsh.exe)
 # ────────────────────────────────────────────────────────────────────────────
@@ -1358,6 +1364,11 @@ function Check-ForUpdates {
             $ui.LatestLbl.Foreground = '#B8A88F'
             return
         }
+        if (-not $current) {
+            $ui.LatestLbl.Text       = "Latest: $latest (installed version unknown)"
+            $ui.LatestLbl.Foreground = '#E07A4F'
+            return
+        }
 
         if ($latest -gt $current) {
             $ui.LatestLbl.Text       = "Latest: $latest (update available)"
@@ -1479,7 +1490,7 @@ $autoRefresh.Add_Tick({ Refresh-StatusHeader })
 
 # Initial paint
 Build-ButtonPanel -Vm $script:LastVmKnown
-$ui.FooterVersion.Text = "Dune Server v4.3.1"
+$ui.FooterVersion.Text = "Dune Server v4.3.2"
 $ui.InstalledLbl.Text  = "Installed: $script:ToolVersion"
 
 # Kick off first status fetch on window load
