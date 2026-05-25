@@ -7,6 +7,26 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [4.3.2] - 2026-05-24
+
+Patch on top of v4.3.1.
+
+### Fixed
+
+- **Update check always said "update available", even on the latest
+  version.** `$script:ToolVersion` was defined in `dune-server.ps1`
+  but never in `app/DuneServer.ps1`, which is a separate script.
+  So `$current` was always `$null` inside `Check-ForUpdates`, and
+  `[Version]"4.3.x" -gt $null` is true in PowerShell, which made the
+  label perma-stuck on "update available" and the comparison
+  always favor downloading. Fixed by defining `$script:ToolVersion`
+  directly in `app/DuneServer.ps1` (kept in lock-step with the other
+  three version constants).
+- Added a defensive `if (-not $current)` arm to `Check-ForUpdates`
+  so a future version-parse failure shows "(installed version
+  unknown)" in red instead of silently falling through to
+  "update available".
+
 ## [4.3.1] - 2026-05-24
 
 Patch on top of v4.3.0.
@@ -685,7 +705,8 @@ entry. From here on, patch releases follow as `3.0.1`, `3.0.2`, etc.
 - Boot-time history stored at `<scriptDir>\.boot-times.json` (rolling
   window of last 20 entries per phase).
 
-[Unreleased]: https://github.com/coastal-ms/Simple-Dune-Server-Management-Tool/compare/v4.3.1...HEAD
+[Unreleased]: https://github.com/coastal-ms/Simple-Dune-Server-Management-Tool/compare/v4.3.2...HEAD
+[4.3.2]: https://github.com/coastal-ms/Simple-Dune-Server-Management-Tool/compare/v4.3.1...v4.3.2
 [4.3.1]: https://github.com/coastal-ms/Simple-Dune-Server-Management-Tool/compare/v4.3.0...v4.3.1
 [4.3.0]: https://github.com/coastal-ms/Simple-Dune-Server-Management-Tool/compare/v4.2.0...v4.3.0
 [4.2.0]: https://github.com/coastal-ms/Simple-Dune-Server-Management-Tool/compare/v4.1.0...v4.2.0
