@@ -9,7 +9,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [4.1.0] - 2026-05-24
 
-Minor release: installer can now download dune-admin for you.
+Minor release: installer can now download dune-admin for you, and the
+top/right status panes are no longer click-into text boxes.
 
 ### Added
 
@@ -25,6 +26,16 @@ Minor release: installer can now download dune-admin for you.
 
 - Help text on the Dune Admin Tool page now points at the download
   button instead of asking the user to grab a release manually.
+- **Status pane (top)** is now a non-interactive `TextBlock` inside a
+  `ScrollViewer`. No more caret, no more accidental text selection -
+  it's purely informational. Mouse-wheel scrolling still works.
+- **Output pane (right)** stays a `TextBox` (still needed for
+  `AppendText`/`ScrollToEnd`) but is now `Focusable=False`,
+  `IsTabStop=False`, with `PreviewMouseLeftButtonDown` and
+  `PreviewMouseRightButtonDown` swallowed so no caret or text
+  selection ever appears. A new `Set-OutputInputMode` helper toggles
+  the pane back to a normal text-entry box for future InApp commands
+  that need to collect input from the user.
 
 ## [4.0.8] - 2026-05-24
 
