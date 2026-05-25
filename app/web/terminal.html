@@ -1,0 +1,198 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8" />
+  <title>Dune Terminal</title>
+  <link rel="stylesheet" href="xterm.css" />
+  <style>
+    html, body {
+      margin: 0;
+      padding: 0;
+      height: 100%;
+      width: 100%;
+      overflow: hidden;
+      background: #0a0e14;
+      font-family: Consolas, 'Cascadia Mono', 'Courier New', monospace;
+    }
+    #terminal {
+      position: absolute;
+      inset: 0;
+      padding: 6px;
+      box-sizing: border-box;
+    }
+    /* Match xterm.js viewport padding with body */
+    .xterm .xterm-viewport { background-color: transparent !important; }
+  </style>
+</head>
+<body>
+  <!-- Pre-xterm visible marker so a blank pane = page didn't load at all,
+       vs. a visible "Loading..." = page loaded but JS hasn't initialized yet. -->
+  <div id="boot" style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;color:#5c6773;font-family:Consolas,monospace;font-size:13px;">Loading terminal...</div>
+  <div id="terminal"></div>
+  <div id="err" style="position:absolute;left:8px;top:8px;right:8px;color:#f07178;font-family:Consolas,monospace;font-size:12px;white-space:pre-wrap;display:none;"></div>
+
+  <script>
+    // Surface any load/runtime error visibly instead of silent blank.
+    window.addEventListener('error', function (e) {
+      var el = document.getElementById('err');
+      if (el) {
+        el.style.display = 'block';
+        el.textContent += '[error] ' + (e.message || e.error || e) +
+          (e.filename ? ('  @ ' + e.filename + ':' + e.lineno) : '') + '\n';
+      }
+    });
+  </script>
+  <script src="xterm.js"></script>
+  <script src="xterm-addon-fit.js"></script>
+  <script>
+    try {
+      if (typeof Terminal === 'undefined') {
+        throw new Error('xterm.js did not load (Terminal undefined). Check that web/xterm.js is deployed and the WebView origin can serve it.');
+      }
+      if (typeof FitAddon === 'undefined' || !FitAddon.FitAddon) {
+        throw new Error('xterm-addon-fit did not load (FitAddon undefined).');
+      }
+
+    const term = new Terminal({
+      cursorBlink: true,
+      cursorStyle: 'block',
+      fontFamily: "Consolas, 'Cascadia Mono', 'Courier New', monospace",
+      fontSize: 13,
+      lineHeight: 1.0,
+      scrollback: 5000,
+      convertEol: false,    // PTY already emits CRLF
+      allowProposedApi: true,
+      theme: {
+        // Dark palette tuned to match the WPF app's status pane
+        background: '#0a0e14',
+        foreground: '#e6e1cf',
+        cursor:     '#ffcc66',
+        selectionBackground: '#3a4150',
+        black:   '#0a0e14', brightBlack:   '#5c6773',
+        red:     '#f07178', brightRed:     '#f07178',
+        green:   '#c2d94c', brightGreen:   '#c2d94c',
+        yellow:  '#ffb454', brightYellow:  '#ffcc66',
+        blue:    '#59c2ff', brightBlue:    '#59c2ff',
+        magenta: '#d4bfff', brightMagenta: '#d4bfff',
+        cyan:    '#95e6cb', brightCyan:    '#95e6cb',
+        white:   '#bfbdb6', brightWhite:   '#ffffff'
+      }
+    });
+
+    const fitAddon = new FitAddon.FitAddon();
+    term.loadAddon(fitAddon);
+
+    term.open(document.getElementById('terminal'));
+    // Terminal mounted — drop the boot indicator.
+    var boot = document.getElementById('boot'); if (boot) boot.remove();
+
+    function postToHost(msg) {
+      if (window.chrome && window.chrome.webview) {
+        window.chrome.webview.postMessage(msg);
+      }
+    }
+
+    // User typed in the terminal -> forward to PS host
+    term.onData(data => postToHost({ kind: 'input', text: data }));
+
+    // Fit and notify host of new dimensions
+    function refit() {
+      try {
+        fitAddon.fit();
+        postToHost({ kind: 'resize', cols: term.cols, rows: term.rows });
+      } catch (e) {
+        // Container may not have layout yet on first load
+      }
+    }
+
+    // Receive messages from PS host
+    let sessionActive = false;
+    if (window.chrome && window.chrome.webview) {
+      window.chrome.webview.addEventListener('message', evt => {
+        const m = evt.data;
+        if (!m || !m.kind) return;
+        switch (m.kind) {
+          case 'data':
+            term.write(m.text);
+            break;
+          case 'clear':
+            term.clear();
+            break;
+          case 'reset':
+            term.reset();
+            break;
+          case 'theme':
+            if (m.theme) term.options.theme = m.theme;
+            break;
+          case 'session-start':
+            // PS spawned a PTY. Send the authoritative current dimensions
+            // back so the PTY/vi/etc. is sized to match exactly what the
+            // user actually sees - this fixes mid-edit display corruption
+            // (overlapping lines) caused by stale dimensions on the PS side.
+            try {
+              fitAddon.fit();
+              lastCols = term.cols; lastRows = term.rows;
+              postToHost({ kind: 'resize', cols: term.cols, rows: term.rows });
+            } catch (e) { /* ignore */ }
+            // Then freeze auto-refits so DOM/layout jitter doesn't reshape
+            // the terminal underneath a TUI app (vi etc.) and corrupt its
+            // rendered display.
+            sessionActive = true;
+            break;
+          case 'session-end':
+            sessionActive = false;
+            // Re-fit once after the session ends so prompt-mode commands
+            // get a tight fit.
+            setTimeout(refit, 30);
+            break;
+          case 'force-refit':
+            // Manual user-triggered refit (e.g. resize button).
+            refit();
+            break;
+          case 'copy-request': {
+            // PS asked us for the current selection. Send it back so PS
+            // can put it on the OS clipboard.
+            const sel = term.getSelection();
+            postToHost({ kind: 'clipboard', text: sel || '' });
+            break;
+          }
+        }
+      });
+    }
+
+    // Initial fit + tell PS we're alive
+    requestAnimationFrame(() => {
+      refit();
+      postToHost({ kind: 'ready' });
+    });
+
+    // Refit when the host container resizes (window resize). Skip while a
+    // PTY session is active — resizing the terminal under a running TUI
+    // app (vi, less) corrupts its internal display buffer. Also de-dupe:
+    // only refit when the dimensions actually change.
+    let resizeTimer = null;
+    let lastCols = term.cols, lastRows = term.rows;
+    new ResizeObserver(() => {
+      if (sessionActive) return;
+      if (resizeTimer) clearTimeout(resizeTimer);
+      resizeTimer = setTimeout(() => {
+        try {
+          fitAddon.fit();
+          if (term.cols !== lastCols || term.rows !== lastRows) {
+            lastCols = term.cols; lastRows = term.rows;
+            postToHost({ kind: 'resize', cols: term.cols, rows: term.rows });
+          }
+        } catch (e) { /* container has no layout yet */ }
+      }, 120);
+    }).observe(document.getElementById('terminal'));
+    } catch (e) {
+      // Init failed — show the error in the err pane (boot remains visible too).
+      var el = document.getElementById('err');
+      if (el) {
+        el.style.display = 'block';
+        el.textContent = '[terminal init failed] ' + (e && e.message ? e.message : e);
+      }
+    }
+  </script>
+</body>
+</html>
