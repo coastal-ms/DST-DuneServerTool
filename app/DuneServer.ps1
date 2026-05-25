@@ -1362,9 +1362,11 @@ function Check-ForUpdates {
         if ($latest -gt $current) {
             $ui.LatestLbl.Text       = "Latest: $latest (update available)"
             $ui.LatestLbl.Foreground = '#4FC3F7'
-            $msg = "A new version is available.`n`nInstalled: $current`nLatest:    $latest`n`nDownload and install now? The app will close while the installer runs."
-            $btn = [Windows.MessageBox]::Show($ui.Window, $msg, 'Update Available', 'YesNo', 'Information')
-            if ($btn -eq 'Yes') { Invoke-UpdateDownload -Release $rel }
+            if (-not $Silent) {
+                $msg = "A new version is available.`n`nInstalled: $current`nLatest:    $latest`n`nDownload and install now? The app will close while the installer runs."
+                $btn = [Windows.MessageBox]::Show($ui.Window, $msg, 'Update Available', 'YesNo', 'Information')
+                if ($btn -eq 'Yes') { Invoke-UpdateDownload -Release $rel }
+            }
         }
         elseif ($latest -eq $current) {
             $ui.LatestLbl.Text       = "Latest: $latest (up to date)"
@@ -1477,7 +1479,7 @@ $autoRefresh.Add_Tick({ Refresh-StatusHeader })
 
 # Initial paint
 Build-ButtonPanel -Vm $script:LastVmKnown
-$ui.FooterVersion.Text = "Dune Server v4.3.0"
+$ui.FooterVersion.Text = "Dune Server v4.3.1"
 $ui.InstalledLbl.Text  = "Installed: $script:ToolVersion"
 
 # Kick off first status fetch on window load
