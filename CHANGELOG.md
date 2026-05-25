@@ -7,6 +7,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [4.0.7] - 2026-05-24
+
+Patch release: dune-admin web UI opens directly to the Players page.
+
+### Changed
+
+- The "Dune Admin" command now opens its web UI to the **Players** route
+  (`https://dune-admin.layout.tools/#/players`) instead of the landing
+  page, since that's the screen most users actually want when they
+  invoke this command.
+
 ## [4.0.6] - 2026-05-24
 
 Patch release: precise drop-position indicator and exact-position
@@ -563,7 +574,8 @@ entry. From here on, patch releases follow as `3.0.1`, `3.0.2`, etc.
 - Boot-time history stored at `<scriptDir>\.boot-times.json` (rolling
   window of last 20 entries per phase).
 
-[Unreleased]: https://github.com/coastal-ms/Simple-Dune-Server-Management-Tool/compare/v4.0.6...HEAD
+[Unreleased]: https://github.com/coastal-ms/Simple-Dune-Server-Management-Tool/compare/v4.0.7...HEAD
+[4.0.7]: https://github.com/coastal-ms/Simple-Dune-Server-Management-Tool/compare/v4.0.6...v4.0.7
 [4.0.6]: https://github.com/coastal-ms/Simple-Dune-Server-Management-Tool/compare/v4.0.5...v4.0.6
 [4.0.5]: https://github.com/coastal-ms/Simple-Dune-Server-Management-Tool/compare/v4.0.4...v4.0.5
 [4.0.4]: https://github.com/coastal-ms/Simple-Dune-Server-Management-Tool/compare/v4.0.3...v4.0.4
