@@ -36,7 +36,7 @@ param()
 # check (Check-ForUpdates) and the "Installed: x.y.z" header label. Must be
 # bumped in lock-step with the other 3 version constants (dune-server.ps1,
 # Build-Exe.ps1, installer .iss).
-$script:ToolVersion = "4.4.0"
+$script:ToolVersion = "4.5.2"
 
 # ────────────────────────────────────────────────────────────────────────────
 #  Prerequisite check: PowerShell 7 (pwsh.exe)
@@ -729,7 +729,21 @@ $script:Commands = @(
     @{ Section='Tools';       Key='18'; Name='dune-admin';   Mode='InApp';   Requires='running'; Desc='Launch dune-admin + open its web UI' }
     @{ Section='Tools';       Key='19'; Name='setup-guide';  Mode='InApp';   Requires='none';    Desc='Open Funcom self-hosted setup guide in your browser' }
     @{ Section='Tools';       Key='20'; Name='report-issue'; Mode='InApp';   Requires='none';    Desc='Report a bug (opens a prefilled GitHub issue)' }
+
+    # ─── Draggable separators ───
+    # Four optional visual dividers. They start parked at the end of the list
+    # so existing layouts are unchanged; the user drags them up into position
+    # to group commands. They participate in the same drag-reorder + persisted
+    # order system as regular commands, but they are not clickable.
+    @{ Section='Separator';   Key='s1'; Name='__separator_1'; Mode='InApp'; Requires='none'; Desc='Separator 1'; IsSeparator=$true }
+    @{ Section='Separator';   Key='s2'; Name='__separator_2'; Mode='InApp'; Requires='none'; Desc='Separator 2'; IsSeparator=$true }
+    @{ Section='Separator';   Key='s3'; Name='__separator_3'; Mode='InApp'; Requires='none'; Desc='Separator 3'; IsSeparator=$true }
+    @{ Section='Separator';   Key='s4'; Name='__separator_4'; Mode='InApp'; Requires='none'; Desc='Separator 4'; IsSeparator=$true }
 )
+
+# Names of the separator pseudo-commands, used by Reset-SeparatorPositions and
+# the renderer to short-circuit click/availability logic.
+$script:SeparatorNames = @('__separator_1','__separator_2','__separator_3','__separator_4')
 
 function Test-CmdAvailable {
     param($Cmd, $Vm)
@@ -1304,6 +1318,20 @@ function Reset-ButtonOrder {
     Build-ButtonPanel
 }
 
+function Reset-SeparatorPositions {
+    # Send the 4 separators back to the end of the list without disturbing the
+    # user's command order. Implemented by writing a new saved order with the
+    # current order minus the separators; Get-OrderedCommands will then re-append
+    # the separators at the end in catalog order.
+    $ordered = @(Get-OrderedCommands)
+    $names = New-Object System.Collections.Generic.List[string]
+    foreach ($c in $ordered) {
+        if (-not $c.IsSeparator) { $names.Add($c.Name) }
+    }
+    Save-ButtonOrderList -Order $names.ToArray()
+    Build-ButtonPanel
+}
+
 # Acronyms that should stay uppercase when expanding kebab-case command names
 # into human-readable Title Case labels.
 $script:LabelAcronyms = @{
@@ -1371,6 +1399,154 @@ function Build-ButtonPanel {
 
     $addButton = {
         param($panel, $cmd)
+
+        # ────────────────────────────────────────────────────────────────────
+        # Separator branch: render as a slim horizontal divider chip with grip
+        # dots. Not clickable. Shares the same drag-and-drop wiring as regular
+        # cards so it can be repositioned and used as a drop target.
+        # ────────────────────────────────────────────────────────────────────
+        if ($cmd.IsSeparator) {
+            $sepBorder = New-Object Windows.Controls.Border
+            $sepBorder.Margin = New-Object Windows.Thickness 3,8,3,8
+            $sepBorder.Padding = New-Object Windows.Thickness 8,4,8,4
+            $sepBorder.CornerRadius = New-Object Windows.CornerRadius 2
+            $sepBorder.Background = [Windows.Media.BrushConverter]::new().ConvertFromString('#1A140E')
+            $sepBorder.BorderBrush = [Windows.Media.BrushConverter]::new().ConvertFromString('#3A2818')
+            $sepBorder.BorderThickness = New-Object Windows.Thickness 0,1,0,1
+            $sepBorder.HorizontalAlignment = 'Stretch'
+            $sepBorder.AllowDrop = $true
+            $sepBorder.DataContext = $cmd
+            $sepBorder.Cursor = [System.Windows.Input.Cursors]::SizeAll
+            $sepBorder.ToolTip = "Separator — drag to reposition. Right-click for options.`n`nUse separators to visually group commands in the list."
+
+            # Three-column grid: grip ┊ dashed line ┊ grip
+            $sepGrid = New-Object Windows.Controls.Grid
+            $cd1 = New-Object Windows.Controls.ColumnDefinition; $cd1.Width = 'Auto'
+            $cd2 = New-Object Windows.Controls.ColumnDefinition; $cd2.Width = New-Object Windows.GridLength 1, 'Star'
+            $cd3 = New-Object Windows.Controls.ColumnDefinition; $cd3.Width = 'Auto'
+            [void]$sepGrid.ColumnDefinitions.Add($cd1)
+            [void]$sepGrid.ColumnDefinitions.Add($cd2)
+            [void]$sepGrid.ColumnDefinitions.Add($cd3)
+
+            $gripBrush = [Windows.Media.BrushConverter]::new().ConvertFromString('#C28840')
+            $lineBrush = [Windows.Media.BrushConverter]::new().ConvertFromString('#5A4023')
+
+            $gripL = New-Object Windows.Controls.TextBlock
+            $gripL.Text = '⋮⋮'
+            $gripL.FontSize = 11
+            $gripL.Foreground = $gripBrush
+            $gripL.VerticalAlignment = 'Center'
+            $gripL.Margin = New-Object Windows.Thickness 0,0,8,0
+            [Windows.Controls.Grid]::SetColumn($gripL, 0)
+            [void]$sepGrid.Children.Add($gripL)
+
+            $line = New-Object Windows.Shapes.Rectangle
+            $line.Height = 1
+            $line.Fill = $lineBrush
+            $line.VerticalAlignment = 'Center'
+            [Windows.Controls.Grid]::SetColumn($line, 1)
+            [void]$sepGrid.Children.Add($line)
+
+            $gripR = New-Object Windows.Controls.TextBlock
+            $gripR.Text = '⋮⋮'
+            $gripR.FontSize = 11
+            $gripR.Foreground = $gripBrush
+            $gripR.VerticalAlignment = 'Center'
+            $gripR.Margin = New-Object Windows.Thickness 8,0,0,0
+            [Windows.Controls.Grid]::SetColumn($gripR, 2)
+            [void]$sepGrid.Children.Add($gripR)
+
+            $sepBorder.Child = $sepGrid
+
+            # Right-click menu: reset separator positions + reset button order.
+            $sepMenu = New-Object Windows.Controls.ContextMenu
+            $miSepReset = New-Object Windows.Controls.MenuItem
+            $miSepReset.Header = 'Reset separator positions'
+            $miSepReset.Add_Click({ Reset-SeparatorPositions })
+            [void]$sepMenu.Items.Add($miSepReset)
+            $miBtnReset = New-Object Windows.Controls.MenuItem
+            $miBtnReset.Header = 'Reset button order to default'
+            $miBtnReset.Add_Click({ Reset-ButtonOrder })
+            [void]$sepMenu.Items.Add($miBtnReset)
+            $sepBorder.ContextMenu = $sepMenu
+
+            # Drag handlers — initiate drag and accept drops. We use a small
+            # in-element insertion line by toggling BorderThickness on top/bottom.
+            $sepBorder.Add_PreviewMouseLeftButtonDown({
+                param($s, $e)
+                $script:DragStartPoint = $e.GetPosition($null)
+            })
+            $sepBorder.Add_PreviewMouseMove({
+                param($s, $e)
+                if ($e.LeftButton -ne [System.Windows.Input.MouseButtonState]::Pressed) { return }
+                if (-not $script:DragStartPoint) { return }
+                $pos = $e.GetPosition($null)
+                $dx = [Math]::Abs($pos.X - $script:DragStartPoint.X)
+                $dy = [Math]::Abs($pos.Y - $script:DragStartPoint.Y)
+                if ($dx -lt [System.Windows.SystemParameters]::MinimumHorizontalDragDistance -and
+                    $dy -lt [System.Windows.SystemParameters]::MinimumVerticalDragDistance) { return }
+                $c = $s.DataContext
+                if (-not $c) { return }
+                $script:DragStartPoint = $null
+                $origOp = $s.Opacity
+                $s.Opacity = 0.35
+                try {
+                    [void][System.Windows.DragDrop]::DoDragDrop($s, $c.Name, [System.Windows.DragDropEffects]::Move)
+                } catch {} finally {
+                    $s.Opacity = $origOp
+                }
+            })
+            $sepBorder.Add_DragEnter({ param($s, $e) $e.Handled = $true })
+            $sepBorder.Add_DragOver({
+                param($s, $e)
+                $srcName = $null
+                try { $srcName = $e.Data.GetData([System.Windows.DataFormats]::Text) } catch {}
+                $tgt = $s.DataContext
+                if ($srcName -and $tgt -and $srcName -ne $tgt.Name) {
+                    $e.Effects = [System.Windows.DragDropEffects]::Move
+                    $pos = $e.GetPosition($s)
+                    $h = $s.ActualHeight
+                    if ($h -le 0) { $h = 1 }
+                    if ($pos.Y -ge ($h / 2.0)) {
+                        $s.BorderBrush = [Windows.Media.BrushConverter]::new().ConvertFromString('#4FC3F7')
+                        $s.BorderThickness = New-Object Windows.Thickness 0,1,0,3
+                        $script:DropPosition = 'after'
+                    } else {
+                        $s.BorderBrush = [Windows.Media.BrushConverter]::new().ConvertFromString('#4FC3F7')
+                        $s.BorderThickness = New-Object Windows.Thickness 0,3,0,1
+                        $script:DropPosition = 'before'
+                    }
+                } else {
+                    $e.Effects = [System.Windows.DragDropEffects]::None
+                }
+                $e.Handled = $true
+            })
+            $sepBorder.Add_DragLeave({
+                param($s, $e)
+                $s.BorderBrush = [Windows.Media.BrushConverter]::new().ConvertFromString('#3A2818')
+                $s.BorderThickness = New-Object Windows.Thickness 0,1,0,1
+                $e.Handled = $true
+            })
+            $sepBorder.Add_Drop({
+                param($s, $e)
+                $s.BorderBrush = [Windows.Media.BrushConverter]::new().ConvertFromString('#3A2818')
+                $s.BorderThickness = New-Object Windows.Thickness 0,1,0,1
+                $srcName = $null
+                try { $srcName = $e.Data.GetData([System.Windows.DataFormats]::Text) } catch {}
+                $tgt = $s.DataContext
+                if ($srcName -and $tgt) {
+                    Move-Command -SourceName $srcName -TargetName $tgt.Name -Position $script:DropPosition
+                }
+                $e.Handled = $true
+            })
+
+            [void]$panel.Children.Add($sepBorder)
+            return
+        }
+
+        # ────────────────────────────────────────────────────────────────────
+        # Regular command button branch (unchanged from prior behavior).
+        # ────────────────────────────────────────────────────────────────────
         $btn = New-Object Windows.Controls.Button
         $btn.Style = $ui.Window.FindResource('CmdButton')
         $btn.DataContext = $cmd
@@ -1413,16 +1589,23 @@ function Build-ButtonPanel {
         $btn.ToolTip = "$($cmd.Desc)`n`nMode: $($cmd.Mode)  -  Requires: $($cmd.Requires)`n`n(Drag any button to reorder. Right-click for options.)"
 
         $available = Test-CmdAvailable -Cmd $cmd -Vm $vm
-        $btn.IsEnabled = $available
+        # NOTE: We deliberately do NOT set $btn.IsEnabled = $false here.
+        # WPF blocks ALL mouse events on disabled controls, which would mean
+        # the user could not drag separators (or any card) across greyed-out
+        # buttons when the VM is off. Keeping the button enabled lets the
+        # drag-reorder system work in all VM states. The click handler below
+        # checks availability and short-circuits with a helpful message when
+        # the underlying command can't actually run.
         if (-not $available) {
             $nameLine.Foreground = $textDisable
             $descLine.Foreground = $textDisable
+            $btn.Opacity = 0.55
             $reason = switch ($cmd.Requires) {
                 'exists'  { "VM '$($script:VmName)' does not exist" }
                 'running' { "VM not running" }
                 default   { '' }
             }
-            if ($reason) { $btn.ToolTip = "$($cmd.Desc)`n`nUnavailable: $reason" }
+            if ($reason) { $btn.ToolTip = "$($cmd.Desc)`n`nUnavailable: $reason`n`n(You can still drag this card to reorder the list.)" }
         }
 
         # Right-click "Reset order" menu (always available, even when button disabled)
@@ -1524,7 +1707,20 @@ function Build-ButtonPanel {
         })
 
         $cmdCopy = $cmd
-        $btn.Add_Click({ Invoke-DuneCmd -Cmd $cmdCopy }.GetNewClosure())
+        $btn.Add_Click({
+            $avail = Test-CmdAvailable -Cmd $cmdCopy -Vm $script:LastVmKnown
+            if (-not $avail) {
+                $reason = switch ($cmdCopy.Requires) {
+                    'exists'  { "the VM '$($script:VmName)' does not exist yet" }
+                    'running' { "the VM is not running" }
+                    default   { 'the command is unavailable' }
+                }
+                Write-Output-Line ""
+                Write-Output-Line "[Cannot run '$($cmdCopy.Name)' - $reason.]"
+                return
+            }
+            Invoke-DuneCmd -Cmd $cmdCopy
+        }.GetNewClosure())
         [void]$panel.Children.Add($btn)
     }
 
@@ -1758,7 +1954,7 @@ $autoRefresh.Add_Tick({
 
 # Initial paint
 Build-ButtonPanel -Vm $script:LastVmKnown
-$ui.FooterVersion.Text = "Dune Server v4.4.0"
+$ui.FooterVersion.Text = "Dune Server v4.5.2"
 $ui.InstalledLbl.Text  = "Installed: $script:ToolVersion"
 
 # Kick off first status fetch on window load
