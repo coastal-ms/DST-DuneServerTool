@@ -1745,6 +1745,16 @@ while ($true) {
         if ($confirm -ne "YES") { Write-Host "Aborted." -ForegroundColor Cyan; continue }
     }
 
+    # Before invoking any vim-driven editor, ensure the VM's ~/.vimrc has
+    # `set mouse=a` so the scroll wheel actually moves the cursor through
+    # the buffer (instead of vim silently eating wheel events while still
+    # capturing them away from the host console's scrollback). Idempotent:
+    # only appends if the directive isn't already present.
+    if ($cmdName -eq "edit" -or $cmdName -eq "edit-advanced") {
+        $vimrcEnsure = "grep -qs '^set mouse=a' ~/.vimrc || echo 'set mouse=a' >> ~/.vimrc"
+        ssh -o StrictHostKeyChecking=no -o LogLevel=QUIET -i "$sshKey" "$sshUser@$ip" $vimrcEnsure 2>$null | Out-Null
+    }
+
     if ($cmdName -eq "logs-export") {
         ssh -t -o StrictHostKeyChecking=no -i "$sshKey" "$sshUser@$ip" "$bgBinPath logs-export"
         $timestamp = Get-Date -Format "yyyy-MM-dd_HH-mm-ss"
@@ -1825,13 +1835,78 @@ while ($true) {
             return [System.Web.HttpUtility]::UrlEncode($v)
         }
         $envStr = "Windows $([System.Environment]::OSVersion.Version), PowerShell $($PSVersionTable.PSVersion)"
+
+        # WebView2 runtime version (registry probe — same one the app uses).
+        $wv2Version = '(not installed / not detected)'
+        foreach ($p in @(
+            'HKLM:\SOFTWARE\WOW6432Node\Microsoft\EdgeUpdate\Clients\{F3017226-FE2A-4295-8BDF-00C3A9A7E4C5}',
+            'HKLM:\SOFTWARE\Microsoft\EdgeUpdate\Clients\{F3017226-FE2A-4295-8BDF-00C3A9A7E4C5}',
+            'HKCU:\SOFTWARE\Microsoft\EdgeUpdate\Clients\{F3017226-FE2A-4295-8BDF-00C3A9A7E4C5}'
+        )) {
+            try {
+                $v = (Get-ItemProperty -Path $p -Name 'pv' -ErrorAction Stop).pv
+                if ($v -and $v -ne '0.0.0.0') { $wv2Version = $v; break }
+            } catch {}
+        }
+
+        # Build the auto-collected diagnostics block.
+        $diagLines = New-Object System.Collections.Generic.List[string]
+        $diagLines.Add("Tool version       : v$script:ToolVersion")
+        $diagLines.Add("Entry point        : $($MyInvocation.MyCommand.Path)")
+        $diagLines.Add("PowerShell         : $($PSVersionTable.PSVersion) ($($PSVersionTable.PSEdition))")
+        $diagLines.Add("OS                 : Windows $([System.Environment]::OSVersion.Version)")
+        $diagLines.Add("WebView2 runtime   : $wv2Version")
+        $diagLines.Add("UserDataFolder     : $(Join-Path $env:LOCALAPPDATA 'DuneServer\webview2')")
+        $diagLines.Add("Config dir         : $(Join-Path $env:APPDATA 'DuneServer')")
+        $diagLines.Add("")
+
+        # WebView2 debug log written by the desktop app. The desktop app writes
+        # it to %APPDATA%\DuneServer\webview2-debug.log; we tail the last ~3KB
+        # so the URL stays under GitHub's practical issue-create length limit.
+        $wv2Log = Join-Path $env:APPDATA 'DuneServer\webview2-debug.log'
+        if (Test-Path $wv2Log) {
+            $diagLines.Add("=== WebView2 debug log (tail) ===")
+            $diagLines.Add("Path: $wv2Log")
+            try {
+                $content = [System.IO.File]::ReadAllText($wv2Log)
+                $maxBytes = 3072
+                if ($content.Length -gt $maxBytes) {
+                    $content = "...(truncated, showing last $maxBytes chars of $($content.Length))...`r`n" +
+                               $content.Substring($content.Length - $maxBytes)
+                }
+                $diagLines.Add($content)
+            } catch {
+                $diagLines.Add("(could not read log: $($_.Exception.Message))")
+            }
+        } else {
+            $diagLines.Add("(no WebView2 debug log present at $wv2Log — desktop app may not have been launched on this machine yet)")
+        }
+
+        $diagText = ($diagLines -join "`r`n")
+
         $params = @(
             "template=bug_report.yml"
             "tool_version=" + (Get-EncodedParam "v$script:ToolVersion")
             "env="          + (Get-EncodedParam $envStr)
+            "diagnostics="  + (Get-EncodedParam $diagText)
         ) -join "&"
         $url = "https://github.com/coastal-ms/Simple-Dune-Server-Management-Tool/issues/new?$params"
 
+        # GitHub returns 414 if the URL is too long. Trim diagnostics and
+        # retry if needed (very unlikely with our 3KB cap, but defensive).
+        if ($url.Length -gt 7500) {
+            $diagText = ($diagLines | Select-Object -First 10) -join "`r`n"
+            $diagText += "`r`n`r`n(diagnostics truncated for URL length — see %APPDATA%\DuneServer\webview2-debug.log for full log)"
+            $params = @(
+                "template=bug_report.yml"
+                "tool_version=" + (Get-EncodedParam "v$script:ToolVersion")
+                "env="          + (Get-EncodedParam $envStr)
+                "diagnostics="  + (Get-EncodedParam $diagText)
+            ) -join "&"
+            $url = "https://github.com/coastal-ms/Simple-Dune-Server-Management-Tool/issues/new?$params"
+        }
+
+        Write-Host "  Pre-filled: tool_version, env, diagnostics ($(($diagText -split "`r?`n").Count) lines)" -ForegroundColor DarkGray
         Write-Host "  $url" -ForegroundColor DarkGray
         Start-Process $url
         continue

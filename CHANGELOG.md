@@ -7,7 +7,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-## [5.0.0] - 2026-05-26
+## [5.0.0] - 2026-05-25
 
 Major release: **embedded terminal pane**. The right pane is now a real
 ConPTY-backed xterm.js terminal. Every command — including interactive ones
@@ -67,6 +67,55 @@ that the desktop app covers every workflow.
   the old `TextBox`-based pane needed to look non-interactive). The
   terminal handles its own mouse routing.
 
+### Fixed (pre-release stabilization)
+
+- **PTY data + exit handlers actually fire.** PowerShell scriptblocks
+  bound to events that are raised from a non-runspace background thread
+  (Pty.Net's reader thread) are silently dropped — `Register-ObjectEvent`,
+  `[DelegateType]{...}.GetNewClosure()`, and ConcurrentQueue-capturing
+  closures all returned 0 chunks despite the child process writing to
+  the PTY. Replaced with a tiny `DuneServer.PtySink` C# helper
+  (compiled at startup via `Add-Type`) whose `OnData`/`OnExit` methods
+  are bound as real CLR delegates via
+  `[Delegate]::CreateDelegate(...)`. These execute on any thread without
+  needing PS runspace context. The DispatcherTimer drains a
+  `ConcurrentQueue<string>` and an `int` Exited flag on the UI thread.
+- **Battlegroup state parser now correctly disables redundant pod
+  buttons.** Previously matched `STATUS: Running`, which the `bg status`
+  command does not actually emit, so `LastBgState` stayed `unknown` and
+  Startup/Start/Stop were always lit regardless of the real pod state.
+  Rewrote `Get-BgStateFromStatusText` to recognise the actual output
+  shape: `Phase: Ready`, `<Map>  Running` table rows, and
+  `No resources found in <ns> namespace`.
+- **Force-kill hung sessions** with a new **Kill** button next to
+  Copy/Clear and a **Ctrl+\\** shortcut from inside the terminal.
+  Targets `shell-vm`, `shell-pod`, and any other interactive command
+  that doesn't cleanly exit on Ctrl+C. The "Ctrl+\\ to kill" hint sits
+  next to the Output title so users don't forget it.
+- **Atomic PTY teardown.** Stopping a session used to double-dispose
+  when the drain timer re-entered during cleanup → crash. `Stop-CurrentPty`
+  now nulls the script-scope refs first (so a re-entrant tick bails out
+  immediately), drains remaining output, marks the sink exited via a
+  method-level `MarkExited()` (avoids the `[ref]$obj.Field` marshaling
+  pitfall in PS 5.1), then disposes.
+- **TUI editors (`edit`, `edit-advanced`) launch in their own console
+  window.** Embedding `xterm.js → ConPTY → ssh -t → remote vim` across
+  five terminal-size negotiation layers corrupts the rendered display
+  (SSH window-change forwarding to nested TUI apps is unreliable on
+  Windows). Native conhost renders vim faithfully and the embedded
+  terminal stays free for streaming output from other commands.
+- **Mouse wheel works inside the popup vim** — `dune-server.ps1` now
+  ensures `set mouse=a` is in `~/.vimrc` on the VM via an idempotent
+  pre-flight check before any edit command. Without this, modern vim's
+  default mouse-mode-enabled-but-wheel-unmapped state ate wheel events
+  without scrolling anything.
+- **Embedded terminal no longer corrupts itself on window resize.** The
+  JS `ResizeObserver` debounce was firing mid-session and reshaping the
+  terminal underneath running commands. Refits are now suppressed while
+  a PTY session is active, and the resize message is de-duplicated so
+  it's only sent when the dimensions actually change. The PTY is also
+  re-synced to the authoritative xterm dimensions on `session-start`.
+
 ### Notes for developers
 
 - The full dependency bundle adds ~2.7 MB to the installer (Pty.Net +
@@ -74,10 +123,12 @@ that the desktop app covers every workflow.
 - ps2exe compiles `DuneServer.exe` as PowerShell 5.1 Desktop. Both DLL
   sets are netstandard2.0 / net46 and load cleanly there. `BackendOptions::ConPty`
   is passed explicitly when spawning PTYs.
-- Pty.Net event handlers cannot use `$script:*` from their callbacks
-  (the scope is the event handler's, not the outer script's). Use the
-  existing `Register-ObjectEvent -MessageData` + `ConcurrentQueue` +
-  `DispatcherTimer` drain pattern (see `Start-PtyDrainTimer`).
+- Pty.Net event handlers must NOT be bound as PowerShell scriptblocks
+  (`Register-ObjectEvent`, `.GetNewClosure()`, or `[DelegateType]{...}`
+  casts) — events fired from the reader thread are silently dropped.
+  Bind a `DuneServer.PtySink` C# helper via
+  `[Delegate]::CreateDelegate(...)` instead. See `Start-PtyDrainTimer`
+  + `Stop-CurrentPty`.
 
 ## [4.5.2] - 2026-05-25
 

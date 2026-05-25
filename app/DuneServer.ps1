@@ -34,6 +34,13 @@ param()
 # Build-Exe.ps1, installer .iss).
 $script:ToolVersion = "5.0.0"
 
+# ANSI escape character (0x1B). The ps2exe-compiled binary runs in
+# PowerShell 5.1 (Desktop), which does NOT support the `e backtick-e
+# escape sequence (that was added in PowerShell 6+). Inside the .exe,
+# "`e[36m..." emits a LITERAL 'e[36m...' — which xterm.js then renders
+# verbatim instead of as colored text. Always use $script:ESC for ANSI.
+$script:ESC = [char]27
+
 # ────────────────────────────────────────────────────────────────────────────
 #  Prerequisite check: PowerShell 7 (pwsh.exe)
 # ────────────────────────────────────────────────────────────────────────────
@@ -148,6 +155,51 @@ try {
         "Details: $($_.Exception.Message)",
         'Dune Server - startup error', 'OK', 'Error') | Out-Null
     exit 1
+}
+
+# ---------- PTY sink (C# helper) -----------------------------------------
+#
+# Pty.Net raises PtyData / PtyDisconnected on a background reader thread.
+# PowerShell scriptblocks bound to those events via [DelegateType]{...} or
+# Register-ObjectEvent silently drop invocations when the firing thread
+# has no PowerShell runspace context. We see the child's stdout in the
+# parent console (because ConPTY mirrors it) but our handlers never run.
+#
+# Workaround: a tiny C# class with thread-safe Concurrent collections.
+# Its OnData / OnExit methods are real CLR method-group instances - they
+# can be converted to the custom delegate types directly and execute on
+# whatever thread fires the event. PowerShell then polls the queue from
+# a DispatcherTimer on the UI thread (see Start-PtyDrainTimer).
+try {
+    Add-Type -TypeDefinition @'
+using System;
+using System.Collections.Concurrent;
+
+namespace DuneServer {
+    public class PtySink {
+        public ConcurrentQueue<string> Data = new ConcurrentQueue<string>();
+        public int Exited;   // 0 = running, 1 = pty disconnected
+        public int BytesSeen;
+
+        public void OnData(object sender, string data) {
+            if (string.IsNullOrEmpty(data)) return;
+            System.Threading.Interlocked.Add(ref BytesSeen, data.Length);
+            Data.Enqueue(data);
+        }
+        public void OnExit(object sender) {
+            System.Threading.Interlocked.Exchange(ref Exited, 1);
+        }
+        // Callable from PowerShell - avoids the [ref]$obj.Field marshaling
+        // pitfall in PS 5.1 (which silently corrupts ref-to-public-field).
+        public void MarkExited() {
+            System.Threading.Interlocked.Exchange(ref Exited, 1);
+        }
+    }
+}
+'@
+} catch {
+    # Already compiled in a prior run (Add-Type complains on re-add of same type).
+    if (-not ('DuneServer.PtySink' -as [type])) { throw }
 }
 
 # WebView2 runtime check. The Evergreen runtime is shipped with current
@@ -589,10 +641,16 @@ Add-Type -AssemblyName System.Xaml
               <ColumnDefinition Width="*"/>
               <ColumnDefinition Width="Auto"/>
               <ColumnDefinition Width="Auto"/>
+              <ColumnDefinition Width="Auto"/>
             </Grid.ColumnDefinitions>
-            <TextBlock x:Name="OutputTitle" Text="Output" Foreground="#E0B341" FontWeight="Bold" FontSize="13" VerticalAlignment="Center"/>
-                <Button x:Name="BtnCopyOutput" Grid.Column="1" Content="Copy" Style="{StaticResource UtilButton}" Padding="10,4" Margin="4,0"/>
-                <Button x:Name="BtnClearOutput" Grid.Column="2" Content="Clear" Style="{StaticResource UtilButton}" Padding="10,4" Margin="4,0"/>
+            <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+              <TextBlock x:Name="OutputTitle" Text="Output" Foreground="#E0B341" FontWeight="Bold" FontSize="13" VerticalAlignment="Center"/>
+              <TextBlock Text="  ·  " Foreground="#5C6773" FontSize="12" VerticalAlignment="Center"/>
+              <TextBlock Text="Ctrl+\ to kill" Foreground="#8A8275" FontSize="11" FontStyle="Italic" VerticalAlignment="Center"/>
+            </StackPanel>
+                <Button x:Name="BtnKillSession" Grid.Column="1" Content="Kill" Style="{StaticResource UtilButton}" Padding="10,4" Margin="4,0" ToolTip="Force-stop the current SSH / command session (Ctrl+\)" Foreground="#F07178" IsEnabled="False"/>
+                <Button x:Name="BtnCopyOutput" Grid.Column="2" Content="Copy" Style="{StaticResource UtilButton}" Padding="10,4" Margin="4,0"/>
+                <Button x:Name="BtnClearOutput" Grid.Column="3" Content="Clear" Style="{StaticResource UtilButton}" Padding="10,4" Margin="4,0"/>
               </Grid>
             </Border>
 
@@ -645,6 +703,7 @@ $ui = @{
     ButtonPanelCol2  = $window.FindName('ButtonPanelCol2')
     ButtonPanelCol3  = $window.FindName('ButtonPanelCol3')
     OutputTitle    = $window.FindName('OutputTitle')
+    BtnKillSession = $window.FindName('BtnKillSession')
     BtnCopyOutput  = $window.FindName('BtnCopyOutput')
     BtnClearOutput = $window.FindName('BtnClearOutput')
     Terminal       = $window.FindName('Terminal')
@@ -736,8 +795,10 @@ function Get-VmStatus {
         $vm = Get-VM -Name $script:VmName -ErrorAction Stop
         $ip = ($vm | Get-VMNetworkAdapter).IPAddresses |
               Where-Object { $_ -match '^\d+\.\d+\.\d+\.\d+$' } | Select-Object -First 1
+        try { Write-Diag ("Get-VmStatus: Name=$($script:VmName) State=$($vm.State) IP=$ip") } catch {}
         return @{ exists=$true; state=$vm.State.ToString(); running=($vm.State -eq 'Running'); ip=$ip }
     } catch {
+        try { Write-Diag ("Get-VmStatus: Get-VM FAILED for Name=$($script:VmName): $($_.Exception.GetType().Name) - $($_.Exception.Message)") } catch {}
         return @{ exists=$false; state='NotFound'; running=$false; ip=$null }
     }
 }
@@ -796,8 +857,8 @@ function Get-BattlegroupStatusSnapshot {
 $script:Commands = @(
     # ─── VM commands ───
     @{ Section='VM';          Key='a'; Name='initial-setup';        Mode='Console'; Requires='none';    Desc='Run the initial VM setup wizard' }
-    @{ Section='VM';          Key='c'; Name='start-vm';             Mode='InApp';   Requires='exists';  Desc='Power on the VM only (no battlegroup)' }
-    @{ Section='VM';          Key='d'; Name='startup';              Mode='Console'; Requires='exists';  Desc='Power on VM, start battlegroup, wait for maps Ready' }
+    @{ Section='VM';          Key='c'; Name='start-vm';             Mode='InApp';   Requires='exists';  DisabledWhen='vm-running';  Desc='Power on the VM only (no battlegroup)' }
+    @{ Section='VM';          Key='d'; Name='startup';              Mode='Console'; Requires='exists';  DisabledWhen='bg-running';  Desc='Power on VM, start battlegroup, wait for maps Ready' }
     @{ Section='VM';          Key='e'; Name='shutdown';             Mode='Console'; Requires='running'; Desc='Stop battlegroup, power off VM' }
     @{ Section='VM';          Key='f'; Name='reboot';               Mode='Console'; Requires='running'; Desc='Stop battlegroup, reboot VM, start battlegroup' }
     @{ Section='VM';          Key='g'; Name='rotate-ssh-key';       Mode='Console'; Requires='running'; Desc='Generate a new SSH key and authorize it on the VM' }
@@ -808,21 +869,21 @@ $script:Commands = @(
     # already shows live battlegroup status with a 30s auto-refresh and a
     # manual Refresh button, so a duplicate button would just dump the same
     # text into the output pane.
-    @{ Section='Battlegroup'; Key='2';  Name='start';                    Mode='Console'; Requires='running'; Desc='Start the selected battlegroup' }
-    @{ Section='Battlegroup'; Key='3';  Name='restart';                  Mode='Console'; Requires='running'; Desc='Restart the selected battlegroup' }
-    @{ Section='Battlegroup'; Key='4';  Name='stop';                     Mode='Console'; Requires='running'; Desc='Stop the selected battlegroup' }
+    @{ Section='Battlegroup'; Key='2';  Name='start';                    Mode='Console'; Requires='running'; DisabledWhen='bg-running';  Desc='Start the selected battlegroup' }
+    @{ Section='Battlegroup'; Key='3';  Name='restart';                  Mode='Console'; Requires='running'; DisabledWhen='bg-stopped';  Desc='Restart the selected battlegroup' }
+    @{ Section='Battlegroup'; Key='4';  Name='stop';                     Mode='Console'; Requires='running'; DisabledWhen='bg-stopped';  Desc='Stop the selected battlegroup' }
     @{ Section='Battlegroup'; Key='5';  Name='update';                   Mode='Console'; Requires='running'; Desc='Check for new versions and apply them' }
-    @{ Section='Battlegroup'; Key='6';  Name='edit';                     Mode='Console'; Requires='running'; Desc='Edit battlegroup via utilities interface' }
-    @{ Section='Battlegroup'; Key='7';  Name='edit-advanced';            Mode='Console'; Requires='running'; Desc='(Advanced) Edit battlegroup YAML directly' }
+    @{ Section='Battlegroup'; Key='6';  Name='edit';                     Mode='Console'; Requires='running'; External=$true; Desc='Edit battlegroup via utilities interface (opens own window)' }
+    @{ Section='Battlegroup'; Key='7';  Name='edit-advanced';            Mode='Console'; Requires='running'; External=$true; Desc='(Advanced) Edit battlegroup YAML directly (opens own window)' }
     @{ Section='Battlegroup'; Key='8';  Name='enable-experimental-swap'; Mode='Console'; Requires='running'; Desc='(Experimental) Enable experimental swap memory' }
-    @{ Section='Battlegroup'; Key='9';  Name='backup';                   Mode='Console'; Requires='running'; Desc="Back up the battlegroup's database" }
-    @{ Section='Battlegroup'; Key='10'; Name='import';                   Mode='Console'; Requires='running'; Desc='Import a database backup' }
-    @{ Section='Battlegroup'; Key='11'; Name='logs-export';              Mode='Console'; Requires='running'; Desc='Retrieve logs from all battlegroup pods' }
-    @{ Section='Battlegroup'; Key='12'; Name='operator-logs-export';     Mode='Console'; Requires='running'; Desc='Retrieve logs from all operator pods' }
-    @{ Section='Battlegroup'; Key='13'; Name='open-file-browser';        Mode='InApp';   Requires='running'; Desc='Open battlegroup file browser in your browser' }
-    @{ Section='Battlegroup'; Key='14'; Name='open-director';            Mode='InApp';   Requires='running'; Desc='Open battlegroup director page in your browser' }
+    @{ Section='Battlegroup'; Key='9';  Name='backup';                   Mode='Console'; Requires='running'; DisabledWhen='bg-stopped';  Desc="Back up the battlegroup's database" }
+    @{ Section='Battlegroup'; Key='10'; Name='import';                   Mode='Console'; Requires='running'; DisabledWhen='bg-running';  Desc='Import a database backup' }
+    @{ Section='Battlegroup'; Key='11'; Name='logs-export';              Mode='Console'; Requires='running'; DisabledWhen='bg-stopped';  Desc='Retrieve logs from all battlegroup pods' }
+    @{ Section='Battlegroup'; Key='12'; Name='operator-logs-export';     Mode='Console'; Requires='running'; DisabledWhen='bg-stopped';  Desc='Retrieve logs from all operator pods' }
+    @{ Section='Battlegroup'; Key='13'; Name='open-file-browser';        Mode='InApp';   Requires='running'; DisabledWhen='bg-stopped';  Desc='Open battlegroup file browser in your browser' }
+    @{ Section='Battlegroup'; Key='14'; Name='open-director';            Mode='InApp';   Requires='running'; DisabledWhen='bg-stopped';  Desc='Open battlegroup director page in your browser' }
     @{ Section='Battlegroup'; Key='15'; Name='shell-vm';                 Mode='Console'; Requires='running'; Desc='Open a shell to the VM' }
-    @{ Section='Battlegroup'; Key='16'; Name='shell-pod';                Mode='Console'; Requires='running'; Desc='Open a shell to a pod' }
+    @{ Section='Battlegroup'; Key='16'; Name='shell-pod';                Mode='Console'; Requires='running'; DisabledWhen='bg-stopped';  Desc='Open a shell to a pod' }
 
     # ─── Tools ───
     @{ Section='Tools';       Key='17'; Name='ssh';          Mode='Console'; Requires='running'; Desc='Open an SSH terminal to the VM' }
@@ -847,12 +908,85 @@ $script:SeparatorNames = @('__separator_1','__separator_2','__separator_3','__se
 
 function Test-CmdAvailable {
     param($Cmd, $Vm)
-    switch ($Cmd.Requires) {
-        'none'    { return $true }
-        'exists'  { return [bool]$Vm.exists }
-        'running' { return [bool]$Vm.running }
-        default   { return [bool]$Vm.running }
+
+    # Base prerequisite (VM existence / running)
+    $baseOk = switch ($Cmd.Requires) {
+        'none'    { $true }
+        'exists'  { [bool]$Vm.exists }
+        'running' { [bool]$Vm.running }
+        default   { [bool]$Vm.running }
     }
+    if (-not $baseOk) {
+        return @{ ok=$false; reason=switch ($Cmd.Requires) {
+            'exists'  { "VM '$($script:VmName)' does not exist" }
+            'running' { "VM not running" }
+            default   { '' }
+        } }
+    }
+
+    # Redundancy guard: don't let users start things that are already started,
+    # or stop things that are already stopped.
+    $bgState = $script:LastBgState   # 'running' | 'stopped' | 'unknown'
+    if (-not $bgState) { $bgState = 'unknown' }
+
+    switch ($Cmd.DisabledWhen) {
+        'vm-running' {
+            if ($Vm.running) { return @{ ok=$false; reason='VM is already running' } }
+        }
+        'vm-stopped' {
+            if (-not $Vm.running) { return @{ ok=$false; reason='VM is not running' } }
+        }
+        'bg-running' {
+            if ($bgState -eq 'running') { return @{ ok=$false; reason='Battlegroup is already running' } }
+        }
+        'bg-stopped' {
+            # Only disable when we KNOW it's stopped — never on 'unknown'
+            # (e.g., SSH check hasn't completed yet), otherwise the buttons
+            # flicker as disabled on every refresh.
+            if ($bgState -eq 'stopped') { return @{ ok=$false; reason='Battlegroup is not running' } }
+        }
+    }
+    return @{ ok=$true }
+}
+
+# Inspect a battlegroup-status text blob and return 'running' | 'stopped' | 'unknown'.
+# The `battlegroup status` command renders a wide column table. The relevant
+# signals we look for:
+#
+#   Running (any of):
+#     - A "Status" header column followed by a value row containing 'Ready'
+#       (e.g. "Reconciling Ready", "Ready").
+#     - At least one game-server map row whose Phase column says "Running"
+#       (table looks like:  Map  Phase ... \n DeepDesert_1  Running ...).
+#     - Old-style "STATUS: Running" single line (kept for compatibility).
+#
+#   Stopped (any of):
+#     - kubectl's "No resources found in <ns> namespace" message (printed
+#       when the bg's namespace is empty / scaled to zero).
+#     - Old-style "STATUS: Stopped".
+#     - A status value of "Stopped" / "NotFound".
+#
+# Anything else returns 'unknown', which the click-time gate treats as
+# "don't disable" (so buttons never grey out on a transient ssh failure).
+function Get-BgStateFromStatusText {
+    param([string]$Text)
+    if (-not $Text) { return 'unknown' }
+
+    # Stopped signals (check first — they're unambiguous)
+    if ($Text -match '(?im)No resources found in .* namespace') { return 'stopped' }
+    if ($Text -match '(?im)\bSTATUS\s*:\s*Stopped\b')           { return 'stopped' }
+    if ($Text -match '(?im)^\s*Stopped\b\s*$')                  { return 'stopped' }
+
+    # Running signals
+    if ($Text -match '(?im)\bSTATUS\s*:\s*Running\b')           { return 'running' }
+    # Any "* Ready" status value (e.g. "Reconciling Ready", "Ready").
+    # The "Status" column in `battlegroup status` shows this when the
+    # control plane has reconciled and the game servers are live.
+    if ($Text -match '(?im)\bReady\b')                          { return 'running' }
+    # Map/Phase table rows: "<map-name>  Running"
+    if ($Text -match '(?m)^\s*\S+\s+Running\b')                 { return 'running' }
+
+    return 'unknown'
 }
 
 # ────────────────────────────────────────────────────────────────────────────
@@ -867,36 +1001,51 @@ function Test-CmdAvailable {
 
 $script:CurrentPty       = $null   # Active Pty.Net.IPtyConnection (single command at a time)
 $script:CurrentPtyName   = $null   # Display name of the running command (for guard messages)
+$script:CurrentSink      = $null   # DuneServer.PtySink - thread-safe data/exit queue
 $script:PtyDataHandler   = $null   # Strong reference to the PtyData delegate (so GC doesn't reap it)
 $script:PtyExitHandler   = $null   # Strong reference to the PtyDisconnected delegate
-$script:PtyDataQueue     = [System.Collections.Concurrent.ConcurrentQueue[hashtable]]::new()
-$script:PtyDrainTimer    = $null   # DispatcherTimer that drains $PtyDataQueue on UI thread
+$script:PtyDrainTimer    = $null   # DispatcherTimer that polls the sink on UI thread
 
 function Start-PtyDrainTimer {
     if ($script:PtyDrainTimer) { return }
     $script:PtyDrainTimer = New-Object System.Windows.Threading.DispatcherTimer
     $script:PtyDrainTimer.Interval = [TimeSpan]::FromMilliseconds(40)
     $script:PtyDrainTimer.Add_Tick({
-        $item = $null
-        while ($script:PtyDataQueue.TryDequeue([ref]$item)) {
-            switch ($item.kind) {
-                'data' {
-                    Send-TerminalMessage @{ kind='data'; text=$item.text }
-                }
-                'exit' {
-                    $banner =
-                        "`r`n`e[90m──────────────────────────────────────────────`e[0m`r`n" +
-                        "`e[32m[process ended]`e[0m`r`n"
-                    Send-TerminalMessage @{ kind='data'; text=$banner }
-                    Set-Footer "Done: $script:CurrentPtyName"
+        $sink = $script:CurrentSink
+        if (-not $sink) { return }
 
-                    # Drop strong refs so the delegates can be GC'd along with the connection.
-                    $script:CurrentPty       = $null
-                    $script:CurrentPtyName   = $null
-                    $script:PtyDataHandler   = $null
-                    $script:PtyExitHandler   = $null
-                }
-            }
+        # Drain any pending data chunks
+        $chunk = ''
+        $tmp = $null
+        try {
+            while ($sink.Data.TryDequeue([ref]$tmp)) { $chunk += $tmp }
+        } catch { return }
+        if ($chunk.Length -gt 0) {
+            Send-TerminalMessage @{ kind='data'; text=$chunk }
+        }
+
+        # Handle disconnect (drain remaining data first, above, then finalize)
+        if ($sink.Exited -ne 0) {
+            $pty  = $script:CurrentPty
+            $name = $script:CurrentPtyName
+
+            # Null script refs FIRST so a re-entrant tick bails immediately.
+            $script:CurrentPty       = $null
+            $script:CurrentPtyName   = $null
+            $script:CurrentSink      = $null
+            $script:PtyDataHandler   = $null
+            $script:PtyExitHandler   = $null
+
+            $ESC = $script:ESC
+            $banner =
+                "`r`n$ESC[90m──────────────────────────────────────────────$ESC[0m`r`n" +
+                "$ESC[32m[process ended]$ESC[0m`r`n"
+            Send-TerminalMessage @{ kind='data'; text=$banner }
+            Send-TerminalMessage @{ kind='session-end' }
+            Set-Footer "Done: $name"
+
+            if ($pty) { try { $pty.Dispose() } catch {} }
+            try { $ui.BtnKillSession.IsEnabled = $false } catch {}
         }
     })
     $script:PtyDrainTimer.Start()
@@ -905,18 +1054,42 @@ function Start-PtyDrainTimer {
 function Invoke-Command-Terminal {
     param([hashtable]$Cmd)
 
+    # External commands (vi/vim-driven editors etc.) launch in their own
+    # console window. The chain xterm.js -> ConPTY -> ssh -t -> remote vim
+    # negotiates terminal size across 5 layers and corrupts the rendered
+    # display (SSH window-change forwarding is unreliable). A native
+    # console host renders nested TUI apps faithfully and the user keeps
+    # the embedded terminal free for streaming output from other commands.
+    if ($Cmd.External) {
+        $ESC = $script:ESC
+        Send-TerminalMessage @{ kind='data'; text="`r`n$ESC[36m[Launching '$($Cmd.Name)' in a new console window...]$ESC[0m`r`n" }
+        try {
+            Start-Process -FilePath $script:PwshExe `
+                -ArgumentList @('-NoProfile','-ExecutionPolicy','Bypass','-File',"`"$($script:MainScript)`"",'-Cmd',$Cmd.Name) `
+                -WorkingDirectory $script:AppDir `
+                -WindowStyle Normal | Out-Null
+            Set-Footer "Launched '$($Cmd.Name)' in external window."
+        } catch {
+            Send-TerminalMessage @{ kind='data'; text="`r`n$ESC[31m[Failed to launch: $($_.Exception.Message)]$ESC[0m`r`n" }
+            Set-Footer "Launch failed."
+        }
+        return
+    }
+
     if ($script:CurrentPty) {
-        Send-TerminalMessage @{ kind='data'; text="`r`n`e[33m[A command is already running ($script:CurrentPtyName). Wait for it to finish.]`e[0m`r`n" }
+        $ESC = $script:ESC
+        Send-TerminalMessage @{ kind='data'; text="`r`n$ESC[33m[A command is already running ($script:CurrentPtyName). Wait for it to finish.]$ESC[0m`r`n" }
         return
     }
 
     Set-OutputTitle "Output  -  $($Cmd.Name)"
     Set-Footer "Running: $($Cmd.Name)..."
 
+    $ESC = $script:ESC
     $headerBanner =
-        "`r`n`e[90m══════════════════════════════════════════════`e[0m`r`n" +
-        ("  `e[33m> {0}`e[0m    `e[90m[{1}]`e[0m`r`n" -f $Cmd.Name, (Get-Date).ToString('HH:mm:ss')) +
-        "`e[90m══════════════════════════════════════════════`e[0m`r`n"
+        "`r`n$ESC[90m══════════════════════════════════════════════$ESC[0m`r`n" +
+        ("  $ESC[33m> {0}$ESC[0m    $ESC[90m[{1}]$ESC[0m`r`n" -f $Cmd.Name, (Get-Date).ToString('HH:mm:ss')) +
+        "$ESC[90m══════════════════════════════════════════════$ESC[0m`r`n"
     Send-TerminalMessage @{ kind='data'; text=$headerBanner }
 
     # Build the command line. Pty.Net.PtyProvider.Spawn takes one combined
@@ -936,7 +1109,7 @@ function Invoke-Command-Terminal {
             $script:AppDir,
             [Pty.Net.BackendOptions]::ConPty)
     } catch {
-        Send-TerminalMessage @{ kind='data'; text="`r`n`e[31m[PTY spawn failed: $($_.Exception.Message)]`e[0m`r`n" }
+        Send-TerminalMessage @{ kind='data'; text="`r`n$($script:ESC)[31m[PTY spawn failed: $($_.Exception.Message)]$($script:ESC)[0m`r`n" }
         Set-Footer "Spawn failed."
         return
     }
@@ -944,26 +1117,78 @@ function Invoke-Command-Terminal {
     $script:CurrentPty     = $pty
     $script:CurrentPtyName = $Cmd.Name
 
-    # Pty.Net events use custom non-EventHandler delegate types
-    # (PtyDataEventArgs(object,string) and PtyDisconnectedEventArgs(object)),
-    # so Register-ObjectEvent doesn't work — use add_* directly. PS converts
-    # the scriptblock to the matching delegate automatically. Handlers run on
-    # the PTY reader thread, so funnel through a thread-safe queue + the
-    # DispatcherTimer above to marshal back onto the UI thread.
-    $queue = $script:PtyDataQueue
-    $script:PtyDataHandler = [Pty.Net.PtyDataEventArgs]{
-        param($sender, $data)
-        if ($data) {
-            [void]$queue.Enqueue(@{ kind='data'; text=[string]$data })
-        }
-    }.GetNewClosure()
-    $script:PtyExitHandler = [Pty.Net.PtyDisconnectedEventArgs]{
-        param($sender)
-        [void]$queue.Enqueue(@{ kind='exit' })
-    }.GetNewClosure()
+    # Pty.Net raises PtyData / PtyDisconnected on a background reader thread.
+    # We bind the events to method-group delegates on a small C# helper (PtySink)
+    # whose OnData/OnExit can safely execute on any thread - they just enqueue
+    # into a ConcurrentQueue / set a flag. The DispatcherTimer above polls
+    # that sink on the UI thread.
+    #
+    # We KEEP strong refs to both delegates and the sink so neither gets GC'd
+    # for the lifetime of the connection.
+    $sink = New-Object DuneServer.PtySink
+    $script:CurrentSink    = $sink
+    # Use Delegate.CreateDelegate (not the [DelegateType]$mg cast - that's
+    # unreliable in PS 5.1 Desktop). This binds a real CLR method group to
+    # the custom delegate type, so invocations on Pty.Net's reader thread
+    # run directly without needing a PS runspace context.
+    $script:PtyDataHandler = [Delegate]::CreateDelegate([Pty.Net.PtyDataEventArgs],         $sink, 'OnData')
+    $script:PtyExitHandler = [Delegate]::CreateDelegate([Pty.Net.PtyDisconnectedEventArgs], $sink, 'OnExit')
 
     $pty.add_PtyData($script:PtyDataHandler)
     $pty.add_PtyDisconnected($script:PtyExitHandler)
+
+    # Light up the Kill button now that a session is live.
+    try { $ui.BtnKillSession.IsEnabled = $true } catch {}
+
+    # Tell the JS terminal to freeze auto-refits while this session runs —
+    # ResizeObserver-triggered re-fits during a TUI app (vi etc.) corrupt
+    # the rendered display.
+    Send-TerminalMessage @{ kind='session-start' }
+
+    Write-Diag ("Spawned PTY for '{0}' (cols={1} rows={2})" -f $Cmd.Name, $cols, $rows)
+}
+
+# Forcefully terminate the current PTY (Ctrl+\ from the terminal, or
+# the "Stop" toolbar button). Safe to call when nothing is running.
+# Forcefully terminate the current PTY (Ctrl+\ from the terminal, or
+# the "Kill" toolbar button). Atomic: tears down state in one shot so the
+# drain timer can't re-enter and double-dispose.
+function Stop-CurrentPty {
+    $pty  = $script:CurrentPty
+    $sink = $script:CurrentSink
+    if (-not $pty) { return }
+
+    $name = $script:CurrentPtyName
+    Write-Diag ("Stop-CurrentPty: killing '{0}'" -f $name)
+
+    # Null out script-scope refs FIRST so the drain timer's next tick sees
+    # CurrentSink=null and bails out without touching disposed state.
+    $script:CurrentPty       = $null
+    $script:CurrentPtyName   = $null
+    $script:CurrentSink      = $null
+    $script:PtyDataHandler   = $null
+    $script:PtyExitHandler   = $null
+
+    # Drain any remaining buffered output BEFORE dispose so the user sees it.
+    if ($sink) {
+        try {
+            $chunk = ''
+            $tmp = $null
+            while ($sink.Data.TryDequeue([ref]$tmp)) { $chunk += $tmp }
+            if ($chunk.Length -gt 0) {
+                Send-TerminalMessage @{ kind='data'; text=$chunk }
+            }
+            $sink.MarkExited()
+        } catch { Write-Diag ("drain-on-kill: {0}" -f $_.Exception.Message) }
+    }
+
+    try { $pty.Dispose() } catch { Write-Diag ("Dispose threw: {0}" -f $_.Exception.Message) }
+
+    $ESC = $script:ESC
+    Send-TerminalMessage @{ kind='data'; text="`r`n$ESC[31m[Process killed]$ESC[0m`r`n" }
+    Send-TerminalMessage @{ kind='session-end' }
+    Set-Footer "Killed: $name"
+    try { $ui.BtnKillSession.IsEnabled = $false } catch {}
 }
 
 # Forward user keystrokes from xterm.js (relayed via WebView2 WebMessageReceived)
@@ -995,6 +1220,7 @@ function Invoke-DuneCmd {
 # ────────────────────────────────────────────────────────────────────────────
 
 function Refresh-StatusHeader {
+    try { Write-Diag "Refresh-StatusHeader: invoked" } catch {}
     Set-Footer "Refreshing status..."
     $ui.StatusMeta.Text = "(fetching...)"
 
@@ -1009,6 +1235,7 @@ function Refresh-StatusHeader {
     if (-not $vmInfo.exists) {
         $ui.StatusPane.Text = "VM '$($script:VmName)' does not exist."
         $ui.StatusMeta.Text = "(no VM)  -  checked $stamp"
+        Set-BgState 'stopped'
         Build-ButtonPanel -Vm $vmInfo
         Set-Footer "Idle"
         return
@@ -1016,6 +1243,7 @@ function Refresh-StatusHeader {
     if (-not $vmInfo.running) {
         $ui.StatusPane.Text = "VM '$($script:VmName)' is not running (state: $($vmInfo.state))."
         $ui.StatusMeta.Text = "VM $($vmInfo.state)  -  checked $stamp"
+        Set-BgState 'stopped'
         Build-ButtonPanel -Vm $vmInfo
         Set-Footer "Idle"
         return
@@ -1023,6 +1251,7 @@ function Refresh-StatusHeader {
     if (-not $vmInfo.ip) {
         $ui.StatusPane.Text = 'VM running but has no IP yet.'
         $ui.StatusMeta.Text = "VM running  -  checked $stamp"
+        Set-BgState 'unknown'
         Build-ButtonPanel -Vm $vmInfo
         Set-Footer "Idle"
         return
@@ -1091,10 +1320,17 @@ function Refresh-StatusHeader {
                 if ($r -and $r.ok) {
                     $ui.StatusPane.Text = $r.output
                     $ui.StatusMeta.Text = "VM running ($($vmInfo.ip))  -  updated $stamp2"
+                    Set-BgState (Get-BgStateFromStatusText $r.output)
+                    # Rebuild the button panel so commands gated on bg-state
+                    # (start/stop battlegroup, startup wizard, etc.) reflect
+                    # the just-discovered state. Cheap — it just re-renders WPF.
+                    Build-ButtonPanel -Vm $vmInfo
                 } else {
                     $reason = if ($r) { $r.reason } else { 'SSH returned no result.' }
                     $ui.StatusPane.Text = $reason
                     $ui.StatusMeta.Text = "VM running ($($vmInfo.ip))  -  ssh failed  -  $stamp2"
+                    Set-BgState 'unknown'
+                    Build-ButtonPanel -Vm $vmInfo
                 }
                 Set-Footer "Idle"
             } catch {
@@ -1456,11 +1692,40 @@ function Format-CmdLabel {
 # ────────────────────────────────────────────────────────────────────────────
 
 $script:LastVmKnown = @{ exists=$false; running=$false; state='?'; ip=$null }
+$script:LastBgState = 'unknown'   # 'running' | 'stopped' | 'unknown'
+
+# Live state hashtable. A *single* hashtable instance whose contents are
+# mutated in place — NEVER reassigned. Click-handler closures created via
+# .GetNewClosure() get a fresh SessionState, so $script:* lookups inside
+# them point to an empty scope, not ours. By capturing this hashtable as
+# a local in the closure-defining scope, the closure holds a *reference*
+# to the same hashtable Build-ButtonPanel mutates — so reads inside the
+# click handler see live updates.
+$script:State = @{
+    Vm = $script:LastVmKnown   # same reference
+    Bg = 'unknown'
+}
+
+function Set-VmState {
+    param($Vm)
+    if (-not $Vm) { return }
+    # Mutate in place so existing references (held by click closures) see the new values.
+    foreach ($k in @('exists','running','state','ip')) { $script:State.Vm[$k] = $Vm[$k] }
+    $script:LastVmKnown = $script:State.Vm   # keep mirror for older read sites
+}
+
+function Set-BgState {
+    param([string]$BgState)
+    if (-not $BgState) { $BgState = 'unknown' }
+    $script:State.Bg    = $BgState
+    $script:LastBgState = $BgState
+}
 
 function Build-ButtonPanel {
     param($Vm)
-    if ($Vm) { $script:LastVmKnown = $Vm }
-    $vm = $script:LastVmKnown
+    if ($Vm) { Set-VmState $Vm }
+    $vm = $script:State.Vm
+    try { Write-Diag ("Build-ButtonPanel: param.running={0} -> State.Vm.running={1} bg={2}" -f [bool]$Vm.running, [bool]$vm.running, $script:State.Bg) } catch {}
 
     $ui.ButtonPanelCol1.Children.Clear()
     $ui.ButtonPanelCol2.Children.Clear()
@@ -1662,7 +1927,7 @@ function Build-ButtonPanel {
         $btn.Content = $stack
         $btn.ToolTip = "$($cmd.Desc)`n`nMode: $($cmd.Mode)  -  Requires: $($cmd.Requires)`n`n(Drag any button to reorder. Right-click for options.)"
 
-        $available = Test-CmdAvailable -Cmd $cmd -Vm $vm
+        $availability = Test-CmdAvailable -Cmd $cmd -Vm $vm
         # NOTE: We deliberately do NOT set $btn.IsEnabled = $false here.
         # WPF blocks ALL mouse events on disabled controls, which would mean
         # the user could not drag separators (or any card) across greyed-out
@@ -1670,15 +1935,11 @@ function Build-ButtonPanel {
         # drag-reorder system work in all VM states. The click handler below
         # checks availability and short-circuits with a helpful message when
         # the underlying command can't actually run.
-        if (-not $available) {
+        if (-not $availability.ok) {
             $nameLine.Foreground = $textDisable
             $descLine.Foreground = $textDisable
             $btn.Opacity = 0.55
-            $reason = switch ($cmd.Requires) {
-                'exists'  { "VM '$($script:VmName)' does not exist" }
-                'running' { "VM not running" }
-                default   { '' }
-            }
+            $reason = $availability.reason
             if ($reason) { $btn.ToolTip = "$($cmd.Desc)`n`nUnavailable: $reason`n`n(You can still drag this card to reorder the list.)" }
         }
 
@@ -1781,14 +2042,23 @@ function Build-ButtonPanel {
         })
 
         $cmdCopy = $cmd
+        # IMPORTANT: $stateRef must be a LOCAL var inside $addButton's scope
+        # (NOT Build-ButtonPanel's scope) so GetNewClosure() captures it.
+        # It holds the same hashtable instance as $script:State, so when
+        # Set-VmState/Set-BgState mutate the hashtable in place, the click
+        # handler sees the live values via this local reference.
+        $stateRef = $script:State
         $btn.Add_Click({
-            $avail = Test-CmdAvailable -Cmd $cmdCopy -Vm $script:LastVmKnown
-            if (-not $avail) {
-                $reason = switch ($cmdCopy.Requires) {
-                    'exists'  { "the VM '$($script:VmName)' does not exist yet" }
-                    'running' { "the VM is not running" }
-                    default   { 'the command is unavailable' }
-                }
+            $liveVm = $stateRef.Vm
+            $liveBg = $stateRef.Bg
+            try { Write-Diag ("Click[{0}]: stateRef.Vm.running={1} bg={2}" -f $cmdCopy.Name, [bool]$liveVm.running, $liveBg) } catch {}
+            # Temporarily sync the script-scope cache so Test-CmdAvailable
+            # (which reads $script:LastBgState) sees the live value too.
+            $script:LastBgState = $liveBg
+            $avail = Test-CmdAvailable -Cmd $cmdCopy -Vm $liveVm
+            if (-not $avail.ok) {
+                $reason = $avail.reason
+                if (-not $reason) { $reason = 'the command is unavailable' }
                 Write-TerminalLine ""
                 Write-TerminalLine "[Cannot run '$($cmdCopy.Name)' - $reason.]"
                 return
@@ -1828,6 +2098,16 @@ $ui.BtnCopyOutput.Add_Click({
     # and post it back as {kind:'clipboard',text:...}; the WebMessageReceived
     # handler below copies it to the OS clipboard.
     Send-TerminalMessage @{ kind='copy-request' }
+})
+$ui.BtnKillSession.Add_Click({
+    # Force-stop the current PTY (SSH session, kubectl exec, whatever's
+    # holding the slot). Same as Ctrl+\ from the terminal. Safe to click
+    # when nothing is running.
+    if ($script:CurrentPty) {
+        $ESC = $script:ESC
+        Send-TerminalMessage @{ kind='data'; text="`r`n$ESC[33m[Kill requested by user]$ESC[0m`r`n" }
+        Stop-CurrentPty
+    }
 })
 
 # ────────────────────────────────────────────────────────────────────────────
@@ -2000,59 +2280,131 @@ $ui.InstalledLbl.Text  = "Installed: $script:ToolVersion"
 #  event fires when ready, at which point we wire up the JS bridge and load
 #  terminal.html.
 
-$script:WebView2UserData = Join-Path $script:DataDir 'webview2'
+# Chromium's sandbox cannot initialize when the host process is running at
+# High integrity (admin/UAC-elevated), which Dune Server always is (Hyper-V
+# cmdlets require admin). Without --no-sandbox, EnsureCoreWebView2Async fails
+# with E_ABORT (0x80004004) — the broker/zygote silently aborts during sandbox
+# bootstrap. UserDataFolder ALSO lives under %PROGRAMDATA% so the elevated
+# host and any future non-elevated subprocesses can both reach it, and so
+# OneDrive (which redirects parts of Neil's user profile) never touches it.
+$script:WebView2UserData = Join-Path $env:PROGRAMDATA 'DuneServer\webview2'
 if (-not (Test-Path $script:WebView2UserData)) {
     New-Item -ItemType Directory -Force -Path $script:WebView2UserData | Out-Null
 }
 
+# Diagnostic log for WebView2 lifecycle — survives across runs so we can see
+# init failures even if the UI never recovers. Written to a fixed path the
+# user can share with us.
+$script:DiagLog = Join-Path $script:DataDir 'webview2-debug.log'
+function Write-Diag {
+    param([string]$Msg)
+    try {
+        $line = ('{0}  {1}' -f (Get-Date).ToString('HH:mm:ss.fff'), $Msg)
+        Add-Content -Path $script:DiagLog -Value $line -ErrorAction SilentlyContinue
+    } catch {}
+}
+try { '' | Set-Content -Path $script:DiagLog -ErrorAction SilentlyContinue } catch {}
+Write-Diag "=== Dune Server v$script:ToolVersion startup ==="
+Write-Diag "AppDir = $script:AppDir"
+Write-Diag "WebDir = $script:WebDir"
+Write-Diag "WebView2Dir = $script:WebView2Dir"
+Write-Diag ("Terminal control: type={0}, IsLoaded={1}" -f $ui.Terminal.GetType().FullName, $ui.Terminal.IsLoaded)
+Write-Diag ("WebView2 runtime: " + ((Test-WebView2Runtime) | Out-String).Trim())
+
 $cp = New-Object Microsoft.Web.WebView2.Wpf.CoreWebView2CreationProperties
 $cp.UserDataFolder = $script:WebView2UserData
+# Required for elevated hosts — Chromium sandbox can't initialize at High
+# integrity. --disable-gpu sidesteps a known WPF-HwndHost + WebView2 GPU
+# compositor race that produces E_ABORT during CONTROLLER (not Environment)
+# creation. RendererCodeIntegrity off because Edge 148+ checks it more
+# strictly and admin-elevated hosts can trip the verifier.
+$cp.AdditionalBrowserArguments = '--no-sandbox --disable-gpu --disable-features=RendererCodeIntegrity'
 $ui.Terminal.CreationProperties = $cp
+Write-Diag "CreationProperties set (UserDataFolder=$script:WebView2UserData, args='$($cp.AdditionalBrowserArguments)')"
 
 # Handler for messages FROM xterm.js (JS -> PS). Dispatched on the UI thread.
 $ui.Terminal.add_CoreWebView2InitializationCompleted({
     param($sender, $e)
+    Write-Diag ("CoreWebView2InitializationCompleted IsSuccess=" + $e.IsSuccess)
     if (-not $e.IsSuccess) {
-        Add-Type -AssemblyName System.Windows.Forms
-        [System.Windows.Forms.MessageBox]::Show(
-            "WebView2 failed to initialize:`r`n`r`n$($e.InitializationException.Message)",
-            'Dune Server - terminal error', 'OK', 'Error') | Out-Null
+        $err = if ($e.InitializationException) { $e.InitializationException.Message } else { '(no exception)' }
+        Write-Diag "InitializationException: $err"
+        # Don't pop a modal MessageBox here — it blocks the UI thread and
+        # makes the app look hung. Surface the failure in the footer; the
+        # 'Report Issue' command auto-attaches $script:DiagLog to the GitHub
+        # form, so the user has a one-click path to send us the details.
+        $short = $err
+        if ($short.Length -gt 140) { $short = $short.Substring(0, 137) + '...' }
+        Set-Footer "Terminal init FAILED: $short  |  use Report Issue to send the log"
         return
     }
 
     $core = $sender.CoreWebView2
+    Write-Diag "Got CoreWebView2 instance"
 
     # Lock down the embedded browser surface — we only load our own local page.
     try {
-        $core.Settings.AreDevToolsEnabled         = $false
+        $core.Settings.AreDevToolsEnabled         = $true    # F12 for in-pane diagnostics
         $core.Settings.AreDefaultContextMenusEnabled = $true   # keep right-click for copy/paste
         $core.Settings.IsStatusBarEnabled         = $false
         $core.Settings.AreBrowserAcceleratorKeysEnabled = $false
+    } catch { Write-Diag "Settings: $($_.Exception.Message)" }
+
+    # Surface page-load failures visually instead of leaving the pane blank.
+    try {
+        $core.add_NavigationCompleted({
+            param($s3, $e3)
+            Write-Diag ("NavigationCompleted IsSuccess={0} WebErrorStatus={1}" -f $e3.IsSuccess, $e3.WebErrorStatus)
+            if (-not $e3.IsSuccess) {
+                $script:TerminalReady = $true   # un-block; we're going to render directly
+                Set-Footer ("Terminal navigation failed: " + $e3.WebErrorStatus)
+            }
+        })
     } catch {}
 
     $core.add_WebMessageReceived({
         param($s2, $e2)
         try {
-            # JS sends objects via postMessage({...}); WebView2 surfaces them
-            # as a JSON string via WebMessageAsJson. (TryGetWebMessageAsString
-            # only works for primitive string posts.)
             $json = $e2.WebMessageAsJson
-            if (-not $json) { return }
+            if (-not $json) { Write-Diag "WebMessage: empty"; return }
+            Write-Diag ("WebMessage: " + ($json -replace "`r|`n",' '))
             $msg = ConvertFrom-Json $json -ErrorAction Stop
+            # $s2 is the CoreWebView2 instance — use it directly so we don't
+            # rely on outer-scope closure capture (unreliable under ps2exe).
             switch ($msg.kind) {
                 'ready' {
                     $script:TerminalReady = $true
-                    # Flush any buffered writes that landed before the page loaded.
-                    foreach ($pending in $script:PendingTermWrites) {
-                        try { $core.PostWebMessageAsJson($pending) } catch {}
+                    $pendingCount = 0
+                    if ($script:PendingTermWrites) { $pendingCount = $script:PendingTermWrites.Count }
+                    Write-Diag ("ready handshake — flushing {0} buffered writes" -f $pendingCount)
+                    if ($script:PendingTermWrites) {
+                        foreach ($pending in $script:PendingTermWrites) {
+                            try { $s2.PostWebMessageAsJson($pending) } catch { Write-Diag "flush err: $($_.Exception.Message)" }
+                        }
+                        $script:PendingTermWrites.Clear()
                     }
-                    $script:PendingTermWrites.Clear()
-                    $banner = "`e[36mDune Server v$script:ToolVersion`e[0m`r`n" +
-                              "`e[90mClick a command on the left to run it. Interactive prompts, SSH, and TUI editors all work here.`e[0m`r`n"
-                    $core.PostWebMessageAsJson((ConvertTo-Json @{ kind='data'; text=$banner } -Compress))
+                    $ver = $script:ToolVersion
+                    if (-not $ver) { $ver = '5.0.0' }
+                    $ESC = $script:ESC
+                    if (-not $ESC) { $ESC = [char]27 }
+                    $banner = "$ESC[36mDune Server v$ver$ESC[0m`r`n" +
+                              "$ESC[90mClick a command on the left to run it. Interactive prompts, SSH, and TUI editors all work here.$ESC[0m`r`n" +
+                              "$ESC[90mPress $ESC[33mCtrl+\$ESC[90m to force-stop the running command.$ESC[0m`r`n"
+                    try {
+                        $s2.PostWebMessageAsJson((ConvertTo-Json @{ kind='data'; text=$banner } -Compress))
+                    } catch { Write-Diag "banner post err: $($_.Exception.Message)" }
                 }
                 'input' {
-                    if ($msg.text) { Send-PtyInput $msg.text }
+                    if ($msg.text) {
+                        # Ctrl+\ (0x1c) → force-kill the current PTY. Lets
+                        # users escape hung/non-interactive commands without
+                        # waiting for them to exit on their own.
+                        if ($msg.text -eq [char]0x1c) {
+                            Stop-CurrentPty
+                        } else {
+                            Send-PtyInput $msg.text
+                        }
+                    }
                 }
                 'resize' {
                     Resize-Pty -Cols ([int]$msg.cols) -Rows ([int]$msg.rows)
@@ -2063,19 +2415,89 @@ $ui.Terminal.add_CoreWebView2InitializationCompleted({
                     }
                 }
             }
-        } catch {}
+        } catch { Write-Diag "WebMessage handler error: $($_.Exception.Message)" }
     })
 
-    # Navigate to the bundled terminal host page.
-    $htmlPath = Join-Path $script:WebDir 'terminal.html'
-    $uri = ([Uri](New-Object Uri ([System.IO.Path]::GetFullPath($htmlPath)))).AbsoluteUri
-    $core.Navigate($uri)
+    try {
+        $core.SetVirtualHostNameToFolderMapping(
+            'dune.local',
+            $script:WebDir,
+            [Microsoft.Web.WebView2.Core.CoreWebView2HostResourceAccessKind]::Allow) | Out-Null
+        Write-Diag "Virtual host mapped: dune.local -> $script:WebDir"
+        $core.Navigate('https://dune.local/terminal.html')
+        Write-Diag "Navigate -> https://dune.local/terminal.html"
+    } catch {
+        Write-Diag "Virtual host mapping failed: $($_.Exception.Message) — falling back to file://"
+        $htmlPath = Join-Path $script:WebDir 'terminal.html'
+        $uri = ([Uri](New-Object Uri ([System.IO.Path]::GetFullPath($htmlPath)))).AbsoluteUri
+        Write-Diag "Navigate -> $uri"
+        $core.Navigate($uri)
+    }
 })
 
-# Kick init. Returns immediately; completion fires the handler above.
-$null = $ui.Terminal.EnsureCoreWebView2Async($null)
+# Kick init from Window.ContentRendered (HWND fully realized + first frame
+# painted). The WPF WebView2 wrapper internally creates the Environment AND
+# the Controller. The Controller-creation step is what fails with E_ABORT
+# during normal init under elevated hosts — pre-creating the Environment
+# with our exact options and passing it via EnsureCoreWebView2Async(env)
+# bypasses the wrapper's own (problematic) environment-creation path.
+$script:WebView2InitKicked = $false
+$ui.Window.add_ContentRendered({
+    if ($script:WebView2InitKicked) { return }
+    $script:WebView2InitKicked = $true
+    Write-Diag "Window.ContentRendered — pre-creating CoreWebView2Environment"
+    try {
+        # 5-arg ctor: (browserArgs, language, targetCompatibleBrowserVersion,
+        #             allowSingleSignOnUsingOSPrimaryAccount, customSchemes)
+        $envOpts = [Microsoft.Web.WebView2.Core.CoreWebView2EnvironmentOptions]::new(
+            '--no-sandbox --disable-gpu --disable-features=RendererCodeIntegrity',
+            '',
+            $null,
+            $false,
+            $null
+        )
+        Write-Diag "EnvironmentOptions built"
+        $envTask = [Microsoft.Web.WebView2.Core.CoreWebView2Environment]::CreateAsync(
+            $null, $script:WebView2UserData, $envOpts)
+        Write-Diag "CreateAsync invoked — awaiting"
+        $envTask.Wait(20000) | Out-Null
+        if ($envTask.IsFaulted) {
+            $ex = $envTask.Exception.GetBaseException()
+            Write-Diag ("Environment CreateAsync FAILED: {0} HR=0x{1:X8} - {2}" -f $ex.GetType().Name, $ex.HResult, $ex.Message)
+            Set-Footer "WebView2 environment create FAILED: $($ex.Message)  |  see $script:DiagLog"
+            return
+        }
+        if (-not $envTask.IsCompleted) {
+            Write-Diag "Environment CreateAsync TIMED OUT"
+            Set-Footer "WebView2 environment create timed out — see $script:DiagLog"
+            return
+        }
+        $env = $envTask.Result
+        Write-Diag ("Environment ready — browser version: " + $env.BrowserVersionString)
 
-# Start the PTY -> terminal drain pump (created idle, runs continuously).
+        Write-Diag "Calling EnsureCoreWebView2Async(env) on the control"
+        $ctrlTask = $ui.Terminal.EnsureCoreWebView2Async($env)
+        Write-Diag ("EnsureCoreWebView2Async returned task: Status=" + $ctrlTask.Status)
+    } catch {
+        Write-Diag "Init kickoff threw: $($_.Exception.GetType().FullName): $($_.Exception.Message)"
+        Set-Footer "WebView2 init threw: $($_.Exception.Message)"
+    }
+
+    # Watchdog: if InitializationCompleted hasn't fired in 10s, log it.
+    $watchdog = New-Object System.Windows.Threading.DispatcherTimer
+    $watchdog.Interval = [TimeSpan]::FromSeconds(10)
+    $watchdog.Add_Tick({
+        $watchdog.Stop()
+        if (-not $script:TerminalReady) {
+            $haveCore = $false
+            try { $haveCore = ($null -ne $ui.Terminal.CoreWebView2) } catch {}
+            Write-Diag ("Watchdog 10s: TerminalReady=false, CoreWebView2={0}" -f $haveCore)
+            Set-Footer "Terminal not ready after 10s — see $script:DiagLog"
+        }
+    })
+    $watchdog.Start()
+})
+
 Start-PtyDrainTimer
 
 # Kick off first status fetch on window load
