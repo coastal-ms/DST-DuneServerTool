@@ -1025,6 +1025,52 @@ function Reset-ButtonOrder {
     Build-ButtonPanel
 }
 
+# Acronyms that should stay uppercase when expanding kebab-case command names
+# into human-readable Title Case labels.
+$script:LabelAcronyms = @{
+    'vm'    = 'VM';    'ssh'  = 'SSH';   'bg'    = 'BG';    'ip'   = 'IP'
+    'dns'   = 'DNS';   'id'   = 'ID';    'url'   = 'URL';   'api'  = 'API'
+    'cli'   = 'CLI';   'k3s'  = 'K3s';   'k8s'   = 'K8s';   'db'   = 'DB'
+    'os'    = 'OS';    'ui'   = 'UI';    'pdf'   = 'PDF';   'http' = 'HTTP'
+    'https' = 'HTTPS'; 'tcp'  = 'TCP';   'udp'   = 'UDP';   'cpu'  = 'CPU'
+    'gpu'   = 'GPU';   'ram'  = 'RAM';   'rcon'  = 'RCON';  'rpc'  = 'RPC'
+    'json'  = 'JSON';  'yaml' = 'YAML';  'sql'   = 'SQL';   'yml'  = 'YAML'
+    'ssl'   = 'SSL';   'tls'  = 'TLS';   'vpn'   = 'VPN';   'ssd'  = 'SSD'
+}
+
+# Specific overrides where simple word-by-word title-casing reads awkwardly.
+$script:LabelOverrides = @{
+    'web'                     = 'Web Portal'
+    'edit-advanced'           = 'Advanced Edit'
+    'enable-experimental-swap'= 'Enable Experimental Swap'
+    'logs-export'             = 'Export Logs'
+    'rotate-ssh-key'          = 'Rotate SSH Key'
+    'change-password'         = 'Change Password'
+    'start-vm'                = 'Start VM'
+    'shell-vm'                = 'Shell into VM'
+    'shell-pod'               = 'Shell into Pod'
+    'dune-admin'              = 'Dune Admin'
+    'setup-guide'             = 'Setup Guide'
+    'report-issue'            = 'Report an Issue'
+    'initial-setup'           = 'Initial Setup'
+}
+
+function Format-CmdLabel {
+    param([string]$Name)
+    if (-not $Name) { return '' }
+    $key = $Name.ToLowerInvariant()
+    if ($script:LabelOverrides.ContainsKey($key)) { return $script:LabelOverrides[$key] }
+    $parts = $key -split '-'
+    $words = foreach ($p in $parts) {
+        if ($script:LabelAcronyms.ContainsKey($p)) {
+            $script:LabelAcronyms[$p]
+        } elseif ($p.Length -gt 0) {
+            $p.Substring(0,1).ToUpperInvariant() + $p.Substring(1)
+        }
+    }
+    ($words -join ' ')
+}
+
 # ────────────────────────────────────────────────────────────────────────────
 #  Button panel builder
 # ────────────────────────────────────────────────────────────────────────────
@@ -1064,7 +1110,7 @@ function Build-ButtonPanel {
         $nameLine.Foreground = $textBright
         $nameLine.TextAlignment = 'Left'
         $nameLine.HorizontalAlignment = 'Left'
-        $nameLine.Text = $cmd.Name
+        $nameLine.Text = Format-CmdLabel -Name $cmd.Name
         if ($cmd.Mode -eq 'Console') {
             $tag = New-Object Windows.Documents.Run
             $tag.Text = '   〔 CONSOLE 〕'
@@ -1127,9 +1173,32 @@ function Build-ButtonPanel {
             $c = $s.DataContext
             if (-not $c) { return }
             $script:DragStartPoint = $null
+            # Ghost the source so the user can see which card they picked up.
+            $origOp = $s.Opacity
+            $s.Opacity = 0.35
             try {
                 [void][System.Windows.DragDrop]::DoDragDrop($s, $c.Name, [System.Windows.DragDropEffects]::Move)
-            } catch {}
+            } catch {} finally {
+                $s.Opacity = $origOp
+            }
+        })
+        $btn.Add_DragEnter({
+            param($s, $e)
+            $srcName = $null
+            try { $srcName = $e.Data.GetData([System.Windows.DataFormats]::Text) } catch {}
+            $tgt = $s.DataContext
+            if ($srcName -and $tgt -and $srcName -ne $tgt.Name) {
+                # Bright Eyes-of-Ibad halo + slight scale-up to show "drop here".
+                $glow = New-Object System.Windows.Media.Effects.DropShadowEffect
+                $glow.Color = [System.Windows.Media.ColorConverter]::ConvertFromString('#4FC3F7')
+                $glow.BlurRadius = 42
+                $glow.ShadowDepth = 0
+                $glow.Opacity = 1.0
+                $s.Effect = $glow
+                $s.RenderTransformOrigin = New-Object System.Windows.Point 0.5, 0.5
+                $s.RenderTransform = New-Object System.Windows.Media.ScaleTransform 1.06, 1.06
+            }
+            $e.Handled = $true
         })
         $btn.Add_DragOver({
             param($s, $e)
@@ -1143,8 +1212,16 @@ function Build-ButtonPanel {
             }
             $e.Handled = $true
         })
+        $btn.Add_DragLeave({
+            param($s, $e)
+            $s.Effect = $null
+            $s.RenderTransform = [System.Windows.Media.Transform]::Identity
+            $e.Handled = $true
+        })
         $btn.Add_Drop({
             param($s, $e)
+            $s.Effect = $null
+            $s.RenderTransform = [System.Windows.Media.Transform]::Identity
             $srcName = $null
             try { $srcName = $e.Data.GetData([System.Windows.DataFormats]::Text) } catch {}
             $tgt = $s.DataContext
@@ -1189,7 +1266,7 @@ $autoRefresh.Add_Tick({ Refresh-StatusHeader })
 
 # Initial paint
 Build-ButtonPanel -Vm $script:LastVmKnown
-$ui.FooterVersion.Text = "Dune Server v4.0.4"
+$ui.FooterVersion.Text = "Dune Server v4.0.5"
 
 # Kick off first status fetch on window load
 $ui.Window.Add_Loaded({
