@@ -945,7 +945,13 @@ foreach ($navName in $script:V6NavMap.Keys) {
         $sender = $s
         # Resolve which page to show from the sender's x:Name.
         $target = $script:V6NavMap[$sender.Name]
-        if ($target) { Show-V6Page $target }
+        if ($target) {
+            Show-V6Page $target
+            # Per-page refresh hooks
+            if ($target -eq 'PageDashboard' -and (Get-Command Update-V6Dashboard -ErrorAction SilentlyContinue)) {
+                try { Update-V6Dashboard } catch {}
+            }
+        }
     }.GetNewClosure())
 }
 
@@ -1179,6 +1185,21 @@ $script:Commands = @(
 # Names of the separator pseudo-commands, used by Reset-SeparatorPositions and
 # the renderer to short-circuit click/availability logic.
 $script:SeparatorNames = @('__separator_1','__separator_2','__separator_3','__separator_4')
+
+# ────────────────────────────────────────────────────────────────────────────
+#  v6: load page modules (each defines its own Initialize-V6*Page function
+#  and any helpers; modules dot-sourced here so $ui / $window / $script:Commands
+#  are all in scope.)
+# ────────────────────────────────────────────────────────────────────────────
+$script:V6PagesDir = Join-Path $PSScriptRoot 'pages'
+foreach ($mod in @('Dashboard.ps1')) {
+    $modPath = Join-Path $script:V6PagesDir $mod
+    if (Test-Path $modPath) {
+        try { . $modPath } catch {
+            try { Write-Diag "v6 page module $mod failed to load: $($_.Exception.Message)" } catch {}
+        }
+    }
+}
 
 function Test-CmdAvailable {
     param($Cmd, $Vm)
@@ -2571,12 +2592,25 @@ $autoRefresh.Add_Tick({
     # Auto-refresh paints port-status from the 5-min cache; only triggers a
     # fresh hit when the cache has aged out (avoids hammering yougetsignal).
     Refresh-PortStatus
+    # v6: keep Dashboard tiles in sync with header data on the 30s rhythm.
+    if (Get-Command Update-V6Dashboard -ErrorAction SilentlyContinue) {
+        try { Update-V6Dashboard } catch {}
+    }
 })
 
 # Initial paint
 Build-ButtonPanel -Vm $script:LastVmKnown
 $ui.FooterVersion.Text = "Dune Server v$script:ToolVersion"
 $ui.InstalledLbl.Text  = "Installed: $script:ToolVersion"
+
+# v6: build Dashboard page content now that $ui, $window, and $script:Commands
+# are all in scope. Update-V6Dashboard will be called later by Refresh-StatusHeader
+# and on NavDashboard.Checked.
+if (Get-Command Initialize-V6DashboardPage -ErrorAction SilentlyContinue) {
+    try { Initialize-V6DashboardPage } catch {
+        try { Write-Diag "Initialize-V6DashboardPage failed: $($_.Exception.Message)" } catch {}
+    }
+}
 
 # ────────────────────────────────────────────────────────────────────────────
 #  WebView2 / xterm.js initialization
