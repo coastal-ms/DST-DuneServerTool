@@ -6,15 +6,19 @@
 #   - PowerShell 7+ (pwsh)
 #   - ps2exe module (auto-installed if missing)
 #
-# The compiled .exe:
+# The compiled .exe (v6.1+):
 #   - Embeds a UAC manifest (-requireAdmin) so launching always elevates
-#   - Runs in -noConsole mode (WPF-only window, no black console flash)
-#   - Uses STA threading (-sta) required for WPF
+#     (Hyper-V cmdlets need admin, matching the v6.0.x WPF host behavior)
+#   - Runs with a console window so server logs are visible to the user
 #   - Bundles the icon for taskbar / Alt-Tab / file explorer
+#   - Self-bootstraps the local HTTP server + opens the default browser
+#
+# v6.0.x was WPF (-NoConsole / -STA); v6.1 swapped to the web portal so we
+# DO want the console window now — it acts as the live server log viewer.
 
 [CmdletBinding()]
 param(
-    [string]$Version = '6.0.1',
+    [string]$Version = '6.1.0',
     [switch]$Quiet
 )
 
@@ -41,27 +45,23 @@ $verNum = "$Version.0"  # ps2exe wants 4-part version
 
 Write-Host "Compiling DuneServer.exe (v$Version)..." -ForegroundColor Cyan
 
-# Note: ps2exe needs splatting and explicit flags. Critical flags:
-#   -noConsole     : suppresses the console window (we use WPF only)
+# Note: ps2exe needs splatting and explicit flags. Critical flags (v6.1):
 #   -requireAdmin  : embeds UAC manifest -> always launches elevated
-#   -STA           : WPF must run on a single-threaded apartment
-#   -noOutput      : compiled exe's Write-Output is suppressed (we use WPF for output)
 #   -iconFile      : taskbar / file explorer icon
+# Removed in v6.1 (WPF-era flags):
+#   -NoConsole, -STA, -NoOutput, -NoError — we now WANT the console window
+#   to show live HTTP server logs while the React SPA runs in the browser.
 $ps2exeArgs = @{
     InputFile      = $src
     OutputFile     = $outExe
     IconFile       = $icon
     Title          = 'Dune Server'
-    Description    = 'Dune Awakening server management - desktop app'
+    Description    = 'Dune Awakening server management - web portal'
     Company        = 'Dune Awakening Self-Hosted Tool'
     Product        = 'Dune Server'
     Version        = $verNum
-    Copyright      = '(c) 2025 Dune Awakening Self-Hosted Tool'
-    NoConsole      = $true
+    Copyright      = '(c) 2026 Dune Awakening Self-Hosted Tool'
     RequireAdmin   = $true
-    STA            = $true
-    NoOutput       = $true
-    NoError        = $true
 }
 
 Invoke-ps2exe @ps2exeArgs
@@ -78,7 +78,7 @@ Write-Host ""
 if (-not $Quiet) {
     Write-Host "Admin requirements:" -ForegroundColor Cyan
     Write-Host "  [x] UAC manifest embedded (-requireAdmin)" -ForegroundColor Green
-    Write-Host "  [x] STA threading enabled (WPF)"          -ForegroundColor Green
+    Write-Host "  [x] Console window enabled (live server logs)" -ForegroundColor Green
     Write-Host ""
     Write-Host "Next step:"
     Write-Host "  & '$PSScriptRoot\..\installer\Build-Installer.ps1'"
