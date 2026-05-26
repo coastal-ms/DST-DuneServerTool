@@ -657,6 +657,14 @@ function Get-V6ThemeInnerXaml {
                   <TextBlock Text="Dashboard" Margin="12,0,0,0" VerticalAlignment="Center"/>
                 </StackPanel>
               </RadioButton>
+              <RadioButton x:Name="NavMonitoring" Style="{StaticResource SidebarItemStyle}" GroupName="SidebarNav" Tag="Monitoring">
+                <StackPanel Orientation="Horizontal">
+                  <Path Width="18" Height="18" Stretch="Uniform" StrokeThickness="2"
+                        Stroke="{Binding Foreground, RelativeSource={RelativeSource AncestorType=RadioButton}}"
+                        Data="M12,12 m-10,0 a10,10 0 1,0 20,0 a10,10 0 1,0 -20,0 M2,12 L22,12 M12,2 a15,15 0 0,1 4,10 a15,15 0 0,1 -4,10 a15,15 0 0,1 -4,-10 a15,15 0 0,1 4,-10"/>
+                  <TextBlock Text="Monitoring" Margin="12,0,0,0" VerticalAlignment="Center"/>
+                </StackPanel>
+              </RadioButton>
               <RadioButton x:Name="NavTerminal" IsChecked="True" Style="{StaticResource SidebarItemStyle}" GroupName="SidebarNav" Tag="Terminal">
                 <StackPanel Orientation="Horizontal">
                   <Path Width="18" Height="18" Stretch="Uniform" StrokeThickness="2"
@@ -689,14 +697,6 @@ function Get-V6ThemeInnerXaml {
                         Stroke="{Binding Foreground, RelativeSource={RelativeSource AncestorType=RadioButton}}"
                         Data="M3,5 m9,-3 a9,3 0 1,0 0,6 a9,3 0 1,0 0,-6 M3,5 L3,11 M21,5 L21,11 M3,11 a9,3 0 1,0 18,0 M3,11 L3,17 M21,11 L21,17 M3,17 a9,3 0 1,0 18,0"/>
                   <TextBlock Text="Database" Margin="12,0,0,0" VerticalAlignment="Center"/>
-                </StackPanel>
-              </RadioButton>
-              <RadioButton x:Name="NavMonitoring" Style="{StaticResource SidebarItemStyle}" GroupName="SidebarNav" Tag="Monitoring">
-                <StackPanel Orientation="Horizontal">
-                  <Path Width="18" Height="18" Stretch="Uniform" StrokeThickness="2"
-                        Stroke="{Binding Foreground, RelativeSource={RelativeSource AncestorType=RadioButton}}"
-                        Data="M12,12 m-10,0 a10,10 0 1,0 20,0 a10,10 0 1,0 -20,0 M2,12 L22,12 M12,2 a15,15 0 0,1 4,10 a15,15 0 0,1 -4,10 a15,15 0 0,1 -4,-10 a15,15 0 0,1 4,-10"/>
-                  <TextBlock Text="Monitoring" Margin="12,0,0,0" VerticalAlignment="Center"/>
                 </StackPanel>
               </RadioButton>
 
@@ -951,6 +951,9 @@ foreach ($navName in $script:V6NavMap.Keys) {
             if ($target -eq 'PageDashboard' -and (Get-Command Update-V6Dashboard -ErrorAction SilentlyContinue)) {
                 try { Update-V6Dashboard } catch {}
             }
+            elseif ($target -eq 'PageMonitoring' -and (Get-Command Update-V6Monitoring -ErrorAction SilentlyContinue)) {
+                try { Update-V6Monitoring } catch {}
+            }
         }
     }.GetNewClosure())
 }
@@ -1192,7 +1195,16 @@ $script:SeparatorNames = @('__separator_1','__separator_2','__separator_3','__se
 #  are all in scope.)
 # ────────────────────────────────────────────────────────────────────────────
 $script:V6PagesDir = Join-Path $PSScriptRoot 'pages'
-foreach ($mod in @('Dashboard.ps1')) {
+foreach ($mod in @(
+        'Dashboard.ps1',
+        'Monitoring.ps1',
+        'Settings.ps1',
+        'Database.ps1',
+        'GameConfig.ps1',
+        'Characters.ps1',
+        'SetupWizard.ps1',
+        'MultiSietch.ps1'
+    )) {
     $modPath = Join-Path $script:V6PagesDir $mod
     if (Test-Path $modPath) {
         try { . $modPath } catch {
@@ -2596,6 +2608,12 @@ $autoRefresh.Add_Tick({
     if (Get-Command Update-V6Dashboard -ErrorAction SilentlyContinue) {
         try { Update-V6Dashboard } catch {}
     }
+    # v6: refresh Monitoring URLs / button enabled-state only when its page is visible
+    # (Director URL lookup hits SSH; skip when user isn't looking at the page).
+    if ($ui.PageMonitoring -and $ui.PageMonitoring.Visibility -eq 'Visible' -and `
+        (Get-Command Update-V6Monitoring -ErrorAction SilentlyContinue)) {
+        try { Update-V6Monitoring } catch {}
+    }
 })
 
 # Initial paint
@@ -2609,6 +2627,11 @@ $ui.InstalledLbl.Text  = "Installed: $script:ToolVersion"
 if (Get-Command Initialize-V6DashboardPage -ErrorAction SilentlyContinue) {
     try { Initialize-V6DashboardPage } catch {
         try { Write-Diag "Initialize-V6DashboardPage failed: $($_.Exception.Message)" } catch {}
+    }
+}
+if (Get-Command Initialize-V6MonitoringPage -ErrorAction SilentlyContinue) {
+    try { Initialize-V6MonitoringPage } catch {
+        try { Write-Diag "Initialize-V6MonitoringPage failed: $($_.Exception.Message)" } catch {}
     }
 }
 
@@ -2826,10 +2849,12 @@ $ui.Window.add_ContentRendered({
     }
 
     # Watchdog: if InitializationCompleted hasn't fired in 10s, log it.
-    $watchdog = New-Object System.Windows.Threading.DispatcherTimer
-    $watchdog.Interval = [TimeSpan]::FromSeconds(10)
-    $watchdog.Add_Tick({
-        $watchdog.Stop()
+    # NOTE: store on script scope so the Add_Tick closure can reach it (the
+    # outer local goes out of scope before the 10s tick fires).
+    $script:WebView2Watchdog = New-Object System.Windows.Threading.DispatcherTimer
+    $script:WebView2Watchdog.Interval = [TimeSpan]::FromSeconds(10)
+    $script:WebView2Watchdog.Add_Tick({
+        try { $script:WebView2Watchdog.Stop() } catch {}
         if (-not $script:TerminalReady) {
             $haveCore = $false
             try { $haveCore = ($null -ne $ui.Terminal.CoreWebView2) } catch {}
@@ -2837,7 +2862,7 @@ $ui.Window.add_ContentRendered({
             Set-Footer "Terminal not ready after 10s — see $script:DiagLog"
         }
     })
-    $watchdog.Start()
+    $script:WebView2Watchdog.Start()
 })
 
 Start-PtyDrainTimer
