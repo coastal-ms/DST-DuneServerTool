@@ -9,8 +9,10 @@ body:
         ## What this tracker is for
 
         This issue tracker is for **bugs in this tool's code** — the
-        desktop app, the PowerShell script, the `.bat` launcher,
-        and the setup wizard.
+        desktop app (Dashboard / Monitoring / Characters / Game Config /
+        Database / Settings / Setup Wizard / Additional Sietches),
+        the PowerShell script (`dune-server.ps1`), the `.bat`
+        launcher, and the installer.
 
         **Please do _not_ open issues here for:**
         - VM connectivity / SSH / network / port-forwarding problems
@@ -30,24 +32,47 @@ body:
       label: Scope check
       description: Please confirm this is actually a bug in the tool's code.
       options:
-        - label: This is a bug in the tool itself (app crashes, menu option misbehaves, terminal pane broken, setup wizard fails, etc.) — **not** a VM/network/Funcom-server issue.
+        - label: This is a bug in the tool itself (app crashes, a page misrenders, a button does nothing, terminal pane broken, setup wizard fails, character/database/game-config edits don't save, etc.) — **not** a VM/network/Funcom-server issue.
           required: true
 
   - type: input
     id: tool_version
     attributes:
       label: Tool version
-      description: Shown in the menu header / app footer (e.g. `v5.0.0`). Auto-filled when launched from `Report Issue` in the desktop app or CLI.
-      placeholder: "v5.0.0"
+      description: Shown in the app header (`Installed: x.y.z`) and in the CLI menu header. Auto-filled when launched from `Report Issue` in the desktop app or CLI.
+      placeholder: "v6.0.0"
+    validations:
+      required: true
+
+  - type: dropdown
+    id: surface
+    attributes:
+      label: Where did the bug happen?
+      description: Which part of the tool was affected? Pick the closest match.
+      options:
+        - Desktop app — Dashboard
+        - Desktop app — Monitoring
+        - Desktop app — Terminal pane
+        - Desktop app — Characters
+        - Desktop app — Game Config
+        - Desktop app — Database
+        - Desktop app — Settings
+        - Desktop app — Setup Wizard
+        - Desktop app — Additional Sietches
+        - Desktop app — header / status bar / window chrome
+        - CLI (`dune-server.ps1` / `dune-server.bat`)
+        - Installer / first-run setup
+        - Update checker
+        - Other (describe below)
     validations:
       required: true
 
   - type: input
     id: menu_option
     attributes:
-      label: Menu option / command
-      description: Which menu letter/number or `-Cmd <name>` triggered the bug?
-      placeholder: "e.g. e. reboot, or -Cmd startup, or 'SSH' button in the app"
+      label: Specific page / button / command
+      description: Which button, tab, menu letter/number, or `-Cmd <name>` triggered the bug?
+      placeholder: "e.g. Dashboard 'Restart' button, Characters > Cosmetics > Save, CLI option 'e. reboot', or -Cmd startup"
     validations:
       required: true
 
@@ -55,10 +80,11 @@ body:
     id: what_happened
     attributes:
       label: What happened
-      description: Paste the actual error message or unexpected output from the terminal pane. Screenshots also welcome.
+      description: Paste the actual error message or unexpected output from the terminal pane / status bar. Screenshots also welcome.
       placeholder: |
-        e.g. "After clicking 'SSH' the terminal pane went blank and
-        the footer said 'Terminal not ready after 8s'."
+        e.g. "After clicking 'Save' on the Characters > Inventory tab,
+        the status text went red and said 'psql exec failed' but the
+        terminal pane was empty."
       render: shell
     validations:
       required: true
@@ -76,9 +102,11 @@ body:
       label: Transcript / log excerpt
       description: |
         Every CLI run is auto-logged to `.logs\dune-server-<timestamp>.log`
-        next to `dune-server.bat`. Paste the relevant section (last 30-50
-        lines around the failure is usually enough — please **redact**
-        public IPs, SSH key paths, and any secrets first).
+        next to `dune-server.bat`. The desktop app also writes
+        `%APPDATA%\DuneServer\webview2-debug.log`. Paste the relevant
+        section (last 30-50 lines around the failure is usually enough
+        — please **redact** public IPs, SSH key paths, hostnames, and
+        any secrets first).
       render: shell
 
   - type: textarea
