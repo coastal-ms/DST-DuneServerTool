@@ -43,14 +43,27 @@ function Write-DuneLog {
         try { Add-Content -LiteralPath $script:DuneLogPath -Value $line -Encoding UTF8 } catch { }
     }
 
-    # Also try Write-Host - safe in console host, no-op in ps2exe -noConsole.
-    try {
-        $color = switch ($Level) {
-            'ERROR' { 'Red' }
-            'WARN'  { 'Yellow' }
-            'DEBUG' { 'DarkGray' }
-            default { 'Gray' }
+    # Mirror to console ONLY when running as plain pwsh/powershell — not when
+    # compiled by ps2exe -noConsole (which routes Write-Host to MessageBox.Show
+    # and pops a modal for every line. Yes really. The "no-op" claim was wrong).
+    if (-not $script:DuneLogConsoleProbed) {
+        $script:DuneLogConsoleProbed = $true
+        try {
+            $pn = [System.Diagnostics.Process]::GetCurrentProcess().ProcessName
+            $script:DuneLogHasConsole = ($pn -in @('pwsh','powershell','powershell_ise','pwsh-preview'))
+        } catch {
+            $script:DuneLogHasConsole = $false
         }
-        Write-Host $line -ForegroundColor $color
-    } catch { }
+    }
+    if ($script:DuneLogHasConsole) {
+        try {
+            $color = switch ($Level) {
+                'ERROR' { 'Red' }
+                'WARN'  { 'Yellow' }
+                'DEBUG' { 'DarkGray' }
+                default { 'Gray' }
+            }
+            Write-Host $line -ForegroundColor $color
+        } catch { }
+    }
 }

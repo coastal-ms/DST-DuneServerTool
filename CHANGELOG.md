@@ -13,6 +13,24 @@ here cover everything those tags shipped.
 
 ## [Unreleased]
 
+## [6.1.3] - 2026-05-26
+
+Patch: **silence Write-DuneLog popup modals on startup.**
+
+Fixed
+- **Startup MessageBox spam** — every `Write-DuneLog` INFO line ("Dune Server
+  v6.1.x starting", "Serving from…", "Tray icon initialized…", "HTTP listening
+  on…") was firing a modal `MessageBox.Show` dialog at app launch. Cause:
+  `app/server/lib/DuneLog.ps1` mirrored every log line to `Write-Host` with the
+  comment "no-op in ps2exe -noConsole" — that claim was **wrong**. ps2exe's
+  `-noConsole` mode actually *redirects* `Write-Host` to `MessageBox.Show` by
+  default, which is why each log line popped a modal that blocked startup
+  until clicked. Fix: probe the host once via `[System.Diagnostics.Process]::`
+  `GetCurrentProcess().ProcessName` and only mirror to `Write-Host` when the
+  process is `pwsh` / `powershell` / `powershell_ise` (real consoles). When
+  running as the compiled `DuneServer.exe`, log lines now go to the log file
+  only — no popups.
+
 ## [6.1.2] - 2026-05-26
 
 Patch: **single-instance gate** (clicking the desktop shortcut multiple times
