@@ -53,8 +53,9 @@ function Get-DuneMapsContext {
 
 function _Find-DuneMapSets {
     # Returns @( @{ Idx; Map; Partitions; HasPartitionsField; Replicas; DedicatedScaling } )
+    # NOTE: don't use $matches as a local — that's an automatic regex variable.
     param([Parameter(Mandatory)]$Bg, [Parameter(Mandatory)][string]$Pattern)
-    $matches = @()
+    $matchList = @()
     $sets = $Bg.spec.serverGroup.template.spec.sets
     for ($i = 0; $i -lt $sets.Count; $i++) {
         $s = $sets[$i]
@@ -69,7 +70,7 @@ function _Find-DuneMapSets {
                 $hasPartField = $true
                 if ($null -ne $s.partitions) { $partIds = @($s.partitions | Where-Object { $null -ne $_ }) }
             }
-            $matches += @{
+            $matchList += @{
                 Idx                = $i
                 Map                = [string]$s.map
                 Partitions         = $partIds
@@ -79,7 +80,52 @@ function _Find-DuneMapSets {
             }
         }
     }
-    return ,$matches
+    return ,$matchList
+}
+
+function _Get-DuneMapPlayersOnline {
+    # Counts active players currently connected to any of the given pod
+    # serverGuids (which uniquely identify a running ServerSet pod). Empty
+    # serverGuids list returns 0 (no DD pod running = nobody can be there).
+    # On any DB error returns -1 (caller treats as "unknown").
+    param([Parameter(Mandatory)][string]$Ip, [string[]]$ServerGuids)
+    if (-not $ServerGuids -or $ServerGuids.Count -eq 0) {
+        return @{ count = 0; ids = @() }
+    }
+    try {
+        $quoted = ($ServerGuids | ForEach-Object { "'" + ($_ -replace "'","''") + "'" }) -join ','
+        $sql = "SELECT player_pawn_id::text FROM encrypted_player_state WHERE online_status::text <> 'Offline' AND server_id IN ($quoted);"
+        $raw = Invoke-V6Psql -Ip $Ip -Sql $sql
+        if ([string]::IsNullOrWhiteSpace($raw)) { return @{ count = 0; ids = @() } }
+        if ($raw -match 'ERROR') { return @{ count = -1; ids = @(); error = $raw } }
+        $ids = @($raw -split "`n" | ForEach-Object { $_.Trim() } | Where-Object { $_ })
+        return @{ count = $ids.Count; ids = $ids }
+    } catch {
+        return @{ count = -1; ids = @(); error = $_.Exception.Message }
+    }
+}
+
+function _Get-DuneMapServerGuids {
+    # Picks out the serverGuid values from BG status.pods whose partitionMap
+    # matches the on-demand map's name pattern. Returns @() if none running.
+    param([Parameter(Mandatory)]$Bg, [Parameter(Mandatory)][string]$Pattern)
+    $guids = @()
+    $status = $null
+    try { $status = $Bg.status } catch {}
+    if (-not $status) { return ,$guids }
+    $pods = @()
+    try { $pods = @($status.serverGroupStatus.pods) } catch {}
+    if (-not $pods -or $pods.Count -eq 0) {
+        try { $pods = @($status.pods) } catch {}
+    }
+    foreach ($p in $pods) {
+        if (-not $p) { continue }
+        $map = $null; $guid = $null
+        if ($p.PSObject.Properties['partitionMap']) { $map = [string]$p.partitionMap }
+        if ($p.PSObject.Properties['serverGuid'])   { $guid = [string]$p.serverGuid }
+        if ($map -and $guid -and ($map -match $Pattern)) { $guids += $guid }
+    }
+    return ,$guids
 }
 
 function _Find-DuneMapWorldPartitions {
@@ -104,7 +150,8 @@ function Get-DuneOnDemandMapState {
     # Inspects the live BG CRD and returns the state of an on-demand map
     # (e.g. DeepDesert): is the set present, what are the current replicas,
     # are any partitions disabled, are the partition IDs bound to the set,
-    # is dedicatedScaling disabled (required for self-provisioning).
+    # is dedicatedScaling disabled (required for self-provisioning), and
+    # how many players are currently connected to the matching pod(s).
     param([Parameter(Mandatory)][string]$Key)
     $def = $script:DuneOnDemandMaps | Where-Object { $_.Key -eq $Key } | Select-Object -First 1
     if (-not $def) { throw "Unknown on-demand map: $Key" }
@@ -134,6 +181,25 @@ function Get-DuneOnDemandMapState {
     $present = ($sets.Count -gt 0)
     $running = ($present -and $totalReplicas -ge 1 -and -not $hasDisabledPartition -and -not $missingPartitionBinding -and -not $stuckDedicatedScaling)
 
+    # Player count comes from the DB and is only meaningful when at least
+    # one matching pod is running (otherwise nobody can be connected).
+    $playersOnline = 0
+    $playerIds     = @()
+    $playersError  = $null
+    if ($running) {
+        $guids = _Get-DuneMapServerGuids -Bg $info.Bg -Pattern $def.Pattern
+        if ($guids.Count -gt 0) {
+            $pr = _Get-DuneMapPlayersOnline -Ip $ctx.vm.ip -ServerGuids $guids
+            if ($pr.count -lt 0) {
+                $playersOnline = $null
+                $playersError  = $pr.error
+            } else {
+                $playersOnline = [int]$pr.count
+                $playerIds     = @($pr.ids)
+            }
+        }
+    }
+
     return @{
         ok                       = $true
         key                      = $Key
@@ -145,6 +211,9 @@ function Get-DuneOnDemandMapState {
         missingPartitionBinding  = $missingPartitionBinding
         stuckDedicatedScaling    = $stuckDedicatedScaling
         running                  = $running
+        playersOnline            = $playersOnline
+        playerIds                = $playerIds
+        playersError             = $playersError
         sets                     = @($sets | ForEach-Object { @{
             idx=$_.Idx; map=$_.Map; replicas=$_.Replicas; dedicatedScaling=$_.DedicatedScaling
             partitionCount=$_.Partitions.Count
@@ -265,6 +334,113 @@ function Start-DuneOnDemandMap {
         raw      = $outText
         message  = if ($success) {
             "$($def.Label) is starting. The pod may take 60-120 seconds to reach Ready."
+        } else {
+            "kubectl patch may have failed: $outText"
+        }
+    }
+}
+
+function Stop-DuneOnDemandMap {
+    # Gracefully shuts down an on-demand map by patching every matching
+    # set's `replicas` to 0. Leaves `dedicatedScaling`, `partitions`, and
+    # `worldPartitions.disable` alone so the next spin-up only has to flip
+    # replicas back to 1.
+    #
+    # Safety: if any players are currently connected to a matching pod
+    # (online_status <> 'Offline' AND server_id IN <pod guids>) the call
+    # refuses with status 409 unless -Force is supplied. Frontend turns
+    # that into a confirm-then-retry prompt.
+    param(
+        [Parameter(Mandatory)][string]$Key,
+        [switch]$Force
+    )
+    $def = $script:DuneOnDemandMaps | Where-Object { $_.Key -eq $Key } | Select-Object -First 1
+    if (-not $def) { throw "Unknown on-demand map: $Key" }
+
+    $ctx = Get-DuneMapsContext
+    if (-not $ctx.ok) { return @{ ok=$false; status=$ctx.status; message=$ctx.message; key=$Key } }
+
+    $info = Get-V6Battlegroup -Ip $ctx.vm.ip
+    $sets = _Find-DuneMapSets -Bg $info.Bg -Pattern $def.Pattern
+
+    if ($sets.Count -eq 0) {
+        return @{
+            ok      = $false
+            status  = 404
+            key     = $Key
+            message = "No '$($def.Label)' set found in the battlegroup CRD."
+        }
+    }
+
+    # Check active players on the matching pod(s) before pulling the rug.
+    $playersOnline = 0
+    $playerIds     = @()
+    $guids = _Get-DuneMapServerGuids -Bg $info.Bg -Pattern $def.Pattern
+    if ($guids.Count -gt 0) {
+        $pr = _Get-DuneMapPlayersOnline -Ip $ctx.vm.ip -ServerGuids $guids
+        if ($pr.count -ge 0) {
+            $playersOnline = [int]$pr.count
+            $playerIds     = @($pr.ids)
+        }
+    }
+
+    if ($playersOnline -gt 0 -and -not $Force) {
+        $who = if ($playerIds.Count -gt 0) { " (player_pawn_id: $($playerIds -join ', '))" } else { '' }
+        return @{
+            ok                   = $false
+            status               = 409
+            key                  = $Key
+            label                = $def.Label
+            requiresConfirmation = $true
+            playersOnline        = $playersOnline
+            playerIds            = $playerIds
+            message              = "$playersOnline player(s) currently connected to $($def.Label)$who. Confirm to force shutdown — they'll be disconnected."
+        }
+    }
+
+    # Build replicas=0 patches for every matching set whose replicas > 0.
+    $patches = @()
+    foreach ($s in $sets) {
+        $r = if ($null -eq $s.Replicas) { 0 } else { [int]$s.Replicas }
+        if ($r -gt 0) {
+            $patches += @{ op='replace'; path="/spec/serverGroup/template/spec/sets/$($s.Idx)/replicas"; value=0 }
+        }
+    }
+
+    if ($patches.Count -eq 0) {
+        return @{
+            ok            = $true
+            key           = $Key
+            label         = $def.Label
+            noop          = $true
+            patchOps      = 0
+            playersOnline = $playersOnline
+            message       = "$($def.Label) is already stopped (all matching sets have replicas = 0)."
+        }
+    }
+
+    $patchJson = $patches | ConvertTo-Json -Depth 30 -Compress
+    if ($patchJson -notmatch '^\s*\[') { $patchJson = "[$patchJson]" }
+    $b64 = [Convert]::ToBase64String([Text.Encoding]::UTF8.GetBytes($patchJson))
+    $cmd = "sudo kubectl patch battlegroup $($info.Name) -n $($info.Ns) --type=json -p `"`$(echo $b64 | base64 -d)`" 2>&1"
+    $out = Invoke-V6Ssh -Ip $ctx.vm.ip -Cmd $cmd -TimeoutSec 60
+    $outText = (($out -join "`n")).Trim()
+
+    $success = ($outText -match 'patched' -and $outText -notmatch 'error|Error|ERROR')
+    return @{
+        ok            = $success
+        key           = $Key
+        label         = $def.Label
+        patchOps      = $patches.Count
+        forced        = [bool]$Force
+        playersOnline = $playersOnline
+        raw           = $outText
+        message       = if ($success) {
+            if ($Force -and $playersOnline -gt 0) {
+                "$($def.Label) is shutting down. $playersOnline player(s) were forcibly disconnected."
+            } else {
+                "$($def.Label) is shutting down. Pod will terminate in a few seconds."
+            }
         } else {
             "kubectl patch may have failed: $outText"
         }
