@@ -13,6 +13,28 @@ here cover everything those tags shipped.
 
 ## [Unreleased]
 
+## [6.1.2] - 2026-05-26
+
+Patch: **`dune-admin` command now self-heals** when the bundled
+`dune-admin.exe` is missing.
+
+Fixed
+- Command 18 (`dune-admin`) silently registered a scheduled task
+  pointed at a missing executable when `DuneAdminExe` in
+  `dune-server.config` pointed nowhere — the spawned console window
+  flashed and closed, dune-admin.exe never started, and the
+  `dune-admin.layout.tools` web UI loaded but showed no data because
+  its local backend wasn't running.
+- The `dune-admin` handler now `Test-Path`s the configured EXE
+  first. If missing or unset it offers to download the latest
+  release from `github.com/Icehunter/dune-admin` (reuses the
+  existing `Install-DuneAdminLatest` helper), persists the new
+  path back to `dune-server.config`, and seeds the install
+  directory with the current SSH key — same flow as
+  `initial-setup`. Errors and the first-time install path now
+  pause with **"Press Enter to close this window"** so the user
+  actually sees what happened before the console disappears.
+
 ## [6.1.1] - 2026-05-26
 
 Patch: **headless launcher with system-tray icon**. The console window
@@ -804,7 +826,8 @@ at the time. Also folds in the v3.0.1 / v3.1.2 patches.
   (`ssh`, `dune-admin`, `setup-guide`, `report-issue`). _(originally
   3.1.2)_
 
-[Unreleased]: https://github.com/coastal-ms/Simple-Dune-Server-Management-Tool/compare/v6.0.1...HEAD
+[Unreleased]: https://github.com/coastal-ms/Simple-Dune-Server-Management-Tool/compare/v6.1.2...HEAD
+[6.1.0]: https://github.com/coastal-ms/Simple-Dune-Server-Management-Tool/compare/v6.0.1...v6.1.2
 [6.0.0]: https://github.com/coastal-ms/Simple-Dune-Server-Management-Tool/compare/v5.0.2...v6.0.1
 [5.0.0]: https://github.com/coastal-ms/Simple-Dune-Server-Management-Tool/compare/v4.5.2...v5.0.2
 [4.0.0]: https://github.com/coastal-ms/Simple-Dune-Server-Management-Tool/compare/v3.1.2...v4.5.2

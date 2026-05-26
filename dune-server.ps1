@@ -1,4 +1,4 @@
-﻿#Requires -RunAsAdministrator
+#Requires -RunAsAdministrator
 
 [CmdletBinding()]
 param(
@@ -13,7 +13,7 @@ param(
 # Wraps the original battlegroup.ps1 menu and adds extra tools
 # ============================================================
 
-$script:ToolVersion = "6.1.1"
+$script:ToolVersion = "6.1.2"
 
 # ============================================================
 #  CRASH / EXIT CLEANUP
@@ -1794,21 +1794,94 @@ while ($true) {
     }
 
     if ($cmdName -eq "dune-admin") {
+        # Verify the configured exe exists. If it doesn't (user uninstalled,
+        # moved the folder, or never installed it), auto-install the latest
+        # release rather than silently registering a scheduled task pointed
+        # at a missing file (which fires-and-forgets and leaves dune-admin's
+        # web UI showing no data).
+        $needsInstall = (-not $duneAdminExe) -or (-not (Test-Path -LiteralPath $duneAdminExe))
+        $didInstallWork = $false
+        if ($needsInstall) {
+            $didInstallWork = $true
+            Write-Host ""
+            Write-Host "dune-admin.exe was not found." -ForegroundColor Yellow
+            if ($duneAdminExe) {
+                Write-Host "  Configured path: $duneAdminExe" -ForegroundColor DarkGray
+            }
+            Write-Host ""
+            Write-Host "  This tool can install the latest dune-admin release for you" -ForegroundColor Gray
+            Write-Host "  from https://github.com/Icehunter/dune-admin/releases" -ForegroundColor Gray
+            Write-Host ""
+            $resp = Read-Host "Install dune-admin now? [Y/n]"
+            if ($resp -and $resp -notmatch '^(y|yes)$') {
+                Write-Host "Aborted." -ForegroundColor Yellow
+                Read-Host "Press Enter to close this window"
+                continue
+            }
+            $installDir = if ($duneAdminExe) { Split-Path $duneAdminExe -Parent } else { Join-Path ([Environment]::GetFolderPath('Desktop')) 'dune-admin' }
+            try {
+                $newExe = Install-DuneAdminLatest -InstallDir $installDir
+                if (-not $newExe -or -not (Test-Path -LiteralPath $newExe)) {
+                    throw "Install completed but dune-admin.exe was not found in $installDir."
+                }
+                $duneAdminExe = $newExe
+                # Persist the new path so future runs find it without re-installing.
+                try {
+                    if (Test-Path -LiteralPath $configFile) {
+                        $lines = Get-Content -LiteralPath $configFile
+                        if ($lines -match '^DuneAdminExe=') {
+                            $lines = $lines | ForEach-Object { if ($_ -match '^DuneAdminExe=') { "DuneAdminExe=$duneAdminExe" } else { $_ } }
+                        } else {
+                            $lines += "DuneAdminExe=$duneAdminExe"
+                        }
+                        $lines | Set-Content -LiteralPath $configFile -Encoding UTF8
+                        Write-Host "  Updated config: $configFile" -ForegroundColor DarkGray
+                    }
+                } catch {
+                    Write-Warning "Installed dune-admin OK but could not update config: $($_.Exception.Message)"
+                }
+                # Seed the install dir with our SSH key so dune-admin can SSH
+                # to the VM the same way this tool does. Mirrors initial-setup.
+                try {
+                    $adminDir = Split-Path $duneAdminExe -Parent
+                    $srcKey   = Resolve-FreshSshKey -ConfiguredPath $sshKey
+                    if ($srcKey -and $adminDir) {
+                        Copy-SshKeyToDir -SourceKey $srcKey -DestDir $adminDir | Out-Null
+                        Write-Host "  Copied SSH key into $adminDir" -ForegroundColor DarkGray
+                    }
+                } catch {
+                    Write-Warning "Could not copy SSH key into dune-admin folder: $($_.Exception.Message)"
+                }
+            } catch {
+                Write-Host ""
+                Write-Host "Install failed: $($_.Exception.Message)" -ForegroundColor Red
+                Write-Host "You can download manually from https://github.com/Icehunter/dune-admin/releases" -ForegroundColor Gray
+                Read-Host "Press Enter to close this window"
+                continue
+            }
+        }
+
         Write-Host "Launching dune-admin.exe and web UI as $windowsUser..." -ForegroundColor Cyan
         $duneAdminDir = Split-Path $duneAdminExe -Parent
-        $duneAdminName = Split-Path $duneAdminExe -Leaf
         # Launch as the logged-in user via scheduled task (avoids admin elevation)
-        $action = New-ScheduledTaskAction -Execute $duneAdminExe -WorkingDirectory $duneAdminDir
-        $principal = New-ScheduledTaskPrincipal -UserId $windowsUser -LogonType Interactive -RunLevel Limited
-        Register-ScheduledTask -TaskName "DuneAdminLaunch" -Action $action -Principal $principal -Force | Out-Null
-        Start-ScheduledTask -TaskName "DuneAdminLaunch"
-        Start-Sleep -Seconds 1
-        Unregister-ScheduledTask -TaskName "DuneAdminLaunch" -Confirm:$false
+        try {
+            $action = New-ScheduledTaskAction -Execute $duneAdminExe -WorkingDirectory $duneAdminDir
+            $principal = New-ScheduledTaskPrincipal -UserId $windowsUser -LogonType Interactive -RunLevel Limited
+            Register-ScheduledTask -TaskName "DuneAdminLaunch" -Action $action -Principal $principal -Force | Out-Null
+            Start-ScheduledTask -TaskName "DuneAdminLaunch"
+            Start-Sleep -Seconds 1
+            Unregister-ScheduledTask -TaskName "DuneAdminLaunch" -Confirm:$false
+        } catch {
+            Write-Host "Failed to launch dune-admin.exe: $($_.Exception.Message)" -ForegroundColor Red
+            Read-Host "Press Enter to close this window"
+            continue
+        }
         # Open web UI in default browser (Start-Process <url> uses the
         # registered https:// protocol handler, honoring the user's default
         # browser. Avoids Windows 11 24H2's explorer.exe-forces-Edge bug.)
         Start-Process $duneAdminWeb
         Write-Host "Done. dune-admin.exe is running and web UI opened in browser." -ForegroundColor Green
+        if ($didInstallWork) { Read-Host "Press Enter to close this window" }
         continue
     }
 
