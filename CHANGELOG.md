@@ -13,6 +13,13 @@ here cover everything those tags shipped.
 
 ## [Unreleased]
 
+Added
+- **Settings → Port-check mode** now offers two extra providers:
+  - `yougetsignal` — yougetsignal.com only (no canyouseeme fallback hop)
+  - `canyouseeme` — canyouseeme.org as the primary checker
+  Useful if either provider is rate-limiting your public IP and you
+  want to force the other one without waiting for the builtin fallback.
+
 ## [6.1.6] - 2026-05-26
 
 Patch: **Max primed mirrors Max active on the Game Config / Spicefields card.**
