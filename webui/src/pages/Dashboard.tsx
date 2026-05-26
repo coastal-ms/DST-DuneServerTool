@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from 'react'
 import { PageHeader } from '../components/PageHeader'
 import { Icon } from '../components/Icon'
 import { useStatus } from '../hooks/useStatus'
+import { BgSpiceSummary } from './dashboard/BgSpiceSummary'
 import type { BgState, PortResult, BgGameServer } from '../api/types'
 import { getMapState, startMap, stopMap, type MapState, type MapStopResult } from '../api/maps'
 import { getLinks, type LinksResponse } from '../api/links'
@@ -281,6 +282,7 @@ export function Dashboard() {
               <dd className="font-mono">{bgInfo.uptime || '—'}</dd>
             </dl>
           )}
+          <BgSpiceSummary enabled={bgReady} />
         </div>
 
         <div className="card p-4">
