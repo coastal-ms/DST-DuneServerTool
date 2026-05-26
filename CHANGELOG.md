@@ -13,6 +13,28 @@ here cover everything those tags shipped.
 
 ## [Unreleased]
 
+## [6.1.1] - 2026-05-26
+
+Patch: **headless launcher with system-tray icon**. The console window
+that v6.1.0 showed ("Dune Server v… / Serving from … / [dune-http]
+Listening on …") is gone — the EXE now runs as a tray app.
+
+Changed
+- `DuneServer.exe` compiled with `-noConsole -STA` (ps2exe). No console window.
+- New `NotifyIcon` (system tray) with menu: **Open Portal**,
+  **Copy URL**, **View Server Log**, **Open Data Folder**,
+  **About**, **Quit**. Double-click the tray icon to reopen the portal.
+- Server log redirected to `%LOCALAPPDATA%\DuneServer\dune-server.log`
+  (rolls at 1 MB). Tray menu's "View Server Log" opens it in Notepad.
+- Self-elevation fallback uses `MessageBox` instead of `Read-Host`
+  (no console to read from).
+- Web portal favicon refreshed: three-layer sand-dune silhouette on
+  warm sand (#d4a574). New `favicon.ico`, `favicon.png`,
+  `apple-touch-icon.png`, plus `<meta name="theme-color">`.
+
+Existing v6.1.0 users will see the **auto-update banner** within ~6h
+and can apply v6.1.1 in-place from Settings → Updates.
+
 ## [6.1.0] - 2026-05-26
 
 Major release: **web portal rewrite**. The WPF UI is gone — replaced

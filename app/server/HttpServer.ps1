@@ -241,7 +241,8 @@ function Start-DuneHttpServer {
     param(
         [Parameter(Mandatory)][string]$DistRoot,
         [int]$PreferredPort = 47823,
-        [string]$Token = ''
+        [string]$Token = '',
+        [hashtable]$TrayState = $null
     )
 
     $script:DuneDistRoot = (Resolve-Path -LiteralPath $DistRoot).Path
@@ -268,20 +269,39 @@ function Start-DuneHttpServer {
         throw "Could not bind HTTP listener in range $PreferredPort..$($PreferredPort + 49)"
     }
     $script:DuneListener = $listener
-    Write-Host "[dune-http] Listening on $script:DunePrefixUrl" -ForegroundColor Cyan
+    if (Get-Command Write-DuneLog -ErrorAction SilentlyContinue) {
+        Write-DuneLog "HTTP listening on $script:DunePrefixUrl"
+    } else {
+        Write-Host "[dune-http] Listening on $script:DunePrefixUrl" -ForegroundColor Cyan
+    }
 
     # Persist actual URL (with token) for external tools.
+    $actualUrl = if ($Token) { "{0}?t={1}" -f $script:DunePrefixUrl, [Uri]::EscapeDataString($Token) } else { $script:DunePrefixUrl }
     try {
         $stateDir = Join-Path $env:LOCALAPPDATA 'DuneServer'
         if (-not (Test-Path -LiteralPath $stateDir)) { New-Item -ItemType Directory -Path $stateDir -Force | Out-Null }
-        $actualUrl = if ($Token) { "{0}?t={1}" -f $script:DunePrefixUrl, [Uri]::EscapeDataString($Token) } else { $script:DunePrefixUrl }
         Set-Content -LiteralPath (Join-Path $stateDir 'last-url.txt') -Value $actualUrl -Encoding UTF8 -Force
     } catch { }
 
+    # Publish to tray state so the NotifyIcon menu can use it.
+    if ($TrayState) {
+        $TrayState.Url      = $actualUrl
+        $TrayState.Listener = $listener
+    }
+
     try {
         while ($listener.IsListening) {
-            $ctxTask = $listener.GetContextAsync()
-            $ctx = $ctxTask.GetAwaiter().GetResult()
+            try {
+                $ctxTask = $listener.GetContextAsync()
+                $ctx = $ctxTask.GetAwaiter().GetResult()
+            } catch [System.Net.HttpListenerException] {
+                break  # Listener was Stop()ed externally (e.g., tray Quit)
+            } catch [System.ObjectDisposedException] {
+                break
+            } catch {
+                if (-not $listener.IsListening) { break }
+                throw
+            }
             try {
                 Invoke-DuneContext -Ctx $ctx
             } catch {
@@ -292,12 +312,16 @@ function Start-DuneHttpServer {
                     $ctx.Response.OutputStream.Write($bytes, 0, $bytes.Length)
                     $ctx.Response.OutputStream.Close()
                 } catch {}
-                Write-Host "[dune-http] $($_.Exception.Message)" -ForegroundColor Red
+                if (Get-Command Write-DuneLog -ErrorAction SilentlyContinue) {
+                    Write-DuneLog "request handler error: $($_.Exception.Message)" 'ERROR'
+                } else {
+                    Write-Host "[dune-http] $($_.Exception.Message)" -ForegroundColor Red
+                }
             }
         }
     } finally {
-        $listener.Stop()
-        $listener.Close()
+        try { $listener.Stop() } catch { }
+        try { $listener.Close() } catch { }
     }
 }
 

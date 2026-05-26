@@ -6,7 +6,7 @@
 $ErrorActionPreference = 'Stop'
 
 # Version (one of the 5 sync'd constants; see persistent-notes.md)
-$script:DuneToolVersion = '6.1.0'
+$script:DuneToolVersion = '6.1.1'
 
 # ---------- Self-elevate -------------------------------------------------------
 # Hyper-V cmdlets (Get-VM etc.) require admin or Hyper-V Administrators group.
@@ -18,21 +18,33 @@ function Test-DuneIsAdmin {
         return $pr.IsInRole([System.Security.Principal.WindowsBuiltInRole]::Administrator)
     } catch { return $false }
 }
-if (-not (Test-DuneIsAdmin)) {
-    Write-Host "  Re-launching elevated (Hyper-V cmdlets require admin)..." -ForegroundColor Yellow
-    $selfPath = $PSCommandPath
-    if (-not $selfPath) {
-        $selfPath = [System.Diagnostics.Process]::GetCurrentProcess().MainModule.FileName
-    }
-    $launcher = (Get-Command pwsh.exe -ErrorAction SilentlyContinue).Source
-    if (-not $launcher) { $launcher = 'powershell.exe' }
+function Show-DuneMessage {
+    param([string]$Text, [string]$Title = 'Dune Server', [string]$Icon = 'Information')
     try {
-        Start-Process -FilePath $launcher `
-            -ArgumentList @('-NoProfile','-ExecutionPolicy','Bypass','-File',"`"$selfPath`"") `
-            -Verb RunAs | Out-Null
+        Add-Type -AssemblyName System.Windows.Forms -ErrorAction Stop
+        [System.Windows.Forms.MessageBox]::Show($Text, $Title, 'OK', $Icon) | Out-Null
     } catch {
-        Write-Host "  Elevation cancelled. Dune Server needs admin to query Hyper-V VMs." -ForegroundColor Red
-        Read-Host "Press Enter to exit"
+        Write-Host $Text -ForegroundColor Yellow
+    }
+}
+if (-not (Test-DuneIsAdmin)) {
+    $exePath = $null
+    try { $exePath = [System.Diagnostics.Process]::GetCurrentProcess().MainModule.FileName } catch { }
+    try {
+        if ($exePath -and ($exePath -like '*.exe') -and ($exePath -notlike '*pwsh.exe') -and ($exePath -notlike '*powershell.exe')) {
+            # We're the compiled EXE - relaunch ourselves (no visible console)
+            Start-Process -FilePath $exePath -Verb RunAs | Out-Null
+        } else {
+            $selfPath = $PSCommandPath
+            if (-not $selfPath) { $selfPath = $exePath }
+            $launcher = (Get-Command pwsh.exe -ErrorAction SilentlyContinue).Source
+            if (-not $launcher) { $launcher = 'powershell.exe' }
+            Start-Process -FilePath $launcher `
+                -ArgumentList @('-NoProfile','-WindowStyle','Hidden','-ExecutionPolicy','Bypass','-File',"`"$selfPath`"") `
+                -Verb RunAs | Out-Null
+        }
+    } catch {
+        Show-DuneMessage 'Dune Server needs administrator privileges to query Hyper-V VMs. Elevation was cancelled.' 'Dune Server' 'Warning'
     }
     exit 0
 }
@@ -80,8 +92,7 @@ function Find-DuneSubpath {
 
 $script:DistRoot = Find-DuneSubpath 'webui\dist'
 if (-not $script:DistRoot) {
-    Write-Host "ERROR: Could not locate webui\dist (searched upward from '$script:AppDir')." -ForegroundColor Red
-    Read-Host "Press Enter to exit"
+    Show-DuneMessage "Could not locate webui\dist (searched upward from '$script:AppDir')." 'Dune Server' 'Error'
     exit 1
 }
 
@@ -98,8 +109,7 @@ try {
     )) { if (Test-Path $p) { $script:PwshExe = $p; break } }
 }
 if (-not $script:PwshExe) {
-    Write-Host "ERROR: pwsh.exe (PowerShell 7) not found. Install from https://aka.ms/PowerShell-Release" -ForegroundColor Red
-    Read-Host "Press Enter to exit"
+    Show-DuneMessage 'pwsh.exe (PowerShell 7) not found. Install from https://aka.ms/PowerShell-Release' 'Dune Server' 'Error'
     exit 1
 }
 
@@ -115,10 +125,17 @@ if (-not $script:MainScript) {
 
 $serverDir = Find-DuneSubpath 'server'
 if (-not $serverDir) {
-    Write-Host "ERROR: Could not locate server\ (HttpServer.ps1 + routes) near '$script:AppDir'." -ForegroundColor Red
-    Read-Host "Press Enter to exit"
+    Show-DuneMessage "Could not locate server\ (HttpServer.ps1 + routes) near '$script:AppDir'." 'Dune Server' 'Error'
     exit 1
 }
+
+# Load DuneLog first so subsequent loaders + HttpServer can use Write-DuneLog
+$duneLogFile = Join-Path $serverDir 'lib\DuneLog.ps1'
+if (Test-Path -LiteralPath $duneLogFile) { . $duneLogFile }
+
+$script:DuneLogFilePath = Join-Path $env:LOCALAPPDATA 'DuneServer\dune-server.log'
+Initialize-DuneLog -Path $script:DuneLogFilePath
+
 . (Join-Path $serverDir 'HttpServer.ps1')
 
 # Web-portal lib modules (Config, Status, Ports, Characters, etc.)
@@ -150,10 +167,28 @@ function Open-DuneInBrowser {
 
 # ---------- Start --------------------------------------------------------------
 
-Write-Host ""
-Write-Host "  Dune Server v$script:DuneToolVersion" -ForegroundColor Yellow
-Write-Host "  Serving from: $script:DistRoot" -ForegroundColor DarkGray
-Write-Host ""
+Write-DuneLog "Dune Server v$script:DuneToolVersion starting"
+Write-DuneLog "Serving from: $script:DistRoot"
+
+# Shared state hashtable used by the tray icon runspace.
+$script:DuneTrayState = [hashtable]::Synchronized(@{
+    Url           = ''
+    LogPath       = $script:DuneLogFilePath
+    QuitRequested = $false
+    Listener      = $null
+    Version       = $script:DuneToolVersion
+    TrayReady     = $false
+})
+
+# Start tray icon (NotifyIcon runs on its own STA runspace + message loop).
+$iconPath = Find-DuneSubpath 'app\assets\icon.ico'
+if (-not $iconPath) { $iconPath = Find-DuneSubpath 'assets\icon.ico' }
+if ($iconPath) {
+    Start-DuneTrayIcon -State $script:DuneTrayState -IconPath $iconPath -Version $script:DuneToolVersion
+    Write-DuneLog "Tray icon initialized ($iconPath)"
+} else {
+    Write-DuneLog "Tray icon disabled - icon.ico not found" 'WARN'
+}
 
 # Kick the browser open after the listener binds. Reads last-url.txt that
 # Start-DuneHttpServer writes once it knows the actual bound port.
@@ -168,9 +203,30 @@ $browserJob = Start-Job -ScriptBlock {
     }
 }
 
+# Side-thread to publish the URL and listener to the tray state once bound.
+$urlPublishJob = Start-Job -ArgumentList $script:DuneTrayState -ScriptBlock {
+    param($state)
+    $urlFile = Join-Path $env:LOCALAPPDATA 'DuneServer\last-url.txt'
+    for ($i = 0; $i -lt 100; $i++) {
+        if (Test-Path -LiteralPath $urlFile) {
+            $u = (Get-Content -LiteralPath $urlFile -Raw).Trim()
+            if ($u) { $state.Url = $u; return }
+        }
+        Start-Sleep -Milliseconds 200
+    }
+}
+
 try {
-    Start-DuneHttpServer -DistRoot $script:DistRoot -PreferredPort 47823 -Token $script:LaunchToken
+    Start-DuneHttpServer -DistRoot $script:DistRoot -PreferredPort 47823 -Token $script:LaunchToken -TrayState $script:DuneTrayState
+} catch {
+    Write-DuneLog "HTTP server failed: $($_.Exception.Message)" 'ERROR'
+    Show-DuneMessage "Dune Server failed to start: $($_.Exception.Message)" 'Dune Server' 'Error'
 } finally {
-    if ($browserJob) { Remove-Job -Job $browserJob -Force -ErrorAction SilentlyContinue }
+    if ($browserJob)    { Remove-Job -Job $browserJob    -Force -ErrorAction SilentlyContinue }
+    if ($urlPublishJob) { Remove-Job -Job $urlPublishJob -Force -ErrorAction SilentlyContinue }
     Stop-DuneHttpServer
+    if (Get-Command Stop-DuneTrayIcon -ErrorAction SilentlyContinue) {
+        Stop-DuneTrayIcon -State $script:DuneTrayState
+    }
+    Write-DuneLog "Dune Server stopped"
 }
