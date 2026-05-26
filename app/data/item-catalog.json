@@ -1,0 +1,3925 @@
+{
+  "_meta": {
+    "total": 979,
+    "source": "awakening.wiki",
+    "scraped": "2026-05-20"
+  },
+  "items": {
+    "SMG_Unique_LargeMag_06": {
+      "name": "A Dart for Every Man",
+      "category": "Weapons - Ranged"
+    },
+    "UniqueSmg1": {
+      "name": "Abulurd's Rapture",
+      "category": "Weapons - Ranged"
+    },
+    "Combat_Neut_AtreidesDeserterUnique04_Boots": {
+      "name": "Acheronian Boots",
+      "category": "Garments - Feet"
+    },
+    "Combat_Neut_AtreidesDeserterUnique04_Top": {
+      "name": "Acheronian Chestplate",
+      "category": "Resources"
+    },
+    "Combat_Neut_AtreidesDeserterUnique04_Gloves": {
+      "name": "Acheronian Gauntlets",
+      "category": "Garments - Hands"
+    },
+    "Combat_Neut_AtreidesDeserterUnique04_Helmet": {
+      "name": "Acheronian Helmet",
+      "category": "Garments - Head"
+    },
+    "Combat_Neut_AtreidesDeserterUnique04_Bottom": {
+      "name": "Acheronian Pants",
+      "category": "Garments - Legs"
+    },
+    "HoltzmanShieldActiveDrain_Unique_01": {
+      "name": "Adaptive Holtzman Shield",
+      "category": "Tools"
+    },
+    "Shotgun_Unique_Explosive_05": {
+      "name": "Adept Burst Drillshot",
+      "category": "Weapons - Ranged"
+    },
+    "Dirk_1": {
+      "name": "Adept Dirk",
+      "category": "Weapons - Melee"
+    },
+    "AtreSmg5": {
+      "name": "Adept Disruptor M11",
+      "category": "Weapons - Ranged"
+    },
+    "HeavyPistol_Unique_Bleed_05": {
+      "name": "Adept Disruptor Pistol",
+      "category": "Weapons - Ranged"
+    },
+    "SmugShot4": {
+      "name": "Adept Drillshot FK7",
+      "category": "Misc"
+    },
+    "Scattergun_Prototype2": {
+      "name": "Adept GRDA 44",
+      "category": "Weapons - Ranged"
+    },
+    "SmugDmr5": {
+      "name": "Adept JABAL Spitdart",
+      "category": "Weapons - Ranged"
+    },
+    "HarkAr6": {
+      "name": "Adept Karpov 38",
+      "category": "Weapons - Ranged"
+    },
+    "Kindjal_3": {
+      "name": "Adept Kindjal",
+      "category": "Weapons - Melee"
+    },
+    "ChoamSda6": {
+      "name": "Adept Maula Pistol",
+      "category": "Weapons - Ranged"
+    },
+    "HarkHeavyPistol4": {
+      "name": "Adept Rafiq Snubnose",
+      "category": "Weapons - Ranged"
+    },
+    "Rapier_0": {
+      "name": "Adept Rapier",
+      "category": "Weapons - Melee"
+    },
+    "CHOAMSword_2": {
+      "name": "Adept Sword",
+      "category": "Weapons - Melee"
+    },
+    "AtreLMG4": {
+      "name": "Adept Vulcan GAU-92",
+      "category": "Weapons - Ranged"
+    },
+    "Combat_Light_Unique_MovingDmgReduction_Boots_06": {
+      "name": "Adrenal Boots",
+      "category": "Garments - Feet"
+    },
+    "D_SuspensorBelt_Unique_Slide_03": {
+      "name": "Advanced Kinetic Suspensor Belt",
+      "category": "Tools"
+    },
+    "T6Machinery": {
+      "name": "Advanced Machinery",
+      "category": "Resources"
+    },
+    "D_GreatHouseComponent12": {
+      "name": "Advanced Mechanical Parts",
+      "category": "Resources"
+    },
+    "WindTrapFilter4": {
+      "name": "Advanced Particulate Filter",
+      "category": "Resources"
+    },
+    "Combat_Light_Unique_DewReap_Gloves_05": {
+      "name": "Advanced Reaper Gloves",
+      "category": "Garments - Hands"
+    },
+    "OldImperialComponent1": {
+      "name": "Advanced Servoks",
+      "category": "Resources"
+    },
+    "Totem_Patent": {
+      "name": "Advanced Sub-Fief",
+      "category": "Building"
+    },
+    "Combat_Light_Unique_ReduceSuspensor_Top_05": {
+      "name": "Advanced Suspensor Jacket",
+      "category": "Garments - Chest"
+    },
+    "SaguaroResourceRaw": {
+      "name": "Agave Seeds",
+      "category": "Resources"
+    },
+    "OrnithopterLightLocomotion_Unique_Speed_4": {
+      "name": "Albatross Wing Module Mk4",
+      "category": "Vehicle Modules"
+    },
+    "OrnithopterLightLocomotion_Unique_Speed_5": {
+      "name": "Albatross Wing Module Mk5",
+      "category": "Vehicle Modules"
+    },
+    "OrnithopterLightLocomotion_Unique_Speed_6": {
+      "name": "Albatross Wing Module Mk6",
+      "category": "Vehicle Modules"
+    },
+    "ContractFactionAlteredAtreidesInfoLog": {
+      "name": "Altered Atreides Intel Log",
+      "category": "Contract Items"
+    },
+    "ContractFactionAlteredLetterFromAnton": {
+      "name": "Altered letter from Anton",
+      "category": "Contract Items"
+    },
+    "AluminiumBar": {
+      "name": "Aluminum Ingot",
+      "category": "Resources"
+    },
+    "BauxiteOre": {
+      "name": "Aluminum Ore",
+      "category": "Resources"
+    },
+    "Shotgun_Unique_LargeMag_06": {
+      "name": "Ambition",
+      "category": "Weapons - Ranged"
+    },
+    "Combat_Neut_SmugglerDeserterUnique01_Boots": {
+      "name": "Aren's Boots",
+      "category": "Garments - Feet"
+    },
+    "Combat_Neut_SmugglerDeserterUnique01_Top": {
+      "name": "Aren's Chestpiece",
+      "category": "Garments - Chest"
+    },
+    "Combat_Neut_SmugglerDeserterUnique01_Gloves": {
+      "name": "Aren's Gloves",
+      "category": "Garments - Hands"
+    },
+    "Combat_Neut_SmugglerDeserterUnique01_Helmet": {
+      "name": "Aren's Mask",
+      "category": "Garments - Head"
+    },
+    "Combat_Neut_SmugglerDeserterUnique01_Bottom": {
+      "name": "Aren's Pants",
+      "category": "Garments - Legs"
+    },
+    "UniqueAr_Burst_01": {
+      "name": "Aren's Vengeance",
+      "category": "Misc"
+    },
+    "ChoamLg1": {
+      "name": "Arhun K-28 Lasgun",
+      "category": "Weapons - Ranged"
+    },
+    "UniqueSda_Story_Ari": {
+      "name": "Ari's Pistol",
+      "category": "Weapons - Ranged"
+    },
+    "T2HeavyComponent": {
+      "name": "Armor Plating",
+      "category": "Resources"
+    },
+    "Dirk": {
+      "name": "Artisan Dirk",
+      "category": "Weapons - Melee"
+    },
+    "AtreSmg3": {
+      "name": "Artisan Disruptor M11",
+      "category": "Weapons - Ranged"
+    },
+    "HeavyPistol_Unique_Bleed_03": {
+      "name": "Artisan Disruptor Pistol",
+      "category": "Weapons - Ranged"
+    },
+    "Scattergun_Prototype0": {
+      "name": "Artisan GRDA 44",
+      "category": "Weapons - Ranged"
+    },
+    "SmugDmr3": {
+      "name": "Artisan JABAL Spitdart",
+      "category": "Weapons - Ranged"
+    },
+    "HarkAr4": {
+      "name": "Artisan Karpov 38",
+      "category": "Weapons - Ranged"
+    },
+    "Kindjal_1": {
+      "name": "Artisan Kindjal",
+      "category": "Weapons - Melee"
+    },
+    "ChoamSda4": {
+      "name": "Artisan Maula Pistol",
+      "category": "Weapons - Ranged"
+    },
+    "HarkHeavyPistol2": {
+      "name": "Artisan Rafiq Snubnose",
+      "category": "Weapons - Ranged"
+    },
+    "CHOAMSword_0": {
+      "name": "Artisan Sword",
+      "category": "Weapons - Melee"
+    },
+    "LongRifle_Unique_Poison_03": {
+      "name": "Assassin's Rifle",
+      "category": "Misc"
+    },
+    "OrnithopterMediumHull_5": {
+      "name": "Assault Ornithopter Cabin Mk5",
+      "category": "Vehicle Modules"
+    },
+    "OrnithopterMediumHull_6": {
+      "name": "Assault Ornithopter Cabin Mk6",
+      "category": "Vehicle Modules"
+    },
+    "OrnithopterMediumChassis_5": {
+      "name": "Assault Ornithopter Chassis Mk5",
+      "category": "Vehicle Modules"
+    },
+    "OrnithopterMediumChassis_6": {
+      "name": "Assault Ornithopter Chassis Mk6",
+      "category": "Vehicle Modules"
+    },
+    "OrnithopterMediumHullFront_5": {
+      "name": "Assault Ornithopter Cockpit Mk5",
+      "category": "Vehicle Modules"
+    },
+    "OrnithopterMediumHullFront_6": {
+      "name": "Assault Ornithopter Cockpit Mk6",
+      "category": "Vehicle Modules"
+    },
+    "OrnithopterMediumEngine_5": {
+      "name": "Assault Ornithopter Engine Mk5",
+      "category": "Vehicle Modules"
+    },
+    "OrnithopterMediumEngine_6": {
+      "name": "Assault Ornithopter Engine Mk6",
+      "category": "Vehicle Modules"
+    },
+    "OrnithopterMediumGenerator_5": {
+      "name": "Assault Ornithopter Generator Mk5",
+      "category": "Vehicle Modules"
+    },
+    "OrnithopterMediumGenerator_6": {
+      "name": "Assault Ornithopter Generator Mk6",
+      "category": "Vehicle Modules"
+    },
+    "OrnithopterMediumLauncher_5": {
+      "name": "Assault Ornithopter Rocket Launcher Mk5",
+      "category": "Ammo"
+    },
+    "OrnithopterMediumLauncher_6": {
+      "name": "Assault Ornithopter Rocket Launcher Mk6",
+      "category": "Ammo"
+    },
+    "OrnithopterMediumInventory_5": {
+      "name": "Assault Ornithopter Storage Mk5",
+      "category": "Vehicle Modules"
+    },
+    "OrnithopterMediumHullBack_5": {
+      "name": "Assault Ornithopter Tail Mk5",
+      "category": "Vehicle Modules"
+    },
+    "OrnithopterMediumHullBack_6": {
+      "name": "Assault Ornithopter Tail Mk6",
+      "category": "Vehicle Modules"
+    },
+    "OrnithopterMediumBoost_5": {
+      "name": "Assault Ornithopter Thruster Mk5",
+      "category": "Vehicle Modules"
+    },
+    "OrnithopterMediumBoost_6": {
+      "name": "Assault Ornithopter Thruster Mk6",
+      "category": "Vehicle Modules"
+    },
+    "OrnithopterMediumLocomotion_5": {
+      "name": "Assault Ornithopter Wing Mk5",
+      "category": "Vehicle Modules"
+    },
+    "OrnithopterMediumLocomotion_6": {
+      "name": "Assault Ornithopter Wing Mk6",
+      "category": "Vehicle Modules"
+    },
+    "T6FilteredFabric": {
+      "name": "Atmospheric Filtered Fabric",
+      "category": "Resources"
+    },
+    "Atre_BasicLighting_Patent": {
+      "name": "Atreides Basic Lights Set",
+      "category": "Building"
+    },
+    "Atre_BedroomSet_Patent": {
+      "name": "Atreides Bedroom Furniture Set",
+      "category": "Building"
+    },
+    "ContractFactionSpyDecryptedReport": {
+      "name": "Atreides Decrypted Report",
+      "category": "Contract Items"
+    },
+    "D_Combat_Neut_AtreidesDeserter02_Boots": {
+      "name": "Atreides Deserter Boots",
+      "category": "Garments - Feet"
+    },
+    "D_Combat_Neut_AtreidesDeserter02_Top": {
+      "name": "Atreides Deserter Chestpiece",
+      "category": "Garments - Chest"
+    },
+    "D_Combat_Neut_AtreidesDeserter02_Gloves": {
+      "name": "Atreides Deserter Gauntlets",
+      "category": "Garments - Hands"
+    },
+    "D_Combat_Neut_AtreidesDeserter02_Helmet": {
+      "name": "Atreides Deserter Hood",
+      "category": "Garments - Head"
+    },
+    "D_Combat_Neut_AtreidesDeserter02_Bottom": {
+      "name": "Atreides Deserter Pants",
+      "category": "Garments - Legs"
+    },
+    "Atre_DiningRoomSet_Patent": {
+      "name": "Atreides Dining Room Furniture Set",
+      "category": "Building"
+    },
+    "D_Social_Atre_Formal01_Boots": {
+      "name": "Atreides Dress Uniform Boots",
+      "category": "Garments - Feet"
+    },
+    "D_Social_Atre_Formal01_Top": {
+      "name": "Atreides Dress Uniform Chestpiece",
+      "category": "Garments - Chest"
+    },
+    "D_Social_Atre_Formal01_Gloves": {
+      "name": "Atreides Dress Uniform Gloves",
+      "category": "Garments - Hands"
+    },
+    "D_Social_Atre_Formal01_Bottom": {
+      "name": "Atreides Dress Uniform Pants",
+      "category": "Garments - Legs"
+    },
+    "ContractFactionSpyEncryptedReport": {
+      "name": "Atreides Encrypted Report",
+      "category": "Contract Items"
+    },
+    "ContractAtreidesIDTag": {
+      "name": "Atreides Identification Tag",
+      "category": "Contract Items"
+    },
+    "ContractFactionAtreidesInfoLog": {
+      "name": "Atreides Intel Log",
+      "category": "Contract Items"
+    },
+    "Atre_OfficeSet_Patent": {
+      "name": "Atreides Office Furniture Set",
+      "category": "Building"
+    },
+    "ContractScavengers1AutomatedPoisonSniffer": {
+      "name": "Automated Poison Snooper",
+      "category": "Contract Items"
+    },
+    "T6BalisticWeave": {
+      "name": "Ballistic Weave Fabric",
+      "category": "Resources"
+    },
+    "Basalt": {
+      "name": "Basalt Stone",
+      "category": "Resources"
+    },
+    "LMG_Unique_RapidFire_06": {
+      "name": "Bashar's Command",
+      "category": "Weapons - Ranged"
+    },
+    "BasicLighting_Patent": {
+      "name": "Basic Lighting",
+      "category": "Building"
+    },
+    "Stillsuit_Unique_Efficient_05_Boots": {
+      "name": "Batigh Stillsuit Boots",
+      "category": "Garments - Feet"
+    },
+    "Stillsuit_Unique_Efficient_05_Top": {
+      "name": "Batigh Stillsuit Garment",
+      "category": "Garments - Chest"
+    },
+    "Stillsuit_Unique_Efficient_05_Gloves": {
+      "name": "Batigh Stillsuit Gloves",
+      "category": "Garments - Hands"
+    },
+    "Stillsuit_Unique_Efficient_05_Mask": {
+      "name": "Batigh Stillsuit Mask",
+      "category": "Garments - Head"
+    },
+    "ContractKirab2SpicePackage2": {
+      "name": "Battered Spice Package",
+      "category": "Contract Items"
+    },
+    "ContractMaasKharet3Modulator": {
+      "name": "Beam Modulator",
+      "category": "Contract Items"
+    },
+    "ArmorPack_BeneGeserit": {
+      "name": "Bene Gesserit Armor Set",
+      "category": "Garments"
+    },
+    "BuggyInventory_Unique_Capacity_03": {
+      "name": "Bigger Buggy Boot Mk3",
+      "category": "Vehicle Modules"
+    },
+    "BuggyInventory_Unique_Capacity_04": {
+      "name": "Bigger Buggy Boot Mk4",
+      "category": "Vehicle Modules"
+    },
+    "BuggyInventory_Unique_Capacity_05": {
+      "name": "Bigger Buggy Boot Mk5",
+      "category": "Vehicle Modules"
+    },
+    "BuggyInventory_Unique_Capacity_06": {
+      "name": "Bigger Buggy Boot Mk6",
+      "category": "Vehicle Modules"
+    },
+    "Binoculars_1": {
+      "name": "Binoculars",
+      "category": "Tools"
+    },
+    "ChoamLg2": {
+      "name": "Black Market K-28 Lasgun",
+      "category": "Misc"
+    },
+    "T1RusherComponent": {
+      "name": "Blade Parts",
+      "category": "Resources"
+    },
+    "BlankSinkChart": {
+      "name": "Blank Sinkchart",
+      "category": "Misc"
+    },
+    "BodyFluidExtractor_02": {
+      "name": "Blood Extractor Mk2",
+      "category": "Consumables"
+    },
+    "BodyFluidExtractor_03": {
+      "name": "Blood Extractor Mk4",
+      "category": "Consumables"
+    },
+    "BodyFluidExtractor_2h_tier6": {
+      "name": "Blood Extractor Mk6",
+      "category": "Consumables"
+    },
+    "ContractFactionKytheriaSandfliesNote": {
+      "name": "Bloodied Letter",
+      "category": "Contract Items"
+    },
+    "WoHBloodyEyeball": {
+      "name": "Bloody Eyeball",
+      "category": "Misc"
+    },
+    "BuggyEngine_Unique_Accelerate_03": {
+      "name": "Bluddshot Buggy Engine Mk3",
+      "category": "Vehicle Modules"
+    },
+    "BuggyEngine_Unique_Accelerate_04": {
+      "name": "Bluddshot Buggy Engine Mk4",
+      "category": "Vehicle Modules"
+    },
+    "BuggyEngine_Unique_Accelerate_05": {
+      "name": "Bluddshot Buggy Engine Mk5",
+      "category": "Vehicle Modules"
+    },
+    "BuggyEngine_Unique_Accelerate_06": {
+      "name": "Bluddshot Buggy Engine Mk6",
+      "category": "Vehicle Modules"
+    },
+    "ContractCrysknifeHilt": {
+      "name": "Broken Crysknife Hilt",
+      "category": "Weapons - Melee"
+    },
+    "BuggyBoost_3": {
+      "name": "Buggy Booster Mk3",
+      "category": "Vehicle Modules"
+    },
+    "BuggyBoost_4": {
+      "name": "Buggy Booster Mk4",
+      "category": "Vehicle Modules"
+    },
+    "BuggyBoost_5": {
+      "name": "Buggy Booster Mk5",
+      "category": "Vehicle Modules"
+    },
+    "BuggyBoost_6": {
+      "name": "Buggy Booster Mk6",
+      "category": "Vehicle Modules"
+    },
+    "BuggyChassis_3": {
+      "name": "Buggy Chassis Mk3",
+      "category": "Vehicle Modules"
+    },
+    "BuggyChassis_4": {
+      "name": "Buggy Chassis Mk4",
+      "category": "Vehicle Modules"
+    },
+    "BuggyChassis_5": {
+      "name": "Buggy Chassis Mk5",
+      "category": "Vehicle Modules"
+    },
+    "BuggyChassis_6": {
+      "name": "Buggy Chassis Mk6",
+      "category": "Vehicle Modules"
+    },
+    "BuggyMining_3": {
+      "name": "Buggy Cutteray Mk3",
+      "category": "Tools"
+    },
+    "BuggyMining_4": {
+      "name": "Buggy Cutteray Mk4",
+      "category": "Tools"
+    },
+    "BuggyMining_5": {
+      "name": "Buggy Cutteray Mk5",
+      "category": "Tools"
+    },
+    "BuggyMining_6": {
+      "name": "Buggy Cutteray Mk6",
+      "category": "Tools"
+    },
+    "BuggyEngine_3": {
+      "name": "Buggy Engine Mk3",
+      "category": "Vehicle Modules"
+    },
+    "BuggyEngine_4": {
+      "name": "Buggy Engine Mk4",
+      "category": "Vehicle Modules"
+    },
+    "BuggyEngine_5": {
+      "name": "Buggy Engine Mk5",
+      "category": "Vehicle Modules"
+    },
+    "BuggyEngine_6": {
+      "name": "Buggy Engine Mk6",
+      "category": "Vehicle Modules"
+    },
+    "BuggyHullFront_3": {
+      "name": "Buggy Hull Mk3",
+      "category": "Vehicle Modules"
+    },
+    "BuggyHullFront_4": {
+      "name": "Buggy Hull Mk4",
+      "category": "Vehicle Modules"
+    },
+    "BuggyHullFront_5": {
+      "name": "Buggy Hull Mk5",
+      "category": "Vehicle Modules"
+    },
+    "BuggyHullFront_6": {
+      "name": "Buggy Hull Mk6",
+      "category": "Vehicle Modules"
+    },
+    "BuggyGenerator_3": {
+      "name": "Buggy PSU Mk3",
+      "category": "Vehicle Modules"
+    },
+    "BuggyGenerator_4": {
+      "name": "Buggy PSU Mk4",
+      "category": "Vehicle Modules"
+    },
+    "BuggyGenerator_5": {
+      "name": "Buggy PSU Mk5",
+      "category": "Vehicle Modules"
+    },
+    "BuggyGenerator_6": {
+      "name": "Buggy PSU Mk6",
+      "category": "Vehicle Modules"
+    },
+    "BuggyHullBack_3": {
+      "name": "Buggy Rear Mk3",
+      "category": "Vehicle Modules"
+    },
+    "BuggyHullBack_4": {
+      "name": "Buggy Rear Mk4",
+      "category": "Vehicle Modules"
+    },
+    "BuggyHullBack_5": {
+      "name": "Buggy Rear Mk5",
+      "category": "Vehicle Modules"
+    },
+    "BuggyHullBack_6": {
+      "name": "Buggy Rear Mk6",
+      "category": "Vehicle Modules"
+    },
+    "BuggyLauncher_5": {
+      "name": "Buggy Rocket Launcher Mk5",
+      "category": "Ammo"
+    },
+    "BuggyLauncher_6": {
+      "name": "Buggy Rocket Launcher Mk6",
+      "category": "Ammo"
+    },
+    "BuggyInventory_3": {
+      "name": "Buggy Storage Mk3",
+      "category": "Vehicle Modules"
+    },
+    "BuggyInventory_4": {
+      "name": "Buggy Storage Mk4",
+      "category": "Vehicle Modules"
+    },
+    "BuggyInventory_5": {
+      "name": "Buggy Storage Mk5",
+      "category": "Vehicle Modules"
+    },
+    "BuggyInventory_6": {
+      "name": "Buggy Storage Mk6",
+      "category": "Vehicle Modules"
+    },
+    "BuggyLocomotion_3": {
+      "name": "Buggy Tread Mk3",
+      "category": "Vehicle Modules"
+    },
+    "BuggyLocomotion_4": {
+      "name": "Buggy Tread Mk4",
+      "category": "Vehicle Modules"
+    },
+    "BuggyLocomotion_5": {
+      "name": "Buggy Tread Mk5",
+      "category": "Vehicle Modules"
+    },
+    "BuggyLocomotion_6": {
+      "name": "Buggy Tread Mk6",
+      "category": "Vehicle Modules"
+    },
+    "BuggyHullBackExtra_3": {
+      "name": "Buggy Utility Rear Mk3",
+      "category": "Vehicle Modules"
+    },
+    "BuggyHullBackExtra_4": {
+      "name": "Buggy Utility Rear Mk4",
+      "category": "Vehicle Modules"
+    },
+    "BuggyHullBackExtra_5": {
+      "name": "Buggy Utility Rear Mk5",
+      "category": "Vehicle Modules"
+    },
+    "BuggyHullBackExtra_6": {
+      "name": "Buggy Utility Rear Mk6",
+      "category": "Vehicle Modules"
+    },
+    "Combat_Heavy_Unique_Reinforced_Boots_06": {
+      "name": "Bulwark Boots",
+      "category": "Garments - Feet"
+    },
+    "Combat_Heavy_Unique_Reinforced_Top_06": {
+      "name": "Bulwark Chest",
+      "category": "Garments - Chest"
+    },
+    "Combat_Heavy_Unique_Reinforced_Gloves_06": {
+      "name": "Bulwark Gloves",
+      "category": "Garments - Hands"
+    },
+    "Combat_Heavy_Unique_Reinforced_Helmet_06": {
+      "name": "Bulwark Helmet",
+      "category": "Garments - Head"
+    },
+    "Combat_Heavy_Unique_Reinforced_Bottom_06": {
+      "name": "Bulwark Leggings",
+      "category": "Garments - Legs"
+    },
+    "ContractSlavers1DeserterArmors": {
+      "name": "Bundle of Deserter Clothes",
+      "category": "Contract Items"
+    },
+    "DewReaper_Unique_01": {
+      "name": "Buoyant Reaper Mk2",
+      "category": "Tools"
+    },
+    "DewReaper_Unique_02": {
+      "name": "Buoyant Reaper Mk3",
+      "category": "Tools"
+    },
+    "DewReaper_Unique_03": {
+      "name": "Buoyant Reaper Mk4",
+      "category": "Tools"
+    },
+    "DewReaper_Unique_04": {
+      "name": "Buoyant Reaper Mk5",
+      "category": "Tools"
+    },
+    "DewReaper_Unique_05": {
+      "name": "Buoyant Reaper Mk6",
+      "category": "Tools"
+    },
+    "ContractYatesCarryallContract": {
+      "name": "Business Contract",
+      "category": "Contract Items"
+    },
+    "Choam_AdvLighting_Patent": {
+      "name": "CHOAM Advanced Lights Set",
+      "category": "Building"
+    },
+    "D_Combat_Choam_Assault03_Shoes": {
+      "name": "CHOAM Assault Boots",
+      "category": "Garments - Feet"
+    },
+    "D_Combat_Choam_Assault03_Top": {
+      "name": "CHOAM Assault Chestpiece",
+      "category": "Garments - Chest"
+    },
+    "D_Combat_Choam_Assault03_Helmet": {
+      "name": "CHOAM Assault Helmet",
+      "category": "Garments - Head"
+    },
+    "Choam_BedroomSet_Furniture_Patent": {
+      "name": "CHOAM Bedroom Furniture Set",
+      "category": "Building"
+    },
+    "Choam_BedroomSet_SmallDeco_Patent": {
+      "name": "CHOAM Bedroom Small Decorations Set",
+      "category": "Building"
+    },
+    "ContractCHOAMCommuninetTransceiver": {
+      "name": "CHOAM Communinet Transceiver",
+      "category": "Contract Items"
+    },
+    "Choam_DiningRoomSet_Furniture_Patent": {
+      "name": "CHOAM Dining Room Furniture Set",
+      "category": "Building"
+    },
+    "Choam_DiningRoomSet_SmallDeco_Patent": {
+      "name": "CHOAM Dining Room Small Decorations Set",
+      "category": "Building"
+    },
+    "ContractCHOAMEmployeeRecords": {
+      "name": "CHOAM Employee Records",
+      "category": "Contract Items"
+    },
+    "ChoamLevel2Set": {
+      "name": "CHOAM Facility Set",
+      "category": "Misc"
+    },
+    "Combat_Choam_Heavy06_Boots": {
+      "name": "CHOAM Heavy Boots",
+      "category": "Garments - Feet"
+    },
+    "Combat_Choam_Heavy06_Top": {
+      "name": "CHOAM Heavy Chestplate",
+      "category": "Resources"
+    },
+    "Combat_Choam_Heavy06_Gloves": {
+      "name": "CHOAM Heavy Gauntlets",
+      "category": "Garments - Hands"
+    },
+    "Combat_Choam_Heavy06_Bottom": {
+      "name": "CHOAM Heavy Greaves",
+      "category": "Garments - Legs"
+    },
+    "Combat_Choam_Heavy06_Helmet": {
+      "name": "CHOAM Heavy Helmet",
+      "category": "Garments - Head"
+    },
+    "Choam_OfficeSet_Furniture_Patent": {
+      "name": "CHOAM Office Furniture Set",
+      "category": "Building"
+    },
+    "Choam_OfficeSet_SmallDeco_Patent": {
+      "name": "CHOAM Office Small Decorations Set",
+      "category": "Building"
+    },
+    "Combat_Choam_Light06_Boots": {
+      "name": "CHOAM Scout Boots",
+      "category": "Garments - Feet"
+    },
+    "Combat_Choam_Light06_Top": {
+      "name": "CHOAM Scout Chestplate",
+      "category": "Resources"
+    },
+    "Combat_Choam_Light06_Gloves": {
+      "name": "CHOAM Scout Gloves",
+      "category": "Garments - Hands"
+    },
+    "Combat_Choam_Light06_Helmet": {
+      "name": "CHOAM Scout Helmet",
+      "category": "Garments - Head"
+    },
+    "Combat_Choam_Light06_Bottom": {
+      "name": "CHOAM Scout Pants",
+      "category": "Garments - Legs"
+    },
+    "ChoamShelterSet": {
+      "name": "CHOAM Shelter Set",
+      "category": "Building"
+    },
+    "Stillsuit_Choam_06_Top": {
+      "name": "CHOAM Stillsuit Body",
+      "category": "Garments - Chest"
+    },
+    "Stillsuit_Choam_06_Boots": {
+      "name": "CHOAM Stillsuit Boots",
+      "category": "Garments - Feet"
+    },
+    "Stillsuit_Choam_06_Gloves": {
+      "name": "CHOAM Stillsuit Gloves",
+      "category": "Garments - Hands"
+    },
+    "Stillsuit_Choam_06_Mask": {
+      "name": "CHOAM Stillsuit Mask",
+      "category": "Garments - Head"
+    },
+    "Social_Atre_Casual03_Shoes": {
+      "name": "Caladan Casual Boots",
+      "category": "Garments - Feet"
+    },
+    "Social_Atre_Casual03_Bottom": {
+      "name": "Caladan Casual Trousers",
+      "category": "Garments - Legs"
+    },
+    "Social_Atre_Casual03_Top": {
+      "name": "Caladan Casual Tunic",
+      "category": "Garments - Chest"
+    },
+    "T3MiningGalleryComponent1": {
+      "name": "Calibrated Servok",
+      "category": "Resources"
+    },
+    "MiningTool_2h_Unique_01": {
+      "name": "Callie's Breaker",
+      "category": "Misc"
+    },
+    "D_WoHCaptainClearenceCard": {
+      "name": "Captain's Clearance Card",
+      "category": "Contract Items"
+    },
+    "T6CarbidePladeParts": {
+      "name": "Carbide Blade Parts",
+      "category": "Misc"
+    },
+    "T4MysaTarilComponent2": {
+      "name": "Carbide Scraps",
+      "category": "Resources"
+    },
+    "DolomiteRock": {
+      "name": "Carbon Ore",
+      "category": "Resources"
+    },
+    "OrnithopterTransportChassis_6": {
+      "name": "Carrier Ornithopter Chassis Mk6",
+      "category": "Vehicle Modules"
+    },
+    "OrnithopterTransportEngine_6": {
+      "name": "Carrier Ornithopter Engine Mk6",
+      "category": "Vehicle Modules"
+    },
+    "OrnithopterTransportGenerator_6": {
+      "name": "Carrier Ornithopter Generator Mk6",
+      "category": "Vehicle Modules"
+    },
+    "OrnithopterTransportHull_6": {
+      "name": "Carrier Ornithopter Main Hull Mk6",
+      "category": "Vehicle Modules"
+    },
+    "MTX_Neut_Miniature_Transport_Patent": {
+      "name": "Carrier Ornithopter Miniature",
+      "category": "Building"
+    },
+    "OrnithopterTransportHullFront_6": {
+      "name": "Carrier Ornithopter Side Hull Mk6",
+      "category": "Vehicle Modules"
+    },
+    "OrnithopterTransportHullBack_6": {
+      "name": "Carrier Ornithopter Tail Hull Mk6",
+      "category": "Vehicle Modules"
+    },
+    "OrnithopterTransportBoost_6": {
+      "name": "Carrier Ornithopter Thruster Mk6",
+      "category": "Vehicle Modules"
+    },
+    "OrnithopterTransportLocomotion_6": {
+      "name": "Carrier Ornithopter Wing Mk6",
+      "category": "Vehicle Modules"
+    },
+    "UniqueDirk_04": {
+      "name": "Cauterizer",
+      "category": "Weapons - Melee"
+    },
+    "ContractSeronVarlinDamasteelSword": {
+      "name": "Ceremonial Damasteel Sword",
+      "category": "Weapons - Melee"
+    },
+    "ContractPlanetologist2ChanisNote": {
+      "name": "Chakobsa Note",
+      "category": "Contract Items"
+    },
+    "ContractMaasKharet3Amplifyer": {
+      "name": "Charge Amplifier",
+      "category": "Contract Items"
+    },
+    "JourneyChaumasPoison": {
+      "name": "Chaumas Poison",
+      "category": "Misc"
+    },
+    "JourneyChaumurkyPoison": {
+      "name": "Chaumurky Poison",
+      "category": "Misc"
+    },
+    "Combat_Neut_SmugglerDeserterUnique05_Boots": {
+      "name": "Chosen Boots",
+      "category": "Garments - Feet"
+    },
+    "Combat_Neut_SmugglerDeserterUnique05_Top": {
+      "name": "Chosen Chestplate",
+      "category": "Resources"
+    },
+    "Combat_Neut_SmugglerDeserterUnique05_Gloves": {
+      "name": "Chosen Gauntlets",
+      "category": "Garments - Hands"
+    },
+    "Combat_Neut_SmugglerDeserterUnique05_Helmet": {
+      "name": "Chosen Helmet",
+      "category": "Garments - Head"
+    },
+    "Combat_Neut_SmugglerDeserterUnique05_Bottom": {
+      "name": "Chosen Pants",
+      "category": "Garments - Legs"
+    },
+    "Combat_Heavy_Unique_PowerEfficient_Gloves_06": {
+      "name": "Circuit Gauntlets",
+      "category": "Garments - Hands"
+    },
+    "UniqueThumper": {
+      "name": "Thumper",
+      "category": "Tools"
+    },
+    "CobaltBar": {
+      "name": "Cobalt Paste",
+      "category": "Resources"
+    },
+    "ContractKaraValkCodedManifest": {
+      "name": "Coded Manifest",
+      "category": "Contract Items"
+    },
+    "moqep": {
+      "name": "Coded Message",
+      "category": "Contract Items"
+    },
+    "DewReaper_1h_Unique_Compact_04": {
+      "name": "Collapsible Dew Reaper Mk4",
+      "category": "Tools"
+    },
+    "DewReaper_1h_Unique_Compact_05": {
+      "name": "Collapsible Dew Reaper Mk5",
+      "category": "Tools"
+    },
+    "DewReaper_1h_Unique_Compact_06": {
+      "name": "Collapsible Dew Reaper Mk6",
+      "category": "Tools"
+    },
+    "StaticCompactor_Unique_Compact_03": {
+      "name": "Compact Compactor Mk3",
+      "category": "Tools"
+    },
+    "StaticCompactor_Unique_Compact_04": {
+      "name": "Compact Compactor Mk4",
+      "category": "Tools"
+    },
+    "StaticCompactor_Unique_Compact_05": {
+      "name": "Compact Compactor Mk5",
+      "category": "Tools"
+    },
+    "StaticCompactor_Unique_Compact_06": {
+      "name": "Compact Compactor Mk6",
+      "category": "Tools"
+    },
+    "T2MachineComponent": {
+      "name": "Complex Machinery",
+      "category": "Resources"
+    },
+    "Combat_Light_Unique_Stamina_Bottom_04": {
+      "name": "Compression-Stim Leggings",
+      "category": "Garments - Legs"
+    },
+    "BasicBuildingTool": {
+      "name": "Construction Tool",
+      "category": "Tools"
+    },
+    "HeavyPistol_Unique_Headshot_05": {
+      "name": "Cope",
+      "category": "Weapons - Ranged"
+    },
+    "CopperBar": {
+      "name": "Copper Ingot",
+      "category": "Resources"
+    },
+    "AzuriteOre": {
+      "name": "Copper Ore",
+      "category": "Resources"
+    },
+    "Corpse": {
+      "name": "Corpse",
+      "category": "Misc"
+    },
+    "ContractFactionAntonFabricatedDocument": {
+      "name": "Counterfeit Document",
+      "category": "Building"
+    },
+    "nhbeu": {
+      "name": "Courier Package",
+      "category": "Contract Items"
+    },
+    "nlckv": {
+      "name": "Cultivating Hufuf Vines in Artificial Environments \u2014 E. Goetha",
+      "category": "Misc"
+    },
+    "WaterPack_Consumable": {
+      "name": "Cup of Water",
+      "category": "Consumables"
+    },
+    "MiningTool_1h_Heavy": {
+      "name": "Cutteray Mk1",
+      "category": "Tools"
+    },
+    "MiningTool_1h_Light": {
+      "name": "Cutteray Mk2",
+      "category": "Tools"
+    },
+    "MiningTool_2h_Standard": {
+      "name": "Cutteray Mk3",
+      "category": "Tools"
+    },
+    "MiningTool_2h_Light": {
+      "name": "Cutteray Mk5",
+      "category": "Tools"
+    },
+    "MiningTool_2h_Advanced": {
+      "name": "Cutteray Mk6",
+      "category": "Tools"
+    },
+    "SandcrawlerLocomotion_Unique_WormThreat_06": {
+      "name": "Dampened Sandcrawler Treads",
+      "category": "Vehicle Modules"
+    },
+    "Decajon": {
+      "name": "Decaliterjon",
+      "category": "Consumables"
+    },
+    "D_Carpets_Patent": {
+      "name": "Decorative Carpets",
+      "category": "Building"
+    },
+    "ContractScorpionDeliveryReport": {
+      "name": "Delivery Report",
+      "category": "Contract Items"
+    },
+    "UniqueDirk_02": {
+      "name": "Denira's Gift",
+      "category": "Weapons - Melee"
+    },
+    "Combat_Light_Unique_BiomeHeat_Top_06": {
+      "name": "Desert Garb",
+      "category": "Garments - Chest"
+    },
+    "ContractZaynDeWitteDeserterBloodSample": {
+      "name": "Deserter Tissue Sample",
+      "category": "Contract Items"
+    },
+    "DewReaper_Prototype": {
+      "name": "Dew Reaper Mk2",
+      "category": "Tools"
+    },
+    "DewReaper_03": {
+      "name": "Dew Reaper Mk4",
+      "category": "Tools"
+    },
+    "DewReaper_1h_Tier6": {
+      "name": "Dew Reaper Mk6",
+      "category": "Tools"
+    },
+    "DewReaper_Scythe": {
+      "name": "Dew Scythe Mk4",
+      "category": "Tools"
+    },
+    "DewReaper_2h_Tier6": {
+      "name": "Dew Scythe Mk6",
+      "category": "Tools"
+    },
+    "T6DiamodineBladeParts": {
+      "name": "Diamondine Blade Parts",
+      "category": "Misc"
+    },
+    "T4MysaTarilComponent1": {
+      "name": "Diamondine Dust",
+      "category": "Resources"
+    },
+    "Stilltent_Unique_01": {
+      "name": "Stilltent",
+      "category": "Consumables"
+    },
+    "ContractKynesNotes": {
+      "name": "Dr. Kynes's Research Notes",
+      "category": "Contract Items"
+    },
+    "Combat_Choam_Heavy01_Boots": {
+      "name": "Duneman Heavy Boots",
+      "category": "Garments - Feet"
+    },
+    "Combat_Choam_Heavy01_Gloves": {
+      "name": "Duneman Heavy Gloves",
+      "category": "Garments - Hands"
+    },
+    "Combat_Choam_Heavy01_Top": {
+      "name": "Duneman Heavy Jacket",
+      "category": "Garments - Chest"
+    },
+    "Combat_Choam_Heavy01_Helmet": {
+      "name": "Duneman Heavy Mask",
+      "category": "Garments - Head"
+    },
+    "Combat_Choam_Heavy01_Bottom": {
+      "name": "Duneman Heavy Pants",
+      "category": "Garments - Legs"
+    },
+    "Combat_Choam_Scout03_Boots": {
+      "name": "Duneman Scout Boots",
+      "category": "Garments - Feet"
+    },
+    "Combat_Choam_Scout03_Gloves": {
+      "name": "Duneman Scout Gloves",
+      "category": "Garments - Hands"
+    },
+    "Combat_Choam_Scout03_Helmet": {
+      "name": "Duneman Scout Helmet",
+      "category": "Garments - Head"
+    },
+    "Combat_Choam_Scout03_Top": {
+      "name": "Duneman Scout Jacket",
+      "category": "Garments - Chest"
+    },
+    "Combat_Choam_Scout03_Bottom": {
+      "name": "Duneman Scout Pants",
+      "category": "Garments - Legs"
+    },
+    "LongRifle_Unique_Poison_06": {
+      "name": "Dunewatcher",
+      "category": "Misc"
+    },
+    "DuraluminumRod": {
+      "name": "Duraluminum Ingot",
+      "category": "Resources"
+    },
+    "FremenComponent1": {
+      "name": "EMF Generator",
+      "category": "Resources"
+    },
+    "ContractBG2EcologicalLexicon": {
+      "name": "Ecological Lexicon of Arrakis",
+      "category": "Contract Items"
+    },
+    "D_ContractElaccaAsh": {
+      "name": "Elacca Ash",
+      "category": "Resources"
+    },
+    "wy1ll": {
+      "name": "Electronics Delivery",
+      "category": "Contract Items"
+    },
+    "Social_Smug_EntrepreneurCasual03_Gloves": {
+      "name": "Entrepreneur Casual Gloves",
+      "category": "Garments - Hands"
+    },
+    "Social_Smug_EntrepreneurCasual03_Bottom": {
+      "name": "Entrepreneur Casual Pants",
+      "category": "Garments - Legs"
+    },
+    "Social_Smug_EntrepreneurCasual03_Top": {
+      "name": "Entrepreneur Casual Shirt",
+      "category": "Garments - Chest"
+    },
+    "Social_Smug_EntrepreneurCasual03_Boots": {
+      "name": "Entrepreneur Casual Shoes",
+      "category": "Garments - Feet"
+    },
+    "ErythriteCrystal": {
+      "name": "Erythrite Crystal",
+      "category": "Resources"
+    },
+    "UniqueScattergun3": {
+      "name": "Eviscerator",
+      "category": "Weapons - Ranged"
+    },
+    "j78fc": {
+      "name": "Execution Order",
+      "category": "Misc"
+    },
+    "Combat_Neut_AtreidesDeserterUnique05_Boots": {
+      "name": "Executor's Boots",
+      "category": "Garments - Feet"
+    },
+    "Combat_Neut_AtreidesDeserterUnique05_Top": {
+      "name": "Executor's Chestpiece",
+      "category": "Garments - Chest"
+    },
+    "Combat_Neut_AtreidesDeserterUnique05_Gloves": {
+      "name": "Executor's Gauntlets",
+      "category": "Garments - Hands"
+    },
+    "Combat_Neut_AtreidesDeserterUnique05_Helmet": {
+      "name": "Executor's Helmet",
+      "category": "Garments - Head"
+    },
+    "Combat_Neut_AtreidesDeserterUnique05_Bottom": {
+      "name": "Executor's Pants",
+      "category": "Garments - Legs"
+    },
+    "ContractExperimentalMissileComponent": {
+      "name": "Experimental Missile Component",
+      "category": "Resources"
+    },
+    "LMG_Unique_RapidFire_04": {
+      "name": "Experimental Vulcan GAU-94",
+      "category": "Weapons - Ranged"
+    },
+    "LMG_Unique_RapidFire_05": {
+      "name": "Extravagant Message",
+      "category": "Weapons - Ranged"
+    },
+    "ContractFactionFalsifiedCommunicationsLog": {
+      "name": "Falsified Communication Log",
+      "category": "Contract Items"
+    },
+    "Kindjal_Unique_Blood_06": {
+      "name": "Feyd's Drinker",
+      "category": "Weapons - Melee"
+    },
+    "UniqueDirk_Story_Feyd": {
+      "name": "Feyd's Take-Down Blade",
+      "category": "Weapons - Melee"
+    },
+    "UniqueAr_Burst_02": {
+      "name": "Fila's Regret",
+      "category": "Misc"
+    },
+    "BodyFluidExtractor_Unique_Water_03": {
+      "name": "Filter Extractor Mk3",
+      "category": "Resources"
+    },
+    "BodyFluidExtractor_Unique_Water_04": {
+      "name": "Filter Extractor Mk4",
+      "category": "Resources"
+    },
+    "BodyFluidExtractor_Unique_Water_05": {
+      "name": "Filter Extractor Mk5",
+      "category": "Resources"
+    },
+    "BodyFluidExtractor_Unique_Water_06": {
+      "name": "Filter Extractor Mk6",
+      "category": "Resources"
+    },
+    "UniqueScattergun_Fire_04": {
+      "name": "Firestorm",
+      "category": "Weapons - Ranged"
+    },
+    "LongRifle_Unique_LargeMag_05": {
+      "name": "Fivefinger's Tripleshot Rifle",
+      "category": "Misc"
+    },
+    "FlourSand": {
+      "name": "Flour Sand",
+      "category": "Resources"
+    },
+    "T6HeavyCalliberCompressor": {
+      "name": "Fluted Heavy Caliber Compressor",
+      "category": "Misc"
+    },
+    "T6LightCalliberCompressor": {
+      "name": "Fluted Light Caliber Compressor",
+      "category": "Misc"
+    },
+    "BuggyMining_Unique_YieldIncrease_03": {
+      "name": "Focused Buggy Cutteray Mk3",
+      "category": "Tools"
+    },
+    "BuggyMining_Unique_YieldIncrease_04": {
+      "name": "Focused Buggy Cutteray Mk4",
+      "category": "Tools"
+    },
+    "BuggyMining_Unique_YieldIncrease_05": {
+      "name": "Focused Buggy Cutteray Mk5",
+      "category": "Tools"
+    },
+    "BuggyMining_Unique_YieldIncrease_06": {
+      "name": "Focused Buggy Cutteray Mk6",
+      "category": "Tools"
+    },
+    "DewReaper_2h_Unique_YieldIncrease_05": {
+      "name": "Focused Reaper Mk5",
+      "category": "Tools"
+    },
+    "D_ufphz": {
+      "name": "Foreman's Dew Reaper",
+      "category": "Resources"
+    },
+    "Combat_Heavy_Unique_StandStillDmgReduction_Top_06": {
+      "name": "Fortress Chestpiece",
+      "category": "Garments - Chest"
+    },
+    "ContractBG2FremenFamilyRecords1": {
+      "name": "Fremen Bloodline Records",
+      "category": "Contract Items"
+    },
+    "Oil": {
+      "name": "Fuel Cell",
+      "category": "Misc"
+    },
+    "PowerGenerator_Patent": {
+      "name": "Fuel-Powered Generator",
+      "category": "Building"
+    },
+    "FullSuspensorBelt": {
+      "name": "Full Suspensor Belt",
+      "category": "Tools"
+    },
+    "dfgsh": {
+      "name": "Get the best loot with Drot!",
+      "category": "Misc"
+    },
+    "Social_Hark_GiediCasual03_Bottom": {
+      "name": "Giedi Casual Pants",
+      "category": "Garments - Legs"
+    },
+    "Social_Hark_GiediCasual03_Top": {
+      "name": "Giedi Casual Shirt",
+      "category": "Garments - Chest"
+    },
+    "Social_Hark_GiediCasual03_Boots": {
+      "name": "Giedi Casual Shoes",
+      "category": "Garments - Feet"
+    },
+    "Flamethrower_Prototype_2": {
+      "name": "Glasser",
+      "category": "Misc"
+    },
+    "HandHeldTorch": {
+      "name": "Glowtube",
+      "category": "Misc"
+    },
+    "Bloodsack_Unique_Durable_03": {
+      "name": "Glutton's Bloodbag",
+      "category": "Consumables"
+    },
+    "Kindjal_Unique_Blood_03": {
+      "name": "Glutton's Drinker",
+      "category": "Weapons - Melee"
+    },
+    "Stone": {
+      "name": "Granite Stone",
+      "category": "Resources"
+    },
+    "T1AssaultComponent": {
+      "name": "Gun Parts",
+      "category": "Resources"
+    },
+    "HighCapacityLiterjon": {
+      "name": "Hajra Literjon Mk1",
+      "category": "Consumables"
+    },
+    "HighCapacityLiterjon_02": {
+      "name": "Hajra Literjon Mk2",
+      "category": "Consumables"
+    },
+    "HighCapacityLiterjon_03": {
+      "name": "Hajra Literjon Mk3",
+      "category": "Consumables"
+    },
+    "HighCapacityLiterjon_04": {
+      "name": "Hajra Literjon Mk4",
+      "category": "Consumables"
+    },
+    "HighCapacityLiterjon_05": {
+      "name": "Hajra Literjon Mk5",
+      "category": "Consumables"
+    },
+    "HighCapacityLiterjon_06": {
+      "name": "Hajra Literjon Mk6",
+      "category": "Consumables"
+    },
+    "UniqueRapier_03": {
+      "name": "Halleck's Pick",
+      "category": "Weapons - Melee"
+    },
+    "Scanner_Unique_Body_03": {
+      "name": "Handheld Life Scanner Mk3",
+      "category": "Garments - Chest"
+    },
+    "Scanner_Base_1": {
+      "name": "Handheld Resource Scanner",
+      "category": "Tools"
+    },
+    "Hark_BasicLighting_Patent": {
+      "name": "Harkonnen Basic Lights Set",
+      "category": "Building"
+    },
+    "Hark_BedroomSet_Patent": {
+      "name": "Harkonnen Bedroom Furniture Set",
+      "category": "Building"
+    },
+    "ContractHarkonnenCasualtyReport": {
+      "name": "Harkonnen Casualty Report",
+      "category": "Contract Items"
+    },
+    "D_HarkonnenDatapad": {
+      "name": "Harkonnen Datapad",
+      "category": "Contract Items"
+    },
+    "Hark_DiningRoomSet_Patent": {
+      "name": "Harkonnen Dining Room Furniture Set",
+      "category": "Building"
+    },
+    "Hark_OfficeSet_Patent": {
+      "name": "Harkonnen Office Furniture Set",
+      "category": "Building"
+    },
+    "D_Social_Hark_MilitaryUniform_Top_L3": {
+      "name": "Harkonnen Officer Jacket",
+      "category": "Garments - Chest"
+    },
+    "D_Social_Hark_MilitaryUniform_Top_L1": {
+      "name": "Harkonnen Recruit Jacket",
+      "category": "Garments - Chest"
+    },
+    "D_bcvvk": {
+      "name": "Harkonnen Spice Shipping Ledger",
+      "category": "Contract Items"
+    },
+    "HealthPack_Channeled": {
+      "name": "Healkit",
+      "category": "Consumables"
+    },
+    "HealthPack_Channeled_2": {
+      "name": "Healkit Mk2",
+      "category": "Consumables"
+    },
+    "HealthPack_Channeled_3": {
+      "name": "Healkit Mk4",
+      "category": "Consumables"
+    },
+    "HealthPack_Channeled_4": {
+      "name": "Healkit Mk6",
+      "category": "Consumables"
+    },
+    "T4HarkSpiceSiloComponent2": {
+      "name": "Heavy Caliber Compressor",
+      "category": "Resources"
+    },
+    "HeavyAmmo": {
+      "name": "Heavy Darts",
+      "category": "Ammo"
+    },
+    "Stillsuit_Unique_Armored_01_Boots": {
+      "name": "Hollower Stillsuit Boots",
+      "category": "Resources"
+    },
+    "Stillsuit_Unique_Armored_01_Top": {
+      "name": "Hollower Stillsuit Garment",
+      "category": "Resources"
+    },
+    "Stillsuit_Unique_Armored_01_Gloves": {
+      "name": "Hollower Stillsuit Gloves",
+      "category": "Resources"
+    },
+    "Stillsuit_Unique_Armored_01_Mask": {
+      "name": "Hollower Stillsuit Mask",
+      "category": "Resources"
+    },
+    "T1ExplorationComponent": {
+      "name": "Holtzman Actuator",
+      "category": "Resources"
+    },
+    "ContractScavengers1HoltzmanAmplifier": {
+      "name": "Holtzman Amplifier",
+      "category": "Contract Items"
+    },
+    "HoltzmanShieldActiveDrain": {
+      "name": "Holtzman Shield Mk2",
+      "category": "Tools"
+    },
+    "HoltzmanShieldActiveDrain2": {
+      "name": "Holtzman Shield Mk3",
+      "category": "Tools"
+    },
+    "HoltzmanShieldActiveDrain3": {
+      "name": "Holtzman Shield Mk5",
+      "category": "Tools"
+    },
+    "Combat_Light_Unique_Climbing_Gloves_06": {
+      "name": "Hook-claw Gloves",
+      "category": "Garments - Hands"
+    },
+    "Shotgun_Unique_Explosive_04": {
+      "name": "House Burst Drillshot",
+      "category": "Weapons - Ranged"
+    },
+    "Dirk_0": {
+      "name": "House Dirk",
+      "category": "Weapons - Melee"
+    },
+    "AtreSmg4": {
+      "name": "House Disruptor M11",
+      "category": "Weapons - Ranged"
+    },
+    "HeavyPistol_Unique_Bleed_04": {
+      "name": "House Disruptor Pistol",
+      "category": "Weapons - Ranged"
+    },
+    "SmugShot3": {
+      "name": "House Drillshot FK7",
+      "category": "Misc"
+    },
+    "Scattergun_Prototype1": {
+      "name": "House GRDA 44",
+      "category": "Weapons - Ranged"
+    },
+    "SmugDmr4": {
+      "name": "House JABAL Spitdart",
+      "category": "Weapons - Ranged"
+    },
+    "HarkAr5": {
+      "name": "House Karpov 38",
+      "category": "Weapons - Ranged"
+    },
+    "Kindjal_2": {
+      "name": "House Kindjal",
+      "category": "Weapons - Melee"
+    },
+    "ChoamSda5": {
+      "name": "House Maula Pistol",
+      "category": "Weapons - Ranged"
+    },
+    "HarkHeavyPistol3": {
+      "name": "House Rafiq Snubnose",
+      "category": "Weapons - Ranged"
+    },
+    "Rapier": {
+      "name": "House Rapier",
+      "category": "Weapons - Melee"
+    },
+    "CHOAMSword_1": {
+      "name": "House Sword",
+      "category": "Weapons - Melee"
+    },
+    "AtreLMG3": {
+      "name": "House Vulcan GAU-92",
+      "category": "Weapons - Ranged"
+    },
+    "OrnithopterMediumLocomotion_Unique_Strafe_5": {
+      "name": "Hummingbird Wing Module Mk5",
+      "category": "Vehicle Modules"
+    },
+    "OrnithopterMediumLocomotion_Unique_Strafe_6": {
+      "name": "Hummingbird Wing Module Mk6",
+      "category": "Vehicle Modules"
+    },
+    "T5FactionBaseComponent2": {
+      "name": "Hydraulic Piston",
+      "category": "Resources"
+    },
+    "Combat_Light_Unique_WormThreat_Boots_04": {
+      "name": "Idaho Softstep Boots",
+      "category": "Garments - Feet"
+    },
+    "Combat_Light_Unique_ReduceSuspensor_Top_06": {
+      "name": "Idaho's Charge",
+      "category": "Garments - Chest"
+    },
+    "Social_Neut_ImperialCasual_Boots": {
+      "name": "Imperial Casual Shoes",
+      "category": "Garments - Feet"
+    },
+    "Social_Neut_ImperialCasual_Top": {
+      "name": "Imperial Casual Top",
+      "category": "Garments - Chest"
+    },
+    "Stillsuit_Unique_Armored_06_Boots": {
+      "name": "Imperial Stillsuit Boots",
+      "category": "Resources"
+    },
+    "Stillsuit_Unique_Armored_06_Top": {
+      "name": "Imperial Stillsuit Garment",
+      "category": "Resources"
+    },
+    "Stillsuit_Unique_Armored_06_Gloves": {
+      "name": "Imperial Stillsuit Gloves",
+      "category": "Resources"
+    },
+    "Stillsuit_Unique_Armored_06_Mask": {
+      "name": "Imperial Stillsuit Mask",
+      "category": "Resources"
+    },
+    "ogv8a": {
+      "name": "Imperial Testing Station Records",
+      "category": "Contract Items"
+    },
+    "ContractPlanetologist1AReels": {
+      "name": "Imperial Testing Station Records (1)",
+      "category": "Contract Items"
+    },
+    "ContractPlanetologist2AReels": {
+      "name": "Imperial Testing Station Records (2)",
+      "category": "Contract Items"
+    },
+    "ContractPlanetologist3AReels": {
+      "name": "Imperial Testing Station Records (3)",
+      "category": "Contract Items"
+    },
+    "ContractPlanetologist4AReels": {
+      "name": "Imperial Testing Station Records (4)",
+      "category": "Contract Items"
+    },
+    "ContractPlanetologist5AReels": {
+      "name": "Imperial Testing Station Records (5)",
+      "category": "Contract Items"
+    },
+    "T6HoltzmanActuator": {
+      "name": "Improved Holtzman Actuator",
+      "category": "Misc"
+    },
+    "Combat_Light_Unique_DewReap_Gloves_04": {
+      "name": "Improved Reaper Gloves",
+      "category": "Garments - Hands"
+    },
+    "Combat_Light_Unique_ReduceSuspensor_Top_04": {
+      "name": "Improved Suspensor Jacket",
+      "category": "Garments - Chest"
+    },
+    "T6Watertube": {
+      "name": "Improved Watertube",
+      "category": "Misc"
+    },
+    "BodyFluidExtractor": {
+      "name": "Improvised Blood Extractor",
+      "category": "Consumables"
+    },
+    "MiningTool_1h_Standard": {
+      "name": "Improvised Cutteray",
+      "category": "Tools"
+    },
+    "ChoamSda1": {
+      "name": "Improvised Maula Pistol",
+      "category": "Weapons - Ranged"
+    },
+    "PowerPack": {
+      "name": "Improvised Power Pack",
+      "category": "Tools"
+    },
+    "BodyFluidExtractor_Unique_Poison_05": {
+      "name": "Impure Extractor Mk5",
+      "category": "Misc"
+    },
+    "BodyFluidExtractor_Unique_Poison_06": {
+      "name": "Impure Extractor Mk6",
+      "category": "Misc"
+    },
+    "Napalm": {
+      "name": "Incendiary Gel",
+      "category": "Ammo"
+    },
+    "UniqueAr_Burst_06": {
+      "name": "Indara's Lullaby",
+      "category": "Misc"
+    },
+    "MiningTool_2h_Heavy": {
+      "name": "Industrial Cutteray Mk4",
+      "category": "Resources"
+    },
+    "D_SuspensorBelt_Unique_Slide_04": {
+      "name": "Industrial Kinetic Suspensor Belt",
+      "category": "Resources"
+    },
+    "T4HarkSpiceSiloComponent1": {
+      "name": "Industrial Pump",
+      "category": "Resources"
+    },
+    "ChoamCom2": {
+      "name": "Industrial Static Compactor",
+      "category": "Resources"
+    },
+    "WindTurbineLubricant2": {
+      "name": "Industrial-grade Lubricant",
+      "category": "Resources"
+    },
+    "Combat_Neut_SmugglerDeserterUnique03_Boots": {
+      "name": "Inkvine Boots",
+      "category": "Garments - Feet"
+    },
+    "Combat_Neut_SmugglerDeserterUnique03_Gloves": {
+      "name": "Inkvine Gauntlets",
+      "category": "Garments - Hands"
+    },
+    "Combat_Neut_SmugglerDeserterUnique03_Top": {
+      "name": "Inkvine Jacket",
+      "category": "Garments - Chest"
+    },
+    "Combat_Neut_SmugglerDeserterUnique03_Helmet": {
+      "name": "Inkvine Mask",
+      "category": "Garments - Head"
+    },
+    "Combat_Neut_SmugglerDeserterUnique03_Bottom": {
+      "name": "Inkvine Pants",
+      "category": "Garments - Legs"
+    },
+    "T4PyonVillageComponent": {
+      "name": "Insulated Fabric",
+      "category": "Resources"
+    },
+    "AntiRadiationPill": {
+      "name": "Iodine Pill",
+      "category": "Consumables"
+    },
+    "Combat_Heavy_Unique_PowerEfficient_Gloves_02": {
+      "name": "Iri's Gauntlets",
+      "category": "Garments - Hands"
+    },
+    "IronBar": {
+      "name": "Iron Ingot",
+      "category": "Resources"
+    },
+    "MagnetiteOre": {
+      "name": "Iron Ore",
+      "category": "Resources"
+    },
+    "SMG_Unique_LargeMag_04": {
+      "name": "Ironwatch Special",
+      "category": "Weapons - Ranged"
+    },
+    "T6IrradiatedCore": {
+      "name": "Irradiated Core",
+      "category": "Resources"
+    },
+    "T5RadiatedCoreComponent": {
+      "name": "Irradiated Slag",
+      "category": "Resources"
+    },
+    "Combat_Light_Unique_Stamina_Bottom_06": {
+      "name": "Ix-core Leggings",
+      "category": "Resources"
+    },
+    "WoHIxianDecoder": {
+      "name": "Ixian Decoder",
+      "category": "Misc"
+    },
+    "MTX_Neut_JailSet_Bed_Patent": {
+      "name": "Jail Bed",
+      "category": "Building"
+    },
+    "MTX_Neut_JailSet_WaterPoint_Patent": {
+      "name": "Jail Waterpoint",
+      "category": "Building"
+    },
+    "JasmiumCrystal": {
+      "name": "Jasmium Crystal",
+      "category": "Resources"
+    },
+    "Kindjal_Unique_Stamina_05": {
+      "name": "Jolt-knife",
+      "category": "Weapons - Melee"
+    },
+    "UniqueSword_04": {
+      "name": "Jolt-sword",
+      "category": "Weapons - Melee"
+    },
+    "Kindjal_Unique_Blood_01": {
+      "name": "Kaleff's Drinker",
+      "category": "Weapons - Melee"
+    },
+    "ContractKaraValkMedicine1": {
+      "name": "Kara Valk's Medicine",
+      "category": "Contract Items"
+    },
+    "Combat_Neut_AtreidesDeserterUnique02_Boots": {
+      "name": "Karak's Boots",
+      "category": "Garments - Feet"
+    },
+    "Combat_Neut_AtreidesDeserterUnique02_Gloves": {
+      "name": "Karak's Gauntlets",
+      "category": "Garments - Hands"
+    },
+    "Combat_Neut_AtreidesDeserterUnique02_Helmet": {
+      "name": "Karak's Helmet",
+      "category": "Garments - Head"
+    },
+    "Combat_Neut_AtreidesDeserterUnique02_Top": {
+      "name": "Karak's Jacket",
+      "category": "Garments - Chest"
+    },
+    "Combat_Neut_AtreidesDeserterUnique02_Bottom": {
+      "name": "Karak's Pants",
+      "category": "Garments - Legs"
+    },
+    "HarkAr2": {
+      "name": "Karpov 38",
+      "category": "Misc"
+    },
+    "Stillsuit_Unique_Armored_03_Boots": {
+      "name": "Kel's Stillsuit Boots",
+      "category": "Resources"
+    },
+    "Stillsuit_Unique_Armored_03_Top": {
+      "name": "Kel's Stillsuit Garment",
+      "category": "Resources"
+    },
+    "Stillsuit_Unique_Armored_03_Gloves": {
+      "name": "Kel's Stillsuit Gloves",
+      "category": "Resources"
+    },
+    "Stillsuit_Unique_Armored_03_Mask": {
+      "name": "Kel's Stillsuit Mask",
+      "category": "Resources"
+    },
+    "UniqueRapier_02": {
+      "name": "Kharet Viper",
+      "category": "Weapons - Melee"
+    },
+    "Kindjal": {
+      "name": "Kindjal",
+      "category": "Weapons - Melee"
+    },
+    "Combat_Choam_Heavy02_Boots": {
+      "name": "Kirab Heavy Boots",
+      "category": "Garments - Feet"
+    },
+    "Combat_Choam_Heavy02_Gloves": {
+      "name": "Kirab Heavy Gauntlet",
+      "category": "Garments - Hands"
+    },
+    "Combat_Choam_Heavy02_Helmet": {
+      "name": "Kirab Heavy Headwrap",
+      "category": "Garments - Head"
+    },
+    "Combat_Choam_Heavy02_Top": {
+      "name": "Kirab Heavy Jerkin",
+      "category": "Garments - Chest"
+    },
+    "Combat_Choam_Heavy02_Bottom": {
+      "name": "Kirab Heavy Pants",
+      "category": "Garments - Legs"
+    },
+    "Combat_Choam_Light02_Boots": {
+      "name": "Kirab Scout Boots",
+      "category": "Garments - Feet"
+    },
+    "Combat_Choam_Light02_Gloves": {
+      "name": "Kirab Scout Gloves",
+      "category": "Garments - Hands"
+    },
+    "Combat_Choam_Light02_Helmet": {
+      "name": "Kirab Scout Helmet",
+      "category": "Garments - Head"
+    },
+    "Combat_Choam_Light02_Top": {
+      "name": "Kirab Scout Jacket",
+      "category": "Garments - Chest"
+    },
+    "Combat_Choam_Light02_Bottom": {
+      "name": "Kirab Scout Pants",
+      "category": "Garments - Legs"
+    },
+    "Stillsuit_Choam_02_Top": {
+      "name": "Kirab Stillsuit Body",
+      "category": "Garments - Chest"
+    },
+    "Stillsuit_Choam_02_Boots": {
+      "name": "Kirab Stillsuit Boots",
+      "category": "Garments - Feet"
+    },
+    "Stillsuit_Choam_02_Gloves": {
+      "name": "Kirab Stillsuit Gloves",
+      "category": "Garments - Hands"
+    },
+    "Stillsuit_Choam_02_Mask": {
+      "name": "Kirab Stillsuit Mask",
+      "category": "Garments - Head"
+    },
+    "MTX_Neut_Statues_KulonDonkey_Patent": {
+      "name": "Kulon Statue",
+      "category": "Building"
+    },
+    "MiningTool_2h_Unique_04": {
+      "name": "Kynes's Cutteray",
+      "category": "Tools"
+    },
+    "Bloodsack_03": {
+      "name": "Large Blood Sack",
+      "category": "Consumables"
+    },
+    "MTX_Atre_Movie_LargeCarpet_Patent": {
+      "name": "Large Carpet",
+      "category": "Building"
+    },
+    "FuelCanister_Large": {
+      "name": "Large Vehicle Fuel Cell",
+      "category": "Fuel"
+    },
+    "SuspensorBelt": {
+      "name": "Leap Suspensor Belt",
+      "category": "Tools"
+    },
+    "SMG_Unique_LargeMag_02": {
+      "name": "Legion Tattoo",
+      "category": "Weapons - Ranged"
+    },
+    "ContractFactionLetterFromAnton": {
+      "name": "Letter from Anton",
+      "category": "Contract Items"
+    },
+    "T4HarkSpiceSiloComponent3": {
+      "name": "Light Caliber Compressor",
+      "category": "Resources"
+    },
+    "Ammo": {
+      "name": "Light Darts",
+      "category": "Ammo"
+    },
+    "ContractBG1Doc1": {
+      "name": "Lisan al-Gaib and Alam al-Mithal",
+      "category": "Contract Items"
+    },
+    "HarkonnenSpyList": {
+      "name": "List of Harkonnen Spies",
+      "category": "Misc"
+    },
+    "ContractBG2FremenFamilyRecords2": {
+      "name": "List of Naibs",
+      "category": "Contract Items"
+    },
+    "Literjon": {
+      "name": "Literjon",
+      "category": "Consumables"
+    },
+    "Literjon_T6": {
+      "name": "Literjon Mk6",
+      "category": "Consumables"
+    },
+    "Scanner_Efficient_1": {
+      "name": "Long Range Scanner",
+      "category": "Tools"
+    },
+    "LongRifle_Unique_Poison_04": {
+      "name": "Long Shot",
+      "category": "Misc"
+    },
+    "WindTurbineLubricant1": {
+      "name": "Low-grade Lubricant",
+      "category": "Resources"
+    },
+    "Bloodsack_Unique_Durable_05": {
+      "name": "Maas Kharet Bloodbag",
+      "category": "Consumables"
+    },
+    "czbpd": {
+      "name": "Maas Kharet Map",
+      "category": "Misc"
+    },
+    "D_ArmorPack_Stillsuit_T5_MaasKharet": {
+      "name": "Maas Kharet Stillsuit Set",
+      "category": "Garments"
+    },
+    "WindTrapFilter1": {
+      "name": "Makeshift Filter",
+      "category": "Resources"
+    },
+    "Combat_Nati_SandtroutLeathers01_Gloves": {
+      "name": "Makeshift Gloves",
+      "category": "Garments - Hands"
+    },
+    "Combat_Nati_SandtroutLeathers01_Helmet": {
+      "name": "Makeshift Hood",
+      "category": "Garments - Head"
+    },
+    "Combat_Nati_SandtroutLeathers01_Top": {
+      "name": "Makeshift Jacket",
+      "category": "Garments - Chest"
+    },
+    "Combat_Nati_SandtroutLeathers01_Bottom": {
+      "name": "Makeshift Pants",
+      "category": "Garments - Legs"
+    },
+    "Combat_Nati_SandtroutLeathers01_Boots": {
+      "name": "Makeshift Shoes",
+      "category": "Garments - Feet"
+    },
+    "Stillsuit_Unique_Efficient_04_Boots": {
+      "name": "Maraqeb Stillsuit Boots",
+      "category": "Garments - Feet"
+    },
+    "Stillsuit_Unique_Efficient_04_Top": {
+      "name": "Maraqeb Stillsuit Garment",
+      "category": "Garments - Chest"
+    },
+    "Stillsuit_Unique_Efficient_04_Gloves": {
+      "name": "Maraqeb Stillsuit Gloves",
+      "category": "Garments - Hands"
+    },
+    "Stillsuit_Unique_Efficient_04_Mask": {
+      "name": "Maraqeb Stillsuit Mask",
+      "category": "Garments - Head"
+    },
+    "Bloodsack_T6": {
+      "name": "Massive Blood Sack",
+      "category": "Consumables"
+    },
+    "Social_Choam_MaulaCastOffs01_Shoes": {
+      "name": "Maula Boots",
+      "category": "Garments - Feet"
+    },
+    "Social_Choam_MaulaCastOffs01_Gloves": {
+      "name": "Maula Bracers",
+      "category": "Garments - Hands"
+    },
+    "Social_Choam_MaulaCastOffs01_Bottom": {
+      "name": "Maula Breeches",
+      "category": "Garments - Legs"
+    },
+    "ChoamSda2": {
+      "name": "Maula Pistol",
+      "category": "Weapons - Ranged"
+    },
+    "Social_Choam_MaulaCastOffs01_Top": {
+      "name": "Maula Vest",
+      "category": "Garments - Chest"
+    },
+    "Social_Choam_MaulaCastOffs01_Top_Fremkit": {
+      "name": "Maula Vest (1)",
+      "category": "Garments - Chest"
+    },
+    "GreatHouseComponent2": {
+      "name": "Mechanical Parts",
+      "category": "Resources"
+    },
+    "Bloodsack_02": {
+      "name": "Medium Blood Sack",
+      "category": "Consumables"
+    },
+    "FuelCanister_Medium": {
+      "name": "Medium Sized Vehicle Fuel Cell",
+      "category": "Fuel"
+    },
+    "SpiceAddictionConsumable_02": {
+      "name": "Melange Spiced Beer",
+      "category": "Consumables"
+    },
+    "SpiceAddictionConsumable_03": {
+      "name": "Melange Spiced Coffee",
+      "category": "Consumables"
+    },
+    "SpiceAddictionConsumable_01": {
+      "name": "Melange Spiced Food",
+      "category": "Consumables"
+    },
+    "SpiceAddictionConsumable_T6": {
+      "name": "Melange Spiced Liquor",
+      "category": "Consumables"
+    },
+    "SpiceAddictionConsumable_04": {
+      "name": "Melange Spiced Wine",
+      "category": "Consumables"
+    },
+    "Beta_Plaque_Patent": {
+      "name": "Memorial Plaque",
+      "category": "Building"
+    },
+    "Combat_Heavy_Unique_Reinforced_Boots_05": {
+      "name": "Mendek's Boots",
+      "category": "Garments - Feet"
+    },
+    "Combat_Heavy_Unique_Reinforced_Top_05": {
+      "name": "Mendek's Chestplate",
+      "category": "Resources"
+    },
+    "Combat_Heavy_Unique_Reinforced_Gloves_05": {
+      "name": "Mendek's Gauntlets",
+      "category": "Garments - Hands"
+    },
+    "Combat_Heavy_Unique_Reinforced_Helmet_05": {
+      "name": "Mendek's Helmet",
+      "category": "Garments - Head"
+    },
+    "Combat_Heavy_Unique_Reinforced_Bottom_05": {
+      "name": "Mendek's Pants",
+      "category": "Garments - Legs"
+    },
+    "UniqueAr_Burst_05": {
+      "name": "Mendek's Rattle",
+      "category": "Misc"
+    },
+    "Combat_Neut_SmugglerDeserterUnique02_Boots": {
+      "name": "Mendia's Boots",
+      "category": "Garments - Feet"
+    },
+    "Combat_Neut_SmugglerDeserterUnique02_Gloves": {
+      "name": "Mendia's Gauntlets",
+      "category": "Garments - Hands"
+    },
+    "Combat_Neut_SmugglerDeserterUnique02_Top": {
+      "name": "Mendia's Jacket",
+      "category": "Garments - Chest"
+    },
+    "Combat_Neut_SmugglerDeserterUnique02_Bottom": {
+      "name": "Mendia's Pants",
+      "category": "Garments - Legs"
+    },
+    "Combat_Neut_SmugglerDeserterUnique02_Helmet": {
+      "name": "Mendia's Wrap",
+      "category": "Garments - Head"
+    },
+    "Stillsuit_Unique_Armored_02_Boots": {
+      "name": "Menol's Stillsuit Boots",
+      "category": "Resources"
+    },
+    "Stillsuit_Unique_Armored_02_Top": {
+      "name": "Menol's Stillsuit Garment",
+      "category": "Resources"
+    },
+    "Stillsuit_Unique_Armored_02_Gloves": {
+      "name": "Menol's Stillsuit Gloves",
+      "category": "Resources"
+    },
+    "Stillsuit_Unique_Armored_02_Mask": {
+      "name": "Menol's Stillsuit Mask",
+      "category": "Resources"
+    },
+    "ArmorPack_Mentat": {
+      "name": "Mentat Armor Set",
+      "category": "Garments"
+    },
+    "Combat_Choam_Heavy04_Shoes": {
+      "name": "Mercenary Heavy Boots",
+      "category": "Garments - Feet"
+    },
+    "Combat_Choam_Heavy04_Top": {
+      "name": "Mercenary Heavy Chestplate",
+      "category": "Resources"
+    },
+    "Combat_Choam_Heavy04_Gloves": {
+      "name": "Mercenary Heavy Gloves",
+      "category": "Garments - Hands"
+    },
+    "Combat_Choam_Heavy04_Helmet": {
+      "name": "Mercenary Heavy Helmet",
+      "category": "Garments - Head"
+    },
+    "Combat_Choam_Heavy04_Bottom": {
+      "name": "Mercenary Heavy Pants",
+      "category": "Garments - Legs"
+    },
+    "Combat_Choam_Light05_Boots": {
+      "name": "Mercenary Scout Boots",
+      "category": "Garments - Feet"
+    },
+    "Combat_Choam_Light05_Gloves": {
+      "name": "Mercenary Scout Gloves",
+      "category": "Garments - Hands"
+    },
+    "Combat_Choam_Light05_Helmet": {
+      "name": "Mercenary Scout Helmet",
+      "category": "Garments - Head"
+    },
+    "Combat_Choam_Light05_Bottom": {
+      "name": "Mercenary Scout Leggings",
+      "category": "Garments - Legs"
+    },
+    "Combat_Choam_Light05_Top": {
+      "name": "Mercenary Scout Top",
+      "category": "Garments - Chest"
+    },
+    "Stillsuit_Choam_05_Top": {
+      "name": "Mercenary Stillsuit Body",
+      "category": "Garments - Chest"
+    },
+    "Stillsuit_Choam_05_Boots": {
+      "name": "Mercenary Stillsuit Boots",
+      "category": "Garments - Feet"
+    },
+    "Stillsuit_Choam_05_Gloves": {
+      "name": "Mercenary Stillsuit Gloves",
+      "category": "Garments - Hands"
+    },
+    "Stillsuit_Choam_05_Mask": {
+      "name": "Mercenary Stillsuit Mask",
+      "category": "Garments - Head"
+    },
+    "FremenComponent2": {
+      "name": "Micro-Sandwich Fabric",
+      "category": "Resources"
+    },
+    "T5FactionBaseComponent1": {
+      "name": "Military Power Regulator",
+      "category": "Resources"
+    },
+    "Combat_Light_Unique_BiomeHeat_Top_04": {
+      "name": "Miner's Blessing",
+      "category": "Garments - Chest"
+    },
+    "SietchMnemeticFilm": {
+      "name": "Minimic Film",
+      "category": "Contract Items"
+    },
+    "InfantryRocketAmmo": {
+      "name": "Missile",
+      "category": "Ammo"
+    },
+    "ContractZaynDeWitteGangMinimicFilm": {
+      "name": "Mobula Gang's Minimic Film",
+      "category": "Contract Items"
+    },
+    "SandbikeEngine_Unique_Speed_1": {
+      "name": "Mohandis Sandbike Engine Mk1",
+      "category": "Vehicle Modules"
+    },
+    "SandbikeEngine_Unique_Speed_2": {
+      "name": "Mohandis Sandbike Engine Mk2",
+      "category": "Vehicle Modules"
+    },
+    "SandbikeEngine_Unique_Speed_3": {
+      "name": "Mohandis Sandbike Engine Mk3",
+      "category": "Vehicle Modules"
+    },
+    "SandbikeEngine_Unique_Speed_4": {
+      "name": "Mohandis Sandbike Engine Mk4",
+      "category": "Vehicle Modules"
+    },
+    "SandbikeEngine_Unique_Speed_5": {
+      "name": "Mohandis Sandbike Engine Mk5",
+      "category": "Vehicle Modules"
+    },
+    "SandbikeEngine_Unique_Speed_6": {
+      "name": "Mohandis Sandbike Engine Mk6",
+      "category": "Vehicle Modules"
+    },
+    "UniqueDirk_03": {
+      "name": "Moisture Sealer",
+      "category": "Resources"
+    },
+    "Mouse_Corpse": {
+      "name": "Mouse Corpse",
+      "category": "Misc"
+    },
+    "T2MuaddibComponent": {
+      "name": "Muad'Dib Corpse",
+      "category": "Resources"
+    },
+    "MTX_Neut_Statues_DesertMouse_Patent": {
+      "name": "Muad'Dib Statue",
+      "category": "Building"
+    },
+    "ContractBlightVials": {
+      "name": "Mysterious Vials",
+      "category": "Contract Items"
+    },
+    "Stillsuit_Choam_04_Top": {
+      "name": "Native Stillsuit Body",
+      "category": "Garments - Chest"
+    },
+    "Stillsuit_Choam_04_Boots": {
+      "name": "Native Stillsuit Boots",
+      "category": "Garments - Feet"
+    },
+    "Stillsuit_Choam_04_Gloves": {
+      "name": "Native Stillsuit Gloves",
+      "category": "Garments - Hands"
+    },
+    "Stillsuit_Choam_04_Mask": {
+      "name": "Native Stillsuit Mask",
+      "category": "Garments - Head"
+    },
+    "SandbikeBoost_Unique_LessHeat_2": {
+      "name": "Night Rider Sandbike Boost Mk2",
+      "category": "Vehicle Modules"
+    },
+    "SandbikeBoost_Unique_LessHeat_3": {
+      "name": "Night Rider Sandbike Boost Mk3",
+      "category": "Vehicle Modules"
+    },
+    "SandbikeBoost_Unique_LessHeat_4": {
+      "name": "Night Rider Sandbike Boost Mk4",
+      "category": "Vehicle Modules"
+    },
+    "SandbikeBoost_Unique_LessHeat_5": {
+      "name": "Night Rider Sandbike Boost Mk5",
+      "category": "Vehicle Modules"
+    },
+    "SandbikeBoost_Unique_LessHeat_6": {
+      "name": "Night Rider Sandbike Boost Mk6",
+      "category": "Vehicle Modules"
+    },
+    "Combat_Neut_AtreidesDeserterUnique01_Boots": {
+      "name": "Oathbreaker Boots",
+      "category": "Garments - Feet"
+    },
+    "Combat_Neut_AtreidesDeserterUnique01_Top": {
+      "name": "Oathbreaker Chestpiece",
+      "category": "Garments - Chest"
+    },
+    "Combat_Neut_AtreidesDeserterUnique01_Gloves": {
+      "name": "Oathbreaker Gauntlets",
+      "category": "Garments - Hands"
+    },
+    "Combat_Neut_AtreidesDeserterUnique01_Helmet": {
+      "name": "Oathbreaker Headwrap",
+      "category": "Garments - Head"
+    },
+    "Combat_Neut_AtreidesDeserterUnique01_Bottom": {
+      "name": "Oathbreaker Pants",
+      "category": "Garments - Legs"
+    },
+    "T3VendorComponent1": {
+      "name": "Off-world Medical Supplies",
+      "category": "Resources"
+    },
+    "cto37": {
+      "name": "Offload Equipment",
+      "category": "Misc"
+    },
+    "PowerPack_Unique_Regen_01": {
+      "name": "Old Sparky Mk1",
+      "category": "Misc"
+    },
+    "PowerPack_Unique_Regen_02": {
+      "name": "Old Sparky Mk2",
+      "category": "Misc"
+    },
+    "PowerPack_Unique_Regen_03": {
+      "name": "Old Sparky Mk3",
+      "category": "Misc"
+    },
+    "PowerPack_Unique_Regen_04": {
+      "name": "Old Sparky Mk4",
+      "category": "Misc"
+    },
+    "MiningTool_1h_Unique_02": {
+      "name": "Olef's Quickcutter",
+      "category": "Misc"
+    },
+    "DewReaper_2h_Unique_YieldIncrease_06": {
+      "name": "Omni Focused Dew Scythe",
+      "category": "Tools"
+    },
+    "StaticCompactorTier6": {
+      "name": "Omni Static Compactor",
+      "category": "Tools"
+    },
+    "ContractBG1Doc3": {
+      "name": "On Witches",
+      "category": "Contract Items"
+    },
+    "LandsraadTreasureComponent1": {
+      "name": "Opafire Gem",
+      "category": "Resources"
+    },
+    "D_OldImperialComponent9": {
+      "name": "Optimized Servoks",
+      "category": "Resources"
+    },
+    "MTX_Neut_Miniature_Ornithopter_Patent": {
+      "name": "Ornithopter Miniature",
+      "category": "Vehicle Modules"
+    },
+    "T6PowerRegulator": {
+      "name": "Overclocked Power Regulator",
+      "category": "Misc"
+    },
+    "HoltzmanShieldActiveDrain_Story_Paranoid": {
+      "name": "Paranoid Holtzman Shield",
+      "category": "Tools"
+    },
+    "Kindjal_Unique_Blood_05": {
+      "name": "Pardot's Drinker",
+      "category": "Weapons - Melee"
+    },
+    "Stillsuit_Unique_HeatMitigation_06_Mask": {
+      "name": "Pardot's Hood",
+      "category": "Garments - Head"
+    },
+    "OldImperialComponent2": {
+      "name": "Particle Capacitor",
+      "category": "Resources"
+    },
+    "WindTrapFilter3": {
+      "name": "Particulate Filter",
+      "category": "Resources"
+    },
+    "t2tsp": {
+      "name": "Passive Suspensor Belt",
+      "category": "Tools"
+    },
+    "Shotgun_Unique_Blood_06": {
+      "name": "Penetrator",
+      "category": "Weapons - Ranged"
+    },
+    "UniqueScattergun5": {
+      "name": "Perforator",
+      "category": "Weapons - Ranged"
+    },
+    "PortableLight": {
+      "name": "Personal Light",
+      "category": "Misc"
+    },
+    "Combat_Neut_SmugglerDeserterUnique06_Boots": {
+      "name": "Pincushion Boots",
+      "category": "Garments - Feet"
+    },
+    "Combat_Neut_SmugglerDeserterUnique06_Top": {
+      "name": "Pincushion Chestpiece",
+      "category": "Garments - Chest"
+    },
+    "Combat_Neut_SmugglerDeserterUnique06_Gloves": {
+      "name": "Pincushion Gauntlets",
+      "category": "Garments - Hands"
+    },
+    "Combat_Neut_SmugglerDeserterUnique06_Helmet": {
+      "name": "Pincushion Helmet",
+      "category": "Garments - Head"
+    },
+    "Combat_Neut_SmugglerDeserterUnique06_Bottom": {
+      "name": "Pincushion Pants",
+      "category": "Garments - Legs"
+    },
+    "UniqueAr2": {
+      "name": "Pipecleaner",
+      "category": "Misc"
+    },
+    "UniqueSmg2": {
+      "name": "Piter's Disruptor",
+      "category": "Weapons - Ranged"
+    },
+    "PartialStabilizationBelt": {
+      "name": "Planar Suspensor Belt",
+      "category": "Tools"
+    },
+    "ArmorPack_Planetologist": {
+      "name": "Planetologist Stillsuit Set",
+      "category": "Contract Items"
+    },
+    "LMG_Unique_Power_06": {
+      "name": "Plasma Cannon",
+      "category": "Weapons - Ranged"
+    },
+    "T6RefinedResourceA": {
+      "name": "Plastanium Ingot",
+      "category": "Resources"
+    },
+    "T6ArmorPlating": {
+      "name": "Plasteel Composite Armor Plating",
+      "category": "Misc"
+    },
+    "T6BladePart": {
+      "name": "Plasteel Composite Blade Parts",
+      "category": "Misc"
+    },
+    "T6GunPart": {
+      "name": "Plasteel Composite Gun Parts",
+      "category": "Misc"
+    },
+    "GreatHouseComponent1": {
+      "name": "Plasteel Microflora Fiber",
+      "category": "Resources"
+    },
+    "T6PlasteelComponent": {
+      "name": "Plasteel Plate",
+      "category": "Resources"
+    },
+    "Plastone": {
+      "name": "Plastone",
+      "category": "Resources"
+    },
+    "UniqueRapier": {
+      "name": "Poison Mist",
+      "category": "Weapons - Melee"
+    },
+    "ContractFactionPoisonVial": {
+      "name": "Poison Vial",
+      "category": "Contract Items"
+    },
+    "Combat_Heavy_Unique_PowerEfficient_Gloves_04": {
+      "name": "Power Gauntlets",
+      "category": "Garments - Hands"
+    },
+    "Combat_Heavy_Unique_PowerIncrease_Top_06": {
+      "name": "Power Harness",
+      "category": "Garments - Chest"
+    },
+    "PowerPack5": {
+      "name": "Power Pack Mk1",
+      "category": "Tools"
+    },
+    "PowerPack2": {
+      "name": "Power Pack Mk2",
+      "category": "Tools"
+    },
+    "PowerPack6": {
+      "name": "Power Pack Mk3",
+      "category": "Tools"
+    },
+    "PowerPack3": {
+      "name": "Power Pack Mk4",
+      "category": "Tools"
+    },
+    "PowerPack7": {
+      "name": "Power Pack Mk5",
+      "category": "Tools"
+    },
+    "PowerPack4": {
+      "name": "Power Pack Mk6",
+      "category": "Tools"
+    },
+    "T6RangeFinder": {
+      "name": "Precision Range Finder",
+      "category": "Misc"
+    },
+    "UniqueSword": {
+      "name": "Pseudo Pulse-Sword",
+      "category": "Weapons - Melee"
+    },
+    "Combat_Neut_SmugglerDeserterUnique04_Boots": {
+      "name": "Quirth's Boots",
+      "category": "Garments - Feet"
+    },
+    "Combat_Neut_SmugglerDeserterUnique04_Gloves": {
+      "name": "Quirth's Gauntlets",
+      "category": "Garments - Hands"
+    },
+    "Combat_Neut_SmugglerDeserterUnique04_Helmet": {
+      "name": "Quirth's Helmet",
+      "category": "Garments - Head"
+    },
+    "Combat_Neut_SmugglerDeserterUnique04_Top": {
+      "name": "Quirth's Jacket",
+      "category": "Garments - Chest"
+    },
+    "Combat_Neut_SmugglerDeserterUnique04_Bottom": {
+      "name": "Quirth's Pants",
+      "category": "Garments - Legs"
+    },
+    "Radiation_Suit": {
+      "name": "Radiation Suit Mk4",
+      "category": "Misc"
+    },
+    "Radiation_Suit_T5": {
+      "name": "Radiation Suit Mk5",
+      "category": "Misc"
+    },
+    "Radiation_Suit_T6": {
+      "name": "Radiation Suit Mk6",
+      "category": "Misc"
+    },
+    "T3MarksmanComponent": {
+      "name": "Range Finder",
+      "category": "Resources"
+    },
+    "BuggyBoost_Unique_LessHeat_3": {
+      "name": "Rattler Boost Module Mk3",
+      "category": "Vehicle Modules"
+    },
+    "BuggyBoost_Unique_LessHeat_4": {
+      "name": "Rattler Boost Module Mk4",
+      "category": "Vehicle Modules"
+    },
+    "BuggyBoost_Unique_LessHeat_5": {
+      "name": "Rattler Boost Module Mk5",
+      "category": "Vehicle Modules"
+    },
+    "BuggyBoost_Unique_LessHeat_6": {
+      "name": "Rattler Boost Module Mk6",
+      "category": "Vehicle Modules"
+    },
+    "T3MiningGalleryComponent2": {
+      "name": "Ray Amplifier",
+      "category": "Resources"
+    },
+    "Combat_Light_Unique_DewReap_Gloves_03": {
+      "name": "Reaper Gloves",
+      "category": "Garments - Hands"
+    },
+    "Shotgun_Unique_Explosive_06": {
+      "name": "Regis Burst Drillshot",
+      "category": "Weapons - Ranged"
+    },
+    "Dirk_3": {
+      "name": "Regis Dirk",
+      "category": "Weapons - Melee"
+    },
+    "AtreSmg6": {
+      "name": "Regis Disruptor M11",
+      "category": "Weapons - Ranged"
+    },
+    "HeavyPistol_Unique_Bleed_06": {
+      "name": "Regis Disruptor Pistol",
+      "category": "Weapons - Ranged"
+    },
+    "SmugShot5": {
+      "name": "Regis Drillshot FK7",
+      "category": "Misc"
+    },
+    "Scattergun_Prototype3": {
+      "name": "Regis GRDA 44",
+      "category": "Weapons - Ranged"
+    },
+    "SmugDmr6": {
+      "name": "Regis JABAL Spitdart",
+      "category": "Weapons - Ranged"
+    },
+    "HarkAr7": {
+      "name": "Regis Karpov 38",
+      "category": "Misc"
+    },
+    "Kindjal_4": {
+      "name": "Regis Kindjal",
+      "category": "Weapons - Melee"
+    },
+    "ChoamSda7": {
+      "name": "Regis Maula Pistol",
+      "category": "Weapons - Ranged"
+    },
+    "RocketLauncher_2": {
+      "name": "Regis Missile Launcher",
+      "category": "Ammo"
+    },
+    "HarkHeavyPistol5": {
+      "name": "Regis Rafiq Snubnose",
+      "category": "Weapons - Ranged"
+    },
+    "Rapier_3": {
+      "name": "Regis Rapier",
+      "category": "Weapons - Melee"
+    },
+    "CHOAMSword_3": {
+      "name": "Regis Sword",
+      "category": "Weapons - Melee"
+    },
+    "LongRifle_Unique_LargeMag_06": {
+      "name": "Regis Tripleshot Repeating Rifle",
+      "category": "Misc"
+    },
+    "AtreLMG5": {
+      "name": "Regis Vulcan GAU-92",
+      "category": "Weapons - Ranged"
+    },
+    "SMG_Unique_LargeMag_05": {
+      "name": "Relentless",
+      "category": "Weapons - Ranged"
+    },
+    "Kindjal_Unique_Stamina_06": {
+      "name": "Replica Pulse-knife",
+      "category": "Weapons - Melee"
+    },
+    "UniqueSword_05": {
+      "name": "Replica Pulse-sword",
+      "category": "Weapons - Melee"
+    },
+    "RespawnBeacon": {
+      "name": "Respawn Beacon",
+      "category": "Tools"
+    },
+    "FullStabilizationBelt": {
+      "name": "Responsive Planar Suspensor Belt",
+      "category": "Tools"
+    },
+    "Combat_Light_Unique_ReduceSuspensor_Top_03": {
+      "name": "Rigged Suspensor Jacket",
+      "category": "Garments - Chest"
+    },
+    "UniqueScattergun2": {
+      "name": "Ripper",
+      "category": "Weapons - Ranged"
+    },
+    "OrnithopterTransportLocomotion_Unique_Speed_6": {
+      "name": "Roc Carrier Wing",
+      "category": "Vehicle Modules"
+    },
+    "RocketAmmo": {
+      "name": "Rocket",
+      "category": "Ammo"
+    },
+    "sjrlz": {
+      "name": "Run with Tarit!",
+      "category": "Misc"
+    },
+    "UniqueAr4": {
+      "name": "Salusan Vengeance",
+      "category": "Weapons - Ranged"
+    },
+    "ScrapMetal": {
+      "name": "Salvaged Metal",
+      "category": "Resources"
+    },
+    "SandbikeSeat_1": {
+      "name": "Sandbike Backseat Mk1",
+      "category": "Vehicle Modules"
+    },
+    "SandbikeBoost_2": {
+      "name": "Sandbike Booster Mk2",
+      "category": "Vehicle Modules"
+    },
+    "SandbikeBoost_3": {
+      "name": "Sandbike Booster Mk3",
+      "category": "Vehicle Modules"
+    },
+    "SandbikeBoost_4": {
+      "name": "Sandbike Booster Mk4",
+      "category": "Vehicle Modules"
+    },
+    "SandbikeBoost_5": {
+      "name": "Sandbike Booster Mk5",
+      "category": "Vehicle Modules"
+    },
+    "SandbikeBoost_6": {
+      "name": "Sandbike Booster Mk6",
+      "category": "Vehicle Modules"
+    },
+    "SandbikeChassis_1": {
+      "name": "Sandbike Chassis Mk1",
+      "category": "Vehicle Modules"
+    },
+    "SandbikeChassis_2": {
+      "name": "Sandbike Chassis Mk2",
+      "category": "Vehicle Modules"
+    },
+    "SandbikeChassis_3": {
+      "name": "Sandbike Chassis Mk3",
+      "category": "Vehicle Modules"
+    },
+    "SandbikeChassis_4": {
+      "name": "Sandbike Chassis Mk4",
+      "category": "Vehicle Modules"
+    },
+    "SandbikeChassis_5": {
+      "name": "Sandbike Chassis Mk5",
+      "category": "Vehicle Modules"
+    },
+    "SandbikeChassis_6": {
+      "name": "Sandbike Chassis Mk6",
+      "category": "Vehicle Modules"
+    },
+    "SandbikeEngine_1": {
+      "name": "Sandbike Engine Mk1",
+      "category": "Vehicle Modules"
+    },
+    "SandbikeEngine_2": {
+      "name": "Sandbike Engine Mk2",
+      "category": "Vehicle Modules"
+    },
+    "SandbikeEngine_3": {
+      "name": "Sandbike Engine Mk3",
+      "category": "Vehicle Modules"
+    },
+    "SandbikeEngine_4": {
+      "name": "Sandbike Engine Mk4",
+      "category": "Vehicle Modules"
+    },
+    "SandbikeEngine_5": {
+      "name": "Sandbike Engine Mk5",
+      "category": "Vehicle Modules"
+    },
+    "SandbikeEngine_6": {
+      "name": "Sandbike Engine Mk6",
+      "category": "Vehicle Modules"
+    },
+    "SandbikeHull_1": {
+      "name": "Sandbike Hull Mk1",
+      "category": "Vehicle Modules"
+    },
+    "SandbikeHull_2": {
+      "name": "Sandbike Hull Mk2",
+      "category": "Vehicle Modules"
+    },
+    "SandbikeHull_3": {
+      "name": "Sandbike Hull Mk3",
+      "category": "Vehicle Modules"
+    },
+    "SandbikeHull_4": {
+      "name": "Sandbike Hull Mk4",
+      "category": "Vehicle Modules"
+    },
+    "SandbikeHull_5": {
+      "name": "Sandbike Hull Mk5",
+      "category": "Vehicle Modules"
+    },
+    "SandbikeHull_6": {
+      "name": "Sandbike Hull Mk6",
+      "category": "Vehicle Modules"
+    },
+    "SandbikeInventory_1": {
+      "name": "Sandbike Inventory Mk1",
+      "category": "Vehicle Modules"
+    },
+    "SandbikeInventory_2": {
+      "name": "Sandbike Inventory Mk2",
+      "category": "Vehicle Modules"
+    },
+    "MTX_Neut_Miniature_Sandbike_Patent": {
+      "name": "Sandbike Miniature",
+      "category": "Vehicle Modules"
+    },
+    "SandbikeGenerator_1": {
+      "name": "Sandbike PSU Mk1",
+      "category": "Vehicle Modules"
+    },
+    "SandbikeGenerator_2": {
+      "name": "Sandbike PSU Mk2",
+      "category": "Vehicle Modules"
+    },
+    "SandbikeGenerator_3": {
+      "name": "Sandbike PSU Mk3",
+      "category": "Vehicle Modules"
+    },
+    "SandbikeGenerator_4": {
+      "name": "Sandbike PSU Mk4",
+      "category": "Vehicle Modules"
+    },
+    "SandbikeGenerator_5": {
+      "name": "Sandbike PSU Mk5",
+      "category": "Vehicle Modules"
+    },
+    "SandbikeGenerator_6": {
+      "name": "Sandbike PSU Mk6",
+      "category": "Vehicle Modules"
+    },
+    "SandbikeScanner_2": {
+      "name": "Sandbike Scanner Mk2",
+      "category": "Tools"
+    },
+    "SandbikeLocomotion_1": {
+      "name": "Sandbike Tread Mk1",
+      "category": "Vehicle Modules"
+    },
+    "SandbikeLocomotion_2": {
+      "name": "Sandbike Tread Mk2",
+      "category": "Vehicle Modules"
+    },
+    "SandbikeLocomotion_3": {
+      "name": "Sandbike Tread Mk3",
+      "category": "Vehicle Modules"
+    },
+    "SandbikeLocomotion_4": {
+      "name": "Sandbike Tread Mk4",
+      "category": "Vehicle Modules"
+    },
+    "SandbikeLocomotion_5": {
+      "name": "Sandbike Tread Mk5",
+      "category": "Vehicle Modules"
+    },
+    "SandbikeLocomotion_6": {
+      "name": "Sandbike Tread Mk6",
+      "category": "Vehicle Modules"
+    },
+    "SandcrawlerHull_6": {
+      "name": "Sandcrawler Cabin Mk6",
+      "category": "Vehicle Modules"
+    },
+    "SandcrawlerSpiceContainer_6": {
+      "name": "Sandcrawler Centrifuge Mk6",
+      "category": "Vehicle Modules"
+    },
+    "SandcrawlerChassis_6": {
+      "name": "Sandcrawler Chassis Mk6",
+      "category": "Vehicle Modules"
+    },
+    "SandcrawlerEngine_6": {
+      "name": "Sandcrawler Engine Mk6",
+      "category": "Vehicle Modules"
+    },
+    "SandcrawlerGenerator_6": {
+      "name": "Sandcrawler PSU Mk6",
+      "category": "Vehicle Modules"
+    },
+    "SandcrawlerLocomotion_6": {
+      "name": "Sandcrawler Tread Mk6",
+      "category": "Vehicle Modules"
+    },
+    "SandcrawlerSpiceHeader_6": {
+      "name": "Sandcrawler Vacuum Mk6",
+      "category": "Vehicle Modules"
+    },
+    "MiningTool_2h_Unique_02": {
+      "name": "Sandflies Carver",
+      "category": "Misc"
+    },
+    "k5ubg": {
+      "name": "Sandflies Transponder",
+      "category": "Misc"
+    },
+    "T4MaasKharetComponent1": {
+      "name": "Sandtrout Leathers",
+      "category": "Resources"
+    },
+    "SaphoJuice": {
+      "name": "Sapho Juice",
+      "category": "Consumables"
+    },
+    "UniqueSmg3": {
+      "name": "Sardaukar Intimidator",
+      "category": "Weapons - Ranged"
+    },
+    "Stillsuit_Unique_Armored_05_Boots": {
+      "name": "Saturnine Stillsuit Boots",
+      "category": "Resources"
+    },
+    "Stillsuit_Unique_Armored_05_Top": {
+      "name": "Saturnine Stillsuit Garment",
+      "category": "Resources"
+    },
+    "Stillsuit_Unique_Armored_05_Gloves": {
+      "name": "Saturnine Stillsuit Gloves",
+      "category": "Resources"
+    },
+    "Stillsuit_Unique_Armored_05_Mask": {
+      "name": "Saturnine Stillsuit Mask",
+      "category": "Resources"
+    },
+    "Combat_Nati_ScavengerRags02_Boots": {
+      "name": "Scavenger Boots",
+      "category": "Garments - Feet"
+    },
+    "Combat_Nati_ScavengerRags02_Top": {
+      "name": "Scavenger Chestpiece",
+      "category": "Garments - Chest"
+    },
+    "Combat_Nati_ScavengerRags02_Gloves": {
+      "name": "Scavenger Gloves",
+      "category": "Garments - Hands"
+    },
+    "Combat_Nati_ScavengerRags02_Helmet": {
+      "name": "Scavenger Hood",
+      "category": "Garments - Head"
+    },
+    "Combat_Nati_ScavengerRags02_Bottom": {
+      "name": "Scavenger Pants",
+      "category": "Garments - Legs"
+    },
+    "Stillsuit_Neut_Leaking01_Top": {
+      "name": "Scavenger Stillsuit Body",
+      "category": "Garments - Chest"
+    },
+    "Stillsuit_Neut_Leaking01_Boots": {
+      "name": "Scavenger Stillsuit Boots",
+      "category": "Garments - Feet"
+    },
+    "Stillsuit_Neut_Leaking01_Gloves": {
+      "name": "Scavenger Stillsuit Gloves",
+      "category": "Garments - Hands"
+    },
+    "Stillsuit_Neut_Leaking01_Mask": {
+      "name": "Scavenger Stillsuit Mask",
+      "category": "Garments - Head"
+    },
+    "Bloodsack_Unique_Durable_02": {
+      "name": "Scipio's Bloodbag",
+      "category": "Consumables"
+    },
+    "Kindjal_Unique_Blood_02": {
+      "name": "Scipio's Drinker",
+      "category": "Weapons - Melee"
+    },
+    "Flamethrower_Prototype": {
+      "name": "Scorchbolt",
+      "category": "Misc"
+    },
+    "OrnithopterLightChassis_4": {
+      "name": "Scout Ornithopter Chassis Mk4",
+      "category": "Vehicle Modules"
+    },
+    "OrnithopterLightChassis_5": {
+      "name": "Scout Ornithopter Chassis Mk5",
+      "category": "Vehicle Modules"
+    },
+    "OrnithopterLightChassis_6": {
+      "name": "Scout Ornithopter Chassis Mk6",
+      "category": "Vehicle Modules"
+    },
+    "OrnithopterLightHullFront_4": {
+      "name": "Scout Ornithopter Cockpit Mk4",
+      "category": "Vehicle Modules"
+    },
+    "OrnithopterLightHullFront_5": {
+      "name": "Scout Ornithopter Cockpit Mk5",
+      "category": "Vehicle Modules"
+    },
+    "OrnithopterLightHullFront_6": {
+      "name": "Scout Ornithopter Cockpit Mk6",
+      "category": "Vehicle Modules"
+    },
+    "OrnithopterLightEngine_4": {
+      "name": "Scout Ornithopter Engine Mk4",
+      "category": "Vehicle Modules"
+    },
+    "OrnithopterLightEngine_5": {
+      "name": "Scout Ornithopter Engine Mk5",
+      "category": "Vehicle Modules"
+    },
+    "OrnithopterLightEngine_6": {
+      "name": "Scout Ornithopter Engine Mk6",
+      "category": "Vehicle Modules"
+    },
+    "OrnithopterLightGenerator_4": {
+      "name": "Scout Ornithopter Generator Mk4",
+      "category": "Vehicle Modules"
+    },
+    "OrnithopterLightGenerator_5": {
+      "name": "Scout Ornithopter Generator Mk5",
+      "category": "Vehicle Modules"
+    },
+    "OrnithopterLightGenerator_6": {
+      "name": "Scout Ornithopter Generator Mk6",
+      "category": "Vehicle Modules"
+    },
+    "OrnithopterLightHullBack_4": {
+      "name": "Scout Ornithopter Hull Mk4",
+      "category": "Vehicle Modules"
+    },
+    "OrnithopterLightHullBack_5": {
+      "name": "Scout Ornithopter Hull Mk5",
+      "category": "Vehicle Modules"
+    },
+    "OrnithopterLightHullBack_6": {
+      "name": "Scout Ornithopter Hull Mk6",
+      "category": "Vehicle Modules"
+    },
+    "OrnithopterLightLauncher_5": {
+      "name": "Scout Ornithopter Rocket Launcher Mk5",
+      "category": "Ammo"
+    },
+    "OrnithopterLightLauncher_6": {
+      "name": "Scout Ornithopter Rocket Launcher Mk6",
+      "category": "Ammo"
+    },
+    "OrnithopterLightScanner_4": {
+      "name": "Scout Ornithopter Scan Module",
+      "category": "Vehicle Modules"
+    },
+    "OrnithopterLightInventory_4": {
+      "name": "Scout Ornithopter Storage Mk4",
+      "category": "Vehicle Modules"
+    },
+    "OrnithopterLightBoost_4": {
+      "name": "Scout Ornithopter Thruster Mk4",
+      "category": "Vehicle Modules"
+    },
+    "OrnithopterLightBoost_5": {
+      "name": "Scout Ornithopter Thruster Mk5",
+      "category": "Vehicle Modules"
+    },
+    "OrnithopterLightBoost_6": {
+      "name": "Scout Ornithopter Thruster Mk6",
+      "category": "Vehicle Modules"
+    },
+    "OrnithopterLightLocomotion_4": {
+      "name": "Scout Ornithopter Wing Mk4",
+      "category": "Vehicle Modules"
+    },
+    "OrnithopterLightLocomotion_5": {
+      "name": "Scout Ornithopter Wing Mk5",
+      "category": "Vehicle Modules"
+    },
+    "OrnithopterLightLocomotion_6": {
+      "name": "Scout Ornithopter Wing Mk6",
+      "category": "Vehicle Modules"
+    },
+    "BuggyChassis_0": {
+      "name": "Scrap Buggy Chassis",
+      "category": "Vehicle Modules"
+    },
+    "BuggyEngine_0": {
+      "name": "Scrap Buggy Engine",
+      "category": "Vehicle Modules"
+    },
+    "BuggyHullFront_0": {
+      "name": "Scrap Buggy Front Hull",
+      "category": "Vehicle Modules"
+    },
+    "BuggyGenerator_0": {
+      "name": "Scrap Buggy PSU",
+      "category": "Vehicle Modules"
+    },
+    "BuggyHullBack_0": {
+      "name": "Scrap Buggy Rear Hull",
+      "category": "Vehicle Modules"
+    },
+    "BuggyLocomotion_0": {
+      "name": "Scrap Buggy Tread",
+      "category": "Vehicle Modules"
+    },
+    "xlkqy": {
+      "name": "Scrap Metal Delivery",
+      "category": "Contract Items"
+    },
+    "ScrapMetalKnife": {
+      "name": "Scrap Metal Knife",
+      "category": "Weapons - Melee"
+    },
+    "SandbikeChassis_0": {
+      "name": "Scrap Sandbike Chassis",
+      "category": "Vehicle Modules"
+    },
+    "SandbikeEngine_0": {
+      "name": "Scrap Sandbike Engine",
+      "category": "Vehicle Modules"
+    },
+    "SandbikeSeat_0": {
+      "name": "Scrap Sandbike Extra Seat",
+      "category": "Vehicle Modules"
+    },
+    "SandbikeHull_0": {
+      "name": "Scrap Sandbike Hull",
+      "category": "Vehicle Modules"
+    },
+    "SandbikeGenerator_0": {
+      "name": "Scrap Sandbike Power Supply Unit",
+      "category": "Vehicle Modules"
+    },
+    "SandbikeLocomotion_0": {
+      "name": "Scrap Sandbike Tread",
+      "category": "Vehicle Modules"
+    },
+    "UniqueAr3": {
+      "name": "Scrubber",
+      "category": "Misc"
+    },
+    "ContractKirab2SpicePackage1": {
+      "name": "Sealed Spice Package",
+      "category": "Contract Items"
+    },
+    "UniqueDirk": {
+      "name": "Searing Shiv",
+      "category": "Weapons - Melee"
+    },
+    "SMG_Unique_LargeMag_03": {
+      "name": "Seb's Kisser",
+      "category": "Weapons - Ranged"
+    },
+    "Combat_Light_Unique_StaminaDmgIncrease_Helmet_06": {
+      "name": "Seeker Helmet",
+      "category": "Garments - Head"
+    },
+    "HeavyPistol_Unique_Headshot_06": {
+      "name": "Seethe",
+      "category": "Weapons - Ranged"
+    },
+    "D_ContractSemutaNotes": {
+      "name": "Semuta Notes",
+      "category": "Contract Items"
+    },
+    "ContractFactionMaximSemutaLogs": {
+      "name": "Semuta Trade Logs",
+      "category": "Contract Items"
+    },
+    "FullStabilizationBelt_Unique_DmgReduction": {
+      "name": "Sentinel Belt",
+      "category": "Misc"
+    },
+    "Combat_Neut_AtreidesDeserterUnique03_Boots": {
+      "name": "Sentinel Boots",
+      "category": "Garments - Feet"
+    },
+    "Combat_Neut_AtreidesDeserterUnique03_Gloves": {
+      "name": "Sentinel Gauntlets",
+      "category": "Garments - Hands"
+    },
+    "Combat_Neut_AtreidesDeserterUnique03_Helmet": {
+      "name": "Sentinel Helmet",
+      "category": "Garments - Head"
+    },
+    "Combat_Neut_AtreidesDeserterUnique03_Top": {
+      "name": "Sentinel Jacket",
+      "category": "Garments - Chest"
+    },
+    "Combat_Neut_AtreidesDeserterUnique03_Bottom": {
+      "name": "Sentinel Pants",
+      "category": "Garments - Legs"
+    },
+    "ContractSeronVarlinFenringChallenge": {
+      "name": "Seron's Challenge",
+      "category": "Contract Items"
+    },
+    "D_ContractSeronValkinSwordHilt": {
+      "name": "Seron's Sword Hilt",
+      "category": "Weapons - Melee"
+    },
+    "ContractKaraValkServoControl1": {
+      "name": "Servo-Stim Transmitter",
+      "category": "Contract Items"
+    },
+    "ContractKaraValkTransmitterFinal": {
+      "name": "Servo-Stimulator Transmitter",
+      "category": "Contract Items"
+    },
+    "Emperor_Paintings_Set_Patent": {
+      "name": "Shaddam IV Portraits",
+      "category": "Building"
+    },
+    "Stillsuit_Unique_HighCapacity_06_Top": {
+      "name": "Shaddam's Bladder",
+      "category": "Garments - Chest"
+    },
+    "Stillsuit_Unique_HeatMitigation_05_Mask": {
+      "name": "Shaded Hood",
+      "category": "Garments - Head"
+    },
+    "Stillsuit_Unique_HeatMitigation_04_Mask": {
+      "name": "Shadow Hood",
+      "category": "Garments - Head"
+    },
+    "Kindjal_Unique_Blood_04": {
+      "name": "Shadrath's Drinker",
+      "category": "Weapons - Melee"
+    },
+    "UniqueSda_Doubleshot_04": {
+      "name": "Shadrath's Edge",
+      "category": "Weapons - Ranged"
+    },
+    "Stillsuit_Unique_Armored_04_Boots": {
+      "name": "Shadrath's Stillsuit Boots",
+      "category": "Resources"
+    },
+    "Stillsuit_Unique_Armored_04_Top": {
+      "name": "Shadrath's Stillsuit Garment",
+      "category": "Resources"
+    },
+    "Stillsuit_Unique_Armored_04_Gloves": {
+      "name": "Shadrath's Stillsuit Gloves",
+      "category": "Resources"
+    },
+    "Stillsuit_Unique_Armored_04_Mask": {
+      "name": "Shadrath's Stillsuit Mask",
+      "category": "Resources"
+    },
+    "UniqueFlameThrower": {
+      "name": "Shaitan's Tongue",
+      "category": "Misc"
+    },
+    "UniqueScattergun_Fire_06": {
+      "name": "Shellburster",
+      "category": "Weapons - Ranged"
+    },
+    "JourneyShieldDissembler": {
+      "name": "Shield Dissembler",
+      "category": "Misc"
+    },
+    "D_ShigawireGarotte_deprecated": {
+      "name": "Shigawire Garotte",
+      "category": "Misc"
+    },
+    "JourneyShigawireGarrote": {
+      "name": "Shigawire Garrote",
+      "category": "Misc"
+    },
+    "LandsraadShipwreckComponent1": {
+      "name": "Ship Manifest",
+      "category": "Resources"
+    },
+    "UniqueSda_Doubleshot_06": {
+      "name": "Shishakli's Bite",
+      "category": "Weapons - Ranged"
+    },
+    "Combat_Heavy_Unique_PowerEfficient_Gloves_03": {
+      "name": "Shock Gauntlets",
+      "category": "Garments - Hands"
+    },
+    "Kindjal_Unique_Stamina_03": {
+      "name": "Shock-Knife",
+      "category": "Weapons - Melee"
+    },
+    "UniqueSword_02": {
+      "name": "Shock-sword",
+      "category": "Weapons - Melee"
+    },
+    "UniqueScattergun1": {
+      "name": "Shredder",
+      "category": "Weapons - Ranged"
+    },
+    "Silicone": {
+      "name": "Silicone Block",
+      "category": "Resources"
+    },
+    "MiningTool_1h_Unique_01": {
+      "name": "Sim's Cutter",
+      "category": "Misc"
+    },
+    "Sinkchart": {
+      "name": "Sinkchart",
+      "category": "Misc"
+    },
+    "Bloodsack_Unique_Durable_04": {
+      "name": "Sinner's Bloodbag",
+      "category": "Consumables"
+    },
+    "Combat_Light_Unique_BiomeHeat_Top_03": {
+      "name": "Skin-lined Jacket",
+      "category": "Garments - Chest"
+    },
+    "sftnj": {
+      "name": "Slave Shipping Ledger",
+      "category": "Contract Items"
+    },
+    "Combat_Choam_Heavy03_Boots": {
+      "name": "Slaver Heavy Boots",
+      "category": "Garments - Feet"
+    },
+    "Combat_Choam_Heavy03_Gloves": {
+      "name": "Slaver Heavy Gloves",
+      "category": "Garments - Hands"
+    },
+    "Combat_Choam_Heavy03_Helmet": {
+      "name": "Slaver Heavy Helmet",
+      "category": "Garments - Head"
+    },
+    "Combat_Choam_Heavy03_Top": {
+      "name": "Slaver Heavy Jerkin",
+      "category": "Garments - Chest"
+    },
+    "Combat_Choam_Heavy03_Bottom": {
+      "name": "Slaver Heavy Pants",
+      "category": "Garments - Legs"
+    },
+    "deday": {
+      "name": "Slaver Records",
+      "category": "Contract Items"
+    },
+    "Combat_Choam_Light03_Boots": {
+      "name": "Slaver Scout Boots",
+      "category": "Garments - Feet"
+    },
+    "Combat_Choam_Light03_Gloves": {
+      "name": "Slaver Scout Gloves",
+      "category": "Garments - Hands"
+    },
+    "Combat_Choam_Light03_Top": {
+      "name": "Slaver Scout Jacket",
+      "category": "Garments - Chest"
+    },
+    "Combat_Choam_Light03_Helmet": {
+      "name": "Slaver Scout Mask",
+      "category": "Garments - Head"
+    },
+    "Combat_Choam_Light03_Bottom": {
+      "name": "Slaver Scout Pants",
+      "category": "Garments - Legs"
+    },
+    "Stillsuit_Choam_01_Top": {
+      "name": "Slaver Stillsuit Body",
+      "category": "Garments - Chest"
+    },
+    "Stillsuit_Choam_01_Boots": {
+      "name": "Slaver Stillsuit Boots",
+      "category": "Garments - Feet"
+    },
+    "Stillsuit_Choam_01_Gloves": {
+      "name": "Slaver Stillsuit Golves",
+      "category": "Garments - Hands"
+    },
+    "Stillsuit_Choam_01_Mask": {
+      "name": "Slaver Stillsuit Mask",
+      "category": "Garments - Head"
+    },
+    "Bloodsack_01": {
+      "name": "Small Blood Sack",
+      "category": "Consumables"
+    },
+    "MTX_Atre_Movie_SmallCarpet_Patent": {
+      "name": "Small Carpet",
+      "category": "Building"
+    },
+    "FuelCanister": {
+      "name": "Small Vehicle Fuel Cell",
+      "category": "Fuel"
+    },
+    "D_ContractSmugglerDocuments": {
+      "name": "Smuggler Documents",
+      "category": "Contract Items"
+    },
+    "yhxzy": {
+      "name": "Smuggler Notes",
+      "category": "Contract Items"
+    },
+    "Combat_Light_Unique_WormThreat_Boots_02": {
+      "name": "Softstep Boots",
+      "category": "Garments - Feet"
+    },
+    "BuildingBlueprint_CopyDevice": {
+      "name": "Solido Replicator",
+      "category": "Misc"
+    },
+    "Kindjal_Unique_Stamina_04": {
+      "name": "Spark-Knife",
+      "category": "Weapons - Melee"
+    },
+    "UniqueSword_03": {
+      "name": "Spark-sword",
+      "category": "Weapons - Melee"
+    },
+    "MTX_Neut_Miniature_SpiceField_Patent": {
+      "name": "Spice Blow Miniature",
+      "category": "Building"
+    },
+    "mspam": {
+      "name": "Spice Field Records",
+      "category": "Contract Items"
+    },
+    "Combat_Light_SpiceMask": {
+      "name": "Spice Mask",
+      "category": "Garments"
+    },
+    "MelangeSpice": {
+      "name": "Spice Melange",
+      "category": "Resources"
+    },
+    "SpiceResidue": {
+      "name": "Spice Residue",
+      "category": "Resources"
+    },
+    "ContractSpiceResidueSample": {
+      "name": "Spice Residue Sample",
+      "category": "Resources"
+    },
+    "T4UniqueComponent": {
+      "name": "Spice-infused Aluminum Dust",
+      "category": "Resources"
+    },
+    "T1UniqueComponent": {
+      "name": "Spice-infused Copper Dust",
+      "category": "Resources"
+    },
+    "T5UniqueComponent": {
+      "name": "Spice-infused Duraluminum Dust",
+      "category": "Resources"
+    },
+    "SpicedFuelCell": {
+      "name": "Spice-infused Fuel Cell",
+      "category": "Misc"
+    },
+    "T2UniqueComponent": {
+      "name": "Spice-infused Iron Dust",
+      "category": "Resources"
+    },
+    "T6UniqueComponent": {
+      "name": "Spice-infused Plastanium Dust",
+      "category": "Resources"
+    },
+    "T3UniqueComponent": {
+      "name": "Spice-infused Steel Dust",
+      "category": "Resources"
+    },
+    "StakingUnit": {
+      "name": "Staking Unit",
+      "category": "Building"
+    },
+    "UniqueAr_Burst_04": {
+      "name": "Stammershot",
+      "category": "Misc"
+    },
+    "AtreSmg2": {
+      "name": "Standard Disruptor M11",
+      "category": "Weapons - Ranged"
+    },
+    "WindTrapFilter2": {
+      "name": "Standard Filter",
+      "category": "Resources"
+    },
+    "Scattergun_Prototype": {
+      "name": "Standard GRDA 44",
+      "category": "Weapons - Ranged"
+    },
+    "HarkAr3": {
+      "name": "Standard Karpov 38",
+      "category": "Misc"
+    },
+    "Kindjal_0": {
+      "name": "Standard Kindjal",
+      "category": "Weapons - Melee"
+    },
+    "ChoamSda3": {
+      "name": "Standard Maula Pistol",
+      "category": "Weapons - Ranged"
+    },
+    "CHOAMSword": {
+      "name": "Standard Sword",
+      "category": "Weapons - Melee"
+    },
+    "UniqueScattergun_Fire_05": {
+      "name": "Starburst",
+      "category": "Weapons - Ranged"
+    },
+    "ChoamCom1": {
+      "name": "Static Compactor",
+      "category": "Tools"
+    },
+    "UniqueRapier_Power_06": {
+      "name": "Static Needle",
+      "category": "Weapons - Melee"
+    },
+    "Combat_Light_Unique_BiomeHeat_Top_05": {
+      "name": "Station Garb",
+      "category": "Garments - Chest"
+    },
+    "Combat_Heavy_Unique_PowerEfficient_Gloves_05": {
+      "name": "Station Gauntlets",
+      "category": "Garments - Hands"
+    },
+    "OrnithopterMediumBoost_Unique_LessHeat_5": {
+      "name": "Steady Assault Boost Module Mk5",
+      "category": "Vehicle Modules"
+    },
+    "OrnithopterMediumBoost_Unique_LessHeat_6": {
+      "name": "Steady Assault Boost Module Mk6",
+      "category": "Vehicle Modules"
+    },
+    "OrnithopterTransportBoost_Unique_LessHeat_06": {
+      "name": "Steady Carrier Boost Module Mk6",
+      "category": "Vehicle Modules"
+    },
+    "SteelBar": {
+      "name": "Steel Ingot",
+      "category": "Resources"
+    },
+    "T4MaasKharetComponent2": {
+      "name": "Stillsuit Tubing",
+      "category": "Resources"
+    },
+    "Combat_Light_Unique_Stamina_Bottom_05": {
+      "name": "Stim-Leggings",
+      "category": "Garments - Legs"
+    },
+    "OrnithopterLightBoost_Unique_LessHeat_4": {
+      "name": "Stormrider Boost Module Mk4",
+      "category": "Vehicle Modules"
+    },
+    "OrnithopterLightBoost_Unique_LessHeat_5": {
+      "name": "Stormrider Boost Module Mk5",
+      "category": "Vehicle Modules"
+    },
+    "OrnithopterLightBoost_Unique_LessHeat_6": {
+      "name": "Stormrider Boost Module Mk6",
+      "category": "Vehicle Modules"
+    },
+    "T6RefinedResourceB": {
+      "name": "Stravidium Fiber",
+      "category": "Resources"
+    },
+    "T6ResourceB": {
+      "name": "Stravidium Mass",
+      "category": "Misc"
+    },
+    "JourneySubLeaderKey": {
+      "name": "Sub-Leader Key",
+      "category": "Misc"
+    },
+    "ContractHarkonnenPhraseBook": {
+      "name": "Surveillance Report",
+      "category": "Contract Items"
+    },
+    "SurveyProbe_1": {
+      "name": "Survey Probe",
+      "category": "Tools"
+    },
+    "SurveyProbeLauncher": {
+      "name": "Survey Probe Launcher",
+      "category": "Tools"
+    },
+    "ContractSlavers2FakedEvidence": {
+      "name": "Suspicious Message",
+      "category": "Contract Items"
+    },
+    "ArmorPack_Swordmaster": {
+      "name": "Swordmaster Armor Set",
+      "category": "Weapons - Melee"
+    },
+    "Combat_Hark_MedUnique01_Boots": {
+      "name": "Syndicate Boots",
+      "category": "Garments - Feet"
+    },
+    "Combat_Hark_MedUnique01_Top": {
+      "name": "Syndicate Chestplate",
+      "category": "Resources"
+    },
+    "ContractBG2SyndicateContract": {
+      "name": "Syndicate Contract",
+      "category": "Contract Items"
+    },
+    "Combat_Hark_MedUnique01_Gloves": {
+      "name": "Syndicate Gauntlets",
+      "category": "Garments - Hands"
+    },
+    "Combat_Hark_MedUnique01_Helmet": {
+      "name": "Syndicate Helmet",
+      "category": "Garments - Head"
+    },
+    "UniqueScattergun4": {
+      "name": "Syndicate Impaler",
+      "category": "Weapons - Ranged"
+    },
+    "Combat_Hark_MedUnique01_Bottom": {
+      "name": "Syndicate Pants",
+      "category": "Garments - Legs"
+    },
+    "Combat_Light_Unique_WormThreat_Boots_03": {
+      "name": "Ta'lab Softstep Boots",
+      "category": "Garments - Feet"
+    },
+    "Combat_Light_Unique_WormThreat_Boots_06": {
+      "name": "Tabr Softstep Boots",
+      "category": "Garments - Feet"
+    },
+    "ContractFactionTaintedSpiceContainer": {
+      "name": "Tainted Spice",
+      "category": "Contract Items"
+    },
+    "UniqueSda_Doubleshot_05": {
+      "name": "Taqwa's Double",
+      "category": "Weapons - Ranged"
+    },
+    "MiningTool_2h_Unique_03": {
+      "name": "Tarl Cutteray",
+      "category": "Tools"
+    },
+    "Combat_Light_Unique_WormThreat_Boots_05": {
+      "name": "Tarl Softstep Boots",
+      "category": "Garments - Feet"
+    },
+    "RocketLauncher_Unique_Homing_06": {
+      "name": "The Ancient Way",
+      "category": "Misc"
+    },
+    "Bloodsack_Unique_Durable_06": {
+      "name": "The Baron's Bloodbag",
+      "category": "Consumables"
+    },
+    "GlidePartialStabilizationBelt": {
+      "name": "The Emperor's Wings Mk1",
+      "category": "Misc"
+    },
+    "GlidePartialStabilizationBelt_02": {
+      "name": "The Emperor's Wings Mk2",
+      "category": "Misc"
+    },
+    "GlidePartialStabilizationBelt_03": {
+      "name": "The Emperor's Wings Mk3",
+      "category": "Misc"
+    },
+    "GlidePartialStabilizationBelt_04": {
+      "name": "The Emperor's Wings Mk4",
+      "category": "Misc"
+    },
+    "GlidePartialStabilizationBelt_05": {
+      "name": "The Emperor's Wings Mk5",
+      "category": "Misc"
+    },
+    "GlidePartialStabilizationBelt_06": {
+      "name": "The Emperor's Wings Mk6",
+      "category": "Misc"
+    },
+    "Combat_Hark_MedUnique02_Boots": {
+      "name": "The Forge Boots",
+      "category": "Garments - Feet"
+    },
+    "Combat_Hark_MedUnique02_Top": {
+      "name": "The Forge Chestpiece",
+      "category": "Garments - Chest"
+    },
+    "Combat_Hark_MedUnique02_Gloves": {
+      "name": "The Forge Gloves",
+      "category": "Garments - Hands"
+    },
+    "Combat_Hark_MedUnique02_Helmet": {
+      "name": "The Forge Helmet",
+      "category": "Garments - Head"
+    },
+    "Combat_Hark_MedUnique02_Bottom": {
+      "name": "The Forge Pants",
+      "category": "Garments - Legs"
+    },
+    "Hook_01": {
+      "name": "The Glutton's Hook",
+      "category": "Misc"
+    },
+    "vjkv3": {
+      "name": "The Guerilla in the Desert",
+      "category": "Misc"
+    },
+    "Combat_Light_Unique_Story_Jackal_Helmet": {
+      "name": "The Jackal's Blindfold",
+      "category": "Garments - Head"
+    },
+    "ContractBG1Doc2": {
+      "name": "The Mahdi's Blade",
+      "category": "Contract Items"
+    },
+    "ContractKirab2Contract5": {
+      "name": "The Man in the Shadows",
+      "category": "Contract Items"
+    },
+    "UniqueAr1": {
+      "name": "The Tapper",
+      "category": "Misc"
+    },
+    "T6RayAmplifier": {
+      "name": "Thermo-Responsive Ray Amplifier",
+      "category": "Misc"
+    },
+    "T5DeepDesertShieldWallComponent": {
+      "name": "Thermoelectric Cooler",
+      "category": "Resources"
+    },
+    "LongRifle_Unique_Poison_05": {
+      "name": "Thufir's Best",
+      "category": "Misc"
+    },
+    "T6ResourceA": {
+      "name": "Titanium Ore",
+      "category": "Resources"
+    },
+    "ContractZaynDeWitteTleilaxuDatapad": {
+      "name": "Tleilaxu Datapad",
+      "category": "Contract Items"
+    },
+    "D_ContractSeronValkinTleilaxuEyes": {
+      "name": "Tleilaxu Eyes",
+      "category": "Contract Items"
+    },
+    "MTX_Neut_DesertMechanicSet_Toolbox_Patent": {
+      "name": "Toolbox",
+      "category": "Building"
+    },
+    "T6HydraulicPiston": {
+      "name": "Tri-Forged Hydraulic Piston",
+      "category": "Resources"
+    },
+    "ArmorPack_Trooper": {
+      "name": "Trooper Armor Set",
+      "category": "Garments"
+    },
+    "lhi1g": {
+      "name": "Trout Leather Delivery",
+      "category": "Contract Items"
+    },
+    "Crysknife": {
+      "name": "Unfixed Crysknife",
+      "category": "Weapons - Melee"
+    },
+    "ojwn1": {
+      "name": "Unmarked Package",
+      "category": "Contract Items"
+    },
+    "SandcrawlerSpiceContainer_Unique_Capacity_6": {
+      "name": "Upgraded Regis Spice Container",
+      "category": "Vehicle Modules"
+    },
+    "UniqueFlameThrower_02": {
+      "name": "Vaporizer",
+      "category": "Misc"
+    },
+    "VehicleBackupTool": {
+      "name": "Vehicle Backup Tool",
+      "category": "Vehicle Modules"
+    },
+    "StakingUnitVertical": {
+      "name": "Vertical Staking Unit",
+      "category": "Building"
+    },
+    "Stillsuit_Unique_Efficient_06_Boots": {
+      "name": "Villari's Stillsuit Boots",
+      "category": "Garments - Feet"
+    },
+    "Stillsuit_Unique_Efficient_06_Top": {
+      "name": "Villari's Stillsuit Garment",
+      "category": "Garments - Chest"
+    },
+    "Stillsuit_Unique_Efficient_06_Gloves": {
+      "name": "Villari's Stillsuit Gloves",
+      "category": "Garments - Hands"
+    },
+    "Stillsuit_Unique_Efficient_06_Mask": {
+      "name": "Villari's Stillsuit Mask",
+      "category": "Garments - Head"
+    },
+    "SandcrawlerEngine_Unique_Speed_06": {
+      "name": "Walker Sandcrawler Engine Mk6",
+      "category": "Vehicle Modules"
+    },
+    "DewReaper_Unique_Story": {
+      "name": "Water Shipper's Dew Reaper",
+      "category": "Tools"
+    },
+    "UniqueSda5": {
+      "name": "Way of the Desert",
+      "category": "Weapons - Ranged"
+    },
+    "UniqueSda1": {
+      "name": "Way of the Fallen",
+      "category": "Weapons - Ranged"
+    },
+    "UniqueSda4": {
+      "name": "Way of the Fighter",
+      "category": "Weapons - Ranged"
+    },
+    "UniqueSda3": {
+      "name": "Way of the Lost",
+      "category": "Weapons - Ranged"
+    },
+    "UniqueSda6": {
+      "name": "Way of the Misr",
+      "category": "Weapons - Ranged"
+    },
+    "UniqueSda2": {
+      "name": "Way of the Wanderer",
+      "category": "Weapons - Ranged"
+    },
+    "Combat_Light_Unique_Scanning_Helmet_05": {
+      "name": "Wayfinder Helm",
+      "category": "Garments - Head"
+    },
+    "RepairTool": {
+      "name": "Welding Torch Mk1",
+      "category": "Tools"
+    },
+    "RepairTool3": {
+      "name": "Welding Torch Mk3",
+      "category": "Tools"
+    },
+    "RepairTool5": {
+      "name": "Welding Torch Mk5",
+      "category": "Tools"
+    },
+    "WeldingMaterial": {
+      "name": "Welding Wire",
+      "category": "Resources"
+    },
+    "WormTooth": {
+      "name": "Worm Tooth",
+      "category": "Resources"
+    },
+    "D_Combat_Nati_WovenFiber01_Shoes": {
+      "name": "Woven Fiber Boots",
+      "category": "Resources"
+    },
+    "D_Combat_Nati_WovenFiber01_Top": {
+      "name": "Woven Fiber Chestpiece",
+      "category": "Resources"
+    },
+    "D_Combat_Nati_WovenFiber01_Gloves": {
+      "name": "Woven Fiber Gloves",
+      "category": "Resources"
+    },
+    "D_Combat_Nati_WovenFiber01_Helmet": {
+      "name": "Woven Fiber Helmet",
+      "category": "Resources"
+    },
+    "D_Combat_Nati_WovenFiber01_Bottom": {
+      "name": "Woven Fiber Pants",
+      "category": "Resources"
+    },
+    "D_ContractWrappedPackage": {
+      "name": "Wrapped Package",
+      "category": "Contract Items"
+    },
+    "PowerPack_Unique_Regen_05": {
+      "name": "Young Sparky Mk5",
+      "category": "Misc"
+    },
+    "PowerPack_Unique_Regen_06": {
+      "name": "Young Sparky Mk6",
+      "category": "Misc"
+    },
+    "Combat_Light_Unique_DewReap_Gloves_06": {
+      "name": "Yueh's Reaper Gloves",
+      "category": "Garments - Hands"
+    },
+    "UniqueAr_Burst_03": {
+      "name": "Zaal's Companion",
+      "category": "Misc"
+    },
+    "Crysknife_Story_Zantara": {
+      "name": "Zantara's Crysknife",
+      "category": "Weapons - Melee"
+    },
+    "ZantaraSignetRing": {
+      "name": "Zantara's Signet Ring",
+      "category": "Misc"
+    },
+    "ContractZaynDeWitteDeserterMinimicFilm": {
+      "name": "Zayn's Minimic Film",
+      "category": "Contract Items"
+    }
+  }
+}

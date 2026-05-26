@@ -1,0 +1,372 @@
+<!--
+  Theme.xaml - Dune Server Tool v6.0
+  ResourceDictionary loaded by DuneServer.ps1 to centralize the v6 visual
+  language: colors, brushes, sidebar styles, card styles, form controls,
+  status pills, and the dune-ridge accent geometry used in section headers.
+
+  Additive only - does not override the v5.0.2 button styles defined inline
+  in DuneServer.ps1. Pages built on top of this dictionary use the keys
+  defined here.
+
+  Palette continuity:
+    Bg               #14110D    warm dark base (existing)
+    BgDeep           #0D0907    deeper, used behind the sidebar
+    BgSoft           #1F1813    panel inner surface
+    Border           #3A2818    standard divider
+    BorderSoft       #2A2018    quiet divider (inside sidebar groups)
+    Gold             #E8B872    primary accent (existing)
+    GoldBright       #FFD9A0    hover / glow accent
+    GoldDim          #8B6914    text-on-muted
+    Bronze1/2/3      #7A5524 / #3A2818 / #1A100A   brand-bar gradient
+    Cyan             #4FC3F7    focus glow (existing)
+    Text             #F0E8D8    primary text
+    TextDim          #9A8E78    secondary text
+    Good             #6FCF7C    healthy state
+    Bad              #E86A6A    error state
+    Warn             #E8B872    caution (re-uses Gold)
+-->
+<ResourceDictionary
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:sys="clr-namespace:System;assembly=mscorlib">
+
+  <!-- ============================================================== -->
+  <!--  Colors                                                         -->
+  <!-- ============================================================== -->
+  <Color x:Key="BgColor">         #FF14110D </Color>
+  <Color x:Key="BgDeepColor">     #FF0D0907 </Color>
+  <Color x:Key="BgSoftColor">     #FF1F1813 </Color>
+  <Color x:Key="BorderColor">     #FF3A2818 </Color>
+  <Color x:Key="BorderSoftColor"> #FF2A2018 </Color>
+  <Color x:Key="GoldColor">       #FFE8B872 </Color>
+  <Color x:Key="GoldBrightColor"> #FFFFD9A0 </Color>
+  <Color x:Key="GoldDimColor">    #FF8B6914 </Color>
+  <Color x:Key="Bronze1Color">    #FF7A5524 </Color>
+  <Color x:Key="Bronze2Color">    #FF3A2818 </Color>
+  <Color x:Key="Bronze3Color">    #FF1A100A </Color>
+  <Color x:Key="CyanColor">       #FF4FC3F7 </Color>
+  <Color x:Key="TextColor">       #FFF0E8D8 </Color>
+  <Color x:Key="TextDimColor">    #FF9A8E78 </Color>
+  <Color x:Key="GoodColor">       #FF6FCF7C </Color>
+  <Color x:Key="BadColor">        #FFE86A6A </Color>
+  <Color x:Key="WarnColor">       #FFE8B872 </Color>
+
+  <!-- ============================================================== -->
+  <!--  Solid brushes                                                  -->
+  <!-- ============================================================== -->
+  <SolidColorBrush x:Key="BgBrush"         Color="{StaticResource BgColor}"/>
+  <SolidColorBrush x:Key="BgDeepBrush"     Color="{StaticResource BgDeepColor}"/>
+  <SolidColorBrush x:Key="BgSoftBrush"     Color="{StaticResource BgSoftColor}"/>
+  <SolidColorBrush x:Key="BorderBrush"     Color="{StaticResource BorderColor}"/>
+  <SolidColorBrush x:Key="BorderSoftBrush" Color="{StaticResource BorderSoftColor}"/>
+  <SolidColorBrush x:Key="GoldBrush"       Color="{StaticResource GoldColor}"/>
+  <SolidColorBrush x:Key="GoldBrightBrush" Color="{StaticResource GoldBrightColor}"/>
+  <SolidColorBrush x:Key="GoldDimBrush"    Color="{StaticResource GoldDimColor}"/>
+  <SolidColorBrush x:Key="CyanBrush"       Color="{StaticResource CyanColor}"/>
+  <SolidColorBrush x:Key="TextBrush"       Color="{StaticResource TextColor}"/>
+  <SolidColorBrush x:Key="TextDimBrush"    Color="{StaticResource TextDimColor}"/>
+  <SolidColorBrush x:Key="GoodBrush"       Color="{StaticResource GoodColor}"/>
+  <SolidColorBrush x:Key="BadBrush"        Color="{StaticResource BadColor}"/>
+  <SolidColorBrush x:Key="WarnBrush"       Color="{StaticResource WarnColor}"/>
+
+  <!-- ============================================================== -->
+  <!--  Gradient brushes                                               -->
+  <!-- ============================================================== -->
+
+  <!--  Bronze brand bar (sidebar top + page-header chrome).
+       Identical stops to the v4.0.3 button gradient so new chrome
+       feels like the same app.                                       -->
+  <LinearGradientBrush x:Key="BronzeBarBrush" StartPoint="0,0" EndPoint="0,1">
+    <GradientStop Color="{StaticResource Bronze1Color}" Offset="0"/>
+    <GradientStop Color="{StaticResource Bronze2Color}" Offset="0.6"/>
+    <GradientStop Color="{StaticResource Bronze3Color}" Offset="1"/>
+  </LinearGradientBrush>
+
+  <!--  Sidebar background - subtle vertical fade to set it apart from
+       the page area without breaking the warm palette.               -->
+  <LinearGradientBrush x:Key="SidebarBgBrush" StartPoint="0,0" EndPoint="0,1">
+    <GradientStop Color="{StaticResource BgDeepColor}" Offset="0"/>
+    <GradientStop Color="#FF0A0705" Offset="1"/>
+  </LinearGradientBrush>
+
+  <!--  Card / tile surface - matches the existing button gradient
+       palette so tiles and buttons read as the same material.        -->
+  <LinearGradientBrush x:Key="TileBgBrush" StartPoint="0,0" EndPoint="1,1">
+    <GradientStop Color="{StaticResource BgSoftColor}" Offset="0"/>
+    <GradientStop Color="{StaticResource BgColor}"     Offset="0.6"/>
+    <GradientStop Color="{StaticResource Bronze3Color}" Offset="1"/>
+  </LinearGradientBrush>
+
+  <!--  Glowing tile (hero card on the Dashboard).                    -->
+  <RadialGradientBrush x:Key="TileGlowBgBrush" GradientOrigin="0.5,0" Center="0.5,0" RadiusX="1" RadiusY="0.8">
+    <GradientStop Color="#332E2316" Offset="0"/>
+    <GradientStop Color="{StaticResource BgColor}" Offset="0.7"/>
+    <GradientStop Color="{StaticResource Bronze3Color}" Offset="1"/>
+  </RadialGradientBrush>
+
+  <!--  Page area background - warm radial highlight in the top-right
+       corner to break up the flatness of large panes.                -->
+  <RadialGradientBrush x:Key="PageBgBrush" GradientOrigin="1,0" Center="1,0" RadiusX="1.4" RadiusY="1">
+    <GradientStop Color="#1AE8B872" Offset="0"/>
+    <GradientStop Color="{StaticResource BgColor}" Offset="0.6"/>
+    <GradientStop Color="#FF100D09" Offset="1"/>
+  </RadialGradientBrush>
+
+  <!--  Active sidebar item highlight (left-to-right fade).            -->
+  <LinearGradientBrush x:Key="SidebarActiveFillBrush" StartPoint="0,0" EndPoint="1,0">
+    <GradientStop Color="#38E8B872" Offset="0"/>
+    <GradientStop Color="#00E8B872" Offset="1"/>
+  </LinearGradientBrush>
+
+  <!--  Hover overlay for sidebar items.                               -->
+  <SolidColorBrush x:Key="SidebarHoverBrush" Color="#10E8B872"/>
+
+  <!--  Pill backgrounds.                                              -->
+  <SolidColorBrush x:Key="PillBgBrush"   Color="#0AFFFFFF"/>
+  <SolidColorBrush x:Key="PillGoodFill"  Color="#306FCF7C"/>
+  <SolidColorBrush x:Key="PillBadFill"   Color="#30E86A6A"/>
+  <SolidColorBrush x:Key="PillWarnFill"  Color="#30E8B872"/>
+
+  <!-- ============================================================== -->
+  <!--  Drop-shadow effects                                            -->
+  <!-- ============================================================== -->
+  <DropShadowEffect x:Key="CardShadow" Color="#000000" ShadowDepth="3" BlurRadius="14" Opacity="0.6"/>
+  <DropShadowEffect x:Key="GoldGlow"   Color="#E8B872" ShadowDepth="0" BlurRadius="16" Opacity="0.55"/>
+  <DropShadowEffect x:Key="CyanGlow"   Color="#4FC3F7" ShadowDepth="0" BlurRadius="18" Opacity="0.85"/>
+
+  <!-- ============================================================== -->
+  <!--  Dune-ridge accent path (used in section headers)               -->
+  <!--                                                                 -->
+  <!--  Two stacked dune silhouettes. Stretches horizontally as a      -->
+  <!--  Viewbox/Path. Use via:                                         -->
+  <!--    <Viewbox Stretch="Fill" Height="14">                         -->
+  <!--      <Path Data="{StaticResource DuneRidgeGeometry}"            -->
+  <!--            Fill="{StaticResource GoldBrush}" Opacity="0.55"/>   -->
+  <!--    </Viewbox>                                                   -->
+  <!-- ============================================================== -->
+  <PathGeometry x:Key="DuneRidgeGeometry"
+                Figures="M0 11 Q40 4 80 9 T160 8 T240 10 T320 7 T400 9 T480 6 T560 9 T600 8 L600 14 L0 14 Z"/>
+
+  <PathGeometry x:Key="DuneRidgeBackGeometry"
+                Figures="M0 13 Q60 9 120 12 T240 11 T360 13 T480 10 T600 12 L600 14 L0 14 Z"/>
+
+  <!-- ============================================================== -->
+  <!--  Sidebar wordmark style                                         -->
+  <!-- ============================================================== -->
+  <Style x:Key="SidebarBrandStyle" TargetType="TextBlock">
+    <Setter Property="Foreground"   Value="{StaticResource GoldBrush}"/>
+    <Setter Property="FontFamily"   Value="Cinzel, Trajan Pro, Georgia"/>
+    <Setter Property="FontSize"     Value="13"/>
+    <Setter Property="FontWeight"   Value="SemiBold"/>
+    <Setter Property="Padding"      Value="16,14,16,14"/>
+    <Setter Property="TextAlignment" Value="Left"/>
+  </Style>
+
+  <!-- ============================================================== -->
+  <!--  Sidebar group label ("Operate", "Manage", "System")            -->
+  <!-- ============================================================== -->
+  <Style x:Key="SidebarGroupLabelStyle" TargetType="TextBlock">
+    <Setter Property="Foreground" Value="#FF5A4A30"/>
+    <Setter Property="FontSize"   Value="10"/>
+    <Setter Property="FontWeight" Value="SemiBold"/>
+    <Setter Property="Margin"     Value="16,14,16,4"/>
+    <Setter Property="Text"       Value="LABEL"/>
+  </Style>
+
+  <!-- ============================================================== -->
+  <!--  Sidebar item (icon + label, ToggleButton-based for selection)  -->
+  <!--                                                                 -->
+  <!--  We use RadioButton so the selection model is automatic across  -->
+  <!--  the sidebar's items grouped by GroupName="SidebarNav".         -->
+  <!-- ============================================================== -->
+  <Style x:Key="SidebarItemStyle" TargetType="RadioButton">
+    <Setter Property="Foreground"     Value="{StaticResource TextDimBrush}"/>
+    <Setter Property="Background"     Value="Transparent"/>
+    <Setter Property="BorderBrush"    Value="Transparent"/>
+    <Setter Property="BorderThickness" Value="3,0,0,0"/>
+    <Setter Property="Padding"        Value="14,9,14,9"/>
+    <Setter Property="FontSize"       Value="13"/>
+    <Setter Property="Cursor"         Value="Hand"/>
+    <Setter Property="Focusable"      Value="True"/>
+    <Setter Property="HorizontalContentAlignment" Value="Stretch"/>
+    <Setter Property="Template">
+      <Setter.Value>
+        <ControlTemplate TargetType="RadioButton">
+          <Border x:Name="root"
+                  Background="{TemplateBinding Background}"
+                  BorderBrush="{TemplateBinding BorderBrush}"
+                  BorderThickness="{TemplateBinding BorderThickness}"
+                  Padding="{TemplateBinding Padding}">
+            <ContentPresenter HorizontalAlignment="Stretch" VerticalAlignment="Center"
+                              TextBlock.Foreground="{TemplateBinding Foreground}"/>
+          </Border>
+          <ControlTemplate.Triggers>
+            <Trigger Property="IsMouseOver" Value="True">
+              <Setter TargetName="root" Property="Background" Value="{StaticResource SidebarHoverBrush}"/>
+              <Setter Property="Foreground" Value="{StaticResource TextBrush}"/>
+            </Trigger>
+            <Trigger Property="IsChecked" Value="True">
+              <Setter TargetName="root" Property="Background" Value="{StaticResource SidebarActiveFillBrush}"/>
+              <Setter TargetName="root" Property="BorderBrush" Value="{StaticResource GoldBrush}"/>
+              <Setter Property="Foreground" Value="{StaticResource GoldBrightBrush}"/>
+            </Trigger>
+            <Trigger Property="IsKeyboardFocused" Value="True">
+              <Setter TargetName="root" Property="Effect" Value="{StaticResource CyanGlow}"/>
+            </Trigger>
+          </ControlTemplate.Triggers>
+        </ControlTemplate>
+      </Setter.Value>
+    </Setter>
+  </Style>
+
+  <!-- ============================================================== -->
+  <!--  Collapse toggle (the icon-only button at the bottom of the     -->
+  <!--  sidebar that flips between 200px and 56px widths).             -->
+  <!-- ============================================================== -->
+  <Style x:Key="SidebarCollapseStyle" TargetType="Button">
+    <Setter Property="Background" Value="Transparent"/>
+    <Setter Property="BorderBrush" Value="{StaticResource BorderSoftBrush}"/>
+    <Setter Property="BorderThickness" Value="0,1,0,0"/>
+    <Setter Property="Foreground" Value="{StaticResource TextDimBrush}"/>
+    <Setter Property="Cursor" Value="Hand"/>
+    <Setter Property="Padding" Value="10,8"/>
+    <Setter Property="HorizontalContentAlignment" Value="Center"/>
+    <Setter Property="Template">
+      <Setter.Value>
+        <ControlTemplate TargetType="Button">
+          <Border x:Name="root" Background="{TemplateBinding Background}"
+                  BorderBrush="{TemplateBinding BorderBrush}"
+                  BorderThickness="{TemplateBinding BorderThickness}"
+                  Padding="{TemplateBinding Padding}">
+            <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"
+                              TextBlock.Foreground="{TemplateBinding Foreground}"/>
+          </Border>
+          <ControlTemplate.Triggers>
+            <Trigger Property="IsMouseOver" Value="True">
+              <Setter TargetName="root" Property="Background" Value="{StaticResource SidebarHoverBrush}"/>
+              <Setter Property="Foreground" Value="{StaticResource GoldBrush}"/>
+            </Trigger>
+          </ControlTemplate.Triggers>
+        </ControlTemplate>
+      </Setter.Value>
+    </Setter>
+  </Style>
+
+  <!-- ============================================================== -->
+  <!--  Card / Tile (Dashboard hero + stat tiles, panel surfaces)      -->
+  <!-- ============================================================== -->
+  <Style x:Key="TileCardStyle" TargetType="Border">
+    <Setter Property="Background"     Value="{StaticResource TileBgBrush}"/>
+    <Setter Property="BorderBrush"    Value="{StaticResource BorderBrush}"/>
+    <Setter Property="BorderThickness" Value="1"/>
+    <Setter Property="CornerRadius"   Value="8"/>
+    <Setter Property="Padding"        Value="16"/>
+    <Setter Property="Effect"         Value="{StaticResource CardShadow}"/>
+  </Style>
+
+  <Style x:Key="TileGlowCardStyle" TargetType="Border" BasedOn="{StaticResource TileCardStyle}">
+    <Setter Property="Background" Value="{StaticResource TileGlowBgBrush}"/>
+    <Setter Property="BorderBrush" Value="{StaticResource GoldDimBrush}"/>
+  </Style>
+
+  <Style x:Key="PanelCardStyle" TargetType="Border" BasedOn="{StaticResource TileCardStyle}">
+    <Setter Property="Padding" Value="18,16"/>
+    <Setter Property="Margin"  Value="0,0,0,16"/>
+  </Style>
+
+  <!-- Standard text styles inside cards. -->
+  <Style x:Key="TileLabelStyle" TargetType="TextBlock">
+    <Setter Property="Foreground" Value="{StaticResource TextDimBrush}"/>
+    <Setter Property="FontSize"   Value="10"/>
+    <Setter Property="FontWeight" Value="SemiBold"/>
+    <Setter Property="Margin"     Value="0,0,0,6"/>
+  </Style>
+  <Style x:Key="TileValueStyle" TargetType="TextBlock">
+    <Setter Property="Foreground" Value="{StaticResource GoldBrightBrush}"/>
+    <Setter Property="FontFamily" Value="Consolas, JetBrains Mono"/>
+    <Setter Property="FontSize"   Value="22"/>
+    <Setter Property="FontWeight" Value="SemiBold"/>
+  </Style>
+  <Style x:Key="TileSubStyle" TargetType="TextBlock">
+    <Setter Property="Foreground" Value="{StaticResource TextDimBrush}"/>
+    <Setter Property="FontFamily" Value="Consolas, JetBrains Mono"/>
+    <Setter Property="FontSize"   Value="11"/>
+    <Setter Property="Margin"     Value="0,4,0,0"/>
+  </Style>
+  <Style x:Key="PanelTitleStyle" TargetType="TextBlock">
+    <Setter Property="Foreground" Value="{StaticResource GoldBrush}"/>
+    <Setter Property="FontSize"   Value="13"/>
+    <Setter Property="FontWeight" Value="SemiBold"/>
+  </Style>
+
+  <!-- ============================================================== -->
+  <!--  Section header (page title + dune-ridge fill)                  -->
+  <!-- ============================================================== -->
+  <Style x:Key="SectionHeadTitleStyle" TargetType="TextBlock">
+    <Setter Property="Foreground" Value="{StaticResource GoldBrush}"/>
+    <Setter Property="FontFamily" Value="Cinzel, Trajan Pro, Georgia"/>
+    <Setter Property="FontSize"   Value="16"/>
+    <Setter Property="FontWeight" Value="SemiBold"/>
+    <Setter Property="VerticalAlignment" Value="Center"/>
+  </Style>
+
+  <!-- ============================================================== -->
+  <!--  Status pill                                                    -->
+  <!-- ============================================================== -->
+  <Style x:Key="PillBaseStyle" TargetType="Border">
+    <Setter Property="CornerRadius"  Value="999"/>
+    <Setter Property="Padding"       Value="10,3"/>
+    <Setter Property="Background"    Value="{StaticResource PillBgBrush}"/>
+    <Setter Property="BorderBrush"   Value="{StaticResource BorderBrush}"/>
+    <Setter Property="BorderThickness" Value="1"/>
+  </Style>
+  <Style x:Key="PillGoodStyle" TargetType="Border" BasedOn="{StaticResource PillBaseStyle}">
+    <Setter Property="Background"  Value="{StaticResource PillGoodFill}"/>
+    <Setter Property="BorderBrush" Value="{StaticResource GoodBrush}"/>
+  </Style>
+  <Style x:Key="PillBadStyle" TargetType="Border" BasedOn="{StaticResource PillBaseStyle}">
+    <Setter Property="Background"  Value="{StaticResource PillBadFill}"/>
+    <Setter Property="BorderBrush" Value="{StaticResource BadBrush}"/>
+  </Style>
+  <Style x:Key="PillWarnStyle" TargetType="Border" BasedOn="{StaticResource PillBaseStyle}">
+    <Setter Property="Background"  Value="{StaticResource PillWarnFill}"/>
+    <Setter Property="BorderBrush" Value="{StaticResource WarnBrush}"/>
+  </Style>
+
+  <!-- ============================================================== -->
+  <!--  Form controls (used by Game Config, Character Editor, Setup)   -->
+  <!-- ============================================================== -->
+  <Style x:Key="DuneTextBoxStyle" TargetType="TextBox">
+    <Setter Property="Background"      Value="{StaticResource BgSoftBrush}"/>
+    <Setter Property="Foreground"      Value="{StaticResource TextBrush}"/>
+    <Setter Property="BorderBrush"     Value="{StaticResource BorderBrush}"/>
+    <Setter Property="BorderThickness" Value="1"/>
+    <Setter Property="Padding"         Value="8,5"/>
+    <Setter Property="CaretBrush"      Value="{StaticResource GoldBrush}"/>
+    <Setter Property="SelectionBrush"  Value="{StaticResource GoldDimBrush}"/>
+    <Setter Property="FontFamily"      Value="Consolas, JetBrains Mono"/>
+    <Setter Property="FontSize"        Value="13"/>
+    <Style.Triggers>
+      <Trigger Property="IsKeyboardFocused" Value="True">
+        <Setter Property="BorderBrush" Value="{StaticResource GoldBrush}"/>
+        <Setter Property="Effect"      Value="{StaticResource CyanGlow}"/>
+      </Trigger>
+    </Style.Triggers>
+  </Style>
+
+  <Style x:Key="DuneCheckBoxStyle" TargetType="CheckBox">
+    <Setter Property="Foreground" Value="{StaticResource TextBrush}"/>
+    <Setter Property="FontSize"   Value="13"/>
+    <Setter Property="Margin"     Value="0,2"/>
+    <Setter Property="Cursor"     Value="Hand"/>
+  </Style>
+
+  <!-- ============================================================== -->
+  <!--  Page-host content container (matches D1 layout proportions)    -->
+  <!-- ============================================================== -->
+  <Style x:Key="PageRootStyle" TargetType="Border">
+    <Setter Property="Background" Value="{StaticResource PageBgBrush}"/>
+    <Setter Property="Padding"    Value="22,18,22,22"/>
+  </Style>
+
+</ResourceDictionary>
