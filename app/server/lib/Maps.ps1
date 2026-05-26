@@ -52,7 +52,7 @@ function Get-DuneMapsContext {
 }
 
 function _Find-DuneMapSets {
-    # Returns @( @{ Idx; Map; Partitions; Replicas; DedicatedScaling } )
+    # Returns @( @{ Idx; Map; Partitions; HasPartitionsField; Replicas; DedicatedScaling } )
     param([Parameter(Mandatory)]$Bg, [Parameter(Mandatory)][string]$Pattern)
     $matches = @()
     $sets = $Bg.spec.serverGroup.template.spec.sets
@@ -63,12 +63,19 @@ function _Find-DuneMapSets {
             if ($s.PSObject.Properties['dedicatedScaling']) { $isDedicated = [bool]$s.dedicatedScaling }
             $replicas = $null
             if ($s.PSObject.Properties['replicas']) { $replicas = [int]$s.replicas }
+            $hasPartField = $false
+            $partIds = @()
+            if ($s.PSObject.Properties['partitions']) {
+                $hasPartField = $true
+                if ($null -ne $s.partitions) { $partIds = @($s.partitions | Where-Object { $null -ne $_ }) }
+            }
             $matches += @{
-                Idx              = $i
-                Map              = [string]$s.map
-                Partitions       = @($s.partitions)
-                Replicas         = $replicas
-                DedicatedScaling = $isDedicated
+                Idx                = $i
+                Map                = [string]$s.map
+                Partitions         = $partIds
+                HasPartitionsField = $hasPartField
+                Replicas           = $replicas
+                DedicatedScaling   = $isDedicated
             }
         }
     }
@@ -96,7 +103,8 @@ function _Find-DuneMapWorldPartitions {
 function Get-DuneOnDemandMapState {
     # Inspects the live BG CRD and returns the state of an on-demand map
     # (e.g. DeepDesert): is the set present, what are the current replicas,
-    # are any partitions disabled.
+    # are any partitions disabled, are the partition IDs bound to the set,
+    # is dedicatedScaling disabled (required for self-provisioning).
     param([Parameter(Mandatory)][string]$Key)
     $def = $script:DuneOnDemandMaps | Where-Object { $_.Key -eq $Key } | Select-Object -First 1
     if (-not $def) { throw "Unknown on-demand map: $Key" }
@@ -110,7 +118,13 @@ function Get-DuneOnDemandMapState {
 
     $totalReplicas = 0
     $hasDisabledPartition = $false
-    foreach ($s in $sets) { if ($s.Replicas) { $totalReplicas += [int]$s.Replicas } }
+    $missingPartitionBinding = $false
+    $stuckDedicatedScaling = $false
+    foreach ($s in $sets) {
+        if ($s.Replicas) { $totalReplicas += [int]$s.Replicas }
+        if (-not $s.Partitions -or $s.Partitions.Count -eq 0) { $missingPartitionBinding = $true }
+        if ($s.DedicatedScaling) { $stuckDedicatedScaling = $true }
+    }
     foreach ($wp in $wps) {
         foreach ($p in $wp.Partitions) {
             if ($p.PSObject.Properties['disable'] -and [bool]$p.disable) { $hasDisabledPartition = $true }
@@ -118,18 +132,20 @@ function Get-DuneOnDemandMapState {
     }
 
     $present = ($sets.Count -gt 0)
-    $running = ($present -and $totalReplicas -ge 1 -and -not $hasDisabledPartition)
+    $running = ($present -and $totalReplicas -ge 1 -and -not $hasDisabledPartition -and -not $missingPartitionBinding -and -not $stuckDedicatedScaling)
 
     return @{
-        ok                = $true
-        key               = $Key
-        label             = $def.Label
-        present           = $present
-        setCount          = $sets.Count
-        totalReplicas     = $totalReplicas
-        hasDisabledPart   = $hasDisabledPartition
-        running           = $running
-        sets              = @($sets | ForEach-Object { @{
+        ok                       = $true
+        key                      = $Key
+        label                    = $def.Label
+        present                  = $present
+        setCount                 = $sets.Count
+        totalReplicas            = $totalReplicas
+        hasDisabledPart          = $hasDisabledPartition
+        missingPartitionBinding  = $missingPartitionBinding
+        stuckDedicatedScaling    = $stuckDedicatedScaling
+        running                  = $running
+        sets                     = @($sets | ForEach-Object { @{
             idx=$_.Idx; map=$_.Map; replicas=$_.Replicas; dedicatedScaling=$_.DedicatedScaling
             partitionCount=$_.Partitions.Count
         } })
@@ -138,6 +154,15 @@ function Get-DuneOnDemandMapState {
 
 function Start-DuneOnDemandMap {
     # Patches the BG CRD to bring an on-demand map online:
+    #   - binds each matching set's `partitions` field to the IDs from
+    #     the corresponding worldPartitions[*].partitions[*].id (e.g.
+    #     DeepDesert_1 -> [8]). Without this binding the operator has
+    #     nothing to schedule and the pod is never created.
+    #   - flips `dedicatedScaling` from true to false: the operator only
+    #     auto-provisions pods (target = replicas) when this flag is false;
+    #     `dedicatedScaling: true` sets stay at TARGET=0 because they expect
+    #     to be scaled externally by the Director. The two always-on sets
+    #     (Survival_1, Overmap) are already false in the template.
     #   - sets every matching set's `replicas` to 1 (if currently 0/missing)
     #   - clears any `disable: true` flag on matching world-partitions
     # No-op if it's already running.
@@ -161,8 +186,38 @@ function Start-DuneOnDemandMap {
         }
     }
 
+    # Build map -> partition-id list lookup from worldPartitions, so each
+    # matching set can bind to the right ID(s).
+    $idsByMap = @{}
+    foreach ($wp in $wps) {
+        $list = @()
+        foreach ($p in $wp.Partitions) {
+            if ($p.PSObject.Properties['id']) { $list += [int]$p.id }
+        }
+        $idsByMap[$wp.Map] = $list
+    }
+
     $patches = @()
     foreach ($s in $sets) {
+        # Bind partitions field if missing or empty.
+        if (-not $s.Partitions -or $s.Partitions.Count -eq 0) {
+            $ids = @()
+            if ($idsByMap.ContainsKey($s.Map)) { $ids = $idsByMap[$s.Map] }
+            if ($ids.Count -gt 0) {
+                if ($s.HasPartitionsField) {
+                    $patches += @{ op='replace'; path="/spec/serverGroup/template/spec/sets/$($s.Idx)/partitions"; value=$ids }
+                } else {
+                    $patches += @{ op='add';     path="/spec/serverGroup/template/spec/sets/$($s.Idx)/partitions"; value=$ids }
+                }
+            }
+        }
+        # dedicatedScaling=true sets are Director-driven and won't self-provision pods
+        # (the ServerSet stays at REQUEST=N, TARGET=0). For on-demand maps we want the
+        # serveroperator to provision the pod from `replicas` directly, so flip the flag
+        # to false on every matching set.
+        if ($s.DedicatedScaling) {
+            $patches += @{ op='replace'; path="/spec/serverGroup/template/spec/sets/$($s.Idx)/dedicatedScaling"; value=$false }
+        }
         if (-not $s.Replicas -or [int]$s.Replicas -lt 1) {
             if ($null -eq $s.Replicas) {
                 $patches += @{ op='add'; path="/spec/serverGroup/template/spec/sets/$($s.Idx)/replicas"; value=1 }
@@ -189,7 +244,7 @@ function Start-DuneOnDemandMap {
             ok        = $true
             key       = $Key
             noop      = $true
-            message   = "$($def.Label) is already configured to run (replicas >= 1, partitions enabled). Pod state may still be Pending if it's still starting."
+            message   = "$($def.Label) is already configured to run (replicas >= 1, partitions bound, enabled). Pod state may still be Pending if it's still starting."
             patchOps  = 0
         }
     }
