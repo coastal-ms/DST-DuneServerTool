@@ -6,7 +6,7 @@
 $ErrorActionPreference = 'Stop'
 
 # Version (one of the 5 sync'd constants; see persistent-notes.md)
-$script:DuneToolVersion = '6.1.3'
+$script:DuneToolVersion = '6.1.4'
 
 # ---------- Single-instance gate ----------------------------------------------
 # Every click of the desktop shortcut runs DuneServer.exe again. Without a
@@ -232,10 +232,23 @@ if ($iconPath) {
     Write-DuneLog "Tray icon disabled - icon.ico not found" 'WARN'
 }
 
+# Delete any stale last-url.txt from a previous run BEFORE starting the
+# polling jobs. Otherwise the browserJob's first poll wins the race against
+# Start-DuneHttpServer's write, opens the browser at the OLD url with the
+# OLD token, and every /api call returns 401 "Invalid or missing token".
+$urlFilePath = Join-Path $env:LOCALAPPDATA 'DuneServer\last-url.txt'
+try {
+    if (Test-Path -LiteralPath $urlFilePath) {
+        Remove-Item -LiteralPath $urlFilePath -Force -ErrorAction Stop
+    }
+} catch {
+    Write-DuneLog "Could not remove stale last-url.txt: $($_.Exception.Message)" 'WARN'
+}
+
 # Kick the browser open after the listener binds. Reads last-url.txt that
 # Start-DuneHttpServer writes once it knows the actual bound port.
-$browserJob = Start-Job -ScriptBlock {
-    $urlFile = Join-Path $env:LOCALAPPDATA 'DuneServer\last-url.txt'
+$browserJob = Start-Job -ArgumentList $urlFilePath -ScriptBlock {
+    param($urlFile)
     for ($i = 0; $i -lt 50; $i++) {
         if (Test-Path -LiteralPath $urlFile) {
             $u = (Get-Content -LiteralPath $urlFile -Raw).Trim()
@@ -246,9 +259,8 @@ $browserJob = Start-Job -ScriptBlock {
 }
 
 # Side-thread to publish the URL and listener to the tray state once bound.
-$urlPublishJob = Start-Job -ArgumentList $script:DuneTrayState -ScriptBlock {
-    param($state)
-    $urlFile = Join-Path $env:LOCALAPPDATA 'DuneServer\last-url.txt'
+$urlPublishJob = Start-Job -ArgumentList $script:DuneTrayState, $urlFilePath -ScriptBlock {
+    param($state, $urlFile)
     for ($i = 0; $i -lt 100; $i++) {
         if (Test-Path -LiteralPath $urlFile) {
             $u = (Get-Content -LiteralPath $urlFile -Raw).Trim()
@@ -270,5 +282,25 @@ try {
     if (Get-Command Stop-DuneTrayIcon -ErrorAction SilentlyContinue) {
         Stop-DuneTrayIcon -State $script:DuneTrayState
     }
+    # Wipe last-url.txt so the next launch can't race-read a stale URL with
+    # a token that no longer matches a running listener.
+    try {
+        $urlFile = Join-Path $env:LOCALAPPDATA 'DuneServer\last-url.txt'
+        if (Test-Path -LiteralPath $urlFile) {
+            Remove-Item -LiteralPath $urlFile -Force -ErrorAction SilentlyContinue
+        }
+    } catch { }
+    # Release the single-instance mutex explicitly so the next click of the
+    # desktop shortcut can acquire it immediately (rather than relying on
+    # OS process-exit cleanup, which is racy under fast reopen).
+    try {
+        if ($script:SingleInstanceMutex) {
+            if ($script:SingleInstanceOwned) {
+                try { $script:SingleInstanceMutex.ReleaseMutex() } catch { }
+            }
+            $script:SingleInstanceMutex.Dispose()
+            $script:SingleInstanceMutex = $null
+        }
+    } catch { }
     Write-DuneLog "Dune Server stopped"
 }
