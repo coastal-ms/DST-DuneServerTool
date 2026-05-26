@@ -13,6 +13,14 @@ type Props = {
 // Large fields are operationally most interesting — sort reverse so they're on top.
 const SIZE_RANK: Record<string, number> = { Large: 0, Medium: 1, Small: 2 }
 
+// Size tier color — large=amber, medium=blue, small=muted. Matches the
+// "scale of importance" cue used elsewhere in the dashboard.
+const SIZE_CLASS: Record<string, string> = {
+  Large:  'text-accent-bright',
+  Medium: 'text-ibad',
+  Small:  'text-text-muted',
+}
+
 // Map labels mirror the colors from the original bg-status terminal output.
 const MAP_LABEL_CLASS: Record<string, string> = {
   HaggaBasin: 'text-success',
@@ -22,6 +30,21 @@ const MAP_LABEL_CLASS: Record<string, string> = {
 const MAP_DISPLAY: Record<string, string> = {
   HaggaBasin: 'Hagga Basin',
   DeepDesert: 'Deep Desert',
+}
+
+// Color the Active count by fill ratio so the eye is drawn to busy fields.
+function activeFillClass(cur: number, max: number): string {
+  if (max <= 0) return 'text-text-dim'
+  const pct = cur / max
+  if (pct >= 1)    return 'text-warning font-semibold'  // at cap
+  if (pct >= 0.75) return 'text-accent-bright font-semibold'
+  if (pct >= 0.25) return 'text-ibad'
+  if (cur === 0)   return 'text-text-dim'
+  return 'text-text'
+}
+
+function primedClass(cur: number): string {
+  return cur > 0 ? 'text-accent' : 'text-text-dim'
 }
 
 function formatTime(d: Date) {
@@ -113,7 +136,9 @@ export function BgSpiceSummary({ enabled }: Props) {
               const newMap    = !prev || prev.mapName !== r.mapName
               const labelCls  = MAP_LABEL_CLASS[r.mapName] ?? 'text-text'
               const display   = MAP_DISPLAY[r.mapName] ?? r.mapName
-              const atCap     = r.maxActive > 0 && r.currentActive >= r.maxActive
+              const sizeCls   = SIZE_CLASS[r.fieldType] ?? 'text-text-muted'
+              const activeCls = activeFillClass(r.currentActive, r.maxActive)
+              const primCls   = primedClass(r.currentPrimed)
               const off       = !r.isSpawningActive
               return (
                 <tr key={r.spicefieldTypeId}
@@ -124,11 +149,11 @@ export function BgSpiceSummary({ enabled }: Props) {
                       {display}
                     </td>
                   ) : null}
-                  <td className="text-text-muted pr-3 py-0.5">{r.fieldType}</td>
-                  <td className={`text-right tabular-nums pr-3 py-0.5 ${atCap ? 'text-warning font-semibold' : 'text-text'}`}>
+                  <td className={`pr-3 py-0.5 ${sizeCls}`}>{r.fieldType}</td>
+                  <td className={`text-right tabular-nums pr-3 py-0.5 ${activeCls}`}>
                     {r.currentActive}<span className="text-text-dim">/{r.maxActive}</span>
                   </td>
-                  <td className="text-right tabular-nums pr-3 py-0.5 text-text-dim">
+                  <td className={`text-right tabular-nums pr-3 py-0.5 ${primCls}`}>
                     {r.currentPrimed}<span className="text-text-dim">/{r.maxPrimed}</span>
                   </td>
                   <td className="text-right py-0.5">
