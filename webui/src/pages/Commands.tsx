@@ -89,7 +89,7 @@ export function Commands() {
   const ordered = useMemo(() => {
     const commands = cmdsState.data?.commands ?? []
     const order = cmdsState.data?.order
-    if (!order || order.length === 0) return commands
+    if (!Array.isArray(order) || order.length === 0) return commands
     const byName = new Map(commands.map(c => [c.name, c]))
     const result: Command[] = []
     for (const n of order) { const c = byName.get(n); if (c) { result.push(c); byName.delete(n) } }
@@ -98,7 +98,9 @@ export function Commands() {
 
   const grouped = useMemo(() => {
     const g: Record<Command['section'], Command[]> = { VM: [], Battlegroup: [], Tools: [] }
-    for (const c of ordered) g[c.section]?.push(c)
+    for (const c of ordered) {
+      if (g[c.section]) g[c.section].push(c)
+    }
     return g
   }, [ordered])
 

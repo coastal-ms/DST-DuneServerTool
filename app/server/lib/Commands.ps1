@@ -106,18 +106,39 @@ function Get-DuneCurrentState {
 # ---- Order persistence -------------------------------------------------------
 
 function Get-DuneCommandOrderFile {
-    $root = Split-Path -Parent $script:AppDir
-    $dataDir = Join-Path $root '.dune'
-    if (-not (Test-Path $dataDir)) { New-Item -ItemType Directory -Path $dataDir -Force | Out-Null }
-    return (Join-Path $dataDir 'button-order.json')
+    # Prefer APPDATA canonical location (matches Get-DuneConfigPath / v6.0
+    # convention). Falls back to repo-root .dune\ for dev runs from source.
+    $appdataDir = Join-Path $env:APPDATA 'DuneServer'
+    $appdataFile = Join-Path $appdataDir 'button-order.json'
+    if (Test-Path -LiteralPath $appdataFile) { return $appdataFile }
+
+    # Dev fallback — repo root or installed app dir
+    $root = if ($script:AppDir) { Split-Path -Parent $script:AppDir } else { (Get-Location).Path }
+    $devDir = Join-Path $root '.dune'
+    $devFile = Join-Path $devDir 'button-order.json'
+    if (Test-Path -LiteralPath $devFile) { return $devFile }
+
+    # Neither exists — default to APPDATA so future Save-DuneCommandOrder writes
+    # land in the canonical location.
+    if (-not (Test-Path -LiteralPath $appdataDir)) {
+        New-Item -ItemType Directory -Path $appdataDir -Force | Out-Null
+    }
+    return $appdataFile
 }
 
 function Get-DuneCommandOrder {
     $f = Get-DuneCommandOrderFile
     if (-not (Test-Path $f)) { return @() }
     try {
-        $arr = Get-Content -LiteralPath $f -Raw | ConvertFrom-Json
-        if ($arr -is [array]) { return @($arr) }
+        $parsed = Get-Content -LiteralPath $f -Raw | ConvertFrom-Json
+        if ($null -eq $parsed) { return @() }
+        # Accept both shapes:
+        #   v6.0 WPF: { "order": [ "name1", "name2", ... ] }   (object wrapper)
+        #   v6.1+:   [ "name1", "name2", ... ]                 (bare array)
+        if ($parsed -is [array]) { return @($parsed | ForEach-Object { "$_" }) }
+        if ($parsed.PSObject.Properties['order']) {
+            return @($parsed.order | ForEach-Object { "$_" })
+        }
         return @()
     } catch { return @() }
 }
@@ -125,7 +146,16 @@ function Get-DuneCommandOrder {
 function Save-DuneCommandOrder {
     param([string[]]$Order)
     $f = Get-DuneCommandOrderFile
-    ($Order | ConvertTo-Json -Depth 2) | Set-Content -LiteralPath $f -Encoding UTF8
+    $dir = Split-Path -Parent $f
+    if ($dir -and -not (Test-Path -LiteralPath $dir)) {
+        New-Item -ItemType Directory -Path $dir -Force | Out-Null
+    }
+    # Write as a bare JSON array — Get-DuneCommandOrder also accepts the
+    # legacy v6.0 { "order": [...] } shape for compatibility.
+    $payload = if ($Order -and $Order.Count -gt 0) {
+        ConvertTo-Json -InputObject ([object[]]$Order) -Depth 2
+    } else { '[]' }
+    Set-Content -LiteralPath $f -Value $payload -Encoding UTF8
 }
 
 function Get-DuneCommandByName {
