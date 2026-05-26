@@ -1,4 +1,4 @@
-﻿# Characters page — top picker + 7 collapsible sub-editor sections.
+# Characters page — top picker + 7 collapsible sub-editor sections.
 # Layout decision (popup B): top character picker dropdown + accordion of all 7 sections,
 # all collapsed by default. Backend wiring will be added in subsequent iterations.
 
@@ -238,6 +238,80 @@ function New-V6CharactersPage {
       <Setter Property="FontFamily" Value="Segoe UI Semibold"/>
       <Setter Property="FontSize" Value="13"/>
     </Style>
+
+    <!-- ListBox (character rail) -->
+    <Style TargetType="ListBox">
+      <Setter Property="Background"   Value="{StaticResource ChInputBg}"/>
+      <Setter Property="Foreground"   Value="{StaticResource ChInputFg}"/>
+      <Setter Property="BorderBrush"  Value="{StaticResource ChCardBorder}"/>
+      <Setter Property="BorderThickness" Value="1"/>
+      <Setter Property="ScrollViewer.HorizontalScrollBarVisibility" Value="Disabled"/>
+      <Setter Property="ScrollViewer.VerticalScrollBarVisibility"   Value="Visible"/>
+    </Style>
+    <Style TargetType="ListBoxItem">
+      <Setter Property="Background" Value="Transparent"/>
+      <Setter Property="Foreground" Value="{StaticResource ChInputFg}"/>
+      <Setter Property="Padding"    Value="10,6"/>
+      <Setter Property="BorderThickness" Value="3,0,0,0"/>
+      <Setter Property="BorderBrush" Value="Transparent"/>
+      <Setter Property="Template">
+        <Setter.Value>
+          <ControlTemplate TargetType="ListBoxItem">
+            <Border x:Name="LbItemBorder" Background="{TemplateBinding Background}"
+                    BorderBrush="{TemplateBinding BorderBrush}"
+                    BorderThickness="{TemplateBinding BorderThickness}"
+                    Padding="{TemplateBinding Padding}">
+              <ContentPresenter VerticalAlignment="Center"/>
+            </Border>
+            <ControlTemplate.Triggers>
+              <Trigger Property="IsMouseOver" Value="True">
+                <Setter TargetName="LbItemBorder" Property="Background" Value="#2A1F15"/>
+              </Trigger>
+              <Trigger Property="IsSelected" Value="True">
+                <Setter TargetName="LbItemBorder" Property="Background" Value="#3F2A10"/>
+                <Setter TargetName="LbItemBorder" Property="BorderBrush" Value="{StaticResource ChGold}"/>
+                <Setter Property="Foreground" Value="{StaticResource ChGold}"/>
+              </Trigger>
+            </ControlTemplate.Triggers>
+          </ControlTemplate>
+        </Setter.Value>
+      </Setter>
+    </Style>
+
+    <!-- TabControl (section tabs) -->
+    <Style TargetType="TabControl">
+      <Setter Property="Background" Value="Transparent"/>
+      <Setter Property="BorderThickness" Value="0"/>
+      <Setter Property="Padding" Value="0"/>
+    </Style>
+    <Style TargetType="TabItem">
+      <Setter Property="Background" Value="Transparent"/>
+      <Setter Property="Foreground" Value="{StaticResource ChInputFg}"/>
+      <Setter Property="Padding"    Value="14,7"/>
+      <Setter Property="FontFamily" Value="Segoe UI Semibold"/>
+      <Setter Property="FontSize"   Value="12"/>
+      <Setter Property="Template">
+        <Setter.Value>
+          <ControlTemplate TargetType="TabItem">
+            <Border x:Name="TiBorder" Background="{TemplateBinding Background}"
+                    BorderBrush="Transparent" BorderThickness="0,0,0,2"
+                    Padding="{TemplateBinding Padding}" Margin="0,0,2,0">
+              <ContentPresenter ContentSource="Header" VerticalAlignment="Center" HorizontalAlignment="Center"/>
+            </Border>
+            <ControlTemplate.Triggers>
+              <Trigger Property="IsMouseOver" Value="True">
+                <Setter TargetName="TiBorder" Property="Background" Value="#2A1F15"/>
+              </Trigger>
+              <Trigger Property="IsSelected" Value="True">
+                <Setter TargetName="TiBorder" Property="Background" Value="#1C1813"/>
+                <Setter TargetName="TiBorder" Property="BorderBrush" Value="{StaticResource ChGold}"/>
+                <Setter Property="Foreground" Value="{StaticResource ChGold}"/>
+              </Trigger>
+            </ControlTemplate.Triggers>
+          </ControlTemplate>
+        </Setter.Value>
+      </Setter>
+    </Style>
   </Border.Resources>
 
   <Grid>
@@ -245,109 +319,176 @@ function New-V6CharactersPage {
       <RowDefinition Height="Auto"/>
       <RowDefinition Height="Auto"/>
       <RowDefinition Height="Auto"/>
-      <RowDefinition Height="Auto"/>
       <RowDefinition Height="*"/>
     </Grid.RowDefinitions>
 
-    <!-- Title row -->
-    <Grid Grid.Row="0" Margin="0,0,0,14">
+    <!-- Title row + action buttons -->
+    <Grid Grid.Row="0" Margin="0,0,0,12">
       <Grid.ColumnDefinitions>
         <ColumnDefinition Width="*"/>
+        <ColumnDefinition Width="Auto"/>
+        <ColumnDefinition Width="Auto"/>
+        <ColumnDefinition Width="Auto"/>
         <ColumnDefinition Width="Auto"/>
       </Grid.ColumnDefinitions>
       <StackPanel Grid.Column="0">
         <TextBlock Text="Characters" FontFamily="Segoe UI Semibold" FontSize="22"
                    Foreground="{StaticResource ChGold}"/>
         <TextBlock Margin="0,4,0,0" Foreground="{StaticResource ChSubtle}"
-                   Text="Pick a character, then expand a section to view or edit. Writes hit the live Postgres DB on the VM \u2014 always take a backup first."/>
+                   Text="Pick a character from the left rail. Switch sections with the tabs. Writes hit the live Postgres DB \u2014 always back up first."/>
       </StackPanel>
       <Border Grid.Column="1" x:Name="ChDirtyPill" Background="#3F2A10" BorderBrush="{StaticResource ChGold}"
-              BorderThickness="1" CornerRadius="10" Padding="10,4" VerticalAlignment="Center" Visibility="Collapsed">
+              BorderThickness="1" CornerRadius="10" Padding="10,4" VerticalAlignment="Center" Margin="0,0,10,0" Visibility="Collapsed">
         <TextBlock Text="Unsaved changes" Foreground="{StaticResource ChGold}" FontSize="11"/>
       </Border>
+      <Button Grid.Column="2" x:Name="ChBtnLoad"   Content="Refresh"   Width="90"  Height="30" Margin="0,0,8,0" VerticalAlignment="Center"/>
+      <Button Grid.Column="3" x:Name="ChBtnBackup" Content="Backup DB" Width="100" Height="30" Margin="0,0,8,0" VerticalAlignment="Center"/>
+      <Button Grid.Column="4" x:Name="ChBtnSave"   Content="Save"      Width="90"  Height="30" VerticalAlignment="Center"/>
     </Grid>
 
     <!-- Stop-bg banner -->
-    <Border x:Name="ChStopBanner" Grid.Row="1" Margin="0,0,0,12" Padding="14,10"
+    <Border x:Name="ChStopBanner" Grid.Row="1" Margin="0,0,0,10" Padding="14,10"
             Background="#3A2410" BorderBrush="#E89C42" BorderThickness="1" CornerRadius="6" Visibility="Collapsed">
       <StackPanel Orientation="Horizontal">
         <TextBlock Text="!" Foreground="#E89C42" FontSize="18" FontWeight="Bold" Margin="0,0,10,0"/>
         <TextBlock Foreground="#F0D8A8" VerticalAlignment="Center" TextWrapping="Wrap"
-                   Text="Battlegroup is running. Stop it from the Terminal pane before applying writes \u2014 live edits can corrupt active sessions."/>
+                   Text="Battlegroup is running. Changes will not take effect until the battlegroup is restarted, or the affected player logs out and back in."/>
       </StackPanel>
-    </Border>
-
-    <!-- Picker row -->
-    <Border Grid.Row="2" Background="{StaticResource ChCardBg}" BorderBrush="{StaticResource ChCardBorder}"
-            BorderThickness="1" CornerRadius="6" Padding="14" Margin="0,0,0,14">
-      <Grid>
-        <Grid.ColumnDefinitions>
-          <ColumnDefinition Width="Auto"/>
-          <ColumnDefinition Width="*"/>
-          <ColumnDefinition Width="Auto"/>
-          <ColumnDefinition Width="Auto"/>
-          <ColumnDefinition Width="Auto"/>
-        </Grid.ColumnDefinitions>
-        <TextBlock Grid.Column="0" Text="Character:" VerticalAlignment="Center" Margin="0,0,12,0"
-                   Foreground="{StaticResource ChInputFg}"/>
-        <ComboBox  Grid.Column="1" x:Name="ChPicker" Height="30" IsEditable="False"/>
-        <Button    Grid.Column="2" x:Name="ChBtnLoad"    Content="Load List"  Width="100" Height="30" Margin="12,0,8,0"/>
-        <Button    Grid.Column="3" x:Name="ChBtnBackup"  Content="Backup DB"  Width="100" Height="30" Margin="0,0,8,0"/>
-        <Button    Grid.Column="4" x:Name="ChBtnSave"    Content="Save"       Width="100" Height="30"/>
-      </Grid>
     </Border>
 
     <!-- Status row -->
-    <TextBlock Grid.Row="3" x:Name="ChStatus" Margin="2,0,0,10" Foreground="{StaticResource ChSubtle}" FontSize="11"
-               Text="Click Load List to fetch characters from the VM Postgres database."/>
+    <TextBlock Grid.Row="2" x:Name="ChStatus" Margin="2,0,0,10" Foreground="{StaticResource ChSubtle}" FontSize="11"
+               Text="Auto-loads when you open this page. Use Refresh to re-fetch."/>
 
-    <!-- Accordion scroll -->
-    <ScrollViewer Grid.Row="4" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
-      <StackPanel x:Name="ChAccordion">
+    <!-- Body: left rail (character list) + right area (tabs + content) -->
+    <Grid Grid.Row="3">
+      <Grid.ColumnDefinitions>
+        <ColumnDefinition Width="200" MinWidth="160"/>
+        <ColumnDefinition Width="6"/>
+        <ColumnDefinition Width="*"/>
+      </Grid.ColumnDefinitions>
 
-        <Expander Header="Stats" x:Name="ChExpStats" IsExpanded="False">
-          <StackPanel x:Name="ChStatsBody"/>
-        </Expander>
+      <!-- Character rail -->
+      <Border Grid.Column="0" Background="{StaticResource ChCardBg}" BorderBrush="{StaticResource ChCardBorder}"
+              BorderThickness="1" CornerRadius="6">
+        <Grid>
+          <Grid.RowDefinitions>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="*"/>
+          </Grid.RowDefinitions>
+          <Grid Grid.Row="0">
+            <Grid.ColumnDefinitions>
+              <ColumnDefinition Width="*"/>
+              <ColumnDefinition Width="Auto"/>
+            </Grid.ColumnDefinitions>
+            <TextBlock Grid.Column="0" x:Name="ChRailHead" Text="Characters" Padding="10,8,10,6"
+                       Foreground="{StaticResource ChSubtle}" FontSize="10"
+                       FontFamily="Segoe UI Semibold"/>
+            <TextBlock Grid.Column="1" x:Name="ChRailCount" Padding="0,8,10,6"
+                       Foreground="{StaticResource ChSubtle}" FontSize="10"
+                       FontFamily="Segoe UI Semibold" Text=""/>
+          </Grid>
 
-        <Expander Header="Inventory" x:Name="ChExpInventory" IsExpanded="False">
-          <StackPanel x:Name="ChInvBody">
-            <TextBlock Foreground="{StaticResource ChSubtle}" FontStyle="Italic"
-                       Text="Inventory editor coming in the next sub-popup (catalog-driven)."/>
-          </StackPanel>
-        </Expander>
+          <!-- z-stack: list + overlays (loading / empty / error) -->
+          <Grid Grid.Row="1">
+            <ListBox x:Name="ChCharList" BorderThickness="0"
+                     Background="Transparent"
+                     ScrollViewer.HorizontalScrollBarVisibility="Disabled"
+                     ScrollViewer.VerticalScrollBarVisibility="Visible"/>
 
-        <Expander Header="Tech Tree" x:Name="ChExpTech" IsExpanded="False">
-          <StackPanel x:Name="ChTechBody"/>
-        </Expander>
+            <!-- Empty / hint state (shown before first load and when no chars) -->
+            <StackPanel x:Name="ChRailEmpty" VerticalAlignment="Center" HorizontalAlignment="Center"
+                        Margin="14" Visibility="Visible">
+              <TextBlock x:Name="ChRailEmptyTitle" Text="No characters loaded"
+                         Foreground="{StaticResource ChSubtle}" FontSize="12"
+                         HorizontalAlignment="Center" FontWeight="SemiBold"/>
+              <TextBlock x:Name="ChRailEmptyHint"
+                         Text="Will auto-load when the VM is running."
+                         Foreground="{StaticResource ChSubtle}" FontSize="10"
+                         HorizontalAlignment="Center" Margin="0,4,0,0"
+                         TextWrapping="Wrap" TextAlignment="Center"/>
+            </StackPanel>
 
-        <Expander Header="Specializations" x:Name="ChExpSpecs" IsExpanded="False">
-          <StackPanel x:Name="ChSpecsBody"/>
-        </Expander>
+            <!-- Loading overlay (shown during async fetch) -->
+            <Border x:Name="ChRailLoading" Background="#CC1A1A1A" Visibility="Collapsed">
+              <StackPanel VerticalAlignment="Center" HorizontalAlignment="Center" Margin="14">
+                <ProgressBar IsIndeterminate="True" Width="120" Height="6"
+                             Foreground="{StaticResource ChGold}" Background="#2A2A2A"
+                             BorderThickness="0"/>
+                <TextBlock x:Name="ChRailLoadingText" Text="Loading characters..."
+                           Foreground="{StaticResource ChGold}" FontSize="11"
+                           HorizontalAlignment="Center" Margin="0,8,0,0"/>
+              </StackPanel>
+            </Border>
+          </Grid>
+        </Grid>
+      </Border>
 
-        <Expander Header="Economy" x:Name="ChExpEconomy" IsExpanded="False">
-          <StackPanel x:Name="ChEconBody"/>
-        </Expander>
+      <GridSplitter Grid.Column="1" Width="6" HorizontalAlignment="Stretch"
+                    Background="Transparent" ShowsPreview="True"
+                    ResizeBehavior="PreviousAndNext" ResizeDirection="Columns"/>
 
-        <Expander Header="Faction Reputation" x:Name="ChExpFaction" IsExpanded="False">
-          <StackPanel x:Name="ChFactionBody"/>
-        </Expander>
-
-        <Expander Header="Cosmetics" x:Name="ChExpCosmetics" IsExpanded="False">
-          <StackPanel x:Name="ChCosmeticsBody">
-            <TextBlock Foreground="{StaticResource ChSubtle}" FontStyle="Italic"
-                       Text="Cosmetics editor coming in the next sub-popup (catalog-driven)."/>
-          </StackPanel>
-        </Expander>
-
-      </StackPanel>
-    </ScrollViewer>
+      <!-- Tabs + section content -->
+      <TabControl Grid.Column="2" x:Name="ChTabs">
+        <TabItem Header="Stats">
+          <ScrollViewer VerticalScrollBarVisibility="Visible" Background="{StaticResource ChCardBg}" Padding="14">
+            <StackPanel x:Name="ChStatsBody"/>
+          </ScrollViewer>
+        </TabItem>
+        <TabItem Header="Inventory">
+          <ScrollViewer VerticalScrollBarVisibility="Visible" Background="{StaticResource ChCardBg}" Padding="14">
+            <StackPanel x:Name="ChInvBody">
+              <TextBlock Foreground="{StaticResource ChSubtle}" FontStyle="Italic"
+                         Text="Inventory editor coming in the next sub-popup (catalog-driven)."/>
+            </StackPanel>
+          </ScrollViewer>
+        </TabItem>
+        <TabItem Header="Tech Tree">
+          <ScrollViewer VerticalScrollBarVisibility="Visible" Background="{StaticResource ChCardBg}" Padding="14">
+            <StackPanel x:Name="ChTechBody"/>
+          </ScrollViewer>
+        </TabItem>
+        <TabItem Header="Specializations">
+          <ScrollViewer VerticalScrollBarVisibility="Visible" Background="{StaticResource ChCardBg}" Padding="14">
+            <StackPanel x:Name="ChSpecsBody"/>
+          </ScrollViewer>
+        </TabItem>
+        <TabItem Header="Economy">
+          <ScrollViewer VerticalScrollBarVisibility="Visible" Background="{StaticResource ChCardBg}" Padding="14">
+            <StackPanel x:Name="ChEconBody"/>
+          </ScrollViewer>
+        </TabItem>
+        <TabItem Header="Faction Reputation">
+          <ScrollViewer VerticalScrollBarVisibility="Visible" Background="{StaticResource ChCardBg}" Padding="14">
+            <StackPanel x:Name="ChFactionBody"/>
+          </ScrollViewer>
+        </TabItem>
+        <TabItem Header="Cosmetics">
+          <ScrollViewer VerticalScrollBarVisibility="Visible" Background="{StaticResource ChCardBg}" Padding="14">
+            <StackPanel x:Name="ChCosmeticsBody">
+              <TextBlock Foreground="{StaticResource ChSubtle}" FontStyle="Italic"
+                         Text="Cosmetics editor coming in the next sub-popup (catalog-driven)."/>
+            </StackPanel>
+          </ScrollViewer>
+        </TabItem>
+      </TabControl>
+    </Grid>
   </Grid>
 </Border>
 '@
     $page = [Windows.Markup.XamlReader]::Parse($xaml)
     return @{
         Root          = $page
-        Picker        = $page.FindName('ChPicker')
+        Picker        = $page.FindName('ChCharList')
+        CharList      = $page.FindName('ChCharList')
+        RailHead      = $page.FindName('ChRailHead')
+        RailCount     = $page.FindName('ChRailCount')
+        RailEmpty     = $page.FindName('ChRailEmpty')
+        RailEmptyTitle= $page.FindName('ChRailEmptyTitle')
+        RailEmptyHint = $page.FindName('ChRailEmptyHint')
+        RailLoading   = $page.FindName('ChRailLoading')
+        RailLoadingText = $page.FindName('ChRailLoadingText')
+        Tabs          = $page.FindName('ChTabs')
         BtnLoad       = $page.FindName('ChBtnLoad')
         BtnBackup     = $page.FindName('ChBtnBackup')
         BtnSave       = $page.FindName('ChBtnSave')
@@ -363,7 +504,7 @@ function New-V6CharactersPage {
         InvBody       = $page.FindName('ChInvBody')
         CosmeticsBody = $page.FindName('ChCosmeticsBody')
 
-        ExpStats      = $page.FindName('ChExpStats')
+        ExpStats      = $null
 
         StatControls    = @{}    # statKey -> TextBox
         SpecControls    = @{}    # trackType -> @{Level=TextBox; Xp=TextBox}
@@ -376,13 +517,38 @@ function New-V6CharactersPage {
         Characters    = @()
         SelectedId    = $null
         Vm            = $null    # last seen Get-VmStatus result
+        IsListLoading = $false   # async-load guard
+        AutoLoadDone  = $false   # has auto-load been attempted this session?
     }
 }
 
 function _V6ChSetDirty {
     param($c, [bool]$Value)
-    $c.Dirty = $Value
-    $c.DirtyPill.Visibility = if ($Value) { 'Visible' } else { 'Collapsed' }
+    if (-not $c) { return }
+    # When we're programmatically populating fields from a load, every
+    # TextBox we touch raises TextChanged — without this guard the dirty
+    # pill would light up the moment a character loaded, and any null/wrong
+    # $c (closure-resolution edge cases during page tear-down) would throw
+    # "property 'Dirty' cannot be found" back through the .Text setter and
+    # abort the entire Update-V6Characters chain.
+    if ($Value -and $script:V6ChLoading) { return }
+    try {
+        if ($c -is [hashtable]) {
+            $c['Dirty'] = $Value
+            if ($c.Contains('DirtyPill') -and $c.DirtyPill) {
+                $c.DirtyPill.Visibility = if ($Value) { 'Visible' } else { 'Collapsed' }
+            }
+        } else {
+            # Fallback: try direct prop set, swallow any failure rather
+            # than letting it propagate out of a TextChanged handler.
+            $c.Dirty = $Value
+            if ($c.DirtyPill) {
+                $c.DirtyPill.Visibility = if ($Value) { 'Visible' } else { 'Collapsed' }
+            }
+        }
+    } catch {
+        try { Write-Diag "_V6ChSetDirty swallowed: $($_.Exception.Message)" } catch {}
+    }
 }
 
 function _V6ChMakeLabel {
@@ -835,19 +1001,164 @@ function _V6ChBuildCosmeticsBody {
     param($state)
     $state.CosmeticsBody.Children.Clear()
 
-    $sumBlock = New-Object System.Windows.Controls.TextBlock
-    $sumBlock.Foreground = New-Object System.Windows.Media.SolidColorBrush ([System.Windows.Media.Color]::FromArgb(255,0xD8,0xCD,0xB5))
-    $sumBlock.Text = 'Unlocked cosmetic IDs are listed below. Catalog picker matches against the item-catalog name field.'
-    $sumBlock.Margin = '0,0,0,8'
-    $state.CosmeticsBody.Children.Add($sumBlock) | Out-Null
+    # 2-column split: Unlocked | Add new
+    $grid = New-Object System.Windows.Controls.Grid
+    $grid.MinHeight = 420
+    $c1 = New-Object System.Windows.Controls.ColumnDefinition; $c1.Width = '*'
+    $c2 = New-Object System.Windows.Controls.ColumnDefinition; $c2.Width = '6'
+    $c3 = New-Object System.Windows.Controls.ColumnDefinition; $c3.Width = '*'
+    $grid.ColumnDefinitions.Add($c1); $grid.ColumnDefinitions.Add($c2); $grid.ColumnDefinitions.Add($c3)
+
+    # --- LEFT: Unlocked panel ---
+    $leftPanel = New-Object System.Windows.Controls.Border
+    $leftPanel.Background = New-Object System.Windows.Media.SolidColorBrush ([System.Windows.Media.Color]::FromArgb(255,0x1C,0x18,0x13))
+    $leftPanel.BorderBrush = New-Object System.Windows.Media.SolidColorBrush ([System.Windows.Media.Color]::FromArgb(255,0x4A,0x36,0x1F))
+    $leftPanel.BorderThickness = '1'
+    $leftPanel.CornerRadius = '4'
+    $leftPanel.Padding = '14'
+    [System.Windows.Controls.Grid]::SetColumn($leftPanel, 0)
+
+    $leftStack = New-Object System.Windows.Controls.DockPanel
+    $leftStack.LastChildFill = $true
+    $leftPanel.Child = $leftStack
+
+    $leftHdr = New-Object System.Windows.Controls.TextBlock
+    $leftHdr.Text = 'UNLOCKED'
+    $leftHdr.FontFamily = 'Segoe UI Semibold'
+    $leftHdr.FontSize = 11
+    $leftHdr.Foreground = New-Object System.Windows.Media.SolidColorBrush ([System.Windows.Media.Color]::FromArgb(255,0xE8,0xB8,0x72))
+    $leftHdr.Margin = '0,0,0,8'
+    [System.Windows.Controls.DockPanel]::SetDock($leftHdr, 'Top')
+    $leftStack.Children.Add($leftHdr) | Out-Null
+    $state.CosmeticsCountHdr = $leftHdr
+
+    $leftScroll = New-Object System.Windows.Controls.ScrollViewer
+    $leftScroll.VerticalScrollBarVisibility = 'Visible'
+    $leftScroll.HorizontalScrollBarVisibility = 'Disabled'
 
     $listHost = New-Object System.Windows.Controls.StackPanel
-    $state.CosmeticsBody.Children.Add($listHost) | Out-Null
+    $leftScroll.Content = $listHost
+    $leftStack.Children.Add($leftScroll) | Out-Null
     $state.CosmeticsHost = $listHost
 
-    $picker = _V6ChBuildCatalogPicker -state $state -Kind 'cosmetics'
-    $state.CosmeticsBody.Children.Add($picker.Panel) | Out-Null
-    $state.CosmeticsPicker = $picker
+    $grid.Children.Add($leftPanel) | Out-Null
+
+    # --- SPLITTER ---
+    $split = New-Object System.Windows.Controls.GridSplitter
+    $split.Width = 6
+    $split.HorizontalAlignment = 'Stretch'
+    $split.VerticalAlignment = 'Stretch'
+    $split.Background = New-Object System.Windows.Media.SolidColorBrush ([System.Windows.Media.Color]::FromArgb(0,0,0,0))
+    $split.Margin = '0'
+    [System.Windows.Controls.Grid]::SetColumn($split, 1)
+    $grid.Children.Add($split) | Out-Null
+
+    # --- RIGHT: Add panel ---
+    $rightPanel = New-Object System.Windows.Controls.Border
+    $rightPanel.Background = New-Object System.Windows.Media.SolidColorBrush ([System.Windows.Media.Color]::FromArgb(255,0x1C,0x18,0x13))
+    $rightPanel.BorderBrush = New-Object System.Windows.Media.SolidColorBrush ([System.Windows.Media.Color]::FromArgb(255,0x4A,0x36,0x1F))
+    $rightPanel.BorderThickness = '1'
+    $rightPanel.CornerRadius = '4'
+    $rightPanel.Padding = '14'
+    [System.Windows.Controls.Grid]::SetColumn($rightPanel, 2)
+
+    $rightGrid = New-Object System.Windows.Controls.Grid
+    $rg1 = New-Object System.Windows.Controls.RowDefinition; $rg1.Height = 'Auto'   # header
+    $rg2 = New-Object System.Windows.Controls.RowDefinition; $rg2.Height = 'Auto'   # search row
+    $rg3 = New-Object System.Windows.Controls.RowDefinition; $rg3.Height = '*'      # results list
+    $rg4 = New-Object System.Windows.Controls.RowDefinition; $rg4.Height = 'Auto'   # hint
+    $rg5 = New-Object System.Windows.Controls.RowDefinition; $rg5.Height = 'Auto'   # add btn
+    $rightGrid.RowDefinitions.Add($rg1); $rightGrid.RowDefinitions.Add($rg2); $rightGrid.RowDefinitions.Add($rg3); $rightGrid.RowDefinitions.Add($rg4); $rightGrid.RowDefinitions.Add($rg5)
+    $rightPanel.Child = $rightGrid
+
+    $rightHdr = New-Object System.Windows.Controls.TextBlock
+    $rightHdr.Text = 'ADD COSMETIC'
+    $rightHdr.FontFamily = 'Segoe UI Semibold'
+    $rightHdr.FontSize = 11
+    $rightHdr.Foreground = New-Object System.Windows.Media.SolidColorBrush ([System.Windows.Media.Color]::FromArgb(255,0xE8,0xB8,0x72))
+    $rightHdr.Margin = '0,0,0,8'
+    [System.Windows.Controls.Grid]::SetRow($rightHdr, 0)
+    $rightGrid.Children.Add($rightHdr) | Out-Null
+
+    # Search row: category combo + search box
+    $searchRow = New-Object System.Windows.Controls.Grid
+    $searchRow.Margin = '0,0,0,8'
+    $sr1 = New-Object System.Windows.Controls.ColumnDefinition; $sr1.Width = '160'
+    $sr2 = New-Object System.Windows.Controls.ColumnDefinition; $sr2.Width = '*'
+    $searchRow.ColumnDefinitions.Add($sr1); $searchRow.ColumnDefinitions.Add($sr2)
+
+    $catCombo = New-Object System.Windows.Controls.ComboBox
+    $catCombo.Margin = '0,0,8,0'; $catCombo.Height = 28
+    $allItem = New-Object System.Windows.Controls.ComboBoxItem
+    $allItem.Content = '(All categories)'; $allItem.Tag = ''
+    $catCombo.Items.Add($allItem) | Out-Null
+    foreach ($cat in (Get-V6ItemCategories)) {
+        $ci = New-Object System.Windows.Controls.ComboBoxItem
+        $ci.Content = $cat; $ci.Tag = $cat
+        $catCombo.Items.Add($ci) | Out-Null
+    }
+    $catCombo.SelectedIndex = 0
+    [System.Windows.Controls.Grid]::SetColumn($catCombo, 0)
+    $searchRow.Children.Add($catCombo) | Out-Null
+
+    $searchBox = New-Object System.Windows.Controls.TextBox
+    $searchBox.Height = 28
+    $searchBox.Tag = 'Type to search cosmetics...'
+    [System.Windows.Controls.Grid]::SetColumn($searchBox, 1)
+    $searchRow.Children.Add($searchBox) | Out-Null
+
+    [System.Windows.Controls.Grid]::SetRow($searchRow, 1)
+    $rightGrid.Children.Add($searchRow) | Out-Null
+
+    # Results list — stretches to fill
+    $listView = New-Object System.Windows.Controls.ListView
+    $listView.MinHeight = 160
+    $listView.Background = New-Object System.Windows.Media.SolidColorBrush ([System.Windows.Media.Color]::FromArgb(255,0x0F,0x0C,0x09))
+    $listView.Foreground = New-Object System.Windows.Media.SolidColorBrush ([System.Windows.Media.Color]::FromArgb(255,0xF0,0xE6,0xD0))
+    $listView.BorderBrush = New-Object System.Windows.Media.SolidColorBrush ([System.Windows.Media.Color]::FromArgb(255,0x4A,0x36,0x1F))
+    $gv = New-Object System.Windows.Controls.GridView
+    $colName = New-Object System.Windows.Controls.GridViewColumn
+    $colName.Header = 'Name'; $colName.Width = 260
+    $colName.DisplayMemberBinding = New-Object System.Windows.Data.Binding('Name')
+    $gv.Columns.Add($colName)
+    $colCat = New-Object System.Windows.Controls.GridViewColumn
+    $colCat.Header = 'Category'; $colCat.Width = 130
+    $colCat.DisplayMemberBinding = New-Object System.Windows.Data.Binding('Category')
+    $gv.Columns.Add($colCat)
+    $listView.View = $gv
+    [System.Windows.Controls.Grid]::SetRow($listView, 2)
+    $rightGrid.Children.Add($listView) | Out-Null
+
+    $hint = New-Object System.Windows.Controls.TextBlock
+    $hint.Text = ''
+    $hint.Foreground = New-Object System.Windows.Media.SolidColorBrush ([System.Windows.Media.Color]::FromArgb(255,0x8E,0x82,0x70))
+    $hint.FontSize = 11
+    $hint.Margin = '2,6,0,6'
+    [System.Windows.Controls.Grid]::SetRow($hint, 3)
+    $rightGrid.Children.Add($hint) | Out-Null
+
+    $addBtn = New-Object System.Windows.Controls.Button
+    $addBtn.Content = '+  Add Selected Cosmetic'
+    $addBtn.Height = 32
+    $addBtn.HorizontalAlignment = 'Stretch'
+    $addBtn.IsEnabled = $false
+    [System.Windows.Controls.Grid]::SetRow($addBtn, 4)
+    $rightGrid.Children.Add($addBtn) | Out-Null
+
+    $grid.Children.Add($rightPanel) | Out-Null
+    $state.CosmeticsBody.Children.Add($grid) | Out-Null
+
+    # Store picker handles in the shape _V6ChWirePicker / _V6ChRefreshCatalogResults expect
+    $state.CosmeticsPicker = @{
+        Panel          = $grid
+        CategoryCombo  = $catCombo
+        SearchBox      = $searchBox
+        ListView       = $listView
+        ContainerCombo = $null
+        QtyBox         = $null
+        Hint           = $hint
+        AddBtn         = $addBtn
+    }
 }
 
 function _V6ChRenderInventory {
@@ -1122,40 +1433,139 @@ function _V6ChResolveVm {
     return $null
 }
 
+function _V6ChShowRailState {
+    param(
+        $c,
+        [ValidateSet('loading','empty','error','ready')] [string]$Mode,
+        [string]$Title = '',
+        [string]$Hint  = '',
+        [string]$LoadingText = 'Loading characters...'
+    )
+    if (-not $c) { return }
+    switch ($Mode) {
+        'loading' {
+            if ($c.RailLoadingText) { $c.RailLoadingText.Text = $LoadingText }
+            if ($c.RailLoading) { $c.RailLoading.Visibility = 'Visible' }
+            if ($c.RailEmpty)   { $c.RailEmpty.Visibility   = 'Collapsed' }
+        }
+        'empty' {
+            if ($Title) { $c.RailEmptyTitle.Text = $Title }
+            if ($Hint)  { $c.RailEmptyHint.Text  = $Hint  }
+            if ($c.RailLoading) { $c.RailLoading.Visibility = 'Collapsed' }
+            if ($c.RailEmpty)   { $c.RailEmpty.Visibility   = 'Visible' }
+        }
+        'error' {
+            if ($Title) { $c.RailEmptyTitle.Text = $Title }
+            if ($Hint)  { $c.RailEmptyHint.Text  = $Hint  }
+            if ($c.RailLoading) { $c.RailLoading.Visibility = 'Collapsed' }
+            if ($c.RailEmpty)   { $c.RailEmpty.Visibility   = 'Visible' }
+        }
+        'ready' {
+            if ($c.RailLoading) { $c.RailLoading.Visibility = 'Collapsed' }
+            if ($c.RailEmpty)   { $c.RailEmpty.Visibility   = 'Collapsed' }
+        }
+    }
+}
+
 function Invoke-V6CharLoadList {
+    param([switch]$Auto)  # true when triggered by Update-V6Characters auto-load (suppresses status text noise)
     $c = $script:V6Ch
     if (-not $c) { return }
+    if ($c.IsListLoading) { return }   # already in flight
     $vm = _V6ChResolveVm
     if (-not $vm) {
         $c.Status.Text = 'VM not running. Start the VM from the Terminal pane first.'
+        _V6ChShowRailState -c $c -Mode 'empty' `
+            -Title 'VM not running' `
+            -Hint 'Start the VM, then click Refresh (or auto-loads when you re-enter this page).'
         return
     }
     $c.Vm = $vm
-    $c.Picker.Items.Clear()
+    $c.IsListLoading = $true
     $c.BtnLoad.IsEnabled = $false
-    $c.Status.Text = 'Querying Postgres for characters...'
-    try {
-        $list = Get-V6CharacterList -Ip $vm.ip
-    } catch {
-        $c.Status.Text = "Failed to load characters: $($_.Exception.Message)"
-        $c.BtnLoad.IsEnabled = $true
-        return
-    } finally {
-        $c.BtnLoad.IsEnabled = $true
-    }
-    if (-not $list -or $list.Count -eq 0) {
-        $c.Status.Text = 'No characters returned. Has anyone joined this server yet?'
-        return
-    }
-    foreach ($ch in $list) {
-        $item = New-Object System.Windows.Controls.ComboBoxItem
-        $item.Content = "$($ch.name)  (ID: $($ch.id))"
-        $item.Tag = $ch.id
-        $c.Picker.Items.Add($item) | Out-Null
-    }
-    $c.Characters = $list
-    $c.Status.Text = "Loaded $($list.Count) characters from the VM."
-    if ($c.Picker.Items.Count -gt 0) { $c.Picker.SelectedIndex = 0 }
+    $c.Picker.Items.Clear()
+    $c.Characters = @()
+    if (-not $Auto) { $c.Status.Text = 'Querying Postgres for characters...' }
+    _V6ChShowRailState -c $c -Mode 'loading' -LoadingText 'Loading characters...'
+
+    $rs = [RunspaceFactory]::CreateRunspace()
+    $rs.ApartmentState = 'STA'
+    $rs.ThreadOptions  = 'ReuseThread'
+    $rs.Open()
+    $libSrc = Get-Content -Raw -LiteralPath (Join-Path $script:V6LibDir 'Db-Postgres.ps1')
+    $rs.SessionStateProxy.SetVariable('LibSrc', $libSrc)
+    $ps = [PowerShell]::Create()
+    $ps.Runspace = $rs
+    [void]$ps.AddScript({
+        param($Ip)
+        Invoke-Expression $LibSrc
+        try {
+            $list = Get-V6CharacterList -Ip $Ip
+            return @{ ok=$true; list=$list }
+        } catch {
+            return @{ ok=$false; reason=$_.Exception.Message }
+        }
+    }).AddArgument($vm.ip)
+
+    $asyncResult = $ps.BeginInvoke()
+    $startedAt = Get-Date
+
+    $timer = New-Object System.Windows.Threading.DispatcherTimer
+    $timer.Interval = [TimeSpan]::FromMilliseconds(250)
+    $tickHandler = {
+        # While we wait, refresh the loading text every few seconds so the user knows we haven't hung
+        if (-not $asyncResult.IsCompleted) {
+            $elapsed = [int]((Get-Date) - $startedAt).TotalSeconds
+            if ($elapsed -ge 2 -and $c.RailLoadingText) {
+                $c.RailLoadingText.Text = "Loading characters... (${elapsed}s)"
+            }
+            return
+        }
+        $timer.Stop()
+        try {
+            $r = $ps.EndInvoke($asyncResult) | Select-Object -First 1
+            if ($r -and $r.ok) {
+                $list = $r.list
+                if (-not $list -or $list.Count -eq 0) {
+                    $c.Status.Text = 'No characters returned. Has anyone joined this server yet?'
+                    _V6ChShowRailState -c $c -Mode 'empty' `
+                        -Title 'No characters' `
+                        -Hint 'The Postgres DB is empty. Have a player log into the server, then click Refresh.'
+                    if ($c.RailCount) { $c.RailCount.Text = '' }
+                } else {
+                    foreach ($ch in $list) {
+                        $item = New-Object System.Windows.Controls.ListBoxItem
+                        $item.Content = "$($ch.name)  (ID: $($ch.id))"
+                        $item.Tag = $ch.id
+                        $item.ToolTip = "ID: $($ch.id)"
+                        $c.Picker.Items.Add($item) | Out-Null
+                    }
+                    $c.Characters = $list
+                    if ($c.RailCount) { $c.RailCount.Text = "$($list.Count)" }
+                    _V6ChShowRailState -c $c -Mode 'ready'
+                    $c.Status.Text = "Loaded $($list.Count) characters from the VM."
+                    if ($c.Picker.Items.Count -gt 0) { $c.Picker.SelectedIndex = 0 }
+                }
+            } else {
+                $msg = if ($r) { $r.reason } else { 'no result' }
+                $c.Status.Text = "Failed to load characters: $msg"
+                _V6ChShowRailState -c $c -Mode 'error' `
+                    -Title 'Load failed' -Hint $msg
+            }
+        } catch {
+            $c.Status.Text = "Failed to load characters: $($_.Exception.Message)"
+            _V6ChShowRailState -c $c -Mode 'error' `
+                -Title 'Load failed' -Hint $_.Exception.Message
+        } finally {
+            try { $ps.Dispose() } catch {}
+            try { $rs.Close(); $rs.Dispose() } catch {}
+            $c.IsListLoading = $false
+            $c.BtnLoad.IsEnabled = $true
+            $c.AutoLoadDone = $true
+        }
+    }.GetNewClosure()
+    $timer.Add_Tick($tickHandler)
+    $timer.Start()
 }
 
 function Invoke-V6CharLoadDetail {
@@ -1166,6 +1576,7 @@ function Invoke-V6CharLoadDetail {
     if (-not $vm) { $c.Status.Text = 'VM not running.'; return }
     $c.Vm = $vm
     $c.Status.Text = "Loading character $Id..."
+    $script:V6ChLoading = $true
     try {
         $detail = Get-V6CharacterDetail -Ip $vm.ip -Id $Id
         $c.Detail = $detail
@@ -1173,12 +1584,23 @@ function Invoke-V6CharLoadDetail {
             $val = Get-V6StatValue -Detail $detail -Field $s.Field -PathStr $s.Path
             $c.StatControls[$s.Key].Text = "$val"
         }
-        $econ = Get-V6Economy -Ip $vm.ip -Id $Id
-        foreach ($cur in $script:V6CurrencyDefs) {
-            $match = $econ.Currency | Where-Object { [int]$_.currency_id -eq [int]$cur.Id } | Select-Object -First 1
-            $c.CurrencyControls[$cur.Id].Text = if ($match) { "$($match.balance)" } else { '0' }
+        $econ = $null
+        try {
+            $econ = Get-V6Economy -Ip $vm.ip -Id $Id
+            try { Write-Diag "Char $Id economy: Currency=$($econ.Currency.Count) FactionRep=$($econ.FactionRep.Count) Factions=$($econ.Factions.Count) ControllerId=$($econ.ControllerId)" } catch {}
+        } catch {
+            try { Write-Diag "Get-V6Economy failed for char ${Id}: $($_.Exception.Message)" } catch {}
         }
-        _V6ChRebuildFactionBody -state $c -factions $econ.Factions -existing $econ.FactionRep
+        if ($econ) {
+            foreach ($cur in $script:V6CurrencyDefs) {
+                $match = $econ.Currency | Where-Object { [int]$_.currency_id -eq [int]$cur.Id } | Select-Object -First 1
+                $c.CurrencyControls[$cur.Id].Text = if ($match) { "$($match.balance)" } else { '0' }
+            }
+            _V6ChRebuildFactionBody -state $c -factions $econ.Factions -existing $econ.FactionRep
+        } else {
+            foreach ($cur in $script:V6CurrencyDefs) { $c.CurrencyControls[$cur.Id].Text = '0' }
+            _V6ChRebuildFactionBody -state $c -factions @() -existing @()
+        }
         $specs = Get-V6Specializations -Ip $vm.ip -Id $Id
         foreach ($t in $script:V6SpecTracks) {
             $match = $specs.Tracks | Where-Object { $_.track_type -eq $t } | Select-Object -First 1
@@ -1211,6 +1633,9 @@ function Invoke-V6CharLoadDetail {
         $c.Status.Text = "Loaded character $Id at $(Get-Date -Format 'HH:mm:ss')."
     } catch {
         $c.Status.Text = "Failed to load character ${Id}: $($_.Exception.Message)"
+        try { Write-Diag "Invoke-V6CharLoadDetail failed for ${Id}: $($_.Exception.Message) -- $($_.ScriptStackTrace)" } catch {}
+    } finally {
+        $script:V6ChLoading = $false
     }
 }
 
@@ -1362,4 +1787,22 @@ function Update-V6Characters {
         }
     } catch {}
     $c.StopBanner.Visibility = if ($bgRunning) { 'Visible' } else { 'Collapsed' }
+
+    # Auto-load the character list on first visit (and whenever the rail is
+    # empty and we haven't tried yet). Skip if a load is already in flight
+    # or if the user already has characters loaded.
+    if (-not $c.IsListLoading -and (-not $c.Characters -or $c.Characters.Count -eq 0)) {
+        $vm = $null
+        try { $vm = Get-VmStatus } catch {}
+        if ($vm -and $vm.running -and $vm.ip) {
+            # VM is up — kick off async load (no Refresh click required)
+            Invoke-V6CharLoadList -Auto
+        } else {
+            # VM down — show contextual empty state so user knows why
+            _V6ChShowRailState -c $c -Mode 'empty' `
+                -Title 'VM not running' `
+                -Hint 'Start the VM, then come back here (auto-loads on entry).'
+            if ($c.RailCount) { $c.RailCount.Text = '' }
+        }
+    }
 }

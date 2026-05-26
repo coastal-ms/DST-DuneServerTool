@@ -7,9 +7,36 @@
 $script:V6DbPodCache     = $null
 $script:V6DbPodCacheTime = [datetime]::MinValue
 
+function Get-V6SshKeyPath {
+    if ($script:V6SshKeyCache -and (Test-Path $script:V6SshKeyCache)) { return $script:V6SshKeyCache }
+    try {
+        $cfg = $null
+        if (Get-Command Read-Config -ErrorAction SilentlyContinue) {
+            $cfg = Read-Config
+        } else {
+            $cfgPath = $null
+            if ($script:ConfigFile -and (Test-Path $script:ConfigFile)) { $cfgPath = $script:ConfigFile }
+            elseif (Test-Path "$env:APPDATA\DuneServer\dune-server.config") { $cfgPath = "$env:APPDATA\DuneServer\dune-server.config" }
+            if ($cfgPath) {
+                $cfg = @{}
+                Get-Content $cfgPath | ForEach-Object {
+                    if ($_ -match '^([^#=]+)=(.*)$') { $cfg[$Matches[1].Trim()] = $Matches[2].Trim() }
+                }
+            }
+        }
+        if ($cfg -and $cfg.SshKey -and (Test-Path $cfg.SshKey)) { $script:V6SshKeyCache = $cfg.SshKey; return $cfg.SshKey }
+    } catch {}
+    return $null
+}
+
 function Invoke-V6Ssh {
     param([string]$Ip, [string]$Cmd, [int]$TimeoutSec = 30)
-    & ssh -o BatchMode=yes -o StrictHostKeyChecking=no -o ConnectTimeout=8 "dune@$Ip" $Cmd 2>$null
+    $key = Get-V6SshKeyPath
+    if ($key) {
+        & ssh -o BatchMode=yes -o StrictHostKeyChecking=no -o LogLevel=QUIET -o ConnectTimeout=8 -i $key "dune@$Ip" $Cmd 2>$null
+    } else {
+        & ssh -o BatchMode=yes -o StrictHostKeyChecking=no -o LogLevel=QUIET -o ConnectTimeout=8 "dune@$Ip" $Cmd 2>$null
+    }
 }
 
 function Find-V6DbPod {
@@ -19,7 +46,7 @@ function Find-V6DbPod {
     }
     $raw = Invoke-V6Ssh -Ip $Ip -Cmd "sudo kubectl get pods --all-namespaces --no-headers 2>/dev/null | grep 'db-dbdepl-sts.*Running'"
     $line = (($raw -join "`n") -split "`n" | Where-Object { $_ } | Select-Object -First 1)
-    if (-not $line) { throw "Database pod not found - is the VM fully booted?" }
+    if (-not $line) { throw "Postgres pod not found. Make sure the battlegroup is running and fully initialized before editing characters." }
     $parts = ($line.Trim() -split '\s+')
     $pod = @{ ns = $parts[0]; name = $parts[1] }
     $script:V6DbPodCache = $pod
