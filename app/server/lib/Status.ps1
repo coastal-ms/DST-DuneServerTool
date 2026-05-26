@@ -63,12 +63,42 @@ function Get-DuneBattlegroupSnapshot {
     }
 }
 
+# Inspect a `battlegroup status` text blob and return one of:
+#   'running' | 'stopped' | 'starting' | 'stopping' | 'updating' | 'unknown'
+#
+# `battlegroup status` renders a wide kubectl-style table. Relevant signals:
+#
+#   Stopped (any of):
+#     - kubectl's "No resources found in <ns> namespace" (empty namespace)
+#     - "STATUS: Stopped" / "Stopped" on its own line
+#
+#   Running (any of):
+#     - "STATUS: Running"
+#     - Any "Ready" status value (e.g. "Reconciling Ready", "Ready") — the
+#       Status column shows this when the control plane has reconciled
+#     - A Map/Phase table row "<map-name>  Running"
+#
+# Anything else returns 'unknown' so transient SSH/parse issues don't
+# falsely lock down the UI.
 function Get-BgStateFromStatusText {
     param([string]$Text)
     if (-not $Text) { return 'unknown' }
-    if ($Text -match '(?im)^\s*Battlegroup:\s*\S+\s+running\b') { return 'running' }
-    if ($Text -match '(?im)^\s*Battlegroup:\s*\S+\s+stopped\b') { return 'stopped' }
-    if ($Text -match '(?im)^\s*Battlegroup:\s*\S+\s+(starting|stopping|updating)\b') { return $Matches[1].ToLower() }
-    if ($Text -match '(?im)No resources found') { return 'stopped' }
+
+    # Stopped signals (check first — unambiguous)
+    if ($Text -match '(?im)No resources found in .* namespace') { return 'stopped' }
+    if ($Text -match '(?im)\bSTATUS\s*:\s*Stopped\b')           { return 'stopped' }
+    if ($Text -match '(?im)^\s*Stopped\b\s*$')                  { return 'stopped' }
+
+    # Transitional signals — these win over generic "Running" matches
+    # because the table can show old rows during a transition.
+    if ($Text -match '(?im)\b(Starting|Reconciling Starting)\b') { return 'starting' }
+    if ($Text -match '(?im)\b(Stopping|Reconciling Stopping)\b') { return 'stopping' }
+    if ($Text -match '(?im)\b(Updating|Reconciling Updating|Upgrading)\b') { return 'updating' }
+
+    # Running signals
+    if ($Text -match '(?im)\bSTATUS\s*:\s*Running\b') { return 'running' }
+    if ($Text -match '(?im)\bReady\b')                { return 'running' }
+    if ($Text -match '(?m)^\s*\S+\s+Running\b')       { return 'running' }
+
     return 'unknown'
 }
