@@ -3,8 +3,8 @@ import { PageHeader } from '../components/PageHeader'
 import { Icon } from '../components/Icon'
 import { useStatus } from '../hooks/useStatus'
 import { BgSpiceSummary } from './dashboard/BgSpiceSummary'
+import { MapPodCard } from './dashboard/MapPodCard'
 import type { BgState, PortResult, BgGameServer } from '../api/types'
-import { getMapState, startMap, stopMap, type MapState, type MapStopResult } from '../api/maps'
 import { getLinks, type LinksResponse } from '../api/links'
 import { api, ApiError } from '../api/client'
 
@@ -76,70 +76,8 @@ export function Dashboard() {
   const tcp = ports?.results.filter(r => r.protocol === 'TCP') ?? []
   const openTcp = tcp.filter(r => r.status === 'open').length
 
-  // Deep Desert (on-demand map pod) — only fetch when BG is running.
+  // Deep Desert / Arakeen / Harko Village — on-demand map pods.
   const bgReady = bgState === 'running'
-  const [ddState, setDdState] = useState<MapState | null>(null)
-  const [ddLoading, setDdLoading] = useState(false)
-  const [ddError, setDdError] = useState<string | null>(null)
-  const [ddBusy, setDdBusy] = useState(false)
-  const [ddMessage, setDdMessage] = useState<string | null>(null)
-
-  const refreshDd = useCallback(async () => {
-    if (!bgReady) { setDdState(null); setDdError(null); return }
-    setDdLoading(true); setDdError(null)
-    try {
-      const s = await getMapState('deepdesert')
-      setDdState(s)
-    } catch (e) {
-      setDdState(null)
-      setDdError(e instanceof ApiError ? e.message : String(e))
-    } finally {
-      setDdLoading(false)
-    }
-  }, [bgReady])
-
-  useEffect(() => { void refreshDd() }, [refreshDd])
-
-  const startDd = useCallback(async () => {
-    setDdBusy(true); setDdMessage(null); setDdError(null)
-    try {
-      const r = await startMap('deepdesert')
-      setDdMessage(r.message ?? (r.ok ? 'Deep Desert is starting.' : 'Start request finished.'))
-      setTimeout(() => { void refreshDd() }, 2000)
-    } catch (e) {
-      setDdError(e instanceof ApiError ? e.message : String(e))
-    } finally {
-      setDdBusy(false)
-    }
-  }, [refreshDd])
-
-  const stopDd = useCallback(async (force = false) => {
-    setDdBusy(true); setDdMessage(null); setDdError(null)
-    try {
-      const r = await stopMap('deepdesert', force)
-      setDdMessage(r.message ?? (r.ok ? 'Deep Desert is shutting down.' : 'Stop request finished.'))
-      setTimeout(() => { void refreshDd() }, 2000)
-    } catch (e) {
-      // 409 = "players still online, confirm to force". Body carries the count.
-      if (e instanceof ApiError && e.status === 409) {
-        const body = e.body as MapStopResult | undefined
-        const n = body?.playersOnline ?? 0
-        const ok = window.confirm(
-          `${n} player${n === 1 ? '' : 's'} currently connected to Deep Desert.\n\n`
-          + `Force shutdown anyway? They will be disconnected.`
-        )
-        if (ok) {
-          setDdBusy(false)
-          return stopDd(true)
-        }
-        setDdMessage('Shutdown cancelled — players still online.')
-      } else {
-        setDdError(e instanceof ApiError ? e.message : String(e))
-      }
-    } finally {
-      setDdBusy(false)
-    }
-  }, [refreshDd])
 
   // Web Interfaces (File Browser + Director URLs)
   const [links, setLinks] = useState<LinksResponse | null>(null)
@@ -422,107 +360,9 @@ export function Dashboard() {
       </section>
 
       <section className="grid grid-cols-1 lg:grid-cols-2 gap-4 mb-4">
-        <div className="card p-5">
-          <div className="flex items-center justify-between mb-3 gap-3 flex-wrap">
-            <h2 className="text-sm font-semibold uppercase tracking-wider text-text-muted flex items-center gap-2">
-              <Icon name="Mountain" size={14} className="text-accent" /> Deep Desert
-            </h2>
-            <div className="flex items-center gap-2">
-              {ddState && (
-                <span className={ddState.running ? 'pill-success' : ddState.present ? 'pill-muted' : 'pill-warning'}>
-                  <Icon name={ddState.running ? 'CheckCircle2' : ddState.present ? 'CircleDashed' : 'AlertTriangle'} size={10} />
-                  {ddState.running ? 'Running' : ddState.present ? 'Stopped' : 'Not in CRD'}
-                </span>
-              )}
-              <button
-                className="btn-secondary"
-                onClick={() => { void refreshDd() }}
-                disabled={!bgReady || ddLoading || ddBusy}
-                title={!bgReady ? 'Battlegroup must be running' : 'Refresh status'}
-              >
-                <Icon name="RefreshCw" size={14} className={ddLoading ? 'animate-spin' : ''} />
-              </button>
-              <button
-                className="btn-primary"
-                onClick={() => { void startDd() }}
-                disabled={!bgReady || ddBusy || ddLoading || (ddState?.running ?? false)}
-                title={
-                  !bgReady ? 'Battlegroup must be running'
-                    : ddState?.running ? 'Deep Desert is already running'
-                    : 'Spin up the Deep Desert map pod'
-                }
-              >
-                <Icon name={ddBusy ? 'Loader2' : 'Play'} size={14} className={ddBusy ? 'animate-spin' : ''} />
-                {ddBusy ? 'Working…' : 'Spin up Deep Desert'}
-              </button>
-              <button
-                className="btn-secondary"
-                onClick={() => { void stopDd(false) }}
-                disabled={!bgReady || ddBusy || ddLoading || !(ddState?.running ?? false)}
-                title={
-                  !bgReady ? 'Battlegroup must be running'
-                    : !ddState?.running ? 'Deep Desert is already stopped'
-                    : (ddState?.playersOnline ?? 0) > 0 ? `${ddState?.playersOnline} player(s) online — will require confirmation`
-                    : 'Gracefully shut down the Deep Desert map pod'
-                }
-              >
-                <Icon name="Power" size={14} />
-                Shut down
-              </button>
-            </div>
-          </div>
-
-          {!bgReady ? (
-            <p className="text-sm text-text-dim italic">
-              Battlegroup must be running to manage on-demand map pods.
-            </p>
-          ) : ddError ? (
-            <p className="text-sm text-danger break-words">{ddError}</p>
-          ) : !ddState ? (
-            <p className="text-sm text-text-dim italic">Loading…</p>
-          ) : (
-            <div className="space-y-2 text-sm">
-              <dl className="grid grid-cols-[160px_1fr] gap-y-1">
-                <dt className="text-text-dim">Sets in CRD</dt>
-                <dd className="font-mono">{ddState.setCount}</dd>
-                <dt className="text-text-dim">Total replicas</dt>
-                <dd className="font-mono">{ddState.totalReplicas}</dd>
-                {ddState.running && (
-                  <>
-                    <dt className="text-text-dim">Players online</dt>
-                    <dd className={(ddState.playersOnline ?? 0) > 0 ? 'font-mono text-warning' : 'font-mono'}>
-                      {ddState.playersOnline === null || ddState.playersOnline === undefined
-                        ? <span className="text-text-dim italic">unknown</span>
-                        : ddState.playersOnline}
-                      {ddState.playerIds && ddState.playerIds.length > 0 && (
-                        <span className="text-text-dim ml-2">({ddState.playerIds.join(', ')})</span>
-                      )}
-                    </dd>
-                  </>
-                )}
-                {ddState.hasDisabledPart && (
-                  <>
-                    <dt className="text-text-dim">Partitions disabled</dt>
-                    <dd className="text-warning">Yes — will be re-enabled on spin-up</dd>
-                  </>
-                )}
-              </dl>
-              {ddState.sets.length > 0 && (
-                <ul className="text-xs text-text-dim font-mono space-y-0.5">
-                  {ddState.sets.map(s => (
-                    <li key={s.idx}>
-                      set[{s.idx}] {s.map} · replicas={s.replicas ?? '(unset)'} · partitions={s.partitionCount}
-                      {s.dedicatedScaling ? ' · dedicated' : ''}
-                    </li>
-                  ))}
-                </ul>
-              )}
-              {ddMessage && (
-                <p className="text-xs text-text-muted border-l-2 border-accent pl-2 mt-2">{ddMessage}</p>
-              )}
-            </div>
-          )}
-        </div>
+        <MapPodCard mapKey="deepdesert"   label="Deep Desert"   icon="Mountain" bgReady={bgReady} />
+        <MapPodCard mapKey="arakeen"      label="Arrakeen"      icon="Castle"   bgReady={bgReady} />
+        <MapPodCard mapKey="harkovillage" label="Harko Village" icon="Building" bgReady={bgReady} />
 
         <div className="card p-5">
           <div className="flex items-center justify-between mb-3">

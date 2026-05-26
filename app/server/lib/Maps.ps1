@@ -30,7 +30,9 @@ if ($script:DuneK8sPath -and -not (Get-Command Get-V6Battlegroup -ErrorAction Si
 
 # Map name prefix → human label. Add new entries here to support more maps.
 $script:DuneOnDemandMaps = @(
-    @{ Key='deepdesert'; Pattern='^DeepDesert'; Label='Deep Desert' }
+    @{ Key='deepdesert';   Pattern='^DeepDesert';     Label='Deep Desert'    }
+    @{ Key='arakeen';      Pattern='^SH_Arrakeen';     Label='Arrakeen'        }
+    @{ Key='harkovillage'; Pattern='^SH_HarkoVillage'; Label='Harko Village' }
 )
 
 function Get-DuneMapsContext {

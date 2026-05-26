@@ -13,21 +13,31 @@ here cover everything those tags shipped.
 
 ## [Unreleased]
 
-Added
-- **Settings → Port-check mode** now offers two extra providers:
-  - `yougetsignal` — yougetsignal.com only (no canyouseeme fallback hop)
-  - `canyouseeme` — canyouseeme.org as the primary checker
-  Useful if either provider is rate-limiting your public IP and you
-  want to force the other one without waiting for the builtin fallback.
-
 ## [6.1.6] - 2026-05-26
 
-Patch: **Max primed mirrors Max active on the Game Config / Spicefields card.**
+Patch: **Max primed mirrors Max active on the Game Config / Spicefields card,
+plus two new on-demand map pod cards (Arrakeen + Harko Village) and extra
+port-check provider choices.**
+
+Added
+- **Two new on-demand map pod cards on the Dashboard**: **Arrakeen**
+  (`SH_Arrakeen`) and **Harko Village** (`SH_HarkoVillage`), alongside
+  the existing Deep Desert card. Each card has the same controls
+  (Spin up / Shut down / Refresh), player-online safeguard on shutdown,
+  set/replica/partition diagnostics, and CRD-presence pill.
+- Settings → Port-check mode now offers two extra providers
+  (`yougetsignal` only, `canyouseeme` only) for users whose IP is
+  rate-limited by one provider.
 
 Changed
 - On the **Game Config → Spicefields** editor, changing **Max active**
   now automatically sets **Max primed** to the same value. Max primed
   remains independently editable afterward if you need to set it lower.
+- The Deep Desert card was extracted into a reusable
+  `pages/dashboard/MapPodCard.tsx` component. Adding more on-demand
+  maps in the future is now a one-line change in
+  `app/server/lib/Maps.ps1` (`$script:DuneOnDemandMaps`) plus a single
+  `<MapPodCard …/>` in `pages/Dashboard.tsx`.
 
 ## [6.1.5] - 2026-05-26
 
