@@ -272,11 +272,11 @@ SELECT COALESCE(json_agg(row_to_json(t)), '[]') FROM (
     $rep = Invoke-V6Psql -Ip $Ip -Sql @"
 SELECT COALESCE(json_agg(row_to_json(t)), '[]') FROM (
   SELECT fr.faction_id, f.name AS faction_name, fr.reputation_amount
-  FROM player_faction_reputation fr JOIN factions f ON fr.faction_id = f.id
-  WHERE fr.actor_id = $Id ORDER BY fr.faction_id
+  FROM dune.player_faction_reputation fr JOIN dune.factions f ON fr.faction_id = f.id
+  WHERE fr.actor_id = $controllerId ORDER BY fr.faction_id
 ) t
 "@
-    $factions = Invoke-V6Psql -Ip $Ip -Sql "SELECT COALESCE(json_agg(row_to_json(t)), '[]') FROM (SELECT id, name FROM factions ORDER BY id) t"
+    $factions = Invoke-V6Psql -Ip $Ip -Sql "SELECT COALESCE(json_agg(row_to_json(t)), '[]') FROM (SELECT id, name FROM dune.factions ORDER BY id) t"
 
     return @{
         ControllerId = $controllerId
@@ -300,9 +300,11 @@ ON CONFLICT (player_controller_id, currency_id) DO UPDATE SET balance = EXCLUDED
 
 function Set-V6FactionReputation {
     param([string]$Ip, [int]$Id, [int]$FactionId, [int]$Amount)
+    $controllerId = Get-V6ControllerId -Ip $Ip -Id $Id
+    if (-not $controllerId) { throw "Could not resolve controller id for actor $Id" }
     $sql = @"
-INSERT INTO player_faction_reputation (actor_id, faction_id, reputation_amount)
-VALUES ($Id, $FactionId, $Amount)
+INSERT INTO dune.player_faction_reputation (actor_id, faction_id, reputation_amount)
+VALUES ($controllerId, $FactionId, $Amount)
 ON CONFLICT (actor_id, faction_id) DO UPDATE SET reputation_amount = EXCLUDED.reputation_amount
 "@
     Invoke-V6Psql -Ip $Ip -Sql $sql | Out-Null
