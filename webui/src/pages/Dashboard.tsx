@@ -3,7 +3,7 @@ import { PageHeader } from '../components/PageHeader'
 import { Icon } from '../components/Icon'
 import { useStatus } from '../hooks/useStatus'
 import type { BgState, PortResult, BgGameServer } from '../api/types'
-import { getMapState, startMap, type MapState } from '../api/maps'
+import { getMapState, startMap, stopMap, type MapState, type MapStopResult } from '../api/maps'
 import { getLinks, type LinksResponse } from '../api/links'
 import { api, ApiError } from '../api/client'
 
@@ -107,6 +107,34 @@ export function Dashboard() {
       setTimeout(() => { void refreshDd() }, 2000)
     } catch (e) {
       setDdError(e instanceof ApiError ? e.message : String(e))
+    } finally {
+      setDdBusy(false)
+    }
+  }, [refreshDd])
+
+  const stopDd = useCallback(async (force = false) => {
+    setDdBusy(true); setDdMessage(null); setDdError(null)
+    try {
+      const r = await stopMap('deepdesert', force)
+      setDdMessage(r.message ?? (r.ok ? 'Deep Desert is shutting down.' : 'Stop request finished.'))
+      setTimeout(() => { void refreshDd() }, 2000)
+    } catch (e) {
+      // 409 = "players still online, confirm to force". Body carries the count.
+      if (e instanceof ApiError && e.status === 409) {
+        const body = e.body as MapStopResult | undefined
+        const n = body?.playersOnline ?? 0
+        const ok = window.confirm(
+          `${n} player${n === 1 ? '' : 's'} currently connected to Deep Desert.\n\n`
+          + `Force shutdown anyway? They will be disconnected.`
+        )
+        if (ok) {
+          setDdBusy(false)
+          return stopDd(true)
+        }
+        setDdMessage('Shutdown cancelled — players still online.')
+      } else {
+        setDdError(e instanceof ApiError ? e.message : String(e))
+      }
     } finally {
       setDdBusy(false)
     }
@@ -415,7 +443,21 @@ export function Dashboard() {
                 }
               >
                 <Icon name={ddBusy ? 'Loader2' : 'Play'} size={14} className={ddBusy ? 'animate-spin' : ''} />
-                {ddBusy ? 'Starting…' : 'Spin up Deep Desert'}
+                {ddBusy ? 'Working…' : 'Spin up Deep Desert'}
+              </button>
+              <button
+                className="btn-secondary"
+                onClick={() => { void stopDd(false) }}
+                disabled={!bgReady || ddBusy || ddLoading || !(ddState?.running ?? false)}
+                title={
+                  !bgReady ? 'Battlegroup must be running'
+                    : !ddState?.running ? 'Deep Desert is already stopped'
+                    : (ddState?.playersOnline ?? 0) > 0 ? `${ddState?.playersOnline} player(s) online — will require confirmation`
+                    : 'Gracefully shut down the Deep Desert map pod'
+                }
+              >
+                <Icon name="Power" size={14} />
+                Shut down
               </button>
             </div>
           </div>
@@ -435,6 +477,19 @@ export function Dashboard() {
                 <dd className="font-mono">{ddState.setCount}</dd>
                 <dt className="text-text-dim">Total replicas</dt>
                 <dd className="font-mono">{ddState.totalReplicas}</dd>
+                {ddState.running && (
+                  <>
+                    <dt className="text-text-dim">Players online</dt>
+                    <dd className={(ddState.playersOnline ?? 0) > 0 ? 'font-mono text-warning' : 'font-mono'}>
+                      {ddState.playersOnline === null || ddState.playersOnline === undefined
+                        ? <span className="text-text-dim italic">unknown</span>
+                        : ddState.playersOnline}
+                      {ddState.playerIds && ddState.playerIds.length > 0 && (
+                        <span className="text-text-dim ml-2">({ddState.playerIds.join(', ')})</span>
+                      )}
+                    </dd>
+                  </>
+                )}
                 {ddState.hasDisabledPart && (
                   <>
                     <dt className="text-text-dim">Partitions disabled</dt>
