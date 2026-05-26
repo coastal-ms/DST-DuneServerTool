@@ -3,7 +3,7 @@ import { Icon } from '../components/Icon'
 import { NAV_ITEMS, GROUP_LABELS } from '../nav'
 
 export function Sidebar() {
-  const groups = (['core', 'data', 'system'] as const).map(g => ({
+  const groups = (['overview', 'terminal', 'data', 'system'] as const).map(g => ({
     key: g,
     label: GROUP_LABELS[g],
     items: NAV_ITEMS.filter(i => i.group === g),
