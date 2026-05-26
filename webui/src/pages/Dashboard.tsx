@@ -260,9 +260,17 @@ export function Dashboard() {
           ) : !bgInfo ? (
             <p className="text-sm text-text-dim italic">No battlegroup info yet.</p>
           ) : (
-            <dl className="grid grid-cols-[90px_1fr] gap-x-3 gap-y-1 text-sm leading-snug">
-              <dt className="text-text-dim">Status</dt>
-              <dd className={healthClass(bgInfo.status)}>{bgInfo.status || '—'}</dd>
+            <dl className="grid grid-cols-[110px_1fr] gap-x-3 gap-y-1 text-sm leading-snug">
+              <dt className="text-text-dim" title="Funcom BG operator's overall reconcile state. Goes 'Reconciling' briefly whenever a Game Server is added or removed.">BG state</dt>
+              <dd className={healthClass(bgInfo.status)}>
+                {bgInfo.status || '—'}
+                {bgInfo.status === 'Reconciling' && (
+                  <span className="ml-2 text-[10px] uppercase tracking-wider text-text-dim font-normal"
+                        title="The BG operator is settling changes — usually because a map just spun up or down. The DB / Gateway / Director rows below show actual component health.">
+                    map churn
+                  </span>
+                )}
+              </dd>
               <dt className="text-text-dim">Database</dt>
               <dd className={healthClass(bgInfo.database)}>{bgInfo.database || '—'}</dd>
               <dt className="text-text-dim">Gateway</dt>
