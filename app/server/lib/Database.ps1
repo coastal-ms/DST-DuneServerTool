@@ -117,7 +117,7 @@ function ConvertFrom-DunePsqlCsv {
             $parsedArr = $parsedArr[0..($MaxRows - 1)]
             $truncated = $true
         }
-        $rows = New-Object System.Collections.Generic.List[object]
+        $rows = [System.Collections.Generic.List[object]]::new()
         foreach ($obj in $parsedArr) {
             $row = New-Object object[] $cols.Count
             for ($i = 0; $i -lt $cols.Count; $i++) {

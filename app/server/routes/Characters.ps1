@@ -76,7 +76,7 @@ Register-DuneRoute -Method PUT -Path '/api/characters/{id}/stats' -Handler {
     elseif ($body.values) { $values = $body.values }
     if (-not $values) { Write-DuneError -Response $res -Status 400 -Message 'Body must include a "values" object.'; return }
 
-    $updates = New-Object System.Collections.Generic.List[hashtable]
+    $updates = [System.Collections.Generic.List[hashtable]]::new()
     $keys = if ($values -is [hashtable]) { $values.Keys } else { $values.PSObject.Properties.Name }
     foreach ($k in $keys) {
         $def = Get-DuneCharStatDef -Key $k
