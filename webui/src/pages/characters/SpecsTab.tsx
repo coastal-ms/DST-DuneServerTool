@@ -68,6 +68,12 @@ export function SpecsTab({ charId, charName, detail, defs, onSaved }: Props) {
     <SectionCard title="Specializations" icon="Sparkles">
       <Toast kind="error" message={err} onClear={() => setErr(null)} />
       <Toast kind="success" message={ok} onClear={() => setOk(null)} />
+      {typeof detail.specializations.keystoneCount === 'number' && (
+        <div className="mb-3 text-xs text-text-muted">
+          <span className="font-medium text-text">{detail.specializations.keystoneCount}</span>
+          {' '}keystone{detail.specializations.keystoneCount === 1 ? '' : 's'} unlocked
+        </div>
+      )}
       <div className="space-y-3">
         {defs.specTracks.map(track => {
           const r = rows[track] ?? { xp: '0', level: '0', busy: false }
