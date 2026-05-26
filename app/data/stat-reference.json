@@ -1,0 +1,178 @@
+{
+  "_meta": {
+    "source": "database inspection",
+    "date": "2026-05-20"
+  },
+  "actor_properties": {
+    "DamageableActorComponent": {
+      "m_TotalMaxHealth": {
+        "type": "float",
+        "description": "Maximum health pool",
+        "default": 100.0
+      },
+      "m_CurrentMaxHealth": {
+        "type": "float",
+        "description": "Current max health (should match TotalMax)",
+        "default": 100.0
+      }
+    },
+    "TechKnowledgePlayerComponent": {
+      "m_TechKnowledgePoints": {
+        "type": "int",
+        "description": "Unspent tech knowledge points",
+        "default": 0
+      },
+      "m_NextTechTreeUpgradeIndex": {
+        "type": "int",
+        "description": "Number of tech tree upgrades purchased",
+        "default": 0
+      }
+    },
+    "BP_DunePlayerCharacter_C": {
+      "m_EyesOfIbadValue": {
+        "type": "float",
+        "description": "Blue-in-blue eye intensity (0.0 to 1.0)",
+        "default": 0.0
+      },
+      "m_bShowHelmet": {
+        "type": "bool",
+        "description": "Show/hide helmet",
+        "default": true
+      },
+      "m_bCharacterHasBeenFinalized": {
+        "type": "bool",
+        "description": "Character creation complete",
+        "default": true
+      }
+    },
+    "WeaponActorComponent": {
+      "m_FavoriteWeaponItemDatabaseId": {
+        "type": "string",
+        "description": "Favorite weapon reference",
+        "default": "!!itm#0"
+      }
+    }
+  },
+  "gas_attributes": {
+    "DuneHydrationAttributeSet": {
+      "CurrentHydration": {
+        "type": "float_pair",
+        "description": "Water level",
+        "default": 100.0,
+        "fields": [
+          "BaseValue",
+          "CurrentValue"
+        ]
+      },
+      "HeatExhaustion": {
+        "type": "float_pair",
+        "description": "Heat exhaustion level",
+        "default": 0.0,
+        "fields": [
+          "BaseValue",
+          "CurrentValue"
+        ]
+      },
+      "DehydrationPenalty": {
+        "type": "float_pair",
+        "description": "Dehydration debuff",
+        "default": 0.0,
+        "fields": [
+          "BaseValue",
+          "CurrentValue"
+        ]
+      },
+      "ClothingCapturedWater": {
+        "type": "float_pair",
+        "description": "Water collected by stillsuit",
+        "default": 0.0,
+        "fields": [
+          "BaseValue",
+          "CurrentValue"
+        ]
+      }
+    },
+    "DuneSpiceAddictionAttributeSet": {
+      "CurrentSpice": {
+        "type": "float_pair",
+        "description": "Spice amount",
+        "default": 0.0,
+        "fields": [
+          "BaseValue",
+          "CurrentValue"
+        ]
+      },
+      "SpiceExposure": {
+        "type": "float_pair",
+        "description": "Spice exposure level",
+        "default": 0.0,
+        "fields": [
+          "BaseValue",
+          "CurrentValue"
+        ]
+      },
+      "SpiceTolerance": {
+        "type": "float_pair",
+        "description": "Spice tolerance",
+        "default": 0.0,
+        "fields": [
+          "BaseValue",
+          "CurrentValue"
+        ]
+      },
+      "SpiceAddictionLevel": {
+        "type": "float_pair",
+        "description": "Addiction level",
+        "default": 0.0,
+        "fields": [
+          "BaseValue",
+          "CurrentValue"
+        ]
+      }
+    }
+  },
+  "inventory_types": {
+    "0": "Main Inventory (backpack)",
+    "1": "Recipes/Knowledge",
+    "12": "Emote Wheel",
+    "14": "Social/Cosmetic Outfits",
+    "15": "Hotbar (equipment slots)",
+    "20": "Quick-use Consumables",
+    "25": "Unknown (25)",
+    "27": "Equipped Garments",
+    "29": "Unknown (29)",
+    "30": "Storage/Overflow",
+    "31": "Unknown (31)",
+    "32": "Unknown (32)",
+    "33": "Unknown (33)"
+  },
+  "item_stats_format": {
+    "stackable": {
+      "FItemStackAndDurabilityStats": [
+        [],
+        {
+          "DecayedMaxDurability": 0.0
+        }
+      ]
+    },
+    "equipment": {
+      "FCustomizationStats": [
+        [],
+        {}
+      ],
+      "FItemStackAndDurabilityStats": [
+        [],
+        {}
+      ]
+    },
+    "simple": {
+      "FItemStackAndDurabilityStats": [
+        [],
+        {}
+      ]
+    }
+  },
+  "currency_table": "player_virtual_currency_balances",
+  "faction_table": "player_faction_reputation",
+  "specialization_table": "specialization_tracks"
+}

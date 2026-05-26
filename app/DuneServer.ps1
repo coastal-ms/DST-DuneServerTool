@@ -1,4 +1,4 @@
-# DuneServer.ps1 - Dune Server desktop app (WPF host for dune-server.ps1)
+﻿# DuneServer.ps1 - Dune Server desktop app (WPF host for dune-server.ps1)
 #
 # Compiled via ps2exe to DuneServer.exe (PowerShell 5.1 Desktop host).
 # Child dune-server.ps1 commands are launched via explicit `pwsh` (PowerShell 7).
@@ -32,7 +32,7 @@ param()
 # check (Check-ForUpdates) and the "Installed: x.y.z" header label. Must be
 # bumped in lock-step with the other 3 version constants (dune-server.ps1,
 # Build-Exe.ps1, installer .iss).
-$script:ToolVersion = "5.0.2"
+$script:ToolVersion = "6.0.0"
 
 # ANSI escape character (0x1B). The ps2exe-compiled binary runs in
 # PowerShell 5.1 (Desktop), which does NOT support the `e backtick-e
@@ -40,6 +40,29 @@ $script:ToolVersion = "5.0.2"
 # "`e[36m..." emits a LITERAL 'e[36m...' — which xterm.js then renders
 # verbatim instead of as colored text. Always use $script:ESC for ANSI.
 $script:ESC = [char]27
+
+# ────────────────────────────────────────────────────────────────────────────
+#  Hide host console window
+# ────────────────────────────────────────────────────────────────────────────
+#
+#  When this script is launched via `powershell.exe -File DuneServer.ps1`
+#  (dev / direct-run scenario), a console window stays open behind the WPF
+#  app. The compiled .exe (ps2exe with -noConsole) doesn't have this issue,
+#  but during development we run the raw .ps1 a lot. Hide the console at
+#  startup so the user experience matches the compiled .exe. Safe no-op when
+#  there is no attached console (GetConsoleWindow returns IntPtr.Zero).
+try {
+    if (-not ('DuneConsoleHider' -as [type])) {
+        Add-Type -Namespace Native -Name DuneConsoleHider -MemberDefinition @'
+[System.Runtime.InteropServices.DllImport("kernel32.dll")] public static extern System.IntPtr GetConsoleWindow();
+[System.Runtime.InteropServices.DllImport("user32.dll")]   public static extern bool ShowWindow(System.IntPtr hWnd, int nCmdShow);
+'@ -ErrorAction Stop
+    }
+    $hCon = [Native.DuneConsoleHider]::GetConsoleWindow()
+    if ($hCon -ne [System.IntPtr]::Zero) {
+        [Native.DuneConsoleHider]::ShowWindow($hCon, 0) | Out-Null   # 0 = SW_HIDE
+    }
+} catch {}
 
 # ────────────────────────────────────────────────────────────────────────────
 #  Prerequisite check: PowerShell 7 (pwsh.exe)
@@ -91,8 +114,16 @@ if (-not $script:AppDir) {
 }
 if (-not $script:AppDir) { $script:AppDir = (Get-Location).Path }
 
-# dune-server.ps1 is shipped in the same install dir
+# dune-server.ps1 is shipped in the same install dir.
+# In dev mode it lives at the repo root (one level up from app\), so probe both.
 $script:MainScript = Join-Path $script:AppDir 'dune-server.ps1'
+if (-not (Test-Path -LiteralPath $script:MainScript)) {
+    $parent = Split-Path -Parent $script:AppDir
+    if ($parent) {
+        $devCandidate = Join-Path $parent 'dune-server.ps1'
+        if (Test-Path -LiteralPath $devCandidate) { $script:MainScript = $devCandidate }
+    }
+}
 $script:VmName     = 'dune-awakening'
 
 # Writable runtime data lives in %APPDATA%\DuneServer\ (Program Files is read-only)
@@ -241,6 +272,22 @@ Add-Type -AssemblyName PresentationCore
 Add-Type -AssemblyName WindowsBase
 Add-Type -AssemblyName System.Xaml
 
+# v6: load Theme.xaml's inner contents and splice into the inline XAML at the
+# `<!-- v6-theme-injection -->` marker before XamlReader parses it. Keeps the
+# single-source-of-truth design tokens in app\styles\Theme.xaml while still
+# letting the inline XAML reference them via {StaticResource X}.
+$script:V6ThemePath = Join-Path $PSScriptRoot 'styles\Theme.xaml'
+function Get-V6ThemeInnerXaml {
+    if (-not (Test-Path $script:V6ThemePath)) { return '' }
+    $raw = Get-Content -Raw -LiteralPath $script:V6ThemePath
+    # Strip XML declaration if present.
+    $raw = [regex]::Replace($raw, '^\s*<\?xml[^?]*\?>\s*', '')
+    # Capture everything between the outer <ResourceDictionary ...> and </ResourceDictionary>.
+    $m = [regex]::Match($raw, '(?s)<ResourceDictionary\b[^>]*>(.*)</ResourceDictionary>\s*$')
+    if (-not $m.Success) { return '' }
+    return $m.Groups[1].Value
+}
+
 [xml]$xaml = @'
 <Window xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
@@ -251,6 +298,7 @@ Add-Type -AssemblyName System.Xaml
         WindowStartupLocation="CenterScreen"
         Background="#14110D">
   <Window.Resources>
+    <!-- v6-theme-injection -->
     <Style x:Key="SectionHeader" TargetType="TextBlock">
       <Setter Property="Foreground" Value="#E8B872"/>
       <Setter Property="FontWeight" Value="Bold"/>
@@ -552,16 +600,17 @@ Add-Type -AssemblyName System.Xaml
       <Setter Property="IsReadOnly"      Value="True"/>
       <Setter Property="TextWrapping"    Value="NoWrap"/>
       <Setter Property="AcceptsReturn"   Value="True"/>
-      <Setter Property="VerticalScrollBarVisibility"   Value="Auto"/>
+      <Setter Property="VerticalScrollBarVisibility"   Value="Visible"/>
       <Setter Property="HorizontalScrollBarVisibility" Value="Auto"/>
     </Style>
   </Window.Resources>
 
   <Grid>
     <Grid.RowDefinitions>
-      <RowDefinition Height="Auto"/> <!-- status header -->
-      <RowDefinition Height="*"/>    <!-- main split -->
-      <RowDefinition Height="Auto"/> <!-- footer status bar -->
+      <RowDefinition Height="345" MinHeight="220" x:Name="HeaderRow"/> <!-- status header (resizable) -->
+      <RowDefinition Height="6"/>                                       <!-- splitter -->
+      <RowDefinition Height="*" MinHeight="220"/>                       <!-- main split -->
+      <RowDefinition Height="Auto"/>                                    <!-- footer status bar -->
     </Grid.RowDefinitions>
 
     <!-- ═══ Status header ═══ -->
@@ -571,9 +620,12 @@ Add-Type -AssemblyName System.Xaml
           <RowDefinition Height="Auto"/>
           <RowDefinition Height="Auto"/>
           <RowDefinition Height="Auto"/>
+          <RowDefinition Height="Auto"/>
+          <RowDefinition Height="*" MinHeight="120"/>
         </Grid.RowDefinitions>
         <Grid.ColumnDefinitions>
           <ColumnDefinition Width="*"/>
+          <ColumnDefinition Width="Auto"/>
           <ColumnDefinition Width="Auto"/>
           <ColumnDefinition Width="Auto"/>
           <ColumnDefinition Width="Auto"/>
@@ -586,16 +638,25 @@ Add-Type -AssemblyName System.Xaml
         </StackPanel>
         <TextBlock x:Name="InstalledVersionLbl" Grid.Row="0" Grid.Column="1" Text="Installed: -" Foreground="#B8A88F" FontSize="11" VerticalAlignment="Center" Margin="0,0,10,0"/>
         <TextBlock x:Name="LatestVersionLbl"    Grid.Row="0" Grid.Column="2" Text="Latest: checking..." Foreground="#B8A88F" FontSize="11" VerticalAlignment="Center" Margin="0,0,10,0"/>
-        <Button x:Name="BtnCheckUpdate" Grid.Row="0" Grid.Column="3" Content="Check for Updates" Style="{StaticResource UtilButton}" Padding="14,4" Margin="0,0,6,0"/>
-        <Button x:Name="BtnRefreshStatus" Grid.Row="0" Grid.Column="4" Content="Refresh" Style="{StaticResource UtilButton}" Padding="14,4"/>
+        <Button x:Name="BtnCheckUpdate"   Grid.Row="0" Grid.Column="3" Content="Check for Updates" Style="{StaticResource UtilButton}" Padding="14,4" Margin="0,0,6,0"/>
+        <Button x:Name="BtnRefreshStatus" Grid.Row="0" Grid.Column="4" Content="Refresh"           Style="{StaticResource UtilButton}" Padding="14,4" Margin="0,0,6,0"/>
+        <Button x:Name="BtnReportIssue"   Grid.Row="0" Grid.Column="5" Content="Report Issue"      Style="{StaticResource UtilButton}" Padding="14,4" ToolTip="Open a prefilled GitHub bug report (auto-fills version, env, and diagnostics log)"/>
 
-        <TextBlock x:Name="PortStatusLbl" Grid.Row="1" Grid.ColumnSpan="5"
+        <TextBlock x:Name="PortStatusLbl" Grid.Row="1" Grid.ColumnSpan="6"
                    FontFamily="Consolas" FontSize="11" Foreground="#888"
                    Margin="0,6,0,0" Text="Ports: (waiting for first check)"/>
 
-        <Border Grid.Row="2" Grid.ColumnSpan="5" Height="332" Margin="0,6,0,0"
+        <TextBlock x:Name="SpiceStatusLbl" Grid.Row="2" Grid.ColumnSpan="6"
+                   FontFamily="Consolas" FontSize="11" Foreground="#888"
+                   Margin="0,3,0,0" Text="Hagga Basin: (waiting for first check)"/>
+
+        <TextBlock x:Name="SpiceStatusLbl2" Grid.Row="3" Grid.ColumnSpan="6"
+                   FontFamily="Consolas" FontSize="11" Foreground="#888"
+                   Margin="0,2,0,0" Text="Deep Desert: (waiting for first check)"/>
+
+        <Border Grid.Row="4" Grid.ColumnSpan="6" Margin="0,6,0,0"
                 Background="#0C0C0C" BorderBrush="#3F3F46" BorderThickness="1">
-          <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Auto"
+          <ScrollViewer VerticalScrollBarVisibility="Visible" HorizontalScrollBarVisibility="Auto"
                         Focusable="False" Padding="4,2">
             <TextBlock x:Name="StatusPane" FontFamily="Consolas" FontSize="12"
                        Foreground="#E5E5E5" Text="Loading cluster status..."/>
@@ -604,62 +665,212 @@ Add-Type -AssemblyName System.Xaml
       </Grid>
     </Border>
 
-    <!-- ═══ Main split: buttons | output ═══ -->
-    <Grid Grid.Row="1">
+    <!-- ═══ Resizable splitter: drag to grow/shrink the lower half ═══ -->
+    <GridSplitter Grid.Row="1" Height="6" HorizontalAlignment="Stretch"
+                  VerticalAlignment="Stretch"
+                  Background="#3F3F46" BorderBrush="#1F1F1F" BorderThickness="0,1,0,1"
+                  ShowsPreview="False" ResizeBehavior="PreviousAndNext" ResizeDirection="Rows"
+                  Cursor="SizeNS"/>
+
+    <!-- ═══ v6 main area: sidebar + page host ═══ -->
+    <Grid Grid.Row="2">
       <Grid.ColumnDefinitions>
-        <ColumnDefinition Width="820" MinWidth="640"/>
-        <ColumnDefinition Width="5"/>
+        <ColumnDefinition Width="200" x:Name="SidebarCol"/>
         <ColumnDefinition Width="*"/>
       </Grid.ColumnDefinitions>
 
-      <!-- Left: 3-column drag-reorderable button grid (flat order, no sections) -->
-      <ScrollViewer Grid.Column="0" VerticalScrollBarVisibility="Auto" Background="#14110D">
-        <Grid Margin="6,4,6,12">
-          <Grid.ColumnDefinitions>
-            <ColumnDefinition Width="*"/>
-            <ColumnDefinition Width="*"/>
-            <ColumnDefinition Width="*"/>
-          </Grid.ColumnDefinitions>
-          <StackPanel x:Name="ButtonPanelCol1" Grid.Column="0" Margin="0,0,3,0"/>
-          <StackPanel x:Name="ButtonPanelCol2" Grid.Column="1" Margin="3,0,3,0"/>
-          <StackPanel x:Name="ButtonPanelCol3" Grid.Column="2" Margin="3,0,0,0"/>
-        </Grid>
-      </ScrollViewer>
+      <!-- ─── Sidebar ─── -->
+      <Border Grid.Column="0" Background="{StaticResource SidebarBgBrush}"
+              BorderBrush="{StaticResource BorderSoftBrush}" BorderThickness="0,0,1,0">
+        <DockPanel LastChildFill="True">
+          <Border DockPanel.Dock="Top" Background="{StaticResource BronzeBarBrush}" Padding="0">
+            <TextBlock x:Name="SidebarBrand" Text="DUNE · SERVER"
+                       Foreground="{StaticResource GoldBrightBrush}"
+                       FontFamily="Cinzel, Trajan Pro, Georgia"
+                       FontSize="13" FontWeight="SemiBold"
+                       Padding="16,14"/>
+          </Border>
 
-      <GridSplitter Grid.Column="1" Width="5" Background="#2D2D30" HorizontalAlignment="Stretch"/>
+          <Button x:Name="SidebarCollapseBtn" DockPanel.Dock="Bottom"
+                  Style="{StaticResource SidebarCollapseStyle}"
+                  ToolTip="Collapse sidebar (Ctrl+B)">
+            <TextBlock x:Name="SidebarCollapseGlyph" Text="‹‹" FontSize="14" FontWeight="Bold"/>
+          </Button>
 
-      <!-- Right: output -->
-      <Grid Grid.Column="2">
-        <Grid.RowDefinitions>
-          <RowDefinition Height="Auto"/>
-          <RowDefinition Height="*"/>
-        </Grid.RowDefinitions>
+          <ScrollViewer VerticalScrollBarVisibility="Hidden">
+            <StackPanel x:Name="SidebarItems">
+              <TextBlock x:Name="SidebarLabelOperate" Text="OPERATE" Style="{StaticResource SidebarGroupLabelStyle}"/>
+              <RadioButton x:Name="NavDashboard" IsChecked="True" Style="{StaticResource SidebarItemStyle}" GroupName="SidebarNav" Tag="Dashboard">
+                <StackPanel Orientation="Horizontal">
+                  <Path Width="18" Height="18" Stretch="Uniform" StrokeThickness="2"
+                        Stroke="{Binding Foreground, RelativeSource={RelativeSource AncestorType=RadioButton}}"
+                        Data="M3,3 L10,3 L10,10 L3,10 Z M14,3 L21,3 L21,10 L14,10 Z M3,14 L10,14 L10,21 L3,21 Z M14,14 L21,14 L21,21 L14,21 Z"/>
+                  <TextBlock Text="Dashboard" Margin="12,0,0,0" VerticalAlignment="Center"/>
+                </StackPanel>
+              </RadioButton>
+              <RadioButton x:Name="NavMonitoring" Style="{StaticResource SidebarItemStyle}" GroupName="SidebarNav" Tag="Monitoring">
+                <StackPanel Orientation="Horizontal">
+                  <Path Width="18" Height="18" Stretch="Uniform" StrokeThickness="2"
+                        Stroke="{Binding Foreground, RelativeSource={RelativeSource AncestorType=RadioButton}}"
+                        Data="M12,12 m-10,0 a10,10 0 1,0 20,0 a10,10 0 1,0 -20,0 M2,12 L22,12 M12,2 a15,15 0 0,1 4,10 a15,15 0 0,1 -4,10 a15,15 0 0,1 -4,-10 a15,15 0 0,1 4,-10"/>
+                  <TextBlock Text="Monitoring" Margin="12,0,0,0" VerticalAlignment="Center"/>
+                </StackPanel>
+              </RadioButton>
+              <RadioButton x:Name="NavTerminal" Style="{StaticResource SidebarItemStyle}" GroupName="SidebarNav" Tag="Terminal">
+                <StackPanel Orientation="Horizontal">
+                  <Path Width="18" Height="18" Stretch="Uniform" StrokeThickness="2"
+                        Stroke="{Binding Foreground, RelativeSource={RelativeSource AncestorType=RadioButton}}"
+                        Data="M4,17 L10,11 L4,5 M12,19 L20,19"/>
+                  <TextBlock Text="Terminal" Margin="12,0,0,0" VerticalAlignment="Center"/>
+                </StackPanel>
+              </RadioButton>
 
-        <Border Grid.Row="0" Background="#252526" BorderBrush="#3F3F46" BorderThickness="0,0,0,1" Padding="10,6">
+              <TextBlock x:Name="SidebarLabelManage" Text="MANAGE" Style="{StaticResource SidebarGroupLabelStyle}"/>
+              <RadioButton x:Name="NavCharacters" Style="{StaticResource SidebarItemStyle}" GroupName="SidebarNav" Tag="Characters">
+                <StackPanel Orientation="Horizontal">
+                  <Path Width="18" Height="18" Stretch="Uniform" StrokeThickness="2"
+                        Stroke="{Binding Foreground, RelativeSource={RelativeSource AncestorType=RadioButton}}"
+                        Data="M12,8 m-4,0 a4,4 0 1,0 8,0 a4,4 0 1,0 -8,0 M4,21 L4,20 A6,6 0 0,1 10,14 L14,14 A6,6 0 0,1 20,20 L20,21"/>
+                  <TextBlock Text="Characters" Margin="12,0,0,0" VerticalAlignment="Center"/>
+                </StackPanel>
+              </RadioButton>
+              <RadioButton x:Name="NavGameConfig" Style="{StaticResource SidebarItemStyle}" GroupName="SidebarNav" Tag="GameConfig">
+                <StackPanel Orientation="Horizontal">
+                  <Path Width="18" Height="18" Stretch="Uniform" StrokeThickness="2"
+                        Stroke="{Binding Foreground, RelativeSource={RelativeSource AncestorType=RadioButton}}"
+                        Data="M12,12 m-3,0 a3,3 0 1,0 6,0 a3,3 0 1,0 -6,0 M12,2 L12,5 M12,19 L12,22 M2,12 L5,12 M19,12 L22,12 M4.9,4.9 L7,7 M17,17 L19.1,19.1 M4.9,19.1 L7,17 M17,7 L19.1,4.9"/>
+                  <TextBlock Text="Game Config" Margin="12,0,0,0" VerticalAlignment="Center"/>
+                </StackPanel>
+              </RadioButton>
+              <RadioButton x:Name="NavDatabase" Style="{StaticResource SidebarItemStyle}" GroupName="SidebarNav" Tag="Database">
+                <StackPanel Orientation="Horizontal">
+                  <Path Width="18" Height="18" Stretch="Uniform" StrokeThickness="2"
+                        Stroke="{Binding Foreground, RelativeSource={RelativeSource AncestorType=RadioButton}}"
+                        Data="M3,5 m9,-3 a9,3 0 1,0 0,6 a9,3 0 1,0 0,-6 M3,5 L3,11 M21,5 L21,11 M3,11 a9,3 0 1,0 18,0 M3,11 L3,17 M21,11 L21,17 M3,17 a9,3 0 1,0 18,0"/>
+                  <TextBlock Text="Database" Margin="12,0,0,0" VerticalAlignment="Center"/>
+                </StackPanel>
+              </RadioButton>
+
+              <TextBlock x:Name="SidebarLabelSystem" Text="SYSTEM" Style="{StaticResource SidebarGroupLabelStyle}"/>
+              <RadioButton x:Name="NavSettings" Style="{StaticResource SidebarItemStyle}" GroupName="SidebarNav" Tag="Settings">
+                <StackPanel Orientation="Horizontal">
+                  <Path Width="18" Height="18" Stretch="Uniform" StrokeThickness="2"
+                        Stroke="{Binding Foreground, RelativeSource={RelativeSource AncestorType=RadioButton}}"
+                        Data="M12,12 m-3,0 a3,3 0 1,0 6,0 a3,3 0 1,0 -6,0 M19.4,15 a1.65,1.65 0 0,0 .33,1.82 l.06,.06 a2,2 0 0,1 0,2.83 a2,2 0 0,1 -2.83,0 l-.06,-.06 a1.65,1.65 0 0,0 -1.82,-.33 a1.65,1.65 0 0,0 -1,1.51 V21 a2,2 0 0,1 -4,0 v-.09 a1.65,1.65 0 0,0 -1,-1.51 a1.65,1.65 0 0,0 -1.82,.33 l-.06,.06 a2,2 0 0,1 -2.83,0 a2,2 0 0,1 0,-2.83 l.06,-.06 a1.65,1.65 0 0,0 .33,-1.82 a1.65,1.65 0 0,0 -1.51,-1 H3 a2,2 0 0,1 0,-4 h.09 a1.65,1.65 0 0,0 1.51,-1 a1.65,1.65 0 0,0 -.33,-1.82 l-.06,-.06 a2,2 0 0,1 0,-2.83 a2,2 0 0,1 2.83,0 l.06,.06 a1.65,1.65 0 0,0 1.82,.33 H9 a1.65,1.65 0 0,0 1,-1.51 V3 a2,2 0 0,1 4,0 v.09 a1.65,1.65 0 0,0 1,1.51 a1.65,1.65 0 0,0 1.82,-.33 l.06,-.06 a2,2 0 0,1 2.83,0 a2,2 0 0,1 0,2.83 l-.06,.06 a1.65,1.65 0 0,0 -.33,1.82 V9 a1.65,1.65 0 0,0 1.51,1 H21 a2,2 0 0,1 0,4 h-.09 a1.65,1.65 0 0,0 -1.51,1 z"/>
+                  <TextBlock Text="Settings" Margin="12,0,0,0" VerticalAlignment="Center"/>
+                </StackPanel>
+              </RadioButton>
+              <RadioButton x:Name="NavSetupWizard" Style="{StaticResource SidebarItemStyle}" GroupName="SidebarNav" Tag="SetupWizard">
+                <StackPanel Orientation="Horizontal">
+                  <Path Width="18" Height="18" Stretch="Uniform" StrokeThickness="2"
+                        Stroke="{Binding Foreground, RelativeSource={RelativeSource AncestorType=RadioButton}}"
+                        Data="M3,12 L5,10 L9,14 L17,6 L21,10"/>
+                  <TextBlock Text="Setup Wizard" Margin="12,0,0,0" VerticalAlignment="Center"/>
+                </StackPanel>
+              </RadioButton>
+              <RadioButton x:Name="NavExperimental" Style="{StaticResource SidebarItemStyle}" GroupName="SidebarNav" Tag="Experimental">
+                <StackPanel Orientation="Horizontal">
+                  <Path Width="18" Height="18" Stretch="Uniform" StrokeThickness="2"
+                        Stroke="{Binding Foreground, RelativeSource={RelativeSource AncestorType=RadioButton}}"
+                        Data="M10,2 L10,8 M14,2 L14,8 M6,8 L18,8 L16,19 a2,2 0 0,1 -2,2 L10,21 a2,2 0 0,1 -2,-2 L6,8 z"/>
+                  <TextBlock Text="Additional Sietches" Margin="12,0,0,0" VerticalAlignment="Center"/>
+                </StackPanel>
+              </RadioButton>
+            </StackPanel>
+          </ScrollViewer>
+        </DockPanel>
+      </Border>
+
+      <!-- ─── Page host ─── -->
+      <Grid Grid.Column="1" x:Name="PageHost">
+
+        <!-- Terminal page (default — preserves v5.0.2 command-list + xterm.js layout) -->
+        <Border x:Name="PageTerminal" Visibility="Visible">
           <Grid>
             <Grid.ColumnDefinitions>
+              <ColumnDefinition Width="820" MinWidth="640"/>
+              <ColumnDefinition Width="5"/>
               <ColumnDefinition Width="*"/>
-              <ColumnDefinition Width="Auto"/>
-              <ColumnDefinition Width="Auto"/>
-              <ColumnDefinition Width="Auto"/>
             </Grid.ColumnDefinitions>
-            <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
-              <TextBlock x:Name="OutputTitle" Text="Output" Foreground="#E0B341" FontWeight="Bold" FontSize="13" VerticalAlignment="Center"/>
-              <TextBlock Text="  ·  " Foreground="#5C6773" FontSize="12" VerticalAlignment="Center"/>
-              <TextBlock Text="Ctrl+\ to kill" Foreground="#8A8275" FontSize="11" FontStyle="Italic" VerticalAlignment="Center"/>
-            </StackPanel>
-                <Button x:Name="BtnKillSession" Grid.Column="1" Content="Kill" Style="{StaticResource UtilButton}" Padding="10,4" Margin="4,0" ToolTip="Force-stop the current SSH / command session (Ctrl+\)" Foreground="#F07178" IsEnabled="False"/>
-                <Button x:Name="BtnCopyOutput" Grid.Column="2" Content="Copy" Style="{StaticResource UtilButton}" Padding="10,4" Margin="4,0"/>
-                <Button x:Name="BtnClearOutput" Grid.Column="3" Content="Clear" Style="{StaticResource UtilButton}" Padding="10,4" Margin="4,0"/>
-              </Grid>
-            </Border>
 
-            <wv2:WebView2 x:Name="Terminal" Grid.Row="1"/>
+            <!-- Left: 3-column drag-reorderable button grid (flat order, no sections) -->
+            <ScrollViewer Grid.Column="0" VerticalScrollBarVisibility="Visible" Background="#14110D">
+              <Grid Margin="6,4,6,12">
+                <Grid.ColumnDefinitions>
+                  <ColumnDefinition Width="*"/>
+                  <ColumnDefinition Width="*"/>
+                  <ColumnDefinition Width="*"/>
+                </Grid.ColumnDefinitions>
+                <StackPanel x:Name="ButtonPanelCol1" Grid.Column="0" Margin="0,0,3,0"/>
+                <StackPanel x:Name="ButtonPanelCol2" Grid.Column="1" Margin="3,0,3,0"/>
+                <StackPanel x:Name="ButtonPanelCol3" Grid.Column="2" Margin="3,0,0,0"/>
+              </Grid>
+            </ScrollViewer>
+
+            <GridSplitter Grid.Column="1" Width="5" Background="#2D2D30" HorizontalAlignment="Stretch"/>
+
+            <!-- Right: output -->
+            <Grid Grid.Column="2">
+              <Grid.RowDefinitions>
+                <RowDefinition Height="Auto"/>
+                <RowDefinition Height="*"/>
+              </Grid.RowDefinitions>
+
+              <Border Grid.Row="0" Background="#252526" BorderBrush="#3F3F46" BorderThickness="0,0,0,1" Padding="10,6">
+                <Grid>
+                  <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*"/>
+                    <ColumnDefinition Width="Auto"/>
+                    <ColumnDefinition Width="Auto"/>
+                    <ColumnDefinition Width="Auto"/>
+                  </Grid.ColumnDefinitions>
+                  <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                    <TextBlock x:Name="OutputTitle" Text="Output" Foreground="#E0B341" FontWeight="Bold" FontSize="13" VerticalAlignment="Center"/>
+                    <TextBlock Text="  ·  " Foreground="#5C6773" FontSize="12" VerticalAlignment="Center"/>
+                    <TextBlock Text="Ctrl+\ to kill" Foreground="#8A8275" FontSize="11" FontStyle="Italic" VerticalAlignment="Center"/>
+                  </StackPanel>
+                  <Button x:Name="BtnKillSession" Grid.Column="1" Content="Kill" Style="{StaticResource UtilButton}" Padding="10,4" Margin="4,0" ToolTip="Force-stop the current SSH / command session (Ctrl+\)" Foreground="#F07178" IsEnabled="False"/>
+                  <Button x:Name="BtnCopyOutput" Grid.Column="2" Content="Copy" Style="{StaticResource UtilButton}" Padding="10,4" Margin="4,0"/>
+                  <Button x:Name="BtnClearOutput" Grid.Column="3" Content="Clear" Style="{StaticResource UtilButton}" Padding="10,4" Margin="4,0"/>
+                </Grid>
+              </Border>
+
+              <wv2:WebView2 x:Name="Terminal" Grid.Row="1"/>
+            </Grid>
+          </Grid>
+        </Border>
+
+        <!-- Other v6 pages — placeholders for now, real content built in subsequent commits. -->
+        <Border x:Name="PageDashboard" Style="{StaticResource PageRootStyle}" Visibility="Collapsed">
+          <TextBlock Text="Dashboard — coming soon" Style="{StaticResource SectionHeadTitleStyle}"/>
+        </Border>
+        <Border x:Name="PageCharacters" Style="{StaticResource PageRootStyle}" Visibility="Collapsed">
+          <TextBlock Text="Characters — coming soon" Style="{StaticResource SectionHeadTitleStyle}"/>
+        </Border>
+        <Border x:Name="PageGameConfig" Style="{StaticResource PageRootStyle}" Visibility="Collapsed">
+          <TextBlock Text="Game Config — coming soon" Style="{StaticResource SectionHeadTitleStyle}"/>
+        </Border>
+        <Border x:Name="PageDatabase" Style="{StaticResource PageRootStyle}" Visibility="Collapsed">
+          <TextBlock Text="Database — coming soon" Style="{StaticResource SectionHeadTitleStyle}"/>
+        </Border>
+        <Border x:Name="PageMonitoring" Style="{StaticResource PageRootStyle}" Visibility="Collapsed">
+          <TextBlock Text="Monitoring — coming soon" Style="{StaticResource SectionHeadTitleStyle}"/>
+        </Border>
+        <Border x:Name="PageSettings" Style="{StaticResource PageRootStyle}" Visibility="Collapsed">
+          <TextBlock Text="Settings — coming soon" Style="{StaticResource SectionHeadTitleStyle}"/>
+        </Border>
+        <Border x:Name="PageSetupWizard" Style="{StaticResource PageRootStyle}" Visibility="Collapsed">
+          <TextBlock Text="Setup Wizard — coming soon" Style="{StaticResource SectionHeadTitleStyle}"/>
+        </Border>
+        <Border x:Name="PageExperimental" Style="{StaticResource PageRootStyle}" Visibility="Collapsed">
+          <TextBlock Text="Experimental — coming soon" Style="{StaticResource SectionHeadTitleStyle}"/>
+        </Border>
+
       </Grid>
     </Grid>
 
     <!-- ═══ Footer ═══ -->
-    <Border Grid.Row="2" Background="#007ACC" Padding="10,4">
+    <Border Grid.Row="3" Background="#007ACC" Padding="10,4">
       <Grid>
         <Grid.ColumnDefinitions>
           <ColumnDefinition Width="*"/>
@@ -672,6 +883,14 @@ Add-Type -AssemblyName System.Xaml
   </Grid>
 </Window>
 '@
+
+# v6: splice Theme.xaml inner contents at the injection marker.
+$themeInner = Get-V6ThemeInnerXaml
+if ($themeInner) {
+    $xamlStr = $xaml.OuterXml
+    $xamlStr = $xamlStr -replace '<!--\s*v6-theme-injection\s*-->', $themeInner
+    [xml]$xaml = $xamlStr
+}
 
 $reader = New-Object System.Xml.XmlNodeReader $xaml
 try {
@@ -695,9 +914,12 @@ $ui = @{
     StatusMeta     = $window.FindName('StatusMeta')
     BtnRefreshStat = $window.FindName('BtnRefreshStatus')
     BtnCheckUpdate = $window.FindName('BtnCheckUpdate')
+    BtnReportIssue = $window.FindName('BtnReportIssue')
     InstalledLbl   = $window.FindName('InstalledVersionLbl')
     LatestLbl      = $window.FindName('LatestVersionLbl')
     PortStatusLbl  = $window.FindName('PortStatusLbl')
+    SpiceStatusLbl = $window.FindName('SpiceStatusLbl')
+    SpiceStatusLbl2 = $window.FindName('SpiceStatusLbl2')
     StatusPane     = $window.FindName('StatusPane')
     ButtonPanelCol1  = $window.FindName('ButtonPanelCol1')
     ButtonPanelCol2  = $window.FindName('ButtonPanelCol2')
@@ -709,6 +931,144 @@ $ui = @{
     Terminal       = $window.FindName('Terminal')
     FooterStatus   = $window.FindName('FooterStatus')
     FooterVersion  = $window.FindName('FooterVersion')
+
+    # v6 sidebar shell + page host
+    SidebarCol           = $window.FindName('SidebarCol')
+    SidebarBrand         = $window.FindName('SidebarBrand')
+    SidebarItems         = $window.FindName('SidebarItems')
+    SidebarLabelOperate  = $window.FindName('SidebarLabelOperate')
+    SidebarLabelManage   = $window.FindName('SidebarLabelManage')
+    SidebarLabelSystem   = $window.FindName('SidebarLabelSystem')
+    SidebarCollapseBtn   = $window.FindName('SidebarCollapseBtn')
+    SidebarCollapseGlyph = $window.FindName('SidebarCollapseGlyph')
+    NavDashboard    = $window.FindName('NavDashboard')
+    NavTerminal     = $window.FindName('NavTerminal')
+    NavCharacters   = $window.FindName('NavCharacters')
+    NavGameConfig   = $window.FindName('NavGameConfig')
+    NavDatabase     = $window.FindName('NavDatabase')
+    NavMonitoring   = $window.FindName('NavMonitoring')
+    NavSettings     = $window.FindName('NavSettings')
+    NavSetupWizard  = $window.FindName('NavSetupWizard')
+    NavExperimental = $window.FindName('NavExperimental')
+    PageTerminal     = $window.FindName('PageTerminal')
+    PageDashboard    = $window.FindName('PageDashboard')
+    PageCharacters   = $window.FindName('PageCharacters')
+    PageGameConfig   = $window.FindName('PageGameConfig')
+    PageDatabase     = $window.FindName('PageDatabase')
+    PageMonitoring   = $window.FindName('PageMonitoring')
+    PageSettings     = $window.FindName('PageSettings')
+    PageSetupWizard  = $window.FindName('PageSetupWizard')
+    PageExperimental = $window.FindName('PageExperimental')
+}
+
+# ────────────────────────────────────────────────────────────────────────────
+#  v6: Sidebar navigation
+# ────────────────────────────────────────────────────────────────────────────
+# Map nav RadioButton -> page Border. Selecting a nav item shows its page and
+# hides all others. Terminal stays selected by default so v5.0.2 workflow is
+# preserved on first launch.
+$script:V6NavMap = @{
+    NavDashboard    = 'PageDashboard'
+    NavTerminal     = 'PageTerminal'
+    NavCharacters   = 'PageCharacters'
+    NavGameConfig   = 'PageGameConfig'
+    NavDatabase     = 'PageDatabase'
+    NavMonitoring   = 'PageMonitoring'
+    NavSettings     = 'PageSettings'
+    NavSetupWizard  = 'PageSetupWizard'
+    NavExperimental = 'PageExperimental'
+}
+$script:V6CurrentPage = 'PageTerminal'
+
+function Show-V6Page {
+    param([string]$PageKey)
+    if (-not $ui.ContainsKey($PageKey)) { return }
+    foreach ($p in $script:V6NavMap.Values) {
+        if ($ui[$p]) { $ui[$p].Visibility = 'Collapsed' }
+    }
+    $ui[$PageKey].Visibility = 'Visible'
+    $script:V6CurrentPage = $PageKey
+}
+
+foreach ($navName in $script:V6NavMap.Keys) {
+    $nav = $ui[$navName]
+    if (-not $nav) { continue }
+    $pageKey = $script:V6NavMap[$navName]
+    $nav.Add_Checked({
+        param($s, $e)
+        $sender = $s
+        # Resolve which page to show from the sender's x:Name.
+        $target = $script:V6NavMap[$sender.Name]
+        if ($target) {
+            Show-V6Page $target
+            # Per-page refresh hooks
+            if ($target -eq 'PageDashboard' -and (Get-Command Update-V6Dashboard -ErrorAction SilentlyContinue)) {
+                try { Update-V6Dashboard } catch {}
+            }
+            elseif ($target -eq 'PageMonitoring' -and (Get-Command Update-V6Monitoring -ErrorAction SilentlyContinue)) {
+                try { Update-V6Monitoring } catch {}
+            }
+            elseif ($target -eq 'PageSettings' -and (Get-Command Update-V6Settings -ErrorAction SilentlyContinue)) {
+                try { Update-V6Settings } catch {}
+            }
+            elseif ($target -eq 'PageDatabase' -and (Get-Command Update-V6Database -ErrorAction SilentlyContinue)) {
+                try { Update-V6Database } catch {}
+            }
+            elseif ($target -eq 'PageGameConfig' -and (Get-Command Update-V6GameConfig -ErrorAction SilentlyContinue)) {
+                try { Update-V6GameConfig } catch {}
+            }
+            elseif ($target -eq 'PageCharacters' -and (Get-Command Update-V6Characters -ErrorAction SilentlyContinue)) {
+                try { Update-V6Characters } catch {}
+            }
+            elseif ($target -eq 'PageSetupWizard' -and (Get-Command Update-V6SetupWizard -ErrorAction SilentlyContinue)) {
+                try { Update-V6SetupWizard } catch {}
+            }
+            elseif ($target -eq 'PageExperimental' -and (Get-Command Update-V6MultiSietch -ErrorAction SilentlyContinue)) {
+                try { Update-V6MultiSietch } catch {}
+            }
+        }
+    }.GetNewClosure())
+}
+
+# NOTE: initial-page reconciliation happens at end of file, after the v6
+# page initializers (Initialize-V6DashboardPage et al.) have populated
+# their content — otherwise calling Update-V6Dashboard here would no-op
+# because $script:V6Dash hasn't been created yet.
+
+# Sidebar collapse / expand. Toggles SidebarCol width and item label visibility.
+$script:V6SidebarCollapsed = $false
+function Set-V6SidebarCollapsed {
+    param([bool]$Collapsed)
+    $script:V6SidebarCollapsed = $Collapsed
+    if ($Collapsed) {
+        $ui.SidebarCol.Width = New-Object System.Windows.GridLength 56
+        $ui.SidebarCollapseGlyph.Text = '››'
+        $ui.SidebarBrand.Visibility = 'Collapsed'
+        foreach ($lbl in @($ui.SidebarLabelOperate, $ui.SidebarLabelManage, $ui.SidebarLabelSystem)) {
+            if ($lbl) { $lbl.Visibility = 'Collapsed' }
+        }
+    } else {
+        $ui.SidebarCol.Width = New-Object System.Windows.GridLength 200
+        $ui.SidebarCollapseGlyph.Text = '‹‹'
+        $ui.SidebarBrand.Visibility = 'Visible'
+        foreach ($lbl in @($ui.SidebarLabelOperate, $ui.SidebarLabelManage, $ui.SidebarLabelSystem)) {
+            if ($lbl) { $lbl.Visibility = 'Visible' }
+        }
+    }
+    # Toggle the text label inside each nav item's StackPanel.
+    foreach ($navName in $script:V6NavMap.Keys) {
+        $nav = $ui[$navName]
+        if (-not $nav) { continue }
+        $sp = $nav.Content
+        if ($sp -and $sp.Children.Count -ge 2) {
+            $sp.Children[1].Visibility = $(if ($Collapsed) { 'Collapsed' } else { 'Visible' })
+            $sp.HorizontalAlignment = $(if ($Collapsed) { 'Center' } else { 'Left' })
+        }
+    }
+}
+
+if ($ui.SidebarCollapseBtn) {
+    $ui.SidebarCollapseBtn.Add_Click({ Set-V6SidebarCollapsed (-not $script:V6SidebarCollapsed) })
 }
 
 # ────────────────────────────────────────────────────────────────────────────
@@ -889,7 +1249,6 @@ $script:Commands = @(
     @{ Section='Tools';       Key='17'; Name='ssh';          Mode='Console'; Requires='running'; Desc='Open an SSH terminal to the VM' }
     @{ Section='Tools';       Key='18'; Name='dune-admin';   Mode='InApp';   Requires='running'; Desc='Launch dune-admin + open its web UI' }
     @{ Section='Tools';       Key='19'; Name='setup-guide';  Mode='InApp';   Requires='none';    Desc='Open Funcom self-hosted setup guide in your browser' }
-    @{ Section='Tools';       Key='20'; Name='report-issue'; Mode='InApp';   Requires='none';    Desc='Report a bug (opens a prefilled GitHub issue)' }
 
     # ─── Draggable separators ───
     # Four optional visual dividers. They start parked at the end of the list
@@ -905,6 +1264,43 @@ $script:Commands = @(
 # Names of the separator pseudo-commands, used by Reset-SeparatorPositions and
 # the renderer to short-circuit click/availability logic.
 $script:SeparatorNames = @('__separator_1','__separator_2','__separator_3','__separator_4')
+
+# ────────────────────────────────────────────────────────────────────────────
+#  v6: load lib modules first (shared helpers used by page modules)
+# ────────────────────────────────────────────────────────────────────────────
+$script:V6LibDir = Join-Path $PSScriptRoot 'lib'
+foreach ($lib in @('Db-Postgres.ps1','Ini-Edit.ps1','Hyperv.ps1','K8s.ps1','StateModel.ps1')) {
+    $libPath = Join-Path $script:V6LibDir $lib
+    if (Test-Path $libPath) {
+        try { . $libPath } catch {
+            try { Write-Diag "v6 lib module $lib failed to load: $($_.Exception.Message)" } catch {}
+        }
+    }
+}
+
+# ────────────────────────────────────────────────────────────────────────────
+#  v6: load page modules (each defines its own Initialize-V6*Page function
+#  and any helpers; modules dot-sourced here so $ui / $window / $script:Commands
+#  are all in scope.)
+# ────────────────────────────────────────────────────────────────────────────
+$script:V6PagesDir = Join-Path $PSScriptRoot 'pages'
+foreach ($mod in @(
+        'Dashboard.ps1',
+        'Monitoring.ps1',
+        'Settings.ps1',
+        'Database.ps1',
+        'GameConfig.ps1',
+        'Characters.ps1',
+        'SetupWizard.ps1',
+        'MultiSietch.ps1'
+    )) {
+    $modPath = Join-Path $script:V6PagesDir $mod
+    if (Test-Path $modPath) {
+        try { . $modPath } catch {
+            try { Write-Diag "v6 page module $mod failed to load: $($_.Exception.Message)" } catch {}
+        }
+    }
+}
 
 function Test-CmdAvailable {
     param($Cmd, $Vm)
@@ -1240,6 +1636,98 @@ function Invoke-DuneCmd {
 #  Status header polling
 # ────────────────────────────────────────────────────────────────────────────
 
+function Open-IssueReport {
+    # Builds a prefilled GitHub bug report URL (template=bug_report.yml) and
+    # opens it in the default browser. Mirrors the CLI's 'report-issue'
+    # command so users can file accurate, low-friction bug reports without
+    # leaving the desktop app. The CLI version still works for terminal-only
+    # users; this is the GUI surface.
+    try { Write-Diag "Open-IssueReport: invoked" } catch {}
+    Set-Footer "Opening bug report in browser..."
+
+    Add-Type -AssemblyName System.Web -ErrorAction SilentlyContinue
+    function script:_EncIssueParam([string]$v) {
+        if ([string]::IsNullOrEmpty($v)) { return "" }
+        return [System.Web.HttpUtility]::UrlEncode($v)
+    }
+
+    $envStr = "Windows $([System.Environment]::OSVersion.Version), PowerShell $($PSVersionTable.PSVersion)"
+
+    # WebView2 runtime version (registry probe).
+    $wv2Version = '(not installed / not detected)'
+    foreach ($p in @(
+        'HKLM:\SOFTWARE\WOW6432Node\Microsoft\EdgeUpdate\Clients\{F3017226-FE2A-4295-8BDF-00C3A9A7E4C5}',
+        'HKLM:\SOFTWARE\Microsoft\EdgeUpdate\Clients\{F3017226-FE2A-4295-8BDF-00C3A9A7E4C5}',
+        'HKCU:\SOFTWARE\Microsoft\EdgeUpdate\Clients\{F3017226-FE2A-4295-8BDF-00C3A9A7E4C5}'
+    )) {
+        try {
+            $v = (Get-ItemProperty -Path $p -Name 'pv' -ErrorAction Stop).pv
+            if ($v -and $v -ne '0.0.0.0') { $wv2Version = $v; break }
+        } catch {}
+    }
+
+    $diagLines = New-Object System.Collections.Generic.List[string]
+    $diagLines.Add("Tool version       : v$script:ToolVersion")
+    $diagLines.Add("Entry point        : $($MyInvocation.MyCommand.Path)")
+    $diagLines.Add("PowerShell         : $($PSVersionTable.PSVersion) ($($PSVersionTable.PSEdition))")
+    $diagLines.Add("OS                 : Windows $([System.Environment]::OSVersion.Version)")
+    $diagLines.Add("WebView2 runtime   : $wv2Version")
+    $diagLines.Add("UserDataFolder     : $(Join-Path $env:LOCALAPPDATA 'DuneServer\webview2')")
+    $diagLines.Add("Config dir         : $(Join-Path $env:APPDATA 'DuneServer')")
+    $diagLines.Add("")
+
+    # Tail the WebView2 debug log so the URL stays under GitHub's practical limit.
+    $wv2Log = if ($script:DiagLog) { $script:DiagLog } else { Join-Path $env:APPDATA 'DuneServer\webview2-debug.log' }
+    if (Test-Path $wv2Log) {
+        $diagLines.Add("=== WebView2 debug log (tail) ===")
+        $diagLines.Add("Path: $wv2Log")
+        try {
+            $content = [System.IO.File]::ReadAllText($wv2Log)
+            $maxBytes = 3072
+            if ($content.Length -gt $maxBytes) {
+                $content = "...(truncated, showing last $maxBytes chars of $($content.Length))...`r`n" +
+                           $content.Substring($content.Length - $maxBytes)
+            }
+            $diagLines.Add($content)
+        } catch {
+            $diagLines.Add("(could not read log: $($_.Exception.Message))")
+        }
+    } else {
+        $diagLines.Add("(no WebView2 debug log present at $wv2Log)")
+    }
+
+    $diagText = ($diagLines -join "`r`n")
+
+    $params = @(
+        "template=bug_report.yml"
+        "tool_version=" + (_EncIssueParam "v$script:ToolVersion")
+        "env="          + (_EncIssueParam $envStr)
+        "diagnostics="  + (_EncIssueParam $diagText)
+    ) -join "&"
+    $url = "https://github.com/coastal-ms/Simple-Dune-Server-Management-Tool/issues/new?$params"
+
+    # Defensive trim if URL too long for GitHub.
+    if ($url.Length -gt 7500) {
+        $diagText = ($diagLines | Select-Object -First 10) -join "`r`n"
+        $diagText += "`r`n`r`n(diagnostics truncated for URL length — see %APPDATA%\DuneServer\webview2-debug.log for full log)"
+        $params = @(
+            "template=bug_report.yml"
+            "tool_version=" + (_EncIssueParam "v$script:ToolVersion")
+            "env="          + (_EncIssueParam $envStr)
+            "diagnostics="  + (_EncIssueParam $diagText)
+        ) -join "&"
+        $url = "https://github.com/coastal-ms/Simple-Dune-Server-Management-Tool/issues/new?$params"
+    }
+
+    try {
+        Start-Process $url | Out-Null
+        Set-Footer "Bug report opened in browser  |  prefilled diagnostics ($(($diagText -split "`r?`n").Count) lines)"
+    } catch {
+        Set-Footer "Could not open browser: $($_.Exception.Message)"
+        try { Write-Diag "Open-IssueReport: Start-Process failed: $($_.Exception.Message)" } catch {}
+    }
+}
+
 function Refresh-StatusHeader {
     try { Write-Diag "Refresh-StatusHeader: invoked" } catch {}
     Set-Footer "Refreshing status..."
@@ -1254,24 +1742,24 @@ function Refresh-StatusHeader {
     $stamp  = (Get-Date).ToString('HH:mm:ss')
 
     if (-not $vmInfo.exists) {
-        $ui.StatusPane.Text = "VM '$($script:VmName)' does not exist."
-        $ui.StatusMeta.Text = "(no VM)  -  checked $stamp"
+        Set-StatusPaneColored "VM '$($script:VmName)' does not exist."
+        Set-StatusMetaColored -VmText "(no VM)" -BgState 'stopped' -Stamp "checked $stamp"
         Set-BgState 'stopped'
         Build-ButtonPanel -Vm $vmInfo
         Set-Footer "Idle"
         return
     }
     if (-not $vmInfo.running) {
-        $ui.StatusPane.Text = "VM '$($script:VmName)' is not running (state: $($vmInfo.state))."
-        $ui.StatusMeta.Text = "VM $($vmInfo.state)  -  checked $stamp"
+        Set-StatusPaneColored "VM '$($script:VmName)' is not running (state: $($vmInfo.state))."
+        Set-StatusMetaColored -VmText "VM $($vmInfo.state)" -BgState 'stopped' -Stamp "checked $stamp"
         Set-BgState 'stopped'
         Build-ButtonPanel -Vm $vmInfo
         Set-Footer "Idle"
         return
     }
     if (-not $vmInfo.ip) {
-        $ui.StatusPane.Text = 'VM running but has no IP yet.'
-        $ui.StatusMeta.Text = "VM running  -  checked $stamp"
+        Set-StatusPaneColored 'VM running but has no IP yet.'
+        Set-StatusMetaColored -VmText 'VM running' -BgState 'unknown' -Stamp "checked $stamp"
         Set-BgState 'unknown'
         Build-ButtonPanel -Vm $vmInfo
         Set-Footer "Idle"
@@ -1280,13 +1768,13 @@ function Refresh-StatusHeader {
 
     # Refresh button panel now that we know VM state (don't wait for SSH)
     Build-ButtonPanel -Vm $vmInfo
-    $ui.StatusMeta.Text = "VM running ($($vmInfo.ip))  -  fetching status..."
+    Set-StatusMetaColored -VmText "VM running ($($vmInfo.ip))" -BgState '' -Stamp "fetching status..."
 
     $cfg    = Read-Config
     $sshKey = $cfg.SshKey
     if (-not $sshKey -or -not (Test-Path $sshKey)) {
-        $ui.StatusPane.Text = "SSH key not configured or missing: $sshKey`r`n`r`nRun the 'initial-setup' command to configure."
-        $ui.StatusMeta.Text = "VM running ($($vmInfo.ip))  -  no SSH key  -  checked $stamp"
+        Set-StatusPaneColored "SSH key not configured or missing: $sshKey`r`n`r`nRun the 'initial-setup' command to configure."
+        Set-StatusMetaColored -VmText "VM running ($($vmInfo.ip))" -BgState 'error' -Stamp "no SSH key  -  checked $stamp"
         Set-Footer "Idle"
         return
     }
@@ -1336,34 +1824,36 @@ function Refresh-StatusHeader {
         if ($asyncResult.IsCompleted) {
             $timer.Stop()
             try {
-                $r = $ps.EndInvoke($asyncResult) | Select-Object -First 1
-                $stamp2 = (Get-Date).ToString('HH:mm:ss')
-                if ($r -and $r.ok) {
-                    $ui.StatusPane.Text = $r.output
-                    $ui.StatusMeta.Text = "VM running ($($vmInfo.ip))  -  updated $stamp2"
-                    Set-BgState (Get-BgStateFromStatusText $r.output)
-                    Set-CorePodsRunning (Test-CorePodsRunningFromText $r.output)
-                    # Rebuild the button panel so commands gated on bg-state
-                    # (start/stop battlegroup, startup wizard, etc.) reflect
-                    # the just-discovered state. Cheap — it just re-renders WPF.
-                    Build-ButtonPanel -Vm $vmInfo
-                } else {
-                    $reason = if ($r) { $r.reason } else { 'SSH returned no result.' }
-                    $ui.StatusPane.Text = $reason
-                    $ui.StatusMeta.Text = "VM running ($($vmInfo.ip))  -  ssh failed  -  $stamp2"
-                    Set-BgState 'unknown'
-                    Set-CorePodsRunning $false
-                    Build-ButtonPanel -Vm $vmInfo
+                try {
+                    $r = $ps.EndInvoke($asyncResult) | Select-Object -First 1
+                    $stamp2 = (Get-Date).ToString('HH:mm:ss')
+                    if ($r -and $r.ok) {
+                        Set-StatusPaneColored $r.output
+                        $detectedState = Get-BgStateFromStatusText $r.output
+                        Set-StatusMetaColored -VmText "VM running ($($vmInfo.ip))" -BgState $detectedState -Stamp "updated $stamp2"
+                        Set-BgState $detectedState
+                        Set-CorePodsRunning (Test-CorePodsRunningFromText $r.output)
+                        # Rebuild the button panel so commands gated on bg-state
+                        # (start/stop battlegroup, startup wizard, etc.) reflect
+                        # the just-discovered state. Cheap — it just re-renders WPF.
+                        Build-ButtonPanel -Vm $vmInfo
+                    } else {
+                        $reason = if ($r) { $r.reason } else { 'SSH returned no result.' }
+                        Set-StatusPaneColored $reason
+                        Set-StatusMetaColored -VmText "VM running ($($vmInfo.ip))" -BgState 'error' -Stamp "ssh failed  -  $stamp2"
+                        Set-BgState 'unknown'
+                        Set-CorePodsRunning $false
+                        Build-ButtonPanel -Vm $vmInfo
+                    }
+                    Set-Footer "Idle"
+                } catch {
+                    try { Set-StatusPaneColored "Error reading status: $($_.Exception.Message)" } catch {}
+                    try { Set-Footer "Idle" } catch {}
+                } finally {
+                    try { $ps.Dispose() } catch {}
+                    try { $rs.Close(); $rs.Dispose() } catch {}
                 }
-                Set-Footer "Idle"
-            } catch {
-                $ui.StatusPane.Text = "Error reading status: $($_.Exception.Message)"
-                Set-Footer "Idle"
-            } finally {
-                $ps.Dispose()
-                $rs.Close()
-                $rs.Dispose()
-            }
+            } catch {}
         }
     }.GetNewClosure()
     $timer.Add_Tick($tickHandler)
@@ -1410,6 +1900,163 @@ function Set-PortLblPlain {
     $ui.PortStatusLbl.Visibility = 'Visible'
 }
 
+# ──────────────────────────────────────────────────────────────────────────
+#  StatusPane colorizer — paints state words in the multi-line battlegroup
+#  status output with theme-aligned colors. Default text stays neutral so
+#  the colored states pop without making the whole pane noisy.
+# ──────────────────────────────────────────────────────────────────────────
+$script:StatusPaneBrushDefault = $null
+$script:StatusPaneBrushGood    = $null
+$script:StatusPaneBrushWarn    = $null
+$script:StatusPaneBrushBad     = $null
+$script:StatusPaneBrushHeader  = $null
+$script:StatusPaneBrushDim     = $null
+
+function _Get-StatusPaneBrushes {
+    if ($script:StatusPaneBrushDefault) { return }
+    $bc = New-Object System.Windows.Media.BrushConverter
+    $script:StatusPaneBrushDefault = $bc.ConvertFromString('#FFE5E5E5')
+    $script:StatusPaneBrushGood    = $bc.ConvertFromString('#FF6FCF7C')  # green — Running/Ready
+    $script:StatusPaneBrushWarn    = $bc.ConvertFromString('#FFE8B872')  # tan-gold — Pending/Init
+    $script:StatusPaneBrushBad     = $bc.ConvertFromString('#FFE86A6A')  # red — Error/CrashLoop
+    $script:StatusPaneBrushHeader  = $bc.ConvertFromString('#FFE0B341')  # gold — header rows
+    $script:StatusPaneBrushDim     = $bc.ConvertFromString('#FF888888')  # muted — Stopped
+    foreach ($b in @($script:StatusPaneBrushDefault,$script:StatusPaneBrushGood,$script:StatusPaneBrushWarn,$script:StatusPaneBrushBad,$script:StatusPaneBrushHeader,$script:StatusPaneBrushDim)) {
+        try { $b.Freeze() } catch {}
+    }
+}
+
+# Returns brush for a matched state word, or $null to use default.
+function _Get-StatusWordBrush {
+    param([string]$Word)
+    switch -Regex ($Word) {
+        '^(Running|Ready)$'                                                  { return $script:StatusPaneBrushGood }
+        '^(Pending|ContainerCreating|PodInitializing|Init|Terminating|Reconciling)$' { return $script:StatusPaneBrushWarn }
+        '^(Error|CrashLoopBackOff|ImagePullBackOff|ErrImagePull|Failed|Evicted|OOMKilled|NotReady|Unknown)$' { return $script:StatusPaneBrushBad }
+        '^(Stopped)$'                                                        { return $script:StatusPaneBrushDim }
+        default                                                              { return $null }
+    }
+}
+
+function Set-StatusPaneColored {
+    param([string]$Text)
+    if (-not $ui.StatusPane) { return }
+    _Get-StatusPaneBrushes
+    $ui.StatusPane.Inlines.Clear()
+    if ([string]::IsNullOrEmpty($Text)) {
+        $ui.StatusPane.Text = ''
+        return
+    }
+
+    # "No resources found ..." short-circuit — paint whole text as muted.
+    if ($Text -match '(?im)No resources found') {
+        $r = New-Object System.Windows.Documents.Run
+        $r.Text = $Text
+        $r.Foreground = $script:StatusPaneBrushDim
+        [void]$ui.StatusPane.Inlines.Add($r)
+        return
+    }
+
+    # Tokenize on whole-word state keywords, line-by-line so we can also
+    # paint header rows (NAMESPACE/NAME/STATUS column headers from kubectl).
+    $lines = $Text -split "(`r?`n)"
+    $stateRegex = [regex]'\b(Running|Ready|Pending|ContainerCreating|PodInitializing|Init|Terminating|Reconciling|Error|CrashLoopBackOff|ImagePullBackOff|ErrImagePull|Failed|Evicted|OOMKilled|NotReady|Unknown|Stopped)\b'
+    $headerRegex = [regex]'^\s*(NAMESPACE|NAME|READY|STATUS|RESTARTS|AGE|MAP|PHASE)(\s{2,}(NAMESPACE|NAME|READY|STATUS|RESTARTS|AGE|MAP|PHASE))+\s*$'
+
+    foreach ($line in $lines) {
+        if ($line -eq "`n" -or $line -eq "`r`n") {
+            $nl = New-Object System.Windows.Documents.Run
+            $nl.Text = $line
+            $nl.Foreground = $script:StatusPaneBrushDefault
+            [void]$ui.StatusPane.Inlines.Add($nl)
+            continue
+        }
+        if ([string]::IsNullOrEmpty($line)) { continue }
+
+        if ($headerRegex.IsMatch($line)) {
+            $r = New-Object System.Windows.Documents.Run
+            $r.Text = $line
+            $r.Foreground = $script:StatusPaneBrushHeader
+            $r.FontWeight = 'Bold'
+            [void]$ui.StatusPane.Inlines.Add($r)
+            continue
+        }
+
+        $matches = $stateRegex.Matches($line)
+        if ($matches.Count -eq 0) {
+            $r = New-Object System.Windows.Documents.Run
+            $r.Text = $line
+            $r.Foreground = $script:StatusPaneBrushDefault
+            [void]$ui.StatusPane.Inlines.Add($r)
+            continue
+        }
+
+        $pos = 0
+        foreach ($m in $matches) {
+            if ($m.Index -gt $pos) {
+                $r = New-Object System.Windows.Documents.Run
+                $r.Text = $line.Substring($pos, $m.Index - $pos)
+                $r.Foreground = $script:StatusPaneBrushDefault
+                [void]$ui.StatusPane.Inlines.Add($r)
+            }
+            $brush = _Get-StatusWordBrush $m.Value
+            $r2 = New-Object System.Windows.Documents.Run
+            $r2.Text = $m.Value
+            if ($brush) { $r2.Foreground = $brush; $r2.FontWeight = 'Bold' } else { $r2.Foreground = $script:StatusPaneBrushDefault }
+            [void]$ui.StatusPane.Inlines.Add($r2)
+            $pos = $m.Index + $m.Length
+        }
+        if ($pos -lt $line.Length) {
+            $r = New-Object System.Windows.Documents.Run
+            $r.Text = $line.Substring($pos)
+            $r.Foreground = $script:StatusPaneBrushDefault
+            [void]$ui.StatusPane.Inlines.Add($r)
+        }
+    }
+}
+
+# Paints StatusMeta with a colored state badge inline with the metadata text.
+function Set-StatusMetaColored {
+    param([string]$VmText, [string]$BgState = 'unknown', [string]$Stamp = '')
+    if (-not $ui.StatusMeta) { return }
+    _Get-StatusPaneBrushes
+    $ui.StatusMeta.Inlines.Clear()
+    $bc = New-Object System.Windows.Media.BrushConverter
+    $dim = $bc.ConvertFromString('#FF888888'); try { $dim.Freeze() } catch {}
+
+    if ($VmText) {
+        $r = New-Object System.Windows.Documents.Run
+        $r.Text = $VmText
+        $r.Foreground = $dim
+        [void]$ui.StatusMeta.Inlines.Add($r)
+    }
+    if ($BgState -and $BgState -ne 'unknown') {
+        $sep = New-Object System.Windows.Documents.Run
+        $sep.Text = '  -  '
+        $sep.Foreground = $dim
+        [void]$ui.StatusMeta.Inlines.Add($sep)
+
+        $brush = switch ($BgState) {
+            'running' { $script:StatusPaneBrushGood }
+            'stopped' { $script:StatusPaneBrushDim }
+            'error'   { $script:StatusPaneBrushBad }
+            default   { $script:StatusPaneBrushWarn }
+        }
+        $label = "BG $($BgState.ToUpper())"
+        $r2 = New-Object System.Windows.Documents.Run
+        $r2.Text = $label
+        $r2.Foreground = $brush
+        $r2.FontWeight = 'Bold'
+        [void]$ui.StatusMeta.Inlines.Add($r2)
+    }
+    if ($Stamp) {
+        $tr = New-Object System.Windows.Documents.Run
+        $tr.Text = "  -  $Stamp"
+        $tr.Foreground = $dim
+        [void]$ui.StatusMeta.Inlines.Add($tr)
+    }
+}
+
 function Add-PortLblRun {
     param([string]$Text, [string]$Color, [bool]$Bold = $false)
     $run = New-Object System.Windows.Documents.Run
@@ -1451,6 +2098,183 @@ function Render-PortStatus {
         $first = $false
     }
     if ($Snapshot.stamp) { Add-PortLblRun "   updated $($Snapshot.stamp)" '#666' }
+}
+
+# ────────────────────────────────────────────────────────────────────────────
+#  Spice-field header — async psql query against dune.spicefield_types,
+#  rendered as a single colored line below the port status. Uses the same
+#  runspace + cache pattern as the port check so it never blocks the UI.
+#
+#   Spice Fields (Hagga/DD): Large 0/1  Medium 0/12  Small 5/65  updated HH:mm:ss
+#
+# - Reuses the lib's Invoke-V6Psql (Db-Postgres.ps1) inside a fresh runspace.
+# - Cache TTL = 25s so the 30s auto-refresh repaints from cache instead of
+#   firing a new psql round-trip every tick.
+# ────────────────────────────────────────────────────────────────────────────
+
+$script:SpiceCheckCache    = $null
+$script:SpiceCheckCacheTtl = [TimeSpan]::FromSeconds(25)
+$script:SpiceCheckInFlight = $false
+
+function Set-SpiceLblPlain {
+    param([string]$Text, [string]$Color = '#888', $Target = $null)
+    $lbl = if ($Target) { $Target } else { $ui.SpiceStatusLbl }
+    if (-not $lbl) { return }
+    $lbl.Inlines.Clear()
+    $run = New-Object System.Windows.Documents.Run
+    $run.Text = $Text
+    $run.Foreground = (New-Object System.Windows.Media.BrushConverter).ConvertFromString($Color)
+    [void]$lbl.Inlines.Add($run)
+    $lbl.Visibility = 'Visible'
+}
+
+function Add-SpiceLblRun {
+    param([string]$Text, [string]$Color, [bool]$Bold = $false, $Target = $null)
+    $lbl = if ($Target) { $Target } else { $ui.SpiceStatusLbl }
+    $run = New-Object System.Windows.Documents.Run
+    $run.Text = $Text
+    $run.Foreground = (New-Object System.Windows.Media.BrushConverter).ConvertFromString($Color)
+    if ($Bold) { $run.FontWeight = 'Bold' }
+    [void]$lbl.Inlines.Add($run)
+}
+
+function Render-SpiceMapLine {
+    param($Lbl, [string]$MapLabel, $Rows, [string]$Stamp)
+    if (-not $Lbl) { return }
+    $Lbl.Inlines.Clear()
+    Add-SpiceLblRun "$MapLabel`: " '#E0B341' $false $Lbl
+    if (-not $Rows -or $Rows.Count -eq 0) {
+        Add-SpiceLblRun "(no fields configured)" '#666' $false $Lbl
+        if ($Stamp) { Add-SpiceLblRun "   updated $Stamp" '#666' $false $Lbl }
+        return
+    }
+    $first = $true
+    foreach ($g in $Rows) {
+        if (-not $first) { Add-SpiceLblRun "   " '#888' $false $Lbl }
+        Add-SpiceLblRun "$($g.Type) " '#B8A88F' $false $Lbl
+        $color = if ($g.Max -eq 0) { '#666' }
+                 elseif ($g.Active -eq 0) { '#888' }
+                 elseif ($g.Active -ge $g.Max) { '#E07A4F' }
+                 else { '#9EBE6B' }
+        Add-SpiceLblRun "$($g.Active)/$($g.Max)" $color $true $Lbl
+        $primedColor = if ($g.Primed -gt 0) { '#E0B341' } else { '#666' }
+        Add-SpiceLblRun " ($($g.Primed) primed)" $primedColor $false $Lbl
+        $first = $false
+    }
+    if ($Stamp) { Add-SpiceLblRun "   updated $Stamp" '#666' $false $Lbl }
+}
+
+function Render-SpiceStatus {
+    param($Snapshot)  # @{ groups = @(@{Type;Map;Active;Max;Primed}); stamp = '...' } or $null
+    if (-not $ui.SpiceStatusLbl) { return }
+    if (-not $Snapshot) {
+        Set-SpiceLblPlain "Hagga Basin: (db unreachable — VM stopped or db pod not ready)" '#666' $ui.SpiceStatusLbl
+        Set-SpiceLblPlain "Deep Desert: (db unreachable)" '#666' $ui.SpiceStatusLbl2
+        return
+    }
+    # Hagga first (line 1), then Deep Desert (line 2). Within each line, sort by
+    # field_type alphabetical (Large, Medium, Small).
+    $hagga = @($Snapshot.groups | Where-Object { $_.Map -eq 'HaggaBasin' } | Sort-Object Type)
+    $dd    = @($Snapshot.groups | Where-Object { $_.Map -eq 'DeepDesert' } | Sort-Object Type)
+    Render-SpiceMapLine -Lbl $ui.SpiceStatusLbl  -MapLabel 'Hagga Basin' -Rows $hagga -Stamp $Snapshot.stamp
+    Render-SpiceMapLine -Lbl $ui.SpiceStatusLbl2 -MapLabel 'Deep Desert' -Rows $dd    -Stamp $Snapshot.stamp
+}
+
+function Refresh-SpiceStatus {
+    param([switch]$Force)
+
+    # Skip if VM not running — psql via SSH would just time out.
+    $vm = $null
+    try { $vm = Get-VmStatus } catch {}
+    if (-not ($vm -and $vm.running -and $vm.ip)) {
+        Render-SpiceStatus $null
+        return
+    }
+
+    # Cache hit?
+    if (-not $Force -and $script:SpiceCheckCache -and `
+        ((Get-Date) - $script:SpiceCheckCache.fetched) -lt $script:SpiceCheckCacheTtl) {
+        Render-SpiceStatus $script:SpiceCheckCache
+        return
+    }
+    # -Force always re-fires: drop the cache and let a fresh runspace go even if
+    # a prior one is still in-flight (the old one will just no-op when it lands).
+    if ($Force) { $script:SpiceCheckCache = $null }
+    elseif ($script:SpiceCheckInFlight) { return }
+    $script:SpiceCheckInFlight = $true
+
+    Set-SpiceLblPlain "Hagga Basin: (querying...)" '#888' $ui.SpiceStatusLbl
+    Set-SpiceLblPlain "Deep Desert: (querying...)" '#888' $ui.SpiceStatusLbl2
+
+    $rs = [RunspaceFactory]::CreateRunspace()
+    $rs.ApartmentState = 'STA'
+    $rs.ThreadOptions  = 'ReuseThread'
+    $rs.Open()
+    # Pre-load Invoke-V6Psql + Invoke-V6Ssh + Find-V6DbPod into the runspace.
+    $libSrc = Get-Content -Raw -LiteralPath (Join-Path $script:V6LibDir 'Db-Postgres.ps1')
+    $rs.SessionStateProxy.SetVariable('LibSrc', $libSrc)
+    $ps = [PowerShell]::Create()
+    $ps.Runspace = $rs
+    [void]$ps.AddScript({
+        param($Ip)
+        Invoke-Expression $LibSrc
+        try {
+            $sql = "SELECT field_type, map_name, SUM(current_globally_active) AS active, SUM(max_globally_active) AS max, SUM(current_globally_primed) AS primed FROM dune.spicefield_types GROUP BY field_type, map_name ORDER BY map_name, field_type;"
+            $raw = Invoke-V6Psql -Ip $Ip -Sql $sql -TimeoutSec 12
+            $groups = @()
+            foreach ($line in ($raw -split "`n")) {
+                $t = $line.Trim()
+                if (-not $t) { continue }
+                $parts = $t -split '\|'
+                if ($parts.Count -ne 5) { continue }
+                $groups += [pscustomobject]@{
+                    Type   = $parts[0].Trim()
+                    Map    = $parts[1].Trim()
+                    Active = [int]$parts[2].Trim()
+                    Max    = [int]$parts[3].Trim()
+                    Primed = [int]$parts[4].Trim()
+                }
+            }
+            return @{ ok=$true; groups=$groups }
+        } catch {
+            return @{ ok=$false; reason=$_.Exception.Message }
+        }
+    }).AddArgument($vm.ip)
+
+    $asyncResult = $ps.BeginInvoke()
+
+    $timer = New-Object System.Windows.Threading.DispatcherTimer
+    $timer.Interval = [TimeSpan]::FromMilliseconds(250)
+    $tickHandler = {
+        if ($asyncResult.IsCompleted) {
+            $timer.Stop()
+            try {
+                $r = $ps.EndInvoke($asyncResult) | Select-Object -First 1
+                $stamp = (Get-Date).ToString('HH:mm:ss')
+                if ($r -and $r.ok -and $r.groups -and $r.groups.Count -gt 0) {
+                    $snap = @{ groups=$r.groups; stamp=$stamp; fetched=(Get-Date) }
+                    $script:SpiceCheckCache = $snap
+                    Render-SpiceStatus $snap
+                } elseif ($r -and $r.ok) {
+                    Set-SpiceLblPlain "Hagga Basin: (no rows — table empty?)" '#E0B341' $ui.SpiceStatusLbl
+                    Set-SpiceLblPlain "Deep Desert: (no rows — table empty?)" '#E0B341' $ui.SpiceStatusLbl2
+                } else {
+                    $msg = if ($r) { $r.reason } else { 'no result' }
+                    Set-SpiceLblPlain "Hagga Basin: (query failed: $msg)" '#E07A4F' $ui.SpiceStatusLbl
+                    Set-SpiceLblPlain "Deep Desert: (query failed)" '#E07A4F' $ui.SpiceStatusLbl2
+                }
+            } catch {
+                Set-SpiceLblPlain "Hagga Basin: (error: $($_.Exception.Message))" '#E07A4F' $ui.SpiceStatusLbl
+                Set-SpiceLblPlain "Deep Desert: (error)" '#E07A4F' $ui.SpiceStatusLbl2
+            } finally {
+                try { $ps.Dispose() } catch {}
+                try { $rs.Close(); $rs.Dispose() } catch {}
+                $script:SpiceCheckInFlight = $false
+            }
+        }
+    }.GetNewClosure()
+    $timer.Add_Tick($tickHandler)
+    $timer.Start()
 }
 
 function Refresh-PortStatus {
@@ -1553,23 +2377,26 @@ function Refresh-PortStatus {
         if ($async.IsCompleted) {
             $timer.Stop()
             try {
-                $r = $ps.EndInvoke($async) | Select-Object -First 1
-                $stamp = (Get-Date).ToString('HH:mm:ss')
-                $snap = @{
-                    fetched  = Get-Date
-                    mode     = $mode
-                    publicIp = $r.publicIp
-                    ports    = $r.ports
-                    stamp    = $stamp
+                try {
+                    $r = $ps.EndInvoke($async) | Select-Object -First 1
+                    $stamp = (Get-Date).ToString('HH:mm:ss')
+                    $snap = @{
+                        fetched  = Get-Date
+                        mode     = $mode
+                        publicIp = $r.publicIp
+                        ports    = $r.ports
+                        stamp    = $stamp
+                    }
+                    $script:PortCheckCache = $snap
+                    Render-PortStatus $snap
+                } catch {
+                    try { Set-PortLblPlain "Ports: check failed - $($_.Exception.Message)" '#E07A4F' } catch {}
+                } finally {
+                    $script:PortCheckInFlight = $false
+                    try { $ps.Dispose() } catch {}
+                    try { $rs.Close(); $rs.Dispose() } catch {}
                 }
-                $script:PortCheckCache = $snap
-                Render-PortStatus $snap
-            } catch {
-                Set-PortLblPlain "Ports: check failed - $($_.Exception.Message)" '#E07A4F'
-            } finally {
-                $script:PortCheckInFlight = $false
-                $ps.Dispose(); $rs.Close(); $rs.Dispose()
-            }
+            } catch {}
         }
     }.GetNewClosure()
     $timer.Add_Tick($tick)
@@ -2125,7 +2952,9 @@ $ui.BtnRefreshStat.Add_Click({
     Refresh-StatusHeader
     # Explicit refresh -> bypass the 5-min cache and hit the port-check service again.
     Refresh-PortStatus -Force
+    Refresh-SpiceStatus -Force
 })
+$ui.BtnReportIssue.Add_Click({ Open-IssueReport })
 $ui.BtnClearOutput.Add_Click({ Clear-Terminal })
 $ui.BtnCopyOutput.Add_Click({
     # xterm.js's selection lives in the WebView. Ask it to read getSelection()
@@ -2297,12 +3126,109 @@ $autoRefresh.Add_Tick({
     # Auto-refresh paints port-status from the 5-min cache; only triggers a
     # fresh hit when the cache has aged out (avoids hammering yougetsignal).
     Refresh-PortStatus
+    Refresh-SpiceStatus
+    # v6: keep Dashboard tiles in sync with header data on the 30s rhythm.
+    if (Get-Command Update-V6Dashboard -ErrorAction SilentlyContinue) {
+        try { Update-V6Dashboard } catch {}
+    }
+    # v6: refresh Monitoring URLs / button enabled-state only when its page is visible
+    # (Director URL lookup hits SSH; skip when user isn't looking at the page).
+    if ($ui.PageMonitoring -and $ui.PageMonitoring.Visibility -eq 'Visible' -and `
+        (Get-Command Update-V6Monitoring -ErrorAction SilentlyContinue)) {
+        try { Update-V6Monitoring } catch {}
+    }
 })
 
 # Initial paint
 Build-ButtonPanel -Vm $script:LastVmKnown
 $ui.FooterVersion.Text = "Dune Server v$script:ToolVersion"
 $ui.InstalledLbl.Text  = "Installed: $script:ToolVersion"
+
+# v6: define Write-Diag early so page Initialize-* functions can use it during
+# wiring. (DiagLog path itself is set later when $script:DataDir is fully
+# established; here we use the same path with a safe fallback.)
+if (-not $script:DiagLog) {
+    $script:DiagLog = Join-Path $script:DataDir 'webview2-debug.log'
+}
+function Write-Diag {
+    param([string]$Msg)
+    try {
+        $line = ('{0}  {1}' -f (Get-Date).ToString('HH:mm:ss.fff'), $Msg)
+        Add-Content -Path $script:DiagLog -Value $line -ErrorAction SilentlyContinue
+    } catch {}
+}
+try { '' | Set-Content -Path $script:DiagLog -ErrorAction SilentlyContinue } catch {}
+Write-Diag "=== Dune Server v$script:ToolVersion startup (early) ==="
+
+# v6: build Dashboard page content now that $ui, $window, and $script:Commands
+# are all in scope. Update-V6Dashboard will be called later by Refresh-StatusHeader
+# and on NavDashboard.Checked.
+if (Get-Command Initialize-V6DashboardPage -ErrorAction SilentlyContinue) {
+    try { Initialize-V6DashboardPage } catch {
+        try { Write-Diag "Initialize-V6DashboardPage failed: $($_.Exception.Message)" } catch {}
+    }
+}
+if (Get-Command Initialize-V6MonitoringPage -ErrorAction SilentlyContinue) {
+    try { Initialize-V6MonitoringPage } catch {
+        try { Write-Diag "Initialize-V6MonitoringPage failed: $($_.Exception.Message)" } catch {}
+    }
+}
+if (Get-Command Initialize-V6SettingsPage -ErrorAction SilentlyContinue) {
+    try { Initialize-V6SettingsPage } catch {
+        try { Write-Diag "Initialize-V6SettingsPage failed: $($_.Exception.Message)" } catch {}
+    }
+}
+if (Get-Command Initialize-V6DatabasePage -ErrorAction SilentlyContinue) {
+    try { Initialize-V6DatabasePage } catch {
+        try { Write-Diag "Initialize-V6DatabasePage failed: $($_.Exception.Message)" } catch {}
+    }
+}
+if (Get-Command Initialize-V6GameConfigPage -ErrorAction SilentlyContinue) {
+    try { Initialize-V6GameConfigPage } catch {
+        try { Write-Diag "Initialize-V6GameConfigPage failed: $($_.Exception.Message)" } catch {}
+    }
+}
+if (Get-Command Initialize-V6CharactersPage -ErrorAction SilentlyContinue) {
+    try { Initialize-V6CharactersPage } catch {
+        try { Write-Diag "Initialize-V6CharactersPage failed: $($_.Exception.Message)" } catch {}
+    }
+}
+if (Get-Command Initialize-V6SetupWizardPage -ErrorAction SilentlyContinue) {
+    try { Initialize-V6SetupWizardPage } catch {
+        try { Write-Diag "Initialize-V6SetupWizardPage failed: $($_.Exception.Message)" } catch {}
+    }
+}
+if (Get-Command Initialize-V6MultiSietchPage -ErrorAction SilentlyContinue) {
+    try { Initialize-V6MultiSietchPage } catch {
+        try { Write-Diag "Initialize-V6MultiSietchPage failed: $($_.Exception.Message)" } catch {}
+    }
+}
+
+# Reconcile actual page visibility with whichever nav button is currently
+# IsChecked=True. XAML's IsChecked="True" fires the Checked event at parse
+# time — BEFORE PowerShell wires up Add_Checked handlers — so the initial
+# Show-V6Page call is otherwise missed and the default PageTerminal stays
+# visible. Done here (after all page initializers) so the matching
+# Update-V6* call has a populated $script:V6* state to refresh.
+$initialChecked = $null
+foreach ($navName in $script:V6NavMap.Keys) {
+    $nav = $ui[$navName]
+    if ($nav -and $nav.IsChecked) { $initialChecked = $script:V6NavMap[$navName]; break }
+}
+if ($initialChecked) {
+    try { Write-Diag "Initial-page reconcile: showing $initialChecked" } catch {}
+    Show-V6Page $initialChecked
+    switch ($initialChecked) {
+        'PageDashboard'   { if (Get-Command Update-V6Dashboard   -ErrorAction SilentlyContinue) { try { Update-V6Dashboard }   catch { try { Write-Diag "Initial Update-V6Dashboard failed: $($_.Exception.Message)" } catch {} } } }
+        'PageMonitoring'  { if (Get-Command Update-V6Monitoring  -ErrorAction SilentlyContinue) { try { Update-V6Monitoring }  catch {} } }
+        'PageSettings'    { if (Get-Command Update-V6Settings    -ErrorAction SilentlyContinue) { try { Update-V6Settings }    catch {} } }
+        'PageDatabase'    { if (Get-Command Update-V6Database    -ErrorAction SilentlyContinue) { try { Update-V6Database }    catch {} } }
+        'PageGameConfig'  { if (Get-Command Update-V6GameConfig  -ErrorAction SilentlyContinue) { try { Update-V6GameConfig }  catch {} } }
+        'PageCharacters'  { if (Get-Command Update-V6Characters  -ErrorAction SilentlyContinue) { try { Update-V6Characters }  catch {} } }
+        'PageSetupWizard' { if (Get-Command Update-V6SetupWizard -ErrorAction SilentlyContinue) { try { Update-V6SetupWizard } catch {} } }
+        'PageExperimental'{ if (Get-Command Update-V6MultiSietch -ErrorAction SilentlyContinue) { try { Update-V6MultiSietch } catch {} } }
+    }
+}
 
 # ────────────────────────────────────────────────────────────────────────────
 #  WebView2 / xterm.js initialization
@@ -2327,18 +3253,8 @@ if (-not (Test-Path $script:WebView2UserData)) {
 }
 
 # Diagnostic log for WebView2 lifecycle — survives across runs so we can see
-# init failures even if the UI never recovers. Written to a fixed path the
-# user can share with us.
-$script:DiagLog = Join-Path $script:DataDir 'webview2-debug.log'
-function Write-Diag {
-    param([string]$Msg)
-    try {
-        $line = ('{0}  {1}' -f (Get-Date).ToString('HH:mm:ss.fff'), $Msg)
-        Add-Content -Path $script:DiagLog -Value $line -ErrorAction SilentlyContinue
-    } catch {}
-}
-try { '' | Set-Content -Path $script:DiagLog -ErrorAction SilentlyContinue } catch {}
-Write-Diag "=== Dune Server v$script:ToolVersion startup ==="
+# init failures even if the UI never recovers. (Write-Diag itself was defined
+# earlier, before page initializers ran.)
 Write-Diag "AppDir = $script:AppDir"
 Write-Diag "WebDir = $script:WebDir"
 Write-Diag "WebView2Dir = $script:WebView2Dir"
@@ -2518,10 +3434,12 @@ $ui.Window.add_ContentRendered({
     }
 
     # Watchdog: if InitializationCompleted hasn't fired in 10s, log it.
-    $watchdog = New-Object System.Windows.Threading.DispatcherTimer
-    $watchdog.Interval = [TimeSpan]::FromSeconds(10)
-    $watchdog.Add_Tick({
-        $watchdog.Stop()
+    # NOTE: store on script scope so the Add_Tick closure can reach it (the
+    # outer local goes out of scope before the 10s tick fires).
+    $script:WebView2Watchdog = New-Object System.Windows.Threading.DispatcherTimer
+    $script:WebView2Watchdog.Interval = [TimeSpan]::FromSeconds(10)
+    $script:WebView2Watchdog.Add_Tick({
+        try { $script:WebView2Watchdog.Stop() } catch {}
         if (-not $script:TerminalReady) {
             $haveCore = $false
             try { $haveCore = ($null -ne $ui.Terminal.CoreWebView2) } catch {}
@@ -2529,15 +3447,29 @@ $ui.Window.add_ContentRendered({
             Set-Footer "Terminal not ready after 10s — see $script:DiagLog"
         }
     })
-    $watchdog.Start()
+    $script:WebView2Watchdog.Start()
 })
 
 Start-PtyDrainTimer
 
 # Kick off first status fetch on window load
 $ui.Window.Add_Loaded({
+    # Default to a generous portion of the working area, scaled to monitor
+    # resolution (looks identical to user's preferred screenshot on any DPI).
+    try {
+        $wa = [System.Windows.SystemParameters]::WorkArea
+        # 2.5 inches at 96 DPI = 240 WPF device-independent units
+        $tgtW = [Math]::Min([Math]::Max([int]($wa.Width  * 0.75) - 240, $ui.Window.MinWidth),  2200)
+        $tgtH = [Math]::Min([Math]::Max([int]($wa.Height * 0.75), $ui.Window.MinHeight), 1300)
+        $ui.Window.Width  = $tgtW
+        $ui.Window.Height = $tgtH
+        $ui.Window.Left   = $wa.Left + ($wa.Width  - $tgtW) / 2
+        $ui.Window.Top    = $wa.Top  + ($wa.Height - $tgtH) / 2
+    } catch {}
+
     Refresh-StatusHeader
     Refresh-PortStatus
+    Refresh-SpiceStatus
     $autoRefresh.Start()
     # Silent update check on launch — populates the Latest label, only
     # prompts the user if a newer release is actually available.
