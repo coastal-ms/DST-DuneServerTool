@@ -118,10 +118,24 @@ function Get-DunePortStatus {
 
     $results = @()
     foreach ($p in $script:DuneRequiredPorts) {
-        $status = if ($mode -eq 'builtin') {
-            Test-DunePortBuiltin -PublicIp $pubIp -Port $p.Port -Protocol $p.Protocol
-        } else {
-            Test-DunePortCustom -Template $cfg.PortCheckUrlTemplate -PublicIp $pubIp -Port $p.Port -Protocol $p.Protocol
+        $status = switch ($mode) {
+            'canyouseeme' {
+                if ($p.Protocol -ne 'TCP') { 'udp-skip' }
+                else { Test-DunePortCanYouSeeMe -PublicIp $pubIp -Port $p.Port }
+            }
+            'yougetsignal' {
+                # Force primary-only (no canyouseeme fallback) for users who
+                # want to bypass the per-IP rate-limit fallback hop.
+                if ($p.Protocol -ne 'TCP') { 'udp-skip' }
+                else { Test-DunePortYougetsignal -PublicIp $pubIp -Port $p.Port }
+            }
+            'custom' {
+                Test-DunePortCustom -Template $cfg.PortCheckUrlTemplate -PublicIp $pubIp -Port $p.Port -Protocol $p.Protocol
+            }
+            default {
+                # 'builtin' (yougetsignal w/ canyouseeme fallback) — the default.
+                Test-DunePortBuiltin -PublicIp $pubIp -Port $p.Port -Protocol $p.Protocol
+            }
         }
         $results += @{ port = $p.Port; protocol = $p.Protocol; label = $p.Label; status = $status }
     }
