@@ -183,7 +183,7 @@ export function Sietches() {
                   </span>
                 </div>
                 <div className="text-lg font-semibold mb-2">{s.map}</div>
-                <dl className="grid grid-cols-[110px,1fr] gap-y-1 text-xs">
+                <dl className="grid grid-cols-[110px_1fr] gap-y-1 text-xs">
                   <dt className="text-text-dim">Set index</dt>
                   <dd className="font-mono">{s.setIndex}</dd>
                   <dt className="text-text-dim">Partitions</dt>

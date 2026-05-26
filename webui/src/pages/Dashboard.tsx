@@ -54,11 +54,11 @@ function healthClass(v: string | undefined): string {
 function GameServerRow({ s }: { s: BgGameServer }) {
   return (
     <tr className="border-t border-border/30">
-      <td className="py-1.5 pr-3 font-medium">{s.map}</td>
-      <td className={`py-1.5 pr-3 ${healthClass(s.phase)}`}>{s.phase || '—'}</td>
-      <td className={`py-1.5 pr-3 ${healthClass(s.ready)}`}>{s.ready || '—'}</td>
-      <td className="py-1.5 pr-3 font-mono">{s.players || '0'}</td>
-      <td className="py-1.5 font-mono text-text-dim">{s.age || '—'}</td>
+      <td className="py-1 pr-3 font-medium">{s.map}</td>
+      <td className={`py-1 pr-3 ${healthClass(s.phase)}`}>{s.phase || '—'}</td>
+      <td className={`py-1 pr-3 ${healthClass(s.ready)}`}>{s.ready || '—'}</td>
+      <td className="py-1 pr-3 font-mono">{s.players || '0'}</td>
+      <td className="py-1 font-mono text-text-dim">{s.age || '—'}</td>
     </tr>
   )
 }
@@ -214,8 +214,8 @@ export function Dashboard() {
       </section>
 
       <section className="grid grid-cols-1 lg:grid-cols-2 gap-4 mb-4">
-        <div className="card p-5">
-          <div className="flex items-center justify-between mb-3">
+        <div className="card p-4">
+          <div className="flex items-center justify-between mb-2">
             <h2 className="text-sm font-semibold uppercase tracking-wider text-text-muted flex items-center gap-2">
               <Icon name="Activity" size={14} className="text-accent" /> Battlegroup info
             </h2>
@@ -232,7 +232,7 @@ export function Dashboard() {
           ) : !bgInfo ? (
             <p className="text-sm text-text-dim italic">No battlegroup info yet.</p>
           ) : (
-            <dl className="grid grid-cols-[110px,1fr] gap-y-2 text-sm">
+            <dl className="grid grid-cols-[90px_1fr] gap-x-3 gap-y-1 text-sm leading-snug">
               <dt className="text-text-dim">Status</dt>
               <dd className={healthClass(bgInfo.status)}>{bgInfo.status || '—'}</dd>
               <dt className="text-text-dim">Database</dt>
@@ -247,8 +247,8 @@ export function Dashboard() {
           )}
         </div>
 
-        <div className="card p-5">
-          <div className="flex items-center justify-between mb-3">
+        <div className="card p-4">
+          <div className="flex items-center justify-between mb-2">
             <h2 className="text-sm font-semibold uppercase tracking-wider text-text-muted flex items-center gap-2">
               <Icon name="ServerCog" size={14} className="text-accent" /> Game servers
             </h2>
@@ -261,7 +261,7 @@ export function Dashboard() {
           ) : gameServers.length === 0 ? (
             <p className="text-sm text-text-dim italic">No game servers reported.</p>
           ) : (
-            <table className="w-full text-sm">
+            <table className="w-full text-sm leading-snug">
               <thead className="text-[10px] uppercase tracking-wider text-text-dim">
                 <tr>
                   <th className="text-left pb-1">Map</th>
@@ -430,7 +430,7 @@ export function Dashboard() {
             <p className="text-sm text-text-dim italic">Loading…</p>
           ) : (
             <div className="space-y-2 text-sm">
-              <dl className="grid grid-cols-[160px,1fr] gap-y-1">
+              <dl className="grid grid-cols-[160px_1fr] gap-y-1">
                 <dt className="text-text-dim">Sets in CRD</dt>
                 <dd className="font-mono">{ddState.setCount}</dd>
                 <dt className="text-text-dim">Total replicas</dt>
