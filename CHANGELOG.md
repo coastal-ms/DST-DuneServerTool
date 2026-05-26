@@ -15,7 +15,16 @@ here cover everything those tags shipped.
 
 ## [6.1.3] - 2026-05-26
 
-Patch: **silence Write-DuneLog popup modals on startup.**
+Patch: **silence Write-DuneLog popup modals on startup**, plus a new
+in-portal **Shutdown** button.
+
+Added
+- **Shutdown button** in the top status bar (next to Refresh). One-click,
+  with confirmation, gracefully stops the local `DuneServer.exe` portal
+  process — same effect as the tray menu's "Quit" item, no need to dig
+  in the system tray. New `POST /api/shutdown` route writes the response,
+  flags the tray runspace as quitting, then stops the HTTP listener after
+  a 400ms delay so the response flushes cleanly before the EXE exits.
 
 Fixed
 - **Startup MessageBox spam** — every `Write-DuneLog` INFO line ("Dune Server
