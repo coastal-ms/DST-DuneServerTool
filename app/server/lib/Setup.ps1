@@ -5,7 +5,7 @@
 #   - the existing POST /api/commands/run/initial-setup is used by Step 3.
 
 function Get-DuneSetupPreflight {
-    $checks = New-Object System.Collections.Generic.List[object]
+    $checks = [System.Collections.Generic.List[object]]::new()
 
     # 1. Administrator
     $isAdmin = $false

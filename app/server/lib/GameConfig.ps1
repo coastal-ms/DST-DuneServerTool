@@ -125,7 +125,7 @@ function ConvertTo-DuneIni {
     $quoted = @{}
     foreach ($q in $script:DuneGameConfigQuotedKeys) { $quoted[$q] = $true }
 
-    $out = New-Object System.Collections.Generic.List[string]
+    $out = [System.Collections.Generic.List[string]]::new()
     foreach ($line in $lines) {
         $t = $line.Trim()
         if (-not $t -or $t.StartsWith('[')) { $out.Add($line); continue }

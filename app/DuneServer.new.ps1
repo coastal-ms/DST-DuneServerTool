@@ -147,15 +147,18 @@ Write-Host "  Dune Server v$script:DuneToolVersion" -ForegroundColor Yellow
 Write-Host "  Serving from: $script:DistRoot" -ForegroundColor DarkGray
 Write-Host ""
 
-# Kick the browser open ~500ms after we start listening, so the listener is up first.
-$url = "http://127.0.0.1:47823/?t=$script:LaunchToken"
-Write-Host "  URL: $url" -ForegroundColor Green
-Write-Host ""
+# Kick the browser open after the listener binds. Reads last-url.txt that
+# Start-DuneHttpServer writes once it knows the actual bound port.
 $browserJob = Start-Job -ScriptBlock {
-    param($u)
-    Start-Sleep -Milliseconds 600
-    Start-Process $u
-} -ArgumentList $url
+    $urlFile = Join-Path $env:LOCALAPPDATA 'DuneServer\last-url.txt'
+    for ($i = 0; $i -lt 50; $i++) {
+        if (Test-Path -LiteralPath $urlFile) {
+            $u = (Get-Content -LiteralPath $urlFile -Raw).Trim()
+            if ($u) { Start-Process $u; return }
+        }
+        Start-Sleep -Milliseconds 200
+    }
+}
 
 try {
     Start-DuneHttpServer -DistRoot $script:DistRoot -PreferredPort 47823 -Token $script:LaunchToken
