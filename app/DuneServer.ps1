@@ -8,9 +8,40 @@ $ErrorActionPreference = 'Stop'
 # Version (one of the 5 sync'd constants; see persistent-notes.md)
 $script:DuneToolVersion = '6.1.2'
 
+# ---------- Single-instance gate ----------------------------------------------
+# Every click of the desktop shortcut runs DuneServer.exe again. Without a
+# gate this spawns N independent servers (each on a fresh port), N tray icons,
+# and N UAC prompts. Acquire a named mutex; if it's already held, just open
+# the existing portal URL in the user's browser and exit — no elevation, no
+# duplicate listener, no second tray icon.
+$script:SingleInstanceMutex = $null
+$script:SingleInstanceOwned = $false
+try {
+    $created = $false
+    $script:SingleInstanceMutex = New-Object System.Threading.Mutex($true, 'Global\DuneServer-Portal-v6', [ref]$created)
+    $script:SingleInstanceOwned = [bool]$created
+} catch {
+    # If the named mutex can't be created (locked-down session, etc.),
+    # fall through and let the rest of startup decide.
+    $script:SingleInstanceOwned = $true
+}
+if (-not $script:SingleInstanceOwned) {
+    # Another instance is already running. Open its portal URL and exit.
+    try {
+        $urlFile = Join-Path $env:LOCALAPPDATA 'DuneServer\last-url.txt'
+        if (Test-Path -LiteralPath $urlFile) {
+            $u = (Get-Content -LiteralPath $urlFile -Raw).Trim()
+            if ($u) { Start-Process $u | Out-Null }
+        }
+    } catch { }
+    exit 0
+}
+
 # ---------- Self-elevate -------------------------------------------------------
 # Hyper-V cmdlets (Get-VM etc.) require admin or Hyper-V Administrators group.
-# Matches the v6.0.x WPF .exe behavior (requireAdmin manifest).
+# We elevate in-script (rather than via a ps2exe -requireAdmin manifest) so the
+# single-instance check above runs FIRST and subsequent shortcut clicks open
+# the browser without a UAC prompt.
 function Test-DuneIsAdmin {
     try {
         $id = [System.Security.Principal.WindowsIdentity]::GetCurrent()
@@ -28,6 +59,17 @@ function Show-DuneMessage {
     }
 }
 if (-not (Test-DuneIsAdmin)) {
+    # Release the mutex BEFORE the elevated child starts, so the child can
+    # acquire it. Without this the child would see "already running" and exit.
+    try {
+        if ($script:SingleInstanceMutex) {
+            $script:SingleInstanceMutex.ReleaseMutex()
+            $script:SingleInstanceMutex.Dispose()
+            $script:SingleInstanceMutex = $null
+            $script:SingleInstanceOwned = $false
+        }
+    } catch { }
+
     $exePath = $null
     try { $exePath = [System.Diagnostics.Process]::GetCurrentProcess().MainModule.FileName } catch { }
     try {
