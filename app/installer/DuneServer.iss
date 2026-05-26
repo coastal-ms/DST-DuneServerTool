@@ -16,7 +16,7 @@
 ;                 -> NOT touched by install or uninstall (preserves user config)
 
 #define MyAppName        "Dune Server"
-#define MyAppVersion "5.0.2"
+#define MyAppVersion "6.0.0"
 #define MyAppPublisher   "Dune Awakening Self-Hosted Tool"
 #define MyAppURL         "https://github.com/coastal-ms/Simple-Dune-Server-Management-Tool"
 #define MyAppExeName     "DuneServer.exe"
@@ -88,6 +88,18 @@ Source: "..\lib\WebView2\runtimes\win-arm64\native\WebView2Loader.dll"; DestDir:
 ; v5.0 terminal renderer: xterm.js + addons + host HTML
 Source: "..\web\*"; DestDir: "{app}\web"; Flags: ignoreversion recursesubdirs
 
+; v6.0 Server Manager: page modules (Dashboard, Characters, GameConfig, etc.)
+Source: "..\pages\*"; DestDir: "{app}\pages"; Flags: ignoreversion recursesubdirs
+
+; v6.0 Server Manager: backend lib modules (Db-Postgres, Ini-Edit, K8s, etc.)
+Source: "..\lib\*.ps1"; DestDir: "{app}\lib"; Flags: ignoreversion
+
+; v6.0 Server Manager: shared WPF theme (Eyes of Ibad scrollbars, brushes, styles)
+Source: "..\styles\*"; DestDir: "{app}\styles"; Flags: ignoreversion recursesubdirs
+
+; v6.0 Server Manager: bundled data catalogs (item-catalog, stat-reference, etc.)
+Source: "..\data\*"; DestDir: "{app}\data"; Flags: ignoreversion recursesubdirs
+
 [Icons]
 ; Start Menu shortcut (always created)
 Name: "{group}\{#MyAppName}"; Filename: "{app}\{#MyAppExeName}"; IconFilename: "{app}\{#MyAppExeName}"; Comment: "Dune Awakening server management"
@@ -119,8 +131,8 @@ Type: filesandordirs; Name: "{app}"
 //  Behaviour:
 //    - If %APPDATA%\DuneServer\dune-server.config already exists,
 //      ALL custom pages are skipped (upgrade path - preserve user config).
-//    - If a legacy config is found on Desktop/OneDrive/etc., the user
-//      is asked once whether to import it. If yes, pages are pre-filled
+//    - If a legacy config is found on the Desktop or in Documents,
+//      the user is asked once whether to import it. If yes, pages are pre-filled
 //      from the legacy values; if no, sensible auto-detected defaults
 //      are used.
 // ============================================================
@@ -143,15 +155,12 @@ var
   i: Integer;
 begin
   Result := '';
-  SetArrayLength(candidates, 8);
+  SetArrayLength(candidates, 5);
   candidates[0] := ExpandConstant('{userdesktop}\GH Dune Server Tool\dune-server.config');
   candidates[1] := ExpandConstant('{userdesktop}\Simple-Dune-Server-Management-Tool\dune-server.config');
   candidates[2] := ExpandConstant('{userdesktop}\dune-server.config');
-  candidates[3] := ExpandConstant('{%USERPROFILE}\OneDrive\Desktop\GH Dune Server Tool\dune-server.config');
-  candidates[4] := ExpandConstant('{%USERPROFILE}\Documents\dune-server.config');
-  candidates[5] := ExpandConstant('{%USERPROFILE}\Downloads\Simple-Dune-Server-Management-Tool-main\dune-server.config');
-  candidates[6] := ExpandConstant('{%USERPROFILE}\OneDrive\1CopilotCLI - Work\Simple-Dune-Server-Management-Tool\dune-server.config');
-  candidates[7] := ExpandConstant('{%USERPROFILE}\OneDrive\Desktop\Simple-Dune-Server-Management-Tool\dune-server.config');
+  candidates[3] := ExpandConstant('{%USERPROFILE}\Documents\dune-server.config');
+  candidates[4] := ExpandConstant('{%USERPROFILE}\Downloads\Simple-Dune-Server-Management-Tool-main\dune-server.config');
 
   for i := 0 to GetArrayLength(candidates) - 1 do
     if FileExists(candidates[i]) then begin Result := candidates[i]; Exit; end;
