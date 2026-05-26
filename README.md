@@ -1,6 +1,6 @@
 # Simple Dune Server Management Tool
 
-> By Coastal (Discord `@allcoast`). A Windows desktop app for managing your
+> By Coastal (Discord `@allcoast`). A Windows management portal for your
 > self-hosted **Dune: Awakening** dedicated server — without ever opening a
 > raw SSH shell or hand-editing YAML.
 
@@ -8,19 +8,13 @@
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 [![Latest release](https://img.shields.io/github/v/release/coastal-ms/Simple-Dune-Server-Management-Tool?sort=semver)](https://github.com/coastal-ms/Simple-Dune-Server-Management-Tool/releases/latest)
 
-**v6.0.0** is a top-to-bottom rebuild around a page-based UI. You get a
-Dashboard for at-a-glance status, dedicated pages for live character editing,
-game-config tuning, database backup/restore, monitoring, and more — all
-backed by the same battle-tested SSH + battlegroup automation under the hood.
+**v6.1.x** runs as a headless system-tray app that serves a local web portal
+(React + Vite + Tailwind) over `127.0.0.1` and opens your default browser to
+a per-launch tokenized URL. No WPF window, no embedded browser engine — just
+a tiny PowerShell HTTP server and a static asset bundle. Same battle-tested
+SSH + Hyper-V + battlegroup automation under the hood as the legacy CLI.
 
-> 🆕 **New in v6.1.3** — a prominent red **Shut down** button now lives in
-> the top-right of the header (next to Refresh). One click gracefully stops
-> the local `DuneServer.exe` portal process — no more digging in the system
-> tray's right-click menu when you want to close the portal.
-
-> 🎬 _Screenshot placeholder — replace with `docs/img/v6-dashboard.png` once captured._
->
-> ![Dashboard](docs/img/v6-dashboard.png)
+![Server Health](docs/img/v6-server-health.png)
 
 See [`CHANGELOG.md`](CHANGELOG.md) for the full release history and
 [`CONTRIBUTING.md`](CONTRIBUTING.md) for the change-control workflow.
@@ -32,177 +26,229 @@ See [`CHANGELOG.md`](CHANGELOG.md) for the full release history and
 1. Download **`DuneServerSetup.exe`** from the
    [latest GitHub release](https://github.com/coastal-ms/Simple-Dune-Server-Management-Tool/releases/latest).
 2. Double-click. The installer walks you through it (one UAC prompt — Hyper-V
-   needs admin).
-3. Launch from **Start Menu → Dune Server**. The first launch opens the
-   **Setup Wizard**, which asks for your server install folder, SSH key, and
+   needs admin). The Start Menu shortcut and the launcher EXE are placed in
+   `C:\Program Files\Dune Server\`.
+3. Launch from **Start Menu → Dune Server**. The launcher binds a free local
+   port (47823+), drops a tray icon, and pops your default browser at
+   `http://127.0.0.1:<port>/?t=<token>`. The first launch opens the **Setup
+   Wizard** page, which asks for your server install folder, SSH key, and
    optional dune-admin path. All answers are saved to `%APPDATA%\DuneServer\`
    and preserved across reinstalls.
 
-> Already running v4.x or v5.x? The installer detects your existing
-> `dune-server.config` (Desktop, OneDrive, common folders) and copies it to
-> `%APPDATA%\DuneServer\` so nothing gets re-asked. Personal-folder paths
-> are no longer scanned in v6.0.0 — only generic locations like Desktop and
-> Documents.
+> The launcher is single-instance — clicking the desktop shortcut again just
+> reopens the existing portal in your browser. No second tray icon, no
+> duplicate UAC prompt.
 
 ---
 
 ## What you need
 
 - **Windows 10/11** with **Hyper-V** enabled (Pro / Enterprise / Education).
-- **PowerShell 7** (`pwsh`) — [download](https://github.com/PowerShell/PowerShell/releases). The app will prompt you with this link on first launch if it's missing.
-- **WebView2 Evergreen runtime** — preinstalled on Windows 11; the app
-  prompts with the official Microsoft installer link if it's missing on
-  Windows 10 / Server.
+- **PowerShell 7** (`pwsh`) — [download](https://github.com/PowerShell/PowerShell/releases). The launcher prompts you with this link if it's missing.
+- **A modern default browser** (Chrome, Edge, Firefox). The portal is served
+  to your existing browser — there is no embedded WebView2 component to
+  install or update.
 - **Dune: Awakening Self-Hosted Server** installed via Steam (gives you the
   `battlegroup-management` folder and the Hyper-V VM image).
 - **SSH private key** for connecting to your VM — created automatically
   during Funcom's official self-hosted setup; usually in
   `%LOCALAPPDATA%\DuneAwakeningServer\sshKey`.
 - **(Optional)** [dune-admin](https://github.com/icehunter/dune-admin) — a
-  community admin panel for player/inventory tooling. Launches from inside
-  the app if you provide the path.
+  community admin panel for player/inventory tooling. Launches from the
+  Commands page if you provide its path.
 
 ---
 
-## The v6 desktop app — a page tour
+## The portal — a page tour
 
-The window is split into three regions: a **header status bar** at the top
-(VM status, battlegroup state, public IP / port check, plus **Refresh** and
-**Shut down** buttons on the right), a **left rail** to navigate pages,
-and the **page surface** on the right. Every page is built from the same
-theme so colors, spacing, and controls stay consistent.
+The browser window is split into a **left nav rail** (grouped under Server
+Health, Terminal, Game Data, System) and a **page surface** on the right.
+The persistent **header status bar** at the top shows live VM / battlegroup
+/ port status, a **Refresh** button, and a prominent red **Shut down**
+button that gracefully stops the local `DuneServer.exe` portal process
+(same effect as the tray menu's *Quit*).
 
-The header is **resizable** — drag the splitter to give a page more room.
-The window auto-sizes to ~75% of your working area on first launch (minus a
-small width margin for ultrawides) and centers itself.
+### 🩺 Server Health
 
-### 🏠 Dashboard
+![Server Health page](docs/img/v6-server-health.png)
 
-> ![Dashboard tiles](docs/img/v6-dashboard.png)
+The default landing page. Cards for everything you usually want to glance at:
 
-At-a-glance tiles for everything you usually want to glance at:
+- **Battlegroup + VM** — combined running / stopped state and uptime.
+- **TCP Ports Open** — live verdict for each public TCP port (Game first,
+  Game last, RabbitMQ).
+- **Battlegroup Info** — typed view of `kubectl get bg` (BG state, DB,
+  Gateway, Director, Uptime).
+- **Game Servers** — per-pod phase, readiness, player count, age.
+- **Active Spice** — per-map / per-size-class active vs primed counts,
+  pulled live from `dune.public_spicefields` over psql. Tiered colors
+  (Large = amber, Medium = blue, Small = muted) and at-cap highlighting.
+- **Public Port Status** — open / closed / skipped badges for Game (UDP)
+  and RabbitMQ (TCP), with a primary + fallback port-check provider.
+- **Web Interfaces** — one-click launchers for File Browser and
+  Battlegroup Director (URLs visible and copyable).
+- **Map pod cards** — Deep Desert, Arrakeen, Harko Village with **Spin
+  up** / **Shut down** / **Refresh** controls. Shutdown is guarded by a
+  player-online check.
+- **Log Exports** — pull logs from any pod or the operator with one click.
 
-- **VM** — running / stopped, IP address
-- **Battlegroup** — phase + per-map pod state (Overmap, Survival_1, …)
-- **Game Port** — live read from `UserEngine.ini` on the VM (the actual port
-  the game server is listening on; refreshes when you save Game Config)
-- **Public IP / Port Check** — open / closed / unknown badges
-- **Restart / Stop / Start** buttons for fast operations without leaving
-  the page
+### ⚡ Commands
 
-Tiles refresh every 30 seconds and on-demand when you trigger an action.
+![Commands page](docs/img/v6-commands.png)
 
-### 📈 Monitoring
+Quick-action cards grouped by **VM**, **Battlegroup**, and **Tools**. Each
+card shows whether the command runs **InApp** (in the embedded terminal)
+or **Console** (in a popup window for interactive commands). Click the
+keyboard hint to fire the card; cards self-disable with a hint when the
+action wouldn't make sense right now (e.g. *start* greyed out with
+"Battlegroup already running").
 
-> ![Monitoring page](docs/img/v6-monitoring.png)
+Drag the grip on any card to reorder commands within their section — the
+order auto-saves to `%APPDATA%\DuneServer\button-order.json` and persists
+across launches. The header has a **Reset layout** button to revert to
+the default arrangement.
 
-- **Status log** — live tail of the battlegroup status stream
-- **Log export buttons** — pull logs from the operator or any pod with one
-  click; saved to your local logs folder and opened in Explorer
-- **Web Interfaces** card — quick-launch tiles for the **File Browser** and
-  **Director** pages (with their resolved URLs visible and copyable)
+### 🖥️ Terminal
+
+![Terminal page](docs/img/v6-terminal.png)
+
+Embedded PowerShell session backed by xterm.js. Runs locally on your
+Windows host — use it for `kubectl`, `ssh dune@vm '...'`, and other
+one-shot commands. Persistent working directory across commands. Each
+WebSocket session owns a dedicated runspace; **Cancel** stops the current
+command, **Clear** wipes the buffer, **Reconnect** spins up a fresh
+runspace. Note: this is an exec model, not a real PTY — `vim` and `htop`
+won't work, but everything else does.
 
 ### 👤 Characters
 
-> ![Characters page](docs/img/v6-characters.png)
+![Characters page](docs/img/v6-characters.png)
 
 Live editor for every character on your server, talking directly to the
-Postgres pod over SSH. Pick a character from the rail, then tab through:
-
-- **Stats** — health, stamina, hydration, vitality, abilities
-- **Tech / Specs** — unlocked tech trees and intel
-- **Economy** — currency, faction standing
-- **Faction** — affiliation, rank
-- **Inventory** — full item list with filters
-- **Cosmetics** — equipped/unlocked skins, dyes, sigils
-
-All edits are written back through `psql` with transactional safety. The
-character list loads asynchronously with a loading overlay so the UI never
-hangs on a slow VM.
+Postgres pod over SSH. Pick a character from the rail, then tab through
+**Stats**, **Tech**, **Specs**, **Economy**, **Faction**, **Inventory**,
+**Cosmetics**. All edits are written back through `psql` with
+transactional safety. Specs and Faction Rep pull live from
+`dune.specialization_tracks` and `dune.player_faction_reputation` so
+you always see the current numbers.
 
 ### ⚙️ Game Config
 
-> ![Game Config page](docs/img/v6-gameconfig.png)
+![Game Config page](docs/img/v6-gameconfig.png)
 
-A safe in-app editor for `UserEngine.ini` and related server tuning files.
-The header shows a **spice fields readout** (Hagga + Deep Desert lines with
-primed counts) so you can sanity-check spawn density at a glance. Save
-flushes the file back to the VM and invalidates the Dashboard's port cache
-so any port change is reflected immediately.
+A grouped editor for `UserGame.ini` and `UserEngine.ini`, with every
+setting labeled, typed, and showing its underlying key in fine print.
+Groups: Combat Rules, World & Weather, Shai-Hulud, Resources & Loot,
+Players, Spicefields, Performance, and more. A dedicated **Spicefield
+Types** card edits `dune.spicefield_types` directly with at-cap row
+highlighting and a live status badge that refreshes every 10s. Save
+flushes the files back to the VM and invalidates the Server Health port
+cache so any port change is reflected immediately.
 
 ### 🗄️ Database
 
-> ![Database page](docs/img/v6-database.png)
+![Database page](docs/img/v6-database.png)
 
-- **Backup** and **Import** the game DB without remembering pod names
-- Browse and edit common tables directly (read-only by default; "Edit mode"
-  toggle prevents accidental writes)
-- One-click **Open psql shell** in the embedded terminal for ad-hoc queries
+- **Take Backup** / **Restore Backup** for the BG PostgreSQL database
+  without remembering pod names. A banner reminds you to stop the BG
+  first for a consistent backup.
+- **SQL Editor** powered by Monaco. Read-only by default; toggle the
+  switch to enable writes. Filterable table list sidebar, configurable
+  max-rows cap, **Ctrl+Enter** to run.
+
+### 🕸️ Sietches *(experimental)*
+
+![Sietches page](docs/img/v6-sietches.png)
+
+Experimental page for adding or removing additional Survival_1 shards
+(sietches). Each sietch costs ~12 GB of RAM and requires the UDP port
+range 7777–7900 to be open on the host. Gated behind an
+**I UNDERSTAND** confirmation prompt — patches the battlegroup CRD
+directly. Unsupported by Funcom; you're on your own if something breaks.
 
 ### 🔧 Settings
 
-> ![Settings page](docs/img/v6-settings.png)
+![Settings page](docs/img/v6-settings.png)
 
-All the things the old setup wizard asked you, but editable any time:
-server install folder, SSH key path, dune-admin path, Windows username,
-port-check URL template, color theme, log retention. Changes are saved on
-the fly — no restart needed.
+All the things the Setup Wizard asked you, but editable any time:
+
+- Steam install path (where Funcom dropped the dedicated server)
+- SSH key path (private key into the dune-awakening VM)
+- `dune-admin.exe` path (optional)
+- Windows username (used for desktop shortcut creation)
+- **Port-check mode** — `builtin` (yougetsignal + canyouseeme fallback),
+  `yougetsignal` only, `canyouseeme` only, `custom` (your own URL), or
+  `disabled`
+- Port-check URL template (when mode is `custom`)
+
+Changes save on-click — no restart needed. The **Updates** card on the
+same page pings the GitHub Releases API on demand and lets you install
+the latest version silently.
 
 ### 🧙 Setup Wizard
 
-> ![Setup Wizard](docs/img/v6-setup-wizard.png)
+![Setup Wizard](docs/img/v6-setup-wizard.png)
 
-Runs automatically on first launch and walks you through the same questions
-as the legacy CLI wizard (server folder, SSH key, dune-admin, Windows
-username, port-check). You can re-run it any time from Settings if you ever
-need a clean reset.
+Six-step linear flow that runs automatically on first launch:
 
-### 🏜️ Additional Sietches _(experimental)_
+1. **Pre-flight** — admin check, Hyper-V module, disk space, OS, config
+2. **Configuration** — confirm tool settings
+3. **Installing** — import the Hyper-V VM
+4. **Security** — SSH + firewall
+5. **Networking** — ports + DNS
+6. **Finalize** — wrap-up
 
-> ![Multi-sietch page](docs/img/v6-multi-sietch.png)
-
-Experimental page for managing more than one battlegroup / VM from a single
-window. Not yet production-ready; included so power users can preview it
-and file feedback.
+Re-runnable any time from the nav rail for a clean reset.
 
 ---
 
 ## Where things live
 
-| Item                       | Path                                            |
-| -------------------------- | ----------------------------------------------- |
-| Install dir                | `C:\Program Files\Dune Server\`                 |
-| Config / logs / state      | `%APPDATA%\DuneServer\`                         |
-| Setup config               | `%APPDATA%\DuneServer\dune-server.config`       |
-| Live transcript            | `%APPDATA%\DuneServer\.logs\dune-server-*.log`  |
-| WebView2 debug log         | `%APPDATA%\DuneServer\webview2-debug.log`       |
-| SSH key (created by Funcom)| `%LOCALAPPDATA%\DuneAwakeningServer\sshKey`     |
-| Start Menu shortcut        | `Start → Dune Server → Dune Server`             |
-| Add/Remove Programs        | _"Dune Server 6.0.0"_                           |
+| Item                           | Path                                                       |
+| ------------------------------ | ---------------------------------------------------------- |
+| Install dir                    | `C:\Program Files\Dune Server\`                            |
+| Config / state                 | `%APPDATA%\DuneServer\`                                    |
+| Setup config                   | `%APPDATA%\DuneServer\dune-server.config`                  |
+| Commands layout                | `%APPDATA%\DuneServer\button-order.json`                   |
+| Server log (tray → View log)   | `%LOCALAPPDATA%\DuneServer\dune-server.log`                |
+| Last portal URL                | `%LOCALAPPDATA%\DuneServer\last-url.txt`                   |
+| SSH key (created by Funcom)    | `%LOCALAPPDATA%\DuneAwakeningServer\sshKey`                |
+| Start Menu shortcut            | *Start → Dune Server → Dune Server*                        |
+| Tray icon                      | Notification area — right-click for Open / Copy URL / Quit |
 
 Uninstalling removes the install dir but **never touches
-`%APPDATA%\DuneServer\`** — your config and logs are preserved if you ever
-reinstall.
+`%APPDATA%\DuneServer\`** — your config is preserved if you ever reinstall.
 
 ---
 
-## Legacy CLI _(`dune-server.bat`)_
+## Auto-update
 
-The original menu-driven CLI script is still in the repo and still works.
-Clone the repo (or download the source zip), then double-click
-`dune-server.bat`. The desktop app and the `.bat` file both call into the
-same `dune-server.ps1` business logic — they're not separate codebases.
+The portal polls the public GitHub Releases API on a 6-hour cadence (also
+cached for 1h server-side). When a newer tag is published with an attached
+`DuneServerSetup*.exe`, an amber banner appears above the status bar with
+**Update now** / **Later** buttons. **Update now** downloads the asset to
+`%TEMP%\DuneServerUpdate\` and launches it silently — the installer kills
+the running `DuneServer.exe`, lays down the new files, and the Start Menu
+shortcut keeps working. Your config in `%APPDATA%\DuneServer\` is preserved.
 
-You'd typically use the CLI if you want to script a one-off command without
-launching the GUI (e.g., from a scheduled task or another tool):
+You can also check manually from **Settings → Updates → Check now**.
+
+---
+
+## CLI launcher *(`dune-server.bat`)*
+
+The repo also ships a menu-driven PowerShell CLI for scripting one-off
+commands without launching the portal (e.g. from a scheduled task). Clone
+the repo (or download the source zip), then double-click `dune-server.bat`
+or invoke it with `-Cmd <name>`:
 
 ```powershell
-.\dune-server.bat
+.\dune-server.bat              # interactive menu
+.\dune-server.bat -Cmd version # print installed version
 ```
 
-It will prompt for the option letter / number from the classic menu. See
-[`CHANGELOG.md`](CHANGELOG.md) under **[5.0.0]** for the last menu-focused
-release notes if you need a refresher on the CLI commands.
+The portal and the `.bat` file both call into the same `dune-server.ps1`
+business logic — they're not separate codebases.
 
 ---
 
@@ -216,19 +262,19 @@ so it can be tracked and fixed:
 
 The bug report form asks for:
 
-- **Tool version** — shown in the app header (`Installed: x.y.z`) or by
-  running `dune-server.bat -Cmd version`
-- **Surface** — which v6 page (or the CLI / installer / update checker)
-  you were on when the bug happened
-- **Page / button / command** — the specific thing you clicked or typed
-- **Environment** — OS build, PowerShell version, WebView2 runtime version
-- **Diagnostics** — recent lines from the transcript log (auto-attached
-  when you use the in-app or CLI **Report Issue** button)
+- **Tool version** — shown in the portal footer (`v6.1.x · coastal-ms`).
+- **Surface** — which portal page (Server Health, Commands, Terminal,
+  Characters, Game Config, Database, Sietches, Settings, Setup Wizard)
+  or whether it was the CLI / installer / auto-updater.
+- **Page / button / command** — the specific thing you clicked or typed.
+- **Environment** — OS build, PowerShell version, browser.
+- **Diagnostics** — recent lines from the server log
+  (`%LOCALAPPDATA%\DuneServer\dune-server.log`).
 
-The **Report Issue** button (app header, or `dune-server -Cmd report-issue`
-from the CLI) pre-fills most of this for you and opens the GitHub form in
-your browser. **Sanitize first** — remove IPs, hostnames, usernames, and
-any key file contents before submitting.
+The **Report Issue** action (CLI: `dune-server -Cmd report-issue`)
+pre-fills most of this for you and opens the GitHub form in your browser.
+**Sanitize first** — remove IPs, hostnames, usernames, and any key file
+contents before submitting.
 
 Discord pings to `@allcoast` are fine for quick questions, but use the
 issue tracker for anything that needs a fix — it keeps the history public
@@ -241,37 +287,46 @@ so other admins can find the same answer.
 ### "pwsh is not recognized"
 PowerShell 7 isn't installed. Download it from
 [github.com/PowerShell/PowerShell/releases](https://github.com/PowerShell/PowerShell/releases)
-and install. The app and the `.bat` launcher both require `pwsh`, not the
+and install. The launcher and the `.bat` CLI both require `pwsh`, not the
 built-in Windows PowerShell 5.1.
 
-### "WebView2 runtime is missing"
-On Windows 10 / Server, the Evergreen WebView2 runtime may not be
-preinstalled. The app prompts with the official Microsoft installer link;
-download, install, then relaunch.
+### Browser didn't open / portal tab is blank
+The launcher writes the current URL to
+`%LOCALAPPDATA%\DuneServer\last-url.txt`. Right-click the tray icon →
+**Open Portal**, or **Copy URL** and paste into your browser. If the tab
+opens but shows "Invalid or missing token", close it and reopen from the
+tray — that error means you have a stale URL from a previous run.
 
 ### "The script requires administrator privileges"
-Hyper-V cmdlets need admin. The installer enables this automatically for
-`DuneServer.exe`; for the CLI, right-click `dune-server.bat` → **Run as
-administrator**, or click Yes on the UAC prompt.
+Hyper-V cmdlets need admin. The installer enables this for `DuneServer.exe`;
+for the CLI, right-click `dune-server.bat` → **Run as administrator**, or
+click Yes on the UAC prompt.
 
-### Dashboard Game Port shows "lookup failed"
-The app couldn't read `UserEngine.ini` from the VM. Common causes:
+### Server Health: Game Port lookup failed
+The portal couldn't read `UserEngine.ini` from the VM. Common causes:
 
-- VM is stopped (the tile will show "VM not running" instead)
-- SSH key path is wrong (check Settings)
-- Battlegroup hasn't been started yet on this VM, so the INI doesn't exist
-- Open the embedded terminal and run `shell-vm` to verify SSH manually
+- VM is stopped (the header pill will show "VM stopped").
+- SSH key path is wrong (check Settings).
+- Battlegroup hasn't been started yet, so the INI doesn't exist.
+- Open the Terminal page and run `ssh dune@<vm-ip> 'cat ...UserEngine.ini'`
+  to verify SSH manually.
 
-The cache TTL is 10 minutes, so the next refresh will retry automatically.
-Saving the Game Config page clears the cache immediately.
+The cache TTL is 10 minutes; saving the Game Config page clears it
+immediately.
 
 ### Characters page shows "no characters"
-Confirm the database pod is `Running`:
-- Dashboard → Battlegroup tile should show all pods Running
-- Or open the embedded terminal and `shell-pod` → pick the `-db-` pod
+Confirm the DB pod is `Running`:
+- Server Health → Game Servers card should show all pods Running.
+- Or open the Terminal page and run `kubectl get pods -A`.
 
 If the pod is up but the list is empty, no players have ever logged in
 yet — the player table only gets rows on first character creation.
+
+### TCP Ports Open shows "unknown" for RabbitMQ
+The primary port checker (yougetsignal.com) has a daily per-public-IP
+rate limit. v6.1.5+ automatically falls back to canyouseeme.org when this
+happens; if both are exhausted, try again tomorrow or switch to a single
+provider via **Settings → Port-check mode**.
 
 ### dune-admin won't find my SSH key
 dune-admin looks for keys in this order:
@@ -290,10 +345,10 @@ when they really mean "no UDP response". Confirm with a UDP-aware tool
 like `nmap -sU -p 7777 <public-ip>` from another network before assuming
 your forwarding is broken.
 
-### I want to change my settings
-Open the **Settings** page in the app, or delete
-`%APPDATA%\DuneServer\dune-server.config` to re-run the Setup Wizard from
-a clean slate.
+### I want to start over
+Open the **Settings** page and clear the fields you want re-asked, or
+delete `%APPDATA%\DuneServer\dune-server.config` to re-run the Setup
+Wizard from a clean slate. Your `button-order.json` and logs are kept.
 
 ---
 
