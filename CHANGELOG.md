@@ -15,6 +15,16 @@ here cover everything those tags shipped.
 
 ## [6.0.0] - 2026-05-26
 
+**6.0.1 hotfix (2026-05-26):** Fixed startup crash _"XAML load failed:
+Provide value on 'System.Windows.StaticResourceExtension' threw an
+exception"_ that hit every fresh install of the v6.0.0 EXE. Three v6
+path lookups (`styles\Theme.xaml`, `pages\`, `lib\`) were resolving
+against `$PSScriptRoot` — which is `$null` when the script is compiled
+with ps2exe — so the Theme.xaml splice silently produced no resources
+and the inline `{StaticResource …}` references failed at parse time.
+Switched those lookups to the existing `$script:AppDir` fallback (uses
+the executing assembly's directory). No data or settings impact.
+
 Major release: **page-based UI**. The left rail of buttons + single output
 pane is gone — replaced by a navigable workspace where each major workflow
 gets its own purpose-built page. This is the biggest UX change since the
@@ -631,8 +641,8 @@ at the time. Also folds in the v3.0.1 / v3.1.2 patches.
   (`ssh`, `dune-admin`, `setup-guide`, `report-issue`). _(originally
   3.1.2)_
 
-[Unreleased]: https://github.com/coastal-ms/Simple-Dune-Server-Management-Tool/compare/v6.0.0...HEAD
-[6.0.0]: https://github.com/coastal-ms/Simple-Dune-Server-Management-Tool/compare/v5.0.2...v6.0.0
+[Unreleased]: https://github.com/coastal-ms/Simple-Dune-Server-Management-Tool/compare/v6.0.1...HEAD
+[6.0.0]: https://github.com/coastal-ms/Simple-Dune-Server-Management-Tool/compare/v5.0.2...v6.0.1
 [5.0.0]: https://github.com/coastal-ms/Simple-Dune-Server-Management-Tool/compare/v4.5.2...v5.0.2
 [4.0.0]: https://github.com/coastal-ms/Simple-Dune-Server-Management-Tool/compare/v3.1.2...v4.5.2
 [3.0.0]: https://github.com/coastal-ms/Simple-Dune-Server-Management-Tool/releases/tag/v3.1.2
