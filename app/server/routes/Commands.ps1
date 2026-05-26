@@ -4,7 +4,10 @@
 Register-DuneRoute -Method GET -Path '/api/commands' -Handler {
     param($req, $res, $routeParams, $body)
     $state = Get-DuneCurrentState
-    $order = Get-DuneCommandOrder
+    # @(...) wraps the result to guarantee a real array even when the helper
+    # returns an empty pipeline (PS 5.1 ConvertTo-Json otherwise serializes
+    # such hashtable values as `{}` instead of `[]`).
+    $order = @(Get-DuneCommandOrder)
     $cmds = foreach ($c in $script:DuneCommands) {
         $av = Get-DuneCommandAvailability -Command $c -State $state
         @{
@@ -37,7 +40,7 @@ Register-DuneRoute -Method PUT -Path '/api/commands/order' -Handler {
         $order = @($body.order | ForEach-Object { "$_" })
     }
     Save-DuneCommandOrder -Order $order
-    Write-DuneJson -Response $res -Body @{ ok = $true; order = Get-DuneCommandOrder }
+    Write-DuneJson -Response $res -Body @{ ok = $true; order = @(Get-DuneCommandOrder) }
 }
 
 # POST /api/commands/order/reset — drop the persisted order
