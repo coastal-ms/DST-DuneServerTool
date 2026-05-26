@@ -12,6 +12,7 @@ import type {
   GameConfigField,
   GameConfigResponse,
 } from '../api/types'
+import { SpicefieldsCard } from './gameconfig/SpicefieldsCard'
 
 type LoadState = 'idle' | 'loading' | 'ready' | 'error' | 'unavailable'
 
@@ -220,6 +221,7 @@ export function GameConfig() {
                 </div>
               </SectionCard>
             ))}
+            <SpicefieldsCard vmRunning={vmRunning} />
           </div>
 
           <div className="sticky bottom-0 mt-6 -mx-6 px-6 py-3 bg-surface/95 border-t border-border backdrop-blur-sm flex items-center justify-between">
