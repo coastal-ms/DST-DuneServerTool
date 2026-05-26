@@ -1,4 +1,4 @@
-# DuneServer.ps1 - Dune Server desktop app (WPF host for dune-server.ps1)
+﻿# DuneServer.ps1 - Dune Server desktop app (WPF host for dune-server.ps1)
 #
 # Compiled via ps2exe to DuneServer.exe (PowerShell 5.1 Desktop host).
 # Child dune-server.ps1 commands are launched via explicit `pwsh` (PowerShell 7).
@@ -1200,6 +1200,19 @@ $script:Commands = @(
 # Names of the separator pseudo-commands, used by Reset-SeparatorPositions and
 # the renderer to short-circuit click/availability logic.
 $script:SeparatorNames = @('__separator_1','__separator_2','__separator_3','__separator_4')
+
+# ────────────────────────────────────────────────────────────────────────────
+#  v6: load lib modules first (shared helpers used by page modules)
+# ────────────────────────────────────────────────────────────────────────────
+$script:V6LibDir = Join-Path $PSScriptRoot 'lib'
+foreach ($lib in @('Db-Postgres.ps1','Ini-Edit.ps1','Hyperv.ps1','K8s.ps1','StateModel.ps1')) {
+    $libPath = Join-Path $script:V6LibDir $lib
+    if (Test-Path $libPath) {
+        try { . $libPath } catch {
+            try { Write-Diag "v6 lib module $lib failed to load: $($_.Exception.Message)" } catch {}
+        }
+    }
+}
 
 # ────────────────────────────────────────────────────────────────────────────
 #  v6: load page modules (each defines its own Initialize-V6*Page function
