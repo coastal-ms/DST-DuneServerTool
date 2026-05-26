@@ -8,6 +8,7 @@ import { Database } from './pages/Database'
 import { Sietches } from './pages/Sietches'
 import { SetupWizard } from './pages/SetupWizard'
 import { Settings } from './pages/Settings'
+import { TerminalPage } from './pages/Terminal'
 import { PageStub } from './pages/PageStub'
 import { StatusProvider } from './hooks/useStatus'
 
@@ -18,7 +19,7 @@ export default function App() {
         <Routes>
           <Route path="/"           element={<Dashboard />} />
           <Route path="/commands"   element={<Commands />} />
-          <Route path="/terminal"   element={<PageStub title="Terminal"    icon="SquareTerminal"  description="Embedded PowerShell session for kubectl / SSH." phase="Phase 4" />} />
+          <Route path="/terminal"   element={<TerminalPage />} />
           <Route path="/characters" element={<Characters />} />
           <Route path="/gameconfig" element={<GameConfig />} />
           <Route path="/database"   element={<Database />} />
