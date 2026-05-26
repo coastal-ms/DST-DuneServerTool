@@ -144,3 +144,52 @@ export type CharacterDetail = {
     items: ItemRow[]
   }
 }
+
+// ---------- GameConfig ------------------------------------------------------
+
+export type GameConfigFieldOption = { value: string; label: string }
+
+export type GameConfigField = {
+  key: string
+  file: 'game' | 'engine'
+  type: 'select' | 'number' | 'text'
+  label: string
+  hint?: string
+  placeholder?: string
+  unit?: string
+  wide?: boolean
+  step?: number
+  min?: number
+  max?: number
+  options?: GameConfigFieldOption[]
+}
+
+export type GameConfigSection = {
+  section: string
+  fields: GameConfigField[]
+}
+
+export type GameConfigSchemaResponse = {
+  schema: GameConfigSection[]
+}
+
+export type GameConfigFileBundle = {
+  path: string
+  raw: string
+  values: Record<string, string>
+}
+
+export type GameConfigResponse = {
+  available: boolean
+  source: 'live' | 'template' | 'cache'
+  game: GameConfigFileBundle
+  engine: GameConfigFileBundle
+}
+
+export type GameConfigSaveResponse = {
+  ok: boolean
+  applied: { game: number; engine: number }
+  source: 'live' | 'template' | 'cache'
+  game: GameConfigFileBundle
+  engine: GameConfigFileBundle
+}
