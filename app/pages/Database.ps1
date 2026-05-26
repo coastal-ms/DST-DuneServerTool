@@ -14,7 +14,8 @@ function Initialize-V6DatabasePage {
 <Border xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         Background="#FF14110D" Padding="32,24,32,28">
-  <DockPanel LastChildFill="True">
+  <ScrollViewer VerticalScrollBarVisibility="Visible" HorizontalScrollBarVisibility="Disabled">
+  <DockPanel LastChildFill="False">
 
     <!-- Section header -->
     <Grid DockPanel.Dock="Top" Margin="0,0,0,18">
@@ -137,6 +138,7 @@ function Initialize-V6DatabasePage {
     </Border>
 
   </DockPanel>
+  </ScrollViewer>
 </Border>
 '@
 

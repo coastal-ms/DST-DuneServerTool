@@ -1,4 +1,4 @@
-# app/pages/Monitoring.ps1 - v6 Monitoring page
+﻿# app/pages/Monitoring.ps1 - v6 Monitoring page
 #
 # Renders inside the existing PageMonitoring Border. Two pairs of cards:
 #   - Web Interfaces (File Browser + Director) with live URL preview
@@ -16,11 +16,20 @@ function Initialize-V6MonitoringPage {
     $xaml = @'
 <Border xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-        Background="#FF14110D" Padding="32,24,32,28">
-  <DockPanel LastChildFill="True">
+        Background="#FF14110D" Padding="24,14,24,16">
+  <ScrollViewer VerticalScrollBarVisibility="Visible" HorizontalScrollBarVisibility="Disabled">
+  <Grid>
+    <Grid.RowDefinitions>
+      <RowDefinition Height="Auto"/>           <!-- Section header -->
+      <RowDefinition Height="Auto"/>           <!-- WEB INTERFACES sub-header -->
+      <RowDefinition Height="Auto" MinHeight="120"/>  <!-- Web Interfaces cards -->
+      <RowDefinition Height="Auto"/>           <!-- Splitter -->
+      <RowDefinition Height="Auto"/>           <!-- LOG EXPORT sub-header -->
+      <RowDefinition Height="Auto" MinHeight="120"/>  <!-- Log Export cards -->
+    </Grid.RowDefinitions>
 
     <!-- Section header -->
-    <Grid DockPanel.Dock="Top" Margin="0,0,0,18">
+    <Grid Grid.Row="0" Margin="0,0,0,10">
       <Grid.ColumnDefinitions>
         <ColumnDefinition Width="Auto"/>
         <ColumnDefinition Width="14"/>
@@ -29,9 +38,9 @@ function Initialize-V6MonitoringPage {
       </Grid.ColumnDefinitions>
       <TextBlock Grid.Column="0" Text="Monitoring"
                  FontFamily="Cinzel, Trajan Pro, Georgia"
-                 FontSize="22" FontWeight="SemiBold"
+                 FontSize="20" FontWeight="SemiBold"
                  Foreground="#FFE8B872" VerticalAlignment="Center"/>
-      <Path Grid.Column="2" Height="14" Stretch="Uniform" HorizontalAlignment="Left"
+      <Path Grid.Column="2" Height="12" Stretch="Uniform" HorizontalAlignment="Left"
             VerticalAlignment="Bottom" Margin="0,0,0,4"
             Stroke="#FF3A2818" StrokeThickness="1" Fill="#10E8B872"
             Data="M0,14 L0,9 C8,6 14,2 24,4 C34,6 40,1 50,3 C60,5 68,9 80,7 C92,5 100,1 110,4 L110,14 Z"/>
@@ -41,10 +50,10 @@ function Initialize-V6MonitoringPage {
     </Grid>
 
     <!-- Sub-header: Web Interfaces -->
-    <TextBlock DockPanel.Dock="Top" Text="WEB INTERFACES" Foreground="#FF9A8E78"
+    <TextBlock Grid.Row="1" Text="WEB INTERFACES" Foreground="#FF9A8E78"
                FontSize="10" FontWeight="Bold" Typography.Capitals="AllSmallCaps"
-               Margin="2,0,0,8"/>
-    <Grid DockPanel.Dock="Top" Margin="0,0,0,18">
+               Margin="2,0,0,4"/>
+    <Grid Grid.Row="2">
       <Grid.ColumnDefinitions>
         <ColumnDefinition Width="*"/>
         <ColumnDefinition Width="14"/>
@@ -53,12 +62,12 @@ function Initialize-V6MonitoringPage {
 
       <!-- File Browser card -->
       <Border Grid.Column="0" Background="#FF14110D" BorderBrush="#FF3A2818"
-              BorderThickness="1" Padding="22,18" SnapsToDevicePixels="True">
+              BorderThickness="1" Padding="14,12" SnapsToDevicePixels="True">
         <Border.Effect>
           <DropShadowEffect Color="#FF000000" ShadowDepth="3" BlurRadius="14" Opacity="0.6"/>
         </Border.Effect>
-        <DockPanel LastChildFill="True">
-          <StackPanel Orientation="Horizontal" DockPanel.Dock="Top" Margin="0,0,0,10">
+        <StackPanel Orientation="Vertical">
+          <StackPanel Orientation="Horizontal" Margin="0,0,0,10">
             <Path Width="22" Height="22" Stretch="Uniform"
                   Stroke="#FFE8B872" StrokeThickness="1.6"
                   StrokeLineJoin="Round" StrokeStartLineCap="Round" StrokeEndLineCap="Round"
@@ -69,33 +78,39 @@ function Initialize-V6MonitoringPage {
                        FontSize="16" FontWeight="SemiBold"
                        Foreground="#FFE8B872" VerticalAlignment="Center"/>
           </StackPanel>
-          <TextBlock DockPanel.Dock="Top"
-                     Text="Browse and download files from the battlegroup VM in your default browser."
-                     Foreground="#FFB8AC95" TextWrapping="Wrap" Margin="0,0,0,12"/>
-          <StackPanel Orientation="Horizontal" DockPanel.Dock="Bottom" Margin="0,12,0,0">
+          <TextBlock Text="Browse and download files from the battlegroup VM in your default browser."
+                     Foreground="#FFB8AC95" TextWrapping="Wrap" Margin="0,0,0,8"/>
+          <Border Background="#FF0F0D0A" BorderBrush="#FF2A2018" BorderThickness="1"
+                  Padding="0" Margin="0,0,0,10" MinHeight="32">
+            <TextBox x:Name="MonFileBrowserUrl" Text="VM not running"
+                     IsReadOnly="True"
+                     BorderThickness="0"
+                     Background="Transparent"
+                     Foreground="#FFC9BDA4"
+                     Padding="12,7"
+                     FontFamily="Consolas, Cascadia Mono, Courier New"
+                     FontSize="12"
+                     VerticalAlignment="Center"
+                     VerticalContentAlignment="Center"
+                     TextWrapping="NoWrap"/>
+          </Border>
+          <StackPanel Orientation="Horizontal">
             <Button x:Name="MonFileBrowserOpen" Content="Open in Browser"
                     MinWidth="142" Padding="0,8" Margin="0,0,8,0"/>
             <Button x:Name="MonFileBrowserCopy" Content="Copy URL"
                     MinWidth="92" Padding="0,8"/>
           </StackPanel>
-          <Border Background="#FF0F0D0A" BorderBrush="#FF2A2018" BorderThickness="1"
-                  Padding="12,9" Margin="0,4,0,0">
-            <TextBlock x:Name="MonFileBrowserUrl" Text="VM not running"
-                       FontFamily="Consolas, Cascadia Mono, Courier New"
-                       FontSize="12" Foreground="#FFC9BDA4"
-                       TextTrimming="CharacterEllipsis"/>
-          </Border>
-        </DockPanel>
+        </StackPanel>
       </Border>
 
       <!-- Director card -->
       <Border Grid.Column="2" Background="#FF14110D" BorderBrush="#FF3A2818"
-              BorderThickness="1" Padding="22,18" SnapsToDevicePixels="True">
+              BorderThickness="1" Padding="14,12" SnapsToDevicePixels="True">
         <Border.Effect>
           <DropShadowEffect Color="#FF000000" ShadowDepth="3" BlurRadius="14" Opacity="0.6"/>
         </Border.Effect>
-        <DockPanel LastChildFill="True">
-          <StackPanel Orientation="Horizontal" DockPanel.Dock="Top" Margin="0,0,0,10">
+        <StackPanel Orientation="Vertical">
+          <StackPanel Orientation="Horizontal" Margin="0,0,0,10">
             <Path Width="22" Height="22" Stretch="Uniform"
                   Stroke="#FFE8B872" StrokeThickness="1.6"
                   StrokeLineJoin="Round" StrokeStartLineCap="Round" StrokeEndLineCap="Round"
@@ -106,31 +121,43 @@ function Initialize-V6MonitoringPage {
                        FontSize="16" FontWeight="SemiBold"
                        Foreground="#FFE8B872" VerticalAlignment="Center"/>
           </StackPanel>
-          <TextBlock DockPanel.Dock="Top"
-                     Text="Open the in-game Director admin page for the running battlegroup."
-                     Foreground="#FFB8AC95" TextWrapping="Wrap" Margin="0,0,0,12"/>
-          <StackPanel Orientation="Horizontal" DockPanel.Dock="Bottom" Margin="0,12,0,0">
+          <TextBlock Text="Open the in-game Director admin page for the running battlegroup."
+                     Foreground="#FFB8AC95" TextWrapping="Wrap" Margin="0,0,0,8"/>
+          <Border Background="#FF0F0D0A" BorderBrush="#FF2A2018" BorderThickness="1"
+                  Padding="0" Margin="0,0,0,10" MinHeight="32">
+            <TextBox x:Name="MonDirectorUrl" Text="Battlegroup not running"
+                     IsReadOnly="True"
+                     BorderThickness="0"
+                     Background="Transparent"
+                     Foreground="#FFC9BDA4"
+                     Padding="12,7"
+                     FontFamily="Consolas, Cascadia Mono, Courier New"
+                     FontSize="12"
+                     VerticalAlignment="Center"
+                     VerticalContentAlignment="Center"
+                     TextWrapping="NoWrap"/>
+          </Border>
+          <StackPanel Orientation="Horizontal">
             <Button x:Name="MonDirectorOpen" Content="Open in Browser"
                     MinWidth="142" Padding="0,8" Margin="0,0,8,0"/>
             <Button x:Name="MonDirectorCopy" Content="Copy URL"
                     MinWidth="92" Padding="0,8"/>
           </StackPanel>
-          <Border Background="#FF0F0D0A" BorderBrush="#FF2A2018" BorderThickness="1"
-                  Padding="12,9" Margin="0,4,0,0">
-            <TextBlock x:Name="MonDirectorUrl" Text="Battlegroup not running"
-                       FontFamily="Consolas, Cascadia Mono, Courier New"
-                       FontSize="12" Foreground="#FFC9BDA4"
-                       TextTrimming="CharacterEllipsis"/>
-          </Border>
-        </DockPanel>
+        </StackPanel>
       </Border>
     </Grid>
 
+    <!-- Splitter between Web Interfaces and Log Export rows -->
+    <GridSplitter Grid.Row="3" Height="6" HorizontalAlignment="Stretch"
+                  VerticalAlignment="Center" Background="#FF2A2018" Margin="0,6,0,6"
+                  ResizeBehavior="PreviousAndNext" ResizeDirection="Rows"
+                  ShowsPreview="True"/>
+
     <!-- Sub-header: Log Export -->
-    <TextBlock DockPanel.Dock="Top" Text="LOG EXPORT" Foreground="#FF9A8E78"
+    <TextBlock Grid.Row="4" Text="LOG EXPORT" Foreground="#FF9A8E78"
                FontSize="10" FontWeight="Bold" Typography.Capitals="AllSmallCaps"
-               Margin="2,0,0,8"/>
-    <Grid DockPanel.Dock="Top">
+               Margin="2,0,0,4"/>
+    <Grid Grid.Row="5">
       <Grid.ColumnDefinitions>
         <ColumnDefinition Width="*"/>
         <ColumnDefinition Width="14"/>
@@ -139,12 +166,12 @@ function Initialize-V6MonitoringPage {
 
       <!-- Battlegroup logs -->
       <Border Grid.Column="0" Background="#FF14110D" BorderBrush="#FF3A2818"
-              BorderThickness="1" Padding="22,18" SnapsToDevicePixels="True">
+              BorderThickness="1" Padding="14,12" SnapsToDevicePixels="True">
         <Border.Effect>
           <DropShadowEffect Color="#FF000000" ShadowDepth="3" BlurRadius="14" Opacity="0.6"/>
         </Border.Effect>
-        <DockPanel LastChildFill="True">
-          <StackPanel Orientation="Horizontal" DockPanel.Dock="Top" Margin="0,0,0,10">
+        <StackPanel Orientation="Vertical">
+          <StackPanel Orientation="Horizontal" Margin="0,0,0,6">
             <Path Width="22" Height="22" Stretch="Uniform"
                   Stroke="#FFE8B872" StrokeThickness="1.6"
                   StrokeLineJoin="Round" StrokeStartLineCap="Round" StrokeEndLineCap="Round"
@@ -155,26 +182,25 @@ function Initialize-V6MonitoringPage {
                        FontSize="16" FontWeight="SemiBold"
                        Foreground="#FFE8B872" VerticalAlignment="Center"/>
           </StackPanel>
-          <TextBlock DockPanel.Dock="Top"
-                     Text="Collect logs from every battlegroup pod into a single archive on the VM."
-                     Foreground="#FFB8AC95" TextWrapping="Wrap" Margin="0,0,0,12"/>
-          <TextBlock DockPanel.Dock="Top" x:Name="MonBgLogsHint" Text=""
-                     Foreground="#FF9A8E78" FontSize="11" Margin="0,0,0,12"/>
-          <StackPanel Orientation="Horizontal" DockPanel.Dock="Bottom">
-            <Button x:Name="MonExportBgLogs" Content="Export Battlegroup Logs"
+          <TextBlock Text="Collect logs from every battlegroup pod into a single archive on the VM."
+                     Foreground="#FFB8AC95" TextWrapping="Wrap" Margin="0,0,0,6"/>
+          <TextBlock x:Name="MonBgLogsHint" Text=""
+                     Foreground="#FF9A8E78" FontSize="11" Margin="0,0,0,6"/>
+          <StackPanel Orientation="Horizontal" HorizontalAlignment="Left">
+            <Button x:Name="MonExportBgLogs" Content="Download Battlegroup Logs"
                     MinWidth="200" Padding="0,8"/>
           </StackPanel>
-        </DockPanel>
+        </StackPanel>
       </Border>
 
       <!-- Operator logs -->
       <Border Grid.Column="2" Background="#FF14110D" BorderBrush="#FF3A2818"
-              BorderThickness="1" Padding="22,18" SnapsToDevicePixels="True">
+              BorderThickness="1" Padding="14,12" SnapsToDevicePixels="True">
         <Border.Effect>
           <DropShadowEffect Color="#FF000000" ShadowDepth="3" BlurRadius="14" Opacity="0.6"/>
         </Border.Effect>
-        <DockPanel LastChildFill="True">
-          <StackPanel Orientation="Horizontal" DockPanel.Dock="Top" Margin="0,0,0,10">
+        <StackPanel Orientation="Vertical">
+          <StackPanel Orientation="Horizontal" Margin="0,0,0,6">
             <Path Width="22" Height="22" Stretch="Uniform"
                   Stroke="#FFE8B872" StrokeThickness="1.6"
                   StrokeLineJoin="Round" StrokeStartLineCap="Round" StrokeEndLineCap="Round"
@@ -185,20 +211,20 @@ function Initialize-V6MonitoringPage {
                        FontSize="16" FontWeight="SemiBold"
                        Foreground="#FFE8B872" VerticalAlignment="Center"/>
           </StackPanel>
-          <TextBlock DockPanel.Dock="Top"
-                     Text="Collect logs from all Kubernetes operator pods (controllers, schedulers)."
-                     Foreground="#FFB8AC95" TextWrapping="Wrap" Margin="0,0,0,12"/>
-          <TextBlock DockPanel.Dock="Top" x:Name="MonOpLogsHint" Text=""
-                     Foreground="#FF9A8E78" FontSize="11" Margin="0,0,0,12"/>
-          <StackPanel Orientation="Horizontal" DockPanel.Dock="Bottom">
-            <Button x:Name="MonExportOpLogs" Content="Export Operator Logs"
+          <TextBlock Text="Collect logs from all Kubernetes operator pods (controllers, schedulers)."
+                     Foreground="#FFB8AC95" TextWrapping="Wrap" Margin="0,0,0,6"/>
+          <TextBlock x:Name="MonOpLogsHint" Text=""
+                     Foreground="#FF9A8E78" FontSize="11" Margin="0,0,0,6"/>
+          <StackPanel Orientation="Horizontal" HorizontalAlignment="Left">
+            <Button x:Name="MonExportOpLogs" Content="Download Operator Logs"
                     MinWidth="200" Padding="0,8"/>
           </StackPanel>
-        </DockPanel>
+        </StackPanel>
       </Border>
     </Grid>
 
-  </DockPanel>
+  </Grid>
+  </ScrollViewer>
 </Border>
 '@
 
@@ -225,6 +251,11 @@ function Initialize-V6MonitoringPage {
         BgLogsHint       = $page.FindName('MonBgLogsHint')
         OpLogsHint       = $page.FindName('MonOpLogsHint')
     }
+    try {
+        Write-Diag ("Init-V6Mon: ExportBgLogs={0} ExportOpLogs={1} DirectorOpen={2} FileBrowserUrl={3} DirectorUrl={4}" -f `
+            ([bool]$script:V6Mon.ExportBgLogs), ([bool]$script:V6Mon.ExportOpLogs), ([bool]$script:V6Mon.DirectorOpen), `
+            ([bool]$script:V6Mon.FileBrowserUrl), ([bool]$script:V6Mon.DirectorUrl))
+    } catch {}
 
     foreach ($btnName in @('FileBrowserOpen','FileBrowserCopy','DirectorOpen','DirectorCopy','ExportBgLogs','ExportOpLogs')) {
         $btn = $script:V6Mon[$btnName]
@@ -233,31 +264,85 @@ function Initialize-V6MonitoringPage {
         }
     }
 
-    $script:V6Mon.FileBrowserOpen.Add_Click({ Invoke-V6MonAction 'Battlegroup' 'open-file-browser' $false })
-    $script:V6Mon.DirectorOpen.Add_Click({    Invoke-V6MonAction 'Battlegroup' 'open-director'     $false })
-    $script:V6Mon.ExportBgLogs.Add_Click({    Invoke-V6MonAction 'Battlegroup' 'logs-export'          $true })
-    $script:V6Mon.ExportOpLogs.Add_Click({    Invoke-V6MonAction 'Battlegroup' 'operator-logs-export' $true })
+    $script:V6Mon.FileBrowserOpen.Add_Click({
+        try {
+            $u = $script:V6Mon.FileBrowserUrl.Tag
+            if (-not $u) { $u = $script:V6Mon.FileBrowserUrl.Text }
+            if ($u -and $u -like 'http*' -and ($u -notmatch '<port') -and ($u -notmatch '<vm-ip>')) {
+                Start-Process $u | Out-Null
+            } else {
+                # Fall back to CLI dispatch (it will resolve the port via SSH);
+                # switch to Terminal so the user sees the spinner / output.
+                Invoke-V6MonAction 'Battlegroup' 'open-file-browser' $true
+            }
+        } catch {
+            try { Write-Diag "FileBrowserOpen click failed: $($_.Exception.Message)" } catch {}
+        }
+    })
+    $script:V6Mon.DirectorOpen.Add_Click({
+        try {
+            $u = $script:V6Mon.DirectorUrl.Tag
+            if (-not $u) { $u = $script:V6Mon.DirectorUrl.Text }
+            if ($u -and $u -like 'http*' -and ($u -notmatch '<port') -and ($u -notmatch '<vm-ip>')) {
+                Start-Process $u | Out-Null
+            } else {
+                Invoke-V6MonAction 'Battlegroup' 'open-director' $true
+            }
+        } catch {
+            try { Write-Diag "DirectorOpen click failed: $($_.Exception.Message)" } catch {}
+        }
+    })
+    $script:V6Mon.ExportBgLogs.Add_MouseEnter({
+        try { Write-Diag "Mon ExportBgLogs MouseEnter (IsEnabled=$($script:V6Mon.ExportBgLogs.IsEnabled) Visible=$($script:V6Mon.ExportBgLogs.IsVisible))" } catch {}
+    })
+    $script:V6Mon.ExportBgLogs.Add_Click({
+        try {
+            Write-Diag "Mon click: ExportBgLogs"
+            Invoke-V6MonAction 'Battlegroup' 'logs-export' $true
+        } catch {
+            Write-Diag "ExportBgLogs click EX: $($_.Exception.GetType().Name) $($_.Exception.Message)"
+        }
+    })
+    $script:V6Mon.ExportOpLogs.Add_Click({
+        try {
+            Write-Diag "Mon click: ExportOpLogs"
+            Invoke-V6MonAction 'Battlegroup' 'operator-logs-export' $true
+        } catch {
+            Write-Diag "ExportOpLogs click EX: $($_.Exception.GetType().Name) $($_.Exception.Message)"
+        }
+    })
 
     $script:V6Mon.FileBrowserCopy.Add_Click({
-        $u = $script:V6Mon.FileBrowserUrl.Text
+        $u = $script:V6Mon.FileBrowserUrl.Tag
+        if (-not $u) { $u = $script:V6Mon.FileBrowserUrl.Text }
         if ($u -and $u -like 'http*') { [Windows.Clipboard]::SetText($u) }
     })
     $script:V6Mon.DirectorCopy.Add_Click({
-        $u = $script:V6Mon.DirectorUrl.Text
+        $u = $script:V6Mon.DirectorUrl.Tag
+        if (-not $u) { $u = $script:V6Mon.DirectorUrl.Text }
         if ($u -and $u -like 'http*') { [Windows.Clipboard]::SetText($u) }
     })
 }
 
 function Invoke-V6MonAction {
     param([string]$Section, [string]$Name, [bool]$SwitchToTerminal)
+    try { Write-Diag "Invoke-V6MonAction: Section=$Section Name=$Name Switch=$SwitchToTerminal" } catch {}
     $cmd = $script:Commands | Where-Object { $_.Section -eq $Section -and $_.Name -eq $Name } | Select-Object -First 1
     if (-not $cmd) {
         try { Write-Diag "Invoke-V6MonAction: command not found $Section/$Name" } catch {}
         return
     }
-    if ($SwitchToTerminal -and $ui.NavTerminal) { $ui.NavTerminal.IsChecked = $true }
-    try { Invoke-DuneCmd -Cmd $cmd } catch {
-        try { Write-Diag "Invoke-V6MonAction failed: $($_.Exception.Message)" } catch {}
+    try { Write-Diag "Invoke-V6MonAction: found cmd $($cmd.Name) Mode=$($cmd.Mode) External=$($cmd.External)" } catch {}
+    if ($SwitchToTerminal -and $ui.NavTerminal) {
+        try { Write-Diag "Invoke-V6MonAction: switching to Terminal" } catch {}
+        $ui.NavTerminal.IsChecked = $true
+    }
+    try {
+        try { Write-Diag "Invoke-V6MonAction: about to call Invoke-DuneCmd" } catch {}
+        Invoke-DuneCmd -Cmd $cmd
+        try { Write-Diag "Invoke-V6MonAction: Invoke-DuneCmd returned" } catch {}
+    } catch {
+        try { Write-Diag "Invoke-V6MonAction failed: $($_.Exception.GetType().Name) - $($_.Exception.Message)" } catch {}
     }
 }
 
@@ -270,11 +355,15 @@ function Update-V6Monitoring {
     $vmRunning = ($vm -and $vm.running -and $vm.ip)
 
     if ($vmRunning) {
-        $m.FileBrowserUrl.Text = "http://$($vm.ip):18888/"
+        $fbUrl = "http://$($vm.ip):18888/"
+        $m.FileBrowserUrl.Tag  = $fbUrl
+        $m.FileBrowserUrl.Text = 'http://<vm-ip>:18888/'
         $m.FileBrowserUrl.Foreground = New-Object System.Windows.Media.SolidColorBrush ([System.Windows.Media.Color]::FromArgb(255,0xE8,0xB8,0x72))
         $m.FileBrowserOpen.IsEnabled = $true
         $m.FileBrowserCopy.IsEnabled = $true
+        try { Write-Diag "Update-V6Monitoring: FileBrowserUrl set (display masked, real URL kept on Tag)" } catch {}
     } else {
+        $m.FileBrowserUrl.Tag  = $null
         $m.FileBrowserUrl.Text = 'VM not running'
         $m.FileBrowserUrl.Foreground = New-Object System.Windows.Media.SolidColorBrush ([System.Windows.Media.Color]::FromArgb(255,0xC9,0xBD,0xA4))
         $m.FileBrowserOpen.IsEnabled = $false
@@ -287,37 +376,57 @@ function Update-V6Monitoring {
             $snap = Get-BattlegroupStatusSnapshot
             if ($snap -and $snap.available) {
                 $state = Get-BgStateFromStatusText $snap.output
+                try { Write-Diag "Update-V6Monitoring: snap.available=True state='$state'" } catch {}
                 if ($state -eq 'Running') { $bgRunning = $true }
+            } else {
+                try { Write-Diag "Update-V6Monitoring: snap.available=False reason='$($snap.reason)'" } catch {}
             }
-        } catch {}
+        } catch {
+            try { Write-Diag "Update-V6Monitoring: snap EX: $($_.Exception.Message)" } catch {}
+        }
     }
+    try { Write-Diag "Update-V6Monitoring: vmRunning=$vmRunning bgRunning=$bgRunning" } catch {}
 
     if ($bgRunning) {
         $port = $null
         try {
-            $raw = & ssh -o BatchMode=yes -o StrictHostKeyChecking=no -o ConnectTimeout=5 "dune@$($vm.ip)" `
-                "sudo kubectl get svc -A -o jsonpath='{.items[*].spec.ports[?(@.port==11717)].nodePort}' 2>/dev/null"
-            if ($LASTEXITCODE -eq 0 -and $raw) {
-                $m1 = [regex]::Match([string]$raw, '\d{4,6}')
-                if ($m1.Success) { $port = $m1.Value }
+            $cfg2    = Read-Config
+            $sshKey2 = $cfg2.SshKey
+            if ($sshKey2 -and (Test-Path $sshKey2)) {
+                $raw = & ssh -o BatchMode=yes -o StrictHostKeyChecking=no -o LogLevel=QUIET `
+                    -o ConnectTimeout=5 -i $sshKey2 "dune@$($vm.ip)" `
+                    "sudo kubectl get svc -A -o jsonpath='{.items[*].spec.ports[?(@.port==11717)].nodePort}' 2>/dev/null"
+                if ($LASTEXITCODE -eq 0 -and $raw) {
+                    $m1 = [regex]::Match([string]$raw, '\d{4,6}')
+                    if ($m1.Success) { $port = $m1.Value }
+                }
             }
-        } catch {}
+        } catch {
+            try { Write-Diag "Director port lookup failed: $($_.Exception.Message)" } catch {}
+        }
         if ($port) {
-            $m.DirectorUrl.Text = "http://$($vm.ip):$port/"
+            $durl = "http://$($vm.ip):$port/"
+            $m.DirectorUrl.Tag  = $durl
+            $m.DirectorUrl.Text = "http://<vm-ip>:$port/"
             $m.DirectorUrl.Foreground = New-Object System.Windows.Media.SolidColorBrush ([System.Windows.Media.Color]::FromArgb(255,0xE8,0xB8,0x72))
             $m.DirectorOpen.IsEnabled = $true
             $m.DirectorCopy.IsEnabled = $true
+            try { Write-Diag "Update-V6Monitoring: DirectorUrl set (display masked, real URL kept on Tag)" } catch {}
         } else {
-            $m.DirectorUrl.Text = "http://$($vm.ip):<port pending>"
+            $durl = "http://$($vm.ip):<port pending>"
+            $m.DirectorUrl.Tag  = $durl
+            $m.DirectorUrl.Text = 'http://<vm-ip>:<port pending>'
             $m.DirectorUrl.Foreground = New-Object System.Windows.Media.SolidColorBrush ([System.Windows.Media.Color]::FromArgb(255,0xC9,0xBD,0xA4))
             $m.DirectorOpen.IsEnabled = $true
             $m.DirectorCopy.IsEnabled = $false
+            try { Write-Diag "Update-V6Monitoring: DirectorUrl set (port lookup empty)" } catch {}
         }
         $m.ExportBgLogs.IsEnabled = $true
         $m.ExportOpLogs.IsEnabled = $true
         $m.BgLogsHint.Text = 'Output streams in the Terminal pane; export can take a few minutes.'
         $m.OpLogsHint.Text = 'Output streams in the Terminal pane; export can take a few minutes.'
     } else {
+        $m.DirectorUrl.Tag  = $null
         $m.DirectorUrl.Text = 'Battlegroup not running'
         $m.DirectorUrl.Foreground = New-Object System.Windows.Media.SolidColorBrush ([System.Windows.Media.Color]::FromArgb(255,0xC9,0xBD,0xA4))
         $m.DirectorOpen.IsEnabled = $false
