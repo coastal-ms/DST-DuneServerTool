@@ -12,6 +12,22 @@ export type VmStatus = {
 
 export type BgState = 'running' | 'stopped' | 'starting' | 'stopping' | 'updating' | 'unknown'
 
+export type BgInfo = {
+  status:   string
+  database: string
+  gateway:  string
+  director: string
+  uptime:   string
+}
+
+export type BgGameServer = {
+  map:     string
+  phase:   string
+  ready:   string
+  players: string
+  age:     string
+}
+
 export type BattlegroupSnapshot = {
   available: boolean
   reason?: string
@@ -19,6 +35,9 @@ export type BattlegroupSnapshot = {
   exitCode?: number
   state?: BgState
   vm?: VmStatus
+  name?: string
+  info?: BgInfo | null
+  gameServers?: BgGameServer[]
 }
 
 export type PortResult = {
