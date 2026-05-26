@@ -1,0 +1,97 @@
+@import "tailwindcss";
+
+@theme {
+  /* Eyes of Ibad — Dune Server brand palette */
+  --color-base: #0c0a09;
+  --color-surface: #18120e;
+  --color-surface-2: #221913;
+  --color-surface-3: #2d211a;
+  --color-border: #3d2e23;
+  --color-border-bright: #5a4030;
+
+  --color-text: #f5ebe0;
+  --color-text-muted: #b8a692;
+  --color-text-dim: #7a6a5a;
+
+  /* Accent — desert amber */
+  --color-accent: #d97706;
+  --color-accent-bright: #f59e0b;
+  --color-accent-dim: #92400e;
+
+  /* Eyes of Ibad cyan glow — for highlights & focus rings */
+  --color-ibad: #38bdf8;
+  --color-ibad-bright: #7dd3fc;
+
+  --color-success: #4ade80;
+  --color-danger: #f87171;
+  --color-warning: #fbbf24;
+  --color-info: #38bdf8;
+
+  --font-sans: "Inter", "Segoe UI", system-ui, -apple-system, sans-serif;
+  --font-mono: "JetBrains Mono", "Cascadia Code", "Consolas", monospace;
+}
+
+@layer base {
+  html, body, #root {
+    height: 100%;
+    min-height: 100%;
+  }
+  body {
+    @apply bg-base text-text font-sans antialiased;
+    background-image:
+      radial-gradient(ellipse 80% 50% at 50% -20%, rgba(217, 119, 6, 0.12), transparent),
+      radial-gradient(ellipse 60% 40% at 80% 110%, rgba(56, 189, 248, 0.05), transparent);
+    background-attachment: fixed;
+  }
+  ::-webkit-scrollbar { width: 10px; height: 10px; }
+  ::-webkit-scrollbar-track { background: transparent; }
+  ::-webkit-scrollbar-thumb { @apply bg-border rounded-full; }
+  ::-webkit-scrollbar-thumb:hover { @apply bg-border-bright; }
+}
+
+@layer components {
+  .card {
+    @apply bg-surface/80 border border-border rounded-xl backdrop-blur-sm;
+    box-shadow: 0 1px 0 rgba(255, 255, 255, 0.03) inset, 0 8px 24px -12px rgba(0, 0, 0, 0.6);
+  }
+  .card-hover {
+    @apply transition-all hover:border-border-bright hover:bg-surface-2/80;
+  }
+  .btn {
+    @apply inline-flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-medium
+           transition-colors disabled:opacity-50 disabled:cursor-not-allowed
+           focus:outline-none focus-visible:ring-2 focus-visible:ring-ibad;
+  }
+  .btn-primary {
+    @apply inline-flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-medium
+           transition-colors disabled:opacity-50 disabled:cursor-not-allowed
+           focus:outline-none focus-visible:ring-2 focus-visible:ring-ibad
+           bg-accent text-base hover:bg-accent-bright;
+  }
+  .btn-secondary {
+    @apply inline-flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-medium
+           transition-colors disabled:opacity-50 disabled:cursor-not-allowed
+           focus:outline-none focus-visible:ring-2 focus-visible:ring-ibad
+           bg-surface-2 border border-border text-text hover:bg-surface-3 hover:border-border-bright;
+  }
+  .btn-ghost {
+    @apply inline-flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-medium
+           transition-colors disabled:opacity-50 disabled:cursor-not-allowed
+           focus:outline-none focus-visible:ring-2 focus-visible:ring-ibad
+           text-text-muted hover:text-text hover:bg-surface-2;
+  }
+  .btn-danger {
+    @apply inline-flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-medium
+           transition-colors disabled:opacity-50 disabled:cursor-not-allowed
+           focus:outline-none focus-visible:ring-2 focus-visible:ring-ibad
+           bg-danger/15 border border-danger/40 text-danger hover:bg-danger/25;
+  }
+  .pill {
+    @apply inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-medium border;
+  }
+  .pill-success { @apply inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-medium border bg-success/10 border-success/30 text-success; }
+  .pill-danger  { @apply inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-medium border bg-danger/10 border-danger/30 text-danger; }
+  .pill-warning { @apply inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-medium border bg-warning/10 border-warning/30 text-warning; }
+  .pill-info    { @apply inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-medium border bg-info/10 border-info/30 text-info; }
+  .pill-muted   { @apply inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-medium border bg-surface-2 border-border text-text-muted; }
+}
