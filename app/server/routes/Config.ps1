@@ -1,4 +1,4 @@
-# GET /api/config — returns current config (localhost-only, full values).
+﻿# GET /api/config — returns current config (localhost-only, full values).
 Register-DuneRoute -Method GET -Path '/api/config' -Handler {
     param($req, $res, $routeParams, $body)
     $cfg = Read-DuneConfig

@@ -1,4 +1,4 @@
-# Sietches — list / add / remove additional Survival_1 shards.
+﻿# Sietches — list / add / remove additional Survival_1 shards.
 #
 # Wraps app/lib/K8s.ps1 (Get-V6SietchList, Add-V6Sietch, Remove-V6Sietch).
 # K8s.ps1 in turn needs Db-Postgres.ps1 (Invoke-V6Ssh + Get-V6SshKeyPath).
@@ -13,7 +13,8 @@ foreach ($candidate in @(
     (Join-Path $PSScriptRoot '..\..\lib\K8s.ps1'),
     (Join-Path (Split-Path -Parent $PSScriptRoot) '..\lib\K8s.ps1')
 )) {
-    $full = try { (Resolve-Path -LiteralPath $candidate -ErrorAction Stop).Path } catch { $null }
+    $full = $null
+    try { $full = (Resolve-Path -LiteralPath $candidate -ErrorAction Stop).Path } catch {}
     if ($full) { $script:DuneK8sPath = $full; break }
 }
 if ($script:DuneK8sPath -and -not (Get-Command Get-V6SietchList -ErrorAction SilentlyContinue)) {

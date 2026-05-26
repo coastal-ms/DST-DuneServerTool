@@ -1,4 +1,4 @@
-# Status — VM + Battlegroup snapshots via Hyper-V and SSH.
+﻿# Status — VM + Battlegroup snapshots via Hyper-V and SSH.
 
 $script:DuneVmName = 'dune-awakening'
 

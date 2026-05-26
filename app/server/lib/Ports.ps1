@@ -1,4 +1,4 @@
-# Ports — external port-check (TCP via yougetsignal, UDP marked as skipped).
+﻿# Ports — external port-check (TCP via yougetsignal, UDP marked as skipped).
 # Per-launch cache with 5 minute TTL so the dashboard auto-refresh repaints
 # from cache and only re-fetches on TTL expiry.
 

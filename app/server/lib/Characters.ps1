@@ -1,4 +1,4 @@
-# Characters lib — bridges the new HTTP server to the existing
+﻿# Characters lib — bridges the new HTTP server to the existing
 # app\lib\Db-Postgres.ps1 helpers (which talk to the live Postgres pod
 # via SSH→kubectl→psql). The plan calls for reusing the v6.0.x DB layer
 # unchanged, so we dot-source it here and add a few HTTP-friendly wrappers.
@@ -24,7 +24,8 @@ foreach ($candidate in @(
     (Join-Path $PSScriptRoot '..\..\lib\Db-Postgres.ps1'),                 # installed layout
     (Join-Path (Split-Path -Parent $PSScriptRoot) '..\lib\Db-Postgres.ps1') # dev layout fallback
 )) {
-    $full = try { (Resolve-Path -LiteralPath $candidate -ErrorAction Stop).Path } catch { $null }
+    $full = $null
+    try { $full = (Resolve-Path -LiteralPath $candidate -ErrorAction Stop).Path } catch {}
     if ($full) { $script:DuneDbPostgresPath = $full; break }
 }
 if ($script:DuneDbPostgresPath) {

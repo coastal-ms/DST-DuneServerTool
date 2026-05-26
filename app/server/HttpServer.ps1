@@ -1,4 +1,4 @@
-# Dune Server — HTTP server (PowerShell HttpListener)
+﻿# Dune Server — HTTP server (PowerShell HttpListener)
 #
 # Serves the built React SPA from <DistRoot> and dispatches /api/* and /ws/*
 # to route handlers registered via Register-DuneRoute.

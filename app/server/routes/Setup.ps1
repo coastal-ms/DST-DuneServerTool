@@ -1,4 +1,4 @@
-# Setup Wizard — preflight + config summary.
+﻿# Setup Wizard — preflight + config summary.
 # The actual install step (Step 3) dispatches `initial-setup` via the existing
 # /api/commands/run/{name} route.
 

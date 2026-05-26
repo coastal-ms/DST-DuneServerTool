@@ -1,4 +1,4 @@
-# Setup — first-run preflight checks for the Setup Wizard.
+﻿# Setup — first-run preflight checks for the Setup Wizard.
 #
 # The wizard itself is a frontend-only state machine. The backend only owns:
 #   - GET  /api/setup/preflight - environment checks (admin / Hyper-V / disk / OS)

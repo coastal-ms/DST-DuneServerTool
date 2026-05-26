@@ -1,4 +1,4 @@
-# Database API — SQL editor for the Database page.
+﻿# Database API — SQL editor for the Database page.
 # Two endpoints (info + query). Backup/restore are dispatched via the
 # existing /api/commands/run/{name} infra (commands 'backup' and 'import').
 

@@ -1,4 +1,4 @@
-# Database lib — SQL editor backing for the Database page.
+﻿# Database lib — SQL editor backing for the Database page.
 # Reuses Find-V6DbPod and Invoke-V6Ssh from app/lib/Db-Postgres.ps1
 # (loaded by Characters.ps1 earlier in alphabetical order).
 #

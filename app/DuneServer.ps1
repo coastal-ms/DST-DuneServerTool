@@ -1,4 +1,4 @@
-# Dune Server — entry point (v6.1 web portal)
+﻿# Dune Server — entry point (v6.1 web portal)
 #
 # Bootstrap: pick a free port, start HttpListener, open default browser at the
 # tokened localhost URL. The full UI is the React SPA in webui/dist/.
@@ -57,18 +57,30 @@ if ($PSScriptRoot) {
 #   C:\Program Files\Dune Server\app\server\*
 #   C:\Program Files\Dune Server\webui\dist\*
 $script:RepoRoot = Split-Path -Parent $script:AppDir
-$script:DistRoot = $null
-foreach ($candidate in @(
-    (Join-Path $script:RepoRoot 'webui\dist'),    # installed layout
-    (Join-Path (Split-Path -Parent $script:RepoRoot) 'webui\dist')  # dev fallback
-)) {
-    if (Test-Path -LiteralPath $candidate -PathType Container) {
-        $script:DistRoot = (Resolve-Path -LiteralPath $candidate).Path
-        break
+
+# Walk upward from $AppDir looking for $Sub (a file or folder relative path).
+# Handles three layouts:
+#   installed:  C:\Program Files\Dune Server\DuneServer.exe + sibling subpath
+#   source:     <repo>\app\DuneServer.ps1                   + sibling/parent subpath
+#   built EXE:  <repo>\app\build\output\DuneServer.exe      + ancestor subpath
+function Find-DuneSubpath {
+    param([string]$Sub, [int]$MaxLevels = 6)
+    $probe = $script:AppDir
+    for ($i = 0; $i -lt $MaxLevels -and $probe; $i++) {
+        $candidate = Join-Path $probe $Sub
+        if (Test-Path -LiteralPath $candidate) {
+            return (Resolve-Path -LiteralPath $candidate).Path
+        }
+        $parent = Split-Path -Parent $probe
+        if ($parent -eq $probe) { break }
+        $probe = $parent
     }
+    return $null
 }
+
+$script:DistRoot = Find-DuneSubpath 'webui\dist'
 if (-not $script:DistRoot) {
-    Write-Host "ERROR: Could not locate webui\dist (looked under '$script:RepoRoot' and parent)." -ForegroundColor Red
+    Write-Host "ERROR: Could not locate webui\dist (searched upward from '$script:AppDir')." -ForegroundColor Red
     Read-Host "Press Enter to exit"
     exit 1
 }
@@ -92,28 +104,24 @@ if (-not $script:PwshExe) {
 }
 
 # dune-server.ps1 — the CLI script with the actual command implementations.
-# Installed layout: <install-root>\dune-server.ps1 (one level above app\)
-# Dev layout:       <repo-root>\dune-server.ps1   (two levels above app\server\)
-$script:MainScript = $null
-foreach ($candidate in @(
-    (Join-Path $script:RepoRoot 'dune-server.ps1'),
-    (Join-Path (Split-Path -Parent $script:RepoRoot) 'dune-server.ps1')
-)) {
-    if (Test-Path -LiteralPath $candidate) {
-        $script:MainScript = (Resolve-Path -LiteralPath $candidate).Path
-        break
-    }
-}
+# Installed: <install-root>\dune-server.ps1     (sibling of DuneServer.exe)
+# Source:    <repo-root>\dune-server.ps1        (two levels up from app\server\)
+$script:MainScript = Find-DuneSubpath 'dune-server.ps1'
 if (-not $script:MainScript) {
-    Write-Host "WARNING: dune-server.ps1 not found near '$script:RepoRoot'. Command execution will fail." -ForegroundColor Yellow
+    Write-Host "WARNING: dune-server.ps1 not found near '$script:AppDir'. Command execution will fail." -ForegroundColor Yellow
 }
 
 # ---------- Load server + routes -----------------------------------------------
 
-$serverDir = Join-Path $script:AppDir 'server'
+$serverDir = Find-DuneSubpath 'server'
+if (-not $serverDir) {
+    Write-Host "ERROR: Could not locate server\ (HttpServer.ps1 + routes) near '$script:AppDir'." -ForegroundColor Red
+    Read-Host "Press Enter to exit"
+    exit 1
+}
 . (Join-Path $serverDir 'HttpServer.ps1')
 
-# Lib modules (load before routes — routes call into them)
+# Web-portal lib modules (Config, Status, Ports, Characters, etc.)
 $libDir = Join-Path $serverDir 'lib'
 if (Test-Path $libDir) {
     Get-ChildItem -Path $libDir -Filter '*.ps1' | ForEach-Object { . $_.FullName }

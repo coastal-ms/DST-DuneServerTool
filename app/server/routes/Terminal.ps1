@@ -1,4 +1,4 @@
-# Terminal — WebSocket bridge from xterm.js to a persistent PowerShell runspace
+﻿# Terminal — WebSocket bridge from xterm.js to a persistent PowerShell runspace
 #
 # Each WS connection owns one PowerShell Runspace. Commands sent from the
 # client execute in that runspace, so cwd / variables / loaded modules
@@ -102,7 +102,8 @@ Register-DuneWebSocket -Path '/ws/terminal' -Handler {
 
     # Start in user profile dir (matches what a fresh terminal would show).
     try { $rs.SessionStateProxy.Path.SetLocation([Environment]::GetFolderPath('UserProfile')) | Out-Null } catch {}
-    $cwd = try { $rs.SessionStateProxy.Path.CurrentLocation.Path } catch { 'C:\' }
+    $cwd = 'C:\'
+    try { $cwd = $rs.SessionStateProxy.Path.CurrentLocation.Path } catch {}
     [void](_Send @{ type='ready'; cwd=$cwd; cols=$cols })
 
     # ---- 3. main loop ------------------------------------------------------------

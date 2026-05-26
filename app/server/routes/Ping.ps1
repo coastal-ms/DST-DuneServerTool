@@ -1,4 +1,4 @@
-# /api/ping — health check
+﻿# /api/ping — health check
 Register-DuneRoute -Method GET -Path '/api/ping' -Handler {
     param($req, $res, $routeParams, $body)
     Write-DuneJson -Response $res -Body @{

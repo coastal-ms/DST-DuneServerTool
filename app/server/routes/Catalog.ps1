@@ -1,4 +1,4 @@
-# Catalog API — item catalog + character-domain definitions.
+﻿# Catalog API — item catalog + character-domain definitions.
 # Both responses are large-ish (~113KB JSON for items) and the client should
 # load them once at page mount.
 

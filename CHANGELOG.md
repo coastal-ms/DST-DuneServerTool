@@ -13,6 +13,70 @@ here cover everything those tags shipped.
 
 ## [Unreleased]
 
+## [6.1.0] - 2026-05-26
+
+Major release: **web portal rewrite**. The WPF UI is gone — replaced
+by a local HTTP server (`System.Net.HttpListener`) bound to
+`127.0.0.1` that serves a React/Vite/Tailwind SPA. The launcher EXE
+starts the server, picks a free port (47823+), and opens the default
+browser to a per-launch tokenized URL. The app runs as a normal
+console process so the live HTTP log is visible while it serves.
+
+Why: WPF + WebView2 + Pty.Net was heavy, fragile across
+.NET runtime versions, and impossible to iterate on without
+rebuilding. The new stack is a single static asset bundle plus a
+tiny PowerShell HTTP server — no native deps, no XAML, no embedded
+browser engine.
+
+### Added
+
+- **Web portal frontend** in `webui/` (Vite + React + TypeScript +
+  Tailwind), built into `webui/dist/` and bundled by the installer.
+  Pages: Server Health, Commands, Terminal, Characters, Game Config,
+  Database, Sietches, Settings, Setup Wizard.
+- **PowerShell HTTP server** in `app/server/`:
+  `HttpServer.ps1` (listener + routing + WebSocket upgrade + runspace
+  pool dispatch), `lib/*.ps1` (Config, Status, Ports, Commands,
+  Characters, GameConfig, Database, Sietch, Setup, Maps, Links),
+  `routes/*.ps1` (one per API surface).
+- **Per-launch token auth** — random GUID in the URL,
+  accepted via `?t=` query or `X-Dune-Token` header on all
+  `/api/*` and `/ws/*` calls. Defends against cross-origin
+  browser tabs.
+- **Terminal page** with `xterm.js` (`@xterm/xterm`) front-end and
+  a runspace-based exec model on the server. Each WS session owns
+  one runspace; PS streams polled at 30 ms; one shared `ReceiveAsync`
+  in a 1-element box keeps the .NET WebSocket happy. Protocol:
+  `{init,exec,cancel,resize} ↔ {ready,output,done,error}`. Persistent
+  cwd across commands.
+- **Server Health page** — Web Interfaces card (File Browser + Director
+  URLs), Log Export buttons, **Deep Desert spin-up button** (patches
+  the maps CRD partition).
+- **Sietches page** — list / add / remove-last with "I UNDERSTAND"
+  confirmation gate and RAM-exceed warning.
+- **Database page** — backup/restore via the existing console commands,
+  plus a new Monaco SQL editor (read-only by default, max-rows, CSV
+  export, Ctrl+Enter, table list sidebar).
+- **Setup Wizard page** — 6-step linear flow with preflight checks,
+  config summary, install, security/networking review, finalize.
+
+### Changed
+
+- **Installer payload** — removed `app/pages/`, `app/styles/`,
+  `app/web/`, `app/lib/WebView2/`, `app/lib/Pty.Net/`. Added
+  `app/server/*` and `webui/dist/*`.
+- `Build-Installer.ps1` now runs `npm run build` in `webui/` before
+  invoking ISCC (skippable via `-SkipWebBuild`).
+- `Build-Exe.ps1` no longer passes ps2exe flags `-NoConsole`, `-STA`,
+  `-NoOutput`, `-NoError` — v6.1 wants a real console window.
+
+### Removed
+
+- All v6.0.x WPF UI source (`app/pages/*.ps1`,
+  `app/styles/Theme.xaml`).
+- `app/web/` (xterm host HTML + assets — now an npm dep in webui).
+- `app/lib/Pty.Net/` and `app/lib/WebView2/` native DLLs.
+
 ## [6.0.0] - 2026-05-26
 
 **6.0.1 hotfix (2026-05-26):** Fixed startup crash _"XAML load failed:
