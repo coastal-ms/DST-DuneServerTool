@@ -13,6 +13,26 @@ here cover everything those tags shipped.
 
 ## [Unreleased]
 
+## [6.1.5] - 2026-05-26
+
+Patch: **Public port-check now falls back to canyouseeme.org when
+yougetsignal.com rate-limits the request.**
+
+Fixed
+- **TCP Ports Open card showed "0/1" with status "unknown" for RabbitMQ
+  (31982) even when the port was actually open.** Root cause: the primary
+  port checker (yougetsignal.com) has a daily per-public-IP rate limit;
+  once hit, it returns the message `"Daily open port check limit reached
+  for <ip>..."` with a 200 status. The body didn't match the open/closed
+  regex, so the checker returned `unknown` and the dashboard counted it
+  as "not open". `app/server/lib/Ports.ps1` now:
+  - explicitly recognises the rate-limit response,
+  - falls back to `canyouseeme.org` (POST `port` + `IP` form fields)
+    when yougetsignal returns `ratelimit` or `unknown`,
+  - parses the canyouseeme verdict (`<b>Success:</b> I can see your
+    service` → open; `<b>Error:</b> I could not see...` → closed).
+
+
 ## [6.1.4] - 2026-05-26
 
 Patch: **drag-and-drop reorder on the Commands page**, plus a fix for a
