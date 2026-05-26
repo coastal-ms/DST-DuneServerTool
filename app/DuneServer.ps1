@@ -722,7 +722,7 @@ function Get-V6ThemeInnerXaml {
                   <Path Width="18" Height="18" Stretch="Uniform" StrokeThickness="2"
                         Stroke="{Binding Foreground, RelativeSource={RelativeSource AncestorType=RadioButton}}"
                         Data="M10,2 L10,8 M14,2 L14,8 M6,8 L18,8 L16,19 a2,2 0 0,1 -2,2 L10,21 a2,2 0 0,1 -2,-2 L6,8 z"/>
-                  <TextBlock Text="Experimental" Margin="12,0,0,0" VerticalAlignment="Center"/>
+                  <TextBlock Text="Additional Sietches" Margin="12,0,0,0" VerticalAlignment="Center"/>
                 </StackPanel>
               </RadioButton>
             </StackPanel>
@@ -968,6 +968,9 @@ foreach ($navName in $script:V6NavMap.Keys) {
             }
             elseif ($target -eq 'PageSetupWizard' -and (Get-Command Update-V6SetupWizard -ErrorAction SilentlyContinue)) {
                 try { Update-V6SetupWizard } catch {}
+            }
+            elseif ($target -eq 'PageExperimental' -and (Get-Command Update-V6MultiSietch -ErrorAction SilentlyContinue)) {
+                try { Update-V6MultiSietch } catch {}
             }
         }
     }.GetNewClosure())
@@ -2685,6 +2688,11 @@ if (Get-Command Initialize-V6CharactersPage -ErrorAction SilentlyContinue) {
 if (Get-Command Initialize-V6SetupWizardPage -ErrorAction SilentlyContinue) {
     try { Initialize-V6SetupWizardPage } catch {
         try { Write-Diag "Initialize-V6SetupWizardPage failed: $($_.Exception.Message)" } catch {}
+    }
+}
+if (Get-Command Initialize-V6MultiSietchPage -ErrorAction SilentlyContinue) {
+    try { Initialize-V6MultiSietchPage } catch {
+        try { Write-Diag "Initialize-V6MultiSietchPage failed: $($_.Exception.Message)" } catch {}
     }
 }
 
