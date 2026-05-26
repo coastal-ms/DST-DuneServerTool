@@ -182,7 +182,7 @@ function Step2Config() {
       {!cfg ? (
         <p className="text-sm text-text-dim italic">Loading…</p>
       ) : (
-        <dl className="grid grid-cols-[200px,1fr] gap-y-2 text-sm">
+        <dl className="grid grid-cols-[200px_1fr] gap-y-2 text-sm">
           <dt className="text-text-dim">Windows user</dt>
           <dd className="font-mono">{cfg.windowsUser ?? '(unset)'}</dd>
           <dt className="text-text-dim">SSH key path</dt>
@@ -272,7 +272,7 @@ function Step5Networking() {
       <p className="text-sm text-text mb-3">
         If players will connect over the public internet, forward these ports on your router:
       </p>
-      <dl className="grid grid-cols-[200px,1fr] gap-y-2 text-sm mb-3">
+      <dl className="grid grid-cols-[200px_1fr] gap-y-2 text-sm mb-3">
         <dt className="text-text-dim">Game port</dt>
         <dd className="font-mono">7777/UDP → VM IP</dd>
         <dt className="text-text-dim">Query port</dt>
