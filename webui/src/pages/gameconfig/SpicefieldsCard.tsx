@@ -272,7 +272,7 @@ export function SpicefieldsCard({ vmRunning }: Props) {
 
                       <div className="grid grid-cols-2 md:grid-cols-[1fr_1fr_1fr_auto_auto] gap-3 items-end">
                         <NumField label="Max active" value={d.maxActive}
-                                  onChange={v => setDraft(r.spicefieldTypeId, { maxActive: v })} />
+                                  onChange={v => setDraft(r.spicefieldTypeId, { maxActive: v, maxPrimed: v })} />
                         <NumField label="Max primed" value={d.maxPrimed}
                                   onChange={v => setDraft(r.spicefieldTypeId, { maxPrimed: v })} />
                         <NumField label="Spawn weight" value={d.spawnWeight} step="0.1"

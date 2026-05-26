@@ -13,6 +13,15 @@ here cover everything those tags shipped.
 
 ## [Unreleased]
 
+## [6.1.6] - 2026-05-26
+
+Patch: **Max primed mirrors Max active on the Game Config / Spicefields card.**
+
+Changed
+- On the **Game Config → Spicefields** editor, changing **Max active**
+  now automatically sets **Max primed** to the same value. Max primed
+  remains independently editable afterward if you need to set it lower.
+
 ## [6.1.5] - 2026-05-26
 
 Patch: **Public port-check now falls back to canyouseeme.org when
