@@ -1,8 +1,11 @@
 import { NavLink } from 'react-router-dom'
 import { Icon } from '../components/Icon'
 import { NAV_ITEMS, GROUP_LABELS } from '../nav'
+import { useUpdateCheck } from '../hooks/useUpdateCheck'
 
 export function Sidebar() {
+  const { data: upd } = useUpdateCheck()
+  const version = upd?.currentVersion ?? ''
   const groups = (['overview', 'terminal', 'data', 'system'] as const).map(g => ({
     key: g,
     label: GROUP_LABELS[g],
@@ -52,7 +55,7 @@ export function Sidebar() {
 
       <div className="px-4 py-3 border-t border-border text-[10px] text-text-dim">
         <div className="flex items-center justify-between">
-          <span>v6.1.0</span>
+          <span>{version ? `v${version}` : '—'}</span>
           <span className="font-mono">coastal-ms</span>
         </div>
       </div>
