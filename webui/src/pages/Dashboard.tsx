@@ -1,7 +1,10 @@
+import { useCallback, useEffect, useState } from 'react'
 import { PageHeader } from '../components/PageHeader'
 import { Icon } from '../components/Icon'
 import { useStatus } from '../hooks/useStatus'
 import type { BgState, PortResult } from '../api/types'
+import { getMapState, startMap, type MapState } from '../api/maps'
+import { ApiError } from '../api/client'
 
 const BG_STYLES: Record<BgState | 'unknown', { cls: string; label: string }> = {
   running:  { cls: 'text-success', label: 'Running'  },
@@ -45,6 +48,43 @@ export function Dashboard() {
   const ports = status?.ports
   const tcp = ports?.results.filter(r => r.protocol === 'TCP') ?? []
   const openTcp = tcp.filter(r => r.status === 'open').length
+
+  // Deep Desert (on-demand map pod) — only fetch when BG is running.
+  const bgReady = bgState === 'running'
+  const [ddState, setDdState] = useState<MapState | null>(null)
+  const [ddLoading, setDdLoading] = useState(false)
+  const [ddError, setDdError] = useState<string | null>(null)
+  const [ddBusy, setDdBusy] = useState(false)
+  const [ddMessage, setDdMessage] = useState<string | null>(null)
+
+  const refreshDd = useCallback(async () => {
+    if (!bgReady) { setDdState(null); setDdError(null); return }
+    setDdLoading(true); setDdError(null)
+    try {
+      const s = await getMapState('deepdesert')
+      setDdState(s)
+    } catch (e) {
+      setDdState(null)
+      setDdError(e instanceof ApiError ? e.message : String(e))
+    } finally {
+      setDdLoading(false)
+    }
+  }, [bgReady])
+
+  useEffect(() => { void refreshDd() }, [refreshDd])
+
+  const startDd = useCallback(async () => {
+    setDdBusy(true); setDdMessage(null); setDdError(null)
+    try {
+      const r = await startMap('deepdesert')
+      setDdMessage(r.message ?? (r.ok ? 'Deep Desert is starting.' : 'Start request finished.'))
+      setTimeout(() => { void refreshDd() }, 2000)
+    } catch (e) {
+      setDdError(e instanceof ApiError ? e.message : String(e))
+    } finally {
+      setDdBusy(false)
+    }
+  }, [refreshDd])
 
   const kpis = [
     {
@@ -179,6 +219,83 @@ export function Dashboard() {
                 </li>
               ))}
             </ul>
+          )}
+        </div>
+      </section>
+
+      <section className="mt-4">
+        <div className="card p-5">
+          <div className="flex items-center justify-between mb-3 gap-3 flex-wrap">
+            <h2 className="text-sm font-semibold uppercase tracking-wider text-text-muted flex items-center gap-2">
+              <Icon name="Mountain" size={14} className="text-accent" /> Deep Desert
+            </h2>
+            <div className="flex items-center gap-2">
+              {ddState && (
+                <span className={ddState.running ? 'pill-success' : ddState.present ? 'pill-muted' : 'pill-warning'}>
+                  <Icon name={ddState.running ? 'CheckCircle2' : ddState.present ? 'CircleDashed' : 'AlertTriangle'} size={10} />
+                  {ddState.running ? 'Running' : ddState.present ? 'Stopped' : 'Not in CRD'}
+                </span>
+              )}
+              <button
+                className="btn-secondary"
+                onClick={() => { void refreshDd() }}
+                disabled={!bgReady || ddLoading || ddBusy}
+                title={!bgReady ? 'Battlegroup must be running' : 'Refresh status'}
+              >
+                <Icon name="RefreshCw" size={14} className={ddLoading ? 'animate-spin' : ''} />
+              </button>
+              <button
+                className="btn-primary"
+                onClick={() => { void startDd() }}
+                disabled={!bgReady || ddBusy || ddLoading || (ddState?.running ?? false)}
+                title={
+                  !bgReady ? 'Battlegroup must be running'
+                    : ddState?.running ? 'Deep Desert is already running'
+                    : 'Spin up the Deep Desert map pod'
+                }
+              >
+                <Icon name={ddBusy ? 'Loader2' : 'Play'} size={14} className={ddBusy ? 'animate-spin' : ''} />
+                {ddBusy ? 'Starting…' : 'Spin up Deep Desert'}
+              </button>
+            </div>
+          </div>
+
+          {!bgReady ? (
+            <p className="text-sm text-text-dim italic">
+              Battlegroup must be running to manage on-demand map pods.
+            </p>
+          ) : ddError ? (
+            <p className="text-sm text-danger break-words">{ddError}</p>
+          ) : !ddState ? (
+            <p className="text-sm text-text-dim italic">Loading…</p>
+          ) : (
+            <div className="space-y-2 text-sm">
+              <dl className="grid grid-cols-[160px,1fr] gap-y-1">
+                <dt className="text-text-dim">Sets in CRD</dt>
+                <dd className="font-mono">{ddState.setCount}</dd>
+                <dt className="text-text-dim">Total replicas</dt>
+                <dd className="font-mono">{ddState.totalReplicas}</dd>
+                {ddState.hasDisabledPart && (
+                  <>
+                    <dt className="text-text-dim">Partitions disabled</dt>
+                    <dd className="text-warning">Yes — will be re-enabled on spin-up</dd>
+                  </>
+                )}
+              </dl>
+              {ddState.sets.length > 0 && (
+                <ul className="text-xs text-text-dim font-mono space-y-0.5">
+                  {ddState.sets.map(s => (
+                    <li key={s.idx}>
+                      set[{s.idx}] {s.map} · replicas={s.replicas ?? '(unset)'} · partitions={s.partitionCount}
+                      {s.dedicatedScaling ? ' · dedicated' : ''}
+                    </li>
+                  ))}
+                </ul>
+              )}
+              {ddMessage && (
+                <p className="text-xs text-text-muted border-l-2 border-accent pl-2 mt-2">{ddMessage}</p>
+              )}
+            </div>
           )}
         </div>
       </section>
