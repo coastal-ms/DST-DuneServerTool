@@ -56,11 +56,117 @@ function Get-DuneBattlegroupSnapshot {
         $result.output    = $text
         $result.exitCode  = $LASTEXITCODE
         $result.state     = Get-BgStateFromStatusText -Text $text
+        $parsed           = ConvertFrom-BgStatusText -Text $text
+        $result.name        = $parsed.name
+        $result.info        = $parsed.info
+        $result.gameServers = $parsed.gameServers
         return $result
     } catch {
         $result.reason = "SSH error: $($_.Exception.Message)"
         return $result
     }
+}
+
+# Parse `battlegroup status` output into structured shape:
+#   @{
+#     name        = '<bg-name>'
+#     info        = @{ status, database, gateway, director, uptime }  (or $null)
+#     gameServers = @(@{ map, phase, ready, players, age }, ...)
+#   }
+#
+# The text is a kubectl-style table with header underlines (dashes), produced
+# by the `battlegroup status` Go CLI. Columns are whitespace-separated but the
+# values themselves can contain spaces (e.g. phase "Reconciling Ready"), so we
+# use the underline row to determine column widths and slice fixed offsets.
+function ConvertFrom-BgStatusText {
+    param([string]$Text)
+    $out = @{ name = $null; info = $null; gameServers = @() }
+    if (-not $Text) { return $out }
+    $lines = $Text -split "`r?`n"
+
+    for ($i = 0; $i -lt $lines.Length; $i++) {
+        $line = $lines[$i]
+        if (-not $out.name -and $line -match '^\s*Battlegroup:\s*(.+?)\s*$') {
+            $out.name = $Matches[1]
+            continue
+        }
+        # Section header followed by column header + dashes row.
+        if ($line -match '^\s*Battlegroup Info\s*$' -and $i + 3 -lt $lines.Length) {
+            $cols   = Get-BgColumnSpans -Header $lines[$i + 1] -Dashes $lines[$i + 2]
+            $values = Get-BgRowValues   -Line   $lines[$i + 3] -Cols $cols
+            if ($values.Count -ge 5) {
+                $out.info = @{
+                    status   = $values[0]
+                    database = $values[1]
+                    gateway  = $values[2]
+                    director = $values[3]
+                    uptime   = $values[4]
+                }
+            }
+            $i += 3
+            continue
+        }
+        if ($line -match '^\s*Game Servers\s*$' -and $i + 2 -lt $lines.Length) {
+            $cols = Get-BgColumnSpans -Header $lines[$i + 1] -Dashes $lines[$i + 2]
+            $servers = @()
+            for ($j = $i + 3; $j -lt $lines.Length; $j++) {
+                $rowLine = $lines[$j]
+                if (-not $rowLine.Trim()) { continue }
+                $values = Get-BgRowValues -Line $rowLine -Cols $cols
+                if ($values.Count -ge 5 -and $values[0]) {
+                    $servers += ,@{
+                        map     = $values[0]
+                        phase   = $values[1]
+                        ready   = $values[2]
+                        players = $values[3]
+                        age     = $values[4]
+                    }
+                }
+            }
+            $out.gameServers = $servers
+            break
+        }
+    }
+    return $out
+}
+
+# Derive (start, length) per column from the dashes row underneath the header.
+function Get-BgColumnSpans {
+    param([string]$Header, [string]$Dashes)
+    $spans = @()
+    if (-not $Dashes) { return $spans }
+    $i = 0
+    while ($i -lt $Dashes.Length) {
+        if ($Dashes[$i] -eq '-') {
+            $start = $i
+            while ($i -lt $Dashes.Length -and $Dashes[$i] -eq '-') { $i++ }
+            $spans += ,@{ start = $start; length = $i - $start }
+        } else {
+            $i++
+        }
+    }
+    return $spans
+}
+
+# Slice a row line into per-column trimmed values using fixed column spans.
+# Extends the last column to the end of the line (catches trailing values
+# wider than the header underline, e.g. "104m  ").
+function Get-BgRowValues {
+    param([string]$Line, [array]$Cols)
+    $values = @()
+    if (-not $Line) { return $values }
+    for ($i = 0; $i -lt $Cols.Count; $i++) {
+        $start = [int]$Cols[$i].start
+        if ($start -ge $Line.Length) { $values += ''; continue }
+        if ($i -eq $Cols.Count - 1) {
+            $values += $Line.Substring($start).Trim()
+        } else {
+            $nextStart = [int]$Cols[$i + 1].start
+            $len = [Math]::Min($nextStart - $start, $Line.Length - $start)
+            $values += $Line.Substring($start, $len).Trim()
+        }
+    }
+    return $values
 }
 
 # Inspect a `battlegroup status` text blob and return one of:
