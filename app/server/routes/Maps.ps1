@@ -1,4 +1,4 @@
-# Routes for on-demand map control (currently DeepDesert).
+﻿# Routes for on-demand map control (currently DeepDesert).
 
 Register-DuneRoute -Method GET -Path '/api/maps/{key}' -Handler {
     param($req, $res, $routeParams, $body)
