@@ -557,3 +557,128 @@ begin
       WriteDuneConfig();
   end;
 end;
+
+// ============================================================
+//  Upgrade path: silently uninstall any prior install (v4-v6.0
+//  WPF desktop app, or earlier v6.1 builds) before laying down
+//  the new web-portal files. Without this, files that the old
+//  version shipped but the new one doesn't (WebView2 DLLs,
+//  WPF XAML pages, old `web\` static assets) would linger in
+//  {app} and could be dot-sourced by mistake.
+//
+//  Preserves %APPDATA%\DuneServer\ - the existing [UninstallDelete]
+//  only clears {app}, not user config.
+// ============================================================
+
+function GetUninstallerCommand(): string;
+var
+  regKey: string;
+  cmd: string;
+begin
+  Result := '';
+  // Inno Setup writes per-AppId uninstall info under "{AppId}_is1".
+  // 64-bit installer always writes to the 64-bit view of HKLM.
+  regKey := 'Software\Microsoft\Windows\CurrentVersion\Uninstall\' +
+            '{B3F8A2C1-7E5D-4F9A-8B2C-1D6E3A4F5C7D}_is1';
+  if RegQueryStringValue(HKLM64, regKey, 'QuietUninstallString', cmd) then
+    Result := cmd
+  else if RegQueryStringValue(HKLM64, regKey, 'UninstallString', cmd) then
+    Result := cmd
+  else if RegQueryStringValue(HKLM,   regKey, 'QuietUninstallString', cmd) then
+    Result := cmd
+  else if RegQueryStringValue(HKLM,   regKey, 'UninstallString', cmd) then
+    Result := cmd;
+end;
+
+// Try to stop a running DuneServer.exe so the old uninstaller can
+// delete its files cleanly. Best-effort - failure is non-fatal.
+procedure StopRunningDuneServer();
+var
+  resultCode: Integer;
+begin
+  Exec('taskkill.exe', '/F /IM DuneServer.exe /T',
+       '', SW_HIDE, ewWaitUntilTerminated, resultCode);
+  // pwsh / powershell.exe spawned by the old app run under the user's
+  // session and exit on their own once the parent EXE is gone.
+end;
+
+function UninstallPreviousVersion(): Boolean;
+var
+  uninstCmd, exePath, args: string;
+  spacePos, resultCode: Integer;
+  ok: Boolean;
+begin
+  Result := True;
+  uninstCmd := GetUninstallerCommand();
+  if uninstCmd = '' then Exit;  // nothing installed - first-time install
+
+  // UninstallString format is typically:
+  //   "C:\Program Files\Dune Server\unins000.exe" [/PARAMS...]
+  // Split into exe + args. The exe path is quoted in modern Inno Setup
+  // installers, so look for the closing quote.
+  if Copy(uninstCmd, 1, 1) = '"' then
+  begin
+    spacePos := Pos('"', Copy(uninstCmd, 2, Length(uninstCmd)));
+    if spacePos > 0 then
+    begin
+      exePath := Copy(uninstCmd, 2, spacePos - 1);
+      args    := Trim(Copy(uninstCmd, spacePos + 2, Length(uninstCmd)));
+    end
+    else
+    begin
+      exePath := uninstCmd;
+      args    := '';
+    end;
+  end
+  else
+  begin
+    spacePos := Pos(' ', uninstCmd);
+    if spacePos > 0 then
+    begin
+      exePath := Copy(uninstCmd, 1, spacePos - 1);
+      args    := Trim(Copy(uninstCmd, spacePos + 1, Length(uninstCmd)));
+    end
+    else
+    begin
+      exePath := uninstCmd;
+      args    := '';
+    end;
+  end;
+
+  if not FileExists(exePath) then Exit;  // stale registry entry
+
+  // Make sure no DuneServer.exe is holding files open.
+  StopRunningDuneServer();
+  Sleep(500);
+
+  // Append silent flags. /SP- skips the "are you sure?" prompt,
+  // /VERYSILENT runs without any UI, /SUPPRESSMSGBOXES squashes
+  // any error popups, /NORESTART blocks an auto-reboot request.
+  args := args + ' /SP- /VERYSILENT /SUPPRESSMSGBOXES /NORESTART';
+
+  ok := Exec(exePath, Trim(args), '', SW_HIDE, ewWaitUntilTerminated, resultCode);
+  if not ok then
+  begin
+    Log('Previous-version uninstall failed to launch: ' + exePath);
+    Result := False;
+    Exit;
+  end;
+
+  if resultCode <> 0 then
+    Log(Format('Previous-version uninstaller exited with code %d (continuing).', [resultCode]));
+
+  // Give Windows a moment to release file handles on the now-deleted EXE
+  Sleep(1000);
+end;
+
+// PrepareToInstall fires right before the file-copy phase. Returning
+// an empty string lets setup proceed; a non-empty string aborts with
+// that message. We always proceed (an upgrade-uninstall failure is
+// logged but not fatal - ignoreversion will still overwrite the
+// active files; only orphans will linger).
+function PrepareToInstall(var NeedsRestart: Boolean): String;
+begin
+  NeedsRestart := False;
+  UninstallPreviousVersion();
+  Result := '';
+end;

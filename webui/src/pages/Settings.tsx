@@ -3,6 +3,7 @@ import { PageHeader } from '../components/PageHeader'
 import { Icon } from '../components/Icon'
 import { api } from '../api/client'
 import type { ConfigResponse } from '../api/types'
+import { checkForUpdate, installUpdate, type UpdateCheck } from '../api/update'
 
 const FIELDS: { key: string; label: string; placeholder: string; help?: string; type?: 'text' | 'select' }[] = [
   { key: 'SteamPath',    label: 'Steam install path',
@@ -32,6 +33,44 @@ export function Settings() {
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [saved, setSaved] = useState<string | null>(null)
+
+  // Update-check card state
+  const [updCheck, setUpdCheck] = useState<UpdateCheck | null>(null)
+  const [updChecking, setUpdChecking] = useState(false)
+  const [updInstalling, setUpdInstalling] = useState(false)
+  const [updMsg, setUpdMsg] = useState<string | null>(null)
+  const [updErr, setUpdErr] = useState<string | null>(null)
+
+  async function onCheckUpdate() {
+    setUpdChecking(true)
+    setUpdErr(null)
+    setUpdMsg(null)
+    try {
+      setUpdCheck(await checkForUpdate({ force: true }))
+    } catch (e) {
+      setUpdErr(e instanceof Error ? e.message : String(e))
+    } finally {
+      setUpdChecking(false)
+    }
+  }
+
+  async function onInstallUpdate() {
+    setUpdInstalling(true)
+    setUpdErr(null)
+    setUpdMsg(null)
+    try {
+      const r = await installUpdate()
+      if (r.launched) {
+        setUpdMsg(`Installer launched — upgrading to v${r.toVersion}. The portal will go offline briefly, then the new version will relaunch.`)
+      } else {
+        setUpdErr(r.reason ?? 'Installer did not launch.')
+      }
+    } catch (e) {
+      setUpdErr(e instanceof Error ? e.message : String(e))
+    } finally {
+      setUpdInstalling(false)
+    }
+  }
 
   useEffect(() => {
     void (async () => {
@@ -146,6 +185,69 @@ export function Settings() {
           </button>
         </div>
       </form>
+
+      {/* --- Update check card -------------------------------------------- */}
+      <div className="card p-6 mt-6 space-y-3">
+        <div className="flex items-center justify-between">
+          <div>
+            <h2 className="text-lg font-semibold flex items-center gap-2">
+              <Icon name="Download" size={18} className="text-text-muted" />
+              Updates
+            </h2>
+            <p className="text-sm text-text-dim mt-0.5">
+              Checks GitHub releases for newer versions. Installs silently — Start Menu icon keeps working, your config in <span className="font-mono">%APPDATA%\DuneServer</span> is preserved.
+            </p>
+          </div>
+          <button type="button" onClick={onCheckUpdate} disabled={updChecking} className="btn-secondary">
+            <Icon name={updChecking ? 'Loader2' : 'RefreshCw'} size={15} className={updChecking ? 'animate-spin' : ''} />
+            {updChecking ? 'Checking…' : 'Check now'}
+          </button>
+        </div>
+
+        {updCheck && (
+          <div className="text-sm border-t border-border pt-3 flex flex-wrap items-center gap-3">
+            <span className="pill-muted">Current · v{updCheck.currentVersion}</span>
+            {updCheck.latestVersion && (
+              <span className={updCheck.available ? 'pill-warning' : 'pill-success'}>
+                Latest · v{updCheck.latestVersion}
+              </span>
+            )}
+            {updCheck.releaseUrl && (
+              <a href={updCheck.releaseUrl} target="_blank" rel="noreferrer" className="text-xs underline text-text-muted hover:text-text">
+                release notes
+              </a>
+            )}
+            {updCheck.available && (
+              <button
+                type="button"
+                onClick={onInstallUpdate}
+                disabled={updInstalling}
+                className="btn-primary ml-auto"
+              >
+                <Icon name={updInstalling ? 'Loader2' : 'Download'} size={15} className={updInstalling ? 'animate-spin' : ''} />
+                {updInstalling ? 'Installing…' : `Update to v${updCheck.latestVersion}`}
+              </button>
+            )}
+            {!updCheck.available && !updCheck.error && (
+              <span className="text-xs text-text-dim ml-auto">You're on the latest version.</span>
+            )}
+            {updCheck.error && (
+              <span className="text-xs text-danger ml-auto">Check failed: {updCheck.error}</span>
+            )}
+          </div>
+        )}
+
+        {updMsg && (
+          <div className="text-sm border-t border-border pt-3 text-success flex items-center gap-2">
+            <Icon name="CheckCircle2" size={14} /> {updMsg}
+          </div>
+        )}
+        {updErr && (
+          <div className="text-sm border-t border-border pt-3 text-danger flex items-center gap-2">
+            <Icon name="AlertCircle" size={14} /> {updErr}
+          </div>
+        )}
+      </div>
     </>
   )
 }
