@@ -304,7 +304,7 @@ function Invoke-DuneContext {
                     if ($g -notmatch '^\d+$') { $routeParams[$g] = $m.Groups[$g].Value }
                 }
                 try {
-                    $wsTask = $Ctx.AcceptWebSocketAsync($null)
+                    $wsTask = $Ctx.AcceptWebSocketAsync([NullString]::Value)
                     $wsCtx  = $wsTask.GetAwaiter().GetResult()
                 } catch {
                     Write-Host "[ws] accept failed: $($_.Exception.Message)" -ForegroundColor Red
