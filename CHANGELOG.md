@@ -13,6 +13,44 @@ here cover everything those tags shipped.
 
 ## [Unreleased]
 
+## [6.1.4] - 2026-05-26
+
+Patch: **drag-and-drop reorder on the Commands page**, plus a fix for a
+relaunch-after-Shutdown race that briefly showed every panel as "Unknown"
+with "Invalid or missing token" until the user closed and reopened the
+portal a second time.
+
+Added
+- **Drag-to-reorder commands.** Each card on the Commands page now has a
+  grip handle on the left. Drag to rearrange commands within their section
+  (VM, Battlegroup, Tools). The order auto-saves to
+  `%APPDATA%\DuneServer\button-order.json` (`PUT /api/commands/order`,
+  400ms debounce) and persists across launches.
+- **Reset layout** button on the Commands page header — clears the saved
+  order and reverts to the default arrangement.
+- `@dnd-kit/core`, `@dnd-kit/sortable`, `@dnd-kit/utilities` added to
+  `webui/` for the drag-and-drop machinery. The grip is the only drag
+  source (6px activation distance), so clicks on the rest of the card
+  still launch commands as before.
+
+Fixed
+- **"Invalid or missing token" after using Shutdown then relaunching.**
+  When the in-portal Shutdown button stopped the EXE and the user
+  immediately clicked the desktop shortcut to relaunch, the new EXE's
+  browser-launcher background job would win a race against the new HTTP
+  server's `last-url.txt` write, read the *previous* run's URL (with the
+  *previous* run's token), and open the browser at that stale URL. The
+  new listener (now bound on the same port) rejected every `/api/*` call
+  as "Invalid or missing token" until the user closed the tab and
+  reopened the shortcut a second time. Fixes:
+  - `app/DuneServer.ps1` now deletes any stale `last-url.txt` before
+    spawning the polling jobs, so the browser can only ever read the
+    fresh URL written by the new listener.
+  - The shutdown `finally` block now wipes `last-url.txt` and explicitly
+    releases the single-instance mutex, rather than relying on OS
+    process-exit cleanup (which is racy under fast reopen).
+
+
 ## [6.1.3] - 2026-05-26
 
 Patch: **silence Write-DuneLog popup modals on startup**, plus a new
