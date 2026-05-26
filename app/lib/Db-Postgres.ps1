@@ -31,6 +31,9 @@ function Get-V6SshKeyPath {
 
 function Invoke-V6Ssh {
     param([string]$Ip, [string]$Cmd, [int]$TimeoutSec = 30)
+    # Strip CRs from the command — here-strings in CRLF-saved .ps1 files
+    # preserve \r, which breaks bash (commands appear as "head -1\r" etc).
+    if ($Cmd) { $Cmd = $Cmd -replace "`r","" }
     $key = Get-V6SshKeyPath
     if ($key) {
         & ssh -o BatchMode=yes -o StrictHostKeyChecking=no -o LogLevel=QUIET -o ConnectTimeout=8 -i $key "dune@$Ip" $Cmd 2>$null
@@ -186,17 +189,42 @@ UPDATE actors SET properties = jsonb_set(
 }
 
 # -----------------------------------------------------------------------------
+# Controller-ID lookup (pawn id -> controller id)
+# -----------------------------------------------------------------------------
+# Most player-scoped tables (specialization_tracks, purchased_specialization_keystones,
+# player_virtual_currency_balances, ...) key on the *controller* id, not the pawn id
+# that the character list / faction-rep / actors tables expose. encrypted_player_state
+# bridges the two.
+function Get-V6ControllerId {
+    param([string]$Ip, [int]$Id)
+    $raw = Invoke-V6Psql -Ip $Ip -Sql "SELECT player_controller_id FROM encrypted_player_state WHERE player_pawn_id = $Id"
+    if ($raw -match '\d+') { return [int]$matches[0] }
+    return 0
+}
+
+# -----------------------------------------------------------------------------
 # Specializations
 # -----------------------------------------------------------------------------
 function Get-V6Specializations {
     param([string]$Ip, [int]$Id)
-    $tracks = Invoke-V6Psql -Ip $Ip -Sql @"
+    $controllerId = Get-V6ControllerId -Ip $Ip -Id $Id
+    $tracksRaw = '[]'
+    if ($controllerId) {
+        $tracksRaw = Invoke-V6Psql -Ip $Ip -Sql @"
 SELECT COALESCE(json_agg(row_to_json(t)), '[]') FROM (
-  SELECT track_type, xp_amount, level FROM specialization_tracks WHERE player_id = $Id ORDER BY track_type
+  SELECT track_type, xp_amount, level FROM dune.specialization_tracks WHERE player_id = $controllerId ORDER BY track_type
 ) t
 "@
+    }
+    $keystoneCount = 0
+    if ($controllerId) {
+        $kcRaw = Invoke-V6Psql -Ip $Ip -Sql "SELECT COUNT(*) FROM dune.purchased_specialization_keystones WHERE player_id = $controllerId"
+        if ($kcRaw -match '\d+') { $keystoneCount = [int]$matches[0] }
+    }
     return @{
-        Tracks = ConvertFrom-V6PsqlJson -Raw $tracks -Default @()
+        ControllerId  = $controllerId
+        Tracks        = ConvertFrom-V6PsqlJson -Raw $tracksRaw -Default @()
+        KeystoneCount = $keystoneCount
     }
 }
 
@@ -204,9 +232,11 @@ function Set-V6SpecializationTrack {
     param([string]$Ip, [int]$Id, [string]$TrackType, [int]$Xp, [double]$Level)
     $valid = @('Combat','Crafting','Gathering','Exploration','Sabotage')
     if ($TrackType -notin $valid) { throw "Invalid track: $TrackType" }
+    $controllerId = Get-V6ControllerId -Ip $Ip -Id $Id
+    if (-not $controllerId) { throw "Could not resolve controller id for actor $Id" }
     $sql = @"
-INSERT INTO specialization_tracks (player_id, track_type, xp_amount, level)
-VALUES ($Id, '$TrackType', $Xp, $Level)
+INSERT INTO dune.specialization_tracks (player_id, track_type, xp_amount, level)
+VALUES ($controllerId, '$TrackType', $Xp, $Level)
 ON CONFLICT (player_id, track_type) DO UPDATE SET xp_amount = EXCLUDED.xp_amount, level = EXCLUDED.level
 "@
     Invoke-V6Psql -Ip $Ip -Sql $sql | Out-Null
@@ -216,9 +246,11 @@ function Invoke-V6UnlockKeystonesForTrack {
     param([string]$Ip, [int]$Id, [string]$TrackPrefix)
     $valid = @('Combat_','Crafting_','Exploration_','Gathering_','Sabotage_')
     if ($TrackPrefix -notin $valid) { throw "Invalid track prefix: $TrackPrefix" }
+    $controllerId = Get-V6ControllerId -Ip $Ip -Id $Id
+    if (-not $controllerId) { throw "Could not resolve controller id for actor $Id" }
     $sql = @"
-INSERT INTO purchased_specialization_keystones (player_id, keystone_id)
-SELECT $Id, id FROM specialization_keystones_map WHERE name LIKE '${TrackPrefix}%'
+INSERT INTO dune.purchased_specialization_keystones (player_id, keystone_id)
+SELECT $controllerId, id FROM dune.specialization_keystones_map WHERE name LIKE '${TrackPrefix}%'
 ON CONFLICT DO NOTHING
 "@
     Invoke-V6Psql -Ip $Ip -Sql $sql | Out-Null
@@ -229,9 +261,7 @@ ON CONFLICT DO NOTHING
 # -----------------------------------------------------------------------------
 function Get-V6Economy {
     param([string]$Ip, [int]$Id)
-    $controllerRaw = Invoke-V6Psql -Ip $Ip -Sql "SELECT player_controller_id FROM encrypted_player_state WHERE player_pawn_id = $Id"
-    $controllerId = 0
-    if ($controllerRaw -match '\d+') { $controllerId = [int]$matches[0] }
+    $controllerId = Get-V6ControllerId -Ip $Ip -Id $Id
 
     $cur = Invoke-V6Psql -Ip $Ip -Sql @"
 SELECT COALESCE(json_agg(row_to_json(t)), '[]') FROM (
@@ -242,11 +272,11 @@ SELECT COALESCE(json_agg(row_to_json(t)), '[]') FROM (
     $rep = Invoke-V6Psql -Ip $Ip -Sql @"
 SELECT COALESCE(json_agg(row_to_json(t)), '[]') FROM (
   SELECT fr.faction_id, f.name AS faction_name, fr.reputation_amount
-  FROM player_faction_reputation fr JOIN factions f ON fr.faction_id = f.id
-  WHERE fr.actor_id = $Id ORDER BY fr.faction_id
+  FROM dune.player_faction_reputation fr JOIN dune.factions f ON fr.faction_id = f.id
+  WHERE fr.actor_id = $controllerId ORDER BY fr.faction_id
 ) t
 "@
-    $factions = Invoke-V6Psql -Ip $Ip -Sql "SELECT COALESCE(json_agg(row_to_json(t)), '[]') FROM (SELECT id, name FROM factions ORDER BY id) t"
+    $factions = Invoke-V6Psql -Ip $Ip -Sql "SELECT COALESCE(json_agg(row_to_json(t)), '[]') FROM (SELECT id, name FROM dune.factions ORDER BY id) t"
 
     return @{
         ControllerId = $controllerId
@@ -258,9 +288,7 @@ SELECT COALESCE(json_agg(row_to_json(t)), '[]') FROM (
 
 function Set-V6Currency {
     param([string]$Ip, [int]$Id, [int]$CurrencyId, [int]$Balance)
-    $controllerRaw = Invoke-V6Psql -Ip $Ip -Sql "SELECT player_controller_id FROM encrypted_player_state WHERE player_pawn_id = $Id"
-    $controllerId = 0
-    if ($controllerRaw -match '\d+') { $controllerId = [int]$matches[0] }
+    $controllerId = Get-V6ControllerId -Ip $Ip -Id $Id
     if (-not $controllerId) { throw "Could not resolve controller id for actor $Id" }
     $sql = @"
 INSERT INTO player_virtual_currency_balances (player_controller_id, currency_id, balance)
@@ -272,10 +300,59 @@ ON CONFLICT (player_controller_id, currency_id) DO UPDATE SET balance = EXCLUDED
 
 function Set-V6FactionReputation {
     param([string]$Ip, [int]$Id, [int]$FactionId, [int]$Amount)
+    $controllerId = Get-V6ControllerId -Ip $Ip -Id $Id
+    if (-not $controllerId) { throw "Could not resolve controller id for actor $Id" }
     $sql = @"
-INSERT INTO player_faction_reputation (actor_id, faction_id, reputation_amount)
-VALUES ($Id, $FactionId, $Amount)
+INSERT INTO dune.player_faction_reputation (actor_id, faction_id, reputation_amount)
+VALUES ($controllerId, $FactionId, $Amount)
 ON CONFLICT (actor_id, faction_id) DO UPDATE SET reputation_amount = EXCLUDED.reputation_amount
+"@
+    Invoke-V6Psql -Ip $Ip -Sql $sql | Out-Null
+}
+
+# -----------------------------------------------------------------------------
+# Spicefield types (dune.spicefield_types)
+# -----------------------------------------------------------------------------
+# One row per (map, field-size) combo. Controls how many spice fields can be
+# active/primed globally, the spawn-weight, and whether spawning is enabled.
+# `current_*` columns are read-only state maintained by the game.
+function Get-V6SpicefieldTypes {
+    param([string]$Ip)
+    $raw = Invoke-V6Psql -Ip $Ip -Sql @"
+SELECT COALESCE(json_agg(row_to_json(t) ORDER BY t.map_name, t.spicefield_type_id), '[]') FROM (
+  SELECT spicefield_type_id, map_name, field_type, dimension_index,
+         max_globally_active, max_globally_primed,
+         current_globally_active, current_globally_primed,
+         is_spawning_active, global_spawn_weight
+  FROM dune.spicefield_types
+) t
+"@
+    return ConvertFrom-V6PsqlJson -Raw $raw -Default @()
+}
+
+function Set-V6SpicefieldType {
+    param(
+        [string]$Ip,
+        [int]$TypeId,
+        [int]$MaxActive,
+        [int]$MaxPrimed,
+        [bool]$IsSpawningActive,
+        [double]$SpawnWeight
+    )
+    if ($MaxActive  -lt 0) { throw "max_globally_active must be >= 0" }
+    if ($MaxPrimed  -lt 0) { throw "max_globally_primed must be >= 0" }
+    if ($SpawnWeight -lt 0) { throw "global_spawn_weight must be >= 0" }
+    $activeFlag = if ($IsSpawningActive) { 'TRUE' } else { 'FALSE' }
+    # Use invariant decimal format (e.g. "1.5", never "1,5") so psql parses it
+    # regardless of host culture.
+    $weightStr = ([double]$SpawnWeight).ToString([System.Globalization.CultureInfo]::InvariantCulture)
+    $sql = @"
+UPDATE dune.spicefield_types
+   SET max_globally_active = $MaxActive,
+       max_globally_primed = $MaxPrimed,
+       is_spawning_active  = $activeFlag,
+       global_spawn_weight = $weightStr
+ WHERE spicefield_type_id = $TypeId
 "@
     Invoke-V6Psql -Ip $Ip -Sql $sql | Out-Null
 }
