@@ -21,21 +21,57 @@ function Get-DunePublicIp {
     return $null
 }
 
-function Test-DunePortBuiltin {
-    param([string]$PublicIp, [int]$Port, [string]$Protocol)
-    if ($Protocol -ne 'TCP') { return 'udp-skip' }
+function Test-DunePortYougetsignal {
+    param([string]$PublicIp, [int]$Port)
+    # Returns 'open' | 'closed' | 'ratelimit' | 'unknown'
     try {
         $resp = Invoke-WebRequest -Uri 'https://ports.yougetsignal.com/check-port.php' `
             -Method POST -UseBasicParsing -TimeoutSec 10 -ErrorAction Stop `
             -Body @{ remoteAddress = $PublicIp; portNumber = "$Port" } `
             -Headers @{ 'User-Agent' = 'Mozilla/5.0 (dune-server-tool)' }
         $body = "$($resp.Content)"
-        if ($body -match '(?i)is\s+open|"open"\s*:\s*true')   { return 'open' }
+        if ($body -match '(?i)Daily\s+open\s+port\s+check\s+limit\s+reached') { return 'ratelimit' }
+        if ($body -match '(?i)is\s+open|"open"\s*:\s*true')                    { return 'open' }
         if ($body -match '(?i)is\s+(closed|not\s+visible|not\s+open)|"open"\s*:\s*false') { return 'closed' }
         return 'unknown'
     } catch {
         return 'unknown'
     }
+}
+
+function Test-DunePortCanYouSeeMe {
+    param([string]$PublicIp, [int]$Port)
+    # Fallback when yougetsignal rate-limits us. POSTs to canyouseeme.org and
+    # parses the success/error verdict line out of the response HTML.
+    try {
+        $resp = Invoke-WebRequest -Uri 'https://canyouseeme.org/' `
+            -Method POST -UseBasicParsing -TimeoutSec 12 -ErrorAction Stop `
+            -Body @{ port = "$Port"; IP = $PublicIp } `
+            -Headers @{
+                'User-Agent' = 'Mozilla/5.0 (dune-server-tool)'
+                'Referer'    = 'https://canyouseeme.org/'
+            }
+        $body = "$($resp.Content)"
+        if ($body -match '(?i)<b>Success:</b>.{0,80}I can see your service') { return 'open' }
+        if ($body -match '(?i)<b>Error:</b>.{0,80}(I could not see|connection refused|timed out)') { return 'closed' }
+        return 'unknown'
+    } catch {
+        return 'unknown'
+    }
+}
+
+function Test-DunePortBuiltin {
+    param([string]$PublicIp, [int]$Port, [string]$Protocol)
+    # No public UDP checker available across free services - mark as skipped
+    # and let the UI render "UDP - skipped" so the user knows to check manually.
+    if ($Protocol -ne 'TCP') { return 'udp-skip' }
+    # Primary: yougetsignal (fast, no referer dance). Falls through to
+    # canyouseeme.org when yougetsignal is rate-limited (per-public-IP daily
+    # cap; the response body says "Daily open port check limit reached for ...")
+    # or returns an unparseable body.
+    $s = Test-DunePortYougetsignal -PublicIp $PublicIp -Port $Port
+    if ($s -eq 'open' -or $s -eq 'closed') { return $s }
+    return Test-DunePortCanYouSeeMe -PublicIp $PublicIp -Port $Port
 }
 
 function Test-DunePortCustom {

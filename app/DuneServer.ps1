@@ -6,7 +6,7 @@
 $ErrorActionPreference = 'Stop'
 
 # Version (one of the 5 sync'd constants; see persistent-notes.md)
-$script:DuneToolVersion = '6.1.4'
+$script:DuneToolVersion = '6.1.5'
 
 # ---------- Single-instance gate ----------------------------------------------
 # Every click of the desktop shortcut runs DuneServer.exe again. Without a
