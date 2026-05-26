@@ -2,7 +2,7 @@ import { useCallback, useEffect, useState } from 'react'
 import { PageHeader } from '../components/PageHeader'
 import { Icon } from '../components/Icon'
 import { useStatus } from '../hooks/useStatus'
-import type { BgState, PortResult } from '../api/types'
+import type { BgState, PortResult, BgGameServer } from '../api/types'
 import { getMapState, startMap, type MapState } from '../api/maps'
 import { getLinks, type LinksResponse } from '../api/links'
 import { api, ApiError } from '../api/client'
@@ -40,12 +40,37 @@ function portStatusText(r: PortResult): string {
   return r.status
 }
 
+// Map a health/phase string to a tone class. Used for Battlegroup Info
+// (Healthy/Ready/...) and Game Servers (Running/Starting/...).
+function healthClass(v: string | undefined): string {
+  if (!v) return 'text-text-dim'
+  const s = v.toLowerCase()
+  if (/(healthy|ready|running|true)/.test(s)) return 'text-success'
+  if (/(starting|reconciling|pending|updating|warning)/.test(s)) return 'text-warning'
+  if (/(stopped|stopping|failed|error|unhealthy|crash|false)/.test(s)) return 'text-danger'
+  return 'text-text'
+}
+
+function GameServerRow({ s }: { s: BgGameServer }) {
+  return (
+    <tr className="border-t border-border/30">
+      <td className="py-1.5 pr-3 font-medium">{s.map}</td>
+      <td className={`py-1.5 pr-3 ${healthClass(s.phase)}`}>{s.phase || '—'}</td>
+      <td className={`py-1.5 pr-3 ${healthClass(s.ready)}`}>{s.ready || '—'}</td>
+      <td className="py-1.5 pr-3 font-mono">{s.players || '0'}</td>
+      <td className="py-1.5 font-mono text-text-dim">{s.age || '—'}</td>
+    </tr>
+  )
+}
+
 export function Dashboard() {
   const { status, forceRefresh, loading } = useStatus()
 
   const vm = status?.vm
   const bgState = (status?.bg?.state ?? 'unknown') as BgState | 'unknown'
   const bg = BG_STYLES[bgState]
+  const bgInfo = status?.bg?.info ?? null
+  const gameServers = status?.bg?.gameServers ?? []
   const ports = status?.ports
   const tcp = ports?.results.filter(r => r.protocol === 'TCP') ?? []
   const openTcp = tcp.filter(r => r.status === 'open').length
@@ -128,40 +153,24 @@ export function Dashboard() {
     void navigator.clipboard?.writeText(url).catch(() => { /* ignore */ })
   }, [])
 
-  const kpis = [
-    {
-      label: 'Battlegroup',
-      value: bg.label,
-      icon: 'Activity',
-      tone: bg.cls,
-      sub: status?.bg?.reason && bgState === 'unknown' ? status.bg.reason : undefined,
-    },
-    {
-      label: 'VM',
-      value: !vm ? '—' : !vm.exists ? 'Not found' : vm.running ? 'Running' : (vm.state || 'Stopped'),
-      icon: 'HardDrive',
-      tone: vm?.running ? 'text-success' : 'text-text-muted',
-      sub: vm?.running && vm.uptime > 0 ? `Up ${fmtUptime(vm.uptime)}` : undefined,
-    },
-    {
-      label: 'VM IP',
-      value: vm?.ip || '—',
-      icon: 'Network',
-      tone: vm?.ip ? 'text-text' : 'text-text-muted',
-      sub: vm?.name ? `vm: ${vm.name}` : undefined,
-    },
-    {
-      label: ports?.mode === 'disabled' ? 'Port checks' : 'TCP ports open',
-      value: ports?.mode === 'disabled'
-        ? 'Disabled'
-        : tcp.length === 0 ? '—' : `${openTcp}/${tcp.length}`,
-      icon: 'Plug',
-      tone: tcp.length > 0 && openTcp === tcp.length ? 'text-success'
-          : tcp.length > 0 && openTcp === 0 ? 'text-danger'
-          : 'text-text-muted',
-      sub: ports?.publicIp ? `public ip: ${ports.publicIp}` : undefined,
-    },
-  ]
+  // KPI summary — 2 combined cards: Battlegroup+VM, TCP ports+VM IP.
+  const vmSubLine = !vm
+    ? 'No VM data'
+    : !vm.exists
+      ? 'VM not found'
+      : vm.running
+        ? `VM ${vm.state.toLowerCase()} · up ${fmtUptime(vm.uptime)}`
+        : `VM ${vm.state.toLowerCase()}`
+  const portsLabel = ports?.mode === 'disabled' ? 'Disabled'
+                  : tcp.length === 0 ? '—'
+                  : `${openTcp}/${tcp.length}`
+  const portsTone = tcp.length > 0 && openTcp === tcp.length ? 'text-success'
+                : tcp.length > 0 && openTcp === 0 ? 'text-danger'
+                : 'text-text-muted'
+  const portsSub = [
+    vm?.ip ? `VM ip: ${vm.ip}` : 'No VM ip',
+    ports?.publicIp ? `public: ${ports.publicIp}` : null,
+  ].filter(Boolean).join(' · ')
 
   return (
     <>
@@ -180,55 +189,97 @@ export function Dashboard() {
         }
       />
 
-      <section className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
-        {kpis.map(k => (
-          <div key={k.label} className="card card-hover p-4">
-            <div className="flex items-center justify-between">
-              <span className="text-xs uppercase tracking-wider text-text-dim">{k.label}</span>
-              <Icon name={k.icon} size={16} className={k.tone} />
-            </div>
-            <div className={`mt-2 text-2xl font-semibold ${k.tone} truncate`}>{k.value}</div>
-            {k.sub && <div className="mt-1 text-xs text-text-dim truncate">{k.sub}</div>}
+      <section className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
+        <div className="card card-hover p-4">
+          <div className="flex items-center justify-between">
+            <span className="text-xs uppercase tracking-wider text-text-dim">Battlegroup + VM</span>
+            <Icon name="Activity" size={16} className={bg.cls} />
           </div>
-        ))}
+          <div className={`mt-2 text-2xl font-semibold ${bg.cls} truncate`}>{bg.label}</div>
+          <div className="mt-1 text-xs text-text-dim truncate">{vmSubLine}</div>
+          {status?.bg?.reason && bgState === 'unknown' && (
+            <div className="mt-1 text-xs text-warning break-words">{status.bg.reason}</div>
+          )}
+        </div>
+        <div className="card card-hover p-4">
+          <div className="flex items-center justify-between">
+            <span className="text-xs uppercase tracking-wider text-text-dim">
+              {ports?.mode === 'disabled' ? 'Port checks' : 'TCP ports open'}
+            </span>
+            <Icon name="Plug" size={16} className={portsTone} />
+          </div>
+          <div className={`mt-2 text-2xl font-semibold ${portsTone} truncate`}>{portsLabel}</div>
+          <div className="mt-1 text-xs text-text-dim truncate">{portsSub || '—'}</div>
+        </div>
       </section>
 
-      <section className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+      <section className="grid grid-cols-1 lg:grid-cols-2 gap-4 mb-4">
         <div className="card p-5">
           <div className="flex items-center justify-between mb-3">
             <h2 className="text-sm font-semibold uppercase tracking-wider text-text-muted flex items-center gap-2">
-              <Icon name="HardDrive" size={14} className="text-accent" /> Virtual machine
+              <Icon name="Activity" size={14} className="text-accent" /> Battlegroup info
             </h2>
+            {status?.bg?.name && (
+              <span className="text-[10px] font-mono text-text-dim truncate ml-2" title={status.bg.name}>
+                {status.bg.name}
+              </span>
+            )}
           </div>
-          {!vm ? (
-            <p className="text-sm text-text-dim italic">No status yet.</p>
+          {!bgReady ? (
+            <p className="text-sm text-text-dim italic">
+              {status?.bg?.reason || 'Battlegroup is not running.'}
+            </p>
+          ) : !bgInfo ? (
+            <p className="text-sm text-text-dim italic">No battlegroup info yet.</p>
           ) : (
-            <dl className="grid grid-cols-[120px,1fr] gap-y-2 text-sm">
-              <dt className="text-text-dim">Name</dt>
-              <dd className="font-mono">{vm.name}</dd>
-              <dt className="text-text-dim">State</dt>
-              <dd>{vm.state}</dd>
-              <dt className="text-text-dim">IP</dt>
-              <dd className="font-mono">{vm.ip || '—'}</dd>
+            <dl className="grid grid-cols-[110px,1fr] gap-y-2 text-sm">
+              <dt className="text-text-dim">Status</dt>
+              <dd className={healthClass(bgInfo.status)}>{bgInfo.status || '—'}</dd>
+              <dt className="text-text-dim">Database</dt>
+              <dd className={healthClass(bgInfo.database)}>{bgInfo.database || '—'}</dd>
+              <dt className="text-text-dim">Gateway</dt>
+              <dd className={healthClass(bgInfo.gateway)}>{bgInfo.gateway || '—'}</dd>
+              <dt className="text-text-dim">Director</dt>
+              <dd className={healthClass(bgInfo.director)}>{bgInfo.director || '—'}</dd>
               <dt className="text-text-dim">Uptime</dt>
-              <dd>{vm.running ? fmtUptime(vm.uptime) : '—'}</dd>
-              {vm.error && (
-                <>
-                  <dt className="text-text-dim">Error</dt>
-                  <dd className="text-warning text-xs break-words">
-                    {vm.error}
-                    {/required permission|access (?:is )?denied/i.test(vm.error) && (
-                      <span className="block mt-1 text-text-muted">
-                        Hyper-V cmdlets need administrator rights. Re-launch Dune Server with elevation.
-                      </span>
-                    )}
-                  </dd>
-                </>
-              )}
+              <dd className="font-mono">{bgInfo.uptime || '—'}</dd>
             </dl>
           )}
         </div>
 
+        <div className="card p-5">
+          <div className="flex items-center justify-between mb-3">
+            <h2 className="text-sm font-semibold uppercase tracking-wider text-text-muted flex items-center gap-2">
+              <Icon name="ServerCog" size={14} className="text-accent" /> Game servers
+            </h2>
+            {gameServers.length > 0 && (
+              <span className="text-[10px] text-text-dim">{gameServers.length} pod{gameServers.length === 1 ? '' : 's'}</span>
+            )}
+          </div>
+          {!bgReady ? (
+            <p className="text-sm text-text-dim italic">Battlegroup must be running.</p>
+          ) : gameServers.length === 0 ? (
+            <p className="text-sm text-text-dim italic">No game servers reported.</p>
+          ) : (
+            <table className="w-full text-sm">
+              <thead className="text-[10px] uppercase tracking-wider text-text-dim">
+                <tr>
+                  <th className="text-left pb-1">Map</th>
+                  <th className="text-left pb-1">Phase</th>
+                  <th className="text-left pb-1">Ready</th>
+                  <th className="text-left pb-1">Players</th>
+                  <th className="text-left pb-1">Age</th>
+                </tr>
+              </thead>
+              <tbody>
+                {gameServers.map(s => <GameServerRow key={s.map} s={s} />)}
+              </tbody>
+            </table>
+          )}
+        </div>
+      </section>
+
+      <section className="grid grid-cols-1 lg:grid-cols-2 gap-4 mb-4">
         <div className="card p-5">
           <div className="flex items-center justify-between mb-3">
             <h2 className="text-sm font-semibold uppercase tracking-wider text-text-muted flex items-center gap-2">
@@ -263,9 +314,7 @@ export function Dashboard() {
             </ul>
           )}
         </div>
-      </section>
 
-      <section className="mt-4 grid grid-cols-1 lg:grid-cols-2 gap-4">
         <div className="card p-5">
           <div className="flex items-center justify-between mb-3 gap-3 flex-wrap">
             <h2 className="text-sm font-semibold uppercase tracking-wider text-text-muted flex items-center gap-2">
@@ -332,42 +381,9 @@ export function Dashboard() {
             </ul>
           )}
         </div>
-
-        <div className="card p-5">
-          <div className="flex items-center justify-between mb-3">
-            <h2 className="text-sm font-semibold uppercase tracking-wider text-text-muted flex items-center gap-2">
-              <Icon name="FileText" size={14} className="text-accent" /> Log exports
-            </h2>
-          </div>
-          <p className="text-xs text-text-dim mb-3">
-            Collects logs from every pod and writes them to your desktop. Each export opens a console window.
-          </p>
-          <div className="flex flex-wrap gap-2">
-            <button
-              className="btn-primary"
-              disabled={!bgReady || exportBusy !== null}
-              onClick={() => { void runExport('logs-export', 'Battlegroup log export') }}
-              title={!bgReady ? 'Battlegroup must be running' : 'Export battlegroup pod logs'}
-            >
-              <Icon name={exportBusy === 'logs-export' ? 'Loader2' : 'Download'} size={14} className={exportBusy === 'logs-export' ? 'animate-spin' : ''} />
-              Battlegroup logs
-            </button>
-            <button
-              className="btn-primary"
-              disabled={!bgReady || exportBusy !== null}
-              onClick={() => { void runExport('operator-logs-export', 'Operator log export') }}
-              title={!bgReady ? 'Battlegroup must be running' : 'Export operator pod logs'}
-            >
-              <Icon name={exportBusy === 'operator-logs-export' ? 'Loader2' : 'Download'} size={14} className={exportBusy === 'operator-logs-export' ? 'animate-spin' : ''} />
-              Operator logs
-            </button>
-          </div>
-          {exportMsg && <p className="mt-3 text-xs text-text-muted border-l-2 border-accent pl-2">{exportMsg}</p>}
-          {exportErr && <p className="mt-3 text-xs text-danger break-words">{exportErr}</p>}
-        </div>
       </section>
 
-      <section className="mt-4">
+      <section className="grid grid-cols-1 lg:grid-cols-2 gap-4 mb-4">
         <div className="card p-5">
           <div className="flex items-center justify-between mb-3 gap-3 flex-wrap">
             <h2 className="text-sm font-semibold uppercase tracking-wider text-text-muted flex items-center gap-2">
@@ -442,7 +458,51 @@ export function Dashboard() {
             </div>
           )}
         </div>
+
+        <div className="card p-5">
+          <div className="flex items-center justify-between mb-3">
+            <h2 className="text-sm font-semibold uppercase tracking-wider text-text-muted flex items-center gap-2">
+              <Icon name="FileText" size={14} className="text-accent" /> Log exports
+            </h2>
+          </div>
+          <p className="text-xs text-text-dim mb-3">
+            Collects logs from every pod and writes them to your desktop. Each export opens a console window.
+          </p>
+          <div className="flex flex-wrap gap-2">
+            <button
+              className="btn-primary"
+              disabled={!bgReady || exportBusy !== null}
+              onClick={() => { void runExport('logs-export', 'Battlegroup log export') }}
+              title={!bgReady ? 'Battlegroup must be running' : 'Export battlegroup pod logs'}
+            >
+              <Icon name={exportBusy === 'logs-export' ? 'Loader2' : 'Download'} size={14} className={exportBusy === 'logs-export' ? 'animate-spin' : ''} />
+              Battlegroup logs
+            </button>
+            <button
+              className="btn-primary"
+              disabled={!bgReady || exportBusy !== null}
+              onClick={() => { void runExport('operator-logs-export', 'Operator log export') }}
+              title={!bgReady ? 'Battlegroup must be running' : 'Export operator pod logs'}
+            >
+              <Icon name={exportBusy === 'operator-logs-export' ? 'Loader2' : 'Download'} size={14} className={exportBusy === 'operator-logs-export' ? 'animate-spin' : ''} />
+              Operator logs
+            </button>
+          </div>
+          {exportMsg && <p className="mt-3 text-xs text-text-muted border-l-2 border-accent pl-2">{exportMsg}</p>}
+          {exportErr && <p className="mt-3 text-xs text-danger break-words">{exportErr}</p>}
+        </div>
       </section>
+
+      {vm?.error && (
+        <section className="card p-4 text-xs text-warning break-words">
+          <span className="font-semibold">VM error:</span> {vm.error}
+          {/required permission|access (?:is )?denied/i.test(vm.error) && (
+            <span className="block mt-1 text-text-muted">
+              Hyper-V cmdlets need administrator rights. Re-launch Dune Server with elevation.
+            </span>
+          )}
+        </section>
+      )}
     </>
   )
 }
