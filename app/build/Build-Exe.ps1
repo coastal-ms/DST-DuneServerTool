@@ -1,4 +1,4 @@
-﻿# Build-Exe.ps1 - Compiles app/DuneServer.ps1 into DuneServer.exe via ps2exe.
+# Build-Exe.ps1 - Compiles app/DuneServer.ps1 into DuneServer.exe via ps2exe.
 #
 # Output: app/build/output/DuneServer.exe
 #
@@ -6,7 +6,7 @@
 #   - PowerShell 7+ (pwsh)
 #   - ps2exe module (auto-installed if missing)
 #
-# The compiled .exe (v6.1.1+):
+# The compiled .exe (v6.1.2+):
 #   - Embeds a UAC manifest (-requireAdmin) so launching always elevates
 #     (Hyper-V cmdlets need admin, matching the v6.0.x WPF host behavior)
 #   - Runs hidden (-noConsole) - server presents as a tray icon (NotifyIcon)
@@ -16,12 +16,12 @@
 #   - Self-bootstraps the local HTTP server + opens the default browser
 #
 # v6.0.x was WPF noConsole; v6.1.0 briefly enabled the console for live logs;
-# v6.1.1 went back to noConsole + tray icon. Logs are written to:
+# v6.1.2 went back to noConsole + tray icon. Logs are written to:
 #   %LOCALAPPDATA%\DuneServer\dune-server.log
 
 [CmdletBinding()]
 param(
-    [string]$Version = '6.1.1',
+    [string]$Version = '6.1.2',
     [switch]$Quiet
 )
 
@@ -48,7 +48,7 @@ $verNum = "$Version.0"  # ps2exe wants 4-part version
 
 Write-Host "Compiling DuneServer.exe (v$Version)..." -ForegroundColor Cyan
 
-# Critical flags (v6.1.1):
+# Critical flags (v6.1.2):
 #   -requireAdmin  : embeds UAC manifest -> always launches elevated
 #   -noConsole     : windowless EXE - tray icon is the only UI surface
 #   -STA           : required for System.Windows.Forms.NotifyIcon / MessageBox
