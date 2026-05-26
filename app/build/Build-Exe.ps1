@@ -7,8 +7,10 @@
 #   - ps2exe module (auto-installed if missing)
 #
 # The compiled .exe (v6.1.2+):
-#   - Embeds a UAC manifest (-requireAdmin) so launching always elevates
-#     (Hyper-V cmdlets need admin, matching the v6.0.x WPF host behavior)
+#   - NO -requireAdmin manifest. Elevation is handled IN-SCRIPT after the
+#     single-instance mutex check, so a second click on the desktop shortcut
+#     just opens the existing portal URL in the browser without a UAC prompt.
+#     (Hyper-V cmdlets still need admin; the first launch self-elevates.)
 #   - Runs hidden (-noConsole) - server presents as a tray icon (NotifyIcon)
 #     with menu: Open Portal / Copy URL / View Log / Quit
 #   - STA apartment so WinForms (NotifyIcon, MessageBox) is safe
@@ -16,8 +18,9 @@
 #   - Self-bootstraps the local HTTP server + opens the default browser
 #
 # v6.0.x was WPF noConsole; v6.1.0 briefly enabled the console for live logs;
-# v6.1.2 went back to noConsole + tray icon. Logs are written to:
-#   %LOCALAPPDATA%\DuneServer\dune-server.log
+# v6.1.2 went back to noConsole + tray icon AND dropped -requireAdmin in favor
+# of in-script elevation (so the single-instance gate runs before UAC).
+# Logs are written to: %LOCALAPPDATA%\DuneServer\dune-server.log
 
 [CmdletBinding()]
 param(
@@ -49,10 +52,12 @@ $verNum = "$Version.0"  # ps2exe wants 4-part version
 Write-Host "Compiling DuneServer.exe (v$Version)..." -ForegroundColor Cyan
 
 # Critical flags (v6.1.2):
-#   -requireAdmin  : embeds UAC manifest -> always launches elevated
 #   -noConsole     : windowless EXE - tray icon is the only UI surface
 #   -STA           : required for System.Windows.Forms.NotifyIcon / MessageBox
 #   -iconFile      : taskbar / file explorer / tray icon
+# NOTE: -requireAdmin INTENTIONALLY OMITTED. The script self-elevates after
+# the single-instance mutex check so subsequent shortcut clicks just open the
+# browser to the existing portal URL without prompting for UAC again.
 $ps2exeArgs = @{
     InputFile      = $src
     OutputFile     = $outExe
@@ -63,7 +68,6 @@ $ps2exeArgs = @{
     Product        = 'Dune Server'
     Version        = $verNum
     Copyright      = '(c) 2026 Dune Awakening Self-Hosted Tool'
-    RequireAdmin   = $true
     NoConsole      = $true
     STA            = $true
 }
@@ -81,7 +85,7 @@ Write-Host ""
 
 if (-not $Quiet) {
     Write-Host "Admin requirements:" -ForegroundColor Cyan
-    Write-Host "  [x] UAC manifest embedded (-requireAdmin)" -ForegroundColor Green
+    Write-Host "  [x] No UAC manifest - self-elevates in-script after single-instance check" -ForegroundColor Green
     Write-Host "  [x] No console window (-noConsole), tray icon UI" -ForegroundColor Green
     Write-Host "  [x] STA apartment (WinForms NotifyIcon)" -ForegroundColor Green
     Write-Host ""

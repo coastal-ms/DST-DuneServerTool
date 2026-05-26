@@ -15,10 +15,24 @@ here cover everything those tags shipped.
 
 ## [6.1.2] - 2026-05-26
 
-Patch: **`dune-admin` command now self-heals** when the bundled
-`dune-admin.exe` is missing.
+Patch: **single-instance gate** (clicking the desktop shortcut multiple times
+no longer spawns multiple servers or UAC prompts) and **`dune-admin` self-heal**
+when the bundled `dune-admin.exe` is missing.
 
 Fixed
+- **Multi-instance bug** — every click of the desktop shortcut spawned a
+  brand-new `DuneServer.exe` (new port, new tray icon, **new UAC prompt**).
+  Added a named-mutex gate (`Global\DuneServer-Portal-v6`): if the portal
+  is already running, subsequent launches just open the existing portal
+  URL (`%LOCALAPPDATA%\DuneServer\last-url.txt`) in the default browser
+  and exit silently — no second listener, no second tray icon, no UAC.
+- **UAC-on-every-click** — `DuneServer.exe` no longer ships a `requireAdmin`
+  manifest. The single-instance check runs *first*; elevation happens
+  *in-script* only when this is the canonical instance (so first launch
+  prompts once, subsequent clicks never prompt). Hyper-V cmdlets still get
+  admin via the in-script self-elevate (`Start-Process -Verb RunAs`); CLI
+  commands still get admin via `dune-server.ps1`'s
+  `#Requires -RunAsAdministrator`.
 - Command 18 (`dune-admin`) silently registered a scheduled task
   pointed at a missing executable when `DuneAdminExe` in
   `dune-server.config` pointed nowhere — the spawned console window
