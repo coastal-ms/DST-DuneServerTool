@@ -43,22 +43,43 @@ Register-DuneWebSocket -Path '/ws/terminal' -Handler {
         } catch { return $false }
     }
 
-    function _RecvFrame([byte[]]$buf) {
-        $sb = [System.Text.StringBuilder]::new()
-        while ($true) {
-            $r = $ws.ReceiveAsync([System.ArraySegment[byte]]::new($buf), $CT).GetAwaiter().GetResult()
-            if ($r.MessageType -eq [System.Net.WebSockets.WebSocketMessageType]::Close) { return $null }
-            if ($r.Count -gt 0) { [void]$sb.Append($ENC.GetString($buf, 0, $r.Count)) }
-            if ($r.EndOfMessage) { break }
-        }
-        return $sb.ToString()
+    # ---- 1. init -----------------------------------------------------------------
+    # The .NET WebSocket only allows ONE pending ReceiveAsync at a time. The exec
+    # poll loop must peek for cancel/resize WHILE waiting on the inflight command,
+    # so we keep a single recv Task alive and share it. We use a 1-element array
+    # ($recvBox) instead of a $script: variable because the latter is unreliable
+    # inside scriptblock handlers running in a runspace pool — array element
+    # writes mutate in place and work from any scope.
+    $buf      = [byte[]]::new(16384)
+    $recvBox  = ,$null      # holds the single in-flight ReceiveAsync task
+    $recvSb   = [System.Text.StringBuilder]::new()
+
+    # Arm a new ReceiveAsync (caller must ensure prior task is already consumed).
+    function _ArmRecv($ws, $CT, $buf, $box) {
+        try { $box[0] = $ws.ReceiveAsync([System.ArraySegment[byte]]::new($buf), $CT) }
+        catch { $box[0] = $null }
     }
 
-    # ---- 1. init -----------------------------------------------------------------
-    $buf = [byte[]]::new(16384)
+    # Blocking wait for next complete text frame. Returns string or $null on close.
+    function _AwaitFrame($ws, $CT, $ENC, $buf, $box, $sb) {
+        [void]$sb.Clear()
+        while ($true) {
+            if (-not $box[0]) { _ArmRecv $ws $CT $buf $box }
+            if (-not $box[0]) { return $null }
+            try { $r = $box[0].GetAwaiter().GetResult() }
+            catch { $box[0] = $null; return $null }
+            $box[0] = $null
+            if ($r.MessageType -eq [System.Net.WebSockets.WebSocketMessageType]::Close) { return $null }
+            if ($r.Count -gt 0) { [void]$sb.Append($ENC.GetString($buf, 0, $r.Count)) }
+            if ($r.EndOfMessage) { return $sb.ToString() }
+            _ArmRecv $ws $CT $buf $box
+        }
+    }
+
+    _ArmRecv $ws $CT $buf $recvBox
     $cols = 100
     try {
-        $first = _RecvFrame $buf
+        $first = _AwaitFrame $ws $CT $ENC $buf $recvBox $recvSb
         if ($first) {
             $init = $first | ConvertFrom-Json -ErrorAction Stop
             if ($init.type -eq 'init' -and $init.cols) {
@@ -89,15 +110,17 @@ Register-DuneWebSocket -Path '/ws/terminal' -Handler {
     $currentAsync = $null
     $closing = $false
 
+    _ArmRecv $ws $CT $buf $recvBox
     try {
         while (-not $closing -and $ws.State -eq [System.Net.WebSockets.WebSocketState]::Open) {
-            $frame = _RecvFrame $buf
+            $frame = _AwaitFrame $ws $CT $ENC $buf $recvBox $recvSb
             if ($null -eq $frame) { break }
 
             try {
                 $msg = $frame | ConvertFrom-Json -ErrorAction Stop
             } catch {
                 [void](_Send @{ type='error'; message="bad frame: $($_.Exception.Message)" })
+                _ArmRecv $ws $CT $buf $recvBox
                 continue
             }
 
@@ -106,11 +129,13 @@ Register-DuneWebSocket -Path '/ws/terminal' -Handler {
                 'exec' {
                     if ($currentPs) {
                         [void](_Send @{ type='error'; message='A command is already running.' })
+                        _ArmRecv $ws $CT $buf $recvBox
                         continue
                     }
                     $cmdText = [string]$msg.cmd
                     if ([string]::IsNullOrWhiteSpace($cmdText)) {
                         [void](_Send @{ type='done'; cwd=$cwd; durationMs=0; hadErrors=$false })
+                        _ArmRecv $ws $CT $buf $recvBox
                         continue
                     }
 
@@ -141,6 +166,7 @@ $cmdText
                         [void](_Send @{ type='error'; message="BeginInvoke failed: $($_.Exception.Message)" })
                         try { $currentPs.Dispose() } catch {}
                         $currentPs = $null
+                        _ArmRecv $ws $CT $buf $recvBox
                         continue
                     }
 
@@ -187,17 +213,15 @@ $cmdText
                     }
 
                     # While the command runs, do interleaved drain + non-blocking WS receive.
-                    # WS receive: kick off a Task and check IsCompleted each tick.
-                    $recvTask = $null
-                    try { $recvTask = $ws.ReceiveAsync([System.ArraySegment[byte]]::new($buf), $CT) } catch {}
-
+                    # We share $recvTask with the outer loop; only consume it when ready.
                     while (-not $currentAsync.IsCompleted) {
                         & $drain
 
-                        # peek WS for cancel
-                        if ($recvTask -and $recvTask.IsCompleted) {
+                        if ($recvBox[0] -and $recvBox[0].IsCompleted) {
+                            $rt = $recvBox[0]
+                            $recvBox[0] = $null
                             try {
-                                $rr = $recvTask.GetAwaiter().GetResult()
+                                $rr = $rt.GetAwaiter().GetResult()
                                 if ($rr.MessageType -eq [System.Net.WebSockets.WebSocketMessageType]::Close) {
                                     $closing = $true
                                     try { $currentPs.Stop() } catch {}
@@ -215,7 +239,7 @@ $cmdText
                                     } catch {}
                                 }
                             } catch { }
-                            try { $recvTask = $ws.ReceiveAsync([System.ArraySegment[byte]]::new($buf), $CT) } catch { $recvTask = $null }
+                            _ArmRecv $ws $CT $buf $recvBox
                         }
 
                         Start-Sleep -Milliseconds 30
@@ -234,17 +258,22 @@ $cmdText
 
                     # If client closed during command, stop loop.
                     if ($closing) { break }
+                    # If poll loop never consumed $recvBox[0], it's still armed and
+                    # ready for the outer _AwaitFrame; if it did consume, we re-armed.
+                    if (-not $recvBox[0]) { _ArmRecv $ws $CT $buf $recvBox }
                 }
 
                 'cancel' {
                     # No command running — just ack
+                    _ArmRecv $ws $CT $buf $recvBox
                 }
 
                 'resize' {
                     if ($msg.cols) { $cols = [Math]::Max(40, [Math]::Min(400, [int]$msg.cols)) }
+                    _ArmRecv $ws $CT $buf $recvBox
                 }
 
-                default { }
+                default { _ArmRecv $ws $CT $buf $recvBox }
             }
         }
     } finally {
