@@ -24,6 +24,90 @@ $script:V6CurrencyDefs = @(
     @{ Id=1; Label='House Scrip' }
 )
 
+# Inventory container types that can be safely edited (from reference app.js WRITABLE_INV_TYPES).
+$script:V6WritableInvTypes = @(
+    @{ Type=0;  Label='Backpack' }
+    @{ Type=15; Label='Hotbar' }
+    @{ Type=20; Label='Quick-use' }
+    @{ Type=27; Label='Equipped' }
+)
+
+# Stack limits keyed by item category (from reference app.js STACK_LIMITS).
+$script:V6StackLimits = @{
+    'Resources'   = 100
+    'Ammo'        = 100
+    'Consumables' = 20
+    'Fuel'        = 5
+}
+$script:V6DefaultStackLimit = 1
+
+# Item categories considered "equipment" — these need the FCustomizationStats stub.
+$script:V6EquipmentCategoryPrefixes = @('Garments','Weapons','Tools','Vehicle Modules')
+
+# Lazy-loaded item catalog from app/data/item-catalog.json
+$script:V6ItemCatalog    = $null   # hashtable: templateId -> @{Name; Category}
+$script:V6ItemCategories = $null   # sorted unique category strings
+
+function Get-V6ItemCatalog {
+    if ($script:V6ItemCatalog) { return $script:V6ItemCatalog }
+    $catalogPath = Join-Path $PSScriptRoot '..\data\item-catalog.json'
+    if (-not (Test-Path $catalogPath)) {
+        $script:V6ItemCatalog = @{}
+        $script:V6ItemCategories = @()
+        return $script:V6ItemCatalog
+    }
+    try {
+        $json = Get-Content $catalogPath -Raw | ConvertFrom-Json
+        $cat = @{}
+        $cats = @{}
+        foreach ($prop in $json.items.PSObject.Properties) {
+            $cat[$prop.Name] = @{ Name = $prop.Value.name; Category = $prop.Value.category }
+            if ($prop.Value.category) { $cats[$prop.Value.category] = $true }
+        }
+        $script:V6ItemCatalog = $cat
+        $script:V6ItemCategories = ($cats.Keys | Sort-Object)
+    } catch {
+        $script:V6ItemCatalog = @{}
+        $script:V6ItemCategories = @()
+    }
+    return $script:V6ItemCatalog
+}
+
+function Get-V6ItemCategories {
+    if ($null -eq $script:V6ItemCategories) { [void](Get-V6ItemCatalog) }
+    return $script:V6ItemCategories
+}
+
+function Get-V6StackLimitForCategory {
+    param([string]$Category)
+    if (-not $Category) { return $script:V6DefaultStackLimit }
+    if ($script:V6StackLimits.ContainsKey($Category)) { return $script:V6StackLimits[$Category] }
+    return $script:V6DefaultStackLimit
+}
+
+function Test-V6IsEquipmentCategory {
+    param([string]$Category)
+    if (-not $Category) { return $false }
+    foreach ($p in $script:V6EquipmentCategoryPrefixes) {
+        if ($Category.StartsWith($p)) { return $true }
+    }
+    return $false
+}
+
+function Get-V6ItemDisplayName {
+    param([string]$TemplateId)
+    $cat = Get-V6ItemCatalog
+    if ($cat.ContainsKey($TemplateId)) { return $cat[$TemplateId].Name }
+    return $TemplateId
+}
+
+function Get-V6InvTypeLabel {
+    param([int]$Type)
+    $match = $script:V6WritableInvTypes | Where-Object { $_.Type -eq $Type } | Select-Object -First 1
+    if ($match) { return $match.Label }
+    return "Container $Type"
+}
+
 # -----------------------------------------------------------------------------
 # Page construction
 # -----------------------------------------------------------------------------
@@ -548,6 +632,425 @@ function _V6ChEnableEditorControls {
     $state.BtnSave.IsEnabled = $Enabled
 }
 
+function _V6ChBuildCatalogPicker {
+    param($state, [string]$Kind)
+    # Returns a hashtable describing the picker controls so callers can wire add-buttons.
+    # Kind is 'inventory' or 'cosmetics' — used to label the Add action.
+    $panel = New-Object System.Windows.Controls.StackPanel
+    $panel.Margin = '0,10,0,0'
+
+    $sep = New-Object System.Windows.Controls.Border
+    $sep.Height = 1
+    $sep.Background = New-Object System.Windows.Media.SolidColorBrush ([System.Windows.Media.Color]::FromArgb(255,0x4A,0x36,0x1F))
+    $sep.Margin = '0,0,0,10'
+    $panel.Children.Add($sep) | Out-Null
+
+    $hdr = New-Object System.Windows.Controls.TextBlock
+    $hdr.Text = 'Add from catalog'
+    $hdr.FontFamily = 'Segoe UI Semibold'
+    $hdr.Foreground = New-Object System.Windows.Media.SolidColorBrush ([System.Windows.Media.Color]::FromArgb(255,0xE8,0xB8,0x72))
+    $hdr.Margin = '0,0,0,6'
+    $panel.Children.Add($hdr) | Out-Null
+
+    # Filter row: category combobox + search textbox
+    $row = New-Object System.Windows.Controls.Grid
+    $row.Margin = '0,0,0,6'
+    $cd1 = New-Object System.Windows.Controls.ColumnDefinition; $cd1.Width = '220'
+    $cd2 = New-Object System.Windows.Controls.ColumnDefinition; $cd2.Width = '*'
+    $row.ColumnDefinitions.Add($cd1); $row.ColumnDefinitions.Add($cd2)
+
+    $catCombo = New-Object System.Windows.Controls.ComboBox
+    $catCombo.Margin = '0,0,8,0'; $catCombo.Height = 28
+    $allItem = New-Object System.Windows.Controls.ComboBoxItem
+    $allItem.Content = '(All categories)'; $allItem.Tag = ''
+    $catCombo.Items.Add($allItem) | Out-Null
+    foreach ($c in (Get-V6ItemCategories)) {
+        $ci = New-Object System.Windows.Controls.ComboBoxItem
+        $ci.Content = $c; $ci.Tag = $c
+        $catCombo.Items.Add($ci) | Out-Null
+    }
+    $catCombo.SelectedIndex = 0
+    [System.Windows.Controls.Grid]::SetColumn($catCombo, 0)
+    $row.Children.Add($catCombo) | Out-Null
+
+    $searchBox = New-Object System.Windows.Controls.TextBox
+    $searchBox.Height = 28
+    $searchBox.Tag = 'Type to search items...'
+    [System.Windows.Controls.Grid]::SetColumn($searchBox, 1)
+    $row.Children.Add($searchBox) | Out-Null
+    $panel.Children.Add($row) | Out-Null
+
+    # Catalog results list
+    $listView = New-Object System.Windows.Controls.ListView
+    $listView.Height = 180
+    $listView.Background = New-Object System.Windows.Media.SolidColorBrush ([System.Windows.Media.Color]::FromArgb(255,0x0F,0x0C,0x09))
+    $listView.Foreground = New-Object System.Windows.Media.SolidColorBrush ([System.Windows.Media.Color]::FromArgb(255,0xF0,0xE6,0xD0))
+    $listView.BorderBrush = New-Object System.Windows.Media.SolidColorBrush ([System.Windows.Media.Color]::FromArgb(255,0x4A,0x36,0x1F))
+    $gv = New-Object System.Windows.Controls.GridView
+    $colName = New-Object System.Windows.Controls.GridViewColumn
+    $colName.Header = 'Name'; $colName.Width = 260
+    $colName.DisplayMemberBinding = New-Object System.Windows.Data.Binding('Name')
+    $gv.Columns.Add($colName)
+    $colCat = New-Object System.Windows.Controls.GridViewColumn
+    $colCat.Header = 'Category'; $colCat.Width = 160
+    $colCat.DisplayMemberBinding = New-Object System.Windows.Data.Binding('Category')
+    $gv.Columns.Add($colCat)
+    $colId = New-Object System.Windows.Controls.GridViewColumn
+    $colId.Header = 'Template ID'; $colId.Width = 220
+    $colId.DisplayMemberBinding = New-Object System.Windows.Data.Binding('TemplateId')
+    $gv.Columns.Add($colId)
+    $listView.View = $gv
+    $panel.Children.Add($listView) | Out-Null
+
+    # Add row: container dropdown (inventory only) + qty + Add button
+    $addRow = New-Object System.Windows.Controls.Grid
+    $addRow.Margin = '0,8,0,0'
+    $ac1 = New-Object System.Windows.Controls.ColumnDefinition; $ac1.Width = '180'
+    $ac2 = New-Object System.Windows.Controls.ColumnDefinition; $ac2.Width = '90'
+    $ac3 = New-Object System.Windows.Controls.ColumnDefinition; $ac3.Width = '*'
+    $ac4 = New-Object System.Windows.Controls.ColumnDefinition; $ac4.Width = '110'
+    $addRow.ColumnDefinitions.Add($ac1); $addRow.ColumnDefinitions.Add($ac2); $addRow.ColumnDefinitions.Add($ac3); $addRow.ColumnDefinitions.Add($ac4)
+
+    $containerCombo = $null
+    if ($Kind -eq 'inventory') {
+        $containerCombo = New-Object System.Windows.Controls.ComboBox
+        $containerCombo.Margin = '0,0,8,0'; $containerCombo.Height = 28
+        foreach ($w in $script:V6WritableInvTypes) {
+            $ci = New-Object System.Windows.Controls.ComboBoxItem
+            $ci.Content = "$($w.Label) ($($w.Type))"; $ci.Tag = $w.Type
+            $containerCombo.Items.Add($ci) | Out-Null
+        }
+        $containerCombo.SelectedIndex = 0
+        [System.Windows.Controls.Grid]::SetColumn($containerCombo, 0)
+        $addRow.Children.Add($containerCombo) | Out-Null
+    } else {
+        $spacer = New-Object System.Windows.Controls.TextBlock
+        $spacer.Text = ''
+        [System.Windows.Controls.Grid]::SetColumn($spacer, 0)
+        $addRow.Children.Add($spacer) | Out-Null
+    }
+
+    $qtyBox = $null
+    if ($Kind -eq 'inventory') {
+        $qtyBox = New-Object System.Windows.Controls.TextBox
+        $qtyBox.Margin = '0,0,8,0'; $qtyBox.Height = 28; $qtyBox.Text = '1'
+        [System.Windows.Controls.Grid]::SetColumn($qtyBox, 1)
+        $addRow.Children.Add($qtyBox) | Out-Null
+    } else {
+        $spacer2 = New-Object System.Windows.Controls.TextBlock
+        $spacer2.Text = ''
+        [System.Windows.Controls.Grid]::SetColumn($spacer2, 1)
+        $addRow.Children.Add($spacer2) | Out-Null
+    }
+
+    $hint = New-Object System.Windows.Controls.TextBlock
+    $hint.Text = ''
+    $hint.VerticalAlignment = 'Center'
+    $hint.Foreground = New-Object System.Windows.Media.SolidColorBrush ([System.Windows.Media.Color]::FromArgb(255,0x8E,0x82,0x70))
+    $hint.FontSize = 11
+    [System.Windows.Controls.Grid]::SetColumn($hint, 2)
+    $addRow.Children.Add($hint) | Out-Null
+
+    $addBtn = New-Object System.Windows.Controls.Button
+    $addBtn.Content = if ($Kind -eq 'inventory') { 'Add Item' } else { 'Add Cosmetic' }
+    $addBtn.Height = 28; $addBtn.HorizontalAlignment = 'Right'
+    $addBtn.IsEnabled = $false
+    [System.Windows.Controls.Grid]::SetColumn($addBtn, 3)
+    $addRow.Children.Add($addBtn) | Out-Null
+
+    $panel.Children.Add($addRow) | Out-Null
+
+    return @{
+        Panel          = $panel
+        CategoryCombo  = $catCombo
+        SearchBox      = $searchBox
+        ListView       = $listView
+        ContainerCombo = $containerCombo
+        QtyBox         = $qtyBox
+        Hint           = $hint
+        AddBtn         = $addBtn
+    }
+}
+
+function _V6ChRefreshCatalogResults {
+    param($picker)
+    $sel = $picker.CategoryCombo.SelectedItem
+    $cat = if ($sel) { [string]$sel.Tag } else { '' }
+    $q   = ($picker.SearchBox.Text).Trim().ToLowerInvariant()
+    $cat2 = Get-V6ItemCatalog
+    $results = @()
+    $limit = 200
+    foreach ($k in $cat2.Keys) {
+        $entry = $cat2[$k]
+        if ($cat -and $entry.Category -ne $cat) { continue }
+        if ($q) {
+            $hay = ("$($entry.Name) $k").ToLowerInvariant()
+            if (-not $hay.Contains($q)) { continue }
+        }
+        $results += [pscustomobject]@{
+            Name       = $entry.Name
+            Category   = $entry.Category
+            TemplateId = $k
+        }
+        if ($results.Count -ge $limit) { break }
+    }
+    $picker.ListView.ItemsSource = ($results | Sort-Object Name)
+    $picker.Hint.Text = if ($results.Count -ge $limit) { "Showing first $limit matches \u2014 refine filter to narrow." } else { "$($results.Count) match(es)." }
+}
+
+function _V6ChWirePicker {
+    param($picker, [scriptblock]$AddAction)
+    $picker.CategoryCombo.Add_SelectionChanged({ _V6ChRefreshCatalogResults $script:V6Ch.InvPicker; _V6ChRefreshCatalogResults $script:V6Ch.CosmeticsPicker }.GetNewClosure())
+    $picker.SearchBox.Add_TextChanged({ _V6ChRefreshCatalogResults $script:V6Ch.InvPicker; _V6ChRefreshCatalogResults $script:V6Ch.CosmeticsPicker }.GetNewClosure())
+    $picker.ListView.Add_SelectionChanged({
+        $btnPicker = $script:V6Ch.InvPicker
+        $btnPicker2 = $script:V6Ch.CosmeticsPicker
+        if ($btnPicker.ListView.SelectedItem)  { $btnPicker.AddBtn.IsEnabled  = $true }
+        if ($btnPicker2.ListView.SelectedItem) { $btnPicker2.AddBtn.IsEnabled = $true }
+    }.GetNewClosure())
+    $picker.AddBtn.Add_Click($AddAction)
+}
+
+function _V6ChBuildInventoryBody {
+    param($state)
+    $state.InvBody.Children.Clear()
+
+    $sumBlock = New-Object System.Windows.Controls.TextBlock
+    $sumBlock.Foreground = New-Object System.Windows.Media.SolidColorBrush ([System.Windows.Media.Color]::FromArgb(255,0xD8,0xCD,0xB5))
+    $sumBlock.Text = 'Select a character and click an item\u2019s Remove button below. Add new items via the catalog picker.'
+    $sumBlock.Margin = '0,0,0,8'
+    $state.InvBody.Children.Add($sumBlock) | Out-Null
+
+    $itemsHost = New-Object System.Windows.Controls.StackPanel
+    $itemsHost.Name = 'ChInvItemsHost'
+    $state.InvBody.Children.Add($itemsHost) | Out-Null
+    $state.InvItemsHost = $itemsHost
+
+    $picker = _V6ChBuildCatalogPicker -state $state -Kind 'inventory'
+    $state.InvBody.Children.Add($picker.Panel) | Out-Null
+    $state.InvPicker = $picker
+}
+
+function _V6ChBuildCosmeticsBody {
+    param($state)
+    $state.CosmeticsBody.Children.Clear()
+
+    $sumBlock = New-Object System.Windows.Controls.TextBlock
+    $sumBlock.Foreground = New-Object System.Windows.Media.SolidColorBrush ([System.Windows.Media.Color]::FromArgb(255,0xD8,0xCD,0xB5))
+    $sumBlock.Text = 'Unlocked cosmetic IDs are listed below. Catalog picker matches against the item-catalog name field.'
+    $sumBlock.Margin = '0,0,0,8'
+    $state.CosmeticsBody.Children.Add($sumBlock) | Out-Null
+
+    $listHost = New-Object System.Windows.Controls.StackPanel
+    $state.CosmeticsBody.Children.Add($listHost) | Out-Null
+    $state.CosmeticsHost = $listHost
+
+    $picker = _V6ChBuildCatalogPicker -state $state -Kind 'cosmetics'
+    $state.CosmeticsBody.Children.Add($picker.Panel) | Out-Null
+    $state.CosmeticsPicker = $picker
+}
+
+function _V6ChRenderInventory {
+    param($state, $inventoryResult)
+    $state.InvItemsHost.Children.Clear()
+    if (-not $inventoryResult -or -not $inventoryResult.Inventories) {
+        $tb = New-Object System.Windows.Controls.TextBlock
+        $tb.Text = '(empty)'; $tb.Foreground = New-Object System.Windows.Media.SolidColorBrush ([System.Windows.Media.Color]::FromArgb(255,0x8E,0x82,0x70))
+        $tb.FontStyle = 'Italic'
+        $state.InvItemsHost.Children.Add($tb) | Out-Null
+        return
+    }
+
+    $writableTypes = $script:V6WritableInvTypes | ForEach-Object { $_.Type }
+    foreach ($inv in ($inventoryResult.Inventories | Sort-Object inventory_type)) {
+        $invType = [int]$inv.inventory_type
+        if ($invType -notin $writableTypes) { continue }
+        $hdr = New-Object System.Windows.Controls.TextBlock
+        $hdr.Text = "$(Get-V6InvTypeLabel $invType) (inv ID $($inv.id), max $($inv.max_item_count))"
+        $hdr.FontFamily = 'Segoe UI Semibold'
+        $hdr.Foreground = New-Object System.Windows.Media.SolidColorBrush ([System.Windows.Media.Color]::FromArgb(255,0xE8,0xB8,0x72))
+        $hdr.Margin = '0,8,0,4'
+        $state.InvItemsHost.Children.Add($hdr) | Out-Null
+
+        $items = $inventoryResult.Items | Where-Object { [int]$_.inventory_id -eq [int]$inv.id }
+        if (-not $items -or $items.Count -eq 0) {
+            $em = New-Object System.Windows.Controls.TextBlock
+            $em.Text = '   (empty)'; $em.Foreground = New-Object System.Windows.Media.SolidColorBrush ([System.Windows.Media.Color]::FromArgb(255,0x8E,0x82,0x70))
+            $em.FontStyle = 'Italic'
+            $state.InvItemsHost.Children.Add($em) | Out-Null
+            continue
+        }
+        foreach ($it in $items) {
+            $row = New-Object System.Windows.Controls.Grid
+            $row.Margin = '12,2,0,2'
+            $rc1 = New-Object System.Windows.Controls.ColumnDefinition; $rc1.Width = '*'
+            $rc2 = New-Object System.Windows.Controls.ColumnDefinition; $rc2.Width = '90'
+            $rc3 = New-Object System.Windows.Controls.ColumnDefinition; $rc3.Width = '90'
+            $row.ColumnDefinitions.Add($rc1); $row.ColumnDefinitions.Add($rc2); $row.ColumnDefinitions.Add($rc3)
+
+            $nameTb = New-Object System.Windows.Controls.TextBlock
+            $name = Get-V6ItemDisplayName -TemplateId $it.template_id
+            $nameTb.Text = "$name  [$($it.template_id)]"
+            $nameTb.VerticalAlignment = 'Center'
+            $nameTb.Foreground = New-Object System.Windows.Media.SolidColorBrush ([System.Windows.Media.Color]::FromArgb(255,0xF0,0xE6,0xD0))
+            [System.Windows.Controls.Grid]::SetColumn($nameTb, 0)
+            $row.Children.Add($nameTb) | Out-Null
+
+            $stackTb = New-Object System.Windows.Controls.TextBlock
+            $stackTb.Text = "qty $($it.stack_size)"
+            $stackTb.VerticalAlignment = 'Center'
+            $stackTb.Foreground = New-Object System.Windows.Media.SolidColorBrush ([System.Windows.Media.Color]::FromArgb(255,0xD8,0xCD,0xB5))
+            [System.Windows.Controls.Grid]::SetColumn($stackTb, 1)
+            $row.Children.Add($stackTb) | Out-Null
+
+            $rmBtn = New-Object System.Windows.Controls.Button
+            $rmBtn.Content = 'Remove'
+            $rmBtn.Height = 24; $rmBtn.Margin = '0,0,4,0'
+            $rmBtn.Tag = [int]$it.id
+            $rmBtn.Add_Click({
+                $btn = $this
+                Invoke-V6CharInventoryRemove -ItemId ([int]$btn.Tag)
+            })
+            [System.Windows.Controls.Grid]::SetColumn($rmBtn, 2)
+            $row.Children.Add($rmBtn) | Out-Null
+
+            $state.InvItemsHost.Children.Add($row) | Out-Null
+        }
+    }
+}
+
+function _V6ChRenderCosmetics {
+    param($state, $cosmeticIds)
+    $state.CosmeticsHost.Children.Clear()
+    if (-not $cosmeticIds -or $cosmeticIds.Count -eq 0) {
+        $tb = New-Object System.Windows.Controls.TextBlock
+        $tb.Text = '(no cosmetics unlocked)'
+        $tb.Foreground = New-Object System.Windows.Media.SolidColorBrush ([System.Windows.Media.Color]::FromArgb(255,0x8E,0x82,0x70))
+        $tb.FontStyle = 'Italic'
+        $state.CosmeticsHost.Children.Add($tb) | Out-Null
+        return
+    }
+    foreach ($cid in ($cosmeticIds | Sort-Object)) {
+        $row = New-Object System.Windows.Controls.Grid
+        $row.Margin = '0,2,0,2'
+        $rc1 = New-Object System.Windows.Controls.ColumnDefinition; $rc1.Width = '*'
+        $rc2 = New-Object System.Windows.Controls.ColumnDefinition; $rc2.Width = '90'
+        $row.ColumnDefinitions.Add($rc1); $row.ColumnDefinitions.Add($rc2)
+
+        $nameTb = New-Object System.Windows.Controls.TextBlock
+        $disp = Get-V6ItemDisplayName -TemplateId $cid
+        $nameTb.Text = if ($disp -ne $cid) { "$disp  [$cid]" } else { "$cid" }
+        $nameTb.VerticalAlignment = 'Center'
+        $nameTb.Foreground = New-Object System.Windows.Media.SolidColorBrush ([System.Windows.Media.Color]::FromArgb(255,0xF0,0xE6,0xD0))
+        [System.Windows.Controls.Grid]::SetColumn($nameTb, 0)
+        $row.Children.Add($nameTb) | Out-Null
+
+        $rmBtn = New-Object System.Windows.Controls.Button
+        $rmBtn.Content = 'Remove'
+        $rmBtn.Height = 24
+        $rmBtn.Tag = $cid
+        $rmBtn.Add_Click({
+            $btn = $this
+            Invoke-V6CharCosmeticRemove -CosmeticId ([string]$btn.Tag)
+        })
+        [System.Windows.Controls.Grid]::SetColumn($rmBtn, 1)
+        $row.Children.Add($rmBtn) | Out-Null
+
+        $state.CosmeticsHost.Children.Add($row) | Out-Null
+    }
+}
+
+function Invoke-V6CharInventoryAdd {
+    $c = $script:V6Ch
+    if (-not $c -or -not $c.SelectedId) { return }
+    $vm = _V6ChResolveVm
+    if (-not $vm) { $c.Status.Text = 'VM not running.'; return }
+    $sel = $c.InvPicker.ListView.SelectedItem
+    if (-not $sel) { $c.Status.Text = 'Pick an item from the catalog first.'; return }
+    $containerSel = $c.InvPicker.ContainerCombo.SelectedItem
+    if (-not $containerSel) { $c.Status.Text = 'Pick a target container.'; return }
+    $invType = [int]$containerSel.Tag
+
+    # Resolve target inventory ID from the loaded inventory result
+    $inv = ($c.Detail.Inventory.Inventories | Where-Object { [int]$_.inventory_type -eq $invType } | Select-Object -First 1)
+    if (-not $inv) {
+        $c.Status.Text = "Character has no inventory of type $invType. Make sure the character has joined the game once."
+        return
+    }
+
+    $qty = 1
+    try { $qty = [int]($c.InvPicker.QtyBox.Text) } catch { $qty = 1 }
+    if ($qty -lt 1) { $qty = 1 }
+    $limit = Get-V6StackLimitForCategory -Category $sel.Category
+    if ($qty -gt $limit) {
+        $r = [System.Windows.MessageBox]::Show(
+            "Stack size $qty exceeds the typical limit for category '$($sel.Category)' (limit $limit). Proceed anyway?",
+            'Stack limit warning',
+            [System.Windows.MessageBoxButton]::OKCancel,
+            [System.Windows.MessageBoxImage]::Warning)
+        if ($r -ne [System.Windows.MessageBoxResult]::OK) { return }
+    }
+    $isEquip = Test-V6IsEquipmentCategory -Category $sel.Category
+    try {
+        Add-V6InventoryItem -Ip $vm.ip -InventoryId ([int]$inv.id) -TemplateId $sel.TemplateId -StackSize $qty -IsEquipment $isEquip
+        $c.Status.Text = "Added $qty x $($sel.Name) to $(Get-V6InvTypeLabel $invType)."
+        # Refresh inventory
+        $c.Detail.Inventory = Get-V6Inventory -Ip $vm.ip -Id $c.SelectedId
+        _V6ChRenderInventory -state $c -inventoryResult $c.Detail.Inventory
+    } catch {
+        $c.Status.Text = "Add failed: $($_.Exception.Message)"
+    }
+}
+
+function Invoke-V6CharInventoryRemove {
+    param([int]$ItemId)
+    $c = $script:V6Ch
+    if (-not $c -or -not $c.SelectedId) { return }
+    $vm = _V6ChResolveVm
+    if (-not $vm) { $c.Status.Text = 'VM not running.'; return }
+    try {
+        Remove-V6InventoryItem -Ip $vm.ip -ItemId $ItemId
+        $c.Status.Text = "Removed item $ItemId."
+        $c.Detail.Inventory = Get-V6Inventory -Ip $vm.ip -Id $c.SelectedId
+        _V6ChRenderInventory -state $c -inventoryResult $c.Detail.Inventory
+    } catch {
+        $c.Status.Text = "Remove failed: $($_.Exception.Message)"
+    }
+}
+
+function Invoke-V6CharCosmeticAdd {
+    $c = $script:V6Ch
+    if (-not $c -or -not $c.SelectedId) { return }
+    $vm = _V6ChResolveVm
+    if (-not $vm) { $c.Status.Text = 'VM not running.'; return }
+    $sel = $c.CosmeticsPicker.ListView.SelectedItem
+    if (-not $sel) { $c.Status.Text = 'Pick a cosmetic from the catalog first.'; return }
+    try {
+        Add-V6Cosmetic -Ip $vm.ip -Id $c.SelectedId -CosmeticId $sel.TemplateId
+        $c.Status.Text = "Cosmetic '$($sel.Name)' added."
+        $c.Detail.Cosmetics = Get-V6Cosmetics -Ip $vm.ip -Id $c.SelectedId
+        _V6ChRenderCosmetics -state $c -cosmeticIds $c.Detail.Cosmetics
+    } catch {
+        $c.Status.Text = "Cosmetic add failed: $($_.Exception.Message)"
+    }
+}
+
+function Invoke-V6CharCosmeticRemove {
+    param([string]$CosmeticId)
+    $c = $script:V6Ch
+    if (-not $c -or -not $c.SelectedId) { return }
+    $vm = _V6ChResolveVm
+    if (-not $vm) { $c.Status.Text = 'VM not running.'; return }
+    try {
+        Remove-V6Cosmetic -Ip $vm.ip -Id $c.SelectedId -CosmeticId $CosmeticId
+        $c.Status.Text = "Cosmetic '$CosmeticId' removed."
+        $c.Detail.Cosmetics = Get-V6Cosmetics -Ip $vm.ip -Id $c.SelectedId
+        _V6ChRenderCosmetics -state $c -cosmeticIds $c.Detail.Cosmetics
+    } catch {
+        $c.Status.Text = "Cosmetic remove failed: $($_.Exception.Message)"
+    }
+}
+
 function Initialize-V6CharactersPage {
     if ($script:V6Ch) { return }
     if (-not $ui -or -not $ui.PageCharacters) { return }
@@ -561,6 +1064,29 @@ function Initialize-V6CharactersPage {
     _V6ChBuildSpecsBody    -state $state
     _V6ChBuildEconomyBody  -state $state
     _V6ChRebuildFactionBody -state $state -factions @() -existing @()
+    _V6ChBuildInventoryBody -state $state
+    _V6ChBuildCosmeticsBody -state $state
+
+    # Wire catalog pickers (shared search/filter helpers across both pickers)
+    $state.InvPicker.CategoryCombo.Add_SelectionChanged({ _V6ChRefreshCatalogResults $script:V6Ch.InvPicker }.GetNewClosure())
+    $state.InvPicker.SearchBox.Add_TextChanged({ _V6ChRefreshCatalogResults $script:V6Ch.InvPicker }.GetNewClosure())
+    $state.InvPicker.ListView.Add_SelectionChanged({
+        $p = $script:V6Ch.InvPicker
+        $p.AddBtn.IsEnabled = ($p.ListView.SelectedItem -ne $null) -and ($script:V6Ch.SelectedId -ne $null)
+    }.GetNewClosure())
+    $state.InvPicker.AddBtn.Add_Click({ Invoke-V6CharInventoryAdd })
+
+    $state.CosmeticsPicker.CategoryCombo.Add_SelectionChanged({ _V6ChRefreshCatalogResults $script:V6Ch.CosmeticsPicker }.GetNewClosure())
+    $state.CosmeticsPicker.SearchBox.Add_TextChanged({ _V6ChRefreshCatalogResults $script:V6Ch.CosmeticsPicker }.GetNewClosure())
+    $state.CosmeticsPicker.ListView.Add_SelectionChanged({
+        $p = $script:V6Ch.CosmeticsPicker
+        $p.AddBtn.IsEnabled = ($p.ListView.SelectedItem -ne $null) -and ($script:V6Ch.SelectedId -ne $null)
+    }.GetNewClosure())
+    $state.CosmeticsPicker.AddBtn.Add_Click({ Invoke-V6CharCosmeticAdd })
+
+    # Initial unfiltered render
+    _V6ChRefreshCatalogResults $state.InvPicker
+    _V6ChRefreshCatalogResults $state.CosmeticsPicker
 
     $state.BtnLoad.Add_Click({ Invoke-V6CharLoadList })
     $state.Picker.Add_SelectionChanged({
@@ -664,7 +1190,23 @@ function Invoke-V6CharLoadDetail {
                 $c.SpecControls[$t].Xp.Text    = '0'
             }
         }
+        # Inventory + cosmetics (best-effort \u2014 don't fail the whole load if these error)
+        try {
+            $c.Detail.Inventory = Get-V6Inventory -Ip $vm.ip -Id $Id
+        } catch {
+            $c.Detail.Inventory = @{ Inventories=@(); Items=@() }
+        }
+        _V6ChRenderInventory -state $c -inventoryResult $c.Detail.Inventory
+        try {
+            $c.Detail.Cosmetics = Get-V6Cosmetics -Ip $vm.ip -Id $Id
+        } catch {
+            $c.Detail.Cosmetics = @()
+        }
+        _V6ChRenderCosmetics -state $c -cosmeticIds $c.Detail.Cosmetics
         _V6ChEnableEditorControls -state $c -Enabled $true
+        # Enable Add buttons if a catalog row was already selected
+        if ($c.InvPicker.ListView.SelectedItem)       { $c.InvPicker.AddBtn.IsEnabled = $true }
+        if ($c.CosmeticsPicker.ListView.SelectedItem) { $c.CosmeticsPicker.AddBtn.IsEnabled = $true }
         _V6ChSetDirty $c $false
         $c.Status.Text = "Loaded character $Id at $(Get-Date -Format 'HH:mm:ss')."
     } catch {
