@@ -150,7 +150,7 @@ export type ItemRow = {
 export type CharacterDetail = {
   id: number
   stats: Record<string, number | string>
-  specializations: { tracks: SpecTrack[] }
+  specializations: { tracks: SpecTrack[]; keystoneCount?: number }
   economy: {
     controllerId: number
     currency: CurrencyRow[]

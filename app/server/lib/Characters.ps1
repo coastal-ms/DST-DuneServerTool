@@ -139,6 +139,7 @@ function Get-DuneCharacterBundle {
             tracks = @($specs.Tracks | ForEach-Object {
                 @{ trackType = $_.track_type; level = $_.level; xp = $_.xp_amount }
             })
+            keystoneCount = $specs.KeystoneCount
         }
         economy         = @{
             controllerId = $economy.ControllerId

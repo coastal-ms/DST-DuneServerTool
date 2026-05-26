@@ -189,17 +189,42 @@ UPDATE actors SET properties = jsonb_set(
 }
 
 # -----------------------------------------------------------------------------
+# Controller-ID lookup (pawn id -> controller id)
+# -----------------------------------------------------------------------------
+# Most player-scoped tables (specialization_tracks, purchased_specialization_keystones,
+# player_virtual_currency_balances, ...) key on the *controller* id, not the pawn id
+# that the character list / faction-rep / actors tables expose. encrypted_player_state
+# bridges the two.
+function Get-V6ControllerId {
+    param([string]$Ip, [int]$Id)
+    $raw = Invoke-V6Psql -Ip $Ip -Sql "SELECT player_controller_id FROM encrypted_player_state WHERE player_pawn_id = $Id"
+    if ($raw -match '\d+') { return [int]$matches[0] }
+    return 0
+}
+
+# -----------------------------------------------------------------------------
 # Specializations
 # -----------------------------------------------------------------------------
 function Get-V6Specializations {
     param([string]$Ip, [int]$Id)
-    $tracks = Invoke-V6Psql -Ip $Ip -Sql @"
+    $controllerId = Get-V6ControllerId -Ip $Ip -Id $Id
+    $tracksRaw = '[]'
+    if ($controllerId) {
+        $tracksRaw = Invoke-V6Psql -Ip $Ip -Sql @"
 SELECT COALESCE(json_agg(row_to_json(t)), '[]') FROM (
-  SELECT track_type, xp_amount, level FROM specialization_tracks WHERE player_id = $Id ORDER BY track_type
+  SELECT track_type, xp_amount, level FROM dune.specialization_tracks WHERE player_id = $controllerId ORDER BY track_type
 ) t
 "@
+    }
+    $keystoneCount = 0
+    if ($controllerId) {
+        $kcRaw = Invoke-V6Psql -Ip $Ip -Sql "SELECT COUNT(*) FROM dune.purchased_specialization_keystones WHERE player_id = $controllerId"
+        if ($kcRaw -match '\d+') { $keystoneCount = [int]$matches[0] }
+    }
     return @{
-        Tracks = ConvertFrom-V6PsqlJson -Raw $tracks -Default @()
+        ControllerId  = $controllerId
+        Tracks        = ConvertFrom-V6PsqlJson -Raw $tracksRaw -Default @()
+        KeystoneCount = $keystoneCount
     }
 }
 
@@ -207,9 +232,11 @@ function Set-V6SpecializationTrack {
     param([string]$Ip, [int]$Id, [string]$TrackType, [int]$Xp, [double]$Level)
     $valid = @('Combat','Crafting','Gathering','Exploration','Sabotage')
     if ($TrackType -notin $valid) { throw "Invalid track: $TrackType" }
+    $controllerId = Get-V6ControllerId -Ip $Ip -Id $Id
+    if (-not $controllerId) { throw "Could not resolve controller id for actor $Id" }
     $sql = @"
-INSERT INTO specialization_tracks (player_id, track_type, xp_amount, level)
-VALUES ($Id, '$TrackType', $Xp, $Level)
+INSERT INTO dune.specialization_tracks (player_id, track_type, xp_amount, level)
+VALUES ($controllerId, '$TrackType', $Xp, $Level)
 ON CONFLICT (player_id, track_type) DO UPDATE SET xp_amount = EXCLUDED.xp_amount, level = EXCLUDED.level
 "@
     Invoke-V6Psql -Ip $Ip -Sql $sql | Out-Null
@@ -219,9 +246,11 @@ function Invoke-V6UnlockKeystonesForTrack {
     param([string]$Ip, [int]$Id, [string]$TrackPrefix)
     $valid = @('Combat_','Crafting_','Exploration_','Gathering_','Sabotage_')
     if ($TrackPrefix -notin $valid) { throw "Invalid track prefix: $TrackPrefix" }
+    $controllerId = Get-V6ControllerId -Ip $Ip -Id $Id
+    if (-not $controllerId) { throw "Could not resolve controller id for actor $Id" }
     $sql = @"
-INSERT INTO purchased_specialization_keystones (player_id, keystone_id)
-SELECT $Id, id FROM specialization_keystones_map WHERE name LIKE '${TrackPrefix}%'
+INSERT INTO dune.purchased_specialization_keystones (player_id, keystone_id)
+SELECT $controllerId, id FROM dune.specialization_keystones_map WHERE name LIKE '${TrackPrefix}%'
 ON CONFLICT DO NOTHING
 "@
     Invoke-V6Psql -Ip $Ip -Sql $sql | Out-Null
@@ -232,9 +261,7 @@ ON CONFLICT DO NOTHING
 # -----------------------------------------------------------------------------
 function Get-V6Economy {
     param([string]$Ip, [int]$Id)
-    $controllerRaw = Invoke-V6Psql -Ip $Ip -Sql "SELECT player_controller_id FROM encrypted_player_state WHERE player_pawn_id = $Id"
-    $controllerId = 0
-    if ($controllerRaw -match '\d+') { $controllerId = [int]$matches[0] }
+    $controllerId = Get-V6ControllerId -Ip $Ip -Id $Id
 
     $cur = Invoke-V6Psql -Ip $Ip -Sql @"
 SELECT COALESCE(json_agg(row_to_json(t)), '[]') FROM (
@@ -261,9 +288,7 @@ SELECT COALESCE(json_agg(row_to_json(t)), '[]') FROM (
 
 function Set-V6Currency {
     param([string]$Ip, [int]$Id, [int]$CurrencyId, [int]$Balance)
-    $controllerRaw = Invoke-V6Psql -Ip $Ip -Sql "SELECT player_controller_id FROM encrypted_player_state WHERE player_pawn_id = $Id"
-    $controllerId = 0
-    if ($controllerRaw -match '\d+') { $controllerId = [int]$matches[0] }
+    $controllerId = Get-V6ControllerId -Ip $Ip -Id $Id
     if (-not $controllerId) { throw "Could not resolve controller id for actor $Id" }
     $sql = @"
 INSERT INTO player_virtual_currency_balances (player_controller_id, currency_id, balance)
