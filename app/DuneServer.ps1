@@ -966,6 +966,9 @@ foreach ($navName in $script:V6NavMap.Keys) {
             elseif ($target -eq 'PageCharacters' -and (Get-Command Update-V6Characters -ErrorAction SilentlyContinue)) {
                 try { Update-V6Characters } catch {}
             }
+            elseif ($target -eq 'PageSetupWizard' -and (Get-Command Update-V6SetupWizard -ErrorAction SilentlyContinue)) {
+                try { Update-V6SetupWizard } catch {}
+            }
         }
     }.GetNewClosure())
 }
@@ -2677,6 +2680,11 @@ if (Get-Command Initialize-V6GameConfigPage -ErrorAction SilentlyContinue) {
 if (Get-Command Initialize-V6CharactersPage -ErrorAction SilentlyContinue) {
     try { Initialize-V6CharactersPage } catch {
         try { Write-Diag "Initialize-V6CharactersPage failed: $($_.Exception.Message)" } catch {}
+    }
+}
+if (Get-Command Initialize-V6SetupWizardPage -ErrorAction SilentlyContinue) {
+    try { Initialize-V6SetupWizardPage } catch {
+        try { Write-Diag "Initialize-V6SetupWizardPage failed: $($_.Exception.Message)" } catch {}
     }
 }
 
