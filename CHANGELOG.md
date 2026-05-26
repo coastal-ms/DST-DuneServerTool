@@ -13,6 +13,147 @@ here cover everything those tags shipped.
 
 ## [Unreleased]
 
+## [6.1.0] - 2026-05-26
+
+Major release: **web portal rewrite**. The WPF UI is gone — replaced
+by a local HTTP server (`System.Net.HttpListener`) bound to
+`127.0.0.1` that serves a React/Vite/Tailwind SPA. The launcher EXE
+starts the server, picks a free port (47823+), and opens the default
+browser to a per-launch tokenized URL. The app runs as a normal
+console process so the live HTTP log is visible while it serves.
+
+Why: WPF + WebView2 + Pty.Net was heavy, fragile across
+.NET runtime versions, and impossible to iterate on without
+rebuilding. The new stack is a single static asset bundle plus a
+tiny PowerShell HTTP server — no native deps, no XAML, no embedded
+browser engine.
+
+### Added
+
+- **Web portal frontend** in `webui/` (Vite + React + TypeScript +
+  Tailwind), built into `webui/dist/` and bundled by the installer.
+  Pages: Server Health, Commands, Terminal, Characters, Game Config,
+  Database, Sietches, Settings, Setup Wizard.
+- **PowerShell HTTP server** in `app/server/`:
+  `HttpServer.ps1` (listener + routing + WebSocket upgrade + runspace
+  pool dispatch), `lib/*.ps1` (Config, Status, Ports, Commands,
+  Characters, GameConfig, Database, Sietch, Setup, Maps, Links),
+  `routes/*.ps1` (one per API surface).
+- **Per-launch token auth** — random GUID in the URL,
+  accepted via `?t=` query or `X-Dune-Token` header on all
+  `/api/*` and `/ws/*` calls. Defends against cross-origin
+  browser tabs.
+- **Terminal page** with `xterm.js` (`@xterm/xterm`) front-end and
+  a runspace-based exec model on the server. Each WS session owns
+  one runspace; PS streams polled at 30 ms; one shared `ReceiveAsync`
+  in a 1-element box keeps the .NET WebSocket happy. Protocol:
+  `{init,exec,cancel,resize} ↔ {ready,output,done,error}`. Persistent
+  cwd across commands.
+- **Server Health page** — Web Interfaces card (File Browser + Director
+  URLs), Log Export buttons, **Deep Desert spin-up button** (patches
+  the maps CRD partition).
+- **Sietches page** — list / add / remove-last with "I UNDERSTAND"
+  confirmation gate and RAM-exceed warning.
+- **Database page** — backup/restore via the existing console commands,
+  plus a new Monaco SQL editor (read-only by default, max-rows, CSV
+  export, Ctrl+Enter, table list sidebar).
+- **Setup Wizard page** — 6-step linear flow with preflight checks,
+  config summary, install, security/networking review, finalize.
+
+### Changed
+
+- **Installer payload** — removed `app/pages/`, `app/styles/`,
+  `app/web/`, `app/lib/WebView2/`, `app/lib/Pty.Net/`. Added
+  `app/server/*` and `webui/dist/*`.
+- `Build-Installer.ps1` now runs `npm run build` in `webui/` before
+  invoking ISCC (skippable via `-SkipWebBuild`).
+- `Build-Exe.ps1` no longer passes ps2exe flags `-NoConsole`, `-STA`,
+  `-NoOutput`, `-NoError` — v6.1 wants a real console window.
+
+### Removed
+
+- All v6.0.x WPF UI source (`app/pages/*.ps1`,
+  `app/styles/Theme.xaml`).
+- `app/web/` (xterm host HTML + assets — now an npm dep in webui).
+- `app/lib/Pty.Net/` and `app/lib/WebView2/` native DLLs.
+
+### Added (post-rewrite refinements)
+
+- **Server Health: structured Battlegroup Info + Game Servers cards** —
+  splits the raw `kubectl get bg` text into typed fields (name, state,
+  map churn, generation, online), and renders each game server with a
+  state badge, partition, and online count.
+- **Server Health: Active Spice readout** — new `BgSpiceSummary` widget
+  pulls `dune.public_spicefields` over psql and shows active vs primed
+  fields **per map**, **per size class**, sorted **large-first**.
+  Tiered color rules: size column tinted by tier (Large = amber,
+  Medium = ibad-blue, Small = muted), active count tinted by fill
+  ratio (warning at-cap, amber ≥ 75 %, blue ≥ 25 %), primed count
+  brightens to accent when populated.
+- **Game Config: Spicefield Types card** — first-class editor backed
+  directly by `dune.spicefield_types`. At-cap rows highlighted; per-row
+  Spicefield status promoted to a prominent inline badge with 10 s
+  refresh.
+- **Maps: Deep Desert graceful shutdown** — checks for online players
+  before scaling the map down; refuses with a structured error
+  otherwise.
+- **Characters: specialization tracks** — Specs tab now pulls live data
+  from `dune.specialization_tracks`.
+- **Characters: faction reputation** — Faction Rep tab now pulls live
+  data from `dune.player_faction_reputation`.
+
+### Fixed (post-rewrite)
+
+- **Maps: on-demand spin-up** — bind partitions and clear
+  `dedicatedScaling` when patching the maps CRD, so on-demand maps
+  (notably Deep Desert) actually come up instead of stalling the
+  operator in `Reconciling`.
+- **HTTP: JSON request bodies on PowerShell 5.1** — `ConvertFrom-Json`
+  output coerced into `[hashtable]` so PS 5.1 route handlers can
+  index into the payload without `PSCustomObject` quirks.
+- **Commands page crash on PS 5.1** — `ConvertTo-Json` `-Depth`
+  default returns an array wrapper for single objects under PS 5.1;
+  routes now force-wrap explicitly so the React client sees a
+  consistent shape.
+- **Characters: Specs / Faction Rep table key** — both tables key on
+  the **controller id**, not the pawn id, so per-character rows now
+  resolve correctly.
+- **`Get-DuneConfigPath`** — always uses the canonical
+  `%APPDATA%\DuneServer\` location, regardless of how the EXE was
+  launched.
+
+### Changed (post-rewrite)
+
+- **Dashboard: "Status" → "BG state"** under Battlegroup Info, with
+  a "map churn" hint so operators can tell whether a reconcile is
+  caused by deliberate map spin-up vs a real fault.
+- **Battlegroup Info / Game Servers cards** — spacing tightened so
+  more fits above the fold on a 1080p screen.
+- **Installer: clean upgrade from v4–v6.0.x.** Setup now silently
+  uninstalls the previous version (via the registered Inno Setup
+  uninstaller) before laying down v6.1 files. Removes orphaned
+  WPF/WebView2 binaries, the old `web\` / `pages\` / `styles\` /
+  `lib\Pty.Net\` / `lib\WebView2\` directories, and any running
+  `DuneServer.exe` process. **User config in `%APPDATA%\DuneServer\`
+  is preserved.** First launch after upgrade goes straight to the
+  new web portal — no manual cleanup, no config wizard prompts.
+- **In-app auto-updater.** The portal now polls the public GitHub
+  Releases API for newer versions (`GET /api/update/check`, cached
+  1 h, refreshed every 6 h in the SPA). When a newer tag is found
+  with an attached `DuneServerSetup*.exe` asset, an amber banner
+  appears above the status bar with **Update now** / **Later**
+  buttons. The Settings page also has a manual "Check now" /
+  "Update to v…" card. Clicking **Update now** hits
+  `POST /api/update/install`, which downloads the asset to
+  `%TEMP%\DuneServerUpdate\` and launches it silently
+  (`/SP- /VERYSILENT /SUPPRESSMSGBOXES /NORESTART
+  /CLOSEAPPLICATIONS /RESTARTAPPLICATIONS`). The installer's
+  `PrepareToInstall` hook (added above) handles the rest — kills
+  this very `DuneServer.exe`, runs the old uninstaller, lays down
+  the new files, and the Start Menu shortcut now points at the new
+  web-portal launcher. This is the last manual installer download
+  v6.1+ users will ever need.
+
 ## [6.0.0] - 2026-05-26
 
 **6.0.1 hotfix (2026-05-26):** Fixed startup crash _"XAML load failed:
