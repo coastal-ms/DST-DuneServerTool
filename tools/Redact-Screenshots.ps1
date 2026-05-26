@@ -13,6 +13,7 @@ $ImgDir = (Resolve-Path $ImgDir).Path
 
 # Common PII in the top status pane (same coords in every screenshot)
 # Format: @{ X=; Y=; W=; H= }
+# Tuned for capture size 2280 x 1107 (PrintWindow-based capture, v6.0.0+).
 $commonRects = @(
   # VM IP "192.168.23.219" in "VM running (192.168.23.219)"
   @{ X = 265; Y = 60;  W = 210; H = 26 },
@@ -27,14 +28,16 @@ $commonRects = @(
 # (`%LOCALAPPDATA%\...` and `http://<vm-ip>:port/` respectively) so no page rects needed there.
 $pageRects = @{
   'v6-dashboard.png' = @(
-    # HOST VM card IP "192.168.23.219" (below RUNNING heading, only present when VM is running)
-    @{ X = 1145; Y = 678; W = 290; H = 26 }
+    # HOST VM card IP "192.168.23.219" — under the big green RUNNING heading.
+    # Pixel-scan located the IP text at Y=641-652; pad slightly.
+    @{ X = 1140; Y = 636; W = 330; H = 22 }
   )
   'v6-characters.png' = @(
     # "Loaded character 229 at hh:mm:ss" — redact the ID
     @{ X = 410;  Y = 605; W = 70;  H = 22 },
-    # Left rail character names + IDs (two rows: Hawk highlighted + Coastal below)
-    @{ X = 288;  Y = 672; W = 210; H = 70 }
+    # Left rail: cover both character rows. Pixel-scan of the rendered file
+    # found Hawk-i5 at Y=713-723 and Coastal at Y=748-758.
+    @{ X = 288;  Y = 705; W = 210; H = 65 }
   )
 }
 
