@@ -32,7 +32,7 @@ param()
 # check (Check-ForUpdates) and the "Installed: x.y.z" header label. Must be
 # bumped in lock-step with the other 3 version constants (dune-server.ps1,
 # Build-Exe.ps1, installer .iss).
-$script:ToolVersion = "6.0.0"
+$script:ToolVersion = "6.0.1"
 
 # ANSI escape character (0x1B). The ps2exe-compiled binary runs in
 # PowerShell 5.1 (Desktop), which does NOT support the `e backtick-e
@@ -276,7 +276,7 @@ Add-Type -AssemblyName System.Xaml
 # `<!-- v6-theme-injection -->` marker before XamlReader parses it. Keeps the
 # single-source-of-truth design tokens in app\styles\Theme.xaml while still
 # letting the inline XAML reference them via {StaticResource X}.
-$script:V6ThemePath = Join-Path $PSScriptRoot 'styles\Theme.xaml'
+$script:V6ThemePath = Join-Path $script:AppDir 'styles\Theme.xaml'
 function Get-V6ThemeInnerXaml {
     if (-not (Test-Path $script:V6ThemePath)) { return '' }
     $raw = Get-Content -Raw -LiteralPath $script:V6ThemePath
@@ -1268,7 +1268,7 @@ $script:SeparatorNames = @('__separator_1','__separator_2','__separator_3','__se
 # ────────────────────────────────────────────────────────────────────────────
 #  v6: load lib modules first (shared helpers used by page modules)
 # ────────────────────────────────────────────────────────────────────────────
-$script:V6LibDir = Join-Path $PSScriptRoot 'lib'
+$script:V6LibDir = Join-Path $script:AppDir 'lib'
 foreach ($lib in @('Db-Postgres.ps1','Ini-Edit.ps1','Hyperv.ps1','K8s.ps1','StateModel.ps1')) {
     $libPath = Join-Path $script:V6LibDir $lib
     if (Test-Path $libPath) {
@@ -1283,7 +1283,7 @@ foreach ($lib in @('Db-Postgres.ps1','Ini-Edit.ps1','Hyperv.ps1','K8s.ps1','Stat
 #  and any helpers; modules dot-sourced here so $ui / $window / $script:Commands
 #  are all in scope.)
 # ────────────────────────────────────────────────────────────────────────────
-$script:V6PagesDir = Join-Path $PSScriptRoot 'pages'
+$script:V6PagesDir = Join-Path $script:AppDir 'pages'
 foreach ($mod in @(
         'Dashboard.ps1',
         'Monitoring.ps1',

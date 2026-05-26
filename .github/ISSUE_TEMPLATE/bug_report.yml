@@ -40,7 +40,7 @@ body:
     attributes:
       label: Tool version
       description: Shown in the app header (`Installed: x.y.z`) and in the CLI menu header. Auto-filled when launched from `Report Issue` in the desktop app or CLI.
-      placeholder: "v6.0.0"
+      placeholder: "v6.0.1"
     validations:
       required: true
 
