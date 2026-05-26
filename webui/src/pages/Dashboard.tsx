@@ -4,7 +4,8 @@ import { Icon } from '../components/Icon'
 import { useStatus } from '../hooks/useStatus'
 import type { BgState, PortResult } from '../api/types'
 import { getMapState, startMap, type MapState } from '../api/maps'
-import { ApiError } from '../api/client'
+import { getLinks, type LinksResponse } from '../api/links'
+import { api, ApiError } from '../api/client'
 
 const BG_STYLES: Record<BgState | 'unknown', { cls: string; label: string }> = {
   running:  { cls: 'text-success', label: 'Running'  },
@@ -85,6 +86,47 @@ export function Dashboard() {
       setDdBusy(false)
     }
   }, [refreshDd])
+
+  // Web Interfaces (File Browser + Director URLs)
+  const [links, setLinks] = useState<LinksResponse | null>(null)
+  const [linksLoading, setLinksLoading] = useState(false)
+  const [linksError, setLinksError] = useState<string | null>(null)
+
+  const refreshLinks = useCallback(async (force = false) => {
+    setLinksLoading(true); setLinksError(null)
+    try {
+      const r = await getLinks({ force })
+      setLinks(r)
+    } catch (e) {
+      setLinks(null)
+      setLinksError(e instanceof ApiError ? e.message : String(e))
+    } finally {
+      setLinksLoading(false)
+    }
+  }, [])
+
+  useEffect(() => { void refreshLinks() }, [refreshLinks, bgReady])
+
+  // Log exports — run-command wrappers
+  const [exportBusy, setExportBusy] = useState<string | null>(null)
+  const [exportMsg,  setExportMsg]  = useState<string | null>(null)
+  const [exportErr,  setExportErr]  = useState<string | null>(null)
+
+  const runExport = useCallback(async (name: string, label: string) => {
+    setExportBusy(name); setExportErr(null); setExportMsg(null)
+    try {
+      await api(`/api/commands/run/${encodeURIComponent(name)}`, { method: 'POST' })
+      setExportMsg(`${label} launched in a console window.`)
+    } catch (e) {
+      setExportErr(e instanceof ApiError ? e.message : String(e))
+    } finally {
+      setExportBusy(null)
+    }
+  }, [])
+
+  const copyToClipboard = useCallback((url: string) => {
+    void navigator.clipboard?.writeText(url).catch(() => { /* ignore */ })
+  }, [])
 
   const kpis = [
     {
@@ -220,6 +262,108 @@ export function Dashboard() {
               ))}
             </ul>
           )}
+        </div>
+      </section>
+
+      <section className="mt-4 grid grid-cols-1 lg:grid-cols-2 gap-4">
+        <div className="card p-5">
+          <div className="flex items-center justify-between mb-3 gap-3 flex-wrap">
+            <h2 className="text-sm font-semibold uppercase tracking-wider text-text-muted flex items-center gap-2">
+              <Icon name="Link2" size={14} className="text-accent" /> Web interfaces
+            </h2>
+            <button
+              className="btn-secondary"
+              onClick={() => { void refreshLinks(true) }}
+              disabled={linksLoading}
+              title="Re-resolve Director port via SSH"
+            >
+              <Icon name="RefreshCw" size={14} className={linksLoading ? 'animate-spin' : ''} />
+            </button>
+          </div>
+          {linksError ? (
+            <p className="text-sm text-danger break-words">{linksError}</p>
+          ) : !links ? (
+            <p className="text-sm text-text-dim italic">Loading…</p>
+          ) : (
+            <ul className="space-y-2 text-sm">
+              {([
+                { key: 'fb',  label: 'File Browser',         link: links.fileBrowser, icon: 'FolderOpen' },
+                { key: 'dir', label: 'Battlegroup Director', link: links.director,    icon: 'Compass' },
+              ] as const).map(row => (
+                <li key={row.key} className="flex items-center justify-between gap-3">
+                  <div className="min-w-0">
+                    <div className="flex items-center gap-2">
+                      <Icon name={row.icon} size={14} className={row.link.available ? 'text-success' : 'text-text-dim'} />
+                      <span className="font-medium">{row.label}</span>
+                    </div>
+                    {row.link.url ? (
+                      <a
+                        href={row.link.url}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="text-xs text-text-dim font-mono hover:text-accent truncate block"
+                      >
+                        {row.link.url}
+                      </a>
+                    ) : (
+                      <div className="text-xs text-text-dim italic">{row.link.reason ?? 'Unavailable'}</div>
+                    )}
+                  </div>
+                  <div className="flex gap-1 shrink-0">
+                    <button
+                      className="btn-secondary"
+                      disabled={!row.link.url}
+                      onClick={() => row.link.url && copyToClipboard(row.link.url)}
+                      title="Copy URL"
+                    >
+                      <Icon name="Copy" size={14} />
+                    </button>
+                    <a
+                      className={`btn-primary ${!row.link.url ? 'opacity-50 pointer-events-none' : ''}`}
+                      href={row.link.url ?? '#'}
+                      target="_blank"
+                      rel="noreferrer"
+                    >
+                      <Icon name="ExternalLink" size={14} /> Open
+                    </a>
+                  </div>
+                </li>
+              ))}
+            </ul>
+          )}
+        </div>
+
+        <div className="card p-5">
+          <div className="flex items-center justify-between mb-3">
+            <h2 className="text-sm font-semibold uppercase tracking-wider text-text-muted flex items-center gap-2">
+              <Icon name="FileText" size={14} className="text-accent" /> Log exports
+            </h2>
+          </div>
+          <p className="text-xs text-text-dim mb-3">
+            Collects logs from every pod and writes them to your desktop. Each export opens a console window.
+          </p>
+          <div className="flex flex-wrap gap-2">
+            <button
+              className="btn-primary"
+              disabled={!bgReady || exportBusy !== null}
+              onClick={() => { void runExport('logs-export', 'Battlegroup log export') }}
+              title={!bgReady ? 'Battlegroup must be running' : 'Export battlegroup pod logs'}
+            >
+              <Icon name={exportBusy === 'logs-export' ? 'Loader2' : 'Download'} size={14} className={exportBusy === 'logs-export' ? 'animate-spin' : ''} />
+              Battlegroup logs
+            </button>
+            <button
+              className="btn-primary"
+              disabled={!bgReady || exportBusy !== null}
+              onClick={() => { void runExport('operator-logs-export', 'Operator log export') }}
+              title={!bgReady ? 'Battlegroup must be running' : 'Export operator pod logs'}
+            >
+              <Icon name={exportBusy === 'operator-logs-export' ? 'Loader2' : 'Download'} size={14} className={exportBusy === 'operator-logs-export' ? 'animate-spin' : ''} />
+              Operator logs
+            </button>
+          </div>
+          {exportMsg && <p className="mt-3 text-xs text-text-muted border-l-2 border-accent pl-2">{exportMsg}</p>}
+          {exportErr && <p className="mt-3 text-xs text-danger break-words">{exportErr}</p>}
         </div>
       </section>
 
