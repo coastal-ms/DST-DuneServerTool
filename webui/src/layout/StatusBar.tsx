@@ -1,5 +1,7 @@
+import { useState } from 'react'
 import { Icon } from '../components/Icon'
 import { useStatus } from '../hooks/useStatus'
+import { api, ApiError } from '../api/client'
 import type { BgState, PortStatus, VmStatus } from '../api/types'
 
 function vmPillClass(vm: VmStatus | undefined | null): string {
@@ -36,10 +38,46 @@ function portsSummary(ports: PortStatus | null | undefined): { cls: string; text
 
 export function StatusBar() {
   const { status, loading, forceRefresh } = useStatus()
+  const [shuttingDown, setShuttingDown] = useState(false)
   const vm    = status?.vm ?? null
   const bgKey = (status?.bg?.state ?? 'unknown') as BgState | 'unknown'
   const bg    = BG_STYLES[bgKey] ?? BG_STYLES.unknown
   const p     = portsSummary(status?.ports)
+
+  async function handleShutdown() {
+    const ok = window.confirm(
+      'Shut down the Dune Server portal?\n\n' +
+      'This stops the local DuneServer.exe process. ' +
+      'You\'ll need to relaunch from the desktop shortcut to reopen the portal.',
+    )
+    if (!ok) return
+    setShuttingDown(true)
+    try {
+      await api<{ ok: boolean; shutdown: boolean; message?: string }>('/api/shutdown', {
+        method: 'POST',
+      })
+    } catch (err) {
+      // A connection-reset right after the response is normal — the server
+      // tears down the listener ~400ms after replying. Only surface real errors.
+      if (err instanceof ApiError) {
+        setShuttingDown(false)
+        window.alert(`Shutdown request failed: ${err.message}`)
+        return
+      }
+      // TypeError / network error after response = expected; fall through to
+      // the "shutting down" UI below.
+    }
+    // Give the EXE a moment to actually exit before the user sees the message.
+    window.setTimeout(() => {
+      document.body.innerHTML =
+        '<div style="display:flex;align-items:center;justify-content:center;' +
+        'height:100vh;background:#1c1917;color:#fafaf9;font-family:system-ui;' +
+        'flex-direction:column;gap:1rem;text-align:center;padding:2rem">' +
+        '<div style="font-size:1.5rem;font-weight:600">Dune Server portal stopped</div>' +
+        '<div style="color:#a8a29e">You can close this tab. Relaunch from your desktop shortcut to reopen.</div>' +
+        '</div>'
+    }, 700)
+  }
 
   return (
     <header className="h-14 shrink-0 border-b border-border bg-surface/60 backdrop-blur-md px-5 flex items-center justify-between">
@@ -64,6 +102,22 @@ export function StatusBar() {
           disabled={loading}
         >
           <Icon name="RefreshCw" size={15} className={loading ? 'animate-spin' : ''} />
+        </button>
+        <div className="w-px h-6 bg-border mx-1" aria-hidden="true" />
+        <button
+          className="inline-flex items-center gap-1.5 px-3 py-2 rounded-lg text-sm font-semibold
+                     bg-danger text-white border border-danger
+                     shadow-md shadow-danger/30
+                     hover:bg-danger/90 hover:shadow-danger/50
+                     focus:outline-none focus-visible:ring-2 focus-visible:ring-danger
+                     disabled:opacity-50 disabled:cursor-not-allowed
+                     transition-all"
+          onClick={() => { void handleShutdown() }}
+          title="Shut down the Dune Server portal (stops the local DuneServer.exe process)"
+          disabled={shuttingDown}
+        >
+          <Icon name="Power" size={15} className={shuttingDown ? 'animate-pulse' : ''} />
+          <span>{shuttingDown ? 'Shutting down…' : 'Shut down'}</span>
         </button>
       </div>
     </header>

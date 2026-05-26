@@ -13,6 +13,11 @@ Dashboard for at-a-glance status, dedicated pages for live character editing,
 game-config tuning, database backup/restore, monitoring, and more — all
 backed by the same battle-tested SSH + battlegroup automation under the hood.
 
+> 🆕 **New in v6.1.3** — a prominent red **Shut down** button now lives in
+> the top-right of the header (next to Refresh). One click gracefully stops
+> the local `DuneServer.exe` portal process — no more digging in the system
+> tray's right-click menu when you want to close the portal.
+
 > 🎬 _Screenshot placeholder — replace with `docs/img/v6-dashboard.png` once captured._
 >
 > ![Dashboard](docs/img/v6-dashboard.png)
@@ -62,9 +67,10 @@ See [`CHANGELOG.md`](CHANGELOG.md) for the full release history and
 ## The v6 desktop app — a page tour
 
 The window is split into three regions: a **header status bar** at the top
-(VM status, battlegroup state, public IP / port check), a **left rail** to
-navigate pages, and the **page surface** on the right. Every page is built
-from the same theme so colors, spacing, and controls stay consistent.
+(VM status, battlegroup state, public IP / port check, plus **Refresh** and
+**Shut down** buttons on the right), a **left rail** to navigate pages,
+and the **page surface** on the right. Every page is built from the same
+theme so colors, spacing, and controls stay consistent.
 
 The header is **resizable** — drag the splitter to give a page more room.
 The window auto-sizes to ~75% of your working area on first launch (minus a
