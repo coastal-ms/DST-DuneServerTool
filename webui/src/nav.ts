@@ -2,13 +2,13 @@ export type NavItem = {
   to: string
   label: string
   icon: string  // lucide-react icon name
-  group?: 'core' | 'data' | 'system'
+  group?: 'overview' | 'terminal' | 'data' | 'system'
 }
 
 export const NAV_ITEMS: NavItem[] = [
-  { to: '/',            label: 'Dashboard',    icon: 'LayoutDashboard', group: 'core' },
-  { to: '/monitoring',  label: 'Monitoring',   icon: 'Activity',        group: 'core' },
-  { to: '/terminal',    label: 'Terminal',     icon: 'SquareTerminal',  group: 'core' },
+  { to: '/',            label: 'Server Health', icon: 'LayoutDashboard', group: 'overview' },
+  { to: '/commands',    label: 'Commands',     icon: 'Zap',             group: 'terminal' },
+  { to: '/terminal',    label: 'Terminal',     icon: 'SquareTerminal',  group: 'terminal' },
   { to: '/characters',  label: 'Characters',   icon: 'Users',           group: 'data' },
   { to: '/gameconfig',  label: 'Game Config',  icon: 'Sliders',         group: 'data' },
   { to: '/database',    label: 'Database',     icon: 'Database',        group: 'data' },
@@ -18,7 +18,8 @@ export const NAV_ITEMS: NavItem[] = [
 ]
 
 export const GROUP_LABELS: Record<NonNullable<NavItem['group']>, string> = {
-  core:   'Server',
-  data:   'Game Data',
-  system: 'System',
+  overview: 'Server Health',
+  terminal: 'Terminal',
+  data:     'Game Data',
+  system:   'System',
 }

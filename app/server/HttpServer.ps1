@@ -50,7 +50,7 @@ function Register-DuneRoute {
         [Parameter(Mandatory)][string]$Path,
         [Parameter(Mandatory)][scriptblock]$Handler
     )
-    $pattern = '^' + ([regex]::Escape($Path) -replace '\\\{([^/}]+)\\\}', '(?<$1>[^/]+)') + '$'
+    $pattern = '^' + ([regex]::Escape($Path) -replace '\\\{([^/}]+)}', '(?<$1>[^/]+)') + '$'
     $script:DuneRoutes.Add([pscustomobject]@{
         Method  = $Method
         Path    = $Path
@@ -64,7 +64,7 @@ function Register-DuneWebSocket {
         [Parameter(Mandatory)][string]$Path,
         [Parameter(Mandatory)][scriptblock]$Handler
     )
-    $pattern = '^' + ([regex]::Escape($Path) -replace '\\\{([^/}]+)\\\}', '(?<$1>[^/]+)') + '$'
+    $pattern = '^' + ([regex]::Escape($Path) -replace '\\\{([^/}]+)}', '(?<$1>[^/]+)') + '$'
     $script:DuneWsRoutes.Add([pscustomobject]@{
         Path    = $Path
         Regex   = [regex]$pattern
