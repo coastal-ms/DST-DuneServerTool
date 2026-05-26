@@ -13,6 +13,33 @@ here cover everything those tags shipped.
 
 ## [Unreleased]
 
+## [6.1.3] - 2026-05-26
+
+Patch: **silence Write-DuneLog popup modals on startup**, plus a new
+in-portal **Shutdown** button.
+
+Added
+- **Shutdown button** in the top status bar (next to Refresh). One-click,
+  with confirmation, gracefully stops the local `DuneServer.exe` portal
+  process — same effect as the tray menu's "Quit" item, no need to dig
+  in the system tray. New `POST /api/shutdown` route writes the response,
+  flags the tray runspace as quitting, then stops the HTTP listener after
+  a 400ms delay so the response flushes cleanly before the EXE exits.
+
+Fixed
+- **Startup MessageBox spam** — every `Write-DuneLog` INFO line ("Dune Server
+  v6.1.x starting", "Serving from…", "Tray icon initialized…", "HTTP listening
+  on…") was firing a modal `MessageBox.Show` dialog at app launch. Cause:
+  `app/server/lib/DuneLog.ps1` mirrored every log line to `Write-Host` with the
+  comment "no-op in ps2exe -noConsole" — that claim was **wrong**. ps2exe's
+  `-noConsole` mode actually *redirects* `Write-Host` to `MessageBox.Show` by
+  default, which is why each log line popped a modal that blocked startup
+  until clicked. Fix: probe the host once via `[System.Diagnostics.Process]::`
+  `GetCurrentProcess().ProcessName` and only mirror to `Write-Host` when the
+  process is `pwsh` / `powershell` / `powershell_ise` (real consoles). When
+  running as the compiled `DuneServer.exe`, log lines now go to the log file
+  only — no popups.
+
 ## [6.1.2] - 2026-05-26
 
 Patch: **single-instance gate** (clicking the desktop shortcut multiple times
