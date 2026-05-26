@@ -85,7 +85,7 @@ Write-Host "  Built: $installer ($size MB)" -ForegroundColor Green
 Write-Host ""
 Write-Host "Admin requirements (all 3 layers):" -ForegroundColor Cyan
 Write-Host "  [x] Setup itself: PrivilegesRequired=admin (writes to Program Files)" -ForegroundColor Green
-Write-Host "  [x] DuneServer.exe: embedded UAC manifest via ps2exe -requireAdmin"   -ForegroundColor Green
+Write-Host "  [x] DuneServer.exe: self-elevates in-script (after single-instance check)"   -ForegroundColor Green
 Write-Host "  [x] dune-server.ps1: #Requires -RunAsAdministrator"                   -ForegroundColor Green
 
 if ($Open) {
