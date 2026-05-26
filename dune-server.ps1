@@ -1,4 +1,4 @@
-#Requires -RunAsAdministrator
+﻿#Requires -RunAsAdministrator
 
 [CmdletBinding()]
 param(
@@ -13,7 +13,7 @@ param(
 # Wraps the original battlegroup.ps1 menu and adds extra tools
 # ============================================================
 
-$script:ToolVersion = "6.0.1"
+$script:ToolVersion = "6.1.0"
 
 # ============================================================
 #  CRASH / EXIT CLEANUP
