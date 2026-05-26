@@ -1,4 +1,4 @@
-# Commands API — list catalogue (with current availability) and persist order.
+﻿# Commands API — list catalogue (with current availability) and persist order.
 
 # GET /api/commands — full catalogue + current availability
 Register-DuneRoute -Method GET -Path '/api/commands' -Handler {

@@ -1,4 +1,4 @@
-# Characters API — 13 endpoints over the existing Db-Postgres helpers.
+﻿# Characters API — 13 endpoints over the existing Db-Postgres helpers.
 # Every endpoint VM-gates via Get-DuneCharContext and returns 503 if the
 # battlegroup isn't running.
 

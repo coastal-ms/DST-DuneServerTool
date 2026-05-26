@@ -1,4 +1,4 @@
-# GameConfig API — read/write UserGame.ini + UserEngine.ini on the BG VM.
+﻿# GameConfig API — read/write UserGame.ini + UserEngine.ini on the BG VM.
 # Two endpoints + one schema endpoint.
 
 # -----------------------------------------------------------------------------

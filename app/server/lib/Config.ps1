@@ -1,4 +1,4 @@
-# Config — read/save dune-server.config (INI-style key=value).
+﻿# Config — read/save dune-server.config (INI-style key=value).
 #
 # Location: <install-root>\dune-server.config, which is one level up from
 # $script:AppDir (the app/ directory).

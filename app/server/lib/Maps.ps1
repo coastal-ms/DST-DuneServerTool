@@ -1,4 +1,4 @@
-# Maps — on-demand control of individual map deployments in the battlegroup
+﻿# Maps — on-demand control of individual map deployments in the battlegroup
 # CRD (currently: DeepDesert).
 #
 # The battlegroup operator owns the map pod replicas — scaling the Deployment
@@ -20,7 +20,8 @@ foreach ($candidate in @(
     (Join-Path $PSScriptRoot '..\..\lib\K8s.ps1'),
     (Join-Path (Split-Path -Parent $PSScriptRoot) '..\lib\K8s.ps1')
 )) {
-    $full = try { (Resolve-Path -LiteralPath $candidate -ErrorAction Stop).Path } catch { $null }
+    $full = $null
+    try { $full = (Resolve-Path -LiteralPath $candidate -ErrorAction Stop).Path } catch {}
     if ($full) { $script:DuneK8sPath = $full; break }
 }
 if ($script:DuneK8sPath -and -not (Get-Command Get-V6Battlegroup -ErrorAction SilentlyContinue)) {

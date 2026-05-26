@@ -1,4 +1,4 @@
-# Build-Installer.ps1 - Compiles app/installer/DuneServer.iss into DuneServerSetup.exe via Inno Setup.
+﻿# Build-Installer.ps1 - Compiles app/installer/DuneServer.iss into DuneServerSetup.exe via Inno Setup.
 #
 # Output: app/installer/output/DuneServerSetup.exe
 #
