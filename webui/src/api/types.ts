@@ -213,6 +213,31 @@ export type GameConfigSaveResponse = {
   engine: GameConfigFileBundle
 }
 
+// ---------- Spicefield types (dune.spicefield_types) ------------------------
+
+export type SpicefieldType = {
+  spicefieldTypeId: number
+  mapName: string         // e.g. "HaggaBasin", "DeepDesert"
+  fieldType: string       // e.g. "Small", "Medium", "Large"
+  dimensionIndex: number
+  maxActive: number
+  maxPrimed: number
+  currentActive: number   // read-only — maintained by the game
+  currentPrimed: number   // read-only — maintained by the game
+  isSpawningActive: boolean
+  spawnWeight: number     // float
+}
+
+export type SpicefieldsResponse = {
+  available: boolean
+  rows: SpicefieldType[]
+}
+
+export type SpicefieldSaveResponse = {
+  ok: boolean
+  row: SpicefieldType
+}
+
 // ---------- Database --------------------------------------------------------
 
 export type DbTable = {

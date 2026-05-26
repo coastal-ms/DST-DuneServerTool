@@ -4,6 +4,9 @@ import type {
   GameConfigSchemaResponse,
   GameConfigResponse,
   GameConfigSaveResponse,
+  SpicefieldsResponse,
+  SpicefieldSaveResponse,
+  SpicefieldType,
 } from './types'
 
 export function getGameConfigSchema() {
@@ -18,5 +21,19 @@ export function saveGameConfig(updates: Record<string, string>) {
   return api<GameConfigSaveResponse>('/api/gameconfig', {
     method: 'PUT',
     body: JSON.stringify({ updates }),
+  })
+}
+
+export function getSpicefields() {
+  return api<SpicefieldsResponse>('/api/gameconfig/spicefields')
+}
+
+export function saveSpicefield(
+  id: number,
+  payload: Pick<SpicefieldType, 'maxActive' | 'maxPrimed' | 'isSpawningActive' | 'spawnWeight'>,
+) {
+  return api<SpicefieldSaveResponse>(`/api/gameconfig/spicefields/${id}`, {
+    method: 'PUT',
+    body: JSON.stringify(payload),
   })
 }

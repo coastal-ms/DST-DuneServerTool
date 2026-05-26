@@ -311,6 +311,53 @@ ON CONFLICT (actor_id, faction_id) DO UPDATE SET reputation_amount = EXCLUDED.re
 }
 
 # -----------------------------------------------------------------------------
+# Spicefield types (dune.spicefield_types)
+# -----------------------------------------------------------------------------
+# One row per (map, field-size) combo. Controls how many spice fields can be
+# active/primed globally, the spawn-weight, and whether spawning is enabled.
+# `current_*` columns are read-only state maintained by the game.
+function Get-V6SpicefieldTypes {
+    param([string]$Ip)
+    $raw = Invoke-V6Psql -Ip $Ip -Sql @"
+SELECT COALESCE(json_agg(row_to_json(t) ORDER BY t.map_name, t.spicefield_type_id), '[]') FROM (
+  SELECT spicefield_type_id, map_name, field_type, dimension_index,
+         max_globally_active, max_globally_primed,
+         current_globally_active, current_globally_primed,
+         is_spawning_active, global_spawn_weight
+  FROM dune.spicefield_types
+) t
+"@
+    return ConvertFrom-V6PsqlJson -Raw $raw -Default @()
+}
+
+function Set-V6SpicefieldType {
+    param(
+        [string]$Ip,
+        [int]$TypeId,
+        [int]$MaxActive,
+        [int]$MaxPrimed,
+        [bool]$IsSpawningActive,
+        [double]$SpawnWeight
+    )
+    if ($MaxActive  -lt 0) { throw "max_globally_active must be >= 0" }
+    if ($MaxPrimed  -lt 0) { throw "max_globally_primed must be >= 0" }
+    if ($SpawnWeight -lt 0) { throw "global_spawn_weight must be >= 0" }
+    $activeFlag = if ($IsSpawningActive) { 'TRUE' } else { 'FALSE' }
+    # Use invariant decimal format (e.g. "1.5", never "1,5") so psql parses it
+    # regardless of host culture.
+    $weightStr = ([double]$SpawnWeight).ToString([System.Globalization.CultureInfo]::InvariantCulture)
+    $sql = @"
+UPDATE dune.spicefield_types
+   SET max_globally_active = $MaxActive,
+       max_globally_primed = $MaxPrimed,
+       is_spawning_active  = $activeFlag,
+       global_spawn_weight = $weightStr
+ WHERE spicefield_type_id = $TypeId
+"@
+    Invoke-V6Psql -Ip $Ip -Sql $sql | Out-Null
+}
+
+# -----------------------------------------------------------------------------
 # Cosmetics
 # -----------------------------------------------------------------------------
 function Get-V6Cosmetics {

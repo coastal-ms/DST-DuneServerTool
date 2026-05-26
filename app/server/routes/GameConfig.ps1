@@ -95,3 +95,100 @@ Register-DuneRoute -Method PUT -Path '/api/gameconfig' -Handler {
         Write-DuneError -Response $res -Status 500 -Message "Game config save failed: $($_.Exception.Message)"
     }
 }
+
+# -----------------------------------------------------------------------------
+# GET /api/gameconfig/spicefields — list rows from dune.spicefield_types.
+# Returns: { available: true, rows: [ { spicefieldTypeId, mapName, fieldType,
+#                                       dimensionIndex,
+#                                       maxActive, maxPrimed,
+#                                       currentActive, currentPrimed,
+#                                       isSpawningActive, spawnWeight } ] }
+# 503 when VM not available.
+# -----------------------------------------------------------------------------
+Register-DuneRoute -Method GET -Path '/api/gameconfig/spicefields' -Handler {
+    param($req, $res, $routeParams, $body)
+    $ctx = Get-DuneGameConfigContext
+    if (-not $ctx.ok) {
+        Write-DuneError -Response $res -Status $ctx.status -Message $ctx.message
+        return
+    }
+    try {
+        $raw = Get-V6SpicefieldTypes -Ip $ctx.ip
+        $rows = @($raw | ForEach-Object {
+            @{
+                spicefieldTypeId = [int]$_.spicefield_type_id
+                mapName          = "$($_.map_name)"
+                fieldType        = "$($_.field_type)"
+                dimensionIndex   = [int]$_.dimension_index
+                maxActive        = [int]$_.max_globally_active
+                maxPrimed        = [int]$_.max_globally_primed
+                currentActive    = [int]$_.current_globally_active
+                currentPrimed    = [int]$_.current_globally_primed
+                isSpawningActive = [bool]$_.is_spawning_active
+                spawnWeight      = [double]$_.global_spawn_weight
+            }
+        })
+        Write-DuneJson -Response $res -Body @{ available = $true; rows = $rows }
+    } catch {
+        Write-DuneError -Response $res -Status 500 -Message "Spicefield types load failed: $($_.Exception.Message)"
+    }
+}
+
+# -----------------------------------------------------------------------------
+# PUT /api/gameconfig/spicefields/{id} — update one spicefield_type row.
+# Body: { maxActive, maxPrimed, isSpawningActive, spawnWeight }
+# Returns the freshly-fetched row.
+# -----------------------------------------------------------------------------
+Register-DuneRoute -Method PUT -Path '/api/gameconfig/spicefields/{id}' -Handler {
+    param($req, $res, $routeParams, $body)
+    $ctx = Get-DuneGameConfigContext
+    if (-not $ctx.ok) {
+        Write-DuneError -Response $res -Status $ctx.status -Message $ctx.message
+        return
+    }
+    $typeId = 0
+    if (-not [int]::TryParse("$($routeParams.id)", [ref]$typeId) -or $typeId -le 0) {
+        Write-DuneError -Response $res -Status 400 -Message 'Invalid spicefield_type id.'
+        return
+    }
+    if (-not ($body -is [hashtable])) {
+        Write-DuneError -Response $res -Status 400 -Message 'Body must be a JSON object.'
+        return
+    }
+    try {
+        $maxA = 0; $maxP = 0; $sw = 0.0
+        try { $maxA = [int]$body.maxActive } catch {}
+        try { $maxP = [int]$body.maxPrimed } catch {}
+        if ($null -ne $body.spawnWeight) {
+            try { $sw = [double]::Parse("$($body.spawnWeight)", [System.Globalization.CultureInfo]::InvariantCulture) } catch {}
+        }
+        $isActive = [bool]$body.isSpawningActive
+        Set-V6SpicefieldType -Ip $ctx.ip -TypeId $typeId `
+            -MaxActive $maxA -MaxPrimed $maxP `
+            -IsSpawningActive $isActive -SpawnWeight $sw
+
+        $rows = Get-V6SpicefieldTypes -Ip $ctx.ip
+        $row  = $rows | Where-Object { [int]$_.spicefield_type_id -eq $typeId } | Select-Object -First 1
+        if (-not $row) {
+            Write-DuneError -Response $res -Status 404 -Message "Spicefield type $typeId not found after update."
+            return
+        }
+        Write-DuneJson -Response $res -Body @{
+            ok  = $true
+            row = @{
+                spicefieldTypeId = [int]$row.spicefield_type_id
+                mapName          = "$($row.map_name)"
+                fieldType        = "$($row.field_type)"
+                dimensionIndex   = [int]$row.dimension_index
+                maxActive        = [int]$row.max_globally_active
+                maxPrimed        = [int]$row.max_globally_primed
+                currentActive    = [int]$row.current_globally_active
+                currentPrimed    = [int]$row.current_globally_primed
+                isSpawningActive = [bool]$row.is_spawning_active
+                spawnWeight      = [double]$row.global_spawn_weight
+            }
+        }
+    } catch {
+        Write-DuneError -Response $res -Status 500 -Message "Spicefield type save failed: $($_.Exception.Message)"
+    }
+}
