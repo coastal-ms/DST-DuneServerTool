@@ -121,6 +121,45 @@ function Invoke-DuneWsHandlerAsync {
 
 # ---------- Responses ----------------------------------------------------------
 
+# Parse incoming JSON request body into a [hashtable] that works on both
+# Windows PowerShell 5.1 (no -AsHashtable) and PowerShell 7+. Falls back to
+# the raw string on parse failure so callers can still inspect it.
+function ConvertFrom-DuneRequestJson {
+    param([Parameter(Mandatory)][string]$Raw)
+    if (-not $Raw -or -not $Raw.Trim()) { return $null }
+    # PS 7+: prefer -AsHashtable when available.
+    $hasAsHashtable = (Get-Command ConvertFrom-Json).Parameters.ContainsKey('AsHashtable')
+    if ($hasAsHashtable) {
+        try { return ($Raw | ConvertFrom-Json -AsHashtable) } catch { return $Raw }
+    }
+    # PS 5.1: parse to PSCustomObject, then convert recursively to [hashtable].
+    try {
+        $obj = $Raw | ConvertFrom-Json
+        return (ConvertTo-DuneHashtable -InputObject $obj)
+    } catch {
+        return $Raw
+    }
+}
+
+function ConvertTo-DuneHashtable {
+    param($InputObject)
+    if ($null -eq $InputObject) { return $null }
+    if ($InputObject -is [System.Collections.IDictionary]) {
+        $out = @{}
+        foreach ($k in $InputObject.Keys) { $out[[string]$k] = ConvertTo-DuneHashtable $InputObject[$k] }
+        return $out
+    }
+    if ($InputObject -is [System.Management.Automation.PSCustomObject]) {
+        $out = @{}
+        foreach ($p in $InputObject.PSObject.Properties) { $out[$p.Name] = ConvertTo-DuneHashtable $p.Value }
+        return $out
+    }
+    if ($InputObject -is [System.Collections.IEnumerable] -and -not ($InputObject -is [string])) {
+        return ,@($InputObject | ForEach-Object { ConvertTo-DuneHashtable $_ })
+    }
+    return $InputObject
+}
+
 function Write-DuneJson {
     param(
         [Parameter(Mandatory)] $Response,
@@ -338,7 +377,7 @@ function Invoke-DuneContext {
                     $reader = [System.IO.StreamReader]::new($req.InputStream, $req.ContentEncoding)
                     try { $body = $reader.ReadToEnd() } finally { $reader.Dispose() }
                     if ($body -and $req.ContentType -like 'application/json*') {
-                        try { $body = $body | ConvertFrom-Json -AsHashtable } catch { }
+                        $body = ConvertFrom-DuneRequestJson -Raw $body
                     }
                 }
                 & $r.Handler $req $res $routeParams $body
