@@ -960,6 +960,9 @@ foreach ($navName in $script:V6NavMap.Keys) {
             elseif ($target -eq 'PageDatabase' -and (Get-Command Update-V6Database -ErrorAction SilentlyContinue)) {
                 try { Update-V6Database } catch {}
             }
+            elseif ($target -eq 'PageGameConfig' -and (Get-Command Update-V6GameConfig -ErrorAction SilentlyContinue)) {
+                try { Update-V6GameConfig } catch {}
+            }
         }
     }.GetNewClosure())
 }
@@ -2648,6 +2651,11 @@ if (Get-Command Initialize-V6SettingsPage -ErrorAction SilentlyContinue) {
 if (Get-Command Initialize-V6DatabasePage -ErrorAction SilentlyContinue) {
     try { Initialize-V6DatabasePage } catch {
         try { Write-Diag "Initialize-V6DatabasePage failed: $($_.Exception.Message)" } catch {}
+    }
+}
+if (Get-Command Initialize-V6GameConfigPage -ErrorAction SilentlyContinue) {
+    try { Initialize-V6GameConfigPage } catch {
+        try { Write-Diag "Initialize-V6GameConfigPage failed: $($_.Exception.Message)" } catch {}
     }
 }
 
