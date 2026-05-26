@@ -77,6 +77,83 @@ browser engine.
 - `app/web/` (xterm host HTML + assets — now an npm dep in webui).
 - `app/lib/Pty.Net/` and `app/lib/WebView2/` native DLLs.
 
+### Added (post-rewrite refinements)
+
+- **Server Health: structured Battlegroup Info + Game Servers cards** —
+  splits the raw `kubectl get bg` text into typed fields (name, state,
+  map churn, generation, online), and renders each game server with a
+  state badge, partition, and online count.
+- **Server Health: Active Spice readout** — new `BgSpiceSummary` widget
+  pulls `dune.public_spicefields` over psql and shows active vs primed
+  fields **per map**, **per size class**, sorted **large-first**.
+  Tiered color rules: size column tinted by tier (Large = amber,
+  Medium = ibad-blue, Small = muted), active count tinted by fill
+  ratio (warning at-cap, amber ≥ 75 %, blue ≥ 25 %), primed count
+  brightens to accent when populated.
+- **Game Config: Spicefield Types card** — first-class editor backed
+  directly by `dune.spicefield_types`. At-cap rows highlighted; per-row
+  Spicefield status promoted to a prominent inline badge with 10 s
+  refresh.
+- **Maps: Deep Desert graceful shutdown** — checks for online players
+  before scaling the map down; refuses with a structured error
+  otherwise.
+- **Characters: specialization tracks** — Specs tab now pulls live data
+  from `dune.specialization_tracks`.
+- **Characters: faction reputation** — Faction Rep tab now pulls live
+  data from `dune.player_faction_reputation`.
+
+### Fixed (post-rewrite)
+
+- **Maps: on-demand spin-up** — bind partitions and clear
+  `dedicatedScaling` when patching the maps CRD, so on-demand maps
+  (notably Deep Desert) actually come up instead of stalling the
+  operator in `Reconciling`.
+- **HTTP: JSON request bodies on PowerShell 5.1** — `ConvertFrom-Json`
+  output coerced into `[hashtable]` so PS 5.1 route handlers can
+  index into the payload without `PSCustomObject` quirks.
+- **Commands page crash on PS 5.1** — `ConvertTo-Json` `-Depth`
+  default returns an array wrapper for single objects under PS 5.1;
+  routes now force-wrap explicitly so the React client sees a
+  consistent shape.
+- **Characters: Specs / Faction Rep table key** — both tables key on
+  the **controller id**, not the pawn id, so per-character rows now
+  resolve correctly.
+- **`Get-DuneConfigPath`** — always uses the canonical
+  `%APPDATA%\DuneServer\` location, regardless of how the EXE was
+  launched.
+
+### Changed (post-rewrite)
+
+- **Dashboard: "Status" → "BG state"** under Battlegroup Info, with
+  a "map churn" hint so operators can tell whether a reconcile is
+  caused by deliberate map spin-up vs a real fault.
+- **Battlegroup Info / Game Servers cards** — spacing tightened so
+  more fits above the fold on a 1080p screen.
+- **Installer: clean upgrade from v4–v6.0.x.** Setup now silently
+  uninstalls the previous version (via the registered Inno Setup
+  uninstaller) before laying down v6.1 files. Removes orphaned
+  WPF/WebView2 binaries, the old `web\` / `pages\` / `styles\` /
+  `lib\Pty.Net\` / `lib\WebView2\` directories, and any running
+  `DuneServer.exe` process. **User config in `%APPDATA%\DuneServer\`
+  is preserved.** First launch after upgrade goes straight to the
+  new web portal — no manual cleanup, no config wizard prompts.
+- **In-app auto-updater.** The portal now polls the public GitHub
+  Releases API for newer versions (`GET /api/update/check`, cached
+  1 h, refreshed every 6 h in the SPA). When a newer tag is found
+  with an attached `DuneServerSetup*.exe` asset, an amber banner
+  appears above the status bar with **Update now** / **Later**
+  buttons. The Settings page also has a manual "Check now" /
+  "Update to v…" card. Clicking **Update now** hits
+  `POST /api/update/install`, which downloads the asset to
+  `%TEMP%\DuneServerUpdate\` and launches it silently
+  (`/SP- /VERYSILENT /SUPPRESSMSGBOXES /NORESTART
+  /CLOSEAPPLICATIONS /RESTARTAPPLICATIONS`). The installer's
+  `PrepareToInstall` hook (added above) handles the rest — kills
+  this very `DuneServer.exe`, runs the old uninstaller, lays down
+  the new files, and the Start Menu shortcut now points at the new
+  web-portal launcher. This is the last manual installer download
+  v6.1+ users will ever need.
+
 ## [6.0.0] - 2026-05-26
 
 **6.0.1 hotfix (2026-05-26):** Fixed startup crash _"XAML load failed:
