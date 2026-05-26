@@ -1,4 +1,4 @@
-# GameConfig lib — visual editor backing for UserGame.ini + UserEngine.ini.
+﻿# GameConfig lib — visual editor backing for UserGame.ini + UserEngine.ini.
 # Reads the LIVE INI files inside the battlegroup PVC (same files FileBrowser
 # exposes under /files/UserSettings/), NOT the setup templates under
 # /home/dune/.dune/download/scripts/setup/config/ which are only used at

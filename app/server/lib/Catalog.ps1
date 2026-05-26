@@ -1,4 +1,4 @@
-# Catalog lib — exposes the item catalog (app\data\item-catalog.json, ~979
+﻿# Catalog lib — exposes the item catalog (app\data\item-catalog.json, ~979
 # items) and the character-domain definitions (stat list, currencies, spec
 # tracks, writable inventory types, stack limits, equipment prefixes).
 #
@@ -13,7 +13,8 @@ function Get-DuneItemCatalogPath {
         (Join-Path $PSScriptRoot '..\..\data\item-catalog.json'),                  # installed layout
         (Join-Path (Split-Path -Parent $PSScriptRoot) '..\data\item-catalog.json') # dev fallback
     )) {
-        $resolved = try { (Resolve-Path -LiteralPath $candidate -ErrorAction Stop).Path } catch { $null }
+        $resolved = $null
+        try { $resolved = (Resolve-Path -LiteralPath $candidate -ErrorAction Stop).Path } catch {}
         if ($resolved) { return $resolved }
     }
     return $null

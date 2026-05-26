@@ -1,4 +1,4 @@
-# GET /api/status — combined VM + Battlegroup + Ports snapshot
+﻿# GET /api/status — combined VM + Battlegroup + Ports snapshot
 Register-DuneRoute -Method GET -Path '/api/status' -Handler {
     param($req, $res, $routeParams, $body)
     $vm = Get-DuneVmStatus

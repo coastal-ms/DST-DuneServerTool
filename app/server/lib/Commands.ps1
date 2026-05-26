@@ -1,4 +1,4 @@
-# Commands — catalogue of actions the Dune Server tool can dispatch.
+﻿# Commands — catalogue of actions the Dune Server tool can dispatch.
 # Mirrors $script:Commands from app/DuneServer.ps1 (v6.0.x WPF), preserved
 # verbatim so v6.1's web UI keeps the exact same command set + key bindings.
 #

@@ -1,4 +1,4 @@
-# Links — resolve in-VM web URLs (File Browser, Battlegroup Director).
+﻿# Links — resolve in-VM web URLs (File Browser, Battlegroup Director).
 #
 # File Browser is always at http://<vm-ip>:18888/ when the VM is up.
 # Director runs inside Kubernetes; the nodePort that maps to its 11717

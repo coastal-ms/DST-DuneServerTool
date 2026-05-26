@@ -1,4 +1,4 @@
-# Sietches API — list, add, remove the last shard.
+﻿# Sietches API — list, add, remove the last shard.
 # Add/Remove patch the K8s BG CRD via SSH; restart the battlegroup to apply.
 
 Register-DuneRoute -Method GET -Path '/api/sietches' -Handler {
