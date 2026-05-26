@@ -31,6 +31,9 @@ function Get-V6SshKeyPath {
 
 function Invoke-V6Ssh {
     param([string]$Ip, [string]$Cmd, [int]$TimeoutSec = 30)
+    # Strip CRs from the command — here-strings in CRLF-saved .ps1 files
+    # preserve \r, which breaks bash (commands appear as "head -1\r" etc).
+    if ($Cmd) { $Cmd = $Cmd -replace "`r","" }
     $key = Get-V6SshKeyPath
     if ($key) {
         & ssh -o BatchMode=yes -o StrictHostKeyChecking=no -o LogLevel=QUIET -o ConnectTimeout=8 -i $key "dune@$Ip" $Cmd 2>$null

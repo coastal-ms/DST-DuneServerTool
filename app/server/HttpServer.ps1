@@ -11,6 +11,7 @@ $script:DuneToken       = [string]::Empty
 $script:DuneListener    = $null
 $script:DunePrefixUrl   = $null
 $script:DuneDistRoot    = $null
+$script:DuneWsPool      = $null   # RunspacePool — WS handlers run here so they don't block the main HTTP loop
 
 # ---------- MIME ---------------------------------------------------------------
 
@@ -70,6 +71,52 @@ function Register-DuneWebSocket {
         Regex   = [regex]$pattern
         Handler = $Handler
     }) | Out-Null
+}
+
+# Initialize the WebSocket handler runspace pool. WS sessions can be
+# long-lived (terminal, log streams) and would block the single-threaded
+# HTTP main loop. Min=1 / Max=8 covers multiple terminals + ambient streams.
+function Initialize-DuneWsPool {
+    if ($script:DuneWsPool) { return }
+    $iss = [System.Management.Automation.Runspaces.InitialSessionState]::CreateDefault()
+    $pool = [runspacefactory]::CreateRunspacePool(1, 8, $iss, $Host)
+    $pool.Open()
+    $script:DuneWsPool = $pool
+}
+
+# Fire-and-forget dispatch of a WebSocket handler scriptblock. The handler
+# runs in a runspace from the pool — .NET types loaded into the AppDomain
+# (Pty.Net, DuneServer.PtySink, WebSockets) are visible, but PS functions
+# from main runspace's lib/*.ps1 are NOT. Pass any state via arguments.
+function Invoke-DuneWsHandlerAsync {
+    param(
+        [Parameter(Mandatory)][scriptblock]$Handler,
+        [Parameter(Mandatory)]$WebSocket,
+        [Parameter(Mandatory)][hashtable]$RouteParams
+    )
+    Initialize-DuneWsPool
+    $ps = [powershell]::Create()
+    $ps.RunspacePool = $script:DuneWsPool
+    [void]$ps.AddScript({
+        param($handlerText, $ws, $routeParams)
+        try {
+            $h = [scriptblock]::Create($handlerText)
+            & $h $ws $routeParams
+        } catch {
+            Write-Host "[ws-handler] $($_.Exception.Message)" -ForegroundColor Red
+        } finally {
+            try {
+                if ($ws -and $ws.State -eq [System.Net.WebSockets.WebSocketState]::Open) {
+                    $ws.CloseAsync(
+                        [System.Net.WebSockets.WebSocketCloseStatus]::NormalClosure,
+                        'closing', [System.Threading.CancellationToken]::None
+                    ).GetAwaiter().GetResult()
+                }
+            } catch {}
+            try { $ws.Dispose() } catch {}
+        }
+    }).AddArgument($Handler.ToString()).AddArgument($WebSocket).AddArgument($RouteParams)
+    [void]$ps.BeginInvoke()
 }
 
 # ---------- Responses ----------------------------------------------------------
@@ -184,6 +231,14 @@ function Start-DuneHttpServer {
     $script:DuneListener = $listener
     Write-Host "[dune-http] Listening on $script:DunePrefixUrl" -ForegroundColor Cyan
 
+    # Persist actual URL (with token) for external tools.
+    try {
+        $stateDir = Join-Path $env:LOCALAPPDATA 'DuneServer'
+        if (-not (Test-Path -LiteralPath $stateDir)) { New-Item -ItemType Directory -Path $stateDir -Force | Out-Null }
+        $actualUrl = if ($Token) { "{0}?t={1}" -f $script:DunePrefixUrl, [Uri]::EscapeDataString($Token) } else { $script:DunePrefixUrl }
+        Set-Content -LiteralPath (Join-Path $stateDir 'last-url.txt') -Value $actualUrl -Encoding UTF8 -Force
+    } catch { }
+
     try {
         while ($listener.IsListening) {
             $ctxTask = $listener.GetContextAsync()
@@ -213,6 +268,11 @@ function Stop-DuneHttpServer {
         try { $script:DuneListener.Close() } catch {}
         $script:DuneListener = $null
     }
+    if ($script:DuneWsPool) {
+        try { $script:DuneWsPool.Close() } catch {}
+        try { $script:DuneWsPool.Dispose() } catch {}
+        $script:DuneWsPool = $null
+    }
 }
 
 function Get-DuneServerUrl {
@@ -228,7 +288,8 @@ function Invoke-DuneContext {
     $rawPath = $req.Url.AbsolutePath
     $method  = $req.HttpMethod
 
-    # WebSocket upgrades
+    # WebSocket upgrades — dispatched onto a runspace pool so the main loop
+    # can keep accepting HTTP requests while the WS session runs.
     if ($req.IsWebSocketRequest) {
         if (-not (Test-DuneToken -Request $req)) {
             $res.StatusCode = 401
@@ -242,9 +303,14 @@ function Invoke-DuneContext {
                 foreach ($g in $r.Regex.GetGroupNames()) {
                     if ($g -notmatch '^\d+$') { $routeParams[$g] = $m.Groups[$g].Value }
                 }
-                $wsTask = $Ctx.AcceptWebSocketAsync($null)
-                $wsCtx  = $wsTask.GetAwaiter().GetResult()
-                & $r.Handler $wsCtx.WebSocket $routeParams $req
+                try {
+                    $wsTask = $Ctx.AcceptWebSocketAsync($null)
+                    $wsCtx  = $wsTask.GetAwaiter().GetResult()
+                } catch {
+                    Write-Host "[ws] accept failed: $($_.Exception.Message)" -ForegroundColor Red
+                    return
+                }
+                Invoke-DuneWsHandlerAsync -Handler $r.Handler -WebSocket $wsCtx.WebSocket -RouteParams $routeParams
                 return
             }
         }
