@@ -4,17 +4,22 @@
 #
 # Requirements:
 #   - Inno Setup 6 (install via:  winget install --id JRSoftware.InnoSetup)
+#   - Node.js + npm (build-time only) for `npm run build` in webui/
 #   - Build-Exe.ps1 must have been run first (this script depends on DuneServer.exe)
 
 [CmdletBinding()]
 param(
     [switch]$SkipExeBuild,
+    [switch]$SkipWebBuild,
     [switch]$Open
 )
 
 $ErrorActionPreference = 'Stop'
 
 $appRoot    = Split-Path -Parent $PSScriptRoot                          # ...\app
+$repoRoot   = Split-Path -Parent $appRoot                               # ...\<repo>
+$webuiDir   = Join-Path $repoRoot 'webui'
+$webuiDist  = Join-Path $webuiDir 'dist'
 $iss        = Join-Path $appRoot 'installer\DuneServer.iss'
 $exePath    = Join-Path $appRoot 'build\output\DuneServer.exe'
 $outDir     = Join-Path $appRoot 'installer\output'
@@ -32,7 +37,25 @@ if (-not $iscc) {
     throw "ISCC.exe not found. Install Inno Setup 6: winget install --id JRSoftware.InnoSetup"
 }
 
-# Build the .exe first (unless skipped)
+# Build the React SPA (writes webui/dist) — bundled into installer below.
+if (-not $SkipWebBuild) {
+    if (-not (Test-Path $webuiDir)) { throw "webui/ folder not found at $webuiDir" }
+    $npm = Get-Command npm.cmd -ErrorAction SilentlyContinue
+    if (-not $npm) { $npm = Get-Command npm -ErrorAction SilentlyContinue }
+    if (-not $npm) { throw "npm not found in PATH. Install Node.js to build the web UI." }
+    Write-Host "Building React SPA (npm run build)..." -ForegroundColor Cyan
+    Push-Location $webuiDir
+    try {
+        & $npm.Source run build
+        if ($LASTEXITCODE -ne 0) { throw "npm run build failed (exit $LASTEXITCODE)" }
+    } finally { Pop-Location }
+    Write-Host ""
+}
+if (-not (Test-Path (Join-Path $webuiDist 'index.html'))) {
+    throw "webui/dist/index.html not found - run 'npm run build' in $webuiDir (or omit -SkipWebBuild)"
+}
+
+# Build the .exe (unless skipped)
 if (-not $SkipExeBuild) {
     Write-Host "Building DuneServer.exe first..." -ForegroundColor Cyan
     & (Join-Path $appRoot 'build\Build-Exe.ps1') -Quiet
