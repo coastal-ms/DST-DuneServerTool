@@ -14,8 +14,20 @@ $script:DuneConfigKeys = @(
 
 function Get-DuneConfigPath {
     if ($script:DuneConfigFile) { return $script:DuneConfigFile }
+    # Primary location used by the installer and shared with the v6.0.x
+    # business-logic script (dune-server.ps1 / app/lib/Db-Postgres.ps1).
+    # Both the source/dev launcher and the installed launcher read & write
+    # the same file here, so settings survive reinstalls and are consistent
+    # across both invocation paths.
+    $appdataPath = Join-Path $env:APPDATA 'DuneServer\dune-server.config'
+    if (Test-Path -LiteralPath $appdataPath) { return $appdataPath }
+    # Dev fallback: repo-root file next to dune-server.ps1.
     $root = Split-Path -Parent $script:AppDir
-    return (Join-Path $root 'dune-server.config')
+    $devPath = Join-Path $root 'dune-server.config'
+    if (Test-Path -LiteralPath $devPath) { return $devPath }
+    # Neither exists yet — return the canonical APPDATA path so a future
+    # Save-DuneConfig creates it there.
+    return $appdataPath
 }
 
 function Read-DuneConfig {
@@ -48,6 +60,10 @@ function Save-DuneConfig {
     foreach ($k in $script:DuneConfigKeys) {
         $v = if ($existing.Contains($k)) { $existing[$k] } else { '' }
         $lines.Add("$k=$v")
+    }
+    $dir = Split-Path -Parent $path
+    if ($dir -and -not (Test-Path -LiteralPath $dir)) {
+        New-Item -ItemType Directory -Path $dir -Force | Out-Null
     }
     Set-Content -LiteralPath $path -Value $lines -Encoding UTF8
     return Read-DuneConfig
