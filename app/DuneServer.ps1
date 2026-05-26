@@ -954,6 +954,9 @@ foreach ($navName in $script:V6NavMap.Keys) {
             elseif ($target -eq 'PageMonitoring' -and (Get-Command Update-V6Monitoring -ErrorAction SilentlyContinue)) {
                 try { Update-V6Monitoring } catch {}
             }
+            elseif ($target -eq 'PageSettings' -and (Get-Command Update-V6Settings -ErrorAction SilentlyContinue)) {
+                try { Update-V6Settings } catch {}
+            }
         }
     }.GetNewClosure())
 }
@@ -2632,6 +2635,11 @@ if (Get-Command Initialize-V6DashboardPage -ErrorAction SilentlyContinue) {
 if (Get-Command Initialize-V6MonitoringPage -ErrorAction SilentlyContinue) {
     try { Initialize-V6MonitoringPage } catch {
         try { Write-Diag "Initialize-V6MonitoringPage failed: $($_.Exception.Message)" } catch {}
+    }
+}
+if (Get-Command Initialize-V6SettingsPage -ErrorAction SilentlyContinue) {
+    try { Initialize-V6SettingsPage } catch {
+        try { Write-Diag "Initialize-V6SettingsPage failed: $($_.Exception.Message)" } catch {}
     }
 }
 
