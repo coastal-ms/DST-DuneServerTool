@@ -193,3 +193,42 @@ export type GameConfigSaveResponse = {
   game: GameConfigFileBundle
   engine: GameConfigFileBundle
 }
+
+// ---------- Database --------------------------------------------------------
+
+export type DbTable = {
+  schema: string
+  name: string
+  kind: string  // r=table, v=view, m=mat-view, f=foreign, p=partitioned
+}
+
+export type DbInfo = {
+  available: boolean
+  version: string
+  database: string
+  user: string
+  now: string
+  tables: DbTable[]
+}
+
+export type SqlOkResult = {
+  ok: true
+  columns: string[]
+  rows: (string | null)[][]
+  rowCount: number
+  truncated: boolean
+  message: string
+  durationMs: number
+  readOnly: boolean
+  maxRows: number
+}
+
+export type SqlErrResult = {
+  ok: false
+  error: string
+  raw?: string
+  durationMs: number
+  readOnly: boolean
+}
+
+export type SqlResult = SqlOkResult | SqlErrResult
