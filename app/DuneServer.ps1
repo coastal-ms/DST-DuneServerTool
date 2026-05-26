@@ -32,7 +32,7 @@ param()
 # check (Check-ForUpdates) and the "Installed: x.y.z" header label. Must be
 # bumped in lock-step with the other 3 version constants (dune-server.ps1,
 # Build-Exe.ps1, installer .iss).
-$script:ToolVersion = "5.0.2"
+$script:ToolVersion = "6.0.0-dev"
 
 # ANSI escape character (0x1B). The ps2exe-compiled binary runs in
 # PowerShell 5.1 (Desktop), which does NOT support the `e backtick-e
@@ -241,6 +241,22 @@ Add-Type -AssemblyName PresentationCore
 Add-Type -AssemblyName WindowsBase
 Add-Type -AssemblyName System.Xaml
 
+# v6: load Theme.xaml's inner contents and splice into the inline XAML at the
+# `<!-- v6-theme-injection -->` marker before XamlReader parses it. Keeps the
+# single-source-of-truth design tokens in app\styles\Theme.xaml while still
+# letting the inline XAML reference them via {StaticResource X}.
+$script:V6ThemePath = Join-Path $PSScriptRoot 'styles\Theme.xaml'
+function Get-V6ThemeInnerXaml {
+    if (-not (Test-Path $script:V6ThemePath)) { return '' }
+    $raw = Get-Content -Raw -LiteralPath $script:V6ThemePath
+    # Strip XML declaration if present.
+    $raw = [regex]::Replace($raw, '^\s*<\?xml[^?]*\?>\s*', '')
+    # Capture everything between the outer <ResourceDictionary ...> and </ResourceDictionary>.
+    $m = [regex]::Match($raw, '(?s)<ResourceDictionary\b[^>]*>(.*)</ResourceDictionary>\s*$')
+    if (-not $m.Success) { return '' }
+    return $m.Groups[1].Value
+}
+
 [xml]$xaml = @'
 <Window xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
@@ -251,6 +267,7 @@ Add-Type -AssemblyName System.Xaml
         WindowStartupLocation="CenterScreen"
         Background="#14110D">
   <Window.Resources>
+    <!-- v6-theme-injection -->
     <Style x:Key="SectionHeader" TargetType="TextBlock">
       <Setter Property="Foreground" Value="#E8B872"/>
       <Setter Property="FontWeight" Value="Bold"/>
@@ -604,57 +621,200 @@ Add-Type -AssemblyName System.Xaml
       </Grid>
     </Border>
 
-    <!-- ═══ Main split: buttons | output ═══ -->
+    <!-- ═══ v6 main area: sidebar + page host ═══ -->
     <Grid Grid.Row="1">
       <Grid.ColumnDefinitions>
-        <ColumnDefinition Width="820" MinWidth="640"/>
-        <ColumnDefinition Width="5"/>
+        <ColumnDefinition Width="200" x:Name="SidebarCol"/>
         <ColumnDefinition Width="*"/>
       </Grid.ColumnDefinitions>
 
-      <!-- Left: 3-column drag-reorderable button grid (flat order, no sections) -->
-      <ScrollViewer Grid.Column="0" VerticalScrollBarVisibility="Auto" Background="#14110D">
-        <Grid Margin="6,4,6,12">
-          <Grid.ColumnDefinitions>
-            <ColumnDefinition Width="*"/>
-            <ColumnDefinition Width="*"/>
-            <ColumnDefinition Width="*"/>
-          </Grid.ColumnDefinitions>
-          <StackPanel x:Name="ButtonPanelCol1" Grid.Column="0" Margin="0,0,3,0"/>
-          <StackPanel x:Name="ButtonPanelCol2" Grid.Column="1" Margin="3,0,3,0"/>
-          <StackPanel x:Name="ButtonPanelCol3" Grid.Column="2" Margin="3,0,0,0"/>
-        </Grid>
-      </ScrollViewer>
+      <!-- ─── Sidebar ─── -->
+      <Border Grid.Column="0" Background="{StaticResource SidebarBgBrush}"
+              BorderBrush="{StaticResource BorderSoftBrush}" BorderThickness="0,0,1,0">
+        <DockPanel LastChildFill="True">
+          <Border DockPanel.Dock="Top" Background="{StaticResource BronzeBarBrush}" Padding="0">
+            <TextBlock x:Name="SidebarBrand" Text="DUNE · SERVER"
+                       Foreground="{StaticResource GoldBrightBrush}"
+                       FontFamily="Cinzel, Trajan Pro, Georgia"
+                       FontSize="13" FontWeight="SemiBold"
+                       Padding="16,14"/>
+          </Border>
 
-      <GridSplitter Grid.Column="1" Width="5" Background="#2D2D30" HorizontalAlignment="Stretch"/>
+          <Button x:Name="SidebarCollapseBtn" DockPanel.Dock="Bottom"
+                  Style="{StaticResource SidebarCollapseStyle}"
+                  ToolTip="Collapse sidebar (Ctrl+B)">
+            <TextBlock x:Name="SidebarCollapseGlyph" Text="‹‹" FontSize="14" FontWeight="Bold"/>
+          </Button>
 
-      <!-- Right: output -->
-      <Grid Grid.Column="2">
-        <Grid.RowDefinitions>
-          <RowDefinition Height="Auto"/>
-          <RowDefinition Height="*"/>
-        </Grid.RowDefinitions>
+          <ScrollViewer VerticalScrollBarVisibility="Hidden">
+            <StackPanel x:Name="SidebarItems">
+              <TextBlock x:Name="SidebarLabelOperate" Text="OPERATE" Style="{StaticResource SidebarGroupLabelStyle}"/>
+              <RadioButton x:Name="NavDashboard" Style="{StaticResource SidebarItemStyle}" GroupName="SidebarNav" Tag="Dashboard">
+                <StackPanel Orientation="Horizontal">
+                  <Path Width="18" Height="18" Stretch="Uniform" StrokeThickness="2"
+                        Stroke="{Binding Foreground, RelativeSource={RelativeSource AncestorType=RadioButton}}"
+                        Data="M3,3 L10,3 L10,10 L3,10 Z M14,3 L21,3 L21,10 L14,10 Z M3,14 L10,14 L10,21 L3,21 Z M14,14 L21,14 L21,21 L14,21 Z"/>
+                  <TextBlock Text="Dashboard" Margin="12,0,0,0" VerticalAlignment="Center"/>
+                </StackPanel>
+              </RadioButton>
+              <RadioButton x:Name="NavTerminal" IsChecked="True" Style="{StaticResource SidebarItemStyle}" GroupName="SidebarNav" Tag="Terminal">
+                <StackPanel Orientation="Horizontal">
+                  <Path Width="18" Height="18" Stretch="Uniform" StrokeThickness="2"
+                        Stroke="{Binding Foreground, RelativeSource={RelativeSource AncestorType=RadioButton}}"
+                        Data="M4,17 L10,11 L4,5 M12,19 L20,19"/>
+                  <TextBlock Text="Terminal" Margin="12,0,0,0" VerticalAlignment="Center"/>
+                </StackPanel>
+              </RadioButton>
 
-        <Border Grid.Row="0" Background="#252526" BorderBrush="#3F3F46" BorderThickness="0,0,0,1" Padding="10,6">
+              <TextBlock x:Name="SidebarLabelManage" Text="MANAGE" Style="{StaticResource SidebarGroupLabelStyle}"/>
+              <RadioButton x:Name="NavCharacters" Style="{StaticResource SidebarItemStyle}" GroupName="SidebarNav" Tag="Characters">
+                <StackPanel Orientation="Horizontal">
+                  <Path Width="18" Height="18" Stretch="Uniform" StrokeThickness="2"
+                        Stroke="{Binding Foreground, RelativeSource={RelativeSource AncestorType=RadioButton}}"
+                        Data="M12,8 m-4,0 a4,4 0 1,0 8,0 a4,4 0 1,0 -8,0 M4,21 L4,20 A6,6 0 0,1 10,14 L14,14 A6,6 0 0,1 20,20 L20,21"/>
+                  <TextBlock Text="Characters" Margin="12,0,0,0" VerticalAlignment="Center"/>
+                </StackPanel>
+              </RadioButton>
+              <RadioButton x:Name="NavGameConfig" Style="{StaticResource SidebarItemStyle}" GroupName="SidebarNav" Tag="GameConfig">
+                <StackPanel Orientation="Horizontal">
+                  <Path Width="18" Height="18" Stretch="Uniform" StrokeThickness="2"
+                        Stroke="{Binding Foreground, RelativeSource={RelativeSource AncestorType=RadioButton}}"
+                        Data="M12,12 m-3,0 a3,3 0 1,0 6,0 a3,3 0 1,0 -6,0 M12,2 L12,5 M12,19 L12,22 M2,12 L5,12 M19,12 L22,12 M4.9,4.9 L7,7 M17,17 L19.1,19.1 M4.9,19.1 L7,17 M17,7 L19.1,4.9"/>
+                  <TextBlock Text="Game Config" Margin="12,0,0,0" VerticalAlignment="Center"/>
+                </StackPanel>
+              </RadioButton>
+              <RadioButton x:Name="NavDatabase" Style="{StaticResource SidebarItemStyle}" GroupName="SidebarNav" Tag="Database">
+                <StackPanel Orientation="Horizontal">
+                  <Path Width="18" Height="18" Stretch="Uniform" StrokeThickness="2"
+                        Stroke="{Binding Foreground, RelativeSource={RelativeSource AncestorType=RadioButton}}"
+                        Data="M3,5 m9,-3 a9,3 0 1,0 0,6 a9,3 0 1,0 0,-6 M3,5 L3,11 M21,5 L21,11 M3,11 a9,3 0 1,0 18,0 M3,11 L3,17 M21,11 L21,17 M3,17 a9,3 0 1,0 18,0"/>
+                  <TextBlock Text="Database" Margin="12,0,0,0" VerticalAlignment="Center"/>
+                </StackPanel>
+              </RadioButton>
+              <RadioButton x:Name="NavMonitoring" Style="{StaticResource SidebarItemStyle}" GroupName="SidebarNav" Tag="Monitoring">
+                <StackPanel Orientation="Horizontal">
+                  <Path Width="18" Height="18" Stretch="Uniform" StrokeThickness="2"
+                        Stroke="{Binding Foreground, RelativeSource={RelativeSource AncestorType=RadioButton}}"
+                        Data="M12,12 m-10,0 a10,10 0 1,0 20,0 a10,10 0 1,0 -20,0 M2,12 L22,12 M12,2 a15,15 0 0,1 4,10 a15,15 0 0,1 -4,10 a15,15 0 0,1 -4,-10 a15,15 0 0,1 4,-10"/>
+                  <TextBlock Text="Monitoring" Margin="12,0,0,0" VerticalAlignment="Center"/>
+                </StackPanel>
+              </RadioButton>
+
+              <TextBlock x:Name="SidebarLabelSystem" Text="SYSTEM" Style="{StaticResource SidebarGroupLabelStyle}"/>
+              <RadioButton x:Name="NavSettings" Style="{StaticResource SidebarItemStyle}" GroupName="SidebarNav" Tag="Settings">
+                <StackPanel Orientation="Horizontal">
+                  <Path Width="18" Height="18" Stretch="Uniform" StrokeThickness="2"
+                        Stroke="{Binding Foreground, RelativeSource={RelativeSource AncestorType=RadioButton}}"
+                        Data="M12,12 m-3,0 a3,3 0 1,0 6,0 a3,3 0 1,0 -6,0 M19.4,15 a1.65,1.65 0 0,0 .33,1.82 l.06,.06 a2,2 0 0,1 0,2.83 a2,2 0 0,1 -2.83,0 l-.06,-.06 a1.65,1.65 0 0,0 -1.82,-.33 a1.65,1.65 0 0,0 -1,1.51 V21 a2,2 0 0,1 -4,0 v-.09 a1.65,1.65 0 0,0 -1,-1.51 a1.65,1.65 0 0,0 -1.82,.33 l-.06,.06 a2,2 0 0,1 -2.83,0 a2,2 0 0,1 0,-2.83 l.06,-.06 a1.65,1.65 0 0,0 .33,-1.82 a1.65,1.65 0 0,0 -1.51,-1 H3 a2,2 0 0,1 0,-4 h.09 a1.65,1.65 0 0,0 1.51,-1 a1.65,1.65 0 0,0 -.33,-1.82 l-.06,-.06 a2,2 0 0,1 0,-2.83 a2,2 0 0,1 2.83,0 l.06,.06 a1.65,1.65 0 0,0 1.82,.33 H9 a1.65,1.65 0 0,0 1,-1.51 V3 a2,2 0 0,1 4,0 v.09 a1.65,1.65 0 0,0 1,1.51 a1.65,1.65 0 0,0 1.82,-.33 l.06,-.06 a2,2 0 0,1 2.83,0 a2,2 0 0,1 0,2.83 l-.06,.06 a1.65,1.65 0 0,0 -.33,1.82 V9 a1.65,1.65 0 0,0 1.51,1 H21 a2,2 0 0,1 0,4 h-.09 a1.65,1.65 0 0,0 -1.51,1 z"/>
+                  <TextBlock Text="Settings" Margin="12,0,0,0" VerticalAlignment="Center"/>
+                </StackPanel>
+              </RadioButton>
+              <RadioButton x:Name="NavSetupWizard" Style="{StaticResource SidebarItemStyle}" GroupName="SidebarNav" Tag="SetupWizard">
+                <StackPanel Orientation="Horizontal">
+                  <Path Width="18" Height="18" Stretch="Uniform" StrokeThickness="2"
+                        Stroke="{Binding Foreground, RelativeSource={RelativeSource AncestorType=RadioButton}}"
+                        Data="M3,12 L5,10 L9,14 L17,6 L21,10"/>
+                  <TextBlock Text="Setup Wizard" Margin="12,0,0,0" VerticalAlignment="Center"/>
+                </StackPanel>
+              </RadioButton>
+              <RadioButton x:Name="NavExperimental" Style="{StaticResource SidebarItemStyle}" GroupName="SidebarNav" Tag="Experimental">
+                <StackPanel Orientation="Horizontal">
+                  <Path Width="18" Height="18" Stretch="Uniform" StrokeThickness="2"
+                        Stroke="{Binding Foreground, RelativeSource={RelativeSource AncestorType=RadioButton}}"
+                        Data="M10,2 L10,8 M14,2 L14,8 M6,8 L18,8 L16,19 a2,2 0 0,1 -2,2 L10,21 a2,2 0 0,1 -2,-2 L6,8 z"/>
+                  <TextBlock Text="Experimental" Margin="12,0,0,0" VerticalAlignment="Center"/>
+                </StackPanel>
+              </RadioButton>
+            </StackPanel>
+          </ScrollViewer>
+        </DockPanel>
+      </Border>
+
+      <!-- ─── Page host ─── -->
+      <Grid Grid.Column="1" x:Name="PageHost">
+
+        <!-- Terminal page (default — preserves v5.0.2 command-list + xterm.js layout) -->
+        <Border x:Name="PageTerminal" Visibility="Visible">
           <Grid>
             <Grid.ColumnDefinitions>
+              <ColumnDefinition Width="820" MinWidth="640"/>
+              <ColumnDefinition Width="5"/>
               <ColumnDefinition Width="*"/>
-              <ColumnDefinition Width="Auto"/>
-              <ColumnDefinition Width="Auto"/>
-              <ColumnDefinition Width="Auto"/>
             </Grid.ColumnDefinitions>
-            <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
-              <TextBlock x:Name="OutputTitle" Text="Output" Foreground="#E0B341" FontWeight="Bold" FontSize="13" VerticalAlignment="Center"/>
-              <TextBlock Text="  ·  " Foreground="#5C6773" FontSize="12" VerticalAlignment="Center"/>
-              <TextBlock Text="Ctrl+\ to kill" Foreground="#8A8275" FontSize="11" FontStyle="Italic" VerticalAlignment="Center"/>
-            </StackPanel>
-                <Button x:Name="BtnKillSession" Grid.Column="1" Content="Kill" Style="{StaticResource UtilButton}" Padding="10,4" Margin="4,0" ToolTip="Force-stop the current SSH / command session (Ctrl+\)" Foreground="#F07178" IsEnabled="False"/>
-                <Button x:Name="BtnCopyOutput" Grid.Column="2" Content="Copy" Style="{StaticResource UtilButton}" Padding="10,4" Margin="4,0"/>
-                <Button x:Name="BtnClearOutput" Grid.Column="3" Content="Clear" Style="{StaticResource UtilButton}" Padding="10,4" Margin="4,0"/>
-              </Grid>
-            </Border>
 
-            <wv2:WebView2 x:Name="Terminal" Grid.Row="1"/>
+            <!-- Left: 3-column drag-reorderable button grid (flat order, no sections) -->
+            <ScrollViewer Grid.Column="0" VerticalScrollBarVisibility="Auto" Background="#14110D">
+              <Grid Margin="6,4,6,12">
+                <Grid.ColumnDefinitions>
+                  <ColumnDefinition Width="*"/>
+                  <ColumnDefinition Width="*"/>
+                  <ColumnDefinition Width="*"/>
+                </Grid.ColumnDefinitions>
+                <StackPanel x:Name="ButtonPanelCol1" Grid.Column="0" Margin="0,0,3,0"/>
+                <StackPanel x:Name="ButtonPanelCol2" Grid.Column="1" Margin="3,0,3,0"/>
+                <StackPanel x:Name="ButtonPanelCol3" Grid.Column="2" Margin="3,0,0,0"/>
+              </Grid>
+            </ScrollViewer>
+
+            <GridSplitter Grid.Column="1" Width="5" Background="#2D2D30" HorizontalAlignment="Stretch"/>
+
+            <!-- Right: output -->
+            <Grid Grid.Column="2">
+              <Grid.RowDefinitions>
+                <RowDefinition Height="Auto"/>
+                <RowDefinition Height="*"/>
+              </Grid.RowDefinitions>
+
+              <Border Grid.Row="0" Background="#252526" BorderBrush="#3F3F46" BorderThickness="0,0,0,1" Padding="10,6">
+                <Grid>
+                  <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*"/>
+                    <ColumnDefinition Width="Auto"/>
+                    <ColumnDefinition Width="Auto"/>
+                    <ColumnDefinition Width="Auto"/>
+                  </Grid.ColumnDefinitions>
+                  <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                    <TextBlock x:Name="OutputTitle" Text="Output" Foreground="#E0B341" FontWeight="Bold" FontSize="13" VerticalAlignment="Center"/>
+                    <TextBlock Text="  ·  " Foreground="#5C6773" FontSize="12" VerticalAlignment="Center"/>
+                    <TextBlock Text="Ctrl+\ to kill" Foreground="#8A8275" FontSize="11" FontStyle="Italic" VerticalAlignment="Center"/>
+                  </StackPanel>
+                  <Button x:Name="BtnKillSession" Grid.Column="1" Content="Kill" Style="{StaticResource UtilButton}" Padding="10,4" Margin="4,0" ToolTip="Force-stop the current SSH / command session (Ctrl+\)" Foreground="#F07178" IsEnabled="False"/>
+                  <Button x:Name="BtnCopyOutput" Grid.Column="2" Content="Copy" Style="{StaticResource UtilButton}" Padding="10,4" Margin="4,0"/>
+                  <Button x:Name="BtnClearOutput" Grid.Column="3" Content="Clear" Style="{StaticResource UtilButton}" Padding="10,4" Margin="4,0"/>
+                </Grid>
+              </Border>
+
+              <wv2:WebView2 x:Name="Terminal" Grid.Row="1"/>
+            </Grid>
+          </Grid>
+        </Border>
+
+        <!-- Other v6 pages — placeholders for now, real content built in subsequent commits. -->
+        <Border x:Name="PageDashboard" Style="{StaticResource PageRootStyle}" Visibility="Collapsed">
+          <TextBlock Text="Dashboard — coming soon" Style="{StaticResource SectionHeadTitleStyle}"/>
+        </Border>
+        <Border x:Name="PageCharacters" Style="{StaticResource PageRootStyle}" Visibility="Collapsed">
+          <TextBlock Text="Characters — coming soon" Style="{StaticResource SectionHeadTitleStyle}"/>
+        </Border>
+        <Border x:Name="PageGameConfig" Style="{StaticResource PageRootStyle}" Visibility="Collapsed">
+          <TextBlock Text="Game Config — coming soon" Style="{StaticResource SectionHeadTitleStyle}"/>
+        </Border>
+        <Border x:Name="PageDatabase" Style="{StaticResource PageRootStyle}" Visibility="Collapsed">
+          <TextBlock Text="Database — coming soon" Style="{StaticResource SectionHeadTitleStyle}"/>
+        </Border>
+        <Border x:Name="PageMonitoring" Style="{StaticResource PageRootStyle}" Visibility="Collapsed">
+          <TextBlock Text="Monitoring — coming soon" Style="{StaticResource SectionHeadTitleStyle}"/>
+        </Border>
+        <Border x:Name="PageSettings" Style="{StaticResource PageRootStyle}" Visibility="Collapsed">
+          <TextBlock Text="Settings — coming soon" Style="{StaticResource SectionHeadTitleStyle}"/>
+        </Border>
+        <Border x:Name="PageSetupWizard" Style="{StaticResource PageRootStyle}" Visibility="Collapsed">
+          <TextBlock Text="Setup Wizard — coming soon" Style="{StaticResource SectionHeadTitleStyle}"/>
+        </Border>
+        <Border x:Name="PageExperimental" Style="{StaticResource PageRootStyle}" Visibility="Collapsed">
+          <TextBlock Text="Experimental — coming soon" Style="{StaticResource SectionHeadTitleStyle}"/>
+        </Border>
+
       </Grid>
     </Grid>
 
@@ -672,6 +832,14 @@ Add-Type -AssemblyName System.Xaml
   </Grid>
 </Window>
 '@
+
+# v6: splice Theme.xaml inner contents at the injection marker.
+$themeInner = Get-V6ThemeInnerXaml
+if ($themeInner) {
+    $xamlStr = $xaml.OuterXml
+    $xamlStr = $xamlStr -replace '<!--\s*v6-theme-injection\s*-->', $themeInner
+    [xml]$xaml = $xamlStr
+}
 
 $reader = New-Object System.Xml.XmlNodeReader $xaml
 try {
@@ -709,6 +877,112 @@ $ui = @{
     Terminal       = $window.FindName('Terminal')
     FooterStatus   = $window.FindName('FooterStatus')
     FooterVersion  = $window.FindName('FooterVersion')
+
+    # v6 sidebar shell + page host
+    SidebarCol           = $window.FindName('SidebarCol')
+    SidebarBrand         = $window.FindName('SidebarBrand')
+    SidebarItems         = $window.FindName('SidebarItems')
+    SidebarLabelOperate  = $window.FindName('SidebarLabelOperate')
+    SidebarLabelManage   = $window.FindName('SidebarLabelManage')
+    SidebarLabelSystem   = $window.FindName('SidebarLabelSystem')
+    SidebarCollapseBtn   = $window.FindName('SidebarCollapseBtn')
+    SidebarCollapseGlyph = $window.FindName('SidebarCollapseGlyph')
+    NavDashboard    = $window.FindName('NavDashboard')
+    NavTerminal     = $window.FindName('NavTerminal')
+    NavCharacters   = $window.FindName('NavCharacters')
+    NavGameConfig   = $window.FindName('NavGameConfig')
+    NavDatabase     = $window.FindName('NavDatabase')
+    NavMonitoring   = $window.FindName('NavMonitoring')
+    NavSettings     = $window.FindName('NavSettings')
+    NavSetupWizard  = $window.FindName('NavSetupWizard')
+    NavExperimental = $window.FindName('NavExperimental')
+    PageTerminal     = $window.FindName('PageTerminal')
+    PageDashboard    = $window.FindName('PageDashboard')
+    PageCharacters   = $window.FindName('PageCharacters')
+    PageGameConfig   = $window.FindName('PageGameConfig')
+    PageDatabase     = $window.FindName('PageDatabase')
+    PageMonitoring   = $window.FindName('PageMonitoring')
+    PageSettings     = $window.FindName('PageSettings')
+    PageSetupWizard  = $window.FindName('PageSetupWizard')
+    PageExperimental = $window.FindName('PageExperimental')
+}
+
+# ────────────────────────────────────────────────────────────────────────────
+#  v6: Sidebar navigation
+# ────────────────────────────────────────────────────────────────────────────
+# Map nav RadioButton -> page Border. Selecting a nav item shows its page and
+# hides all others. Terminal stays selected by default so v5.0.2 workflow is
+# preserved on first launch.
+$script:V6NavMap = @{
+    NavDashboard    = 'PageDashboard'
+    NavTerminal     = 'PageTerminal'
+    NavCharacters   = 'PageCharacters'
+    NavGameConfig   = 'PageGameConfig'
+    NavDatabase     = 'PageDatabase'
+    NavMonitoring   = 'PageMonitoring'
+    NavSettings     = 'PageSettings'
+    NavSetupWizard  = 'PageSetupWizard'
+    NavExperimental = 'PageExperimental'
+}
+$script:V6CurrentPage = 'PageTerminal'
+
+function Show-V6Page {
+    param([string]$PageKey)
+    if (-not $ui.ContainsKey($PageKey)) { return }
+    foreach ($p in $script:V6NavMap.Values) {
+        if ($ui[$p]) { $ui[$p].Visibility = 'Collapsed' }
+    }
+    $ui[$PageKey].Visibility = 'Visible'
+    $script:V6CurrentPage = $PageKey
+}
+
+foreach ($navName in $script:V6NavMap.Keys) {
+    $nav = $ui[$navName]
+    if (-not $nav) { continue }
+    $pageKey = $script:V6NavMap[$navName]
+    $nav.Add_Checked({
+        param($s, $e)
+        $sender = $s
+        # Resolve which page to show from the sender's x:Name.
+        $target = $script:V6NavMap[$sender.Name]
+        if ($target) { Show-V6Page $target }
+    }.GetNewClosure())
+}
+
+# Sidebar collapse / expand. Toggles SidebarCol width and item label visibility.
+$script:V6SidebarCollapsed = $false
+function Set-V6SidebarCollapsed {
+    param([bool]$Collapsed)
+    $script:V6SidebarCollapsed = $Collapsed
+    if ($Collapsed) {
+        $ui.SidebarCol.Width = New-Object System.Windows.GridLength 56
+        $ui.SidebarCollapseGlyph.Text = '››'
+        $ui.SidebarBrand.Visibility = 'Collapsed'
+        foreach ($lbl in @($ui.SidebarLabelOperate, $ui.SidebarLabelManage, $ui.SidebarLabelSystem)) {
+            if ($lbl) { $lbl.Visibility = 'Collapsed' }
+        }
+    } else {
+        $ui.SidebarCol.Width = New-Object System.Windows.GridLength 200
+        $ui.SidebarCollapseGlyph.Text = '‹‹'
+        $ui.SidebarBrand.Visibility = 'Visible'
+        foreach ($lbl in @($ui.SidebarLabelOperate, $ui.SidebarLabelManage, $ui.SidebarLabelSystem)) {
+            if ($lbl) { $lbl.Visibility = 'Visible' }
+        }
+    }
+    # Toggle the text label inside each nav item's StackPanel.
+    foreach ($navName in $script:V6NavMap.Keys) {
+        $nav = $ui[$navName]
+        if (-not $nav) { continue }
+        $sp = $nav.Content
+        if ($sp -and $sp.Children.Count -ge 2) {
+            $sp.Children[1].Visibility = $(if ($Collapsed) { 'Collapsed' } else { 'Visible' })
+            $sp.HorizontalAlignment = $(if ($Collapsed) { 'Center' } else { 'Left' })
+        }
+    }
+}
+
+if ($ui.SidebarCollapseBtn) {
+    $ui.SidebarCollapseBtn.Add_Click({ Set-V6SidebarCollapsed (-not $script:V6SidebarCollapsed) })
 }
 
 # ────────────────────────────────────────────────────────────────────────────
