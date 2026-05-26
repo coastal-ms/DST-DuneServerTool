@@ -88,7 +88,7 @@ function New-V6SetupWizardPage {
     <!-- Step content card -->
     <Border Background="{StaticResource SwCard}" BorderBrush="{StaticResource SwBorder}" BorderThickness="1"
             CornerRadius="4" Padding="24,20">
-      <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
+      <ScrollViewer VerticalScrollBarVisibility="Visible" HorizontalScrollBarVisibility="Disabled">
         <ContentControl x:Name="SwStepContent"/>
       </ScrollViewer>
     </Border>

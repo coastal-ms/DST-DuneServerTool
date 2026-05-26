@@ -1,8 +1,22 @@
 # Game Config page — visual editor for UserGame.ini + UserEngine.ini
 # Fields adapted from dune-awakening-server-manager (MIT) reference UI.
-
-$script:V6CfgGamePath   = '/home/dune/.dune/download/scripts/setup/config/UserGame.ini'
-$script:V6CfgEnginePath = '/home/dune/.dune/download/scripts/setup/config/UserEngine.ini'
+#
+# Reads/writes the LIVE INI files inside the battlegroup PVC (the same files
+# FileBrowser exposes under /files/UserSettings/), NOT the setup templates
+# under /home/dune/.dune/download/scripts/setup/config/ which are only used
+# at first-boot provisioning.
+#
+# The PVC path on disk includes a sietch-specific hash, e.g.
+#   /var/lib/rancher/k3s/storage/pvc-<uuid>_funcom-seabass-<sietch>_<sietch>-pvc/Saved/UserSettings/UserGame.ini
+# so we resolve at runtime via a sudo glob rather than hardcoding.
+$script:V6CfgLiveGlobGame   = '/var/lib/rancher/k3s/storage/*/Saved/UserSettings/UserGame.ini'
+$script:V6CfgLiveGlobEngine = '/var/lib/rancher/k3s/storage/*/Saved/UserSettings/UserEngine.ini'
+# Setup templates — fallback if no live files exist yet (e.g. BG never started)
+$script:V6CfgTplGamePath   = '/home/dune/.dune/download/scripts/setup/config/UserGame.ini'
+$script:V6CfgTplEnginePath = '/home/dune/.dune/download/scripts/setup/config/UserEngine.ini'
+# Cache resolved live paths per session (PVC name is stable across BG restarts)
+$script:V6CfgResolvedGamePath   = $null
+$script:V6CfgResolvedEnginePath = $null
 $script:V6CfgQuotedKeys = @('Bgd.ServerDisplayName','Bgd.ServerLoginPassword')
 
 # -----------------------------------------------------------------------------
@@ -11,13 +25,13 @@ $script:V6CfgQuotedKeys = @('Bgd.ServerDisplayName','Bgd.ServerLoginPassword')
 # file: game | engine
 # -----------------------------------------------------------------------------
 $script:V6CfgSchema = @(
-    @{ Section = 'PvP & Security'; Fields = @(
+    @{ Section = 'Combat Rules'; Fields = @(
         @{ Key='m_bShouldForceEnablePvpOnAllPartitions'; File='game'; Type='select'; Label='Force PvP on All Partitions';
            Options=@(@{V='False';L='Off'},@{V='True';L='On'}) }
         @{ Key='m_bAreSecurityZonesEnabled'; File='game'; Type='select'; Label='Security Zones Enabled';
            Options=@(@{V='True';L='On'},@{V='False';L='Off (PvP everywhere)'}) }
     )}
-    @{ Section = 'Environment'; Fields = @(
+    @{ Section = 'World & Weather'; Fields = @(
         @{ Key='m_bCoriolisAutoSpawnEnabled'; File='game'; Type='select'; Label='Coriolis Storm';
            Options=@(@{V='True';L='On'},@{V='False';L='Off'}) }
         @{ Key='Sandstorm.Enabled'; File='engine'; Type='select'; Label='Sandstorm';
@@ -25,7 +39,7 @@ $script:V6CfgSchema = @(
         @{ Key='Sandstorm.Treasure.Enabled'; File='engine'; Type='select'; Label='Sandstorm Treasure Spawns';
            Options=@(@{V='1';L='On'},@{V='0';L='Off'}) }
     )}
-    @{ Section = 'Sandworm'; Fields = @(
+    @{ Section = 'Shai-Hulud'; Fields = @(
         @{ Key='sandworm.dune.Enabled'; File='engine'; Type='select'; Label='Sandworm Enabled';
            Options=@(@{V='1';L='On'},@{V='0';L='Off'}) }
         @{ Key='Sandworm.SandwormDangerZonesEnabled'; File='engine'; Type='select'; Label='Danger Zones Enabled';
@@ -37,7 +51,7 @@ $script:V6CfgSchema = @(
         @{ Key='Vehicle.SandwormInvulnerabilitySecondsOnServerRestart'; File='engine'; Type='number'; Label='Invulnerability on Server Restart';
            Step='1'; Min='0'; Unit='sec' }
     )}
-    @{ Section = 'Economy & Resources'; Fields = @(
+    @{ Section = 'Resources & Loot'; Fields = @(
         @{ Key='Dune.GlobalMiningOutputMultiplier'; File='engine'; Type='number'; Label='Global Mining Multiplier';
            Step='0.1'; Min='0' }
         @{ Key='Dune.GlobalVehicleMiningOutputMultiplier'; File='engine'; Type='number'; Label='Vehicle Mining Multiplier';
@@ -49,14 +63,14 @@ $script:V6CfgSchema = @(
         @{ Key='dw.VehicleDurabilityDamageMultiplier'; File='engine'; Type='number'; Label='Vehicle Durability Damage';
            Step='0.1'; Min='0'; Max='10'; Hint='0=off, 1-10' }
     )}
-    @{ Section = 'Building'; Fields = @(
+    @{ Section = 'Bases & Land Claims'; Fields = @(
         @{ Key='m_MaxNumLandclaimSegments'; File='game'; Type='number'; Label='Max Landclaim Segments'; Step='1'; Min='1' }
         @{ Key='m_BuildingBlueprintMaxExtensions'; File='game'; Type='number'; Label='Blueprint Max Extensions'; Step='1'; Min='0' }
         @{ Key='m_BaseBackupMaxExtensions'; File='game'; Type='number'; Label='Base Backup Max Extensions'; Step='1'; Min='0' }
         @{ Key='m_bBuildingRestrictionLimitsEnabled'; File='game'; Type='select'; Label='Building Restriction Limits';
            Options=@(@{V='True';L='On'},@{V='False';L='Off'}) }
     )}
-    @{ Section = 'Server'; Fields = @(
+    @{ Section = 'Server Identity'; Fields = @(
         @{ Key='Bgd.ServerDisplayName'; File='engine'; Type='text'; Label='Server Display Name';
            Hint='shown to players'; Placeholder='Not set (uses world name)'; Wide=$true }
         @{ Key='Bgd.ServerLoginPassword'; File='engine'; Type='text'; Label='Server Login Password';
@@ -153,35 +167,100 @@ function ConvertTo-V6Ini {
 # -----------------------------------------------------------------------------
 # SSH helpers — synchronous; called only from explicit user action (Refresh/Save)
 # -----------------------------------------------------------------------------
-function Invoke-V6Ssh {
+function Get-V6GcSshKeyPath {
+    if ($script:V6GcSshKeyCache) { return $script:V6GcSshKeyCache }
+    $cfgPath = $null
+    if ($script:ConfigFile) { $cfgPath = $script:ConfigFile }
+    elseif ($env:APPDATA) { $cfgPath = Join-Path $env:APPDATA 'DuneServer\dune-server.config' }
+    if ($cfgPath -and (Test-Path $cfgPath)) {
+        try {
+            $cfg = $null
+            if (Get-Command Read-Config -ErrorAction SilentlyContinue) { $cfg = Read-Config }
+            if ($cfg -and $cfg.SshKey) { $script:V6GcSshKeyCache = $cfg.SshKey; return $cfg.SshKey }
+            foreach ($line in (Get-Content -LiteralPath $cfgPath -ErrorAction SilentlyContinue)) {
+                if ($line -match '^\s*SshKey\s*=\s*(.+?)\s*$') { $script:V6GcSshKeyCache = $Matches[1].Trim('"'); return $script:V6GcSshKeyCache }
+            }
+        } catch {}
+    }
+    return $null
+}
+
+# Renamed from Invoke-V6Ssh to avoid colliding with lib/Db-Postgres.ps1's
+# Invoke-V6Ssh, which has different parameter names (-TimeoutSec vs -Timeout)
+# and is loaded earlier. PowerShell's function table keeps the last definition,
+# so before this rename our redefinition was clobbering the lib version and
+# any Db code path that explicitly passed -TimeoutSec would have silently
+# bound to nothing (only working by accident because GameConfig's param list
+# was permissive).
+function Invoke-V6GcSsh {
     param([string]$Ip, [string]$Cmd, [int]$Timeout = 20)
-    & ssh -o BatchMode=yes -o StrictHostKeyChecking=no -o ConnectTimeout=8 "dune@$Ip" $Cmd 2>$null
+    $key = Get-V6GcSshKeyPath
+    if ($key) {
+        & ssh -i $key -o BatchMode=yes -o StrictHostKeyChecking=no -o LogLevel=QUIET -o ConnectTimeout=8 "dune@$Ip" $Cmd 2>$null
+    } else {
+        & ssh -o BatchMode=yes -o StrictHostKeyChecking=no -o ConnectTimeout=8 "dune@$Ip" $Cmd 2>$null
+    }
+}
+
+function Resolve-V6CfgPaths {
+    param([string]$Ip, [switch]$Force)
+    if (-not $Force -and $script:V6CfgResolvedGamePath -and $script:V6CfgResolvedEnginePath) {
+        return @{ Game = $script:V6CfgResolvedGamePath; Engine = $script:V6CfgResolvedEnginePath; Source = 'cache' }
+    }
+    # ls -t orders by mtime descending so we pick the live BG's PVC if multiple
+    # exist (e.g. after re-provision). sudo because /var/lib/rancher is root-only.
+    $liveGame   = (Invoke-V6GcSsh -Ip $Ip -Cmd "sudo bash -c 'ls -t $($script:V6CfgLiveGlobGame) 2>/dev/null | head -1'") -join ''
+    $liveEngine = (Invoke-V6GcSsh -Ip $Ip -Cmd "sudo bash -c 'ls -t $($script:V6CfgLiveGlobEngine) 2>/dev/null | head -1'") -join ''
+    $liveGame   = $liveGame.Trim()
+    $liveEngine = $liveEngine.Trim()
+    if ($liveGame -and $liveEngine) {
+        $script:V6CfgResolvedGamePath   = $liveGame
+        $script:V6CfgResolvedEnginePath = $liveEngine
+        try { Write-Diag "Resolve-V6CfgPaths: live game=$liveGame engine=$liveEngine" } catch {}
+        return @{ Game = $liveGame; Engine = $liveEngine; Source = 'live' }
+    }
+    try { Write-Diag "Resolve-V6CfgPaths: live PVC not found, falling back to setup templates" } catch {}
+    $script:V6CfgResolvedGamePath   = $script:V6CfgTplGamePath
+    $script:V6CfgResolvedEnginePath = $script:V6CfgTplEnginePath
+    return @{ Game = $script:V6CfgTplGamePath; Engine = $script:V6CfgTplEnginePath; Source = 'template' }
 }
 
 function Get-V6GameConfigFromVm {
     param([string]$Ip)
-    $game   = Invoke-V6Ssh -Ip $Ip -Cmd "cat $($script:V6CfgGamePath) 2>/dev/null"
-    $engine = Invoke-V6Ssh -Ip $Ip -Cmd "cat $($script:V6CfgEnginePath) 2>/dev/null"
+    $paths = Resolve-V6CfgPaths -Ip $Ip
+    # Files live under /var/lib/rancher which is root-only, so cat via sudo.
+    # Templates under /home/dune are readable as dune, but sudo cat works for
+    # both — harmless extra privilege for the template path.
+    $game   = Invoke-V6GcSsh -Ip $Ip -Cmd "sudo cat '$($paths.Game)' 2>/dev/null"
+    $engine = Invoke-V6GcSsh -Ip $Ip -Cmd "sudo cat '$($paths.Engine)' 2>/dev/null"
+    try { Write-Diag ("Get-V6GameConfigFromVm: source={0} gameLen={1} engineLen={2}" -f `
+        $paths.Source, (($game -join "`n").Length), (($engine -join "`n").Length)) } catch {}
     return @{
-        gameRaw   = ($game -join "`n")
-        engineRaw = ($engine -join "`n")
-        game      = ConvertFrom-V6Ini -Raw (($game -join "`n"))
-        engine    = ConvertFrom-V6Ini -Raw (($engine -join "`n"))
+        gameRaw     = ($game -join "`n")
+        engineRaw   = ($engine -join "`n")
+        game        = ConvertFrom-V6Ini -Raw (($game -join "`n"))
+        engine      = ConvertFrom-V6Ini -Raw (($engine -join "`n"))
+        sourceLabel = $paths.Source
+        gamePath    = $paths.Game
+        enginePath  = $paths.Engine
     }
 }
 
 function Save-V6GameConfigToVm {
     param([string]$Ip, [string]$GameRaw, [string]$EngineRaw, [hashtable]$GameUpdates, [hashtable]$EngineUpdates)
+    $paths = Resolve-V6CfgPaths -Ip $Ip
 
     if ($GameUpdates -and $GameUpdates.Count -gt 0) {
         $newGame = ConvertTo-V6Ini -Raw $GameRaw -Updates $GameUpdates
         $b64 = [Convert]::ToBase64String([Text.Encoding]::UTF8.GetBytes($newGame))
-        Invoke-V6Ssh -Ip $Ip -Cmd "echo '$b64' | base64 -d > $($script:V6CfgGamePath)" -Timeout 20 | Out-Null
+        # tee via sudo so we can write into the root-owned PVC mount; redirect
+        # tee's stdout to /dev/null so we don't pull the whole file back over SSH.
+        Invoke-V6GcSsh -Ip $Ip -Cmd "echo '$b64' | base64 -d | sudo tee '$($paths.Game)' > /dev/null" -Timeout 30 | Out-Null
     }
     if ($EngineUpdates -and $EngineUpdates.Count -gt 0) {
         $newEng = ConvertTo-V6Ini -Raw $EngineRaw -Updates $EngineUpdates
         $b64 = [Convert]::ToBase64String([Text.Encoding]::UTF8.GetBytes($newEng))
-        Invoke-V6Ssh -Ip $Ip -Cmd "echo '$b64' | base64 -d > $($script:V6CfgEnginePath)" -Timeout 20 | Out-Null
+        Invoke-V6GcSsh -Ip $Ip -Cmd "echo '$b64' | base64 -d | sudo tee '$($paths.Engine)' > /dev/null" -Timeout 30 | Out-Null
     }
 }
 
@@ -245,6 +324,63 @@ function New-V6GameConfigPage {
                 <Setter Property="Foreground" Value="{StaticResource GcInputFg}"/>
               </Trigger>
             </ControlTemplate.Triggers>
+          </ControlTemplate>
+        </Setter.Value>
+      </Setter>
+    </Style>
+
+    <Style TargetType="TabItem">
+      <Setter Property="Background" Value="Transparent"/>
+      <Setter Property="Foreground" Value="#C9BDA4"/>
+      <Setter Property="FontFamily" Value="Segoe UI Semibold"/>
+      <Setter Property="FontSize"   Value="12"/>
+      <Setter Property="Padding"    Value="16,8"/>
+      <Setter Property="Margin"     Value="0,0,2,0"/>
+      <Setter Property="Cursor"     Value="Hand"/>
+      <Setter Property="Template">
+        <Setter.Value>
+          <ControlTemplate TargetType="TabItem">
+            <Border x:Name="TabBorder"
+                    Background="{TemplateBinding Background}"
+                    BorderBrush="Transparent"
+                    BorderThickness="0,0,0,2"
+                    Padding="{TemplateBinding Padding}">
+              <ContentPresenter ContentSource="Header" RecognizesAccessKey="True" HorizontalAlignment="Center"/>
+            </Border>
+            <ControlTemplate.Triggers>
+              <Trigger Property="IsMouseOver" Value="True">
+                <Setter TargetName="TabBorder" Property="Background" Value="#2A1F15"/>
+                <Setter Property="Foreground" Value="#F0E6D0"/>
+              </Trigger>
+              <Trigger Property="IsSelected" Value="True">
+                <Setter TargetName="TabBorder" Property="Background" Value="#1C1813"/>
+                <Setter TargetName="TabBorder" Property="BorderBrush" Value="#E8B872"/>
+                <Setter Property="Foreground" Value="#E8B872"/>
+              </Trigger>
+            </ControlTemplate.Triggers>
+          </ControlTemplate>
+        </Setter.Value>
+      </Setter>
+    </Style>
+
+    <Style TargetType="TabControl">
+      <Setter Property="Background" Value="Transparent"/>
+      <Setter Property="BorderThickness" Value="0"/>
+      <Setter Property="Template">
+        <Setter.Value>
+          <ControlTemplate TargetType="TabControl">
+            <Grid>
+              <Grid.RowDefinitions>
+                <RowDefinition Height="Auto"/>
+                <RowDefinition Height="*"/>
+              </Grid.RowDefinitions>
+              <Border Grid.Row="0" BorderBrush="#4A361F" BorderThickness="0,0,0,1">
+                <TabPanel x:Name="HeaderPanel" IsItemsHost="True" Background="Transparent" Panel.ZIndex="1"/>
+              </Border>
+              <Border Grid.Row="1" Background="Transparent" BorderThickness="0" Padding="0,16,0,0">
+                <ContentPresenter ContentSource="SelectedContent"/>
+              </Border>
+            </Grid>
           </ControlTemplate>
         </Setter.Value>
       </Setter>
@@ -355,7 +491,7 @@ function New-V6GameConfigPage {
       <StackPanel Orientation="Horizontal">
         <TextBlock Text="!" Foreground="#E89C42" FontSize="18" FontWeight="Bold" Margin="0,0,10,0"/>
         <TextBlock Foreground="#F0D8A8" VerticalAlignment="Center" TextWrapping="Wrap"
-                   Text="Battlegroup is running. Stop it from the Terminal pane before saving — config changes only take effect on a clean start."/>
+                   Text="Battlegroup is running. Saved config values will not take effect until the battlegroup is restarted."/>
       </StackPanel>
     </Border>
 
@@ -364,9 +500,7 @@ function New-V6GameConfigPage {
                Text="Click Refresh to load current settings from the VM."/>
 
     <!-- Card content area -->
-    <ScrollViewer Grid.Row="3" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
-      <StackPanel x:Name="GcSections"/>
-    </ScrollViewer>
+    <TabControl x:Name="GcTabs" Grid.Row="3"/>
   </Grid>
 </Border>
 '@
@@ -378,7 +512,8 @@ function New-V6GameConfigPage {
         DirtyPill    = $page.FindName('GcDirtyPill')
         StopBanner   = $page.FindName('GcStopBanner')
         Status       = $page.FindName('GcStatus')
-        Sections     = $page.FindName('GcSections')
+        Sections     = $page.FindName('GcTabs')
+        Tabs         = $page.FindName('GcTabs')
         Subtitle     = $page.FindName('GcSubtitle')
         Fields       = @{}   # key -> @{ Control=...; File=...; Type=... }
         Loaded       = $false
@@ -397,24 +532,19 @@ function _V6GcSetDirty {
 
 function _V6GcAddCard {
     param($parent, [string]$Title, [array]$Fields, $state, $window)
-    $card = New-Object System.Windows.Controls.Border
-    $card.Background = New-Object System.Windows.Media.SolidColorBrush ([System.Windows.Media.Color]::FromArgb(255,0x1C,0x18,0x13))
-    $card.BorderBrush = New-Object System.Windows.Media.SolidColorBrush ([System.Windows.Media.Color]::FromArgb(255,0x4A,0x36,0x1F))
-    $card.BorderThickness = '1'
-    $card.CornerRadius = '6'
-    $card.Padding = '18'
-    $card.Margin = '0,0,0,14'
+
+    # Create TabItem (parent is the TabControl)
+    $tab = New-Object System.Windows.Controls.TabItem
+    $tab.Header = $Title
+
+    $scroll = New-Object System.Windows.Controls.ScrollViewer
+    $scroll.VerticalScrollBarVisibility = 'Visible'
+    $scroll.HorizontalScrollBarVisibility = 'Disabled'
+    $scroll.Padding = '4,0,12,12'
 
     $stack = New-Object System.Windows.Controls.StackPanel
-    $card.Child = $stack
-
-    $h = New-Object System.Windows.Controls.TextBlock
-    $h.Text = $Title
-    $h.FontFamily = 'Segoe UI Semibold'
-    $h.FontSize = 14
-    $h.Foreground = New-Object System.Windows.Media.SolidColorBrush ([System.Windows.Media.Color]::FromArgb(255,0xE8,0xB8,0x72))
-    $h.Margin = '0,0,0,12'
-    $stack.Children.Add($h) | Out-Null
+    $scroll.Content = $stack
+    $tab.Content = $scroll
 
     $grid = New-Object System.Windows.Controls.Grid
     $c1 = New-Object System.Windows.Controls.ColumnDefinition; $c1.Width = '*'
@@ -497,9 +627,6 @@ function _V6GcAddCard {
                 $ctrl = $tb
             }
         }
-        if ($f.Type -ne 'number') {
-            # Number control already added inside its wrap/cell branch
-        }
         if ($f.Type -eq 'select') { $cell.Children.Add($ctrl) | Out-Null }
 
         $grid.Children.Add($cell) | Out-Null
@@ -514,7 +641,7 @@ function _V6GcAddCard {
     }
 
     $stack.Children.Add($grid) | Out-Null
-    $parent.Children.Add($card) | Out-Null
+    $parent.Items.Add($tab) | Out-Null
 }
 
 function _V6GcApplyValueToControl {
@@ -573,6 +700,7 @@ function Initialize-V6GameConfigPage {
 
 function Update-V6GameConfig {
     param([switch]$Force)
+    try { Write-Diag "Update-V6GameConfig: entered (Force=$Force) V6Gc=$([bool]$script:V6Gc)" } catch {}
     if (-not $script:V6Gc) { return }
     $g = $script:V6Gc
 
@@ -588,11 +716,15 @@ function Update-V6GameConfig {
     $g.StopBanner.Visibility = if ($bgRunning) { 'Visible' } else { 'Collapsed' }
 
     # INI fetch — only on explicit Refresh or first visible load
-    if (-not $Force -and $g.Loaded) { return }
+    if (-not $Force -and $g.Loaded) {
+        try { Write-Diag "Update-V6GameConfig: already loaded, skipping fetch" } catch {}
+        return
+    }
 
     $vm = $null
-    try { $vm = Get-VmStatus } catch {}
+    try { $vm = Get-VmStatus } catch { try { Write-Diag "Update-V6GameConfig: Get-VmStatus failed: $($_.Exception.Message)" } catch {} }
     if (-not ($vm -and $vm.running -and $vm.ip)) {
+        try { Write-Diag "Update-V6GameConfig: VM not running (vm=$([bool]$vm) running=$($vm.running) ip=$($vm.ip))" } catch {}
         $g.Status.Text = 'VM not running — start the VM from the Terminal pane to edit config.'
         foreach ($entry in $g.Fields.Values) { $entry.Control.IsEnabled = $false }
         $g.BtnSave.IsEnabled = $false
@@ -601,9 +733,15 @@ function Update-V6GameConfig {
 
     $g.Status.Text = 'Loading config from VM…'
     $g.BtnRefresh.IsEnabled = $false
+    $cfg = $null
     try {
         $cfg = Get-V6GameConfigFromVm -Ip $vm.ip
+        try { Write-Diag ("Update-V6GameConfig: fetched gameRawLen={0} engineRawLen={1} gameKeys={2} engineKeys={3}" -f `
+            ($cfg.gameRaw | Measure-Object -Character).Characters, `
+            ($cfg.engineRaw | Measure-Object -Character).Characters, `
+            $cfg.game.Count, $cfg.engine.Count) } catch {}
     } catch {
+        try { Write-Diag "Update-V6GameConfig: fetch FAILED: $($_.Exception.Message) -- $($_.ScriptStackTrace)" } catch {}
         $g.Status.Text = "Failed to load: $($_.Exception.Message)"
         $g.BtnRefresh.IsEnabled = $true
         return
@@ -611,26 +749,47 @@ function Update-V6GameConfig {
         $g.BtnRefresh.IsEnabled = $true
     }
 
+    if (-not $cfg -or ([string]::IsNullOrWhiteSpace($cfg.gameRaw) -and [string]::IsNullOrWhiteSpace($cfg.engineRaw))) {
+        try { Write-Diag "Update-V6GameConfig: SSH returned empty config — INI files not found or SSH failed silently" } catch {}
+        $g.Status.Text = "No config returned from VM. Check SSH key (Settings → SSH Key) and that the VM has finished provisioning."
+        return
+    }
+
     $g.GameRaw   = $cfg.gameRaw
     $g.EngineRaw = $cfg.engineRaw
     $g.Original  = @{}
 
-    foreach ($k in $g.Fields.Keys) {
-        $entry = $g.Fields[$k]
-        $entry.Control.IsEnabled = $true
-        $bag = if ($entry.File -eq 'game') { $cfg.game } else { $cfg.engine }
-        $val = if ($bag.ContainsKey($k)) { $bag[$k] } else { '' }
-        # Strip wrapping quotes for display in text fields
-        if ($entry.Type -eq 'text' -and $val -and $val.StartsWith('"') -and $val.EndsWith('"')) {
-            $val = $val.Substring(1, $val.Length - 2)
+    $script:V6GcLoading = $true
+    try {
+        foreach ($k in $g.Fields.Keys) {
+            $entry = $g.Fields[$k]
+            $entry.Control.IsEnabled = $true
+            $bag = if ($entry.File -eq 'game') { $cfg.game } else { $cfg.engine }
+            $val = if ($bag.ContainsKey($k)) { $bag[$k] } else { '' }
+            # Strip wrapping quotes for display in text fields
+            if ($entry.Type -eq 'text' -and $val -and $val.StartsWith('"') -and $val.EndsWith('"')) {
+                $val = $val.Substring(1, $val.Length - 2)
+            }
+            try {
+                _V6GcApplyValueToControl -entry $entry -Value $val
+            } catch {
+                try { Write-Diag "Update-V6GameConfig: ApplyValue failed for key=$k type=$($entry.Type) val='$val': $($_.Exception.Message)" } catch {}
+            }
+            $g.Original[$k] = "$val"
         }
-        _V6GcApplyValueToControl -entry $entry -Value $val
-        $g.Original[$k] = "$val"
+    } finally {
+        $script:V6GcLoading = $false
     }
     _V6GcSetDirty $g $false
     $g.Loaded = $true
     $g.BtnSave.IsEnabled = $true
-    $g.Status.Text = "Loaded — UserGame.ini and UserEngine.ini fetched at $(Get-Date -Format 'HH:mm:ss')."
+    $sourceTag = switch ($cfg.sourceLabel) {
+        'live'     { 'live battlegroup PVC' }
+        'template' { 'setup templates (BG never started — edits apply on first launch)' }
+        default    { $cfg.sourceLabel }
+    }
+    $g.Status.Text = "Loaded from $sourceTag at $(Get-Date -Format 'HH:mm:ss')."
+    try { Write-Diag "Update-V6GameConfig: completed ($($g.Fields.Count) fields, source=$($cfg.sourceLabel))" } catch {}
 }
 
 function Invoke-V6GameConfigSave {
@@ -713,4 +872,8 @@ function Invoke-V6GameConfigSave {
     }
     _V6GcSetDirty $g $false
     $g.BtnSave.IsEnabled = $true
+
+    # Engine.ini Port may have changed — invalidate the Dashboard's port cache
+    # so the next Dashboard visit re-reads it from disk.
+    $script:V6DashPortCache = $null
 }

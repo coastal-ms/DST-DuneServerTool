@@ -1,4 +1,4 @@
-# app/pages/Dashboard.ps1 - v6 Dashboard page (D1 layout)
+﻿# app/pages/Dashboard.ps1 - v6 Dashboard page (D1 layout)
 #
 # Renders inside the existing PageDashboard Border. Two hero tiles
 # (Battlegroup + VM) with inline action buttons, plus a row of quick
@@ -12,6 +12,125 @@
 # Update-V6Dashboard which is invoked from Refresh-StatusHeader's tail
 # and from NavDashboard.Checked.
 
+# ──────────────────────────────────────────────────────────────────────────
+#  Game Port tile (async fetch + cache)
+# ──────────────────────────────────────────────────────────────────────────
+#
+# Reads `Port=` from the live UserEngine.ini inside the BG's PVC, via SSH +
+# sudo grep. The value is cached for 10 min so per-tick repaints don't fire
+# extra SSH calls; the cache is invalidated when GameConfig saves a new
+# port (Save-V6GameConfigToVm clears $script:V6DashPortCache).
+
+$script:V6DashPortCache    = $null         # @{ port=7777; fetched=DateTime }
+$script:V6DashPortCacheTtl = [TimeSpan]::FromMinutes(10)
+$script:V6DashPortInFlight = $false
+
+function _V6DashUpdatePortTile {
+    param($d)
+    if (-not $d -or -not $d.TilePortLabel) { return }
+
+    # Cache hit
+    if ($script:V6DashPortCache -and `
+        ((Get-Date) - $script:V6DashPortCache.fetched) -lt $script:V6DashPortCacheTtl) {
+        $d.TilePortLabel.Text = 'GAME PORT'
+        $d.TilePortValue.Text = "$($script:V6DashPortCache.port)"
+        $d.TilePortSub.Text   = 'UDP (live UserEngine.ini)'
+        return
+    }
+
+    # VM not up?
+    $vm = $null
+    try { $vm = Get-VmStatus } catch {}
+    if (-not ($vm -and $vm.running -and $vm.ip)) {
+        $d.TilePortLabel.Text = 'GAME PORT'
+        $d.TilePortValue.Text = '—'
+        $d.TilePortSub.Text   = 'VM not running'
+        return
+    }
+
+    if ($script:V6DashPortInFlight) { return }   # already fetching
+    $script:V6DashPortInFlight = $true
+    $d.TilePortLabel.Text = 'GAME PORT'
+    $d.TilePortValue.Text = '…'
+    $d.TilePortSub.Text   = 'reading UserEngine.ini'
+
+    $rs = [RunspaceFactory]::CreateRunspace()
+    $rs.ApartmentState = 'STA'
+    $rs.ThreadOptions  = 'ReuseThread'
+    $rs.Open()
+    $libSrc = Get-Content -Raw -LiteralPath (Join-Path $script:V6LibDir 'Db-Postgres.ps1')
+    $rs.SessionStateProxy.SetVariable('LibSrc', $libSrc)
+    $ps = [PowerShell]::Create()
+    $ps.Runspace = $rs
+    [void]$ps.AddScript({
+        param($Ip)
+        Invoke-Expression $LibSrc
+        try {
+            $bash = @'
+f=$(ls -t /var/lib/rancher/k3s/storage/pvc-*_funcom-seabass-*-pvc/Saved/UserSettings/UserEngine.ini 2>/dev/null | head -1)
+[ -z "$f" ] && f=/home/dune/.dune/download/scripts/setup/config/UserEngine.ini
+sudo grep -E '^Port=' "$f" 2>/dev/null | tail -1
+'@
+            $bash = $bash -replace "`r",""
+            $b64 = [Convert]::ToBase64String([Text.Encoding]::UTF8.GetBytes($bash))
+            # Call ssh directly (don't use Invoke-V6Ssh's stderr swallow) so we can diagnose.
+            $key = Get-V6SshKeyPath
+            $keyOk = ($key -and (Test-Path $key))
+            if ($keyOk) {
+                $raw = & ssh -o BatchMode=yes -o StrictHostKeyChecking=no -o ConnectTimeout=8 -i $key "dune@$Ip" "echo $b64 | base64 -d | sudo bash" 2>&1
+            } else {
+                $raw = & ssh -o BatchMode=yes -o StrictHostKeyChecking=no -o ConnectTimeout=8 "dune@$Ip" "echo $b64 | base64 -d | sudo bash" 2>&1
+            }
+            $rawText = ($raw | ForEach-Object { "$_" }) -join '|'
+            $line = ($raw | ForEach-Object { "$_" } | Where-Object { $_ -match '^Port\s*=\s*\d+' } | Select-Object -First 1)
+            if ($line -and ($line -match '^Port\s*=\s*(\d+)')) {
+                return @{ ok=$true; port=[int]$Matches[1] }
+            }
+            return @{ ok=$false; reason="key=$keyOk raw=[$rawText]" }
+        } catch {
+            return @{ ok=$false; reason=$_.Exception.Message }
+        }
+    }).AddArgument($vm.ip)
+
+    $asyncResult = $ps.BeginInvoke()
+
+    $timer = New-Object System.Windows.Threading.DispatcherTimer
+    $timer.Interval = [TimeSpan]::FromMilliseconds(300)
+    $tickHandler = {
+        if (-not $asyncResult.IsCompleted) { return }
+        $timer.Stop()
+        try {
+            $r = $ps.EndInvoke($asyncResult) | Select-Object -First 1
+            if ($r -and $r.ok -and $r.port) {
+                $script:V6DashPortCache = @{ port=$r.port; fetched=(Get-Date) }
+                if ($d.TilePortValue) {
+                    $d.TilePortLabel.Text = 'GAME PORT'
+                    $d.TilePortValue.Text = "$($r.port)"
+                    $d.TilePortSub.Text   = 'UDP (live UserEngine.ini)'
+                }
+            } else {
+                if ($d.TilePortValue) {
+                    $d.TilePortValue.Text = '?'
+                    $reasonText = if ($r -and $r.reason) { "$($r.reason)" } else { 'no result' }
+                    if ($reasonText.Length -gt 120) { $reasonText = $reasonText.Substring(0,120) + '…' }
+                    $d.TilePortSub.Text   = $reasonText
+                }
+            }
+        } catch {
+            if ($d.TilePortValue) {
+                $d.TilePortValue.Text = '?'
+                $d.TilePortSub.Text   = 'lookup error'
+            }
+        } finally {
+            try { $ps.Dispose() } catch {}
+            try { $rs.Close(); $rs.Dispose() } catch {}
+            $script:V6DashPortInFlight = $false
+        }
+    }.GetNewClosure()
+    $timer.Add_Tick($tickHandler)
+    $timer.Start()
+}
+
 function Initialize-V6DashboardPage {
     if (-not $ui -or -not $ui.PageDashboard) { return }
 
@@ -19,7 +138,9 @@ function Initialize-V6DashboardPage {
 <Border xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         Background="#FF14110D" Padding="32,24,32,28">
-  <DockPanel LastChildFill="True">
+  <Grid>
+  <ScrollViewer VerticalScrollBarVisibility="Visible" HorizontalScrollBarVisibility="Disabled">
+  <DockPanel LastChildFill="False">
 
     <!-- Section header (gold title + subtle dune-ridge accent + timestamp) -->
     <Grid DockPanel.Dock="Top" Margin="0,0,0,18">
@@ -58,9 +179,12 @@ function Initialize-V6DashboardPage {
         </Border.Effect>
         <DockPanel LastChildFill="True">
           <StackPanel Orientation="Horizontal" DockPanel.Dock="Bottom" Margin="0,18,0,0">
-            <Button x:Name="DashBgStart"   Content="Start"   MinWidth="92" Padding="0,8" Margin="0,0,8,0"/>
-            <Button x:Name="DashBgRestart" Content="Restart" MinWidth="92" Padding="0,8" Margin="0,0,8,0"/>
-            <Button x:Name="DashBgStop"    Content="Stop"    MinWidth="92" Padding="0,8" Foreground="#FFE86A6A"/>
+            <Button x:Name="DashBgStart"   Content="Start"   MinWidth="92" Padding="0,8" Margin="0,0,8,0"
+                    ToolTip="Start the battlegroup (assumes VM is already powered on)."/>
+            <Button x:Name="DashBgRestart" Content="Restart" MinWidth="92" Padding="0,8" Margin="0,0,8,0"
+                    ToolTip="Restart only the battlegroup (game/mq/gateway/director pods)."/>
+            <Button x:Name="DashBgStop"    Content="Stop"    MinWidth="92" Padding="0,8" Foreground="#FFE86A6A"
+                    ToolTip="Stop the battlegroup (game pods terminate; VM stays running)."/>
           </StackPanel>
           <StackPanel>
             <TextBlock Text="BATTLEGROUP" Foreground="#FF9A8E78"
@@ -83,9 +207,14 @@ function Initialize-V6DashboardPage {
         </Border.Effect>
         <DockPanel LastChildFill="True">
           <StackPanel Orientation="Horizontal" DockPanel.Dock="Bottom" Margin="0,18,0,0">
-            <Button x:Name="DashVmStart"  Content="Power On" MinWidth="104" Padding="0,8" Margin="0,0,8,0"/>
-            <Button x:Name="DashVmReboot" Content="Reboot"   MinWidth="92"  Padding="0,8" Margin="0,0,8,0"/>
-            <Button x:Name="DashVmStop"   Content="Shutdown" MinWidth="104" Padding="0,8" Foreground="#FFE86A6A"/>
+            <Button x:Name="DashVmStart"   Content="Power On"      MinWidth="88" Padding="0,8" Margin="0,0,6,0"
+                    ToolTip="Power on the VM only (no battlegroup) — useful for maintenance."/>
+            <Button x:Name="DashVmStartup" Content="Start Stack"   MinWidth="100" Padding="0,8" Margin="0,0,6,0"
+                    ToolTip="Power on VM → start battlegroup → wait for Overmap + Survival to reach Ready."/>
+            <Button x:Name="DashVmReboot"  Content="Restart Stack" MinWidth="110" Padding="0,8" Margin="0,0,6,0"
+                    ToolTip="Stop battlegroup → restart VM → start battlegroup (clean cycle for the whole stack)."/>
+            <Button x:Name="DashVmStop"    Content="Shutdown"      MinWidth="96"  Padding="0,8" Foreground="#FFE86A6A"
+                    ToolTip="Stop battlegroup → power off the VM (use when shutting down for the night)."/>
           </StackPanel>
           <StackPanel>
             <TextBlock Text="HOST VM" Foreground="#FF9A8E78"
@@ -161,6 +290,47 @@ function Initialize-V6DashboardPage {
     <!-- Bottom fill -->
     <Grid/>
   </DockPanel>
+  </ScrollViewer>
+
+  <!-- Loading overlay: covers cards until first refresh completes. -->
+  <Border x:Name="DashLoadingOverlay" Background="#EE14110D"
+          BorderBrush="#FF3A2818" BorderThickness="0"
+          Visibility="Visible">
+    <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center">
+      <Path Width="40" Height="40" Stretch="Uniform"
+            Stroke="#FFE8B872" StrokeThickness="2.2"
+            StrokeLineJoin="Round" StrokeStartLineCap="Round" StrokeEndLineCap="Round"
+            Fill="Transparent"
+            Data="M12 2 a10 10 0 1 0 10 10 M12 6 v6 l4 2"
+            HorizontalAlignment="Center">
+        <Path.RenderTransform>
+          <RotateTransform x:Name="DashLoadingSpin" Angle="0" CenterX="11" CenterY="11"/>
+        </Path.RenderTransform>
+        <Path.Triggers>
+          <EventTrigger RoutedEvent="Path.Loaded">
+            <BeginStoryboard>
+              <Storyboard RepeatBehavior="Forever">
+                <DoubleAnimation Storyboard.TargetName="DashLoadingSpin"
+                                 Storyboard.TargetProperty="Angle"
+                                 From="0" To="360" Duration="0:0:1.4"/>
+              </Storyboard>
+            </BeginStoryboard>
+          </EventTrigger>
+        </Path.Triggers>
+      </Path>
+      <TextBlock Text="Loading Dashboard" Margin="0,16,0,0"
+                 HorizontalAlignment="Center"
+                 FontFamily="Cinzel, Trajan Pro, Georgia"
+                 FontSize="18" FontWeight="SemiBold"
+                 Foreground="#FFE8B872"/>
+      <TextBlock x:Name="DashLoadingHint"
+                 Text="Querying VM and battlegroup status..."
+                 HorizontalAlignment="Center"
+                 Margin="0,8,0,0" FontSize="12"
+                 Foreground="#FF9A8E78"/>
+    </StackPanel>
+  </Border>
+  </Grid>
 </Border>
 '@
 
@@ -185,6 +355,7 @@ function Initialize-V6DashboardPage {
         VmValue           = $page.FindName('DashVmValue')
         VmSub             = $page.FindName('DashVmSub')
         VmStart           = $page.FindName('DashVmStart')
+        VmStartup         = $page.FindName('DashVmStartup')
         VmReboot          = $page.FindName('DashVmReboot')
         VmStop            = $page.FindName('DashVmStop')
 
@@ -197,9 +368,12 @@ function Initialize-V6DashboardPage {
         TileMemorySub     = $page.FindName('DashTileMemorySub')
         TileUptimeValue   = $page.FindName('DashTileUptimeValue')
         TileUptimeSub     = $page.FindName('DashTileUptimeSub')
+
+        LoadingOverlay    = $page.FindName('DashLoadingOverlay')
+        LoadingHint       = $page.FindName('DashLoadingHint')
     }
 
-    foreach ($btnName in @('BgStart','BgRestart','BgStop','VmStart','VmReboot','VmStop')) {
+    foreach ($btnName in @('BgStart','BgRestart','BgStop','VmStart','VmStartup','VmReboot','VmStop')) {
         $btn = $script:V6Dash[$btnName]
         if ($btn -and $window) {
             try { $btn.Style = $window.FindResource('UtilButton') } catch {}
@@ -210,6 +384,7 @@ function Initialize-V6DashboardPage {
     $script:V6Dash.BgRestart.Add_Click({ Invoke-V6DashAction 'Battlegroup' 'restart' })
     $script:V6Dash.BgStop.Add_Click({    Invoke-V6DashAction 'Battlegroup' 'stop' })
     $script:V6Dash.VmStart.Add_Click({   Invoke-V6DashAction 'VM' 'start-vm' })
+    $script:V6Dash.VmStartup.Add_Click({ Invoke-V6DashAction 'VM' 'startup' })
     $script:V6Dash.VmReboot.Add_Click({  Invoke-V6DashAction 'VM' 'reboot' })
     $script:V6Dash.VmStop.Add_Click({    Invoke-V6DashAction 'VM' 'shutdown' })
 }
@@ -247,9 +422,10 @@ function Update-V6Dashboard {
         $d.VmValue.Text = 'NOT FOUND'
         $d.VmValue.Foreground = [System.Windows.Media.Brushes]::IndianRed
         $d.VmSub.Text = "VM '$($script:VmName)' is not registered with Hyper-V"
-        $d.VmStart.IsEnabled  = $false
-        $d.VmReboot.IsEnabled = $false
-        $d.VmStop.IsEnabled   = $false
+        $d.VmStart.IsEnabled   = $false
+        $d.VmStartup.IsEnabled = $false
+        $d.VmReboot.IsEnabled  = $false
+        $d.VmStop.IsEnabled    = $false
         $d.TileMemoryValue.Text = '-'
         $d.TileUptimeValue.Text = '-'
     } else {
@@ -258,16 +434,18 @@ function Update-V6Dashboard {
             $d.VmValue.Foreground = New-Object System.Windows.Media.SolidColorBrush ([System.Windows.Media.Color]::FromArgb(255,0x6F,0xCF,0x7C))
             $ip = if ($vm.ip) { $vm.ip } else { '(no IP yet)' }
             $d.VmSub.Text = "$ip"
-            $d.VmStart.IsEnabled  = $false
-            $d.VmReboot.IsEnabled = $true
-            $d.VmStop.IsEnabled   = $true
+            $d.VmStart.IsEnabled   = $false
+            $d.VmStartup.IsEnabled = $false
+            $d.VmReboot.IsEnabled  = $true
+            $d.VmStop.IsEnabled    = $true
         } else {
             $d.VmValue.Text = ($vm.state.ToString().ToUpper())
             $d.VmValue.Foreground = New-Object System.Windows.Media.SolidColorBrush ([System.Windows.Media.Color]::FromArgb(255,0xE8,0xB8,0x72))
             $d.VmSub.Text = "VM is powered off"
-            $d.VmStart.IsEnabled  = $true
-            $d.VmReboot.IsEnabled = $false
-            $d.VmStop.IsEnabled   = $false
+            $d.VmStart.IsEnabled   = $true
+            $d.VmStartup.IsEnabled = $true
+            $d.VmReboot.IsEnabled  = $false
+            $d.VmStop.IsEnabled    = $false
         }
 
         try {
@@ -337,15 +515,9 @@ function Update-V6Dashboard {
         }
     }
 
-    # Port tile - reuse what the header port-status pulled if cached
-    try {
-        $cfg = Read-Config
-        if ($cfg.GamePort) {
-            $d.TilePortLabel.Text = "PORT $($cfg.GamePort)"
-            $d.TilePortValue.Text = if ($ui.PortStatusLbl -and $ui.PortStatusLbl.Text) { 'see header' } else { '-' }
-            $d.TilePortSub.Text   = 'TCP'
-        }
-    } catch {}
+    # Port tile — async fetch the live Port from UserEngine.ini on the VM.
+    # Cached for 10 min; invalidated when GameConfig saves a new port.
+    _V6DashUpdatePortTile -d $d
 
     # Latest tag tile - mirror header labels
     if ($ui.InstalledLbl -and $ui.LatestLbl) {
@@ -360,4 +532,9 @@ function Update-V6Dashboard {
     }
 
     $d.LastUpdated.Text = "updated $((Get-Date).ToString('HH:mm:ss'))"
+
+    # Hide loading overlay once first refresh paints real data.
+    if ($d.LoadingOverlay -and $d.LoadingOverlay.Visibility -ne 'Collapsed') {
+        $d.LoadingOverlay.Visibility = 'Collapsed'
+    }
 }

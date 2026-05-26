@@ -1,4 +1,4 @@
-﻿# app/pages/MultiSietch.ps1 - v6 Experimental Multi-Sietch page
+# app/pages/MultiSietch.ps1 - v6 Experimental Multi-Sietch page
 #
 # Hosts inside the existing PageExperimental Border (XAML host).
 #
@@ -33,7 +33,8 @@ function New-V6MultiSietchPage {
     <SolidColorBrush x:Key="MsSubtle" Color="#FF9A8E78"/>
   </Border.Resources>
 
-  <DockPanel LastChildFill="True">
+  <ScrollViewer VerticalScrollBarVisibility="Visible" HorizontalScrollBarVisibility="Disabled">
+  <DockPanel LastChildFill="False">
 
     <!-- Section header -->
     <Grid DockPanel.Dock="Top" Margin="0,0,0,16">
@@ -65,9 +66,9 @@ function New-V6MultiSietchPage {
         <TextBlock Text="&#x26A0;" FontSize="16" Foreground="{StaticResource MsRed}"
                    Margin="0,0,10,0" VerticalAlignment="Center"/>
         <TextBlock Foreground="{StaticResource MsText}" TextWrapping="Wrap" VerticalAlignment="Center">
-          <Run Text="Unsupported: adds extra Hagga Basin instances by patching the K8s battlegroup CRD directly."/>
+          <Run Text="Unsupported: adds additional sietch shards onto an existing battlegroup by patching the K8s CRD directly."/>
           <LineBreak/>
-          <Run Text="Each additional sietch consumes ~12 GB RAM, requires extra UDP ports forwarded (7777-7900), and a battlegroup restart to apply."/>
+          <Run Text="Budget roughly 12 GB more system RAM per sietch you add, open the extra UDP port range (7777-7900) on the host, and restart the battlegroup for the change to land."/>
         </TextBlock>
       </StackPanel>
     </Border>
@@ -76,6 +77,7 @@ function New-V6MultiSietchPage {
     <ContentControl x:Name="MsContent"/>
 
   </DockPanel>
+  </ScrollViewer>
 </Border>
 '@
     $page = [Windows.Markup.XamlReader]::Parse($xaml)
@@ -88,7 +90,7 @@ function New-V6MultiSietchPage {
 function _V6MsBuildGate {
     param($state)
     $sv = New-Object System.Windows.Controls.ScrollViewer
-    $sv.VerticalScrollBarVisibility = 'Auto'
+    $sv.VerticalScrollBarVisibility = 'Visible'
     $sp = New-Object System.Windows.Controls.StackPanel
     $sp.MaxWidth = 640
     $sp.HorizontalAlignment = 'Left'
@@ -218,7 +220,7 @@ function _V6MsBuildControls {
     param($state)
 
     $sv = New-Object System.Windows.Controls.ScrollViewer
-    $sv.VerticalScrollBarVisibility = 'Auto'
+    $sv.VerticalScrollBarVisibility = 'Visible'
     $sp = New-Object System.Windows.Controls.StackPanel
     $sv.Content = $sp
 

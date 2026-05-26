@@ -361,12 +361,223 @@
     <Setter Property="Cursor"     Value="Hand"/>
   </Style>
 
+  <!-- Consistent primary action button (used by Settings cards so all three
+       action buttons render identically regardless of focus state). -->
+  <Style x:Key="DuneActionButtonStyle" TargetType="Button">
+    <Setter Property="MinWidth"            Value="180"/>
+    <Setter Property="MinHeight"           Value="40"/>
+    <Setter Property="Padding"             Value="14,0"/>
+    <Setter Property="HorizontalAlignment" Value="Left"/>
+    <Setter Property="VerticalContentAlignment" Value="Center"/>
+    <Setter Property="HorizontalContentAlignment" Value="Center"/>
+    <Setter Property="FocusVisualStyle"    Value="{x:Null}"/>
+    <Setter Property="Cursor"              Value="Hand"/>
+  </Style>
+
   <!-- ============================================================== -->
   <!--  Page-host content container (matches D1 layout proportions)    -->
   <!-- ============================================================== -->
   <Style x:Key="PageRootStyle" TargetType="Border">
     <Setter Property="Background" Value="{StaticResource PageBgBrush}"/>
     <Setter Property="Padding"    Value="22,18,22,22"/>
+  </Style>
+
+  <!-- ============================================================== -->
+  <!--  Eyes of Ibad ScrollBar                                         -->
+  <!--  Cyan (Ibad-blue) thumb with a spice-gold border. Always        -->
+  <!--  visible so users know scrollable content extends offscreen.    -->
+  <!-- ============================================================== -->
+  <Color x:Key="IbadGlowColor">  #FF00E5FF </Color>
+  <Color x:Key="IbadCoreColor">  #FF4FC3F7 </Color>
+  <Color x:Key="IbadDeepColor">  #FF1B7CB0 </Color>
+  <Color x:Key="SpiceColor">     #FFD87F33 </Color>
+  <Color x:Key="SpiceBrightColor"> #FFFFB060 </Color>
+
+  <SolidColorBrush x:Key="ScrollTrackBrush"    Color="#FF0A0806"/>
+  <SolidColorBrush x:Key="ScrollTrackEdgeBrush" Color="#FF2A2018"/>
+  <SolidColorBrush x:Key="SpiceBrush"          Color="{StaticResource SpiceColor}"/>
+  <SolidColorBrush x:Key="SpiceBrightBrush"    Color="{StaticResource SpiceBrightColor}"/>
+
+  <LinearGradientBrush x:Key="IbadThumbBrush" StartPoint="0,0" EndPoint="1,0">
+    <GradientStop Offset="0.0" Color="{StaticResource IbadDeepColor}"/>
+    <GradientStop Offset="0.5" Color="{StaticResource IbadCoreColor}"/>
+    <GradientStop Offset="1.0" Color="{StaticResource IbadDeepColor}"/>
+  </LinearGradientBrush>
+
+  <LinearGradientBrush x:Key="IbadThumbHoverBrush" StartPoint="0,0" EndPoint="1,0">
+    <GradientStop Offset="0.0" Color="{StaticResource IbadCoreColor}"/>
+    <GradientStop Offset="0.5" Color="{StaticResource IbadGlowColor}"/>
+    <GradientStop Offset="1.0" Color="{StaticResource IbadCoreColor}"/>
+  </LinearGradientBrush>
+
+  <LinearGradientBrush x:Key="IbadThumbHBrush" StartPoint="0,0" EndPoint="0,1">
+    <GradientStop Offset="0.0" Color="{StaticResource IbadDeepColor}"/>
+    <GradientStop Offset="0.5" Color="{StaticResource IbadCoreColor}"/>
+    <GradientStop Offset="1.0" Color="{StaticResource IbadDeepColor}"/>
+  </LinearGradientBrush>
+
+  <LinearGradientBrush x:Key="IbadThumbHHoverBrush" StartPoint="0,0" EndPoint="0,1">
+    <GradientStop Offset="0.0" Color="{StaticResource IbadCoreColor}"/>
+    <GradientStop Offset="0.5" Color="{StaticResource IbadGlowColor}"/>
+    <GradientStop Offset="1.0" Color="{StaticResource IbadCoreColor}"/>
+  </LinearGradientBrush>
+
+  <DropShadowEffect x:Key="IbadGlow" Color="{StaticResource IbadGlowColor}"
+                    BlurRadius="10" ShadowDepth="0" Opacity="0.55"/>
+
+  <!-- Invisible repeat-button (track click area) -->
+  <Style x:Key="ScrollBarLineButtonStyle" TargetType="RepeatButton">
+    <Setter Property="OverridesDefaultStyle" Value="True"/>
+    <Setter Property="Focusable" Value="False"/>
+    <Setter Property="IsTabStop" Value="False"/>
+    <Setter Property="Background" Value="Transparent"/>
+    <Setter Property="Template">
+      <Setter.Value>
+        <ControlTemplate TargetType="RepeatButton">
+          <Border Background="Transparent"/>
+        </ControlTemplate>
+      </Setter.Value>
+    </Setter>
+  </Style>
+
+  <Style x:Key="ScrollBarPageButtonStyle" TargetType="RepeatButton">
+    <Setter Property="OverridesDefaultStyle" Value="True"/>
+    <Setter Property="Focusable" Value="False"/>
+    <Setter Property="IsTabStop" Value="False"/>
+    <Setter Property="Background" Value="Transparent"/>
+    <Setter Property="Template">
+      <Setter.Value>
+        <ControlTemplate TargetType="RepeatButton">
+          <Border Background="Transparent"/>
+        </ControlTemplate>
+      </Setter.Value>
+    </Setter>
+  </Style>
+
+  <!-- Vertical thumb: Ibad-blue gradient with spice-gold border -->
+  <Style x:Key="ScrollBarThumbVerticalStyle" TargetType="Thumb">
+    <Setter Property="OverridesDefaultStyle" Value="True"/>
+    <Setter Property="Focusable" Value="False"/>
+    <Setter Property="IsTabStop" Value="False"/>
+    <Setter Property="Template">
+      <Setter.Value>
+        <ControlTemplate TargetType="Thumb">
+          <Grid>
+            <Border x:Name="ThumbBorder"
+                    Background="{StaticResource IbadThumbBrush}"
+                    BorderBrush="{StaticResource SpiceBrush}"
+                    BorderThickness="1.4"
+                    CornerRadius="3"
+                    Margin="2,1"
+                    SnapsToDevicePixels="True"/>
+          </Grid>
+          <ControlTemplate.Triggers>
+            <Trigger Property="IsMouseOver" Value="True">
+              <Setter TargetName="ThumbBorder" Property="Background"  Value="{StaticResource IbadThumbHoverBrush}"/>
+              <Setter TargetName="ThumbBorder" Property="BorderBrush" Value="{StaticResource SpiceBrightBrush}"/>
+              <Setter TargetName="ThumbBorder" Property="Effect"      Value="{StaticResource IbadGlow}"/>
+            </Trigger>
+            <Trigger Property="IsDragging" Value="True">
+              <Setter TargetName="ThumbBorder" Property="Background"  Value="{StaticResource IbadThumbHoverBrush}"/>
+              <Setter TargetName="ThumbBorder" Property="BorderBrush" Value="{StaticResource SpiceBrightBrush}"/>
+              <Setter TargetName="ThumbBorder" Property="Effect"      Value="{StaticResource IbadGlow}"/>
+            </Trigger>
+          </ControlTemplate.Triggers>
+        </ControlTemplate>
+      </Setter.Value>
+    </Setter>
+  </Style>
+
+  <!-- Horizontal thumb: same look, gradient rotated -->
+  <Style x:Key="ScrollBarThumbHorizontalStyle" TargetType="Thumb">
+    <Setter Property="OverridesDefaultStyle" Value="True"/>
+    <Setter Property="Focusable" Value="False"/>
+    <Setter Property="IsTabStop" Value="False"/>
+    <Setter Property="Template">
+      <Setter.Value>
+        <ControlTemplate TargetType="Thumb">
+          <Grid>
+            <Border x:Name="ThumbBorder"
+                    Background="{StaticResource IbadThumbHBrush}"
+                    BorderBrush="{StaticResource SpiceBrush}"
+                    BorderThickness="1.4"
+                    CornerRadius="3"
+                    Margin="1,2"
+                    SnapsToDevicePixels="True"/>
+          </Grid>
+          <ControlTemplate.Triggers>
+            <Trigger Property="IsMouseOver" Value="True">
+              <Setter TargetName="ThumbBorder" Property="Background"  Value="{StaticResource IbadThumbHHoverBrush}"/>
+              <Setter TargetName="ThumbBorder" Property="BorderBrush" Value="{StaticResource SpiceBrightBrush}"/>
+              <Setter TargetName="ThumbBorder" Property="Effect"      Value="{StaticResource IbadGlow}"/>
+            </Trigger>
+            <Trigger Property="IsDragging" Value="True">
+              <Setter TargetName="ThumbBorder" Property="Background"  Value="{StaticResource IbadThumbHHoverBrush}"/>
+              <Setter TargetName="ThumbBorder" Property="BorderBrush" Value="{StaticResource SpiceBrightBrush}"/>
+              <Setter TargetName="ThumbBorder" Property="Effect"      Value="{StaticResource IbadGlow}"/>
+            </Trigger>
+          </ControlTemplate.Triggers>
+        </ControlTemplate>
+      </Setter.Value>
+    </Setter>
+  </Style>
+
+  <!-- Default ScrollBar style (applies to ALL ScrollBars unless overridden) -->
+  <Style TargetType="{x:Type ScrollBar}">
+    <Setter Property="SnapsToDevicePixels" Value="True"/>
+    <Setter Property="OverridesDefaultStyle" Value="True"/>
+    <Style.Triggers>
+      <Trigger Property="Orientation" Value="Vertical">
+        <Setter Property="Width"  Value="14"/>
+        <Setter Property="MinWidth" Value="14"/>
+        <Setter Property="Template">
+          <Setter.Value>
+            <ControlTemplate TargetType="ScrollBar">
+              <Grid Background="{StaticResource ScrollTrackBrush}">
+                <Border BorderBrush="{StaticResource ScrollTrackEdgeBrush}"
+                        BorderThickness="1,0,0,0"/>
+                <Track x:Name="PART_Track" IsDirectionReversed="True">
+                  <Track.DecreaseRepeatButton>
+                    <RepeatButton Style="{StaticResource ScrollBarPageButtonStyle}" Command="ScrollBar.PageUpCommand"/>
+                  </Track.DecreaseRepeatButton>
+                  <Track.IncreaseRepeatButton>
+                    <RepeatButton Style="{StaticResource ScrollBarPageButtonStyle}" Command="ScrollBar.PageDownCommand"/>
+                  </Track.IncreaseRepeatButton>
+                  <Track.Thumb>
+                    <Thumb Style="{StaticResource ScrollBarThumbVerticalStyle}" MinHeight="32"/>
+                  </Track.Thumb>
+                </Track>
+              </Grid>
+            </ControlTemplate>
+          </Setter.Value>
+        </Setter>
+      </Trigger>
+      <Trigger Property="Orientation" Value="Horizontal">
+        <Setter Property="Height" Value="14"/>
+        <Setter Property="MinHeight" Value="14"/>
+        <Setter Property="Template">
+          <Setter.Value>
+            <ControlTemplate TargetType="ScrollBar">
+              <Grid Background="{StaticResource ScrollTrackBrush}">
+                <Border BorderBrush="{StaticResource ScrollTrackEdgeBrush}"
+                        BorderThickness="0,1,0,0"/>
+                <Track x:Name="PART_Track" IsDirectionReversed="False">
+                  <Track.DecreaseRepeatButton>
+                    <RepeatButton Style="{StaticResource ScrollBarPageButtonStyle}" Command="ScrollBar.PageLeftCommand"/>
+                  </Track.DecreaseRepeatButton>
+                  <Track.IncreaseRepeatButton>
+                    <RepeatButton Style="{StaticResource ScrollBarPageButtonStyle}" Command="ScrollBar.PageRightCommand"/>
+                  </Track.IncreaseRepeatButton>
+                  <Track.Thumb>
+                    <Thumb Style="{StaticResource ScrollBarThumbHorizontalStyle}" MinWidth="32"/>
+                  </Track.Thumb>
+                </Track>
+              </Grid>
+            </ControlTemplate>
+          </Setter.Value>
+        </Setter>
+      </Trigger>
+    </Style.Triggers>
   </Style>
 
 </ResourceDictionary>

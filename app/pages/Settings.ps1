@@ -16,7 +16,8 @@ function Initialize-V6SettingsPage {
 <Border xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         Background="#FF14110D" Padding="32,24,32,28">
-  <DockPanel LastChildFill="True">
+  <ScrollViewer VerticalScrollBarVisibility="Visible" HorizontalScrollBarVisibility="Disabled">
+  <DockPanel LastChildFill="False">
 
     <!-- Section header -->
     <Grid DockPanel.Dock="Top" Margin="0,0,0,18">
@@ -56,7 +57,7 @@ function Initialize-V6SettingsPage {
         <Border.Effect>
           <DropShadowEffect Color="#FF000000" ShadowDepth="3" BlurRadius="14" Opacity="0.6"/>
         </Border.Effect>
-        <DockPanel LastChildFill="True">
+        <DockPanel LastChildFill="False">
           <StackPanel Orientation="Horizontal" DockPanel.Dock="Top" Margin="0,0,0,10">
             <Path Width="22" Height="22" Stretch="Uniform"
                   Stroke="#FFE8B872" StrokeThickness="1.6"
@@ -73,7 +74,10 @@ function Initialize-V6SettingsPage {
                      Foreground="#FFB8AC95" TextWrapping="Wrap" Margin="0,0,0,12"/>
           <StackPanel Orientation="Horizontal" DockPanel.Dock="Bottom">
             <Button x:Name="SettingsBtnChangePassword" Content="Change Password"
-                    MinWidth="160" Padding="0,8"/>
+                    MinWidth="180" MinHeight="40" Padding="14,0"
+                    HorizontalAlignment="Left"
+                    HorizontalContentAlignment="Center" VerticalContentAlignment="Center"
+                    FocusVisualStyle="{x:Null}" Cursor="Hand"/>
           </StackPanel>
         </DockPanel>
       </Border>
@@ -84,7 +88,7 @@ function Initialize-V6SettingsPage {
         <Border.Effect>
           <DropShadowEffect Color="#FF000000" ShadowDepth="3" BlurRadius="14" Opacity="0.6"/>
         </Border.Effect>
-        <DockPanel LastChildFill="True">
+        <DockPanel LastChildFill="False">
           <StackPanel Orientation="Horizontal" DockPanel.Dock="Top" Margin="0,0,0,10">
             <Path Width="22" Height="22" Stretch="Uniform"
                   Stroke="#FFE8B872" StrokeThickness="1.6"
@@ -97,7 +101,7 @@ function Initialize-V6SettingsPage {
                        Foreground="#FFE8B872" VerticalAlignment="Center"/>
           </StackPanel>
           <TextBlock DockPanel.Dock="Top"
-                     Text="Generate a new SSH key pair and install it on the VM, replacing the current one. The old key is invalidated immediately."
+                     Text="Regenerate the SSH keypair for VM access. The new public key is pushed to authorized_keys immediately; the old key stops working."
                      Foreground="#FFB8AC95" TextWrapping="Wrap" Margin="0,0,0,12"/>
           <TextBlock DockPanel.Dock="Top" x:Name="SettingsKeyPathValue" Text=""
                      Foreground="#FF9A8E78" FontSize="11" Margin="0,0,0,12"
@@ -105,7 +109,10 @@ function Initialize-V6SettingsPage {
                      TextTrimming="CharacterEllipsis"/>
           <StackPanel Orientation="Horizontal" DockPanel.Dock="Bottom">
             <Button x:Name="SettingsBtnRotateKey" Content="Rotate SSH Key"
-                    MinWidth="160" Padding="0,8"/>
+                    MinWidth="180" MinHeight="40" Padding="14,0"
+                    HorizontalAlignment="Left"
+                    HorizontalContentAlignment="Center" VerticalContentAlignment="Center"
+                    FocusVisualStyle="{x:Null}" Cursor="Hand"/>
           </StackPanel>
         </DockPanel>
       </Border>
@@ -128,7 +135,7 @@ function Initialize-V6SettingsPage {
         <Border.Effect>
           <DropShadowEffect Color="#FF000000" ShadowDepth="3" BlurRadius="14" Opacity="0.6"/>
         </Border.Effect>
-        <DockPanel LastChildFill="True">
+        <DockPanel LastChildFill="False">
           <StackPanel Orientation="Horizontal" DockPanel.Dock="Top" Margin="0,0,0,10">
             <Path Width="22" Height="22" Stretch="Uniform"
                   Stroke="#FFE8B872" StrokeThickness="1.6"
@@ -146,11 +153,14 @@ function Initialize-V6SettingsPage {
             </Border>
           </StackPanel>
           <TextBlock DockPanel.Dock="Top"
-                     Text="Enable Linux swap on the VM so the battlegroup can run with less RAM. Recommended only if your VM has fewer than 20 GB allocated."
+                     Text="Enable Linux swap on the VM to let the battlegroup run with a smaller RAM footprint. Best suited for hosts with under 20 GB available to the VM."
                      Foreground="#FFB8AC95" TextWrapping="Wrap" Margin="0,0,0,12"/>
           <StackPanel Orientation="Horizontal" DockPanel.Dock="Bottom">
             <Button x:Name="SettingsBtnEnableSwap" Content="Enable Swap"
-                    MinWidth="160" Padding="0,8"/>
+                    MinWidth="180" MinHeight="40" Padding="14,0"
+                    HorizontalAlignment="Left"
+                    HorizontalContentAlignment="Center" VerticalContentAlignment="Center"
+                    FocusVisualStyle="{x:Null}" Cursor="Hand"/>
           </StackPanel>
         </DockPanel>
       </Border>
@@ -161,7 +171,7 @@ function Initialize-V6SettingsPage {
         <Border.Effect>
           <DropShadowEffect Color="#FF000000" ShadowDepth="3" BlurRadius="14" Opacity="0.6"/>
         </Border.Effect>
-        <DockPanel LastChildFill="True">
+        <DockPanel LastChildFill="False">
           <StackPanel Orientation="Horizontal" DockPanel.Dock="Top" Margin="0,0,0,10">
             <Path Width="22" Height="22" Stretch="Uniform"
                   Stroke="#FFE8B872" StrokeThickness="1.6"
@@ -191,6 +201,7 @@ function Initialize-V6SettingsPage {
     </Grid>
 
   </DockPanel>
+  </ScrollViewer>
 </Border>
 '@
 
@@ -271,20 +282,42 @@ function Update-V6Settings {
     $cfg = @{}
     try { $cfg = Read-Config } catch {}
 
+    # Replace user-profile portions of paths with %ENVVAR% placeholders so
+    # the displayed path doesn't leak the Windows username. We keep the
+    # tooltip generic too — the real path is still in dune-server.config
+    # for users who actually need to copy it.
+    function script:_DisplayPath([string]$p) {
+        if ([string]::IsNullOrWhiteSpace($p)) { return $p }
+        $out = $p
+        $maps = @(
+            @{ Env = $env:LOCALAPPDATA; Token = '%LOCALAPPDATA%' }
+            @{ Env = $env:APPDATA;      Token = '%APPDATA%' }
+            @{ Env = $env:USERPROFILE;  Token = '%USERPROFILE%' }
+            @{ Env = $env:ProgramData;  Token = '%PROGRAMDATA%' }
+        )
+        foreach ($m in $maps) {
+            if ($m.Env -and $out -like ($m.Env + '*')) {
+                $out = $m.Token + $out.Substring($m.Env.Length)
+                break
+            }
+        }
+        return $out
+    }
+
     if ($cfg.SshKey) {
-        $s.KeyPathValue.Text = "current: $($cfg.SshKey)"
+        $s.KeyPathValue.Text = "current: $(_DisplayPath $cfg.SshKey)"
     } else {
         $s.KeyPathValue.Text = "no SSH key configured yet"
     }
 
     $s.ConfigSummary.Children.Clear()
     $rows = @(
-        @{ Label = 'Config file';       Value = $script:ConfigFile }
-        @{ Label = 'SSH key';           Value = $cfg.SshKey }
-        @{ Label = 'Battlegroup .bat';  Value = $cfg.BgBat }
-        @{ Label = 'Steam path';        Value = $cfg.SteamPath }
-        @{ Label = 'dune-admin exe';    Value = $cfg.DuneAdminExe }
-        @{ Label = 'Windows user';      Value = $cfg.WindowsUser }
+        @{ Label = 'Config file';       Value = (_DisplayPath $script:ConfigFile) }
+        @{ Label = 'SSH key';           Value = (_DisplayPath $cfg.SshKey) }
+        @{ Label = 'Battlegroup .bat';  Value = (_DisplayPath $cfg.BgBat) }
+        @{ Label = 'Steam path';        Value = (_DisplayPath $cfg.SteamPath) }
+        @{ Label = 'dune-admin exe';    Value = (_DisplayPath $cfg.DuneAdminExe) }
+        @{ Label = 'Windows user';      Value = '(hidden)' }
         @{ Label = 'Port check mode';   Value = $(if ($cfg.PortCheckMode) { $cfg.PortCheckMode } else { 'builtin (default)' }) }
         @{ Label = 'Game port';         Value = $cfg.GamePort }
     )

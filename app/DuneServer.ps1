@@ -32,7 +32,7 @@ param()
 # check (Check-ForUpdates) and the "Installed: x.y.z" header label. Must be
 # bumped in lock-step with the other 3 version constants (dune-server.ps1,
 # Build-Exe.ps1, installer .iss).
-$script:ToolVersion = "6.0.0-dev"
+$script:ToolVersion = "6.0.0"
 
 # ANSI escape character (0x1B). The ps2exe-compiled binary runs in
 # PowerShell 5.1 (Desktop), which does NOT support the `e backtick-e
@@ -40,6 +40,29 @@ $script:ToolVersion = "6.0.0-dev"
 # "`e[36m..." emits a LITERAL 'e[36m...' — which xterm.js then renders
 # verbatim instead of as colored text. Always use $script:ESC for ANSI.
 $script:ESC = [char]27
+
+# ────────────────────────────────────────────────────────────────────────────
+#  Hide host console window
+# ────────────────────────────────────────────────────────────────────────────
+#
+#  When this script is launched via `powershell.exe -File DuneServer.ps1`
+#  (dev / direct-run scenario), a console window stays open behind the WPF
+#  app. The compiled .exe (ps2exe with -noConsole) doesn't have this issue,
+#  but during development we run the raw .ps1 a lot. Hide the console at
+#  startup so the user experience matches the compiled .exe. Safe no-op when
+#  there is no attached console (GetConsoleWindow returns IntPtr.Zero).
+try {
+    if (-not ('DuneConsoleHider' -as [type])) {
+        Add-Type -Namespace Native -Name DuneConsoleHider -MemberDefinition @'
+[System.Runtime.InteropServices.DllImport("kernel32.dll")] public static extern System.IntPtr GetConsoleWindow();
+[System.Runtime.InteropServices.DllImport("user32.dll")]   public static extern bool ShowWindow(System.IntPtr hWnd, int nCmdShow);
+'@ -ErrorAction Stop
+    }
+    $hCon = [Native.DuneConsoleHider]::GetConsoleWindow()
+    if ($hCon -ne [System.IntPtr]::Zero) {
+        [Native.DuneConsoleHider]::ShowWindow($hCon, 0) | Out-Null   # 0 = SW_HIDE
+    }
+} catch {}
 
 # ────────────────────────────────────────────────────────────────────────────
 #  Prerequisite check: PowerShell 7 (pwsh.exe)
@@ -91,8 +114,16 @@ if (-not $script:AppDir) {
 }
 if (-not $script:AppDir) { $script:AppDir = (Get-Location).Path }
 
-# dune-server.ps1 is shipped in the same install dir
+# dune-server.ps1 is shipped in the same install dir.
+# In dev mode it lives at the repo root (one level up from app\), so probe both.
 $script:MainScript = Join-Path $script:AppDir 'dune-server.ps1'
+if (-not (Test-Path -LiteralPath $script:MainScript)) {
+    $parent = Split-Path -Parent $script:AppDir
+    if ($parent) {
+        $devCandidate = Join-Path $parent 'dune-server.ps1'
+        if (Test-Path -LiteralPath $devCandidate) { $script:MainScript = $devCandidate }
+    }
+}
 $script:VmName     = 'dune-awakening'
 
 # Writable runtime data lives in %APPDATA%\DuneServer\ (Program Files is read-only)
@@ -569,16 +600,17 @@ function Get-V6ThemeInnerXaml {
       <Setter Property="IsReadOnly"      Value="True"/>
       <Setter Property="TextWrapping"    Value="NoWrap"/>
       <Setter Property="AcceptsReturn"   Value="True"/>
-      <Setter Property="VerticalScrollBarVisibility"   Value="Auto"/>
+      <Setter Property="VerticalScrollBarVisibility"   Value="Visible"/>
       <Setter Property="HorizontalScrollBarVisibility" Value="Auto"/>
     </Style>
   </Window.Resources>
 
   <Grid>
     <Grid.RowDefinitions>
-      <RowDefinition Height="Auto"/> <!-- status header -->
-      <RowDefinition Height="*"/>    <!-- main split -->
-      <RowDefinition Height="Auto"/> <!-- footer status bar -->
+      <RowDefinition Height="345" MinHeight="220" x:Name="HeaderRow"/> <!-- status header (resizable) -->
+      <RowDefinition Height="6"/>                                       <!-- splitter -->
+      <RowDefinition Height="*" MinHeight="220"/>                       <!-- main split -->
+      <RowDefinition Height="Auto"/>                                    <!-- footer status bar -->
     </Grid.RowDefinitions>
 
     <!-- ═══ Status header ═══ -->
@@ -588,9 +620,12 @@ function Get-V6ThemeInnerXaml {
           <RowDefinition Height="Auto"/>
           <RowDefinition Height="Auto"/>
           <RowDefinition Height="Auto"/>
+          <RowDefinition Height="Auto"/>
+          <RowDefinition Height="*" MinHeight="120"/>
         </Grid.RowDefinitions>
         <Grid.ColumnDefinitions>
           <ColumnDefinition Width="*"/>
+          <ColumnDefinition Width="Auto"/>
           <ColumnDefinition Width="Auto"/>
           <ColumnDefinition Width="Auto"/>
           <ColumnDefinition Width="Auto"/>
@@ -603,16 +638,25 @@ function Get-V6ThemeInnerXaml {
         </StackPanel>
         <TextBlock x:Name="InstalledVersionLbl" Grid.Row="0" Grid.Column="1" Text="Installed: -" Foreground="#B8A88F" FontSize="11" VerticalAlignment="Center" Margin="0,0,10,0"/>
         <TextBlock x:Name="LatestVersionLbl"    Grid.Row="0" Grid.Column="2" Text="Latest: checking..." Foreground="#B8A88F" FontSize="11" VerticalAlignment="Center" Margin="0,0,10,0"/>
-        <Button x:Name="BtnCheckUpdate" Grid.Row="0" Grid.Column="3" Content="Check for Updates" Style="{StaticResource UtilButton}" Padding="14,4" Margin="0,0,6,0"/>
-        <Button x:Name="BtnRefreshStatus" Grid.Row="0" Grid.Column="4" Content="Refresh" Style="{StaticResource UtilButton}" Padding="14,4"/>
+        <Button x:Name="BtnCheckUpdate"   Grid.Row="0" Grid.Column="3" Content="Check for Updates" Style="{StaticResource UtilButton}" Padding="14,4" Margin="0,0,6,0"/>
+        <Button x:Name="BtnRefreshStatus" Grid.Row="0" Grid.Column="4" Content="Refresh"           Style="{StaticResource UtilButton}" Padding="14,4" Margin="0,0,6,0"/>
+        <Button x:Name="BtnReportIssue"   Grid.Row="0" Grid.Column="5" Content="Report Issue"      Style="{StaticResource UtilButton}" Padding="14,4" ToolTip="Open a prefilled GitHub bug report (auto-fills version, env, and diagnostics log)"/>
 
-        <TextBlock x:Name="PortStatusLbl" Grid.Row="1" Grid.ColumnSpan="5"
+        <TextBlock x:Name="PortStatusLbl" Grid.Row="1" Grid.ColumnSpan="6"
                    FontFamily="Consolas" FontSize="11" Foreground="#888"
                    Margin="0,6,0,0" Text="Ports: (waiting for first check)"/>
 
-        <Border Grid.Row="2" Grid.ColumnSpan="5" Height="332" Margin="0,6,0,0"
+        <TextBlock x:Name="SpiceStatusLbl" Grid.Row="2" Grid.ColumnSpan="6"
+                   FontFamily="Consolas" FontSize="11" Foreground="#888"
+                   Margin="0,3,0,0" Text="Hagga Basin: (waiting for first check)"/>
+
+        <TextBlock x:Name="SpiceStatusLbl2" Grid.Row="3" Grid.ColumnSpan="6"
+                   FontFamily="Consolas" FontSize="11" Foreground="#888"
+                   Margin="0,2,0,0" Text="Deep Desert: (waiting for first check)"/>
+
+        <Border Grid.Row="4" Grid.ColumnSpan="6" Margin="0,6,0,0"
                 Background="#0C0C0C" BorderBrush="#3F3F46" BorderThickness="1">
-          <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Auto"
+          <ScrollViewer VerticalScrollBarVisibility="Visible" HorizontalScrollBarVisibility="Auto"
                         Focusable="False" Padding="4,2">
             <TextBlock x:Name="StatusPane" FontFamily="Consolas" FontSize="12"
                        Foreground="#E5E5E5" Text="Loading cluster status..."/>
@@ -621,8 +665,15 @@ function Get-V6ThemeInnerXaml {
       </Grid>
     </Border>
 
+    <!-- ═══ Resizable splitter: drag to grow/shrink the lower half ═══ -->
+    <GridSplitter Grid.Row="1" Height="6" HorizontalAlignment="Stretch"
+                  VerticalAlignment="Stretch"
+                  Background="#3F3F46" BorderBrush="#1F1F1F" BorderThickness="0,1,0,1"
+                  ShowsPreview="False" ResizeBehavior="PreviousAndNext" ResizeDirection="Rows"
+                  Cursor="SizeNS"/>
+
     <!-- ═══ v6 main area: sidebar + page host ═══ -->
-    <Grid Grid.Row="1">
+    <Grid Grid.Row="2">
       <Grid.ColumnDefinitions>
         <ColumnDefinition Width="200" x:Name="SidebarCol"/>
         <ColumnDefinition Width="*"/>
@@ -649,7 +700,7 @@ function Get-V6ThemeInnerXaml {
           <ScrollViewer VerticalScrollBarVisibility="Hidden">
             <StackPanel x:Name="SidebarItems">
               <TextBlock x:Name="SidebarLabelOperate" Text="OPERATE" Style="{StaticResource SidebarGroupLabelStyle}"/>
-              <RadioButton x:Name="NavDashboard" Style="{StaticResource SidebarItemStyle}" GroupName="SidebarNav" Tag="Dashboard">
+              <RadioButton x:Name="NavDashboard" IsChecked="True" Style="{StaticResource SidebarItemStyle}" GroupName="SidebarNav" Tag="Dashboard">
                 <StackPanel Orientation="Horizontal">
                   <Path Width="18" Height="18" Stretch="Uniform" StrokeThickness="2"
                         Stroke="{Binding Foreground, RelativeSource={RelativeSource AncestorType=RadioButton}}"
@@ -665,7 +716,7 @@ function Get-V6ThemeInnerXaml {
                   <TextBlock Text="Monitoring" Margin="12,0,0,0" VerticalAlignment="Center"/>
                 </StackPanel>
               </RadioButton>
-              <RadioButton x:Name="NavTerminal" IsChecked="True" Style="{StaticResource SidebarItemStyle}" GroupName="SidebarNav" Tag="Terminal">
+              <RadioButton x:Name="NavTerminal" Style="{StaticResource SidebarItemStyle}" GroupName="SidebarNav" Tag="Terminal">
                 <StackPanel Orientation="Horizontal">
                   <Path Width="18" Height="18" Stretch="Uniform" StrokeThickness="2"
                         Stroke="{Binding Foreground, RelativeSource={RelativeSource AncestorType=RadioButton}}"
@@ -743,7 +794,7 @@ function Get-V6ThemeInnerXaml {
             </Grid.ColumnDefinitions>
 
             <!-- Left: 3-column drag-reorderable button grid (flat order, no sections) -->
-            <ScrollViewer Grid.Column="0" VerticalScrollBarVisibility="Auto" Background="#14110D">
+            <ScrollViewer Grid.Column="0" VerticalScrollBarVisibility="Visible" Background="#14110D">
               <Grid Margin="6,4,6,12">
                 <Grid.ColumnDefinitions>
                   <ColumnDefinition Width="*"/>
@@ -819,7 +870,7 @@ function Get-V6ThemeInnerXaml {
     </Grid>
 
     <!-- ═══ Footer ═══ -->
-    <Border Grid.Row="2" Background="#007ACC" Padding="10,4">
+    <Border Grid.Row="3" Background="#007ACC" Padding="10,4">
       <Grid>
         <Grid.ColumnDefinitions>
           <ColumnDefinition Width="*"/>
@@ -863,9 +914,12 @@ $ui = @{
     StatusMeta     = $window.FindName('StatusMeta')
     BtnRefreshStat = $window.FindName('BtnRefreshStatus')
     BtnCheckUpdate = $window.FindName('BtnCheckUpdate')
+    BtnReportIssue = $window.FindName('BtnReportIssue')
     InstalledLbl   = $window.FindName('InstalledVersionLbl')
     LatestLbl      = $window.FindName('LatestVersionLbl')
     PortStatusLbl  = $window.FindName('PortStatusLbl')
+    SpiceStatusLbl = $window.FindName('SpiceStatusLbl')
+    SpiceStatusLbl2 = $window.FindName('SpiceStatusLbl2')
     StatusPane     = $window.FindName('StatusPane')
     ButtonPanelCol1  = $window.FindName('ButtonPanelCol1')
     ButtonPanelCol2  = $window.FindName('ButtonPanelCol2')
@@ -975,6 +1029,11 @@ foreach ($navName in $script:V6NavMap.Keys) {
         }
     }.GetNewClosure())
 }
+
+# NOTE: initial-page reconciliation happens at end of file, after the v6
+# page initializers (Initialize-V6DashboardPage et al.) have populated
+# their content — otherwise calling Update-V6Dashboard here would no-op
+# because $script:V6Dash hasn't been created yet.
 
 # Sidebar collapse / expand. Toggles SidebarCol width and item label visibility.
 $script:V6SidebarCollapsed = $false
@@ -1190,7 +1249,6 @@ $script:Commands = @(
     @{ Section='Tools';       Key='17'; Name='ssh';          Mode='Console'; Requires='running'; Desc='Open an SSH terminal to the VM' }
     @{ Section='Tools';       Key='18'; Name='dune-admin';   Mode='InApp';   Requires='running'; Desc='Launch dune-admin + open its web UI' }
     @{ Section='Tools';       Key='19'; Name='setup-guide';  Mode='InApp';   Requires='none';    Desc='Open Funcom self-hosted setup guide in your browser' }
-    @{ Section='Tools';       Key='20'; Name='report-issue'; Mode='InApp';   Requires='none';    Desc='Report a bug (opens a prefilled GitHub issue)' }
 
     # ─── Draggable separators ───
     # Four optional visual dividers. They start parked at the end of the list
@@ -1578,6 +1636,98 @@ function Invoke-DuneCmd {
 #  Status header polling
 # ────────────────────────────────────────────────────────────────────────────
 
+function Open-IssueReport {
+    # Builds a prefilled GitHub bug report URL (template=bug_report.yml) and
+    # opens it in the default browser. Mirrors the CLI's 'report-issue'
+    # command so users can file accurate, low-friction bug reports without
+    # leaving the desktop app. The CLI version still works for terminal-only
+    # users; this is the GUI surface.
+    try { Write-Diag "Open-IssueReport: invoked" } catch {}
+    Set-Footer "Opening bug report in browser..."
+
+    Add-Type -AssemblyName System.Web -ErrorAction SilentlyContinue
+    function script:_EncIssueParam([string]$v) {
+        if ([string]::IsNullOrEmpty($v)) { return "" }
+        return [System.Web.HttpUtility]::UrlEncode($v)
+    }
+
+    $envStr = "Windows $([System.Environment]::OSVersion.Version), PowerShell $($PSVersionTable.PSVersion)"
+
+    # WebView2 runtime version (registry probe).
+    $wv2Version = '(not installed / not detected)'
+    foreach ($p in @(
+        'HKLM:\SOFTWARE\WOW6432Node\Microsoft\EdgeUpdate\Clients\{F3017226-FE2A-4295-8BDF-00C3A9A7E4C5}',
+        'HKLM:\SOFTWARE\Microsoft\EdgeUpdate\Clients\{F3017226-FE2A-4295-8BDF-00C3A9A7E4C5}',
+        'HKCU:\SOFTWARE\Microsoft\EdgeUpdate\Clients\{F3017226-FE2A-4295-8BDF-00C3A9A7E4C5}'
+    )) {
+        try {
+            $v = (Get-ItemProperty -Path $p -Name 'pv' -ErrorAction Stop).pv
+            if ($v -and $v -ne '0.0.0.0') { $wv2Version = $v; break }
+        } catch {}
+    }
+
+    $diagLines = New-Object System.Collections.Generic.List[string]
+    $diagLines.Add("Tool version       : v$script:ToolVersion")
+    $diagLines.Add("Entry point        : $($MyInvocation.MyCommand.Path)")
+    $diagLines.Add("PowerShell         : $($PSVersionTable.PSVersion) ($($PSVersionTable.PSEdition))")
+    $diagLines.Add("OS                 : Windows $([System.Environment]::OSVersion.Version)")
+    $diagLines.Add("WebView2 runtime   : $wv2Version")
+    $diagLines.Add("UserDataFolder     : $(Join-Path $env:LOCALAPPDATA 'DuneServer\webview2')")
+    $diagLines.Add("Config dir         : $(Join-Path $env:APPDATA 'DuneServer')")
+    $diagLines.Add("")
+
+    # Tail the WebView2 debug log so the URL stays under GitHub's practical limit.
+    $wv2Log = if ($script:DiagLog) { $script:DiagLog } else { Join-Path $env:APPDATA 'DuneServer\webview2-debug.log' }
+    if (Test-Path $wv2Log) {
+        $diagLines.Add("=== WebView2 debug log (tail) ===")
+        $diagLines.Add("Path: $wv2Log")
+        try {
+            $content = [System.IO.File]::ReadAllText($wv2Log)
+            $maxBytes = 3072
+            if ($content.Length -gt $maxBytes) {
+                $content = "...(truncated, showing last $maxBytes chars of $($content.Length))...`r`n" +
+                           $content.Substring($content.Length - $maxBytes)
+            }
+            $diagLines.Add($content)
+        } catch {
+            $diagLines.Add("(could not read log: $($_.Exception.Message))")
+        }
+    } else {
+        $diagLines.Add("(no WebView2 debug log present at $wv2Log)")
+    }
+
+    $diagText = ($diagLines -join "`r`n")
+
+    $params = @(
+        "template=bug_report.yml"
+        "tool_version=" + (_EncIssueParam "v$script:ToolVersion")
+        "env="          + (_EncIssueParam $envStr)
+        "diagnostics="  + (_EncIssueParam $diagText)
+    ) -join "&"
+    $url = "https://github.com/coastal-ms/Simple-Dune-Server-Management-Tool/issues/new?$params"
+
+    # Defensive trim if URL too long for GitHub.
+    if ($url.Length -gt 7500) {
+        $diagText = ($diagLines | Select-Object -First 10) -join "`r`n"
+        $diagText += "`r`n`r`n(diagnostics truncated for URL length — see %APPDATA%\DuneServer\webview2-debug.log for full log)"
+        $params = @(
+            "template=bug_report.yml"
+            "tool_version=" + (_EncIssueParam "v$script:ToolVersion")
+            "env="          + (_EncIssueParam $envStr)
+            "diagnostics="  + (_EncIssueParam $diagText)
+        ) -join "&"
+        $url = "https://github.com/coastal-ms/Simple-Dune-Server-Management-Tool/issues/new?$params"
+    }
+
+    try {
+        Start-Process $url | Out-Null
+        Set-Footer "Bug report opened in browser  |  prefilled diagnostics ($(($diagText -split "`r?`n").Count) lines)"
+    } catch {
+        Set-Footer "Could not open browser: $($_.Exception.Message)"
+        try { Write-Diag "Open-IssueReport: Start-Process failed: $($_.Exception.Message)" } catch {}
+    }
+}
+
 function Refresh-StatusHeader {
     try { Write-Diag "Refresh-StatusHeader: invoked" } catch {}
     Set-Footer "Refreshing status..."
@@ -1592,24 +1742,24 @@ function Refresh-StatusHeader {
     $stamp  = (Get-Date).ToString('HH:mm:ss')
 
     if (-not $vmInfo.exists) {
-        $ui.StatusPane.Text = "VM '$($script:VmName)' does not exist."
-        $ui.StatusMeta.Text = "(no VM)  -  checked $stamp"
+        Set-StatusPaneColored "VM '$($script:VmName)' does not exist."
+        Set-StatusMetaColored -VmText "(no VM)" -BgState 'stopped' -Stamp "checked $stamp"
         Set-BgState 'stopped'
         Build-ButtonPanel -Vm $vmInfo
         Set-Footer "Idle"
         return
     }
     if (-not $vmInfo.running) {
-        $ui.StatusPane.Text = "VM '$($script:VmName)' is not running (state: $($vmInfo.state))."
-        $ui.StatusMeta.Text = "VM $($vmInfo.state)  -  checked $stamp"
+        Set-StatusPaneColored "VM '$($script:VmName)' is not running (state: $($vmInfo.state))."
+        Set-StatusMetaColored -VmText "VM $($vmInfo.state)" -BgState 'stopped' -Stamp "checked $stamp"
         Set-BgState 'stopped'
         Build-ButtonPanel -Vm $vmInfo
         Set-Footer "Idle"
         return
     }
     if (-not $vmInfo.ip) {
-        $ui.StatusPane.Text = 'VM running but has no IP yet.'
-        $ui.StatusMeta.Text = "VM running  -  checked $stamp"
+        Set-StatusPaneColored 'VM running but has no IP yet.'
+        Set-StatusMetaColored -VmText 'VM running' -BgState 'unknown' -Stamp "checked $stamp"
         Set-BgState 'unknown'
         Build-ButtonPanel -Vm $vmInfo
         Set-Footer "Idle"
@@ -1618,13 +1768,13 @@ function Refresh-StatusHeader {
 
     # Refresh button panel now that we know VM state (don't wait for SSH)
     Build-ButtonPanel -Vm $vmInfo
-    $ui.StatusMeta.Text = "VM running ($($vmInfo.ip))  -  fetching status..."
+    Set-StatusMetaColored -VmText "VM running ($($vmInfo.ip))" -BgState '' -Stamp "fetching status..."
 
     $cfg    = Read-Config
     $sshKey = $cfg.SshKey
     if (-not $sshKey -or -not (Test-Path $sshKey)) {
-        $ui.StatusPane.Text = "SSH key not configured or missing: $sshKey`r`n`r`nRun the 'initial-setup' command to configure."
-        $ui.StatusMeta.Text = "VM running ($($vmInfo.ip))  -  no SSH key  -  checked $stamp"
+        Set-StatusPaneColored "SSH key not configured or missing: $sshKey`r`n`r`nRun the 'initial-setup' command to configure."
+        Set-StatusMetaColored -VmText "VM running ($($vmInfo.ip))" -BgState 'error' -Stamp "no SSH key  -  checked $stamp"
         Set-Footer "Idle"
         return
     }
@@ -1674,34 +1824,36 @@ function Refresh-StatusHeader {
         if ($asyncResult.IsCompleted) {
             $timer.Stop()
             try {
-                $r = $ps.EndInvoke($asyncResult) | Select-Object -First 1
-                $stamp2 = (Get-Date).ToString('HH:mm:ss')
-                if ($r -and $r.ok) {
-                    $ui.StatusPane.Text = $r.output
-                    $ui.StatusMeta.Text = "VM running ($($vmInfo.ip))  -  updated $stamp2"
-                    Set-BgState (Get-BgStateFromStatusText $r.output)
-                    Set-CorePodsRunning (Test-CorePodsRunningFromText $r.output)
-                    # Rebuild the button panel so commands gated on bg-state
-                    # (start/stop battlegroup, startup wizard, etc.) reflect
-                    # the just-discovered state. Cheap — it just re-renders WPF.
-                    Build-ButtonPanel -Vm $vmInfo
-                } else {
-                    $reason = if ($r) { $r.reason } else { 'SSH returned no result.' }
-                    $ui.StatusPane.Text = $reason
-                    $ui.StatusMeta.Text = "VM running ($($vmInfo.ip))  -  ssh failed  -  $stamp2"
-                    Set-BgState 'unknown'
-                    Set-CorePodsRunning $false
-                    Build-ButtonPanel -Vm $vmInfo
+                try {
+                    $r = $ps.EndInvoke($asyncResult) | Select-Object -First 1
+                    $stamp2 = (Get-Date).ToString('HH:mm:ss')
+                    if ($r -and $r.ok) {
+                        Set-StatusPaneColored $r.output
+                        $detectedState = Get-BgStateFromStatusText $r.output
+                        Set-StatusMetaColored -VmText "VM running ($($vmInfo.ip))" -BgState $detectedState -Stamp "updated $stamp2"
+                        Set-BgState $detectedState
+                        Set-CorePodsRunning (Test-CorePodsRunningFromText $r.output)
+                        # Rebuild the button panel so commands gated on bg-state
+                        # (start/stop battlegroup, startup wizard, etc.) reflect
+                        # the just-discovered state. Cheap — it just re-renders WPF.
+                        Build-ButtonPanel -Vm $vmInfo
+                    } else {
+                        $reason = if ($r) { $r.reason } else { 'SSH returned no result.' }
+                        Set-StatusPaneColored $reason
+                        Set-StatusMetaColored -VmText "VM running ($($vmInfo.ip))" -BgState 'error' -Stamp "ssh failed  -  $stamp2"
+                        Set-BgState 'unknown'
+                        Set-CorePodsRunning $false
+                        Build-ButtonPanel -Vm $vmInfo
+                    }
+                    Set-Footer "Idle"
+                } catch {
+                    try { Set-StatusPaneColored "Error reading status: $($_.Exception.Message)" } catch {}
+                    try { Set-Footer "Idle" } catch {}
+                } finally {
+                    try { $ps.Dispose() } catch {}
+                    try { $rs.Close(); $rs.Dispose() } catch {}
                 }
-                Set-Footer "Idle"
-            } catch {
-                $ui.StatusPane.Text = "Error reading status: $($_.Exception.Message)"
-                Set-Footer "Idle"
-            } finally {
-                $ps.Dispose()
-                $rs.Close()
-                $rs.Dispose()
-            }
+            } catch {}
         }
     }.GetNewClosure()
     $timer.Add_Tick($tickHandler)
@@ -1748,6 +1900,163 @@ function Set-PortLblPlain {
     $ui.PortStatusLbl.Visibility = 'Visible'
 }
 
+# ──────────────────────────────────────────────────────────────────────────
+#  StatusPane colorizer — paints state words in the multi-line battlegroup
+#  status output with theme-aligned colors. Default text stays neutral so
+#  the colored states pop without making the whole pane noisy.
+# ──────────────────────────────────────────────────────────────────────────
+$script:StatusPaneBrushDefault = $null
+$script:StatusPaneBrushGood    = $null
+$script:StatusPaneBrushWarn    = $null
+$script:StatusPaneBrushBad     = $null
+$script:StatusPaneBrushHeader  = $null
+$script:StatusPaneBrushDim     = $null
+
+function _Get-StatusPaneBrushes {
+    if ($script:StatusPaneBrushDefault) { return }
+    $bc = New-Object System.Windows.Media.BrushConverter
+    $script:StatusPaneBrushDefault = $bc.ConvertFromString('#FFE5E5E5')
+    $script:StatusPaneBrushGood    = $bc.ConvertFromString('#FF6FCF7C')  # green — Running/Ready
+    $script:StatusPaneBrushWarn    = $bc.ConvertFromString('#FFE8B872')  # tan-gold — Pending/Init
+    $script:StatusPaneBrushBad     = $bc.ConvertFromString('#FFE86A6A')  # red — Error/CrashLoop
+    $script:StatusPaneBrushHeader  = $bc.ConvertFromString('#FFE0B341')  # gold — header rows
+    $script:StatusPaneBrushDim     = $bc.ConvertFromString('#FF888888')  # muted — Stopped
+    foreach ($b in @($script:StatusPaneBrushDefault,$script:StatusPaneBrushGood,$script:StatusPaneBrushWarn,$script:StatusPaneBrushBad,$script:StatusPaneBrushHeader,$script:StatusPaneBrushDim)) {
+        try { $b.Freeze() } catch {}
+    }
+}
+
+# Returns brush for a matched state word, or $null to use default.
+function _Get-StatusWordBrush {
+    param([string]$Word)
+    switch -Regex ($Word) {
+        '^(Running|Ready)$'                                                  { return $script:StatusPaneBrushGood }
+        '^(Pending|ContainerCreating|PodInitializing|Init|Terminating|Reconciling)$' { return $script:StatusPaneBrushWarn }
+        '^(Error|CrashLoopBackOff|ImagePullBackOff|ErrImagePull|Failed|Evicted|OOMKilled|NotReady|Unknown)$' { return $script:StatusPaneBrushBad }
+        '^(Stopped)$'                                                        { return $script:StatusPaneBrushDim }
+        default                                                              { return $null }
+    }
+}
+
+function Set-StatusPaneColored {
+    param([string]$Text)
+    if (-not $ui.StatusPane) { return }
+    _Get-StatusPaneBrushes
+    $ui.StatusPane.Inlines.Clear()
+    if ([string]::IsNullOrEmpty($Text)) {
+        $ui.StatusPane.Text = ''
+        return
+    }
+
+    # "No resources found ..." short-circuit — paint whole text as muted.
+    if ($Text -match '(?im)No resources found') {
+        $r = New-Object System.Windows.Documents.Run
+        $r.Text = $Text
+        $r.Foreground = $script:StatusPaneBrushDim
+        [void]$ui.StatusPane.Inlines.Add($r)
+        return
+    }
+
+    # Tokenize on whole-word state keywords, line-by-line so we can also
+    # paint header rows (NAMESPACE/NAME/STATUS column headers from kubectl).
+    $lines = $Text -split "(`r?`n)"
+    $stateRegex = [regex]'\b(Running|Ready|Pending|ContainerCreating|PodInitializing|Init|Terminating|Reconciling|Error|CrashLoopBackOff|ImagePullBackOff|ErrImagePull|Failed|Evicted|OOMKilled|NotReady|Unknown|Stopped)\b'
+    $headerRegex = [regex]'^\s*(NAMESPACE|NAME|READY|STATUS|RESTARTS|AGE|MAP|PHASE)(\s{2,}(NAMESPACE|NAME|READY|STATUS|RESTARTS|AGE|MAP|PHASE))+\s*$'
+
+    foreach ($line in $lines) {
+        if ($line -eq "`n" -or $line -eq "`r`n") {
+            $nl = New-Object System.Windows.Documents.Run
+            $nl.Text = $line
+            $nl.Foreground = $script:StatusPaneBrushDefault
+            [void]$ui.StatusPane.Inlines.Add($nl)
+            continue
+        }
+        if ([string]::IsNullOrEmpty($line)) { continue }
+
+        if ($headerRegex.IsMatch($line)) {
+            $r = New-Object System.Windows.Documents.Run
+            $r.Text = $line
+            $r.Foreground = $script:StatusPaneBrushHeader
+            $r.FontWeight = 'Bold'
+            [void]$ui.StatusPane.Inlines.Add($r)
+            continue
+        }
+
+        $matches = $stateRegex.Matches($line)
+        if ($matches.Count -eq 0) {
+            $r = New-Object System.Windows.Documents.Run
+            $r.Text = $line
+            $r.Foreground = $script:StatusPaneBrushDefault
+            [void]$ui.StatusPane.Inlines.Add($r)
+            continue
+        }
+
+        $pos = 0
+        foreach ($m in $matches) {
+            if ($m.Index -gt $pos) {
+                $r = New-Object System.Windows.Documents.Run
+                $r.Text = $line.Substring($pos, $m.Index - $pos)
+                $r.Foreground = $script:StatusPaneBrushDefault
+                [void]$ui.StatusPane.Inlines.Add($r)
+            }
+            $brush = _Get-StatusWordBrush $m.Value
+            $r2 = New-Object System.Windows.Documents.Run
+            $r2.Text = $m.Value
+            if ($brush) { $r2.Foreground = $brush; $r2.FontWeight = 'Bold' } else { $r2.Foreground = $script:StatusPaneBrushDefault }
+            [void]$ui.StatusPane.Inlines.Add($r2)
+            $pos = $m.Index + $m.Length
+        }
+        if ($pos -lt $line.Length) {
+            $r = New-Object System.Windows.Documents.Run
+            $r.Text = $line.Substring($pos)
+            $r.Foreground = $script:StatusPaneBrushDefault
+            [void]$ui.StatusPane.Inlines.Add($r)
+        }
+    }
+}
+
+# Paints StatusMeta with a colored state badge inline with the metadata text.
+function Set-StatusMetaColored {
+    param([string]$VmText, [string]$BgState = 'unknown', [string]$Stamp = '')
+    if (-not $ui.StatusMeta) { return }
+    _Get-StatusPaneBrushes
+    $ui.StatusMeta.Inlines.Clear()
+    $bc = New-Object System.Windows.Media.BrushConverter
+    $dim = $bc.ConvertFromString('#FF888888'); try { $dim.Freeze() } catch {}
+
+    if ($VmText) {
+        $r = New-Object System.Windows.Documents.Run
+        $r.Text = $VmText
+        $r.Foreground = $dim
+        [void]$ui.StatusMeta.Inlines.Add($r)
+    }
+    if ($BgState -and $BgState -ne 'unknown') {
+        $sep = New-Object System.Windows.Documents.Run
+        $sep.Text = '  -  '
+        $sep.Foreground = $dim
+        [void]$ui.StatusMeta.Inlines.Add($sep)
+
+        $brush = switch ($BgState) {
+            'running' { $script:StatusPaneBrushGood }
+            'stopped' { $script:StatusPaneBrushDim }
+            'error'   { $script:StatusPaneBrushBad }
+            default   { $script:StatusPaneBrushWarn }
+        }
+        $label = "BG $($BgState.ToUpper())"
+        $r2 = New-Object System.Windows.Documents.Run
+        $r2.Text = $label
+        $r2.Foreground = $brush
+        $r2.FontWeight = 'Bold'
+        [void]$ui.StatusMeta.Inlines.Add($r2)
+    }
+    if ($Stamp) {
+        $tr = New-Object System.Windows.Documents.Run
+        $tr.Text = "  -  $Stamp"
+        $tr.Foreground = $dim
+        [void]$ui.StatusMeta.Inlines.Add($tr)
+    }
+}
+
 function Add-PortLblRun {
     param([string]$Text, [string]$Color, [bool]$Bold = $false)
     $run = New-Object System.Windows.Documents.Run
@@ -1789,6 +2098,183 @@ function Render-PortStatus {
         $first = $false
     }
     if ($Snapshot.stamp) { Add-PortLblRun "   updated $($Snapshot.stamp)" '#666' }
+}
+
+# ────────────────────────────────────────────────────────────────────────────
+#  Spice-field header — async psql query against dune.spicefield_types,
+#  rendered as a single colored line below the port status. Uses the same
+#  runspace + cache pattern as the port check so it never blocks the UI.
+#
+#   Spice Fields (Hagga/DD): Large 0/1  Medium 0/12  Small 5/65  updated HH:mm:ss
+#
+# - Reuses the lib's Invoke-V6Psql (Db-Postgres.ps1) inside a fresh runspace.
+# - Cache TTL = 25s so the 30s auto-refresh repaints from cache instead of
+#   firing a new psql round-trip every tick.
+# ────────────────────────────────────────────────────────────────────────────
+
+$script:SpiceCheckCache    = $null
+$script:SpiceCheckCacheTtl = [TimeSpan]::FromSeconds(25)
+$script:SpiceCheckInFlight = $false
+
+function Set-SpiceLblPlain {
+    param([string]$Text, [string]$Color = '#888', $Target = $null)
+    $lbl = if ($Target) { $Target } else { $ui.SpiceStatusLbl }
+    if (-not $lbl) { return }
+    $lbl.Inlines.Clear()
+    $run = New-Object System.Windows.Documents.Run
+    $run.Text = $Text
+    $run.Foreground = (New-Object System.Windows.Media.BrushConverter).ConvertFromString($Color)
+    [void]$lbl.Inlines.Add($run)
+    $lbl.Visibility = 'Visible'
+}
+
+function Add-SpiceLblRun {
+    param([string]$Text, [string]$Color, [bool]$Bold = $false, $Target = $null)
+    $lbl = if ($Target) { $Target } else { $ui.SpiceStatusLbl }
+    $run = New-Object System.Windows.Documents.Run
+    $run.Text = $Text
+    $run.Foreground = (New-Object System.Windows.Media.BrushConverter).ConvertFromString($Color)
+    if ($Bold) { $run.FontWeight = 'Bold' }
+    [void]$lbl.Inlines.Add($run)
+}
+
+function Render-SpiceMapLine {
+    param($Lbl, [string]$MapLabel, $Rows, [string]$Stamp)
+    if (-not $Lbl) { return }
+    $Lbl.Inlines.Clear()
+    Add-SpiceLblRun "$MapLabel`: " '#E0B341' $false $Lbl
+    if (-not $Rows -or $Rows.Count -eq 0) {
+        Add-SpiceLblRun "(no fields configured)" '#666' $false $Lbl
+        if ($Stamp) { Add-SpiceLblRun "   updated $Stamp" '#666' $false $Lbl }
+        return
+    }
+    $first = $true
+    foreach ($g in $Rows) {
+        if (-not $first) { Add-SpiceLblRun "   " '#888' $false $Lbl }
+        Add-SpiceLblRun "$($g.Type) " '#B8A88F' $false $Lbl
+        $color = if ($g.Max -eq 0) { '#666' }
+                 elseif ($g.Active -eq 0) { '#888' }
+                 elseif ($g.Active -ge $g.Max) { '#E07A4F' }
+                 else { '#9EBE6B' }
+        Add-SpiceLblRun "$($g.Active)/$($g.Max)" $color $true $Lbl
+        $primedColor = if ($g.Primed -gt 0) { '#E0B341' } else { '#666' }
+        Add-SpiceLblRun " ($($g.Primed) primed)" $primedColor $false $Lbl
+        $first = $false
+    }
+    if ($Stamp) { Add-SpiceLblRun "   updated $Stamp" '#666' $false $Lbl }
+}
+
+function Render-SpiceStatus {
+    param($Snapshot)  # @{ groups = @(@{Type;Map;Active;Max;Primed}); stamp = '...' } or $null
+    if (-not $ui.SpiceStatusLbl) { return }
+    if (-not $Snapshot) {
+        Set-SpiceLblPlain "Hagga Basin: (db unreachable — VM stopped or db pod not ready)" '#666' $ui.SpiceStatusLbl
+        Set-SpiceLblPlain "Deep Desert: (db unreachable)" '#666' $ui.SpiceStatusLbl2
+        return
+    }
+    # Hagga first (line 1), then Deep Desert (line 2). Within each line, sort by
+    # field_type alphabetical (Large, Medium, Small).
+    $hagga = @($Snapshot.groups | Where-Object { $_.Map -eq 'HaggaBasin' } | Sort-Object Type)
+    $dd    = @($Snapshot.groups | Where-Object { $_.Map -eq 'DeepDesert' } | Sort-Object Type)
+    Render-SpiceMapLine -Lbl $ui.SpiceStatusLbl  -MapLabel 'Hagga Basin' -Rows $hagga -Stamp $Snapshot.stamp
+    Render-SpiceMapLine -Lbl $ui.SpiceStatusLbl2 -MapLabel 'Deep Desert' -Rows $dd    -Stamp $Snapshot.stamp
+}
+
+function Refresh-SpiceStatus {
+    param([switch]$Force)
+
+    # Skip if VM not running — psql via SSH would just time out.
+    $vm = $null
+    try { $vm = Get-VmStatus } catch {}
+    if (-not ($vm -and $vm.running -and $vm.ip)) {
+        Render-SpiceStatus $null
+        return
+    }
+
+    # Cache hit?
+    if (-not $Force -and $script:SpiceCheckCache -and `
+        ((Get-Date) - $script:SpiceCheckCache.fetched) -lt $script:SpiceCheckCacheTtl) {
+        Render-SpiceStatus $script:SpiceCheckCache
+        return
+    }
+    # -Force always re-fires: drop the cache and let a fresh runspace go even if
+    # a prior one is still in-flight (the old one will just no-op when it lands).
+    if ($Force) { $script:SpiceCheckCache = $null }
+    elseif ($script:SpiceCheckInFlight) { return }
+    $script:SpiceCheckInFlight = $true
+
+    Set-SpiceLblPlain "Hagga Basin: (querying...)" '#888' $ui.SpiceStatusLbl
+    Set-SpiceLblPlain "Deep Desert: (querying...)" '#888' $ui.SpiceStatusLbl2
+
+    $rs = [RunspaceFactory]::CreateRunspace()
+    $rs.ApartmentState = 'STA'
+    $rs.ThreadOptions  = 'ReuseThread'
+    $rs.Open()
+    # Pre-load Invoke-V6Psql + Invoke-V6Ssh + Find-V6DbPod into the runspace.
+    $libSrc = Get-Content -Raw -LiteralPath (Join-Path $script:V6LibDir 'Db-Postgres.ps1')
+    $rs.SessionStateProxy.SetVariable('LibSrc', $libSrc)
+    $ps = [PowerShell]::Create()
+    $ps.Runspace = $rs
+    [void]$ps.AddScript({
+        param($Ip)
+        Invoke-Expression $LibSrc
+        try {
+            $sql = "SELECT field_type, map_name, SUM(current_globally_active) AS active, SUM(max_globally_active) AS max, SUM(current_globally_primed) AS primed FROM dune.spicefield_types GROUP BY field_type, map_name ORDER BY map_name, field_type;"
+            $raw = Invoke-V6Psql -Ip $Ip -Sql $sql -TimeoutSec 12
+            $groups = @()
+            foreach ($line in ($raw -split "`n")) {
+                $t = $line.Trim()
+                if (-not $t) { continue }
+                $parts = $t -split '\|'
+                if ($parts.Count -ne 5) { continue }
+                $groups += [pscustomobject]@{
+                    Type   = $parts[0].Trim()
+                    Map    = $parts[1].Trim()
+                    Active = [int]$parts[2].Trim()
+                    Max    = [int]$parts[3].Trim()
+                    Primed = [int]$parts[4].Trim()
+                }
+            }
+            return @{ ok=$true; groups=$groups }
+        } catch {
+            return @{ ok=$false; reason=$_.Exception.Message }
+        }
+    }).AddArgument($vm.ip)
+
+    $asyncResult = $ps.BeginInvoke()
+
+    $timer = New-Object System.Windows.Threading.DispatcherTimer
+    $timer.Interval = [TimeSpan]::FromMilliseconds(250)
+    $tickHandler = {
+        if ($asyncResult.IsCompleted) {
+            $timer.Stop()
+            try {
+                $r = $ps.EndInvoke($asyncResult) | Select-Object -First 1
+                $stamp = (Get-Date).ToString('HH:mm:ss')
+                if ($r -and $r.ok -and $r.groups -and $r.groups.Count -gt 0) {
+                    $snap = @{ groups=$r.groups; stamp=$stamp; fetched=(Get-Date) }
+                    $script:SpiceCheckCache = $snap
+                    Render-SpiceStatus $snap
+                } elseif ($r -and $r.ok) {
+                    Set-SpiceLblPlain "Hagga Basin: (no rows — table empty?)" '#E0B341' $ui.SpiceStatusLbl
+                    Set-SpiceLblPlain "Deep Desert: (no rows — table empty?)" '#E0B341' $ui.SpiceStatusLbl2
+                } else {
+                    $msg = if ($r) { $r.reason } else { 'no result' }
+                    Set-SpiceLblPlain "Hagga Basin: (query failed: $msg)" '#E07A4F' $ui.SpiceStatusLbl
+                    Set-SpiceLblPlain "Deep Desert: (query failed)" '#E07A4F' $ui.SpiceStatusLbl2
+                }
+            } catch {
+                Set-SpiceLblPlain "Hagga Basin: (error: $($_.Exception.Message))" '#E07A4F' $ui.SpiceStatusLbl
+                Set-SpiceLblPlain "Deep Desert: (error)" '#E07A4F' $ui.SpiceStatusLbl2
+            } finally {
+                try { $ps.Dispose() } catch {}
+                try { $rs.Close(); $rs.Dispose() } catch {}
+                $script:SpiceCheckInFlight = $false
+            }
+        }
+    }.GetNewClosure()
+    $timer.Add_Tick($tickHandler)
+    $timer.Start()
 }
 
 function Refresh-PortStatus {
@@ -1891,23 +2377,26 @@ function Refresh-PortStatus {
         if ($async.IsCompleted) {
             $timer.Stop()
             try {
-                $r = $ps.EndInvoke($async) | Select-Object -First 1
-                $stamp = (Get-Date).ToString('HH:mm:ss')
-                $snap = @{
-                    fetched  = Get-Date
-                    mode     = $mode
-                    publicIp = $r.publicIp
-                    ports    = $r.ports
-                    stamp    = $stamp
+                try {
+                    $r = $ps.EndInvoke($async) | Select-Object -First 1
+                    $stamp = (Get-Date).ToString('HH:mm:ss')
+                    $snap = @{
+                        fetched  = Get-Date
+                        mode     = $mode
+                        publicIp = $r.publicIp
+                        ports    = $r.ports
+                        stamp    = $stamp
+                    }
+                    $script:PortCheckCache = $snap
+                    Render-PortStatus $snap
+                } catch {
+                    try { Set-PortLblPlain "Ports: check failed - $($_.Exception.Message)" '#E07A4F' } catch {}
+                } finally {
+                    $script:PortCheckInFlight = $false
+                    try { $ps.Dispose() } catch {}
+                    try { $rs.Close(); $rs.Dispose() } catch {}
                 }
-                $script:PortCheckCache = $snap
-                Render-PortStatus $snap
-            } catch {
-                Set-PortLblPlain "Ports: check failed - $($_.Exception.Message)" '#E07A4F'
-            } finally {
-                $script:PortCheckInFlight = $false
-                $ps.Dispose(); $rs.Close(); $rs.Dispose()
-            }
+            } catch {}
         }
     }.GetNewClosure()
     $timer.Add_Tick($tick)
@@ -2463,7 +2952,9 @@ $ui.BtnRefreshStat.Add_Click({
     Refresh-StatusHeader
     # Explicit refresh -> bypass the 5-min cache and hit the port-check service again.
     Refresh-PortStatus -Force
+    Refresh-SpiceStatus -Force
 })
+$ui.BtnReportIssue.Add_Click({ Open-IssueReport })
 $ui.BtnClearOutput.Add_Click({ Clear-Terminal })
 $ui.BtnCopyOutput.Add_Click({
     # xterm.js's selection lives in the WebView. Ask it to read getSelection()
@@ -2635,6 +3126,7 @@ $autoRefresh.Add_Tick({
     # Auto-refresh paints port-status from the 5-min cache; only triggers a
     # fresh hit when the cache has aged out (avoids hammering yougetsignal).
     Refresh-PortStatus
+    Refresh-SpiceStatus
     # v6: keep Dashboard tiles in sync with header data on the 30s rhythm.
     if (Get-Command Update-V6Dashboard -ErrorAction SilentlyContinue) {
         try { Update-V6Dashboard } catch {}
@@ -2651,6 +3143,22 @@ $autoRefresh.Add_Tick({
 Build-ButtonPanel -Vm $script:LastVmKnown
 $ui.FooterVersion.Text = "Dune Server v$script:ToolVersion"
 $ui.InstalledLbl.Text  = "Installed: $script:ToolVersion"
+
+# v6: define Write-Diag early so page Initialize-* functions can use it during
+# wiring. (DiagLog path itself is set later when $script:DataDir is fully
+# established; here we use the same path with a safe fallback.)
+if (-not $script:DiagLog) {
+    $script:DiagLog = Join-Path $script:DataDir 'webview2-debug.log'
+}
+function Write-Diag {
+    param([string]$Msg)
+    try {
+        $line = ('{0}  {1}' -f (Get-Date).ToString('HH:mm:ss.fff'), $Msg)
+        Add-Content -Path $script:DiagLog -Value $line -ErrorAction SilentlyContinue
+    } catch {}
+}
+try { '' | Set-Content -Path $script:DiagLog -ErrorAction SilentlyContinue } catch {}
+Write-Diag "=== Dune Server v$script:ToolVersion startup (early) ==="
 
 # v6: build Dashboard page content now that $ui, $window, and $script:Commands
 # are all in scope. Update-V6Dashboard will be called later by Refresh-StatusHeader
@@ -2696,6 +3204,32 @@ if (Get-Command Initialize-V6MultiSietchPage -ErrorAction SilentlyContinue) {
     }
 }
 
+# Reconcile actual page visibility with whichever nav button is currently
+# IsChecked=True. XAML's IsChecked="True" fires the Checked event at parse
+# time — BEFORE PowerShell wires up Add_Checked handlers — so the initial
+# Show-V6Page call is otherwise missed and the default PageTerminal stays
+# visible. Done here (after all page initializers) so the matching
+# Update-V6* call has a populated $script:V6* state to refresh.
+$initialChecked = $null
+foreach ($navName in $script:V6NavMap.Keys) {
+    $nav = $ui[$navName]
+    if ($nav -and $nav.IsChecked) { $initialChecked = $script:V6NavMap[$navName]; break }
+}
+if ($initialChecked) {
+    try { Write-Diag "Initial-page reconcile: showing $initialChecked" } catch {}
+    Show-V6Page $initialChecked
+    switch ($initialChecked) {
+        'PageDashboard'   { if (Get-Command Update-V6Dashboard   -ErrorAction SilentlyContinue) { try { Update-V6Dashboard }   catch { try { Write-Diag "Initial Update-V6Dashboard failed: $($_.Exception.Message)" } catch {} } } }
+        'PageMonitoring'  { if (Get-Command Update-V6Monitoring  -ErrorAction SilentlyContinue) { try { Update-V6Monitoring }  catch {} } }
+        'PageSettings'    { if (Get-Command Update-V6Settings    -ErrorAction SilentlyContinue) { try { Update-V6Settings }    catch {} } }
+        'PageDatabase'    { if (Get-Command Update-V6Database    -ErrorAction SilentlyContinue) { try { Update-V6Database }    catch {} } }
+        'PageGameConfig'  { if (Get-Command Update-V6GameConfig  -ErrorAction SilentlyContinue) { try { Update-V6GameConfig }  catch {} } }
+        'PageCharacters'  { if (Get-Command Update-V6Characters  -ErrorAction SilentlyContinue) { try { Update-V6Characters }  catch {} } }
+        'PageSetupWizard' { if (Get-Command Update-V6SetupWizard -ErrorAction SilentlyContinue) { try { Update-V6SetupWizard } catch {} } }
+        'PageExperimental'{ if (Get-Command Update-V6MultiSietch -ErrorAction SilentlyContinue) { try { Update-V6MultiSietch } catch {} } }
+    }
+}
+
 # ────────────────────────────────────────────────────────────────────────────
 #  WebView2 / xterm.js initialization
 # ────────────────────────────────────────────────────────────────────────────
@@ -2719,18 +3253,8 @@ if (-not (Test-Path $script:WebView2UserData)) {
 }
 
 # Diagnostic log for WebView2 lifecycle — survives across runs so we can see
-# init failures even if the UI never recovers. Written to a fixed path the
-# user can share with us.
-$script:DiagLog = Join-Path $script:DataDir 'webview2-debug.log'
-function Write-Diag {
-    param([string]$Msg)
-    try {
-        $line = ('{0}  {1}' -f (Get-Date).ToString('HH:mm:ss.fff'), $Msg)
-        Add-Content -Path $script:DiagLog -Value $line -ErrorAction SilentlyContinue
-    } catch {}
-}
-try { '' | Set-Content -Path $script:DiagLog -ErrorAction SilentlyContinue } catch {}
-Write-Diag "=== Dune Server v$script:ToolVersion startup ==="
+# init failures even if the UI never recovers. (Write-Diag itself was defined
+# earlier, before page initializers ran.)
 Write-Diag "AppDir = $script:AppDir"
 Write-Diag "WebDir = $script:WebDir"
 Write-Diag "WebView2Dir = $script:WebView2Dir"
@@ -2930,8 +3454,22 @@ Start-PtyDrainTimer
 
 # Kick off first status fetch on window load
 $ui.Window.Add_Loaded({
+    # Default to a generous portion of the working area, scaled to monitor
+    # resolution (looks identical to user's preferred screenshot on any DPI).
+    try {
+        $wa = [System.Windows.SystemParameters]::WorkArea
+        # 2.5 inches at 96 DPI = 240 WPF device-independent units
+        $tgtW = [Math]::Min([Math]::Max([int]($wa.Width  * 0.75) - 240, $ui.Window.MinWidth),  2200)
+        $tgtH = [Math]::Min([Math]::Max([int]($wa.Height * 0.75), $ui.Window.MinHeight), 1300)
+        $ui.Window.Width  = $tgtW
+        $ui.Window.Height = $tgtH
+        $ui.Window.Left   = $wa.Left + ($wa.Width  - $tgtW) / 2
+        $ui.Window.Top    = $wa.Top  + ($wa.Height - $tgtH) / 2
+    } catch {}
+
     Refresh-StatusHeader
     Refresh-PortStatus
+    Refresh-SpiceStatus
     $autoRefresh.Start()
     # Silent update check on launch — populates the Latest label, only
     # prompts the user if a newer release is actually available.
