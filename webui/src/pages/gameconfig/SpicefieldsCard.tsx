@@ -38,9 +38,9 @@ export function SpicefieldsCard({ vmRunning }: Props) {
     setDrafts(next)
   }, [])
 
-  const load = useCallback(async () => {
+  const load = useCallback(async (opts?: { silent?: boolean }) => {
     if (!vmRunning) return
-    setLoading(true); setErr(null)
+    if (!opts?.silent) { setLoading(true); setErr(null) }
     try {
       const data = await getSpicefields()
       const sorted = [...data.rows].sort((a, b) =>
@@ -48,15 +48,43 @@ export function SpicefieldsCard({ vmRunning }: Props) {
         a.spicefieldTypeId - b.spicefieldTypeId,
       )
       setRows(sorted)
-      seed(sorted)
+      if (opts?.silent) {
+        // Background poll: refresh stats but never overwrite an in-progress edit.
+        setDrafts(prev => {
+          const next = { ...prev }
+          for (const r of sorted) {
+            const d = prev[r.spicefieldTypeId]
+            if (!d) {
+              next[r.spicefieldTypeId] = {
+                maxActive:        String(r.maxActive),
+                maxPrimed:        String(r.maxPrimed),
+                spawnWeight:      String(r.spawnWeight),
+                isSpawningActive: r.isSpawningActive,
+              }
+            }
+          }
+          return next
+        })
+      } else {
+        seed(sorted)
+      }
     } catch (e) {
-      setErr(e instanceof Error ? e.message : String(e))
+      if (!opts?.silent) setErr(e instanceof Error ? e.message : String(e))
     } finally {
-      setLoading(false)
+      if (!opts?.silent) setLoading(false)
     }
   }, [vmRunning, seed])
 
   useEffect(() => { void load() }, [load])
+
+  // Light polling so the read-only "current active / primed" counters track
+  // what's actually on the map without the operator hitting Refresh — and
+  // without clobbering any unsaved edits in the form.
+  useEffect(() => {
+    if (!vmRunning) return
+    const id = window.setInterval(() => { void load({ silent: true }) }, 15000)
+    return () => window.clearInterval(id)
+  }, [vmRunning, load])
 
   const grouped = useMemo(() => {
     const out: Record<string, SpicefieldType[]> = {}
@@ -170,10 +198,31 @@ export function SpicefieldsCard({ vmRunning }: Props) {
 
       {vmRunning && rows && rows.length > 0 && (
         <div className="space-y-4">
-          {Object.entries(grouped).map(([mapName, list]) => (
+          {Object.entries(grouped).map(([mapName, list]) => {
+            const totalActive = list.reduce((s, r) => s + r.currentActive, 0)
+            const totalMaxActive = list.reduce((s, r) => s + r.maxActive, 0)
+            const totalPrimed = list.reduce((s, r) => s + r.currentPrimed, 0)
+            const totalMaxPrimed = list.reduce((s, r) => s + r.maxPrimed, 0)
+            return (
             <div key={mapName}>
-              <div className="text-[11px] font-mono uppercase tracking-wider text-text-dim mb-2">
-                {mapName}
+              <div className="flex items-center justify-between mb-2">
+                <div className="text-[11px] font-mono uppercase tracking-wider text-text-dim">
+                  {mapName}
+                </div>
+                <div className="text-[11px] text-text-muted flex items-center gap-3">
+                  <span title={`Total currently active across all ${mapName} field sizes`}>
+                    <Icon name="Sparkles" size={11} className="inline mr-1 text-accent-bright" />
+                    <span className="text-text font-medium">{totalActive}</span>
+                    <span className="text-text-dim"> / {totalMaxActive}</span>
+                    <span className="ml-1">active</span>
+                  </span>
+                  <span className="text-border">·</span>
+                  <span title={`Total currently primed across all ${mapName} field sizes`}>
+                    <span className="text-text font-medium">{totalPrimed}</span>
+                    <span className="text-text-dim"> / {totalMaxPrimed}</span>
+                    <span className="ml-1">primed</span>
+                  </span>
+                </div>
               </div>
               <div className="space-y-2">
                 {list.map(r => {
@@ -181,10 +230,12 @@ export function SpicefieldsCard({ vmRunning }: Props) {
                   if (!d) return null
                   const dirty = isDirty(r)
                   const saving = savingId === r.spicefieldTypeId
+                  const activeAtCap = r.maxActive > 0 && r.currentActive >= r.maxActive
+                  const primedAtCap = r.maxPrimed > 0 && r.currentPrimed >= r.maxPrimed
                   return (
                     <div key={r.spicefieldTypeId}
                          className="border border-border rounded-lg p-3 bg-surface-2/40">
-                      <div className="flex items-center justify-between mb-3">
+                      <div className="flex items-center justify-between mb-3 gap-3 flex-wrap">
                         <div className="flex items-center gap-2">
                           <span className="font-medium text-text">{r.fieldType}</span>
                           <span className="text-[10px] font-mono text-text-dim">
@@ -195,19 +246,28 @@ export function SpicefieldsCard({ vmRunning }: Props) {
                                   title="Unsaved changes" />
                           )}
                         </div>
-                        <div className="flex items-center gap-3 text-[11px] text-text-muted">
-                          <span title="Currently active on the map / max allowed">
-                            <span className="text-text">{r.currentActive}</span>
-                            <span className="text-text-dim"> / {r.maxActive}</span>
-                            <span className="ml-1">active</span>
-                          </span>
-                          <span className="text-border">|</span>
-                          <span title="Currently primed (about to spawn) / max allowed">
-                            <span className="text-text">{r.currentPrimed}</span>
-                            <span className="text-text-dim"> / {r.maxPrimed}</span>
-                            <span className="ml-1">primed</span>
-                          </span>
-                        </div>
+                        <span className={r.isSpawningActive ? 'pill-success' : 'pill-muted'}
+                              title={r.isSpawningActive
+                                ? 'Game is spawning this field type'
+                                : 'Spawning disabled for this field type'}>
+                          <Icon name={r.isSpawningActive ? 'Sparkles' : 'CircleOff'} size={11} />
+                          {r.isSpawningActive ? 'Spawning' : 'Off'}
+                        </span>
+                      </div>
+
+                      <div className="grid grid-cols-2 gap-2 mb-3">
+                        <StatTile
+                          label="Active on map"
+                          current={r.currentActive}
+                          max={r.maxActive}
+                          atCap={activeAtCap}
+                        />
+                        <StatTile
+                          label="Primed to spawn"
+                          current={r.currentPrimed}
+                          max={r.maxPrimed}
+                          atCap={primedAtCap}
+                        />
                       </div>
 
                       <div className="grid grid-cols-2 md:grid-cols-[1fr_1fr_1fr_auto_auto] gap-3 items-end">
@@ -245,9 +305,49 @@ export function SpicefieldsCard({ vmRunning }: Props) {
                 })}
               </div>
             </div>
-          ))}
+            )
+          })}
         </div>
       )}
+    </div>
+  )
+}
+
+function StatTile({ label, current, max, atCap }: {
+  label: string
+  current: number
+  max: number
+  atCap: boolean
+}) {
+  const pct = max > 0 ? Math.min(100, Math.round((current / max) * 100)) : 0
+  const barColor = atCap
+    ? 'bg-warning'
+    : pct >= 75 ? 'bg-accent-bright'
+    : 'bg-ibad'
+  return (
+    <div className={
+      'rounded-md border px-3 py-2 ' +
+      (atCap
+        ? 'border-warning/40 bg-warning/5'
+        : 'border-border bg-base/40')
+    }>
+      <div className="flex items-baseline justify-between gap-2">
+        <span className="text-[10px] uppercase tracking-wider text-text-dim">{label}</span>
+        {atCap && (
+          <span className="text-[10px] uppercase tracking-wider text-warning font-semibold">
+            at cap
+          </span>
+        )}
+      </div>
+      <div className="flex items-baseline gap-1 mt-0.5">
+        <span className={'font-mono text-lg leading-none ' + (atCap ? 'text-warning' : 'text-text')}>
+          {current}
+        </span>
+        <span className="font-mono text-sm text-text-dim">/ {max}</span>
+      </div>
+      <div className="mt-1.5 h-1 rounded-full bg-surface-3 overflow-hidden">
+        <div className={'h-full ' + barColor} style={{ width: pct + '%' }} />
+      </div>
     </div>
   )
 }
