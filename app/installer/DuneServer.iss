@@ -88,6 +88,18 @@ Source: "..\lib\WebView2\runtimes\win-arm64\native\WebView2Loader.dll"; DestDir:
 ; v5.0 terminal renderer: xterm.js + addons + host HTML
 Source: "..\web\*"; DestDir: "{app}\web"; Flags: ignoreversion recursesubdirs
 
+; v6.0 Server Manager: page modules (Dashboard, Characters, GameConfig, etc.)
+Source: "..\pages\*"; DestDir: "{app}\pages"; Flags: ignoreversion recursesubdirs
+
+; v6.0 Server Manager: backend lib modules (Db-Postgres, Ini-Edit, K8s, etc.)
+Source: "..\lib\*.ps1"; DestDir: "{app}\lib"; Flags: ignoreversion
+
+; v6.0 Server Manager: shared WPF theme (Eyes of Ibad scrollbars, brushes, styles)
+Source: "..\styles\*"; DestDir: "{app}\styles"; Flags: ignoreversion recursesubdirs
+
+; v6.0 Server Manager: bundled data catalogs (item-catalog, stat-reference, etc.)
+Source: "..\data\*"; DestDir: "{app}\data"; Flags: ignoreversion recursesubdirs
+
 [Icons]
 ; Start Menu shortcut (always created)
 Name: "{group}\{#MyAppName}"; Filename: "{app}\{#MyAppExeName}"; IconFilename: "{app}\{#MyAppExeName}"; Comment: "Dune Awakening server management"
