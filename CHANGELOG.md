@@ -14,6 +14,37 @@ here cover everything those tags shipped.
 ## [Unreleased]
 
 
+## [6.1.17] - 2026-05-27
+
+Minor: **Broadcasts feature** + **Install as App** (PWA).
+
+### Added
+- **Broadcasts page** under the Terminal nav group. Two cards (Message,
+  Server Alert) let the operator push in-game notifications and
+  shutdown/restart countdowns to every connected player.
+  - *Message*: Header, Message, on-screen duration → Send. Pop-up appears
+    instantly on every client.
+  - *Server Alert*: Type (Restart / Shutdown / Maintenance / Update) and
+    delay in minutes → Broadcast (confirm dialog) or Cancel an in-flight
+    countdown.
+- Backend: `app/server/lib/Broadcast.ps1` publishes through the same
+  RabbitMQ path Funcom's `send-dune-broadcast` uses (kubectl exec →
+  `rabbitmqctl eval` of an Erlang `basic.publish` to the `heartbeats`
+  exchange, routing key `notifications`). Auto-detects the `mq-game-sts-0`
+  pod (cached 120 s). Routes: `POST /api/broadcasts/generic`,
+  `POST /api/broadcasts/shutdown`.
+- **Install as App** button at the bottom of the sidebar. The portal now
+  ships a web app manifest (`/manifest.webmanifest`) and a no-op service
+  worker (`/sw.js`) so Chrome and Edge will install it as a standalone
+  windowed app (no tabs, no address bar) when the button is clicked.
+  Falls back to an in-app instructions modal if the browser hasn't
+  surfaced an install prompt yet.
+
+### Changed
+- Static file server now serves `.webmanifest` with
+  `application/manifest+json` so browsers recognize the PWA manifest.
+
+
 ## [6.1.16] - 2026-05-27
 
 Patch: **Critical startup fix — restore the server's ability to launch.**
