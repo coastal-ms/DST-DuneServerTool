@@ -1,4 +1,4 @@
-# /api/shutdown — gracefully stop the local Dune Server portal process.
+﻿# /api/shutdown — gracefully stop the local Dune Server portal process.
 #
 # Used by the "Shutdown" button in the web UI status bar. Sends the response
 # (Write-DuneJson flushes + closes the response stream synchronously), then
