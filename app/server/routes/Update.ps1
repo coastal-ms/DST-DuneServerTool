@@ -149,20 +149,78 @@ Register-DuneRoute -Method POST -Path '/api/update/install' -Handler {
             return
         }
 
-        # Fire-and-forget. Installer is admin-elevated already (Inno Setup
-        # PrivilegesRequired=admin) and we are too (DuneServer.exe has the
-        # UAC manifest), so this hand-off keeps elevation. Installer's
-        # StopRunningDuneServer / PrepareToInstall handles killing this
-        # very process, so we must respond BEFORE the kill arrives.
-        $args = '/SP- /VERYSILENT /SUPPRESSMSGBOXES /NORESTART /CLOSEAPPLICATIONS /RESTARTAPPLICATIONS'
-        Start-Process -FilePath $dest -ArgumentList $args -WindowStyle Hidden | Out-Null
-
+        # IMPORTANT: respond to the client BEFORE we spawn anything. The
+        # installer's PrepareToInstall hook runs `taskkill /F /IM
+        # DuneServer.exe /T`, which kills this very process within a few
+        # seconds of launch. If we wrote the JSON after Start-Process, the
+        # response would race the kill and the browser would hang.
         Write-DuneJson -Response $res -Body @{
             launched        = $true
             installerPath   = $dest
             fromVersion     = $script:DuneToolVersion
             toVersion       = ($rel.tag -replace '^v','')
             note            = 'Installer launched silently. The portal will go offline briefly while the upgrade lays down new files, then the new DuneServer.exe will relaunch automatically.'
+        }
+
+        # Build a relauncher script that:
+        #   1. Sleeps a few seconds so the HTTP response finishes flushing.
+        #   2. Runs the installer with /VERYSILENT and waits for it.
+        #   3. Launches the freshly-installed DuneServer.exe if (and only
+        #      if) it isn't already running. The installer's [Run] entry
+        #      should handle the relaunch (v6.1.14+ has a silent-mode
+        #      entry), but this is belt-and-suspenders for upgrades from
+        #      v6.1.13 where the installer's [Run] is skipifsilent-broken.
+        #
+        # The relauncher is launched via WMI Win32_Process.Create so its
+        # parent in the process tree is WmiPrvSE.exe, NOT DuneServer.exe.
+        # That detaches it from taskkill /T's kill list. (Start-Process or
+        # Start-Job would keep DuneServer.exe as the parent and the
+        # relauncher would die with us.)
+        $installArgs   = '/SP- /VERYSILENT /SUPPRESSMSGBOXES /NORESTART /CLOSEAPPLICATIONS /RESTARTAPPLICATIONS'
+        $logPath       = Join-Path $tmpDir ("relaunch-$safeTag.log")
+        $appExeGuess1  = Join-Path ${env:ProgramFiles}        'Dune Server\DuneServer.exe'
+        $appExeGuess2  = Join-Path ${env:ProgramFiles(x86)}   'Dune Server\DuneServer.exe'
+        $relaunchScript = @"
+`$ErrorActionPreference = 'Continue'
+Start-Transcript -Path '$logPath' -Append | Out-Null
+try {
+    Start-Sleep -Seconds 3
+    Write-Host "[$(Get-Date -Format o)] Launching installer: $dest"
+    `$p = Start-Process -FilePath '$dest' -ArgumentList '$installArgs' -PassThru -Wait
+    Write-Host "[`$(Get-Date -Format o)] Installer exited with code `$(`$p.ExitCode)"
+    Start-Sleep -Seconds 2
+    `$running = Get-Process -Name DuneServer -ErrorAction SilentlyContinue
+    if (`$running) {
+        Write-Host "[`$(Get-Date -Format o)] DuneServer.exe already running (PID=`$(`$running[0].Id)) - not relaunching."
+    } else {
+        foreach (`$exe in @('$appExeGuess1','$appExeGuess2')) {
+            if (Test-Path -LiteralPath `$exe) {
+                Write-Host "[`$(Get-Date -Format o)] Relaunching: `$exe"
+                Start-Process -FilePath `$exe -WindowStyle Hidden
+                break
+            }
+        }
+    }
+} catch {
+    Write-Host "[`$(Get-Date -Format o)] Relauncher error: `$(`$_.Exception.Message)"
+} finally {
+    Stop-Transcript | Out-Null
+}
+"@
+        $scriptPath = Join-Path $tmpDir ("DuneRelaunch-$safeTag.ps1")
+        Set-Content -LiteralPath $scriptPath -Value $relaunchScript -Encoding UTF8
+
+        try {
+            $wmi = [WMICLASS]'\\.\root\cimv2:Win32_Process'
+            $cmd = "powershell.exe -NoProfile -WindowStyle Hidden -ExecutionPolicy Bypass -File `"$scriptPath`""
+            $null = $wmi.Create($cmd)
+        } catch {
+            # Last-ditch fallback: spawn in-tree. Relauncher will likely die
+            # with us, but the installer's own [Run] silent-mode entry
+            # (v6.1.14+) will still relaunch DuneServer.exe.
+            Start-Process -FilePath 'powershell.exe' `
+                -ArgumentList @('-NoProfile','-WindowStyle','Hidden','-ExecutionPolicy','Bypass','-File',$scriptPath) `
+                -WindowStyle Hidden | Out-Null
         }
     } catch {
         Write-DuneError -Response $res -Status 500 -Message $_.Exception.Message

@@ -14,6 +14,50 @@ here cover everything those tags shipped.
 ## [Unreleased]
 
 
+## [6.1.14] - 2026-05-27
+
+Patch: **Auto-update relaunch fix.**
+
+Background: v6.1.13's auto-updater shipped a regression — the UI hung on
+"Installing…" and the portal went dead (`ERR_CONNECTION_REFUSED`) after the
+upgrade completed. Two bugs were responsible:
+
+1. `app/installer/DuneServer.iss` had `skipifsilent` on its `[Run]` entry,
+   so silent installs (which is what the in-app updater uses) skipped the
+   "launch DuneServer.exe" step entirely. The installer killed the running
+   server, copied new files, and exited without ever relaunching it.
+2. `app/server/routes/Update.ps1` wrote its JSON success response *after*
+   launching the installer, racing the installer's own
+   `taskkill /F /IM DuneServer.exe /T` step. The kill won → response never
+   flushed → browser fetch hung.
+
+Fixed
+- Installer `[Run]` now has a second silent-mode entry (`Check:
+  WizardSilent`) so the new EXE relaunches whether the install was
+  interactive or silent.
+- `/api/update/install` writes the success JSON *before* spawning anything,
+  so the browser confirmation arrives before the kill.
+- `/api/update/install` now stages a relauncher PowerShell script in
+  `%TEMP%\DuneServerUpdate` and starts it via
+  `Win32_Process.Create` (WMI). That detaches the relauncher from
+  DuneServer.exe's process tree, so `taskkill /T` can't reach it. The
+  relauncher waits for the installer to finish, then starts
+  `DuneServer.exe` from `Program Files\Dune Server\` only if it isn't
+  already running.
+- Relauncher writes a transcript to
+  `%TEMP%\DuneServerUpdate\relaunch-<tag>.log` for post-mortem if a future
+  upgrade misbehaves.
+
+Notes
+- If you are stuck on v6.1.13 with the portal dead, manually launch
+  **Dune Server** from the Start Menu (or run
+  `"C:\Program Files\Dune Server\DuneServer.exe"`). v6.1.13's installer
+  shipped the broken `[Run]` flag, so the v6.1.13 → v6.1.14 upgrade may
+  hang the same way; if it does, relaunch manually one more time. From
+  v6.1.14 onward, auto-update will relaunch correctly without manual
+  intervention.
+
+
 ## [6.1.13] - 2026-05-27
 
 Patch: **Players-online guard on mutating endpoints.**

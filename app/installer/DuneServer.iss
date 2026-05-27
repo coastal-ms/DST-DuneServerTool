@@ -16,7 +16,7 @@
 ;                 -> NOT touched by install or uninstall (preserves user config)
 
 #define MyAppName        "Dune Server"
-#define MyAppVersion "6.1.13"
+#define MyAppVersion "6.1.14"
 #define MyAppPublisher   "Dune Awakening Self-Hosted Tool"
 #define MyAppURL         "https://github.com/coastal-ms/Simple-Dune-Server-Management-Tool"
 #define MyAppExeName     "DuneServer.exe"
@@ -98,10 +98,15 @@ Name: "{group}\{cm:UninstallProgram,{#MyAppName}}"; Filename: "{uninstallexe}"
 Name: "{autodesktop}\{#MyAppName}"; Filename: "{app}\{#MyAppExeName}"; IconFilename: "{app}\{#MyAppExeName}"; Tasks: desktopicon; Flags: runminimized
 
 [Run]
-; Launch immediately after install if the user wants. The app's embedded
-; UAC manifest will trigger its own elevation prompt; postinstall preserves
-; the original elevated context.
+; Launch immediately after install. Two entries so both interactive AND
+; silent (auto-update) installs relaunch the app:
+;   * Interactive: postinstall shows the "Launch Dune Server" checkbox on
+;     the Finished page (skipifsilent hides it during silent install).
+;   * Silent: a plain [Run] entry that fires only in silent mode (Check:
+;     WizardSilent). Without this, /VERYSILENT updates would leave the app
+;     uninstalled-but-not-restarted and the portal would go dark forever.
 Filename: "{app}\{#MyAppExeName}"; Description: "{cm:LaunchProgram,{#MyAppName}}"; Flags: nowait postinstall skipifsilent runascurrentuser runminimized
+Filename: "{app}\{#MyAppExeName}"; Flags: nowait runascurrentuser runminimized; Check: WizardSilent
 
 [UninstallDelete]
 ; Belt-and-suspenders: clear any junk inside install dir that isn't tracked
