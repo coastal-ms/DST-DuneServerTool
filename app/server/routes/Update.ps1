@@ -1,4 +1,4 @@
-# /api/update — GitHub release auto-update
+﻿# /api/update — GitHub release auto-update
 #
 # Polls the public GitHub Releases API for the latest tag, compares against
 # the running $script:DuneToolVersion, and (on user click) downloads the

@@ -14,6 +14,35 @@ here cover everything those tags shipped.
 ## [Unreleased]
 
 
+## [6.1.16] - 2026-05-27
+
+Patch: **Critical startup fix — restore the server's ability to launch.**
+
+After installing v6.1.13/14/15, clicking the desktop icon silently failed:
+log header was written but the server never reached the "starting" banner
+and the portal never came up. Root cause: `app/server/lib/PlayerGuard.ps1`
+(new in v6.1.13) contains an em-dash (—) and was saved as UTF-8 *without*
+BOM. The ps2exe-compiled `DuneServer.exe` hosts Windows PowerShell 5.1,
+whose default file-encoding is Windows-1252 — it mis-decoded the em-dash
+as `â€"` and the parser died. Standalone `pwsh` 7 defaults to UTF-8, so
+this never surfaced during dev / interactive testing.
+
+### Fixed
+- Re-saved 7 `.ps1` files with UTF-8 BOM so the ps2exe-hosted runtime
+  parses them correctly: `PlayerGuard.ps1`, `Commands.ps1` (route),
+  `Shutdown.ps1` (route), `Update.ps1` (route), `app/DuneServer.ps1`,
+  `app/build/Build-Exe.ps1`, `dune-server.ps1`. The em-dash in
+  `PlayerGuard.ps1`'s "players online" message was the actual crasher;
+  the rest had non-ASCII in comments / string literals that hadn't yet
+  triggered a parse error but would have eventually.
+
+### Notes
+- Permanent rule: any `.ps1` that will be dot-sourced by the
+  ps2exe-compiled `DuneServer.exe` **must** be saved with a UTF-8 BOM if
+  it contains any non-ASCII byte. Pure-ASCII files are fine without BOM.
+- v6.1.15's interactive auto-update path is preserved.
+
+
 ## [6.1.15] - 2026-05-27
 
 Patch: **Auto-update goes interactive.**
