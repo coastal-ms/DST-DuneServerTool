@@ -13,6 +13,42 @@ here cover everything those tags shipped.
 
 ## [Unreleased]
 
+## [6.1.7] - 2026-05-26
+
+Patch: **Fix per-refresh popup-window flash on the dashboard; remove the
+tray icon (workaround no longer needed).**
+
+Fixed
+- **Dashboard refresh no longer flashes a popup window.** The compiled
+  `DuneServer.exe` was previously built as a windowless (`-noConsole`)
+  application, which caused Windows to briefly allocate a fresh console
+  window for every child `kubectl` / `ssh` process invoked while the
+  dashboard polled for status, port checks, and links. On every refresh
+  this looked like a small white box flashing on-screen.
+  v6.1.7 rebuilds the EXE as a console-subsystem application and
+  minimizes its own console window at startup via the Win32
+  `ShowWindow(SW_SHOWMINNOACTIVE)` API. Child processes now inherit
+  the (minimized, off-screen) parent console — no per-child window
+  allocation, no flash.
+- Desktop / Start-Menu / post-install shortcuts now carry the
+  `runminimized` flag as belt-and-suspenders so they launch the EXE
+  minimized from the first click.
+- Source-mode self-elevation relaunch now uses `-WindowStyle Minimized`
+  instead of `-WindowStyle Hidden` for consistency.
+
+Removed
+- **System tray (NotifyIcon) icon removed.** The tray icon was added in
+  v6.1.2 only as a workaround for the windowless EXE not having any
+  visible UI surface. With v6.1.7's minimized-console design, the
+  taskbar entry for the console IS that surface — click it to bring
+  the live log into view, close the window to exit. Having both a
+  taskbar entry AND a notification-area entry for the same single
+  process was redundant clutter. `app/server/lib/TrayIcon.ps1`
+  deleted; `Start-DuneTrayIcon` / `Stop-DuneTrayIcon` calls removed
+  from `DuneServer.ps1`; `-TrayState` parameter dropped from
+  `Start-DuneHttpServer`; the URL-publish job that only existed to
+  feed the tray menu is gone.
+
 ## [6.1.6] - 2026-05-26
 
 Patch: **Max primed mirrors Max active on the Game Config / Spicefields card,
