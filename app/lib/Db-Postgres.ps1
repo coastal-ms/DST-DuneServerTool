@@ -73,6 +73,33 @@ function ConvertFrom-V6PsqlJson {
 }
 
 # -----------------------------------------------------------------------------
+# Online players — used by the route-layer guard to refuse mutating operations
+# while anyone is connected. Returns [] when the DB is unreachable so the guard
+# fails open (we don't want a transient SSH/psql blip to block all edits).
+# -----------------------------------------------------------------------------
+function Get-V6OnlinePlayers {
+    param([string]$Ip)
+    $sql = @"
+SELECT json_agg(row_to_json(t)) FROM (
+  SELECT eps.player_pawn_id::text  AS id,
+         decrypt_user_data(eps.encrypted_character_name) AS name,
+         eps.online_status::text   AS status
+  FROM encrypted_player_state eps
+  WHERE eps.online_status::text <> 'Offline'
+  ORDER BY eps.player_pawn_id
+) t
+"@
+    try {
+        $raw = Invoke-V6Psql -Ip $Ip -Sql $sql
+    } catch {
+        return @()
+    }
+    $list = ConvertFrom-V6PsqlJson -Raw $raw -Default @()
+    if (-not $list) { return @() }
+    return @($list)
+}
+
+# -----------------------------------------------------------------------------
 # Character list
 # -----------------------------------------------------------------------------
 function Get-V6CharacterList {

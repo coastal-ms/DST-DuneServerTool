@@ -14,6 +14,49 @@ here cover everything those tags shipped.
 ## [Unreleased]
 
 
+## [6.1.13] - 2026-05-27
+
+Patch: **Players-online guard on mutating endpoints.**
+
+Background: On 2026-05-27 a player lost their entire crafting recipe library
+(482 → 29 entries) after a save was applied while their character was in the
+middle of logging in. Root cause was a Funcom game-side partial-load race
+(actor loaded with empty `m_PersistentName`, then auto-saved that empty state
+back over the real character). The tool didn't initiate it, but writing to
+`actors.properties` while a player is connected can race the same way. This
+release adds a server-side guard so the tool refuses to write while anyone
+is online unless the operator confirms.
+
+Added
+- New server helper `Get-V6OnlinePlayers` queries
+  `encrypted_player_state.online_status` (any value other than `Offline`,
+  including `LoggingOut`) and returns the connected player names via
+  `decrypt_user_data()`.
+- New shared route helper `Test-DunePlayerGuard` in `app/server/lib/PlayerGuard.ps1`.
+  Returns HTTP **409** with `{ conflict: 'players_online', playersOnline,
+  playerNames, players, message }` when any player is connected. Bypass with
+  `?force=1|true|yes` once the operator confirms.
+- All 11 mutating `/api/characters/*` endpoints and the 2 mutating
+  `/api/gameconfig*` endpoints (game settings PUT, spicefield row PUT) call
+  the guard before touching the DB.
+- Client-side `withOnlinePlayerGuard()` wrapper in `webui/src/api/client.ts`.
+  On 409 it shows a `window.confirm` listing the online player names, and on
+  confirmation retries the same call with `?force=true`. Every save in the
+  Characters tabs (Stats, Tech, Specs, Economy, Cosmetics, Inventory) and the
+  Game Config page (settings, spicefields) flows through the wrapper
+  automatically — tab UI code is unchanged.
+
+Notes
+- The guard **fails open** on DB errors: a transient SSH/psql blip won't lock
+  editing.
+- The existing `/api/maps/{key}/stop` endpoint already had its own 409 +
+  `?force=true` flow; this release adopts the same pattern across the rest
+  of the mutating surface.
+- The Database page SQL editor is intentionally not gated — it already
+  defaults to read-only and requires an explicit toggle + `window.confirm`
+  for arbitrary SQL.
+
+
 ## [6.1.12] - 2026-05-27
 
 Patch: **Buttons no longer word-wrap.**

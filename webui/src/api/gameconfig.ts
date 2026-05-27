@@ -1,5 +1,5 @@
 // GameConfig API — typed wrappers around /api/gameconfig/*
-import { api } from './client'
+import { api, withOnlinePlayerGuard } from './client'
 import type {
   GameConfigSchemaResponse,
   GameConfigResponse,
@@ -8,6 +8,8 @@ import type {
   SpicefieldSaveResponse,
   SpicefieldType,
 } from './types'
+
+const fq = (force: boolean) => (force ? '?force=true' : '')
 
 export function getGameConfigSchema() {
   return api<GameConfigSchemaResponse>('/api/gameconfig/schema')
@@ -18,10 +20,12 @@ export function getGameConfig() {
 }
 
 export function saveGameConfig(updates: Record<string, string>) {
-  return api<GameConfigSaveResponse>('/api/gameconfig', {
-    method: 'PUT',
-    body: JSON.stringify({ updates }),
-  })
+  return withOnlinePlayerGuard(force =>
+    api<GameConfigSaveResponse>(`/api/gameconfig${fq(force)}`, {
+      method: 'PUT',
+      body: JSON.stringify({ updates }),
+    }),
+  )
 }
 
 export function getSpicefields() {
@@ -32,8 +36,10 @@ export function saveSpicefield(
   id: number,
   payload: Pick<SpicefieldType, 'maxActive' | 'maxPrimed' | 'isSpawningActive' | 'spawnWeight'>,
 ) {
-  return api<SpicefieldSaveResponse>(`/api/gameconfig/spicefields/${id}`, {
-    method: 'PUT',
-    body: JSON.stringify(payload),
-  })
+  return withOnlinePlayerGuard(force =>
+    api<SpicefieldSaveResponse>(`/api/gameconfig/spicefields/${id}${fq(force)}`, {
+      method: 'PUT',
+      body: JSON.stringify(payload),
+    }),
+  )
 }
