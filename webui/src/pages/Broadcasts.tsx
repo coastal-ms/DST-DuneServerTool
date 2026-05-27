@@ -70,11 +70,11 @@ export function Broadcasts() {
         description="Send in-game pop-ups and shutdown countdowns to all connected players."
       />
 
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-        {/* Generic message */}
-        <div className="card p-5">
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 items-stretch">
+        {/* Message */}
+        <div className="card p-5 flex flex-col">
           <div className="text-xs font-semibold uppercase tracking-widest text-accent mb-3">
-            Generic Message
+            Message
           </div>
 
           <label className="block text-xs uppercase tracking-wider text-text-dim mb-1">Header</label>
@@ -95,17 +95,19 @@ export function Broadcasts() {
             className="w-full mb-3 px-3 py-2 rounded-lg bg-surface-2 border border-border text-text focus:outline-none focus:ring-2 focus:ring-ibad focus:border-ibad/50"
           />
 
-          <div className="flex items-center gap-3 mt-2">
-            <label className="text-xs text-text-dim shrink-0">How long should the message last on screen?</label>
-            <input
-              type="number"
-              min={1}
-              max={3600}
-              value={duration}
-              onChange={e => setDuration(Math.max(1, parseInt(e.target.value) || 30))}
-              className="w-24 px-3 py-2 rounded-lg bg-surface-2 border border-border text-text font-mono focus:outline-none focus:ring-2 focus:ring-ibad focus:border-ibad/50"
-            />
-            <div className="flex-1" />
+          <label className="block text-xs uppercase tracking-wider text-text-dim mb-1">
+            How long should the message last on screen? (seconds)
+          </label>
+          <input
+            type="number"
+            min={1}
+            max={3600}
+            value={duration}
+            onChange={e => setDuration(Math.max(1, parseInt(e.target.value) || 30))}
+            className="w-full mb-3 px-3 py-2 rounded-lg bg-surface-2 border border-border text-text font-mono focus:outline-none focus:ring-2 focus:ring-ibad focus:border-ibad/50"
+          />
+
+          <div className="mt-auto pt-2 flex items-center justify-end gap-2">
             <button
               className="btn-primary"
               disabled={sendBusy || !title.trim()}
@@ -123,47 +125,35 @@ export function Broadcasts() {
           )}
         </div>
 
-        {/* Shutdown broadcast */}
-        <div className="card p-5">
+        {/* Server Alert */}
+        <div className="card p-5 flex flex-col">
           <div className="text-xs font-semibold uppercase tracking-widest text-accent mb-3">
-            Shutdown Broadcast
+            Server Alert
           </div>
 
-          <div className="flex items-center gap-3 mb-3">
-            <label className="text-xs text-text-dim shrink-0 w-16">Type</label>
-            <select
-              value={shutdownType}
-              onChange={e => setShutdownType(e.target.value as ShutdownType)}
-              className="flex-1 px-3 py-2 rounded-lg bg-surface-2 border border-border text-text focus:outline-none focus:ring-2 focus:ring-ibad focus:border-ibad/50"
-            >
-              <option value="Restart">Restart</option>
-              <option value="Shutdown">Shutdown</option>
-              <option value="Maintenance">Maintenance</option>
-              <option value="Update">Update</option>
-            </select>
-          </div>
+          <label className="block text-xs uppercase tracking-wider text-text-dim mb-1">Type</label>
+          <select
+            value={shutdownType}
+            onChange={e => setShutdownType(e.target.value as ShutdownType)}
+            className="w-full mb-3 px-3 py-2 rounded-lg bg-surface-2 border border-border text-text focus:outline-none focus:ring-2 focus:ring-ibad focus:border-ibad/50"
+          >
+            <option value="Restart">Restart</option>
+            <option value="Shutdown">Shutdown</option>
+            <option value="Maintenance">Maintenance</option>
+            <option value="Update">Update</option>
+          </select>
 
-          <div className="flex items-center gap-3 mb-4">
-            <label className="text-xs text-text-dim shrink-0 w-16">Delay (min)</label>
-            <input
-              type="number"
-              min={0}
-              max={1440}
-              value={delay}
-              onChange={e => setDelay(Math.max(0, parseInt(e.target.value) || 0))}
-              className="w-24 px-3 py-2 rounded-lg bg-surface-2 border border-border text-text font-mono focus:outline-none focus:ring-2 focus:ring-ibad focus:border-ibad/50"
-            />
-          </div>
+          <label className="block text-xs uppercase tracking-wider text-text-dim mb-1">Delay (minutes)</label>
+          <input
+            type="number"
+            min={0}
+            max={1440}
+            value={delay}
+            onChange={e => setDelay(Math.max(0, parseInt(e.target.value) || 0))}
+            className="w-full mb-3 px-3 py-2 rounded-lg bg-surface-2 border border-border text-text font-mono focus:outline-none focus:ring-2 focus:ring-ibad focus:border-ibad/50"
+          />
 
-          <div className="flex items-center gap-2 mt-2">
-            <button
-              className="btn-danger"
-              disabled={shutdownBusy !== null}
-              onClick={() => { void onShutdown() }}
-            >
-              <Icon name={shutdownBusy === 'broadcast' ? 'Loader2' : 'AlertTriangle'} size={14} className={shutdownBusy === 'broadcast' ? 'animate-spin' : ''} />
-              {shutdownBusy === 'broadcast' ? 'Sending…' : 'Broadcast'}
-            </button>
+          <div className="mt-auto pt-2 flex items-center justify-end gap-2">
             <button
               className="btn-secondary"
               disabled={shutdownBusy !== null}
@@ -171,6 +161,14 @@ export function Broadcasts() {
             >
               <Icon name={shutdownBusy === 'cancel' ? 'Loader2' : 'X'} size={14} className={shutdownBusy === 'cancel' ? 'animate-spin' : ''} />
               {shutdownBusy === 'cancel' ? 'Cancelling…' : 'Cancel'}
+            </button>
+            <button
+              className="btn-danger"
+              disabled={shutdownBusy !== null}
+              onClick={() => { void onShutdown() }}
+            >
+              <Icon name={shutdownBusy === 'broadcast' ? 'Loader2' : 'AlertTriangle'} size={14} className={shutdownBusy === 'broadcast' ? 'animate-spin' : ''} />
+              {shutdownBusy === 'broadcast' ? 'Sending…' : 'Broadcast'}
             </button>
           </div>
 
@@ -180,14 +178,6 @@ export function Broadcasts() {
             </p>
           )}
         </div>
-      </div>
-
-      <div className="card p-4 mt-4 border-border/60">
-        <p className="text-xs text-text-dim">
-          <Icon name="Info" size={12} className="inline mr-1" />
-          Broadcasts are published to the battlegroup's <span className="font-mono">mq-game</span> RabbitMQ
-          exchange and forwarded to every connected player. The VM must be running and the battlegroup must be healthy.
-        </p>
       </div>
     </>
   )
