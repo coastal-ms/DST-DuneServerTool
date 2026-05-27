@@ -1,11 +1,15 @@
 // Characters API — typed wrappers around /api/characters/* and /api/catalog/*
-import { api } from './client'
+import { api, withOnlinePlayerGuard } from './client'
 import type {
   CharactersListResponse,
   CharacterDetail,
   CharacterDefs,
   ItemCatalog,
 } from './types'
+
+// `?force=true` bypasses the server's players-online guard. The withOnlinePlayerGuard
+// wrapper sets force=true automatically when the user confirms the prompt.
+const fq = (force: boolean) => (force ? '?force=true' : '')
 
 export function listCharacters() {
   return api<CharactersListResponse>('/api/characters')
@@ -16,57 +20,77 @@ export function getCharacter(id: number) {
 }
 
 export function saveStats(id: number, values: Record<string, number>) {
-  return api<{ ok: boolean; updated: number }>(`/api/characters/${id}/stats`, {
-    method: 'PUT',
-    body: JSON.stringify({ values }),
-  })
+  return withOnlinePlayerGuard(force =>
+    api<{ ok: boolean; updated: number }>(`/api/characters/${id}/stats${fq(force)}`, {
+      method: 'PUT',
+      body: JSON.stringify({ values }),
+    }),
+  )
 }
 
 export function techUnlockAll(id: number) {
-  return api<{ ok: boolean }>(`/api/characters/${id}/tech/unlock-all`, { method: 'POST' })
+  return withOnlinePlayerGuard(force =>
+    api<{ ok: boolean }>(`/api/characters/${id}/tech/unlock-all${fq(force)}`, { method: 'POST' }),
+  )
 }
 export function techLockAll(id: number) {
-  return api<{ ok: boolean }>(`/api/characters/${id}/tech/lock-all`, { method: 'POST' })
+  return withOnlinePlayerGuard(force =>
+    api<{ ok: boolean }>(`/api/characters/${id}/tech/lock-all${fq(force)}`, { method: 'POST' }),
+  )
 }
 
 export function saveSpec(id: number, track: string, xp: number, level: number) {
-  return api<{ ok: boolean }>(`/api/characters/${id}/specs/${encodeURIComponent(track)}`, {
-    method: 'PUT',
-    body: JSON.stringify({ xp, level }),
-  })
+  return withOnlinePlayerGuard(force =>
+    api<{ ok: boolean }>(`/api/characters/${id}/specs/${encodeURIComponent(track)}${fq(force)}`, {
+      method: 'PUT',
+      body: JSON.stringify({ xp, level }),
+    }),
+  )
 }
 
 export function unlockKeystones(id: number, prefix: string) {
-  return api<{ ok: boolean }>(`/api/characters/${id}/specs/${encodeURIComponent(prefix)}/unlock-keystones`, {
-    method: 'POST',
-  })
+  return withOnlinePlayerGuard(force =>
+    api<{ ok: boolean }>(
+      `/api/characters/${id}/specs/${encodeURIComponent(prefix)}/unlock-keystones${fq(force)}`,
+      { method: 'POST' },
+    ),
+  )
 }
 
 export function saveCurrency(id: number, currencyId: number, balance: number) {
-  return api<{ ok: boolean }>(`/api/characters/${id}/currency/${currencyId}`, {
-    method: 'PUT',
-    body: JSON.stringify({ balance }),
-  })
+  return withOnlinePlayerGuard(force =>
+    api<{ ok: boolean }>(`/api/characters/${id}/currency/${currencyId}${fq(force)}`, {
+      method: 'PUT',
+      body: JSON.stringify({ balance }),
+    }),
+  )
 }
 
 export function saveFactionRep(id: number, factionId: number, amount: number) {
-  return api<{ ok: boolean }>(`/api/characters/${id}/faction/${factionId}`, {
-    method: 'PUT',
-    body: JSON.stringify({ amount }),
-  })
+  return withOnlinePlayerGuard(force =>
+    api<{ ok: boolean }>(`/api/characters/${id}/faction/${factionId}${fq(force)}`, {
+      method: 'PUT',
+      body: JSON.stringify({ amount }),
+    }),
+  )
 }
 
 export function addCosmetic(id: number, cosmeticId: string) {
-  return api<{ ok: boolean }>(`/api/characters/${id}/cosmetics`, {
-    method: 'POST',
-    body: JSON.stringify({ cosmeticId }),
-  })
+  return withOnlinePlayerGuard(force =>
+    api<{ ok: boolean }>(`/api/characters/${id}/cosmetics${fq(force)}`, {
+      method: 'POST',
+      body: JSON.stringify({ cosmeticId }),
+    }),
+  )
 }
 
 export function removeCosmetic(id: number, cosmeticId: string) {
-  return api<{ ok: boolean }>(`/api/characters/${id}/cosmetics/${encodeURIComponent(cosmeticId)}`, {
-    method: 'DELETE',
-  })
+  return withOnlinePlayerGuard(force =>
+    api<{ ok: boolean }>(
+      `/api/characters/${id}/cosmetics/${encodeURIComponent(cosmeticId)}${fq(force)}`,
+      { method: 'DELETE' },
+    ),
+  )
 }
 
 export function addInventoryItem(
@@ -75,14 +99,18 @@ export function addInventoryItem(
   stackSize: number,
   isEquipment: boolean,
 ) {
-  return api<{ ok: boolean }>(`/api/inventories/${inventoryId}/items`, {
-    method: 'POST',
-    body: JSON.stringify({ templateId, stackSize, isEquipment }),
-  })
+  return withOnlinePlayerGuard(force =>
+    api<{ ok: boolean }>(`/api/inventories/${inventoryId}/items${fq(force)}`, {
+      method: 'POST',
+      body: JSON.stringify({ templateId, stackSize, isEquipment }),
+    }),
+  )
 }
 
 export function removeItem(itemId: number) {
-  return api<{ ok: boolean }>(`/api/items/${itemId}`, { method: 'DELETE' })
+  return withOnlinePlayerGuard(force =>
+    api<{ ok: boolean }>(`/api/items/${itemId}${fq(force)}`, { method: 'DELETE' }),
+  )
 }
 
 export function getCharacterDefs() {

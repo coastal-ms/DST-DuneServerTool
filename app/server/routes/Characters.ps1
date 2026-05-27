@@ -70,6 +70,7 @@ Register-DuneRoute -Method PUT -Path '/api/characters/{id}/stats' -Handler {
     if (-not $id) { Write-DuneError -Response $res -Status 400 -Message 'Invalid character id'; return }
     $ctx = Resolve-DuneCharContext -Response $res
     if (-not $ctx) { return }
+    if (-not (Test-DunePlayerGuard -Req $req -Res $res -Ip $ctx.ip)) { return }
 
     $values = $null
     if ($body -is [hashtable] -and $body.ContainsKey('values')) { $values = $body.values }
@@ -115,6 +116,7 @@ Register-DuneRoute -Method POST -Path '/api/characters/{id}/tech/unlock-all' -Ha
     if (-not $id) { Write-DuneError -Response $res -Status 400 -Message 'Invalid character id'; return }
     $ctx = Resolve-DuneCharContext -Response $res
     if (-not $ctx) { return }
+    if (-not (Test-DunePlayerGuard -Req $req -Res $res -Ip $ctx.ip)) { return }
     try {
         Invoke-V6TechUnlockAll -Ip $ctx.ip -Id $id
         Write-DuneJson -Response $res -Body @{ ok = $true; action = 'unlock-all' }
@@ -129,6 +131,7 @@ Register-DuneRoute -Method POST -Path '/api/characters/{id}/tech/lock-all' -Hand
     if (-not $id) { Write-DuneError -Response $res -Status 400 -Message 'Invalid character id'; return }
     $ctx = Resolve-DuneCharContext -Response $res
     if (-not $ctx) { return }
+    if (-not (Test-DunePlayerGuard -Req $req -Res $res -Ip $ctx.ip)) { return }
     try {
         Invoke-V6TechLockAll -Ip $ctx.ip -Id $id
         Write-DuneJson -Response $res -Body @{ ok = $true; action = 'lock-all' }
@@ -151,6 +154,7 @@ Register-DuneRoute -Method PUT -Path '/api/characters/{id}/specs/{track}' -Handl
     }
     $ctx = Resolve-DuneCharContext -Response $res
     if (-not $ctx) { return }
+    if (-not (Test-DunePlayerGuard -Req $req -Res $res -Ip $ctx.ip)) { return }
     $xp    = ConvertTo-DuneInt    $body.xp
     $level = ConvertTo-DuneDouble $body.level
     try {
@@ -176,6 +180,7 @@ Register-DuneRoute -Method POST -Path '/api/characters/{id}/specs/{prefix}/unloc
     }
     $ctx = Resolve-DuneCharContext -Response $res
     if (-not $ctx) { return }
+    if (-not (Test-DunePlayerGuard -Req $req -Res $res -Ip $ctx.ip)) { return }
     try {
         Invoke-V6UnlockKeystonesForTrack -Ip $ctx.ip -Id $id -TrackPrefix $prefix
         Write-DuneJson -Response $res -Body @{ ok = $true; prefix = $prefix }
@@ -194,6 +199,7 @@ Register-DuneRoute -Method PUT -Path '/api/characters/{id}/currency/{currencyId}
     if (-not $id) { Write-DuneError -Response $res -Status 400 -Message 'Invalid character id'; return }
     $ctx = Resolve-DuneCharContext -Response $res
     if (-not $ctx) { return }
+    if (-not (Test-DunePlayerGuard -Req $req -Res $res -Ip $ctx.ip)) { return }
     $balance = ConvertTo-DuneInt $body.balance
     try {
         Set-V6Currency -Ip $ctx.ip -Id $id -CurrencyId $cur -Balance $balance
@@ -214,6 +220,7 @@ Register-DuneRoute -Method PUT -Path '/api/characters/{id}/faction/{factionId}' 
     if (-not $fac) { Write-DuneError -Response $res -Status 400 -Message 'Invalid faction id';   return }
     $ctx = Resolve-DuneCharContext -Response $res
     if (-not $ctx) { return }
+    if (-not (Test-DunePlayerGuard -Req $req -Res $res -Ip $ctx.ip)) { return }
     $amount = ConvertTo-DuneInt $body.amount
     try {
         Set-V6FactionReputation -Ip $ctx.ip -Id $id -FactionId $fac -Amount $amount
@@ -235,6 +242,7 @@ Register-DuneRoute -Method POST -Path '/api/characters/{id}/cosmetics' -Handler 
     if (-not $cosmeticId) { Write-DuneError -Response $res -Status 400 -Message 'Body must include cosmeticId'; return }
     $ctx = Resolve-DuneCharContext -Response $res
     if (-not $ctx) { return }
+    if (-not (Test-DunePlayerGuard -Req $req -Res $res -Ip $ctx.ip)) { return }
     try {
         Add-V6Cosmetic -Ip $ctx.ip -Id $id -CosmeticId $cosmeticId
         Write-DuneJson -Response $res -Body @{ ok = $true; action = 'add'; cosmeticId = $cosmeticId }
@@ -251,6 +259,7 @@ Register-DuneRoute -Method DELETE -Path '/api/characters/{id}/cosmetics/{cosmeti
     if (-not $cosmeticId) { Write-DuneError -Response $res -Status 400 -Message 'Missing cosmeticId'; return }
     $ctx = Resolve-DuneCharContext -Response $res
     if (-not $ctx) { return }
+    if (-not (Test-DunePlayerGuard -Req $req -Res $res -Ip $ctx.ip)) { return }
     try {
         Remove-V6Cosmetic -Ip $ctx.ip -Id $id -CosmeticId $cosmeticId
         Write-DuneJson -Response $res -Body @{ ok = $true; action = 'remove'; cosmeticId = $cosmeticId }
@@ -273,6 +282,7 @@ Register-DuneRoute -Method POST -Path '/api/inventories/{inventoryId}/items' -Ha
     $isEq  = [bool]$body.isEquipment
     $ctx = Resolve-DuneCharContext -Response $res
     if (-not $ctx) { return }
+    if (-not (Test-DunePlayerGuard -Req $req -Res $res -Ip $ctx.ip)) { return }
     try {
         Add-V6InventoryItem -Ip $ctx.ip -InventoryId $invId -TemplateId $tmpl -StackSize $stack -IsEquipment $isEq
         Write-DuneJson -Response $res -Body @{ ok = $true; inventoryId = $invId; templateId = $tmpl; stackSize = $stack }
@@ -287,6 +297,7 @@ Register-DuneRoute -Method DELETE -Path '/api/items/{itemId}' -Handler {
     if (-not $itemId) { Write-DuneError -Response $res -Status 400 -Message 'Invalid item id'; return }
     $ctx = Resolve-DuneCharContext -Response $res
     if (-not $ctx) { return }
+    if (-not (Test-DunePlayerGuard -Req $req -Res $res -Ip $ctx.ip)) { return }
     try {
         Remove-V6InventoryItem -Ip $ctx.ip -ItemId $itemId
         Write-DuneJson -Response $res -Body @{ ok = $true; itemId = $itemId }
