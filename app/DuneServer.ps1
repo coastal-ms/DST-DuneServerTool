@@ -5,8 +5,63 @@
 
 $ErrorActionPreference = 'Stop'
 
+# ---------- Minimize own console window IMMEDIATELY ----------------------------
+# v6.1.7+: the EXE is built console-subsystem (NoConsole=$false in Build-Exe.ps1)
+# so that child kubectl/ssh/git processes inherit a console and Windows doesn't
+# allocate a flashy new console window for each one (the "popup window flash"
+# users saw on every dashboard refresh in v6.1.2-v6.1.6). We don't actually
+# want the console visible, so minimize it as the very first action.
+#
+# Detection rule: process name is the compiled EXE name (e.g. "DuneServer")
+# when launched as the ps2exe build. When the script runs as plain .ps1
+# inside an existing pwsh/powershell session, the process name is
+# "pwsh" / "powershell" — leave that console alone (it's Neil's working shell).
+#
+# v6.1.7 hotfix: the previous `GetConsoleProcessList(count==1)` guard turned
+# out to skip the minimize whenever the installer / auto-updater that
+# launched the EXE was still attached to the same console at startup
+# (count > 1), leaving the window full-size. Process-name detection is
+# reliable in all those cases.
+$script:DuneIsCompiledExe = $false
+try {
+    $procName = [System.Diagnostics.Process]::GetCurrentProcess().ProcessName
+    if ($procName -and $procName -notmatch '^(pwsh|powershell|powershell_ise)$') {
+        $script:DuneIsCompiledExe = $true
+    }
+} catch { }
+
+if ($script:DuneIsCompiledExe) {
+    try {
+        Add-Type -MemberDefinition @'
+[System.Runtime.InteropServices.DllImport("kernel32.dll")]
+public static extern System.IntPtr GetConsoleWindow();
+[System.Runtime.InteropServices.DllImport("user32.dll")]
+public static extern bool ShowWindow(System.IntPtr hWnd, int nCmdShow);
+[System.Runtime.InteropServices.DllImport("user32.dll")]
+public static extern bool IsIconic(System.IntPtr hWnd);
+'@ -Name 'DuneNativeWin' -Namespace 'DuneServer' -ErrorAction Stop
+
+        # Retry loop: console may not be attached on the very first tick after
+        # process start (especially when launched by Inno Setup's [Run] step
+        # or by the in-app updater). Try for up to ~2s; bail as soon as we
+        # see the window is iconic.
+        $deadline = (Get-Date).AddSeconds(2)
+        while ((Get-Date) -lt $deadline) {
+            $hwnd = [DuneServer.DuneNativeWin]::GetConsoleWindow()
+            if ($hwnd -ne [System.IntPtr]::Zero) {
+                [void][DuneServer.DuneNativeWin]::ShowWindow($hwnd, 7)   # SW_SHOWMINNOACTIVE
+                Start-Sleep -Milliseconds 50
+                if ([DuneServer.DuneNativeWin]::IsIconic($hwnd)) { break }
+            }
+            Start-Sleep -Milliseconds 100
+        }
+    } catch {
+        # Non-fatal: console just stays at normal size if Win32 isn't available.
+    }
+}
+
 # Version (one of the 5 sync'd constants; see persistent-notes.md)
-$script:DuneToolVersion = '6.1.6'
+$script:DuneToolVersion = '6.1.7'
 
 # ---------- Single-instance gate ----------------------------------------------
 # Every click of the desktop shortcut runs DuneServer.exe again. Without a
@@ -82,7 +137,7 @@ if (-not (Test-DuneIsAdmin)) {
             $launcher = (Get-Command pwsh.exe -ErrorAction SilentlyContinue).Source
             if (-not $launcher) { $launcher = 'powershell.exe' }
             Start-Process -FilePath $launcher `
-                -ArgumentList @('-NoProfile','-WindowStyle','Hidden','-ExecutionPolicy','Bypass','-File',"`"$selfPath`"") `
+                -ArgumentList @('-NoProfile','-WindowStyle','Minimized','-ExecutionPolicy','Bypass','-File',"`"$selfPath`"") `
                 -Verb RunAs | Out-Null
         }
     } catch {
@@ -212,26 +267,6 @@ function Open-DuneInBrowser {
 Write-DuneLog "Dune Server v$script:DuneToolVersion starting"
 Write-DuneLog "Serving from: $script:DistRoot"
 
-# Shared state hashtable used by the tray icon runspace.
-$script:DuneTrayState = [hashtable]::Synchronized(@{
-    Url           = ''
-    LogPath       = $script:DuneLogFilePath
-    QuitRequested = $false
-    Listener      = $null
-    Version       = $script:DuneToolVersion
-    TrayReady     = $false
-})
-
-# Start tray icon (NotifyIcon runs on its own STA runspace + message loop).
-$iconPath = Find-DuneSubpath 'app\assets\icon.ico'
-if (-not $iconPath) { $iconPath = Find-DuneSubpath 'assets\icon.ico' }
-if ($iconPath) {
-    Start-DuneTrayIcon -State $script:DuneTrayState -IconPath $iconPath -Version $script:DuneToolVersion
-    Write-DuneLog "Tray icon initialized ($iconPath)"
-} else {
-    Write-DuneLog "Tray icon disabled - icon.ico not found" 'WARN'
-}
-
 # Delete any stale last-url.txt from a previous run BEFORE starting the
 # polling jobs. Otherwise the browserJob's first poll wins the race against
 # Start-DuneHttpServer's write, opens the browser at the OLD url with the
@@ -258,30 +293,14 @@ $browserJob = Start-Job -ArgumentList $urlFilePath -ScriptBlock {
     }
 }
 
-# Side-thread to publish the URL and listener to the tray state once bound.
-$urlPublishJob = Start-Job -ArgumentList $script:DuneTrayState, $urlFilePath -ScriptBlock {
-    param($state, $urlFile)
-    for ($i = 0; $i -lt 100; $i++) {
-        if (Test-Path -LiteralPath $urlFile) {
-            $u = (Get-Content -LiteralPath $urlFile -Raw).Trim()
-            if ($u) { $state.Url = $u; return }
-        }
-        Start-Sleep -Milliseconds 200
-    }
-}
-
 try {
-    Start-DuneHttpServer -DistRoot $script:DistRoot -PreferredPort 47823 -Token $script:LaunchToken -TrayState $script:DuneTrayState
+    Start-DuneHttpServer -DistRoot $script:DistRoot -PreferredPort 47823 -Token $script:LaunchToken
 } catch {
     Write-DuneLog "HTTP server failed: $($_.Exception.Message)" 'ERROR'
     Show-DuneMessage "Dune Server failed to start: $($_.Exception.Message)" 'Dune Server' 'Error'
 } finally {
-    if ($browserJob)    { Remove-Job -Job $browserJob    -Force -ErrorAction SilentlyContinue }
-    if ($urlPublishJob) { Remove-Job -Job $urlPublishJob -Force -ErrorAction SilentlyContinue }
+    if ($browserJob) { Remove-Job -Job $browserJob -Force -ErrorAction SilentlyContinue }
     Stop-DuneHttpServer
-    if (Get-Command Stop-DuneTrayIcon -ErrorAction SilentlyContinue) {
-        Stop-DuneTrayIcon -State $script:DuneTrayState
-    }
     # Wipe last-url.txt so the next launch can't race-read a stale URL with
     # a token that no longer matches a running listener.
     try {

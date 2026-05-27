@@ -6,25 +6,34 @@
 #   - PowerShell 7+ (pwsh)
 #   - ps2exe module (auto-installed if missing)
 #
-# The compiled .exe (v6.1.2+):
+# The compiled .exe (v6.1.7+):
 #   - NO -requireAdmin manifest. Elevation is handled IN-SCRIPT after the
 #     single-instance mutex check, so a second click on the desktop shortcut
 #     just opens the existing portal URL in the browser without a UAC prompt.
 #     (Hyper-V cmdlets still need admin; the first launch self-elevates.)
-#   - Runs hidden (-noConsole) - server presents as a tray icon (NotifyIcon)
-#     with menu: Open Portal / Copy URL / View Log / Quit
-#   - STA apartment so WinForms (NotifyIcon, MessageBox) is safe
-#   - Bundles the icon for taskbar / Alt-Tab / file explorer / tray
+#   - Console window IS allocated (NoConsole = $false). The script immediately
+#     minimizes its own console via Win32 ShowWindow(SW_SHOWMINNOACTIVE) so it
+#     never visually intrudes. The console exists ONLY so that child kubectl /
+#     ssh / git / etc. processes inherit a console instead of having Windows
+#     briefly allocate a new console window for each one (the visible "popup
+#     window flash" users saw on every dashboard refresh in v6.1.6-).
+#   - STA apartment so WinForms (MessageBox) is safe
+#   - Bundles the icon for taskbar / Alt-Tab / file explorer
 #   - Self-bootstraps the local HTTP server + opens the default browser
 #
 # v6.0.x was WPF noConsole; v6.1.0 briefly enabled the console for live logs;
 # v6.1.2 went back to noConsole + tray icon AND dropped -requireAdmin in favor
 # of in-script elevation (so the single-instance gate runs before UAC).
+# v6.1.7 re-enabled the console (start-minimized) to fix the per-refresh
+# popup window flash caused by windowless-parent + console-child processes,
+# and REMOVED the tray icon entirely — the (minimized) console window in the
+# taskbar is now the single UI surface for the running process. Click the
+# taskbar entry to see live logs; close the window to exit.
 # Logs are written to: %LOCALAPPDATA%\DuneServer\dune-server.log
 
 [CmdletBinding()]
 param(
-    [string]$Version = '6.1.6',
+    [string]$Version = '6.1.7',
     [switch]$Quiet
 )
 
@@ -51,10 +60,12 @@ $verNum = "$Version.0"  # ps2exe wants 4-part version
 
 Write-Host "Compiling DuneServer.exe (v$Version)..." -ForegroundColor Cyan
 
-# Critical flags (v6.1.2):
-#   -noConsole     : windowless EXE - tray icon is the only UI surface
-#   -STA           : required for System.Windows.Forms.NotifyIcon / MessageBox
-#   -iconFile      : taskbar / file explorer / tray icon
+# Critical flags (v6.1.7):
+#   -noConsole=$false : console-subsystem EXE so child kubectl/ssh/etc. inherit
+#                       a console (no per-child window-flash). Script minimizes
+#                       its own console at startup so it never visually intrudes.
+#   -STA              : required for System.Windows.Forms.MessageBox
+#   -iconFile         : taskbar / file explorer icon (also used for the EXE)
 # NOTE: -requireAdmin INTENTIONALLY OMITTED. The script self-elevates after
 # the single-instance mutex check so subsequent shortcut clicks just open the
 # browser to the existing portal URL without prompting for UAC again.
@@ -68,7 +79,7 @@ $ps2exeArgs = @{
     Product        = 'Dune Server'
     Version        = $verNum
     Copyright      = '(c) 2026 Dune Awakening Self-Hosted Tool'
-    NoConsole      = $true
+    NoConsole      = $false
     STA            = $true
 }
 
@@ -86,8 +97,8 @@ Write-Host ""
 if (-not $Quiet) {
     Write-Host "Admin requirements:" -ForegroundColor Cyan
     Write-Host "  [x] No UAC manifest - self-elevates in-script after single-instance check" -ForegroundColor Green
-    Write-Host "  [x] No console window (-noConsole), tray icon UI" -ForegroundColor Green
-    Write-Host "  [x] STA apartment (WinForms NotifyIcon)" -ForegroundColor Green
+    Write-Host "  [x] Console-subsystem EXE (NoConsole=`$false), auto-minimized at startup" -ForegroundColor Green
+    Write-Host "  [x] STA apartment (WinForms MessageBox)" -ForegroundColor Green
     Write-Host ""
     Write-Host "Next step:"
     Write-Host "  & '$PSScriptRoot\..\installer\Build-Installer.ps1'"
