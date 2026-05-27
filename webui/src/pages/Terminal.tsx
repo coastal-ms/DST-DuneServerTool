@@ -384,7 +384,7 @@ export function TerminalPage() {
   return (
     <>
       <PageHeader
-        title="Terminal"
+        title="PowerShell"
         icon="SquareTerminal"
         description="Embedded PowerShell session — runs locally on this machine. Use it for kubectl, ssh dune@vm '…', and other one-shot commands."
       />
