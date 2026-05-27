@@ -241,8 +241,7 @@ function Start-DuneHttpServer {
     param(
         [Parameter(Mandatory)][string]$DistRoot,
         [int]$PreferredPort = 47823,
-        [string]$Token = '',
-        [hashtable]$TrayState = $null
+        [string]$Token = ''
     )
 
     $script:DuneDistRoot = (Resolve-Path -LiteralPath $DistRoot).Path
@@ -282,12 +281,6 @@ function Start-DuneHttpServer {
         if (-not (Test-Path -LiteralPath $stateDir)) { New-Item -ItemType Directory -Path $stateDir -Force | Out-Null }
         Set-Content -LiteralPath (Join-Path $stateDir 'last-url.txt') -Value $actualUrl -Encoding UTF8 -Force
     } catch { }
-
-    # Publish to tray state so the NotifyIcon menu can use it.
-    if ($TrayState) {
-        $TrayState.Url      = $actualUrl
-        $TrayState.Listener = $listener
-    }
 
     try {
         while ($listener.IsListening) {
