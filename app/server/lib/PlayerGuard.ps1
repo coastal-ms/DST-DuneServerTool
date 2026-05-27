@@ -1,4 +1,4 @@
-# Shared mutation guard — refuses to touch live DB state while players are
+﻿# Shared mutation guard — refuses to touch live DB state while players are
 # connected. Pulled out of Characters.ps1 so any future route can reuse it.
 #
 # Background: on 2025-05-27 a player's crafting recipes were wiped from 482 to
