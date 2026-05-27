@@ -1,0 +1,31 @@
+{
+  "name": "Dune Server Management Portal",
+  "short_name": "Dune Server",
+  "description": "Management portal for the self-hosted Dune Awakening server.",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "background_color": "#0e0d0b",
+  "theme_color": "#d4a574",
+  "orientation": "any",
+  "icons": [
+    {
+      "src": "/favicon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "/favicon.png",
+      "sizes": "256x256",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/favicon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any"
+    }
+  ]
+}
