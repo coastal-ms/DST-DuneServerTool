@@ -14,6 +14,39 @@ here cover everything those tags shipped.
 ## [Unreleased]
 
 
+## [6.1.15] - 2026-05-27
+
+Patch: **Auto-update goes interactive.**
+
+Background: v6.1.13 and v6.1.14's auto-updaters both used `/VERYSILENT`
+flags on the installer, relying on Inno Setup's silent-mode `[Run]`
+behaviour to relaunch `DuneServer.exe`. That relaunch turned out to be
+unreliable in practice (even with `Check: WizardSilent` and a fallback
+WMI relauncher), so the portal kept going dark after updates. Per the host's
+direction, the updater now drops silent mode entirely and runs the
+installer as a normal interactive wizard.
+
+Changed
+- `/api/update/install` no longer passes `/VERYSILENT` or
+  `/SUPPRESSMSGBOXES` to the installer. Only `/SP-` (skip "are you sure?"
+  prompt) and `/NORESTART` remain.
+- The detached relauncher script now explicitly `Stop-Process`es the
+  running `DuneServer.exe` by PID *before* launching the installer, so
+  the installer doesn't have to do its own `taskkill /T` (which was
+  killing the relauncher itself in earlier builds).
+- The installer wizard handles the relaunch naturally via its standard
+  "Launch Dune Server" checkbox on the Finished page - no silent-mode
+  edge cases to worry about.
+
+Notes
+- The user experience is now: click "Update now" → portal disconnects →
+  installer wizard pops up → click Next/Install/Finish → the new
+  `DuneServer.exe` starts from the Finished-page checkbox.
+- The silent-mode `[Run]` entry added in v6.1.14 is kept for safety
+  (anyone running the installer manually with `/VERYSILENT` still gets a
+  relaunch), but it is no longer on the auto-update path.
+
+
 ## [6.1.14] - 2026-05-27
 
 Patch: **Auto-update relaunch fix.**
