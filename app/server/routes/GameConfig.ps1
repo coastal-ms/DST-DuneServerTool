@@ -52,6 +52,7 @@ Register-DuneRoute -Method PUT -Path '/api/gameconfig' -Handler {
         Write-DuneError -Response $res -Status $ctx.status -Message $ctx.message
         return
     }
+    if (-not (Test-DunePlayerGuard -Req $req -Res $res -Ip $ctx.ip)) { return }
 
     # Parse updates from body
     $updates = $null
@@ -146,6 +147,7 @@ Register-DuneRoute -Method PUT -Path '/api/gameconfig/spicefields/{id}' -Handler
         Write-DuneError -Response $res -Status $ctx.status -Message $ctx.message
         return
     }
+    if (-not (Test-DunePlayerGuard -Req $req -Res $res -Ip $ctx.ip)) { return }
     $typeId = 0
     if (-not [int]::TryParse("$($routeParams.id)", [ref]$typeId) -or $typeId -le 0) {
         Write-DuneError -Response $res -Status 400 -Message 'Invalid spicefield_type id.'
