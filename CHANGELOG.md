@@ -13,6 +13,178 @@ here cover everything those tags shipped.
 
 ## [Unreleased]
 
+
+## [6.1.12] - 2026-05-27
+
+Patch: **Buttons no longer word-wrap.**
+
+Fixed
+- Added `whitespace-nowrap` to `.btn`, `.btn-primary`, `.btn-secondary`,
+  `.btn-ghost`, and `.btn-danger`. Two-word labels like *Reset layout* were
+  wrapping onto two lines in narrow header layouts (most visible on the
+  Commands page action bar). Affects every button in the app.
+
+
+## [6.1.11] - 2026-05-27
+
+Patch: **"Terminal" renamed to "PowerShell" everywhere it's user-visible.**
+
+Changed
+- **Sidebar nav item** *Terminal* → *PowerShell*. (The group header above it
+  was already renamed in v6.1.9; this catches the leaf item too.)
+- **Page title** on the embedded shell page is now **PowerShell** instead of
+  *Terminal*. Description text was already accurate.
+
+The URL (`/terminal`) and route handlers (`app/server/routes/Terminal.ps1`)
+are unchanged — this is a label-only rename.
+
+
+## [6.1.10] - 2026-05-27
+
+Patch: **Commands page rebuilt around three first-class sections — renamable,
+dynamically sized, with a deterministic default layout.**
+
+This release replaces the v6.1.9 "order + section overrides" model, which had
+a regression where dragging a command across sections would visually snap back
+(sections always reverted to their original sizes once the layout reloaded).
+
+Added
+- **Three sections, each user-renamable.** Section headers are click-to-edit
+  inline: click the title (or its pencil icon), type a new name, press Enter
+  or click away to save. Esc cancels. Max 40 chars; empty input falls back to
+  the default name ("VM", "Battlegroup", "Tools").
+- **Sections grow and shrink with their contents.** A section's height is
+  driven by the number of cards inside it — there is no fixed per-section
+  capacity. Moving three commands from "Tools" into "VM" enlarges VM by
+  three rows and shrinks Tools by three. Empty sections render a dashed
+  drop placeholder so they remain valid drop targets.
+- **Deterministic default layout.** On first run (or after *Reset layout*),
+  commands are sorted with startup commands first (`start`, `start-vm`,
+  `startup`), shutdown commands next (`reboot`, `shutdown`, `stop`), then
+  the remainder alphabetically — and distributed left-to-right, top-to-bottom
+  across the three sections.
+
+Changed
+- **`button-order.json` v3 shape.** Now stores
+  `{ version: 3, sectionNames: [a,b,c], sections: [[…],[…],[…]] }`. Sections
+  are first-class arrays of command names; there is no longer a separate
+  "default section" + "override" layer to disagree with itself. Legacy
+  v6.1/v6.1.9 layout files are ignored on read (users get the new default);
+  the old layout couldn't have been mapped cleanly to renamable sections
+  anyway.
+- **API surface.** `GET /api/commands` now returns
+  `{ state, sectionNames, sections, commands }` instead of
+  `{ state, order, sectionOverrides, commands }`. `PUT /api/commands/order`
+  is replaced by `PUT /api/commands/layout`
+  (body: `{ sectionNames, sections }`). `POST /api/commands/order/reset` is
+  replaced by `POST /api/commands/layout/reset`. The server normalizes
+  payloads on save: trims/caps names, drops unknown commands, dedupes
+  globally, and parks any catalogue commands missing from the payload into
+  section 0 so they remain reachable.
+
+Fixed
+- **Cross-section drag no longer snaps back.** With sections-as-arrays there
+  is no override layer to disagree with the order layer, so a command's
+  section is unambiguous and survives the round trip to the server.
+
+
+## [6.1.9] - 2026-05-27
+
+Patch: **Commands page restyled as raised buttons + cross-section drag, and
+the sidebar "Terminal" section header renamed to "PowerShell".**
+
+Added
+- **Commands — cross-section drag.** The drag handle on any command card now
+  lets you move that command into a different section (VM ↔ Battlegroup ↔
+  Tools), not just reorder within its current section. Cross-section moves
+  persist as per-command "section overrides" alongside the existing order
+  array. Empty target sections display a dashed "Drop commands here…"
+  placeholder so they remain valid drop targets. The active drag now shows
+  a floating overlay clone of the card following the cursor, and the
+  hovered section gets a subtle accent ring while a drag is in flight.
+- **Commands — persisted section overrides** (`button-order.json` now
+  written as `{ "order": [...], "sections": {"name":"section"} }`). The
+  reader still accepts the legacy bare-array and `{"order":[...]}` shapes
+  so existing installs keep working with no migration step. *Reset layout*
+  clears both order and section overrides.
+
+Changed
+- **Commands — every command card is now a raised "button" instead of a flat
+  card.** New look: subtle vertical gradient, thicker bottom border for
+  depth, layered drop shadow, lift-on-hover, press-down-on-active. Drag
+  handle, keystroke chip, mode pill, description, and warning row all
+  preserved; only the surface chrome changed.
+- **Sidebar — "Terminal" section header renamed to "PowerShell".** The
+  group above *Commands* and *Terminal* in the navigation now reads
+  **PowerShell** to better describe what the embedded session actually is.
+  Individual nav item labels (*Commands*, *Terminal*) are unchanged.
+
+
+## [6.1.8] - 2026-05-27
+
+Patch: **Sandworm-enable confirmation gate, dashboard shutdown button removed,
+Arrakeen card layout fix, Terminal SSH launch button, and a `jsonb_set`
+NULL-wipe safety guard in the currency / cosmetics / tech helpers.**
+
+Added
+- **Game Config — confirmation gate on enabling Sandworms.** Switching the
+  "Sandworm Enabled" toggle from Off → On now opens a modal that warns
+  *"When this is enabled, all sandworm areas should be clear of items you
+  want to keep. Irreversible."* and requires the user to type **`i confirm`**
+  before the change is staged. Disabling, or selecting On when it's already
+  On, does not prompt. The toggle is only applied to the form state after
+  confirmation — Cancel / Esc / clicking the backdrop leaves the previous
+  value unchanged.
+- **Terminal — SSH button.** New primary-styled `SSH` button to the left of
+  `Cancel` on the Terminal page, visually separated from the existing
+  Cancel / Clear / Reconnect cluster. Clicking it dispatches the same
+  `Invoke-DuneCommandExternal` path the Commands page uses for the `ssh`
+  entry, spawning a real native console window running
+  `ssh dune@<vm-ip>` with the configured key. The button is disabled when
+  the VM isn't running, shows a spinner while launching, and writes
+  `[ssh] Launched external console (PID N) → dune@<ip>` (or a red error
+  line) back into the embedded xterm pane for feedback. The embedded
+  PowerShell terminal is an exec model — it cannot host an interactive
+  PTY — so spawning an external console is the only way SSH works
+  end-to-end without input hangs.
+
+Changed
+- **Dashboard — Arrakeen "Spin up" card header no longer wraps.** All three
+  map-pod cards (Arrakeen / Hagga Basin / Deep Desert) now use a compact
+  `Spin up` button label instead of `Spin up {map name}`, plus
+  `whitespace-nowrap` on the start/stop buttons, `shrink-0` on the action
+  cluster, and `min-w-0` + `truncate` on the title. This guarantees the
+  title-row controls stay inline at any card width rather than wrapping
+  the buttons below the title on narrow viewports.
+
+Removed
+- **Dashboard "Shut down" button (top-right of the status bar) removed.**
+  The button was originally added in v6.0 alongside the system-tray icon,
+  pairing with the tray's *Quit* menu so the portal could be exited from
+  either surface. Since the tray icon was removed in v6.1.7 and closing
+  the (now-visible, minimized) console window is the documented exit
+  gesture, the dashboard button is redundant. The server-side
+  `POST /api/shutdown` route is unchanged — `Stop-DuneHttpServer` still
+  uses it as the graceful-shutdown signal during in-place upgrades and
+  programmatic stops.
+
+Fixed
+- **Hardened `jsonb_set` calls against the NULL-wipe failure mode.** Three
+  helpers in `app/lib/Db-Postgres.ps1` — `Add-V6Cosmetic`,
+  `Invoke-V6TechUnlockAll`, and `Invoke-V6TechLockAll` — built the new JSONB
+  value from a subexpression that could return SQL `NULL` when the source
+  path was missing or empty on the actor (e.g. a brand-new character with no
+  `TechKnowledgeData` yet, or a `CustomizationLibraryActorComponent` block
+  that was never initialised). `jsonb_set(target, path, NULL)` returns NULL
+  for the whole expression, which would wipe the entire `actors.properties`
+  column for that row — taking cosmetics, stats, tech, and every other
+  component-block with it. Each call now wraps the inner subexpression in
+  `COALESCE(..., '[]'::jsonb)` and gates the UPDATE with a
+  `jsonb_typeof(...) = 'array'` / `IS NOT NULL` precondition so the
+  operation is a no-op rather than a row-wipe when the path is absent. No
+  behavioural change on the happy path; this is purely a safety guard.
+
+
 ## [6.1.7] - 2026-05-26
 
 Patch: **Fix per-refresh popup-window flash on the dashboard; remove the

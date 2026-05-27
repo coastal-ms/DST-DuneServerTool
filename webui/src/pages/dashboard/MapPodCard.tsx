@@ -76,10 +76,11 @@ export function MapPodCard({ mapKey, label, icon = 'Mountain', bgReady }: MapPod
   return (
     <div className="card p-5">
       <div className="flex items-center justify-between mb-3 gap-3 flex-wrap">
-        <h2 className="text-sm font-semibold uppercase tracking-wider text-text-muted flex items-center gap-2">
-          <Icon name={icon} size={14} className="text-accent" /> {label}
+        <h2 className="text-sm font-semibold uppercase tracking-wider text-text-muted flex items-center gap-2 min-w-0">
+          <Icon name={icon} size={14} className="text-accent shrink-0" />
+          <span className="truncate">{label}</span>
         </h2>
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 shrink-0">
           {state && (
             <span className={state.running ? 'pill-success' : state.present ? 'pill-muted' : 'pill-warning'}>
               <Icon name={state.running ? 'CheckCircle2' : state.present ? 'CircleDashed' : 'AlertTriangle'} size={10} />
@@ -95,7 +96,7 @@ export function MapPodCard({ mapKey, label, icon = 'Mountain', bgReady }: MapPod
             <Icon name="RefreshCw" size={14} className={loading ? 'animate-spin' : ''} />
           </button>
           <button
-            className="btn-primary"
+            className="btn-primary whitespace-nowrap"
             onClick={() => { void start() }}
             disabled={!bgReady || busy || loading || (state?.running ?? false)}
             title={
@@ -105,10 +106,10 @@ export function MapPodCard({ mapKey, label, icon = 'Mountain', bgReady }: MapPod
             }
           >
             <Icon name={busy ? 'Loader2' : 'Play'} size={14} className={busy ? 'animate-spin' : ''} />
-            {busy ? 'Working…' : `Spin up ${label}`}
+            {busy ? 'Working…' : 'Spin up'}
           </button>
           <button
-            className="btn-secondary"
+            className="btn-secondary whitespace-nowrap"
             onClick={() => { void stop(false) }}
             disabled={!bgReady || busy || loading || !(state?.running ?? false)}
             title={

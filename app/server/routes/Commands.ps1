@@ -1,17 +1,14 @@
-﻿# Commands API — list catalogue (with current availability) and persist order.
+# Commands API — list catalogue (with current availability) and persist layout.
 
-# GET /api/commands — full catalogue + current availability
+# GET /api/commands — catalogue + availability + persisted layout (3 sections).
 Register-DuneRoute -Method GET -Path '/api/commands' -Handler {
     param($req, $res, $routeParams, $body)
-    $state = Get-DuneCurrentState
-    # @(...) wraps the result to guarantee a real array even when the helper
-    # returns an empty pipeline (PS 5.1 ConvertTo-Json otherwise serializes
-    # such hashtable values as `{}` instead of `[]`).
-    $order = @(Get-DuneCommandOrder)
+    $state  = Get-DuneCurrentState
+    $layout = Get-DuneCommandLayout
     $cmds = foreach ($c in $script:DuneCommands) {
         $av = Get-DuneCommandAvailability -Command $c -State $state
         @{
-            section      = $c.Section
+            section      = $c.Section   # original catalogue section, kept as a hint
             key          = $c.Key
             name         = $c.Name
             mode         = $c.Mode
@@ -23,31 +20,85 @@ Register-DuneRoute -Method GET -Path '/api/commands' -Handler {
             reason       = $av.reason
         }
     }
+    # Force-wrap each per-section array so PS 5.1 ConvertTo-Json emits real
+    # JSON arrays even when a section is empty.
+    $sectionsOut = @(
+        ,([object[]]$layout.sections[0])
+        ,([object[]]$layout.sections[1])
+        ,([object[]]$layout.sections[2])
+    )
     Write-DuneJson -Response $res -Body @{
-        state    = $state
-        order    = $order
-        commands = $cmds
+        state        = $state
+        sectionNames = $layout.sectionNames
+        sections     = $sectionsOut
+        commands     = $cmds
     }
 }
 
-# PUT /api/commands/order — body: { order: ['name1','name2',...] }
-Register-DuneRoute -Method PUT -Path '/api/commands/order' -Handler {
+# PUT /api/commands/layout — body: { sectionNames: ['a','b','c'], sections: [[],[],[]] }
+# Replaces the persisted layout in full. Server normalizes (dedupes commands,
+# trims names, parks orphan catalogue entries in section 0).
+Register-DuneRoute -Method PUT -Path '/api/commands/layout' -Handler {
     param($req, $res, $routeParams, $body)
-    $order = @()
-    if ($body -is [hashtable] -and $body.order) {
-        $order = @($body.order | ForEach-Object { "$_" })
-    } elseif ($body.order) {
-        $order = @($body.order | ForEach-Object { "$_" })
+    if ($null -eq $body) {
+        Write-DuneError -Response $res -Status 400 -Message 'Body required'
+        return
     }
-    Save-DuneCommandOrder -Order $order
-    Write-DuneJson -Response $res -Body @{ ok = $true; order = @(Get-DuneCommandOrder) }
+
+    # Body parser returns hashtables on both PS 5.1 and 7+ (see HttpServer.ps1).
+    $names    = $null
+    $sections = $null
+    if ($body -is [System.Collections.IDictionary]) {
+        if ($body.Contains('sectionNames')) { $names    = $body['sectionNames'] }
+        if ($body.Contains('sections'))     { $sections = $body['sections'] }
+    } else {
+        if ($body.PSObject.Properties['sectionNames']) { $names    = $body.sectionNames }
+        if ($body.PSObject.Properties['sections'])     { $sections = $body.sections }
+    }
+
+    if ($null -eq $names -or $null -eq $sections) {
+        Write-DuneError -Response $res -Status 400 -Message 'sectionNames and sections are both required'
+        return
+    }
+
+    try {
+        $nameArr = @($names | ForEach-Object { "$_" })
+        $secArr  = @()
+        foreach ($s in $sections) {
+            $secArr += ,@(@($s) | ForEach-Object { "$_" })
+        }
+        Save-DuneCommandLayout -SectionNames $nameArr -Sections $secArr
+        $layout = Get-DuneCommandLayout
+        $sectionsOut = @(
+            ,([object[]]$layout.sections[0])
+            ,([object[]]$layout.sections[1])
+            ,([object[]]$layout.sections[2])
+        )
+        Write-DuneJson -Response $res -Body @{
+            ok           = $true
+            sectionNames = $layout.sectionNames
+            sections     = $sectionsOut
+        }
+    } catch {
+        Write-DuneError -Response $res -Status 400 -Message "Invalid layout: $($_.Exception.Message)"
+    }
 }
 
-# POST /api/commands/order/reset — drop the persisted order
-Register-DuneRoute -Method POST -Path '/api/commands/order/reset' -Handler {
+# POST /api/commands/layout/reset — drop the persisted layout file.
+Register-DuneRoute -Method POST -Path '/api/commands/layout/reset' -Handler {
     param($req, $res, $routeParams, $body)
-    Save-DuneCommandOrder -Order @()
-    Write-DuneJson -Response $res -Body @{ ok = $true }
+    Reset-DuneCommandLayout
+    $layout = Get-DuneCommandLayout
+    $sectionsOut = @(
+        ,([object[]]$layout.sections[0])
+        ,([object[]]$layout.sections[1])
+        ,([object[]]$layout.sections[2])
+    )
+    Write-DuneJson -Response $res -Body @{
+        ok           = $true
+        sectionNames = $layout.sectionNames
+        sections     = $sectionsOut
+    }
 }
 
 # POST /api/commands/run/{name} — launch a command in a new console window.

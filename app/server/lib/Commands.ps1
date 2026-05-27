@@ -126,36 +126,185 @@ function Get-DuneCommandOrderFile {
     return $appdataFile
 }
 
-function Get-DuneCommandOrder {
-    $f = Get-DuneCommandOrderFile
-    if (-not (Test-Path $f)) { return @() }
-    try {
-        $parsed = Get-Content -LiteralPath $f -Raw | ConvertFrom-Json
-        if ($null -eq $parsed) { return @() }
-        # Accept both shapes:
-        #   v6.0 WPF: { "order": [ "name1", "name2", ... ] }   (object wrapper)
-        #   v6.1+:   [ "name1", "name2", ... ]                 (bare array)
-        if ($parsed -is [array]) { return @($parsed | ForEach-Object { "$_" }) }
-        if ($parsed.PSObject.Properties['order']) {
-            return @($parsed.order | ForEach-Object { "$_" })
-        }
-        return @()
-    } catch { return @() }
+# ---- Layout (v6.1.10+) -------------------------------------------------------
+#
+# The Commands page now models three sections as ordered arrays of command
+# names, plus a parallel array of user-renamable section labels. This replaces
+# the old "order + catalogue-default + overrides" model, which had a subtle
+# bug where dragging a command across sections could snap back on the next
+# server refresh because the override layer and order layer disagreed.
+#
+# On-disk shape (button-order.json):
+#   {
+#     "version": 3,
+#     "sectionNames": ["VM", "Battlegroup", "Tools"],
+#     "sections":     [["startup", "...", ...], [...], [...]]
+#   }
+#
+# A missing or corrupt file falls back to Get-DuneDefaultCommandLayout — which
+# distributes the catalogue across three sections with startup commands first,
+# shutdown commands next, and the remainder alphabetically.
+
+function Get-DuneDefaultCommandLayout {
+    $priority = @{
+        'start'    = 0; 'start-vm'   = 0; 'startup' = 0
+        'reboot'   = 1; 'shutdown'   = 1; 'stop'    = 1
+    }
+    $sorted = @(
+        $script:DuneCommands |
+            ForEach-Object {
+                $p = if ($priority.ContainsKey($_.Name)) { $priority[$_.Name] } else { 2 }
+                [pscustomobject]@{ Name = $_.Name; Priority = $p }
+            } |
+            Sort-Object Priority, Name |
+            Select-Object -ExpandProperty Name
+    )
+
+    # Sequential top-left → bottom-right fill across 3 sections.
+    $total = $sorted.Count
+    $per   = [Math]::Max(1, [Math]::Ceiling($total / 3.0))
+    $sections = @(@(), @(), @())
+    for ($i = 0; $i -lt $total; $i++) {
+        $idx = [Math]::Min(2, [Math]::Floor($i / $per))
+        $sections[$idx] += $sorted[$i]
+    }
+    return @{
+        sectionNames = @('VM','Battlegroup','Tools')
+        sections     = $sections
+    }
 }
 
-function Save-DuneCommandOrder {
-    param([string[]]$Order)
+function Get-DuneCommandLayout {
+    $f = Get-DuneCommandOrderFile
+    $default = Get-DuneDefaultCommandLayout
+    if (-not (Test-Path $f)) { return $default }
+
+    try {
+        $parsed = Get-Content -LiteralPath $f -Raw | ConvertFrom-Json
+        if ($null -eq $parsed) { return $default }
+
+        # v6.1.10+ shape: { version: 3, sectionNames: [...], sections: [[],[],[]] }
+        if ($parsed.PSObject.Properties['sections'] -and $parsed.sections -is [array] -and $parsed.sections.Count -ge 1) {
+            # Names — pad / trim to exactly 3, fall back to defaults if missing.
+            $defaultNames = @('VM','Battlegroup','Tools')
+            $rawNames = if ($parsed.PSObject.Properties['sectionNames']) { @($parsed.sectionNames | ForEach-Object { "$_" }) } else { @() }
+            $names = @()
+            for ($i = 0; $i -lt 3; $i++) {
+                $n = if ($i -lt $rawNames.Count) { $rawNames[$i] } else { $defaultNames[$i] }
+                $n = "$n".Trim()
+                if ($n.Length -eq 0) { $n = $defaultNames[$i] }
+                if ($n.Length -gt 40) { $n = $n.Substring(0, 40) }
+                $names += $n
+            }
+
+            # Sections — pad / trim to exactly 3 arrays. Drop unknown commands
+            # and de-dupe across all three (a command may only live in one
+            # section at a time).
+            $catalogSet = @{}
+            foreach ($c in $script:DuneCommands) { $catalogSet[$c.Name] = $true }
+            $sections = @(@(), @(), @())
+            $seen     = @{}
+            for ($i = 0; $i -lt 3; $i++) {
+                $arr = if ($i -lt $parsed.sections.Count) { @($parsed.sections[$i]) } else { @() }
+                $kept = @()
+                foreach ($n in $arr) {
+                    $s = "$n"
+                    if ($catalogSet.ContainsKey($s) -and -not $seen.ContainsKey($s)) {
+                        $kept += $s
+                        $seen[$s] = $true
+                    }
+                }
+                $sections[$i] = $kept
+            }
+
+            # Catalogue entries not yet placed anywhere (e.g. new commands
+            # introduced after the layout was saved) land in section 0 so
+            # they're always visible.
+            foreach ($c in $script:DuneCommands) {
+                if (-not $seen.ContainsKey($c.Name)) {
+                    $sections[0] += $c.Name
+                    $seen[$c.Name] = $true
+                }
+            }
+
+            return @{ sectionNames = $names; sections = $sections }
+        }
+
+        # Legacy shapes (v6.1 bare array, v6.1.9 {order, sections{}}) — ignore
+        # the old data and start fresh. Users who haven't touched layout get
+        # the new default; users who had a custom order lose it once, but the
+        # new model is qualitatively different so a clean slate is correct.
+        return $default
+    } catch {
+        return $default
+    }
+}
+
+function Save-DuneCommandLayout {
+    param(
+        [Parameter(Mandatory)][string[]]$SectionNames,
+        [Parameter(Mandatory)][array]$Sections
+    )
+
+    if ($SectionNames.Count -ne 3) { throw "Expected exactly 3 section names, got $($SectionNames.Count)" }
+    if ($Sections.Count     -ne 3) { throw "Expected exactly 3 sections, got $($Sections.Count)" }
+
+    # Sanitize section names — trim, fall back to defaults, cap length.
+    $defaultNames = @('VM','Battlegroup','Tools')
+    $cleanNames = @()
+    for ($i = 0; $i -lt 3; $i++) {
+        $n = "$($SectionNames[$i])".Trim()
+        if ($n.Length -eq 0)  { $n = $defaultNames[$i] }
+        if ($n.Length -gt 40) { $n = $n.Substring(0, 40) }
+        $cleanNames += $n
+    }
+
+    # Sanitize sections — only catalogue commands, globally unique.
+    $catalogSet = @{}
+    foreach ($c in $script:DuneCommands) { $catalogSet[$c.Name] = $true }
+    $cleanSections = @(@(), @(), @())
+    $seen = @{}
+    for ($i = 0; $i -lt 3; $i++) {
+        $arr = @($Sections[$i])
+        foreach ($n in $arr) {
+            $s = "$n"
+            if ($catalogSet.ContainsKey($s) -and -not $seen.ContainsKey($s)) {
+                $cleanSections[$i] += $s
+                $seen[$s] = $true
+            }
+        }
+    }
+    # Any catalogue command not represented in the incoming payload still has
+    # to live somewhere — park it in section 0 so it's discoverable.
+    foreach ($c in $script:DuneCommands) {
+        if (-not $seen.ContainsKey($c.Name)) {
+            $cleanSections[0] += $c.Name
+            $seen[$c.Name] = $true
+        }
+    }
+
     $f = Get-DuneCommandOrderFile
     $dir = Split-Path -Parent $f
     if ($dir -and -not (Test-Path -LiteralPath $dir)) {
         New-Item -ItemType Directory -Path $dir -Force | Out-Null
     }
-    # Write as a bare JSON array — Get-DuneCommandOrder also accepts the
-    # legacy v6.0 { "order": [...] } shape for compatibility.
-    $payload = if ($Order -and $Order.Count -gt 0) {
-        ConvertTo-Json -InputObject ([object[]]$Order) -Depth 2
-    } else { '[]' }
+
+    $obj = [ordered]@{
+        version      = 3
+        sectionNames = $cleanNames
+        sections     = @(
+            ,([object[]]$cleanSections[0])
+            ,([object[]]$cleanSections[1])
+            ,([object[]]$cleanSections[2])
+        )
+    }
+    $payload = $obj | ConvertTo-Json -Depth 4 -Compress:$false
     Set-Content -LiteralPath $f -Value $payload -Encoding UTF8
+}
+
+function Reset-DuneCommandLayout {
+    $f = Get-DuneCommandOrderFile
+    if (Test-Path -LiteralPath $f) { Remove-Item -LiteralPath $f -Force }
 }
 
 function Get-DuneCommandByName {

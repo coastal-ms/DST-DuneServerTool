@@ -165,25 +165,39 @@ function Set-V6CharacterStats {
 # -----------------------------------------------------------------------------
 function Invoke-V6TechUnlockAll {
     param([string]$Ip, [int]$Id)
+    # COALESCE + WHERE-guard: if the TechKnowledgeData array doesn't exist or
+    # is empty, jsonb_agg returns NULL → jsonb_set with NULL value returns
+    # NULL → would wipe the entire properties column. Belt-and-suspenders:
+    # COALESCE the agg to '[]' and only run the UPDATE when the source path
+    # actually exists as an array.
     $sql = @"
 UPDATE actors SET properties = jsonb_set(
   properties, '{TechKnowledgePlayerComponent,m_TechKnowledge,m_TechKnowledgeData}',
-  (SELECT jsonb_agg(CASE WHEN elem->>'UnlockedState' = 'NotPurchased'
-                          THEN jsonb_set(elem, '{UnlockedState}', '"Purchased"') ELSE elem END)
-   FROM jsonb_array_elements(properties->'TechKnowledgePlayerComponent'->'m_TechKnowledge'->'m_TechKnowledgeData') AS elem)
+  COALESCE(
+    (SELECT jsonb_agg(CASE WHEN elem->>'UnlockedState' = 'NotPurchased'
+                            THEN jsonb_set(elem, '{UnlockedState}', '"Purchased"') ELSE elem END)
+     FROM jsonb_array_elements(properties->'TechKnowledgePlayerComponent'->'m_TechKnowledge'->'m_TechKnowledgeData') AS elem),
+    '[]'::jsonb
+  )
 ) WHERE id = $Id
+  AND jsonb_typeof(properties->'TechKnowledgePlayerComponent'->'m_TechKnowledge'->'m_TechKnowledgeData') = 'array'
 "@
     Invoke-V6Psql -Ip $Ip -Sql $sql | Out-Null
 }
 
 function Invoke-V6TechLockAll {
     param([string]$Ip, [int]$Id)
+    # Same NULL-wipe guard as Invoke-V6TechUnlockAll.
     $sql = @"
 UPDATE actors SET properties = jsonb_set(
   properties, '{TechKnowledgePlayerComponent,m_TechKnowledge,m_TechKnowledgeData}',
-  (SELECT jsonb_agg(jsonb_set(elem, '{UnlockedState}', '"NotPurchased"'))
-   FROM jsonb_array_elements(properties->'TechKnowledgePlayerComponent'->'m_TechKnowledge'->'m_TechKnowledgeData') AS elem)
+  COALESCE(
+    (SELECT jsonb_agg(jsonb_set(elem, '{UnlockedState}', '"NotPurchased"'))
+     FROM jsonb_array_elements(properties->'TechKnowledgePlayerComponent'->'m_TechKnowledge'->'m_TechKnowledgeData') AS elem),
+    '[]'::jsonb
+  )
 ) WHERE id = $Id
+  AND jsonb_typeof(properties->'TechKnowledgePlayerComponent'->'m_TechKnowledge'->'m_TechKnowledgeData') = 'array'
 "@
     Invoke-V6Psql -Ip $Ip -Sql $sql | Out-Null
 }
@@ -374,12 +388,19 @@ FROM (SELECT jsonb_array_elements(properties->'CustomizationLibraryActorComponen
 function Add-V6Cosmetic {
     param([string]$Ip, [int]$Id, [string]$CosmeticId)
     $safe = ($CosmeticId -replace '[^a-zA-Z0-9_]', '')
+    # COALESCE guards: if the path doesn't yet exist on this actor, the inner
+    # `->` chain returns SQL NULL. `NULL || ...` is NULL, and jsonb_set with a
+    # NULL value returns NULL for the whole expression — which would wipe the
+    # entire `properties` column (taking cosmetics, stats, tech, etc. with it).
+    # We coerce the missing array to `[]` so concatenation always produces
+    # valid JSONB.
     $sql = @"
 UPDATE actors SET properties = jsonb_set(properties,
   '{CustomizationLibraryActorComponent,m_UnlockedCustomizationSerializableList,m_UnlockedCustomizationIds}',
-  (properties->'CustomizationLibraryActorComponent'->'m_UnlockedCustomizationSerializableList'->'m_UnlockedCustomizationIds')
+  COALESCE(properties->'CustomizationLibraryActorComponent'->'m_UnlockedCustomizationSerializableList'->'m_UnlockedCustomizationIds', '[]'::jsonb)
     || '[{"m_CustomizationId": "$safe"}]'::jsonb
 ) WHERE id = $Id
+  AND properties->'CustomizationLibraryActorComponent'->'m_UnlockedCustomizationSerializableList' IS NOT NULL
 "@
     Invoke-V6Psql -Ip $Ip -Sql $sql | Out-Null
 }

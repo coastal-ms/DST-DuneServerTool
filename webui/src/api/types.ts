@@ -71,7 +71,7 @@ export type ConfigResponse = {
 }
 
 export type Command = {
-  section: 'VM' | 'Battlegroup' | 'Tools'
+  section: 'VM' | 'Battlegroup' | 'Tools'  // original catalogue hint — not used for layout
   key: string
   name: string
   mode: 'InApp' | 'Console'
@@ -83,6 +83,9 @@ export type Command = {
   reason: string
 }
 
+// v6.1.10+ layout: three sections, each with a user-renamable label and an
+// ordered array of command names. Sections are sized by their contents — they
+// grow and shrink as the user drags commands between them.
 export type CommandsResponse = {
   state: {
     vmExists: boolean
@@ -90,7 +93,8 @@ export type CommandsResponse = {
     bgState: BgState
     vm: VmStatus
   }
-  order: string[] | null
+  sectionNames: [string, string, string]
+  sections: [string[], string[], string[]]
   commands: Command[]
 }
 

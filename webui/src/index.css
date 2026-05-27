@@ -58,30 +58,30 @@
     @apply transition-all hover:border-border-bright hover:bg-surface-2/80;
   }
   .btn {
-    @apply inline-flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-medium
+    @apply inline-flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-medium whitespace-nowrap
            transition-colors disabled:opacity-50 disabled:cursor-not-allowed
            focus:outline-none focus-visible:ring-2 focus-visible:ring-ibad;
   }
   .btn-primary {
-    @apply inline-flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-medium
+    @apply inline-flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-medium whitespace-nowrap
            transition-colors disabled:opacity-50 disabled:cursor-not-allowed
            focus:outline-none focus-visible:ring-2 focus-visible:ring-ibad
            bg-accent text-base hover:bg-accent-bright;
   }
   .btn-secondary {
-    @apply inline-flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-medium
+    @apply inline-flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-medium whitespace-nowrap
            transition-colors disabled:opacity-50 disabled:cursor-not-allowed
            focus:outline-none focus-visible:ring-2 focus-visible:ring-ibad
            bg-surface-2 border border-border text-text hover:bg-surface-3 hover:border-border-bright;
   }
   .btn-ghost {
-    @apply inline-flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-medium
+    @apply inline-flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-medium whitespace-nowrap
            transition-colors disabled:opacity-50 disabled:cursor-not-allowed
            focus:outline-none focus-visible:ring-2 focus-visible:ring-ibad
            text-text-muted hover:text-text hover:bg-surface-2;
   }
   .btn-danger {
-    @apply inline-flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-medium
+    @apply inline-flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-medium whitespace-nowrap
            transition-colors disabled:opacity-50 disabled:cursor-not-allowed
            focus:outline-none focus-visible:ring-2 focus-visible:ring-ibad
            bg-danger/15 border border-danger/40 text-danger hover:bg-danger/25;

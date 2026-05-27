@@ -16,6 +16,8 @@ import { SpicefieldsCard } from './gameconfig/SpicefieldsCard'
 
 type LoadState = 'idle' | 'loading' | 'ready' | 'error' | 'unavailable'
 
+const SANDWORM_ENABLED_KEY = 'sandworm.dune.Enabled'
+
 export function GameConfig() {
   const { status } = useStatus()
   const vmRunning = status?.vm?.running === true
@@ -29,6 +31,26 @@ export function GameConfig() {
   const [saving, setSaving] = useState(false)
   const [saveError, setSaveError] = useState<string | null>(null)
   const [savedMsg, setSavedMsg] = useState<string | null>(null)
+  const [sandwormModalOpen, setSandwormModalOpen] = useState(false)
+
+  // Intercepts field changes to gate destructive toggles (e.g. enabling
+  // Sandworms wipes anything left in sandworm areas — confirm before applying).
+  const handleFieldChange = useCallback((key: string, newVal: string) => {
+    if (
+      key === SANDWORM_ENABLED_KEY &&
+      newVal === '1' &&
+      (values[key] ?? '') !== '1'
+    ) {
+      setSandwormModalOpen(true)
+      return
+    }
+    setValues(prev => ({ ...prev, [key]: newVal }))
+  }, [values])
+
+  const confirmSandwormEnable = useCallback(() => {
+    setValues(prev => ({ ...prev, [SANDWORM_ENABLED_KEY]: '1' }))
+    setSandwormModalOpen(false)
+  }, [])
 
   // Compute combined values + originals from the fetched config + schema.
   const seedValues = useCallback((sections: GameConfigSection[], data: GameConfigResponse) => {
@@ -213,7 +235,7 @@ export function GameConfig() {
                       key={f.key}
                       field={f}
                       value={values[f.key] ?? ''}
-                      onChange={v => setValues(prev => ({ ...prev, [f.key]: v }))}
+                      onChange={v => handleFieldChange(f.key, v)}
                       disabled={loadState !== 'ready' || saving}
                       isDirty={(values[f.key] ?? '') !== (originals[f.key] ?? '')}
                     />
@@ -257,6 +279,12 @@ export function GameConfig() {
           </div>
         </form>
       )}
+
+      <SandwormConfirmModal
+        open={sandwormModalOpen}
+        onCancel={() => setSandwormModalOpen(false)}
+        onConfirm={confirmSandwormEnable}
+      />
     </>
   )
 }
@@ -345,6 +373,93 @@ function FieldRow({ field, value, onChange, disabled, isDirty }: FieldRowProps) 
       <div className="mt-1 flex items-center justify-between gap-2">
         {field.hint && <p className="text-xs text-text-dim">{field.hint}</p>}
         <span className="text-[10px] font-mono text-text-dim ml-auto truncate">{field.key}</span>
+      </div>
+    </div>
+  )
+}
+
+// -----------------------------------------------------------------------------
+// Sandworm-enable confirmation modal
+// -----------------------------------------------------------------------------
+// Enabling sandworms wipes anything left in sandworm areas, so require the
+// user to type "i confirm" before flipping the toggle to On.
+
+function SandwormConfirmModal({
+  open, onCancel, onConfirm,
+}: {
+  open: boolean
+  onCancel: () => void
+  onConfirm: () => void
+}) {
+  const [text, setText] = useState('')
+
+  useEffect(() => { if (!open) setText('') }, [open])
+
+  if (!open) return null
+
+  const ok = text.trim().toLowerCase() === 'i confirm'
+
+  return (
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4"
+      onClick={onCancel}
+    >
+      <div
+        className="card p-0 max-w-md w-full"
+        onClick={e => e.stopPropagation()}
+      >
+        <div className="px-5 py-4 border-b border-border flex items-center justify-between">
+          <h3 className="font-semibold text-text flex items-center gap-2">
+            <Icon name="AlertTriangle" size={16} className="text-warning" />
+            Enable Sandworms?
+          </h3>
+          <button type="button" className="btn-ghost px-2 py-1" onClick={onCancel}>
+            <Icon name="X" size={16} />
+          </button>
+        </div>
+
+        <div className="px-5 py-4 space-y-4">
+          <div className="text-sm text-text leading-relaxed">
+            When this is enabled, all sandworm areas should be clear of items
+            you want to keep.{' '}
+            <span className="font-semibold text-danger">Irreversible.</span>
+          </div>
+
+          <div>
+            <label className="block text-xs uppercase tracking-wider text-text-muted mb-1.5">
+              Type <span className="font-mono text-text">i confirm</span> to proceed
+            </label>
+            <input
+              type="text"
+              autoFocus
+              value={text}
+              onChange={e => setText(e.target.value)}
+              onKeyDown={e => {
+                if (e.key === 'Enter' && ok) { e.preventDefault(); onConfirm() }
+                if (e.key === 'Escape') { e.preventDefault(); onCancel() }
+              }}
+              placeholder="i confirm"
+              className="w-full px-3 py-2 rounded-lg bg-surface-2 border border-border text-text text-sm
+                         font-mono placeholder:text-text-dim focus:outline-none focus:ring-2
+                         focus:ring-warning focus:border-warning/50"
+            />
+          </div>
+        </div>
+
+        <div className="px-5 py-3 border-t border-border flex items-center justify-end gap-2">
+          <button type="button" className="btn-secondary" onClick={onCancel}>
+            Cancel
+          </button>
+          <button
+            type="button"
+            disabled={!ok}
+            onClick={onConfirm}
+            className="btn-primary"
+          >
+            <Icon name="AlertTriangle" size={14} />
+            Enable Sandworms
+          </button>
+        </div>
       </div>
     </div>
   )
