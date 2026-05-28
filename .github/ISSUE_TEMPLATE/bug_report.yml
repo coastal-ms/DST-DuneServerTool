@@ -39,8 +39,8 @@ body:
     id: tool_version
     attributes:
       label: Tool version
-      description: Shown in the app header (`Installed: x.y.z`) and in the CLI menu header. Auto-filled when launched from `Report Issue` in the desktop app or CLI.
-      placeholder: "v6.1.0"
+      description: Shown in the bottom-left of the web portal sidebar and in the CLI menu header. Auto-filled when launched from the **?** help button in the top-left of the portal, or from the CLI `report-issue` command.
+      placeholder: "v6.1.20"
     validations:
       required: true
 
@@ -50,19 +50,25 @@ body:
       label: Where did the bug happen?
       description: Which part of the tool was affected? Pick the closest match.
       options:
-        - Desktop app — Dashboard
-        - Desktop app — Monitoring
-        - Desktop app — Terminal pane
-        - Desktop app — Characters
-        - Desktop app — Game Config
-        - Desktop app — Database
-        - Desktop app — Settings
-        - Desktop app — Setup Wizard
-        - Desktop app — Additional Sietches
-        - Desktop app — header / status bar / window chrome
+        - Web portal — Dashboard / Server Health
+        - Web portal — Monitoring
+        - Web portal — Terminal pane
+        - Web portal — Characters
+        - Web portal — Game Config
+        - Web portal — Database (Backup / Restore / SQL Editor)
+        - Web portal — Database (Sane-Pricing Patch card)
+        - Web portal — Bot Control / Market (dune-admin integration)
+        - Web portal — Broadcasts
+        - Web portal — Settings (general)
+        - Web portal — Settings (dune-admin updater)
+        - Web portal — Settings (Dune Server Tool self-updater)
+        - Web portal — Setup Wizard / first-run
+        - Web portal — Additional Sietches / Sietches
+        - Web portal — Sidebar / status bar / window chrome / help button
+        - PWA install / desktop-app shell
         - CLI (`dune-server.ps1` / `dune-server.bat`)
         - Installer / first-run setup
-        - Update checker
+        - Update checker / auto-updater
         - Other (describe below)
     validations:
       required: true
