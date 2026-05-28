@@ -7,6 +7,7 @@ import { GameConfig } from './pages/GameConfig'
 import { Database } from './pages/Database'
 import { Sietches } from './pages/Sietches'
 import { Broadcasts } from './pages/Broadcasts'
+import { DDMap } from './pages/DDMap'
 import { SetupWizard } from './pages/SetupWizard'
 import { Settings } from './pages/Settings'
 import { TerminalPage } from './pages/Terminal'
@@ -26,6 +27,7 @@ export default function App() {
           <Route path="/gameconfig" element={<GameConfig />} />
           <Route path="/database"   element={<Database />} />
           <Route path="/sietches"   element={<Sietches />} />
+          <Route path="/dd-map"     element={<DDMap />} />
           <Route path="/settings"   element={<Settings />} />
           <Route path="/setup"      element={<SetupWizard />} />
           {/* /monitoring merged into Dashboard in v6.1 — redirect old path */}

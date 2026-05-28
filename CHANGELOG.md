@@ -16,7 +16,7 @@ here cover everything those tags shipped.
 
 ## [6.1.17] - 2026-05-27
 
-Minor: **Broadcasts feature** + **Install as App** (PWA).
+Minor: **Broadcasts feature** + **Install as App** (PWA) + **DD Map**.
 
 ### Added
 - **Broadcasts page** under the Terminal nav group. Two cards (Message,
@@ -39,10 +39,19 @@ Minor: **Broadcasts feature** + **Install as App** (PWA).
   windowed app (no tabs, no address bar) when the button is clicked.
   Falls back to an in-app instructions modal if the browser hasn't
   surfaced an install prompt yet.
+- **DD Map page** under Game Data. Two reference cards (Method.gg and
+  Dune Gaming Tools) link out to interactive Deep Desert map companions
+  in a new tab. Both sites block iframe embedding, so the portal surfaces
+  the links in a consistent card layout instead.
 
 ### Changed
 - Static file server now serves `.webmanifest` with
   `application/manifest+json` so browsers recognize the PWA manifest.
+
+### Removed
+- Deep Desert / Arrakeen / Harko Village on-demand map-pod startup cards
+  from Server Health. The dashboard now focuses on battlegroup, port,
+  and component health.
 
 
 ## [6.1.16] - 2026-05-27
