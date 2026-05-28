@@ -14,6 +14,21 @@ here cover everything those tags shipped.
 ## [Unreleased]
 
 
+## [6.1.19] - 2026-05-28
+
+Patch: **Fix Settings page silently dropping all configuration changes.**
+
+### Fixed
+- **Settings page edits were silently discarded.** Saving any field
+  (e.g. `DuneAdminExe`, `SteamPath`, `SshKey`, port-check mode) appeared
+  to succeed but the value reverted on the next load. Root cause: the
+  `PUT /api/config` handler treated the request body as a flat
+  hashtable when it was actually `{ values: { ... } }`, so the inner
+  values dict was passed straight to `Save-DuneConfig` whose key
+  whitelist then filtered out the lone `values` key — no fields ever
+  reached the persisted file. Handler now unwraps the `values` wrapper
+  first, then merges into the on-disk `dune-server.config`.
+
 ## [6.1.18] - 2026-05-27
 
 Patch: **dune-admin updater in Settings** + **Broadcasts shutdown fix**.

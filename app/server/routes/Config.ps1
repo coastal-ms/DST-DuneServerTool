@@ -22,7 +22,12 @@ Register-DuneRoute -Method PUT -Path '/api/config' -Handler {
     }
     $patch = @{}
     if ($body -is [hashtable]) {
-        $patch = $body
+        # Frontend sends { values: { ... } }; older/alt callers send a flat hashtable.
+        if ($body.Contains('values') -and ($body['values'] -is [hashtable])) {
+            foreach ($k in $body['values'].Keys) { $patch[$k] = $body['values'][$k] }
+        } else {
+            foreach ($k in $body.Keys) { $patch[$k] = $body[$k] }
+        }
     } elseif ($body.values) {
         foreach ($k in $body.values.Keys) { $patch[$k] = $body.values[$k] }
     } else {
