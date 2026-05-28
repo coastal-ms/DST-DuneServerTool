@@ -32,10 +32,19 @@ export function Sidebar() {
         <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-accent-bright to-accent flex items-center justify-center shadow-lg shadow-accent/20">
           <Icon name="Hexagon" size={18} className="text-base" strokeWidth={2.5} />
         </div>
-        <div>
-          <div className="text-sm font-semibold tracking-wide">Dune Server</div>
+        <div className="flex-1 min-w-0">
+          <div className="text-sm font-semibold tracking-wide">Dune Server Tool</div>
           <div className="text-[10px] text-text-dim uppercase tracking-widest">Management Portal</div>
         </div>
+        <a
+          href={`https://github.com/coastal-ms/Simple-Dune-Server-Management-Tool/issues/new?template=bug_report.yml${version ? `&tool_version=v${encodeURIComponent(version)}` : ''}`}
+          target="_blank"
+          rel="noopener noreferrer"
+          title="Report a bug / open a GitHub issue (prefilled template)"
+          className="w-8 h-8 rounded-full border border-accent/40 bg-accent/10 text-accent-bright hover:text-accent hover:bg-accent/20 hover:border-accent/60 flex items-center justify-center transition-colors shrink-0"
+        >
+          <Icon name="HelpCircle" size={16} strokeWidth={2.25} />
+        </a>
       </div>
 
       <nav className="flex-1 overflow-y-auto px-2 py-3 space-y-5">
@@ -72,7 +81,7 @@ export function Sidebar() {
           <button
             type="button"
             onClick={() => { void onInstallClick() }}
-            title={canInstall ? 'Install Dune Server as a desktop app' : 'How to install as a Chrome/Edge app'}
+            title={canInstall ? 'Install Dune Server Tool as a desktop app' : 'How to install as a Chrome/Edge app'}
             className="w-full flex items-center justify-center gap-1.5 px-2 py-1.5 rounded-md border border-accent/30 text-accent-bright/90 hover:text-accent-bright hover:bg-accent/10 hover:border-accent/50 transition-colors uppercase tracking-widest"
           >
             <Icon name="Download" size={11} />
@@ -111,7 +120,7 @@ export function Sidebar() {
               <div>
                 <div className="font-semibold text-text mb-1">Edge</div>
                 <p className="text-text-muted">
-                  Click the <span className="font-mono">⋯</span> menu (top-right) → <span className="text-text">Apps</span> → <span className="text-text">Install Dune Server</span>
+                  Click the <span className="font-mono">⋯</span> menu (top-right) → <span className="text-text">Apps</span> → <span className="text-text">Install Dune Server Tool</span>
                 </p>
               </div>
               <div>

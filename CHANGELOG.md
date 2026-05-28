@@ -14,6 +14,55 @@ here cover everything those tags shipped.
 ## [Unreleased]
 
 
+## [6.1.20] - 2026-05-28
+
+Feature: **Apply Coastal's sane-pricing patch to dune-admin from the Database page.**
+
+### Added
+- **Database → "dune-admin Sane-Pricing Patch (Coastal)" card.** One-click
+  installs Coastal's tier-driven market-bot pricing model (with hard 100k
+  cap per listing) into the user's local dune-admin v0.13.0+ source repo.
+  Bundles `0001-sane-pricing-100k-cap.patch` + `build-patched.ps1` with
+  the installer; the card stages them into the user's
+  `<dune-admin>\scripts\patches\` and `\scripts\` then runs
+  `build-patched.ps1 -Restart` to rebuild dune-admin.exe in place and
+  relaunch it. Restore button swaps `dune-admin.exe.upstream` back over
+  the patched binary.
+- **Preconditions checklist** displayed inline beside the buttons so the
+  user can see exactly what needs to be in place before applying:
+  - DuneAdminExe set in Settings + file exists
+  - dune-admin v0.13.0+ source repo detected at the parent dir of DuneAdminExe
+  - `git` and `go` available on PATH (with `winget install` commands shown
+    for one-click PowerShell copy)
+  - Bundled patch file present in the install
+  - dune-admin reachable on `localhost:8080` with `market-bot` mode `embedded`
+  Each unmet row shows a tailored "Fix:" line and (where applicable) a
+  copyable PowerShell command. The dune-admin-not-running command is
+  parameterized with the user's actual DuneAdminExe path and also
+  stops `AMP-ADS01` first when that's the cause of the :8080 conflict.
+- **Help (?) button** in the top-left of the portal sidebar, next to the
+  title. Opens a prefilled GitHub bug-report template (tool version
+  auto-filled). Restores discoverability of the issue tracker the CLI's
+  `report-issue` command already targeted.
+- New API routes: `GET /api/dune-admin/pricing-patch/status`,
+  `POST /api/dune-admin/pricing-patch/apply`,
+  `POST /api/dune-admin/pricing-patch/restore`.
+
+### Changed
+- Sidebar title renamed **Dune Server** → **Dune Server Tool** (also in
+  the PWA-install tooltip + the Chrome/Edge install instruction).
+- `.github/ISSUE_TEMPLATE/bug_report.yml` surfaces refreshed for the v6.1
+  web portal layout: added Database (Sane-Pricing Patch card), Bot Control
+  / Market, Broadcasts, Settings (dune-admin updater / self-updater),
+  PWA install / desktop-app shell, and Sidebar / help button entries.
+  Removed legacy "Desktop app — *" prefixes.
+
+### Notes
+- Apply succeeds only when every precondition is met (HTTP 412 otherwise).
+- A sidecar marker `dune-admin.exe.coastal-sane-pricing` is written next to
+  the patched exe so the card can detect that the patch is already applied
+  across restarts of Dune Server Tool.
+
 ## [6.1.19] - 2026-05-28
 
 Patch: **Fix Settings page silently dropping all configuration changes.**
