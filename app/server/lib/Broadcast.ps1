@@ -145,11 +145,14 @@ function Send-V6ShutdownBroadcast {
     $ip  = $ctx.vm.ip
     $pod = Find-V6MqGamePod -Ip $ip
 
-    $tsCmd = "date -d '+$DelayMinutes minutes' +%s"
-    $tsRaw = (Invoke-V6Ssh -Ip $ip -Cmd $tsCmd) -join ''
-    $ts = 0
-    if ($tsRaw -match '^\s*(\d+)\s*$') { $ts = [int64]$Matches[1] }
-    if ($ts -le 0) { return @{ ok = $false; status = 500; message = 'Could not compute shutdown timestamp on the VM.' } }
+    # Compute the absolute Unix-epoch timestamp host-side. The earlier
+    # implementation shelled out to the VM (`ssh ... date -d ...`) to dodge
+    # host/VM clock drift, but in practice both sides are NTP-synced and
+    # the SSH round-trip turned into a real failure mode (single-quote
+    # round-trip through PowerShell/ssh occasionally returned empty,
+    # surfacing as "Could not compute shutdown timestamp on the VM").
+    $ts = [int64]([DateTimeOffset]::UtcNow.AddMinutes($DelayMinutes).ToUnixTimeSeconds())
+    if ($ts -le 0) { return @{ ok = $false; status = 500; message = 'Could not compute shutdown timestamp.' } }
 
     $cancelAtom = if ($Cancel) { 'true' } else { 'false' }
     $tEsc = _Escape-V6ErlBinary $ShutdownType
