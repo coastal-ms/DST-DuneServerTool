@@ -3,7 +3,6 @@ import { PageHeader } from '../components/PageHeader'
 import { Icon } from '../components/Icon'
 import { useStatus } from '../hooks/useStatus'
 import { BgSpiceSummary } from './dashboard/BgSpiceSummary'
-import { MapPodCard } from './dashboard/MapPodCard'
 import type { BgState, PortResult, BgGameServer } from '../api/types'
 import { getLinks, type LinksResponse } from '../api/links'
 import { api, ApiError } from '../api/client'
@@ -360,10 +359,6 @@ export function Dashboard() {
       </section>
 
       <section className="grid grid-cols-1 lg:grid-cols-2 gap-4 mb-4">
-        <MapPodCard mapKey="deepdesert"   label="Deep Desert"   icon="Mountain" bgReady={bgReady} />
-        <MapPodCard mapKey="arakeen"      label="Arrakeen"      icon="Castle"   bgReady={bgReady} />
-        <MapPodCard mapKey="harkovillage" label="Harko Village" icon="Building" bgReady={bgReady} />
-
         <div className="card p-5">
           <div className="flex items-center justify-between mb-3">
             <h2 className="text-sm font-semibold uppercase tracking-wider text-text-muted flex items-center gap-2">

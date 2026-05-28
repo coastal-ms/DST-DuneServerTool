@@ -14,6 +14,7 @@ export const NAV_ITEMS: NavItem[] = [
   { to: '/gameconfig',  label: 'Game Config',  icon: 'Sliders',         group: 'data' },
   { to: '/database',    label: 'Database',     icon: 'Database',        group: 'data' },
   { to: '/sietches',    label: 'Sietches',     icon: 'Network',         group: 'data' },
+  { to: '/dd-map',      label: 'DD Map',       icon: 'Map',             group: 'data' },
   { to: '/settings',    label: 'Settings',     icon: 'Settings',        group: 'system' },
   { to: '/setup',       label: 'Setup Wizard', icon: 'Wand2',           group: 'system' },
 ]
