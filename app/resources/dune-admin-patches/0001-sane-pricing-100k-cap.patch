@@ -1,0 +1,339 @@
+diff --git a/internal/marketbot/config.go b/internal/marketbot/config.go
+index 596782d..f47db26 100644
+--- a/internal/marketbot/config.go
++++ b/internal/marketbot/config.go
+@@ -36,16 +36,25 @@ func defaultConfig() configValues {
+ 		MaxBuys:          50,
+ 		ListingsPerGrade: 5,
+ 		Enabled:          true,
+-		GradeMultipliers: [6]float64{1.0, 1.0, 1.25, 1.5, 1.75, 2.0},
++		// GradeMultipliers — per-quality compounding (Standard … Flawless).
++		// Tuned so a T6 schematic (basePrice 30,000) at Flawless lands at
++		// 30,000 × 3.3 = 99,000 — just under the 100k hard cap. Spread is
++		// felt across grades so high-grade gear is meaningfully pricier.
++		GradeMultipliers: [6]float64{1.0, 1.25, 1.55, 2.0, 2.6, 3.3},
++		// RarityMultipliers — "rarity is only a minor relevancy" per Coastal.
++		// Small premiums per rarity that don't distort the tier shape.
+ 		RarityMultipliers: map[string]float64{
+ 			"common":  1.0,
+-			"unique":  3.0,
+-			"memento": 5.0,
++			"unique":  1.05,
++			"memento": 1.08,
+ 		},
++		// VendorMultipliers — vendor-floor fraction per rarity. The bot lists
++		// at this fraction of the NPC vendor price when vendor > tier formula,
++		// so it slightly undercuts vendors without gutting them.
+ 		VendorMultipliers: map[string]float64{
+-			"common":  3.0,
+-			"unique":  5.0,
+-			"memento": 5.0,
++			"common":  0.95,
++			"unique":  0.95,
++			"memento": 0.95,
+ 		},
+ 		DisabledItems: nil,
+ 	}
+diff --git a/internal/marketbot/config_test.go b/internal/marketbot/config_test.go
+index bd6cf14..db067fd 100644
+--- a/internal/marketbot/config_test.go
++++ b/internal/marketbot/config_test.go
+@@ -27,7 +27,7 @@ func TestConfigDefaults(t *testing.T) {
+ 	if !cfg.Enabled {
+ 		t.Error("Enabled should default to true")
+ 	}
+-	want := [6]float64{1.0, 1.0, 1.25, 1.5, 1.75, 2.0}
++	want := [6]float64{1.0, 1.25, 1.55, 2.0, 2.6, 3.3}
+ 	if cfg.GradeMultipliers != want {
+ 		t.Errorf("GradeMultipliers want %v got %v", want, cfg.GradeMultipliers)
+ 	}
+diff --git a/internal/marketbot/pricing.go b/internal/marketbot/pricing.go
+index 8ce7bd4..426b0e4 100644
+--- a/internal/marketbot/pricing.go
++++ b/internal/marketbot/pricing.go
+@@ -334,33 +334,181 @@ func computePrice(item CatalogItem, snap configValues) int64 {
+ // is used instead.
+ const minMeaningfulVendorPrice = 10
+ 
++// maxAnyPrice is the global hard ceiling. No listing — regardless of formula
++// branch, vendor_price, item rarity, adaptive drift, or per-item override —
++// may ever exceed this amount. This is the final safety net Coastal mandates.
++const maxAnyPrice = 100_000
++
++// equipmentTierFactor is the multiplier applied to tierBasePrice for non-
++// schematic, non-augment single-item gear. You're buying the item itself
++// (not the recipe), so it lists slightly cheaper than the schematic baseline.
++const equipmentTierFactor = 0.8
++
++// augmentTierFactor is the multiplier for items in the augment category.
++// Coastal's model: augments are *additions* attached to gear, so they price
++// lower per tier than full equipment or schematics.
++const augmentTierFactor = 0.6
++
++// vendorFloorFractionFallback is the default vendor-floor multiplier used
++// when a rarity is missing from snap.VendorMultipliers. 0.95 = list at 95% of
++// vendor — small undercut so players prefer the bot, but the NPC economy
++// isn't gutted. defaultConfig() ships VendorMultipliers populated with this
++// value for every known rarity, so this fallback only kicks in for unknown
++// rarities the game may add later.
++const vendorFloorFractionFallback = 0.95
++
++// commonRarityMultFallback is the default rarity multiplier returned when the
++// rarity isn't present in snap.RarityMultipliers. defaultConfig() ships
++// RarityMultipliers populated with the documented per-rarity nudges, so this
++// fallback only kicks in for unknown rarities.
++const commonRarityMultFallback = 1.0
++
++// capPrice clamps a price at maxAnyPrice.
++func capPrice(p int64) int64 {
++	if p > maxAnyPrice {
++		return maxAnyPrice
++	}
++	return p
++}
++
++// tierBasePrice is the dominant pricing axis. Tier 1 → 6 ranges from trivial
++// sundries (50) to top-tier aspirational (30k base, capping near 99k at
++// Flawless with the default grade multipliers). The spread is geometric so
++// low tiers stay cheap and the tier ladder is felt.
++//
++// Calibration target (Coastal's server, ~2 active players, ~5–20k solari/hr):
++//   - T1 Standard: pocket change
++//   - T3 Flawless: a session's farming
++//   - T6 Flawless: aspirational, 2–4 hr of farming, fits under the 100k cap
++func tierBasePrice(tier int) int64 {
++	switch tier {
++	case 1:
++		return 50
++	case 2:
++		return 200
++	case 3:
++		return 800
++	case 4:
++		return 3_000
++	case 5:
++		return 10_000
++	case 6:
++		return 30_000
++	default: // T0 cosmetic / unknown
++		return 10
++	}
++}
++
++// stackUnitPrice is the per-unit listing price for stackable crafting materials.
++// Calibrated so a ~100-unit stack of T6 lands near the 100k cap and low-tier
++// stacks stay throwaway-cheap.
++func stackUnitPrice(tier int) int64 {
++	switch tier {
++	case 1:
++		return 1
++	case 2:
++		return 5
++	case 3:
++		return 20
++	case 4:
++		return 75
++	case 5:
++		return 250
++	case 6:
++		return 800
++	default: // T0 raw
++		return 1
++	}
++}
++
++// rarityMultOrFallback looks up the per-rarity multiplier from the config
++// snapshot (snap.RarityMultipliers) and falls back to commonRarityMultFallback
++// when the rarity isn't in the map. The lookup is case-insensitive and
++// reuses the existing rarityMult helper.
++func rarityMultOrFallback(rarity string, snap configValues) float64 {
++	mult := rarityMult(rarity, snap.RarityMultipliers)
++	if mult == 0 {
++		return commonRarityMultFallback
++	}
++	return mult
++}
++
++// vendorFloorFraction returns the per-rarity vendor-floor multiplier from
++// snap.VendorMultipliers, falling back to vendorFloorFractionFallback (0.95)
++// when the rarity isn't in the map.
++func vendorFloorFraction(rarity string, snap configValues) float64 {
++	mult := vendorMult(rarity, snap.VendorMultipliers)
++	if mult == 0 {
++		return vendorFloorFractionFallback
++	}
++	return mult
++}
++
++// isAugment returns true if the item is in the augment category, regardless of
++// gradeable flag. Augments use augmentTierFactor instead of equipmentTierFactor.
++func isAugment(item CatalogItem) bool {
++	return strings.HasPrefix(strings.ToLower(item.Category), "items/augment")
++}
++
+ // basePrice returns the unrounded base price, shared by computePrice and adjustPrice.
++//
++// The pricing model is calibrated for a small private server (Coastal's: ~2 active
++// players). The upstream rarity-weighted formula produced unobtainable
++// multi-million-solari listings; this replaces it with a tier-driven model:
++//
++//  1. Stackable materials (StackMax > 1) → stackUnitPrice(tier) × rarity multiplier.
++//  2. Non-stackable items use tierBasePrice(tier) × categoryFactor × rarity multiplier,
++//     where categoryFactor is:
++//        - augment       → augmentTierFactor (0.6)   "additions, that scale"
++//        - schematic     → 1.0                       baseline
++//        - other gear    → equipmentTierFactor (0.8) slight item-vs-recipe discount
++//  3. Vendor-price floor: if the NPC vendor prices this item meaningfully high
++//     (≥ 10) and that's higher than the tier-derived value, list at
++//     vendorFloorFraction × vendor (per-rarity from VendorMultipliers; default
++//     ~95%) instead so the bot doesn't gut the NPC economy.
++//
++// Rarity and vendor multipliers are read from the live bot config snapshot
++// (RarityMultipliers / VendorMultipliers) so the dune-admin Bot Control UI
++// can adjust them at runtime. Defaults are wired in defaultConfig() to match
++// the original hardcoded values, so a fresh restart produces identical
++// behavior to a fresh in-memory config.
++//
++// gradeFloor then scales this baseline by the per-grade multiplier
++// (GradeMultipliers) for gradeable items. Non-gradeable items only ever list
++// at grade 0 (per applicableGrades in exchange.go) so they end up at
++// exactly basePrice.
++//
++// Every code path is finally clamped at maxAnyPrice (100k) — hard ceiling.
+ func basePrice(item CatalogItem, snap configValues) int64 {
+-	// Unique/memento equipment with a known crafting cost: price as
+-	// schematic_equivalent + material_cost * 0.75.
+-	if item.MaterialCost > 0 && item.StackMax <= 1 && !item.IsSchematic &&
+-		(strings.ToLower(item.Rarity) == "unique" || strings.ToLower(item.Rarity) == "memento") {
+-		schemPrice := float64(schematicEquipmentPrice(item.Tier)) * rarityMult(item.Rarity, snap.RarityMultipliers)
+-		return int64(math.Round(schemPrice + float64(materialCostForGrade(item, 0))*0.75))
++	rarity := rarityMultOrFallback(item.Rarity, snap)
++
++	var p int64
++
++	if item.StackMax > 1 {
++		p = int64(math.Round(float64(stackUnitPrice(item.Tier)) * rarity))
++	} else {
++		var factor float64
++		switch {
++		case isAugment(item):
++			factor = augmentTierFactor
++		case item.IsSchematic:
++			factor = 1.0
++		default:
++			factor = equipmentTierFactor
++		}
++		p = int64(math.Round(float64(tierBasePrice(item.Tier)) * factor * rarity))
+ 	}
++
++	// Vendor-price soft floor: never list grossly below the NPC vendor for
++	// items the game itself prices meaningfully high.
+ 	if item.BasePrice >= minMeaningfulVendorPrice {
+-		mult := vendorMult(item.Rarity, snap.VendorMultipliers)
+-		return int64(math.Round(float64(item.BasePrice) * mult))
+-	}
+-	// Fallback for items without a vendor price.
+-	mult := rarityMult(item.Rarity, snap.RarityMultipliers)
+-	if item.StackMax <= 1 {
+-		base := equipmentPrice(item.Tier)
+-		if item.IsSchematic {
+-			base = schematicEquipmentPrice(item.Tier)
++		vendorFloor := int64(math.Round(float64(item.BasePrice) * vendorFloorFraction(item.Rarity, snap)))
++		if vendorFloor > p {
++			p = vendorFloor
+ 		}
+-		return int64(math.Round(float64(base) * mult))
+-	}
+-	p := int64(math.Round(float64(materialUnitPrice(item.Tier)) * mult))
+-	if p < 1 {
+-		p = 1
+ 	}
+-	return p
++
++	return capPrice(p)
+ }
+ 
+ // vendorMult returns the market price multiplier for the NPC vendor base price.
+@@ -450,9 +598,18 @@ func rarityMult(rarity string, mult map[string]float64) float64 {
+ 
+ func adjustPrice(item CatalogItem, currentPrice int64, soldFraction float64, snap configValues) int64 {
+ 	floor := roundPrice(basePrice(item, snap))
+-	ceiling := floor * 5
++	ceiling := floor * 2
++
++	// Hard cap: never list above vendor_price × 2 when a real vendor price exists.
++	// (Combined with the global maxAnyPrice cap below.)
++	if item.BasePrice >= minMeaningfulVendorPrice {
++		vendorCap := item.BasePrice * 2
++		if ceiling > vendorCap {
++			ceiling = vendorCap
++		}
++	}
+ 
+-	// Hard per-item overrides from item-data.json take precedence.
++	// Hard per-item overrides from item-data.json take precedence over formulas.
+ 	if item.MinPrice > 0 && floor < item.MinPrice {
+ 		floor = item.MinPrice
+ 	}
+@@ -460,6 +617,20 @@ func adjustPrice(item CatalogItem, currentPrice int64, soldFraction float64, sna
+ 		ceiling = item.MaxPrice
+ 	}
+ 
++	// Global hard ceiling (Coastal's rule: nothing over 100k, ever).
++	if floor > maxAnyPrice {
++		floor = maxAnyPrice
++	}
++	if ceiling > maxAnyPrice {
++		ceiling = maxAnyPrice
++	}
++
++	// Safety: ceiling must never be below floor (could happen if MaxPrice
++	// override or vendorCap is below the base floor for some item).
++	if ceiling < floor {
++		ceiling = floor
++	}
++
+ 	var next int64
+ 	switch {
+ 	case soldFraction > 0.5:
+@@ -477,7 +648,7 @@ func adjustPrice(item CatalogItem, currentPrice int64, soldFraction float64, sna
+ 	if next > ceiling {
+ 		next = ceiling
+ 	}
+-	return next
++	return capPrice(next)
+ }
+ 
+ // gradePriceMult returns the price multiplier for quality grades 0–5 from the config array.
+@@ -488,9 +659,10 @@ func gradePriceMult(grade int64, mults [6]float64) float64 {
+ 	return mults[grade]
+ }
+ 
+-// gradedPrice returns the grade-adjusted listing price, rounded to a clean step.
++// gradedPrice returns the grade-adjusted listing price, rounded to a clean step
++// and capped at maxAnyPrice (Coastal's global 100k ceiling).
+ func gradedPrice(basePrice int64, grade int64, mults [6]float64) int64 {
+-	return roundPrice(int64(math.Round(float64(basePrice) * gradePriceMult(grade, mults))))
++	return capPrice(roundPrice(int64(math.Round(float64(basePrice) * gradePriceMult(grade, mults)))))
+ }
+ 
+ // materialCostForGrade returns the recipe material cost for a specific grade.
+@@ -503,15 +675,10 @@ func materialCostForGrade(item CatalogItem, grade int64) int64 {
+ }
+ 
+ // gradeFloor returns the listing price floor for item at the given grade.
+-// For unique/memento equipment with crafting recipes, each grade's price is derived
+-// from that grade's actual material cost rather than a flat multiplier.
++// Delegates entirely to basePrice (which knows whether the item is gradeable,
++// stackable, schematic, equipment, or vendor-priced) and applies the per-grade
++// multiplier on top via gradedPrice. The result is capped at maxAnyPrice.
+ func gradeFloor(item CatalogItem, grade int64, snap configValues) int64 {
+-	if item.MaterialCost > 0 && item.StackMax <= 1 && !item.IsSchematic &&
+-		(strings.ToLower(item.Rarity) == "unique" || strings.ToLower(item.Rarity) == "memento") {
+-		mc := materialCostForGrade(item, grade)
+-		schemPrice := float64(schematicEquipmentPrice(item.Tier)) * rarityMult(item.Rarity, snap.RarityMultipliers)
+-		return roundPrice(int64(math.Round(schemPrice + float64(mc)*0.75)))
+-	}
+ 	return gradedPrice(roundPrice(basePrice(item, snap)), grade, snap.GradeMultipliers)
+ }
+ 
