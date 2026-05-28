@@ -14,6 +14,45 @@ here cover everything those tags shipped.
 ## [Unreleased]
 
 
+## [6.1.18] - 2026-05-27
+
+Patch: **dune-admin updater in Settings** + **Broadcasts shutdown fix**.
+
+### Added
+- **dune-admin.exe updater** in Settings. A new collapsible card under
+  the Dune Server self-updater shows the installed version vs. the
+  latest [`Icehunter/dune-admin`](https://github.com/Icehunter/dune-admin)
+  release and one-click installs the `dune-admin_windows_amd64.zip`
+  asset over the configured `DuneAdminExe` path. Writes a
+  `<exe>.version` sidecar file so the installed version persists across
+  checks (Go binaries built with goreleaser have no Win32
+  FileVersionInfo). New routes: `GET /api/dune-admin/check`,
+  `POST /api/dune-admin/install`. Refuses to overwrite a running EXE
+  (returns 423 Locked).
+
+### Changed
+- Settings page restructured: **Updates** card and **dune-admin.exe**
+  card now live at the top of the page, both minimized by default with
+  compact status pills shown in the collapsed header. Both auto-check
+  on mount so the pills are populated without expanding.
+
+### Fixed
+- Broadcasts → Server Alert: shutdown timestamp is now computed
+  host-side (`[DateTimeOffset]::UtcNow.AddMinutes(...)`) instead of
+  via `ssh ... date -d '+N minutes' +%s`. The SSH round-trip
+  occasionally returned an empty string (single-quote handling through
+  PowerShell → ssh → remote bash), which surfaced as
+  *"Could not compute shutdown timestamp on the VM."* Both clocks are
+  NTP-synced so there's no meaningful drift.
+
+### Notes
+- README brought current: added Broadcasts, DD Map, dune-admin updater,
+  and PWA install sections; removed stale tray-icon references that
+  v6.1.7 had already retired.
+- Scrubbed real VM/public IPs out of `tools/Redact-Screenshots.ps1`
+  comments.
+
+
 ## [6.1.17] - 2026-05-27
 
 Minor: **Broadcasts feature** + **Install as App** (PWA) + **DD Map**.
@@ -43,15 +82,6 @@ Minor: **Broadcasts feature** + **Install as App** (PWA) + **DD Map**.
   Dune Gaming Tools) link out to interactive Deep Desert map companions
   in a new tab. Both sites block iframe embedding, so the portal surfaces
   the links in a consistent card layout instead.
-- **dune-admin.exe updater** in Settings. A new card under the Dune Server
-  self-updater shows the installed version vs. the latest
-  `Icehunter/dune-admin` release and one-click installs the
-  `dune-admin_windows_amd64.zip` asset over the configured
-  `DuneAdminExe` path. Writes a `<exe>.version` sidecar file so the
-  installed version persists across checks (Go binaries have no Win32
-  FileVersionInfo). New routes: `GET /api/dune-admin/check`,
-  `POST /api/dune-admin/install`. Refuses to overwrite a running EXE
-  (returns 423 Locked).
 
 ### Changed
 - Static file server now serves `.webmanifest` with
@@ -77,13 +107,6 @@ as `â€"` and the parser died. Standalone `pwsh` 7 defaults to UTF-8, so
 this never surfaced during dev / interactive testing.
 
 ### Fixed
-- Broadcasts → Server Alert: shutdown timestamp is now computed
-  host-side (`[DateTimeOffset]::UtcNow.AddMinutes(...)`) instead of
-  via `ssh ... date -d '+N minutes' +%s`. The SSH round-trip occasionally
-  returned an empty string (single-quote handling through
-  PowerShell→ssh→remote bash), which surfaced as
-  *"Could not compute shutdown timestamp on the VM."* Both clocks are
-  NTP-synced so there's no meaningful drift.
 - Re-saved 7 `.ps1` files with UTF-8 BOM so the ps2exe-hosted runtime
   parses them correctly: `PlayerGuard.ps1`, `Commands.ps1` (route),
   `Shutdown.ps1` (route), `Update.ps1` (route), `app/DuneServer.ps1`,
