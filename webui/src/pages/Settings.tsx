@@ -4,6 +4,11 @@ import { Icon } from '../components/Icon'
 import { api } from '../api/client'
 import type { ConfigResponse } from '../api/types'
 import { checkForUpdate, installUpdate, type UpdateCheck } from '../api/update'
+import {
+  checkDuneAdminUpdate,
+  installDuneAdminUpdate,
+  type DuneAdminCheck,
+} from '../api/duneAdmin'
 
 const FIELDS: { key: string; label: string; placeholder: string; help?: string; type?: 'text' | 'select' }[] = [
   { key: 'SteamPath',    label: 'Steam install path',
@@ -41,6 +46,17 @@ export function Settings() {
   const [updMsg, setUpdMsg] = useState<string | null>(null)
   const [updErr, setUpdErr] = useState<string | null>(null)
 
+  // dune-admin.exe update card state
+  const [daCheck, setDaCheck] = useState<DuneAdminCheck | null>(null)
+  const [daChecking, setDaChecking] = useState(false)
+  const [daInstalling, setDaInstalling] = useState(false)
+  const [daMsg, setDaMsg] = useState<string | null>(null)
+  const [daErr, setDaErr] = useState<string | null>(null)
+
+  // Collapsible-card state — both update cards start minimized.
+  const [updExpanded, setUpdExpanded] = useState(false)
+  const [daExpanded, setDaExpanded] = useState(false)
+
   async function onCheckUpdate() {
     setUpdChecking(true)
     setUpdErr(null)
@@ -72,6 +88,41 @@ export function Settings() {
     }
   }
 
+  async function onCheckDuneAdmin(force = true) {
+    setDaChecking(true)
+    setDaErr(null)
+    setDaMsg(null)
+    try {
+      setDaCheck(await checkDuneAdminUpdate({ force }))
+    } catch (e) {
+      setDaErr(e instanceof Error ? e.message : String(e))
+    } finally {
+      setDaChecking(false)
+    }
+  }
+
+  async function onInstallDuneAdmin() {
+    setDaInstalling(true)
+    setDaErr(null)
+    setDaMsg(null)
+    try {
+      const r = await installDuneAdminUpdate()
+      if (r.ok) {
+        setDaMsg(`dune-admin.exe replaced with v${r.toVersion}. Restart any running instance.`)
+        // Re-check so the displayed installed version updates.
+        try {
+          setDaCheck(await checkDuneAdminUpdate({ force: false }))
+        } catch { /* non-fatal */ }
+      } else {
+        setDaErr('Installer reported no action.')
+      }
+    } catch (e) {
+      setDaErr(e instanceof Error ? e.message : String(e))
+    } finally {
+      setDaInstalling(false)
+    }
+  }
+
   useEffect(() => {
     void (async () => {
       try {
@@ -82,6 +133,32 @@ export function Settings() {
         setError(e instanceof Error ? e.message : String(e))
       } finally {
         setLoading(false)
+      }
+    })()
+    // Kick off a non-forced dune-admin check on mount so the card shows
+    // current/latest immediately without requiring a button press. Uses
+    // the 1h server-side cache so it does not hit the GitHub API every
+    // time the user opens Settings.
+    void (async () => {
+      try {
+        setDaChecking(true)
+        setDaCheck(await checkDuneAdminUpdate({ force: false }))
+      } catch (e) {
+        setDaErr(e instanceof Error ? e.message : String(e))
+      } finally {
+        setDaChecking(false)
+      }
+    })()
+    // Same idea for the Dune Server self-updater — populate the collapsed
+    // header pills (current/latest) without forcing a fresh GitHub hit.
+    void (async () => {
+      try {
+        setUpdChecking(true)
+        setUpdCheck(await checkForUpdate({ force: false }))
+      } catch (e) {
+        setUpdErr(e instanceof Error ? e.message : String(e))
+      } finally {
+        setUpdChecking(false)
       }
     })()
   }, [])
@@ -143,6 +220,233 @@ export function Settings() {
         </div>
       )}
 
+      {/* --- Update check card (top, collapsible) ------------------------ */}
+      <div className="card mb-4">
+        <button
+          type="button"
+          onClick={() => setUpdExpanded(v => !v)}
+          className="w-full flex items-center justify-between px-6 py-4 text-left hover:bg-surface-2/40 rounded-lg transition-colors"
+          aria-expanded={updExpanded}
+        >
+          <div className="flex items-center gap-3">
+            <Icon name={updExpanded ? 'ChevronDown' : 'ChevronRight'} size={16} className="text-text-dim" />
+            <Icon name="Download" size={18} className="text-text-muted" />
+            <h2 className="text-lg font-semibold">Dune Server updates</h2>
+          </div>
+          <div className="flex items-center gap-2">
+            {updCheck && (
+              <>
+                <span className="pill-muted text-xs">v{updCheck.currentVersion}</span>
+                {updCheck.available && updCheck.latestVersion && (
+                  <span className="pill-warning text-xs">v{updCheck.latestVersion} available</span>
+                )}
+                {!updCheck.available && !updCheck.error && updCheck.latestVersion && (
+                  <span className="pill-success text-xs">up to date</span>
+                )}
+              </>
+            )}
+          </div>
+        </button>
+
+        {updExpanded && (
+          <div className="px-6 pb-5 space-y-3">
+            <div className="flex items-center justify-between">
+              <p className="text-sm text-text-dim">
+                Checks GitHub releases for newer versions. Installs silently — Start Menu icon keeps working, your config in <span className="font-mono">%APPDATA%\DuneServer</span> is preserved.
+              </p>
+              <button type="button" onClick={onCheckUpdate} disabled={updChecking} className="btn-secondary ml-3 shrink-0">
+                <Icon name={updChecking ? 'Loader2' : 'RefreshCw'} size={15} className={updChecking ? 'animate-spin' : ''} />
+                {updChecking ? 'Checking…' : 'Check now'}
+              </button>
+            </div>
+
+            {updCheck && (
+              <div className="text-sm border-t border-border pt-3 flex flex-wrap items-center gap-3">
+                <span className="pill-muted">Current · v{updCheck.currentVersion}</span>
+                {updCheck.latestVersion && (
+                  <span className={updCheck.available ? 'pill-warning' : 'pill-success'}>
+                    Latest · v{updCheck.latestVersion}
+                  </span>
+                )}
+                {updCheck.releaseUrl && (
+                  <a href={updCheck.releaseUrl} target="_blank" rel="noreferrer" className="text-xs underline text-text-muted hover:text-text">
+                    release notes
+                  </a>
+                )}
+                {updCheck.available && (
+                  <button
+                    type="button"
+                    onClick={onInstallUpdate}
+                    disabled={updInstalling}
+                    className="btn-primary ml-auto"
+                  >
+                    <Icon name={updInstalling ? 'Loader2' : 'Download'} size={15} className={updInstalling ? 'animate-spin' : ''} />
+                    {updInstalling ? 'Installing…' : `Update to v${updCheck.latestVersion}`}
+                  </button>
+                )}
+                {!updCheck.available && !updCheck.error && (
+                  <span className="text-xs text-text-dim ml-auto">You're on the latest version.</span>
+                )}
+                {updCheck.error && (
+                  <span className="text-xs text-danger ml-auto">Check failed: {updCheck.error}</span>
+                )}
+              </div>
+            )}
+
+            {updMsg && (
+              <div className="text-sm border-t border-border pt-3 text-success flex items-center gap-2">
+                <Icon name="CheckCircle2" size={14} /> {updMsg}
+              </div>
+            )}
+            {updErr && (
+              <div className="text-sm border-t border-border pt-3 text-danger flex items-center gap-2">
+                <Icon name="AlertCircle" size={14} /> {updErr}
+              </div>
+            )}
+          </div>
+        )}
+      </div>
+
+      {/* --- dune-admin.exe update card (collapsible) -------------------- */}
+      <div className="card mb-6">
+        <button
+          type="button"
+          onClick={() => setDaExpanded(v => !v)}
+          className="w-full flex items-center justify-between px-6 py-4 text-left hover:bg-surface-2/40 rounded-lg transition-colors"
+          aria-expanded={daExpanded}
+        >
+          <div className="flex items-center gap-3">
+            <Icon name={daExpanded ? 'ChevronDown' : 'ChevronRight'} size={16} className="text-text-dim" />
+            <Icon name="Package" size={18} className="text-text-muted" />
+            <h2 className="text-lg font-semibold">dune-admin.exe</h2>
+          </div>
+          <div className="flex items-center gap-2">
+            {daCheck && (
+              <>
+                {daCheck.installed.exists && daCheck.installed.version ? (
+                  <span className="pill-muted text-xs">v{daCheck.installed.version.replace(/^v/, '')}</span>
+                ) : daCheck.configured && daCheck.installed.exists ? (
+                  <span className="pill-muted text-xs">unknown</span>
+                ) : daCheck.configured ? (
+                  <span className="pill-warning text-xs">not installed</span>
+                ) : (
+                  <span className="pill-warning text-xs">path not set</span>
+                )}
+                {daCheck.available && daCheck.latestVersion && (
+                  <span className="pill-warning text-xs">v{daCheck.latestVersion} available</span>
+                )}
+                {!daCheck.available && !daCheck.error && daCheck.installed.exists && daCheck.latestVersion && (
+                  <span className="pill-success text-xs">up to date</span>
+                )}
+              </>
+            )}
+          </div>
+        </button>
+
+        {daExpanded && (
+          <div className="px-6 pb-5 space-y-3">
+            <div className="flex items-center justify-between">
+              <p className="text-sm text-text-dim">
+                Checks <span className="font-mono">Icehunter/dune-admin</span> releases and replaces the EXE at the <span className="font-mono">DuneAdminExe</span> path below.
+                {' '}Close any running dune-admin first.
+              </p>
+              <button
+                type="button"
+                onClick={() => onCheckDuneAdmin(true)}
+                disabled={daChecking}
+                className="btn-secondary ml-3 shrink-0"
+              >
+                <Icon name={daChecking ? 'Loader2' : 'RefreshCw'} size={15} className={daChecking ? 'animate-spin' : ''} />
+                {daChecking ? 'Checking...' : 'Check now'}
+              </button>
+            </div>
+
+            {daCheck && (
+              <div className="text-sm border-t border-border pt-3 space-y-2">
+                <div className="flex flex-wrap items-center gap-3">
+                  {daCheck.installed.exists ? (
+                    <span className="pill-muted">
+                      Current &middot; {daCheck.installed.version
+                        ? `v${daCheck.installed.version.replace(/^v/, '')}`
+                        : 'unknown'}
+                      {daCheck.installed.versionSource === 'unknown' && (
+                        <span className="ml-1 text-text-dim">(no version metadata)</span>
+                      )}
+                    </span>
+                  ) : daCheck.configured ? (
+                    <span className="pill-warning">Not installed at configured path</span>
+                  ) : (
+                    <span className="pill-warning">DuneAdminExe path not set</span>
+                  )}
+
+                  {daCheck.latestVersion && (
+                    <span className={daCheck.available ? 'pill-warning' : 'pill-success'}>
+                      Latest &middot; v{daCheck.latestVersion}
+                    </span>
+                  )}
+
+                  {daCheck.releaseUrl && (
+                    <a
+                      href={daCheck.releaseUrl}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="text-xs underline text-text-muted hover:text-text"
+                    >
+                      release notes
+                    </a>
+                  )}
+
+                  {daCheck.available && daCheck.configured && (
+                    <button
+                      type="button"
+                      onClick={onInstallDuneAdmin}
+                      disabled={daInstalling}
+                      className="btn-primary ml-auto"
+                    >
+                      <Icon
+                        name={daInstalling ? 'Loader2' : 'Download'}
+                        size={15}
+                        className={daInstalling ? 'animate-spin' : ''}
+                      />
+                      {daInstalling
+                        ? 'Installing...'
+                        : daCheck.installed.exists
+                          ? `Update to v${daCheck.latestVersion}`
+                          : `Install v${daCheck.latestVersion}`}
+                    </button>
+                  )}
+
+                  {!daCheck.available && !daCheck.error && daCheck.installed.exists && (
+                    <span className="text-xs text-text-dim ml-auto">You're on the latest version.</span>
+                  )}
+
+                  {daCheck.error && (
+                    <span className="text-xs text-danger ml-auto">Check failed: {daCheck.error}</span>
+                  )}
+                </div>
+
+                {daCheck.exePath && (
+                  <div className="text-xs text-text-dim font-mono break-all">
+                    {daCheck.exePath}
+                  </div>
+                )}
+              </div>
+            )}
+
+            {daMsg && (
+              <div className="text-sm border-t border-border pt-3 text-success flex items-center gap-2">
+                <Icon name="CheckCircle2" size={14} /> {daMsg}
+              </div>
+            )}
+            {daErr && (
+              <div className="text-sm border-t border-border pt-3 text-danger flex items-center gap-2">
+                <Icon name="AlertCircle" size={14} /> {daErr}
+              </div>
+            )}
+          </div>
+        )}
+      </div>
+
       <form onSubmit={onSubmit} className="card p-6 space-y-5">
         {FIELDS.map(f => (
           <div key={f.key}>
@@ -187,69 +491,6 @@ export function Settings() {
           </button>
         </div>
       </form>
-
-      {/* --- Update check card -------------------------------------------- */}
-      <div className="card p-6 mt-6 space-y-3">
-        <div className="flex items-center justify-between">
-          <div>
-            <h2 className="text-lg font-semibold flex items-center gap-2">
-              <Icon name="Download" size={18} className="text-text-muted" />
-              Updates
-            </h2>
-            <p className="text-sm text-text-dim mt-0.5">
-              Checks GitHub releases for newer versions. Installs silently — Start Menu icon keeps working, your config in <span className="font-mono">%APPDATA%\DuneServer</span> is preserved.
-            </p>
-          </div>
-          <button type="button" onClick={onCheckUpdate} disabled={updChecking} className="btn-secondary">
-            <Icon name={updChecking ? 'Loader2' : 'RefreshCw'} size={15} className={updChecking ? 'animate-spin' : ''} />
-            {updChecking ? 'Checking…' : 'Check now'}
-          </button>
-        </div>
-
-        {updCheck && (
-          <div className="text-sm border-t border-border pt-3 flex flex-wrap items-center gap-3">
-            <span className="pill-muted">Current · v{updCheck.currentVersion}</span>
-            {updCheck.latestVersion && (
-              <span className={updCheck.available ? 'pill-warning' : 'pill-success'}>
-                Latest · v{updCheck.latestVersion}
-              </span>
-            )}
-            {updCheck.releaseUrl && (
-              <a href={updCheck.releaseUrl} target="_blank" rel="noreferrer" className="text-xs underline text-text-muted hover:text-text">
-                release notes
-              </a>
-            )}
-            {updCheck.available && (
-              <button
-                type="button"
-                onClick={onInstallUpdate}
-                disabled={updInstalling}
-                className="btn-primary ml-auto"
-              >
-                <Icon name={updInstalling ? 'Loader2' : 'Download'} size={15} className={updInstalling ? 'animate-spin' : ''} />
-                {updInstalling ? 'Installing…' : `Update to v${updCheck.latestVersion}`}
-              </button>
-            )}
-            {!updCheck.available && !updCheck.error && (
-              <span className="text-xs text-text-dim ml-auto">You're on the latest version.</span>
-            )}
-            {updCheck.error && (
-              <span className="text-xs text-danger ml-auto">Check failed: {updCheck.error}</span>
-            )}
-          </div>
-        )}
-
-        {updMsg && (
-          <div className="text-sm border-t border-border pt-3 text-success flex items-center gap-2">
-            <Icon name="CheckCircle2" size={14} /> {updMsg}
-          </div>
-        )}
-        {updErr && (
-          <div className="text-sm border-t border-border pt-3 text-danger flex items-center gap-2">
-            <Icon name="AlertCircle" size={14} /> {updErr}
-          </div>
-        )}
-      </div>
     </>
   )
 }

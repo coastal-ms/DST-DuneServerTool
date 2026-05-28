@@ -8,11 +8,12 @@
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 [![Latest release](https://img.shields.io/github/v/release/coastal-ms/Simple-Dune-Server-Management-Tool?sort=semver)](https://github.com/coastal-ms/Simple-Dune-Server-Management-Tool/releases/latest)
 
-**v6.1.x** runs as a headless system-tray app that serves a local web portal
+**v6.1.x** runs as a single-window Windows app that serves a local web portal
 (React + Vite + Tailwind) over `127.0.0.1` and opens your default browser to
 a per-launch tokenized URL. No WPF window, no embedded browser engine — just
 a tiny PowerShell HTTP server and a static asset bundle. Same battle-tested
 SSH + Hyper-V + battlegroup automation under the hood as the legacy CLI.
+The launcher window is start-minimized; close it to exit.
 
 ![Server Health](docs/img/v6-server-health.png)
 
@@ -29,15 +30,20 @@ See [`CHANGELOG.md`](CHANGELOG.md) for the full release history and
    needs admin). The Start Menu shortcut and the launcher EXE are placed in
    `C:\Program Files\Dune Server\`.
 3. Launch from **Start Menu → Dune Server**. The launcher binds a free local
-   port (47823+), drops a tray icon, and pops your default browser at
-   `http://127.0.0.1:<port>/?t=<token>`. The first launch opens the **Setup
-   Wizard** page, which asks for your server install folder, SSH key, and
-   optional dune-admin path. All answers are saved to `%APPDATA%\DuneServer\`
-   and preserved across reinstalls.
+   port (47823+), starts minimized in the taskbar, and pops your default
+   browser at `http://127.0.0.1:<port>/?t=<token>`. The first launch opens
+   the **Setup Wizard** page, which asks for your server install folder,
+   SSH key, and optional dune-admin path. All answers are saved to
+   `%APPDATA%\DuneServer\` and preserved across reinstalls.
 
 > The launcher is single-instance — clicking the desktop shortcut again just
-> reopens the existing portal in your browser. No second tray icon, no
-> duplicate UAC prompt.
+> reopens the existing portal in your browser. No duplicate UAC prompt, no
+> second window.
+
+> 📱 **Install as App** — once the portal is open, your browser's address-bar
+> install button (or `⋮ → Install Dune Server`) turns the portal into a
+> standalone PWA window with its own taskbar/Start-menu entry. No reinstall
+> needed; uninstall from the browser at any time.
 
 ---
 
@@ -65,8 +71,7 @@ The browser window is split into a **left nav rail** (grouped under Server
 Health, Terminal, Game Data, System) and a **page surface** on the right.
 The persistent **header status bar** at the top shows live VM / battlegroup
 / port status, a **Refresh** button, and a prominent red **Shut down**
-button that gracefully stops the local `DuneServer.exe` portal process
-(same effect as the tray menu's *Quit*).
+button that gracefully stops the local `DuneServer.exe` portal process.
 
 ### 🩺 Server Health
 
@@ -108,7 +113,7 @@ order auto-saves to `%APPDATA%\DuneServer\button-order.json` and persists
 across launches. The header has a **Reset layout** button to revert to
 the default arrangement.
 
-### 🖥️ Terminal
+### 🖥️ PowerShell
 
 ![Terminal page](docs/img/v6-terminal.png)
 
@@ -119,6 +124,22 @@ WebSocket session owns a dedicated runspace; **Cancel** stops the current
 command, **Clear** wipes the buffer, **Reconnect** spins up a fresh
 runspace. Note: this is an exec model, not a real PTY — `vim` and `htop`
 won't work, but everything else does.
+
+### 📣 Broadcasts
+
+In-game notifications and shutdown countdowns pushed to every connected
+player via the battlegroup's `mq-game` RabbitMQ pod. Two cards:
+
+- **Message** — Header + Message + on-screen duration → **Send**. A pop-up
+  appears instantly on every client.
+- **Server Alert** — Type (Restart / Shutdown / Maintenance / Update) and
+  delay in minutes → **Broadcast** (confirm dialog) or **Cancel** an
+  in-flight countdown. Mirrors what the official Funcom client shows when
+  the live servers are about to come down.
+
+Transport is `ssh dune@<vm-ip>` → `sudo kubectl exec` →
+`rabbitmqctl eval`. No extra setup required beyond the SSH key you
+already configured for the rest of the portal.
 
 ### 👤 Characters
 
@@ -166,6 +187,14 @@ range 7777–7900 to be open on the host. Gated behind an
 **I UNDERSTAND** confirmation prompt — patches the battlegroup CRD
 directly. Unsupported by Funcom; you're on your own if something breaks.
 
+### 🗺️ DD Map
+
+Pan/zoom map of the Deep Desert grid with per-cell controls and live pod
+status. Click a cell to spin it up, shut it down, or refresh — same
+guardrails as the Server Health map-pod cards (player-online check on
+shutdown). Replaces the per-map startup cards that used to live on
+Server Health.
+
 ### 🔧 Settings
 
 ![Settings page](docs/img/v6-settings.png)
@@ -181,9 +210,21 @@ All the things the Setup Wizard asked you, but editable any time:
   `disabled`
 - Port-check URL template (when mode is `custom`)
 
-Changes save on-click — no restart needed. The **Updates** card on the
-same page pings the GitHub Releases API on demand and lets you install
-the latest version silently.
+Changes save on-click — no restart needed.
+
+Two collapsible cards live at the top of the page (both minimized by
+default, both auto-check on mount):
+
+- **Updates** — current vs. latest Dune Server Tool version pulled from
+  the GitHub Releases API. **Check now** to refresh, **Install** to
+  download `DuneServerSetup.exe` and silently re-run it.
+- **dune-admin.exe** — current vs. latest from
+  [Icehunter/dune-admin](https://github.com/Icehunter/dune-admin). **Check
+  now** to refresh, **Install** to download the Windows zip, extract it,
+  and swap the binary in-place. Refuses to install while dune-admin is
+  running (the file lock check returns *423 Locked*). The current version
+  is read from a sidecar `<exe>.version` file written by the installer
+  (Go binaries built with goreleaser don't embed a Win32 FileVersionInfo).
 
 ### 🧙 Setup Wizard
 
@@ -210,11 +251,11 @@ Re-runnable any time from the nav rail for a clean reset.
 | Config / state                 | `%APPDATA%\DuneServer\`                                    |
 | Setup config                   | `%APPDATA%\DuneServer\dune-server.config`                  |
 | Commands layout                | `%APPDATA%\DuneServer\button-order.json`                   |
-| Server log (tray → View log)   | `%LOCALAPPDATA%\DuneServer\dune-server.log`                |
+| Server log (taskbar console)   | `%LOCALAPPDATA%\DuneServer\dune-server.log`                |
 | Last portal URL                | `%LOCALAPPDATA%\DuneServer\last-url.txt`                   |
 | SSH key (created by Funcom)    | `%LOCALAPPDATA%\DuneAwakeningServer\sshKey`                |
 | Start Menu shortcut            | *Start → Dune Server → Dune Server*                        |
-| Tray icon                      | Notification area — right-click for Open / Copy URL / Quit |
+| Live logs                      | Click the minimized **Dune Server** entry in your taskbar  |
 
 Uninstalling removes the install dir but **never touches
 `%APPDATA%\DuneServer\`** — your config is preserved if you ever reinstall.
@@ -292,10 +333,10 @@ built-in Windows PowerShell 5.1.
 
 ### Browser didn't open / portal tab is blank
 The launcher writes the current URL to
-`%LOCALAPPDATA%\DuneServer\last-url.txt`. Right-click the tray icon →
-**Open Portal**, or **Copy URL** and paste into your browser. If the tab
-opens but shows "Invalid or missing token", close it and reopen from the
-tray — that error means you have a stale URL from a previous run.
+`%LOCALAPPDATA%\DuneServer\last-url.txt` — open it manually if the
+browser didn't pop. If the tab opens but shows "Invalid or missing
+token", close it, then close & relaunch DuneServer.exe — that error
+means you have a stale URL from a previous run.
 
 ### "The script requires administrator privileges"
 Hyper-V cmdlets need admin. The installer enables this for `DuneServer.exe`;
