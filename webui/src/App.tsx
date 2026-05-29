@@ -6,7 +6,6 @@ import { Characters } from './pages/Characters'
 import { GameConfig } from './pages/GameConfig'
 import { Database } from './pages/Database'
 import { Sietches } from './pages/Sietches'
-import { Broadcasts } from './pages/Broadcasts'
 import { DDMap } from './pages/DDMap'
 import { SetupWizard } from './pages/SetupWizard'
 import { Settings } from './pages/Settings'
@@ -22,7 +21,6 @@ export default function App() {
           <Route path="/"           element={<Dashboard />} />
           <Route path="/commands"   element={<Commands />} />
           <Route path="/terminal"   element={<TerminalPage />} />
-          <Route path="/broadcasts" element={<Broadcasts />} />
           <Route path="/characters" element={<Characters />} />
           <Route path="/gameconfig" element={<GameConfig />} />
           <Route path="/database"   element={<Database />} />
