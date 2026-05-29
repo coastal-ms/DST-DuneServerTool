@@ -7,6 +7,7 @@ import { checkForUpdate, installUpdate, type UpdateCheck } from '../api/update'
 import {
   checkDuneAdminUpdate,
   installDuneAdminUpdate,
+  runDuneAdminSetup,
   type DuneAdminCheck,
 } from '../api/duneAdmin'
 
@@ -141,6 +142,30 @@ export function Settings() {
       setDaErr(e instanceof Error ? e.message : String(e))
     } finally {
       setDaInstalling(false)
+    }
+  }
+
+  const [daSettingUp, setDaSettingUp] = useState(false)
+  async function onRunDuneAdminSetup() {
+    setDaSettingUp(true)
+    setDaErr(null)
+    setDaMsg(null)
+    try {
+      const r = await runDuneAdminSetup()
+      if (r.ok) {
+        const installedPart = r.didInstall ? 'Downloaded + installed dune-admin.exe, then ' : ''
+        setDaMsg(`${installedPart}opened the dune-admin setup wizard in a console window. Answer the prompts there — dune-admin will auto-launch when the wizard finishes.`)
+        // Re-check so the UI shows the new install + config.yaml state.
+        try {
+          setDaCheck(await checkDuneAdminUpdate({ force: false }))
+        } catch { /* non-fatal */ }
+      } else {
+        setDaErr('Setup wizard could not be launched.')
+      }
+    } catch (e) {
+      setDaErr(e instanceof Error ? e.message : String(e))
+    } finally {
+      setDaSettingUp(false)
     }
   }
 
@@ -451,6 +476,49 @@ export function Settings() {
                 {daCheck.exePath && (
                   <div className="text-xs text-text-dim font-mono break-all">
                     {daCheck.exePath}
+                  </div>
+                )}
+
+                {/* v6.1.24: First-time setup — kicks off the interactive
+                    dune-admin -setup wizard in a console window. If the
+                    binary isn't installed yet the route downloads it first.
+                    Shown whenever the binary is missing OR config.yaml has
+                    never been written (i.e. wizard has never been completed). */}
+                {daCheck.configured && (!daCheck.installed.exists || !daCheck.configYamlExists) && (
+                  <div className="pt-3 border-t border-border space-y-2">
+                    <div className="flex items-center gap-2">
+                      <button
+                        type="button"
+                        onClick={onRunDuneAdminSetup}
+                        disabled={daSettingUp}
+                        className="btn-primary"
+                      >
+                        <Icon
+                          name={daSettingUp ? 'Loader2' : 'Wand2'}
+                          size={15}
+                          className={daSettingUp ? 'animate-spin' : ''}
+                        />
+                        {daSettingUp
+                          ? 'Launching wizard...'
+                          : !daCheck.installed.exists
+                            ? 'Install + run setup wizard'
+                            : 'Run setup wizard'}
+                      </button>
+                      <span className="text-xs text-text-dim">
+                        {!daCheck.installed.exists
+                          ? 'Downloads dune-admin.exe, then opens the interactive setup wizard in a new console window.'
+                          : 'Opens the interactive setup wizard in a new console window.'}
+                      </span>
+                    </div>
+                    {daCheck.configYamlPath && (
+                      <div className="text-xs text-text-dim">
+                        Config will be written to{' '}
+                        <span className="font-mono">{daCheck.configYamlPath}</span>
+                        {daCheck.configYamlExists && (
+                          <span className="ml-1 text-success">(already exists — running the wizard overwrites it)</span>
+                        )}
+                      </div>
+                    )}
                   </div>
                 )}
 

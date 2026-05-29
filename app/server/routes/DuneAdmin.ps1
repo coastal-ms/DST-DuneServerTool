@@ -154,6 +154,12 @@ function Get-DuneAdminLatestRelease {
     }
 }
 
+function Get-DuneAdminConfigYamlPath {
+    # dune-admin -setup writes ~/.dune-admin/config.yaml. On Windows that
+    # resolves to %USERPROFILE%\.dune-admin\config.yaml.
+    return Join-Path $env:USERPROFILE '.dune-admin\config.yaml'
+}
+
 function Test-DuneAdminFileLocked {
     param([string]$Path)
     if (-not (Test-Path -LiteralPath $Path)) { return $false }
@@ -272,6 +278,8 @@ Register-DuneRoute -Method GET -Path '/api/dune-admin/check' -Handler {
                 available        = $false
                 checkedAt        = (Get-Date).ToString('o')
                 error            = $rel.error
+                configYamlPath   = Get-DuneAdminConfigYamlPath
+                configYamlExists = (Test-Path -LiteralPath (Get-DuneAdminConfigYamlPath))
             }
             return
         }
@@ -301,6 +309,8 @@ Register-DuneRoute -Method GET -Path '/api/dune-admin/check' -Handler {
             assetName      = $rel.assetName
             assetSize      = $rel.assetSize
             checkedAt      = (Get-Date).ToString('o')
+            configYamlPath = Get-DuneAdminConfigYamlPath
+            configYamlExists = (Test-Path -LiteralPath (Get-DuneAdminConfigYamlPath))
         }
     } catch {
         Write-DuneError -Response $res -Status 500 -Message $_.Exception.Message
@@ -513,6 +523,152 @@ exit `$LASTEXITCODE
             sourceSync     = $sourceSync
             autoRebuild    = $autoRebuild
             note           = 'dune-admin.exe replaced. Restart any open instance.'
+        }
+    } catch {
+        Write-DuneError -Response $res -Status 500 -Message $_.Exception.Message
+    }
+}
+
+# POST /api/dune-admin/setup - one-button first-run setup wizard launcher
+#
+# What it does, in order:
+#   1. If DuneAdminExe path is not configured -> 400 (user must set the path
+#      in Settings first so we know where to put dune-admin.exe).
+#   2. If dune-admin.exe does not exist at that path -> download + extract
+#      the latest Windows release into the parent dir (same as /install does,
+#      minus the source-tarball sync + auto-rebuild).
+#   3. Spawn a VISIBLE cmd.exe console window in the dune-admin folder that
+#      runs `dune-admin.exe -setup` interactively. The user answers the
+#      wizard's prompts (control plane / SSH / DB / broker / paths) — every
+#      user's deployment is different, so we never pre-fill anything.
+#   4. When the wizard exits with success (errorlevel 0) AND a config.yaml
+#      now exists at %USERPROFILE%\.dune-admin\config.yaml, the wrapper
+#      auto-launches dune-admin.exe in a separate visible window so the
+#      server starts listening on :8080 immediately.
+#   5. The setup window stays open after exit ("Press any key to close")
+#      so the user can see any wizard errors before the window closes.
+#
+# Returns 200 immediately as soon as the console is spawned — the wizard
+# itself runs asynchronously and the user interacts with it directly.
+Register-DuneRoute -Method POST -Path '/api/dune-admin/setup' -Handler {
+    param($req, $res, $routeParams, $body)
+    try {
+        $exePath = Get-DuneAdminConfiguredPath
+        if (-not $exePath) {
+            Write-DuneError -Response $res -Status 400 -Message 'DuneAdminExe path is not set in Settings. Pick a location for dune-admin.exe first (e.g. C:\Tools\dune-admin\dune-admin.exe), Save, then click Run setup wizard again.'
+            return
+        }
+        $targetDir = Split-Path -Parent $exePath
+        if (-not $targetDir) {
+            Write-DuneError -Response $res -Status 400 -Message "Cannot derive a parent directory from '$exePath'."
+            return
+        }
+        if (-not (Test-Path -LiteralPath $targetDir)) {
+            New-Item -ItemType Directory -Path $targetDir -Force | Out-Null
+        }
+
+        # --- Step 1: install the binary if it isn't there yet -----------------
+        $didInstall = $false
+        if (-not (Test-Path -LiteralPath $exePath)) {
+            $rel = Get-DuneAdminLatestRelease
+            if (-not $rel -or -not $rel.assetUrl) {
+                Write-DuneError -Response $res -Status 503 -Message 'No Windows zip asset available on the latest dune-admin release.'
+                return
+            }
+            $tmpRoot = Join-Path $env:TEMP 'DuneAdminUpdate'
+            if (-not (Test-Path -LiteralPath $tmpRoot)) { New-Item -ItemType Directory -Path $tmpRoot -Force | Out-Null }
+            $safeTag = ($rel.tag -replace '[^A-Za-z0-9._-]','_')
+            $zipPath = Join-Path $tmpRoot ("dune-admin-$safeTag.zip")
+            $extract = Join-Path $tmpRoot ("dune-admin-$safeTag")
+
+            $need = $true
+            if (Test-Path -LiteralPath $zipPath) {
+                $existing = (Get-Item -LiteralPath $zipPath).Length
+                if ($rel.assetSize -gt 0 -and $existing -eq $rel.assetSize) { $need = $false }
+            }
+            if ($need) {
+                [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
+                Invoke-WebRequest -Uri $rel.assetUrl -Headers @{ 'User-Agent' = $script:DuneAdminUA } -OutFile $zipPath -TimeoutSec 300 -UseBasicParsing
+            }
+            if (Test-Path -LiteralPath $extract) { Remove-Item -LiteralPath $extract -Recurse -Force -ErrorAction SilentlyContinue }
+            New-Item -ItemType Directory -Path $extract -Force | Out-Null
+            Expand-Archive -LiteralPath $zipPath -DestinationPath $extract -Force
+
+            $srcExe = Get-ChildItem -Path $extract -Recurse -Filter 'dune-admin.exe' -File -ErrorAction SilentlyContinue | Select-Object -First 1
+            if (-not $srcExe) {
+                Write-DuneError -Response $res -Status 500 -Message "Extracted archive does not contain dune-admin.exe (looked under $extract)."
+                return
+            }
+            $srcDir = $srcExe.Directory.FullName
+            Get-ChildItem -Path $srcDir -File | ForEach-Object {
+                Copy-Item -LiteralPath $_.FullName -Destination (Join-Path $targetDir $_.Name) -Force
+            }
+            Save-DuneAdminVersionSidecar -ExePath $exePath -Tag $rel.tag
+            $didInstall = $true
+        }
+
+        # --- Step 2: spawn a visible console for the interactive wizard ------
+        # cmd.exe wrapper lets us chain (a) run setup, (b) auto-launch
+        # dune-admin if config.yaml was created, (c) pause so the user
+        # can read any errors before the window closes.
+        $configYaml = Get-DuneAdminConfigYamlPath
+        $cmdBody = @"
+@echo off
+title dune-admin setup wizard
+echo ============================================================
+echo   dune-admin first-time setup wizard
+echo ============================================================
+echo.
+echo Every user's deployment is different — you'll be asked for:
+echo   * Control plane: amp / kubectl / docker / local
+echo   * SSH host, user, key path (for kubectl over SSH)
+echo   * DB host, port, user, password, name, schema
+echo   * Broker addresses (mq-game / mq-admin)
+echo   * Backup directory
+echo.
+echo Config will be written to:
+echo   $configYaml
+echo.
+echo ------------------------------------------------------------
+echo.
+"$exePath" -setup
+set RC=%ERRORLEVEL%
+echo.
+echo ------------------------------------------------------------
+if "%RC%"=="0" (
+    if exist "$configYaml" (
+        echo Setup complete. Launching dune-admin in a new window...
+        start "dune-admin" "$exePath"
+        timeout /t 3 >nul
+        echo dune-admin is now running on http://localhost:8080
+        echo You can close this window.
+    ) else (
+        echo Setup wizard exited cleanly but no config.yaml was written.
+        echo Expected location: $configYaml
+    )
+) else (
+    echo Setup wizard exited with error code %RC%.
+    echo Review the messages above for what went wrong.
+)
+echo.
+pause
+"@
+        $cmdFile = Join-Path $env:TEMP ('dune-admin-setup-' + (Get-Date -Format 'yyyyMMdd-HHmmss') + '.bat')
+        Set-Content -LiteralPath $cmdFile -Value $cmdBody -Encoding ASCII
+
+        # Launch the wrapper in a visible console window. We do NOT redirect
+        # stdio so the user can interact with the wizard directly.
+        Start-Process -FilePath 'cmd.exe' -ArgumentList '/c', "`"$cmdFile`"" -WorkingDirectory $targetDir | Out-Null
+
+        Write-DuneJson -Response $res -Body @{
+            ok               = $true
+            exePath          = $exePath
+            targetDir        = $targetDir
+            didInstall       = $didInstall
+            configYamlPath   = $configYaml
+            configYamlExists = (Test-Path -LiteralPath $configYaml)
+            wizardScript     = $cmdFile
+            note             = 'A console window opened with the dune-admin setup wizard. Answer the prompts there; dune-admin will auto-launch when the wizard finishes.'
         }
     } catch {
         Write-DuneError -Response $res -Status 500 -Message $_.Exception.Message

@@ -14,6 +14,39 @@ here cover everything those tags shipped.
 ## [Unreleased]
 
 
+## [6.1.24] - 2026-05-29
+
+Patch: **One-button dune-admin first-run setup wizard.**
+
+### Added
+- **New "Install + run setup wizard" button in Settings → dune-admin update card.**
+  Aimed at users who've never set up dune-admin before. Click once, and the
+  Dune Server Tool will:
+  1. Download + extract the latest `dune-admin_windows_amd64.zip` into the
+     `DuneAdminExe` parent folder (if the binary isn't already there).
+  2. Open a **visible cmd.exe console window** running
+     `dune-admin.exe -setup` — the interactive wizard that walks through
+     control-plane choice (amp / kubectl / docker / local), SSH host / user
+     / key, DB credentials, broker addresses, and backup directory.
+  3. When the wizard exits successfully AND
+     `%USERPROFILE%\.dune-admin\config.yaml` was written, auto-launch
+     `dune-admin.exe` in a separate window so the server starts listening
+     on `http://localhost:8080` immediately.
+  4. Leave the setup window open ("Press any key to close") so wizard
+     errors stay visible.
+
+  The button is shown whenever the binary is missing OR `config.yaml`
+  doesn't exist — once both are in place it disappears and the regular
+  Reinstall / Update flow takes over. We deliberately do NOT pre-fill the
+  wizard: every user's deployment is different (their VM IP, SSH key path,
+  BG namespace, DB password, broker addresses are unique to their setup).
+
+  New API route: `POST /api/dune-admin/setup`. The existing
+  `GET /api/dune-admin/check` response now also returns `configYamlPath`
+  and `configYamlExists` so the frontend can hide the button after a
+  successful first-run setup.
+
+
 ## [6.1.23] - 2026-05-29
 
 Patch: **Fix silent startup crash on Restricted-policy / MOTW-tagged machines, plus preflight checker.**

@@ -27,6 +27,8 @@ export interface DuneAdminCheck {
   assetSize?: number
   checkedAt: string
   error?: string
+  configYamlPath?: string
+  configYamlExists?: boolean
 }
 
 export interface DuneAdminInstallResult {
@@ -41,6 +43,17 @@ export interface DuneAdminInstallResult {
   note?: string
 }
 
+export interface DuneAdminSetupResult {
+  ok: boolean
+  exePath?: string
+  targetDir?: string
+  didInstall?: boolean
+  configYamlPath?: string
+  configYamlExists?: boolean
+  wizardScript?: string
+  note?: string
+}
+
 export function checkDuneAdminUpdate(opts: { force?: boolean } = {}) {
   const qs = opts.force ? '?force=1' : ''
   return api<DuneAdminCheck>(`/api/dune-admin/check${qs}`)
@@ -48,4 +61,8 @@ export function checkDuneAdminUpdate(opts: { force?: boolean } = {}) {
 
 export function installDuneAdminUpdate() {
   return api<DuneAdminInstallResult>(`/api/dune-admin/install`, { method: 'POST', body: '{}' })
+}
+
+export function runDuneAdminSetup() {
+  return api<DuneAdminSetupResult>(`/api/dune-admin/setup`, { method: 'POST', body: '{}' })
 }
