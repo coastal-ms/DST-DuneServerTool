@@ -5,7 +5,6 @@ import { useStatus } from '../hooks/useStatus'
 import { api } from '../api/client'
 import { getDbInfo, runSql } from '../api/database'
 import type { DbInfo, SqlResult, SqlOkResult, Command, CommandsResponse } from '../api/types'
-import { SanePricingCard } from './database/SanePricingCard'
 import Editor, { type OnMount } from '@monaco-editor/react'
 
 type CmdLaunch = { ok: boolean; name: string; pid?: number; mode: string }
@@ -222,9 +221,6 @@ export function Database() {
           onClick={() => void runMaint('import')}
         />
       </div>
-
-      {/* dune-admin sane-pricing patch installer */}
-      <SanePricingCard onToast={showToast} />
 
       {/* SQL editor card */}
       <div className="card overflow-hidden mb-4">

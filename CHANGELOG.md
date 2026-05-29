@@ -14,6 +14,59 @@ here cover everything those tags shipped.
 ## [Unreleased]
 
 
+## [6.1.22] - 2026-05-28
+
+Patch: **Fold sane-pricing into the dune-admin updater (with opt-in checkbox).**
+
+### Added
+- **Auto-apply Coastal's sane-pricing patch on every dune-admin update.**
+  New checkbox in Settings → dune-admin update card:
+  *"Keep Coastal's sane-pricing patch applied after each update."* When
+  checked, every dune-admin Install/Update also pulls the matching
+  source tarball, overlays it onto the user's dune-admin source dir,
+  then rebuilds `dune-admin.exe` locally with the 100k-cap pricing patch.
+  Uncheck and click Install again to revert to the pristine upstream
+  binary. Persists as `AutoApplyPricingPatch=true|false` in
+  `dune-server.config`.
+- **dune-admin updater now syncs source.** Every Install action now
+  downloads two assets from the GitHub release: the Windows binary zip
+  (as before) AND the `*_source.tar.gz` tarball. The tarball is
+  extracted with `tar.exe` and overlaid onto the source repo via
+  `robocopy`, with `.git/`, the running `dune-admin.exe`, sidecar
+  versions, and any "market bot cache/" directory excluded. This keeps
+  the user's source in lockstep with the running binary version, so the
+  patch always rebuilds against the source it was generated against.
+- **Reinstall anytime.** The Install button in Settings is no longer
+  gated on `available=true` from the release check. The user can
+  reinstall the current version at will (button reads "Reinstall vX.Y.Z"
+  when already on latest). This is what lets the "uncheck and reupdate
+  to revert" flow work without waiting for a new release.
+- **Regenerated `0001-sane-pricing-100k-cap.patch` for dune-admin
+  v0.13.0.** Phase 0 refactor (Icehunter/dune-admin#52) changed the
+  context lines around the patched regions, so the old patch refused
+  to apply on fresh upstream. The new patch is functionally identical
+  (same numerical targets, same 100k hard cap, same tier-driven model)
+  and was verified by `go vet` + `go test ./internal/marketbot/...`
+  against current upstream.
+
+### Removed
+- **Manual sane-pricing card on the Database page** (`SanePricingCard.tsx`,
+  `duneAdminPricing.ts`, `DuneAdminPricingPatch.ps1` routes). Replaced
+  entirely by the auto-apply checkbox above — one source of truth, one
+  knob, no separate apply/restore dance.
+
+### Fixed
+- **Build deadlock + handle-leak in build-patched.ps1.** The previous
+  apply path redirected the child build script's stdout/stderr through
+  .NET pipes, but the script ends by launching the rebuilt dune-admin
+  (a long-lived server) which inherited those handles and held them
+  open forever. The auto-rebuild path in the updater now uses
+  file-based logging (no .NET pipe redirection) plus a 15-minute hard
+  timeout. `build-patched.ps1` itself was also switched from
+  `cmd /c start "" "$exe"` to `Start-Process $exe` for the final
+  relaunch, so no inherited handles ever leak.
+
+
 ## [6.1.21] - 2026-05-28
 
 Patch: **Hide the Broadcasts feature from the UI.**

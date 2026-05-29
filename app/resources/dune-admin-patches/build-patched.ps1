@@ -144,9 +144,12 @@ try {
 
     if ($Restart -or $stoppedRunning) {
         Step "Relaunching dune-admin (visible console)"
-        # cmd /c start needs the path quoted because "GitHub Work" contains a space.
-        # The empty "" before the path is the window title.
-        & cmd /c "start `"`" `"$exePath`""
+        # Use Start-Process (not `cmd /c start`) so the launched dune-admin
+        # does NOT inherit any redirected stdout/stderr handles from our
+        # parent. cmd's `start` historically leaked inherited handles, which
+        # caused our Dune Server Tool's HTTP apply call to hang forever
+        # waiting for pipes to close (v6.1.22 fix).
+        Start-Process -FilePath $exePath -WorkingDirectory $repoRoot -WindowStyle Normal
         Info "dune-admin started from $exePath"
     } else {
         Info "Build complete. Re-run with -Restart to relaunch, or start dune-admin manually."

@@ -57,6 +57,27 @@ export function Settings() {
   const [updExpanded, setUpdExpanded] = useState(false)
   const [daExpanded, setDaExpanded] = useState(false)
 
+  // Auto-apply pricing patch checkbox — saved to dune-server.config as
+  // AutoApplyPricingPatch ('true'/'false'). Persisted immediately on toggle
+  // so the user doesn't have to remember to hit Save below.
+  const autoApply = (values.AutoApplyPricingPatch ?? '').toLowerCase() === 'true'
+  const [autoApplySaving, setAutoApplySaving] = useState(false)
+  async function onToggleAutoApply(next: boolean) {
+    setAutoApplySaving(true)
+    setDaErr(null)
+    try {
+      const out = await api<{ ok: boolean; complete: boolean; values: Record<string, string> }>(
+        '/api/config',
+        { method: 'PUT', body: JSON.stringify({ values: { ...values, AutoApplyPricingPatch: next ? 'true' : 'false' } }) },
+      )
+      setValues(out.values)
+    } catch (e) {
+      setDaErr(e instanceof Error ? e.message : String(e))
+    } finally {
+      setAutoApplySaving(false)
+    }
+  }
+
   async function onCheckUpdate() {
     setUpdChecking(true)
     setUpdErr(null)
@@ -396,7 +417,7 @@ export function Settings() {
                     </a>
                   )}
 
-                  {daCheck.available && daCheck.configured && (
+                  {daCheck.configured && (
                     <button
                       type="button"
                       onClick={onInstallDuneAdmin}
@@ -410,14 +431,16 @@ export function Settings() {
                       />
                       {daInstalling
                         ? 'Installing...'
-                        : daCheck.installed.exists
-                          ? `Update to v${daCheck.latestVersion}`
-                          : `Install v${daCheck.latestVersion}`}
+                        : !daCheck.installed.exists
+                          ? `Install${daCheck.latestVersion ? ` v${daCheck.latestVersion}` : ''}`
+                          : daCheck.available
+                            ? `Update to v${daCheck.latestVersion}`
+                            : `Reinstall${daCheck.latestVersion ? ` v${daCheck.latestVersion}` : ''}`}
                     </button>
                   )}
 
                   {!daCheck.available && !daCheck.error && daCheck.installed.exists && (
-                    <span className="text-xs text-text-dim ml-auto">You're on the latest version.</span>
+                    <span className="text-xs text-text-dim">You're on the latest version.</span>
                   )}
 
                   {daCheck.error && (
@@ -430,6 +453,34 @@ export function Settings() {
                     {daCheck.exePath}
                   </div>
                 )}
+
+                {/* Auto-apply Coastal's sane-pricing patch on every update.
+                    When checked, after each Install the tool re-downloads the
+                    source tarball alongside the binary and rebuilds dune-admin
+                    locally with the patch on top. Uncheck and click Install
+                    again to revert to upstream. */}
+                <label className="flex items-start gap-3 pt-3 border-t border-border cursor-pointer">
+                  <input
+                    type="checkbox"
+                    className="mt-0.5 h-4 w-4 accent-accent"
+                    checked={autoApply}
+                    disabled={autoApplySaving}
+                    onChange={e => void onToggleAutoApply(e.target.checked)}
+                  />
+                  <span className="text-xs">
+                    <span className="font-medium text-text">
+                      Keep Coastal's sane-pricing patch applied after each update
+                    </span>
+                    <span className="block text-text-dim mt-0.5">
+                      When checked, the tool also downloads the source tarball with each
+                      release and rebuilds <span className="font-mono">dune-admin.exe</span> locally
+                      with the 100k-cap pricing patch. Uncheck and click Install again to revert
+                      to the upstream binary. Requires <span className="font-mono">go</span> and
+                      {' '}<span className="font-mono">git</span> on PATH.
+                    </span>
+                  </span>
+                  {autoApplySaving && <Icon name="Loader2" size={14} className="animate-spin text-text-dim" />}
+                </label>
               </div>
             )}
 
