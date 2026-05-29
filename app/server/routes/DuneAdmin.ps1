@@ -124,16 +124,25 @@ function Get-DuneAdminLatestRelease {
             $asset = $rel.assets | Where-Object { $_.name -match '(?i)windows.*\.zip$' } | Select-Object -First 1
         }
 
+        # GoReleaser also publishes a "<repo>_<version>_source.tar.gz" asset
+        # containing the Go source tree. We use this to keep the user's source
+        # repo in sync with the running binary so the sane-pricing patch can
+        # be rebuilt on top after each upgrade.
+        $srcAsset = $rel.assets | Where-Object { $_.name -match '(?i)_source\.tar\.gz$' } | Select-Object -First 1
+
         $script:DuneAdminCache = [pscustomobject]@{
-            fetchedAt    = $now
-            tag          = [string]$rel.tag_name
-            name         = [string]$rel.name
-            htmlUrl      = [string]$rel.html_url
-            publishedAt  = [string]$rel.published_at
-            releaseNotes = [string]$rel.body
-            assetName    = if ($asset) { [string]$asset.name } else { $null }
-            assetUrl     = if ($asset) { [string]$asset.browser_download_url } else { $null }
-            assetSize    = if ($asset) { [int64]$asset.size } else { 0 }
+            fetchedAt     = $now
+            tag           = [string]$rel.tag_name
+            name          = [string]$rel.name
+            htmlUrl       = [string]$rel.html_url
+            publishedAt   = [string]$rel.published_at
+            releaseNotes  = [string]$rel.body
+            assetName     = if ($asset) { [string]$asset.name } else { $null }
+            assetUrl      = if ($asset) { [string]$asset.browser_download_url } else { $null }
+            assetSize     = if ($asset) { [int64]$asset.size } else { 0 }
+            sourceName    = if ($srcAsset) { [string]$srcAsset.name } else { $null }
+            sourceUrl     = if ($srcAsset) { [string]$srcAsset.browser_download_url } else { $null }
+            sourceSize    = if ($srcAsset) { [int64]$srcAsset.size } else { 0 }
         }
         return $script:DuneAdminCache
     } catch {
@@ -155,6 +164,90 @@ function Test-DuneAdminFileLocked {
     } catch {
         return $true
     }
+}
+
+# Sync the source tarball into the user's dune-admin source dir. GoReleaser
+# tarballs contain a single top-level directory (e.g. "dune-admin-0.14.0/").
+# We extract via the Windows-bundled `tar` (10+), locate the inner directory
+# by hunting for go.mod, then overlay all files onto $TargetDir without
+# touching .git/, dune-admin.exe, .upstream/.old backups, the sane-pricing
+# marker, or anything under scripts/patches/ (where our staged patch lives).
+function Sync-DuneAdminSourceTarball {
+    param(
+        [string]$ZipPath,    # actually a .tar.gz despite the param name
+        [string]$ExtractDir, # fresh temp dir for the extract
+        [string]$TargetDir   # the user's dune-admin source repo dir
+    )
+    $result = [pscustomobject]@{
+        ok          = $false
+        copiedCount = 0
+        sourceRoot  = $null
+        skipped     = @()
+        error       = $null
+    }
+    if (-not (Test-Path -LiteralPath $ZipPath)) {
+        $result.error = "Source tarball missing: $ZipPath"
+        return $result
+    }
+    try {
+        if (Test-Path -LiteralPath $ExtractDir) {
+            Remove-Item -LiteralPath $ExtractDir -Recurse -Force -ErrorAction SilentlyContinue
+        }
+        New-Item -ItemType Directory -Path $ExtractDir -Force | Out-Null
+
+        # Windows 10+ ships tar.exe. Use it directly.
+        $tarExe = (Get-Command tar.exe -ErrorAction SilentlyContinue).Source
+        if (-not $tarExe) {
+            $result.error = 'tar.exe not found on PATH (Windows 10+ ships it). Cannot extract source tarball.'
+            return $result
+        }
+        $p = Start-Process -FilePath $tarExe -ArgumentList @('-xzf', $ZipPath, '-C', $ExtractDir) -NoNewWindow -Wait -PassThru
+        if ($p.ExitCode -ne 0) {
+            $result.error = "tar -xzf exited with code $($p.ExitCode)"
+            return $result
+        }
+
+        # Find the source root by locating go.mod.
+        $goMod = Get-ChildItem -Path $ExtractDir -Recurse -Filter 'go.mod' -File -ErrorAction SilentlyContinue |
+                 Select-Object -First 1
+        if (-not $goMod) {
+            $result.error = "go.mod not found in extracted tarball under $ExtractDir"
+            return $result
+        }
+        $srcRoot = $goMod.Directory.FullName
+        $result.sourceRoot = $srcRoot
+
+        # Skip-list: never overlay these.
+        $skip = @('.git', 'dune-admin.exe', 'dune-admin.exe.old', 'dune-admin.exe.upstream',
+                  'dune-admin.exe.version', 'dune-admin.exe.coastal-sane-pricing',
+                  'market bot cache')
+
+        # Use robocopy for the overlay — it handles long paths, copies only
+        # changed files, preserves attributes. /XD excludes whole directories
+        # (.git/, market bot cache/), /XF excludes files by name.
+        $robocopyArgs = @($srcRoot, $TargetDir, '/E', '/NFL', '/NDL', '/NJH', '/NJS', '/NP', '/R:1', '/W:1')
+        foreach ($name in $skip) {
+            if ($name -match '\.') {
+                $robocopyArgs += @('/XF', $name)
+            } else {
+                $robocopyArgs += @('/XD', (Join-Path $TargetDir $name))
+            }
+        }
+        & robocopy @robocopyArgs | Out-Null
+        # robocopy exit codes 0-7 indicate success; >=8 indicates failure.
+        if ($LASTEXITCODE -ge 8) {
+            $result.error = "robocopy exited with code $LASTEXITCODE"
+            return $result
+        }
+
+        # Best-effort: count copied files.
+        $result.copiedCount = (Get-ChildItem -Path $srcRoot -Recurse -File -ErrorAction SilentlyContinue).Count
+        $result.skipped     = $skip
+        $result.ok          = $true
+    } catch {
+        $result.error = $_.Exception.Message
+    }
+    return $result
 }
 
 # --- Routes ------------------------------------------------------------------
@@ -310,6 +403,104 @@ Register-DuneRoute -Method POST -Path '/api/dune-admin/install' -Handler {
         # Write sidecar so next /check returns the real version.
         Save-DuneAdminVersionSidecar -ExePath $exePath -Tag $rel.tag
 
+        # --- Sync source tarball + auto-rebuild patched binary (v6.1.22) ---
+        # GoReleaser publishes a source tarball alongside the windows zip. We
+        # extract it over the user's dune-admin source dir so the next time
+        # they apply the sane-pricing patch (or other future patches), the
+        # source matches the running binary version. If the patch was already
+        # applied (marker file present), we automatically re-run the patched
+        # build so the upgrade stays patched without a second click.
+        $sourceSync     = $null
+        $autoRebuild    = $null
+        if ($rel.sourceUrl) {
+            $srcZip = Join-Path $tmpRoot ("dune-admin-$safeTag-src.tar.gz")
+            $srcExtract = Join-Path $tmpRoot ("dune-admin-$safeTag-src")
+            $needSrc = $true
+            if (Test-Path -LiteralPath $srcZip) {
+                $existingSrc = (Get-Item -LiteralPath $srcZip).Length
+                if ($rel.sourceSize -gt 0 -and $existingSrc -eq $rel.sourceSize) { $needSrc = $false }
+            }
+            if ($needSrc) {
+                try {
+                    [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
+                    Invoke-WebRequest -Uri $rel.sourceUrl -Headers @{ 'User-Agent' = $script:DuneAdminUA } -OutFile $srcZip -TimeoutSec 300 -UseBasicParsing
+                } catch {
+                    $sourceSync = [pscustomobject]@{ ok = $false; error = "Source download failed: $($_.Exception.Message)" }
+                }
+            }
+            if (-not $sourceSync -and (Test-Path -LiteralPath $srcZip)) {
+                $sourceSync = Sync-DuneAdminSourceTarball -ZipPath $srcZip -ExtractDir $srcExtract -TargetDir $targetDir
+            }
+
+            # If AutoApplyPricingPatch is enabled in settings, automatically
+            # re-run build-patched.ps1 against the freshly-synced source so the
+            # rebuilt binary keeps Coastal's pricing patch on top after every
+            # upgrade. No marker files — the setting is the source of truth.
+            $autoApply = $false
+            try {
+                $cfg = Read-DuneConfig
+                if ($cfg -and $cfg.Contains('AutoApplyPricingPatch')) {
+                    $val = "$($cfg['AutoApplyPricingPatch'])".Trim().ToLower()
+                    $autoApply = ($val -eq 'true' -or $val -eq '1' -or $val -eq 'yes' -or $val -eq 'on')
+                }
+            } catch { }
+            if ($sourceSync -and $sourceSync.ok -and $autoApply) {
+                try {
+                    # Stage the patch + build script the same way the apply
+                    # route does, then invoke build-patched.ps1 via a wrapper
+                    # script that pipes its own output (avoids the pipe-
+                    # deadlock fixed in v6.1.22).
+                    $resDir   = $null
+                    foreach ($p in @(
+                        (Join-Path $script:AppDir 'resources\dune-admin-patches'),
+                        (Join-Path $script:AppDir 'app\resources\dune-admin-patches'),
+                        (Join-Path (Split-Path -Parent $script:AppDir) 'resources\dune-admin-patches'),
+                        (Join-Path (Split-Path -Parent $script:AppDir) 'app\resources\dune-admin-patches')
+                    )) { if (Test-Path -LiteralPath $p) { $resDir = $p; break } }
+                    if ($resDir) {
+                        $userPatchDir = Join-Path $targetDir 'scripts\patches'
+                        $userScripts  = Join-Path $targetDir 'scripts'
+                        if (-not (Test-Path -LiteralPath $userPatchDir)) { New-Item -ItemType Directory -Path $userPatchDir -Force | Out-Null }
+                        if (-not (Test-Path -LiteralPath $userScripts))  { New-Item -ItemType Directory -Path $userScripts -Force | Out-Null }
+                        Copy-Item -LiteralPath (Join-Path $resDir '0001-sane-pricing-100k-cap.patch') -Destination $userPatchDir -Force -ErrorAction SilentlyContinue
+                        Copy-Item -LiteralPath (Join-Path $resDir 'build-patched.ps1') -Destination $userScripts -Force -ErrorAction SilentlyContinue
+
+                        $stamp   = Get-Date -Format 'yyyyMMdd-HHmmss'
+                        $logFile = Join-Path $env:TEMP "dune-admin-pricing-rebuild-$stamp.log"
+                        $wrapper = Join-Path $env:TEMP "dune-admin-pricing-rebuild-wrap-$stamp.ps1"
+                        $buildScript = Join-Path $userScripts 'build-patched.ps1'
+                        $wrapperBody = @"
+`$ErrorActionPreference = 'Continue'
+Set-Location -LiteralPath '$targetDir'
+& '$buildScript' -SkipTests *> '$logFile'
+exit `$LASTEXITCODE
+"@
+                        Set-Content -LiteralPath $wrapper -Value $wrapperBody -Encoding UTF8
+
+                        $psi = New-Object System.Diagnostics.ProcessStartInfo
+                        $psi.FileName               = 'pwsh'
+                        $psi.Arguments              = "-NoProfile -ExecutionPolicy Bypass -File `"$wrapper`""
+                        $psi.WorkingDirectory       = $targetDir
+                        $psi.UseShellExecute        = $false
+                        $psi.CreateNoWindow         = $true
+                        $bp = [System.Diagnostics.Process]::Start($psi)
+                        if ($bp.WaitForExit(15 * 60 * 1000)) {
+                            $rebuildOut = if (Test-Path -LiteralPath $logFile) { Get-Content -LiteralPath $logFile -Raw } else { '' }
+                            $autoRebuild = [pscustomobject]@{ ok = ($bp.ExitCode -eq 0); exitCode = $bp.ExitCode; logFile = $logFile; output = $rebuildOut }
+                        } else {
+                            try { $bp.Kill($true) } catch { }
+                            $autoRebuild = [pscustomobject]@{ ok = $false; error = 'Rebuild timed out after 15 minutes'; logFile = $logFile }
+                        }
+                        try { Remove-Item -LiteralPath $wrapper -Force -ErrorAction SilentlyContinue } catch { }
+                    } else {
+                        $autoRebuild = [pscustomobject]@{ ok = $false; error = 'Bundled patch resources not found' }
+                    }
+                } catch {
+                    $autoRebuild = [pscustomobject]@{ ok = $false; error = $_.Exception.Message }
+                }
+            }
+        }
+
         Write-DuneJson -Response $res -Body @{
             ok             = $true
             fromVersion    = (Get-DuneAdminInstalledVersion -ExePath $exePath).version
@@ -319,6 +510,8 @@ Register-DuneRoute -Method POST -Path '/api/dune-admin/install' -Handler {
             assetSize      = $rel.assetSize
             targetDir      = $targetDir
             copied         = $copied
+            sourceSync     = $sourceSync
+            autoRebuild    = $autoRebuild
             note           = 'dune-admin.exe replaced. Restart any open instance.'
         }
     } catch {

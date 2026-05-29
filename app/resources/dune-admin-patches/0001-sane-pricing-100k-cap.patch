@@ -1,5 +1,5 @@
 diff --git a/internal/marketbot/config.go b/internal/marketbot/config.go
-index 596782d..f47db26 100644
+index 596782d..004a944 100644
 --- a/internal/marketbot/config.go
 +++ b/internal/marketbot/config.go
 @@ -36,16 +36,25 @@ func defaultConfig() configValues {
@@ -48,7 +48,7 @@ index bd6cf14..db067fd 100644
  		t.Errorf("GradeMultipliers want %v got %v", want, cfg.GradeMultipliers)
  	}
 diff --git a/internal/marketbot/pricing.go b/internal/marketbot/pricing.go
-index 8ce7bd4..426b0e4 100644
+index 8ce7bd4..79a1e6d 100644
 --- a/internal/marketbot/pricing.go
 +++ b/internal/marketbot/pricing.go
 @@ -334,33 +334,181 @@ func computePrice(item CatalogItem, snap configValues) int64 {

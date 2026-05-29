@@ -9,7 +9,8 @@ $script:DuneConfigKeys = @(
     'DuneAdminExe',
     'WindowsUser',
     'PortCheckMode',
-    'PortCheckUrlTemplate'
+    'PortCheckUrlTemplate',
+    'AutoApplyPricingPatch'
 )
 
 function Get-DuneConfigPath {
