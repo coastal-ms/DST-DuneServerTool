@@ -173,11 +173,14 @@ directly. Unsupported by Funcom; you're on your own if something breaks.
 
 ### 🗺️ DD Map
 
-Pan/zoom map of the Deep Desert grid with per-cell controls and live pod
-status. Click a cell to spin it up, shut it down, or refresh — same
-guardrails as the Server Health map-pod cards (player-online check on
-shutdown). Replaces the per-map startup cards that used to live on
-Server Health.
+![DD Map page](docs/img/v6-dd-map.png)
+
+Two link cards (method.gg + dune.gaming.tools) for the interactive Deep
+Desert maps the community maintains. Both target sites send
+`X-Frame-Options: SAMEORIGIN`, so we can't embed them directly — clicking
+**Open in new tab** launches each in your browser. Replaces the per-map
+spin-up cards that used to live on Server Health (those moved here in
+v6.1.17).
 
 ### 🔧 Settings
 
@@ -222,6 +225,15 @@ default, both auto-check on mount):
     dune-admin — all in one click. Replaces the manual "Apply Sane-Pricing
     Patch" Database card from v6.1.20. Requires `go` and `git` on PATH.
     Uncheck and click Reinstall to go back to the stock upstream binary.
+
+    The patch caps every bot-generated listing at **100,000 solari** and
+    realigns dune-admin's default grade / rarity / vendor multipliers to
+    Coastal's tier-driven curve. With it applied, the in-game Market Board
+    looks like this — bot listings (e.g. Buggy Booster Mk3, Adept Sword,
+    Bluddshot Buggy Engine Mk3) sit well below the cap, while player
+    listings that aren't undercut by the bot can still exceed it:
+
+    ![dune-admin Market Bot listings with sane-pricing applied](docs/img/v6-marketbot-pricing.png)
 
 ### 🧙 Setup Wizard
 
