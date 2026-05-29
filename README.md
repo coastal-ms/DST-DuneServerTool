@@ -92,10 +92,10 @@ The default landing page. Cards for everything you usually want to glance at:
   and RabbitMQ (TCP), with a primary + fallback port-check provider.
 - **Web Interfaces** — one-click launchers for File Browser and
   Battlegroup Director (URLs visible and copyable).
-- **Map pod cards** — Deep Desert, Arrakeen, Harko Village with **Spin
-  up** / **Shut down** / **Refresh** controls. Shutdown is guarded by a
-  player-online check.
 - **Log Exports** — pull logs from any pod or the operator with one click.
+
+Per-map spin-up / shut-down controls for Deep Desert, Arrakeen, and Harko
+Village moved to the dedicated **DD Map** page (see below).
 
 ### ⚡ Commands
 
@@ -124,22 +124,6 @@ WebSocket session owns a dedicated runspace; **Cancel** stops the current
 command, **Clear** wipes the buffer, **Reconnect** spins up a fresh
 runspace. Note: this is an exec model, not a real PTY — `vim` and `htop`
 won't work, but everything else does.
-
-### 📣 Broadcasts
-
-In-game notifications and shutdown countdowns pushed to every connected
-player via the battlegroup's `mq-game` RabbitMQ pod. Two cards:
-
-- **Message** — Header + Message + on-screen duration → **Send**. A pop-up
-  appears instantly on every client.
-- **Server Alert** — Type (Restart / Shutdown / Maintenance / Update) and
-  delay in minutes → **Broadcast** (confirm dialog) or **Cancel** an
-  in-flight countdown. Mirrors what the official Funcom client shows when
-  the live servers are about to come down.
-
-Transport is `ssh dune@<vm-ip>` → `sudo kubectl exec` →
-`rabbitmqctl eval`. No extra setup required beyond the SSH key you
-already configured for the rest of the portal.
 
 ### 👤 Characters
 
@@ -217,14 +201,27 @@ default, both auto-check on mount):
 
 - **Updates** — current vs. latest Dune Server Tool version pulled from
   the GitHub Releases API. **Check now** to refresh, **Install** to
-  download `DuneServerSetup.exe` and silently re-run it.
+  download `DuneServerSetup.exe` and launch the installer wizard
+  (interactive — the running portal is killed by PID before the wizard
+  copies files, and the wizard's *Launch Dune Server* checkbox handles
+  the relaunch).
 - **dune-admin.exe** — current vs. latest from
   [Icehunter/dune-admin](https://github.com/Icehunter/dune-admin). **Check
-  now** to refresh, **Install** to download the Windows zip, extract it,
-  and swap the binary in-place. Refuses to install while dune-admin is
+  now** to refresh, **Reinstall vX.Y.Z** to download the Windows zip,
+  extract it, and swap the binary in-place. The button is *always*
+  enabled — you can reinstall the current version any time, useful after
+  a config or patch-file change. Refuses to install while dune-admin is
   running (the file lock check returns *423 Locked*). The current version
   is read from a sidecar `<exe>.version` file written by the installer
   (Go binaries built with goreleaser don't embed a Win32 FileVersionInfo).
+  - **Keep Coastal's sane-pricing patch applied after each update**
+    (checkbox, saved as `AutoApplyPricingPatch`). When checked, the tool
+    *also* downloads the matching `dune-admin_X.Y.Z_source.tar.gz`,
+    overlays the upstream source over your dune-admin folder, applies the
+    bundled 100k-cap pricing patch, runs `go build`, and restarts
+    dune-admin — all in one click. Replaces the manual "Apply Sane-Pricing
+    Patch" Database card from v6.1.20. Requires `go` and `git` on PATH.
+    Uncheck and click Reinstall to go back to the stock upstream binary.
 
 ### 🧙 Setup Wizard
 
@@ -268,9 +265,11 @@ The portal polls the public GitHub Releases API on a 6-hour cadence (also
 cached for 1h server-side). When a newer tag is published with an attached
 `DuneServerSetup*.exe`, an amber banner appears above the status bar with
 **Update now** / **Later** buttons. **Update now** downloads the asset to
-`%TEMP%\DuneServerUpdate\` and launches it silently — the installer kills
-the running `DuneServer.exe`, lays down the new files, and the Start Menu
-shortcut keeps working. Your config in `%APPDATA%\DuneServer\` is preserved.
+`%TEMP%\DuneServerUpdate\` and launches the installer **wizard** — the
+detached relauncher kills the current `DuneServer.exe` by PID, the wizard
+walks through the standard pages, and the *Launch Dune Server* checkbox on
+the Finished page brings the portal back up. Your config in
+`%APPDATA%\DuneServer\` is preserved across upgrades.
 
 You can also check manually from **Settings → Updates → Check now**.
 
@@ -304,9 +303,9 @@ so it can be tracked and fixed:
 The bug report form asks for:
 
 - **Tool version** — shown in the portal footer (`v6.1.x · coastal-ms`).
-- **Surface** — which portal page (Server Health, Commands, Terminal,
-  Characters, Game Config, Database, Sietches, Settings, Setup Wizard)
-  or whether it was the CLI / installer / auto-updater.
+- **Surface** — which portal page (Server Health, Commands, PowerShell,
+  Characters, Game Config, Database, Sietches, DD Map, Settings, Setup
+  Wizard) or whether it was the CLI / installer / auto-updater.
 - **Page / button / command** — the specific thing you clicked or typed.
 - **Environment** — OS build, PowerShell version, browser.
 - **Diagnostics** — recent lines from the server log
