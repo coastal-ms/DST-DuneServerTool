@@ -7,8 +7,10 @@ import { checkForUpdate, installUpdate, type UpdateCheck } from '../api/update'
 import {
   checkDuneAdminUpdate,
   installDuneAdminUpdate,
+  pricingPatchStatus,
   runDuneAdminSetup,
   type DuneAdminCheck,
+  type DuneAdminPricingPatchStatus,
 } from '../api/duneAdmin'
 
 const FIELDS: { key: string; label: string; placeholder: string; help?: string; type?: 'text' | 'select' }[] = [
@@ -53,6 +55,41 @@ export function Settings() {
   const [daInstalling, setDaInstalling] = useState(false)
   const [daMsg, setDaMsg] = useState<string | null>(null)
   const [daErr, setDaErr] = useState<string | null>(null)
+
+  // v6.1.25: pricing-patch rebuild runs detached in the background after
+  // /install returns. We poll /api/dune-admin/pricing-patch-status every 2s
+  // while status==='running' and show a separate "Patching..." chip with
+  // elapsed time + log tail.
+  const [daPatch, setDaPatch] = useState<DuneAdminPricingPatchStatus | null>(null)
+  const [daPatchPolling, setDaPatchPolling] = useState(false)
+  useEffect(() => {
+    if (!daPatchPolling) return
+    let cancelled = false
+    const tick = async () => {
+      try {
+        const s = await pricingPatchStatus()
+        if (cancelled) return
+        setDaPatch(s)
+        if (s.status !== 'running') {
+          setDaPatchPolling(false)
+          if (s.status === 'success') {
+            setDaMsg(prev =>
+              (prev ? prev + ' ' : '')
+              + `Pricing patch rebuilt successfully${s.targetTag ? ` (${s.targetTag})` : ''}.`,
+            )
+            // Refresh installed-version display.
+            try { setDaCheck(await checkDuneAdminUpdate({ force: false })) } catch { /* non-fatal */ }
+          } else if (s.status === 'failed') {
+            const msg = s.error ?? `Pricing rebuild failed (exit ${s.exitCode ?? 'n/a'}).`
+            setDaErr(prev => (prev ? prev + ' ' : '') + msg + (s.logFile ? ` Log: ${s.logFile}` : ''))
+          }
+        }
+      } catch { /* keep polling; transient server hiccup */ }
+    }
+    void tick()
+    const id = window.setInterval(() => { void tick() }, 2000)
+    return () => { cancelled = true; window.clearInterval(id) }
+  }, [daPatchPolling])
 
   // Collapsible-card state — both update cards start minimized.
   const [updExpanded, setUpdExpanded] = useState(false)
@@ -127,10 +164,21 @@ export function Settings() {
     setDaInstalling(true)
     setDaErr(null)
     setDaMsg(null)
+    setDaPatch(null)
+    setDaPatchPolling(false)
     try {
       const r = await installDuneAdminUpdate()
       if (r.ok) {
         setDaMsg(`dune-admin.exe replaced with v${r.toVersion}. Restart any running instance.`)
+        // v6.1.25: if the install kicked off the detached pricing-patch
+        // rebuild, start polling its status. We DO NOT block on it here —
+        // the binary install is already done.
+        if (r.pricingPatch && r.pricingPatch.status === 'running') {
+          setDaPatch(r.pricingPatch)
+          setDaPatchPolling(true)
+        } else if (r.pricingPatch && r.pricingPatch.status === 'failed') {
+          setDaErr(`Pricing rebuild failed to start: ${r.pricingPatch.error ?? 'unknown error'}`)
+        }
         // Re-check so the displayed installed version updates.
         try {
           setDaCheck(await checkDuneAdminUpdate({ force: false }))
@@ -194,6 +242,20 @@ export function Settings() {
       } finally {
         setDaChecking(false)
       }
+    })()
+
+    // v6.1.25: if a previous Settings session kicked off a pricing-patch
+    // rebuild that's still running (or just terminated with the user
+    // never seeing the result), pick it up on mount so the UI surfaces
+    // it instead of silently ignoring an in-flight build.
+    void (async () => {
+      try {
+        const s = await pricingPatchStatus()
+        if (s && s.status && s.status !== 'idle') {
+          setDaPatch(s)
+          if (s.status === 'running') setDaPatchPolling(true)
+        }
+      } catch { /* non-fatal */ }
     })()
     // Same idea for the Dune Server self-updater — populate the collapsed
     // header pills (current/latest) without forcing a fresh GitHub hit.
@@ -549,6 +611,65 @@ export function Settings() {
                   </span>
                   {autoApplySaving && <Icon name="Loader2" size={14} className="animate-spin text-text-dim" />}
                 </label>
+
+                {/* v6.1.25: pricing-patch rebuild status panel. Shows when
+                    /install kicks off the detached background rebuild. The
+                    binary install is already complete by the time this card
+                    appears — this is JUST the local Go build with the
+                    sane-pricing patch on top. */}
+                {daPatch && daPatch.status && daPatch.status !== 'idle' && (
+                  <div className="pt-3 border-t border-border">
+                    <div className="flex items-center gap-2 mb-1.5">
+                      <Icon
+                        name={daPatch.status === 'running' ? 'Loader2' : daPatch.status === 'success' ? 'CheckCircle2' : 'AlertCircle'}
+                        size={14}
+                        className={`${daPatch.status === 'running' ? 'animate-spin text-accent' : daPatch.status === 'success' ? 'text-success' : 'text-danger'}`}
+                      />
+                      <span className="text-xs font-medium">
+                        {daPatch.status === 'running' && (
+                          <>Rebuilding patched dune-admin{daPatch.targetTag ? ` (${daPatch.targetTag})` : ''}...</>
+                        )}
+                        {daPatch.status === 'success' && (
+                          <>Patched build complete{daPatch.targetTag ? ` (${daPatch.targetTag})` : ''}.</>
+                        )}
+                        {daPatch.status === 'failed' && (
+                          <>Patched build failed{daPatch.exitCode != null ? ` (exit ${daPatch.exitCode})` : ''}.</>
+                        )}
+                      </span>
+                      {daPatch.status === 'running' && daPatch.startedAt && (
+                        <span className="text-[10px] text-text-dim font-mono">
+                          {(() => {
+                            const started = new Date(daPatch.startedAt).getTime()
+                            const secs = Math.max(0, Math.floor((Date.now() - started) / 1000))
+                            const mm = Math.floor(secs / 60).toString().padStart(2, '0')
+                            const ss = (secs % 60).toString().padStart(2, '0')
+                            return `${mm}:${ss} elapsed`
+                          })()}
+                        </span>
+                      )}
+                    </div>
+                    {daPatch.status === 'running' && (
+                      <p className="text-[11px] text-text-dim mb-2">
+                        Safe to leave this page open or navigate away — the build runs in a detached
+                        background process. The Install button reactivates immediately so the rest of
+                        the tool stays responsive.
+                      </p>
+                    )}
+                    {daPatch.error && (
+                      <p className="text-[11px] text-danger break-words">{daPatch.error}</p>
+                    )}
+                    {daPatch.logTail && (
+                      <pre className="text-[10px] font-mono bg-bg-dim border border-border rounded p-2 mt-1 max-h-40 overflow-auto whitespace-pre-wrap">
+                        {daPatch.logTail}
+                      </pre>
+                    )}
+                    {daPatch.logFile && (
+                      <div className="text-[10px] text-text-dim font-mono break-all mt-1">
+                        Log: {daPatch.logFile}
+                      </div>
+                    )}
+                  </div>
+                )}
               </div>
             )}
 

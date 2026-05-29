@@ -256,7 +256,204 @@ function Sync-DuneAdminSourceTarball {
     return $result
 }
 
-# --- Routes ------------------------------------------------------------------
+# v6.1.25: status file directory + helpers for the detached pricing-patch
+# rebuild. The install route launches the patched build as a fully detached
+# background process and writes a JSON status file here; the UI polls
+# GET /api/dune-admin/pricing-patch-status until status is terminal. This
+# prevents the multi-minute Go build from blocking the HTTP listener thread
+# (which previously froze the entire server, since PowerShell HttpListener
+# processes one request at a time on the main thread).
+
+function Get-DuneAdminPricingStateDir {
+    $dir = Join-Path $env:LOCALAPPDATA 'DuneServer\dune-admin-pricing'
+    if (-not (Test-Path -LiteralPath $dir)) {
+        try { New-Item -ItemType Directory -Path $dir -Force | Out-Null } catch { }
+    }
+    return $dir
+}
+
+function Get-DuneAdminPricingStatusPath {
+    return (Join-Path (Get-DuneAdminPricingStateDir) 'rebuild-status.json')
+}
+
+function Write-DuneAdminPricingStatus {
+    param([hashtable]$Data)
+    $path = Get-DuneAdminPricingStatusPath
+    try {
+        $json = $Data | ConvertTo-Json -Depth 6 -Compress
+        Set-Content -LiteralPath $path -Value $json -Encoding UTF8
+    } catch { }
+}
+
+function Read-DuneAdminPricingStatus {
+    $path = Get-DuneAdminPricingStatusPath
+    if (-not (Test-Path -LiteralPath $path)) { return $null }
+    try {
+        $raw = Get-Content -LiteralPath $path -Raw -ErrorAction Stop
+        if (-not $raw) { return $null }
+        return ($raw | ConvertFrom-Json -ErrorAction Stop)
+    } catch { return $null }
+}
+
+function Start-DuneAdminPricingRebuild {
+    param(
+        [string]$ResDir,       # bundled resources dir containing patch + build-patched.ps1
+        [string]$TargetDir,    # user's dune-admin source dir
+        [string]$TargetTag     # e.g. 'v0.14.2' for status display
+    )
+    $stateDir = Get-DuneAdminPricingStateDir
+    $stamp    = Get-Date -Format 'yyyyMMdd-HHmmss'
+    $logFile  = Join-Path $stateDir "rebuild-$stamp.log"
+    $wrapper  = Join-Path $stateDir "rebuild-$stamp.ps1"
+    $statusPath = Get-DuneAdminPricingStatusPath
+
+    # Stage the bundled patch + wrapper into the user's source dir (same as
+    # the legacy apply route).
+    $userPatchDir = Join-Path $TargetDir 'scripts\patches'
+    $userScripts  = Join-Path $TargetDir 'scripts'
+    if (-not (Test-Path -LiteralPath $userPatchDir)) { New-Item -ItemType Directory -Path $userPatchDir -Force | Out-Null }
+    if (-not (Test-Path -LiteralPath $userScripts))  { New-Item -ItemType Directory -Path $userScripts -Force | Out-Null }
+    Copy-Item -LiteralPath (Join-Path $ResDir '0001-sane-pricing-100k-cap.patch') -Destination $userPatchDir -Force -ErrorAction SilentlyContinue
+    Copy-Item -LiteralPath (Join-Path $ResDir 'build-patched.ps1') -Destination $userScripts -Force -ErrorAction SilentlyContinue
+    $buildScript = Join-Path $userScripts 'build-patched.ps1'
+
+    # The wrapper script:
+    # 1. Sets working dir + runs build-patched.ps1 piping ALL output to file.
+    # 2. On completion, atomically rewrites the status file with the final
+    #    state (success / failed + exitCode).
+    # 3. Honors a hard 15-min watchdog (Stop-Process self-terminate from a
+    #    separate Start-Job kept simple by relying on the parent's $LASTEXITCODE
+    #    after WaitForExit; this wrapper IS the supervisor since it runs
+    #    detached from DuneServer).
+    $wrapperBody = @"
+`$ErrorActionPreference = 'Continue'
+`$statusPath = '$statusPath'
+`$logFile    = '$logFile'
+
+function Write-Status {
+    param([hashtable]`$Data)
+    try {
+        `$json = `$Data | ConvertTo-Json -Depth 6 -Compress
+        Set-Content -LiteralPath `$statusPath -Value `$json -Encoding UTF8
+    } catch { }
+}
+
+`$startedAt = (Get-Date).ToString('o')
+Write-Status @{
+    status     = 'running'
+    targetTag  = '$TargetTag'
+    targetDir  = '$TargetDir'
+    logFile    = `$logFile
+    startedAt  = `$startedAt
+    pid        = `$PID
+}
+
+Set-Location -LiteralPath '$TargetDir'
+try {
+    & '$buildScript' -SkipTests *> `$logFile
+    `$code = `$LASTEXITCODE
+    if (`$null -eq `$code) { `$code = 0 }
+    `$finished = (Get-Date).ToString('o')
+    if (`$code -eq 0) {
+        Write-Status @{
+            status     = 'success'
+            targetTag  = '$TargetTag'
+            targetDir  = '$TargetDir'
+            logFile    = `$logFile
+            startedAt  = `$startedAt
+            finishedAt = `$finished
+            exitCode   = `$code
+            pid        = `$PID
+        }
+    } else {
+        Write-Status @{
+            status     = 'failed'
+            targetTag  = '$TargetTag'
+            targetDir  = '$TargetDir'
+            logFile    = `$logFile
+            startedAt  = `$startedAt
+            finishedAt = `$finished
+            exitCode   = `$code
+            error      = "build-patched.ps1 exited with code `$code"
+            pid        = `$PID
+        }
+    }
+    exit `$code
+} catch {
+    `$finished = (Get-Date).ToString('o')
+    Write-Status @{
+        status     = 'failed'
+        targetTag  = '$TargetTag'
+        targetDir  = '$TargetDir'
+        logFile    = `$logFile
+        startedAt  = `$startedAt
+        finishedAt = `$finished
+        error      = `$_.Exception.Message
+        pid        = `$PID
+    }
+    exit 1
+}
+"@
+    Set-Content -LiteralPath $wrapper -Value $wrapperBody -Encoding UTF8
+
+    # Seed the status file BEFORE launching so the polling UI gets 'running'
+    # even if the background process is still warming up.
+    Write-DuneAdminPricingStatus @{
+        status     = 'running'
+        targetTag  = $TargetTag
+        targetDir  = $TargetDir
+        logFile    = $logFile
+        startedAt  = (Get-Date).ToString('o')
+    }
+
+    # Launch fully detached. Start-Process -WindowStyle Hidden returns a
+    # Process object whose handle we close immediately so DuneServer holds no
+    # reference. The child runs under pwsh.exe and supervises itself.
+    try {
+        $shell = $null
+        foreach ($candidate in @('pwsh', 'powershell')) {
+            $cmd = Get-Command $candidate -ErrorAction SilentlyContinue
+            if ($cmd) { $shell = $cmd.Source; break }
+        }
+        if (-not $shell) { throw 'Neither pwsh nor powershell found on PATH' }
+
+        $proc = Start-Process -FilePath $shell `
+            -ArgumentList @('-NoProfile','-ExecutionPolicy','Bypass','-WindowStyle','Hidden','-File',"`"$wrapper`"") `
+            -WorkingDirectory $TargetDir `
+            -WindowStyle Hidden `
+            -PassThru
+        $bgPid = if ($proc) { $proc.Id } else { 0 }
+        if ($proc) {
+            try { $proc.Dispose() } catch { }
+        }
+        return [pscustomobject]@{
+            ok        = $true
+            status    = 'running'
+            logFile   = $logFile
+            statusFile= $statusPath
+            pid       = $bgPid
+            startedAt = (Get-Date).ToString('o')
+        }
+    } catch {
+        $err = $_.Exception.Message
+        Write-DuneAdminPricingStatus @{
+            status     = 'failed'
+            targetTag  = $TargetTag
+            targetDir  = $TargetDir
+            logFile    = $logFile
+            startedAt  = (Get-Date).ToString('o')
+            finishedAt = (Get-Date).ToString('o')
+            error      = "Failed to launch rebuild: $err"
+        }
+        return [pscustomobject]@{
+            ok        = $false
+            status    = 'failed'
+            error     = "Failed to launch rebuild: $err"
+            logFile   = $logFile
+            statusFile= $statusPath
+        }
+    }
+}
 
 # GET /api/dune-admin/check[?force=1] - return installed vs latest
 Register-DuneRoute -Method GET -Path '/api/dune-admin/check' -Handler {
@@ -455,12 +652,16 @@ Register-DuneRoute -Method POST -Path '/api/dune-admin/install' -Handler {
                 }
             } catch { }
             if ($sourceSync -and $sourceSync.ok -and $autoApply) {
+                # v6.1.25: launch the patched-build wrapper as a fully detached
+                # background process. The HTTP request returns immediately with
+                # the status file path; the UI polls /api/dune-admin/pricing-
+                # patch-status until status is terminal. This stops the
+                # PowerShell HttpListener thread from blocking for the entire
+                # multi-minute Go build, which previously froze the whole
+                # server (no /healthz, /ports, etc.) and made the install
+                # button appear hung.
                 try {
-                    # Stage the patch + build script the same way the apply
-                    # route does, then invoke build-patched.ps1 via a wrapper
-                    # script that pipes its own output (avoids the pipe-
-                    # deadlock fixed in v6.1.22).
-                    $resDir   = $null
+                    $resDir = $null
                     foreach ($p in @(
                         (Join-Path $script:AppDir 'resources\dune-admin-patches'),
                         (Join-Path $script:AppDir 'app\resources\dune-admin-patches'),
@@ -468,45 +669,12 @@ Register-DuneRoute -Method POST -Path '/api/dune-admin/install' -Handler {
                         (Join-Path (Split-Path -Parent $script:AppDir) 'app\resources\dune-admin-patches')
                     )) { if (Test-Path -LiteralPath $p) { $resDir = $p; break } }
                     if ($resDir) {
-                        $userPatchDir = Join-Path $targetDir 'scripts\patches'
-                        $userScripts  = Join-Path $targetDir 'scripts'
-                        if (-not (Test-Path -LiteralPath $userPatchDir)) { New-Item -ItemType Directory -Path $userPatchDir -Force | Out-Null }
-                        if (-not (Test-Path -LiteralPath $userScripts))  { New-Item -ItemType Directory -Path $userScripts -Force | Out-Null }
-                        Copy-Item -LiteralPath (Join-Path $resDir '0001-sane-pricing-100k-cap.patch') -Destination $userPatchDir -Force -ErrorAction SilentlyContinue
-                        Copy-Item -LiteralPath (Join-Path $resDir 'build-patched.ps1') -Destination $userScripts -Force -ErrorAction SilentlyContinue
-
-                        $stamp   = Get-Date -Format 'yyyyMMdd-HHmmss'
-                        $logFile = Join-Path $env:TEMP "dune-admin-pricing-rebuild-$stamp.log"
-                        $wrapper = Join-Path $env:TEMP "dune-admin-pricing-rebuild-wrap-$stamp.ps1"
-                        $buildScript = Join-Path $userScripts 'build-patched.ps1'
-                        $wrapperBody = @"
-`$ErrorActionPreference = 'Continue'
-Set-Location -LiteralPath '$targetDir'
-& '$buildScript' -SkipTests *> '$logFile'
-exit `$LASTEXITCODE
-"@
-                        Set-Content -LiteralPath $wrapper -Value $wrapperBody -Encoding UTF8
-
-                        $psi = New-Object System.Diagnostics.ProcessStartInfo
-                        $psi.FileName               = 'pwsh'
-                        $psi.Arguments              = "-NoProfile -ExecutionPolicy Bypass -File `"$wrapper`""
-                        $psi.WorkingDirectory       = $targetDir
-                        $psi.UseShellExecute        = $false
-                        $psi.CreateNoWindow         = $true
-                        $bp = [System.Diagnostics.Process]::Start($psi)
-                        if ($bp.WaitForExit(15 * 60 * 1000)) {
-                            $rebuildOut = if (Test-Path -LiteralPath $logFile) { Get-Content -LiteralPath $logFile -Raw } else { '' }
-                            $autoRebuild = [pscustomobject]@{ ok = ($bp.ExitCode -eq 0); exitCode = $bp.ExitCode; logFile = $logFile; output = $rebuildOut }
-                        } else {
-                            try { $bp.Kill($true) } catch { }
-                            $autoRebuild = [pscustomobject]@{ ok = $false; error = 'Rebuild timed out after 15 minutes'; logFile = $logFile }
-                        }
-                        try { Remove-Item -LiteralPath $wrapper -Force -ErrorAction SilentlyContinue } catch { }
+                        $autoRebuild = Start-DuneAdminPricingRebuild -ResDir $resDir -TargetDir $targetDir -TargetTag $rel.tag
                     } else {
-                        $autoRebuild = [pscustomobject]@{ ok = $false; error = 'Bundled patch resources not found' }
+                        $autoRebuild = [pscustomobject]@{ ok = $false; status = 'failed'; error = 'Bundled patch resources not found' }
                     }
                 } catch {
-                    $autoRebuild = [pscustomobject]@{ ok = $false; error = $_.Exception.Message }
+                    $autoRebuild = [pscustomobject]@{ ok = $false; status = 'failed'; error = $_.Exception.Message }
                 }
             }
         }
@@ -522,8 +690,79 @@ exit `$LASTEXITCODE
             copied         = $copied
             sourceSync     = $sourceSync
             autoRebuild    = $autoRebuild
+            pricingPatch   = $autoRebuild
             note           = 'dune-admin.exe replaced. Restart any open instance.'
         }
+    } catch {
+        Write-DuneError -Response $res -Status 500 -Message $_.Exception.Message
+    }
+}
+
+# GET /api/dune-admin/pricing-patch-status - poll the detached pricing-patch
+# rebuild started by /install. The UI shows a separate "Patching..." chip
+# and polls this every couple of seconds while status === 'running'.
+# Response shape mirrors the status JSON written by the wrapper script with
+# an extra `logTail` (last ~40 lines of the build log) so the user can see
+# progress / failure detail in the UI without opening a file explorer.
+Register-DuneRoute -Method GET -Path '/api/dune-admin/pricing-patch-status' -Handler {
+    param($req, $res, $routeParams, $body)
+    try {
+        $statusPath = Get-DuneAdminPricingStatusPath
+        $status = Read-DuneAdminPricingStatus
+        if (-not $status) {
+            Write-DuneJson -Response $res -Body @{
+                ok         = $true
+                status     = 'idle'
+                statusFile = $statusPath
+            }
+            return
+        }
+
+        # status is a PSCustomObject from ConvertFrom-Json; copy fields onto a
+        # hashtable so we can add logTail safely.
+        $out = @{
+            ok         = $true
+            status     = ([string]$status.status)
+            statusFile = $statusPath
+        }
+        foreach ($prop in $status.PSObject.Properties) {
+            if (-not $out.ContainsKey($prop.Name)) { $out[$prop.Name] = $prop.Value }
+        }
+
+        # Tail the log (best-effort, capped at 40 lines / 8 KB).
+        if ($status.PSObject.Properties.Name -contains 'logFile' -and $status.logFile -and (Test-Path -LiteralPath $status.logFile)) {
+            try {
+                $tail = Get-Content -LiteralPath $status.logFile -Tail 40 -ErrorAction SilentlyContinue
+                if ($tail) {
+                    $joined = ($tail -join "`n")
+                    if ($joined.Length -gt 8000) { $joined = $joined.Substring($joined.Length - 8000) }
+                    $out['logTail'] = $joined
+                }
+            } catch { }
+        }
+
+        # If status says 'running' but the wrapper PID is no longer alive,
+        # the background process died without writing a terminal status.
+        # Promote to 'failed' so the UI stops spinning forever.
+        if ($out['status'] -eq 'running' -and $out.ContainsKey('pid') -and $out['pid']) {
+            $alive = $false
+            try {
+                $p = Get-Process -Id ([int]$out['pid']) -ErrorAction SilentlyContinue
+                if ($p) { $alive = $true }
+            } catch { $alive = $false }
+            if (-not $alive) {
+                $out['status'] = 'failed'
+                $out['error']  = 'Rebuild process exited without writing a terminal status (likely crashed). See log for details.'
+                # Persist so subsequent polls are consistent.
+                try {
+                    $persist = @{}
+                    foreach ($k in $out.Keys) { if ($k -ne 'ok' -and $k -ne 'logTail' -and $k -ne 'statusFile') { $persist[$k] = $out[$k] } }
+                    Write-DuneAdminPricingStatus $persist
+                } catch { }
+            }
+        }
+
+        Write-DuneJson -Response $res -Body $out
     } catch {
         Write-DuneError -Response $res -Status 500 -Message $_.Exception.Message
     }
