@@ -10,7 +10,7 @@ body:
 
         This issue tracker is for **bugs in this tool's code** — the
         desktop app (Dashboard / Monitoring / Characters / Game Config /
-        Database / Settings / Setup Wizard / Additional Sietches),
+            Database / DD Map / Settings / Setup Wizard / Additional Sietches),
         the PowerShell script (`dune-server.ps1`), the `.bat`
         launcher, and the installer.
 
@@ -40,7 +40,7 @@ body:
     attributes:
       label: Tool version
       description: Shown in the bottom-left of the web portal sidebar and in the CLI menu header. Auto-filled when launched from the **?** help button in the top-left of the portal, or from the CLI `report-issue` command.
-      placeholder: "v6.1.20"
+      placeholder: "v6.1.22"
     validations:
       required: true
 
@@ -52,15 +52,14 @@ body:
       options:
         - Web portal — Dashboard / Server Health
         - Web portal — Monitoring
-        - Web portal — Terminal pane
+        - Web portal — Commands
+        - Web portal — PowerShell pane
         - Web portal — Characters
         - Web portal — Game Config
         - Web portal — Database (Backup / Restore / SQL Editor)
-        - Web portal — Database (Sane-Pricing Patch card)
-        - Web portal — Bot Control / Market (dune-admin integration)
-        - Web portal — Broadcasts
+        - Web portal — DD Map
         - Web portal — Settings (general)
-        - Web portal — Settings (dune-admin updater)
+        - Web portal — Settings (dune-admin updater / sane-pricing auto-apply)
         - Web portal — Settings (Dune Server Tool self-updater)
         - Web portal — Setup Wizard / first-run
         - Web portal — Additional Sietches / Sietches
