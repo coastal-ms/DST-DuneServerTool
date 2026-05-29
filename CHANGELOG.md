@@ -14,6 +14,45 @@ here cover everything those tags shipped.
 ## [Unreleased]
 
 
+## [6.1.25] - 2026-05-29
+
+Patch: **Fix install hang when pricing-patch is enabled.**
+
+### Fixed
+- **dune-admin install button no longer freezes the entire server.** When
+  `AutoApplyPricingPatch=true`, the v6.1.22-v6.1.24 install route ran
+  `build-patched.ps1` synchronously with `Process.WaitForExit(15 min)` on
+  the HTTP listener thread. PowerShell's HttpListener handles one request
+  at a time, so every other API call (`/healthz`, `/api/ports`,
+  `/api/dune-admin/check`, etc.) would stall for the entire Go build —
+  the UI's polling loops would all time out, the Install button would
+  appear stuck on "Installing...", and impatient re-clicks compounded
+  the jam by queueing more requests behind the build. After ~3-15 minutes
+  the build finished, but by then DuneServer.exe was holding 1000+ open
+  handles from the queued+abandoned requests and often had to be killed
+  manually.
+
+### Changed
+- **Pricing-patch rebuild now runs fully detached.** The install route
+  returns 200 as soon as the binary swap completes, with
+  `pricingPatch: { status: 'running', logFile, statusFile, pid }`. The
+  background `pwsh.exe` process writes its terminal state to a JSON
+  status file at
+  `%LOCALAPPDATA%\DuneServer\dune-admin-pricing\rebuild-status.json`.
+- **New `GET /api/dune-admin/pricing-patch-status` endpoint** returns
+  `{ status, startedAt, finishedAt, exitCode, error, logFile, logTail }`.
+  Falls back to `'failed'` if the wrapper PID is dead but no terminal
+  status was written (catches mid-build crashes).
+- **Settings page polls the status endpoint every 2s** while
+  `status === 'running'`, shows a separate "Rebuilding patched dune-admin"
+  chip with elapsed time + the last 40 lines of build log. The Install
+  button reactivates immediately after the binary swap — operators can
+  navigate away or trigger other actions while the rebuild completes.
+- On Settings mount, the page also picks up any rebuild that was already
+  in-flight from a previous tab/session, so refreshing the page doesn't
+  hide a still-running build.
+
+
 ## [6.1.24] - 2026-05-29
 
 Patch: **One-button dune-admin first-run setup wizard.**
