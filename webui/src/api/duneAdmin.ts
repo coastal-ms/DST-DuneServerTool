@@ -31,6 +31,21 @@ export interface DuneAdminCheck {
   configYamlExists?: boolean
 }
 
+export interface DuneAdminPricingPatchStatus {
+  ok: boolean
+  status: 'idle' | 'running' | 'success' | 'failed'
+  statusFile?: string
+  targetTag?: string
+  targetDir?: string
+  logFile?: string
+  startedAt?: string
+  finishedAt?: string
+  exitCode?: number
+  error?: string
+  pid?: number
+  logTail?: string
+}
+
 export interface DuneAdminInstallResult {
   ok: boolean
   fromVersion?: string | null
@@ -41,6 +56,15 @@ export interface DuneAdminInstallResult {
   targetDir?: string
   copied?: string[]
   note?: string
+  /**
+   * Present when `AutoApplyPricingPatch=true` in dune-server.config. The
+   * /install route launches the patched-build as a detached background
+   * process and returns `pricingPatch.status='running'` immediately. The
+   * UI should then poll `pricingPatchStatus()` every couple of seconds
+   * until status is `'success'` or `'failed'`. See DuneAdmin.ps1
+   * `Start-DuneAdminPricingRebuild` (v6.1.25).
+   */
+  pricingPatch?: DuneAdminPricingPatchStatus
 }
 
 export interface DuneAdminSetupResult {
@@ -61,6 +85,10 @@ export function checkDuneAdminUpdate(opts: { force?: boolean } = {}) {
 
 export function installDuneAdminUpdate() {
   return api<DuneAdminInstallResult>(`/api/dune-admin/install`, { method: 'POST', body: '{}' })
+}
+
+export function pricingPatchStatus() {
+  return api<DuneAdminPricingPatchStatus>(`/api/dune-admin/pricing-patch-status`)
 }
 
 export function runDuneAdminSetup() {
