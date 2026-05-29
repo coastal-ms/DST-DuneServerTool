@@ -1,4 +1,4 @@
-# Build-Exe.ps1 - Compiles app/DuneServer.ps1 into DuneServer.exe via ps2exe.
+﻿# Build-Exe.ps1 - Compiles app/DuneServer.ps1 into DuneServer.exe via ps2exe.
 #
 # Output: app/build/output/DuneServer.exe
 #
@@ -33,7 +33,7 @@
 
 [CmdletBinding()]
 param(
-    [string]$Version = '6.1.22',
+    [string]$Version = '6.1.23',
     [switch]$Quiet
 )
 

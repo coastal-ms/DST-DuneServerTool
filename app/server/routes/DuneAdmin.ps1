@@ -1,4 +1,4 @@
-# /api/dune-admin - dune-admin.exe updater (third-party companion tool)
+﻿# /api/dune-admin - dune-admin.exe updater (third-party companion tool)
 #
 # Checks GitHub releases for Icehunter/dune-admin, compares against the
 # installed dune-admin.exe (path from DuneAdminExe in dune-server.config),

@@ -1,9 +1,68 @@
-# Dune Server — entry point (v6.1 web portal)
+﻿# Dune Server — entry point (v6.1 web portal)
 #
 # Bootstrap: pick a free port, start HttpListener, open default browser at the
 # tokened localhost URL. The full UI is the React SPA in webui/dist/.
 
 $ErrorActionPreference = 'Stop'
+
+# ---------- v6.1.23: Process-scope ExecutionPolicy + emergency crash log -------
+# Windows defaults non-server SKUs to ExecutionPolicy=Restricted, which blocks
+# dot-sourcing our bundled (unsigned) .ps1 files. The launcher would die on the
+# very first `. DuneLog.ps1` BEFORE Initialize-DuneLog could open a log file,
+# producing the infamous "window opens and closes, no log, no popup" symptom.
+#
+# Force Bypass for THIS process only (no admin needed, no machine state change)
+# so subsequent dot-sources always succeed regardless of machine policy.
+try {
+    Set-ExecutionPolicy -Scope Process -ExecutionPolicy Bypass -Force -ErrorAction Stop
+} catch {
+    # Worst case: if even Set-ExecutionPolicy is blocked (group-policy lockdown)
+    # we will surface a clear error via the emergency log below instead of
+    # dying silently.
+}
+
+# Emergency crash log — writes to %LOCALAPPDATA%\DuneServer\dune-startup.log
+# BEFORE we know whether the normal logger will load. Any exception in the
+# bootstrap is appended here so users always have something to send us.
+$script:DuneStartupLog = $null
+try {
+    $stateDir = Join-Path $env:LOCALAPPDATA 'DuneServer'
+    if (-not (Test-Path -LiteralPath $stateDir)) {
+        New-Item -ItemType Directory -Path $stateDir -Force | Out-Null
+    }
+    $script:DuneStartupLog = Join-Path $stateDir 'dune-startup.log'
+    $hdr = "==== $(Get-Date -Format 's')  DuneServer startup, pid=$PID, host=$($PSVersionTable.PSVersion), policy=$(Get-ExecutionPolicy -Scope Process) ===="
+    Add-Content -LiteralPath $script:DuneStartupLog -Value $hdr -Encoding UTF8
+} catch { }
+
+function Write-DuneStartupLog {
+    param([string]$Message)
+    if (-not $script:DuneStartupLog) { return }
+    try {
+        Add-Content -LiteralPath $script:DuneStartupLog -Value "[$(Get-Date -Format 'HH:mm:ss')] $Message" -Encoding UTF8
+    } catch { }
+}
+
+# Catch-all trap: any uncaught exception during bootstrap lands here, logs the
+# full stack, AND shows a MessageBox so the user is never left wondering why
+# the window opened and closed.
+trap {
+    $err = $_
+    $msg = "Dune Server bootstrap failed.`r`n`r`n$($err.Exception.Message)`r`n`r`nFull error:`r`n$($err | Out-String)"
+    Write-DuneStartupLog "BOOTSTRAP CRASH: $($err.Exception.Message)"
+    Write-DuneStartupLog ($err | Out-String)
+    try {
+        Add-Type -AssemblyName System.Windows.Forms -ErrorAction Stop
+        [System.Windows.Forms.MessageBox]::Show(
+            $msg + "`r`n`r`nDetails written to:`r`n$script:DuneStartupLog",
+            'Dune Server — startup failed', 'OK', 'Error') | Out-Null
+    } catch {
+        Write-Host $msg -ForegroundColor Red
+    }
+    exit 1
+}
+
+Write-DuneStartupLog 'Bootstrap entered'
 
 # ---------- Minimize own console window IMMEDIATELY ----------------------------
 # v6.1.7+: the EXE is built console-subsystem (NoConsole=$false in Build-Exe.ps1)
@@ -61,7 +120,7 @@ public static extern bool IsIconic(System.IntPtr hWnd);
 }
 
 # Version (one of the 5 sync'd constants; see persistent-notes.md)
-$script:DuneToolVersion = '6.1.22'
+$script:DuneToolVersion = '6.1.23'
 
 # ---------- Single-instance gate ----------------------------------------------
 # Every click of the desktop shortcut runs DuneServer.exe again. Without a
@@ -264,6 +323,7 @@ function Open-DuneInBrowser {
 
 # ---------- Start --------------------------------------------------------------
 
+Write-DuneStartupLog "Bootstrap complete, handing off to Start-DuneHttpServer"
 Write-DuneLog "Dune Server v$script:DuneToolVersion starting"
 Write-DuneLog "Serving from: $script:DistRoot"
 

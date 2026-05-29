@@ -1,4 +1,4 @@
-# build-patched.ps1
+﻿# build-patched.ps1
 #
 # Local Windows build wrapper for dune-admin.exe.
 #
