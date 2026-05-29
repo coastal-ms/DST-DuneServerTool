@@ -1,4 +1,4 @@
-; ============================================================
+﻿; ============================================================
 ;  Dune Server - Inno Setup installer script
 ;  Output: app/installer/output/DuneServerSetup.exe
 ; ============================================================
@@ -16,7 +16,7 @@
 ;                 -> NOT touched by install or uninstall (preserves user config)
 
 #define MyAppName        "Dune Server"
-#define MyAppVersion "6.1.22"
+#define MyAppVersion "6.1.23"
 #define MyAppPublisher   "Dune Awakening Self-Hosted Tool"
 #define MyAppURL         "https://github.com/coastal-ms/Simple-Dune-Server-Management-Tool"
 #define MyAppExeName     "DuneServer.exe"
@@ -95,15 +95,34 @@ Source: "..\..\webui\dist\*"; DestDir: "{app}\webui\dist"; Flags: ignoreversion 
 ; time, then runs build-patched.ps1 -Restart against it.
 Source: "..\resources\dune-admin-patches\*"; DestDir: "{app}\resources\dune-admin-patches"; Flags: ignoreversion recursesubdirs
 
+; v6.1.23: Drop-in preflight checker users can run when something goes wrong.
+; DunePreflight.bat is the entry point (right-click -> Run as administrator),
+; DunePreflight.ps1 is the WinForms results window, README.md explains usage.
+Source: "..\..\tools\preflight\*"; DestDir: "{app}\tools\preflight"; Flags: ignoreversion recursesubdirs
+
 [Icons]
 ; Start Menu shortcut (always created)
 Name: "{group}\{#MyAppName}"; Filename: "{app}\{#MyAppExeName}"; IconFilename: "{app}\{#MyAppExeName}"; Comment: "Dune Awakening server management"; Flags: runminimized
 Name: "{group}\{cm:UninstallProgram,{#MyAppName}}"; Filename: "{uninstallexe}"
 
+; v6.1.23: Preflight checker shortcut so users can run diagnostics without
+; hunting for the file in C:\Program Files\Dune Server\tools\preflight\.
+Name: "{group}\Dune Preflight (run as admin)"; Filename: "{app}\tools\preflight\DunePreflight.bat"; IconFilename: "{app}\{#MyAppExeName}"; Comment: "Diagnose why the Dune Server Tool won't start"
+
 ; Desktop shortcut (only if user ticked the box on the Tasks page)
 Name: "{autodesktop}\{#MyAppName}"; Filename: "{app}\{#MyAppExeName}"; IconFilename: "{app}\{#MyAppExeName}"; Tasks: desktopicon; Flags: runminimized
 
 [Run]
+; v6.1.23: Strip Mark-of-the-Web from every shipped file BEFORE we try to
+; launch the app. Files unpacked from a downloaded installer inherit the
+; downloaded-from-internet Zone.Identifier, which RemoteSigned (the most
+; common ExecutionPolicy on dev machines) treats as "remote" and refuses
+; to dot-source — the exact failure that caused v6.1.22's "window opens
+; and closes" symptom on machines with CurrentUser=RemoteSigned +
+; LocalMachine=Restricted. Use PowerShell rather than Inno's Pascal API
+; because Unblock-File handles every file kind correctly and is one line.
+Filename: "powershell.exe"; Parameters: "-NoProfile -ExecutionPolicy Bypass -Command ""Get-ChildItem -LiteralPath '{app}' -Recurse -File | Unblock-File"""; Flags: runhidden waituntilterminated
+
 ; Launch immediately after install. Two entries so both interactive AND
 ; silent (auto-update) installs relaunch the app:
 ;   * Interactive: postinstall shows the "Launch Dune Server" checkbox on
