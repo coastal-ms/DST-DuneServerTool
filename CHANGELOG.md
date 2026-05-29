@@ -14,6 +14,18 @@ here cover everything those tags shipped.
 ## [Unreleased]
 
 
+## [6.1.21] - 2026-05-28
+
+Patch: **Hide the Broadcasts feature from the UI.**
+
+### Removed
+- **Broadcasts** nav item and `/broadcasts` route removed from the
+  sidebar / app. The page is no longer reachable from the portal.
+  Backend routes (`/api/broadcasts/generic`, `/api/broadcasts/shutdown`)
+  and the `Broadcast.ps1` helper remain in the installed app as dormant
+  code in case the feature is brought back later.
+
+
 ## [6.1.20] - 2026-05-28
 
 Feature: **Apply Coastal's sane-pricing patch to dune-admin from the Database page.**
