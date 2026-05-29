@@ -5,7 +5,7 @@
 
 $ErrorActionPreference = 'Stop'
 
-# ---------- v6.1.23: Process-scope ExecutionPolicy + emergency crash log -------
+# ---------- v6.1.24: Process-scope ExecutionPolicy + emergency crash log -------
 # Windows defaults non-server SKUs to ExecutionPolicy=Restricted, which blocks
 # dot-sourcing our bundled (unsigned) .ps1 files. The launcher would die on the
 # very first `. DuneLog.ps1` BEFORE Initialize-DuneLog could open a log file,
@@ -120,7 +120,7 @@ public static extern bool IsIconic(System.IntPtr hWnd);
 }
 
 # Version (one of the 5 sync'd constants; see persistent-notes.md)
-$script:DuneToolVersion = '6.1.23'
+$script:DuneToolVersion = '6.1.24'
 
 # ---------- Single-instance gate ----------------------------------------------
 # Every click of the desktop shortcut runs DuneServer.exe again. Without a
