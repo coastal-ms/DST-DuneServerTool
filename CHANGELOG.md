@@ -14,6 +14,65 @@ here cover everything those tags shipped.
 ## [Unreleased]
 
 
+## [6.1.23] - 2026-05-29
+
+Patch: **Fix silent startup crash on Restricted-policy / MOTW-tagged machines, plus preflight checker.**
+
+### Fixed
+- **Launcher silently died on Windows machines with `ExecutionPolicy=Restricted`
+  OR with Mark-of-the-Web on the installer's unpacked files** (window opened,
+  UAC fired, window closed, no log, no popup, no portal). Two root causes
+  fixed in tandem:
+
+  1. The compiled `DuneServer.exe` dot-sources its bundled (unsigned) `.ps1`
+     modules at startup. Under `Restricted`, every dot-source is blocked;
+     the first `. DuneLog.ps1` threw before `Initialize-DuneLog` could even
+     open the log file, so users had nothing to send us. **Fix:**
+     `app/DuneServer.ps1` now sets process-scope `ExecutionPolicy=Bypass`
+     as the very first action (no admin needed, no machine state change —
+     only affects this one process).
+
+  2. Even with `CurrentUser=RemoteSigned` (the standard dev-machine policy)
+     the launcher *still* failed if `DuneServerSetup.exe` was downloaded
+     from the internet, because Windows propagates **Mark-of-the-Web** to
+     every file unpacked from a downloaded installer. RemoteSigned treats
+     MOTW-tagged files as "remote" → blocks them. **Fix:** the installer
+     now runs `Get-ChildItem -Recurse '{app}' | Unblock-File` as a [Run]
+     step before launching the app, stripping the Zone.Identifier from
+     every shipped file.
+
+- **Silent crashes are now impossible.** Added an emergency startup logger
+  at `%LOCALAPPDATA%\DuneServer\dune-startup.log` that is opened BEFORE
+  the main logger and a global `trap` that catches any uncaught bootstrap
+  exception, writes the full stack to the emergency log, AND shows a
+  WinForms `MessageBox` so the user always sees what failed.
+- **Re-saved 4 `.ps1` files with UTF-8 BOM** per the v6.1.16 permanent
+  rule: `app/DuneServer.ps1`, `dune-server.ps1`,
+  `app/server/routes/DuneAdmin.ps1`,
+  `app/resources/dune-admin-patches/build-patched.ps1`. Two of them
+  (`dune-server.ps1` and `build-patched.ps1`) had parse errors under
+  Windows PowerShell 5.1 because of em-dashes mis-decoded as Windows-1252.
+
+### Added
+- **`tools/preflight/` — drop-in checker users can run when something is
+  wrong.** `DunePreflight.bat` (launcher) + `DunePreflight.ps1` (WinForms
+  results window) + `README.md`. Verifies elevation, OS build floor,
+  Hyper-V features + cmdlets, `pwsh.exe` / `ssh.exe` / `tar.exe` / `git.exe`
+  / `go.exe` on PATH, **`Get-ExecutionPolicy` per scope (detects the
+  pre-v6.1.23 silent-crash conditions)**, Defender exclusions,
+  **Mark-of-the-Web on every bundled .ps1 file** (not just the EXE),
+  AppLocker enforcement, install-dir completeness, port 47823 bind test,
+  default-browser registration, and writability of the state dir. Each
+  PASS / WARN / FAIL row is colour-coded with a per-row Fix command.
+  Bundled with the installer as `{app}\tools\preflight\` and gets its own
+  Start Menu shortcut "Dune Preflight (run as admin)". Saves a redacted
+  report to `Desktop\dune-preflight.txt` and copies it to the clipboard
+  for sharing with the maintainer. **PII (username, hostname, IPs,
+  user-profile paths, battlegroup IDs) is scrubbed from the saved /
+  clipboard report** but kept in the live GUI rows so the user can act
+  on it locally.
+
+
 ## [6.1.22] - 2026-05-28
 
 Patch: **Fold sane-pricing into the dune-admin updater (with opt-in checkbox).**
