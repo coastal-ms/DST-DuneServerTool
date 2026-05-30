@@ -14,6 +14,21 @@ here cover everything those tags shipped.
 ## [Unreleased]
 
 
+## [6.1.27] - 2026-05-29
+
+Patch: **Fix v6.1.26 wrapper-script regression that broke every install.**
+
+### Fixed
+- **Pricing-patch wrapper now actually executes.** v6.1.26's
+  `Start-DuneAdminPricingRebuild` here-string template emitted `""..""`
+  (two literal double-quotes around the value) instead of `"..."` for two
+  string literals inside the generated wrapper script. The result was a
+  syntactically invalid `rebuild-{stamp}.ps1` that pwsh refused to parse,
+  so every Install click left status stuck at `running`, no log file was
+  ever produced, and the chip in the UI spun forever. With the template
+  corrected the wrapper parses, runs `build-patched.ps1`, writes the log,
+  and transitions to `success`/`failed` like it did in v6.1.24/v6.1.25.
+
 ## [6.1.26] - 2026-05-29
 
 Patch: **Make dune-admin pricing-patch reinstalls reliably succeed.**
