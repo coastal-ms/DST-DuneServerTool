@@ -260,6 +260,16 @@ default, both auto-check on mount):
     This replaces the old price-threshold buy gate referenced on the bot's
     market control (Revy) page.
 
+    **Configurable buy odds (v6.3.0+):** the die size and the winning roll are
+    no longer fixed. Two inputs on the Settings page — **Die size (N)** and
+    **Buy on roll** — let you tune how aggressively the bot buys. The bot rolls a
+    1–N die per candidate listing and only buys on the target number, so a larger
+    die means fewer buys (e.g. `20` / `7` ≈ a 1-in-20 chance per listing). Values
+    are saved as `GambleDieSize` / `GambleTarget` and **baked into the patched
+    binary at build time**, so they take effect on the next patch (re)apply —
+    click **Install** with the "keep sane-pricing patch applied" box checked to
+    rebuild. The defaults (12 / 5) reproduce the original behaviour exactly.
+
 ### 🧙 Setup Wizard
 
 ![Setup Wizard](docs/img/v6-setup-wizard.png)
