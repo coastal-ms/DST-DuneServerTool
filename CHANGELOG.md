@@ -14,6 +14,28 @@ here cover everything those tags shipped.
 ## [Unreleased]
 
 
+## [6.1.28] - 2026-05-29
+
+Patch: **Idempotent reinstall — pre-patch snapshot/restore instead of git restore.**
+
+### Fixed
+- **Back-to-back reinstalls now succeed.** `build-patched.ps1` used to clean
+  up after a successful build by running `git restore` on each patched file.
+  That reverted the file to the user's *local* git HEAD, which on a typical
+  install machine is whatever commit the user happened to be sitting on
+  (often an older release than the one the installer just overlaid). The
+  next reinstall would then see a stale baseline and either fail
+  `git apply --check` (`Patch is stale relative to current source`) or
+  build a broken binary (`undefined: LoadState`, `OnChange undefined`,
+  etc., from `bot.go` referencing symbols a stale `config.go` no longer
+  exposes). Now the script snapshots the raw bytes of each touched file
+  *before* applying the patch and writes those exact bytes back in the
+  `finally` block — so the working tree returns to the **upstream-tarball
+  baseline that was just overlaid**, not the user's old git HEAD. Repeated
+  Install clicks are now true no-ops on disk and each rebuild starts from
+  a clean v0.15.0 baseline.
+
+
 ## [6.1.27] - 2026-05-29
 
 Patch: **Fix v6.1.26 wrapper-script regression that broke every install.**

@@ -58,6 +58,16 @@ try {
     $patchDir = Join-Path $scriptRoot 'patches'
     $patches  = @(Get-ChildItem -Path $patchDir -Filter '*.patch' -File -ErrorAction SilentlyContinue | Sort-Object Name)
 
+    # Snapshot of pre-patch file contents (raw bytes), keyed by repo-relative
+    # path. After the build we restore each file's exact pre-patch bytes so
+    # the working tree returns to whatever state it was in BEFORE we touched
+    # it — independent of the user's git HEAD. This is critical: a plain
+    # `git restore` reverts to LOCAL HEAD, which on user machines is often an
+    # older release than the one we just patched against, breaking subsequent
+    # reinstalls (the next `git apply --check` would find a mismatched
+    # baseline and fail).
+    $preSnapshots = @{}
+
     $patchedFiles = @()
     if ($patches.Count -eq 0) {
         Info "No patches in scripts\patches\ — building straight upstream."
@@ -75,6 +85,14 @@ try {
             # Try clean apply.
             & git apply --check -- $p.FullName 2>$null
             if ($LASTEXITCODE -eq 0) {
+                # Snapshot pre-patch bytes so the cleanup can restore them
+                # exactly (independent of git history).
+                foreach ($t in $touched) {
+                    $tPath = Join-Path $repoRoot $t
+                    if ((Test-Path -LiteralPath $tPath) -and -not $preSnapshots.ContainsKey($t)) {
+                        $preSnapshots[$t] = [System.IO.File]::ReadAllBytes($tPath)
+                    }
+                }
                 & git apply --whitespace=nowarn -- $p.FullName
                 if ($LASTEXITCODE -ne 0) { throw "Patch failed (clean apply): $($p.Name)" }
                 $patchedFiles += $touched
@@ -142,10 +160,23 @@ try {
         Info "version=$version commit=$gitCommit"
     } finally {
         if (-not $Keep -and $patchedFiles.Count -gt 0) {
-            Step "Reverting patched files (working tree → clean upstream)"
+            Step "Reverting patched files (working tree → exact pre-patch state)"
             foreach ($f in $patchedFiles) {
-                Info "git restore $f"
-                & git restore -- $f
+                if ($preSnapshots.ContainsKey($f)) {
+                    $fPath = Join-Path $repoRoot $f
+                    try {
+                        [System.IO.File]::WriteAllBytes($fPath, $preSnapshots[$f])
+                        Info "restored $f from snapshot"
+                    } catch {
+                        Info "snapshot restore failed for $f, falling back to git restore"
+                        & git restore -- $f
+                    }
+                } else {
+                    # No snapshot (e.g. the patch was already-applied path) —
+                    # leave the file as-is so we don't accidentally revert
+                    # against an older git HEAD.
+                    Info "no snapshot for $f — leaving as-is"
+                }
             }
         } elseif ($Keep) {
             Info "Leaving patches applied in working tree (-Keep). 'git status' will show diff."
