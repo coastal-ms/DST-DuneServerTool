@@ -13,7 +13,7 @@ param(
 # Wraps the original battlegroup.ps1 menu and adds extra tools
 # ============================================================
 
-$script:ToolVersion = "6.1.32"
+$script:ToolVersion = "6.1.33"
 
 # ============================================================
 #  CRASH / EXIT CLEANUP
@@ -1095,7 +1095,48 @@ while ($true) {
     # ========================================================
 
     if ($cmdName -eq "initial-setup") {
-        . "$bgSetupPath\initial-setup.ps1"
+        # Funcom's initial-setup.ps1 resolves the VM image (.vmcx), vm-utilities.ps1
+        # and its bootstrap dir relative to $scriptDir, expecting $scriptDir to be
+        # the battlegroup-management folder - that's how their own battlegroup.ps1
+        # launches it. We must NOT dot-source it into this process: it would inherit
+        # THIS tool's $scriptDir (the install dir, e.g. C:\Program Files\Dune Server)
+        # and look for the VM under "...\..\Virtual Machines" at the wrong location
+        # ("No .vmcx file found"). Worse, the script uses `exit 1` on every error,
+        # which - when dot-sourced - kills this entire window with no readable
+        # message ("runs 1 thing and closes"). Instead we run it in a child pwsh
+        # that replicates Funcom's environment, so every path resolves correctly and
+        # any `exit` only ends the child. We then pause so the window stays open.
+        $isScript = Join-Path $bgSetupPath 'initial-setup.ps1'
+        if (-not (Test-Path -LiteralPath $isScript)) {
+            Write-Host ""
+            Write-Host "Could not find Funcom's initial-setup.ps1." -ForegroundColor Red
+            Write-Host "  Expected at: $isScript" -ForegroundColor Gray
+            Write-Host "  Check that 'Steam Path' in Settings points at the Self-Hosted" -ForegroundColor Yellow
+            Write-Host "  Server install (the folder that contains 'battlegroup-management')." -ForegroundColor Yellow
+            Read-Host "Press Enter to close this window"
+            if ($Cmd) { break }
+            continue
+        }
+        $pwshExe = (Get-Process -Id $PID).Path
+        if (-not $pwshExe) { $pwshExe = 'pwsh.exe' }
+        $bgEsc = $bgSetupPath.Replace("'", "''")
+        # Mirror battlegroup.ps1: set $scriptDir to battlegroup-management, load
+        # vm-utilities.ps1, then run initial-setup.ps1 in that same scope.
+        $childScript = @"
+`$scriptDir = '$bgEsc'
+. '$bgEsc\vm-utilities.ps1'
+. '$bgEsc\initial-setup.ps1'
+"@
+        Write-Host "Running Funcom initial setup..." -ForegroundColor Cyan
+        & $pwshExe -NoProfile -ExecutionPolicy Bypass -Command $childScript
+        $rc = $LASTEXITCODE
+        Write-Host ""
+        if ($rc -and $rc -ne 0) {
+            Write-Host "initial-setup exited with code $rc (see messages above)." -ForegroundColor Yellow
+        } else {
+            Write-Host "initial-setup finished." -ForegroundColor Green
+        }
+        Read-Host "Press Enter to close this window"
         if ($Cmd) { break }
         continue
     }

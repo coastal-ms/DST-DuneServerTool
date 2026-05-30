@@ -14,7 +14,27 @@ here cover everything those tags shipped.
 ## [Unreleased]
 
 
-## [6.1.32] - 2026-05-29
+## [6.1.33] - 2026-05-30
+
+Fix: **Setup Wizard Step 3 (initial-setup) opened a console that "ran one thing and closed."**
+
+### Fixed
+
+- **Setup Wizard Step 3 / `initial-setup` console closing instantly:** the tool
+  dot-sourced Funcom's `initial-setup.ps1` directly into `dune-server.ps1`, so the
+  script inherited the tool's own `$scriptDir` (its install dir, e.g.
+  `C:\Program Files\Dune Server`) instead of the `battlegroup-management` folder.
+  It then looked for the VM image at `...\..\Virtual Machines` under the wrong path
+  and failed with `No .vmcx file found`. Because Funcom's script calls `exit 1` on
+  every error, dot-sourcing it killed the entire console window with no readable
+  message — the reported "runs 1 thing and closes." The tool now runs
+  `initial-setup.ps1` in a **child PowerShell** that replicates Funcom's own
+  environment (sets `$scriptDir` to `battlegroup-management` and loads
+  `vm-utilities.ps1`, exactly like their `battlegroup.ps1`), so every path resolves
+  correctly and any `exit` only ends the child. The window now stays open and shows
+  any error. A guard also reports a clear message if **Steam Path** in Settings does
+  not point at the Self-Hosted Server install (the folder containing
+  `battlegroup-management`).
 
 Feature: **dune-admin market bot "d12 gamble buy" pricing mode**, plus Settings quality-of-life.
 
