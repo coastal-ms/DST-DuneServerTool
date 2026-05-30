@@ -169,7 +169,14 @@ export function Settings() {
     try {
       const r = await installDuneAdminUpdate()
       if (r.ok) {
-        setDaMsg(`dune-admin.exe replaced with v${r.toVersion}. Restart any running instance.`)
+        const sshNote = r.sshKeyCopy?.ok
+          ? (r.sshKeyCopy.skipped
+              ? ' SSH key already in place.'
+              : ' SSH key copied next to dune-admin.exe.')
+          : (r.sshKeyCopy
+              ? ` WARNING: SSH key was NOT copied — dune-admin will not be able to reach the VM until you place sshKey in ${r.targetDir ?? 'the dune-admin folder'}. (${r.sshKeyCopy.message ?? 'no detail'})`
+              : '')
+        setDaMsg(`dune-admin.exe replaced with v${r.toVersion}. Restart any running instance.${sshNote}`)
         // v6.1.25: if the install kicked off the detached pricing-patch
         // rebuild, start polling its status. We DO NOT block on it here —
         // the binary install is already done.
@@ -202,7 +209,12 @@ export function Settings() {
       const r = await runDuneAdminSetup()
       if (r.ok) {
         const installedPart = r.didInstall ? 'Downloaded + installed dune-admin.exe, then ' : ''
-        setDaMsg(`${installedPart}opened the dune-admin setup wizard in a console window. Answer the prompts there — dune-admin will auto-launch when the wizard finishes.`)
+        const sshNote = r.sshKeyCopy?.ok
+          ? (r.sshKeyCopy.skipped ? ' SSH key already in place.' : ' SSH key copied next to dune-admin.exe.')
+          : (r.sshKeyCopy
+              ? ` WARNING: SSH key was NOT copied — dune-admin cannot reach the VM until you place sshKey in ${r.targetDir ?? 'the dune-admin folder'}. (${r.sshKeyCopy.message ?? 'no detail'})`
+              : '')
+        setDaMsg(`${installedPart}opened the dune-admin setup wizard in a console window. Answer the prompts there — dune-admin will auto-launch when the wizard finishes.${sshNote}`)
         // Re-check so the UI shows the new install + config.yaml state.
         try {
           setDaCheck(await checkDuneAdminUpdate({ force: false }))
