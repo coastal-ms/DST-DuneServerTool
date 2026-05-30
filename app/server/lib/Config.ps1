@@ -10,7 +10,9 @@ $script:DuneConfigKeys = @(
     'WindowsUser',
     'PortCheckMode',
     'PortCheckUrlTemplate',
-    'AutoApplyPricingPatch'
+    'AutoApplyPricingPatch',
+    'GambleDieSize',
+    'GambleTarget'
 )
 
 function Get-DuneConfigPath {

@@ -152,6 +152,40 @@ export function Settings() {
     }
   }
 
+  // Gamble die config — saved to dune-server.config as GambleDieSize /
+  // GambleTarget. The sane-pricing patch rolls a die per candidate listing and
+  // buys only on the target number. Defaults (12 / 5) reproduce the original
+  // patch behaviour. These take effect on the NEXT patch (re)apply — i.e. click
+  // Install with "Keep ... pricing patch" checked to rebuild with new values.
+  const dieSize = values.GambleDieSize?.trim() || '12'
+  const dieTarget = values.GambleTarget?.trim() || '5'
+  const [dieInput, setDieInput] = useState(dieSize)
+  const [targetInput, setTargetInput] = useState(dieTarget)
+  const [dieSaving, setDieSaving] = useState(false)
+  // Reflect externally-loaded config into the inputs once it arrives.
+  useEffect(() => { setDieInput(dieSize); setTargetInput(dieTarget) }, [dieSize, dieTarget])
+  const dieNum = Number.parseInt(dieInput, 10)
+  const targetNum = Number.parseInt(targetInput, 10)
+  const dieValid = Number.isInteger(dieNum) && dieNum >= 2
+  const targetValid = Number.isInteger(targetNum) && targetNum >= 1 && (dieValid ? targetNum <= dieNum : true)
+  const dieDirty = dieInput !== dieSize || targetInput !== dieTarget
+  async function onSaveDie() {
+    if (!dieValid || !targetValid) return
+    setDieSaving(true)
+    setDaErr(null)
+    try {
+      const out = await api<{ ok: boolean; complete: boolean; values: Record<string, string> }>(
+        '/api/config',
+        { method: 'PUT', body: JSON.stringify({ values: { ...values, GambleDieSize: String(dieNum), GambleTarget: String(targetNum) } }) },
+      )
+      setValues(out.values)
+    } catch (e) {
+      setDaErr(e instanceof Error ? e.message : String(e))
+    } finally {
+      setDieSaving(false)
+    }
+  }
+
   async function onCheckUpdate() {
     setUpdChecking(true)
     setUpdErr(null)
@@ -682,6 +716,64 @@ export function Settings() {
                   </span>
                   {autoApplySaving && <Icon name="Loader2" size={14} className="animate-spin text-text-dim" />}
                 </label>
+
+                {/* v6.3.0: gamble die config for the sane-pricing patch. The
+                    patch rolls a die per candidate listing and only buys on the
+                    target number, throttling buys. Die size + target are baked
+                    into the patched binary at build time, so changes take effect
+                    on the NEXT (re)apply — click Install with the box above
+                    checked to rebuild. */}
+                <div className="pt-3 border-t border-border">
+                  <div className="text-xs font-medium text-text mb-1">Pricing-patch buy odds (gamble die)</div>
+                  <div className="text-xs text-text-dim mb-2">
+                    The bot rolls a 1–N die per candidate listing and only buys when it
+                    hits the target number — a roughly 1-in-N chance per listing. Higher
+                    die size = fewer buys. Defaults (12 / 5) match the original patch.
+                  </div>
+                  <div className="flex flex-wrap items-end gap-3">
+                    <label className="text-xs">
+                      <span className="block text-text-dim mb-1">Die size (N)</span>
+                      <input
+                        type="number"
+                        min={2}
+                        className="w-24 px-2 py-1 rounded bg-bg border border-border text-text text-xs"
+                        value={dieInput}
+                        disabled={dieSaving}
+                        onChange={e => setDieInput(e.target.value)}
+                      />
+                    </label>
+                    <label className="text-xs">
+                      <span className="block text-text-dim mb-1">Buy on roll</span>
+                      <input
+                        type="number"
+                        min={1}
+                        className="w-24 px-2 py-1 rounded bg-bg border border-border text-text text-xs"
+                        value={targetInput}
+                        disabled={dieSaving}
+                        onChange={e => setTargetInput(e.target.value)}
+                      />
+                    </label>
+                    <button
+                      type="button"
+                      className="px-3 py-1.5 rounded bg-accent text-bg text-xs font-medium disabled:opacity-50"
+                      disabled={dieSaving || !dieValid || !targetValid || !dieDirty}
+                      onClick={() => void onSaveDie()}
+                    >
+                      {dieSaving ? 'Saving...' : 'Save odds'}
+                    </button>
+                  </div>
+                  {(!dieValid || !targetValid) && (
+                    <div className="text-xs text-danger mt-1.5">
+                      Die size must be ≥ 2, and buy-on-roll must be between 1 and the die size.
+                    </div>
+                  )}
+                  {dieValid && targetValid && dieDirty && (
+                    <div className="text-xs text-warning mt-1.5">
+                      Save, then click Install (with the patch box above checked) to rebuild
+                      <span className="font-mono"> dune-admin.exe</span> with the new odds.
+                    </div>
+                  )}
+                </div>
 
                 {/* v6.1.25: pricing-patch rebuild status panel. Shows when
                     /install kicks off the detached background rebuild. The

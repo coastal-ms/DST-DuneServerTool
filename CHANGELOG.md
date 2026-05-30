@@ -14,7 +14,35 @@ here cover everything those tags shipped.
 ## [Unreleased]
 
 
-## [6.2.4] - 2026-05-30
+## [6.3.0] - 2026-05-30
+
+Adds player-facing control over how aggressively the sane-pricing market bot
+buys. The patch has always rolled a die per candidate listing and only bought
+on one winning number (a d12, buy-on-5 — roughly a 1-in-12 chance per listing);
+those values are now configurable from the Settings page instead of being
+hard-coded in the patch.
+
+### Added
+
+- **Gamble die config for the pricing patch** (Settings → dune-admin updates).
+  Two new inputs — **Die size (N)** and **Buy on roll** — let you tune the bot's
+  buy frequency. The bot rolls a 1–N die per candidate listing and only buys when
+  it hits the target number, so a larger die means fewer buys. Defaults (12 / 5)
+  reproduce the original patch behaviour exactly, so existing installs are a
+  byte-identical no-op until you change them.
+  - Persisted to `dune-server.config` as `GambleDieSize` / `GambleTarget`.
+  - Validated both client- and server-side: die size ≥ 2, and buy-on-roll
+    between 1 and the die size.
+  - Baked into the patched `dune-admin.exe` at **build time** via the
+    `-GambleDie` / `-GambleTarget` parameters on `build-patched.ps1`, written with
+    LF endings and reverted from the working tree after the build (tree stays
+    clean). Non-default values rewrite the gamble-roll in `exchange.go`; the build
+    fails loudly if the expected pattern isn't found rather than silently shipping
+    stock odds.
+  - The UI notes that changes take effect on the **next** patch (re)apply — i.e.
+    click Install with the pricing-patch box checked to rebuild with the new odds.
+
+
 
 Hotfix on top of 6.2.3: the CRLF fix let the pricing-patch rebuild get past
 `git apply` for the first time — which immediately exposed a second bug that had
