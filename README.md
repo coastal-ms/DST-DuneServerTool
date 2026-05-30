@@ -211,7 +211,9 @@ All the things the Setup Wizard asked you, but editable any time:
   `disabled`
 - Port-check URL template (when mode is `custom`)
 
-Changes save on-click — no restart needed.
+Changes save on-click — no restart needed. The three path fields (Steam path,
+SSH key, `dune-admin.exe`) each have a **Browse** button that opens a native
+Windows folder/file picker.
 
 Two collapsible cards live at the top of the page (both minimized by
 default, both auto-check on mount):
@@ -248,6 +250,15 @@ default, both auto-check on mount):
     listings that aren't undercut by the bot can still exceed it:
 
     ![dune-admin Market Bot listings with sane-pricing applied](docs/img/v6-marketbot-pricing.png)
+
+    **d12 gamble-buy (v6.1.32+):** the same bundled patch also changes how the
+    market bot *buys* player listings. Instead of buying only when a listing is
+    at or below the bot's reference price, the bot now rolls a **12-sided die**
+    for each candidate listing on every buy tick — only a **5** buys the item,
+    **regardless of price**; any other roll skips it. The per-tick `MaxBuys`
+    cap and the unknown / non-buyable / disabled-item safety skips still apply.
+    This replaces the old price-threshold buy gate referenced on the bot's
+    market control (Revy) page.
 
 ### 🧙 Setup Wizard
 

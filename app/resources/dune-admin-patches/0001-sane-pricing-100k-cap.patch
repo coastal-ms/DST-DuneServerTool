@@ -341,3 +341,45 @@ index 8ce7bd4..79a1e6d 100644
  	return gradedPrice(roundPrice(basePrice(item, snap)), grade, snap.GradeMultipliers)
  }
  
+diff --git a/internal/marketbot/exchange.go b/internal/marketbot/exchange.go
+index aa0d019..df2505d 100644
+--- a/internal/marketbot/exchange.go
++++ b/internal/marketbot/exchange.go
+@@ -5,6 +5,7 @@ import (
+ 	"database/sql"
+ 	"fmt"
+ 	"log"
++	"math/rand"
+ 	"os"
+ 	"path/filepath"
+ 	"strings"
+@@ -445,9 +446,8 @@ func (e *Exchange) categoryFor(item CatalogItem) (mask int32, depth int16) {
+ }
+ 
+ func (e *Exchange) buyPlayerListings(ctx context.Context, orderExpiry int64, snap configValues) {
+-	if snap.BuyThreshold <= 0 {
+-		return
+-	}
++	// d12 gamble-buy: the price threshold no longer gates whether buying runs.
++	// Buying executes every tick; per-item purchase is decided by a dice roll below.
+ 	if orderExpiry <= 0 {
+ 		orderExpiry = 999_999_999
+ 	}
+@@ -502,12 +502,14 @@ func (e *Exchange) buyPlayerListings(ctx context.Context, orderExpiry int64, sna
+ 			continue
+ 		}
+ 
+-		refPrice := gradedPrice(botPrice, grade, snap.GradeMultipliers)
+-		if price > int64(float64(refPrice)*snap.BuyThreshold) {
+-			log.Printf("buy: skip %s price=%d ref=%d(grade%d) threshold=%.2f", tmpl, price, refPrice, grade, snap.BuyThreshold)
++		// d12 gamble-buy: ignore price entirely. Roll a 12-sided die per candidate
++		// listing; only a 5 buys the item, regardless of price. Otherwise skip.
++		if roll := rand.Intn(12) + 1; roll != 5 {
++			log.Printf("buy: d12 skip %s price=%d roll=%d (need 5)", tmpl, price, roll)
+ 			skippedPrice++
+ 			continue
+ 		}
++		log.Printf("buy: d12 hit %s price=%d grade=%d (buying regardless of price)", tmpl, price, grade)
+ 
+ 		totalCost := price * stackSize
+ 

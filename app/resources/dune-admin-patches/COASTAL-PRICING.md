@@ -10,7 +10,7 @@ clean against upstream `main`. (`install.sh` does the same on Linux installs.)
 
 | File | What it changes | Files touched |
 |---|---|---|
-| `0001-sane-pricing-100k-cap.patch` | Replaces the upstream rarity-weighted market-bot pricing (which produced multi-million-solari listings on T6 gear) with a tier-driven model calibrated for a small private server (~2 active players). Hard 100k cap on every listing, regardless of formula branch, vendor price, item rarity, or adaptive drift. Default config values realigned to match the new formula so a fresh-state restart produces identical pricing without needing disk persistence. | `internal/marketbot/pricing.go`, `internal/marketbot/config.go`, `internal/marketbot/config_test.go` |
+| `0001-sane-pricing-100k-cap.patch` | Replaces the upstream rarity-weighted market-bot pricing (which produced multi-million-solari listings on T6 gear) with a tier-driven model calibrated for a small private server (~2 active players). Hard 100k cap on every listing, regardless of formula branch, vendor price, item rarity, or adaptive drift. Default config values realigned to match the new formula so a fresh-state restart produces identical pricing without needing disk persistence. **Also replaces the market bot's price-threshold *buy* gate with a "d12 gamble buy": on every buy tick each candidate player listing rolls a 12-sided die; only a 5 buys the item, regardless of price, otherwise it is skipped. `MaxBuys` and the unknown/non-buyable/disabled safety skips still apply.** | `internal/marketbot/pricing.go`, `internal/marketbot/config.go`, `internal/marketbot/config_test.go`, `internal/marketbot/exchange.go` |
 
 ## Where things live
 
