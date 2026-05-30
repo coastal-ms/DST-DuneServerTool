@@ -56,13 +56,21 @@ function Get-DuneBattlegroupSnapshot {
         $result.output    = $text
         $result.exitCode  = $LASTEXITCODE
         $result.state     = Get-BgStateFromStatusText -Text $text
+        if ($result.state -eq 'stopped' -and $text -match '(?im)No resources found in .* namespace') {
+            $result.reason = 'Battlegroup not started (namespace is empty).'
+        }
         $parsed           = ConvertFrom-BgStatusText -Text $text
         $result.name        = $parsed.name
         $result.info        = $parsed.info
         $result.gameServers = $parsed.gameServers
         return $result
     } catch {
-        $result.reason = "SSH error: $($_.Exception.Message)"
+        $msg = $_.Exception.Message
+        if ($msg -match '(?im)No resources found in .* namespace') {
+            $result.reason = 'Battlegroup not started (namespace is empty).'
+        } else {
+            $result.reason = "SSH error: $msg"
+        }
         return $result
     }
 }

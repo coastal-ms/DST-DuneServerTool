@@ -14,6 +14,42 @@ here cover everything those tags shipped.
 ## [Unreleased]
 
 
+## [6.2.3] - 2026-05-30
+
+Hardens the dune-admin pricing-patch rebuild against line-ending corruption,
+polishes the in-app updater messaging, and fixes a couple of UI papercuts.
+
+Big thanks to **Techtonic** on Discord for surfacing the patch-apply failure that
+led to the root-cause fix below.
+
+### Fixed
+
+- **Pricing-patch rebuild failed with "Patch does not apply cleanly" / "Patch is
+  stale relative to current source."** The bundled `0001-sane-pricing-100k-cap.patch`
+  had been silently rewritten with **CRLF** line endings (cross-tree/OneDrive sync).
+  `git apply` matches context lines byte-for-byte, so a CRLF patch never applies to
+  the LF Go source — against **any** upstream dune-admin version. This masqueraded as
+  a "stale baseline" problem. Three-layer fix:
+  - The committed patch is normalized back to **LF**.
+  - `build-patched.ps1` now **self-heals**: it detects CR bytes in any patch and
+    applies an LF-normalized temp copy, so a re-corrupted patch still applies.
+  - A repo `.gitattributes` forces `*.patch`/`*.diff`/`*.go` to `eol=lf` so git can
+    never re-introduce CRLF.
+- **Database "Take Backup" button could stay greyed out even while the battlegroup
+  was running.** Availability came from a one-shot `/api/commands` fetch whose own
+  SSH `battlegroup status` call could latch a stale `stopped`/error result that never
+  refetched. Backup/restore availability is now derived from the **live** status poll.
+- **Misleading "SSH error: No resources found in <ns> namespace" on Server Health.**
+  An empty battlegroup namespace now reads **"Battlegroup not started (namespace is
+  empty)."**
+
+### Changed
+
+- **In-app updater messaging.** Replaced the modal/redirect dance with a clear
+  full-screen status that tells you plainly to **close all leftover Dune Server
+  browser tabs and console windows** once the new window opens. No more scripted
+  tab-closing promises the browser can't keep.
+
 ## [6.2.2] - 2026-05-30
 
 Makes cold first boots reliable: raises the cluster-readiness timeouts and stops
