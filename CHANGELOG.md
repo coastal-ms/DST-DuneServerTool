@@ -14,6 +14,37 @@ here cover everything those tags shipped.
 ## [Unreleased]
 
 
+## [6.2.2] - 2026-05-30
+
+Makes cold first boots reliable: raises the cluster-readiness timeouts and stops
+SSH key-auth failures from silently hanging the startup flow.
+
+Big thanks to **Techtonic** on Discord for patiently working through a cold
+first-boot bring-up and surfacing both of these issues.
+
+### Fixed
+
+- **Startup could hang indefinitely on "Waiting for DB pod(s) Ready…" when SSH
+  key auth wasn't working.** The DB / operator readiness phases run their `ssh`
+  calls inside a background runspace (so the live counter can tick). If the key
+  wasn't authorized on the VM, `ssh` silently fell back to a **password prompt**
+  that the background runspace has no console to answer — so it waited forever.
+  All non-interactive `ssh` calls now pass **`-o BatchMode=yes`**, so a key-auth
+  failure fails fast instead of hanging. The SSH-readiness gate now also prints
+  clear guidance (run `rotate-ssh-key`, or how to append the key's `.pub` to
+  `~/.ssh/authorized_keys`) when it can't connect.
+
+### Changed
+
+- **Cold-boot cluster-readiness timeouts raised.** A fresh battlegroup's *first*
+  boot can take 10–30 min (k3s + funcom-operators initializing, `metrics-server`
+  restarting until its serving cert is up, images still pulling). The old
+  180s/120s caps aborted healthy-but-slow boots. New budgets: VM IP 5 min, SSH
+  5 min, k3s API 10 min, DB pods 15 min, operators 15 min, webhook endpoints
+  5 min. Startup/reboot now also warn up front that "first boot can take 10–30
+  min." Both the `startup` and `reboot` readiness blocks were updated.
+
+
 ## [6.2.1] - 2026-05-30
 
 Fixes the sane-pricing patch build, adds new pre-flight checks, and lets the
