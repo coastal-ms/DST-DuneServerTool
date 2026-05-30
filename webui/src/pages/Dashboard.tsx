@@ -3,8 +3,9 @@ import { PageHeader } from '../components/PageHeader'
 import { Icon } from '../components/Icon'
 import { useStatus } from '../hooks/useStatus'
 import { BgSpiceSummary } from './dashboard/BgSpiceSummary'
-import type { BgState, PortResult, BgGameServer } from '../api/types'
+import type { BgState, BgGameServer } from '../api/types'
 import { getLinks, type LinksResponse } from '../api/links'
+import { checkDuneAdminUpdate } from '../api/duneAdmin'
 import { api, ApiError } from '../api/client'
 
 const BG_STYLES: Record<BgState | 'unknown', { cls: string; label: string }> = {
@@ -24,20 +25,6 @@ function fmtUptime(seconds: number): string {
   if (d > 0) return `${d}d ${h}h`
   if (h > 0) return `${h}h ${m}m`
   return `${m}m`
-}
-
-function portPill(r: PortResult): string {
-  switch (r.status) {
-    case 'open':     return 'pill-success'
-    case 'closed':   return 'pill-danger'
-    case 'udp-skip': return 'pill-muted'
-    default:         return 'pill-warning'
-  }
-}
-
-function portStatusText(r: PortResult): string {
-  if (r.status === 'udp-skip') return 'UDP (skipped)'
-  return r.status
 }
 
 // Map a health/phase string to a tone class. Used for Battlegroup Info
@@ -60,6 +47,37 @@ function GameServerRow({ s }: { s: BgGameServer }) {
       <td className="py-1 pr-3 font-mono">{s.players || '0'}</td>
       <td className="py-1 font-mono text-text-dim">{s.age || '—'}</td>
     </tr>
+  )
+}
+
+// Maps the Battlegroup operator's reconcile state to a heartbeat tone.
+// Healthy → green, Reconciling → yellow, anything else (unhealthy/failed) → red.
+// When the BG isn't reporting, the sensor goes flat (muted, no beat).
+function bgHeartbeat(bgReady: boolean, statusText: string | undefined): {
+  cls: string
+  label: string
+  beating: boolean
+} {
+  if (!bgReady || !statusText) return { cls: 'text-text-dim', label: 'No signal', beating: false }
+  const s = statusText.toLowerCase()
+  if (/(healthy|ready|running)/.test(s)) return { cls: 'text-success', label: 'Healthy', beating: true }
+  if (/(reconciling|starting|pending|updating)/.test(s)) return { cls: 'text-warning', label: statusText, beating: true }
+  return { cls: 'text-danger', label: statusText, beating: true }
+}
+
+function HeartbeatSensor({ bgReady, statusText }: { bgReady: boolean; statusText: string | undefined }) {
+  const hb = bgHeartbeat(bgReady, statusText)
+  return (
+    <div className="mt-auto pt-2 border-t border-border/30 flex items-center gap-2"
+         title="VM heartbeat — driven by the Battlegroup reconcile state. Refreshes every 30s.">
+      <Icon
+        name="HeartPulse"
+        size={30}
+        className={`${hb.cls} ${hb.beating ? 'animate-heartbeat' : ''}`}
+      />
+      <span className="text-[13px] uppercase tracking-wider text-text-dim">VM heartbeat</span>
+      <span className={`text-[15px] font-medium ml-auto ${hb.cls}`}>{hb.label}</span>
+    </div>
   )
 }
 
@@ -102,6 +120,33 @@ export function Dashboard() {
   const [exportBusy, setExportBusy] = useState<string | null>(null)
   const [exportMsg,  setExportMsg]  = useState<string | null>(null)
   const [exportErr,  setExportErr]  = useState<string | null>(null)
+
+  // Start the Dune Admin Tool — same action as the Commands "dune-admin" entry.
+  const [daBusy, setDaBusy] = useState(false)
+  const [daMsg,  setDaMsg]  = useState<string | null>(null)
+  const [daErr,  setDaErr]  = useState<string | null>(null)
+  // null = still checking; true/false = whether dune-admin.exe is located.
+  const [daInstalled, setDaInstalled] = useState<boolean | null>(null)
+
+  useEffect(() => {
+    let alive = true
+    void checkDuneAdminUpdate()
+      .then(r => { if (alive) setDaInstalled(!!r.installed?.exists) })
+      .catch(() => { if (alive) setDaInstalled(false) })
+    return () => { alive = false }
+  }, [])
+
+  const startDuneAdmin = useCallback(async () => {
+    setDaBusy(true); setDaErr(null); setDaMsg(null)
+    try {
+      await api('/api/commands/run/dune-admin', { method: 'POST' })
+      setDaMsg('dune-admin launched — its web UI will open in your browser.')
+    } catch (e) {
+      setDaErr(e instanceof ApiError ? e.message : String(e))
+    } finally {
+      setDaBusy(false)
+    }
+  }, [])
 
   const runExport = useCallback(async (name: string, label: string) => {
     setExportBusy(name); setExportErr(null); setExportMsg(null)
@@ -222,7 +267,7 @@ export function Dashboard() {
           <BgSpiceSummary enabled={bgReady} />
         </div>
 
-        <div className="card p-4">
+        <div className="card p-4 flex flex-col">
           <div className="flex items-center justify-between mb-2">
             <h2 className="text-sm font-semibold uppercase tracking-wider text-text-muted flex items-center gap-2">
               <Icon name="ServerCog" size={14} className="text-accent" /> Game servers
@@ -251,6 +296,7 @@ export function Dashboard() {
               </tbody>
             </table>
           )}
+          <HeartbeatSensor bgReady={bgReady} statusText={bgInfo?.status} />
         </div>
       </section>
 
@@ -258,36 +304,48 @@ export function Dashboard() {
         <div className="card p-5">
           <div className="flex items-center justify-between mb-3">
             <h2 className="text-sm font-semibold uppercase tracking-wider text-text-muted flex items-center gap-2">
-              <Icon name="Plug" size={14} className="text-accent" /> Public port status
+              <Icon name="Boxes" size={14} className="text-accent" /> Start the Dune Admin Tool
             </h2>
-            {ports?.cached && (
-              <span className="text-[10px] text-text-dim">cached · {ports.ageSecs}s ago</span>
-            )}
+            <a
+              href="https://github.com/Icehunter"
+              target="_blank"
+              rel="noopener noreferrer"
+              title="dune-admin is built by Icehunter — visit GitHub profile"
+              className="flex items-center gap-1 text-[10px] font-mono text-text-dim
+                         hover:text-accent px-1.5 py-0.5 rounded bg-surface-3/60
+                         border border-border/60 transition-colors shrink-0"
+            >
+              <Icon name="Github" size={10} />
+              <span>by Icehunter</span>
+            </a>
           </div>
-          {!ports || ports.results.length === 0 ? (
-            <p className="text-sm text-text-dim italic">
-              {ports?.mode === 'disabled' ? 'Port checks disabled in Settings.' : 'No status yet.'}
-            </p>
-          ) : (
-            <ul className="space-y-2">
-              {ports.results.map(r => (
-                <li key={`${r.protocol}-${r.port}`} className="flex items-center justify-between gap-2 text-sm">
-                  <div className="min-w-0">
-                    <div className="truncate">{r.label}</div>
-                    <div className="text-xs text-text-dim font-mono">{r.protocol} · {r.port}</div>
-                  </div>
-                  <span className={portPill(r)}>
-                    <Icon name={
-                      r.status === 'open' ? 'CheckCircle2'
-                        : r.status === 'closed' ? 'XCircle'
-                        : 'CircleDashed'
-                    } size={10} />
-                    {portStatusText(r)}
-                  </span>
-                </li>
-              ))}
-            </ul>
-          )}
+          <p className="text-xs text-text-dim mb-3">
+            Launches dune-admin and opens its web UI. The VM must be running.
+          </p>
+          <div className="flex flex-wrap gap-2">
+            <button
+              className="btn-primary"
+              disabled={daInstalled !== true || !vm?.running || daBusy}
+              onClick={() => { void startDuneAdmin() }}
+              title={
+                daInstalled === false ? 'dune-admin.exe not found — install it from Settings first'
+                  : daInstalled === null ? 'Checking dune-admin install…'
+                  : !vm?.running ? 'VM must be running'
+                  : 'Launch dune-admin and open its web UI'
+              }
+            >
+              <Icon
+                name={daBusy ? 'Loader2' : daInstalled === false ? 'XCircle' : 'Play'}
+                size={14}
+                className={daBusy ? 'animate-spin' : ''}
+              />
+              {daInstalled === null ? 'Checking…'
+                : daInstalled === false ? 'Not installed'
+                : 'Start the Dune Admin Tool'}
+            </button>
+          </div>
+          {daMsg && <p className="mt-3 text-xs text-text-muted border-l-2 border-accent pl-2">{daMsg}</p>}
+          {daErr && <p className="mt-3 text-xs text-danger break-words">{daErr}</p>}
         </div>
 
         <div className="card p-5">

@@ -1,4 +1,4 @@
-﻿# /api/dune-admin - dune-admin.exe updater (third-party companion tool)
+# /api/dune-admin - dune-admin.exe updater (third-party companion tool)
 #
 # Checks GitHub releases for Icehunter/dune-admin, compares against the
 # installed dune-admin.exe (path from DuneAdminExe in dune-server.config),
@@ -34,9 +34,17 @@ function Compare-DuneAdminSemver {
 # --- Helpers -----------------------------------------------------------------
 
 function Get-DuneAdminConfiguredPath {
+    # The Settings field now stores a FOLDER (where dune-admin should live),
+    # but every consumer wants the full dune-admin.exe path. Normalize here so
+    # there's one source of truth: if the stored value already ends in .exe
+    # (back-compat with configs saved before the folder change) use it as-is;
+    # otherwise treat it as the install folder and append dune-admin.exe.
     $cfg = Read-DuneConfig
-    if ($cfg.Contains('DuneAdminExe')) { return [string]$cfg['DuneAdminExe'] }
-    return ''
+    if (-not $cfg.Contains('DuneAdminExe')) { return '' }
+    $val = ([string]$cfg['DuneAdminExe']).Trim()
+    if (-not $val) { return '' }
+    if ($val -match '\.exe$') { return $val }
+    return (Join-Path ($val.TrimEnd('\','/')) 'dune-admin.exe')
 }
 
 # Copies the configured SSH key (private + .pub if present) into the
@@ -139,7 +147,7 @@ function Get-DuneAdminInstalledVersion {
         lastWriteTime  = $null
     }
     if (-not $ExePath) { return $info }
-    if (-not (Test-Path -LiteralPath $ExePath)) { return $info }
+    if (-not (Test-Path -LiteralPath $ExePath -PathType Leaf)) { return $info }
     $info.exists = $true
     try {
         $f = Get-Item -LiteralPath $ExePath
@@ -243,86 +251,9 @@ function Get-DuneAdminConfigYamlPath {
     return Join-Path $env:USERPROFILE '.dune-admin\config.yaml'
 }
 
-function Get-DuneAdminMarketBotHealth {
-    # Self-diagnose the common "No market bot connected" case: the embedded
-    # market bot dials Postgres (db_host:db_port from dune-admin's config.yaml)
-    # at startup. In kubectl/k3s topologies that DB is reached over a tunnel
-    # (e.g. 127.0.0.1:15432). If the tunnel is down when dune-admin launches,
-    # the bot's DB ping fails, marketbot.Run errors, and the market panel shows
-    # nothing with no explanation. We probe the same host:port so the portal can
-    # say "DB unreachable" instead of leaving the user guessing.
-    $yamlPath = Get-DuneAdminConfigYamlPath
-    $result = [ordered]@{
-        checked      = $false
-        configExists = (Test-Path -LiteralPath $yamlPath)
-        botEnabled   = $null
-        dbHost       = $null
-        dbPort       = $null
-        reachable    = $null
-        status       = 'unknown'   # ok | unreachable | disabled | no-config | unknown
-        message      = $null
-    }
-    if (-not $result.configExists) {
-        $result.status  = 'no-config'
-        $result.message = 'dune-admin has not been set up yet (no config.yaml).'
-        return [pscustomobject]$result
-    }
-    try {
-        foreach ($line in Get-Content -LiteralPath $yamlPath -ErrorAction Stop) {
-            if ($line -match '^\s*market_bot_enabled\s*:\s*(.+?)\s*$') {
-                $v = $Matches[1].Trim().Trim('"').ToLower()
-                $result.botEnabled = ($v -eq 'true' -or $v -eq 'yes' -or $v -eq '1' -or $v -eq 'on')
-            } elseif ($line -match '^\s*db_host\s*:\s*(.+?)\s*$') {
-                $result.dbHost = $Matches[1].Trim().Trim('"')
-            } elseif ($line -match '^\s*db_port\s*:\s*(\d+)\s*$') {
-                $result.dbPort = [int]$Matches[1]
-            }
-        }
-    } catch {
-        $result.status  = 'unknown'
-        $result.message = "Could not read config.yaml: $($_.Exception.Message)"
-        return [pscustomobject]$result
-    }
-
-    if ($result.botEnabled -eq $false) {
-        $result.status  = 'disabled'
-        $result.message = 'Embedded market bot is disabled in dune-admin config (market_bot_enabled: false).'
-        return [pscustomobject]$result
-    }
-    if (-not $result.dbHost -or -not $result.dbPort) {
-        $result.status  = 'unknown'
-        $result.message = 'config.yaml is missing db_host/db_port.'
-        return [pscustomobject]$result
-    }
-
-    # TCP probe with a short timeout so the status poll never hangs.
-    $result.checked = $true
-    $reachable = $false
-    try {
-        $client = [System.Net.Sockets.TcpClient]::new()
-        $iar = $client.BeginConnect($result.dbHost, $result.dbPort, $null, $null)
-        if ($iar.AsyncWaitHandle.WaitOne(1500, $false) -and $client.Connected) {
-            $reachable = $true
-            try { $client.EndConnect($iar) } catch { }
-        }
-        $client.Close()
-    } catch {
-        $reachable = $false
-    }
-    $result.reachable = $reachable
-    if ($reachable) {
-        $result.status  = 'ok'
-        $result.message = "Market bot DB reachable at $($result.dbHost):$($result.dbPort)."
-    } else {
-        $result.status  = 'unreachable'
-        $result.message = "Market bot DB unreachable at $($result.dbHost):$($result.dbPort). The embedded bot will fail to start (no market). If you use a kubectl/SSH tunnel for Postgres, make sure it is running before launching dune-admin."
-    }
-    return [pscustomobject]$result
-}
-
 function Test-DuneAdminFileLocked {
     param([string]$Path)
-    if (-not (Test-Path -LiteralPath $Path)) { return $false }
+    if (-not (Test-Path -LiteralPath $Path -PathType Leaf)) { return $false }
     try {
         $fs = [System.IO.File]::Open($Path, 'Open', 'ReadWrite', 'None')
         $fs.Close()
@@ -729,14 +660,44 @@ Register-DuneRoute -Method GET -Path '/api/dune-admin/check' -Handler {
     }
 }
 
-# GET /api/dune-admin/market-bot-health - probe the bot's DB host:port
-Register-DuneRoute -Method GET -Path '/api/dune-admin/market-bot-health' -Handler {
+# GET /api/dune-admin/dotfolder - reports whether the per-user ~/.dune-admin
+# config folder exists. dune-admin's -setup writes config.yaml here; a stale
+# copy left behind when the install location changes holds DB/host pointers
+# from the previous install and makes the market bot fail to start. The
+# Settings install/setup preflight uses this to OFFER (never auto-perform) a
+# cleanup, always asking the user first.
+Register-DuneRoute -Method GET -Path '/api/dune-admin/dotfolder' -Handler {
+    param($req, $res, $routeParams, $body)
+    $path = Join-Path $env:USERPROFILE '.dune-admin'
+    Write-DuneJson -Response $res -Body @{
+        path   = $path
+        exists = (Test-Path -LiteralPath $path -PathType Container)
+    }
+}
+
+# POST /api/dune-admin/dotfolder/delete - delete EXACTLY %USERPROFILE%\.dune-admin
+# (recursively). Hard-guarded so it can only ever remove that one folder and
+# nothing else. The server NEVER deletes on its own: callers must have already
+# asked the user for explicit permission (see Settings preflight).
+Register-DuneRoute -Method POST -Path '/api/dune-admin/dotfolder/delete' -Handler {
     param($req, $res, $routeParams, $body)
     try {
-        $h = Get-DuneAdminMarketBotHealth
-        Write-DuneJson -Response $res -Body $h
+        $profile  = [System.IO.Path]::GetFullPath($env:USERPROFILE)
+        $expected = [System.IO.Path]::GetFullPath((Join-Path $profile '.dune-admin'))
+        # Safety: only ever the literal <profile>\.dune-admin — refuse anything else.
+        $leaf = Split-Path -Leaf $expected
+        if ($leaf -ne '.dune-admin' -or (Split-Path -Parent $expected) -ne $profile) {
+            Write-DuneError -Response $res -Status 400 -Message "Refusing to delete unexpected path: $expected"
+            return
+        }
+        if (-not (Test-Path -LiteralPath $expected -PathType Container)) {
+            Write-DuneJson -Response $res -Body @{ ok = $true; deleted = $false; path = $expected; message = 'Nothing to delete.' }
+            return
+        }
+        Remove-Item -LiteralPath $expected -Recurse -Force -ErrorAction Stop
+        Write-DuneJson -Response $res -Body @{ ok = $true; deleted = $true; path = $expected }
     } catch {
-        Write-DuneError -Response $res -Status 500 -Message $_.Exception.Message
+        Write-DuneError -Response $res -Status 500 -Message "Failed to delete .dune-admin folder: $($_.Exception.Message)"
     }
 }
 
@@ -1138,6 +1099,10 @@ echo ------------------------------------------------------------
 if "%RC%"=="0" (
     if exist "$configYaml" (
         echo Setup complete. Launching dune-admin in a new window...
+        rem Make sure no leftover/hidden dune-admin is already running — a second
+        rem instance locks the market bot's SQLite cache and makes the bot fail
+        rem with "unable to open database file (14)" (no market). Best-effort.
+        taskkill /F /IM dune-admin.exe >nul 2>&1
         start "dune-admin" "$exePath"
         timeout /t 3 >nul
         echo dune-admin is now running on http://localhost:8080

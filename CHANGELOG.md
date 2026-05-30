@@ -14,6 +14,64 @@ here cover everything those tags shipped.
 ## [Unreleased]
 
 
+## [10.0.0] - 2026-05-30
+
+Displayed in-app as **X**. Feature release rolling up everything since 6.3.2. Focus: dune-admin
+operability (config-files handling, SSH-key rotation, folder picker, reliable
+reinstall) plus market-bot pricing correctness and a testing-only listings wipe.
+
+### Added
+
+- **Local config-files support.** A new "Use local config files" toggle (Settings)
+  switches the server between the effective merged config and a raw local file,
+  and the installer now seeds `UseLocalConfigFiles=true` on fresh installs
+  (existing configs are preserved). Backend splits raw-vs-effective config.
+- **DST config-files store.** `Sync-DstConfigFiles` maintains a backup snapshot
+  under `%APPDATA%\DuneServer\configFiles\` (sshKey + .pub, dune-server.config,
+  a dune-admin `config.yaml` backup) and re-dumps the SSH key into the dune-admin
+  folder. Backup/re-dump only — normal paths always win; opt-in, never required.
+  New endpoints `GET /api/config-files` and `POST /api/config-files/sync`, with a
+  "Local config files" panel + Refresh button in Settings.
+- **Generate new SSH key button** next to the SshKey field. Runs `rotate-ssh-key`,
+  waits for completion, then `Sync-DstConfigFiles` propagates the new key
+  everywhere. New `POST /api/config/rotate-ssh-key`.
+- **dune-admin folder picker.** The dune-admin path field is now a folder picker
+  (the tool installs `dune-admin.exe`, so the exe doesn't exist at config time).
+  Backend normalizes folder vs. exe paths transparently.
+- **VM heartbeat sensor** on the Game-servers card — an animated liveness pulse
+  pinned to the bottom of the card, driven by the VM probe.
+- **"Wipe all listings" testing button** (Settings → dune-admin updates). Guarded
+  by an "I approve" checkbox + confirm dialog; clears the market bot's exchange
+  orders/items so it re-lists from scratch. Testing only. New
+  `POST /api/db/wipe-bot-listings`.
+- **Market-bot pricing defaults re-seed.** The sane-pricing dune-admin patch now
+  carries a one-time defaults migration: when an older persisted config is loaded,
+  the Grade/Rarity/Vendor multiplier defaults are re-seeded once to the current
+  sane values, then operator edits afterward stick. Fixes bots that were stuck on
+  stale multiplier defaults from earlier patch versions. The pricing-logic patch
+  sets bot-level defaults at patch time; operators can still adjust them later.
+
+### Changed
+
+- **Header port pills** split into individual green/neutral indicators driven by
+  per-port probes instead of one combined pill.
+- **Reinstalling dune-admin now always offers to delete a stale `.dune-admin`
+  folder** (not just on first install / folder change). A stale dotfolder was the
+  real cause behind "bot won't start / no market"; the prompt is context-aware
+  (setting up / changing folder / reinstalling) and never auto-deletes.
+- Single-instance enforcement: any running `dune-admin` is stopped before launch.
+
+### Removed
+
+- **Characters page** removed. The sidebar entry now launches dune-admin and opens
+  the players URL (guarded so it only fires when the server is running).
+- **Market-bot database health check** (added in 6.3.1) removed. It TCP-probed
+  `127.0.0.1:15432`, but the embedded bot dials Postgres over dune-admin's own
+  in-process pool with no local listener, so the probe was a persistent false
+  negative even while the bot listed thousands of items. The `.dune-admin`
+  reinstall delete-prompt addresses the real "bot won't start" cause.
+
+
 ## [6.3.2] - 2026-05-30
 
 ### Added

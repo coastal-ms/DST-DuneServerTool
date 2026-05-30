@@ -2,7 +2,6 @@ import { Routes, Route } from 'react-router-dom'
 import { AppShell } from './layout/AppShell'
 import { Dashboard } from './pages/Dashboard'
 import { Commands } from './pages/Commands'
-import { Characters } from './pages/Characters'
 import { GameConfig } from './pages/GameConfig'
 import { Database } from './pages/Database'
 import { Sietches } from './pages/Sietches'
@@ -21,7 +20,6 @@ export default function App() {
           <Route path="/"           element={<Dashboard />} />
           <Route path="/commands"   element={<Commands />} />
           <Route path="/terminal"   element={<TerminalPage />} />
-          <Route path="/characters" element={<Characters />} />
           <Route path="/gameconfig" element={<GameConfig />} />
           <Route path="/database"   element={<Database />} />
           <Route path="/sietches"   element={<Sietches />} />

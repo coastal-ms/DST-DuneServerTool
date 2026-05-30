@@ -95,3 +95,20 @@
   .pill-info    { @apply inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-medium border bg-info/10 border-info/30 text-info; }
   .pill-muted   { @apply inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-medium border bg-surface-2 border-border text-text-muted; }
 }
+
+/* Steady double-thump heartbeat used by the Game-servers health sensor. */
+@keyframes heartbeat {
+  0%   { transform: scale(1); }
+  14%  { transform: scale(1.35); }
+  28%  { transform: scale(1); }
+  42%  { transform: scale(1.35); }
+  70%  { transform: scale(1); }
+  100% { transform: scale(1); }
+}
+.animate-heartbeat {
+  animation: heartbeat 1.4s ease-in-out infinite;
+  transform-origin: center;
+}
+@media (prefers-reduced-motion: reduce) {
+  .animate-heartbeat { animation: none; }
+}

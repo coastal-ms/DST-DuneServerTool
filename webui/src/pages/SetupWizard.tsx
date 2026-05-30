@@ -328,7 +328,7 @@ function Step6Finalize() {
       </p>
       <ul className="text-sm text-text-dim space-y-2">
         <li><Link to="/" className="text-accent hover:underline">Server Health</Link> — start/stop the battlegroup, view logs</li>
-        <li><Link to="/characters" className="text-accent hover:underline">Characters</Link> — edit player stats and inventory</li>
+        <li><a href="https://dune-admin.layout.tools/#/players" target="_blank" rel="noopener noreferrer" className="text-accent hover:underline">Characters</a> — edit players in dune-admin (launch it from the sidebar first)</li>
         <li><Link to="/database" className="text-accent hover:underline">Database</Link> — schedule backups, run SQL</li>
         <li><Link to="/settings" className="text-accent hover:underline">Settings</Link> — rotate SSH key, change password</li>
       </ul>

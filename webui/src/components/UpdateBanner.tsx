@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { Icon } from './Icon'
 import { useUpdateCheck } from '../hooks/useUpdateCheck'
 import { installUpdate } from '../api/update'
+import { fmtToolVersion } from '../format'
 
 const DISMISS_KEY = 'dune.update.dismissed'
 
@@ -56,7 +57,7 @@ function UpdatingPage({ toVersion }: { toVersion?: string }) {
         </h1>
         {toVersion && (
           <p className="mt-1 text-sm text-amber-200/70">
-            {offline ? `Now running v${toVersion}` : `Installing v${toVersion}`}
+            {offline ? `Now running ${fmtToolVersion(toVersion)}` : `Installing ${fmtToolVersion(toVersion)}`}
           </p>
         )}
 
@@ -152,8 +153,8 @@ export function UpdateBanner() {
       <Icon name="Download" size={16} className="text-amber-300 shrink-0" />
       <div className="flex-1 min-w-0">
         <strong className="font-semibold">Update available:</strong>{' '}
-        <span className="text-amber-50">v{data.latestVersion}</span>
-        <span className="text-amber-200/70"> (you're on v{data.currentVersion})</span>
+        <span className="text-amber-50">{fmtToolVersion(data.latestVersion)}</span>
+        <span className="text-amber-200/70"> (you're on {fmtToolVersion(data.currentVersion)})</span>
         {data.releaseUrl && (
           <>
             {' · '}

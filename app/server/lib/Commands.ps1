@@ -38,7 +38,7 @@ $script:DuneCommands = @(
     @{ Section='Battlegroup'; Key='16'; Name='shell-pod';                Mode='Console'; Requires='running'; DisabledWhen='bg-stopped';  Desc='Open a shell to a pod' }
 
     @{ Section='Tools'; Key='17'; Name='ssh';         Mode='Console'; Requires='running'; Desc='Open an SSH terminal to the VM' }
-    @{ Section='Tools'; Key='18'; Name='dune-admin';  Mode='InApp';   Requires='running'; Desc='Launch dune-admin + open its web UI' }
+    @{ Section='Tools'; Key='18'; Name='dune-admin';  Mode='InApp';   Requires='running'; Hidden=$true; Desc='Launch dune-admin + open its web UI' }
     @{ Section='Tools'; Key='19'; Name='setup-guide'; Mode='InApp';   Requires='none';    Desc='Open Funcom self-hosted setup guide' }
 )
 
@@ -152,6 +152,7 @@ function Get-DuneDefaultCommandLayout {
     }
     $sorted = @(
         $script:DuneCommands |
+            Where-Object { -not $_.Hidden } |
             ForEach-Object {
                 $p = if ($priority.ContainsKey($_.Name)) { $priority[$_.Name] } else { 2 }
                 [pscustomobject]@{ Name = $_.Name; Priority = $p }
@@ -201,7 +202,7 @@ function Get-DuneCommandLayout {
             # and de-dupe across all three (a command may only live in one
             # section at a time).
             $catalogSet = @{}
-            foreach ($c in $script:DuneCommands) { $catalogSet[$c.Name] = $true }
+            foreach ($c in $script:DuneCommands) { if ($c.Hidden) { continue }; $catalogSet[$c.Name] = $true }
             $sections = @(@(), @(), @())
             $seen     = @{}
             for ($i = 0; $i -lt 3; $i++) {
@@ -221,6 +222,7 @@ function Get-DuneCommandLayout {
             # introduced after the layout was saved) land in section 0 so
             # they're always visible.
             foreach ($c in $script:DuneCommands) {
+                if ($c.Hidden) { continue }
                 if (-not $seen.ContainsKey($c.Name)) {
                     $sections[0] += $c.Name
                     $seen[$c.Name] = $true
@@ -261,7 +263,7 @@ function Save-DuneCommandLayout {
 
     # Sanitize sections — only catalogue commands, globally unique.
     $catalogSet = @{}
-    foreach ($c in $script:DuneCommands) { $catalogSet[$c.Name] = $true }
+    foreach ($c in $script:DuneCommands) { if ($c.Hidden) { continue }; $catalogSet[$c.Name] = $true }
     $cleanSections = @(@(), @(), @())
     $seen = @{}
     for ($i = 0; $i -lt 3; $i++) {
@@ -277,6 +279,7 @@ function Save-DuneCommandLayout {
     # Any catalogue command not represented in the incoming payload still has
     # to live somewhere — park it in section 0 so it's discoverable.
     foreach ($c in $script:DuneCommands) {
+        if ($c.Hidden) { continue }
         if (-not $seen.ContainsKey($c.Name)) {
             $cleanSections[0] += $c.Name
             $seen[$c.Name] = $true

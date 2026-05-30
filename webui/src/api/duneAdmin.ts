@@ -118,19 +118,29 @@ export function pricingPatchStatus() {
   return api<DuneAdminPricingPatchStatus>(`/api/dune-admin/pricing-patch-status`)
 }
 
-export interface DuneAdminMarketBotHealth {
-  checked: boolean
-  configExists: boolean
-  botEnabled: boolean | null
-  dbHost: string | null
-  dbPort: number | null
-  reachable: boolean | null
-  status: 'ok' | 'unreachable' | 'disabled' | 'no-config' | 'unknown'
-  message: string | null
+export interface DuneAdminDotFolder {
+  path: string
+  exists: boolean
 }
 
-export function marketBotHealth() {
-  return api<DuneAdminMarketBotHealth>(`/api/dune-admin/market-bot-health`)
+/** Reports whether the per-user ~/.dune-admin config folder exists. A stale
+ *  copy (left behind when the install location changes) makes the market bot
+ *  fail. The install/setup preflight uses this to OFFER a cleanup. */
+export function getDuneAdminDotFolder() {
+  return api<DuneAdminDotFolder>(`/api/dune-admin/dotfolder`)
+}
+
+export interface DuneAdminDotFolderDeleteResult {
+  ok: boolean
+  deleted: boolean
+  path: string
+  message?: string
+}
+
+/** Deletes EXACTLY %USERPROFILE%\.dune-admin. Only call after the user has
+ *  explicitly granted permission — the server never deletes on its own. */
+export function deleteDuneAdminDotFolder() {
+  return api<DuneAdminDotFolderDeleteResult>(`/api/dune-admin/dotfolder/delete`, { method: 'POST', body: '{}' })
 }
 
 export function runDuneAdminSetup() {

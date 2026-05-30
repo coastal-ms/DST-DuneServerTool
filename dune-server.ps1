@@ -13,7 +13,7 @@ param(
 # Wraps the original battlegroup.ps1 menu and adds extra tools
 # ============================================================
 
-$script:ToolVersion = "6.3.2"
+$script:ToolVersion = "10.0.0"
 
 # Cold-boot readiness budgets (seconds). A fresh battlegroup's FIRST boot can
 # take 10-30 min: k3s + funcom-operators initialize, metrics-server restarts a
@@ -295,6 +295,11 @@ function Run-Setup {
     }
     Write-Host ""
 
+    # New installs default to using the local config-files store (safe: the
+    # SSH-key override only kicks in once a local copy actually exists). Existing
+    # configs keep whatever they already had.
+    $useLocalCfg = if ($existing -and $existing.UseLocalConfigFiles) { $existing.UseLocalConfigFiles } else { 'true' }
+
     # ── Save ──
     $config = @(
         "# Dune Awakening Server Management — Configuration"
@@ -307,6 +312,7 @@ function Run-Setup {
         "WindowsUser=$winUser"
         "PortCheckMode=$portCheckMode"
         "PortCheckUrlTemplate=$portCheckUrlTemplate"
+        "UseLocalConfigFiles=$useLocalCfg"
     )
     $config | Set-Content -Path $configFile -Encoding UTF8
 
@@ -505,6 +511,17 @@ $vmName        = 'dune-awakening'
 $sshKey        = $cfg.SshKey
 $sshUser       = 'dune'
 $duneAdminExe  = $cfg.DuneAdminExe
+# The Settings UI now stores a FOLDER for dune-admin (folder picker), but the
+# launch path below needs the full dune-admin.exe path. Mirror the in-app
+# normalization (Get-DuneAdminConfiguredPath): if the value already ends in
+# .exe use it as-is (back-compat with older configs); otherwise treat it as
+# the install folder and append dune-admin.exe.
+if ($duneAdminExe) {
+    $duneAdminExe = ([string]$duneAdminExe).Trim()
+    if ($duneAdminExe -and $duneAdminExe -notmatch '\.exe$') {
+        $duneAdminExe = Join-Path ($duneAdminExe.TrimEnd('\','/')) 'dune-admin.exe'
+    }
+}
 $duneAdminWeb  = 'https://dune-admin.layout.tools/#/players'
 $bgSetupPath   = "$($cfg.SteamPath)\battlegroup-management"
 $windowsUser   = $cfg.WindowsUser
@@ -1930,18 +1947,29 @@ while ($true) {
 
         Write-Host "Launching dune-admin.exe and web UI as $windowsUser..." -ForegroundColor Cyan
         $duneAdminDir = Split-Path $duneAdminExe -Parent
-        # Launch as the logged-in user via scheduled task (avoids admin elevation)
-        try {
-            $action = New-ScheduledTaskAction -Execute $duneAdminExe -WorkingDirectory $duneAdminDir
-            $principal = New-ScheduledTaskPrincipal -UserId $windowsUser -LogonType Interactive -RunLevel Limited
-            Register-ScheduledTask -TaskName "DuneAdminLaunch" -Action $action -Principal $principal -Force | Out-Null
-            Start-ScheduledTask -TaskName "DuneAdminLaunch"
-            Start-Sleep -Seconds 1
-            Unregister-ScheduledTask -TaskName "DuneAdminLaunch" -Confirm:$false
-        } catch {
-            Write-Host "Failed to launch dune-admin.exe: $($_.Exception.Message)" -ForegroundColor Red
-            Read-Host "Press Enter to close this window"
-            continue
+        # Skip the launch if dune-admin is already running — relaunching would
+        # spawn a duplicate console/process. We still open the web UI below.
+        $adminProcName = [System.IO.Path]::GetFileNameWithoutExtension($duneAdminExe)
+        $adminRunning  = $false
+        if ($adminProcName) {
+            $adminRunning = [bool](Get-Process -Name $adminProcName -ErrorAction SilentlyContinue)
+        }
+        if ($adminRunning) {
+            Write-Host "dune-admin.exe is already running — reusing the existing instance." -ForegroundColor DarkGray
+        } else {
+            # Launch as the logged-in user via scheduled task (avoids admin elevation)
+            try {
+                $action = New-ScheduledTaskAction -Execute $duneAdminExe -WorkingDirectory $duneAdminDir
+                $principal = New-ScheduledTaskPrincipal -UserId $windowsUser -LogonType Interactive -RunLevel Limited
+                Register-ScheduledTask -TaskName "DuneAdminLaunch" -Action $action -Principal $principal -Force | Out-Null
+                Start-ScheduledTask -TaskName "DuneAdminLaunch"
+                Start-Sleep -Seconds 1
+                Unregister-ScheduledTask -TaskName "DuneAdminLaunch" -Confirm:$false
+            } catch {
+                Write-Host "Failed to launch dune-admin.exe: $($_.Exception.Message)" -ForegroundColor Red
+                Read-Host "Press Enter to close this window"
+                continue
+            }
         }
         # Open web UI in default browser (Start-Process <url> uses the
         # registered https:// protocol handler, honoring the user's default
