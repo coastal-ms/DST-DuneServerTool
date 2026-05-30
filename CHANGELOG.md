@@ -29,6 +29,16 @@ Displayed in-app as **X (0.1)**. Bug-fix release.
   Delete & continue) that always renders and defaults to non-destructive;
   Cancel aborts the reinstall/setup entirely.
 
+### Changed
+
+- **Server Health heartbeat now reflects login readiness.** The heartbeat sensor
+  (relabeled **"Game Ready State"**) is driven by the `Survival_1` map pod — the
+  map players actually connect to. Green + "Ready" when it reports ready, yellow +
+  "Starting" while it's in a startup phase, red + "Not Ready" when it's down,
+  missing, or failed (you can't log in). Previously it tracked the Battlegroup
+  operator's reconcile state, which could read healthy before the map was joinable.
+- Refreshed all README portal screenshots (PII scrubbed).
+
 
 ## [10.0.0] - 2026-05-30
 

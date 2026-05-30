@@ -50,32 +50,43 @@ function GameServerRow({ s }: { s: BgGameServer }) {
   )
 }
 
-// Maps the Battlegroup operator's reconcile state to a heartbeat tone.
-// Healthy → green, Reconciling → yellow, anything else (unhealthy/failed) → red.
-// When the BG isn't reporting, the sensor goes flat (muted, no beat).
-function bgHeartbeat(bgReady: boolean, statusText: string | undefined): {
+// Login-readiness heartbeat, driven by the Survival_1 map pod — that's the map
+// players actually connect to, so if it isn't Ready you can't log in.
+//   ready=True              → green  + "Ready"
+//   in a startup phase      → yellow + "Starting"
+//   down / missing / failed → red    + "Not Ready"
+// Before the first status load (loading, no pods yet) the sensor goes flat.
+function survivalHeartbeat(servers: BgGameServer[], loading: boolean): {
   cls: string
   label: string
   beating: boolean
 } {
-  if (!bgReady || !statusText) return { cls: 'text-text-dim', label: 'No signal', beating: false }
-  const s = statusText.toLowerCase()
-  if (/(healthy|ready|running)/.test(s)) return { cls: 'text-success', label: 'Healthy', beating: true }
-  if (/(reconciling|starting|pending|updating)/.test(s)) return { cls: 'text-warning', label: statusText, beating: true }
-  return { cls: 'text-danger', label: statusText, beating: true }
+  const sv = servers.find(s => /survival[_-]?1/i.test(s.map))
+  if (!sv) {
+    if (loading) return { cls: 'text-text-dim', label: 'No signal', beating: false }
+    return { cls: 'text-danger', label: 'Not Ready', beating: true }
+  }
+  if (/^(true|ready|yes|ok)$/i.test((sv.ready ?? '').trim())) {
+    return { cls: 'text-success', label: 'Ready', beating: true }
+  }
+  const phase = (sv.phase ?? '').toLowerCase()
+  if (/(start|pending|reconcil|creating|init|progress|updating|provision|scaling|waiting)/.test(phase)) {
+    return { cls: 'text-warning', label: 'Starting', beating: true }
+  }
+  return { cls: 'text-danger', label: 'Not Ready', beating: true }
 }
 
-function HeartbeatSensor({ bgReady, statusText }: { bgReady: boolean; statusText: string | undefined }) {
-  const hb = bgHeartbeat(bgReady, statusText)
+function HeartbeatSensor({ servers, loading }: { servers: BgGameServer[]; loading: boolean }) {
+  const hb = survivalHeartbeat(servers, loading)
   return (
     <div className="mt-auto pt-2 border-t border-border/30 flex items-center gap-2"
-         title="VM heartbeat — driven by the Battlegroup reconcile state. Refreshes every 30s.">
+         title="Login readiness — driven by the Survival_1 map's ready/phase. If it isn't Ready you can't log in. Refreshes every 30s.">
       <Icon
         name="HeartPulse"
         size={30}
         className={`${hb.cls} ${hb.beating ? 'animate-heartbeat' : ''}`}
       />
-      <span className="text-[13px] uppercase tracking-wider text-text-dim">VM heartbeat</span>
+      <span className="text-[13px] uppercase tracking-wider text-text-dim">Game Ready State</span>
       <span className={`text-[15px] font-medium ml-auto ${hb.cls}`}>{hb.label}</span>
     </div>
   )
@@ -296,7 +307,7 @@ export function Dashboard() {
               </tbody>
             </table>
           )}
-          <HeartbeatSensor bgReady={bgReady} statusText={bgInfo?.status} />
+          <HeartbeatSensor servers={gameServers} loading={loading} />
         </div>
       </section>
 
