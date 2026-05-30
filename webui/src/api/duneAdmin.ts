@@ -83,6 +83,13 @@ export interface DuneAdminInstallResult {
    * `Start-DuneAdminPricingRebuild` (v6.1.25).
    */
   pricingPatch?: DuneAdminPricingPatchStatus
+  /**
+   * PIDs of any running dune-admin instances the install route stopped before
+   * overwriting dune-admin.exe. Handles the hidden-window / detached-process
+   * case where the user can't close it manually. Empty when nothing was running.
+   * (v6.3.2)
+   */
+  stoppedPids?: number[]
 }
 
 export interface DuneAdminSetupResult {

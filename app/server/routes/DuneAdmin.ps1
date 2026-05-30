@@ -332,6 +332,47 @@ function Test-DuneAdminFileLocked {
     }
 }
 
+function Stop-DuneAdminProcesses {
+    # Kill any running dune-admin instances before an update/install. This
+    # exists for the case where dune-admin is running with no visible window
+    # (e.g. the embedded market bot launched it, or a prior session left a
+    # detached copy) and the user has no way to close it by hand. Without this,
+    # the install route would hit a locked dune-admin.exe and bail with 423.
+    #
+    # We match conservatively: any process named 'dune-admin', plus any process
+    # whose image path equals the configured target exe (covers a renamed exe).
+    # Returns the list of PIDs we stopped.
+    param([string]$ExePath)
+    $killed = @()
+    $targets = @()
+    try {
+        $targets += @(Get-Process -Name 'dune-admin' -ErrorAction SilentlyContinue)
+    } catch { }
+    if ($ExePath) {
+        try {
+            $byPath = Get-Process -ErrorAction SilentlyContinue | Where-Object {
+                try { $_.Path -and ($_.Path -ieq $ExePath) } catch { $false }
+            }
+            $targets += @($byPath)
+        } catch { }
+    }
+    $unique = $targets | Where-Object { $_ } | Sort-Object -Property Id -Unique
+    foreach ($p in $unique) {
+        try {
+            Stop-Process -Id $p.Id -Force -ErrorAction Stop
+            $killed += $p.Id
+        } catch { }
+    }
+    if ($killed.Count -gt 0) {
+        # Give the OS a moment to release the file lock before we proceed.
+        for ($i = 0; $i -lt 20; $i++) {
+            if (-not (Test-DuneAdminFileLocked -Path $ExePath)) { break }
+            Start-Sleep -Milliseconds 100
+        }
+    }
+    return $killed
+}
+
 # Sync the source tarball into the user's dune-admin source dir. GoReleaser
 # tarballs contain a single top-level directory (e.g. "dune-admin-0.14.0/").
 # We extract via the Windows-bundled `tar` (10+), locate the inner directory
@@ -720,6 +761,11 @@ Register-DuneRoute -Method POST -Path '/api/dune-admin/install' -Handler {
             return
         }
 
+        # Proactively stop any running dune-admin instances first. Handles the
+        # hidden-window / detached-process case where the user can't close it
+        # manually; otherwise the lock check below would bail with 423.
+        $stopped = Stop-DuneAdminProcesses -ExePath $exePath
+
         # Bail if the running EXE has the file locked.
         if (Test-DuneAdminFileLocked -Path $exePath) {
             Write-DuneError -Response $res -Status 423 -Message "dune-admin.exe is currently running and the file is locked. Close it and try again. Path: $exePath"
@@ -897,6 +943,7 @@ Register-DuneRoute -Method POST -Path '/api/dune-admin/install' -Handler {
             sourceSync     = $sourceSync
             autoRebuild    = $autoRebuild
             pricingPatch   = $autoRebuild
+            stoppedPids    = $stopped
             note           = 'dune-admin.exe replaced. Restart any open instance.'
         }
     } catch {
