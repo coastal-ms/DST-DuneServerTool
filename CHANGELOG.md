@@ -14,6 +14,25 @@ here cover everything those tags shipped.
 ## [Unreleased]
 
 
+## [6.2.4] - 2026-05-30
+
+Hotfix on top of 6.2.3: the CRLF fix let the pricing-patch rebuild get past
+`git apply` for the first time — which immediately exposed a second bug that had
+always been lurking right behind it.
+
+Thanks again to **Techtonic** for catching this the moment 6.2.3 unblocked his build.
+
+### Fixed
+
+- **Pricing-patch rebuild failed with "You cannot call a method on a null-valued
+  expression" right after `go build` started** (`fatal: not a git repository`).
+  The installer rebuild flow overlays an upstream **source tarball**, which has no
+  `.git` directory. `git apply` doesn't need a repo, but the version-stamping step
+  called `git rev-parse --short HEAD` and then `.Trim()`'d the result — which is
+  `$null` outside a repo. `build-patched.ps1` now treats the git commit (and a
+  missing `VERSION` file) as **best-effort**: it stamps `commit=unknown` instead of
+  crashing, so the rebuild completes.
+
 ## [6.2.3] - 2026-05-30
 
 Hardens the dune-admin pricing-patch rebuild against line-ending corruption,

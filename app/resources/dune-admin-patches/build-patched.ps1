@@ -25,10 +25,25 @@
 param(
     [switch] $Restart,
     [switch] $SkipTests,
-    [switch] $Keep
+    [switch] $Keep,
+    [int]    $GambleDie    = 12,
+    [int]    $GambleTarget = 5
 )
 
 $ErrorActionPreference = 'Stop'
+
+# --- Validate gamble die config ----------------------------------------------
+# The sane-pricing patch replaces dune-admin's price-threshold buy gate with a
+# dice roll: roll a $GambleDie-sided die per candidate listing and buy only on
+# $GambleTarget. Defaults reproduce the original d12/need-5 behaviour exactly
+# (and, being defaults, leave the patched source byte-for-byte unchanged so the
+# build is identical to before this feature existed).
+if ($GambleDie -lt 2) {
+    throw "GambleDie must be >= 2 (got $GambleDie)."
+}
+if ($GambleTarget -lt 1 -or $GambleTarget -gt $GambleDie) {
+    throw "GambleTarget must be between 1 and GambleDie ($GambleDie); got $GambleTarget."
+}
 # PowerShell 7.4+ makes native commands (git, go) respect $ErrorActionPreference,
 # which causes harmless stderr like git's "LF will be replaced by CRLF" warning
 # to throw. We rely on explicit $LASTEXITCODE checks below, so opt out.
@@ -201,6 +216,34 @@ try {
         $patchedFiles = @($patchedFiles | Sort-Object -Unique)
     }
 
+    # --- Inject custom gamble die size / target ------------------------------
+    # The patch hard-codes a 12-sided die that buys on a roll of 5. When the
+    # operator picks different values we rewrite the just-patched exchange.go in
+    # place (it's reverted from the pre-patch snapshot after the build, so the
+    # working tree still ends up clean). Defaults (12/5) skip this entirely so a
+    # default build is byte-identical to the unmodified patch output.
+    if ($GambleDie -ne 12 -or $GambleTarget -ne 5) {
+        $exchangeGo = Join-Path $repoRoot 'internal\marketbot\exchange.go'
+        if (-not (Test-Path -LiteralPath $exchangeGo)) {
+            throw "Cannot inject gamble die config: $exchangeGo not found after patch."
+        }
+        Step "Injecting gamble die config (d$GambleDie, buy on $GambleTarget)"
+        $src = Get-Content -LiteralPath $exchangeGo -Raw
+        $orig = $src
+        # Functional roll: rand.Intn(12) + 1; roll != 5
+        $src = $src -replace 'rand\.Intn\(12\) \+ 1', "rand.Intn($GambleDie) + 1"
+        $src = $src -replace 'roll != 5\b',            "roll != $GambleTarget"
+        # Log strings: "(need 5)" and the d12 labels
+        $src = $src -replace '\(need 5\)',  "(need $GambleTarget)"
+        $src = $src -replace 'buy: d12 ',   "buy: d$GambleDie "
+        if ($src -eq $orig) {
+            throw "Gamble die injection matched nothing in exchange.go — patch layout may have changed."
+        }
+        # Preserve original (LF) line endings — never write CRLF into Go source.
+        [System.IO.File]::WriteAllText($exchangeGo, ($src -replace "`r`n", "`n"), (New-Object System.Text.UTF8Encoding($false)))
+        Info "exchange.go: die=$GambleDie target=$GambleTarget"
+    }
+
     try {
         if (-not $SkipTests) {
             Step "go test ./internal/marketbot/..."
@@ -211,8 +254,21 @@ try {
         }
 
         Step "go build (windows/amd64) → $exePath"
-        $version    = (Get-Content (Join-Path $repoRoot 'VERSION') -Raw).Trim()
-        $gitCommit  = (& git rev-parse --short HEAD).Trim()
+        # The installer rebuild flow overlays an upstream *source tarball*, which
+        # has NO .git directory and may lack a VERSION file. `git apply` doesn't
+        # need a repo, but `git rev-parse HEAD` does — so both of these are
+        # best-effort. Never let stamping metadata fail the build.
+        $version = 'unknown'
+        $versionFile = Join-Path $repoRoot 'VERSION'
+        if (Test-Path -LiteralPath $versionFile) {
+            $vRaw = (Get-Content -LiteralPath $versionFile -Raw)
+            if ($vRaw) { $version = $vRaw.Trim() }
+        }
+        $gitCommit = 'unknown'
+        try {
+            $rev = (& git rev-parse --short HEAD 2>$null)
+            if ($LASTEXITCODE -eq 0 -and $rev) { $gitCommit = ($rev | Out-String).Trim() }
+        } catch { }
         $buildTime  = (Get-Date).ToUniversalTime().ToString("yyyy-MM-ddTHH:mm:ssZ")
         $ldflags    = "-s -w -X main.AppVersion=$version -X main.GitCommit=$gitCommit -X main.BuildTime=$buildTime"
         $env:GOOS = 'windows'; $env:GOARCH = 'amd64'; $env:CGO_ENABLED = '0'
