@@ -14,7 +14,20 @@ here cover everything those tags shipped.
 ## [Unreleased]
 
 
-## [6.3.1] - 2026-05-30
+## [6.3.2] - 2026-05-30
+
+### Added
+
+- **Auto-stop running dune-admin instances before an update.** The install/update
+  route now proactively kills any running `dune-admin` process (matched by name
+  and by the configured exe path) before overwriting `dune-admin.exe`, then waits
+  for the file lock to release. This fixes the case where dune-admin is running
+  with **no visible window** (e.g. launched detached / by the embedded bot) and
+  the user has no way to close it by hand — previously the update bailed with a
+  "file is locked" error (HTTP 423). Stopped PIDs are reported back in the install
+  response (`stoppedPids`).
+
+
 
 Diagnostic follow-up to the recurring "No market bot connected" reports. The
 embedded market bot dials Postgres (`db_host:db_port` from dune-admin's
