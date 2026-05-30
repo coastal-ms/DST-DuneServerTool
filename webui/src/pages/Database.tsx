@@ -4,7 +4,7 @@ import { Icon } from '../components/Icon'
 import { useStatus } from '../hooks/useStatus'
 import { api } from '../api/client'
 import { getDbInfo, runSql } from '../api/database'
-import type { DbInfo, SqlResult, SqlOkResult, Command, CommandsResponse } from '../api/types'
+import type { DbInfo, SqlResult, SqlOkResult } from '../api/types'
 import Editor, { type OnMount } from '@monaco-editor/react'
 
 type CmdLaunch = { ok: boolean; name: string; pid?: number; mode: string }
@@ -18,7 +18,15 @@ export function Database() {
   const bgState = status?.bg?.state ?? 'unknown'
 
   // ---------- Backup / Restore (delegates to /api/commands/run) ------------
-  const [commands, setCommands] = useState<{ backup: Command | null; restore: Command | null }>({ backup: null, restore: null })
+  // Availability is derived from the LIVE status poll (vmRunning + bgState),
+  // mirroring the server gate in Commands.ps1. We deliberately do NOT read a
+  // one-shot /api/commands snapshot here: that fetch only re-ran when bgState
+  // changed, so a single transient/empty reading could latch the buttons
+  // disabled with no recovery while the dashboard still showed the BG running.
+  // The server re-checks availability on POST /api/commands/run, so deriving
+  // client-side here is safe.
+  const backupAvailable  = vmRunning && bgState !== 'stopped'   // backup dumps the live DB
+  const restoreAvailable = vmRunning && bgState !== 'running'   // restore needs BG stopped
   const [launching, setLaunching] = useState<string | null>(null)
   const [toast, setToast] = useState<{ kind: 'ok' | 'err'; msg: string } | null>(null)
 
@@ -26,18 +34,6 @@ export function Database() {
     setToast({ kind, msg })
     window.setTimeout(() => setToast(t => (t?.msg === msg ? null : t)), 4000)
   }, [])
-
-  useEffect(() => {
-    void (async () => {
-      try {
-        const cmds = await api<CommandsResponse>('/api/commands')
-        setCommands({
-          backup:  cmds.commands.find(c => c.name === 'backup')  ?? null,
-          restore: cmds.commands.find(c => c.name === 'import') ?? null,
-        })
-      } catch { /* swallow — buttons stay disabled */ }
-    })()
-  }, [vmRunning, bgState])
 
   async function runMaint(name: 'backup' | 'import') {
     setLaunching(name)
@@ -201,7 +197,7 @@ export function Database() {
             : 'Battlegroup is running — backup will open in a new console window.'
           }
           buttonLabel="Take Backup"
-          available={commands.backup?.available ?? false}
+          available={backupAvailable}
           busy={launching === 'backup'}
           onClick={() => void runMaint('backup')}
         />
@@ -216,7 +212,7 @@ export function Database() {
             : 'Battlegroup is stopped — choose the backup file in the console window.'
           }
           buttonLabel="Restore Backup"
-          available={commands.restore?.available ?? false}
+          available={restoreAvailable}
           busy={launching === 'import'}
           onClick={() => void runMaint('import')}
         />

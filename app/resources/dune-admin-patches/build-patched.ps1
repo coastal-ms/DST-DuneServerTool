@@ -55,6 +55,29 @@ function Resolve-ToolDir {
     return $null
 }
 
+# Return a path to an LF-normalized copy of the patch. `git apply` matches
+# context lines BYTE-FOR-BYTE: if the .patch file has CRLF line endings (which
+# happens when it's renormalized in transit — OneDrive sync, a Windows editor,
+# git core.autocrlf, etc.) but the upstream Go source is LF, every hunk fails
+# with "patch does not apply" — against EVERY upstream version, not just a new
+# one. This historically looked like (and was misreported as) a "stale patch /
+# baseline drift" problem when it was purely line endings. Normalizing to LF
+# here makes apply robust regardless of how the file arrived on disk. The
+# normalized copy lives in a temp file; the original on disk is left untouched.
+$script:TempPatchFiles = @()
+function Get-LfPatchPath {
+    param([string]$PatchPath)
+    $bytes = [System.IO.File]::ReadAllBytes($PatchPath)
+    # Fast path: no CR bytes -> already LF, use as-is.
+    if (-not ($bytes -contains [byte]13)) { return $PatchPath }
+    $text = [System.Text.Encoding]::UTF8.GetString($bytes)
+    $text = $text -replace "`r`n", "`n"
+    $tmp  = Join-Path ([System.IO.Path]::GetTempPath()) ("dune-patch-" + [System.Guid]::NewGuid().ToString('N') + '.patch')
+    [System.IO.File]::WriteAllText($tmp, $text, (New-Object System.Text.UTF8Encoding($false)))
+    $script:TempPatchFiles += $tmp
+    return $tmp
+}
+
 $gitDir = Resolve-ToolDir -Name 'git' -Candidates @(
     "$env:ProgramFiles\Git\cmd\git.exe",
     "$env:ProgramFiles\Git\bin\git.exe",
@@ -116,15 +139,18 @@ try {
         Step "Applying $($patches.Count) patch(es) from scripts\patches\"
         foreach ($p in $patches) {
             Info "git apply $($p.Name)"
+            # Normalize to LF before applying — CRLF in the .patch breaks
+            # git apply against LF Go source (see Get-LfPatchPath).
+            $applyPath = Get-LfPatchPath -PatchPath $p.FullName
             # Determine which files this patch touches (works regardless of
             # apply state) — used for revert tracking and for cleanup on
             # conflict.
-            $touched = @(& git apply --numstat -- $p.FullName 2>$null |
+            $touched = @(& git apply --numstat -- $applyPath 2>$null |
                         ForEach-Object { ($_ -split "`t")[2] } |
                         Where-Object { $_ })
 
             # Try clean apply.
-            & git apply --check -- $p.FullName 2>$null
+            & git apply --check -- $applyPath 2>$null
             if ($LASTEXITCODE -eq 0) {
                 # Snapshot pre-patch bytes so the cleanup can restore them
                 # exactly (independent of git history).
@@ -134,7 +160,7 @@ try {
                         $preSnapshots[$t] = [System.IO.File]::ReadAllBytes($tPath)
                     }
                 }
-                & git apply --whitespace=nowarn -- $p.FullName
+                & git apply --whitespace=nowarn -- $applyPath
                 if ($LASTEXITCODE -ne 0) { throw "Patch failed (clean apply): $($p.Name)" }
                 $patchedFiles += $touched
                 continue
@@ -147,29 +173,29 @@ try {
             # an old commit — that corrupts the upstream-tarball overlay we
             # just dropped in. Skipping the restore is both safer and
             # produces an identical end state.)
-            & git apply --reverse --check -- $p.FullName 2>$null
+            & git apply --reverse --check -- $applyPath 2>$null
             if ($LASTEXITCODE -eq 0) {
                 Info "Patch is already applied to the working tree — using as-is."
                 $patchedFiles += $touched
                 continue
             }
 
-            # Neither forward nor reverse — the patch is stale relative to
-            # the current source. Surface a clear diagnostic and stop. We
-            # deliberately do NOT `git restore` + force-apply: when this
-            # script runs from the installer, the working tree was just
-            # overlaid from an upstream source tarball, and `git restore`
-            # reverts to whatever the user's local git HEAD happens to be
-            # (often an older release), which strips the new symbols
-            # bot.go/exchange.go reference and breaks the build with
-            # confusing "undefined: LoadState" errors. Failing fast tells
-            # the user the real problem: ship a refreshed patch.
+            # Neither forward nor reverse — the patch genuinely does not match
+            # the current source. We deliberately do NOT `git restore` +
+            # force-apply: when this script runs from the installer, the working
+            # tree was just overlaid from an upstream source tarball, and
+            # `git restore` reverts to whatever the user's local git HEAD
+            # happens to be (often an older release), which strips the new
+            # symbols bot.go/exchange.go reference and breaks the build with
+            # confusing "undefined: LoadState" errors. Failing fast tells the
+            # user the real problem.
             Info "Patch does not apply cleanly and is not already applied."
             Info "Touched files: $($touched -join ', ')"
-            Info "Likely cause: the bundled patch was authored against an"
-            Info "older dune-admin baseline. Update the Dune Server Tool"
-            Info "(which ships the patch) and reinstall."
-            throw "Patch is stale relative to current source: $($p.Name). Refusing to corrupt the working tree."
+            Info "The patch was LF-normalized before applying, so this is NOT a"
+            Info "line-ending mismatch — the bundled patch was authored against a"
+            Info "different dune-admin baseline than the source on disk. Update the"
+            Info "Dune Server Tool (which ships the patch) and reinstall to refresh it."
+            throw "Patch does not match current source: $($p.Name). Refusing to corrupt the working tree."
         }
         # De-duplicate file list for the revert step.
         $patchedFiles = @($patchedFiles | Sort-Object -Unique)
@@ -239,4 +265,9 @@ try {
 }
 finally {
     Pop-Location
+    if ($script:TempPatchFiles) {
+        foreach ($tmp in $script:TempPatchFiles) {
+            Remove-Item -LiteralPath $tmp -Force -ErrorAction SilentlyContinue
+        }
+    }
 }
