@@ -14,6 +14,36 @@ here cover everything those tags shipped.
 ## [Unreleased]
 
 
+## [6.1.29] - 2026-05-29
+
+Patch: **Spicefields live-commit toggle + 5-second click rate limiter; dune-admin Icehunter credit.**
+
+### Added
+- **Spicefields card — live-commit "spawning" toggle.** Each row's spawning
+  checkbox now writes to Postgres the moment you click it, no Save needed.
+  Backed by a dedicated guard-railed endpoint
+  `PUT /api/gameconfig/spicefields/{id}/spawning` that only ever writes
+  `TRUE` or `FALSE` to the single `is_spawning_active` column — no other
+  columns are touched even if the body contains extra fields. New
+  PowerShell function `Set-V6SpicefieldSpawning` enforces this in three
+  layers (strict `[bool]` param, explicit TRUE/FALSE literal, paranoid
+  post-compute check). Optimistic UI with rollback on failure.
+- **5-second per-button click cooldown.** Both the spawning toggle and the
+  Save button on each row are rate-limited to one click every 5 seconds,
+  with a live `(Ns)` countdown shown next to the disabled button. Cooldowns
+  are per-row and per-button independent (toggling row A doesn't cool down
+  row B's Save). Defense-in-depth: the cooldown is also enforced inside the
+  click handler so a stale render can't bypass it.
+- **Commands page — `dune-admin` button shows an "Icehunter" credit badge.**
+  Small inline badge in the bottom-right of the dune-admin command tile
+  linking to https://github.com/Icehunter (clicking the badge does not
+  launch the command — `stopPropagation` on the link).
+
+### Changed
+- Spicefields `isDirty` no longer considers `isSpawningActive` (it's
+  committed live now, so it should never make the row "dirty").
+
+
 ## [6.1.28] - 2026-05-29
 
 Patch: **Idempotent reinstall — pre-patch snapshot/restore instead of git restore.**

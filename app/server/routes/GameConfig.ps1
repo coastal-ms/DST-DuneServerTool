@@ -194,3 +194,85 @@ Register-DuneRoute -Method PUT -Path '/api/gameconfig/spicefields/{id}' -Handler
         Write-DuneError -Response $res -Status 500 -Message "Spicefield type save failed: $($_.Exception.Message)"
     }
 }
+
+# -----------------------------------------------------------------------------
+# PUT /api/gameconfig/spicefields/{id}/spawning — live toggle.
+# Body: { "active": true|false }   — must be a JSON boolean. No other shape
+# is accepted; null, missing, strings, numbers all 400.
+#
+# This endpoint exists specifically so the per-row checkbox in the UI can
+# commit each click straight to the live DB without involving the bulk
+# editor. The DB layer (Set-V6SpicefieldSpawning) only ever mutates
+# is_spawning_active for the given spicefield_type_id — no other columns,
+# no NULL, only literal TRUE/FALSE.
+# -----------------------------------------------------------------------------
+Register-DuneRoute -Method PUT -Path '/api/gameconfig/spicefields/{id}/spawning' -Handler {
+    param($req, $res, $routeParams, $body)
+    $ctx = Get-DuneGameConfigContext
+    if (-not $ctx.ok) {
+        Write-DuneError -Response $res -Status $ctx.status -Message $ctx.message
+        return
+    }
+    if (-not (Test-DunePlayerGuard -Req $req -Res $res -Ip $ctx.ip)) { return }
+
+    $typeId = 0
+    if (-not [int]::TryParse("$($routeParams.id)", [ref]$typeId) -or $typeId -le 0) {
+        Write-DuneError -Response $res -Status 400 -Message 'Invalid spicefield_type id.'
+        return
+    }
+    if (-not ($body -is [hashtable])) {
+        Write-DuneError -Response $res -Status 400 -Message 'Body must be a JSON object: { "active": true|false }.'
+        return
+    }
+    if (-not $body.ContainsKey('active')) {
+        Write-DuneError -Response $res -Status 400 -Message 'Body must include "active" (true|false).'
+        return
+    }
+    $raw = $body['active']
+    # STRICT boolean parsing — accept only real JSON booleans. We deliberately
+    # do NOT coerce strings/numbers, because the whole point of this endpoint
+    # is to guarantee is_spawning_active is set to exactly TRUE or FALSE,
+    # never NULL, never some ambiguous truthy value.
+    $active = $null
+    if ($raw -is [bool]) {
+        $active = [bool]$raw
+    } elseif ($raw -is [int] -or $raw -is [long]) {
+        # Some JSON parsers map JSON true/false to 1/0 — accept only those.
+        if ([int]$raw -eq 1) { $active = $true }
+        elseif ([int]$raw -eq 0) { $active = $false }
+    }
+    if ($null -eq $active) {
+        Write-DuneError -Response $res -Status 400 -Message '"active" must be a JSON boolean (true or false); null and other values are rejected.'
+        return
+    }
+
+    try {
+        Set-V6SpicefieldSpawning -Ip $ctx.ip -TypeId $typeId -Active $active
+
+        # Read back the canonical row so the UI can refresh state without a
+        # full list reload.
+        $rows = Get-V6SpicefieldTypes -Ip $ctx.ip
+        $row  = $rows | Where-Object { [int]$_.spicefield_type_id -eq $typeId } | Select-Object -First 1
+        if (-not $row) {
+            Write-DuneError -Response $res -Status 404 -Message "Spicefield type $typeId not found after update."
+            return
+        }
+        Write-DuneJson -Response $res -Body @{
+            ok  = $true
+            row = @{
+                spicefieldTypeId = [int]$row.spicefield_type_id
+                mapName          = "$($row.map_name)"
+                fieldType        = "$($row.field_type)"
+                dimensionIndex   = [int]$row.dimension_index
+                maxActive        = [int]$row.max_globally_active
+                maxPrimed        = [int]$row.max_globally_primed
+                currentActive    = [int]$row.current_globally_active
+                currentPrimed    = [int]$row.current_globally_primed
+                isSpawningActive = [bool]$row.is_spawning_active
+                spawnWeight      = [double]$row.global_spawn_weight
+            }
+        }
+    } catch {
+        Write-DuneError -Response $res -Status 500 -Message "Spicefield spawning toggle failed: $($_.Exception.Message)"
+    }
+}
