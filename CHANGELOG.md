@@ -14,6 +14,60 @@ here cover everything those tags shipped.
 ## [Unreleased]
 
 
+## [6.1.26] - 2026-05-29
+
+Patch: **Make dune-admin pricing-patch reinstalls reliably succeed.**
+
+### Fixed
+- **Sane-pricing patch is now in sync with dune-admin v0.14.2.** The previous
+  patch was authored against a v0.13.x baseline whose `defaultConfig()` block
+  only had `common/unique/memento` rarities. v0.14.2 added a `rare` rarity
+  and shipped different stock multiplier values, so `git apply --check`
+  failed on every install attempt — and the recovery path silently
+  corrupted the working tree (see below). Regenerated the patch against
+  the current v0.14.2 source so `git apply` succeeds cleanly on a fresh
+  overlay. Pricing semantics preserved: 100k hard cap, geometric tier
+  ladder (T1 50 → T6 30k base), grade compounding (Standard 1.0 →
+  Flawless 3.3), small per-rarity premiums (`common` 1.0, `rare` 1.03,
+  `unique` 1.05, `memento` 1.08), and 0.95 vendor undercut floor across
+  all rarities.
+- **`build-patched.ps1` no longer corrupts the source tree on patch
+  conflicts.** When `git apply --check` failed, the old recovery path
+  ran `git restore` on the touched files — but `git restore` reverts to
+  whatever the user's *local* git HEAD happens to be, not to the
+  upstream-tarball overlay we just dropped in. In the installer flow
+  the local HEAD was typically an older release (v0.13.x), so the
+  restore stripped the v0.14.x `LoadState` / `SaveState` / `OnChange` /
+  `isDisabled` symbols out of `config.go`. The patch then force-applied
+  cleanly against the old code, but the still-v0.14.x `bot.go` and
+  `exchange.go` references those missing symbols and `go build` failed
+  with confusing `undefined: LoadState` errors. New behaviour: when a
+  patch is already applied, leave it as-is (no restore + reapply
+  cycle); when neither forward nor reverse apply works, fail fast with
+  a clear "patch is stale — update the Dune Server Tool" diagnostic
+  instead of mangling the tree.
+
+### Changed
+- **Install button is fully idempotent — reinstall as many times as you
+  want.** If a previous pricing-patch rebuild is still running when you
+  click Install again, the new wrapper now walks `Win32_Process` for any
+  child PIDs (go.exe, link.exe, git.exe), kills them, then kills the
+  prior wrapper PID, and starts a fresh background build that overwrites
+  the status JSON immediately. Repeated clicks no longer orphan
+  background work or leave the UI stuck on a stale "running" chip.
+
+### Removed
+- **HEAD-clone fallback experiment removed.** Briefly considered shipping
+  a "if the v0.14.x tarball build fails with marketbot symbol errors,
+  fall back to cloning dune-admin HEAD and patching that" safety net.
+  Investigation showed the tarball wasn't actually incomplete — the bug
+  was our stale patch + the corrupting `git restore` path described
+  above. With both of those fixed, the HEAD fallback would never trigger
+  in practice, and HEAD requires Go 1.26.3 and a pnpm/Vite frontend
+  build that v0.14.2 does not need, so the added complexity earned its
+  way out.
+
+
 ## [6.1.25] - 2026-05-29
 
 Patch: **Fix install hang when pricing-patch is enabled.**

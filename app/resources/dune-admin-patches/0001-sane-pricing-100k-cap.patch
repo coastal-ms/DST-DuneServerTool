@@ -1,8 +1,8 @@
 diff --git a/internal/marketbot/config.go b/internal/marketbot/config.go
-index 596782d..004a944 100644
+index 1d32425..4fece55 100644
 --- a/internal/marketbot/config.go
 +++ b/internal/marketbot/config.go
-@@ -36,16 +36,25 @@ func defaultConfig() configValues {
+@@ -42,18 +42,27 @@ func defaultConfig() configValues {
  		MaxBuys:          50,
  		ListingsPerGrade: 5,
  		Enabled:          true,
@@ -16,8 +16,10 @@ index 596782d..004a944 100644
 +		// Small premiums per rarity that don't distort the tier shape.
  		RarityMultipliers: map[string]float64{
  			"common":  1.0,
--			"unique":  3.0,
--			"memento": 5.0,
+-			"rare":    5.0,
+-			"unique":  5.0,
+-			"memento": 2.0,
++			"rare":    1.03,
 +			"unique":  1.05,
 +			"memento": 1.08,
  		},
@@ -25,20 +27,22 @@ index 596782d..004a944 100644
 +		// at this fraction of the NPC vendor price when vendor > tier formula,
 +		// so it slightly undercuts vendors without gutting them.
  		VendorMultipliers: map[string]float64{
--			"common":  3.0,
+-			"common":  1.0,
+-			"rare":    5.0,
 -			"unique":  5.0,
--			"memento": 5.0,
+-			"memento": 2.0,
 +			"common":  0.95,
++			"rare":    0.95,
 +			"unique":  0.95,
 +			"memento": 0.95,
  		},
  		DisabledItems: nil,
  	}
 diff --git a/internal/marketbot/config_test.go b/internal/marketbot/config_test.go
-index bd6cf14..db067fd 100644
+index 6afefeb..dadb295 100644
 --- a/internal/marketbot/config_test.go
 +++ b/internal/marketbot/config_test.go
-@@ -27,7 +27,7 @@ func TestConfigDefaults(t *testing.T) {
+@@ -29,7 +29,7 @@ func TestConfigDefaults(t *testing.T) {
  	if !cfg.Enabled {
  		t.Error("Enabled should default to true")
  	}

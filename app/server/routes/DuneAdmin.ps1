@@ -307,8 +307,31 @@ function Start-DuneAdminPricingRebuild {
     $wrapper  = Join-Path $stateDir "rebuild-$stamp.ps1"
     $statusPath = Get-DuneAdminPricingStatusPath
 
-    # Stage the bundled patch + wrapper into the user's source dir (same as
-    # the legacy apply route).
+    # v6.1.26: if a previous wrapper is still running, kill it so this click
+    # gets a clean slate. The user explicitly said "I should be able to
+    # reinstall this as many times as I want" — repeated clicks must not
+    # silently orphan background work.
+    $prev = Read-DuneAdminPricingStatus
+    if ($prev -and $prev.PSObject.Properties.Name -contains 'status' -and $prev.status -eq 'running' -and
+        $prev.PSObject.Properties.Name -contains 'pid' -and $prev.pid) {
+        try {
+            $prevProc = Get-Process -Id ([int]$prev.pid) -ErrorAction SilentlyContinue
+            if ($prevProc) {
+                # Kill descendants first (go.exe, link.exe, git.exe), then the
+                # wrapper itself, so a long-running compile doesn't keep
+                # writing to the new run's log.
+                try {
+                    $kids = Get-CimInstance Win32_Process -Filter "ParentProcessId = $($prev.pid)" -ErrorAction SilentlyContinue
+                    foreach ($k in $kids) {
+                        try { Stop-Process -Id ([int]$k.ProcessId) -Force -ErrorAction SilentlyContinue } catch { }
+                    }
+                } catch { }
+                try { Stop-Process -Id ([int]$prev.pid) -Force -ErrorAction SilentlyContinue } catch { }
+            }
+        } catch { }
+    }
+
+    # Stage the bundled patch + build wrapper into the user's source dir.
     $userPatchDir = Join-Path $TargetDir 'scripts\patches'
     $userScripts  = Join-Path $TargetDir 'scripts'
     if (-not (Test-Path -LiteralPath $userPatchDir)) { New-Item -ItemType Directory -Path $userPatchDir -Force | Out-Null }
@@ -317,18 +340,14 @@ function Start-DuneAdminPricingRebuild {
     Copy-Item -LiteralPath (Join-Path $ResDir 'build-patched.ps1') -Destination $userScripts -Force -ErrorAction SilentlyContinue
     $buildScript = Join-Path $userScripts 'build-patched.ps1'
 
-    # The wrapper script:
-    # 1. Sets working dir + runs build-patched.ps1 piping ALL output to file.
-    # 2. On completion, atomically rewrites the status file with the final
-    #    state (success / failed + exitCode).
-    # 3. Honors a hard 15-min watchdog (Stop-Process self-terminate from a
-    #    separate Start-Job kept simple by relying on the parent's $LASTEXITCODE
-    #    after WaitForExit; this wrapper IS the supervisor since it runs
-    #    detached from DuneServer).
+    # The wrapper script runs build-patched.ps1 piping ALL output to file, then
+    # atomically rewrites the status file with the final state. Failure modes
+    # (stale patch, missing tools, build error) are surfaced via exitCode + the
+    # log tail in the UI.
     $wrapperBody = @"
 `$ErrorActionPreference = 'Continue'
-`$statusPath = '$statusPath'
-`$logFile    = '$logFile'
+`$statusPath    = '$statusPath'
+`$logFile       = '$logFile'
 
 function Write-Status {
     param([hashtable]`$Data)
@@ -349,38 +368,30 @@ Write-Status @{
 }
 
 Set-Location -LiteralPath '$TargetDir'
+
 try {
     & '$buildScript' -SkipTests *> `$logFile
-    `$code = `$LASTEXITCODE
-    if (`$null -eq `$code) { `$code = 0 }
-    `$finished = (Get-Date).ToString('o')
-    if (`$code -eq 0) {
-        Write-Status @{
-            status     = 'success'
-            targetTag  = '$TargetTag'
-            targetDir  = '$TargetDir'
-            logFile    = `$logFile
-            startedAt  = `$startedAt
-            finishedAt = `$finished
-            exitCode   = `$code
-            pid        = `$PID
-        }
-    } else {
-        Write-Status @{
-            status     = 'failed'
-            targetTag  = '$TargetTag'
-            targetDir  = '$TargetDir'
-            logFile    = `$logFile
-            startedAt  = `$startedAt
-            finishedAt = `$finished
-            exitCode   = `$code
-            error      = "build-patched.ps1 exited with code `$code"
-            pid        = `$PID
-        }
-    }
-    exit `$code
+    `$buildCode = `$LASTEXITCODE
+    if (`$null -eq `$buildCode) { `$buildCode = 0 }
 } catch {
-    `$finished = (Get-Date).ToString('o')
+    `$buildCode = 1
+    try { Add-Content -LiteralPath `$logFile -Value ""``r``n[wrapper] build-patched.ps1 threw: `$(`$_.Exception.Message)`r``n"" } catch { }
+}
+
+`$finished = (Get-Date).ToString('o')
+if (`$buildCode -eq 0) {
+    Write-Status @{
+        status     = 'success'
+        targetTag  = '$TargetTag'
+        targetDir  = '$TargetDir'
+        logFile    = `$logFile
+        startedAt  = `$startedAt
+        finishedAt = `$finished
+        exitCode   = `$buildCode
+        pid        = `$PID
+    }
+    exit 0
+} else {
     Write-Status @{
         status     = 'failed'
         targetTag  = '$TargetTag'
@@ -388,10 +399,11 @@ try {
         logFile    = `$logFile
         startedAt  = `$startedAt
         finishedAt = `$finished
-        error      = `$_.Exception.Message
+        exitCode   = `$buildCode
+        error      = ""build-patched.ps1 exited with code `$buildCode (see log).""
         pid        = `$PID
     }
-    exit 1
+    exit `$buildCode
 }
 "@
     Set-Content -LiteralPath $wrapper -Value $wrapperBody -Encoding UTF8
