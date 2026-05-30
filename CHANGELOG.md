@@ -14,7 +14,30 @@ here cover everything those tags shipped.
 ## [Unreleased]
 
 
-## [6.3.0] - 2026-05-30
+## [6.3.1] - 2026-05-30
+
+Diagnostic follow-up to the recurring "No market bot connected" reports. The
+embedded market bot dials Postgres (`db_host:db_port` from dune-admin's
+`config.yaml`) at startup; in kubectl/k3s setups that DB is reached over a
+tunnel, and if the tunnel is down when dune-admin launches the bot fails
+silently and dune-admin just shows an empty market with no explanation.
+
+Thanks to **Techtonic** for the legwork that pinned this to an unreachable
+`127.0.0.1:15432` at runtime.
+
+### Added
+
+- **Market-bot database health check** (Settings → dune-admin updates). Reads
+  `db_host` / `db_port` / `market_bot_enabled` from dune-admin's `config.yaml`
+  and does a short TCP probe (1.5s timeout) against that host:port, surfacing one
+  of: **reachable** (bot should start), **unreachable** (tunnel/DB down — the bot
+  will fail and the market will be blank, with guidance to bring the tunnel up
+  before launching dune-admin), **disabled**, or **not set up yet**. A **Recheck**
+  button re-runs the probe after fixing the tunnel.
+  - New endpoint `GET /api/dune-admin/market-bot-health`.
+  - Purely diagnostic — reads config and probes a port; changes nothing.
+
+
 
 Adds player-facing control over how aggressively the sane-pricing market bot
 buys. The patch has always rolled a die per candidate listing and only bought
