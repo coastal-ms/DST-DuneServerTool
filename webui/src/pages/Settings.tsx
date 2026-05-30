@@ -201,6 +201,18 @@ export function Settings() {
   const [daMsg, setDaMsg] = useState<string | null>(null)
   const [daErr, setDaErr] = useState<string | null>(null)
 
+  // In-app confirmation modal for the stale .dune-admin folder preflight.
+  // We DO NOT use window.confirm() here: it is fired after an `await` (the
+  // folder-existence fetch), at which point the browser's user-activation from
+  // the button click has expired. Chrome/Edge then suppress the dialog and
+  // return TRUE silently — which auto-deleted the folder without ever asking.
+  // A React modal needs no user activation, so it always renders.
+  const [dotPrompt, setDotPrompt] = useState<{
+    path: string
+    lead: string
+    resolve: (choice: 'delete' | 'keep' | 'cancel') => void
+  } | null>(null)
+
   // v6.1.25: pricing-patch rebuild runs detached in the background after
   // /install returns. We poll /api/dune-admin/pricing-patch-status every 2s
   // while status==='running' and show a separate "Patching..." chip with
@@ -360,22 +372,18 @@ export function Settings() {
       if (!pf.exists) return true
 
       const lead = isFirstTime
-        ? `Preflight — you're setting up dune-admin.`
+        ? `You're setting up dune-admin.`
         : folderChanged
-          ? `Preflight — you're changing the dune-admin install folder.`
-          : `Preflight — you're reinstalling dune-admin.`
-      const ok = window.confirm(
-        `${lead}\n\n` +
-        `An existing dune-admin config folder was found at:\n${pf.path}\n\n` +
-        `WHY THIS MATTERS: dune-admin's market bot reads its config and database ` +
-        `pointers from this folder. If it holds stale settings, the market bot ` +
-        `can FAIL to start.\n\n` +
-        `May I DELETE this folder now so dune-admin can regenerate a clean one ` +
-        `during setup?\n\n` +
-        `OK  = delete it and continue\n` +
-        `Cancel = keep it and continue (market bot may fail)`,
-      )
-      if (ok) {
+          ? `You're changing the dune-admin install folder.`
+          : `You're reinstalling dune-admin.`
+
+      const choice = await new Promise<'delete' | 'keep' | 'cancel'>((resolve) => {
+        setDotPrompt({ path: pf.path, lead, resolve })
+      })
+      setDotPrompt(null)
+
+      if (choice === 'cancel') return false
+      if (choice === 'delete') {
         const r = await deleteDuneAdminDotFolder()
         if (r.ok && r.deleted) {
           setDaMsg(`Removed stale config folder ${r.path}. dune-admin will create a fresh one during setup.`)
@@ -395,7 +403,8 @@ export function Settings() {
     setDaPatch(null)
     setDaPatchPolling(false)
     try {
-      await preflightStaleDotFolder()
+      const proceed = await preflightStaleDotFolder()
+      if (!proceed) { setDaMsg('Reinstall cancelled — nothing was changed.'); return }
       const r = await installDuneAdminUpdate()
       if (r.ok) {
         const sshNote = r.sshKeyCopy?.ok
@@ -435,7 +444,8 @@ export function Settings() {
     setDaErr(null)
     setDaMsg(null)
     try {
-      await preflightStaleDotFolder()
+      const proceed = await preflightStaleDotFolder()
+      if (!proceed) { setDaMsg('Setup cancelled — nothing was changed.'); return }
       const r = await runDuneAdminSetup()
       if (r.ok) {
         const installedPart = r.didInstall ? 'Downloaded + installed dune-admin.exe, then ' : ''
@@ -1206,6 +1216,56 @@ export function Settings() {
           </button>
         </div>
       </form>
+
+      {dotPrompt && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4"
+          onClick={() => dotPrompt.resolve('keep')}
+        >
+          <div className="card p-0 max-w-md w-full" onClick={e => e.stopPropagation()}>
+            <div className="px-5 py-4 border-b border-border flex items-center justify-between">
+              <h3 className="font-semibold text-text flex items-center gap-2">
+                <Icon name="AlertTriangle" size={16} className="text-warning" />
+                Stale dune-admin config folder
+              </h3>
+              <button type="button" className="btn-ghost px-2 py-1" onClick={() => dotPrompt.resolve('cancel')}>
+                <Icon name="X" size={16} />
+              </button>
+            </div>
+
+            <div className="px-5 py-4 space-y-3 text-sm text-text leading-relaxed">
+              <div>{dotPrompt.lead}</div>
+              <div>
+                An existing dune-admin config folder was found at:
+                <div className="mt-1 font-mono text-xs text-text-muted break-all">{dotPrompt.path}</div>
+              </div>
+              <div className="text-text-muted">
+                dune-admin's market bot reads its config and database pointers from this
+                folder. If it holds stale settings, the market bot can{' '}
+                <span className="font-semibold text-warning">fail to start</span>. Deleting it
+                lets dune-admin regenerate a clean one during setup.
+              </div>
+            </div>
+
+            <div className="px-5 py-4 border-t border-border flex items-center justify-end gap-2">
+              <button type="button" className="btn-ghost" onClick={() => dotPrompt.resolve('cancel')}>
+                Cancel
+              </button>
+              <button type="button" className="btn-ghost" onClick={() => dotPrompt.resolve('keep')}>
+                Keep &amp; continue
+              </button>
+              <button
+                type="button"
+                className="btn-primary !bg-danger hover:!bg-danger/90"
+                onClick={() => dotPrompt.resolve('delete')}
+              >
+                <Icon name="Trash2" size={15} />
+                Delete &amp; continue
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </>
   )
 }
