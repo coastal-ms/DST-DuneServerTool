@@ -243,6 +243,83 @@ function Get-DuneAdminConfigYamlPath {
     return Join-Path $env:USERPROFILE '.dune-admin\config.yaml'
 }
 
+function Get-DuneAdminMarketBotHealth {
+    # Self-diagnose the common "No market bot connected" case: the embedded
+    # market bot dials Postgres (db_host:db_port from dune-admin's config.yaml)
+    # at startup. In kubectl/k3s topologies that DB is reached over a tunnel
+    # (e.g. 127.0.0.1:15432). If the tunnel is down when dune-admin launches,
+    # the bot's DB ping fails, marketbot.Run errors, and the market panel shows
+    # nothing with no explanation. We probe the same host:port so the portal can
+    # say "DB unreachable" instead of leaving the user guessing.
+    $yamlPath = Get-DuneAdminConfigYamlPath
+    $result = [ordered]@{
+        checked      = $false
+        configExists = (Test-Path -LiteralPath $yamlPath)
+        botEnabled   = $null
+        dbHost       = $null
+        dbPort       = $null
+        reachable    = $null
+        status       = 'unknown'   # ok | unreachable | disabled | no-config | unknown
+        message      = $null
+    }
+    if (-not $result.configExists) {
+        $result.status  = 'no-config'
+        $result.message = 'dune-admin has not been set up yet (no config.yaml).'
+        return [pscustomobject]$result
+    }
+    try {
+        foreach ($line in Get-Content -LiteralPath $yamlPath -ErrorAction Stop) {
+            if ($line -match '^\s*market_bot_enabled\s*:\s*(.+?)\s*$') {
+                $v = $Matches[1].Trim().Trim('"').ToLower()
+                $result.botEnabled = ($v -eq 'true' -or $v -eq 'yes' -or $v -eq '1' -or $v -eq 'on')
+            } elseif ($line -match '^\s*db_host\s*:\s*(.+?)\s*$') {
+                $result.dbHost = $Matches[1].Trim().Trim('"')
+            } elseif ($line -match '^\s*db_port\s*:\s*(\d+)\s*$') {
+                $result.dbPort = [int]$Matches[1]
+            }
+        }
+    } catch {
+        $result.status  = 'unknown'
+        $result.message = "Could not read config.yaml: $($_.Exception.Message)"
+        return [pscustomobject]$result
+    }
+
+    if ($result.botEnabled -eq $false) {
+        $result.status  = 'disabled'
+        $result.message = 'Embedded market bot is disabled in dune-admin config (market_bot_enabled: false).'
+        return [pscustomobject]$result
+    }
+    if (-not $result.dbHost -or -not $result.dbPort) {
+        $result.status  = 'unknown'
+        $result.message = 'config.yaml is missing db_host/db_port.'
+        return [pscustomobject]$result
+    }
+
+    # TCP probe with a short timeout so the status poll never hangs.
+    $result.checked = $true
+    $reachable = $false
+    try {
+        $client = [System.Net.Sockets.TcpClient]::new()
+        $iar = $client.BeginConnect($result.dbHost, $result.dbPort, $null, $null)
+        if ($iar.AsyncWaitHandle.WaitOne(1500, $false) -and $client.Connected) {
+            $reachable = $true
+            try { $client.EndConnect($iar) } catch { }
+        }
+        $client.Close()
+    } catch {
+        $reachable = $false
+    }
+    $result.reachable = $reachable
+    if ($reachable) {
+        $result.status  = 'ok'
+        $result.message = "Market bot DB reachable at $($result.dbHost):$($result.dbPort)."
+    } else {
+        $result.status  = 'unreachable'
+        $result.message = "Market bot DB unreachable at $($result.dbHost):$($result.dbPort). The embedded bot will fail to start (no market). If you use a kubectl/SSH tunnel for Postgres, make sure it is running before launching dune-admin."
+    }
+    return [pscustomobject]$result
+}
+
 function Test-DuneAdminFileLocked {
     param([string]$Path)
     if (-not (Test-Path -LiteralPath $Path)) { return $false }
@@ -606,6 +683,17 @@ Register-DuneRoute -Method GET -Path '/api/dune-admin/check' -Handler {
             configYamlPath = Get-DuneAdminConfigYamlPath
             configYamlExists = (Test-Path -LiteralPath (Get-DuneAdminConfigYamlPath))
         }
+    } catch {
+        Write-DuneError -Response $res -Status 500 -Message $_.Exception.Message
+    }
+}
+
+# GET /api/dune-admin/market-bot-health - probe the bot's DB host:port
+Register-DuneRoute -Method GET -Path '/api/dune-admin/market-bot-health' -Handler {
+    param($req, $res, $routeParams, $body)
+    try {
+        $h = Get-DuneAdminMarketBotHealth
+        Write-DuneJson -Response $res -Body $h
     } catch {
         Write-DuneError -Response $res -Status 500 -Message $_.Exception.Message
     }
