@@ -382,7 +382,9 @@ function Start-DuneAdminPricingRebuild {
     param(
         [string]$ResDir,       # bundled resources dir containing patch + build-patched.ps1
         [string]$TargetDir,    # user's dune-admin source dir
-        [string]$TargetTag     # e.g. 'v0.14.2' for status display
+        [string]$TargetTag,    # e.g. 'v0.14.2' for status display
+        [int]$GambleDie = 12,  # gamble-buy die size (patch default 12)
+        [int]$GambleTarget = 5 # winning roll that buys (patch default 5)
     )
     $stateDir = Get-DuneAdminPricingStateDir
     $stamp    = Get-Date -Format 'yyyyMMdd-HHmmss'
@@ -453,7 +455,7 @@ Write-Status @{
 Set-Location -LiteralPath '$TargetDir'
 
 try {
-    & '$buildScript' -SkipTests *> `$logFile
+    & '$buildScript' -SkipTests -GambleDie $GambleDie -GambleTarget $GambleTarget *> `$logFile
     `$buildCode = `$LASTEXITCODE
     if (`$null -eq `$buildCode) { `$buildCode = 0 }
 } catch {
@@ -745,12 +747,26 @@ Register-DuneRoute -Method POST -Path '/api/dune-admin/install' -Handler {
             # rebuilt binary keeps Coastal's pricing patch on top after every
             # upgrade. No marker files — the setting is the source of truth.
             $autoApply = $false
+            $gambleDie = 12
+            $gambleTarget = 5
             try {
                 $cfg = Read-DuneConfig
                 if ($cfg -and $cfg.Contains('AutoApplyPricingPatch')) {
                     $val = "$($cfg['AutoApplyPricingPatch'])".Trim().ToLower()
                     $autoApply = ($val -eq 'true' -or $val -eq '1' -or $val -eq 'yes' -or $val -eq 'on')
                 }
+                # Gamble die config (optional). Defaults reproduce the patch's
+                # original d12 / buy-on-5 behaviour. Validate defensively so a
+                # bad config value can never break the rebuild.
+                if ($cfg -and $cfg.Contains('GambleDieSize')) {
+                    $d = 0
+                    if ([int]::TryParse("$($cfg['GambleDieSize'])".Trim(), [ref]$d) -and $d -ge 2) { $gambleDie = $d }
+                }
+                if ($cfg -and $cfg.Contains('GambleTarget')) {
+                    $t = 0
+                    if ([int]::TryParse("$($cfg['GambleTarget'])".Trim(), [ref]$t) -and $t -ge 1) { $gambleTarget = $t }
+                }
+                if ($gambleTarget -gt $gambleDie) { $gambleTarget = $gambleDie }
             } catch { }
             if ($sourceSync -and $sourceSync.ok -and $autoApply) {
                 # v6.1.25: launch the patched-build wrapper as a fully detached
@@ -770,7 +786,7 @@ Register-DuneRoute -Method POST -Path '/api/dune-admin/install' -Handler {
                         (Join-Path (Split-Path -Parent $script:AppDir) 'app\resources\dune-admin-patches')
                     )) { if (Test-Path -LiteralPath $p) { $resDir = $p; break } }
                     if ($resDir) {
-                        $autoRebuild = Start-DuneAdminPricingRebuild -ResDir $resDir -TargetDir $targetDir -TargetTag $rel.tag
+                        $autoRebuild = Start-DuneAdminPricingRebuild -ResDir $resDir -TargetDir $targetDir -TargetTag $rel.tag -GambleDie $gambleDie -GambleTarget $gambleTarget
                     } else {
                         $autoRebuild = [pscustomobject]@{ ok = $false; status = 'failed'; error = 'Bundled patch resources not found' }
                     }
