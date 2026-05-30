@@ -8,12 +8,17 @@ import {
   checkDuneAdminUpdate,
   installDuneAdminUpdate,
   pricingPatchStatus,
-  marketBotHealth,
   runDuneAdminSetup,
+  getDuneAdminDotFolder,
+  deleteDuneAdminDotFolder,
   type DuneAdminCheck,
   type DuneAdminPricingPatchStatus,
-  type DuneAdminMarketBotHealth,
 } from '../api/duneAdmin'
+import {
+  syncConfigFiles,
+  type ConfigFilesSyncResult,
+} from '../api/configFiles'
+import { fmtToolVersion } from '../format'
 
 const FIELDS: {
   key: string
@@ -31,10 +36,10 @@ const FIELDS: {
     placeholder: 'C:\\Users\\<you>\\AppData\\Local\\DuneAwakeningServer\\sshKey',
     help: 'Private key used to SSH into the dune-awakening VM.',
     browse: { mode: 'file', filter: 'SSH key (sshKey;*.pem;*.key)|sshKey;*.pem;*.key|All files (*.*)|*.*' } },
-  { key: 'DuneAdminExe', label: 'dune-admin.exe',
-    placeholder: 'C:\\path\\to\\dune-admin.exe',
-    help: 'Optional — only needed if you launch dune-admin from this tool.',
-    browse: { mode: 'file', filter: 'dune-admin.exe (dune-admin.exe)|dune-admin.exe|Executables (*.exe)|*.exe|All files (*.*)|*.*' } },
+  { key: 'DuneAdminExe', label: 'dune-admin folder',
+    placeholder: 'C:\\Tools\\dune-admin',
+    help: 'Optional — pick the folder where dune-admin should live. This tool installs dune-admin.exe there for you, so the folder can be empty / not exist yet.',
+    browse: { mode: 'folder' } },
   { key: 'WindowsUser',  label: 'Windows username',
     placeholder: 'your-windows-username',
     help: 'Used for desktop shortcut creation.' },
@@ -53,6 +58,108 @@ export function Settings() {
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [browsing, setBrowsing] = useState<string | null>(null)
+  const [cfSyncing, setCfSyncing] = useState(false)
+  const [cfResult, setCfResult] = useState<ConfigFilesSyncResult | null>(null)
+
+  async function onSyncConfigFiles() {
+    setCfSyncing(true)
+    setError(null)
+    setCfResult(null)
+    try {
+      const r = await syncConfigFiles()
+      setCfResult(r)
+      if (!r.ok) setError(r.message || 'Some config files could not be collected.')
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e))
+    } finally {
+      setCfSyncing(false)
+    }
+  }
+
+  // "Use local config files" toggle — when ON, DST reads the SSH key from its
+  // local configFiles store (overriding the configured SshKey path). Persisted
+  // immediately to dune-server.config as UseLocalConfigFiles ('true'/'false').
+  const useLocalCfgFiles = (values.UseLocalConfigFiles ?? '').toLowerCase() === 'true'
+  const [cfToggleSaving, setCfToggleSaving] = useState(false)
+  async function onToggleUseLocalConfigFiles(next: boolean) {
+    const msg = next
+      ? 'Turn ON local config files?\n\nDST will read the SSH key from its local store (%APPDATA%\\DuneServer\\configFiles\\sshKey) instead of the configured "SSH key path". Make sure you have refreshed config files at least once so the local copy is current.'
+      : 'Turn OFF local config files?\n\nDST will go back to using the configured "SSH key path" directly.'
+    if (!window.confirm(msg)) return
+    setCfToggleSaving(true)
+    setError(null)
+    try {
+      const out = await api<{ ok: boolean; complete: boolean; values: Record<string, string> }>(
+        '/api/config',
+        { method: 'PUT', body: JSON.stringify({ values: { ...values, UseLocalConfigFiles: next ? 'true' : 'false' } }) },
+      )
+      setValues({ ...out.values, UseLocalConfigFiles: next ? 'true' : 'false' })
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e))
+    } finally {
+      setCfToggleSaving(false)
+    }
+  }
+
+  // "Generate new SSH key" — runs the rotate-ssh-key command, waits for it to
+  // finish, then propagates the fresh key everywhere DST uses it.
+  const [sshRotating, setSshRotating] = useState(false)
+  const [sshRotateMsg, setSshRotateMsg] = useState<string | null>(null)
+  async function onRotateSshKey() {
+    if (!window.confirm('Generate a NEW SSH key?\n\nThis regenerates the key, authorizes it on the dune-awakening VM, and copies it everywhere DST uses it (local config-files store + dune-admin folder). The VM must be running. A console window will open and may ask for admin approval.')) return
+    setSshRotating(true)
+    setSshRotateMsg(null)
+    setError(null)
+    try {
+      const r = await api<{ ok: boolean; rotated: boolean; synced: boolean; message?: string }>(
+        '/api/config/rotate-ssh-key',
+        { method: 'POST' },
+      )
+      setSshRotateMsg(r.message ?? (r.ok ? 'SSH key rotated and propagated.' : 'Rotation did not complete.'))
+      if (!r.ok && r.message) setError(r.message)
+      // Reload config so the form reflects any path changes.
+      try {
+        const cfgOut = await api<ConfigResponse>('/api/config')
+        setCfg(cfgOut)
+        setValues({ ...cfgOut.values, UseLocalConfigFiles: cfgOut.useLocalConfigFiles ? 'true' : 'false' })
+      } catch { /* non-fatal */ }
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e))
+    } finally {
+      setSshRotating(false)
+    }
+  }
+
+
+  // "Wipe all listings" — TESTING ONLY. Deletes every market-bot listing on
+  // the VM so the bot re-lists from scratch with freshly-computed prices.
+  const [wipeApprove, setWipeApprove] = useState(false)
+  const [wiping, setWiping] = useState(false)
+  const [wipeMsg, setWipeMsg] = useState<string | null>(null)
+  const [wipeErr, setWipeErr] = useState<string | null>(null)
+  async function onWipeListings() {
+    if (!wipeApprove) return
+    if (!window.confirm('FOR TESTING ONLY — this will WIPE ALL MARKET LISTINGS on the VM.\n\nThe market bot will re-list everything from scratch on its next listing tick. Continue?')) return
+    setWiping(true)
+    setWipeMsg(null)
+    setWipeErr(null)
+    try {
+      const r = await api<{ ok: boolean; ordersDeleted?: number; itemsDeleted?: number; message?: string; error?: string }>(
+        '/api/db/wipe-bot-listings',
+        { method: 'POST', body: JSON.stringify({ approve: true }) },
+      )
+      if (r.ok) {
+        setWipeMsg(r.message ?? `Wiped ${r.ordersDeleted ?? '?'} orders / ${r.itemsDeleted ?? '?'} items.`)
+        setWipeApprove(false)
+      } else {
+        setWipeErr(r.error ?? 'Wipe failed.')
+      }
+    } catch (e) {
+      setWipeErr(e instanceof Error ? e.message : String(e))
+    } finally {
+      setWiping(false)
+    }
+  }
 
   async function onBrowse(field: { key: string; label: string; browse?: { mode: 'folder' | 'file'; filter?: string } }) {
     if (!field.browse) return
@@ -100,16 +207,6 @@ export function Settings() {
   // elapsed time + log tail.
   const [daPatch, setDaPatch] = useState<DuneAdminPricingPatchStatus | null>(null)
   const [daPatchPolling, setDaPatchPolling] = useState(false)
-  const [daBotHealth, setDaBotHealth] = useState<DuneAdminMarketBotHealth | null>(null)
-  const [daBotHealthChecking, setDaBotHealthChecking] = useState(false)
-  async function refreshBotHealth() {
-    setDaBotHealthChecking(true)
-    try {
-      setDaBotHealth(await marketBotHealth())
-    } catch { /* non-fatal */ } finally {
-      setDaBotHealthChecking(false)
-    }
-  }
   useEffect(() => {
     if (!daPatchPolling) return
     let cancelled = false
@@ -218,7 +315,7 @@ export function Settings() {
     try {
       const r = await installUpdate()
       if (r.launched) {
-        setUpdMsg(`Installer launched — upgrading to v${r.toVersion}. The portal will go offline briefly, then the new version will relaunch.`)
+        setUpdMsg(`Installer launched — upgrading to ${fmtToolVersion(r.toVersion)}. The portal will go offline briefly, then the new version will relaunch.`)
       } else {
         setUpdErr(r.reason ?? 'Installer did not launch.')
       }
@@ -242,6 +339,55 @@ export function Settings() {
     }
   }
 
+  // Install/setup preflight: on first-time install, a folder change, OR a
+  // same-folder reinstall, a %USERPROFILE%\.dune-admin config folder may hold
+  // stale DB/host pointers that make the market bot fail. We ALWAYS ask before
+  // deleting — never auto-delete. Returns true to proceed with the
+  // install/setup regardless of the user's choice (declining just keeps it).
+  async function preflightStaleDotFolder(): Promise<boolean> {
+    try {
+      // Detect first-time install, a folder change, or a same-folder reinstall.
+      const installedExe = daCheck?.installed?.exists ? (daCheck.exePath ?? '') : ''
+      const installedFolder = installedExe
+        ? installedExe.replace(/[\\/]+$/, '').replace(/[\\/][^\\/]*$/, '')
+        : ''
+      const norm = (p: string) => p.trim().replace(/[\\/]+$/, '').toLowerCase()
+      const chosenFolder = norm(values.DuneAdminExe ?? '')
+      const isFirstTime = !installedFolder
+      const folderChanged = !!installedFolder && norm(installedFolder) !== chosenFolder
+
+      const pf = await getDuneAdminDotFolder()
+      if (!pf.exists) return true
+
+      const lead = isFirstTime
+        ? `Preflight — you're setting up dune-admin.`
+        : folderChanged
+          ? `Preflight — you're changing the dune-admin install folder.`
+          : `Preflight — you're reinstalling dune-admin.`
+      const ok = window.confirm(
+        `${lead}\n\n` +
+        `An existing dune-admin config folder was found at:\n${pf.path}\n\n` +
+        `WHY THIS MATTERS: dune-admin's market bot reads its config and database ` +
+        `pointers from this folder. If it holds stale settings, the market bot ` +
+        `can FAIL to start.\n\n` +
+        `May I DELETE this folder now so dune-admin can regenerate a clean one ` +
+        `during setup?\n\n` +
+        `OK  = delete it and continue\n` +
+        `Cancel = keep it and continue (market bot may fail)`,
+      )
+      if (ok) {
+        const r = await deleteDuneAdminDotFolder()
+        if (r.ok && r.deleted) {
+          setDaMsg(`Removed stale config folder ${r.path}. dune-admin will create a fresh one during setup.`)
+        }
+      }
+    } catch (e) {
+      // Non-fatal — surface the issue but let the install proceed.
+      setDaErr(`Stale-folder preflight failed: ${e instanceof Error ? e.message : String(e)}`)
+    }
+    return true
+  }
+
   async function onInstallDuneAdmin() {
     setDaInstalling(true)
     setDaErr(null)
@@ -249,6 +395,7 @@ export function Settings() {
     setDaPatch(null)
     setDaPatchPolling(false)
     try {
+      await preflightStaleDotFolder()
       const r = await installDuneAdminUpdate()
       if (r.ok) {
         const sshNote = r.sshKeyCopy?.ok
@@ -288,6 +435,7 @@ export function Settings() {
     setDaErr(null)
     setDaMsg(null)
     try {
+      await preflightStaleDotFolder()
       const r = await runDuneAdminSetup()
       if (r.ok) {
         const installedPart = r.didInstall ? 'Downloaded + installed dune-admin.exe, then ' : ''
@@ -316,7 +464,7 @@ export function Settings() {
       try {
         const out = await api<ConfigResponse>('/api/config')
         setCfg(out)
-        setValues(out.values)
+        setValues({ ...out.values, UseLocalConfigFiles: out.useLocalConfigFiles ? 'true' : 'false' })
       } catch (e) {
         setError(e instanceof Error ? e.message : String(e))
       } finally {
@@ -351,7 +499,6 @@ export function Settings() {
         }
       } catch { /* non-fatal */ }
     })()
-    void refreshBotHealth()
     // Same idea for the Dune Server self-updater — populate the collapsed
     // header pills (current/latest) without forcing a fresh GitHub hit.
     void (async () => {
@@ -423,6 +570,75 @@ export function Settings() {
         </div>
       )}
 
+      {/* --- Config files store (top) ----------------------------------- */}
+      <div className="card mb-4 p-4">
+        <div className="flex items-start justify-between gap-4">
+          <div>
+            <h3 className="font-semibold flex items-center gap-2">
+              <Icon name="FolderSync" size={16} /> Local config files
+            </h3>
+            <p className="text-sm text-muted mt-1">
+              DST keeps a local copy of everything it needs (SSH key, dune-server.config,
+              dune-admin config) in <code>%APPDATA%\DuneServer\configFiles</code>. Repull if you've
+              regenerated your SSH key or changed config — the refreshed key is also re-dumped into
+              the dune-admin folder.
+            </p>
+          </div>
+          <button
+            type="button"
+            onClick={onSyncConfigFiles}
+            disabled={cfSyncing}
+            className="btn btn-secondary shrink-0"
+          >
+            <Icon name={cfSyncing ? 'Loader2' : 'RefreshCw'} size={14} className={cfSyncing ? 'animate-spin' : ''} />
+            {cfSyncing ? 'Refreshing…' : 'Refresh config files'}
+          </button>
+        </div>
+
+        {cfResult && (
+          <div className="mt-3 space-y-2">
+            {cfResult.sshKeyDir && (
+              <p className="text-xs text-muted">
+                SSH key re-dumped into dune-admin folder: <code>{cfResult.sshKeyDir}</code>
+              </p>
+            )}
+            <div className="text-sm border border-default/40 rounded overflow-hidden">
+              {cfResult.files.map((f) => (
+                <div key={f.name} className="flex items-center gap-2 px-3 py-1.5 border-b border-default/20 last:border-0">
+                  <Icon
+                    name={f.status === 'copied' ? 'CheckCircle2' : f.status === 'skipped' ? 'MinusCircle' : f.status === 'error' ? 'AlertCircle' : 'Circle'}
+                    size={13}
+                    className={f.status === 'copied' ? 'text-success' : f.status === 'error' ? 'text-danger' : 'text-muted'}
+                  />
+                  <span className="font-mono text-xs">{f.name}</span>
+                  <span className="text-xs text-muted truncate flex-1">{f.message}</span>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
+        <label className="mt-4 flex items-start gap-3 cursor-pointer select-none">
+          <input
+            type="checkbox"
+            className="mt-1"
+            checked={useLocalCfgFiles}
+            disabled={cfToggleSaving}
+            onChange={e => onToggleUseLocalConfigFiles(e.target.checked)}
+          />
+          <span className="text-sm">
+            <span className="font-medium flex items-center gap-2">
+              Use local config files
+              {cfToggleSaving && <Icon name="Loader2" size={13} className="animate-spin" />}
+            </span>
+            <span className="text-muted block mt-0.5">
+              When on, DST reads the SSH key from its local store instead of the configured
+              “SSH key path”. Refresh config files first so the local copy is current.
+            </span>
+          </span>
+        </label>
+      </div>
+
       {/* --- Update check card (top, collapsible) ------------------------ */}
       <div className="card mb-4">
         <button
@@ -439,9 +655,9 @@ export function Settings() {
           <div className="flex items-center gap-2">
             {updCheck && (
               <>
-                <span className="pill-muted text-xs">v{updCheck.currentVersion}</span>
+                <span className="pill-muted text-xs">{fmtToolVersion(updCheck.currentVersion)}</span>
                 {updCheck.available && updCheck.latestVersion && (
-                  <span className="pill-warning text-xs">v{updCheck.latestVersion} available</span>
+                  <span className="pill-warning text-xs">{fmtToolVersion(updCheck.latestVersion)} available</span>
                 )}
                 {!updCheck.available && !updCheck.error && updCheck.latestVersion && (
                   <span className="pill-success text-xs">up to date</span>
@@ -465,10 +681,10 @@ export function Settings() {
 
             {updCheck && (
               <div className="text-sm border-t border-border pt-3 flex flex-wrap items-center gap-3">
-                <span className="pill-muted">Current · v{updCheck.currentVersion}</span>
+                <span className="pill-muted">Current · {fmtToolVersion(updCheck.currentVersion)}</span>
                 {updCheck.latestVersion && (
                   <span className={updCheck.available ? 'pill-warning' : 'pill-success'}>
-                    Latest · v{updCheck.latestVersion}
+                    Latest · {fmtToolVersion(updCheck.latestVersion)}
                   </span>
                 )}
                 {updCheck.releaseUrl && (
@@ -484,7 +700,7 @@ export function Settings() {
                     className="btn-primary ml-auto"
                   >
                     <Icon name={updInstalling ? 'Loader2' : 'Download'} size={15} className={updInstalling ? 'animate-spin' : ''} />
-                    {updInstalling ? 'Installing…' : `Update to v${updCheck.latestVersion}`}
+                    {updInstalling ? 'Installing…' : `Update to ${fmtToolVersion(updCheck.latestVersion)}`}
                   </button>
                 )}
                 {!updCheck.available && !updCheck.error && (
@@ -788,49 +1004,6 @@ export function Settings() {
                   )}
                 </div>
 
-                {/* v6.3.1: market-bot DB health. The embedded market bot dials
-                    Postgres (db_host:db_port from dune-admin's config.yaml) at
-                    startup; if that's unreachable (e.g. a k3s/SSH tunnel is
-                    down) the bot silently fails and the market panel is blank.
-                    We probe the same host:port so the cause is obvious here. */}
-                {daBotHealth && daBotHealth.configExists && daBotHealth.status !== 'disabled' && (
-                  <div className="pt-3 border-t border-border">
-                    <div className="flex items-center gap-2 mb-1">
-                      <Icon
-                        name={daBotHealth.status === 'ok' ? 'CheckCircle2' : daBotHealth.status === 'unreachable' ? 'AlertCircle' : 'HelpCircle'}
-                        size={14}
-                        className={daBotHealth.status === 'ok' ? 'text-success' : daBotHealth.status === 'unreachable' ? 'text-danger' : 'text-text-dim'}
-                      />
-                      <span className="text-xs font-medium text-text">
-                        Market bot database
-                        {daBotHealth.dbHost && daBotHealth.dbPort ? (
-                          <span className="font-mono text-text-dim"> {daBotHealth.dbHost}:{daBotHealth.dbPort}</span>
-                        ) : null}
-                      </span>
-                      <button
-                        type="button"
-                        className="ml-auto text-[11px] text-accent disabled:opacity-50"
-                        disabled={daBotHealthChecking}
-                        onClick={() => void refreshBotHealth()}
-                      >
-                        {daBotHealthChecking ? 'Checking...' : 'Recheck'}
-                      </button>
-                    </div>
-                    {daBotHealth.status === 'unreachable' ? (
-                      <div className="text-xs text-danger">
-                        Unreachable — the embedded market bot will fail to start, so dune-admin shows
-                        no market. If Postgres is reached through a kubectl/SSH tunnel, make sure that
-                        tunnel is running <span className="font-medium">before</span> launching dune-admin,
-                        then click Recheck.
-                      </div>
-                    ) : daBotHealth.status === 'ok' ? (
-                      <div className="text-xs text-text-dim">Reachable — the embedded bot should start normally.</div>
-                    ) : (
-                      <div className="text-xs text-text-dim">{daBotHealth.message}</div>
-                    )}
-                  </div>
-                )}
-
                 {/* v6.1.25: pricing-patch rebuild status panel. Shows when
                     /install kicks off the detached background rebuild. The
                     binary install is already complete by the time this card
@@ -902,6 +1075,47 @@ export function Settings() {
                 <Icon name="AlertCircle" size={14} /> {daErr}
               </div>
             )}
+
+            {/* Testing-only: wipe all market listings on the VM. */}
+            <div className="border-t border-border pt-3 mt-1">
+              <div className="rounded-lg border border-danger/40 bg-danger/5 p-3">
+                <h4 className="text-sm font-semibold text-danger flex items-center gap-2">
+                  <Icon name="TriangleAlert" size={14} /> For Testing Only — Will WIPE ALL LISTINGS
+                </h4>
+                <p className="text-xs text-muted mt-1">
+                  Deletes every market-bot listing on the VM. The bot re-lists from scratch with
+                  freshly-computed prices on its next listing tick. Requires the VM to be running.
+                </p>
+                <label className="mt-2 flex items-center gap-2 cursor-pointer select-none text-sm">
+                  <input
+                    type="checkbox"
+                    checked={wipeApprove}
+                    disabled={wiping}
+                    onChange={e => setWipeApprove(e.target.checked)}
+                  />
+                  I approve — wipe all listings
+                </label>
+                <button
+                  type="button"
+                  onClick={() => void onWipeListings()}
+                  disabled={!wipeApprove || wiping}
+                  className="btn-danger mt-2 disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  <Icon name={wiping ? 'Loader2' : 'Trash2'} size={14} className={wiping ? 'animate-spin' : ''} />
+                  {wiping ? 'Wiping…' : 'Wipe all listings'}
+                </button>
+                {wipeMsg && (
+                  <p className="mt-2 text-xs text-success flex items-center gap-1.5">
+                    <Icon name="CheckCircle2" size={13} /> {wipeMsg}
+                  </p>
+                )}
+                {wipeErr && (
+                  <p className="mt-2 text-xs text-danger flex items-center gap-1.5">
+                    <Icon name="AlertCircle" size={13} /> {wipeErr}
+                  </p>
+                )}
+              </div>
+            </div>
           </div>
         )}
       </div>
@@ -950,6 +1164,18 @@ export function Settings() {
                   />
                   Browse
                 </button>
+                {f.key === 'SshKey' && (
+                  <button
+                    type="button"
+                    onClick={() => void onRotateSshKey()}
+                    disabled={sshRotating}
+                    title="Generate a new SSH key and copy it everywhere DST uses it"
+                    className="btn-secondary shrink-0"
+                  >
+                    <Icon name={sshRotating ? 'Loader2' : 'KeyRound'} size={15} className={sshRotating ? 'animate-spin' : ''} />
+                    {sshRotating ? 'Rotating…' : 'Generate new'}
+                  </button>
+                )}
               </div>
             ) : (
               <input
@@ -962,6 +1188,11 @@ export function Settings() {
               />
             )}
             {f.help && <p className="mt-1 text-xs text-text-dim">{f.help}</p>}
+            {f.key === 'SshKey' && sshRotateMsg && (
+              <p className="mt-1 text-xs text-success flex items-center gap-1.5">
+                <Icon name="CheckCircle2" size={13} /> {sshRotateMsg}
+              </p>
+            )}
           </div>
         ))}
 

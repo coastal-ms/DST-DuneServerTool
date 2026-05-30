@@ -1,8 +1,26 @@
 diff --git a/internal/marketbot/config.go b/internal/marketbot/config.go
-index 1d32425..4fece55 100644
+index 1d32425..3eebb66 100644
 --- a/internal/marketbot/config.go
 +++ b/internal/marketbot/config.go
-@@ -42,18 +42,27 @@ func defaultConfig() configValues {
+@@ -25,8 +25,17 @@ type configValues struct {
+ 	RarityMultipliers map[string]float64 `json:"rarity_multipliers"`
+ 	VendorMultipliers map[string]float64 `json:"vendor_multipliers"`
+ 	DisabledItems     []string           `json:"disabled_items"`
++	// DefaultsRevision tracks which generation of sane-pricing multiplier
++	// defaults this config was seeded against. A persisted config older than
++	// saneDefaultsRevision is re-seeded once on load (see LoadState).
++	DefaultsRevision int `json:"defaults_revision"`
+ }
+ 
++// saneDefaultsRevision is the current generation of the Grade/Rarity/Vendor
++// multiplier defaults below. Bump this whenever those defaults change to force
++// a one-time re-seed of existing operator configs on the next load.
++const saneDefaultsRevision = 1
++
+ // Config is the thread-safe runtime config. Tickers call Snapshot() at tick start.
+ type Config struct {
+ 	mu       sync.RWMutex
+@@ -42,20 +51,32 @@ func defaultConfig() configValues {
  		MaxBuys:          50,
  		ListingsPerGrade: 5,
  		Enabled:          true,
@@ -37,9 +55,70 @@ index 1d32425..4fece55 100644
 +			"memento": 0.95,
  		},
  		DisabledItems: nil,
++		// DefaultsRevision stamps freshly-created configs as already current so
++		// they are never re-seeded.
++		DefaultsRevision: saneDefaultsRevision,
  	}
+ }
+ 
+@@ -104,6 +125,7 @@ type configJSON struct {
+ 	RarityMultipliers map[string]float64 `json:"rarity_multipliers"`
+ 	VendorMultipliers map[string]float64 `json:"vendor_multipliers"`
+ 	DisabledItems     []string           `json:"disabled_items"`
++	DefaultsRevision  int                `json:"defaults_revision"`
+ }
+ 
+ // MarshalJSON returns the config as JSON with durations as strings (e.g. "5m0s"),
+@@ -122,6 +144,7 @@ func (c *Config) MarshalJSON() ([]byte, error) {
+ 		RarityMultipliers: c.config.RarityMultipliers,
+ 		VendorMultipliers: c.config.VendorMultipliers,
+ 		DisabledItems:     c.config.DisabledItems,
++		DefaultsRevision:  c.config.DefaultsRevision,
+ 	})
+ }
+ 
+@@ -311,6 +334,7 @@ func LoadState(path string) (configValues, error) {
+ 		RarityMultipliers: wire.RarityMultipliers,
+ 		VendorMultipliers: wire.VendorMultipliers,
+ 		DisabledItems:     wire.DisabledItems,
++		DefaultsRevision:  wire.DefaultsRevision,
+ 	}
+ 	if wire.BuyInterval != "" {
+ 		if d, err := time.ParseDuration(wire.BuyInterval); err == nil {
+@@ -327,6 +351,23 @@ func LoadState(path string) (configValues, error) {
+ 	def := defaultConfig()
+ 	out.RarityMultipliers = mergeMultiplierDefaults(out.RarityMultipliers, def.RarityMultipliers)
+ 	out.VendorMultipliers = mergeMultiplierDefaults(out.VendorMultipliers, def.VendorMultipliers)
++
++	// One-time re-seed: a persisted config older than the current defaults
++	// revision has its pricing-multiplier sections (Grade/Rarity/Vendor)
++	// overwritten ONCE with the current sane defaults, then persisted so the
++	// migration runs exactly once. Every other field (intervals, max buys,
++	// disabled items, …) is left untouched. After this, operator edits made via
++	// Apply persist normally — Apply preserves DefaultsRevision and OnChange
++	// re-saves the file — so the bot-level overrides the operator sets later win.
++	if out.DefaultsRevision < saneDefaultsRevision {
++		out.GradeMultipliers = def.GradeMultipliers
++		out.RarityMultipliers = copyFloatMap(def.RarityMultipliers)
++		out.VendorMultipliers = copyFloatMap(def.VendorMultipliers)
++		out.DefaultsRevision = saneDefaultsRevision
++		// Best-effort persist so the re-seed is not repeated on the next load.
++		// A write failure is non-fatal: the migration simply retries next time.
++		_ = SaveState(path, out)
++	}
+ 	return out, nil
+ }
+ 
+@@ -344,6 +385,7 @@ func SaveState(path string, v configValues) error {
+ 		RarityMultipliers: v.RarityMultipliers,
+ 		VendorMultipliers: v.VendorMultipliers,
+ 		DisabledItems:     v.DisabledItems,
++		DefaultsRevision:  v.DefaultsRevision,
+ 	}
+ 	data, err := json.MarshalIndent(wire, "", "  ")
+ 	if err != nil {
 diff --git a/internal/marketbot/config_test.go b/internal/marketbot/config_test.go
-index 6afefeb..dadb295 100644
+index 6afefeb..b023db8 100644
 --- a/internal/marketbot/config_test.go
 +++ b/internal/marketbot/config_test.go
 @@ -29,7 +29,7 @@ func TestConfigDefaults(t *testing.T) {
@@ -51,6 +130,133 @@ index 6afefeb..dadb295 100644
  	if cfg.GradeMultipliers != want {
  		t.Errorf("GradeMultipliers want %v got %v", want, cfg.GradeMultipliers)
  	}
+@@ -335,3 +335,84 @@ func TestSaveStateAtomicWrite(t *testing.T) {
+ 		}
+ 	}
+ }
++
++// TestLoadStateReseedsOldRevision verifies the one-time defaults re-seed: a
++// persisted config that predates saneDefaultsRevision (no defaults_revision key)
++// has ONLY its Grade/Rarity/Vendor sections overwritten with the current sane
++// defaults on load, while every other operator setting is preserved, the
++// revision is bumped, and the migrated state is persisted to disk.
++func TestLoadStateReseedsOldRevision(t *testing.T) {
++	dir := t.TempDir()
++	path := filepath.Join(dir, "state.json")
++
++	// Simulate a pre-upgrade state file: real operator content, stale pricing
++	// multipliers, and NO defaults_revision field (so it decodes as 0).
++	content := `{"buy_interval":"7m0s","list_interval":"45m0s","buy_threshold":1.2,` +
++		`"max_buys":99,"listings_per_grade":4,"enabled":true,` +
++		`"grade_multipliers":[1,1,1.25,1.5,1.65,1.5],` +
++		`"rarity_multipliers":{"common":5,"rare":5,"unique":5,"memento":5},` +
++		`"vendor_multipliers":{"common":5,"rare":5,"unique":5,"memento":5},` +
++		`"disabled_items":["item.keepme"]}`
++	if err := os.WriteFile(path, []byte(content), 0o600); err != nil {
++		t.Fatalf("WriteFile: %v", err)
++	}
++
++	got, err := LoadState(path)
++	if err != nil {
++		t.Fatalf("LoadState: %v", err)
++	}
++
++	def := defaultConfig()
++	// Pricing sections must be re-seeded to the current defaults.
++	if got.GradeMultipliers != def.GradeMultipliers {
++		t.Errorf("GradeMultipliers not re-seeded: got %v want %v", got.GradeMultipliers, def.GradeMultipliers)
++	}
++	for k, want := range def.RarityMultipliers {
++		if got.RarityMultipliers[k] != want {
++			t.Errorf("RarityMultipliers[%q] not re-seeded: got %v want %v", k, got.RarityMultipliers[k], want)
++		}
++	}
++	for k, want := range def.VendorMultipliers {
++		if got.VendorMultipliers[k] != want {
++			t.Errorf("VendorMultipliers[%q] not re-seeded: got %v want %v", k, got.VendorMultipliers[k], want)
++		}
++	}
++	// Revision bumped.
++	if got.DefaultsRevision != saneDefaultsRevision {
++		t.Errorf("DefaultsRevision: got %d want %d", got.DefaultsRevision, saneDefaultsRevision)
++	}
++	// Everything else preserved.
++	if got.MaxBuys != 99 || got.ListingsPerGrade != 4 || got.BuyThreshold != 1.2 {
++		t.Errorf("non-pricing fields clobbered: %+v", got)
++	}
++	if got.BuyInterval != 7*time.Minute || got.ListInterval != 45*time.Minute {
++		t.Errorf("intervals clobbered: buy=%v list=%v", got.BuyInterval, got.ListInterval)
++	}
++	if len(got.DisabledItems) != 1 || got.DisabledItems[0] != "item.keepme" {
++		t.Errorf("DisabledItems clobbered: %v", got.DisabledItems)
++	}
++
++	// The migration must persist: a second load sees revision already current
++	// and does NOT re-seed, so a subsequent operator override sticks.
++	reloaded, err := LoadState(path)
++	if err != nil {
++		t.Fatalf("LoadState (reload): %v", err)
++	}
++	if reloaded.DefaultsRevision != saneDefaultsRevision {
++		t.Errorf("persisted revision not current on reload: %d", reloaded.DefaultsRevision)
++	}
++
++	// Operator override after migration must survive the next load.
++	override := reloaded
++	override.GradeMultipliers = [6]float64{2, 2, 2, 2, 2, 2}
++	if err := SaveState(path, override); err != nil {
++		t.Fatalf("SaveState override: %v", err)
++	}
++	final, err := LoadState(path)
++	if err != nil {
++		t.Fatalf("LoadState (final): %v", err)
++	}
++	if final.GradeMultipliers != override.GradeMultipliers {
++		t.Errorf("operator override re-seeded away: got %v want %v", final.GradeMultipliers, override.GradeMultipliers)
++	}
++}
+diff --git a/internal/marketbot/exchange.go b/internal/marketbot/exchange.go
+index 7e99e5b..cd28aef 100644
+--- a/internal/marketbot/exchange.go
++++ b/internal/marketbot/exchange.go
+@@ -5,6 +5,7 @@ import (
+ 	"database/sql"
+ 	"fmt"
+ 	"log"
++	"math/rand"
+ 	"os"
+ 	"path/filepath"
+ 	"strings"
+@@ -493,9 +494,8 @@ func (e *Exchange) categoryFor(item CatalogItem) (mask int32, depth int16) {
+ }
+ 
+ func (e *Exchange) buyPlayerListings(ctx context.Context, orderExpiry int64, snap configValues) {
+-	if snap.BuyThreshold <= 0 {
+-		return
+-	}
++	// d12 gamble-buy: the price threshold no longer gates whether buying runs.
++	// Buying executes every tick; per-item purchase is decided by a dice roll below.
+ 	if orderExpiry <= 0 {
+ 		orderExpiry = 999_999_999
+ 	}
+@@ -550,12 +550,14 @@ func (e *Exchange) buyPlayerListings(ctx context.Context, orderExpiry int64, sna
+ 			continue
+ 		}
+ 
+-		refPrice := gradedPrice(botPrice, grade, snap.GradeMultipliers)
+-		if price > int64(float64(refPrice)*snap.BuyThreshold) {
+-			log.Printf("buy: skip %s price=%d ref=%d(grade%d) threshold=%.2f", tmpl, price, refPrice, grade, snap.BuyThreshold)
++		// d12 gamble-buy: ignore price entirely. Roll a 12-sided die per candidate
++		// listing; only a 5 buys the item, regardless of price. Otherwise skip.
++		if roll := rand.Intn(12) + 1; roll != 5 {
++			log.Printf("buy: d12 skip %s price=%d roll=%d (need 5)", tmpl, price, roll)
+ 			skippedPrice++
+ 			continue
+ 		}
++		log.Printf("buy: d12 hit %s price=%d grade=%d (buying regardless of price)", tmpl, price, grade)
+ 
+ 		totalCost := price * stackSize
+ 
 diff --git a/internal/marketbot/pricing.go b/internal/marketbot/pricing.go
 index 8ce7bd4..79a1e6d 100644
 --- a/internal/marketbot/pricing.go
@@ -340,46 +546,4 @@ index 8ce7bd4..79a1e6d 100644
 -	}
  	return gradedPrice(roundPrice(basePrice(item, snap)), grade, snap.GradeMultipliers)
  }
- 
-diff --git a/internal/marketbot/exchange.go b/internal/marketbot/exchange.go
-index aa0d019..df2505d 100644
---- a/internal/marketbot/exchange.go
-+++ b/internal/marketbot/exchange.go
-@@ -5,6 +5,7 @@ import (
- 	"database/sql"
- 	"fmt"
- 	"log"
-+	"math/rand"
- 	"os"
- 	"path/filepath"
- 	"strings"
-@@ -445,9 +446,8 @@ func (e *Exchange) categoryFor(item CatalogItem) (mask int32, depth int16) {
- }
- 
- func (e *Exchange) buyPlayerListings(ctx context.Context, orderExpiry int64, snap configValues) {
--	if snap.BuyThreshold <= 0 {
--		return
--	}
-+	// d12 gamble-buy: the price threshold no longer gates whether buying runs.
-+	// Buying executes every tick; per-item purchase is decided by a dice roll below.
- 	if orderExpiry <= 0 {
- 		orderExpiry = 999_999_999
- 	}
-@@ -502,12 +502,14 @@ func (e *Exchange) buyPlayerListings(ctx context.Context, orderExpiry int64, sna
- 			continue
- 		}
- 
--		refPrice := gradedPrice(botPrice, grade, snap.GradeMultipliers)
--		if price > int64(float64(refPrice)*snap.BuyThreshold) {
--			log.Printf("buy: skip %s price=%d ref=%d(grade%d) threshold=%.2f", tmpl, price, refPrice, grade, snap.BuyThreshold)
-+		// d12 gamble-buy: ignore price entirely. Roll a 12-sided die per candidate
-+		// listing; only a 5 buys the item, regardless of price. Otherwise skip.
-+		if roll := rand.Intn(12) + 1; roll != 5 {
-+			log.Printf("buy: d12 skip %s price=%d roll=%d (need 5)", tmpl, price, roll)
- 			skippedPrice++
- 			continue
- 		}
-+		log.Printf("buy: d12 hit %s price=%d grade=%d (buying regardless of price)", tmpl, price, grade)
- 
- 		totalCost := price * stackSize
  

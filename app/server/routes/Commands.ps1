@@ -6,6 +6,7 @@ Register-DuneRoute -Method GET -Path '/api/commands' -Handler {
     $state  = Get-DuneCurrentState
     $layout = Get-DuneCommandLayout
     $cmds = foreach ($c in $script:DuneCommands) {
+        if ($c.Hidden) { continue }
         $av = Get-DuneCommandAvailability -Command $c -State $state
         @{
             section      = $c.Section   # original catalogue section, kept as a hint

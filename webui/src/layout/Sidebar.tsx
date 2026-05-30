@@ -4,12 +4,33 @@ import { Icon } from '../components/Icon'
 import { NAV_ITEMS, GROUP_LABELS } from '../nav'
 import { useUpdateCheck } from '../hooks/useUpdateCheck'
 import { useInstallPrompt } from '../hooks/useInstallPrompt'
+import { api } from '../api/client'
+import { fmtToolVersion } from '../format'
 
 export function Sidebar() {
   const { data: upd } = useUpdateCheck()
   const version = upd?.currentVersion ?? ''
   const { canInstall, installed, install } = useInstallPrompt()
   const [showHelp, setShowHelp] = useState(false)
+  const [daLaunching, setDaLaunching] = useState(false)
+
+  // Characters live in dune-admin (Icehunter's tool), not in this portal.
+  // Launch dune-admin (skipped server-side if already running) then open its
+  // players web UI. The launch command opens the page itself, so we don't
+  // window.open here — that would double-open the tab.
+  const launchDuneAdmin = async () => {
+    if (daLaunching) return
+    setDaLaunching(true)
+    try {
+      await api('/api/commands/run/dune-admin', { method: 'POST' })
+    } catch {
+      // Best-effort: if the launch endpoint fails, still open the page so the
+      // user can connect to an already-running instance.
+      window.open('https://dune-admin.layout.tools/#/players', '_blank', 'noopener')
+    } finally {
+      setDaLaunching(false)
+    }
+  }
 
   const onInstallClick = async () => {
     if (canInstall) {
@@ -56,19 +77,33 @@ export function Sidebar() {
             <ul className="space-y-0.5">
               {g.items.map(item => (
                 <li key={item.to}>
-                  <NavLink
-                    to={item.to}
-                    end={item.to === '/'}
-                    className={({ isActive }) =>
-                      `flex items-center gap-2.5 px-3 py-2 rounded-lg text-sm transition-all
-                       ${isActive
-                         ? 'bg-accent/15 text-accent-bright border border-accent/30 shadow-inner'
-                         : 'text-text-muted hover:text-text hover:bg-surface-2/60 border border-transparent'}`
-                    }
-                  >
-                    <Icon name={item.icon} size={16} />
-                    <span>{item.label}</span>
-                  </NavLink>
+                  {item.action === 'launch-dune-admin' ? (
+                    <button
+                      type="button"
+                      onClick={() => { void launchDuneAdmin() }}
+                      title="Opens player/character editing in dune-admin (launches it if not already running)"
+                      className="w-full flex items-center gap-2.5 px-3 py-2 rounded-lg text-sm transition-all
+                                 text-text-muted hover:text-text hover:bg-surface-2/60 border border-transparent"
+                    >
+                      <Icon name={daLaunching ? 'Loader2' : item.icon} size={16} className={daLaunching ? 'animate-spin' : ''} />
+                      <span>{item.label}</span>
+                      <Icon name="ExternalLink" size={12} className="ml-auto text-text-dim" />
+                    </button>
+                  ) : (
+                    <NavLink
+                      to={item.to}
+                      end={item.to === '/'}
+                      className={({ isActive }) =>
+                        `flex items-center gap-2.5 px-3 py-2 rounded-lg text-sm transition-all
+                         ${isActive
+                           ? 'bg-accent/15 text-accent-bright border border-accent/30 shadow-inner'
+                           : 'text-text-muted hover:text-text hover:bg-surface-2/60 border border-transparent'}`
+                      }
+                    >
+                      <Icon name={item.icon} size={16} />
+                      <span>{item.label}</span>
+                    </NavLink>
+                  )}
                 </li>
               ))}
             </ul>
@@ -89,7 +124,7 @@ export function Sidebar() {
           </button>
         )}
         <div className="flex items-center justify-between">
-          <span>{version ? `v${version}` : '—'}</span>
+          <span>{version ? fmtToolVersion(version) : '—'}</span>
           <span className="font-mono">coastal-ms</span>
         </div>
       </div>
