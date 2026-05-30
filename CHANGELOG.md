@@ -14,7 +14,31 @@ here cover everything those tags shipped.
 ## [Unreleased]
 
 
-## [6.1.33] - 2026-05-30
+## [6.2.0] - 2026-05-30
+
+Feature: **updater "this window is offline" takeover**, plus a release-history cleanup.
+
+### Added
+
+- **Update flow now takes over the whole portal when an update launches.** Clicking
+  **Update now** previously left a small banner while the old window stayed fully
+  usable — so after the server restarted, someone could keep clicking around a
+  **stale, disconnected window** and think the tool was broken. The portal now shows
+  a full-screen "Updating Dune Server Tool…" screen the moment the installer
+  launches, **polls the server**, and the instant it goes offline flips to a clear
+  **"This window is now offline — safe to close"** state with a **Close this window**
+  button. It also makes a **best-effort auto-close** (works for PWA / app-mode
+  windows; normal browser tabs block programmatic close, so the screen plus the
+  button cover that case). The updated tool still relaunches in a fresh window
+  automatically when the installer finishes. _(This screen ships inside the new
+  build, so it appears on the **next** update onward.)_
+
+### Changed
+
+- **Pruned GitHub releases** from 32 entries down to a clean set: one release per
+  major for **v1–v5**, split by minor for v6 (**v6.0**, **v6.1**, **v6.2**). Each
+  consolidated release keeps the newest installer of its group; per-release git tags
+  are preserved.
 
 Fix: **Setup Wizard Step 3 (initial-setup) opened a console that "ran one thing and closed."**
 
