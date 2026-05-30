@@ -375,7 +375,7 @@ try {
     if (`$null -eq `$buildCode) { `$buildCode = 0 }
 } catch {
     `$buildCode = 1
-    try { Add-Content -LiteralPath `$logFile -Value ""``r``n[wrapper] build-patched.ps1 threw: `$(`$_.Exception.Message)`r``n"" } catch { }
+    try { Add-Content -LiteralPath `$logFile -Value "``r``n[wrapper] build-patched.ps1 threw: `$(`$_.Exception.Message)``r``n" } catch { }
 }
 
 `$finished = (Get-Date).ToString('o')
@@ -400,7 +400,7 @@ if (`$buildCode -eq 0) {
         startedAt  = `$startedAt
         finishedAt = `$finished
         exitCode   = `$buildCode
-        error      = ""build-patched.ps1 exited with code `$buildCode (see log).""
+        error      = "build-patched.ps1 exited with code `$buildCode (see log)."
         pid        = `$PID
     }
     exit `$buildCode
