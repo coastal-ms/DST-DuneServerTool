@@ -13,16 +13,26 @@ import {
   type DuneAdminPricingPatchStatus,
 } from '../api/duneAdmin'
 
-const FIELDS: { key: string; label: string; placeholder: string; help?: string; type?: 'text' | 'select' }[] = [
+const FIELDS: {
+  key: string
+  label: string
+  placeholder: string
+  help?: string
+  type?: 'text' | 'select'
+  browse?: { mode: 'folder' | 'file'; filter?: string }
+}[] = [
   { key: 'SteamPath',    label: 'Steam install path',
     placeholder: 'C:\\Program Files (x86)\\Steam\\steamapps\\common\\Dune Awakening Self-Hosted Server',
-    help: 'Where Funcom installed the dedicated server.' },
+    help: 'Where Funcom installed the dedicated server.',
+    browse: { mode: 'folder' } },
   { key: 'SshKey',       label: 'SSH key path',
     placeholder: 'C:\\Users\\<you>\\AppData\\Local\\DuneAwakeningServer\\sshKey',
-    help: 'Private key used to SSH into the dune-awakening VM.' },
+    help: 'Private key used to SSH into the dune-awakening VM.',
+    browse: { mode: 'file', filter: 'SSH key (sshKey;*.pem;*.key)|sshKey;*.pem;*.key|All files (*.*)|*.*' } },
   { key: 'DuneAdminExe', label: 'dune-admin.exe',
     placeholder: 'C:\\path\\to\\dune-admin.exe',
-    help: 'Optional — only needed if you launch dune-admin from this tool.' },
+    help: 'Optional — only needed if you launch dune-admin from this tool.',
+    browse: { mode: 'file', filter: 'dune-admin.exe (dune-admin.exe)|dune-admin.exe|Executables (*.exe)|*.exe|All files (*.*)|*.*' } },
   { key: 'WindowsUser',  label: 'Windows username',
     placeholder: 'your-windows-username',
     help: 'Used for desktop shortcut creation.' },
@@ -40,6 +50,32 @@ export function Settings() {
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [browsing, setBrowsing] = useState<string | null>(null)
+
+  async function onBrowse(field: { key: string; label: string; browse?: { mode: 'folder' | 'file'; filter?: string } }) {
+    if (!field.browse) return
+    setBrowsing(field.key)
+    setError(null)
+    try {
+      const r = await api<{ ok: boolean; cancelled: boolean; path: string }>('/api/browse-path', {
+        method: 'POST',
+        body: JSON.stringify({
+          mode: field.browse.mode,
+          current: values[field.key] ?? '',
+          title: field.browse.mode === 'folder' ? `Select ${field.label}` : `Select ${field.label} file`,
+          filter: field.browse.filter ?? 'All files (*.*)|*.*',
+        }),
+      })
+      if (r.ok && !r.cancelled && r.path) {
+        setValues(v => ({ ...v, [field.key]: r.path }))
+      }
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e))
+    } finally {
+      setBrowsing(null)
+    }
+  }
+
   const [saved, setSaved] = useState<string | null>(null)
 
   // Update-check card state
@@ -439,6 +475,19 @@ export function Settings() {
             <Icon name={daExpanded ? 'ChevronDown' : 'ChevronRight'} size={16} className="text-text-dim" />
             <Icon name="Package" size={18} className="text-text-muted" />
             <h2 className="text-lg font-semibold">dune-admin.exe</h2>
+            <a
+              href="https://github.com/Icehunter"
+              target="_blank"
+              rel="noopener noreferrer"
+              onClick={(e) => e.stopPropagation()}
+              title="dune-admin is built by Icehunter — visit GitHub profile"
+              className="flex items-center gap-1 text-[10px] font-mono text-text-dim
+                         hover:text-accent px-1.5 py-0.5 rounded bg-surface-3/60
+                         border border-border/40 hover:border-accent/40 transition-colors"
+            >
+              <Icon name="Github" size={10} />
+              <span>by Icehunter</span>
+            </a>
           </div>
           <div className="flex items-center gap-2">
             {daCheck && (
@@ -467,7 +516,17 @@ export function Settings() {
           <div className="px-6 pb-5 space-y-3">
             <div className="flex items-center justify-between">
               <p className="text-sm text-text-dim">
-                Checks <span className="font-mono">Icehunter/dune-admin</span> releases and replaces the EXE at the <span className="font-mono">DuneAdminExe</span> path below.
+                Checks{' '}
+                <a
+                  href="https://github.com/Icehunter/dune-admin"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  title="dune-admin is built by Icehunter — view the repo"
+                  className="font-mono text-accent hover:underline"
+                >
+                  Icehunter/dune-admin
+                </a>
+                {' '}releases and replaces the EXE at the <span className="font-mono">DuneAdminExe</span> path below.
                 {' '}Close any running dune-admin first.
               </p>
               <button
@@ -719,6 +778,31 @@ export function Settings() {
                 <option value="custom">custom — your own URL template</option>
                 <option value="disabled">disabled — no port checks</option>
               </select>
+            ) : f.browse ? (
+              <div className="flex items-stretch gap-2">
+                <input
+                  type="text"
+                  value={values[f.key] ?? ''}
+                  placeholder={f.placeholder}
+                  onChange={e => setValues(v => ({ ...v, [f.key]: e.target.value }))}
+                  className="flex-1 min-w-0 px-3 py-2 rounded-lg bg-surface-2 border border-border text-text font-mono text-sm
+                             placeholder:text-text-dim focus:outline-none focus:ring-2 focus:ring-ibad focus:border-ibad/50"
+                />
+                <button
+                  type="button"
+                  onClick={() => void onBrowse(f)}
+                  disabled={browsing !== null}
+                  title={f.browse.mode === 'folder' ? 'Browse for folder…' : 'Browse for file…'}
+                  className="btn-secondary shrink-0"
+                >
+                  <Icon
+                    name={browsing === f.key ? 'Loader2' : (f.browse.mode === 'folder' ? 'FolderOpen' : 'FileSearch')}
+                    size={15}
+                    className={browsing === f.key ? 'animate-spin' : ''}
+                  />
+                  Browse
+                </button>
+              </div>
             ) : (
               <input
                 type="text"
