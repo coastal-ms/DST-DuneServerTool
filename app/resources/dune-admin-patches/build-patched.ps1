@@ -37,6 +37,47 @@ $scriptRoot = $PSScriptRoot
 $repoRoot   = Split-Path -Parent $scriptRoot
 $exePath    = Join-Path $repoRoot 'dune-admin.exe'
 
+# --- Resolve build tools (git, go) -------------------------------------------
+# When this script runs from the Dune Server Tool's background wrapper (spawned
+# by DuneServer.exe, a ps2exe binary), the inherited PATH can be missing entries
+# an interactive shell would have — most commonly Git. Find git/go via PATH
+# first, then fall back to their standard install locations, and prepend the
+# containing dir to PATH so every bare `git`/`go` call below — and Go's own
+# internal git invocations (module/VCS stamping) — resolve correctly.
+function Resolve-ToolDir {
+    param([string]$Name, [string[]]$Candidates)
+    $cmd = Get-Command $Name -ErrorAction SilentlyContinue
+    if ($cmd -and $cmd.Source) { return (Split-Path -Parent $cmd.Source) }
+    foreach ($c in $Candidates) {
+        $expanded = [Environment]::ExpandEnvironmentVariables($c)
+        if ($expanded -and (Test-Path -LiteralPath $expanded)) { return (Split-Path -Parent $expanded) }
+    }
+    return $null
+}
+
+$gitDir = Resolve-ToolDir -Name 'git' -Candidates @(
+    "$env:ProgramFiles\Git\cmd\git.exe",
+    "$env:ProgramFiles\Git\bin\git.exe",
+    "${env:ProgramFiles(x86)}\Git\cmd\git.exe",
+    "$env:LOCALAPPDATA\Programs\Git\cmd\git.exe",
+    "$env:LOCALAPPDATA\Microsoft\WinGet\Links\git.exe"
+)
+$goDir = Resolve-ToolDir -Name 'go' -Candidates @(
+    "$env:ProgramFiles\Go\bin\go.exe",
+    "$env:LOCALAPPDATA\Programs\Go\bin\go.exe",
+    "$env:LOCALAPPDATA\Microsoft\WinGet\Links\go.exe",
+    "C:\Go\bin\go.exe"
+)
+foreach ($d in @($gitDir, $goDir)) {
+    if ($d -and (";$env:PATH;" -notlike "*;$d;*")) { $env:PATH = "$d;$env:PATH" }
+}
+if (-not (Get-Command git -ErrorAction SilentlyContinue)) {
+    throw "Git was not found on this machine (searched PATH and the standard install locations). Install Git for Windows — e.g. run 'winget install --id Git.Git' — then close and reopen the Dune Server Tool and re-apply the patch."
+}
+if (-not (Get-Command go -ErrorAction SilentlyContinue)) {
+    throw "Go was not found on this machine (searched PATH and the standard install locations). Install Go — e.g. run 'winget install --id GoLang.Go' — then close and reopen the Dune Server Tool and re-apply the patch."
+}
+
 Push-Location $repoRoot
 try {
     function Step($msg) { Write-Host "==> $msg" -ForegroundColor Cyan }

@@ -7,6 +7,7 @@ export interface PreflightCheck {
   ok: boolean
   severity: 'ok' | 'warning' | 'error' | 'info'
   detail: string
+  fix?: string
   freeGB?: number
 }
 
