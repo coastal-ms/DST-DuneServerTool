@@ -88,6 +88,12 @@ The default landing page. Cards for everything you usually want to glance at:
 - **Active Spice** — per-map / per-size-class active vs primed counts,
   pulled live from `dune.public_spicefields` over psql. Tiered colors
   (Large = amber, Medium = blue, Small = muted) and at-cap highlighting.
+  Each row also has an **Active** checkbox (v6.1.30+) that toggles
+  `dune.spicefield_types.is_spawning_active` live — clicking commits
+  immediately through a guard-railed endpoint that only ever writes
+  `TRUE`/`FALSE` to that single column. One shared 5-second click
+  cooldown across all checkboxes prevents accidental DB hammering
+  (live `(Ns)` countdown shown next to the disabled row).
 - **Public Port Status** — open / closed / skipped badges for Game (UDP)
   and RabbitMQ (TCP), with a primary + fallback port-check provider.
 - **Web Interfaces** — one-click launchers for File Browser and
@@ -112,6 +118,10 @@ Drag the grip on any card to reorder commands within their section — the
 order auto-saves to `%APPDATA%\DuneServer\button-order.json` and persists
 across launches. The header has a **Reset layout** button to revert to
 the default arrangement.
+
+The **dune-admin** launch tile carries an inline
+"by [Icehunter](https://github.com/Icehunter)" credit badge linking to
+the upstream project (v6.1.29+).
 
 ### 🖥️ PowerShell
 
@@ -146,9 +156,13 @@ setting labeled, typed, and showing its underlying key in fine print.
 Groups: Combat Rules, World & Weather, Shai-Hulud, Resources & Loot,
 Players, Spicefields, Performance, and more. A dedicated **Spicefield
 Types** card edits `dune.spicefield_types` directly with at-cap row
-highlighting and a live status badge that refreshes every 10s. Save
-flushes the files back to the VM and invalidates the Server Health port
-cache so any port change is reflected immediately.
+highlighting and a live status badge that refreshes every 10s. Each
+row includes a live-commit **spawning toggle** (v6.1.29+) that flips
+`is_spawning_active` through a guard-railed single-column endpoint,
+plus a 5-second per-button click cooldown on toggle + Save to prevent
+accidental DB hammering. Save flushes the files back to the VM and
+invalidates the Server Health port cache so any port change is
+reflected immediately.
 
 ### 🗄️ Database
 
@@ -280,8 +294,11 @@ cached for 1h server-side). When a newer tag is published with an attached
 `%TEMP%\DuneServerUpdate\` and launches the installer **wizard** — the
 detached relauncher kills the current `DuneServer.exe` by PID, the wizard
 walks through the standard pages, and the *Launch Dune Server* checkbox on
-the Finished page brings the portal back up. Your config in
-`%APPDATA%\DuneServer\` is preserved across upgrades.
+the Finished page brings the portal back up. As of v6.1.30 the relauncher
+runs in a visible window (with a brief "Installing update..." banner) and
+explicitly raises the wizard's main window so it appears in the foreground
+instead of being hidden behind the browser or other windows. Your config
+in `%APPDATA%\DuneServer\` is preserved across upgrades.
 
 You can also check manually from **Settings → Updates → Check now**.
 
