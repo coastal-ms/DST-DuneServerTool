@@ -120,7 +120,7 @@ public static extern bool IsIconic(System.IntPtr hWnd);
 }
 
 # Version (one of the 5 sync'd constants; see persistent-notes.md)
-$script:DuneToolVersion = '6.2.0'
+$script:DuneToolVersion = '6.2.1'
 
 # ---------- Single-instance gate ----------------------------------------------
 # Every click of the desktop shortcut runs DuneServer.exe again. Without a
@@ -312,10 +312,34 @@ $script:LaunchToken = [Guid]::NewGuid().ToString('N')
 
 # ---------- Browser launch -----------------------------------------------------
 
+# Resolve a Chromium-based browser (Edge, then Chrome) so we can open the portal
+# as an *app-mode* window (--app=URL). App windows are script-closable, which is
+# what lets the in-app updater auto-close the now-stale window after an update.
+# Returns the browser exe path, or $null if none found (caller falls back to the
+# default-browser tab, where window.close() is blocked by the browser).
+function Resolve-DuneAppBrowser {
+    $candidates = @(
+        "$env:ProgramFiles\Microsoft\Edge\Application\msedge.exe",
+        "${env:ProgramFiles(x86)}\Microsoft\Edge\Application\msedge.exe",
+        "$env:ProgramFiles\Google\Chrome\Application\chrome.exe",
+        "${env:ProgramFiles(x86)}\Google\Chrome\Application\chrome.exe",
+        "$env:LOCALAPPDATA\Google\Chrome\Application\chrome.exe"
+    )
+    foreach ($c in $candidates) {
+        if ($c -and (Test-Path -LiteralPath $c)) { return $c }
+    }
+    return $null
+}
+
 function Open-DuneInBrowser {
     param([string]$Url)
     try {
-        Start-Process $Url | Out-Null
+        $appBrowser = Resolve-DuneAppBrowser
+        if ($appBrowser) {
+            Start-Process -FilePath $appBrowser -ArgumentList "--app=$Url" | Out-Null
+        } else {
+            Start-Process $Url | Out-Null
+        }
     } catch {
         Write-Host "Could not open browser automatically. Visit: $Url" -ForegroundColor Yellow
     }
@@ -341,13 +365,23 @@ try {
 }
 
 # Kick the browser open after the listener binds. Reads last-url.txt that
-# Start-DuneHttpServer writes once it knows the actual bound port.
-$browserJob = Start-Job -ArgumentList $urlFilePath -ScriptBlock {
-    param($urlFile)
+# Start-DuneHttpServer writes once it knows the actual bound port. Opens in an
+# app-mode window when Edge/Chrome is available (so the updater can auto-close
+# it later); otherwise falls back to the default-browser tab.
+$appBrowserPath = Resolve-DuneAppBrowser
+$browserJob = Start-Job -ArgumentList $urlFilePath, $appBrowserPath -ScriptBlock {
+    param($urlFile, $appBrowser)
     for ($i = 0; $i -lt 50; $i++) {
         if (Test-Path -LiteralPath $urlFile) {
             $u = (Get-Content -LiteralPath $urlFile -Raw).Trim()
-            if ($u) { Start-Process $u; return }
+            if ($u) {
+                if ($appBrowser -and (Test-Path -LiteralPath $appBrowser)) {
+                    Start-Process -FilePath $appBrowser -ArgumentList "--app=$u"
+                } else {
+                    Start-Process $u
+                }
+                return
+            }
         }
         Start-Sleep -Milliseconds 200
     }

@@ -20,6 +20,35 @@ const STEPS: Step[] = [
   { index: 6, title: 'Finalize',      subtitle: 'Wrap-up' },
 ]
 
+function FixBlock({ fix }: { fix: string }) {
+  const [copied, setCopied] = useState(false)
+  const lines = fix.split('\n')
+  const caption = lines.length > 1 ? lines.slice(0, -1).join(' ') : 'Run this command:'
+  const command = lines[lines.length - 1]
+  const copy = () => {
+    void navigator.clipboard?.writeText(command).then(() => {
+      setCopied(true)
+      setTimeout(() => setCopied(false), 1500)
+    })
+  }
+  return (
+    <div className="mt-2">
+      <div className="text-xs text-text-dim mb-1">{caption}</div>
+      <div className="flex items-stretch gap-2">
+        <code className="flex-1 min-w-0 text-xs font-mono bg-surface-1 border border-border rounded px-2 py-1.5 overflow-x-auto whitespace-pre">{command}</code>
+        <button
+          type="button"
+          onClick={copy}
+          className="btn-secondary shrink-0 !px-2 !py-1 text-xs"
+          title="Copy to clipboard"
+        >
+          <Icon name={copied ? 'Check' : 'Copy'} size={14} /> {copied ? 'Copied' : 'Copy'}
+        </button>
+      </div>
+    </div>
+  )
+}
+
 export function SetupWizard() {
   const [current, setCurrent] = useState(1)
   const [done, setDone]       = useState<Set<number>>(new Set())
@@ -146,9 +175,10 @@ function Step1Preflight() {
             return (
               <li key={c.key} className="flex items-start gap-3 p-3 rounded border border-border bg-surface-2">
                 <Icon name={icon} size={18} className={`${tone} shrink-0 mt-0.5`} />
-                <div className="min-w-0">
+                <div className="min-w-0 flex-1">
                   <div className={`text-sm font-medium ${tone}`}>{c.label}</div>
                   <div className="text-xs text-text-dim mt-0.5 break-words">{c.detail}</div>
+                  {!c.ok && c.fix && <FixBlock fix={c.fix} />}
                 </div>
               </li>
             )

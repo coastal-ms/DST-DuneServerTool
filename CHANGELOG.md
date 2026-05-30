@@ -14,6 +14,50 @@ here cover everything those tags shipped.
 ## [Unreleased]
 
 
+## [6.2.1] - 2026-05-30
+
+Fixes the sane-pricing patch build, adds new pre-flight checks, and lets the
+updater actually close the old window.
+
+### Fixed
+
+- **`build-patched.ps1` failed with `The term 'git' is not recognized…` when the
+  sane-pricing patch was applied from Settings.** The patch builder is launched by
+  a background wrapper spawned from `DuneServer.exe` (a ps2exe binary), whose
+  inherited `PATH` can be missing entries an interactive shell would have — most
+  commonly **Git**. The builder now resolves `git` and `go` via `PATH` first, then
+  falls back to their standard install locations (`Program Files\Git`,
+  `Program Files\Go`, per-user installs, and WinGet `Links` shims), prepends the
+  resolved directory to `PATH` (so Go's own internal Git calls also work), and
+  fails fast with an actionable **"Install Git for Windows (winget install Git.Git)"**
+  message if neither can be found.
+
+### Added
+
+- **Pre-flight wizard now checks for Git and SSH-key authorization, with
+  copy-paste fixes.** Each failing check shows the exact PowerShell command (with a
+  one-click **Copy** button) to resolve it — aimed at users who are tech-smart but
+  not CLI-smart. New checks:
+  - **Git** (warning) — needed only for the optional sane-pricing patch; offers
+    `winget install --id Git.Git -e`.
+  - **SSH key authorized on VM** (warning) — verifies the *configured* key actually
+    authenticates to `dune@<vm>`. If the key was generated outside the tool and
+    never authorized, it explains the cause and offers two fixes: use the tool's
+    **Rotate SSH Key** action (generates *and* authorizes a fresh key), or
+    authorize the existing key from a machine with working SSH access.
+  - Existing **Administrator**, **Hyper-V**, and **disk-space** checks now also
+    carry copy-paste fix commands.
+
+### Changed
+
+- **The portal now opens as an app-mode window (Edge/Chrome `--app=`) when
+  available.** App windows are script-closable, so the in-app updater's
+  "this window is offline" takeover can now **actually auto-close** the stale
+  window after an update finishes. Falls back to a normal default-browser tab when
+  no Chromium browser is found (where the browser still blocks auto-close, and the
+  takeover screen + manual Close button remain).
+
+
 ## [6.2.0] - 2026-05-30
 
 Feature: **updater "this window is offline" takeover**, plus a release-history cleanup.
