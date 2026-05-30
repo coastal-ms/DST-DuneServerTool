@@ -8,3 +8,7 @@
 
 # Go sources are LF upstream; keep them LF so locally-applied patches match.
 *.go text eol=lf
+
+# Shell scripts must stay LF — they're meant to be pasted into Linux SSH
+# sessions. CRLF causes `$'\r': command not found` errors on bash.
+*.sh text eol=lf
