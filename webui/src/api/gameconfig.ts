@@ -43,3 +43,14 @@ export function saveSpicefield(
     }),
   )
 }
+
+// Live toggle for is_spawning_active ONLY. Hits the dedicated guard-railed
+// endpoint that never touches any other column and never writes NULL.
+export function setSpicefieldSpawning(id: number, active: boolean) {
+  return withOnlinePlayerGuard(force =>
+    api<SpicefieldSaveResponse>(`/api/gameconfig/spicefields/${id}/spawning${fq(force)}`, {
+      method: 'PUT',
+      body: JSON.stringify({ active: active === true }),
+    }),
+  )
+}

@@ -398,6 +398,35 @@ UPDATE dune.spicefield_types
     Invoke-V6Psql -Ip $Ip -Sql $sql | Out-Null
 }
 
+# Live toggle for is_spawning_active ONLY. Used by the per-row checkbox in
+# the Spicefields card — every click commits straight to the DB while the
+# game is running.
+#
+# Guard rails (intentionally strict — this function MUST NOT mutate any
+# other column under any circumstance):
+#   * $TypeId must be a positive int.
+#   * $Active is a [bool] parameter; PowerShell coerces strictly true/false.
+#   * The SQL UPDATE touches exactly one column (is_spawning_active) and
+#     emits a literal TRUE or FALSE — never NULL, never the empty string,
+#     never anything else. The WHERE clause pins it to a single row by PK.
+#   * No CASE, no other columns, no triggers we own.
+function Set-V6SpicefieldSpawning {
+    param(
+        [Parameter(Mandatory)] [string]$Ip,
+        [Parameter(Mandatory)] [int]$TypeId,
+        [Parameter(Mandatory)] [bool]$Active
+    )
+    if ($TypeId -le 0) { throw "spicefield_type_id must be a positive int (got $TypeId)" }
+    $flag = if ($Active) { 'TRUE' } else { 'FALSE' }
+    # Final paranoia check — $flag MUST be one of two exact strings before
+    # going anywhere near psql.
+    if ($flag -ne 'TRUE' -and $flag -ne 'FALSE') {
+        throw "Internal: is_spawning_active flag computed to '$flag' (expected TRUE or FALSE)"
+    }
+    $sql = "UPDATE dune.spicefield_types SET is_spawning_active = $flag WHERE spicefield_type_id = $TypeId"
+    Invoke-V6Psql -Ip $Ip -Sql $sql | Out-Null
+}
+
 # -----------------------------------------------------------------------------
 # Cosmetics
 # -----------------------------------------------------------------------------

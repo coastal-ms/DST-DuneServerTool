@@ -1,9 +1,9 @@
 // SpicefieldsCard — editor for dune.spicefield_types.
 // Live read/write directly against the live BG Postgres pod over SSH.
 // Disabled when the VM is not running.
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Icon } from '../../components/Icon'
-import { getSpicefields, saveSpicefield } from '../../api/gameconfig'
+import { getSpicefields, saveSpicefield, setSpicefieldSpawning } from '../../api/gameconfig'
 import type { SpicefieldType } from '../../api/types'
 
 type RowDraft = {
@@ -17,13 +17,35 @@ type Props = {
   vmRunning: boolean
 }
 
+// Per-button rate limit (ms). Each button (toggle + Save) records the time
+// of its last click; another click within this window is dropped.
+const CLICK_COOLDOWN_MS = 5000
+
 export function SpicefieldsCard({ vmRunning }: Props) {
   const [rows, setRows] = useState<SpicefieldType[] | null>(null)
   const [drafts, setDrafts] = useState<Record<number, RowDraft>>({})
   const [loading, setLoading] = useState(false)
   const [savingId, setSavingId] = useState<number | null>(null)
+  const [togglingId, setTogglingId] = useState<number | null>(null)
   const [err, setErr] = useState<string | null>(null)
   const [ok, setOk] = useState<string | null>(null)
+  // Cooldowns are stored as ref maps so a tick doesn't re-render every row.
+  // Key: `${kind}:${spicefieldTypeId}` -> last click ms timestamp.
+  const lastClickRef = useRef<Record<string, number>>({})
+  // Force a re-render when a cooldown expires so disabled buttons re-enable.
+  const [, bumpCooldown] = useState(0)
+
+  function cooldownRemaining(kind: 'toggle' | 'save', id: number): number {
+    const k = `${kind}:${id}`
+    const t = lastClickRef.current[k] ?? 0
+    const remaining = (t + CLICK_COOLDOWN_MS) - Date.now()
+    return remaining > 0 ? remaining : 0
+  }
+  function markClick(kind: 'toggle' | 'save', id: number) {
+    lastClickRef.current[`${kind}:${id}`] = Date.now()
+    // Re-render once when the cooldown lapses so the button re-enables.
+    window.setTimeout(() => bumpCooldown(x => x + 1), CLICK_COOLDOWN_MS + 50)
+  }
 
   const seed = useCallback((list: SpicefieldType[]) => {
     const next: Record<number, RowDraft> = {}
@@ -95,11 +117,12 @@ export function SpicefieldsCard({ vmRunning }: Props) {
   function isDirty(r: SpicefieldType) {
     const d = drafts[r.spicefieldTypeId]
     if (!d) return false
+    // Only numeric fields gate the Save button. isSpawningActive is
+    // committed live via its own endpoint, so it never makes the row "dirty".
     return (
       Number(d.maxActive)   !== r.maxActive   ||
       Number(d.maxPrimed)   !== r.maxPrimed   ||
-      Number(d.spawnWeight) !== r.spawnWeight ||
-      d.isSpawningActive    !== r.isSpawningActive
+      Number(d.spawnWeight) !== r.spawnWeight
     )
   }
 
@@ -110,6 +133,8 @@ export function SpicefieldsCard({ vmRunning }: Props) {
   async function onSave(r: SpicefieldType) {
     const d = drafts[r.spicefieldTypeId]
     if (!d) return
+    if (cooldownRemaining('save', r.spicefieldTypeId) > 0) return
+    markClick('save', r.spicefieldTypeId)
     setSavingId(r.spicefieldTypeId); setErr(null); setOk(null)
     try {
       const out = await saveSpicefield(r.spicefieldTypeId, {
@@ -136,6 +161,57 @@ export function SpicefieldsCard({ vmRunning }: Props) {
       setErr(e instanceof Error ? e.message : String(e))
     } finally {
       setSavingId(null)
+    }
+  }
+
+  // Live-commit toggle for is_spawning_active. Each click hits the dedicated
+  // /spawning endpoint that only ever writes TRUE or FALSE to that single
+  // column. Rate-limited to one click every CLICK_COOLDOWN_MS per row to
+  // prevent a stuck user from hammering the DB.
+  async function onToggleSpawning(r: SpicefieldType, next: boolean) {
+    if (cooldownRemaining('toggle', r.spicefieldTypeId) > 0) return
+    if (togglingId === r.spicefieldTypeId) return
+    markClick('toggle', r.spicefieldTypeId)
+    // Optimistic UI — flip the draft + the row immediately so the checkbox
+    // tracks the user's intent while the request is in flight.
+    setDrafts(prev => ({
+      ...prev,
+      [r.spicefieldTypeId]: { ...prev[r.spicefieldTypeId], isSpawningActive: next },
+    }))
+    setRows(prev => (prev ?? []).map(row =>
+      row.spicefieldTypeId === r.spicefieldTypeId
+        ? { ...row, isSpawningActive: next }
+        : row,
+    ))
+    setTogglingId(r.spicefieldTypeId); setErr(null); setOk(null)
+    try {
+      const out = await setSpicefieldSpawning(r.spicefieldTypeId, next === true)
+      setRows(prev => (prev ?? []).map(row =>
+        row.spicefieldTypeId === r.spicefieldTypeId ? out.row : row,
+      ))
+      setDrafts(prev => ({
+        ...prev,
+        [r.spicefieldTypeId]: {
+          ...prev[r.spicefieldTypeId],
+          isSpawningActive: out.row.isSpawningActive,
+        },
+      }))
+      setOk(`${r.mapName} • ${r.fieldType}: spawning ${out.row.isSpawningActive ? 'ON' : 'OFF'}.`)
+      window.setTimeout(() => setOk(null), 3500)
+    } catch (e) {
+      // Roll back the optimistic flip on failure.
+      setDrafts(prev => ({
+        ...prev,
+        [r.spicefieldTypeId]: { ...prev[r.spicefieldTypeId], isSpawningActive: r.isSpawningActive },
+      }))
+      setRows(prev => (prev ?? []).map(row =>
+        row.spicefieldTypeId === r.spicefieldTypeId
+          ? { ...row, isSpawningActive: r.isSpawningActive }
+          : row,
+      ))
+      setErr(e instanceof Error ? e.message : String(e))
+    } finally {
+      setTogglingId(null)
     }
   }
 
@@ -230,6 +306,13 @@ export function SpicefieldsCard({ vmRunning }: Props) {
                   if (!d) return null
                   const dirty = isDirty(r)
                   const saving = savingId === r.spicefieldTypeId
+                  const toggling = togglingId === r.spicefieldTypeId
+                  const toggleCdMs = cooldownRemaining('toggle', r.spicefieldTypeId)
+                  const saveCdMs   = cooldownRemaining('save',   r.spicefieldTypeId)
+                  const toggleCdSec = Math.ceil(toggleCdMs / 1000)
+                  const saveCdSec   = Math.ceil(saveCdMs   / 1000)
+                  const toggleDisabled = !vmRunning || toggling || toggleCdMs > 0
+                  const saveDisabled   = !vmRunning || !dirty || saving || saveCdMs > 0
                   const activeAtCap = r.maxActive > 0 && r.currentActive >= r.maxActive
                   const primedAtCap = r.maxPrimed > 0 && r.currentPrimed >= r.maxPrimed
                   return (
@@ -243,7 +326,7 @@ export function SpicefieldsCard({ vmRunning }: Props) {
                           </span>
                           {dirty && (
                             <span className="w-1.5 h-1.5 rounded-full bg-ibad"
-                                  title="Unsaved changes" />
+                                  title="Unsaved changes (numeric fields)" />
                           )}
                         </div>
                         <span className={r.isSpawningActive ? 'pill-success' : 'pill-muted'}
@@ -277,27 +360,49 @@ export function SpicefieldsCard({ vmRunning }: Props) {
                                   onChange={v => setDraft(r.spicefieldTypeId, { maxPrimed: v })} />
                         <NumField label="Spawn weight" value={d.spawnWeight} step="0.1"
                                   onChange={v => setDraft(r.spicefieldTypeId, { spawnWeight: v })} />
-                        <label className="flex items-center gap-2 text-xs select-none cursor-pointer pb-2">
+                        <label
+                          className={
+                            'flex items-center gap-2 text-xs select-none pb-2 ' +
+                            (toggleDisabled ? 'cursor-not-allowed opacity-70' : 'cursor-pointer')
+                          }
+                          title={
+                            toggleCdMs > 0
+                              ? `Rate-limited — wait ${toggleCdSec}s before toggling again`
+                              : (d.isSpawningActive
+                                  ? 'Click to disable spawning for this field (live DB write)'
+                                  : 'Click to enable spawning for this field (live DB write)')
+                          }
+                        >
                           <input
                             type="checkbox"
                             checked={d.isSpawningActive}
-                            onChange={e => setDraft(r.spicefieldTypeId,
-                                                   { isSpawningActive: e.target.checked })}
+                            disabled={toggleDisabled}
+                            onChange={e => void onToggleSpawning(r, e.target.checked)}
                             className="accent-ibad"
                           />
                           <span className={d.isSpawningActive ? 'text-success' : 'text-text-dim'}>
-                            {d.isSpawningActive ? 'Spawning' : 'Off'}
+                            {toggling ? '…' : (d.isSpawningActive ? 'Spawning' : 'Off')}
+                            {toggleCdMs > 0 && !toggling && (
+                              <span className="ml-1 text-[10px] font-mono text-text-dim">
+                                ({toggleCdSec}s)
+                              </span>
+                            )}
                           </span>
                         </label>
                         <button
                           type="button"
                           className="btn-primary py-2"
-                          disabled={!dirty || saving}
+                          disabled={saveDisabled}
                           onClick={() => void onSave(r)}
+                          title={
+                            saveCdMs > 0
+                              ? `Rate-limited — wait ${saveCdSec}s before saving again`
+                              : 'Save numeric fields'
+                          }
                         >
                           <Icon name={saving ? 'Loader2' : 'Save'} size={14}
                                 className={saving ? 'animate-spin' : ''} />
-                          Save
+                          {saveCdMs > 0 && !saving ? `Save (${saveCdSec}s)` : 'Save'}
                         </button>
                       </div>
                     </div>

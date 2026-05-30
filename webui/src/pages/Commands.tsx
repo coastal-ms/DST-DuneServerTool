@@ -103,13 +103,29 @@ function CommandButtonInner({
             {cmd.mode}
           </span>
         </div>
-        <p className="mt-1.5 text-xs text-text-muted line-clamp-2">{cmd.desc}</p>
+        <p className={`mt-1.5 text-xs text-text-muted line-clamp-2 ${cmd.name === 'dune-admin' ? 'pr-28' : ''}`}>{cmd.desc}</p>
         {!cmd.available && cmd.reason && (
           <p className="mt-1 text-[11px] text-warning/80 flex items-center gap-1">
             <Icon name="AlertTriangle" size={10} /> {cmd.reason}
           </p>
         )}
       </button>
+      {cmd.name === 'dune-admin' && (
+        <a
+          href="https://github.com/Icehunter"
+          target="_blank"
+          rel="noopener noreferrer"
+          onClick={(e) => e.stopPropagation()}
+          title="dune-admin is built by Icehunter — visit GitHub profile"
+          className="absolute bottom-1 right-2 z-10 flex items-center gap-1
+                     text-[10px] font-mono text-text-dim hover:text-accent
+                     px-1.5 py-0.5 rounded bg-surface-3/60 border border-border/40
+                     hover:border-accent/40 transition-colors"
+        >
+          <Icon name="Github" size={10} />
+          <span>by Icehunter</span>
+        </a>
+      )}
     </>
   )
 }
