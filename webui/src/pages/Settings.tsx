@@ -8,9 +8,11 @@ import {
   checkDuneAdminUpdate,
   installDuneAdminUpdate,
   pricingPatchStatus,
+  marketBotHealth,
   runDuneAdminSetup,
   type DuneAdminCheck,
   type DuneAdminPricingPatchStatus,
+  type DuneAdminMarketBotHealth,
 } from '../api/duneAdmin'
 
 const FIELDS: {
@@ -98,6 +100,16 @@ export function Settings() {
   // elapsed time + log tail.
   const [daPatch, setDaPatch] = useState<DuneAdminPricingPatchStatus | null>(null)
   const [daPatchPolling, setDaPatchPolling] = useState(false)
+  const [daBotHealth, setDaBotHealth] = useState<DuneAdminMarketBotHealth | null>(null)
+  const [daBotHealthChecking, setDaBotHealthChecking] = useState(false)
+  async function refreshBotHealth() {
+    setDaBotHealthChecking(true)
+    try {
+      setDaBotHealth(await marketBotHealth())
+    } catch { /* non-fatal */ } finally {
+      setDaBotHealthChecking(false)
+    }
+  }
   useEffect(() => {
     if (!daPatchPolling) return
     let cancelled = false
@@ -339,6 +351,7 @@ export function Settings() {
         }
       } catch { /* non-fatal */ }
     })()
+    void refreshBotHealth()
     // Same idea for the Dune Server self-updater — populate the collapsed
     // header pills (current/latest) without forcing a fresh GitHub hit.
     void (async () => {
@@ -774,6 +787,49 @@ export function Settings() {
                     </div>
                   )}
                 </div>
+
+                {/* v6.3.1: market-bot DB health. The embedded market bot dials
+                    Postgres (db_host:db_port from dune-admin's config.yaml) at
+                    startup; if that's unreachable (e.g. a k3s/SSH tunnel is
+                    down) the bot silently fails and the market panel is blank.
+                    We probe the same host:port so the cause is obvious here. */}
+                {daBotHealth && daBotHealth.configExists && daBotHealth.status !== 'disabled' && (
+                  <div className="pt-3 border-t border-border">
+                    <div className="flex items-center gap-2 mb-1">
+                      <Icon
+                        name={daBotHealth.status === 'ok' ? 'CheckCircle2' : daBotHealth.status === 'unreachable' ? 'AlertCircle' : 'HelpCircle'}
+                        size={14}
+                        className={daBotHealth.status === 'ok' ? 'text-success' : daBotHealth.status === 'unreachable' ? 'text-danger' : 'text-text-dim'}
+                      />
+                      <span className="text-xs font-medium text-text">
+                        Market bot database
+                        {daBotHealth.dbHost && daBotHealth.dbPort ? (
+                          <span className="font-mono text-text-dim"> {daBotHealth.dbHost}:{daBotHealth.dbPort}</span>
+                        ) : null}
+                      </span>
+                      <button
+                        type="button"
+                        className="ml-auto text-[11px] text-accent disabled:opacity-50"
+                        disabled={daBotHealthChecking}
+                        onClick={() => void refreshBotHealth()}
+                      >
+                        {daBotHealthChecking ? 'Checking...' : 'Recheck'}
+                      </button>
+                    </div>
+                    {daBotHealth.status === 'unreachable' ? (
+                      <div className="text-xs text-danger">
+                        Unreachable — the embedded market bot will fail to start, so dune-admin shows
+                        no market. If Postgres is reached through a kubectl/SSH tunnel, make sure that
+                        tunnel is running <span className="font-medium">before</span> launching dune-admin,
+                        then click Recheck.
+                      </div>
+                    ) : daBotHealth.status === 'ok' ? (
+                      <div className="text-xs text-text-dim">Reachable — the embedded bot should start normally.</div>
+                    ) : (
+                      <div className="text-xs text-text-dim">{daBotHealth.message}</div>
+                    )}
+                  </div>
+                )}
 
                 {/* v6.1.25: pricing-patch rebuild status panel. Shows when
                     /install kicks off the detached background rebuild. The

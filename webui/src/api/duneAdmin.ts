@@ -111,6 +111,21 @@ export function pricingPatchStatus() {
   return api<DuneAdminPricingPatchStatus>(`/api/dune-admin/pricing-patch-status`)
 }
 
+export interface DuneAdminMarketBotHealth {
+  checked: boolean
+  configExists: boolean
+  botEnabled: boolean | null
+  dbHost: string | null
+  dbPort: number | null
+  reachable: boolean | null
+  status: 'ok' | 'unreachable' | 'disabled' | 'no-config' | 'unknown'
+  message: string | null
+}
+
+export function marketBotHealth() {
+  return api<DuneAdminMarketBotHealth>(`/api/dune-admin/market-bot-health`)
+}
+
 export function runDuneAdminSetup() {
   return api<DuneAdminSetupResult>(`/api/dune-admin/setup`, { method: 'POST', body: '{}' })
 }
