@@ -176,10 +176,36 @@ Register-DuneRoute -Method POST -Path '/api/update/install' -Handler {
         $parentPid     = $PID
         $installArgs   = '/SP- /NORESTART'
         $logPath       = Join-Path $tmpDir ("relaunch-$safeTag.log")
+        # NOTE: relauncher window is intentionally VISIBLE (not hidden).
+        # A hidden parent powershell has no foreground rights, so the
+        # installer wizard it spawns lands BEHIND other windows. With a
+        # visible parent we also pre-grant ASFW_ANY via
+        # AllowSetForegroundWindow and then explicitly raise the
+        # installer's main window once it appears - so the wizard is
+        # the first thing the user sees when they click Update.
         $relaunchScript = @"
 `$ErrorActionPreference = 'Continue'
 Start-Transcript -Path '$logPath' -Append | Out-Null
 try {
+    `$Host.UI.RawUI.WindowTitle = 'Dune Server - Installing update...'
+    Write-Host ''
+    Write-Host '  Dune Server Management Tool' -ForegroundColor Cyan
+    Write-Host '  ----------------------------' -ForegroundColor Cyan
+    Write-Host '  Update in progress. The installer wizard will appear in a few seconds.'
+    Write-Host '  This window will close automatically when the installer is launched.'
+    Write-Host ''
+
+    Add-Type -Namespace DuneUpd -Name Win -MemberDefinition @'
+[System.Runtime.InteropServices.DllImport("user32.dll")]
+public static extern bool AllowSetForegroundWindow(int dwProcessId);
+[System.Runtime.InteropServices.DllImport("user32.dll")]
+public static extern bool SetForegroundWindow(System.IntPtr hWnd);
+[System.Runtime.InteropServices.DllImport("user32.dll")]
+public static extern bool ShowWindowAsync(System.IntPtr hWnd, int nCmdShow);
+[System.Runtime.InteropServices.DllImport("user32.dll")]
+public static extern bool BringWindowToTop(System.IntPtr hWnd);
+'@ -ErrorAction SilentlyContinue
+
     Start-Sleep -Seconds 2
     Write-Host "[`$(Get-Date -Format o)] Stopping DuneServer.exe (PID $parentPid)"
     Stop-Process -Id $parentPid -Force -ErrorAction SilentlyContinue
@@ -191,8 +217,40 @@ try {
         Stop-Process -Id `$_.Id -Force -ErrorAction SilentlyContinue
     }
     Start-Sleep -Seconds 1
+
+    # Grant foreground rights to whatever we launch next (ASFW_ANY = -1).
+    try { [DuneUpd.Win]::AllowSetForegroundWindow(-1) | Out-Null } catch {}
+
     Write-Host "[`$(Get-Date -Format o)] Launching installer: $dest"
-    Start-Process -FilePath '$dest' -ArgumentList '$installArgs'
+    `$proc = Start-Process -FilePath '$dest' -ArgumentList '$installArgs' -PassThru
+
+    # Wait for the installer wizard window and force it to the top.
+    # The installer goes through UAC consent first, so MainWindowHandle
+    # may take a few seconds to populate. Try for up to 30 seconds.
+    `$deadline = (Get-Date).AddSeconds(30)
+    while ((Get-Date) -lt `$deadline) {
+        Start-Sleep -Milliseconds 250
+        # Re-query: under UAC, the originally spawned proc may exit
+        # quickly while the elevated child becomes the real installer.
+        `$cand = Get-Process -Name 'DuneServerSetup','DuneServerSetup-*' -ErrorAction SilentlyContinue |
+                 Where-Object { `$_.MainWindowHandle -ne 0 } |
+                 Sort-Object StartTime -Descending |
+                 Select-Object -First 1
+        if (-not `$cand -and `$proc) {
+            try { `$proc.Refresh() } catch {}
+            if (`$proc.MainWindowHandle -ne 0) { `$cand = `$proc }
+        }
+        if (`$cand) {
+            try {
+                [DuneUpd.Win]::AllowSetForegroundWindow(`$cand.Id) | Out-Null
+                [DuneUpd.Win]::ShowWindowAsync(`$cand.MainWindowHandle, 9) | Out-Null  # SW_RESTORE
+                [DuneUpd.Win]::BringWindowToTop(`$cand.MainWindowHandle) | Out-Null
+                [DuneUpd.Win]::SetForegroundWindow(`$cand.MainWindowHandle) | Out-Null
+                Write-Host "[`$(Get-Date -Format o)] Raised installer window (PID `$(`$cand.Id))."
+            } catch {}
+            break
+        }
+    }
 } catch {
     Write-Host "[`$(Get-Date -Format o)] Relauncher error: `$(`$_.Exception.Message)"
 } finally {
@@ -202,14 +260,15 @@ try {
         $scriptPath = Join-Path $tmpDir ("DuneRelaunch-$safeTag.ps1")
         Set-Content -LiteralPath $scriptPath -Value $relaunchScript -Encoding UTF8
 
-        # Spawn the relauncher as a normal child process. It will be
-        # orphaned when we Stop-Process ourselves a few seconds later, but
-        # an orphaned process keeps running - only `taskkill /T` (process
-        # tree kill) reaches descendants, and we are deliberately not
-        # using that.
+        # Spawn the relauncher in a VISIBLE (minimized-ok-but-not-hidden)
+        # window. A visible parent gets foreground rights, which it then
+        # passes to the installer via AllowSetForegroundWindow. The
+        # window briefly shows an "Installing update..." banner so the
+        # user has clear feedback that something is happening between
+        # the portal closing and the wizard appearing.
         Start-Process -FilePath 'powershell.exe' `
-            -ArgumentList @('-NoProfile','-WindowStyle','Hidden','-ExecutionPolicy','Bypass','-File',$scriptPath) `
-            -WindowStyle Hidden | Out-Null
+            -ArgumentList @('-NoProfile','-ExecutionPolicy','Bypass','-File',$scriptPath) `
+            -WindowStyle Normal | Out-Null
     } catch {
         Write-DuneError -Response $res -Status 500 -Message $_.Exception.Message
     }
