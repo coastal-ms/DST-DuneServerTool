@@ -14,6 +14,35 @@ here cover everything those tags shipped.
 ## [Unreleased]
 
 
+## [6.1.32] - 2026-05-29
+
+Feature: **dune-admin market bot "d12 gamble buy" pricing mode**, plus Settings quality-of-life.
+
+### Added
+
+- **dune-admin market bot — d12 gamble buy:** the bundled sane-pricing patch now
+  replaces the market bot's price-threshold buy gate with a dice roll. On every
+  buy tick, each candidate player listing rolls a 12-sided die; only a **5**
+  buys the item — **regardless of price** — otherwise it is skipped. The
+  per-tick `MaxBuys` cap and the unknown / non-buyable / disabled-item safety
+  skips still apply; only the price comparison is replaced by the gamble. This
+  ships inside `0001-sane-pricing-100k-cap.patch` (now also patches
+  `internal/marketbot/exchange.go`) and is applied automatically when you
+  install/rebuild dune-admin with the pricing patch enabled.
+- **Settings — folder/file locator buttons:** each path field (Steam path, SSH
+  key, dune-admin.exe) now has a **Browse** button that opens a native
+  Windows folder/file picker via `POST /api/browse-path`.
+- **Settings — Icehunter branding:** the dune-admin.exe card header and the
+  updater pointer text now carry the "by Icehunter" badge / live repo link,
+  matching the Commands page.
+
+### Fixed
+
+- **Native path picker:** fixed an "Argument type cannot be System.Void" error
+  in the new browse route by using `$null = $ps.AddArgument(...)` instead of a
+  `[void]…| Out-Null` call chain.
+
+
 ## [6.1.31] - 2026-05-30
 
 Patch: **dune-admin install now auto-copies your SSH key into the dune-admin folder.**
