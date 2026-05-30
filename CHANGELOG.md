@@ -14,6 +14,38 @@ here cover everything those tags shipped.
 ## [Unreleased]
 
 
+## [6.1.31] - 2026-05-30
+
+Patch: **dune-admin install now auto-copies your SSH key into the dune-admin folder.**
+
+### Fixed
+
+- **dune-admin install / setup wizard:** every call to `POST /api/dune-admin/install`
+  and `POST /api/dune-admin/setup` now copies the user's SSH private key (and
+  `.pub` if present) into the dune-admin install folder as `sshKey` /
+  `sshKey.pub`. dune-admin's SSH/kubectl-over-SSH layer reads `./sshKey`
+  first, so this is what makes the binary actually able to authenticate
+  against the VM right after install — previously the user had to copy the
+  file in by hand or `dune-admin server start` would fail to reach the VM.
+  The CLI `rotate-ssh-key` flow already did this (since v6.0.x); the web
+  install paths now match.
+  - Source-of-truth selection: newest mtime between the configured
+    `SshKey` (from `dune-server.config`) and
+    `%LOCALAPPDATA%\DuneAwakeningServer\sshKey` (where the CLI's
+    `rotate-ssh-key` writes new keys). Always lands as `sshKey` in the
+    target dir regardless of source filename.
+  - Non-fatal: a copy failure (missing key, ACL issue, target dir
+    perms) does not break the binary install. The result is surfaced
+    as `sshKeyCopy: { ok, skipped, source, dest, message }` in the
+    `/install` and `/setup` JSON response and the Settings page now
+    shows a "SSH key copied next to dune-admin.exe" confirmation or
+    a "WARNING: SSH key was NOT copied" toast with the underlying
+    reason.
+  - New helper `Copy-DuneAdminSshKey` in `app/server/routes/DuneAdmin.ps1`;
+    mirrors the CLI's `Resolve-FreshSshKey` + `Copy-SshKeyToDir` pattern
+    from `dune-server.ps1` so both code paths stay consistent.
+
+
 ## [6.1.30] - 2026-05-29
 
 Patch: **Auto-updater wizard now appears in foreground; Server Health "Active spice" card has per-row spawning checkboxes.**

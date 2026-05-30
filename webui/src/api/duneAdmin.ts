@@ -46,6 +46,14 @@ export interface DuneAdminPricingPatchStatus {
   logTail?: string
 }
 
+export interface DuneAdminSshKeyCopyResult {
+  ok: boolean
+  skipped?: boolean
+  source?: string | null
+  dest?: string | null
+  message?: string | null
+}
+
 export interface DuneAdminInstallResult {
   ok: boolean
   fromVersion?: string | null
@@ -56,6 +64,16 @@ export interface DuneAdminInstallResult {
   targetDir?: string
   copied?: string[]
   note?: string
+  /**
+   * Result of copying the user's SSH key (from dune-server.config or
+   * %LOCALAPPDATA%\DuneAwakeningServer\sshKey, whichever is newer) into
+   * the dune-admin install folder. dune-admin's SSH/kubectl-over-SSH
+   * layer reads `./sshKey` so this copy is what makes the binary
+   * actually able to talk to the VM. Non-fatal: ok=false means
+   * dune-admin will start but won't be able to authenticate until the
+   * key is placed manually. (v6.1.31)
+   */
+  sshKeyCopy?: DuneAdminSshKeyCopyResult
   /**
    * Present when `AutoApplyPricingPatch=true` in dune-server.config. The
    * /install route launches the patched-build as a detached background
@@ -72,6 +90,8 @@ export interface DuneAdminSetupResult {
   exePath?: string
   targetDir?: string
   didInstall?: boolean
+  /** See DuneAdminInstallResult.sshKeyCopy. (v6.1.31) */
+  sshKeyCopy?: DuneAdminSshKeyCopyResult
   configYamlPath?: string
   configYamlExists?: boolean
   wizardScript?: string

@@ -39,6 +39,89 @@ function Get-DuneAdminConfiguredPath {
     return ''
 }
 
+# Copies the configured SSH key (private + .pub if present) into the
+# dune-admin install folder. dune-admin will not function without this
+# key sitting next to dune-admin.exe — its SSH/kubectl-over-SSH layer
+# looks for `./sshKey` first. We pick the freshest of:
+#   1) the path stored in dune-server.config (SshKey)
+#   2) %LOCALAPPDATA%\DuneAwakeningServer\sshKey (where rotate-ssh-key
+#      writes new keys)
+# and copy it to $TargetDir. We never throw — a copy failure is logged
+# and bubbled up as a non-fatal warning in the install response so a
+# bad ACL or missing key doesn't break the binary install itself.
+function Copy-DuneAdminSshKey {
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory)][string]$TargetDir
+    )
+
+    $result = [pscustomobject]@{
+        ok      = $false
+        skipped = $false
+        source  = $null
+        dest    = $null
+        message = $null
+    }
+
+    try {
+        if (-not (Test-Path -LiteralPath $TargetDir)) {
+            $result.message = "Target dir does not exist: $TargetDir"
+            return $result
+        }
+
+        $cfg = Read-DuneConfig
+        $configured = $null
+        if ($cfg -and $cfg.Contains('SshKey')) { $configured = [string]$cfg['SshKey'] }
+        $appDataKey = Join-Path $env:LOCALAPPDATA 'DuneAwakeningServer\sshKey'
+
+        $candidates = @()
+        if ($configured -and (Test-Path -LiteralPath $configured)) {
+            $candidates += Get-Item -LiteralPath $configured
+        }
+        if (Test-Path -LiteralPath $appDataKey) {
+            $resolved = (Resolve-Path -LiteralPath $appDataKey).Path
+            if (-not ($candidates | Where-Object { $_.FullName -eq $resolved })) {
+                $candidates += Get-Item -LiteralPath $appDataKey
+            }
+        }
+        if (-not $candidates -or $candidates.Count -eq 0) {
+            $result.message = 'No SSH key found (neither SshKey in config nor %LOCALAPPDATA%\DuneAwakeningServer\sshKey exists). dune-admin will not work until a key is placed next to dune-admin.exe.'
+            return $result
+        }
+
+        $src = ($candidates | Sort-Object LastWriteTime -Descending | Select-Object -First 1).FullName
+        $srcDir = (Resolve-Path -LiteralPath (Split-Path $src -Parent)).Path
+        $dstDir = (Resolve-Path -LiteralPath $TargetDir).Path
+        if ($srcDir -eq $dstDir) {
+            $result.ok = $true
+            $result.skipped = $true
+            $result.source = $src
+            $result.dest = $src
+            $result.message = 'Source already in target dir; no copy needed.'
+            return $result
+        }
+
+        # Always land as `sshKey` (the name dune-admin's SSH layer
+        # expects) regardless of the source filename.
+        $destKey = Join-Path $TargetDir 'sshKey'
+        Copy-Item -LiteralPath $src -Destination $destKey -Force
+
+        $pubSrc = "$src.pub"
+        if (Test-Path -LiteralPath $pubSrc) {
+            Copy-Item -LiteralPath $pubSrc -Destination (Join-Path $TargetDir 'sshKey.pub') -Force
+        }
+
+        $result.ok = $true
+        $result.source = $src
+        $result.dest = $destKey
+        $result.message = "Copied $src -> $destKey"
+        return $result
+    } catch {
+        $result.message = "SSH key copy failed: $($_.Exception.Message)"
+        return $result
+    }
+}
+
 function Get-DuneAdminSidecarPath {
     param([string]$ExePath)
     if (-not $ExePath) { return $null }
@@ -622,6 +705,12 @@ Register-DuneRoute -Method POST -Path '/api/dune-admin/install' -Handler {
         # Write sidecar so next /check returns the real version.
         Save-DuneAdminVersionSidecar -ExePath $exePath -Tag $rel.tag
 
+        # Copy the user's SSH key into the dune-admin folder so dune-admin's
+        # SSH/kubectl-over-SSH layer (which looks for ./sshKey first) just
+        # works. Non-fatal on failure — the binary install itself already
+        # succeeded; we surface the result so the UI can warn the user.
+        $sshKeyCopy = Copy-DuneAdminSshKey -TargetDir $targetDir
+
         # --- Sync source tarball + auto-rebuild patched binary (v6.1.22) ---
         # GoReleaser publishes a source tarball alongside the windows zip. We
         # extract it over the user's dune-admin source dir so the next time
@@ -695,11 +784,12 @@ Register-DuneRoute -Method POST -Path '/api/dune-admin/install' -Handler {
             ok             = $true
             fromVersion    = (Get-DuneAdminInstalledVersion -ExePath $exePath).version
             toVersion      = ($rel.tag -replace '^v','')
-            tagName        = $rel.tag
+            tagName         = $rel.tag
             assetName      = $rel.assetName
             assetSize      = $rel.assetSize
             targetDir      = $targetDir
             copied         = $copied
+            sshKeyCopy     = $sshKeyCopy
             sourceSync     = $sourceSync
             autoRebuild    = $autoRebuild
             pricingPatch   = $autoRebuild
@@ -858,6 +948,14 @@ Register-DuneRoute -Method POST -Path '/api/dune-admin/setup' -Handler {
             $didInstall = $true
         }
 
+        # dune-admin needs the SSH key sitting next to dune-admin.exe to
+        # talk to the VM (its own SSH/kubectl-over-SSH layer looks for
+        # ./sshKey first). Copy it from the configured SshKey path (or
+        # %LOCALAPPDATA%\DuneAwakeningServer\sshKey if newer) every
+        # time the wizard runs, not just when we just installed — covers
+        # cases where the user rotated keys between sessions.
+        $sshKeyCopy = Copy-DuneAdminSshKey -TargetDir $targetDir
+
         # --- Step 2: spawn a visible console for the interactive wizard ------
         # cmd.exe wrapper lets us chain (a) run setup, (b) auto-launch
         # dune-admin if config.yaml was created, (c) pause so the user
@@ -916,6 +1014,7 @@ pause
             exePath          = $exePath
             targetDir        = $targetDir
             didInstall       = $didInstall
+            sshKeyCopy       = $sshKeyCopy
             configYamlPath   = $configYaml
             configYamlExists = (Test-Path -LiteralPath $configYaml)
             wizardScript     = $cmdFile
