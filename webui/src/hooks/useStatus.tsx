@@ -14,7 +14,7 @@ type StatusCtx = {
 const Ctx = createContext<StatusCtx | null>(null)
 
 export function StatusProvider({ children }: { children: ReactNode }) {
-  const s = useApi<StatusSnapshot>('/api/status', { intervalMs: 30_000 })
+  const s = useApi<StatusSnapshot>('/api/status', { intervalMs: 10_000 })
   const value: StatusCtx = {
     status:   s.data,
     loading:  s.loading,
