@@ -80,8 +80,7 @@ function HeartbeatSensor({ servers, loading }: { servers: BgGameServer[]; loadin
   const hb = survivalHeartbeat(servers, loading)
   return (
     <div className="mt-auto pt-2 border-t border-border/30 flex items-center gap-2"
-         title="Login readiness — driven by the Survival_1 map's ready/phase. If it isn't Ready you can't log in. Refreshes every 30s.">
-      <Icon
+         title="Login readiness — driven by the Survival_1 map's ready/phase. If it isn't Ready you can't log in. Refreshes every 10s.">      <Icon
         name="HeartPulse"
         size={30}
         className={`${hb.cls} ${hb.beating ? 'animate-heartbeat' : ''}`}

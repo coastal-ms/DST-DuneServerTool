@@ -14,6 +14,16 @@ here cover everything those tags shipped.
 ## [Unreleased]
 
 
+## [10.0.2] - 2026-05-30
+
+Displayed in-app as **X (0.2)**. Patch release.
+
+### Changed
+
+- **Server Health now refreshes every 10 seconds** (was 30s) so the Game Ready
+  State heartbeat and game-server pod status reflect the live server much faster.
+
+
 ## [10.0.1] - 2026-05-30
 
 Displayed in-app as **X (0.1)**. Bug-fix release.
