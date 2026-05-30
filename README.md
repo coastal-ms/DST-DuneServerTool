@@ -8,7 +8,10 @@
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 [![Latest release](https://img.shields.io/github/v/release/coastal-ms/Simple-Dune-Server-Management-Tool?sort=semver)](https://github.com/coastal-ms/Simple-Dune-Server-Management-Tool/releases/latest)
 
-**v6.1.x** runs as a single-window Windows app that serves a local web portal
+The current release is **version X** (shown stylized as **X** in-app; patch
+updates display as **X (0.1)**, **X (0.2)**, … under the hood these are
+`10.0.0`, `10.0.1`, … so update-checks and version comparisons keep working).
+It runs as a single-window Windows app that serves a local web portal
 (React + Vite + Tailwind) over `127.0.0.1` and opens your default browser to
 a per-launch tokenized URL. No WPF window, no embedded browser engine — just
 a tiny PowerShell HTTP server and a static asset bundle. Same battle-tested
@@ -233,6 +236,13 @@ default, both auto-check on mount):
   running (the file lock check returns *423 Locked*). The current version
   is read from a sidecar `<exe>.version` file written by the installer
   (Go binaries built with goreleaser don't embed a Win32 FileVersionInfo).
+  - **Stale `~/.dune-admin` config check (v10.0.1+).** Before a reinstall or
+    setup run, if a `%USERPROFILE%\.dune-admin` config folder already exists
+    the portal shows an in-app confirmation modal (**Cancel** / **Keep &
+    continue** / **Delete & continue**). It *never* deletes without you
+    clicking **Delete & continue** — *Keep* leaves it and proceeds, *Cancel*
+    aborts entirely. (Earlier builds relied on a browser `confirm()` dialog
+    that could be silently suppressed and auto-delete the folder — fixed.)
   - **Keep Coastal's sane-pricing patch applied after each update**
     (checkbox, saved as `AutoApplyPricingPatch`). When checked, the tool
     *also* downloads the matching `dune-admin_X.Y.Z_source.tar.gz`,
@@ -352,7 +362,7 @@ so it can be tracked and fixed:
 
 The bug report form asks for:
 
-- **Tool version** — shown in the portal footer (`v6.1.x · coastal-ms`).
+- **Tool version** — shown in the portal footer (e.g. `X · coastal-ms`).
 - **Surface** — which portal page (Server Health, Commands, PowerShell,
   Characters, Game Config, Database, Sietches, DD Map, Settings, Setup
   Wizard) or whether it was the CLI / installer / auto-updater.
