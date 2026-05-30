@@ -2,13 +2,23 @@
 // recreates the old `bg-status` terminal layout. Tabular form: one
 // row per (map, field type), sorted by map and then largest-first.
 // Lives under the Battlegroup Info card on Server Health.
-import { useCallback, useEffect, useMemo, useState } from 'react'
-import { getSpicefields } from '../../api/gameconfig'
+//
+// Per-row spawning toggle: clicking the checkbox to the right of
+// Primed flips `is_spawning_active` in dune.spicefield_types live,
+// via the guard-railed PUT /api/gameconfig/spicefields/{id}/spawning
+// endpoint (only ever writes TRUE/FALSE to that one column). Each
+// checkbox has an independent 5-second click cooldown.
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { getSpicefields, setSpicefieldSpawning } from '../../api/gameconfig'
 import type { SpicefieldType } from '../../api/types'
 
 type Props = {
   enabled: boolean   // gate on BG ready
 }
+
+// 5-second click cooldown per checkbox (defense against accidental
+// rapid clicks hammering the DB). Mirrors the GameConfig SpicefieldsCard.
+const CLICK_COOLDOWN_MS = 5000
 
 // Large fields are operationally most interesting — sort reverse so they're on top.
 const SIZE_RANK: Record<string, number> = { Large: 0, Medium: 1, Small: 2 }
@@ -55,6 +65,21 @@ export function BgSpiceSummary({ enabled }: Props) {
   const [rows, setRows] = useState<SpicefieldType[] | null>(null)
   const [err, setErr]   = useState<string | null>(null)
   const [updatedAt, setUpdatedAt] = useState<Date | null>(null)
+  const [togglingId, setTogglingId] = useState<number | null>(null)
+  const [toggleErr, setToggleErr]   = useState<string | null>(null)
+  // SHARED cooldown: one click anywhere on this card locks every
+  // checkbox for 5 seconds. Ref (not state) so the cooldown check
+  // doesn't depend on re-render timing.
+  const lastClickAtRef = useRef<number>(0)
+  // bumpCooldown forces a re-render when the shared cooldown lapses
+  // so all checkboxes visually re-enable at once.
+  const [, setCooldownTick] = useState(0)
+  const bumpCooldown = useCallback(() => setCooldownTick(t => t + 1), [])
+
+  const cooldownRemaining = useCallback(() => {
+    const remaining = CLICK_COOLDOWN_MS - (Date.now() - lastClickAtRef.current)
+    return remaining > 0 ? remaining : 0
+  }, [])
 
   const load = useCallback(async () => {
     if (!enabled) return
@@ -76,6 +101,46 @@ export function BgSpiceSummary({ enabled }: Props) {
     const id = window.setInterval(() => { void load() }, 10000)
     return () => window.clearInterval(id)
   }, [enabled, load])
+
+  // Live-commit toggle: optimistically flip the row in state, send to
+  // the guard-railed PUT endpoint, and roll back on failure. ONE shared
+  // 5s cooldown across all checkboxes — clicking any of them locks all
+  // of them. Cooldown enforced inside the handler too (defense-in-depth
+  // against stale React state allowing a second click through).
+  const onToggleSpawning = useCallback(async (row: SpicefieldType) => {
+    if (cooldownRemaining() > 0) return
+    if (togglingId !== null) return
+    lastClickAtRef.current = Date.now()
+    window.setTimeout(bumpCooldown, CLICK_COOLDOWN_MS + 50)
+
+    const newActive = !row.isSpawningActive
+    setTogglingId(row.spicefieldTypeId)
+    setToggleErr(null)
+    // Optimistic update.
+    setRows(prev => prev
+      ? prev.map(r => r.spicefieldTypeId === row.spicefieldTypeId
+          ? { ...r, isSpawningActive: newActive }
+          : r)
+      : prev)
+    try {
+      const resp = await setSpicefieldSpawning(row.spicefieldTypeId, newActive)
+      const saved = resp.row
+      // Adopt canonical row from server (in case backend normalized).
+      setRows(prev => prev
+        ? prev.map(r => r.spicefieldTypeId === saved.spicefieldTypeId ? saved : r)
+        : prev)
+    } catch (e) {
+      // Rollback.
+      setRows(prev => prev
+        ? prev.map(r => r.spicefieldTypeId === row.spicefieldTypeId
+            ? { ...r, isSpawningActive: row.isSpawningActive }
+            : r)
+        : prev)
+      setToggleErr(e instanceof Error ? e.message : String(e))
+    } finally {
+      setTogglingId(null)
+    }
+  }, [bumpCooldown, cooldownRemaining, togglingId])
 
   const sorted = useMemo(() => {
     if (!rows) return []
@@ -127,7 +192,7 @@ export function BgSpiceSummary({ enabled }: Props) {
               <th className="text-left font-medium pb-1">Size</th>
               <th className="text-right font-medium pb-1">Active</th>
               <th className="text-right font-medium pb-1">Primed</th>
-              <th className="text-right font-medium pb-1"></th>
+              <th className="text-center font-medium pb-1" title="Spawning enabled — click to toggle">Active</th>
             </tr>
           </thead>
           <tbody>
@@ -139,7 +204,15 @@ export function BgSpiceSummary({ enabled }: Props) {
               const sizeCls   = SIZE_CLASS[r.fieldType] ?? 'text-text-muted'
               const activeCls = activeFillClass(r.currentActive, r.maxActive)
               const primCls   = primedClass(r.currentPrimed)
-              const off       = !r.isSpawningActive
+              const cooldownMs = cooldownRemaining()
+              const onCooldown = cooldownMs > 0
+              const isBusy     = togglingId === r.spicefieldTypeId
+              const disabled   = isBusy || onCooldown || (togglingId !== null && togglingId !== r.spicefieldTypeId)
+              const cdSecs     = Math.ceil(cooldownMs / 1000)
+              const title      = isBusy ? 'Saving…'
+                                 : onCooldown ? `Wait ${cdSecs}s before clicking again`
+                                 : r.isSpawningActive ? 'Spawning ENABLED — click to disable'
+                                                       : 'Spawning DISABLED — click to enable'
               return (
                 <tr key={r.spicefieldTypeId}
                     className={newMap && idx > 0 ? 'border-t border-border/40' : ''}>
@@ -156,19 +229,37 @@ export function BgSpiceSummary({ enabled }: Props) {
                   <td className={`text-right tabular-nums pr-3 py-0.5 ${primCls}`}>
                     {r.currentPrimed}<span className="text-text-dim">/{r.maxPrimed}</span>
                   </td>
-                  <td className="text-right py-0.5">
-                    {off && (
-                      <span className="text-[10px] uppercase tracking-wider text-danger"
-                            title="Spawning disabled for this field type">
-                        off
-                      </span>
-                    )}
+                  <td className="text-center py-0.5 whitespace-nowrap">
+                    <label className={`inline-flex items-center gap-1 ${disabled ? 'cursor-wait opacity-70' : 'cursor-pointer'}`}
+                           title={title}>
+                      <input
+                        type="checkbox"
+                        checked={r.isSpawningActive}
+                        disabled={disabled}
+                        onChange={() => void onToggleSpawning(r)}
+                        className="h-3 w-3 accent-accent-bright cursor-[inherit]"
+                      />
+                      {onCooldown && (
+                        <span className="text-[10px] text-text-dim font-mono tabular-nums">
+                          {cdSecs}s
+                        </span>
+                      )}
+                      {isBusy && !onCooldown && (
+                        <span className="text-[10px] text-text-dim font-mono">…</span>
+                      )}
+                    </label>
                   </td>
                 </tr>
               )
             })}
           </tbody>
         </table>
+      )}
+
+      {toggleErr && (
+        <p className="mt-1 text-[10px] text-danger font-mono">
+          toggle: {toggleErr}
+        </p>
       )}
     </div>
   )

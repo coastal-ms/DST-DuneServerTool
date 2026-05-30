@@ -14,6 +14,47 @@ here cover everything those tags shipped.
 ## [Unreleased]
 
 
+## [6.1.30] - 2026-05-29
+
+Patch: **Auto-updater wizard now appears in foreground; Server Health "Active spice" card has per-row spawning checkboxes.**
+
+### Added
+- **Server Health → Active spice card — new "Active" column with
+  per-row spawning checkboxes.** A checkbox is rendered to the right
+  of the Primed column for every spicefield row, reflecting and
+  toggling `is_spawning_active` live. Clicking commits immediately
+  via the same guard-railed `PUT /api/gameconfig/spicefields/{id}/spawning`
+  endpoint introduced in 6.1.29 (only ever writes `TRUE`/`FALSE` to
+  that single column). Optimistic UI with rollback on failure. One
+  shared 5-second click cooldown across **all** checkboxes on the
+  card (clicking any of them locks every checkbox for 5s, with a
+  live `(Ns)` countdown shown next to the disabled row).
+- This replaces the previous read-only red "OFF" indicator — the
+  checkbox state itself now conveys ON/OFF, and the row is editable.
+
+### Fixed
+- **Installer wizard hidden behind other windows after clicking "Update".**
+  The relauncher script that bridges the running `DuneServer.exe` to the
+  Inno installer was running in a hidden powershell window. Hidden
+  parents have no foreground rights, so when the relauncher spawned the
+  installer, Windows demoted the wizard behind whatever window the user
+  had focus on (browser, file explorer, IDE, etc.). The result:
+  clicking Update appeared to do nothing, then the wizard would be
+  discovered minutes later buried behind everything. Now:
+  - The relauncher window is **visible** and shows a brief
+    "Update in progress — installer wizard will appear in a few
+    seconds" banner, so the user has clear feedback during the 4-5s
+    handoff.
+  - The relauncher calls `AllowSetForegroundWindow(ASFW_ANY)` before
+    spawning the installer, granting the new process foreground rights.
+  - After launching, the relauncher polls for the installer's
+    `MainWindowHandle` (up to 30s, covering the UAC consent delay) and
+    explicitly raises it via `ShowWindowAsync(SW_RESTORE)` +
+    `BringWindowToTop` + `SetForegroundWindow`.
+  - Net effect: the wizard is the **first window the user sees** after
+    clicking Update, not buried behind the browser.
+
+
 ## [6.1.29] - 2026-05-29
 
 Patch: **Spicefields live-commit toggle + 5-second click rate limiter; dune-admin Icehunter credit.**
