@@ -1,4 +1,4 @@
-﻿#Requires -RunAsAdministrator
+#Requires -RunAsAdministrator
 
 [CmdletBinding()]
 param(
@@ -13,7 +13,19 @@ param(
 # Wraps the original battlegroup.ps1 menu and adds extra tools
 # ============================================================
 
-$script:ToolVersion = "6.2.1"
+$script:ToolVersion = "6.2.2"
+
+# Cold-boot readiness budgets (seconds). A fresh battlegroup's FIRST boot can
+# take 10-30 min: k3s + funcom-operators initialize, metrics-server restarts a
+# few times until its serving cert is up, and images may still be pulling. The
+# old 180s/120s caps aborted healthy-but-slow boots, so these are generous.
+# Used by the startup/reboot cluster-readiness phases below.
+$script:WaitVmIpSec      = 300
+$script:WaitSshSec       = 300
+$script:WaitK3sApiSec    = 600
+$script:WaitDbPodsSec    = 900
+$script:WaitOperatorsSec = 900
+$script:WaitWebhookSec   = 300
 
 # ============================================================
 #  CRASH / EXIT CLEANUP
@@ -762,7 +774,7 @@ function Get-OnlinePlayers {
     # Awk prints "namespace podname" space-separated; we avoid embedded double
     # quotes in the awk script because PowerShell mangles \" inside the
     # double-quoted command string.
-    $pgInfo = ssh -o StrictHostKeyChecking=no -o LogLevel=QUIET -i "$sshKey" "$sshUser@$ip" `
+    $pgInfo = ssh -o BatchMode=yes -o StrictHostKeyChecking=no -o LogLevel=QUIET -i "$sshKey" "$sshUser@$ip" `
         "sudo k3s kubectl get pods -A --no-headers 2>/dev/null | awk '`$2 ~ /(-db-|postgres|-pg-)/ {print `$1, `$2; exit}'"
     $pgInfo = ($pgInfo | Out-String).Trim()
     if (-not $pgInfo) { return @{ Names = @(); Error = 'Postgres pod not found' } }
@@ -774,7 +786,7 @@ function Get-OnlinePlayers {
     # Query online players. The cluster's postgres listens on 15432 (not default 5432).
     $sql = "SELECT character_name FROM player_state WHERE online_status = 'Online' AND character_name IS NOT NULL ORDER BY character_name;"
     $cmd = "sudo k3s kubectl exec -n '$pgNs' '$pgPod' -- env PGPASSWORD=dune psql -h 127.0.0.1 -p 15432 -U dune -d dune -t -A -c `"$sql`" 2>&1"
-    $raw = ssh -o StrictHostKeyChecking=no -o LogLevel=QUIET -i "$sshKey" "$sshUser@$ip" $cmd
+    $raw = ssh -o BatchMode=yes -o StrictHostKeyChecking=no -o LogLevel=QUIET -i "$sshKey" "$sshUser@$ip" $cmd
     $rawText = ($raw | Out-String)
     if ($LASTEXITCODE -ne 0 -or $rawText -match 'error|FATAL|ERROR') {
         return @{ Names = @(); Error = "psql failed: $($rawText.Trim())" }
@@ -818,7 +830,7 @@ function Wait-MapPodReady {
     $lastPod = $null
     $lastStatus = $null
     while ($elapsed -lt $TimeoutSec) {
-        $line = ssh -o StrictHostKeyChecking=no -o LogLevel=QUIET -i "$sshKey" "$sshUser@$Ip" `
+        $line = ssh -o BatchMode=yes -o StrictHostKeyChecking=no -o LogLevel=QUIET -i "$sshKey" "$sshUser@$Ip" `
             "sudo k3s kubectl get pods -A --no-headers 2>/dev/null | grep -E -i '$MapName' | head -1"
         $line = ($line | Out-String).Trim()
         if ($line) {
@@ -1196,7 +1208,7 @@ while ($true) {
             $ipHint = if ($estIp) { " $estIp" } else { "" }
             Write-Host "  VM running. Waiting for IP...$ipHint" -ForegroundColor DarkGray
 
-            $newIp = $null; $timeout = 180; $elapsed = 0; $dots = 0
+            $newIp = $null; $timeout = $script:WaitVmIpSec; $elapsed = 0; $dots = 0
             $t_ip = Get-Date
             while (-not $newIp -and $elapsed -lt $timeout) {
                 $dots = ($dots % 3) + 1
@@ -1215,13 +1227,14 @@ while ($true) {
         # ---- Step 2: SSH + cluster readiness ----
         Write-Host ""
         Write-Host "[2/4] Waiting for cluster readiness..." -ForegroundColor Cyan
+        Write-Host "  First boot can take 10-30 min (k3s, operators, and the database initializing). Please be patient." -ForegroundColor DarkGray
 
         # 2a. SSH responsive
         $estSsh = Format-PhaseEstimate 'ssh-ready'
-        $t_ssh = Get-Date; $sshReady = $false; $maxSec = 180
+        $t_ssh = Get-Date; $sshReady = $false; $maxSec = $script:WaitSshSec
         while (((Get-Date) - $t_ssh).TotalSeconds -lt $maxSec) {
             Write-WaitCounter -Start $t_ssh -Label "Waiting for SSH..." -EstimateText $estSsh
-            $probe = ssh -o StrictHostKeyChecking=no -o LogLevel=QUIET -o ConnectTimeout=3 -i "$sshKey" "$sshUser@$ip" "echo ok" 2>$null
+            $probe = ssh -o BatchMode=yes -o StrictHostKeyChecking=no -o LogLevel=QUIET -o ConnectTimeout=3 -i "$sshKey" "$sshUser@$ip" "echo ok" 2>$null
             if ($probe -match 'ok') { $sshReady = $true; break }
             for ($i = 0; $i -lt 3 -and ((Get-Date) - $t_ssh).TotalSeconds -lt $maxSec; $i++) {
                 Start-Sleep -Seconds 1
@@ -1229,19 +1242,25 @@ while ($true) {
             }
         }
         $elapsed = [int]((Get-Date) - $t_ssh).TotalSeconds
-        if (-not $sshReady) { Complete-WaitCounter -Message "SSH not responsive after $(Format-Duration $elapsed). Aborting." -Color Red; continue }
+        if (-not $sshReady) {
+            Complete-WaitCounter -Message "SSH not responsive after $(Format-Duration $elapsed). Aborting." -Color Red
+            Write-Host "  Likely SSH key auth failure (the tool requires passwordless key auth - it will not use a password)." -ForegroundColor Yellow
+            Write-Host "  Fixes: run 'rotate-ssh-key' to generate + authorize a fresh key, OR add this key's .pub to ~/.ssh/authorized_keys on the VM:" -ForegroundColor DarkGray
+            Write-Host "    Get-Content `"$sshKey.pub`" | ssh $sshUser@$ip `"mkdir -p ~/.ssh && cat >> ~/.ssh/authorized_keys && chmod 600 ~/.ssh/authorized_keys`"" -ForegroundColor DarkGray
+            continue
+        }
         Save-PhaseTiming 'ssh-ready' $elapsed
         Complete-WaitCounter -Message "SSH responsive ($(Format-Duration $elapsed))."
 
         # 2b. k3s API
         $estApi = Format-PhaseEstimate 'k3s-api'
         $t_api = Get-Date; $apiReady = $false
-        while (((Get-Date) - $t_api).TotalSeconds -lt 180) {
+        while (((Get-Date) - $t_api).TotalSeconds -lt $script:WaitK3sApiSec) {
             Write-WaitCounter -Start $t_api -Label "Waiting for k3s API..." -EstimateText $estApi
-            $apiOk = ssh -o StrictHostKeyChecking=no -o LogLevel=QUIET -i "$sshKey" "$sshUser@$ip" `
+            $apiOk = ssh -o BatchMode=yes -o StrictHostKeyChecking=no -o LogLevel=QUIET -i "$sshKey" "$sshUser@$ip" `
                 "sudo k3s kubectl get --raw='/readyz' 2>/dev/null"
             if ($apiOk -match 'ok') { $apiReady = $true; break }
-            for ($i = 0; $i -lt 3 -and ((Get-Date) - $t_api).TotalSeconds -lt 180; $i++) {
+            for ($i = 0; $i -lt 3 -and ((Get-Date) - $t_api).TotalSeconds -lt $script:WaitK3sApiSec; $i++) {
                 Start-Sleep -Seconds 1
                 Write-WaitCounter -Start $t_api -Label "Waiting for k3s API..." -EstimateText $estApi
             }
@@ -1257,7 +1276,7 @@ while ($true) {
         # an awk script get mangled by PowerShell when the script is in a double-
         # quoted string passed to ssh, so we split on whitespace in PS instead.
         $estDb = Format-PhaseEstimate 'db-pods'
-        $dbPodList = ssh -o StrictHostKeyChecking=no -o LogLevel=QUIET -i "$sshKey" "$sshUser@$ip" `
+        $dbPodList = ssh -o BatchMode=yes -o StrictHostKeyChecking=no -o LogLevel=QUIET -i "$sshKey" "$sshUser@$ip" `
             "sudo k3s kubectl get pods -A --no-headers 2>/dev/null | awk '`$2 ~ /(-db-|postgres|^pg-|-pg-)/ && `$2 !~ /(dump|backup|fb-|migration)/ {print `$1, `$2}'"
         $dbPodList = ($dbPodList | Out-String).Trim()
         if ($dbPodList) {
@@ -1268,8 +1287,8 @@ while ($true) {
                 -ArgumentList $sshKey,$sshUser,$ip,$dbNs,$podArgs `
                 -Action {
                     param($sshKey, $sshUser, $ip, $dbNs, $podArgs)
-                    $output = ssh -o StrictHostKeyChecking=no -o LogLevel=QUIET -i "$sshKey" "$sshUser@$ip" `
-                        "sudo k3s kubectl wait --for=condition=Ready $podArgs -n '$dbNs' --timeout=180s 2>&1"
+                    $output = ssh -o BatchMode=yes -o StrictHostKeyChecking=no -o LogLevel=QUIET -i "$sshKey" "$sshUser@$ip" `
+                        "sudo k3s kubectl wait --for=condition=Ready $podArgs -n '$dbNs' --timeout=$($script:WaitDbPodsSec)s 2>&1"
                     return [pscustomobject]@{ ExitCode = $LASTEXITCODE; Output = $output }
                 }
             $podCount = $dbPods.Count
@@ -1291,8 +1310,8 @@ while ($true) {
             -ArgumentList $sshKey,$sshUser,$ip `
             -Action {
                 param($sshKey, $sshUser, $ip)
-                $output = ssh -o StrictHostKeyChecking=no -o LogLevel=QUIET -i "$sshKey" "$sshUser@$ip" `
-                    "sudo k3s kubectl wait --for=condition=Ready pods --all -n funcom-operators --timeout=180s 2>&1"
+                $output = ssh -o BatchMode=yes -o StrictHostKeyChecking=no -o LogLevel=QUIET -i "$sshKey" "$sshUser@$ip" `
+                    "sudo k3s kubectl wait --for=condition=Ready pods --all -n funcom-operators --timeout=$($script:WaitOperatorsSec)s 2>&1"
                 return [pscustomobject]@{ ExitCode = $LASTEXITCODE; Output = $output }
             }
         if ($opResult.Output.ExitCode -ne 0) {
@@ -1306,12 +1325,12 @@ while ($true) {
         # 2e. webhook Service endpoints
         $estWh = Format-PhaseEstimate 'webhook-endpoints'
         $t_wh = Get-Date; $epReady = $false
-        while (((Get-Date) - $t_wh).TotalSeconds -lt 120) {
+        while (((Get-Date) - $t_wh).TotalSeconds -lt $script:WaitWebhookSec) {
             Write-WaitCounter -Start $t_wh -Label "Waiting for webhook Service endpoints..." -EstimateText $estWh
-            $epOut = ssh -o StrictHostKeyChecking=no -o LogLevel=QUIET -i "$sshKey" "$sshUser@$ip" `
+            $epOut = ssh -o BatchMode=yes -o StrictHostKeyChecking=no -o LogLevel=QUIET -i "$sshKey" "$sshUser@$ip" `
                 "sudo k3s kubectl -n funcom-operators get endpoints battlegroupoperator-webhook-svc -o jsonpath='{.subsets[*].addresses[*].ip}' 2>/dev/null"
             if ($epOut -match '\d+\.\d+\.\d+\.\d+') { $epReady = $true; break }
-            for ($i = 0; $i -lt 3 -and ((Get-Date) - $t_wh).TotalSeconds -lt 120; $i++) {
+            for ($i = 0; $i -lt 3 -and ((Get-Date) - $t_wh).TotalSeconds -lt $script:WaitWebhookSec; $i++) {
                 Start-Sleep -Seconds 1
                 Write-WaitCounter -Start $t_wh -Label "Waiting for webhook Service endpoints..." -EstimateText $estWh
             }
@@ -1402,7 +1421,7 @@ while ($true) {
         $maxWaitSec = 360
         $finalCount = $null
         while ($true) {
-            $remainRaw = ssh -o StrictHostKeyChecking=no -o LogLevel=QUIET -i "$sshKey" "$sshUser@$ip" `
+            $remainRaw = ssh -o BatchMode=yes -o StrictHostKeyChecking=no -o LogLevel=QUIET -i "$sshKey" "$sshUser@$ip" `
                 "sudo k3s kubectl get pods -A --no-headers 2>/dev/null | grep -E '(-sg-|-mq-|-sgw-|-tr-|-bgd-)' | wc -l"
             $remain = ($remainRaw -replace '\D','')
             if (-not $remain) { $remain = '0' }
@@ -1450,7 +1469,7 @@ while ($true) {
         $ipHint = if ($estIp) { " $estIp" } else { "" }
         Write-Host "  VM running. Waiting for IP...$ipHint" -ForegroundColor DarkGray
 
-        $newIp = $null; $timeout = 180; $elapsed = 0; $dots = 0
+        $newIp = $null; $timeout = $script:WaitVmIpSec; $elapsed = 0; $dots = 0
         $t_ip = Get-Date
         while (-not $newIp -and $elapsed -lt $timeout) {
             $dots = ($dots % 3) + 1
@@ -1467,10 +1486,10 @@ while ($true) {
 
         # Wait for SSH to be responsive
         $estSsh = Format-PhaseEstimate 'ssh-ready'
-        $t_ssh = Get-Date; $sshReady = $false; $maxSec = 180
+        $t_ssh = Get-Date; $sshReady = $false; $maxSec = $script:WaitSshSec
         while (((Get-Date) - $t_ssh).TotalSeconds -lt $maxSec) {
             Write-WaitCounter -Start $t_ssh -Label "Waiting for SSH..." -EstimateText $estSsh
-            $probe = ssh -o StrictHostKeyChecking=no -o LogLevel=QUIET -o ConnectTimeout=3 -i "$sshKey" "$sshUser@$ip" "echo ok" 2>$null
+            $probe = ssh -o BatchMode=yes -o StrictHostKeyChecking=no -o LogLevel=QUIET -o ConnectTimeout=3 -i "$sshKey" "$sshUser@$ip" "echo ok" 2>$null
             if ($probe -match 'ok') { $sshReady = $true; break }
             for ($i = 0; $i -lt 3 -and ((Get-Date) - $t_ssh).TotalSeconds -lt $maxSec; $i++) {
                 Start-Sleep -Seconds 1
@@ -1478,7 +1497,13 @@ while ($true) {
             }
         }
         $elapsed = [int]((Get-Date) - $t_ssh).TotalSeconds
-        if (-not $sshReady) { Complete-WaitCounter -Message "SSH not responsive after $(Format-Duration $elapsed). Aborting." -Color Red; continue }
+        if (-not $sshReady) {
+            Complete-WaitCounter -Message "SSH not responsive after $(Format-Duration $elapsed). Aborting." -Color Red
+            Write-Host "  Likely SSH key auth failure (the tool requires passwordless key auth - it will not use a password)." -ForegroundColor Yellow
+            Write-Host "  Fixes: run 'rotate-ssh-key' to generate + authorize a fresh key, OR add this key's .pub to ~/.ssh/authorized_keys on the VM:" -ForegroundColor DarkGray
+            Write-Host "    Get-Content `"$sshKey.pub`" | ssh $sshUser@$ip `"mkdir -p ~/.ssh && cat >> ~/.ssh/authorized_keys && chmod 600 ~/.ssh/authorized_keys`"" -ForegroundColor DarkGray
+            continue
+        }
         Save-PhaseTiming 'ssh-ready' $elapsed
         Complete-WaitCounter -Message "SSH responsive after $(Format-Duration $elapsed)."
 
@@ -1490,12 +1515,13 @@ while ($true) {
         # 2a. k3s API responsive
         $estApi = Format-PhaseEstimate 'k3s-api'
         $t_api = Get-Date; $apiReady = $false
-        while (((Get-Date) - $t_api).TotalSeconds -lt 180) {
+        Write-Host "  First boot can take 10-30 min (k3s, operators, and the database initializing). Please be patient." -ForegroundColor DarkGray
+        while (((Get-Date) - $t_api).TotalSeconds -lt $script:WaitK3sApiSec) {
             Write-WaitCounter -Start $t_api -Label "Waiting for k3s API..." -EstimateText $estApi
-            $apiOk = ssh -o StrictHostKeyChecking=no -o LogLevel=QUIET -i "$sshKey" "$sshUser@$ip" `
+            $apiOk = ssh -o BatchMode=yes -o StrictHostKeyChecking=no -o LogLevel=QUIET -i "$sshKey" "$sshUser@$ip" `
                 "sudo k3s kubectl get --raw='/readyz' 2>/dev/null"
             if ($apiOk -match 'ok') { $apiReady = $true; break }
-            for ($i = 0; $i -lt 3 -and ((Get-Date) - $t_api).TotalSeconds -lt 180; $i++) {
+            for ($i = 0; $i -lt 3 -and ((Get-Date) - $t_api).TotalSeconds -lt $script:WaitK3sApiSec; $i++) {
                 Start-Sleep -Seconds 1
                 Write-WaitCounter -Start $t_api -Label "Waiting for k3s API..." -EstimateText $estApi
             }
@@ -1510,7 +1536,7 @@ while ($true) {
         # Awk prints space-separated to avoid embedded double quotes (PowerShell
         # mangles \" inside a double-quoted string passed to ssh).
         $estDb = Format-PhaseEstimate 'db-pods'
-        $dbPodList = ssh -o StrictHostKeyChecking=no -o LogLevel=QUIET -i "$sshKey" "$sshUser@$ip" `
+        $dbPodList = ssh -o BatchMode=yes -o StrictHostKeyChecking=no -o LogLevel=QUIET -i "$sshKey" "$sshUser@$ip" `
             "sudo k3s kubectl get pods -A --no-headers 2>/dev/null | awk '`$2 ~ /(-db-|postgres|^pg-|-pg-)/ && `$2 !~ /(dump|backup|fb-|migration)/ {print `$1, `$2}'"
         $dbPodList = ($dbPodList | Out-String).Trim()
         if ($dbPodList) {
@@ -1521,8 +1547,8 @@ while ($true) {
                 -ArgumentList $sshKey,$sshUser,$ip,$dbNs,$podArgs `
                 -Action {
                     param($sshKey, $sshUser, $ip, $dbNs, $podArgs)
-                    $output = ssh -o StrictHostKeyChecking=no -o LogLevel=QUIET -i "$sshKey" "$sshUser@$ip" `
-                        "sudo k3s kubectl wait --for=condition=Ready $podArgs -n '$dbNs' --timeout=180s 2>&1"
+                    $output = ssh -o BatchMode=yes -o StrictHostKeyChecking=no -o LogLevel=QUIET -i "$sshKey" "$sshUser@$ip" `
+                        "sudo k3s kubectl wait --for=condition=Ready $podArgs -n '$dbNs' --timeout=$($script:WaitDbPodsSec)s 2>&1"
                     return [pscustomobject]@{ ExitCode = $LASTEXITCODE; Output = $output }
                 }
             $podCount = $dbPods.Count
@@ -1544,8 +1570,8 @@ while ($true) {
             -ArgumentList $sshKey,$sshUser,$ip `
             -Action {
                 param($sshKey, $sshUser, $ip)
-                $output = ssh -o StrictHostKeyChecking=no -o LogLevel=QUIET -i "$sshKey" "$sshUser@$ip" `
-                    "sudo k3s kubectl wait --for=condition=Ready pods --all -n funcom-operators --timeout=180s 2>&1"
+                $output = ssh -o BatchMode=yes -o StrictHostKeyChecking=no -o LogLevel=QUIET -i "$sshKey" "$sshUser@$ip" `
+                    "sudo k3s kubectl wait --for=condition=Ready pods --all -n funcom-operators --timeout=$($script:WaitOperatorsSec)s 2>&1"
                 return [pscustomobject]@{ ExitCode = $LASTEXITCODE; Output = $output }
             }
         if ($opResult.Output.ExitCode -ne 0) {
@@ -1559,12 +1585,12 @@ while ($true) {
         # 2d. Webhook Service must have endpoints populated, else API-server proxy returns 502
         $estWh = Format-PhaseEstimate 'webhook-endpoints'
         $t_wh = Get-Date; $epReady = $false
-        while (((Get-Date) - $t_wh).TotalSeconds -lt 120) {
+        while (((Get-Date) - $t_wh).TotalSeconds -lt $script:WaitWebhookSec) {
             Write-WaitCounter -Start $t_wh -Label "Waiting for webhook Service endpoints..." -EstimateText $estWh
-            $epOut = ssh -o StrictHostKeyChecking=no -o LogLevel=QUIET -i "$sshKey" "$sshUser@$ip" `
+            $epOut = ssh -o BatchMode=yes -o StrictHostKeyChecking=no -o LogLevel=QUIET -i "$sshKey" "$sshUser@$ip" `
                 "sudo k3s kubectl -n funcom-operators get endpoints battlegroupoperator-webhook-svc -o jsonpath='{.subsets[*].addresses[*].ip}' 2>/dev/null"
             if ($epOut -match '\d+\.\d+\.\d+\.\d+') { $epReady = $true; break }
-            for ($i = 0; $i -lt 3 -and ((Get-Date) - $t_wh).TotalSeconds -lt 120; $i++) {
+            for ($i = 0; $i -lt 3 -and ((Get-Date) - $t_wh).TotalSeconds -lt $script:WaitWebhookSec; $i++) {
                 Start-Sleep -Seconds 1
                 Write-WaitCounter -Start $t_wh -Label "Waiting for webhook Service endpoints..." -EstimateText $estWh
             }
@@ -1630,7 +1656,7 @@ while ($true) {
         $maxWaitSec = 360
         $finalCount = $null
         while ($true) {
-            $remainRaw = ssh -o StrictHostKeyChecking=no -o LogLevel=QUIET -i "$sshKey" "$sshUser@$ip" `
+            $remainRaw = ssh -o BatchMode=yes -o StrictHostKeyChecking=no -o LogLevel=QUIET -i "$sshKey" "$sshUser@$ip" `
                 "sudo k3s kubectl get pods -A --no-headers 2>/dev/null | grep -E '(-sg-|-mq-|-sgw-|-tr-|-bgd-)' | wc -l"
             $remain = ($remainRaw -replace '\D','')
             if (-not $remain) { $remain = '0' }
@@ -1720,7 +1746,7 @@ while ($true) {
 
     if ($cmdName -eq "open-director") {
         if (-not $directorPort) {
-            $directorNodePort = ssh -o StrictHostKeyChecking=no -o LogLevel=QUIET -i "$sshKey" "$sshUser@$ip" `
+            $directorNodePort = ssh -o BatchMode=yes -o StrictHostKeyChecking=no -o LogLevel=QUIET -i "$sshKey" "$sshUser@$ip" `
                 "sudo kubectl get svc -A -o jsonpath='{.items[*].spec.ports[?(@.port==11717)].nodePort}' 2>&1"
             if ($directorNodePort -match '^\d+$') { $directorPort = $directorNodePort.Trim() }
         }
@@ -1737,7 +1763,7 @@ while ($true) {
 
     if ($cmdName -eq "shell-pod") {
         $bgPrefix = "funcom-seabass-"
-        $nsList = ssh -o StrictHostKeyChecking=no -o LogLevel=QUIET -i "$sshKey" "$sshUser@$ip" "sudo kubectl get ns --no-headers -o custom-columns=NAME:.metadata.name | grep '^$bgPrefix'"
+        $nsList = ssh -o BatchMode=yes -o StrictHostKeyChecking=no -o LogLevel=QUIET -i "$sshKey" "$sshUser@$ip" "sudo kubectl get ns --no-headers -o custom-columns=NAME:.metadata.name | grep '^$bgPrefix'"
         $namespaces = @($nsList -split "`n" | ForEach-Object { $_.Trim() } | Where-Object { $_ })
         if ($namespaces.Count -eq 0) { Write-Warning "No battlegroup found."; continue }
         if ($namespaces.Count -eq 1) { $ns = $namespaces[0] }
@@ -1751,7 +1777,7 @@ while ($true) {
                 else { Write-Warning "Invalid selection." }
             }
         }
-        $podList = ssh -o StrictHostKeyChecking=no -o LogLevel=QUIET -i "$sshKey" "$sshUser@$ip" "sudo kubectl get pods -n '$ns' --no-headers -o custom-columns=NAME:.metadata.name,ROLE:.metadata.labels.role"
+        $podList = ssh -o BatchMode=yes -o StrictHostKeyChecking=no -o LogLevel=QUIET -i "$sshKey" "$sshUser@$ip" "sudo kubectl get pods -n '$ns' --no-headers -o custom-columns=NAME:.metadata.name,ROLE:.metadata.labels.role"
         $pods = @($podList -split "`n" | ForEach-Object { $_.Trim() } | Where-Object { $_ } | ForEach-Object {
             $parts = $_ -split '\s+', 2
             [pscustomobject]@{
@@ -1793,7 +1819,7 @@ while ($true) {
     # only appends if the directive isn't already present.
     if ($cmdName -eq "edit" -or $cmdName -eq "edit-advanced") {
         $vimrcEnsure = "grep -qs '^set mouse=a' ~/.vimrc || echo 'set mouse=a' >> ~/.vimrc"
-        ssh -o StrictHostKeyChecking=no -o LogLevel=QUIET -i "$sshKey" "$sshUser@$ip" $vimrcEnsure 2>$null | Out-Null
+        ssh -o BatchMode=yes -o StrictHostKeyChecking=no -o LogLevel=QUIET -i "$sshKey" "$sshUser@$ip" $vimrcEnsure 2>$null | Out-Null
     }
 
     if ($cmdName -eq "logs-export") {
@@ -2038,7 +2064,7 @@ while ($true) {
     if ($cmdName -eq "start" -or $cmdName -eq "restart") {
         $elapsed = 0; $timeout = 60
         while (-not $directorPort -and $elapsed -lt $timeout) {
-            $directorNodePort = ssh -o StrictHostKeyChecking=no -o LogLevel=QUIET -i "$sshKey" "$sshUser@$ip" `
+            $directorNodePort = ssh -o BatchMode=yes -o StrictHostKeyChecking=no -o LogLevel=QUIET -i "$sshKey" "$sshUser@$ip" `
                 "sudo kubectl get svc -A -o jsonpath='{.items[*].spec.ports[?(@.port==11717)].nodePort}' 2>&1"
             if ($directorNodePort -match '^\d+$') { $directorPort = $directorNodePort.Trim() }
             else { Start-Sleep -Seconds 5; $elapsed += 5 }
