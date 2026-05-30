@@ -81,26 +81,36 @@ try {
                 continue
             }
 
-            # Maybe it's already applied — reverse-apply check.
+            # Maybe it's already applied — reverse-apply check. If so, leave
+            # it applied; the build will use it as-is. (Previously we did a
+            # `git restore` + re-apply for a "clean state", but `git restore`
+            # reverts to LOCAL git HEAD, which in the installer flow may be
+            # an old commit — that corrupts the upstream-tarball overlay we
+            # just dropped in. Skipping the restore is both safer and
+            # produces an identical end state.)
             & git apply --reverse --check -- $p.FullName 2>$null
             if ($LASTEXITCODE -eq 0) {
-                Info "Already applied — restoring upstream and re-applying for a clean state"
-                foreach ($f in $touched) { & git restore -- $f }
-                & git apply --whitespace=nowarn -- $p.FullName
-                if ($LASTEXITCODE -ne 0) { throw "Patch failed after restore: $($p.Name)" }
+                Info "Patch is already applied to the working tree — using as-is."
                 $patchedFiles += $touched
                 continue
             }
 
-            # Neither forward nor reverse — working tree has conflicting
-            # changes. Restore the touched files and try once more.
-            Info "Working tree has conflicting changes on touched files; restoring and retrying"
-            foreach ($f in $touched) { & git restore -- $f }
-            & git apply --whitespace=nowarn -- $p.FullName
-            if ($LASTEXITCODE -ne 0) {
-                throw "Patch failed: $($p.Name) (working tree still dirty after restore)"
-            }
-            $patchedFiles += $touched
+            # Neither forward nor reverse — the patch is stale relative to
+            # the current source. Surface a clear diagnostic and stop. We
+            # deliberately do NOT `git restore` + force-apply: when this
+            # script runs from the installer, the working tree was just
+            # overlaid from an upstream source tarball, and `git restore`
+            # reverts to whatever the user's local git HEAD happens to be
+            # (often an older release), which strips the new symbols
+            # bot.go/exchange.go reference and breaks the build with
+            # confusing "undefined: LoadState" errors. Failing fast tells
+            # the user the real problem: ship a refreshed patch.
+            Info "Patch does not apply cleanly and is not already applied."
+            Info "Touched files: $($touched -join ', ')"
+            Info "Likely cause: the bundled patch was authored against an"
+            Info "older dune-admin baseline. Update the Dune Server Tool"
+            Info "(which ships the patch) and reinstall."
+            throw "Patch is stale relative to current source: $($p.Name). Refusing to corrupt the working tree."
         }
         # De-duplicate file list for the revert step.
         $patchedFiles = @($patchedFiles | Sort-Object -Unique)
