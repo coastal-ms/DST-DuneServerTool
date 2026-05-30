@@ -1,0 +1,10 @@
+# Patch files MUST stay LF. `git apply` matches context lines byte-for-byte
+# against the (LF) upstream Go source, so a CRLF-renormalized .patch fails to
+# apply against EVERY upstream version — which previously looked like a "stale
+# patch / baseline drift" bug but was purely line endings. Forcing eol=lf here
+# stops git (any core.autocrlf setting) from ever re-introducing CRLF.
+*.patch text eol=lf
+*.diff  text eol=lf
+
+# Go sources are LF upstream; keep them LF so locally-applied patches match.
+*.go text eol=lf
