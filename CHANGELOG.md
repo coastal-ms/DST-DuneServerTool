@@ -14,6 +14,22 @@ here cover everything those tags shipped.
 ## [Unreleased]
 
 
+## [10.0.1] - 2026-05-30
+
+Displayed in-app as **X (0.1)**. Bug-fix release.
+
+### Fixed
+
+- **dune-admin reinstall/setup no longer deletes the `~/.dune-admin` config
+  folder without asking.** The stale-folder preflight used `window.confirm()`,
+  which is fired after an `await` (the folder-existence check). Browsers expire
+  the click's user-activation across the `await` and then suppress the dialog,
+  silently returning `true` — so the folder was deleted with no prompt ever
+  shown. The preflight now uses an in-app modal (Cancel / Keep & continue /
+  Delete & continue) that always renders and defaults to non-destructive;
+  Cancel aborts the reinstall/setup entirely.
+
+
 ## [10.0.0] - 2026-05-30
 
 Displayed in-app as **X**. Feature release rolling up everything since 6.3.2. Focus: dune-admin
