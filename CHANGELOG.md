@@ -14,6 +14,34 @@ here cover everything those tags shipped.
 ## [Unreleased]
 
 
+## [10.0.4] - 2026-05-30
+
+Displayed in-app as **X (0.4)**.
+
+### Added
+
+- **"Fix on-demand maps" action.** Re-runs the VM's partition-cleanup script
+  (`/etc/local.d/dune-clear-partitions.start`) to clear the drifted
+  `igwsss.spec.partitions` pin that intermittently stops DeepDesert,
+  SH_Arrakeen and SH_HarkoVillage from launching on demand, then tails the
+  last 10 lines of `/var/log/dune-clear-partitions.log` so you can see what
+  happened. The remote script is idempotent and skips any map that already
+  has a running pod, so it's safe to run repeatedly.
+  - CLI: new **fix-on-demand-maps** entry in the Battlegroup menu.
+  - Portal: new **Battlegroup** command button, plus a dedicated tool card on
+    the **Database** page with an inline output pane
+    (`POST /api/maps/fix-partitions`).
+
+### Changed
+
+- **Reinstalling dune-admin now reopens it after wiping the stale config
+  folder.** When you confirm "delete" on the stale `.dune-admin` preflight
+  prompt during an install, the market bot's config and DB pointers are gone —
+  so DST now launches dune-admin once the install (and any pricing-patch
+  rebuild) finishes, letting you re-run market-bot setup right away. The launch
+  is deferred until the rebuild completes so the running exe can't lock it.
+
+
 ## [10.0.3] - 2026-05-30
 
 Displayed in-app as **X (0.3)**. Cosmetic rebrand — no functional changes.

@@ -36,6 +36,7 @@ $script:DuneCommands = @(
     @{ Section='Battlegroup'; Key='14'; Name='open-director';            Mode='InApp';   Requires='running'; DisabledWhen='bg-stopped';  Desc='Open battlegroup director page in your browser' }
     @{ Section='Battlegroup'; Key='15'; Name='shell-vm';                 Mode='Console'; Requires='running'; Desc='Open a shell to the VM' }
     @{ Section='Battlegroup'; Key='16'; Name='shell-pod';                Mode='Console'; Requires='running'; DisabledWhen='bg-stopped';  Desc='Open a shell to a pod' }
+    @{ Section='Battlegroup'; Key='21'; Name='fix-on-demand-maps';      Mode='InApp';   Requires='running'; DisabledWhen='bg-stopped';  Desc='Clear pinned partitions so DeepDesert / Arrakeen / Harko launch on demand' }
 
     @{ Section='Tools'; Key='17'; Name='ssh';         Mode='Console'; Requires='running'; Desc='Open an SSH terminal to the VM' }
     @{ Section='Tools'; Key='18'; Name='dune-admin';  Mode='InApp';   Requires='running'; Hidden=$true; Desc='Launch dune-admin + open its web UI' }

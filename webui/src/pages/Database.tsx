@@ -8,6 +8,7 @@ import type { DbInfo, SqlResult, SqlOkResult } from '../api/types'
 import Editor, { type OnMount } from '@monaco-editor/react'
 
 type CmdLaunch = { ok: boolean; name: string; pid?: number; mode: string }
+type FixMapsResult = { ok: boolean; output?: string; logTail?: string; message?: string }
 
 const DEFAULT_SQL = `-- Read-only by default. Toggle the switch to allow writes.
 SELECT current_database(), current_user, version();`
@@ -45,6 +46,29 @@ export function Database() {
       showToast('err', `Launch failed: ${e instanceof Error ? e.message : String(e)}`)
     } finally {
       setLaunching(null)
+    }
+  }
+
+  // ---------- Fix on-demand maps (captured output) -------------------------
+  // Re-runs the remote partition-cleanup script and tails its log into the
+  // pane below. Unlike backup/restore this runs server-side and returns the
+  // captured output instead of opening a console window.
+  const fixMapsAvailable = vmRunning && bgState === 'running'
+  const [fixingMaps, setFixingMaps] = useState(false)
+  const [fixMapsOut, setFixMapsOut] = useState<FixMapsResult | null>(null)
+
+  async function runFixMaps() {
+    setFixingMaps(true)
+    setFixMapsOut(null)
+    try {
+      const r = await api<FixMapsResult>('/api/maps/fix-partitions', { method: 'POST' })
+      setFixMapsOut(r)
+      showToast('ok', 'Partition cleanup ran — see the output below.')
+      window.setTimeout(() => { void forceRefresh() }, 1500)
+    } catch (e) {
+      showToast('err', `Fix failed: ${e instanceof Error ? e.message : String(e)}`)
+    } finally {
+      setFixingMaps(false)
     }
   }
 
@@ -216,6 +240,54 @@ export function Database() {
           busy={launching === 'import'}
           onClick={() => void runMaint('import')}
         />
+      </div>
+
+      {/* Fix on-demand maps — captured output */}
+      <div className="card p-5 flex flex-col mb-6">
+        <div className="flex items-center gap-3 mb-3">
+          <Icon name="Wrench" size={22} className="text-warning" />
+          <h2 className="text-base font-semibold tracking-tight text-warning">Fix on-demand maps</h2>
+        </div>
+        <p className="text-sm text-text-muted mb-3">
+          Clears the drifted partition pin that stops DeepDesert, Arrakeen and Harko Village from launching on demand.
+          Runs on the VM, then shows the last 10 lines of the cleanup log below. Idempotent — it skips any map that already
+          has a running pod, so it's safe to run again whenever a map refuses to start.
+        </p>
+        <p className="text-xs text-text-dim mb-4">
+          {!vmRunning ? 'VM must be running to run the cleanup.'
+            : bgState !== 'running' ? 'Start the battlegroup first; the cleanup targets the live deployment.'
+            : 'Battlegroup is running — click to clear the pinned partitions.'}
+        </p>
+        <div>
+          <button
+            type="button"
+            onClick={() => void runFixMaps()}
+            disabled={!fixMapsAvailable || fixingMaps}
+            className="btn-primary"
+          >
+            <Icon name={fixingMaps ? 'Loader2' : 'Wrench'} size={14} className={fixingMaps ? 'animate-spin' : ''} />
+            {fixingMaps ? 'Running…' : 'Fix on-demand maps'}
+          </button>
+        </div>
+        {fixMapsOut && (
+          <div className="mt-4 space-y-3">
+            {fixMapsOut.output && (
+              <div>
+                <div className="text-xs font-semibold text-text-muted mb-1">Script output</div>
+                <pre className="text-xs font-mono bg-surface-2 border border-border rounded p-3 overflow-x-auto whitespace-pre-wrap">{fixMapsOut.output}</pre>
+              </div>
+            )}
+            {fixMapsOut.logTail && (
+              <div>
+                <div className="text-xs font-semibold text-text-muted mb-1">/var/log/dune-clear-partitions.log (last 10 lines)</div>
+                <pre className="text-xs font-mono bg-surface-2 border border-border rounded p-3 overflow-x-auto whitespace-pre-wrap">{fixMapsOut.logTail}</pre>
+              </div>
+            )}
+            {!fixMapsOut.output && !fixMapsOut.logTail && (
+              <p className="text-xs text-text-dim">{fixMapsOut.message ?? 'Cleanup ran (no output captured).'}</p>
+            )}
+          </div>
+        )}
       </div>
 
       {/* SQL editor card */}

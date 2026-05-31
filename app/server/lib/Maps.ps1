@@ -342,6 +342,30 @@ function Start-DuneOnDemandMap {
     }
 }
 
+function Invoke-DuneFixOnDemandPartitions {
+    # Re-runs the remote partition-cleanup script that clears the drifted
+    # igwsss.spec.partitions pin which stops DeepDesert / SH_Arrakeen /
+    # SH_HarkoVillage from launching on demand, then returns the last lines
+    # of its log. The remote script is idempotent and skips any map that
+    # already has a running pod, so it's safe to invoke repeatedly.
+    $ctx = Get-DuneMapsContext
+    if (-not $ctx.ok) { return @{ ok=$false; status=$ctx.status; message=$ctx.message } }
+
+    $ip = $ctx.vm.ip
+    $runRaw = Invoke-V6Ssh -Ip $ip -Cmd 'sudo /etc/local.d/dune-clear-partitions.start' -TimeoutSec 120
+    $output = (($runRaw -join "`n")).Trim()
+
+    $tailRaw = Invoke-V6Ssh -Ip $ip -Cmd 'tail -n 10 /var/log/dune-clear-partitions.log' -TimeoutSec 30
+    $logTail = (($tailRaw -join "`n")).Trim()
+
+    return @{
+        ok      = $true
+        output  = $output
+        logTail = $logTail
+        message = 'Partition cleanup ran. The script is idempotent and skips any map with a running pod, so it is safe to run again whenever a map refuses to launch.'
+    }
+}
+
 function Stop-DuneOnDemandMap {
     # Gracefully shuts down an on-demand map by patching every matching
     # set's `replicas` to 0. Leaves `dedicatedScaling`, `partitions`, and

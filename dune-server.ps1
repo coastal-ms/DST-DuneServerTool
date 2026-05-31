@@ -13,7 +13,7 @@ param(
 # Wraps the original battlegroup.ps1 menu and adds extra tools
 # ============================================================
 
-$script:ToolVersion = "10.0.3"
+$script:ToolVersion = "10.0.4"
 
 # Cold-boot readiness budgets (seconds). A fresh battlegroup's FIRST boot can
 # take 10-30 min: k3s + funcom-operators initialize, metrics-server restarts a
@@ -898,6 +898,7 @@ $bgCommands = @(
     [pscustomobject]@{ Key = "14"; SubSection = "Monitoring";   Name = "open-director";             Desc = "Open the battlegroup director page to view server status" }
     [pscustomobject]@{ Key = "15"; SubSection = "Monitoring";   Name = "shell-vm";                  Desc = "Connect to the VM via commandline" }
     [pscustomobject]@{ Key = "16"; SubSection = "Monitoring";   Name = "shell-pod";                 Desc = "Connect to a pod in the battlegroup via commandline" }
+    [pscustomobject]@{ Key = "21"; SubSection = "Maintenance";   Name = "fix-on-demand-maps";        Desc = "Clear pinned partitions so DeepDesert / Arrakeen / Harko launch on demand" }
 )
 
 $toolCommands = @(
@@ -2077,6 +2078,25 @@ while ($true) {
         Write-Host "  Pre-filled: tool_version, env, diagnostics ($(($diagText -split "`r?`n").Count) lines)" -ForegroundColor DarkGray
         Write-Host "  $url" -ForegroundColor DarkGray
         Start-Process $url
+        continue
+    }
+
+    if ($cmdName -eq "fix-on-demand-maps") {
+        Write-Host ""
+        Write-Host "Fixing on-demand map partitions on the VM..." -ForegroundColor Cyan
+        Write-Host "  This clears the drifted igwsss.spec.partitions pin so DeepDesert," -ForegroundColor DarkGray
+        Write-Host "  SH_Arrakeen and SH_HarkoVillage can launch on demand again." -ForegroundColor DarkGray
+        Write-Host ""
+        Write-Host "  Running: sudo /etc/local.d/dune-clear-partitions.start" -ForegroundColor DarkGray
+        ssh -o BatchMode=yes -o StrictHostKeyChecking=no -o LogLevel=QUIET -i "$sshKey" "$sshUser@$ip" `
+            "sudo /etc/local.d/dune-clear-partitions.start" 2>&1 | ForEach-Object { Write-Host "    $_" }
+        Write-Host ""
+        Write-Host "  Last 10 lines of /var/log/dune-clear-partitions.log:" -ForegroundColor Cyan
+        ssh -o BatchMode=yes -o StrictHostKeyChecking=no -o LogLevel=QUIET -i "$sshKey" "$sshUser@$ip" `
+            "tail -n 10 /var/log/dune-clear-partitions.log" 2>&1 | ForEach-Object { Write-Host "    $_" -ForegroundColor Gray }
+        Write-Host ""
+        Write-Host "Done. The remote script is idempotent and skips any map with a running pod," -ForegroundColor Green
+        Write-Host "so it's safe to run again whenever a map refuses to start." -ForegroundColor Green
         continue
     }
 
