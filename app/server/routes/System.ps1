@@ -49,7 +49,8 @@ Register-DuneRoute -Method POST -Path '/api/system/dependencies/install' -Handle
         $result = Start-DstDependencyInstall -Name $name
         if (-not $result.ok -and $result.status -ne 'failed') {
             # Unknown dependency / bad request.
-            Write-DuneError -Response $res -Status 400 -Message ($result.error ?? 'Could not start install.')
+            $errMsg = if ($result.error) { $result.error } else { 'Could not start install.' }
+            Write-DuneError -Response $res -Status 400 -Message $errMsg
             return
         }
         Write-DuneJson -Response $res -Body $result

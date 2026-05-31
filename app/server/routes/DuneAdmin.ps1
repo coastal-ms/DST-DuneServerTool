@@ -1213,10 +1213,10 @@ Register-DuneRoute -Method GET -Path '/api/dune-admin/diagnostics' -Handler {
         } elseif ($httpProbe.statusCode -eq 404) {
             # dune-admin only registers the SPA route ("/") when the binary was
             # built with the embedded web UI (-tags embed). A 404 at the root
-            # therefore means THIS binary serves the API only — no localhost web
+            # therefore means THIS binary serves the API only - no localhost web
             # portal. The market bot / API still work (that is why the bot runs),
             # but http://localhost:$port shows nothing.
-            & $addFinding 'warn' "dune-admin is up on :$port but serves NO embedded web UI (HTTP 404 at /). The running binary was built without the frontend." "Update the Dune Server Tool to the latest version and click Install/Reinstall: the patched build now compiles and embeds the web UI automatically (it will offer to install Node if it is missing). After the rebuild finishes, re-run diagnostics — the probe should read 200."
+            & $addFinding 'warn' "dune-admin is up on :$port but serves NO embedded web UI (HTTP 404 at /). The running binary was built without the frontend." "Update the Dune Server Tool to the latest version and click Install/Reinstall: the patched build now compiles and embeds the web UI automatically (it will offer to install Node if it is missing). After the rebuild finishes, re-run diagnostics - the probe should read 200."
         } elseif (-not $httpProbe.ok) {
             & $addFinding 'warn' "Port $port accepts connections but the HTTP probe failed: $($httpProbe.error)" 'The process may be mid-startup or wedged. Restart the single dune-admin instance.'
         }
