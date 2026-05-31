@@ -185,6 +185,8 @@ export interface DuneAdminDiagnostics {
     cacheDbLocked: boolean
     addrConfigured: boolean
     containerConfigured: boolean
+    running?: boolean
+    status?: 'running' | 'configured' | 'not configured'
   }
   pricing: {
     status: 'idle' | 'running' | 'success' | 'failed'

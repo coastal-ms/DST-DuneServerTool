@@ -13,7 +13,7 @@ param(
 # Wraps the original battlegroup.ps1 menu and adds extra tools
 # ============================================================
 
-$script:ToolVersion = "10.0.12"
+$script:ToolVersion = "10.1.0"
 
 # Cold-boot readiness budgets (seconds). A fresh battlegroup's FIRST boot can
 # take 10-30 min: k3s + funcom-operators initialize, metrics-server restarts a
@@ -516,7 +516,24 @@ if ($duneAdminExe) {
         $duneAdminExe = Join-Path ($duneAdminExe.TrimEnd('\','/')) 'dune-admin.exe'
     }
 }
-$duneAdminWeb  = 'https://dune-admin.layout.tools/#/players'
+# dune-admin serves its web UI embedded (same-origin with its own API). Open the
+# LOCAL instance — NOT the hosted layout.tools site, which is a different origin
+# from the local API and triggers "Failed to fetch" + a sign-in wall. Derive the
+# port from dune-admin's config.yaml listen_addr; default 8080.
+$duneAdminPort = 8080
+try {
+    $daCfg = Join-Path (Join-Path $env:USERPROFILE '.dune-admin') 'config.yaml'
+    if (Test-Path -LiteralPath $daCfg) {
+        $laMatch = Select-String -LiteralPath $daCfg -Pattern '^\s*listen_addr\s*:\s*(.+?)\s*$' -ErrorAction SilentlyContinue | Select-Object -First 1
+        if ($laMatch) {
+            $la = $laMatch.Matches[0].Groups[1].Value.Trim().Trim('"').Trim("'")
+            $p = ($la -split ':')[-1]
+            $pn = 0
+            if ([int]::TryParse($p, [ref]$pn) -and $pn -gt 0) { $duneAdminPort = $pn }
+        }
+    }
+} catch { }
+$duneAdminWeb  = "http://localhost:$duneAdminPort/#/players"
 $bgSetupPath   = "$($cfg.SteamPath)\battlegroup-management"
 $windowsUser   = $cfg.WindowsUser
 # Default existing installs (no PortCheckMode in config) to built-in.

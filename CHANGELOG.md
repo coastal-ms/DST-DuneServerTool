@@ -12,6 +12,42 @@ on GitHub still exist for each individual release; the consolidated entries
 here cover everything those tags shipped.
 
 ## [Unreleased]
+## [10.1.0] - 2026-05-31
+
+### Added
+- **"DST needs X — install it?" dependency popup.** When a feature needs a build
+  tool that's missing (Go, Git, Node.js), DST now detects it and offers to
+  install it for you via `winget` from a single modal, instead of failing the
+  build with a cryptic error. Detection probes both `PATH` and standard install
+  locations (`%ProgramFiles%\Go\bin`, `%ProgramFiles%\Git\cmd`,
+  `%ProgramFiles%\nodejs`, `%LOCALAPPDATA%\Microsoft\WinGet\Links`) so a
+  freshly-installed tool is found without restarting DST. Installs run detached
+  (machine scope first, user-scope fallback) so they never freeze the portal.
+  New endpoints: `GET /api/system/dependencies`,
+  `POST /api/system/dependencies/install`,
+  `GET /api/system/dependencies/install-status`.
+
+### Changed
+- **dune-admin links now open the LOCAL instance** (`http://localhost:<port>/#/...`,
+  port derived from `listen_addr`, default 8080) instead of the hosted
+  `dune-admin.layout.tools` site. The hosted UI is a different origin from your
+  local dune-admin API, which caused "Failed to fetch" and a sign-in wall; the
+  embedded, same-origin UI dune-admin serves needs neither. Updated the launcher,
+  sidebar "Characters" link, setup-wizard link, and README.
+
+### Fixed
+- **Market Bot diagnostic false "not configured".** The troubleshooter inferred
+  "configured" from two legacy `config.yaml` keys (`market_bot_addr` /
+  `market_bot_container`) that modern dune-admin leaves empty, so a perfectly
+  healthy running bot showed as "not configured." It now trusts the cache DB
+  (`market-bot-cache.db` exists **and** is locked = the bot process holds it
+  open = running), and the panel reports "running" accordingly.
+- **HTTP-probe 404 meaning corrected.** A 404 at dune-admin's root no longer
+  reads as benign — it specifically means the binary was built **without the
+  embedded web UI** (`-tags embed`). The diagnostic now flags this as a warning
+  and points at updating DST / reinstalling to get an embed build, rather than
+  suggesting unrelated workarounds.
+
 ## [10.0.12] - 2026-05-31
 
 ### Fixed
