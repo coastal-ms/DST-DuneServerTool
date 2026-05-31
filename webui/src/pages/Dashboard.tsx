@@ -466,7 +466,7 @@ export function Dashboard() {
           <span className="font-semibold">VM error:</span> {vm.error}
           {/required permission|access (?:is )?denied/i.test(vm.error) && (
             <span className="block mt-1 text-text-muted">
-              Hyper-V cmdlets need administrator rights. Re-launch Dune Server with elevation.
+              Hyper-V cmdlets need administrator rights. Re-launch Dune Server Tool with elevation.
             </span>
           )}
         </section>

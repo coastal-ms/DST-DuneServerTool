@@ -281,7 +281,7 @@ function Invoke-DunePreflight {
 
     $root = 'C:\Program Files\Dune Server'
     if (-not (Test-Path -LiteralPath $root)) {
-        Fail 'Install' 'Install dir' "Not found: $root" 'Install from https://github.com/coastal-ms/Simple-Dune-Server-Management-Tool/releases/latest (download DuneServerSetup.exe and run it)'
+        Fail 'Install' 'Install dir' "Not found: $root" 'Install from https://github.com/coastal-ms/DST-DuneServerTool/releases/latest (download DuneServerSetup.exe and run it)'
     } else {
         $req = @(
             'DuneServer.exe',

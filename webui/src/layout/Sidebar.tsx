@@ -58,7 +58,7 @@ export function Sidebar() {
           <div className="text-[10px] text-text-dim uppercase tracking-widest">Management Portal</div>
         </div>
         <a
-          href={`https://github.com/coastal-ms/Simple-Dune-Server-Management-Tool/issues/new?template=bug_report.yml${version ? `&tool_version=v${encodeURIComponent(version)}` : ''}`}
+          href={`https://github.com/coastal-ms/DST-DuneServerTool/issues/new?template=bug_report.yml${version ? `&tool_version=v${encodeURIComponent(version)}` : ''}`}
           target="_blank"
           rel="noopener noreferrer"
           title="Report a bug / open a GitHub issue (prefilled template)"

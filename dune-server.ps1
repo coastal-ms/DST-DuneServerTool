@@ -13,7 +13,7 @@ param(
 # Wraps the original battlegroup.ps1 menu and adds extra tools
 # ============================================================
 
-$script:ToolVersion = "10.0.2"
+$script:ToolVersion = "10.0.3"
 
 # Cold-boot readiness budgets (seconds). A fresh battlegroup's FIRST boot can
 # take 10-30 min: k3s + funcom-operators initialize, metrics-server restarts a
@@ -2058,7 +2058,7 @@ while ($true) {
             "env="          + (Get-EncodedParam $envStr)
             "diagnostics="  + (Get-EncodedParam $diagText)
         ) -join "&"
-        $url = "https://github.com/coastal-ms/Simple-Dune-Server-Management-Tool/issues/new?$params"
+        $url = "https://github.com/coastal-ms/DST-DuneServerTool/issues/new?$params"
 
         # GitHub returns 414 if the URL is too long. Trim diagnostics and
         # retry if needed (very unlikely with our 3KB cap, but defensive).
@@ -2071,7 +2071,7 @@ while ($true) {
                 "env="          + (Get-EncodedParam $envStr)
                 "diagnostics="  + (Get-EncodedParam $diagText)
             ) -join "&"
-            $url = "https://github.com/coastal-ms/Simple-Dune-Server-Management-Tool/issues/new?$params"
+            $url = "https://github.com/coastal-ms/DST-DuneServerTool/issues/new?$params"
         }
 
         Write-Host "  Pre-filled: tool_version, env, diagnostics ($(($diagText -split "`r?`n").Count) lines)" -ForegroundColor DarkGray

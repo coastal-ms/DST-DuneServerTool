@@ -660,7 +660,7 @@ export function Settings() {
           <div className="flex items-center gap-3">
             <Icon name={updExpanded ? 'ChevronDown' : 'ChevronRight'} size={16} className="text-text-dim" />
             <Icon name="Download" size={18} className="text-text-muted" />
-            <h2 className="text-lg font-semibold">Dune Server updates</h2>
+            <h2 className="text-lg font-semibold">Dune Server Tool updates</h2>
           </div>
           <div className="flex items-center gap-2">
             {updCheck && (

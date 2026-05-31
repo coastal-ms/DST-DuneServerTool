@@ -64,14 +64,14 @@ function UpdatingPage({ toVersion }: { toVersion?: string }) {
         {offline ? (
           <>
             <p className="mt-5 text-sm leading-relaxed text-slate-300">
-              A <strong className="text-white">new Dune Server window has opened</strong> with the
+              A <strong className="text-white">new Dune Server Tool window has opened</strong> with the
               updated tool. The old version is shut down.
             </p>
             <div className="mt-4 rounded-lg border border-amber-400/30 bg-amber-400/10 px-4 py-3 text-left">
               <p className="text-sm font-semibold text-amber-100">You can now close:</p>
               <ul className="mt-1 list-disc pl-5 text-sm text-slate-300 space-y-0.5">
-                <li><strong className="text-white">every Dune Server browser tab/window</strong> (including this one)</li>
-                <li>any leftover <strong className="text-white">Dune Server console (black) windows</strong></li>
+                <li><strong className="text-white">every Dune Server Tool browser tab/window</strong> (including this one)</li>
+                <li>any leftover <strong className="text-white">Dune Server Tool console (black) windows</strong></li>
               </ul>
               <p className="mt-2 text-xs text-amber-200/70">
                 They're all from the old version — closing them won't affect the new window.
@@ -88,7 +88,7 @@ function UpdatingPage({ toVersion }: { toVersion?: string }) {
             <div className="mt-4 rounded-lg border border-amber-400/30 bg-amber-400/10 px-4 py-3 text-left">
               <p className="text-sm font-semibold text-amber-100">Once the new window opens:</p>
               <p className="mt-1 text-sm text-slate-300">
-                Close <strong className="text-white">all other Dune Server browser tabs/windows</strong>{' '}
+                Close <strong className="text-white">all other Dune Server Tool browser tabs/windows</strong>{' '}
                 and any <strong className="text-white">console (black) windows</strong> — they're from the
                 old version.
               </p>
