@@ -12,6 +12,18 @@ on GitHub still exist for each individual release; the consolidated entries
 here cover everything those tags shipped.
 
 ## [Unreleased]
+## [10.0.9] - 2026-05-31
+
+### Fixed
+- `startup` and `reboot` no longer abort before starting the battlegroup when a
+  pre-start readiness check is slow. Previously, if the k3s API, operator pods,
+  or operator webhook endpoints didn't report Ready within their (already
+  generous) budgets, the command stopped after powering on the VM and the
+  battlegroup had to be started manually. These checks now warn and proceed to
+  start the battlegroup anyway, matching the existing database-wait behavior. The
+  VM-IP and SSH checks remain hard prerequisites because the battlegroup is
+  started over SSH and cannot run without them.
+
 ## [10.0.8] - 2026-05-31
 
 ### Fixed
