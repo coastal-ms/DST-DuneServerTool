@@ -12,6 +12,20 @@ on GitHub still exist for each individual release; the consolidated entries
 here cover everything those tags shipped.
 
 ## [Unreleased]
+## [10.0.8] - 2026-05-31
+
+### Fixed
+- Clicking the desktop shortcut while the server is already running now
+  re-opens (and focuses) the standalone app window instead of opening the
+  portal in a web browser. The single-instance handler predated the app
+  window and always fell back to the browser; it now respects the
+  `OpenInAppWindow` setting (default on) and launches `DuneShell.exe`,
+  only using the browser when the app window is disabled or unavailable.
+- The app window (`DuneShell.exe`) is now itself single-instance: repeated
+  launches focus the existing window rather than stacking duplicates. This
+  also prevents the "both the app and a browser tab opened" behavior seen
+  right after an in-app update.
+
 ## [10.0.7] - 2026-05-31
 
 ### Fixed
