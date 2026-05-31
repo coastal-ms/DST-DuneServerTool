@@ -1,4 +1,4 @@
-import { useState, useEffect, type FormEvent } from 'react'
+import { useState, useEffect, useRef, useCallback, type FormEvent } from 'react'
 import { PageHeader } from '../components/PageHeader'
 import { Icon } from '../components/Icon'
 import { api } from '../api/client'
@@ -240,6 +240,12 @@ export function Settings() {
             const msg = s.error ?? `Pricing rebuild failed (exit ${s.exitCode ?? 'n/a'}).`
             setDaErr(prev => (prev ? prev + ' ' : '') + msg + (s.logFile ? ` Log: ${s.logFile}` : ''))
           }
+          // If a reinstall deleted the stale .dune-admin folder, open dune-admin
+          // now that the rebuild has finished so the running exe didn't lock it.
+          if (pendingDaLaunchRef.current) {
+            pendingDaLaunchRef.current = false
+            void launchDuneAdminApp()
+          }
         }
       } catch { /* keep polling; transient server hiccup */ }
     }
@@ -356,7 +362,8 @@ export function Settings() {
   // stale DB/host pointers that make the market bot fail. We ALWAYS ask before
   // deleting — never auto-delete. Returns true to proceed with the
   // install/setup regardless of the user's choice (declining just keeps it).
-  async function preflightStaleDotFolder(): Promise<boolean> {
+  async function preflightStaleDotFolder(): Promise<{ proceed: boolean; deleted: boolean }> {
+    let deleted = false
     try {
       // Detect first-time install, a folder change, or a same-folder reinstall.
       const installedExe = daCheck?.installed?.exists ? (daCheck.exePath ?? '') : ''
@@ -369,7 +376,7 @@ export function Settings() {
       const folderChanged = !!installedFolder && norm(installedFolder) !== chosenFolder
 
       const pf = await getDuneAdminDotFolder()
-      if (!pf.exists) return true
+      if (!pf.exists) return { proceed: true, deleted }
 
       const lead = isFirstTime
         ? `You're setting up dune-admin.`
@@ -382,10 +389,11 @@ export function Settings() {
       })
       setDotPrompt(null)
 
-      if (choice === 'cancel') return false
+      if (choice === 'cancel') return { proceed: false, deleted }
       if (choice === 'delete') {
         const r = await deleteDuneAdminDotFolder()
         if (r.ok && r.deleted) {
+          deleted = true
           setDaMsg(`Removed stale config folder ${r.path}. dune-admin will create a fresh one during setup.`)
         }
       }
@@ -393,8 +401,23 @@ export function Settings() {
       // Non-fatal — surface the issue but let the install proceed.
       setDaErr(`Stale-folder preflight failed: ${e instanceof Error ? e.message : String(e)}`)
     }
-    return true
+    return { proceed: true, deleted }
   }
+
+  // After the user confirms deleting the stale .dune-admin config folder during
+  // a reinstall, the market bot's config + DB pointers are gone — so we open
+  // dune-admin afterward to let them re-run market-bot setup. Deferred until any
+  // pricing-patch rebuild finishes so the running exe doesn't lock the rebuild's
+  // output. Tracked via a ref so the patch-poll effect can fire it.
+  const pendingDaLaunchRef = useRef(false)
+  const launchDuneAdminApp = useCallback(async () => {
+    try {
+      await api('/api/commands/run/dune-admin', { method: 'POST' })
+      setDaMsg(prev => (prev ? prev + ' ' : '') + 'Opened dune-admin so you can re-setup the market bot.')
+    } catch (e) {
+      setDaErr(prev => (prev ? prev + ' ' : '') + `Could not open dune-admin automatically: ${e instanceof Error ? e.message : String(e)}`)
+    }
+  }, [])
 
   async function onInstallDuneAdmin() {
     setDaInstalling(true)
@@ -403,7 +426,7 @@ export function Settings() {
     setDaPatch(null)
     setDaPatchPolling(false)
     try {
-      const proceed = await preflightStaleDotFolder()
+      const { proceed, deleted } = await preflightStaleDotFolder()
       if (!proceed) { setDaMsg('Reinstall cancelled — nothing was changed.'); return }
       const r = await installDuneAdminUpdate()
       if (r.ok) {
@@ -418,8 +441,9 @@ export function Settings() {
         // v6.1.25: if the install kicked off the detached pricing-patch
         // rebuild, start polling its status. We DO NOT block on it here —
         // the binary install is already done.
-        if (r.pricingPatch && r.pricingPatch.status === 'running') {
-          setDaPatch(r.pricingPatch)
+        const patchRunning = !!(r.pricingPatch && r.pricingPatch.status === 'running')
+        if (patchRunning) {
+          setDaPatch(r.pricingPatch!)
           setDaPatchPolling(true)
         } else if (r.pricingPatch && r.pricingPatch.status === 'failed') {
           setDaErr(`Pricing rebuild failed to start: ${r.pricingPatch.error ?? 'unknown error'}`)
@@ -428,6 +452,14 @@ export function Settings() {
         try {
           setDaCheck(await checkDuneAdminUpdate({ force: false }))
         } catch { /* non-fatal */ }
+        // The user deleted the stale config folder, so the market bot needs to
+        // be set up again — open dune-admin for them. If a pricing-patch rebuild
+        // is still running, defer the launch (the patch-poll effect fires it)
+        // so the running exe doesn't lock the rebuild's output file.
+        if (deleted) {
+          if (patchRunning) pendingDaLaunchRef.current = true
+          else await launchDuneAdminApp()
+        }
       } else {
         setDaErr('Installer reported no action.')
       }
@@ -444,7 +476,7 @@ export function Settings() {
     setDaErr(null)
     setDaMsg(null)
     try {
-      const proceed = await preflightStaleDotFolder()
+      const { proceed } = await preflightStaleDotFolder()
       if (!proceed) { setDaMsg('Setup cancelled — nothing was changed.'); return }
       const r = await runDuneAdminSetup()
       if (r.ok) {
