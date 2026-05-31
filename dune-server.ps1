@@ -13,7 +13,7 @@ param(
 # Wraps the original battlegroup.ps1 menu and adds extra tools
 # ============================================================
 
-$script:ToolVersion = "10.0.8"
+$script:ToolVersion = "10.0.9"
 
 # Cold-boot readiness budgets (seconds). A fresh battlegroup's FIRST boot can
 # take 10-30 min: k3s + funcom-operators initialize, metrics-server restarts a
@@ -1284,9 +1284,12 @@ while ($true) {
             }
         }
         $elapsed = [int]((Get-Date) - $t_api).TotalSeconds
-        if (-not $apiReady) { Complete-WaitCounter -Message "k3s API not ready after $(Format-Duration $elapsed). Aborting." -Color Red; continue }
-        Save-PhaseTiming 'k3s-api' $elapsed
-        Complete-WaitCounter -Message "k3s API ready ($(Format-Duration $elapsed))."
+        if (-not $apiReady) {
+            Complete-WaitCounter -Message "k3s API not ready after $(Format-Duration $elapsed) - starting battlegroup anyway." -Color Yellow
+        } else {
+            Save-PhaseTiming 'k3s-api' $elapsed
+            Complete-WaitCounter -Message "k3s API ready ($(Format-Duration $elapsed))."
+        }
 
         # 2c. DB pod(s) Ready - find ACTUAL db pods by name pattern (not "all pods in namespace",
         # which would also wait on backup Jobs, file-browser deploys, etc. and time out incorrectly).
@@ -1333,12 +1336,12 @@ while ($true) {
                 return [pscustomobject]@{ ExitCode = $LASTEXITCODE; Output = $output }
             }
         if ($opResult.Output.ExitCode -ne 0) {
-            Complete-WaitCounter -Message "Operator pods not Ready after $(Format-Duration $opResult.Elapsed). Aborting battlegroup start." -Color Red
+            Complete-WaitCounter -Message "Operator pods not Ready after $(Format-Duration $opResult.Elapsed) - starting battlegroup anyway." -Color Yellow
             if ($opResult.Output.Output) { $opResult.Output.Output | Select-Object -Last 5 | ForEach-Object { Write-Host "    $_" -ForegroundColor DarkGray } }
-            continue
+        } else {
+            Save-PhaseTiming 'operators' $opResult.Elapsed
+            Complete-WaitCounter -Message "Operator pods Ready ($(Format-Duration $opResult.Elapsed))."
         }
-        Save-PhaseTiming 'operators' $opResult.Elapsed
-        Complete-WaitCounter -Message "Operator pods Ready ($(Format-Duration $opResult.Elapsed))."
 
         # 2e. webhook Service endpoints
         $estWh = Format-PhaseEstimate 'webhook-endpoints'
@@ -1355,11 +1358,12 @@ while ($true) {
         }
         $elapsed = [int]((Get-Date) - $t_wh).TotalSeconds
         if (-not $epReady) {
-            Complete-WaitCounter -Message "battlegroupoperator-webhook-svc has no endpoints after $(Format-Duration $elapsed). Aborting." -Color Red
-            continue
+            Complete-WaitCounter -Message "battlegroupoperator-webhook-svc has no endpoints after $(Format-Duration $elapsed) - starting battlegroup anyway (it may need a retry if the operator webhook returns 502)." -Color Yellow
+        } else {
+            Save-PhaseTiming 'webhook-endpoints' $elapsed
+            Complete-WaitCounter -Message "Webhook endpoints populated ($(Format-Duration $elapsed))."
         }
-        Save-PhaseTiming 'webhook-endpoints' $elapsed
-        Complete-WaitCounter -Message "Webhook endpoints populated ($(Format-Duration $elapsed)). Settling 10s..."
+        Write-Host "  Settling 10s before starting battlegroup..." -ForegroundColor DarkGray
         Start-Sleep -Seconds 10
 
         # ---- Step 3: battlegroup start ----
@@ -1545,9 +1549,12 @@ while ($true) {
             }
         }
         $elapsed = [int]((Get-Date) - $t_api).TotalSeconds
-        if (-not $apiReady) { Complete-WaitCounter -Message "k3s API not ready after $(Format-Duration $elapsed). Aborting." -Color Red; continue }
-        Save-PhaseTiming 'k3s-api' $elapsed
-        Complete-WaitCounter -Message "k3s API ready ($(Format-Duration $elapsed))."
+        if (-not $apiReady) {
+            Complete-WaitCounter -Message "k3s API not ready after $(Format-Duration $elapsed) - starting battlegroup anyway." -Color Yellow
+        } else {
+            Save-PhaseTiming 'k3s-api' $elapsed
+            Complete-WaitCounter -Message "k3s API ready ($(Format-Duration $elapsed))."
+        }
 
         # 2b. DB pod(s) Ready - target actual DB pods by name pattern, not "--all" in the namespace
         # (which would also wait on backup Jobs, file-browser deployments, etc).
@@ -1593,12 +1600,12 @@ while ($true) {
                 return [pscustomobject]@{ ExitCode = $LASTEXITCODE; Output = $output }
             }
         if ($opResult.Output.ExitCode -ne 0) {
-            Complete-WaitCounter -Message "Operator pods not Ready after $(Format-Duration $opResult.Elapsed). Aborting battlegroup start." -Color Red
+            Complete-WaitCounter -Message "Operator pods not Ready after $(Format-Duration $opResult.Elapsed) - starting battlegroup anyway." -Color Yellow
             if ($opResult.Output.Output) { $opResult.Output.Output | Select-Object -Last 5 | ForEach-Object { Write-Host "    $_" -ForegroundColor DarkGray } }
-            continue
+        } else {
+            Save-PhaseTiming 'operators' $opResult.Elapsed
+            Complete-WaitCounter -Message "Operator pods Ready ($(Format-Duration $opResult.Elapsed))."
         }
-        Save-PhaseTiming 'operators' $opResult.Elapsed
-        Complete-WaitCounter -Message "Operator pods Ready ($(Format-Duration $opResult.Elapsed))."
 
         # 2d. Webhook Service must have endpoints populated, else API-server proxy returns 502
         $estWh = Format-PhaseEstimate 'webhook-endpoints'
@@ -1615,11 +1622,12 @@ while ($true) {
         }
         $elapsed = [int]((Get-Date) - $t_wh).TotalSeconds
         if (-not $epReady) {
-            Complete-WaitCounter -Message "battlegroupoperator-webhook-svc has no endpoints after $(Format-Duration $elapsed). Aborting." -Color Red
-            continue
+            Complete-WaitCounter -Message "battlegroupoperator-webhook-svc has no endpoints after $(Format-Duration $elapsed) - starting battlegroup anyway (it may need a retry if the operator webhook returns 502)." -Color Yellow
+        } else {
+            Save-PhaseTiming 'webhook-endpoints' $elapsed
+            Complete-WaitCounter -Message "Webhook endpoints populated ($(Format-Duration $elapsed))."
         }
-        Save-PhaseTiming 'webhook-endpoints' $elapsed
-        Complete-WaitCounter -Message "Webhook endpoints populated ($(Format-Duration $elapsed)). Settling 10s..."
+        Write-Host "  Settling 10s before starting battlegroup..." -ForegroundColor DarkGray
         Start-Sleep -Seconds 10
 
         # ---- Step 3: start battlegroup ----
