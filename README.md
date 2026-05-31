@@ -5,7 +5,7 @@
 > raw SSH shell or hand-editing YAML.
 
 [![Lint PowerShell](https://github.com/coastal-ms/DST-DuneServerTool/actions/workflows/lint.yml/badge.svg)](https://github.com/coastal-ms/DST-DuneServerTool/actions/workflows/lint.yml)
-[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
+[![License: Apache 2.0](https://img.shields.io/badge/License-Apache_2.0-blue.svg)](LICENSE)
 [![Latest release](https://img.shields.io/github/v/release/coastal-ms/DST-DuneServerTool?sort=semver)](https://github.com/coastal-ms/DST-DuneServerTool/releases/latest)
 
 The current release is **version X** (shown stylized as **X** in-app; patch
@@ -22,6 +22,16 @@ The launcher window is start-minimized; close it to exit.
 
 See [`CHANGELOG.md`](CHANGELOG.md) for the full release history and
 [`CONTRIBUTING.md`](CONTRIBUTING.md) for the change-control workflow.
+
+### License & attribution
+
+DST is released under the **Apache License 2.0** (see [`LICENSE`](LICENSE)
+and [`NOTICE`](NOTICE)). You're welcome to use it, fork it, modify it, and
+redistribute it. If you do redistribute or build on top of it, the license
+requires you to preserve the `NOTICE` file and credit **Coastal** (Discord
+`@allcoast`, project home <https://github.com/coastal-ms/DST-DuneServerTool>)
+as the original author. Republishing this tool as your own work without
+attribution violates the license — please don't.
 
 ---
 

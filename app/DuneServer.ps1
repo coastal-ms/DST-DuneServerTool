@@ -120,7 +120,7 @@ public static extern bool IsIconic(System.IntPtr hWnd);
 }
 
 # Version (one of the 5 sync'd constants; see persistent-notes.md)
-$script:DuneToolVersion = '10.0.5'
+$script:DuneToolVersion = '10.0.6'
 
 # ---------- Single-instance gate ----------------------------------------------
 # Every click of the desktop shortcut runs DuneServer.exe again. Without a
@@ -376,6 +376,13 @@ if ($openInAppWindow) { $script:DuneShellExe = Get-DuneShellExePath }
 
 $browserJob = $null
 if ($openInAppWindow -and $script:DuneShellExe) {
+    # Close any stale app window from a previous run (e.g. left over by an
+    # in-app update, where the relauncher restarts DuneServer.exe but the old
+    # WebView2 window keeps pointing at the now-dead server). Killing it here
+    # means a fresh launch always ends with exactly ONE app window.
+    Get-Process -Name DuneShell -ErrorAction SilentlyContinue | ForEach-Object {
+        try { Stop-Process -Id $_.Id -Force -ErrorAction SilentlyContinue } catch {}
+    }
     Write-DuneLog "Opening portal in app window: $script:DuneShellExe"
     try {
         Start-Process -FilePath $script:DuneShellExe | Out-Null

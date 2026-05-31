@@ -12,6 +12,21 @@ on GitHub still exist for each individual release; the consolidated entries
 here cover everything those tags shipped.
 
 ## [Unreleased]
+## [10.0.6] - 2026-05-31
+
+### Changed
+- **License switched from MIT to Apache 2.0** to add explicit
+  notice-preservation (Section 4) and trademark-protection (Section 6)
+  clauses. You can still use, fork, and modify freely; redistributors must
+  now preserve the `NOTICE` file and credit the original author. Added new
+  top-level `NOTICE` file and README "License & attribution" section.
+
+### Fixed
+- App launcher now closes any stale `DuneShell` window from a previous run
+  (e.g. left over after an in-app update, where the relauncher restarted
+  `DuneServer.exe` but the prior WebView2 window kept pointing at the
+  now-dead server). Guarantees exactly one app window after launch.
+
 
 
 ## [10.0.5] - 2026-05-31

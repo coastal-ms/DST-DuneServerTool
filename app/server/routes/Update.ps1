@@ -216,6 +216,11 @@ public static extern bool BringWindowToTop(System.IntPtr hWnd);
     Get-Process -Name DuneServer -ErrorAction SilentlyContinue | ForEach-Object {
         Stop-Process -Id `$_.Id -Force -ErrorAction SilentlyContinue
     }
+    # Also close any standalone app window (DuneShell.exe) so the stale
+    # WebView2 window doesn't linger beside the freshly relaunched one.
+    Get-Process -Name DuneShell -ErrorAction SilentlyContinue | ForEach-Object {
+        Stop-Process -Id `$_.Id -Force -ErrorAction SilentlyContinue
+    }
     Start-Sleep -Seconds 1
 
     # Grant foreground rights to whatever we launch next (ASFW_ANY = -1).
