@@ -13,7 +13,8 @@ $script:DuneConfigKeys = @(
     'AutoApplyPricingPatch',
     'GambleDieSize',
     'GambleTarget',
-    'UseLocalConfigFiles'
+    'UseLocalConfigFiles',
+    'OpenInAppWindow'
 )
 
 function Get-DuneConfigPath {
@@ -54,6 +55,16 @@ function Get-DstUseLocalConfigFiles {
     $raw = Read-DuneConfigRaw
     $v = if ($raw.Contains('UseLocalConfigFiles')) { [string]$raw['UseLocalConfigFiles'] } else { '' }
     return ($v -match '^(?i:true|1|yes|on)$')
+}
+
+# True when the portal should open in the standalone DuneShell app window
+# instead of a browser tab. Defaults to TRUE (app window is the preferred
+# experience); only an explicit false/0/no/off falls back to the browser.
+function Get-DstOpenInAppWindow {
+    $raw = Read-DuneConfigRaw
+    $v = if ($raw.Contains('OpenInAppWindow')) { [string]$raw['OpenInAppWindow'] } else { '' }
+    if ($v -match '^(?i:false|0|no|off)$') { return $false }
+    return $true
 }
 
 # Effective config view. Identical to the raw file EXCEPT that, when the user

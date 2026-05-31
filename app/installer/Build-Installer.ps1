@@ -11,6 +11,7 @@
 param(
     [switch]$SkipExeBuild,
     [switch]$SkipWebBuild,
+    [switch]$SkipShellBuild,
     [switch]$Open
 )
 
@@ -64,6 +65,24 @@ if (-not $SkipExeBuild) {
 
 if (-not (Test-Path $exePath)) {
     throw "DuneServer.exe not found at $exePath - run Build-Exe.ps1 first (or omit -SkipExeBuild)"
+}
+
+# Build the standalone WebView2 app window (DuneShell.exe). Self-contained
+# single-file publish; the .iss bundles it beside DuneServer.exe. Requires the
+# .NET SDK (dotnet) on PATH.
+$shellProj = Join-Path $appRoot 'desktop\DuneShell\DuneShell.csproj'
+$shellExe  = Join-Path $appRoot 'desktop\DuneShell\bin\Release\net10.0-windows\win-x64\publish\DuneShell.exe'
+if (-not $SkipShellBuild) {
+    if (-not (Test-Path $shellProj)) { throw "DuneShell.csproj not found at $shellProj" }
+    $dotnet = Get-Command dotnet -ErrorAction SilentlyContinue
+    if (-not $dotnet) { throw "dotnet SDK not found in PATH. Install .NET 10 SDK to build DuneShell." }
+    Write-Host "Publishing DuneShell.exe (WebView2 app window)..." -ForegroundColor Cyan
+    & $dotnet.Source publish $shellProj -c Release -r win-x64 -p:PublishSingleFile=true --self-contained true --nologo
+    if ($LASTEXITCODE -ne 0) { throw "dotnet publish failed for DuneShell (exit $LASTEXITCODE)" }
+    Write-Host ""
+}
+if (-not (Test-Path $shellExe)) {
+    throw "DuneShell.exe not found at $shellExe - run 'dotnet publish' for DuneShell (or omit -SkipShellBuild)"
 }
 
 # Ensure output dir
