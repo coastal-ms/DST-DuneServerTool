@@ -26,7 +26,7 @@ export function Sidebar() {
     } catch {
       // Best-effort: if the launch endpoint fails, still open the page so the
       // user can connect to an already-running instance.
-      window.open('https://dune-admin.layout.tools/#/players', '_blank', 'noopener')
+      window.open('http://localhost:8080/#/players', '_blank', 'noopener')
     } finally {
       setDaLaunching(false)
     }

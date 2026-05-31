@@ -17,6 +17,8 @@ import {
   type DuneAdminDiagnostics,
 } from '../api/duneAdmin'
 import { fmtToolVersion } from '../format'
+import { DependencyInstallModal } from '../components/DependencyInstallModal'
+import { getDependencies, type SystemDependency } from '../api/dependencies'
 
 const FIELDS: {
   key: string
@@ -395,6 +397,16 @@ export function Settings() {
   // dune-admin afterward to let them re-run market-bot setup. Deferred until any
   // pricing-patch rebuild finishes so the running exe doesn't lock the rebuild's
   // output. Tracked via a ref so the patch-poll effect can fire it.
+  // Reusable dependency-install popup. When a feature needs go/git/node and
+  // they're missing, we surface this instead of letting the build fail; the
+  // user can install them via winget and we then continue automatically.
+  const [depPrompt, setDepPrompt] = useState<{
+    deps: SystemDependency[]
+    wingetAvailable: boolean
+    context: string
+    onResolved: () => void
+  } | null>(null)
+
   const pendingDaLaunchRef = useRef(false)
   const launchDuneAdminApp = useCallback(async () => {
     try {
@@ -405,13 +417,34 @@ export function Settings() {
     }
   }, [])
 
-  async function onInstallDuneAdmin() {
+  async function onInstallDuneAdmin(skipDepCheck = false) {
     setDaInstalling(true)
     setDaErr(null)
     setDaMsg(null)
     setDaPatch(null)
     setDaPatchPolling(false)
     try {
+      // When the sane-pricing patch is kept, /install triggers a local rebuild
+      // that needs go + git + node. Detect missing tools UP FRONT and offer to
+      // install them, rather than letting the background build fail with a
+      // "X was not found" log the user has to decipher. Once installed, we
+      // continue the install automatically (skipDepCheck avoids re-prompting).
+      if (autoApply && !skipDepCheck) {
+        try {
+          const dc = await getDependencies(['go', 'git', 'node'])
+          const missing = dc.dependencies.filter(d => !d.found)
+          if (missing.length > 0) {
+            setDaInstalling(false)
+            setDepPrompt({
+              deps: missing,
+              wingetAvailable: dc.wingetAvailable,
+              context: 'Keeping the sane-pricing patch rebuilds dune-admin locally (with its web UI), which needs these tools.',
+              onResolved: () => { setDepPrompt(null); void onInstallDuneAdmin(true) },
+            })
+            return
+          }
+        } catch { /* dependency probe failed — fall through and let the build surface it */ }
+      }
       const { proceed, deleted } = await preflightStaleDotFolder()
       if (!proceed) { setDaMsg('Reinstall cancelled — nothing was changed.'); return }
       const r = await installDuneAdminUpdate()
@@ -800,7 +833,7 @@ export function Settings() {
                   {daCheck.configured && (
                     <button
                       type="button"
-                      onClick={onInstallDuneAdmin}
+                      onClick={() => onInstallDuneAdmin()}
                       disabled={daInstalling}
                       className="btn-primary ml-auto"
                     >
@@ -1120,8 +1153,12 @@ export function Settings() {
                       {daDiag.listener.listening ? `yes (:${daDiag.listener.port})` : `no (:${daDiag.listener.port})`}
                     </span>
                     <span>http probe</span>
-                    <span className={daDiag.httpProbe.ok ? 'text-success' : 'text-danger'}>
-                      {daDiag.httpProbe.ok ? (daDiag.httpProbe.statusCode ?? 'ok') : (daDiag.httpProbe.error ?? 'failed')}
+                    <span className={daDiag.httpProbe.ok ? (daDiag.httpProbe.statusCode === 404 ? 'text-warning' : 'text-success') : 'text-danger'}>
+                      {daDiag.httpProbe.ok
+                        ? (daDiag.httpProbe.statusCode === 404
+                            ? 'HTTP 404 · no web UI embedded'
+                            : `up${daDiag.httpProbe.statusCode ? ` (HTTP ${daDiag.httpProbe.statusCode})` : ''}`)
+                        : (daDiag.httpProbe.error ?? 'failed')}
                     </span>
                     <span>instances running</span>
                     <span className={daDiag.processes.multipleInstances ? 'text-danger' : 'text-text'}>
@@ -1134,10 +1171,22 @@ export function Settings() {
                     <span>listen_addr</span>
                     <span className="text-text">{daDiag.effective.listenAddr || ':8080 (default)'}</span>
                     <span>market bot</span>
-                    <span className="text-text">
-                      {daDiag.marketBot.addrConfigured || daDiag.marketBot.containerConfigured ? 'configured' : 'not configured'}
-                      {daDiag.marketBot.cacheDbLocked ? ' · cache locked' : ''}
-                    </span>
+                    {(() => {
+                      // Prefer the backend's derived status (trusts the cache-DB
+                      // lock as proof the bot is running, regardless of the
+                      // legacy config.yaml proxy keys). Fall back to the old
+                      // key-based label for older backends.
+                      const running = daDiag.marketBot.running ?? (daDiag.marketBot.cacheDbExists && daDiag.marketBot.cacheDbLocked)
+                      const status = daDiag.marketBot.status
+                        ?? (running ? 'running' : (daDiag.marketBot.addrConfigured || daDiag.marketBot.containerConfigured ? 'configured' : 'not configured'))
+                      const cls = status === 'running' ? 'text-success' : status === 'configured' ? 'text-text' : 'text-text-dim'
+                      return (
+                        <span className={cls}>
+                          {status}
+                          {daDiag.marketBot.cacheDbLocked && status !== 'running' ? ' · cache locked' : ''}
+                        </span>
+                      )
+                    })()}
                     <span>pricing patch</span>
                     <span className="text-text">
                       {daDiag.pricing.status}
@@ -1284,6 +1333,16 @@ export function Settings() {
           </button>
         </div>
       </form>
+
+      {depPrompt && (
+        <DependencyInstallModal
+          deps={depPrompt.deps}
+          wingetAvailable={depPrompt.wingetAvailable}
+          context={depPrompt.context}
+          onCancel={() => setDepPrompt(null)}
+          onAllResolved={depPrompt.onResolved}
+        />
+      )}
 
       {dotPrompt && (
         <div

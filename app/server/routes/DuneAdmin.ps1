@@ -1210,6 +1210,13 @@ Register-DuneRoute -Method GET -Path '/api/dune-admin/diagnostics' -Handler {
         }
         if (-not $listening) {
             & $addFinding 'error' "Nothing is listening on localhost:$port." "The dune-admin backend is not running, so every browser request fails with 'Failed to fetch'. Open a cmd window, cd to '$targetDir', run dune-admin.exe directly, and read the startup error. Expect 'dune-admin listening on :$port'."
+        } elseif ($httpProbe.statusCode -eq 404) {
+            # dune-admin only registers the SPA route ("/") when the binary was
+            # built with the embedded web UI (-tags embed). A 404 at the root
+            # therefore means THIS binary serves the API only — no localhost web
+            # portal. The market bot / API still work (that is why the bot runs),
+            # but http://localhost:$port shows nothing.
+            & $addFinding 'warn' "dune-admin is up on :$port but serves NO embedded web UI (HTTP 404 at /). The running binary was built without the frontend." "Update the Dune Server Tool to the latest version and click Install/Reinstall: the patched build now compiles and embeds the web UI automatically (it will offer to install Node if it is missing). After the rebuild finishes, re-run diagnostics — the probe should read 200."
         } elseif (-not $httpProbe.ok) {
             & $addFinding 'warn' "Port $port accepts connections but the HTTP probe failed: $($httpProbe.error)" 'The process may be mid-startup or wedged. Restart the single dune-admin instance.'
         }
@@ -1218,18 +1225,31 @@ Register-DuneRoute -Method GET -Path '/api/dune-admin/diagnostics' -Handler {
         $cacheDb = if ($config.marketBotCacheDb) { $config.marketBotCacheDb } else { Join-Path (Join-Path ([Environment]::GetFolderPath('UserProfile')) '.dune-admin') 'market-bot-cache.db' }
         $cacheExists = [bool](Test-Path -LiteralPath $cacheDb -PathType Leaf)
         $cacheLocked = if ($cacheExists) { Test-DuneAdminFileLocked -Path $cacheDb } else { $false }
+        # The bot holding its cache DB open (exists + locked) is the most reliable
+        # signal that it is actually RUNNING — regardless of whether the legacy
+        # config.yaml proxy keys (market_bot_addr / market_bot_container) are set.
+        # Newer dune-admin builds configure the bot via the web UI / token rather
+        # than those keys, so judging "configured" purely off them produced a
+        # false "not configured" on healthy, actively-running bots.
+        $botRunning  = ($cacheExists -and $cacheLocked)
+        $botWired    = [bool]($config.marketBotAddr -or $config.marketBotContainer)
+        $botStatus   = if ($botRunning) { 'running' } elseif ($botWired) { 'configured' } else { 'not configured' }
         $marketBot = @{
             cacheDbPath        = $cacheDb
             cacheDbExists      = $cacheExists
             cacheDbLocked      = $cacheLocked
             addrConfigured     = [bool]$config.marketBotAddr
             containerConfigured= [bool]$config.marketBotContainer
+            running            = $botRunning
+            status             = $botStatus
         }
-        if (-not $config.marketBotAddr -and -not $config.marketBotContainer) {
-            & $addFinding 'info' 'Market bot is not wired up in config.yaml (market_bot_addr and market_bot_container are both empty).' 'The Market Bot panel proxies to a deployed bot via these keys; set them during the setup wizard if the panel shows "not configured".'
+        # Only flag "not wired in config.yaml" when the bot is NOT demonstrably
+        # running. A running bot (cache locked) needs no config.yaml proxy keys.
+        if (-not $botRunning -and -not $config.marketBotAddr -and -not $config.marketBotContainer) {
+            & $addFinding 'info' 'Market bot is not wired up in config.yaml (market_bot_addr and market_bot_container are both empty) and no running bot was detected.' 'The Market Bot panel proxies to a deployed bot via these keys; set them during the setup wizard if the panel shows "not configured".'
         }
         if ($cacheLocked -and -not $multi) {
-            & $addFinding 'info' 'market-bot-cache.db is locked (held by the running dune-admin) — normal for a single healthy instance.' $null
+            & $addFinding 'info' 'market-bot-cache.db is locked (held by the running dune-admin) — normal for a single healthy instance. The market bot is running.' $null
         }
 
         # --- pricing patch (auto-rebuild) ------------------------------------

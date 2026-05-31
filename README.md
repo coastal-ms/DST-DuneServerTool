@@ -477,7 +477,8 @@ Wizard from a clean slate. Your `button-order.json` and logs are kept.
 
 - The VM name is always `dune-awakening` and the SSH user is always `dune`
   — these match Funcom's official setup and can't be changed.
-- The dune-admin web UI is at
-  [https://dune-admin.layout.tools/#/players](https://dune-admin.layout.tools/#/players).
+- The dune-admin web UI is served locally (same-origin) at
+  [http://localhost:8080/#/players](http://localhost:8080/#/players) once
+  dune-admin is running.
 - This tool is **not affiliated with Funcom**. "Dune", "Dune: Awakening",
   and related trademarks are property of their respective owners.
