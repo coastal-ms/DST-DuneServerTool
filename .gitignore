@@ -39,3 +39,8 @@ app/installer/output/
 
 # Pre-redaction screenshot originals — contain real PII, never commit
 docs/img/_originals/
+
+# OneDrive cloud-sync leftovers — corrupt dehydrated placeholders that also
+# break ripgrep (os error 383). Never commit.
+*.todelete.gone~*
+*~RF*.TMP

@@ -113,6 +113,19 @@ function Start-DuneTrayIcon {
                 Add-Type -AssemblyName System.Windows.Forms
                 Add-Type -AssemblyName System.Drawing
 
+                # Trap exceptions raised inside the message pump (e.g. a
+                # PipelineStoppedException injected if the host force-stops this
+                # runspace during shutdown) so WinForms never pops its own
+                # unhandled-exception dialog. Must be set before any UI is built.
+                try {
+                    [System.Windows.Forms.Application]::SetUnhandledExceptionMode(
+                        [System.Windows.Forms.UnhandledExceptionMode]::CatchException)
+                    [System.Windows.Forms.Application]::add_ThreadException({
+                        param($eventSender, $eventArgs)
+                        try { [System.Windows.Forms.Application]::ExitThread() } catch {}
+                    })
+                } catch {}
+
                 $ni = New-Object System.Windows.Forms.NotifyIcon
                 $icon = $null
                 try {
@@ -229,6 +242,12 @@ function Start-DuneConsoleLifecycle {
 # Symmetric teardown, run from DuneServer.ps1's finally. If the server stopped
 # for a reason OTHER than the app window closing (tray Quit, console close),
 # kill the app window too so no orphan lingers; then dispose helper runspaces.
+#
+# Both helpers self-terminate: the watcher returns once the app proc exits, the
+# tray thread exits once its timer sees the listener is down. We wait briefly
+# for that graceful exit rather than calling PowerShell.Stop(): stopping the
+# tray pipeline mid message-pump injects a PipelineStoppedException that WinForms
+# turns into a .NET unhandled-exception dialog on shutdown.
 function Stop-DuneConsoleLifecycle {
     try {
         if ($script:DuneAppProc -and -not $script:DuneAppProc.HasExited) {
@@ -236,14 +255,16 @@ function Stop-DuneConsoleLifecycle {
         }
     } catch {}
 
-    foreach ($pair in @(
-        ,@($script:DuneWatcherPs, $script:DuneWatcherRs)
-        ,@($script:DuneTrayPs,    $script:DuneTrayRs)
+    foreach ($trip in @(
+        ,@($script:DuneWatcherPs, $script:DuneWatcherRs, $script:DuneWatcherHandle)
+        ,@($script:DuneTrayPs,    $script:DuneTrayRs,    $script:DuneTrayHandle)
     )) {
-        $p = $pair[0]; $r = $pair[1]
-        try { if ($p) { $p.Stop(); $p.Dispose() } } catch {}
+        $p = $trip[0]; $r = $trip[1]; $h = $trip[2]
+        try { if ($h -and -not $h.IsCompleted) { [void]$h.AsyncWaitHandle.WaitOne(2000) } } catch {}
+        try { if ($p -and $h) { $p.EndInvoke($h) } } catch {}
+        try { if ($p) { $p.Dispose() } } catch {}
         try { if ($r) { $r.Dispose() } } catch {}
     }
-    $script:DuneWatcherPs = $null; $script:DuneWatcherRs = $null
-    $script:DuneTrayPs    = $null; $script:DuneTrayRs    = $null
+    $script:DuneWatcherPs = $null; $script:DuneWatcherRs = $null; $script:DuneWatcherHandle = $null
+    $script:DuneTrayPs    = $null; $script:DuneTrayRs    = $null; $script:DuneTrayHandle    = $null
 }

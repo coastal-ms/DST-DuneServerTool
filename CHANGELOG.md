@@ -12,6 +12,21 @@ on GitHub still exist for each individual release; the consolidated entries
 here cover everything those tags shipped.
 
 ## [Unreleased]
+## [10.0.11] - 2026-05-31
+
+### Fixed
+- **Crash on close when the console is sent to the system tray.** Picking "Send to
+  system tray" then closing the app window could pop a .NET "Unhandled exception …
+  The pipeline has been stopped" dialog. Shutdown force-stopped the tray runspace
+  while its WinForms message pump was still running, injecting a
+  `PipelineStoppedException` into the pump. The tray pump now traps thread
+  exceptions and exits cleanly, and teardown waits for the watcher/tray helpers to
+  self-terminate instead of stopping their pipelines.
+- **dune-admin diagnostics: "Cannot overwrite variable HOME …" error.** The sidecar
+  resolver assigned to `$home`, a read-only automatic variable in the compiled-exe
+  host, so the diagnostics report errored on machines running the installed build
+  (it happened to work in a dev PowerShell session). Renamed the local variable.
+
 ## [10.0.10] - 2026-05-31
 
 ### Added

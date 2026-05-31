@@ -1,0 +1,10 @@
+# ripgrep .ignore — keep searches from choking on OneDrive cloud-sync junk.
+# OneDrive leaves corrupt dehydrated placeholders (os error 383) that rg can't
+# read. These patterns are search-only (not git); they just stop the crashes.
+*.todelete.gone~*
+*.todelete.gone~*.TMP
+*~RF*.TMP
+
+# Bundled WebView2 runtime — third-party binaries, never useful to grep, and the
+# main place those corrupt OneDrive temp files appear.
+app/lib/WebView2/
