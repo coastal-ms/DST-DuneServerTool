@@ -174,6 +174,13 @@ reflected immediately.
 - **Take Backup** / **Restore Backup** for the BG PostgreSQL database
   without remembering pod names. A banner reminds you to stop the BG
   first for a consistent backup.
+- **Fix on-demand maps** (v10.0.4+) — one click clears the drifted
+  `igwsss.spec.partitions` pin that intermittently stops DeepDesert,
+  Arrakeen and Harko Village from launching on demand, then shows the last
+  10 lines of the cleanup log inline. Idempotent and skips any map that
+  already has a running pod, so it's safe to run repeatedly. Also available
+  as the **fix-on-demand-maps** card in the Battlegroup section of the
+  Commands page and the CLI Battlegroup menu.
 - **SQL Editor** powered by Monaco. Read-only by default; toggle the
   switch to enable writes. Filterable table list sidebar, configurable
   max-rows cap, **Ctrl+Enter** to run.
@@ -243,6 +250,10 @@ default, both auto-check on mount):
     clicking **Delete & continue** — *Keep* leaves it and proceeds, *Cancel*
     aborts entirely. (Earlier builds relied on a browser `confirm()` dialog
     that could be silently suppressed and auto-delete the folder — fixed.)
+    When you do choose **Delete & continue** on a reinstall, the market bot's
+    config and DB pointers are gone, so DST reopens dune-admin once the
+    install (and any pricing-patch rebuild) finishes — letting you re-run
+    market-bot setup right away (v10.0.4+).
   - **Keep Coastal's sane-pricing patch applied after each update**
     (checkbox, saved as `AutoApplyPricingPatch`). When checked, the tool
     *also* downloads the matching `dune-admin_X.Y.Z_source.tar.gz`,
