@@ -12,6 +12,17 @@ on GitHub still exist for each individual release; the consolidated entries
 here cover everything those tags shipped.
 
 ## [Unreleased]
+## [10.0.7] - 2026-05-31
+
+### Fixed
+- Standalone app window can no longer restore off-screen. The saved
+  position is now clamped onto a currently-connected monitor with the
+  title bar always reachable: it snaps to the display it overlaps most
+  (or the primary monitor if the previous monitor was unplugged) and is
+  nudged fully inside that screen's working area. Previously a window
+  saved on a secondary monitor that was later disconnected — or parked
+  far off the primary display — could open where it couldn't be seen.
+
 ## [10.0.6] - 2026-05-31
 
 ### Changed
