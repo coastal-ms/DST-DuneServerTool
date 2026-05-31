@@ -253,9 +253,7 @@ internal sealed class MainForm : Form
         Rectangle bounds;
         if (saved != null && saved.W >= MinimumSize.Width && saved.H >= MinimumSize.Height)
         {
-            bounds = new Rectangle(saved.X, saved.Y, saved.W, saved.H);
-            if (!IsOnAnyScreen(bounds))
-                bounds = CenteredDefault(def);
+            bounds = ClampToVisible(new Rectangle(saved.X, saved.Y, saved.W, saved.H), def);
         }
         else
         {
@@ -267,6 +265,44 @@ internal sealed class MainForm : Form
             WindowState = FormWindowState.Maximized;
     }
 
+    /// <summary>
+    /// Guarantee the restored window lands on a currently-connected monitor with
+    /// its title bar reachable. Picks the screen the saved rect overlaps most (or
+    /// the primary if it overlaps none — e.g. a monitor was unplugged), shrinks the
+    /// window to fit that screen's working area, then nudges it fully inside so no
+    /// part — especially the title bar — sits off-screen.
+    /// </summary>
+    private static Rectangle ClampToVisible(Rectangle bounds, Size def)
+    {
+        Screen target = BestScreenFor(bounds);
+        Rectangle wa = target.WorkingArea;
+
+        int w = Math.Min(bounds.Width, wa.Width);
+        int h = Math.Min(bounds.Height, wa.Height);
+        if (w < 1 || h < 1) return CenteredDefault(def);
+
+        int x = Math.Min(Math.Max(bounds.X, wa.X), wa.Right - w);
+        int y = Math.Min(Math.Max(bounds.Y, wa.Y), wa.Bottom - h);
+        return new Rectangle(x, y, w, h);
+    }
+
+    private static Screen BestScreenFor(Rectangle bounds)
+    {
+        Screen best = Screen.PrimaryScreen ?? Screen.AllScreens[0];
+        long bestArea = -1;
+        foreach (var s in Screen.AllScreens)
+        {
+            var inter = Rectangle.Intersect(s.WorkingArea, bounds);
+            long area = (long)inter.Width * inter.Height;
+            if (area > bestArea)
+            {
+                bestArea = area;
+                best = s;
+            }
+        }
+        return best;
+    }
+
     private static Rectangle CenteredDefault(Size desired)
     {
         var wa = Screen.PrimaryScreen?.WorkingArea ?? new Rectangle(0, 0, 1600, 1000);
@@ -275,14 +311,6 @@ internal sealed class MainForm : Form
         int x = wa.X + (wa.Width - w) / 2;
         int y = wa.Y + (wa.Height - h) / 2;
         return new Rectangle(x, y, w, h);
-    }
-
-    private static bool IsOnAnyScreen(Rectangle bounds)
-    {
-        foreach (var s in Screen.AllScreens)
-            if (s.WorkingArea.IntersectsWith(bounds))
-                return true;
-        return false;
     }
 
     private WinState? LoadWindowState()
