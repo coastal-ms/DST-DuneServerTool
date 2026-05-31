@@ -116,6 +116,44 @@ if (-not (Get-Command go -ErrorAction SilentlyContinue)) {
     throw "Go was not found on this machine (searched PATH and the standard install locations). Install Go — e.g. run 'winget install --id GoLang.Go' — then close and reopen the Dune Server Tool and re-apply the patch."
 }
 
+# --- Resolve build tools (node, pnpm) ----------------------------------------
+# The patched binary embeds the dune-admin web UI (go build -tags embed reads
+# cmd/dune-admin/dist). Building that SPA needs Node + pnpm. WITHOUT the embed,
+# the binary serves the API + market bot but every web-portal request 404s —
+# i.e. "can't access dune-admin / market bot" even though the backend is up.
+$nodeDir = Resolve-ToolDir -Name 'node' -Candidates @(
+    "$env:ProgramFiles\nodejs\node.exe",
+    "$env:LOCALAPPDATA\Programs\nodejs\node.exe",
+    "${env:ProgramFiles(x86)}\nodejs\node.exe",
+    "$env:LOCALAPPDATA\Microsoft\WinGet\Links\node.exe"
+)
+if ($nodeDir -and (";$env:PATH;" -notlike "*;$nodeDir;*")) { $env:PATH = "$nodeDir;$env:PATH" }
+if (-not (Get-Command node -ErrorAction SilentlyContinue)) {
+    throw "Node.js was not found on this machine (searched PATH and the standard install locations). The patched build embeds the dune-admin web UI, which requires Node to build — without it dune-admin.exe serves the API and market bot but the web portal returns 404. Install Node — e.g. run 'winget install --id OpenJS.NodeJS.LTS' — then close and reopen the Dune Server Tool and re-apply the patch."
+}
+
+# pnpm: prefer a real pnpm on PATH; otherwise bootstrap it via corepack (ships
+# with Node >= 16.9, no global install needed). Returns the exe to invoke plus
+# any leading args (corepack runs pnpm as `corepack pnpm ...`).
+function Resolve-Pnpm {
+    $direct = Get-Command pnpm -ErrorAction SilentlyContinue
+    if ($direct -and $direct.Source) { return @{ Exe = $direct.Source; Pre = @() } }
+    $corepack = Get-Command corepack -ErrorAction SilentlyContinue
+    if ($corepack -and $corepack.Source) {
+        try { & $corepack.Source enable pnpm 2>$null | Out-Null } catch { }
+        $direct2 = Get-Command pnpm -ErrorAction SilentlyContinue
+        if ($direct2 -and $direct2.Source) { return @{ Exe = $direct2.Source; Pre = @() } }
+        return @{ Exe = $corepack.Source; Pre = @('pnpm') }
+    }
+    return $null
+}
+$pnpm = Resolve-Pnpm
+if (-not $pnpm) {
+    throw "pnpm was not found and could not be bootstrapped via corepack (which ships with Node). Enable it by running 'corepack enable pnpm', or install pnpm with 'npm install -g pnpm', then re-apply the patch. The patched build needs pnpm to build the embedded dune-admin web UI."
+}
+$pnpmExe = $pnpm.Exe
+$pnpmPre = $pnpm.Pre
+
 Push-Location $repoRoot
 try {
     function Step($msg) { Write-Host "==> $msg" -ForegroundColor Cyan }
@@ -271,9 +309,35 @@ try {
         } catch { }
         $buildTime  = (Get-Date).ToUniversalTime().ToString("yyyy-MM-ddTHH:mm:ssZ")
         $ldflags    = "-s -w -X main.AppVersion=$version -X main.GitCommit=$gitCommit -X main.BuildTime=$buildTime"
+
+        # --- Build the embedded web UI (mirrors upstream `make web`) ----------
+        # cmd/dune-admin/embed_prod.go embeds cmd/dune-admin/dist behind the
+        # `embed` build tag; without it embed_dev.go serves no SPA and every
+        # web request 404s. Build web/dist with pnpm and stage it for embedding.
+        Step "pnpm install + build (web UI for embedding)"
+        $webDir = Join-Path $repoRoot 'web'
+        if (-not (Test-Path -LiteralPath (Join-Path $webDir 'package.json'))) {
+            throw "web\package.json not found at $webDir — cannot build the dune-admin web UI to embed."
+        }
+        Push-Location $webDir
+        try {
+            & $pnpmExe @pnpmPre install --frozen-lockfile
+            if ($LASTEXITCODE -ne 0) { throw "pnpm install failed (web UI)." }
+            & $pnpmExe @pnpmPre build
+            if ($LASTEXITCODE -ne 0) { throw "pnpm build failed (web UI)." }
+        } finally { Pop-Location }
+        $webDist   = Join-Path $webDir 'dist'
+        $embedDist = Join-Path $repoRoot 'cmd\dune-admin\dist'
+        if (-not (Test-Path -LiteralPath (Join-Path $webDist 'index.html'))) {
+            throw "web build produced no dist\index.html — refusing to build a UI-less binary."
+        }
+        if (Test-Path -LiteralPath $embedDist) { Remove-Item -LiteralPath $embedDist -Recurse -Force }
+        Copy-Item -LiteralPath $webDist -Destination $embedDist -Recurse -Force
+        Info "staged web UI for embedding → cmd\dune-admin\dist"
+
         $env:GOOS = 'windows'; $env:GOARCH = 'amd64'; $env:CGO_ENABLED = '0'
         try {
-            & go build -trimpath -ldflags $ldflags -o $exePath ./cmd/dune-admin
+            & go build -trimpath -tags embed -ldflags $ldflags -o $exePath ./cmd/dune-admin
             if ($LASTEXITCODE -ne 0) { throw "go build failed." }
         } finally {
             Remove-Item Env:GOOS, Env:GOARCH, Env:CGO_ENABLED -ErrorAction SilentlyContinue
