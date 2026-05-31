@@ -1,6 +1,6 @@
 {
-  "name": "Dune Server Management Portal",
-  "short_name": "Dune Server",
+  "name": "Dune Server Tool Management Portal",
+  "short_name": "Dune Server Tool",
   "description": "Management portal for the self-hosted Dune Awakening server.",
   "start_url": "/",
   "scope": "/",

@@ -4,9 +4,9 @@
 > self-hosted **Dune: Awakening** dedicated server — without ever opening a
 > raw SSH shell or hand-editing YAML.
 
-[![Lint PowerShell](https://github.com/coastal-ms/Simple-Dune-Server-Management-Tool/actions/workflows/lint.yml/badge.svg)](https://github.com/coastal-ms/Simple-Dune-Server-Management-Tool/actions/workflows/lint.yml)
+[![Lint PowerShell](https://github.com/coastal-ms/DST-DuneServerTool/actions/workflows/lint.yml/badge.svg)](https://github.com/coastal-ms/DST-DuneServerTool/actions/workflows/lint.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
-[![Latest release](https://img.shields.io/github/v/release/coastal-ms/Simple-Dune-Server-Management-Tool?sort=semver)](https://github.com/coastal-ms/Simple-Dune-Server-Management-Tool/releases/latest)
+[![Latest release](https://img.shields.io/github/v/release/coastal-ms/DST-DuneServerTool?sort=semver)](https://github.com/coastal-ms/DST-DuneServerTool/releases/latest)
 
 The current release is **version X** (shown stylized as **X** in-app; patch
 updates display as **X (0.1)**, **X (0.2)**, … under the hood these are
@@ -28,7 +28,7 @@ See [`CHANGELOG.md`](CHANGELOG.md) for the full release history and
 ## Quick install
 
 1. Download **`DuneServerSetup.exe`** from the
-   [latest GitHub release](https://github.com/coastal-ms/Simple-Dune-Server-Management-Tool/releases/latest).
+   [latest GitHub release](https://github.com/coastal-ms/DST-DuneServerTool/releases/latest).
 2. Double-click. The installer walks you through it (one UAC prompt — Hyper-V
    needs admin). The Start Menu shortcut and the launcher EXE are placed in
    `C:\Program Files\Dune Server\`.
@@ -357,8 +357,8 @@ business logic — they're not separate codebases.
 Hit a bug, error, or unexpected behavior? **Please open a GitHub issue**
 so it can be tracked and fixed:
 
-> 👉 [**Open an issue**](https://github.com/coastal-ms/Simple-Dune-Server-Management-Tool/issues/new/choose) &nbsp;·&nbsp;
-> [Browse existing issues](https://github.com/coastal-ms/Simple-Dune-Server-Management-Tool/issues)
+> 👉 [**Open an issue**](https://github.com/coastal-ms/DST-DuneServerTool/issues/new/choose) &nbsp;·&nbsp;
+> [Browse existing issues](https://github.com/coastal-ms/DST-DuneServerTool/issues)
 
 The bug report form asks for:
 

@@ -15,10 +15,10 @@
 ;  User data:     %APPDATA%\DuneServer\         (config, logs, boot-times.json)
 ;                 -> NOT touched by install or uninstall (preserves user config)
 
-#define MyAppName        "Dune Server"
-#define MyAppVersion "10.0.2"
+#define MyAppName        "Dune Server Tool"
+#define MyAppVersion "10.0.3"
 #define MyAppPublisher   "Dune Awakening Self-Hosted Tool"
-#define MyAppURL         "https://github.com/coastal-ms/Simple-Dune-Server-Management-Tool"
+#define MyAppURL         "https://github.com/coastal-ms/DST-DuneServerTool"
 #define MyAppExeName     "DuneServer.exe"
 #define MyAppId          "{{B3F8A2C1-7E5D-4F9A-8B2C-1D6E3A4F5C7D}"
 
@@ -32,8 +32,8 @@ AppPublisherURL={#MyAppURL}
 AppSupportURL={#MyAppURL}/issues
 AppUpdatesURL={#MyAppURL}/releases
 VersionInfoVersion={#MyAppVersion}.0
-DefaultDirName={autopf}\Dune Server
-DefaultGroupName=Dune Server
+DefaultDirName={autopf}\Dune Server Tool
+DefaultGroupName=Dune Server Tool
 DisableProgramGroupPage=no
 DisableDirPage=no
 DisableReadyPage=no
