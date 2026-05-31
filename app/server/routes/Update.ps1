@@ -9,7 +9,7 @@
 
 # --- Config ------------------------------------------------------------------
 
-$script:DuneUpdateRepo  = 'coastal-ms/Simple-Dune-Server-Management-Tool'
+$script:DuneUpdateRepo  = 'coastal-ms/DST-DuneServerTool'
 $script:DuneUpdateUA    = 'DuneServerTool-Updater'
 $script:DuneUpdateCache = $null    # cached release lookup (1 h TTL)
 

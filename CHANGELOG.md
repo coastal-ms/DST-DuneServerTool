@@ -14,6 +14,32 @@ here cover everything those tags shipped.
 ## [Unreleased]
 
 
+## [10.0.3] - 2026-05-30
+
+Displayed in-app as **X (0.3)**. Cosmetic rebrand — no functional changes.
+
+### Changed
+
+- **Rebranded the app to "Dune Server Tool"** across all user-visible surfaces:
+  browser tab title, web app manifest, Settings page, Dashboard elevation hint,
+  and the update banner.
+- **Installer now presents as "Dune Server Tool"** — Start Menu group, Add/Remove
+  Programs entry, and the default folder for **new** installs
+  (`C:\Program Files\Dune Server Tool`).
+- **GitHub repository renamed** to `coastal-ms/DST-DuneServerTool` ("DST - Dune
+  Server Tool"). Updated all in-code repo references (update checker, issue links,
+  badges). Old URLs continue to redirect automatically.
+
+### Notes
+
+- **Existing installs upgrade in place** — they keep their current install folder
+  (`C:\Program Files\Dune Server`) and only the display name changes.
+- **On-disk identifiers are unchanged** by design: `DuneServer.exe`, the Windows
+  process name, the installer asset (`DuneServerSetup.exe`), the Inno AppId, and
+  the user-data directories (`%APPDATA%\DuneServer`, `%LOCALAPPDATA%\DuneServer`)
+  all stay the same, so auto-update and existing configuration are preserved.
+
+
 ## [10.0.2] - 2026-05-30
 
 Displayed in-app as **X (0.2)**. Patch release.
@@ -1643,7 +1669,7 @@ are consolidated into this single 6.0.0 entry.
 - **Auto-sized window on launch.** The window opens at ~75% of the
   working area (clamped to sensible min/max, ~240 px width margin for
   ultrawides) and centers itself on the active monitor.
-- **Update checker** wired to GitHub Releases (`coastal-ms/Simple-Dune-Server-Management-Tool`).
+- **Update checker** wired to GitHub Releases (`coastal-ms/DST-DuneServerTool`).
   Surfaces the installed-vs-latest version in the header and offers a
   one-click "What's new" link to the release notes.
 - **Async character loading** with a loading overlay; the character rail
@@ -1905,7 +1931,7 @@ this single 4.0.0 entry.
   extracts it, and auto-fills the path field. _(originally 4.1.0)_
 - **"Check for Updates" button** + **Installed / Latest version labels**
   in the status header. Hits the GitHub Releases API for
-  `coastal-ms/Simple-Dune-Server-Management-Tool`, compares against the
+  `coastal-ms/DST-DuneServerTool`, compares against the
   installed version, offers a one-click download + launch of the new
   installer. Silent check runs on `Window.Loaded`; explicit clicks
   surface failures via dialog. **Latest label is clickable** — opens the
@@ -2202,9 +2228,9 @@ at the time. Also folds in the v3.0.1 / v3.1.2 patches.
   (`ssh`, `dune-admin`, `setup-guide`, `report-issue`). _(originally
   3.1.2)_
 
-[Unreleased]: https://github.com/coastal-ms/Simple-Dune-Server-Management-Tool/compare/v6.1.2...HEAD
-[6.1.0]: https://github.com/coastal-ms/Simple-Dune-Server-Management-Tool/compare/v6.0.1...v6.1.2
-[6.0.0]: https://github.com/coastal-ms/Simple-Dune-Server-Management-Tool/compare/v5.0.2...v6.0.1
-[5.0.0]: https://github.com/coastal-ms/Simple-Dune-Server-Management-Tool/compare/v4.5.2...v5.0.2
-[4.0.0]: https://github.com/coastal-ms/Simple-Dune-Server-Management-Tool/compare/v3.1.2...v4.5.2
-[3.0.0]: https://github.com/coastal-ms/Simple-Dune-Server-Management-Tool/releases/tag/v3.1.2
+[Unreleased]: https://github.com/coastal-ms/DST-DuneServerTool/compare/v6.1.2...HEAD
+[6.1.0]: https://github.com/coastal-ms/DST-DuneServerTool/compare/v6.0.1...v6.1.2
+[6.0.0]: https://github.com/coastal-ms/DST-DuneServerTool/compare/v5.0.2...v6.0.1
+[5.0.0]: https://github.com/coastal-ms/DST-DuneServerTool/compare/v4.5.2...v5.0.2
+[4.0.0]: https://github.com/coastal-ms/DST-DuneServerTool/compare/v3.1.2...v4.5.2
+[3.0.0]: https://github.com/coastal-ms/DST-DuneServerTool/releases/tag/v3.1.2
