@@ -13,7 +13,7 @@ param(
 # Wraps the original battlegroup.ps1 menu and adds extra tools
 # ============================================================
 
-$script:ToolVersion = "10.0.9"
+$script:ToolVersion = "10.0.10"
 
 # Cold-boot readiness budgets (seconds). A fresh battlegroup's FIRST boot can
 # take 10-30 min: k3s + funcom-operators initialize, metrics-server restarts a
@@ -295,11 +295,6 @@ function Run-Setup {
     }
     Write-Host ""
 
-    # New installs default to using the local config-files store (safe: the
-    # SSH-key override only kicks in once a local copy actually exists). Existing
-    # configs keep whatever they already had.
-    $useLocalCfg = if ($existing -and $existing.UseLocalConfigFiles) { $existing.UseLocalConfigFiles } else { 'true' }
-
     # ── Save ──
     $config = @(
         "# Dune Awakening Server Management — Configuration"
@@ -312,7 +307,6 @@ function Run-Setup {
         "WindowsUser=$winUser"
         "PortCheckMode=$portCheckMode"
         "PortCheckUrlTemplate=$portCheckUrlTemplate"
-        "UseLocalConfigFiles=$useLocalCfg"
     )
     $config | Set-Content -Path $configFile -Encoding UTF8
 
