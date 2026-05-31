@@ -1042,8 +1042,8 @@ function Test-DunePortListening {
 # (sshKey additionally checks %LOCALAPPDATA%\DuneSandboxServer first.)
 function Resolve-DuneAdminSidecar {
     param([string]$Name, [string]$ExeDir, [switch]$IsKey)
-    $home = [Environment]::GetFolderPath('UserProfile')
-    $dotPath = Join-Path (Join-Path $home '.dune-admin') $Name
+    $userHome = [Environment]::GetFolderPath('UserProfile')
+    $dotPath = Join-Path (Join-Path $userHome '.dune-admin') $Name
     $exeFile = if ($ExeDir) { Join-Path $ExeDir $Name } else { $null }
     $candidates = @()
     if ($IsKey -and $env:LOCALAPPDATA) {
