@@ -120,7 +120,7 @@ public static extern bool IsIconic(System.IntPtr hWnd);
 }
 
 # Version (one of the 5 sync'd constants; see persistent-notes.md)
-$script:DuneToolVersion = '10.0.7'
+$script:DuneToolVersion = '10.0.8'
 
 # ---------- Single-instance gate ----------------------------------------------
 # Every click of the desktop shortcut runs DuneServer.exe again. Without a
@@ -140,12 +140,41 @@ try {
     $script:SingleInstanceOwned = $true
 }
 if (-not $script:SingleInstanceOwned) {
-    # Another instance is already running. Open its portal URL and exit.
+    # Another instance is already running. Surface the portal again — in the
+    # standalone app window when enabled (default; DuneShell is itself single-
+    # instance so this just focuses the existing window), otherwise the browser.
+    # The Config/helper stack loads later, so decide inline here.
     try {
         $urlFile = Join-Path $env:LOCALAPPDATA 'DuneServer\last-url.txt'
-        if (Test-Path -LiteralPath $urlFile) {
-            $u = (Get-Content -LiteralPath $urlFile -Raw).Trim()
-            if ($u) { Start-Process $u | Out-Null }
+        $u = if (Test-Path -LiteralPath $urlFile) { (Get-Content -LiteralPath $urlFile -Raw).Trim() } else { '' }
+
+        $useApp = $true
+        try {
+            $cfgFile = Join-Path $env:APPDATA 'DuneServer\dune-server.config'
+            if (Test-Path -LiteralPath $cfgFile) {
+                $line = Get-Content -LiteralPath $cfgFile |
+                        Where-Object { $_ -match '^\s*OpenInAppWindow\s*=' } | Select-Object -Last 1
+                if ($line -and (($line -replace '^\s*OpenInAppWindow\s*=\s*','').Trim() -match '^(false|0|no|off)$')) {
+                    $useApp = $false
+                }
+            }
+        } catch { }
+
+        $shellExe = $null
+        if ($useApp) {
+            try {
+                $selfExe = [System.Diagnostics.Process]::GetCurrentProcess().MainModule.FileName
+                if ($selfExe) {
+                    $cand = Join-Path (Split-Path -Parent $selfExe) 'DuneShell.exe'
+                    if (Test-Path -LiteralPath $cand) { $shellExe = $cand }
+                }
+            } catch { }
+        }
+
+        if ($shellExe) {
+            Start-Process -FilePath $shellExe | Out-Null
+        } elseif ($u) {
+            Start-Process $u | Out-Null
         }
     } catch { }
     exit 0

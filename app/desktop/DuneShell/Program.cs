@@ -1,9 +1,16 @@
+using System.Diagnostics;
+using System.Runtime.InteropServices;
 using System.Windows.Forms;
 
 namespace DuneShell;
 
 internal static class Program
 {
+    [DllImport("user32.dll")] private static extern bool SetForegroundWindow(IntPtr hWnd);
+    [DllImport("user32.dll")] private static extern bool ShowWindow(IntPtr hWnd, int nCmdShow);
+    [DllImport("user32.dll")] private static extern bool IsIconic(IntPtr hWnd);
+    private const int SW_RESTORE = 9;
+
     /// <summary>
     /// Thin native host for the Dune Server Tool web portal.
     ///
@@ -19,12 +26,45 @@ internal static class Program
     [STAThread]
     private static void Main(string[] args)
     {
+        // Single-instance: if a DuneShell window is already open (e.g. the user
+        // clicked the desktop shortcut again while the server — and its app
+        // window — were already running), focus that window instead of opening
+        // a second one, then exit.
+        using var mutex = new Mutex(true, @"Global\DuneShell-Portal-Window", out bool createdNew);
+        if (!createdNew)
+        {
+            FocusExistingWindow();
+            return;
+        }
+
         ApplicationConfiguration.Initialize();
 
         string? url = GetArgValue(args, "--url");
         bool useWaitFile = !HasFlag(args, "--no-wait-file");
 
         Application.Run(new MainForm(url, useWaitFile));
+        GC.KeepAlive(mutex);
+    }
+
+    private static void FocusExistingWindow()
+    {
+        try
+        {
+            int me = Environment.ProcessId;
+            foreach (var p in Process.GetProcessesByName("DuneShell"))
+            {
+                if (p.Id == me) continue;
+                IntPtr h = p.MainWindowHandle;
+                if (h == IntPtr.Zero) continue;
+                if (IsIconic(h)) ShowWindow(h, SW_RESTORE);
+                SetForegroundWindow(h);
+                break;
+            }
+        }
+        catch
+        {
+            // best-effort; ignore
+        }
     }
 
     private static string? GetArgValue(string[] args, string name)
