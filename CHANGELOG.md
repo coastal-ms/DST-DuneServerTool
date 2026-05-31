@@ -14,6 +14,25 @@ here cover everything those tags shipped.
 ## [Unreleased]
 
 
+## [10.0.5] - 2026-05-31
+
+Displayed in-app as **X (0.5)**.
+
+### Added
+
+- **Standalone app window.** The portal now opens in its own desktop window
+  (DuneShell, a self-contained WebView2 host) instead of a browser tab, for a
+  clean app-like feel. A slim native menu at the top provides **Server Health**
+  and **Settings** navigation (plus **View → Reload / Open in browser**).
+  External links (websites, the dune-admin web UI) still open in your default
+  browser, and console commands still spawn their own windows.
+  - The window is freely resizable and opens at 2000×1196 by default; its size,
+    position and maximized state are remembered between launches.
+  - New `OpenInAppWindow` setting in `dune-server.config` (default **on**).
+    Set it to `false` to fall back to opening the portal as a browser tab.
+    If `DuneShell.exe` is missing, the launcher automatically falls back to the
+    browser.
+
 ## [10.0.4] - 2026-05-30
 
 Displayed in-app as **X (0.4)**.

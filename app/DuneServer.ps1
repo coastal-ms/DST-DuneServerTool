@@ -120,7 +120,7 @@ public static extern bool IsIconic(System.IntPtr hWnd);
 }
 
 # Version (one of the 5 sync'd constants; see persistent-notes.md)
-$script:DuneToolVersion = '10.0.4'
+$script:DuneToolVersion = '10.0.5'
 
 # ---------- Single-instance gate ----------------------------------------------
 # Every click of the desktop shortcut runs DuneServer.exe again. Without a
@@ -310,7 +310,7 @@ if (Test-Path $routesDir) {
 
 $script:LaunchToken = [Guid]::NewGuid().ToString('N')
 
-# ---------- Browser launch -----------------------------------------------------
+# ---------- Browser / app-window launch ---------------------------------------
 
 # Open the portal in the user's default browser as a normal tab. We intentionally
 # do NOT use Chromium app-mode (--app): app windows looked like a separate "app"
@@ -324,6 +324,24 @@ function Open-DuneInBrowser {
     } catch {
         Write-Host "Could not open browser automatically. Visit: $Url" -ForegroundColor Yellow
     }
+}
+
+# Locate the standalone DuneShell.exe (WebView2 app window). Installed layout
+# ships it beside DuneServer.exe; dev/build layouts leave it under the project's
+# bin output. Returns $null when it isn't present (e.g. dev box without a build).
+function Get-DuneShellExePath {
+    $candidate = Find-DuneSubpath 'DuneShell.exe'
+    if ($candidate) { return $candidate }
+    $devPaths = @(
+        'app\desktop\DuneShell\bin\Release\net10.0-windows\win-x64\DuneShell.exe',
+        'app\desktop\DuneShell\bin\Debug\net10.0-windows\win-x64\DuneShell.exe',
+        'desktop\DuneShell\bin\Release\net10.0-windows\win-x64\DuneShell.exe'
+    )
+    foreach ($rel in $devPaths) {
+        $p = Find-DuneSubpath $rel
+        if ($p) { return $p }
+    }
+    return $null
 }
 
 # ---------- Start --------------------------------------------------------------
@@ -345,20 +363,41 @@ try {
     Write-DuneLog "Could not remove stale last-url.txt: $($_.Exception.Message)" 'WARN'
 }
 
-# Kick the browser open after the listener binds. Reads last-url.txt that
-# Start-DuneHttpServer writes once it knows the actual bound port. Opens the
-# portal as a normal tab in the user's default browser.
-$browserJob = Start-Job -ArgumentList $urlFilePath -ScriptBlock {
-    param($urlFile)
-    for ($i = 0; $i -lt 50; $i++) {
-        if (Test-Path -LiteralPath $urlFile) {
-            $u = (Get-Content -LiteralPath $urlFile -Raw).Trim()
-            if ($u) {
-                Start-Process $u
-                return
+# Kick the portal open after the listener binds. Two paths:
+#   * App window (default): launch DuneShell.exe, which polls last-url.txt itself
+#     and renders the portal in a standalone WebView2 window with a native menu.
+#   * Browser fallback: when the app window is disabled (OpenInAppWindow=false in
+#     dune-server.config) or DuneShell.exe isn't present, poll last-url.txt here
+#     and open the portal as a normal tab in the user's default browser.
+$script:DuneShellExe = $null
+$openInAppWindow = $false
+try { $openInAppWindow = Get-DstOpenInAppWindow } catch { $openInAppWindow = $true }
+if ($openInAppWindow) { $script:DuneShellExe = Get-DuneShellExePath }
+
+$browserJob = $null
+if ($openInAppWindow -and $script:DuneShellExe) {
+    Write-DuneLog "Opening portal in app window: $script:DuneShellExe"
+    try {
+        Start-Process -FilePath $script:DuneShellExe | Out-Null
+    } catch {
+        Write-DuneLog "App window failed to launch ($($_.Exception.Message)); falling back to browser" 'WARN'
+        $script:DuneShellExe = $null
+    }
+}
+
+if (-not ($openInAppWindow -and $script:DuneShellExe)) {
+    $browserJob = Start-Job -ArgumentList $urlFilePath -ScriptBlock {
+        param($urlFile)
+        for ($i = 0; $i -lt 50; $i++) {
+            if (Test-Path -LiteralPath $urlFile) {
+                $u = (Get-Content -LiteralPath $urlFile -Raw).Trim()
+                if ($u) {
+                    Start-Process $u
+                    return
+                }
             }
+            Start-Sleep -Milliseconds 200
         }
-        Start-Sleep -Milliseconds 200
     }
 }
 

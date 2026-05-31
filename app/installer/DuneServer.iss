@@ -16,7 +16,7 @@
 ;                 -> NOT touched by install or uninstall (preserves user config)
 
 #define MyAppName        "Dune Server Tool"
-#define MyAppVersion "10.0.4"
+#define MyAppVersion "10.0.5"
 #define MyAppPublisher   "Dune Awakening Self-Hosted Tool"
 #define MyAppURL         "https://github.com/coastal-ms/DST-DuneServerTool"
 #define MyAppExeName     "DuneServer.exe"
@@ -66,6 +66,11 @@ Name: "desktopicon"; Description: "Create a &desktop shortcut"; GroupDescription
 ; The compiled launcher (with embedded UAC manifest). Starts the local
 ; HTTP server, opens the default browser to the React SPA.
 Source: "..\build\output\DuneServer.exe"; DestDir: "{app}"; Flags: ignoreversion
+
+; v10.0.5: Standalone app window (WebView2). Self-contained single-file build;
+; DuneServer.exe launches this instead of a browser tab when OpenInAppWindow is
+; enabled (the default). Lives beside DuneServer.exe so the launcher finds it.
+Source: "..\desktop\DuneShell\bin\Release\net10.0-windows\win-x64\publish\DuneShell.exe"; DestDir: "{app}"; Flags: ignoreversion
 
 ; The business logic script (called via dune-server.ps1 -Cmd for the
 ; "spawn elevated console window" pattern used by the Commands page).
