@@ -118,6 +118,98 @@ export function pricingPatchStatus() {
   return api<DuneAdminPricingPatchStatus>(`/api/dune-admin/pricing-patch-status`)
 }
 
+export type DuneAdminDiagLevel = 'ok' | 'info' | 'warn' | 'error'
+
+export interface DuneAdminFinding {
+  level: DuneAdminDiagLevel
+  message: string
+  hint?: string | null
+}
+
+export interface DuneAdminDiagnostics {
+  ok: boolean
+  generatedAt: string
+  verdict: 'ok' | 'warn' | 'error'
+  machine?: string
+  findings: DuneAdminFinding[]
+  install: {
+    exePath: string | null
+    exeExists: boolean
+    targetDir: string | null
+    files: { name: string; present: boolean; size: number }[]
+  }
+  config: {
+    configYamlPath: string
+    exists: boolean
+    listenAddr: string
+    dbHost: string
+    dbPort: string
+    dbUser: string
+    dbName: string
+    dbSchema: string
+    dbPassSet: boolean
+    sshHost: string
+    sshUser: string
+    sshKey: string
+    sshKeyExists: boolean
+    control: string
+    controlNamespace: string
+    marketBotEnabled: string
+    marketBotAddr: string
+    marketBotContainer: string
+    marketBotNamespace: string
+    marketBotTokenSet: boolean
+    marketBotCacheDb: string
+  }
+  effective: { listenAddr: string; port: number }
+  envOverrides: { key: string; scope: string; value: string }[]
+  sidecars: {
+    name: string
+    resolvedPath: string | null
+    dotFolderPath: string
+    dotFolderExists: boolean
+    installPath: string | null
+    installExists: boolean
+    shadowsInstall: boolean
+  }[]
+  processes: {
+    duneAdmin: { pid: number; path: string | null; startTime: string | null }[]
+    count: number
+    multipleInstances: boolean
+  }
+  listener: { port: number; listening: boolean }
+  httpProbe: { url: string; ok: boolean; statusCode: number | null; error: string | null }
+  marketBot: {
+    cacheDbPath: string
+    cacheDbExists: boolean
+    cacheDbLocked: boolean
+    addrConfigured: boolean
+    containerConfigured: boolean
+  }
+  pricing: {
+    status: 'idle' | 'running' | 'success' | 'failed'
+    error?: string
+    exitCode?: number
+    targetTag?: string
+    startedAt?: string
+    finishedAt?: string
+    logFile?: string
+    logTail?: string
+    autoApply: boolean
+    goAvailable: boolean
+    gitAvailable: boolean
+  }
+}
+
+/** Runs a one-shot health report on the local dune-admin install: backend
+ *  reachability, config.yaml/env precedence, sidecar shadowing, duplicate
+ *  instances (market-bot DB lock), and pricing-patch state. Surfaces a list of
+ *  findings so a user can self-diagnose "Failed to fetch" and paste the full
+ *  report back for support. */
+export function getDuneAdminDiagnostics() {
+  return api<DuneAdminDiagnostics>(`/api/dune-admin/diagnostics`)
+}
+
 export interface DuneAdminDotFolder {
   path: string
   exists: boolean

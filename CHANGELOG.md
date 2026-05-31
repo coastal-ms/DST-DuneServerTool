@@ -12,7 +12,35 @@ on GitHub still exist for each individual release; the consolidated entries
 here cover everything those tags shipped.
 
 ## [Unreleased]
-## [10.0.9] - 2026-05-31
+## [10.0.10] - 2026-05-31
+
+### Added
+- **dune-admin diagnostics.** Settings → dune-admin card now has a "Troubleshoot
+  dune-admin" panel that runs a one-shot health report: backend reachability on
+  the SPA's expected port, config.yaml vs environment-variable precedence, stale
+  `~/.dune-admin` sidecar shadowing, duplicate-instance detection (which locks
+  the market-bot cache DB), and pricing-patch build state. Surfaces colour-coded
+  findings with hints plus a "Copy report" button so issues like the dune-admin
+  portal's "Failed to fetch" can be self-diagnosed or shared for support.
+
+### Removed
+- **"Use local config files" feature.** The `%APPDATA%\DuneServer\configFiles`
+  store, its "Refresh config files" / "Use local config files" controls, and the
+  `UseLocalConfigFiles` config key have been removed — they added maintenance
+  overhead and could shadow the configured SSH key. The SSH key is still copied
+  into the dune-admin folder automatically whenever dune-admin is installed or
+  updated, and the `rotate-ssh-key` command continues to re-copy the freshly
+  rotated key there, so no functionality is lost.
+
+### Changed
+- **Console + app-window share one lifecycle.** Closing the DuneShell app window
+  now stops the server/console, and closing the console (or picking "Quit" from
+  the tray) closes the app window — symmetric cleanup, one console + one app
+  window per machine. On first run the user chooses how the console presents
+  itself while the app window is open (minimized vs. system tray); the choice is
+  remembered. No-op in browser-fallback mode.
+
+
 
 ### Fixed
 - `startup` and `reboot` no longer abort before starting the battlegroup when a
