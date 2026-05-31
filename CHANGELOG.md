@@ -12,6 +12,19 @@ on GitHub still exist for each individual release; the consolidated entries
 here cover everything those tags shipped.
 
 ## [Unreleased]
+## [10.1.1] - 2026-05-31
+
+### Fixed
+- **Hotfix: the app failed to start ("Dune Server bootstrap failed").** Two
+  diagnostics strings shipped in 10.1.0 used syntax that Windows PowerShell 5.1
+  (the engine the packaged `DuneServer.exe` runs under) could not parse, so
+  `DuneAdmin.ps1` / `System.ps1` failed to load and the whole portal aborted at
+  startup. Specifically: an em-dash (`—`) inside a double-quoted string in a
+  no-BOM file (5.1 mis-decodes it via the ANSI code page into a quote-like
+  character, unbalancing the string), and a `??` null-coalescing operator
+  (PowerShell 7 only). Both replaced with 5.1-safe equivalents; all dot-sourced
+  `lib/`/`routes/` files now verified to parse under 5.1.
+
 ## [10.1.0] - 2026-05-31
 
 ### Added
