@@ -898,8 +898,11 @@ export function Settings() {
                       When checked, the tool also downloads the source tarball with each
                       release and rebuilds <span className="font-mono">dune-admin.exe</span> locally
                       with the 100k-cap pricing patch. Uncheck and click Install again to revert
-                      to the upstream binary. Requires <span className="font-mono">go</span> and
-                      {' '}<span className="font-mono">git</span> on PATH.
+                      to the upstream binary. Requires <span className="font-mono">go</span>,
+                      {' '}<span className="font-mono">git</span>, and
+                      {' '}<span className="font-mono">node</span> (with{' '}
+                      <span className="font-mono">pnpm</span>, auto-enabled via corepack) on PATH —
+                      node builds the embedded web UI so the dune-admin portal and Market Bot panel load.
                     </span>
                   </span>
                   {autoApplySaving && <Icon name="Loader2" size={14} className="animate-spin text-text-dim" />}

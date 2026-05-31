@@ -12,6 +12,21 @@ on GitHub still exist for each individual release; the consolidated entries
 here cover everything those tags shipped.
 
 ## [Unreleased]
+## [10.0.12] - 2026-05-31
+
+### Fixed
+- **Patched dune-admin builds served no web UI ("can't access dune-admin / the
+  Market Bot panel").** The local pricing-patch build ran a plain `go build`,
+  which omits the `embed` build tag and never built the SPA — so the rebuilt
+  `dune-admin.exe` served the API and market bot but returned 404 for the entire
+  web portal. The patched build now builds the web UI (`pnpm install && pnpm
+  build`), stages it into `cmd/dune-admin/dist`, and compiles with
+  `go build -tags embed`, matching upstream's release binary. Adds a build-time
+  Node.js + pnpm requirement (pnpm auto-enabled via corepack); the build now
+  fails fast with guidance if Node is missing instead of producing a UI-less
+  binary. To unblock immediately on an older build, uncheck "Keep Coastal's
+  sane-pricing patch" and reinstall to use the upstream prebuilt binary.
+
 ## [10.0.11] - 2026-05-31
 
 ### Fixed
