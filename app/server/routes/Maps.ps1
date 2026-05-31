@@ -1,5 +1,22 @@
 ﻿# Routes for on-demand map control (currently DeepDesert).
 
+# Static route — clears drifted partitions so on-demand maps launch again.
+# Registered separately from /api/maps/{key} (it's a POST so there's no
+# collision with the GET param route).
+Register-DuneRoute -Method POST -Path '/api/maps/fix-partitions' -Handler {
+    param($req, $res, $routeParams, $body)
+    try {
+        $result = Invoke-DuneFixOnDemandPartitions
+        if (-not $result.ok -and $result.status) {
+            Write-DuneError -Response $res -Status $result.status -Message $result.message
+            return
+        }
+        Write-DuneJson -Response $res -Body $result
+    } catch {
+        Write-DuneError -Response $res -Status 500 -Message $_.Exception.Message
+    }
+}
+
 Register-DuneRoute -Method GET -Path '/api/maps/{key}' -Handler {
     param($req, $res, $routeParams, $body)
     try {
