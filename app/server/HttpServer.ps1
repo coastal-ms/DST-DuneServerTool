@@ -283,6 +283,18 @@ function Start-DuneHttpServer {
         Set-Content -LiteralPath (Join-Path $stateDir 'last-url.txt') -Value $actualUrl -Encoding UTF8 -Force
     } catch { }
 
+    # Link the app-window + console lifecycle to this listener now that it's
+    # bound: closing the app window stops the server, and apply the user's
+    # chosen console presentation (minimized vs. system tray). No-op in
+    # browser-fallback mode (nothing to watch).
+    if (Get-Command Start-DuneConsoleLifecycle -ErrorAction SilentlyContinue) {
+        try { Start-DuneConsoleLifecycle -Listener $listener } catch {
+            if (Get-Command Write-DuneLog -ErrorAction SilentlyContinue) {
+                Write-DuneLog "Console lifecycle init failed: $($_.Exception.Message)" 'WARN'
+            }
+        }
+    }
+
     try {
         while ($listener.IsListening) {
             try {

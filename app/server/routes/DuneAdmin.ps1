@@ -982,6 +982,321 @@ Register-DuneRoute -Method GET -Path '/api/dune-admin/pricing-patch-status' -Han
     }
 }
 
+# --- Diagnostics -------------------------------------------------------------
+# GET /api/dune-admin/diagnostics
+#
+# One-shot health report for troubleshooting "Failed to fetch" / market-bot /
+# pricing-patch problems on a remote user's machine. Everything is best-effort
+# and wrapped so a single probe failure never 500s the whole report. The UI
+# renders the findings and offers a "copy report" button so the user can paste
+# the full JSON back to us.
+
+# Minimal flat YAML parser for ~/.dune-admin/config.yaml (key: value lines).
+# We only need scalar top-level keys; nested blocks (welcome_packages) are
+# ignored, which is fine — dune-admin's config is otherwise flat.
+function ConvertFrom-DuneAdminYaml {
+    param([string]$Path)
+    $map = @{}
+    if (-not $Path -or -not (Test-Path -LiteralPath $Path -PathType Leaf)) { return $map }
+    try {
+        foreach ($line in (Get-Content -LiteralPath $Path -ErrorAction Stop)) {
+            $t = ([string]$line).Trim()
+            if (-not $t -or $t.StartsWith('#') -or $t.StartsWith('-')) { continue }
+            $idx = $t.IndexOf(':')
+            if ($idx -lt 1) { continue }
+            $k = $t.Substring(0, $idx).Trim()
+            $v = $t.Substring($idx + 1).Trim()
+            if ($v.Length -ge 2 -and (($v[0] -eq '"' -and $v[$v.Length-1] -eq '"') -or ($v[0] -eq "'" -and $v[$v.Length-1] -eq "'"))) {
+                $v = $v.Substring(1, $v.Length - 2)
+            }
+            if (-not $map.ContainsKey($k)) { $map[$k] = $v }
+        }
+    } catch { }
+    return $map
+}
+
+function Get-DuneAdminListenPort {
+    param([string]$ListenAddr)
+    $addr = if ($ListenAddr) { $ListenAddr } else { ':8080' }
+    $portStr = ($addr -split ':')[-1]
+    $port = 0
+    if (-not [int]::TryParse($portStr, [ref]$port) -or $port -le 0) { $port = 8080 }
+    return $port
+}
+
+function Test-DunePortListening {
+    param([string]$DuneHost = '127.0.0.1', [int]$Port, [int]$TimeoutMs = 1200)
+    $client = $null
+    try {
+        $client = [System.Net.Sockets.TcpClient]::new()
+        $iar = $client.BeginConnect($DuneHost, $Port, $null, $null)
+        $ok = $iar.AsyncWaitHandle.WaitOne($TimeoutMs)
+        if ($ok -and $client.Connected) { $client.EndConnect($iar); return $true }
+        return $false
+    } catch { return $false } finally { if ($client) { try { $client.Close() } catch { } } }
+}
+
+# Resolves which candidate path dune-admin will actually load for a given
+# sidecar file, mirroring main.go resolve*Path() precedence:
+#   ~/.dune-admin/<name>  >  <exeDir>/<name>  >  ./<name>
+# (sshKey additionally checks %LOCALAPPDATA%\DuneSandboxServer first.)
+function Resolve-DuneAdminSidecar {
+    param([string]$Name, [string]$ExeDir, [switch]$IsKey)
+    $home = [Environment]::GetFolderPath('UserProfile')
+    $dotPath = Join-Path (Join-Path $home '.dune-admin') $Name
+    $exeFile = if ($ExeDir) { Join-Path $ExeDir $Name } else { $null }
+    $candidates = @()
+    if ($IsKey -and $env:LOCALAPPDATA) {
+        $candidates += (Join-Path $env:LOCALAPPDATA (Join-Path 'DuneSandboxServer' $Name))
+    }
+    $candidates += $dotPath
+    if ($exeFile) { $candidates += $exeFile }
+    $resolved = $null
+    foreach ($c in $candidates) { if ($c -and (Test-Path -LiteralPath $c -PathType Leaf)) { $resolved = $c; break } }
+    $dotExists = Test-Path -LiteralPath $dotPath -PathType Leaf
+    $exeExists = if ($exeFile) { Test-Path -LiteralPath $exeFile -PathType Leaf } else { $false }
+    return @{
+        name            = $Name
+        resolvedPath    = $resolved
+        dotFolderPath   = $dotPath
+        dotFolderExists = [bool]$dotExists
+        installPath     = $exeFile
+        installExists   = [bool]$exeExists
+        # A copy in ~/.dune-admin shadows the install-folder copy and may be stale.
+        shadowsInstall  = [bool]($dotExists -and $exeExists -and $resolved -eq $dotPath)
+    }
+}
+
+Register-DuneRoute -Method GET -Path '/api/dune-admin/diagnostics' -Handler {
+    param($req, $res, $routeParams, $body)
+    try {
+        $findings = New-Object System.Collections.ArrayList
+        $addFinding = {
+            param([string]$Level, [string]$Message, [string]$Hint)
+            [void]$findings.Add(@{ level = $Level; message = $Message; hint = $Hint })
+        }
+
+        # --- install ---------------------------------------------------------
+        $exePath   = Get-DuneAdminConfiguredPath
+        $exeExists = [bool]($exePath -and (Test-Path -LiteralPath $exePath -PathType Leaf))
+        $targetDir = if ($exePath) { Split-Path -Parent $exePath } else { $null }
+        $requiredFiles = @('dune-admin.exe','item-data.json','tags-data.json','quality-data.json','sshKey','sshKey.pub','.env','dune-admin.exe.version')
+        $fileList = @()
+        foreach ($n in $requiredFiles) {
+            $p = if ($targetDir) { Join-Path $targetDir $n } else { $null }
+            $present = [bool]($p -and (Test-Path -LiteralPath $p -PathType Leaf))
+            $size = 0
+            if ($present) { try { $size = (Get-Item -LiteralPath $p).Length } catch { } }
+            $fileList += @{ name = $n; present = $present; size = $size }
+        }
+
+        if (-not $exePath) {
+            & $addFinding 'error' 'DuneAdminExe path is not set in Settings.' 'Pick a folder for dune-admin in Settings, Save, then run the setup wizard.'
+        } elseif (-not $exeExists) {
+            & $addFinding 'error' "dune-admin.exe not found at $exePath." 'Click Install in the dune-admin card to download it.'
+        }
+        foreach ($crit in @('item-data.json','tags-data.json')) {
+            $inInstall = ($fileList | Where-Object { $_.name -eq $crit }).present
+            $inDot = Test-Path -LiteralPath (Join-Path (Join-Path ([Environment]::GetFolderPath('UserProfile')) '.dune-admin') $crit) -PathType Leaf
+            if (-not $inInstall -and -not $inDot) {
+                & $addFinding 'error' "$crit is missing from both the install folder and ~/.dune-admin." "dune-admin.exe exits immediately on launch without $crit (nothing listens -> browser shows 'Failed to fetch'). Reinstall to restore it."
+            }
+        }
+
+        # --- config.yaml -----------------------------------------------------
+        $cfgPath = Get-DuneAdminConfigYamlPath
+        $cfgExists = [bool](Test-Path -LiteralPath $cfgPath -PathType Leaf)
+        $y = ConvertFrom-DuneAdminYaml -Path $cfgPath
+        $dbPassSet  = [bool]($y['db_pass'])
+        $sshKeyCfg  = [string]$y['ssh_key']
+        $listenAddr = [string]$y['listen_addr']
+        $port = Get-DuneAdminListenPort -ListenAddr $listenAddr
+        $config = @{
+            configYamlPath     = $cfgPath
+            exists             = $cfgExists
+            listenAddr         = $listenAddr
+            dbHost             = [string]$y['db_host']
+            dbPort             = [string]$y['db_port']
+            dbUser             = [string]$y['db_user']
+            dbName             = [string]$y['db_name']
+            dbSchema           = [string]$y['db_schema']
+            dbPassSet          = $dbPassSet
+            sshHost            = [string]$y['ssh_host']
+            sshUser            = [string]$y['ssh_user']
+            sshKey             = $sshKeyCfg
+            sshKeyExists       = [bool]($sshKeyCfg -and (Test-Path -LiteralPath $sshKeyCfg -PathType Leaf))
+            control            = [string]$y['control']
+            controlNamespace   = [string]$y['control_namespace']
+            marketBotEnabled   = [string]$y['market_bot_enabled']
+            marketBotAddr      = [string]$y['market_bot_addr']
+            marketBotContainer = [string]$y['market_bot_container']
+            marketBotNamespace = [string]$y['market_bot_namespace']
+            marketBotTokenSet  = [bool]($y['market_bot_token'])
+            marketBotCacheDb   = [string]$y['market_bot_cache_db']
+        }
+
+        if (-not $cfgExists) {
+            & $addFinding 'warn' "No config.yaml at $cfgPath." 'On launch dune-admin drops into the interactive setup wizard and never starts serving. Run the setup wizard.'
+        } elseif (-not $dbPassSet) {
+            & $addFinding 'warn' 'config.yaml has an empty db_pass.' 'needsSetup() is true, so dune-admin auto-runs the interactive wizard instead of serving. Re-run setup and complete the DB prompts.'
+        }
+        if ($listenAddr -and $port -ne 8080) {
+            & $addFinding 'warn' "Backend listen_addr is '$listenAddr' (port $port), but the dune-admin SPA defaults to http://localhost:8080." "Either change listen_addr back to :8080, or in the web UI set localStorage 'dune_admin_backend' to http://localhost:$port."
+        }
+
+        # --- environment overrides (these WIN over config.yaml) --------------
+        $envKeys = @('LISTEN_ADDR','DB_HOST','DB_PORT','DB_USER','DB_PASS','DB_NAME','DB_SCHEMA','SSH_HOST','SSH_USER','SSH_KEY','CONTROL','CONTROL_NAMESPACE','MARKET_BOT_ADDR','MARKET_BOT_CONTAINER','MARKET_BOT_NAMESPACE','MARKET_BOT_TOKEN')
+        $secretKeys = @('DB_PASS','MARKET_BOT_TOKEN')
+        $envOverrides = @()
+        foreach ($k in $envKeys) {
+            foreach ($scope in @('Process','User','Machine')) {
+                $val = $null
+                try { $val = [Environment]::GetEnvironmentVariable($k, $scope) } catch { }
+                if ($val) {
+                    $shown = if ($secretKeys -contains $k) { '(set)' } else { $val }
+                    $envOverrides += @{ key = $k; scope = $scope; value = $shown }
+                }
+            }
+        }
+        if ($envOverrides.Count -gt 0) {
+            $keys = ($envOverrides | ForEach-Object { $_.key } | Select-Object -Unique) -join ', '
+            & $addFinding 'warn' "Environment variables are set that override config.yaml: $keys." 'dune-admin only fills config values when the matching env var is blank, so a stale system/user env var silently wins. Clear it unless intentional.'
+        }
+
+        # --- sidecar resolution (dot-folder can shadow the install folder) ---
+        $sidecars = @(
+            (Resolve-DuneAdminSidecar -Name 'item-data.json' -ExeDir $targetDir),
+            (Resolve-DuneAdminSidecar -Name 'tags-data.json'  -ExeDir $targetDir),
+            (Resolve-DuneAdminSidecar -Name 'sshKey' -ExeDir $targetDir -IsKey)
+        )
+        foreach ($sc in $sidecars) {
+            if ($sc.shadowsInstall) {
+                & $addFinding 'warn' "$($sc.name) in ~/.dune-admin is used instead of the copy in the install folder." "If the ~/.dune-admin copy is stale this breaks features. Delete $($sc.dotFolderPath) to fall back to the install-folder copy."
+            }
+        }
+
+        # --- running processes ----------------------------------------------
+        $procs = @()
+        try {
+            $byName = @(Get-Process -Name 'dune-admin' -ErrorAction SilentlyContinue)
+            $byPath = @()
+            if ($exePath) {
+                $byPath = @(Get-Process -ErrorAction SilentlyContinue | Where-Object { try { $_.Path -and ($_.Path -ieq $exePath) } catch { $false } })
+            }
+            $all = @($byName) + @($byPath) | Where-Object { $_ } | Sort-Object -Property Id -Unique
+            foreach ($p in $all) {
+                $ppath = $null; $pstart = $null
+                try { $ppath = $p.Path } catch { }
+                try { $pstart = $p.StartTime.ToString('o') } catch { }
+                $procs += @{ pid = $p.Id; path = $ppath; startTime = $pstart }
+            }
+        } catch { }
+        $multi = ($procs.Count -gt 1)
+        if ($multi) {
+            & $addFinding 'error' "More than one dune-admin.exe is running ($($procs.Count) instances)." 'A second instance locks the market-bot SQLite cache (error 14 "unable to open database file") so the market bot fails. Kill all but one: taskkill /F /IM dune-admin.exe, then start a single instance.'
+        }
+
+        # --- listener + HTTP probe ------------------------------------------
+        $listening = Test-DunePortListening -Port $port
+        $httpProbe = @{ url = "http://localhost:$port/"; ok = $false; statusCode = $null; error = $null }
+        try {
+            $resp = Invoke-WebRequest -Uri $httpProbe.url -TimeoutSec 4 -UseBasicParsing -ErrorAction Stop
+            $httpProbe.ok = $true
+            $httpProbe.statusCode = [int]$resp.StatusCode
+        } catch {
+            try { if ($_.Exception.Response) { $httpProbe.statusCode = [int]$_.Exception.Response.StatusCode } } catch { }
+            $httpProbe.error = $_.Exception.Message
+            if ($httpProbe.statusCode) { $httpProbe.ok = $true }  # got an HTTP response, server is up
+        }
+        if (-not $listening) {
+            & $addFinding 'error' "Nothing is listening on localhost:$port." "The dune-admin backend is not running, so every browser request fails with 'Failed to fetch'. Open a cmd window, cd to '$targetDir', run dune-admin.exe directly, and read the startup error. Expect 'dune-admin listening on :$port'."
+        } elseif (-not $httpProbe.ok) {
+            & $addFinding 'warn' "Port $port accepts connections but the HTTP probe failed: $($httpProbe.error)" 'The process may be mid-startup or wedged. Restart the single dune-admin instance.'
+        }
+
+        # --- market bot ------------------------------------------------------
+        $cacheDb = if ($config.marketBotCacheDb) { $config.marketBotCacheDb } else { Join-Path (Join-Path ([Environment]::GetFolderPath('UserProfile')) '.dune-admin') 'market-bot-cache.db' }
+        $cacheExists = [bool](Test-Path -LiteralPath $cacheDb -PathType Leaf)
+        $cacheLocked = if ($cacheExists) { Test-DuneAdminFileLocked -Path $cacheDb } else { $false }
+        $marketBot = @{
+            cacheDbPath        = $cacheDb
+            cacheDbExists      = $cacheExists
+            cacheDbLocked      = $cacheLocked
+            addrConfigured     = [bool]$config.marketBotAddr
+            containerConfigured= [bool]$config.marketBotContainer
+        }
+        if (-not $config.marketBotAddr -and -not $config.marketBotContainer) {
+            & $addFinding 'info' 'Market bot is not wired up in config.yaml (market_bot_addr and market_bot_container are both empty).' 'The Market Bot panel proxies to a deployed bot via these keys; set them during the setup wizard if the panel shows "not configured".'
+        }
+        if ($cacheLocked -and -not $multi) {
+            & $addFinding 'info' 'market-bot-cache.db is locked (held by the running dune-admin) — normal for a single healthy instance.' $null
+        }
+
+        # --- pricing patch (auto-rebuild) ------------------------------------
+        $pricing = @{ status = 'idle' }
+        try {
+            $ps = Read-DuneAdminPricingStatus
+            if ($ps) {
+                $pricing['status'] = [string]$ps.status
+                foreach ($prop in $ps.PSObject.Properties) {
+                    if ($prop.Name -in @('error','exitCode','targetTag','startedAt','finishedAt','logFile')) { $pricing[$prop.Name] = $prop.Value }
+                }
+                if ($ps.PSObject.Properties.Name -contains 'logFile' -and $ps.logFile -and (Test-Path -LiteralPath $ps.logFile)) {
+                    try {
+                        $tail = Get-Content -LiteralPath $ps.logFile -Tail 25 -ErrorAction SilentlyContinue
+                        if ($tail) { $pricing['logTail'] = ($tail -join "`n") }
+                    } catch { }
+                }
+            }
+        } catch { }
+        $cfgAll = @{}
+        try { $cfgAll = Read-DuneConfig } catch { }
+        $autoApply = [bool]($cfgAll.Contains('AutoApplyPricingPatch') -and ([string]$cfgAll['AutoApplyPricingPatch'] -match '^(1|true|yes)$'))
+        $goAvail  = [bool](Get-Command go  -ErrorAction SilentlyContinue)
+        $gitAvail = [bool](Get-Command git -ErrorAction SilentlyContinue)
+        $pricing['autoApply']    = $autoApply
+        $pricing['goAvailable']  = $goAvail
+        $pricing['gitAvailable'] = $gitAvail
+        if ($autoApply -and -not $goAvail) {
+            & $addFinding 'warn' 'Pricing auto-rebuild is ON but the Go toolchain is not on PATH.' 'The patched build needs go (and git) to compile. Install Go or turn off "Keep Coastal''s sane-pricing patch applied".'
+        }
+        if ($autoApply -and -not $gitAvail) {
+            & $addFinding 'warn' 'Pricing auto-rebuild is ON but git is not on PATH.' 'Install git or turn off the auto-apply pricing patch.'
+        }
+        if ($pricing['status'] -eq 'failed') {
+            & $addFinding 'warn' "Last pricing-patch rebuild failed$(if ($pricing.Contains('error') -and $pricing['error']) { ": $($pricing['error'])" })." 'See the log tail in the report. dune-admin still runs as the upstream binary; the patch just was not applied.'
+        }
+
+        if ($findings.Count -eq 0) {
+            & $addFinding 'ok' 'No problems detected. dune-admin is installed, configured, listening, and a single instance is running.' $null
+        }
+
+        $hasError = [bool]($findings | Where-Object { $_.level -eq 'error' })
+        $hasWarn  = [bool]($findings | Where-Object { $_.level -eq 'warn' })
+        $verdict  = if ($hasError) { 'error' } elseif ($hasWarn) { 'warn' } else { 'ok' }
+
+        Write-DuneJson -Response $res -Body @{
+            ok           = $true
+            generatedAt  = (Get-Date).ToString('o')
+            verdict      = $verdict
+            machine      = $env:COMPUTERNAME
+            findings     = @($findings)
+            install      = @{ exePath = $exePath; exeExists = $exeExists; targetDir = $targetDir; files = $fileList }
+            config       = $config
+            effective    = @{ listenAddr = $listenAddr; port = $port }
+            envOverrides = @($envOverrides)
+            sidecars     = @($sidecars)
+            processes    = @{ duneAdmin = @($procs); count = $procs.Count; multipleInstances = $multi }
+            listener     = @{ port = $port; listening = $listening }
+            httpProbe    = $httpProbe
+            marketBot    = $marketBot
+            pricing      = $pricing
+        }
+    } catch {
+        Write-DuneError -Response $res -Status 500 -Message $_.Exception.Message
+    }
+}
+
 # POST /api/dune-admin/setup - one-button first-run setup wizard launcher
 #
 # What it does, in order:

@@ -11,13 +11,11 @@ import {
   runDuneAdminSetup,
   getDuneAdminDotFolder,
   deleteDuneAdminDotFolder,
+  getDuneAdminDiagnostics,
   type DuneAdminCheck,
   type DuneAdminPricingPatchStatus,
+  type DuneAdminDiagnostics,
 } from '../api/duneAdmin'
-import {
-  syncConfigFiles,
-  type ConfigFilesSyncResult,
-} from '../api/configFiles'
 import { fmtToolVersion } from '../format'
 
 const FIELDS: {
@@ -58,70 +56,28 @@ export function Settings() {
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [browsing, setBrowsing] = useState<string | null>(null)
-  const [cfSyncing, setCfSyncing] = useState(false)
-  const [cfResult, setCfResult] = useState<ConfigFilesSyncResult | null>(null)
-
-  async function onSyncConfigFiles() {
-    setCfSyncing(true)
-    setError(null)
-    setCfResult(null)
-    try {
-      const r = await syncConfigFiles()
-      setCfResult(r)
-      if (!r.ok) setError(r.message || 'Some config files could not be collected.')
-    } catch (e) {
-      setError(e instanceof Error ? e.message : String(e))
-    } finally {
-      setCfSyncing(false)
-    }
-  }
-
-  // "Use local config files" toggle — when ON, DST reads the SSH key from its
-  // local configFiles store (overriding the configured SshKey path). Persisted
-  // immediately to dune-server.config as UseLocalConfigFiles ('true'/'false').
-  const useLocalCfgFiles = (values.UseLocalConfigFiles ?? '').toLowerCase() === 'true'
-  const [cfToggleSaving, setCfToggleSaving] = useState(false)
-  async function onToggleUseLocalConfigFiles(next: boolean) {
-    const msg = next
-      ? 'Turn ON local config files?\n\nDST will read the SSH key from its local store (%APPDATA%\\DuneServer\\configFiles\\sshKey) instead of the configured "SSH key path". Make sure you have refreshed config files at least once so the local copy is current.'
-      : 'Turn OFF local config files?\n\nDST will go back to using the configured "SSH key path" directly.'
-    if (!window.confirm(msg)) return
-    setCfToggleSaving(true)
-    setError(null)
-    try {
-      const out = await api<{ ok: boolean; complete: boolean; values: Record<string, string> }>(
-        '/api/config',
-        { method: 'PUT', body: JSON.stringify({ values: { ...values, UseLocalConfigFiles: next ? 'true' : 'false' } }) },
-      )
-      setValues({ ...out.values, UseLocalConfigFiles: next ? 'true' : 'false' })
-    } catch (e) {
-      setError(e instanceof Error ? e.message : String(e))
-    } finally {
-      setCfToggleSaving(false)
-    }
-  }
 
   // "Generate new SSH key" — runs the rotate-ssh-key command, waits for it to
   // finish, then propagates the fresh key everywhere DST uses it.
   const [sshRotating, setSshRotating] = useState(false)
   const [sshRotateMsg, setSshRotateMsg] = useState<string | null>(null)
   async function onRotateSshKey() {
-    if (!window.confirm('Generate a NEW SSH key?\n\nThis regenerates the key, authorizes it on the dune-awakening VM, and copies it everywhere DST uses it (local config-files store + dune-admin folder). The VM must be running. A console window will open and may ask for admin approval.')) return
+    if (!window.confirm('Generate a NEW SSH key?\n\nThis regenerates the key, authorizes it on the dune-awakening VM, and copies it into the dune-admin folder. The VM must be running. A console window will open and may ask for admin approval.')) return
     setSshRotating(true)
     setSshRotateMsg(null)
     setError(null)
     try {
-      const r = await api<{ ok: boolean; rotated: boolean; synced: boolean; message?: string }>(
+      const r = await api<{ ok: boolean; rotated: boolean; message?: string }>(
         '/api/config/rotate-ssh-key',
         { method: 'POST' },
       )
-      setSshRotateMsg(r.message ?? (r.ok ? 'SSH key rotated and propagated.' : 'Rotation did not complete.'))
+      setSshRotateMsg(r.message ?? (r.ok ? 'SSH key rotated.' : 'Rotation did not complete.'))
       if (!r.ok && r.message) setError(r.message)
       // Reload config so the form reflects any path changes.
       try {
         const cfgOut = await api<ConfigResponse>('/api/config')
         setCfg(cfgOut)
-        setValues({ ...cfgOut.values, UseLocalConfigFiles: cfgOut.useLocalConfigFiles ? 'true' : 'false' })
+        setValues({ ...cfgOut.values })
       } catch { /* non-fatal */ }
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e))
@@ -200,6 +156,12 @@ export function Settings() {
   const [daInstalling, setDaInstalling] = useState(false)
   const [daMsg, setDaMsg] = useState<string | null>(null)
   const [daErr, setDaErr] = useState<string | null>(null)
+
+  // dune-admin diagnostics panel state
+  const [daDiag, setDaDiag] = useState<DuneAdminDiagnostics | null>(null)
+  const [daDiagRunning, setDaDiagRunning] = useState(false)
+  const [daDiagErr, setDaDiagErr] = useState<string | null>(null)
+  const [daDiagCopied, setDaDiagCopied] = useState(false)
 
   // In-app confirmation modal for the stale .dune-admin folder preflight.
   // We DO NOT use window.confirm() here: it is fired after an `await` (the
@@ -357,6 +319,30 @@ export function Settings() {
     }
   }
 
+  async function onRunDuneAdminDiagnostics() {
+    setDaDiagRunning(true)
+    setDaDiagErr(null)
+    setDaDiagCopied(false)
+    try {
+      setDaDiag(await getDuneAdminDiagnostics())
+    } catch (e) {
+      setDaDiagErr(e instanceof Error ? e.message : String(e))
+    } finally {
+      setDaDiagRunning(false)
+    }
+  }
+
+  async function onCopyDiagnostics() {
+    if (!daDiag) return
+    try {
+      await navigator.clipboard.writeText(JSON.stringify(daDiag, null, 2))
+      setDaDiagCopied(true)
+      window.setTimeout(() => setDaDiagCopied(false), 2500)
+    } catch {
+      setDaDiagErr('Could not copy to clipboard — select the report text manually.')
+    }
+  }
+
   // Install/setup preflight: on first-time install, a folder change, OR a
   // same-folder reinstall, a %USERPROFILE%\.dune-admin config folder may hold
   // stale DB/host pointers that make the market bot fail. We ALWAYS ask before
@@ -506,7 +492,7 @@ export function Settings() {
       try {
         const out = await api<ConfigResponse>('/api/config')
         setCfg(out)
-        setValues({ ...out.values, UseLocalConfigFiles: out.useLocalConfigFiles ? 'true' : 'false' })
+        setValues({ ...out.values })
       } catch (e) {
         setError(e instanceof Error ? e.message : String(e))
       } finally {
@@ -611,75 +597,6 @@ export function Settings() {
           <Icon name="CheckCircle2" size={14} /> {saved}
         </div>
       )}
-
-      {/* --- Config files store (top) ----------------------------------- */}
-      <div className="card mb-4 p-4">
-        <div className="flex items-start justify-between gap-4">
-          <div>
-            <h3 className="font-semibold flex items-center gap-2">
-              <Icon name="FolderSync" size={16} /> Local config files
-            </h3>
-            <p className="text-sm text-muted mt-1">
-              DST keeps a local copy of everything it needs (SSH key, dune-server.config,
-              dune-admin config) in <code>%APPDATA%\DuneServer\configFiles</code>. Repull if you've
-              regenerated your SSH key or changed config — the refreshed key is also re-dumped into
-              the dune-admin folder.
-            </p>
-          </div>
-          <button
-            type="button"
-            onClick={onSyncConfigFiles}
-            disabled={cfSyncing}
-            className="btn btn-secondary shrink-0"
-          >
-            <Icon name={cfSyncing ? 'Loader2' : 'RefreshCw'} size={14} className={cfSyncing ? 'animate-spin' : ''} />
-            {cfSyncing ? 'Refreshing…' : 'Refresh config files'}
-          </button>
-        </div>
-
-        {cfResult && (
-          <div className="mt-3 space-y-2">
-            {cfResult.sshKeyDir && (
-              <p className="text-xs text-muted">
-                SSH key re-dumped into dune-admin folder: <code>{cfResult.sshKeyDir}</code>
-              </p>
-            )}
-            <div className="text-sm border border-default/40 rounded overflow-hidden">
-              {cfResult.files.map((f) => (
-                <div key={f.name} className="flex items-center gap-2 px-3 py-1.5 border-b border-default/20 last:border-0">
-                  <Icon
-                    name={f.status === 'copied' ? 'CheckCircle2' : f.status === 'skipped' ? 'MinusCircle' : f.status === 'error' ? 'AlertCircle' : 'Circle'}
-                    size={13}
-                    className={f.status === 'copied' ? 'text-success' : f.status === 'error' ? 'text-danger' : 'text-muted'}
-                  />
-                  <span className="font-mono text-xs">{f.name}</span>
-                  <span className="text-xs text-muted truncate flex-1">{f.message}</span>
-                </div>
-              ))}
-            </div>
-          </div>
-        )}
-
-        <label className="mt-4 flex items-start gap-3 cursor-pointer select-none">
-          <input
-            type="checkbox"
-            className="mt-1"
-            checked={useLocalCfgFiles}
-            disabled={cfToggleSaving}
-            onChange={e => onToggleUseLocalConfigFiles(e.target.checked)}
-          />
-          <span className="text-sm">
-            <span className="font-medium flex items-center gap-2">
-              Use local config files
-              {cfToggleSaving && <Icon name="Loader2" size={13} className="animate-spin" />}
-            </span>
-            <span className="text-muted block mt-0.5">
-              When on, DST reads the SSH key from its local store instead of the configured
-              “SSH key path”. Refresh config files first so the local copy is current.
-            </span>
-          </span>
-        </label>
-      </div>
 
       {/* --- Update check card (top, collapsible) ------------------------ */}
       <div className="card mb-4">
@@ -1117,6 +1034,122 @@ export function Settings() {
                 <Icon name="AlertCircle" size={14} /> {daErr}
               </div>
             )}
+
+            {/* --- Troubleshooting / diagnostics ------------------------------
+                One-shot health report: backend reachability, config.yaml vs
+                env precedence, sidecar shadowing, duplicate instances (market-
+                bot DB lock), and pricing-patch state. The Copy button lets a
+                user paste the full report back for support. */}
+            <div className="border-t border-border pt-3 mt-1">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <Icon name="Stethoscope" size={16} className="text-text-muted" />
+                  <h4 className="text-sm font-semibold">Troubleshoot dune-admin</h4>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => void onRunDuneAdminDiagnostics()}
+                  disabled={daDiagRunning}
+                  className="btn-secondary shrink-0"
+                >
+                  <Icon name={daDiagRunning ? 'Loader2' : 'Activity'} size={15} className={daDiagRunning ? 'animate-spin' : ''} />
+                  {daDiagRunning ? 'Running…' : 'Run diagnostics'}
+                </button>
+              </div>
+              <p className="text-xs text-text-dim mt-1">
+                Checks whether the dune-admin backend is actually running and reachable, and flags
+                the usual causes of <span className="font-mono">Failed to fetch</span> — wrong listen
+                port, stale <span className="font-mono">~/.dune-admin</span> config, env-var overrides,
+                duplicate instances (which lock the market-bot DB), and pricing-patch build problems.
+              </p>
+
+              {daDiagErr && (
+                <p className="mt-2 text-xs text-danger flex items-center gap-1.5">
+                  <Icon name="AlertCircle" size={13} /> {daDiagErr}
+                </p>
+              )}
+
+              {daDiag && (
+                <div className="mt-3 space-y-3">
+                  <div className="flex items-center gap-2">
+                    <span className={
+                      daDiag.verdict === 'error' ? 'pill-warning' : daDiag.verdict === 'warn' ? 'pill-warning' : 'pill-success'
+                    }>
+                      {daDiag.verdict === 'error' ? 'Problems found' : daDiag.verdict === 'warn' ? 'Warnings' : 'All good'}
+                    </span>
+                    <span className="text-[10px] text-text-dim font-mono">
+                      {daDiag.machine ? `${daDiag.machine} · ` : ''}{new Date(daDiag.generatedAt).toLocaleString()}
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => void onCopyDiagnostics()}
+                      className="btn-secondary ml-auto"
+                      title="Copy the full JSON report to share for support"
+                    >
+                      <Icon name={daDiagCopied ? 'ClipboardCheck' : 'Copy'} size={14} className={daDiagCopied ? 'text-success' : ''} />
+                      {daDiagCopied ? 'Copied' : 'Copy report'}
+                    </button>
+                  </div>
+
+                  <ul className="space-y-1.5">
+                    {daDiag.findings.map((f, i) => {
+                      const iconName = f.level === 'error' ? 'AlertCircle'
+                        : f.level === 'warn' ? 'TriangleAlert'
+                        : f.level === 'ok' ? 'CheckCircle2' : 'Info'
+                      const color = f.level === 'error' ? 'text-danger'
+                        : f.level === 'warn' ? 'text-warning'
+                        : f.level === 'ok' ? 'text-success' : 'text-text-muted'
+                      return (
+                        <li key={i} className="text-xs flex items-start gap-2">
+                          <Icon name={iconName} size={13} className={`mt-0.5 shrink-0 ${color}`} />
+                          <span>
+                            <span className={color}>{f.message}</span>
+                            {f.hint && <span className="block text-text-dim mt-0.5">{f.hint}</span>}
+                          </span>
+                        </li>
+                      )
+                    })}
+                  </ul>
+
+                  <div className="grid grid-cols-2 gap-x-4 gap-y-1 text-[11px] font-mono text-text-dim border-t border-border pt-2">
+                    <span>backend listening</span>
+                    <span className={daDiag.listener.listening ? 'text-success' : 'text-danger'}>
+                      {daDiag.listener.listening ? `yes (:${daDiag.listener.port})` : `no (:${daDiag.listener.port})`}
+                    </span>
+                    <span>http probe</span>
+                    <span className={daDiag.httpProbe.ok ? 'text-success' : 'text-danger'}>
+                      {daDiag.httpProbe.ok ? (daDiag.httpProbe.statusCode ?? 'ok') : (daDiag.httpProbe.error ?? 'failed')}
+                    </span>
+                    <span>instances running</span>
+                    <span className={daDiag.processes.multipleInstances ? 'text-danger' : 'text-text'}>
+                      {daDiag.processes.count}{daDiag.processes.multipleInstances ? ' (too many)' : ''}
+                    </span>
+                    <span>config.yaml</span>
+                    <span className={daDiag.config.exists ? 'text-text' : 'text-warning'}>
+                      {daDiag.config.exists ? (daDiag.config.dbPassSet ? 'present' : 'present, db_pass empty') : 'missing'}
+                    </span>
+                    <span>listen_addr</span>
+                    <span className="text-text">{daDiag.effective.listenAddr || ':8080 (default)'}</span>
+                    <span>market bot</span>
+                    <span className="text-text">
+                      {daDiag.marketBot.addrConfigured || daDiag.marketBot.containerConfigured ? 'configured' : 'not configured'}
+                      {daDiag.marketBot.cacheDbLocked ? ' · cache locked' : ''}
+                    </span>
+                    <span>pricing patch</span>
+                    <span className="text-text">
+                      {daDiag.pricing.status}
+                      {daDiag.pricing.autoApply ? ` · auto (go ${daDiag.pricing.goAvailable ? 'ok' : 'missing'})` : ''}
+                    </span>
+                  </div>
+
+                  {daDiag.pricing.logTail && (
+                    <pre className="text-[10px] font-mono bg-bg-dim border border-border rounded p-2 max-h-32 overflow-auto whitespace-pre-wrap">
+                      {daDiag.pricing.logTail}
+                    </pre>
+                  )}
+                </div>
+              )}
+            </div>
 
             {/* Testing-only: wipe all market listings on the VM. */}
             <div className="border-t border-border pt-3 mt-1">

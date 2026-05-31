@@ -13,8 +13,9 @@ $script:DuneConfigKeys = @(
     'AutoApplyPricingPatch',
     'GambleDieSize',
     'GambleTarget',
-    'UseLocalConfigFiles',
-    'OpenInAppWindow'
+    'OpenInAppWindow',
+    'ConsolePresence',
+    'ConsolePresenceVersion'
 )
 
 function Get-DuneConfigPath {
@@ -50,13 +51,6 @@ function Read-DuneConfigRaw {
     return $cfg
 }
 
-# True when the user has opted into the local config-files store.
-function Get-DstUseLocalConfigFiles {
-    $raw = Read-DuneConfigRaw
-    $v = if ($raw.Contains('UseLocalConfigFiles')) { [string]$raw['UseLocalConfigFiles'] } else { '' }
-    return ($v -match '^(?i:true|1|yes|on)$')
-}
-
 # True when the portal should open in the standalone DuneShell app window
 # instead of a browser tab. Defaults to TRUE (app window is the preferred
 # experience); only an explicit false/0/no/off falls back to the browser.
@@ -67,20 +61,10 @@ function Get-DstOpenInAppWindow {
     return $true
 }
 
-# Effective config view. Identical to the raw file EXCEPT that, when the user
-# has opted into the local config-files store AND a local SSH key has been
-# captured there, SshKey is redirected to that local copy so every consumer
-# (SSH, kubectl-over-SSH, dune-admin key re-dump) uses one upgrade-surviving
-# key. Backup/sync code must call Read-DuneConfigRaw to avoid a circular source.
+# Effective config view. Currently identical to the raw on-disk file; kept as a
+# distinct function so callers have a single "resolved config" entry point.
 function Read-DuneConfig {
-    $cfg = Read-DuneConfigRaw
-    if (Get-DstUseLocalConfigFiles) {
-        $localKey = Join-Path $env:APPDATA 'DuneServer\configFiles\sshKey'
-        if (Test-Path -LiteralPath $localKey -PathType Leaf) {
-            $cfg['SshKey'] = $localKey
-        }
-    }
-    return $cfg
+    return Read-DuneConfigRaw
 }
 
 function Save-DuneConfig {

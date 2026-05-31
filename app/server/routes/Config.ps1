@@ -2,8 +2,7 @@
 Register-DuneRoute -Method GET -Path '/api/config' -Handler {
     param($req, $res, $routeParams, $body)
     # Return the RAW on-disk values so the Settings form edits/persists the
-    # user's literal SshKey path (not the local-store override). The computed
-    # useLocalConfigFiles flag drives the toggle's checked state.
+    # user's literal SshKey path.
     $cfg = Read-DuneConfigRaw
     $obj = @{}
     foreach ($k in $cfg.Keys) { $obj[$k] = $cfg[$k] }
@@ -13,7 +12,6 @@ Register-DuneRoute -Method GET -Path '/api/config' -Handler {
         complete            = Test-DuneConfigComplete -Config (Read-DuneConfig)
         keys                = $script:DuneConfigKeys
         values              = $obj
-        useLocalConfigFiles = (Get-DstUseLocalConfigFiles)
     }
 }
 
@@ -52,11 +50,11 @@ Register-DuneRoute -Method PUT -Path '/api/config' -Handler {
     }
 }
 
-# POST /api/config/rotate-ssh-key — generate a fresh SSH key, authorize it on
-# the VM, then propagate the new key everywhere DST uses it (local config-files
-# store + the dune-admin folder). Runs the existing 'rotate-ssh-key' command in
-# an elevated console, WAITS for it to finish (it's non-interactive), then runs
-# the config-files sync so the rotated key lands in every consumer location.
+# POST /api/config/rotate-ssh-key — generate a fresh SSH key and authorize it on
+# the VM. Runs the existing 'rotate-ssh-key' command in an elevated console and
+# WAITS for it to finish (non-interactive). That command also re-copies the
+# rotated key into the dune-admin folder itself, so no extra propagation step is
+# needed here.
 Register-DuneRoute -Method POST -Path '/api/config/rotate-ssh-key' -Handler {
     param($req, $res, $routeParams, $body)
 
@@ -93,25 +91,17 @@ Register-DuneRoute -Method POST -Path '/api/config/rotate-ssh-key' -Handler {
             Write-DuneJson -Response $res -Body @{
                 ok       = $false
                 rotated  = $false
-                synced   = $false
                 pid      = $procId
-                message  = 'Rotation is still running (or needs UAC approval). Once it finishes, click "Refresh config files" to propagate the new key.'
+                message  = 'Rotation is still running (or needs UAC approval). It will finish in the elevated console window.'
             }
             return
         }
 
-        # Propagate the freshly rotated key everywhere DST reads it from.
-        $sync = Sync-DstConfigFiles
-
         Write-DuneJson -Response $res -Body @{
-            ok       = [bool]$sync.ok
+            ok       = $true
             rotated  = $true
-            synced   = [bool]$sync.ok
             pid      = $procId
-            sshKeyDir = $sync.sshKeyDir
-            dir      = $sync.dir
-            files    = $sync.files
-            message  = "SSH key rotated and propagated. $($sync.message)"
+            message  = 'SSH key rotated, authorized on the VM, and copied into the dune-admin folder.'
         }
     } catch {
         Write-DuneError -Response $res -Status 500 -Message "SSH key rotation failed: $($_.Exception.Message)"

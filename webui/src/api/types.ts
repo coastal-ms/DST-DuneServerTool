@@ -68,7 +68,6 @@ export type ConfigResponse = {
   complete: boolean
   keys: string[]
   values: Record<string, string>
-  useLocalConfigFiles?: boolean
 }
 
 export type Command = {

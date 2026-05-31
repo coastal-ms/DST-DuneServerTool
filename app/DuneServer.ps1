@@ -120,7 +120,7 @@ public static extern bool IsIconic(System.IntPtr hWnd);
 }
 
 # Version (one of the 5 sync'd constants; see persistent-notes.md)
-$script:DuneToolVersion = '10.0.9'
+$script:DuneToolVersion = '10.0.10'
 
 # ---------- Single-instance gate ----------------------------------------------
 # Every click of the desktop shortcut runs DuneServer.exe again. Without a
@@ -399,6 +399,9 @@ try {
 #     dune-server.config) or DuneShell.exe isn't present, poll last-url.txt here
 #     and open the portal as a normal tab in the user's default browser.
 $script:DuneShellExe = $null
+$script:DuneAppProc = $null
+$script:DuneConsoleMode = 'console'
+$script:DuneIconPath = $null
 $openInAppWindow = $false
 try { $openInAppWindow = Get-DstOpenInAppWindow } catch { $openInAppWindow = $true }
 if ($openInAppWindow) { $script:DuneShellExe = Get-DuneShellExePath }
@@ -412,12 +415,36 @@ if ($openInAppWindow -and $script:DuneShellExe) {
     Get-Process -Name DuneShell -ErrorAction SilentlyContinue | ForEach-Object {
         try { Stop-Process -Id $_.Id -Force -ErrorAction SilentlyContinue } catch {}
     }
-    Write-DuneLog "Opening portal in app window: $script:DuneShellExe"
+
+    # Decide how the console should present itself while the app window is open
+    # (prompts once per version). Resolve an icon for the optional tray.
+    try { $script:DuneIconPath = Find-DuneSubpath 'assets\icon.ico' } catch {}
+    if (-not $script:DuneIconPath) {
+        try {
+            $selfExeIco = [System.Diagnostics.Process]::GetCurrentProcess().MainModule.FileName
+            if ($selfExeIco -and ($selfExeIco -like '*.exe')) { $script:DuneIconPath = $selfExeIco }
+        } catch {}
+    }
+    if (Get-Command Resolve-DuneConsoleMode -ErrorAction SilentlyContinue) {
+        try { $script:DuneConsoleMode = Resolve-DuneConsoleMode } catch { $script:DuneConsoleMode = 'console' }
+    }
+
+    Write-DuneLog "Opening portal in app window: $script:DuneShellExe (console mode: $script:DuneConsoleMode)"
     try {
-        Start-Process -FilePath $script:DuneShellExe | Out-Null
+        # Capture the app-window process so the lifecycle watcher can stop the
+        # server when it closes. DuneShell is single-instance: if one somehow
+        # already exists, the process we spawn focuses it and exits at once, so
+        # adopt the real long-lived window process in that case.
+        $script:DuneAppProc = Start-Process -FilePath $script:DuneShellExe -PassThru
+        Start-Sleep -Milliseconds 700
+        if ($script:DuneAppProc -and $script:DuneAppProc.HasExited) {
+            $script:DuneAppProc = Get-Process -Name DuneShell -ErrorAction SilentlyContinue |
+                                  Sort-Object StartTime -Descending | Select-Object -First 1
+        }
     } catch {
         Write-DuneLog "App window failed to launch ($($_.Exception.Message)); falling back to browser" 'WARN'
         $script:DuneShellExe = $null
+        $script:DuneAppProc = $null
     }
 }
 
@@ -443,6 +470,9 @@ try {
     Write-DuneLog "HTTP server failed: $($_.Exception.Message)" 'ERROR'
     Show-DuneMessage "Dune Server failed to start: $($_.Exception.Message)" 'Dune Server' 'Error'
 } finally {
+    if (Get-Command Stop-DuneConsoleLifecycle -ErrorAction SilentlyContinue) {
+        try { Stop-DuneConsoleLifecycle } catch {}
+    }
     if ($browserJob) { Remove-Job -Job $browserJob -Force -ErrorAction SilentlyContinue }
     Stop-DuneHttpServer
     # Wipe last-url.txt so the next launch can't race-read a stale URL with

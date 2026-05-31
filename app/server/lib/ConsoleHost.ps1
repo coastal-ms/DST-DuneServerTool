@@ -1,0 +1,249 @@
+# ConsoleHost — links the DuneServer console + the DuneShell app window so they
+# share a single lifecycle, and lets the user pick how the console presents
+# itself (minimized vs. system tray) while the app window is open.
+#
+# Invariants (one console + one app window per machine, see DuneServer.ps1):
+#   * Closing the app window shuts the server (console) down — real-time, via a
+#     watcher runspace that calls $listener.Stop().
+#   * Closing the console / picking tray "Quit" also closes the app window —
+#     symmetric cleanup in Stop-DuneConsoleLifecycle.
+#
+# Elevation note: DuneServer.exe runs ELEVATED, DuneShell.exe runs non-elevated.
+# An elevated process is allowed to WaitForExit/Stop-Process a non-elevated one,
+# so the (admin) console must be the watcher — never the other way around.
+
+# Cache the Win32 console-window P/Invoke. A distinct type name avoids clashing
+# with DuneServer.DuneNativeWin (added only in the compiled-exe startup path).
+function Get-DuneConsoleNativeType {
+    if (-not ('DuneServer.DuneConsoleNative' -as [type])) {
+        Add-Type -MemberDefinition @'
+[System.Runtime.InteropServices.DllImport("kernel32.dll")]
+public static extern System.IntPtr GetConsoleWindow();
+[System.Runtime.InteropServices.DllImport("user32.dll")]
+public static extern bool ShowWindow(System.IntPtr hWnd, int nCmdShow);
+'@ -Name 'DuneConsoleNative' -Namespace 'DuneServer' -ErrorAction Stop
+    }
+    return [DuneServer.DuneConsoleNative]
+}
+
+# Two-button first-run dialog. Returns 'console' or 'tray' ('console' on any
+# failure so we never end up with a hidden, unmanaged console).
+function Show-DuneConsolePresencePrompt {
+    try {
+        Add-Type -AssemblyName System.Windows.Forms -ErrorAction Stop
+        Add-Type -AssemblyName System.Drawing -ErrorAction Stop
+    } catch { return 'console' }
+    try {
+        $form = New-Object System.Windows.Forms.Form
+        $form.Text = 'Dune Server Tool'
+        $form.FormBorderStyle = 'FixedDialog'
+        $form.StartPosition = 'CenterScreen'
+        $form.MinimizeBox = $false
+        $form.MaximizeBox = $false
+        $form.TopMost = $true
+        $form.ClientSize = New-Object System.Drawing.Size(460, 180)
+
+        $lbl = New-Object System.Windows.Forms.Label
+        $lbl.Text = "While the app window is open, how should the Dune Server console behave?`r`n`r`nClosing the app window always shuts the server down. You can change this after the next update."
+        $lbl.SetBounds(16, 14, 428, 80)
+        $form.Controls.Add($lbl)
+
+        $btnMin = New-Object System.Windows.Forms.Button
+        $btnMin.Text = 'Minimize to taskbar'
+        $btnMin.SetBounds(20, 120, 200, 40)
+        $btnMin.DialogResult = [System.Windows.Forms.DialogResult]::No
+        $form.Controls.Add($btnMin)
+
+        $btnTray = New-Object System.Windows.Forms.Button
+        $btnTray.Text = 'Send to system tray'
+        $btnTray.SetBounds(240, 120, 200, 40)
+        $btnTray.DialogResult = [System.Windows.Forms.DialogResult]::Yes
+        $form.Controls.Add($btnTray)
+
+        $form.AcceptButton = $btnMin
+        $result = $form.ShowDialog()
+        try { $form.Dispose() } catch {}
+        if ($result -eq [System.Windows.Forms.DialogResult]::Yes) { return 'tray' }
+        return 'console'
+    } catch { return 'console' }
+}
+
+# Decide the console mode for THIS launch. Prompts once per tool version
+# ("remember until next update"): the stored choice is reused only while its
+# saved version matches the current one, otherwise we re-ask.
+function Resolve-DuneConsoleMode {
+    $raw       = Read-DuneConfigRaw
+    $stored    = if ($raw.Contains('ConsolePresence')) { [string]$raw['ConsolePresence'] } else { '' }
+    $storedVer = if ($raw.Contains('ConsolePresenceVersion')) { [string]$raw['ConsolePresenceVersion'] } else { '' }
+    $cur       = [string]$script:DuneToolVersion
+    $valid     = ($stored -eq 'console' -or $stored -eq 'tray')
+
+    if ($valid -and $storedVer -eq $cur) { return $stored }
+
+    # Only a real (compiled-exe) console is worth prompting about; dev pwsh runs
+    # just default to a minimized console without nagging or persisting.
+    if (-not $script:DuneIsCompiledExe) { return 'console' }
+
+    $mode = Show-DuneConsolePresencePrompt
+    try { Save-DuneConfig @{ ConsolePresence = $mode; ConsolePresenceVersion = $cur } | Out-Null } catch {}
+    if (Get-Command Write-DuneLog -ErrorAction SilentlyContinue) {
+        Write-DuneLog "Console presence chosen: $mode (remembered for v$cur)"
+    }
+    return $mode
+}
+
+# System-tray host on a dedicated STA thread (a NotifyIcon needs a message
+# pump, which the blocking server loop can't provide). Self-terminates when the
+# listener goes down, so it cleans up no matter why the server stopped.
+# Returns $true only when the tray thread was started.
+function Start-DuneTrayIcon {
+    param([Parameter(Mandatory)]$Listener)
+    try {
+        $rs = [runspacefactory]::CreateRunspace()
+        $rs.ApartmentState = 'STA'
+        $rs.ThreadOptions  = 'ReuseThread'
+        $rs.Open()
+        $rs.SessionStateProxy.SetVariable('Listener', $Listener)
+        $rs.SessionStateProxy.SetVariable('IconPath', $script:DuneIconPath)
+        $rs.SessionStateProxy.SetVariable('AppExe',   $script:DuneShellExe)
+        $ps = [PowerShell]::Create()
+        $ps.Runspace = $rs
+        [void]$ps.AddScript({
+            try {
+                Add-Type -AssemblyName System.Windows.Forms
+                Add-Type -AssemblyName System.Drawing
+
+                $ni = New-Object System.Windows.Forms.NotifyIcon
+                $icon = $null
+                try {
+                    if ($IconPath -and (Test-Path -LiteralPath $IconPath)) {
+                        if ($IconPath -match '\.ico$') { $icon = New-Object System.Drawing.Icon $IconPath }
+                        else { $icon = [System.Drawing.Icon]::ExtractAssociatedIcon($IconPath) }
+                    }
+                } catch {}
+                if (-not $icon) { $icon = [System.Drawing.SystemIcons]::Application }
+                $ni.Icon = $icon
+                $ni.Text = 'Dune Server Tool'
+                $ni.Visible = $true
+
+                $openApp = {
+                    try { if ($AppExe -and (Test-Path -LiteralPath $AppExe)) { Start-Process -FilePath $AppExe } } catch {}
+                }
+                $menu = New-Object System.Windows.Forms.ContextMenuStrip
+                $miOpen = $menu.Items.Add('Open Dune Server Tool')
+                $miOpen.add_Click($openApp)
+                $miQuit = $menu.Items.Add('Quit (stop server)')
+                $miQuit.add_Click({
+                    try { $ni.Visible = $false } catch {}
+                    try { $Listener.Stop() } catch {}
+                })
+                $ni.ContextMenuStrip = $menu
+                $ni.add_MouseDoubleClick($openApp)
+
+                # When the listener stops (app closed, Quit, shutdown) tear down.
+                $timer = New-Object System.Windows.Forms.Timer
+                $timer.Interval = 500
+                $timer.add_Tick({
+                    $up = $false
+                    try { $up = $Listener.IsListening } catch { $up = $false }
+                    if (-not $up) {
+                        try { $timer.Stop() } catch {}
+                        try { $ni.Visible = $false; $ni.Dispose() } catch {}
+                        [System.Windows.Forms.Application]::ExitThread()
+                    }
+                })
+                $timer.Start()
+
+                [System.Windows.Forms.Application]::Run()
+                try { $ni.Dispose() } catch {}
+            } catch {}
+        })
+        $script:DuneTrayPs     = $ps
+        $script:DuneTrayRs     = $rs
+        $script:DuneTrayHandle = $ps.BeginInvoke()
+        return $true
+    } catch {
+        if (Get-Command Write-DuneLog -ErrorAction SilentlyContinue) {
+            Write-DuneLog "Tray icon failed to start: $($_.Exception.Message)" 'WARN'
+        }
+        return $false
+    }
+}
+
+# Arm the app-window watcher + apply the chosen console presentation. Called
+# from Start-DuneHttpServer once the listener is bound. No-op unless an app
+# window was launched (browser-fallback launches have nothing to watch).
+function Start-DuneConsoleLifecycle {
+    param([Parameter(Mandatory)]$Listener)
+
+    if (-not $script:DuneAppProc) { return }
+    $mode = if ($script:DuneConsoleMode) { $script:DuneConsoleMode } else { 'console' }
+
+    # 1. Real-time linkage: app window closes -> stop listener -> server exits.
+    try {
+        $rs = [runspacefactory]::CreateRunspace()
+        $rs.Open()
+        $rs.SessionStateProxy.SetVariable('AppProc',  $script:DuneAppProc)
+        $rs.SessionStateProxy.SetVariable('Listener', $Listener)
+        $ps = [PowerShell]::Create()
+        $ps.Runspace = $rs
+        [void]$ps.AddScript({
+            try { $AppProc.WaitForExit() } catch {}
+            try { $Listener.Stop() } catch {}
+        })
+        $script:DuneWatcherPs     = $ps
+        $script:DuneWatcherRs     = $rs
+        $script:DuneWatcherHandle = $ps.BeginInvoke()
+        if (Get-Command Write-DuneLog -ErrorAction SilentlyContinue) {
+            Write-DuneLog "App-window watcher armed (PID $($script:DuneAppProc.Id)); closing the app window stops the server"
+        }
+    } catch {
+        if (Get-Command Write-DuneLog -ErrorAction SilentlyContinue) {
+            Write-DuneLog "Failed to arm app-window watcher: $($_.Exception.Message)" 'WARN'
+        }
+    }
+
+    # 2. Console presentation (compiled exe only; dev pwsh has no own console).
+    if (-not $script:DuneIsCompiledExe) { return }
+    try {
+        $native = Get-DuneConsoleNativeType
+        $hwnd = $native::GetConsoleWindow()
+        if ($hwnd -ne [System.IntPtr]::Zero) {
+            if ($mode -eq 'tray') {
+                if (Start-DuneTrayIcon -Listener $Listener) {
+                    [void]$native::ShowWindow($hwnd, 0)   # SW_HIDE
+                } else {
+                    [void]$native::ShowWindow($hwnd, 7)   # SW_SHOWMINNOACTIVE (tray failed)
+                }
+            } else {
+                [void]$native::ShowWindow($hwnd, 7)       # SW_SHOWMINNOACTIVE
+            }
+        }
+    } catch {
+        if (Get-Command Write-DuneLog -ErrorAction SilentlyContinue) {
+            Write-DuneLog "Console presentation failed: $($_.Exception.Message)" 'WARN'
+        }
+    }
+}
+
+# Symmetric teardown, run from DuneServer.ps1's finally. If the server stopped
+# for a reason OTHER than the app window closing (tray Quit, console close),
+# kill the app window too so no orphan lingers; then dispose helper runspaces.
+function Stop-DuneConsoleLifecycle {
+    try {
+        if ($script:DuneAppProc -and -not $script:DuneAppProc.HasExited) {
+            try { Stop-Process -Id $script:DuneAppProc.Id -Force -ErrorAction SilentlyContinue } catch {}
+        }
+    } catch {}
+
+    foreach ($pair in @(
+        ,@($script:DuneWatcherPs, $script:DuneWatcherRs)
+        ,@($script:DuneTrayPs,    $script:DuneTrayRs)
+    )) {
+        $p = $pair[0]; $r = $pair[1]
+        try { if ($p) { $p.Stop(); $p.Dispose() } } catch {}
+        try { if ($r) { $r.Dispose() } } catch {}
+    }
+    $script:DuneWatcherPs = $null; $script:DuneWatcherRs = $null
+    $script:DuneTrayPs    = $null; $script:DuneTrayRs    = $null
+}
