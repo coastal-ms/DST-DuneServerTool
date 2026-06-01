@@ -201,7 +201,31 @@ function Start-DuneConsoleLifecycle {
         $ps = [PowerShell]::Create()
         $ps.Runspace = $rs
         [void]$ps.AddScript({
-            try { $AppProc.WaitForExit() } catch {}
+            # Follow the chain of app windows rather than nuking the server the
+            # instant the FIRST watched window exits. DuneShell is single-instance
+            # (Global mutex): right after an update/relaunch the server launches a
+            # fresh DuneShell that may exit immediately because an older window
+            # still owns the mutex. Stopping the listener on that instantaneous
+            # exit kills a brand-new server out from under the surviving window
+            # ("Connecting... attempt N" forever). So: when the watched window
+            # exits, only stop the server if NO DuneShell survives a short grace
+            # window; if one does, re-arm on it and keep serving.
+            $proc = $AppProc
+            while ($true) {
+                try { $proc.WaitForExit() } catch {}
+                $survivor = $null
+                $deadline = (Get-Date).AddSeconds(6)
+                while ((Get-Date) -lt $deadline) {
+                    try {
+                        $alive = @(Get-Process -Name 'DuneShell' -ErrorAction SilentlyContinue |
+                                   Sort-Object StartTime -Descending)
+                    } catch { $alive = @() }
+                    if ($alive.Count -gt 0) { $survivor = $alive[0]; break }
+                    Start-Sleep -Milliseconds 400
+                }
+                if ($survivor) { $proc = $survivor; continue }
+                break
+            }
             try { $Listener.Stop() } catch {}
         })
         $script:DuneWatcherPs     = $ps
