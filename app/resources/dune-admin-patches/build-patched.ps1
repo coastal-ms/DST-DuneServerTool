@@ -65,6 +65,26 @@ $scriptRoot = $PSScriptRoot
 $repoRoot   = Split-Path -Parent $scriptRoot
 $exePath    = Join-Path $repoRoot 'dune-admin.exe'
 
+# --- pnpm content-addressable store (warm-store reuse) -----------------------
+# pnpm hardlinks packages from a global content-addressable store into
+# node_modules, but hardlinks CANNOT span volumes. dune-admin source commonly
+# lives on a non-system drive (e.g. E:\DuneAdminMain) while pnpm's default store
+# sits on C: under %LOCALAPPDATA% — so a fresh install re-downloads the whole
+# ~480-package tree every time ("reused 0") instead of linking from the store.
+# Pin the store to a stable dir on the BUILD's own volume so installs hardlink
+# from a warm store and become near-instant on repeat builds. Passed explicitly
+# via --store-dir on every install (works for both real pnpm and corepack pnpm).
+$pnpmStoreDir = $null
+try {
+    $qualifier = Split-Path -Qualifier $repoRoot   # e.g. 'E:' (empty for UNC)
+    if ($qualifier) {
+        $pnpmStoreDir = Join-Path "$qualifier\" '.dst-pnpm-store'
+        if (-not (Test-Path -LiteralPath $pnpmStoreDir)) {
+            New-Item -ItemType Directory -Path $pnpmStoreDir -Force -ErrorAction Stop | Out-Null
+        }
+    }
+} catch { $pnpmStoreDir = $null }
+
 # --- Resolve build tools (git, go) -------------------------------------------
 # When this script runs from the Dune Server Tool's background wrapper (spawned
 # by DuneServer.exe, a ps2exe binary), the inherited PATH can be missing entries
@@ -398,7 +418,14 @@ try {
             try {
                 # --prefer-offline reuses the pnpm content-addressable store so a
                 # forced rebuild doesn't re-download packages it already has.
-                & $pnpmExe @pnpmPre install --frozen-lockfile --prefer-offline
+                # --store-dir pins that store to the build's own volume so the
+                # reuse is via hardlink (instant) rather than a cross-drive miss.
+                $installArgs = @('install', '--frozen-lockfile', '--prefer-offline')
+                if ($pnpmStoreDir) {
+                    $installArgs += @('--store-dir', $pnpmStoreDir)
+                    Info "pnpm store: $pnpmStoreDir (same-volume warm store)"
+                }
+                & $pnpmExe @pnpmPre @installArgs
                 if ($LASTEXITCODE -ne 0) { throw "pnpm install failed (web UI)." }
                 & $pnpmExe @pnpmPre build
                 if ($LASTEXITCODE -ne 0) { throw "pnpm build failed (web UI)." }
@@ -424,6 +451,15 @@ try {
         $exe = Get-Item $exePath
         Info "built: $($exe.FullName) ($([math]::Round($exe.Length / 1MB, 2)) MB)"
         Info "version=$version commit=$gitCommit"
+        # Stamp the patched binary so the Dune Server Tool can skip a redundant
+        # download + rebuild on the next reinstall of the SAME upstream version
+        # and gamble-die config (the result would be byte-identical). Best-effort:
+        # a stamp failure must never fail an otherwise-successful build.
+        try {
+            Set-Content -LiteralPath "$exePath.coastal-sane-pricing" `
+                        -Value "$version|$GambleDie|$GambleTarget" -Encoding ascii -ErrorAction Stop
+            Info "patched stamp: $version|$GambleDie|$GambleTarget"
+        } catch { }
     } finally {
         if (-not $Keep -and $patchedFiles.Count -gt 0) {
             Step "Reverting patched files (working tree → exact pre-patch state)"
