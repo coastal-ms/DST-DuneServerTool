@@ -12,6 +12,37 @@ on GitHub still exist for each individual release; the consolidated entries
 here cover everything those tags shipped.
 
 ## [Unreleased]
+## [10.1.5] - 2026-05-31
+
+### Fixed
+- **The portal no longer kills its own server right after an update/relaunch.**
+  The app-window watcher (which stops the server when you close the window) was
+  armed on the specific DuneShell window the server launched. Because DuneShell
+  is single-instance, a freshly launched window can exit immediately when an
+  older window still owns the global mutex — and the watcher took that instant
+  exit as "the user closed the window" and tore down the brand-new HTTP listener.
+  The surviving window was then left retrying forever ("Connecting to Dune Server
+  Tool… (attempt N)"), and dashboard panels flashed "Failed to fetch" / "spice:
+  Failed to fetch" while a zombie server lingered. The watcher now only stops the
+  server if **no** DuneShell window survives a short grace period; if one does, it
+  re-arms on it and keeps serving. Closing the last window still stops the server.
+
+## [10.1.4] - 2026-05-31
+
+### Added
+- **Map SpinUp page** — spin native maps up or down on the live battlegroup by
+  patching `director.ini` via a base64-piped `kubectl patch --patch-file` (no
+  fragile embedded quoting).
+
+### Fixed
+- **dune-admin gets its own loopback port when another app squats 8080.** When a
+  foreign process (e.g. CubeCoders AMP) already holds the configured dune-admin
+  port, the launcher now moves dune-admin to a free `127.0.0.1` port instead of
+  surfacing an unreachable `[::1]` URL.
+- **Auto-update no longer gets stuck reporting the old version.** The runtime
+  version constant compiled into `DuneServer.exe` is now bumped together with the
+  installer metadata, so the update banner clears correctly after installing.
+
 ## [10.1.3] - 2026-05-31
 
 ### Added
