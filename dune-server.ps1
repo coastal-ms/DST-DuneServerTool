@@ -547,6 +547,61 @@ function Get-DuneAdminWebState {
     }
 }
 
+# dune-admin is the priority tool on this host. When CubeCoders AMP (or anything
+# else) already owns dune-admin's configured port on the IPv4 wildcard
+# (0.0.0.0:<port>), dune-admin can only fall back to the IPv6 wildcard
+# ([::]:<port>) — which forces the ugly [::1] loopback URL and breaks hosts with
+# IPv6 disabled. So give dune-admin its OWN IPv4 loopback port: if the configured
+# port is held by a foreign process at cold-launch time, move dune-admin to the
+# next free port and pin it to 127.0.0.1 (loopback-only bind => a normal
+# 'localhost' name, no AMP contention). No-op when the configured port is free,
+# so normal (non-AMP) users are NEVER touched. Returns the port to serve on.
+function Set-DuneAdminOwnLoopbackPort {
+    $cfgPath = Join-Path (Join-Path $env:USERPROFILE '.dune-admin') 'config.yaml'
+    if (-not (Test-Path -LiteralPath $cfgPath)) { return $null }
+
+    $port = [int](Get-DuneAdminWebState).Port
+
+    # Who (if anyone) is already listening on the configured port? The caller only
+    # invokes us on the cold path (dune-admin NOT running), so any listener here
+    # is a foreign process (e.g. AMP) that will block dune-admin's bind.
+    $blocked = @(Get-DunePortOwnerNames -Port $port).Count -gt 0
+    if (-not $blocked) { return $port }   # port free -> leave config untouched
+
+    # Find the next free loopback port. Prefer 18080 (the value dune-admin's own
+    # AMP control-plane setup uses), then scan upward.
+    $candidates = @(18080) + (18081..18099)
+    $freePort = $null
+    foreach ($cand in $candidates) {
+        if ($cand -eq $port) { continue }
+        if (@(Get-DunePortOwnerNames -Port $cand).Count -eq 0) { $freePort = $cand; break }
+    }
+    if (-not $freePort) {
+        Write-Host "Could not find a free port to move dune-admin to (tried 18080-18099)." -ForegroundColor Yellow
+        return $port
+    }
+
+    # Rewrite (or add) listen_addr, pinning to 127.0.0.1 so dune-admin binds IPv4
+    # loopback ONLY — it owns this port outright (no AMP contention) and the web
+    # UI opens on a normal 'localhost' name instead of [::1].
+    try {
+        $newAddr = "127.0.0.1:$freePort"
+        $lines = @(Get-Content -LiteralPath $cfgPath)
+        $found = $false
+        $lines = $lines | ForEach-Object {
+            if ($_ -match '^\s*listen_addr\s*:') { $found = $true; "listen_addr: $newAddr" } else { $_ }
+        }
+        if (-not $found) { $lines += "listen_addr: $newAddr" }
+        $utf8 = New-Object System.Text.UTF8Encoding($false)
+        [System.IO.File]::WriteAllText($cfgPath, ($lines -join "`n") + "`n", $utf8)
+        Write-Host "Port $port is held by another process (likely AMP) — moved dune-admin to 127.0.0.1:$freePort." -ForegroundColor Cyan
+        return $freePort
+    } catch {
+        Write-Warning "Could not update dune-admin listen_addr: $($_.Exception.Message)"
+        return $port
+    }
+}
+
 # Short-timeout TCP probe: is anything listening on 127.0.0.1:<port> yet?
 function Test-DuneAdminListening {
     param([int]$Port, [int]$TimeoutMs = 800)
@@ -2056,6 +2111,11 @@ while ($true) {
         if ($adminRunning) {
             Write-Host "dune-admin.exe is already running — reusing the existing instance." -ForegroundColor DarkGray
         } else {
+            # dune-admin is priority: if its configured port is squatted by a
+            # foreign process (e.g. AMP on 0.0.0.0:8080), move dune-admin to its
+            # own free 127.0.0.1 loopback port BEFORE launch so it binds IPv4
+            # cleanly and the UI opens on a normal name (no [::1]).
+            try { Set-DuneAdminOwnLoopbackPort | Out-Null } catch { Write-Warning "Port pre-flight failed: $($_.Exception.Message)" }
             # Launch as the logged-in user via scheduled task (avoids admin elevation)
             try {
                 $action = New-ScheduledTaskAction -Execute $duneAdminExe -WorkingDirectory $duneAdminDir

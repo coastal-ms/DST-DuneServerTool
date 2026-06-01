@@ -6,6 +6,7 @@ import { GameConfig } from './pages/GameConfig'
 import { Database } from './pages/Database'
 import { Sietches } from './pages/Sietches'
 import { DDMap } from './pages/DDMap'
+import { MapSpinUp } from './pages/MapSpinUp'
 import { SetupWizard } from './pages/SetupWizard'
 import { Settings } from './pages/Settings'
 import { TerminalPage } from './pages/Terminal'
@@ -24,6 +25,7 @@ export default function App() {
           <Route path="/database"   element={<Database />} />
           <Route path="/sietches"   element={<Sietches />} />
           <Route path="/dd-map"     element={<DDMap />} />
+          <Route path="/map-spinup" element={<MapSpinUp />} />
           <Route path="/settings"   element={<Settings />} />
           <Route path="/setup"      element={<SetupWizard />} />
           {/* /monitoring merged into Dashboard in v6.1 — redirect old path */}
