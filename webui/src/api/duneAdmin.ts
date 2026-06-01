@@ -33,7 +33,7 @@ export interface DuneAdminCheck {
 
 export interface DuneAdminPricingPatchStatus {
   ok: boolean
-  status: 'idle' | 'running' | 'success' | 'failed'
+  status: 'idle' | 'running' | 'success' | 'failed' | 'deferred'
   statusFile?: string
   targetTag?: string
   targetDir?: string
@@ -42,6 +42,7 @@ export interface DuneAdminPricingPatchStatus {
   finishedAt?: string
   exitCode?: number
   error?: string
+  reason?: string
   pid?: number
   logTail?: string
 }
@@ -116,6 +117,39 @@ export function installDuneAdminUpdate() {
 
 export function pricingPatchStatus() {
   return api<DuneAdminPricingPatchStatus>(`/api/dune-admin/pricing-patch-status`)
+}
+
+export interface DuneAdminPricingPatchPending {
+  ok: boolean
+  pending: boolean
+  configured: boolean
+  listening: boolean
+  targetTag?: string | null
+  requestedAt?: string | null
+}
+
+/** Reports whether a deferred sane-pricing rebuild is waiting (because the user
+ *  deleted ~/.dune-admin during a reinstall) and whether dune-admin is now
+ *  configured + listening so it can be applied. Poll after a deferred install. */
+export function pricingPatchPending() {
+  return api<DuneAdminPricingPatchPending>(`/api/dune-admin/pricing-patch-pending`)
+}
+
+export interface DuneAdminApplyPendingResult {
+  ok: boolean
+  applied: boolean
+  pending: boolean
+  configured?: boolean
+  reason?: string
+  stoppedPids?: number[]
+  pricingPatch?: DuneAdminPricingPatchStatus
+}
+
+/** Applies a deferred pricing patch once dune-admin is configured. Stops the
+ *  running dune-admin (to unlock its exe), starts the detached rebuild, and
+ *  clears the pending marker. Poll pricingPatchStatus() afterwards. */
+export function applyPendingPricingPatch() {
+  return api<DuneAdminApplyPendingResult>(`/api/dune-admin/pricing-patch/apply-pending`, { method: 'POST', body: '{}' })
 }
 
 export type DuneAdminDiagLevel = 'ok' | 'info' | 'warn' | 'error'

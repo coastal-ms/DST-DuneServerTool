@@ -12,6 +12,43 @@ on GitHub still exist for each individual release; the consolidated entries
 here cover everything those tags shipped.
 
 ## [Unreleased]
+## [10.1.3] - 2026-05-31
+
+### Added
+- **The installer now offers to install the pricing-patch build tools.** The
+  optional "sane pricing" market patch compiles a patched `dune-admin.exe` from
+  source, which needs Node.js, Go and Git. At install time DST checks whether
+  those are present and, if any are missing, offers to install them via winget
+  (your choice — skip it if you don't use the patch). If the install can't be
+  done on your PC, it shows what to install manually and where to get it; the
+  Dune Server Tool itself installs and works regardless. This avoids the patch
+  build trying to bootstrap a toolchain on-demand later.
+- **Deferred sane-pricing patch when you delete `~/.dune-admin` on reinstall.**
+  Rebuilding the patched `dune-admin.exe` requires the on-disk source/config to be
+  present, and the exe is locked while the first-run setup wizard is open. If you
+  elect to delete your `.dune-admin` folder during a reinstall, the portal no
+  longer tries to rebuild mid-setup (which failed with exit 1). Instead it records
+  a pending marker, tells you the pricing patch will not deploy until dune-admin is
+  reconfigured, and then automatically polls. Once setup finishes and dune-admin is
+  listening, the patch applies on its own (it briefly stops dune-admin to swap in
+  the patched build).
+
+### Fixed
+- **The desktop window no longer gets stuck on "Hmmm… can't reach this page".**
+  DuneShell (the WebView2 app window) revealed the page on the first navigation
+  regardless of whether it succeeded, so if it started a moment before the portal's
+  HTTP listener was accepting (a timing race), it showed a permanent connection-error
+  page with no recovery. It now retries the navigation (up to ~12s) on any
+  transport-level failure and only gives up — showing the error page so you can F5 —
+  after that, eliminating the intermittent "console says listening but the window
+  can't reach it" symptom.
+- **Pricing-patch build no longer dies on a stale pnpm shim.** A standalone-pnpm
+  self-update can orphan the `pnpm.ps1` shim on `PATH` (it points at a versioned
+  global exe that pnpm deleted), so `& pnpm install` failed with "pnpm.exe is not
+  recognized" at build time even though `pnpm --version` worked interactively. The
+  build wrapper now probes each pnpm candidate with `--version` and falls back to
+  `corepack pnpm`, so the web-UI build resolves a working pnpm reliably.
+
 ## [10.1.2] - 2026-05-31
 
 ### Fixed
