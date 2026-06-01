@@ -240,3 +240,19 @@ export function deleteDuneAdminDotFolder() {
 export function runDuneAdminSetup() {
   return api<DuneAdminSetupResult>(`/api/dune-admin/setup`, { method: 'POST', body: '{}' })
 }
+
+export interface DuneAdminWebUrl {
+  configured: boolean
+  port: number
+  listenAddr: string
+  url: string
+  listening: boolean
+}
+
+/** Resolves dune-admin's effective web URL from its config.yaml listen_addr.
+ *  The port is per-user (default 8080, but :18080 for AMP installs or any
+ *  custom value chosen at setup), so the UI must NEVER hardcode 8080 — it asks
+ *  the backend, which reads the real listen_addr. */
+export function getDuneAdminWebUrl() {
+  return api<DuneAdminWebUrl>(`/api/dune-admin/web-url`)
+}

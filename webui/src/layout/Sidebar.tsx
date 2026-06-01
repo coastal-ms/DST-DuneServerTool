@@ -5,6 +5,7 @@ import { NAV_ITEMS, GROUP_LABELS } from '../nav'
 import { useUpdateCheck } from '../hooks/useUpdateCheck'
 import { useInstallPrompt } from '../hooks/useInstallPrompt'
 import { api } from '../api/client'
+import { getDuneAdminWebUrl } from '../api/duneAdmin'
 import { fmtToolVersion } from '../format'
 
 export function Sidebar() {
@@ -24,9 +25,16 @@ export function Sidebar() {
     try {
       await api('/api/commands/run/dune-admin', { method: 'POST' })
     } catch {
-      // Best-effort: if the launch endpoint fails, still open the page so the
-      // user can connect to an already-running instance.
-      window.open('http://localhost:8080/#/players', '_blank', 'noopener')
+      // Best-effort fallback: if the launch endpoint fails, open the page so the
+      // user can connect to an already-running instance. Resolve the REAL port
+      // from the backend (per-user listen_addr — never assume 8080, which may be
+      // AMP's panel). Only open if dune-admin is actually listening.
+      try {
+        const web = await getDuneAdminWebUrl()
+        if (web.listening) window.open(web.url, '_blank', 'noopener')
+      } catch {
+        // give up silently — better than opening the wrong port
+      }
     } finally {
       setDaLaunching(false)
     }
