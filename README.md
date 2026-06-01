@@ -478,7 +478,17 @@ Wizard from a clean slate. Your `button-order.json` and logs are kept.
 - The VM name is always `dune-awakening` and the SSH user is always `dune`
   — these match Funcom's official setup and can't be changed.
 - The dune-admin web UI is served locally (same-origin) at
-  [http://localhost:8080/#/players](http://localhost:8080/#/players) once
-  dune-admin is running.
+  `http://localhost:<port>/#/players` once dune-admin is running.
+- **Ports & DST.** DST never picks, moves, or binds a port — it only *reads*
+  the port you chose. dune-admin's listen port is per-user: it's written to
+  `~/.dune-admin/config.yaml` as `listen_addr` during dune-admin's setup wizard
+  (the "HTTP listen address" prompt). The default is `:8080`, but if you tell
+  the wizard you use the **`amp`** control plane it auto-defaults to `:18080`,
+  since CubeCoders AMP commonly squats `8080` on host installs. DST reads
+  whatever `listen_addr` you set and opens that exact URL — so AMP (or anything
+  else) on `8080` is never touched. When you click **Characters**, DST also
+  verifies the process actually listening on that port is dune-admin (not AMP)
+  before opening the browser, and waits for dune-admin to finish first-time
+  setup, so it can never accidentally open the wrong app's panel.
 - This tool is **not affiliated with Funcom**. "Dune", "Dune: Awakening",
   and related trademarks are property of their respective owners.

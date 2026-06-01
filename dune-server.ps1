@@ -13,7 +13,7 @@ param(
 # Wraps the original battlegroup.ps1 menu and adds extra tools
 # ============================================================
 
-$script:ToolVersion = "10.1.1"
+$script:ToolVersion = "10.1.2"
 
 # Cold-boot readiness budgets (seconds). A fresh battlegroup's FIRST boot can
 # take 10-30 min: k3s + funcom-operators initialize, metrics-server restarts a
@@ -518,22 +518,101 @@ if ($duneAdminExe) {
 }
 # dune-admin serves its web UI embedded (same-origin with its own API). Open the
 # LOCAL instance — NOT the hosted layout.tools site, which is a different origin
-# from the local API and triggers "Failed to fetch" + a sign-in wall. Derive the
-# port from dune-admin's config.yaml listen_addr; default 8080.
-$duneAdminPort = 8080
-try {
-    $daCfg = Join-Path (Join-Path $env:USERPROFILE '.dune-admin') 'config.yaml'
-    if (Test-Path -LiteralPath $daCfg) {
-        $laMatch = Select-String -LiteralPath $daCfg -Pattern '^\s*listen_addr\s*:\s*(.+?)\s*$' -ErrorAction SilentlyContinue | Select-Object -First 1
-        if ($laMatch) {
-            $la = $laMatch.Matches[0].Groups[1].Value.Trim().Trim('"').Trim("'")
-            $p = ($la -split ':')[-1]
-            $pn = 0
-            if ([int]::TryParse($p, [ref]$pn) -and $pn -gt 0) { $duneAdminPort = $pn }
-        }
+# from the local API and triggers "Failed to fetch" + a sign-in wall.
+#
+# The port is PER-USER. dune-admin defaults to :8080 but its setup wizard writes
+# whatever the user picked into config.yaml listen_addr (e.g. :18080 when the
+# 'amp' control plane is chosen, since CubeCoders AMP squats 8080). NEVER assume
+# 8080 — always resolve through Get-DuneAdminWebState, which re-reads config.yaml
+# fresh each call (so a port chosen mid-session is picked up).
+function Get-DuneAdminWebState {
+    $port = 8080
+    $cfgPath = Join-Path (Join-Path $env:USERPROFILE '.dune-admin') 'config.yaml'
+    $configured = Test-Path -LiteralPath $cfgPath
+    if ($configured) {
+        try {
+            $laMatch = Select-String -LiteralPath $cfgPath -Pattern '^\s*listen_addr\s*:\s*(.+?)\s*$' -ErrorAction SilentlyContinue | Select-Object -First 1
+            if ($laMatch) {
+                $la = $laMatch.Matches[0].Groups[1].Value.Trim().Trim('"').Trim("'")
+                $p = ($la -split ':')[-1]
+                $pn = 0
+                if ([int]::TryParse($p, [ref]$pn) -and $pn -gt 0) { $port = $pn }
+            }
+        } catch { }
     }
-} catch { }
-$duneAdminWeb  = "http://localhost:$duneAdminPort/#/players"
+    return [pscustomobject]@{
+        Configured = [bool]$configured
+        Port       = $port
+        Url        = "http://localhost:$port/#/players"
+    }
+}
+
+# Short-timeout TCP probe: is anything listening on 127.0.0.1:<port> yet?
+function Test-DuneAdminListening {
+    param([int]$Port, [int]$TimeoutMs = 800)
+    $client = $null
+    try {
+        $client = [System.Net.Sockets.TcpClient]::new()
+        $iar = $client.BeginConnect('127.0.0.1', $Port, $null, $null)
+        if ($iar.AsyncWaitHandle.WaitOne($TimeoutMs) -and $client.Connected) {
+            $client.EndConnect($iar); return $true
+        }
+        return $false
+    } catch { return $false } finally { if ($client) { try { $client.Close() } catch { } } }
+}
+
+# Which processes own the TCP listener(s) on <port>? Returns an array of
+# ProcessNames (no .exe). More than one can listen on the same port via
+# different interfaces (e.g. dune-admin on 127.0.0.1 AND CubeCoders AMP on
+# 0.0.0.0). Returns @() if nothing is listening / owners can't be resolved.
+function Get-DunePortOwnerNames {
+    param([int]$Port)
+    $names = @()
+    try {
+        $conns = Get-NetTCPConnection -LocalPort $Port -State Listen -ErrorAction SilentlyContinue
+        foreach ($c in $conns) {
+            $op = $c.OwningProcess
+            if ($op) {
+                $proc = Get-Process -Id $op -ErrorAction SilentlyContinue
+                if ($proc -and ($names -notcontains $proc.ProcessName)) { $names += $proc.ProcessName }
+            }
+        }
+    } catch { }
+    return $names
+}
+
+# Picks the loopback host literal that actually routes to dune-admin on <port>.
+#
+# Why this is needed: when CubeCoders AMP already holds the IPv4 wildcard
+# (0.0.0.0:8080), dune-admin can only bind the IPv6 wildcard ([::]:8080). In
+# that split, 'localhost' resolves to 127.0.0.1 FIRST and lands on AMP's panel,
+# not dune-admin — even though dune-admin IS listening on the same port number.
+# So we inspect the actual listeners and, when there's a cross-family conflict,
+# return the loopback literal ([::1] or 127.0.0.1) that dune-admin owns
+# exclusively. With no conflict we keep friendly 'localhost'.
+function Get-DuneAdminUrlHost {
+    param([int]$Port, [string]$AdminProcName = 'dune-admin')
+    $hostLit = 'localhost'
+    try {
+        $conns = Get-NetTCPConnection -LocalPort $Port -State Listen -ErrorAction SilentlyContinue
+        $adminV4 = $false; $adminV6 = $false; $otherV4 = $false; $otherV6 = $false
+        foreach ($c in $conns) {
+                $isV6 = ([string]$c.LocalAddress).Contains(':')
+                $pn = $null
+                if ($c.OwningProcess) { $pn = (Get-Process -Id $c.OwningProcess -ErrorAction SilentlyContinue).ProcessName }
+                $isAdmin = ($pn -and $AdminProcName -and ($pn -ieq $AdminProcName))
+                if ($isAdmin) { if ($isV6) { $adminV6 = $true } else { $adminV4 = $true } }
+                else         { if ($isV6) { $otherV6 = $true } else { $otherV4 = $true } }
+        }
+        if ($otherV4 -or $otherV6) {
+                if ($adminV6 -and -not $otherV6)      { $hostLit = '[::1]' }
+                elseif ($adminV4 -and -not $otherV4)  { $hostLit = '127.0.0.1' }
+        }
+    } catch { }
+    return $hostLit
+}
+
+$duneAdminWeb = (Get-DuneAdminWebState).Url
 $bgSetupPath   = "$($cfg.SteamPath)\battlegroup-management"
 $windowsUser   = $cfg.WindowsUser
 # Default existing installs (no PortCheckMode in config) to built-in.
@@ -1991,11 +2070,72 @@ while ($true) {
                 continue
             }
         }
-        # Open web UI in default browser (Start-Process <url> uses the
-        # registered https:// protocol handler, honoring the user's default
-        # browser. Avoids Windows 11 24H2's explorer.exe-forces-Edge bug.)
-        Start-Process $duneAdminWeb
-        Write-Host "Done. dune-admin.exe is running and web UI opened in browser." -ForegroundColor Green
+        # Open the web UI — but ONLY once dune-admin is actually listening on its
+        # configured port. Re-resolve fresh: if the user just ran first-time setup
+        # (or AMP picked :18080), config.yaml now holds the real port. Opening
+        # blindly on :8080 could land on AMP's panel or a dead port.
+        $webState = Get-DuneAdminWebState
+        if (-not $webState.Configured) {
+            Write-Host ""
+            Write-Host "dune-admin needs first-time setup before it can serve the web UI." -ForegroundColor Yellow
+            Write-Host "Complete the prompts in the dune-admin window (control plane, ports, etc)." -ForegroundColor Yellow
+            Write-Host "When it prints 'Starting server on :<port>', click Characters again to open it." -ForegroundColor Yellow
+            Write-Host "Not opening a browser yet (would hit the wrong port before setup finishes)." -ForegroundColor DarkGray
+            if ($didInstallWork) { Read-Host "Press Enter to close this window" }
+            continue
+        }
+        # Poll until dune-admin is listening on its real port (up to ~30s) AND
+        # verify the process that owns the port is dune-admin itself. This closes
+        # the AMP edge case: if something else (CubeCoders AMP) already owns the
+        # port, dune-admin's bind fails and AMP would answer the probe — we must
+        # NOT open AMP's panel. Bail early with guidance instead.
+        $ready = $false
+        $conflictOwner = $null
+        for ($i = 0; $i -lt 30; $i++) {
+            if (Test-DuneAdminListening -Port $webState.Port -TimeoutMs 800) {
+                $owners = @(Get-DunePortOwnerNames -Port $webState.Port)
+                if ($owners.Count -eq 0) {
+                    # Listening but owners unresolved (loopback can hide it) — accept.
+                    $ready = $true; break
+                } elseif (-not $adminProcName -or ($owners -icontains $adminProcName)) {
+                    # dune-admin is among the listeners (even if AMP also holds the
+                    # port on another interface) — safe to open.
+                    $ready = $true; break
+                } else {
+                    $conflictOwner = $owners[0]; break
+                }
+            }
+            Start-Sleep -Seconds 1
+        }
+        if ($ready) {
+            # Build the URL with the loopback host that actually routes to
+            # dune-admin. If AMP holds IPv4:<port>, dune-admin is IPv6-only and
+            # 'localhost' (127.0.0.1-first) would open AMP's panel — use [::1].
+            $urlHost = Get-DuneAdminUrlHost -Port $webState.Port -AdminProcName $adminProcName
+            $openUrl = "http://${urlHost}:$($webState.Port)/#/players"
+            # Start-Process <url> uses the registered https:// protocol handler,
+            # honoring the user's default browser (avoids Win11 24H2's Edge bug).
+            Start-Process $openUrl
+            Write-Host "Done. dune-admin is listening on port $($webState.Port); web UI opened in browser ($openUrl)." -ForegroundColor Green
+        } elseif ($conflictOwner) {
+            Write-Host ""
+            Write-Host "Port $($webState.Port) is in use by '$conflictOwner' (not dune-admin)." -ForegroundColor Yellow
+            Write-Host "dune-admin can't bind that port, so its web UI isn't available there." -ForegroundColor Yellow
+            if ($conflictOwner -match 'amp|cube') {
+                Write-Host "Looks like CubeCoders AMP. Re-run dune-admin setup and choose the 'amp'" -ForegroundColor Yellow
+                Write-Host "control plane (it moves dune-admin to :18080), or set a different" -ForegroundColor Yellow
+                Write-Host "listen_addr in ~/.dune-admin/config.yaml, then click Characters again." -ForegroundColor Yellow
+            } else {
+                Write-Host "Free port $($webState.Port) or set a different listen_addr in" -ForegroundColor Yellow
+                Write-Host "~/.dune-admin/config.yaml, then click Characters again." -ForegroundColor Yellow
+            }
+            Write-Host "Not opening a browser (would land on '$conflictOwner', not dune-admin)." -ForegroundColor DarkGray
+        } else {
+            Write-Host ""
+            Write-Host "dune-admin did not start listening on port $($webState.Port) within 30s." -ForegroundColor Yellow
+            Write-Host "If it is still finishing setup, wait for 'Starting server on :$($webState.Port)' then click Characters again." -ForegroundColor Yellow
+            Write-Host "URL when ready: $($webState.Url)" -ForegroundColor DarkGray
+        }
         if ($didInstallWork) { Read-Host "Press Enter to close this window" }
         continue
     }
