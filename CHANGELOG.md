@@ -12,6 +12,21 @@ on GitHub still exist for each individual release; the consolidated entries
 here cover everything those tags shipped.
 
 ## [Unreleased]
+## [10.1.6] - 2026-06-01
+
+### Changed
+- **The portal no longer wastes time reinstalling dune-admin when it's already
+  patched.** When sane-pricing auto-apply is enabled and the dune-admin binary
+  on disk is already the patched build for the exact upstream version *and* the
+  same gamble-die config, the install route now detects this up front (via the
+  patched stamp written next to the exe) and no-ops instead of downloading,
+  overwriting with the upstream binary, and recompiling to a byte-identical
+  result. This also removes the brief window where the unpatched upstream exe
+  sat in place mid-rebuild. A full reinstall can still be forced by passing
+  `force: true`.
+- The Settings page now reports "already up to date and patched" instead of
+  running a redundant reinstall, and re-checks update status afterward.
+
 ## [10.1.5] - 2026-05-31
 
 ### Fixed
