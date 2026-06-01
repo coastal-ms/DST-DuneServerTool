@@ -1395,11 +1395,11 @@ while ($true) {
             $dbNs = ($dbPods[0] -split '\s+', 2)[0]
             $podArgs = ($dbPods | ForEach-Object { "pod/$(($_ -split '\s+', 2)[1])" }) -join ' '
             $dbResult = Invoke-WithLiveCounter -Label "Waiting for DB pod(s) Ready..." -EstimateText $estDb `
-                -ArgumentList $sshKey,$sshUser,$ip,$dbNs,$podArgs `
+                -ArgumentList $sshKey,$sshUser,$ip,$dbNs,$podArgs,$script:WaitDbPodsSec `
                 -Action {
-                    param($sshKey, $sshUser, $ip, $dbNs, $podArgs)
+                    param($sshKey, $sshUser, $ip, $dbNs, $podArgs, $timeoutSec)
                     $output = ssh -o BatchMode=yes -o StrictHostKeyChecking=no -o LogLevel=QUIET -i "$sshKey" "$sshUser@$ip" `
-                        "sudo k3s kubectl wait --for=condition=Ready $podArgs -n '$dbNs' --timeout=$($script:WaitDbPodsSec)s 2>&1"
+                        "sudo k3s kubectl wait --for=condition=Ready $podArgs -n '$dbNs' --timeout=${timeoutSec}s 2>&1"
                     return [pscustomobject]@{ ExitCode = $LASTEXITCODE; Output = $output }
                 }
             $podCount = $dbPods.Count
@@ -1418,11 +1418,11 @@ while ($true) {
         # 2d. operator pods Ready
         $estOp = Format-PhaseEstimate 'operators'
         $opResult = Invoke-WithLiveCounter -Label "Waiting for operator pods Ready..." -EstimateText $estOp `
-            -ArgumentList $sshKey,$sshUser,$ip `
+            -ArgumentList $sshKey,$sshUser,$ip,$script:WaitOperatorsSec `
             -Action {
-                param($sshKey, $sshUser, $ip)
+                param($sshKey, $sshUser, $ip, $timeoutSec)
                 $output = ssh -o BatchMode=yes -o StrictHostKeyChecking=no -o LogLevel=QUIET -i "$sshKey" "$sshUser@$ip" `
-                    "sudo k3s kubectl wait --for=condition=Ready pods --all -n funcom-operators --timeout=$($script:WaitOperatorsSec)s 2>&1"
+                    "sudo k3s kubectl wait --for=condition=Ready pods --all -n funcom-operators --timeout=${timeoutSec}s 2>&1"
                 return [pscustomobject]@{ ExitCode = $LASTEXITCODE; Output = $output }
             }
         if ($opResult.Output.ExitCode -ne 0) {
@@ -1659,11 +1659,11 @@ while ($true) {
             $dbNs = ($dbPods[0] -split '\s+', 2)[0]
             $podArgs = ($dbPods | ForEach-Object { "pod/$(($_ -split '\s+', 2)[1])" }) -join ' '
             $dbResult = Invoke-WithLiveCounter -Label "Waiting for DB pod(s) Ready..." -EstimateText $estDb `
-                -ArgumentList $sshKey,$sshUser,$ip,$dbNs,$podArgs `
+                -ArgumentList $sshKey,$sshUser,$ip,$dbNs,$podArgs,$script:WaitDbPodsSec `
                 -Action {
-                    param($sshKey, $sshUser, $ip, $dbNs, $podArgs)
+                    param($sshKey, $sshUser, $ip, $dbNs, $podArgs, $timeoutSec)
                     $output = ssh -o BatchMode=yes -o StrictHostKeyChecking=no -o LogLevel=QUIET -i "$sshKey" "$sshUser@$ip" `
-                        "sudo k3s kubectl wait --for=condition=Ready $podArgs -n '$dbNs' --timeout=$($script:WaitDbPodsSec)s 2>&1"
+                        "sudo k3s kubectl wait --for=condition=Ready $podArgs -n '$dbNs' --timeout=${timeoutSec}s 2>&1"
                     return [pscustomobject]@{ ExitCode = $LASTEXITCODE; Output = $output }
                 }
             $podCount = $dbPods.Count
@@ -1682,11 +1682,11 @@ while ($true) {
         # 2c. ALL funcom-operators pods Ready (not just Running)
         $estOp = Format-PhaseEstimate 'operators'
         $opResult = Invoke-WithLiveCounter -Label "Waiting for operator pods Ready..." -EstimateText $estOp `
-            -ArgumentList $sshKey,$sshUser,$ip `
+            -ArgumentList $sshKey,$sshUser,$ip,$script:WaitOperatorsSec `
             -Action {
-                param($sshKey, $sshUser, $ip)
+                param($sshKey, $sshUser, $ip, $timeoutSec)
                 $output = ssh -o BatchMode=yes -o StrictHostKeyChecking=no -o LogLevel=QUIET -i "$sshKey" "$sshUser@$ip" `
-                    "sudo k3s kubectl wait --for=condition=Ready pods --all -n funcom-operators --timeout=$($script:WaitOperatorsSec)s 2>&1"
+                    "sudo k3s kubectl wait --for=condition=Ready pods --all -n funcom-operators --timeout=${timeoutSec}s 2>&1"
                 return [pscustomobject]@{ ExitCode = $LASTEXITCODE; Output = $output }
             }
         if ($opResult.Output.ExitCode -ne 0) {
