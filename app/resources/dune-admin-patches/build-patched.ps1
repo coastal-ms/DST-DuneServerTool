@@ -48,6 +48,19 @@ if ($GambleTarget -lt 1 -or $GambleTarget -gt $GambleDie) {
 # which causes harmless stderr like git's "LF will be replaced by CRLF" warning
 # to throw. We rely on explicit $LASTEXITCODE checks below, so opt out.
 $PSNativeCommandUseErrorActionPreference = $false
+
+# --- Non-interactive guards --------------------------------------------------
+# This script is normally launched DETACHED (no console, no stdin) by the Dune
+# Server Tool's pricing-patch wrapper. Any tool that tries to prompt on stdin
+# would block FOREVER — the build produces no output, leaving an idle node/
+# corepack process, a 0-byte log, and the patch stuck on "running". The most
+# common offender is corepack's first-run "About to download pnpm@X — continue?
+# [Y/n]" confirmation (hit when the standalone pnpm shim is stale and we fall
+# back to corepack). Force every step non-interactive so it can never hang.
+$env:COREPACK_ENABLE_DOWNLOAD_PROMPT = '0'   # corepack: auto-yes the download
+$env:CI                               = '1'  # most JS tools: assume non-TTY/CI
+$env:npm_config_yes                   = 'true'
+$env:DO_NOT_TRACK                     = '1'
 $scriptRoot = $PSScriptRoot
 $repoRoot   = Split-Path -Parent $scriptRoot
 $exePath    = Join-Path $repoRoot 'dune-admin.exe'
@@ -135,21 +148,49 @@ if (-not (Get-Command node -ErrorAction SilentlyContinue)) {
 # pnpm: prefer a real pnpm on PATH; otherwise bootstrap it via corepack (ships
 # with Node >= 16.9, no global install needed). Returns the exe to invoke plus
 # any leading args (corepack runs pnpm as `corepack pnpm ...`).
+#
+# IMPORTANT: never trust `Get-Command pnpm` blindly. The standalone pnpm
+# installer drops a `pnpm.ps1`/`pnpm.cmd` shim on PATH that points at a
+# *versioned* global exe (…\pnpm\global\v11\<hash>\…\pnpm.exe). When pnpm
+# self-updates (or that global dir is cleaned), the shim survives but the exe it
+# targets is gone — so `& pnpm install` dies with "pnpm.exe is not recognized"
+# even though `pnpm` is on PATH. We therefore PROBE each candidate by actually
+# running `--version` and only accept one that works; otherwise we fall back to
+# corepack's pnpm, which is independent of the standalone shim.
+function Test-PnpmCandidate {
+    param([string]$Exe, [string[]]$Pre = @())
+    if (-not $Exe) { return $false }
+    try {
+        $probeArgs = @() + $Pre + @('--version')
+        $out = & $Exe @probeArgs 2>&1
+        $text = ($out | Out-String)
+        return [bool](($LASTEXITCODE -eq 0) -or ($text -match '\d+\.\d+\.\d+'))
+    } catch { return $false }
+}
 function Resolve-Pnpm {
+    # 1) pnpm on PATH — but only if it actually runs (guards the stale shim).
     $direct = Get-Command pnpm -ErrorAction SilentlyContinue
-    if ($direct -and $direct.Source) { return @{ Exe = $direct.Source; Pre = @() } }
+    if ($direct -and $direct.Source -and (Test-PnpmCandidate -Exe $direct.Source)) {
+        return @{ Exe = $direct.Source; Pre = @() }
+    }
+    # 2) corepack: enable, then re-probe a (possibly freshly shimmed) pnpm.
     $corepack = Get-Command corepack -ErrorAction SilentlyContinue
     if ($corepack -and $corepack.Source) {
         try { & $corepack.Source enable pnpm 2>$null | Out-Null } catch { }
         $direct2 = Get-Command pnpm -ErrorAction SilentlyContinue
-        if ($direct2 -and $direct2.Source) { return @{ Exe = $direct2.Source; Pre = @() } }
-        return @{ Exe = $corepack.Source; Pre = @('pnpm') }
+        if ($direct2 -and $direct2.Source -and (Test-PnpmCandidate -Exe $direct2.Source)) {
+            return @{ Exe = $direct2.Source; Pre = @() }
+        }
+        # 3) run pnpm THROUGH corepack (independent of the standalone shim).
+        if (Test-PnpmCandidate -Exe $corepack.Source -Pre @('pnpm')) {
+            return @{ Exe = $corepack.Source; Pre = @('pnpm') }
+        }
     }
     return $null
 }
 $pnpm = Resolve-Pnpm
 if (-not $pnpm) {
-    throw "pnpm was not found and could not be bootstrapped via corepack (which ships with Node). Enable it by running 'corepack enable pnpm', or install pnpm with 'npm install -g pnpm', then re-apply the patch. The patched build needs pnpm to build the embedded dune-admin web UI."
+    throw "pnpm was not found, or the pnpm on PATH is broken (its shim points at a pnpm.exe that no longer exists, e.g. after a pnpm self-update), and it could not be bootstrapped via corepack (which ships with Node). Fix it by running 'corepack enable pnpm', or reinstall pnpm with 'npm install -g pnpm', then re-apply the patch. The patched build needs pnpm to build the embedded dune-admin web UI."
 }
 $pnpmExe = $pnpm.Exe
 $pnpmPre = $pnpm.Pre

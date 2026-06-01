@@ -8,6 +8,8 @@ import {
   checkDuneAdminUpdate,
   installDuneAdminUpdate,
   pricingPatchStatus,
+  pricingPatchPending,
+  applyPendingPricingPatch,
   runDuneAdminSetup,
   getDuneAdminDotFolder,
   deleteDuneAdminDotFolder,
@@ -218,6 +220,47 @@ export function Settings() {
     return () => { cancelled = true; window.clearInterval(id) }
   }, [daPatchPolling])
 
+  // Deferred pricing patch: when a reinstall deletes ~/.dune-admin, the rebuild
+  // is held until dune-admin is reconfigured (config.yaml gone + setup wizard
+  // locks the exe). We poll /pricing-patch-pending; once dune-admin is
+  // configured AND listening (after setup it goes straight to a working
+  // console), we apply the pending patch — which stops the exe, rebuilds, and
+  // relaunches — then hand off to the normal status poll.
+  const [daPatchPendingPolling, setDaPatchPendingPolling] = useState(false)
+  useEffect(() => {
+    if (!daPatchPendingPolling) return
+    let cancelled = false
+    const tick = async () => {
+      try {
+        const p = await pricingPatchPending()
+        if (cancelled) return
+        if (!p.pending) { setDaPatchPendingPolling(false); return }
+        if (p.configured && p.listening) {
+          setDaPatchPendingPolling(false)
+          setDaMsg(prev => (prev ? prev + ' ' : '') + 'dune-admin setup detected — applying the sane-pricing patch now…')
+          try {
+            const r = await applyPendingPricingPatch()
+            const pp = r.pricingPatch
+            if (r.applied && pp && pp.status === 'running') {
+              setDaPatch(pp)
+              setDaPatchPolling(true)
+            } else if (pp && pp.status === 'failed') {
+              setDaErr(prev => (prev ? prev + ' ' : '') + `Pricing rebuild failed to start: ${pp.error ?? 'unknown error'}`)
+            } else if (!r.applied) {
+              // Not ready after all — resume polling.
+              setDaPatchPendingPolling(true)
+            }
+          } catch (e) {
+            setDaErr(prev => (prev ? prev + ' ' : '') + `Could not apply deferred pricing patch: ${e instanceof Error ? e.message : String(e)}`)
+          }
+        }
+      } catch { /* keep polling; transient server hiccup */ }
+    }
+    void tick()
+    const id = window.setInterval(() => { void tick() }, 3000)
+    return () => { cancelled = true; window.clearInterval(id) }
+  }, [daPatchPendingPolling])
+
   // Collapsible-card state — both update cards start minimized.
   const [updExpanded, setUpdExpanded] = useState(false)
   const [daExpanded, setDaExpanded] = useState(false)
@@ -382,7 +425,10 @@ export function Settings() {
         const r = await deleteDuneAdminDotFolder()
         if (r.ok && r.deleted) {
           deleted = true
-          setDaMsg(`Removed stale config folder ${r.path}. dune-admin will create a fresh one during setup.`)
+          const patchNote = autoApply
+            ? ' Heads-up: the sane-pricing patch won\u2019t deploy until dune-admin is reconfigured \u2014 it\u2019ll apply automatically once you finish setup.'
+            : ''
+          setDaMsg(`Removed stale config folder ${r.path}. dune-admin will create a fresh one during setup.${patchNote}`)
         }
       }
     } catch (e) {
@@ -461,9 +507,18 @@ export function Settings() {
         // rebuild, start polling its status. We DO NOT block on it here —
         // the binary install is already done.
         const patchRunning = !!(r.pricingPatch && r.pricingPatch.status === 'running')
+        const patchDeferred = !!(r.pricingPatch && r.pricingPatch.status === 'deferred')
         if (patchRunning) {
           setDaPatch(r.pricingPatch!)
           setDaPatchPolling(true)
+        } else if (patchDeferred) {
+          // User deleted ~/.dune-admin, so dune-admin isn't configured yet. The
+          // patch is held until they finish setup; poll until dune-admin comes
+          // up, then apply it automatically.
+          setDaPatch(r.pricingPatch!)
+          setDaPatchPendingPolling(true)
+          setDaMsg(prev => (prev ? prev + ' ' : '')
+            + 'The sane-pricing patch will deploy automatically once you finish dune-admin setup (it can\u2019t rebuild while setup is running). Leave this page open.')
         } else if (r.pricingPatch && r.pricingPatch.status === 'failed') {
           setDaErr(`Pricing rebuild failed to start: ${r.pricingPatch.error ?? 'unknown error'}`)
         }
@@ -558,6 +613,15 @@ export function Settings() {
           setDaPatch(s)
           if (s.status === 'running') setDaPatchPolling(true)
         }
+      } catch { /* non-fatal */ }
+    })()
+    // Resume a deferred pricing patch left waiting from a prior session: if a
+    // pending marker still exists, keep polling until dune-admin is configured
+    // and then apply it. Survives a server/UI restart mid-setup.
+    void (async () => {
+      try {
+        const p = await pricingPatchPending()
+        if (p && p.pending) setDaPatchPendingPolling(true)
       } catch { /* non-fatal */ }
     })()
     // Same idea for the Dune Server self-updater — populate the collapsed
@@ -1008,9 +1072,9 @@ export function Settings() {
                   <div className="pt-3 border-t border-border">
                     <div className="flex items-center gap-2 mb-1.5">
                       <Icon
-                        name={daPatch.status === 'running' ? 'Loader2' : daPatch.status === 'success' ? 'CheckCircle2' : 'AlertCircle'}
+                        name={daPatch.status === 'running' ? 'Loader2' : daPatch.status === 'success' ? 'CheckCircle2' : daPatch.status === 'deferred' ? 'Clock' : 'AlertCircle'}
                         size={14}
-                        className={`${daPatch.status === 'running' ? 'animate-spin text-accent' : daPatch.status === 'success' ? 'text-success' : 'text-danger'}`}
+                        className={`${daPatch.status === 'running' ? 'animate-spin text-accent' : daPatch.status === 'success' ? 'text-success' : daPatch.status === 'deferred' ? 'text-accent' : 'text-danger'}`}
                       />
                       <span className="text-xs font-medium">
                         {daPatch.status === 'running' && (
@@ -1018,6 +1082,9 @@ export function Settings() {
                         )}
                         {daPatch.status === 'success' && (
                           <>Patched build complete{daPatch.targetTag ? ` (${daPatch.targetTag})` : ''}.</>
+                        )}
+                        {daPatch.status === 'deferred' && (
+                          <>Sane-pricing patch waiting for dune-admin setup…</>
                         )}
                         {daPatch.status === 'failed' && (
                           <>Patched build failed{daPatch.exitCode != null ? ` (exit ${daPatch.exitCode})` : ''}.</>
@@ -1040,6 +1107,13 @@ export function Settings() {
                         Safe to leave this page open or navigate away — the build runs in a detached
                         background process. The Install button reactivates immediately so the rest of
                         the tool stays responsive.
+                      </p>
+                    )}
+                    {daPatch.status === 'deferred' && (
+                      <p className="text-[11px] text-text-dim mb-2">
+                        {daPatch.reason ?? 'The patch can\u2019t rebuild while dune-admin setup is running.'} Keep
+                        this page open — once setup finishes and dune-admin is up, the patch applies
+                        automatically (it briefly stops dune-admin to swap in the patched build).
                       </p>
                     )}
                     {daPatch.error && (

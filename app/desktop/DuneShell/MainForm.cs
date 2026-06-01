@@ -16,6 +16,9 @@ internal sealed class MainForm : Form
     private readonly bool _useWaitFile;
 
     private bool _firstLoadDone;
+    private string? _targetUrl;
+    private int _navRetries;
+    private const int MaxNavRetries = 20;
 
     public MainForm(string? initialUrl, bool useWaitFile)
     {
@@ -131,11 +134,42 @@ internal sealed class MainForm : Form
         };
 
         _web.Source = new Uri(url);
+        _targetUrl = url;
     }
 
-    private void OnNavigationCompleted(object? sender, CoreWebView2NavigationCompletedEventArgs e)
+    private async void OnNavigationCompleted(object? sender, CoreWebView2NavigationCompletedEventArgs e)
     {
         if (_firstLoadDone) return;
+
+        if (e.IsSuccess)
+        {
+            _firstLoadDone = true;
+            _navRetries = 0;
+            _status.Visible = false;
+            _web.Visible = true;
+            return;
+        }
+
+        // Navigation failed at the transport level (IsSuccess == false means the
+        // request never got an HTTP response — typically CannotConnect /
+        // ConnectionAborted because the WebView started a moment before the
+        // HttpListener was accepting). A real server error page would still be a
+        // *successful* navigation. So retry a bounded number of times instead of
+        // leaving the user staring at a permanent "can't reach this page".
+        if (_navRetries < MaxNavRetries && !string.IsNullOrWhiteSpace(_targetUrl))
+        {
+            _navRetries++;
+            _status.Visible = true;
+            _web.Visible = false;
+            _status.Text = $"Connecting to Dune Server Tool… (attempt {_navRetries})";
+            await Task.Delay(600);
+            try { _web.CoreWebView2?.Navigate(_targetUrl); }
+            catch { /* surfaces on the next NavigationCompleted */ }
+            return;
+        }
+
+        // Out of retries: reveal whatever loaded so the user sees the error page
+        // and can F5 / Reload manually.
         _firstLoadDone = true;
         _status.Visible = false;
         _web.Visible = true;

@@ -16,7 +16,7 @@
 ;                 -> NOT touched by install or uninstall (preserves user config)
 
 #define MyAppName        "Dune Server Tool"
-#define MyAppVersion "10.1.2"
+#define MyAppVersion "10.1.3"
 #define MyAppPublisher   "Dune Awakening Self-Hosted Tool"
 #define MyAppURL         "https://github.com/coastal-ms/DST-DuneServerTool"
 #define MyAppExeName     "DuneServer.exe"
@@ -584,12 +584,65 @@ begin
     Log('FAILED to write config: ' + dest);
 end;
 
+procedure OfferPatchPrereqs();
+var
+  psScript, args: string;
+  resultCode: Integer;
+  logPath: string;
+begin
+  psScript := ExpandConstant('{app}\tools\preflight\Install-Prereqs.ps1');
+  if not FileExists(psScript) then
+    Exit;
+
+  // Detect-only pass. Exit 10 = something missing; anything else = leave it.
+  if not Exec('powershell.exe',
+       '-NoProfile -ExecutionPolicy Bypass -File "' + psScript + '" -CheckOnly',
+       '', SW_HIDE, ewWaitUntilTerminated, resultCode) then
+    Exit;
+  if resultCode <> 10 then
+    Exit;
+
+  if MsgBox(
+       'The optional "sane pricing" market patch builds a patched dune-admin from source, which needs Node.js, Go and Git.' + #13#10 + #13#10 +
+       'One or more of these are not installed. Would you like the installer to install them now via winget?' + #13#10 + #13#10 +
+       '(You can skip this if you don''t use the pricing patch, or install them yourself later.)',
+       mbConfirmation, MB_YESNO) <> IDYES then
+    Exit;
+
+  WizardForm.Cursor := crHourGlass;
+  args := '-NoProfile -ExecutionPolicy Bypass -File "' + psScript + '"';
+  try
+    Exec('powershell.exe', args, '', SW_HIDE, ewWaitUntilTerminated, resultCode);
+  finally
+    WizardForm.Cursor := crDefault;
+  end;
+
+  logPath := ExpandConstant('{localappdata}\DuneServer\prereq-install.log');
+  if resultCode = 0 then
+    Exit;
+
+  if resultCode = 20 then
+    MsgBox('Couldn''t install the build tools because winget (the Windows "App Installer") isn''t available on this PC.' + #13#10 + #13#10 +
+           'Install these manually if you want the pricing patch:' + #13#10 +
+           '  - Node.js LTS:  https://nodejs.org/' + #13#10 +
+           '  - Go:           https://go.dev/dl/' + #13#10 +
+           '  - Git:          https://git-scm.com/' + #13#10 + #13#10 +
+           'The Dune Server Tool itself is fully installed and works without these.',
+           mbError, MB_OK)
+  else
+    MsgBox('One or more build tools failed to install on this system.' + #13#10 + #13#10 +
+           'See the log for details:' + #13#10 + logPath + #13#10 + #13#10 +
+           'You can install Node.js, Go and Git yourself later. The Dune Server Tool itself is fully installed and works without them.',
+           mbError, MB_OK);
+end;
+
 procedure CurStepChanged(CurStep: TSetupStep);
 begin
   if CurStep = ssPostInstall then
   begin
     if not SkipConfigPages then
       WriteDuneConfig();
+    OfferPatchPrereqs();
   end;
 end;
 

@@ -427,6 +427,39 @@ function Read-DuneAdminPricingStatus {
     } catch { return $null }
 }
 
+# --- Deferred (pending) pricing patch ----------------------------------------
+# When the user deletes their ~/.dune-admin folder during a reinstall, dune-admin
+# is no longer configured (no config.yaml) and the first-run setup wizard holds
+# dune-admin.exe open — so rebuilding the patched binary right then would either
+# fail to overwrite the locked exe or get clobbered when setup finishes. Instead
+# we record the rebuild request as "pending" and apply it AFTER the user finishes
+# setup (config.yaml appears + dune-admin is up), via /pricing-patch/apply-pending.
+function Get-DuneAdminPricingPendingPath {
+    return (Join-Path (Get-DuneAdminPricingStateDir) 'pending-pricing-patch.json')
+}
+function Write-DuneAdminPricingPending {
+    param([hashtable]$Data)
+    $path = Get-DuneAdminPricingPendingPath
+    try {
+        $json = $Data | ConvertTo-Json -Depth 6 -Compress
+        Set-Content -LiteralPath $path -Value $json -Encoding UTF8
+        return $true
+    } catch { return $false }
+}
+function Read-DuneAdminPricingPending {
+    $path = Get-DuneAdminPricingPendingPath
+    if (-not (Test-Path -LiteralPath $path)) { return $null }
+    try {
+        $raw = Get-Content -LiteralPath $path -Raw -ErrorAction Stop
+        if (-not $raw) { return $null }
+        return ($raw | ConvertFrom-Json -ErrorAction Stop)
+    } catch { return $null }
+}
+function Clear-DuneAdminPricingPending {
+    $path = Get-DuneAdminPricingPendingPath
+    try { if (Test-Path -LiteralPath $path) { Remove-Item -LiteralPath $path -Force -ErrorAction SilentlyContinue } } catch { }
+}
+
 function Start-DuneAdminPricingRebuild {
     param(
         [string]$ResDir,       # bundled resources dir containing patch + build-patched.ps1
@@ -864,29 +897,56 @@ Register-DuneRoute -Method POST -Path '/api/dune-admin/install' -Handler {
                 if ($gambleTarget -gt $gambleDie) { $gambleTarget = $gambleDie }
             } catch { }
             if ($sourceSync -and $sourceSync.ok -and $autoApply) {
-                # v6.1.25: launch the patched-build wrapper as a fully detached
-                # background process. The HTTP request returns immediately with
-                # the status file path; the UI polls /api/dune-admin/pricing-
-                # patch-status until status is terminal. This stops the
-                # PowerShell HttpListener thread from blocking for the entire
-                # multi-minute Go build, which previously froze the whole
-                # server (no /healthz, /ports, etc.) and made the install
-                # button appear hung.
-                try {
-                    $resDir = $null
-                    foreach ($p in @(
-                        (Join-Path $script:AppDir 'resources\dune-admin-patches'),
-                        (Join-Path $script:AppDir 'app\resources\dune-admin-patches'),
-                        (Join-Path (Split-Path -Parent $script:AppDir) 'resources\dune-admin-patches'),
-                        (Join-Path (Split-Path -Parent $script:AppDir) 'app\resources\dune-admin-patches')
-                    )) { if (Test-Path -LiteralPath $p) { $resDir = $p; break } }
-                    if ($resDir) {
-                        $autoRebuild = Start-DuneAdminPricingRebuild -ResDir $resDir -TargetDir $targetDir -TargetTag $rel.tag -GambleDie $gambleDie -GambleTarget $gambleTarget
-                    } else {
-                        $autoRebuild = [pscustomobject]@{ ok = $false; status = 'failed'; error = 'Bundled patch resources not found' }
+                # Resolve where the bundled patch resources live (used by both the
+                # immediate and the deferred path).
+                $resDir = $null
+                foreach ($p in @(
+                    (Join-Path $script:AppDir 'resources\dune-admin-patches'),
+                    (Join-Path $script:AppDir 'app\resources\dune-admin-patches'),
+                    (Join-Path (Split-Path -Parent $script:AppDir) 'resources\dune-admin-patches'),
+                    (Join-Path (Split-Path -Parent $script:AppDir) 'app\resources\dune-admin-patches')
+                )) { if (Test-Path -LiteralPath $p) { $resDir = $p; break } }
+
+                # Gate: only rebuild now if dune-admin is CONFIGURED (config.yaml
+                # exists). If the user just deleted ~/.dune-admin, config.yaml is
+                # gone and the first-run setup wizard holds dune-admin.exe open —
+                # building now would fail to overwrite the locked exe (or get
+                # clobbered when setup finishes). Defer: record the request and
+                # apply it after setup completes (config.yaml reappears), which the
+                # UI drives via /pricing-patch/apply-pending once polling sees
+                # dune-admin come up.
+                $cfgExists = [bool](Test-Path -LiteralPath (Get-DuneAdminConfigYamlPath) -PathType Leaf)
+                if (-not $cfgExists) {
+                    Clear-DuneAdminPricingPending
+                    [void](Write-DuneAdminPricingPending @{
+                        targetDir    = $targetDir
+                        resDir       = $resDir
+                        targetTag    = $rel.tag
+                        gambleDie    = $gambleDie
+                        gambleTarget = $gambleTarget
+                        requestedAt  = (Get-Date).ToString('o')
+                    })
+                    $autoRebuild = [pscustomobject]@{
+                        ok     = $true
+                        status = 'deferred'
+                        reason = 'dune-admin is not configured yet (no config.yaml). The sane-pricing patch will be applied automatically once you finish dune-admin setup.'
                     }
-                } catch {
-                    $autoRebuild = [pscustomobject]@{ ok = $false; status = 'failed'; error = $_.Exception.Message }
+                } elseif (-not $resDir) {
+                    $autoRebuild = [pscustomobject]@{ ok = $false; status = 'failed'; error = 'Bundled patch resources not found' }
+                } else {
+                    # v6.1.25: launch the patched-build wrapper as a fully detached
+                    # background process. The HTTP request returns immediately with
+                    # the status file path; the UI polls /api/dune-admin/pricing-
+                    # patch-status until status is terminal. This stops the
+                    # PowerShell HttpListener thread from blocking for the entire
+                    # multi-minute Go build, which previously froze the whole
+                    # server (no /healthz, /ports, etc.) and made the install
+                    # button appear hung.
+                    try {
+                        $autoRebuild = Start-DuneAdminPricingRebuild -ResDir $resDir -TargetDir $targetDir -TargetTag $rel.tag -GambleDie $gambleDie -GambleTarget $gambleTarget
+                    } catch {
+                        $autoRebuild = [pscustomobject]@{ ok = $false; status = 'failed'; error = $_.Exception.Message }
+                    }
                 }
             }
         }
@@ -982,7 +1042,108 @@ Register-DuneRoute -Method GET -Path '/api/dune-admin/pricing-patch-status' -Han
     }
 }
 
-# --- Diagnostics -------------------------------------------------------------
+# GET /api/dune-admin/pricing-patch-pending - reports whether a deferred
+# sane-pricing rebuild is waiting (because the user deleted ~/.dune-admin during
+# a reinstall) and whether dune-admin is now configured + listening so the patch
+# can be applied. The UI polls this after a deferred install; once
+# `configured` flips true it calls /pricing-patch/apply-pending.
+Register-DuneRoute -Method GET -Path '/api/dune-admin/pricing-patch-pending' -Handler {
+    param($req, $res, $routeParams, $body)
+    try {
+        $pending = Read-DuneAdminPricingPending
+        $hasPending = [bool]$pending
+        $cfgPath = Get-DuneAdminConfigYamlPath
+        $configured = [bool]($cfgPath -and (Test-Path -LiteralPath $cfgPath -PathType Leaf))
+        # Also report whether dune-admin is actually up — after setup it goes
+        # straight to a working console, so this confirms the environment is ready.
+        $port = Get-DuneAdminListenPort -ListenAddr ''
+        try {
+            if ($configured) {
+                $y = ConvertFrom-DuneAdminYaml -Path $cfgPath
+                $port = Get-DuneAdminListenPort -ListenAddr ([string]$y['listen_addr'])
+            }
+        } catch { }
+        $listening = [bool](Test-DunePortListening -Port $port -TimeoutMs 600)
+        Write-DuneJson -Response $res -Body @{
+            ok          = $true
+            pending     = $hasPending
+            configured  = $configured
+            listening   = $listening
+            targetTag   = if ($hasPending -and ($pending.PSObject.Properties.Name -contains 'targetTag')) { $pending.targetTag } else { $null }
+            requestedAt = if ($hasPending -and ($pending.PSObject.Properties.Name -contains 'requestedAt')) { $pending.requestedAt } else { $null }
+        }
+    } catch {
+        Write-DuneError -Response $res -Status 500 -Message $_.Exception.Message
+    }
+}
+
+# POST /api/dune-admin/pricing-patch/apply-pending - apply a deferred rebuild.
+# Only proceeds once dune-admin is configured (config.yaml exists). Stops any
+# running dune-admin (its exe is locked while running / mid-setup) so the build
+# can overwrite dune-admin.exe, then starts the detached rebuild and clears the
+# pending marker. The UI then polls /pricing-patch-status as usual.
+Register-DuneRoute -Method POST -Path '/api/dune-admin/pricing-patch/apply-pending' -Handler {
+    param($req, $res, $routeParams, $body)
+    try {
+        $pending = Read-DuneAdminPricingPending
+        if (-not $pending) {
+            Write-DuneJson -Response $res -Body @{ ok = $true; applied = $false; pending = $false; reason = 'No pending pricing patch.' }
+            return
+        }
+        $cfgPath = Get-DuneAdminConfigYamlPath
+        $configured = [bool]($cfgPath -and (Test-Path -LiteralPath $cfgPath -PathType Leaf))
+        if (-not $configured) {
+            Write-DuneJson -Response $res -Body @{ ok = $true; applied = $false; pending = $true; configured = $false; reason = 'dune-admin is not configured yet (finish setup first).' }
+            return
+        }
+
+        $targetDir    = [string]$pending.targetDir
+        $resDir       = [string]$pending.resDir
+        $targetTag    = [string]$pending.targetTag
+        $gambleDie    = 12; $gambleTarget = 5
+        if ($pending.PSObject.Properties.Name -contains 'gambleDie')    { [void][int]::TryParse("$($pending.gambleDie)", [ref]$gambleDie) }
+        if ($pending.PSObject.Properties.Name -contains 'gambleTarget') { [void][int]::TryParse("$($pending.gambleTarget)", [ref]$gambleTarget) }
+        if ($gambleTarget -gt $gambleDie) { $gambleTarget = $gambleDie }
+
+        # Re-resolve resDir if the stored one is gone (e.g. app updated since).
+        if (-not ($resDir -and (Test-Path -LiteralPath $resDir))) {
+            $resDir = $null
+            foreach ($p in @(
+                (Join-Path $script:AppDir 'resources\dune-admin-patches'),
+                (Join-Path $script:AppDir 'app\resources\dune-admin-patches'),
+                (Join-Path (Split-Path -Parent $script:AppDir) 'resources\dune-admin-patches'),
+                (Join-Path (Split-Path -Parent $script:AppDir) 'app\resources\dune-admin-patches')
+            )) { if (Test-Path -LiteralPath $p) { $resDir = $p; break } }
+        }
+        if (-not $resDir) {
+            Write-DuneError -Response $res -Status 500 -Message 'Bundled patch resources not found; cannot apply pending pricing patch.'
+            return
+        }
+
+        # Stop running dune-admin so go build can overwrite the locked exe.
+        $exePath = Get-DuneAdminConfiguredPath
+        $stopped = @()
+        if ($exePath) { $stopped = @(Stop-DuneAdminProcesses -ExePath $exePath) }
+
+        try {
+            $rebuild = Start-DuneAdminPricingRebuild -ResDir $resDir -TargetDir $targetDir -TargetTag $targetTag -GambleDie $gambleDie -GambleTarget $gambleTarget
+        } catch {
+            Write-DuneError -Response $res -Status 500 -Message "Failed to start deferred rebuild: $($_.Exception.Message)"
+            return
+        }
+        Clear-DuneAdminPricingPending
+        Write-DuneJson -Response $res -Body @{
+            ok           = $true
+            applied      = $true
+            pending      = $false
+            configured   = $true
+            stoppedPids  = $stopped
+            pricingPatch = $rebuild
+        }
+    } catch {
+        Write-DuneError -Response $res -Status 500 -Message $_.Exception.Message
+    }
+}
 # GET /api/dune-admin/diagnostics
 #
 # One-shot health report for troubleshooting "Failed to fetch" / market-bot /
