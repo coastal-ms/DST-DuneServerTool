@@ -755,6 +755,57 @@ Register-DuneRoute -Method POST -Path '/api/dune-admin/install' -Handler {
             return
         }
 
+        # --- Skip a redundant patched reinstall --------------------------------
+        # When the sane-pricing auto-apply is on and the binary already on disk is
+        # the patched build for THIS exact upstream version AND the same gamble-die
+        # config, a reinstall would download + overwrite with the upstream binary
+        # and recompile to a byte-identical result — pure waste, and it briefly
+        # leaves the unpatched upstream exe in place mid-rebuild. Detect it up
+        # front via the patched stamp build-patched.ps1 writes next to the exe and
+        # no-op. A caller can force a full reinstall by POSTing { "force": true }.
+        $forceReinstall = $false
+        try {
+            if ($body -and ($body.PSObject.Properties.Name -contains 'force')) { $forceReinstall = [bool]$body.force }
+        } catch { }
+        if (-not $forceReinstall) {
+            $skAuto = $false; $skDie = 12; $skTarget = 5
+            try {
+                $cfgEarly = Read-DuneConfig
+                if ($cfgEarly -and $cfgEarly.Contains('AutoApplyPricingPatch')) {
+                    $v = "$($cfgEarly['AutoApplyPricingPatch'])".Trim().ToLower()
+                    $skAuto = ($v -eq 'true' -or $v -eq '1' -or $v -eq 'yes' -or $v -eq 'on')
+                }
+                if ($cfgEarly -and $cfgEarly.Contains('GambleDieSize')) {
+                    $d = 0; if ([int]::TryParse("$($cfgEarly['GambleDieSize'])".Trim(), [ref]$d) -and $d -ge 2) { $skDie = $d }
+                }
+                if ($cfgEarly -and $cfgEarly.Contains('GambleTarget')) {
+                    $t = 0; if ([int]::TryParse("$($cfgEarly['GambleTarget'])".Trim(), [ref]$t) -and $t -ge 1) { $skTarget = $t }
+                }
+                if ($skTarget -gt $skDie) { $skTarget = $skDie }
+            } catch { }
+            if ($skAuto) {
+                $targetVerNorm = ($rel.tag -replace '^v','')
+                $stampPath = "$exePath.coastal-sane-pricing"
+                if ((Test-Path -LiteralPath $exePath -PathType Leaf) -and (Test-Path -LiteralPath $stampPath -PathType Leaf)) {
+                    $stampVal = ''
+                    try { $stampVal = (Get-Content -LiteralPath $stampPath -Raw).Trim() } catch { }
+                    if ($stampVal -eq "$targetVerNorm|$skDie|$skTarget") {
+                        Write-DuneJson -Response $res -Body @{
+                            ok             = $true
+                            skipped        = $true
+                            alreadyPatched = $true
+                            fromVersion    = (Get-DuneAdminInstalledVersion -ExePath $exePath).version
+                            toVersion      = $targetVerNorm
+                            tagName        = $rel.tag
+                            targetDir      = $targetDir
+                            note           = "dune-admin.exe is already the sane-pricing patched build for $($rel.tag) (die=$skDie, target=$skTarget). Skipped redundant download + rebuild."
+                        }
+                        return
+                    }
+                }
+            }
+        }
+
         # Proactively stop any running dune-admin instances first. Handles the
         # hidden-window / detached-process case where the user can't close it
         # manually; otherwise the lock check below would bail with 423.

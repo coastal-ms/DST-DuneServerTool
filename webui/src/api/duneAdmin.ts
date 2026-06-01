@@ -91,6 +91,14 @@ export interface DuneAdminInstallResult {
    * (v6.3.2)
    */
   stoppedPids?: number[]
+  /**
+   * True when the install was a no-op because dune-admin.exe is already the
+   * sane-pricing patched build for the target version AND the same gamble-die
+   * config (idea 7). No download, overwrite, or rebuild happened. `note`
+   * explains it. A caller can force a full reinstall by POSTing { force: true }.
+   */
+  skipped?: boolean
+  alreadyPatched?: boolean
 }
 
 export interface DuneAdminSetupResult {

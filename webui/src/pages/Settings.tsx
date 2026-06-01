@@ -495,6 +495,13 @@ export function Settings() {
       if (!proceed) { setDaMsg('Reinstall cancelled — nothing was changed.'); return }
       const r = await installDuneAdminUpdate()
       if (r.ok) {
+        if (r.skipped) {
+          // Idea 7: already the patched build for this version + gamble config.
+          // Nothing was downloaded, overwritten, or rebuilt.
+          setDaMsg(r.note ?? `dune-admin is already up to date and patched (v${r.toVersion}). Nothing to do.`)
+          try { setDaCheck(await checkDuneAdminUpdate({ force: false })) } catch { /* non-fatal */ }
+          return
+        }
         const sshNote = r.sshKeyCopy?.ok
           ? (r.sshKeyCopy.skipped
               ? ' SSH key already in place.'
