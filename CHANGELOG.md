@@ -12,7 +12,57 @@ on GitHub still exist for each individual release; the consolidated entries
 here cover everything those tags shipped.
 
 ## [Unreleased]
-## [10.1.1] - 2026-05-31
+## [10.1.2] - 2026-05-31
+
+### Fixed
+- **dune-admin now opens on the correct per-user port instead of a hardcoded
+  `8080`.** dune-admin's listen port is configurable (`listen_addr` in
+  `~/.dune-admin/config.yaml`): it defaults to `:8080`, but its setup wizard
+  writes whatever you choose — notably `:18080` when the `amp` control plane is
+  selected, since CubeCoders AMP commonly squats `8080`. The portal was assuming
+  `8080` everywhere, so AMP users (and anyone on a custom port) had the
+  **Characters** link land on the wrong app's panel. DST now resolves the real
+  port from `listen_addr` and opens that exact URL.
+- **The browser no longer opens before dune-admin is actually ready.** Clicking
+  **Characters** previously launched dune-admin and opened the web UI after a
+  fixed 1-second wait — so if dune-admin was still running first-time setup (or
+  its port was taken), the browser opened prematurely onto a dead port or
+  another app. DST now waits (up to ~30s) until dune-admin is listening on its
+  configured port **and** verifies the process holding that port is dune-admin
+  itself (not AMP) before opening. If dune-admin isn't set up yet, or the port
+  is owned by something else, it shows clear guidance instead of opening the
+  wrong thing.
+- **dune-admin now opens correctly even when it shares port 8080 with AMP on a
+  different IP family.** When CubeCoders AMP already holds the IPv4 wildcard
+  (`0.0.0.0:8080`), dune-admin can only bind the IPv6 wildcard (`[::]:8080`).
+  In that split, `localhost` resolves to `127.0.0.1` first and lands on AMP's
+  panel — even though dune-admin *is* listening on the same port number. DST now
+  inspects the actual listeners and, when there's a cross-family conflict, opens
+  the loopback literal that dune-admin owns exclusively (`http://[::1]:<port>`),
+  so the **Characters** link reliably opens dune-admin instead of AMP. The
+  readiness probe was also fixed to test the dune-admin-owned address, so it can
+  no longer report AMP as "dune-admin is listening."
+
+### Added
+- `GET /api/dune-admin/web-url` — single source of truth for dune-admin's
+  effective URL/port (`configured`, `port`, `listenAddr`, `url`, `listening`,
+  `ownerProcess`, `listeningIsDuneAdmin`). The UI reads this instead of guessing
+  `8080`, so fallbacks never open a non-dune-admin panel.
+
+### Changed
+- **The sane-pricing patch no longer re-downloads the dune-admin web UI's whole
+  dependency tree on every reinstall.** The web UI is identical across
+  pricing-patch rebuilds (the patch only touches Go), so the patched build now
+  skips `pnpm install` + `pnpm build` when the prerequisites are already in
+  place — `node_modules` present, a prior `web\dist` exists, and the build
+  inputs (upstream `VERSION` + `pnpm-lock.yaml`) are unchanged since the last
+  successful build. Any version or lockfile change still forces a fresh build,
+  so correctness is preserved. When a rebuild *is* needed, `pnpm install` now
+  runs with `--prefer-offline` to reuse the local package store. Result:
+  reapplying the patch to an already-built version is near-instant instead of a
+  multi-minute re-download.
+
+
 
 ### Fixed
 - **Hotfix: the app failed to start ("Dune Server bootstrap failed").** Two

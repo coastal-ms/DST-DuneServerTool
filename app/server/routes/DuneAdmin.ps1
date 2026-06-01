@@ -1067,6 +1067,96 @@ function Resolve-DuneAdminSidecar {
     }
 }
 
+# Resolves dune-admin's effective web URL from its config.yaml listen_addr.
+# The port is per-user: default 8080, but the setup wizard writes whatever the
+# user picked (e.g. :18080 when the 'amp' control plane is chosen, since AMP
+# squats 8080). NEVER hardcode 8080 anywhere; always resolve through here.
+function Resolve-DuneAdminWeb {
+    $cfgPath = Get-DuneAdminConfigYamlPath
+    $configured = [bool]($cfgPath -and (Test-Path -LiteralPath $cfgPath -PathType Leaf))
+    $listenAddr = ''
+    if ($configured) {
+        $y = ConvertFrom-DuneAdminYaml -Path $cfgPath
+        $listenAddr = [string]$y['listen_addr']
+    }
+    $port = Get-DuneAdminListenPort -ListenAddr $listenAddr
+    return @{
+        configured = $configured
+        configPath = $cfgPath
+        listenAddr = $listenAddr
+        port       = $port
+        url        = "http://localhost:$port/#/players"
+    }
+}
+
+# Picks the loopback host literal that actually routes to dune-admin on a port.
+# When AMP holds the IPv4 wildcard (0.0.0.0:port), dune-admin can only bind the
+# IPv6 wildcard ([::]:port); 'localhost' resolves IPv4-first and would open AMP.
+# Returns @{ Host; ListeningIsDuneAdmin; Owners } after inspecting real listeners.
+function Resolve-DuneAdminUrlHost {
+    param([int]$Port, [string]$AdminProcName = 'dune-admin')
+    $owners = @()
+    $adminV4 = $false; $adminV6 = $false; $otherV4 = $false; $otherV6 = $false
+    $anyAdmin = $false
+    try {
+        $conns = Get-NetTCPConnection -LocalPort $Port -State Listen -ErrorAction SilentlyContinue
+        foreach ($c in $conns) {
+            $isV6 = ([string]$c.LocalAddress).Contains(':')
+            $pn = $null
+            if ($c.OwningProcess) {
+                $proc = Get-Process -Id $c.OwningProcess -ErrorAction SilentlyContinue
+                if ($proc) { $pn = $proc.ProcessName }
+            }
+            if ($pn -and ($owners -notcontains $pn)) { $owners += $pn }
+            $isAdmin = ($pn -and $AdminProcName -and ($pn -ieq $AdminProcName))
+            if ($isAdmin) { $anyAdmin = $true; if ($isV6) { $adminV6 = $true } else { $adminV4 = $true } }
+            else          { if ($isV6) { $otherV6 = $true } else { $otherV4 = $true } }
+        }
+    } catch { }
+    $hostLit = 'localhost'
+    if ($otherV4 -or $otherV6) {
+        if ($adminV6 -and -not $otherV6)     { $hostLit = '[::1]' }
+        elseif ($adminV4 -and -not $otherV4) { $hostLit = '127.0.0.1' }
+    }
+    return @{ Host = $hostLit; Owners = $owners; AdminListening = $anyAdmin }
+}
+
+# GET /api/dune-admin/web-url
+# Single source of truth the frontend reads instead of guessing 8080. Returns
+# the per-user port/url plus whether dune-admin is actually listening on it.
+Register-DuneRoute -Method GET -Path '/api/dune-admin/web-url' -Handler {
+    param($req, $res, $routeParams, $body)
+    try {
+        $w = Resolve-DuneAdminWeb
+        $port = [int]$w.port
+        $exePath = Get-DuneAdminConfiguredPath
+        $adminProc = if ($exePath) { [System.IO.Path]::GetFileNameWithoutExtension($exePath) } else { 'dune-admin' }
+        # Inspect the actual listeners to pick the loopback host that routes to
+        # dune-admin (not AMP, which commonly squats 8080 on the IPv4 wildcard).
+        $hostInfo = Resolve-DuneAdminUrlHost -Port $port -AdminProcName $adminProc
+        $urlHost = $hostInfo.Host
+        $owners = @($hostInfo.Owners)
+        # Probe listening against the SAME host we'll hand the browser, so a
+        # 127.0.0.1 probe can't report AMP as 'dune-admin listening'.
+        $probeHost = if ($urlHost -eq '[::1]') { '::1' } elseif ($urlHost -eq 'localhost') { '127.0.0.1' } else { $urlHost }
+        $listening = Test-DunePortListening -DuneHost $probeHost -Port $port -TimeoutMs 800
+        $url = "http://${urlHost}:$port/#/players"
+        $isDuneAdmin = [bool]($listening -and ($owners.Count -eq 0 -or ($owners -icontains $adminProc)))
+        $owner = if ($owners.Count) { ($owners -join ', ') } else { $null }
+        Write-DuneJson -Response $res -Body @{
+            configured          = $w.configured
+            port                = $port
+            listenAddr          = $w.listenAddr
+            url                 = $url
+            listening           = [bool]$listening
+            ownerProcess        = $owner
+            listeningIsDuneAdmin = $isDuneAdmin
+        }
+    } catch {
+        Write-DuneError -Response $res -Status 500 -Message $_.Exception.Message
+    }
+}
+
 Register-DuneRoute -Method GET -Path '/api/dune-admin/diagnostics' -Handler {
     param($req, $res, $routeParams, $body)
     try {

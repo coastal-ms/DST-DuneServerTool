@@ -314,23 +314,61 @@ try {
         # cmd/dune-admin/embed_prod.go embeds cmd/dune-admin/dist behind the
         # `embed` build tag; without it embed_dev.go serves no SPA and every
         # web request 404s. Build web/dist with pnpm and stage it for embedding.
-        Step "pnpm install + build (web UI for embedding)"
+        # The web UI is identical across pricing-patch rebuilds (the sane-pricing
+        # patch only touches Go), so re-running `pnpm install` (which re-resolves
+        # and re-downloads the full ~480-package dependency tree) + `pnpm build`
+        # on every reinstall is pure waste. Skip it when the prerequisites are
+        # already in place: node_modules present, a prior web\dist\index.html
+        # exists, and the build inputs (upstream VERSION + pnpm-lock.yaml) match
+        # the last successful web build. ANY version or lockfile change
+        # invalidates the stamp and forces a fresh install+build, so correctness
+        # is preserved — we only skip when the inputs are provably unchanged.
         $webDir = Join-Path $repoRoot 'web'
         if (-not (Test-Path -LiteralPath (Join-Path $webDir 'package.json'))) {
             throw "web\package.json not found at $webDir — cannot build the dune-admin web UI to embed."
         }
-        Push-Location $webDir
-        try {
-            & $pnpmExe @pnpmPre install --frozen-lockfile
-            if ($LASTEXITCODE -ne 0) { throw "pnpm install failed (web UI)." }
-            & $pnpmExe @pnpmPre build
-            if ($LASTEXITCODE -ne 0) { throw "pnpm build failed (web UI)." }
-        } finally { Pop-Location }
-        $webDist   = Join-Path $webDir 'dist'
-        $embedDist = Join-Path $repoRoot 'cmd\dune-admin\dist'
-        if (-not (Test-Path -LiteralPath (Join-Path $webDist 'index.html'))) {
-            throw "web build produced no dist\index.html — refusing to build a UI-less binary."
+        $webDist     = Join-Path $webDir 'dist'
+        $nodeModules = Join-Path $webDir 'node_modules'
+        $lockFile    = Join-Path $webDir 'pnpm-lock.yaml'
+        $webStamp    = Join-Path $webDir '.dst-web-build-stamp'
+        $lockHash = ''
+        if (Test-Path -LiteralPath $lockFile) {
+            try { $lockHash = (Get-FileHash -LiteralPath $lockFile -Algorithm SHA256).Hash } catch { }
         }
+        $wantStamp = "$version|$lockHash"
+        $haveStamp = ''
+        if (Test-Path -LiteralPath $webStamp) {
+            try { $haveStamp = (Get-Content -LiteralPath $webStamp -Raw).Trim() } catch { }
+        }
+        $webPrereqsReady = (Test-Path -LiteralPath $nodeModules) -and `
+                           (Test-Path -LiteralPath (Join-Path $webDist 'index.html')) -and `
+                           $lockHash -and ($haveStamp -eq $wantStamp)
+        if ($webPrereqsReady) {
+            Step "Web UI already built (v$version, deps installed) - skipping pnpm install + build"
+            Info "Reusing existing web\dist (build stamp matches). Delete $webStamp to force a rebuild."
+        } else {
+            Step "pnpm install + build (web UI for embedding)"
+            if (-not (Test-Path -LiteralPath $nodeModules)) {
+                Info "node_modules missing - installing dependencies."
+            } elseif ($haveStamp -ne $wantStamp) {
+                Info "Build inputs changed (VERSION/pnpm-lock) - rebuilding web UI."
+            }
+            Push-Location $webDir
+            try {
+                # --prefer-offline reuses the pnpm content-addressable store so a
+                # forced rebuild doesn't re-download packages it already has.
+                & $pnpmExe @pnpmPre install --frozen-lockfile --prefer-offline
+                if ($LASTEXITCODE -ne 0) { throw "pnpm install failed (web UI)." }
+                & $pnpmExe @pnpmPre build
+                if ($LASTEXITCODE -ne 0) { throw "pnpm build failed (web UI)." }
+            } finally { Pop-Location }
+            if (-not (Test-Path -LiteralPath (Join-Path $webDist 'index.html'))) {
+                throw "web build produced no dist\index.html — refusing to build a UI-less binary."
+            }
+            # Stamp the successful build so the next reinstall can skip it.
+            try { Set-Content -LiteralPath $webStamp -Value $wantStamp -Encoding ascii -ErrorAction Stop } catch { }
+        }
+        $embedDist = Join-Path $repoRoot 'cmd\dune-admin\dist'
         if (Test-Path -LiteralPath $embedDist) { Remove-Item -LiteralPath $embedDist -Recurse -Force }
         Copy-Item -LiteralPath $webDist -Destination $embedDist -Recurse -Force
         Info "staged web UI for embedding → cmd\dune-admin\dist"
