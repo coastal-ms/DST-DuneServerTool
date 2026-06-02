@@ -280,3 +280,39 @@ export type SqlErrResult = {
 }
 
 export type SqlResult = SqlOkResult | SqlErrResult
+
+// ---------- Backup schedule -------------------------------------------------
+
+export type BackupPreset = {
+  id: string
+  label: string
+}
+
+export type BackupSchedule = {
+  enabled: boolean
+  preset: string
+  retentionDays: number
+  vmTimezone: string
+  vmNowUtc: string
+  crondRunning: boolean
+  crondStatusRaw: string
+  hasUnmanagedBackupLines: boolean
+  managedBlockLooksTampered: boolean
+  inferredFromUnmanaged: boolean
+  presets: BackupPreset[]
+}
+
+export type BackupFile = {
+  path: string
+  sizeBytes: number
+  mtimeEpoch: number
+  mtimeIso: string
+}
+
+export type BackupHistory = {
+  recent: BackupFile[]
+  logTail: string
+  dumpDirPath: string
+  dumpDirSize: string
+  logPath: string
+}
