@@ -301,6 +301,11 @@ default, both auto-check on mount):
     click **Install** with the "keep sane-pricing patch applied" box checked to
     rebuild. The defaults (12 / 5) reproduce the original behaviour exactly.
 
+    **Wiping bot listings (v10.1.7+):** the portal's old "Wipe all listings"
+    testing button has been removed. dune-admin now ships its own **Wipe
+    Listings** control in its market-bot panel, which owns that job directly —
+    use that when you need the bot to re-list everything from scratch.
+
 ### 🧙 Setup Wizard
 
 ![Setup Wizard](docs/img/v6-setup-wizard.png)
