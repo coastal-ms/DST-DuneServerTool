@@ -91,36 +91,6 @@ export function Settings() {
   }
 
 
-  // "Wipe all listings" — TESTING ONLY. Deletes every market-bot listing on
-  // the VM so the bot re-lists from scratch with freshly-computed prices.
-  const [wipeApprove, setWipeApprove] = useState(false)
-  const [wiping, setWiping] = useState(false)
-  const [wipeMsg, setWipeMsg] = useState<string | null>(null)
-  const [wipeErr, setWipeErr] = useState<string | null>(null)
-  async function onWipeListings() {
-    if (!wipeApprove) return
-    if (!window.confirm('FOR TESTING ONLY — this will WIPE ALL MARKET LISTINGS on the VM.\n\nThe market bot will re-list everything from scratch on its next listing tick. Continue?')) return
-    setWiping(true)
-    setWipeMsg(null)
-    setWipeErr(null)
-    try {
-      const r = await api<{ ok: boolean; ordersDeleted?: number; itemsDeleted?: number; message?: string; error?: string }>(
-        '/api/db/wipe-bot-listings',
-        { method: 'POST', body: JSON.stringify({ approve: true }) },
-      )
-      if (r.ok) {
-        setWipeMsg(r.message ?? `Wiped ${r.ordersDeleted ?? '?'} orders / ${r.itemsDeleted ?? '?'} items.`)
-        setWipeApprove(false)
-      } else {
-        setWipeErr(r.error ?? 'Wipe failed.')
-      }
-    } catch (e) {
-      setWipeErr(e instanceof Error ? e.message : String(e))
-    } finally {
-      setWiping(false)
-    }
-  }
-
   async function onBrowse(field: { key: string; label: string; browse?: { mode: 'folder' | 'file'; filter?: string } }) {
     if (!field.browse) return
     setBrowsing(field.key)
@@ -1282,47 +1252,6 @@ export function Settings() {
                   )}
                 </div>
               )}
-            </div>
-
-            {/* Testing-only: wipe all market listings on the VM. */}
-            <div className="border-t border-border pt-3 mt-1">
-              <div className="rounded-lg border border-danger/40 bg-danger/5 p-3">
-                <h4 className="text-sm font-semibold text-danger flex items-center gap-2">
-                  <Icon name="TriangleAlert" size={14} /> For Testing Only — Will WIPE ALL LISTINGS
-                </h4>
-                <p className="text-xs text-muted mt-1">
-                  Deletes every market-bot listing on the VM. The bot re-lists from scratch with
-                  freshly-computed prices on its next listing tick. Requires the VM to be running.
-                </p>
-                <label className="mt-2 flex items-center gap-2 cursor-pointer select-none text-sm">
-                  <input
-                    type="checkbox"
-                    checked={wipeApprove}
-                    disabled={wiping}
-                    onChange={e => setWipeApprove(e.target.checked)}
-                  />
-                  I approve — wipe all listings
-                </label>
-                <button
-                  type="button"
-                  onClick={() => void onWipeListings()}
-                  disabled={!wipeApprove || wiping}
-                  className="btn-danger mt-2 disabled:opacity-50 disabled:cursor-not-allowed"
-                >
-                  <Icon name={wiping ? 'Loader2' : 'Trash2'} size={14} className={wiping ? 'animate-spin' : ''} />
-                  {wiping ? 'Wiping…' : 'Wipe all listings'}
-                </button>
-                {wipeMsg && (
-                  <p className="mt-2 text-xs text-success flex items-center gap-1.5">
-                    <Icon name="CheckCircle2" size={13} /> {wipeMsg}
-                  </p>
-                )}
-                {wipeErr && (
-                  <p className="mt-2 text-xs text-danger flex items-center gap-1.5">
-                    <Icon name="AlertCircle" size={13} /> {wipeErr}
-                  </p>
-                )}
-              </div>
             </div>
           </div>
         )}
