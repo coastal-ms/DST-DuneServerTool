@@ -58,6 +58,38 @@ function Get-DuneBackupPresetNames {
     return @($script:DuneBackupPresets.Keys | Sort-Object)
 }
 
+# Map a set of cron expressions back to a preset id, or $null if no match.
+# Comparison is order-insensitive on the expressions themselves but exact on
+# the time fields — anything unusual stays "Custom".
+function Get-DuneBackupPresetForCronExprs {
+    param([string[]]$Exprs)
+    if (-not $Exprs -or $Exprs.Count -eq 0) { return $null }
+    $sorted = ($Exprs | Sort-Object) -join '|'
+    foreach ($name in $script:DuneBackupPresets.Keys) {
+        $candidate = $script:DuneBackupPresets[$name].crons
+        if (-not $candidate -or $candidate.Count -eq 0) { continue }
+        if (($candidate | Sort-Object) -join '|' -eq $sorted) { return $name }
+    }
+    return $null
+}
+
+# Extract the 5-field cron expression from a crontab line that runs our
+# backup command. Returns $null if the line doesn't look like a managed
+# backup invocation (i.e. doesn't reference the battlegroup-backup binary).
+function Get-DuneBackupCronExprFromLine {
+    param([string]$Line)
+    if (-not $Line) { return $null }
+    if ($Line -notmatch 'battlegroup\s+backup') { return $null }
+    $trimmed = $Line.Trim()
+    if ($trimmed.StartsWith('#')) { return $null }
+    # First 5 whitespace-separated fields = the cron schedule. BusyBox cron
+    # doesn't support @yearly/@daily/@hourly shortcuts in /etc/crontabs, so
+    # we only worry about the standard 5-field form.
+    $parts = $trimmed -split '\s+', 6
+    if ($parts.Count -lt 6) { return $null }
+    return ($parts[0..4] -join ' ')
+}
+
 function Get-DuneBackupContext {
     if (-not (Get-Command Invoke-V6Ssh -ErrorAction SilentlyContinue)) {
         return @{ ok=$false; status=503; message='SSH helper unavailable (Db-Postgres.ps1 not loaded).' }
@@ -183,16 +215,22 @@ function ConvertFrom-DuneBackupCrontab {
     }
 
     # Detect user-managed cron lines outside our block that still call the
-    # backup command — surfaces as a warning in the UI.
-    $unmanaged = $false
+    # backup command — surfaces as a warning in the UI. Also collect their
+    # cron expressions so the caller can try to reverse-map to a preset
+    # (the most common case is the hardcoded `0 4 * * *` line that early
+    # adopters installed by hand before this card existed).
+    $unmanagedExprs = New-Object System.Collections.Generic.List[string]
     foreach ($ln in $outside) {
-        if ($ln -match 'battlegroup\s+backup') { $unmanaged = $true; break }
+        $expr = Get-DuneBackupCronExprFromLine -Line $ln
+        if ($expr) { $unmanagedExprs.Add($expr) | Out-Null }
     }
+    $unmanaged = ($unmanagedExprs.Count -gt 0)
 
     return @{
-        block                   = $blockInfo
-        outsideText             = ($outside -join "`n").TrimEnd("`n")
-        hasUnmanagedBackupLines = $unmanaged
+        block                    = $blockInfo
+        outsideText              = ($outside -join "`n").TrimEnd("`n")
+        hasUnmanagedBackupLines  = $unmanaged
+        unmanagedBackupCronExprs = @($unmanagedExprs)
     }
 }
 
@@ -244,6 +282,7 @@ sudo crontab -l 2>&1 || true
     $preset = 'Off'
     $retention = 0
     $looksTampered = $false
+    $inferredFromUnmanaged = $false
     if ($parsed.block) {
         $preset    = $parsed.block.preset
         $retention = $parsed.block.retentionDays
@@ -255,19 +294,32 @@ sudo crontab -l 2>&1 || true
             $expectedInner = ($expected.TrimEnd("`n") -split "`n" | Select-Object -Skip 1 | Select-Object -SkipLast 1) -join "`n"
             if ($expectedInner -ne $parsed.block.raw) { $looksTampered = $true }
         }
+    } elseif ($parsed.hasUnmanagedBackupLines) {
+        # No managed block, but a hand-installed `battlegroup backup` cron
+        # exists outside the block (e.g. the legacy `0 4 * * *` line from
+        # the miniature-disco docs). If the schedule matches a known preset
+        # exactly, infer it so the UI shows the right preselected option and
+        # the user just clicks Save to migrate it into our managed block.
+        $inferred = Get-DuneBackupPresetForCronExprs -Exprs $parsed.unmanagedBackupCronExprs
+        if ($inferred) {
+            $preset    = $inferred
+            $enabled   = $true
+            $inferredFromUnmanaged = $true
+        }
     }
 
     return @{
-        enabled                 = $enabled
-        preset                  = $preset
-        retentionDays           = $retention
-        vmTimezone              = $tz
-        vmNowUtc                = $vmNowUtc
-        crondRunning            = [bool]$crondRunning
-        crondStatusRaw          = $crondTxt.Trim()
-        hasUnmanagedBackupLines = $parsed.hasUnmanagedBackupLines
+        enabled                   = $enabled
+        preset                    = $preset
+        retentionDays             = $retention
+        vmTimezone                = $tz
+        vmNowUtc                  = $vmNowUtc
+        crondRunning              = [bool]$crondRunning
+        crondStatusRaw            = $crondTxt.Trim()
+        hasUnmanagedBackupLines   = $parsed.hasUnmanagedBackupLines
         managedBlockLooksTampered = $looksTampered
-        presets                 = @(Get-DuneBackupPresetNames | ForEach-Object {
+        inferredFromUnmanaged     = $inferredFromUnmanaged
+        presets                   = @(Get-DuneBackupPresetNames | ForEach-Object {
             @{ id=$_; label=$script:DuneBackupPresets[$_].label }
         })
     }
@@ -312,11 +364,18 @@ sudo touch /var/log/dune-backup.log 2>/dev/null || true
 sudo chmod 0644 /var/log/dune-backup.log 2>/dev/null || true
 
 existing=`$(sudo crontab -l 2>/dev/null || true)
-# Drop any prior managed block (inclusive of markers). awk is BusyBox-safe.
+# Drop any prior managed block (inclusive of markers) AND any stray cron
+# line that calls `battlegroup backup` outside the block — otherwise an
+# old hand-installed line (e.g. the legacy `0 4 * * *` from the docs)
+# would coexist with our new managed block and run a second time.
+# awk is BusyBox-safe.
 stripped=`$(printf '%s\n' "`$existing" | awk '
   /^# DST-BACKUP BEGIN`$/ { in_block=1; next }
   /^# DST-BACKUP END`$/   { in_block=0; next }
-  !in_block               { print }
+  in_block                { next }
+  /^[[:space:]]*#/        { print; next }
+  /battlegroup[[:space:]]+backup/ { next }
+  { print }
 ')
 
 newblock=''

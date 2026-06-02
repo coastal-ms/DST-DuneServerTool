@@ -13,6 +13,8 @@ here cover everything those tags shipped.
 
 ## [Unreleased]
 
+## [10.1.8] - 2026-06-02
+
 ### Added
 - **Backup Schedule card on the Database page.** The portal now installs a
   recurring `battlegroup backup` cron on the VM directly from the UI, with
@@ -20,8 +22,14 @@ here cover everything those tags shipped.
   every six hours, daily 04:00, twice daily (04:00 and 16:00), and weekly
   Monday 04:00. The schedule lives in a clearly-marked managed block inside
   root's `/etc/crontabs/root`, is read back and verified after each save, and
-  is shown alongside recent backup files plus a tail of the cron log. The
-  existing manual **Take Backup** and **Restore Backup** controls are
+  is shown alongside recent backup files plus a tail of the cron log.
+- **Adopts the old hand-installed cron line automatically.** If a
+  `battlegroup backup` cron line is already on the VM (e.g. the legacy
+  `0 4 * * *` line from the backup guide) and its schedule matches a known
+  preset, the card preselects that preset and offers a one-click migration
+  into the managed block. The first Save also strips any other stray
+  `battlegroup backup` lines so two schedules can't run at once.
+- The existing manual **Take Backup** and **Restore Backup** controls are
   unchanged. Note that the schedule lives on the VM, so reprovisioning the VM
   loses it and it must be re-installed from the card.
 

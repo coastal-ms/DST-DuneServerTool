@@ -298,6 +298,7 @@ export type BackupSchedule = {
   crondStatusRaw: string
   hasUnmanagedBackupLines: boolean
   managedBlockLooksTampered: boolean
+  inferredFromUnmanaged: boolean
   presets: BackupPreset[]
 }
 

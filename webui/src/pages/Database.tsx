@@ -623,6 +623,13 @@ function BackupScheduleCard({ vmRunning, showToast }: BackupScheduleCardProps) {
 
   const dirty = useMemo(() => {
     if (!schedule) return false
+    // If the schedule was inferred from an unmanaged line (i.e. no managed
+    // block exists yet), the user MUST be able to save even though the draft
+    // matches the inferred preset — saving is how the line gets migrated.
+    if (schedule.inferredFromUnmanaged) return true
+    // Likewise, if there are still unmanaged lines outside our block, allow
+    // saving so the user can clean them up by re-installing.
+    if (schedule.hasUnmanagedBackupLines) return true
     return draftPreset !== schedule.preset || draftRetention !== schedule.retentionDays
   }, [schedule, draftPreset, draftRetention])
 
@@ -696,12 +703,24 @@ function BackupScheduleCard({ vmRunning, showToast }: BackupScheduleCardProps) {
         </p>
       )}
 
-      {schedule?.hasUnmanagedBackupLines && (
+      {schedule?.inferredFromUnmanaged && (
+        <p className="text-xs text-info mb-3 flex items-start gap-1.5">
+          <Icon name="Info" size={12} className="mt-0.5 shrink-0" />
+          <span>
+            Found a hand-installed <span className="font-mono">battlegroup backup</span> cron on the VM that
+            matches the <strong>{schedule.preset}</strong> preset. Click <strong>Save schedule</strong> to take
+            it over into a managed block (the old line will be replaced cleanly — no duplicate runs).
+          </span>
+        </p>
+      )}
+
+      {schedule?.hasUnmanagedBackupLines && !schedule.inferredFromUnmanaged && (
         <p className="text-xs text-warning mb-3 flex items-start gap-1.5">
           <Icon name="AlertTriangle" size={12} className="mt-0.5 shrink-0" />
           <span>
-            The crontab also contains a <span className="font-mono">battlegroup backup</span> line outside the
-            managed block. Saving here won't remove it — review with <span className="font-mono">sudo crontab -l</span>.
+            The crontab also contains one or more <span className="font-mono">battlegroup backup</span> lines
+            outside the managed block. Saving here will <strong>remove</strong> them and replace with the preset
+            above (so you never end up with two schedules running at once).
           </span>
         </p>
       )}
