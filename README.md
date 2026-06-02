@@ -181,9 +181,25 @@ reflected immediately.
 
 ![Database page](docs/img/v6-database.png)
 
+![Backup Schedule card](docs/img/v10-database-backup-schedule.png)
+
 - **Take Backup** / **Restore Backup** for the BG PostgreSQL database
   without remembering pod names. A banner reminds you to stop the BG
   first for a consistent backup.
+- **Backup Schedule** (v10.1.8+) — install a recurring `battlegroup backup`
+  cron on the VM directly from the UI, with optional auto-pruning of dump
+  files older than N days. Presets cover hourly, every six hours, daily 04:00,
+  twice daily (04:00 and 16:00), and weekly Monday. The schedule lives in a
+  clearly-marked managed block inside root's `/etc/crontabs/root`, is read
+  back and verified after each save, and is shown alongside recent backup
+  files plus a tail of `/var/log/dune-backup.log`. If a hand-installed
+  `battlegroup backup` cron already exists (e.g. the legacy `0 4 * * *` line
+  from the backup guide), the card preselects the matching preset and a
+  single Save migrates it into the managed block — without leaving duplicate
+  schedules behind. Backups land in `/funcom/artifacts/database-dumps/<bg>/`
+  alongside Funcom's own ~3-hourly auto-backups. The schedule lives on the
+  VM, so reprovisioning the VM loses it and it must be re-installed from the
+  card.
 - **Fix on-demand maps** (v10.0.4+) — one click clears the drifted
   `igwsss.spec.partitions` pin that intermittently stops DeepDesert,
   Arrakeen and Harko Village from launching on demand, then shows the last

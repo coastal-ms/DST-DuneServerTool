@@ -91,10 +91,11 @@ Outputs:
    git tag -a v4.0.x -m "v4.0.x: ..."
    git push origin main v4.0.x
    ```
-7. Create GitHub release:
+7. Create GitHub release (substitute the real version — DO NOT leave `X.Y.Z`
+   literal in the title; the releases page renders the title prominently):
    ```powershell
-   gh release create v4.0.x --title "v4.0.x" --notes-file release-notes.md
-   gh release upload v4.0.x app\installer\output\DuneServerSetup.exe
+   gh release create v10.1.8 --title "10.1.8" --notes-file release-notes.md
+   gh release upload v10.1.8 app\installer\output\DuneServerSetup.exe
    ```
 
 ## Regenerating the icon

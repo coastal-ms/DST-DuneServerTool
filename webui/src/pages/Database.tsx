@@ -3,8 +3,20 @@ import { PageHeader } from '../components/PageHeader'
 import { Icon } from '../components/Icon'
 import { useStatus } from '../hooks/useStatus'
 import { api } from '../api/client'
-import { getDbInfo, runSql } from '../api/database'
-import type { DbInfo, SqlResult, SqlOkResult } from '../api/types'
+import {
+  getDbInfo,
+  runSql,
+  getBackupSchedule,
+  putBackupSchedule,
+  getBackupHistory,
+} from '../api/database'
+import type {
+  DbInfo,
+  SqlResult,
+  SqlOkResult,
+  BackupSchedule,
+  BackupHistory,
+} from '../api/types'
 import Editor, { type OnMount } from '@monaco-editor/react'
 
 type CmdLaunch = { ok: boolean; name: string; pid?: number; mode: string }
@@ -241,6 +253,9 @@ export function Database() {
           onClick={() => void runMaint('import')}
         />
       </div>
+
+      {/* Configurable backup schedule (writes the VM's root crontab) */}
+      <BackupScheduleCard vmRunning={vmRunning} showToast={showToast} />
 
       {/* Fix on-demand maps — captured output */}
       <div className="card p-5 flex flex-col mb-6">
@@ -561,4 +576,294 @@ function ResultsPanel({ result, onExportCsv }: { result: SqlResult | null; onExp
       )}
     </div>
   )
+}
+
+// -----------------------------------------------------------------------------
+// Backup schedule card — read/edit the managed crontab block on the VM.
+// -----------------------------------------------------------------------------
+type BackupScheduleCardProps = {
+  vmRunning: boolean
+  showToast: (kind: 'ok' | 'err', msg: string) => void
+}
+
+function BackupScheduleCard({ vmRunning, showToast }: BackupScheduleCardProps) {
+  const [schedule, setSchedule] = useState<BackupSchedule | null>(null)
+  const [history, setHistory]   = useState<BackupHistory  | null>(null)
+  const [loading, setLoading]   = useState(false)
+  const [saving, setSaving]     = useState(false)
+  const [err, setErr]           = useState<string | null>(null)
+  const [showLog, setShowLog]   = useState(false)
+
+  // Draft state — initialised from `schedule` when it loads, then locally
+  // editable so the user can preview their choice before clicking Save.
+  const [draftPreset, setDraftPreset]       = useState<string>('Off')
+  const [draftRetention, setDraftRetention] = useState<number>(30)
+
+  const loadAll = useCallback(async () => {
+    if (!vmRunning) {
+      setSchedule(null); setHistory(null); setErr('VM is not running.')
+      return
+    }
+    setLoading(true); setErr(null)
+    try {
+      const [sched, hist] = await Promise.all([getBackupSchedule(), getBackupHistory({ recent: 5, logLines: 50 })])
+      setSchedule(sched)
+      setHistory(hist)
+      setDraftPreset(sched.preset === 'Custom' ? 'Off' : sched.preset)
+      setDraftRetention(sched.retentionDays)
+    } catch (e) {
+      setErr(e instanceof Error ? e.message : String(e))
+      setSchedule(null); setHistory(null)
+    } finally {
+      setLoading(false)
+    }
+  }, [vmRunning])
+
+  useEffect(() => { void loadAll() }, [loadAll])
+
+  const dirty = useMemo(() => {
+    if (!schedule) return false
+    // If the schedule was inferred from an unmanaged line (i.e. no managed
+    // block exists yet), the user MUST be able to save even though the draft
+    // matches the inferred preset — saving is how the line gets migrated.
+    if (schedule.inferredFromUnmanaged) return true
+    // Likewise, if there are still unmanaged lines outside our block, allow
+    // saving so the user can clean them up by re-installing.
+    if (schedule.hasUnmanagedBackupLines) return true
+    return draftPreset !== schedule.preset || draftRetention !== schedule.retentionDays
+  }, [schedule, draftPreset, draftRetention])
+
+  async function save() {
+    if (!schedule) return
+    setSaving(true)
+    try {
+      const updated = await putBackupSchedule({ preset: draftPreset, retentionDays: draftRetention })
+      setSchedule(updated)
+      setDraftPreset(updated.preset === 'Custom' ? 'Off' : updated.preset)
+      setDraftRetention(updated.retentionDays)
+      showToast('ok', draftPreset === 'Off' ? 'Schedule disabled.' : `Schedule saved (${draftPreset}, retention ${draftRetention}d).`)
+      // Refresh history in the background so the user sees the new schedule
+      // reflected immediately when the next cron run lands.
+      void getBackupHistory({ recent: 5, logLines: 50 }).then(setHistory).catch(() => {})
+    } catch (e) {
+      showToast('err', `Save failed: ${e instanceof Error ? e.message : String(e)}`)
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  const presetChoices = schedule?.presets ?? [
+    { id: 'Off',            label: 'Disabled' },
+    { id: 'Hourly',         label: 'Every hour' },
+    { id: 'Every6Hours',    label: 'Every 6 hours' },
+    { id: 'DailyUtc04',     label: 'Daily at 04:00' },
+    { id: 'TwiceDailyUtc',  label: 'Twice daily (04:00 and 16:00)' },
+    { id: 'WeeklyMonUtc04', label: 'Weekly, Monday 04:00' },
+  ]
+
+  const tzLabel = schedule?.vmTimezone || 'UTC'
+  const lastBackup = history?.recent?.[0]
+
+  return (
+    <div className="card p-5 flex flex-col mb-6">
+      <div className="flex items-center gap-3 mb-3">
+        <Icon name="Clock" size={22} className="text-info" />
+        <h2 className="text-base font-semibold tracking-tight text-info">Backup Schedule</h2>
+        <span className="ml-auto text-xs text-text-muted">
+          Runs on the VM via root crontab. Edits write to <span className="font-mono">/etc/crontabs/root</span>.
+        </span>
+      </div>
+      <p className="text-sm text-text-muted mb-3">
+        Run <span className="font-mono">battlegroup backup</span> on a recurring schedule. Times are in the VM's
+        timezone (<span className="font-mono">{tzLabel}</span>). Backups land in{' '}
+        <span className="font-mono">{history?.dumpDirPath ?? '/funcom/artifacts/database-dumps'}</span> alongside
+        Funcom's own ~3-hourly auto-backups.
+      </p>
+
+      {!vmRunning && (
+        <p className="text-xs text-warning mb-3 flex items-center gap-1.5">
+          <Icon name="AlertTriangle" size={12} /> VM must be running to read or edit the schedule.
+        </p>
+      )}
+
+      {err && (
+        <p className="text-xs text-danger mb-3 flex items-center gap-1.5">
+          <Icon name="AlertCircle" size={12} /> {err}
+        </p>
+      )}
+
+      {schedule && !schedule.crondRunning && (
+        <p className="text-xs text-warning mb-3 flex items-start gap-1.5">
+          <Icon name="AlertTriangle" size={12} className="mt-0.5 shrink-0" />
+          <span>
+            crond does not appear to be running on the VM — schedule entries will not fire.
+            Start it with <span className="font-mono">sudo rc-service crond start</span> (and{' '}
+            <span className="font-mono">sudo rc-update add crond default</span> to enable at boot).
+          </span>
+        </p>
+      )}
+
+      {schedule?.inferredFromUnmanaged && (
+        <p className="text-xs text-info mb-3 flex items-start gap-1.5">
+          <Icon name="Info" size={12} className="mt-0.5 shrink-0" />
+          <span>
+            Found a hand-installed <span className="font-mono">battlegroup backup</span> cron on the VM that
+            matches the <strong>{schedule.preset}</strong> preset. Click <strong>Save schedule</strong> to take
+            it over into a managed block (the old line will be replaced cleanly — no duplicate runs).
+          </span>
+        </p>
+      )}
+
+      {schedule?.hasUnmanagedBackupLines && !schedule.inferredFromUnmanaged && (
+        <p className="text-xs text-warning mb-3 flex items-start gap-1.5">
+          <Icon name="AlertTriangle" size={12} className="mt-0.5 shrink-0" />
+          <span>
+            The crontab also contains one or more <span className="font-mono">battlegroup backup</span> lines
+            outside the managed block. Saving here will <strong>remove</strong> them and replace with the preset
+            above (so you never end up with two schedules running at once).
+          </span>
+        </p>
+      )}
+
+      {schedule?.managedBlockLooksTampered && (
+        <p className="text-xs text-warning mb-3 flex items-start gap-1.5">
+          <Icon name="AlertTriangle" size={12} className="mt-0.5 shrink-0" />
+          <span>
+            The managed block was edited outside this app. Clicking Save will overwrite those edits with the preset above.
+          </span>
+        </p>
+      )}
+
+      <div className="grid grid-cols-1 md:grid-cols-[1fr_180px_auto] gap-3 items-end mb-4">
+        <label className="flex flex-col gap-1 text-xs">
+          <span className="text-text-muted font-medium">Schedule</span>
+          <select
+            value={draftPreset}
+            onChange={e => setDraftPreset(e.target.value)}
+            disabled={!vmRunning || loading || saving}
+            className="px-2 py-1.5 rounded bg-surface-2 border border-border text-text text-sm"
+          >
+            {presetChoices.map(p => (
+              <option key={p.id} value={p.id}>{p.label}</option>
+            ))}
+          </select>
+        </label>
+        <label className="flex flex-col gap-1 text-xs">
+          <span className="text-text-muted font-medium">
+            Retention (days){draftRetention === 0 ? ' — keep forever' : ''}
+          </span>
+          <input
+            type="number"
+            min={0}
+            max={3650}
+            step={1}
+            value={draftRetention}
+            onChange={e => {
+              const n = parseInt(e.target.value || '0', 10)
+              setDraftRetention(Number.isFinite(n) ? Math.max(0, Math.min(3650, n)) : 0)
+            }}
+            disabled={!vmRunning || loading || saving || draftPreset === 'Off'}
+            className="px-2 py-1.5 rounded bg-surface-2 border border-border text-text text-sm font-mono w-full"
+          />
+        </label>
+        <div className="flex gap-2">
+          <button
+            type="button"
+            onClick={() => void loadAll()}
+            disabled={!vmRunning || loading || saving}
+            className="btn-secondary"
+          >
+            <Icon name={loading ? 'Loader2' : 'RefreshCw'} size={14} className={loading ? 'animate-spin' : ''} />
+            Refresh
+          </button>
+          <button
+            type="button"
+            onClick={() => void save()}
+            disabled={!vmRunning || loading || saving || !dirty}
+            className="btn-primary"
+            title={dirty ? 'Install the new schedule on the VM' : 'No changes to save'}
+          >
+            <Icon name={saving ? 'Loader2' : 'Save'} size={14} className={saving ? 'animate-spin' : ''} />
+            {saving ? 'Saving…' : 'Save schedule'}
+          </button>
+        </div>
+      </div>
+
+      {schedule && (
+        <p className="text-xs text-text-dim mb-3">
+          Currently installed:{' '}
+          {schedule.enabled
+            ? <>
+                <strong className="text-text">{schedule.preset}</strong>
+                {schedule.retentionDays > 0
+                  ? <> · retention <strong className="text-text">{schedule.retentionDays}d</strong></>
+                  : <> · no retention pruning</>}
+              </>
+            : <strong className="text-text">Off</strong>}
+          {' · '}VM time <span className="font-mono">{schedule.vmNowUtc} ({tzLabel})</span>
+        </p>
+      )}
+
+      <div className="border-t border-border pt-3 mt-1">
+        <div className="flex items-center justify-between gap-3 mb-2">
+          <div className="text-xs font-semibold text-text-muted">Recent backups</div>
+          <div className="text-xs text-text-dim">
+            {history?.dumpDirSize ? <>Dump dir: <span className="font-mono">{history.dumpDirSize}</span></> : null}
+          </div>
+        </div>
+        {!history || history.recent.length === 0 ? (
+          <p className="text-xs text-text-dim italic">
+            {vmRunning ? 'No backup files found yet.' : 'VM not running.'}
+          </p>
+        ) : (
+          <ul className="text-xs font-mono space-y-1">
+            {history.recent.map(f => (
+              <li key={f.path} className="flex items-baseline gap-2">
+                <span className="text-text">{f.mtimeIso}</span>
+                <span className="text-text-muted">{(f.sizeBytes / (1024 * 1024)).toFixed(1)} MB</span>
+                <span className="text-text-dim truncate" title={f.path}>{f.path.replace(/^\/funcom\/artifacts\/database-dumps\//, '')}</span>
+              </li>
+            ))}
+          </ul>
+        )}
+        {lastBackup && (
+          <p className="text-xs text-text-dim mt-2">
+            Last backup at <span className="font-mono">{lastBackup.mtimeIso}</span> ({relativeFromNow(lastBackup.mtimeEpoch)}).
+          </p>
+        )}
+      </div>
+
+      {history?.logTail && (
+        <div className="mt-3">
+          <button
+            type="button"
+            onClick={() => setShowLog(v => !v)}
+            className="text-xs text-info hover:underline flex items-center gap-1"
+          >
+            <Icon name={showLog ? 'ChevronDown' : 'ChevronRight'} size={12} />
+            {showLog ? 'Hide' : 'Show'} log tail (<span className="font-mono">{history.logPath}</span>, last 50 lines)
+          </button>
+          {showLog && (
+            <pre className="mt-2 text-xs font-mono bg-surface-2 border border-border rounded p-3 overflow-x-auto whitespace-pre-wrap max-h-64">
+              {history.logTail || '(empty)'}
+            </pre>
+          )}
+        </div>
+      )}
+
+      <p className="text-xs text-text-dim mt-3 italic">
+        Note: this schedule lives in the VM's root crontab. If the VM is reprovisioned the schedule is lost
+        and must be re-installed from here.
+      </p>
+    </div>
+  )
+}
+
+function relativeFromNow(epochSeconds: number): string {
+  const deltaSec = Math.floor(Date.now() / 1000) - epochSeconds
+  if (deltaSec < 60)        return `${deltaSec}s ago`
+  if (deltaSec < 3600)      return `${Math.floor(deltaSec / 60)}m ago`
+  if (deltaSec < 86400)     return `${Math.floor(deltaSec / 3600)}h ago`
+  if (deltaSec < 86400 * 7) return `${Math.floor(deltaSec / 86400)}d ago`
+  return `${Math.floor(deltaSec / 86400)}d ago`
 }
