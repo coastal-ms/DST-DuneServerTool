@@ -12,6 +12,15 @@ on GitHub still exist for each individual release; the consolidated entries
 here cover everything those tags shipped.
 
 ## [Unreleased]
+## [10.1.7] - 2026-06-01
+
+### Removed
+- **The "Wipe all listings" testing tool was removed from the Settings page.**
+  dune-admin now ships its own **Wipe Listings** control in its market-bot
+  panel, which owns that job directly. The portal's `POST /api/db/wipe-bot-listings`
+  route and the Settings-page wipe panel (checkbox + button) are gone, removing a
+  duplicate, destructive DB action from the tool.
+
 ## [10.1.6] - 2026-06-01
 
 ### Changed
