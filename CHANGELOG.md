@@ -12,6 +12,19 @@ on GitHub still exist for each individual release; the consolidated entries
 here cover everything those tags shipped.
 
 ## [Unreleased]
+
+### Added
+- **Backup Schedule card on the Database page.** The portal now installs a
+  recurring `battlegroup backup` cron on the VM directly from the UI, with
+  optional auto-pruning of dump files older than N days. Presets cover hourly,
+  every six hours, daily 04:00, twice daily (04:00 and 16:00), and weekly
+  Monday 04:00. The schedule lives in a clearly-marked managed block inside
+  root's `/etc/crontabs/root`, is read back and verified after each save, and
+  is shown alongside recent backup files plus a tail of the cron log. The
+  existing manual **Take Backup** and **Restore Backup** controls are
+  unchanged. Note that the schedule lives on the VM, so reprovisioning the VM
+  loses it and it must be re-installed from the card.
+
 ## [10.1.7] - 2026-06-01
 
 ### Removed
