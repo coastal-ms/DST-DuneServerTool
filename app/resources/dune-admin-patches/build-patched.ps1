@@ -149,6 +149,35 @@ if (-not (Get-Command go -ErrorAction SilentlyContinue)) {
     throw "Go was not found on this machine (searched PATH and the standard install locations). Install Go — e.g. run 'winget install --id GoLang.Go' — then close and reopen the Dune Server Tool and re-apply the patch."
 }
 
+# --- Resolve GNU patch.exe (compatibility-mode fallback) ---------------------
+# Git for Windows ships a full GNU patch under usr\bin\. We use it as a
+# fuzz-tolerant fallback when `git apply` (which requires byte-exact context)
+# refuses a patch whose context lines have drifted slightly because upstream
+# made a small unrelated change inside our context window — typically a new
+# function parameter on a signature line we depend on, or a reworded comment
+# next to a hunk. `git apply` already tolerates line-offset drift (it'll
+# locate the hunk a few lines up or down), so the fuzz fallback ONLY fires
+# for context-byte mismatches.
+#
+# Strategy: try fuzz=2 first (conservative — at most 2 of 6 context lines
+# may mismatch). If that rejects, escalate ONCE to fuzz=3 (effectively
+# matches on the removed/added lines alone). Both paths run the SAME post-
+# apply invariants check, which is the real safety net: it verifies the
+# patch left behind the expected semantic markers (math/rand import,
+# 100k-cap constant, d12 roll, removed BuyThreshold gate, …), and reverts
+# the working tree if any check fails. So even the permissive fuzz=3 tier
+# can't silently land a hunk in the wrong function — it'd fail the check
+# and bail.
+$patchExe = Resolve-ToolDir -Name 'patch' -Candidates @(
+    "$env:ProgramFiles\Git\usr\bin\patch.exe",
+    "${env:ProgramFiles(x86)}\Git\usr\bin\patch.exe",
+    "$env:LOCALAPPDATA\Programs\Git\usr\bin\patch.exe"
+)
+if ($patchExe) {
+    $patchExePath = Join-Path $patchExe 'patch.exe'
+    if (-not (Test-Path -LiteralPath $patchExePath)) { $patchExePath = $null }
+} else { $patchExePath = $null }
+
 # --- Resolve build tools (node, pnpm) ----------------------------------------
 # The patched binary embeds the dune-admin web UI (go build -tags embed reads
 # cmd/dune-admin/dist). Building that SPA needs Node + pnpm. WITHOUT the embed,
@@ -294,15 +323,169 @@ try {
                 continue
             }
 
-            # Neither forward nor reverse — the patch genuinely does not match
-            # the current source. We deliberately do NOT `git restore` +
-            # force-apply: when this script runs from the installer, the working
-            # tree was just overlaid from an upstream source tarball, and
-            # `git restore` reverts to whatever the user's local git HEAD
-            # happens to be (often an older release), which strips the new
-            # symbols bot.go/exchange.go reference and breaks the build with
-            # confusing "undefined: LoadState" errors. Failing fast tells the
-            # user the real problem.
+            # Neither forward nor reverse — git apply rejects the patch.
+            # Before giving up, try GNU `patch.exe` in compatibility mode
+            # (fuzz=1): `git apply` requires byte-exact context, which means
+            # even a single unrelated upstream tweak inside our context
+            # window (e.g. a new function parameter, a renamed local var, a
+            # reworded comment) makes it refuse to apply — even when our
+            # actual edit lines are still perfectly placeable. GNU patch
+            # tolerates this drift; we then verify the resulting file
+            # contains the expected semantic markers ("invariants") to
+            # guarantee we didn't quietly land a hunk in the wrong place.
+            #
+            # We deliberately do NOT `git restore` + force-apply: when this
+            # script runs from the installer, the working tree was just
+            # overlaid from an upstream source tarball, and `git restore`
+            # reverts to whatever the user's local git HEAD happens to be
+            # (often an older release), which strips the new symbols
+            # bot.go/exchange.go reference and breaks the build with
+            # confusing "undefined: LoadState" errors.
+            $fuzzApplied = $false
+            if ($patchExePath) {
+                Info "git apply refused (likely upstream context drift) — trying GNU patch.exe (compatibility mode)."
+
+                # Snapshot pre-patch bytes BEFORE patch.exe touches anything,
+                # so the revert/invariant-failure path can restore exactly.
+                foreach ($t in $touched) {
+                    $tPath = Join-Path $repoRoot $t
+                    if ((Test-Path -LiteralPath $tPath) -and -not $preSnapshots.ContainsKey($t)) {
+                        $preSnapshots[$t] = [System.IO.File]::ReadAllBytes($tPath)
+                    }
+                }
+
+                # Try fuzz tiers in ascending order. fuzz=2 is conservative
+                # (≥4 of 6 context lines must match); fuzz=3 effectively
+                # matches on the removed/added lines alone (needed when the
+                # drift is on a context line in the middle of the hunk
+                # window, e.g. a function-signature change). Either tier
+                # goes through the SAME invariants check below.
+                $chosenFuzz = $null
+                foreach ($fuzz in 2, 3) {
+                    # --batch suppresses ALL prompts so a renamed/missing
+                    # file can never hang on stdin; --forward refuses to
+                    # silently reverse-apply; --no-backup-if-mismatch
+                    # prevents .orig file litter; --dry-run is non-mutating
+                    # so we can probe both fuzz tiers safely.
+                    $dryArgs = @('-p1', '--batch', '--forward', '--no-backup-if-mismatch', "-F$fuzz", '--dry-run', '-i', $applyPath)
+                    $dryOut  = & $patchExePath @dryArgs 2>&1
+                    if ($LASTEXITCODE -eq 0) {
+                        $chosenFuzz = $fuzz
+                        break
+                    } else {
+                        Info "patch.exe dry-run rejected fuzz=$fuzz (exit $LASTEXITCODE)."
+                    }
+                }
+
+                if ($null -ne $chosenFuzz) {
+                    $applyArgs = @('-p1', '--batch', '--forward', '--no-backup-if-mismatch', "-F$chosenFuzz", '-i', $applyPath)
+                    $applyOut  = & $patchExePath @applyArgs 2>&1
+                    if ($LASTEXITCODE -eq 0) {
+                        Info "patch.exe applied with fuzz=$chosenFuzz — COMPATIBILITY MODE active (verifying invariants below)."
+                        foreach ($line in @($applyOut)) {
+                            $s = "$line"
+                            if ($s -match 'Hunk #|with fuzz|with offset|succeeded') { Info "  $s" }
+                        }
+
+                        # Invariants: each known patched marker MUST be
+                        # present after a successful apply. These guard
+                        # against a fuzz=3 application landing a hunk in
+                        # the wrong function (e.g. if upstream renamed the
+                        # patched function and a similar `if X { return }`
+                        # block exists elsewhere — vanishingly unlikely
+                        # given the specific removed text, but enforced
+                        # here regardless). On any violation we restore
+                        # the pre-patch snapshot byte-for-byte and bail.
+                        $invariantViolations = @()
+                        $invariants = @(
+                            @{ File = 'internal\marketbot\exchange.go'; Needle = '"math/rand"';            Why = 'math/rand import' },
+                            @{ File = 'internal\marketbot\exchange.go'; Needle = 'd12 gamble-buy';         Why = 'd12 gamble-buy comment' },
+                            @{ File = 'internal\marketbot\exchange.go'; Needle = 'rand.Intn(';             Why = 'rand.Intn() roll' },
+                            @{ File = 'internal\marketbot\pricing.go';  Needle = 'maxAnyPrice';            Why = '100k cap constant' },
+                            @{ File = 'internal\marketbot\pricing.go';  Needle = 'tierBasePrice';          Why = 'tier-based pricing function' },
+                            @{ File = 'internal\marketbot\pricing.go';  Needle = 'func capPrice(';         Why = 'capPrice helper' },
+                            @{ File = 'internal\marketbot\config.go';   Needle = 'saneDefaultsRevision';   Why = 'defaults-revision migration constant' }
+                        )
+                        foreach ($inv in $invariants) {
+                            $invFile = Join-Path $repoRoot $inv.File
+                            if (-not (Test-Path -LiteralPath $invFile)) {
+                                $invariantViolations += "$($inv.File): file missing"
+                                continue
+                            }
+                            $bytes = [System.IO.File]::ReadAllBytes($invFile)
+                            $text  = [System.Text.Encoding]::UTF8.GetString($bytes)
+                            if ($text -notlike "*$($inv.Needle)*") {
+                                $invariantViolations += "$($inv.File): missing $($inv.Why) (`"$($inv.Needle)`")"
+                            }
+                        }
+                        # Also: the BuyThreshold short-circuit MUST be gone
+                        # from buyPlayerListings (otherwise the gamble-buy
+                        # path is unreachable when threshold<=0). The
+                        # `snap.BuyThreshold` reference still exists in
+                        # other functions, so we scope the check to a
+                        # window after the function signature.
+                        $exGo = Join-Path $repoRoot 'internal\marketbot\exchange.go'
+                        if (Test-Path -LiteralPath $exGo) {
+                            $exText = [System.Text.Encoding]::UTF8.GetString([System.IO.File]::ReadAllBytes($exGo))
+                            if ($exText -match 'buyPlayerListings[\s\S]{0,300}snap\.BuyThreshold\s*<=\s*0') {
+                                $invariantViolations += "internal\marketbot\exchange.go: BuyThreshold short-circuit was not removed from buyPlayerListings (patch landed wrong hunk)"
+                            }
+                        }
+
+                        if ($invariantViolations.Count -gt 0) {
+                            Info "Post-apply invariants failed (compatibility-mode result is unsafe):"
+                            foreach ($v in $invariantViolations) { Info "  - $v" }
+                            foreach ($t in $touched) {
+                                $tPath = Join-Path $repoRoot $t
+                                if ($preSnapshots.ContainsKey($t)) {
+                                    try { [System.IO.File]::WriteAllBytes($tPath, $preSnapshots[$t]) } catch { }
+                                }
+                                foreach ($ext in @('.rej', '.orig')) {
+                                    $litter = "$tPath$ext"
+                                    if (Test-Path -LiteralPath $litter) { Remove-Item -LiteralPath $litter -Force -ErrorAction SilentlyContinue }
+                                }
+                            }
+                            throw "Compatibility-mode apply landed in a semantically-wrong location: $($p.Name). Update the Dune Server Tool (which ships the patch) and reinstall to refresh it."
+                        }
+
+                        # Clean up any benign .rej / .orig that patch may
+                        # have left even on a successful apply (rare with
+                        # --no-backup-if-mismatch, but be defensive).
+                        foreach ($t in $touched) {
+                            $tPath = Join-Path $repoRoot $t
+                            foreach ($ext in @('.rej', '.orig')) {
+                                $litter = "$tPath$ext"
+                                if (Test-Path -LiteralPath $litter) { Remove-Item -LiteralPath $litter -Force -ErrorAction SilentlyContinue }
+                            }
+                        }
+                        $patchedFiles += $touched
+                        $fuzzApplied = $true
+                    } else {
+                        Info "patch.exe failed despite passing dry-run at fuzz=$chosenFuzz (exit $LASTEXITCODE):"
+                        foreach ($line in @($applyOut)) { Info "  $line" }
+                        foreach ($t in $touched) {
+                            $tPath = Join-Path $repoRoot $t
+                            if ($preSnapshots.ContainsKey($t)) {
+                                try { [System.IO.File]::WriteAllBytes($tPath, $preSnapshots[$t]) } catch { }
+                            }
+                            foreach ($ext in @('.rej', '.orig')) {
+                                $litter = "$tPath$ext"
+                                if (Test-Path -LiteralPath $litter) { Remove-Item -LiteralPath $litter -Force -ErrorAction SilentlyContinue }
+                            }
+                        }
+                    }
+                } else {
+                    # Dry-run didn't modify anything, but the snapshot
+                    # bookkeeping shouldn't leak into the revert step.
+                    foreach ($t in $touched) {
+                        if ($preSnapshots.ContainsKey($t)) { $preSnapshots.Remove($t) | Out-Null }
+                    }
+                }
+            } else {
+                Info "GNU patch.exe was not found at the standard Git-for-Windows location — cannot try compatibility mode."
+            }
+            if ($fuzzApplied) { continue }
+
             Info "Patch does not apply cleanly and is not already applied."
             Info "Touched files: $($touched -join ', ')"
             Info "The patch was LF-normalized before applying, so this is NOT a"
