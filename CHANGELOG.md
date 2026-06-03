@@ -25,6 +25,15 @@ here cover everything those tags shipped.
   `WebMessageAsJson` first and falls back to the string accessor, so both
   object and stringified payloads work and the app window closes + the
   default browser opens to the live portal URL as intended.
+- **"Open in web browser" confirm dialog was clipped off-screen.** The dialog
+  is rendered inside the sidebar `<aside>`, which uses `backdrop-blur` —
+  applying a `backdrop-filter` to an element makes it a containing block for
+  `position: fixed` descendants, so the modal centered itself inside the
+  240px sidebar instead of the viewport and the **Cancel** button was cut
+  off at the screen edge. The dialog is now mounted at `document.body` via a
+  React portal so it centers in the viewport regardless of sidebar styling.
+- **Dialog buttons are now stacked full-width** (primary on top, Cancel
+  below) so they read cleanly on narrow layouts.
 
 ## [10.1.9] - 2026-06-02
 
