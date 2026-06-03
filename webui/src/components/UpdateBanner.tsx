@@ -120,6 +120,17 @@ export function UpdateBanner() {
   if (!data || !data.available || !data.latestVersion) return null
   if (dismissed || isDismissed(data.latestVersion)) return null
 
+  // If a newer release exists but its installer .exe is missing (project
+  // rule violation: every release must upload DuneServerSetup.exe), we
+  // still tell the user about it - just send them to the release page
+  // instead of pretending the in-app updater can install it.
+  //
+  // `installable` is set by newer (>=10.1.13) backends. Older backends
+  // only return `available`, which they already gated on assetUrl - so for
+  // those, treating undefined as "true" is the safe default (matches the
+  // old behavior of only showing the banner when an asset was present).
+  const canInstall = data.installable ?? true
+
   const onInstall = async () => {
     setInstalling(true)
     setInstallErr(null)
@@ -173,14 +184,26 @@ export function UpdateBanner() {
         )}
       </div>
       <div className="flex items-center gap-2 shrink-0">
-        <button
-          type="button"
-          className="px-3 py-1 rounded-md bg-amber-400 text-amber-950 font-semibold text-xs hover:bg-amber-300 disabled:opacity-60 disabled:cursor-wait"
-          onClick={() => { void onInstall() }}
-          disabled={installing}
-        >
-          {installing ? 'Installing…' : 'Update now'}
-        </button>
+        {canInstall ? (
+          <button
+            type="button"
+            className="px-3 py-1 rounded-md bg-amber-400 text-amber-950 font-semibold text-xs hover:bg-amber-300 disabled:opacity-60 disabled:cursor-wait"
+            onClick={() => { void onInstall() }}
+            disabled={installing}
+          >
+            {installing ? 'Installing…' : 'Update now'}
+          </button>
+        ) : (
+          <a
+            href={data.releaseUrl ?? `https://github.com/coastal-ms/DST-DuneServerTool/releases/tag/${data.tagName ?? ''}`}
+            target="_blank"
+            rel="noreferrer"
+            className="px-3 py-1 rounded-md bg-amber-400 text-amber-950 font-semibold text-xs hover:bg-amber-300"
+            title="No installer attached to this release — opens the release page"
+          >
+            View release
+          </a>
+        )}
         <button
           type="button"
           className="px-2 py-1 rounded-md text-amber-200 hover:text-white hover:bg-amber-400/10 text-xs"
