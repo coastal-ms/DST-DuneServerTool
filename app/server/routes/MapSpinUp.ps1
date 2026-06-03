@@ -21,7 +21,7 @@ Register-DuneRoute -Method POST -Path '/api/map-spinup/{map}' -Handler {
         if ($body -is [hashtable] -and $body.ContainsKey('enabled')) { $enabled = [bool]$body['enabled'] }
         elseif ($null -ne $body -and $null -ne $body.enabled)        { $enabled = [bool]$body.enabled }
 
-        $r = Set-DuneSpinUpMap -Map $routeParams.map -Enabled:$enabled
+        $r = Invoke-WithDuneLock -Name 'director-ini' -Script { Set-DuneSpinUpMap -Map $routeParams.map -Enabled:$enabled }
         if (-not $r.ok -and $r.status) {
             Write-DuneError -Response $res -Status $r.status -Message $r.message
             return

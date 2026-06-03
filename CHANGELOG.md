@@ -13,6 +13,41 @@ here cover everything those tags shipped.
 
 ## [Unreleased]
 
+## [10.1.15] - 2026-06-03
+
+### Changed
+- **HTTP API handlers now run on a runspace pool instead of inline on the
+  listener thread** (closes the v10.1.14 _Known limitation_; issue #47). The
+  single-threaded `HttpListener` loop used to run every `/api/*` handler
+  inline, so any slow handler — a hung SSH/kubectl call, a backup, a
+  dependency install — head-of-line-blocked every other request and could
+  freeze the whole backend UI (the 2026-06-03 incident). API handlers are now
+  dispatched onto a 2..16 runspace pool (mirroring the existing WebSocket
+  pool); the accept loop returns immediately and keeps serving. Static file
+  serving and two control routes (`/api/shutdown`, `/api/portal/open-in-browser`)
+  intentionally stay inline because they mutate main-runspace lifecycle state.
+  The change addresses all four design blockers from the issue:
+  - **Shared state injection.** Worker runspaces dot-source every `lib/*.ps1`
+    + `routes/*.ps1` (once per runspace, pooled) and receive an immutable
+    server context (`DuneToken`, `DunePrefixUrl`, `DuneListener`, `AppDir`,
+    `PwshExe`, `MainScript`, `DuneToolVersion`, log path, …) injected per
+    request, so handlers that read those `$script:` vars keep working.
+  - **Per-resource locks.** New `Invoke-WithDuneLock` / `Get-DuneLock`
+    serialize read-modify-write mutations behind named `SemaphoreSlim`s
+    shared across all workers. Applied to Map SpinUp (`director.ini`),
+    config save, backup-schedule, on-demand map start/stop/fix-partitions,
+    and the update + dune-admin install flows — so two concurrent toggles
+    can no longer clobber each other's writes.
+  - **Backpressure.** A `SemaphoreSlim(16,16)` gate caps in-flight handlers;
+    when saturated, new requests get an immediate **503** instead of queuing
+    forever behind hung handlers.
+  - **Async cleanup.** Each worker always closes its response (so a throwing
+    handler can never hang the client), request bodies are read off the
+    listener thread (a slow upload can't stall the accept loop, with a 25 MB
+    cap), and the accept loop reaps finished pipelines each iteration. If the
+    pool fails to initialize for any reason, the server falls back to the
+    legacy inline dispatch rather than failing to start.
+
 ## [10.1.14] - 2026-06-03
 
 ### Fixed

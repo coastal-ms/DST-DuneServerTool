@@ -120,7 +120,7 @@ public static extern bool IsIconic(System.IntPtr hWnd);
 }
 
 # Version (one of the 5 sync'd constants; see persistent-notes.md)
-$script:DuneToolVersion = '10.1.14'
+$script:DuneToolVersion = '10.1.15'
 
 # ---------- Restart-on-detach handoff -----------------------------------------
 # When a prior "Web Portal" detach left the server running headless, the
@@ -438,6 +438,9 @@ if (-not $serverDir) {
     Show-DuneMessage "Could not locate server\ (HttpServer.ps1 + routes) near '$script:AppDir'." 'Dune Server' 'Error'
     exit 1
 }
+# Remember the server dir so HttpServer.ps1 can build the API handler pool's
+# startup dot-sources (lib/*.ps1 + routes/*.ps1) for worker runspaces.
+$script:DuneServerDir = $serverDir
 
 # Load DuneLog first so subsequent loaders + HttpServer can use Write-DuneLog
 $duneLogFile = Join-Path $serverDir 'lib\DuneLog.ps1'

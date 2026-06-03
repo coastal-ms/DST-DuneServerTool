@@ -6,7 +6,7 @@
 # $listener.IsListening on each iteration and breaks out when it sees false;
 # the script then exits, killing the EXE process.
 
-Register-DuneRoute -Method POST -Path '/api/shutdown' -Handler {
+Register-DuneRoute -Method POST -Path '/api/shutdown' -Inline -Handler {
     param($req, $res, $routeParams, $body)
 
     Write-DuneJson -Response $res -Body @{
