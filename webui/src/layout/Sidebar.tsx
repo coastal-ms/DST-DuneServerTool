@@ -1,5 +1,6 @@
 import { NavLink } from 'react-router-dom'
 import { useState } from 'react'
+import { createPortal } from 'react-dom'
 import { Icon } from '../components/Icon'
 import { NAV_ITEMS, GROUP_LABELS } from '../nav'
 import { useUpdateCheck } from '../hooks/useUpdateCheck'
@@ -170,7 +171,7 @@ export function Sidebar() {
         </div>
       </div>
 
-      {showPortalConfirm && (
+      {showPortalConfirm && createPortal(
         <div
           className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4"
           onClick={() => { if (!portalDetaching) setShowPortalConfirm(false) }}
@@ -197,25 +198,26 @@ export function Sidebar() {
                 {portalError}
               </div>
             )}
-            <div className="mt-4 flex justify-end gap-2">
+            <div className="mt-4 flex flex-col gap-2">
               <button
-                className="btn-secondary"
-                onClick={() => setShowPortalConfirm(false)}
-                disabled={portalDetaching}
-              >
-                <Icon name="X" size={12} /> Cancel
-              </button>
-              <button
-                className="btn-primary"
+                className="btn-primary w-full justify-center"
                 onClick={() => { void onOpenWebPortal() }}
                 disabled={portalDetaching}
               >
                 <Icon name={portalDetaching ? 'Loader2' : 'ExternalLink'} size={12} className={portalDetaching ? 'animate-spin' : ''} />
                 {portalDetaching ? 'Opening…' : 'Open in browser'}
               </button>
+              <button
+                className="btn-secondary w-full justify-center"
+                onClick={() => setShowPortalConfirm(false)}
+                disabled={portalDetaching}
+              >
+                <Icon name="X" size={12} /> Cancel
+              </button>
             </div>
           </div>
-        </div>
+        </div>,
+        document.body,
       )}
     </aside>
   )
