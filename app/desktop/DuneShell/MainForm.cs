@@ -205,15 +205,45 @@ internal sealed class MainForm : Form
         string? url = null;
         try
         {
-            // The portal sends a JSON object via postMessage(obj); WebView2
-            // serializes that into TryGetWebMessageAsString().
-            string json = e.TryGetWebMessageAsString();
-            if (string.IsNullOrWhiteSpace(json)) return;
+            // The portal sends a JS object via postMessage(obj). For non-string
+            // payloads WebView2 exposes the serialized JSON on WebMessageAsJson;
+            // TryGetWebMessageAsString() throws InvalidOperationException for
+            // object payloads (it only succeeds when JS posts a raw string).
+            string? json = e.WebMessageAsJson;
+            if (string.IsNullOrWhiteSpace(json))
+            {
+                // Fallback: a caller that posts a JSON *string* (e.g.
+                // postMessage(JSON.stringify(obj))) — read the inner string and
+                // re-parse it. Wrapped in try/catch so a plain-text payload
+                // doesn't blow up the handler.
+                try { json = e.TryGetWebMessageAsString(); } catch { return; }
+                if (string.IsNullOrWhiteSpace(json)) return;
+            }
             using var doc = System.Text.Json.JsonDocument.Parse(json);
             var root = doc.RootElement;
-            if (root.ValueKind != System.Text.Json.JsonValueKind.Object) return;
-            if (root.TryGetProperty("action", out var a)) action = a.GetString();
-            if (root.TryGetProperty("url",    out var u)) url    = u.GetString();
+
+            // Unwrap one layer of string-encoded JSON if the caller stringified
+            // before posting. WebMessageAsJson returns "\"{\\\"action\\\"...}\""
+            // in that case, which parses to a JSON string, not an object.
+            if (root.ValueKind == System.Text.Json.JsonValueKind.String)
+            {
+                string inner = root.GetString() ?? string.Empty;
+                if (string.IsNullOrWhiteSpace(inner)) return;
+                using var inner_doc = System.Text.Json.JsonDocument.Parse(inner);
+                var inner_root = inner_doc.RootElement;
+                if (inner_root.ValueKind != System.Text.Json.JsonValueKind.Object) return;
+                if (inner_root.TryGetProperty("action", out var ia)) action = ia.GetString();
+                if (inner_root.TryGetProperty("url",    out var iu)) url    = iu.GetString();
+            }
+            else if (root.ValueKind == System.Text.Json.JsonValueKind.Object)
+            {
+                if (root.TryGetProperty("action", out var a)) action = a.GetString();
+                if (root.TryGetProperty("url",    out var u)) url    = u.GetString();
+            }
+            else
+            {
+                return;
+            }
         }
         catch
         {
