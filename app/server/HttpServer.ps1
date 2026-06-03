@@ -13,6 +13,17 @@ $script:DunePrefixUrl   = $null
 $script:DuneDistRoot    = $null
 $script:DuneWsPool      = $null   # RunspacePool — WS handlers run here so they don't block the main HTTP loop
 
+# --- API handler pool (issue #47): HTTP /api handlers run on a runspace pool so
+# a slow handler (SSH/kubectl/backup/install) can't head-of-line-block the
+# single-threaded listener and freeze the whole UI. ----------------------------
+$script:DuneApiPool      = $null   # RunspacePool for /api handlers
+$script:DuneApiGate      = $null   # SemaphoreSlim bounding in-flight handlers (saturation -> 503)
+$script:DuneApiInFlight  = $null   # synchronized list of {Ps;Handle;Release} for cleanup
+$script:DuneApiLockTable = $null   # shared synchronized name -> SemaphoreSlim registry (named locks)
+$script:DuneApiCtx       = $null   # immutable server-context injected into every worker
+$script:DuneApiMax       = 16      # max concurrent handlers == pool max == gate count
+$script:DuneServerDir    = $null   # server/ dir (for the pool's startup dot-sources)
+
 # ---------- MIME ---------------------------------------------------------------
 
 $script:DuneMimeMap = @{
@@ -50,7 +61,11 @@ function Register-DuneRoute {
     param(
         [Parameter(Mandatory)][ValidateSet('GET','POST','PUT','DELETE','PATCH')] [string]$Method,
         [Parameter(Mandatory)][string]$Path,
-        [Parameter(Mandatory)][scriptblock]$Handler
+        [Parameter(Mandatory)][scriptblock]$Handler,
+        # Inline routes run ON the listener thread instead of the handler pool.
+        # Reserve this for fast handlers that mutate MAIN-runspace lifecycle state
+        # (e.g. the listener / app-detach flag) which a worker runspace can't touch.
+        [switch]$Inline
     )
     $pattern = '^' + ([regex]::Escape($Path) -replace '\\\{([^/}]+)}', '(?<$1>[^/]+)') + '$'
     $script:DuneRoutes.Add([pscustomobject]@{
@@ -58,6 +73,7 @@ function Register-DuneRoute {
         Path    = $Path
         Regex   = [regex]$pattern
         Handler = $Handler
+        Inline  = [bool]$Inline
     }) | Out-Null
 }
 
@@ -118,6 +134,252 @@ function Invoke-DuneWsHandlerAsync {
         }
     }).AddArgument($Handler.ToString()).AddArgument($WebSocket).AddArgument($RouteParams)
     [void]$ps.BeginInvoke()
+}
+
+# ---------- Named locks (issue #47) --------------------------------------------
+#
+# Once handlers run concurrently, two simultaneous read-modify-write mutations of
+# the same resource (director.ini, config file, backup cron, on-demand CRD scale,
+# installs) can clobber each other. Invoke-WithDuneLock serializes them by name.
+#
+# The registry MUST be a single object shared across every worker runspace, so it
+# is created once in Initialize-DuneApiPool and injected into workers via the
+# server context. Get-DuneLock lazily creates a per-name SemaphoreSlim under a
+# SyncRoot monitor (synchronized hashtables make single ops atomic, but
+# check-then-add is two ops and would otherwise race two locks into existence).
+
+function Get-DuneLock {
+    param([Parameter(Mandatory)][string]$Name)
+    if (-not $script:DuneApiLockTable) {
+        $script:DuneApiLockTable = [System.Collections.Hashtable]::Synchronized(@{})
+    }
+    $table = $script:DuneApiLockTable
+    [System.Threading.Monitor]::Enter($table.SyncRoot)
+    try {
+        if (-not $table.ContainsKey($Name)) {
+            $table[$Name] = [System.Threading.SemaphoreSlim]::new(1, 1)
+        }
+        return $table[$Name]
+    } finally {
+        [System.Threading.Monitor]::Exit($table.SyncRoot)
+    }
+}
+
+function Invoke-WithDuneLock {
+    param(
+        [Parameter(Mandatory)][string]$Name,
+        [Parameter(Mandatory)][scriptblock]$Script,
+        [int]$TimeoutSec = 30
+    )
+    $sem = Get-DuneLock -Name $Name
+    if (-not $sem.Wait($TimeoutSec * 1000)) {
+        throw "Resource '$Name' is busy (timed out after ${TimeoutSec}s waiting for the lock)."
+    }
+    try { & $Script } finally { [void]$sem.Release() }
+}
+
+# ---------- API handler runspace pool (issue #47) ------------------------------
+
+# Build the pool whose worker runspaces have every lib function + route handler
+# available (same dot-source order as DuneServer.ps1). Each runspace pays the
+# dot-source cost once (pooled, reused across requests). All Add-Type calls in
+# those files are lazy (inside functions) so dot-sourcing has no AppDomain side
+# effects beyond defining functions + harmless route re-registration.
+function Initialize-DuneApiPool {
+    param([string]$ServerDir = $script:DuneServerDir)
+    if ($script:DuneApiPool) { return }
+    if (-not $ServerDir -or -not (Test-Path -LiteralPath $ServerDir)) {
+        throw "Initialize-DuneApiPool: server dir not found ('$ServerDir')."
+    }
+
+    # Shared cross-runspace coordination objects (created ONCE).
+    $script:DuneApiGate      = [System.Threading.SemaphoreSlim]::new($script:DuneApiMax, $script:DuneApiMax)
+    $script:DuneApiInFlight  = [System.Collections.ArrayList]::Synchronized([System.Collections.ArrayList]::new())
+    if (-not $script:DuneApiLockTable) {
+        $script:DuneApiLockTable = [System.Collections.Hashtable]::Synchronized(@{})
+    }
+
+    # Immutable snapshot of the main-runspace $script: vars that route handlers
+    # read but that are set by DuneServer.ps1's bootstrap / Start-DuneHttpServer
+    # (i.e. NOT defined by dot-sourcing the lib files). Everything else the
+    # handlers use is defined per-runspace by the startup dot-sources.
+    $script:DuneApiCtx = @{
+        Token         = $script:DuneToken
+        PrefixUrl     = $script:DunePrefixUrl
+        Listener      = $script:DuneListener
+        DistRoot      = $script:DuneDistRoot
+        ToolVersion   = $script:DuneToolVersion
+        PwshExe       = $script:PwshExe
+        MainScript    = $script:MainScript
+        AppDir        = $script:AppDir
+        LogPath       = $script:DuneLogPath
+        IsCompiledExe = $script:DuneIsCompiledExe
+        LockTable     = $script:DuneApiLockTable
+    }
+
+    $iss = [System.Management.Automation.Runspaces.InitialSessionState]::CreateDefault()
+    $duneLog = Join-Path $ServerDir 'lib\DuneLog.ps1'
+    if (Test-Path -LiteralPath $duneLog) { [void]$iss.StartupScripts.Add($duneLog) }
+    [void]$iss.StartupScripts.Add((Join-Path $ServerDir 'HttpServer.ps1'))
+    $libDir = Join-Path $ServerDir 'lib'
+    if (Test-Path -LiteralPath $libDir) {
+        foreach ($f in (Get-ChildItem -Path $libDir -Filter '*.ps1' | Sort-Object Name)) {
+            if ($f.Name -ieq 'DuneLog.ps1') { continue }
+            [void]$iss.StartupScripts.Add($f.FullName)
+        }
+    }
+    $routesDir = Join-Path $ServerDir 'routes'
+    if (Test-Path -LiteralPath $routesDir) {
+        foreach ($f in (Get-ChildItem -Path $routesDir -Filter '*.ps1' | Sort-Object Name)) {
+            [void]$iss.StartupScripts.Add($f.FullName)
+        }
+    }
+
+    $pool = [runspacefactory]::CreateRunspacePool(2, $script:DuneApiMax, $iss, $Host)
+    $pool.Open()
+    $script:DuneApiPool = $pool
+    if (Get-Command Write-DuneLog -ErrorAction SilentlyContinue) {
+        Write-DuneLog "API handler pool ready (2..$($script:DuneApiMax) runspaces)"
+    }
+}
+
+# Reclaim a gate permit exactly once, no matter which thread gets here first
+# (worker finally, or the main-loop sweep). Double-release would over-count the
+# SemaphoreSlim and throw, so guard with a one-shot flag under a monitor.
+function Complete-DuneApiRelease {
+    param([Parameter(Mandatory)]$Release)
+    try {
+        [System.Threading.Monitor]::Enter($Release)
+        if (-not $Release.Done) {
+            $Release.Done = $true
+            if ($Release.Gate) { [void]$Release.Gate.Release() }
+        }
+    } catch {
+    } finally {
+        try { [System.Threading.Monitor]::Exit($Release) } catch {}
+    }
+}
+
+# Fire-and-forget dispatch of one /api handler onto the pool. The listener
+# thread has already done the (fast, CPU-only) token check + route match; the
+# worker reads/parses the body (off the accept loop, so a slow upload can't stall
+# it) and runs the handler. The worker ALWAYS closes the response so a failed or
+# throwing handler never leaves the client hanging.
+function Invoke-DuneApiHandlerAsync {
+    param(
+        [Parameter(Mandatory)][scriptblock]$Handler,
+        [Parameter(Mandatory)]$Request,
+        [Parameter(Mandatory)]$Response,
+        [Parameter(Mandatory)][hashtable]$RouteParams
+    )
+
+    # Saturation guard: never queue behind a full pool. If every permit is held
+    # (e.g. many hung SSH calls during a VM outage) answer 503 immediately so the
+    # UI gets a fast, honest error instead of an unbounded wait.
+    if (-not $script:DuneApiGate.Wait(0)) {
+        try { Write-DuneError -Response $Response -Status 503 -Message 'Server busy: handler pool saturated. Try again shortly.' } catch {}
+        return
+    }
+
+    $release = [pscustomobject]@{ Gate = $script:DuneApiGate; Done = $false }
+
+    $ps = [powershell]::Create()
+    $ps.RunspacePool = $script:DuneApiPool
+    [void]$ps.AddScript({
+        param($handlerText, $req, $res, $routeParams, $ctx, $release)
+        try {
+            # Inject main-runspace server context into BOTH scopes. Functions
+            # defined by the startup dot-sources read these as $script:X (which,
+            # for a dot-sourced top-level scope, resolves to global); we set both
+            # to be unambiguous. Done per-invocation AFTER startup scripts ran so
+            # HttpServer.ps1's own `$script:DuneToken = ''` init can't clobber it.
+            foreach ($pair in @(
+                ,@('DuneToken',        $ctx.Token)
+                ,@('DunePrefixUrl',    $ctx.PrefixUrl)
+                ,@('DuneListener',     $ctx.Listener)
+                ,@('DuneDistRoot',     $ctx.DistRoot)
+                ,@('DuneToolVersion',  $ctx.ToolVersion)
+                ,@('PwshExe',          $ctx.PwshExe)
+                ,@('MainScript',       $ctx.MainScript)
+                ,@('AppDir',           $ctx.AppDir)
+                ,@('DuneLogPath',      $ctx.LogPath)
+                ,@('DuneIsCompiledExe',$ctx.IsCompiledExe)
+                ,@('DuneApiLockTable', $ctx.LockTable)
+            )) {
+                Set-Variable -Name $pair[0] -Value $pair[1] -Scope Global -ErrorAction SilentlyContinue
+                Set-Variable -Name $pair[0] -Value $pair[1] -Scope Script -ErrorAction SilentlyContinue
+            }
+
+            # Read + parse the request body here (off the listener thread).
+            $body = $null
+            if ($req.HasEntityBody) {
+                if ($req.ContentLength64 -gt 26214400) {   # 25 MB hard cap
+                    Write-DuneError -Response $res -Status 413 -Message 'Request body too large.'
+                    return
+                }
+                $reader = [System.IO.StreamReader]::new($req.InputStream, $req.ContentEncoding)
+                try { $raw = $reader.ReadToEnd() } finally { $reader.Dispose() }
+                if ($raw -and $req.ContentType -like 'application/json*') {
+                    $body = ConvertFrom-DuneRequestJson -Raw $raw
+                } else {
+                    $body = $raw
+                }
+            }
+
+            $h = [scriptblock]::Create($handlerText)
+            & $h $req $res $routeParams $body
+        } catch {
+            # Off-thread failure: best-effort 500. If the handler already started
+            # the response this throws and is swallowed; the finally still closes.
+            try {
+                $res.StatusCode = 500
+                $bytes = [System.Text.Encoding]::UTF8.GetBytes("Server error: $($_.Exception.Message)")
+                $res.OutputStream.Write($bytes, 0, $bytes.Length)
+            } catch {}
+            try {
+                if (Get-Command Write-DuneLog -ErrorAction SilentlyContinue) {
+                    Write-DuneLog "api-handler error: $($_.Exception.Message)" 'ERROR'
+                }
+            } catch {}
+        } finally {
+            try { $res.OutputStream.Close() } catch {}
+            try { $res.Close() } catch {}
+            # Release the gate permit (idempotent with the main-loop sweep).
+            try {
+                [System.Threading.Monitor]::Enter($release)
+                if (-not $release.Done) { $release.Done = $true; if ($release.Gate) { [void]$release.Gate.Release() } }
+            } catch {} finally { try { [System.Threading.Monitor]::Exit($release) } catch {} }
+        }
+    }).AddArgument($Handler.ToString()).AddArgument($Request).AddArgument($Response).AddArgument($RouteParams).AddArgument($script:DuneApiCtx).AddArgument($release)
+
+    try {
+        $handle = $ps.BeginInvoke()
+        [void]$script:DuneApiInFlight.Add([pscustomobject]@{ Ps = $ps; Handle = $handle; Release = $release })
+    } catch {
+        # Couldn't even start the pipeline — reclaim the permit and answer now so
+        # the client isn't left hanging on a request we never ran.
+        Complete-DuneApiRelease -Release $release
+        try { $ps.Dispose() } catch {}
+        try { Write-DuneError -Response $Response -Status 503 -Message 'Server busy: could not dispatch handler.' } catch {}
+    }
+}
+
+# Reap finished worker pipelines: EndInvoke + Dispose, and defensively reclaim
+# any permit a worker somehow failed to release (e.g. an aborted runspace).
+# Called each iteration of the accept loop and during shutdown. Per-entry
+# try/catch so one faulted EndInvoke can't abort the whole sweep.
+function Clear-DuneApiCompleted {
+    if (-not $script:DuneApiInFlight) { return }
+    $done = @()
+    foreach ($e in @($script:DuneApiInFlight.ToArray())) {
+        if ($e.Handle -and $e.Handle.IsCompleted) { $done += $e }
+    }
+    foreach ($e in $done) {
+        try { [void]$e.Ps.EndInvoke($e.Handle) } catch {}
+        try { $e.Ps.Dispose() } catch {}
+        Complete-DuneApiRelease -Release $e.Release
+        try { [void]$script:DuneApiInFlight.Remove($e) } catch {}
+    }
 }
 
 # ---------- Responses ----------------------------------------------------------
@@ -295,8 +557,24 @@ function Start-DuneHttpServer {
         }
     }
 
+    # Build the /api handler pool now that the listener is bound and all the
+    # main-runspace context vars are set. If it fails for any reason, fall back
+    # to the legacy inline dispatch so the server still works (just single
+    # threaded) rather than not starting at all.
+    $script:DuneApiPoolEnabled = $false
+    try {
+        Initialize-DuneApiPool -ServerDir $script:DuneServerDir
+        $script:DuneApiPoolEnabled = $true
+    } catch {
+        if (Get-Command Write-DuneLog -ErrorAction SilentlyContinue) {
+            Write-DuneLog "API handler pool init failed; falling back to inline dispatch: $($_.Exception.Message)" 'WARN'
+        }
+    }
+
     try {
         while ($listener.IsListening) {
+            # Reap finished worker pipelines from the previous wait.
+            try { Clear-DuneApiCompleted } catch {}
             try {
                 $ctxTask = $listener.GetContextAsync()
                 $ctx = $ctxTask.GetAwaiter().GetResult()
@@ -326,6 +604,14 @@ function Start-DuneHttpServer {
             }
         }
     } finally {
+        # Wait briefly for in-flight handlers to finish, then reap + tear down.
+        try {
+            $deadline = (Get-Date).AddSeconds(5)
+            while ($script:DuneApiInFlight -and $script:DuneApiInFlight.Count -gt 0 -and (Get-Date) -lt $deadline) {
+                Clear-DuneApiCompleted
+                if ($script:DuneApiInFlight.Count -gt 0) { Start-Sleep -Milliseconds 100 }
+            }
+        } catch {}
         try { $listener.Stop() } catch { }
         try { $listener.Close() } catch { }
     }
@@ -341,6 +627,12 @@ function Stop-DuneHttpServer {
         try { $script:DuneWsPool.Close() } catch {}
         try { $script:DuneWsPool.Dispose() } catch {}
         $script:DuneWsPool = $null
+    }
+    if ($script:DuneApiPool) {
+        try { Clear-DuneApiCompleted } catch {}
+        try { $script:DuneApiPool.Close() } catch {}
+        try { $script:DuneApiPool.Dispose() } catch {}
+        $script:DuneApiPool = $null
     }
 }
 
@@ -402,6 +694,16 @@ function Invoke-DuneContext {
                 foreach ($g in $r.Regex.GetGroupNames()) {
                     if ($g -notmatch '^\d+$') { $routeParams[$g] = $m.Groups[$g].Value }
                 }
+
+                # Non-inline routes dispatch to the handler pool so a slow handler
+                # can't block the accept loop. The worker reads the body itself.
+                if ($script:DuneApiPoolEnabled -and -not $r.Inline) {
+                    Invoke-DuneApiHandlerAsync -Handler $r.Handler -Request $req -Response $res -RouteParams $routeParams
+                    return
+                }
+
+                # Inline path (control routes, or pool-disabled fallback): read +
+                # parse the body on the listener thread, then run the handler.
                 $body = $null
                 if ($req.HasEntityBody) {
                     $reader = [System.IO.StreamReader]::new($req.InputStream, $req.ContentEncoding)
