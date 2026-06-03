@@ -2,6 +2,50 @@
 
 $script:DuneVmName = 'dune-awakening'
 
+# Detect whether an SSH private key file is passphrase-protected (encrypted).
+# Returns $true / $false, or $null when it can't be determined (file missing,
+# ssh-keygen unavailable). `ssh-keygen -y -P ''` prints the public key for an
+# unencrypted key (exit 0) and fails with an "incorrect passphrase" error for an
+# encrypted one — this works for both PEM and modern OpenSSH key formats.
+function Test-DuneSshKeyEncrypted {
+    param([string]$KeyPath)
+    if (-not $KeyPath -or -not (Test-Path -LiteralPath $KeyPath)) { return $null }
+    try {
+        $out  = & ssh-keygen -y -P '' -f $KeyPath 2>&1
+        $code = $LASTEXITCODE
+        if ($code -eq 0) { return $false }
+        $text = ($out | Out-String)
+        if ($text -match '(?im)incorrect passphrase|passphrase') { return $true }
+        return $null
+    } catch { return $null }
+}
+
+# Translate a raw `ssh` stderr blob + exit code into an actionable reason string
+# the UI can show. Returns $null when there's nothing useful to say.
+function Get-DuneSshFailureReason {
+    param([string]$Stderr, [int]$ExitCode, [string]$KeyPath)
+    $err = ($Stderr | Out-String).Trim()
+
+    # Authentication rejected: either the key isn't authorized on the VM, or it's
+    # a passphrase-protected key that can't be unlocked in BatchMode. The latter
+    # is the classic "interactive SSH works but the dashboard shows Unknown" trap.
+    if ($err -match '(?im)Permission denied|no supported authentication|authentication fail|publickey') {
+        if ((Test-DuneSshKeyEncrypted -KeyPath $KeyPath) -eq $true) {
+            return "SSH key is passphrase-protected, so background checks (battlegroup status, server health, game data) can't use it — they run non-interactively and can't answer a passphrase prompt. An interactive SSH terminal still works because it can prompt you. Fix it with the Rotate SSH Key action (VM menu, key 'g'), or strip the passphrase: ssh-keygen -p -f `"$KeyPath`""
+        }
+        return "VM rejected the SSH key (its public half isn't in dune@VM:~/.ssh/authorized_keys). Run the Rotate SSH Key action (VM menu, key 'g') to generate and authorize a fresh key."
+    }
+    if ($err -match '(?im)Connection timed out|Connection refused|No route to host|Operation timed out|timed out|Could not resolve') {
+        return 'VM is not answering SSH yet — it may still be booting. This clears once the battlegroup is up.'
+    }
+    if ($err -match '(?im)Host key verification failed') {
+        return 'SSH host key verification failed for the VM. Remove the stale entry from known_hosts and retry.'
+    }
+    if ($err) { return "Couldn't get battlegroup status over SSH: $err" }
+    if ($ExitCode -ne 0) { return "Battlegroup status command failed over SSH (exit $ExitCode)." }
+    return $null
+}
+
 function Get-DuneVmStatus {
     try {
         $vm = Get-VM -Name $script:DuneVmName -ErrorAction Stop
@@ -44,17 +88,48 @@ function Get-DuneBattlegroupSnapshot {
     }
 
     try {
-        $raw = & ssh -o StrictHostKeyChecking=no -o LogLevel=QUIET `
-                     -o ConnectTimeout=10 -o BatchMode=yes `
-                     -i $sshKey "dune@$($vm.ip)" '/home/dune/.dune/bin/battlegroup status' 2>&1 |
-               ForEach-Object {
-                   if ($_ -is [System.Management.Automation.ErrorRecord]) { $_.Exception.Message } else { $_ }
-               }
-        $text = ($raw | Out-String).TrimEnd()
-        $text = $text -replace "`e\[[0-9;]*[A-Za-z]", ''
+        # Run the status command over a non-interactive (BatchMode) SSH session.
+        # Capture stderr separately so a real SSH failure (auth / connection)
+        # can be surfaced as a clear reason instead of collapsing into a blank
+        # "Unknown" state. LogLevel=ERROR (not QUIET) lets ssh's own diagnostics
+        # through to the error file.
+        $errFile = [System.IO.Path]::GetTempFileName()
+        try {
+            $raw = & ssh -o StrictHostKeyChecking=no -o LogLevel=ERROR `
+                         -o ConnectTimeout=10 -o BatchMode=yes `
+                         -i $sshKey "dune@$($vm.ip)" '/home/dune/.dune/bin/battlegroup status' 2>$errFile
+            $exit   = $LASTEXITCODE
+            $sshErr = if (Test-Path $errFile) { Get-Content -Raw -ErrorAction SilentlyContinue $errFile } else { '' }
+        } finally {
+            Remove-Item $errFile -ErrorAction SilentlyContinue
+        }
+
+        # `battlegroup status` (a kubectl wrapper) can write status-shaped text —
+        # notably the empty-namespace "No resources found" stopped signal — to
+        # *stderr* rather than stdout, so detect/parse against both streams to
+        # avoid regressing the stopped/running classification.
+        $stdoutText = ($raw    | Out-String).TrimEnd()
+        $stderrText = ($sshErr | Out-String).TrimEnd()
+        $combined   = (@($stdoutText, $stderrText) | Where-Object { $_ }) -join "`n"
+        $combined   = $combined -replace "`e\[[0-9;]*[A-Za-z]", ''
+        $result.exitCode = $exit
+
+        # A non-zero exit with no status-shaped output (on either stream) means
+        # SSH itself failed — surface *why* (passphrase-protected key, unauthorized
+        # key, VM still booting) rather than silently reporting "Unknown".
+        $looksLikeStatus = $combined -match '(?im)Battlegroup|No resources found|STATUS\s*:'
+        $text = if ($looksLikeStatus) { $combined } else { $stdoutText }
+        if ($exit -ne 0 -and -not $looksLikeStatus) {
+            $result.available = $false
+            $result.state     = 'unknown'
+            $result.output    = $text
+            $reason           = Get-DuneSshFailureReason -Stderr $sshErr -ExitCode $exit -KeyPath $sshKey
+            $result.reason    = if ($reason) { $reason } else { 'Could not reach the battlegroup over SSH.' }
+            return $result
+        }
+
         $result.available = $true
         $result.output    = $text
-        $result.exitCode  = $LASTEXITCODE
         $result.state     = Get-BgStateFromStatusText -Text $text
         if ($result.state -eq 'stopped' -and $text -match '(?im)No resources found in .* namespace') {
             $result.reason = 'Battlegroup not started (namespace is empty).'

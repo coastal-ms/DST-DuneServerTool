@@ -151,11 +151,20 @@ function Get-DuneSetupPreflight {
                 }
                 elseif ($sshErr -match 'Permission denied|no supported methods|authentication fail|publickey') {
                     $pubPath = "$keyPath.pub"
-                    $checks.Add(@{
-                        key = 'sshkey'; label = 'SSH key authorized on VM'; ok = $false; severity = 'warning'
-                        detail = "The VM rejected this key (its public half isn't in dune@${ip}:~/.ssh/authorized_keys). This usually means a new key was generated outside the tool. Fix it one of two ways: (A) generate a properly-authorized key with the tool's Rotate SSH Key action (VM menu, key 'g'), or (B) if another key already has working SSH access, authorize this one with the command below."
-                        fix    = "Run from a machine that already has working SSH access (replace <working-key>):`ntype `"$pubPath`" | ssh -i `"<working-key>`" dune@$ip `"cat >> ~/.ssh/authorized_keys`""
-                    }) | Out-Null
+                    if ((Test-DuneSshKeyEncrypted -KeyPath $keyPath) -eq $true) {
+                        $checks.Add(@{
+                            key = 'sshkey'; label = 'SSH key authorized on VM'; ok = $false; severity = 'warning'
+                            detail = "This SSH key is passphrase-protected, so the tool can't use it for background checks (battlegroup status, server health, game data) — those run non-interactively and can't answer a passphrase prompt. An interactive SSH terminal still works because it can prompt you, which is why the VM looks reachable while the dashboard shows Unknown. Fix it with the Rotate SSH Key action (VM menu, key 'g') to generate a passphrase-less key, or strip the passphrase from this one."
+                            fix    = "Remove the passphrase from the existing key (press Enter when asked for the new passphrase to leave it empty):`nssh-keygen -p -f `"$keyPath`""
+                        }) | Out-Null
+                    }
+                    else {
+                        $checks.Add(@{
+                            key = 'sshkey'; label = 'SSH key authorized on VM'; ok = $false; severity = 'warning'
+                            detail = "The VM rejected this key (its public half isn't in dune@${ip}:~/.ssh/authorized_keys). This usually means a new key was generated outside the tool. Fix it one of two ways: (A) generate a properly-authorized key with the tool's Rotate SSH Key action (VM menu, key 'g'), or (B) if another key already has working SSH access, authorize this one with the command below."
+                            fix    = "Run from a machine that already has working SSH access (replace <working-key>):`ntype `"$pubPath`" | ssh -i `"<working-key>`" dune@$ip `"cat >> ~/.ssh/authorized_keys`""
+                        }) | Out-Null
+                    }
                 }
                 else {
                     $checks.Add(@{
