@@ -14,12 +14,25 @@ body:
         the PowerShell script (`dune-server.ps1`), the `.bat`
         launcher, and the installer.
 
+        **✅ Do open an issue here** when the tool shows you a problem, e.g.:
+        - The **Dashboard** shows the battlegroup as **Unknown** with a yellow
+          message under it (SSH key / connection diagnostics).
+        - The **Setup Wizard / preflight** "SSH key authorized on VM" check
+          fails, or any other preflight check is wrong.
+        - **Server Health**, **Game Config**, **Database**, **Characters**, a
+          button, page, or the terminal pane misbehaves.
+
+        > 💡 The tool now explains *why* it can't reach the VM. If you see one of
+        > those yellow messages, copy it into the **Connection / VM status
+        > message** box below — that's usually all we need to pinpoint it.
+
         **Please do _not_ open issues here for:**
-        - VM connectivity / SSH / network / port-forwarding problems
-        - Hyper-V configuration or performance tuning
+        - Raw network / router / port-forwarding setup where the **tool itself
+          shows no message** (ping `@allcoast` on Discord instead).
+        - Hyper-V configuration or performance tuning.
         - Funcom dedicated-server bugs (game crashes, missing pods,
-          `battlegroup` CLI errors that aren't caused by this tool)
-        - General "how do I play / host" questions
+          `battlegroup` CLI errors that aren't caused by this tool).
+        - General "how do I play / host" questions.
 
         For those, ping `@allcoast` on Discord or check the
         [Funcom Self-Hosted Server docs](https://duneawakening.com/self-hosted-servers/).
@@ -30,9 +43,9 @@ body:
     id: scope
     attributes:
       label: Scope check
-      description: Please confirm this is actually a bug in the tool's code.
+      description: Please confirm this is about the tool, not a raw Funcom/network problem.
       options:
-        - label: This is a bug in the tool itself (app crashes, a page misrenders, a button does nothing, terminal pane broken, setup wizard fails, character/database/game-config edits don't save, etc.) — **not** a VM/network/Funcom-server issue.
+        - label: This is about the tool — the app/CLI itself misbehaves, **or** the tool shows me an error/diagnostic message (e.g. the Dashboard battlegroup status, a Setup "SSH key" check, Server Health). It is **not** a pure Funcom game-server crash or router/port-forwarding question with no tool message.
           required: true
 
   - type: input
@@ -51,6 +64,7 @@ body:
       description: Which part of the tool was affected? Pick the closest match.
       options:
         - Web portal — Dashboard / Server Health
+        - Web portal — Battlegroup shows "Unknown" / tool can't connect to the VM (SSH)
         - Web portal — Monitoring
         - Web portal — Commands
         - Web portal — PowerShell pane
@@ -100,6 +114,48 @@ body:
       label: What you expected to happen
     validations:
       required: true
+
+  - type: textarea
+    id: connection_diag
+    attributes:
+      label: Connection / VM status message (only if your bug involves the VM / SSH / battlegroup)
+      description: |
+        The tool now tells you **why** it can't reach the battlegroup — copy the
+        exact message it shows. Where to find each piece (skip what doesn't apply):
+
+        - **Dashboard → "Battlegroup + VM" card:** the yellow line under the
+          status (e.g. *"SSH key is passphrase-protected…"*, *"VM rejected the
+          SSH key…"*, *"Battlegroup not started…"*, *"VM is not answering SSH
+          yet…"*). Also shown under **Battlegroup info**.
+        - **Setup Wizard / Settings → "Re-run checks":** paste the detail text
+          from the **"SSH key authorized on VM"** row.
+        - **Settings → SSH Key field:** the path to the key the tool is using.
+
+        Leave blank if your bug has nothing to do with the VM/SSH.
+      placeholder: |
+        Dashboard message: "SSH key is passphrase-protected, so background checks can't use it…"
+        Setup "SSH key authorized on VM": "The VM rejected this key…"
+        SSH Key path (Settings): C:\Users\me\.ssh\dune_key
+      render: shell
+    validations:
+      required: false
+
+  - type: dropdown
+    id: ssh_interactive
+    attributes:
+      label: Does an interactive SSH terminal still work?
+      description: |
+        Only relevant for VM/SSH bugs. Open **Commands → "Open an SSH terminal to
+        the VM"** (CLI option `17`/`ssh`) and see if it connects. This single
+        answer tells us apart a passphrase-protected key (works here, fails the
+        dashboard) from a key the VM never authorized (fails everywhere).
+      options:
+        - Not applicable — my bug isn't about VM/SSH connectivity
+        - "Yes — the interactive SSH terminal connects, but the Dashboard still shows Unknown"
+        - No — the interactive SSH terminal also fails
+        - Haven't tried
+    validations:
+      required: false
 
   - type: textarea
     id: transcript
