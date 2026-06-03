@@ -13,6 +13,43 @@ here cover everything those tags shipped.
 
 ## [Unreleased]
 
+## [10.1.14] - 2026-06-03
+
+### Fixed
+- **`Invoke-V6Ssh -TimeoutSec` is now actually enforced.** The function
+  accepted a `-TimeoutSec` parameter but completely ignored it — the only
+  OpenSSH-level timeout being set was `ConnectTimeout=8`, which caps the
+  TCP handshake but lets a connected remote command hang indefinitely.
+  When a Map SpinUp toggle triggered an ssh-over-kubectl call that hung
+  (~2026-06-03 morning), the child `ssh.exe` lived 12+ minutes with 0.02 s
+  of CPU. Because every HTTP API handler runs inline on the listener
+  thread (see _Known limitations_ below), that one stuck handler froze
+  the entire backend UI — Map SpinUp, Web Interfaces, Active Spice, the
+  dune-admin Check button, and any other VM-touching panel all showed
+  `Loading…` forever until the orphaned ssh process was killed manually.
+  The function now spawns ssh as a managed `System.Diagnostics.Process`,
+  drains stdout/stderr asynchronously to avoid pipe-buffer deadlock, and
+  calls `WaitForExit($TimeoutSec * 1000)` followed by `Kill()` past the
+  deadline. On timeout it returns the line
+  `ERROR: ssh timed out after Ns` so callers (which all already join the
+  output and pattern-match it) see a clear failure mode instead of a
+  silent `$null`.
+- Added `ServerAliveInterval=10` + `ServerAliveCountMax=3` as
+  belt-and-suspenders defense — even if the host-side `Kill()` ever
+  fails, OpenSSH itself will now tear down a silent session within
+  ~30 s instead of clinging to it forever.
+
+### Known limitations (deferred to v10.1.15)
+- The HTTP listener still dispatches API route handlers inline on a
+  single thread (`app/server/HttpServer.ps1:298-327`); only WebSocket
+  upgrades are pushed onto a runspace pool. A slow handler still blocks
+  the queue for up to its `Invoke-V6Ssh` timeout window, just no longer
+  forever. Proper concurrent dispatch — with shared-state injection,
+  per-resource locks (so two simultaneous Map SpinUp toggles can't
+  clobber each other's `director.ini` patches), backpressure (return
+  503 when the pool is saturated), and async response cleanup — is
+  designed for v10.1.15 in a follow-up issue.
+
 ## [10.1.13] - 2026-06-03
 
 ### Fixed
