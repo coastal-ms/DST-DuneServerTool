@@ -35,10 +35,85 @@ function Invoke-V6Ssh {
     # preserve \r, which breaks bash (commands appear as "head -1\r" etc).
     if ($Cmd) { $Cmd = $Cmd -replace "`r","" }
     $key = Get-V6SshKeyPath
-    if ($key) {
-        & ssh -o BatchMode=yes -o StrictHostKeyChecking=no -o LogLevel=QUIET -o ConnectTimeout=8 -i $key "dune@$Ip" $Cmd 2>$null
-    } else {
-        & ssh -o BatchMode=yes -o StrictHostKeyChecking=no -o LogLevel=QUIET -o ConnectTimeout=8 "dune@$Ip" $Cmd 2>$null
+    if ($TimeoutSec -lt 1) { $TimeoutSec = 30 }
+
+    # NOTE 2026-06-03 (v10.1.14): previously this function called
+    # `& ssh ...` directly and SILENTLY IGNORED its $TimeoutSec parameter
+    # — only OpenSSH-level ConnectTimeout=8 was set, which caps the TCP
+    # handshake but lets a *connected* remote command hang forever. That
+    # bug caused a Map SpinUp toggle to wedge the entire backend UI when
+    # the underlying ssh child process never returned (the HTTP listener
+    # runs handlers inline on a single thread; one hung handler froze
+    # every panel — see app/server/HttpServer.ps1:298). We now spawn ssh
+    # as a managed Process and hard-kill it past the deadline.
+    # ServerAliveInterval+ServerAliveCountMax are belt-and-suspenders so
+    # OpenSSH itself tears down a silent session in ~30 s even if the
+    # host-side kill ever misfires. The single-thread-listener problem
+    # itself is the v10.1.15 work tracked separately.
+    $psi = [System.Diagnostics.ProcessStartInfo]::new()
+    $psi.FileName               = 'ssh'
+    $psi.RedirectStandardOutput = $true
+    $psi.RedirectStandardError  = $true
+    $psi.UseShellExecute        = $false
+    $psi.CreateNoWindow         = $true
+
+    # PS 5.1 lacks ProcessStartInfo.ArgumentList — build the command line
+    # by hand. All values here are fixed literals, an IP, a file path we
+    # control ($key), or the caller's remote command ($Cmd). Quote any
+    # arg containing whitespace or quotes; escape embedded " as \".
+    $sshArgs = @(
+        '-o','BatchMode=yes'
+        '-o','StrictHostKeyChecking=no'
+        '-o','LogLevel=QUIET'
+        '-o','ConnectTimeout=8'
+        '-o','ServerAliveInterval=10'
+        '-o','ServerAliveCountMax=3'
+    )
+    if ($key) { $sshArgs += @('-i', $key) }
+    $sshArgs += @("dune@$Ip")
+    if ($null -ne $Cmd) { $sshArgs += @($Cmd) }
+    $psi.Arguments = (@($sshArgs) | ForEach-Object {
+        if ($_ -match '[\s"]') { '"' + ($_ -replace '"','\"') + '"' } else { $_ }
+    }) -join ' '
+
+    $proc = [System.Diagnostics.Process]::new()
+    $proc.StartInfo = $psi
+    try {
+        [void]$proc.Start()
+        # Drain both streams asynchronously — a chatty remote command can
+        # fill the ~4 KB pipe buffer before we reach WaitForExit, causing
+        # ssh to block on stdout.write and us to deadlock waiting for it
+        # to exit.
+        $outTask = $proc.StandardOutput.ReadToEndAsync()
+        $errTask = $proc.StandardError.ReadToEndAsync()
+        $timeoutMs = [int]$TimeoutSec * 1000
+        $exited = $proc.WaitForExit($timeoutMs)
+        if (-not $exited) {
+            try { $proc.Kill() } catch {}
+            try { [void]$proc.WaitForExit(2000) } catch {}
+            if (Get-Command Write-DuneLog -ErrorAction SilentlyContinue) {
+                Write-DuneLog "Invoke-V6Ssh: ssh to $Ip exceeded ${TimeoutSec}s, killed" 'WARN'
+            }
+            # Surface the timeout to callers via the stdout slot they
+            # already inspect — most do `($out -join "`n").Trim()` then
+            # string-match the result; an `ERROR:` line is clearly
+            # visible (vs. the silent `$null`/empty failure mode that
+            # produced the misleading "kubectl patch may have failed:"
+            # toast in the v10.1.13 incident).
+            return "ERROR: ssh timed out after ${TimeoutSec}s"
+        }
+        # Per Microsoft docs, an unbounded WaitForExit() after a bounded
+        # one ensures the async stream readers fully drain before we
+        # consume the tasks.
+        [void]$proc.WaitForExit()
+        [void]$errTask.GetAwaiter().GetResult()  # discarded — mirrors prior `2>$null`
+        $text = $outTask.GetAwaiter().GetResult()
+        if ([string]::IsNullOrEmpty($text)) { return }
+        # Emit one pipeline item per stdout line — matches the original
+        # `& ssh ...` capture semantics so existing callers keep working.
+        return ($text -split "`r?`n")
+    } finally {
+        try { $proc.Dispose() } catch {}
     }
 }
 
