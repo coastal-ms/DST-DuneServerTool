@@ -13,6 +13,19 @@ here cover everything those tags shipped.
 
 ## [Unreleased]
 
+## [10.1.10] - 2026-06-02
+
+### Fixed
+- **"Web Portal" sidebar button now actually opens the browser.** Clicking the
+  button in 10.1.9 set the server-side detach flag but the WebView2 host
+  silently dropped the "open URL and close" message — the React UI posts a JS
+  object via `chrome.webview.postMessage(obj)`, but the C# bridge was reading
+  it with `TryGetWebMessageAsString()`, which only succeeds for raw-string
+  payloads and throws (then swallowed) for objects. The bridge now reads
+  `WebMessageAsJson` first and falls back to the string accessor, so both
+  object and stringified payloads work and the app window closes + the
+  default browser opens to the live portal URL as intended.
+
 ## [10.1.9] - 2026-06-02
 
 ### Changed
