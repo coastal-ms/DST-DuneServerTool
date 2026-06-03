@@ -13,6 +13,33 @@ here cover everything those tags shipped.
 
 ## [Unreleased]
 
+## [10.2.0] - 2026-06-03
+
+### Added
+- **Top menu bar** above the StatusBar (classic desktop-app layout). One
+  dropdown per nav group — **Server Health**, **PowerShell**, **Game Data**,
+  **Database**, **System** — plus a rightmost **Help** dropdown for
+  cross-cutting commands. Works identically in the DuneShell.exe app window
+  and in a normal web-browser tab.
+- **Help menu** items:
+  - `Create GitHub Issue` — opens the prefilled bug-report template (same
+    URL the old `?` icon used; the icon itself is removed from the sidebar
+    brand strip).
+  - `Collapse Sidebar` / `Expand Sidebar` — toggles the new icon-rail mode.
+- **Collapsible sidebar.** New icon-only rail (width 56px) with thin
+  separator lines between groups instead of textual headers. State persists
+  per surface in `localStorage` (`dst.sidebar.collapsed`).
+- **`Database` nav group** (both in the menubar dropdown and the left
+  sidebar). Houses Database, Sietches, and Map SpinUp.
+
+### Changed
+- **Sidebar regrouping.** **Database**, **Sietches**, and **Map SpinUp**
+  moved out of `Game Data` and into the new `Database` group. `Game Data`
+  now contains Characters, Game Config, and DD Map.
+- Extracted `useLaunchDuneAdmin` so the sidebar's Characters item and the
+  new menubar's Characters item share one launch implementation (no
+  behavior change — same skip-if-running + port-resolve fallback).
+
 ## [10.1.15] - 2026-06-03
 
 ### Changed
