@@ -47,6 +47,33 @@ here cover everything those tags shipped.
     cap), and the accept loop reaps finished pipelines each iteration. If the
     pool fails to initialize for any reason, the server falls back to the
     legacy inline dispatch rather than failing to start.
+### Fixed
+- **Pricing patch now applies cleanly on dune-admin v0.23.2** (and absorbs
+  future minor upstream context drift automatically). v0.23.2 added a
+  `gameNow int64` parameter to `Exchange.buyPlayerListings`, which broke a
+  context line in the bundled `0001-sane-pricing-100k-cap.patch` and caused
+  the patched build to abort with *"patch does not apply cleanly"* (exit 1)
+  in the **Pricing** screen. The patch has been updated to match the new
+  `buyPlayerListings(ctx, orderExpiry, gameNow, snap)` signature.
+
+### Added
+- **Fuzz-tolerant patch fallback in `build-patched.ps1`.** When `git apply`
+  refuses a hunk (typically because upstream changed a context line), the
+  build script now falls back to GNU `patch.exe` (shipped with Git for
+  Windows) with a conservative two-tier fuzz strategy: try `--fuzz=2` first,
+  escalate to `--fuzz=3` only if the dry-run rejects. After any fuzz-mode
+  apply, the script runs an **invariants check** — verifying that the key
+  sane-pricing symbols (`maxAnyPrice`, `tierBasePrice`, `capPrice`,
+  `saneDefaultsRevision`, the d12 gamble-buy block, `rand.Intn`, the
+  `math/rand` import) are present *and* that the removed `BuyThreshold`
+  gate is gone from `buyPlayerListings`. If invariants fail, the working
+  tree is restored byte-for-byte from a pre-patch snapshot and the build
+  aborts — no silent half-applied build. Loud `COMPATIBILITY MODE` logging
+  surfaces in the UI log when the fallback fires so the bundled patch can
+  be refreshed against the new upstream.
+
+### Internal
+- Bumped version to 10.1.15.
 
 ## [10.1.14] - 2026-06-03
 
