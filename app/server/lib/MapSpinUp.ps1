@@ -4,17 +4,32 @@
 #   spec.utilities.director.spec.configFiles.files["director.ini"]
 #
 # Each playable map is an INI section ([ MapName ]). Some maps carry a
-#   MinServers = N
-# key — when N >= 1 the director keeps that many instances of the map warm
-# at all times (a "spin-up floor"). Funcom ships MinServers on a handful of
-# persistent/instanced maps; the rest only have NumExtraServers (on-demand
-# scaling, which we DO NOT touch here).
+#   MinServers=1
+# key — when set to 1 the director keeps one instance of the map warm
+# at all times (a "spin-up floor"). The key is binary: 0 (off) or 1 (on).
+# Other values are not supported by the director. The format is strict:
+# no spaces around the '=', no quoting.
+#
+# Funcom ships MinServers on a handful of persistent/instanced maps; the
+# rest only have NumExtraServers (on-demand scaling, which we DO NOT touch
+# here).
+#
+# As of director image 1979201-0-shipping (Funcom 2026-06 update), the
+# MinServers floor is ONLY honored when the section also carries
+#   EnableAutomaticInstanceScaling = true
+# Funcom ships that key on Story/DLC sections (Story_ArtOfKanly,
+# Story_ProcesVerbal, DLC_Story_LostHarvest_*) but NOT on DeepDesert_1,
+# SH_Arrakeen, or SH_HarkoVillage — so a bare MinServers=1 on those
+# sections silently no-ops. We therefore set both keys together on spin-up.
+# The flag is left in place on spin-down (idempotent, also allows player
+# travel-to spawn — a deliberate trade-off, not a side effect).
 #
 # This module:
 #   * lists every real map section (anything with a NumExtraServers key),
 #   * reports its current MinServers value (absent = 0 = off),
 #   * toggles MinServers between 0 and 1 by rewriting director.ini and
-#     patching the CRD (hot-swappable — the operator reconciles it live).
+#     patching the CRD (hot-swappable — the operator reconciles it live),
+#   * ensures EnableAutomaticInstanceScaling = true is present on spin-up.
 #
 # Overmap / Survival_1 are always-on and aren't in director.ini at all, so
 # they never appear. Config-only sections ([ Battlegroup ], [ InstancingModes ])
@@ -101,7 +116,7 @@ function _Get-DuneDirectorIni {
 
 function _Parse-DuneDirectorIni {
     # Parses INI text into ordered section objects:
-    #   @{ Name; IsMap; HasMinServers; MinServers; }
+    #   @{ Name; IsMap; HasMinServers; MinServers; HasEnableAutoScaling; }
     param([Parameter(Mandatory)][string]$Ini)
     $sections = New-Object System.Collections.Generic.List[object]
     $current  = $null
@@ -111,10 +126,11 @@ function _Parse-DuneDirectorIni {
         if ($trim -match '^\[\s*(.+?)\s*\]$') {
             if ($current) { $sections.Add($current) }
             $current = [pscustomobject]@{
-                Name          = $matches[1]
-                IsMap         = $false
-                HasMinServers = $false
-                MinServers    = 0
+                Name                 = $matches[1]
+                IsMap                = $false
+                HasMinServers        = $false
+                MinServers           = 0
+                HasEnableAutoScaling = $false
             }
             continue
         }
@@ -123,6 +139,9 @@ function _Parse-DuneDirectorIni {
         if ($trim -match '^MinServers\s*=\s*(-?\d+)') {
             $current.HasMinServers = $true
             $current.MinServers    = [int]$matches[1]
+        }
+        if ($trim -match '^EnableAutomaticInstanceScaling\s*=\s*true\s*$') {
+            $current.HasEnableAutoScaling = $true
         }
     }
     if ($current) { $sections.Add($current) }
@@ -158,14 +177,18 @@ function Get-DuneSpinUpMaps {
 
 function _Set-DuneIniMinServers {
     # Returns a new INI string with $Map's MinServers line set to $Value.
+    # $Value must be 0 or 1 (the only values the director accepts). The
+    # emitted line uses Funcom's strict format: "MinServers=1" — no spaces,
+    # no quoting. Spaces around '=' have been observed to be silently
+    # ignored by the director.
     #   - replaces an existing MinServers line in the section, or
-    #   - inserts one (after NumExtraServers, or after the header) when missing
-    #     and $Value >= 1. When $Value -eq 0 and no line exists, leaves the
-    #     section untouched (absent == 0) to keep the file minimal.
+    #   - inserts one (after NumExtraServers, or after the header) when
+    #     missing and $Value -eq 1. When $Value -eq 0 and no line exists,
+    #     leaves the section untouched (absent == 0) to keep the file minimal.
     param(
         [Parameter(Mandatory)][string]$Ini,
         [Parameter(Mandatory)][string]$Map,
-        [Parameter(Mandatory)][int]$Value
+        [Parameter(Mandatory)][ValidateRange(0,1)][int]$Value
     )
     $lines = [System.Collections.Generic.List[string]]::new()
     foreach ($l in ($Ini -split "`n")) { $lines.Add(($l -replace "`r", '')) }
@@ -192,11 +215,44 @@ function _Set-DuneIniMinServers {
     }
 
     if ($msIdx -ge 0) {
-        $lines[$msIdx] = "MinServers = $Value"
-    } elseif ($Value -ge 1) {
+        $lines[$msIdx] = "MinServers=$Value"
+    } elseif ($Value -eq 1) {
         $insertAt = if ($numExtraIdx -ge 0) { $numExtraIdx + 1 } else { $secStart + 1 }
-        $lines.Insert($insertAt, "MinServers = $Value")
+        $lines.Insert($insertAt, "MinServers=$Value")
     }
+    return ($lines -join "`n")
+}
+
+function _Set-DuneIniEnableAutoScaling {
+    # Returns a new INI string with EnableAutomaticInstanceScaling = true
+    # ensured in $Map's section. No-ops if the key is already present.
+    # Insert position: immediately after the section header, mirroring how
+    # Funcom ships it on Story/DLC sections.
+    param(
+        [Parameter(Mandatory)][string]$Ini,
+        [Parameter(Mandatory)][string]$Map
+    )
+    $lines = [System.Collections.Generic.List[string]]::new()
+    foreach ($l in ($Ini -split "`n")) { $lines.Add(($l -replace "`r", '')) }
+
+    $secStart = -1
+    for ($i = 0; $i -lt $lines.Count; $i++) {
+        if ($lines[$i].Trim() -match '^\[\s*(.+?)\s*\]$' -and $matches[1] -eq $Map) { $secStart = $i; break }
+    }
+    if ($secStart -lt 0) { return $Ini }
+
+    $secEnd = $lines.Count
+    for ($i = $secStart + 1; $i -lt $lines.Count; $i++) {
+        if ($lines[$i].Trim() -match '^\[\s*.+?\s*\]$') { $secEnd = $i; break }
+    }
+
+    for ($i = $secStart + 1; $i -lt $secEnd; $i++) {
+        if ($lines[$i].Trim() -match '^EnableAutomaticInstanceScaling\s*=\s*true\s*$') {
+            return $Ini  # already present
+        }
+    }
+
+    $lines.Insert($secStart + 1, 'EnableAutomaticInstanceScaling = true')
     return ($lines -join "`n")
 }
 
@@ -218,7 +274,14 @@ function Set-DuneSpinUpMap {
     $value   = if ($Enabled) { 1 } else { 0 }
     $current = [int]$target.MinServers
 
-    if ($current -eq $value -and ($target.HasMinServers -or $value -eq 0)) {
+    # Spin-up requires BOTH MinServers >= 1 AND EnableAutomaticInstanceScaling = true
+    # (the latter is the gate added in director image 1979201-0-shipping). On
+    # spin-down we only need to drop MinServers; the auto-scaling flag is left
+    # in place so a future spin-up is a one-line change.
+    $needsAutoScaling = ($value -ge 1) -and -not $target.HasEnableAutoScaling
+    $minServersInSync = ($current -eq $value -and ($target.HasMinServers -or $value -eq 0))
+
+    if ($minServersInSync -and -not $needsAutoScaling) {
         return @{
             ok         = $true
             map        = $Map
@@ -231,6 +294,9 @@ function Set-DuneSpinUpMap {
     }
 
     $newIni = _Set-DuneIniMinServers -Ini $r.ini -Map $Map -Value $value
+    if ($value -ge 1) {
+        $newIni = _Set-DuneIniEnableAutoScaling -Ini $newIni -Map $Map
+    }
     if ($newIni -eq $r.ini) {
         return @{
             ok = $false; status = 500
