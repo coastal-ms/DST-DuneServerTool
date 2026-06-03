@@ -725,7 +725,7 @@ export function Settings() {
                     release notes
                   </a>
                 )}
-                {updCheck.available && (
+                {updCheck.available && (updCheck.installable ?? true) && (
                   <button
                     type="button"
                     onClick={onInstallUpdate}
@@ -735,6 +735,21 @@ export function Settings() {
                     <Icon name={updInstalling ? 'Loader2' : 'Download'} size={15} className={updInstalling ? 'animate-spin' : ''} />
                     {updInstalling ? 'Installing…' : `Update to ${fmtToolVersion(updCheck.latestVersion)}`}
                   </button>
+                )}
+                {updCheck.available && updCheck.installable === false && (
+                  <span className="text-xs text-warning ml-auto flex items-center gap-1.5">
+                    <Icon name="AlertCircle" size={14} />
+                    Newer version available, but this release has no installer attached. Use the{' '}
+                    <a
+                      href={updCheck.releaseUrl ?? `https://github.com/coastal-ms/DST-DuneServerTool/releases/tag/${updCheck.tagName ?? ''}`}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="underline hover:text-text"
+                    >
+                      release page
+                    </a>
+                    .
+                  </span>
                 )}
                 {!updCheck.available && !updCheck.error && (
                   <span className="text-xs text-text-dim ml-auto">You're on the latest version.</span>

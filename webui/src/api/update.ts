@@ -3,6 +3,18 @@ import { api } from './client'
 
 export interface UpdateCheck {
   available: boolean
+  /**
+   * True when `available` AND the release has an installer .exe asset that
+   * the in-app auto-updater can download and run. False when a newer release
+   * exists but no asset is attached — UI should still show "update available"
+   * but link to the release page instead of offering an Install button.
+   *
+   * Optional for backward compatibility with older backends that didn't
+   * split this from `available`.
+   */
+  installable?: boolean
+  /** True when `available` but no installer asset is present. Diagnostic. */
+  assetMissing?: boolean
   currentVersion: string
   latestVersion?: string
   tagName?: string
