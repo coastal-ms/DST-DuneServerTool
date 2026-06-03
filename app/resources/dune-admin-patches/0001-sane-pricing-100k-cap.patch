@@ -227,10 +227,10 @@ index 7e99e5b..cd28aef 100644
  	"os"
  	"path/filepath"
  	"strings"
-@@ -493,9 +494,8 @@ func (e *Exchange) categoryFor(item CatalogItem) (mask int32, depth int16) {
+@@ -555,9 +556,8 @@ func buyExpiryCutoff(gameNow int64) int64 {
  }
  
- func (e *Exchange) buyPlayerListings(ctx context.Context, orderExpiry int64, snap configValues) {
+ func (e *Exchange) buyPlayerListings(ctx context.Context, orderExpiry int64, gameNow int64, snap configValues) {
 -	if snap.BuyThreshold <= 0 {
 -		return
 -	}
@@ -239,7 +239,7 @@ index 7e99e5b..cd28aef 100644
  	if orderExpiry <= 0 {
  		orderExpiry = 999_999_999
  	}
-@@ -550,12 +550,14 @@ func (e *Exchange) buyPlayerListings(ctx context.Context, orderExpiry int64, sna
+@@ -612,12 +612,14 @@ func (e *Exchange) buyPlayerListings(ctx context.Context, orderExpiry int64, gam
  			continue
  		}
  
