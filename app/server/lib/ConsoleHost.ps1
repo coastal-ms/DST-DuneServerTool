@@ -26,6 +26,43 @@ public static extern bool ShowWindow(System.IntPtr hWnd, int nCmdShow);
     return [DuneServer.DuneConsoleNative]
 }
 
+# Cross-runspace signal: the app-window watcher runs in its own runspace and
+# can't read $script:DuneAppDetached from the main runspace. The "Web Portal"
+# detach route writes this marker so the watcher knows to skip its usual
+# "shell exited -> stop listener" teardown. The marker is also a breadcrumb
+# for the NEXT launch: if it exists when a fresh DuneServer starts, the prior
+# console was detached and must be killed before we proceed.
+function Get-DuneDetachStateFile {
+    $dir = Join-Path $env:LOCALAPPDATA 'DuneServer'
+    return (Join-Path $dir 'detached.flag')
+}
+
+function Set-DuneAppDetached {
+    $script:DuneAppDetached = $true
+    try {
+        $file = Get-DuneDetachStateFile
+        $dir = Split-Path -Parent $file
+        if (-not (Test-Path -LiteralPath $dir)) {
+            New-Item -ItemType Directory -Path $dir -Force | Out-Null
+        }
+        $payload = @{
+            pid       = $PID
+            timestamp = (Get-Date).ToString('o')
+        } | ConvertTo-Json -Compress
+        Set-Content -LiteralPath $file -Value $payload -Encoding UTF8 -Force
+    } catch { }
+}
+
+function Clear-DuneAppDetached {
+    $script:DuneAppDetached = $false
+    try {
+        $file = Get-DuneDetachStateFile
+        if (Test-Path -LiteralPath $file) {
+            Remove-Item -LiteralPath $file -Force -ErrorAction SilentlyContinue
+        }
+    } catch { }
+}
+
 # Two-button first-run dialog. Returns 'console' or 'tray' ('console' on any
 # failure so we never end up with a hidden, unmanaged console).
 function Show-DuneConsolePresencePrompt {
@@ -191,6 +228,7 @@ function Start-DuneConsoleLifecycle {
 
     if (-not $script:DuneAppProc) { return }
     $mode = if ($script:DuneConsoleMode) { $script:DuneConsoleMode } else { 'console' }
+    Clear-DuneAppDetached
 
     # 1. Real-time linkage: app window closes -> stop listener -> server exits.
     try {
@@ -198,6 +236,7 @@ function Start-DuneConsoleLifecycle {
         $rs.Open()
         $rs.SessionStateProxy.SetVariable('AppProc',  $script:DuneAppProc)
         $rs.SessionStateProxy.SetVariable('Listener', $Listener)
+        $rs.SessionStateProxy.SetVariable('DetachStateFile', (Get-DuneDetachStateFile))
         $ps = [PowerShell]::Create()
         $ps.Runspace = $rs
         [void]$ps.AddScript({
@@ -210,9 +249,27 @@ function Start-DuneConsoleLifecycle {
             # ("Connecting... attempt N" forever). So: when the watched window
             # exits, only stop the server if NO DuneShell survives a short grace
             # window; if one does, re-arm on it and keep serving.
+            #
+            # ALSO: the "Web Portal" sidebar button sets a detach flag via
+            # /api/portal/open-in-browser before asking the shell to close. In
+            # that case we exit WITHOUT stopping the listener so the server
+            # stays up for the user's browser tab. The flag is written to a
+            # file because this watcher runs in a separate runspace and can't
+            # see $script:DuneAppDetached directly.
             $proc = $AppProc
             while ($true) {
                 try { $proc.WaitForExit() } catch {}
+
+                # Intentional detach takes priority over the survivor chain —
+                # no need to wait 6s if the user explicitly asked to detach.
+                $detached = $false
+                try {
+                    if ($DetachStateFile -and (Test-Path -LiteralPath $DetachStateFile)) {
+                        $detached = $true
+                    }
+                } catch { $detached = $false }
+                if ($detached) { return }
+
                 $survivor = $null
                 $deadline = (Get-Date).AddSeconds(6)
                 while ((Get-Date) -lt $deadline) {
@@ -232,7 +289,7 @@ function Start-DuneConsoleLifecycle {
         $script:DuneWatcherRs     = $rs
         $script:DuneWatcherHandle = $ps.BeginInvoke()
         if (Get-Command Write-DuneLog -ErrorAction SilentlyContinue) {
-            Write-DuneLog "App-window watcher armed (PID $($script:DuneAppProc.Id)); closing the app window stops the server"
+            Write-DuneLog "App-window watcher armed (PID $($script:DuneAppProc.Id)); closing the app window stops the server (unless the Web Portal button detaches it)"
         }
     } catch {
         if (Get-Command Write-DuneLog -ErrorAction SilentlyContinue) {
@@ -274,8 +331,13 @@ function Start-DuneConsoleLifecycle {
 # turns into a .NET unhandled-exception dialog on shutdown.
 function Stop-DuneConsoleLifecycle {
     try {
-        if ($script:DuneAppProc -and -not $script:DuneAppProc.HasExited) {
-            try { Stop-Process -Id $script:DuneAppProc.Id -Force -ErrorAction SilentlyContinue } catch {}
+        # When detached, the user already closed the app window themselves and
+        # explicitly asked us to keep going. Don't try to kill a process that's
+        # already gone, and don't disturb anything else.
+        if (-not $script:DuneAppDetached) {
+            if ($script:DuneAppProc -and -not $script:DuneAppProc.HasExited) {
+                try { Stop-Process -Id $script:DuneAppProc.Id -Force -ErrorAction SilentlyContinue } catch {}
+            }
         }
     } catch {}
 
@@ -291,4 +353,10 @@ function Stop-DuneConsoleLifecycle {
     }
     $script:DuneWatcherPs = $null; $script:DuneWatcherRs = $null; $script:DuneWatcherHandle = $null
     $script:DuneTrayPs    = $null; $script:DuneTrayRs    = $null; $script:DuneTrayHandle    = $null
+
+    # Clear the detach marker on a clean shutdown so the next launch starts
+    # from a known state. The next launch ALSO clears it after handling, so
+    # this is just defense-in-depth (the marker is only meaningful while a
+    # detached server is alive in the background).
+    Clear-DuneAppDetached
 }
