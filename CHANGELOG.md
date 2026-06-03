@@ -13,6 +13,71 @@ here cover everything those tags shipped.
 
 ## [Unreleased]
 
+## [10.1.13] - 2026-06-03
+
+### Fixed
+- **In-app updater no longer silently reports "up to date" when a newer
+  release has no installer attached.** Previously the `available` flag on
+  `/api/update/check` was gated on **both** "newer tag exists" **and** "a
+  `DuneServerSetup.exe` asset is uploaded to the release." If a release was
+  ever published without the installer asset (as v10.1.12 was), the UI
+  flipped to a green **up to date** pill and the update banner stayed
+  hidden, even though a newer tag was live on GitHub. That bug now has two
+  fixes layered on top of each other:
+  1. `available` now means "newer release exists" - asset-independent.
+  2. A new `installable` flag is the strict version (newer tag **and**
+     installer asset present). The Update banner and Settings card use
+     `installable` to decide between an in-app **Update now / Update to X**
+     button and a **View release** link that opens the release page in a
+     new tab. The header pill still flips to amber **X (N.N) available**
+     either way - so the user always knows there's an update.
+- **MapSpinUp fix from v10.1.12 carried forward** (see [10.1.12] entry for
+  the full root-cause writeup). v10.1.12 was tagged but shipped without an
+  installer asset and without the version-stamp bumps in the four release
+  files, so the auto-updater couldn't deliver it. v10.1.13 ships both the
+  MapSpinUp fix and the updater-honesty fix together, with a proper
+  installer attached.
+
+### Changed
+- Release-readiness rule (now enforced by checklist): **every** DST GitHub
+  release must upload `DuneServerSetup.exe` as its sole asset. Code-only
+  releases are forbidden - the asset-less v10.1.12 broke this rule and
+  triggered the silent "up to date" regression above.
+- `Build-Installer.ps1` now runs a **version-stamp sync check** before any
+  of the long build steps. It reads the five files that must agree
+  (`dune-server.ps1`, `app\DuneServer.ps1`, `app\build\Build-Exe.ps1`,
+  `app\installer\DuneServer.iss`, `app\desktop\DuneShell\DuneShell.csproj`)
+  and aborts the build with a per-file listing if they disagree. This is
+  what should have caught the v10.1.12 mistake (forgotten stamp bumps).
+  Pass `-SkipVersionCheck` for deliberate intermediate test builds.
+- `app\server\routes\Update.ps1` asset detection is now strict: requires
+  an asset named exactly `DuneServerSetup.exe`. The old `*.exe` fallback
+  was removed - it masked malformed releases and conflicts with the
+  one-asset rule.
+
+## [10.1.12] - 2026-06-03
+
+> **Note:** v10.1.12 was tagged and a GitHub release was published, but
+> the release was missing its `DuneServerSetup.exe` asset and the four
+> version-stamp files were never bumped from `10.1.11`. As a result the
+> in-app auto-updater couldn't deliver this version and the UI showed
+> "up to date" while v10.1.12 was the latest release. The fix it contained
+> has been carried forward into v10.1.13, which ships with a working
+> installer. **Use v10.1.13 instead.**
+
+### Fixed
+- **MapSpinUp no longer no-ops on DeepDesert_1, SH_Arrakeen, and
+  SH_HarkoVillage after the Funcom director image update
+  (`1973075-0-shipping` → `1979201-0-shipping`).** The new director only
+  honors `MinServers = N` when the same section also contains
+  `EnableAutomaticInstanceScaling = true`. Funcom ships that flag on the
+  Story/DLC sections but not on Deep Desert or the Sietches. DST now
+  writes both keys together on spin-up (and only drops `MinServers` on
+  spin-down, leaving the auto-scaling flag in place so travel-to spawn
+  still works). `MinServers` is now strictly validated to `0` or `1` and
+  written with no spaces (Funcom-strict format).
+  (coastal-ms/DST-DuneServerTool#44)
+
 ## [10.1.11] - 2026-06-03
 
 ### Fixed

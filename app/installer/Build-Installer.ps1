@@ -12,6 +12,7 @@ param(
     [switch]$SkipExeBuild,
     [switch]$SkipWebBuild,
     [switch]$SkipShellBuild,
+    [switch]$SkipVersionCheck,
     [switch]$Open
 )
 
@@ -25,6 +26,54 @@ $iss        = Join-Path $appRoot 'installer\DuneServer.iss'
 $exePath    = Join-Path $appRoot 'build\output\DuneServer.exe'
 $outDir     = Join-Path $appRoot 'installer\output'
 $installer  = Join-Path $outDir 'DuneServerSetup.exe'
+
+# ---------------------------------------------------------------------------
+# Pre-flight: version-stamp sync check.
+#
+# DST keeps the release version in FIVE files that must all match. Historically
+# this was a manual procedure and at least once (v10.1.12) someone forgot to
+# bump them, so the installer reported the prior version's number and the
+# auto-updater couldn't deliver the release. Catch that before doing any of
+# the long build steps below.
+#
+# If the stamps disagree, abort with a clear listing. To override (e.g. for
+# a deliberate intermediate test build), pass `-SkipVersionCheck`.
+# ---------------------------------------------------------------------------
+$versionFiles = @(
+    @{ Path = Join-Path $repoRoot 'dune-server.ps1';                 Pattern = '\$script:ToolVersion\s*=\s*"([0-9]+\.[0-9]+\.[0-9]+)"';     Label = '$script:ToolVersion' },
+    @{ Path = Join-Path $appRoot  'DuneServer.ps1';                  Pattern = "\`$script:DuneToolVersion\s*=\s*'([0-9]+\.[0-9]+\.[0-9]+)'"; Label = '$script:DuneToolVersion' },
+    @{ Path = Join-Path $appRoot  'build\Build-Exe.ps1';             Pattern = "\[string\]\`$Version\s*=\s*'([0-9]+\.[0-9]+\.[0-9]+)'";     Label = 'Build-Exe.ps1 default $Version' },
+    @{ Path = Join-Path $appRoot  'installer\DuneServer.iss';        Pattern = '#define\s+MyAppVersion\s+"([0-9]+\.[0-9]+\.[0-9]+)"';       Label = 'MyAppVersion' },
+    @{ Path = Join-Path $appRoot  'desktop\DuneShell\DuneShell.csproj'; Pattern = '<Version>([0-9]+\.[0-9]+\.[0-9]+)</Version>';            Label = 'DuneShell <Version>' }
+)
+if (-not $SkipVersionCheck) {
+    $stampReport = foreach ($vf in $versionFiles) {
+        if (-not (Test-Path -LiteralPath $vf.Path)) {
+            throw "Version-stamp file not found: $($vf.Path)"
+        }
+        $m = Select-String -Path $vf.Path -Pattern $vf.Pattern -List
+        if (-not $m) {
+            throw "Could not find version stamp in $($vf.Path) using pattern: $($vf.Pattern)"
+        }
+        [pscustomobject]@{
+            File    = $vf.Path.Substring($repoRoot.Length + 1)
+            Label   = $vf.Label
+            Version = $m.Matches[0].Groups[1].Value
+        }
+    }
+    $distinct = @($stampReport.Version | Sort-Object -Unique)
+    Write-Host "Version-stamp check:" -ForegroundColor Cyan
+    foreach ($r in $stampReport) {
+        $marker = if ($distinct.Count -eq 1) { '[x]' } else { '[!]' }
+        Write-Host ("  {0} {1,-32} {2}" -f $marker, $r.Label, $r.Version)
+    }
+    if ($distinct.Count -ne 1) {
+        Write-Host ""
+        throw "Version stamps disagree (found: $($distinct -join ', ')). Bump all 5 files to the same release version before building, or pass -SkipVersionCheck for a deliberate intermediate build."
+    }
+    Write-Host "  All 5 stamps match: $($distinct[0])" -ForegroundColor Green
+    Write-Host ""
+}
 
 # Locate ISCC.exe
 $isccCandidates = @(
