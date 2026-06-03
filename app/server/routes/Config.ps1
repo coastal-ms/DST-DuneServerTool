@@ -40,7 +40,7 @@ Register-DuneRoute -Method PUT -Path '/api/config' -Handler {
         Write-DuneError -Response $res -Status 400 -Message "SshKey path does not exist: $($patch.SshKey)"
         return
     }
-    $saved = Save-DuneConfig -Config $patch
+    $saved = Invoke-WithDuneLock -Name 'config' -Script { Save-DuneConfig -Config $patch }
     $obj = @{}
     foreach ($k in $saved.Keys) { $obj[$k] = $saved[$k] }
     Write-DuneJson -Response $res -Body @{

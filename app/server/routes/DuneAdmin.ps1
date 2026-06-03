@@ -737,7 +737,15 @@ Register-DuneRoute -Method POST -Path '/api/dune-admin/dotfolder/delete' -Handle
 # POST /api/dune-admin/install - download + extract + overwrite
 Register-DuneRoute -Method POST -Path '/api/dune-admin/install' -Handler {
     param($req, $res, $routeParams, $body)
+    # Serialize dune-admin installs/patches so two concurrent installs can't
+    # corrupt the target dir or race the detached pricing-patch rebuild.
+    $daLock = Get-DuneLock -Name 'dune-admin-install'
+    if (-not $daLock.Wait(0)) {
+        Write-DuneError -Response $res -Status 409 -Message 'A dune-admin install is already in progress.'
+        return
+    }
     try {
+      try {
         $exePath = Get-DuneAdminConfiguredPath
         if (-not $exePath) {
             Write-DuneError -Response $res -Status 400 -Message 'DuneAdminExe path is not set in Settings. Save a target path first, then re-try.'
@@ -1020,6 +1028,9 @@ Register-DuneRoute -Method POST -Path '/api/dune-admin/install' -Handler {
         }
     } catch {
         Write-DuneError -Response $res -Status 500 -Message $_.Exception.Message
+      }
+    } finally {
+        [void]$daLock.Release()
     }
 }
 
