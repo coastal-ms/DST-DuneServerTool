@@ -18,7 +18,7 @@
 # Next launch of DuneServer.exe detects no surviving DuneShell.exe and treats
 # it as a kill+restart request (see DuneServer.ps1 second-instance branch).
 
-Register-DuneRoute -Method POST -Path '/api/portal/open-in-browser' -Handler {
+Register-DuneRoute -Method POST -Path '/api/portal/open-in-browser' -Inline -Handler {
     param($req, $res, $routeParams, $body)
 
     if (Get-Command Set-DuneAppDetached -ErrorAction SilentlyContinue) {

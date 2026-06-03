@@ -131,7 +131,14 @@ Register-DuneRoute -Method GET -Path '/api/update/check' -Handler {
 # POST /api/update/install — download installer asset and run it silently
 Register-DuneRoute -Method POST -Path '/api/update/install' -Handler {
     param($req, $res, $routeParams, $body)
+    # Serialize installs: never let two update flows download + relaunch at once.
+    $updLock = Get-DuneLock -Name 'update-install'
+    if (-not $updLock.Wait(0)) {
+        Write-DuneError -Response $res -Status 409 -Message 'An update is already in progress.'
+        return
+    }
     try {
+      try {
         $rel = Get-DuneLatestRelease
         if (-not $rel -or -not $rel.assetUrl) {
             Write-DuneError -Response $res -Status 503 -Message 'No installer asset available on latest release.'
@@ -297,5 +304,8 @@ public static extern bool BringWindowToTop(System.IntPtr hWnd);
             -WindowStyle Normal | Out-Null
     } catch {
         Write-DuneError -Response $res -Status 500 -Message $_.Exception.Message
+      }
+    } finally {
+        [void]$updLock.Release()
     }
 }

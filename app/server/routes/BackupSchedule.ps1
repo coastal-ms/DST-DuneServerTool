@@ -43,7 +43,7 @@ Register-DuneRoute -Method PUT -Path '/api/db/backup-schedule' -Handler {
         return
     }
     try {
-        $result = Set-DuneBackupSchedule -Ip $ctx.ip -Preset $preset -RetentionDays $retention
+        $result = Invoke-WithDuneLock -Name 'backup-schedule' -Script { Set-DuneBackupSchedule -Ip $ctx.ip -Preset $preset -RetentionDays $retention }
         if (-not $result.ok) {
             Write-DuneError -Response $res -Status ([int]$result.status) -Message $result.message
             return

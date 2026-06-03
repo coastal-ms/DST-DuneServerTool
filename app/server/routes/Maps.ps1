@@ -6,7 +6,7 @@
 Register-DuneRoute -Method POST -Path '/api/maps/fix-partitions' -Handler {
     param($req, $res, $routeParams, $body)
     try {
-        $result = Invoke-DuneFixOnDemandPartitions
+        $result = Invoke-WithDuneLock -Name 'ondemand-maps' -Script { Invoke-DuneFixOnDemandPartitions }
         if (-not $result.ok -and $result.status) {
             Write-DuneError -Response $res -Status $result.status -Message $result.message
             return
@@ -34,7 +34,7 @@ Register-DuneRoute -Method GET -Path '/api/maps/{key}' -Handler {
 Register-DuneRoute -Method POST -Path '/api/maps/{key}/start' -Handler {
     param($req, $res, $routeParams, $body)
     try {
-        $result = Start-DuneOnDemandMap -Key $routeParams.key
+        $result = Invoke-WithDuneLock -Name 'ondemand-maps' -Script { Start-DuneOnDemandMap -Key $routeParams.key }
         if (-not $result.ok -and $result.status) {
             Write-DuneError -Response $res -Status $result.status -Message $result.message
             return
@@ -54,7 +54,7 @@ Register-DuneRoute -Method POST -Path '/api/maps/{key}/stop' -Handler {
             $q = $req.Url.Query
             if ($q -and $q -match '(?:^|[?&])force=(true|1|yes)(?:&|$)') { $force = $true }
         } catch {}
-        $result = Stop-DuneOnDemandMap -Key $routeParams.key -Force:$force
+        $result = Invoke-WithDuneLock -Name 'ondemand-maps' -Script { Stop-DuneOnDemandMap -Key $routeParams.key -Force:$force }
         if (-not $result.ok -and $result.status) {
             # 409 = players online, needs confirmation. Return the body so
             # the frontend can show the count and re-POST with ?force=true.
