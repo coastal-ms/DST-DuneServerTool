@@ -11,12 +11,12 @@
 The current release is **version X** (shown stylized as **X** in-app; patch
 updates display as **X (0.1)**, **X (0.2)**, … under the hood these are
 `10.0.0`, `10.0.1`, … so update-checks and version comparisons keep working).
-It runs as a single-window Windows app that serves a local web portal
-(React + Vite + Tailwind) over `127.0.0.1` and opens your default browser to
-a per-launch tokenized URL. No WPF window, no embedded browser engine — just
-a tiny PowerShell HTTP server and a static asset bundle. Same battle-tested
-SSH + Hyper-V + battlegroup automation under the hood as the legacy CLI.
-The launcher window is start-minimized; close it to exit.
+It runs as a single-window Windows app (native WebView2 shell) that hosts a
+local web portal (React + Vite + Tailwind) on `127.0.0.1` with a per-launch
+tokenized URL. Same battle-tested SSH + Hyper-V + battlegroup automation
+under the hood as the legacy CLI. Closing the app window stops the server;
+the sidebar's **Web Portal** button hands the portal off to your default
+browser and keeps the server running in the background.
 
 ![Server Health](docs/img/v6-server-health.png)
 
@@ -43,20 +43,22 @@ attribution violates the license — please don't.
    needs admin). The Start Menu shortcut and the launcher EXE are placed in
    `C:\Program Files\Dune Server\`.
 3. Launch from **Start Menu → Dune Server**. The launcher binds a free local
-   port (47823+), starts minimized in the taskbar, and pops your default
-   browser at `http://127.0.0.1:<port>/?t=<token>`. The first launch opens
+   port (47823+), opens the **Dune Server Tool** native app window
+   (WebView2) pointed at `http://127.0.0.1:<port>/?t=<token>`, and runs a
+   minimized PowerShell console in the background. The first launch opens
    the **Setup Wizard** page, which asks for your server install folder,
    SSH key, and optional dune-admin path. All answers are saved to
    `%APPDATA%\DuneServer\` and preserved across reinstalls.
 
 > The launcher is single-instance — clicking the desktop shortcut again just
-> reopens the existing portal in your browser. No duplicate UAC prompt, no
-> second window.
+> focuses the existing app window. No duplicate UAC prompt, no second window.
 
-> 📱 **Install as App** — once the portal is open, your browser's address-bar
-> install button (or `⋮ → Install Dune Server`) turns the portal into a
-> standalone PWA window with its own taskbar/Start-menu entry. No reinstall
-> needed; uninstall from the browser at any time.
+> 🌐 **Web Portal button** — the sidebar's **Web Portal** button (footer of
+> the left nav, visible only inside the app window) hands the portal off to
+> your default browser: it opens the tokenized URL in Chrome/Edge/Firefox,
+> closes the app window, and **keeps the server running in the background**.
+> Reopen Dune Server Tool any time to bring the app window back — the prior
+> background server is stopped and a fresh one is started (one UAC prompt).
 
 ---
 
@@ -64,9 +66,10 @@ attribution violates the license — please don't.
 
 - **Windows 10/11** with **Hyper-V** enabled (Pro / Enterprise / Education).
 - **PowerShell 7** (`pwsh`) — [download](https://github.com/PowerShell/PowerShell/releases). The launcher prompts you with this link if it's missing.
-- **A modern default browser** (Chrome, Edge, Firefox). The portal is served
-  to your existing browser — there is no embedded WebView2 component to
-  install or update.
+- **Microsoft Edge WebView2 Runtime** — ships with Windows 11 and modern
+  Windows 10; the installer falls back to your default browser if it's
+  missing. The native app window uses WebView2; the **Web Portal** button
+  hands off to a standalone browser tab whenever you prefer one.
 - **Dune: Awakening Self-Hosted Server** installed via Steam (gives you the
   `battlegroup-management` folder and the Hyper-V VM image).
 - **SSH private key** for connecting to your VM — created automatically

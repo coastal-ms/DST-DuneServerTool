@@ -127,6 +127,7 @@ internal sealed class MainForm : Form
 
         core.NewWindowRequested += OnNewWindowRequested;
         core.NavigationCompleted += OnNavigationCompleted;
+        core.WebMessageReceived += OnWebMessageReceived;
         core.DocumentTitleChanged += (_, _) =>
         {
             var t = core.DocumentTitle;
@@ -186,6 +187,47 @@ internal sealed class MainForm : Form
                 _web.CoreWebView2?.Navigate(e.Uri);
             else
                 OpenExternal(e.Uri.ToString());
+        }
+    }
+
+    /// <summary>
+    /// Bridge for the "Web Portal" sidebar button. The React UI posts a JSON
+    /// message {"action":"open-and-close","url":"http://127.0.0.1:..."} after
+    /// calling /api/portal/open-in-browser (which sets the server-side detach
+    /// flag). We open the URL via Process.Start with UseShellExecute=true so
+    /// the OS default browser handles it as a non-elevated process — important
+    /// because Chrome/Edge refuse to run from an elevated parent — and then
+    /// close ourselves. The elevated DuneServer console keeps running.
+    /// </summary>
+    private void OnWebMessageReceived(object? sender, CoreWebView2WebMessageReceivedEventArgs e)
+    {
+        string? action = null;
+        string? url = null;
+        try
+        {
+            // The portal sends a JSON object via postMessage(obj); WebView2
+            // serializes that into TryGetWebMessageAsString().
+            string json = e.TryGetWebMessageAsString();
+            if (string.IsNullOrWhiteSpace(json)) return;
+            using var doc = System.Text.Json.JsonDocument.Parse(json);
+            var root = doc.RootElement;
+            if (root.ValueKind != System.Text.Json.JsonValueKind.Object) return;
+            if (root.TryGetProperty("action", out var a)) action = a.GetString();
+            if (root.TryGetProperty("url",    out var u)) url    = u.GetString();
+        }
+        catch
+        {
+            // Malformed payload — ignore. The portal is the only sender so
+            // this would mean a code bug rather than user input.
+            return;
+        }
+
+        if (string.Equals(action, "open-and-close", StringComparison.OrdinalIgnoreCase))
+        {
+            if (!string.IsNullOrWhiteSpace(url)) OpenExternal(url);
+            // Defer the actual close to the next message loop tick so the
+            // WebMessageReceived handler can return cleanly first.
+            BeginInvoke(new Action(() => { try { Close(); } catch { } }));
         }
     }
 

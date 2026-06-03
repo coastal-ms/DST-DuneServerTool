@@ -120,7 +120,63 @@ public static extern bool IsIconic(System.IntPtr hWnd);
 }
 
 # Version (one of the 5 sync'd constants; see persistent-notes.md)
-$script:DuneToolVersion = '10.1.8'
+$script:DuneToolVersion = '10.1.9'
+
+# ---------- Restart-on-detach handoff -----------------------------------------
+# When a prior "Web Portal" detach left the server running headless, the
+# non-elevated second-instance branch wrote restart-requested.flag and
+# elevated us. At this point we ARE the elevated child — we must stop the
+# prior elevated DuneServer.exe (which still holds the single-instance mutex
+# and is bound to port 47823) before our own mutex acquisition runs.
+#
+# We only act on the marker briefly after it was written, so a stale flag
+# from a crash can't poison normal launches.
+try {
+    $restartMarker = Join-Path $env:LOCALAPPDATA 'DuneServer\restart-requested.flag'
+    if (Test-Path -LiteralPath $restartMarker) {
+        $stale  = $true
+        $reqPid = 0
+        try {
+            $j = Get-Content -LiteralPath $restartMarker -Raw | ConvertFrom-Json
+            $age = (Get-Date) - ([DateTime]$j.requestedAt)
+            if ($age.TotalSeconds -lt 30) { $stale = $false }
+            if ($j.requestedByPid) { $reqPid = [int]$j.requestedByPid }
+        } catch { $stale = $true }
+
+        if (-not $stale) {
+            $self = $PID
+            try {
+                Get-Process -Name 'DuneServer' -ErrorAction SilentlyContinue | ForEach-Object {
+                    if ($_.Id -ne $self -and $_.Id -ne $reqPid) {
+                        try { Stop-Process -Id $_.Id -Force -ErrorAction SilentlyContinue } catch {}
+                    }
+                }
+            } catch { }
+            # Wait for the listener port to free up + the prior mutex to be
+            # released. Cheap polling; bail out after ~5s either way.
+            $deadline = (Get-Date).AddSeconds(5)
+            while ((Get-Date) -lt $deadline) {
+                $alive = @(Get-Process -Name 'DuneServer' -ErrorAction SilentlyContinue |
+                           Where-Object { $_.Id -ne $self -and $_.Id -ne $reqPid })
+                if ($alive.Count -eq 0) { break }
+                Start-Sleep -Milliseconds 200
+            }
+            # Also clear the detach marker — the prior server may have died
+            # before its own Stop-DuneConsoleLifecycle ran.
+            try {
+                $detFlag = Join-Path $env:LOCALAPPDATA 'DuneServer\detached.flag'
+                if (Test-Path -LiteralPath $detFlag) {
+                    Remove-Item -LiteralPath $detFlag -Force -ErrorAction SilentlyContinue
+                }
+            } catch { }
+            Write-DuneStartupLog "Restart-on-detach: stopped prior DuneServer processes, proceeding with fresh startup"
+        }
+
+        try { Remove-Item -LiteralPath $restartMarker -Force -ErrorAction SilentlyContinue } catch { }
+    }
+} catch {
+    Write-DuneStartupLog "Restart-on-detach handler failed: $($_.Exception.Message)"
+}
 
 # ---------- Single-instance gate ----------------------------------------------
 # Every click of the desktop shortcut runs DuneServer.exe again. Without a
@@ -140,11 +196,80 @@ try {
     $script:SingleInstanceOwned = $true
 }
 if (-not $script:SingleInstanceOwned) {
-    # Another instance is already running. Surface the portal again — in the
-    # standalone app window when enabled (default; DuneShell is itself single-
-    # instance so this just focuses the existing window), otherwise the browser.
-    # The Config/helper stack loads later, so decide inline here.
+    # Another instance is already running. Two scenarios:
+    #
+    #   * App window still alive (normal case): just surface the existing
+    #     portal — focus the DuneShell window when enabled (default; DuneShell
+    #     is itself single-instance, so this just focuses it), or reopen the
+    #     URL in the browser otherwise.
+    #
+    #   * No DuneShell alive (= a prior "Web Portal" detach left the server
+    #     running headless): the user clicked the shortcut to bring the app
+    #     window back. Treat this as kill-and-restart — drop a flag, then
+    #     elevate ourselves so the elevated child can Stop-Process the prior
+    #     (also-elevated) DuneServer.exe and proceed with a normal first-
+    #     instance startup (fresh listener, fresh token, fresh DuneShell).
     try {
+        $detachedFlag = Join-Path $env:LOCALAPPDATA 'DuneServer\detached.flag'
+        $isDetached   = $false
+        try { $isDetached = (Test-Path -LiteralPath $detachedFlag) } catch {}
+
+        # Detached state is only "real" while the prior server is actually up;
+        # a stale flag from a crash shouldn't trigger a restart loop. Probe by
+        # listing DuneShell.exe procs — a true detached console has none.
+        $shellAlive = $false
+        try {
+            $shellAlive = @(Get-Process -Name 'DuneShell' -ErrorAction SilentlyContinue).Count -gt 0
+        } catch { $shellAlive = $false }
+
+        if ($isDetached -and -not $shellAlive) {
+            # Tag the flag with our PID so the elevated child knows WHICH
+            # DuneServer.exe to kill (everyone-named-DuneServer-except-self
+            # is risky if the user has unrelated processes — though "DuneServer"
+            # is specific enough that in practice we'd be fine).
+            try {
+                $marker = Join-Path $env:LOCALAPPDATA 'DuneServer\restart-requested.flag'
+                $payload = @{
+                    requestedAt    = (Get-Date).ToString('o')
+                    requestedByPid = $PID
+                } | ConvertTo-Json -Compress
+                $markerDir = Split-Path -Parent $marker
+                if (-not (Test-Path -LiteralPath $markerDir)) {
+                    New-Item -ItemType Directory -Path $markerDir -Force | Out-Null
+                }
+                Set-Content -LiteralPath $marker -Value $payload -Encoding UTF8 -Force
+            } catch { }
+
+            # Release the mutex BEFORE the elevated child starts, so the child
+            # can acquire it after killing the prior detached server.
+            try {
+                if ($script:SingleInstanceMutex) {
+                    $script:SingleInstanceMutex.ReleaseMutex()
+                    $script:SingleInstanceMutex.Dispose()
+                    $script:SingleInstanceMutex = $null
+                    $script:SingleInstanceOwned = $false
+                }
+            } catch { }
+
+            $exePath = $null
+            try { $exePath = [System.Diagnostics.Process]::GetCurrentProcess().MainModule.FileName } catch { }
+            try {
+                if ($exePath -and ($exePath -like '*.exe') -and ($exePath -notlike '*pwsh.exe') -and ($exePath -notlike '*powershell.exe')) {
+                    Start-Process -FilePath $exePath -Verb RunAs | Out-Null
+                } else {
+                    $selfPath = $PSCommandPath
+                    if (-not $selfPath) { $selfPath = $exePath }
+                    $launcher = (Get-Command pwsh.exe -ErrorAction SilentlyContinue).Source
+                    if (-not $launcher) { $launcher = 'powershell.exe' }
+                    Start-Process -FilePath $launcher `
+                        -ArgumentList @('-NoProfile','-WindowStyle','Minimized','-ExecutionPolicy','Bypass','-File',"`"$selfPath`"") `
+                        -Verb RunAs | Out-Null
+                }
+            } catch { }
+            exit 0
+        }
+
+        # Normal "already running" path — surface the existing portal.
         $urlFile = Join-Path $env:LOCALAPPDATA 'DuneServer\last-url.txt'
         $u = if (Test-Path -LiteralPath $urlFile) { (Get-Content -LiteralPath $urlFile -Raw).Trim() } else { '' }
 

@@ -13,6 +13,31 @@ here cover everything those tags shipped.
 
 ## [Unreleased]
 
+## [10.1.9] - 2026-06-02
+
+### Changed
+- **Sidebar "Install as app" button is gone, replaced by "Web Portal".**
+  Dune Server Tool now ships as a real native app window (WebView2), so the
+  old PWA-install affordance was redundant. The new **Web Portal** button
+  (sidebar footer, visible only inside the native shell) opens the portal
+  in your default web browser, closes the app window, and **leaves the
+  server running in the background** so the browser tab keeps working with
+  no restart and no token rotation.
+
+### Added
+- **Detach + restore lifecycle.** A new `/api/portal/open-in-browser`
+  endpoint sets a detach flag the app-window watcher honors (so closing the
+  shell after "Web Portal" no longer stops the listener). Reopening Dune
+  Server Tool while a detached console is still running cleanly stops the
+  prior server and starts a fresh one (one UAC prompt, fresh token, fresh
+  app window) — no orphaned headless processes pile up across the day.
+
+### Fixed
+- WebView2 host bridge (`chrome.webview.postMessage`) is now wired into the
+  React portal so the page can ask the native shell to open URLs in the
+  default browser. Previously the shell only consumed `window.open`
+  intercepts via `NewWindowRequested`, which couldn't reach loopback URLs.
+
 ## [10.1.8] - 2026-06-02
 
 ### Added

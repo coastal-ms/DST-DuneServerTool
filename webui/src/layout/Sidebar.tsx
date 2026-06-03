@@ -3,17 +3,31 @@ import { useState } from 'react'
 import { Icon } from '../components/Icon'
 import { NAV_ITEMS, GROUP_LABELS } from '../nav'
 import { useUpdateCheck } from '../hooks/useUpdateCheck'
-import { useInstallPrompt } from '../hooks/useInstallPrompt'
 import { api } from '../api/client'
 import { getDuneAdminWebUrl } from '../api/duneAdmin'
 import { fmtToolVersion } from '../format'
 
+// WebView2 host bridge — present only when the portal is rendered inside the
+// native DuneShell.exe app window (not in a regular browser tab). We use it to
+// hand the shell an "open URL in default browser then close yourself" message
+// when the user clicks "Web Portal" below.
+type WebView2Host = { postMessage: (data: unknown) => void }
+function getWebView2(): WebView2Host | null {
+  const w = window as unknown as { chrome?: { webview?: WebView2Host } }
+  return w.chrome?.webview ?? null
+}
+
 export function Sidebar() {
   const { data: upd } = useUpdateCheck()
   const version = upd?.currentVersion ?? ''
-  const { canInstall, installed, install } = useInstallPrompt()
-  const [showHelp, setShowHelp] = useState(false)
+  const [showPortalConfirm, setShowPortalConfirm] = useState(false)
+  const [portalDetaching, setPortalDetaching] = useState(false)
+  const [portalError, setPortalError] = useState<string | null>(null)
   const [daLaunching, setDaLaunching] = useState(false)
+
+  // "Web Portal" is meaningful only inside the native shell. In a regular
+  // browser tab the user is already in their browser, so we hide the button.
+  const inShellWindow = getWebView2() !== null
 
   // Characters live in dune-admin (Icehunter's tool), not in this portal.
   // Launch dune-admin (skipped server-side if already running) then open its
@@ -40,12 +54,31 @@ export function Sidebar() {
     }
   }
 
-  const onInstallClick = async () => {
-    if (canInstall) {
-      const r = await install()
-      if (r === 'unavailable') setShowHelp(true)
-    } else {
-      setShowHelp(true)
+  const onOpenWebPortal = async () => {
+    if (portalDetaching) return
+    setPortalDetaching(true)
+    setPortalError(null)
+    try {
+      // Tell the server to flag itself as "intentionally detached" — the
+      // app-window watcher in ConsoleHost.ps1 reads this flag and skips the
+      // usual "shell exited -> stop listener" teardown. Server keeps running.
+      const r = await api<{ ok: boolean; url: string }>(
+        '/api/portal/open-in-browser', { method: 'POST' },
+      )
+      if (!r?.url) throw new Error('Server did not return a portal URL.')
+      const wv = getWebView2()
+      if (wv) {
+        wv.postMessage({ action: 'open-and-close', url: r.url })
+      } else {
+        // Browser fallback: just open the URL in a new tab. We can't close
+        // our own window from a regular browser tab.
+        window.open(r.url, '_blank', 'noopener')
+      }
+      setShowPortalConfirm(false)
+    } catch (e) {
+      setPortalError(e instanceof Error ? e.message : String(e))
+    } finally {
+      setPortalDetaching(false)
     }
   }
 
@@ -120,15 +153,15 @@ export function Sidebar() {
       </nav>
 
       <div className="px-4 py-3 border-t border-border text-[10px] text-text-dim space-y-2">
-        {!installed && (
+        {inShellWindow && (
           <button
             type="button"
-            onClick={() => { void onInstallClick() }}
-            title={canInstall ? 'Install Dune Server Tool as a desktop app' : 'How to install as a Chrome/Edge app'}
+            onClick={() => { setPortalError(null); setShowPortalConfirm(true) }}
+            title="Open the portal in your default web browser and close this app window"
             className="w-full flex items-center justify-center gap-1.5 px-2 py-1.5 rounded-md border border-accent/30 text-accent-bright/90 hover:text-accent-bright hover:bg-accent/10 hover:border-accent/50 transition-colors uppercase tracking-widest"
           >
-            <Icon name="Download" size={11} />
-            <span>Install as app</span>
+            <Icon name="ExternalLink" size={11} />
+            <span>Web Portal</span>
           </button>
         )}
         <div className="flex items-center justify-between">
@@ -137,48 +170,48 @@ export function Sidebar() {
         </div>
       </div>
 
-      {showHelp && (
+      {showPortalConfirm && (
         <div
           className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4"
-          onClick={() => setShowHelp(false)}
+          onClick={() => { if (!portalDetaching) setShowPortalConfirm(false) }}
         >
           <div
             className="card p-5 max-w-md w-full text-text"
             onClick={e => e.stopPropagation()}
           >
             <div className="flex items-center gap-2 mb-3">
-              <Icon name="Download" size={16} className="text-accent" />
-              <h3 className="text-sm font-semibold uppercase tracking-widest text-accent">Install as app</h3>
+              <Icon name="ExternalLink" size={16} className="text-accent" />
+              <h3 className="text-sm font-semibold uppercase tracking-widest text-accent">Open in web browser</h3>
             </div>
-            <p className="text-sm text-text-muted mb-3">
-              Run the portal in its own dedicated window without browser tabs or address bar.
+            <p className="text-sm text-text-muted mb-2">
+              The Dune Server Tool <strong>app window will close</strong> and the portal will open in your <strong>default web browser</strong>.
             </p>
-            <div className="space-y-3 text-xs">
-              <div>
-                <div className="font-semibold text-text mb-1">Chrome</div>
-                <p className="text-text-muted">
-                  Click the <span className="font-mono">⋮</span> menu (top-right) → <span className="text-text">Cast, save, and share</span> → <span className="text-text">Install page as app…</span>
-                </p>
+            <p className="text-sm text-text-muted mb-2">
+              Your server keeps running in the background — the browser tab will work normally.
+            </p>
+            <p className="text-sm text-text-muted">
+              Reopen Dune Server Tool any time to bring the app window back (the running server will be restarted).
+            </p>
+            {portalError && (
+              <div className="mt-3 text-xs text-red-400 bg-red-950/40 border border-red-900/60 rounded px-3 py-2">
+                {portalError}
               </div>
-              <div>
-                <div className="font-semibold text-text mb-1">Edge</div>
-                <p className="text-text-muted">
-                  Click the <span className="font-mono">⋯</span> menu (top-right) → <span className="text-text">Apps</span> → <span className="text-text">Install Dune Server Tool</span>
-                </p>
-              </div>
-              <div>
-                <div className="font-semibold text-text mb-1">Address bar shortcut</div>
-                <p className="text-text-muted">
-                  Look for the install icon (<span className="font-mono">⊕</span> or a small monitor icon) on the right side of the address bar and click it.
-                </p>
-              </div>
-            </div>
-            <div className="mt-4 flex justify-end">
+            )}
+            <div className="mt-4 flex justify-end gap-2">
               <button
                 className="btn-secondary"
-                onClick={() => setShowHelp(false)}
+                onClick={() => setShowPortalConfirm(false)}
+                disabled={portalDetaching}
               >
-                <Icon name="X" size={12} /> Close
+                <Icon name="X" size={12} /> Cancel
+              </button>
+              <button
+                className="btn-primary"
+                onClick={() => { void onOpenWebPortal() }}
+                disabled={portalDetaching}
+              >
+                <Icon name={portalDetaching ? 'Loader2' : 'ExternalLink'} size={12} className={portalDetaching ? 'animate-spin' : ''} />
+                {portalDetaching ? 'Opening…' : 'Open in browser'}
               </button>
             </div>
           </div>
