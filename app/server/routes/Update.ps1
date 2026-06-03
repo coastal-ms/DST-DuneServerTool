@@ -40,10 +40,14 @@ function Get-DuneLatestRelease {
         $headers = @{ 'User-Agent' = $script:DuneUpdateUA; 'Accept' = 'application/vnd.github+json' }
         $uri = "https://api.github.com/repos/$($script:DuneUpdateRepo)/releases/latest"
         $rel = Invoke-RestMethod -Uri $uri -Headers $headers -TimeoutSec 15 -ErrorAction Stop
-        $asset = $rel.assets | Where-Object { $_.name -like 'DuneServerSetup*.exe' } | Select-Object -First 1
-        if (-not $asset) {
-            $asset = $rel.assets | Where-Object { $_.name -like '*.exe' } | Select-Object -First 1
-        }
+        # Strict: the release rule requires `DuneServerSetup.exe` as the sole
+        # asset. Match it exactly. Do NOT fall back to "any *.exe" - that
+        # masked malformed releases historically and conflicts with the
+        # one-asset rule. If a release ships a differently-named installer
+        # by mistake, the UI will correctly show "available, no installer
+        # attached" with a release-page link, instead of silently treating
+        # the wrong file as the installer.
+        $asset = $rel.assets | Where-Object { $_.name -eq 'DuneServerSetup.exe' } | Select-Object -First 1
         $script:DuneUpdateCache = [pscustomobject]@{
             fetchedAt    = $now
             tag          = [string]$rel.tag_name
@@ -88,9 +92,26 @@ Register-DuneRoute -Method GET -Path '/api/update/check' -Handler {
             return
         }
         $diff      = Compare-DuneSemver -A $rel.tag -B $current
-        $available = ($diff -gt 0) -and ([string]::IsNullOrEmpty($rel.assetUrl) -eq $false)
+        # `available` means a newer release exists (independent of whether an
+        # installer asset is attached). `installable` is the stricter flag:
+        # newer release AND the installer .exe is uploaded so the in-app
+        # auto-updater can actually run it.
+        #
+        # Background: every DST release MUST upload `DuneServerSetup.exe` as
+        # its only asset (hard project rule). If a release is ever published
+        # without one, we still want the UI to alert the user that an update
+        # exists - just with a "no installer attached" notice and a link to
+        # the release page instead of an "Update now" button. We do NOT want
+        # the UI to silently report "up to date" while a newer tag is live;
+        # that's what happened with v10.1.12 (shipped asset-less) and is the
+        # bug this split fixes.
+        $available    = ($diff -gt 0)
+        $hasAsset     = -not [string]::IsNullOrEmpty($rel.assetUrl)
+        $installable  = $available -and $hasAsset
         Write-DuneJson -Response $res -Body @{
             available       = $available
+            installable     = $installable
+            assetMissing    = ($available -and -not $hasAsset)
             currentVersion  = $current
             latestVersion   = ($rel.tag -replace '^v','')
             tagName         = $rel.tag
