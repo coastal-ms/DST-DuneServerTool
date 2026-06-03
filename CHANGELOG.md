@@ -13,6 +13,41 @@ here cover everything those tags shipped.
 
 ## [Unreleased]
 
+## [10.1.11] - 2026-06-03
+
+### Fixed
+- **Battlegroup no longer shows a bare "Unknown" when SSH fails — the Dashboard
+  now tells you _why_.** The status snapshot runs `battlegroup status` over a
+  non-interactive (`BatchMode=yes`) SSH session. Previously, if that SSH call
+  failed (auth rejected, key passphrase-protected, VM still booting) the error
+  was swallowed (`LogLevel=QUIET`, stderr merged into stdout) and the UI just
+  showed **Unknown** with no explanation. `Get-DuneBattlegroupSnapshot` now
+  captures ssh's stderr separately, checks the exit code, and surfaces an
+  actionable `reason` that the Dashboard already renders under the battlegroup
+  status. (coastal-ms/DST-DuneServerTool#38)
+- **Passphrase-protected SSH keys are now detected and called out.** This is the
+  classic "I can open an SSH terminal and restart the battlegroup, but the
+  dashboard / Server Health / game-data all show nothing" trap: an interactive
+  SSH session can prompt for the key passphrase, but the tool's background
+  checks run non-interactively and can't. The Setup preflight **"SSH key
+  authorized on VM"** check and the Dashboard status message now explicitly say
+  the key is passphrase-protected and how to fix it (Rotate SSH Key, or
+  `ssh-keygen -p`). New helpers `Test-DuneSshKeyEncrypted` and
+  `Get-DuneSshFailureReason` in `app/server/lib/Status.ps1`.
+
+### Changed
+- **Bug-report template (the in-app **?** help button) now covers VM/SSH
+  diagnostics and tells you exactly where to find them.** The template used to
+  tell users *not* to report any SSH/VM-connectivity problem — which hid the
+  very class of issue the tool now diagnoses. It now: (1) says to report when the
+  Dashboard shows the battlegroup as **Unknown** with a message or the Setup
+  "SSH key" check fails; (2) adds a **Connection / VM status message** field with
+  step-by-step "where to find it" pointers (Dashboard card, Setup "Re-run
+  checks", Settings → SSH Key); and (3) adds a one-click **"Does an interactive
+  SSH terminal still work?"** question that distinguishes a passphrase-protected
+  key from an unauthorized one. The CLI `report-issue` wording and the legacy
+  Markdown template were updated to match.
+
 ## [10.1.10] - 2026-06-02
 
 ### Fixed

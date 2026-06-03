@@ -2209,9 +2209,12 @@ while ($true) {
         Write-Host ""
         Write-Host "=== Report an Issue ===" -ForegroundColor Cyan
         Write-Host "  Opening a prefilled bug report in your browser." -ForegroundColor DarkGray
-        Write-Host "  This tracker is for bugs in the TOOL ITSELF -" -ForegroundColor Yellow
-        Write-Host "  not for VM connectivity, Hyper-V, port forwarding, or Funcom server issues." -ForegroundColor Yellow
-        Write-Host "  For those, ping @allcoast on Discord." -ForegroundColor DarkGray
+        Write-Host "  This tracker is for bugs in the TOOL ITSELF (the app/CLI)," -ForegroundColor Yellow
+        Write-Host "  including the diagnostics it shows you (Dashboard battlegroup" -ForegroundColor Yellow
+        Write-Host "  status, Setup 'SSH key' checks, Server Health). If you see one" -ForegroundColor Yellow
+        Write-Host "  of those messages, copy it into the report." -ForegroundColor Yellow
+        Write-Host "  Not for raw router/port-forwarding or Funcom game-server issues -" -ForegroundColor Yellow
+        Write-Host "  for those, ping @allcoast on Discord." -ForegroundColor DarkGray
         Write-Host ""
 
         # GitHub issue forms accept URL params keyed by the input id in the
