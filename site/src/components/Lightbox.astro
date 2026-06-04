@@ -1,0 +1,86 @@
+---
+// Shared full-screen image viewer used by <Screenshot /> components.
+// Any element with [data-lightbox-trigger] + [data-lightbox-src] opens this
+// dialog with the larger image. Close on backdrop click, ESC, or close button.
+---
+
+<dialog
+  id="dst-lightbox"
+  class="w-screen h-screen max-w-none max-h-none m-0 p-0 bg-transparent backdrop:bg-black/85 backdrop:backdrop-blur-sm"
+  aria-label="Image viewer"
+>
+  <div class="relative w-full h-full flex items-center justify-center p-4 sm:p-8">
+    <button
+      type="button"
+      data-lightbox-close
+      aria-label="Close image viewer"
+      class="absolute top-4 right-4 z-10 rounded-full bg-dune-surface/90 hover:bg-dune-surface text-dune-text w-10 h-10 flex items-center justify-center border border-dune-border focus:outline-none focus-visible:ring-2 focus-visible:ring-dune-accent"
+    >
+      <svg viewBox="0 0 24 24" class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+        <path d="M6 6l12 12M18 6L6 18" stroke-linecap="round" />
+      </svg>
+    </button>
+    <img
+      id="dst-lightbox-img"
+      alt=""
+      class="max-w-full max-h-full object-contain rounded-lg shadow-2xl shadow-black/60"
+    />
+  </div>
+</dialog>
+
+<script>
+  const dialog = document.getElementById("dst-lightbox") as HTMLDialogElement | null;
+  const img = document.getElementById("dst-lightbox-img") as HTMLImageElement | null;
+
+  if (dialog && img) {
+    const open = (src: string, alt: string) => {
+      img.src = src;
+      img.alt = alt;
+      if (typeof dialog.showModal === "function") {
+        dialog.showModal();
+      } else {
+        dialog.setAttribute("open", "");
+      }
+      document.documentElement.style.overflow = "hidden";
+    };
+
+    const close = () => {
+      if (dialog.open) dialog.close();
+      document.documentElement.style.overflow = "";
+      // Drop the src so the image isn't held in memory while closed.
+      img.removeAttribute("src");
+      img.alt = "";
+    };
+
+    document.addEventListener("click", (e) => {
+      const target = e.target as HTMLElement | null;
+      if (!target) return;
+      const trigger = target.closest<HTMLElement>("[data-lightbox-trigger]");
+      if (trigger) {
+        const src = trigger.getAttribute("data-lightbox-src");
+        const alt = trigger.getAttribute("data-lightbox-alt") ?? "";
+        if (src) {
+          e.preventDefault();
+          open(src, alt);
+        }
+        return;
+      }
+      if (target.closest("[data-lightbox-close]")) {
+        close();
+      }
+    });
+
+    // Click on the backdrop (outside the inner flex container) closes too.
+    dialog.addEventListener("click", (e) => {
+      if (e.target === dialog) close();
+    });
+
+    // Native dialog ESC fires a `cancel` event then `close`; make sure we
+    // restore body scroll and clear the src.
+    dialog.addEventListener("close", () => {
+      document.documentElement.style.overflow = "";
+      img.removeAttribute("src");
+      img.alt = "";
+    });
+  }
+</script>

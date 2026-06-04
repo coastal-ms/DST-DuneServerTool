@@ -7,11 +7,21 @@ const { src, alt, caption } = Astro.props as {
 ---
 
 <figure class="my-8">
-  <div
-    class="overflow-hidden rounded-lg border border-dune-border bg-dune-surface"
+  <button
+    type="button"
+    data-lightbox-trigger
+    data-lightbox-src={src}
+    data-lightbox-alt={alt}
+    aria-label={`Open larger view: ${alt}`}
+    class="group block w-full overflow-hidden rounded-lg border border-dune-border bg-dune-surface cursor-zoom-in focus:outline-none focus-visible:ring-2 focus-visible:ring-dune-accent"
   >
-    <img src={src} alt={alt} loading="lazy" class="w-full h-auto" />
-  </div>
+    <img
+      src={src}
+      alt={alt}
+      loading="lazy"
+      class="w-full h-auto transition-transform duration-200 group-hover:scale-[1.01]"
+    />
+  </button>
   {caption && (
     <figcaption class="mt-2 text-sm text-dune-muted">{caption}</figcaption>
   )}
