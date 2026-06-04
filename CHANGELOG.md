@@ -13,6 +13,14 @@ here cover everything those tags shipped.
 
 ## [Unreleased]
 
+## [10.2.4] - 2026-06-03
+
+### Changed
+- **Help dropdown** in the top menu bar moved from the right edge to
+  immediately right of `System` (the last sidebar group). Removed the
+  flex spacer that pushed it to the far right; the dropdown panel now
+  anchors `left-0` so it opens directly under the Help button.
+
 ## [10.2.3] - 2026-06-03
 
 ### Changed
