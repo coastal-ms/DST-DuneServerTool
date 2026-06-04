@@ -1,0 +1,36 @@
+---
+import { marked } from "marked";
+import Base from "../layouts/Base.astro";
+import PageHeader from "../components/PageHeader.astro";
+import { getChangelog } from "../lib/changelog";
+
+const raw = await getChangelog();
+const html = marked.parse(raw, { gfm: true, breaks: false });
+---
+
+<Base
+  title="Changelog — DST"
+  description="Release history for the Dune Server Tool."
+>
+  <PageHeader
+    eyebrow="History"
+    title="Changelog"
+    intro="Rendered from the repository's CHANGELOG.md on every build."
+  />
+
+  <section class="mx-auto max-w-3xl px-6 pb-20">
+    <article
+      class="prose prose-invert max-w-none
+             prose-headings:text-dune-text prose-headings:font-semibold
+             prose-h1:hidden
+             prose-h2:text-2xl prose-h2:mt-12 prose-h2:mb-4 prose-h2:pb-2 prose-h2:border-b prose-h2:border-dune-border
+             prose-h3:text-lg prose-h3:mt-8
+             prose-a:text-dune-accent hover:prose-a:text-dune-accent-soft prose-a:no-underline
+             prose-code:text-dune-accent-soft prose-code:bg-dune-surface prose-code:px-1 prose-code:rounded prose-code:before:content-none prose-code:after:content-none
+             prose-strong:text-dune-text
+             prose-li:text-dune-muted prose-p:text-dune-muted
+             prose-hr:border-dune-border"
+      set:html={html}
+    />
+  </section>
+</Base>

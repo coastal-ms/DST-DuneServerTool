@@ -1,0 +1,23 @@
+---
+const { title, eyebrow, intro } = Astro.props as {
+  title: string;
+  eyebrow?: string;
+  intro?: string;
+};
+---
+
+<section class="mx-auto max-w-6xl px-6 pt-16 pb-10">
+  {eyebrow && (
+    <div class="font-mono text-xs uppercase tracking-widest text-dune-accent mb-3">
+      {eyebrow}
+    </div>
+  )}
+  <h1 class="text-4xl sm:text-5xl font-semibold tracking-tight text-dune-text">
+    {title}
+  </h1>
+  {intro && (
+    <p class="mt-4 max-w-2xl text-lg text-dune-muted leading-relaxed">
+      {intro}
+    </p>
+  )}
+</section>
