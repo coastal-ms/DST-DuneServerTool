@@ -13,6 +13,40 @@ here cover everything those tags shipped.
 
 ## [Unreleased]
 
+## [10.2.8] - 2026-06-04
+
+### Added
+- **Map SpinUp page: "Fix partitions" button.** New action in the page header
+  invokes the existing `POST /api/maps/fix-partitions` endpoint (which runs
+  the remote `/etc/local.d/dune-clear-partitions.start` script) to clear the
+  stuck `igwsss.spec.partitions=[N]` pin that occasionally re-appears on the
+  on-demand maps (Deep Desert, Arrakeen, Harko Village) after a VM/BG reboot
+  or operator reconcile. Without clearing, the director can't trigger
+  scale-up on player entry and the map silently refuses to launch even with
+  its SpinUp checkbox enabled. The button shows a confirmation dialog
+  explaining what will happen, then renders the script's log tail in the
+  result card so the operator can see exactly which maps were cleared or
+  skipped. Safety guards (already enforced server-side by the remote script):
+  only the 3 on-demand maps are ever touched — Overmap and Survival_1 are
+  excluded by suffix matching — and any map with a running pod is skipped
+  so live sessions are never disturbed.
+
+### Changed
+- **Boot script `/etc/local.d/dune-clear-partitions.start` hardened on the
+  VM** (manual install — not part of this app release, documented here for
+  history). The pre-existing script waited for the K3s API and the `igwsss`
+  CRD to be reachable before proceeding, but in some boot scenarios the CRD
+  is registered seconds before the Funcom server-operator finishes
+  reconciling the battlegroup and creating the per-map `ServerSetScale`
+  instances. The script would log "no igwsss objects found; nothing to do"
+  and exit, leaving DD/Arrakeen/Harko with `partitions:[N]` pre-pinned by
+  the operator a few moments later. Added a second wait loop (up to 5 min)
+  that polls for at least one expected map igwsss object to actually exist
+  before deciding the BG has nothing to clean. Old version preserved at
+  `/etc/local.d/dune-clear-partitions.start.bak.20260604`. Cron watchdog
+  (`/etc/periodic/15min/dune-clear-partitions`) is unchanged and continues
+  to act as belt-and-suspenders.
+
 ## [10.2.7] - 2026-06-04
 
 ### Changed
