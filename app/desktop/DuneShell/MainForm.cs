@@ -9,7 +9,6 @@ namespace DuneShell;
 internal sealed class MainForm : Form
 {
     private readonly WebView2 _web = new();
-    private readonly MenuStrip _menu = new();
     private readonly Label _status = new();
 
     private readonly string? _initialUrl;
@@ -37,44 +36,12 @@ internal sealed class MainForm : Form
 
         FormClosing += (_, _) => SaveWindowState();
 
-        // Add order matters for docking: the Fill controls (WebView, status)
-        // must sit BEHIND the Top-docked menu so the menu reserves the top
-        // strip instead of the WebView painting underneath it.
+        // The React portal owns its own top menu bar, so the native window has
+        // just the WebView and a transient status label — no MenuStrip.
         BuildWebView();
         BuildStatus();
-        BuildMenu();
 
         Load += async (_, _) => await InitializeAsync();
-    }
-
-    private void BuildMenu()
-    {
-        _menu.RenderMode = ToolStripRenderMode.System;
-
-        var serverHealth = new ToolStripMenuItem("Server Health");
-        serverHealth.Click += (_, _) => NavigateRoute("/");
-
-        var settings = new ToolStripMenuItem("Settings");
-        settings.Click += (_, _) => NavigateRoute("/settings");
-
-        var view = new ToolStripMenuItem("View");
-        var reload = new ToolStripMenuItem("Reload") { ShortcutKeys = Keys.F5 };
-        reload.Click += (_, _) => _web.CoreWebView2?.Reload();
-        var openExternal = new ToolStripMenuItem("Open in browser");
-        openExternal.Click += (_, _) =>
-        {
-            var src = _web.Source?.ToString();
-            if (!string.IsNullOrEmpty(src)) OpenExternal(src);
-        };
-        view.DropDownItems.Add(reload);
-        view.DropDownItems.Add(openExternal);
-
-        _menu.Items.Add(serverHealth);
-        _menu.Items.Add(settings);
-        _menu.Items.Add(view);
-
-        MainMenuStrip = _menu;
-        Controls.Add(_menu);
     }
 
     private void BuildStatus()
@@ -259,21 +226,6 @@ internal sealed class MainForm : Form
             // WebMessageReceived handler can return cleanly first.
             BeginInvoke(new Action(() => { try { Close(); } catch { } }));
         }
-    }
-
-    /// <summary>
-    /// Navigate within the SPA without a server round-trip. The portal uses
-    /// react-router BrowserRouter, so pushState + a synthetic popstate makes it
-    /// switch routes client-side — no dependency on server SPA fallback.
-    /// </summary>
-    private async void NavigateRoute(string path)
-    {
-        var core = _web.CoreWebView2;
-        if (core == null) return;
-        string js =
-            "(function(){try{history.pushState({},'','" + path + "');" +
-            "window.dispatchEvent(new PopStateEvent('popstate'));}catch(e){location.pathname='" + path + "';}})();";
-        await core.ExecuteScriptAsync(js);
     }
 
     private static void OpenExternal(string url)
