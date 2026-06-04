@@ -14,8 +14,9 @@ type Props = {
 
 // Classic Windows-style top menu bar. Each group from the sidebar (Server
 // Health, PowerShell, Game Data, Database, System) appears here as a dropdown
-// listing its pages, plus a rightmost "Help" dropdown for cross-cutting
-// commands like "Create GitHub Issue" and the sidebar collapse toggle.
+// listing its pages, plus a "Help" dropdown immediately to the right of
+// System for cross-cutting commands like "Create GitHub Issue" and the
+// sidebar collapse toggle.
 export function MenuBar({ sidebarCollapsed, onToggleSidebar }: Props) {
   const navigate = useNavigate()
   const location = useLocation()
@@ -111,9 +112,7 @@ export function MenuBar({ sidebarCollapsed, onToggleSidebar }: Props) {
         )
       })}
 
-      {/* Spacer pushes Help to the right edge. */}
-      <div className="flex-1" />
-
+      {/* Help sits immediately to the right of the last group (System). */}
       <div className="relative">
         <button
           type="button"
@@ -128,7 +127,7 @@ export function MenuBar({ sidebarCollapsed, onToggleSidebar }: Props) {
           Help
         </button>
         {open === 'help' && (
-          <div className="absolute right-0 top-full mt-1 min-w-[220px] bg-surface border border-border rounded-xl p-1 shadow-xl shadow-black/40 z-50">
+          <div className="absolute left-0 top-full mt-1 min-w-[220px] bg-surface border border-border rounded-xl p-1 shadow-xl shadow-black/40 z-50">
             <a
               href={issueHref}
               target="_blank"
