@@ -1,0 +1,128 @@
+---
+import Base from "../layouts/Base.astro";
+import PageHeader from "../components/PageHeader.astro";
+import DownloadButton from "../components/DownloadButton.astro";
+---
+
+<Base
+  title="Install — DST"
+  description="Requirements and quick install for the Dune Server Tool."
+>
+  <PageHeader
+    eyebrow="Install"
+    title="Quick install"
+    intro="DST is a single Windows installer. One UAC prompt (Hyper-V needs admin) and you're up."
+  />
+
+  <section class="mx-auto max-w-3xl px-6 pb-12">
+    <div class="rounded-xl border border-dune-border bg-dune-surface p-8 mb-12">
+      <ol class="space-y-5 text-dune-text">
+        <li class="flex gap-4">
+          <span
+            class="shrink-0 w-7 h-7 rounded-full bg-dune-accent text-dune-bg font-semibold flex items-center justify-center text-sm"
+            >1</span
+          >
+          <div>
+            Download <span class="font-mono">DuneServerSetup.exe</span> from
+            the latest release.
+            <div class="mt-3">
+              <DownloadButton />
+            </div>
+          </div>
+        </li>
+        <li class="flex gap-4">
+          <span
+            class="shrink-0 w-7 h-7 rounded-full bg-dune-accent text-dune-bg font-semibold flex items-center justify-center text-sm"
+            >2</span
+          >
+          <div>
+            Double-click. The installer walks you through it — one UAC
+            prompt, then a Start Menu shortcut at
+            <span class="font-mono text-dune-muted"
+              >C:\Program Files\Dune Server\</span
+            >.
+          </div>
+        </li>
+        <li class="flex gap-4">
+          <span
+            class="shrink-0 w-7 h-7 rounded-full bg-dune-accent text-dune-bg font-semibold flex items-center justify-center text-sm"
+            >3</span
+          >
+          <div>
+            Launch from <strong>Start Menu → Dune Server</strong>. The first
+            launch opens the Setup Wizard, which asks for your server install
+            folder, SSH key, and optional dune-admin path. Answers are saved
+            to
+            <span class="font-mono text-dune-muted">%APPDATA%\DuneServer\</span
+            >
+            and survive reinstalls.
+          </div>
+        </li>
+      </ol>
+    </div>
+
+    <h2 class="text-2xl font-semibold mb-4">What you need</h2>
+    <ul class="space-y-3 text-dune-muted leading-relaxed mb-12">
+      <li>
+        <strong class="text-dune-text">Windows 10 / 11</strong> with Hyper-V
+        enabled (Pro / Enterprise / Education editions).
+      </li>
+      <li>
+        <strong class="text-dune-text">PowerShell 7</strong> (<span
+          class="font-mono">pwsh</span
+        >). The launcher prompts with a download link if missing.
+      </li>
+      <li>
+        <strong class="text-dune-text">Microsoft Edge WebView2 Runtime</strong> —
+        ships with Windows 11 and modern Windows 10. Falls back to your
+        default browser if absent.
+      </li>
+      <li>
+        <strong class="text-dune-text"
+          >Dune: Awakening Self-Hosted Server</strong
+        > installed via Steam (provides the battlegroup-management folder and
+        the Hyper-V VM image).
+      </li>
+      <li>
+        <strong class="text-dune-text">SSH private key</strong> for your VM —
+        created automatically during Funcom's official self-hosted setup;
+        usually at
+        <span class="font-mono text-sm">%LOCALAPPDATA%\DuneAwakeningServer\sshKey</span
+        >.
+      </li>
+      <li>
+        <strong class="text-dune-text">(Optional)</strong>
+        <a
+          href="https://github.com/icehunter/dune-admin"
+          rel="noopener"
+          class="underline decoration-dotted hover:text-dune-text"
+          >dune-admin</a
+        >
+        — community admin panel for player and inventory tooling. Launches
+        from the Commands page if you point DST at its install path.
+      </li>
+    </ul>
+
+    <h2 class="text-2xl font-semibold mb-4">Where things live</h2>
+    <div
+      class="rounded-lg border border-dune-border bg-dune-surface overflow-hidden text-sm"
+    >
+      <dl class="divide-y divide-dune-border">
+        <div class="grid grid-cols-[1fr_2fr] gap-4 px-5 py-3">
+          <dt class="text-dune-muted">Install dir</dt>
+          <dd class="font-mono text-dune-text">C:\Program Files\Dune Server\</dd>
+        </div>
+        <div class="grid grid-cols-[1fr_2fr] gap-4 px-5 py-3">
+          <dt class="text-dune-muted">Config &amp; state</dt>
+          <dd class="font-mono text-dune-text">%APPDATA%\DuneServer\</dd>
+        </div>
+        <div class="grid grid-cols-[1fr_2fr] gap-4 px-5 py-3">
+          <dt class="text-dune-muted">Local portal</dt>
+          <dd class="font-mono text-dune-text">
+            http://127.0.0.1:&lt;port&gt;/?t=&lt;token&gt;
+          </dd>
+        </div>
+      </dl>
+    </div>
+  </section>
+</Base>

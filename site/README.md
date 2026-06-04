@@ -1,0 +1,85 @@
+# DST Site
+
+Marketing + docs site for the Dune Server Tool. Built with **Astro 5 + React-free islands + Tailwind v4**, designed to deploy as a static site to GitHub Pages (or anywhere that serves a folder of HTML).
+
+This site lives inside the main `DST-DuneServerTool` repo so that:
+
+- Screenshots in `../docs/img/` and the canonical `../CHANGELOG.md` are pulled in at build time — no duplication, the site always reflects what's in the repo.
+- The download button auto-resolves to the latest `DuneServerSetup.exe` via the GitHub Releases API at build time, so a new release picks up the link without a code change.
+
+## Local dev
+
+Requires **Node 20 or 22** (Astro 5 requirement).
+
+```powershell
+cd site
+npm install
+npm run dev
+```
+
+Then open <http://localhost:4321/DST-DuneServerTool/> (the `/DST-DuneServerTool/` base path matches the eventual GitHub Pages URL; set `SITE_BASE=/` in env if you switch to a custom domain).
+
+The `predev` and `prebuild` hooks copy `../docs/img/*.png` into `public/screenshots/` (gitignored) so the screenshots referenced by the pages exist locally.
+
+## Build / preview
+
+```powershell
+npm run build
+npm run preview
+```
+
+`dist/` contains the deployable static site.
+
+## Environment knobs
+
+| Env var       | Default                                  | Purpose                                                            |
+| ------------- | ---------------------------------------- | ------------------------------------------------------------------ |
+| `SITE_URL`    | `https://coastal-ms.github.io`           | Origin used for canonical URLs and OG tags.                        |
+| `SITE_BASE`   | `/DST-DuneServerTool/`                   | Path prefix (matches the project-pages URL). Set to `/` on apex.   |
+| `GITHUB_TOKEN`| _(none)_                                 | Optional — raises the GitHub API rate limit during the release fetch. |
+
+## Pages
+
+| Route         | Source                                | Notes                                              |
+| ------------- | ------------------------------------- | -------------------------------------------------- |
+| `/`           | `src/pages/index.astro`               | Hero + 3 feature cards + capability checklist.     |
+| `/features`   | `src/pages/features.astro`            | Page-by-page tour using `docs/img/` screenshots.   |
+| `/install`    | `src/pages/install.astro`             | Quick install + requirements + path table.         |
+| `/changelog`  | `src/pages/changelog.astro`           | Renders `../CHANGELOG.md` at build time.           |
+| `/about`      | `src/pages/about.astro`               | Author bio, stack summary, soft consulting note.   |
+
+## Folder layout
+
+```
+site/
+├── astro.config.mjs      Astro config (Tailwind plugin, base path)
+├── package.json
+├── tsconfig.json
+├── public/
+│   ├── favicon.svg
+│   └── screenshots/      auto-synced from ../docs/img (gitignored)
+├── scripts/
+│   └── sync-images.mjs   prebuild hook
+└── src/
+    ├── components/
+    │   ├── DownloadButton.astro
+    │   ├── PageHeader.astro
+    │   └── Screenshot.astro
+    ├── layouts/
+    │   └── Base.astro    site shell (header, footer, OG tags)
+    ├── lib/
+    │   ├── changelog.ts  reads ../CHANGELOG.md
+    │   └── release.ts    fetches GitHub release info at build time
+    ├── pages/            (see table above)
+    └── styles/
+        └── global.css    Tailwind v4 entry + design tokens
+```
+
+## Deployment
+
+A GitHub Actions workflow will be added once the site content is locked in. The general plan is: on push to `main` or release tag, build → upload `dist/` → publish to GitHub Pages. Until then, deploy manually if needed:
+
+```powershell
+npm run build
+# upload dist/ wherever
+```

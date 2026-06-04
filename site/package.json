@@ -1,0 +1,25 @@
+{
+  "name": "dst-site",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "sync:images": "node scripts/sync-images.mjs",
+    "predev": "npm run sync:images",
+    "prebuild": "npm run sync:images",
+    "dev": "astro dev",
+    "build": "astro build",
+    "preview": "astro preview",
+    "check": "astro check"
+  },
+  "dependencies": {
+    "@astrojs/check": "^0.9.4",
+    "@astrojs/mdx": "^4.0.3",
+    "@tailwindcss/typography": "^0.5.16",
+    "@tailwindcss/vite": "^4.0.0",
+    "astro": "^5.1.0",
+    "marked": "^15.0.6",
+    "tailwindcss": "^4.0.0",
+    "typescript": "~5.7.2"
+  }
+}

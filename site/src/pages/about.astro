@@ -1,0 +1,67 @@
+---
+import Base from "../layouts/Base.astro";
+import PageHeader from "../components/PageHeader.astro";
+---
+
+<Base
+  title="About — DST"
+  description="About the Dune Server Tool and its author."
+>
+  <PageHeader
+    eyebrow="About"
+    title="About DST"
+    intro="A side project that grew up."
+  />
+
+  <section class="mx-auto max-w-3xl px-6 pb-20 space-y-8 text-dune-muted leading-relaxed">
+    <p>
+      DST started as a handful of PowerShell helpers wrapping <code
+        class="font-mono text-dune-accent-soft bg-dune-surface px-1 rounded"
+        >kubectl</code
+      > calls into a Dune: Awakening self-hosted VM. Over time it grew into a
+      full local web portal — a single Windows app that owns the workflow of
+      running, editing, backing up, and updating a Dune dedicated server
+      without ever opening a raw SSH shell or hand-editing YAML.
+    </p>
+
+    <p>
+      It's built and maintained by <strong class="text-dune-text">Coastal</strong
+      > (Discord <span class="font-mono text-dune-text">@allcoast</span>),
+      released under the Apache 2.0 license, and lives on GitHub at
+      <a
+        href="https://github.com/coastal-ms/DST-DuneServerTool"
+        rel="noopener"
+        class="text-dune-accent hover:text-dune-accent-soft"
+        >coastal-ms/DST-DuneServerTool</a
+      >. Bug reports, PRs, and forks are welcome — see <code
+        class="font-mono text-dune-accent-soft bg-dune-surface px-1 rounded"
+        >CONTRIBUTING.md</code
+      > for the change-control workflow.
+    </p>
+
+    <h2 class="text-xl font-semibold text-dune-text pt-4">
+      How it's put together
+    </h2>
+    <p>
+      The native app shell is a Windows WebView2 host that loads a React +
+      TypeScript + Tailwind frontend served by a local PowerShell HTTP +
+      WebSocket server. The backend automates a Hyper-V VM over SSH, talks
+      to a K3s cluster via <code
+        class="font-mono text-dune-accent-soft bg-dune-surface px-1 rounded"
+        >kubectl</code
+      >, and reaches into the game's PostgreSQL database directly via <code
+        class="font-mono text-dune-accent-soft bg-dune-surface px-1 rounded"
+        >psql</code
+      >. The installer is built with Inno Setup; CI runs on GitHub Actions; and
+      the in-app updater pulls the next release straight from the Releases API.
+    </p>
+
+    <p class="text-sm pt-8 border-t border-dune-border">
+      Coastal is occasionally open to small consulting projects involving
+      Windows tooling, server automation, or game-server operations — reach
+      out on Discord (<span class="font-mono text-dune-text">@allcoast</span
+      >) if that's relevant. No formal pitch, no rate card; just a quick
+      chat.
+    </p>
+  </section>
+</Base>

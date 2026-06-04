@@ -1,0 +1,106 @@
+---
+import Base from "../layouts/Base.astro";
+import PageHeader from "../components/PageHeader.astro";
+import Screenshot from "../components/Screenshot.astro";
+
+const base = import.meta.env.BASE_URL;
+
+const sections = [
+  {
+    id: "health",
+    title: "Server Health",
+    img: "v6-server-health.png",
+    body: "Default landing page. Combined battlegroup + VM state, live TCP port verdicts, per-pod game-server status, active spice-field counts pulled live from Postgres with tiered colours and at-cap highlighting, public port checks with provider fallback, and one-click log exports.",
+  },
+  {
+    id: "commands",
+    title: "Commands",
+    img: "v6-commands.png",
+    body: "Quick-action cards grouped by VM, Battlegroup, and Tools. Each card knows whether it runs in-app or in a popup, self-disables with a hint when it doesn't apply, and is drag-reorderable — the layout persists across launches.",
+  },
+  {
+    id: "powershell",
+    title: "Embedded PowerShell",
+    img: "v6-terminal.png",
+    body: "Live xterm.js terminal backed by a dedicated runspace per WebSocket session. Persistent working directory, cancel / clear / reconnect controls. Use it for kubectl, ssh dune@vm, and other one-shot commands without leaving the app.",
+  },
+  {
+    id: "characters",
+    title: "Characters",
+    img: "v6-characters.png",
+    body: "Live editor for every character on the server, talking directly to the Postgres pod over SSH. Stats, tech, specs, economy, faction, inventory, cosmetics — all writes are transactional and guard-railed.",
+  },
+  {
+    id: "gameconfig",
+    title: "Game Config",
+    img: "v6-gameconfig.png",
+    body: "Grouped editor for UserGame.ini and UserEngine.ini with every setting labelled and typed. Dedicated Spicefield Types card edits dune.spicefield_types directly with at-cap highlighting and live status badges.",
+  },
+  {
+    id: "database",
+    title: "Database",
+    img: "v6-database.png",
+    body: "Take and restore battlegroup Postgres backups without remembering pod names. Schedule recurring cron-based backups straight from the UI. A Monaco-powered SQL editor with read-only-by-default toggle and Ctrl+Enter to run.",
+  },
+  {
+    id: "backup-schedule",
+    title: "Backup Schedule",
+    img: "v10-database-backup-schedule.png",
+    body: "One-card install of a recurring battlegroup backup cron with optional pruning of older dumps. Presets cover hourly through weekly; the schedule lives in a clearly-marked managed block in root's crontab and is read back and verified after each save.",
+  },
+  {
+    id: "ddmap",
+    title: "DD Map",
+    img: "v6-dd-map.png",
+    body: "Quick links to the community Deep Desert maps (method.gg, dune.gaming.tools). Both target sites block embedding, so DST opens them in a new tab.",
+  },
+  {
+    id: "sietches",
+    title: "Sietches (experimental)",
+    img: "v6-sietches.png",
+    body: "Add or remove additional Survival_1 shards. Each costs ~12 GB RAM and a UDP port range, so it's gated behind an explicit confirmation and patches the battlegroup CRD directly.",
+  },
+  {
+    id: "settings",
+    title: "Settings",
+    img: "v6-settings.png",
+    body: "Everything the setup wizard asked you, editable any time. Path pickers, port-check provider selection, and two collapsible cards for the DST and dune-admin auto-updaters.",
+  },
+  {
+    id: "wizard",
+    title: "Setup Wizard",
+    img: "v6-setup-wizard.png",
+    body: "Six-step linear flow that runs on first launch: pre-flight checks, configuration, Hyper-V import, security (SSH + firewall), networking (ports + DNS), and finalize. Re-runnable any time for a clean reset.",
+  },
+];
+---
+
+<Base
+  title="Features — DST"
+  description="A page-by-page tour of the Dune Server Tool portal."
+>
+  <PageHeader
+    eyebrow="Tour"
+    title="Every page, one tour"
+    intro="DST is a left-nav portal grouped under Server Health, Terminal, Game Data, and System. Here's what each page does."
+  />
+
+  <section class="mx-auto max-w-6xl px-6 pb-20 space-y-20">
+    {
+      sections.map((s, i) => (
+        <div
+          id={s.id}
+          class={`grid md:grid-cols-2 gap-8 items-center ${i % 2 ? "md:[&>:first-child]:order-2" : ""}`}
+        >
+          <Screenshot src={`${base}screenshots/${s.img}`} alt={s.title} />
+          <div>
+            <h2 class="text-2xl font-semibold text-dune-text mb-3">
+              {s.title}
+            </h2>
+            <p class="text-dune-muted leading-relaxed">{s.body}</p>
+          </div>
+        </div>
+      ))
+    }
+  </section>
+</Base>

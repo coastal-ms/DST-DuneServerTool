@@ -1,0 +1,118 @@
+---
+import Base from "../layouts/Base.astro";
+import DownloadButton from "../components/DownloadButton.astro";
+import Screenshot from "../components/Screenshot.astro";
+import { getLatestRelease } from "../lib/release";
+
+const base = import.meta.env.BASE_URL;
+const release = await getLatestRelease();
+const versionLabel =
+  release.version === "latest" ? "the latest release" : `v${release.version}`;
+
+const features = [
+  {
+    title: "Server Health at a glance",
+    body: "Battlegroup + VM status, live TCP port checks, per-pod game-server health, and live spice-field counts — all on the landing page.",
+  },
+  {
+    title: "Character & database editor",
+    body: "A typed UI over the server's Postgres database. Edit stats, tech, specs, inventory, faction rep — every write goes through guard-railed psql.",
+  },
+  {
+    title: "Setup wizard + auto-updater",
+    body: "First-launch wizard handles Hyper-V import, SSH keys, and firewall. Built-in updater pulls the next release straight from GitHub.",
+  },
+];
+---
+
+<Base
+  title="DST — Dune Server Tool"
+  description="A Windows portal for your self-hosted Dune: Awakening dedicated server. Open source, Apache 2.0."
+>
+  <section class="mx-auto max-w-6xl px-6 pt-20 pb-12">
+    <div class="grid lg:grid-cols-[1.1fr_1fr] gap-12 items-center">
+      <div>
+        <div
+          class="font-mono text-xs uppercase tracking-widest text-dune-accent mb-3"
+        >
+          Open source · Apache 2.0 · {versionLabel}
+        </div>
+        <h1
+          class="text-5xl sm:text-6xl font-semibold tracking-tight leading-[1.05]"
+        >
+          Run your Dune: Awakening server
+          <span class="text-dune-accent">without the YAML.</span>
+        </h1>
+        <p class="mt-6 text-lg text-dune-muted leading-relaxed max-w-xl">
+          DST is a single-window Windows app that hosts a local web portal
+          for your self-hosted Dune: Awakening dedicated server. Same
+          battlegroup, SSH, and Hyper-V automation under the hood — without
+          ever opening a raw shell or hand-editing YAML.
+        </p>
+        <div class="mt-8 flex flex-wrap items-start gap-4">
+          <DownloadButton />
+          <a
+            href={`${base}features`}
+            class="inline-flex items-center gap-2 rounded-lg border border-dune-border hover:border-dune-accent text-dune-text px-6 py-3 transition-colors"
+          >
+            See features →
+          </a>
+        </div>
+      </div>
+      <Screenshot
+        src={`${base}screenshots/v6-server-health.png`}
+        alt="Server Health dashboard showing battlegroup status, ports, game servers, and active spice fields"
+      />
+    </div>
+  </section>
+
+  <section class="mx-auto max-w-6xl px-6 py-16">
+    <div class="grid sm:grid-cols-3 gap-6">
+      {
+        features.map((f) => (
+          <div class="rounded-lg border border-dune-border bg-dune-surface p-6">
+            <h3 class="text-lg font-semibold text-dune-text mb-2">{f.title}</h3>
+            <p class="text-sm text-dune-muted leading-relaxed">{f.body}</p>
+          </div>
+        ))
+      }
+    </div>
+  </section>
+
+  <section class="mx-auto max-w-6xl px-6 py-16">
+    <div
+      class="rounded-xl border border-dune-border bg-dune-surface p-8 sm:p-12"
+    >
+      <h2 class="text-2xl sm:text-3xl font-semibold mb-4">
+        What's in the box
+      </h2>
+      <div class="grid sm:grid-cols-2 gap-x-12 gap-y-3 text-dune-muted">
+        <div>✓ Server health dashboard</div>
+        <div>✓ Per-character data editor</div>
+        <div>✓ Game config (UserGame.ini / UserEngine.ini)</div>
+        <div>✓ Embedded PowerShell terminal</div>
+        <div>✓ Monaco SQL editor over Postgres</div>
+        <div>✓ Database backup + scheduling</div>
+        <div>✓ Per-map on-demand spin-up</div>
+        <div>✓ dune-admin integration (optional)</div>
+        <div>✓ Setup wizard (Hyper-V, SSH, firewall)</div>
+        <div>✓ Built-in auto-updater</div>
+      </div>
+      <div class="mt-8 flex flex-wrap gap-4">
+        <a
+          href={`${base}install`}
+          class="inline-flex items-center gap-2 text-dune-accent hover:text-dune-accent-soft"
+        >
+          Install guide →
+        </a>
+        <a
+          href="https://github.com/coastal-ms/DST-DuneServerTool"
+          rel="noopener"
+          class="inline-flex items-center gap-2 text-dune-muted hover:text-dune-text"
+        >
+          Browse the code →
+        </a>
+      </div>
+    </div>
+  </section>
+</Base>

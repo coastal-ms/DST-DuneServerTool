@@ -1,0 +1,40 @@
+---
+import { getLatestRelease } from "../lib/release";
+const { variant = "primary" } = Astro.props as {
+  variant?: "primary" | "ghost";
+};
+const release = await getLatestRelease();
+const versionLabel = release.version === "latest" ? "" : `v${release.version.replace(/^v/, "")}`;
+const classes =
+  variant === "primary"
+    ? "inline-flex items-center gap-3 rounded-lg bg-dune-accent hover:bg-dune-accent-soft text-dune-bg font-medium px-6 py-3 transition-colors shadow-lg shadow-amber-900/30"
+    : "inline-flex items-center gap-3 rounded-lg border border-dune-border hover:border-dune-accent text-dune-text px-6 py-3 transition-colors";
+---
+
+<div class="flex flex-col items-start gap-2">
+  <a
+    href={release.installerUrl ?? release.htmlUrl}
+    class={classes}
+    rel="noopener"
+  >
+    <svg
+      class="w-5 h-5"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      stroke-width="2"
+    >
+      <path d="M12 3v14m0 0l-5-5m5 5l5-5" stroke-linecap="round" />
+      <path d="M5 21h14" stroke-linecap="round" />
+    </svg>
+    <span>Download for Windows</span>
+    {versionLabel && <span class="font-mono text-xs opacity-80">{versionLabel}</span>}
+  </a>
+  <a
+    href={release.htmlUrl}
+    class="text-xs text-dune-muted hover:text-dune-text underline decoration-dotted"
+    rel="noopener"
+  >
+    All releases →
+  </a>
+</div>

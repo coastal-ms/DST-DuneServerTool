@@ -1,0 +1,102 @@
+---
+import "../styles/global.css";
+const { title, description } = Astro.props as {
+  title: string;
+  description?: string;
+};
+const base = import.meta.env.BASE_URL;
+const nav = [
+  { href: "", label: "Home" },
+  { href: "features", label: "Features" },
+  { href: "install", label: "Install" },
+  { href: "changelog", label: "Changelog" },
+  { href: "about", label: "About" },
+];
+const url = new URL(Astro.url.pathname, Astro.site);
+const ogDesc =
+  description ??
+  "A Windows portal for your self-hosted Dune: Awakening dedicated server.";
+---
+
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="color-scheme" content="dark" />
+    <title>{title}</title>
+    <meta name="description" content={ogDesc} />
+    <meta property="og:title" content={title} />
+    <meta property="og:description" content={ogDesc} />
+    <meta property="og:type" content="website" />
+    <meta property="og:url" content={url.toString()} />
+    <meta name="twitter:card" content="summary_large_image" />
+    <link rel="icon" type="image/svg+xml" href={`${base}favicon.svg`} />
+  </head>
+  <body class="min-h-screen flex flex-col text-dune-text">
+    <header
+      class="sticky top-0 z-20 backdrop-blur-md bg-dune-bg/80 border-b border-dune-border"
+    >
+      <div
+        class="mx-auto max-w-6xl px-6 py-3 flex items-center justify-between gap-6"
+      >
+        <a
+          href={base}
+          class="font-mono text-sm tracking-wide text-dune-accent hover:text-dune-accent-soft transition-colors"
+        >
+          DST — Dune Server Tool
+        </a>
+        <nav class="flex items-center gap-5 text-sm">
+          {
+            nav.map((item) => {
+              const href = item.href ? `${base}${item.href}` : base;
+              const active =
+                Astro.url.pathname === href ||
+                (item.href !== "" &&
+                  Astro.url.pathname.startsWith(href));
+              return (
+                <a
+                  href={href}
+                  class={`transition-colors ${active ? "text-dune-text" : "text-dune-muted hover:text-dune-text"}`}
+                >
+                  {item.label}
+                </a>
+              );
+            })
+          }
+          <a
+            href="https://github.com/coastal-ms/DST-DuneServerTool"
+            class="text-dune-muted hover:text-dune-text transition-colors"
+            rel="noopener"
+            target="_blank">GitHub</a
+          >
+        </nav>
+      </div>
+    </header>
+
+    <main class="flex-1">
+      <slot />
+    </main>
+
+    <footer
+      class="mt-24 border-t border-dune-border text-sm text-dune-muted"
+    >
+      <div
+        class="mx-auto max-w-6xl px-6 py-8 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4"
+      >
+        <div>
+          DST is open source under the
+          <a
+            href="https://github.com/coastal-ms/DST-DuneServerTool/blob/main/LICENSE"
+            class="underline decoration-dotted hover:text-dune-text"
+            rel="noopener">Apache 2.0</a
+          > license.
+        </div>
+        <div class="font-mono text-xs">
+          by Coastal · Discord
+          <span class="text-dune-text">@allcoast</span>
+        </div>
+      </div>
+    </footer>
+  </body>
+</html>
