@@ -105,26 +105,52 @@ function Show-DuneConsolePresencePrompt {
     } catch { return 'console' }
 }
 
-# Decide the console mode for THIS launch. Prompts once per tool version
-# ("remember until next update"): the stored choice is reused only while its
-# saved version matches the current one, otherwise we re-ask.
-function Resolve-DuneConsoleMode {
-    $raw       = Read-DuneConfigRaw
-    $stored    = if ($raw.Contains('ConsolePresence')) { [string]$raw['ConsolePresence'] } else { '' }
-    $storedVer = if ($raw.Contains('ConsolePresenceVersion')) { [string]$raw['ConsolePresenceVersion'] } else { '' }
-    $cur       = [string]$script:DuneToolVersion
-    $valid     = ($stored -eq 'console' -or $stored -eq 'tray')
+# Decide the console mode for THIS launch. Sticky across updates: prompts ONCE
+# on first install (or after config loss), then reuses that choice forever
+# regardless of tool-version bumps. Re-prompts only when ConsolePresenceSchema
+# is missing/mismatched -- bump $script:DuneConsolePresenceSchema below if a
+# future release changes what 'console'/'tray' actually mean and a fresh user
+# decision is genuinely required. ConsolePresenceVersion is still recorded for
+# diagnostics so logs/audits can see when the choice was last touched, but it
+# is no longer used as a gate.
+$script:DuneConsolePresenceSchema = '1'
 
-    if ($valid -and $storedVer -eq $cur) { return $stored }
+function Resolve-DuneConsoleMode {
+    $raw          = Read-DuneConfigRaw
+    $stored       = if ($raw.Contains('ConsolePresence'))       { [string]$raw['ConsolePresence'] }       else { '' }
+    $storedSchema = if ($raw.Contains('ConsolePresenceSchema')) { [string]$raw['ConsolePresenceSchema'] } else { '' }
+    $cur          = [string]$script:DuneToolVersion
+    $schema       = $script:DuneConsolePresenceSchema
+    $valid        = ($stored -eq 'console' -or $stored -eq 'tray')
+
+    # First-install / schema-bump path: $storedSchema is blank (legacy v10.2.6
+    # and earlier never wrote it). Treat blank as "schema 1 grandfathered" so
+    # users updating from a sticky-tray choice in v10.2.6 are NOT re-prompted.
+    $schemaOk = ($storedSchema -eq $schema) -or ([string]::IsNullOrEmpty($storedSchema) -and $valid)
+
+    if ($valid -and $schemaOk) {
+        # Backfill ConsolePresenceSchema for older configs so subsequent reads
+        # take the fast path without the grandfathering branch above.
+        if ([string]::IsNullOrEmpty($storedSchema)) {
+            try { Save-DuneConfig @{ ConsolePresenceSchema = $schema } | Out-Null } catch {}
+        }
+        return $stored
+    }
 
     # Only a real (compiled-exe) console is worth prompting about; dev pwsh runs
     # just default to a minimized console without nagging or persisting.
     if (-not $script:DuneIsCompiledExe) { return 'console' }
 
     $mode = Show-DuneConsolePresencePrompt
-    try { Save-DuneConfig @{ ConsolePresence = $mode; ConsolePresenceVersion = $cur } | Out-Null } catch {}
+    try {
+        Save-DuneConfig @{
+            ConsolePresence        = $mode
+            ConsolePresenceVersion = $cur
+            ConsolePresenceSchema  = $schema
+        } | Out-Null
+    } catch {}
     if (Get-Command Write-DuneLog -ErrorAction SilentlyContinue) {
-        Write-DuneLog "Console presence chosen: $mode (remembered for v$cur)"
+        Write-DuneLog "Console presence chosen: $mode (locked in -- won't re-prompt across updates)"
     }
     return $mode
 }
