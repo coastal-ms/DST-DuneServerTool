@@ -13,6 +13,38 @@ here cover everything those tags shipped.
 
 ## [Unreleased]
 
+## [10.2.6] - 2026-06-04
+
+### Fixed
+- **Dune-admin pricing patch: rebuild now survives upstream file-to-directory
+  refactors.** After Icehunter/dune-admin v0.24.0 refactored
+  `web/src/tabs/WelcomePackageTab.tsx` into `web/src/tabs/WelcomePackageTab/`
+  (`index.tsx` + `views/` + `types.ts`), every "Reinstall + keep sane-pricing
+  patch" failed with `pnpm build` errors:
+  `src/App.tsx(20,10): error TS2614: ... has no exported member 'WelcomePackageTab'`
+  and `src/tabs/WelcomePackageTab.tsx(138,13): error TS2741: Property 'active_versions' is missing`.
+  Root cause was in **our** overlay step, not upstream: `Sync-DuneAdminSourceTarball`
+  uses `robocopy /E`, which is additive — it never deletes files that were
+  removed in the new release. The deleted flat `WelcomePackageTab.tsx`
+  stayed on disk as an orphan from the prior v0.23.x install, and
+  TypeScript/Vite module resolution prefers a bare `.tsx` over a sibling
+  `dir/index.tsx`, so the stale file shadowed the new directory and `tsc`
+  saw the wrong export shape. Go build succeeded (the patched
+  `dune-admin.exe` was replaced cleanly with v0.24.0), but the embedded
+  web UI never compiled, so the build wrapper failed with exit 1 and the
+  marketplace bot panel was effectively unbuildable.
+- `app/resources/dune-admin-patches/build-patched.ps1` now scans
+  `web/src/` for any `Foo.tsx` / `Foo.ts` that has a sibling `Foo/`
+  directory containing `index.tsx` / `index.ts`, and deletes the flat
+  file before running `pnpm install` / `pnpm build`. The check is safe
+  by construction (you never legitimately ship a flat component file
+  next to a sibling barrel directory of the same name; the collision is
+  always a refactor leftover) and only fires on the exact shadow
+  pattern. Any removal also invalidates `.dst-web-build-stamp` so the
+  cached `web/dist/` (which may have been compiled from the stale file)
+  gets rebuilt instead of reused. Fixes future upstream refactors of
+  this shape without needing per-release patches.
+
 ## [10.2.5] - 2026-06-03
 
 ### Added
