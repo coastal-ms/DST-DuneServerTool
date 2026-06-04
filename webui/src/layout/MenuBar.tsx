@@ -61,7 +61,7 @@ export function MenuBar({ sidebarCollapsed, onToggleSidebar }: Props) {
   return (
     <div
       ref={rootRef}
-      className="h-8 shrink-0 border-b border-border bg-surface/80 backdrop-blur-md flex items-center px-1 text-[13px] select-none relative z-40"
+      className="h-8 shrink-0 border-b border-border bg-surface flex items-center px-1 text-[13px] select-none relative z-40"
     >
       {GROUP_ORDER.map(g => {
         const items = NAV_ITEMS.filter(i => i.group === g)
@@ -82,7 +82,7 @@ export function MenuBar({ sidebarCollapsed, onToggleSidebar }: Props) {
               {GROUP_LABELS[g]}
             </button>
             {isOpen && (
-              <div className="absolute left-0 top-full mt-1 min-w-[200px] card p-1 shadow-xl shadow-black/40 z-50">
+              <div className="absolute left-0 top-full mt-1 min-w-[200px] bg-surface border border-border rounded-xl p-1 shadow-xl shadow-black/40 z-50">
                 {items.map(item => (
                   <button
                     key={item.to}
@@ -128,7 +128,7 @@ export function MenuBar({ sidebarCollapsed, onToggleSidebar }: Props) {
           Help
         </button>
         {open === 'help' && (
-          <div className="absolute right-0 top-full mt-1 min-w-[220px] card p-1 shadow-xl shadow-black/40 z-50">
+          <div className="absolute right-0 top-full mt-1 min-w-[220px] bg-surface border border-border rounded-xl p-1 shadow-xl shadow-black/40 z-50">
             <a
               href={issueHref}
               target="_blank"
