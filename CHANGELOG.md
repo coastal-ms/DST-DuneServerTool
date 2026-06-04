@@ -13,6 +13,16 @@ here cover everything those tags shipped.
 
 ## [Unreleased]
 
+## [10.2.2] - 2026-06-03
+
+### Removed
+- **Native WinForms `MenuStrip`** (the thin strip directly under the
+  Windows title bar with `Server Health · Settings · View`). Redundant
+  with the React top menu bar shipped in v10.2.0 — it duplicated nav
+  targets and produced two menu rows stacked on top of each other.
+  `BuildMenu()` and the unused `NavigateRoute` helper in `MainForm.cs`
+  are gone.
+
 ## [10.2.1] - 2026-06-03
 
 ### Changed
