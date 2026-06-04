@@ -13,6 +13,43 @@ here cover everything those tags shipped.
 
 ## [Unreleased]
 
+## [10.2.7] - 2026-06-04
+
+### Changed
+- **In-app updater is now silent.** Clicking *Install update* now closes the
+  Dune Server app and console after a 3-second grace period, then runs the
+  Inno installer with `/VERYSILENT /SUPPRESSMSGBOXES /NORESTART /NOCANCEL` in
+  a hidden PowerShell host. No wizard window appears, no UAC re-prompt fires
+  (the relauncher inherits the already-elevated DuneServer.exe token), and
+  the new DuneServer.exe + DuneShell.exe come up automatically on completion
+  via the installer's existing `[Run] WizardSilent` entry. Total visible UX
+  is the *Updater launched* toast in the portal, the 3-second pause, then
+  the new app window comes back. The 30-second wait-for-wizard-window loop
+  and the `ShowWindowAsync` / `BringWindowToTop` / `SetForegroundWindow`
+  cascade are gone -- they only mattered for the visible wizard.
+- **Update failures now surface a topmost WinForms `MessageBox`** with the
+  installer exit code, the relauncher log path, and the original installer
+  path so the user can reinstall manually. Without this, a silent-mode
+  failure would just leave the app gone with no feedback (the hidden
+  PowerShell host can't print to a console the user sees).
+- **Console / tray choice is now sticky across updates.** The first-run
+  "Keep console / Send to system tray" dialog persists the user's pick
+  forever and never re-prompts on subsequent version bumps. Previously
+  `Resolve-DuneConsoleMode` gated on `ConsolePresenceVersion == currentVersion`
+  and re-asked after every install, which was noisy with the silent updater
+  flipping the version stamp under their feet. Re-prompt is now gated on a
+  separate `ConsolePresenceSchema` constant that only changes when the
+  semantics of console/tray meaningfully change in a future release.
+  Existing v10.2.6 configs are grandfathered (blank schema + valid
+  ConsolePresence → use it and backfill schema=1).
+
+### Fixed
+- **Apostrophe-in-username crash in the updater relauncher.** Paths embedded
+  into the generated `DuneRelaunch-*.ps1` are now escaped (`'` → `''`)
+  before being interpolated into single-quoted PowerShell literals, so usernames
+  like `C:\Users\O'Brien\AppData\...` no longer break the relauncher with a
+  parse error on the first sleep.
+
 ## [10.2.6] - 2026-06-04
 
 ### Fixed
