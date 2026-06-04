@@ -179,113 +179,140 @@ Register-DuneRoute -Method POST -Path '/api/update/install' -Handler {
 
         # Respond to the client FIRST so the browser sees confirmation
         # before we tear ourselves down. The relauncher below kills this
-        # very process within a few seconds.
+        # very process about 3 seconds later.
         Write-DuneJson -Response $res -Body @{
             launched        = $true
             installerPath   = $dest
             fromVersion     = $script:DuneToolVersion
             toVersion       = ($rel.tag -replace '^v','')
-            note            = 'Updater launched. The portal will close, the installer wizard will open - click through it normally, then the new DuneServer.exe will start automatically from the installer''s Finish page.'
+            note            = 'Updater launched. The Dune Server app and console will close in 3 seconds, then a silent update runs in the background. The app relaunches automatically when it finishes (usually under a minute).'
         }
 
         # Build a relauncher script that:
-        #   1. Sleeps briefly so the HTTP response above finishes flushing.
-        #   2. Force-kills DuneServer.exe by its known PID (this process).
-        #      We do NOT use `taskkill /T` - that would also kill the
-        #      relauncher (which is a child of DuneServer.exe). Killing the
-        #      specific PID with Stop-Process leaves the relauncher
-        #      orphaned but alive.
-        #   3. Launches the installer in NORMAL interactive mode (NOT
-        #      /VERYSILENT). The user sees the wizard, clicks through, and
-        #      the installer's standard "Launch Dune Server" checkbox on
-        #      the Finished page handles the relaunch. No silent-mode race
-        #      conditions, no detached relauncher needed for the launch
-        #      itself - just the standard postinstall [Run] entry.
-        $parentPid     = $PID
-        $installArgs   = '/SP- /NORESTART'
-        $logPath       = Join-Path $tmpDir ("relaunch-$safeTag.log")
-        # NOTE: relauncher window is intentionally VISIBLE (not hidden).
-        # A hidden parent powershell has no foreground rights, so the
-        # installer wizard it spawns lands BEHIND other windows. With a
-        # visible parent we also pre-grant ASFW_ANY via
-        # AllowSetForegroundWindow and then explicitly raise the
-        # installer's main window once it appears - so the wizard is
-        # the first thing the user sees when they click Update.
+        #   1. Sleeps 3 seconds so the user sees the "Updater launched" toast
+        #      and the HTTP response finishes flushing before the app vanishes.
+        #   2. Force-kills DuneServer.exe by its known PID (this process),
+        #      any sibling DuneServer instances, and DuneShell.exe (the app
+        #      window). We do NOT use `taskkill /T` - that would also kill
+        #      the relauncher (a child of DuneServer.exe). Killing the
+        #      specific PID with Stop-Process leaves the relauncher orphaned
+        #      but alive. dune-admin.exe is left untouched (different program).
+        #   3. Launches the installer SILENTLY (/VERYSILENT). The installer's
+        #      [Run] WizardSilent entry (DuneServer.iss) then relaunches
+        #      DuneServer.exe with `runminimized`, which in turn brings up
+        #      DuneShell.exe. The whole update is invisible apart from the
+        #      3-second portal-close pause.
+        #   4. WaitForExit on the installer PID, then on non-zero exit /
+        #      timeout shows a topmost WinForms MessageBox so the user has
+        #      a real signal when something fails (the hidden powershell
+        #      host has no other UI to surface errors).
+        $parentPid       = $PID
+        $installArgs     = '/SP- /VERYSILENT /SUPPRESSMSGBOXES /NORESTART /NOCANCEL'
+        $logPath         = Join-Path $tmpDir ("relaunch-$safeTag.log")
+        # Defensive escapes: %TEMP% / install path can contain an apostrophe
+        # (e.g. C:\Users\O'Brien\AppData\...) which would break the single-
+        # quoted literals embedded in the relauncher heredoc below.
+        # PowerShell escapes ' as '' inside single-quoted strings.
+        $destEsc         = $dest         -replace "'", "''"
+        $installArgsEsc  = $installArgs  -replace "'", "''"
+        $logPathEsc      = $logPath      -replace "'", "''"
         $relaunchScript = @"
 `$ErrorActionPreference = 'Continue'
-Start-Transcript -Path '$logPath' -Append | Out-Null
-try {
-    `$Host.UI.RawUI.WindowTitle = 'Dune Server - Installing update...'
-    Write-Host ''
-    Write-Host '  Dune Server Management Tool' -ForegroundColor Cyan
-    Write-Host '  ----------------------------' -ForegroundColor Cyan
-    Write-Host '  Update in progress. The installer wizard will appear in a few seconds.'
-    Write-Host '  This window will close automatically when the installer is launched.'
-    Write-Host ''
+Start-Transcript -Path '$logPathEsc' -Append | Out-Null
 
+function Show-DuneUpdateFailure {
+    param([string]`$Title, [string]`$Message)
+    try {
+        Add-Type -AssemblyName System.Windows.Forms -ErrorAction Stop
+        Add-Type -AssemblyName System.Drawing -ErrorAction Stop
+        # Off-screen, transparent, topmost owner so the MessageBox actually
+        # comes foreground even though the PowerShell host is hidden.
+        `$owner = New-Object System.Windows.Forms.Form
+        `$owner.FormBorderStyle = 'FixedToolWindow'
+        `$owner.StartPosition   = 'Manual'
+        `$owner.Location        = [System.Drawing.Point]::new(-32000, -32000)
+        `$owner.Size            = [System.Drawing.Size]::new(1, 1)
+        `$owner.ShowInTaskbar   = `$false
+        `$owner.TopMost         = `$true
+        `$owner.Opacity         = 0
+        `$owner.Show()
+        `$owner.Activate()
+        [System.Windows.Forms.MessageBox]::Show(`$owner, `$Message, `$Title,
+            [System.Windows.Forms.MessageBoxButtons]::OK,
+            [System.Windows.Forms.MessageBoxIcon]::Error) | Out-Null
+        try { `$owner.Close(); `$owner.Dispose() } catch {}
+    } catch {}
+}
+
+try {
     Add-Type -Namespace DuneUpd -Name Win -MemberDefinition @'
 [System.Runtime.InteropServices.DllImport("user32.dll")]
 public static extern bool AllowSetForegroundWindow(int dwProcessId);
-[System.Runtime.InteropServices.DllImport("user32.dll")]
-public static extern bool SetForegroundWindow(System.IntPtr hWnd);
-[System.Runtime.InteropServices.DllImport("user32.dll")]
-public static extern bool ShowWindowAsync(System.IntPtr hWnd, int nCmdShow);
-[System.Runtime.InteropServices.DllImport("user32.dll")]
-public static extern bool BringWindowToTop(System.IntPtr hWnd);
 '@ -ErrorAction SilentlyContinue
 
-    Start-Sleep -Seconds 2
+    # 3-second grace between user clicking Update and the silent install
+    # kicking off. Lets the HTTP response finish flushing and gives the
+    # user a moment to register the "Updater launched" toast in the portal
+    # before the app vanishes.
+    Start-Sleep -Seconds 3
+
     Write-Host "[`$(Get-Date -Format o)] Stopping DuneServer.exe (PID $parentPid)"
     Stop-Process -Id $parentPid -Force -ErrorAction SilentlyContinue
-    Start-Sleep -Seconds 1
-    # Belt-and-suspenders - if a sibling instance is still alive, take it
-    # down too. Each by explicit Id (no Stop-Process -Name to satisfy any
-    # tooling that forbids name-based kills).
+    # Sibling DuneServer instances + the standalone app window
+    # (DuneShell.exe). Kill by .Id (no Stop-Process -Name). NOT touching
+    # dune-admin.exe -- that's a separate program with its own lifecycle.
     Get-Process -Name DuneServer -ErrorAction SilentlyContinue | ForEach-Object {
         Stop-Process -Id `$_.Id -Force -ErrorAction SilentlyContinue
     }
-    # Also close any standalone app window (DuneShell.exe) so the stale
-    # WebView2 window doesn't linger beside the freshly relaunched one.
     Get-Process -Name DuneShell -ErrorAction SilentlyContinue | ForEach-Object {
         Stop-Process -Id `$_.Id -Force -ErrorAction SilentlyContinue
     }
+    # 1s settle so WebView2 children and file handles in
+    # C:\Program Files\Dune Server are released before Inno tries to
+    # overwrite them under /VERYSILENT (no in-use retry prompt in silent
+    # mode -- file-in-use just fails the install).
     Start-Sleep -Seconds 1
 
-    # Grant foreground rights to whatever we launch next (ASFW_ANY = -1).
+    # Grant foreground rights to whatever we launch next (ASFW_ANY = -1)
+    # so the post-install DuneServer.exe -> DuneShell.exe chain can take
+    # focus when the new app window comes up.
     try { [DuneUpd.Win]::AllowSetForegroundWindow(-1) | Out-Null } catch {}
 
-    Write-Host "[`$(Get-Date -Format o)] Launching installer: $dest"
-    `$proc = Start-Process -FilePath '$dest' -ArgumentList '$installArgs' -PassThru
+    Write-Host "[`$(Get-Date -Format o)] Launching installer silently: $destEsc"
+    `$proc = Start-Process -FilePath '$destEsc' -ArgumentList '$installArgsEsc' -PassThru
 
-    # Wait for the installer wizard window and force it to the top.
-    # The installer goes through UAC consent first, so MainWindowHandle
-    # may take a few seconds to populate. Try for up to 30 seconds.
-    `$deadline = (Get-Date).AddSeconds(30)
-    while ((Get-Date) -lt `$deadline) {
-        Start-Sleep -Milliseconds 250
-        # Re-query: under UAC, the originally spawned proc may exit
-        # quickly while the elevated child becomes the real installer.
-        `$cand = Get-Process -Name 'DuneServerSetup','DuneServerSetup-*' -ErrorAction SilentlyContinue |
-                 Where-Object { `$_.MainWindowHandle -ne 0 } |
-                 Sort-Object StartTime -Descending |
-                 Select-Object -First 1
-        if (-not `$cand -and `$proc) {
-            try { `$proc.Refresh() } catch {}
-            if (`$proc.MainWindowHandle -ne 0) { `$cand = `$proc }
-        }
-        if (`$cand) {
-            try {
-                [DuneUpd.Win]::AllowSetForegroundWindow(`$cand.Id) | Out-Null
-                [DuneUpd.Win]::ShowWindowAsync(`$cand.MainWindowHandle, 9) | Out-Null  # SW_RESTORE
-                [DuneUpd.Win]::BringWindowToTop(`$cand.MainWindowHandle) | Out-Null
-                [DuneUpd.Win]::SetForegroundWindow(`$cand.MainWindowHandle) | Out-Null
-                Write-Host "[`$(Get-Date -Format o)] Raised installer window (PID `$(`$cand.Id))."
-            } catch {}
-            break
-        }
+    # Wait up to 5 minutes for the silent install to finish. Under
+    # /VERYSILENT Inno runs the entire install + the [Run] WizardSilent
+    # entry (which launches the new DuneServer.exe runminimized) and
+    # then exits. We were spawned from an already-elevated DuneServer.exe,
+    # so Inno runs in-place rather than re-elevating -- WaitForExit on
+    # the spawned PID is meaningful end-to-end.
+    if (-not `$proc.WaitForExit(300000)) {
+        Write-Host "[`$(Get-Date -Format o)] Installer timed out after 5 minutes"
+        try { Stop-Process -Id `$proc.Id -Force -ErrorAction SilentlyContinue } catch {}
+        Show-DuneUpdateFailure -Title 'Dune Server Update Timed Out' -Message (
+            "The silent installer did not finish within 5 minutes. The Dune Server app has been closed.``r``n``r``n" +
+            "Log file:``r``n  $logPathEsc``r``n``r``n" +
+            "You can reinstall manually by running:``r``n  $destEsc")
+    } elseif (`$proc.ExitCode -ne 0) {
+        `$code = `$proc.ExitCode
+        Write-Host "[`$(Get-Date -Format o)] Installer exited with code `$code"
+        Show-DuneUpdateFailure -Title 'Dune Server Update Failed' -Message (
+            "The silent installer exited with code `$code. The Dune Server app has been closed.``r``n``r``n" +
+            "Log file:``r``n  $logPathEsc``r``n``r``n" +
+            "You can reinstall manually by running:``r``n  $destEsc")
+    } else {
+        Write-Host "[`$(Get-Date -Format o)] Silent install completed successfully (exit 0)"
     }
 } catch {
-    Write-Host "[`$(Get-Date -Format o)] Relauncher error: `$(`$_.Exception.Message)"
+    `$errMsg = `$_.Exception.Message
+    Write-Host "[`$(Get-Date -Format o)] Relauncher error: `$errMsg"
+    try {
+        Show-DuneUpdateFailure -Title 'Dune Server Update Error' -Message (
+            "The updater hit an unexpected error:``r``n  `$errMsg``r``n``r``n" +
+            "Log file:``r``n  $logPathEsc``r``n``r``n" +
+            "You can reinstall manually by running:``r``n  $destEsc")
+    } catch {}
 } finally {
     Stop-Transcript | Out-Null
 }
@@ -293,15 +320,14 @@ public static extern bool BringWindowToTop(System.IntPtr hWnd);
         $scriptPath = Join-Path $tmpDir ("DuneRelaunch-$safeTag.ps1")
         Set-Content -LiteralPath $scriptPath -Value $relaunchScript -Encoding UTF8
 
-        # Spawn the relauncher in a VISIBLE (minimized-ok-but-not-hidden)
-        # window. A visible parent gets foreground rights, which it then
-        # passes to the installer via AllowSetForegroundWindow. The
-        # window briefly shows an "Installing update..." banner so the
-        # user has clear feedback that something is happening between
-        # the portal closing and the wizard appearing.
+        # Spawn the relauncher in a HIDDEN window. No visible UI during the
+        # silent update: the 3-second sleep, kill chain, /VERYSILENT install,
+        # and post-install DuneServer.exe relaunch all happen in the
+        # background. The only visible artifacts are the toast in the portal
+        # before it closes and (on failure) the topmost MessageBox.
         Start-Process -FilePath 'powershell.exe' `
             -ArgumentList @('-NoProfile','-ExecutionPolicy','Bypass','-File',$scriptPath) `
-            -WindowStyle Normal | Out-Null
+            -WindowStyle Hidden | Out-Null
     } catch {
         Write-DuneError -Response $res -Status 500 -Message $_.Exception.Message
       }
