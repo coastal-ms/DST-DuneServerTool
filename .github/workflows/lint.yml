@@ -1,5 +1,14 @@
 name: Lint PowerShell
 
+# Triggered on:
+#   - push to main: only when PowerShell files (or this workflow) change, to
+#     keep CI minutes low on doc / site-only pushes.
+#   - pull_request to main: ALWAYS, regardless of which files changed. This
+#     workflow's job name (`lint`) is a required status check on main, and
+#     filtering it by paths means PRs that don't touch *.ps1 would block
+#     forever waiting for a check that never runs. The lint steps below are
+#     a few seconds when there's nothing relevant to lint, so the cost is
+#     negligible. See PR #58 history for the catch-22 this resolves.
 on:
   push:
     branches: [main]
@@ -9,10 +18,6 @@ on:
       - '.github/workflows/lint.yml'
   pull_request:
     branches: [main]
-    paths:
-      - '**/*.ps1'
-      - '**/*.psm1'
-      - '.github/workflows/lint.yml'
 
 jobs:
   lint:
