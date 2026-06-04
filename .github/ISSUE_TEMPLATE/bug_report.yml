@@ -1,5 +1,5 @@
 name: 🐛 Tool bug report
-description: Report a bug or unexpected behavior in the Simple Dune Server Management Tool itself (the desktop app, the PowerShell script, or the .bat launcher).
+description: Report a bug or unexpected behavior in the Dune Server Tool itself (the desktop app, the PowerShell script, the .bat launcher, or the installer).
 title: "[Bug] "
 labels: ["bug"]
 body:
@@ -8,21 +8,22 @@ body:
       value: |
         ## What this tracker is for
 
-        This issue tracker is for **bugs in this tool's code** — the
-        desktop app (Dashboard / Monitoring / Characters / Game Config /
-            Database / DD Map / Settings / Setup Wizard / Additional Sietches),
-        the PowerShell script (`dune-server.ps1`), the `.bat`
-        launcher, and the installer.
+        This issue tracker is for **bugs in this tool's code** — the desktop
+        app (Server Health, Commands, PowerShell, Characters, Game Config, DD
+        Map, Database, Sietches, Map SpinUp, Settings, Setup Wizard), the
+        PowerShell script (`dune-server.ps1`), the `.bat` launcher, and the
+        installer (`DuneServerSetup.exe`).
 
         **✅ Do open an issue here** when the tool shows you a problem, e.g.:
-        - The **Dashboard** shows the battlegroup as **Unknown** with a yellow
-          message under it (SSH key / connection diagnostics).
+        - The **Server Health** page shows the battlegroup as **Unknown** with
+          a yellow message under it (SSH key / connection diagnostics).
         - The **Setup Wizard / preflight** "SSH key authorized on VM" check
           fails, or any other preflight check is wrong.
-        - **Server Health**, **Game Config**, **Database**, **Characters**, a
-          button, page, or the terminal pane misbehaves.
+        - **Game Config**, **Database** (backup / restore / SQL editor /
+          backup schedule), **Map SpinUp**, **Characters**, a button, page, the
+          top menu bar, or the embedded PowerShell pane misbehaves.
 
-        > 💡 The tool now explains *why* it can't reach the VM. If you see one of
+        > 💡 The tool explains *why* it can't reach the VM. If you see one of
         > those yellow messages, copy it into the **Connection / VM status
         > message** box below — that's usually all we need to pinpoint it.
 
@@ -45,15 +46,15 @@ body:
       label: Scope check
       description: Please confirm this is about the tool, not a raw Funcom/network problem.
       options:
-        - label: This is about the tool — the app/CLI itself misbehaves, **or** the tool shows me an error/diagnostic message (e.g. the Dashboard battlegroup status, a Setup "SSH key" check, Server Health). It is **not** a pure Funcom game-server crash or router/port-forwarding question with no tool message.
+        - label: This is about the tool — the app/CLI itself misbehaves, **or** the tool shows me an error/diagnostic message (e.g. the Server Health battlegroup status, a Setup "SSH key" check). It is **not** a pure Funcom game-server crash or router/port-forwarding question with no tool message.
           required: true
 
   - type: input
     id: tool_version
     attributes:
       label: Tool version
-      description: Shown in the bottom-left of the web portal sidebar and in the CLI menu header. Auto-filled when launched from the **?** help button in the top-left of the portal, or from the CLI `report-issue` command.
-      placeholder: "v6.1.22"
+      description: Shown in the bottom-left of the web portal sidebar (status bar) and in the CLI menu header. Auto-filled when launched from **Help → Create GitHub Issue** in the top menu bar, or from the CLI `report-issue` command.
+      placeholder: "v10.2.4"
     validations:
       required: true
 
@@ -61,27 +62,29 @@ body:
     id: surface
     attributes:
       label: Where did the bug happen?
-      description: Which part of the tool was affected? Pick the closest match.
+      description: Which part of the tool was affected? Pick the closest match. (Nav layout reflects v10.x — the top-bar / sidebar groups are Server Health, PowerShell, Game Data, Database, System, plus a Help dropdown on the right.)
       options:
-        - Web portal — Dashboard / Server Health
+        - Web portal — Server Health (Dashboard)
         - Web portal — Battlegroup shows "Unknown" / tool can't connect to the VM (SSH)
-        - Web portal — Monitoring
         - Web portal — Commands
-        - Web portal — PowerShell pane
-        - Web portal — Characters
-        - Web portal — Game Config
-        - Web portal — Database (Backup / Restore / SQL Editor)
+        - Web portal — PowerShell (embedded xterm.js terminal)
+        - Web portal — Characters (dune-admin launcher / players UI)
+        - Web portal — Game Config (UserGame.ini / UserEngine.ini / Spicefield Types)
         - Web portal — DD Map
-        - Web portal — Settings (general)
+        - Web portal — Database (Backup / Restore / SQL Editor)
+        - Web portal — Database (Backup Schedule / crontab)
+        - Web portal — Sietches (Additional Survival_1 shards)
+        - Web portal — Map SpinUp
+        - Web portal — Settings (general — paths, ports, providers)
         - Web portal — Settings (dune-admin updater / sane-pricing auto-apply)
         - Web portal — Settings (Dune Server Tool self-updater)
         - Web portal — Setup Wizard / first-run
-        - Web portal — Additional Sietches / Sietches
-        - Web portal — Sidebar / status bar / window chrome / help button
-        - PWA install / desktop-app shell
+        - Web portal — Top menu bar / Help dropdown
+        - Web portal — Sidebar / status bar / window chrome
+        - Desktop app shell (DuneShell.exe / WebView2) / PWA install
         - CLI (`dune-server.ps1` / `dune-server.bat`)
-        - Installer / first-run setup
-        - Update checker / auto-updater
+        - Installer (`DuneServerSetup.exe`) / first-run setup
+        - Update checker / auto-updater (DST or dune-admin)
         - Other (describe below)
     validations:
       required: true
@@ -91,7 +94,7 @@ body:
     attributes:
       label: Specific page / button / command
       description: Which button, tab, menu letter/number, or `-Cmd <name>` triggered the bug?
-      placeholder: "e.g. Dashboard 'Restart' button, Characters > Cosmetics > Save, CLI option 'e. reboot', or -Cmd startup"
+      placeholder: "e.g. Server Health 'Restart battlegroup' button, Game Config > Spicefields > Save, Database > Backup Schedule presets > Hourly, Map SpinUp > Survival_2, Help > Create GitHub Issue, CLI option 'e. reboot', or -Cmd startup"
     validations:
       required: true
 
@@ -146,9 +149,9 @@ body:
       label: Does an interactive SSH terminal still work?
       description: |
         Only relevant for VM/SSH bugs. Open **Commands → "Open an SSH terminal to
-        the VM"** (CLI option `17`/`ssh`) and see if it connects. This single
-        answer tells us apart a passphrase-protected key (works here, fails the
-        dashboard) from a key the VM never authorized (fails everywhere).
+        the VM"** (or the **PowerShell** page and run the SSH command yourself).
+        This single answer tells us apart a passphrase-protected key (works here,
+        fails the dashboard) from a key the VM never authorized (fails everywhere).
       options:
         - Not applicable — my bug isn't about VM/SSH connectivity
         - "Yes — the interactive SSH terminal connects, but the Dashboard still shows Unknown"
