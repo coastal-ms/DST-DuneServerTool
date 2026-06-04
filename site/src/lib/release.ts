@@ -60,3 +60,23 @@ export async function getLatestRelease(): Promise<LatestRelease> {
     return FALLBACK;
   }
 }
+
+// Renders a version string for display in the site UI (everywhere except the
+// changelog / release-notes page, which prints raw tags from CHANGELOG.md).
+// Convention: the current major series (10) is shown as the Roman numeral "X",
+// with the minor.patch suffix in parentheses. Examples:
+//   "10.2.4" -> "X (2.4)"
+//   "10.0"   -> "X"
+//   "10"     -> "X"
+//   "9.1.2"  -> "v9.1.2"   (other majors untouched)
+//   "latest" -> "the latest release"
+export function formatDisplayVersion(version: string): string {
+  if (!version || version === "latest") return "the latest release";
+  const cleaned = version.replace(/^v/, "");
+  const parts = cleaned.split(".");
+  if (parts[0] === "10") {
+    const rest = parts.slice(1).join(".").replace(/(\.0)+$/, "");
+    return rest ? `X (${rest})` : "X";
+  }
+  return `v${cleaned}`;
+}
