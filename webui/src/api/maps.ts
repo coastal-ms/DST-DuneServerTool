@@ -64,3 +64,16 @@ export function stopMap(key: string, force = false) {
     method: 'POST',
   })
 }
+
+export interface FixPartitionsResult {
+  ok: boolean
+  output?: string
+  logTail?: string
+  message?: string
+}
+
+export function fixOnDemandPartitions() {
+  return api<FixPartitionsResult>('/api/maps/fix-partitions', {
+    method: 'POST',
+  })
+}
