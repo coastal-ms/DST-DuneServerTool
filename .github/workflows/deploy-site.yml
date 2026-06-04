@@ -16,8 +16,11 @@ on:
       - "CHANGELOG.md"
       - "docs/img/**"
       - ".github/workflows/deploy-site.yml"
-  release:
-    types: [published]
+  # NOTE: we intentionally do NOT trigger on `release: published`. The
+  # `release: v10.2.X ...` merge commit to main always touches CHANGELOG.md
+  # and re-deploys the site, and the github-pages environment only allows
+  # one concurrent deploy — so a release-event run that fires while the
+  # CHANGELOG-push run is in flight just gets rejected and spams CI email.
   workflow_dispatch:
 
 # Allow only one deploy at a time; cancel in-progress runs on new pushes.
