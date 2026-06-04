@@ -1,0 +1,47 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 630" width="1200" height="630">
+  <defs>
+    <radialGradient id="glow" cx="50%" cy="0%" r="70%">
+      <stop offset="0%" stop-color="#d97706" stop-opacity="0.22"/>
+      <stop offset="60%" stop-color="#d97706" stop-opacity="0.04"/>
+      <stop offset="100%" stop-color="#0a0908" stop-opacity="0"/>
+    </radialGradient>
+    <linearGradient id="dunes" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#d97706" stop-opacity="0.55"/>
+      <stop offset="100%" stop-color="#d97706" stop-opacity="0.15"/>
+    </linearGradient>
+  </defs>
+
+  <rect width="1200" height="630" fill="#0a0908"/>
+  <rect width="1200" height="630" fill="url(#glow)"/>
+
+  <g opacity="0.85">
+    <path d="M0,510 Q200,440 400,470 T800,455 T1200,475 L1200,630 L0,630 Z" fill="url(#dunes)"/>
+    <path d="M0,560 Q250,510 500,540 T1000,525 T1200,545 L1200,630 L0,630 Z" fill="#d97706" fill-opacity="0.18"/>
+  </g>
+
+  <circle cx="990" cy="120" r="48" fill="#f59e0b" opacity="0.9"/>
+  <circle cx="990" cy="120" r="60" fill="none" stroke="#f59e0b" stroke-opacity="0.3" stroke-width="2"/>
+
+  <text x="80" y="180" font-family="Inter, -apple-system, system-ui, sans-serif"
+        font-size="26" font-weight="500" fill="#d97706" letter-spacing="6">
+    DUNE SERVER TOOL
+  </text>
+
+  <text x="80" y="320" font-family="Inter, -apple-system, system-ui, sans-serif"
+        font-size="92" font-weight="700" fill="#e8e2d4" letter-spacing="-2">
+    Run your Dune
+  </text>
+  <text x="80" y="420" font-family="Inter, -apple-system, system-ui, sans-serif"
+        font-size="92" font-weight="700" fill="#e8e2d4" letter-spacing="-2">
+    server without
+  </text>
+  <text x="80" y="520" font-family="Inter, -apple-system, system-ui, sans-serif"
+        font-size="92" font-weight="700" fill="#d97706" letter-spacing="-2">
+    the YAML.
+  </text>
+
+  <text x="80" y="600" font-family="ui-monospace, 'JetBrains Mono', Consolas, monospace"
+        font-size="22" fill="#9a9285">
+    coastal-ms/DST-DuneServerTool · Apache 2.0 · by @allcoast
+  </text>
+</svg>

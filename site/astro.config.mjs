@@ -1,6 +1,7 @@
 // @ts-check
 import { defineConfig } from "astro/config";
 import mdx from "@astrojs/mdx";
+import sitemap from "@astrojs/sitemap";
 import tailwindcss from "@tailwindcss/vite";
 
 // GitHub Pages project site — served at /DST-DuneServerTool/.
@@ -18,7 +19,13 @@ export default defineConfig({
     host: "127.0.0.1",
     port: 4321,
   },
-  integrations: [mdx()],
+  integrations: [
+    mdx(),
+    sitemap({
+      // The 404 page shouldn't be indexable.
+      filter: (page) => !page.endsWith("/404"),
+    }),
+  ],
   vite: {
     plugins: [tailwindcss()],
   },
