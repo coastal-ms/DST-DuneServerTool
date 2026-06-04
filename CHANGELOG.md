@@ -13,6 +13,14 @@ here cover everything those tags shipped.
 
 ## [Unreleased]
 
+## [10.2.3] - 2026-06-03
+
+### Changed
+- **Map SpinUp icon** changed from `Power` to `Globe` in both the
+  sidebar and the Database menubar dropdown — more representative of
+  what the page does (spawn a region/map server) and stops it from
+  looking like a generic on/off control.
+
 ## [10.2.2] - 2026-06-03
 
 ### Removed
