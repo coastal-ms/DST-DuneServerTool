@@ -1,5 +1,6 @@
 ---
 import "../styles/global.css";
+import Lightbox from "../components/Lightbox.astro";
 const { title, description, ogImage } = Astro.props as {
   title: string;
   description?: string;
@@ -109,5 +110,6 @@ const ogImg = new URL(ogImage ?? `${base}og.png`, Astro.site).toString();
         </div>
       </div>
     </footer>
+    <Lightbox />
   </body>
 </html>
