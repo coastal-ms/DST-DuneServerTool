@@ -19,7 +19,7 @@ export const NAV_ITEMS: NavItem[] = [
   { to: '/dd-map',      label: 'DD Map',       icon: 'Map',             group: 'data' },
   { to: '/database',    label: 'Database',     icon: 'Database',        group: 'database' },
   { to: '/sietches',    label: 'Sietches',     icon: 'Network',         group: 'database' },
-  { to: '/map-spinup',  label: 'Map SpinUp',   icon: 'Power',           group: 'database' },
+  { to: '/map-spinup',  label: 'Map SpinUp',   icon: 'Globe',           group: 'database' },
   { to: '/settings',    label: 'Settings',     icon: 'Settings',        group: 'system' },
   { to: '/setup',       label: 'Setup Wizard', icon: 'Wand2',           group: 'system' },
 ]
