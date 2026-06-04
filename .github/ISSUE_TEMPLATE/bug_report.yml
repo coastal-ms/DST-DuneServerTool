@@ -14,6 +14,15 @@ body:
         PowerShell script (`dune-server.ps1`), the `.bat` launcher, and the
         installer (`DuneServerSetup.exe`).
 
+        > 💡 **One-click report from the app.** In the desktop app, click
+        > **Help → Create GitHub Issue + Save Logs**. It opens this form
+        > pre-filled AND saves `dst-diagnostics-<timestamp>.zip` to your
+        > Desktop (Explorer pops with the ZIP selected). **Drag the ZIP
+        > into the comment area below** to attach all logs at once — VM IPs,
+        > SSH paths, Windows usernames, and config secrets are redacted before
+        > the ZIP is written. The bundle's `manifest.txt` lists what's inside
+        > and any sanitization warnings.
+
         **✅ Do open an issue here** when the tool shows you a problem, e.g.:
         - The **Server Health** page shows the battlegroup as **Unknown** with
           a yellow message under it (SSH key / connection diagnostics).
@@ -165,12 +174,17 @@ body:
     attributes:
       label: Transcript / log excerpt
       description: |
-        Every CLI run is auto-logged to `.logs\dune-server-<timestamp>.log`
-        next to `dune-server.bat`. The desktop app also writes
-        `%APPDATA%\DuneServer\webview2-debug.log`. Paste the relevant
-        section (last 30-50 lines around the failure is usually enough
-        — please **redact** public IPs, SSH key paths, hostnames, and
-        any secrets first).
+        💡 **Easiest path: attach the diagnostic ZIP.** Use **Help → Create
+        GitHub Issue + Save Logs** in the desktop app — it saves a redacted
+        `dst-diagnostics-<timestamp>.zip` to your Desktop and reveals it in
+        Explorer. Drag it onto this comment area to attach.
+
+        If you'd rather paste manually, every CLI run is auto-logged to
+        `.logs\dune-server-<timestamp>.log` next to `dune-server.bat`. The
+        desktop app also writes `%APPDATA%\DuneServer\webview2-debug.log`.
+        Paste the relevant section (last 30-50 lines around the failure is
+        usually enough — please **redact** public IPs, SSH key paths,
+        hostnames, and any secrets first).
       render: shell
 
   - type: textarea

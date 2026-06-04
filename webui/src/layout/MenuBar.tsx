@@ -4,6 +4,7 @@ import { Icon } from '../components/Icon'
 import { NAV_ITEMS, GROUP_LABELS, GROUP_ORDER, type NavGroup } from '../nav'
 import { useUpdateCheck } from '../hooks/useUpdateCheck'
 import { useLaunchDuneAdmin } from '../hooks/useLaunchDuneAdmin'
+import { buildDiagnosticBundle } from '../api/diagnostics'
 
 type MenuKey = NavGroup | 'help'
 
@@ -44,6 +45,23 @@ export function MenuBar({ sidebarCollapsed, onToggleSidebar }: Props) {
   const issueHref = `https://github.com/coastal-ms/DST-DuneServerTool/issues/new?template=bug_report.yml${
     version ? `&tool_version=v${encodeURIComponent(version)}` : ''
   }`
+
+  // Help → Create GitHub Issue + Save Logs. Opens the prefilled issue form
+  // synchronously inside the click handler (so the popup-blocker treats it as
+  // a user gesture), then fires the diagnostics-bundle build in the
+  // background. The backend pops an Explorer window with the ZIP selected so
+  // the user can drag it straight into the new issue comment. We intentionally
+  // do NOT await the bundle before opening the issue — a slow zip should
+  // never make the issue tab fail to open.
+  const onReportIssue = () => {
+    setOpen(null)
+    window.open(issueHref, '_blank', 'noopener,noreferrer')
+    void buildDiagnosticBundle().catch(() => {
+      /* the toastless world: backend already revealed the ZIP if it succeeded.
+         A failure here just means no auto-bundle — the user can still file the
+         issue manually and attach logs themselves. */
+    })
+  }
 
   const onItemClick = (item: typeof NAV_ITEMS[number]) => {
     setOpen(null)
@@ -127,18 +145,22 @@ export function MenuBar({ sidebarCollapsed, onToggleSidebar }: Props) {
           Help
         </button>
         {open === 'help' && (
-          <div className="absolute left-0 top-full mt-1 min-w-[220px] bg-surface border border-border rounded-xl p-1 shadow-xl shadow-black/40 z-50">
-            <a
-              href={issueHref}
-              target="_blank"
-              rel="noopener noreferrer"
-              onClick={() => setOpen(null)}
-              className="w-full flex items-center gap-2 px-2.5 py-1.5 rounded text-sm text-text-muted hover:text-text hover:bg-surface-2 transition-colors"
+          <div className="absolute left-0 top-full mt-1 min-w-[260px] bg-surface border border-border rounded-xl p-1 shadow-xl shadow-black/40 z-50">
+            <button
+              type="button"
+              onClick={onReportIssue}
+              className="w-full flex items-start gap-2 px-2.5 py-1.5 rounded text-sm text-text-muted hover:text-text hover:bg-surface-2 transition-colors text-left"
+              title="Opens the prefilled GitHub bug-report form and saves a redacted log ZIP to your Desktop (Explorer will pop with the ZIP selected — drag it into the issue comment)."
             >
-              <Icon name="Github" size={14} />
-              <span className="flex-1">Create GitHub Issue</span>
-              <Icon name="ExternalLink" size={11} className="text-text-dim" />
-            </a>
+              <Icon name="Github" size={14} className="mt-0.5" />
+              <span className="flex-1">
+                <span className="block">Create GitHub Issue + Save Logs</span>
+                <span className="block text-[11px] text-text-dim">
+                  Opens the issue form &amp; drops a redacted ZIP on your Desktop
+                </span>
+              </span>
+              <Icon name="ExternalLink" size={11} className="text-text-dim mt-1" />
+            </button>
             <button
               type="button"
               onClick={() => { onToggleSidebar(); setOpen(null) }}

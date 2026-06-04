@@ -2216,6 +2216,11 @@ while ($true) {
         Write-Host "  Not for raw router/port-forwarding or Funcom game-server issues -" -ForegroundColor Yellow
         Write-Host "  for those, ping @allcoast on Discord." -ForegroundColor DarkGray
         Write-Host ""
+        Write-Host "  TIP: For the easiest bug report, launch the desktop app and" -ForegroundColor Cyan
+        Write-Host "       click Help -> Create GitHub Issue + Save Logs. That" -ForegroundColor Cyan
+        Write-Host "       saves a redacted dst-diagnostics-<ts>.zip on your Desktop" -ForegroundColor Cyan
+        Write-Host "       you can drag straight into the issue comment." -ForegroundColor Cyan
+        Write-Host ""
 
         # GitHub issue forms accept URL params keyed by the input id in the
         # YAML form. Prefill what we already know so the user only fills in
