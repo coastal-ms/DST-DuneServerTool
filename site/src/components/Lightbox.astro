@@ -9,21 +9,22 @@
   class="w-screen h-screen max-w-none max-h-none m-0 p-0 bg-transparent backdrop:bg-black/85 backdrop:backdrop-blur-sm"
   aria-label="Image viewer"
 >
-  <div class="relative w-full h-full flex items-center justify-center p-4 sm:p-8">
+  <div class="relative w-full h-full flex items-center justify-center p-4 sm:p-8 cursor-zoom-out" data-lightbox-close>
     <button
       type="button"
       data-lightbox-close
       aria-label="Close image viewer"
-      class="absolute top-4 right-4 z-10 rounded-full bg-dune-surface/90 hover:bg-dune-surface text-dune-text w-10 h-10 flex items-center justify-center border border-dune-border focus:outline-none focus-visible:ring-2 focus-visible:ring-dune-accent"
+      class="absolute top-4 right-4 z-10 rounded-full bg-black/85 hover:bg-black text-white w-12 h-12 flex items-center justify-center border-2 border-white/90 shadow-xl shadow-black/60 focus:outline-none focus-visible:ring-2 focus-visible:ring-dune-accent transition-colors"
     >
-      <svg viewBox="0 0 24 24" class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+      <svg viewBox="0 0 24 24" class="w-6 h-6" fill="none" stroke="currentColor" stroke-width="2.5" aria-hidden="true">
         <path d="M6 6l12 12M18 6L6 18" stroke-linecap="round" />
       </svg>
     </button>
     <img
       id="dst-lightbox-img"
       alt=""
-      class="max-w-full max-h-full object-contain rounded-lg shadow-2xl shadow-black/60"
+      data-lightbox-close
+      class="max-w-full max-h-full object-contain rounded-lg shadow-2xl shadow-black/60 cursor-zoom-out"
     />
   </div>
 </dialog>
