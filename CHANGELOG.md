@@ -13,6 +13,14 @@ here cover everything those tags shipped.
 
 ## [Unreleased]
 
+## [10.2.1] - 2026-06-03
+
+### Changed
+- **Top menu bar and its dropdowns are now fully opaque.** Removed the
+  semi-transparent surface tint + `backdrop-blur-md` (menubar strip) and
+  the `card` translucency + `backdrop-blur-sm` (dropdown panels) so page
+  content underneath no longer bleeds through. Solid `bg-surface` on both.
+
 ## [10.2.0] - 2026-06-03
 
 ### Added
