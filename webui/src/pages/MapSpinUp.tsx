@@ -3,6 +3,7 @@ import { PageHeader } from '../components/PageHeader'
 import { Icon } from '../components/Icon'
 import { ApiError } from '../api/client'
 import { getMapSpinUp, setMapSpinUp, type SpinUpMap } from '../api/mapSpinUp'
+import { fixOnDemandPartitions } from '../api/maps'
 
 export function MapSpinUp() {
   const [maps, setMaps] = useState<SpinUpMap[] | null>(null)
@@ -10,6 +11,8 @@ export function MapSpinUp() {
   const [error, setError] = useState<string | null>(null)
   const [message, setMessage] = useState<string | null>(null)
   const [busy, setBusy] = useState<string | null>(null)
+  const [fixBusy, setFixBusy] = useState(false)
+  const [fixLog, setFixLog] = useState<string | null>(null)
 
   const refresh = useCallback(async () => {
     setLoading(true); setError(null)
@@ -43,6 +46,31 @@ export function MapSpinUp() {
     }
   }, [refresh])
 
+  const onFixPartitions = useCallback(async () => {
+    const ok = window.confirm(
+      'Clear stuck partition pins on the on-demand maps (Deep Desert, Arrakeen, '
+      + 'Harko Village) so the director can re-assign partitions and spin them up '
+      + 'on demand?\n\n'
+      + 'Safety:\n'
+      + '• Only those 3 maps are touched. Overmap and Survival_1 are never affected.\n'
+      + '• Any map with a running pod is skipped — no live session will be disturbed.\n'
+      + '• Partitions are re-assigned by the director on next spawn.\n\n'
+      + 'Use this when a map refuses to launch after a reboot or BG restart.',
+    )
+    if (!ok) return
+    setFixBusy(true); setMessage(null); setError(null); setFixLog(null)
+    try {
+      const r = await fixOnDemandPartitions()
+      setMessage(r.message ?? 'Partition cleanup ran.')
+      const tail = (r.logTail && r.logTail.trim().length > 0) ? r.logTail : (r.output ?? '')
+      setFixLog(tail || null)
+    } catch (e) {
+      setError(e instanceof ApiError ? e.message : String(e))
+    } finally {
+      setFixBusy(false)
+    }
+  }, [])
+
   const supported = (maps ?? []).filter(m => m.group === 'supported')
   const experimental = (maps ?? []).filter(m => m.group === 'experimental')
 
@@ -53,9 +81,20 @@ export function MapSpinUp() {
         icon="Power"
         description="Keep at least one server warm for a map (MinServers = 1). Hot-swappable — no restart needed."
         actions={
-          <button className="btn-secondary" onClick={() => { void refresh() }} disabled={loading || busy !== null}>
-            <Icon name="RefreshCw" size={15} className={loading ? 'animate-spin' : ''} /> Refresh
-          </button>
+          <>
+            <button
+              className="btn-secondary"
+              onClick={() => { void onFixPartitions() }}
+              disabled={loading || busy !== null || fixBusy}
+              title="Clear stuck igwsss.spec.partitions pins on Deep Desert / Arrakeen / Harko Village. Safe — only touches those 3 maps, skips any with a running pod, and never touches Overmap or Survival_1."
+            >
+              <Icon name={fixBusy ? 'Loader2' : 'Wrench'} size={15} className={fixBusy ? 'animate-spin' : ''} />
+              {fixBusy ? 'Fixing…' : 'Fix partitions'}
+            </button>
+            <button className="btn-secondary" onClick={() => { void refresh() }} disabled={loading || busy !== null || fixBusy}>
+              <Icon name="RefreshCw" size={15} className={loading ? 'animate-spin' : ''} /> Refresh
+            </button>
+          </>
         }
       />
 
@@ -67,6 +106,11 @@ export function MapSpinUp() {
       {message && (
         <div className="card p-4 mb-4 border-accent/40">
           <p className="text-sm text-text">{message}</p>
+          {fixLog && (
+            <pre className="mt-3 text-[11px] leading-snug text-text-dim font-mono whitespace-pre-wrap break-words max-h-60 overflow-auto border-t border-border/40 pt-2">
+              {fixLog}
+            </pre>
+          )}
         </div>
       )}
 
