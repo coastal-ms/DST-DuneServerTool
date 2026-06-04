@@ -1,10 +1,11 @@
 ---
-import { getLatestRelease } from "../lib/release";
+import { formatDisplayVersion, getLatestRelease } from "../lib/release";
 const { variant = "primary" } = Astro.props as {
   variant?: "primary" | "ghost";
 };
 const release = await getLatestRelease();
-const versionLabel = release.version === "latest" ? "" : `v${release.version.replace(/^v/, "")}`;
+const versionLabel =
+  release.version === "latest" ? "" : formatDisplayVersion(release.version);
 const classes =
   variant === "primary"
     ? "inline-flex items-center gap-3 rounded-lg bg-dune-accent hover:bg-dune-accent-soft text-dune-bg font-medium px-6 py-3 transition-colors shadow-lg shadow-amber-900/30"

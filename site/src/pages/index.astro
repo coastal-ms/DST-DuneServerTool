@@ -2,12 +2,11 @@
 import Base from "../layouts/Base.astro";
 import DownloadButton from "../components/DownloadButton.astro";
 import Screenshot from "../components/Screenshot.astro";
-import { getLatestRelease } from "../lib/release";
+import { formatDisplayVersion, getLatestRelease } from "../lib/release";
 
 const base = import.meta.env.BASE_URL;
 const release = await getLatestRelease();
-const versionLabel =
-  release.version === "latest" ? "the latest release" : `v${release.version}`;
+const versionLabel = formatDisplayVersion(release.version);
 
 const features = [
   {
