@@ -1,0 +1,42 @@
+---
+import Base from "../layouts/Base.astro";
+
+const base = import.meta.env.BASE_URL;
+---
+
+<Base
+  title="Not found — DST"
+  description="That page doesn't exist (yet)."
+>
+  <section
+    class="mx-auto max-w-2xl px-6 py-32 text-center flex flex-col items-center"
+  >
+    <div
+      class="font-mono text-xs uppercase tracking-widest text-dune-accent mb-3"
+    >
+      404
+    </div>
+    <h1 class="text-5xl font-semibold tracking-tight mb-4">
+      Lost in the deep desert.
+    </h1>
+    <p class="text-lg text-dune-muted mb-10 max-w-md">
+      That URL doesn't lead anywhere on this site. The link may be old, or the
+      page may have moved.
+    </p>
+    <div class="flex flex-wrap items-center justify-center gap-4">
+      <a
+        href={base}
+        class="inline-flex items-center gap-2 rounded-lg bg-dune-accent hover:bg-dune-accent-soft text-dune-bg font-medium px-6 py-3 transition-colors"
+      >
+        ← Back to home
+      </a>
+      <a
+        href="https://github.com/coastal-ms/DST-DuneServerTool/issues"
+        rel="noopener"
+        class="inline-flex items-center gap-2 rounded-lg border border-dune-border hover:border-dune-accent text-dune-text px-6 py-3 transition-colors"
+      >
+        Report a broken link
+      </a>
+    </div>
+  </section>
+</Base>

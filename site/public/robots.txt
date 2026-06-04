@@ -1,0 +1,4 @@
+User-agent: *
+Allow: /
+
+Sitemap: https://coastal-ms.github.io/DST-DuneServerTool/sitemap-index.xml
