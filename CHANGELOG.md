@@ -13,6 +13,41 @@ here cover everything those tags shipped.
 
 ## [Unreleased]
 
+## [10.2.5] - 2026-06-03
+
+### Added
+- **Help → Create GitHub Issue + Save Logs** in the top menu bar — one
+  click opens the prefilled `bug_report.yml` issue form **and** drops a
+  redacted `dst-diagnostics-<timestamp>.zip` on the user's Desktop with
+  Explorer popped to it, so reporters can drag-and-drop attach all
+  relevant logs to the new issue comment in one motion. Bundle contains
+  `env.txt` (tool/PS/OS/WebView2 versions), a sanitized copy of
+  `dune-server.config`, the tail of `webview2-debug.log` (last 200 KB),
+  the last 3 CLI `dune-server-*.log` files (tails, 50 KB each), and a
+  `manifest.txt` listing what's inside and any sanitization warnings.
+- New `POST /api/diagnostics/bundle` route + `Invoke-DstRedaction`
+  helper that scrubs IPv4 / IPv6 (loopback preserved), Windows
+  user-profile paths, `?t=<token>` query params, and INI `key=value`
+  secrets for `SshKey`, `WindowsUser`, `SteamPath`, `DuneAdminExe`,
+  `PortCheckUrlTemplate` from every text file written into the bundle.
+
+### Changed
+- **Bug report template (`bug_report.yml`)** updated for the v10.2.x
+  app layout — surface dropdown now lists Server Health, Commands,
+  PowerShell, Characters, Game Config, DD Map, Database, Sietches, Map
+  SpinUp, Settings (split into 3 sub-areas), Setup Wizard, the top
+  menu bar/Help dropdown, sidebar/chrome, desktop shell, CLI, and the
+  installer — and the intro callout + Transcript field now point
+  reporters at the new diagnostic bundle button as the easiest way to
+  attach logs.
+- **CLI `report-issue`** prints a hint pointing CLI users at the
+  desktop app's Help → Create GitHub Issue + Save Logs flow for the
+  one-click attachable ZIP. URL-prefilled diagnostics are unchanged.
+
+### Removed
+- Legacy `bug_report.md` issue template (duplicate on the issue
+  chooser; the YAML form supersedes it).
+
 ## [10.2.4] - 2026-06-03
 
 ### Changed
