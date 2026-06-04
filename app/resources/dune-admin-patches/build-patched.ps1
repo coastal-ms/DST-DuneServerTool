@@ -244,6 +244,66 @@ if (-not $pnpm) {
 $pnpmExe = $pnpm.Exe
 $pnpmPre = $pnpm.Pre
 
+# --- Stale flat-file shadow cleanup (web/src/) -------------------------------
+# Sync-DuneAdminSourceTarball in DuneAdmin.ps1 overlays the upstream tarball
+# with `robocopy /E`, which is additive — it never deletes files that were
+# removed upstream. When the upstream `web/src/` tree refactors a flat
+# component file (Foo.tsx) into a directory (Foo/index.tsx), the deleted
+# flat file lingers on disk as an orphan from the prior install. TypeScript
+# / Vite module resolution prefers a bare `.tsx` over a sibling `dir/index.tsx`,
+# so the stale flat file SHADOWS the new directory and the build picks it up
+# instead — with predictable disasters: named imports of a default-exported
+# symbol fail (TS2614), type literals miss new required fields (TS2741), etc.
+#
+# Concrete instance that motivated this code: upstream Icehunter/dune-admin
+# v0.24.0 refactored web/src/tabs/WelcomePackageTab.tsx into
+# web/src/tabs/WelcomePackageTab/index.tsx (plus views/, types.ts). Users
+# upgrading from v0.23.x kept the old flat file, App.tsx's
+# `import { WelcomePackageTab } from './tabs/WelcomePackageTab'` resolved to
+# the stale flat file (which exported the symbol as default and lacked the
+# new active_versions field), and `pnpm build` failed every reinstall with:
+#   src/App.tsx(20,10): error TS2614 ...
+#   src/tabs/WelcomePackageTab.tsx(138,13): error TS2741 ...
+#
+# The fix is purely local: scan web/src/ for any `Foo.tsx` / `Foo.ts` that
+# has a sibling `Foo/` directory containing `index.tsx` / `index.ts`, and
+# delete the flat file (the directory wins on disk if the flat sibling is
+# gone). This is safe by construction — you never legitimately ship a flat
+# `Foo.tsx` next to a sibling `Foo/index.tsx`; the pattern only arises as a
+# refactor leftover. We also nuke the .dst-web-build-stamp on any removal so
+# the prior dist (which may have been built FROM the stale file) gets
+# rebuilt, not reused.
+function Remove-StaleFlatFileShadows {
+    [CmdletBinding()]
+    param([Parameter(Mandatory)][string]$Root)
+    $removed = New-Object System.Collections.Generic.List[string]
+    if (-not (Test-Path -LiteralPath $Root -PathType Container)) { return $removed }
+    $candidates = Get-ChildItem -LiteralPath $Root -Recurse -File -ErrorAction SilentlyContinue |
+        Where-Object {
+            ($_.Extension -eq '.tsx' -or $_.Extension -eq '.ts') -and
+            $_.Name -ne 'index.tsx' -and $_.Name -ne 'index.ts' -and
+            $_.Name -notlike '*.d.ts'
+        }
+    foreach ($f in $candidates) {
+        $base = [System.IO.Path]::GetFileNameWithoutExtension($f.Name)
+        $siblingDir = Join-Path $f.Directory.FullName $base
+        if (-not (Test-Path -LiteralPath $siblingDir -PathType Container)) { continue }
+        $hasIndex = (Test-Path -LiteralPath (Join-Path $siblingDir 'index.tsx')) -or
+                    (Test-Path -LiteralPath (Join-Path $siblingDir 'index.ts'))
+        if (-not $hasIndex) { continue }
+        try {
+            Remove-Item -LiteralPath $f.FullName -Force -ErrorAction Stop
+            $removed.Add($f.FullName) | Out-Null
+        } catch {
+            # Best-effort: if we can't delete (locked, AV, perms), the build
+            # will fail with the original TS error below — which is no worse
+            # than the pre-fix behavior. Log and continue.
+            Write-Host "    WARN: could not remove stale shadow $($f.FullName): $($_.Exception.Message)" -ForegroundColor Yellow
+        }
+    }
+    return $removed
+}
+
 Push-Location $repoRoot
 try {
     function Step($msg) { Write-Host "==> $msg" -ForegroundColor Cyan }
@@ -575,6 +635,28 @@ try {
         $nodeModules = Join-Path $webDir 'node_modules'
         $lockFile    = Join-Path $webDir 'pnpm-lock.yaml'
         $webStamp    = Join-Path $webDir '.dst-web-build-stamp'
+
+        # Purge stale flat-file shadows left over by the additive tarball
+        # overlay (see Remove-StaleFlatFileShadows docs above). Must run
+        # BEFORE the prereqs check — any removal forces a rebuild because the
+        # prior dist may have embedded code from the stale file.
+        $webSrc = Join-Path $webDir 'src'
+        $shadowsRemoved = Remove-StaleFlatFileShadows -Root $webSrc
+        if ($shadowsRemoved.Count -gt 0) {
+            Step "Removed $($shadowsRemoved.Count) stale flat-file shadow(s) under web\src\ (upstream refactor leftovers)"
+            foreach ($r in $shadowsRemoved) {
+                $rel = $r
+                if ($r.StartsWith($repoRoot, [System.StringComparison]::OrdinalIgnoreCase)) {
+                    $rel = $r.Substring($repoRoot.Length).TrimStart('\','/')
+                }
+                Info "removed $rel (shadowed by sibling directory with index.ts[x])"
+            }
+            # Invalidate the build stamp so the cached dist (potentially built
+            # FROM the stale file) gets rebuilt.
+            if (Test-Path -LiteralPath $webStamp) {
+                try { Remove-Item -LiteralPath $webStamp -Force -ErrorAction Stop } catch { }
+            }
+        }
         $lockHash = ''
         if (Test-Path -LiteralPath $lockFile) {
             try { $lockHash = (Get-FileHash -LiteralPath $lockFile -Algorithm SHA256).Hash } catch { }
