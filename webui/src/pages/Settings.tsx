@@ -22,6 +22,7 @@ import { fmtToolVersion } from '../format'
 import { DependencyInstallModal } from '../components/DependencyInstallModal'
 import { getDependencies, type SystemDependency } from '../api/dependencies'
 import { AppearanceCard } from './settings/AppearanceCard'
+import { RemoteAccessCard } from './settings/RemoteAccessCard'
 
 const FIELDS: {
   key: string
@@ -1274,6 +1275,8 @@ export function Settings() {
       </div>
 
       <AppearanceCard />
+
+      <RemoteAccessCard />
 
       <form onSubmit={onSubmit} className="card p-6 space-y-5">
         {FIELDS.map(f => (

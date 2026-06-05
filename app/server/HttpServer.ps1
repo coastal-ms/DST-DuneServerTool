@@ -278,6 +278,17 @@ function Invoke-DuneApiHandlerAsync {
     # UI gets a fast, honest error instead of an unbounded wait.
     if (-not $script:DuneApiGate.Wait(0)) {
         try { Write-DuneError -Response $Response -Status 503 -Message 'Server busy: handler pool saturated. Try again shortly.' } catch {}
+        # Remote portal audit (issue #74): saturation on a remote write
+        # never reaches the worker's finally block, so log here.
+        try {
+            if ($RouteParams -and $RouteParams.ContainsKey('remoteEmail') -and $RouteParams.remoteEmail) {
+                $m = ''; try { $m = [string]$Request.HttpMethod } catch {}
+                if ($m -and $m -ne 'GET' -and $m -ne 'HEAD') {
+                    $p = ''; try { $p = [string]$Request.Url.AbsolutePath } catch {}
+                    Write-DuneRemoteAudit -Role ([string]$RouteParams.remoteRole) -Email ([string]$RouteParams.remoteEmail) -Method $m -Path $p -Status 503 -Note 'pool-saturated'
+                }
+            }
+        } catch {}
         return
     }
 
@@ -343,6 +354,26 @@ function Invoke-DuneApiHandlerAsync {
             } catch {}
         } finally {
             try { $res.OutputStream.Close() } catch {}
+            # Remote portal audit log (issue #74): when this worker handled
+            # a write (non-GET) /api/remote/* request, append one line with
+            # the final status code. Reads are NOT audit-logged. Listener-
+            # thread denials (401/403/503) are logged in Invoke-DuneContext
+            # directly because the worker never starts for those.
+            try {
+                if ($routeParams -and $routeParams.ContainsKey('remoteEmail') -and $routeParams.remoteEmail) {
+                    $m = ''
+                    try { $m = [string]$req.HttpMethod } catch {}
+                    if ($m -and $m -ne 'GET' -and $m -ne 'HEAD') {
+                        $p = ''
+                        try { $p = [string]$req.Url.AbsolutePath } catch {}
+                        $sc = 0
+                        try { $sc = [int]$res.StatusCode } catch {}
+                        if (Get-Command Write-DuneRemoteAudit -ErrorAction SilentlyContinue) {
+                            Write-DuneRemoteAudit -Role ([string]$routeParams.remoteRole) -Email ([string]$routeParams.remoteEmail) -Method $m -Path $p -Status $sc
+                        }
+                    }
+                }
+            } catch {}
             try { $res.Close() } catch {}
             # Release the gate permit (idempotent with the main-loop sweep).
             try {
@@ -445,7 +476,16 @@ function Write-DuneError {
 }
 
 function Write-DuneFile {
-    param($Response, [string]$Path)
+    param(
+        $Response,
+        [string]$Path,
+        # When set, treat the file as the remote-portal index.html and
+        # string-replace the <!-- DUNE_REMOTE_BOOTSTRAP --> marker with a
+        # tiny <script> tag that exposes the per-launch DuneToken to the
+        # remote SPA. Issue #74: this is how the SPA gets the token without
+        # the user having to paste it on a phone.
+        [switch]$InjectRemoteToken
+    )
     if (-not (Test-Path -LiteralPath $Path -PathType Leaf)) {
         Write-DuneError -Response $Response -Status 404 -Message 'Not found'
         return
@@ -458,6 +498,20 @@ function Write-DuneFile {
         $Response.Headers['Cache-Control'] = 'public, max-age=31536000, immutable'
     } else {
         $Response.Headers['Cache-Control'] = 'no-cache'
+    }
+
+    if ($InjectRemoteToken) {
+        # index.html is small (~1 KB); read it as text, do the replacement,
+        # then emit UTF-8 bytes. Never cached (we already set no-cache above).
+        $html = Get-Content -LiteralPath $Path -Raw -Encoding UTF8
+        $tokenLiteral = if ($script:DuneToken) { ($script:DuneToken -replace '"','\"') } else { '' }
+        $script = '<script>window.__duneRemoteToken="' + $tokenLiteral + '";</script>'
+        $html = $html -replace '<!--\s*DUNE_REMOTE_BOOTSTRAP\s*-->', $script
+        $bytes = [System.Text.Encoding]::UTF8.GetBytes($html)
+        $Response.ContentLength64 = $bytes.Length
+        $Response.OutputStream.Write($bytes, 0, $bytes.Length)
+        $Response.OutputStream.Close()
+        return
     }
 
     $stream = [System.IO.File]::OpenRead($Path)
@@ -677,6 +731,101 @@ function Invoke-DuneContext {
         }
         $res.StatusCode = 404
         $res.OutputStream.Close()
+        return
+    }
+
+    # ---------- Remote portal (issue #74) ------------------------------------
+    # Two distinct surfaces gated by Cloudflare Access:
+    #   /api/remote/*  — JSON API, requires CF Access header + ACL match
+    #                    AND DuneToken (defense in depth).
+    #   /remote/*      — SPA HTML/assets, requires CF Access header + ACL.
+    #                    Token reaches the SPA via index.html injection.
+    # All other /api/* and /api/remote-access/* fall through to the
+    # standard DuneToken gate below.
+    $isRemoteApi = $rawPath.StartsWith('/api/remote/')
+    $isRemoteSpa = $rawPath.StartsWith('/remote/') -or $rawPath -eq '/remote'
+    if ($isRemoteApi -or $isRemoteSpa) {
+        $auth = $null
+        try { $auth = Test-DuneRemoteRequest -Request $req } catch {
+            $auth = @{ ok = $false; status = 500; message = "Auth middleware error: $($_.Exception.Message)" }
+        }
+        if (-not $auth.ok) {
+            $note = if ($auth.status -eq 401) { 'auth-required' } elseif ($auth.status -eq 403) { 'not-authorized' } else { 'auth-error' }
+            $emailHdr = ''
+            try { $emailHdr = ($req.Headers['Cf-Access-Authenticated-User-Email']) } catch {}
+            try {
+                Write-DuneRemoteAudit -Role '-' -Email $emailHdr -Method $method -Path $rawPath -Status $auth.status -Note $note
+            } catch {}
+            Write-DuneError -Response $res -Status $auth.status -Message $auth.message
+            return
+        }
+
+        if ($isRemoteApi) {
+            # /api/remote/* — also require the per-launch DuneToken (defense
+            # in depth — a same-Windows-box attacker forging the CF header
+            # still hits this wall because the token only lives in DST's RAM).
+            if (-not (Test-DuneToken -Request $req)) {
+                try { Write-DuneRemoteAudit -Role $auth.role -Email $auth.email -Method $method -Path $rawPath -Status 401 -Note 'token-missing' } catch {}
+                Write-DuneError -Response $res -Status 401 -Message 'Invalid or missing token'
+                return
+            }
+            foreach ($r in $script:DuneRoutes) {
+                if ($r.Method -ne $method) { continue }
+                $m = $r.Regex.Match($rawPath)
+                if ($m.Success) {
+                    $routeParams = @{}
+                    foreach ($g in $r.Regex.GetGroupNames()) {
+                        if ($g -notmatch '^\d+$') { $routeParams[$g] = $m.Groups[$g].Value }
+                    }
+                    $routeParams['remoteEmail'] = $auth.email
+                    $routeParams['remoteRole']  = $auth.role
+                    if ($script:DuneApiPoolEnabled -and -not $r.Inline) {
+                        Invoke-DuneApiHandlerAsync -Handler $r.Handler -Request $req -Response $res -RouteParams $routeParams
+                        return
+                    }
+                    $body = $null
+                    if ($req.HasEntityBody) {
+                        $reader = [System.IO.StreamReader]::new($req.InputStream, $req.ContentEncoding)
+                        try { $body = $reader.ReadToEnd() } finally { $reader.Dispose() }
+                        if ($body -and $req.ContentType -like 'application/json*') {
+                            $body = ConvertFrom-DuneRequestJson -Raw $body
+                        }
+                    }
+                    & $r.Handler $req $res $routeParams $body
+                    # Inline path also gets audit-logged for writes (the
+                    # worker path is handled in Invoke-DuneApiHandlerAsync).
+                    if ($method -ne 'GET' -and $method -ne 'HEAD') {
+                        try { Write-DuneRemoteAudit -Role $auth.role -Email $auth.email -Method $method -Path $rawPath -Status ([int]$res.StatusCode) } catch {}
+                    }
+                    return
+                }
+            }
+            try { Write-DuneRemoteAudit -Role $auth.role -Email $auth.email -Method $method -Path $rawPath -Status 404 -Note 'no-route' } catch {}
+            Write-DuneError -Response $res -Status 404 -Message "No route for $method $rawPath"
+            return
+        }
+
+        # /remote/* SPA serving (GET/HEAD only). Token injection happens in
+        # Write-DuneFile when the served file is index.html.
+        if ($method -ne 'GET' -and $method -ne 'HEAD') {
+            Write-DuneError -Response $res -Status 405 -Message 'Method not allowed'
+            return
+        }
+        $filePath = Resolve-DuneStaticPath -UrlPath $rawPath
+        $serveIndex = $false
+        if ($filePath -and (Test-Path -LiteralPath $filePath -PathType Leaf)) {
+            $serveIndex = ($filePath -match '\\index\.html$')
+            Write-DuneFile -Response $res -Path $filePath -InjectRemoteToken:$serveIndex
+            return
+        }
+        # SPA fallback (client-side router URLs like /remote/maps) — serve
+        # the SPA's index.html with the token injection.
+        $indexPath = Join-Path $script:DuneDistRoot 'index.html'
+        if (Test-Path -LiteralPath $indexPath -PathType Leaf) {
+            Write-DuneFile -Response $res -Path $indexPath -InjectRemoteToken
+            return
+        }
+        Write-DuneError -Response $res -Status 404 -Message 'Static asset not found'
         return
     }
 
