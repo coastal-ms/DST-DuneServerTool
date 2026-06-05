@@ -13,6 +13,46 @@ here cover everything those tags shipped.
 
 ## [Unreleased]
 
+## [11.1.0] - 2026-06-05
+
+### Added
+- **Remote portal — mobile-friendly subset of DST behind Cloudflare Tunnel + Access.**
+  A new top-level SPA tree under `/remote/*` (Dashboard + Maps) lets you
+  view VM/battlegroup state, check the last 3 backups, and run safe
+  one-click actions (spin-up / spin-down on-demand maps, fix partitions)
+  from a phone — without ever exposing console, edit, shell, or DB
+  surfaces. **DST still binds 127.0.0.1**; cloudflared proxies the
+  Cloudflare edge to your loopback, so no port-forwarding or inbound
+  firewall changes are required. Per-email ACL gate
+  (`%APPDATA%\DuneServer\remote-acl.json`) on top of CF Access magic-link
+  / IdP auth — owner sees everything, admins get reads + safe writes.
+
+- **Settings → Remote Access card.** Toggle the remote portal,
+  configure owner + admin allowlist, see cloudflared status, view the
+  audit log. cloudflared installation/setup itself is documented (see
+  the `/remote` page on the marketing site) — this card focuses on
+  managing access once the tunnel is up.
+
+- **Audit log** at `%APPDATA%\DuneServer\.logs\remote-audit.log` — every
+  remote write action is appended with timestamp, role, email, path,
+  and HTTP status, plus every auth denial. Visible in the Settings card.
+
+- **Setup guide** at <https://coastal-ms.github.io/DST-DuneServerTool/remote>
+  covering cloudflared install, tunnel create, hostname mapping, and
+  CF Access policy setup.
+
+### Security
+- The remote portal requires **both** Cloudflare Access (per-email or
+  IdP allowlist enforced at the edge) **and** the existing DuneToken
+  (injected into the served `index.html` for `/remote/*` paths so a
+  same-Windows-box CF-header-spoofing attempt still hits a token wall).
+  Fail-closed: missing CF header, malformed ACL, or empty `owner`
+  field all return 401 and the remote portal stays disabled.
+
+### Deferred to v11.2.0
+- `restart-bg`, `backup-now`, player-kick, WebSocket live-log tail,
+  desktop push notifications, browser-side CF Access JWT validation.
+
 ## [11.0.3] - 2026-06-05
 
 ### Fixed
