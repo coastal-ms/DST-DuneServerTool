@@ -1,0 +1,37 @@
+<Window x:Class="DstFriendHelper.MainWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:wv2="clr-namespace:Microsoft.Web.WebView2.Wpf;assembly=Microsoft.Web.WebView2.Wpf"
+        Title="Dune Server Tool — Friend Helper"
+        Width="1280" Height="800"
+        WindowStartupLocation="CenterScreen"
+        Background="#0B0B0F">
+  <Grid>
+    <wv2:WebView2 x:Name="Web" Visibility="Hidden" />
+    <Border x:Name="StatusOverlay" Background="#0B0B0F">
+      <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center" MaxWidth="640">
+        <TextBlock x:Name="StatusTitle"
+                   Text="Connecting to the host's PC..."
+                   FontSize="22"
+                   Foreground="#FFB05E"
+                   HorizontalAlignment="Center"
+                   Margin="0,0,0,12" />
+        <TextBlock x:Name="StatusBody"
+                   Text=""
+                   TextWrapping="Wrap"
+                   Foreground="#D4C7B5"
+                   HorizontalAlignment="Center"
+                   TextAlignment="Center"
+                   FontSize="14" />
+        <Button x:Name="RetryButton"
+                Content="Retry"
+                Width="120"
+                Height="32"
+                Margin="0,20,0,0"
+                Visibility="Collapsed"
+                HorizontalAlignment="Center"
+                Click="RetryButton_Click" />
+      </StackPanel>
+    </Border>
+  </Grid>
+</Window>
