@@ -1,0 +1,117 @@
+#!/bin/sh
+# Clear on-demand map partitions at boot so director-driven auto-spawn works.
+# Without this, igwsss for DD/Arrakeen/Harko ends up with partitions:[N] pinned
+# at replicas:0 — which blocks the director from triggering scale-up when a
+# player tries to enter. Confirmed working state per session 2026-05-27:
+# clean igwsss.spec = {replicas:0, partitions:[]} for each on-demand map.
+#
+# Auto-discovers namespace + battlegroup ID at runtime by scanning all igwsss
+# cluster-wide and matching map-name suffix. Survives BG recreate, helm
+# upgrades, and Funcom server upgrades — only fails if Funcom renames the
+# igwsss CRD itself.
+#
+# Hardened 2026-06-04: after k3s API + CRD are reachable, ALSO waits up to
+# 5 min for at least one of the expected map igwsss objects to actually exist
+# before deciding "nothing to do". Fixes a boot race where the CRD is
+# registered before the Funcom server-operator has finished reconciling the
+# battlegroup and created the per-map igwsss instances (observed after VM
+# reboot 2026-06-04: script ran ~3 min after boot, CRD was queryable but
+# zero objects existed; objects appeared moments later with partitions:[N]
+# pre-pinned, blocking DD auto-spawn until the 15-min cron pass).
+#
+# Logged to /var/log/dune-clear-partitions.log
+
+set -u
+
+LOG=/var/log/dune-clear-partitions.log
+MAP_SUFFIXES="-deepdesert-1 -sh-arrakeen -sh-harkovillage"
+KUBE="/usr/local/bin/k3s kubectl"
+
+ts() { date "+%Y-%m-%d %H:%M:%S"; }
+log() { echo "[$(ts)] $*" >> "$LOG"; }
+
+log "dune-clear-partitions: start"
+
+# Wait up to 5 min for k3s API + igwsss CRD to be available.
+for i in $(seq 1 60); do
+  if $KUBE get igwsss --all-namespaces >/dev/null 2>&1; then
+    log "api + igwsss CRD ready after ${i} attempts"
+    break
+  fi
+  sleep 5
+done
+
+if ! $KUBE get igwsss --all-namespaces >/dev/null 2>&1; then
+  log "ERROR: k3s API / igwsss CRD not reachable, giving up"
+  exit 1
+fi
+
+# Helper: return non-empty if at least one igwsss exists whose name ends in
+# one of our MAP_SUFFIXES.
+has_expected_match() {
+  $KUBE get igwsss --all-namespaces --no-headers 2>/dev/null | awk '{print $2}' | while read -r n; do
+    for suffix in $MAP_SUFFIXES; do
+      case "$n" in
+        *"$suffix") echo "y"; return ;;
+      esac
+    done
+  done
+}
+
+# Wait up to 5 min for at least one expected map igwsss object to exist.
+# This is the race-window fix: CRD can be reachable before the server-operator
+# has created the per-map ServerSetScale instances during a fresh boot.
+for i in $(seq 1 60); do
+  if [ -n "$(has_expected_match)" ]; then
+    log "expected map igwsss object(s) present after ${i} attempts"
+    break
+  fi
+  sleep 5
+done
+
+# Auto-discover all on-demand igwsss by matching map-name suffix.
+# Output: NS<TAB>NAME for every matching object.
+matches=$($KUBE get igwsss --all-namespaces --no-headers 2>/dev/null | awk '{print $1"\t"$2}')
+if [ -z "$matches" ]; then
+  log "no igwsss objects found in any namespace after wait; nothing to do"
+  exit 0
+fi
+
+# Verify we actually saw at least one expected map; otherwise the BG never
+# reconciled and there's nothing for us to clean.
+if [ -z "$(has_expected_match)" ]; then
+  log "no on-demand map igwsss matched ($MAP_SUFFIXES) after wait; nothing to do"
+  exit 0
+fi
+
+echo "$matches" | while IFS="$(printf '\t')" read -r ns name; do
+  [ -z "$ns" ] || [ -z "$name" ] && continue
+  for suffix in $MAP_SUFFIXES; do
+    case "$name" in
+      *"$suffix")
+        # Skip if a pod is running for this ServerSet (don't kick a player at boot)
+        # Pod name pattern: <bg-id>-sg<suffix>-pod-<n>  e.g. ...-sg-deepdesert-1-pod-8
+        ss_name="${name%$suffix}-sg${suffix}"
+        podcount=$($KUBE -n "$ns" get pods --no-headers 2>/dev/null | grep -c "^${ss_name}-pod-" || true)
+        if [ "$podcount" -gt 0 ]; then
+          log "$ns/$name: pod running ($podcount for ${ss_name}-pod-*), skipping clear"
+          break
+        fi
+        cur=$($KUBE -n "$ns" get igwsss "$name" -o jsonpath="{.spec.partitions}" 2>/dev/null)
+        if [ "$cur" = "[]" ] || [ -z "$cur" ]; then
+          log "$ns/$name: partitions already empty ($cur), no change"
+          break
+        fi
+        if $KUBE -n "$ns" patch igwsss "$name" --type=merge -p '{"spec":{"replicas":0,"partitions":[]}}' >>"$LOG" 2>&1; then
+          log "$ns/$name: cleared (was partitions=$cur)"
+        else
+          log "$ns/$name: ERROR patching"
+        fi
+        break
+        ;;
+    esac
+  done
+done
+
+log "dune-clear-partitions: done"
+exit 0

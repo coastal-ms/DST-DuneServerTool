@@ -16,7 +16,7 @@
 ;                 -> NOT touched by install or uninstall (preserves user config)
 
 #define MyAppName        "Dune Server Tool"
-#define MyAppVersion "11.0.0"
+#define MyAppVersion "11.0.1"
 #define MyAppPublisher   "Dune Awakening Self-Hosted Tool"
 #define MyAppURL         "https://github.com/coastal-ms/DST-DuneServerTool"
 #define MyAppExeName     "DuneServer.exe"
@@ -99,6 +99,13 @@ Source: "..\..\webui\dist\*"; DestDir: "{app}\webui\dist"; Flags: ignoreversion 
 ; the user's dune-admin source repo (derived from DuneAdminExe) at apply
 ; time, then runs build-patched.ps1 -Restart against it.
 Source: "..\resources\dune-admin-patches\*"; DestDir: "{app}\resources\dune-admin-patches"; Flags: ignoreversion recursesubdirs
+
+; v11.0.1: Versioned copy of the remote partition-clear boot script.
+; Sync-DunePartitionAutomation pushes this to the VM's /etc/local.d/ +
+; /etc/periodic/15min/ on every start/restart/reboot so the on-demand
+; partition fix (and the 15-min watchdog) survive VM rebuilds and
+; snapshot restores. Auto-skipped on the VM via sha256 match.
+Source: "..\resources\remote-scripts\*"; DestDir: "{app}\resources\remote-scripts"; Flags: ignoreversion recursesubdirs
 
 ; v6.1.24: Drop-in preflight checker users can run when something goes wrong.
 ; DunePreflight.bat is the entry point (right-click -> Run as administrator),

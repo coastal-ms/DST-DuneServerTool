@@ -12,3 +12,7 @@
 # Shell scripts must stay LF — they're meant to be pasted into Linux SSH
 # sessions. CRLF causes `$'\r': command not found` errors on bash.
 *.sh text eol=lf
+
+# Remote VM scripts pushed by Sync-DunePartitionAutomation must be LF —
+# Alpine /bin/sh sees $'\r' on CRLF and fails with cryptic errors.
+app/resources/remote-scripts/* text eol=lf
