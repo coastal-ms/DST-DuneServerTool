@@ -16,7 +16,7 @@
 ;                 -> NOT touched by install or uninstall (preserves user config)
 
 #define MyAppName        "Dune Server Tool"
-#define MyAppVersion "11.0.1"
+#define MyAppVersion "11.0.3"
 #define MyAppPublisher   "Dune Awakening Self-Hosted Tool"
 #define MyAppURL         "https://github.com/coastal-ms/DST-DuneServerTool"
 #define MyAppExeName     "DuneServer.exe"
@@ -100,11 +100,12 @@ Source: "..\..\webui\dist\*"; DestDir: "{app}\webui\dist"; Flags: ignoreversion 
 ; time, then runs build-patched.ps1 -Restart against it.
 Source: "..\resources\dune-admin-patches\*"; DestDir: "{app}\resources\dune-admin-patches"; Flags: ignoreversion recursesubdirs
 
-; v11.0.1: Versioned copy of the remote partition-clear boot script.
-; Sync-DunePartitionAutomation pushes this to the VM's /etc/local.d/ +
-; /etc/periodic/15min/ on every start/restart/reboot so the on-demand
-; partition fix (and the 15-min watchdog) survive VM rebuilds and
-; snapshot restores. Auto-skipped on the VM via sha256 match.
+; v11.0.1: Versioned copy of the remote partition-clear script.
+; v11.0.3: Script is now staged inline to /tmp on the VM, run once with
+; sudo, then removed — no /etc/local.d install, no /etc/periodic/15min cron.
+; DST scp's this file to /tmp/dune-cp-<id>.sh on every Start / Restart /
+; fix-on-demand-maps invocation. (Existing VMs that had the boot script +
+; cron installed by v11.0.1/v11.0.2 keep working harmlessly until rebuilt.)
 Source: "..\resources\remote-scripts\*"; DestDir: "{app}\resources\remote-scripts"; Flags: ignoreversion recursesubdirs
 
 ; v6.1.24: Drop-in preflight checker users can run when something goes wrong.

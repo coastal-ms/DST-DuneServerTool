@@ -13,7 +13,7 @@ param(
 # Wraps the original battlegroup.ps1 menu and adds extra tools
 # ============================================================
 
-$script:ToolVersion = "11.0.1"
+$script:ToolVersion = "11.0.3"
 
 # Cold-boot readiness budgets (seconds). A fresh battlegroup's FIRST boot can
 # take 10-30 min: k3s + funcom-operators initialize, metrics-server restarts a
@@ -1019,12 +1019,20 @@ function Wait-MapPodReady {
 # The Funcom server-operator periodically copies the parent ServerSet's
 # spec.partitions:[N] into the child ServerSetScale (igwsss), which blocks
 # the battlegroup director from triggering on-demand spawn for
-# DeepDesert / SH_Arrakeen / SH_HarkoVillage. The remote shell script
-# /etc/local.d/dune-clear-partitions.start fixes that idempotently and is
-# safe to re-run (skips any map whose pod is currently running). It also
-# runs at VM boot (OpenRC 'local') and every 15 min via
-# /etc/periodic/15min/dune-clear-partitions. We auto-invoke it after every
-# DST command that brings the battlegroup up so users no longer have to.
+# DeepDesert / SH_Arrakeen / SH_HarkoVillage. The bundled shell script
+# `app/resources/remote-scripts/dune-clear-partitions.start` fixes that
+# idempotently (skips any map whose pod is currently running). DST stages
+# it to /tmp on the VM via scp, runs it once with sudo, then removes it
+# on every Start / Restart / fix-on-demand-maps command — so users no
+# longer have to invoke it manually.
+#
+# v11.0.3: removed the v11.0.1 install of /etc/local.d/dune-clear-partitions.start
+# + the 15-min cron watchdog. The script is now run inline (single scp +
+# ssh pair, no persistent VM install) which eliminates the Windows Defender
+# ML false positive (Trojan:Script/Wacatac.H!ml) that flagged the v11.0.1
+# installer. Existing VMs that had the boot script + cron installed by
+# v11.0.1 are unaffected — those leftovers keep running harmlessly until
+# the VM is rebuilt.
 
 function Get-DuneRemotePartitionScriptPath {
     $candidates = @(
@@ -1037,104 +1045,50 @@ function Get-DuneRemotePartitionScriptPath {
     return $null
 }
 
-function Sync-DunePartitionAutomation {
-    # Idempotently push the boot script + 15-min cron wrapper to the VM.
-    # Uses sha256 to skip the upload when the on-VM copy already matches the
-    # bundled one, so this is cheap to call on every start/restart/reboot.
-    # Best-effort: returns $false on any failure but never throws.
+function Invoke-DuneRemotePartitionScript {
+    # Stages the bundled dune-clear-partitions.start to /tmp on the VM via scp,
+    # runs it once with sudo, removes the staged copy. No persistent install,
+    # no boot script, no cron. Returns @{ ok; rc; output }. Best-effort —
+    # never throws.
     param(
-        [Parameter(Mandatory)][string]$Ip,
-        [switch]$Quiet
+        [Parameter(Mandatory)][string]$Ip
     )
     $local = Get-DuneRemotePartitionScriptPath
     if (-not $local) {
-        if (-not $Quiet) {
-            Write-Host "  Skip: bundled dune-clear-partitions.start not found in install dir" -ForegroundColor DarkYellow
-        }
-        return $false
+        return @{ ok = $false; rc = -1; output = @('Bundled dune-clear-partitions.start not found in install dir.') }
     }
 
-    # Read + force LF line endings — Alpine /bin/sh chokes on CRLF.
-    $raw   = [System.IO.File]::ReadAllText($local)
-    $lf    = $raw -replace "`r`n", "`n" -replace "`r", "`n"
-    $bytes = [Text.Encoding]::UTF8.GetBytes($lf)
-    $b64   = [Convert]::ToBase64String($bytes)
-    $sha   = [BitConverter]::ToString(
-        [Security.Cryptography.SHA256]::Create().ComputeHash($bytes)
-    ).Replace('-','').ToLower()
+    $stamp     = [Guid]::NewGuid().ToString('N').Substring(0, 12)
+    $localTmp  = Join-Path $env:TEMP "dune-cp-$stamp.sh"
+    $remoteTmp = "/tmp/dune-cp-$stamp.sh"
 
-    $remoteScript = @"
-set -u
-SCRIPT_PATH=/etc/local.d/dune-clear-partitions.start
-CRON_PATH=/etc/periodic/15min/dune-clear-partitions
-EXPECTED_SHA='$sha'
+    # Force LF line endings — Alpine /bin/sh chokes on CRLF.
+    $raw = [System.IO.File]::ReadAllText($local)
+    $lf  = $raw -replace "`r`n", "`n" -replace "`r", "`n"
+    [System.IO.File]::WriteAllBytes($localTmp, [Text.Encoding]::UTF8.GetBytes($lf))
 
-changed=0
-current_sha=''
-if [ -f "`$SCRIPT_PATH" ]; then
-  current_sha=`$(sha256sum "`$SCRIPT_PATH" 2>/dev/null | awk '{print `$1}')
-fi
-if [ "`$current_sha" != "`$EXPECTED_SHA" ]; then
-  printf '%s' '$b64' | base64 -d > "`$SCRIPT_PATH"
-  chmod 0755 "`$SCRIPT_PATH"
-  chown root:root "`$SCRIPT_PATH"
-  echo "installed-or-updated `$SCRIPT_PATH"
-  changed=1
-fi
-
-if [ ! -x "`$CRON_PATH" ]; then
-  cat > "`$CRON_PATH" <<'EOC'
-#!/bin/sh
-# 15-min watchdog wrapper for the on-demand partition clear script.
-# Managed by DST (Dune Server Tool) — see /etc/local.d/dune-clear-partitions.start.
-exec /etc/local.d/dune-clear-partitions.start
-EOC
-  chmod 0755 "`$CRON_PATH"
-  chown root:root "`$CRON_PATH"
-  echo "installed `$CRON_PATH"
-  changed=1
-fi
-
-# Make sure OpenRC's 'local' service is in the default runlevel so the boot
-# script actually fires next reboot. Idempotent — quiet add, ignore error.
-if command -v rc-update >/dev/null 2>&1; then
-  rc-update -q add local default 2>/dev/null || true
-fi
-
-if [ "`$changed" -eq 0 ]; then
-  echo "already-current"
-fi
-exit 0
-"@
-
-    $payloadB64 = [Convert]::ToBase64String([Text.Encoding]::UTF8.GetBytes($remoteScript))
-    $output = ssh -o BatchMode=yes -o StrictHostKeyChecking=no -o LogLevel=QUIET -i "$sshKey" "$sshUser@$Ip" `
-        "echo $payloadB64 | base64 -d | sudo -n sh" 2>&1
-    $rc = $LASTEXITCODE
-    if ($rc -ne 0) {
-        if (-not $Quiet) {
-            Write-Host "  Warning: partition-clear automation sync exited $rc (best-effort, parent command continues)." -ForegroundColor Yellow
-            if ($output) { $output | Select-Object -Last 5 | ForEach-Object { Write-Host "    $_" -ForegroundColor DarkGray } }
+    try {
+        & scp -o BatchMode=yes -o StrictHostKeyChecking=no -o LogLevel=QUIET `
+              -i "$sshKey" $localTmp "${sshUser}@${Ip}:${remoteTmp}" 2>&1 | Out-Null
+        if ($LASTEXITCODE -ne 0) {
+            return @{ ok = $false; rc = $LASTEXITCODE; output = @("scp of partition-clear script failed (exit $LASTEXITCODE).") }
         }
-        return $false
+        $output = & ssh -o BatchMode=yes -o StrictHostKeyChecking=no -o LogLevel=QUIET `
+                        -i "$sshKey" "$sshUser@$Ip" `
+                        "sudo -n sh $remoteTmp; rc=`$?; rm -f $remoteTmp; exit `$rc" 2>&1
+        $rc = $LASTEXITCODE
+        return @{ ok = ($rc -eq 0); rc = $rc; output = @($output) }
+    } finally {
+        Remove-Item -LiteralPath $localTmp -Force -ErrorAction SilentlyContinue
     }
-    if (-not $Quiet) {
-        $summary = ($output | Out-String).Trim()
-        if (-not $summary -or $summary -eq 'already-current') {
-            Write-Host "  Partition-clear boot script + 15-min cron already current on VM." -ForegroundColor DarkGray
-        } else {
-            Write-Host "  Partition-clear automation refreshed on VM:" -ForegroundColor DarkGray
-            $summary -split "`r?`n" | ForEach-Object { Write-Host "    $_" -ForegroundColor DarkGray }
-        }
-    }
-    return $true
 }
 
 function Invoke-OnDemandPartitionClear {
-    # Best-effort wrapper: sync the boot script + cron to the VM, settle for
-    # DelaySec to let the Funcom server-operator finish reconciling on-demand
-    # ServerSets (otherwise the script runs before partitions are pinned and
-    # finds nothing to clear), then run the script and tail its log.
+    # Best-effort wrapper: settle for DelaySec to let the Funcom server-operator
+    # finish reconciling on-demand ServerSets (otherwise the script runs before
+    # partitions are pinned and finds nothing to clear), stage the bundled
+    # script to /tmp on the VM, run it once with sudo, remove it, then tail
+    # its log.
     #
     # Never throws — partition-clear failure is surfaced as a yellow warning
     # so a successful battlegroup start doesn't get reported as failed when
@@ -1147,17 +1101,14 @@ function Invoke-OnDemandPartitionClear {
     Write-Host ""
     Write-Host "[$Phase] Clearing on-demand map partition pins (auto-fix so DeepDesert / Arrakeen / Harko spawn on demand)..." -ForegroundColor Cyan
 
-    # Always (re)assert the boot script + cron — survives VM rebuilds.
-    Sync-DunePartitionAutomation -Ip $Ip | Out-Null
-
     if ($DelaySec -gt 0) {
         Write-Host "  Settling ${DelaySec}s so the server operator finishes reconciling on-demand ServerSets..." -ForegroundColor DarkGray
         Start-Sleep -Seconds $DelaySec
     }
 
-    $runOut = ssh -o BatchMode=yes -o StrictHostKeyChecking=no -o LogLevel=QUIET -i "$sshKey" "$sshUser@$Ip" `
-        "sudo -n /etc/local.d/dune-clear-partitions.start" 2>&1
-    $runRc = $LASTEXITCODE
+    $result = Invoke-DuneRemotePartitionScript -Ip $Ip
+    $runOut = $result.output
+    $runRc  = $result.rc
 
     if ($runRc -ne 0) {
         Write-Host "  Warning: partition-clear script exited $runRc — server is up but on-demand maps may not auto-spawn." -ForegroundColor Yellow
