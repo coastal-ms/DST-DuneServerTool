@@ -66,10 +66,11 @@ here cover everything those tags shipped.
   Replaced with `color-mix(in oklab, var(--color-accent) 12%,
   transparent)` and the same for `--color-ibad`, so the body glow now
   follows whatever palette is active.
-- **Version display extended to Roman major XI.** `fmtToolVersion`
-  (portal) and `formatDisplayVersion` (marketing site) now recognise
-  majors 10–20 (X through XX). The on-disk semver stays purely numeric
-  (`11.0.0`) so update-check comparisons keep working.
+- **Version display reverted to plain semver.** Previous releases
+  stylized the major version as a Roman numeral (e.g. `XI` for `11.0.0`,
+  `XI (0.1)` for `11.0.1`). That mapping has been removed from both the
+  portal (`fmtToolVersion`) and the marketing site (`formatDisplayVersion`);
+  both now render `v<major>.<minor>.<patch>` to match the git tags.
 
 ## [10.2.8] - 2026-06-04
 
