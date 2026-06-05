@@ -1,9 +1,10 @@
 # DST Friend Helper
 
-A standalone Windows app a trusted friend double-clicks on **his** PC to
-get into the host's full DST desktop portal running on **the host's** PC. Built as
-a purely additive scaffold on top of the released DST surface — **zero
-changes to `app/`, `webui/`, `site/`, or `dune-server.ps1`.**
+A standalone Windows app (`DSTConsole.exe`) a trusted friend double-clicks
+on **his** PC to get into the host's full DST desktop portal running on
+**the host's** PC. Built as a purely additive scaffold on top of the released
+DST surface — **zero changes to `app/`, `webui/`, `site/`, or
+`dune-server.ps1`.**
 
 ## Components
 
@@ -15,13 +16,13 @@ helper/
 │   ├── Uninstall-Bridge.ps1
 │   └── README.md
 └── friend/                 # Ships to the friend (single .exe + config.json)
-    ├── DstFriendHelper.csproj
+    ├── DSTConsole.csproj
     ├── App.xaml(.cs)
     ├── MainWindow.xaml(.cs)
     ├── Config.cs
     ├── app.manifest
     ├── config.sample.json
-    ├── Build-FriendHelper.ps1
+    ├── Build-DstConsole.ps1
     └── README.md
 ```
 
@@ -32,7 +33,7 @@ See each subdirectory's `README.md` for the install / build steps.
 ```mermaid
 sequenceDiagram
   autonumber
-  participant F as Friend's PC<br/>(DstFriendHelper.exe)
+  participant F as Friend's PC<br/>(DSTConsole.exe)
   participant TS as Tailscale tailnet
   participant B as the host's PC<br/>(bridge :47900)
   participant D as the host's PC<br/>(DST :random/?t=token)
@@ -93,17 +94,17 @@ current DuneToken — which is rotated on every DST launch.
 - [ ] Tag the host device `tag:dst-host` in the Tailscale admin panel.
 - [ ] Add the friend's device, tag it `tag:dst-friend`, and add the ACL
       stanza shown in `helper/bridge/README.md`.
-- [ ] Build the friend .exe: `helper\friend\Build-FriendHelper.ps1`.
-- [ ] Send `dist\DstFriendHelper.exe` + `dist\config.json` to the friend
+- [ ] Build the friend .exe: `helper\friend\Build-DstConsole.ps1`.
+- [ ] Send `dist\DSTConsole.exe` + `dist\config.json` to the friend
       (set `bridgeHost` to your Tailscale hostname first, or let the
       friend do it).
 
 ### Friend's side
 
 - [ ] Install Tailscale and accept the host's invite.
-- [ ] Drop `DstFriendHelper.exe` and `config.json` in any folder.
+- [ ] Drop `DSTConsole.exe` and `config.json` in any folder.
 - [ ] Open `config.json`, set `bridgeHost` if the maintainer didn't pre-fill it.
-- [ ] Double-click `DstFriendHelper.exe`.
+- [ ] Double-click `DSTConsole.exe`.
 
 ## Known limitations (scaffold scope)
 
