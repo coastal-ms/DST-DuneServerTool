@@ -13,6 +13,22 @@ here cover everything those tags shipped.
 
 ## [Unreleased]
 
+### Added
+- **Friend helper scaffold** (`helper/`). A net-new, additive companion
+  to the released DST surface that lets a single trusted friend connect
+  into the host's full desktop portal over Tailscale, without modifying any
+  v11.0.3 code. Two components: `helper/bridge/` (PowerShell 7
+  `HttpListener` daemon that runs on the host as a scheduled task,
+  binds port 47900 scoped to the Tailscale interface, re-reads
+  `%LOCALAPPDATA%\DuneServer\last-url.txt` per request, and
+  reverse-proxies into the current DST loopback) and `helper/friend/`
+  (.NET 8 WPF + WebView2 single-file .exe + `config.json` the friend
+  drops on their PC). Trust boundary is the Tailscale ACL; the
+  DuneToken returned by the bridge's `/_dst/token` endpoint is
+  defense-in-depth. Explicit "no changes to released DST surface
+  area" guarantee — `app/`, `webui/`, `site/`, and `dune-server.ps1`
+  are untouched.
+
 ## [11.1.0] - 2026-06-05
 
 ### Added
