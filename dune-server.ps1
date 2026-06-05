@@ -2278,7 +2278,7 @@ while ($true) {
             Write-Host ""
             Write-Host "dune-admin needs first-time setup before it can serve the web UI." -ForegroundColor Yellow
             Write-Host "Complete the prompts in the dune-admin window (control plane, ports, etc)." -ForegroundColor Yellow
-            Write-Host "When it prints 'Starting server on :<port>', click Characters again to open it." -ForegroundColor Yellow
+            Write-Host "When it prints 'Starting server on :<port>', re-run this command to open it." -ForegroundColor Yellow
             Write-Host "Not opening a browser yet (would hit the wrong port before setup finishes)." -ForegroundColor DarkGray
             if ($didInstallWork) { Read-Host "Press Enter to close this window" }
             continue
@@ -2323,16 +2323,16 @@ while ($true) {
             if ($conflictOwner -match 'amp|cube') {
                 Write-Host "Looks like CubeCoders AMP. Re-run dune-admin setup and choose the 'amp'" -ForegroundColor Yellow
                 Write-Host "control plane (it moves dune-admin to :18080), or set a different" -ForegroundColor Yellow
-                Write-Host "listen_addr in ~/.dune-admin/config.yaml, then click Characters again." -ForegroundColor Yellow
+                Write-Host "listen_addr in ~/.dune-admin/config.yaml, then re-run this command." -ForegroundColor Yellow
             } else {
                 Write-Host "Free port $($webState.Port) or set a different listen_addr in" -ForegroundColor Yellow
-                Write-Host "~/.dune-admin/config.yaml, then click Characters again." -ForegroundColor Yellow
+                Write-Host "~/.dune-admin/config.yaml, then re-run this command." -ForegroundColor Yellow
             }
             Write-Host "Not opening a browser (would land on '$conflictOwner', not dune-admin)." -ForegroundColor DarkGray
         } else {
             Write-Host ""
             Write-Host "dune-admin did not start listening on port $($webState.Port) within 30s." -ForegroundColor Yellow
-            Write-Host "If it is still finishing setup, wait for 'Starting server on :$($webState.Port)' then click Characters again." -ForegroundColor Yellow
+            Write-Host "If it is still finishing setup, wait for 'Starting server on :$($webState.Port)' then re-run this command." -ForegroundColor Yellow
             Write-Host "URL when ready: $($webState.Url)" -ForegroundColor DarkGray
         }
         if ($didInstallWork) { Read-Host "Press Enter to close this window" }
