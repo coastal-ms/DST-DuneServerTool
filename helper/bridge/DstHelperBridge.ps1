@@ -185,6 +185,140 @@ function Invoke-Proxy {
     }
 }
 
+function Start-WsPumpAsync {
+    <#
+        Spawn a background PowerShell runspace that pumps WebSocket frames
+        one-way (Src -> Dst). Returns @{ PS = ..., Handle = ... } so the
+        caller can wait for completion and dispose.
+    #>
+    param(
+        [System.Net.WebSockets.WebSocket]$Src,
+        [System.Net.WebSockets.WebSocket]$Dst,
+        [System.Threading.CancellationToken]$CT
+    )
+    $ps = [System.Management.Automation.PowerShell]::Create()
+    [void]$ps.AddScript({
+        param($s, $d, $ct)
+        $buf = [byte[]]::new(16384)
+        try {
+            while (-not $ct.IsCancellationRequested -and
+                   $s.State -eq [System.Net.WebSockets.WebSocketState]::Open) {
+                $seg = [System.ArraySegment[byte]]::new($buf)
+                $r = $s.ReceiveAsync($seg, $ct).GetAwaiter().GetResult()
+                if ($r.MessageType -eq [System.Net.WebSockets.WebSocketMessageType]::Close) {
+                    if ($d.State -eq [System.Net.WebSockets.WebSocketState]::Open) {
+                        try {
+                            [void]$d.CloseOutputAsync(
+                                [System.Net.WebSockets.WebSocketCloseStatus]::NormalClosure,
+                                '', [System.Threading.CancellationToken]::None
+                            ).GetAwaiter().GetResult()
+                        } catch { }
+                    }
+                    return
+                }
+                $out = [System.ArraySegment[byte]]::new($buf, 0, $r.Count)
+                [void]$d.SendAsync($out, $r.MessageType, $r.EndOfMessage, $ct).GetAwaiter().GetResult()
+            }
+        } catch {
+            # Connection dropped / cancelled. Let the partner pump notice
+            # through its own cancellation token; nothing to log per-frame.
+        }
+    }).AddArgument($Src).AddArgument($Dst).AddArgument($CT) | Out-Null
+    return @{ PS = $ps; Handle = $ps.BeginInvoke() }
+}
+
+function Invoke-WsProxy {
+    <#
+        Bidirectional WebSocket reverse proxy. The friend's browser opens a
+        WS to the bridge (e.g. /ws/terminal?t=token); we accept it, open a
+        matching WS to DST on loopback, and bridge frames in both directions
+        until either side closes.
+
+        Trade-off: this call blocks the main HttpListener loop for the
+        lifetime of the WS session. The friend helper is single-user and
+        the DST WebUI only opens one WS at a time (from the Terminal page),
+        so this is acceptable for the scaffold scope. Periodic REST polls
+        from other tabs will queue behind the WS — close the Terminal page
+        to free the loop.
+    #>
+    param(
+        [System.Net.HttpListenerContext]$Context,
+        [pscustomobject]$Dst
+    )
+    $req = $Context.Request
+    $serverWs = $null
+    $client = $null
+    $cts = [System.Threading.CancellationTokenSource]::new()
+    $j1 = $null
+    $j2 = $null
+
+    try {
+        # Accept the inbound upgrade (subprotocol negotiation deferred to DST —
+        # pass through whatever the client requested, if anything).
+        $subprotocol = [NullString]::Value
+        $requested = $req.Headers['Sec-WebSocket-Protocol']
+        if ($requested) {
+            # Use the first offered subprotocol; AcceptWebSocketAsync requires
+            # us to pick one specifically rather than echoing the list.
+            $subprotocol = ($requested -split ',')[0].Trim()
+        }
+        $wsCtx = $Context.AcceptWebSocketAsync($subprotocol).GetAwaiter().GetResult()
+        $serverWs = $wsCtx.WebSocket
+
+        # Connect to DST on loopback. Same path + query (e.g. ?t=token).
+        $client = [System.Net.WebSockets.ClientWebSocket]::new()
+        if ($subprotocol -and $subprotocol -ne [NullString]::Value) {
+            $client.Options.AddSubProtocol($subprotocol)
+        }
+        $targetUri = [Uri]::new("ws://127.0.0.1:$($Dst.DstPort)$($req.Url.PathAndQuery)")
+        [void]$client.ConnectAsync($targetUri, [System.Threading.CancellationToken]::None).GetAwaiter().GetResult()
+
+        # Two pumps in parallel: client->DST and DST->client.
+        $j1 = Start-WsPumpAsync -Src $serverWs -Dst $client -CT $cts.Token
+        $j2 = Start-WsPumpAsync -Src $client -Dst $serverWs -CT $cts.Token
+
+        [System.Threading.WaitHandle]::WaitAny(@($j1.Handle.AsyncWaitHandle, $j2.Handle.AsyncWaitHandle)) | Out-Null
+        $cts.Cancel()
+        # WaitAll isn't supported on STA threads (PowerShell default), so
+        # wait on each handle individually with a 5s ceiling each.
+        foreach ($j in @($j1, $j2)) {
+            try { [void]$j.Handle.AsyncWaitHandle.WaitOne([TimeSpan]::FromSeconds(5)) } catch { }
+        }
+    } catch {
+        Write-BridgeLog "WS proxy error: $($_.Exception.Message)"
+    } finally {
+        foreach ($j in @($j1, $j2)) {
+            if ($null -ne $j) {
+                try { [void]$j.PS.EndInvoke($j.Handle) } catch { }
+                try { $j.PS.Dispose() } catch { }
+            }
+        }
+        if ($null -ne $serverWs) {
+            try {
+                if ($serverWs.State -eq [System.Net.WebSockets.WebSocketState]::Open) {
+                    [void]$serverWs.CloseAsync(
+                        [System.Net.WebSockets.WebSocketCloseStatus]::NormalClosure,
+                        '', [System.Threading.CancellationToken]::None
+                    ).GetAwaiter().GetResult()
+                }
+            } catch { }
+            try { $serverWs.Dispose() } catch { }
+        }
+        if ($null -ne $client) {
+            try {
+                if ($client.State -eq [System.Net.WebSockets.WebSocketState]::Open) {
+                    [void]$client.CloseAsync(
+                        [System.Net.WebSockets.WebSocketCloseStatus]::NormalClosure,
+                        '', [System.Threading.CancellationToken]::None
+                    ).GetAwaiter().GetResult()
+                }
+            } catch { }
+            try { $client.Dispose() } catch { }
+        }
+        $cts.Dispose()
+    }
+}
+
 function Invoke-Request {
     param([System.Net.HttpListenerContext]$Context)
     $req = $Context.Request
@@ -215,6 +349,15 @@ function Invoke-Request {
 
         # Everything else: reverse-proxy to current DST.
         $dst = Get-CurrentDst
+
+        if ($req.IsWebSocketRequest) {
+            # WebSocket upgrades (currently just /ws/terminal). Handled inline
+            # — see Invoke-WsProxy for the trade-off note about main-loop blocking.
+            Invoke-WsProxy -Context $Context -Dst $dst
+            Write-BridgeLog "WS  $($req.HttpMethod) $path from $client (closed)"
+            return
+        }
+
         Invoke-Proxy -Context $Context -Dst $dst
         Write-BridgeLog "$($res.StatusCode) $($req.HttpMethod) $path from $client"
     } catch {
