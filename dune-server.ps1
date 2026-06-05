@@ -1013,6 +1013,123 @@ function Wait-MapPodReady {
 }
 
 # ============================================================
+#  ON-DEMAND PARTITION CLEAR (Funcom drift workaround)
+# ============================================================
+#
+# The Funcom server-operator periodically copies the parent ServerSet's
+# spec.partitions:[N] into the child ServerSetScale (igwsss), which blocks
+# the battlegroup director from triggering on-demand spawn for
+# DeepDesert / SH_Arrakeen / SH_HarkoVillage. The bundled shell script
+# `app/resources/remote-scripts/dune-clear-partitions.start` fixes that
+# idempotently (skips any map whose pod is currently running). DST stages
+# it to /tmp on the VM via scp, runs it once with sudo, then removes it
+# on every Start / Restart / fix-on-demand-maps command — so users no
+# longer have to invoke it manually.
+#
+# v11.0.3: removed the v11.0.1 install of /etc/local.d/dune-clear-partitions.start
+# + the 15-min cron watchdog. The script is now run inline (single scp +
+# ssh pair, no persistent VM install) which eliminates the Windows Defender
+# ML false positive (Trojan:Script/Wacatac.H!ml) that flagged the v11.0.1
+# installer. Existing VMs that had the boot script + cron installed by
+# v11.0.1 are unaffected — those leftovers keep running harmlessly until
+# the VM is rebuilt.
+
+function Get-DuneRemotePartitionScriptPath {
+    $candidates = @(
+        (Join-Path $scriptDir 'resources\remote-scripts\dune-clear-partitions.start')
+        (Join-Path $scriptDir 'app\resources\remote-scripts\dune-clear-partitions.start')
+    )
+    foreach ($p in $candidates) {
+        if (Test-Path -LiteralPath $p) { return $p }
+    }
+    return $null
+}
+
+function Invoke-DuneRemotePartitionScript {
+    # Stages the bundled dune-clear-partitions.start to /tmp on the VM via scp,
+    # runs it once with sudo, removes the staged copy. No persistent install,
+    # no boot script, no cron. Returns @{ ok; rc; output }. Best-effort —
+    # never throws.
+    param(
+        [Parameter(Mandatory)][string]$Ip
+    )
+    $local = Get-DuneRemotePartitionScriptPath
+    if (-not $local) {
+        return @{ ok = $false; rc = -1; output = @('Bundled dune-clear-partitions.start not found in install dir.') }
+    }
+
+    $stamp     = [Guid]::NewGuid().ToString('N').Substring(0, 12)
+    $localTmp  = Join-Path $env:TEMP "dune-cp-$stamp.sh"
+    $remoteTmp = "/tmp/dune-cp-$stamp.sh"
+
+    # Force LF line endings — Alpine /bin/sh chokes on CRLF.
+    $raw = [System.IO.File]::ReadAllText($local)
+    $lf  = $raw -replace "`r`n", "`n" -replace "`r", "`n"
+    [System.IO.File]::WriteAllBytes($localTmp, [Text.Encoding]::UTF8.GetBytes($lf))
+
+    try {
+        & scp -o BatchMode=yes -o StrictHostKeyChecking=no -o LogLevel=QUIET `
+              -i "$sshKey" $localTmp "${sshUser}@${Ip}:${remoteTmp}" 2>&1 | Out-Null
+        if ($LASTEXITCODE -ne 0) {
+            return @{ ok = $false; rc = $LASTEXITCODE; output = @("scp of partition-clear script failed (exit $LASTEXITCODE).") }
+        }
+        $output = & ssh -o BatchMode=yes -o StrictHostKeyChecking=no -o LogLevel=QUIET `
+                        -i "$sshKey" "$sshUser@$Ip" `
+                        "sudo -n sh $remoteTmp; rc=`$?; rm -f $remoteTmp; exit `$rc" 2>&1
+        $rc = $LASTEXITCODE
+        return @{ ok = ($rc -eq 0); rc = $rc; output = @($output) }
+    } finally {
+        Remove-Item -LiteralPath $localTmp -Force -ErrorAction SilentlyContinue
+    }
+}
+
+function Invoke-OnDemandPartitionClear {
+    # Best-effort wrapper: settle for DelaySec to let the Funcom server-operator
+    # finish reconciling on-demand ServerSets (otherwise the script runs before
+    # partitions are pinned and finds nothing to clear), stage the bundled
+    # script to /tmp on the VM, run it once with sudo, remove it, then tail
+    # its log.
+    #
+    # Never throws — partition-clear failure is surfaced as a yellow warning
+    # so a successful battlegroup start doesn't get reported as failed when
+    # this auxiliary step fails.
+    param(
+        [Parameter(Mandatory)][string]$Ip,
+        [int]$DelaySec = 30,
+        [string]$Phase = 'post-start'
+    )
+    Write-Host ""
+    Write-Host "[$Phase] Clearing on-demand map partition pins (auto-fix so DeepDesert / Arrakeen / Harko spawn on demand)..." -ForegroundColor Cyan
+
+    if ($DelaySec -gt 0) {
+        Write-Host "  Settling ${DelaySec}s so the server operator finishes reconciling on-demand ServerSets..." -ForegroundColor DarkGray
+        Start-Sleep -Seconds $DelaySec
+    }
+
+    $result = Invoke-DuneRemotePartitionScript -Ip $Ip
+    $runOut = $result.output
+    $runRc  = $result.rc
+
+    if ($runRc -ne 0) {
+        Write-Host "  Warning: partition-clear script exited $runRc — server is up but on-demand maps may not auto-spawn." -ForegroundColor Yellow
+        Write-Host "  Use command 21 (fix-on-demand-maps) or the Map SpinUp 'Fix partitions' button if a player can't enter DD/Arrakeen/Harko." -ForegroundColor DarkGray
+        if ($runOut) { $runOut | Select-Object -Last 5 | ForEach-Object { Write-Host "    $_" -ForegroundColor DarkGray } }
+        return
+    }
+    if ($runOut) { $runOut | ForEach-Object { Write-Host "    $_" -ForegroundColor DarkGray } }
+
+    # Tail log after the run — capture exit code before any further ssh so we
+    # don't lose it. Failure to read the log is non-fatal.
+    $tail = ssh -o BatchMode=yes -o StrictHostKeyChecking=no -o LogLevel=QUIET -i "$sshKey" "$sshUser@$Ip" `
+        "tail -n 10 /var/log/dune-clear-partitions.log" 2>&1
+    if ($LASTEXITCODE -eq 0 -and $tail) {
+        Write-Host "  Last 10 lines of /var/log/dune-clear-partitions.log:" -ForegroundColor DarkGray
+        $tail | ForEach-Object { Write-Host "    $_" -ForegroundColor Gray }
+    }
+    Write-Host "  Done — on-demand maps will spawn for the next player." -ForegroundColor Green
+}
+
+# ============================================================
 #  MENU DEFINITIONS
 # ============================================================
 
@@ -1518,6 +1635,7 @@ while ($true) {
         Write-Host "[3/4] Starting battlegroup...$bgHint" -ForegroundColor Cyan
         $t_bg = Get-Date
         ssh -t -o StrictHostKeyChecking=no -o LogLevel=QUIET -i "$sshKey" "$sshUser@$ip" "$bgBinPath start"
+        $bgStartExit = $LASTEXITCODE
         Save-PhaseTiming 'battlegroup-start' ([int]((Get-Date) - $t_bg).TotalSeconds)
 
         # ---- Step 4: wait for map pods ----
@@ -1554,6 +1672,16 @@ while ($true) {
             Write-Host "Use 'status' (1) or 'shell-pod' (16) to investigate any map that didn't reach Ready." -ForegroundColor DarkGray
         }
         if ($estTotal) { Write-Host "  $estTotal" -ForegroundColor DarkGray }
+
+        # Auto-clear pinned on-demand partitions so DD/Arrakeen/Harko spawn for
+        # the next player without manual intervention. Skipped if `bg start`
+        # itself failed (no point waiting on operator that never reconciled).
+        if ($bgStartExit -eq 0) {
+            Invoke-OnDemandPartitionClear -Ip $ip -DelaySec 15 -Phase 'post-startup'
+        } else {
+            Write-Host "  Skipped on-demand partition auto-clear because battlegroup start exited $bgStartExit." -ForegroundColor DarkYellow
+        }
+
         $directorPort = $null
         continue
     }
@@ -1782,6 +1910,7 @@ while ($true) {
         Write-Host "[3/3] Starting battlegroup...$bgHint" -ForegroundColor Cyan
         $t_bg = Get-Date
         ssh -t -o StrictHostKeyChecking=no -o LogLevel=QUIET -i "$sshKey" "$sshUser@$ip" "$bgBinPath start"
+        $bgStartExit = $LASTEXITCODE
         Save-PhaseTiming 'battlegroup-start' ([int]((Get-Date) - $t_bg).TotalSeconds)
 
         # Reset cached director port; it'll be resolved on next 'open-director'
@@ -1794,6 +1923,16 @@ while ($true) {
         Write-Host "=== Reboot complete in $(Format-Duration $totalSec) ===" -ForegroundColor Green
         if ($estTotal) { Write-Host "  $estTotal" -ForegroundColor DarkGray }
         Write-Host "Pods may take another 1-2 min to all reach Healthy. Check with 'status'." -ForegroundColor DarkGray
+
+        # Auto-clear on-demand partitions so DD/Arrakeen/Harko spawn on demand
+        # post-reboot. 45s settling delay because (unlike startup) we did not
+        # already wait on overmap/survival Ready — the server-operator may
+        # still be reconciling on-demand ServerSets.
+        if ($bgStartExit -eq 0) {
+            Invoke-OnDemandPartitionClear -Ip $ip -DelaySec 45 -Phase 'post-reboot'
+        } else {
+            Write-Host "  Skipped on-demand partition auto-clear because battlegroup start exited $bgStartExit." -ForegroundColor DarkYellow
+        }
         continue
     }
 
@@ -2309,31 +2448,29 @@ while ($true) {
     }
 
     if ($cmdName -eq "fix-on-demand-maps") {
-        Write-Host ""
-        Write-Host "Fixing on-demand map partitions on the VM..." -ForegroundColor Cyan
-        Write-Host "  This clears the drifted igwsss.spec.partitions pin so DeepDesert," -ForegroundColor DarkGray
-        Write-Host "  SH_Arrakeen and SH_HarkoVillage can launch on demand again." -ForegroundColor DarkGray
-        Write-Host ""
-        Write-Host "  Running: sudo /etc/local.d/dune-clear-partitions.start" -ForegroundColor DarkGray
-        ssh -o BatchMode=yes -o StrictHostKeyChecking=no -o LogLevel=QUIET -i "$sshKey" "$sshUser@$ip" `
-            "sudo /etc/local.d/dune-clear-partitions.start" 2>&1 | ForEach-Object { Write-Host "    $_" }
-        Write-Host ""
-        Write-Host "  Last 10 lines of /var/log/dune-clear-partitions.log:" -ForegroundColor Cyan
-        ssh -o BatchMode=yes -o StrictHostKeyChecking=no -o LogLevel=QUIET -i "$sshKey" "$sshUser@$ip" `
-            "tail -n 10 /var/log/dune-clear-partitions.log" 2>&1 | ForEach-Object { Write-Host "    $_" -ForegroundColor Gray }
-        Write-Host ""
-        Write-Host "Done. The remote script is idempotent and skips any map with a running pod," -ForegroundColor Green
-        Write-Host "so it's safe to run again whenever a map refuses to start." -ForegroundColor Green
+        # Manual on-demand-map repair — also (re)installs the boot script + cron
+        # if missing, then runs the partition-clear script with no settling
+        # delay (operator has already had whatever time it needed by the time
+        # the user invokes this).
+        Invoke-OnDemandPartitionClear -Ip $ip -DelaySec 0 -Phase 'fix-on-demand-maps'
         continue
     }
 
     # --- Fallback: delegate to battlegroup CLI on VM ---
     ssh -t -o StrictHostKeyChecking=no -o LogLevel=QUIET -i "$sshKey" "$sshUser@$ip" "$bgBinPath $cmdName"
+    $bgFallbackExit = $LASTEXITCODE
 
     # Battlegroup commands (status/start/restart/stop) can change observable
     # port state, so invalidate the cached external port-check results to
     # force a fresh check on the next menu render.
     $script:portCheckCache = $null
+
+    # After a successful bg start / restart, auto-clear the on-demand-map
+    # partition pins so DD/Arrakeen/Harko spawn for the next player without
+    # the user having to invoke fix-on-demand-maps manually.
+    if ($bgFallbackExit -eq 0 -and ($cmdName -eq 'start' -or $cmdName -eq 'restart')) {
+        Invoke-OnDemandPartitionClear -Ip $ip -DelaySec 45 -Phase "post-$cmdName"
+    }
 
     # After start/restart, resolve director port
     if ($cmdName -eq "start" -or $cmdName -eq "restart") {
