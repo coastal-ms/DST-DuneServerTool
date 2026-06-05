@@ -100,6 +100,14 @@ Source: "..\..\webui\dist\*"; DestDir: "{app}\webui\dist"; Flags: ignoreversion 
 ; time, then runs build-patched.ps1 -Restart against it.
 Source: "..\resources\dune-admin-patches\*"; DestDir: "{app}\resources\dune-admin-patches"; Flags: ignoreversion recursesubdirs
 
+; v11.0.1: Versioned copy of the remote partition-clear script.
+; v11.0.3: Script is now staged inline to /tmp on the VM, run once with
+; sudo, then removed — no /etc/local.d install, no /etc/periodic/15min cron.
+; DST scp's this file to /tmp/dune-cp-<id>.sh on every Start / Restart /
+; fix-on-demand-maps invocation. (Existing VMs that had the boot script +
+; cron installed by v11.0.1/v11.0.2 keep working harmlessly until rebuilt.)
+Source: "..\resources\remote-scripts\*"; DestDir: "{app}\resources\remote-scripts"; Flags: ignoreversion recursesubdirs
+
 ; v6.1.24: Drop-in preflight checker users can run when something goes wrong.
 ; DunePreflight.bat is the entry point (right-click -> Run as administrator),
 ; DunePreflight.ps1 is the WinForms results window, README.md explains usage.
