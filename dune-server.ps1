@@ -13,7 +13,7 @@ param(
 # Wraps the original battlegroup.ps1 menu and adds extra tools
 # ============================================================
 
-$script:ToolVersion = "11.0.1"
+$script:ToolVersion = "11.0.2"
 
 # Cold-boot readiness budgets (seconds). A fresh battlegroup's FIRST boot can
 # take 10-30 min: k3s + funcom-operators initialize, metrics-server restarts a
@@ -1054,17 +1054,36 @@ function Sync-DunePartitionAutomation {
         return $false
     }
 
-    # Read + force LF line endings — Alpine /bin/sh chokes on CRLF.
+    # Compute sha256 of the bundled (LF-normalized) script content so the
+    # remote installer can skip the in-place replace when nothing changed.
     $raw   = [System.IO.File]::ReadAllText($local)
     $lf    = $raw -replace "`r`n", "`n" -replace "`r", "`n"
     $bytes = [Text.Encoding]::UTF8.GetBytes($lf)
-    $b64   = [Convert]::ToBase64String($bytes)
     $sha   = [BitConverter]::ToString(
         [Security.Cryptography.SHA256]::Create().ComputeHash($bytes)
     ).Replace('-','').ToLower()
 
-    $remoteScript = @"
+    # v11.0.2: deliver via scp + on-disk installer instead of inline
+    # base64-payload-piped-to-`base64 -d | sh`. The latter pattern is a
+    # generic ML heuristic trigger (Trojan:Script/Wacatac.H!ml) on PS2EXE-
+    # compiled admin tools because it shapes-up identical to
+    # `powershell -enc <b64>` malware. Same end state, no obfuscation-looking
+    # code path.
+    $stamp      = [Guid]::NewGuid().ToString('N').Substring(0, 12)
+    $localTmp   = Join-Path $env:TEMP "dune-sync-$stamp.start"
+    $localInst  = Join-Path $env:TEMP "dune-sync-$stamp.installer.sh"
+    $remoteNew  = "/tmp/dune-sync-$stamp.start"
+    $remoteInst = "/tmp/dune-sync-$stamp.installer.sh"
+
+    # Local temp 1: the LF-encoded partition-clear script body itself.
+    [System.IO.File]::WriteAllBytes($localTmp, $bytes)
+
+    # Local temp 2: a small POSIX installer that diffs sha256 and atomically
+    # moves the staged file into place. Plain shell, no base64 payloads.
+    $installer = @"
+#!/bin/sh
 set -u
+NEW='$remoteNew'
 SCRIPT_PATH=/etc/local.d/dune-clear-partitions.start
 CRON_PATH=/etc/periodic/15min/dune-clear-partitions
 EXPECTED_SHA='$sha'
@@ -1075,9 +1094,7 @@ if [ -f "`$SCRIPT_PATH" ]; then
   current_sha=`$(sha256sum "`$SCRIPT_PATH" 2>/dev/null | awk '{print `$1}')
 fi
 if [ "`$current_sha" != "`$EXPECTED_SHA" ]; then
-  printf '%s' '$b64' | base64 -d > "`$SCRIPT_PATH"
-  chmod 0755 "`$SCRIPT_PATH"
-  chown root:root "`$SCRIPT_PATH"
+  install -o root -g root -m 0755 "`$NEW" "`$SCRIPT_PATH"
   echo "installed-or-updated `$SCRIPT_PATH"
   changed=1
 fi
@@ -1086,7 +1103,7 @@ if [ ! -x "`$CRON_PATH" ]; then
   cat > "`$CRON_PATH" <<'EOC'
 #!/bin/sh
 # 15-min watchdog wrapper for the on-demand partition clear script.
-# Managed by DST (Dune Server Tool) — see /etc/local.d/dune-clear-partitions.start.
+# Managed by DST (Dune Server Tool) -- see /etc/local.d/dune-clear-partitions.start.
 exec /etc/local.d/dune-clear-partitions.start
 EOC
   chmod 0755 "`$CRON_PATH"
@@ -1096,21 +1113,42 @@ EOC
 fi
 
 # Make sure OpenRC's 'local' service is in the default runlevel so the boot
-# script actually fires next reboot. Idempotent — quiet add, ignore error.
+# script actually fires next reboot. Idempotent.
 if command -v rc-update >/dev/null 2>&1; then
   rc-update -q add local default 2>/dev/null || true
 fi
+
+rm -f "`$NEW"
 
 if [ "`$changed" -eq 0 ]; then
   echo "already-current"
 fi
 exit 0
 "@
+    # LF-encode the installer too so Alpine /bin/sh doesn't see CRLF.
+    [System.IO.File]::WriteAllText($localInst, ($installer -replace "`r`n", "`n"))
 
-    $payloadB64 = [Convert]::ToBase64String([Text.Encoding]::UTF8.GetBytes($remoteScript))
-    $output = ssh -o BatchMode=yes -o StrictHostKeyChecking=no -o LogLevel=QUIET -i "$sshKey" "$sshUser@$Ip" `
-        "echo $payloadB64 | base64 -d | sudo -n sh" 2>&1
-    $rc = $LASTEXITCODE
+    try {
+        # Push both files to /tmp via scp (no payload-in-shell-command tricks).
+        & scp -o BatchMode=yes -o StrictHostKeyChecking=no -o LogLevel=QUIET `
+              -i "$sshKey" $localTmp $localInst "${sshUser}@${Ip}:/tmp/" 2>&1 | Out-Null
+        if ($LASTEXITCODE -ne 0) {
+            if (-not $Quiet) {
+                Write-Host "  Warning: scp of partition-sync files failed (exit $LASTEXITCODE)." -ForegroundColor Yellow
+            }
+            return $false
+        }
+
+        # Run the staged installer via sudo. The installer mv's the staged
+        # script into /etc/local.d and removes its own staged copy when done.
+        $output = & ssh -o BatchMode=yes -o StrictHostKeyChecking=no -o LogLevel=QUIET `
+                        -i "$sshKey" "$sshUser@$Ip" `
+                        "sudo -n sh $remoteInst; rc=`$?; rm -f $remoteInst; exit `$rc" 2>&1
+        $rc = $LASTEXITCODE
+    } finally {
+        Remove-Item -LiteralPath $localTmp  -Force -ErrorAction SilentlyContinue
+        Remove-Item -LiteralPath $localInst -Force -ErrorAction SilentlyContinue
+    }
     if ($rc -ne 0) {
         if (-not $Quiet) {
             Write-Host "  Warning: partition-clear automation sync exited $rc (best-effort, parent command continues)." -ForegroundColor Yellow

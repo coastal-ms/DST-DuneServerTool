@@ -13,6 +13,18 @@ here cover everything those tags shipped.
 
 ## [Unreleased]
 
+## [11.0.2] - 2026-06-05
+
+### Fixed
+- **Defender false positive (`Trojan:Script/Wacatac.H!ml`) tripped by v11.0.1's
+  new partition-clear deploy code.** The `Sync-DunePartitionAutomation` helper
+  used the pattern `Convert::ToBase64String` → `ssh "echo <b64> | base64 -d | sudo sh"`
+  to atomically push the boot script to the VM. That pattern is shape-identical
+  to `powershell -enc <b64>` malware and trips Microsoft Defender's ML
+  heuristic on PS2EXE-wrapped admin tools. Reworked the helper to stage the
+  script + a small installer via `scp` and run them with `sudo -n sh <file>` —
+  same end state, no obfuscation-looking code path. No behavior change.
+
 ## [11.0.1] - 2026-06-05
 
 ### Fixed
