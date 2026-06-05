@@ -63,20 +63,28 @@ export async function getLatestRelease(): Promise<LatestRelease> {
 
 // Renders a version string for display in the site UI (everywhere except the
 // changelog / release-notes page, which prints raw tags from CHANGELOG.md).
-// Convention: the current major series (10) is shown as the Roman numeral "X",
-// with the minor.patch suffix in parentheses. Examples:
+// Convention: current and recent major series render as Roman numerals
+// ("X", "XI", "XII", …) with the minor.patch suffix in parentheses.
+// Examples:
+//   "11.0.0" -> "XI"
+//   "11.0.1" -> "XI (0.1)"
 //   "10.2.4" -> "X (2.4)"
-//   "10.0"   -> "X"
-//   "10"     -> "X"
-//   "9.1.2"  -> "v9.1.2"   (other majors untouched)
+//   "9.1.2"  -> "v9.1.2"   (older majors untouched)
 //   "latest" -> "the latest release"
+const ROMAN_MAJORS: Record<string, string> = {
+  "10": "X", "11": "XI", "12": "XII", "13": "XIII", "14": "XIV", "15": "XV",
+  "16": "XVI", "17": "XVII", "18": "XVIII", "19": "XIX", "20": "XX",
+};
+
 export function formatDisplayVersion(version: string): string {
   if (!version || version === "latest") return "the latest release";
   const cleaned = version.replace(/^v/, "");
   const parts = cleaned.split(".");
-  if (parts[0] === "10") {
+  const major = parts[0];
+  const label = ROMAN_MAJORS[major];
+  if (label) {
     const rest = parts.slice(1).join(".").replace(/(\.0)+$/, "");
-    return rest ? `X (${rest})` : "X";
+    return rest ? `${label} (${rest})` : label;
   }
   return `v${cleaned}`;
 }

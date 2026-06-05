@@ -13,6 +13,64 @@ here cover everything those tags shipped.
 
 ## [Unreleased]
 
+## [11.0.0] - 2026-06-04
+
+### Added
+- **Theming engine — full preset picker + custom color overrides + import/export.**
+  Settings → Appearance now lets you swap the portal palette without rebuilding
+  or editing CSS. Ships with 6 built-in presets:
+  - **Eyes of Ibad** — the original. Desert amber on warm dark, cyan glow.
+  - **Sietch Tabr** — daytime light theme. Aged-parchment tan with deep
+    amber text — dim enough to live in.
+  - **Caladan** — Atreides homeworld. Muted slate-blue on stormcloud grey.
+  - **Giedi Prime** — Harkonnen homeworld. Dark slate-grey with blood-red
+    accents.
+  - **House Harkonnen** — heraldic. Bone-white sigil on blood-crimson
+    and oxidized black.
+  - **Atreides** — house colors. Forest green and royal gold on midnight.
+
+  Beyond the presets, every one of the 18 theme tokens (page background,
+  card surfaces, border, all 3 text shades, accent + its foreground +
+  bright/dim variants, highlight, and all four status colors) is editable
+  via a native `<input type="color">` with hex text field. Per-token reset
+  and a single "Revert all overrides" button. **Reset to default** restores
+  Eyes of Ibad with no customizations.
+
+  Themes export to JSON (download via the browser) and import back from a
+  picked file — so you can share a theme between machines or with someone
+  else. Schema is forward-compatible (versioned); unknown keys in an
+  imported file are reported in the status banner rather than silently
+  dropped.
+
+  Implementation: themes are CSS variable overrides applied to `:root`,
+  persisted to `localStorage["dst-theme"]` as `{presetId, overrides,
+  resolved}`. An inline `<script>` in `index.html` reads the persisted
+  resolved map and applies it BEFORE React mounts, so there is no flash
+  of the default palette on reload. The embedded xterm in the Terminal
+  page also recolors live (background, foreground, cursor, ANSI palette)
+  when the theme changes — no Terminal-page refresh required.
+
+### Changed
+- **`.btn-primary` text-color bug fixed.** The primary-button class was
+  previously declared as `bg-accent text-base` — `text-base` is the
+  Tailwind font-size utility (1rem) and never set a text color, so the
+  button's text inherited from `<body>`. That happened to look OK on
+  the original Eyes of Ibad palette (light cream text on amber) but
+  produced unreadable buttons on light themes. Replaced with a new
+  `--color-accent-fg` token and `text-accent-fg` utility so every preset
+  can declare a sensible button-text color.
+- **Body radial-gradient glows tint with the active theme.** The two
+  ambient radial gradients on `<body>` previously used hardcoded
+  `rgba(217, 119, 6, 0.12)` (amber) and `rgba(56, 189, 248, 0.05)`
+  (cyan) — fine for Eyes of Ibad, wrong for every other theme.
+  Replaced with `color-mix(in oklab, var(--color-accent) 12%,
+  transparent)` and the same for `--color-ibad`, so the body glow now
+  follows whatever palette is active.
+- **Version display extended to Roman major XI.** `fmtToolVersion`
+  (portal) and `formatDisplayVersion` (marketing site) now recognise
+  majors 10–20 (X through XX). The on-disk semver stays purely numeric
+  (`11.0.0`) so update-check comparisons keep working.
+
 ## [10.2.8] - 2026-06-04
 
 ### Added
