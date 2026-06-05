@@ -9,6 +9,32 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <link rel="manifest" href="/manifest.webmanifest" />
     <title>Dune Server Tool</title>
+    <!-- Theming engine: apply the user's saved theme BEFORE React mounts so
+         there is no flash of the default palette on reload. Mirrors the logic
+         in webui/src/theme/ThemeContext.tsx (intentionally inline + dependency-
+         free so it runs synchronously during HTML parse). -->
+    <script>
+      (function () {
+        try {
+          var raw = localStorage.getItem('dst-theme');
+          if (!raw) return;
+          var parsed = JSON.parse(raw);
+          if (!parsed || typeof parsed !== 'object') return;
+          var resolved = parsed.resolved;
+          if (!resolved || typeof resolved !== 'object') return;
+          var hex = /^#([0-9a-f]{3}|[0-9a-f]{6}|[0-9a-f]{8})$/i;
+          var root = document.documentElement;
+          for (var key in resolved) {
+            if (Object.prototype.hasOwnProperty.call(resolved, key)
+                && key.indexOf('--color-') === 0
+                && typeof resolved[key] === 'string'
+                && hex.test(resolved[key])) {
+              root.style.setProperty(key, resolved[key]);
+            }
+          }
+        } catch (e) { /* corrupted storage — fall through to default palette */ }
+      })();
+    </script>
   </head>
   <body>
     <div id="root"></div>
