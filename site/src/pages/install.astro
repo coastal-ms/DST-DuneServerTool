@@ -134,5 +134,96 @@ import DownloadButton from "../components/DownloadButton.astro";
         </div>
       </dl>
     </div>
+
+    <h2 class="text-2xl font-semibold mt-12 mb-4">Remote access <span class="text-dune-muted text-base font-normal">— advanced, no third-party software</span></h2>
+    <p class="text-dune-muted leading-relaxed mb-4">
+      DST binds the portal to <span class="font-mono">127.0.0.1</span> only and
+      has no built-in remote login — exposing the port to the internet would
+      be unsafe (the per-launch token is the only credential). If you want a
+      trusted co-admin to reach your portal from elsewhere, the supported
+      pattern uses only software that ships with Windows 10 / 11: the
+      built-in <strong class="text-dune-text">OpenSSH Server</strong> plus an
+      SSH local port-forward. No Cloudflare, Tailscale, ngrok, or VPN
+      service required.
+    </p>
+
+    <div class="rounded-lg border border-dune-accent/40 bg-dune-accent/10 px-5 py-4 mb-6 text-sm text-dune-text">
+      <strong class="block mb-1">⚠️ Read this first.</strong>
+      Anyone with your DST URL + token has full admin (restart battlegroup,
+      edit ServerSetup.ini, drop the database, kick players). Only share
+      access with people you trust at that level. The token resets on every
+      DST launch and lives in
+      <span class="font-mono">%LOCALAPPDATA%\DuneServer\last-url.txt</span>.
+    </div>
+
+    <h3 class="text-xl font-semibold mt-6 mb-3">Host setup (your machine, one-time)</h3>
+    <ol class="space-y-3 text-dune-muted leading-relaxed mb-6 list-decimal pl-6">
+      <li>
+        Install OpenSSH Server (Microsoft component, no third-party install)
+        in an elevated PowerShell:
+        <pre class="mt-2 p-3 rounded bg-dune-bg border border-dune-border text-xs text-dune-text overflow-x-auto"><code>Add-WindowsCapability -Online -Name OpenSSH.Server~~~~0.0.1.0
+Set-Service -Name sshd -StartupType Automatic
+Start-Service sshd
+New-NetFirewallRule -Name 'OpenSSH-Server-In-TCP' -DisplayName 'OpenSSH Server (TCP)' `
+  -Enabled True -Direction Inbound -Protocol TCP -Action Allow -LocalPort 22</code></pre>
+      </li>
+      <li>
+        Force key-only auth — edit
+        <span class="font-mono">C:\ProgramData\ssh\sshd_config</span> and
+        set <span class="font-mono">PasswordAuthentication no</span>,
+        <span class="font-mono">PubkeyAuthentication yes</span>,
+        <span class="font-mono">PermitRootLogin no</span>, then
+        <span class="font-mono">Restart-Service sshd</span>.
+      </li>
+      <li>
+        Add the co-admin's public key to
+        <span class="font-mono">C:\ProgramData\ssh\administrators_authorized_keys</span>
+        (if your Windows user is an Administrator) or
+        <span class="font-mono">C:\Users\&lt;you&gt;\.ssh\authorized_keys</span>
+        for a standard user.
+      </li>
+      <li>
+        On your router, forward an arbitrary public TCP port
+        (e.g. <span class="font-mono">52222</span>) → your PC's port 22. Use
+        a non-standard external port to cut log noise from internet
+        scanners. If your ISP rotates your public IP, use a free dynamic-DNS
+        hostname.
+      </li>
+    </ol>
+
+    <h3 class="text-xl font-semibold mt-6 mb-3">Connecting (every session)</h3>
+    <ol class="space-y-3 text-dune-muted leading-relaxed mb-6 list-decimal pl-6">
+      <li>
+        You launch DST normally, then send the co-admin the current token
+        from <span class="font-mono">%LOCALAPPDATA%\DuneServer\last-url.txt</span>
+        over a secure channel (Signal, encrypted email, Discord DM).
+      </li>
+      <li>
+        They open an SSH tunnel from their machine:
+        <pre class="mt-2 p-3 rounded bg-dune-bg border border-dune-border text-xs text-dune-text overflow-x-auto"><code>ssh -N -L 47823:127.0.0.1:47823 &lt;your-user&gt;@&lt;your-public-ip&gt; -p 52222</code></pre>
+      </li>
+      <li>
+        They browse to
+        <span class="font-mono">http://127.0.0.1:47823/?t=&lt;token&gt;</span>
+        on <em>their own</em> loopback. The portal itself never accepts a
+        non-loopback connection.
+      </li>
+      <li>
+        Tear down with <span class="font-mono">Ctrl+C</span> on the SSH
+        session when done.
+      </li>
+    </ol>
+
+    <p class="text-dune-muted text-sm leading-relaxed mb-12">
+      <strong class="text-dune-text">Notes:</strong> DST prefers port
+      <span class="font-mono">47823</span> but probes <span class="font-mono">+50</span>
+      if busy — check <span class="font-mono">last-url.txt</span> for the real
+      port and adjust the <span class="font-mono">-L</span> mapping. The
+      DuneShell window holds the listener; click <strong class="text-dune-text">Web
+      Portal</strong> in the sidebar before closing it to keep the server
+      running in the background. The token rotates on every DST launch — re-send
+      it after a restart. The PowerShell page is loopback-only by design even
+      over the tunnel, so a remote admin cannot get a shell on your host.
+    </p>
   </section>
 </Base>
