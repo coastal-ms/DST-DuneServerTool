@@ -6,6 +6,7 @@ import '@xterm/xterm/css/xterm.css'
 import { PageHeader } from '../components/PageHeader'
 import { Icon } from '../components/Icon'
 import { connectTerminal, type TerminalClient, type TermStream } from '../api/terminal'
+import { useTheme } from '../theme/ThemeContext'
 
 // ----------------------------------------------------------------------------
 // Terminal page — embedded PowerShell session.
@@ -48,6 +49,11 @@ function writeStream(term: XTerm, stream: TermStream, data: string) {
 }
 
 export function TerminalPage() {
+  // xterm has its own color palette that lives outside the CSS-var theming
+  // engine; we read the resolved tokens from useTheme() and either build the
+  // initial theme from them on mount or hot-swap term.options.theme when the
+  // user changes presets / overrides.
+  const theme = useTheme()
   const hostRef = useRef<HTMLDivElement | null>(null)
   const termRef = useRef<XTerm | null>(null)
   const fitRef = useRef<FitAddon | null>(null)
@@ -256,6 +262,36 @@ export function TerminalPage() {
     }
   }, [redrawLine, setLine, writePrompt])
 
+  // Build an xterm theme object from the current resolved theme tokens.
+  // Status colors (success/warning/danger/info) map to the closest ANSI slots
+  // so colored output like `\x1b[91m...` still feels theme-appropriate.
+  const buildXtermTheme = useCallback((r: Record<string, string>) => {
+    const accent = r['--color-accent'] ?? '#d97706'
+    return {
+      background: r['--color-base'] ?? '#0c0a09',
+      foreground: r['--color-text'] ?? '#f5ebe0',
+      cursor:     accent,
+      // 33% alpha selection — xterm accepts #rrggbbaa.
+      selectionBackground: accent + '55',
+      black:   r['--color-base'] ?? '#0c0a09',
+      red:     r['--color-danger'] ?? '#f87171',
+      green:   r['--color-success'] ?? '#4ade80',
+      yellow:  r['--color-warning'] ?? '#fbbf24',
+      blue:    r['--color-ibad'] ?? '#38bdf8',
+      magenta: '#c084fc',
+      cyan:    r['--color-info'] ?? '#22d3ee',
+      white:   r['--color-text'] ?? '#f5ebe0',
+      brightBlack:   r['--color-text-dim'] ?? '#7a6a5a',
+      brightRed:     r['--color-danger'] ?? '#ef4444',
+      brightGreen:   r['--color-success'] ?? '#86efac',
+      brightYellow:  r['--color-warning'] ?? '#fde047',
+      brightBlue:    r['--color-ibad-bright'] ?? '#7dd3fc',
+      brightMagenta: '#e9d5ff',
+      brightCyan:    r['--color-info'] ?? '#67e8f9',
+      brightWhite:   '#ffffff',
+    }
+  }, [])
+
   // ---- mount: create xterm + WS ------------------------------------------
 
   useEffect(() => {
@@ -265,19 +301,7 @@ export function TerminalPage() {
       fontFamily: '"JetBrains Mono", "Cascadia Code", "Consolas", monospace',
       fontSize: 13,
       lineHeight: 1.2,
-      theme: {
-        background: '#0c0a09',
-        foreground: '#f5ebe0',
-        cursor:     '#d97706',
-        selectionBackground: '#d9770655',
-        black: '#0c0a09', red: '#f87171', green: '#4ade80',
-        yellow: '#fbbf24', blue: '#38bdf8', magenta: '#c084fc',
-        cyan: '#22d3ee', white: '#f5ebe0',
-        brightBlack: '#7a6a5a', brightRed: '#ef4444',
-        brightGreen: '#86efac', brightYellow: '#fde047',
-        brightBlue: '#7dd3fc', brightMagenta: '#e9d5ff',
-        brightCyan: '#67e8f9', brightWhite: '#ffffff',
-      },
+      theme: buildXtermTheme(theme.resolved),
       scrollback: 5000,
       convertEol: false,
     })
@@ -353,6 +377,15 @@ export function TerminalPage() {
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
+
+  // Live-update xterm colors when the user changes preset or tweaks a token.
+  // Re-running the WS-creating effect on every theme change would be wasteful,
+  // so we mutate term.options.theme in place instead.
+  useEffect(() => {
+    const term = termRef.current
+    if (!term) return
+    try { term.options.theme = buildXtermTheme(theme.resolved) } catch { /* xterm rejects mid-write; ignore */ }
+  }, [theme.revision, theme.resolved, buildXtermTheme])
 
   const onCancelClick = () => {
     const c = clientRef.current

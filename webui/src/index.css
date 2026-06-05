@@ -17,6 +17,10 @@
   --color-accent: #d97706;
   --color-accent-bright: #f59e0b;
   --color-accent-dim: #92400e;
+  /* Foreground (text) color used ON TOP of accent — e.g. primary button text.
+   * Themes that flip the accent to a light color (Sietch Tabr) must override
+   * this to a dark value, or button text becomes unreadable. */
+  --color-accent-fg: #0c0a09;
 
   /* Eyes of Ibad cyan glow — for highlights & focus rings */
   --color-ibad: #38bdf8;
@@ -38,9 +42,11 @@
   }
   body {
     @apply bg-base text-text font-sans antialiased;
+    /* Glow tints follow the active theme automatically — color-mix bakes a
+     * 12%/5% wash of the current accent and highlight tokens. */
     background-image:
-      radial-gradient(ellipse 80% 50% at 50% -20%, rgba(217, 119, 6, 0.12), transparent),
-      radial-gradient(ellipse 60% 40% at 80% 110%, rgba(56, 189, 248, 0.05), transparent);
+      radial-gradient(ellipse 80% 50% at 50% -20%, color-mix(in oklab, var(--color-accent) 12%, transparent), transparent),
+      radial-gradient(ellipse 60% 40% at 80% 110%, color-mix(in oklab, var(--color-ibad) 5%, transparent), transparent);
     background-attachment: fixed;
   }
   ::-webkit-scrollbar { width: 10px; height: 10px; }
@@ -63,10 +69,13 @@
            focus:outline-none focus-visible:ring-2 focus-visible:ring-ibad;
   }
   .btn-primary {
+    /* `text-accent-fg` (NOT the old `text-base` which was secretly the
+     * font-size utility and never colored the button) keeps button text
+     * readable across light + dark themes. */
     @apply inline-flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-medium whitespace-nowrap
            transition-colors disabled:opacity-50 disabled:cursor-not-allowed
            focus:outline-none focus-visible:ring-2 focus-visible:ring-ibad
-           bg-accent text-base hover:bg-accent-bright;
+           bg-accent text-accent-fg hover:bg-accent-bright;
   }
   .btn-secondary {
     @apply inline-flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-medium whitespace-nowrap

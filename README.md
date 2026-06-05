@@ -8,9 +8,9 @@
 [![License: Apache 2.0](https://img.shields.io/badge/License-Apache_2.0-blue.svg)](LICENSE)
 [![Latest release](https://img.shields.io/github/v/release/coastal-ms/DST-DuneServerTool?sort=semver)](https://github.com/coastal-ms/DST-DuneServerTool/releases/latest)
 
-The current release is **version X** (shown stylized as **X** in-app; patch
-updates display as **X (0.1)**, **X (0.2)**, … under the hood these are
-`10.0.0`, `10.0.1`, … so update-checks and version comparisons keep working).
+The current release is **version XI** (shown stylized as **XI** in-app; patch
+updates display as **XI (0.1)**, **XI (0.2)**, … under the hood these are
+`11.0.0`, `11.0.1`, … so update-checks and version comparisons keep working).
 It runs as a single-window Windows app (native WebView2 shell) that hosts a
 local web portal (React + Vite + Tailwind) on `127.0.0.1` with a per-launch
 tokenized URL. Same battle-tested SSH + Hyper-V + battlegroup automation
@@ -19,6 +19,16 @@ the sidebar's **Web Portal** button hands the portal off to your default
 browser and keeps the server running in the background.
 
 ![Server Health](docs/img/v6-server-health.png)
+
+### New in v11 — theming engine
+
+Settings now ships an **Appearance** card with six built-in presets — Eyes
+of Ibad, Sietch Tabr, Caladan, Giedi Prime, House Harkonnen, and Atreides
+— plus per-token color customization, JSON import/export, and live
+recoloring of the in-app terminal. Your choice is persisted locally and
+applied before React mounts (no flash of the default theme on launch).
+
+![Appearance card with six theme presets](docs/img/appearance-card.png)
 
 See [`CHANGELOG.md`](CHANGELOG.md) for the full release history and
 [`CONTRIBUTING.md`](CONTRIBUTING.md) for the change-control workflow.
