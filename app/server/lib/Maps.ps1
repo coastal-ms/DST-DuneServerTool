@@ -343,17 +343,58 @@ function Start-DuneOnDemandMap {
 }
 
 function Invoke-DuneFixOnDemandPartitions {
-    # Re-runs the remote partition-cleanup script that clears the drifted
+    # Re-runs the partition-cleanup script that clears the drifted
     # igwsss.spec.partitions pin which stops DeepDesert / SH_Arrakeen /
     # SH_HarkoVillage from launching on demand, then returns the last lines
-    # of its log. The remote script is idempotent and skips any map that
-    # already has a running pod, so it's safe to invoke repeatedly.
+    # of its log. The script is idempotent and skips any map that already
+    # has a running pod, so it's safe to invoke repeatedly.
+    #
+    # v11.0.3: stages the bundled script to /tmp on the VM via scp, runs it
+    # once with sudo, removes the staged copy. No persistent install on the
+    # VM. (Previously called /etc/local.d/dune-clear-partitions.start
+    # installed by Sync-DunePartitionAutomation — that path may not exist
+    # on fresh installs, but is still honored when present.)
     $ctx = Get-DuneMapsContext
     if (-not $ctx.ok) { return @{ ok=$false; status=$ctx.status; message=$ctx.message } }
 
     $ip = $ctx.vm.ip
-    $runRaw = Invoke-V6Ssh -Ip $ip -Cmd 'sudo /etc/local.d/dune-clear-partitions.start' -TimeoutSec 120
-    $output = (($runRaw -join "`n")).Trim()
+
+    $candidates = @(
+        (Join-Path $PSScriptRoot '..\..\resources\remote-scripts\dune-clear-partitions.start')                  # installed layout
+        (Join-Path (Split-Path -Parent $PSScriptRoot) '..\resources\remote-scripts\dune-clear-partitions.start') # dev layout fallback
+    )
+    $local = $null
+    foreach ($p in $candidates) { if (Test-Path -LiteralPath $p) { $local = $p; break } }
+    if (-not $local) {
+        return @{ ok=$false; status=500; message='Bundled dune-clear-partitions.start not found in install dir.' }
+    }
+
+    $key = Get-V6SshKeyPath
+    if (-not $key) {
+        return @{ ok=$false; status=500; message='SSH key path not configured.' }
+    }
+
+    $stamp     = [Guid]::NewGuid().ToString('N').Substring(0, 12)
+    $localTmp  = Join-Path $env:TEMP "dune-cp-$stamp.sh"
+    $remoteTmp = "/tmp/dune-cp-$stamp.sh"
+
+    # Force LF — Alpine /bin/sh chokes on CRLF.
+    $raw = [System.IO.File]::ReadAllText($local)
+    $lf  = $raw -replace "`r`n", "`n" -replace "`r", "`n"
+    [System.IO.File]::WriteAllBytes($localTmp, [Text.Encoding]::UTF8.GetBytes($lf))
+
+    $output = ''
+    try {
+        & scp -o BatchMode=yes -o StrictHostKeyChecking=no -o LogLevel=QUIET `
+              -i "$key" $localTmp "dune@${ip}:${remoteTmp}" 2>&1 | Out-Null
+        if ($LASTEXITCODE -ne 0) {
+            return @{ ok=$false; status=500; message="scp of partition-clear script failed (exit $LASTEXITCODE)." }
+        }
+        $runRaw = Invoke-V6Ssh -Ip $ip -Cmd "sudo -n sh $remoteTmp; rc=`$?; rm -f $remoteTmp; exit `$rc" -TimeoutSec 120
+        $output = (($runRaw -join "`n")).Trim()
+    } finally {
+        Remove-Item -LiteralPath $localTmp -Force -ErrorAction SilentlyContinue
+    }
 
     $tailRaw = Invoke-V6Ssh -Ip $ip -Cmd 'tail -n 10 /var/log/dune-clear-partitions.log' -TimeoutSec 30
     $logTail = (($tailRaw -join "`n")).Trim()
