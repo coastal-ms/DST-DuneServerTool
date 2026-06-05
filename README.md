@@ -407,6 +407,130 @@ business logic — they're not separate codebases.
 
 ---
 
+## Remote access *(advanced — no third-party software)*
+
+DST binds its web portal to `127.0.0.1` only — there is **no** built-in
+remote login, and exposing the port to the public internet would be unsafe
+(the per-launch token is the only credential). If you want a trusted
+co-admin to reach your portal from elsewhere, the supported pattern uses
+only software that ships with Windows 10 / 11 — no Cloudflare, Tailscale,
+ngrok, VPN service, or other third-party install required.
+
+> ⚠️ **Read this first.** Anyone with your DST URL + token has full admin:
+> they can restart your battlegroup, edit `ServerSetup.ini`, drop the
+> database, or kick players. Only share access with people you trust at
+> that level. The token resets on every DST launch and lives in
+> `%LOCALAPPDATA%\DuneServer\last-url.txt`.
+
+### How it works
+
+The remote user opens an **SSH local port-forward** (a feature built into
+`ssh.exe` on every Windows 10 / 11 install) that tunnels their machine's
+`127.0.0.1:47823` to your machine's `127.0.0.1:47823`. They then browse to
+the DST URL on their own loopback. The portal itself never accepts a
+non-loopback connection, so it stays as locked down as if they were
+sitting at your desk.
+
+### One-time host setup (your machine)
+
+1. **Install OpenSSH Server** (Microsoft component, no third-party install):
+
+   ```powershell
+   # Run as Administrator
+   Add-WindowsCapability -Online -Name OpenSSH.Server~~~~0.0.1.0
+   Set-Service -Name sshd -StartupType Automatic
+   Start-Service sshd
+   New-NetFirewallRule -Name 'OpenSSH-Server-In-TCP' -DisplayName 'OpenSSH Server (TCP)' `
+     -Enabled True -Direction Inbound -Protocol TCP -Action Allow -LocalPort 22
+   ```
+
+2. **Force key-only authentication** — edit `C:\ProgramData\ssh\sshd_config`:
+
+   ```
+   PasswordAuthentication no
+   PubkeyAuthentication yes
+   PermitRootLogin no
+   AllowUsers <your-windows-username>
+   ```
+
+   Then `Restart-Service sshd`.
+
+3. **Add your co-admin's public SSH key** to your authorized list:
+
+   ```powershell
+   # If your Windows account is in the Administrators group:
+   $key = 'ssh-ed25519 AAAA... them@laptop'   # paste their public key
+   Add-Content -Path 'C:\ProgramData\ssh\administrators_authorized_keys' -Value $key
+   icacls 'C:\ProgramData\ssh\administrators_authorized_keys' /inheritance:r `
+     /grant 'Administrators:F' /grant 'SYSTEM:F'
+   ```
+
+   For a non-admin Windows account, use `C:\Users\<you>\.ssh\authorized_keys`
+   instead (create the `.ssh` folder if missing; lock to user-only ACLs).
+
+4. **Open a port on your router** — forward an arbitrary public TCP port
+   (e.g. `52222`) → your PC's `22`. Use a non-standard external port to
+   cut log noise from internet scanners. If your ISP gives you a rotating
+   public IP, use a free dynamic-DNS hostname (e.g. DuckDNS, No-IP) — but
+   that's still your DNS provider, not a tunnel service.
+
+5. **(Recommended)** Rename the `sshd` Windows service log to flag brute
+   force, or disable IPv6 on the router rule.
+
+### One-time co-admin setup (their machine)
+
+1. They generate a keypair on their Windows / macOS / Linux box:
+
+   ```bash
+   ssh-keygen -t ed25519 -C "them@laptop"
+   ```
+
+2. They send you `~/.ssh/id_ed25519.pub` (public key only — never the
+   private one). You paste it into step 3 above.
+
+### Every time the co-admin wants to connect
+
+1. **You** launch DST normally, then send them the current token from
+   `%LOCALAPPDATA%\DuneServer\last-url.txt` (it rotates on every launch).
+   Use a secure channel — Signal, encrypted email, Discord DM — not a
+   public channel.
+
+2. **They** open an SSH tunnel from their machine:
+
+   ```bash
+   ssh -N -L 47823:127.0.0.1:47823 <your-windows-user>@<your-public-ip> -p 52222
+   ```
+
+   - `-N` = "don't run a remote command, just hold the tunnel"
+   - `-L 47823:127.0.0.1:47823` = "forward my local 47823 to your loopback 47823"
+   - Replace `52222` with whatever external port you forwarded on the router
+
+3. **They** open the DST URL in their own browser, but pointed at *their*
+   loopback:
+
+   ```
+   http://127.0.0.1:47823/?t=<token-you-sent-them>
+   ```
+
+4. When done, they `Ctrl+C` the SSH session to tear down the tunnel.
+
+### Notes / gotchas
+
+- **DST's port is dynamic.** It prefers `47823` but probes up to `+50`
+  if busy. Check `%LOCALAPPDATA%\DuneServer\last-url.txt` for the real
+  port and adjust the `-L 47823:127.0.0.1:<actual-port>` accordingly.
+- **The DuneShell window holds the listener.** If you close it without
+  using **Web Portal** (sidebar footer), the server stops and the
+  tunnel returns 502s. Click **Web Portal** first if you want the
+  server to keep running in the background after you close the window.
+- **Token rotates on every DST launch.** If you restart DST while the
+  co-admin is connected, re-send the new token from `last-url.txt`.
+- **PowerShell page is loopback-only by design.** Even over the tunnel,
+  the PowerShell terminal is intentionally restricted so a remote admin
+  can't get a shell on your host. Server-side commands still work.
+
+---
+
 ## Reporting issues
 
 Hit a bug, error, or unexpected behavior? **Please open a GitHub issue**
