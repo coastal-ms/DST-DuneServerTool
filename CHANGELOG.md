@@ -14,6 +14,17 @@ here cover everything those tags shipped.
 ## [Unreleased]
 
 ### Added
+- **Friend helper — WebSocket proxy.** The bridge now transparently
+  proxies WebSocket upgrades (`/ws/terminal` and friends) in addition
+  to plain HTTP, so the friend gets a working Terminal page in
+  WebView2. Implemented with `HttpListenerContext.AcceptWebSocketAsync`
+  + a `ClientWebSocket` toward DST on loopback, with two bidirectional
+  pumps stitched together by a `CancellationTokenSource`. Subprotocol
+  negotiation is preserved (first offered subprotocol echoed back).
+  Verified end-to-end against DST v11.0.3 with the real Terminal
+  protocol: `init` → `exec` → `output` → `done` frames carry through
+  byte-identical to a direct DST connection.
+
 - **Friend helper scaffold** (`helper/`). A net-new, additive companion
   to the released DST surface that lets a single trusted friend connect
   into the host's full desktop portal over Tailscale, without modifying any
