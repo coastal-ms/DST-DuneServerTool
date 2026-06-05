@@ -576,7 +576,7 @@ function Show-ResultsWindow {
     Render
 
     # Auto-save to Desktop + clipboard on first paint, so the user already has
-    # something to send the maintainer without clicking anything.
+    # something to send to the maintainer without clicking anything.
     try {
         $txt = Format-ReportText
         $desktopPath = Join-Path ([Environment]::GetFolderPath('Desktop')) 'dune-preflight.txt'

@@ -12,7 +12,7 @@ Double-click to launch.
 3. On success, parses `{url, token}` and navigates an embedded WebView2
    window to the bridge URL with the token in the query string.
 4. The bridge reverse-proxies into the current DST portal on the host's
-   loopback. You see exactly what the maintainer sees in his portal.
+   loopback. You see exactly what the host sees in his portal.
 
 ## What the friend needs
 
@@ -28,15 +28,15 @@ runtime), no admin rights required (manifest is `asInvoker`).
 ## Setup steps (give these to the friend)
 
 1. Install Tailscale: <https://tailscale.com/download/windows>
-2. Sign in with the account the maintainer added you to.
+2. Sign in with the account the host added you to.
 3. Drop `DSTConsole.exe` and `config.json` into any folder
    (e.g. `Documents\DstHelper`).
 4. Open `config.json` in Notepad and set `bridgeHost` to the Tailscale
-   hostname the maintainer sent you (something like `hostpc.tailXXXX.ts.net`).
+   hostname the host sent you (something like `hostpc.tailXXXX.ts.net`).
 5. Double-click `DSTConsole.exe`. the host's portal opens in the
    window.
 
-## Building from source (the maintainer side)
+## Building from source (host side)
 
 ```powershell
 # from the repo root

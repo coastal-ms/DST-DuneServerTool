@@ -1,11 +1,11 @@
-﻿# RemoteAccess.ps1 — Cloudflare-Access-gated remote portal subset (issue #74).
+# RemoteAccess.ps1 — Cloudflare-Access-gated remote portal subset (issue #74).
 #
-# DST today is loopback + per-launch DuneToken. The remote portal lets the maintainer and
+# DST today is loopback + per-launch DuneToken. The remote portal lets the host and
 # 1..3 trusted admins reach a mobile-friendly read+safe-write subset via a
 # Cloudflare Tunnel + Cloudflare Access policy. This file owns:
 #
 #   * The ACL file (%APPDATA%\DuneServer\remote-acl.json) — schema:
-#       { "owner": "you@example", "admins": ["friend@example", ...] }
+#       { "owner": "you@example.com", "admins": ["friend@example", ...] }
 #     Empty "owner" == remote portal disabled (fail-closed).
 #
 #   * The middleware (Test-DuneRemoteRequest) called by the listener for any

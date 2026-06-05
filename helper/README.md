@@ -56,12 +56,12 @@ sequenceDiagram
 
 | Layer                | What it gates                                                  |
 | -------------------- | -------------------------------------------------------------- |
-| Tailscale tailnet    | Only devices the maintainer has added can route to his machine at all.   |
+| Tailscale tailnet    | Only devices the host has added can route to his machine at all.   |
 | Tailscale ACL        | Friend's device tag can only reach port 47900 on the host's host.  |
 | Windows Firewall     | Port 47900 is allowed inbound **only on the Tailscale NIC**.   |
 | DuneToken (?t=)      | Defense-in-depth — DST itself still requires a valid token.    |
 
-Defeating this requires (a) the maintainer-issued tailnet membership, (b) the
+Defeating this requires (a) host-issued tailnet membership, (b) the
 friend's specific device tag in the ACL, **and** (c) capturing the
 current DuneToken — which is rotated on every DST launch.
 
@@ -71,7 +71,7 @@ current DuneToken — which is rotated on every DST launch.
   already uses CF Tunnel + Access for a mobile-friendly subset. This
   scaffold targets a *different* use case: a single trusted friend who
   wants the **full** desktop portal (Database, Terminal, Setup Wizard,
-  everything the maintainer sees). Tailscale gives identity-based access without
+  everything the host sees). Tailscale gives identity-based access without
   per-domain edge config, and friends don't need to set up an IdP.
 - **No DST code changes.** The bridge is a pure reverse proxy that reads
   the existing `last-url.txt` (DST already writes this for the desktop
@@ -84,7 +84,7 @@ current DuneToken — which is rotated on every DST launch.
 
 ## Setup checklist
 
-### the host's side
+### host side
 
 - [ ] Tailscale installed + signed in. `Get-NetIPInterface | ? InterfaceAlias -eq 'Tailscale'` returns a row.
 - [ ] PowerShell 7 (`pwsh.exe`) on PATH.
@@ -103,7 +103,7 @@ current DuneToken — which is rotated on every DST launch.
 
 - [ ] Install Tailscale and accept the host's invite.
 - [ ] Drop `DSTConsole.exe` and `config.json` in any folder.
-- [ ] Open `config.json`, set `bridgeHost` if the maintainer didn't pre-fill it.
+- [ ] Open `config.json`, set `bridgeHost` if the host didn't pre-fill it.
 - [ ] Double-click `DSTConsole.exe`.
 
 ## Known limitations (scaffold scope)

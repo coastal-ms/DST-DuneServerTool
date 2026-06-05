@@ -1,4 +1,4 @@
-﻿# Dune Server — entry point (v6.1 web portal)
+# Dune Server — entry point (v6.1 web portal)
 #
 # Bootstrap: pick a free port, start HttpListener, open default browser at the
 # tokened localhost URL. The full UI is the React SPA in webui/dist/.
@@ -74,7 +74,7 @@ Write-DuneStartupLog 'Bootstrap entered'
 # Detection rule: process name is the compiled EXE name (e.g. "DuneServer")
 # when launched as the ps2exe build. When the script runs as plain .ps1
 # inside an existing pwsh/powershell session, the process name is
-# "pwsh" / "powershell" — leave that console alone (it's the host's working shell).
+# "pwsh" / "powershell" — leave that console alone (it's the user's working shell).
 #
 # v6.1.7 hotfix: the previous `GetConsoleProcessList(count==1)` guard turned
 # out to skip the minimize whenever the installer / auto-updater that
