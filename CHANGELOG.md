@@ -13,6 +13,31 @@ here cover everything those tags shipped.
 
 ## [Unreleased]
 
+## [11.0.1] - 2026-06-05
+
+### Fixed
+- **Auto-clear pinned on-demand map partitions on every battlegroup start.**
+  Previously, after a Commands-menu `startup`, `reboot`, `start`, or `restart`,
+  the Funcom server-operator would re-pin `igwsss.spec.partitions:[N]` for
+  DeepDesert / SH_Arrakeen / SH_HarkoVillage, blocking the director from
+  triggering on-demand spawn — players hit "failed to launch" until the next
+  15-min cron pass or until you manually clicked **Fix partitions**.
+  DST now runs the idempotent clear script automatically after each of those
+  commands (best-effort — never aborts a successful battlegroup start, just
+  warns), with a short settling delay so the operator has time to reconcile
+  before the clean-up pass.
+
+### Added
+- **VM-side partition automation is now versioned and self-healing.** The
+  installer ships `app/resources/remote-scripts/dune-clear-partitions.start`,
+  and every start / restart / reboot calls a new `Sync-DunePartitionAutomation`
+  that pushes the script to `/etc/local.d/` and a wrapper to
+  `/etc/periodic/15min/` on the VM whenever the on-disk copy is missing or
+  the sha256 differs. The OpenRC `local` service is added to the default
+  runlevel idempotently. This means VM rebuilds, snapshot restores, or a
+  fresh-from-Funcom Alpine image all get the boot script + 15-min watchdog
+  installed automatically — no SSH-and-paste required.
+
 ## [11.0.0] - 2026-06-04
 
 ### Added
