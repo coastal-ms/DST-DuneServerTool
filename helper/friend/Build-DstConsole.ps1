@@ -1,11 +1,11 @@
 <#
 .SYNOPSIS
-    Builds the DstFriendHelper.exe as a self-contained single-file Windows
+    Builds DSTConsole.exe as a self-contained single-file Windows
     executable, ready to hand to a friend.
 
 .DESCRIPTION
     Wraps `dotnet publish` with the publish-time properties locked in. Output
-    lands in helper/friend/dist/. Drop DstFriendHelper.exe plus a populated
+    lands in helper/friend/dist/. Drop DSTConsole.exe plus a populated
     config.json into the same folder on the friend's PC.
 
 .PARAMETER Configuration
@@ -26,11 +26,11 @@ $ErrorActionPreference = 'Stop'
 Set-StrictMode -Version Latest
 
 $here = $PSScriptRoot
-$proj = Join-Path $here 'DstFriendHelper.csproj'
+$proj = Join-Path $here 'DSTConsole.csproj'
 $dist = Join-Path $here 'dist'
 
 if (-not (Test-Path -LiteralPath $proj)) {
-    throw "DstFriendHelper.csproj not found at $proj"
+    throw "DSTConsole.csproj not found at $proj"
 }
 
 # Clean previous dist so single-file size doesn't accumulate stale baggage.
@@ -39,7 +39,7 @@ if (Test-Path -LiteralPath $dist) {
 }
 New-Item -ItemType Directory -Path $dist | Out-Null
 
-Write-Host "Building DstFriendHelper ($Configuration / $Runtime) ..."
+Write-Host "Building DSTConsole ($Configuration / $Runtime) ..."
 
 & dotnet publish $proj `
     --configuration $Configuration `
@@ -66,5 +66,5 @@ Write-Host "Build complete." -ForegroundColor Green
 Write-Host "  Output:  $dist"
 Get-ChildItem $dist | Select-Object Name, Length | Format-Table -AutoSize
 Write-Host "Hand the friend:"
-Write-Host "  $dist\DstFriendHelper.exe"
+Write-Host "  $dist\DSTConsole.exe"
 Write-Host "  $dist\config.json   (edit bridgeHost to Neil's Tailscale hostname first)"
