@@ -11,7 +11,7 @@
     <RootNamespace>DuneShell</RootNamespace>
     <ApplicationManifest>app.manifest</ApplicationManifest>
     <ApplicationHighDpiMode>PerMonitorV2</ApplicationHighDpiMode>
-    <Version>11.0.0</Version>
+    <Version>11.1.0</Version>
     <Product>Dune Server Tool</Product>
     <AssemblyTitle>Dune Server Tool</AssemblyTitle>
     <!-- Self-contained single-file publish so the shell ships as one EXE that
