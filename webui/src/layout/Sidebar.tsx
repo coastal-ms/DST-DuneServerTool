@@ -4,7 +4,6 @@ import { createPortal } from 'react-dom'
 import { Icon } from '../components/Icon'
 import { NAV_ITEMS, GROUP_LABELS, GROUP_ORDER } from '../nav'
 import { useUpdateCheck } from '../hooks/useUpdateCheck'
-import { useLaunchDuneAdmin } from '../hooks/useLaunchDuneAdmin'
 import { api } from '../api/client'
 import { fmtToolVersion } from '../format'
 
@@ -28,7 +27,6 @@ export function Sidebar({ collapsed }: Props) {
   const [showPortalConfirm, setShowPortalConfirm] = useState(false)
   const [portalDetaching, setPortalDetaching] = useState(false)
   const [portalError, setPortalError] = useState<string | null>(null)
-  const { launching: daLaunching, launch: launchDuneAdmin } = useLaunchDuneAdmin()
 
   // "Web Portal" is meaningful only inside the native shell. In a regular
   // browser tab the user is already in their browser, so we hide the button.
@@ -70,30 +68,6 @@ export function Sidebar({ collapsed }: Props) {
 
   // Shared row renderer for a single nav item, in either layout mode.
   const renderItem = (item: typeof NAV_ITEMS[number]) => {
-    const iconName = item.action === 'launch-dune-admin' && daLaunching ? 'Loader2' : item.icon
-    const iconCls = item.action === 'launch-dune-admin' && daLaunching ? 'animate-spin' : ''
-
-    if (item.action === 'launch-dune-admin') {
-      return (
-        <button
-          type="button"
-          onClick={() => { void launchDuneAdmin() }}
-          title={collapsed
-            ? `${item.label} — opens player/character editing in dune-admin`
-            : 'Opens player/character editing in dune-admin (launches it if not already running)'}
-          className={
-            collapsed
-              ? 'w-full flex items-center justify-center h-9 rounded-lg transition-all text-text-muted hover:text-text hover:bg-surface-2/60 border border-transparent'
-              : 'w-full flex items-center gap-2.5 px-3 py-2 rounded-lg text-sm transition-all text-text-muted hover:text-text hover:bg-surface-2/60 border border-transparent'
-          }
-        >
-          <Icon name={iconName} size={collapsed ? 18 : 16} className={iconCls} />
-          {!collapsed && <span>{item.label}</span>}
-          {!collapsed && <Icon name="ExternalLink" size={12} className="ml-auto text-text-dim" />}
-        </button>
-      )
-    }
-
     return (
       <NavLink
         to={item.to}
