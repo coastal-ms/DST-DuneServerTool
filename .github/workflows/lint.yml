@@ -29,32 +29,57 @@ jobs:
       - name: Install PSScriptAnalyzer
         shell: pwsh
         # Newer windows-latest runner images don't pre-register PSGallery
-        # for the legacy PowerShellGet v2 cmdlets (Set-PSRepository fails
-        # with "No repository with the name 'PSGallery' was found"). Prefer
-        # PowerShellGet v3 (`Install-PSResource`), which ships with the
-        # pwsh on the runner and has PSGallery baked in. Fall back to the
-        # legacy path with explicit `Register-PSRepository -Default` if v3
-        # isn't available.
+        # for the legacy PowerShellGet v2 cmdlets, so prefer PowerShellGet
+        # v3 (`Install-PSResource`) which has PSGallery baked in. We've
+        # also seen two transient failure modes worth tolerating:
+        #   1. PSGallery returns 403/429 during high CI load.
+        #   2. The legacy fallback shells out to nuget.exe, which prints a
+        #      "Missing option value for: '-source'" parser error and exits
+        #      non-zero on some runner images even when PSScriptAnalyzer is
+        #      ultimately installed.
+        # Strategy: retry v3 install up to 3x with backoff, then attempt
+        # the legacy install in a try/catch, and treat success as
+        # "Import-Module PSScriptAnalyzer works" rather than "no command
+        # exited non-zero". Suppresses noise; only fails if we genuinely
+        # can't get the module loaded.
         run: |
+          $ErrorActionPreference = 'Continue'
+
+          $haveV3 = [bool](Get-Command Install-PSResource -ErrorAction SilentlyContinue)
           $installed = $false
-          if (Get-Command Install-PSResource -ErrorAction SilentlyContinue) {
+
+          if ($haveV3) {
+              for ($i = 1; $i -le 3 -and -not $installed; $i++) {
+                  try {
+                      Install-PSResource -Name PSScriptAnalyzer -Scope CurrentUser `
+                          -TrustRepository -Reinstall -ErrorAction Stop
+                      $installed = $true
+                  } catch {
+                      Write-Host "::warning::Install-PSResource attempt $i failed: $($_.Exception.Message)"
+                      if ($i -lt 3) { Start-Sleep -Seconds ([Math]::Pow(2, $i)) }
+                  }
+              }
+          }
+
+          if (-not $installed) {
               try {
-                  Install-PSResource -Name PSScriptAnalyzer -Scope CurrentUser `
-                      -TrustRepository -Reinstall -ErrorAction Stop
+                  if (-not (Get-PSRepository -Name PSGallery -ErrorAction SilentlyContinue)) {
+                      Register-PSRepository -Default -ErrorAction Stop
+                  }
+                  Set-PSRepository -Name PSGallery -InstallationPolicy Trusted -ErrorAction SilentlyContinue
+                  Install-Module PSScriptAnalyzer -Scope CurrentUser -Force -ErrorAction Stop
                   $installed = $true
               } catch {
-                  Write-Host "::warning::Install-PSResource failed: $($_.Exception.Message). Falling back to Install-Module."
+                  Write-Host "::warning::Install-Module fallback failed: $($_.Exception.Message)"
               }
           }
-          if (-not $installed) {
-              if (-not (Get-PSRepository -Name PSGallery -ErrorAction SilentlyContinue)) {
-                  Register-PSRepository -Default
-              }
-              Set-PSRepository -Name PSGallery -InstallationPolicy Trusted
-              Install-Module PSScriptAnalyzer -Scope CurrentUser -Force
-          }
-          Import-Module PSScriptAnalyzer
-          (Get-Module PSScriptAnalyzer).Version
+
+          # Success criterion is Import-Module, not exit codes from the
+          # install path. nuget.exe noise from the legacy installer is
+          # routinely non-zero even on successful installs.
+          Import-Module PSScriptAnalyzer -ErrorAction Stop
+          $v = (Get-Module PSScriptAnalyzer).Version
+          Write-Host "PSScriptAnalyzer $v ready."
 
       - name: Parse-validate dune-server.ps1
         shell: pwsh
