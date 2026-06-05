@@ -28,9 +28,33 @@ jobs:
 
       - name: Install PSScriptAnalyzer
         shell: pwsh
+        # Newer windows-latest runner images don't pre-register PSGallery
+        # for the legacy PowerShellGet v2 cmdlets (Set-PSRepository fails
+        # with "No repository with the name 'PSGallery' was found"). Prefer
+        # PowerShellGet v3 (`Install-PSResource`), which ships with the
+        # pwsh on the runner and has PSGallery baked in. Fall back to the
+        # legacy path with explicit `Register-PSRepository -Default` if v3
+        # isn't available.
         run: |
-          Set-PSRepository PSGallery -InstallationPolicy Trusted
-          Install-Module PSScriptAnalyzer -Scope CurrentUser -Force
+          $installed = $false
+          if (Get-Command Install-PSResource -ErrorAction SilentlyContinue) {
+              try {
+                  Install-PSResource -Name PSScriptAnalyzer -Scope CurrentUser `
+                      -TrustRepository -Reinstall -ErrorAction Stop
+                  $installed = $true
+              } catch {
+                  Write-Host "::warning::Install-PSResource failed: $($_.Exception.Message). Falling back to Install-Module."
+              }
+          }
+          if (-not $installed) {
+              if (-not (Get-PSRepository -Name PSGallery -ErrorAction SilentlyContinue)) {
+                  Register-PSRepository -Default
+              }
+              Set-PSRepository -Name PSGallery -InstallationPolicy Trusted
+              Install-Module PSScriptAnalyzer -Scope CurrentUser -Force
+          }
+          Import-Module PSScriptAnalyzer
+          (Get-Module PSScriptAnalyzer).Version
 
       - name: Parse-validate dune-server.ps1
         shell: pwsh
