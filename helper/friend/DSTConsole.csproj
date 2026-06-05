@@ -15,12 +15,12 @@
     <ImplicitUsings>enable</ImplicitUsings>
     <LangVersion>latest</LangVersion>
     <RootNamespace>DstFriendHelper</RootNamespace>
-    <AssemblyName>DstFriendHelper</AssemblyName>
+    <AssemblyName>DSTConsole</AssemblyName>
     <ApplicationManifest>app.manifest</ApplicationManifest>
     <ApplicationHighDpiMode>PerMonitorV2</ApplicationHighDpiMode>
     <Version>0.1.0</Version>
-    <Product>DST Friend Helper</Product>
-    <AssemblyTitle>DST Friend Helper</AssemblyTitle>
+    <Product>DST Console</Product>
+    <AssemblyTitle>DST Console</AssemblyTitle>
     <Company>Coastal</Company>
 
     <!-- Self-contained single-file publish: friend can just double-click. -->

@@ -95,7 +95,7 @@ public partial class MainWindow : Window
         // collide with any other Edge install on the friend's PC.
         var userDataDir = Path.Combine(
             Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
-            "DstFriendHelper",
+            "DSTConsole",
             "WebView2");
         Directory.CreateDirectory(userDataDir);
 
