@@ -8,9 +8,9 @@
 [![License: Apache 2.0](https://img.shields.io/badge/License-Apache_2.0-blue.svg)](LICENSE)
 [![Latest release](https://img.shields.io/github/v/release/coastal-ms/DST-DuneServerTool?sort=semver)](https://github.com/coastal-ms/DST-DuneServerTool/releases/latest)
 
-The current release is **version XI** (shown stylized as **XI** in-app; patch
-updates display as **XI (0.1)**, **XI (0.2)**, … under the hood these are
-`11.0.0`, `11.0.1`, … so update-checks and version comparisons keep working).
+The current release is **v11.0.0**. The in-app version label and the
+website now show plain semver tags (e.g. `v11.0.0`, `v11.0.1`) — the
+previous Roman-numeral stylization has been removed.
 It runs as a single-window Windows app (native WebView2 shell) that hosts a
 local web portal (React + Vite + Tailwind) on `127.0.0.1` with a per-launch
 tokenized URL. Same battle-tested SSH + Hyper-V + battlegroup automation
