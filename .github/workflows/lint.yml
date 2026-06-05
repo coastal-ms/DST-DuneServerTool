@@ -46,6 +46,37 @@ jobs:
           }
           Write-Host "Parse OK"
 
+      - name: Parse-validate helper/*.ps1
+        shell: pwsh
+        # Helper is an additive scaffold (`helper/bridge/`, `helper/friend/`)
+        # and is not loaded by dune-server.ps1, so it isn't covered by the
+        # main parse step. But these scripts ship to Neil's PC (bridge) and
+        # build the friend's .exe, so a parse regression here would silently
+        # break the helper without anyone noticing. Cheap to guard.
+        run: |
+          $any = Get-ChildItem -Path .\helper -Recurse -Filter *.ps1 -ErrorAction SilentlyContinue
+          if (-not $any) {
+              Write-Host "::warning::no helper/*.ps1 files found; skipping."
+              exit 0
+          }
+          $bad = 0
+          foreach ($f in $any) {
+              $errors = $null
+              [System.Management.Automation.Language.Parser]::ParseFile(
+                  $f.FullName, [ref]$null, [ref]$errors) | Out-Null
+              if ($errors -and $errors.Count -gt 0) {
+                  $rel = Resolve-Path -Relative $f.FullName
+                  foreach ($e in $errors) {
+                      Write-Host "::error file=$rel,line=$($e.Extent.StartLineNumber)::$($e.Message)"
+                  }
+                  $bad++
+              } else {
+                  Write-Host "  $($f.FullName) OK"
+              }
+          }
+          if ($bad -gt 0) { exit 1 }
+          Write-Host "All $($any.Count) helper script(s) parse OK"
+
       - name: Run PSScriptAnalyzer
         shell: pwsh
         run: |
