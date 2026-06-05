@@ -1,0 +1,123 @@
+name: PII Guard
+
+# Enforces the long-standing DST rule: only "coastal-ms" / "allcoast" may
+# appear in public repo artifacts. Fails any PR that introduces the
+# maintainer's personal first name, last name, personal-email LHS, or
+# legacy Tailscale hostname prefix into:
+#
+#   * the PR title
+#   * the PR body
+#   * any added line in the PR diff
+#   * any commit message introduced by the PR
+#
+# The banned-pattern list is built at runtime from single-character
+# concatenation so this workflow file itself does not contain the literal
+# strings (and therefore does not trip its own check).
+
+on:
+  pull_request:
+    types: [opened, edited, reopened, synchronize]
+
+permissions:
+  contents: read
+  pull-requests: read
+
+jobs:
+  scan:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout PR head with full history
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          ref: ${{ github.event.pull_request.head.sha }}
+
+      - name: Build banned pattern
+        id: build
+        shell: bash
+        run: |
+          set -e
+          n=n; e=e; i=i; l=l; b=b; r=r; o=o; m=m; pc=pc
+          NAME="${n}${e}${i}${l}"
+          LAST="${b}${r}${o}${o}${m}${e}"
+          EMAIL_LHS="${n}${b}${r}${o}${o}${m}${e}"
+          HOSTPREFIX="${NAME}${pc}"
+          PAT="(\\b${NAME}\\b|\\b${LAST}\\b|${EMAIL_LHS}@|${HOSTPREFIX})"
+          echo "pat=${PAT}" >> "$GITHUB_OUTPUT"
+          echo "Pattern built (${#PAT} chars)."
+
+      - name: Scan PR title + body
+        env:
+          PR_TITLE: ${{ github.event.pull_request.title }}
+          PR_BODY:  ${{ github.event.pull_request.body }}
+          PAT:      ${{ steps.build.outputs.pat }}
+        shell: bash
+        run: |
+          set -e
+          fail=0
+          if printf '%s' "$PR_TITLE" | grep -Eiq "$PAT"; then
+            echo "::error::PR title contains banned PII pattern."
+            fail=1
+          fi
+          if printf '%s' "$PR_BODY" | grep -Eiq "$PAT"; then
+            echo "::error::PR body contains banned PII pattern."
+            fail=1
+          fi
+          exit "$fail"
+
+      - name: Scan PR diff
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+          PAT:      ${{ steps.build.outputs.pat }}
+        shell: bash
+        run: |
+          set -e
+          # The guard file constructs the pattern at runtime so it cannot
+          # contain the literal strings; exclude it anyway to make intent
+          # explicit.
+          excluded='^\.github/workflows/pii-guard\.yml$'
+
+          files=$(git diff --name-only --diff-filter=ACMR "$BASE_SHA...$HEAD_SHA")
+          if [ -z "$files" ]; then
+            echo "no changed files"
+            exit 0
+          fi
+
+          fail=0
+          echo "$files" | while IFS= read -r f; do
+            [ -z "$f" ] && continue
+            echo "$f" | grep -Eq "$excluded" && continue
+            added=$(git diff -U0 "$BASE_SHA...$HEAD_SHA" -- "$f" | grep -E '^\+[^+]' || true)
+            [ -z "$added" ] && continue
+            if printf '%s' "$added" | grep -Eiq "$PAT"; then
+              echo "::error file=$f::Banned PII pattern in added lines."
+              echo "$f" >> /tmp/pii-violations.txt
+            fi
+          done
+
+          if [ -s /tmp/pii-violations.txt ]; then
+            echo ""
+            echo "Files with violations:"
+            sort -u /tmp/pii-violations.txt | sed 's/^/  - /'
+            exit 1
+          fi
+
+      - name: Scan commit messages introduced by the PR
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+          PAT:      ${{ steps.build.outputs.pat }}
+        shell: bash
+        run: |
+          set -e
+          fail=0
+          shas=$(git rev-list "$BASE_SHA..$HEAD_SHA")
+          for sha in $shas; do
+            msg=$(git log -1 --format='%B' "$sha")
+            if printf '%s' "$msg" | grep -Eiq "$PAT"; then
+              echo "::error::Commit $sha message contains banned PII pattern."
+              fail=1
+            fi
+          done
+          exit "$fail"
