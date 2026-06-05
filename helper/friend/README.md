@@ -11,15 +11,15 @@ Double-click to launch.
    with a 5s timeout. If unreachable → friendly dialog, no stack trace.
 3. On success, parses `{url, token}` and navigates an embedded WebView2
    window to the bridge URL with the token in the query string.
-4. The bridge reverse-proxies into the current DST portal on Neil's
-   loopback. You see exactly what Neil sees in his portal.
+4. The bridge reverse-proxies into the current DST portal on the host's
+   loopback. You see exactly what the host sees in his portal.
 
 ## What the friend needs
 
 - **Windows 10/11 x64**
 - **Microsoft Edge WebView2 Runtime** (most systems already have it; if
   not, helper shows a dialog with the install link).
-- **Tailscale** signed in to the same tailnet as Neil's PC.
+- **Tailscale** signed in to the same tailnet as the host's PC.
 - The shipped `DSTConsole.exe` and `config.json`.
 
 That's it. No .NET install required (self-contained publish bundles the
@@ -28,15 +28,15 @@ runtime), no admin rights required (manifest is `asInvoker`).
 ## Setup steps (give these to the friend)
 
 1. Install Tailscale: <https://tailscale.com/download/windows>
-2. Sign in with the account Neil added you to.
+2. Sign in with the account the host added you to.
 3. Drop `DSTConsole.exe` and `config.json` into any folder
    (e.g. `Documents\DstHelper`).
 4. Open `config.json` in Notepad and set `bridgeHost` to the Tailscale
-   hostname Neil sent you (something like `neilpc.tailXXXX.ts.net`).
-5. Double-click `DSTConsole.exe`. Neil's portal opens in the
+   hostname the host sent you (something like `hostpc.tailXXXX.ts.net`).
+5. Double-click `DSTConsole.exe`. the host's portal opens in the
    window.
 
-## Building from source (Neil side)
+## Building from source (host side)
 
 ```powershell
 # from the repo root
@@ -50,7 +50,7 @@ both files to the friend.
 ### Toolchain
 
 The project file targets **`net8.0-windows`** with WPF. The .NET 10
-SDK installed on Neil's machine cross-targets net8.0 fine — NuGet
+SDK installed on the host's machine cross-targets net8.0 fine — NuGet
 auto-resolves the WindowsDesktop reference pack on first build. If
 your environment can't reach that pack (offline / mirror), change the
 `<TargetFramework>` in `DSTConsole.csproj` to `net10.0-windows`

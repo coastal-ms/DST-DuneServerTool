@@ -1,6 +1,6 @@
 <#
 .SYNOPSIS
-    Installs the DST Friend Helper bridge as a Scheduled Task on Neil's PC.
+    Installs the DST Friend Helper bridge as a Scheduled Task on the host's PC.
 
 .DESCRIPTION
     Performs three setup steps (all idempotent):

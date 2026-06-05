@@ -1,4 +1,4 @@
-﻿# /api/update — GitHub release auto-update
+# /api/update — GitHub release auto-update
 #
 # Polls the public GitHub Releases API for the latest tag, compares against
 # the running $script:DuneToolVersion, and (on user click) downloads the
@@ -210,7 +210,7 @@ Register-DuneRoute -Method POST -Path '/api/update/install' -Handler {
         $installArgs     = '/SP- /VERYSILENT /SUPPRESSMSGBOXES /NORESTART /NOCANCEL'
         $logPath         = Join-Path $tmpDir ("relaunch-$safeTag.log")
         # Defensive escapes: %TEMP% / install path can contain an apostrophe
-        # (e.g. C:\Users\O'Neil\AppData\...) which would break the single-
+        # (e.g. C:\Users\O'Brien\AppData\...) which would break the single-
         # quoted literals embedded in the relauncher heredoc below.
         # PowerShell escapes ' as '' inside single-quoted strings.
         $destEsc         = $dest         -replace "'", "''"

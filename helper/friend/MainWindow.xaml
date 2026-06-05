@@ -11,7 +11,7 @@
     <Border x:Name="StatusOverlay" Background="#0B0B0F">
       <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center" MaxWidth="640">
         <TextBlock x:Name="StatusTitle"
-                   Text="Connecting to Neil's PC..."
+                   Text="Connecting to the host's PC..."
                    FontSize="22"
                    Foreground="#FFB05E"
                    HorizontalAlignment="Center"

@@ -1,4 +1,4 @@
-# Bridge — runs on Neil's PC
+# Bridge — runs on the host's PC
 
 This is the half of the friend helper that lives on the **host** PC (mine).
 It exposes the locally running DST portal to a single trusted friend over

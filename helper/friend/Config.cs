@@ -28,7 +28,7 @@ public sealed class FriendConfig
         {
             throw new FileNotFoundException(
                 $"config.json not found at {path}. " +
-                "Copy config.sample.json -> config.json and set bridgeHost to Neil's Tailscale hostname.",
+                "Copy config.sample.json -> config.json and set bridgeHost to the host's Tailscale hostname.",
                 path);
         }
 

@@ -1,8 +1,8 @@
 # DST Friend Helper
 
 A standalone Windows app (`DSTConsole.exe`) a trusted friend double-clicks
-on **his** PC to get into Neil's full DST desktop portal running on
-**Neil's** PC. Built as a purely additive scaffold on top of the released
+on **his** PC to get into the host's full DST desktop portal running on
+**the host's** PC. Built as a purely additive scaffold on top of the released
 DST surface — **zero changes to `app/`, `webui/`, `site/`, or
 `dune-server.ps1`.**
 
@@ -10,7 +10,7 @@ DST surface — **zero changes to `app/`, `webui/`, `site/`, or
 
 ```
 helper/
-├── bridge/                 # Runs on Neil's PC (long-lived, scheduled task)
+├── bridge/                 # Runs on the host's PC (long-lived, scheduled task)
 │   ├── DstHelperBridge.ps1
 │   ├── Install-Bridge.ps1
 │   ├── Uninstall-Bridge.ps1
@@ -35,14 +35,14 @@ sequenceDiagram
   autonumber
   participant F as Friend's PC<br/>(DSTConsole.exe)
   participant TS as Tailscale tailnet
-  participant B as Neil's PC<br/>(bridge :47900)
-  participant D as Neil's PC<br/>(DST :random/?t=token)
+  participant B as the host's PC<br/>(bridge :47900)
+  participant D as the host's PC<br/>(DST :random/?t=token)
 
-  F->>TS: GET http://neilpc.tailnet/47900/_dst/token
+  F->>TS: GET http://hostpc.tailnet/47900/_dst/token
   TS->>B: encrypted via Tailscale
   B->>B: read %LOCALAPPDATA%\DuneServer\last-url.txt
   B-->>F: { url: "http://127.0.0.1:47823", token: "3e2f..." }
-  F->>F: WebView2.Navigate("http://neilpc.tailnet/47900/?t=3e2f...")
+  F->>F: WebView2.Navigate("http://hostpc.tailnet/47900/?t=3e2f...")
 
   loop every portal request
     F->>B: GET /api/...?t=token  (via Tailscale)
@@ -56,12 +56,12 @@ sequenceDiagram
 
 | Layer                | What it gates                                                  |
 | -------------------- | -------------------------------------------------------------- |
-| Tailscale tailnet    | Only devices Neil has added can route to his machine at all.   |
-| Tailscale ACL        | Friend's device tag can only reach port 47900 on Neil's host.  |
+| Tailscale tailnet    | Only devices the host has added can route to his machine at all.   |
+| Tailscale ACL        | Friend's device tag can only reach port 47900 on the host's host.  |
 | Windows Firewall     | Port 47900 is allowed inbound **only on the Tailscale NIC**.   |
 | DuneToken (?t=)      | Defense-in-depth — DST itself still requires a valid token.    |
 
-Defeating this requires (a) Neil-issued tailnet membership, (b) the
+Defeating this requires (a) host-issued tailnet membership, (b) the
 friend's specific device tag in the ACL, **and** (c) capturing the
 current DuneToken — which is rotated on every DST launch.
 
@@ -71,7 +71,7 @@ current DuneToken — which is rotated on every DST launch.
   already uses CF Tunnel + Access for a mobile-friendly subset. This
   scaffold targets a *different* use case: a single trusted friend who
   wants the **full** desktop portal (Database, Terminal, Setup Wizard,
-  everything Neil sees). Tailscale gives identity-based access without
+  everything the host sees). Tailscale gives identity-based access without
   per-domain edge config, and friends don't need to set up an IdP.
 - **No DST code changes.** The bridge is a pure reverse proxy that reads
   the existing `last-url.txt` (DST already writes this for the desktop
@@ -84,7 +84,7 @@ current DuneToken — which is rotated on every DST launch.
 
 ## Setup checklist
 
-### Neil's side
+### host side
 
 - [ ] Tailscale installed + signed in. `Get-NetIPInterface | ? InterfaceAlias -eq 'Tailscale'` returns a row.
 - [ ] PowerShell 7 (`pwsh.exe`) on PATH.
@@ -101,9 +101,9 @@ current DuneToken — which is rotated on every DST launch.
 
 ### Friend's side
 
-- [ ] Install Tailscale and accept Neil's invite.
+- [ ] Install Tailscale and accept the host's invite.
 - [ ] Drop `DSTConsole.exe` and `config.json` in any folder.
-- [ ] Open `config.json`, set `bridgeHost` if Neil didn't pre-fill it.
+- [ ] Open `config.json`, set `bridgeHost` if the host didn't pre-fill it.
 - [ ] Double-click `DSTConsole.exe`.
 
 ## Known limitations (scaffold scope)

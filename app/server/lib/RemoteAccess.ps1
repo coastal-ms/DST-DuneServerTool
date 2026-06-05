@@ -1,11 +1,11 @@
-﻿# RemoteAccess.ps1 — Cloudflare-Access-gated remote portal subset (issue #74).
+# RemoteAccess.ps1 — Cloudflare-Access-gated remote portal subset (issue #74).
 #
-# DST today is loopback + per-launch DuneToken. The remote portal lets Neil and
+# DST today is loopback + per-launch DuneToken. The remote portal lets the host and
 # 1..3 trusted admins reach a mobile-friendly read+safe-write subset via a
 # Cloudflare Tunnel + Cloudflare Access policy. This file owns:
 #
 #   * The ACL file (%APPDATA%\DuneServer\remote-acl.json) — schema:
-#       { "owner": "neil@example", "admins": ["friend@example", ...] }
+#       { "owner": "you@example.com", "admins": ["friend@example", ...] }
 #     Empty "owner" == remote portal disabled (fail-closed).
 #
 #   * The middleware (Test-DuneRemoteRequest) called by the listener for any
@@ -189,7 +189,7 @@ function Test-DuneRemoteRequest {
 # Append a single line to %APPDATA%\DuneServer\.logs\remote-audit.log.
 # Schema (tab-separated for easy splitting; UTC ISO-8601 timestamp):
 #
-#   2026-06-05T12:34:56Z\towner\tnbroome@me.com\tPOST\t/api/remote/maps/spin-up/deepdesert\t200\t<note>
+#   2026-06-05T12:34:56Z\towner\tyou@example.com\tPOST\t/api/remote/maps/spin-up/deepdesert\t200\t<note>
 #
 # Note is optional — used by the listener to record the reason for an auth
 # denial ('no-header', 'unknown-email', 'remote-disabled', 'pool-saturated').

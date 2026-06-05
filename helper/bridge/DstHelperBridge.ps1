@@ -1,6 +1,6 @@
 <#
 .SYNOPSIS
-    DST Friend Helper bridge daemon. Runs on Neil's PC.
+    DST Friend Helper bridge daemon. Runs on the host's PC.
 
 .DESCRIPTION
     Long-lived HTTP listener bound to a stable port (default 47900). Re-reads

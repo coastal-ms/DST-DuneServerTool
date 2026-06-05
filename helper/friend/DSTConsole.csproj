@@ -3,7 +3,7 @@
   <PropertyGroup>
     <OutputType>WinExe</OutputType>
     <!--
-      Spec target: .NET 8 LTS. The .NET 10 SDK installed on Neil's machine
+      Spec target: .NET 8 LTS. The .NET 10 SDK installed on the host's machine
       cross-targets net8.0-windows fine; NuGet auto-resolves the
       Microsoft.WindowsDesktop.App.Ref pack on first build. If you need to
       target net10 because no net8 reference pack is reachable, change the

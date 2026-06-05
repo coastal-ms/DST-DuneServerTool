@@ -67,4 +67,4 @@ Write-Host "  Output:  $dist"
 Get-ChildItem $dist | Select-Object Name, Length | Format-Table -AutoSize
 Write-Host "Hand the friend:"
 Write-Host "  $dist\DSTConsole.exe"
-Write-Host "  $dist\config.json   (edit bridgeHost to Neil's Tailscale hostname first)"
+Write-Host "  $dist\config.json   (edit bridgeHost to the host's Tailscale hostname first)"

@@ -1,6 +1,6 @@
 <#
 .SYNOPSIS
-    Cleanly removes the DST Friend Helper bridge from Neil's PC.
+    Cleanly removes the DST Friend Helper bridge from the host's PC.
 
 .DESCRIPTION
     Reverses every step taken by Install-Bridge.ps1: unregisters the

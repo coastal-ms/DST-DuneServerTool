@@ -27,7 +27,7 @@ here cover everything those tags shipped.
 
 - **Friend helper scaffold** (`helper/`). A net-new, additive companion
   to the released DST surface that lets a single trusted friend connect
-  into Neil's full desktop portal over Tailscale, without modifying any
+  into the host's full desktop portal over Tailscale, without modifying any
   v11.0.3 code. Two components: `helper/bridge/` (PowerShell 7
   `HttpListener` daemon that runs on the host as a scheduled task,
   binds port 47900 scoped to the Tailscale interface, re-reads
@@ -271,7 +271,7 @@ here cover everything those tags shipped.
 - **Apostrophe-in-username crash in the updater relauncher.** Paths embedded
   into the generated `DuneRelaunch-*.ps1` are now escaped (`'` → `''`)
   before being interpolated into single-quoted PowerShell literals, so usernames
-  like `C:\Users\O'Neil\AppData\...` no longer break the relauncher with a
+  like `C:\Users\O'Brien\AppData\...` no longer break the relauncher with a
   parse error on the first sleep.
 
 ## [10.2.6] - 2026-06-04
@@ -1975,7 +1975,7 @@ Background: v6.1.13 and v6.1.14's auto-updaters both used `/VERYSILENT`
 flags on the installer, relying on Inno Setup's silent-mode `[Run]`
 behaviour to relaunch `DuneServer.exe`. That relaunch turned out to be
 unreliable in practice (even with `Check: WizardSilent` and a fallback
-WMI relauncher), so the portal kept going dark after updates. Per Neil's
+WMI relauncher), so the portal kept going dark after updates. Per the host's
 direction, the updater now drops silent mode entirely and runs the
 installer as a normal interactive wizard.
 

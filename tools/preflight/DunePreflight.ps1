@@ -535,7 +535,7 @@ function Show-ResultsWindow {
     $btnCopy.Add_Click({
         $txt = Format-ReportText
         [System.Windows.Forms.Clipboard]::SetText($txt)
-        [System.Windows.Forms.MessageBox]::Show('Report copied to clipboard. Paste it into Discord / email and send to Neil.', 'Dune Preflight', 'OK', 'Information') | Out-Null
+        [System.Windows.Forms.MessageBox]::Show('Report copied to clipboard. Paste it into Discord / email and send to the maintainer.', 'Dune Preflight', 'OK', 'Information') | Out-Null
     })
 
     $btnSave.Add_Click({
@@ -576,7 +576,7 @@ function Show-ResultsWindow {
     Render
 
     # Auto-save to Desktop + clipboard on first paint, so the user already has
-    # something to send Neil without clicking anything.
+    # something to send to the maintainer without clicking anything.
     try {
         $txt = Format-ReportText
         $desktopPath = Join-Path ([Environment]::GetFolderPath('Desktop')) 'dune-preflight.txt'

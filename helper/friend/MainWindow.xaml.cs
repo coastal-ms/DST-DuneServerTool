@@ -36,7 +36,7 @@ public partial class MainWindow : Window
 
     private async Task ConnectAsync()
     {
-        ShowStatus("Connecting to Neil's PC...", "Reading config and probing the bridge over Tailscale.");
+        ShowStatus("Connecting to the host's PC...", "Reading config and probing the bridge over Tailscale.");
 
         try
         {
@@ -56,12 +56,12 @@ public partial class MainWindow : Window
         catch (Exception ex)
         {
             ShowError(
-                "Can't reach Neil's PC",
+                "Can't reach the host's PC",
                 $"Tried {_config.BridgeUrl}/_dst/token but got: {ex.Message}\n\n" +
                 "Checklist:\n" +
                 "  • Is Tailscale running on this PC?\n" +
-                "  • Is Neil's PC online and on the tailnet?\n" +
-                "  • Is the DST Friend Helper Bridge running on Neil's PC?");
+                "  • Is the host's PC online and on the tailnet?\n" +
+                "  • Is the DST Friend Helper Bridge running on the host's PC?");
             return;
         }
 
@@ -78,7 +78,7 @@ public partial class MainWindow : Window
         }
 
         // Navigate WebView2 through the bridge using the freshly fetched token.
-        // The bridge proxies / -> 127.0.0.1:<DSTport>/ on Neil's PC, and the
+        // The bridge proxies / -> 127.0.0.1:<DSTport>/ on the host's PC, and the
         // token query-param is exactly what DST's portal expects to auth.
         var targetUrl = $"{_config.BridgeUrl}/?t={Uri.EscapeDataString(token.Token)}";
         Web.CoreWebView2.Navigate(targetUrl);
