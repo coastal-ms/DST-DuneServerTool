@@ -1,0 +1,55 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <!--
+      Spec target: .NET 8 LTS. The .NET 10 SDK installed on the host's machine
+      cross-targets net8.0-windows fine; NuGet auto-resolves the
+      Microsoft.WindowsDesktop.App.Ref pack on first build. If you need to
+      target net10 because no net8 reference pack is reachable, change the
+      TFM below — the source compiles unchanged.
+    -->
+    <TargetFramework>net8.0-windows</TargetFramework>
+    <UseWPF>true</UseWPF>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <LangVersion>latest</LangVersion>
+    <RootNamespace>DstFriendHelper</RootNamespace>
+    <AssemblyName>DstFriendHelper</AssemblyName>
+    <ApplicationManifest>app.manifest</ApplicationManifest>
+    <ApplicationHighDpiMode>PerMonitorV2</ApplicationHighDpiMode>
+    <Version>0.1.0</Version>
+    <Product>DST Friend Helper</Product>
+    <AssemblyTitle>DST Friend Helper</AssemblyTitle>
+    <Company>Coastal</Company>
+
+    <!-- Self-contained single-file publish: friend can just double-click. -->
+    <SelfContained>true</SelfContained>
+    <RuntimeIdentifier>win-x64</RuntimeIdentifier>
+    <PublishSingleFile>true</PublishSingleFile>
+    <IncludeNativeLibrariesForSelfExtract>true</IncludeNativeLibrariesForSelfExtract>
+    <EnableCompressionInSingleFile>true</EnableCompressionInSingleFile>
+
+    <!-- Drop debug + doc artifacts from publish output. -->
+    <DebugType>none</DebugType>
+    <DebugSymbols>false</DebugSymbols>
+    <GenerateDocumentationFile>false</GenerateDocumentationFile>
+    <PublishDocumentationFiles>false</PublishDocumentationFiles>
+    <PublishReferencesDocumentationFiles>false</PublishReferencesDocumentationFiles>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <!-- Same WebView2 pin as DuneShell so behavior matches across the two
+         WPF/WinForms entry points. -->
+    <PackageReference Include="Microsoft.Web.WebView2" Version="1.0.2792.45" />
+  </ItemGroup>
+
+  <!-- Ship a sample config.json next to the published .exe so the friend
+       knows what to edit. -->
+  <ItemGroup>
+    <None Update="config.sample.json">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
+  </ItemGroup>
+
+</Project>

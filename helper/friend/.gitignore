@@ -1,0 +1,7 @@
+# build/publish output
+dist/
+bin/
+obj/
+
+# Friend-specific config (don't commit a real one with a real host name)
+config.json
