@@ -20,7 +20,7 @@ Double-click to launch.
 - **Microsoft Edge WebView2 Runtime** (most systems already have it; if
   not, helper shows a dialog with the install link).
 - **Tailscale** signed in to the same tailnet as Neil's PC.
-- The shipped `DstFriendHelper.exe` and `config.json`.
+- The shipped `DSTConsole.exe` and `config.json`.
 
 That's it. No .NET install required (self-contained publish bundles the
 runtime), no admin rights required (manifest is `asInvoker`).
@@ -29,21 +29,21 @@ runtime), no admin rights required (manifest is `asInvoker`).
 
 1. Install Tailscale: <https://tailscale.com/download/windows>
 2. Sign in with the account Neil added you to.
-3. Drop `DstFriendHelper.exe` and `config.json` into any folder
+3. Drop `DSTConsole.exe` and `config.json` into any folder
    (e.g. `Documents\DstHelper`).
 4. Open `config.json` in Notepad and set `bridgeHost` to the Tailscale
    hostname Neil sent you (something like `neilpc.tailXXXX.ts.net`).
-5. Double-click `DstFriendHelper.exe`. Neil's portal opens in the
+5. Double-click `DSTConsole.exe`. Neil's portal opens in the
    window.
 
 ## Building from source (Neil side)
 
 ```powershell
 # from the repo root
-.\helper\friend\Build-FriendHelper.ps1
+.\helper\friend\Build-DstConsole.ps1
 ```
 
-This produces `helper\friend\dist\DstFriendHelper.exe` (+ a stub
+This produces `helper\friend\dist\DSTConsole.exe` (+ a stub
 `config.json`) as a self-contained single-file win-x64 publish. Hand
 both files to the friend.
 
@@ -53,7 +53,7 @@ The project file targets **`net8.0-windows`** with WPF. The .NET 10
 SDK installed on Neil's machine cross-targets net8.0 fine — NuGet
 auto-resolves the WindowsDesktop reference pack on first build. If
 your environment can't reach that pack (offline / mirror), change the
-`<TargetFramework>` in `DstFriendHelper.csproj` to `net10.0-windows`
+`<TargetFramework>` in `DSTConsole.csproj` to `net10.0-windows`
 and rebuild; the source compiles unchanged.
 
 ### Code-signing
@@ -83,10 +83,10 @@ scaffold.
 
 | File                      | Role                                              |
 | ------------------------- | ------------------------------------------------- |
-| `DstFriendHelper.csproj`  | WPF + WebView2 project, single-file publish.      |
+| `DSTConsole.csproj`       | WPF + WebView2 project, single-file publish.      |
 | `app.manifest`            | `asInvoker` execution level.                      |
 | `App.xaml` / `.xaml.cs`   | WPF application entry.                            |
 | `MainWindow.xaml` / `.cs` | Window with WebView2 + status overlay.            |
 | `Config.cs`               | `config.json` loader.                             |
 | `config.sample.json`      | Template the build script copies as `config.json`.|
-| `Build-FriendHelper.ps1`  | `dotnet publish` wrapper.                         |
+| `Build-DstConsole.ps1`    | `dotnet publish` wrapper.                         |
