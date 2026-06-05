@@ -33,7 +33,12 @@
 param(
     [int]$Port = 47900,
     [string]$LastUrlPath = (Join-Path $env:LOCALAPPDATA 'DuneServer\last-url.txt'),
-    [string]$LogPath
+    [string]$LogPath,
+    # Override the listener URL prefix. Default binds all interfaces and
+    # relies on the Tailscale-scoped firewall rule for inbound filtering.
+    # For local testing without admin/URLACL, set this to
+    # 'http://localhost:<port>/' or 'http://127.0.0.1:<port>/'.
+    [string]$Prefix
 )
 
 $ErrorActionPreference = 'Stop'
@@ -228,17 +233,19 @@ function Invoke-Request {
 
 function Start-Bridge {
     $listener = [System.Net.HttpListener]::new()
-    # Bind to all interfaces; the firewall rule scopes inbound to Tailscale.
-    $prefix = "http://+:$Port/"
-    $listener.Prefixes.Add($prefix)
+    # Bind to all interfaces by default; the firewall rule scopes inbound to
+    # Tailscale. The -Prefix override lets you bind to localhost for local
+    # testing without admin / URL ACL.
+    $effectivePrefix = if ($Prefix) { $Prefix } else { "http://+:$Port/" }
+    $listener.Prefixes.Add($effectivePrefix)
 
     try {
         $listener.Start()
     } catch [System.Net.HttpListenerException] {
-        throw "Failed to bind $prefix — needs admin OR a URL ACL: `n  netsh http add urlacl url=$prefix user=$env:USERNAME`n($($_.Exception.Message))"
+        throw "Failed to bind $effectivePrefix — needs admin OR a URL ACL: `n  netsh http add urlacl url=$effectivePrefix user=$env:USERNAME`n($($_.Exception.Message))"
     }
 
-    Write-BridgeLog "DST Helper Bridge listening on $prefix"
+    Write-BridgeLog "DST Helper Bridge listening on $effectivePrefix"
     Write-BridgeLog "Watching $LastUrlPath"
 
     try {
