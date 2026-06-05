@@ -1,0 +1,179 @@
+---
+import Base from "../layouts/Base.astro";
+import PageHeader from "../components/PageHeader.astro";
+---
+
+<Base
+  title="Remote portal — DST"
+  description="Set up a mobile-friendly remote view of DST behind a Cloudflare Tunnel + Cloudflare Access policy."
+>
+  <PageHeader
+    eyebrow="Remote portal (v11.1.0)"
+    title="Mobile access via Cloudflare Tunnel"
+    intro="DST stays a local-only tool by default. If you want to check status and spin maps up/down from your phone, you can expose a read-mostly subset of the portal through a Cloudflare Tunnel gated by Cloudflare Access — your email is the password."
+  />
+
+  <section class="mx-auto max-w-3xl px-6 pb-16 space-y-12 text-dune-text">
+    <!-- What it gives you ------------------------------------------------- -->
+    <div>
+      <h2 class="text-2xl font-semibold mb-4">What the remote portal does</h2>
+      <ul class="space-y-2 text-dune-muted leading-relaxed">
+        <li><strong class="text-dune-text">Dashboard</strong> — VM up/down, battlegroup state, public IP, port-forward summary, last few backups.</li>
+        <li><strong class="text-dune-text">Maps</strong> — spin a configured map up or down, run a one-click <em>fix partitions</em> if a worker pin drifts.</li>
+        <li>That's it. No initial-setup wizard, no <span class="font-mono">.ini</span> editor, no SSH/shell, no DB import or restore, no dune-admin, no Settings. The remote route module physically cannot reach those handlers.</li>
+      </ul>
+    </div>
+
+    <!-- Security model --------------------------------------------------- -->
+    <div>
+      <h2 class="text-2xl font-semibold mb-4">Security model</h2>
+      <p class="text-dune-muted leading-relaxed mb-3">
+        Three layers, all of which must pass for any remote request:
+      </p>
+      <ol class="list-decimal list-inside space-y-2 text-dune-muted leading-relaxed">
+        <li><strong class="text-dune-text">Cloudflare Tunnel</strong> — outbound-only TCP from your PC to Cloudflare's edge. No inbound port-forward, no public IP. <span class="font-mono">cloudflared</span> sees your DST listener at <span class="font-mono">http://127.0.0.1:&lt;port&gt;</span> and proxies it to a hostname like <span class="font-mono">dune.example.com</span>.</li>
+        <li><strong class="text-dune-text">Cloudflare Access</strong> — a per-hostname policy that requires a verified identity (Google / GitHub / one-time PIN). The request arrives at DST with an <span class="font-mono">Cf-Access-Authenticated-User-Email</span> header that only Cloudflare can sign.</li>
+        <li><strong class="text-dune-text">DST allow-list</strong> — DST reads that email and looks it up in <span class="font-mono">%APPDATA%\DuneServer\remote-acl.json</span>. Owner + 0–3 admins, all explicitly added by you in <strong>Settings → Remote Access</strong>. Anything else is a 401/403.</li>
+      </ol>
+      <p class="text-dune-muted leading-relaxed mt-3">
+        DST's per-launch GUID token (<span class="font-mono">DuneToken</span>) is still
+        enforced on every request as a defense-in-depth, so even an attacker on
+        your Windows box who forges the Cloudflare header without going through
+        the tunnel can't reach the remote API.
+      </p>
+      <p class="text-dune-muted leading-relaxed mt-3">
+        Every successful write (spin up / spin down / fix partitions) appends a
+        line to <span class="font-mono">%APPDATA%\DuneServer\.logs\remote-audit.log</span>
+        with timestamp, role, email, path, and status. Revoking a misbehaving
+        admin is one toggle in Settings.
+      </p>
+    </div>
+
+    <!-- Setup steps ------------------------------------------------------ -->
+    <div>
+      <h2 class="text-2xl font-semibold mb-4">One-time setup</h2>
+      <p class="text-dune-muted leading-relaxed mb-6">
+        You'll need a Cloudflare account and a domain you control on it (any
+        free plan works). The whole thing takes about 15 minutes.
+      </p>
+
+      <ol class="space-y-6">
+        <!-- Step 1 -->
+        <li class="rounded-xl border border-dune-border bg-dune-surface p-5">
+          <h3 class="font-semibold text-lg mb-2">1 · Install <span class="font-mono">cloudflared</span></h3>
+          <p class="text-dune-muted text-sm mb-3">From an admin PowerShell window:</p>
+          <pre class="bg-dune-bg border border-dune-border rounded-md p-3 text-xs font-mono overflow-x-auto">winget install --id Cloudflare.cloudflared</pre>
+          <p class="text-dune-muted text-xs mt-2">DST detects whether <span class="font-mono">cloudflared.exe</span> is on PATH and surfaces it in the Settings card. DST never runs it for you — you keep ownership of the tunnel.</p>
+        </li>
+
+        <!-- Step 2 -->
+        <li class="rounded-xl border border-dune-border bg-dune-surface p-5">
+          <h3 class="font-semibold text-lg mb-2">2 · Authenticate</h3>
+          <pre class="bg-dune-bg border border-dune-border rounded-md p-3 text-xs font-mono overflow-x-auto">cloudflared tunnel login</pre>
+          <p class="text-dune-muted text-xs mt-2">Browser opens — pick the zone you want to use. A cert is saved to <span class="font-mono">%USERPROFILE%\.cloudflared\cert.pem</span>.</p>
+        </li>
+
+        <!-- Step 3 -->
+        <li class="rounded-xl border border-dune-border bg-dune-surface p-5">
+          <h3 class="font-semibold text-lg mb-2">3 · Create a tunnel</h3>
+          <pre class="bg-dune-bg border border-dune-border rounded-md p-3 text-xs font-mono overflow-x-auto">cloudflared tunnel create dune-portal</pre>
+          <p class="text-dune-muted text-xs mt-2">Writes a credentials JSON for the tunnel; copy the tunnel UUID it prints — you'll need it in step 4.</p>
+        </li>
+
+        <!-- Step 4 -->
+        <li class="rounded-xl border border-dune-border bg-dune-surface p-5">
+          <h3 class="font-semibold text-lg mb-2">4 · Map your hostname</h3>
+          <pre class="bg-dune-bg border border-dune-border rounded-md p-3 text-xs font-mono overflow-x-auto">cloudflared tunnel route dns dune-portal dune.example.com</pre>
+          <p class="text-dune-muted text-xs mt-2">Creates a proxied <span class="font-mono">CNAME</span> in Cloudflare DNS pointing your hostname at the tunnel.</p>
+        </li>
+
+        <!-- Step 5 -->
+        <li class="rounded-xl border border-dune-border bg-dune-surface p-5">
+          <h3 class="font-semibold text-lg mb-2">5 · Configure ingress</h3>
+          <p class="text-dune-muted text-sm mb-3">
+            Edit <span class="font-mono">%USERPROFILE%\.cloudflared\config.yml</span>:
+          </p>
+          <pre class="bg-dune-bg border border-dune-border rounded-md p-3 text-xs font-mono overflow-x-auto">tunnel: dune-portal
+credentials-file: C:\Users\You\.cloudflared\&lt;UUID&gt;.json
+
+ingress:
+  - hostname: dune.example.com
+    service: http://127.0.0.1:47823
+  - service: http_status:404</pre>
+          <div class="mt-3 rounded-md border border-amber-500/40 bg-amber-500/10 p-3 text-xs leading-relaxed">
+            <strong>Port caveat:</strong> DST prefers port <span class="font-mono">47823</span> but
+            roams to <span class="font-mono">47824–47872</span> if it's in use. If you suspect a
+            port collision, free 47823 (so DST always takes it) or read the
+            actual port from <span class="font-mono">%LOCALAPPDATA%\DuneServer\last-url.txt</span>
+            and update the <span class="font-mono">service:</span> line above to match. The Settings
+            page status bar also shows the current port.
+          </div>
+        </li>
+
+        <!-- Step 6 -->
+        <li class="rounded-xl border border-dune-border bg-dune-surface p-5">
+          <h3 class="font-semibold text-lg mb-2">6 · Add the Access policy</h3>
+          <p class="text-dune-muted text-sm mb-3">
+            In the Cloudflare Zero Trust dashboard → <strong>Access → Applications →
+            Add a self-hosted app</strong>:
+          </p>
+          <ul class="list-disc list-inside text-dune-muted text-sm space-y-1 mb-3">
+            <li>Application domain: <span class="font-mono">dune.example.com</span></li>
+            <li>Session duration: 24 h (or whatever feels right)</li>
+            <li>Add a policy → Action <strong>Allow</strong> → Include <strong>Emails</strong>
+              → list yourself plus each trusted admin.</li>
+          </ul>
+          <p class="text-dune-muted text-xs">
+            Cloudflare injects the verified email as <span class="font-mono">Cf-Access-Authenticated-User-Email</span>.
+            DST's middleware compares it to <span class="font-mono">remote-acl.json</span>
+            — the Access list and DST's allow-list are independent, so the
+            principle of least privilege applies twice.
+          </p>
+        </li>
+
+        <!-- Step 7 -->
+        <li class="rounded-xl border border-dune-border bg-dune-surface p-5">
+          <h3 class="font-semibold text-lg mb-2">7 · Run the tunnel</h3>
+          <pre class="bg-dune-bg border border-dune-border rounded-md p-3 text-xs font-mono overflow-x-auto">cloudflared tunnel run dune-portal</pre>
+          <p class="text-dune-muted text-xs mt-2">Or install it as a Windows service so it survives reboots:</p>
+          <pre class="bg-dune-bg border border-dune-border rounded-md p-3 text-xs font-mono overflow-x-auto mt-1">cloudflared service install</pre>
+        </li>
+
+        <!-- Step 8 -->
+        <li class="rounded-xl border border-dune-border bg-dune-surface p-5">
+          <h3 class="font-semibold text-lg mb-2">8 · Enable in DST</h3>
+          <p class="text-dune-muted text-sm">
+            In DST: <strong>Settings → Remote Access</strong>. Tick <strong>Enable
+            remote portal</strong>, fill in the same email Cloudflare authenticates
+            you with, add any admins, save. Visit
+            <span class="font-mono">https://dune.example.com/remote/</span> on your phone.
+            You'll get a Cloudflare login, then the mobile portal.
+          </p>
+        </li>
+      </ol>
+    </div>
+
+    <!-- Disabling / revoking --------------------------------------------- -->
+    <div>
+      <h2 class="text-2xl font-semibold mb-4">Disabling or revoking access</h2>
+      <ul class="space-y-2 text-dune-muted leading-relaxed">
+        <li><strong class="text-dune-text">Pause everything:</strong> untick <strong>Enable remote portal</strong> in Settings. Every <span class="font-mono">/remote/*</span> request is refused immediately (the owner field is cleared, so DST fails closed).</li>
+        <li><strong class="text-dune-text">Revoke an admin:</strong> remove their email from the allow-list and save. The next request they make returns 403 and gets logged.</li>
+        <li><strong class="text-dune-text">Kill the tunnel:</strong> stop the <span class="font-mono">cloudflared</span> service (or just close its window).</li>
+        <li><strong class="text-dune-text">Audit:</strong> Settings → Remote Access → <strong>View audit log</strong> shows the last 50 mutating actions with timestamp, role, email, path, and HTTP status.</li>
+      </ul>
+    </div>
+
+    <!-- What this PR does NOT do ----------------------------------------- -->
+    <div>
+      <h2 class="text-2xl font-semibold mb-4">What v11.1.0 does <em>not</em> include</h2>
+      <p class="text-dune-muted leading-relaxed">
+        Phase 1 is intentionally read-mostly. <strong>Restart battlegroup</strong>,
+        <strong>backup now</strong>, and <strong>kick player</strong> are scoped for v11.2.0
+        once we've seen real mobile usage. <span class="font-mono">cloudflared</span>
+        install / config is your job, not DST's — DST detects whether it's present
+        and surfaces a status pill, but never modifies tunnel state.
+      </p>
+    </div>
+  </section>
+</Base>

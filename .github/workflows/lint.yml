@@ -57,3 +57,57 @@ jobs:
           } else {
               Write-Host "No issues found."
           }
+
+      - name: Guard remote-portal isolation
+        shell: pwsh
+        # Issue #74 (v11.1.0): the CF-Access-gated route module MUST NOT
+        # touch console-requiring or destructive surface area. The
+        # dispatcher already partitions URLs by prefix, but the runspace
+        # pool dot-sources every lib + route into every worker, so any
+        # function is technically reachable. This guard is the third
+        # safety net (after dispatcher and code review): if Remote.ps1
+        # mentions any of these names in EXECUTABLE code (comments are
+        # intentionally allowed to document the rule), the build fails so
+        # the PR can't land.
+        run: |
+          $path = 'app/server/routes/Remote.ps1'
+          if (-not (Test-Path -LiteralPath $path)) {
+              Write-Host "::warning::$path not present; skipping guard."
+              exit 0
+          }
+          $tokens = $null; $parseErrors = $null
+          [System.Management.Automation.Language.Parser]::ParseFile(
+              (Resolve-Path $path).Path, [ref]$tokens, [ref]$parseErrors) | Out-Null
+          if ($parseErrors -and $parseErrors.Count -gt 0) {
+              $parseErrors | ForEach-Object {
+                  Write-Host "::error file=$path,line=$($_.Extent.StartLineNumber)::$($_.Message)"
+              }
+              exit 1
+          }
+          $banned = @(
+              'Setup','ConsoleHost','Database','Browse-','EditDuneIni','Edit-DuneIni',
+              'Invoke-DuneCommand','Get-DuneCommandByName','Start-DuneTerminal',
+              'Invoke-DuneSshShell','DuneAdmin'
+          )
+          # Walk every token that is NOT a comment and check its text.
+          $bad = @()
+          foreach ($tok in $tokens) {
+              if ($tok.Kind -eq 'Comment') { continue }
+              foreach ($pat in $banned) {
+                  if ($tok.Text -match [regex]::Escape($pat)) {
+                      $bad += [pscustomobject]@{
+                          line = $tok.Extent.StartLineNumber
+                          text = $tok.Text
+                          pat  = $pat
+                      }
+                      break
+                  }
+              }
+          }
+          if ($bad) {
+              foreach ($h in $bad) {
+                  Write-Host "::error file=$path,line=$($h.line)::Remote.ps1 must not reference '$($h.pat)' in code (found: '$($h.text)')."
+              }
+              exit 1
+          }
+          Write-Host "Remote.ps1 isolation guard OK"
