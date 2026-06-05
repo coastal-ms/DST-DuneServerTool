@@ -220,11 +220,18 @@ function Initialize-DuneApiPool {
     $iss = [System.Management.Automation.Runspaces.InitialSessionState]::CreateDefault()
     $duneLog = Join-Path $ServerDir 'lib\DuneLog.ps1'
     if (Test-Path -LiteralPath $duneLog) { [void]$iss.StartupScripts.Add($duneLog) }
+    # Bootstrap.ps1 must load BEFORE the alphabetical lib loop so the
+    # Read-Config shim + Db-Postgres dot-source are in place by the time
+    # BackupSchedule.ps1, Broadcast.ps1, etc. are sourced (they call into
+    # Invoke-V6Ssh, Get-V6SshKeyPath, and friends at load time).
+    $bootstrap = Join-Path $ServerDir 'lib\Bootstrap.ps1'
+    if (Test-Path -LiteralPath $bootstrap) { [void]$iss.StartupScripts.Add($bootstrap) }
     [void]$iss.StartupScripts.Add((Join-Path $ServerDir 'HttpServer.ps1'))
     $libDir = Join-Path $ServerDir 'lib'
     if (Test-Path -LiteralPath $libDir) {
         foreach ($f in (Get-ChildItem -Path $libDir -Filter '*.ps1' | Sort-Object Name)) {
-            if ($f.Name -ieq 'DuneLog.ps1') { continue }
+            if ($f.Name -ieq 'DuneLog.ps1')   { continue }
+            if ($f.Name -ieq 'Bootstrap.ps1') { continue }
             [void]$iss.StartupScripts.Add($f.FullName)
         }
     }

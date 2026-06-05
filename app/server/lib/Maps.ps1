@@ -10,7 +10,7 @@
 #
 # Pattern cribbed from app/lib/K8s.ps1 (Add-V6Sietch).
 #
-# K8s.ps1 is dot-sourced via Characters.ps1's load order, which also pulls
+# K8s.ps1 is dot-sourced via Bootstrap.ps1 (which loads Db-Postgres.ps1, which
 # Db-Postgres.ps1 (Invoke-V6Ssh, Get-V6Battlegroup). If those haven't loaded
 # yet (parse-test contexts) we no-op gracefully.
 

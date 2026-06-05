@@ -42,6 +42,22 @@ here cover everything those tags shipped.
 
 ## [11.1.0] - 2026-06-05
 
+### Removed
+- **Characters sidebar entry + dead character API surface.** The
+  "Characters" entry under Game Data was a launcher button for
+  `dune-admin.exe` (Icehunter's separate character/player editor) and is
+  now gone — dune-admin is its own Windows app and is launched from the
+  Start menu / desktop shortcut directly. Along with the link, the
+  unused `/api/characters*` route family (13 endpoints in
+  `app/server/routes/Characters.ps1`), its backing helper
+  `app/server/lib/Characters.ps1`, the `useLaunchDuneAdmin` React hook,
+  and the unused `Character*` / `SpecTrack` / `CurrencyRow` / etc.
+  TypeScript types are all removed. DST never rendered any of the
+  character data itself — every code path was dead surface that pointed
+  at dune-admin. dune-admin integration (updater under Settings,
+  bundled SSH key, port/URL resolver, `setup` flow's optional download
+  step) is unchanged.
+
 ### Added
 - **Remote portal — mobile-friendly subset of DST behind Cloudflare Tunnel + Access.**
   A new top-level SPA tree under `/remote/*` (Dashboard + Maps) lets you

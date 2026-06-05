@@ -1,6 +1,6 @@
 ﻿# Database lib — SQL editor backing for the Database page.
 # Reuses Find-V6DbPod and Invoke-V6Ssh from app/lib/Db-Postgres.ps1
-# (loaded by Characters.ps1 earlier in alphabetical order).
+# (loaded by Bootstrap.ps1, which dot-sources app/lib/Db-Postgres.ps1).
 #
 # Read-only mode wraps the user SQL in a READ ONLY transaction so accidental
 # INSERT/UPDATE/DELETE/DDL get rejected by Postgres itself.

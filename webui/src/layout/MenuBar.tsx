@@ -3,7 +3,6 @@ import { useNavigate, useLocation } from 'react-router-dom'
 import { Icon } from '../components/Icon'
 import { NAV_ITEMS, GROUP_LABELS, GROUP_ORDER, type NavGroup } from '../nav'
 import { useUpdateCheck } from '../hooks/useUpdateCheck'
-import { useLaunchDuneAdmin } from '../hooks/useLaunchDuneAdmin'
 import { buildDiagnosticBundle } from '../api/diagnostics'
 
 type MenuKey = NavGroup | 'help'
@@ -23,7 +22,6 @@ export function MenuBar({ sidebarCollapsed, onToggleSidebar }: Props) {
   const location = useLocation()
   const { data: upd } = useUpdateCheck()
   const version = upd?.currentVersion ?? ''
-  const { launching: daLaunching, launch: launchDuneAdmin } = useLaunchDuneAdmin()
   const [open, setOpen] = useState<MenuKey | null>(null)
   const rootRef = useRef<HTMLDivElement | null>(null)
 
@@ -65,10 +63,6 @@ export function MenuBar({ sidebarCollapsed, onToggleSidebar }: Props) {
 
   const onItemClick = (item: typeof NAV_ITEMS[number]) => {
     setOpen(null)
-    if (item.action === 'launch-dune-admin') {
-      void launchDuneAdmin()
-      return
-    }
     navigate(item.to)
   }
 
@@ -113,15 +107,8 @@ export function MenuBar({ sidebarCollapsed, onToggleSidebar }: Props) {
                         : 'text-text-muted hover:text-text hover:bg-surface-2'
                     }`}
                   >
-                    <Icon
-                      name={item.action === 'launch-dune-admin' && daLaunching ? 'Loader2' : item.icon}
-                      size={14}
-                      className={item.action === 'launch-dune-admin' && daLaunching ? 'animate-spin' : ''}
-                    />
+                    <Icon name={item.icon} size={14} />
                     <span className="flex-1">{item.label}</span>
-                    {item.action === 'launch-dune-admin' && (
-                      <Icon name="ExternalLink" size={11} className="text-text-dim" />
-                    )}
                   </button>
                 ))}
               </div>

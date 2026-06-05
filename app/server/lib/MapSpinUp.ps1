@@ -38,7 +38,7 @@
 # Pattern (SSH + kubectl patch) cribbed from app/server/lib/Maps.ps1.
 
 # Dot-source the K8s helpers (Get-V6Battlegroup). Db-Postgres.ps1 (Invoke-V6Ssh)
-# is loaded earlier in the server lib load order via Characters.ps1.
+# is loaded earlier in the server lib load order via Bootstrap.ps1.
 $script:DuneSpinUpK8sPath = $null
 foreach ($candidate in @(
     (Join-Path $PSScriptRoot '..\..\lib\K8s.ps1'),
