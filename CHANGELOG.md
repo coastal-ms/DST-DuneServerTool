@@ -13,6 +13,29 @@ here cover everything those tags shipped.
 
 ## [Unreleased]
 
+## [11.0.3] - 2026-06-05
+
+### Fixed
+- **Windows Defender false positive on `DuneServerSetup.exe` (`Trojan:Script/Wacatac.H!ml`).**
+  v11.0.1 introduced `Sync-DunePartitionAutomation`, which delivered an
+  install payload to the VM via `ssh ... "echo <b64> | base64 -d | sudo sh"`.
+  That `base64 → pipe → sh` shape is shape-identical to `powershell -enc <b64>`
+  malware and tripped Defender's ML classifier on the PS2EXE-wrapped installer.
+  v11.0.3 removes the `Sync-DunePartitionAutomation` helper entirely — the
+  partition-clear script is no longer installed to `/etc/local.d/` on the VM
+  and the 15-min `/etc/periodic/15min/dune-clear-partitions` cron watchdog is
+  no longer created. The script is now staged inline to `/tmp` via `scp`, run
+  once with `sudo`, and removed on every Start / Restart / fix-on-demand-maps
+  invocation — same UX, no remote install, no Defender bait. (Existing VMs
+  that had the boot script + cron installed by v11.0.1 / v11.0.2 keep working
+  harmlessly until the VM is rebuilt.)
+
+### Changed
+- **Partition-clear now fires on the click, not on the clock.** The 15-min
+  cron watchdog is gone; partitions are cleared inline whenever DST issues
+  a Start, Restart, `startup`, `reboot`, or `fix-on-demand-maps` command —
+  which is the only path a player-facing on-demand map ever needs.
+
 ## [11.0.1] - 2026-06-05
 
 ### Fixed
