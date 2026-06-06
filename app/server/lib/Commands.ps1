@@ -324,7 +324,17 @@ function Get-DuneCommandByName {
 # UI used for external commands. Phase 4 will route InApp commands through the
 # embedded terminal instead; for now everything opens a console window.
 function Invoke-DuneCommandExternal {
-    param([string]$Name)
+    param(
+        [string]$Name,
+        # When the API command runner spawns dune-admin, the DST embed tab is
+        # already showing dune-admin via iframe — so dune-server.ps1's default
+        # behavior of Start-Process'ing the URL in the user's browser would
+        # pop a redundant second window. Setting this env var on the spawned
+        # process tells dune-server.ps1's dune-admin handler to skip the
+        # browser launch. CLI users running the command directly still get
+        # the browser open as before.
+        [switch]$SuppressBrowser
+    )
     if (-not $script:PwshExe -or -not $script:MainScript) {
         throw "Command execution not configured (pwsh.exe or dune-server.ps1 missing)."
     }
@@ -345,7 +355,27 @@ function Invoke-DuneCommandExternal {
         Verb             = 'RunAs'   # dune-server.ps1 requires admin
         PassThru         = $true
     }
-    $proc = Start-Process @startArgs
+    # Default to suppressing the browser for the dune-admin command — the
+    # DST embed tab is the canonical viewer now. Callers can pass
+    # -SuppressBrowser:$false to override.
+    $shouldSuppress = if ($PSBoundParameters.ContainsKey('SuppressBrowser')) {
+        [bool]$SuppressBrowser
+    } else {
+        $cmd.Name -eq 'dune-admin'
+    }
+
+    $prevValue = $env:DST_DUNE_ADMIN_NO_BROWSER
+    try {
+        if ($shouldSuppress) { $env:DST_DUNE_ADMIN_NO_BROWSER = '1' }
+        $proc = Start-Process @startArgs
+    } finally {
+        # Restore the parent's env so subsequent commands aren't affected.
+        if ($null -eq $prevValue) {
+            Remove-Item Env:\DST_DUNE_ADMIN_NO_BROWSER -ErrorAction SilentlyContinue
+        } else {
+            $env:DST_DUNE_ADMIN_NO_BROWSER = $prevValue
+        }
+    }
     return @{
         ok      = $true
         name    = $cmd.Name

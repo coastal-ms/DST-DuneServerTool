@@ -81,6 +81,31 @@ export function MenuBar({ sidebarCollapsed, onToggleSidebar }: Props) {
       {GROUP_ORDER.map(g => {
         const items = NAV_ITEMS.filter(i => i.group === g)
         if (items.length === 0) return null
+        // Single-item group (e.g. Server Health, which has only one page):
+        // a dropdown with one entry is pure friction. Render the group
+        // button as a direct link to that page instead. The button label
+        // stays as the group label so the menu bar's visual layout is
+        // unchanged; only the click behavior differs.
+        if (items.length === 1) {
+          const only = items[0]
+          const active = isActive(only.to)
+          return (
+            <div key={g} className="relative">
+              <button
+                type="button"
+                onClick={() => { setOpen(null); navigate(only.to) }}
+                onMouseEnter={() => { if (open !== null) setOpen(null) }}
+                className={`px-3 h-7 rounded-md transition-colors ${
+                  active
+                    ? 'bg-surface-3 text-text'
+                    : 'text-text-muted hover:text-text hover:bg-surface-2/80'
+                }`}
+              >
+                {GROUP_LABELS[g]}
+              </button>
+            </div>
+          )
+        }
         const isOpen = open === g
         return (
           <div key={g} className="relative">
