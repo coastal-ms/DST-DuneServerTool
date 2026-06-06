@@ -5,6 +5,7 @@ import { NAV_ITEMS, GROUP_LABELS, GROUP_ORDER, type NavGroup } from '../nav'
 import { useUpdateCheck } from '../hooks/useUpdateCheck'
 import { useDuneAdminWebUrl } from '../hooks/useDuneAdminWebUrl'
 import { buildDiagnosticBundle } from '../api/diagnostics'
+import { isLocalViewer } from '../util/viewer'
 
 type MenuKey = NavGroup | 'help' | 'duneadmin'
 
@@ -79,7 +80,9 @@ export function MenuBar({ sidebarCollapsed, onToggleSidebar }: Props) {
       className="h-8 shrink-0 border-b border-border bg-surface flex items-center px-1 text-[13px] select-none relative z-40"
     >
       {GROUP_ORDER.map(g => {
-        const items = NAV_ITEMS.filter(i => i.group === g)
+        const items = NAV_ITEMS
+          .filter(i => i.group === g)
+          .filter(i => !i.localOnly || isLocalViewer())
         if (items.length === 0) return null
         // Single-item group (e.g. Server Health, which has only one page):
         // a dropdown with one entry is pure friction. Render the group
