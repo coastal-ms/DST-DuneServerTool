@@ -256,6 +256,11 @@ function Start-DuneConsoleLifecycle {
     $mode = if ($script:DuneConsoleMode) { $script:DuneConsoleMode } else { 'console' }
     Clear-DuneAppDetached
 
+    # Mirror dune-admin stdout/stderr into THIS console so the operator sees
+    # one combined stream. Safe to call eagerly: it's a no-op if dune-admin
+    # never runs, and the tail loop re-attaches if the log file appears later.
+    try { Start-DuneAdminLogMirror } catch {}
+
     # 1. Real-time linkage: app window closes -> stop listener -> server exits.
     try {
         $rs = [runspacefactory]::CreateRunspace()
@@ -380,9 +385,122 @@ function Stop-DuneConsoleLifecycle {
     $script:DuneWatcherPs = $null; $script:DuneWatcherRs = $null; $script:DuneWatcherHandle = $null
     $script:DuneTrayPs    = $null; $script:DuneTrayRs    = $null; $script:DuneTrayHandle    = $null
 
+    # Tear down the dune-admin -> console mirror runspace if armed.
+    try { Stop-DuneAdminLogMirror } catch {}
+
     # Clear the detach marker on a clean shutdown so the next launch starts
     # from a known state. The next launch ALSO clears it after handling, so
     # this is just defense-in-depth (the marker is only meaningful while a
     # detached server is alive in the background).
     Clear-DuneAppDetached
+}
+
+# ---------------------------------------------------------------------------
+# Dune-admin log mirror — merge dune-admin's stdout/stderr into THIS console
+# so the user sees backend + dune-admin output in one window instead of two.
+#
+# Architecture:
+#   dune-server.ps1's `dune-admin` command launches dune-admin via a HIDDEN
+#   scheduled task whose action is `cmd.exe /c "<exe> 1>>"<log>" 2>&1"`. That
+#   redirects dune-admin's stdout/stderr to a well-known log file AND hides
+#   its window. The mirror runspace below tails that log file in real time
+#   and writes each new line to DuneServer's console with an `[admin]` prefix,
+#   so the user sees both streams in DuneServer's existing console window.
+#
+# This is the v11.3.0 "merge backend + dune-admin into one combined console
+# window" feature — the design parked in .github/PARKED-console-merge.md.
+# ---------------------------------------------------------------------------
+
+function Get-DuneAdminMirrorLogPath {
+    $dir = Join-Path $env:LOCALAPPDATA 'DuneServer\logs'
+    return (Join-Path $dir 'dune-admin.log')
+}
+
+function Start-DuneAdminLogMirror {
+    # No-op if a mirror is already running for this DuneServer process — the
+    # lifecycle hook may be called more than once across restart cycles.
+    if ($script:DuneAdminMirrorPs -and $script:DuneAdminMirrorHandle -and -not $script:DuneAdminMirrorHandle.IsCompleted) {
+        return
+    }
+    $logPath = Get-DuneAdminMirrorLogPath
+    $logDir  = Split-Path -Parent $logPath
+    try {
+        if (-not (Test-Path -LiteralPath $logDir)) {
+            New-Item -ItemType Directory -Path $logDir -Force | Out-Null
+        }
+        # Touch the file so Get-Content -Wait has something to attach to from
+        # the start; otherwise it errors until dune-admin runs for the first
+        # time. The mirror's loop is also resilient to the file being deleted.
+        if (-not (Test-Path -LiteralPath $logPath)) {
+            New-Item -ItemType File -Path $logPath -Force | Out-Null
+        }
+    } catch {
+        if (Get-Command Write-DuneLog -ErrorAction SilentlyContinue) {
+            Write-DuneLog "Could not prep dune-admin mirror log dir: $($_.Exception.Message)" 'WARN'
+        }
+        return
+    }
+
+    try {
+        $rs = [runspacefactory]::CreateRunspace()
+        $rs.Open()
+        $rs.SessionStateProxy.SetVariable('LogPath', $logPath)
+        $ps = [PowerShell]::Create()
+        $ps.Runspace = $rs
+        [void]$ps.AddScript({
+            # Long-running tail loop. Get-Content -Wait blocks until killed by
+            # PowerShell.Stop() during shutdown. Wrapped so a transient file
+            # disappearance (e.g. user deletes the log while dune-admin is
+            # restarting) doesn't kill the mirror — we re-attach when the file
+            # reappears.
+            while ($true) {
+                try {
+                    if (-not (Test-Path -LiteralPath $LogPath)) {
+                        Start-Sleep -Seconds 2
+                        continue
+                    }
+                    # -Tail 0 = "stream only NEW lines from now on", so a
+                    # restart doesn't dump a huge historical replay into the
+                    # console. -Wait blocks waiting for additions until the
+                    # runspace is stopped.
+                    Get-Content -LiteralPath $LogPath -Wait -Tail 0 -ErrorAction Stop | ForEach-Object {
+                        if ($null -ne $_ -and $_ -ne '') {
+                            # [Console] is process-static, so this writes to
+                            # DuneServer's visible console window even though
+                            # we're inside a separate runspace.
+                            [Console]::WriteLine("[admin] $_")
+                        }
+                    }
+                } catch {
+                    # File got rotated / deleted / locked — back off briefly
+                    # and re-attach. Stop only happens via PowerShell.Stop()
+                    # which throws PipelineStoppedException out of this loop.
+                    Start-Sleep -Seconds 2
+                }
+            }
+        })
+        $script:DuneAdminMirrorPs     = $ps
+        $script:DuneAdminMirrorRs     = $rs
+        $script:DuneAdminMirrorHandle = $ps.BeginInvoke()
+        if (Get-Command Write-DuneLog -ErrorAction SilentlyContinue) {
+            Write-DuneLog "Dune-admin console mirror armed (tailing $logPath -> [admin] prefix)"
+        }
+    } catch {
+        if (Get-Command Write-DuneLog -ErrorAction SilentlyContinue) {
+            Write-DuneLog "Failed to start dune-admin log mirror: $($_.Exception.Message)" 'WARN'
+        }
+    }
+}
+
+function Stop-DuneAdminLogMirror {
+    try {
+        if ($script:DuneAdminMirrorPs -and $script:DuneAdminMirrorHandle -and -not $script:DuneAdminMirrorHandle.IsCompleted) {
+            try { $script:DuneAdminMirrorPs.Stop() } catch {}
+        }
+        try { if ($script:DuneAdminMirrorPs) { $script:DuneAdminMirrorPs.Dispose() } } catch {}
+        try { if ($script:DuneAdminMirrorRs) { $script:DuneAdminMirrorRs.Dispose() } } catch {}
+    } catch {}
+    $script:DuneAdminMirrorPs     = $null
+    $script:DuneAdminMirrorRs     = $null
+    $script:DuneAdminMirrorHandle = $null
 }
