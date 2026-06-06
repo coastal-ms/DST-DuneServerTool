@@ -390,6 +390,35 @@ You can also check manually from **Settings → Updates → Check now**.
 
 ---
 
+## Run at Windows startup *(optional)*
+
+The **Help** menu (top toolbar) has a **Run at Windows startup** toggle.
+Turn it on and DuneServer launches automatically every time you sign in to
+Windows — in the system tray with no app window — and **closing the
+DuneShell window no longer stops the server**.
+
+- Reopen the portal any time from the **tray icon → Open Web Portal**, or
+  just launch the Start Menu shortcut again (the running background server
+  stays where it is; the shortcut brings the app window back).
+- Toggling on or off takes effect at the **next launch**. Flipping mid-
+  session doesn't change the current session's close behavior — that's
+  intentional, so closing the app window always does what you just saw it
+  do, not what a setting says it should do.
+- **Loopback-only**: remote viewers (Tailscale / LAN / the SSH-tunneled
+  co-admin pattern below) cannot enable autostart on your host. The menu
+  entry is hidden for non-local viewers and the backend route refuses
+  non-loopback callers.
+- Implemented as a per-user Task Scheduler "at logon" job named
+  `DuneServer-Autostart-<sid>` under the `Dune Server` folder. The
+  uninstaller removes it automatically.
+
+**Off by default — opt-in only.** If the toggle is missing from the Help
+menu you're either viewing remotely (expected) or running from a dev
+`pwsh` shell rather than the installed `DuneServer.exe` (also expected —
+the feature needs the .exe path to schedule).
+
+---
+
 ## CLI launcher *(`dune-server.bat`)*
 
 The repo also ships a menu-driven PowerShell CLI for scripting one-off
