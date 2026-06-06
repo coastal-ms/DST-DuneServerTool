@@ -148,7 +148,7 @@ public static extern bool IsIconic(System.IntPtr hWnd);
 }
 
 # Version (one of the 5 sync'd constants; see persistent-notes.md)
-$script:DuneToolVersion = '11.3.3'
+$script:DuneToolVersion = '11.3.4'
 
 # ---------- Restart-on-detach handoff -----------------------------------------
 # When a prior "Web Portal" detach left the server running headless, the
@@ -586,9 +586,31 @@ $script:DuneConsoleMode = 'console'
 $script:DuneIconPath = $null
 
 # Process-lifetime flag: when true, closing the (manually-opened) DuneShell
-# does NOT stop the listener. Set unconditionally in headless mode; the
-# autostart toggle's "next launch" semantic means we don't flip this mid-run.
-$script:DuneKeepAliveAfterShellClose = [bool]$script:DuneHeadlessMode
+# does NOT stop the listener — the backend keeps running and the user can
+# re-attach by clicking the shortcut (the single-instance branch above
+# spawns a fresh DuneShell against the live backend instead of restarting).
+#
+# True in two cases:
+#   * --headless launch (the scheduled-task autostart path): no app window
+#     is even launched; the tray icon is the only handle on the backend.
+#   * Autostart task currently registered for this user: even when DST is
+#     launched manually (shortcut click, not the scheduled-task path), the
+#     user has opted into "background service" semantics by enabling Help
+#     → Run at Windows startup. Closing the DuneShell viewer should NOT
+#     take the merged DuneServer + dune-admin console down with it.
+#
+# Evaluated at startup only. Toggling Help → Run at Windows startup mid-run
+# does not flip this flag; the new semantic takes effect on the next launch.
+$script:DuneAutostartRegistered = $false
+try {
+    if (Get-Command Test-DuneAutostartEnabled -ErrorAction SilentlyContinue) {
+        $script:DuneAutostartRegistered = [bool](Test-DuneAutostartEnabled)
+    }
+} catch { $script:DuneAutostartRegistered = $false }
+$script:DuneKeepAliveAfterShellClose = [bool]$script:DuneHeadlessMode -or $script:DuneAutostartRegistered
+if ($script:DuneAutostartRegistered -and -not $script:DuneHeadlessMode) {
+    Write-DuneLog "Autostart task registered for this user — closing the DuneShell window will leave the backend console running; click the shortcut again to re-open the viewer, or stop the backend explicitly via the tray / console window"
+}
 
 $openInAppWindow = $false
 try { $openInAppWindow = Get-DstOpenInAppWindow } catch { $openInAppWindow = $true }

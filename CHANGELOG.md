@@ -13,6 +13,24 @@ here cover everything those tags shipped.
 
 ## [Unreleased]
 
+## [11.3.4] - 2026-06-05
+
+### Changed
+- **Autostart now means "background service".** Toggling Help → Run at
+  Windows startup ON used to only change behaviour at the next logon (the
+  scheduled task launched DST with `--headless`, which keeps the backend
+  console alive when DuneShell closes). A DST that you launched manually
+  the same day still treated the close-DuneShell button as "stop
+  everything", which surprised users who expected the toggle to mean
+  "DST is a service from now on, the GUI just attaches/detaches". The
+  backend now stays alive across a DuneShell close whenever the autostart
+  task is registered for the current user — manual launches and the
+  scheduled-task `--headless` launches both behave the same way. Click
+  the desktop shortcut to re-open a viewer against the running backend;
+  stop it explicitly via the tray icon's Quit, or by closing the
+  DuneServer console window itself. Toggling autostart OFF mid-run is
+  unchanged (the next launch reverts to the old "close = stop" semantic).
+
 ## [11.3.3] - 2026-06-05
 
 ### Security
