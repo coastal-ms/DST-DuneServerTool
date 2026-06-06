@@ -148,7 +148,7 @@ public static extern bool IsIconic(System.IntPtr hWnd);
 }
 
 # Version (one of the 5 sync'd constants; see persistent-notes.md)
-$script:DuneToolVersion = '11.4.2'
+$script:DuneToolVersion = '11.4.3'
 
 # ---------- Restart-on-detach handoff -----------------------------------------
 # When a prior "Web Portal" detach left the server running headless, the
@@ -618,6 +618,13 @@ try {
 $script:DuneKeepAliveAfterShellClose = [bool]$script:DuneHeadlessMode -or $script:DuneAutostartRegistered
 if ($script:DuneAutostartRegistered -and -not $script:DuneHeadlessMode) {
     Write-DuneLog "Autostart task registered for this user - closing the DuneShell window will leave the backend console running; click the shortcut again to re-open the viewer, or stop the backend explicitly via the tray / console window"
+}
+# Sync the on-disk keep-alive sentinel so DuneShell's FormClosing teardown
+# knows to skip its /api/shutdown + dune-admin kill + DuneServer.exe sweep
+# when keep-alive is active. Refreshed at runtime by Register-/Unregister-
+# DuneAutostart so toggling the Help menu takes effect without restart.
+if (Get-Command Update-DuneKeepAliveFlag -ErrorAction SilentlyContinue) {
+    try { [void](Update-DuneKeepAliveFlag) } catch {}
 }
 
 $openInAppWindow = $false

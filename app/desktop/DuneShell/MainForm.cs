@@ -151,16 +151,32 @@ internal sealed class MainForm : Form
 
     private void OnNewWindowRequested(object? sender, CoreWebView2NewWindowRequestedEventArgs e)
     {
-        // window.open / target=_blank: keep loopback (the portal itself) in the
-        // shell, send everything else (websites, dune-admin web UI) to the OS browser.
+        // window.open / target=_blank routing:
+        //   * Same-origin as the portal's own URL (loopback + same port) -> keep
+        //     in this shell. Covers in-portal "open in new tab" flows like the
+        //     updater's safe-to-close page or any future window.open from React.
+        //   * Anything else, including OTHER loopback ports (e.g. dune-admin's
+        //     own HTTP port via the iframe's "Open in browser" link, or any
+        //     localhost game-tool URL) -> hand to the OS default browser. Just
+        //     checking `IsLoopback` here was too broad and caused dune-admin's
+        //     "Open in browser" to navigate the shell off the portal instead.
         e.Handled = true;
-        if (Uri.TryCreate(e.Uri, UriKind.Absolute, out var u))
+        if (!Uri.TryCreate(e.Uri, UriKind.Absolute, out var u)) return;
+
+        bool keepInShell = false;
+        if (u.IsLoopback &&
+            Uri.TryCreate(_targetUrl, UriKind.Absolute, out var portal) &&
+            portal.IsLoopback &&
+            u.Port == portal.Port &&
+            string.Equals(u.Scheme, portal.Scheme, StringComparison.OrdinalIgnoreCase))
         {
-            if (u.IsLoopback)
-                _web.CoreWebView2?.Navigate(e.Uri);
-            else
-                OpenExternal(e.Uri.ToString());
+            keepInShell = true;
         }
+
+        if (keepInShell)
+            _web.CoreWebView2?.Navigate(e.Uri);
+        else
+            OpenExternal(e.Uri.ToString());
     }
 
     /// <summary>
@@ -447,6 +463,24 @@ internal sealed class MainForm : Form
     private void StopCompanionProcesses()
     {
         if (!_useWaitFile) return;
+
+        // Keep-alive opt-out: when the backend wrote keep-alive.flag, the
+        // user has registered DST autostart (or launched --headless), and
+        // closing the viewer must NOT take the backend + wrapped dune-admin
+        // console down with it. They re-attach to the live backend by
+        // clicking the shortcut again, and stop it explicitly via the
+        // tray's "Quit (stop server)" or the console window. The flag is
+        // refreshed live by the backend on startup AND on every autostart
+        // toggle, so this reflects current intent rather than launch-time
+        // state.
+        try
+        {
+            string keepAliveFlag = Path.Combine(
+                Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
+                "DuneServer", "keep-alive.flag");
+            if (File.Exists(keepAliveFlag)) return;
+        }
+        catch { /* defensive -- fall through to the normal teardown */ }
 
         // 1) Graceful backend shutdown via the same loopback URL + token the
         //    WebView is using. Send synchronously with a tight timeout so we

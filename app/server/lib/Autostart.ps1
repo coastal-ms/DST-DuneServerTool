@@ -143,6 +143,11 @@ function Register-DuneAutostart {
         if (Get-Command Write-DuneLog -ErrorAction SilentlyContinue) {
             Write-DuneLog "Autostart enabled: registered scheduled task '$folder$name' for $user (exe: $exe)"
         }
+        # Refresh the keep-alive sentinel so closing the shell from this
+        # point on leaves the backend running (no need to restart DST).
+        if (Get-Command Update-DuneKeepAliveFlag -ErrorAction SilentlyContinue) {
+            try { [void](Update-DuneKeepAliveFlag) } catch {}
+        }
         return @{ ok = $true }
     } catch {
         $msg = $_.Exception.Message
@@ -166,6 +171,9 @@ function Unregister-DuneAutostart {
             if (Get-Command Write-DuneLog -ErrorAction SilentlyContinue) {
                 Write-DuneLog "Autostart disabled: removed scheduled task '$folder$name'"
             }
+            if (Get-Command Update-DuneKeepAliveFlag -ErrorAction SilentlyContinue) {
+                try { [void](Update-DuneKeepAliveFlag) } catch {}
+            }
             return @{ ok = $true }
         }
         # Fallback to schtasks.exe.
@@ -173,6 +181,9 @@ function Unregister-DuneAutostart {
         & schtasks.exe /Delete /TN $fullName /F 2>&1 | Out-Null
         if (Get-Command Write-DuneLog -ErrorAction SilentlyContinue) {
             Write-DuneLog "Autostart disabled (schtasks fallback): '$fullName' (exit $LASTEXITCODE)"
+        }
+        if (Get-Command Update-DuneKeepAliveFlag -ErrorAction SilentlyContinue) {
+            try { [void](Update-DuneKeepAliveFlag) } catch {}
         }
         return @{ ok = $true }
     } catch {
