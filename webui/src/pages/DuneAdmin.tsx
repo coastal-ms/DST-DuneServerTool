@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom'
 import { Icon } from '../components/Icon'
 import { api, ApiError } from '../api/client'
 import { getDuneAdminWebUrl, type DuneAdminWebUrl } from '../api/duneAdmin'
+import { isLocalViewer } from '../util/viewer'
 
 // While we're waiting for dune-admin to come up after a "Start" click, poll
 // fast so the iframe swaps in as soon as the port is listening.
@@ -107,8 +108,7 @@ export function DuneAdmin() {
     // friend's own 127.0.0.1. Requires host-side firewall to allow inbound on
     // dune-admin's port over the Tailscale interface (see helper/bridge).
     const viewerHost = typeof window !== 'undefined' ? window.location.hostname : ''
-    const isLocalViewer = viewerHost === '127.0.0.1' || viewerHost === 'localhost' || viewerHost === ''
-    const iframeUrl = isLocalViewer
+    const iframeUrl = isLocalViewer()
       ? info.url
       : `http://${viewerHost}:${info.port}`
     return (

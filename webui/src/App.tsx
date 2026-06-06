@@ -1,4 +1,4 @@
-import { Routes, Route } from 'react-router-dom'
+import { Routes, Route, Navigate } from 'react-router-dom'
 import { AppShell } from './layout/AppShell'
 import { Dashboard } from './pages/Dashboard'
 import { Commands } from './pages/Commands'
@@ -13,15 +13,26 @@ import { TerminalPage } from './pages/Terminal'
 import { DuneAdmin } from './pages/DuneAdmin'
 import { PageStub } from './pages/PageStub'
 import { StatusProvider } from './hooks/useStatus'
+import { isLocalViewer } from './util/viewer'
 
 export default function App() {
+  // The free-form PowerShell page can run arbitrary commands on the host
+  // as the DuneServer service user. It's safe locally (you're already on
+  // the host with admin) but a foot-gun for remote viewers (friend over
+  // Tailscale), so we redirect /terminal to Server Health for them. The
+  // backend /ws/terminal route enforces this too — this is just the UX
+  // half so the page doesn't render an empty failing terminal.
+  const showTerminal = isLocalViewer()
   return (
     <StatusProvider>
       <AppShell>
         <Routes>
           <Route path="/"           element={<Dashboard />} />
           <Route path="/commands"   element={<Commands />} />
-          <Route path="/terminal"   element={<TerminalPage />} />
+          <Route
+            path="/terminal"
+            element={showTerminal ? <TerminalPage /> : <Navigate to="/" replace />}
+          />
           <Route path="/gameconfig" element={<GameConfig />} />
           <Route path="/database"   element={<Database />} />
           <Route path="/sietches"   element={<Sietches />} />

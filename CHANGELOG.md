@@ -13,6 +13,24 @@ here cover everything those tags shipped.
 
 ## [Unreleased]
 
+## [11.3.3] - 2026-06-05
+
+### Security
+- **Free-form PowerShell page is now local-only.** The `/terminal` page
+  (and its `/ws/terminal` WebSocket) lets anyone with the page open type
+  arbitrary commands that run as the DuneServer service user on the
+  host. That's fine when the only viewer is the host's own WebView2,
+  but DST's remote-portal bridge (v11.2.0) now lets a friend reach the
+  same UI over Tailscale — at which point a typo, accidental click, or
+  anyone else on the friend's computer can run arbitrary host-side
+  PowerShell with no audit trail. The page is now hidden from the
+  sidebar / menu bar for any viewer that isn't on loopback, the
+  `/terminal` route redirects to Server Health for them, and the
+  `/ws/terminal` endpoint server-side returns 403 on non-loopback
+  upgrade (defense in depth). The curated **Commands** page is
+  unaffected — friends can still drive Restart Battlegroup, Clear
+  Partitions, Spin Up Map, etc.
+
 ## [11.3.2] - 2026-06-05
 
 ### Fixed

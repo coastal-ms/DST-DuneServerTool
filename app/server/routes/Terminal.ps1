@@ -27,7 +27,7 @@
 # Runs in a runspace from $script:DuneWsPool — no PS functions from
 # lib/*.ps1 are visible. Pure .NET / built-in cmdlets.
 
-Register-DuneWebSocket -Path '/ws/terminal' -Handler {
+Register-DuneWebSocket -Path '/ws/terminal' -LocalOnly -Handler {
     param($ws, $routeParams)
 
     $CT  = [System.Threading.CancellationToken]::None

@@ -80,13 +80,20 @@ function Register-DuneRoute {
 function Register-DuneWebSocket {
     param(
         [Parameter(Mandatory)][string]$Path,
-        [Parameter(Mandatory)][scriptblock]$Handler
+        [Parameter(Mandatory)][scriptblock]$Handler,
+        # When set, this WS endpoint is reachable ONLY from a loopback
+        # connection on the host itself. Any remote viewer (friend reaching
+        # the portal over Tailscale, LAN client, etc.) gets a 403 on upgrade.
+        # Use for endpoints that drive arbitrary host-side execution — the
+        # free-form Terminal is the canonical case.
+        [switch]$LocalOnly
     )
     $pattern = '^' + ([regex]::Escape($Path) -replace '\\\{([^/}]+)}', '(?<$1>[^/]+)') + '$'
     $script:DuneWsRoutes.Add([pscustomobject]@{
-        Path    = $Path
-        Regex   = [regex]$pattern
-        Handler = $Handler
+        Path      = $Path
+        Regex     = [regex]$pattern
+        Handler   = $Handler
+        LocalOnly = [bool]$LocalOnly
     }) | Out-Null
 }
 
@@ -721,6 +728,20 @@ function Invoke-DuneContext {
         foreach ($r in $script:DuneWsRoutes) {
             $m = $r.Regex.Match($rawPath)
             if ($m.Success) {
+                if ($r.LocalOnly) {
+                    $remote = $null
+                    try { $remote = $req.RemoteEndPoint.Address } catch {}
+                    $isLoopback = $false
+                    if ($remote) {
+                        try { $isLoopback = [System.Net.IPAddress]::IsLoopback($remote) } catch { $isLoopback = $false }
+                    }
+                    if (-not $isLoopback) {
+                        Write-Host "[ws] 403 local-only path '$rawPath' from $remote" -ForegroundColor Yellow
+                        $res.StatusCode = 403
+                        $res.OutputStream.Close()
+                        return
+                    }
+                }
                 $routeParams = @{}
                 foreach ($g in $r.Regex.GetGroupNames()) {
                     if ($g -notmatch '^\d+$') { $routeParams[$g] = $m.Groups[$g].Value }
