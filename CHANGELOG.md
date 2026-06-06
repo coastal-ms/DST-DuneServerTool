@@ -13,6 +13,23 @@ here cover everything those tags shipped.
 
 ## [Unreleased]
 
+## [11.4.1] - 2026-06-05
+
+### Fixed
+- **DuneServer.exe failed to boot on every v11.4.0 install** with a parse
+  error in `Autostart.ps1`. PS2EXE compiles against Windows PowerShell
+  5.1, which reads BOM-less `.ps1` files as the system ANSI codepage
+  (Windows-1252 on en-US) rather than UTF-8 — and `Autostart.ps1` plus
+  the v11.4.0 changes to `ConsoleHost.ps1` contained UTF-8 multi-byte
+  characters (em-dashes, right-arrows) without a UTF-8 BOM. PS 5.1
+  mis-tokenized those bytes and the parser counted `{` and `}` wrong,
+  producing a bogus "Missing closing '}'" error even though PowerShell
+  7 (used during development) parsed the same files cleanly. Adds a
+  UTF-8 BOM to the affected files, and adds a PS 5.1 parse pre-flight
+  to `Build-Installer.ps1` so this entire class of bug cannot ship
+  silently again — the installer build now refuses to compile if any
+  bundled `.ps1` fails to parse under PS 5.1.
+
 ## [11.4.0] - 2026-06-05
 
 ### Added
