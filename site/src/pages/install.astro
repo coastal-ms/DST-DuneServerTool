@@ -113,6 +113,18 @@ import DownloadButton from "../components/DownloadButton.astro";
       </li>
     </ul>
 
+    <h2 class="text-2xl font-semibold mb-4">Optional: run at Windows startup</h2>
+    <p class="text-dune-muted leading-relaxed mb-4">
+      Off by default. Open <strong class="text-dune-text">Help → Run at
+      Windows startup</strong> in the top toolbar to toggle it on. After
+      that, DST launches automatically at every Windows sign-in — in the
+      system tray with no app window — and closing the DuneShell window no
+      longer stops the server. Toggle it back off the same way; takes
+      effect at the next launch. The toggle is loopback-only — remote
+      viewers can't enable it on your host. The uninstaller cleans up the
+      scheduled task automatically.
+    </p>
+
     <h2 class="text-2xl font-semibold mb-4">Where things live</h2>
     <div
       class="rounded-lg border border-dune-border bg-dune-surface overflow-hidden text-sm"
