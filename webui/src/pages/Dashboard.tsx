@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from 'react'
+import { useNavigate } from 'react-router-dom'
 import { PageHeader } from '../components/PageHeader'
 import { Icon } from '../components/Icon'
 import { useStatus } from '../hooks/useStatus'
@@ -92,6 +93,7 @@ function HeartbeatSensor({ servers, loading }: { servers: BgGameServer[]; loadin
 }
 
 export function Dashboard() {
+  const navigate = useNavigate()
   const { status, forceRefresh, loading } = useStatus()
 
   const vm = status?.vm
@@ -131,10 +133,7 @@ export function Dashboard() {
   const [exportMsg,  setExportMsg]  = useState<string | null>(null)
   const [exportErr,  setExportErr]  = useState<string | null>(null)
 
-  // Start the Dune Admin Tool — same action as the Commands "dune-admin" entry.
-  const [daBusy, setDaBusy] = useState(false)
-  const [daMsg,  setDaMsg]  = useState<string | null>(null)
-  const [daErr,  setDaErr]  = useState<string | null>(null)
+  // Start the Dune Admin Tool — navigates to the in-app embed page.
   // null = still checking; true/false = whether dune-admin.exe is located.
   const [daInstalled, setDaInstalled] = useState<boolean | null>(null)
 
@@ -146,17 +145,15 @@ export function Dashboard() {
     return () => { alive = false }
   }, [])
 
-  const startDuneAdmin = useCallback(async () => {
-    setDaBusy(true); setDaErr(null); setDaMsg(null)
-    try {
-      await api('/api/commands/run/dune-admin', { method: 'POST' })
-      setDaMsg('dune-admin launched — its web UI will open in your browser.')
-    } catch (e) {
-      setDaErr(e instanceof ApiError ? e.message : String(e))
-    } finally {
-      setDaBusy(false)
-    }
-  }, [])
+  const startDuneAdmin = useCallback(() => {
+    // Route to the in-app embed page instead of launching dune-admin's
+    // separate browser window. The embed page itself offers a Start button
+    // when dune-admin isn't yet listening, so the user flow becomes:
+    //   click "Open dune-admin" → embed page mounts → if not running, click
+    //   Start in the embed header. That replaces the prior detour through an
+    //   external browser tab.
+    navigate('/dune-admin')
+  }, [navigate])
 
   const runExport = useCallback(async (name: string, label: string) => {
     setExportBusy(name); setExportErr(null); setExportMsg(null)
@@ -330,32 +327,29 @@ export function Dashboard() {
             </a>
           </div>
           <p className="text-xs text-text-dim mb-3">
-            Launches dune-admin and opens its web UI. The VM must be running.
+            Opens dune-admin inside this window. The VM must be running.
           </p>
           <div className="flex flex-wrap gap-2">
             <button
               className="btn-primary"
-              disabled={daInstalled !== true || !vm?.running || daBusy}
+              disabled={daInstalled !== true || !vm?.running}
               onClick={() => { void startDuneAdmin() }}
               title={
                 daInstalled === false ? 'dune-admin.exe not found — install it from Settings first'
                   : daInstalled === null ? 'Checking dune-admin install…'
                   : !vm?.running ? 'VM must be running'
-                  : 'Launch dune-admin and open its web UI'
+                  : 'Open the dune-admin web UI inside DST'
               }
             >
               <Icon
-                name={daBusy ? 'Loader2' : daInstalled === false ? 'XCircle' : 'Play'}
+                name={daInstalled === false ? 'XCircle' : 'ExternalLink'}
                 size={14}
-                className={daBusy ? 'animate-spin' : ''}
               />
               {daInstalled === null ? 'Checking…'
                 : daInstalled === false ? 'Not installed'
-                : 'Start the Dune Admin Tool'}
+                : 'Open Dune Admin'}
             </button>
           </div>
-          {daMsg && <p className="mt-3 text-xs text-text-muted border-l-2 border-accent pl-2">{daMsg}</p>}
-          {daErr && <p className="mt-3 text-xs text-danger break-words">{daErr}</p>}
         </div>
 
         <div className="card p-5">
