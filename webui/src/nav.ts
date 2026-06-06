@@ -5,12 +5,18 @@ export type NavItem = {
   label: string
   icon: string  // lucide-react icon name
   group?: NavGroup
+  // When true, this item is hidden from the sidebar / menubar for any
+  // viewer that isn't on the host machine itself (e.g. a friend reaching
+  // the portal over Tailscale). The corresponding /api or /ws routes
+  // MUST also enforce loopback-only on the server — the client filter is
+  // just a UX hide, not a security boundary.
+  localOnly?: boolean
 }
 
 export const NAV_ITEMS: NavItem[] = [
   { to: '/',            label: 'Server Health', icon: 'LayoutDashboard', group: 'overview' },
   { to: '/commands',    label: 'Commands',     icon: 'Zap',             group: 'terminal' },
-  { to: '/terminal',    label: 'PowerShell',   icon: 'SquareTerminal',  group: 'terminal' },
+  { to: '/terminal',    label: 'PowerShell',   icon: 'SquareTerminal',  group: 'terminal', localOnly: true },
   { to: '/gameconfig',  label: 'Game Config',  icon: 'Sliders',         group: 'data' },
   { to: '/dd-map',      label: 'DD Map',       icon: 'Map',             group: 'data' },
   { to: '/database',    label: 'Database',     icon: 'Database',        group: 'database' },

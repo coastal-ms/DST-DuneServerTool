@@ -6,6 +6,7 @@ import { NAV_ITEMS, GROUP_LABELS, GROUP_ORDER } from '../nav'
 import { useUpdateCheck } from '../hooks/useUpdateCheck'
 import { api } from '../api/client'
 import { fmtToolVersion } from '../format'
+import { isLocalViewer } from '../util/viewer'
 
 // WebView2 host bridge — present only when the portal is rendered inside the
 // native DuneShell.exe app window (not in a regular browser tab). We use it to
@@ -63,7 +64,9 @@ export function Sidebar({ collapsed }: Props) {
   const groups = GROUP_ORDER.map(g => ({
     key: g,
     label: GROUP_LABELS[g],
-    items: NAV_ITEMS.filter(i => i.group === g),
+    items: NAV_ITEMS
+      .filter(i => i.group === g)
+      .filter(i => !i.localOnly || isLocalViewer()),
   })).filter(g => g.items.length > 0)
 
   // Shared row renderer for a single nav item, in either layout mode.
