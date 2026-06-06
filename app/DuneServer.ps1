@@ -64,6 +64,34 @@ trap {
 
 Write-DuneStartupLog 'Bootstrap entered'
 
+# ---------- Headless mode (--headless) ----------------------------------------
+# When launched by the scheduled task that backs the Help → "Run at Windows
+# startup" toggle, we boot WITHOUT the DuneShell app window so the user isn't
+# greeted at login by an unexpected window. The console is force-sent to the
+# system tray (regardless of the saved ConsolePresence choice) so the operator
+# always has SOME visible handle on the running server.
+#
+# Detection: scan the full process command line for --headless / -headless /
+# /headless (case-insensitive). PS2EXE-compiled binaries expose CLI args via
+# [Environment]::GetCommandLineArgs() reliably, including double-dash options.
+$script:DuneHeadlessMode = $false
+try {
+    $rawArgs = @([Environment]::GetCommandLineArgs())
+    foreach ($a in $rawArgs) {
+        if (-not $a) { continue }
+        if ($a -match '^(?:--|-|/)headless$') { $script:DuneHeadlessMode = $true; break }
+    }
+} catch {}
+if ($script:DuneHeadlessMode) {
+    Write-DuneStartupLog 'Headless mode requested (--headless): no DuneShell window will be opened by this process'
+}
+
+# Build the arg-list we need to forward through any in-script self-elevation
+# (the "we need admin, relaunch ourselves with -Verb RunAs" branch) so that
+# the elevated child stays in headless mode. Used in two places below.
+$script:DuneRelaunchArgs = @()
+if ($script:DuneHeadlessMode) { $script:DuneRelaunchArgs += '--headless' }
+
 # ---------- Minimize own console window IMMEDIATELY ----------------------------
 # v6.1.7+: the EXE is built console-subsystem (NoConsole=$false in Build-Exe.ps1)
 # so that child kubectl/ssh/git processes inherit a console and Windows doesn't
@@ -196,6 +224,22 @@ try {
     $script:SingleInstanceOwned = $true
 }
 if (-not $script:SingleInstanceOwned) {
+    # Headless second-instance is always a no-op: another DuneServer is already
+    # running; we have no UI to surface (the user didn't click anything, the
+    # logon trigger just fired again somehow) and we MUST NOT trip the
+    # detached-restart branch below or we'd kill the running server during
+    # routine logon. Just exit.
+    if ($script:DuneHeadlessMode) {
+        Write-DuneStartupLog 'Headless second-instance: another DuneServer is already running, exiting cleanly'
+        try {
+            if ($script:SingleInstanceMutex) {
+                $script:SingleInstanceMutex.Dispose()
+                $script:SingleInstanceMutex = $null
+            }
+        } catch {}
+        exit 0
+    }
+
     # Another instance is already running. Two scenarios:
     #
     #   * App window still alive (normal case): just surface the existing
@@ -342,15 +386,25 @@ if (-not (Test-DuneIsAdmin)) {
     try { $exePath = [System.Diagnostics.Process]::GetCurrentProcess().MainModule.FileName } catch { }
     try {
         if ($exePath -and ($exePath -like '*.exe') -and ($exePath -notlike '*pwsh.exe') -and ($exePath -notlike '*powershell.exe')) {
-            # We're the compiled EXE - relaunch ourselves (no visible console)
-            Start-Process -FilePath $exePath -Verb RunAs | Out-Null
+            # We're the compiled EXE - relaunch ourselves (no visible console).
+            # Forward --headless so the scheduled-task launch path stays headless
+            # across the in-script self-elevation hop.
+            if ($script:DuneRelaunchArgs -and $script:DuneRelaunchArgs.Count -gt 0) {
+                Start-Process -FilePath $exePath -ArgumentList $script:DuneRelaunchArgs -Verb RunAs | Out-Null
+            } else {
+                Start-Process -FilePath $exePath -Verb RunAs | Out-Null
+            }
         } else {
             $selfPath = $PSCommandPath
             if (-not $selfPath) { $selfPath = $exePath }
             $launcher = (Get-Command pwsh.exe -ErrorAction SilentlyContinue).Source
             if (-not $launcher) { $launcher = 'powershell.exe' }
+            $argList = @('-NoProfile','-WindowStyle','Minimized','-ExecutionPolicy','Bypass','-File',"`"$selfPath`"")
+            if ($script:DuneRelaunchArgs -and $script:DuneRelaunchArgs.Count -gt 0) {
+                $argList += $script:DuneRelaunchArgs
+            }
             Start-Process -FilePath $launcher `
-                -ArgumentList @('-NoProfile','-WindowStyle','Minimized','-ExecutionPolicy','Bypass','-File',"`"$selfPath`"") `
+                -ArgumentList $argList `
                 -Verb RunAs | Out-Null
         }
     } catch {
@@ -530,12 +584,36 @@ $script:DuneShellExe = $null
 $script:DuneAppProc = $null
 $script:DuneConsoleMode = 'console'
 $script:DuneIconPath = $null
+
+# Process-lifetime flag: when true, closing the (manually-opened) DuneShell
+# does NOT stop the listener. Set unconditionally in headless mode; the
+# autostart toggle's "next launch" semantic means we don't flip this mid-run.
+$script:DuneKeepAliveAfterShellClose = [bool]$script:DuneHeadlessMode
+
 $openInAppWindow = $false
 try { $openInAppWindow = Get-DstOpenInAppWindow } catch { $openInAppWindow = $true }
-if ($openInAppWindow) { $script:DuneShellExe = Get-DuneShellExePath }
+
+# Headless mode: no DuneShell launch, no browser fallback, no app-window watcher.
+# We still want a tray icon (the operator's only handle on the running server),
+# so resolve the icon and force tray presentation regardless of the saved
+# ConsolePresence choice — a minimized-console-without-tray would be a UX dead
+# end since there's no app window to keep the user oriented.
+if ($script:DuneHeadlessMode) {
+    try { $script:DuneIconPath = Find-DuneSubpath 'assets\icon.ico' } catch {}
+    if (-not $script:DuneIconPath) {
+        try {
+            $selfExeIco = [System.Diagnostics.Process]::GetCurrentProcess().MainModule.FileName
+            if ($selfExeIco -and ($selfExeIco -like '*.exe')) { $script:DuneIconPath = $selfExeIco }
+        } catch {}
+    }
+    $script:DuneConsoleMode = 'tray'
+    Write-DuneLog "Headless mode: skipping DuneShell launch, forcing tray presentation (operator can re-open the UI from the tray or by clicking the shortcut)"
+} else {
+    if ($openInAppWindow) { $script:DuneShellExe = Get-DuneShellExePath }
+}
 
 $browserJob = $null
-if ($openInAppWindow -and $script:DuneShellExe) {
+if ((-not $script:DuneHeadlessMode) -and $openInAppWindow -and $script:DuneShellExe) {
     # Close any stale app window from a previous run (e.g. left over by an
     # in-app update, where the relauncher restarts DuneServer.exe but the old
     # WebView2 window keeps pointing at the now-dead server). Killing it here
@@ -576,7 +654,7 @@ if ($openInAppWindow -and $script:DuneShellExe) {
     }
 }
 
-if (-not ($openInAppWindow -and $script:DuneShellExe)) {
+if ((-not $script:DuneHeadlessMode) -and -not ($openInAppWindow -and $script:DuneShellExe)) {
     $browserJob = Start-Job -ArgumentList $urlFilePath -ScriptBlock {
         param($urlFile)
         for ($i = 0; $i -lt 50; $i++) {

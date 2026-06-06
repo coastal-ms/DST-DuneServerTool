@@ -247,12 +247,20 @@ function Start-DuneTrayIcon {
 }
 
 # Arm the app-window watcher + apply the chosen console presentation. Called
-# from Start-DuneHttpServer once the listener is bound. No-op unless an app
-# window was launched (browser-fallback launches have nothing to watch).
+# from Start-DuneHttpServer once the listener is bound.
+#
+# Three call shapes today:
+#   * App-window launch ($DuneAppProc set): arm the watcher so closing the
+#     window stops the listener. Apply ConsolePresence (minimize-or-tray) to
+#     the wrapping console.
+#   * Headless autostart ($DuneHeadlessMode + $DuneKeepAliveAfterShellClose):
+#     no app window, never any watcher, but ALWAYS bring up the tray icon —
+#     it's the operator's only handle on the running server.
+#   * Browser-fallback launch (no app window, no headless): nothing to watch;
+#     fall through to console presentation only.
 function Start-DuneConsoleLifecycle {
     param([Parameter(Mandatory)]$Listener)
 
-    if (-not $script:DuneAppProc) { return }
     $mode = if ($script:DuneConsoleMode) { $script:DuneConsoleMode } else { 'console' }
     Clear-DuneAppDetached
 
@@ -262,73 +270,88 @@ function Start-DuneConsoleLifecycle {
     try { Start-DuneAdminLogMirror } catch {}
 
     # 1. Real-time linkage: app window closes -> stop listener -> server exits.
-    try {
-        $rs = [runspacefactory]::CreateRunspace()
-        $rs.Open()
-        $rs.SessionStateProxy.SetVariable('AppProc',  $script:DuneAppProc)
-        $rs.SessionStateProxy.SetVariable('Listener', $Listener)
-        $rs.SessionStateProxy.SetVariable('DetachStateFile', (Get-DuneDetachStateFile))
-        $ps = [PowerShell]::Create()
-        $ps.Runspace = $rs
-        [void]$ps.AddScript({
-            # Follow the chain of app windows rather than nuking the server the
-            # instant the FIRST watched window exits. DuneShell is single-instance
-            # (Global mutex): right after an update/relaunch the server launches a
-            # fresh DuneShell that may exit immediately because an older window
-            # still owns the mutex. Stopping the listener on that instantaneous
-            # exit kills a brand-new server out from under the surviving window
-            # ("Connecting... attempt N" forever). So: when the watched window
-            # exits, only stop the server if NO DuneShell survives a short grace
-            # window; if one does, re-arm on it and keep serving.
-            #
-            # ALSO: the "Web Portal" sidebar button sets a detach flag via
-            # /api/portal/open-in-browser before asking the shell to close. In
-            # that case we exit WITHOUT stopping the listener so the server
-            # stays up for the user's browser tab. The flag is written to a
-            # file because this watcher runs in a separate runspace and can't
-            # see $script:DuneAppDetached directly.
-            $proc = $AppProc
-            while ($true) {
-                try { $proc.WaitForExit() } catch {}
-
-                # Intentional detach takes priority over the survivor chain —
-                # no need to wait 6s if the user explicitly asked to detach.
-                $detached = $false
-                try {
-                    if ($DetachStateFile -and (Test-Path -LiteralPath $DetachStateFile)) {
-                        $detached = $true
-                    }
-                } catch { $detached = $false }
-                if ($detached) { return }
-
-                $survivor = $null
-                $deadline = (Get-Date).AddSeconds(6)
-                while ((Get-Date) -lt $deadline) {
-                    try {
-                        $alive = @(Get-Process -Name 'DuneShell' -ErrorAction SilentlyContinue |
-                                   Sort-Object StartTime -Descending)
-                    } catch { $alive = @() }
-                    if ($alive.Count -gt 0) { $survivor = $alive[0]; break }
-                    Start-Sleep -Milliseconds 400
-                }
-                if ($survivor) { $proc = $survivor; continue }
-                break
-            }
-            try { $Listener.Stop() } catch {}
-        })
-        $script:DuneWatcherPs     = $ps
-        $script:DuneWatcherRs     = $rs
-        $script:DuneWatcherHandle = $ps.BeginInvoke()
+    #    SKIPPED when:
+    #      * no app window was launched (headless or browser-fallback), OR
+    #      * the process is in keep-alive mode (autostart / --headless) — the
+    #        user expects the server to outlive any manually-opened DuneShell.
+    $armWatcher = $script:DuneAppProc -and -not $script:DuneKeepAliveAfterShellClose
+    if (-not $armWatcher -and $script:DuneAppProc) {
         if (Get-Command Write-DuneLog -ErrorAction SilentlyContinue) {
-            Write-DuneLog "App-window watcher armed (PID $($script:DuneAppProc.Id)); closing the app window stops the server (unless the Web Portal button detaches it)"
+            Write-DuneLog "Keep-alive mode active — app-window watcher disarmed (closing the DuneShell window will NOT stop the server; use the tray's 'Quit (stop server)' to stop)"
         }
-    } catch {
-        if (Get-Command Write-DuneLog -ErrorAction SilentlyContinue) {
-            Write-DuneLog "Failed to arm app-window watcher: $($_.Exception.Message)" 'WARN'
+    }
+    if ($armWatcher) {
+        try {
+            $rs = [runspacefactory]::CreateRunspace()
+            $rs.Open()
+            $rs.SessionStateProxy.SetVariable('AppProc',  $script:DuneAppProc)
+            $rs.SessionStateProxy.SetVariable('Listener', $Listener)
+            $rs.SessionStateProxy.SetVariable('DetachStateFile', (Get-DuneDetachStateFile))
+            $ps = [PowerShell]::Create()
+            $ps.Runspace = $rs
+            [void]$ps.AddScript({
+                # Follow the chain of app windows rather than nuking the server the
+                # instant the FIRST watched window exits. DuneShell is single-instance
+                # (Global mutex): right after an update/relaunch the server launches a
+                # fresh DuneShell that may exit immediately because an older window
+                # still owns the mutex. Stopping the listener on that instantaneous
+                # exit kills a brand-new server out from under the surviving window
+                # ("Connecting... attempt N" forever). So: when the watched window
+                # exits, only stop the server if NO DuneShell survives a short grace
+                # window; if one does, re-arm on it and keep serving.
+                #
+                # ALSO: the "Web Portal" sidebar button sets a detach flag via
+                # /api/portal/open-in-browser before asking the shell to close. In
+                # that case we exit WITHOUT stopping the listener so the server
+                # stays up for the user's browser tab. The flag is written to a
+                # file because this watcher runs in a separate runspace and can't
+                # see $script:DuneAppDetached directly.
+                $proc = $AppProc
+                while ($true) {
+                    try { $proc.WaitForExit() } catch {}
+
+                    # Intentional detach takes priority over the survivor chain —
+                    # no need to wait 6s if the user explicitly asked to detach.
+                    $detached = $false
+                    try {
+                        if ($DetachStateFile -and (Test-Path -LiteralPath $DetachStateFile)) {
+                            $detached = $true
+                        }
+                    } catch { $detached = $false }
+                    if ($detached) { return }
+
+                    $survivor = $null
+                    $deadline = (Get-Date).AddSeconds(6)
+                    while ((Get-Date) -lt $deadline) {
+                        try {
+                            $alive = @(Get-Process -Name 'DuneShell' -ErrorAction SilentlyContinue |
+                                       Sort-Object StartTime -Descending)
+                        } catch { $alive = @() }
+                        if ($alive.Count -gt 0) { $survivor = $alive[0]; break }
+                        Start-Sleep -Milliseconds 400
+                    }
+                    if ($survivor) { $proc = $survivor; continue }
+                    break
+                }
+                try { $Listener.Stop() } catch {}
+            })
+            $script:DuneWatcherPs     = $ps
+            $script:DuneWatcherRs     = $rs
+            $script:DuneWatcherHandle = $ps.BeginInvoke()
+            if (Get-Command Write-DuneLog -ErrorAction SilentlyContinue) {
+                Write-DuneLog "App-window watcher armed (PID $($script:DuneAppProc.Id)); closing the app window stops the server (unless the Web Portal button detaches it)"
+            }
+        } catch {
+            if (Get-Command Write-DuneLog -ErrorAction SilentlyContinue) {
+                Write-DuneLog "Failed to arm app-window watcher: $($_.Exception.Message)" 'WARN'
+            }
         }
     }
 
     # 2. Console presentation (compiled exe only; dev pwsh has no own console).
+    #    In tray mode we ALWAYS bring up the NotifyIcon, even when there's no
+    #    app window (headless launch) — without it the user has no surface to
+    #    interact with the running server.
     if (-not $script:DuneIsCompiledExe) { return }
     try {
         $native = Get-DuneConsoleNativeType
