@@ -13,7 +13,7 @@ param(
 # Wraps the original battlegroup.ps1 menu and adds extra tools
 # ============================================================
 
-$script:ToolVersion = "11.2.0"
+$script:ToolVersion = "11.3.0"
 
 # Cold-boot readiness budgets (seconds). A fresh battlegroup's FIRST boot can
 # take 10-30 min: k3s + funcom-operators initialize, metrics-server restarts a
@@ -2255,11 +2255,27 @@ while ($true) {
             # own free 127.0.0.1 loopback port BEFORE launch so it binds IPv4
             # cleanly and the UI opens on a normal name (no [::1]).
             try { Set-DuneAdminOwnLoopbackPort | Out-Null } catch { Write-Warning "Port pre-flight failed: $($_.Exception.Message)" }
-            # Launch as the logged-in user via scheduled task (avoids admin elevation)
+            # Launch as the logged-in user via scheduled task (avoids admin elevation).
+            # Wrap in cmd.exe with stdout/stderr redirected to %LOCALAPPDATA%\DuneServer\logs\dune-admin.log
+            # AND mark the task settings -Hidden so dune-admin's own console
+            # window never appears. The DuneServer process tails that log and
+            # mirrors each line into THIS console with an [admin] prefix, giving
+            # the operator one combined console window instead of two. See
+            # Start-DuneAdminLogMirror in app/server/lib/ConsoleHost.ps1.
             try {
-                $action = New-ScheduledTaskAction -Execute $duneAdminExe -WorkingDirectory $duneAdminDir
+                $duneAdminLogDir  = Join-Path $env:LOCALAPPDATA 'DuneServer\logs'
+                $duneAdminLogPath = Join-Path $duneAdminLogDir 'dune-admin.log'
+                if (-not (Test-Path -LiteralPath $duneAdminLogDir)) {
+                    New-Item -ItemType Directory -Path $duneAdminLogDir -Force | Out-Null
+                }
+                # cmd.exe argument string: /c "<exe>" 1>>"<log>" 2>&1
+                # The whole /c value is wrapped in outer quotes so cmd treats
+                # the redirected paths as one logical command.
+                $cmdArgs = '/c "' + '"' + $duneAdminExe + '"' + ' 1>>' + '"' + $duneAdminLogPath + '"' + ' 2>&1' + '"'
+                $action    = New-ScheduledTaskAction -Execute 'cmd.exe' -Argument $cmdArgs -WorkingDirectory $duneAdminDir
+                $settings  = New-ScheduledTaskSettingsSet -Hidden -AllowStartIfOnBatteries -DontStopIfGoingOnBatteries
                 $principal = New-ScheduledTaskPrincipal -UserId $windowsUser -LogonType Interactive -RunLevel Limited
-                Register-ScheduledTask -TaskName "DuneAdminLaunch" -Action $action -Principal $principal -Force | Out-Null
+                Register-ScheduledTask -TaskName "DuneAdminLaunch" -Action $action -Principal $principal -Settings $settings -Force | Out-Null
                 Start-ScheduledTask -TaskName "DuneAdminLaunch"
                 Start-Sleep -Seconds 1
                 Unregister-ScheduledTask -TaskName "DuneAdminLaunch" -Confirm:$false

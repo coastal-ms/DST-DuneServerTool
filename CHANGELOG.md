@@ -13,6 +13,22 @@ here cover everything those tags shipped.
 
 ## [Unreleased]
 
+## [11.3.0] - 2026-06-05
+
+### Changed
+- **Combined console window — backend + dune-admin streams in one place.**
+  Previously DST and dune-admin each opened their own Windows console
+  window, so the desktop had two consoles to track. dune-admin now
+  launches with its console hidden (scheduled task wrapped in `cmd.exe`
+  with stdout/stderr redirected to
+  `%LOCALAPPDATA%\DuneServer\logs\dune-admin.log`) and the DuneServer
+  process tails that log in a background runspace, mirroring every line
+  into its own console with an `[admin]` prefix. Net result: one console
+  window showing backend output and dune-admin output interleaved, with
+  the dune-admin lines clearly labelled. The dune-admin web UI (and the
+  Dune Admin embed tab inside DST) is unaffected — only the on-host
+  console window changes.
+
 ## [11.2.0] - 2026-06-05
 
 ### Added
