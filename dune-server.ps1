@@ -2323,23 +2323,50 @@ while ($true) {
             try { Set-DuneAdminBindAllInterfaces | Out-Null } catch { Write-Warning "Bind-all pre-flight failed: $($_.Exception.Message)" }
             try { Add-DuneAdminFirewallRule } catch { Write-Warning "Firewall pre-flight failed: $($_.Exception.Message)" }
             # Launch as the logged-in user via scheduled task (avoids admin elevation).
-            # Wrap in cmd.exe with stdout/stderr redirected to %LOCALAPPDATA%\DuneServer\logs\dune-admin.log
-            # AND mark the task settings -Hidden so dune-admin's own console
-            # window never appears. The DuneServer process tails that log and
-            # mirrors each line into THIS console with an [admin] prefix, giving
-            # the operator one combined console window instead of two. See
-            # Start-DuneAdminLogMirror in app/server/lib/ConsoleHost.ps1.
+            # Hiding the spawned console window is harder than it sounds:
+            #   * `-Hidden` on New-ScheduledTaskSettingsSet only hides the TASK
+            #     in Task Scheduler's UI — the spawned cmd.exe still shows a
+            #     console window.
+            #   * `-WindowStyle Hidden` on powershell.exe does work but flashes
+            #     a visible console for ~50ms while PS itself starts up.
+            # The reliable zero-flash trick on Windows 10/11 is to invoke the
+            # process via WScript.Shell.Run with intWindowStyle=0 (SW_HIDE).
+            # wscript.exe is a Windows-subsystem host (no console of its own)
+            # and CreateProcess inherits SW_HIDE through to cmd's spawn of
+            # dune-admin. We drop a tiny .vbs to %LOCALAPPDATA%\DuneServer\,
+            # then schedule wscript.exe <vbs> <exe> <log>. cmd's redirection
+            # captures both streams into the log file the DuneServer mirror
+            # runspace tails into THIS console with an [admin] prefix.
             try {
                 $duneAdminLogDir  = Join-Path $env:LOCALAPPDATA 'DuneServer\logs'
                 $duneAdminLogPath = Join-Path $duneAdminLogDir 'dune-admin.log'
+                $duneAdminVbsPath = Join-Path (Join-Path $env:LOCALAPPDATA 'DuneServer') 'launch-dune-admin.vbs'
                 if (-not (Test-Path -LiteralPath $duneAdminLogDir)) {
                     New-Item -ItemType Directory -Path $duneAdminLogDir -Force | Out-Null
                 }
-                # cmd.exe argument string: /c "<exe>" 1>>"<log>" 2>&1
-                # The whole /c value is wrapped in outer quotes so cmd treats
-                # the redirected paths as one logical command.
-                $cmdArgs = '/c "' + '"' + $duneAdminExe + '"' + ' 1>>' + '"' + $duneAdminLogPath + '"' + ' 2>&1' + '"'
-                $action    = New-ScheduledTaskAction -Execute 'cmd.exe' -Argument $cmdArgs -WorkingDirectory $duneAdminDir
+                $vbsDir = Split-Path -Parent $duneAdminVbsPath
+                if (-not (Test-Path -LiteralPath $vbsDir)) {
+                    New-Item -ItemType Directory -Path $vbsDir -Force | Out-Null
+                }
+                # VBS contents — q is the literal ASCII double-quote, used to
+                # build a cmd.exe command line with the magic-quote pattern:
+                #   cmd /c ""<exe>" 1>>"<log>" 2>&1"
+                # The outer "" pair is consumed by cmd /c's tokenizer per its
+                # documented quoting rules. Style 0 = SW_HIDE (no window).
+                # True (3rd arg) = wait for completion so cmd's redirection
+                # file handles stay alive for dune-admin's whole lifetime.
+                $vbsContent = @'
+Dim args, q, cmd
+Set args = WScript.Arguments
+If args.Count < 2 Then WScript.Quit 1
+q = Chr(34)
+cmd = "cmd.exe /c " & q & q & args(0) & q & " 1>>" & q & args(1) & q & " 2>&1" & q
+CreateObject("WScript.Shell").Run cmd, 0, True
+'@
+                [System.IO.File]::WriteAllText($duneAdminVbsPath, $vbsContent, [System.Text.UTF8Encoding]::new($false))
+
+                $wscriptArgs = '"' + $duneAdminVbsPath + '" "' + $duneAdminExe + '" "' + $duneAdminLogPath + '"'
+                $action    = New-ScheduledTaskAction -Execute 'wscript.exe' -Argument $wscriptArgs -WorkingDirectory $duneAdminDir
                 $settings  = New-ScheduledTaskSettingsSet -Hidden -AllowStartIfOnBatteries -DontStopIfGoingOnBatteries
                 $principal = New-ScheduledTaskPrincipal -UserId $windowsUser -LogonType Interactive -RunLevel Limited
                 Register-ScheduledTask -TaskName "DuneAdminLaunch" -Action $action -Principal $principal -Settings $settings -Force | Out-Null

@@ -27,6 +27,17 @@ here cover everything those tags shipped.
   (Private + Domain profiles — Tailscale's tun adapter is Private)
   whenever it launches dune-admin. Both ops are idempotent and run
   every launch. dune-admin's own auth still gates the surface.
+- **dune-admin console window is now actually hidden.** v11.3.0 shipped
+  the cmd.exe + `-Hidden` settings approach for hiding dune-admin's
+  console window, but `-Hidden` on `New-ScheduledTaskSettingsSet` only
+  hides the task in Task Scheduler's UI — the spawned cmd.exe console
+  still appeared on screen (just empty, because stdout/stderr were
+  redirected to the log file). dune-admin is now launched via a tiny
+  `launch-dune-admin.vbs` invoking `WScript.Shell.Run` with
+  `intWindowStyle=0` (SW_HIDE) — a Windows-subsystem host with no
+  window of its own, which then spawns cmd hidden with the same
+  redirection. Result: one console window for the whole stack
+  (DuneServer's), with `[admin]`-prefixed dune-admin lines mirrored in.
 
 ## [11.3.0] - 2026-06-05
 
