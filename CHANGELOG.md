@@ -13,7 +13,34 @@ here cover everything those tags shipped.
 
 ## [Unreleased]
 
+## [11.2.0] - 2026-06-05
+
 ### Added
+- **dune-admin embedded inside DST.** When DST detects a configured
+  dune-admin install (its `config.yaml` is parseable), a new **Dune
+  Admin** menu item appears immediately to the right of Help — with a
+  small green/grey dot indicating whether dune-admin is currently
+  listening. Clicking it routes to `/dune-admin`, which renders
+  dune-admin's full web UI in a flush iframe under a slim DST header
+  (Reload + "Open in browser" actions). When dune-admin isn't yet
+  listening, the page offers a one-click **Start** button that runs
+  the existing `dune-admin` command; the page then polls fast (1.5s)
+  until the UI is up, then drops back to a 15s heartbeat. The
+  Dashboard's "Start the Dune Admin Tool" button and the Settings page's
+  post-install launcher now route to this embed page instead of
+  spawning the dune-admin process into its own browser tab, so the user
+  experience is "click → see dune-admin inside DST" with no external
+  windows.
+
+- **Friend access to dune-admin via the bridge.** The embed page is
+  bridge-aware: when DST is being viewed through the Tailscale friend
+  bridge (i.e. `window.location.hostname` is the host's tailnet name
+  rather than 127.0.0.1), the iframe `src` is rewritten to
+  `http://<host-tailnet>:<dune-admin-port>` so the friend's WebView2
+  hits the host's dune-admin instance directly, reusing the existing
+  Tailscale ACL as the trust boundary. dune-admin's default listener
+  binds all interfaces, so no bridge proxy logic is needed.
+
 - **Friend helper — WebSocket proxy.** The bridge now transparently
   proxies WebSocket upgrades (`/ws/terminal` and friends) in addition
   to plain HTTP, so the friend gets a working Terminal page in
@@ -39,6 +66,29 @@ here cover everything those tags shipped.
   defense-in-depth. Explicit "no changes to released DST surface
   area" guarantee — `app/`, `webui/`, `site/`, and `dune-server.ps1`
   are untouched.
+
+### Changed
+- **Closing the DST window now stops the whole stack.** Previously,
+  closing the portal window left the elevated PowerShell backend
+  (`DuneServer.exe`) and any spawned `dune-admin` terminal silently
+  running in the background, which surprised users — especially now
+  that dune-admin renders inside the portal. The shell's `FormClosing`
+  handler now (1) fires a graceful `POST /api/shutdown` to the backend
+  using the same loopback URL+token the WebView is on (750ms hard
+  timeout so window close isn't perceptibly delayed), (2) terminates
+  any `dune-admin*` processes, and (3) sweeps up any remaining
+  `DuneServer.exe` as a safety net. Skipped when the shell is launched
+  standalone (`--no-wait-file`), where no paired backend is assumed.
+
+### Security
+- **CI PII guard** (`.github/workflows/pii-guard.yml`). After the
+  2026-06-05 incident in which a personal name was committed to
+  documentation and required a full filter-repo history rewrite, every
+  push and pull request is now scanned by GitHub Actions for a small
+  list of banned personal identifiers. The pattern is built at runtime
+  from per-character concatenation so the workflow file itself
+  doesn't trip the scan. Scan covers tracked files only (`.git/` and
+  `node_modules/` excluded). Required check on PRs.
 
 ## [11.1.0] - 2026-06-05
 
