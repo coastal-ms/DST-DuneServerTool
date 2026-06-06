@@ -13,6 +13,21 @@ here cover everything those tags shipped.
 
 ## [Unreleased]
 
+## [11.3.1] - 2026-06-05
+
+### Fixed
+- **dune-admin reachable through the friend remote-portal bridge.**
+  v11.2.0 added the friend helper (DSTConsole.exe) and the Dune Admin
+  embed tab, but dune-admin was still bound to `127.0.0.1` only — so
+  when the friend loaded the embed tab through Tailscale, the iframe
+  pointed at the host's tailnet name on dune-admin's port and got a
+  "took too long to respond" error because nothing answered on that
+  interface. DST now rewrites dune-admin's `listen_addr` to
+  `0.0.0.0:<port>` and opens a matching Windows Firewall inbound rule
+  (Private + Domain profiles — Tailscale's tun adapter is Private)
+  whenever it launches dune-admin. Both ops are idempotent and run
+  every launch. dune-admin's own auth still gates the surface.
+
 ## [11.3.0] - 2026-06-05
 
 ### Changed

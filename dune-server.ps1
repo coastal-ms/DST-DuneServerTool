@@ -13,7 +13,7 @@ param(
 # Wraps the original battlegroup.ps1 menu and adds extra tools
 # ============================================================
 
-$script:ToolVersion = "11.3.0"
+$script:ToolVersion = "11.3.1"
 
 # Cold-boot readiness budgets (seconds). A fresh battlegroup's FIRST boot can
 # take 10-30 min: k3s + funcom-operators initialize, metrics-server restarts a
@@ -581,11 +581,13 @@ function Set-DuneAdminOwnLoopbackPort {
         return $port
     }
 
-    # Rewrite (or add) listen_addr, pinning to 127.0.0.1 so dune-admin binds IPv4
-    # loopback ONLY — it owns this port outright (no AMP contention) and the web
-    # UI opens on a normal 'localhost' name instead of [::1].
+    # Rewrite (or add) listen_addr. Bind 0.0.0.0 so the remote-portal helper
+    # bridge (helper/) can route the friend's WebView2 to dune-admin over
+    # Tailscale. If the configured port WAS contested (e.g. AMP), we've already
+    # relocated to a free port above — binding 0.0.0.0 on that new port is safe
+    # because nothing else holds it. dune-admin still has its own auth gate.
     try {
-        $newAddr = "127.0.0.1:$freePort"
+        $newAddr = "0.0.0.0:$freePort"
         $lines = @(Get-Content -LiteralPath $cfgPath)
         $found = $false
         $lines = $lines | ForEach-Object {
@@ -594,11 +596,70 @@ function Set-DuneAdminOwnLoopbackPort {
         if (-not $found) { $lines += "listen_addr: $newAddr" }
         $utf8 = New-Object System.Text.UTF8Encoding($false)
         [System.IO.File]::WriteAllText($cfgPath, ($lines -join "`n") + "`n", $utf8)
-        Write-Host "Port $port is held by another process (likely AMP) — moved dune-admin to 127.0.0.1:$freePort." -ForegroundColor Cyan
+        Write-Host "Port $port is held by another process (likely AMP) — moved dune-admin to 0.0.0.0:$freePort." -ForegroundColor Cyan
         return $freePort
     } catch {
         Write-Warning "Could not update dune-admin listen_addr: $($_.Exception.Message)"
         return $port
+    }
+}
+
+# Force dune-admin's listen_addr to bind ALL interfaces (0.0.0.0) on its current
+# port. Needed for the friend remote-portal helper to reach dune-admin through
+# DST's bridge — a 127.0.0.1 bind only answers the host's loopback, so even
+# though DST's listener routes through Tailscale, the iframe inside DST web UI
+# pointed at the host's tailnet name:port hits dune-admin which doesn't answer
+# on that interface. Idempotent (no rewrite if already 0.0.0.0:port). Returns
+# $true if any change was made, $false otherwise.
+function Set-DuneAdminBindAllInterfaces {
+    $cfgPath = Join-Path (Join-Path $env:USERPROFILE '.dune-admin') 'config.yaml'
+    if (-not (Test-Path -LiteralPath $cfgPath)) { return $false }
+    try {
+        $port = [int](Get-DuneAdminWebState).Port
+        if (-not $port -or $port -le 0) { return $false }
+        $newAddr = "0.0.0.0:$port"
+        $lines = @(Get-Content -LiteralPath $cfgPath)
+        $found = $false
+        $changed = $false
+        $lines = $lines | ForEach-Object {
+            if ($_ -match '^\s*listen_addr\s*:\s*(\S+)') {
+                $found = $true
+                $current = $matches[1].Trim()
+                if ($current -ne $newAddr) { $changed = $true; "listen_addr: $newAddr" } else { $_ }
+            } else { $_ }
+        }
+        if (-not $found) { $changed = $true; $lines += "listen_addr: $newAddr" }
+        if ($changed) {
+            $utf8 = New-Object System.Text.UTF8Encoding($false)
+            [System.IO.File]::WriteAllText($cfgPath, ($lines -join "`n") + "`n", $utf8)
+            Write-Host "dune-admin bind set to $newAddr (all interfaces, for remote-portal friend access)." -ForegroundColor Cyan
+        }
+        return $changed
+    } catch {
+        Write-Warning "Could not set dune-admin listen_addr to all interfaces: $($_.Exception.Message)"
+        return $false
+    }
+}
+
+# Open a Windows Firewall hole for dune-admin's port on the Private + Domain
+# profiles so the friend can reach it over Tailscale (Tailscale's tun adapter
+# is Private). Idempotent — won't add a duplicate rule on subsequent launches.
+function Add-DuneAdminFirewallRule {
+    try {
+        $port = [int](Get-DuneAdminWebState).Port
+        if (-not $port -or $port -le 0) { return }
+        $ruleName = "DST_DuneAdmin_Inbound_$port"
+        $existing = Get-NetFirewallRule -DisplayName $ruleName -ErrorAction SilentlyContinue
+        if ($existing) { return }
+        New-NetFirewallRule `
+            -DisplayName $ruleName `
+            -Description "Allow inbound TCP to dune-admin (managed by DST for remote-portal helper access)." `
+            -Direction Inbound -Action Allow -Protocol TCP `
+            -LocalPort $port -Profile Private,Domain `
+            -ErrorAction Stop | Out-Null
+        Write-Host "Firewall: opened inbound TCP $port for dune-admin (Private+Domain profiles)." -ForegroundColor DarkGray
+    } catch {
+        Write-Warning "Could not add dune-admin firewall rule: $($_.Exception.Message)"
     }
 }
 
@@ -2255,6 +2316,12 @@ while ($true) {
             # own free 127.0.0.1 loopback port BEFORE launch so it binds IPv4
             # cleanly and the UI opens on a normal name (no [::1]).
             try { Set-DuneAdminOwnLoopbackPort | Out-Null } catch { Write-Warning "Port pre-flight failed: $($_.Exception.Message)" }
+            # Ensure dune-admin binds all interfaces (0.0.0.0) on its port so the
+            # remote-portal helper bridge can route the friend's WebView2 to it
+            # over Tailscale. Also drop a Windows Firewall rule for the same port
+            # (Private+Domain — Tailscale's tun is Private). Both idempotent.
+            try { Set-DuneAdminBindAllInterfaces | Out-Null } catch { Write-Warning "Bind-all pre-flight failed: $($_.Exception.Message)" }
+            try { Add-DuneAdminFirewallRule } catch { Write-Warning "Firewall pre-flight failed: $($_.Exception.Message)" }
             # Launch as the logged-in user via scheduled task (avoids admin elevation).
             # Wrap in cmd.exe with stdout/stderr redirected to %LOCALAPPDATA%\DuneServer\logs\dune-admin.log
             # AND mark the task settings -Hidden so dune-admin's own console
