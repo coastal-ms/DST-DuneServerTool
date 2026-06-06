@@ -2312,10 +2312,19 @@ while ($true) {
             # 'localhost' (127.0.0.1-first) would open AMP's panel — use [::1].
             $urlHost = Get-DuneAdminUrlHost -Port $webState.Port -AdminProcName $adminProcName
             $openUrl = "http://${urlHost}:$($webState.Port)/#/players"
-            # Start-Process <url> uses the registered https:// protocol handler,
-            # honoring the user's default browser (avoids Win11 24H2's Edge bug).
-            Start-Process $openUrl
-            Write-Host "Done. dune-admin is listening on port $($webState.Port); web UI opened in browser ($openUrl)." -ForegroundColor Green
+            # The DST embed tab is the canonical dune-admin viewer now, so the
+            # API command runner sets DST_DUNE_ADMIN_NO_BROWSER=1 to stop us
+            # from popping a redundant second browser window over the iframe.
+            # CLI users running this command directly have the env var unset
+            # and still get the browser open.
+            if ($env:DST_DUNE_ADMIN_NO_BROWSER -eq '1') {
+                Write-Host "Done. dune-admin is listening on port $($webState.Port) ($openUrl). Browser skipped (DST embed tab is active)." -ForegroundColor Green
+            } else {
+                # Start-Process <url> uses the registered https:// protocol handler,
+                # honoring the user's default browser (avoids Win11 24H2's Edge bug).
+                Start-Process $openUrl
+                Write-Host "Done. dune-admin is listening on port $($webState.Port); web UI opened in browser ($openUrl)." -ForegroundColor Green
+            }
         } elseif ($conflictOwner) {
             Write-Host ""
             Write-Host "Port $($webState.Port) is in use by '$conflictOwner' (not dune-admin)." -ForegroundColor Yellow
