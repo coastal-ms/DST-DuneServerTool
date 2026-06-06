@@ -16,7 +16,7 @@
 ;                 -> NOT touched by install or uninstall (preserves user config)
 
 #define MyAppName        "Dune Server Tool"
-#define MyAppVersion "11.4.3"
+#define MyAppVersion "11.4.4"
 #define MyAppPublisher   "Dune Awakening Self-Hosted Tool"
 #define MyAppURL         "https://github.com/coastal-ms/DST-DuneServerTool"
 #define MyAppExeName     "DuneServer.exe"
@@ -43,7 +43,7 @@ OutputBaseFilename=DuneServerSetup
 SetupIconFile=..\assets\icon.ico
 UninstallDisplayIcon={app}\{#MyAppExeName}
 UninstallDisplayName={#MyAppName} {#MyAppVersion}
-Compression=lzma2/ultra
+Compression=lzma2/normal
 SolidCompression=yes
 WizardStyle=modern
 
@@ -134,7 +134,16 @@ Name: "{autodesktop}\{#MyAppName}"; Filename: "{app}\{#MyAppExeName}"; IconFilen
 ; and closes" symptom on machines with CurrentUser=RemoteSigned +
 ; LocalMachine=Restricted. Use PowerShell rather than Inno's Pascal API
 ; because Unblock-File handles every file kind correctly and is one line.
-Filename: "powershell.exe"; Parameters: "-NoProfile -ExecutionPolicy Bypass -Command ""Get-ChildItem -LiteralPath '{app}' -Recurse -File | Unblock-File"""; Flags: runhidden waituntilterminated
+;
+; v11.4.4: Skip the recursive Unblock-File pass on silent installs (the
+; in-app updater path). The previously-installed DST is by definition
+; trusted (it's already running elevated and just told us to update),
+; and the new files inherit the trust zone of the downloaded setup.exe
+; only if the user manually downloaded it -- which is the non-silent
+; path that DOES still run this. Saves ~1-2s on every in-app update,
+; on top of the 4s previously lost to hardcoded sleeps in the updater
+; relauncher (also cut in this release).
+Filename: "powershell.exe"; Parameters: "-NoProfile -ExecutionPolicy Bypass -Command ""Get-ChildItem -LiteralPath '{app}' -Recurse -File | Unblock-File"""; Flags: runhidden waituntilterminated; Check: not WizardSilent
 
 ; Launch immediately after install. Two entries so both interactive AND
 ; silent (auto-update) installs relaunch the app:

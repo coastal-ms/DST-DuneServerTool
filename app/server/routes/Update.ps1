@@ -250,11 +250,11 @@ try {
 public static extern bool AllowSetForegroundWindow(int dwProcessId);
 '@ -ErrorAction SilentlyContinue
 
-    # 3-second grace between user clicking Update and the silent install
-    # kicking off. Lets the HTTP response finish flushing and gives the
-    # user a moment to register the "Updater launched" toast in the portal
-    # before the app vanishes.
-    Start-Sleep -Seconds 3
+    # 1-second grace between user clicking Update and the silent install
+    # kicking off. Lets the HTTP response finish flushing so the "Updater
+    # launched" toast renders in the portal before the app closes.
+    # (v11.4.4: cut from 3s to 1s; v11.4.3 and earlier wasted ~2s here.)
+    Start-Sleep -Seconds 1
 
     Write-Host "[`$(Get-Date -Format o)] Stopping DuneServer.exe (PID $parentPid)"
     Stop-Process -Id $parentPid -Force -ErrorAction SilentlyContinue
@@ -267,11 +267,15 @@ public static extern bool AllowSetForegroundWindow(int dwProcessId);
     Get-Process -Name DuneShell -ErrorAction SilentlyContinue | ForEach-Object {
         Stop-Process -Id `$_.Id -Force -ErrorAction SilentlyContinue
     }
-    # 1s settle so WebView2 children and file handles in
+    # Brief settle so WebView2 children and file handles in
     # C:\Program Files\Dune Server are released before Inno tries to
     # overwrite them under /VERYSILENT (no in-use retry prompt in silent
     # mode -- file-in-use just fails the install).
-    Start-Sleep -Seconds 1
+    # (v11.4.4: cut from 1s to 250ms. Stop-Process -Force is synchronous
+    # on the kill signal; the remaining wait is for WebView2 helper
+    # processes to drop their MPK handles, which is sub-100ms in
+    # practice.)
+    Start-Sleep -Milliseconds 250
 
     # Grant foreground rights to whatever we launch next (ASFW_ANY = -1)
     # so the post-install DuneServer.exe -> DuneShell.exe chain can take

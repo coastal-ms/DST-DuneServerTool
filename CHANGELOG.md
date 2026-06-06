@@ -13,6 +13,38 @@ here cover everything those tags shipped.
 
 ## [Unreleased]
 
+## [11.4.4] - 2026-06-05
+
+### Changed
+- **In-app updater is now ~7-10s faster end-to-end** (typical update
+  drops from ~30s to ~20s). Three independent cuts in the same
+  release:
+  1. The updater relauncher's hardcoded `Start-Sleep -Seconds 3`
+     before kicking off the silent install was overkill -- 1s is
+     plenty for the `/api/update` HTTP response to flush and the
+     portal toast to render. The post-kill `Start-Sleep -Seconds 1`
+     "WebView2 file-handle settle" is now `Start-Sleep -Milliseconds
+     250` (`Stop-Process -Force` is synchronous on the kill signal;
+     the wait was for WebView2 helpers to drop MPK handles, which is
+     sub-100ms in practice). Saves ~3s.
+  2. Installer compression dropped from `lzma2/ultra` to
+     `lzma2/normal`. Decompression is ~2-3x faster; the resulting
+     `DuneServerSetup.exe` is ~5% larger (~47.5 MB -> ~50 MB).
+     Saves ~3-5s on every install.
+  3. The post-install recursive `Unblock-File` Mark-of-the-Web
+     stripper pass is skipped on silent installs (= the in-app
+     updater path). The previously-installed DST is by definition
+     trusted (it told us to update); the unblock pass still runs on
+     non-silent installs where the user manually downloaded the
+     setup.exe. Saves ~1-2s.
+- The DuneShell `.NET 10` single-file bundle still re-extracts
+  ~16 MB to `%TEMP%\.net\DuneShell\<hash>\` on first launch after
+  every update (~3-8s, depending on disk). That's the next-biggest
+  lever but would require switching to a multi-file publish
+  (`PublishSingleFile=false`), which adds ~30 MB and ~40 files to
+  the install footprint. Deferred unless update time is still felt
+  to be a problem after this release.
+
 ## [11.4.3] - 2026-06-05
 
 ### Fixed
