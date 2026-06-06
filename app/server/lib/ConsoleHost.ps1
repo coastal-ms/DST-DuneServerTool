@@ -1,4 +1,4 @@
-# ConsoleHost — links the DuneServer console + the DuneShell app window so they
+﻿# ConsoleHost — links the DuneServer console + the DuneShell app window so they
 # share a single lifecycle, and lets the user pick how the console presents
 # itself (minimized vs. system tray) while the app window is open.
 #

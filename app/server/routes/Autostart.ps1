@@ -1,4 +1,4 @@
-# Autostart routes — backs the Help → "Run at Windows startup" toggle.
+﻿# Autostart routes — backs the Help → "Run at Windows startup" toggle.
 #
 # Loopback-only: a remote viewer (Tailscale / LAN) with a valid token must NOT
 # be able to register a per-user scheduled task on the host machine. Both

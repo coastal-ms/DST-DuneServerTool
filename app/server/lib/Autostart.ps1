@@ -1,4 +1,4 @@
-# Autostart — "Run at Windows startup" for DuneServer.
+﻿# Autostart — "Run at Windows startup" for DuneServer.
 #
 # Backs the Help → "Run at Windows startup" toggle. When enabled we register a
 # per-user Task Scheduler job that launches DuneServer.exe with --headless at
