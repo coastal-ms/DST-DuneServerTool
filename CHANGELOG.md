@@ -68,6 +68,12 @@ here cover everything those tags shipped.
   are untouched.
 
 ### Changed
+- **Single-item menu groups render as direct links.** The Server
+  Health group has exactly one page, so showing a dropdown was pure
+  friction (click to open, click again to navigate). Any nav group
+  with a single item now renders the group label as a direct nav
+  button.
+
 - **Closing the DST window now stops the whole stack.** Previously,
   closing the portal window left the elevated PowerShell backend
   (`DuneServer.exe`) and any spawned `dune-admin` terminal silently
@@ -89,6 +95,16 @@ here cover everything those tags shipped.
   from per-character concatenation so the workflow file itself
   doesn't trip the scan. Scan covers tracked files only (`.git/` and
   `node_modules/` excluded). Required check on PRs.
+
+### Fixed
+- **Suppress redundant dune-admin browser pop when launched from the
+  embed.** Clicking Start in the new Dune Admin tab launched the
+  `dune-admin` command, which historically `Start-Process`'d the URL
+  in the user's default browser as well — popping a second window on
+  top of the iframe. The API command runner now sets
+  `DST_DUNE_ADMIN_NO_BROWSER=1` on the spawned admin pwsh and
+  `dune-server.ps1` honors it, skipping the browser open. Users
+  running the `dune-admin` CLI command directly are unaffected.
 
 ## [11.1.0] - 2026-06-05
 
