@@ -13,6 +13,24 @@ here cover everything those tags shipped.
 
 ## [Unreleased]
 
+## [11.4.0] - 2026-06-05
+
+### Added
+- **Run at Windows startup toggle (Help menu).** New opt-in toggle in
+  the Help dropdown of the top toolbar. When enabled, DuneServer launches
+  automatically at every Windows sign-in via a per-user Task Scheduler
+  "at logon" job — in the system tray with no app window — and closing
+  the DuneShell window no longer stops the server. The headless mode
+  forces tray-presence regardless of saved `ConsolePresence` so users
+  always have a way to reach the portal or quit. Toggle takes effect at
+  the next launch; mid-session flips don't change current-session close
+  behavior (intentional, avoids the "I closed the app expecting it to
+  quit, it didn't" surprise). The toggle is loopback-only — remote
+  viewers (Tailscale / LAN / SSH-tunneled co-admin) cannot enable
+  autostart on the host, and the menu entry is hidden for them. The
+  uninstaller removes all `DuneServer-Autostart-*` scheduled tasks
+  automatically. Off by default; opt-in only.
+
 ## [11.3.3] - 2026-06-05
 
 ### Security
