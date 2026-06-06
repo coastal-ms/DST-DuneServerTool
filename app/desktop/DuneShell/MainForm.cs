@@ -1,5 +1,7 @@
 using System.Diagnostics;
 using System.Drawing;
+using System.Net.Http;
+using System.Text;
 using System.Windows.Forms;
 using Microsoft.Web.WebView2.Core;
 using Microsoft.Web.WebView2.WinForms;
@@ -34,7 +36,11 @@ internal sealed class MainForm : Form
         BackColor = Color.FromArgb(17, 19, 24);
         TryLoadIcon();
 
-        FormClosing += (_, _) => SaveWindowState();
+        FormClosing += (_, _) =>
+        {
+            SaveWindowState();
+            StopCompanionProcesses();
+        };
 
         // The React portal owns its own top menu bar, so the native window has
         // just the WebView and a transient status label — no MenuStrip.
@@ -410,5 +416,113 @@ internal sealed class MainForm : Form
         {
             // best-effort; ignore
         }
+    }
+
+    /// <summary>
+    /// When the portal window closes, also stop the helper processes the user
+    /// thinks of as "DST": the elevated PowerShell backend (DuneServer.exe)
+    /// and the bundled dune-admin terminal window. Closing the visible window
+    /// used to leave both running silently in the background, which surprised
+    /// users — especially now that dune-admin can render inside this window
+    /// via the in-app embed, removing the last reason to keep its console
+    /// window alive separately.
+    ///
+    /// Order matters:
+    ///   1. Ask the backend to shut down gracefully via POST /api/shutdown.
+    ///      That endpoint flushes the response, stops the HttpListener, and
+    ///      lets the script exit cleanly, releasing its mutex and the
+    ///      battlegroup VM is left in a known state.
+    ///   2. Kill any dune-admin.exe processes. dune-admin has no graceful
+    ///      stop hook, but it's a stateless watcher — terminating it just
+    ///      closes the terminal window.
+    ///   3. Schedule a short fallback that force-kills DuneServer.exe a few
+    ///      seconds later in case the HTTP shutdown didn't take (backend
+    ///      hung, port already moved, etc.). The fallback runs on a thread
+    ///      pool task so we don't block the UI close.
+    ///
+    /// Skipped when the shell was launched standalone (`--no-wait-file`):
+    /// in that mode the shell wasn't started by the backend launcher and we
+    /// must not assume there's a paired DuneServer process to stop.
+    /// </summary>
+    private void StopCompanionProcesses()
+    {
+        if (!_useWaitFile) return;
+
+        // 1) Graceful backend shutdown via the same loopback URL + token the
+        //    WebView is using. Send synchronously with a tight timeout so we
+        //    don't drag out window close past ~750ms in the worst case.
+        try
+        {
+            string? url = _targetUrl;
+            if (string.IsNullOrWhiteSpace(url))
+            {
+                try
+                {
+                    string file = Path.Combine(
+                        Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
+                        "DuneServer", "last-url.txt");
+                    if (File.Exists(file)) url = File.ReadAllText(file).Trim();
+                }
+                catch { /* fall through to direct kill */ }
+            }
+
+            if (!string.IsNullOrWhiteSpace(url) &&
+                Uri.TryCreate(url, UriKind.Absolute, out var u))
+            {
+                using var http = new HttpClient { Timeout = TimeSpan.FromMilliseconds(750) };
+                var shutdownUri = new Uri(u, "/api/shutdown" + u.Query);
+                var content = new StringContent("{}", Encoding.UTF8, "application/json");
+                try { _ = http.PostAsync(shutdownUri, content).GetAwaiter().GetResult(); }
+                catch { /* expected when listener tears down before responding */ }
+            }
+        }
+        catch { /* best-effort */ }
+
+        // 2) Always terminate dune-admin terminal windows — they have no
+        //    graceful stop and are safe to nuke. Two binary names are possible
+        //    depending on the dune-admin build (Go binary or wrapper).
+        foreach (var name in new[] { "dune-admin", "dune-admin-windows-amd64" })
+        {
+            try
+            {
+                foreach (var p in Process.GetProcessesByName(name))
+                {
+                    try
+                    {
+                        if (!p.HasExited) p.Kill(entireProcessTree: true);
+                    }
+                    catch { /* access denied / already gone */ }
+                }
+            }
+            catch { /* defensive */ }
+        }
+
+        // 3) Sweep up any remaining DuneServer.exe. If /api/shutdown succeeded
+        //    above the process is already gone (or has HasExited=true) and
+        //    this is a no-op; if the listener was hung or the token expired,
+        //    this is the safety net that guarantees the user's intent ("close
+        //    the window, stop the service") actually happens. The name
+        //    "DuneServer" is unique to DST so killing by name is safe.
+        //
+        //    This MUST run synchronously inside FormClosing — scheduling it
+        //    on a background Task would not work because our own process
+        //    exits within milliseconds of this method returning, killing the
+        //    scheduled task before its delay elapses. We skip the current
+        //    process defensively in case a future build ever renames our own
+        //    exe to something that overlaps.
+        try
+        {
+            int me = Environment.ProcessId;
+            foreach (var p in Process.GetProcessesByName("DuneServer"))
+            {
+                try
+                {
+                    if (p.Id == me) continue;
+                    if (!p.HasExited) p.Kill(entireProcessTree: true);
+                }
+                catch { /* best-effort */ }
+            }
+        }
+        catch { /* defensive */ }
     }
 }

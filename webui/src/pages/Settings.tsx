@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef, useCallback, type FormEvent } from 'react'
+import { useNavigate } from 'react-router-dom'
 import { PageHeader } from '../components/PageHeader'
 import { Icon } from '../components/Icon'
 import { api } from '../api/client'
@@ -56,6 +57,7 @@ const FIELDS: {
 ]
 
 export function Settings() {
+  const navigate = useNavigate()
   const [cfg, setCfg] = useState<ConfigResponse | null>(null)
   const [values, setValues] = useState<Record<string, string>>({})
   const [loading, setLoading] = useState(true)
@@ -426,14 +428,14 @@ export function Settings() {
   } | null>(null)
 
   const pendingDaLaunchRef = useRef(false)
-  const launchDuneAdminApp = useCallback(async () => {
-    try {
-      await api('/api/commands/run/dune-admin', { method: 'POST' })
-      setDaMsg(prev => (prev ? prev + ' ' : '') + 'Opened dune-admin so you can re-setup the market bot.')
-    } catch (e) {
-      setDaErr(prev => (prev ? prev + ' ' : '') + `Could not open dune-admin automatically: ${e instanceof Error ? e.message : String(e)}`)
-    }
-  }, [])
+  const launchDuneAdminApp = useCallback(() => {
+    // Reroute to the in-app embed page (see Dashboard.startDuneAdmin for the
+    // rationale). The pricing-patch / setup flow that previously spawned the
+    // dune-admin executable in a separate console window now lands the user
+    // inside the iframe, which keeps the "everything inside DST" promise of
+    // the embed feature.
+    navigate('/dune-admin')
+  }, [navigate])
 
   async function onInstallDuneAdmin(skipDepCheck = false) {
     setDaInstalling(true)
