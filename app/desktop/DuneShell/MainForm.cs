@@ -464,6 +464,24 @@ internal sealed class MainForm : Form
     {
         if (!_useWaitFile) return;
 
+        // Keep-alive opt-out: when the backend wrote keep-alive.flag, the
+        // user has registered DST autostart (or launched --headless), and
+        // closing the viewer must NOT take the backend + wrapped dune-admin
+        // console down with it. They re-attach to the live backend by
+        // clicking the shortcut again, and stop it explicitly via the
+        // tray's "Quit (stop server)" or the console window. The flag is
+        // refreshed live by the backend on startup AND on every autostart
+        // toggle, so this reflects current intent rather than launch-time
+        // state.
+        try
+        {
+            string keepAliveFlag = Path.Combine(
+                Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
+                "DuneServer", "keep-alive.flag");
+            if (File.Exists(keepAliveFlag)) return;
+        }
+        catch { /* defensive -- fall through to the normal teardown */ }
+
         // 1) Graceful backend shutdown via the same loopback URL + token the
         //    WebView is using. Send synchronously with a tight timeout so we
         //    don't drag out window close past ~750ms in the worst case.

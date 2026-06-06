@@ -63,6 +63,61 @@ function Clear-DuneAppDetached {
     } catch { }
 }
 
+# Sentinel file consumed by DuneShell's FormClosing teardown AND by the
+# app-window watcher runspace. When this file exists, neither side should
+# tear the backend down on shell close -- the user has opted into
+# "background service" semantics (autostart registered or --headless launch)
+# and the backend (+ wrapped dune-admin console) is expected to outlive any
+# manually-opened DuneShell.
+#
+# Live state: rewritten on every startup AND on every autostart toggle
+# (Register-/Unregister-DuneAutostart), so closing the shell mid-run
+# always reflects the user's current intent rather than the snapshot
+# captured at process startup.
+function Get-DuneKeepAliveStateFile {
+    $dir = Join-Path $env:LOCALAPPDATA 'DuneServer'
+    return (Join-Path $dir 'keep-alive.flag')
+}
+
+function Set-DuneKeepAliveFlag {
+    try {
+        $file = Get-DuneKeepAliveStateFile
+        $dir = Split-Path -Parent $file
+        if (-not (Test-Path -LiteralPath $dir)) {
+            New-Item -ItemType Directory -Path $dir -Force | Out-Null
+        }
+        $payload = @{
+            pid       = $PID
+            timestamp = (Get-Date).ToString('o')
+        } | ConvertTo-Json -Compress
+        Set-Content -LiteralPath $file -Value $payload -Encoding UTF8 -Force
+    } catch { }
+}
+
+function Clear-DuneKeepAliveFlag {
+    try {
+        $file = Get-DuneKeepAliveStateFile
+        if (Test-Path -LiteralPath $file) {
+            Remove-Item -LiteralPath $file -Force -ErrorAction SilentlyContinue
+        }
+    } catch { }
+}
+
+# Recompute the effective keep-alive state from live inputs (headless mode +
+# whether the autostart task is currently registered for this user) and write
+# or remove the sentinel file accordingly. Safe to call repeatedly.
+function Update-DuneKeepAliveFlag {
+    $autostart = $false
+    try {
+        if (Get-Command Test-DuneAutostartEnabled -ErrorAction SilentlyContinue) {
+            $autostart = [bool](Test-DuneAutostartEnabled)
+        }
+    } catch { $autostart = $false }
+    $keep = [bool]$script:DuneHeadlessMode -or $autostart
+    if ($keep) { Set-DuneKeepAliveFlag } else { Clear-DuneKeepAliveFlag }
+    return $keep
+}
+
 # Two-button first-run dialog. Returns 'console' or 'tray' ('console' on any
 # failure so we never end up with a hidden, unmanaged console).
 function Show-DuneConsolePresencePrompt {
@@ -287,6 +342,7 @@ function Start-DuneConsoleLifecycle {
             $rs.SessionStateProxy.SetVariable('AppProc',  $script:DuneAppProc)
             $rs.SessionStateProxy.SetVariable('Listener', $Listener)
             $rs.SessionStateProxy.SetVariable('DetachStateFile', (Get-DuneDetachStateFile))
+            $rs.SessionStateProxy.SetVariable('KeepAliveStateFile', (Get-DuneKeepAliveStateFile))
             $ps = [PowerShell]::Create()
             $ps.Runspace = $rs
             [void]$ps.AddScript({
@@ -333,6 +389,18 @@ function Start-DuneConsoleLifecycle {
                     if ($survivor) { $proc = $survivor; continue }
                     break
                 }
+                # Final gate before tearing the listener down: if keep-alive
+                # was enabled at runtime (autostart toggled on after launch,
+                # or --headless), the user expects the backend to outlive
+                # the shell. Re-read the flag here -- the value captured at
+                # startup is stale by the time we get here.
+                $keepAlive = $false
+                try {
+                    if ($KeepAliveStateFile -and (Test-Path -LiteralPath $KeepAliveStateFile)) {
+                        $keepAlive = $true
+                    }
+                } catch { $keepAlive = $false }
+                if ($keepAlive) { return }
                 try { $Listener.Stop() } catch {}
             })
             $script:DuneWatcherPs     = $ps
