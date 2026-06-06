@@ -150,6 +150,14 @@ Filename: "{app}\{#MyAppExeName}"; Flags: nowait runascurrentuser runminimized; 
 ; Belt-and-suspenders: clear any junk inside install dir that isn't tracked
 Type: filesandordirs; Name: "{app}"
 
+[UninstallRun]
+; v11.4.0: Remove the per-user "Run at Windows startup" scheduled task(s)
+; left behind by the Help → Run at Windows startup toggle. The task name is
+; per-user (DuneServer-Autostart-<sid>) so multi-user machines may have one
+; per user; iterate and remove them all. RunHidden, never block uninstall on
+; failure (the task may already be gone, the folder may not exist, etc.).
+Filename: "powershell.exe"; Parameters: "-NoProfile -ExecutionPolicy Bypass -Command ""try {{ Get-ScheduledTask -TaskPath '\Dune Server\' -ErrorAction SilentlyContinue | Where-Object {{ $_.TaskName -like 'DuneServer-Autostart-*' }} | Unregister-ScheduledTask -Confirm:$false -ErrorAction SilentlyContinue }} catch {{}}"""; Flags: runhidden; RunOnceId: "RemoveDuneAutostartTasks"
+
 [Code]
 // ============================================================
 //  First-run configuration wizard
