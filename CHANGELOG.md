@@ -13,6 +13,20 @@ here cover everything those tags shipped.
 
 ## [Unreleased]
 
+## [11.4.3] - 2026-06-05
+
+### Fixed
+- **dune-admin's "Open in browser" link now actually opens in the OS
+  browser** instead of replacing the portal inside the DST app window.
+  The shell's new-window handler used to treat any loopback URL as
+  "stay in this WebView" — but dune-admin runs on its own loopback
+  port, so clicking dune-admin's "Open in browser" link navigated the
+  shell away from the DST portal into the standalone dune-admin view.
+  Now only URLs whose loopback port matches the portal's own port stay
+  in the shell; every other loopback port (dune-admin's port, any
+  localhost helper tool) is handed to the OS default browser, the
+  same as non-localhost links.
+
 ## [11.4.2] - 2026-06-05
 
 ### Changed
