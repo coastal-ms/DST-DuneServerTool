@@ -13,6 +13,20 @@ here cover everything those tags shipped.
 
 ## [Unreleased]
 
+## [11.4.6] - 2026-06-07
+
+### Changed
+- **Server Health → "Start the Dune Admin Tool" card now restarts the
+  service in place instead of opening the embed tab.** The button is renamed
+  **Start/Restart Dune Admin Service** and, instead of navigating to the
+  Dune Admin tab (or popping a browser), it re-kicks off the merged-console
+  reattachment process — it relaunches the `dune-admin` process and re-mirrors
+  its `[admin]`-prefixed output back into DST's wrapping console. Use it after
+  a dune-admin update (which was crashing the embedded console) or if the embed
+  drops out; view the panel itself in the dedicated **Dune Admin** menu-bar tab.
+  The card shows a "Relaunching…" spinner and a confirmation message, and stays
+  disabled until dune-admin is installed and the VM is running.
+
 ## [11.4.5] - 2026-06-07
 
 ### Changed
