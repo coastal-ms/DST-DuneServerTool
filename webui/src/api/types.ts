@@ -74,6 +74,7 @@ export type Command = {
   section: 'VM' | 'Battlegroup' | 'Tools'  // original catalogue hint — not used for layout
   key: string
   name: string
+  label: string
   mode: 'InApp' | 'Console'
   requires: 'none' | 'exists' | 'running'
   disabledWhen?: string

@@ -1232,22 +1232,22 @@ function Invoke-OnDemandPartitionClear {
 
 $vmCommands = @(
     [pscustomobject]@{ Key = "a"; Name = "initial-setup";      Desc = "Run the initial VM setup" }
-    [pscustomobject]@{ Key = "c"; Name = "start-vm";           Desc = "Power on the VM only (no battlegroup) - useful for maintenance" }
-    [pscustomobject]@{ Key = "d"; Name = "startup";            Desc = "Power on VM -> start battlegroup -> wait for overmap + survival maps" }
-    [pscustomobject]@{ Key = "e"; Name = "shutdown";           Desc = "Stop battlegroup -> power off VM (e.g. shut down for the night)" }
-    [pscustomobject]@{ Key = "f"; Name = "reboot";             Desc = "Stop battlegroup -> restart VM -> start battlegroup (clean cycle)" }
+    [pscustomobject]@{ Key = "c"; Name = "start-vm";           Label = "Start VM Only";    Desc = "Power on the VM only (no battlegroup) - useful for maintenance" }
+    [pscustomobject]@{ Key = "d"; Name = "startup";            Label = "Start Full Stack"; Desc = "Power on VM -> start battlegroup -> wait for overmap + survival maps" }
+    [pscustomobject]@{ Key = "e"; Name = "shutdown";           Label = "Stop Full Stack";  Desc = "Stop battlegroup -> power off VM (e.g. shut down for the night)" }
+    [pscustomobject]@{ Key = "f"; Name = "reboot";             Label = "Reboot Full Stack"; Desc = "Stop battlegroup -> restart VM -> start battlegroup (clean cycle)" }
     [pscustomobject]@{ Key = "g"; Name = "rotate-ssh-key";     Desc = "Generate a new SSH key and replace the one authorized on the VM" }
     [pscustomobject]@{ Key = "h"; Name = "change-password";    Desc = "Change the password of the 'dune' user on the VM" }
 )
 
 $bgCommands = @(
     [pscustomobject]@{ Key = "1";  SubSection = $null;          Name = "status";                    Desc = "Shows the status of the selected battlegroup" }
-    [pscustomobject]@{ Key = "2";  SubSection = $null;          Name = "start";                     Desc = "Starts the selected battlegroup" }
-    [pscustomobject]@{ Key = "3";  SubSection = $null;          Name = "restart";                   Desc = "Restarts the selected battlegroup" }
-    [pscustomobject]@{ Key = "4";  SubSection = $null;          Name = "stop";                      Desc = "Stops the selected battlegroup" }
+    [pscustomobject]@{ Key = "2";  SubSection = $null;          Name = "start";                     Label = "Start BG Only";   Desc = "Starts the selected battlegroup" }
+    [pscustomobject]@{ Key = "3";  SubSection = $null;          Name = "restart";                   Label = "Restart BG Only"; Desc = "Restarts the selected battlegroup" }
+    [pscustomobject]@{ Key = "4";  SubSection = $null;          Name = "stop";                      Label = "Stop BG Only";    Desc = "Stops the selected battlegroup" }
     [pscustomobject]@{ Key = "5";  SubSection = $null;          Name = "update";                    Desc = "Checks for new versions and applies them" }
     [pscustomobject]@{ Key = "6";  SubSection = $null;          Name = "edit";                      Desc = "Edit the battlegroup with the utilities interface" }
-    [pscustomobject]@{ Key = "7";  SubSection = $null;          Name = "edit-advanced";             Desc = "(Advanced) Manually edit battlegroup directly with YAML" }
+    [pscustomobject]@{ Key = "7";  SubSection = $null;          Name = "edit-advanced";             Label = "Edit Director";   Desc = "(Advanced) Manually edit battlegroup directly with YAML" }
     [pscustomobject]@{ Key = "8";  SubSection = $null;          Name = "enable-experimental-swap";  Desc = "(Experimental) Enable experimental swap memory feature" }
     [pscustomobject]@{ Key = "9";  SubSection = "Database";     Name = "backup";                    Desc = "Take a backup of the battlegroup's database" }
     [pscustomobject]@{ Key = "10"; SubSection = "Database";     Name = "import";                    Desc = "Import a database backup into the selected battlegroup" }
@@ -1368,15 +1368,15 @@ while ($true) {
 
     foreach ($c in $vmCommands) {
         $avail = Get-VmCmdAvailability -cmdName $c.Name -info $info
-        $entries += [pscustomobject]@{ Section = 'vm'; SubSection = $null; Key = $c.Key; Name = $c.Name; Desc = $c.Desc; Available = $avail.Available; Reason = $avail.Reason }
+        $entries += [pscustomobject]@{ Section = 'vm'; SubSection = $null; Key = $c.Key; Name = $c.Name; Label = $(if ($c.Label) { $c.Label } else { $c.Name }); Desc = $c.Desc; Available = $avail.Available; Reason = $avail.Reason }
     }
     foreach ($c in $bgCommands) {
         $avail = Get-BgCmdAvailability -info $info
-        $entries += [pscustomobject]@{ Section = 'battlegroup'; SubSection = $c.SubSection; Key = $c.Key; Name = $c.Name; Desc = $c.Desc; Available = $avail.Available; Reason = $avail.Reason }
+        $entries += [pscustomobject]@{ Section = 'battlegroup'; SubSection = $c.SubSection; Key = $c.Key; Name = $c.Name; Label = $(if ($c.Label) { $c.Label } else { $c.Name }); Desc = $c.Desc; Available = $avail.Available; Reason = $avail.Reason }
     }
     foreach ($c in $toolCommands) {
         $avail = Get-ToolCmdAvailability -cmdName $c.Name -info $info
-        $entries += [pscustomobject]@{ Section = 'tools'; SubSection = $null; Key = $c.Key; Name = $c.Name; Desc = $c.Desc; Available = $avail.Available; Reason = $avail.Reason }
+        $entries += [pscustomobject]@{ Section = 'tools'; SubSection = $null; Key = $c.Key; Name = $c.Name; Label = $(if ($c.Label) { $c.Label } else { $c.Name }); Desc = $c.Desc; Available = $avail.Available; Reason = $avail.Reason }
     }
 
     foreach ($e in $entries) { $entryByKey[$e.Key.ToLower()] = $e }
@@ -1442,7 +1442,7 @@ while ($true) {
                 }
             }
             $color = if ($e.Available) { 'White' } else { 'DarkGray' }
-            Write-Host ("  {0,2}. {1,-30} {2}" -f $e.Key, $e.Name, $e.Desc) -ForegroundColor $color
+            Write-Host ("  {0,2}. {1,-30} {2}" -f $e.Key, $e.Label, $e.Desc) -ForegroundColor $color
             $prevSection = $e.Section
         }
 

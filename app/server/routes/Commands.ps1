@@ -12,6 +12,7 @@ Register-DuneRoute -Method GET -Path '/api/commands' -Handler {
             section      = $c.Section   # original catalogue section, kept as a hint
             key          = $c.Key
             name         = $c.Name
+            label        = $(if ($c.Label) { $c.Label } else { $c.Name })
             mode         = $c.Mode
             requires     = $c.Requires
             disabledWhen = $c.DisabledWhen
