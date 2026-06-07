@@ -14,8 +14,8 @@ const features = [
     body: "Battlegroup + VM status, live TCP port checks, per-pod game-server health, and live spice-field counts — all on the landing page.",
   },
   {
-    title: "Character & database editor",
-    body: "A typed UI over the server's Postgres database. Edit stats, tech, specs, inventory, faction rep — every write goes through guard-railed psql.",
+    title: "Game config & database editor",
+    body: "Grouped editors for UserGame.ini / UserEngine.ini plus a Monaco SQL editor over the server's Postgres — every write goes through guard-railed psql.",
   },
   {
     title: "Setup wizard + auto-updater",
@@ -59,7 +59,7 @@ const features = [
         </div>
       </div>
       <Screenshot
-        src={`${base}screenshots/v6-server-health.png`}
+        src={`${base}screenshots/server-health.png`}
         alt="Server Health dashboard showing battlegroup status, ports, game servers, and active spice fields"
       />
     </div>
@@ -87,7 +87,7 @@ const features = [
       </h2>
       <div class="grid sm:grid-cols-2 gap-x-12 gap-y-3 text-dune-muted">
         <div>✓ Server health dashboard</div>
-        <div>✓ Per-character data editor</div>
+        <div>✓ Live spice-field controls</div>
         <div>✓ Game config (UserGame.ini / UserEngine.ini)</div>
         <div>✓ Embedded PowerShell terminal</div>
         <div>✓ Monaco SQL editor over Postgres</div>
