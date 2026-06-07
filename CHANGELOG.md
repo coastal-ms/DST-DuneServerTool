@@ -13,6 +13,31 @@ here cover everything those tags shipped.
 
 ## [Unreleased]
 
+## [11.4.7] - 2026-06-07
+
+### Fixed
+- **Commands launched from the web UI can no longer freeze on a stray
+  mouse click.** Each command opens in a new elevated console, which
+  inherited Windows' default **QuickEdit Mode** — clicking or dragging
+  inside the window enters text-selection ("mark") mode and *suspends* the
+  running script until a key is pressed. Long flows like **Start Full
+  Stack** / **Reboot Full Stack** (VM → cluster → battlegroup → map pods)
+  could silently stall mid-boot (e.g. parked at "Settling 10s before
+  starting battlegroup…" without ever issuing the battlegroup start) with
+  no error or timeout — the only tell was a `Select` prefix on the console
+  title bar. `dune-server.ps1` now clears `ENABLE_QUICK_EDIT_INPUT` on its
+  console at startup, so every Commands-menu action is click-proof.
+
+### Changed
+- **Command menu entries now show plain-language labels instead of raw
+  command ids**, making the scope of each action obvious at a glance:
+  `start-vm` → **Start VM Only**, `startup` → **Start Full Stack**,
+  `start` → **Start BG Only**, `restart` → **Restart BG Only**,
+  `reboot` → **Reboot Full Stack**, `stop` → **Stop BG Only**,
+  `shutdown` → **Stop Full Stack**, `edit-advanced` → **Edit Director**.
+  The underlying command ids are unchanged, so saved layouts and
+  shortcuts keep working.
+
 ## [11.4.6] - 2026-06-07
 
 ### Changed
