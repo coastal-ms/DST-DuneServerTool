@@ -130,6 +130,10 @@ export function Dashboard() {
   // Deep Desert / Arakeen / Harko Village — on-demand map pods.
   const bgReady = bgState === 'running'
 
+  // Per-visit toggle for the raw `battlegroup status` text. Local state only,
+  // so it resets to hidden whenever the user navigates away from the page.
+  const [showRawBg, setShowRawBg] = useState(false)
+
   // Web Interfaces (File Browser + Director URLs)
   const [links, setLinks] = useState<LinksResponse | null>(null)
   const [linksLoading, setLinksLoading] = useState(false)
@@ -292,6 +296,21 @@ export function Dashboard() {
               <dt className="text-text-dim">Uptime</dt>
               <dd className="font-mono">{bgInfo.uptime || '—'}</dd>
             </dl>
+          )}
+          {bgReady && status?.bg?.output && (
+            <div className="mt-2 flex justify-end">
+              <button
+                type="button"
+                onClick={() => setShowRawBg(v => !v)}
+                className="text-[10px] uppercase tracking-wider text-text-dim hover:text-text border border-border/40 hover:border-border rounded px-2 py-0.5 transition-colors"
+                title="Show the raw `battlegroup status` output from the VM. Resets when you leave this page."
+              >
+                {showRawBg ? 'Hide raw output' : 'Show raw output'}
+              </button>
+            </div>
+          )}
+          {showRawBg && status?.bg?.output && (
+            <pre className="mt-2 text-[10px] font-mono bg-bg-dim border border-border rounded p-2 max-h-64 overflow-auto whitespace-pre-wrap break-words text-text-dim">{status.bg.output}</pre>
           )}
           <BgSpiceSummary enabled={bgReady} />
         </div>
