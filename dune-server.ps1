@@ -61,6 +61,42 @@ try {
     $Host.UI.RawUI.WindowSize = New-Object System.Management.Automation.Host.Size($winWidth, $winHeight)
 } catch {}
 
+# ============================================================
+#  DISABLE CONSOLE QUICKEDIT MODE  (click-freeze guard)
+# ============================================================
+# Windows consoles enable QuickEdit Mode by default: a single click or drag
+# inside the window enters text-selection ("mark") mode and SUSPENDS the
+# running process until a key is pressed. Long flows (startup/reboot: VM ->
+# cluster -> battlegroup -> map pods) would otherwise freeze silently on a
+# stray click with no error and no timeout - the title bar just gains a
+# "Select" prefix. Clear ENABLE_QUICK_EDIT_INPUT (0x40) while setting
+# ENABLE_EXTENDED_FLAGS (0x80) so the change actually applies. Best-effort:
+# any failure (no console, redirected stdin) is swallowed.
+function Disable-DuneConsoleQuickEdit {
+    try {
+        if (-not ('Dune.ConsoleMode' -as [type])) {
+            Add-Type -Namespace Dune -Name ConsoleMode -MemberDefinition @'
+[System.Runtime.InteropServices.DllImport("kernel32.dll", SetLastError=true)]
+public static extern System.IntPtr GetStdHandle(int nStdHandle);
+[System.Runtime.InteropServices.DllImport("kernel32.dll", SetLastError=true)]
+public static extern bool GetConsoleMode(System.IntPtr hConsoleHandle, out uint lpMode);
+[System.Runtime.InteropServices.DllImport("kernel32.dll", SetLastError=true)]
+public static extern bool SetConsoleMode(System.IntPtr hConsoleHandle, uint dwMode);
+'@ -ErrorAction Stop
+        }
+        $STD_INPUT_HANDLE        = -10
+        $ENABLE_QUICK_EDIT_INPUT = 0x0040
+        $ENABLE_EXTENDED_FLAGS   = 0x0080
+        $h = [Dune.ConsoleMode]::GetStdHandle($STD_INPUT_HANDLE)
+        if ($h -eq [System.IntPtr]::Zero -or $h -eq [System.IntPtr](-1)) { return }
+        $mode = [uint32]0
+        if (-not [Dune.ConsoleMode]::GetConsoleMode($h, [ref]$mode)) { return }
+        $new = ($mode -band (-bnot $ENABLE_QUICK_EDIT_INPUT)) -bor $ENABLE_EXTENDED_FLAGS
+        [void][Dune.ConsoleMode]::SetConsoleMode($h, $new)
+    } catch { }
+}
+Disable-DuneConsoleQuickEdit
+
 $scriptDir = Split-Path -Parent $MyInvocation.MyCommand.Path
 
 # ============================================================
