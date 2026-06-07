@@ -13,7 +13,7 @@ param(
 # Wraps the original battlegroup.ps1 menu and adds extra tools
 # ============================================================
 
-$script:ToolVersion = "11.4.6"
+$script:ToolVersion = "11.4.7"
 
 # Cold-boot readiness budgets (seconds). A fresh battlegroup's FIRST boot can
 # take 10-30 min: k3s + funcom-operators initialize, metrics-server restarts a
@@ -60,6 +60,42 @@ try {
     $Host.UI.RawUI.BufferSize = New-Object System.Management.Automation.Host.Size($bufWidth, 9999)
     $Host.UI.RawUI.WindowSize = New-Object System.Management.Automation.Host.Size($winWidth, $winHeight)
 } catch {}
+
+# ============================================================
+#  DISABLE CONSOLE QUICKEDIT MODE  (click-freeze guard)
+# ============================================================
+# Windows consoles enable QuickEdit Mode by default: a single click or drag
+# inside the window enters text-selection ("mark") mode and SUSPENDS the
+# running process until a key is pressed. Long flows (startup/reboot: VM ->
+# cluster -> battlegroup -> map pods) would otherwise freeze silently on a
+# stray click with no error and no timeout - the title bar just gains a
+# "Select" prefix. Clear ENABLE_QUICK_EDIT_INPUT (0x40) while setting
+# ENABLE_EXTENDED_FLAGS (0x80) so the change actually applies. Best-effort:
+# any failure (no console, redirected stdin) is swallowed.
+function Disable-DuneConsoleQuickEdit {
+    try {
+        if (-not ('Dune.ConsoleMode' -as [type])) {
+            Add-Type -Namespace Dune -Name ConsoleMode -MemberDefinition @'
+[System.Runtime.InteropServices.DllImport("kernel32.dll", SetLastError=true)]
+public static extern System.IntPtr GetStdHandle(int nStdHandle);
+[System.Runtime.InteropServices.DllImport("kernel32.dll", SetLastError=true)]
+public static extern bool GetConsoleMode(System.IntPtr hConsoleHandle, out uint lpMode);
+[System.Runtime.InteropServices.DllImport("kernel32.dll", SetLastError=true)]
+public static extern bool SetConsoleMode(System.IntPtr hConsoleHandle, uint dwMode);
+'@ -ErrorAction Stop
+        }
+        $STD_INPUT_HANDLE        = -10
+        $ENABLE_QUICK_EDIT_INPUT = 0x0040
+        $ENABLE_EXTENDED_FLAGS   = 0x0080
+        $h = [Dune.ConsoleMode]::GetStdHandle($STD_INPUT_HANDLE)
+        if ($h -eq [System.IntPtr]::Zero -or $h -eq [System.IntPtr](-1)) { return }
+        $mode = [uint32]0
+        if (-not [Dune.ConsoleMode]::GetConsoleMode($h, [ref]$mode)) { return }
+        $new = ($mode -band (-bnot $ENABLE_QUICK_EDIT_INPUT)) -bor $ENABLE_EXTENDED_FLAGS
+        [void][Dune.ConsoleMode]::SetConsoleMode($h, $new)
+    } catch { }
+}
+Disable-DuneConsoleQuickEdit
 
 $scriptDir = Split-Path -Parent $MyInvocation.MyCommand.Path
 
@@ -1196,22 +1232,22 @@ function Invoke-OnDemandPartitionClear {
 
 $vmCommands = @(
     [pscustomobject]@{ Key = "a"; Name = "initial-setup";      Desc = "Run the initial VM setup" }
-    [pscustomobject]@{ Key = "c"; Name = "start-vm";           Desc = "Power on the VM only (no battlegroup) - useful for maintenance" }
-    [pscustomobject]@{ Key = "d"; Name = "startup";            Desc = "Power on VM -> start battlegroup -> wait for overmap + survival maps" }
-    [pscustomobject]@{ Key = "e"; Name = "shutdown";           Desc = "Stop battlegroup -> power off VM (e.g. shut down for the night)" }
-    [pscustomobject]@{ Key = "f"; Name = "reboot";             Desc = "Stop battlegroup -> restart VM -> start battlegroup (clean cycle)" }
+    [pscustomobject]@{ Key = "c"; Name = "start-vm";           Label = "Start VM Only";    Desc = "Power on the VM only (no battlegroup) - useful for maintenance" }
+    [pscustomobject]@{ Key = "d"; Name = "startup";            Label = "Start Full Stack"; Desc = "Power on VM -> start battlegroup -> wait for overmap + survival maps" }
+    [pscustomobject]@{ Key = "e"; Name = "shutdown";           Label = "Stop Full Stack";  Desc = "Stop battlegroup -> power off VM (e.g. shut down for the night)" }
+    [pscustomobject]@{ Key = "f"; Name = "reboot";             Label = "Reboot Full Stack"; Desc = "Stop battlegroup -> restart VM -> start battlegroup (clean cycle)" }
     [pscustomobject]@{ Key = "g"; Name = "rotate-ssh-key";     Desc = "Generate a new SSH key and replace the one authorized on the VM" }
     [pscustomobject]@{ Key = "h"; Name = "change-password";    Desc = "Change the password of the 'dune' user on the VM" }
 )
 
 $bgCommands = @(
     [pscustomobject]@{ Key = "1";  SubSection = $null;          Name = "status";                    Desc = "Shows the status of the selected battlegroup" }
-    [pscustomobject]@{ Key = "2";  SubSection = $null;          Name = "start";                     Desc = "Starts the selected battlegroup" }
-    [pscustomobject]@{ Key = "3";  SubSection = $null;          Name = "restart";                   Desc = "Restarts the selected battlegroup" }
-    [pscustomobject]@{ Key = "4";  SubSection = $null;          Name = "stop";                      Desc = "Stops the selected battlegroup" }
+    [pscustomobject]@{ Key = "2";  SubSection = $null;          Name = "start";                     Label = "Start BG Only";   Desc = "Starts the selected battlegroup" }
+    [pscustomobject]@{ Key = "3";  SubSection = $null;          Name = "restart";                   Label = "Restart BG Only"; Desc = "Restarts the selected battlegroup" }
+    [pscustomobject]@{ Key = "4";  SubSection = $null;          Name = "stop";                      Label = "Stop BG Only";    Desc = "Stops the selected battlegroup" }
     [pscustomobject]@{ Key = "5";  SubSection = $null;          Name = "update";                    Desc = "Checks for new versions and applies them" }
     [pscustomobject]@{ Key = "6";  SubSection = $null;          Name = "edit";                      Desc = "Edit the battlegroup with the utilities interface" }
-    [pscustomobject]@{ Key = "7";  SubSection = $null;          Name = "edit-advanced";             Desc = "(Advanced) Manually edit battlegroup directly with YAML" }
+    [pscustomobject]@{ Key = "7";  SubSection = $null;          Name = "edit-advanced";             Label = "Edit Director";   Desc = "(Advanced) Manually edit battlegroup directly with YAML" }
     [pscustomobject]@{ Key = "8";  SubSection = $null;          Name = "enable-experimental-swap";  Desc = "(Experimental) Enable experimental swap memory feature" }
     [pscustomobject]@{ Key = "9";  SubSection = "Database";     Name = "backup";                    Desc = "Take a backup of the battlegroup's database" }
     [pscustomobject]@{ Key = "10"; SubSection = "Database";     Name = "import";                    Desc = "Import a database backup into the selected battlegroup" }
@@ -1332,15 +1368,15 @@ while ($true) {
 
     foreach ($c in $vmCommands) {
         $avail = Get-VmCmdAvailability -cmdName $c.Name -info $info
-        $entries += [pscustomobject]@{ Section = 'vm'; SubSection = $null; Key = $c.Key; Name = $c.Name; Desc = $c.Desc; Available = $avail.Available; Reason = $avail.Reason }
+        $entries += [pscustomobject]@{ Section = 'vm'; SubSection = $null; Key = $c.Key; Name = $c.Name; Label = $(if ($c.Label) { $c.Label } else { $c.Name }); Desc = $c.Desc; Available = $avail.Available; Reason = $avail.Reason }
     }
     foreach ($c in $bgCommands) {
         $avail = Get-BgCmdAvailability -info $info
-        $entries += [pscustomobject]@{ Section = 'battlegroup'; SubSection = $c.SubSection; Key = $c.Key; Name = $c.Name; Desc = $c.Desc; Available = $avail.Available; Reason = $avail.Reason }
+        $entries += [pscustomobject]@{ Section = 'battlegroup'; SubSection = $c.SubSection; Key = $c.Key; Name = $c.Name; Label = $(if ($c.Label) { $c.Label } else { $c.Name }); Desc = $c.Desc; Available = $avail.Available; Reason = $avail.Reason }
     }
     foreach ($c in $toolCommands) {
         $avail = Get-ToolCmdAvailability -cmdName $c.Name -info $info
-        $entries += [pscustomobject]@{ Section = 'tools'; SubSection = $null; Key = $c.Key; Name = $c.Name; Desc = $c.Desc; Available = $avail.Available; Reason = $avail.Reason }
+        $entries += [pscustomobject]@{ Section = 'tools'; SubSection = $null; Key = $c.Key; Name = $c.Name; Label = $(if ($c.Label) { $c.Label } else { $c.Name }); Desc = $c.Desc; Available = $avail.Available; Reason = $avail.Reason }
     }
 
     foreach ($e in $entries) { $entryByKey[$e.Key.ToLower()] = $e }
@@ -1406,7 +1442,7 @@ while ($true) {
                 }
             }
             $color = if ($e.Available) { 'White' } else { 'DarkGray' }
-            Write-Host ("  {0,2}. {1,-30} {2}" -f $e.Key, $e.Name, $e.Desc) -ForegroundColor $color
+            Write-Host ("  {0,2}. {1,-30} {2}" -f $e.Key, $e.Label, $e.Desc) -ForegroundColor $color
             $prevSection = $e.Section
         }
 
