@@ -10,7 +10,7 @@ const sections = [
     id: "health",
     title: "Server Health",
     img: "server-health.png",
-    body: "Default landing page. Combined battlegroup + VM state, live TCP port verdicts, per-pod game-server status, active spice-field counts pulled live from Postgres with tiered colours and at-cap highlighting, public port checks with provider fallback, and one-click log exports.",
+    body: "Default landing page. Combined battlegroup + VM state, live TCP port verdicts, per-pod game-server status, active spice-field counts pulled live from Postgres with tiered colours and at-cap highlighting, public port checks with provider fallback, and one-click log exports. BG state reads a green 'Healthy' while the operator is healthy or reconciling (its normal steady state), with a per-visit toggle to reveal the raw battlegroup status output.",
   },
   {
     id: "commands",
