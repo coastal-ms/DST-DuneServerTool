@@ -13,6 +13,28 @@ here cover everything those tags shipped.
 
 ## [Unreleased]
 
+## [11.4.5] - 2026-06-07
+
+### Changed
+- **Server Health → Battlegroup info: "BG state" now reads "Healthy" (green)
+  while the operator is reconciling.** The Funcom battlegroup operator sits in
+  its `Reconciling` / `Reconciling Ready` phase as its normal steady state
+  while managing a healthy battlegroup, so the field used to show a permanent
+  yellow "Reconciling" that read like a fault. Healthy and reconciling states
+  are now both surfaced as a green **Healthy**; yellow/red are reserved for
+  genuine transitions (starting/updating/pending) and faults
+  (failed/error/unhealthy/stopped). The raw operator status stays in the
+  field's hover tooltip and a dim "reconciling" hint still appears while the
+  operator settles map churn. The Database / Gateway / Director rows and the
+  Game Servers table keep their literal per-component colouring.
+
+### Added
+- **Server Health → Battlegroup info: a "Show raw output" toggle.** A small
+  button at the bottom-right of the Battlegroup Info card reveals the raw
+  `battlegroup status` text from the VM on demand ("Hide raw output" collapses
+  it again). It's per-visit — the panel resets to hidden when you navigate
+  away from the page.
+
 ## [11.4.4] - 2026-06-05
 
 ### Changed
