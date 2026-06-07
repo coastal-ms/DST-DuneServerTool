@@ -8,9 +8,9 @@
 [![License: Apache 2.0](https://img.shields.io/badge/License-Apache_2.0-blue.svg)](LICENSE)
 [![Latest release](https://img.shields.io/github/v/release/coastal-ms/DST-DuneServerTool?sort=semver)](https://github.com/coastal-ms/DST-DuneServerTool/releases/latest)
 
-The current release is **v11.0.0**. The in-app version label and the
-website now show plain semver tags (e.g. `v11.0.0`, `v11.0.1`) — the
-previous Roman-numeral stylization has been removed.
+The current release is **v11.4.4**. The in-app version label and the
+website show plain semver tags (e.g. `v11.4.4`) — the previous
+Roman-numeral stylization has been removed.
 It runs as a single-window Windows app (native WebView2 shell) that hosts a
 local web portal (React + Vite + Tailwind) on `127.0.0.1` with a per-launch
 tokenized URL. Same battle-tested SSH + Hyper-V + battlegroup automation
@@ -18,17 +18,28 @@ under the hood as the legacy CLI. Closing the app window stops the server;
 the sidebar's **Web Portal** button hands the portal off to your default
 browser and keeps the server running in the background.
 
-![Server Health](docs/img/v6-server-health.png)
+![Server Health](docs/img/server-health.png)
 
-### New in v11 — theming engine
+### New in the v11 series
 
-Settings now ships an **Appearance** card with six built-in presets — Eyes
-of Ibad, Sietch Tabr, Caladan, Giedi Prime, House Harkonnen, and Atreides
-— plus per-token color customization, JSON import/export, and live
-recoloring of the in-app terminal. Your choice is persisted locally and
-applied before React mounts (no flash of the default theme on launch).
+- **Theming engine.** A Settings → **Appearance** card with six built-in
+  presets — Eyes of Ibad, Sietch Tabr, Caladan, Giedi Prime, House Harkonnen,
+  and Atreides — plus per-token color customization, JSON import/export, and
+  live recoloring of the in-app terminal. Your choice is persisted locally and
+  applied before React mounts (no flash of the default theme on launch).
+- **dune-admin, embedded.** A **Dune Admin** tab in the top menu bar renders
+  Icehunter's admin panel in a flush iframe inside DST, with a live green/grey
+  "listening" dot and a one-click **Start**.
+- **One console window.** The backend and dune-admin now share a single
+  console — dune-admin's output is mirrored in with an `[admin]` prefix
+  instead of opening a second window.
+- **PowerShell page is loopback-only.** The free-form terminal is hidden, and
+  refused server-side, for any viewer that isn't on the host machine itself.
+- **Run at Windows startup.** An opt-in **Help → Run at Windows startup**
+  toggle keeps the server alive in the tray across sign-ins.
+- **Faster in-app updates.** End-to-end update time dropped by ~7–10s.
 
-![Appearance card with six theme presets](docs/img/appearance-card.png)
+![Appearance card with six theme presets](docs/img/appearance.png)
 
 See [`CHANGELOG.md`](CHANGELOG.md) for the full release history and
 [`CONTRIBUTING.md`](CONTRIBUTING.md) for the change-control workflow.
@@ -93,15 +104,15 @@ attribution violates the license — please don't.
 
 ## The portal — a page tour
 
-The browser window is split into a **left nav rail** (grouped under Server
-Health, Terminal, Game Data, System) and a **page surface** on the right.
-The persistent **header status bar** at the top shows live VM / battlegroup
-/ port status, a **Refresh** button, and a prominent red **Shut down**
-button that gracefully stops the local `DuneServer.exe` portal process.
+The window is split into a **left nav rail** (grouped under Server Health,
+PowerShell, Game Data, Database, and System) and a **page surface** on the
+right. The persistent **header status bar** at the top shows live VM /
+battlegroup / port status, a **Refresh** button, and a prominent red **Shut
+down** button that gracefully stops the local `DuneServer.exe` portal process.
 
 ### 🩺 Server Health
 
-![Server Health page](docs/img/v6-server-health.png)
+![Server Health page](docs/img/server-health.png)
 
 The default landing page. Cards for everything you usually want to glance at:
 
@@ -127,11 +138,11 @@ The default landing page. Cards for everything you usually want to glance at:
 - **Log Exports** — pull logs from any pod or the operator with one click.
 
 Per-map spin-up / shut-down controls for Deep Desert, Arrakeen, and Harko
-Village moved to the dedicated **DD Map** page (see below).
+Village live on the dedicated **Map SpinUp** page (see below).
 
 ### ⚡ Commands
 
-![Commands page](docs/img/v6-commands.png)
+![Commands page](docs/img/commands.png)
 
 Quick-action cards grouped by **VM**, **Battlegroup**, and **Tools**. Each
 card shows whether the command runs **InApp** (in the embedded terminal)
@@ -147,11 +158,22 @@ the default arrangement.
 
 The **dune-admin** launch tile carries an inline
 "by [Icehunter](https://github.com/Icehunter)" credit badge linking to
-the upstream project (v6.1.29+).
+the upstream project.
+
+### 🧩 Dune Admin *(menu bar)*
+
+When DST detects a configured dune-admin install, a **Dune Admin** item
+appears in the top menu bar (right of **Help**) with a small green / grey dot
+showing whether dune-admin is currently listening. Clicking it renders
+Icehunter's full admin web UI in a flush iframe inside DST — no separate
+browser window — under a slim header with **Reload** and **Open in browser**
+actions. If dune-admin isn't running yet, the page offers a one-click
+**Start** and polls until it's up. dune-admin remains its own Windows app;
+this is just an in-portal view of it.
 
 ### 🖥️ PowerShell
 
-![Terminal page](docs/img/v6-terminal.png)
+![Terminal page](docs/img/powershell.png)
 
 Embedded PowerShell session backed by xterm.js. Runs locally on your
 Windows host — use it for `kubectl`, `ssh dune@vm '...'`, and other
@@ -161,21 +183,15 @@ command, **Clear** wipes the buffer, **Reconnect** spins up a fresh
 runspace. Note: this is an exec model, not a real PTY — `vim` and `htop`
 won't work, but everything else does.
 
-### 👤 Characters
-
-![Characters page](docs/img/v6-characters.png)
-
-Live editor for every character on your server, talking directly to the
-Postgres pod over SSH. Pick a character from the rail, then tab through
-**Stats**, **Tech**, **Specs**, **Economy**, **Faction**, **Inventory**,
-**Cosmetics**. All edits are written back through `psql` with
-transactional safety. Specs and Faction Rep pull live from
-`dune.specialization_tracks` and `dune.player_faction_reputation` so
-you always see the current numbers.
+**Loopback-only.** Because this page runs arbitrary commands as the
+DuneServer service user on your host, it's hidden from the nav for any viewer
+that isn't on the host machine itself, the `/terminal` route redirects them to
+Server Health, and the `/ws/terminal` socket is refused server-side for
+non-loopback callers. The curated **Commands** page stays available either way.
 
 ### ⚙️ Game Config
 
-![Game Config page](docs/img/v6-gameconfig.png)
+![Game Config page](docs/img/game-config.png)
 
 A grouped editor for `UserGame.ini` and `UserEngine.ini`, with every
 setting labeled, typed, and showing its underlying key in fine print.
@@ -192,9 +208,9 @@ reflected immediately.
 
 ### 🗄️ Database
 
-![Database page](docs/img/v6-database.png)
+![Database page](docs/img/database.png)
 
-![Backup Schedule card](docs/img/v10-database-backup-schedule.png)
+![Backup Schedule card](docs/img/backup-schedule.png)
 
 - **Take Backup** / **Restore Backup** for the BG PostgreSQL database
   without remembering pod names. A banner reminds you to stop the BG
@@ -226,7 +242,7 @@ reflected immediately.
 
 ### 🕸️ Sietches *(experimental)*
 
-![Sietches page](docs/img/v6-sietches.png)
+![Sietches page](docs/img/sietches.png)
 
 Experimental page for adding or removing additional Survival_1 shards
 (sietches). Each sietch costs ~12 GB of RAM and requires the UDP port
@@ -236,18 +252,33 @@ directly. Unsupported by Funcom; you're on your own if something breaks.
 
 ### 🗺️ DD Map
 
-![DD Map page](docs/img/v6-dd-map.png)
+![DD Map page](docs/img/dd-map.png)
 
 Two link cards (method.gg + dune.gaming.tools) for the interactive Deep
 Desert maps the community maintains. Both target sites send
 `X-Frame-Options: SAMEORIGIN`, so we can't embed them directly — clicking
-**Open in new tab** launches each in your browser. Replaces the per-map
-spin-up cards that used to live on Server Health (those moved here in
-v6.1.17).
+**Open in new tab** launches each in your browser.
+
+### 🌍 Map SpinUp
+
+![Map SpinUp page](docs/img/map-spinup.png)
+
+Per-map on-demand control for the three scale-to-zero maps — **Deep Desert**,
+**Arrakeen**, and **Harko Village**. Each card shows the map's current pod
+state with **Spin up** / **Spin down** buttons that patch the battlegroup's
+`ServerSetScale` so the map comes up (or releases its RAM) without an SSH
+session. Always-on maps (Hagga / Survival_1 and Overmap) are listed for
+reference but not toggled here.
+
+A header **Fix partitions** button clears the drifted
+`igwsss.spec.partitions` pin that occasionally stops an on-demand map from
+launching after a reboot, then shows the last ~10 lines of the cleanup log
+inline. It's idempotent and skips any map with a running pod, so it's safe to
+click repeatedly (the same action as the **fix-on-demand-maps** Command).
 
 ### 🔧 Settings
 
-![Settings page](docs/img/v6-settings.png)
+![Settings page](docs/img/settings.png)
 
 All the things the Setup Wizard asked you, but editable any time:
 
@@ -294,50 +325,25 @@ default, both auto-check on mount):
     install (and any pricing-patch rebuild) finishes — letting you re-run
     market-bot setup right away (v10.0.4+).
   - **Keep Coastal's sane-pricing patch applied after each update**
-    (checkbox, saved as `AutoApplyPricingPatch`). When checked, the tool
-    *also* downloads the matching `dune-admin_X.Y.Z_source.tar.gz`,
-    overlays the upstream source over your dune-admin folder, applies the
-    bundled 100k-cap pricing patch, runs `go build`, and restarts
-    dune-admin — all in one click. Replaces the manual "Apply Sane-Pricing
-    Patch" Database card from v6.1.20. Requires `go` and `git` on PATH.
-    Uncheck and click Reinstall to go back to the stock upstream binary.
+    (checkbox, saved as `AutoApplyPricingPatch`). When checked, each update
+    overlays the matching dune-admin source, applies the bundled patch, runs
+    `go build`, and restarts dune-admin in one click (requires `go` and `git`
+    on PATH). Uncheck and Reinstall to return to the stock upstream binary.
 
     The patch caps every bot-generated listing at **100,000 solari** and
-    realigns dune-admin's default grade / rarity / vendor multipliers to
-    Coastal's tier-driven curve. With it applied, the in-game Market Board
-    looks like this — bot listings (e.g. Buggy Booster Mk3, Adept Sword,
-    Bluddshot Buggy Engine Mk3) sit well below the cap, while player
-    listings that aren't undercut by the bot can still exceed it:
+    realigns dune-admin's grade / rarity / vendor multipliers to a
+    tier-driven curve. It also makes the bot's *buying* probabilistic — it
+    rolls a configurable die per candidate listing and only buys on the
+    target number (**Die size** / **Buy on roll** on the Settings page, baked
+    into the patched binary at build time). With the patch applied the in-game
+    Market Board looks like this — bot listings sit well below the cap, while
+    player listings the bot doesn't undercut can still exceed it:
 
-    ![dune-admin Market Bot listings with sane-pricing applied](docs/img/v6-marketbot-pricing.png)
-
-    **d12 gamble-buy (v6.1.32+):** the same bundled patch also changes how the
-    market bot *buys* player listings. Instead of buying only when a listing is
-    at or below the bot's reference price, the bot now rolls a **12-sided die**
-    for each candidate listing on every buy tick — only a **5** buys the item,
-    **regardless of price**; any other roll skips it. The per-tick `MaxBuys`
-    cap and the unknown / non-buyable / disabled-item safety skips still apply.
-    This replaces the old price-threshold buy gate referenced on the bot's
-    market control (Revy) page.
-
-    **Configurable buy odds (v6.3.0+):** the die size and the winning roll are
-    no longer fixed. Two inputs on the Settings page — **Die size (N)** and
-    **Buy on roll** — let you tune how aggressively the bot buys. The bot rolls a
-    1–N die per candidate listing and only buys on the target number, so a larger
-    die means fewer buys (e.g. `20` / `7` ≈ a 1-in-20 chance per listing). Values
-    are saved as `GambleDieSize` / `GambleTarget` and **baked into the patched
-    binary at build time**, so they take effect on the next patch (re)apply —
-    click **Install** with the "keep sane-pricing patch applied" box checked to
-    rebuild. The defaults (12 / 5) reproduce the original behaviour exactly.
-
-    **Wiping bot listings (v10.1.7+):** the portal's old "Wipe all listings"
-    testing button has been removed. dune-admin now ships its own **Wipe
-    Listings** control in its market-bot panel, which owns that job directly —
-    use that when you need the bot to re-list everything from scratch.
+    ![dune-admin Market Bot listings with sane-pricing applied](docs/img/marketbot-pricing.png)
 
 ### 🧙 Setup Wizard
 
-![Setup Wizard](docs/img/v6-setup-wizard.png)
+![Setup Wizard](docs/img/setup-wizard.png)
 
 Six-step linear flow that runs automatically on first launch:
 
@@ -384,7 +390,9 @@ the Finished page brings the portal back up. As of v6.1.30 the relauncher
 runs in a visible window (with a brief "Installing update..." banner) and
 explicitly raises the wizard's main window so it appears in the foreground
 instead of being hidden behind the browser or other windows. Your config
-in `%APPDATA%\DuneServer\` is preserved across upgrades.
+in `%APPDATA%\DuneServer\` is preserved across upgrades. As of v11.4.4 the
+whole sequence is ~7–10s faster (lighter installer compression and trimmed
+relauncher waits).
 
 You can also check manually from **Settings → Updates → Check now**.
 
@@ -570,9 +578,9 @@ so it can be tracked and fixed:
 
 The bug report form asks for:
 
-- **Tool version** — shown in the portal footer (e.g. `X · coastal-ms`).
+- **Tool version** — shown in the portal footer (e.g. `v11.4.4 · coastal-ms`).
 - **Surface** — which portal page (Server Health, Commands, PowerShell,
-  Characters, Game Config, Database, Sietches, DD Map, Settings, Setup
+  Game Config, DD Map, Map SpinUp, Database, Sietches, Settings, Setup
   Wizard) or whether it was the CLI / installer / auto-updater.
 - **Page / button / command** — the specific thing you clicked or typed.
 - **Environment** — OS build, PowerShell version, browser.
@@ -622,14 +630,6 @@ The portal couldn't read `UserEngine.ini` from the VM. Common causes:
 The cache TTL is 10 minutes; saving the Game Config page clears it
 immediately.
 
-### Characters page shows "no characters"
-Confirm the DB pod is `Running`:
-- Server Health → Game Servers card should show all pods Running.
-- Or open the Terminal page and run `kubectl get pods -A`.
-
-If the pod is up but the list is empty, no players have ever logged in
-yet — the player table only gets rows on first character creation.
-
 ### TCP Ports Open shows "unknown" for RabbitMQ
 The primary port checker (yougetsignal.com) has a daily per-public-IP
 rate limit. v6.1.5+ automatically falls back to canyouseeme.org when this
@@ -673,9 +673,9 @@ Wizard from a clean slate. Your `button-order.json` and logs are kept.
   the wizard you use the **`amp`** control plane it auto-defaults to `:18080`,
   since CubeCoders AMP commonly squats `8080` on host installs. DST reads
   whatever `listen_addr` you set and opens that exact URL — so AMP (or anything
-  else) on `8080` is never touched. When you click **Characters**, DST also
-  verifies the process actually listening on that port is dune-admin (not AMP)
-  before opening the browser, and waits for dune-admin to finish first-time
-  setup, so it can never accidentally open the wrong app's panel.
+  else) on `8080` is never touched. When you open the **Dune Admin** tab, DST
+  also verifies the process actually listening on that port is dune-admin (not
+  AMP) before loading it, and waits for dune-admin to finish first-time setup,
+  so it can never accidentally open the wrong app's panel.
 - This tool is **not affiliated with Funcom**. "Dune", "Dune: Awakening",
   and related trademarks are property of their respective owners.
