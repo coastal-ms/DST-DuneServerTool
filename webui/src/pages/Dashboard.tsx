@@ -1,5 +1,4 @@
 import { useCallback, useEffect, useState } from 'react'
-import { useNavigate } from 'react-router-dom'
 import { PageHeader } from '../components/PageHeader'
 import { Icon } from '../components/Icon'
 import { useStatus } from '../hooks/useStatus'
@@ -115,7 +114,6 @@ function HeartbeatSensor({ servers, loading }: { servers: BgGameServer[]; loadin
 }
 
 export function Dashboard() {
-  const navigate = useNavigate()
   const { status, forceRefresh, loading } = useStatus()
 
   const vm = status?.vm
@@ -159,9 +157,13 @@ export function Dashboard() {
   const [exportMsg,  setExportMsg]  = useState<string | null>(null)
   const [exportErr,  setExportErr]  = useState<string | null>(null)
 
-  // Start the Dune Admin Tool — navigates to the in-app embed page.
-  // null = still checking; true/false = whether dune-admin.exe is located.
+  // Start/Restart the Dune Admin service — re-kicks off the merged-console
+  // reattachment process. null = still checking; true/false = whether
+  // dune-admin.exe is located.
   const [daInstalled, setDaInstalled] = useState<boolean | null>(null)
+  const [daBusy, setDaBusy] = useState(false)
+  const [daMsg,  setDaMsg]  = useState<string | null>(null)
+  const [daErr,  setDaErr]  = useState<string | null>(null)
 
   useEffect(() => {
     let alive = true
@@ -171,15 +173,24 @@ export function Dashboard() {
     return () => { alive = false }
   }, [])
 
-  const startDuneAdmin = useCallback(() => {
-    // Route to the in-app embed page instead of launching dune-admin's
-    // separate browser window. The embed page itself offers a Start button
-    // when dune-admin isn't yet listening, so the user flow becomes:
-    //   click "Open dune-admin" → embed page mounts → if not running, click
-    //   Start in the embed header. That replaces the prior detour through an
-    //   external browser tab.
-    navigate('/dune-admin')
-  }, [navigate])
+  const startDuneAdmin = useCallback(async () => {
+    // Re-kick off the dune-admin console reattachment instead of opening
+    // anything. This POST relaunches the dune-admin process and re-mirrors its
+    // log back into DST's wrapping console — so it "relaunches the console and
+    // then continues wrapped by our console". We deliberately don't navigate to
+    // the embed tab or pop a browser: the Dune Admin tab is the canonical
+    // viewer now, and dune-admin updates were crashing the console, so this is
+    // a clean in-place restart.
+    setDaBusy(true); setDaErr(null); setDaMsg(null)
+    try {
+      await api('/api/commands/run/dune-admin', { method: 'POST' })
+      setDaMsg('Relaunching dune-admin — it will reattach to this window’s console.')
+    } catch (e) {
+      setDaErr(e instanceof ApiError ? e.message : String(e))
+    } finally {
+      setDaBusy(false)
+    }
+  }, [])
 
   const runExport = useCallback(async (name: string, label: string) => {
     setExportBusy(name); setExportErr(null); setExportMsg(null)
@@ -352,7 +363,7 @@ export function Dashboard() {
         <div className="card p-5">
           <div className="flex items-center justify-between mb-3">
             <h2 className="text-sm font-semibold uppercase tracking-wider text-text-muted flex items-center gap-2">
-              <Icon name="Boxes" size={14} className="text-accent" /> Start the Dune Admin Tool
+              <Icon name="Boxes" size={14} className="text-accent" /> Start/Restart Dune Admin Service
             </h2>
             <a
               href="https://github.com/Icehunter"
@@ -368,29 +379,34 @@ export function Dashboard() {
             </a>
           </div>
           <p className="text-xs text-text-dim mb-3">
-            Opens dune-admin inside this window. The VM must be running.
+            Relaunches dune-admin and reattaches its output to this console. Use it after a
+            dune-admin update or if the embed crashed — view it in the Dune Admin tab. The VM must be running.
           </p>
           <div className="flex flex-wrap gap-2">
             <button
               className="btn-primary"
-              disabled={daInstalled !== true || !vm?.running}
+              disabled={daInstalled !== true || !vm?.running || daBusy}
               onClick={() => { void startDuneAdmin() }}
               title={
                 daInstalled === false ? 'dune-admin.exe not found — install it from Settings first'
                   : daInstalled === null ? 'Checking dune-admin install…'
                   : !vm?.running ? 'VM must be running'
-                  : 'Open the dune-admin web UI inside DST'
+                  : 'Relaunch dune-admin and reattach it to DST’s console'
               }
             >
               <Icon
-                name={daInstalled === false ? 'XCircle' : 'ExternalLink'}
+                name={daInstalled === false ? 'XCircle' : daBusy ? 'Loader2' : 'RefreshCw'}
                 size={14}
+                className={daBusy ? 'animate-spin' : ''}
               />
               {daInstalled === null ? 'Checking…'
                 : daInstalled === false ? 'Not installed'
-                : 'Open Dune Admin'}
+                : daBusy ? 'Relaunching…'
+                : 'Start/Restart Dune Admin Service'}
             </button>
           </div>
+          {daMsg && <p className="mt-3 text-xs text-success">{daMsg}</p>}
+          {daErr && <p className="mt-3 text-xs text-danger break-words">{daErr}</p>}
         </div>
 
         <div className="card p-5">
