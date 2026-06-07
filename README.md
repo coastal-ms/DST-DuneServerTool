@@ -8,8 +8,8 @@
 [![License: Apache 2.0](https://img.shields.io/badge/License-Apache_2.0-blue.svg)](LICENSE)
 [![Latest release](https://img.shields.io/github/v/release/coastal-ms/DST-DuneServerTool?sort=semver)](https://github.com/coastal-ms/DST-DuneServerTool/releases/latest)
 
-The current release is **v11.4.5**. The in-app version label and the
-website show plain semver tags (e.g. `v11.4.5`) — the previous
+The current release is **v11.4.6**. The in-app version label and the
+website show plain semver tags (e.g. `v11.4.6`) — the previous
 Roman-numeral stylization has been removed.
 It runs as a single-window Windows app (native WebView2 shell) that hosts a
 local web portal (React + Vite + Tailwind) on `127.0.0.1` with a per-launch
@@ -160,7 +160,10 @@ order auto-saves to `%APPDATA%\DuneServer\button-order.json` and persists
 across launches. The header has a **Reset layout** button to revert to
 the default arrangement.
 
-The **dune-admin** launch tile carries an inline
+The **dune-admin** launch tile (**Start/Restart Dune Admin Service**) restarts
+dune-admin in place — it relaunches the process and reattaches its output to
+DST's shared console rather than opening anything; view the panel in the
+**Dune Admin** menu-bar tab. The tile carries an inline
 "by [Icehunter](https://github.com/Icehunter)" credit badge linking to
 the upstream project.
 
@@ -582,7 +585,7 @@ so it can be tracked and fixed:
 
 The bug report form asks for:
 
-- **Tool version** — shown in the portal footer (e.g. `v11.4.5 · coastal-ms`).
+- **Tool version** — shown in the portal footer (e.g. `v11.4.6 · coastal-ms`).
 - **Surface** — which portal page (Server Health, Commands, PowerShell,
   Game Config, DD Map, Map SpinUp, Database, Sietches, Settings, Setup
   Wizard) or whether it was the CLI / installer / auto-updater.
