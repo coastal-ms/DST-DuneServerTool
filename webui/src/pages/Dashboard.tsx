@@ -39,6 +39,28 @@ function healthClass(v: string | undefined): string {
   return 'text-text'
 }
 
+// BG state shown under Battlegroup Info is the Funcom operator's "Status"
+// column — a kube-operator reconcile phase. It normally sits in
+// "Reconciling" / "Reconciling Ready" while the battlegroup is perfectly
+// healthy, so both healthy and reconciling are surfaced as a green "Healthy".
+// Yellow/red are reserved for genuine transitions or faults — the per-component
+// Database / Gateway / Director rows below show real component health.
+function bgStateDisplay(v: string | undefined): { cls: string; label: string } {
+  const raw = (v ?? '').trim()
+  const s = raw.toLowerCase()
+  if (!s) return { cls: 'text-text-dim', label: '—' }
+  // Genuine fault → red.
+  if (/(fail|error|unhealthy|crash|degraded|fault|stopp|\bfalse\b)/.test(s)) {
+    return { cls: 'text-danger', label: raw }
+  }
+  // Healthy or reconciling → green "Healthy".
+  if (/(healthy|ready|reconcil|running|\btrue\b)/.test(s)) {
+    return { cls: 'text-success', label: 'Healthy' }
+  }
+  // Anything else (starting / updating / pending …) is an in-progress transition.
+  return { cls: 'text-warning', label: raw }
+}
+
 function GameServerRow({ s }: { s: BgGameServer }) {
   return (
     <tr className="border-t border-border/30">
@@ -251,13 +273,13 @@ export function Dashboard() {
             <p className="text-sm text-text-dim italic">No battlegroup info yet.</p>
           ) : (
             <dl className="grid grid-cols-[110px_1fr] gap-x-3 gap-y-1 text-sm leading-snug">
-              <dt className="text-text-dim" title="Funcom BG operator's overall reconcile state. Goes 'Reconciling' briefly whenever a Game Server is added or removed.">BG state</dt>
-              <dd className={healthClass(bgInfo.status)}>
-                {bgInfo.status || '—'}
-                {bgInfo.status === 'Reconciling' && (
+              <dt className="text-text-dim" title="Funcom BG operator's overall state. 'Reconciling' is the operator's normal steady state while it manages the battlegroup, so it's reported as Healthy. The DB / Gateway / Director rows below show actual component health.">BG state</dt>
+              <dd className={bgStateDisplay(bgInfo.status).cls} title={`Operator status: ${bgInfo.status || 'unknown'}`}>
+                {bgStateDisplay(bgInfo.status).label}
+                {/reconcil/i.test(bgInfo.status || '') && (
                   <span className="ml-2 text-[10px] uppercase tracking-wider text-text-dim font-normal"
-                        title="The BG operator is settling changes — usually because a map just spun up or down. The DB / Gateway / Director rows below show actual component health.">
-                    map churn
+                        title="The BG operator is reconciling — its steady state while managing the battlegroup, usually settling a map spin-up/down. The DB / Gateway / Director rows below show actual component health.">
+                    reconciling
                   </span>
                 )}
               </dd>
