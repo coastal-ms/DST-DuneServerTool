@@ -96,7 +96,7 @@ function CommandButtonInner({
                             group-hover:text-text-muted group-hover:border-border-bright">
               {cmd.key}
             </kbd>
-            <span className="font-mono text-sm truncate text-text">{cmd.name}</span>
+            <span className="font-medium text-sm truncate text-text">{cmd.label || cmd.name}</span>
           </div>
           <span className={cmd.mode === 'Console' ? 'pill-info shrink-0' : 'pill-muted shrink-0'}>
             <Icon name={cmd.mode === 'Console' ? 'SquareTerminal' : 'Zap'} size={10} />

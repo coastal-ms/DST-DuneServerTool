@@ -14,19 +14,19 @@
 
 $script:DuneCommands = @(
     @{ Section='VM'; Key='a';  Name='initial-setup';   Mode='Console'; Requires='none';    DisabledWhen='core-pods-running'; Desc='Run the initial VM setup wizard' }
-    @{ Section='VM'; Key='c';  Name='start-vm';        Mode='InApp';   Requires='exists';  DisabledWhen='vm-running';  Desc='Power on the VM only (no battlegroup)' }
-    @{ Section='VM'; Key='d';  Name='startup';         Mode='Console'; Requires='exists';  DisabledWhen='bg-running';  Desc='Power on VM, start battlegroup, wait for maps Ready' }
-    @{ Section='VM'; Key='e';  Name='shutdown';        Mode='Console'; Requires='running'; Desc='Stop battlegroup, power off VM' }
-    @{ Section='VM'; Key='f';  Name='reboot';          Mode='Console'; Requires='running'; Desc='Stop battlegroup, reboot VM, start battlegroup' }
+    @{ Section='VM'; Key='c';  Name='start-vm';        Label='Start VM Only';      Mode='InApp';   Requires='exists';  DisabledWhen='vm-running';  Desc='Power on the VM only (no battlegroup)' }
+    @{ Section='VM'; Key='d';  Name='startup';         Label='Start Full Stack';   Mode='Console'; Requires='exists';  DisabledWhen='bg-running';  Desc='Power on VM, start battlegroup, wait for maps Ready' }
+    @{ Section='VM'; Key='e';  Name='shutdown';        Label='Stop Full Stack';    Mode='Console'; Requires='running'; Desc='Stop battlegroup, power off VM' }
+    @{ Section='VM'; Key='f';  Name='reboot';          Label='Reboot Full Stack';  Mode='Console'; Requires='running'; Desc='Stop battlegroup, reboot VM, start battlegroup' }
     @{ Section='VM'; Key='g';  Name='rotate-ssh-key';  Mode='Console'; Requires='running'; Desc='Generate a new SSH key and authorize it on the VM' }
     @{ Section='VM'; Key='h';  Name='change-password'; Mode='Console'; Requires='running'; Desc="Change the password of the 'dune' user on the VM" }
 
-    @{ Section='Battlegroup'; Key='2';  Name='start';                    Mode='Console'; Requires='running'; DisabledWhen='bg-running';  Desc='Start the selected battlegroup' }
-    @{ Section='Battlegroup'; Key='3';  Name='restart';                  Mode='Console'; Requires='running'; DisabledWhen='bg-stopped';  Desc='Restart the selected battlegroup' }
-    @{ Section='Battlegroup'; Key='4';  Name='stop';                     Mode='Console'; Requires='running'; DisabledWhen='bg-stopped';  Desc='Stop the selected battlegroup' }
+    @{ Section='Battlegroup'; Key='2';  Name='start';                    Label='Start BG Only';   Mode='Console'; Requires='running'; DisabledWhen='bg-running';  Desc='Start the selected battlegroup' }
+    @{ Section='Battlegroup'; Key='3';  Name='restart';                  Label='Restart BG Only'; Mode='Console'; Requires='running'; DisabledWhen='bg-stopped';  Desc='Restart the selected battlegroup' }
+    @{ Section='Battlegroup'; Key='4';  Name='stop';                     Label='Stop BG Only';    Mode='Console'; Requires='running'; DisabledWhen='bg-stopped';  Desc='Stop the selected battlegroup' }
     @{ Section='Battlegroup'; Key='5';  Name='update';                   Mode='Console'; Requires='running'; Desc='Check for new versions and apply them' }
     @{ Section='Battlegroup'; Key='6';  Name='edit';                     Mode='Console'; Requires='running'; External=$true; Desc='Edit battlegroup via utilities interface' }
-    @{ Section='Battlegroup'; Key='7';  Name='edit-advanced';            Mode='Console'; Requires='running'; External=$true; Desc='(Advanced) Edit battlegroup YAML directly' }
+    @{ Section='Battlegroup'; Key='7';  Name='edit-advanced';            Label='Edit Director';   Mode='Console'; Requires='running'; External=$true; Desc='(Advanced) Edit battlegroup YAML directly' }
     @{ Section='Battlegroup'; Key='8';  Name='enable-experimental-swap'; Mode='Console'; Requires='running'; Desc='(Experimental) Enable experimental swap memory' }
     @{ Section='Battlegroup'; Key='9';  Name='backup';                   Mode='Console'; Requires='running'; DisabledWhen='bg-stopped';  Desc="Back up the battlegroup's database" }
     @{ Section='Battlegroup'; Key='10'; Name='import';                   Mode='Console'; Requires='running'; DisabledWhen='bg-running';  Desc='Import a database backup' }
