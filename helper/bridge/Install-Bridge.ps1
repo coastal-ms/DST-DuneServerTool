@@ -8,7 +8,9 @@
       2. Creates an inbound Windows Firewall rule scoped to the Tailscale
          interface only (no LAN / no public exposure).
       3. Registers a Scheduled Task that runs DstHelperBridge.ps1 under
-         PowerShell 7 (pwsh.exe) at user logon, restarting on failure.
+         PowerShell 7 (pwsh.exe) at user logon, self-healing via a 2-minute
+         keepalive trigger (relaunches the daemon if it dies; IgnoreNew avoids
+         duplicates while it is healthy).
 
     Must be run elevated (admin) — both the URL ACL and the firewall rule
     require admin rights to create.
@@ -108,12 +110,26 @@ function Ensure-ScheduledTask {
         -Execute $pwsh `
         -Argument "-NoLogo -NoProfile -ExecutionPolicy Bypass -File `"$BridgeScriptPath`" -Port $Port"
 
-    $trigger = New-ScheduledTaskTrigger -AtLogOn -User "$env:USERDOMAIN\$env:USERNAME"
+    # Two triggers keep the daemon alive across crashes, kills, and sleep/wake:
+    #   1. AtLogOn      — start when the host user signs in.
+    #   2. Keepalive    — re-fire every 2 minutes, indefinitely. Combined with
+    #                     MultipleInstances=IgnoreNew below this is a no-op while
+    #                     the daemon is healthy, but relaunches it within ~2 min
+    #                     if it has died. RestartOnFailure alone is insufficient:
+    #                     an externally-killed daemon (exit 0xC000013A) is logged
+    #                     as a stop, not a failure, so it never restarted.
+    # A large finite RepetitionDuration is used because [TimeSpan]::MaxValue
+    # trips a known Register-ScheduledTask bug.
+    $logonTrigger = New-ScheduledTaskTrigger -AtLogOn -User "$env:USERDOMAIN\$env:USERNAME"
+    $keepAlive    = New-ScheduledTaskTrigger -Once -At (Get-Date).AddMinutes(1) `
+        -RepetitionInterval (New-TimeSpan -Minutes 2) `
+        -RepetitionDuration (New-TimeSpan -Days 3650)
 
     $settings = New-ScheduledTaskSettingsSet `
         -AllowStartIfOnBatteries `
         -DontStopIfGoingOnBatteries `
         -StartWhenAvailable `
+        -MultipleInstances IgnoreNew `
         -RestartInterval (New-TimeSpan -Minutes 1) `
         -RestartCount 999 `
         -ExecutionTimeLimit (New-TimeSpan -Hours 0)
@@ -126,10 +142,10 @@ function Ensure-ScheduledTask {
     Register-ScheduledTask `
         -TaskName $TaskName `
         -Action $action `
-        -Trigger $trigger `
+        -Trigger @($logonTrigger, $keepAlive) `
         -Settings $settings `
         -Principal $principal `
-        -Description 'Reverse-proxies friend helper requests over Tailscale to the locally running DST instance.' | Out-Null
+        -Description 'Reverse-proxies friend helper requests over Tailscale to the locally running DST instance. Self-healing: a 2-minute keepalive trigger relaunches the daemon if it dies; IgnoreNew prevents duplicates while it is healthy.' | Out-Null
 }
 
 Assert-Elevated
