@@ -71,7 +71,7 @@ export function Settings() {
   const [sshRotating, setSshRotating] = useState(false)
   const [sshRotateMsg, setSshRotateMsg] = useState<string | null>(null)
   async function onRotateSshKey() {
-    if (!window.confirm('Generate a NEW SSH key?\n\nThis regenerates the key, authorizes it on the dune-awakening VM, and copies it into the dune-admin folder. The VM must be running. A console window will open and may ask for admin approval.')) return
+    if (!window.confirm('Generate a NEW SSH key?\n\nThis regenerates the key, authorizes it on the dune-awakening VM, and copies it into the dune-admin folder. The VM must be running.\n\nA console window will open and ask for the \'dune\' user\'s password — you MUST type it there to authorize the new key on the VM. If you close that prompt without entering the password, DST will be locked out of the server until you re-run this. The console will tell you if authorization succeeded.')) return
     setSshRotating(true)
     setSshRotateMsg(null)
     setError(null)
