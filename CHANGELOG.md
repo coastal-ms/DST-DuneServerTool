@@ -13,6 +13,18 @@ here cover everything those tags shipped.
 
 ## [Unreleased]
 
+### Changed
+- **Verified compatible with Dune: Awakening 1.4.5.0.** Confirmed DST
+  v11.4.10 works against Funcom's latest release — both the game client and
+  the self-hosted server software — tested live against the 1.4.5.0 server
+  build (image `1988751-0-shipping`, June 10 2026) covering battlegroup
+  management, on-demand map spin-up, game-config/database editing, and
+  backups. No DST code change was required for the patch. Added a noticeable
+  compatibility callout to the README, the marketing-site home page (hero
+  badge + banner), and the install page. The 1.4.5.0 on-demand partition
+  drift behavior is unchanged, so the `dune-clear-partitions` workaround
+  remains required.
+
 ## [11.4.10] - 2026-06-10
 
 ### Fixed
