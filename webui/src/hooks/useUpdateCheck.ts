@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useCallback, useSyncExternalStore } from 'react'
 import type { UpdateCheck } from '../api/update'
 import { checkForUpdate } from '../api/update'
 
@@ -11,33 +11,87 @@ export interface UpdateState {
   refresh: () => Promise<void>
 }
 
-export function useUpdateCheck(): UpdateState {
-  const [data, setData] = useState<UpdateCheck | null>(null)
-  const [loading, setLoading] = useState(false)
-  const [error, setError] = useState<string | null>(null)
-  const inflight = useRef(false)
+// ---------------------------------------------------------------------------
+// Shared, module-level store.
+//
+// Every consumer of useUpdateCheck() reads from this single source of truth.
+// Previously each call kept its own isolated useState, so a forced "Check now"
+// on the Settings page updated only that component's copy while the global
+// UpdateBanner kept its own stale result and stayed hidden until a full page
+// reload or the next 6-hour poll. With a shared store, any update found by any
+// consumer (or pushed via publishUpdateCheck) surfaces in the banner instantly.
+// ---------------------------------------------------------------------------
 
-  const run = useCallback(async (force = false) => {
-    if (inflight.current) return
-    inflight.current = true
-    setLoading(true)
-    setError(null)
-    try {
-      const res = await checkForUpdate({ force })
-      setData(res)
-    } catch (e) {
-      setError(e instanceof Error ? e.message : String(e))
-    } finally {
-      inflight.current = false
-      setLoading(false)
-    }
-  }, [])
+interface Snapshot {
+  data: UpdateCheck | null
+  loading: boolean
+  error: string | null
+}
 
-  useEffect(() => {
+let snapshot: Snapshot = { data: null, loading: false, error: null }
+const listeners = new Set<() => void>()
+let inflight = false
+let started = false
+let pollId: number | null = null
+let mountCount = 0
+
+function emit() {
+  for (const l of listeners) l()
+}
+
+function setState(patch: Partial<Snapshot>) {
+  snapshot = { ...snapshot, ...patch }
+  emit()
+}
+
+async function run(force = false): Promise<void> {
+  if (inflight) return
+  inflight = true
+  setState({ loading: true, error: null })
+  try {
+    const res = await checkForUpdate({ force })
+    setState({ data: res })
+  } catch (e) {
+    setState({ error: e instanceof Error ? e.message : String(e) })
+  } finally {
+    inflight = false
+    setState({ loading: false })
+  }
+}
+
+// Lets other components (e.g. the Settings update card, which runs its own
+// force-check) feed a fresh result into the shared store so the global banner
+// updates immediately — no page reload required.
+export function publishUpdateCheck(data: UpdateCheck): void {
+  setState({ data })
+}
+
+function subscribe(cb: () => void): () => void {
+  listeners.add(cb)
+  mountCount += 1
+  if (!started) {
+    started = true
     void run(false)
-    const id = window.setInterval(() => { void run(false) }, POLL_MS)
-    return () => window.clearInterval(id)
-  }, [run])
+    pollId = window.setInterval(() => { void run(false) }, POLL_MS)
+  }
+  return () => {
+    listeners.delete(cb)
+    mountCount -= 1
+    if (mountCount <= 0 && pollId !== null) {
+      window.clearInterval(pollId)
+      pollId = null
+      started = false
+      mountCount = 0
+    }
+  }
+}
 
-  return { data, loading, error, refresh: () => run(true) }
+function getSnapshot(): Snapshot {
+  return snapshot
+}
+
+export function useUpdateCheck(): UpdateState {
+  const snap = useSyncExternalStore(subscribe, getSnapshot, getSnapshot)
+  const refresh = useCallback(() => run(true), [])
+  return { data: snap.data, loading: snap.loading, error: snap.error, refresh }
 }

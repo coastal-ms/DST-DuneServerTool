@@ -13,6 +13,21 @@ here cover everything those tags shipped.
 
 ## [Unreleased]
 
+## [11.4.9] - 2026-06-10
+
+### Fixed
+- **The "Update available" banner now appears as soon as a new release is
+  detected — including right after you click "Check now" in Settings.**
+  Previously the global banner and the Settings update card each kept their
+  own independent copy of the update-check result. The banner only checked
+  once at startup and then every 6 hours, so if a new version was published
+  while the app was already open, the banner stayed hidden — even though
+  Settings → "Check now" correctly showed the update was available. Clicking
+  "Check now" updated only the Settings card, never the banner. The
+  update-check result is now a single shared source: any check (the periodic
+  poll, the startup check, or a manual "Check now") updates the banner
+  immediately, with no full page reload required.
+
 ## [11.4.8] - 2026-06-10
 
 ### Added

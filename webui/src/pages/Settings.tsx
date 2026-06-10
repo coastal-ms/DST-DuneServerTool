@@ -5,6 +5,7 @@ import { Icon } from '../components/Icon'
 import { api } from '../api/client'
 import type { ConfigResponse } from '../api/types'
 import { checkForUpdate, installUpdate, type UpdateCheck } from '../api/update'
+import { publishUpdateCheck } from '../hooks/useUpdateCheck'
 import {
   checkDuneAdminUpdate,
   installDuneAdminUpdate,
@@ -299,7 +300,10 @@ export function Settings() {
     setUpdErr(null)
     setUpdMsg(null)
     try {
-      setUpdCheck(await checkForUpdate({ force: true }))
+      const res = await checkForUpdate({ force: true })
+      setUpdCheck(res)
+      // Share the result so the global UpdateBanner reflects it immediately.
+      publishUpdateCheck(res)
     } catch (e) {
       setUpdErr(e instanceof Error ? e.message : String(e))
     } finally {
@@ -610,7 +614,9 @@ export function Settings() {
     void (async () => {
       try {
         setUpdChecking(true)
-        setUpdCheck(await checkForUpdate({ force: false }))
+        const res = await checkForUpdate({ force: false })
+        setUpdCheck(res)
+        publishUpdateCheck(res)
       } catch (e) {
         setUpdErr(e instanceof Error ? e.message : String(e))
       } finally {
