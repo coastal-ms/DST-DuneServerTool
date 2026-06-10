@@ -13,7 +13,7 @@ param(
 # Wraps the original battlegroup.ps1 menu and adds extra tools
 # ============================================================
 
-$script:ToolVersion = "11.4.7"
+$script:ToolVersion = "11.4.8"
 
 # Cold-boot readiness budgets (seconds). A fresh battlegroup's FIRST boot can
 # take 10-30 min: k3s + funcom-operators initialize, metrics-server restarts a
@@ -1238,6 +1238,7 @@ $vmCommands = @(
     [pscustomobject]@{ Key = "f"; Name = "reboot";             Label = "Reboot Full Stack"; Desc = "Stop battlegroup -> restart VM -> start battlegroup (clean cycle)" }
     [pscustomobject]@{ Key = "g"; Name = "rotate-ssh-key";     Desc = "Generate a new SSH key and replace the one authorized on the VM" }
     [pscustomobject]@{ Key = "h"; Name = "change-password";    Desc = "Change the password of the 'dune' user on the VM" }
+    [pscustomobject]@{ Key = "i"; Name = "change-vm-ip";       Desc = "Change the VM's IP address or how it gets one (DHCP/static)" }
 )
 
 $bgCommands = @(
@@ -2142,6 +2143,20 @@ while ($true) {
         continue
     }
 
+    if ($cmdName -eq "change-vm-ip") {
+        $vmIpScript = Join-Path $bgSetupPath 'vm-ip.ps1'
+        if (-not (Test-Path -LiteralPath $vmIpScript)) {
+            Write-Warning "vm-ip.ps1 not found at $vmIpScript - your self-hosted server install may be too old to change the VM IP from here."
+            continue
+        }
+        . $vmIpScript
+        if (Set-VmIp -Ip $ip -SshKey $sshKey) {
+            Write-Host "VM IP configuration updated." -ForegroundColor Green
+            Write-Host "  The VM may take a few seconds to reappear on its new address; DST will pick it up on the next status refresh." -ForegroundColor DarkGray
+        }
+        continue
+    }
+
     # ========================================================
     #  BATTLEGROUP COMMANDS
     # ========================================================
@@ -2624,7 +2639,11 @@ CreateObject("WScript.Shell").Run cmd, 0, True
     # partition pins so DD/Arrakeen/Harko spawn for the next player without
     # the user having to invoke fix-on-demand-maps manually.
     if ($bgFallbackExit -eq 0 -and ($cmdName -eq 'start' -or $cmdName -eq 'restart')) {
-        Invoke-OnDemandPartitionClear -Ip $ip -DelaySec 45 -Phase "post-$cmdName"
+        # 'start' brings up a battlegroup that was not running, on an already-up
+        # VM; the operator pins on-demand ServerSets quickly, so a short settle
+        # is enough. 'restart' keeps the longer delay (battlegroup churn).
+        $settleSec = if ($cmdName -eq 'start') { 9 } else { 45 }
+        Invoke-OnDemandPartitionClear -Ip $ip -DelaySec $settleSec -Phase "post-$cmdName"
     }
 
     # After start/restart, resolve director port

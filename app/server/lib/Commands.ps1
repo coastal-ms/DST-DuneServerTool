@@ -20,6 +20,7 @@ $script:DuneCommands = @(
     @{ Section='VM'; Key='f';  Name='reboot';          Label='Reboot Full Stack';  Mode='Console'; Requires='running'; Desc='Stop battlegroup, reboot VM, start battlegroup' }
     @{ Section='VM'; Key='g';  Name='rotate-ssh-key';  Mode='Console'; Requires='running'; Desc='Generate a new SSH key and authorize it on the VM' }
     @{ Section='VM'; Key='h';  Name='change-password'; Mode='Console'; Requires='running'; Desc="Change the password of the 'dune' user on the VM" }
+    @{ Section='VM'; Key='i';  Name='change-vm-ip';    Mode='Console'; Requires='running'; Desc="Change the VM's IP address or how it gets one (DHCP/static)" }
 
     @{ Section='Battlegroup'; Key='2';  Name='start';                    Label='Start BG Only';   Mode='Console'; Requires='running'; DisabledWhen='bg-running';  Desc='Start the selected battlegroup' }
     @{ Section='Battlegroup'; Key='3';  Name='restart';                  Label='Restart BG Only'; Mode='Console'; Requires='running'; DisabledWhen='bg-stopped';  Desc='Restart the selected battlegroup' }
