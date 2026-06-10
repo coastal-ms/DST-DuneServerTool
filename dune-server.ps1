@@ -13,7 +13,7 @@ param(
 # Wraps the original battlegroup.ps1 menu and adds extra tools
 # ============================================================
 
-$script:ToolVersion = "11.4.9"
+$script:ToolVersion = "11.4.10"
 
 # Cold-boot readiness budgets (seconds). A fresh battlegroup's FIRST boot can
 # take 10-30 min: k3s + funcom-operators initialize, metrics-server restarts a
@@ -1656,9 +1656,19 @@ while ($true) {
         # Awk prints "namespace podname" space-separated; embedded double quotes in
         # an awk script get mangled by PowerShell when the script is in a double-
         # quoted string passed to ssh, so we split on whitespace in PS instead.
+        #
+        # Exclusions matter: the `-db-` family also contains a one-shot
+        # `db-dbdepl-util` Job pod plus `db-util-mon` / `db-util-pghero`
+        # sidecars. A finished Job pod sits in STATUS=Completed forever, and
+        # `kubectl wait --for=condition=Ready` against a Completed pod never
+        # succeeds - it blocks for the ENTIRE --timeout (900s) and then fails,
+        # so reboot/start appeared to hang for 15 minutes whenever that Job
+        # pod hadn't been garbage-collected yet. Skip util/mon/pghero by name
+        # and skip any terminal (Completed/Succeeded) pod by status ($4) so we
+        # only ever wait on the real DB StatefulSet pod (db-dbdepl-sts-*).
         $estDb = Format-PhaseEstimate 'db-pods'
         $dbPodList = ssh -o BatchMode=yes -o StrictHostKeyChecking=no -o LogLevel=QUIET -i "$sshKey" "$sshUser@$ip" `
-            "sudo k3s kubectl get pods -A --no-headers 2>/dev/null | awk '`$2 ~ /(-db-|postgres|^pg-|-pg-)/ && `$2 !~ /(dump|backup|fb-|migration)/ {print `$1, `$2}'"
+            "sudo k3s kubectl get pods -A --no-headers 2>/dev/null | awk '`$2 ~ /(-db-|postgres|^pg-|-pg-)/ && `$2 !~ /(dump|backup|fb-|migration|util|mon|pghero)/ && `$4 !~ /(Completed|Succeeded)/ {print `$1, `$2}'"
         $dbPodList = ($dbPodList | Out-String).Trim()
         if ($dbPodList) {
             $dbPods = $dbPodList -split "`r?`n" | Where-Object { $_.Trim() }
@@ -1931,9 +1941,15 @@ while ($true) {
         # (which would also wait on backup Jobs, file-browser deployments, etc).
         # Awk prints space-separated to avoid embedded double quotes (PowerShell
         # mangles \" inside a double-quoted string passed to ssh).
+        #
+        # Exclude util/mon/pghero helpers and terminal (Completed/Succeeded)
+        # pods: a finished `db-dbdepl-util` Job pod stays Completed forever and
+        # `kubectl wait --for=condition=Ready` against it blocks for the full
+        # --timeout (900s) before failing, which made start/reboot hang ~15
+        # min. We only want the real DB StatefulSet pod (db-dbdepl-sts-*).
         $estDb = Format-PhaseEstimate 'db-pods'
         $dbPodList = ssh -o BatchMode=yes -o StrictHostKeyChecking=no -o LogLevel=QUIET -i "$sshKey" "$sshUser@$ip" `
-            "sudo k3s kubectl get pods -A --no-headers 2>/dev/null | awk '`$2 ~ /(-db-|postgres|^pg-|-pg-)/ && `$2 !~ /(dump|backup|fb-|migration)/ {print `$1, `$2}'"
+            "sudo k3s kubectl get pods -A --no-headers 2>/dev/null | awk '`$2 ~ /(-db-|postgres|^pg-|-pg-)/ && `$2 !~ /(dump|backup|fb-|migration|util|mon|pghero)/ && `$4 !~ /(Completed|Succeeded)/ {print `$1, `$2}'"
         $dbPodList = ($dbPodList | Out-String).Trim()
         if ($dbPodList) {
             $dbPods = $dbPodList -split "`r?`n" | Where-Object { $_.Trim() }
