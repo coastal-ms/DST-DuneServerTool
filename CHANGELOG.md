@@ -13,6 +13,24 @@ here cover everything those tags shipped.
 
 ## [Unreleased]
 
+## [11.4.8] - 2026-06-10
+
+### Fixed
+- **The app no longer gets stuck on "Connecting to Dune Server Tool…
+  (attempt N)" after the backend's listener silently dies.** A prior
+  DuneServer process can keep running (and keep holding the single-instance
+  mutex) while its HTTP listener has stopped accepting — observed after a
+  sleep/resume cycle, a network-stack reset, or http.sys dropping the URL
+  registration. The process stays alive but nothing is bound to the port.
+  Previously every subsequent shortcut click just re-attached the WebView2
+  viewer to that dead "zombie" backend, so the window retried forever and
+  never recovered. The launcher now **probes the recorded portal URL before
+  adopting an already-running instance**: if it doesn't answer at the HTTP
+  level, the instance is treated exactly like a stale "Web Portal" detach —
+  the zombie is killed and a fresh server (new listener, token, and app
+  window) is started automatically. Clicking the shortcut now self-heals the
+  stuck state instead of compounding it.
+
 ## [11.4.7] - 2026-06-07
 
 ### Fixed

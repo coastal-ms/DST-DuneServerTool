@@ -148,7 +148,7 @@ public static extern bool IsIconic(System.IntPtr hWnd);
 }
 
 # Version (one of the 5 sync'd constants; see persistent-notes.md)
-$script:DuneToolVersion = '11.4.7'
+$script:DuneToolVersion = '11.4.8'
 
 # ---------- Restart-on-detach handoff -----------------------------------------
 # When a prior "Web Portal" detach left the server running headless, the
@@ -204,6 +204,46 @@ try {
     }
 } catch {
     Write-DuneStartupLog "Restart-on-detach handler failed: $($_.Exception.Message)"
+}
+
+# ---------- Health probe for an already-running instance ----------------------
+# A prior DuneServer can keep its process (and the single-instance mutex) alive
+# while its HttpListener has silently stopped accepting - observed after a
+# sleep/resume cycle, a network-stack reset, or http.sys dropping the URL
+# registration. The log then shows the process still running but nothing bound
+# to the port. Without a liveness check, every subsequent shortcut click just
+# re-attaches the viewer to that dead backend, stranding the user forever on
+# "Connecting to Dune Server Tool... (attempt N)".
+#
+# Probe the recorded portal URL: ANY HTTP-level response (200/302/401/404)
+# proves the listener is accepting; a connection failure / timeout means it's a
+# zombie. Used by the already-running branch below to decide focus-vs-restart.
+function Test-DuneExistingServerHealthy {
+    param([int]$TimeoutMs = 1500, [int]$Attempts = 3)
+    $urlFile = Join-Path $env:LOCALAPPDATA 'DuneServer\last-url.txt'
+    $u = ''
+    try { if (Test-Path -LiteralPath $urlFile) { $u = (Get-Content -LiteralPath $urlFile -Raw).Trim() } } catch {}
+    # No recorded URL -> there is no running server we can confirm is serving.
+    if (-not $u) { return $false }
+    $probe = $u
+    try { $uri = [Uri]$u; $probe = "$($uri.Scheme)://$($uri.Authority)/" } catch {}
+    for ($i = 0; $i -lt $Attempts; $i++) {
+        try {
+            $req = [System.Net.HttpWebRequest]::Create($probe)
+            $req.Timeout          = $TimeoutMs
+            $req.Method           = 'GET'
+            $req.AllowAutoRedirect = $false
+            $resp = $req.GetResponse()
+            try { $resp.Close() } catch {}
+            return $true
+        } catch [System.Net.WebException] {
+            # A protocol error still carries an HTTP response => listener alive.
+            if ($_.Exception.Response) { return $true }
+            # ConnectFailure / Timeout / NameResolutionFailure => not serving.
+        } catch {}
+        Start-Sleep -Milliseconds 250
+    }
+    return $false
 }
 
 # ---------- Single-instance gate ----------------------------------------------
@@ -266,10 +306,21 @@ if (-not $script:SingleInstanceOwned) {
             $shellAlive = @(Get-Process -Name 'DuneShell' -ErrorAction SilentlyContinue).Count -gt 0
         } catch { $shellAlive = $false }
 
-        if ($isDetached -and -not $shellAlive) {
+        # Zombie guard: confirm the already-running instance is actually serving
+        # HTTP. If it isn't (listener died but the process - typically a headless
+        # keep-alive backend - lingers holding the mutex), adopting its portal
+        # URL would strand the viewer on "Connecting..." forever. Treat a
+        # non-responding backend exactly like a stale "Web Portal" detach: kill
+        # it and start fresh, regardless of which flag (if any) was set.
+        $serverHealthy = Test-DuneExistingServerHealthy
+        if (-not $serverHealthy) {
+            Write-DuneStartupLog 'Already-running instance is not serving HTTP (zombie listener) - forcing kill-and-restart'
+        }
+
+        if ((-not $serverHealthy) -or ($isDetached -and -not $shellAlive)) {
             # Tag the flag with our PID so the elevated child knows WHICH
             # DuneServer.exe to kill (everyone-named-DuneServer-except-self
-            # is risky if the user has unrelated processes — though "DuneServer"
+            # is risky if the user has unrelated processes - though "DuneServer"
             # is specific enough that in practice we'd be fine).
             try {
                 $marker = Join-Path $env:LOCALAPPDATA 'DuneServer\restart-requested.flag'
