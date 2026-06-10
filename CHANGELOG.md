@@ -13,6 +13,23 @@ here cover everything those tags shipped.
 
 ## [Unreleased]
 
+## [11.4.10] - 2026-06-10
+
+### Fixed
+- **Reboot / Start BG no longer hang for up to 15 minutes on the "Waiting for
+  DB pod(s) Ready…" step.** The readiness gate matched database pods by the
+  `-db-` name pattern, which also caught the one-shot `db-dbdepl-util` Job pod
+  (plus the `db-util-mon` / `db-util-pghero` sidecars). A finished Job pod sits
+  in `Completed` state permanently, and `kubectl wait --for=condition=Ready`
+  against a Completed pod never succeeds — it blocks for the entire 900-second
+  timeout and then gives up, so whenever that Job pod hadn't been
+  garbage-collected yet the whole reboot/start appeared to freeze for ~15
+  minutes before continuing. The gate now skips `util` / `mon` / `pghero`
+  helper pods by name and skips any terminal (`Completed` / `Succeeded`) pod by
+  status, so it only ever waits on the real database StatefulSet pod
+  (`db-dbdepl-sts-*`). Verified against the live cluster: the new filter
+  returns exactly the DB pod where the old one returned four.
+
 ## [11.4.9] - 2026-06-10
 
 ### Fixed
