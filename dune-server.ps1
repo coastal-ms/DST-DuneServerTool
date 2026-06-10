@@ -2132,6 +2132,41 @@ while ($true) {
     if ($cmdName -eq "rotate-ssh-key") {
         . "$bgSetupPath\vm-utilities.ps1"
         Update-SshKey -Ip $ip | Out-Null
+
+        # --- Guard: confirm the freshly-rotated key actually authenticates -----
+        # Update-SshKey regenerates the local key, then authorizes it on the VM
+        # by SSHing in with the dune *password*. If that password prompt is
+        # closed or cancelled, the local key is replaced but its public half
+        # never reaches dune@VM:~/.ssh/authorized_keys — leaving DST locked out
+        # of every key-based operation (status, commands, diagnostics all fail
+        # with "Permission denied (publickey)"). Verify non-interactively and,
+        # if it failed, tell the user exactly how to recover instead of silently
+        # stranding them.
+        $verifyKey = Resolve-FreshSshKey -ConfiguredPath $sshKey
+        if (-not $verifyKey) { $verifyKey = $sshKey }
+        $rotateProbe = ''
+        if ($verifyKey -and (Test-Path -LiteralPath $verifyKey)) {
+            $rotateProbe = ssh -o BatchMode=yes -o StrictHostKeyChecking=no -o ConnectTimeout=8 -o LogLevel=QUIET -i "$verifyKey" "$sshUser@$ip" "echo dune-ok" 2>&1
+        }
+        if ($rotateProbe -match 'dune-ok') {
+            Write-Host ""
+            Write-Host "  Verified: the new SSH key authenticates to $sshUser@$ip." -ForegroundColor Green
+        } else {
+            Write-Host ""
+            Write-Host "  WARNING: the new SSH key is NOT authorized on the VM yet." -ForegroundColor Red
+            Write-Host "  The key was regenerated locally, but its public half never reached" -ForegroundColor Yellow
+            Write-Host "  ${sshUser}@${ip}:~/.ssh/authorized_keys - usually because the dune" -ForegroundColor Yellow
+            Write-Host "  password prompt above was closed or cancelled. DST cannot manage the" -ForegroundColor Yellow
+            Write-Host "  server (status, commands, diagnostics) until this is fixed." -ForegroundColor Yellow
+            Write-Host ""
+            Write-Host "  Recover by running this and entering the '$sshUser' password when asked:" -ForegroundColor Yellow
+            Write-Host ""
+            Write-Host "    Get-Content `"$verifyKey.pub`" | ssh $sshUser@$ip `"mkdir -p ~/.ssh && cat >> ~/.ssh/authorized_keys && chmod 600 ~/.ssh/authorized_keys`"" -ForegroundColor Cyan
+            Write-Host ""
+            Write-Host "  ...or simply run 'rotate-ssh-key' again and be sure to type the dune" -ForegroundColor DarkGray
+            Write-Host "  password when the console asks for it." -ForegroundColor DarkGray
+        }
+
         # Keep dune-admin's copy of the SSH key in sync with the rotated one
         if ($cfg.DuneAdminExe -and (Test-Path $cfg.DuneAdminExe)) {
             try {
