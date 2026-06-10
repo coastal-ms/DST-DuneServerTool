@@ -16,6 +16,17 @@ here cover everything those tags shipped.
 ## [11.4.11] - 2026-06-10
 
 ### Fixed
+- **Rotating the SSH key can no longer silently lock you out.** Settings →
+  SSH key → "Generate new" (the `rotate-ssh-key` command) regenerates the
+  local key and then authorizes it on the VM by SSHing in with the `dune`
+  password. If that password prompt was closed or cancelled, the local key
+  was swapped in but its public half never reached the VM's
+  `authorized_keys` — leaving DST locked out of every key-based operation
+  (server health, commands, diagnostics all failed with "Permission denied
+  (publickey)"). The command now verifies the new key actually authenticates
+  before finishing and, if it didn't, prints a loud warning with the exact
+  one-line recovery command. The in-app confirmation also now makes clear you
+  must enter the `dune` password when the console prompts.
 - **"Report an issue" now tells you what happened.** The Help → Report an
   issue diagnostics bundle previously built (or failed to build) silently —
   if the ZIP couldn't be written, or landed in the `%APPDATA%\DuneServer`
@@ -31,11 +42,22 @@ here cover everything those tags shipped.
   the self-hosted server software — tested live against the 1.4.5.0 server
   build (image `1988751-0-shipping`, June 10 2026) covering battlegroup
   management, on-demand map spin-up, game-config/database editing, and
-  backups. No DST code change was required for the patch. Added a noticeable
-  compatibility callout to the README, the marketing-site home page (hero
-  badge + banner), and the install page. The 1.4.5.0 on-demand partition
-  drift behavior is unchanged, so the `dune-clear-partitions` workaround
-  remains required.
+  backups. 1.4.5.0 updated Funcom's self-hosted deployment files, so DST's
+  dependencies were re-audited against the live build: the host helper
+  signatures DST dot-sources (`Update-SshKey`/`Set-VmPassword` in
+  `vm-utilities.ps1`, `Set-VmIp` in `vm-ip.ps1`), the `funcom-seabass-`
+  namespace prefix, every battlegroup-CRD JSON-patch path DST writes
+  (`sets[].map/replicas/partitions/dedicatedScaling`,
+  `worldPartitions[].partitions[].disable`, and the `director.ini` config
+  file), and the `sudo kubectl` shim plus the in-VM
+  `/home/dune/.dune/bin/battlegroup` binary all remain unchanged — so no DST
+  code change was required for the patch. 1.4.5.0's only command-surface delta
+  is additive (the bg binary's new `change-battlegroup-ip` for the advertised
+  player IP, alongside the existing `change-vm-ip` DST already drives), which
+  does not affect existing DST behavior. Added a noticeable compatibility
+  callout to the README, the marketing-site home page (hero badge + banner),
+  and the install page. The 1.4.5.0 on-demand partition drift behavior is
+  unchanged, so the `dune-clear-partitions` workaround remains required.
 
 ## [11.4.10] - 2026-06-10
 
