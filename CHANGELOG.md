@@ -15,6 +15,21 @@ here cover everything those tags shipped.
 
 ## [11.4.8] - 2026-06-10
 
+### Added
+- **New VM command: `change-vm-ip` ("Change VM IP").** Lets you change the
+  VM's network address — or switch how it gets one — without leaving DST.
+  Choose DHCP (automatic from your router) or a static IP (simple, or
+  advanced with custom CIDR / gateway / DNS); the change is applied to the
+  VM over SSH and networking is restarted in place. Available in the VM
+  section of the Commands page (and the CLI menu) whenever the VM is running.
+
+### Changed
+- **"Start BG Only" no longer waits 45s before clearing on-demand map
+  partition pins.** On a plain `start` the VM is already up and the operator
+  pins the on-demand ServerSets quickly, so the post-start settle is now
+  **9s** instead of 45s — the window closes much sooner. `restart`, `reboot`,
+  and `startup` keep their existing settle times.
+
 ### Fixed
 - **The app no longer gets stuck on "Connecting to Dune Server Tool…
   (attempt N)" after the backend's listener silently dies.** A prior
