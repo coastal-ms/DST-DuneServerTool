@@ -8,6 +8,9 @@ const base = import.meta.env.BASE_URL;
 const release = await getLatestRelease();
 const versionLabel = formatDisplayVersion(release.version);
 
+// Latest Funcom Dune: Awakening release this build is verified against.
+const funcomVersion = "1.4.5.0";
+
 const features = [
   {
     title: "Server Health at a glance",
@@ -36,6 +39,12 @@ const features = [
         >
           Open source · Apache 2.0 · {versionLabel}
         </div>
+        <div
+          class="inline-flex items-center gap-2 rounded-full border border-emerald-500/40 bg-emerald-500/10 px-3 py-1 text-xs font-medium text-emerald-300 mb-5"
+        >
+          <span aria-hidden="true">✅</span>
+          Verified compatible with Dune: Awakening {funcomVersion}
+        </div>
         <h1
           class="text-5xl sm:text-6xl font-semibold tracking-tight leading-[1.05]"
         >
@@ -62,6 +71,26 @@ const features = [
         src={`${base}screenshots/server-health.png`}
         alt="Server Health dashboard showing battlegroup status, ports, game servers, and active spice fields"
       />
+    </div>
+  </section>
+
+  <section class="mx-auto max-w-6xl px-6 pb-4">
+    <div
+      class="rounded-xl border border-emerald-500/40 bg-emerald-500/10 px-6 py-5 sm:px-8 sm:flex sm:items-center sm:gap-5"
+    >
+      <div class="flex items-center gap-3 shrink-0">
+        <span class="text-2xl" aria-hidden="true">✅</span>
+        <span class="text-base font-semibold text-emerald-200">
+          Compatible with Dune: Awakening {funcomVersion}
+        </span>
+      </div>
+      <p class="mt-2 sm:mt-0 text-sm text-dune-muted leading-relaxed">
+        The current release ({versionLabel}) is verified against Funcom's
+        latest update — both the game <strong class="text-dune-text">client</strong>
+        and the <strong class="text-dune-text">self-hosted server</strong>
+        software — confirmed live on the 1.4.5.0 build (June 10, 2026). No
+        update to DST is required.
+      </p>
     </div>
   </section>
 

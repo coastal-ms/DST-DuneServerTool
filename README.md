@@ -11,6 +11,15 @@
 The current release is **v11.4.10**. The in-app version label and the
 website show plain semver tags (e.g. `v11.4.10`) — the previous
 Roman-numeral stylization has been removed.
+
+> ## ✅ Confirmed compatible with Dune: Awakening **1.4.5.0**
+> DST **v11.4.10** is verified working against the **latest Funcom release** —
+> both the game **client** and the **self-hosted server** software — as of the
+> **1.4.5.0** patch (June 10, 2026). Compatibility was checked live against a
+> running self-hosted server on that build (server image `1988751-0-shipping`),
+> covering battlegroup management, on-demand map spin-up, game-config and
+> database editing, and backups. No update to DST is required for 1.4.5.0.
+
 It runs as a single-window Windows app (native WebView2 shell) that hosts a
 local web portal (React + Vite + Tailwind) on `127.0.0.1` with a per-launch
 tokenized URL. Same battle-tested SSH + Hyper-V + battlegroup automation

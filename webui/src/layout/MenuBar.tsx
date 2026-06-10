@@ -4,7 +4,7 @@ import { Icon } from '../components/Icon'
 import { NAV_ITEMS, GROUP_LABELS, GROUP_ORDER, type NavGroup } from '../nav'
 import { useUpdateCheck } from '../hooks/useUpdateCheck'
 import { useDuneAdminWebUrl } from '../hooks/useDuneAdminWebUrl'
-import { buildDiagnosticBundle } from '../api/diagnostics'
+import { buildDiagnosticBundle, type DiagnosticBundle } from '../api/diagnostics'
 import { getAutostartState, setAutostartEnabled, type AutostartState } from '../api/autostart'
 import { isLocalViewer } from '../util/viewer'
 
@@ -37,6 +37,13 @@ export function MenuBar({ sidebarCollapsed, onToggleSidebar }: Props) {
   const [autostartBusy, setAutostartBusy] = useState(false)
   const [autostartConfirm, setAutostartConfirm] = useState<null | { nextEnabled: boolean }>(null)
   const [autostartError, setAutostartError] = useState<string | null>(null)
+
+  // Diagnostics-bundle result, surfaced so the user always learns where the
+  // ZIP landed (Desktop vs. %APPDATA% fallback) or why it couldn't be built —
+  // instead of the old fire-and-forget that silently swallowed both.
+  const [diag, setDiag] = useState<
+    null | { status: 'building' } | { status: 'done'; result: DiagnosticBundle } | { status: 'error'; error: string }
+  >(null)
 
   const refreshAutostart = useCallback(async () => {
     if (!local) return
@@ -96,19 +103,20 @@ export function MenuBar({ sidebarCollapsed, onToggleSidebar }: Props) {
 
   // Help → Create GitHub Issue + Save Logs. Opens the prefilled issue form
   // synchronously inside the click handler (so the popup-blocker treats it as
-  // a user gesture), then fires the diagnostics-bundle build in the
-  // background. The backend pops an Explorer window with the ZIP selected so
-  // the user can drag it straight into the new issue comment. We intentionally
-  // do NOT await the bundle before opening the issue — a slow zip should
-  // never make the issue tab fail to open.
+  // a user gesture), then builds the diagnostics bundle. The result is surfaced
+  // in a modal so the user always learns where the ZIP landed (Desktop, or the
+  // %APPDATA% fallback when the Desktop isn't writable — e.g. OneDrive KFM) or
+  // why it failed. We intentionally do NOT await the bundle before opening the
+  // issue — a slow zip should never make the issue tab fail to open.
   const onReportIssue = () => {
     setOpen(null)
     window.open(issueHref, '_blank', 'noopener,noreferrer')
-    void buildDiagnosticBundle().catch(() => {
-      /* the toastless world: backend already revealed the ZIP if it succeeded.
-         A failure here just means no auto-bundle — the user can still file the
-         issue manually and attach logs themselves. */
-    })
+    setDiag({ status: 'building' })
+    buildDiagnosticBundle()
+      .then((result) => setDiag({ status: 'done', result }))
+      .catch((e) =>
+        setDiag({ status: 'error', error: e instanceof Error ? e.message : String(e) }),
+      )
   }
 
   const onItemClick = (item: typeof NAV_ITEMS[number]) => {
@@ -351,6 +359,93 @@ export function MenuBar({ sidebarCollapsed, onToggleSidebar }: Props) {
                     : 'Disable autostart'}
               </button>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* Diagnostics bundle result — surfaced so "Report an issue" always tells
+          the user what happened instead of failing silently. */}
+      {diag && (
+        <div
+          className="fixed inset-0 z-[60] bg-black/60 flex items-center justify-center p-4"
+          onClick={() => { if (diag.status !== 'building') setDiag(null) }}
+        >
+          <div
+            className="bg-surface border border-border rounded-xl shadow-2xl max-w-md w-full p-5"
+            onClick={(e) => e.stopPropagation()}
+          >
+            {diag.status === 'building' && (
+              <div className="flex items-start gap-3">
+                <Icon name="Loader" size={20} className="text-accent-bright mt-0.5 animate-spin" />
+                <div className="flex-1">
+                  <h2 className="text-base font-semibold text-text mb-1">Building diagnostics bundle…</h2>
+                  <p className="text-sm text-text-muted leading-snug">
+                    Collecting and redacting logs into a ZIP you can attach to your GitHub issue.
+                  </p>
+                </div>
+              </div>
+            )}
+
+            {diag.status === 'done' && (
+              <>
+                <div className="flex items-start gap-3 mb-3">
+                  <Icon name="CheckCircle" size={20} className="text-success mt-0.5" />
+                  <div className="flex-1 min-w-0">
+                    <h2 className="text-base font-semibold text-text mb-1">Diagnostics bundle saved</h2>
+                    <p className="text-sm text-text-muted leading-snug">
+                      An Explorer window should have opened with the ZIP selected. Drag it into your
+                      GitHub issue to attach it.
+                    </p>
+                  </div>
+                </div>
+                <div className="mb-3 p-2.5 rounded bg-surface-2 border border-border text-xs">
+                  <div className="text-text-dim mb-0.5">Saved to</div>
+                  <div className="text-text break-all font-mono">{diag.result.path}</div>
+                  <div className="text-text-dim mt-1.5">
+                    {diag.result.fileCount} file{diag.result.fileCount === 1 ? '' : 's'} ·{' '}
+                    {Math.max(1, Math.round(diag.result.sizeBytes / 1024))} KB
+                    {diag.result.sanitized ? ' · redacted' : ''}
+                  </div>
+                </div>
+                {diag.result.warnings.length > 0 && (
+                  <div className="mb-3 p-2.5 rounded bg-warning/10 border border-warning/30 text-xs text-warning space-y-1">
+                    {diag.result.warnings.map((w, i) => (
+                      <div key={i}>{w}</div>
+                    ))}
+                  </div>
+                )}
+              </>
+            )}
+
+            {diag.status === 'error' && (
+              <>
+                <div className="flex items-start gap-3 mb-3">
+                  <Icon name="AlertTriangle" size={20} className="text-danger mt-0.5" />
+                  <div className="flex-1">
+                    <h2 className="text-base font-semibold text-text mb-1">Couldn’t build the diagnostics bundle</h2>
+                    <p className="text-sm text-text-muted leading-snug">
+                      You can still file the issue — attach your logs manually from
+                      <span className="font-mono text-text"> %APPDATA%\DuneServer\.logs</span>.
+                    </p>
+                  </div>
+                </div>
+                <div className="mb-3 p-2 rounded bg-danger/10 border border-danger/30 text-sm text-danger break-words">
+                  {diag.error}
+                </div>
+              </>
+            )}
+
+            {diag.status !== 'building' && (
+              <div className="flex justify-end">
+                <button
+                  type="button"
+                  onClick={() => setDiag(null)}
+                  className="px-3 py-1.5 rounded text-sm bg-accent text-white hover:bg-accent-bright"
+                >
+                  Close
+                </button>
+              </div>
+            )}
           </div>
         </div>
       )}
