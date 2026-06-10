@@ -13,6 +13,16 @@ here cover everything those tags shipped.
 
 ## [Unreleased]
 
+### Fixed
+- **"Report an issue" now tells you what happened.** The Help → Report an
+  issue diagnostics bundle previously built (or failed to build) silently —
+  if the ZIP couldn't be written, or landed in the `%APPDATA%\DuneServer`
+  fallback instead of the Desktop (e.g. when the Desktop is redirected to
+  OneDrive), the user got no feedback and assumed nothing happened. DST now
+  shows a result dialog with the exact saved path, file count/size, any
+  warnings (such as the fallback-location notice), or a clear error with
+  manual log-attach instructions when the bundle can't be built.
+
 ### Changed
 - **Verified compatible with Dune: Awakening 1.4.5.0.** Confirmed DST
   v11.4.10 works against Funcom's latest release — both the game client and
