@@ -348,6 +348,11 @@ function Invoke-DuneCommandExternal {
         '-File',"`"$script:MainScript`""
         '-Cmd',$cmd.Name
     )
+    # Console-mode commands open in their own visible window; tell dune-server.ps1
+    # to pause for a keypress before exiting so the result (especially a warning
+    # or error) stays readable instead of the window closing instantly. InApp
+    # commands capture stdout and must never pause, so they don't get the flag.
+    if ($cmd.Mode -eq 'Console') { $argList += '-PauseOnExit' }
     $startArgs = @{
         FilePath         = $script:PwshExe
         ArgumentList     = $argList

@@ -13,6 +13,29 @@ here cover everything those tags shipped.
 
 ## [Unreleased]
 
+## [11.4.12] - 2026-06-11
+
+### Fixed
+- **"Report an issue" now actually produces the diagnostics ZIP.** The Help →
+  Report an issue bundle staged the archive to a `...zip.tmp` path before
+  renaming it into place. Under Windows PowerShell 5.1 — which the packaged
+  `DuneServer.exe` runs on — `Compress-Archive` rejects any destination that
+  doesn't end in `.zip` (".tmp is not a supported archive file format"), so the
+  whole bundle build threw and no ZIP was ever written. (It happened to work in
+  PowerShell 7 during development, which masked the bug.) The bundle now stages
+  to a real `.zip` name and moves it into place, so the
+  `dst-diagnostics-<timestamp>.zip` is generated reliably. Thanks to **Eqan
+  (Discord)** for reporting that no ZIP was being created.
+- **Command windows no longer slam shut before you can read the result.**
+  Console commands launched in their own window (e.g. `rotate-ssh-key`) ran to
+  completion and then closed instantly, so any final message — especially a red
+  warning or error — flashed and vanished. Those windows now pause for a
+  keypress before closing, keeping the result on screen. The pause is scoped to
+  Console-mode commands and is a no-op for the app's stdout-captured calls, so
+  it can never hang a background operation. Thanks to **Eqan (Discord)** for
+  flagging that the `rotate-ssh-key` warning was unreadable before the window
+  closed.
+
 ## [11.4.11] - 2026-06-10
 
 ### Fixed
