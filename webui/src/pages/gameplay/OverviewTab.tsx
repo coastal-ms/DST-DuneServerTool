@@ -43,20 +43,20 @@ const FEATURES: Feature[] = [
     desc: 'Start / stop / update the battlegroup and run maintenance commands — handled by the Commands and Server Health pages.',
   },
   {
-    name: 'Players', icon: 'Users', status: 'roadmap',
-    desc: 'Inspect and edit player characters: inventory, currencies, skills, schematics. Portable natively via the same SQL bridge.',
+    name: 'Players', icon: 'Users', status: 'live', tab: 'players',
+    desc: 'Inspect and edit player characters: inventory, currencies, and specialization tracks. Give Solari or items, rename, award XP, and repair or delete items — straight against the live game database.',
   },
   {
-    name: 'Bases', icon: 'Castle', status: 'roadmap',
-    desc: 'Browse player bases and structures, ownership, and placement. Read-only views first, then management.',
+    name: 'Bases', icon: 'Castle', status: 'live', tab: 'bases',
+    desc: 'Browse every player base with its building-piece and placeable counts. Search and sort across the world for moderation and cleanup.',
   },
   {
-    name: 'Storage', icon: 'Package', status: 'roadmap',
-    desc: 'Inspect container and stockpile contents across the world for moderation and economy analysis.',
+    name: 'Storage', icon: 'Package', status: 'live', tab: 'storage',
+    desc: 'Inspect container and stockpile contents across the world — open any container to see exactly what is inside, for moderation and economy analysis.',
   },
   {
-    name: 'Blueprints', icon: 'ScrollText', status: 'roadmap',
-    desc: 'Catalog of craftable blueprints and recipes, with which players have unlocked them.',
+    name: 'Blueprints', icon: 'ScrollText', status: 'live', tab: 'blueprints',
+    desc: 'Catalog of player blueprints with their building-piece and placeable counts and owners.',
   },
 ]
 

@@ -138,6 +138,29 @@ $script:DuneGameConfigSchema = @(
 
     # --- Vehicles (engine cvars) ---
     @{ Section=$script:DuneGcSecConsole; Key='dw.VehicleDurabilityDamageMultiplier'; File='engine'; Type='float'; Min=0; Max=10; Label='Vehicle Durability Damage'; Help='Durability damage multiplier for vehicles. 0 = off.'; Category='Vehicles' }
+
+    # --- Parity additions (dune-admin serverSettingsSchema) ---
+    # Building
+    @{ Section=$script:DuneGcSecBuilding; Key='m_BuildingDecayRateMultiplier'; File='game'; Type='float'; Min=0; Label='Building Decay Rate Multiplier'; Help='Scales how fast player buildings decay over time.'; Category='Building' }
+    @{ Section=$script:DuneGcSecBuilding; Key='bEnableBuildingStability'; File='game'; Type='bool'; Label='Enable Building Stability'; Help='Whether structural / stability rules apply to player constructions.'; Category='Building' }
+    @{ Section=$script:DuneGcSecBuilding; Key='m_BaseBackupExtensions'; File='game'; Type='int'; Min=0; Unit='slots'; Label='Base Backup Extensions'; Help='Default number of backup extension slots per base.'; Category='Building' }
+    # Guilds & Economy
+    @{ Section=$script:DuneGcSecGuilds; Key='m_MaxPermissionsPerActor'; File='game'; Type='int'; Min=0; Unit='rules'; Label='Max Permissions per Actor'; Help='Maximum number of permission rules per actor / structure.'; Category='Guilds & Economy' }
+    # Storm Cycle
+    @{ Section=$script:DuneGcSecStorm; Key='m_StormCycleDuration'; File='game'; Type='int'; Min=0; Unit='sec'; Label='Storm Cycle Duration'; Help='Total wall-clock duration of one full storm cycle (calm + storm + warning).'; Category='Storm Cycle' }
+    @{ Section=$script:DuneGcSecStorm; Key='m_StormDuration'; File='game'; Type='int'; Min=0; Unit='sec'; Label='Storm Duration'; Help='How long the active sandstorm phase lasts per cycle.'; Category='Storm Cycle' }
+    @{ Section=$script:DuneGcSecStorm; Key='m_StormWarningDuration'; File='game'; Type='int'; Min=0; Unit='sec'; Label='Storm Warning Duration'; Help='Warning period (dust / audio cues) before the active storm phase begins.'; Category='Storm Cycle' }
+    # PvP & Security
+    @{ Section=$script:DuneGcSecPvP; Key='bPvPEnabled'; File='game'; Type='bool'; Label='PvP Enabled'; Help='Allow player-vs-player combat globally across the server.'; Category='PvP & Security' }
+    @{ Section=$script:DuneGcSecPvP; Key='bServerPVE'; File='game'; Type='bool'; Label='Server PvE Mode'; Help='Enables global PvE protection (inverse of PvP; both can be set independently).'; Category='PvP & Security' }
+    # Spice
+    @{ Section=$script:DuneGcSecSpice; Key='m_bSpawningActive'; File='game'; Type='bool'; Label='Spice Spawning Active'; Help='Master switch - whether spice nodes spawn on the map at all.'; Category='Spice' }
+    @{ Section=$script:DuneGcSecSpice; Key='m_bPlayerMustWitnessBloom'; File='game'; Type='bool'; Label='Player Must Witness Bloom'; Help='If true, a player must be present in the area for a spice bloom to register / count.'; Category='Spice' }
+    # Taxation
+    @{ Section=$script:DuneGcSecTaxation; Key='m_SpicePerHour'; File='game'; Type='int'; Min=0; Unit='spice/hr'; Label='Spice Yield per Hour'; Help='Base spice amount generated per hour per active spice field under taxation.'; Category='Taxation' }
+    # Sandworm
+    @{ Section=$script:DuneGcSecSandworm; Key='m_MinDistanceBetweenSandworms'; File='game'; Type='float'; Min=0; Unit='UU'; Label='Min Distance Between Sandworms'; Help='Minimum world-unit separation required between two simultaneously active sandworms.'; Category='Sandworm' }
+    @{ Section=$script:DuneGcSecSandworm; Key='m_GiantWormMinimumPlayersOnSpiceField'; File='game'; Type='int'; Min=0; Unit='players'; Label='Giant Worm Min Players on Field'; Help='Minimum number of players on a spice field to trigger a giant sandworm spawn.'; Category='Sandworm' }
 )
 
 # -----------------------------------------------------------------------------

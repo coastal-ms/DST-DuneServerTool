@@ -255,3 +255,182 @@ export function clearBotListings() {
     { method: 'POST' },
   )
 }
+
+// ---------------------------------------------------------------------------
+// Players
+// ---------------------------------------------------------------------------
+export interface Player {
+  id: number            // pawn actor id (inventory / spec writes)
+  account_id: number    // rename, tags
+  controller_id: number // currency writes
+  name: string
+  class: string
+  map: string
+  faction_id: number
+  faction_name: string
+  online_status: string
+}
+
+export interface PlayersResponse {
+  players: Player[]
+  total: number
+  source: DataSource
+  liveError?: string
+}
+
+export interface InventoryItem {
+  id: number
+  template_id: string
+  name: string
+  stack_size: number
+  quality: number
+  durability: string
+  max_durability: string
+}
+
+export interface SpecTrack {
+  track_type: string
+  xp: number
+  level: number
+}
+
+export interface CurrencyBalance {
+  currency_id: number
+  balance: number
+}
+
+export interface PlayerDetailResponse {
+  inventory: InventoryItem[]
+  specs: SpecTrack[]
+  currency: CurrencyBalance[]
+  source: DataSource
+  liveError?: string
+}
+
+export interface WriteResult {
+  ok: boolean
+  message: string
+  result?: Record<string, unknown>
+}
+
+export function getPlayers(demo?: boolean) {
+  return api<PlayersResponse>(`/api/gameplay/players${qs({ demo: demo ? 1 : undefined })}`)
+}
+
+export function getPlayerDetail(pawnId: number, controllerId: number, demo?: boolean) {
+  return api<PlayerDetailResponse>(`/api/gameplay/players/detail${qs({
+    pawn: pawnId, controller: controllerId, demo: demo ? 1 : undefined,
+  })}`)
+}
+
+export function giveSolari(controllerId: number, amount: number) {
+  return api<WriteResult>('/api/gameplay/players/give-solari', {
+    method: 'POST', body: JSON.stringify({ controller_id: controllerId, amount }),
+  })
+}
+
+export function giveItem(pawnId: number, template: string, qty: number, quality: number) {
+  return api<WriteResult>('/api/gameplay/players/give-item', {
+    method: 'POST', body: JSON.stringify({ pawn_id: pawnId, template, qty, quality }),
+  })
+}
+
+export function renamePlayer(accountId: number, name: string) {
+  return api<WriteResult>('/api/gameplay/players/rename', {
+    method: 'POST', body: JSON.stringify({ account_id: accountId, name }),
+  })
+}
+
+export function awardSpecXp(pawnId: number, trackType: string, delta: number) {
+  return api<WriteResult>('/api/gameplay/players/award-xp', {
+    method: 'POST', body: JSON.stringify({ pawn_id: pawnId, track_type: trackType, delta }),
+  })
+}
+
+export function deleteInventoryItem(itemId: number) {
+  return api<WriteResult>('/api/gameplay/players/delete-item', {
+    method: 'POST', body: JSON.stringify({ item_id: itemId }),
+  })
+}
+
+export function repairInventoryItem(itemId: number) {
+  return api<WriteResult>('/api/gameplay/players/repair-item', {
+    method: 'POST', body: JSON.stringify({ item_id: itemId }),
+  })
+}
+
+// ---------------------------------------------------------------------------
+// Bases / Storage / Blueprints (read-only)
+// ---------------------------------------------------------------------------
+export interface BaseRow {
+  id: number
+  name: string
+  pieces: number
+  placeables: number
+}
+
+export interface BasesResponse {
+  bases: BaseRow[]
+  total: number
+  source: DataSource
+  liveError?: string
+}
+
+export interface StorageContainer {
+  id: number
+  name: string
+  class: string
+  raw_class: string
+  map: string
+  item_count: number
+  item_templates: string[]
+  item_names: string[]
+  owner_name: string
+}
+
+export interface StorageResponse {
+  containers: StorageContainer[]
+  total: number
+  source: DataSource
+  liveError?: string
+}
+
+export interface StorageItemsResponse {
+  items: InventoryItem[]
+  source: DataSource
+  liveError?: string
+}
+
+export interface BlueprintRow {
+  id: number
+  owner_name: string
+  item_id: number
+  pieces: number
+  placeables: number
+  name: string
+}
+
+export interface BlueprintsResponse {
+  blueprints: BlueprintRow[]
+  total: number
+  source: DataSource
+  liveError?: string
+}
+
+export function getBases(demo?: boolean) {
+  return api<BasesResponse>(`/api/gameplay/bases${qs({ demo: demo ? 1 : undefined })}`)
+}
+
+export function getStorage(demo?: boolean) {
+  return api<StorageResponse>(`/api/gameplay/storage${qs({ demo: demo ? 1 : undefined })}`)
+}
+
+export function getStorageItems(containerId: number, demo?: boolean) {
+  return api<StorageItemsResponse>(`/api/gameplay/storage/items${qs({
+    id: containerId, demo: demo ? 1 : undefined,
+  })}`)
+}
+
+export function getBlueprints(demo?: boolean) {
+  return api<BlueprintsResponse>(`/api/gameplay/blueprints${qs({ demo: demo ? 1 : undefined })}`)
+}
