@@ -130,12 +130,18 @@ export function getGameplayStatus() {
   return api<GameplayStatus>('/api/gameplay/status')
 }
 
+export type MarketSortKey =
+  | 'display_name' | 'category' | 'tier' | 'rarity'
+  | 'lowest_price' | 'total_stock' | 'listing_count'
+
 export interface MarketItemsQuery {
   search?: string
   category?: string
   tier?: string
   rarity?: string
   owner?: string
+  sort?: MarketSortKey
+  dir?: 'asc' | 'desc'
   page?: number
   limit?: number
   demo?: boolean
@@ -144,7 +150,8 @@ export interface MarketItemsQuery {
 export function getMarketItems(q: MarketItemsQuery = {}) {
   return api<MarketItemsResponse>(`/api/gameplay/market/items${qs({
     search: q.search, category: q.category, tier: q.tier, rarity: q.rarity,
-    owner: q.owner, page: q.page, limit: q.limit, demo: q.demo ? 1 : undefined,
+    owner: q.owner, sort: q.sort, dir: q.dir,
+    page: q.page, limit: q.limit, demo: q.demo ? 1 : undefined,
   })}`)
 }
 

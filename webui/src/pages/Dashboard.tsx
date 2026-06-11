@@ -239,13 +239,13 @@ export function Dashboard() {
           <Icon name="Gamepad2" size={22} />
         </div>
         <div className="flex-1 min-w-0">
-          <h2 className="text-base font-semibold text-text">Gameplay Environment</h2>
+          <h2 className="text-base font-semibold text-text">Gameplay Admin</h2>
           <p className="text-sm text-text-muted mt-0.5">
             Native market, exchange, and bot tools — the Dune admin portal, rebuilt right here in one console.
           </p>
         </div>
         <button className="btn-primary shrink-0" onClick={() => navigate('/gameplay')}>
-          <Icon name="ArrowRight" size={15} /> Open Gameplay
+          <Icon name="ArrowRight" size={15} /> Open Gameplay Admin
         </button>
       </section>
 

@@ -3,10 +3,41 @@ import { Icon } from '../../components/Icon'
 import {
   getMarketItems, getMarketStats, getMarketListings, getMarketSales, getMarketCategories,
   type MarketItem, type MarketListing, type MarketSale, type MarketStats, type DataSource,
+  type MarketSortKey,
 } from '../../api/gameplay'
 import { fmtSolari, fmtNum, SourceBadge, RarityTag, categoryLeaf } from './shared'
 
 const PAGE_SIZE = 50
+
+function SortTh({ label, col, sort, dir, onSort, align = 'left', className = '' }: {
+  label: string
+  col: MarketSortKey
+  sort: MarketSortKey
+  dir: 'asc' | 'desc'
+  onSort: (col: MarketSortKey) => void
+  align?: 'left' | 'center' | 'right'
+  className?: string
+}) {
+  const active = sort === col
+  const justify = align === 'right' ? 'justify-end' : align === 'center' ? 'justify-center' : 'justify-start'
+  return (
+    <th className={`px-3 py-2 font-medium ${className}`}>
+      <button
+        type="button"
+        onClick={() => onSort(col)}
+        className={`flex w-full items-center gap-1 ${justify} uppercase tracking-wider transition-colors ${active ? 'text-accent-bright' : 'hover:text-text'}`}
+        aria-sort={active ? (dir === 'asc' ? 'ascending' : 'descending') : 'none'}
+      >
+        <span>{label}</span>
+        <Icon
+          name={active ? (dir === 'asc' ? 'ChevronUp' : 'ChevronDown') : 'ChevronsUpDown'}
+          size={12}
+          className={active ? '' : 'opacity-40'}
+        />
+      </button>
+    </th>
+  )
+}
 
 export function MarketTab() {
   const [items, setItems] = useState<MarketItem[]>([])
@@ -23,7 +54,14 @@ export function MarketTab() {
   const [debouncedSearch, setDebouncedSearch] = useState('')
   const [category, setCategory] = useState('')
   const [owner, setOwner] = useState('')
+  const [sort, setSort] = useState<MarketSortKey>('display_name')
+  const [dir, setDir] = useState<'asc' | 'desc'>('asc')
   const [page, setPage] = useState(0)
+
+  const toggleSort = (col: MarketSortKey) => {
+    if (sort === col) setDir(d => (d === 'asc' ? 'desc' : 'asc'))
+    else { setSort(col); setDir('asc') }
+  }
 
   // Detail drawer
   const [selected, setSelected] = useState<MarketItem | null>(null)
@@ -33,14 +71,14 @@ export function MarketTab() {
     return () => window.clearTimeout(id)
   }, [search])
 
-  useEffect(() => { setPage(0) }, [debouncedSearch, category, owner])
+  useEffect(() => { setPage(0) }, [debouncedSearch, category, owner, sort, dir])
 
   const load = useCallback(async () => {
     setLoading(true)
     setError(null)
     try {
       const [itemsRes, statsRes] = await Promise.all([
-        getMarketItems({ search: debouncedSearch, category, owner, page, limit: PAGE_SIZE }),
+        getMarketItems({ search: debouncedSearch, category, owner, sort, dir, page, limit: PAGE_SIZE }),
         getMarketStats(),
       ])
       setItems(itemsRes.items)
@@ -53,7 +91,7 @@ export function MarketTab() {
     } finally {
       setLoading(false)
     }
-  }, [debouncedSearch, category, owner, page])
+  }, [debouncedSearch, category, owner, sort, dir, page])
 
   useEffect(() => { void load() }, [load])
 
@@ -135,13 +173,13 @@ export function MarketTab() {
         <table className="w-full text-sm">
           <thead>
             <tr className="text-left text-xs uppercase tracking-wider text-text-dim border-b border-border">
-              <th className="px-3 py-2 font-medium">Item</th>
-              <th className="px-3 py-2 font-medium hidden md:table-cell">Category</th>
-              <th className="px-3 py-2 font-medium text-center hidden sm:table-cell">Tier</th>
-              <th className="px-3 py-2 font-medium hidden lg:table-cell">Rarity</th>
-              <th className="px-3 py-2 font-medium text-right">Lowest</th>
-              <th className="px-3 py-2 font-medium text-right">Stock</th>
-              <th className="px-3 py-2 font-medium text-right hidden sm:table-cell">Listings</th>
+              <SortTh label="Item" col="display_name" sort={sort} dir={dir} onSort={toggleSort} />
+              <SortTh label="Category" col="category" sort={sort} dir={dir} onSort={toggleSort} className="hidden md:table-cell" />
+              <SortTh label="Tier" col="tier" sort={sort} dir={dir} onSort={toggleSort} align="center" className="hidden sm:table-cell" />
+              <SortTh label="Rarity" col="rarity" sort={sort} dir={dir} onSort={toggleSort} className="hidden lg:table-cell" />
+              <SortTh label="Lowest" col="lowest_price" sort={sort} dir={dir} onSort={toggleSort} align="right" />
+              <SortTh label="Stock" col="total_stock" sort={sort} dir={dir} onSort={toggleSort} align="right" />
+              <SortTh label="Listings" col="listing_count" sort={sort} dir={dir} onSort={toggleSort} align="right" className="hidden sm:table-cell" />
             </tr>
           </thead>
           <tbody>
