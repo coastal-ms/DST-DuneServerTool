@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { Icon } from '../../components/Icon'
-import { getBases, type BaseRow, type DataSource } from '../../api/gameplay'
+import { getBases, exportBase, downloadBlueprintFile, type BaseRow, type DataSource } from '../../api/gameplay'
 import { fmtNum, SourceBadge, StatCard, DemoNotice } from './shared'
 
 type SortKey = 'id' | 'name' | 'pieces' | 'placeables'
@@ -14,6 +14,8 @@ export function BasesTab() {
   const [search, setSearch] = useState('')
   const [sort, setSort] = useState<SortKey>('pieces')
   const [dir, setDir] = useState<'asc' | 'desc'>('desc')
+  const [busyId, setBusyId] = useState<number | null>(null)
+  const [flash, setFlash] = useState<string | null>(null)
 
   const load = useCallback(async () => {
     setLoading(true); setError(null)
@@ -27,6 +29,19 @@ export function BasesTab() {
     }
   }, [])
   useEffect(() => { void load() }, [load])
+
+  const handleExport = async (b: BaseRow) => {
+    setBusyId(b.id); setError(null); setFlash(null)
+    try {
+      const r = await exportBase(b.id, source === 'demo')
+      downloadBlueprintFile(r.blueprint, r.filename)
+      setFlash(`Exported ${r.filename}.`)
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e))
+    } finally {
+      setBusyId(null)
+    }
+  }
 
   const toggleSort = (col: SortKey) => {
     if (sort === col) setDir(d => (d === 'asc' ? 'desc' : 'asc'))
@@ -69,6 +84,7 @@ export function BasesTab() {
       </div>
 
       {source === 'demo' && <DemoNotice liveError={liveError} what="base data" />}
+      {flash && <div className="card p-3 mb-4 text-sm text-success break-words flex items-center gap-2"><Icon name="CheckCircle2" size={15} /> {flash}</div>}
       {error && <div className="card p-3 mb-4 text-sm text-danger break-words">{error}</div>}
 
       <div className="card overflow-hidden">
@@ -79,16 +95,17 @@ export function BasesTab() {
               <Th label="ID" col="id" sort={sort} dir={dir} onSort={toggleSort} align="right" className="hidden sm:table-cell" />
               <Th label="Pieces" col="pieces" sort={sort} dir={dir} onSort={toggleSort} align="right" />
               <Th label="Placeables" col="placeables" sort={sort} dir={dir} onSort={toggleSort} align="right" />
+              <th className="px-3 py-2 font-medium text-right">Actions</th>
             </tr>
           </thead>
           <tbody>
             {loading && bases.length === 0 && (
-              <tr><td colSpan={4} className="px-3 py-8 text-center text-text-dim">
+              <tr><td colSpan={5} className="px-3 py-8 text-center text-text-dim">
                 <Icon name="Loader2" size={18} className="animate-spin inline" /> Loading bases…
               </td></tr>
             )}
             {!loading && rows.length === 0 && (
-              <tr><td colSpan={4} className="px-3 py-8 text-center text-text-dim">No bases match.</td></tr>
+              <tr><td colSpan={5} className="px-3 py-8 text-center text-text-dim">No bases match.</td></tr>
             )}
             {rows.map(b => (
               <tr key={b.id} className="border-b border-border/50 hover:bg-surface-2">
@@ -98,6 +115,12 @@ export function BasesTab() {
                 <td className="px-3 py-2 text-right hidden sm:table-cell font-mono text-text-dim">{b.id}</td>
                 <td className="px-3 py-2 text-right font-mono">{fmtNum(b.pieces)}</td>
                 <td className="px-3 py-2 text-right font-mono text-text-muted">{fmtNum(b.placeables)}</td>
+                <td className="px-3 py-2 text-right">
+                  <button className="btn-secondary py-1 px-2 text-xs" disabled={busyId === b.id}
+                    onClick={() => { void handleExport(b) }} title="Download this base as a portable blueprint JSON file">
+                    {busyId === b.id ? <Icon name="Loader2" size={13} className="animate-spin" /> : <Icon name="Download" size={13} />} Export
+                  </button>
+                </td>
               </tr>
             ))}
           </tbody>

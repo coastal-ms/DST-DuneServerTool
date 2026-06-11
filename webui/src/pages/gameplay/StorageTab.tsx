@@ -1,8 +1,8 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { Icon } from '../../components/Icon'
 import {
-  getStorage, getStorageItems,
-  type StorageContainer, type InventoryItem, type DataSource,
+  getStorage, getStorageItems, giveItemsToStorage, deleteStorageItem,
+  type StorageContainer, type InventoryItem, type DataSource, type StorageGiveItemInput,
 } from '../../api/gameplay'
 import { fmtNum, SourceBadge, StatCard, DemoNotice, qualityClass } from './shared'
 
@@ -74,6 +74,15 @@ export function StorageTab() {
       </div>
 
       {source === 'demo' && <DemoNotice liveError={liveError} what="storage data" />}
+      {source === 'live' && (
+        <div className="card p-3 mb-4 text-xs text-warning border-l-2 border-warning flex items-start gap-2">
+          <Icon name="AlertTriangle" size={14} className="shrink-0 mt-0.5" />
+          <span>
+            Items added to or removed from a container only become visible to players after a <strong>server zone restart</strong>.
+            The game caches container contents while the zone is loaded.
+          </span>
+        </div>
+      )}
       {error && <div className="card p-3 mb-4 text-sm text-danger break-words">{error}</div>}
 
       <div className="card overflow-hidden">
@@ -113,17 +122,23 @@ export function StorageTab() {
         </table>
       </div>
 
-      {selected && <ContainerDetail container={selected} demo={source === 'demo'} onClose={() => setSelected(null)} />}
+      {selected && <ContainerDetail container={selected} demo={source === 'demo'} onClose={() => setSelected(null)} onChanged={() => { void load() }} />}
     </div>
   )
 }
 
-function ContainerDetail({ container, demo, onClose }: { container: StorageContainer; demo: boolean; onClose: () => void }) {
+function ContainerDetail({ container, demo, onClose, onChanged }: {
+  container: StorageContainer; demo: boolean; onClose: () => void; onChanged: () => void
+}) {
   const [items, setItems] = useState<InventoryItem[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
+  const [busy, setBusy] = useState(false)
+  const [flash, setFlash] = useState<string | null>(null)
+  const [showAdd, setShowAdd] = useState(false)
+  const canWrite = !demo
 
-  useEffect(() => {
+  const loadItems = useCallback(() => {
     let alive = true
     setLoading(true); setError(null)
     getStorageItems(container.id, demo)
@@ -132,6 +147,39 @@ function ContainerDetail({ container, demo, onClose }: { container: StorageConta
       .finally(() => { if (alive) setLoading(false) })
     return () => { alive = false }
   }, [container.id, demo])
+  useEffect(() => loadItems(), [loadItems])
+
+  const afterWrite = (msg: string) => {
+    setFlash(msg)
+    loadItems()
+    onChanged()
+  }
+
+  const handleDelete = async (it: InventoryItem) => {
+    if (!window.confirm(`Remove ${it.name} (×${it.stack_size}) from this container? This cannot be undone.`)) return
+    setBusy(true); setError(null); setFlash(null)
+    try {
+      const r = await deleteStorageItem(it.id)
+      afterWrite(r.message || 'Item removed.')
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e))
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  const handleAdd = async (staged: StorageGiveItemInput[]) => {
+    setBusy(true); setError(null); setFlash(null)
+    try {
+      const r = await giveItemsToStorage(container.id, staged)
+      setShowAdd(false)
+      afterWrite(r.message || 'Items added.')
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e))
+    } finally {
+      setBusy(false)
+    }
+  }
 
   return (
     <div className="fixed inset-0 z-40 flex justify-end" onClick={onClose}>
@@ -149,7 +197,23 @@ function ContainerDetail({ container, demo, onClose }: { container: StorageConta
           <button onClick={onClose} className="text-text-dim hover:text-text"><Icon name="X" size={20} /></button>
         </div>
 
-        <h4 className="text-xs uppercase tracking-wider text-text-dim mb-2">Contents ({fmtNum(container.item_count)})</h4>
+        {canWrite ? (
+          <div className="flex flex-wrap gap-2 mb-3">
+            <button className="btn-primary" disabled={busy} onClick={() => setShowAdd(s => !s)}>
+              <Icon name="PackagePlus" size={14} /> Add Items
+            </button>
+          </div>
+        ) : (
+          <div className="text-xs text-text-dim mb-3 flex items-center gap-1.5">
+            <Icon name="Lock" size={12} /> Editing is available when the live game database is connected.
+          </div>
+        )}
+
+        {showAdd && <AddItemsForm busy={busy} onSubmit={handleAdd} onCancel={() => setShowAdd(false)} />}
+
+        {flash && <div className="text-sm text-success mb-3 flex items-center gap-2"><Icon name="CheckCircle2" size={15} /> {flash}</div>}
+
+        <h4 className="text-xs uppercase tracking-wider text-text-dim mb-2">Contents ({fmtNum(items.length || container.item_count)})</h4>
         {loading ? (
           <div className="text-text-dim text-sm py-4"><Icon name="Loader2" size={16} className="animate-spin inline" /> Loading…</div>
         ) : error ? (
@@ -163,12 +227,88 @@ function ContainerDetail({ container, demo, onClose }: { container: StorageConta
                 <span className="truncate max-w-[220px]">
                   <span className="text-text">{it.name}</span>
                   {it.quality > 0 && <span className={`ml-1.5 text-[11px] ${qualityClass(it.quality)}`}>Q{it.quality}</span>}
+                  <span className="ml-1.5 font-mono text-text-dim text-xs">×{fmtNum(it.stack_size)}</span>
                 </span>
-                <span className="font-mono text-text-muted">×{fmtNum(it.stack_size)}</span>
+                {canWrite && (
+                  <button className="text-danger/80 hover:text-danger shrink-0" title="Remove item" disabled={busy}
+                    onClick={() => { void handleDelete(it) }}>
+                    <Icon name="Trash2" size={14} />
+                  </button>
+                )}
               </div>
             ))}
           </div>
         )}
+      </div>
+    </div>
+  )
+}
+
+// Staged "Add Items" form: build a list of template/qty/quality rows, then
+// submit them all at once (mirrors dune-admin's AddItemsModal).
+function AddItemsForm({ busy, onSubmit, onCancel }: {
+  busy: boolean; onSubmit: (items: StorageGiveItemInput[]) => void; onCancel: () => void
+}) {
+  const [staged, setStaged] = useState<StorageGiveItemInput[]>([])
+  const [template, setTemplate] = useState('')
+  const [qty, setQty] = useState('1')
+  const [quality, setQuality] = useState('0')
+
+  const add = () => {
+    const t = template.trim()
+    if (!t) return
+    setStaged(s => [...s, { template: t, qty: Math.max(1, Number(qty) || 1), quality: Math.max(0, Number(quality) || 0) }])
+    setTemplate(''); setQty('1'); setQuality('0')
+  }
+
+  return (
+    <div className="card p-3 mb-3 space-y-2">
+      <div>
+        <label className="block text-[11px] uppercase tracking-wider text-text-dim mb-1">Item template id</label>
+        <input type="text" value={template} placeholder="e.g. Spice_Melange"
+          onChange={e => setTemplate(e.target.value)}
+          onKeyDown={e => { if (e.key === 'Enter') add() }}
+          className="w-full px-3 py-2 rounded-lg bg-surface-2 border border-border text-text text-sm focus:outline-none focus:ring-2 focus:ring-ibad focus:border-ibad/50" />
+      </div>
+      <div className="grid grid-cols-2 gap-2">
+        <div>
+          <label className="block text-[11px] uppercase tracking-wider text-text-dim mb-1">Quantity</label>
+          <input type="number" min={1} value={qty} onChange={e => setQty(e.target.value)}
+            className="w-full px-3 py-2 rounded-lg bg-surface-2 border border-border text-text text-sm focus:outline-none focus:ring-2 focus:ring-ibad focus:border-ibad/50" />
+        </div>
+        <div>
+          <label className="block text-[11px] uppercase tracking-wider text-text-dim mb-1">Quality (0–5)</label>
+          <input type="number" min={0} max={5} value={quality} onChange={e => setQuality(e.target.value)}
+            className="w-full px-3 py-2 rounded-lg bg-surface-2 border border-border text-text text-sm focus:outline-none focus:ring-2 focus:ring-ibad focus:border-ibad/50" />
+        </div>
+      </div>
+      <button className="btn-secondary w-full" onClick={add} disabled={busy || !template.trim()}>
+        <Icon name="Plus" size={14} /> Add to list
+      </button>
+
+      {staged.length > 0 && (
+        <div className="space-y-1 pt-1">
+          {staged.map((s, i) => (
+            <div key={i} className="flex items-center justify-between text-sm bg-surface-2 rounded-lg px-3 py-1.5 border border-border/50">
+              <span className="truncate max-w-[220px] text-text">
+                {s.template}
+                {s.quality > 0 && <span className={`ml-1.5 text-[11px] ${qualityClass(s.quality)}`}>Q{s.quality}</span>}
+                <span className="ml-1.5 font-mono text-text-dim text-xs">×{fmtNum(s.qty)}</span>
+              </span>
+              <button className="text-danger/80 hover:text-danger shrink-0" title="Remove from list"
+                onClick={() => setStaged(list => list.filter((_, j) => j !== i))}>
+                <Icon name="X" size={14} />
+              </button>
+            </div>
+          ))}
+        </div>
+      )}
+
+      <div className="flex justify-end gap-2 pt-1">
+        <button className="btn-secondary" onClick={onCancel} disabled={busy}>Cancel</button>
+        <button className="btn-primary" onClick={() => onSubmit(staged)} disabled={busy || staged.length === 0}>
+          {busy ? <Icon name="Loader2" size={14} className="animate-spin" /> : <Icon name="Check" size={14} />} Add {staged.length || ''} item{staged.length === 1 ? '' : 's'}
+        </button>
       </div>
     </div>
   )
