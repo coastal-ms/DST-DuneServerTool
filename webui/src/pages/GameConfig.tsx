@@ -7,6 +7,7 @@ import {
   getGameConfig,
   saveGameConfig,
   backupGameConfig,
+  listGameConfigBackups,
 } from '../api/gameconfig'
 import type {
   GameConfigCategory,
@@ -14,6 +15,7 @@ import type {
   GameConfigResponse,
   GameConfigFileBundle,
   GameConfigIniSection,
+  GameConfigBackupEntry,
 } from '../api/types'
 import { SpicefieldsCard } from './gameconfig/SpicefieldsCard'
 
@@ -77,6 +79,10 @@ export function GameConfig() {
   const [backing, setBacking] = useState(false)
   const [backupMsg, setBackupMsg] = useState<string | null>(null)
   const [backupError, setBackupError] = useState<string | null>(null)
+  const [backupsOpen, setBackupsOpen] = useState(false)
+  const [backupsLoading, setBackupsLoading] = useState(false)
+  const [backupsError, setBackupsError] = useState<string | null>(null)
+  const [backups, setBackups] = useState<GameConfigBackupEntry[]>([])
 
   const onBackup = useCallback(async () => {
     setBacking(true)
@@ -94,6 +100,20 @@ export function GameConfig() {
       setBackupError(e instanceof Error ? e.message : String(e))
     } finally {
       setBacking(false)
+    }
+  }, [])
+
+  const onViewBackups = useCallback(async () => {
+    setBackupsOpen(true)
+    setBackupsLoading(true)
+    setBackupsError(null)
+    try {
+      const r = await listGameConfigBackups()
+      setBackups(r.backups ?? [])
+    } catch (e) {
+      setBackupsError(e instanceof Error ? e.message : String(e))
+    } finally {
+      setBackupsLoading(false)
     }
   }, [])
 
@@ -272,6 +292,16 @@ export function GameConfig() {
             </button>
             <button
               type="button"
+              onClick={() => void onViewBackups()}
+              disabled={!vmRunning}
+              className="btn-secondary"
+              title="View the most recent on-server backups of these INI files"
+            >
+              <Icon name="History" size={14} />
+              View backups
+            </button>
+            <button
+              type="button"
               onClick={() => void loadAll()}
               disabled={!vmRunning || loadState === 'loading' || saving}
               className="btn-secondary"
@@ -307,6 +337,16 @@ export function GameConfig() {
           >
             <Icon name={backing ? 'Loader2' : 'DatabaseBackup'} size={14} className={backing ? 'animate-spin' : ''} />
             {backing ? 'Backing up…' : 'Backup settings now'}
+          </button>
+          <button
+            type="button"
+            onClick={() => void onViewBackups()}
+            disabled={!vmRunning}
+            className="btn-secondary mt-2.5 ml-2"
+            title="View the most recent on-server backups of these INI files"
+          >
+            <Icon name="History" size={14} />
+            View backups
           </button>
         </div>
       </div>
@@ -447,8 +487,108 @@ export function GameConfig() {
         onCancel={() => setSandwormModalOpen(false)}
         onConfirm={confirmSandwormEnable}
       />
+
+      {backupsOpen && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4"
+          onClick={() => setBackupsOpen(false)}
+        >
+          <div
+            className="card w-full max-w-2xl max-h-[80vh] flex flex-col p-0 overflow-hidden"
+            onClick={e => e.stopPropagation()}
+          >
+            <div className="flex items-center justify-between px-5 py-3 border-b border-border">
+              <h2 className="text-sm font-semibold text-text flex items-center gap-2">
+                <Icon name="History" size={16} className="text-accent-bright" />
+                Recent backups
+              </h2>
+              <button type="button" className="btn-icon" title="Close" onClick={() => setBackupsOpen(false)}>
+                <Icon name="X" size={16} />
+              </button>
+            </div>
+            <div className="px-5 py-4 overflow-y-auto">
+              <p className="text-xs text-text-muted mb-3">
+                On-server snapshots of <span className="font-mono">UserGame.ini</span> /{' '}
+                <span className="font-mono">UserEngine.ini</span> (saved as{' '}
+                <span className="font-mono">.dstbak-&lt;timestamp&gt;</span>). To restore one, open it in the File Browser
+                and copy it back over the live file.
+              </p>
+              {backupsLoading && (
+                <div className="flex items-center gap-2 text-sm text-text-muted py-6 justify-center">
+                  <Icon name="Loader2" size={16} className="animate-spin" /> Loading backups…
+                </div>
+              )}
+              {!backupsLoading && backupsError && (
+                <div className="card p-3 border-danger/40 bg-danger/10 text-danger text-sm flex items-center gap-2">
+                  <Icon name="AlertCircle" size={14} /> {backupsError}
+                </div>
+              )}
+              {!backupsLoading && !backupsError && backups.length === 0 && (
+                <div className="text-sm text-text-muted py-6 text-center">
+                  No backups found yet. Click “Backup settings” to create your first restore point.
+                </div>
+              )}
+              {!backupsLoading && !backupsError && backups.length > 0 && (
+                <div className="space-y-1.5">
+                  {backups.map(b => (
+                    <div key={b.path} className="flex items-center gap-3 rounded border border-border bg-surface-2/40 px-3 py-2">
+                      <Icon name="FileCog" size={14} className="shrink-0 text-text-dim" />
+                      <div className="min-w-0 flex-1">
+                        <div className="text-sm text-text truncate" title={b.path}>{b.name}</div>
+                        <div className="text-[11px] text-text-dim truncate" title={b.dir}>{b.dir}</div>
+                      </div>
+                      <div className="text-right shrink-0">
+                        <div className="text-xs text-text-muted">{formatBackupStamp(b)}</div>
+                        <div className="text-[11px] text-text-dim">{formatBytes(b.size)}</div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+            <div className="px-5 py-3 border-t border-border flex items-center justify-between gap-2">
+              <button
+                type="button"
+                onClick={() => void onViewBackups()}
+                disabled={backupsLoading}
+                className="btn-secondary"
+                title="Reload the backup list"
+              >
+                <Icon name={backupsLoading ? 'Loader2' : 'RefreshCw'} size={14} className={backupsLoading ? 'animate-spin' : ''} />
+                Refresh
+              </button>
+              <button type="button" className="btn-primary" onClick={() => setBackupsOpen(false)}>Close</button>
+            </div>
+          </div>
+        </div>
+      )}
     </>
   )
+}
+
+// Render a backup's timestamp. Prefer the embedded yyyyMMddHHmmss stamp; fall
+// back to the file's mtime (epoch seconds).
+function formatBackupStamp(b: GameConfigBackupEntry): string {
+  const s = b.stamp
+  if (s && /^\d{14}$/.test(s)) {
+    const d = new Date(
+      Number(s.slice(0, 4)),
+      Number(s.slice(4, 6)) - 1,
+      Number(s.slice(6, 8)),
+      Number(s.slice(8, 10)),
+      Number(s.slice(10, 12)),
+      Number(s.slice(12, 14)),
+    )
+    if (!Number.isNaN(d.getTime())) return d.toLocaleString()
+  }
+  if (b.modified > 0) return new Date(b.modified * 1000).toLocaleString()
+  return '—'
+}
+
+function formatBytes(n: number): string {
+  if (!n || n < 1024) return `${n || 0} B`
+  if (n < 1024 * 1024) return `${(n / 1024).toFixed(1)} KB`
+  return `${(n / (1024 * 1024)).toFixed(1)} MB`
 }
 
 // -----------------------------------------------------------------------------

@@ -138,6 +138,30 @@ Register-DuneRoute -Method POST -Path '/api/gameconfig/backup' -Handler {
 }
 
 # -----------------------------------------------------------------------------
+# GET /api/gameconfig/backups — list existing DST backups for the live INI files.
+# Returns the most-recent ".dstbak-<ts>" snapshots next to UserGame/UserEngine.ini
+# so the user can locate a restore point. 503 when VM not available.
+# -----------------------------------------------------------------------------
+Register-DuneRoute -Method GET -Path '/api/gameconfig/backups' -Handler {
+    param($req, $res, $routeParams, $body)
+    $ctx = Get-DuneGameConfigContext
+    if (-not $ctx.ok) {
+        Write-DuneError -Response $res -Status $ctx.status -Message $ctx.message
+        return
+    }
+    try {
+        $r = Get-DuneGameConfigBackups -Ip $ctx.ip
+        Write-DuneJson -Response $res -Body @{
+            available = $true
+            source    = $r.source
+            backups   = $r.backups
+        }
+    } catch {
+        Write-DuneError -Response $res -Status 500 -Message "Game config backup list failed: $($_.Exception.Message)"
+    }
+}
+
+# -----------------------------------------------------------------------------
 # GET /api/gameconfig/spicefields — list rows from dune.spicefield_types.
 # Returns: { available: true, rows: [ { spicefieldTypeId, mapName, fieldType,
 #                                       dimensionIndex,

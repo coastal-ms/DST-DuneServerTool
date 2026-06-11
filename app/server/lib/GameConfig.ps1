@@ -590,6 +590,44 @@ function Backup-DuneGameConfig {
     return @{ timestamp = $ts; source = $paths.source; files = $files.ToArray() }
 }
 
+# List existing DST backups (".dstbak-<ts>") next to each live INI, most-recent
+# first. Returns a flat array the UI can show so users can find a restore point.
+function Get-DuneGameConfigBackups {
+    param([string]$Ip, [int]$Limit = 20)
+    $paths = Resolve-DuneGameConfigPaths -Ip $Ip
+    $out = New-Object 'System.Collections.Generic.List[object]'
+    foreach ($f in @('game','engine')) {
+        $path = if ($f -eq 'game') { $paths.game } else { $paths.engine }
+        $dir  = Split-Path -Path $path -Parent
+        $cmd  = "sudo bash -c 'for x in ''$path''.dstbak-*; do [ -e `"`$x`" ] && stat -c `"%n|%s|%Y`" `"`$x`"; done'"
+        $lines = Invoke-V6Ssh -Ip $Ip -Cmd $cmd
+        foreach ($ln in $lines) {
+            $s = "$ln".Trim()
+            if (-not $s -or $s -notmatch '\.dstbak-') { continue }
+            $parts = $s -split '\|'
+            if ($parts.Count -lt 3) { continue }
+            $full = $parts[0]
+            $name = Split-Path -Path $full -Leaf
+            $ts   = ''
+            if ($name -match '\.dstbak-(\d+)$') { $ts = $matches[1] }
+            $size = 0L; [void][int64]::TryParse($parts[1], [ref]$size)
+            $epoch = 0L; [void][int64]::TryParse($parts[2], [ref]$epoch)
+            $out.Add(@{
+                file    = $f
+                path    = $full
+                dir     = $dir
+                name    = $name
+                size    = $size
+                stamp   = $ts
+                modified = $epoch
+            })
+        }
+    }
+    $sorted = $out.ToArray() | Sort-Object -Property modified -Descending
+    if ($Limit -gt 0) { $sorted = $sorted | Select-Object -First $Limit }
+    return @{ source = $paths.source; backups = @($sorted) }
+}
+
 # =============================================================================
 # SCHEMA API (grouped by category)
 # =============================================================================
