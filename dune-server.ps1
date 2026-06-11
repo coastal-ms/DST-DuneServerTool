@@ -914,6 +914,7 @@ $bgCommands = @(
     [pscustomobject]@{ Key = "5";  SubSection = $null;          Name = "update";                    Desc = "Checks for new versions and applies them" }
     [pscustomobject]@{ Key = "6";  SubSection = $null;          Name = "edit";                      Desc = "Edit the battlegroup with the utilities interface" }
     [pscustomobject]@{ Key = "7";  SubSection = $null;          Name = "edit-advanced";             Label = "Edit Director";   Desc = "(Advanced) Manually edit battlegroup directly with YAML" }
+    [pscustomobject]@{ Key = "21"; SubSection = $null;          Name = "change-battlegroup-ip";     Label = "Change Player IP"; Desc = "Change the IP that players connect to" }
     [pscustomobject]@{ Key = "8";  SubSection = $null;          Name = "enable-experimental-swap";  Desc = "(Experimental) Enable experimental swap memory feature" }
     [pscustomobject]@{ Key = "9";  SubSection = "Database";     Name = "backup";                    Desc = "Take a backup of the battlegroup's database" }
     [pscustomobject]@{ Key = "10"; SubSection = "Database";     Name = "import";                    Desc = "Import a database backup into the selected battlegroup" }
