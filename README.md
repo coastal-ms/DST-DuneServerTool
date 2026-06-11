@@ -42,8 +42,6 @@ browser and keeps the server running in the background.
   toggle keeps the server alive in the tray across sign-ins.
 - **Faster in-app updates.** End-to-end update time dropped by ~7–10s.
 
-![Appearance card with six theme presets](docs/img/appearance.png)
-
 See [`CHANGELOG.md`](CHANGELOG.md) for the full release history and
 [`CONTRIBUTING.md`](CONTRIBUTING.md) for the change-control workflow.
 
@@ -162,8 +160,6 @@ the default arrangement.
 
 ### 🖥️ PowerShell
 
-![Terminal page](docs/img/powershell.png)
-
 Embedded PowerShell session backed by xterm.js. Runs locally on your
 Windows host — use it for `kubectl`, `ssh dune@vm '...'`, and other
 one-shot commands. Persistent working directory across commands. Each
@@ -178,28 +174,42 @@ that isn't on the host machine itself, the `/terminal` route redirects them to
 Server Health, and the `/ws/terminal` socket is refused server-side for
 non-loopback callers. The curated **Commands** page stays available either way.
 
-### ⚙️ Game Config
+### ⚙️ Game Config *(BETA)*
 
 ![Game Config page](docs/img/game-config.png)
 
 A grouped editor for `UserGame.ini` and `UserEngine.ini`, with every
 setting labeled, typed, and showing its underlying key in fine print.
-Groups: Combat Rules, World & Weather, Shai-Hulud, Resources & Loot,
-Players, Spicefields, Performance, and more. A dedicated **Spicefield
-Types** card edits `dune.spicefield_types` directly with at-cap row
-highlighting and a live status badge that refreshes every 10s. Each
-row includes a live-commit **spawning toggle** (v6.1.29+) that flips
-`is_spawning_active` through a guard-railed single-column endpoint,
-plus a 5-second per-button click cooldown on toggle + Save to prevent
-accidental DB hammering. Save flushes the files back to the VM and
-invalidates the Server Health port cache so any port change is
+Groups: Server Identity, Combat Rules, World & Weather, Shai-Hulud,
+Resources & Loot, Players, Spicefields, Performance, and more. The page
+**scans the live INIs on load** and shows each setting's **Funcom default**
+until you override it; your edits are written into a clearly-marked
+**DST-managed block** that DST owns (whole-section relocation, dedup, and
+migration of any legacy dune-admin block), and the original file is **backed
+up on the server before every write**. A prominent BETA banner reminds you to
+hit **Backup settings** first — and a **View backups** button lists the recent
+`.dstbak-*` restore points next to each file. Save flushes the files back to
+the VM and invalidates the Server Health port cache so any port change is
 reflected immediately.
+
+### 🎮 Gameplay Admin
+
+![Gameplay Admin page](docs/img/gameplay-admin.png)
+
+The open-source **Dune admin portal, rebuilt natively inside DST** — one
+console, one theme, no second program to install. A tabbed surface
+(**Overview, Market, Market Bot, Players, Bases, Storage, Blueprints**) sits
+on top of the same SSH + psql bridge the rest of DST uses. **Market /
+Exchange** aggregates every active listing by item (lowest price, stock, bot
+vs. player split, recent sales) and **Market Bot** monitors the automated
+vendor and tunes its pricing — both read your **live game Postgres** directly.
+When the battlegroup is offline the page falls back to a realistic **demo
+dataset** (clearly badged) so the tools are explorable out of the box and flip
+to live data automatically once the battlegroup is running.
 
 ### 🗄️ Database
 
 ![Database page](docs/img/database.png)
-
-![Backup Schedule card](docs/img/backup-schedule.png)
 
 - **Take Backup** / **Restore Backup** for the BG PostgreSQL database
   without remembering pod names. A banner reminds you to stop the BG
@@ -231,8 +241,6 @@ reflected immediately.
 
 ### 🕸️ Sietches *(experimental)*
 
-![Sietches page](docs/img/sietches.png)
-
 Experimental page for adding or removing additional Survival_1 shards
 (sietches). Each sietch costs ~12 GB of RAM and requires the UDP port
 range 7777–7900 to be open on the host. Gated behind an
@@ -241,16 +249,12 @@ directly. Unsupported by Funcom; you're on your own if something breaks.
 
 ### 🗺️ DD Map
 
-![DD Map page](docs/img/dd-map.png)
-
 Two link cards (method.gg + dune.gaming.tools) for the interactive Deep
 Desert maps the community maintains. Both target sites send
 `X-Frame-Options: SAMEORIGIN`, so we can't embed them directly — clicking
 **Open in new tab** launches each in your browser.
 
 ### 🌍 Map SpinUp
-
-![Map SpinUp page](docs/img/map-spinup.png)
 
 Per-map on-demand control for the three scale-to-zero maps — **Deep Desert**,
 **Arrakeen**, and **Harko Village**. Each card shows the map's current pod
@@ -292,8 +296,6 @@ auto-checks on mount):
   copies files, and the wizard's *Launch Dune Server* checkbox handles
   the relaunch).
 ### 🧙 Setup Wizard
-
-![Setup Wizard](docs/img/setup-wizard.png)
 
 Six-step linear flow that runs automatically on first launch:
 
