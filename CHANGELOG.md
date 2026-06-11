@@ -13,6 +13,18 @@ here cover everything those tags shipped.
 
 ## [Unreleased]
 
+## [11.4.13] - 2026-06-11
+
+### Added
+- **Open Funcom's battlegroup.bat from Settings.** A new **"Funcom
+  BattleGroup.bat"** button sits above the Browse button on the Steam install
+  path field (Settings → Tool configuration). It opens the original
+  `battlegroup.bat` in the root of your configured Steam install folder in an
+  elevated window — handy for running Funcom's own setup/management menu
+  without hunting for the file. The button confirms first, then launches the
+  `.bat` (which itself runs `battlegroup.ps1` and pauses on exit) with
+  administrator rights.
+
 ## [11.4.12] - 2026-06-11
 
 ### Fixed

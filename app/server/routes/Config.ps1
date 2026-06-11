@@ -107,3 +107,43 @@ Register-DuneRoute -Method POST -Path '/api/config/rotate-ssh-key' -Handler {
         Write-DuneError -Response $res -Status 500 -Message "SSH key rotation failed: $($_.Exception.Message)"
     }
 }
+
+# POST /api/config/open-battlegroup-bat — open Funcom's original battlegroup.bat
+# (located in the root of the Steam install folder) in an elevated window. The
+# .bat launches battlegroup.ps1 and pauses on exit. The API server already runs
+# elevated, so -Verb RunAs hands that elevation straight to the child (and falls
+# back to a UAC prompt if it somehow isn't). The frontend asks the user before
+# calling this.
+Register-DuneRoute -Method POST -Path '/api/config/open-battlegroup-bat' -Handler {
+    param($req, $res, $routeParams, $body)
+
+    $cfg   = Read-DuneConfigRaw
+    $steam = if ($cfg -and $cfg.SteamPath) { [string]$cfg.SteamPath } else { '' }
+    if (-not $steam) {
+        Write-DuneError -Response $res -Status 400 -Message 'Steam install path is not set. Set it in Settings first.'
+        return
+    }
+
+    $bat = Join-Path $steam 'battlegroup.bat'
+    if (-not (Test-Path -LiteralPath $bat)) {
+        Write-DuneError -Response $res -Status 404 -Message "battlegroup.bat not found at: $bat. Check that the Steam install path points at Funcom's Self-Hosted Server folder."
+        return
+    }
+
+    try {
+        $proc = Start-Process -FilePath $bat -WorkingDirectory $steam -Verb RunAs -PassThru -ErrorAction Stop
+        Write-DuneJson -Response $res -Body @{
+            ok      = $true
+            path    = $bat
+            pid     = if ($proc) { $proc.Id } else { $null }
+            message = 'Opened Funcom battlegroup.bat in an elevated window.'
+        }
+    } catch {
+        $msg = $_.Exception.Message
+        if ($msg -match 'cancell?ed by the user|operation was canceled') {
+            Write-DuneError -Response $res -Status 409 -Message 'Elevation was cancelled — battlegroup.bat was not opened.'
+        } else {
+            Write-DuneError -Response $res -Status 500 -Message "Could not open battlegroup.bat: $msg"
+        }
+    }
+}
