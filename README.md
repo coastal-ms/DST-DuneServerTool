@@ -8,12 +8,12 @@
 [![License: Apache 2.0](https://img.shields.io/badge/License-Apache_2.0-blue.svg)](LICENSE)
 [![Latest release](https://img.shields.io/github/v/release/coastal-ms/DST-DuneServerTool?sort=semver)](https://github.com/coastal-ms/DST-DuneServerTool/releases/latest)
 
-The current release is **v11.4.13**. The in-app version label and the
-website show plain semver tags (e.g. `v11.4.13`) — the previous
+The current release is **v12.3.0**. The in-app version label and the
+website show plain semver tags (e.g. `v12.3.0`) — the previous
 Roman-numeral stylization has been removed.
 
 > ## ✅ Confirmed compatible with Dune: Awakening **1.4.5.0**
-> DST **v11.4.13** is verified working against the **latest Funcom release** —
+> DST **v12.3.0** is verified working against the **latest Funcom release** —
 > both the game **client** and the **self-hosted server** software — as of the
 > **1.4.5.0** patch (June 10, 2026). Compatibility was checked live against a
 > running self-hosted server on that build (server image `1988751-0-shipping`),
