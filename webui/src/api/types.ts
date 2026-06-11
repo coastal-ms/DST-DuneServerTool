@@ -183,6 +183,22 @@ export type GameConfigBackupResponse = {
   files: GameConfigBackupFile[]
 }
 
+export type GameConfigBackupEntry = {
+  file: 'game' | 'engine'
+  path: string
+  dir: string
+  name: string
+  size: number
+  stamp: string
+  modified: number
+}
+
+export type GameConfigBackupListResponse = {
+  available: boolean
+  source: 'live' | 'template' | 'cache'
+  backups: GameConfigBackupEntry[]
+}
+
 // ---------- Spicefield types (dune.spicefield_types) ------------------------
 
 export type SpicefieldType = {
