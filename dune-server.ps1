@@ -5,7 +5,15 @@ param(
     # When set, skip the interactive menu and dispatch directly to the named
     # command. Used by the desktop app (app\DuneServer.ps1) to invoke commands
     # inside its embedded terminal pane.
-    [string]$Cmd
+    [string]$Cmd,
+
+    # When set, pause for a keypress before the script exits so the result
+    # stays on screen instead of the console window closing instantly. The
+    # desktop app passes this for Console-mode commands launched in their own
+    # window (Invoke-DuneCommandExternal); without it a quick command like
+    # rotate-ssh-key flashes its result/warning and vanishes before it can be
+    # read. Never passed for stdout-captured InApp runs.
+    [switch]$PauseOnExit
 )
 
 # ============================================================
@@ -13,7 +21,7 @@ param(
 # Wraps the original battlegroup.ps1 menu and adds extra tools
 # ============================================================
 
-$script:ToolVersion = "11.4.11"
+$script:ToolVersion = "11.4.12"
 
 # Cold-boot readiness budgets (seconds). A fresh battlegroup's FIRST boot can
 # take 10-30 min: k3s + funcom-operators initialize, metrics-server restarts a
@@ -44,6 +52,25 @@ function Invoke-DuneCleanup {
             $jobs | Remove-Job -Force -ErrorAction SilentlyContinue
         }
     } catch { }
+}
+
+# Pause before the script exits so a command launched in its own console
+# window doesn't slam shut before the user can read the result — especially a
+# red warning or error (a user reported rotate-ssh-key flashed a red message
+# and the window closed before they could tell whether it had worked). Only
+# active when -PauseOnExit was passed (Console-mode commands), and a no-op when
+# stdin is redirected so it can never hang a non-interactive / stdout-captured
+# caller.
+function Invoke-DunePauseBeforeClose {
+    if (-not $PauseOnExit) { return }
+    try { if ([Console]::IsInputRedirected) { return } } catch {}
+    try {
+        Write-Host ""
+        Write-Host "Press any key to close this window..." -ForegroundColor Cyan
+        $null = $Host.UI.RawUI.ReadKey('NoEcho,IncludeKeyDown')
+    } catch {
+        try { Read-Host "Press Enter to close this window" | Out-Null } catch {}
+    }
 }
 Register-EngineEvent -SourceIdentifier PowerShell.Exiting -SupportEvent -Action {
     try {
@@ -1351,6 +1378,7 @@ trap {
     Write-Host "  at: $($_.InvocationInfo.PositionMessage)" -ForegroundColor DarkGray
     Write-Host "Cleaning up background helpers..." -ForegroundColor Yellow
     Invoke-DuneCleanup
+    Invoke-DunePauseBeforeClose
     exit 1
 }
 
@@ -1389,6 +1417,7 @@ while ($true) {
         $entry = $entries | Where-Object { $_.Name -eq $Cmd } | Select-Object -First 1
         if (-not $entry) {
             Write-Error "Unknown command: $Cmd"
+            Invoke-DunePauseBeforeClose
             exit 1
         }
     } else {
@@ -1474,7 +1503,7 @@ while ($true) {
 
     if (-not $entry.Available) {
         Write-Warning $entry.Reason
-        if ($Cmd) { exit 1 } else { continue }
+        if ($Cmd) { Invoke-DunePauseBeforeClose; exit 1 } else { continue }
     }
 
     $cmdName = $entry.Name
@@ -2713,3 +2742,4 @@ CreateObject("WScript.Shell").Run cmd, 0, True
 }
 
 Stop-Transcript | Out-Null
+Invoke-DunePauseBeforeClose
