@@ -333,6 +333,7 @@ function Select-DuneMarketItems {
     param(
         [object[]]$Items,
         [string]$Search, [string]$Category, [string]$Tier, [string]$Rarity, [string]$Owner,
+        [string]$SortBy, [string]$SortDir,
         [int]$Page = 0, [int]$Limit = 100
     )
     $search = ''
@@ -352,6 +353,27 @@ function Select-DuneMarketItems {
         if ($Owner -eq 'player' -and ($it.total_stock - $it.bot_stock) -eq 0) { continue }
         $filtered += $it
     }
+
+    # Optional sort across the full filtered set (before pagination so it
+    # orders every match, not just the current page).
+    $valid = @('display_name','category','tier','rarity','lowest_price','total_stock','listing_count')
+    if ($SortBy -and ($valid -contains $SortBy)) {
+        $desc = ($SortDir -ieq 'desc')
+        if ($SortBy -eq 'rarity') {
+            $rank = @{ common = 1; uncommon = 2; rare = 3; epic = 4; legendary = 5 }
+            $filtered = @($filtered | Sort-Object -Descending:$desc -Property @{ Expression = {
+                $k = ([string]$_.rarity).ToLower(); if ($rank.ContainsKey($k)) { $rank[$k] } else { 0 } } })
+        }
+        elseif (@('tier','lowest_price','total_stock','listing_count') -contains $SortBy) {
+            $key = $SortBy
+            $filtered = @($filtered | Sort-Object -Descending:$desc -Property @{ Expression = { [double]$_.$key } })
+        }
+        else {
+            $key = $SortBy
+            $filtered = @($filtered | Sort-Object -Descending:$desc -Property @{ Expression = { ([string]$_.$key).ToLower() } })
+        }
+    }
+
     if ($Limit -le 0 -or $Limit -gt 500) { $Limit = 100 }
     if ($Page -lt 0) { $Page = 0 }
     $total = $filtered.Count

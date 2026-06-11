@@ -19,7 +19,7 @@ export function GameplayEnvironment() {
   return (
     <>
       <PageHeader
-        title="Gameplay Environment"
+        title="Gameplay Admin"
         icon="Gamepad2"
         description="Native market, exchange, and bot tools — the Dune admin portal, rebuilt inside Dune Server Tool."
       />

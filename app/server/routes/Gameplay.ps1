@@ -32,7 +32,7 @@ Register-DuneRoute -Method GET -Path '/api/gameplay/status' -Handler {
 
 # ---------------------------------------------------------------------------
 # GET /api/gameplay/market/items
-# Query: search, category, tier, rarity, owner(bot|player), page, limit, demo
+# Query: search, category, tier, rarity, owner(bot|player), sort, dir, page, limit, demo
 # ---------------------------------------------------------------------------
 Register-DuneRoute -Method GET -Path '/api/gameplay/market/items' -Handler {
     param($req, $res, $routeParams, $body)
@@ -57,7 +57,9 @@ Register-DuneRoute -Method GET -Path '/api/gameplay/market/items' -Handler {
         $sel = Select-DuneMarketItems -Items $items `
             -Search (Get-DuneQ $req 'search') -Category (Get-DuneQ $req 'category') `
             -Tier (Get-DuneQ $req 'tier') -Rarity (Get-DuneQ $req 'rarity') `
-            -Owner (Get-DuneQ $req 'owner') -Page $page -Limit $limit
+            -Owner (Get-DuneQ $req 'owner') `
+            -SortBy (Get-DuneQ $req 'sort') -SortDir (Get-DuneQ $req 'dir') `
+            -Page $page -Limit $limit
         $sel['source'] = $source
         if ($liveError) { $sel['liveError'] = $liveError }
         Write-DuneJson -Response $res -Body $sel
