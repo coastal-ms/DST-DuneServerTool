@@ -6,6 +6,7 @@ import {
   getGameConfigSchema,
   getGameConfig,
   saveGameConfig,
+  backupGameConfig,
 } from '../api/gameconfig'
 import type {
   GameConfigCategory,
@@ -73,6 +74,28 @@ export function GameConfig() {
   const [savedMsg, setSavedMsg] = useState<string | null>(null)
   const [sandwormModalOpen, setSandwormModalOpen] = useState(false)
   const [search, setSearch] = useState('')
+  const [backing, setBacking] = useState(false)
+  const [backupMsg, setBackupMsg] = useState<string | null>(null)
+  const [backupError, setBackupError] = useState<string | null>(null)
+
+  const onBackup = useCallback(async () => {
+    setBacking(true)
+    setBackupError(null)
+    setBackupMsg(null)
+    try {
+      const r = await backupGameConfig()
+      if (!r.ok) {
+        setBackupError('Backup did not complete for one or more files. Is the battlegroup fully provisioned?')
+        return
+      }
+      setBackupMsg(`Backed up UserGame.ini + UserEngine.ini on the server (snapshot ${r.timestamp}). You can revert via the File Browser if needed.`)
+      window.setTimeout(() => setBackupMsg(null), 9000)
+    } catch (e) {
+      setBackupError(e instanceof Error ? e.message : String(e))
+    } finally {
+      setBacking(false)
+    }
+  }, [])
 
   const handleFieldChange = useCallback((key: string, newVal: string) => {
     if (
@@ -239,6 +262,16 @@ export function GameConfig() {
             {sourcePill}
             <button
               type="button"
+              onClick={() => void onBackup()}
+              disabled={!vmRunning || backing || saving}
+              className="btn-secondary"
+              title="Snapshot UserGame.ini + UserEngine.ini on the server before making changes"
+            >
+              <Icon name={backing ? 'Loader2' : 'DatabaseBackup'} size={14} className={backing ? 'animate-spin' : ''} />
+              {backing ? 'Backing up…' : 'Backup settings'}
+            </button>
+            <button
+              type="button"
               onClick={() => void loadAll()}
               disabled={!vmRunning || loadState === 'loading' || saving}
               className="btn-secondary"
@@ -250,6 +283,44 @@ export function GameConfig() {
           </div>
         }
       />
+
+      {/* BETA / experimental notice */}
+      <div className="card p-4 mb-4 border-ibad/40 bg-ibad/5 text-sm flex items-start gap-3">
+        <Icon name="FlaskConical" size={18} className="mt-0.5 shrink-0 text-ibad" />
+        <div className="flex-1 min-w-0">
+          <div className="flex items-center gap-2 mb-1">
+            <span className="text-[10px] font-semibold uppercase tracking-wider px-1.5 py-0.5 rounded bg-ibad/15 text-ibad">Beta</span>
+            <span className="font-semibold text-text">Experimental feature</span>
+          </div>
+          <p className="text-xs text-text-muted leading-relaxed">
+            Game Config writes directly to your live battlegroup&apos;s <span className="font-mono">UserGame.ini</span> /{' '}
+            <span className="font-mono">UserEngine.ini</span>. It&apos;s still being refined and values are written into a
+            DST-managed block. <span className="text-text font-medium">Always click “Backup settings” before making changes</span> so
+            you have a restore point — backups are saved on the server next to each file and can be restored via the File Browser.
+          </p>
+          <button
+            type="button"
+            onClick={() => void onBackup()}
+            disabled={!vmRunning || backing || saving}
+            className="btn-secondary mt-2.5"
+            title="Snapshot UserGame.ini + UserEngine.ini on the server before making changes"
+          >
+            <Icon name={backing ? 'Loader2' : 'DatabaseBackup'} size={14} className={backing ? 'animate-spin' : ''} />
+            {backing ? 'Backing up…' : 'Backup settings now'}
+          </button>
+        </div>
+      </div>
+
+      {backupMsg && (
+        <div className="card p-3 mb-4 border-success/40 bg-success/10 text-success text-sm flex items-center gap-2">
+          <Icon name="ShieldCheck" size={14} /> {backupMsg}
+        </div>
+      )}
+      {backupError && (
+        <div className="card p-3 mb-4 border-danger/40 bg-danger/10 text-danger text-sm flex items-center gap-2">
+          <Icon name="AlertCircle" size={14} /> {backupError}
+        </div>
+      )}
 
       {/* How-it-works note */}
       <div className="card p-3 mb-4 border-border bg-surface-2/40 text-xs text-text-muted flex items-start gap-2">

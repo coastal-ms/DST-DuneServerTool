@@ -567,6 +567,29 @@ function Save-DuneGameConfig {
     }
 }
 
+# Back up the live INI files server-side WITHOUT writing any changes. Copies each
+# resolved file to "<path>.dstbak-<ts>" and verifies the copy landed. Returns a
+# summary the UI can show. Only meaningful for a live BG (templates aren't backed up).
+function Backup-DuneGameConfig {
+    param([string]$Ip)
+    $paths = Resolve-DuneGameConfigPaths -Ip $Ip
+    $ts    = (Get-Date).ToString('yyyyMMddHHmmss')
+    $files = New-Object 'System.Collections.Generic.List[object]'
+    foreach ($f in @('game','engine')) {
+        $path = if ($f -eq 'game') { $paths.game } else { $paths.engine }
+        $bak  = "$path.dstbak-$ts"
+        $exists = ((Invoke-V6Ssh -Ip $Ip -Cmd "sudo bash -c 'test -f ''$path'' && echo yes || echo no'") -join '').Trim()
+        if ($exists -ne 'yes') {
+            $files.Add(@{ file = $f; path = $path; backup = $null; ok = $false; reason = 'source file not found' })
+            continue
+        }
+        Invoke-V6Ssh -Ip $Ip -Cmd "sudo cp '$path' '$bak'" -TimeoutSec 20 | Out-Null
+        $ok = ((Invoke-V6Ssh -Ip $Ip -Cmd "sudo bash -c 'test -f ''$bak'' && echo yes || echo no'") -join '').Trim()
+        $files.Add(@{ file = $f; path = $path; backup = $bak; ok = ($ok -eq 'yes') })
+    }
+    return @{ timestamp = $ts; source = $paths.source; files = $files.ToArray() }
+}
+
 # =============================================================================
 # SCHEMA API (grouped by category)
 # =============================================================================

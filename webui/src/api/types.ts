@@ -168,6 +168,21 @@ export type GameConfigSaveResponse = {
   engine: GameConfigFileBundle
 }
 
+export type GameConfigBackupFile = {
+  file: 'game' | 'engine'
+  path: string
+  backup: string | null
+  ok: boolean
+  reason?: string
+}
+
+export type GameConfigBackupResponse = {
+  ok: boolean
+  timestamp: string
+  source: 'live' | 'template' | 'cache'
+  files: GameConfigBackupFile[]
+}
+
 // ---------- Spicefield types (dune.spicefield_types) ------------------------
 
 export type SpicefieldType = {

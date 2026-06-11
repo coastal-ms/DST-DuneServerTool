@@ -4,6 +4,7 @@ import type {
   GameConfigSchemaResponse,
   GameConfigResponse,
   GameConfigSaveResponse,
+  GameConfigBackupResponse,
   SpicefieldsResponse,
   SpicefieldSaveResponse,
   SpicefieldType,
@@ -26,6 +27,10 @@ export function saveGameConfig(updates: Record<string, string>) {
       body: JSON.stringify({ updates }),
     }),
   )
+}
+
+export function backupGameConfig() {
+  return api<GameConfigBackupResponse>('/api/gameconfig/backup', { method: 'POST' })
 }
 
 export function getSpicefields() {
