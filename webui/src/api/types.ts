@@ -112,6 +112,7 @@ export type GameConfigField = {
   file: 'game' | 'engine'
   type: GameConfigFieldType
   label: string
+  default?: string
   help?: string
   placeholder?: string
   unit?: string
