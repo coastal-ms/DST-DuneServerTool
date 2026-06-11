@@ -12,3 +12,12 @@ WindowsUser=<your-windows-username>
 #   disabled - no checks; menu shows nothing for ports
 PortCheckMode=builtin
 PortCheckUrlTemplate=
+
+# Market Bot (Revy) — optional. The Gameplay Environment > Market Bot tab proxies
+# to an external market-bot service over HTTP. Leave blank to run the Market tab
+# against the live game database only (the bot tab then shows a "not configured"
+# state and falls back to demo data).
+#   MarketBotAddr  - base URL of the bot API, e.g. http://10.0.0.5:8087
+#   MarketBotToken - bearer token the bot expects (sent as: Authorization: Bearer <token>)
+MarketBotAddr=
+MarketBotToken=

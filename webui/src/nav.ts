@@ -18,6 +18,7 @@ export const NAV_ITEMS: NavItem[] = [
   { to: '/commands',    label: 'Commands',     icon: 'Zap',             group: 'terminal' },
   { to: '/terminal',    label: 'PowerShell',   icon: 'SquareTerminal',  group: 'terminal', localOnly: true },
   { to: '/gameconfig',  label: 'Game Config',  icon: 'Sliders',         group: 'data' },
+  { to: '/gameplay',    label: 'Gameplay',     icon: 'Gamepad2',        group: 'data' },
   { to: '/dd-map',      label: 'DD Map',       icon: 'Map',             group: 'data' },
   { to: '/database',    label: 'Database',     icon: 'Database',        group: 'database' },
   { to: '/sietches',    label: 'Sietches',     icon: 'Network',         group: 'database' },
