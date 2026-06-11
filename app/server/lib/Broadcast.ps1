@@ -1,9 +1,8 @@
 ﻿# Broadcast.ps1
 # In-game broadcasts via the battlegroup's mq-game RabbitMQ pod.
 #
-# Mirrors the standalone `send-dune-broadcast` shell script (and dune-admin's
-# rmq_commands.go) but runs over SSH from this Windows tool. Two broadcast
-# kinds are supported:
+# Mirrors Funcom's standalone `send-dune-broadcast` shell script, but runs over
+# SSH from this Windows tool. Two broadcast kinds are supported:
 #   - Generic  : pop-up Title/Body with a duration in seconds.
 #   - Shutdown : server Restart/Shutdown countdown with a delay in minutes.
 #

@@ -3,12 +3,11 @@ import { useNavigate, useLocation } from 'react-router-dom'
 import { Icon } from '../components/Icon'
 import { NAV_ITEMS, GROUP_LABELS, GROUP_ORDER, type NavGroup } from '../nav'
 import { useUpdateCheck } from '../hooks/useUpdateCheck'
-import { useDuneAdminWebUrl } from '../hooks/useDuneAdminWebUrl'
 import { buildDiagnosticBundle, type DiagnosticBundle } from '../api/diagnostics'
 import { getAutostartState, setAutostartEnabled, type AutostartState } from '../api/autostart'
 import { isLocalViewer } from '../util/viewer'
 
-type MenuKey = NavGroup | 'help' | 'duneadmin'
+type MenuKey = NavGroup | 'help'
 
 type Props = {
   sidebarCollapsed: boolean
@@ -24,7 +23,6 @@ export function MenuBar({ sidebarCollapsed, onToggleSidebar }: Props) {
   const navigate = useNavigate()
   const location = useLocation()
   const { data: upd } = useUpdateCheck()
-  const { data: da } = useDuneAdminWebUrl()
   const version = upd?.currentVersion ?? ''
   const [open, setOpen] = useState<MenuKey | null>(null)
   const rootRef = useRef<HTMLDivElement | null>(null)
@@ -272,40 +270,6 @@ export function MenuBar({ sidebarCollapsed, onToggleSidebar }: Props) {
           </div>
         )}
       </div>
-
-      {/* Dune Admin appears immediately to the right of Help only when DST
-          detects a configured dune-admin install (config.yaml present). The
-          item itself is shown whether or not dune-admin is currently
-          listening — clicking it routes to /dune-admin, which then either
-          embeds the live web UI or offers a Start button. The whole entry
-          stays hidden for users who don't have the companion tool. */}
-      {da?.configured && (
-        <div className="relative">
-          <button
-            type="button"
-            onClick={() => { setOpen(null); navigate('/dune-admin') }}
-            onMouseEnter={() => { if (open !== null) setOpen(null) }}
-            className={`px-3 h-7 rounded-md transition-colors flex items-center gap-1.5 ${
-              isActive('/dune-admin')
-                ? 'bg-surface-3 text-text'
-                : 'text-text-muted hover:text-text hover:bg-surface-2/80'
-            }`}
-            title={
-              da.listening
-                ? `dune-admin live at ${da.url || `:${da.port}`}`
-                : `dune-admin installed but not running`
-            }
-          >
-            <span>Dune Admin</span>
-            <span
-              className={`w-1.5 h-1.5 rounded-full ${
-                da.listening ? 'bg-success' : 'bg-text-dim'
-              }`}
-              aria-hidden
-            />
-          </button>
-        </div>
-      )}
 
       {/* Autostart toggle — confirmation modal. Lives at the menubar root
           rather than inside the dropdown so it stays visible after the menu

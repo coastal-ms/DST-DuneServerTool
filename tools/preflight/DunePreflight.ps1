@@ -169,8 +169,6 @@ function Invoke-DunePreflight {
     ToolCheck 'ssh.exe'     'OpenSSH client' 'Settings -> Apps -> Optional features -> OpenSSH Client -> Install'
     ToolCheck 'tar.exe'     'tar (bsdtar)'   'Ships with Win10 1803+. If missing, update Windows or repair system32 PATH.'
     ToolCheck 'curl.exe'    'curl'           'Ships with Win10 1803+ (informational only)' -Optional
-    ToolCheck 'git.exe'     'git'            'winget install -e --id Git.Git  (only needed for the sane-pricing auto-apply feature)' -Optional
-    ToolCheck 'go.exe'      'go'             'winget install -e --id GoLang.Go  (only needed for the sane-pricing auto-apply feature)' -Optional
     ToolCheck 'kubectl.exe' 'kubectl'        'Not required on host — kubectl lives on the VM' -Optional
 
     # ------------------------------------------------------ .NET smoke tests
@@ -290,10 +288,8 @@ function Invoke-DunePreflight {
             'server\lib\DuneLog.ps1',
             'server\lib\Config.ps1',
             'server\routes\Status.ps1',
-            'server\routes\DuneAdmin.ps1',
             'lib\Db-Postgres.ps1',
-            'webui\dist\index.html',
-            'resources\dune-admin-patches\0001-sane-pricing-100k-cap.patch'
+            'webui\dist\index.html'
         )
         $missing = $req | Where-Object { -not (Test-Path -LiteralPath (Join-Path $root $_)) }
         if (-not $missing) { Pass 'Install' 'Required files' "All $($req.Count) present under $root" }

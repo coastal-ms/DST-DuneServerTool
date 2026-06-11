@@ -37,11 +37,10 @@ $script:DuneCommands = @(
     @{ Section='Battlegroup'; Key='14'; Name='open-director';            Mode='InApp';   Requires='running'; DisabledWhen='bg-stopped';  Desc='Open battlegroup director page in your browser' }
     @{ Section='Battlegroup'; Key='15'; Name='shell-vm';                 Mode='Console'; Requires='running'; Desc='Open a shell to the VM' }
     @{ Section='Battlegroup'; Key='16'; Name='shell-pod';                Mode='Console'; Requires='running'; DisabledWhen='bg-stopped';  Desc='Open a shell to a pod' }
-    @{ Section='Battlegroup'; Key='21'; Name='fix-on-demand-maps';      Mode='InApp';   Requires='running'; DisabledWhen='bg-stopped';  Desc='Clear pinned partitions so DeepDesert / Arrakeen / Harko launch on demand' }
+    @{ Section='Battlegroup'; Key='20'; Name='fix-on-demand-maps';      Mode='InApp';   Requires='running'; DisabledWhen='bg-stopped';  Desc='Clear pinned partitions so DeepDesert / Arrakeen / Harko launch on demand' }
 
     @{ Section='Tools'; Key='17'; Name='ssh';         Mode='Console'; Requires='running'; Desc='Open an SSH terminal to the VM' }
-    @{ Section='Tools'; Key='18'; Name='dune-admin';  Mode='InApp';   Requires='running'; Hidden=$true; Desc='Launch dune-admin + open its web UI' }
-    @{ Section='Tools'; Key='19'; Name='setup-guide'; Mode='InApp';   Requires='none';    Desc='Open Funcom self-hosted setup guide' }
+    @{ Section='Tools'; Key='18'; Name='setup-guide'; Mode='InApp';   Requires='none';    Desc='Open Funcom self-hosted setup guide' }
 )
 
 # ---- Availability ------------------------------------------------------------
@@ -326,15 +325,7 @@ function Get-DuneCommandByName {
 # embedded terminal instead; for now everything opens a console window.
 function Invoke-DuneCommandExternal {
     param(
-        [string]$Name,
-        # When the API command runner spawns dune-admin, the DST embed tab is
-        # already showing dune-admin via iframe — so dune-server.ps1's default
-        # behavior of Start-Process'ing the URL in the user's browser would
-        # pop a redundant second window. Setting this env var on the spawned
-        # process tells dune-server.ps1's dune-admin handler to skip the
-        # browser launch. CLI users running the command directly still get
-        # the browser open as before.
-        [switch]$SuppressBrowser
+        [string]$Name
     )
     if (-not $script:PwshExe -or -not $script:MainScript) {
         throw "Command execution not configured (pwsh.exe or dune-server.ps1 missing)."
@@ -361,27 +352,7 @@ function Invoke-DuneCommandExternal {
         Verb             = 'RunAs'   # dune-server.ps1 requires admin
         PassThru         = $true
     }
-    # Default to suppressing the browser for the dune-admin command — the
-    # DST embed tab is the canonical viewer now. Callers can pass
-    # -SuppressBrowser:$false to override.
-    $shouldSuppress = if ($PSBoundParameters.ContainsKey('SuppressBrowser')) {
-        [bool]$SuppressBrowser
-    } else {
-        $cmd.Name -eq 'dune-admin'
-    }
-
-    $prevValue = $env:DST_DUNE_ADMIN_NO_BROWSER
-    try {
-        if ($shouldSuppress) { $env:DST_DUNE_ADMIN_NO_BROWSER = '1' }
-        $proc = Start-Process @startArgs
-    } finally {
-        # Restore the parent's env so subsequent commands aren't affected.
-        if ($null -eq $prevValue) {
-            Remove-Item Env:\DST_DUNE_ADMIN_NO_BROWSER -ErrorAction SilentlyContinue
-        } else {
-            $env:DST_DUNE_ADMIN_NO_BROWSER = $prevValue
-        }
-    }
+    $proc = Start-Process @startArgs
     return @{
         ok      = $true
         name    = $cmd.Name
