@@ -32,8 +32,26 @@ function bundleFor(data: GameConfigResponse, file: 'game' | 'engine'): GameConfi
   return file === 'game' ? data.game : data.engine
 }
 
-function effectiveValue(data: GameConfigResponse, field: GameConfigField): string {
+function fieldDefault(field: GameConfigField): string {
+  return field.default ?? ''
+}
+
+// Live value written in the battlegroup's INI for this field ('' when unset or VM down).
+function liveValue(data: GameConfigResponse | null, field: GameConfigField): string {
+  if (!data) return ''
   return bundleFor(data, field.file).effective?.[`${field.section}||${field.key}`] ?? ''
+}
+
+// A field is "customized" when the live file overrides it with a value other than the default.
+function isCustomized(data: GameConfigResponse | null, field: GameConfigField): boolean {
+  const lv = liveValue(data, field)
+  return lv !== '' && lv !== fieldDefault(field)
+}
+
+// The value an input should hold: the live override when present, otherwise the default.
+function currentValue(data: GameConfigResponse | null, field: GameConfigField): string {
+  const lv = liveValue(data, field)
+  return lv !== '' ? lv : fieldDefault(field)
 }
 
 function sectionIsManaged(data: GameConfigResponse, field: GameConfigField): boolean {
@@ -73,11 +91,12 @@ export function GameConfig() {
     setSandwormModalOpen(false)
   }, [])
 
-  // Seed editable values from the live config's effective (last-wins) map.
-  const seedValues = useCallback((cats: GameConfigCategory[], data: GameConfigResponse) => {
+  // Seed editable values: live override when present, otherwise the funcom default,
+  // so every field is populated even before (or without) a live battlegroup.
+  const seedValues = useCallback((cats: GameConfigCategory[], data: GameConfigResponse | null) => {
     const out: Record<string, string> = {}
     for (const cat of cats) {
-      for (const f of cat.fields) out[f.key] = effectiveValue(data, f)
+      for (const f of cat.fields) out[f.key] = currentValue(data, f)
     }
     return out
   }, [])
@@ -104,10 +123,12 @@ export function GameConfig() {
 
   useEffect(() => {
     void (async () => {
-      if (!schema) {
+      let s = schema
+      if (!s) {
         try {
-          const s = await getGameConfigSchema()
-          setSchema(s.schema)
+          const resp = await getGameConfigSchema()
+          s = resp.schema
+          setSchema(s)
         } catch (e) {
           setLoadError(e instanceof Error ? e.message : String(e))
           setLoadState('error')
@@ -117,8 +138,14 @@ export function GameConfig() {
       if (vmRunning) {
         void loadAll()
       } else {
+        // No live battlegroup: populate every field with its funcom default so the
+        // form is readable. Editing/saving is gated until the VM is up.
+        const seeded = seedValues(s, null)
+        setValues(seeded)
+        setOriginals(seeded)
+        setCfg(null)
         setLoadState('unavailable')
-        setLoadError('VM is not running. Start the battlegroup to load live values.')
+        setLoadError('Showing Funcom defaults — start the battlegroup to load live values and edit.')
       }
     })()
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -236,11 +263,11 @@ export function GameConfig() {
 
       {/* Status / error banners */}
       {loadState === 'unavailable' && (
-        <div className="card p-4 mb-4 border-warning/40 bg-warning/10 text-warning text-sm flex items-start gap-2">
-          <Icon name="AlertTriangle" size={16} className="mt-0.5 shrink-0" />
+        <div className="card p-4 mb-4 border-accent/30 bg-accent/5 text-text-muted text-sm flex items-start gap-2">
+          <Icon name="Info" size={16} className="mt-0.5 shrink-0 text-accent-bright" />
           <div>
-            <div className="font-medium">{loadError ?? 'Game config unavailable.'}</div>
-            <div className="text-xs text-text-muted mt-0.5">Form is read-only until the VM is up.</div>
+            <div className="font-medium text-text">{loadError ?? 'Showing Funcom defaults.'}</div>
+            <div className="text-xs text-text-muted mt-0.5">Every setting below shows its default value. Editing and saving are enabled once the battlegroup is running.</div>
           </div>
         </div>
       )}
@@ -292,7 +319,9 @@ export function GameConfig() {
                       onChange={v => handleFieldChange(f.key, v)}
                       disabled={loadState !== 'ready' || saving}
                       isDirty={(values[f.key] ?? '') !== (originals[f.key] ?? '')}
-                      isSet={cfg ? effectiveValue(cfg, f) !== '' : false}
+                      isSet={liveValue(cfg, f) !== ''}
+                      isCustom={isCustomized(cfg, f)}
+                      defaultValue={fieldDefault(f)}
                       managed={cfg ? sectionIsManaged(cfg, f) : false}
                     />
                   ))}
@@ -374,10 +403,24 @@ type FieldRowProps = {
   disabled: boolean
   isDirty: boolean
   isSet: boolean
+  isCustom: boolean
+  defaultValue: string
   managed: boolean
 }
 
-function FieldRow({ field, value, onChange, disabled, isDirty, isSet, managed }: FieldRowProps) {
+// Human-friendly rendering of a raw default value for the grayed "Default:" line.
+function formatDefaultDisplay(field: GameConfigField, def: string): string {
+  if (def === '') return '(unset)'
+  if (field.type === 'select' && field.options) {
+    const opt = field.options.find(o => o.value === def)
+    return opt ? opt.label : def
+  }
+  const pair = boolPair(field.type)
+  if (pair) return def === pair.on ? 'On' : def === pair.off ? 'Off' : def
+  return def
+}
+
+function FieldRow({ field, value, onChange, disabled, isDirty, isSet, isCustom, defaultValue, managed }: FieldRowProps) {
   const inputBase =
     'w-full px-3 py-2 rounded-lg bg-surface-2 border border-border text-text text-sm ' +
     'placeholder:text-text-dim focus:outline-none focus:ring-2 focus:ring-ibad focus:border-ibad/50 ' +
@@ -400,14 +443,31 @@ function FieldRow({ field, value, onChange, disabled, isDirty, isSet, managed }:
               DST
             </span>
           )}
-          {isSet && !managed && (
-            <span className="text-[9px] font-semibold uppercase tracking-wider px-1.5 py-0.5 rounded bg-surface-2 text-text-muted" title="Currently set in the file">
+          {isCustom ? (
+            <span className="text-[9px] font-semibold uppercase tracking-wider px-1.5 py-0.5 rounded bg-ibad/15 text-ibad" title="This value overrides the Funcom default">
+              Custom
+            </span>
+          ) : isSet && !managed ? (
+            <span className="text-[9px] font-semibold uppercase tracking-wider px-1.5 py-0.5 rounded bg-surface-2 text-text-muted" title="Currently set in the file (matches default)">
               Set
+            </span>
+          ) : (
+            <span className="text-[9px] font-semibold uppercase tracking-wider px-1.5 py-0.5 rounded bg-surface-2 text-text-dim" title="Using the Funcom default value">
+              Default
             </span>
           )}
           <span className="text-[10px] font-mono text-text-dim uppercase tracking-wider">{field.file}</span>
         </span>
       </label>
+
+      {/* When this field overrides the default, show the uneditable default beneath the name. */}
+      {isCustom && (
+        <div className="mb-1.5 text-[11px] text-text-dim flex items-center gap-1.5" title="Funcom default — read-only">
+          <Icon name="CornerDownRight" size={11} className="shrink-0 opacity-60" />
+          <span>Default:</span>
+          <span className="font-mono">{formatDefaultDisplay(field, defaultValue)}</span>
+        </div>
+      )}
 
       {field.type === 'select' && field.options ? (
         <select value={value} disabled={disabled} onChange={e => onChange(e.target.value)} className={inputBase}>
