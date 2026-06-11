@@ -111,6 +111,33 @@ Register-DuneRoute -Method PUT -Path '/api/gameconfig' -Handler {
 }
 
 # -----------------------------------------------------------------------------
+# POST /api/gameconfig/backup — snapshot the live INI files before editing.
+# Copies each live file to "<path>.dstbak-<timestamp>" on the BG VM (read-only
+# copy; no settings are changed). Returns the backup paths so the user has a
+# restore point. 503 when VM not available.
+# -----------------------------------------------------------------------------
+Register-DuneRoute -Method POST -Path '/api/gameconfig/backup' -Handler {
+    param($req, $res, $routeParams, $body)
+    $ctx = Get-DuneGameConfigContext
+    if (-not $ctx.ok) {
+        Write-DuneError -Response $res -Status $ctx.status -Message $ctx.message
+        return
+    }
+    try {
+        $r = Backup-DuneGameConfig -Ip $ctx.ip
+        $allOk = (@($r.files | Where-Object { -not $_.ok }).Count -eq 0)
+        Write-DuneJson -Response $res -Body @{
+            ok        = $allOk
+            timestamp = $r.timestamp
+            source    = $r.source
+            files     = $r.files
+        }
+    } catch {
+        Write-DuneError -Response $res -Status 500 -Message "Game config backup failed: $($_.Exception.Message)"
+    }
+}
+
+# -----------------------------------------------------------------------------
 # GET /api/gameconfig/spicefields — list rows from dune.spicefield_types.
 # Returns: { available: true, rows: [ { spicefieldTypeId, mapName, fieldType,
 #                                       dimensionIndex,
