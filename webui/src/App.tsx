@@ -10,7 +10,6 @@ import { MapSpinUp } from './pages/MapSpinUp'
 import { SetupWizard } from './pages/SetupWizard'
 import { Settings } from './pages/Settings'
 import { TerminalPage } from './pages/Terminal'
-import { DuneAdmin } from './pages/DuneAdmin'
 import { PageStub } from './pages/PageStub'
 import { StatusProvider } from './hooks/useStatus'
 import { isLocalViewer } from './util/viewer'
@@ -40,7 +39,6 @@ export default function App() {
           <Route path="/map-spinup" element={<MapSpinUp />} />
           <Route path="/settings"   element={<Settings />} />
           <Route path="/setup"      element={<SetupWizard />} />
-          <Route path="/dune-admin" element={<DuneAdmin />} />
           {/* /monitoring merged into Dashboard in v6.1 — redirect old path */}
           <Route path="/monitoring" element={<Dashboard />} />
           <Route path="*"           element={<PageStub title="Not Found"   icon="HelpCircle"      description="No page at that path." phase="—" />} />

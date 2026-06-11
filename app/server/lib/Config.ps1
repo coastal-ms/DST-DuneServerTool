@@ -6,13 +6,9 @@
 $script:DuneConfigKeys = @(
     'SteamPath',
     'SshKey',
-    'DuneAdminExe',
     'WindowsUser',
     'PortCheckMode',
     'PortCheckUrlTemplate',
-    'AutoApplyPricingPatch',
-    'GambleDieSize',
-    'GambleTarget',
     'OpenInAppWindow',
     'ConsolePresence',
     'ConsolePresenceVersion'

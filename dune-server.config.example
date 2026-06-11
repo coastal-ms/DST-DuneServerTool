@@ -4,7 +4,6 @@
 
 SteamPath=C:\Program Files (x86)\Steam\steamapps\common\Dune Awakening Self-Hosted Server
 SshKey=C:\Users\<you>\AppData\Local\DuneAwakeningServer\sshKey
-DuneAdminExe=C:\path\to\dune-admin.exe
 WindowsUser=<your-windows-username>
 
 # Port verification mode: builtin | custom | disabled

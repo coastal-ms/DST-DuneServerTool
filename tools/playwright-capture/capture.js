@@ -156,7 +156,7 @@ const piiScrubJs = `
     if (p.route === '/settings') {
       // Expand both collapsible update cards. Re-query buttons between clicks because
       // React re-renders after each toggle and detaches the previous DOM nodes.
-      for (const label of ['Dune Server updates', 'dune-admin.exe']) {
+      for (const label of ['Dune Server updates']) {
         const clicked = await page.evaluate((needle) => {
           const buttons = Array.from(document.querySelectorAll('button, [role="button"]'))
           for (const b of buttons) {

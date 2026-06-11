@@ -1,14 +1,12 @@
 ﻿# System routes — generic machine-dependency detection + install offer.
 #
-# Backs the reusable "DST needs <X> — install it?" popup. Any feature that
-# requires a third-party CLI tool (go / git / node today) can:
-#   1. GET  /api/system/dependencies?names=go,git,node   -> which are missing
-#   2. POST /api/system/dependencies/install {name}       -> winget install (detached)
-#   3. GET  /api/system/dependencies/install-status?name= -> poll until terminal
+# Backs the reusable "DST needs <X> — install it?" popup. No optional backend
+# toolchains are registered today, but the route plumbing is retained for future
+# native DST features.
 #
 # Detection + the detached winget runner live in lib/Dependencies.ps1.
 
-# GET /api/system/dependencies[?names=go,git,node]
+# GET /api/system/dependencies[?names=<dependency>]
 Register-DuneRoute -Method GET -Path '/api/system/dependencies' -Handler {
     param($req, $res, $routeParams, $body)
     try {
@@ -30,7 +28,7 @@ Register-DuneRoute -Method GET -Path '/api/system/dependencies' -Handler {
     }
 }
 
-# POST /api/system/dependencies/install  body: { name: 'go' | 'git' | 'node' }
+# POST /api/system/dependencies/install  body: { name: '<dependency>' }
 # Launches a detached winget install and returns immediately. Poll the status
 # endpoint below until status is terminal (success | failed).
 Register-DuneRoute -Method POST -Path '/api/system/dependencies/install' -Handler {
@@ -43,7 +41,7 @@ Register-DuneRoute -Method POST -Path '/api/system/dependencies/install' -Handle
             $name = [string]$body.name
         }
         if (-not $name) {
-            Write-DuneError -Response $res -Status 400 -Message "Missing 'name' (expected one of: go, git, node)."
+            Write-DuneError -Response $res -Status 400 -Message "Missing 'name'."
             return
         }
         $result = Start-DstDependencyInstall -Name $name
@@ -59,9 +57,9 @@ Register-DuneRoute -Method POST -Path '/api/system/dependencies/install' -Handle
     }
 }
 
-# GET /api/system/dependencies/install-status?name=go
-# Mirrors the dune-admin pricing-patch status pattern: reads the per-dependency
-# JSON status file, tails the winget log, and promotes a dead 'running' process
+# GET /api/system/dependencies/install-status?name=<dependency>
+# Reads the per-dependency JSON status file, tails the winget log, and promotes
+# a dead 'running' process
 # to 'failed' so the UI never spins forever. Also re-probes the tool path so a
 # completed install reports the resolved exe.
 Register-DuneRoute -Method GET -Path '/api/system/dependencies/install-status' -Handler {

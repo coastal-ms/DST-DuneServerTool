@@ -1,69 +1,11 @@
-﻿# Dependencies — detect optional build-time tools and offer to install them.
+# Dependencies — generic optional third-party tool detection + install offer.
 #
-# Some DST features need third-party command-line tools that don't ship with
-# the installer (they're large / better managed by the user's package manager):
-#
-#   - go    : compiles the patched dune-admin binary (sane-pricing patch)
-#   - git   : applies the patch to the dune-admin source tree
-#   - node  : builds the dune-admin web UI that gets embedded in the patched
-#             binary (without it the portal + Market Bot panel 404)
-#
-# Rather than fail a build with a wall-of-text "X was not found" error, DST
-# detects what's missing up front and offers to install it via winget (DST runs
-# elevated, so machine-scope installs land on the system PATH). This file owns
-# detection + the detached winget install runner; routes/System.ps1 exposes it.
-#
-# DETECTION NOTE: we deliberately do NOT rely on Get-Command / $env:PATH alone.
-# When DST (a long-running elevated process) spawns the build, its inherited
-# PATH can be stale — most importantly, a tool the user JUST installed via
-# winget won't be on this process's PATH until DST restarts. So we also probe
-# the standard install locations + winget's shim dir. These candidate lists are
-# kept in sync with app/resources/dune-admin-patches/build-patched.ps1 so that
-# "DST says it's installed" always agrees with "the build can find it".
+# No optional backend toolchains are currently registered. Keep this scaffold so
+# future native DST features can ask for third-party tools without rebuilding the
+# route/winget plumbing.
 
 function Get-DstDependencyRegistry {
-    return @(
-        [pscustomobject]@{
-            name     = 'go'
-            display  = 'Go toolchain'
-            command  = 'go'
-            wingetId = 'GoLang.Go'
-            reason   = 'Compiles the patched dune-admin binary (sane-pricing patch).'
-            candidates = @(
-                "$env:ProgramFiles\Go\bin\go.exe",
-                "$env:LOCALAPPDATA\Programs\Go\bin\go.exe",
-                "$env:LOCALAPPDATA\Microsoft\WinGet\Links\go.exe",
-                "C:\Go\bin\go.exe"
-            )
-        },
-        [pscustomobject]@{
-            name     = 'git'
-            display  = 'Git'
-            command  = 'git'
-            wingetId = 'Git.Git'
-            reason   = 'Applies the sane-pricing patch to the dune-admin source.'
-            candidates = @(
-                "$env:ProgramFiles\Git\cmd\git.exe",
-                "$env:ProgramFiles\Git\bin\git.exe",
-                "${env:ProgramFiles(x86)}\Git\cmd\git.exe",
-                "$env:LOCALAPPDATA\Programs\Git\cmd\git.exe",
-                "$env:LOCALAPPDATA\Microsoft\WinGet\Links\git.exe"
-            )
-        },
-        [pscustomobject]@{
-            name     = 'node'
-            display  = 'Node.js (LTS)'
-            command  = 'node'
-            wingetId = 'OpenJS.NodeJS.LTS'
-            reason   = 'Builds the dune-admin web UI embedded in the patched binary (the portal + Market Bot panel).'
-            candidates = @(
-                "$env:ProgramFiles\nodejs\node.exe",
-                "$env:LOCALAPPDATA\Programs\nodejs\node.exe",
-                "${env:ProgramFiles(x86)}\nodejs\node.exe",
-                "$env:LOCALAPPDATA\Microsoft\WinGet\Links\node.exe"
-            )
-        }
-    )
+    return @()
 }
 
 # Look up a single dependency definition by name (case-insensitive). Returns
@@ -169,7 +111,7 @@ function Start-DstDependencyInstall {
 
     $dep = Get-DstDependencyDef -Name $Name
     if (-not $dep) {
-        return [pscustomobject]@{ ok = $false; error = "Unknown dependency '$Name'. Only go, git and node can be installed this way." }
+        return [pscustomobject]@{ ok = $false; error = "Unknown dependency '$Name'. No optional dependency installers are registered." }
     }
 
     # Already present? Report success without launching winget.

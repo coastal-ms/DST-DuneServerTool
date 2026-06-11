@@ -82,28 +82,7 @@ function Get-DuneSetupPreflight {
         detail   = if ($cfgOk) { "Found: $cfgPath" } else { "Will be created on first save: $cfgPath" }
     }) | Out-Null
 
-    # 6. Git (optional — required only to build the sane-pricing patch)
-    $gitCmd = Get-Command git -ErrorAction SilentlyContinue
-    $gitPath = if ($gitCmd) { $gitCmd.Source } else {
-        @(
-            "$env:ProgramFiles\Git\cmd\git.exe",
-            "$env:ProgramFiles\Git\bin\git.exe",
-            "${env:ProgramFiles(x86)}\Git\cmd\git.exe",
-            "$env:LOCALAPPDATA\Programs\Git\cmd\git.exe",
-            "$env:LOCALAPPDATA\Microsoft\WinGet\Links\git.exe"
-        ) | Where-Object { $_ -and (Test-Path -LiteralPath $_) } | Select-Object -First 1
-    }
-    $gitOk = [bool]$gitPath
-    $checks.Add(@{
-        key      = 'git'
-        label    = 'Git (for sane-pricing patch)'
-        ok       = $gitOk
-        severity = if ($gitOk) { 'ok' } else { 'warning' }
-        detail   = if ($gitOk) { "Found: $gitPath" } else { 'Not found. Only needed to build the optional sane-pricing patch.' }
-        fix      = if ($gitOk) { $null } else { "Install Git, then close and reopen the tool:`nwinget install --id Git.Git -e" }
-    }) | Out-Null
-
-    # 7. SSH key authorized on the VM
+    # 6. SSH key authorized on the VM
     #    Generating a new SSH key by hand (outside the tool) is the #1 reason the
     #    VM rejects the connection: the new key's public half was never added to
     #    dune@VM:~/.ssh/authorized_keys. We verify the *configured* key actually

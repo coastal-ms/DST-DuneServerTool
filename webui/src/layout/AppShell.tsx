@@ -9,7 +9,7 @@ import { useSidebarCollapsed } from '../hooks/useSidebarCollapsed'
 // Routes that should render full-bleed below the menu bar — no sidebar, no
 // status bar, no update banner, no max-width / padding. Keep the top menu bar
 // because that's how the user navigates back out of the immersive view.
-const IMMERSIVE_ROUTES = new Set<string>(['/dune-admin'])
+const IMMERSIVE_ROUTES = new Set<string>([])
 
 export function AppShell({ children }: { children: ReactNode }) {
   const { collapsed, toggle } = useSidebarCollapsed()

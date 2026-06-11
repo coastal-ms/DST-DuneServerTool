@@ -18,7 +18,7 @@ export interface DependencyInstallModalProps {
   deps: SystemDependency[]
   /** Whether winget is available on the machine (drives the manual-fallback note). */
   wingetAvailable: boolean
-  /** One-line context, e.g. "The patched dune-admin build needs these tools." */
+  /** One-line context, e.g. "This feature needs these tools." */
   context?: string
   /** Called when the user cancels / dismisses without resolving everything. */
   onCancel: () => void
@@ -32,7 +32,7 @@ export interface DependencyInstallModalProps {
  * Given a set of missing dependencies, it offers a one-click winget install for
  * each (run detached on the backend), polls until each is present, and fires
  * onAllResolved when nothing is missing anymore. Generalised so any feature can
- * reuse it — not just the dune-admin patch build.
+ * reuse it.
  */
 export function DependencyInstallModal({
   deps,

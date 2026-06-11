@@ -77,7 +77,7 @@ body:
         - Web portal — Battlegroup shows "Unknown" / tool can't connect to the VM (SSH)
         - Web portal — Commands
         - Web portal — PowerShell (embedded xterm.js terminal)
-        - Web portal — Characters (dune-admin launcher / players UI)
+        - Web portal — Characters
         - Web portal — Game Config (UserGame.ini / UserEngine.ini / Spicefield Types)
         - Web portal — DD Map
         - Web portal — Database (Backup / Restore / SQL Editor)
@@ -85,7 +85,6 @@ body:
         - Web portal — Sietches (Additional Survival_1 shards)
         - Web portal — Map SpinUp
         - Web portal — Settings (general — paths, ports, providers)
-        - Web portal — Settings (dune-admin updater / sane-pricing auto-apply)
         - Web portal — Settings (Dune Server Tool self-updater)
         - Web portal — Setup Wizard / first-run
         - Web portal — Top menu bar / Help dropdown
@@ -93,7 +92,7 @@ body:
         - Desktop app shell (DuneShell.exe / WebView2) / PWA install
         - CLI (`dune-server.ps1` / `dune-server.bat`)
         - Installer (`DuneServerSetup.exe`) / first-run setup
-        - Update checker / auto-updater (DST or dune-admin)
+        - Update checker / auto-updater (DST)
         - Other (describe below)
     validations:
       required: true
