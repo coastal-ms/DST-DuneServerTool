@@ -435,3 +435,97 @@ export function getStorageItems(containerId: number, demo?: boolean) {
 export function getBlueprints(demo?: boolean) {
   return api<BlueprintsResponse>(`/api/gameplay/blueprints${qs({ demo: demo ? 1 : undefined })}`)
 }
+
+// ---------------------------------------------------------------------------
+// Blueprint / Base export + import, Storage write actions
+// ---------------------------------------------------------------------------
+export interface BlueprintInstance {
+  building_type: string
+  x: number
+  y: number
+  z: number
+  rotation: number
+  instance_id?: number
+  provides_stability?: boolean
+}
+
+export interface BlueprintPlaceable {
+  building_type: string
+  x: number
+  y: number
+  z: number
+  rx: number
+  ry: number
+  rz: number
+  placeable_id?: number
+}
+
+export interface BlueprintPentashield {
+  placeable_id: number
+  scale: number[]
+}
+
+export interface BlueprintFile {
+  name: string
+  instances: BlueprintInstance[]
+  placeables: BlueprintPlaceable[]
+  pentashields: BlueprintPentashield[]
+}
+
+export interface ExportResponse {
+  blueprint: BlueprintFile
+  filename: string
+  source: DataSource
+  liveError?: string
+}
+
+export function exportBlueprint(id: number, demo?: boolean) {
+  return api<ExportResponse>(`/api/gameplay/blueprints/export${qs({ id, demo: demo ? 1 : undefined })}`)
+}
+
+export function importBlueprint(playerId: number, blueprint: BlueprintFile) {
+  return api<WriteResult>('/api/gameplay/blueprints/import', {
+    method: 'POST', body: JSON.stringify({ player_id: playerId, blueprint }),
+  })
+}
+
+export function exportBase(id: number, demo?: boolean) {
+  return api<ExportResponse>(`/api/gameplay/bases/export${qs({ id, demo: demo ? 1 : undefined })}`)
+}
+
+export interface StorageGiveItemInput {
+  template: string
+  qty: number
+  quality: number
+}
+
+export function giveItemToStorage(containerId: number, template: string, qty: number, quality: number) {
+  return api<WriteResult>('/api/gameplay/storage/give-item', {
+    method: 'POST', body: JSON.stringify({ container_id: containerId, template, qty, quality }),
+  })
+}
+
+export function giveItemsToStorage(containerId: number, items: StorageGiveItemInput[]) {
+  return api<WriteResult>('/api/gameplay/storage/give-items', {
+    method: 'POST', body: JSON.stringify({ container_id: containerId, items }),
+  })
+}
+
+export function deleteStorageItem(itemId: number) {
+  return api<WriteResult>('/api/gameplay/storage/delete-item', {
+    method: 'POST', body: JSON.stringify({ item_id: itemId }),
+  })
+}
+
+// Trigger a client-side download of an exported blueprint/base JSON file.
+export function downloadBlueprintFile(blueprint: BlueprintFile, filename: string) {
+  const blob = new Blob([JSON.stringify(blueprint, null, 2)], { type: 'application/json' })
+  const url = URL.createObjectURL(blob)
+  const a = document.createElement('a')
+  a.href = url
+  a.download = filename || 'blueprint.json'
+  document.body.appendChild(a)
+  a.click()
+  document.body.removeChild(a)
+  URL.revokeObjectURL(url)
+}
