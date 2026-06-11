@@ -335,7 +335,8 @@ function Select-DuneMarketItems {
         [string]$Search, [string]$Category, [string]$Tier, [string]$Rarity, [string]$Owner,
         [int]$Page = 0, [int]$Limit = 100
     )
-    $search = ($Search ?? '').ToLower()
+    $search = ''
+    if ($Search) { $search = $Search.ToLower() }
     $filtered = @()
     foreach ($it in $Items) {
         if ($search) {
