@@ -51,8 +51,7 @@ import DownloadButton from "../components/DownloadButton.astro";
           <div>
             Launch from <strong>Start Menu → Dune Server</strong>. The first
             launch opens the Setup Wizard, which asks for your server install
-            folder, SSH key, and optional dune-admin path. Answers are saved
-            to
+            folder and SSH key. Answers are saved to
             <span class="font-mono text-dune-muted">%APPDATA%\DuneServer\</span
             >
             and survive reinstalls.
@@ -91,17 +90,6 @@ import DownloadButton from "../components/DownloadButton.astro";
         usually at
         <span class="font-mono text-sm">%LOCALAPPDATA%\DuneAwakeningServer\sshKey</span
         >.
-      </li>
-      <li>
-        <strong class="text-dune-text">(Optional)</strong>
-        <a
-          href="https://github.com/icehunter/dune-admin"
-          rel="noopener"
-          class="underline decoration-dotted hover:text-dune-text"
-          >dune-admin</a
-        >
-        — community admin panel for player and inventory tooling. Launches
-        from the Commands page if you point DST at its install path.
       </li>
       <li>
         <strong class="text-dune-text">(Optional)</strong>

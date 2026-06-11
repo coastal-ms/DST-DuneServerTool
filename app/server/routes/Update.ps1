@@ -196,7 +196,7 @@ Register-DuneRoute -Method POST -Path '/api/update/install' -Handler {
         #      window). We do NOT use `taskkill /T` - that would also kill
         #      the relauncher (a child of DuneServer.exe). Killing the
         #      specific PID with Stop-Process leaves the relauncher orphaned
-        #      but alive. dune-admin.exe is left untouched (different program).
+        #      but alive.
         #   3. Launches the installer SILENTLY (/VERYSILENT). The installer's
         #      [Run] WizardSilent entry (DuneServer.iss) then relaunches
         #      DuneServer.exe with `runminimized`, which in turn brings up
@@ -259,8 +259,7 @@ public static extern bool AllowSetForegroundWindow(int dwProcessId);
     Write-Host "[`$(Get-Date -Format o)] Stopping DuneServer.exe (PID $parentPid)"
     Stop-Process -Id $parentPid -Force -ErrorAction SilentlyContinue
     # Sibling DuneServer instances + the standalone app window
-    # (DuneShell.exe). Kill by .Id (no Stop-Process -Name). NOT touching
-    # dune-admin.exe -- that's a separate program with its own lifecycle.
+    # (DuneShell.exe). Kill by .Id (no Stop-Process -Name).
     Get-Process -Name DuneServer -ErrorAction SilentlyContinue | ForEach-Object {
         Stop-Process -Id `$_.Id -Force -ErrorAction SilentlyContinue
     }

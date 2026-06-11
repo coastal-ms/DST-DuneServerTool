@@ -21,8 +21,7 @@ function Invoke-DstRedaction {
         [string]$Text,
         [string]$WindowsUser,
         [string]$SshKeyPath,
-        [string]$SteamPath,
-        [string]$DuneAdminExe
+        [string]$SteamPath
     )
     if ([string]::IsNullOrEmpty($Text)) { return $Text }
     $out = $Text
@@ -50,17 +49,13 @@ function Invoke-DstRedaction {
     if ($SteamPath) {
         $out = [regex]::Replace($out, [regex]::Escape($SteamPath), '<steam-path>', 'IgnoreCase')
     }
-    if ($DuneAdminExe) {
-        $out = [regex]::Replace($out, [regex]::Escape($DuneAdminExe), '<dune-admin-path>', 'IgnoreCase')
-    }
-
     # 5) Generic Windows user-profile path:  C:\Users\<anyone>\  ->  C:\Users\<user>\
     $out = [regex]::Replace($out, '([A-Za-z]):\\Users\\[^\\/:*?"<>|\r\n]+', '$1:\Users\<user>', 'IgnoreCase')
 
     # 6) SshKey=<value> / SteamPath=<value> / WindowsUser=<value> lines in
     #    INI-style config files. Belt-and-braces in case the value didn't
     #    match the explicit redactions above.
-    foreach ($k in @('SshKey', 'WindowsUser', 'SteamPath', 'DuneAdminExe', 'PortCheckUrlTemplate')) {
+    foreach ($k in @('SshKey', 'WindowsUser', 'SteamPath', 'PortCheckUrlTemplate')) {
         $out = [regex]::Replace($out, "(?m)^(\s*$k\s*=\s*).+$", "`${1}<redacted>")
     }
 
@@ -161,7 +156,6 @@ function New-DstDiagnosticBundle {
         WindowsUser  = if ($cfg) { [string]$cfg.WindowsUser  } else { '' }
         SshKeyPath   = if ($cfg) { [string]$cfg.SshKey       } else { '' }
         SteamPath    = if ($cfg) { [string]$cfg.SteamPath    } else { '' }
-        DuneAdminExe = if ($cfg) { [string]$cfg.DuneAdminExe } else { '' }
     }
 
     # 3) env.txt -------------------------------------------------------------
@@ -249,8 +243,7 @@ function New-DstDiagnosticBundle {
     $manLines.Add('Sanitization applied to every text file in this bundle:')
     $manLines.Add('  - IPv4 / IPv6 addresses (except loopback) -> <ip> / <ipv6>')
     $manLines.Add('  - C:\Users\<anyone>\... paths              -> C:\Users\<user>\...')
-    $manLines.Add('  - WindowsUser / SshKey / SteamPath /       -> <user> / <ssh-key-path> /')
-    $manLines.Add('    DuneAdminExe values                         <steam-path> / <dune-admin-path>')
+    $manLines.Add('  - WindowsUser / SshKey / SteamPath values    -> <user> / <ssh-key-path> / <steam-path>')
     $manLines.Add('  - ?t=<token> query params                  -> ?t=<redacted>')
     $manLines.Add('  - INI key=value redaction for the keys above as a safety net')
     $manLines.Add('')

@@ -136,7 +136,7 @@ jobs:
           $banned = @(
               'Setup','ConsoleHost','Database','Browse-','EditDuneIni','Edit-DuneIni',
               'Invoke-DuneCommand','Get-DuneCommandByName','Start-DuneTerminal',
-              'Invoke-DuneSshShell','DuneAdmin'
+              'Invoke-DuneSshShell'
           )
           # Walk every token that is NOT a comment and check its text.
           $bad = @()

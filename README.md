@@ -36,12 +36,6 @@ browser and keeps the server running in the background.
   and Atreides — plus per-token color customization, JSON import/export, and
   live recoloring of the in-app terminal. Your choice is persisted locally and
   applied before React mounts (no flash of the default theme on launch).
-- **dune-admin, embedded.** A **Dune Admin** tab in the top menu bar renders
-  Icehunter's admin panel in a flush iframe inside DST, with a live green/grey
-  "listening" dot and a one-click **Start**.
-- **One console window.** The backend and dune-admin now share a single
-  console — dune-admin's output is mirrored in with an `[admin]` prefix
-  instead of opening a second window.
 - **PowerShell page is loopback-only.** The free-form terminal is hidden, and
   refused server-side, for any viewer that isn't on the host machine itself.
 - **Run at Windows startup.** An opt-in **Help → Run at Windows startup**
@@ -76,9 +70,9 @@ attribution violates the license — please don't.
    port (47823+), opens the **Dune Server Tool** native app window
    (WebView2) pointed at `http://127.0.0.1:<port>/?t=<token>`, and runs a
    minimized PowerShell console in the background. The first launch opens
-   the **Setup Wizard** page, which asks for your server install folder,
-   SSH key, and optional dune-admin path. All answers are saved to
-   `%APPDATA%\DuneServer\` and preserved across reinstalls.
+   the **Setup Wizard** page, which asks for your server install folder
+   and SSH key. All answers are saved to `%APPDATA%\DuneServer\` and
+   preserved across reinstalls.
 
 > The launcher is single-instance — clicking the desktop shortcut again just
 > focuses the existing app window. No duplicate UAC prompt, no second window.
@@ -105,9 +99,6 @@ attribution violates the license — please don't.
 - **SSH private key** for connecting to your VM — created automatically
   during Funcom's official self-hosted setup; usually in
   `%LOCALAPPDATA%\DuneAwakeningServer\sshKey`.
-- **(Optional)** [dune-admin](https://github.com/icehunter/dune-admin) — a
-  community admin panel for player/inventory tooling. Launches from the
-  Commands page if you provide its path.
 
 ---
 
@@ -168,24 +159,6 @@ Drag the grip on any card to reorder commands within their section — the
 order auto-saves to `%APPDATA%\DuneServer\button-order.json` and persists
 across launches. The header has a **Reset layout** button to revert to
 the default arrangement.
-
-The **dune-admin** launch tile (**Start/Restart Dune Admin Service**) restarts
-dune-admin in place — it relaunches the process and reattaches its output to
-DST's shared console rather than opening anything; view the panel in the
-**Dune Admin** menu-bar tab. The tile carries an inline
-"by [Icehunter](https://github.com/Icehunter)" credit badge linking to
-the upstream project.
-
-### 🧩 Dune Admin *(menu bar)*
-
-When DST detects a configured dune-admin install, a **Dune Admin** item
-appears in the top menu bar (right of **Help**) with a small green / grey dot
-showing whether dune-admin is currently listening. Clicking it renders
-Icehunter's full admin web UI in a flush iframe inside DST — no separate
-browser window — under a slim header with **Reload** and **Open in browser**
-actions. If dune-admin isn't running yet, the page offers a one-click
-**Start** and polls until it's up. dune-admin remains its own Windows app;
-this is just an in-portal view of it.
 
 ### 🖥️ PowerShell
 
@@ -300,19 +273,17 @@ All the things the Setup Wizard asked you, but editable any time:
 
 - Steam install path (where Funcom dropped the dedicated server)
 - SSH key path (private key into the dune-awakening VM)
-- `dune-admin.exe` path (optional)
 - Windows username (used for desktop shortcut creation)
 - **Port-check mode** — `builtin` (yougetsignal + canyouseeme fallback),
   `yougetsignal` only, `canyouseeme` only, `custom` (your own URL), or
   `disabled`
 - Port-check URL template (when mode is `custom`)
 
-Changes save on-click — no restart needed. The three path fields (Steam path,
-SSH key, `dune-admin.exe`) each have a **Browse** button that opens a native
-Windows folder/file picker.
+Changes save on-click — no restart needed. The Steam path and SSH key fields
+each have a **Browse** button that opens a native Windows folder/file picker.
 
-Two collapsible cards live at the top of the page (both minimized by
-default, both auto-check on mount):
+The Updates card lives at the top of the page (minimized by default and
+auto-checks on mount):
 
 - **Updates** — current vs. latest Dune Server Tool version pulled from
   the GitHub Releases API. **Check now** to refresh, **Install** to
@@ -320,43 +291,6 @@ default, both auto-check on mount):
   (interactive — the running portal is killed by PID before the wizard
   copies files, and the wizard's *Launch Dune Server* checkbox handles
   the relaunch).
-- **dune-admin.exe** — current vs. latest from
-  [Icehunter/dune-admin](https://github.com/Icehunter/dune-admin). **Check
-  now** to refresh, **Reinstall vX.Y.Z** to download the Windows zip,
-  extract it, and swap the binary in-place. The button is *always*
-  enabled — you can reinstall the current version any time, useful after
-  a config or patch-file change. Refuses to install while dune-admin is
-  running (the file lock check returns *423 Locked*). The current version
-  is read from a sidecar `<exe>.version` file written by the installer
-  (Go binaries built with goreleaser don't embed a Win32 FileVersionInfo).
-  - **Stale `~/.dune-admin` config check (v10.0.1+).** Before a reinstall or
-    setup run, if a `%USERPROFILE%\.dune-admin` config folder already exists
-    the portal shows an in-app confirmation modal (**Cancel** / **Keep &
-    continue** / **Delete & continue**). It *never* deletes without you
-    clicking **Delete & continue** — *Keep* leaves it and proceeds, *Cancel*
-    aborts entirely. (Earlier builds relied on a browser `confirm()` dialog
-    that could be silently suppressed and auto-delete the folder — fixed.)
-    When you do choose **Delete & continue** on a reinstall, the market bot's
-    config and DB pointers are gone, so DST reopens dune-admin once the
-    install (and any pricing-patch rebuild) finishes — letting you re-run
-    market-bot setup right away (v10.0.4+).
-  - **Keep Coastal's sane-pricing patch applied after each update**
-    (checkbox, saved as `AutoApplyPricingPatch`). When checked, each update
-    overlays the matching dune-admin source, applies the bundled patch, runs
-    `go build`, and restarts dune-admin in one click (requires `go` and `git`
-    on PATH). Uncheck and Reinstall to return to the stock upstream binary.
-
-    The patch caps every bot-generated listing at **100,000 solari** and
-    realigns dune-admin's grade / rarity / vendor multipliers to a
-    tier-driven curve. It also makes the bot's *buying* probabilistic — it
-    rolls a configurable die per candidate listing and only buys on the
-    target number (**Die size** / **Buy on roll** on the Settings page, baked
-    into the patched binary at build time). With the patch applied the in-game
-    Market Board looks like this — bot listings sit well below the cap, while
-    player listings the bot doesn't undercut can still exceed it:
-
-    ![dune-admin Market Bot listings with sane-pricing applied](docs/img/marketbot-pricing.png)
-
 ### 🧙 Setup Wizard
 
 ![Setup Wizard](docs/img/setup-wizard.png)
@@ -652,17 +586,6 @@ rate limit. v6.1.5+ automatically falls back to canyouseeme.org when this
 happens; if both are exhausted, try again tomorrow or switch to a single
 provider via **Settings → Port-check mode**.
 
-### dune-admin won't find my SSH key
-dune-admin looks for keys in this order:
-1. `./sshKey` (same folder as the exe)
-2. `~/.ssh/dune`
-3. `~/.ssh/id_ed25519`
-
-You may also need to set `HOME`:
-```powershell
-[System.Environment]::SetEnvironmentVariable("HOME", $env:USERPROFILE, "User")
-```
-
 ### Port check shows `[CLOSED]` but the game works
 Many port-check services don't truly probe UDP — they report "closed"
 when they really mean "no UDP response". Confirm with a UDP-aware tool
@@ -680,18 +603,5 @@ Wizard from a clean slate. Your `button-order.json` and logs are kept.
 
 - The VM name is always `dune-awakening` and the SSH user is always `dune`
   — these match Funcom's official setup and can't be changed.
-- The dune-admin web UI is served locally (same-origin) at
-  `http://localhost:<port>/#/players` once dune-admin is running.
-- **Ports & DST.** DST never picks, moves, or binds a port — it only *reads*
-  the port you chose. dune-admin's listen port is per-user: it's written to
-  `~/.dune-admin/config.yaml` as `listen_addr` during dune-admin's setup wizard
-  (the "HTTP listen address" prompt). The default is `:8080`, but if you tell
-  the wizard you use the **`amp`** control plane it auto-defaults to `:18080`,
-  since CubeCoders AMP commonly squats `8080` on host installs. DST reads
-  whatever `listen_addr` you set and opens that exact URL — so AMP (or anything
-  else) on `8080` is never touched. When you open the **Dune Admin** tab, DST
-  also verifies the process actually listening on that port is dune-admin (not
-  AMP) before loading it, and waits for dune-admin to finish first-time setup,
-  so it can never accidentally open the wrong app's panel.
 - This tool is **not affiliated with Funcom**. "Dune", "Dune: Awakening",
   and related trademarks are property of their respective owners.
