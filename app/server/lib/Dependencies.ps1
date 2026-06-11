@@ -1,4 +1,4 @@
-# Dependencies — generic optional third-party tool detection + install offer.
+﻿# Dependencies — generic optional third-party tool detection + install offer.
 #
 # No optional backend toolchains are currently registered. Keep this scaffold so
 # future native DST features can ask for third-party tools without rebuilding the

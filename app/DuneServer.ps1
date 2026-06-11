@@ -1,4 +1,4 @@
-# Dune Server — entry point (v6.1 web portal)
+﻿# Dune Server — entry point (v6.1 web portal)
 #
 # Bootstrap: pick a free port, start HttpListener, open default browser at the
 # tokened localhost URL. The full UI is the React SPA in webui/dist/.
@@ -148,7 +148,7 @@ public static extern bool IsIconic(System.IntPtr hWnd);
 }
 
 # Version (one of the 5 sync'd constants; see persistent-notes.md)
-$script:DuneToolVersion = '11.4.13'
+$script:DuneToolVersion = '12.3.0'
 
 # ---------- Restart-on-detach handoff -----------------------------------------
 # When a prior "Web Portal" detach left the server running headless, the
@@ -566,6 +566,13 @@ if (Test-Path $libDir) {
 $routesDir = Join-Path $serverDir 'routes'
 if (Test-Path $routesDir) {
     Get-ChildItem -Path $routesDir -Filter '*.ps1' | ForEach-Object { . $_.FullName }
+}
+
+# Start the native Market Bot ("Duke") scheduler in its own background runspace.
+# It only acts when the bot is enabled in gameplay-bot.json, so this is safe to
+# always start; it idles otherwise.
+if (Get-Command Start-DuneGameplayBotScheduler -ErrorAction SilentlyContinue) {
+    try { [void](Start-DuneGameplayBotScheduler -ServerDir $serverDir) } catch {}
 }
 
 # ---------- Token --------------------------------------------------------------

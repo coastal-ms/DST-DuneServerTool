@@ -13,6 +13,35 @@ here cover everything those tags shipped.
 
 ## [Unreleased]
 
+## [12.3.0] - 2026-06-11
+
+New edition. Headlines: the native **Gameplay Admin** console (the
+open-source Dune admin portal rebuilt inside DST) and a **Game Config**
+editor in BETA.
+
+### Added
+- **Gameplay Admin (native Dune admin portal).** A tabbed console —
+  Overview, Market / Exchange, Market Bot, Players, Bases, Storage, and
+  Blueprints — built on the same SSH + psql bridge as the rest of DST, so
+  there's no second program to install. Market and Market Bot read the live
+  game Postgres directly and fall back to a clearly-badged demo dataset when
+  the battlegroup is offline, flipping to live data automatically once it's
+  running. Includes blueprint export/import and storage/base placement
+  parity with the original portal.
+- **Game Config editor (BETA).** A grouped editor for `UserGame.ini` and
+  `UserEngine.ini` that scans the live INIs on load, shows each setting's
+  Funcom default until you override it, and writes changes into a
+  DST-managed block (with whole-section relocation, dedup, and migration of
+  any legacy dune-admin block). The original file is backed up on the server
+  before every write. A BETA banner, a **Backup settings** button, and a
+  **View backups** button (lists recent `.dstbak-*` restore points) make the
+  experimental nature and the restore path obvious.
+
+### Changed
+- **Docs + marketing site refreshed** around a curated six-screenshot tour
+  (Server Health, Commands, Game Config BETA, Gameplay Admin, Database,
+  Settings), all recaptured with PII scrubbed.
+
 ## [11.4.13] - 2026-06-11
 
 ### Added

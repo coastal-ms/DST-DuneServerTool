@@ -103,34 +103,54 @@ export type CommandsResponse = {
 
 export type GameConfigFieldOption = { value: string; label: string }
 
+export type GameConfigFieldType =
+  | 'float' | 'int' | 'bool' | 'bool01' | 'boolLower' | 'string' | 'select'
+
 export type GameConfigField = {
+  section: string
   key: string
   file: 'game' | 'engine'
-  type: 'select' | 'number' | 'text'
+  type: GameConfigFieldType
   label: string
-  hint?: string
+  default?: string
+  help?: string
   placeholder?: string
   unit?: string
   wide?: boolean
-  step?: number
   min?: number
   max?: number
+  quoted?: boolean
   options?: GameConfigFieldOption[]
 }
 
-export type GameConfigSection = {
-  section: string
+export type GameConfigCategory = {
+  category: string
   fields: GameConfigField[]
 }
 
 export type GameConfigSchemaResponse = {
-  schema: GameConfigSection[]
+  schema: GameConfigCategory[]
+}
+
+export type GameConfigIniKey = {
+  key: string
+  value: string
+  isArray: boolean
+  raw: string
+}
+
+export type GameConfigIniSection = {
+  name: string
+  managed: boolean
+  keys: GameConfigIniKey[]
 }
 
 export type GameConfigFileBundle = {
   path: string
   raw: string
-  values: Record<string, string>
+  sections: GameConfigIniSection[]
+  effective: Record<string, string>
+  managedSections: string[]
 }
 
 export type GameConfigResponse = {
@@ -142,10 +162,41 @@ export type GameConfigResponse = {
 
 export type GameConfigSaveResponse = {
   ok: boolean
-  applied: { game: number; engine: number }
+  applied: number
   source: 'live' | 'template' | 'cache'
   game: GameConfigFileBundle
   engine: GameConfigFileBundle
+}
+
+export type GameConfigBackupFile = {
+  file: 'game' | 'engine'
+  path: string
+  backup: string | null
+  ok: boolean
+  reason?: string
+}
+
+export type GameConfigBackupResponse = {
+  ok: boolean
+  timestamp: string
+  source: 'live' | 'template' | 'cache'
+  files: GameConfigBackupFile[]
+}
+
+export type GameConfigBackupEntry = {
+  file: 'game' | 'engine'
+  path: string
+  dir: string
+  name: string
+  size: number
+  stamp: string
+  modified: number
+}
+
+export type GameConfigBackupListResponse = {
+  available: boolean
+  source: 'live' | 'template' | 'cache'
+  backups: GameConfigBackupEntry[]
 }
 
 // ---------- Spicefield types (dune.spicefield_types) ------------------------
