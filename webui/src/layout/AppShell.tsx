@@ -4,6 +4,7 @@ import { MenuBar } from './MenuBar'
 import { Sidebar } from './Sidebar'
 import { StatusBar } from './StatusBar'
 import { UpdateBanner } from '../components/UpdateBanner'
+import { DecoupleNoticeModal } from '../components/DecoupleNoticeModal'
 import { useSidebarCollapsed } from '../hooks/useSidebarCollapsed'
 
 // Routes that should render full-bleed below the menu bar — no sidebar, no
@@ -19,6 +20,7 @@ export function AppShell({ children }: { children: ReactNode }) {
   if (immersive) {
     return (
       <div className="h-full flex flex-col overflow-hidden">
+        <DecoupleNoticeModal />
         <MenuBar sidebarCollapsed={collapsed} onToggleSidebar={toggle} />
         <main className="flex-1 min-h-0 overflow-hidden">
           {children}
@@ -29,6 +31,7 @@ export function AppShell({ children }: { children: ReactNode }) {
 
   return (
     <div className="h-full flex flex-col overflow-hidden">
+      <DecoupleNoticeModal />
       <MenuBar sidebarCollapsed={collapsed} onToggleSidebar={toggle} />
       <div className="flex-1 flex overflow-hidden min-h-0">
         <Sidebar collapsed={collapsed} />

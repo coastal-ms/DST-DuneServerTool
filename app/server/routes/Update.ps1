@@ -128,6 +128,46 @@ Register-DuneRoute -Method GET -Path '/api/update/check' -Handler {
     }
 }
 
+# GET /api/update/migration-notice — one-time "DST is now decoupled from
+# dune-admin" notice. `needed` is true only for installs upgraded from a
+# pre-decouple build that haven't acknowledged yet (see Get-DuneDecoupleNotice).
+Register-DuneRoute -Method GET -Path '/api/update/migration-notice' -Handler {
+    param($req, $res, $routeParams, $body)
+    try {
+        $n = Get-DuneDecoupleNotice
+        Write-DuneJson -Response $res -Body @{
+            needed          = [bool]$n.Needed
+            acknowledged    = [bool]$n.Acknowledged
+            fromLegacy      = [bool]$n.FromLegacy
+            duneAdminExe    = [string]$n.DuneAdminExe
+            duneAdminFolder = [string]$n.DuneAdminFolder
+            portalUrl       = 'https://dune-admin.layout.tools'
+            currentVersion  = [string]$script:DuneToolVersion
+            checkedAt       = (Get-Date).ToString('o')
+        }
+    } catch {
+        Write-DuneError -Response $res -Status 500 -Message $_.Exception.Message
+    }
+}
+
+# POST /api/update/migration-notice/ack — record that the user has read the
+# decoupling notice. Stamps the acknowledging version into config so it never
+# shows again.
+Register-DuneRoute -Method POST -Path '/api/update/migration-notice/ack' -Handler {
+    param($req, $res, $routeParams, $body)
+    try {
+        $ver = [string]$script:DuneToolVersion
+        Invoke-WithDuneLock -Name 'config' -Script { Set-DuneDecoupleAck -Version $ver } | Out-Null
+        Write-DuneJson -Response $res -Body @{
+            ok           = $true
+            acknowledged = $true
+            ackVersion   = $ver
+        }
+    } catch {
+        Write-DuneError -Response $res -Status 500 -Message $_.Exception.Message
+    }
+}
+
 # POST /api/update/install — download installer asset and run it silently
 Register-DuneRoute -Method POST -Path '/api/update/install' -Handler {
     param($req, $res, $routeParams, $body)
@@ -139,6 +179,17 @@ Register-DuneRoute -Method POST -Path '/api/update/install' -Handler {
     }
     try {
       try {
+        # Gate: a user upgrading across the dune-admin decoupling must read and
+        # acknowledge the one-time notice before any further update can run.
+        $notice = Get-DuneDecoupleNotice
+        if ($notice.Needed) {
+            Write-DuneJson -Response $res -Body @{
+                launched               = $false
+                reason                 = 'Please review and acknowledge the Dune-Admin decoupling notice before updating.'
+                decoupleNoticeRequired = $true
+            }
+            return
+        }
         $rel = Get-DuneLatestRelease
         if (-not $rel -or -not $rel.assetUrl) {
             Write-DuneError -Response $res -Status 503 -Message 'No installer asset available on latest release.'
