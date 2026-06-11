@@ -66,3 +66,42 @@ export function categoryLeaf(cat: string | undefined): string {
   const parts = cat.split('/').filter(Boolean)
   return parts[parts.length - 1] ?? cat
 }
+
+// Small stat card used across the gameplay tabs.
+export function StatCard({ label, value, sub, icon }: { label: string; value: string; sub?: string; icon: string }) {
+  return (
+    <div className="card p-3">
+      <div className="flex items-center justify-between">
+        <span className="text-xs uppercase tracking-wider text-text-dim">{label}</span>
+        <Icon name={icon} size={15} className="text-accent" />
+      </div>
+      <div className="mt-1 text-xl font-semibold text-text truncate">{value}</div>
+      {sub && <div className="text-[11px] text-text-dim truncate">{sub}</div>}
+    </div>
+  )
+}
+
+// "Showing sample data" banner shown when a tab is on demo data.
+export function DemoNotice({ liveError, what }: { liveError?: string; what: string }) {
+  return (
+    <div className="card p-3 mb-4 text-xs text-text-muted border-l-2 border-accent flex items-start gap-2">
+      <Icon name="Info" size={14} className="text-accent shrink-0 mt-0.5" />
+      <span>
+        Showing sample {what}. {liveError ? <span className="text-warning">{liveError}</span> : 'Start the battlegroup'} — this
+        view reads the live game database automatically once it is reachable.
+      </span>
+    </div>
+  )
+}
+
+// Quality level -> rarity-ish colour (game quality 0..5).
+export function qualityClass(q: number | undefined): string {
+  switch (q) {
+    case 1: return 'text-success'
+    case 2: return 'text-info'
+    case 3: return 'text-accent-bright'
+    case 4: return 'text-warning'
+    case 5: return 'text-danger'
+    default: return 'text-text-dim'
+  }
+}

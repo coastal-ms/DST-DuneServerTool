@@ -4,13 +4,22 @@ import { Icon } from '../components/Icon'
 import { OverviewTab } from './gameplay/OverviewTab'
 import { MarketTab } from './gameplay/MarketTab'
 import { MarketBotTab } from './gameplay/MarketBotTab'
+import { PlayersTab } from './gameplay/PlayersTab'
+import { BasesTab } from './gameplay/BasesTab'
+import { StorageTab } from './gameplay/StorageTab'
+import { BlueprintsTab } from './gameplay/BlueprintsTab'
 
-export type GameplaySubTab = 'overview' | 'market' | 'marketbot'
+export type GameplaySubTab =
+  | 'overview' | 'market' | 'marketbot' | 'players' | 'bases' | 'storage' | 'blueprints'
 
 const TABS: { id: GameplaySubTab; label: string; icon: string }[] = [
   { id: 'overview',  label: 'Overview', icon: 'LayoutGrid' },
   { id: 'market',    label: 'Market',   icon: 'Store' },
   { id: 'marketbot', label: 'Market Bot', icon: 'Bot' },
+  { id: 'players',   label: 'Players',  icon: 'Users' },
+  { id: 'bases',     label: 'Bases',    icon: 'Castle' },
+  { id: 'storage',   label: 'Storage',  icon: 'Package' },
+  { id: 'blueprints', label: 'Blueprints', icon: 'ScrollText' },
 ]
 
 export function GameplayEnvironment() {
@@ -45,6 +54,10 @@ export function GameplayEnvironment() {
       {tab === 'overview' && <OverviewTab onOpenTab={setTab} />}
       {tab === 'market' && <MarketTab />}
       {tab === 'marketbot' && <MarketBotTab />}
+      {tab === 'players' && <PlayersTab />}
+      {tab === 'bases' && <BasesTab />}
+      {tab === 'storage' && <StorageTab />}
+      {tab === 'blueprints' && <BlueprintsTab />}
     </>
   )
 }
