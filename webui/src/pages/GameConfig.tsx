@@ -6,11 +6,16 @@ import {
   getGameConfigSchema,
   getGameConfig,
   saveGameConfig,
+  backupGameConfig,
+  listGameConfigBackups,
 } from '../api/gameconfig'
 import type {
-  GameConfigSection,
+  GameConfigCategory,
   GameConfigField,
   GameConfigResponse,
+  GameConfigFileBundle,
+  GameConfigIniSection,
+  GameConfigBackupEntry,
 } from '../api/types'
 import { SpicefieldsCard } from './gameconfig/SpicefieldsCard'
 
@@ -18,11 +23,49 @@ type LoadState = 'idle' | 'loading' | 'ready' | 'error' | 'unavailable'
 
 const SANDWORM_ENABLED_KEY = 'sandworm.dune.Enabled'
 
+// Bool literal pairs per type so toggles emit exactly what UE expects.
+function boolPair(type: GameConfigField['type']): { on: string; off: string } | null {
+  if (type === 'bool') return { on: 'True', off: 'False' }
+  if (type === 'boolLower') return { on: 'true', off: 'false' }
+  if (type === 'bool01') return { on: '1', off: '0' }
+  return null
+}
+
+function bundleFor(data: GameConfigResponse, file: 'game' | 'engine'): GameConfigFileBundle {
+  return file === 'game' ? data.game : data.engine
+}
+
+function fieldDefault(field: GameConfigField): string {
+  return field.default ?? ''
+}
+
+// Live value written in the battlegroup's INI for this field ('' when unset or VM down).
+function liveValue(data: GameConfigResponse | null, field: GameConfigField): string {
+  if (!data) return ''
+  return bundleFor(data, field.file).effective?.[`${field.section}||${field.key}`] ?? ''
+}
+
+// A field is "customized" when the live file overrides it with a value other than the default.
+function isCustomized(data: GameConfigResponse | null, field: GameConfigField): boolean {
+  const lv = liveValue(data, field)
+  return lv !== '' && lv !== fieldDefault(field)
+}
+
+// The value an input should hold: the live override when present, otherwise the default.
+function currentValue(data: GameConfigResponse | null, field: GameConfigField): string {
+  const lv = liveValue(data, field)
+  return lv !== '' ? lv : fieldDefault(field)
+}
+
+function sectionIsManaged(data: GameConfigResponse, field: GameConfigField): boolean {
+  return bundleFor(data, field.file).managedSections?.includes(field.section) ?? false
+}
+
 export function GameConfig() {
   const { status } = useStatus()
   const vmRunning = status?.vm?.running === true
 
-  const [schema, setSchema] = useState<GameConfigSection[] | null>(null)
+  const [schema, setSchema] = useState<GameConfigCategory[] | null>(null)
   const [cfg, setCfg] = useState<GameConfigResponse | null>(null)
   const [values, setValues] = useState<Record<string, string>>({})
   const [originals, setOriginals] = useState<Record<string, string>>({})
@@ -32,9 +75,48 @@ export function GameConfig() {
   const [saveError, setSaveError] = useState<string | null>(null)
   const [savedMsg, setSavedMsg] = useState<string | null>(null)
   const [sandwormModalOpen, setSandwormModalOpen] = useState(false)
+  const [search, setSearch] = useState('')
+  const [backing, setBacking] = useState(false)
+  const [backupMsg, setBackupMsg] = useState<string | null>(null)
+  const [backupError, setBackupError] = useState<string | null>(null)
+  const [backupsOpen, setBackupsOpen] = useState(false)
+  const [backupsLoading, setBackupsLoading] = useState(false)
+  const [backupsError, setBackupsError] = useState<string | null>(null)
+  const [backups, setBackups] = useState<GameConfigBackupEntry[]>([])
 
-  // Intercepts field changes to gate destructive toggles (e.g. enabling
-  // Sandworms wipes anything left in sandworm areas — confirm before applying).
+  const onBackup = useCallback(async () => {
+    setBacking(true)
+    setBackupError(null)
+    setBackupMsg(null)
+    try {
+      const r = await backupGameConfig()
+      if (!r.ok) {
+        setBackupError('Backup did not complete for one or more files. Is the battlegroup fully provisioned?')
+        return
+      }
+      setBackupMsg(`Backed up UserGame.ini + UserEngine.ini on the server (snapshot ${r.timestamp}). You can revert via the File Browser if needed.`)
+      window.setTimeout(() => setBackupMsg(null), 9000)
+    } catch (e) {
+      setBackupError(e instanceof Error ? e.message : String(e))
+    } finally {
+      setBacking(false)
+    }
+  }, [])
+
+  const onViewBackups = useCallback(async () => {
+    setBackupsOpen(true)
+    setBackupsLoading(true)
+    setBackupsError(null)
+    try {
+      const r = await listGameConfigBackups()
+      setBackups(r.backups ?? [])
+    } catch (e) {
+      setBackupsError(e instanceof Error ? e.message : String(e))
+    } finally {
+      setBackupsLoading(false)
+    }
+  }, [])
+
   const handleFieldChange = useCallback((key: string, newVal: string) => {
     if (
       key === SANDWORM_ENABLED_KEY &&
@@ -52,14 +134,12 @@ export function GameConfig() {
     setSandwormModalOpen(false)
   }, [])
 
-  // Compute combined values + originals from the fetched config + schema.
-  const seedValues = useCallback((sections: GameConfigSection[], data: GameConfigResponse) => {
+  // Seed editable values: live override when present, otherwise the funcom default,
+  // so every field is populated even before (or without) a live battlegroup.
+  const seedValues = useCallback((cats: GameConfigCategory[], data: GameConfigResponse | null) => {
     const out: Record<string, string> = {}
-    for (const sec of sections) {
-      for (const f of sec.fields) {
-        const bucket = f.file === 'game' ? data.game.values : data.engine.values
-        out[f.key] = bucket?.[f.key] ?? ''
-      }
+    for (const cat of cats) {
+      for (const f of cat.fields) out[f.key] = currentValue(data, f)
     }
     return out
   }, [])
@@ -69,10 +149,8 @@ export function GameConfig() {
     setLoadError(null)
     setSavedMsg(null)
     try {
-      // Schema is always available (no SSH). Fetch it once.
       const sch = schema ?? (await getGameConfigSchema()).schema
       if (!schema) setSchema(sch)
-
       const data = await getGameConfig()
       setCfg(data)
       const seeded = seedValues(sch, data)
@@ -82,19 +160,18 @@ export function GameConfig() {
     } catch (e) {
       const msg = e instanceof Error ? e.message : String(e)
       setLoadError(msg)
-      // Detect 503 (VM not running etc.) vs hard failure
       setLoadState(/\b503\b/.test(msg) ? 'unavailable' : 'error')
     }
   }, [schema, seedValues])
 
-  // Initial mount: fetch schema even if VM is offline so the form can render
-  // with all fields disabled. Only fetch live values when VM is running.
   useEffect(() => {
     void (async () => {
-      if (!schema) {
+      let s = schema
+      if (!s) {
         try {
-          const s = await getGameConfigSchema()
-          setSchema(s.schema)
+          const resp = await getGameConfigSchema()
+          s = resp.schema
+          setSchema(s)
         } catch (e) {
           setLoadError(e instanceof Error ? e.message : String(e))
           setLoadState('error')
@@ -104,8 +181,14 @@ export function GameConfig() {
       if (vmRunning) {
         void loadAll()
       } else {
+        // No live battlegroup: populate every field with its funcom default so the
+        // form is readable. Editing/saving is gated until the VM is up.
+        const seeded = seedValues(s, null)
+        setValues(seeded)
+        setOriginals(seeded)
+        setCfg(null)
         setLoadState('unavailable')
-        setLoadError('VM is not running. Start the battlegroup to load live values.')
+        setLoadError('Showing Funcom defaults — start the battlegroup to load live values and edit.')
       }
     })()
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -119,6 +202,24 @@ export function GameConfig() {
     return keys
   }, [values, originals])
 
+  const filteredSchema = useMemo(() => {
+    if (!schema) return null
+    const q = search.trim().toLowerCase()
+    if (!q) return schema
+    return schema
+      .map(cat => ({
+        category: cat.category,
+        fields: cat.fields.filter(
+          f =>
+            f.label.toLowerCase().includes(q) ||
+            f.key.toLowerCase().includes(q) ||
+            (f.help ?? '').toLowerCase().includes(q) ||
+            cat.category.toLowerCase().includes(q),
+        ),
+      }))
+      .filter(cat => cat.fields.length > 0)
+  }, [schema, search])
+
   async function onSubmit(e: FormEvent) {
     e.preventDefault()
     if (dirtyKeys.length === 0) return
@@ -129,13 +230,14 @@ export function GameConfig() {
       const updates: Record<string, string> = {}
       for (const k of dirtyKeys) updates[k] = values[k] ?? ''
       const out = await saveGameConfig(updates)
-      setCfg({ available: true, source: out.source, game: out.game, engine: out.engine })
-      const seeded = seedValues(schema ?? [], { available: true, source: out.source, game: out.game, engine: out.engine })
+      const next: GameConfigResponse = { available: true, source: out.source, game: out.game, engine: out.engine }
+      setCfg(next)
+      const seeded = seedValues(schema ?? [], next)
       setValues(seeded)
       setOriginals(seeded)
-      const n = (out.applied?.game ?? 0) + (out.applied?.engine ?? 0)
-      setSavedMsg(`Saved ${n} change${n === 1 ? '' : 's'}.`)
-      window.setTimeout(() => setSavedMsg(null), 4000)
+      const n = out.applied ?? dirtyKeys.length
+      setSavedMsg(`Saved ${n} change${n === 1 ? '' : 's'} into the DST-managed block.`)
+      window.setTimeout(() => setSavedMsg(null), 5000)
     } catch (err) {
       setSaveError(err instanceof Error ? err.message : String(err))
     } finally {
@@ -174,10 +276,30 @@ export function GameConfig() {
       <PageHeader
         title="Game Config"
         icon="Sliders"
-        description="UserGame.ini + UserEngine.ini editor — writes back to the live BG PVC."
+        description="UserGame.ini + UserEngine.ini editor. Edits are tracked in a DST-managed block written to the live battlegroup."
         actions={
           <div className="flex items-center gap-2">
             {sourcePill}
+            <button
+              type="button"
+              onClick={() => void onBackup()}
+              disabled={!vmRunning || backing || saving}
+              className="btn-secondary"
+              title="Snapshot UserGame.ini + UserEngine.ini on the server before making changes"
+            >
+              <Icon name={backing ? 'Loader2' : 'DatabaseBackup'} size={14} className={backing ? 'animate-spin' : ''} />
+              {backing ? 'Backing up…' : 'Backup settings'}
+            </button>
+            <button
+              type="button"
+              onClick={() => void onViewBackups()}
+              disabled={!vmRunning}
+              className="btn-secondary"
+              title="View the most recent on-server backups of these INI files"
+            >
+              <Icon name="History" size={14} />
+              View backups
+            </button>
             <button
               type="button"
               onClick={() => void loadAll()}
@@ -192,13 +314,71 @@ export function GameConfig() {
         }
       />
 
+      {/* BETA / experimental notice */}
+      <div className="card p-4 mb-4 border-ibad/40 bg-ibad/5 text-sm flex items-start gap-3">
+        <Icon name="FlaskConical" size={18} className="mt-0.5 shrink-0 text-ibad" />
+        <div className="flex-1 min-w-0">
+          <div className="flex items-center gap-2 mb-1">
+            <span className="text-[10px] font-semibold uppercase tracking-wider px-1.5 py-0.5 rounded bg-ibad/15 text-ibad">Beta</span>
+            <span className="font-semibold text-text">Experimental feature</span>
+          </div>
+          <p className="text-xs text-text-muted leading-relaxed">
+            Game Config writes directly to your live battlegroup&apos;s <span className="font-mono">UserGame.ini</span> /{' '}
+            <span className="font-mono">UserEngine.ini</span>. It&apos;s still being refined and values are written into a
+            DST-managed block. <span className="text-text font-medium">Always click “Backup settings” before making changes</span> so
+            you have a restore point — backups are saved on the server next to each file and can be restored via the File Browser.
+          </p>
+          <button
+            type="button"
+            onClick={() => void onBackup()}
+            disabled={!vmRunning || backing || saving}
+            className="btn-secondary mt-2.5"
+            title="Snapshot UserGame.ini + UserEngine.ini on the server before making changes"
+          >
+            <Icon name={backing ? 'Loader2' : 'DatabaseBackup'} size={14} className={backing ? 'animate-spin' : ''} />
+            {backing ? 'Backing up…' : 'Backup settings now'}
+          </button>
+          <button
+            type="button"
+            onClick={() => void onViewBackups()}
+            disabled={!vmRunning}
+            className="btn-secondary mt-2.5 ml-2"
+            title="View the most recent on-server backups of these INI files"
+          >
+            <Icon name="History" size={14} />
+            View backups
+          </button>
+        </div>
+      </div>
+
+      {backupMsg && (
+        <div className="card p-3 mb-4 border-success/40 bg-success/10 text-success text-sm flex items-center gap-2">
+          <Icon name="ShieldCheck" size={14} /> {backupMsg}
+        </div>
+      )}
+      {backupError && (
+        <div className="card p-3 mb-4 border-danger/40 bg-danger/10 text-danger text-sm flex items-center gap-2">
+          <Icon name="AlertCircle" size={14} /> {backupError}
+        </div>
+      )}
+
+      {/* How-it-works note */}
+      <div className="card p-3 mb-4 border-border bg-surface-2/40 text-xs text-text-muted flex items-start gap-2">
+        <Icon name="Info" size={14} className="mt-0.5 shrink-0 text-accent-bright" />
+        <div>
+          When you change a setting, DST relocates that setting&apos;s entire section into a managed block at the
+          bottom of the file and becomes its owner — keeping one clean copy, preserving structure, and migrating
+          any existing dune-admin block. The original file is backed up on the server before every write.
+        </div>
+      </div>
+
       {/* Status / error banners */}
       {loadState === 'unavailable' && (
-        <div className="card p-4 mb-4 border-warning/40 bg-warning/10 text-warning text-sm flex items-start gap-2">
-          <Icon name="AlertTriangle" size={16} className="mt-0.5 shrink-0" />
+        <div className="card p-4 mb-4 border-accent/30 bg-accent/5 text-text-muted text-sm flex items-start gap-2">
+          <Icon name="Info" size={16} className="mt-0.5 shrink-0 text-accent-bright" />
           <div>
-            <div className="font-medium">{loadError ?? 'Game config unavailable.'}</div>
-            <div className="text-xs text-text-muted mt-0.5">Form is read-only until the VM is up.</div>
+            <div className="font-medium text-text">{loadError ?? 'Showing Funcom defaults.'}</div>
+            <div className="text-xs text-text-muted mt-0.5">Every setting below shows its default value. Editing and saving are enabled once the battlegroup is running.</div>
           </div>
         </div>
       )}
@@ -218,40 +398,62 @@ export function GameConfig() {
         </div>
       )}
 
-      {/* Form */}
       {!schema && loadState === 'loading' && (
         <div className="card p-8 text-text-muted flex items-center gap-2">
           <Icon name="Loader2" size={14} className="animate-spin" /> Loading schema…
         </div>
       )}
+
       {schema && (
         <form onSubmit={onSubmit}>
+          {/* Search */}
+          <div className="relative mb-4">
+            <Icon name="Search" size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-text-dim" />
+            <input
+              type="text"
+              value={search}
+              onChange={e => setSearch(e.target.value)}
+              placeholder="Filter settings…"
+              className="w-full pl-9 pr-3 py-2 rounded-lg bg-surface-2 border border-border text-text text-sm placeholder:text-text-dim focus:outline-none focus:ring-2 focus:ring-ibad focus:border-ibad/50"
+            />
+          </div>
+
           <div className="space-y-5">
-            {schema.map(sec => (
-              <SectionCard key={sec.section} section={sec}>
+            {(filteredSchema ?? []).map(cat => (
+              <CategoryCard key={cat.category} category={cat.category} count={cat.fields.length}>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-x-6 gap-y-4">
-                  {sec.fields.map(f => (
+                  {cat.fields.map(f => (
                     <FieldRow
-                      key={f.key}
+                      key={`${f.section}||${f.key}`}
                       field={f}
                       value={values[f.key] ?? ''}
                       onChange={v => handleFieldChange(f.key, v)}
                       disabled={loadState !== 'ready' || saving}
                       isDirty={(values[f.key] ?? '') !== (originals[f.key] ?? '')}
+                      isSet={liveValue(cfg, f) !== ''}
+                      isCustom={isCustomized(cfg, f)}
+                      defaultValue={fieldDefault(f)}
+                      managed={cfg ? sectionIsManaged(cfg, f) : false}
                     />
                   ))}
                 </div>
-              </SectionCard>
+              </CategoryCard>
             ))}
+            {filteredSchema && filteredSchema.length === 0 && (
+              <div className="card p-6 text-text-muted text-sm">No settings match “{search}”.</div>
+            )}
+
             <SpicefieldsCard vmRunning={vmRunning} />
+
+            {cfg && <AdvancedIniBrowser cfg={cfg} />}
           </div>
 
           <div className="sticky bottom-0 mt-6 -mx-6 px-6 py-3 bg-surface/95 border-t border-border backdrop-blur-sm flex items-center justify-between">
             <div className="text-xs text-text-muted flex items-center gap-4">
               {cfg && (
                 <>
-                  <span className="font-mono truncate max-w-md" title={cfg.game.path}>game: {cfg.game.path}</span>
-                  <span className="font-mono truncate max-w-md" title={cfg.engine.path}>engine: {cfg.engine.path}</span>
+                  <span className="font-mono truncate max-w-xs" title={cfg.game.path}>game: {cfg.game.path}</span>
+                  <span className="font-mono truncate max-w-xs" title={cfg.engine.path}>engine: {cfg.engine.path}</span>
                 </>
               )}
             </div>
@@ -285,19 +487,120 @@ export function GameConfig() {
         onCancel={() => setSandwormModalOpen(false)}
         onConfirm={confirmSandwormEnable}
       />
+
+      {backupsOpen && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4"
+          onClick={() => setBackupsOpen(false)}
+        >
+          <div
+            className="card w-full max-w-2xl max-h-[80vh] flex flex-col p-0 overflow-hidden"
+            onClick={e => e.stopPropagation()}
+          >
+            <div className="flex items-center justify-between px-5 py-3 border-b border-border">
+              <h2 className="text-sm font-semibold text-text flex items-center gap-2">
+                <Icon name="History" size={16} className="text-accent-bright" />
+                Recent backups
+              </h2>
+              <button type="button" className="btn-icon" title="Close" onClick={() => setBackupsOpen(false)}>
+                <Icon name="X" size={16} />
+              </button>
+            </div>
+            <div className="px-5 py-4 overflow-y-auto">
+              <p className="text-xs text-text-muted mb-3">
+                On-server snapshots of <span className="font-mono">UserGame.ini</span> /{' '}
+                <span className="font-mono">UserEngine.ini</span> (saved as{' '}
+                <span className="font-mono">.dstbak-&lt;timestamp&gt;</span>). To restore one, open it in the File Browser
+                and copy it back over the live file.
+              </p>
+              {backupsLoading && (
+                <div className="flex items-center gap-2 text-sm text-text-muted py-6 justify-center">
+                  <Icon name="Loader2" size={16} className="animate-spin" /> Loading backups…
+                </div>
+              )}
+              {!backupsLoading && backupsError && (
+                <div className="card p-3 border-danger/40 bg-danger/10 text-danger text-sm flex items-center gap-2">
+                  <Icon name="AlertCircle" size={14} /> {backupsError}
+                </div>
+              )}
+              {!backupsLoading && !backupsError && backups.length === 0 && (
+                <div className="text-sm text-text-muted py-6 text-center">
+                  No backups found yet. Click “Backup settings” to create your first restore point.
+                </div>
+              )}
+              {!backupsLoading && !backupsError && backups.length > 0 && (
+                <div className="space-y-1.5">
+                  {backups.map(b => (
+                    <div key={b.path} className="flex items-center gap-3 rounded border border-border bg-surface-2/40 px-3 py-2">
+                      <Icon name="FileCog" size={14} className="shrink-0 text-text-dim" />
+                      <div className="min-w-0 flex-1">
+                        <div className="text-sm text-text truncate" title={b.path}>{b.name}</div>
+                        <div className="text-[11px] text-text-dim truncate" title={b.dir}>{b.dir}</div>
+                      </div>
+                      <div className="text-right shrink-0">
+                        <div className="text-xs text-text-muted">{formatBackupStamp(b)}</div>
+                        <div className="text-[11px] text-text-dim">{formatBytes(b.size)}</div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+            <div className="px-5 py-3 border-t border-border flex items-center justify-between gap-2">
+              <button
+                type="button"
+                onClick={() => void onViewBackups()}
+                disabled={backupsLoading}
+                className="btn-secondary"
+                title="Reload the backup list"
+              >
+                <Icon name={backupsLoading ? 'Loader2' : 'RefreshCw'} size={14} className={backupsLoading ? 'animate-spin' : ''} />
+                Refresh
+              </button>
+              <button type="button" className="btn-primary" onClick={() => setBackupsOpen(false)}>Close</button>
+            </div>
+          </div>
+        </div>
+      )}
     </>
   )
 }
 
+// Render a backup's timestamp. Prefer the embedded yyyyMMddHHmmss stamp; fall
+// back to the file's mtime (epoch seconds).
+function formatBackupStamp(b: GameConfigBackupEntry): string {
+  const s = b.stamp
+  if (s && /^\d{14}$/.test(s)) {
+    const d = new Date(
+      Number(s.slice(0, 4)),
+      Number(s.slice(4, 6)) - 1,
+      Number(s.slice(6, 8)),
+      Number(s.slice(8, 10)),
+      Number(s.slice(10, 12)),
+      Number(s.slice(12, 14)),
+    )
+    if (!Number.isNaN(d.getTime())) return d.toLocaleString()
+  }
+  if (b.modified > 0) return new Date(b.modified * 1000).toLocaleString()
+  return '—'
+}
+
+function formatBytes(n: number): string {
+  if (!n || n < 1024) return `${n || 0} B`
+  if (n < 1024 * 1024) return `${(n / 1024).toFixed(1)} KB`
+  return `${(n / (1024 * 1024)).toFixed(1)} MB`
+}
+
 // -----------------------------------------------------------------------------
-// Section card + field row
+// Category card + field row
 // -----------------------------------------------------------------------------
 
-function SectionCard({ section, children }: { section: GameConfigSection; children: React.ReactNode }) {
+function CategoryCard({ category, count, children }: { category: string; count: number; children: React.ReactNode }) {
   return (
     <div className="card p-5">
       <h2 className="text-sm font-semibold uppercase tracking-wider text-accent-bright mb-4 flex items-center gap-2">
-        <Icon name="ChevronRight" size={14} /> {section.section}
+        <Icon name="ChevronRight" size={14} /> {category}
+        <span className="text-[10px] font-normal text-text-dim normal-case tracking-normal">({count})</span>
       </h2>
       {children}
     </div>
@@ -310,48 +613,90 @@ type FieldRowProps = {
   onChange: (v: string) => void
   disabled: boolean
   isDirty: boolean
+  isSet: boolean
+  isCustom: boolean
+  defaultValue: string
+  managed: boolean
 }
 
-function FieldRow({ field, value, onChange, disabled, isDirty }: FieldRowProps) {
+// Human-friendly rendering of a raw default value for the grayed "Default:" line.
+function formatDefaultDisplay(field: GameConfigField, def: string): string {
+  if (def === '') return '(unset)'
+  if (field.type === 'select' && field.options) {
+    const opt = field.options.find(o => o.value === def)
+    return opt ? opt.label : def
+  }
+  const pair = boolPair(field.type)
+  if (pair) return def === pair.on ? 'On' : def === pair.off ? 'Off' : def
+  return def
+}
+
+function FieldRow({ field, value, onChange, disabled, isDirty, isSet, isCustom, defaultValue, managed }: FieldRowProps) {
   const inputBase =
     'w-full px-3 py-2 rounded-lg bg-surface-2 border border-border text-text text-sm ' +
     'placeholder:text-text-dim focus:outline-none focus:ring-2 focus:ring-ibad focus:border-ibad/50 ' +
     'disabled:opacity-50 disabled:cursor-not-allowed'
 
+  const pair = boolPair(field.type)
+  const isNumber = field.type === 'int' || field.type === 'float'
   const wide = field.wide
 
   return (
     <div className={wide ? 'md:col-span-2' : ''}>
-      <label className="flex items-center justify-between text-sm font-medium mb-1.5">
-        <span className="flex items-center gap-2">
-          {field.label}
-          {isDirty && <span className="w-1.5 h-1.5 rounded-full bg-ibad" title="Modified" />}
+      <label className="flex items-center justify-between text-sm font-medium mb-1.5 gap-2">
+        <span className="flex items-center gap-2 min-w-0">
+          <span className="truncate">{field.label}</span>
+          {isDirty && <span className="w-1.5 h-1.5 rounded-full bg-ibad shrink-0" title="Modified" />}
         </span>
-        <span className="text-[10px] font-mono text-text-dim uppercase tracking-wider">
-          {field.file}
+        <span className="flex items-center gap-1 shrink-0">
+          {managed && (
+            <span className="text-[9px] font-semibold uppercase tracking-wider px-1.5 py-0.5 rounded bg-accent/15 text-accent-bright" title="DST owns this section in the managed block">
+              DST
+            </span>
+          )}
+          {isCustom ? (
+            <span className="text-[9px] font-semibold uppercase tracking-wider px-1.5 py-0.5 rounded bg-ibad/15 text-ibad" title="This value overrides the Funcom default">
+              Custom
+            </span>
+          ) : isSet && !managed ? (
+            <span className="text-[9px] font-semibold uppercase tracking-wider px-1.5 py-0.5 rounded bg-surface-2 text-text-muted" title="Currently set in the file (matches default)">
+              Set
+            </span>
+          ) : (
+            <span className="text-[9px] font-semibold uppercase tracking-wider px-1.5 py-0.5 rounded bg-surface-2 text-text-dim" title="Using the Funcom default value">
+              Default
+            </span>
+          )}
+          <span className="text-[10px] font-mono text-text-dim uppercase tracking-wider">{field.file}</span>
         </span>
       </label>
 
+      {/* When this field overrides the default, show the uneditable default beneath the name. */}
+      {isCustom && (
+        <div className="mb-1.5 text-[11px] text-text-dim flex items-center gap-1.5" title="Funcom default — read-only">
+          <Icon name="CornerDownRight" size={11} className="shrink-0 opacity-60" />
+          <span>Default:</span>
+          <span className="font-mono">{formatDefaultDisplay(field, defaultValue)}</span>
+        </div>
+      )}
+
       {field.type === 'select' && field.options ? (
-        <select
-          value={value}
-          disabled={disabled}
-          onChange={e => onChange(e.target.value)}
-          className={inputBase}
-        >
+        <select value={value} disabled={disabled} onChange={e => onChange(e.target.value)} className={inputBase}>
           <option value="">(unset)</option>
           {field.options.map(o => (
             <option key={o.value} value={o.value}>{o.label}</option>
           ))}
         </select>
-      ) : field.type === 'number' ? (
+      ) : pair ? (
+        <BoolToggle on={pair.on} off={pair.off} value={value} disabled={disabled} onChange={onChange} />
+      ) : isNumber ? (
         <div className="flex items-center gap-2">
           <input
             type="number"
             value={value}
             disabled={disabled}
             placeholder={field.placeholder ?? ''}
-            step={field.step ?? undefined}
+            step={field.type === 'float' ? 'any' : 1}
             min={field.min ?? undefined}
             max={field.max ?? undefined}
             onChange={e => onChange(e.target.value)}
@@ -371,8 +716,126 @@ function FieldRow({ field, value, onChange, disabled, isDirty }: FieldRowProps) 
       )}
 
       <div className="mt-1 flex items-center justify-between gap-2">
-        {field.hint && <p className="text-xs text-text-dim">{field.hint}</p>}
-        <span className="text-[10px] font-mono text-text-dim ml-auto truncate">{field.key}</span>
+        {field.help && <p className="text-xs text-text-dim">{field.help}</p>}
+        <span className="text-[10px] font-mono text-text-dim ml-auto truncate" title={`${field.section} / ${field.key}`}>{field.key}</span>
+      </div>
+    </div>
+  )
+}
+
+function BoolToggle({ on, off, value, disabled, onChange }: { on: string; off: string; value: string; disabled: boolean; onChange: (v: string) => void }) {
+  const isOn = value === on
+  const isOff = value === off
+  const btn = 'flex-1 px-3 py-2 text-sm font-medium rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed'
+  return (
+    <div className="flex items-center gap-2">
+      <button
+        type="button"
+        disabled={disabled}
+        onClick={() => onChange(off)}
+        className={btn + ' ' + (isOff ? 'bg-danger/20 text-danger border border-danger/40' : 'bg-surface-2 border border-border text-text-muted')}
+      >
+        Off
+      </button>
+      <button
+        type="button"
+        disabled={disabled}
+        onClick={() => onChange(on)}
+        className={btn + ' ' + (isOn ? 'bg-success/20 text-success border border-success/40' : 'bg-surface-2 border border-border text-text-muted')}
+      >
+        On
+      </button>
+    </div>
+  )
+}
+
+// -----------------------------------------------------------------------------
+// Advanced / raw INI browser (read-only) — shows everything in both files,
+// including keys DST has no curated control for, with managed-block badges.
+// -----------------------------------------------------------------------------
+
+function AdvancedIniBrowser({ cfg }: { cfg: GameConfigResponse }) {
+  const [open, setOpen] = useState(false)
+  const [file, setFile] = useState<'game' | 'engine'>('game')
+  const [showRaw, setShowRaw] = useState(false)
+
+  const bundle = file === 'game' ? cfg.game : cfg.engine
+
+  return (
+    <div className="card p-5">
+      <button
+        type="button"
+        onClick={() => setOpen(o => !o)}
+        className="w-full flex items-center justify-between text-sm font-semibold uppercase tracking-wider text-accent-bright"
+      >
+        <span className="flex items-center gap-2">
+          <Icon name={open ? 'ChevronDown' : 'ChevronRight'} size={14} /> Advanced — full INI contents
+        </span>
+        <span className="text-[10px] font-normal text-text-dim normal-case tracking-normal">read-only</span>
+      </button>
+
+      {open && (
+        <div className="mt-4">
+          <div className="flex items-center justify-between mb-3">
+            <div className="flex items-center gap-1 bg-surface-2 rounded-lg p-0.5">
+              {(['game', 'engine'] as const).map(f => (
+                <button
+                  key={f}
+                  type="button"
+                  onClick={() => setFile(f)}
+                  className={'px-3 py-1.5 text-xs font-medium rounded-md ' + (file === f ? 'bg-accent/20 text-accent-bright' : 'text-text-muted')}
+                >
+                  {f === 'game' ? 'UserGame.ini' : 'UserEngine.ini'}
+                </button>
+              ))}
+            </div>
+            <button type="button" onClick={() => setShowRaw(r => !r)} className="btn-ghost px-2 py-1 text-xs">
+              <Icon name="Code" size={13} /> {showRaw ? 'Sections' : 'Raw text'}
+            </button>
+          </div>
+
+          {showRaw ? (
+            <pre className="text-[11px] font-mono text-text-muted bg-surface-2 rounded-lg p-3 overflow-x-auto max-h-[28rem] overflow-y-auto whitespace-pre">
+              {bundle.raw}
+            </pre>
+          ) : (
+            <div className="space-y-3 max-h-[28rem] overflow-y-auto pr-1">
+              {bundle.sections.map((s, i) => (
+                <IniSectionBlock key={`${s.name}-${i}`} section={s} />
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  )
+}
+
+function IniSectionBlock({ section }: { section: GameConfigIniSection }) {
+  return (
+    <div className="border border-border rounded-lg overflow-hidden">
+      <div className="flex items-center justify-between px-3 py-2 bg-surface-2">
+        <span className="font-mono text-xs text-text truncate" title={section.name}>[{section.name}]</span>
+        {section.managed && (
+          <span className="text-[9px] font-semibold uppercase tracking-wider px-1.5 py-0.5 rounded bg-accent/15 text-accent-bright shrink-0">
+            DST-managed
+          </span>
+        )}
+      </div>
+      <div className="divide-y divide-border/60">
+        {section.keys.length === 0 && (
+          <div className="px-3 py-1.5 text-[11px] text-text-dim">(no keys)</div>
+        )}
+        {section.keys.map((k, i) => (
+          <div key={`${k.key}-${i}`} className="px-3 py-1.5 flex items-start gap-2 text-[11px] font-mono">
+            <span className="text-text-muted shrink-0">
+              {k.isArray && <span className="text-warning mr-1" title="Array entry (+/-)">[]</span>}
+              {k.key}
+            </span>
+            <span className="text-text-dim">=</span>
+            <span className="text-text break-all">{k.value}</span>
+          </div>
+        ))}
       </div>
     </div>
   )
@@ -381,8 +844,6 @@ function FieldRow({ field, value, onChange, disabled, isDirty }: FieldRowProps) 
 // -----------------------------------------------------------------------------
 // Sandworm-enable confirmation modal
 // -----------------------------------------------------------------------------
-// Enabling sandworms wipes anything left in sandworm areas, so require the
-// user to type "i confirm" before flipping the toggle to On.
 
 function SandwormConfirmModal({
   open, onCancel, onConfirm,

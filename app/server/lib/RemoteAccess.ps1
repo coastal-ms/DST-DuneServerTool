@@ -1,4 +1,4 @@
-# RemoteAccess.ps1 — Cloudflare-Access-gated remote portal subset (issue #74).
+﻿# RemoteAccess.ps1 — Cloudflare-Access-gated remote portal subset (issue #74).
 #
 # DST today is loopback + per-launch DuneToken. The remote portal lets the host and
 # 1..3 trusted admins reach a mobile-friendly read+safe-write subset via a

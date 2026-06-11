@@ -3,6 +3,7 @@ import { AppShell } from './layout/AppShell'
 import { Dashboard } from './pages/Dashboard'
 import { Commands } from './pages/Commands'
 import { GameConfig } from './pages/GameConfig'
+import { GameplayEnvironment } from './pages/GameplayEnvironment'
 import { Database } from './pages/Database'
 import { Sietches } from './pages/Sietches'
 import { DDMap } from './pages/DDMap'
@@ -33,6 +34,7 @@ export default function App() {
             element={showTerminal ? <TerminalPage /> : <Navigate to="/" replace />}
           />
           <Route path="/gameconfig" element={<GameConfig />} />
+          <Route path="/gameplay"   element={<GameplayEnvironment />} />
           <Route path="/database"   element={<Database />} />
           <Route path="/sietches"   element={<Sietches />} />
           <Route path="/dd-map"     element={<DDMap />} />

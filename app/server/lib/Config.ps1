@@ -11,7 +11,9 @@ $script:DuneConfigKeys = @(
     'PortCheckUrlTemplate',
     'OpenInAppWindow',
     'ConsolePresence',
-    'ConsolePresenceVersion'
+    'ConsolePresenceVersion',
+    'MarketBotAddr',
+    'MarketBotToken'
 )
 
 function Get-DuneConfigPath {

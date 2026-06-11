@@ -40,10 +40,12 @@ Register-DuneRoute -Method GET -Path '/api/gameconfig' -Handler {
 
 # -----------------------------------------------------------------------------
 # PUT /api/gameconfig — apply updates.
-# Body: { updates: { "<key>": "<value>", ... } }
-# We figure out which file each key belongs to from the schema; unknown keys
-# are silently dropped (defends against client bugs / stale schemas).
-# Returns the freshly-fetched config so the client can refresh its state.
+# Body: { updates: { "<key>": "<value>", ... } }   (schema-keyed; section/file
+#        resolved from the schema), OR
+#        { updates: [ { file, section, key, value }, ... ] } (explicit/raw).
+# Every touched section is relocated into the DST-managed block (whole-section
+# absorption); any pre-existing dune-admin block is migrated. Returns the
+# freshly-fetched config so the client can refresh its state.
 # -----------------------------------------------------------------------------
 Register-DuneRoute -Method PUT -Path '/api/gameconfig' -Handler {
     param($req, $res, $routeParams, $body)
@@ -54,46 +56,108 @@ Register-DuneRoute -Method PUT -Path '/api/gameconfig' -Handler {
     }
     if (-not (Test-DunePlayerGuard -Req $req -Res $res -Ip $ctx.ip)) { return }
 
-    # Parse updates from body
     $updates = $null
     if ($body -is [hashtable] -and $body.ContainsKey('updates')) { $updates = $body.updates }
     elseif ($body.updates) { $updates = $body.updates }
     if (-not $updates) {
-        Write-DuneError -Response $res -Status 400 -Message 'Body must include an "updates" object.'
+        Write-DuneError -Response $res -Status 400 -Message 'Body must include an "updates" object or array.'
         return
     }
 
-    $keyFile = Get-DuneGameConfigKeyFileMap
-    $gameUpdates   = @{}
-    $engineUpdates = @{}
-    $keys = if ($updates -is [hashtable]) { $updates.Keys } else { $updates.PSObject.Properties.Name }
-    foreach ($k in $keys) {
-        if (-not $keyFile.ContainsKey($k)) { continue }
-        $v = if ($updates -is [hashtable]) { $updates[$k] } else { $updates.$k }
-        switch ($keyFile[$k]) {
-            'game'   { $gameUpdates[$k]   = $v }
-            'engine' { $engineUpdates[$k] = $v }
+    # Build a schema lookup: key -> @{ section; file }.
+    $schemaMap = @{}
+    foreach ($f in $script:DuneGameConfigSchema) { $schemaMap[$f.Key] = @{ section = $f.Section; file = $f.File } }
+
+    $structured = New-Object 'System.Collections.Generic.List[object]'
+    if ($updates -is [System.Collections.IEnumerable] -and -not ($updates -is [hashtable]) -and -not ($updates -is [string])) {
+        # Explicit array form: each item already carries file/section/key/value.
+        foreach ($u in $updates) {
+            $sec = "$($u.section)"; $file = "$($u.file)"; $key = "$($u.key)"
+            if (-not $key) { continue }
+            if (-not $sec -or -not $file) {
+                if ($schemaMap.ContainsKey($key)) { if (-not $sec) { $sec = $schemaMap[$key].section }; if (-not $file) { $file = $schemaMap[$key].file } }
+            }
+            if (-not $sec -or -not $file) { continue }
+            $structured.Add(@{ file = $file; section = $sec; key = $key; value = "$($u.value)" })
+        }
+    } else {
+        # Schema-keyed object form: resolve section/file from the schema.
+        $keys = if ($updates -is [hashtable]) { $updates.Keys } else { $updates.PSObject.Properties.Name }
+        foreach ($k in $keys) {
+            if (-not $schemaMap.ContainsKey($k)) { continue }
+            $v = if ($updates -is [hashtable]) { $updates[$k] } else { $updates.$k }
+            $structured.Add(@{ file = $schemaMap[$k].file; section = $schemaMap[$k].section; key = $k; value = "$v" })
         }
     }
 
-    if ($gameUpdates.Count -eq 0 -and $engineUpdates.Count -eq 0) {
+    if ($structured.Count -eq 0) {
         Write-DuneError -Response $res -Status 400 -Message 'No recognized keys in updates.'
         return
     }
 
     try {
-        Save-DuneGameConfig -Ip $ctx.ip -GameUpdates $gameUpdates -EngineUpdates $engineUpdates
-        # Return freshly-fetched config so the client can sync its state.
+        Save-DuneGameConfig -Ip $ctx.ip -Updates $structured.ToArray()
         $cfg = Get-DuneGameConfig -Ip $ctx.ip
         Write-DuneJson -Response $res -Body @{
-            ok        = $true
-            applied   = @{ game = $gameUpdates.Count; engine = $engineUpdates.Count }
-            source    = $cfg.source
-            game      = $cfg.game
-            engine    = $cfg.engine
+            ok      = $true
+            applied = $structured.Count
+            source  = $cfg.source
+            game    = $cfg.game
+            engine  = $cfg.engine
         }
     } catch {
         Write-DuneError -Response $res -Status 500 -Message "Game config save failed: $($_.Exception.Message)"
+    }
+}
+
+# -----------------------------------------------------------------------------
+# POST /api/gameconfig/backup — snapshot the live INI files before editing.
+# Copies each live file to "<path>.dstbak-<timestamp>" on the BG VM (read-only
+# copy; no settings are changed). Returns the backup paths so the user has a
+# restore point. 503 when VM not available.
+# -----------------------------------------------------------------------------
+Register-DuneRoute -Method POST -Path '/api/gameconfig/backup' -Handler {
+    param($req, $res, $routeParams, $body)
+    $ctx = Get-DuneGameConfigContext
+    if (-not $ctx.ok) {
+        Write-DuneError -Response $res -Status $ctx.status -Message $ctx.message
+        return
+    }
+    try {
+        $r = Backup-DuneGameConfig -Ip $ctx.ip
+        $allOk = (@($r.files | Where-Object { -not $_.ok }).Count -eq 0)
+        Write-DuneJson -Response $res -Body @{
+            ok        = $allOk
+            timestamp = $r.timestamp
+            source    = $r.source
+            files     = $r.files
+        }
+    } catch {
+        Write-DuneError -Response $res -Status 500 -Message "Game config backup failed: $($_.Exception.Message)"
+    }
+}
+
+# -----------------------------------------------------------------------------
+# GET /api/gameconfig/backups — list existing DST backups for the live INI files.
+# Returns the most-recent ".dstbak-<ts>" snapshots next to UserGame/UserEngine.ini
+# so the user can locate a restore point. 503 when VM not available.
+# -----------------------------------------------------------------------------
+Register-DuneRoute -Method GET -Path '/api/gameconfig/backups' -Handler {
+    param($req, $res, $routeParams, $body)
+    $ctx = Get-DuneGameConfigContext
+    if (-not $ctx.ok) {
+        Write-DuneError -Response $res -Status $ctx.status -Message $ctx.message
+        return
+    }
+    try {
+        $r = Get-DuneGameConfigBackups -Ip $ctx.ip
+        Write-DuneJson -Response $res -Body @{
+            available = $true
+            source    = $r.source
+            backups   = $r.backups
+        }
+    } catch {
+        Write-DuneError -Response $res -Status 500 -Message "Game config backup list failed: $($_.Exception.Message)"
     }
 }
 

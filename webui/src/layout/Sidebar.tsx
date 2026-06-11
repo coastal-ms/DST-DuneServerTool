@@ -92,6 +92,11 @@ export function Sidebar({ collapsed }: Props) {
       >
         <Icon name={item.icon} size={collapsed ? 18 : 16} />
         {!collapsed && <span>{item.label}</span>}
+        {!collapsed && item.badge && (
+          <span className="ml-auto text-[9px] font-semibold uppercase tracking-wider px-1.5 py-0.5 rounded bg-ibad/15 text-ibad">
+            {item.badge}
+          </span>
+        )}
       </NavLink>
     )
   }
