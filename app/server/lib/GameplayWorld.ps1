@@ -171,7 +171,7 @@ function Get-DuneStorageItemsDemo {
 # ----------------------------------------------------------------------------
 $script:DuneBlueprintsListSql = @'
 SELECT bb.id,
-       COALESCE(ps.character_name, '') AS owner_name,
+       COALESCE(NULLIF(ps_acct.character_name, ''), ps_pawn.character_name, '') AS owner_name,
        COALESCE(bb.item_id, 0)         AS item_id,
        COALESCE(inst.cnt, 0)           AS pieces,
        COALESCE(plac.cnt, 0)           AS placeables,
@@ -180,7 +180,13 @@ FROM dune.building_blueprints bb
 LEFT JOIN dune.items i ON i.id = bb.item_id
 LEFT JOIN dune.inventories inv ON inv.id = i.inventory_id
 LEFT JOIN dune.actors a ON a.id = inv.actor_id
-LEFT JOIN dune.player_state ps ON ps.player_pawn_id = a.id
+-- Owner resolution: dune-admin's original join (ps.player_pawn_id = a.id) only
+-- matches a player whose pawn is currently spawned/loaded, so offline players'
+-- blueprints render with a blank owner (looked like "only the host's blueprints
+-- show up"). Resolve primarily by the persistent account link (same pattern the
+-- Storage view uses), falling back to the live-pawn link for parity.
+LEFT JOIN dune.player_state ps_acct ON ps_acct.account_id = a.owner_account_id
+LEFT JOIN dune.player_state ps_pawn ON ps_pawn.player_pawn_id = a.id
 LEFT JOIN (
     SELECT building_blueprint_id, COUNT(*) AS cnt
     FROM dune.building_blueprint_instances
