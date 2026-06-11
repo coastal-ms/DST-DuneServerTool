@@ -8,7 +8,7 @@
 //
 // Used to gate access to surfaces that must NEVER be drivable from a
 // remote viewer (the free-form PowerShell page, for example) while still
-// letting curated remote surfaces (Commands, Dune Admin) render normally.
+// letting curated remote surfaces (Commands, Gameplay Admin) render normally.
 export function isLocalViewer(): boolean {
   if (typeof window === 'undefined') return true
   const host = window.location.hostname
