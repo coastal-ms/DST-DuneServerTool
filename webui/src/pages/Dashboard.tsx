@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from 'react'
+import { useNavigate } from 'react-router-dom'
 import { PageHeader } from '../components/PageHeader'
 import { Icon } from '../components/Icon'
 import { useStatus } from '../hooks/useStatus'
@@ -114,6 +115,7 @@ function HeartbeatSensor({ servers, loading }: { servers: BgGameServer[]; loadin
 
 export function Dashboard() {
   const { status, forceRefresh, loading } = useStatus()
+  const navigate = useNavigate()
 
   const vm = status?.vm
   const bgState = (status?.bg?.state ?? 'unknown') as BgState | 'unknown'
@@ -230,6 +232,21 @@ export function Dashboard() {
           <div className={`mt-2 text-2xl font-semibold ${portsTone} truncate`}>{portsLabel}</div>
           <div className="mt-1 text-xs text-text-dim truncate">{portsSub || '—'}</div>
         </div>
+      </section>
+
+      <section className="card card-hover p-4 mb-6 flex flex-col sm:flex-row sm:items-center gap-4">
+        <div className="w-11 h-11 rounded-lg bg-accent/15 border border-accent/30 flex items-center justify-center text-accent-bright shrink-0">
+          <Icon name="Gamepad2" size={22} />
+        </div>
+        <div className="flex-1 min-w-0">
+          <h2 className="text-base font-semibold text-text">Gameplay Environment</h2>
+          <p className="text-sm text-text-muted mt-0.5">
+            Native market, exchange, and bot tools — the Dune admin portal, rebuilt right here in one console.
+          </p>
+        </div>
+        <button className="btn-primary shrink-0" onClick={() => navigate('/gameplay')}>
+          <Icon name="ArrowRight" size={15} /> Open Gameplay
+        </button>
       </section>
 
       <section className="grid grid-cols-1 lg:grid-cols-2 gap-4 mb-4">
