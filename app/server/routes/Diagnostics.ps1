@@ -142,10 +142,15 @@ function New-DstDiagnosticBundle {
     }
     $ts = (Get-Date).ToString('yyyyMMdd-HHmmss-fff')
     $finalZip = Join-Path $destInfo.path "dst-diagnostics-$ts.zip"
-    $tmpZip   = "$finalZip.tmp"
+    # NB: Compress-Archive ONLY accepts a destination ending in ".zip". Under
+    # Windows PowerShell 5.1 (which the packaged DuneServer.exe runs on) a
+    # ".tmp" destination throws ".tmp is not a supported archive file format",
+    # which silently failed the whole bundle. Stage to a real .zip name in
+    # %TEMP%, then move it onto the final path.
+    $stageZip = Join-Path $env:TEMP "dst-diagnostics-$ts.partial.zip"
 
     # Stage everything in %TEMP% so writes to the user's Desktop are atomic
-    # (we Compress-Archive into the .tmp name, then rename on success).
+    # (we Compress-Archive into the staging .zip, then move on success).
     $stageDir = Join-Path $env:TEMP "dst-diagnostics-$ts"
     [void](New-Item -ItemType Directory -Force -Path $stageDir -ErrorAction SilentlyContinue)
 
@@ -262,14 +267,14 @@ function New-DstDiagnosticBundle {
     Set-Content -LiteralPath $manPath -Value ($manLines -join "`r`n") -Encoding UTF8
     $included.Add(@{ name = 'manifest.txt'; bytes = (Get-Item -LiteralPath $manPath).Length })
 
-    # 8) Compress into .tmp then atomically rename ---------------------------
-    if (Test-Path -LiteralPath $tmpZip)   { Remove-Item -LiteralPath $tmpZip -Force -ErrorAction SilentlyContinue }
+    # 8) Compress into a staging .zip then move into place ------------------
+    if (Test-Path -LiteralPath $stageZip) { Remove-Item -LiteralPath $stageZip -Force -ErrorAction SilentlyContinue }
     if (Test-Path -LiteralPath $finalZip) { Remove-Item -LiteralPath $finalZip -Force -ErrorAction SilentlyContinue }
     try {
-        Compress-Archive -Path (Join-Path $stageDir '*') -DestinationPath $tmpZip -Force -ErrorAction Stop
-        Rename-Item -LiteralPath $tmpZip -NewName (Split-Path -Leaf $finalZip) -ErrorAction Stop
+        Compress-Archive -Path (Join-Path $stageDir '*') -DestinationPath $stageZip -Force -ErrorAction Stop
+        Move-Item -LiteralPath $stageZip -Destination $finalZip -Force -ErrorAction Stop
     } catch {
-        if (Test-Path -LiteralPath $tmpZip) { Remove-Item -LiteralPath $tmpZip -Force -ErrorAction SilentlyContinue }
+        if (Test-Path -LiteralPath $stageZip) { Remove-Item -LiteralPath $stageZip -Force -ErrorAction SilentlyContinue }
         Remove-Item -LiteralPath $stageDir -Recurse -Force -ErrorAction SilentlyContinue
         throw "Failed to build diagnostic ZIP: $($_.Exception.Message)"
     }
