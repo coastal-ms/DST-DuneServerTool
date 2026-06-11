@@ -244,81 +244,16 @@ function Run-Setup {
     $sshKeyPath = AskPath -Label "SSH private key" -Default $defaultKey -MustExist
     Write-Host ""
 
-    # ── 3. dune-admin.exe ──
-    Write-Host "3. Dune Admin Tool (optional)" -ForegroundColor Yellow
-    Write-Host "   The dune-admin tool (by Icehunter) provides extra utilities for managing" -ForegroundColor Gray
-    Write-Host "   your battlegroup. Repo: https://github.com/Icehunter/dune-admin" -ForegroundColor Gray
-    Write-Host ""
-    Write-Host "   You can either:" -ForegroundColor Gray
-    Write-Host "     1. Download latest release now (recommended)" -ForegroundColor Gray
-    Write-Host "     2. Point at an existing dune-admin.exe you already have" -ForegroundColor Gray
-    Write-Host "     3. Skip — option 21 will be hidden" -ForegroundColor Gray
-    Write-Host ""
-    $existingAdmin = $existing.DuneAdminExe
-    $defaultAdminChoice = if ($existingAdmin -and (Test-Path $existingAdmin)) { '2' } else { '1' }
-    $adminChoice = Ask -Label "Choose 1, 2, or 3" -Default $defaultAdminChoice
-    $adminExe = ""
-    if ($adminChoice -eq '1') {
-        $defaultInstallDir = if ($existingAdmin) { Split-Path $existingAdmin -Parent } else { Join-Path ([Environment]::GetFolderPath('Desktop')) 'dune-admin' }
-        $installDir = Ask -Label "Install directory" -Default $defaultInstallDir
-        try {
-            $adminExe = Install-DuneAdminLatest -InstallDir $installDir
-            if ($adminExe) {
-                Write-Host "   dune-admin installed at $adminExe" -ForegroundColor Green
-            }
-        } catch {
-            Write-Warning "Download failed: $($_.Exception.Message)"
-            Write-Host "   You can re-run setup later or manually grab a release from:" -ForegroundColor Gray
-            Write-Host "   https://github.com/Icehunter/dune-admin/releases" -ForegroundColor Gray
-            $adminExe = ""
-        }
-    } elseif ($adminChoice -eq '2') {
-        $defaultAdmin = $null
-        $adminCandidates = @(
-            (Join-Path ([Environment]::GetFolderPath('Desktop')) 'dune-admin\dune-admin.exe'),
-            "$env:USERPROFILE\dune-admin\dune-admin.exe",
-            "$env:USERPROFILE\Desktop\dune-admin-main\dune-admin.exe",
-            "$scriptDir\dune-admin\dune-admin.exe"
-        )
-        foreach ($a in $adminCandidates) {
-            if (Test-Path $a) { $defaultAdmin = $a; break }
-        }
-        if ($existingAdmin) { $defaultAdmin = $existingAdmin }
-        $adminExe = Ask -Label "dune-admin.exe path" -Default $defaultAdmin
-        if ($adminExe -and -not (Test-Path $adminExe)) {
-            Write-Warning "File not found - dune-admin option will be hidden until the file exists."
-        }
-    }
-
-    # ── Copy SSH key alongside dune-admin.exe ──
-    # dune-admin needs to SSH to the VM the same way this tool does, so
-    # seed its install folder with the same key. We prefer the live key
-    # at %LOCALAPPDATA%\DuneAwakeningServer\sshKey (where rotate-ssh-key
-    # writes new keys) over the configured $sshKeyPath, which can drift
-    # if the user rotates after picking a different path in setup.
-    if ($adminExe) {
-        try {
-            $adminDir = Split-Path $adminExe -Parent
-            $srcKey   = Resolve-FreshSshKey -ConfiguredPath $sshKeyPath
-            if ($srcKey -and $adminDir) {
-                Copy-SshKeyToDir -SourceKey $srcKey -DestDir $adminDir | Out-Null
-            }
-        } catch {
-            Write-Warning "Could not copy SSH key to dune-admin folder: $($_.Exception.Message)"
-        }
-    }
-    Write-Host ""
-
-    # ── 4. Windows username ──
-    Write-Host "4. Windows Username" -ForegroundColor Yellow
-    Write-Host "   Used to launch dune-admin without admin elevation." -ForegroundColor Gray
+    # ── 3. Windows Username ──
+    Write-Host "3. Windows Username" -ForegroundColor Yellow
+    Write-Host "   Used by setup helpers and diagnostics." -ForegroundColor Gray
     Write-Host ""
     $defaultUser = if ($existing.WindowsUser) { $existing.WindowsUser } else { $env:USERNAME }
     $winUser = Ask -Label "Windows username" -Default $defaultUser
     Write-Host ""
 
-    # ── 5. Port verification (optional) ──
-    Write-Host "5. Port Verification" -ForegroundColor Yellow
+    # ── 4. Port Verification (optional) ──
+    Write-Host "4. Port Verification" -ForegroundColor Yellow
     Write-Host "   The tool can check that your forwarded ports are reachable from the internet" -ForegroundColor Gray
     Write-Host "   each time it launches, and display a color-coded status in the menu header." -ForegroundColor Gray
     Write-Host ""
@@ -366,7 +301,6 @@ function Run-Setup {
         ""
         "SteamPath=$steamPath"
         "SshKey=$sshKeyPath"
-        "DuneAdminExe=$adminExe"
         "WindowsUser=$winUser"
         "PortCheckMode=$portCheckMode"
         "PortCheckUrlTemplate=$portCheckUrlTemplate"
@@ -379,7 +313,7 @@ function Run-Setup {
     Write-Host ""
 
     # ── Optional desktop shortcut (Run as Administrator) ──
-    Write-Host "6. Desktop Shortcut (optional)" -ForegroundColor Yellow
+    Write-Host "5. Desktop Shortcut (optional)" -ForegroundColor Yellow
     Write-Host "   Create an icon on your desktop that launches dune-server.bat" -ForegroundColor Gray
     Write-Host "   pre-elevated (so SSH key permissions and Hyper-V calls just work)." -ForegroundColor Gray
     Write-Host ""
@@ -396,7 +330,6 @@ function Run-Setup {
     return @{
         SteamPath            = $steamPath
         SshKey               = $sshKeyPath
-        DuneAdminExe         = $adminExe
         WindowsUser          = $winUser
         PortCheckMode        = $portCheckMode
         PortCheckUrlTemplate = $portCheckUrlTemplate
@@ -440,46 +373,6 @@ function New-DuneDesktopShortcut {
     Write-Host "   (Double-click it - Windows will prompt for elevation.)" -ForegroundColor DarkGray
 }
 
-function Install-DuneAdminLatest {
-    [CmdletBinding()]
-    param(
-        [Parameter(Mandatory)][string]$InstallDir
-    )
-
-    Write-Host ""
-    Write-Host "   Fetching latest release info from Icehunter/dune-admin..." -ForegroundColor Cyan
-
-    $headers = @{ 'User-Agent' = 'Simple-Dune-Server-Management-Tool' }
-    $release = Invoke-RestMethod -Uri 'https://api.github.com/repos/Icehunter/dune-admin/releases/latest' -Headers $headers -TimeoutSec 15
-    $tag = $release.tag_name
-    Write-Host "   Latest release: $tag" -ForegroundColor DarkGray
-
-    $asset = $release.assets | Where-Object { $_.name -like '*windows_amd64.zip' } | Select-Object -First 1
-    if (-not $asset) {
-        throw "No Windows amd64 .zip asset found in release $tag."
-    }
-    Write-Host "   Asset: $($asset.name) ($([Math]::Round($asset.size/1MB,1)) MB)" -ForegroundColor DarkGray
-
-    if (-not (Test-Path $InstallDir)) {
-        New-Item -ItemType Directory -Force -Path $InstallDir | Out-Null
-    }
-
-    $tempZip = Join-Path $env:TEMP $asset.name
-    Write-Host "   Downloading..." -ForegroundColor Cyan
-    Invoke-WebRequest -Uri $asset.browser_download_url -OutFile $tempZip -Headers $headers -UseBasicParsing -TimeoutSec 120
-
-    Write-Host "   Extracting to $InstallDir..." -ForegroundColor Cyan
-    Expand-Archive -Path $tempZip -DestinationPath $InstallDir -Force
-    Remove-Item $tempZip -ErrorAction SilentlyContinue
-
-    $exe = Get-ChildItem -Path $InstallDir -Filter 'dune-admin.exe' -Recurse -ErrorAction SilentlyContinue |
-           Select-Object -First 1 -ExpandProperty FullName
-    if (-not $exe) {
-        throw "dune-admin.exe was not found in the extracted contents at $InstallDir."
-    }
-    return $exe
-}
-
 function Resolve-FreshSshKey {
     # Picks the most recently modified SSH private key out of:
     #   1) %LOCALAPPDATA%\DuneAwakeningServer\sshKey  (rotate-ssh-key writes here)
@@ -499,35 +392,6 @@ function Resolve-FreshSshKey {
     }
     if (-not $candidates) { return $null }
     return ($candidates | Sort-Object LastWriteTime -Descending | Select-Object -First 1).FullName
-}
-
-function Copy-SshKeyToDir {
-    # Copies an SSH private key (and its .pub if present) into a destination
-    # directory, skipping when source and destination point at the same place.
-    # Returns $true on success, $false on skip, throws on failure.
-    [CmdletBinding()]
-    param(
-        [Parameter(Mandatory)][string]$SourceKey,
-        [Parameter(Mandatory)][string]$DestDir
-    )
-
-    if (-not (Test-Path $SourceKey)) { return $false }
-    if (-not (Test-Path $DestDir))   { return $false }
-
-    $srcDir  = (Resolve-Path (Split-Path $SourceKey -Parent)).Path
-    $dstDir  = (Resolve-Path $DestDir).Path
-    if ($srcDir -eq $dstDir) { return $false }
-
-    $keyName = Split-Path $SourceKey -Leaf
-    $destKey = Join-Path $DestDir $keyName
-    Copy-Item -Path $SourceKey -Destination $destKey -Force
-    Write-Host "   Copied SSH key -> $destKey" -ForegroundColor DarkGray
-
-    $pubSrc = "$SourceKey.pub"
-    if (Test-Path $pubSrc) {
-        Copy-Item -Path $pubSrc -Destination (Join-Path $DestDir "$keyName.pub") -Force
-    }
-    return $true
 }
 
 function Load-Config {
@@ -567,233 +431,7 @@ if (-not $cfg) {
 $vmName        = 'dune-awakening'
 $sshKey        = $cfg.SshKey
 $sshUser       = 'dune'
-$duneAdminExe  = $cfg.DuneAdminExe
-# The Settings UI now stores a FOLDER for dune-admin (folder picker), but the
-# launch path below needs the full dune-admin.exe path. Mirror the in-app
-# normalization (Get-DuneAdminConfiguredPath): if the value already ends in
-# .exe use it as-is (back-compat with older configs); otherwise treat it as
-# the install folder and append dune-admin.exe.
-if ($duneAdminExe) {
-    $duneAdminExe = ([string]$duneAdminExe).Trim()
-    if ($duneAdminExe -and $duneAdminExe -notmatch '\.exe$') {
-        $duneAdminExe = Join-Path ($duneAdminExe.TrimEnd('\','/')) 'dune-admin.exe'
-    }
-}
-# dune-admin serves its web UI embedded (same-origin with its own API). Open the
-# LOCAL instance — NOT the hosted layout.tools site, which is a different origin
-# from the local API and triggers "Failed to fetch" + a sign-in wall.
-#
-# The port is PER-USER. dune-admin defaults to :8080 but its setup wizard writes
-# whatever the user picked into config.yaml listen_addr (e.g. :18080 when the
-# 'amp' control plane is chosen, since CubeCoders AMP squats 8080). NEVER assume
-# 8080 — always resolve through Get-DuneAdminWebState, which re-reads config.yaml
-# fresh each call (so a port chosen mid-session is picked up).
-function Get-DuneAdminWebState {
-    $port = 8080
-    $cfgPath = Join-Path (Join-Path $env:USERPROFILE '.dune-admin') 'config.yaml'
-    $configured = Test-Path -LiteralPath $cfgPath
-    if ($configured) {
-        try {
-            $laMatch = Select-String -LiteralPath $cfgPath -Pattern '^\s*listen_addr\s*:\s*(.+?)\s*$' -ErrorAction SilentlyContinue | Select-Object -First 1
-            if ($laMatch) {
-                $la = $laMatch.Matches[0].Groups[1].Value.Trim().Trim('"').Trim("'")
-                $p = ($la -split ':')[-1]
-                $pn = 0
-                if ([int]::TryParse($p, [ref]$pn) -and $pn -gt 0) { $port = $pn }
-            }
-        } catch { }
-    }
-    return [pscustomobject]@{
-        Configured = [bool]$configured
-        Port       = $port
-        Url        = "http://localhost:$port/#/players"
-    }
-}
-
-# dune-admin is the priority tool on this host. When CubeCoders AMP (or anything
-# else) already owns dune-admin's configured port on the IPv4 wildcard
-# (0.0.0.0:<port>), dune-admin can only fall back to the IPv6 wildcard
-# ([::]:<port>) — which forces the ugly [::1] loopback URL and breaks hosts with
-# IPv6 disabled. So give dune-admin its OWN IPv4 loopback port: if the configured
-# port is held by a foreign process at cold-launch time, move dune-admin to the
-# next free port and pin it to 127.0.0.1 (loopback-only bind => a normal
-# 'localhost' name, no AMP contention). No-op when the configured port is free,
-# so normal (non-AMP) users are NEVER touched. Returns the port to serve on.
-function Set-DuneAdminOwnLoopbackPort {
-    $cfgPath = Join-Path (Join-Path $env:USERPROFILE '.dune-admin') 'config.yaml'
-    if (-not (Test-Path -LiteralPath $cfgPath)) { return $null }
-
-    $port = [int](Get-DuneAdminWebState).Port
-
-    # Who (if anyone) is already listening on the configured port? The caller only
-    # invokes us on the cold path (dune-admin NOT running), so any listener here
-    # is a foreign process (e.g. AMP) that will block dune-admin's bind.
-    $blocked = @(Get-DunePortOwnerNames -Port $port).Count -gt 0
-    if (-not $blocked) { return $port }   # port free -> leave config untouched
-
-    # Find the next free loopback port. Prefer 18080 (the value dune-admin's own
-    # AMP control-plane setup uses), then scan upward.
-    $candidates = @(18080) + (18081..18099)
-    $freePort = $null
-    foreach ($cand in $candidates) {
-        if ($cand -eq $port) { continue }
-        if (@(Get-DunePortOwnerNames -Port $cand).Count -eq 0) { $freePort = $cand; break }
-    }
-    if (-not $freePort) {
-        Write-Host "Could not find a free port to move dune-admin to (tried 18080-18099)." -ForegroundColor Yellow
-        return $port
-    }
-
-    # Rewrite (or add) listen_addr. Bind 0.0.0.0 so the remote-portal helper
-    # bridge (helper/) can route the friend's WebView2 to dune-admin over
-    # Tailscale. If the configured port WAS contested (e.g. AMP), we've already
-    # relocated to a free port above — binding 0.0.0.0 on that new port is safe
-    # because nothing else holds it. dune-admin still has its own auth gate.
-    try {
-        $newAddr = "0.0.0.0:$freePort"
-        $lines = @(Get-Content -LiteralPath $cfgPath)
-        $found = $false
-        $lines = $lines | ForEach-Object {
-            if ($_ -match '^\s*listen_addr\s*:') { $found = $true; "listen_addr: $newAddr" } else { $_ }
-        }
-        if (-not $found) { $lines += "listen_addr: $newAddr" }
-        $utf8 = New-Object System.Text.UTF8Encoding($false)
-        [System.IO.File]::WriteAllText($cfgPath, ($lines -join "`n") + "`n", $utf8)
-        Write-Host "Port $port is held by another process (likely AMP) — moved dune-admin to 0.0.0.0:$freePort." -ForegroundColor Cyan
-        return $freePort
-    } catch {
-        Write-Warning "Could not update dune-admin listen_addr: $($_.Exception.Message)"
-        return $port
-    }
-}
-
-# Force dune-admin's listen_addr to bind ALL interfaces (0.0.0.0) on its current
-# port. Needed for the friend remote-portal helper to reach dune-admin through
-# DST's bridge — a 127.0.0.1 bind only answers the host's loopback, so even
-# though DST's listener routes through Tailscale, the iframe inside DST web UI
-# pointed at the host's tailnet name:port hits dune-admin which doesn't answer
-# on that interface. Idempotent (no rewrite if already 0.0.0.0:port). Returns
-# $true if any change was made, $false otherwise.
-function Set-DuneAdminBindAllInterfaces {
-    $cfgPath = Join-Path (Join-Path $env:USERPROFILE '.dune-admin') 'config.yaml'
-    if (-not (Test-Path -LiteralPath $cfgPath)) { return $false }
-    try {
-        $port = [int](Get-DuneAdminWebState).Port
-        if (-not $port -or $port -le 0) { return $false }
-        $newAddr = "0.0.0.0:$port"
-        $lines = @(Get-Content -LiteralPath $cfgPath)
-        $found = $false
-        $changed = $false
-        $lines = $lines | ForEach-Object {
-            if ($_ -match '^\s*listen_addr\s*:\s*(\S+)') {
-                $found = $true
-                $current = $matches[1].Trim()
-                if ($current -ne $newAddr) { $changed = $true; "listen_addr: $newAddr" } else { $_ }
-            } else { $_ }
-        }
-        if (-not $found) { $changed = $true; $lines += "listen_addr: $newAddr" }
-        if ($changed) {
-            $utf8 = New-Object System.Text.UTF8Encoding($false)
-            [System.IO.File]::WriteAllText($cfgPath, ($lines -join "`n") + "`n", $utf8)
-            Write-Host "dune-admin bind set to $newAddr (all interfaces, for remote-portal friend access)." -ForegroundColor Cyan
-        }
-        return $changed
-    } catch {
-        Write-Warning "Could not set dune-admin listen_addr to all interfaces: $($_.Exception.Message)"
-        return $false
-    }
-}
-
-# Open a Windows Firewall hole for dune-admin's port on the Private + Domain
-# profiles so the friend can reach it over Tailscale (Tailscale's tun adapter
-# is Private). Idempotent — won't add a duplicate rule on subsequent launches.
-function Add-DuneAdminFirewallRule {
-    try {
-        $port = [int](Get-DuneAdminWebState).Port
-        if (-not $port -or $port -le 0) { return }
-        $ruleName = "DST_DuneAdmin_Inbound_$port"
-        $existing = Get-NetFirewallRule -DisplayName $ruleName -ErrorAction SilentlyContinue
-        if ($existing) { return }
-        New-NetFirewallRule `
-            -DisplayName $ruleName `
-            -Description "Allow inbound TCP to dune-admin (managed by DST for remote-portal helper access)." `
-            -Direction Inbound -Action Allow -Protocol TCP `
-            -LocalPort $port -Profile Private,Domain `
-            -ErrorAction Stop | Out-Null
-        Write-Host "Firewall: opened inbound TCP $port for dune-admin (Private+Domain profiles)." -ForegroundColor DarkGray
-    } catch {
-        Write-Warning "Could not add dune-admin firewall rule: $($_.Exception.Message)"
-    }
-}
-
-# Short-timeout TCP probe: is anything listening on 127.0.0.1:<port> yet?
-function Test-DuneAdminListening {
-    param([int]$Port, [int]$TimeoutMs = 800)
-    $client = $null
-    try {
-        $client = [System.Net.Sockets.TcpClient]::new()
-        $iar = $client.BeginConnect('127.0.0.1', $Port, $null, $null)
-        if ($iar.AsyncWaitHandle.WaitOne($TimeoutMs) -and $client.Connected) {
-            $client.EndConnect($iar); return $true
-        }
-        return $false
-    } catch { return $false } finally { if ($client) { try { $client.Close() } catch { } } }
-}
-
-# Which processes own the TCP listener(s) on <port>? Returns an array of
-# ProcessNames (no .exe). More than one can listen on the same port via
-# different interfaces (e.g. dune-admin on 127.0.0.1 AND CubeCoders AMP on
-# 0.0.0.0). Returns @() if nothing is listening / owners can't be resolved.
-function Get-DunePortOwnerNames {
-    param([int]$Port)
-    $names = @()
-    try {
-        $conns = Get-NetTCPConnection -LocalPort $Port -State Listen -ErrorAction SilentlyContinue
-        foreach ($c in $conns) {
-            $op = $c.OwningProcess
-            if ($op) {
-                $proc = Get-Process -Id $op -ErrorAction SilentlyContinue
-                if ($proc -and ($names -notcontains $proc.ProcessName)) { $names += $proc.ProcessName }
-            }
-        }
-    } catch { }
-    return $names
-}
-
-# Picks the loopback host literal that actually routes to dune-admin on <port>.
-#
-# Why this is needed: when CubeCoders AMP already holds the IPv4 wildcard
-# (0.0.0.0:8080), dune-admin can only bind the IPv6 wildcard ([::]:8080). In
-# that split, 'localhost' resolves to 127.0.0.1 FIRST and lands on AMP's panel,
-# not dune-admin — even though dune-admin IS listening on the same port number.
-# So we inspect the actual listeners and, when there's a cross-family conflict,
-# return the loopback literal ([::1] or 127.0.0.1) that dune-admin owns
-# exclusively. With no conflict we keep friendly 'localhost'.
-function Get-DuneAdminUrlHost {
-    param([int]$Port, [string]$AdminProcName = 'dune-admin')
-    $hostLit = 'localhost'
-    try {
-        $conns = Get-NetTCPConnection -LocalPort $Port -State Listen -ErrorAction SilentlyContinue
-        $adminV4 = $false; $adminV6 = $false; $otherV4 = $false; $otherV6 = $false
-        foreach ($c in $conns) {
-                $isV6 = ([string]$c.LocalAddress).Contains(':')
-                $pn = $null
-                if ($c.OwningProcess) { $pn = (Get-Process -Id $c.OwningProcess -ErrorAction SilentlyContinue).ProcessName }
-                $isAdmin = ($pn -and $AdminProcName -and ($pn -ieq $AdminProcName))
-                if ($isAdmin) { if ($isV6) { $adminV6 = $true } else { $adminV4 = $true } }
-                else         { if ($isV6) { $otherV6 = $true } else { $otherV4 = $true } }
-        }
-        if ($otherV4 -or $otherV6) {
-                if ($adminV6 -and -not $otherV6)      { $hostLit = '[::1]' }
-                elseif ($adminV4 -and -not $otherV4)  { $hostLit = '127.0.0.1' }
-        }
-    } catch { }
-    return $hostLit
-}
-
-$duneAdminWeb = (Get-DuneAdminWebState).Url
 $bgSetupPath   = "$($cfg.SteamPath)\battlegroup-management"
-$windowsUser   = $cfg.WindowsUser
 # Default existing installs (no PortCheckMode in config) to built-in.
 $portCheckMode = if ($cfg.PortCheckMode) { $cfg.PortCheckMode } else { 'builtin' }
 $portCheckUrl  = $cfg.PortCheckUrlTemplate
@@ -1285,17 +923,14 @@ $bgCommands = @(
     [pscustomobject]@{ Key = "14"; SubSection = "Monitoring";   Name = "open-director";             Desc = "Open the battlegroup director page to view server status" }
     [pscustomobject]@{ Key = "15"; SubSection = "Monitoring";   Name = "shell-vm";                  Desc = "Connect to the VM via commandline" }
     [pscustomobject]@{ Key = "16"; SubSection = "Monitoring";   Name = "shell-pod";                 Desc = "Connect to a pod in the battlegroup via commandline" }
-    [pscustomobject]@{ Key = "21"; SubSection = "Maintenance";   Name = "fix-on-demand-maps";        Desc = "Clear pinned partitions so DeepDesert / Arrakeen / Harko launch on demand" }
+    [pscustomobject]@{ Key = "20"; SubSection = "Maintenance";   Name = "fix-on-demand-maps";        Desc = "Clear pinned partitions so DeepDesert / Arrakeen / Harko launch on demand" }
 )
 
 $toolCommands = @(
     [pscustomobject]@{ Key = "17"; Name = "ssh";             Desc = "Open an SSH terminal to the VM" }
 )
-if ($duneAdminExe) {
-    $toolCommands += [pscustomobject]@{ Key = "18"; Name = "dune-admin";      Desc = "Launch dune-admin.exe  +  Open dune-admin web UI" }
-}
-$toolCommands += [pscustomobject]@{ Key = "19"; Name = "setup-guide";    Desc = "Open Funcom Self-Hosted Server Setup Instructions" }
-$toolCommands += [pscustomobject]@{ Key = "20"; Name = "report-issue";   Desc = "Report a bug in this tool (opens prefilled GitHub issue in browser)" }
+$toolCommands += [pscustomobject]@{ Key = "18"; Name = "setup-guide";    Desc = "Open Funcom Self-Hosted Server Setup Instructions" }
+$toolCommands += [pscustomobject]@{ Key = "19"; Name = "report-issue";   Desc = "Report a bug in this tool (opens prefilled GitHub issue in browser)" }
 
 # ============================================================
 #  AVAILABILITY CHECKS
@@ -1348,11 +983,6 @@ function Get-ToolCmdAvailability {
     param($cmdName, $info)
     switch ($cmdName) {
         "ssh" {
-            if (-not $info.Exists)  { return @{ Available = $false; Reason = "VM '$vmName' does not exist." } }
-            if (-not $info.Running) { return @{ Available = $false; Reason = "VM '$vmName' is not running." } }
-            return @{ Available = $true; Reason = $null }
-        }
-        "dune-admin" {
             if (-not $info.Exists)  { return @{ Available = $false; Reason = "VM '$vmName' does not exist." } }
             if (-not $info.Running) { return @{ Available = $false; Reason = "VM '$vmName' is not running." } }
             return @{ Available = $true; Reason = $null }
@@ -2196,18 +1826,6 @@ while ($true) {
             Write-Host "  password when the console asks for it." -ForegroundColor DarkGray
         }
 
-        # Keep dune-admin's copy of the SSH key in sync with the rotated one
-        if ($cfg.DuneAdminExe -and (Test-Path $cfg.DuneAdminExe)) {
-            try {
-                $freshKey = Resolve-FreshSshKey -ConfiguredPath $sshKey
-                if ($freshKey) {
-                    Copy-SshKeyToDir -SourceKey $freshKey `
-                                     -DestDir (Split-Path $cfg.DuneAdminExe -Parent) | Out-Null
-                }
-            } catch {
-                Write-Warning "Could not refresh dune-admin's SSH key copy: $($_.Exception.Message)"
-            }
-        }
         continue
     }
 
@@ -2359,233 +1977,6 @@ while ($true) {
     if ($cmdName -eq "ssh") {
         Write-Host "Connecting to VM via SSH... Type 'exit' to return." -ForegroundColor Cyan
         ssh -t -o StrictHostKeyChecking=no -o LogLevel=QUIET -i "$sshKey" "$sshUser@$ip"
-        continue
-    }
-
-    if ($cmdName -eq "dune-admin") {
-        # Verify the configured exe exists. If it doesn't (user uninstalled,
-        # moved the folder, or never installed it), auto-install the latest
-        # release rather than silently registering a scheduled task pointed
-        # at a missing file (which fires-and-forgets and leaves dune-admin's
-        # web UI showing no data).
-        $needsInstall = (-not $duneAdminExe) -or (-not (Test-Path -LiteralPath $duneAdminExe))
-        $didInstallWork = $false
-        if ($needsInstall) {
-            $didInstallWork = $true
-            Write-Host ""
-            Write-Host "dune-admin.exe was not found." -ForegroundColor Yellow
-            if ($duneAdminExe) {
-                Write-Host "  Configured path: $duneAdminExe" -ForegroundColor DarkGray
-            }
-            Write-Host ""
-            Write-Host "  This tool can install the latest dune-admin release for you" -ForegroundColor Gray
-            Write-Host "  from https://github.com/Icehunter/dune-admin/releases" -ForegroundColor Gray
-            Write-Host ""
-            $resp = Read-Host "Install dune-admin now? [Y/n]"
-            if ($resp -and $resp -notmatch '^(y|yes)$') {
-                Write-Host "Aborted." -ForegroundColor Yellow
-                Read-Host "Press Enter to close this window"
-                continue
-            }
-            $installDir = if ($duneAdminExe) { Split-Path $duneAdminExe -Parent } else { Join-Path ([Environment]::GetFolderPath('Desktop')) 'dune-admin' }
-            try {
-                $newExe = Install-DuneAdminLatest -InstallDir $installDir
-                if (-not $newExe -or -not (Test-Path -LiteralPath $newExe)) {
-                    throw "Install completed but dune-admin.exe was not found in $installDir."
-                }
-                $duneAdminExe = $newExe
-                # Persist the new path so future runs find it without re-installing.
-                try {
-                    if (Test-Path -LiteralPath $configFile) {
-                        $lines = Get-Content -LiteralPath $configFile
-                        if ($lines -match '^DuneAdminExe=') {
-                            $lines = $lines | ForEach-Object { if ($_ -match '^DuneAdminExe=') { "DuneAdminExe=$duneAdminExe" } else { $_ } }
-                        } else {
-                            $lines += "DuneAdminExe=$duneAdminExe"
-                        }
-                        $lines | Set-Content -LiteralPath $configFile -Encoding UTF8
-                        Write-Host "  Updated config: $configFile" -ForegroundColor DarkGray
-                    }
-                } catch {
-                    Write-Warning "Installed dune-admin OK but could not update config: $($_.Exception.Message)"
-                }
-                # Seed the install dir with our SSH key so dune-admin can SSH
-                # to the VM the same way this tool does. Mirrors initial-setup.
-                try {
-                    $adminDir = Split-Path $duneAdminExe -Parent
-                    $srcKey   = Resolve-FreshSshKey -ConfiguredPath $sshKey
-                    if ($srcKey -and $adminDir) {
-                        Copy-SshKeyToDir -SourceKey $srcKey -DestDir $adminDir | Out-Null
-                        Write-Host "  Copied SSH key into $adminDir" -ForegroundColor DarkGray
-                    }
-                } catch {
-                    Write-Warning "Could not copy SSH key into dune-admin folder: $($_.Exception.Message)"
-                }
-            } catch {
-                Write-Host ""
-                Write-Host "Install failed: $($_.Exception.Message)" -ForegroundColor Red
-                Write-Host "You can download manually from https://github.com/Icehunter/dune-admin/releases" -ForegroundColor Gray
-                Read-Host "Press Enter to close this window"
-                continue
-            }
-        }
-
-        Write-Host "Launching dune-admin.exe and web UI as $windowsUser..." -ForegroundColor Cyan
-        $duneAdminDir = Split-Path $duneAdminExe -Parent
-        # Skip the launch if dune-admin is already running — relaunching would
-        # spawn a duplicate console/process. We still open the web UI below.
-        $adminProcName = [System.IO.Path]::GetFileNameWithoutExtension($duneAdminExe)
-        $adminRunning  = $false
-        if ($adminProcName) {
-            $adminRunning = [bool](Get-Process -Name $adminProcName -ErrorAction SilentlyContinue)
-        }
-        if ($adminRunning) {
-            Write-Host "dune-admin.exe is already running — reusing the existing instance." -ForegroundColor DarkGray
-        } else {
-            # dune-admin is priority: if its configured port is squatted by a
-            # foreign process (e.g. AMP on 0.0.0.0:8080), move dune-admin to its
-            # own free 127.0.0.1 loopback port BEFORE launch so it binds IPv4
-            # cleanly and the UI opens on a normal name (no [::1]).
-            try { Set-DuneAdminOwnLoopbackPort | Out-Null } catch { Write-Warning "Port pre-flight failed: $($_.Exception.Message)" }
-            # Ensure dune-admin binds all interfaces (0.0.0.0) on its port so the
-            # remote-portal helper bridge can route the friend's WebView2 to it
-            # over Tailscale. Also drop a Windows Firewall rule for the same port
-            # (Private+Domain — Tailscale's tun is Private). Both idempotent.
-            try { Set-DuneAdminBindAllInterfaces | Out-Null } catch { Write-Warning "Bind-all pre-flight failed: $($_.Exception.Message)" }
-            try { Add-DuneAdminFirewallRule } catch { Write-Warning "Firewall pre-flight failed: $($_.Exception.Message)" }
-            # Launch as the logged-in user via scheduled task (avoids admin elevation).
-            # Hiding the spawned console window is harder than it sounds:
-            #   * `-Hidden` on New-ScheduledTaskSettingsSet only hides the TASK
-            #     in Task Scheduler's UI — the spawned cmd.exe still shows a
-            #     console window.
-            #   * `-WindowStyle Hidden` on powershell.exe does work but flashes
-            #     a visible console for ~50ms while PS itself starts up.
-            # The reliable zero-flash trick on Windows 10/11 is to invoke the
-            # process via WScript.Shell.Run with intWindowStyle=0 (SW_HIDE).
-            # wscript.exe is a Windows-subsystem host (no console of its own)
-            # and CreateProcess inherits SW_HIDE through to cmd's spawn of
-            # dune-admin. We drop a tiny .vbs to %LOCALAPPDATA%\DuneServer\,
-            # then schedule wscript.exe <vbs> <exe> <log>. cmd's redirection
-            # captures both streams into the log file the DuneServer mirror
-            # runspace tails into THIS console with an [admin] prefix.
-            try {
-                $duneAdminLogDir  = Join-Path $env:LOCALAPPDATA 'DuneServer\logs'
-                $duneAdminLogPath = Join-Path $duneAdminLogDir 'dune-admin.log'
-                $duneAdminVbsPath = Join-Path (Join-Path $env:LOCALAPPDATA 'DuneServer') 'launch-dune-admin.vbs'
-                if (-not (Test-Path -LiteralPath $duneAdminLogDir)) {
-                    New-Item -ItemType Directory -Path $duneAdminLogDir -Force | Out-Null
-                }
-                $vbsDir = Split-Path -Parent $duneAdminVbsPath
-                if (-not (Test-Path -LiteralPath $vbsDir)) {
-                    New-Item -ItemType Directory -Path $vbsDir -Force | Out-Null
-                }
-                # VBS contents — q is the literal ASCII double-quote, used to
-                # build a cmd.exe command line with the magic-quote pattern:
-                #   cmd /c ""<exe>" 1>>"<log>" 2>&1"
-                # The outer "" pair is consumed by cmd /c's tokenizer per its
-                # documented quoting rules. Style 0 = SW_HIDE (no window).
-                # True (3rd arg) = wait for completion so cmd's redirection
-                # file handles stay alive for dune-admin's whole lifetime.
-                $vbsContent = @'
-Dim args, q, cmd
-Set args = WScript.Arguments
-If args.Count < 2 Then WScript.Quit 1
-q = Chr(34)
-cmd = "cmd.exe /c " & q & q & args(0) & q & " 1>>" & q & args(1) & q & " 2>&1" & q
-CreateObject("WScript.Shell").Run cmd, 0, True
-'@
-                [System.IO.File]::WriteAllText($duneAdminVbsPath, $vbsContent, [System.Text.UTF8Encoding]::new($false))
-
-                $wscriptArgs = '"' + $duneAdminVbsPath + '" "' + $duneAdminExe + '" "' + $duneAdminLogPath + '"'
-                $action    = New-ScheduledTaskAction -Execute 'wscript.exe' -Argument $wscriptArgs -WorkingDirectory $duneAdminDir
-                $settings  = New-ScheduledTaskSettingsSet -Hidden -AllowStartIfOnBatteries -DontStopIfGoingOnBatteries
-                $principal = New-ScheduledTaskPrincipal -UserId $windowsUser -LogonType Interactive -RunLevel Limited
-                Register-ScheduledTask -TaskName "DuneAdminLaunch" -Action $action -Principal $principal -Settings $settings -Force | Out-Null
-                Start-ScheduledTask -TaskName "DuneAdminLaunch"
-                Start-Sleep -Seconds 1
-                Unregister-ScheduledTask -TaskName "DuneAdminLaunch" -Confirm:$false
-            } catch {
-                Write-Host "Failed to launch dune-admin.exe: $($_.Exception.Message)" -ForegroundColor Red
-                Read-Host "Press Enter to close this window"
-                continue
-            }
-        }
-        # Open the web UI — but ONLY once dune-admin is actually listening on its
-        # configured port. Re-resolve fresh: if the user just ran first-time setup
-        # (or AMP picked :18080), config.yaml now holds the real port. Opening
-        # blindly on :8080 could land on AMP's panel or a dead port.
-        $webState = Get-DuneAdminWebState
-        if (-not $webState.Configured) {
-            Write-Host ""
-            Write-Host "dune-admin needs first-time setup before it can serve the web UI." -ForegroundColor Yellow
-            Write-Host "Complete the prompts in the dune-admin window (control plane, ports, etc)." -ForegroundColor Yellow
-            Write-Host "When it prints 'Starting server on :<port>', re-run this command to open it." -ForegroundColor Yellow
-            Write-Host "Not opening a browser yet (would hit the wrong port before setup finishes)." -ForegroundColor DarkGray
-            if ($didInstallWork) { Read-Host "Press Enter to close this window" }
-            continue
-        }
-        # Poll until dune-admin is listening on its real port (up to ~30s) AND
-        # verify the process that owns the port is dune-admin itself. This closes
-        # the AMP edge case: if something else (CubeCoders AMP) already owns the
-        # port, dune-admin's bind fails and AMP would answer the probe — we must
-        # NOT open AMP's panel. Bail early with guidance instead.
-        $ready = $false
-        $conflictOwner = $null
-        for ($i = 0; $i -lt 30; $i++) {
-            if (Test-DuneAdminListening -Port $webState.Port -TimeoutMs 800) {
-                $owners = @(Get-DunePortOwnerNames -Port $webState.Port)
-                if ($owners.Count -eq 0) {
-                    # Listening but owners unresolved (loopback can hide it) — accept.
-                    $ready = $true; break
-                } elseif (-not $adminProcName -or ($owners -icontains $adminProcName)) {
-                    # dune-admin is among the listeners (even if AMP also holds the
-                    # port on another interface) — safe to open.
-                    $ready = $true; break
-                } else {
-                    $conflictOwner = $owners[0]; break
-                }
-            }
-            Start-Sleep -Seconds 1
-        }
-        if ($ready) {
-            # Build the URL with the loopback host that actually routes to
-            # dune-admin. If AMP holds IPv4:<port>, dune-admin is IPv6-only and
-            # 'localhost' (127.0.0.1-first) would open AMP's panel — use [::1].
-            $urlHost = Get-DuneAdminUrlHost -Port $webState.Port -AdminProcName $adminProcName
-            $openUrl = "http://${urlHost}:$($webState.Port)/#/players"
-            # The DST embed tab is the canonical dune-admin viewer now, so the
-            # API command runner sets DST_DUNE_ADMIN_NO_BROWSER=1 to stop us
-            # from popping a redundant second browser window over the iframe.
-            # CLI users running this command directly have the env var unset
-            # and still get the browser open.
-            if ($env:DST_DUNE_ADMIN_NO_BROWSER -eq '1') {
-                Write-Host "Done. dune-admin is listening on port $($webState.Port) ($openUrl). Browser skipped (DST embed tab is active)." -ForegroundColor Green
-            } else {
-                # Start-Process <url> uses the registered https:// protocol handler,
-                # honoring the user's default browser (avoids Win11 24H2's Edge bug).
-                Start-Process $openUrl
-                Write-Host "Done. dune-admin is listening on port $($webState.Port); web UI opened in browser ($openUrl)." -ForegroundColor Green
-            }
-        } elseif ($conflictOwner) {
-            Write-Host ""
-            Write-Host "Port $($webState.Port) is in use by '$conflictOwner' (not dune-admin)." -ForegroundColor Yellow
-            Write-Host "dune-admin can't bind that port, so its web UI isn't available there." -ForegroundColor Yellow
-            if ($conflictOwner -match 'amp|cube') {
-                Write-Host "Looks like CubeCoders AMP. Re-run dune-admin setup and choose the 'amp'" -ForegroundColor Yellow
-                Write-Host "control plane (it moves dune-admin to :18080), or set a different" -ForegroundColor Yellow
-                Write-Host "listen_addr in ~/.dune-admin/config.yaml, then re-run this command." -ForegroundColor Yellow
-            } else {
-                Write-Host "Free port $($webState.Port) or set a different listen_addr in" -ForegroundColor Yellow
-                Write-Host "~/.dune-admin/config.yaml, then re-run this command." -ForegroundColor Yellow
-            }
-            Write-Host "Not opening a browser (would land on '$conflictOwner', not dune-admin)." -ForegroundColor DarkGray
-        } else {
-            Write-Host ""
-            Write-Host "dune-admin did not start listening on port $($webState.Port) within 30s." -ForegroundColor Yellow
-            Write-Host "If it is still finishing setup, wait for 'Starting server on :$($webState.Port)' then re-run this command." -ForegroundColor Yellow
-            Write-Host "URL when ready: $($webState.Url)" -ForegroundColor DarkGray
-        }
-        if ($didInstallWork) { Read-Host "Press Enter to close this window" }
         continue
     }
 

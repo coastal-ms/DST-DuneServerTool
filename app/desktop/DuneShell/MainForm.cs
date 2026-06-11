@@ -155,11 +155,10 @@ internal sealed class MainForm : Form
         //   * Same-origin as the portal's own URL (loopback + same port) -> keep
         //     in this shell. Covers in-portal "open in new tab" flows like the
         //     updater's safe-to-close page or any future window.open from React.
-        //   * Anything else, including OTHER loopback ports (e.g. dune-admin's
-        //     own HTTP port via the iframe's "Open in browser" link, or any
+        //   * Anything else, including OTHER loopback ports (e.g. any
         //     localhost game-tool URL) -> hand to the OS default browser. Just
-        //     checking `IsLoopback` here was too broad and caused dune-admin's
-        //     "Open in browser" to navigate the shell off the portal instead.
+        //     checking `IsLoopback` here is too broad and can navigate the
+        //     shell off the portal instead.
         e.Handled = true;
         if (!Uri.TryCreate(e.Uri, UriKind.Absolute, out var u)) return;
 
@@ -435,26 +434,18 @@ internal sealed class MainForm : Form
     }
 
     /// <summary>
-    /// When the portal window closes, also stop the helper processes the user
-    /// thinks of as "DST": the elevated PowerShell backend (DuneServer.exe)
-    /// and the bundled dune-admin terminal window. Closing the visible window
-    /// used to leave both running silently in the background, which surprised
-    /// users — especially now that dune-admin can render inside this window
-    /// via the in-app embed, removing the last reason to keep its console
-    /// window alive separately.
+    /// When the portal window closes, also stop the helper process the user
+    /// thinks of as "DST": the elevated PowerShell backend (DuneServer.exe).
+    /// Closing the visible window used to leave it running silently in the
+    /// background, which surprised users.
     ///
     /// Order matters:
     ///   1. Ask the backend to shut down gracefully via POST /api/shutdown.
     ///      That endpoint flushes the response, stops the HttpListener, and
     ///      lets the script exit cleanly, releasing its mutex and the
     ///      battlegroup VM is left in a known state.
-    ///   2. Kill any dune-admin.exe processes. dune-admin has no graceful
-    ///      stop hook, but it's a stateless watcher — terminating it just
-    ///      closes the terminal window.
-    ///   3. Schedule a short fallback that force-kills DuneServer.exe a few
-    ///      seconds later in case the HTTP shutdown didn't take (backend
-    ///      hung, port already moved, etc.). The fallback runs on a thread
-    ///      pool task so we don't block the UI close.
+    ///   2. Sweep any remaining DuneServer.exe processes in case the HTTP
+    ///      shutdown didn't take (backend hung, port already moved, etc.).
     ///
     /// Skipped when the shell was launched standalone (`--no-wait-file`):
     /// in that mode the shell wasn't started by the backend launcher and we
@@ -466,8 +457,8 @@ internal sealed class MainForm : Form
 
         // Keep-alive opt-out: when the backend wrote keep-alive.flag, the
         // user has registered DST autostart (or launched --headless), and
-        // closing the viewer must NOT take the backend + wrapped dune-admin
-        // console down with it. They re-attach to the live backend by
+        // closing the viewer must NOT take the backend down with it. They
+        // re-attach to the live backend by
         // clicking the shortcut again, and stop it explicitly via the
         // tray's "Quit (stop server)" or the console window. The flag is
         // refreshed live by the backend on startup AND on every autostart
@@ -512,26 +503,7 @@ internal sealed class MainForm : Form
         }
         catch { /* best-effort */ }
 
-        // 2) Always terminate dune-admin terminal windows — they have no
-        //    graceful stop and are safe to nuke. Two binary names are possible
-        //    depending on the dune-admin build (Go binary or wrapper).
-        foreach (var name in new[] { "dune-admin", "dune-admin-windows-amd64" })
-        {
-            try
-            {
-                foreach (var p in Process.GetProcessesByName(name))
-                {
-                    try
-                    {
-                        if (!p.HasExited) p.Kill(entireProcessTree: true);
-                    }
-                    catch { /* access denied / already gone */ }
-                }
-            }
-            catch { /* defensive */ }
-        }
-
-        // 3) Sweep up any remaining DuneServer.exe. If /api/shutdown succeeded
+        // 2) Sweep up any remaining DuneServer.exe. If /api/shutdown succeeded
         //    above the process is already gone (or has HasExited=true) and
         //    this is a no-op; if the listener was hung or the token expired,
         //    this is the safety net that guarantees the user's intent ("close

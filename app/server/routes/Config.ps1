@@ -52,9 +52,7 @@ Register-DuneRoute -Method PUT -Path '/api/config' -Handler {
 
 # POST /api/config/rotate-ssh-key — generate a fresh SSH key and authorize it on
 # the VM. Runs the existing 'rotate-ssh-key' command in an elevated console and
-# WAITS for it to finish (non-interactive). That command also re-copies the
-# rotated key into the dune-admin folder itself, so no extra propagation step is
-# needed here.
+# WAITS for it to finish (non-interactive).
 Register-DuneRoute -Method POST -Path '/api/config/rotate-ssh-key' -Handler {
     param($req, $res, $routeParams, $body)
 
@@ -77,7 +75,7 @@ Register-DuneRoute -Method POST -Path '/api/config/rotate-ssh-key' -Handler {
 
         # Wait for the elevated rotation console to exit (rotation is
         # non-interactive: it regenerates the key, authorizes it on the VM, and
-        # re-dumps it into the dune-admin folder, then the -Cmd run exits).
+        # exits when the elevated rotation console finishes).
         $rotated = $false
         if ($procId) {
             $deadline = (Get-Date).AddSeconds(180)
@@ -101,7 +99,7 @@ Register-DuneRoute -Method POST -Path '/api/config/rotate-ssh-key' -Handler {
             ok       = $true
             rotated  = $true
             pid      = $procId
-            message  = 'SSH key rotated, authorized on the VM, and copied into the dune-admin folder.'
+            message  = 'SSH key rotated and authorized on the VM.'
         }
     } catch {
         Write-DuneError -Response $res -Status 500 -Message "SSH key rotation failed: $($_.Exception.Message)"

@@ -6,10 +6,9 @@
 #      routes (Maps, MapSpinUp, Database, Sietch, BackupSchedule, Broadcast,
 #      GameConfig, Links) rely on for SSH/kubectl/psql access into the VM.
 #
-# Previously this lived in app/server/lib/Characters.ps1; that file (and the
-# Characters API surface) were removed in v11.1.0 because the only thing
-# referencing character data was a sidebar launcher button for dune-admin.exe
-# itself, which is its own standalone Windows tool.
+# Previously this lived in app/server/lib/Characters.ps1; that file and the
+# Characters API surface were removed in v11.1.0 after character data stopped
+# being exposed by the backend.
 
 if (-not (Get-Command Read-Config -ErrorAction SilentlyContinue)) {
     function Read-Config {

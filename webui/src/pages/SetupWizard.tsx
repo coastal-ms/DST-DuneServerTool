@@ -289,7 +289,6 @@ function Step4Security() {
           (<span className="font-mono">rotate-ssh-key</span>).
         </li>
         <li>Limit inbound traffic in Windows Defender Firewall to the battlegroup ports only.</li>
-        <li>If you exposed dune-admin externally, gate it behind a reverse proxy with HTTPS.</li>
       </ul>
     </>
   )
