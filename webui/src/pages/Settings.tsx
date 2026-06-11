@@ -70,6 +70,26 @@ export function Settings() {
   // finish, then propagates the fresh key everywhere DST uses it.
   const [sshRotating, setSshRotating] = useState(false)
   const [sshRotateMsg, setSshRotateMsg] = useState<string | null>(null)
+  const [openingBat, setOpeningBat] = useState(false)
+  const [batMsg, setBatMsg] = useState<string | null>(null)
+  async function onOpenBattlegroupBat() {
+    if (!window.confirm('Open Funcom\'s original battlegroup.bat?\n\nThis launches the battlegroup.bat in the root of your Steam install folder in an ELEVATED (administrator) window. Approve the Windows UAC prompt if it appears.')) return
+    setOpeningBat(true)
+    setBatMsg(null)
+    setError(null)
+    try {
+      const r = await api<{ ok: boolean; path?: string; message?: string }>(
+        '/api/config/open-battlegroup-bat',
+        { method: 'POST' },
+      )
+      setBatMsg(r.message ?? (r.ok ? 'Opened battlegroup.bat.' : 'Could not open battlegroup.bat.'))
+      if (!r.ok && r.message) setError(r.message)
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e))
+    } finally {
+      setOpeningBat(false)
+    }
+  }
   async function onRotateSshKey() {
     if (!window.confirm('Generate a NEW SSH key?\n\nThis regenerates the key, authorizes it on the dune-awakening VM, and copies it into the dune-admin folder. The VM must be running.\n\nA console window will open and ask for the \'dune\' user\'s password — you MUST type it there to authorize the new key on the VM. If you close that prompt without entering the password, DST will be locked out of the server until you re-run this. The console will tell you if authorization succeeded.')) return
     setSshRotating(true)
@@ -1307,7 +1327,20 @@ export function Settings() {
                 <option value="disabled">disabled — no port checks</option>
               </select>
             ) : f.browse ? (
-              <div className="flex items-stretch gap-2">
+              <>
+                {f.key === 'SteamPath' && (
+                  <button
+                    type="button"
+                    onClick={() => void onOpenBattlegroupBat()}
+                    disabled={openingBat}
+                    title="Open Funcom's battlegroup.bat (in the Steam install root) in an elevated window"
+                    className="btn-secondary mb-2"
+                  >
+                    <Icon name={openingBat ? 'Loader2' : 'SquareTerminal'} size={15} className={openingBat ? 'animate-spin' : ''} />
+                    {openingBat ? 'Opening…' : 'Funcom BattleGroup.bat'}
+                  </button>
+                )}
+                <div className="flex items-stretch gap-2">
                 <input
                   type="text"
                   value={values[f.key] ?? ''}
@@ -1342,7 +1375,8 @@ export function Settings() {
                     {sshRotating ? 'Rotating…' : 'Generate new'}
                   </button>
                 )}
-              </div>
+                </div>
+              </>
             ) : (
               <input
                 type="text"
@@ -1357,6 +1391,11 @@ export function Settings() {
             {f.key === 'SshKey' && sshRotateMsg && (
               <p className="mt-1 text-xs text-success flex items-center gap-1.5">
                 <Icon name="CheckCircle2" size={13} /> {sshRotateMsg}
+              </p>
+            )}
+            {f.key === 'SteamPath' && batMsg && (
+              <p className="mt-1 text-xs text-success flex items-center gap-1.5">
+                <Icon name="CheckCircle2" size={13} /> {batMsg}
               </p>
             )}
           </div>
