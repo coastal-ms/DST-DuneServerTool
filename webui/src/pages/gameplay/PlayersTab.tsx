@@ -3,7 +3,7 @@ import { Icon } from '../../components/Icon'
 import {
   getPlayers, getPlayerDetail,
   giveSolari, giveItem, renamePlayer, awardSpecXp, deleteInventoryItem, repairInventoryItem,
-  type Player, type PlayerDetailResponse, type DataSource,
+  type Player, type PlayerDetailResponse, type InventoryItem, type DataSource,
 } from '../../api/gameplay'
 import { fmtNum, fmtSolari, SourceBadge, StatCard, DemoNotice, qualityClass } from './shared'
 
@@ -171,6 +171,17 @@ function PlayerDetail({ player, canWrite, demo, onClose, onChanged }: {
 
   const solari = detail?.currency.find(c => c.currency_id === 1)?.balance
 
+  // Separate emotes and contract (quest) items from real gear/loot so the
+  // inventory list stays focused; they're shown in their own sub-sections.
+  const groups = useMemo(() => {
+    const inv = detail?.inventory ?? []
+    return {
+      gear: inv.filter(i => (i.kind ?? 'item') === 'item'),
+      emotes: inv.filter(i => i.kind === 'emote'),
+      contracts: inv.filter(i => i.kind === 'contract'),
+    }
+  }, [detail])
+
   return (
     <div className="fixed inset-0 z-40 flex justify-end" onClick={onClose}>
       <div className="absolute inset-0 bg-black/50" />
@@ -191,7 +202,7 @@ function PlayerDetail({ player, canWrite, demo, onClose, onChanged }: {
         {/* Currency */}
         <div className="grid grid-cols-3 gap-2 mb-4">
           <MiniStat label="Solari" value={fmtSolari(solari)} />
-          <MiniStat label="Inventory" value={fmtNum(detail?.inventory.length)} />
+          <MiniStat label="Inventory" value={fmtNum(groups.gear.length)} />
           <MiniStat label="Spec tracks" value={fmtNum(detail?.specs.length)} />
         </div>
 
@@ -263,37 +274,21 @@ function PlayerDetail({ player, canWrite, demo, onClose, onChanged }: {
               </>
             )}
 
-            {/* Inventory */}
-            <h4 className="text-xs uppercase tracking-wider text-text-dim mb-2">Inventory ({fmtNum(detail?.inventory.length)})</h4>
-            {!detail || detail.inventory.length === 0 ? (
+            {/* Inventory (gear/loot only — emotes & contracts shown separately) */}
+            <h4 className="text-xs uppercase tracking-wider text-text-dim mb-2">Inventory ({fmtNum(groups.gear.length)})</h4>
+            {groups.gear.length === 0 ? (
               <div className="text-text-dim text-sm py-2">No items.</div>
             ) : (
               <div className="space-y-1">
-                {detail.inventory.map(it => (
-                  <div key={it.id} className="flex items-center justify-between text-sm bg-surface-2 rounded-lg px-3 py-2 border border-border/50">
-                    <span className="truncate max-w-[240px]">
-                      <span className="text-text">{it.name}</span>
-                      {it.quality > 0 && <span className={`ml-1.5 text-[11px] ${qualityClass(it.quality)}`}>Q{it.quality}</span>}
-                      <span className="ml-1.5 font-mono text-text-dim text-xs">×{fmtNum(it.stack_size)}</span>
-                    </span>
-                    {canWrite && (
-                      <span className="flex items-center gap-2 shrink-0">
-                        {it.durability !== 'N/A' && (
-                          <button className="text-info hover:text-accent-bright" title="Repair to full" disabled={busy}
-                            onClick={() => run(() => repairInventoryItem(it.id), 'Repair')}>
-                            <Icon name="Wrench" size={14} />
-                          </button>
-                        )}
-                        <button className="text-danger/80 hover:text-danger" title="Delete item" disabled={busy}
-                          onClick={() => { if (window.confirm(`Delete ${it.name} (×${it.stack_size})? This cannot be undone.`)) void run(() => deleteInventoryItem(it.id), 'Delete') }}>
-                          <Icon name="Trash2" size={14} />
-                        </button>
-                      </span>
-                    )}
-                  </div>
+                {groups.gear.map(it => (
+                  <ItemRow key={it.id} item={it} canWrite={canWrite} busy={busy} run={run} />
                 ))}
               </div>
             )}
+
+            {/* Emotes & contract items — separated to keep the list above clean */}
+            <ItemSection title="Emotes" icon="Smile" items={groups.emotes} canWrite={canWrite} busy={busy} run={run} />
+            <ItemSection title="Contract items" icon="FileText" items={groups.contracts} canWrite={canWrite} busy={busy} run={run} />
           </>
         )}
       </div>
@@ -302,6 +297,62 @@ function PlayerDetail({ player, canWrite, demo, onClose, onChanged }: {
 }
 
 function isOnlineStr(s: string) { return s.toLowerCase().includes('online') }
+
+type RunFn = (fn: () => Promise<{ ok: boolean; message: string }>, label: string) => void | Promise<void>
+
+function ItemRow({ item: it, canWrite, busy, run }: {
+  item: InventoryItem; canWrite: boolean; busy: boolean; run: RunFn
+}) {
+  return (
+    <div className="flex items-center justify-between text-sm bg-surface-2 rounded-lg px-3 py-2 border border-border/50">
+      <span className="truncate max-w-[240px]">
+        <span className="text-text">{it.name}</span>
+        {it.quality > 0 && <span className={`ml-1.5 text-[11px] ${qualityClass(it.quality)}`}>Q{it.quality}</span>}
+        <span className="ml-1.5 font-mono text-text-dim text-xs">×{fmtNum(it.stack_size)}</span>
+      </span>
+      {canWrite && (
+        <span className="flex items-center gap-2 shrink-0">
+          {it.durability !== 'N/A' && (
+            <button className="text-info hover:text-accent-bright" title="Repair to full" disabled={busy}
+              onClick={() => run(() => repairInventoryItem(it.id), 'Repair')}>
+              <Icon name="Wrench" size={14} />
+            </button>
+          )}
+          <button className="text-danger/80 hover:text-danger" title="Delete item" disabled={busy}
+            onClick={() => { if (window.confirm(`Delete ${it.name} (×${it.stack_size})? This cannot be undone.`)) void run(() => deleteInventoryItem(it.id), 'Delete') }}>
+            <Icon name="Trash2" size={14} />
+          </button>
+        </span>
+      )}
+    </div>
+  )
+}
+
+// Collapsible sub-section for emotes / contract items, collapsed by default so
+// they don't clutter the main inventory list. Hidden entirely when empty.
+function ItemSection({ title, icon, items, canWrite, busy, run }: {
+  title: string; icon: string; items: InventoryItem[]; canWrite: boolean; busy: boolean; run: RunFn
+}) {
+  const [open, setOpen] = useState(false)
+  if (items.length === 0) return null
+  return (
+    <div className="mt-4">
+      <button type="button" onClick={() => setOpen(o => !o)}
+        className="flex w-full items-center gap-2 text-xs uppercase tracking-wider text-text-dim hover:text-text mb-2">
+        <Icon name={open ? 'ChevronDown' : 'ChevronRight'} size={14} />
+        <Icon name={icon} size={13} />
+        <span>{title} ({fmtNum(items.length)})</span>
+      </button>
+      {open && (
+        <div className="space-y-1">
+          {items.map(it => (
+            <ItemRow key={it.id} item={it} canWrite={canWrite} busy={busy} run={run} />
+          ))}
+        </div>
+      )}
+    </div>
+  )
+}
 
 interface FieldDef { key: string; label: string; type: 'text' | 'number'; placeholder?: string }
 
