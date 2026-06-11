@@ -90,6 +90,22 @@ function Get-DuneGameplayItemName {
     return $TemplateId
 }
 
+# Classify an inventory item as a normal 'item', an 'emote', or a 'contract'
+# (quest) item so the Players view can separate clutter from real gear/loot.
+# Emotes and contract turn-in items are not in the catalog metadata (no
+# category); a handful of "Contract*" template_ids ARE real catalogued items
+# (e.g. ContractSeronVarlinDamasteelSword, a longblade) — those stay 'item'.
+function Get-DuneItemKind {
+    param([string]$TemplateId)
+    if (-not $TemplateId) { return 'item' }
+    $rule = Get-DuneGameplayItemRule -TemplateId $TemplateId
+    if (-not $rule.category) {
+        if ($TemplateId -match 'Emote')        { return 'emote' }
+        if ($TemplateId -match '^(D_)?Contract') { return 'contract' }
+    }
+    return 'item'
+}
+
 # Reclassify "*_Schematic" items under schematics/<first-segment> (matches dune-admin).
 function Get-DuneSchematicCategory {
     param([string]$TemplateId, [string]$BaseCategory)

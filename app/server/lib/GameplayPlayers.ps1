@@ -117,6 +117,7 @@ function Get-DunePlayerDetailLive {
             id             = (ConvertTo-DuneInt $r['id'])
             template_id    = $tmpl
             name           = (Get-DuneGameplayItemName -TemplateId $tmpl)
+            kind           = (Get-DuneItemKind -TemplateId $tmpl)
             stack_size     = (ConvertTo-DuneInt $r['stack_size'])
             quality        = (ConvertTo-DuneInt $r['quality_level'])
             durability     = [string]$r['durability']
@@ -293,9 +294,12 @@ function Get-DunePlayerDetailDemo {
     return @{
         ok = $true
         inventory = @(
-            [ordered]@{ id=70001; template_id='Stillsuit_T4'; name='Stillsuit (Mk IV)'; stack_size=1; quality=3; durability='842.0'; max_durability='1000.0' }
-            [ordered]@{ id=70002; template_id='Spice_Melange'; name='Spice Melange'; stack_size=1200; quality=0; durability='N/A'; max_durability='N/A' }
-            [ordered]@{ id=70003; template_id='Maula_Pistol'; name='Maula Pistol'; stack_size=1; quality=4; durability='310.0'; max_durability='400.0' }
+            [ordered]@{ id=70001; template_id='Stillsuit_T4'; name='Stillsuit (Mk IV)'; kind='item'; stack_size=1; quality=3; durability='842.0'; max_durability='1000.0' }
+            [ordered]@{ id=70002; template_id='Spice_Melange'; name='Spice Melange'; kind='item'; stack_size=1200; quality=0; durability='N/A'; max_durability='N/A' }
+            [ordered]@{ id=70003; template_id='Maula_Pistol'; name='Maula Pistol'; kind='item'; stack_size=1; quality=4; durability='310.0'; max_durability='400.0' }
+            [ordered]@{ id=70004; template_id='Emote_AtreSalute_01'; name='Atreides Salute'; kind='emote'; stack_size=1; quality=0; durability='N/A'; max_durability='N/A' }
+            [ordered]@{ id=70005; template_id='Emote_Wave_01'; name='Wave'; kind='emote'; stack_size=1; quality=0; durability='N/A'; max_durability='N/A' }
+            [ordered]@{ id=70006; template_id='D_ContractSmugglerDocuments'; name='Smuggler Documents'; kind='contract'; stack_size=1; quality=0; durability='N/A'; max_durability='N/A' }
         )
         specs = @(
             [ordered]@{ track_type='Trooper'; xp=44182; level=100.0 }

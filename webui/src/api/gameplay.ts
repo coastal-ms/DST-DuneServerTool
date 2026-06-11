@@ -282,6 +282,7 @@ export interface InventoryItem {
   id: number
   template_id: string
   name: string
+  kind?: 'item' | 'emote' | 'contract'
   stack_size: number
   quality: number
   durability: string
