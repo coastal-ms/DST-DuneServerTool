@@ -45,3 +45,31 @@ export function checkForUpdate(opts: { force?: boolean } = {}) {
 export function installUpdate() {
   return api<UpdateInstallResult>(`/api/update/install`, { method: 'POST', body: '{}' })
 }
+
+/**
+ * One-time "DST is now decoupled from Dune-Admin" notice. `needed` is true only
+ * for installs upgraded from a pre-decouple build (<= 11.4.13) that haven't
+ * acknowledged yet. `duneAdminFolder` is recovered from the legacy
+ * `DuneAdminExe` config value so the user can still launch dune-admin manually.
+ */
+export interface MigrationNotice {
+  needed: boolean
+  acknowledged: boolean
+  fromLegacy: boolean
+  duneAdminExe?: string
+  duneAdminFolder?: string
+  portalUrl: string
+  currentVersion?: string
+  checkedAt?: string
+}
+
+export function getMigrationNotice() {
+  return api<MigrationNotice>(`/api/update/migration-notice`)
+}
+
+export function ackMigrationNotice() {
+  return api<{ ok: boolean; acknowledged: boolean; ackVersion?: string }>(
+    `/api/update/migration-notice/ack`,
+    { method: 'POST', body: '{}' },
+  )
+}
