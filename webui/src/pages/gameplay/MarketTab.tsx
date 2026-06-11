@@ -119,7 +119,7 @@ export function MarketTab() {
           sub={`${fmtNum(stats?.bot_listings)} bot · ${fmtNum(stats?.player_listings)} player`} />
         <StatCard label="Unique items" value={fmtNum(stats?.unique_items)} icon="Boxes" />
         <StatCard label="Total stock" value={fmtNum(stats?.total_stock)} icon="Package"
-          sub={`${fmtNum(stats?.bot_stock)} on Revy`} />
+          sub={`${fmtNum(stats?.bot_stock)} on Duke`} />
         <StatCard label="Bot stock share" icon="Bot"
           value={stats && stats.total_stock > 0 ? `${Math.round((stats.bot_stock / stats.total_stock) * 100)}%` : '—'} />
       </section>
@@ -142,7 +142,7 @@ export function MarketTab() {
           {topCategories.map(c => <option key={c} value={c}>{c}</option>)}
         </select>
         <div className="flex rounded-lg border border-border overflow-hidden">
-          {[['', 'All'], ['bot', 'Revy'], ['player', 'Players']].map(([val, label]) => (
+          {[['', 'All'], ['bot', 'Duke'], ['player', 'Players']].map(([val, label]) => (
             <button key={val}
               onClick={() => setOwner(val)}
               className={`px-3 py-2 text-sm ${owner === val ? 'bg-accent/20 text-accent-bright' : 'bg-surface-2 text-text-muted hover:text-text'}`}>
@@ -205,7 +205,7 @@ export function MarketTab() {
                 <td className="px-3 py-2 text-right font-mono text-accent-bright">{fmtSolari(it.lowest_price)}</td>
                 <td className="px-3 py-2 text-right font-mono">
                   {fmtNum(it.total_stock)}
-                  {it.bot_stock > 0 && <span className="text-[11px] text-text-dim"> ({fmtNum(it.bot_stock)} Revy)</span>}
+                  {it.bot_stock > 0 && <span className="text-[11px] text-text-dim"> ({fmtNum(it.bot_stock)} Duke)</span>}
                 </td>
                 <td className="px-3 py-2 text-right hidden sm:table-cell text-text-muted">{it.listing_count}</td>
               </tr>
@@ -286,7 +286,7 @@ function ItemDetail({ item, onClose }: { item: MarketItem; onClose: () => void }
         <div className="grid grid-cols-3 gap-2 mb-4">
           <MiniStat label="Lowest" value={fmtSolari(item.lowest_price)} />
           <MiniStat label="Stock" value={fmtNum(item.total_stock)} />
-          <MiniStat label="On Revy" value={fmtNum(item.bot_stock)} />
+          <MiniStat label="On Duke" value={fmtNum(item.bot_stock)} />
         </div>
 
         <h4 className="text-xs uppercase tracking-wider text-text-dim mb-2">Active listings</h4>

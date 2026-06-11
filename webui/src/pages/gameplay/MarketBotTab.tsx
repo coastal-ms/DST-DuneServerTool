@@ -1,10 +1,10 @@
 import { useCallback, useEffect, useState } from 'react'
 import { Icon } from '../../components/Icon'
 import {
-  getBotStatus, getBotConfig, saveBotConfig,
-  type BotStatus, type BotConfig,
+  getBotStatus, getBotConfig, saveBotConfig, runBotTick, botExec, setBotBalance, clearBotListings,
+  type BotStatus, type BotConfig, type BotTickResult,
 } from '../../api/gameplay'
-import { fmtSolari, fmtNum, fmtUptime, SourceBadge } from './shared'
+import { fmtSolari, fmtNum, SourceBadge } from './shared'
 
 export function MarketBotTab() {
   const [status, setStatus] = useState<BotStatus | null>(null)
@@ -14,6 +14,10 @@ export function MarketBotTab() {
   const [error, setError] = useState<string | null>(null)
   const [saving, setSaving] = useState(false)
   const [saveMsg, setSaveMsg] = useState<string | null>(null)
+  const [tick, setTick] = useState<BotTickResult | null>(null)
+  const [ticking, setTicking] = useState(false)
+  const [balanceBusy, setBalanceBusy] = useState(false)
+  const [clearing, setClearing] = useState(false)
 
   const load = useCallback(async () => {
     setLoading(true)
@@ -32,7 +36,7 @@ export function MarketBotTab() {
 
   useEffect(() => { void load() }, [load])
 
-  // Poll status while the tab is open (config is left untouched).
+  // Poll status while the tab is open (config draft is left untouched).
   useEffect(() => {
     const id = window.setInterval(() => {
       getBotStatus().then(setStatus).catch(() => {})
@@ -40,7 +44,6 @@ export function MarketBotTab() {
     return () => window.clearInterval(id)
   }, [])
 
-  const configured = config?.configured !== false && status?.configured !== false
   const dirty = JSON.stringify(config) !== JSON.stringify(draft)
 
   const save = async () => {
@@ -52,11 +55,71 @@ export function MarketBotTab() {
       const saved = await saveBotConfig(draft)
       setConfig(saved)
       setDraft(structuredClone(saved))
-      setSaveMsg('Configuration saved to the bot.')
+      setSaveMsg('Configuration saved.')
+      getBotStatus().then(setStatus).catch(() => {})
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e))
     } finally {
       setSaving(false)
+    }
+  }
+
+  const toggleEnabled = async (v: boolean) => {
+    setError(null)
+    try {
+      await botExec(v ? 'start' : 'stop')
+      if (draft) setDraft({ ...draft, enabled: v })
+      if (config) setConfig({ ...config, enabled: v })
+      getBotStatus().then(setStatus).catch(() => {})
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e))
+    }
+  }
+
+  const doTick = async (dry: boolean) => {
+    setTicking(true)
+    setTick(null)
+    setError(null)
+    try {
+      const r = await runBotTick(dry)
+      setTick(r)
+      if (!dry) getBotStatus().then(setStatus).catch(() => {})
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e))
+    } finally {
+      setTicking(false)
+    }
+  }
+
+  const maintainBalance = async () => {
+    if (!draft) return
+    setBalanceBusy(true)
+    setError(null)
+    setSaveMsg(null)
+    try {
+      const r = await setBotBalance(draft.target_balance)
+      setSaveMsg(`Balance set to ${fmtSolari(r.after)} (Δ ${fmtSolari(r.delta)}).`)
+      getBotStatus().then(setStatus).catch(() => {})
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e))
+    } finally {
+      setBalanceBusy(false)
+    }
+  }
+
+  const clearListings = async () => {
+    if (!window.confirm("Delete ALL of Duke's market listings? Player listings are not affected. This cannot be undone.")) return
+    setClearing(true)
+    setError(null)
+    setSaveMsg(null)
+    try {
+      const r = await clearBotListings()
+      setSaveMsg(r.message ?? `Cleared ${fmtNum(r.cleared)} of Duke's listings.`)
+      getBotStatus().then(setStatus).catch(() => {})
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e))
+    } finally {
+      setClearing(false)
     }
   }
 
@@ -66,16 +129,15 @@ export function MarketBotTab() {
 
   return (
     <div>
-      {!configured && (
-        <div className="card p-3 mb-4 text-xs text-text-muted border-l-2 border-accent flex items-start gap-2">
-          <Icon name="Info" size={14} className="text-accent shrink-0 mt-0.5" />
-          <span>
-            No market bot is configured. Set <span className="font-mono text-accent">MarketBotAddr</span> and{' '}
-            <span className="font-mono text-accent">MarketBotToken</span> in your config to manage a live Revy bot.
-            The values below are a sample configuration.
-          </span>
-        </div>
-      )}
+      <div className="card p-3 mb-4 text-xs text-text-muted border-l-2 border-accent flex items-start gap-2">
+        <Icon name="Info" size={14} className="text-accent shrink-0 mt-0.5" />
+        <span>
+          <span className="font-semibold text-text">Duke</span> runs natively inside this server — no external bot process.
+          On each buy tick every player listing rolls a <span className="font-mono text-accent">d{draft?.die_size ?? 12}</span>;
+          only a roll of <span className="font-mono text-accent">{draft?.die_target ?? 5}</span> buys the item, regardless of price.
+          Writes go straight to the live game database, so keep the bot disabled until you've dry-run a tick.
+        </span>
+      </div>
 
       {/* Status */}
       <section className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-4">
@@ -87,10 +149,10 @@ export function MarketBotTab() {
           <div className={`mt-1 text-xl font-semibold ${status?.running ? 'text-success' : 'text-text-muted'}`}>
             {status?.running ? 'Running' : 'Stopped'}
           </div>
-          {status?.uptime ? <div className="text-[11px] text-text-dim">up {fmtUptime(status.uptime)}</div> : null}
+          <div className="text-[11px] text-text-dim">{status?.provisioned ? 'provisioned' : 'not provisioned'}</div>
         </div>
-        <StatCard label="Listings" value={fmtNum(status?.listing_count)} icon="Tags" />
-        <StatCard label="Balance" value={status?.balance !== undefined ? fmtSolari(status.balance) : '—'} icon="Coins" />
+        <StatCard label="NPC listings" value={fmtNum(status?.listing_count)} icon="Tags" />
+        <StatCard label="Balance" value={status?.balance != null ? fmtSolari(status.balance) : '—'} icon="Coins" />
         <StatCard label="Errors" value={fmtNum(status?.error_count ?? 0)} icon="TriangleAlert"
           tone={status?.error_count ? 'text-danger' : 'text-text'} />
       </section>
@@ -101,9 +163,68 @@ export function MarketBotTab() {
         </div>
       )}
 
+      {/* Run a buy tick */}
+      <div className="card p-4 mb-4">
+        <div className="flex items-center justify-between mb-2">
+          <h4 className="text-xs uppercase tracking-wider text-text-dim flex items-center gap-2">
+            <Icon name="Dices" size={14} className="text-accent" /> Run a buy tick
+          </h4>
+          <div className="flex items-center gap-2">
+            <button className="btn-secondary" disabled={clearing} onClick={() => { void clearListings() }}
+              title="Delete all of Duke's own market listings (player listings are untouched)">
+              <Icon name={clearing ? 'Loader2' : 'Trash2'} size={15} className={clearing ? 'animate-spin' : ''} /> Clear listings
+            </button>
+            <button className="btn-secondary" disabled={ticking} onClick={() => { void doTick(true) }}>
+              <Icon name={ticking ? 'Loader2' : 'FlaskConical'} size={15} className={ticking ? 'animate-spin' : ''} /> Dry run
+            </button>
+            <button className="btn-primary" disabled={ticking} onClick={() => { void doTick(false) }}>
+              <Icon name={ticking ? 'Loader2' : 'Play'} size={15} className={ticking ? 'animate-spin' : ''} /> Run now
+            </button>
+          </div>
+        </div>
+        <p className="text-[11px] text-text-dim mb-2">
+          Dry run rolls the dice and reports what it <em>would</em> buy without touching the database. Run now executes the purchases.
+        </p>
+        {tick && (
+          <div className="text-sm">
+            <div className="flex flex-wrap gap-x-4 gap-y-1 text-text-muted">
+              <span><span className="text-text-dim">die:</span> <span className="font-mono">{tick.die}</span></span>
+              <span><span className="text-text-dim">candidates:</span> {fmtNum(tick.candidates)}</span>
+              <span><span className="text-text-dim">rolled:</span> {fmtNum(tick.rolled)}</span>
+              <span><span className="text-text-dim">won:</span> {fmtNum(tick.won)}</span>
+              <span className={tick.dryRun ? 'text-accent' : 'text-success'}>
+                <span className="text-text-dim">{tick.dryRun ? 'would buy:' : 'purchased:'}</span> {fmtNum(tick.purchased)}
+              </span>
+              {tick.errors > 0 && <span className="text-danger"><span className="text-text-dim">errors:</span> {fmtNum(tick.errors)}</span>}
+            </div>
+            {tick.dryRun && <div className="mt-1 text-[11px] text-accent">Dry run — nothing was written.</div>}
+            {tick.message && <div className="mt-1 text-[11px] text-danger break-words">{tick.message}</div>}
+            {tick.winners?.length > 0 && (
+              <div className="mt-2 max-h-40 overflow-auto rounded-lg border border-border">
+                <table className="w-full text-xs">
+                  <thead className="text-text-dim bg-surface-2 sticky top-0">
+                    <tr><th className="text-left px-2 py-1">Item</th><th className="text-right px-2 py-1">Price</th><th className="text-right px-2 py-1">Qty</th><th className="text-right px-2 py-1">Roll</th></tr>
+                  </thead>
+                  <tbody>
+                    {tick.winners.map((w, i) => (
+                      <tr key={`${w.order_id}-${i}`} className="border-t border-border">
+                        <td className="px-2 py-1 font-mono text-text">{w.template_id}</td>
+                        <td className="px-2 py-1 text-right">{fmtSolari(w.price)}</td>
+                        <td className="px-2 py-1 text-right">{fmtNum(w.stack)}</td>
+                        <td className="px-2 py-1 text-right font-mono text-accent">{w.roll}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </div>
+        )}
+      </div>
+
       <div className="flex items-center justify-between mb-3">
         <h3 className="text-sm font-semibold uppercase tracking-wider text-text-muted flex items-center gap-2">
-          <Icon name="Sliders" size={14} className="text-accent" /> Pricing &amp; tuning
+          <Icon name="Sliders" size={14} className="text-accent" /> Buy tuning
         </h3>
         <div className="flex items-center gap-2">
           <SourceBadge source={config?.source} />
@@ -117,57 +238,63 @@ export function MarketBotTab() {
         <div className="space-y-4">
           {/* Core toggles + intervals */}
           <div className="card p-4 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-            <Toggle label="Bot enabled" checked={draft.enabled}
-              onChange={v => setDraft({ ...draft, enabled: v })} disabled={!configured} />
-            <NumField label="List tick (s)" value={draft.list_tick_interval}
-              onChange={v => setDraft({ ...draft, list_tick_interval: v })} disabled={!configured} />
+            <Toggle label="Bot enabled" checked={draft.enabled} onChange={v => { void toggleEnabled(v) }} />
             <NumField label="Buy tick (s)" value={draft.buy_tick_interval}
-              onChange={v => setDraft({ ...draft, buy_tick_interval: v })} disabled={!configured} />
-            <NumField label="Buy threshold" step={0.01} value={draft.buy_threshold}
-              onChange={v => setDraft({ ...draft, buy_threshold: v })} disabled={!configured} />
+              onChange={v => setDraft({ ...draft, buy_tick_interval: v })} />
             <NumField label="Max buys / tick" value={draft.max_buys_per_tick}
-              onChange={v => setDraft({ ...draft, max_buys_per_tick: v })} disabled={!configured} />
-            <NumField label="Listings / grade" value={draft.listings_per_grade}
-              onChange={v => setDraft({ ...draft, listings_per_grade: v })} disabled={!configured} />
+              onChange={v => setDraft({ ...draft, max_buys_per_tick: v })} />
           </div>
 
-          {/* Rarity multipliers */}
+          {/* Dice roll buy */}
           <div className="card p-4">
-            <h4 className="text-xs uppercase tracking-wider text-text-dim mb-3">Rarity price multipliers</h4>
-            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
-              {Object.entries(draft.rarity_multipliers ?? {}).map(([rarity, mult]) => (
-                <NumField key={rarity} label={rarity} step={0.05} value={mult} disabled={!configured}
-                  onChange={v => setDraft({ ...draft, rarity_multipliers: { ...draft.rarity_multipliers, [rarity]: v } })} />
-              ))}
+            <h4 className="text-xs uppercase tracking-wider text-text-dim mb-1 flex items-center gap-2">
+              <Icon name="Dices" size={14} className="text-accent" /> Dice roll buy
+            </h4>
+            <p className="text-[11px] text-text-dim mb-3">
+              Each candidate listing rolls 1–<span className="font-mono">{draft.die_size}</span>; a roll equal to the winning number buys it.
+              A larger die buys less often; the winning number is clamped to the die size.
+            </p>
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+              <NumField label="Die size" value={draft.die_size}
+                onChange={v => setDraft({ ...draft, die_size: v })} />
+              <NumField label="Winning number" value={draft.die_target}
+                onChange={v => setDraft({ ...draft, die_target: v })} />
             </div>
           </div>
 
-          {/* Grade multipliers */}
+          {/* Solari balance maintenance */}
           <div className="card p-4">
-            <h4 className="text-xs uppercase tracking-wider text-text-dim mb-1">Grade multipliers</h4>
-            <p className="text-[11px] text-text-dim mb-2">Comma-separated, one per item grade (low → high).</p>
-            <input type="text" disabled={!configured}
-              value={(draft.grade_multipliers ?? []).join(', ')}
-              onChange={e => {
-                const arr = e.target.value.split(',').map(s => parseFloat(s.trim())).filter(n => !Number.isNaN(n))
-                setDraft({ ...draft, grade_multipliers: arr })
-              }}
-              className="w-full px-3 py-2 rounded-lg bg-surface-2 border border-border text-text text-sm font-mono focus:outline-none focus:ring-2 focus:ring-ibad disabled:opacity-50" />
+            <h4 className="text-xs uppercase tracking-wider text-text-dim mb-1 flex items-center gap-2">
+              <Icon name="Coins" size={14} className="text-accent" /> Solari balance
+            </h4>
+            <p className="text-[11px] text-text-dim mb-3">
+              Current balance: <span className="font-mono text-text">{status?.balance != null ? fmtSolari(status.balance) : '—'}</span>.
+              When auto-maintain is on, Duke tops back up to the target at the start of a tick if it drops below half.
+            </p>
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 items-end">
+              <Toggle label="Auto-maintain balance" checked={draft.maintain_balance}
+                onChange={v => setDraft({ ...draft, maintain_balance: v })} />
+              <NumField label="Target balance" value={draft.target_balance}
+                onChange={v => setDraft({ ...draft, target_balance: v })} />
+              <button className="btn-secondary" disabled={balanceBusy} onClick={() => { void maintainBalance() }}>
+                <Icon name={balanceBusy ? 'Loader2' : 'Wallet'} size={15} className={balanceBusy ? 'animate-spin' : ''} /> Set balance to target
+              </button>
+            </div>
           </div>
 
           {/* Disabled items */}
           <div className="card p-4">
             <h4 className="text-xs uppercase tracking-wider text-text-dim mb-1">Disabled items</h4>
-            <p className="text-[11px] text-text-dim mb-2">Template IDs the bot will never list or buy. One per line.</p>
-            <textarea rows={4} disabled={!configured}
+            <p className="text-[11px] text-text-dim mb-2">Template IDs Duke will never buy. One per line.</p>
+            <textarea rows={4}
               value={(draft.disabled_items ?? []).join('\n')}
               onChange={e => setDraft({ ...draft, disabled_items: e.target.value.split('\n').map(s => s.trim()).filter(Boolean) })}
-              className="w-full px-3 py-2 rounded-lg bg-surface-2 border border-border text-text text-sm font-mono focus:outline-none focus:ring-2 focus:ring-ibad disabled:opacity-50" />
+              className="w-full px-3 py-2 rounded-lg bg-surface-2 border border-border text-text text-sm font-mono focus:outline-none focus:ring-2 focus:ring-ibad" />
           </div>
 
           {/* Actions */}
           <div className="flex items-center gap-3">
-            <button className="btn-primary" disabled={!configured || !dirty || saving} onClick={() => { void save() }}>
+            <button className="btn-primary" disabled={!dirty || saving} onClick={() => { void save() }}>
               <Icon name={saving ? 'Loader2' : 'Save'} size={15} className={saving ? 'animate-spin' : ''} /> Save config
             </button>
             <button className="btn-secondary" disabled={!dirty || saving} onClick={() => setDraft(structuredClone(config))}>
@@ -176,11 +303,6 @@ export function MarketBotTab() {
             {saveMsg && <span className="text-xs text-success">{saveMsg}</span>}
             {error && <span className="text-xs text-danger break-words">{error}</span>}
           </div>
-
-          <p className="text-[11px] text-text-dim flex items-center gap-1.5">
-            <Icon name="Info" size={12} />
-            Lifecycle control (start / stop / restart) isn't wired in this build — manage the bot service directly for now.
-          </p>
         </div>
       )}
     </div>

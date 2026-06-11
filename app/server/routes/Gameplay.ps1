@@ -176,65 +176,47 @@ Register-DuneRoute -Method GET -Path '/api/gameplay/market/catalog' -Handler {
 }
 
 # ---------------------------------------------------------------------------
-# GET /api/gameplay/market-bot/status
-# Proxies the external bot; on unreachable returns running:false (or demo).
+# Native Market Bot ("Duke") — runs the d12 gamble buy loop inside this backend
+# and writes directly to the live game DB. Config + runtime state live in
+# %APPDATA%\DuneServer\gameplay-bot.json (see lib/GameplayBot.ps1). The old
+# external-proxy routes have been replaced by these native handlers.
+# ---------------------------------------------------------------------------
+
+function Test-DuneBodyTruthy {
+    param($Body, [string]$Name)
+    if ($null -eq $Body) { return $false }
+    $v = $null
+    if ($Body -is [System.Collections.IDictionary]) { if ($Body.Contains($Name)) { $v = $Body[$Name] } }
+    elseif ($Body.PSObject.Properties[$Name]) { $v = $Body.$Name }
+    if ($null -eq $v) { return $false }
+    $s = ([string]$v).Trim().ToLower()
+    return ($v -eq $true -or $s -eq 'true' -or $s -eq '1' -or $s -eq 'yes')
+}
+
+# ---------------------------------------------------------------------------
+# GET /api/gameplay/market-bot/status — native bot health + balance + listings.
 # ---------------------------------------------------------------------------
 Register-DuneRoute -Method GET -Path '/api/gameplay/market-bot/status' -Handler {
     param($req, $res, $routeParams, $body)
     try {
-        if (Test-DuneDemoRequested $req) {
-            Write-DuneJson -Response $res -Body (Get-DuneMarketBotDemoStatus)
-            return
-        }
-        $bot = Get-DuneMarketBotConfig
-        if (-not $bot.addr) {
-            Write-DuneJson -Response $res -Body @{ running = $false; configured = $false; source = 'live' }
-            return
-        }
-        $r = Invoke-DuneMarketBot -Method GET -Path '/status'
-        if (-not $r.ok) {
-            Write-DuneJson -Response $res -Body @{ running = $false; configured = $true; error = $r.error; source = 'live' }
-            return
-        }
-        $data = $r.data
-        $out = @{}
-        if ($data -is [System.Collections.IDictionary]) { foreach ($k in $data.Keys) { $out[$k] = $data[$k] } }
-        else { foreach ($p in $data.PSObject.Properties) { $out[$p.Name] = $p.Value } }
-        $out['running'] = $true
-        $out['configured'] = $true
-        $out['source'] = 'live'
-        Write-DuneJson -Response $res -Body $out
+        Write-DuneJson -Response $res -Body (Get-DuneNativeBotStatus)
     } catch {
         Write-DuneError -Response $res -Status 500 -Message "Bot status failed: $($_.Exception.Message)"
     }
 }
 
 # ---------------------------------------------------------------------------
-# GET / PUT /api/gameplay/market-bot/config
+# GET / PUT /api/gameplay/market-bot/config — native JSON config store.
 # ---------------------------------------------------------------------------
 Register-DuneRoute -Method GET -Path '/api/gameplay/market-bot/config' -Handler {
     param($req, $res, $routeParams, $body)
     try {
-        if (Test-DuneDemoRequested $req) {
-            $cfg = Get-DuneMarketBotDemoConfig
-            $cfg['source'] = 'demo'
-            Write-DuneJson -Response $res -Body $cfg
-            return
-        }
-        $bot = Get-DuneMarketBotConfig
-        if (-not $bot.addr) {
-            $cfg = Get-DuneMarketBotDemoConfig
-            $cfg['source'] = 'demo'
-            $cfg['configured'] = $false
-            Write-DuneJson -Response $res -Body $cfg
-            return
-        }
-        $r = Invoke-DuneMarketBot -Method GET -Path '/config'
-        if (-not $r.ok) {
-            Write-DuneError -Response $res -Status $r.status -Message $r.error
-            return
-        }
-        Write-DuneJson -Response $res -Body $r.data
+        $cfg = Read-DuneBotConfig
+        $out = @{}
+        foreach ($k in $cfg.Keys) { $out[$k] = $cfg[$k] }
+        $out['configured'] = $true
+        $out['source'] = 'live'
+        Write-DuneJson -Response $res -Body $out
     } catch {
         Write-DuneError -Response $res -Status 500 -Message "Bot config failed: $($_.Exception.Message)"
     }
@@ -243,20 +225,12 @@ Register-DuneRoute -Method GET -Path '/api/gameplay/market-bot/config' -Handler 
 Register-DuneRoute -Method PUT -Path '/api/gameplay/market-bot/config' -Handler {
     param($req, $res, $routeParams, $body)
     try {
-        $bot = Get-DuneMarketBotConfig
-        if (-not $bot.addr) {
-            Write-DuneError -Response $res -Status 503 -Message 'market_bot_addr not configured — set it in Settings before editing bot config.'
-            return
-        }
-        $put = Invoke-DuneMarketBot -Method PUT -Path '/config' -Body $body
-        if (-not $put.ok) {
-            Write-DuneError -Response $res -Status $put.status -Message $put.error
-            return
-        }
-        # Bot acks rather than echoing config; re-fetch canonical config.
-        $get = Invoke-DuneMarketBot -Method GET -Path '/config'
-        if ($get.ok) { Write-DuneJson -Response $res -Body $get.data }
-        else { Write-DuneJson -Response $res -Body $put.data }
+        $saved = Save-DuneBotConfig -Incoming $body
+        $out = @{}
+        foreach ($k in $saved.Keys) { $out[$k] = $saved[$k] }
+        $out['configured'] = $true
+        $out['source'] = 'live'
+        Write-DuneJson -Response $res -Body $out
     } catch {
         Write-DuneError -Response $res -Status 500 -Message "Bot config save failed: $($_.Exception.Message)"
     }
@@ -264,12 +238,108 @@ Register-DuneRoute -Method PUT -Path '/api/gameplay/market-bot/config' -Handler 
 
 # ---------------------------------------------------------------------------
 # POST /api/gameplay/market-bot/exec  (start|stop|restart)
-# Lifecycle control plane (kubectl scale / docker) is not wired yet — return a
-# clear 501 so the UI can disable the controls honestly rather than silently
-# pretend. Proxy bots that expose their own control endpoint still work via
-# the config PUT path above.
+# Native lifecycle = flip the persisted `enabled` flag; the background
+# scheduler runspace picks it up on its next pass. restart is a no-op ack.
 # ---------------------------------------------------------------------------
 Register-DuneRoute -Method POST -Path '/api/gameplay/market-bot/exec' -Handler {
     param($req, $res, $routeParams, $body)
-    Write-DuneError -Response $res -Status 501 -Message 'Bot lifecycle control (start/stop/restart) is not wired in this build. Manage the bot service directly for now.'
+    try {
+        $action = ''
+        if ($body -is [System.Collections.IDictionary]) { if ($body.Contains('action')) { $action = [string]$body['action'] } }
+        elseif ($body -and $body.PSObject.Properties['action']) { $action = [string]$body.action }
+        $action = $action.Trim().ToLower()
+        switch ($action) {
+            'start'   { $saved = Save-DuneBotConfig -Incoming @{ enabled = $true } }
+            'stop'    { $saved = Save-DuneBotConfig -Incoming @{ enabled = $false } }
+            'restart' { $saved = Read-DuneBotConfig }
+            default {
+                Write-DuneError -Response $res -Status 400 -Message "Unknown action '$action' (expected start|stop|restart)."
+                return
+            }
+        }
+        Write-DuneJson -Response $res -Body @{ ok = $true; action = $action; enabled = [bool]$saved.enabled }
+    } catch {
+        Write-DuneError -Response $res -Status 500 -Message "Bot exec failed: $($_.Exception.Message)"
+    }
+}
+
+# ---------------------------------------------------------------------------
+# POST /api/gameplay/market-bot/tick — run one buy tick now. ?dry=1 (or body
+# { dryRun:true }) rolls + reports candidates WITHOUT writing to the DB.
+# ---------------------------------------------------------------------------
+Register-DuneRoute -Method POST -Path '/api/gameplay/market-bot/tick' -Handler {
+    param($req, $res, $routeParams, $body)
+    try {
+        $dry = $false
+        $q = (Get-DuneQ -Request $req -Name 'dry').ToLower()
+        if ($q -eq '1' -or $q -eq 'true' -or $q -eq 'yes') { $dry = $true }
+        if (Test-DuneBodyTruthy -Body $body -Name 'dryRun') { $dry = $true }
+        $summary = Invoke-DuneBotBuyTick -DryRun:$dry
+        $status = 200
+        if (-not $summary.ok) { $status = 503 }
+        Write-DuneJson -Response $res -Status $status -Body $summary
+    } catch {
+        Write-DuneError -Response $res -Status 500 -Message "Bot tick failed: $($_.Exception.Message)"
+    }
+}
+
+# ---------------------------------------------------------------------------
+# GET /api/gameplay/market-bot/balance — current Duke solari balance.
+# POST .../balance  { target_balance: <int64> }  — set/top-up to a target.
+# ---------------------------------------------------------------------------
+Register-DuneRoute -Method GET -Path '/api/gameplay/market-bot/balance' -Handler {
+    param($req, $res, $routeParams, $body)
+    try {
+        $ctx = Get-DuneDbContext
+        if (-not $ctx.ok) { Write-DuneError -Response $res -Status 503 -Message $ctx.message; return }
+        $ident = Get-DuneBotIdentity -Ip $ctx.ip
+        if (-not $ident.ok) {
+            Write-DuneJson -Response $res -Body @{ ok = $true; provisioned = $false; balance = $null; message = $ident.error }
+            return
+        }
+        $bal = Get-DuneBotBalance -Ip $ctx.ip -OwnerId $ident.ownerId
+        if (-not $bal.ok) { Write-DuneError -Response $res -Status 503 -Message $bal.error; return }
+        Write-DuneJson -Response $res -Body @{ ok = $true; provisioned = $true; balance = $bal.balance; owner_id = $ident.ownerId }
+    } catch {
+        Write-DuneError -Response $res -Status 500 -Message "Bot balance failed: $($_.Exception.Message)"
+    }
+}
+
+Register-DuneRoute -Method POST -Path '/api/gameplay/market-bot/balance' -Handler {
+    param($req, $res, $routeParams, $body)
+    try {
+        $target = $null
+        if ($body -is [System.Collections.IDictionary]) { if ($body.Contains('target_balance')) { $target = $body['target_balance'] } }
+        elseif ($body -and $body.PSObject.Properties['target_balance']) { $target = $body.target_balance }
+        if ($null -eq $target) {
+            $cfg = Read-DuneBotConfig
+            $target = $cfg.target_balance
+        }
+        $t = 0L
+        if (-not [Int64]::TryParse([string]$target, [ref]$t)) {
+            Write-DuneError -Response $res -Status 400 -Message 'target_balance must be an integer.'
+            return
+        }
+        if ($t -lt 0) { $t = 0L }
+        $r = Set-DuneBotBalance -TargetBalance $t
+        if (-not $r.ok) { Write-DuneError -Response $res -Status 503 -Message $r.error; return }
+        Write-DuneJson -Response $res -Body @{ ok = $true; before = $r.before; after = $r.after; delta = $r.delta }
+    } catch {
+        Write-DuneError -Response $res -Status 500 -Message "Bot balance set failed: $($_.Exception.Message)"
+    }
+}
+
+# ---------------------------------------------------------------------------
+# POST /api/gameplay/market-bot/clear-listings — delete all of Duke's own NPC
+# market listings (player listings are never touched).
+# ---------------------------------------------------------------------------
+Register-DuneRoute -Method POST -Path '/api/gameplay/market-bot/clear-listings' -Handler {
+    param($req, $res, $routeParams, $body)
+    try {
+        $r = Clear-DuneBotListings
+        if (-not $r.ok) { Write-DuneError -Response $res -Status 503 -Message $r.error; return }
+        Write-DuneJson -Response $res -Body @{ ok = $true; cleared = $r.cleared; message = $r.message }
+    } catch {
+        Write-DuneError -Response $res -Status 500 -Message "Clear listings failed: $($_.Exception.Message)"
+    }
 }

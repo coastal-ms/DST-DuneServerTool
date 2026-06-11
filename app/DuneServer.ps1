@@ -568,6 +568,13 @@ if (Test-Path $routesDir) {
     Get-ChildItem -Path $routesDir -Filter '*.ps1' | ForEach-Object { . $_.FullName }
 }
 
+# Start the native Market Bot ("Duke") scheduler in its own background runspace.
+# It only acts when the bot is enabled in gameplay-bot.json, so this is safe to
+# always start; it idles otherwise.
+if (Get-Command Start-DuneGameplayBotScheduler -ErrorAction SilentlyContinue) {
+    try { [void](Start-DuneGameplayBotScheduler -ServerDir $serverDir) } catch {}
+}
+
 # ---------- Token --------------------------------------------------------------
 
 $script:LaunchToken = [Guid]::NewGuid().ToString('N')

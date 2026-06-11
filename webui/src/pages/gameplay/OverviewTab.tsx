@@ -23,7 +23,7 @@ const FEATURES: Feature[] = [
     desc: 'Browse every active exchange listing aggregated by item — lowest price, stock, bot vs player split, per-item listings and recent sales. Reads the live game database directly.',
   },
   {
-    name: 'Market Bot (Revy)', icon: 'Bot', status: 'live', tab: 'marketbot',
+    name: 'Market Bot (Duke)', icon: 'Bot', status: 'live', tab: 'marketbot',
     desc: 'Monitor the automated vendor and tune its pricing: rarity & grade multipliers, buy threshold, tick intervals, listings per grade, and a disabled-items list.',
   },
   {

@@ -8,9 +8,11 @@ import {
   saveGameConfig,
 } from '../api/gameconfig'
 import type {
-  GameConfigSection,
+  GameConfigCategory,
   GameConfigField,
   GameConfigResponse,
+  GameConfigFileBundle,
+  GameConfigIniSection,
 } from '../api/types'
 import { SpicefieldsCard } from './gameconfig/SpicefieldsCard'
 
@@ -18,11 +20,31 @@ type LoadState = 'idle' | 'loading' | 'ready' | 'error' | 'unavailable'
 
 const SANDWORM_ENABLED_KEY = 'sandworm.dune.Enabled'
 
+// Bool literal pairs per type so toggles emit exactly what UE expects.
+function boolPair(type: GameConfigField['type']): { on: string; off: string } | null {
+  if (type === 'bool') return { on: 'True', off: 'False' }
+  if (type === 'boolLower') return { on: 'true', off: 'false' }
+  if (type === 'bool01') return { on: '1', off: '0' }
+  return null
+}
+
+function bundleFor(data: GameConfigResponse, file: 'game' | 'engine'): GameConfigFileBundle {
+  return file === 'game' ? data.game : data.engine
+}
+
+function effectiveValue(data: GameConfigResponse, field: GameConfigField): string {
+  return bundleFor(data, field.file).effective?.[`${field.section}||${field.key}`] ?? ''
+}
+
+function sectionIsManaged(data: GameConfigResponse, field: GameConfigField): boolean {
+  return bundleFor(data, field.file).managedSections?.includes(field.section) ?? false
+}
+
 export function GameConfig() {
   const { status } = useStatus()
   const vmRunning = status?.vm?.running === true
 
-  const [schema, setSchema] = useState<GameConfigSection[] | null>(null)
+  const [schema, setSchema] = useState<GameConfigCategory[] | null>(null)
   const [cfg, setCfg] = useState<GameConfigResponse | null>(null)
   const [values, setValues] = useState<Record<string, string>>({})
   const [originals, setOriginals] = useState<Record<string, string>>({})
@@ -32,9 +54,8 @@ export function GameConfig() {
   const [saveError, setSaveError] = useState<string | null>(null)
   const [savedMsg, setSavedMsg] = useState<string | null>(null)
   const [sandwormModalOpen, setSandwormModalOpen] = useState(false)
+  const [search, setSearch] = useState('')
 
-  // Intercepts field changes to gate destructive toggles (e.g. enabling
-  // Sandworms wipes anything left in sandworm areas — confirm before applying).
   const handleFieldChange = useCallback((key: string, newVal: string) => {
     if (
       key === SANDWORM_ENABLED_KEY &&
@@ -52,14 +73,11 @@ export function GameConfig() {
     setSandwormModalOpen(false)
   }, [])
 
-  // Compute combined values + originals from the fetched config + schema.
-  const seedValues = useCallback((sections: GameConfigSection[], data: GameConfigResponse) => {
+  // Seed editable values from the live config's effective (last-wins) map.
+  const seedValues = useCallback((cats: GameConfigCategory[], data: GameConfigResponse) => {
     const out: Record<string, string> = {}
-    for (const sec of sections) {
-      for (const f of sec.fields) {
-        const bucket = f.file === 'game' ? data.game.values : data.engine.values
-        out[f.key] = bucket?.[f.key] ?? ''
-      }
+    for (const cat of cats) {
+      for (const f of cat.fields) out[f.key] = effectiveValue(data, f)
     }
     return out
   }, [])
@@ -69,10 +87,8 @@ export function GameConfig() {
     setLoadError(null)
     setSavedMsg(null)
     try {
-      // Schema is always available (no SSH). Fetch it once.
       const sch = schema ?? (await getGameConfigSchema()).schema
       if (!schema) setSchema(sch)
-
       const data = await getGameConfig()
       setCfg(data)
       const seeded = seedValues(sch, data)
@@ -82,13 +98,10 @@ export function GameConfig() {
     } catch (e) {
       const msg = e instanceof Error ? e.message : String(e)
       setLoadError(msg)
-      // Detect 503 (VM not running etc.) vs hard failure
       setLoadState(/\b503\b/.test(msg) ? 'unavailable' : 'error')
     }
   }, [schema, seedValues])
 
-  // Initial mount: fetch schema even if VM is offline so the form can render
-  // with all fields disabled. Only fetch live values when VM is running.
   useEffect(() => {
     void (async () => {
       if (!schema) {
@@ -119,6 +132,24 @@ export function GameConfig() {
     return keys
   }, [values, originals])
 
+  const filteredSchema = useMemo(() => {
+    if (!schema) return null
+    const q = search.trim().toLowerCase()
+    if (!q) return schema
+    return schema
+      .map(cat => ({
+        category: cat.category,
+        fields: cat.fields.filter(
+          f =>
+            f.label.toLowerCase().includes(q) ||
+            f.key.toLowerCase().includes(q) ||
+            (f.help ?? '').toLowerCase().includes(q) ||
+            cat.category.toLowerCase().includes(q),
+        ),
+      }))
+      .filter(cat => cat.fields.length > 0)
+  }, [schema, search])
+
   async function onSubmit(e: FormEvent) {
     e.preventDefault()
     if (dirtyKeys.length === 0) return
@@ -129,13 +160,14 @@ export function GameConfig() {
       const updates: Record<string, string> = {}
       for (const k of dirtyKeys) updates[k] = values[k] ?? ''
       const out = await saveGameConfig(updates)
-      setCfg({ available: true, source: out.source, game: out.game, engine: out.engine })
-      const seeded = seedValues(schema ?? [], { available: true, source: out.source, game: out.game, engine: out.engine })
+      const next: GameConfigResponse = { available: true, source: out.source, game: out.game, engine: out.engine }
+      setCfg(next)
+      const seeded = seedValues(schema ?? [], next)
       setValues(seeded)
       setOriginals(seeded)
-      const n = (out.applied?.game ?? 0) + (out.applied?.engine ?? 0)
-      setSavedMsg(`Saved ${n} change${n === 1 ? '' : 's'}.`)
-      window.setTimeout(() => setSavedMsg(null), 4000)
+      const n = out.applied ?? dirtyKeys.length
+      setSavedMsg(`Saved ${n} change${n === 1 ? '' : 's'} into the DST-managed block.`)
+      window.setTimeout(() => setSavedMsg(null), 5000)
     } catch (err) {
       setSaveError(err instanceof Error ? err.message : String(err))
     } finally {
@@ -174,7 +206,7 @@ export function GameConfig() {
       <PageHeader
         title="Game Config"
         icon="Sliders"
-        description="UserGame.ini + UserEngine.ini editor — writes back to the live BG PVC."
+        description="UserGame.ini + UserEngine.ini editor. Edits are tracked in a DST-managed block written to the live battlegroup."
         actions={
           <div className="flex items-center gap-2">
             {sourcePill}
@@ -191,6 +223,16 @@ export function GameConfig() {
           </div>
         }
       />
+
+      {/* How-it-works note */}
+      <div className="card p-3 mb-4 border-border bg-surface-2/40 text-xs text-text-muted flex items-start gap-2">
+        <Icon name="Info" size={14} className="mt-0.5 shrink-0 text-accent-bright" />
+        <div>
+          When you change a setting, DST relocates that setting&apos;s entire section into a managed block at the
+          bottom of the file and becomes its owner — keeping one clean copy, preserving structure, and migrating
+          any existing dune-admin block. The original file is backed up on the server before every write.
+        </div>
+      </div>
 
       {/* Status / error banners */}
       {loadState === 'unavailable' && (
@@ -218,40 +260,60 @@ export function GameConfig() {
         </div>
       )}
 
-      {/* Form */}
       {!schema && loadState === 'loading' && (
         <div className="card p-8 text-text-muted flex items-center gap-2">
           <Icon name="Loader2" size={14} className="animate-spin" /> Loading schema…
         </div>
       )}
+
       {schema && (
         <form onSubmit={onSubmit}>
+          {/* Search */}
+          <div className="relative mb-4">
+            <Icon name="Search" size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-text-dim" />
+            <input
+              type="text"
+              value={search}
+              onChange={e => setSearch(e.target.value)}
+              placeholder="Filter settings…"
+              className="w-full pl-9 pr-3 py-2 rounded-lg bg-surface-2 border border-border text-text text-sm placeholder:text-text-dim focus:outline-none focus:ring-2 focus:ring-ibad focus:border-ibad/50"
+            />
+          </div>
+
           <div className="space-y-5">
-            {schema.map(sec => (
-              <SectionCard key={sec.section} section={sec}>
+            {(filteredSchema ?? []).map(cat => (
+              <CategoryCard key={cat.category} category={cat.category} count={cat.fields.length}>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-x-6 gap-y-4">
-                  {sec.fields.map(f => (
+                  {cat.fields.map(f => (
                     <FieldRow
-                      key={f.key}
+                      key={`${f.section}||${f.key}`}
                       field={f}
                       value={values[f.key] ?? ''}
                       onChange={v => handleFieldChange(f.key, v)}
                       disabled={loadState !== 'ready' || saving}
                       isDirty={(values[f.key] ?? '') !== (originals[f.key] ?? '')}
+                      isSet={cfg ? effectiveValue(cfg, f) !== '' : false}
+                      managed={cfg ? sectionIsManaged(cfg, f) : false}
                     />
                   ))}
                 </div>
-              </SectionCard>
+              </CategoryCard>
             ))}
+            {filteredSchema && filteredSchema.length === 0 && (
+              <div className="card p-6 text-text-muted text-sm">No settings match “{search}”.</div>
+            )}
+
             <SpicefieldsCard vmRunning={vmRunning} />
+
+            {cfg && <AdvancedIniBrowser cfg={cfg} />}
           </div>
 
           <div className="sticky bottom-0 mt-6 -mx-6 px-6 py-3 bg-surface/95 border-t border-border backdrop-blur-sm flex items-center justify-between">
             <div className="text-xs text-text-muted flex items-center gap-4">
               {cfg && (
                 <>
-                  <span className="font-mono truncate max-w-md" title={cfg.game.path}>game: {cfg.game.path}</span>
-                  <span className="font-mono truncate max-w-md" title={cfg.engine.path}>engine: {cfg.engine.path}</span>
+                  <span className="font-mono truncate max-w-xs" title={cfg.game.path}>game: {cfg.game.path}</span>
+                  <span className="font-mono truncate max-w-xs" title={cfg.engine.path}>engine: {cfg.engine.path}</span>
                 </>
               )}
             </div>
@@ -290,14 +352,15 @@ export function GameConfig() {
 }
 
 // -----------------------------------------------------------------------------
-// Section card + field row
+// Category card + field row
 // -----------------------------------------------------------------------------
 
-function SectionCard({ section, children }: { section: GameConfigSection; children: React.ReactNode }) {
+function CategoryCard({ category, count, children }: { category: string; count: number; children: React.ReactNode }) {
   return (
     <div className="card p-5">
       <h2 className="text-sm font-semibold uppercase tracking-wider text-accent-bright mb-4 flex items-center gap-2">
-        <Icon name="ChevronRight" size={14} /> {section.section}
+        <Icon name="ChevronRight" size={14} /> {category}
+        <span className="text-[10px] font-normal text-text-dim normal-case tracking-normal">({count})</span>
       </h2>
       {children}
     </div>
@@ -310,48 +373,59 @@ type FieldRowProps = {
   onChange: (v: string) => void
   disabled: boolean
   isDirty: boolean
+  isSet: boolean
+  managed: boolean
 }
 
-function FieldRow({ field, value, onChange, disabled, isDirty }: FieldRowProps) {
+function FieldRow({ field, value, onChange, disabled, isDirty, isSet, managed }: FieldRowProps) {
   const inputBase =
     'w-full px-3 py-2 rounded-lg bg-surface-2 border border-border text-text text-sm ' +
     'placeholder:text-text-dim focus:outline-none focus:ring-2 focus:ring-ibad focus:border-ibad/50 ' +
     'disabled:opacity-50 disabled:cursor-not-allowed'
 
+  const pair = boolPair(field.type)
+  const isNumber = field.type === 'int' || field.type === 'float'
   const wide = field.wide
 
   return (
     <div className={wide ? 'md:col-span-2' : ''}>
-      <label className="flex items-center justify-between text-sm font-medium mb-1.5">
-        <span className="flex items-center gap-2">
-          {field.label}
-          {isDirty && <span className="w-1.5 h-1.5 rounded-full bg-ibad" title="Modified" />}
+      <label className="flex items-center justify-between text-sm font-medium mb-1.5 gap-2">
+        <span className="flex items-center gap-2 min-w-0">
+          <span className="truncate">{field.label}</span>
+          {isDirty && <span className="w-1.5 h-1.5 rounded-full bg-ibad shrink-0" title="Modified" />}
         </span>
-        <span className="text-[10px] font-mono text-text-dim uppercase tracking-wider">
-          {field.file}
+        <span className="flex items-center gap-1 shrink-0">
+          {managed && (
+            <span className="text-[9px] font-semibold uppercase tracking-wider px-1.5 py-0.5 rounded bg-accent/15 text-accent-bright" title="DST owns this section in the managed block">
+              DST
+            </span>
+          )}
+          {isSet && !managed && (
+            <span className="text-[9px] font-semibold uppercase tracking-wider px-1.5 py-0.5 rounded bg-surface-2 text-text-muted" title="Currently set in the file">
+              Set
+            </span>
+          )}
+          <span className="text-[10px] font-mono text-text-dim uppercase tracking-wider">{field.file}</span>
         </span>
       </label>
 
       {field.type === 'select' && field.options ? (
-        <select
-          value={value}
-          disabled={disabled}
-          onChange={e => onChange(e.target.value)}
-          className={inputBase}
-        >
+        <select value={value} disabled={disabled} onChange={e => onChange(e.target.value)} className={inputBase}>
           <option value="">(unset)</option>
           {field.options.map(o => (
             <option key={o.value} value={o.value}>{o.label}</option>
           ))}
         </select>
-      ) : field.type === 'number' ? (
+      ) : pair ? (
+        <BoolToggle on={pair.on} off={pair.off} value={value} disabled={disabled} onChange={onChange} />
+      ) : isNumber ? (
         <div className="flex items-center gap-2">
           <input
             type="number"
             value={value}
             disabled={disabled}
             placeholder={field.placeholder ?? ''}
-            step={field.step ?? undefined}
+            step={field.type === 'float' ? 'any' : 1}
             min={field.min ?? undefined}
             max={field.max ?? undefined}
             onChange={e => onChange(e.target.value)}
@@ -371,8 +445,126 @@ function FieldRow({ field, value, onChange, disabled, isDirty }: FieldRowProps) 
       )}
 
       <div className="mt-1 flex items-center justify-between gap-2">
-        {field.hint && <p className="text-xs text-text-dim">{field.hint}</p>}
-        <span className="text-[10px] font-mono text-text-dim ml-auto truncate">{field.key}</span>
+        {field.help && <p className="text-xs text-text-dim">{field.help}</p>}
+        <span className="text-[10px] font-mono text-text-dim ml-auto truncate" title={`${field.section} / ${field.key}`}>{field.key}</span>
+      </div>
+    </div>
+  )
+}
+
+function BoolToggle({ on, off, value, disabled, onChange }: { on: string; off: string; value: string; disabled: boolean; onChange: (v: string) => void }) {
+  const isOn = value === on
+  const isOff = value === off
+  const btn = 'flex-1 px-3 py-2 text-sm font-medium rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed'
+  return (
+    <div className="flex items-center gap-2">
+      <button
+        type="button"
+        disabled={disabled}
+        onClick={() => onChange(off)}
+        className={btn + ' ' + (isOff ? 'bg-danger/20 text-danger border border-danger/40' : 'bg-surface-2 border border-border text-text-muted')}
+      >
+        Off
+      </button>
+      <button
+        type="button"
+        disabled={disabled}
+        onClick={() => onChange(on)}
+        className={btn + ' ' + (isOn ? 'bg-success/20 text-success border border-success/40' : 'bg-surface-2 border border-border text-text-muted')}
+      >
+        On
+      </button>
+    </div>
+  )
+}
+
+// -----------------------------------------------------------------------------
+// Advanced / raw INI browser (read-only) — shows everything in both files,
+// including keys DST has no curated control for, with managed-block badges.
+// -----------------------------------------------------------------------------
+
+function AdvancedIniBrowser({ cfg }: { cfg: GameConfigResponse }) {
+  const [open, setOpen] = useState(false)
+  const [file, setFile] = useState<'game' | 'engine'>('game')
+  const [showRaw, setShowRaw] = useState(false)
+
+  const bundle = file === 'game' ? cfg.game : cfg.engine
+
+  return (
+    <div className="card p-5">
+      <button
+        type="button"
+        onClick={() => setOpen(o => !o)}
+        className="w-full flex items-center justify-between text-sm font-semibold uppercase tracking-wider text-accent-bright"
+      >
+        <span className="flex items-center gap-2">
+          <Icon name={open ? 'ChevronDown' : 'ChevronRight'} size={14} /> Advanced — full INI contents
+        </span>
+        <span className="text-[10px] font-normal text-text-dim normal-case tracking-normal">read-only</span>
+      </button>
+
+      {open && (
+        <div className="mt-4">
+          <div className="flex items-center justify-between mb-3">
+            <div className="flex items-center gap-1 bg-surface-2 rounded-lg p-0.5">
+              {(['game', 'engine'] as const).map(f => (
+                <button
+                  key={f}
+                  type="button"
+                  onClick={() => setFile(f)}
+                  className={'px-3 py-1.5 text-xs font-medium rounded-md ' + (file === f ? 'bg-accent/20 text-accent-bright' : 'text-text-muted')}
+                >
+                  {f === 'game' ? 'UserGame.ini' : 'UserEngine.ini'}
+                </button>
+              ))}
+            </div>
+            <button type="button" onClick={() => setShowRaw(r => !r)} className="btn-ghost px-2 py-1 text-xs">
+              <Icon name="Code" size={13} /> {showRaw ? 'Sections' : 'Raw text'}
+            </button>
+          </div>
+
+          {showRaw ? (
+            <pre className="text-[11px] font-mono text-text-muted bg-surface-2 rounded-lg p-3 overflow-x-auto max-h-[28rem] overflow-y-auto whitespace-pre">
+              {bundle.raw}
+            </pre>
+          ) : (
+            <div className="space-y-3 max-h-[28rem] overflow-y-auto pr-1">
+              {bundle.sections.map((s, i) => (
+                <IniSectionBlock key={`${s.name}-${i}`} section={s} />
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  )
+}
+
+function IniSectionBlock({ section }: { section: GameConfigIniSection }) {
+  return (
+    <div className="border border-border rounded-lg overflow-hidden">
+      <div className="flex items-center justify-between px-3 py-2 bg-surface-2">
+        <span className="font-mono text-xs text-text truncate" title={section.name}>[{section.name}]</span>
+        {section.managed && (
+          <span className="text-[9px] font-semibold uppercase tracking-wider px-1.5 py-0.5 rounded bg-accent/15 text-accent-bright shrink-0">
+            DST-managed
+          </span>
+        )}
+      </div>
+      <div className="divide-y divide-border/60">
+        {section.keys.length === 0 && (
+          <div className="px-3 py-1.5 text-[11px] text-text-dim">(no keys)</div>
+        )}
+        {section.keys.map((k, i) => (
+          <div key={`${k.key}-${i}`} className="px-3 py-1.5 flex items-start gap-2 text-[11px] font-mono">
+            <span className="text-text-muted shrink-0">
+              {k.isArray && <span className="text-warning mr-1" title="Array entry (+/-)">[]</span>}
+              {k.key}
+            </span>
+            <span className="text-text-dim">=</span>
+            <span className="text-text break-all">{k.value}</span>
+          </div>
+        ))}
       </div>
     </div>
   )
@@ -381,8 +573,6 @@ function FieldRow({ field, value, onChange, disabled, isDirty }: FieldRowProps) 
 // -----------------------------------------------------------------------------
 // Sandworm-enable confirmation modal
 // -----------------------------------------------------------------------------
-// Enabling sandworms wipes anything left in sandworm areas, so require the
-// user to type "i confirm" before flipping the toggle to On.
 
 function SandwormConfirmModal({
   open, onCancel, onConfirm,
