@@ -13,7 +13,19 @@ $script:DuneConfigKeys = @(
     'ConsolePresence',
     'ConsolePresenceVersion',
     'MarketBotAddr',
-    'MarketBotToken'
+    'MarketBotToken',
+    'DecoupleNoticeAck'
+)
+
+# Keys that ONLY a pre-decouple (<= 11.4.13) build ever wrote into
+# dune-server.config. Their presence on disk is how we know a config was
+# created before DST was split off from the dune-admin companion app — a fresh
+# 12.x install never writes them. Used to drive the one-time decoupling notice.
+$script:DuneLegacyAdminKeys = @(
+    'DuneAdminExe',
+    'AutoApplyPricingPatch',
+    'GambleDieSize',
+    'GambleTarget'
 )
 
 function Get-DuneConfigPath {
@@ -95,4 +107,48 @@ function Test-DuneConfigComplete {
     if (-not $Config.SshKey -or -not (Test-Path -LiteralPath $Config.SshKey)) { return $false }
     if (-not $Config.SteamPath) { return $false }
     return $true
+}
+
+# Decoupling notice ----------------------------------------------------------
+#
+# As of v12.x DST is a standalone tool: the bundled dune-admin companion and
+# its in-app launch commands were removed (dune-admin is now run separately and
+# reached at https://dune-admin.layout.tools). Anyone upgrading from a
+# pre-decouple build (<= 11.4.13) must be told this once, and shown where their
+# old dune-admin folder lives so they can still launch it.
+#
+# Detection: pre-decouple builds wrote dune-admin-era keys (see
+# $script:DuneLegacyAdminKeys) into dune-server.config; a fresh 12.x install
+# never does. We treat the presence of any of those keys as "this user came
+# from the dune-admin era". `DecoupleNoticeAck` is set once the user
+# acknowledges, after which the notice never shows again.
+function Get-DuneDecoupleNotice {
+    $raw = Read-DuneConfigRaw
+    $ack = if ($raw.Contains('DecoupleNoticeAck')) { [string]$raw['DecoupleNoticeAck'] } else { '' }
+    $acknowledged = -not [string]::IsNullOrWhiteSpace($ack)
+
+    $hasLegacy = $false
+    foreach ($k in $script:DuneLegacyAdminKeys) {
+        if ($raw.Contains($k)) { $hasLegacy = $true; break }
+    }
+
+    $exe = if ($raw.Contains('DuneAdminExe')) { [string]$raw['DuneAdminExe'] } else { '' }
+    $folder = ''
+    if ($exe) {
+        try { $folder = Split-Path -Parent $exe } catch { $folder = '' }
+    }
+
+    return [pscustomobject]@{
+        Needed          = ((-not $acknowledged) -and $hasLegacy)
+        Acknowledged    = $acknowledged
+        AckVersion      = $ack
+        FromLegacy      = $hasLegacy
+        DuneAdminExe    = $exe
+        DuneAdminFolder = $folder
+    }
+}
+
+function Set-DuneDecoupleAck {
+    param([string]$Version)
+    Save-DuneConfig -Config @{ DecoupleNoticeAck = $Version } | Out-Null
 }
