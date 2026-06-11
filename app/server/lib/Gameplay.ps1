@@ -11,7 +11,7 @@
 # demo dataset is returned so the UI works out-of-the-box and flips to live
 # automatically once the battlegroup is running.
 #
-# The Market Bot is an external HTTP service (Revy). We proxy to it with
+# The Market Bot is an external HTTP service (Duke). We proxy to it with
 # Invoke-RestMethod using the configured address + bearer token, mirroring
 # dune-admin's botProxy. Lifecycle (start/stop/restart) is left as a no-op
 # stub here and surfaced honestly in the UI until the control plane is wired.
@@ -135,7 +135,7 @@ function Test-DuneTruthy {
 
 # ----------------------------------------------------------------------------
 # Market — live SQL (ported from dune-admin db_market.go), prices stored x0.1
-# so multiply by 10; NPC orders are shown as the bot vendor "Revy".
+# so multiply by 10; NPC orders are shown as the bot vendor "Duke".
 # ----------------------------------------------------------------------------
 $script:DuneMarketItemsSql = @'
 SELECT
@@ -248,7 +248,7 @@ function Get-DuneMarketListingsLive {
             order_id    = [string]$r['id']
             template_id = [string]$r['template_id']
             owner_type  = if ($isNpc) { 'bot' } else { 'player' }
-            owner_name  = if ($isNpc) { 'Revy' } else { [string]$r['owner_name'] }
+            owner_name  = if ($isNpc) { 'Duke' } else { [string]$r['owner_name'] }
             price       = (ConvertTo-DuneInt $r['item_price']) * 10
             stock       = (ConvertTo-DuneInt $r['stock'])
             quality     = (ConvertTo-DuneInt $r['quality'])
@@ -268,7 +268,7 @@ function Get-DuneMarketSalesLive {
             order_id    = [string]$r['order_id']
             template_id = [string]$r['template_id']
             seller_type = if ($isNpc) { 'bot' } else { 'player' }
-            seller_name = if ($isNpc) { 'Revy' } else { [string]$r['seller_name'] }
+            seller_name = if ($isNpc) { 'Duke' } else { [string]$r['seller_name'] }
             price       = (ConvertTo-DuneInt $r['item_price']) * 10
             quantity    = (ConvertTo-DuneInt $r['stack_size'])
         }
@@ -386,7 +386,7 @@ function Select-DuneMarketItems {
 
 # ----------------------------------------------------------------------------
 # Demo datasets — used when the live DB is unreachable or ?demo=1 is requested.
-# Crafted to look like a real Revy-run exchange so the showcase is meaningful.
+# Crafted to look like a real Duke-run exchange so the showcase is meaningful.
 # ----------------------------------------------------------------------------
 function Get-DuneMarketDemoItems {
     @(
@@ -404,13 +404,13 @@ function Get-DuneMarketDemoItems {
 function Get-DuneMarketDemoListings {
     param([string]$TemplateId)
     $all = @(
-        [ordered]@{ order_id='demo-1001'; template_id='Stillsuit_T4'; owner_type='bot'; owner_name='Revy'; price=42000; stock=12; quality=3 }
+        [ordered]@{ order_id='demo-1001'; template_id='Stillsuit_T4'; owner_type='bot'; owner_name='Duke'; price=42000; stock=12; quality=3 }
         [ordered]@{ order_id='demo-1002'; template_id='Stillsuit_T4'; owner_type='player'; owner_name='Duncan Idaho'; price=45500; stock=6; quality=2 }
-        [ordered]@{ order_id='demo-1003'; template_id='Maula_Pistol'; owner_type='bot'; owner_name='Revy'; price=287500; stock=2; quality=4 }
+        [ordered]@{ order_id='demo-1003'; template_id='Maula_Pistol'; owner_type='bot'; owner_name='Duke'; price=287500; stock=2; quality=4 }
         [ordered]@{ order_id='demo-1004'; template_id='Maula_Pistol'; owner_type='player'; owner_name='Gurney Halleck'; price=310000; stock=2; quality=4 }
-        [ordered]@{ order_id='demo-1005'; template_id='Spice_Melange'; owner_type='bot'; owner_name='Revy'; price=950; stock=8200; quality=0 }
+        [ordered]@{ order_id='demo-1005'; template_id='Spice_Melange'; owner_type='bot'; owner_name='Duke'; price=950; stock=8200; quality=0 }
         [ordered]@{ order_id='demo-1006'; template_id='Spice_Melange'; owner_type='player'; owner_name='Stilgar'; price=1010; stock=4200; quality=0 }
-        [ordered]@{ order_id='demo-1007'; template_id='Plasteel_Plate'; owner_type='bot'; owner_name='Revy'; price=320; stock=3100; quality=1 }
+        [ordered]@{ order_id='demo-1007'; template_id='Plasteel_Plate'; owner_type='bot'; owner_name='Duke'; price=320; stock=3100; quality=1 }
     )
     if ($TemplateId) { return @($all | Where-Object { $_.template_id -eq $TemplateId }) }
     return $all
@@ -418,11 +418,11 @@ function Get-DuneMarketDemoListings {
 
 function Get-DuneMarketDemoSales {
     @(
-        [ordered]@{ order_id='demo-sale-9007'; template_id='Spice_Melange'; seller_type='bot'; seller_name='Revy'; price=950; quantity=500 }
-        [ordered]@{ order_id='demo-sale-9006'; template_id='Stillsuit_T4'; seller_type='bot'; seller_name='Revy'; price=42000; quantity=1 }
-        [ordered]@{ order_id='demo-sale-9005'; template_id='Plasteel_Plate'; seller_type='bot'; seller_name='Revy'; price=320; quantity=200 }
-        [ordered]@{ order_id='demo-sale-9004'; template_id='Maula_Pistol'; seller_type='bot'; seller_name='Revy'; price=287500; quantity=1 }
-        [ordered]@{ order_id='demo-sale-9003'; template_id='Cutteray'; seller_type='bot'; seller_name='Revy'; price=58800; quantity=1 }
+        [ordered]@{ order_id='demo-sale-9007'; template_id='Spice_Melange'; seller_type='bot'; seller_name='Duke'; price=950; quantity=500 }
+        [ordered]@{ order_id='demo-sale-9006'; template_id='Stillsuit_T4'; seller_type='bot'; seller_name='Duke'; price=42000; quantity=1 }
+        [ordered]@{ order_id='demo-sale-9005'; template_id='Plasteel_Plate'; seller_type='bot'; seller_name='Duke'; price=320; quantity=200 }
+        [ordered]@{ order_id='demo-sale-9004'; template_id='Maula_Pistol'; seller_type='bot'; seller_name='Duke'; price=287500; quantity=1 }
+        [ordered]@{ order_id='demo-sale-9003'; template_id='Cutteray'; seller_type='bot'; seller_name='Duke'; price=58800; quantity=1 }
     )
 }
 
@@ -439,7 +439,7 @@ function Get-DuneMarketDemoStats {
 }
 
 # ----------------------------------------------------------------------------
-# Market Bot (Revy) — HTTP proxy to the external bot service.
+# Market Bot (Duke) — HTTP proxy to the external bot service.
 # ----------------------------------------------------------------------------
 function Get-DuneMarketBotConfig {
     $cfg = Read-DuneConfig
@@ -506,17 +506,13 @@ function Get-DuneMarketBotDemoConfig {
 # ----------------------------------------------------------------------------
 function Get-DuneGameplayStatus {
     $ctx = Get-DuneDbContext
-    $bot = Get-DuneMarketBotConfig
-    $botReachable = $false
-    if ($bot.addr) {
-        $s = Invoke-DuneMarketBot -Method GET -Path '/status'
-        $botReachable = [bool]$s.ok
-    }
+    $botEnabled = $false
+    try { if (Get-Command Read-DuneBotConfig -ErrorAction SilentlyContinue) { $botEnabled = [bool](Read-DuneBotConfig).enabled } } catch {}
     return [ordered]@{
         db_available   = [bool]$ctx.ok
         db_message     = if ($ctx.ok) { 'Connected to live game database.' } else { [string]$ctx.message }
-        bot_configured = [bool]($bot.addr)
-        bot_reachable  = $botReachable
+        bot_configured = $true
+        bot_reachable  = $botEnabled
         source         = if ($ctx.ok) { 'live' } else { 'demo' }
     }
 }

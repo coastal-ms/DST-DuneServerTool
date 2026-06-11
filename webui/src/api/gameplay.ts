@@ -84,31 +84,63 @@ export interface MarketStatsResponse {
 }
 
 export interface BotStatus {
-  running: boolean
   configured?: boolean
-  uptime?: number
-  last_list_tick?: string
+  running: boolean
+  enabled?: boolean
+  die_size?: number
+  die_target?: number
   last_buy_tick?: string
   listing_count?: number
   balance?: number
+  provisioned?: boolean
   error_count?: number
   error?: string
   source?: DataSource
+  db_message?: string
 }
 
 export interface BotConfig {
   enabled: boolean
-  list_tick_interval: number
   buy_tick_interval: number
-  buy_threshold: number
   max_buys_per_tick: number
-  listings_per_grade: number
-  rarity_multipliers: Record<string, number>
-  vendor_multipliers: Record<string, number>
-  grade_multipliers: number[]
+  die_size: number
+  die_target: number
+  target_balance: number
+  maintain_balance: boolean
   disabled_items: string[]
   configured?: boolean
   source?: DataSource
+}
+
+export interface BotTickWinner {
+  template_id: string
+  order_id: string
+  price: number
+  stack: number
+  roll: number
+}
+
+export interface BotTickResult {
+  ok: boolean
+  dryRun: boolean
+  enabled: boolean
+  candidates: number
+  rolled: number
+  won: number
+  purchased: number
+  skipped: number
+  errors: number
+  die: string
+  winners: BotTickWinner[]
+  message: string
+}
+
+export interface BotBalance {
+  ok: boolean
+  provisioned: boolean
+  balance: number | null
+  owner_id?: number
+  message?: string
 }
 
 export interface CatalogEntry {
@@ -190,4 +222,36 @@ export function saveBotConfig(cfg: Partial<BotConfig>) {
     method: 'PUT',
     body: JSON.stringify(cfg),
   })
+}
+
+export function runBotTick(dryRun: boolean) {
+  return api<BotTickResult>(`/api/gameplay/market-bot/tick${dryRun ? '?dry=1' : ''}`, {
+    method: 'POST',
+    body: JSON.stringify({ dryRun }),
+  })
+}
+
+export function botExec(action: 'start' | 'stop' | 'restart') {
+  return api<{ ok: boolean; action: string; enabled: boolean }>('/api/gameplay/market-bot/exec', {
+    method: 'POST',
+    body: JSON.stringify({ action }),
+  })
+}
+
+export function getBotBalance() {
+  return api<BotBalance>('/api/gameplay/market-bot/balance')
+}
+
+export function setBotBalance(targetBalance: number) {
+  return api<{ ok: boolean; before: number; after: number; delta: number }>(
+    '/api/gameplay/market-bot/balance',
+    { method: 'POST', body: JSON.stringify({ target_balance: targetBalance }) },
+  )
+}
+
+export function clearBotListings() {
+  return api<{ ok: boolean; cleared: number; message?: string }>(
+    '/api/gameplay/market-bot/clear-listings',
+    { method: 'POST' },
+  )
 }

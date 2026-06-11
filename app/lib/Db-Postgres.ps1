@@ -30,7 +30,7 @@ function Get-V6SshKeyPath {
 }
 
 function Invoke-V6Ssh {
-    param([string]$Ip, [string]$Cmd, [int]$TimeoutSec = 30)
+    param([string]$Ip, [string]$Cmd, [int]$TimeoutSec = 30, [string]$StdinData)
     # Strip CRs from the command — here-strings in CRLF-saved .ps1 files
     # preserve \r, which breaks bash (commands appear as "head -1\r" etc).
     if ($Cmd) { $Cmd = $Cmd -replace "`r","" }
@@ -56,6 +56,7 @@ function Invoke-V6Ssh {
     $psi.RedirectStandardError  = $true
     $psi.UseShellExecute        = $false
     $psi.CreateNoWindow         = $true
+    if ($StdinData) { $psi.RedirectStandardInput = $true }
 
     # PS 5.1 lacks ProcessStartInfo.ArgumentList — build the command line
     # by hand. All values here are fixed literals, an IP, a file path we
@@ -69,6 +70,14 @@ function Invoke-V6Ssh {
         '-o','ServerAliveInterval=10'
         '-o','ServerAliveCountMax=3'
     )
+    # When there's no payload to stream, pass -n so ssh doesn't inherit the
+    # backend's stdin handle and hang waiting on it after the remote command
+    # exits. When StdinData IS supplied we keep stdin open and feed the payload
+    # through it — this is how large writes avoid the OS command-line length
+    # limit (a multi-KB command string is rejected by the remote with
+    # "Connection closed by remote host"); the command itself stays tiny and
+    # reads the bytes from stdin instead.
+    if (-not $StdinData) { $sshArgs = @('-n') + $sshArgs }
     if ($key) { $sshArgs += @('-i', $key) }
     $sshArgs += @("dune@$Ip")
     if ($null -ne $Cmd) { $sshArgs += @($Cmd) }
@@ -80,6 +89,11 @@ function Invoke-V6Ssh {
     $proc.StartInfo = $psi
     try {
         [void]$proc.Start()
+        if ($StdinData) {
+            # Stream the payload over stdin, then close so the remote sees EOF.
+            $proc.StandardInput.Write($StdinData)
+            $proc.StandardInput.Close()
+        }
         # Drain both streams asynchronously — a chatty remote command can
         # fill the ~4 KB pipe buffer before we reach WaitForExit, causing
         # ssh to block on stdout.write and us to deadlock waiting for it
