@@ -130,10 +130,35 @@ Register-DuneRoute -Method GET -Path '/api/update/check' -Handler {
 
 # GET /api/update/migration-notice — one-time "DST is now decoupled from
 # dune-admin" notice. `needed` is true only for installs upgraded from a
-# pre-decouple build that haven't acknowledged yet (see Get-DuneDecoupleNotice).
+# pre-decouple build (see Get-DuneDecoupleNotice).
+#
+# Loopback-only: the notice exposes the host's local dune-admin folder path and
+# is a host-machine concern (the host runs dune-admin, not a remote Tailscale /
+# LAN viewer). Remote callers must never see the path or be blocked by it.
+function Test-DuneUpdateLoopbackRequest {
+    param($req)
+    try {
+        $remote = $req.RemoteEndPoint.Address
+        if ($remote) { return [System.Net.IPAddress]::IsLoopback($remote) }
+    } catch {}
+    return $false
+}
+
 Register-DuneRoute -Method GET -Path '/api/update/migration-notice' -Handler {
     param($req, $res, $routeParams, $body)
     try {
+        if (-not (Test-DuneUpdateLoopbackRequest $req)) {
+            # Remote viewers are never shown the host migration notice. Report a
+            # benign "nothing to do" state instead of the host's folder path.
+            Write-DuneJson -Response $res -Body @{
+                needed       = $false
+                acknowledged = $true
+                fromLegacy   = $false
+                portalUrl    = 'https://dune-admin.layout.tools'
+                remote       = $true
+            }
+            return
+        }
         $n = Get-DuneDecoupleNotice
         Write-DuneJson -Response $res -Body @{
             needed          = [bool]$n.Needed
@@ -151,11 +176,15 @@ Register-DuneRoute -Method GET -Path '/api/update/migration-notice' -Handler {
 }
 
 # POST /api/update/migration-notice/ack — record that the user has read the
-# decoupling notice. Stamps the acknowledging version into config so it never
-# shows again.
+# decoupling notice. Loopback-only: only the host can acknowledge a host
+# migration (a remote viewer must not be able to clear it for the host).
 Register-DuneRoute -Method POST -Path '/api/update/migration-notice/ack' -Handler {
     param($req, $res, $routeParams, $body)
     try {
+        if (-not (Test-DuneUpdateLoopbackRequest $req)) {
+            Write-DuneError -Response $res -Status 403 -Message 'The decoupling notice can only be acknowledged from the host machine.'
+            return
+        }
         $ver = [string]$script:DuneToolVersion
         Invoke-WithDuneLock -Name 'config' -Script { Set-DuneDecoupleAck -Version $ver } | Out-Null
         Write-DuneJson -Response $res -Body @{
