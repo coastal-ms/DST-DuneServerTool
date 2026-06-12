@@ -249,13 +249,28 @@ function Get-DuneBotScalar {
 function Get-DuneBotIdentity {
     param([string]$Ip, [switch]$CreateIfMissing)
 
+    # Validate any cached identity against the current "clean Duke" filter
+    # (owner_account_id IS NULL). Stale caches from a previous run where the
+    # bot was bound to a player account would otherwise label every new
+    # listing with that player's character_name.
     if ($script:DuneBotIdentityCache -and $script:DuneBotIdentityCache.ownerId -gt 0) {
-        return $script:DuneBotIdentityCache
+        $cachedId = [int64]$script:DuneBotIdentityCache.ownerId
+        $vc = Get-DuneBotScalar -Ip $Ip -Sql "SELECT id FROM dune.actors WHERE id = $cachedId AND class = 'Duke' AND owner_account_id IS NULL"
+        if ($vc.ok -and $vc.value) {
+            return $script:DuneBotIdentityCache
+        }
+        # Cache is stale (actor deleted, reassigned to a player account, or
+        # class changed). Drop it and re-resolve from scratch.
+        $script:DuneBotIdentityCache = $null
     }
 
-    # Owner actor (class = 'Duke').
+    # Owner actor: only a "clean" Duke is acceptable — one whose actor row
+    # has owner_account_id IS NULL. A Duke bound to a player account causes
+    # both the in-game UI and the Market view to render the bot listings
+    # under that player's character_name (e.g. "Revy") because the market
+    # owner-label query falls through ps.character_name first.
     $ownerId = 0L
-    $r = Get-DuneBotScalar -Ip $Ip -Sql "SELECT id FROM dune.actors WHERE class = 'Duke' LIMIT 1"
+    $r = Get-DuneBotScalar -Ip $Ip -Sql "SELECT id FROM dune.actors WHERE class = 'Duke' AND owner_account_id IS NULL ORDER BY id LIMIT 1"
     if (-not $r.ok) { return @{ ok = $false; error = "actor lookup: $($r.error)" } }
     if ($r.value) { $ownerId = ConvertTo-DuneInt $r.value }
 
@@ -283,12 +298,13 @@ function Get-DuneBotIdentity {
             if ($ap0.ok -and $ap0.value) { $apId = ConvertTo-DuneInt $ap0.value }
             return @{ ok = $true; provisioned = $false; ownerId = 0L; exchangeId = $exId; accessPointId = $apId }
         }
-        # Idempotent create-or-fetch in one statement.
+        # Idempotent create-or-fetch in one statement. Only matches Dukes that
+        # are NOT bound to a player account, so we never reuse a borked one.
         $createSql = @"
-WITH existing AS (SELECT id FROM dune.actors WHERE class = 'Duke' LIMIT 1),
+WITH existing AS (SELECT id FROM dune.actors WHERE class = 'Duke' AND owner_account_id IS NULL ORDER BY id LIMIT 1),
 ins AS (
-  INSERT INTO dune.actors (class, serial, gas_attributes, properties, dimension_index, partition_id)
-  SELECT 'Duke', 0, '{}', '{}', 0, (SELECT partition_id FROM dune.world_partition ORDER BY partition_id LIMIT 1)
+  INSERT INTO dune.actors (class, serial, gas_attributes, properties, dimension_index, partition_id, owner_account_id)
+  SELECT 'Duke', 0, '{}', '{}', 0, (SELECT partition_id FROM dune.world_partition ORDER BY partition_id LIMIT 1), NULL
   WHERE NOT EXISTS (SELECT 1 FROM existing)
   RETURNING id
 )
