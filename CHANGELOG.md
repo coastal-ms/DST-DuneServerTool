@@ -13,6 +13,29 @@ here cover everything those tags shipped.
 
 ## [Unreleased]
 
+## [11.5.1] - 2026-06-11
+
+### Added
+- **All default settings browser (Game Config).** A new collapsible
+  *All default settings* card on the Game Config page reads the
+  battlegroup's live `DefaultGame.ini` and `DefaultEngine.ini` straight
+  from a running game-server pod (`kubectl exec`-driven, one SSH round-trip,
+  cached per process), then merges every section and key with your current
+  `UserGame.ini` / `UserEngine.ini` overrides. Every section becomes a
+  collapsible card with an override-count badge; every key gets a
+  type-aware editor (Off/On toggles for booleans, numeric inputs for
+  ints/floats, free text otherwise) plus a one-click *Reset to default*.
+  Edits are batched and saved through the existing managed-block writer
+  with a `.dstbak-<ts>` backup. Search box + game/engine filter included.
+  Array-style keys (`+Key=…` / `-Key=…`) are surfaced read-only in v1 with
+  a hint pointing at the raw INI view.
+- **Risk-acknowledgement modal on the Game Config page.** First time you
+  open Game Config (and again after every DST update), a *"Use at your own
+  risk"* modal explains that bad values can render a save unbootable,
+  with an **I acknowledge** button and an optional **Remember this
+  selection** checkbox. The acknowledgement is stored locally per DST
+  version, so a fresh release re-prompts you to re-read the warning.
+
 ## [12.3.0] - 2026-06-11
 
 New edition. Headlines: the native **Gameplay Admin** console (the
