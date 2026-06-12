@@ -117,7 +117,10 @@ export function Sidebar({ collapsed }: Props) {
         />
         {!collapsed && (
           <div className="flex-1 min-w-0">
-            <div className="text-sm font-semibold tracking-wide">DST - Dune Server Tool</div>
+            <div className="inline-block text-center leading-tight">
+              <div className="text-2xl font-bold tracking-wide">DST</div>
+              <div className="text-sm font-semibold tracking-wide">Dune Server Tool</div>
+            </div>
             <div className="text-[10px] text-text-dim uppercase tracking-widest">Management Portal</div>
             <div className="text-[11px] font-bold tracking-wide mt-1 flex items-center gap-1">
               <Icon name="ThumbsUp" size={11} className="text-emerald-400" />
@@ -129,8 +132,8 @@ export function Sidebar({ collapsed }: Props) {
 
       <nav
         className={`flex-1 overflow-y-auto ${
-          collapsed ? 'px-1.5 py-2' : 'px-2 py-3'
-        } ${collapsed ? '' : 'space-y-5'}`}
+          collapsed ? 'px-1.5 py-2' : 'px-2 py-2'
+        } ${collapsed ? '' : 'space-y-3'}`}
       >
         {groups.map((g, idx) => (
           <div key={g.key}>

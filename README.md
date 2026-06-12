@@ -8,12 +8,12 @@
 [![License: Apache 2.0](https://img.shields.io/badge/License-Apache_2.0-blue.svg)](LICENSE)
 [![Latest release](https://img.shields.io/github/v/release/coastal-ms/DST-DuneServerTool?sort=semver)](https://github.com/coastal-ms/DST-DuneServerTool/releases/latest)
 
-The current release is **v12.3.0**. The in-app version label and the
-website show plain semver tags (e.g. `v12.3.0`) — the previous
+The current release is **v11.5.1**. The in-app version label and the
+website show plain semver tags (e.g. `v11.5.1`) — the previous
 Roman-numeral stylization has been removed.
 
 > ## ✅ Confirmed compatible with Dune: Awakening **1.4.5.0**
-> DST **v12.3.0** is verified working against the **latest Funcom release** —
+> DST **v11.5.1** is verified working against the **latest Funcom release** —
 > both the game **client** and the **self-hosted server** software — as of the
 > **1.4.5.0** patch (June 10, 2026). Compatibility was checked live against a
 > running self-hosted server on that build (server image `1988751-0-shipping`),
@@ -31,6 +31,16 @@ browser and keeps the server running in the background.
 
 ### New in the v11 series
 
+- **All default settings browser (Game Config).** A collapsible *All
+  default settings* card reads the battlegroup's live `DefaultGame.ini` and
+  `DefaultEngine.ini` from a running game-server pod and merges them with
+  your `UserGame.ini` / `UserEngine.ini` overrides — every section is
+  expandable, every key gets a type-aware editor, overrides are badged, and
+  changes are saved through the existing managed-block writer (with a
+  `.dstbak-<ts>` backup).
+- **Risk-acknowledgement modal on Game Config.** A *"Use at your own
+  risk"* modal greets first-time visitors to Game Config (and re-prompts
+  once after every DST update) so a bad edit isn't a silent footgun.
 - **Theming engine.** A Settings → **Appearance** card with six built-in
   presets — Eyes of Ibad, Sietch Tabr, Caladan, Giedi Prime, House Harkonnen,
   and Atreides — plus per-token color customization, JSON import/export, and
