@@ -170,9 +170,32 @@ export function Tailscale() {
             <StatCard label="Peers online" value={`${online} / ${total}`} icon="Network" />
           </section>
 
-          {!status.available && status.error && (
-            <div className="card p-3 mb-4 text-sm text-warning break-words flex items-center gap-2">
-              <Icon name="AlertTriangle" size={15} /> {status.error}
+          {!status.available && (
+            <div className="card p-4 mb-4">
+              <div className="flex items-start gap-3">
+                <Icon name="AlertTriangle" size={18} className="text-warning shrink-0 mt-0.5" />
+                <div className="min-w-0">
+                  <h2 className="text-sm font-semibold text-warning">
+                    Tailscale isn’t connected{status.backendState ? ` (state: ${status.backendState})` : ''}
+                  </h2>
+                  <p className="text-sm text-text-muted mt-1">
+                    The CLI is installed but not signed in to a tailnet, so there’s nothing to show yet. To connect:
+                  </p>
+                  <ol className="text-sm text-text-muted mt-2 list-decimal ml-5 space-y-1">
+                    <li>Open <span className="font-medium text-text">Tailscale</span> from the Windows system tray and sign in — or run <code className="font-mono text-xs bg-surface-2 px-1.5 py-0.5 rounded">tailscale up</code> in a terminal.</li>
+                    <li>Approve this machine in your tailnet if prompted.</li>
+                    <li>Come back and hit <span className="font-medium text-text">Refresh</span>.</li>
+                  </ol>
+                  <div className="flex items-center gap-2 mt-3">
+                    <button className="btn-secondary" onClick={() => void load()} disabled={loading}>
+                      <Icon name="RefreshCw" size={14} className={loading ? 'animate-spin' : ''} /> Refresh
+                    </button>
+                    <button className="btn-secondary" onClick={() => void onOpenConsole()} disabled={opening}>
+                      <Icon name="ExternalLink" size={14} /> Admin console
+                    </button>
+                  </div>
+                </div>
+              </div>
             </div>
           )}
 
