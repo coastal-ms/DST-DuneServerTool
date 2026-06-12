@@ -1,4 +1,4 @@
-# PlayersAdmin.ps1 — v11.5.9 player admin routes ported from dune-admin §2 + §7.
+﻿# PlayersAdmin.ps1 — v11.5.9 player admin routes ported from dune-admin §2 + §7.
 # Currency / progression writes + returning-player-award + delete-account.
 # Uses Invoke-DunePlayerWriteRoute + Get-DuneBodyInt/Value from routes/GameplayPlayers.ps1.
 

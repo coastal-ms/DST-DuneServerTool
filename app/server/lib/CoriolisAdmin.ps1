@@ -1,4 +1,4 @@
-# Coriolis Admin — v11.5.7
+﻿# Coriolis Admin — v11.5.7
 #
 # Wraps dune.debug_get_coriolis_seeds() + dune.debug_set_farm_seed() /
 # debug_set_map_seed() / debug_set_partition_seed() so admins can inspect and

@@ -1,4 +1,4 @@
-# PlayersAdmin.ps1 — v11.5.9 player admin extras ported from dune-admin.
+﻿# PlayersAdmin.ps1 — v11.5.9 player admin extras ported from dune-admin.
 # Covers §2 currency writes + §7 returning-award/delete-account + shared helpers
 # (faction tables, char-XP table, offline check, raw funcom-id lookup).
 #
