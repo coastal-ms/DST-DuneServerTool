@@ -13,6 +13,20 @@ here cover everything those tags shipped.
 
 ## [Unreleased]
 
+## [11.5.2] - 2026-06-11
+
+### Fixed
+- **Gameplay → Blueprints: offline players' blueprints now show their
+  owner.** The list query previously joined `player_state` through the
+  *live pawn* (`player_state.player_pawn_id = actors.id`), which only
+  matches a player whose pawn is currently spawned, so every offline
+  player's blueprints rendered with a blank owner — making it look like
+  "blueprints only show for the host." Owner is now resolved through the
+  persistent account link (`player_state.account_id =
+  actors.owner_account_id`, the same pattern the Storage view uses), with
+  the original pawn-based link kept as a COALESCE fallback for parity.
+  Read-only change, only affects the `owner_name` column.
+
 ## [11.5.1] - 2026-06-11
 
 ### Added
