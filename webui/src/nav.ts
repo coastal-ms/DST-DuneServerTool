@@ -27,6 +27,7 @@ export const NAV_ITEMS: NavItem[] = [
   { to: '/sietches',    label: 'Sietches',     icon: 'Network',         group: 'database' },
   { to: '/map-spinup',  label: 'Map SpinUp',   icon: 'Globe',           group: 'database' },
   { to: '/settings',    label: 'Settings',     icon: 'Settings',        group: 'system' },
+  { to: '/tailscale',   label: 'Tailscale',    icon: 'Share2',          group: 'system', localOnly: true },
   { to: '/setup',       label: 'Setup Wizard', icon: 'Wand2',           group: 'system' },
 ]
 
