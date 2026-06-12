@@ -13,6 +13,20 @@ here cover everything those tags shipped.
 
 ## [Unreleased]
 
+## [11.5.8] - 2026-06-12
+
+### Changed — Item search autocomplete everywhere (user requirement)
+
+Follow-up to v11.5.7. User requirement: *every* item search box across the
+app must use the typeahead dropdown introduced in v11.5.7, not just the two
+add-item forms (Players → Give Item, Storage → Add Items).
+
+- **Market Bot → Pricing → Per-template price overrides → Add override** —
+  previously two ``window.prompt()`` dialogs (one for template id, one for
+  price). Now opens an inline form with the ``ItemPicker`` typeahead for the
+  item search and a number field for the override price, with Add / Cancel
+  buttons. No more typing raw template ids from memory.
+
 ## [11.5.7] - 2026-06-12
 
 ### Added — User-reported hotfixes (Phase 1.5 of dune-admin player port)

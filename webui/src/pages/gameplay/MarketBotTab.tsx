@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from 'react'
 import { Icon } from '../../components/Icon'
+import { ItemPicker } from '../../components/ItemPicker'
 import {
   getBotStatus, getBotConfig, saveBotConfig, runBotTick, runBotListTick, botExec,
   setBotBalance, clearBotListings, clearBotLegacyListings, getBotVendorSnapshot,
@@ -621,6 +622,10 @@ function PricingSection({ draft, setDraft }: { draft: BotConfig; setDraft: (c: B
   const overrides = draft.price_overrides ?? {}
   const overrideRows = Object.entries(overrides)
 
+  const [showAddOverride, setShowAddOverride] = useState(false)
+  const [newTmpl, setNewTmpl] = useState('')
+  const [newPrice, setNewPrice] = useState('0')
+
   const setMap = (key: 'tier_base_prices' | 'stack_unit_prices' | 'category_factors' | 'rarity_multipliers' | 'vendor_multipliers',
                   next: Record<string, number>) => {
     setDraft({ ...draft, [key]: next })
@@ -700,20 +705,43 @@ function PricingSection({ draft, setDraft }: { draft: BotConfig; setDraft: (c: B
       <div className="card p-4">
         <div className="flex items-center justify-between mb-2">
           <h4 className="text-xs uppercase tracking-wider text-text-dim">Per-template price overrides</h4>
-          <button className="btn-secondary text-xs" onClick={() => {
-            const tmpl = window.prompt('Template ID to override:')?.trim()
-            if (!tmpl) return
-            const v = window.prompt(`Override price for ${tmpl} (Solari, integer):`)?.trim()
-            const n = v != null ? parseInt(v, 10) : NaN
-            if (!Number.isFinite(n) || n < 0) return
-            setDraft({ ...draft, price_overrides: { ...overrides, [tmpl]: n } })
-          }}>
-            <Icon name="Plus" size={13} /> Add override
+          <button className="btn-secondary text-xs" onClick={() => setShowAddOverride(s => !s)}>
+            <Icon name={showAddOverride ? 'X' : 'Plus'} size={13} /> {showAddOverride ? 'Cancel' : 'Add override'}
           </button>
         </div>
         <p className="text-[11px] text-text-dim mb-2">
           Manual price (Solari, integer) for specific template IDs. Overrides win over the formula, then the 100 k cap applies.
         </p>
+        {showAddOverride && (
+          <div className="mb-3 p-3 rounded-lg bg-surface-2 border border-border space-y-2">
+            <ItemPicker
+              value={newTmpl}
+              onChange={setNewTmpl}
+              label="Item"
+              placeholder="Type to search items by name or template id…"
+              autoFocus
+            />
+            <div className="flex items-end gap-2">
+              <label className="block flex-1 max-w-[200px]">
+                <span className="block text-[11px] uppercase tracking-wider text-text-dim mb-1">Override price (Solari)</span>
+                <input type="number" value={newPrice} min={0}
+                  onChange={e => setNewPrice(e.target.value)}
+                  className="w-full px-3 py-2 rounded-lg bg-surface-2 border border-border text-text text-sm font-mono focus:outline-none focus:ring-2 focus:ring-ibad" />
+              </label>
+              <button className="btn-primary"
+                disabled={!newTmpl.trim() || !Number.isFinite(parseInt(newPrice, 10)) || parseInt(newPrice, 10) < 0}
+                onClick={() => {
+                  const tmpl = newTmpl.trim()
+                  const n = parseInt(newPrice, 10)
+                  if (!tmpl || !Number.isFinite(n) || n < 0) return
+                  setDraft({ ...draft, price_overrides: { ...overrides, [tmpl]: n } })
+                  setNewTmpl(''); setNewPrice('0'); setShowAddOverride(false)
+                }}>
+                <Icon name="Plus" size={14} /> Add
+              </button>
+            </div>
+          </div>
+        )}
         {overrideRows.length === 0 ? (
           <div className="text-text-dim text-sm">No overrides.</div>
         ) : (
