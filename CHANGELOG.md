@@ -70,6 +70,30 @@ here cover everything those tags shipped.
   later restarts).
 
 ### Fixed
+- **Bot enable now offers to wipe foreign-bot listings before starting.**
+  When the operator flips Duke to *Enabled*, the toggle now first checks
+  for non-Duke NPC orders sitting in `dune.dune_exchange_orders` (Revy
+  from a still-deployed upstream Go `market-bot` pod, anything else).
+  If any exist, a confirm dialog lists the affected actor classes + row
+  counts and offers a one-click wipe before Duke starts ticking — so
+  players don't see two bots' listings side-by-side in-game.
+- **Persistent warning banner while a foreign bot's listings linger.**
+  A high-visibility warning bar sits at the top of the *Market Bot* tab
+  whenever Duke is enabled **and** the exchange still has legacy NPC
+  listings. It names the offending actor class(es) + count and embeds
+  the same *Wipe legacy* one-click action so the operator can clear at
+  any time without leaving the tab. Disappears the moment the legacy
+  count hits zero.
+- **`Get-DuneBotIdentity` only accepts a "clean" Duke actor and now
+  re-validates its cached identity on every call.** Previously a cached
+  Duke `actor_id` was trusted blindly; if the row's `owner_account_id`
+  got bound to a player account between server starts, the in-game
+  market would render Duke's listings under that player's character
+  name (the `COALESCE(ps.character_name, a.class, …)` falls through to
+  the player). The resolver now filters
+  `class = 'Duke' AND owner_account_id IS NULL`, re-checks the cache
+  with a cheap `SELECT id WHERE …` on every call, and the
+  create-if-missing path explicitly sets `owner_account_id = NULL`.
 - **Gameplay → Blueprints: offline players' blueprints now show their
   owner.** The list query previously joined `player_state` through the
   *live pawn* (`player_state.player_pawn_id = actors.id`), which only

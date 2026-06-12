@@ -70,6 +70,35 @@ export function MarketBotTab() {
 
   const toggleEnabled = async (v: boolean) => {
     setError(null)
+    // When the operator enables Duke and the live DB still has NPC orders
+    // from a previous bot (Revy from the upstream Go bot, or anything else
+    // that isn't a clean Duke actor), offer to wipe them right now. Two
+    // bots fighting over the same exchange is the #1 source of mislabeled
+    // listings in-game, so we make this front-and-center on enable.
+    if (v) {
+      const refreshed = await getBotStatus().catch(() => null)
+      if (refreshed) setStatus(refreshed)
+      const legacy = refreshed?.legacy_listings_count ?? status?.legacy_listings_count ?? 0
+      if (legacy > 0) {
+        const breakdown = (refreshed?.listings_by_class ?? status?.listings_by_class ?? [])
+          .filter(b => b.class !== 'Duke')
+          .map(b => `  • ${b.class}: ${fmtNum(b.count)}`)
+          .join('\n')
+        const msg = `Heads up — the live exchange already has ${fmtNum(legacy)} NPC listings from a previous bot:\n\n${breakdown}\n\nThese will keep showing up in-game alongside Duke's listings unless they're removed. Wipe them now before starting Duke?\n\n(Player listings and Duke's own listings are NOT affected. This cannot be undone.)`
+        if (window.confirm(msg)) {
+          setClearingLegacy(true)
+          try {
+            const r = await clearBotLegacyListings()
+            setSaveMsg(r.message ?? `Cleared ${fmtNum(r.cleared)} legacy NPC listings.`)
+          } catch (e) {
+            setError(e instanceof Error ? e.message : String(e))
+            setClearingLegacy(false)
+            return
+          }
+          setClearingLegacy(false)
+        }
+      }
+    }
     try {
       await botExec(v ? 'start' : 'stop')
       if (draft) setDraft({ ...draft, enabled: v })
@@ -150,6 +179,35 @@ export function MarketBotTab() {
 
   return (
     <div>
+      {/* Persistent warning: bot is running but the exchange still has
+          listings from another bot. Stays visible until legacy_count is 0. */}
+      {status?.enabled && legacyCount > 0 && (
+        <div className="card p-3 mb-4 border-l-4 border-warning bg-warning/10 flex items-start gap-3">
+          <Icon name="TriangleAlert" size={18} className="text-warning shrink-0 mt-0.5" />
+          <div className="flex-1 min-w-0">
+            <div className="text-sm font-semibold text-warning">
+              Duke is running alongside {fmtNum(legacyCount)} legacy NPC listings from a previous bot.
+            </div>
+            <div className="text-xs text-text-muted mt-1">
+              Players will see both sets in-game until these are cleared. Wipe them so Duke owns the exchange cleanly.
+              {(() => {
+                const others = (status.listings_by_class ?? []).filter(b => b.class !== 'Duke')
+                if (others.length === 0) return null
+                return (
+                  <span className="ml-1">
+                    Affected actor{others.length > 1 ? 's' : ''}: {others.map(b => `${b.class} (${fmtNum(b.count)})`).join(', ')}.
+                  </span>
+                )
+              })()}
+            </div>
+          </div>
+          <button className="btn-primary text-xs shrink-0" disabled={clearingLegacy} onClick={() => { void clearLegacy() }}>
+            <Icon name={clearingLegacy ? 'Loader2' : 'Trash2'} size={13} className={clearingLegacy ? 'animate-spin' : ''} />
+            {' '}Wipe legacy ({fmtNum(legacyCount)})
+          </button>
+        </div>
+      )}
+
       <div className="card p-3 mb-4 text-xs text-text-muted border-l-2 border-accent flex items-start gap-2">
         <Icon name="Info" size={14} className="text-accent shrink-0 mt-0.5" />
         <span>
