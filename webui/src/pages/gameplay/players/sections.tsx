@@ -530,7 +530,10 @@ const ACTIONS: ActionDef[] = [
     } },
 ]
 
-const GROUP_ORDER: ActionGroup[] = ['Currency', 'Progression', 'Items', 'Vehicle', 'Live', 'Identity', 'Danger']
+// 'Items' is rendered inside the Inventory section (between the inventory
+// title and the items list), not in the Actions section.
+const GROUP_ORDER: ActionGroup[] = ['Currency', 'Progression', 'Vehicle', 'Live', 'Identity', 'Danger']
+const ITEMS_GROUP: ActionGroup = 'Items'
 
 export function ActionsSection({ player, canWrite, flash, onChanged }: SectionProps) {
   const [openId, setOpenId] = useState<string | null>(null)
@@ -577,7 +580,11 @@ export function ActionsSection({ player, canWrite, flash, onChanged }: SectionPr
     const map: Record<ActionGroup, ActionDef[]> = {
       Currency: [], Progression: [], Items: [], Vehicle: [], Live: [], Identity: [], Danger: [],
     }
-    for (const a of ACTIONS) map[a.group].push(a)
+    for (const a of ACTIONS) {
+      // Items is rendered inside InventorySection — skip here.
+      if (a.group === ITEMS_GROUP) continue
+      map[a.group].push(a)
+    }
     return map
   }, [])
 
@@ -687,6 +694,106 @@ export function ActionsSection({ player, canWrite, flash, onChanged }: SectionPr
 }
 
 // ---------------------------------------------------------------------------
+// Items action block — the 'Items' group of ACTIONS, rendered inside the
+// Inventory section (between the inventory title and the items list).
+// Mirrors ActionsSection's per-group rendering, scoped to one group, with
+// its own openId/busy/give-item form state.
+// ---------------------------------------------------------------------------
+function ItemsActionBlock({ player, canWrite, flash, onChanged }: {
+  player: Player; canWrite: boolean; flash: Flash; onChanged: () => void
+}) {
+  const [openId, setOpenId] = useState<string | null>(null)
+  const [busy, setBusy] = useState(false)
+  const [giveTpl, setGiveTpl]   = useState('')
+  const [giveQty, setGiveQty]   = useState('1')
+  const [giveQual, setGiveQual] = useState('0')
+
+  const isOnline = (player.online_status || '').toLowerCase() === 'online'
+
+  const acts = useMemo(() => ACTIONS.filter(a => a.group === ITEMS_GROUP), [])
+
+  if (!canWrite || acts.length === 0) return null
+
+  const openAction = (id: string) => {
+    if (openId === id) { setOpenId(null); return }
+    setOpenId(id)
+    if (id === 'give-item' || id === 'give-item-live') { setGiveTpl(''); setGiveQty('1'); setGiveQual('0') }
+  }
+
+  const runAction = async (def: ActionDef, exec: () => Promise<{ message: string }>) => {
+    if (def.confirm) {
+      const msg = def.confirm(player)
+      if (msg && !window.confirm(msg)) return
+    }
+    setBusy(true)
+    try {
+      const r = await exec()
+      flash(r.message || `${def.label} done.`, 'ok')
+      setOpenId(null)
+      onChanged()
+    } catch (e) {
+      flash(e instanceof Error ? e.message : String(e), 'err')
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  return (
+    <div className="space-y-2 mb-2">
+      <div className="flex flex-wrap gap-2">
+        {acts.map(a => {
+          const disabled = busy || (a.liveOnly && !isOnline)
+          return (
+            <button key={a.id} className="btn-secondary" disabled={disabled}
+              onClick={() => openAction(a.id)}
+              title={a.liveOnly ? 'Requires player to be online' : undefined}>
+              <Icon name={a.icon} size={13} /> {a.label}
+            </button>
+          )
+        })}
+      </div>
+
+      {acts.filter(a => a.id === openId).map(def => {
+        if (def.custom === 'give-item' || def.custom === 'give-item-live') {
+          return (
+            <div key={def.id} className="card p-3 space-y-3">
+              <ItemPicker label="Item — type to search by name or template id"
+                value={giveTpl} onChange={setGiveTpl} autoFocus disabled={busy} />
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-[11px] uppercase tracking-wider text-text-dim mb-1">Quantity</label>
+                  <input type="number" min={1} value={giveQty} disabled={busy}
+                    onChange={e => setGiveQty(e.target.value)}
+                    className="w-full px-3 py-2 rounded-lg bg-surface-2 border border-border text-text text-sm focus:outline-none focus:ring-2 focus:ring-ibad focus:border-ibad/50" />
+                </div>
+                <div>
+                  <label className="block text-[11px] uppercase tracking-wider text-text-dim mb-1">Quality (0-5)</label>
+                  <input type="number" min={0} max={5} value={giveQual} disabled={busy}
+                    onChange={e => setGiveQual(e.target.value)}
+                    className="w-full px-3 py-2 rounded-lg bg-surface-2 border border-border text-text text-sm focus:outline-none focus:ring-2 focus:ring-ibad focus:border-ibad/50" />
+                </div>
+              </div>
+              <button className="btn-primary w-full" disabled={busy || !giveTpl.trim()}
+                onClick={() => runAction(def, () => def.custom === 'give-item-live'
+                  ? giveItemLive({ actor_id: player.id }, giveTpl.trim(), Number(giveQty) || 1, Number(giveQual) || 0)
+                  : giveItem(player.id, giveTpl.trim(), Number(giveQty) || 1, Number(giveQual) || 0))}>
+                {busy ? <Icon name="Loader2" size={13} className="animate-spin" /> : <Icon name="Check" size={13} />} {def.label}
+              </button>
+            </div>
+          )
+        }
+        return (
+          <InlineForm key={def.id} busy={busy} submitLabel={def.label}
+            fields={def.fields || []}
+            onSubmit={v => runAction(def, () => def.run(player, v))}
+          />
+        )
+      })}
+    </div>
+  )
+}
+
+// ---------------------------------------------------------------------------
 // Inventory — re-uses the existing detail endpoint via the section pattern.
 // Repair + delete per item; sub-sections for emotes & contract items.
 // ---------------------------------------------------------------------------
@@ -739,7 +846,8 @@ export function InventorySection({ player, canWrite, demo, refreshKey, flash, on
   return (
     <div className="space-y-4">
       <ItemList title={`Inventory (${fmtNum(groups.gear.length)})`} icon="Backpack" items={groups.gear}
-        canWrite={canWrite} busy={busy} run={run} />
+        canWrite={canWrite} busy={busy} run={run}
+        extra={<ItemsActionBlock player={player} canWrite={canWrite} flash={flash} onChanged={() => { onChanged(); setTick(t => t + 1) }} />} />
       <ItemList title={`Emotes (${fmtNum(groups.emotes.length)})`} icon="Smile" items={groups.emotes} collapsed
         canWrite={canWrite} busy={busy} run={run} />
       <ItemList title={`Contract items (${fmtNum(groups.contracts.length)})`} icon="FileText" items={groups.contracts} collapsed
@@ -748,10 +856,11 @@ export function InventorySection({ player, canWrite, demo, refreshKey, flash, on
   )
 }
 
-function ItemList({ title, icon, items, canWrite, busy, run, collapsed }: {
+function ItemList({ title, icon, items, canWrite, busy, run, collapsed, extra }: {
   title: string; icon: string; items: InventoryItem[]; canWrite: boolean; busy: boolean
   run: (fn: () => Promise<{ message: string }>, label: string) => void | Promise<void>
   collapsed?: boolean
+  extra?: React.ReactNode
 }) {
   const [open, setOpen] = useState(!collapsed)
   if (collapsed && items.length === 0) return null
@@ -763,6 +872,7 @@ function ItemList({ title, icon, items, canWrite, busy, run, collapsed }: {
         <Icon name={icon} size={13} />
         <span>{title}</span>
       </button>
+      {open && extra}
       {open && (
         items.length === 0 ? (
           <div className="text-sm text-text-dim italic py-1">No items.</div>
