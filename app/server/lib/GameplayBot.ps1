@@ -798,7 +798,13 @@ COMMIT;
 # ============================================================================
 
 function Get-DuneBotVendorSnapshot {
-    param([string]$Ip, [int64]$ExchangeId)
+    param([string]$Ip, [int64]$ExchangeId, [int64]$ExcludeOwnerId = 0)
+    # Exclude Duke's own listings from the "vendor snapshot" so we never
+    # use our own seeded grade-multiplied prices as the vendor floor. If
+    # we did, the floor calc (vp*0.95) would put the grade-0 target at
+    # ~1.9x base, flag every existing listing as stale, and trigger
+    # full DELETE + re-INSERT of every listing on every tick.
+    $excludeClause = if ($ExcludeOwnerId -gt 0) { "AND o.owner_id <> $ExcludeOwnerId" } else { '' }
     $sql = @"
 SELECT o.template_id,
        MAX(o.item_price)                                 AS max_price,
@@ -809,7 +815,7 @@ SELECT o.template_id,
 FROM dune.dune_exchange_orders o
 JOIN dune.dune_exchange_sell_orders s ON s.order_id = o.id
 LEFT JOIN dune.items i ON i.id = o.item_id
-WHERE o.is_npc_order = TRUE AND o.exchange_id = $ExchangeId
+WHERE o.is_npc_order = TRUE AND o.exchange_id = $ExchangeId $excludeClause
 GROUP BY o.template_id
 "@
     $r = Invoke-DuneSqlQuery -Ip $Ip -Sql $sql -ReadOnly $true -MaxRows 50000 -TimeoutSec 25
@@ -1159,7 +1165,7 @@ function Invoke-DuneBotListTick {
         Save-DuneBotState -State $earlyState
     }
 
-    $vs = Get-DuneBotVendorSnapshot -Ip $ctx.ip -ExchangeId $ident.exchangeId
+    $vs = Get-DuneBotVendorSnapshot -Ip $ctx.ip -ExchangeId $ident.exchangeId -ExcludeOwnerId $ident.ownerId
     if (-not $vs.ok) { $summary.ok = $false; $summary.message = "vendor snapshot: $($vs.error)"; return $summary }
     $summary.considered = $vs.snapshot.Count
 
@@ -1758,6 +1764,103 @@ function Start-DuneBotSeedAsync {
     }
 }
 
+# Mirror Start-DuneBotSeedAsync for the LIST tick. The HTTP server runs each
+# request synchronously on a single PowerShell runspace, so a slow list tick
+# (SSH-heavy: vendor snapshot + current listings + insert/delete batches)
+# blocks every other API request — the whole console UI freezes until the
+# tick returns. Dispatch the live (non-dry) tick into a dedicated background
+# runspace and return 202 immediately. Dry runs still run inline because the
+# caller needs the plan in the response body.
+function Start-DuneBotListTickAsync {
+        param([string]$ServerDir)
+        if (-not $ServerDir) { $ServerDir = $script:DuneGameplayBotServerDir }
+        $st = Read-DuneBotState
+        if ($st.list_tick_progress) {
+            $running = $false
+            if ($st.list_tick_progress -is [hashtable]) {
+                $running = [bool]$st.list_tick_progress['running']
+            } else {
+                try { $running = [bool]$st.list_tick_progress.running } catch { $running = $false }
+            }
+            if ($running) {
+                return @{
+                    ok       = $false
+                    running  = $true
+                    progress = $st.list_tick_progress
+                    error    = 'A list tick is already in progress.'
+                }
+            }
+        }
+        if (-not $ServerDir -or -not (Test-Path -LiteralPath $ServerDir)) {
+            return @{ ok = $false; error = "Start-DuneBotListTickAsync: server dir not found ('$ServerDir')." }
+        }
+        $st.list_tick_progress = @{
+            phase    = 'starting'
+            running  = $true
+            started  = (Get-Date).ToUniversalTime().ToString('o')
+            updated  = (Get-Date).ToUniversalTime().ToString('o')
+        }
+        Save-DuneBotState -State $st
+
+        try {
+            $rs = [runspacefactory]::CreateRunspace()
+            $rs.ApartmentState = 'MTA'
+            $rs.ThreadOptions  = 'ReuseThread'
+            $rs.Open()
+            $ps = [powershell]::Create()
+            $ps.Runspace = $rs
+            [void]$ps.AddScript({
+                param($ServerDir)
+                try {
+                    $boot = Join-Path $ServerDir 'lib\Bootstrap.ps1'
+                    if (Test-Path $boot) { . $boot }
+                    Get-ChildItem -Path (Join-Path $ServerDir 'lib') -Filter '*.ps1' | ForEach-Object {
+                        if ($_.Name -ieq 'Bootstrap.ps1') { return }
+                        try { . $_.FullName } catch {}
+                    }
+                    [void](Invoke-DuneBotListTick)
+                    try {
+                        $st2 = Read-DuneBotState
+                        $st2.list_tick_progress = @{
+                            phase    = 'done'
+                            running  = $false
+                            updated  = (Get-Date).ToUniversalTime().ToString('o')
+                            finished = (Get-Date).ToUniversalTime().ToString('o')
+                        }
+                        Save-DuneBotState -State $st2
+                    } catch {}
+                } catch {
+                    try {
+                        $st2 = Read-DuneBotState
+                        $st2.list_tick_progress = @{
+                            phase    = 'error'
+                            running  = $false
+                            message  = "List tick runspace crashed: $($_.Exception.Message)"
+                            updated  = (Get-Date).ToUniversalTime().ToString('o')
+                            finished = (Get-Date).ToUniversalTime().ToString('o')
+                        }
+                        Save-DuneBotState -State $st2
+                    } catch {}
+                }
+            }).AddArgument($ServerDir)
+            [void]$ps.BeginInvoke()
+            return @{ ok = $true; running = $true; message = 'List tick started.' }
+        } catch {
+            try {
+                $st3 = Read-DuneBotState
+                $st3.list_tick_progress = @{
+                    phase    = 'error'
+                    running  = $false
+                    message  = "Failed to spawn list-tick runspace: $($_.Exception.Message)"
+                    updated  = (Get-Date).ToUniversalTime().ToString('o')
+                    finished = (Get-Date).ToUniversalTime().ToString('o')
+                }
+                Save-DuneBotState -State $st3
+            } catch {}
+            return @{ ok = $false; running = $false; error = "Failed to spawn list-tick runspace: $($_.Exception.Message)" }
+        }
+}
+
 # Reset the persistent last_error banner. Lets the UI clear a stale failure
 # message without having to wait for a fresh successful tick to overwrite it.
 function Clear-DuneBotError {
@@ -1828,6 +1931,7 @@ function Get-DuneNativeBotStatus {
         legacy_listings_count = $null    # NPC listings owned by non-Duke actors
         provisioned           = $false
         seed_progress         = $state.seed_progress
+        list_tick_progress    = $state.list_tick_progress
         source                = 'live'
     }
     $ctx = Get-DuneDbContext

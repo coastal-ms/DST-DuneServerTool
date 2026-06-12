@@ -106,6 +106,15 @@ export interface BotSeedProgress {
   finished?: string
 }
 
+export interface BotListTickProgress {
+  phase?: 'starting' | 'done' | 'error' | string
+  running?: boolean
+  started?: string
+  updated?: string
+  finished?: string
+  message?: string
+}
+
 export interface BotStatus {
   configured?: boolean
   running: boolean
@@ -123,6 +132,7 @@ export interface BotStatus {
   error_count?: number
   error?: string
   seed_progress?: BotSeedProgress | null
+  list_tick_progress?: BotListTickProgress | null
   source?: DataSource
   db_message?: string
 }
@@ -389,8 +399,21 @@ export function clearBotError() {
   )
 }
 
-export function runBotListTick(dryRun: boolean) {
-  return api<BotListTickResult>(`/api/gameplay/market-bot/tick/list${dryRun ? '?dry=1' : ''}`, {
+// Dry runs of the list tick still run inline and return the full plan. Live
+// runs are dispatched into a background runspace and return an ack — progress
+// is then published into BotStatus.list_tick_progress.
+export interface BotListTickLaunch {
+  ok: boolean
+  running?: boolean
+  message?: string
+  error?: string
+  progress?: BotListTickProgress
+}
+
+export function runBotListTick(dryRun: true): Promise<BotListTickResult>
+export function runBotListTick(dryRun: false): Promise<BotListTickLaunch>
+export function runBotListTick(dryRun: boolean): Promise<BotListTickResult | BotListTickLaunch> {
+  return api<BotListTickResult | BotListTickLaunch>(`/api/gameplay/market-bot/tick/list${dryRun ? '?dry=1' : ''}`, {
     method: 'POST',
     body: JSON.stringify({ dryRun }),
   })
