@@ -382,8 +382,8 @@ export function MarketBotTab() {
 
       {draft && sub === 'buy' && (
         <BuySection draft={draft} setDraft={setDraft} status={status} tick={tick} ticking={ticking}
-          clearing={clearing} balanceBusy={balanceBusy}
-          onTick={doTick} onClear={clearListings} onMaintainBalance={maintainBalance}
+          balanceBusy={balanceBusy}
+          onTick={doTick} onMaintainBalance={maintainBalance}
           onToggleEnabled={toggleEnabled} />
       )}
 
@@ -391,7 +391,9 @@ export function MarketBotTab() {
         <ListSection draft={draft} setDraft={setDraft} listTick={listTick} listTicking={listTicking}
           snapshot={snapshot} snapshotLoading={snapshotLoading}
           seeding={seeding} seedLaunchError={seedLaunchError}
-          onListTick={doListTick} onLoadSnapshot={loadSnapshot} onSeedMarket={doSeedMarket} />
+          clearing={clearing}
+          onListTick={doListTick} onLoadSnapshot={loadSnapshot} onSeedMarket={doSeedMarket}
+          onClear={clearListings} />
       )}
 
       {draft && sub === 'pricing' && (
@@ -419,11 +421,11 @@ export function MarketBotTab() {
 // ---------------------------------------------------------------------------
 // Buy section — existing dice-roll buy tuning + clear-listings.
 // ---------------------------------------------------------------------------
-function BuySection({ draft, setDraft, status, tick, ticking, clearing, balanceBusy,
-  onTick, onClear, onMaintainBalance, onToggleEnabled }: {
+function BuySection({ draft, setDraft, status, tick, ticking, balanceBusy,
+  onTick, onMaintainBalance, onToggleEnabled }: {
     draft: BotConfig; setDraft: (c: BotConfig) => void; status: BotStatus | null;
-    tick: BotTickResult | null; ticking: boolean; clearing: boolean; balanceBusy: boolean;
-    onTick: (dry: boolean) => void; onClear: () => void; onMaintainBalance: () => void;
+    tick: BotTickResult | null; ticking: boolean; balanceBusy: boolean;
+    onTick: (dry: boolean) => void; onMaintainBalance: () => void;
     onToggleEnabled: (v: boolean) => void;
   }) {
   return (
@@ -434,10 +436,6 @@ function BuySection({ draft, setDraft, status, tick, ticking, clearing, balanceB
             <Icon name="Dices" size={14} className="text-accent" /> Run a buy tick
           </h4>
           <div className="flex items-center gap-2">
-            <button className="btn-secondary" disabled={clearing} onClick={onClear}
-              title="Delete all of Duke's own market listings.">
-              <Icon name={clearing ? 'Loader2' : 'Trash2'} size={15} className={clearing ? 'animate-spin' : ''} /> Clear Duke listings
-            </button>
             <button className="btn-secondary" disabled={ticking} onClick={() => onTick(true)}>
               <Icon name={ticking ? 'Loader2' : 'FlaskConical'} size={15} className={ticking ? 'animate-spin' : ''} /> Dry run
             </button>
@@ -548,14 +546,15 @@ function BuyTickResultView({ tick }: { tick: BotTickResult }) {
 // List section — sell-side scheduler + listing tuning + vendor snapshot preview.
 // ---------------------------------------------------------------------------
 function ListSection({ draft, setDraft, listTick, listTicking, snapshot, snapshotLoading,
-  seeding, seedLaunchError,
-  onListTick, onLoadSnapshot, onSeedMarket }: {
+  seeding, seedLaunchError, clearing,
+  onListTick, onLoadSnapshot, onSeedMarket, onClear }: {
     draft: BotConfig; setDraft: (c: BotConfig) => void;
     listTick: BotListTickResult | null; listTicking: boolean;
     snapshot: BotVendorCandidate[] | null; snapshotLoading: boolean;
     seeding: boolean; seedLaunchError: string | null;
+    clearing: boolean;
     onListTick: () => void; onLoadSnapshot: () => void;
-    onSeedMarket: () => void;
+    onSeedMarket: () => void; onClear: () => void;
   }) {
   return (
     <div className="space-y-4">
@@ -587,9 +586,15 @@ function ListSection({ draft, setDraft, listTick, listTicking, snapshot, snapsho
           <h4 className="text-xs uppercase tracking-wider text-text-dim flex items-center gap-2">
             <Icon name="Tags" size={14} className="text-accent" /> Run a list tick
           </h4>
-          <button className="btn-primary" disabled={listTicking} onClick={onListTick}>
-            <Icon name={listTicking ? 'Loader2' : 'Play'} size={15} className={listTicking ? 'animate-spin' : ''} /> Run now
-          </button>
+          <div className="flex items-center gap-2">
+            <button className="btn-secondary" disabled={clearing} onClick={onClear}
+              title="Delete all of Duke's own market listings.">
+              <Icon name={clearing ? 'Loader2' : 'Trash2'} size={15} className={clearing ? 'animate-spin' : ''} /> Clear Duke listings
+            </button>
+            <button className="btn-primary" disabled={listTicking} onClick={onListTick}>
+              <Icon name={listTicking ? 'Loader2' : 'Play'} size={15} className={listTicking ? 'animate-spin' : ''} /> Run now
+            </button>
+          </div>
         </div>
         <p className="text-[11px] text-text-dim mb-2">
           Snapshots live NPC vendor inventory, applies sane-pricing rules, and tops up Duke's own listings to
