@@ -94,10 +94,10 @@ $script:DuneGameConfigSchema = @(
     @{ Section=$script:DuneGcSecConsole; Key='SecurityZones.PvpResourceMultiplier'; File='engine'; Type='float'; Min=0; Default='1.0'; Label='PvP Resource Multiplier'; Help='Resource yield multiplier inside PvP zones.'; Category='Resources & Economy' }
 
     # --- Building ---
-    @{ Section=$script:DuneGcSecBuilding; Key='m_MaxNumLandclaimSegments'; File='game'; Type='int'; Min=1; Default='6'; Label='Max Landclaim Segments'; Help='Maximum territory claim segments. Also needs client-side apply.'; Category='Building' }
+    @{ Section=$script:DuneGcSecBuilding; Key='m_MaxNumLandclaimSegments'; File='game'; Type='int'; Min=1; Default='6'; Label='Max Landclaim Segments'; Help='Maximum territory claim segments. Also needs client-side apply.'; ClientApply=$true; Category='Building' }
     @{ Section=$script:DuneGcSecBuilding; Key='m_BuildingBlueprintMaxExtensions'; File='game'; Type='int'; Min=0; Default='4'; Label='Blueprint Max Extensions'; Help='Maximum blueprint extension slots.'; Category='Building' }
     @{ Section=$script:DuneGcSecBuilding; Key='m_BaseBackupMaxExtensions'; File='game'; Type='int'; Min=0; Default='8'; Label='Base Backup Max Extensions'; Help='Backup (reconstruction) extension slots per base.'; Category='Building' }
-    @{ Section=$script:DuneGcSecBuilding; Key='m_bBuildingRestrictionLimitsEnabled'; File='game'; Type='bool'; Default='True'; Label='Building Restriction Limits'; Help='Enforce building restriction limits. Also needs client-side apply.'; Category='Building' }
+    @{ Section=$script:DuneGcSecBuilding; Key='m_bBuildingRestrictionLimitsEnabled'; File='game'; Type='bool'; Default='True'; Label='Building Restriction Limits'; Help='Enforce building restriction limits. Also needs client-side apply.'; ClientApply=$true; Category='Building' }
     @{ Section=$script:DuneGcSecBuilding; Key='m_GlobalBuildingDamageMultiplier'; File='game'; Type='float'; Min=0; Default='1.0'; Label='Building Damage Multiplier'; Help='Scales damage dealt to player buildings.'; Category='Building' }
 
     # --- Inventory ---
@@ -188,6 +188,180 @@ $script:DuneGameConfigTplGamePath    = '/home/dune/.dune/download/scripts/setup/
 $script:DuneGameConfigTplEnginePath  = '/home/dune/.dune/download/scripts/setup/config/UserEngine.ini'
 $script:DuneGameConfigResolvedGame   = $null
 $script:DuneGameConfigResolvedEngine = $null
+
+# Where each player applies the "client-side too" settings. These keys are read
+# by BOTH server and client; changing them server-side only takes full effect
+# once each player mirrors them in their LOCAL client config (Funcom flags these
+# in DefaultGame.ini as "!Needs to also be applied to each client!").
+$script:DuneGameConfigClientPath = '%LOCALAPPDATA%\DuneSandbox\Saved\Config\WindowsClient\Game.ini'
+
+# Build the post-save "apply this on each client too" reminder from a set of
+# structured updates (@{ file; section; key; value }). Returns @{ path; items }
+# where items = the saved keys whose schema entry is flagged ClientApply. Empty
+# items means nothing client-side to do.
+function Get-DuneGameConfigClientApplyNotice {
+    param([object[]]$Updates)
+    $byKey = @{}
+    foreach ($f in $script:DuneGameConfigSchema) {
+        if ($f.ContainsKey('ClientApply') -and $f.ClientApply) { $byKey[$f.Key] = $f }
+    }
+    $items = New-Object 'System.Collections.Generic.List[object]'
+    foreach ($u in $Updates) {
+        $k = "$($u.key)"
+        if ($byKey.ContainsKey($k)) {
+            $f = $byKey[$k]
+            $items.Add(@{ key = $k; label = $f.Label; section = $f.Section; value = "$($u.value)" })
+        }
+    }
+    return @{ path = $script:DuneGameConfigClientPath; items = $items.ToArray() }
+}
+
+# -----------------------------------------------------------------------------
+# LOCAL CLIENT CONFIG (admin's own machine; no SSH). DST runs locally, so it can
+# read/write the player's client Game.ini directly. Used by the optional
+# "apply to my client too" flow + the read-only client viewer.
+# -----------------------------------------------------------------------------
+$script:DuneGameConfigClientDirDefault = '%LOCALAPPDATA%\DuneSandbox\Saved\Config\WindowsClient'
+$script:DuneGameConfigClientFileName   = 'Game.ini'
+
+# The admin's configured client-config FOLDER (persisted as ClientConfigPath in
+# dune-server.config). Falls back to the per-user default. Returned UNEXPANDED so
+# the UI box round-trips the literal value the user typed.
+function Get-DuneGameConfigClientDir {
+    $configured = ''
+    if (Get-Command Read-DuneConfig -ErrorAction SilentlyContinue) {
+        try {
+            $cfg = Read-DuneConfig
+            if ($cfg -and $cfg.ContainsKey('ClientConfigPath')) { $configured = "$($cfg['ClientConfigPath'])".Trim() }
+        } catch { }
+    }
+    if ($configured) { return $configured }
+    return $script:DuneGameConfigClientDirDefault
+}
+
+# Expand env tokens (%LOCALAPPDATA% etc.) to a concrete filesystem path.
+function Resolve-DuneGameConfigClientDir {
+    param([string]$Dir = '')
+    if (-not $Dir) { $Dir = Get-DuneGameConfigClientDir }
+    return [Environment]::ExpandEnvironmentVariables($Dir)
+}
+
+# Full path to the client Game.ini under the configured (or given) folder.
+function Get-DuneGameConfigClientFilePath {
+    param([string]$Dir = '')
+    $resolved = Resolve-DuneGameConfigClientDir -Dir $Dir
+    return (Join-Path $resolved $script:DuneGameConfigClientFileName)
+}
+
+# Read the LOCAL client Game.ini and project it the same way the VM read does.
+function Get-DuneGameConfigClient {
+    param([string]$Dir = '')
+    $dirRaw      = if ($Dir) { $Dir } else { Get-DuneGameConfigClientDir }
+    $dirResolved = Resolve-DuneGameConfigClientDir -Dir $dirRaw
+    $path        = Get-DuneGameConfigClientFilePath -Dir $dirRaw
+    $exists      = Test-Path -LiteralPath $path -PathType Leaf
+    $raw         = ''
+    if ($exists) { try { $raw = [IO.File]::ReadAllText($path) } catch { $raw = '' } }
+    return @{
+        dir             = $dirRaw
+        dirResolved     = $dirResolved
+        path            = $path
+        exists          = [bool]$exists
+        dirExists       = [bool](Test-Path -LiteralPath $dirResolved)
+        default         = $script:DuneGameConfigClientDirDefault
+        raw             = $raw
+        sections        = (ConvertTo-DuneIniSectionsApi -Raw $raw)
+        effective       = (Get-DuneIniEffective -Raw $raw)
+        managedSections = (Get-DuneIniManagedSectionNames -Raw $raw)
+    }
+}
+
+# Surgically upsert scalar keys into raw INI, preserving everything else. Used
+# for the LOCAL client file so we touch only the requested keys (no whole-section
+# absorption like the server-side managed-block writer). $Updates = array of
+# @{ section; key; value }. Returns the new raw text (LF-joined).
+function Set-DuneIniValuesInPlace {
+    param([string]$Raw, [object[]]$Updates, [hashtable]$QuotedKeys)
+    if ($null -eq $Raw) { $Raw = '' }
+    $doc = ConvertFrom-DuneIniDoc -Raw $Raw
+    foreach ($u in $Updates) {
+        $secName = "$($u.section)"
+        $key     = "$($u.key)"
+        if (-not $secName -or -not $key) { continue }
+        $valLine = "$key=" + (Format-DuneIniValue -Key $key -Value $u.value -QuotedKeys $QuotedKeys)
+        # Target the LAST section with this name (UE5 last-wins ordering).
+        $target = $null
+        foreach ($s in $doc.sections) { if ($s.name -eq $secName) { $target = $s } }
+        if ($null -eq $target) {
+            $target = @{ name = $secName; header = "[$secName]"; body = (New-Object 'System.Collections.Generic.List[string]'); managed = $false }
+            $doc.sections.Add($target)
+        }
+        $replaced = $false
+        for ($i = 0; $i -lt $target.body.Count; $i++) {
+            $info = Get-DuneIniLineKey $target.body[$i]
+            if ($info -and -not $info.isArray -and $info.key -eq $key) {
+                $target.body[$i] = $valLine
+                $replaced = $true
+                break
+            }
+        }
+        if (-not $replaced) { $target.body.Add($valLine) }
+    }
+    $out = New-Object 'System.Collections.Generic.List[string]'
+    foreach ($l in $doc.preamble) { $out.Add($l) }
+    foreach ($s in $doc.sections) {
+        $out.Add($s.header)
+        foreach ($l in $s.body) { $out.Add($l) }
+    }
+    return (($out -join "`n") + "`n")
+}
+
+# Apply client-apply updates to the LOCAL client Game.ini. Validates that every
+# key is schema-flagged ClientApply (blocks arbitrary local writes), backs the
+# file up next to itself (.dstbak-<ts>) before writing, and upserts in place.
+# Returns @{ ok; path; backup; created; applied; items }.
+function Save-DuneGameConfigClient {
+    param([object[]]$Updates, [string]$Dir = '')
+    if (-not $Updates -or $Updates.Count -eq 0) { throw 'No updates supplied.' }
+
+    $allowed = @{}
+    foreach ($f in $script:DuneGameConfigSchema) {
+        if ($f.ContainsKey('ClientApply') -and $f.ClientApply) { $allowed[$f.Key] = $f }
+    }
+    $clean = New-Object 'System.Collections.Generic.List[object]'
+    foreach ($u in $Updates) {
+        $k = "$($u.key)"
+        if (-not $allowed.ContainsKey($k)) { continue }
+        $f = $allowed[$k]
+        $clean.Add(@{ section = $f.Section; key = $k; value = "$($u.value)" })
+    }
+    if ($clean.Count -eq 0) { throw 'No client-applicable keys in the supplied updates.' }
+
+    $dirResolved = Resolve-DuneGameConfigClientDir -Dir $Dir
+    if (-not (Test-Path -LiteralPath $dirResolved)) { throw "Client config folder not found: $dirResolved" }
+    $path = Get-DuneGameConfigClientFilePath -Dir $Dir
+
+    $existing = ''
+    $created  = $true
+    if (Test-Path -LiteralPath $path -PathType Leaf) {
+        $existing = [IO.File]::ReadAllText($path)
+        $created  = $false
+    }
+
+    $quoted = Get-DuneGameConfigQuotedKeys
+    $new    = Set-DuneIniValuesInPlace -Raw $existing -Updates $clean.ToArray() -QuotedKeys $quoted
+    $new    = $new -replace "`r?`n", "`r`n"   # local file is Windows CRLF
+
+    $backup = ''
+    if (-not $created) {
+        $ts     = (Get-Date).ToString('yyyyMMddHHmmss')
+        $backup = "$path.dstbak-$ts"
+        Copy-Item -LiteralPath $path -Destination $backup -Force
+    }
+    [IO.File]::WriteAllText($path, $new, (New-Object System.Text.UTF8Encoding($false)))
+
+    return @{ ok = $true; path = $path; backup = $backup; created = $created; applied = $clean.Count; items = $clean.ToArray() }
+}
 
 # =============================================================================
 # INI ENGINE (pure functions, no SSH - unit-testable)
@@ -660,6 +834,7 @@ function Get-DuneGameConfigSchemaApi {
             default = [string]$f.Default
         }
         if ($f.ContainsKey('Help'))        { $field.help        = $f.Help }
+        if ($f.ContainsKey('ClientApply')) { $field.clientApply = [bool]$f.ClientApply }
         if ($f.ContainsKey('Unit'))        { $field.unit        = $f.Unit }
         if ($f.ContainsKey('Min'))         { $field.min         = $f.Min }
         if ($f.ContainsKey('Max'))         { $field.max         = $f.Max }

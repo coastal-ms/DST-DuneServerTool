@@ -14,7 +14,8 @@ $script:DuneConfigKeys = @(
     'ConsolePresenceVersion',
     'MarketBotAddr',
     'MarketBotToken',
-    'DecoupleNoticeAck'
+    'DecoupleNoticeAck',
+    'ClientConfigPath'
 )
 
 # Keys that ONLY a pre-decouple (<= 11.4.13) build ever wrote into
