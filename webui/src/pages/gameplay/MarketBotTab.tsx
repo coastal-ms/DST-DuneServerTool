@@ -524,7 +524,7 @@ function ListSection({ draft, setDraft, listTick, listTicking, snapshot, snapsho
           Bypasses the live NPC vendor snapshot (which depends on the in-game market already having activity)
           and the mask-cache SSH refresh. Walks the bundled item catalog intersected with the persistent mask cache
           and tops Duke up to <span className="font-mono">{draft.listings_per_grade}</span> per template in one
-          batched transaction per ~200 templates. Runs in the background — the button reactivates when it finishes.
+          batched transaction per ~50 templates. Runs in the background — the button reactivates when it finishes.
         </p>
         {seedLaunchError && (
           <div className="text-danger text-xs mb-2">Launch failed: {seedLaunchError}</div>
