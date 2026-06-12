@@ -11,10 +11,16 @@ import { useCallback, useEffect, useMemo, useState, type ReactElement } from 're
 import { Icon } from '../../../components/Icon'
 import { ItemPicker } from '../../../components/ItemPicker'
 import {
-  awardSpecXp, deleteInventoryItem, fillWater, getPlayerEvents, getPlayerSpecs, getPlayerStats,
-  getPlayerTags, giveItem, giveSolari, grantAllKeystones, grantMaxSpec,
-  renamePlayer, repairInventoryItem, resetAllKeystones, resetAllSpecs, resetSpec,
-  setPlayerTags,
+  awardCharXp, awardIntel, awardSpecXp, cheatScript, cleanPlayerInventory,
+  deleteAccount, deleteInventoryItem, deleteTutorials,
+  dismissReturningPlayerAward, fillWater, getPlayerEvents, getPlayerSpecs,
+  getPlayerStats, getPlayerTags, giveFactionRep, giveItem, giveItemLive,
+  giveScrip, giveSolari, grantAllKeystones, grantLive, grantMaxSpec,
+  kickPlayer, refuelVehicle, renamePlayer, repairGear, repairInventoryItem,
+  resetAllKeystones, resetAllSpecs, resetJourney, resetProgressionLive, resetSpec,
+  returningPlayerAward, setFactionTier, setPlayerTags, setSkillPoints,
+  setStarterClass, teleportToPlayer, updatePlayerTags, wipeCodex, wipeJourney,
+  chatWhisper,
   type Player, type PlayerEvent, type PlayerStats, type SpecTrackFull,
 } from '../../../api/gameplay'
 import { fmtNum, fmtSolari } from '../shared'
@@ -389,38 +395,179 @@ function EventRow({ ev }: { ev: PlayerEvent }) {
 }
 
 // ---------------------------------------------------------------------------
-// Actions — write surface. Give Solari / Give Item / Rename / Fill Water.
-// Inventory mgmt and per-track XP already covered by Inventory + Specs sections.
-// v11.5.7: Give Item now uses the ItemPicker typeahead; Fill Water added
-// (offline-safe SQL refill of stillsuits + literjons).
+// Actions — write surface. v11.5.9: full dune-admin player toolkit.
+// Bucketed into Currency / Progression / Items / Vehicle / Live (RMQ) /
+// Identity / Danger Zone for discoverability. All actions use the inline-form
+// pattern: click button to open form, fill fields, submit.
 // ---------------------------------------------------------------------------
+type ActionGroup = 'Currency' | 'Progression' | 'Items' | 'Vehicle' | 'Live' | 'Identity' | 'Danger'
+interface ActionField { key: string; label: string; type: 'text' | 'number'; placeholder?: string; min?: number; max?: number }
+interface ActionDef {
+  id: string
+  group: ActionGroup
+  label: string
+  icon: string
+  liveOnly?: boolean      // requires player to be online (RMQ path)
+  fields?: ActionField[]
+  custom?: 'give-item' | 'give-item-live' | 'whisper'
+  confirm?: (p: Player) => string  // confirm message; if returns '' no prompt
+  run: (p: Player, v: Record<string, string>) => Promise<{ message: string }>
+}
+
+const ACTIONS: ActionDef[] = [
+  // ----- Currency -----
+  { id: 'give-solari', group: 'Currency', label: 'Give Solari', icon: 'Coins',
+    fields: [{ key: 'amount', label: 'Amount', type: 'number', placeholder: '10000' }],
+    run: (p, v) => giveSolari(p.controller_id, Number(v.amount) || 0) },
+  { id: 'give-scrip', group: 'Currency', label: 'Give Scrip', icon: 'Banknote',
+    fields: [{ key: 'amount', label: 'Amount', type: 'number', placeholder: '500' }],
+    run: (p, v) => giveScrip(p.account_id, Number(v.amount) || 0) },
+  { id: 'give-intel', group: 'Currency', label: 'Give Intel', icon: 'BookOpen',
+    fields: [{ key: 'amount', label: 'Tech Knowledge Points', type: 'number', placeholder: '100' }],
+    run: (p, v) => awardIntel(p.controller_id, Number(v.amount) || 0) },
+  { id: 'grant-live', group: 'Currency', label: 'Grant Reward (popup)', icon: 'Gift',
+    fields: [
+      { key: 'template', label: 'Item template id', type: 'text', placeholder: 'Item_…' },
+      { key: 'amount',   label: 'Amount',           type: 'number', placeholder: '1' },
+    ],
+    run: (p, v) => grantLive(p.controller_id, String(v.template || '').trim(), Number(v.amount) || 1) },
+
+  // ----- Progression -----
+  { id: 'award-char-xp', group: 'Progression', label: 'Award Character XP', icon: 'TrendingUp',
+    fields: [{ key: 'delta', label: 'XP delta', type: 'number', placeholder: '5000' }],
+    run: (p, v) => awardCharXp(p.id, Number(v.delta) || 0) },
+  { id: 'set-skill-points', group: 'Progression', label: 'Set Skill Points (live)', icon: 'Sparkles', liveOnly: true,
+    fields: [{ key: 'sp', label: 'Unspent Skill Points', type: 'number', placeholder: '50' }],
+    run: (p, v) => setSkillPoints({ actor_id: p.id }, Number(v.sp) || 0) },
+  { id: 'give-faction-rep', group: 'Progression', label: 'Give Faction Rep', icon: 'Shield',
+    fields: [
+      { key: 'faction', label: 'Faction id (atreides / harkonnen)', type: 'text', placeholder: 'atreides' },
+      { key: 'delta',   label: 'Delta',                              type: 'number', placeholder: '500' },
+    ],
+    run: (p, v) => giveFactionRep(p.account_id, String(v.faction || '').trim(), Number(v.delta) || 0) },
+  { id: 'set-faction-tier', group: 'Progression', label: 'Set Faction Tier', icon: 'BarChart3',
+    fields: [
+      { key: 'faction', label: 'Faction id', type: 'text', placeholder: 'atreides' },
+      { key: 'tier',    label: 'Tier (0-20)', type: 'number', placeholder: '10', min: 0, max: 20 },
+    ],
+    run: (p, v) => setFactionTier(p.account_id, String(v.faction || '').trim(), Number(v.tier) || 0) },
+  { id: 'reset-progression', group: 'Progression', label: 'Reset Progression (live)', icon: 'RotateCcw', liveOnly: true,
+    confirm: p => `Reset ALL progression for ${p.name}? Cannot be undone.`,
+    run: p => resetProgressionLive({ actor_id: p.id }) },
+  { id: 'reset-journey', group: 'Progression', label: 'Reset Journey', icon: 'Map',
+    confirm: p => `Reset journey progress for ${p.name}?`,
+    run: p => resetJourney(p.account_id) },
+  { id: 'wipe-journey', group: 'Progression', label: 'Wipe Journey (restart)', icon: 'RefreshCw',
+    confirm: p => `Wipe journey and restart from step 1 for ${p.name}?`,
+    run: p => wipeJourney(p.account_id) },
+
+  // ----- Items -----
+  { id: 'give-item',      group: 'Items', label: 'Give Item (offline-safe)', icon: 'PackagePlus', custom: 'give-item',
+    run: () => Promise.resolve({ message: '' }) },
+  { id: 'give-item-live', group: 'Items', label: 'Give Item (live)',         icon: 'Zap', liveOnly: true, custom: 'give-item-live',
+    run: () => Promise.resolve({ message: '' }) },
+  { id: 'repair-gear', group: 'Items', label: 'Repair Equipped Gear', icon: 'Wrench',
+    run: p => repairGear(p.id) },
+  { id: 'fill-water', group: 'Items', label: 'Fill Water', icon: 'Droplets',
+    confirm: p => `Refill all water-fillable items for ${p.name}? Online players: takes effect on next relog.`,
+    run: p => fillWater(p.id) },
+  { id: 'clean-inventory', group: 'Items', label: 'Clean Inventory (live)', icon: 'Trash', liveOnly: true,
+    confirm: p => `WIPE ${p.name}'s inventory? Cannot be undone.`,
+    run: p => cleanPlayerInventory({ actor_id: p.id }) },
+
+  // ----- Vehicle -----
+  { id: 'refuel-vehicle', group: 'Vehicle', label: 'Refuel Vehicle', icon: 'Fuel',
+    fields: [{ key: 'vid', label: 'Vehicle id', type: 'number', placeholder: '12345' }],
+    run: (_p, v) => refuelVehicle(Number(v.vid) || 0) },
+
+  // ----- Live (RMQ) -----
+  { id: 'kick', group: 'Live', label: 'Kick Player', icon: 'LogOut', liveOnly: true,
+    confirm: p => `Kick ${p.name} from the server?`,
+    run: p => kickPlayer({ actor_id: p.id }) },
+  { id: 'teleport', group: 'Live', label: 'Teleport To Player', icon: 'Move',
+    fields: [{ key: 'target', label: 'Target pawn id', type: 'number', placeholder: '67890' }],
+    run: (p, v) => teleportToPlayer(p.id, Number(v.target) || 0) },
+  { id: 'whisper', group: 'Live', label: 'Whisper', icon: 'MessageCircle', liveOnly: true, custom: 'whisper',
+    run: () => Promise.resolve({ message: '' }) },
+  { id: 'cheat-script', group: 'Live', label: 'Cheat Script', icon: 'Terminal', liveOnly: true,
+    fields: [{ key: 'script', label: 'Cheat command', type: 'text', placeholder: 'ce God' }],
+    run: (p, v) => cheatScript({ actor_id: p.id }, String(v.script || '').trim()) },
+
+  // ----- Identity -----
+  { id: 'rename', group: 'Identity', label: 'Rename Character', icon: 'PenLine',
+    fields: [{ key: 'name', label: 'New character name', type: 'text' }],
+    run: (p, v) => renamePlayer(p.account_id, String(v.name || '').trim()) },
+  { id: 'set-starter-class', group: 'Identity', label: 'Set Starter Class', icon: 'Compass',
+    fields: [{ key: 'class', label: 'Class id', type: 'text', placeholder: 'mentat' }],
+    run: (p, v) => setStarterClass(p.id, String(v.class || '').trim()) },
+  { id: 'tags-add-remove', group: 'Identity', label: 'Update Tags (add / remove)', icon: 'Tag',
+    fields: [
+      { key: 'add',    label: 'Add (comma-separated)',    type: 'text', placeholder: 'vip, tester' },
+      { key: 'remove', label: 'Remove (comma-separated)', type: 'text', placeholder: 'banned' },
+    ],
+    run: (p, v) => updatePlayerTags(
+      p.account_id,
+      String(v.add || '').split(',').map(s => s.trim()).filter(Boolean),
+      String(v.remove || '').split(',').map(s => s.trim()).filter(Boolean),
+    ) },
+  { id: 'delete-tutorials', group: 'Identity', label: 'Clear Tutorial Flags', icon: 'Eraser',
+    run: p => deleteTutorials(p.account_id) },
+  { id: 'wipe-codex', group: 'Identity', label: 'Wipe Codex', icon: 'BookX',
+    confirm: p => `Wipe codex/discoveries for ${p.name}?`,
+    run: p => wipeCodex(p.account_id) },
+  { id: 'returning-award', group: 'Identity', label: 'Grant Returning-Player Award', icon: 'Star',
+    run: p => returningPlayerAward(p.account_id) },
+  { id: 'dismiss-returning', group: 'Identity', label: 'Dismiss Returning-Player Award', icon: 'X',
+    run: p => dismissReturningPlayerAward(p.account_id) },
+
+  // ----- Danger Zone -----
+  { id: 'delete-account', group: 'Danger', label: 'Delete Account (permanent)', icon: 'AlertTriangle',
+    confirm: p => `PERMANENTLY delete account ${p.account_id} (${p.name})? This cannot be undone. Type the player name in the next prompt to confirm.`,
+    run: p => {
+      const typed = window.prompt(`Confirm by typing the character name: ${p.name}`) || ''
+      if (typed.trim() !== p.name) throw new Error('Confirmation name did not match. Aborted.')
+      return deleteAccount(p.account_id)
+    } },
+]
+
+const GROUP_ORDER: ActionGroup[] = ['Currency', 'Progression', 'Items', 'Vehicle', 'Live', 'Identity', 'Danger']
+
 export function ActionsSection({ player, canWrite, flash, onChanged }: SectionProps) {
-  const [form, setForm] = useState<'solari' | 'item' | 'rename' | null>(null)
+  const [openId, setOpenId] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
 
   // Give-item form state lives at the section level so the ItemPicker keeps
   // its selection when the user tabs to Quantity / Quality fields.
-  const [giveTpl, setGiveTpl] = useState('')
-  const [giveQty, setGiveQty] = useState('1')
+  const [giveTpl, setGiveTpl]   = useState('')
+  const [giveQty, setGiveQty]   = useState('1')
   const [giveQual, setGiveQual] = useState('0')
+  const [whisper, setWhisper]   = useState('')
 
-  const run = async (fn: () => Promise<{ message: string }>, label: string, closeAfter = true) => {
+  const isOnline = (player.online_status || '').toLowerCase() === 'online'
+
+  const openAction = (id: string) => {
+    if (openId === id) { setOpenId(null); return }
+    setOpenId(id)
+    if (id === 'give-item' || id === 'give-item-live') { setGiveTpl(''); setGiveQty('1'); setGiveQual('0') }
+    if (id === 'whisper') setWhisper('')
+  }
+
+  const runAction = async (def: ActionDef, exec: () => Promise<{ message: string }>) => {
+    if (def.confirm) {
+      const msg = def.confirm(player)
+      if (msg && !window.confirm(msg)) return
+    }
     setBusy(true)
     try {
-      const r = await fn()
-      flash(r.message || `${label} done.`, 'ok')
-      if (closeAfter) setForm(null)
+      const r = await exec()
+      flash(r.message || `${def.label} done.`, 'ok')
+      setOpenId(null)
       onChanged()
     } catch (e) {
       flash(e instanceof Error ? e.message : String(e), 'err')
     } finally {
       setBusy(false)
     }
-  }
-
-  const handleFillWater = () => {
-    if (!confirm(`Refill all water-fillable items (stillsuits, literjons, dewpacks) for ${player.name}?\n\nOnline players: takes effect on next relog.`)) return
-    run(() => fillWater(player.id), 'Fill Water', false)
   }
 
   if (!canWrite) {
@@ -431,68 +578,107 @@ export function ActionsSection({ player, canWrite, flash, onChanged }: SectionPr
     )
   }
 
-  return (
-    <div className="space-y-3">
-      <div className="flex flex-wrap gap-2">
-        <button className="btn-secondary" disabled={busy} onClick={() => setForm(form === 'solari' ? null : 'solari')}>
-          <Icon name="Coins" size={13} /> Give Solari
-        </button>
-        <button className="btn-secondary" disabled={busy} onClick={() => setForm(form === 'item' ? null : 'item')}>
-          <Icon name="PackagePlus" size={13} /> Give Item
-        </button>
-        <button className="btn-secondary" disabled={busy} onClick={() => setForm(form === 'rename' ? null : 'rename')}>
-          <Icon name="PenLine" size={13} /> Rename
-        </button>
-        <button className="btn-secondary" disabled={busy} onClick={handleFillWater} title="Refill stillsuits + literjons to max">
-          <Icon name="Droplets" size={13} /> Fill Water
-        </button>
-      </div>
+  const grouped = useMemo(() => {
+    const map: Record<ActionGroup, ActionDef[]> = {
+      Currency: [], Progression: [], Items: [], Vehicle: [], Live: [], Identity: [], Danger: [],
+    }
+    for (const a of ACTIONS) map[a.group].push(a)
+    return map
+  }, [])
 
-      {form === 'solari' && (
-        <InlineForm busy={busy} submitLabel="Give Solari" fields={[
-          { key: 'amount', label: 'Amount (Solari)', type: 'number', placeholder: 'e.g. 10000' },
-        ]} onSubmit={v => run(() => giveSolari(player.controller_id, Number(v.amount) || 0), 'Give Solari')} />
-      )}
-      {form === 'item' && (
-        <div className="card p-3 space-y-3">
-          <ItemPicker
-            label="Item — type to search by name or template id"
-            value={giveTpl}
-            onChange={setGiveTpl}
-            autoFocus
-            disabled={busy}
-          />
-          <div className="grid grid-cols-2 gap-3">
-            <div>
-              <label className="block text-[11px] uppercase tracking-wider text-text-dim mb-1">Quantity</label>
-              <input type="number" min={1} value={giveQty} disabled={busy}
-                onChange={e => setGiveQty(e.target.value)}
-                className="w-full px-3 py-2 rounded-lg bg-surface-2 border border-border text-text text-sm focus:outline-none focus:ring-2 focus:ring-ibad focus:border-ibad/50" />
-            </div>
-            <div>
-              <label className="block text-[11px] uppercase tracking-wider text-text-dim mb-1">Quality (0–5)</label>
-              <input type="number" min={0} max={5} value={giveQual} disabled={busy}
-                onChange={e => setGiveQual(e.target.value)}
-                className="w-full px-3 py-2 rounded-lg bg-surface-2 border border-border text-text text-sm focus:outline-none focus:ring-2 focus:ring-ibad focus:border-ibad/50" />
-            </div>
-          </div>
-          <button
-            className="btn-primary w-full"
-            disabled={busy || !giveTpl.trim()}
-            onClick={() => run(
-              () => giveItem(player.id, giveTpl.trim(), Number(giveQty) || 1, Number(giveQual) || 0),
-              'Give Item',
-            )}
-          >
-            {busy ? <Icon name="Loader2" size={13} className="animate-spin" /> : <Icon name="Check" size={13} />} Give Item
-          </button>
+  return (
+    <div className="space-y-4">
+      {!isOnline && (
+        <div className="card p-2.5 text-xs text-text-muted border-l-2 border-warning flex items-center gap-2">
+          <Icon name="WifiOff" size={12} /> Player is offline — buttons marked "(live)" are disabled (require RMQ + an online player).
         </div>
       )}
-      {form === 'rename' && (
-        <InlineForm busy={busy} submitLabel="Rename" fields={[
-          { key: 'name', label: 'New character name', type: 'text', placeholder: player.name },
-        ]} onSubmit={v => run(() => renamePlayer(player.account_id, String(v.name || '').trim()), 'Rename')} />
-      )}
+
+      {GROUP_ORDER.map(group => {
+        const acts = grouped[group]
+        if (!acts || acts.length === 0) return null
+        return (
+          <div key={group} className="space-y-2">
+            <div className="text-[11px] uppercase tracking-wider text-text-dim font-medium flex items-center gap-2">
+              {group === 'Danger' && <Icon name="AlertTriangle" size={11} className="text-error" />}
+              {group}
+            </div>
+            <div className="flex flex-wrap gap-2">
+              {acts.map(a => {
+                const disabled = busy || (a.liveOnly && !isOnline)
+                const btnClass = group === 'Danger' ? 'btn-secondary text-error border-error/50' : 'btn-secondary'
+                return (
+                  <button
+                    key={a.id}
+                    className={btnClass}
+                    disabled={disabled}
+                    onClick={() => openAction(a.id)}
+                    title={a.liveOnly ? 'Requires player to be online' : undefined}
+                  >
+                    <Icon name={a.icon} size={13} /> {a.label}
+                  </button>
+                )
+              })}
+            </div>
+
+            {acts.filter(a => a.id === openId).map(def => {
+              // Custom forms (item picker, whisper textarea).
+              if (def.custom === 'give-item' || def.custom === 'give-item-live') {
+                return (
+                  <div key={def.id} className="card p-3 space-y-3">
+                    <ItemPicker label="Item — type to search by name or template id"
+                      value={giveTpl} onChange={setGiveTpl} autoFocus disabled={busy} />
+                    <div className="grid grid-cols-2 gap-3">
+                      <div>
+                        <label className="block text-[11px] uppercase tracking-wider text-text-dim mb-1">Quantity</label>
+                        <input type="number" min={1} value={giveQty} disabled={busy}
+                          onChange={e => setGiveQty(e.target.value)}
+                          className="w-full px-3 py-2 rounded-lg bg-surface-2 border border-border text-text text-sm focus:outline-none focus:ring-2 focus:ring-ibad focus:border-ibad/50" />
+                      </div>
+                      <div>
+                        <label className="block text-[11px] uppercase tracking-wider text-text-dim mb-1">Quality (0-5)</label>
+                        <input type="number" min={0} max={5} value={giveQual} disabled={busy}
+                          onChange={e => setGiveQual(e.target.value)}
+                          className="w-full px-3 py-2 rounded-lg bg-surface-2 border border-border text-text text-sm focus:outline-none focus:ring-2 focus:ring-ibad focus:border-ibad/50" />
+                      </div>
+                    </div>
+                    <button className="btn-primary w-full" disabled={busy || !giveTpl.trim()}
+                      onClick={() => runAction(def, () => def.custom === 'give-item-live'
+                        ? giveItemLive({ actor_id: player.id }, giveTpl.trim(), Number(giveQty) || 1, Number(giveQual) || 0)
+                        : giveItem(player.id, giveTpl.trim(), Number(giveQty) || 1, Number(giveQual) || 0))}>
+                      {busy ? <Icon name="Loader2" size={13} className="animate-spin" /> : <Icon name="Check" size={13} />} {def.label}
+                    </button>
+                  </div>
+                )
+              }
+              if (def.custom === 'whisper') {
+                return (
+                  <div key={def.id} className="card p-3 space-y-3">
+                    <label className="block text-[11px] uppercase tracking-wider text-text-dim mb-1">Whisper message</label>
+                    <textarea rows={3} value={whisper} disabled={busy}
+                      onChange={e => setWhisper(e.target.value)} placeholder="Hello from the admin tool"
+                      className="w-full px-3 py-2 rounded-lg bg-surface-2 border border-border text-text text-sm focus:outline-none focus:ring-2 focus:ring-ibad focus:border-ibad/50 resize-none" />
+                    <div className="text-[11px] text-text-muted">
+                      Note: chat/whisper external publish is experimental — broker accepts but the game may silently drop.
+                    </div>
+                    <button className="btn-primary w-full" disabled={busy || !whisper.trim()}
+                      onClick={() => runAction(def, () => chatWhisper(String(player.id), whisper.trim()))}>
+                      {busy ? <Icon name="Loader2" size={13} className="animate-spin" /> : <Icon name="Send" size={13} />} Send Whisper
+                    </button>
+                  </div>
+                )
+              }
+              // Standard form built from field defs.
+              return (
+                <InlineForm key={def.id} busy={busy} submitLabel={def.label}
+                  fields={def.fields || []}
+                  onSubmit={v => runAction(def, () => def.run(player, v))}
+                />
+              )
+            })}
+          </div>
+        )
+      })}
     </div>
   )
 }
