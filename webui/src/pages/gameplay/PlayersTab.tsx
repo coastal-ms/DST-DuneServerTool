@@ -66,9 +66,16 @@ export function PlayersTab() {
     return () => window.clearTimeout(t)
   }, [flash])
 
+  // GM filter applies to the whole tab — counts, summary buckets, and the
+  // list all hide the bot when toggled on.
+  const visiblePlayers = useMemo(
+    () => hideGm ? players.filter(p => (p.name || '').trim().toLowerCase() !== 'gm') : players,
+    [players, hideGm],
+  )
+
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase()
-    let out = players
+    let out = visiblePlayers
     if (q) out = out.filter(p =>
       p.name.toLowerCase().includes(q) ||
       p.faction_name.toLowerCase().includes(q) ||
@@ -76,16 +83,45 @@ export function PlayersTab() {
       String(p.account_id).includes(q))
     if (online === 'online')  out = out.filter(p => isOnline(p.online_status))
     if (online === 'offline') out = out.filter(p => !isOnline(p.online_status))
-    if (hideGm) out = out.filter(p => (p.name || '').trim().toLowerCase() !== 'gm')
     return [...out].sort((a, b) => {
       const ao = isOnline(a.online_status) ? 0 : 1
       const bo = isOnline(b.online_status) ? 0 : 1
       if (ao !== bo) return ao - bo
       return (a.name || '').localeCompare(b.name || '')
     })
-  }, [players, search, online, hideGm])
+  }, [visiblePlayers, search, online])
 
-  const onlineCount = useMemo(() => players.filter(p => isOnline(p.online_status)).length, [players])
+  const onlineCount = useMemo(() => visiblePlayers.filter(p => isOnline(p.online_status)).length, [visiblePlayers])
+
+  // When hiding GM, rebuild the by_faction / by_map / totals locally from
+  // visiblePlayers so the Server Overview buckets and the Factions stat card
+  // do not count the bot. Otherwise pass the API summary through unchanged.
+  const displaySummary = useMemo<PlayerSummaryResponse | null>(() => {
+    if (!hideGm) return summary
+    const buckets = (key: 'faction_name' | 'map') => {
+      const m = new Map<string, number>()
+      for (const p of visiblePlayers) {
+        const name = (p[key] as string) || ''
+        if (!name) continue
+        m.set(name, (m.get(name) || 0) + 1)
+      }
+      return Array.from(m, ([name, count]) => ({ name, count })).sort((a, b) => b.count - a.count)
+    }
+    const by_faction = buckets('faction_name')
+    const by_map = buckets('map')
+    return {
+      ...(summary ?? {}),
+      by_faction,
+      by_map,
+      totals: {
+        ...(summary?.totals ?? {}),
+        players: visiblePlayers.length,
+        online: visiblePlayers.filter(p => isOnline(p.online_status)).length,
+        factions: by_faction.length,
+      },
+    } as PlayerSummaryResponse
+  }, [summary, hideGm, visiblePlayers])
+
   const selected = useMemo(() => players.find(p => p.id === selectedId) ?? null, [players, selectedId])
 
   const refresh = useCallback(() => {
@@ -100,9 +136,9 @@ export function PlayersTab() {
     <div>
       {/* Top-of-tab stat cards */}
       <section className="grid grid-cols-2 md:grid-cols-3 gap-3 mb-4">
-        <StatCard label="Players"    value={fmtNum(players.length)}                                                icon="Users" />
-        <StatCard label="Online now" value={fmtNum(onlineCount)}                                                   icon="Wifi" />
-        <StatCard label="Factions"   value={fmtNum(summary?.totals.factions ?? new Set(players.map(p => p.faction_name).filter(Boolean)).size)} icon="Flag" />
+        <StatCard label="Players"    value={fmtNum(visiblePlayers.length)}                                                icon="Users" />
+        <StatCard label="Online now" value={fmtNum(onlineCount)}                                                          icon="Wifi" />
+        <StatCard label="Factions"   value={fmtNum(displaySummary?.totals.factions ?? new Set(visiblePlayers.map(p => p.faction_name).filter(Boolean)).size)} icon="Flag" />
       </section>
 
       <div className="card p-3 mb-4 flex flex-wrap items-center gap-2">
@@ -212,7 +248,7 @@ export function PlayersTab() {
             </div>
           ) : (
             <>
-              <ServerOverview summary={summary} />
+              <ServerOverview summary={displaySummary} />
               <div className="mt-3">
                 <CoriolisAdmin flash={(msg, kind = 'ok') => setFlash({ msg, kind })} />
               </div>
