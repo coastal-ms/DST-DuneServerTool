@@ -124,6 +124,17 @@ Register-DuneRoute -Method POST -Path '/api/commands/run/{name}' -Handler {
     }
 
     try {
+        # For commands that restart the battlegroup, force-clear any orphaned
+        # *_progress.running flags. Restarting the BG wipes/cycles game state,
+        # so an in-flight seed or list-tick from a prior run is moot — and
+        # leaving the flag set blocks fresh runs after the restart with
+        # "A seed market run is already in progress."
+        if ($name -in @('start','restart','startup','reboot')) {
+            if (Get-Command Clear-DuneBotStaleRunFlags -ErrorAction SilentlyContinue) {
+                try { Clear-DuneBotStaleRunFlags } catch {}
+            }
+        }
+
         $result = Invoke-DuneCommandExternal -Name $name
         Write-DuneJson -Response $res -Body $result
     } catch {
