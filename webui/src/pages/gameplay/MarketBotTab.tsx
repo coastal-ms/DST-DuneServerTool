@@ -3,7 +3,7 @@ import { Icon } from '../../components/Icon'
 import { ItemPicker } from '../../components/ItemPicker'
 import {
   getBotStatus, getBotConfig, saveBotConfig, runBotTick, runBotListTick,
-  startBotSeedMarket, botExec,
+  startBotSeedMarket, abortBotSeedMarket, botExec,
   setBotBalance, clearBotListings, clearBotLegacyListings, clearBotError, getBotVendorSnapshot,
   type BotStatus, type BotConfig, type BotTickResult, type BotListTickResult,
   type BotSeedProgress,
@@ -186,6 +186,20 @@ export function MarketBotTab() {
     }
   }
 
+  const [aborting, setAborting] = useState(false)
+  const doAbortSeed = async () => {
+    if (aborting) return
+    setAborting(true)
+    try {
+      await abortBotSeedMarket()
+      getBotStatus().then(setStatus).catch(() => {})
+    } catch (e) {
+      setSeedLaunchError(e instanceof Error ? e.message : String(e))
+    } finally {
+      setAborting(false)
+    }
+  }
+
   // While a seed OR list tick is running, poll status every 2s instead of
   // 10s so the progress bar / button state updates promptly. Reverts to
   // normal cadence once both finish.
@@ -364,10 +378,16 @@ export function MarketBotTab() {
       {seedProgress && (seeding || isRecentSeedFinish(seedProgress)) && (
         <div className="card p-3 mb-4 border-l-2 border-l-accent">
           <div className="text-xs uppercase tracking-wider text-text-dim mb-2 flex items-center gap-2">
-            <Icon name={seeding ? 'Loader2' : (seedProgress.phase === 'error' ? 'AlertCircle' : 'CheckCircle2')}
+            <Icon name={seeding ? 'Loader2' : (seedProgress.phase === 'error' ? 'AlertCircle' : (seedProgress.phase === 'aborted' ? 'XCircle' : 'CheckCircle2'))}
                   size={14}
-                  className={seeding ? 'animate-spin text-accent' : (seedProgress.phase === 'error' ? 'text-danger' : 'text-success')} />
-            Seed market — {seeding ? 'in progress' : (seedProgress.phase === 'error' ? 'failed' : 'done')}
+                  className={seeding ? 'animate-spin text-accent' : (seedProgress.phase === 'error' ? 'text-danger' : (seedProgress.phase === 'aborted' ? 'text-warning' : 'text-success'))} />
+            Seed market — {seeding ? 'in progress' : (seedProgress.phase === 'error' ? 'failed' : (seedProgress.phase === 'aborted' ? 'aborted' : 'done'))}
+            {seeding && (
+              <button className="btn-secondary ml-auto text-xs" disabled={aborting} onClick={() => { void doAbortSeed() }}>
+                <Icon name={aborting ? 'Loader2' : 'X'} size={13} className={aborting ? 'animate-spin' : ''} />
+                {aborting ? 'Aborting…' : 'Abort'}
+              </button>
+            )}
           </div>
           <SeedProgressView progress={seedProgress} />
         </div>
@@ -722,6 +742,9 @@ function SeedProgressView({ progress }: { progress: BotSeedProgress }) {
         )}
         {progress.listed_after != null && (
           <span><span className="text-text-dim">listed after:</span> {fmtNum(progress.listed_after)}</span>
+        )}
+        {progress.last_chunk_ms != null && progress.last_chunk_ms > 0 && (
+          <span><span className="text-text-dim">last chunk:</span> {(progress.last_chunk_ms / 1000).toFixed(1)}s</span>
         )}
       </div>
       {progress.message && (

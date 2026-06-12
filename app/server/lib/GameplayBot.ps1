@@ -1375,7 +1375,8 @@ COMMIT;
 # market to seed itself.
 # ----------------------------------------------------------------------------
 function New-DuneBotListingSqlChunk {
-    param([hashtable]$Ident, [hashtable]$Cand, [int]$ItemPrice, [int64]$OrderExpiry, [int]$Count, [int]$Grade = 0)
+    param([hashtable]$Ident, [hashtable]$Cand, [int]$ItemPrice, [int64]$OrderExpiry, [int]$Count, [int]$Grade = 0,
+          [int64]$InvId = 0, [int64]$StartPos = -1)
     if ($Count -le 0) { return '' }
     $tmplLit = ConvertTo-DuneSqlLiteral $Cand.template_id
     $stack   = [int]$Cand.stack_max; if ($stack -lt 1) { $stack = 1 }
@@ -1385,6 +1386,36 @@ function New-DuneBotListingSqlChunk {
     $ap      = [int64]$Ident.accessPointId
     $ow      = [int64]$Ident.ownerId
     $q       = [int]$Grade; if ($q -lt 0) { $q = 0 }; if ($q -gt 5) { $q = 5 }
+    if ($InvId -gt 0 -and $StartPos -ge 0) {
+        # FAST PATH: caller has precomputed inv_id and the next free
+        # position_index, so we skip the per-template SELECT MAX(position_index)
+        # scan (which was the seed bottleneck: ~3s per template × 100 templates
+        # = ~5min per chunk when dune.items has no inventory_id index).
+        return @"
+WITH ins_items AS (
+       INSERT INTO dune.items (inventory_id, position_index, template_id, stack_size, stats, quality_level)
+       SELECT $InvId, $StartPos + gs.n - 1, '$tmplLit', $stack, '{}', $q
+       FROM generate_series(1, $Count) AS gs(n)
+       RETURNING id
+     ),
+     ins_orders AS (
+       INSERT INTO dune.dune_exchange_orders (
+         exchange_id, access_point_id, owner_id, template_id, expiration_time,
+         durability_cur, durability_max, item_price, category_mask, category_depth,
+         is_npc_order, item_id, quality_level
+       )
+       SELECT $ex, $ap, $ow, '$tmplLit', $OrderExpiry, 1.0, 1.0, $ItemPrice, $mask, $depth, TRUE, ins_items.id, $q
+       FROM ins_items
+       RETURNING id
+     )
+INSERT INTO dune.dune_exchange_sell_orders (order_id, initial_stack_size, wear_normalized_price)
+SELECT id, $stack, $ItemPrice FROM ins_orders;
+"@
+    }
+    # LEGACY PATH: kept for the unit tests + any caller that hasn't moved to
+    # the precomputed-position fast path. Each invocation triggers its own
+    # get_exchange_inventory_id() call and a MAX(position_index) scan, which
+    # is fine for single-template inserts but is slow when looped per chunk.
     return @"
 WITH inv AS (SELECT dune.get_exchange_inventory_id($ex) AS id),
      base AS (
@@ -1575,22 +1606,51 @@ function Invoke-DuneBotSeedMarket {
         considered   = $summary.considered
     } $true
 
+    # ---- PRECOMPUTE inv_id and base position_index once for the whole seed.
+    # The legacy per-template SQL re-ran get_exchange_inventory_id() and
+    # SELECT MAX(position_index) FROM dune.items WHERE inventory_id=... inside
+    # every template's CTE. With no inventory_id index on dune.items, that MAX
+    # is a full table scan, and doing it 100× per chunk × 30 chunks turned a
+    # ~minute seed into a multi-hour one. Two scalar reads here replace 3000+
+    # in-chunk subqueries; we then bake literal position_index values into the
+    # SQL emitted by New-DuneBotListingSqlChunk's fast path.
+    $invR = Get-DuneBotScalar -Ip $ctx.ip -Sql "SELECT dune.get_exchange_inventory_id($($ident.exchangeId))"
+    if (-not $invR.ok -or [int64]$invR.value -le 0) {
+        $summary.ok = $false
+        $summary.message = "resolve inventory id: $(if ($invR.error) { $invR.error } else { 'returned 0/null' })"
+        & $writeProgress @{ phase = 'error'; message = $summary.message } $false
+        return $summary
+    }
+    $invId = [int64]$invR.value
+    $maxR = Get-DuneBotScalar -Ip $ctx.ip -Sql "SELECT COALESCE(MAX(position_index), -1) FROM dune.items WHERE inventory_id = $invId"
+    if (-not $maxR.ok) {
+        $summary.ok = $false
+        $summary.message = "resolve max position: $($maxR.error)"
+        & $writeProgress @{ phase = 'error'; message = $summary.message } $false
+        return $summary
+    }
+    $nextPos = [int64]$maxR.value + 1
+
     # Build one BEGIN/COMMIT per chunk of $ChunkSize templates. Each per-
     # template block is one WITH-CTE statement that bulk-inserts $need
     # listings in a single statement.
     $i = 0
     while ($i -lt $work.Count) {
+        $chunkStartMs = [Environment]::TickCount
         $endIdx = [Math]::Min($i + $ChunkSize, $work.Count) - 1
         $sb = New-Object System.Text.StringBuilder
         [void]$sb.AppendLine('BEGIN;')
         for ($j = $i; $j -le $endIdx; $j++) {
             $w = $work[$j]
             $chunk = New-DuneBotListingSqlChunk -Ident $ident -Cand $w.cand `
-                        -ItemPrice $w.target -OrderExpiry $orderExpiry -Count $w.need -Grade $w.grade
+                        -ItemPrice $w.target -OrderExpiry $orderExpiry -Count $w.need -Grade $w.grade `
+                        -InvId $invId -StartPos $nextPos
+            $nextPos += [int]$w.need
             [void]$sb.AppendLine($chunk)
         }
         [void]$sb.AppendLine('COMMIT;')
         $r = Invoke-DuneSqlQuery -Ip $ctx.ip -Sql ($sb.ToString()) -ReadOnly $false -MaxRows 5 -TimeoutSec 600 -Bulk
+        $chunkMs = [Environment]::TickCount - $chunkStartMs
         $summary.chunks++
         if ($r.ok) {
             # Sum up the planned insertions in this chunk into the running total.
@@ -1604,6 +1664,7 @@ function Invoke-DuneBotSeedMarket {
                 inserted    = $summary.inserted
                 errors      = $summary.errors
                 message     = $summary.message
+                last_chunk_ms = $chunkMs
             } $false
             # Stop on the first failed chunk — likely a schema mismatch or
             # exchange-id problem, and continuing would just multiply noise.
@@ -1614,9 +1675,10 @@ function Invoke-DuneBotSeedMarket {
         # return — the POST returns immediately when called via the async
         # wrapper anyway).
         & $writeProgress @{
-            phase       = 'writing'
-            chunks_done = $summary.chunks
-            inserted    = $summary.inserted
+            phase         = 'writing'
+            chunks_done   = $summary.chunks
+            inserted      = $summary.inserted
+            last_chunk_ms = $chunkMs
         } $true
         $i = $endIdx + 1
     }
@@ -1718,6 +1780,15 @@ function Start-DuneBotSeedAsync {
         $rs.Open()
         $ps = [powershell]::Create()
         $ps.Runspace = $rs
+        # Track the handle so Stop-DuneBotSeedAsync can interrupt this run
+        # via $ps.Stop(). Stored module-scoped (script:) so the route handler
+        # can find it from a different runspace pool.
+        $script:DuneBotSeedRunspace = @{
+            ps      = $ps
+            rs      = $rs
+            handle  = $null
+            started = (Get-Date).ToUniversalTime()
+        }
         [void]$ps.AddScript({
             param($ServerDir)
             try {
@@ -1744,7 +1815,7 @@ function Start-DuneBotSeedAsync {
                 } catch {}
             }
         }).AddArgument($ServerDir)
-        [void]$ps.BeginInvoke()
+        $script:DuneBotSeedRunspace.handle = $ps.BeginInvoke()
         return @{ ok = $true; running = $true; message = 'Seed market started.' }
     } catch {
         # Bootstrap failed — clear the running flag so the UI doesn't hang
@@ -1762,6 +1833,50 @@ function Start-DuneBotSeedAsync {
         } catch {}
         return @{ ok = $false; running = $false; error = "Failed to spawn seed runspace: $($_.Exception.Message)" }
     }
+}
+
+# Abort an in-flight seed: stops the tracked runspace (if any), then
+# force-clears seed_progress.running so the UI / next-launch gate sees a
+# clean state. The in-flight SQL transaction on the VM may still complete
+# (we don't pg_cancel_backend) but any chunks not yet sent are dropped and
+# the UI re-enables Seed Market immediately.
+function Stop-DuneBotSeedAsync {
+    $stopped = $false
+    if ($script:DuneBotSeedRunspace) {
+        try {
+            $ps = $script:DuneBotSeedRunspace.ps
+            $rs = $script:DuneBotSeedRunspace.rs
+            if ($ps) {
+                try { $ps.Stop() } catch {}
+                try { $ps.Dispose() } catch {}
+            }
+            if ($rs) {
+                try { $rs.Close() } catch {}
+                try { $rs.Dispose() } catch {}
+            }
+            $stopped = $true
+        } catch {}
+        $script:DuneBotSeedRunspace = $null
+    }
+    try {
+        $st = Read-DuneBotState
+        $base = @{}
+        if ($st.seed_progress) {
+            if ($st.seed_progress -is [hashtable]) {
+                foreach ($k in $st.seed_progress.Keys) { $base[$k] = $st.seed_progress[$k] }
+            } else {
+                foreach ($p in $st.seed_progress.PSObject.Properties) { $base[$p.Name] = $p.Value }
+            }
+        }
+        $base['phase']    = 'aborted'
+        $base['running']  = $false
+        $base['message']  = 'Aborted by user'
+        $base['updated']  = (Get-Date).ToUniversalTime().ToString('o')
+        $base['finished'] = (Get-Date).ToUniversalTime().ToString('o')
+        $st.seed_progress = $base
+        Save-DuneBotState -State $st
+    } catch {}
+    return @{ ok = $true; stopped = $stopped; message = if ($stopped) { 'Seed aborted.' } else { 'No live seed runspace; flag cleared.' } }
 }
 
 # Mirror Start-DuneBotSeedAsync for the LIST tick. The HTTP server runs each

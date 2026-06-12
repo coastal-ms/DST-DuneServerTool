@@ -451,6 +451,20 @@ Register-DuneRoute -Method POST -Path '/api/gameplay/market-bot/seed' -Handler {
     }
 }
 
+# POST /api/gameplay/market-bot/seed/abort — interrupt the in-flight seed
+# runspace and clear seed_progress.running so the UI re-enables the
+# "Seed market" button immediately. Safe to call when nothing is running
+# (just clears any orphaned flag).
+Register-DuneRoute -Method POST -Path '/api/gameplay/market-bot/seed/abort' -Handler {
+    param($req, $res, $routeParams, $body)
+    try {
+        $r = Stop-DuneBotSeedAsync
+        Write-DuneJson -Response $res -Body $r
+    } catch {
+        Write-DuneError -Response $res -Status 500 -Message "Bot seed abort failed: $($_.Exception.Message)"
+    }
+}
+
 # ---------------------------------------------------------------------------
 # GET /api/gameplay/market-bot/vendor-snapshot — preview what the bot WOULD
 # list (catalog derived from live NPC vendor inventory). Useful for tuning

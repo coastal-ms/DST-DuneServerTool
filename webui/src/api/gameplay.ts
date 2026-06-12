@@ -89,7 +89,7 @@ export interface BotStatusByClass {
 }
 
 export interface BotSeedProgress {
-  phase?: 'starting' | 'reading-listings' | 'writing' | 'done' | 'error' | string
+  phase?: 'starting' | 'reading-listings' | 'writing' | 'done' | 'error' | 'aborted' | string
   running?: boolean
   chunks_done?: number
   chunks_total?: number
@@ -104,6 +104,7 @@ export interface BotSeedProgress {
   started?: string
   updated?: string
   finished?: string
+  last_chunk_ms?: number
 }
 
 export interface BotListTickProgress {
@@ -440,6 +441,19 @@ export function runBotSeedDryRun() {
 
 export function startBotSeedMarket() {
   return api<BotSeedLaunch>('/api/gameplay/market-bot/seed', {
+    method: 'POST',
+    body: JSON.stringify({}),
+  })
+}
+
+export interface BotSeedAbortResult {
+  ok: boolean
+  stopped?: boolean
+  message?: string
+}
+
+export function abortBotSeedMarket() {
+  return api<BotSeedAbortResult>('/api/gameplay/market-bot/seed/abort', {
     method: 'POST',
     body: JSON.stringify({}),
   })
