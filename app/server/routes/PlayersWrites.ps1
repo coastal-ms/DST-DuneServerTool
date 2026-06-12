@@ -1,4 +1,4 @@
-# PlayersWrites.ps1 — v11.5.9 player write routes ported from dune-admin.
+﻿# PlayersWrites.ps1 — v11.5.9 player write routes ported from dune-admin.
 # Wires Phase C/D/E/F endpoints onto the HTTP server. All routes use
 # Invoke-DunePlayerWriteRoute + Get-DuneBodyInt/Value from routes/GameplayPlayers.ps1.
 

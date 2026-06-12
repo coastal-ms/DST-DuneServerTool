@@ -1,4 +1,4 @@
-# PlayersRead.ps1 — v11.5.9 read endpoints ported from dune-admin §1.
+﻿# PlayersRead.ps1 — v11.5.9 read endpoints ported from dune-admin §1.
 # Each Get-Dune* returns @{ ok=$true|$false; <payload-key>=...; error?=... }.
 # Routes wrap with Invoke-DunePlayerReadRoute (live + demo fallback).
 #

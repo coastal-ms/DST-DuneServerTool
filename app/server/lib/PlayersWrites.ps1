@@ -1,4 +1,4 @@
-# PlayersWrites.ps1 — v11.5.9 player write actions ported from dune-admin.
+﻿# PlayersWrites.ps1 — v11.5.9 player write actions ported from dune-admin.
 # Covers Phases C, D, E, F of the v11.5.9 port (37 endpoints across):
 #   §3 items, §4 vehicles, §5 teleport (offline), §6 progression/journey/
 #   contracts/jobs/codex, §10 storage owner debug.

@@ -112,6 +112,32 @@ if (Test-Path $ps5Exe) {
     }
     $bundledPs1 += Get-Item (Join-Path $appRoot 'DuneServer.ps1')
 
+    # Stricter BOM check: any file containing non-ASCII bytes MUST have a
+    # UTF-8 BOM, otherwise PS 5.1 (the runtime PS2EXE targets) decodes it
+    # as Windows-1252 and produces silent mojibake (em-dash becomes â€",
+    # the 0x94 byte terminates string literals early, etc.).
+    #
+    # The Parser::ParseFile check below is BOM-aware and won't catch this.
+    # Only an actual dot-source under PS 5.1 (or this byte-level check)
+    # will. We do the byte check here because it's near-instant.
+    Write-Host "Checking UTF-8 BOM on non-ASCII .ps1 files..." -ForegroundColor Cyan
+    $bomMissing = @()
+    foreach ($f in $bundledPs1) {
+        $bytes = [IO.File]::ReadAllBytes($f.FullName)
+        $hasBom = ($bytes.Length -ge 3 -and $bytes[0] -eq 0xEF -and $bytes[1] -eq 0xBB -and $bytes[2] -eq 0xBF)
+        if ($hasBom) { continue }
+        $hasNonAscii = $false
+        foreach ($b in $bytes) { if ($b -gt 0x7F) { $hasNonAscii = $true; break } }
+        if ($hasNonAscii) { $bomMissing += $f.FullName }
+    }
+    if ($bomMissing.Count -gt 0) {
+        Write-Host "  BOM missing on these files (PS 5.1 would mojibake them at runtime):" -ForegroundColor Red
+        foreach ($p in $bomMissing) { Write-Host "    $p" -ForegroundColor Red }
+        throw "$($bomMissing.Count) .ps1 file(s) contain non-ASCII bytes without a UTF-8 BOM. Re-save them as UTF-8-with-BOM (in PowerShell: [IO.File]::WriteAllBytes(`$p, ([byte[]](0xEF,0xBB,0xBF)) + [IO.File]::ReadAllBytes(`$p)))."
+    }
+    Write-Host "  All non-ASCII .ps1 files carry a UTF-8 BOM." -ForegroundColor Green
+    Write-Host ""
+
     $ps5ParseScript = @'
 param([string[]]$Paths)
 $exitCode = 0

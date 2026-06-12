@@ -1,4 +1,4 @@
-# PlayersRead.ps1 — v11.5.9 read routes ported from dune-admin §1.
+﻿# PlayersRead.ps1 — v11.5.9 read routes ported from dune-admin §1.
 # Each route uses Invoke-DunePlayerReadRoute (live + demo fallback) so demo
 # requests still get a usable empty / stub payload.
 

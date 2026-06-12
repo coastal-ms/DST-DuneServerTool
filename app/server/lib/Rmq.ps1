@@ -1,4 +1,4 @@
-# Rmq.ps1
+﻿# Rmq.ps1
 # Generic ServerCommand publisher + courier (chat) publisher for the
 # battlegroup's mq-game RabbitMQ broker.
 #
