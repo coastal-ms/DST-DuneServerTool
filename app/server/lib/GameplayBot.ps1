@@ -21,6 +21,21 @@
 
 $script:DuneBotIdentityCache = $null   # cached @{ownerId;exchangeId;accessPointId}
 
+# Derived at lib load time so async helpers don't depend on $script:DuneServerDir
+# being set in their runspace. Works the same in the installed exe, the pool
+# runspaces, the scheduler runspace, AND the dev-server flow — any context that
+# can dot-source this file already has $PSScriptRoot pointing at server/lib,
+# so server/ is one level up.
+$script:DuneGameplayBotServerDir = $null
+try {
+    if ($PSScriptRoot -and (Test-Path -LiteralPath $PSScriptRoot)) {
+        $candidate = Split-Path -Parent $PSScriptRoot
+        if ($candidate -and (Test-Path -LiteralPath $candidate)) {
+            $script:DuneGameplayBotServerDir = $candidate
+        }
+    }
+} catch {}
+
 # ----------------------------------------------------------------------------
 # Db-Postgres.ps1 (Invoke-V6Ssh / Find-V6DbPod) is normally already loaded by
 # Bootstrap.ps1. Lazy-load it defensively (same pattern as BackupSchedule.ps1)
@@ -1479,6 +1494,10 @@ function Invoke-DuneBotSeedMarket {
 # the main runspace.
 function Start-DuneBotSeedAsync {
     param([string]$ServerDir)
+    # Fall back to the server dir captured at lib load time so callers don't
+    # need to know about $script:DuneServerDir (which is per-runspace and not
+    # populated in the API pool runspaces or the dev-server flow).
+    if (-not $ServerDir) { $ServerDir = $script:DuneGameplayBotServerDir }
     $st = Read-DuneBotState
     if ($st.seed_progress) {
         $running = $false
