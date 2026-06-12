@@ -889,13 +889,25 @@ function Resolve-DuneBotListingCandidates {
         $rarity = if ($rule) { ([string]$rule.rarity).ToLower() } else { '' }
         if (-not $tier)   { $tier = Get-DuneBotTierFromTemplate -Template $tmpl }
         if (-not $rarity) { $rarity = 'common' }
-        # Stackability: trust the vendor snapshot (max_stack > 1 means the game
-        # has actually stacked this template). Fall back to bundled rule, then
-        # to category prefix.
+        # Stackability decision tree:
+        #   * Authoritative: the live vendor snapshot reports max_stack > 1
+        #     means the game itself stacked this template at the vendor.
+        #   * Authoritative: bundled rule.stack_max > 1 (extracted from
+        #     gameplay-item-data.json — covers items not on the snapshot).
+        #   * If a rule exists at all, trust its is_gradeable + stack_max
+        #     fields and don't second-guess them via the category-prefix
+        #     heuristic — that heuristic depends on
+        #     $script:DuneEquipmentCategoryPrefixes which is currently
+        #     uninitialized, so it would mark every categorised item as
+        #     "not equipment" → forced-stackable → fan-out collapses to
+        #     [0] and the entire grade-aware seed silently no-ops.
+        #   * Only for snapshot-only catalog gaps (no rule) do we fall
+        #     back to the prefix heuristic.
         $snStack = if ($sn) { [int]$sn.max_stack } else { 0 }
         $isStackable = ($snStack -gt 1)
-        if (-not $isStackable -and $rule -and [int]$rule.stack_max -gt 1) { $isStackable = $true }
-        if (-not $isStackable -and $cat -and (Get-Command Test-DuneIsEquipmentCategory -ErrorAction SilentlyContinue)) {
+        if (-not $isStackable -and $rule) {
+            if ([int]$rule.stack_max -gt 1) { $isStackable = $true }
+        } elseif (-not $isStackable -and $cat -and (Get-Command Test-DuneIsEquipmentCategory -ErrorAction SilentlyContinue)) {
             $isStackable = -not (Test-DuneIsEquipmentCategory -Category $cat)
         }
         if ($stackablesOnly -and -not $isStackable) { continue }
