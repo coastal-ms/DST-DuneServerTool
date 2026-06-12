@@ -139,6 +139,18 @@ Name: "{autodesktop}\{#MyAppName}"; Filename: "{app}\{#MyAppExeName}"; IconFilen
 ; relauncher (also cut in this release).
 Filename: "powershell.exe"; Parameters: "-NoProfile -ExecutionPolicy Bypass -Command ""Get-ChildItem -LiteralPath '{app}' -Recurse -File | Unblock-File"""; Flags: runhidden waituntilterminated; Check: not WizardSilent
 
+; v12.0.0: One-time migration. Clear any per-user "Run at Windows startup"
+; scheduled tasks left behind by earlier builds. Earlier console-host
+; autostart entries could relaunch DuneServer/DuneShell after reboot with
+; stale arguments and confuse the keep-alive lifecycle. The task is per-user
+; (DuneServer-Autostart-<sid>); iterate and remove every match under
+; \Dune Server\ regardless of owner. Users can re-enable autostart from
+; Help -> Run at Windows startup after the v12.0.0 install. Scoped to
+; upgrades from pre-12.0.0 only (see ShouldClearLegacyAutostart in [Code])
+; so a normal v12.0.x -> v12.0.y in-app update never touches the user's
+; autostart preference. Idempotent; never blocks install on failure.
+Filename: "powershell.exe"; Parameters: "-NoProfile -ExecutionPolicy Bypass -Command ""try {{ Get-ScheduledTask -TaskPath '\Dune Server\' -ErrorAction SilentlyContinue | Where-Object {{ $_.TaskName -like 'DuneServer-Autostart-*' }} | Unregister-ScheduledTask -Confirm:$false -ErrorAction SilentlyContinue }} catch {{}}"""; Flags: runhidden waituntilterminated; Check: ShouldClearLegacyAutostart
+
 ; Launch immediately after install. Two entries so both interactive AND
 ; silent (auto-update) installs relaunch the app:
 ;   * Interactive: postinstall shows the "Launch Dune Server" checkbox on
@@ -186,6 +198,49 @@ var
   UserPage:        TInputQueryWizardPage;
   PortModePage:    TInputOptionWizardPage;
   SkipConfigPages: Boolean;
+
+// ---------- v12.0.0 one-time migration helpers ----------
+
+// Read the DisplayVersion that the previously-installed DST registered with
+// Windows Uninstall. Returns '' when there is no prior install (fresh setup).
+function GetPriorInstalledVersion(): string;
+var
+  ver: string;
+begin
+  Result := '';
+  if RegQueryStringValue(HKEY_LOCAL_MACHINE,
+       'Software\Microsoft\Windows\CurrentVersion\Uninstall\{#MyAppId}_is1',
+       'DisplayVersion', ver) then
+    Result := ver
+  else if RegQueryStringValue(HKEY_LOCAL_MACHINE,
+            'Software\WOW6432Node\Microsoft\Windows\CurrentVersion\Uninstall\{#MyAppId}_is1',
+            'DisplayVersion', ver) then
+    Result := ver;
+end;
+
+// Extract the leading integer (major version) from a string like '11.5.8'.
+function VersionMajor(ver: string): Integer;
+var
+  dotPos: Integer;
+  head: string;
+begin
+  Result := -1;
+  if ver = '' then Exit;
+  dotPos := Pos('.', ver);
+  if dotPos > 0 then head := Copy(ver, 1, dotPos - 1) else head := ver;
+  Result := StrToIntDef(head, -1);
+end;
+
+// True when upgrading from a build older than 12.0.0 (and so we should run
+// the one-time scheduled-task cleanup). False on fresh installs and on every
+// future v12.x -> v12.y upgrade, so user-toggled autostart survives those.
+function ShouldClearLegacyAutostart(): Boolean;
+var
+  major: Integer;
+begin
+  major := VersionMajor(GetPriorInstalledVersion());
+  Result := (major >= 0) and (major < 12);
+end;
 
 // ---------- helpers ----------
 
