@@ -1332,7 +1332,7 @@ function Invoke-DuneBotSeedMarket {
             [void]$sb.AppendLine($chunk)
         }
         [void]$sb.AppendLine('COMMIT;')
-        $r = Invoke-DuneSqlQuery -Ip $ctx.ip -Sql ($sb.ToString()) -ReadOnly $false -MaxRows 5 -TimeoutSec 300
+        $r = Invoke-DuneSqlQuery -Ip $ctx.ip -Sql ($sb.ToString()) -ReadOnly $false -MaxRows 5 -TimeoutSec 300 -Bulk
         $summary.chunks++
         if ($r.ok) {
             # Sum up the planned insertions in this chunk into the running total.
