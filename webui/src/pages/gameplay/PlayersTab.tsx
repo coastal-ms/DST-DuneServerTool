@@ -27,6 +27,9 @@ export function PlayersTab() {
   const [error, setError]       = useState<string | null>(null)
   const [search, setSearch]     = useState('')
   const [online, setOnline]     = useState<OnlineFilter>('')
+  const [hideGm, setHideGm]     = useState<boolean>(() => {
+    try { return localStorage.getItem('dst.players.hideGm') === '1' } catch { return false }
+  })
   const [selectedId, setSel]    = useState<number | null>(null)
   const [section, setSection]   = useState<SectionId>('stats')
   const [flash, setFlash]       = useState<{ msg: string; kind: 'ok' | 'err' } | null>(null)
@@ -73,13 +76,14 @@ export function PlayersTab() {
       String(p.account_id).includes(q))
     if (online === 'online')  out = out.filter(p => isOnline(p.online_status))
     if (online === 'offline') out = out.filter(p => !isOnline(p.online_status))
+    if (hideGm) out = out.filter(p => (p.name || '').trim().toLowerCase() !== 'gm')
     return [...out].sort((a, b) => {
       const ao = isOnline(a.online_status) ? 0 : 1
       const bo = isOnline(b.online_status) ? 0 : 1
       if (ao !== bo) return ao - bo
       return (a.name || '').localeCompare(b.name || '')
     })
-  }, [players, search, online])
+  }, [players, search, online, hideGm])
 
   const onlineCount = useMemo(() => players.filter(p => isOnline(p.online_status)).length, [players])
   const selected = useMemo(() => players.find(p => p.id === selectedId) ?? null, [players, selectedId])
@@ -115,6 +119,17 @@ export function PlayersTab() {
             </button>
           ))}
         </div>
+        <button onClick={() => {
+            setHideGm(v => {
+              const next = !v
+              try { localStorage.setItem('dst.players.hideGm', next ? '1' : '0') } catch { /* ignore */ }
+              return next
+            })
+          }}
+          title={hideGm ? 'Showing real players only — click to include GM bot' : 'Hide the GM admin bot from the list'}
+          className={`px-3 py-1.5 text-xs rounded-lg border flex items-center gap-1.5 ${hideGm ? 'bg-accent/20 text-accent-bright border-accent/40' : 'bg-surface-2 text-text-muted hover:text-text border-border'}`}>
+          <Icon name={hideGm ? 'EyeOff' : 'Eye'} size={13} /> {hideGm ? 'GM hidden' : 'Hide GM'}
+        </button>
         <button className="btn-secondary" onClick={refresh} disabled={loading}>
           <Icon name="RefreshCw" size={14} className={loading ? 'animate-spin' : ''} /> Refresh
         </button>
