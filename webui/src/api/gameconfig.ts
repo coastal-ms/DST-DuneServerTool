@@ -9,6 +9,8 @@ import type {
   GameConfigClientInfo,
   GameConfigClientApplyResult,
   GameConfigClientApplyItem,
+  GameConfigDefaultsResponse,
+  GameConfigRawUpdate,
   SpicefieldsResponse,
   SpicefieldSaveResponse,
   SpicefieldType,
@@ -25,6 +27,26 @@ export function getGameConfig() {
 }
 
 export function saveGameConfig(updates: Record<string, string>) {
+  return withOnlinePlayerGuard(force =>
+    api<GameConfigSaveResponse>(`/api/gameconfig${fq(force)}`, {
+      method: 'PUT',
+      body: JSON.stringify({ updates }),
+    }),
+  )
+}
+
+// Defaults catalog — full DefaultGame.ini / DefaultEngine.ini from the live
+// pod, merged with current overrides. Pass refresh=true to re-read the pod.
+export function getGameConfigDefaults(refresh = false) {
+  return api<GameConfigDefaultsResponse>(
+    `/api/gameconfig/defaults${refresh ? '?refresh=1' : ''}`,
+  )
+}
+
+// Save arbitrary (file, section, key, value) tuples — used by the defaults
+// browser so keys outside the curated schema can still be persisted via the
+// existing explicit-array form of PUT /api/gameconfig.
+export function saveGameConfigRaw(updates: GameConfigRawUpdate[]) {
   return withOnlinePlayerGuard(force =>
     api<GameConfigSaveResponse>(`/api/gameconfig${fq(force)}`, {
       method: 'PUT',
