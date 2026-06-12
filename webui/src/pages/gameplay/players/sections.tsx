@@ -570,14 +570,9 @@ export function ActionsSection({ player, canWrite, flash, onChanged }: SectionPr
     }
   }
 
-  if (!canWrite) {
-    return (
-      <div className="card p-4 text-sm text-text-dim flex items-center gap-2">
-        <Icon name="Lock" size={14} /> Editing is available when the live game database is connected.
-      </div>
-    )
-  }
-
+  // ACTIONS is a module-level constant; computing the grouped view once is
+  // cheap, but useMemo must run before any conditional early-return below to
+  // satisfy the rules of hooks.
   const grouped = useMemo(() => {
     const map: Record<ActionGroup, ActionDef[]> = {
       Currency: [], Progression: [], Items: [], Vehicle: [], Live: [], Identity: [], Danger: [],
@@ -585,6 +580,14 @@ export function ActionsSection({ player, canWrite, flash, onChanged }: SectionPr
     for (const a of ACTIONS) map[a.group].push(a)
     return map
   }, [])
+
+  if (!canWrite) {
+    return (
+      <div className="card p-4 text-sm text-text-dim flex items-center gap-2">
+        <Icon name="Lock" size={14} /> Editing is available when the live game database is connected.
+      </div>
+    )
+  }
 
   return (
     <div className="space-y-4">
