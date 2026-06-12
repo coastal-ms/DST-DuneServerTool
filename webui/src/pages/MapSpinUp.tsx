@@ -1,9 +1,62 @@
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
+import {
+  DndContext,
+  PointerSensor,
+  KeyboardSensor,
+  useSensor,
+  useSensors,
+  closestCenter,
+  type DragEndEvent,
+} from '@dnd-kit/core'
+import {
+  SortableContext,
+  arrayMove,
+  sortableKeyboardCoordinates,
+  useSortable,
+  rectSortingStrategy,
+} from '@dnd-kit/sortable'
+import { CSS } from '@dnd-kit/utilities'
 import { PageHeader } from '../components/PageHeader'
 import { Icon } from '../components/Icon'
 import { ApiError } from '../api/client'
 import { getMapSpinUp, setMapSpinUp, type SpinUpMap } from '../api/mapSpinUp'
 import { fixOnDemandPartitions } from '../api/maps'
+
+// Most-used maps pinned to the front by default — these fill the first row.
+// Everything else keeps the backend's order beneath them. Users can drag any
+// card to reorder; the custom order is saved per-browser in localStorage.
+const PRIORITY = ['DeepDesert_1', 'SH_Arrakeen', 'SH_HarkoVillage']
+const ORDER_KEY = 'dst.mapspinup.order.v1'
+
+function defaultOrder(maps: SpinUpMap[]): string[] {
+  const keys = maps.map(m => m.map)
+  const pinned = PRIORITY.filter(k => keys.includes(k))
+  const rest = keys.filter(k => !PRIORITY.includes(k))
+  return [...pinned, ...rest]
+}
+
+function loadSavedOrder(): string[] | null {
+  try {
+    const raw = localStorage.getItem(ORDER_KEY)
+    if (!raw) return null
+    const parsed = JSON.parse(raw)
+    return Array.isArray(parsed) && parsed.every(x => typeof x === 'string') ? parsed : null
+  } catch {
+    return null
+  }
+}
+
+// Merge a saved order with the live map list: keep saved keys still present (in
+// their saved order), then append any new maps in default (priority) order.
+function reconcileOrder(saved: string[] | null, maps: SpinUpMap[]): string[] {
+  const def = defaultOrder(maps)
+  if (!saved) return def
+  const present = new Set(maps.map(m => m.map))
+  const kept = saved.filter(k => present.has(k))
+  const keptSet = new Set(kept)
+  const added = def.filter(k => !keptSet.has(k))
+  return [...kept, ...added]
+}
 
 export function MapSpinUp() {
   const [maps, setMaps] = useState<SpinUpMap[] | null>(null)
@@ -13,6 +66,7 @@ export function MapSpinUp() {
   const [busy, setBusy] = useState<string | null>(null)
   const [fixBusy, setFixBusy] = useState(false)
   const [fixLog, setFixLog] = useState<string | null>(null)
+  const [order, setOrder] = useState<string[] | null>(null)
 
   const refresh = useCallback(async () => {
     setLoading(true); setError(null)
@@ -71,23 +125,70 @@ export function MapSpinUp() {
     }
   }, [])
 
-  // Most-used maps pinned to the top in this order; everything else keeps
-  // the backend's order beneath them.
-  const PRIORITY = ['DeepDesert_1', 'SH_Arrakeen', 'SH_HarkoVillage']
-  const prio = (m: SpinUpMap) => {
-    const i = PRIORITY.indexOf(m.map)
-    return i === -1 ? PRIORITY.length : i
-  }
-  const allMaps = [...(maps ?? [])].sort((a, b) => prio(a) - prio(b))
+  // Reconcile the saved drag-order against the live map list whenever maps load.
+  useEffect(() => {
+    if (!maps) return
+    setOrder(reconcileOrder(loadSavedOrder(), maps))
+  }, [maps])
+
+  const orderedMaps = useMemo<SpinUpMap[]>(() => {
+    if (!maps) return []
+    const byKey = new Map(maps.map(m => [m.map, m]))
+    const seq = order ?? defaultOrder(maps)
+    const out = seq.map(k => byKey.get(k)).filter((m): m is SpinUpMap => Boolean(m))
+    // Defensive: append any map missing from the order sequence.
+    for (const m of maps) if (!seq.includes(m.map)) out.push(m)
+    return out
+  }, [maps, order])
+
+  const sensors = useSensors(
+    useSensor(PointerSensor, { activationConstraint: { distance: 6 } }),
+    useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates }),
+  )
+
+  const onDragEnd = useCallback((e: DragEndEvent) => {
+    const { active, over } = e
+    if (!over || active.id === over.id) return
+    setOrder(prev => {
+      const base = prev ?? (maps ? defaultOrder(maps) : [])
+      const oldIdx = base.indexOf(String(active.id))
+      const newIdx = base.indexOf(String(over.id))
+      if (oldIdx < 0 || newIdx < 0) return prev
+      const next = arrayMove(base, oldIdx, newIdx)
+      try { localStorage.setItem(ORDER_KEY, JSON.stringify(next)) } catch { /* ignore */ }
+      return next
+    })
+  }, [maps])
+
+  const resetOrder = useCallback(() => {
+    try { localStorage.removeItem(ORDER_KEY) } catch { /* ignore */ }
+    setOrder(maps ? defaultOrder(maps) : null)
+  }, [maps])
+
+  const isCustomOrder = useMemo(() => {
+    if (!maps || !order) return false
+    const def = defaultOrder(maps)
+    return order.length !== def.length || order.some((k, i) => k !== def[i])
+  }, [maps, order])
 
   return (
     <>
       <PageHeader
         title="Map SpinUp"
         icon="Power"
-        description="Keep at least one server warm for a map (MinServers = 1). Hot-swappable — no restart needed."
+        description="Keep at least one server warm for a map (MinServers = 1). Hot-swappable — no restart needed. Drag the grip on any card to reorder; your layout is saved in this browser."
         actions={
           <>
+            {isCustomOrder && (
+              <button
+                className="btn-secondary"
+                onClick={resetOrder}
+                disabled={loading || busy !== null || fixBusy}
+                title="Restore the default card order (Deep Desert, Arrakeen, Harko Village first)."
+              >
+                <Icon name="RotateCcw" size={14} /> Reset order
+              </button>
+            )}
             <button
               className="btn-secondary"
               onClick={() => { void onFixPartitions() }}
@@ -129,9 +230,11 @@ export function MapSpinUp() {
           <MapGroup
             title="Maps"
             hint="These keep at least one server warm (MinServers = 1). Some maps don't ship MinServers natively — enabling those may be ignored by the director, or may keep an instance warm and consume RAM (~1+ GB each). Use with care."
-            maps={allMaps}
+            maps={orderedMaps}
             busy={busy}
             onToggle={onToggle}
+            sensors={sensors}
+            onDragEnd={onDragEnd}
           />
         </>
       )}
@@ -139,13 +242,15 @@ export function MapSpinUp() {
   )
 }
 
-function MapGroup({ title, hint, tone = 'text', maps, busy, onToggle }: {
+function MapGroup({ title, hint, tone = 'text', maps, busy, onToggle, sensors, onDragEnd }: {
   title: string
   hint: string
   tone?: 'text' | 'warning'
   maps: SpinUpMap[]
   busy: string | null
   onToggle: (m: SpinUpMap, next: boolean) => void
+  sensors: ReturnType<typeof useSensors>
+  onDragEnd: (e: DragEndEvent) => void
 }) {
   if (maps.length === 0) return null
   const headColor = tone === 'warning' ? 'text-warning' : 'text-text-muted'
@@ -156,31 +261,64 @@ function MapGroup({ title, hint, tone = 'text', maps, busy, onToggle }: {
         {title}
       </h2>
       <p className="text-xs text-text-dim mb-3 max-w-3xl">{hint}</p>
-      <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3">
-        {maps.map(m => (
-          <label
-            key={m.map}
-            className={`card p-4 flex items-center justify-between gap-3 cursor-pointer ${busy === m.map ? 'opacity-60' : ''}`}
-          >
-            <div className="min-w-0">
-              <div className="text-sm font-semibold truncate">{m.label}</div>
-              <div className="text-xs text-text-dim font-mono truncate">{m.map}</div>
-            </div>
-            <div className="flex items-center gap-2 shrink-0">
-              <span className={m.enabled ? 'pill-success' : 'pill-muted'}>
-                {m.enabled ? 'Warm' : 'Off'}
-              </span>
-              <input
-                type="checkbox"
-                className="h-4 w-4 accent-accent"
-                checked={m.enabled}
-                disabled={busy !== null}
-                onChange={e => onToggle(m, e.target.checked)}
-              />
-            </div>
-          </label>
-        ))}
-      </div>
+      <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={onDragEnd}>
+        <SortableContext items={maps.map(m => m.map)} strategy={rectSortingStrategy}>
+          <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3">
+            {maps.map(m => (
+              <SortableMapCard key={m.map} map={m} busy={busy} onToggle={onToggle} />
+            ))}
+          </div>
+        </SortableContext>
+      </DndContext>
     </section>
+  )
+}
+
+function SortableMapCard({ map: m, busy, onToggle }: {
+  map: SpinUpMap
+  busy: string | null
+  onToggle: (m: SpinUpMap, next: boolean) => void
+}) {
+  const { attributes, listeners, setNodeRef, transform, transition, isDragging } =
+    useSortable({ id: m.map })
+  const style: React.CSSProperties = {
+    transform: CSS.Transform.toString(transform),
+    transition,
+    opacity: isDragging ? 0.4 : busy === m.map ? 0.6 : undefined,
+  }
+  return (
+    <div
+      ref={setNodeRef}
+      style={style}
+      className="card p-4 flex items-center gap-3"
+    >
+      <button
+        type="button"
+        className="shrink-0 -ml-1 p-1 text-text-dim hover:text-text cursor-grab active:cursor-grabbing touch-none"
+        title="Drag to reorder"
+        {...attributes}
+        {...listeners}
+      >
+        <Icon name="GripVertical" size={16} />
+      </button>
+      <label className="flex items-center justify-between gap-3 flex-1 min-w-0 cursor-pointer">
+        <div className="min-w-0">
+          <div className="text-sm font-semibold truncate">{m.label}</div>
+          <div className="text-xs text-text-dim font-mono truncate">{m.map}</div>
+        </div>
+        <div className="flex items-center gap-2 shrink-0">
+          <span className={m.enabled ? 'pill-success' : 'pill-muted'}>
+            {m.enabled ? 'Warm' : 'Off'}
+          </span>
+          <input
+            type="checkbox"
+            className="h-4 w-4 accent-accent"
+            checked={m.enabled}
+            disabled={busy !== null}
+            onChange={e => onToggle(m, e.target.checked)}
+          />
+        </div>
+      </label>
+    </div>
   )
 }
