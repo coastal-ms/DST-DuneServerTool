@@ -211,8 +211,15 @@ console, one theme, no second program to install. A tabbed surface
 (**Overview, Market, Market Bot, Players, Bases, Storage, Blueprints**) sits
 on top of the same SSH + psql bridge the rest of DST uses. **Market /
 Exchange** aggregates every active listing by item (lowest price, stock, bot
-vs. player split, recent sales) and **Market Bot** monitors the automated
-vendor and tunes its pricing — both read your **live game Postgres** directly.
+vs. player split, recent sales) and **Market Bot** runs the native bot
+("Duke") — both *buys* player listings and *lists* its own NPC stock via
+sane-pricing rules (tier × category × rarity × vendor × grade, 100,000
+Solari hard cap, per-template overrides), with three sub-tabs (Buy /
+List / Pricing rules), a vendor-snapshot preview, per-actor-class
+listing breakdown, and a safety net that detects leftover listings from
+any prior bot deployment (e.g. Revy from the old external Go market-bot)
+and offers a one-click wipe before Duke starts ticking. Both read your
+**live game Postgres** directly.
 When the battlegroup is offline the page falls back to a realistic **demo
 dataset** (clearly badged) so the tools are explorable out of the box and flip
 to live data automatically once the battlegroup is running.
