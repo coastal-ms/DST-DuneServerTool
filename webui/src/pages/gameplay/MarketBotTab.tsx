@@ -390,7 +390,7 @@ export function MarketBotTab() {
       {draft && sub === 'list' && (
         <ListSection draft={draft} setDraft={setDraft} listTick={listTick} listTicking={listTicking}
           snapshot={snapshot} snapshotLoading={snapshotLoading}
-          seedProgress={seedProgress} seeding={seeding} seedLaunchError={seedLaunchError}
+          seeding={seeding} seedLaunchError={seedLaunchError}
           onListTick={doListTick} onLoadSnapshot={loadSnapshot} onSeedMarket={doSeedMarket} />
       )}
 
@@ -548,12 +548,12 @@ function BuyTickResultView({ tick }: { tick: BotTickResult }) {
 // List section — sell-side scheduler + listing tuning + vendor snapshot preview.
 // ---------------------------------------------------------------------------
 function ListSection({ draft, setDraft, listTick, listTicking, snapshot, snapshotLoading,
-  seedProgress, seeding, seedLaunchError,
+  seeding, seedLaunchError,
   onListTick, onLoadSnapshot, onSeedMarket }: {
     draft: BotConfig; setDraft: (c: BotConfig) => void;
     listTick: BotListTickResult | null; listTicking: boolean;
     snapshot: BotVendorCandidate[] | null; snapshotLoading: boolean;
-    seedProgress: BotSeedProgress | null; seeding: boolean; seedLaunchError: string | null;
+    seeding: boolean; seedLaunchError: string | null;
     onListTick: () => void; onLoadSnapshot: () => void;
     onSeedMarket: () => void;
   }) {
