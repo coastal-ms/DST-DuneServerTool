@@ -283,14 +283,29 @@ function Get-DuneBotIdentity {
             foreach ($q in @(
                 # Tier 1 (upstream parity): the access-point table is the
                 # authoritative exchange index even on virgin servers with no
-                # player orders yet.
+                # player orders yet. JOIN ensures the referenced exchange row
+                # actually exists — otherwise we'd hand a phantom id to
+                # get_exchange_inventory_id() and trip the inventories FK.
                 'SELECT ap.exchange_id FROM dune.dune_exchange_accesspoints ap JOIN dune.dune_exchanges e ON e.id = ap.exchange_id ORDER BY ap.id LIMIT 1',
-                'SELECT exchange_id FROM dune.dune_exchange_orders WHERE is_npc_order = FALSE LIMIT 1',
+                # Tier 2: player orders can carry a stale exchange_id even when
+                # the matching dune_exchanges row was wiped (Duke wipe / BG
+                # reset). JOIN-guard so we never return a phantom id.
+                'SELECT o.exchange_id FROM dune.dune_exchange_orders o JOIN dune.dune_exchanges e ON e.id = o.exchange_id WHERE o.is_npc_order = FALSE LIMIT 1',
                 'SELECT id FROM dune.dune_exchanges ORDER BY id LIMIT 1',
                 "SELECT dune.get_dune_exchange_id('Global')"
             )) {
                 $er = Get-DuneBotScalar -Ip $Ip -Sql $q
                 if ($er.ok -and $er.value) { $exId = ConvertTo-DuneInt $er.value; if ($exId -gt 0) { break } }
+            }
+            # Final guard: if every fallback yielded a phantom id, force-create
+            # the canonical Global exchange row so get_exchange_inventory_id
+            # has a valid FK target on its first call.
+            if ($exId -gt 0) {
+                $vex = Get-DuneBotScalar -Ip $Ip -Sql "SELECT id FROM dune.dune_exchanges WHERE id = $exId"
+                if (-not ($vex.ok -and $vex.value)) {
+                    $fc = Get-DuneBotScalar -Ip $Ip -Sql "SELECT dune.get_dune_exchange_id('Global')"
+                    if ($fc.ok -and $fc.value) { $exId = ConvertTo-DuneInt $fc.value }
+                }
             }
             if ($exId -le 0) { return @{ ok = $false; provisioned = $false; error = 'could not resolve exchange id.' } }
             $apId = 1L
@@ -320,15 +335,28 @@ SELECT id FROM ins UNION ALL SELECT id FROM existing LIMIT 1;
 
     # Exchange id (try the same fallbacks dune-admin uses, with the upstream
     # access-point cascade prepended so we always pick the canonical exchange).
+    # Every tier JOINs against dune_exchanges so a stale access-point or
+    # player-order row pointing at a wiped exchange id can never be returned —
+    # otherwise get_exchange_inventory_id() trips inventories_exchange_id_fkey.
     $exchangeId = 0L
     foreach ($q in @(
         'SELECT ap.exchange_id FROM dune.dune_exchange_accesspoints ap JOIN dune.dune_exchanges e ON e.id = ap.exchange_id ORDER BY ap.id LIMIT 1',
-        'SELECT exchange_id FROM dune.dune_exchange_orders WHERE is_npc_order = FALSE LIMIT 1',
+        'SELECT o.exchange_id FROM dune.dune_exchange_orders o JOIN dune.dune_exchanges e ON e.id = o.exchange_id WHERE o.is_npc_order = FALSE LIMIT 1',
         'SELECT id FROM dune.dune_exchanges ORDER BY id LIMIT 1',
         "SELECT dune.get_dune_exchange_id('Global')"
     )) {
         $er = Get-DuneBotScalar -Ip $Ip -Sql $q
         if ($er.ok -and $er.value) { $exchangeId = ConvertTo-DuneInt $er.value; if ($exchangeId -gt 0) { break } }
+    }
+    # Final guard: validate that the resolved exchange row exists. If not (e.g.
+    # cascade hit a phantom from a stale dependent table), force-create the
+    # canonical Global exchange so the FK target is present.
+    if ($exchangeId -gt 0) {
+        $vex = Get-DuneBotScalar -Ip $Ip -Sql "SELECT id FROM dune.dune_exchanges WHERE id = $exchangeId"
+        if (-not ($vex.ok -and $vex.value)) {
+            $fc = Get-DuneBotScalar -Ip $Ip -Sql "SELECT dune.get_dune_exchange_id('Global')"
+            if ($fc.ok -and $fc.value) { $exchangeId = ConvertTo-DuneInt $fc.value }
+        }
     }
     if ($exchangeId -le 0) { return @{ ok = $false; error = 'could not resolve exchange id.' } }
 
@@ -778,7 +806,13 @@ VALUES (:new_order_id, $stack, $ItemPrice);
 COMMIT;
 "@
     $r = Invoke-DuneSqlQuery -Ip $Ip -Sql $sql -ReadOnly $false -MaxRows 5 -TimeoutSec 45
-    if (-not $r.ok) { return @{ ok = $false; error = $r.error } }
+    if (-not $r.ok) {
+        $err = $r.error
+        if ($err -match 'inventories_exchange_id_fkey') {
+            $err = "exchange id $($Ident.exchangeId) is missing from dune_exchanges (phantom from a stale access-point or wiped Duke). Disable then re-enable the bot to re-resolve identity, or list one item in-game first to seed the exchange row. raw: $err"
+        }
+        return @{ ok = $false; error = $err }
+    }
     return @{ ok = $true }
 }
 

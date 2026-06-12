@@ -13,6 +13,32 @@ here cover everything those tags shipped.
 
 ## [Unreleased]
 
+## [11.5.3] - 2026-06-11
+
+### Fixed
+- **Market Bot list tick failing with `inventories_exchange_id_fkey`
+  violation on fresh battlegroups or after a Duke wipe.** `Get-DuneBotIdentity`'s
+  exchange-id cascade had two read paths that didn't validate the resolved
+  id against `dune.dune_exchanges`, so a stale row in
+  `dune_exchange_orders` (or any other dependent table) pointing at a
+  wiped exchange would feed a phantom id to `get_exchange_inventory_id()`,
+  which then tripped the inventories FK on insert. Every cascade tier
+  now JOINs against `dune_exchanges`, and a final guard re-validates
+  the resolved id and falls through to
+  `dune.get_dune_exchange_id('Global')` (create-on-miss) when the row
+  truly doesn't exist yet. `New-DuneBotListing` also wraps the raw FK
+  error with a diagnostic hint so future occurrences don't surface as
+  a cryptic constraint name.
+- **Game Config page going fully blank after acknowledging the risk
+  disclaimer modal**, leaving the WebView2 app unresponsive and hard to
+  close. The disclaimer modal (and its `dst.gameConfig.disclaimerAck`
+  localStorage gate) has been removed outright. The page-level "How
+  it works" notice and the existing per-section warnings are sufficient
+  caution for a tool that already backs up every INI file before every
+  write — the blocking modal was protecting the user against a problem
+  that was already mitigated, at the cost of an unrecoverable UI lock
+  when it misbehaved.
+
 ## [11.5.2] - 2026-06-11
 
 ### Added
