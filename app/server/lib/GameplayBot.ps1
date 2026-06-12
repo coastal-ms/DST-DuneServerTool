@@ -129,15 +129,45 @@ function Save-DuneBotMaskCache {
 # prior Duke listings — all are valid). Mirrors refreshCategoryCache() from
 # dune-admin/internal/marketbot/exchange.go. Returns the merged cache so the
 # caller can pass it straight to Resolve-DuneBotListingCandidates.
+#
+# v11.5.5: throttled by $RefreshIntervalSec (default 6h). The bundled seed
+# already covers ~83% of the catalog and Funcom masks are server-binary
+# constants per template_id (they do not change between sessions), so daily-
+# scale harvesting is plenty. The on-disk timestamp is written BEFORE the SSH
+# call so a wedged SSH connection cannot cause back-to-back retries every
+# tick. SSH timeout is 15s — if the harvest fails the existing cache is
+# returned untouched and the list tick continues normally.
 function Update-DuneBotMaskCache {
-    param([string]$Ip, [int64]$ExchangeId)
+    param(
+        [string]$Ip,
+        [int64]$ExchangeId,
+        [int]$RefreshIntervalSec = 21600,
+        [int]$MinSeededCount      = 1000
+    )
     $cache = Read-DuneBotMaskCache
+    $state = Read-DuneBotState
+    $skip  = $false
+    if ($cache.Count -ge $MinSeededCount -and $state.last_mask_refresh) {
+        $last = ConvertTo-DuneBotUtcInstant $state.last_mask_refresh
+        if ($null -ne $last) {
+            $age = ([datetime]::UtcNow - $last).TotalSeconds
+            if ($age -ge 0 -and $age -lt $RefreshIntervalSec) { $skip = $true }
+        }
+    }
+    if ($skip) { return $cache }
+
+    # Stamp BEFORE the SSH call so a hang/timeout still satisfies the
+    # interval check on the next tick — prevents a wedged ssh socket from
+    # turning every list tick into a fresh 15s hang.
+    $state.last_mask_refresh = (Get-Date).ToUniversalTime().ToString('o')
+    Save-DuneBotState -State $state
+
     $sql = @"
 SELECT DISTINCT template_id, category_mask, category_depth
 FROM dune.dune_exchange_orders
 WHERE category_mask != 0 AND exchange_id = $ExchangeId
 "@
-    $r = Invoke-DuneSqlQuery -Ip $Ip -Sql $sql -ReadOnly $true -MaxRows 50000 -TimeoutSec 60
+    $r = Invoke-DuneSqlQuery -Ip $Ip -Sql $sql -ReadOnly $true -MaxRows 50000 -TimeoutSec 15
     if (-not $r.ok) { return $cache }
     $added = 0
     foreach ($row in (ConvertTo-DuneRowMaps -Result $r)) {
@@ -191,6 +221,10 @@ function Get-DuneBotConfigDefaults {
         # orders yet, as long as ANY market activity has happened (the cache
         # is harvested from every dune_exchange_orders row with mask != 0).
         seed_from_catalog    = $true
+        # How often the mask cache is refreshed from the DB. Funcom masks are
+        # server-binary constants per template_id, so once-per-day is plenty
+        # for new templates introduced by patches. Default 6h.
+        mask_refresh_interval = 21600
     }
 }
 
@@ -285,6 +319,7 @@ function Save-DuneBotConfig {
     $v = _Get $Incoming 'seed_from_catalog'; if ($null -ne $v) { $cfg['seed_from_catalog'] = [bool]$v }
     $v = _Get $Incoming 'buy_tick_interval'; if ($null -ne $v) { $cfg['buy_tick_interval'] = [Math]::Max(10,  [int]$v) }
     $v = _Get $Incoming 'list_tick_interval';if ($null -ne $v) { $cfg['list_tick_interval'] = [Math]::Max(60, [int]$v) }
+    $v = _Get $Incoming 'mask_refresh_interval'; if ($null -ne $v) { $cfg['mask_refresh_interval'] = [Math]::Min(604800, [Math]::Max(300, [int]$v)) }
     $v = _Get $Incoming 'listings_per_grade';if ($null -ne $v) { $cfg['listings_per_grade'] = [Math]::Min(50, [Math]::Max(1, [int]$v)) }
     $v = _Get $Incoming 'price_cap';         if ($null -ne $v) { $cfg['price_cap'] = [Math]::Max(1, [int]$v) }
     $v = _Get $Incoming 'default_unit_price';if ($null -ne $v) { $cfg['default_unit_price'] = [Math]::Max(1, [int]$v) }
@@ -316,12 +351,13 @@ function Save-DuneBotConfig {
 
 function Read-DuneBotState {
     $state = [ordered]@{
-        last_buy_tick   = $null
-        last_list_tick  = $null
-        last_result     = $null
-        last_list_result = $null
-        error_count     = 0
-        last_error      = ''
+        last_buy_tick     = $null
+        last_list_tick    = $null
+        last_mask_refresh = $null
+        last_result       = $null
+        last_list_result  = $null
+        error_count       = 0
+        last_error        = ''
     }
     $path = Get-DuneBotStatePath
     if (Test-Path -LiteralPath $path) {
@@ -333,6 +369,29 @@ function Read-DuneBotState {
         } catch {}
     }
     return $state
+}
+
+# PowerShell 5.1's ConvertFrom-Json eagerly parses ISO 8601 strings into
+# [datetime] instances with Kind=Local (with the wall-clock value already
+# shifted from UTC to local). Calling [datetime]::Parse() on such an instance
+# stringifies it via the local culture (losing TZ info), reparses as local,
+# then .ToUniversalTime() shifts AGAIN — turning a recent timestamp into one
+# many hours in the future and breaking every elapsed-time check. This
+# helper normalises both string and DateTime inputs to a real UTC instant.
+function ConvertTo-DuneBotUtcInstant {
+    param($Value)
+    if ($null -eq $Value) { return $null }
+    if ($Value -is [datetime]) {
+        if ($Value.Kind -eq [DateTimeKind]::Utc) { return $Value }
+        if ($Value.Kind -eq [DateTimeKind]::Local) { return $Value.ToUniversalTime() }
+        return [datetime]::SpecifyKind($Value, [DateTimeKind]::Utc)
+    }
+    try {
+        return [datetime]::Parse(
+            [string]$Value,
+            [System.Globalization.CultureInfo]::InvariantCulture,
+            [System.Globalization.DateTimeStyles]::AssumeUniversal -bor [System.Globalization.DateTimeStyles]::AdjustToUniversal)
+    } catch { return $null }
 }
 
 function Save-DuneBotState {
@@ -729,7 +788,7 @@ LEFT JOIN dune.items i ON i.id = o.item_id
 WHERE o.is_npc_order = TRUE AND o.exchange_id = $ExchangeId
 GROUP BY o.template_id
 "@
-    $r = Invoke-DuneSqlQuery -Ip $Ip -Sql $sql -ReadOnly $true -MaxRows 50000 -TimeoutSec 60
+    $r = Invoke-DuneSqlQuery -Ip $Ip -Sql $sql -ReadOnly $true -MaxRows 50000 -TimeoutSec 25
     if (-not $r.ok) { return @{ ok = $false; error = $r.error } }
     $snap = @{}
     foreach ($row in (ConvertTo-DuneRowMaps -Result $r)) {
@@ -1007,15 +1066,26 @@ function Invoke-DuneBotListTick {
         return $summary
     }
 
+    # v11.5.5: stamp last_list_tick BEFORE the SSH-heavy work so a wedged
+    # SSH connection inside the tick can't cause the scheduler to re-fire
+    # the tick on the very next 15s poll. The final timestamp/result is
+    # rewritten on successful completion below.
+    if (-not $DryRun) {
+        $earlyState = Read-DuneBotState
+        $earlyState.last_list_tick = (Get-Date).ToUniversalTime().ToString('o')
+        Save-DuneBotState -State $earlyState
+    }
+
     $vs = Get-DuneBotVendorSnapshot -Ip $ctx.ip -ExchangeId $ident.exchangeId
     if (-not $vs.ok) { $summary.ok = $false; $summary.message = "vendor snapshot: $($vs.error)"; return $summary }
     $summary.considered = $vs.snapshot.Count
 
     # Refresh persistent mask cache from any non-zero-mask order on this
     # exchange (player, NPC, prior Duke). Seeded with the bundled snapshot
-    # on first run so a brand-new BG already has coverage. Without this,
-    # Resolve-DuneBotListingCandidates can't fall back to catalog templates.
-    $maskCache = Update-DuneBotMaskCache -Ip $ctx.ip -ExchangeId $ident.exchangeId
+    # on first run so a brand-new BG already has coverage. Throttled to
+    # mask_refresh_interval (default 6h) so a wedged SSH doesn't repeatedly
+    # hang every list tick.
+    $maskCache = Update-DuneBotMaskCache -Ip $ctx.ip -ExchangeId $ident.exchangeId -RefreshIntervalSec ([int]$cfg.mask_refresh_interval)
     $summary.masks_known = $maskCache.Count
 
     $cl = Get-DuneBotCurrentListings -Ip $ctx.ip -OwnerId $ident.ownerId -ExchangeId $ident.exchangeId
@@ -1245,20 +1315,20 @@ function Start-DuneGameplayBotScheduler {
                         # Buy tick.
                         $dueBuy = $true
                         if ($state.last_buy_tick) {
-                            try {
-                                $last = [datetime]::Parse($state.last_buy_tick).ToUniversalTime()
+                            $last = ConvertTo-DuneBotUtcInstant $state.last_buy_tick
+                            if ($null -ne $last) {
                                 $dueBuy = (([datetime]::UtcNow - $last).TotalSeconds -ge [int]$cfg.buy_tick_interval)
-                            } catch { $dueBuy = $true }
+                            }
                         }
                         if ($dueBuy) { [void](Invoke-DuneBotBuyTick) }
                         # List tick (independent cadence).
                         $state2 = Read-DuneBotState
                         $dueList = $true
                         if ($state2.last_list_tick) {
-                            try {
-                                $lastL = [datetime]::Parse($state2.last_list_tick).ToUniversalTime()
+                            $lastL = ConvertTo-DuneBotUtcInstant $state2.last_list_tick
+                            if ($null -ne $lastL) {
                                 $dueList = (([datetime]::UtcNow - $lastL).TotalSeconds -ge [int]$cfg.list_tick_interval)
-                            } catch { $dueList = $true }
+                            }
                         }
                         if ($dueList) { [void](Invoke-DuneBotListTick) }
                     }
