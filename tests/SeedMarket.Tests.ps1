@@ -186,3 +186,59 @@ Describe 'Get-DuneBotItemPrice -Grade multiplier' -Tag 'MarketBot' {
         $argless | Should -Be $g0
     }
 }
+
+Describe 'Get-DuneBotItemPrice price_floor' -Tag 'MarketBot' {
+    BeforeAll {
+        # Configure a deliberately low base (T0 cosmetic refuse) that would
+        # produce a sub-floor price without the clamp.
+        $script:floorCfg = @{
+            price_cap          = 100000
+            price_floor        = 50
+            price_overrides    = @{}
+            rarity_multipliers = @{ 'common' = 1.0 }
+            tier_base_prices   = @{ '0' = 10 }
+            stack_unit_prices  = @{ '0' = 1 }
+            category_factors   = @{ 'gear' = 1.0 }
+            vendor_multipliers = @{ 'all' = 0.95 }
+            default_unit_price = 1
+        }
+        $script:cheapCand = @{
+            template_id  = 'CosmeticRefuse_T0'
+            tier         = 0
+            rarity       = 'common'
+            is_stackable = $false
+            vendor_price = 0
+            category     = 'items/gear/cosmetic'
+        }
+        $script:cheapStackCand = @{
+            template_id  = 'DustPile_T0'
+            tier         = 0
+            rarity       = 'common'
+            is_stackable = $true
+            vendor_price = 0
+            category     = 'items/materials/dust'
+        }
+    }
+
+    It 'clamps a sub-floor non-stackable to price_floor at G0' {
+        $p = Get-DuneBotItemPrice -Cfg $script:floorCfg -Cand $script:cheapCand -Grade 0
+        $p | Should -BeGreaterOrEqual 50
+    }
+
+    It 'clamps a sub-floor stackable to price_floor at G0' {
+        $p = Get-DuneBotItemPrice -Cfg $script:floorCfg -Cand $script:cheapStackCand -Grade 0
+        $p | Should -BeGreaterOrEqual 50
+    }
+
+    It 'price_floor is applied BEFORE grade multiplier (G5 scales from floor)' {
+        $p0 = Get-DuneBotItemPrice -Cfg $script:floorCfg -Cand $script:cheapCand -Grade 0
+        $p5 = Get-DuneBotItemPrice -Cfg $script:floorCfg -Cand $script:cheapCand -Grade 5
+        $p5 | Should -BeGreaterThan $p0
+    }
+
+    It 'setting price_floor = 0 disables the clamp' {
+        $cfg2 = $script:floorCfg.Clone(); $cfg2['price_floor'] = 0
+        $p = Get-DuneBotItemPrice -Cfg $cfg2 -Cand $script:cheapCand -Grade 0
+        $p | Should -BeLessThan 50
+    }
+}
