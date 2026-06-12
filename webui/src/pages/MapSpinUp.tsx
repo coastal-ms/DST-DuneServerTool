@@ -71,8 +71,7 @@ export function MapSpinUp() {
     }
   }, [])
 
-  const supported = (maps ?? []).filter(m => m.group === 'supported')
-  const experimental = (maps ?? []).filter(m => m.group === 'experimental')
+  const allMaps = maps ?? []
 
   return (
     <>
@@ -121,23 +120,12 @@ export function MapSpinUp() {
       ) : (
         <>
           <MapGroup
-            title="Supported"
-            hint="These maps ship with native MinServers support — toggling is reliable."
-            maps={supported}
+            title="Maps"
+            hint="These keep at least one server warm (MinServers = 1). Some maps don't ship MinServers natively — enabling those may be ignored by the director, or may keep an instance warm and consume RAM (~1+ GB each). Use with care."
+            maps={allMaps}
             busy={busy}
             onToggle={onToggle}
           />
-
-          {experimental.length > 0 && (
-            <MapGroup
-              title="Experimental"
-              tone="warning"
-              hint="These maps don't ship MinServers natively. Enabling may be ignored by the director, or it may keep an instance warm and consume RAM (~1+ GB each). Use with care."
-              maps={experimental}
-              busy={busy}
-              onToggle={onToggle}
-            />
-          )}
         </>
       )}
     </>
