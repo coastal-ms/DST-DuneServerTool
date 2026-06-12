@@ -280,13 +280,13 @@ function Get-DuneKeystoneSpBonus {
 function Get-DunePlayerLevelComponentRow {
     param([string]$Ip, [long]$ActorId)
     $sql = @"
-SELECT fge.id::text AS entity_id,
-       fge.properties->'FLevelComponent'->>'TotalXPEarned' AS xp_text,
-       fge.properties->'FLevelComponent'->>'SkillPointsSpent' AS sp_spent_text,
-       fge.properties->'FLevelComponent'->>'TotalSkillPointsEarned' AS sp_total_text
+SELECT fge.entity_id::text AS entity_id,
+       fge.components->'FLevelComponent'->1->>'TotalXPEarned' AS xp_text,
+       fge.components->'FLevelComponent'->1->>'UnspentSkillPoints' AS sp_unspent_text,
+       fge.components->'FLevelComponent'->1->>'TotalSkillPointsEarned' AS sp_total_text
 FROM dune.actor_fgl_entities afe
-JOIN dune.fgl_entities fge ON fge.id = afe.fgl_entity_id
-WHERE afe.actor_id = $ActorId::bigint AND afe.fgl_entity_slot = 'DuneCharacter'
+JOIN dune.fgl_entities fge ON fge.entity_id = afe.entity_id
+WHERE afe.actor_id = $ActorId::bigint AND afe.slot_name = 'DuneCharacter'
 LIMIT 1;
 "@
     $r = Invoke-DuneSqlQuery -Ip $Ip -Sql $sql -ReadOnly $true -MaxRows 1 -TimeoutSec 15
@@ -294,12 +294,15 @@ LIMIT 1;
     $maps = ConvertTo-DuneRowMaps -Result $r
     if ($maps.Count -eq 0) { return @{ ok = $false; error = "No DuneCharacter FLevelComponent found for actor $ActorId." } }
     $row = $maps[0]
+    $unspent = [int](ConvertTo-DuneInt $row['sp_unspent_text'])
+    $total   = [int](ConvertTo-DuneInt $row['sp_total_text'])
     return @{
         ok = $true
         entity_id = [string]$row['entity_id']
         xp = [int64](ConvertTo-DuneInt $row['xp_text'])
-        sp_spent = [int](ConvertTo-DuneInt $row['sp_spent_text'])
-        sp_total = [int](ConvertTo-DuneInt $row['sp_total_text'])
+        sp_spent = [int]($total - $unspent)
+        sp_total = $total
+        sp_unspent = $unspent
     }
 }
 
@@ -350,13 +353,13 @@ function Invoke-DunePlayerGetCharXp {
 # {0}=entity_id {1}=xp {2}=total_sp {3}=unspent_sp.
 $script:DuneAwardCharXpFglSqlTpl = @'
 UPDATE dune.fgl_entities
-SET properties = jsonb_set(
+SET components = jsonb_set(
     jsonb_set(
-        jsonb_set(properties,
+        jsonb_set(components,
             '{{FLevelComponent,1,TotalXPEarned}}', to_jsonb({1}::bigint)),
         '{{FLevelComponent,1,TotalSkillPointsEarned}}', to_jsonb({2}::int)),
     '{{FLevelComponent,1,UnspentSkillPoints}}', to_jsonb({3}::int))
-WHERE id = {0}::bigint;
+WHERE entity_id = {0}::bigint;
 '@
 
 # {0}=actor_id {1}=intel
@@ -508,25 +511,25 @@ BEGIN
     -- character actors
     DELETE FROM dune.actor_fgl_entities afe
     USING dune.actors a
-    WHERE afe.actor_id = a.id AND a.account_id = v_account_id;
+    WHERE afe.actor_id = a.id AND a.owner_account_id = v_account_id;
 
     DELETE FROM dune.fgl_entities fge
-    WHERE fge.id IN (
-        SELECT afe.fgl_entity_id FROM dune.actor_fgl_entities afe
+    WHERE fge.entity_id IN (
+        SELECT afe.entity_id FROM dune.actor_fgl_entities afe
         JOIN dune.actors a ON a.id = afe.actor_id
-        WHERE a.account_id = v_account_id
+        WHERE a.owner_account_id = v_account_id
     );
 
     DELETE FROM dune.player_virtual_currency_balances
-    WHERE player_controller_id IN (SELECT id FROM dune.actors WHERE account_id = v_account_id);
+    WHERE player_controller_id IN (SELECT id FROM dune.actors WHERE owner_account_id = v_account_id);
 
     DELETE FROM dune.player_faction_reputation
-    WHERE actor_id IN (SELECT id FROM dune.actors WHERE account_id = v_account_id);
+    WHERE actor_id IN (SELECT id FROM dune.actors WHERE owner_account_id = v_account_id);
 
     DELETE FROM dune.player_state
-    WHERE player_pawn_id IN (SELECT id FROM dune.actors WHERE account_id = v_account_id);
+    WHERE player_pawn_id IN (SELECT id FROM dune.actors WHERE owner_account_id = v_account_id);
 
-    DELETE FROM dune.actors WHERE account_id = v_account_id;
+    DELETE FROM dune.actors WHERE owner_account_id = v_account_id;
 
     DELETE FROM dune.accounts WHERE id = v_account_id OR "user" = v_funcom;
 END
