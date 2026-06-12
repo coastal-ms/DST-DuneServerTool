@@ -9,10 +9,10 @@ body:
         ## What this tracker is for
 
         This issue tracker is for **bugs in this tool's code** — the desktop
-        app (Server Health, Commands, PowerShell, Characters, Game Config, DD
-        Map, Database, Sietches, Map SpinUp, Settings, Setup Wizard), the
-        PowerShell script (`dune-server.ps1`), the `.bat` launcher, and the
-        installer (`DuneServerSetup.exe`).
+        app (Server Health, Commands, PowerShell, Game Config, Gameplay Admin,
+        DD Map, Database, Sietches, Map SpinUp, Settings, Tailscale, Setup
+        Wizard), the PowerShell script (`dune-server.ps1`), the `.bat`
+        launcher, and the installer (`DuneServerSetup.exe`).
 
         > 💡 **One-click report from the app.** In the desktop app, click
         > **Help → Create GitHub Issue + Save Logs**. It opens this form
@@ -71,14 +71,20 @@ body:
     id: surface
     attributes:
       label: Where did the bug happen?
-      description: Which part of the tool was affected? Pick the closest match. (Nav layout reflects v10.x — the top-bar / sidebar groups are Server Health, PowerShell, Game Data, Database, System, plus a Help dropdown on the right.)
+      description: Which part of the tool was affected? Pick the closest match. (Nav groups are Server Health, PowerShell, Game Data, Database, System, plus a Help dropdown on the right.)
       options:
         - Web portal — Server Health (Dashboard)
         - Web portal — Battlegroup shows "Unknown" / tool can't connect to the VM (SSH)
         - Web portal — Commands
         - Web portal — PowerShell (embedded xterm.js terminal)
-        - Web portal — Characters
-        - Web portal — Game Config (UserGame.ini / UserEngine.ini / Spicefield Types)
+        - Web portal — Game Config — VM INI (UserGame.ini / UserEngine.ini / Spicefield Types)
+        - Web portal — Game Config — client-side INI (preview / Open in Notepad / client-apply reminder)
+        - Web portal — Gameplay Admin — Overview
+        - Web portal — Gameplay Admin — Market / Market Bot
+        - Web portal — Gameplay Admin — Players
+        - Web portal — Gameplay Admin — Bases
+        - Web portal — Gameplay Admin — Storage
+        - Web portal — Gameplay Admin — Blueprints (incl. Blueprint Designer link)
         - Web portal — DD Map
         - Web portal — Database (Backup / Restore / SQL Editor)
         - Web portal — Database (Backup Schedule / crontab)
@@ -86,6 +92,7 @@ body:
         - Web portal — Map SpinUp
         - Web portal — Settings (general — paths, ports, providers)
         - Web portal — Settings (Dune Server Tool self-updater)
+        - Web portal — Tailscale (remote-access / device list)
         - Web portal — Setup Wizard / first-run
         - Web portal — Top menu bar / Help dropdown
         - Web portal — Sidebar / status bar / window chrome
@@ -102,7 +109,7 @@ body:
     attributes:
       label: Specific page / button / command
       description: Which button, tab, menu letter/number, or `-Cmd <name>` triggered the bug?
-      placeholder: "e.g. Server Health 'Restart battlegroup' button, Game Config > Spicefields > Save, Database > Backup Schedule presets > Hourly, Map SpinUp > Survival_2, Help > Create GitHub Issue, CLI option 'e. reboot', or -Cmd startup"
+      placeholder: "e.g. Server Health 'Restart battlegroup' button, Game Config > Spicefields > Save, Game Config > client INI 'Open in Notepad', Gameplay Admin > Market Bot > toggle, Gameplay Admin > Blueprints > 'Blueprint Designer' link, Tailscale > 'Admin console', Database > Backup Schedule presets > Hourly, Map SpinUp > Survival_2, Help > Create GitHub Issue, CLI option 'e. reboot', or -Cmd startup"
     validations:
       required: true
 
@@ -165,6 +172,32 @@ body:
         - "Yes — the interactive SSH terminal connects, but the Dashboard still shows Unknown"
         - No — the interactive SSH terminal also fails
         - Haven't tried
+    validations:
+      required: false
+
+  - type: textarea
+    id: tailscale_diag
+    attributes:
+      label: Tailscale status (only if your bug is on the Tailscale page)
+      description: |
+        The Tailscale page wraps the local `tailscale` CLI (read-only). If the
+        page is empty, stuck, or wrong, paste the output of the following from a
+        terminal on the **machine running the tool** (redact public/100.x IPs and
+        device names you'd rather not share):
+
+        ```
+        tailscale version
+        tailscale status
+        ```
+
+        Also note what the page itself shows: "Tailscale isn't installed", the
+        "Tailscale isn't connected (state: …)" card, or a populated device list
+        with something wrong. Leave blank if your bug isn't about Tailscale.
+      placeholder: |
+        Page shows: "Tailscale isn't connected (state: NeedsLogin)"
+        tailscale version: 1.xx.x
+        tailscale status: <redacted>
+      render: shell
     validations:
       required: false
 

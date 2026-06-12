@@ -21,12 +21,13 @@ export const NAV_ITEMS: NavItem[] = [
   { to: '/commands',    label: 'Commands',     icon: 'Zap',             group: 'terminal' },
   { to: '/terminal',    label: 'PowerShell',   icon: 'SquareTerminal',  group: 'terminal', localOnly: true },
   { to: '/gameconfig',  label: 'Game Config',  icon: 'Sliders',         group: 'data', badge: 'BETA' },
-  { to: '/gameplay',    label: 'Gameplay Admin', icon: 'Gamepad2',        group: 'data' },
+  { to: '/gameplay',    label: 'Gameplay Admin', icon: 'Gamepad2',        group: 'data', badge: 'BETA' },
   { to: '/dd-map',      label: 'DD Map',       icon: 'Map',             group: 'data' },
   { to: '/database',    label: 'Database',     icon: 'Database',        group: 'database' },
   { to: '/sietches',    label: 'Sietches',     icon: 'Network',         group: 'database' },
   { to: '/map-spinup',  label: 'Map SpinUp',   icon: 'Globe',           group: 'database' },
   { to: '/settings',    label: 'Settings',     icon: 'Settings',        group: 'system' },
+  { to: '/tailscale',   label: 'Tailscale',    icon: 'Share2',          group: 'system', localOnly: true },
   { to: '/setup',       label: 'Setup Wizard', icon: 'Wand2',           group: 'system' },
 ]
 
