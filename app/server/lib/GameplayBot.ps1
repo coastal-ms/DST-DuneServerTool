@@ -605,30 +605,49 @@ function Set-DuneBotBalance {
 }
 
 # ----------------------------------------------------------------------------
-# Clear Duke's own market listings — port of dune-admin's bot-listing purge.
-# Deletes only rows owned by the Duke actor with is_npc_order = TRUE (backing
-# items, sell orders, then the orders themselves) in one transaction, so player
-# listings are never touched.
+# Clear Duke's own market listings AND wipe any orphan items from Duke's NPC
+# inventory. Previously this only deleted items referenced by an active order
+# (`WHERE id IN (SELECT item_id FROM orders)`), which left 6M+ orphans on a
+# production VM after the bot ran for months — every subsequent seed/insert
+# paid the full b-tree/hash index cost on that giant inventory bucket, pushing
+# chunk writes to ~14s each. We now wipe ALL items in Duke's inventory after
+# clearing his orders, because by definition nothing else lives there.
+#
+# Inventories with > $script:DuneBotClearChunk items use a chunked autocommit
+# loop (the items DELETE can't fit in a single transaction under the SSH/600s
+# cap once row count crosses ~1M). Orders and sell_orders are tiny (~thousands)
+# so they stay in one transaction. Player listings are never touched.
 # ----------------------------------------------------------------------------
+$script:DuneBotClearChunk = 500000
 function Clear-DuneBotListings {
     $ctx = Get-DuneDbContext
     if (-not $ctx.ok) { return @{ ok = $false; error = $ctx.message } }
     $ident = Get-DuneBotIdentity -Ip $ctx.ip
     if (-not $ident.ok) { return @{ ok = $false; error = $ident.error } }
     if (-not $ident.provisioned -or $ident.ownerId -le 0) {
-        return @{ ok = $true; cleared = 0; message = 'Duke has no listings to clear.' }
+        return @{ ok = $true; cleared = 0; items_deleted = 0; message = 'Duke has no listings to clear.' }
     }
-    $o = $ident.ownerId
+    $o  = $ident.ownerId
+    $ex = $ident.exchangeId
+
+    # Resolve Duke's NPC inventory_id (the one all bot items live in). If the
+    # exchange has no inventory yet, there are no orphans to worry about.
+    $invR = Get-DuneBotScalar -Ip $ctx.ip -Sql "SELECT dune.get_exchange_inventory_id($ex)"
+    $invId = if ($invR.ok) { ConvertTo-DuneInt $invR.value } else { 0 }
+
     $before = 0L
     $cnt = Get-DuneBotScalar -Ip $ctx.ip -Sql "SELECT COUNT(*) FROM dune.dune_exchange_orders WHERE owner_id = $o AND is_npc_order = TRUE"
     if ($cnt.ok) { $before = ConvertTo-DuneInt $cnt.value }
 
-    $sql = @"
+    $itemsBefore = 0L
+    if ($invId -gt 0) {
+        $ic = Get-DuneBotScalar -Ip $ctx.ip -Sql "SELECT COUNT(*) FROM dune.items WHERE inventory_id = $invId"
+        if ($ic.ok) { $itemsBefore = ConvertTo-DuneInt $ic.value }
+    }
+
+    # ---- Step 1: drop orders + sell_orders in one transaction (always small).
+    $sqlOrders = @"
 BEGIN;
-DELETE FROM dune.items WHERE id IN (
-  SELECT item_id FROM dune.dune_exchange_orders
-  WHERE owner_id = $o AND is_npc_order = TRUE AND item_id IS NOT NULL
-);
 DELETE FROM dune.dune_exchange_sell_orders WHERE order_id IN (
   SELECT id FROM dune.dune_exchange_orders
   WHERE owner_id = $o AND is_npc_order = TRUE
@@ -636,9 +655,47 @@ DELETE FROM dune.dune_exchange_sell_orders WHERE order_id IN (
 DELETE FROM dune.dune_exchange_orders WHERE owner_id = $o AND is_npc_order = TRUE;
 COMMIT;
 "@
-    $w = Invoke-DuneSqlQuery -Ip $ctx.ip -Sql $sql -ReadOnly $false -MaxRows 5 -TimeoutSec 60
-    if (-not $w.ok) { return @{ ok = $false; error = $w.error } }
-    return @{ ok = $true; cleared = $before }
+    $w = Invoke-DuneSqlQuery -Ip $ctx.ip -Sql $sqlOrders -ReadOnly $false -MaxRows 5 -TimeoutSec 600 -Bulk
+    if (-not $w.ok) { return @{ ok = $false; error = "orders: $($w.error)" } }
+
+    # ---- Step 2: nuke ALL items in Duke's inventory (orphans + the rows we
+    # just dereferenced). Small inventories run in one shot; big ones loop
+    # with autocommit so each batch fits under the SSH timeout.
+    $itemsDeleted = 0L
+    if ($invId -gt 0 -and $itemsBefore -gt 0) {
+        if ($itemsBefore -le $script:DuneBotClearChunk) {
+            $sqlItems = "BEGIN; DELETE FROM dune.items WHERE inventory_id = $invId; COMMIT;"
+            $w2 = Invoke-DuneSqlQuery -Ip $ctx.ip -Sql $sqlItems -ReadOnly $false -MaxRows 5 -TimeoutSec 600 -Bulk
+            if (-not $w2.ok) { return @{ ok = $false; error = "items: $($w2.error)"; cleared = $before } }
+            $itemsDeleted = $itemsBefore
+        } else {
+            $batch = $script:DuneBotClearChunk
+            for ($pass = 0; $pass -lt 100; $pass++) {
+                $sqlBatch = "DELETE FROM dune.items WHERE id IN (SELECT id FROM dune.items WHERE inventory_id = $invId LIMIT $batch);"
+                $w3 = Invoke-DuneSqlQuery -Ip $ctx.ip -Sql $sqlBatch -ReadOnly $false -MaxRows 5 -TimeoutSec 600 -Bulk
+                if (-not $w3.ok) { return @{ ok = $false; error = "items batch $($pass+1): $($w3.error)"; cleared = $before; items_deleted = $itemsDeleted } }
+                $remR = Get-DuneBotScalar -Ip $ctx.ip -Sql "SELECT COUNT(*) FROM dune.items WHERE inventory_id = $invId"
+                $remaining = if ($remR.ok) { ConvertTo-DuneInt $remR.value } else { 0 }
+                $itemsDeleted = $itemsBefore - $remaining
+                if ($remaining -le 0) { break }
+            }
+        }
+    }
+
+    $orphans = [Math]::Max(0L, $itemsDeleted - $before)
+    $msg = if ($orphans -gt 0) {
+        "Cleared $before listing(s); also removed $orphans orphan item(s) from inventory $invId."
+    } else {
+        "Cleared $before listing(s)."
+    }
+    return @{
+        ok            = $true
+        cleared       = $before
+        items_deleted = $itemsDeleted
+        orphans       = $orphans
+        inventory_id  = $invId
+        message       = $msg
+    }
 }
 
 # ----------------------------------------------------------------------------

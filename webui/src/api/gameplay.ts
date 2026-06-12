@@ -380,7 +380,7 @@ export function setBotBalance(targetBalance: number) {
 }
 
 export function clearBotListings() {
-  return api<{ ok: boolean; cleared: number; message?: string }>(
+  return api<{ ok: boolean; cleared: number; items_deleted?: number; orphans?: number; inventory_id?: number; message?: string }>(
     '/api/gameplay/market-bot/clear-listings',
     { method: 'POST' },
   )

@@ -223,11 +223,15 @@ export function MarketBotTab() {
   }
 
   const clearListings = async () => {
-    if (!window.confirm("Delete ALL of Duke's market listings? Player listings are not affected. This cannot be undone.")) return
+    if (!window.confirm("Delete ALL of Duke's market listings AND wipe his entire NPC inventory (including any orphan items left behind by previous runs)? Player listings are not affected. This cannot be undone.")) return
     setClearing(true); setError(null); setSaveMsg(null)
     try {
       const r = await clearBotListings()
-      setSaveMsg(r.message ?? `Cleared ${fmtNum(r.cleared)} of Duke's listings.`)
+      let msg = r.message ?? `Cleared ${fmtNum(r.cleared)} of Duke's listings.`
+      if (r.orphans && r.orphans > 0) {
+        msg = `${msg} (Removed ${fmtNum(r.orphans)} orphan item(s) from inventory ${r.inventory_id ?? '?'}.)`
+      }
+      setSaveMsg(msg)
       getBotStatus().then(setStatus).catch(() => {})
     } catch (e) { setError(e instanceof Error ? e.message : String(e)) }
     finally { setClearing(false) }
@@ -600,7 +604,7 @@ function ListSection({ draft, setDraft, listTick, listTicking, snapshot, snapsho
           Bypasses the live NPC vendor snapshot (which depends on the in-game market already having activity)
           and the mask-cache SSH refresh. Walks the bundled item catalog intersected with the persistent mask cache
           and tops Duke up to <span className="font-mono">{draft.listings_per_grade}</span> per template in one
-          batched transaction per ~50 templates. Runs in the background — the button reactivates when it finishes.
+          batched transaction per ~100 templates. Runs in the background — the button reactivates when it finishes.
         </p>
         {seedLaunchError && (
           <div className="text-danger text-xs mb-2">Launch failed: {seedLaunchError}</div>
