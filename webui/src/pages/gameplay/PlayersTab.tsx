@@ -66,6 +66,21 @@ export function PlayersTab() {
     return () => window.clearTimeout(t)
   }, [flash])
 
+  // Esc closes the open player and returns to the Server Overview. Ignored
+  // when the user is typing in an input/textarea/contenteditable so it does
+  // not steal escapes from inline forms.
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key !== 'Escape') return
+      const t = e.target as HTMLElement | null
+      const tag = t?.tagName
+      if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT' || t?.isContentEditable) return
+      setSel(null)
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [])
+
   // GM filter applies to the whole tab — counts, summary buckets, and the
   // list all hide the bot when toggled on.
   const visiblePlayers = useMemo(
@@ -194,7 +209,8 @@ export function PlayersTab() {
                 <div className="px-3 py-6 text-center text-text-dim text-sm">No players match.</div>
               ) : (
                 filtered.map(p => (
-                  <button key={p.id} type="button" onClick={() => setSel(p.id)}
+                  <button key={p.id} type="button" onClick={() => setSel(cur => cur === p.id ? null : p.id)}
+                    title={selectedId === p.id ? 'Click again to close and return to Server Overview' : undefined}
                     className={`w-full flex items-center justify-between gap-2 px-3 py-2 text-left border-b border-border/30 hover:bg-surface-2 ${selectedId === p.id ? 'bg-surface-2 border-l-2 border-l-accent' : ''}`}>
                     <span className="min-w-0 flex-1">
                       <div className="text-sm text-text truncate">{p.name || <span className="italic text-text-dim">Unnamed</span>}</div>
@@ -236,7 +252,7 @@ export function PlayersTab() {
           )}
           {selected ? (
             <div className="space-y-3">
-              <PlayerHeader player={selected} />
+              <PlayerHeader player={selected} onClose={() => setSel(null)} />
               <SectionComponent
                 player={selected}
                 canWrite={source === 'live'}
@@ -260,10 +276,10 @@ export function PlayersTab() {
   )
 }
 
-function PlayerHeader({ player }: { player: Player }) {
+function PlayerHeader({ player, onClose }: { player: Player; onClose: () => void }) {
   return (
     <div className="card p-3 flex items-start justify-between gap-3">
-      <div className="min-w-0">
+      <div className="min-w-0 flex-1">
         <h3 className="text-lg font-semibold text-text truncate">{player.name || 'Unnamed player'}</h3>
         <div className="text-xs text-text-dim flex flex-wrap gap-x-3 gap-y-0.5 mt-1">
           <span><Icon name="Hash" size={11} className="inline" /> pawn {player.id}</span>
@@ -280,6 +296,11 @@ function PlayerHeader({ player }: { player: Player }) {
           </span>
         </div>
       </div>
+      <button type="button" onClick={onClose}
+        title="Close player (back to Server Overview) - Esc"
+        className="shrink-0 text-text-dim hover:text-text rounded-lg p-1.5 hover:bg-surface-2 flex items-center gap-1 text-xs">
+        <Icon name="X" size={14} /> Close
+      </button>
     </div>
   )
 }
