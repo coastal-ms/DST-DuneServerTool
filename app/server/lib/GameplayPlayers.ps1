@@ -43,7 +43,7 @@ SELECT a.id,
        COALESCE(ps.online_status::text, 'Offline')      AS online_status
 FROM dune.actors a
 LEFT JOIN dune.player_state ps  ON ps.account_id = a.owner_account_id
-LEFT JOIN dune.player_faction pf ON pf.actor_id = a.id
+LEFT JOIN dune.player_faction pf ON pf.actor_id = ps.player_controller_id
 LEFT JOIN dune.factions f        ON f.id = pf.faction_id
 WHERE a.class ILIKE '%PlayerCharacter%'
 ORDER BY a.id
@@ -369,7 +369,8 @@ UNION ALL
 SELECT 'by_faction', COALESCE(f.name, 'Unaligned'),
        COUNT(*)::bigint
   FROM dune.actors a
-  LEFT JOIN dune.player_faction pf ON pf.actor_id = a.id
+  LEFT JOIN dune.player_state   ps ON ps.account_id = a.owner_account_id
+  LEFT JOIN dune.player_faction pf ON pf.actor_id   = ps.player_controller_id
   LEFT JOIN dune.factions f ON f.id = pf.faction_id
   WHERE a.class ILIKE '%PlayerCharacter%'
   GROUP BY 2
@@ -442,7 +443,7 @@ SELECT
               WHERE player_controller_id = ps.player_controller_id), 0)::bigint AS total_currency
 FROM dune.actors a
 LEFT JOIN dune.player_state    ps ON ps.account_id = a.owner_account_id
-LEFT JOIN dune.player_faction  pf ON pf.actor_id   = a.id
+LEFT JOIN dune.player_faction  pf ON pf.actor_id   = ps.player_controller_id
 LEFT JOIN dune.factions        f  ON f.id          = pf.faction_id
 WHERE a.id = {0}::bigint
 LIMIT 1;
