@@ -343,3 +343,76 @@ Register-DuneRoute -Method POST -Path '/api/gameplay/market-bot/clear-listings' 
         Write-DuneError -Response $res -Status 500 -Message "Clear listings failed: $($_.Exception.Message)"
     }
 }
+
+# ---------------------------------------------------------------------------
+# POST /api/gameplay/market-bot/clear-legacy-listings — wipe NPC orders owned
+# by any actor class that ISN'T Duke (Revy orphans from the old external
+# dune-admin integration, etc.). One-shot cleanup; player listings untouched.
+# ---------------------------------------------------------------------------
+Register-DuneRoute -Method POST -Path '/api/gameplay/market-bot/clear-legacy-listings' -Handler {
+    param($req, $res, $routeParams, $body)
+    try {
+        $r = Clear-DuneBotLegacyListings
+        if (-not $r.ok) { Write-DuneError -Response $res -Status 503 -Message $r.error; return }
+        Write-DuneJson -Response $res -Body @{ ok = $true; cleared = $r.cleared; message = $r.message }
+    } catch {
+        Write-DuneError -Response $res -Status 500 -Message "Clear legacy listings failed: $($_.Exception.Message)"
+    }
+}
+
+# ---------------------------------------------------------------------------
+# POST /api/gameplay/market-bot/tick/list — run one LIST tick now. ?dry=1 (or
+# body { dryRun: true }) reports the planned listing actions WITHOUT writing.
+# ---------------------------------------------------------------------------
+Register-DuneRoute -Method POST -Path '/api/gameplay/market-bot/tick/list' -Handler {
+    param($req, $res, $routeParams, $body)
+    try {
+        $dry = $false
+        $q = (Get-DuneQ -Request $req -Name 'dry').ToLower()
+        if ($q -eq '1' -or $q -eq 'true' -or $q -eq 'yes') { $dry = $true }
+        if (Test-DuneBodyTruthy -Body $body -Name 'dryRun') { $dry = $true }
+        $summary = Invoke-DuneBotListTick -DryRun:$dry
+        $status = if ($summary.ok) { 200 } else { 503 }
+        Write-DuneJson -Response $res -Status $status -Body $summary
+    } catch {
+        Write-DuneError -Response $res -Status 500 -Message "Bot list tick failed: $($_.Exception.Message)"
+    }
+}
+
+# ---------------------------------------------------------------------------
+# GET /api/gameplay/market-bot/vendor-snapshot — preview what the bot WOULD
+# list (catalog derived from live NPC vendor inventory). Useful for tuning
+# pricing rules before flipping the bot on.
+# ---------------------------------------------------------------------------
+Register-DuneRoute -Method GET -Path '/api/gameplay/market-bot/vendor-snapshot' -Handler {
+    param($req, $res, $routeParams, $body)
+    try {
+        $ctx = Get-DuneDbContext
+        if (-not $ctx.ok) { Write-DuneError -Response $res -Status 503 -Message $ctx.message; return }
+        $ident = Get-DuneBotIdentity -Ip $ctx.ip
+        if (-not $ident.ok) {
+            Write-DuneJson -Response $res -Body @{ ok = $true; provisioned = $false; candidates = @(); message = $ident.error }
+            return
+        }
+        $cfg = Read-DuneBotConfig
+        $vs = Get-DuneBotVendorSnapshot -Ip $ctx.ip -ExchangeId $ident.exchangeId
+        if (-not $vs.ok) { Write-DuneError -Response $res -Status 503 -Message $vs.error; return }
+        $cands = Resolve-DuneBotListingCandidates -Snapshot $vs.snapshot -Cfg $cfg
+        $rows = @()
+        foreach ($c in $cands) {
+            $price = Get-DuneBotItemPrice -Cfg $cfg -Cand $c
+            $rows += [ordered]@{
+                template_id   = $c.template_id
+                tier          = $c.tier
+                rarity        = $c.rarity
+                stackable     = [bool]$c.is_stackable
+                stack_max     = $c.stack_max
+                vendor_price  = ($c.vendor_price * 10)
+                target_price  = ($price * 10)
+            }
+        }
+        Write-DuneJson -Response $res -Body @{ ok = $true; provisioned = $true; total = $rows.Count; candidates = $rows }
+    } catch {
+        Write-DuneError -Response $res -Status 500 -Message "Vendor snapshot failed: $($_.Exception.Message)"
+    }
+}

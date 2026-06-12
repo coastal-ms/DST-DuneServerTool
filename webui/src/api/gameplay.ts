@@ -83,6 +83,11 @@ export interface MarketStatsResponse {
   liveError?: string
 }
 
+export interface BotStatusByClass {
+  class: string
+  count: number
+}
+
 export interface BotStatus {
   configured?: boolean
   running: boolean
@@ -90,7 +95,11 @@ export interface BotStatus {
   die_size?: number
   die_target?: number
   last_buy_tick?: string
-  listing_count?: number
+  last_list_tick?: string
+  listing_count?: number               // Duke's own NPC listings
+  listings_npc_total?: number          // ALL NPC listings across actor classes
+  listings_by_class?: BotStatusByClass[]
+  legacy_listings_count?: number       // NPC listings owned by non-Duke actors
   balance?: number
   provisioned?: boolean
   error_count?: number
@@ -99,7 +108,19 @@ export interface BotStatus {
   db_message?: string
 }
 
-export interface BotConfig {
+export interface BotPricingConfig {
+  price_cap: number
+  default_unit_price: number
+  tier_base_prices: Record<string, number>
+  stack_unit_prices: Record<string, number>
+  category_factors: Record<string, number>
+  grade_multipliers: number[]
+  rarity_multipliers: Record<string, number>
+  vendor_multipliers: Record<string, number>
+  price_overrides: Record<string, number>
+}
+
+export interface BotConfig extends Partial<BotPricingConfig> {
   enabled: boolean
   buy_tick_interval: number
   max_buys_per_tick: number
@@ -108,6 +129,11 @@ export interface BotConfig {
   target_balance: number
   maintain_balance: boolean
   disabled_items: string[]
+  // Listing side (sane-pricing port, v11.5.2+).
+  list_tick_interval: number
+  listings_per_grade: number
+  stackables_only: boolean
+  sane_defaults_revision?: number
   configured?: boolean
   source?: DataSource
 }
@@ -133,6 +159,52 @@ export interface BotTickResult {
   die: string
   winners: BotTickWinner[]
   message: string
+}
+
+export interface BotListTickPlan {
+  template_id: string
+  target_price: number
+  stack_max: number
+  existing: number
+  aligned: number
+  stale: number
+  to_insert: number
+  tier: number
+  rarity: string
+  stackable: boolean
+}
+
+export interface BotListTickResult {
+  ok: boolean
+  dryRun: boolean
+  enabled: boolean
+  considered: number
+  eligible: number
+  listed_before: number
+  listed_after: number
+  inserted: number
+  deleted: number
+  errors: number
+  planned: BotListTickPlan[]
+  message: string
+}
+
+export interface BotVendorCandidate {
+  template_id: string
+  tier: number
+  rarity: string
+  stackable: boolean
+  stack_max: number
+  vendor_price: number
+  target_price: number
+}
+
+export interface BotVendorSnapshotResponse {
+  ok: boolean
+  provisioned: boolean
+  total?: number
+  candidates: BotVendorCandidate[]
+  message?: string
 }
 
 export interface BotBalance {
@@ -254,6 +326,24 @@ export function clearBotListings() {
     '/api/gameplay/market-bot/clear-listings',
     { method: 'POST' },
   )
+}
+
+export function clearBotLegacyListings() {
+  return api<{ ok: boolean; cleared: number; message?: string }>(
+    '/api/gameplay/market-bot/clear-legacy-listings',
+    { method: 'POST' },
+  )
+}
+
+export function runBotListTick(dryRun: boolean) {
+  return api<BotListTickResult>(`/api/gameplay/market-bot/tick/list${dryRun ? '?dry=1' : ''}`, {
+    method: 'POST',
+    body: JSON.stringify({ dryRun }),
+  })
+}
+
+export function getBotVendorSnapshot() {
+  return api<BotVendorSnapshotResponse>('/api/gameplay/market-bot/vendor-snapshot')
 }
 
 // ---------------------------------------------------------------------------
