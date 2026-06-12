@@ -46,19 +46,37 @@ function _Load-DuneKeystoneCatalog {
 
 function _Load-DuneTagsData {
     if ($null -ne $script:DuneTagsData) { return }
-    $script:DuneTagsData = @{ contractTags = @{}; contractAliases = @{} }
+    $script:DuneTagsData = @{
+        contractTags         = @{}
+        contractAliases      = @{}
+        contractSkillGrants  = @{}
+        jobSkillBlocks       = @{}
+        jobAllModules        = @{}
+        journeyNodeTags      = @{}
+    }
     $p = _Resolve-DuneCatalog 'dune-tags.json'
     if (-not $p) { return }
     try {
         $json = Get-Content -LiteralPath $p -Raw | ConvertFrom-Json
-        if ($json.PSObject.Properties['contractTags']) {
-            foreach ($prop in $json.contractTags.PSObject.Properties) {
-                $script:DuneTagsData.contractTags[$prop.Name] = @($prop.Value)
-            }
+        $map = @{
+            'contract_tags'         = 'contractTags'
+            'contract_aliases'      = 'contractAliases'
+            'contract_skill_grants' = 'contractSkillGrants'
+            'job_skill_blocks'      = 'jobSkillBlocks'
+            'job_all_modules'       = 'jobAllModules'
+            'journey_node_tags'     = 'journeyNodeTags'
         }
-        if ($json.PSObject.Properties['contractAliases']) {
-            foreach ($prop in $json.contractAliases.PSObject.Properties) {
-                $script:DuneTagsData.contractAliases[$prop.Name] = [string]$prop.Value
+        foreach ($srcKey in $map.Keys) {
+            $dstKey = $map[$srcKey]
+            if ($json.PSObject.Properties[$srcKey]) {
+                foreach ($prop in $json.$srcKey.PSObject.Properties) {
+                    $val = $prop.Value
+                    if ($val -is [string]) {
+                        $script:DuneTagsData[$dstKey][$prop.Name] = [string]$val
+                    } else {
+                        $script:DuneTagsData[$dstKey][$prop.Name] = @($val)
+                    }
+                }
             }
         }
     } catch {}

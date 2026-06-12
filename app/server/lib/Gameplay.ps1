@@ -52,11 +52,12 @@ function Initialize-DuneGameplayItemData {
             foreach ($p in $json.items.PSObject.Properties) {
                 $v = $p.Value
                 $rules[$p.Name] = @{
-                    name     = [string]$v.name
-                    category = [string]$v.category
-                    tier     = if ($null -ne $v.tier) { [int]$v.tier } else { 0 }
-                    rarity   = [string]$v.rarity
-                    icon     = [string]$v.icon
+                    name           = [string]$v.name
+                    category       = [string]$v.category
+                    tier           = if ($null -ne $v.tier) { [int]$v.tier } else { 0 }
+                    rarity         = [string]$v.rarity
+                    icon           = [string]$v.icon
+                    max_durability = if ($null -ne $v.max_durability) { [double]$v.max_durability } else { 0.0 }
                 }
             }
         }
@@ -76,7 +77,7 @@ function Get-DuneGameplayItemRule {
     if ($script:DuneGameplayItemRules.ContainsKey($TemplateId)) {
         return $script:DuneGameplayItemRules[$TemplateId]
     }
-    return @{ name = ''; category = ''; tier = 0; rarity = ''; icon = '' }
+    return @{ name = ''; category = ''; tier = 0; rarity = ''; icon = ''; max_durability = 0.0 }
 }
 
 function Get-DuneGameplayItemName {
