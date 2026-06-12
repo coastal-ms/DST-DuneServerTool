@@ -46,6 +46,9 @@ $script:DuneGcSecSandworm  = '/Script/DuneSandbox.SandwormSettings'
 $script:DuneGcSecDurab     = '/DeteriorationSystem.ItemDeteriorationConstants'
 $script:DuneGcSecGuilds    = '/Script/DuneSandbox.GuildSettings'
 $script:DuneGcSecOnline    = '/Script/DuneSandbox.PlayerOnlineStateSettings'
+$script:DuneGcSecCoriolis   = '/Script/DuneSandbox.CoriolisSubsystem'
+$script:DuneGcSecHazards    = '/Script/DuneSandbox.HazardsSettings'
+$script:DuneGcSecPermission = '/Script/DuneSandbox.PermissionSettings'
 $script:DuneGcSecConsole   = 'ConsoleVariables'
 $script:DuneGcSecUrl       = 'URL'
 
@@ -91,15 +94,15 @@ $script:DuneGameConfigSchema = @(
     @{ Section=$script:DuneGcSecConsole; Key='SecurityZones.PvpResourceMultiplier'; File='engine'; Type='float'; Min=0; Default='1.0'; Label='PvP Resource Multiplier'; Help='Resource yield multiplier inside PvP zones.'; Category='Resources & Economy' }
 
     # --- Building ---
-    @{ Section=$script:DuneGcSecBuilding; Key='m_MaxNumLandclaimSegments'; File='game'; Type='int'; Min=1; Default='100'; Label='Max Landclaim Segments'; Help='Maximum territory claim segments. Also needs client-side apply.'; Category='Building' }
-    @{ Section=$script:DuneGcSecBuilding; Key='m_BuildingBlueprintMaxExtensions'; File='game'; Type='int'; Min=0; Default='5'; Label='Blueprint Max Extensions'; Help='Maximum blueprint extension slots.'; Category='Building' }
-    @{ Section=$script:DuneGcSecBuilding; Key='m_BaseBackupMaxExtensions'; File='game'; Type='int'; Min=0; Default='2'; Label='Base Backup Max Extensions'; Help='Backup (reconstruction) extension slots per base.'; Category='Building' }
-    @{ Section=$script:DuneGcSecBuilding; Key='m_bBuildingRestrictionLimitsEnabled'; File='game'; Type='bool'; Default='False'; Label='Building Restriction Limits'; Help='Enforce building restriction limits. Also needs client-side apply.'; Category='Building' }
+    @{ Section=$script:DuneGcSecBuilding; Key='m_MaxNumLandclaimSegments'; File='game'; Type='int'; Min=1; Default='6'; Label='Max Landclaim Segments'; Help='Maximum territory claim segments. Also needs client-side apply.'; Category='Building' }
+    @{ Section=$script:DuneGcSecBuilding; Key='m_BuildingBlueprintMaxExtensions'; File='game'; Type='int'; Min=0; Default='4'; Label='Blueprint Max Extensions'; Help='Maximum blueprint extension slots.'; Category='Building' }
+    @{ Section=$script:DuneGcSecBuilding; Key='m_BaseBackupMaxExtensions'; File='game'; Type='int'; Min=0; Default='8'; Label='Base Backup Max Extensions'; Help='Backup (reconstruction) extension slots per base.'; Category='Building' }
+    @{ Section=$script:DuneGcSecBuilding; Key='m_bBuildingRestrictionLimitsEnabled'; File='game'; Type='bool'; Default='True'; Label='Building Restriction Limits'; Help='Enforce building restriction limits. Also needs client-side apply.'; Category='Building' }
     @{ Section=$script:DuneGcSecBuilding; Key='m_GlobalBuildingDamageMultiplier'; File='game'; Type='float'; Min=0; Default='1.0'; Label='Building Damage Multiplier'; Help='Scales damage dealt to player buildings.'; Category='Building' }
 
     # --- Inventory ---
-    @{ Section=$script:DuneGcSecInventory; Key='PlayerInventoryStartingSize'; File='game'; Type='int'; Min=1; Default='40'; Label='Starting Inventory Slots'; Help='Number of inventory slots at spawn.'; Category='Inventory' }
-    @{ Section=$script:DuneGcSecInventory; Key='PlayerInventoryStartingVolumeCapacity'; File='game'; Type='float'; Min=0; Default='225.0'; Label='Starting Inventory Volume'; Help='Volume capacity of the starting inventory.'; Category='Inventory' }
+    @{ Section=$script:DuneGcSecInventory; Key='PlayerInventoryStartingSize'; File='game'; Type='int'; Min=1; Default='35'; Label='Starting Inventory Slots'; Help='Number of inventory slots at spawn.'; Category='Inventory' }
+    @{ Section=$script:DuneGcSecInventory; Key='PlayerInventoryStartingVolumeCapacity'; File='game'; Type='float'; Min=0; Default='175.0'; Label='Starting Inventory Volume'; Help='Volume capacity of the starting inventory.'; Category='Inventory' }
     @{ Section=$script:DuneGcSecGame; Key='m_InventoryWeightMultiplier'; File='game'; Type='float'; Min=0; Default='1.0'; Label='Inventory Weight Multiplier'; Help='Scales item weight across all inventories.'; Category='Inventory' }
 
     # --- Guilds & Economy ---
@@ -108,9 +111,9 @@ $script:DuneGameConfigSchema = @(
     @{ Section=$script:DuneGcSecGuilds; Key='m_GuildCreationCost'; File='game'; Type='int'; Min=0; Unit='Solari'; Default='1000'; Label='Guild Creation Cost'; Help='Solari required to create a guild.'; Category='Guilds & Economy' }
 
     # --- Storm Cycle ---
-    @{ Section=$script:DuneGcSecStorm; Key='m_CycleDurationInDays'; File='game'; Type='int'; Min=1; Unit='days'; Default='7'; Label='Coriolis Cycle Length'; Help='In-game days between Coriolis storm / season events.'; Category='Storm Cycle' }
-    @{ Section=$script:DuneGcSecGame; Key='m_bCoriolisAutoSpawnEnabled'; File='game'; Type='bool'; Default='True'; Label='Coriolis Auto-Spawn'; Help='Whether Coriolis storms spawn automatically.'; Category='Storm Cycle' }
-    @{ Section=$script:DuneGcSecGame; Key='m_bIsDbWipeEnabled'; File='game'; Type='bool'; Default='False'; Label='Database Wipe on Season End'; Help='Wipe the database when the season ends.'; Category='Storm Cycle' }
+    @{ Section=$script:DuneGcSecCoriolis; Key='m_CycleDurationInDays'; File='game'; Type='int'; Min=1; Unit='days'; Default='7'; Label='Coriolis Cycle Length'; Help='In-game days between Coriolis storm / season events.'; Category='Storm Cycle' }
+    @{ Section=$script:DuneGcSecStorm; Key='m_bCoriolisAutoSpawnEnabled'; File='game'; Type='bool'; Default='True'; Label='Coriolis Auto-Spawn'; Help='Whether Coriolis storms spawn automatically.'; Category='Storm Cycle' }
+    @{ Section=$script:DuneGcSecCoriolis; Key='m_bIsDbWipeEnabled'; File='game'; Type='bool'; Default='True'; Label='Database Wipe on Season End'; Help='Wipe the database when the season ends.'; Category='Storm Cycle' }
     @{ Section=$script:DuneGcSecConsole; Key='Sandstorm.Enabled'; File='engine'; Type='bool01'; Default='1'; Label='Sandstorm'; Help='Enable rolling sandstorms.'; Category='Storm Cycle' }
     @{ Section=$script:DuneGcSecConsole; Key='Sandstorm.Treasure.Enabled'; File='engine'; Type='bool01'; Default='1'; Label='Sandstorm Treasure Spawns'; Help='Spawn treasure during sandstorms.'; Category='Storm Cycle' }
 
@@ -123,8 +126,8 @@ $script:DuneGameConfigSchema = @(
     @{ Section=$script:DuneGcSecSpice; Key='m_NodeValueToSpiceResourceRatio'; File='game'; Type='float'; Min=0; Default='10.0'; Label='Node Value to Spice Ratio'; Help='Converts node value into harvestable spice.'; Category='Spice' }
 
     # --- Taxation ---
-    @{ Section=$script:DuneGcSecTaxation; Key='m_bTaxationEnabled'; File='game'; Type='bool'; Default='True'; Label='Taxation Enabled'; Help='Whether the taxation system is active.'; Category='Taxation' }
-    @{ Section=$script:DuneGcSecTaxation; Key='m_TaxationCycleLengthSeconds'; File='game'; Type='int'; Min=0; Unit='sec'; Default='86400'; Label='Taxation Cycle'; Help='Seconds between taxation collection cycles.'; Category='Taxation' }
+    @{ Section=$script:DuneGcSecTaxation; Key='m_bTaxationEnabled'; File='game'; Type='bool'; Default='False'; Label='Taxation Enabled'; Help='Whether the taxation system is active.'; Category='Taxation' }
+    @{ Section=$script:DuneGcSecTaxation; Key='m_TaxationCycleLengthSeconds'; File='game'; Type='int'; Min=0; Unit='sec'; Default='1209600'; Label='Taxation Cycle'; Help='Seconds between taxation collection cycles.'; Category='Taxation' }
 
     # --- Sandworm (engine cvars + game settings) ---
     @{ Section=$script:DuneGcSecConsole; Key='sandworm.dune.Enabled'; File='engine'; Type='bool01'; Default='1'; Label='Sandworm Enabled'; Help='Master toggle for the sandworm.'; Category='Sandworm' }
@@ -134,18 +137,30 @@ $script:DuneGameConfigSchema = @(
     @{ Section=$script:DuneGcSecConsole; Key='Vehicle.SandwormInvulnerabilitySecondsOnServerRestart'; File='engine'; Type='float'; Min=0; Unit='sec'; Default='60.0'; Label='Invulnerability on Server Restart'; Help='Seconds of sandworm invulnerability after a server restart.'; Category='Sandworm' }
     @{ Section=$script:DuneGcSecSandworm; Key='WormDetectionDistance'; File='game'; Type='float'; Min=0; Default='5000.0'; Label='Worm Detection Distance'; Help='Distance at which worms detect players.'; Category='Sandworm' }
     @{ Section=$script:DuneGcSecSandworm; Key='m_MinWormSpawnInternal'; File='game'; Type='float'; Min=0; Unit='sec'; Default='300.0'; Label='Min Worm Spawn Interval'; Help='Minimum seconds between worm spawns.'; Category='Sandworm' }
-    @{ Section=$script:DuneGcSecSandworm; Key='m_SandwormQuicksandSpeedModifier'; File='game'; Type='float'; Min=0; Default='0.5'; Label='Quicksand Speed Modifier'; Help='Movement speed multiplier in quicksand.'; Category='Sandworm' }
+    @{ Section=$script:DuneGcSecHazards; Key='m_SandwormQuicksandSpeedModifier'; File='game'; Type='float'; Min=0; Default='0.25'; Label='Quicksand Speed Modifier'; Help='Movement speed multiplier in quicksand.'; Category='Sandworm' }
 
     # --- Vehicles (engine cvars) ---
     @{ Section=$script:DuneGcSecConsole; Key='dw.VehicleDurabilityDamageMultiplier'; File='engine'; Type='float'; Min=0; Max=10; Default='1.0'; Label='Vehicle Durability Damage'; Help='Durability damage multiplier for vehicles. 0 = off.'; Category='Vehicles' }
 
     # --- Parity additions (dune-admin serverSettingsSchema) ---
+    # ACCURACY NOTE (pending validation against the live UserGame.ini): the keys
+    # below were NOT found in the stock DefaultGame.ini dump (docs/Dune_Server_INI_Field_Sheet.md,
+    # game 1.4.0.0) and are NOT in dune-admin's evidence-validated schema. They may
+    # be no-ops as written and need confirmation before relying on them:
+    #   - m_BuildingDecayRateMultiplier / bEnableBuildingStability / m_BaseBackupExtensions
+    #     (m_BaseBackupExtensions duplicates the real m_BaseBackupMaxExtensions above)
+    #   - m_StormCycleDuration / m_StormDuration / m_StormWarningDuration (real storm
+    #     timing lives in SandStormConfig m_Coriolis*Duration* keys)
+    #   - bPvPEnabled / bServerPVE (only m_bShouldForceEnablePvpOnAllPartitions is confirmed real)
+    # Also suspect elsewhere in this schema: WormDetectionDistance (only valid nested
+    # inside SandwormSettings RoamingSettings=(...), no-op as a standalone key) and
+    # m_MinWormSpawnInternal (likely a typo'd / non-existent key name).
     # Building
     @{ Section=$script:DuneGcSecBuilding; Key='m_BuildingDecayRateMultiplier'; File='game'; Type='float'; Min=0; Default='1.0'; Label='Building Decay Rate Multiplier'; Help='Scales how fast player buildings decay over time.'; Category='Building' }
     @{ Section=$script:DuneGcSecBuilding; Key='bEnableBuildingStability'; File='game'; Type='bool'; Default='True'; Label='Enable Building Stability'; Help='Whether structural / stability rules apply to player constructions.'; Category='Building' }
     @{ Section=$script:DuneGcSecBuilding; Key='m_BaseBackupExtensions'; File='game'; Type='int'; Min=0; Unit='slots'; Default='2'; Label='Base Backup Extensions'; Help='Default number of backup extension slots per base.'; Category='Building' }
     # Guilds & Economy
-    @{ Section=$script:DuneGcSecGuilds; Key='m_MaxPermissionsPerActor'; File='game'; Type='int'; Min=0; Unit='rules'; Default='20'; Label='Max Permissions per Actor'; Help='Maximum number of permission rules per actor / structure.'; Category='Guilds & Economy' }
+    @{ Section=$script:DuneGcSecPermission; Key='m_MaxPermissionsPerActor'; File='game'; Type='int'; Min=0; Unit='rules'; Default='32'; Label='Max Permissions per Actor'; Help='Maximum number of permission rules per actor / structure.'; Category='Guilds & Economy' }
     # Storm Cycle
     @{ Section=$script:DuneGcSecStorm; Key='m_StormCycleDuration'; File='game'; Type='int'; Min=0; Unit='sec'; Default='3600'; Label='Storm Cycle Duration'; Help='Total wall-clock duration of one full storm cycle (calm + storm + warning).'; Category='Storm Cycle' }
     @{ Section=$script:DuneGcSecStorm; Key='m_StormDuration'; File='game'; Type='int'; Min=0; Unit='sec'; Default='900'; Label='Storm Duration'; Help='How long the active sandstorm phase lasts per cycle.'; Category='Storm Cycle' }
@@ -155,12 +170,12 @@ $script:DuneGameConfigSchema = @(
     @{ Section=$script:DuneGcSecPvP; Key='bServerPVE'; File='game'; Type='bool'; Default='True'; Label='Server PvE Mode'; Help='Enables global PvE protection (inverse of PvP; both can be set independently).'; Category='PvP & Security' }
     # Spice
     @{ Section=$script:DuneGcSecSpice; Key='m_bSpawningActive'; File='game'; Type='bool'; Default='True'; Label='Spice Spawning Active'; Help='Master switch - whether spice nodes spawn on the map at all.'; Category='Spice' }
-    @{ Section=$script:DuneGcSecSpice; Key='m_bPlayerMustWitnessBloom'; File='game'; Type='bool'; Default='True'; Label='Player Must Witness Bloom'; Help='If true, a player must be present in the area for a spice bloom to register / count.'; Category='Spice' }
+    @{ Section=$script:DuneGcSecSpice; Key='m_bPlayerMustWitnessBloom'; File='game'; Type='bool'; Default='False'; Label='Player Must Witness Bloom'; Help='If true, a player must be present in the area for a spice bloom to register / count.'; Category='Spice' }
     # Taxation
-    @{ Section=$script:DuneGcSecTaxation; Key='m_SpicePerHour'; File='game'; Type='int'; Min=0; Unit='spice/hr'; Default='100'; Label='Spice Yield per Hour'; Help='Base spice amount generated per hour per active spice field under taxation.'; Category='Taxation' }
+    @{ Section=$script:DuneGcSecTaxation; Key='m_SpicePerHour'; File='game'; Type='float'; Min=0; Unit='spice/hr'; Default='11.904750'; Label='Spice Yield per Hour'; Help='Base spice amount generated per hour per active spice field under taxation.'; Category='Taxation' }
     # Sandworm
-    @{ Section=$script:DuneGcSecSandworm; Key='m_MinDistanceBetweenSandworms'; File='game'; Type='float'; Min=0; Unit='UU'; Default='10000.0'; Label='Min Distance Between Sandworms'; Help='Minimum world-unit separation required between two simultaneously active sandworms.'; Category='Sandworm' }
-    @{ Section=$script:DuneGcSecSandworm; Key='m_GiantWormMinimumPlayersOnSpiceField'; File='game'; Type='int'; Min=0; Unit='players'; Default='1'; Label='Giant Worm Min Players on Field'; Help='Minimum number of players on a spice field to trigger a giant sandworm spawn.'; Category='Sandworm' }
+    @{ Section=$script:DuneGcSecSandworm; Key='m_MinDistanceBetweenSandworms'; File='game'; Type='float'; Min=0; Unit='UU'; Default='80000.0'; Label='Min Distance Between Sandworms'; Help='Minimum world-unit separation required between two simultaneously active sandworms.'; Category='Sandworm' }
+    @{ Section=$script:DuneGcSecSandworm; Key='m_GiantWormMinimumPlayersOnSpiceField'; File='game'; Type='int'; Min=0; Unit='players'; Default='4'; Label='Giant Worm Min Players on Field'; Help='Minimum number of players on a spice field to trigger a giant sandworm spawn.'; Category='Sandworm' }
 )
 
 # -----------------------------------------------------------------------------
