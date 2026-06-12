@@ -13,6 +13,7 @@ import { fmtNum, SourceBadge, StatCard, DemoNotice } from './shared'
 import {
   SECTIONS, SECTION_COMPONENTS, type SectionId,
 } from './players/sections'
+import { CoriolisAdmin } from './players/coriolis'
 
 type OnlineFilter = '' | 'online' | 'offline'
 
@@ -195,7 +196,12 @@ export function PlayersTab() {
               />
             </div>
           ) : (
-            <ServerOverview summary={summary} />
+            <>
+              <ServerOverview summary={summary} />
+              <div className="mt-3">
+                <CoriolisAdmin flash={(msg, kind = 'ok') => setFlash({ msg, kind })} />
+              </div>
+            </>
           )}
         </section>
       </div>

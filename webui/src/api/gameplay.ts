@@ -756,3 +756,117 @@ export function downloadBlueprintFile(blueprint: BlueprintFile, filename: string
   document.body.removeChild(a)
   URL.revokeObjectURL(url)
 }
+
+// ---------------------------------------------------------------------------
+// v11.5.7 — Item catalog (for autocomplete), Fill Water, Coriolis admin.
+// ---------------------------------------------------------------------------
+
+export interface CatalogItem {
+  template_id: string
+  name: string
+  category: string
+}
+
+interface CatalogResponse {
+  _meta?: { count?: number; source?: string }
+  items: Record<string, { name: string; category: string }>
+}
+
+let _catalogCache: CatalogItem[] | null = null
+let _catalogPromise: Promise<CatalogItem[]> | null = null
+
+/**
+ * Load + cache the full item catalog. The /api/catalog/items response is a
+ * dict of { template_id: { name, category } }; we flatten to an array so the
+ * autocomplete can sort + slice efficiently. ~5k entries, ~110KB JSON; only
+ * fetched once per session.
+ */
+export function getItemCatalog(): Promise<CatalogItem[]> {
+  if (_catalogCache) return Promise.resolve(_catalogCache)
+  if (_catalogPromise) return _catalogPromise
+  _catalogPromise = api<CatalogResponse>('/api/catalog/items').then(r => {
+    const items = r.items || {}
+    const flat: CatalogItem[] = []
+    for (const tid of Object.keys(items)) {
+      const v = items[tid]
+      flat.push({ template_id: tid, name: v?.name || tid, category: v?.category || '' })
+    }
+    flat.sort((a, b) => a.name.localeCompare(b.name))
+    _catalogCache = flat
+    _catalogPromise = null
+    return flat
+  }).catch(e => {
+    _catalogPromise = null
+    throw e
+  })
+  return _catalogPromise
+}
+
+/**
+ * Case-insensitive substring filter over name OR template_id. Returns up to
+ * `limit` matches sorted by best-match (template_id prefix > name prefix >
+ * substring), then alphabetically.
+ */
+export function filterCatalog(catalog: CatalogItem[], query: string, limit = 20): CatalogItem[] {
+  const q = query.trim().toLowerCase()
+  if (!q) return []
+  const out: { item: CatalogItem; rank: number }[] = []
+  for (const it of catalog) {
+    const tid = it.template_id.toLowerCase()
+    const nm  = it.name.toLowerCase()
+    let rank = -1
+    if (tid === q || nm === q)                 rank = 0
+    else if (tid.startsWith(q))                rank = 1
+    else if (nm.startsWith(q))                 rank = 2
+    else if (tid.includes(q) || nm.includes(q)) rank = 3
+    if (rank >= 0) out.push({ item: it, rank })
+  }
+  out.sort((a, b) => a.rank - b.rank || a.item.name.localeCompare(b.item.name))
+  return out.slice(0, limit).map(o => o.item)
+}
+
+export interface FillWaterResponse {
+  ok: boolean
+  message: string
+  result?: { refilled?: number }
+}
+
+export function fillWater(pawnId: number): Promise<FillWaterResponse> {
+  return api<FillWaterResponse>('/api/gameplay/players/fill-water', {
+    method: 'POST', body: JSON.stringify({ pawn_id: pawnId }),
+  })
+}
+
+export interface CoriolisMap       { map: string; seed: number }
+export interface CoriolisPartition { partition_id: number; map: string; seed: number }
+
+export interface CoriolisSeedsResponse {
+  ok: boolean
+  source: DataSource
+  farm_seed: number
+  maps: CoriolisMap[]
+  partitions: CoriolisPartition[]
+  liveError?: string
+}
+
+export function getCoriolisSeeds() {
+  return api<CoriolisSeedsResponse>('/api/gameplay/coriolis/seeds')
+}
+
+export function setCoriolisFarmSeed(seed: number) {
+  return api<WriteResult>('/api/gameplay/coriolis/set-farm-seed', {
+    method: 'POST', body: JSON.stringify({ seed }),
+  })
+}
+
+export function setCoriolisMapSeed(map: string, seed: number) {
+  return api<WriteResult>('/api/gameplay/coriolis/set-map-seed', {
+    method: 'POST', body: JSON.stringify({ map, seed }),
+  })
+}
+
+export function setCoriolisPartitionSeed(partitionId: number, seed: number) {
+  return api<WriteResult>('/api/gameplay/coriolis/set-partition-seed', {
+    method: 'POST', body: JSON.stringify({ partition_id: partitionId, seed }),
+  })
+}
