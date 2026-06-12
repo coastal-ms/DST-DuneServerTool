@@ -199,15 +199,6 @@ export function Dashboard() {
         title="Server Health"
         icon="LayoutDashboard"
         description="Live VM, battlegroup, and port status."
-        actions={
-          <button
-            className="btn-secondary"
-            onClick={() => { void forceRefresh() }}
-            disabled={loading}
-          >
-            <Icon name="RefreshCw" size={15} className={loading ? 'animate-spin' : ''} /> Refresh
-          </button>
-        }
       />
 
       <section className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
@@ -221,32 +212,27 @@ export function Dashboard() {
           {status?.bg?.reason && bgState === 'unknown' && (
             <div className="mt-1 text-xs text-warning break-words">{status.bg.reason}</div>
           )}
-        </div>
-        <div className="card card-hover p-4">
-          <div className="flex items-center justify-between">
-            <span className="text-xs uppercase tracking-wider text-text-dim">
+          <div className="mt-3 pt-3 border-t border-border/40 flex items-center justify-between gap-3">
+            <span className="text-xs uppercase tracking-wider text-text-dim flex items-center gap-1.5">
+              <Icon name="Plug" size={13} className={portsTone} />
               {ports?.mode === 'disabled' ? 'Port checks' : 'TCP ports open'}
             </span>
-            <Icon name="Plug" size={16} className={portsTone} />
+            <span className={`text-sm font-semibold ${portsTone} truncate`}>{portsLabel}</span>
           </div>
-          <div className={`mt-2 text-2xl font-semibold ${portsTone} truncate`}>{portsLabel}</div>
           <div className="mt-1 text-xs text-text-dim truncate">{portsSub || '—'}</div>
         </div>
-      </section>
-
-      <section className="card card-hover p-4 mb-6 flex flex-col sm:flex-row sm:items-center gap-4">
-        <div className="w-11 h-11 rounded-lg bg-accent/15 border border-accent/30 flex items-center justify-center text-accent-bright shrink-0">
-          <Icon name="Gamepad2" size={22} />
-        </div>
-        <div className="flex-1 min-w-0">
-          <h2 className="text-base font-semibold text-text">Gameplay Admin</h2>
-          <p className="text-sm text-text-muted mt-0.5">
+        <div className="card card-hover p-4 flex flex-col">
+          <div className="flex items-center justify-between">
+            <span className="text-xs uppercase tracking-wider text-text-dim">Gameplay Admin</span>
+            <Icon name="Gamepad2" size={16} className="text-accent" />
+          </div>
+          <p className="text-sm text-text-muted mt-2 flex-1">
             Native market, exchange, and bot tools — the Dune admin portal, rebuilt right here in one console.
           </p>
+          <button className="btn-primary mt-3 self-start shrink-0" onClick={() => navigate('/gameplay')}>
+            <Icon name="ArrowRight" size={15} /> Open Gameplay Admin
+          </button>
         </div>
-        <button className="btn-primary shrink-0" onClick={() => navigate('/gameplay')}>
-          <Icon name="ArrowRight" size={15} /> Open Gameplay Admin
-        </button>
       </section>
 
       <section className="grid grid-cols-1 lg:grid-cols-2 gap-4 mb-4">
@@ -311,6 +297,15 @@ export function Dashboard() {
           <div className="flex items-center justify-between mb-2">
             <h2 className="text-sm font-semibold uppercase tracking-wider text-text-muted flex items-center gap-2">
               <Icon name="ServerCog" size={14} className="text-accent" /> Game servers
+              <button
+                type="button"
+                onClick={() => { void forceRefresh() }}
+                disabled={loading}
+                className="text-text-dim hover:text-text transition-colors disabled:opacity-50"
+                title="Refresh server status"
+              >
+                <Icon name="RefreshCw" size={13} className={loading ? 'animate-spin' : ''} />
+              </button>
             </h2>
             {gameServers.length > 0 && (
               <span className="text-[10px] text-text-dim">{gameServers.length} pod{gameServers.length === 1 ? '' : 's'}</span>
