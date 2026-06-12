@@ -262,6 +262,42 @@ function Get-DuneMarketItemsLive {
     return @{ ok = $true; items = $items }
 }
 
+# ----------------------------------------------------------------------------
+# Cached wrapper for Get-DuneMarketItemsLive. Sort/filter/page requests all
+# re-fetch the full ~15k-row set; without this cache, every column sort flip
+# in the UI re-hits Postgres for ~1s of SQL + ~0.5s of PS enrichment. With a
+# 15 s TTL, subsequent sort/page/filter requests reuse the enriched list and
+# the table feels instant.
+#
+# Cache is bypassed (and replaced on success) when -NoCache is set, which the
+# route handler wires up to the ?nocache=1 query param so the Refresh button
+# still pulls live data.
+# ----------------------------------------------------------------------------
+$script:DuneMarketItemsCache         = $null
+$script:DuneMarketItemsCacheTtlSec   = 15
+
+function Get-DuneMarketItemsCached {
+    param([string]$Ip, [switch]$NoCache)
+    $now = [DateTime]::UtcNow
+    if (-not $NoCache -and $script:DuneMarketItemsCache -and
+        $script:DuneMarketItemsCache.ip -eq $Ip -and
+        $script:DuneMarketItemsCache.expiresAt -gt $now) {
+        return @{ ok = $true; items = $script:DuneMarketItemsCache.items; cached = $true }
+    }
+    $live = Get-DuneMarketItemsLive -Ip $Ip
+    if ($live.ok) {
+        $script:DuneMarketItemsCache = @{
+            ip        = $Ip
+            items     = $live.items
+            expiresAt = $now.AddSeconds($script:DuneMarketItemsCacheTtlSec)
+        }
+        $live['cached'] = $false
+    }
+    return $live
+}
+
+function Clear-DuneMarketItemsCache { $script:DuneMarketItemsCache = $null }
+
 function Get-DuneMarketListingsLive {
     param([string]$Ip, [string]$TemplateId)
     $where = ''

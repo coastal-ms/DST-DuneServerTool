@@ -47,7 +47,8 @@ Register-DuneRoute -Method GET -Path '/api/gameplay/market/items' -Handler {
         if (-not (Test-DuneDemoRequested $req)) {
             $ctx = Get-DuneDbContext
             if ($ctx.ok) {
-                $live = Get-DuneMarketItemsLive -Ip $ctx.ip
+                $noCache = [bool](Get-DuneQ $req 'nocache')
+                $live = Get-DuneMarketItemsCached -Ip $ctx.ip -NoCache:$noCache
                 if ($live.ok) { $items = $live.items; $source = 'live' }
                 else { $liveError = $live.error }
             } else { $liveError = $ctx.message }

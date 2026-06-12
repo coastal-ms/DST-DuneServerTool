@@ -73,12 +73,12 @@ export function MarketTab() {
 
   useEffect(() => { setPage(0) }, [debouncedSearch, category, owner, sort, dir])
 
-  const load = useCallback(async () => {
+  const load = useCallback(async (opts: { force?: boolean } = {}) => {
     setLoading(true)
     setError(null)
     try {
       const [itemsRes, statsRes] = await Promise.all([
-        getMarketItems({ search: debouncedSearch, category, owner, sort, dir, page, limit: PAGE_SIZE }),
+        getMarketItems({ search: debouncedSearch, category, owner, sort, dir, page, limit: PAGE_SIZE, nocache: opts.force }),
         getMarketStats(),
       ])
       setItems(itemsRes.items)
@@ -150,7 +150,7 @@ export function MarketTab() {
             </button>
           ))}
         </div>
-        <button className="btn-secondary" onClick={() => { void load() }} disabled={loading}>
+        <button className="btn-secondary" onClick={() => { void load({ force: true }) }} disabled={loading}>
           <Icon name="RefreshCw" size={15} className={loading ? 'animate-spin' : ''} /> Refresh
         </button>
         <SourceBadge source={source} />
