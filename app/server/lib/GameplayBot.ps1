@@ -690,6 +690,7 @@ COMMIT;
     } else {
         "Cleared $before listing(s)."
     }
+    Invoke-DuneMarketItemsCacheBust
     return @{
         ok            = $true
         cleared       = $before
@@ -697,6 +698,14 @@ COMMIT;
         orphans       = $orphans
         inventory_id  = $invId
         message       = $msg
+    }
+}
+
+# Cache-bust hook used by Clear and Seed so the Market tab reflects the
+# write within one refresh instead of waiting for the 15s TTL to elapse.
+function Invoke-DuneMarketItemsCacheBust {
+    if (Get-Command -Name Clear-DuneMarketItemsCache -ErrorAction SilentlyContinue) {
+        Clear-DuneMarketItemsCache
     }
 }
 
@@ -1823,6 +1832,7 @@ function Invoke-DuneBotSeedMarket {
         finished      = (Get-Date).ToUniversalTime().ToString('o')
     } $false
 
+    Invoke-DuneMarketItemsCacheBust
     return $summary
 }
 

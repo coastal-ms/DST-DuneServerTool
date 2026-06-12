@@ -308,6 +308,7 @@ export interface MarketItemsQuery {
   page?: number
   limit?: number
   demo?: boolean
+  nocache?: boolean
 }
 
 export function getMarketItems(q: MarketItemsQuery = {}) {
@@ -315,6 +316,7 @@ export function getMarketItems(q: MarketItemsQuery = {}) {
     search: q.search, category: q.category, tier: q.tier, rarity: q.rarity,
     owner: q.owner, sort: q.sort, dir: q.dir,
     page: q.page, limit: q.limit, demo: q.demo ? 1 : undefined,
+    nocache: q.nocache ? 1 : undefined,
   })}`)
 }
 
