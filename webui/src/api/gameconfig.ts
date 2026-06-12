@@ -6,6 +6,9 @@ import type {
   GameConfigSaveResponse,
   GameConfigBackupResponse,
   GameConfigBackupListResponse,
+  GameConfigClientInfo,
+  GameConfigClientApplyResult,
+  GameConfigClientApplyItem,
   SpicefieldsResponse,
   SpicefieldSaveResponse,
   SpicefieldType,
@@ -36,6 +39,36 @@ export function backupGameConfig() {
 
 export function listGameConfigBackups() {
   return api<GameConfigBackupListResponse>('/api/gameconfig/backups')
+}
+
+// --- Local client config (admin's own machine) -----------------------------
+
+export function getGameConfigClient() {
+  return api<GameConfigClientInfo>('/api/gameconfig/client')
+}
+
+export function setGameConfigClientDir(dir: string) {
+  return api<GameConfigClientInfo>('/api/gameconfig/client/dir', {
+    method: 'PUT',
+    body: JSON.stringify({ dir }),
+  })
+}
+
+export function applyGameConfigClient(items: GameConfigClientApplyItem[], dir?: string) {
+  return api<GameConfigClientApplyResult>('/api/gameconfig/client/apply', {
+    method: 'PUT',
+    body: JSON.stringify({
+      updates: items.map(i => ({ key: i.key, value: i.value })),
+      ...(dir ? { dir } : {}),
+    }),
+  })
+}
+
+export function openGameConfigClientFile(dir?: string) {
+  return api<{ ok: boolean; path: string }>('/api/gameconfig/client/open', {
+    method: 'POST',
+    body: JSON.stringify(dir ? { dir } : {}),
+  })
 }
 
 export function getSpicefields() {

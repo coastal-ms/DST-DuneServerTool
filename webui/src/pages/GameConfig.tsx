@@ -2,12 +2,17 @@ import { useState, useEffect, useMemo, useCallback, type FormEvent } from 'react
 import { PageHeader } from '../components/PageHeader'
 import { Icon } from '../components/Icon'
 import { useStatus } from '../hooks/useStatus'
+import { api } from '../api/client'
 import {
   getGameConfigSchema,
   getGameConfig,
   saveGameConfig,
   backupGameConfig,
   listGameConfigBackups,
+  getGameConfigClient,
+  setGameConfigClientDir,
+  applyGameConfigClient,
+  openGameConfigClientFile,
 } from '../api/gameconfig'
 import type {
   GameConfigCategory,
@@ -16,6 +21,8 @@ import type {
   GameConfigFileBundle,
   GameConfigIniSection,
   GameConfigBackupEntry,
+  GameConfigClientApply,
+  GameConfigClientInfo,
 } from '../api/types'
 import { SpicefieldsCard } from './gameconfig/SpicefieldsCard'
 
@@ -74,6 +81,7 @@ export function GameConfig() {
   const [saving, setSaving] = useState(false)
   const [saveError, setSaveError] = useState<string | null>(null)
   const [savedMsg, setSavedMsg] = useState<string | null>(null)
+  const [clientApply, setClientApply] = useState<GameConfigClientApply | null>(null)
   const [sandwormModalOpen, setSandwormModalOpen] = useState(false)
   const [search, setSearch] = useState('')
   const [backing, setBacking] = useState(false)
@@ -83,6 +91,113 @@ export function GameConfig() {
   const [backupsLoading, setBackupsLoading] = useState(false)
   const [backupsError, setBackupsError] = useState<string | null>(null)
   const [backups, setBackups] = useState<GameConfigBackupEntry[]>([])
+
+  // Local client config (this PC). DST runs locally, so it can read/write the
+  // player's own client Game.ini directly — gated behind explicit user action.
+  const [clientInfo, setClientInfo] = useState<GameConfigClientInfo | null>(null)
+  const [clientDirInput, setClientDirInput] = useState('')
+  const [clientBusy, setClientBusy] = useState(false)
+  const [clientMsg, setClientMsg] = useState<string | null>(null)
+  const [clientErr, setClientErr] = useState<string | null>(null)
+  const [clientViewOpen, setClientViewOpen] = useState(false)
+  const [applying, setApplying] = useState(false)
+
+  const refreshClient = useCallback(async () => {
+    try {
+      const info = await getGameConfigClient()
+      setClientInfo(info)
+      setClientDirInput(prev => (prev ? prev : info.dir))
+      return info
+    } catch (e) {
+      setClientErr(e instanceof Error ? e.message : String(e))
+      return null
+    }
+  }, [])
+
+  useEffect(() => {
+    void refreshClient()
+  }, [refreshClient])
+
+  const onBrowseClientDir = useCallback(async () => {
+    setClientErr(null)
+    setClientBusy(true)
+    try {
+      const r = await api<{ ok: boolean; cancelled: boolean; path: string }>('/api/browse-path', {
+        method: 'POST',
+        body: JSON.stringify({
+          mode: 'folder',
+          current: clientInfo?.dirResolved ?? clientDirInput,
+          title: 'Select your Dune client config folder',
+        }),
+      })
+      if (r.ok && !r.cancelled && r.path) setClientDirInput(r.path)
+    } catch (e) {
+      setClientErr(e instanceof Error ? e.message : String(e))
+    } finally {
+      setClientBusy(false)
+    }
+  }, [clientInfo, clientDirInput])
+
+  const onSaveClientDir = useCallback(async () => {
+    const dir = clientDirInput.trim()
+    if (!dir) return
+    setClientErr(null)
+    setClientMsg(null)
+    setClientBusy(true)
+    try {
+      const info = await setGameConfigClientDir(dir)
+      setClientInfo(info)
+      setClientDirInput(info.dir)
+      setClientMsg('Client config folder saved.')
+      window.setTimeout(() => setClientMsg(null), 5000)
+    } catch (e) {
+      setClientErr(e instanceof Error ? e.message : String(e))
+    } finally {
+      setClientBusy(false)
+    }
+  }, [clientDirInput])
+
+  const onViewClient = useCallback(async () => {
+    setClientErr(null)
+    setClientViewOpen(true)
+    await refreshClient()
+  }, [refreshClient])
+
+  // Open the local client Game.ini in Notepad on this PC (DST runs locally).
+  const onOpenInEditor = useCallback(async () => {
+    setClientErr(null)
+    setClientMsg(null)
+    setClientBusy(true)
+    try {
+      const r = await openGameConfigClientFile(clientInfo?.dir)
+      setClientMsg(`Opened ${r.path} in Notepad.`)
+      window.setTimeout(() => setClientMsg(null), 5000)
+    } catch (e) {
+      setClientErr(e instanceof Error ? e.message : String(e))
+    } finally {
+      setClientBusy(false)
+    }
+  }, [clientInfo])
+
+  // Explicit permission gate: the admin opts in to having DST also write the
+  // client-apply settings into THEIR OWN local client Game.ini.
+  const onApplyToClient = useCallback(async () => {
+    if (!clientApply || clientApply.items.length === 0) return
+    setClientErr(null)
+    setClientMsg(null)
+    setApplying(true)
+    try {
+      const r = await applyGameConfigClient(clientApply.items, clientInfo?.dir)
+      setClientInfo(r.client)
+      const verb = r.created ? 'Created and wrote' : 'Applied'
+      setClientMsg(`${verb} ${r.applied} setting${r.applied === 1 ? '' : 's'} to your local client (${r.path}).${r.backup ? ' Previous file backed up.' : ''}`)
+      setClientApply(null)
+    } catch (e) {
+      setClientErr(e instanceof Error ? e.message : String(e))
+    } finally {
+      setApplying(false)
+    }
+  }, [clientApply, clientInfo])
 
   const onBackup = useCallback(async () => {
     setBacking(true)
@@ -238,6 +353,10 @@ export function GameConfig() {
       const n = out.applied ?? dirtyKeys.length
       setSavedMsg(`Saved ${n} change${n === 1 ? '' : 's'} into the DST-managed block.`)
       window.setTimeout(() => setSavedMsg(null), 5000)
+      // Some settings (e.g. landclaim limits, building restrictions) are read by
+      // BOTH server and client — remind the admin to mirror them on each client.
+      const ca = out.clientApply
+      setClientApply(ca && ca.items && ca.items.length > 0 ? ca : null)
     } catch (err) {
       setSaveError(err instanceof Error ? err.message : String(err))
     } finally {
@@ -372,6 +491,81 @@ export function GameConfig() {
         </div>
       </div>
 
+      {/* Local client config (this PC) */}
+      <div className="card p-4 mb-4 border-border">
+        <div className="flex items-center justify-between gap-2 mb-2">
+          <div className="flex items-center gap-2 text-sm font-semibold text-text">
+            <Icon name="MonitorSmartphone" size={15} className="text-accent-bright" />
+            Your client config (this PC)
+          </div>
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={() => void onOpenInEditor()}
+              disabled={clientBusy}
+              className="btn-secondary"
+              title="Open your local client Game.ini in Notepad"
+            >
+              <Icon name="ExternalLink" size={14} /> Open in Notepad
+            </button>
+            <button
+              type="button"
+              onClick={() => void onViewClient()}
+              className="btn-secondary"
+              title="View the contents of your local client Game.ini"
+            >
+              <Icon name="FileSearch" size={14} /> View client config
+            </button>
+          </div>
+        </div>
+        <p className="text-xs text-text-muted mb-3">
+          A few settings (landclaim limits, building restrictions) are read by the game client too. DST can mirror
+          those into your own client&apos;s <span className="font-mono">Game.ini</span> on this machine when you save —
+          with your permission. Point this at your Dune client config folder.
+        </p>
+        <div className="flex items-center gap-2">
+          <input
+            type="text"
+            value={clientDirInput}
+            onChange={e => setClientDirInput(e.target.value)}
+            spellCheck={false}
+            placeholder={clientInfo?.default ?? '%LOCALAPPDATA%\\DuneSandbox\\Saved\\Config\\WindowsClient'}
+            className="flex-1 min-w-0 px-3 py-2 rounded-lg bg-surface-2 border border-border text-text text-sm font-mono placeholder:text-text-dim focus:outline-none focus:ring-2 focus:ring-ibad focus:border-ibad/50"
+          />
+          <button type="button" onClick={() => void onBrowseClientDir()} disabled={clientBusy} className="btn-secondary shrink-0">
+            <Icon name={clientBusy ? 'Loader2' : 'FolderOpen'} size={14} className={clientBusy ? 'animate-spin' : ''} /> Browse
+          </button>
+          <button
+            type="button"
+            onClick={() => void onSaveClientDir()}
+            disabled={clientBusy || !clientDirInput.trim() || clientDirInput.trim() === (clientInfo?.dir ?? '')}
+            className="btn-primary shrink-0"
+          >
+            <Icon name="Save" size={14} /> Save
+          </button>
+        </div>
+        {clientInfo && (
+          <div className="text-[11px] text-text-dim mt-2 font-mono break-all">
+            {clientInfo.path}{' '}
+            {clientInfo.exists
+              ? <span className="text-success">• found</span>
+              : clientInfo.dirExists
+                ? <span className="text-warning">• Game.ini not present yet (will be created on apply)</span>
+                : <span className="text-danger">• folder not found</span>}
+          </div>
+        )}
+      </div>
+      {clientMsg && (
+        <div className="card p-3 mb-4 border-success/40 bg-success/10 text-success text-sm flex items-center gap-2">
+          <Icon name="CheckCircle2" size={14} /> {clientMsg}
+        </div>
+      )}
+      {clientErr && (
+        <div className="card p-3 mb-4 border-danger/40 bg-danger/10 text-danger text-sm flex items-center gap-2">
+          <Icon name="AlertCircle" size={14} /> {clientErr}
+        </div>
+      )}
+
       {/* Status / error banners */}
       {loadState === 'unavailable' && (
         <div className="card p-4 mb-4 border-accent/30 bg-accent/5 text-text-muted text-sm flex items-start gap-2">
@@ -395,6 +589,61 @@ export function GameConfig() {
       {savedMsg && (
         <div className="card p-3 mb-4 border-success/40 bg-success/10 text-success text-sm flex items-center gap-2">
           <Icon name="CheckCircle2" size={14} /> {savedMsg}
+        </div>
+      )}
+      {clientApply && (
+        <div className="card p-3 mb-4 border-warning/40 bg-warning/10 text-sm">
+          <div className="flex items-start gap-2">
+            <Icon name="MonitorSmartphone" size={16} className="text-warning mt-0.5 shrink-0" />
+            <div className="flex-1 min-w-0">
+              <div className="font-medium text-text mb-1">Also apply these on each player's client</div>
+              <p className="text-text-muted mb-2">
+                The setting{clientApply.items.length === 1 ? '' : 's'} below {clientApply.items.length === 1 ? 'is' : 'are'} read by
+                both the server and the game client. The server is updated, but each player must mirror {clientApply.items.length === 1 ? 'it' : 'them'} in
+                their local client config for it to take full effect:
+              </p>
+              <ul className="space-y-1 mb-2">
+                {clientApply.items.map(it => (
+                  <li key={it.key} className="font-mono text-xs text-text">
+                    <span className="text-text-muted">[{it.section}]</span>{' '}
+                    {it.key}={it.value}
+                    <span className="text-text-muted"> — {it.label}</span>
+                  </li>
+                ))}
+              </ul>
+              <p className="text-text-muted">
+                Add {clientApply.items.length === 1 ? 'it' : 'them'} under the matching section in each client's:
+              </p>
+              <code className="block mt-1 px-2 py-1 rounded bg-surface-2 text-text text-xs break-all">{clientApply.path}</code>
+              <div className="flex items-center gap-2 mt-3">
+                <button
+                  type="button"
+                  onClick={() => void onApplyToClient()}
+                  disabled={applying}
+                  className="btn-primary"
+                  title="Let DST write these settings into your own client's Game.ini on this PC"
+                >
+                  <Icon name={applying ? 'Loader2' : 'MonitorCog'} size={14} className={applying ? 'animate-spin' : ''} />
+                  {applying ? 'Applying…' : 'Apply to my client'}
+                </button>
+                <button type="button" onClick={() => setClientApply(null)} className="btn-ghost text-xs">
+                  I&apos;ll do it manually
+                </button>
+              </div>
+              <p className="text-[11px] text-text-dim mt-2">
+                “Apply to my client” only changes <span className="font-mono break-all">{clientInfo?.path ?? 'your local client Game.ini'}</span> on
+                this machine (backed up first). Other players still apply manually.
+              </p>
+            </div>
+            <button
+              type="button"
+              className="btn-icon shrink-0"
+              title="Dismiss"
+              onClick={() => setClientApply(null)}
+            >
+              <Icon name="X" size={14} />
+            </button>
+          </div>
         </div>
       )}
 
@@ -558,6 +807,59 @@ export function GameConfig() {
                 Refresh
               </button>
               <button type="button" className="btn-primary" onClick={() => setBackupsOpen(false)}>Close</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {clientViewOpen && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4"
+          onClick={() => setClientViewOpen(false)}
+        >
+          <div
+            className="card w-full max-w-3xl max-h-[85vh] flex flex-col p-0 overflow-hidden"
+            onClick={e => e.stopPropagation()}
+          >
+            <div className="flex items-center justify-between px-5 py-3 border-b border-border">
+              <h2 className="text-sm font-semibold text-text flex items-center gap-2">
+                <Icon name="MonitorSmartphone" size={16} className="text-accent-bright" />
+                Your client config
+              </h2>
+              <button type="button" className="btn-icon" title="Close" onClick={() => setClientViewOpen(false)}>
+                <Icon name="X" size={16} />
+              </button>
+            </div>
+            <div className="px-5 py-4 overflow-y-auto">
+              <div className="text-[11px] text-text-dim font-mono break-all mb-3">
+                {clientInfo?.path}{' '}
+                {clientInfo?.exists
+                  ? <span className="text-success">• found</span>
+                  : <span className="text-warning">• not present yet</span>}
+              </div>
+              {!clientInfo?.exists && (
+                <div className="text-sm text-text-muted py-4 text-center">
+                  No client <span className="font-mono">Game.ini</span> at this location yet. It will be created the
+                  first time you apply a client-side setting.
+                </div>
+              )}
+              {clientInfo?.exists && (
+                <pre className="text-xs font-mono text-text bg-[#1e1e1e] border border-border rounded-lg p-3 overflow-x-auto max-h-[60vh] overflow-y-auto whitespace-pre leading-relaxed">
+                  {clientInfo.raw || '(empty file)'}
+                </pre>
+              )}
+            </div>
+            <div className="px-5 py-3 border-t border-border flex items-center justify-between gap-2">
+              <span className="text-[11px] text-text-dim">Read-only preview. “Open in Notepad” edits the real file.</span>
+              <div className="flex items-center gap-2">
+                <button type="button" onClick={() => void onOpenInEditor()} disabled={clientBusy} className="btn-secondary" title="Open this file in Notepad">
+                  <Icon name="ExternalLink" size={14} /> Open in Notepad
+                </button>
+                <button type="button" onClick={() => void refreshClient()} className="btn-secondary" title="Reload">
+                  <Icon name="RefreshCw" size={14} /> Refresh
+                </button>
+                <button type="button" className="btn-primary" onClick={() => setClientViewOpen(false)}>Close</button>
+              </div>
             </div>
           </div>
         </div>
