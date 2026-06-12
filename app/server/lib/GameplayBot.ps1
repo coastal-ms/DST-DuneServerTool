@@ -1631,23 +1631,68 @@ function Invoke-DuneBotSeedMarket {
     }
     $nextPos = [int64]$maxR.value + 1
 
-    # Build one BEGIN/COMMIT per chunk of $ChunkSize templates. Each per-
-    # template block is one WITH-CTE statement that bulk-inserts $need
-    # listings in a single statement.
+    # Build one BEGIN/COMMIT per chunk of $ChunkSize templates. The chunk is
+    # ONE bulk WITH-CTE statement covering every template in the chunk —
+    # 3 INSERTs (items, orders, sell_orders) total, not 3 × N. This kills the
+    # per-statement parse/plan/lock-acquire overhead that made each chunk
+    # 14s on the prod VM (where dune.items / dune_exchange_orders have a
+    # real index footprint).
+    $ex = [int64]$ident.exchangeId
+    $ap = [int64]$ident.accessPointId
+    $ow = [int64]$ident.ownerId
     $i = 0
     while ($i -lt $work.Count) {
         $chunkStartMs = [Environment]::TickCount
         $endIdx = [Math]::Min($i + $ChunkSize, $work.Count) - 1
         $sb = New-Object System.Text.StringBuilder
         [void]$sb.AppendLine('BEGIN;')
+        [void]$sb.AppendLine('WITH params(idx, template_id, stack_size, n_items, quality_level, item_price, category_mask, category_depth) AS (VALUES')
+        $first = $true
+        $chunkStartPos = $nextPos
         for ($j = $i; $j -le $endIdx; $j++) {
             $w = $work[$j]
-            $chunk = New-DuneBotListingSqlChunk -Ident $ident -Cand $w.cand `
-                        -ItemPrice $w.target -OrderExpiry $orderExpiry -Count $w.need -Grade $w.grade `
-                        -InvId $invId -StartPos $nextPos
-            $nextPos += [int]$w.need
-            [void]$sb.AppendLine($chunk)
+            $tmplLit = ConvertTo-DuneSqlLiteral $w.cand.template_id
+            $stack   = [int]$w.cand.stack_max; if ($stack -lt 1) { $stack = 1 }
+            $mask    = [int]$w.cand.category_mask
+            $depth   = [int]$w.cand.category_depth
+            $qg      = [int]$w.grade; if ($qg -lt 0) { $qg = 0 }; if ($qg -gt 5) { $qg = 5 }
+            $need    = [int]$w.need
+            $rowIdx  = $j - $i
+            $comma   = if ($first) { '  ' } else { ', ' }
+            $first   = $false
+            [void]$sb.AppendLine("$comma($rowIdx, '$tmplLit'::text, ${stack}::int, ${need}::int, ${qg}::int, $($w.target)::bigint, ${mask}::int, ${depth}::int)")
+            $nextPos += $need
         }
+        [void]$sb.AppendLine('),')
+        [void]$sb.AppendLine('expanded AS (')
+        [void]$sb.AppendLine('  SELECT p.*, gs.k AS k FROM params p, generate_series(1, p.n_items) AS gs(k)')
+        [void]$sb.AppendLine('),')
+        [void]$sb.AppendLine('positioned AS (')
+        [void]$sb.AppendLine("  SELECT e.*, $chunkStartPos + (ROW_NUMBER() OVER (ORDER BY e.idx, e.k))::bigint - 1 AS pos")
+        [void]$sb.AppendLine('  FROM expanded e')
+        [void]$sb.AppendLine('),')
+        [void]$sb.AppendLine('ins_items AS (')
+        [void]$sb.AppendLine('  INSERT INTO dune.items (inventory_id, position_index, template_id, stack_size, stats, quality_level)')
+        [void]$sb.AppendLine("  SELECT $invId, pos, template_id, stack_size, '{}', quality_level FROM positioned")
+        [void]$sb.AppendLine('  RETURNING id, position_index')
+        [void]$sb.AppendLine('),')
+        [void]$sb.AppendLine('joined AS (')
+        [void]$sb.AppendLine('  SELECT i.id AS item_id, p.template_id, p.item_price, p.category_mask, p.category_depth, p.quality_level, p.stack_size')
+        [void]$sb.AppendLine('  FROM ins_items i JOIN positioned p ON p.pos = i.position_index')
+        [void]$sb.AppendLine('),')
+        [void]$sb.AppendLine('ins_orders AS (')
+        [void]$sb.AppendLine('  INSERT INTO dune.dune_exchange_orders (')
+        [void]$sb.AppendLine('    exchange_id, access_point_id, owner_id, template_id, expiration_time,')
+        [void]$sb.AppendLine('    durability_cur, durability_max, item_price, category_mask, category_depth,')
+        [void]$sb.AppendLine('    is_npc_order, item_id, quality_level')
+        [void]$sb.AppendLine('  )')
+        [void]$sb.AppendLine("  SELECT $ex, $ap, $ow, template_id, $orderExpiry, 1.0, 1.0, item_price, category_mask, category_depth, TRUE, item_id, quality_level")
+        [void]$sb.AppendLine('  FROM joined')
+        [void]$sb.AppendLine('  RETURNING id AS order_id, item_id')
+        [void]$sb.AppendLine(')')
+        [void]$sb.AppendLine('INSERT INTO dune.dune_exchange_sell_orders (order_id, initial_stack_size, wear_normalized_price)')
+        [void]$sb.AppendLine('SELECT o.order_id, j.stack_size, j.item_price')
+        [void]$sb.AppendLine('FROM ins_orders o JOIN joined j ON j.item_id = o.item_id;')
         [void]$sb.AppendLine('COMMIT;')
         $r = Invoke-DuneSqlQuery -Ip $ctx.ip -Sql ($sb.ToString()) -ReadOnly $false -MaxRows 5 -TimeoutSec 600 -Bulk
         $chunkMs = [Environment]::TickCount - $chunkStartMs
