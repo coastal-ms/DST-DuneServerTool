@@ -451,6 +451,143 @@ export function repairInventoryItem(itemId: number) {
 }
 
 // ---------------------------------------------------------------------------
+// v11.5.6 — extended player surface (port of dune-admin's player tooling).
+// ---------------------------------------------------------------------------
+
+export interface PlayerSummaryBucket { name: string; count: number }
+
+export interface PlayerSummaryResponse {
+  totals: { players: number; online: number; factions: number }
+  by_faction: PlayerSummaryBucket[]
+  by_map: PlayerSummaryBucket[]
+  source: DataSource
+  liveError?: string
+}
+
+export function getPlayerSummary(demo?: boolean) {
+  return api<PlayerSummaryResponse>(`/api/gameplay/players/summary${qs({ demo: demo ? 1 : undefined })}`)
+}
+
+export interface PlayerStats {
+  pawn_id: number
+  account_id: number
+  controller_id: number
+  character_name: string
+  class: string
+  map: string
+  online_status: string
+  last_seen: string
+  faction_id: number
+  faction_name: string
+  solaris: number
+  total_currency: number
+}
+
+export interface PlayerStatsResponse {
+  stats: PlayerStats | null
+  source: DataSource
+  liveError?: string
+}
+
+export function getPlayerStats(pawnId: number, demo?: boolean) {
+  return api<PlayerStatsResponse>(`/api/gameplay/players/stats${qs({
+    pawn: pawnId, demo: demo ? 1 : undefined,
+  })}`)
+}
+
+export interface SpecTrackFull {
+  track_type: string
+  xp: number
+  level: number
+  xp_max: number
+  level_max: number
+}
+
+export interface PlayerSpecsResponse {
+  tracks: SpecTrackFull[]
+  keystones_total: number
+  keystones_max: number
+  unsupported?: boolean
+  source: DataSource
+  liveError?: string
+}
+
+export function getPlayerSpecs(pawnId: number, controllerId: number, demo?: boolean) {
+  return api<PlayerSpecsResponse>(`/api/gameplay/players/specs${qs({
+    pawn: pawnId, controller: controllerId, demo: demo ? 1 : undefined,
+  })}`)
+}
+
+export function grantMaxSpec(pawnId: number, trackType: string) {
+  return api<WriteResult>('/api/gameplay/players/grant-max-spec', {
+    method: 'POST', body: JSON.stringify({ pawn_id: pawnId, track_type: trackType }),
+  })
+}
+
+export function resetSpec(pawnId: number, trackType: string) {
+  return api<WriteResult>('/api/gameplay/players/reset-spec', {
+    method: 'POST', body: JSON.stringify({ pawn_id: pawnId, track_type: trackType }),
+  })
+}
+
+export function resetAllSpecs(pawnId: number) {
+  return api<WriteResult>('/api/gameplay/players/reset-all-specs', {
+    method: 'POST', body: JSON.stringify({ pawn_id: pawnId }),
+  })
+}
+
+export function grantAllKeystones(controllerId: number) {
+  return api<WriteResult>('/api/gameplay/players/grant-all-keystones', {
+    method: 'POST', body: JSON.stringify({ controller_id: controllerId }),
+  })
+}
+
+export function resetAllKeystones(pawnId: number) {
+  return api<WriteResult>('/api/gameplay/players/reset-all-keystones', {
+    method: 'POST', body: JSON.stringify({ pawn_id: pawnId }),
+  })
+}
+
+export interface PlayerTagsResponse {
+  tags: string[]
+  unsupported?: boolean
+  source: DataSource
+  liveError?: string
+}
+
+export function getPlayerTags(accountId: number, demo?: boolean) {
+  return api<PlayerTagsResponse>(`/api/gameplay/players/tags${qs({
+    account: accountId, demo: demo ? 1 : undefined,
+  })}`)
+}
+
+export function setPlayerTags(accountId: number, tags: string[]) {
+  return api<WriteResult>('/api/gameplay/players/tags', {
+    method: 'POST', body: JSON.stringify({ account_id: accountId, tags }),
+  })
+}
+
+export interface PlayerEvent {
+  id: number
+  ts: string
+  event_type: string
+  meta: string
+}
+
+export interface PlayerEventsResponse {
+  events: PlayerEvent[]
+  unsupported?: boolean
+  source: DataSource
+  liveError?: string
+}
+
+export function getPlayerEvents(accountId: number, limit?: number, demo?: boolean) {
+  return api<PlayerEventsResponse>(`/api/gameplay/players/events${qs({
+    account: accountId, limit: limit ?? undefined, demo: demo ? 1 : undefined,
+  })}`)
+}
+
+// ---------------------------------------------------------------------------
 // Bases / Storage / Blueprints (read-only)
 // ---------------------------------------------------------------------------
 export interface BaseRow {

@@ -13,6 +13,60 @@ here cover everything those tags shipped.
 
 ## [Unreleased]
 
+## [11.5.6] - 2026-06-12
+
+### Added — Player admin foundation (Phase 1 of dune-admin player port)
+
+The Gameplay > Players tab has been rebuilt as a two-column workspace mirroring
+[dune-admin.layout.tools/#/players](https://dune-admin.layout.tools/#/players),
+which is the primary player-management surface coastal-ms players rely on.
+This release is the foundation that the rest of the port (Phases 2–5) will
+extend.
+
+- **New left rail**: filterable player list with online dots + a Sections
+  selector that swaps the right pane content. The legacy single-table list
+  is gone; the new list scrolls inside its own card and online players sort
+  to the top.
+- **Server Overview** (shown when no player is selected) — aggregate counts
+  + by-faction and by-map breakdowns from a new
+  `GET /api/gameplay/players/summary` endpoint.
+- **Stats section** — per-player snapshot: Solari, total currency, faction,
+  status, last-seen, all the account/controller/pawn IDs. Backed by new
+  `GET /api/gameplay/players/stats?pawn=`.
+- **Specs section** — 5-track view (Combat / Crafting / Exploration /
+  Gathering / Sabotage) with per-row XP progress bars, **+5000 XP** button,
+  **Grant Max** (xp=44182, level=100 via `dune.set_specialization_xp_and_level`),
+  per-track **Reset**, and panel-level **Grant Max Keystones** (insert all 205
+  via `dune.purchased_specialization_keystones`), **Reset All Keystones**, and
+  **Reset All** (tracks + keystones). Backed by new
+  `GET/POST /api/gameplay/players/specs`, `/grant-max-spec`, `/reset-spec`,
+  `/reset-all-specs`, `/grant-all-keystones`, `/reset-all-keystones`.
+- **Inventory section** — gear / emotes / contracts groupings extracted from
+  the old detail drawer; per-item Repair + Delete preserved.
+- **Tags section** — chip editor for `dune.player_tags(account_id, tag)`.
+  Add / remove + Save (writes the full set in one POST). New
+  `GET/POST /api/gameplay/players/tags`.
+- **History section** — most recent `dune.event_log` rows joined via
+  `meta->>'fls_id'`, with per-row expandable raw JSON view. New
+  `GET /api/gameplay/players/events?account=`.
+- **Actions section** — keeps the existing **Give Solari / Give Item /
+  Rename** writes on a dedicated tab. Live-DB writes only; demo mode shows a
+  locked-padlock notice.
+
+### Notes
+
+- Sections that depend on optional tables (`player_tags`, `event_log`) degrade
+  to "feature unavailable" cards when the live game DB doesn't have them
+  instead of throwing — older Funcom server builds remain usable.
+- All new SQL goes through the existing `Invoke-DuneSqlQuery` SSH→psql
+  bridge; no new transports added.
+- This release ships the **read + DB-write** subset only. Live-game RMQ
+  commands (kick / whisper / teleport / spawn-vehicle / fill-water /
+  cheat-script) are scoped for v11.5.9 (Phase 4), once DST's existing
+  `Broadcast.ps1` Erlang AMQP path is generalised. Progression / Contracts /
+  Journey land in v11.5.7; Inventory bulk-edit + Give-Currency expansions +
+  Vehicles in v11.5.8.
+
 ## [11.5.5] - 2026-06-12
 
 ### Fixed
