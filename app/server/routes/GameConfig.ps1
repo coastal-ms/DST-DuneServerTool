@@ -12,6 +12,39 @@ Register-DuneRoute -Method GET -Path '/api/gameconfig/schema' -Handler {
 }
 
 # -----------------------------------------------------------------------------
+# GET /api/gameconfig/defaults — full settings catalog from the live image.
+# Reads DefaultGame.ini + DefaultEngine.ini out of a running game-server pod
+# (cached per process), merges with the current User*.ini overrides, and
+# returns every section as { name, file, count, overriddenCount, keys[] }.
+# Pass ?refresh=1 to force a re-read of the pod files (e.g. after a game patch).
+# 503 when VM not available; 500 on read failure.
+# -----------------------------------------------------------------------------
+Register-DuneRoute -Method GET -Path '/api/gameconfig/defaults' -Handler {
+    param($req, $res, $routeParams, $body)
+    $ctx = Get-DuneGameConfigContext
+    if (-not $ctx.ok) {
+        Write-DuneError -Response $res -Status $ctx.status -Message $ctx.message
+        return
+    }
+    try {
+        $force = $false
+        try {
+            $v = $req.QueryString['refresh']
+            if ($v -and ($v -eq '1' -or $v -eq 'true' -or $v -eq 'yes')) { $force = $true }
+        } catch {}
+        $cat = Get-DuneGameConfigCatalog -Ip $ctx.ip -ForceDefaults:$force
+        Write-DuneJson -Response $res -Body @{
+            available = $true
+            cached    = $cat.cached
+            source    = $cat.source
+            sections  = $cat.sections
+        }
+    } catch {
+        Write-DuneError -Response $res -Status 500 -Message "Defaults catalog load failed: $($_.Exception.Message)"
+    }
+}
+
+# -----------------------------------------------------------------------------
 # GET /api/gameconfig — fetch live INI values from the BG VM.
 # Returns:
 #   { available: true, source: 'live'|'template'|'cache',

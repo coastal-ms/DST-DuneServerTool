@@ -756,6 +756,206 @@ function Save-DuneGameConfig {
     }
 }
 
+# =============================================================================
+# DEFAULTS CATALOG — full DefaultGame.ini + DefaultEngine.ini from a sg-* pod
+# =============================================================================
+#
+# These ship inside the actual UE server image, so the only reliable way to
+# read them is `kubectl exec -- cat` against a running game-server pod. We do
+# one SSH round-trip that finds the namespace + an sg-* pod and concatenates
+# both files with sentinel markers; the result is cached per process so the
+# (337KB + 143KB) reads only happen once until a deliberate refresh.
+#
+# Path inside the pod (confirmed 2026-06-11):
+#   /home/dune/server/DuneSandbox/Config/DefaultGame.ini
+#   /home/dune/server/DuneSandbox/Config/DefaultEngine.ini
+#
+# We deliberately do NOT use Resolve-DuneGameConfigPaths' template fallback
+# here — defaults must come from the live image (or the catalog will be
+# misleading when the game patches).
+$script:DuneGameConfigDefaultsNs     = $null
+$script:DuneGameConfigDefaultsPod    = $null
+$script:DuneGameConfigDefaultsGame   = $null  # raw INI text
+$script:DuneGameConfigDefaultsEngine = $null  # raw INI text
+$script:DuneGameConfigDefaultsSource = $null  # ns + pod + timestamp
+
+function Get-DuneGameConfigDefaults {
+    param([string]$Ip, [switch]$Force)
+    if (-not $Force -and $script:DuneGameConfigDefaultsGame -and $script:DuneGameConfigDefaultsEngine) {
+        return @{
+            game   = $script:DuneGameConfigDefaultsGame
+            engine = $script:DuneGameConfigDefaultsEngine
+            source = $script:DuneGameConfigDefaultsSource
+            cached = $true
+        }
+    }
+
+    # Single SSH round-trip: discover ns + a Running sg-* pod, then cat both
+    # files between unmistakable sentinels so we can split the output cleanly.
+    $bash = @'
+set -e
+NS=$(sudo kubectl get pods -A --no-headers 2>/dev/null | awk '/-sg-/ && / Running /{print $1; exit}')
+if [ -z "$NS" ]; then echo "__NOPOD__"; exit 0; fi
+POD=$(sudo kubectl get pods -n "$NS" --no-headers 2>/dev/null | awk '/-sg-/ && / Running /{print $1; exit}')
+if [ -z "$POD" ]; then echo "__NOPOD__"; exit 0; fi
+echo "===META==="
+echo "NS=$NS"
+echo "POD=$POD"
+echo "===GAME==="
+sudo kubectl exec -n "$NS" "$POD" -- cat /home/dune/server/DuneSandbox/Config/DefaultGame.ini 2>/dev/null || echo "__READFAIL_GAME__"
+echo "===ENGINE==="
+sudo kubectl exec -n "$NS" "$POD" -- cat /home/dune/server/DuneSandbox/Config/DefaultEngine.ini 2>/dev/null || echo "__READFAIL_ENGINE__"
+echo "===END==="
+'@
+    $raw = (Invoke-V6Ssh -Ip $Ip -Cmd $bash -TimeoutSec 60) -join "`n"
+    if ($raw -match '__NOPOD__') {
+        throw 'No running game-server (sg-*) pod found. Start the battlegroup and try again.'
+    }
+
+    $idxMeta   = $raw.IndexOf("===META===")
+    $idxGame   = $raw.IndexOf("===GAME===")
+    $idxEngine = $raw.IndexOf("===ENGINE===")
+    $idxEnd    = $raw.IndexOf("===END===")
+    if ($idxMeta -lt 0 -or $idxGame -lt 0 -or $idxEngine -lt 0 -or $idxEnd -lt 0) {
+        throw 'Defaults read returned malformed output (missing sentinels).'
+    }
+    $metaBlock = $raw.Substring($idxMeta + "===META===".Length, $idxGame - ($idxMeta + "===META===".Length))
+    $gameBlock = $raw.Substring($idxGame + "===GAME===".Length, $idxEngine - ($idxGame + "===GAME===".Length))
+    $engBlock  = $raw.Substring($idxEngine + "===ENGINE===".Length, $idxEnd - ($idxEngine + "===ENGINE===".Length))
+
+    if ($gameBlock -match '__READFAIL_GAME__') { throw 'kubectl exec failed reading DefaultGame.ini.' }
+    if ($engBlock  -match '__READFAIL_ENGINE__') { throw 'kubectl exec failed reading DefaultEngine.ini.' }
+
+    $ns = ''; $pod = ''
+    foreach ($l in ($metaBlock -split "`n")) {
+        $t = $l.Trim()
+        if ($t -like 'NS=*')  { $ns  = $t.Substring(3) }
+        if ($t -like 'POD=*') { $pod = $t.Substring(4) }
+    }
+
+    $script:DuneGameConfigDefaultsGame   = $gameBlock.Trim("`r","`n")
+    $script:DuneGameConfigDefaultsEngine = $engBlock.Trim("`r","`n")
+    $script:DuneGameConfigDefaultsNs     = $ns
+    $script:DuneGameConfigDefaultsPod    = $pod
+    $script:DuneGameConfigDefaultsSource = @{
+        ns       = $ns
+        pod      = $pod
+        fetchedAt = (Get-Date).ToString('o')
+    }
+
+    return @{
+        game   = $script:DuneGameConfigDefaultsGame
+        engine = $script:DuneGameConfigDefaultsEngine
+        source = $script:DuneGameConfigDefaultsSource
+        cached = $false
+    }
+}
+
+# Best-effort type inference for an arbitrary INI scalar — used so the UI can
+# render the right input control (bool toggle vs number vs free text) for keys
+# the static schema doesn't know about. Mirrors dune-admin's inferType.
+function Get-DuneGameConfigInferType {
+    param([string]$Value)
+    $v = "$Value".Trim()
+    if ($v -eq '') { return 'string' }
+    # Strip surrounding quotes for detection (still 'string' though).
+    $isQuoted = $false
+    if ($v.Length -ge 2 -and $v.StartsWith('"') -and $v.EndsWith('"')) {
+        $isQuoted = $true
+        $v = $v.Substring(1, $v.Length - 2)
+    }
+    if ($isQuoted) { return 'string' }
+    if ($v -ieq 'true' -or $v -ieq 'false') {
+        if ($v.ToLowerInvariant() -eq $v) { return 'boolLower' } else { return 'bool' }
+    }
+    if ($v -eq '0' -or $v -eq '1') { return 'bool01' }
+    if ($v -match '^-?\d+$') { return 'int' }
+    if ($v -match '^-?\d+\.\d+$') { return 'float' }
+    if ($v.StartsWith('(') -or $v.StartsWith('{')) { return 'string' } # struct literal
+    return 'string'
+}
+
+# Build the full settings catalog merging live defaults with the current
+# overrides from UserGame.ini / UserEngine.ini. Each section knows which file
+# its overrides go to ('game' or 'engine'), so the UI can pass file+section+key
+# straight to PUT /api/gameconfig (which already handles the explicit form).
+function Get-DuneGameConfigCatalog {
+    param([string]$Ip, [switch]$ForceDefaults)
+    $defaults = Get-DuneGameConfigDefaults -Ip $Ip -Force:$ForceDefaults
+    $live     = Get-DuneGameConfig -Ip $Ip
+
+    $sectionsGame   = ConvertTo-DuneIniSectionsApi -Raw $defaults.game
+    $sectionsEngine = ConvertTo-DuneIniSectionsApi -Raw $defaults.engine
+
+    # User-override lookups: key = "<section>||<key>".
+    $userGame   = $live.game.effective
+    $userEngine = $live.engine.effective
+
+    $out = New-Object 'System.Collections.Generic.List[object]'
+
+    # Game-side defaults → write to UserGame.ini
+    foreach ($s in $sectionsGame) {
+        $keys = New-Object 'System.Collections.Generic.List[object]'
+        $overridden = 0
+        foreach ($k in $s.keys) {
+            $defVal = "$($k.value)"
+            $eff = $userGame["$($s.name)||$($k.key)"]
+            $current = if ($null -ne $eff -and "$eff" -ne '') { "$eff" } else { $defVal }
+            $isOverridden = ($null -ne $eff -and "$eff" -ne '' -and "$eff" -ne $defVal)
+            if ($isOverridden) { $overridden++ }
+            $keys.Add(@{
+                key        = $k.key
+                default    = $defVal
+                current    = $current
+                overridden = [bool]$isOverridden
+                isArray    = [bool]$k.isArray
+                type       = (Get-DuneGameConfigInferType -Value $defVal)
+            })
+        }
+        $out.Add(@{
+            name            = $s.name
+            file            = 'game'
+            count           = $keys.Count
+            overriddenCount = $overridden
+            keys            = $keys.ToArray()
+        })
+    }
+
+    # Engine-side defaults → write to UserEngine.ini
+    foreach ($s in $sectionsEngine) {
+        $keys = New-Object 'System.Collections.Generic.List[object]'
+        $overridden = 0
+        foreach ($k in $s.keys) {
+            $defVal = "$($k.value)"
+            $eff = $userEngine["$($s.name)||$($k.key)"]
+            $current = if ($null -ne $eff -and "$eff" -ne '') { "$eff" } else { $defVal }
+            $isOverridden = ($null -ne $eff -and "$eff" -ne '' -and "$eff" -ne $defVal)
+            if ($isOverridden) { $overridden++ }
+            $keys.Add(@{
+                key        = $k.key
+                default    = $defVal
+                current    = $current
+                overridden = [bool]$isOverridden
+                isArray    = [bool]$k.isArray
+                type       = (Get-DuneGameConfigInferType -Value $defVal)
+            })
+        }
+        $out.Add(@{
+            name            = $s.name
+            file            = 'engine'
+            count           = $keys.Count
+            overriddenCount = $overridden
+            keys            = $keys.ToArray()
+        })
+    }
+
+    return @{
+        source   = $defaults.source
+        cached   = [bool]$defaults.cached
+        sections = $out.ToArray()
+    }
+}
+
 # Back up the live INI files server-side WITHOUT writing any changes. Copies each
 # resolved file to "<path>.dstbak-<ts>" and verifies the copy landed. Returns a
 # summary the UI can show. Only meaningful for a live BG (templates aren't backed up).

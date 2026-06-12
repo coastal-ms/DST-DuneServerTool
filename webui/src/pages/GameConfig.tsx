@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo, useCallback, type FormEvent } from 'react'
+import { useState, useEffect, useMemo, useCallback, type FormEvent, type ReactElement } from 'react'
 import { PageHeader } from '../components/PageHeader'
 import { Icon } from '../components/Icon'
 import { useStatus } from '../hooks/useStatus'
@@ -14,6 +14,8 @@ import {
   setGameConfigClientDir,
   applyGameConfigClient,
   openGameConfigClientFile,
+  getGameConfigDefaults,
+  saveGameConfigRaw,
 } from '../api/gameconfig'
 import type {
   GameConfigCategory,
@@ -24,6 +26,10 @@ import type {
   GameConfigBackupEntry,
   GameConfigClientApply,
   GameConfigClientInfo,
+  GameConfigDefaultsResponse,
+  GameConfigDefaultSection,
+  GameConfigDefaultKey,
+  GameConfigRawUpdate,
 } from '../api/types'
 import { SpicefieldsCard } from './gameconfig/SpicefieldsCard'
 
@@ -739,6 +745,8 @@ export function GameConfig() {
 
             <SpicefieldsCard vmRunning={vmRunning} />
 
+            <DefaultsCatalogBrowser vmRunning={vmRunning} onSaved={() => void loadAll()} />
+
             {cfg && <AdvancedIniBrowser cfg={cfg} />}
           </div>
 
@@ -1099,6 +1107,395 @@ function BoolToggle({ on, off, value, disabled, onChange }: { on: string; off: s
       >
         On
       </button>
+    </div>
+  )
+}
+
+// -----------------------------------------------------------------------------
+// All default settings browser — lazy-loads DefaultGame.ini + DefaultEngine.ini
+// straight from the live game-server pod. Every section is a collapsible card;
+// every key is editable and saved back to UserGame/UserEngine.ini via the
+// existing explicit PUT /api/gameconfig form. Mirrors dune-admin's "Server
+// Settings" page.
+// -----------------------------------------------------------------------------
+
+function DefaultsCatalogBrowser({
+  vmRunning, onSaved,
+}: {
+  vmRunning: boolean
+  onSaved: () => void
+}) {
+  const [open, setOpen] = useState(false)
+  const [data, setData] = useState<GameConfigDefaultsResponse | null>(null)
+  const [loading, setLoading] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+  const [search, setSearch] = useState('')
+  const [fileFilter, setFileFilter] = useState<'all' | 'game' | 'engine'>('all')
+  const [expanded, setExpanded] = useState<Set<string>>(() => new Set())
+  // sectionName||key  ->  edited value (string). Empty when nothing pending.
+  const [edits, setEdits] = useState<Map<string, string>>(() => new Map())
+  const [saving, setSaving] = useState(false)
+  const [saveErr, setSaveErr] = useState<string | null>(null)
+  const [savedMsg, setSavedMsg] = useState<string | null>(null)
+
+  const load = useCallback(async (refresh = false) => {
+    setLoading(true); setError(null)
+    try {
+      const r = await getGameConfigDefaults(refresh)
+      setData(r)
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e))
+    } finally {
+      setLoading(false)
+    }
+  }, [])
+
+  // Fetch on first open, not before — keeps the (large) request lazy.
+  useEffect(() => {
+    if (open && !data && !loading && vmRunning) void load(false)
+  }, [open, data, loading, vmRunning, load])
+
+  const dirtyCount = edits.size
+  const sectionEditCount = (sectionName: string): number => {
+    let n = 0
+    edits.forEach((_v, k) => { if (k.startsWith(sectionName + '||')) n++ })
+    return n
+  }
+
+  const sectionsFiltered = useMemo(() => {
+    if (!data) return [] as GameConfigDefaultSection[]
+    const q = search.trim().toLowerCase()
+    return data.sections.filter(s => {
+      if (fileFilter !== 'all' && s.file !== fileFilter) return false
+      if (!q) return true
+      if (s.name.toLowerCase().includes(q)) return true
+      return s.keys.some(k => k.key.toLowerCase().includes(q))
+    })
+  }, [data, search, fileFilter])
+
+  const toggleSection = (name: string) => {
+    setExpanded(prev => {
+      const next = new Set(prev)
+      if (next.has(name)) next.delete(name); else next.add(name)
+      return next
+    })
+  }
+
+  const setEdit = (sectionName: string, key: string, value: string, original: string) => {
+    setEdits(prev => {
+      const next = new Map(prev)
+      const id = `${sectionName}||${key}`
+      if (value === original) next.delete(id)
+      else next.set(id, value)
+      return next
+    })
+  }
+
+  const resetEdits = () => { setEdits(new Map()); setSavedMsg(null); setSaveErr(null) }
+
+  const onSave = async () => {
+    if (!data || edits.size === 0) return
+    setSaving(true); setSaveErr(null); setSavedMsg(null)
+    try {
+      // Map each pending edit back to its section.file via the loaded catalog.
+      const sectionFile = new Map<string, 'game' | 'engine'>()
+      for (const s of data.sections) sectionFile.set(s.name, s.file)
+      const updates: GameConfigRawUpdate[] = []
+      edits.forEach((value, id) => {
+        const ix = id.indexOf('||')
+        if (ix < 0) return
+        const section = id.slice(0, ix)
+        const key = id.slice(ix + 2)
+        const file = sectionFile.get(section)
+        if (!file) return
+        updates.push({ file, section, key, value })
+      })
+      if (updates.length === 0) return
+      await saveGameConfigRaw(updates)
+      setSavedMsg(`Saved ${updates.length} change${updates.length === 1 ? '' : 's'}.`)
+      setEdits(new Map())
+      await load(false)
+      onSaved()
+    } catch (e) {
+      setSaveErr(e instanceof Error ? e.message : String(e))
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  return (
+    <div className="card p-5">
+      <button
+        type="button"
+        onClick={() => setOpen(o => !o)}
+        className="w-full flex items-center justify-between text-sm font-semibold uppercase tracking-wider text-accent-bright"
+      >
+        <span className="flex items-center gap-2">
+          <Icon name={open ? 'ChevronDown' : 'ChevronRight'} size={14} />
+          All default settings (browse &amp; override)
+        </span>
+        <span className="text-[10px] font-normal text-text-dim normal-case tracking-normal">
+          {data ? `${data.sections.length} sections` : 'lazy-loaded'}
+        </span>
+      </button>
+
+      {open && (
+        <div className="mt-4 space-y-3">
+          {!vmRunning && (
+            <div className="text-xs text-text-muted">Start the VM to load the defaults catalog.</div>
+          )}
+
+          {vmRunning && (
+            <div className="flex items-center gap-2 flex-wrap">
+              <input
+                type="text"
+                value={search}
+                onChange={e => setSearch(e.target.value)}
+                placeholder="Search section or key…"
+                className="flex-1 min-w-[200px] px-3 py-2 rounded-lg bg-surface-2 border border-border text-text text-sm placeholder:text-text-dim focus:outline-none focus:ring-2 focus:ring-accent/40"
+              />
+              <div className="flex items-center gap-1 bg-surface-2 rounded-lg p-0.5">
+                {(['all', 'game', 'engine'] as const).map(f => (
+                  <button
+                    key={f}
+                    type="button"
+                    onClick={() => setFileFilter(f)}
+                    className={'px-3 py-1.5 text-xs font-medium rounded-md ' + (fileFilter === f ? 'bg-accent/20 text-accent-bright' : 'text-text-muted')}
+                  >
+                    {f === 'all' ? 'All' : f === 'game' ? 'Game' : 'Engine'}
+                  </button>
+                ))}
+              </div>
+              <button
+                type="button"
+                onClick={() => void load(true)}
+                disabled={loading}
+                className="btn-secondary"
+                title="Re-read DefaultGame.ini / DefaultEngine.ini from the live pod"
+              >
+                <Icon name={loading ? 'Loader2' : 'RefreshCw'} size={13} className={loading ? 'animate-spin' : ''} />
+                Refresh
+              </button>
+            </div>
+          )}
+
+          {loading && !data && (
+            <div className="text-sm text-text-muted flex items-center gap-2">
+              <Icon name="Loader2" size={14} className="animate-spin" />
+              Reading DefaultGame.ini + DefaultEngine.ini from the live pod…
+            </div>
+          )}
+
+          {error && (
+            <div className="text-sm text-danger flex items-start gap-2">
+              <Icon name="AlertTriangle" size={14} className="mt-0.5" />
+              <span>{error}</span>
+            </div>
+          )}
+
+          {data && (
+            <>
+              {data.source && (
+                <div className="text-[11px] font-mono text-text-dim truncate" title={`${data.source.ns}/${data.source.pod} @ ${data.source.fetchedAt}`}>
+                  source: {data.source.pod} {data.cached && <span className="text-text-muted">(cached)</span>}
+                </div>
+              )}
+
+              <div className="space-y-2 max-h-[32rem] overflow-y-auto pr-1">
+                {sectionsFiltered.map(s => (
+                  <DefaultsSectionCard
+                    key={`${s.file}-${s.name}`}
+                    section={s}
+                    expanded={expanded.has(s.name)}
+                    onToggle={() => toggleSection(s.name)}
+                    editsCount={sectionEditCount(s.name)}
+                    getEdit={(key) => edits.get(`${s.name}||${key}`)}
+                    onEdit={(key, value, original) => setEdit(s.name, key, value, original)}
+                    searchTerm={search.trim().toLowerCase()}
+                  />
+                ))}
+                {sectionsFiltered.length === 0 && (
+                  <div className="text-sm text-text-muted">No sections match the filter.</div>
+                )}
+              </div>
+
+              <div className="flex items-center justify-between border-t border-border pt-3 mt-2">
+                <div className="text-xs text-text-muted">
+                  {dirtyCount === 0 ? 'No changes' : `${dirtyCount} pending change${dirtyCount === 1 ? '' : 's'}`}
+                  {savedMsg && <span className="ml-3 text-success">{savedMsg}</span>}
+                  {saveErr && <span className="ml-3 text-danger">{saveErr}</span>}
+                </div>
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={resetEdits}
+                    disabled={dirtyCount === 0 || saving}
+                    className="btn-secondary"
+                  >
+                    Reset
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => void onSave()}
+                    disabled={dirtyCount === 0 || saving || !vmRunning}
+                    className="btn-primary"
+                  >
+                    <Icon name={saving ? 'Loader2' : 'Save'} size={14} className={saving ? 'animate-spin' : ''} />
+                    {saving ? 'Saving…' : `Save ${dirtyCount || ''}`}
+                  </button>
+                </div>
+              </div>
+            </>
+          )}
+        </div>
+      )}
+    </div>
+  )
+}
+
+function DefaultsSectionCard({
+  section, expanded, onToggle, editsCount, getEdit, onEdit, searchTerm,
+}: {
+  section: GameConfigDefaultSection
+  expanded: boolean
+  onToggle: () => void
+  editsCount: number
+  getEdit: (key: string) => string | undefined
+  onEdit: (key: string, value: string, original: string) => void
+  searchTerm: string
+}) {
+  // If the user is searching for a key, filter the section's visible keys too
+  // so deep sections aren't a wall of noise.
+  const visibleKeys = useMemo(() => {
+    if (!searchTerm) return section.keys
+    if (section.name.toLowerCase().includes(searchTerm)) return section.keys
+    return section.keys.filter(k => k.key.toLowerCase().includes(searchTerm))
+  }, [section, searchTerm])
+
+  return (
+    <div className="border border-border rounded-lg overflow-hidden">
+      <button
+        type="button"
+        onClick={onToggle}
+        className="w-full flex items-center justify-between px-3 py-2 bg-surface-2 hover:bg-surface-3 transition-colors text-left"
+      >
+        <span className="flex items-center gap-2 min-w-0">
+          <Icon name={expanded ? 'ChevronDown' : 'ChevronRight'} size={13} className="shrink-0 text-text-muted" />
+          <span className="font-mono text-xs text-text truncate" title={section.name}>[{section.name}]</span>
+          <span className={'text-[9px] font-semibold uppercase tracking-wider px-1.5 py-0.5 rounded shrink-0 ' +
+            (section.file === 'engine' ? 'bg-warning/15 text-warning' : 'bg-accent/15 text-accent-bright')}>
+            {section.file}
+          </span>
+        </span>
+        <span className="flex items-center gap-2 shrink-0 text-[10px] text-text-dim">
+          {editsCount > 0 && (
+            <span className="px-1.5 py-0.5 rounded bg-success/15 text-success font-semibold">
+              {editsCount} edit{editsCount === 1 ? '' : 's'}
+            </span>
+          )}
+          {section.overriddenCount > 0 && (
+            <span className="px-1.5 py-0.5 rounded bg-accent/15 text-accent-bright font-semibold">
+              {section.overriddenCount} overridden
+            </span>
+          )}
+          <span>{section.count} keys</span>
+        </span>
+      </button>
+
+      {expanded && (
+        <div className="divide-y divide-border/60">
+          {visibleKeys.length === 0 && (
+            <div className="px-3 py-2 text-[11px] text-text-dim">(no keys match)</div>
+          )}
+          {visibleKeys.map((k, i) => (
+            <DefaultsKeyRow
+              key={`${k.key}-${i}`}
+              k={k}
+              pending={getEdit(k.key)}
+              onChange={(v) => onEdit(k.key, v, k.current)}
+            />
+          ))}
+        </div>
+      )}
+    </div>
+  )
+}
+
+function DefaultsKeyRow({
+  k, pending, onChange,
+}: {
+  k: GameConfigDefaultKey
+  pending: string | undefined
+  onChange: (v: string) => void
+}) {
+  const displayed = pending ?? k.current
+  const isDirty = pending !== undefined
+  // Array keys (+/-) need multi-line edits that the explicit-array save path
+  // doesn't model; surface them read-only with a hint for now.
+  const isArray = k.isArray
+
+  const inputCls =
+    'w-full px-2 py-1 rounded bg-surface border border-border text-text text-xs font-mono ' +
+    'focus:outline-none focus:ring-2 focus:ring-accent/40 disabled:opacity-60'
+
+  let control: ReactElement
+  if (isArray) {
+    control = (
+      <span className="text-[11px] font-mono text-text-dim break-all">
+        {displayed} <span className="text-warning">[array — edit in INI]</span>
+      </span>
+    )
+  } else {
+    const pair = boolPair(k.type)
+    if (pair) {
+      control = (
+        <div className="flex items-center gap-1">
+          <button
+            type="button"
+            onClick={() => onChange(pair.off)}
+            className={'px-2 py-1 text-[11px] rounded ' + (displayed === pair.off ? 'bg-danger/20 text-danger border border-danger/40' : 'bg-surface border border-border text-text-muted')}
+          >Off</button>
+          <button
+            type="button"
+            onClick={() => onChange(pair.on)}
+            className={'px-2 py-1 text-[11px] rounded ' + (displayed === pair.on ? 'bg-success/20 text-success border border-success/40' : 'bg-surface border border-border text-text-muted')}
+          >On</button>
+        </div>
+      )
+    } else if (k.type === 'int' || k.type === 'float') {
+      control = (
+        <input
+          type="number"
+          value={displayed}
+          onChange={e => onChange(e.target.value)}
+          className={inputCls}
+          step={k.type === 'float' ? 'any' : '1'}
+        />
+      )
+    } else {
+      control = (
+        <input
+          type="text"
+          value={displayed}
+          onChange={e => onChange(e.target.value)}
+          className={inputCls}
+        />
+      )
+    }
+  }
+
+  return (
+    <div className="px-3 py-2 grid grid-cols-[minmax(0,2fr)_minmax(0,3fr)_minmax(0,2fr)] gap-3 items-center">
+      <span className="font-mono text-[11px] text-text truncate" title={k.key}>
+        {isArray && <span className="text-warning mr-1" title="Array entry">[]</span>}
+        {k.key}
+      </span>
+      <div>{control}</div>
+      <div className="text-[10px] font-mono text-text-dim truncate flex items-center gap-2" title={`default: ${k.default}`}>
+        {isDirty && <span className="px-1 rounded bg-success/15 text-success font-semibold uppercase">edited</span>}
+        {!isDirty && k.overridden && <span className="px-1 rounded bg-accent/15 text-accent-bright font-semibold uppercase">overridden</span>}
+        <span className="truncate">default: {k.default || <span className="text-text-dim/60">∅</span>}</span>
+      </div>
     </div>
   )
 }

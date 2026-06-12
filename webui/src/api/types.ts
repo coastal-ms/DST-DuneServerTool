@@ -173,6 +173,49 @@ export type GameConfigClientApply = {
   items: GameConfigClientApplyItem[]
 }
 
+// ---------- Defaults catalog -----------------------------------------------
+// Per-key entry inside a default INI section. `default` = value shipped in
+// DefaultGame.ini / DefaultEngine.ini; `current` = effective value after any
+// User*.ini override; `overridden` flags whether the user changed it.
+export type GameConfigDefaultKey = {
+  key: string
+  default: string
+  current: string
+  overridden: boolean
+  isArray: boolean
+  type: GameConfigFieldType
+}
+
+export type GameConfigDefaultSection = {
+  name: string
+  file: 'game' | 'engine'
+  count: number
+  overriddenCount: number
+  keys: GameConfigDefaultKey[]
+}
+
+export type GameConfigDefaultsSource = {
+  ns: string
+  pod: string
+  fetchedAt: string
+}
+
+export type GameConfigDefaultsResponse = {
+  available: true
+  cached: boolean
+  source: GameConfigDefaultsSource
+  sections: GameConfigDefaultSection[]
+}
+
+// Raw, explicit-form save item: bypasses the static schema so we can write
+// any section/key the defaults browser surfaces.
+export type GameConfigRawUpdate = {
+  file: 'game' | 'engine'
+  section: string
+  key: string
+  value: string
+}
+
 // Local client config (admin's own machine). `bundle`-style fields mirror
 // GameConfigFileBundle so the read-only viewer can reuse the same components.
 export type GameConfigClientInfo = {
