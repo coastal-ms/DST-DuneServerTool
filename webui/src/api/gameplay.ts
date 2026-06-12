@@ -382,6 +382,13 @@ export function clearBotLegacyListings() {
   )
 }
 
+export function clearBotError() {
+  return api<{ ok: boolean }>(
+    '/api/gameplay/market-bot/clear-error',
+    { method: 'POST' },
+  )
+}
+
 export function runBotListTick(dryRun: boolean) {
   return api<BotListTickResult>(`/api/gameplay/market-bot/tick/list${dryRun ? '?dry=1' : ''}`, {
     method: 'POST',

@@ -380,6 +380,21 @@ Register-DuneRoute -Method POST -Path '/api/gameplay/market-bot/tick/list' -Hand
 }
 
 # ---------------------------------------------------------------------------
+# POST /api/gameplay/market-bot/clear-error — dismiss the persistent
+# last_error banner from the bot state. Resets error_count too. No-op when
+# the banner is already empty.
+# ---------------------------------------------------------------------------
+Register-DuneRoute -Method POST -Path '/api/gameplay/market-bot/clear-error' -Handler {
+    param($req, $res, $routeParams, $body)
+    try {
+        $r = Clear-DuneBotError
+        Write-DuneJson -Response $res -Body $r
+    } catch {
+        Write-DuneError -Response $res -Status 500 -Message "Clear bot error failed: $($_.Exception.Message)"
+    }
+}
+
+# ---------------------------------------------------------------------------
 # POST /api/gameplay/market-bot/seed — IMMEDIATE seed: bulk-list every
 # catalogued template up to listings_per_grade in one shot. Bypasses the
 # live vendor snapshot (which hangs on fresh BGs with no NPC orders) and

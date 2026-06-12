@@ -1502,6 +1502,8 @@ function Start-DuneBotSeedAsync {
 
     # Stamp 'starting' synchronously so the very next /status call sees
     # running=true even if the runspace hasn't had its first wakeup yet.
+    # Also CLEAR the last_error banner — a previous failure shouldn't keep
+    # haunting the UI once the user kicks off a fresh attempt.
     $st.seed_progress = @{
         phase        = 'starting'
         chunks_done  = 0
@@ -1515,6 +1517,8 @@ function Start-DuneBotSeedAsync {
         started      = (Get-Date).ToUniversalTime().ToString('o')
         updated      = (Get-Date).ToUniversalTime().ToString('o')
     }
+    $st.last_error  = ''
+    $st.error_count = 0
     Save-DuneBotState -State $st
 
     try {
@@ -1568,6 +1572,16 @@ function Start-DuneBotSeedAsync {
         } catch {}
         return @{ ok = $false; running = $false; error = "Failed to spawn seed runspace: $($_.Exception.Message)" }
     }
+}
+
+# Reset the persistent last_error banner. Lets the UI clear a stale failure
+# message without having to wait for a fresh successful tick to overwrite it.
+function Clear-DuneBotError {
+    $st = Read-DuneBotState
+    $st.last_error  = ''
+    $st.error_count = 0
+    Save-DuneBotState -State $st
+    return @{ ok = $true }
 }
 
 # Wipe NPC orders owned by any actor whose class is not 'Duke'. Used to evict

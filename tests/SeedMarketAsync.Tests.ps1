@@ -111,3 +111,56 @@ Describe 'Read-DuneBotState — seed_progress field' -Tag 'MarketBot' {
         [int]$st2.seed_progress.inserted     | Should -Be 612
     }
 }
+
+Describe 'Clear-DuneBotError' -Tag 'MarketBot' {
+
+    BeforeEach {
+        if (Test-Path -LiteralPath $script:StatePath) { Remove-Item -LiteralPath $script:StatePath -Force }
+    }
+
+    It 'zeros last_error and error_count' {
+        $st = Read-DuneBotState
+        $st.last_error  = 'chunk 1 failed: ssh timed out after 300s'
+        $st.error_count = 7
+        Save-DuneBotState -State $st
+
+        $r = Clear-DuneBotError
+        $r.ok | Should -Be $true
+
+        $after = Read-DuneBotState
+        [string]$after.last_error  | Should -Be ''
+        [int]$after.error_count    | Should -Be 0
+    }
+
+    It 'is idempotent on an already-clean state' {
+        $r1 = Clear-DuneBotError
+        $r2 = Clear-DuneBotError
+        $r1.ok | Should -Be $true
+        $r2.ok | Should -Be $true
+    }
+}
+
+Describe 'Start-DuneBotSeedAsync — fresh launch clears stale errors' -Tag 'MarketBot' {
+
+    BeforeEach {
+        if (Test-Path -LiteralPath $script:StatePath) { Remove-Item -LiteralPath $script:StatePath -Force }
+    }
+
+    It 'wipes last_error / error_count when stamping seed_progress.starting' {
+        $st = Read-DuneBotState
+        $st.last_error  = 'old chunk failure'
+        $st.error_count = 3
+        Save-DuneBotState -State $st
+
+        # Pass a VALID ServerDir so the synchronous stamp happens. The spawned
+        # runspace will subsequently fail because there's no lib subdir, but
+        # that's irrelevant — we only care that the synchronous error-clear
+        # part of the function ran before returning. The runspace runs in
+        # another thread and only touches seed_progress (never last_error).
+        [void](Start-DuneBotSeedAsync -ServerDir $script:StateDir)
+
+        $after = Read-DuneBotState
+        [string]$after.last_error | Should -Be ''
+        [int]$after.error_count   | Should -Be 0
+    }
+}
