@@ -89,6 +89,10 @@ export function BlueprintsTab() {
         <button className="btn-secondary" onClick={() => { void load() }} disabled={loading}>
           <Icon name="RefreshCw" size={15} className={loading ? 'animate-spin' : ''} /> Refresh
         </button>
+        <a className="btn-secondary" href="https://dune.layout.tools/" target="_blank" rel="noopener noreferrer"
+          title="Open the Dune base/blueprint layout designer in a new tab">
+          <Icon name="ExternalLink" size={15} /> Blueprint Designer
+        </a>
         <SourceBadge source={source} />
       </div>
 

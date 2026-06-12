@@ -98,12 +98,14 @@ Register-DuneRoute -Method PUT -Path '/api/gameconfig' -Handler {
     try {
         Save-DuneGameConfig -Ip $ctx.ip -Updates $structured.ToArray()
         $cfg = Get-DuneGameConfig -Ip $ctx.ip
+        $clientApply = Get-DuneGameConfigClientApplyNotice -Updates $structured.ToArray()
         Write-DuneJson -Response $res -Body @{
-            ok      = $true
-            applied = $structured.Count
-            source  = $cfg.source
-            game    = $cfg.game
-            engine  = $cfg.engine
+            ok          = $true
+            applied     = $structured.Count
+            source      = $cfg.source
+            game        = $cfg.game
+            engine      = $cfg.engine
+            clientApply = $clientApply
         }
     } catch {
         Write-DuneError -Response $res -Status 500 -Message "Game config save failed: $($_.Exception.Message)"
@@ -158,6 +160,104 @@ Register-DuneRoute -Method GET -Path '/api/gameconfig/backups' -Handler {
         }
     } catch {
         Write-DuneError -Response $res -Status 500 -Message "Game config backup list failed: $($_.Exception.Message)"
+    }
+}
+
+# -----------------------------------------------------------------------------
+# LOCAL CLIENT CONFIG endpoints. These run on the admin's own machine (no SSH /
+# no VM context needed) and operate on the player's client Game.ini.
+#
+# GET  /api/gameconfig/client      — read the local client config + folder info.
+# PUT  /api/gameconfig/client/dir  — persist the client-config FOLDER. { dir }
+# PUT  /api/gameconfig/client/apply— upsert ClientApply keys into the local file.
+#                                     { updates: [ { key, value }, ... ], dir? }
+# -----------------------------------------------------------------------------
+Register-DuneRoute -Method GET -Path '/api/gameconfig/client' -Handler {
+    param($req, $res, $routeParams, $body)
+    try {
+        Write-DuneJson -Response $res -Body (Get-DuneGameConfigClient)
+    } catch {
+        Write-DuneError -Response $res -Status 500 -Message "Client config read failed: $($_.Exception.Message)"
+    }
+}
+
+Register-DuneRoute -Method PUT -Path '/api/gameconfig/client/dir' -Handler {
+    param($req, $res, $routeParams, $body)
+    $dir = ''
+    if ($body -is [hashtable] -and $body.Contains('dir')) { $dir = "$($body['dir'])".Trim() }
+    if (-not $dir) {
+        Write-DuneError -Response $res -Status 400 -Message 'Missing dir.'
+        return
+    }
+    $resolved = [Environment]::ExpandEnvironmentVariables($dir)
+    if (-not (Test-Path -LiteralPath $resolved)) {
+        Write-DuneError -Response $res -Status 400 -Message "Folder does not exist: $resolved"
+        return
+    }
+    try {
+        $null = Invoke-WithDuneLock -Name 'config' -Script { Save-DuneConfig -Config @{ ClientConfigPath = $dir } }
+        Write-DuneJson -Response $res -Body (Get-DuneGameConfigClient)
+    } catch {
+        Write-DuneError -Response $res -Status 500 -Message "Saving client config folder failed: $($_.Exception.Message)"
+    }
+}
+
+Register-DuneRoute -Method PUT -Path '/api/gameconfig/client/apply' -Handler {
+    param($req, $res, $routeParams, $body)
+    if (-not $body -or -not ($body -is [hashtable])) {
+        Write-DuneError -Response $res -Status 400 -Message 'Missing JSON body.'
+        return
+    }
+    $dir     = if ($body.Contains('dir')) { "$($body['dir'])".Trim() } else { '' }
+    $updates = New-Object 'System.Collections.Generic.List[object]'
+    $raw = $body['updates']
+    if ($raw -is [System.Collections.IEnumerable] -and -not ($raw -is [string]) -and -not ($raw -is [hashtable])) {
+        foreach ($u in $raw) {
+            $k = if ($u -is [hashtable]) { "$($u['key'])" } else { "$($u.key)" }
+            $v = if ($u -is [hashtable]) { "$($u['value'])" } else { "$($u.value)" }
+            if ($k) { $updates.Add(@{ key = $k; value = $v }) }
+        }
+    }
+    if ($updates.Count -eq 0) {
+        Write-DuneError -Response $res -Status 400 -Message 'No updates supplied.'
+        return
+    }
+    try {
+        $r = Save-DuneGameConfigClient -Updates $updates.ToArray() -Dir $dir
+        $client = Get-DuneGameConfigClient -Dir $dir
+        Write-DuneJson -Response $res -Body @{
+            ok      = $true
+            path    = $r.path
+            backup  = $r.backup
+            created = $r.created
+            applied = $r.applied
+            items   = $r.items
+            client  = $client
+        }
+    } catch {
+        Write-DuneError -Response $res -Status 500 -Message "Applying to client config failed: $($_.Exception.Message)"
+    }
+}
+
+# -----------------------------------------------------------------------------
+# POST /api/gameconfig/client/open — open the local client Game.ini in Notepad
+# on this PC (DST runs locally). Body (optional): { dir }
+# -----------------------------------------------------------------------------
+Register-DuneRoute -Method POST -Path '/api/gameconfig/client/open' -Handler {
+    param($req, $res, $routeParams, $body)
+    $dir = ''
+    if ($body -is [hashtable] -and $body.Contains('dir')) { $dir = "$($body['dir'])".Trim() }
+    try {
+        $resolvedDir = Resolve-DuneGameConfigClientDir -Dir $dir
+        if (-not (Test-Path -LiteralPath $resolvedDir)) {
+            Write-DuneError -Response $res -Status 400 -Message "Client config folder not found: $resolvedDir"
+            return
+        }
+        $path = Get-DuneGameConfigClientFilePath -Dir $dir
+        Start-Process -FilePath 'notepad.exe' -ArgumentList "`"$path`""
+        Write-DuneJson -Response $res -Body @{ ok = $true; path = $path }
+    } catch {
+        Write-DuneError -Response $res -Status 500 -Message "Opening client config failed: $($_.Exception.Message)"
     }
 }
 

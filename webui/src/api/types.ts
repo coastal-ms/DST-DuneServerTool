@@ -120,6 +120,7 @@ export type GameConfigField = {
   min?: number
   max?: number
   quoted?: boolean
+  clientApply?: boolean
   options?: GameConfigFieldOption[]
 }
 
@@ -160,12 +161,50 @@ export type GameConfigResponse = {
   engine: GameConfigFileBundle
 }
 
+export type GameConfigClientApplyItem = {
+  key: string
+  label: string
+  section: string
+  value: string
+}
+
+export type GameConfigClientApply = {
+  path: string
+  items: GameConfigClientApplyItem[]
+}
+
+// Local client config (admin's own machine). `bundle`-style fields mirror
+// GameConfigFileBundle so the read-only viewer can reuse the same components.
+export type GameConfigClientInfo = {
+  dir: string
+  dirResolved: string
+  path: string
+  exists: boolean
+  dirExists: boolean
+  default: string
+  raw: string
+  sections: GameConfigIniSection[]
+  effective: Record<string, string>
+  managedSections: string[]
+}
+
+export type GameConfigClientApplyResult = {
+  ok: boolean
+  path: string
+  backup: string
+  created: boolean
+  applied: number
+  items: GameConfigClientApplyItem[]
+  client: GameConfigClientInfo
+}
+
 export type GameConfigSaveResponse = {
   ok: boolean
   applied: number
   source: 'live' | 'template' | 'cache'
   game: GameConfigFileBundle
   engine: GameConfigFileBundle
+  clientApply?: GameConfigClientApply
 }
 
 export type GameConfigBackupFile = {
