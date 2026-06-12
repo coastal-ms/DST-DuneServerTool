@@ -44,6 +44,118 @@ function Get-DuneBotConfigPath {
 function Get-DuneBotStatePath {
     Join-Path $env:APPDATA 'DuneServer\gameplay-bot-state.json'
 }
+# Persistent cache of (template_id -> category_mask / category_depth), harvested
+# opportunistically from any dune_exchange_orders row whose mask is non-zero
+# (player listings, prior Duke listings, residual Funcom NPC orders — all are
+# valid sources). Survives BG wipes / DST restarts so a mature DST instance
+# can list catalog items even on a virgin BG. Ports the SQLite `categories`
+# cache from Icehunter/dune-market-bot exchange.go to a flat JSON file.
+function Get-DuneBotMaskCachePath {
+    Join-Path $env:APPDATA 'DuneServer\gameplay-bot-mask-cache.json'
+}
+
+# Bundled seed harvested from a mature dune_exchange_orders table. Ships ~1378
+# template->mask entries so Duke can list on a brand-new BG without waiting for
+# any in-game market activity. Looks in two places to handle both source-tree
+# runs and installed layouts (matches Get-DuneGameplayItemDataPath).
+function Get-DuneBotMaskSeedPath {
+    foreach ($candidate in @(
+        (Join-Path $PSScriptRoot '..\..\data\gameplay-bot-mask-seed.json'),
+        (Join-Path (Split-Path -Parent $PSScriptRoot) '..\data\gameplay-bot-mask-seed.json')
+    )) {
+        $resolved = $null
+        try { $resolved = (Resolve-Path -LiteralPath $candidate -ErrorAction Stop).Path } catch {}
+        if ($resolved) { return $resolved }
+    }
+    return $null
+}
+
+# Load the persistent mask cache as a hashtable: lowercase template_id ->
+# @{ mask = int32; depth = int16 }. On first run (cache file absent) the
+# bundled seed is copied verbatim so Duke has coverage immediately. Returns
+# an empty hashtable on any read failure rather than throwing.
+function Read-DuneBotMaskCache {
+    $path = Get-DuneBotMaskCachePath
+    if (-not (Test-Path -LiteralPath $path)) {
+        $seed = Get-DuneBotMaskSeedPath
+        if ($seed) {
+            try {
+                $dir = Split-Path -Parent $path
+                if (-not (Test-Path -LiteralPath $dir)) { New-Item -ItemType Directory -Path $dir -Force | Out-Null }
+                Copy-Item -LiteralPath $seed -Destination $path -Force
+            } catch {}
+        }
+    }
+    $cache = @{}
+    if (-not (Test-Path -LiteralPath $path)) { return $cache }
+    try {
+        $raw = Get-Content -LiteralPath $path -Raw -Encoding UTF8
+        if (-not $raw) { return $cache }
+        $obj = $raw | ConvertFrom-Json -ErrorAction Stop
+        foreach ($p in $obj.PSObject.Properties) {
+            $entry = $p.Value
+            if ($null -eq $entry) { continue }
+            $mask  = 0; $depth = 0
+            try { $mask  = [int]$entry.mask  } catch {}
+            try { $depth = [int]$entry.depth } catch {}
+            if ($mask -eq 0) { continue }
+            $cache[$p.Name.ToLower()] = @{ mask = $mask; depth = $depth }
+        }
+    } catch {}
+    return $cache
+}
+
+function Save-DuneBotMaskCache {
+    param([hashtable]$Cache)
+    if ($null -eq $Cache) { return }
+    $path = Get-DuneBotMaskCachePath
+    $dir  = Split-Path -Parent $path
+    if (-not (Test-Path -LiteralPath $dir)) { New-Item -ItemType Directory -Path $dir -Force | Out-Null }
+    $obj = [ordered]@{}
+    foreach ($k in ($Cache.Keys | Sort-Object)) {
+        $v = $Cache[$k]
+        $obj[$k] = [ordered]@{ mask = [int]$v.mask; depth = [int]$v.depth }
+    }
+    $tmp = "$path.tmp"
+    try {
+        $obj | ConvertTo-Json -Depth 4 -Compress | Set-Content -LiteralPath $tmp -Encoding UTF8 -NoNewline
+        Move-Item -LiteralPath $tmp -Destination $path -Force
+    } catch {
+        if (Test-Path -LiteralPath $tmp) { Remove-Item -LiteralPath $tmp -Force -ErrorAction SilentlyContinue }
+    }
+}
+
+# Harvest masks from EVERY non-zero-mask order on the exchange (player, NPC,
+# prior Duke listings — all are valid). Mirrors refreshCategoryCache() from
+# dune-admin/internal/marketbot/exchange.go. Returns the merged cache so the
+# caller can pass it straight to Resolve-DuneBotListingCandidates.
+function Update-DuneBotMaskCache {
+    param([string]$Ip, [int64]$ExchangeId)
+    $cache = Read-DuneBotMaskCache
+    $sql = @"
+SELECT DISTINCT template_id, category_mask, category_depth
+FROM dune.dune_exchange_orders
+WHERE category_mask != 0 AND exchange_id = $ExchangeId
+"@
+    $r = Invoke-DuneSqlQuery -Ip $Ip -Sql $sql -ReadOnly $true -MaxRows 50000 -TimeoutSec 60
+    if (-not $r.ok) { return $cache }
+    $added = 0
+    foreach ($row in (ConvertTo-DuneRowMaps -Result $r)) {
+        $tmpl = [string]$row['template_id']
+        if (-not $tmpl) { continue }
+        $mask  = ConvertTo-DuneInt $row['category_mask']
+        $depth = ConvertTo-DuneInt $row['category_depth']
+        if ($mask -le 0) { continue }
+        $key = $tmpl.ToLower()
+        $existing = $cache[$key]
+        if ($null -eq $existing -or [int]$existing.mask -ne $mask -or [int]$existing.depth -ne $depth) {
+            $cache[$key] = @{ mask = [int]$mask; depth = [int]$depth }
+            $added++
+        }
+    }
+    if ($added -gt 0) { Save-DuneBotMaskCache -Cache $cache }
+    return $cache
+}
 
 function Get-DuneBotConfigDefaults {
     [ordered]@{
@@ -73,6 +185,12 @@ function Get-DuneBotConfigDefaults {
         price_overrides      = @{}
         # Marker for one-time sane-defaults migration on load.
         sane_defaults_revision = 1
+        # Catalog-seed: when TRUE, candidate set is (live NPC snapshot) UNION
+        # (bundled item catalog INTERSECTED with the persistent mask cache).
+        # Lets Duke list immediately on fresh BGs that have no NPC vendor
+        # orders yet, as long as ANY market activity has happened (the cache
+        # is harvested from every dune_exchange_orders row with mask != 0).
+        seed_from_catalog    = $true
     }
 }
 
@@ -115,6 +233,7 @@ function Read-DuneBotConfig {
                         'enabled'              { $cfg[$k] = [bool]$v }
                         'maintain_balance'     { $cfg[$k] = [bool]$v }
                         'stackables_only'      { $cfg[$k] = [bool]$v }
+                        'seed_from_catalog'    { $cfg[$k] = [bool]$v }
                         'disabled_items'       { $cfg[$k] = @($v | ForEach-Object { [string]$_ } | Where-Object { $_ }) }
                         'target_balance'       { $cfg[$k] = [int64]$v }
                         'tier_base_prices'     { $cfg[$k] = ConvertFrom-DuneBotJsonMap -Value $v -Default $cfg[$k] -IntValues }
@@ -163,6 +282,7 @@ function Save-DuneBotConfig {
     $v = _Get $Incoming 'enabled';           if ($null -ne $v) { $cfg['enabled'] = [bool]$v }
     $v = _Get $Incoming 'maintain_balance';  if ($null -ne $v) { $cfg['maintain_balance'] = [bool]$v }
     $v = _Get $Incoming 'stackables_only';   if ($null -ne $v) { $cfg['stackables_only'] = [bool]$v }
+    $v = _Get $Incoming 'seed_from_catalog'; if ($null -ne $v) { $cfg['seed_from_catalog'] = [bool]$v }
     $v = _Get $Incoming 'buy_tick_interval'; if ($null -ne $v) { $cfg['buy_tick_interval'] = [Math]::Max(10,  [int]$v) }
     $v = _Get $Incoming 'list_tick_interval';if ($null -ne $v) { $cfg['list_tick_interval'] = [Math]::Max(60, [int]$v) }
     $v = _Get $Incoming 'listings_per_grade';if ($null -ne $v) { $cfg['listings_per_grade'] = [Math]::Min(50, [Math]::Max(1, [int]$v)) }
@@ -638,44 +758,85 @@ function Get-DuneBotTierFromTemplate {
 # Merge vendor snapshot with bundled item metadata + DST's existing equipment
 # heuristic. Returns the eligible-to-list candidate list filtered by config.
 function Resolve-DuneBotListingCandidates {
-    param([hashtable]$Snapshot, [hashtable]$Cfg)
+    param(
+        [hashtable]$Snapshot,
+        [hashtable]$Cfg,
+        [hashtable]$MaskCache = @{}
+    )
     # Lazy-load gameplay-item-data.json via the Gameplay lib helpers.
     if (Get-Command Initialize-DuneGameplayItemData -ErrorAction SilentlyContinue) {
         Initialize-DuneGameplayItemData
     }
     $rules = if ($null -ne $script:DuneGameplayItemRules) { $script:DuneGameplayItemRules } else { @{} }
     $stackablesOnly = [bool]$Cfg.stackables_only
+    $seedFromCatalog = [bool]$Cfg.seed_from_catalog
     $disabled = @{}; foreach ($d in @($Cfg.disabled_items)) { $disabled[[string]$d] = $true }
+    # Build the work set: every snapshot template (authoritative — has real
+    # vendor_price + mask) UNION every catalog template that has a mask in
+    # the persistent cache (catalog-seed for fresh BGs). Snapshot wins on
+    # mask/price collision.
+    $work = @{}
+    foreach ($tmpl in $Snapshot.Keys) { $work[$tmpl] = $true }
+    if ($seedFromCatalog -and $MaskCache.Count -gt 0) {
+        foreach ($tmpl in $rules.Keys) {
+            if ($work.ContainsKey($tmpl)) { continue }
+            if (-not $MaskCache.ContainsKey($tmpl.ToLower())) { continue }
+            $work[$tmpl] = $true
+        }
+    }
     $candidates = @()
-    foreach ($tmpl in $Snapshot.Keys) {
+    foreach ($tmpl in $work.Keys) {
         if ($disabled.ContainsKey($tmpl)) { continue }
-        $sn = $Snapshot[$tmpl]
+        $sn   = if ($Snapshot.ContainsKey($tmpl)) { $Snapshot[$tmpl] } else { $null }
         $rule = if ($rules.ContainsKey($tmpl)) { $rules[$tmpl] } else { $null }
+        # Category mask: snapshot wins; otherwise pull from MaskCache.
+        $mask = 0; $depth = 0
+        if ($sn -and $sn.category_mask -gt 0) {
+            $mask  = [int]$sn.category_mask
+            $depth = [int]$sn.category_depth
+        } else {
+            $mc = $MaskCache[$tmpl.ToLower()]
+            if ($mc) { $mask = [int]$mc.mask; $depth = [int]$mc.depth }
+        }
+        # Listing requires a real category_mask — without it the item is
+        # invisible in every in-game market tab.
+        if ($mask -le 0) { continue }
         $cat    = if ($rule) { [string]$rule.category } else { '' }
         $tier   = if ($rule) { [int]$rule.tier } else { 0 }
         $rarity = if ($rule) { ([string]$rule.rarity).ToLower() } else { '' }
         if (-not $tier)   { $tier = Get-DuneBotTierFromTemplate -Template $tmpl }
         if (-not $rarity) { $rarity = 'common' }
         # Stackability: trust the vendor snapshot (max_stack > 1 means the game
-        # has actually stacked this template). Fall back to category prefix.
-        $isStackable = ($sn.max_stack -gt 1)
+        # has actually stacked this template). Fall back to bundled rule, then
+        # to category prefix.
+        $snStack = if ($sn) { [int]$sn.max_stack } else { 0 }
+        $isStackable = ($snStack -gt 1)
+        if (-not $isStackable -and $rule -and [int]$rule.stack_max -gt 1) { $isStackable = $true }
         if (-not $isStackable -and $cat -and (Get-Command Test-DuneIsEquipmentCategory -ErrorAction SilentlyContinue)) {
             $isStackable = -not (Test-DuneIsEquipmentCategory -Category $cat)
         }
         if ($stackablesOnly -and -not $isStackable) { continue }
-        # Listing requires a real category_mask — without it the item is
-        # invisible in every in-game market tab.
-        if ($sn.category_mask -le 0) { continue }
+        # Stack max: snapshot first, then bundled catalog, then 1.
+        $stackMax = 1
+        if ($snStack -gt 0) { $stackMax = $snStack }
+        elseif ($rule -and [int]$rule.stack_max -gt 0) { $stackMax = [int]$rule.stack_max }
+        # Vendor price: snapshot first (live in-game Funcom price), then
+        # bundled catalog vendor_price, then default_unit_price.
+        $vendor = 0
+        if ($sn -and [int]$sn.vendor_price -gt 0) { $vendor = [int]$sn.vendor_price }
+        elseif ($rule -and [int]$rule.vendor_price -gt 0) { $vendor = [int]$rule.vendor_price }
+        else { $vendor = [int]$Cfg.default_unit_price }
         $candidates += @{
             template_id    = $tmpl
-            vendor_price   = $sn.vendor_price
-            category_mask  = $sn.category_mask
-            category_depth = $sn.category_depth
-            stack_max      = if ($sn.max_stack -gt 0) { $sn.max_stack } else { 1 }
+            vendor_price   = $vendor
+            category_mask  = $mask
+            category_depth = $depth
+            stack_max      = $stackMax
             tier           = $tier
             rarity         = $rarity
             category       = $cat
             is_stackable   = $isStackable
+            source         = if ($sn) { 'snapshot' } else { 'catalog' }
         }
     }
     return ,$candidates
@@ -825,6 +986,8 @@ function Invoke-DuneBotListTick {
         dryRun        = [bool]$DryRun
         enabled       = [bool]$cfg.enabled
         considered    = 0
+        masks_known   = 0
+        from_catalog  = 0
         eligible      = 0
         listed_before = 0
         listed_after  = 0
@@ -848,13 +1011,21 @@ function Invoke-DuneBotListTick {
     if (-not $vs.ok) { $summary.ok = $false; $summary.message = "vendor snapshot: $($vs.error)"; return $summary }
     $summary.considered = $vs.snapshot.Count
 
+    # Refresh persistent mask cache from any non-zero-mask order on this
+    # exchange (player, NPC, prior Duke). Seeded with the bundled snapshot
+    # on first run so a brand-new BG already has coverage. Without this,
+    # Resolve-DuneBotListingCandidates can't fall back to catalog templates.
+    $maskCache = Update-DuneBotMaskCache -Ip $ctx.ip -ExchangeId $ident.exchangeId
+    $summary.masks_known = $maskCache.Count
+
     $cl = Get-DuneBotCurrentListings -Ip $ctx.ip -OwnerId $ident.ownerId -ExchangeId $ident.exchangeId
     if (-not $cl.ok) { $summary.ok = $false; $summary.message = "current listings: $($cl.error)"; return $summary }
     $current = $cl.byTemplate
     foreach ($k in $current.Keys) { $summary.listed_before += @($current[$k]).Count }
 
-    $candidates = Resolve-DuneBotListingCandidates -Snapshot $vs.snapshot -Cfg $cfg
-    $summary.eligible = @($candidates).Count
+    $candidates = Resolve-DuneBotListingCandidates -Snapshot $vs.snapshot -Cfg $cfg -MaskCache $maskCache
+    $summary.eligible     = @($candidates).Count
+    $summary.from_catalog = @($candidates | Where-Object { $_.source -eq 'catalog' }).Count
 
     $perGrade = [int]$cfg.listings_per_grade
     $orderExpiry = if ($DryRun) { 999999999L } else { Get-DuneBotOrderExpiry -Ip $ctx.ip }
@@ -878,6 +1049,7 @@ function Invoke-DuneBotListTick {
             tier         = $cand.tier
             rarity       = $cand.rarity
             stackable    = [bool]$cand.is_stackable
+            source       = [string]$cand.source
         })
 
         if ($DryRun) { continue }
@@ -921,9 +1093,10 @@ COMMIT;
         $state = Read-DuneBotState
         $state.last_list_tick   = (Get-Date).ToUniversalTime().ToString('o')
         $state.last_list_result = @{
-            considered = $summary.considered; eligible = $summary.eligible
-            inserted   = $summary.inserted;   deleted  = $summary.deleted
-            errors     = $summary.errors;     dryRun   = $false
+            considered   = $summary.considered;  eligible    = $summary.eligible
+            masks_known  = $summary.masks_known; from_catalog = $summary.from_catalog
+            inserted     = $summary.inserted;    deleted     = $summary.deleted
+            errors       = $summary.errors;      dryRun      = $false
         }
         if ($summary.errors -gt 0) { $state.error_count = ([int]$state.error_count + [int]$summary.errors) }
         if ($summary.message)      { $state.last_error  = [string]$summary.message }
