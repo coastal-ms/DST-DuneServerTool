@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { Icon } from '../../components/Icon'
+import { ItemPicker } from '../../components/ItemPicker'
 import {
   getStorage, getStorageItems, giveItemsToStorage, deleteStorageItem,
   type StorageContainer, type InventoryItem, type DataSource, type StorageGiveItemInput,
@@ -263,13 +264,12 @@ function AddItemsForm({ busy, onSubmit, onCancel }: {
 
   return (
     <div className="card p-3 mb-3 space-y-2">
-      <div>
-        <label className="block text-[11px] uppercase tracking-wider text-text-dim mb-1">Item template id</label>
-        <input type="text" value={template} placeholder="e.g. Spice_Melange"
-          onChange={e => setTemplate(e.target.value)}
-          onKeyDown={e => { if (e.key === 'Enter') add() }}
-          className="w-full px-3 py-2 rounded-lg bg-surface-2 border border-border text-text text-sm focus:outline-none focus:ring-2 focus:ring-ibad focus:border-ibad/50" />
-      </div>
+      <ItemPicker
+        label="Item — type to search by name or template id"
+        value={template}
+        onChange={setTemplate}
+        disabled={busy}
+      />
       <div className="grid grid-cols-2 gap-2">
         <div>
           <label className="block text-[11px] uppercase tracking-wider text-text-dim mb-1">Quantity</label>

@@ -381,3 +381,21 @@ Register-DuneRoute -Method GET -Path '/api/gameplay/players/events' -Handler {
     }
 }
 
+
+# v11.5.7 — POST /api/gameplay/players/fill-water  { pawn_id }
+# Online players: takes effect on next relog (game server caches inventory in
+# memory). Offline players: instant.
+Register-DuneRoute -Method POST -Path '/api/gameplay/players/fill-water' -Handler {
+    param($req, $res, $routeParams, $body)
+    try {
+        $pawn = Get-DuneBodyInt -Body $body -Name 'pawn_id'
+        if (-not $pawn) { $pawn = Get-DuneBodyInt -Body $body -Name 'actor_id' }
+        if (-not $pawn) { $pawn = Get-DuneBodyInt -Body $body -Name 'id' }
+        if (-not $pawn -or $pawn -le 0) { Write-DuneError -Response $res -Status 400 -Message 'pawn_id (actor id) is required.'; return }
+        Invoke-DunePlayerWriteRoute -Response $res -Action {
+            param($ip) Invoke-DunePlayerFillWater -Ip $ip -PawnId $pawn
+        }
+    } catch {
+        Write-DuneError -Response $res -Status 500 -Message "Fill water failed: $($_.Exception.Message)"
+    }
+}
