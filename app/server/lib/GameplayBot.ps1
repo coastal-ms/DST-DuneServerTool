@@ -1171,64 +1171,156 @@ function Invoke-DuneBotListTick {
     $perGrade = [int]$cfg.listings_per_grade
     $orderExpiry = if ($DryRun) { 999999999L } else { Get-DuneBotOrderExpiry -Ip $ctx.ip }
 
+    # v11.5.9: list tick must be grade-aware. The seed now fans out per
+    # quality grade (0,2,3,4,5 for gradeable equipment) and prices each tier
+    # at the grade-multiplied price. The old grade-blind list tick computed
+    # target = base price and flagged every grade>0 listing as "stale",
+    # then issued per-template DELETE + N INSERT over SSH for every
+    # gradeable template — ~7,800 single SSH SQL roundtrips on a full
+    # catalog, which presented as "Run now just spins forever". Now we
+    # mirror the seed: fan out per grade, batch deletes, batch inserts.
+    if (Get-Command Initialize-DuneGameplayItemData -ErrorAction SilentlyContinue) {
+        Initialize-DuneGameplayItemData
+    }
+    $rules = if ($null -ne $script:DuneGameplayItemRules) { $script:DuneGameplayItemRules } else { @{} }
+
+    $insertWork = @()   # array of @{cand; target; grade; need}
+    $deleteIds  = @()   # array of @{order_id; item_id} to delete
+    $totalAlignedAllGrades = 0   # for summary
+    $totalStaleAllGrades   = 0
+
     foreach ($cand in $candidates) {
-        $target = Get-DuneBotItemPrice -Cfg $cfg -Cand $cand
+        $rule = if ($rules.ContainsKey($cand.template_id)) { $rules[$cand.template_id] } else { $null }
+        $grades = Get-DuneBotApplicableGrades -Cand $cand -Rule $rule
         $existing = if ($current.ContainsKey($cand.template_id)) { @($current[$cand.template_id]) } else { @() }
-        $aligned = @($existing | Where-Object { $_.item_price -eq $target })
-        $stale   = @($existing | Where-Object { $_.item_price -ne $target })
-        $need    = $perGrade - $aligned.Count
-        if ($need -lt 0) { $need = 0 }
+
+        $tmplAligned = 0
+        $tmplStale   = 0
+        $tmplInsert  = 0
+        $gradesSeen  = @{}
+        foreach ($g in $grades) { $gradesSeen[[int]$g] = $true }
+
+        foreach ($grade in $grades) {
+            $target = Get-DuneBotItemPrice -Cfg $cfg -Cand $cand -Grade $grade
+            $atGrade = @($existing | Where-Object { [int]$_.quality_level -eq [int]$grade })
+            $aligned = @($atGrade | Where-Object { $_.item_price -eq $target })
+            $stale   = @($atGrade | Where-Object { $_.item_price -ne $target })
+            $need    = $perGrade - $aligned.Count
+            if ($need -lt 0) { $need = 0 }
+
+            $tmplAligned += $aligned.Count
+            $tmplStale   += $stale.Count
+            $tmplInsert  += $need
+
+            if ($need -gt 0) {
+                $insertWork += @{ cand = $cand; target = $target; need = $need; grade = [int]$grade }
+            }
+            if (-not $DryRun -and $stale.Count -gt 0) {
+                foreach ($s in $stale) {
+                    $deleteIds += @{ order_id = [int64]$s.order_id; item_id = [int64]$s.item_id }
+                }
+            }
+        }
+
+        # Also retire any listings on grades that don't apply to this
+        # template (e.g. seed left grade-3 listings but rule says
+        # min_quality_level=4 now). Keeps the catalog tidy between config
+        # changes without manual clears.
+        $orphans = @($existing | Where-Object { -not $gradesSeen.ContainsKey([int]$_.quality_level) })
+        if ($orphans.Count -gt 0) {
+            $tmplStale += $orphans.Count
+            if (-not $DryRun) {
+                foreach ($o in $orphans) {
+                    $deleteIds += @{ order_id = [int64]$o.order_id; item_id = [int64]$o.item_id }
+                }
+            }
+        }
+
+        $totalAlignedAllGrades += $tmplAligned
+        $totalStaleAllGrades   += $tmplStale
 
         $summary.planned += ,([ordered]@{
             template_id  = $cand.template_id
-            target_price = ($target * 10)
+            target_price = ((Get-DuneBotItemPrice -Cfg $cfg -Cand $cand -Grade 0) * 10)
             stack_max    = $cand.stack_max
             existing     = $existing.Count
-            aligned      = $aligned.Count
-            stale        = $stale.Count
-            to_insert    = $need
+            aligned      = $tmplAligned
+            stale        = $tmplStale
+            to_insert    = $tmplInsert
             tier         = $cand.tier
             rarity       = $cand.rarity
             stackable    = [bool]$cand.is_stackable
             source       = [string]$cand.source
+            grades       = @($grades)
         })
+    }
 
-        if ($DryRun) { continue }
-
-        if ($stale.Count -gt 0) {
-            $orderIds = ($stale | ForEach-Object { $_.order_id }) -join ','
-            $itemIds  = ($stale | Where-Object { $_.item_id -gt 0 } | ForEach-Object { $_.item_id }) -join ','
-            $delItems = if ($itemIds) { "DELETE FROM dune.items WHERE id IN ($itemIds);" } else { '' }
-            $delSql = @"
+    if (-not $DryRun) {
+        # ---- Batch DELETE stale + orphaned listings, ~200 orders per chunk.
+        if ($deleteIds.Count -gt 0) {
+            $delChunkSize = 200
+            $di = 0
+            while ($di -lt $deleteIds.Count) {
+                $endIdx = [Math]::Min($di + $delChunkSize, $deleteIds.Count) - 1
+                $orderIds = (($deleteIds[$di..$endIdx]) | ForEach-Object { $_.order_id }) -join ','
+                $itemIds  = (($deleteIds[$di..$endIdx]) | Where-Object { $_.item_id -gt 0 } | ForEach-Object { $_.item_id }) -join ','
+                $delItems = if ($itemIds) { "DELETE FROM dune.items WHERE id IN ($itemIds);" } else { '' }
+                $delSql = @"
 BEGIN;
 DELETE FROM dune.dune_exchange_sell_orders WHERE order_id IN ($orderIds);
 DELETE FROM dune.dune_exchange_orders WHERE id IN ($orderIds) AND owner_id = $($ident.ownerId) AND is_npc_order = TRUE;
 $delItems
 COMMIT;
 "@
-            $dr = Invoke-DuneSqlQuery -Ip $ctx.ip -Sql $delSql -ReadOnly $false -MaxRows 5 -TimeoutSec 60
-            if ($dr.ok) {
-                $summary.deleted += $stale.Count
-            } else {
-                $summary.errors++
-                $summary.message = "stale delete $($cand.template_id): $($dr.error)"
+                $dr = Invoke-DuneSqlQuery -Ip $ctx.ip -Sql $delSql -ReadOnly $false -MaxRows 5 -TimeoutSec 300 -Bulk
+                if ($dr.ok) {
+                    $summary.deleted += ($endIdx - $di + 1)
+                } else {
+                    $summary.errors++
+                    $summary.message = "stale delete chunk: $($dr.error)"
+                    break
+                }
+                $di = $endIdx + 1
             }
         }
 
-        for ($i = 0; $i -lt $need; $i++) {
-            $r = New-DuneBotListing -Ip $ctx.ip -Ident $ident -Cand $cand -ItemPrice $target -OrderExpiry $orderExpiry
-            if ($r.ok) {
-                $summary.inserted++
-            } else {
-                $summary.errors++
-                $summary.message = "list $($cand.template_id): $($r.error)"
-                break
+        # ---- Batch INSERT new listings using the seed's chunked WITH-CTE
+        # emitter (~50 work items per chunk; each work item is one
+        # multi-row CTE that inserts $need rows in a single statement).
+        if ($summary.errors -eq 0 -and $insertWork.Count -gt 0) {
+            $insChunkSize = 50
+            $ii = 0
+            while ($ii -lt $insertWork.Count) {
+                $endIdx = [Math]::Min($ii + $insChunkSize, $insertWork.Count) - 1
+                $sb = New-Object System.Text.StringBuilder
+                [void]$sb.AppendLine('BEGIN;')
+                for ($j = $ii; $j -le $endIdx; $j++) {
+                    $w = $insertWork[$j]
+                    $chunk = New-DuneBotListingSqlChunk -Ident $ident -Cand $w.cand `
+                                -ItemPrice $w.target -OrderExpiry $orderExpiry -Count $w.need -Grade $w.grade
+                    [void]$sb.AppendLine($chunk)
+                }
+                [void]$sb.AppendLine('COMMIT;')
+                $ir = Invoke-DuneSqlQuery -Ip $ctx.ip -Sql ($sb.ToString()) -ReadOnly $false -MaxRows 5 -TimeoutSec 600 -Bulk
+                if ($ir.ok) {
+                    for ($j = $ii; $j -le $endIdx; $j++) { $summary.inserted += [int]$insertWork[$j].need }
+                } else {
+                    $summary.errors++
+                    $summary.message = "insert chunk: $($ir.error)"
+                    break
+                }
+                $ii = $endIdx + 1
             }
         }
+
+        # Snapshot Duke's final listing count for the UI.
+        $cl2 = Get-DuneBotCurrentListings -Ip $ctx.ip -OwnerId $ident.ownerId -ExchangeId $ident.exchangeId
+        if ($cl2.ok) { foreach ($k in $cl2.byTemplate.Keys) { $summary.listed_after += @($cl2.byTemplate[$k]).Count } }
+    } else {
+        # Dry-run: project the would-be post count so the UI shows accurate deltas.
+        $wouldInsert = 0; foreach ($w in $insertWork) { $wouldInsert += [int]$w.need }
+        $summary.listed_after = $summary.listed_before - $totalStaleAllGrades + $wouldInsert
     }
-
-    $cl2 = Get-DuneBotCurrentListings -Ip $ctx.ip -OwnerId $ident.ownerId -ExchangeId $ident.exchangeId
-    if ($cl2.ok) { foreach ($k in $cl2.byTemplate.Keys) { $summary.listed_after += @($cl2.byTemplate[$k]).Count } }
 
     if (-not $DryRun) {
         $state = Read-DuneBotState
