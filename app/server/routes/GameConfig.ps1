@@ -240,6 +240,28 @@ Register-DuneRoute -Method PUT -Path '/api/gameconfig/client/apply' -Handler {
 }
 
 # -----------------------------------------------------------------------------
+# POST /api/gameconfig/client/open — open the local client Game.ini in Notepad
+# on this PC (DST runs locally). Body (optional): { dir }
+# -----------------------------------------------------------------------------
+Register-DuneRoute -Method POST -Path '/api/gameconfig/client/open' -Handler {
+    param($req, $res, $routeParams, $body)
+    $dir = ''
+    if ($body -is [hashtable] -and $body.Contains('dir')) { $dir = "$($body['dir'])".Trim() }
+    try {
+        $resolvedDir = Resolve-DuneGameConfigClientDir -Dir $dir
+        if (-not (Test-Path -LiteralPath $resolvedDir)) {
+            Write-DuneError -Response $res -Status 400 -Message "Client config folder not found: $resolvedDir"
+            return
+        }
+        $path = Get-DuneGameConfigClientFilePath -Dir $dir
+        Start-Process -FilePath 'notepad.exe' -ArgumentList "`"$path`""
+        Write-DuneJson -Response $res -Body @{ ok = $true; path = $path }
+    } catch {
+        Write-DuneError -Response $res -Status 500 -Message "Opening client config failed: $($_.Exception.Message)"
+    }
+}
+
+# -----------------------------------------------------------------------------
 # GET /api/gameconfig/spicefields — list rows from dune.spicefield_types.
 # Returns: { available: true, rows: [ { spicefieldTypeId, mapName, fieldType,
 #                                       dimensionIndex,

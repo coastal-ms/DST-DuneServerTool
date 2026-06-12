@@ -64,6 +64,13 @@ export function applyGameConfigClient(items: GameConfigClientApplyItem[], dir?: 
   })
 }
 
+export function openGameConfigClientFile(dir?: string) {
+  return api<{ ok: boolean; path: string }>('/api/gameconfig/client/open', {
+    method: 'POST',
+    body: JSON.stringify(dir ? { dir } : {}),
+  })
+}
+
 export function getSpicefields() {
   return api<SpicefieldsResponse>('/api/gameconfig/spicefields')
 }
