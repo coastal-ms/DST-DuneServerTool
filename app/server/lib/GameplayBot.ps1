@@ -958,7 +958,7 @@ function Get-DuneBotRoundedPrice {
 # Solari is item_price * 10). Respects per-template override, then sane-pricing
 # tier/category/rarity formula, vendor floor (vendor*0.95) and 2x vendor ceiling.
 function Get-DuneBotItemPrice {
-    param([hashtable]$Cfg, [hashtable]$Cand)
+    param([hashtable]$Cfg, [hashtable]$Cand, [int]$Grade = 0)
     $cap = [int]$Cfg.price_cap
     $overrides = [hashtable]$Cfg.price_overrides
     if ($overrides -and $overrides.ContainsKey($Cand.template_id)) {
@@ -991,6 +991,12 @@ function Get-DuneBotItemPrice {
         $ceil = $vp * 2.0
         if ($price -gt $ceil) { $price = $ceil }
     }
+    # Apply per-grade premium AFTER the vendor-bracket clamp so higher grades
+    # are allowed to break above the 2× vendor ceiling (a G5 schematic legit-
+    # imately sells for ~2× a G0). Caps still enforced by Limit-DuneBotPrice.
+    if ($Grade -ge 0 -and $Grade -le 5) {
+        $price = $price * [double]$script:DuneBotGradePriceMult[$Grade]
+    }
     $rounded = Get-DuneBotRoundedPrice -Price $price
     return Limit-DuneBotPrice -Price $rounded -Cap $cap
 }
@@ -1014,14 +1020,55 @@ WHERE o.owner_id = $OwnerId AND o.is_npc_order = TRUE AND o.exchange_id = $Excha
         $tmpl = [string]$row['template_id']
         if (-not $by.ContainsKey($tmpl)) { $by[$tmpl] = @() }
         $by[$tmpl] += @{
-            order_id   = ConvertTo-DuneInt $row['id']
-            item_id    = ConvertTo-DuneInt $row['item_id']
-            item_price = ConvertTo-DuneInt $row['item_price']
-            stack_size = ConvertTo-DuneInt $row['stack_size']
+            order_id      = ConvertTo-DuneInt $row['id']
+            item_id       = ConvertTo-DuneInt $row['item_id']
+            item_price    = ConvertTo-DuneInt $row['item_price']
+            stack_size    = ConvertTo-DuneInt $row['stack_size']
+            quality_level = ConvertTo-DuneInt $row['quality_level']
         }
     }
     return @{ ok = $true; byTemplate = $by }
 }
+
+# Returns the quality grades a template should be listed at — mirrors
+# dune-market-bot's applicableGrades(): stackables + non-gradeable equipment
+# get one listing tier (grade 0), gradeable equipment gets the full 0–5
+# (or MinQualityLevel–5 for augments that only drop at higher grades). This
+# is what drives DST seed up from ~1 listing/template to ~6× for gradeable
+# gear, closing most of the gap against dune-admin's seed output.
+function Get-DuneBotApplicableGrades {
+    param([hashtable]$Cand, $Rule)
+    # Stackables don't have a quality grade in-game.
+    if ([bool]$Cand.is_stackable) { return ,@(0) }
+    # Without an item-data rule we can't tell if the template is gradeable —
+    # treat as grade-0 only (safe default; matches old DST behaviour).
+    if (-not $Rule) { return ,@(0) }
+    $isGradeable = $false
+    if ($Rule -is [hashtable]) {
+        if ($Rule.ContainsKey('is_gradeable')) { $isGradeable = [bool]$Rule['is_gradeable'] }
+    } else {
+        $p = $Rule.PSObject.Properties['is_gradeable']
+        if ($p) { $isGradeable = [bool]$p.Value }
+    }
+    if (-not $isGradeable) { return ,@(0) }
+    $minQL = 0
+    if ($Rule -is [hashtable]) {
+        if ($Rule.ContainsKey('min_quality_level')) { $minQL = [int]$Rule['min_quality_level'] }
+    } else {
+        $p = $Rule.PSObject.Properties['min_quality_level']
+        if ($p) { $minQL = [int]$p.Value }
+    }
+    if ($minQL -lt 0) { $minQL = 0 }
+    if ($minQL -gt 5) { $minQL = 5 }
+    $out = @()
+    for ($g = $minQL; $g -le 5; $g++) { $out += $g }
+    return ,$out
+}
+
+# Grade -> price multiplier, mirroring dune-market-bot's gradePriceMultTable.
+# Grade 0 (no grade) is the baseline. Higher grades command a real premium
+# in-game so list at a matching premium price.
+$script:DuneBotGradePriceMult = @(1.0, 1.0, 1.25, 1.5, 1.75, 2.0)
 
 # INSERT one (items, dune_exchange_orders, dune_exchange_sell_orders) trio.
 function New-DuneBotListing {
@@ -1218,7 +1265,7 @@ COMMIT;
 # market to seed itself.
 # ----------------------------------------------------------------------------
 function New-DuneBotListingSqlChunk {
-    param([hashtable]$Ident, [hashtable]$Cand, [int]$ItemPrice, [int64]$OrderExpiry, [int]$Count)
+    param([hashtable]$Ident, [hashtable]$Cand, [int]$ItemPrice, [int64]$OrderExpiry, [int]$Count, [int]$Grade = 0)
     if ($Count -le 0) { return '' }
     $tmplLit = ConvertTo-DuneSqlLiteral $Cand.template_id
     $stack   = [int]$Cand.stack_max; if ($stack -lt 1) { $stack = 1 }
@@ -1227,6 +1274,7 @@ function New-DuneBotListingSqlChunk {
     $ex      = [int64]$Ident.exchangeId
     $ap      = [int64]$Ident.accessPointId
     $ow      = [int64]$Ident.ownerId
+    $q       = [int]$Grade; if ($q -lt 0) { $q = 0 }; if ($q -gt 5) { $q = 5 }
     return @"
 WITH inv AS (SELECT dune.get_exchange_inventory_id($ex) AS id),
      base AS (
@@ -1236,7 +1284,7 @@ WITH inv AS (SELECT dune.get_exchange_inventory_id($ex) AS id),
      ),
      ins_items AS (
        INSERT INTO dune.items (inventory_id, position_index, template_id, stack_size, stats, quality_level)
-       SELECT base.inv_id, base.pos + gs.n, '$tmplLit', $stack, '{}', 0
+       SELECT base.inv_id, base.pos + gs.n, '$tmplLit', $stack, '{}', $q
        FROM base, generate_series(1, $Count) AS gs(n)
        RETURNING id
      ),
@@ -1246,7 +1294,7 @@ WITH inv AS (SELECT dune.get_exchange_inventory_id($ex) AS id),
          durability_cur, durability_max, item_price, category_mask, category_depth,
          is_npc_order, item_id, quality_level
        )
-       SELECT $ex, $ap, $ow, '$tmplLit', $OrderExpiry, 1.0, 1.0, $ItemPrice, $mask, $depth, TRUE, ins_items.id, 0
+       SELECT $ex, $ap, $ow, '$tmplLit', $OrderExpiry, 1.0, 1.0, $ItemPrice, $mask, $depth, TRUE, ins_items.id, $q
        FROM ins_items
        RETURNING id
      )
@@ -1366,29 +1414,42 @@ function Invoke-DuneBotSeedMarket {
     $perGrade    = [int]$cfg.listings_per_grade
     $orderExpiry = if ($DryRun) { 999999999L } else { Get-DuneBotOrderExpiry -Ip $ctx.ip }
 
+    # item-data rules (is_gradeable / min_quality_level) for the grade fan-out.
+    if (Get-Command Initialize-DuneGameplayItemData -ErrorAction SilentlyContinue) {
+        Initialize-DuneGameplayItemData
+    }
+    $rules = if ($null -ne $script:DuneGameplayItemRules) { $script:DuneGameplayItemRules } else { @{} }
+
     $work = @()
     foreach ($cand in $candidates) {
-        $target = Get-DuneBotItemPrice -Cfg $cfg -Cand $cand
+        $rule  = if ($rules.ContainsKey($cand.template_id)) { $rules[$cand.template_id] } else { $null }
+        $grades = Get-DuneBotApplicableGrades -Cand $cand -Rule $rule
         $existing = if ($current.ContainsKey($cand.template_id)) { @($current[$cand.template_id]) } else { @() }
-        $aligned  = @($existing | Where-Object { $_.item_price -eq $target })
-        $need     = $perGrade - $aligned.Count
-        if ($need -lt 0) { $need = 0 }
+        # Sum to_insert across grades for the per-template planning summary.
+        $tmplPlanInsert = 0
+        foreach ($grade in $grades) {
+            $target = Get-DuneBotItemPrice -Cfg $cfg -Cand $cand -Grade $grade
+            $aligned = @($existing | Where-Object { [int]$_.quality_level -eq $grade -and $_.item_price -eq $target })
+            $need = $perGrade - $aligned.Count
+            if ($need -lt 0) { $need = 0 }
+            if ($need -gt 0) {
+                $work += @{ cand = $cand; target = $target; need = $need; grade = $grade }
+                $summary.eligible++
+                $tmplPlanInsert += $need
+            }
+        }
         $summary.planned += ,([ordered]@{
             template_id  = $cand.template_id
-            target_price = ($target * 10)   # display value (Solari, not 1/10ths)
+            target_price = ((Get-DuneBotItemPrice -Cfg $cfg -Cand $cand -Grade 0) * 10)   # display value (Solari)
             stack_max    = $cand.stack_max
             existing     = $existing.Count
-            aligned      = $aligned.Count
-            to_insert    = $need
+            grades       = @($grades)
+            to_insert    = $tmplPlanInsert
             tier         = $cand.tier
             rarity       = $cand.rarity
             stackable    = [bool]$cand.is_stackable
             source       = [string]$cand.source
         })
-        if ($need -gt 0) {
-            $work += @{ cand = $cand; target = $target; need = $need }
-            $summary.eligible++
-        }
     }
 
     if ($DryRun) {
@@ -1415,7 +1476,7 @@ function Invoke-DuneBotSeedMarket {
         for ($j = $i; $j -le $endIdx; $j++) {
             $w = $work[$j]
             $chunk = New-DuneBotListingSqlChunk -Ident $ident -Cand $w.cand `
-                        -ItemPrice $w.target -OrderExpiry $orderExpiry -Count $w.need
+                        -ItemPrice $w.target -OrderExpiry $orderExpiry -Count $w.need -Grade $w.grade
             [void]$sb.AppendLine($chunk)
         }
         [void]$sb.AppendLine('COMMIT;')
