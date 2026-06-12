@@ -1175,6 +1175,199 @@ COMMIT;
     return $summary
 }
 
+# ----------------------------------------------------------------------------
+# Seed market — IMMEDIATE bulk-list every catalogued template up to the
+# configured listings_per_grade. Bypasses the live NPC vendor snapshot
+# (which depends on the in-game market already having activity) and the
+# 6-hour mask-cache refresh (which makes an SSH round-trip on its own).
+# Uses only:
+#   * bundled gameplay-item-data.json (item catalog with stack_max / vendor_price)
+#   * persistent mask cache file (template -> category_mask), pre-seeded
+#     from gameplay-bot-mask-seed.json on first run
+#   * ONE SQL read for Duke's current listings
+#   * ONE SQL write per chunk (default 200 templates per chunk = ~7 chunks
+#     for a full catalog) — each chunk is a single BEGIN/COMMIT containing
+#     N per-template `WITH ... INSERT INTO sell_orders` statements.
+#
+# This is what the user clicks when they just want every NPC sell order
+# populated NOW, without waiting for the scheduler or for the in-game
+# market to seed itself.
+# ----------------------------------------------------------------------------
+function New-DuneBotListingSqlChunk {
+    param([hashtable]$Ident, [hashtable]$Cand, [int]$ItemPrice, [int64]$OrderExpiry, [int]$Count)
+    if ($Count -le 0) { return '' }
+    $tmplLit = ConvertTo-DuneSqlLiteral $Cand.template_id
+    $stack   = [int]$Cand.stack_max; if ($stack -lt 1) { $stack = 1 }
+    $mask    = [int]$Cand.category_mask
+    $depth   = [int]$Cand.category_depth
+    $ex      = [int64]$Ident.exchangeId
+    $ap      = [int64]$Ident.accessPointId
+    $ow      = [int64]$Ident.ownerId
+    return @"
+WITH inv AS (SELECT dune.get_exchange_inventory_id($ex) AS id),
+     base AS (
+       SELECT inv.id AS inv_id,
+              COALESCE((SELECT MAX(position_index) FROM dune.items WHERE inventory_id = inv.id), -1) AS pos
+       FROM inv
+     ),
+     ins_items AS (
+       INSERT INTO dune.items (inventory_id, position_index, template_id, stack_size, stats, quality_level)
+       SELECT base.inv_id, base.pos + gs.n, '$tmplLit', $stack, '{}', 0
+       FROM base, generate_series(1, $Count) AS gs(n)
+       RETURNING id
+     ),
+     ins_orders AS (
+       INSERT INTO dune.dune_exchange_orders (
+         exchange_id, access_point_id, owner_id, template_id, expiration_time,
+         durability_cur, durability_max, item_price, category_mask, category_depth,
+         is_npc_order, item_id, quality_level
+       )
+       SELECT $ex, $ap, $ow, '$tmplLit', $OrderExpiry, 1.0, 1.0, $ItemPrice, $mask, $depth, TRUE, ins_items.id, 0
+       FROM ins_items
+       RETURNING id
+     )
+INSERT INTO dune.dune_exchange_sell_orders (order_id, initial_stack_size, wear_normalized_price)
+SELECT id, $stack, $ItemPrice FROM ins_orders;
+"@
+}
+
+function Invoke-DuneBotSeedMarket {
+    param(
+        [switch]$DryRun,
+        [int]$ChunkSize = 200
+    )
+    $cfg = Read-DuneBotConfig
+    # Force catalog-seed mode for this call regardless of saved config — the
+    # whole point of the seed button is to populate without a live snapshot.
+    $cfg.seed_from_catalog = $true
+
+    $summary = [ordered]@{
+        ok            = $true
+        dryRun        = [bool]$DryRun
+        considered    = 0   # all candidates from catalog+mask cache
+        eligible      = 0   # candidates with mask>0 and (stackable if cfg says so)
+        masks_known   = 0
+        listed_before = 0
+        listed_after  = 0
+        inserted      = 0
+        chunks        = 0
+        errors        = 0
+        planned       = @()
+        message       = ''
+    }
+
+    $ctx = Get-DuneDbContext
+    if (-not $ctx.ok) { $summary.ok = $false; $summary.message = $ctx.message; return $summary }
+
+    $ident = Get-DuneBotIdentity -Ip $ctx.ip -CreateIfMissing:(!$DryRun)
+    if (-not $ident.ok) { $summary.ok = $false; $summary.message = $ident.error; return $summary }
+    if ($ident.ownerId -le 0) {
+        $summary.message = 'Bot not provisioned (run any live tick once to create the Duke actor).'
+        return $summary
+    }
+
+    # File-only mask cache read — NO SSH round-trip up front. On first run
+    # this auto-seeds from the bundled gameplay-bot-mask-seed.json (~1378
+    # templates) so a brand-new BG has immediate coverage.
+    $maskCache = Read-DuneBotMaskCache
+    $summary.masks_known = $maskCache.Count
+
+    # Need to know what's already there to compute per-template "need".
+    # For a fresh seed this is one fast SSH read.
+    $cl = Get-DuneBotCurrentListings -Ip $ctx.ip -OwnerId $ident.ownerId -ExchangeId $ident.exchangeId
+    if (-not $cl.ok) { $summary.ok = $false; $summary.message = "current listings: $($cl.error)"; return $summary }
+    $current = $cl.byTemplate
+    foreach ($k in $current.Keys) { $summary.listed_before += @($current[$k]).Count }
+
+    # Build candidates from the bundled catalog INTERSECTED with mask cache.
+    # An empty snapshot is fine because seed_from_catalog is forced on.
+    $candidates = Resolve-DuneBotListingCandidates -Snapshot @{} -Cfg $cfg -MaskCache $maskCache
+    $summary.considered = @($candidates).Count
+
+    $perGrade    = [int]$cfg.listings_per_grade
+    $orderExpiry = if ($DryRun) { 999999999L } else { Get-DuneBotOrderExpiry -Ip $ctx.ip }
+
+    $work = @()
+    foreach ($cand in $candidates) {
+        $target = Get-DuneBotItemPrice -Cfg $cfg -Cand $cand
+        $existing = if ($current.ContainsKey($cand.template_id)) { @($current[$cand.template_id]) } else { @() }
+        $aligned  = @($existing | Where-Object { $_.item_price -eq $target })
+        $need     = $perGrade - $aligned.Count
+        if ($need -lt 0) { $need = 0 }
+        $summary.planned += ,([ordered]@{
+            template_id  = $cand.template_id
+            target_price = ($target * 10)   # display value (Solari, not 1/10ths)
+            stack_max    = $cand.stack_max
+            existing     = $existing.Count
+            aligned      = $aligned.Count
+            to_insert    = $need
+            tier         = $cand.tier
+            rarity       = $cand.rarity
+            stackable    = [bool]$cand.is_stackable
+            source       = [string]$cand.source
+        })
+        if ($need -gt 0) {
+            $work += @{ cand = $cand; target = $target; need = $need }
+            $summary.eligible++
+        }
+    }
+
+    if ($DryRun) {
+        # Nothing else to do — UI shows the plan.
+        return $summary
+    }
+
+    # Build one BEGIN/COMMIT per chunk of $ChunkSize templates. Each per-
+    # template block is one WITH-CTE statement that bulk-inserts $need
+    # listings in a single statement.
+    $i = 0
+    while ($i -lt $work.Count) {
+        $endIdx = [Math]::Min($i + $ChunkSize, $work.Count) - 1
+        $sb = New-Object System.Text.StringBuilder
+        [void]$sb.AppendLine('BEGIN;')
+        for ($j = $i; $j -le $endIdx; $j++) {
+            $w = $work[$j]
+            $chunk = New-DuneBotListingSqlChunk -Ident $ident -Cand $w.cand `
+                        -ItemPrice $w.target -OrderExpiry $orderExpiry -Count $w.need
+            [void]$sb.AppendLine($chunk)
+        }
+        [void]$sb.AppendLine('COMMIT;')
+        $r = Invoke-DuneSqlQuery -Ip $ctx.ip -Sql ($sb.ToString()) -ReadOnly $false -MaxRows 5 -TimeoutSec 300
+        $summary.chunks++
+        if ($r.ok) {
+            # Sum up the planned insertions in this chunk into the running total.
+            for ($j = $i; $j -le $endIdx; $j++) { $summary.inserted += [int]$work[$j].need }
+        } else {
+            $summary.errors++
+            $summary.message = "chunk $($summary.chunks) failed: $($r.error)"
+            # Stop on the first failed chunk — likely a schema mismatch or
+            # exchange-id problem, and continuing would just multiply noise.
+            break
+        }
+        $i = $endIdx + 1
+    }
+
+    # Snapshot Duke's final state for the UI.
+    $cl2 = Get-DuneBotCurrentListings -Ip $ctx.ip -OwnerId $ident.ownerId -ExchangeId $ident.exchangeId
+    if ($cl2.ok) { foreach ($k in $cl2.byTemplate.Keys) { $summary.listed_after += @($cl2.byTemplate[$k]).Count } }
+
+    # Stamp the list-tick state so the UI's "Last list tick" reflects the seed.
+    $state = Read-DuneBotState
+    $state.last_list_tick   = (Get-Date).ToUniversalTime().ToString('o')
+    $state.last_list_result = @{
+        considered  = $summary.considered;  eligible = $summary.eligible
+        masks_known = $summary.masks_known
+        inserted    = $summary.inserted;    deleted  = 0
+        errors      = $summary.errors;      dryRun   = $false
+        seed        = $true
+    }
+    if ($summary.errors -gt 0) { $state.error_count = ([int]$state.error_count + [int]$summary.errors) }
+    if ($summary.message)      { $state.last_error  = [string]$summary.message }
+    Save-DuneBotState -State $state
+
+    return $summary
+}
+
 # Wipe NPC orders owned by any actor whose class is not 'Duke'. Used to evict
 # leftover Revy orphans from the old external dune-admin integration.
 function Clear-DuneBotLegacyListings {

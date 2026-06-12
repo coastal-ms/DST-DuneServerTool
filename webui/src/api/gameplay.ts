@@ -189,6 +189,34 @@ export interface BotListTickResult {
   message: string
 }
 
+export interface BotSeedPlan {
+  template_id: string
+  target_price: number
+  stack_max: number
+  existing: number
+  aligned: number
+  to_insert: number
+  tier: number
+  rarity: string
+  stackable: boolean
+  source: string
+}
+
+export interface BotSeedResult {
+  ok: boolean
+  dryRun: boolean
+  considered: number
+  eligible: number
+  masks_known: number
+  listed_before: number
+  listed_after: number
+  inserted: number
+  chunks: number
+  errors: number
+  planned: BotSeedPlan[]
+  message: string
+}
+
 export interface BotVendorCandidate {
   template_id: string
   tier: number
@@ -337,6 +365,13 @@ export function clearBotLegacyListings() {
 
 export function runBotListTick(dryRun: boolean) {
   return api<BotListTickResult>(`/api/gameplay/market-bot/tick/list${dryRun ? '?dry=1' : ''}`, {
+    method: 'POST',
+    body: JSON.stringify({ dryRun }),
+  })
+}
+
+export function runBotSeedMarket(dryRun: boolean) {
+  return api<BotSeedResult>(`/api/gameplay/market-bot/seed${dryRun ? '?dry=1' : ''}`, {
     method: 'POST',
     body: JSON.stringify({ dryRun }),
   })
