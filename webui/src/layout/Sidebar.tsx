@@ -132,8 +132,8 @@ export function Sidebar({ collapsed }: Props) {
 
       <nav
         className={`flex-1 overflow-y-auto ${
-          collapsed ? 'px-1.5 py-2' : 'px-2 py-3'
-        } ${collapsed ? '' : 'space-y-5'}`}
+          collapsed ? 'px-1.5 py-2' : 'px-2 py-2'
+        } ${collapsed ? '' : 'space-y-3'}`}
       >
         {groups.map((g, idx) => (
           <div key={g.key}>
