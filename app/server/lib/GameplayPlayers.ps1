@@ -623,6 +623,30 @@ function Invoke-DunePlayerSetTags {
     return @{ ok = $true; message = "Tags updated for account $AccountId ($($clean.Count) tag(s))."; tags = $clean }
 }
 
+# v11.5.9 - update_player_tags delta path. Mirrors dune-admin cmdUpdatePlayerTags:
+# calls dune.update_player_tags(account_id, add[], remove[]) via the stored
+# proc rather than DELETE-INSERT, so the server-side trigger logic (faction
+# rep cascades, journey hooks) fires correctly.
+function Invoke-DunePlayerUpdateTags {
+    param([string]$Ip, [long]$AccountId, [string[]]$Add, [string[]]$Remove)
+    if ($AccountId -le 0) { return @{ ok = $false; error = 'account_id is required.' } }
+    $addClean = @(); foreach ($t in @($Add))    { $s = ([string]$t).Trim(); if ($s -and $s.Length -le 128) { $addClean += $s } }
+    $remClean = @(); foreach ($t in @($Remove)) { $s = ([string]$t).Trim(); if ($s -and $s.Length -le 128) { $remClean += $s } }
+    if ($addClean.Count -eq 0 -and $remClean.Count -eq 0) {
+        return @{ ok = $false; error = 'at least one of add[] or remove[] must be non-empty.' }
+    }
+    $addArr = if ($addClean.Count -gt 0) { ConvertTo-DunePgTextArray $addClean } else { 'ARRAY[]::text[]' }
+    $remArr = if ($remClean.Count -gt 0) { ConvertTo-DunePgTextArray $remClean } else { 'ARRAY[]::text[]' }
+    $sql = "SELECT dune.update_player_tags($AccountId::bigint, $addArr, $remArr);"
+    $r = Invoke-DuneSqlQuery -Ip $Ip -Sql $sql -ReadOnly $false -MaxRows 1 -TimeoutSec 30
+    if (-not $r.ok) { return @{ ok = $false; error = "update_player_tags: $($r.error)" } }
+    return @{
+        ok = $true
+        message = "Tags updated for account $AccountId (+$($addClean.Count) / -$($remClean.Count))."
+        added = $addClean; removed = $remClean
+    }
+}
+
 # ---------------------------------------------------------------------------
 # Recent events (history). Joins event_log to accounts via fls_id.
 # Returns most recent N rows; meta is JSON kept as a string for the client.

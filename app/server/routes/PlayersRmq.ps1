@@ -26,16 +26,8 @@ Register-DuneRoute -Method POST -Path '/api/gameplay/players/kick' -Handler {
 }
 
 # POST /api/gameplay/players/fill-water  { fls_id?, actor_id?, water_amount? }
-Register-DuneRoute -Method POST -Path '/api/gameplay/players/fill-water' -Handler {
-    param($req, $res, $routeParams, $body)
-    try {
-        $fls = _DuneRmqFlsId $body; $aid = _DuneRmqActor $body
-        if (-not (_DuneRmqRequireTarget -Response $res -FlsId $fls -ActorId $aid)) { return }
-        $amt = Get-DuneBodyInt -Body $body -Name 'water_amount'
-        if ($null -eq $amt -or $amt -le 0) { $amt = 1000000 }
-        Invoke-DunePlayerWriteRoute -Response $res -Action { param($ip) Invoke-DunePlayerFillWaterLive -Ip $ip -FlsId $fls -ActorId $aid -WaterAmount ([int]$amt) }
-    } catch { Write-DuneError -Response $res -Status 500 -Message "Fill water failed: $($_.Exception.Message)" }
-}
+# Note: lives in routes/GameplayPlayers.ps1 which is loaded first and handles
+# both online (RMQ) and offline (SQL) paths. Routes here are RMQ-only.
 
 # POST /api/gameplay/players/set-skill-points  { fls_id?, actor_id?, skill_points }
 Register-DuneRoute -Method POST -Path '/api/gameplay/players/set-skill-points' -Handler {

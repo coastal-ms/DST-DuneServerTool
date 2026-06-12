@@ -382,18 +382,35 @@ Register-DuneRoute -Method GET -Path '/api/gameplay/players/events' -Handler {
 }
 
 
-# v11.5.7 — POST /api/gameplay/players/fill-water  { pawn_id }
-# Online players: takes effect on next relog (game server caches inventory in
-# memory). Offline players: instant.
+# v11.5.7+v11.5.9 — POST /api/gameplay/players/fill-water  { pawn_id|actor_id|fls_id, water_amount? }
+# Online players: RMQ UpdateAllWaterFillables (live, via mq-game broker).
+# Offline players: SQL UPDATE of FFillableItemStats CurrentAmount = MaxAmount.
 Register-DuneRoute -Method POST -Path '/api/gameplay/players/fill-water' -Handler {
     param($req, $res, $routeParams, $body)
     try {
         $pawn = Get-DuneBodyInt -Body $body -Name 'pawn_id'
         if (-not $pawn) { $pawn = Get-DuneBodyInt -Body $body -Name 'actor_id' }
         if (-not $pawn) { $pawn = Get-DuneBodyInt -Body $body -Name 'id' }
-        if (-not $pawn -or $pawn -le 0) { Write-DuneError -Response $res -Status 400 -Message 'pawn_id (actor id) is required.'; return }
+        $fls  = [string](Get-DuneBodyValue -Body $body -Name 'fls_id')
+        if ((-not $pawn -or $pawn -le 0) -and [string]::IsNullOrWhiteSpace($fls)) {
+            Write-DuneError -Response $res -Status 400 -Message 'pawn_id (actor id) or fls_id is required.'
+            return
+        }
+        $amt = Get-DuneBodyInt -Body $body -Name 'water_amount'
+        if ($null -eq $amt -or $amt -le 0) { $amt = 1000000 }
+
         Invoke-DunePlayerWriteRoute -Response $res -Action {
-            param($ip) Invoke-DunePlayerFillWater -Ip $ip -PawnId $pawn
+            param($ip)
+            # Online path when fls_id supplied or pawn online.
+            if (-not [string]::IsNullOrWhiteSpace($fls)) {
+                return Invoke-DunePlayerFillWaterLive -Ip $ip -FlsId $fls -WaterAmount ([int]$amt)
+            }
+            $off = Test-DunePlayerOffline -Ip $ip -PawnId $pawn
+            if (-not $off.ok) {
+                return Invoke-DunePlayerFillWaterLive -Ip $ip -ActorId $pawn -WaterAmount ([int]$amt)
+            }
+            # Offline: existing SQL refill (per-item MaxAmount).
+            Invoke-DunePlayerFillWater -Ip $ip -PawnId $pawn
         }
     } catch {
         Write-DuneError -Response $res -Status 500 -Message "Fill water failed: $($_.Exception.Message)"

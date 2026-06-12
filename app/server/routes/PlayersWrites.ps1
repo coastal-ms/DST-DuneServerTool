@@ -301,3 +301,26 @@ Register-DuneRoute -Method GET -Path '/api/gameplay/storage/owner-debug' -Handle
         Write-DuneError -Response $res -Status 500 -Message "Owner debug failed: $($_.Exception.Message)"
     }
 }
+
+# ---------------------------------------------------------------------------
+# §7 refine — Account/identity: update-tags (add+remove delta)
+# ---------------------------------------------------------------------------
+
+# POST /api/gameplay/players/update-tags  { account_id, add?[], remove?[] }
+# Mirrors dune-admin cmdUpdatePlayerTags (calls dune.update_player_tags proc
+# so server-side triggers fire). Separate from POST /tags (overwrite model)
+# which is kept for back-compat.
+Register-DuneRoute -Method POST -Path '/api/gameplay/players/update-tags' -Handler {
+    param($req, $res, $routeParams, $body)
+    try {
+        $acct = Get-DuneBodyInt -Body $body -Name 'account_id'
+        if ($null -eq $acct -or $acct -le 0) { Write-DuneError -Response $res -Status 400 -Message 'account_id is required.'; return }
+        $add  = @(Get-DuneBodyValue -Body $body -Name 'add')
+        $rem  = @(Get-DuneBodyValue -Body $body -Name 'remove')
+        Invoke-DunePlayerWriteRoute -Response $res -Action {
+            param($ip) Invoke-DunePlayerUpdateTags -Ip $ip -AccountId ([long]$acct) -Add $add -Remove $rem
+        }
+    } catch {
+        Write-DuneError -Response $res -Status 500 -Message "Update tags failed: $($_.Exception.Message)"
+    }
+}
