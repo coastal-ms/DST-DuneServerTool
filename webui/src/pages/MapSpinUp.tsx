@@ -71,7 +71,14 @@ export function MapSpinUp() {
     }
   }, [])
 
-  const allMaps = maps ?? []
+  // Most-used maps pinned to the top in this order; everything else keeps
+  // the backend's order beneath them.
+  const PRIORITY = ['DeepDesert_1', 'SH_Arrakeen', 'SH_HarkoVillage']
+  const prio = (m: SpinUpMap) => {
+    const i = PRIORITY.indexOf(m.map)
+    return i === -1 ? PRIORITY.length : i
+  }
+  const allMaps = [...(maps ?? [])].sort((a, b) => prio(a) - prio(b))
 
   return (
     <>
