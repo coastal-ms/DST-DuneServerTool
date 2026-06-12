@@ -12,6 +12,7 @@ import {
   getGameConfigClient,
   setGameConfigClientDir,
   applyGameConfigClient,
+  openGameConfigClientFile,
 } from '../api/gameconfig'
 import type {
   GameConfigCategory,
@@ -161,6 +162,22 @@ export function GameConfig() {
     setClientViewOpen(true)
     await refreshClient()
   }, [refreshClient])
+
+  // Open the local client Game.ini in Notepad on this PC (DST runs locally).
+  const onOpenInEditor = useCallback(async () => {
+    setClientErr(null)
+    setClientMsg(null)
+    setClientBusy(true)
+    try {
+      const r = await openGameConfigClientFile(clientInfo?.dir)
+      setClientMsg(`Opened ${r.path} in Notepad.`)
+      window.setTimeout(() => setClientMsg(null), 5000)
+    } catch (e) {
+      setClientErr(e instanceof Error ? e.message : String(e))
+    } finally {
+      setClientBusy(false)
+    }
+  }, [clientInfo])
 
   // Explicit permission gate: the admin opts in to having DST also write the
   // client-apply settings into THEIR OWN local client Game.ini.
@@ -481,14 +498,25 @@ export function GameConfig() {
             <Icon name="MonitorSmartphone" size={15} className="text-accent-bright" />
             Your client config (this PC)
           </div>
-          <button
-            type="button"
-            onClick={() => void onViewClient()}
-            className="btn-secondary"
-            title="View the contents of your local client Game.ini"
-          >
-            <Icon name="FileSearch" size={14} /> View client config
-          </button>
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={() => void onOpenInEditor()}
+              disabled={clientBusy}
+              className="btn-secondary"
+              title="Open your local client Game.ini in Notepad"
+            >
+              <Icon name="ExternalLink" size={14} /> Open in Notepad
+            </button>
+            <button
+              type="button"
+              onClick={() => void onViewClient()}
+              className="btn-secondary"
+              title="View the contents of your local client Game.ini"
+            >
+              <Icon name="FileSearch" size={14} /> View client config
+            </button>
+          </div>
         </div>
         <p className="text-xs text-text-muted mb-3">
           A few settings (landclaim limits, building restrictions) are read by the game client too. DST can mirror
@@ -815,22 +843,18 @@ export function GameConfig() {
                   first time you apply a client-side setting.
                 </div>
               )}
-              {clientInfo?.exists && clientInfo.sections.length === 0 && (
-                <pre className="text-[11px] font-mono text-text-muted bg-surface-2 rounded-lg p-3 overflow-x-auto max-h-[55vh] overflow-y-auto whitespace-pre">
+              {clientInfo?.exists && (
+                <pre className="text-xs font-mono text-text bg-[#1e1e1e] border border-border rounded-lg p-3 overflow-x-auto max-h-[60vh] overflow-y-auto whitespace-pre leading-relaxed">
                   {clientInfo.raw || '(empty file)'}
                 </pre>
               )}
-              {clientInfo?.exists && clientInfo.sections.length > 0 && (
-                <div className="space-y-3 max-h-[55vh] overflow-y-auto pr-1">
-                  {clientInfo.sections.map((s, i) => (
-                    <IniSectionBlock key={`${s.name}-${i}`} section={s} />
-                  ))}
-                </div>
-              )}
             </div>
             <div className="px-5 py-3 border-t border-border flex items-center justify-between gap-2">
-              <span className="text-[11px] text-text-dim">Read-only view of this PC&apos;s client config.</span>
+              <span className="text-[11px] text-text-dim">Read-only preview. “Open in Notepad” edits the real file.</span>
               <div className="flex items-center gap-2">
+                <button type="button" onClick={() => void onOpenInEditor()} disabled={clientBusy} className="btn-secondary" title="Open this file in Notepad">
+                  <Icon name="ExternalLink" size={14} /> Open in Notepad
+                </button>
                 <button type="button" onClick={() => void refreshClient()} className="btn-secondary" title="Reload">
                   <Icon name="RefreshCw" size={14} /> Refresh
                 </button>
