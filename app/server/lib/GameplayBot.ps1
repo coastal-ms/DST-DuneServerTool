@@ -201,7 +201,7 @@ function Get-DuneBotConfigDefaults {
         # ----- Listing side (sane-pricing port of dune-admin/internal/marketbot) -----
         list_tick_interval   = 1800          # 30 min between list ticks
         listings_per_grade   = 5             # concurrent NPC listings per (template, grade)
-        stackables_only      = $true         # v11.5.2 scope: skip gradeable gear
+        stackables_only      = $false        # v11.5.9: default OFF — list gear too
         price_cap            = 100000        # HARD ceiling in Solari (sane-pricing patch)
         default_unit_price   = 100           # fallback for unknown templates
         # Per-tier base prices, mirroring 0001-sane-pricing-100k-cap.patch.
@@ -214,7 +214,7 @@ function Get-DuneBotConfigDefaults {
         # Per-template manual price override (template_id -> integer Solari).
         price_overrides      = @{}
         # Marker for one-time sane-defaults migration on load.
-        sane_defaults_revision = 1
+        sane_defaults_revision = 2
         # Catalog-seed: when TRUE, candidate set is (live NPC snapshot) UNION
         # (bundled item catalog INTERSECTED with the persistent mask cache).
         # Lets Duke list immediately on fresh BGs that have no NPC vendor
@@ -295,6 +295,14 @@ function Read-DuneBotConfig {
                 $cfg['rarity_multipliers']  = $defaults['rarity_multipliers']
                 $cfg['vendor_multipliers']  = $defaults['vendor_multipliers']
                 $cfg['sane_defaults_revision'] = 1
+            }
+            # v11.5.9 (rev 2): flip stackables_only default OFF so the bot
+            # lists gear too. Only force-overwrite if the saved config still
+            # holds the old default ($true) AND the user hasn't bumped past
+            # rev 1 — otherwise we'd clobber an explicit on toggle.
+            if ($rev -lt 2) {
+                $cfg['stackables_only']         = $false
+                $cfg['sane_defaults_revision']  = 2
             }
         } catch {}
     }

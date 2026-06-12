@@ -120,29 +120,27 @@ export function MarketBotTab() {
     finally { setTicking(false) }
   }
 
-  const doListTick = async (dry: boolean) => {
+  const doListTick = async () => {
     setListTicking(true); setListTick(null); setError(null)
     try {
-      const r = await runBotListTick(dry)
+      const r = await runBotListTick(false)
       setListTick(r)
-      if (!dry) getBotStatus().then(setStatus).catch(() => {})
+      getBotStatus().then(setStatus).catch(() => {})
     } catch (e) { setError(e instanceof Error ? e.message : String(e)) }
     finally { setListTicking(false) }
   }
 
-  const doSeedMarket = async (dry: boolean) => {
-    if (!dry) {
-      const perGrade = draft?.listings_per_grade ?? 5
-      const ok = window.confirm(
-        `Bulk-seed the market: insert up to ${perGrade} NPC listings per catalogued template (~1000–1400 templates depending on the Stackables-only toggle). This bypasses the live vendor snapshot and writes straight to the DB.\n\nProceed?`,
-      )
-      if (!ok) return
-    }
+  const doSeedMarket = async () => {
+    const perGrade = draft?.listings_per_grade ?? 5
+    const ok = window.confirm(
+      `Bulk-seed the market: insert up to ${perGrade} NPC listings per catalogued template (~1000–1400 templates depending on the Stackables-only toggle). This bypasses the live vendor snapshot and writes straight to the DB.\n\nProceed?`,
+    )
+    if (!ok) return
     setSeeding(true); setSeedResult(null); setError(null)
     try {
-      const r = await runBotSeedMarket(dry)
+      const r = await runBotSeedMarket(false)
       setSeedResult(r)
-      if (!dry) getBotStatus().then(setStatus).catch(() => {})
+      getBotStatus().then(setStatus).catch(() => {})
     } catch (e) { setError(e instanceof Error ? e.message : String(e)) }
     finally { setSeeding(false) }
   }
@@ -488,8 +486,8 @@ function ListSection({ draft, setDraft, listTick, listTicking, snapshot, snapsho
     listTick: BotListTickResult | null; listTicking: boolean;
     snapshot: BotVendorCandidate[] | null; snapshotLoading: boolean;
     seedResult: BotSeedResult | null; seeding: boolean;
-    onListTick: (dry: boolean) => void; onLoadSnapshot: () => void;
-    onSeedMarket: (dry: boolean) => void;
+    onListTick: () => void; onLoadSnapshot: () => void;
+    onSeedMarket: () => void;
   }) {
   return (
     <div className="space-y-4">
@@ -498,14 +496,9 @@ function ListSection({ draft, setDraft, listTick, listTicking, snapshot, snapsho
           <h4 className="text-xs uppercase tracking-wider text-text-dim flex items-center gap-2">
             <Icon name="Sparkles" size={14} className="text-accent" /> Seed market (immediate bulk-list)
           </h4>
-          <div className="flex items-center gap-2">
-            <button className="btn-secondary" disabled={seeding} onClick={() => onSeedMarket(true)}>
-              <Icon name={seeding ? 'Loader2' : 'FlaskConical'} size={15} className={seeding ? 'animate-spin' : ''} /> Dry run
-            </button>
-            <button className="btn-primary" disabled={seeding} onClick={() => onSeedMarket(false)}>
-              <Icon name={seeding ? 'Loader2' : 'Zap'} size={15} className={seeding ? 'animate-spin' : ''} /> Seed market
-            </button>
-          </div>
+          <button className="btn-primary" disabled={seeding} onClick={onSeedMarket}>
+            <Icon name={seeding ? 'Loader2' : 'Zap'} size={15} className={seeding ? 'animate-spin' : ''} /> Seed market
+          </button>
         </div>
         <p className="text-[11px] text-text-dim mb-2">
           Bypasses the live NPC vendor snapshot (which depends on the in-game market already having activity)
@@ -522,19 +515,13 @@ function ListSection({ draft, setDraft, listTick, listTicking, snapshot, snapsho
           <h4 className="text-xs uppercase tracking-wider text-text-dim flex items-center gap-2">
             <Icon name="Tags" size={14} className="text-accent" /> Run a list tick
           </h4>
-          <div className="flex items-center gap-2">
-            <button className="btn-secondary" disabled={listTicking} onClick={() => onListTick(true)}>
-              <Icon name={listTicking ? 'Loader2' : 'FlaskConical'} size={15} className={listTicking ? 'animate-spin' : ''} /> Dry run
-            </button>
-            <button className="btn-primary" disabled={listTicking} onClick={() => onListTick(false)}>
-              <Icon name={listTicking ? 'Loader2' : 'Play'} size={15} className={listTicking ? 'animate-spin' : ''} /> Run now
-            </button>
-          </div>
+          <button className="btn-primary" disabled={listTicking} onClick={onListTick}>
+            <Icon name={listTicking ? 'Loader2' : 'Play'} size={15} className={listTicking ? 'animate-spin' : ''} /> Run now
+          </button>
         </div>
         <p className="text-[11px] text-text-dim mb-2">
           Snapshots live NPC vendor inventory, applies sane-pricing rules, and tops up Duke's own listings to
           <span className="font-mono"> {draft.listings_per_grade}</span> per (item, grade).
-          Dry run shows the planned actions without writing.
         </p>
         {listTick && <ListTickResultView tick={listTick} />}
       </div>
@@ -544,7 +531,7 @@ function ListSection({ draft, setDraft, listTick, listTicking, snapshot, snapsho
           onChange={v => setDraft({ ...draft, list_tick_interval: v })} />
         <NumField label="Listings / grade" value={draft.listings_per_grade}
           onChange={v => setDraft({ ...draft, listings_per_grade: v })} />
-        <Toggle label="Stackables only (v11.5.2)" checked={draft.stackables_only}
+        <Toggle label="Stackables only" checked={draft.stackables_only}
           onChange={v => setDraft({ ...draft, stackables_only: v })} />
       </div>
 
