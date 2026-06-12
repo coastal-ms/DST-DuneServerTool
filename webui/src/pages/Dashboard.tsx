@@ -306,10 +306,10 @@ export function Dashboard() {
                 type="button"
                 onClick={() => { void forceRefresh() }}
                 disabled={loading}
-                className="text-text-dim hover:text-text transition-colors disabled:opacity-50"
+                className="p-1.5 rounded-md border border-border text-text-muted hover:text-text hover:bg-bg-dim transition-colors disabled:opacity-50"
                 title="Refresh server status"
               >
-                <Icon name="RefreshCw" size={13} className={loading ? 'animate-spin' : ''} />
+                <Icon name="RefreshCw" size={18} className={loading ? 'animate-spin' : ''} />
               </button>
             </div>
           </div>
