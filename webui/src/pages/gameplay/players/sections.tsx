@@ -141,7 +141,7 @@ export function SpecsSection({ player, canWrite, demo, refreshKey, flash, onChan
           {canWrite && (
             <>
               <button className="btn-secondary" disabled={busy}
-                onClick={() => { if (window.confirm(`Grant all ${keystones.max} keystones to ${player.name}?`)) void run(() => grantAllKeystones(player.controller_id), 'Grant all keystones') }}>
+                onClick={() => void run(() => grantAllKeystones(player.controller_id), 'Grant all keystones')}>
                 <Icon name="Star" size={13} /> Grant Max Keystones
               </button>
               <button className="btn-secondary text-warning" disabled={busy}
@@ -172,8 +172,8 @@ export function SpecsSection({ player, canWrite, demo, refreshKey, flash, onChan
             const t = tracks.find(x => x.track_type.toLowerCase() === name.toLowerCase())
             return (
               <SpecRow key={name} name={name} track={t} canWrite={canWrite} busy={busy}
-                onGrantMax={() => { if (window.confirm(`Grant max XP for ${name}?`)) void run(() => grantMaxSpec(player.id, name), 'Grant max') }}
-                onReset={() => { if (window.confirm(`Reset ${name} track?`)) void run(() => resetSpec(player.id, name), 'Reset') }}
+                onGrantMax={() => void run(() => grantMaxSpec(player.id, name), 'Grant max')}
+                onReset={() => void run(() => resetSpec(player.id, name), 'Reset')}
                 onAdd5k={() => run(() => awardSpecXp(player.id, name, 5000), '+5000 XP')}
               />
             )
@@ -455,10 +455,8 @@ const ACTIONS: ActionDef[] = [
     confirm: p => `Reset ALL progression for ${p.name}? Cannot be undone.`,
     run: p => resetProgressionLive({ actor_id: p.id }) },
   { id: 'reset-journey', group: 'Progression', label: 'Reset Journey', icon: 'Map',
-    confirm: p => `Reset journey progress for ${p.name}?`,
     run: p => resetJourney(p.account_id) },
   { id: 'wipe-journey', group: 'Progression', label: 'Wipe Journey (restart)', icon: 'RefreshCw',
-    confirm: p => `Wipe journey and restart from step 1 for ${p.name}?`,
     run: p => wipeJourney(p.account_id) },
 
   // ----- Items -----
@@ -469,7 +467,6 @@ const ACTIONS: ActionDef[] = [
   { id: 'repair-gear', group: 'Items', label: 'Repair Equipped Gear', icon: 'Wrench',
     run: p => repairGear(p.id) },
   { id: 'fill-water', group: 'Items', label: 'Fill Water', icon: 'Droplets',
-    confirm: p => `Refill all water-fillable items for ${p.name}? Online players: takes effect on next relog.`,
     run: p => fillWater(p.id) },
   { id: 'clean-inventory', group: 'Items', label: 'Clean Inventory (live)', icon: 'Trash', liveOnly: true,
     confirm: p => `WIPE ${p.name}'s inventory? Cannot be undone.`,
@@ -482,7 +479,6 @@ const ACTIONS: ActionDef[] = [
 
   // ----- Live (RMQ) -----
   { id: 'kick', group: 'Live', label: 'Kick Player', icon: 'LogOut', liveOnly: true,
-    confirm: p => `Kick ${p.name} from the server?`,
     run: p => kickPlayer({ actor_id: p.id }) },
   { id: 'teleport', group: 'Live', label: 'Teleport To Player', icon: 'Move',
     fields: [{ key: 'target', label: 'Target pawn id', type: 'number', placeholder: '67890' }],
@@ -513,7 +509,6 @@ const ACTIONS: ActionDef[] = [
   { id: 'delete-tutorials', group: 'Identity', label: 'Clear Tutorial Flags', icon: 'Eraser',
     run: p => deleteTutorials(p.account_id) },
   { id: 'wipe-codex', group: 'Identity', label: 'Wipe Codex', icon: 'BookX',
-    confirm: p => `Wipe codex/discoveries for ${p.name}?`,
     run: p => wipeCodex(p.account_id) },
   { id: 'returning-award', group: 'Identity', label: 'Grant Returning-Player Award', icon: 'Star',
     run: p => returningPlayerAward(p.account_id) },
@@ -784,7 +779,7 @@ function ItemList({ title, icon, items, canWrite, busy, run, collapsed }: {
                       </button>
                     )}
                     <button className="text-danger/80 hover:text-danger" title="Delete item" disabled={busy}
-                      onClick={() => { if (window.confirm(`Delete ${it.name || it.template_id} (×${it.stack_size})?`)) void run(() => deleteInventoryItem(it.id), 'Delete') }}>
+                      onClick={() => void run(() => deleteInventoryItem(it.id), 'Delete')}>
                       <Icon name="Trash2" size={13} />
                     </button>
                   </span>
