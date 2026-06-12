@@ -13,6 +13,36 @@ here cover everything those tags shipped.
 
 ## [Unreleased]
 
+## [11.5.4] - 2026-06-12
+
+### Added
+- **Market Bot catalog-seed mask cache.** Duke now lists items on
+  brand-new battlegroups that have zero NPC vendor orders. A bundled
+  seed file (`app/data/gameplay-bot-mask-seed.json`, 1378 templates
+  harvested from a mature `dune_exchange_orders` table) is copied to
+  `%APPDATA%\DuneServer\gameplay-bot-mask-cache.json` on first run, and
+  every list tick augments the cache via
+  `SELECT DISTINCT template_id, category_mask, category_depth
+   FROM dune.dune_exchange_orders WHERE category_mask != 0`. Mirrors the
+  persistent `categories` SQLite cache in
+  `Icehunter/dune-admin/internal/marketbot/exchange.go`. Category masks
+  are Funcom server-binary constants per template, so one harvest gives
+  every install full coverage without per-user setup or visiting an
+  in-game NPC vendor. Tracked in the tick summary as `masks_known` and
+  `from_catalog`; the `planned` entries now also tag `source` =
+  `snapshot` (live NPC order with real Funcom vendor_price) or
+  `catalog` (bundled item + cached mask, falls back to bundled
+  `vendor_price` then `default_unit_price`). New config flag
+  `seed_from_catalog` (default `true`) controls catalog augmentation.
+
+### Notes
+- Bundled seed currently covers ~83% of the 1658-item catalog. The
+  remaining ~280 templates fill in automatically as users hit them via
+  in-game orders; a planned v11.5.5 port of dune-admin's pure-functional
+  `CategoryMask` / `UniqueSchematicsMask` (`internal/marketbot/pricing.go`)
+  will compute masks from category paths so coverage reaches 100%
+  without any DB harvest.
+
 ## [11.5.3] - 2026-06-11
 
 ### Fixed
