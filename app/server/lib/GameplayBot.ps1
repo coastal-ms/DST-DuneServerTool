@@ -1983,8 +1983,56 @@ ORDER BY n DESC
 # pattern used elsewhere in the server. State lives on disk so config edits made
 # via the API are picked up on the next tick without restarting anything.
 # ----------------------------------------------------------------------------
+function Clear-DuneBotStaleRunFlags {
+    # A running flag with no live runspace can only happen if the previous
+    # DuneServer.exe process died (clean exit, crash, or installer-driven
+    # restart) while a background job was mid-flight. The runspace cannot
+    # survive process death, so any *_progress.running=true at startup is
+    # by definition orphaned. Clear it so the UI isn't stuck "in progress"
+    # forever and the gates in Start-DuneBotSeedAsync / Start-DuneBotListTickAsync
+    # don't reject fresh runs.
+    try {
+        $st = Read-DuneBotState
+        $changed = $false
+        foreach ($key in @('seed_progress','list_tick_progress')) {
+            $p = $st.$key
+            if (-not $p) { continue }
+            $running = $false
+            if ($p -is [hashtable]) {
+                $running = [bool]$p['running']
+            } else {
+                try { $running = [bool]$p.running } catch { $running = $false }
+            }
+            if ($running) {
+                $cleared = @{
+                    phase   = 'aborted'
+                    message = 'cleared on DuneServer restart (previous run did not survive process exit)'
+                    running = $false
+                    updated = (Get-Date).ToUniversalTime().ToString('o')
+                }
+                foreach ($field in @('chunks_done','chunks_total','inserted','eligible','considered','errors','started')) {
+                    if ($p -is [hashtable]) {
+                        if ($p.ContainsKey($field)) { $cleared[$field] = $p[$field] }
+                    } else {
+                        try { $v = $p.$field; if ($null -ne $v) { $cleared[$field] = $v } } catch {}
+                    }
+                }
+                $st.$key = $cleared
+                $changed = $true
+            }
+        }
+        if ($changed) {
+            Save-DuneBotState -State $st
+            Write-DuneLog "GameplayBot: cleared stale *_progress.running flags from prior process"
+        }
+    } catch {
+        try { Write-DuneLog "GameplayBot: Clear-DuneBotStaleRunFlags failed: $_" } catch {}
+    }
+}
+
 function Start-DuneGameplayBotScheduler {
     param([string]$ServerDir)
+    try { Clear-DuneBotStaleRunFlags } catch {}
     try {
         $rs = [runspacefactory]::CreateRunspace()
         $rs.ApartmentState = 'MTA'
