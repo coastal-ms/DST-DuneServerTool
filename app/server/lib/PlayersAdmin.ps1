@@ -1,0 +1,538 @@
+# PlayersAdmin.ps1 — v11.5.9 player admin extras ported from dune-admin.
+# Covers §2 currency writes + §7 returning-award/delete-account + shared helpers
+# (faction tables, char-XP table, offline check, raw funcom-id lookup).
+#
+# Style mirrors lib/GameplayPlayers.ps1: every Invoke-DunePlayer* takes -Ip
+# and returns @{ ok=$true|$false; message; ... }. Routes wrap via
+# Invoke-DunePlayerWriteRoute from routes/GameplayPlayers.ps1.
+
+# ----- Common helpers ------------------------------------------------------
+
+# accounts."user" string — used by returning-award, delete-account.
+function Get-DuneRawFuncomId {
+    param([string]$Ip, [long]$AccountId)
+    if ($AccountId -le 0) { return @{ ok = $false; error = 'account_id is required.' } }
+    $sql = "SELECT ""user"" AS funcom FROM dune.accounts WHERE id = $AccountId::bigint;"
+    $r = Invoke-DuneSqlQuery -Ip $Ip -Sql $sql -ReadOnly $true -MaxRows 1 -TimeoutSec 10
+    if (-not $r.ok) { return @{ ok = $false; error = "rawFuncomID: $($r.error)" } }
+    $maps = ConvertTo-DuneRowMaps -Result $r
+    if ($maps.Count -eq 0) { return @{ ok = $false; error = "No account with id $AccountId." } }
+    return @{ ok = $true; funcom_id = [string]$maps[0]['funcom'] }
+}
+
+# checkPlayerOffline(pawn) — nil player_state row is treated as offline.
+function Test-DunePlayerOffline {
+    param([string]$Ip, [long]$PawnId)
+    $sql = "SELECT online_status::text AS status FROM dune.player_state WHERE player_pawn_id = $PawnId::bigint;"
+    $r = Invoke-DuneSqlQuery -Ip $Ip -Sql $sql -ReadOnly $true -MaxRows 1 -TimeoutSec 10
+    if (-not $r.ok) { return @{ ok = $true; reason = $null } }
+    $maps = ConvertTo-DuneRowMaps -Result $r
+    if ($maps.Count -eq 0) { return @{ ok = $true; reason = $null } }
+    $status = [string]$maps[0]['status']
+    if ($status -ne 'Offline') {
+        return @{ ok = $false; reason = "player is currently $status - log out first, then apply the edit" }
+    }
+    return @{ ok = $true; reason = $null }
+}
+
+# ----- Faction reputation tables (verbatim from db.go) ---------------------
+
+$script:DuneFactionTierThresholds = @(
+    0, 99, 249, 499, 999, 1999, 2224, 2524, 2899, 3349, 3874,
+    4474, 5149, 5899, 6724, 7624, 8599, 9649, 10774, 11974, 12474
+)
+$script:DuneFactionRepCap = 12474
+
+function Get-DuneFactionDisplayName {
+    param([int]$Id)
+    switch ($Id) {
+        1 { 'Atreides' }
+        2 { 'Harkonnen' }
+        3 { 'None' }
+        4 { 'Smuggler' }
+        default { "Faction$Id" }
+    }
+}
+
+function Get-DuneFactionTierName {
+    param([int]$FactionId, [int]$Tier)
+    if ($Tier -eq 20) {
+        if ($FactionId -eq 1) { return 'Envoy' }
+        if ($FactionId -eq 2) { return 'Enforcer' }
+    }
+    switch ($Tier) {
+        0 { 'Outsider' }
+        1 { 'Mercenary' }
+        2 { 'Recruit' }
+        3 { 'Contractor' }
+        4 { 'Agent' }
+        5 { 'House Operator' }
+        default { "Tier $Tier" }
+    }
+}
+
+function Convert-DuneRepToTier {
+    param([int]$Rep)
+    $tier = 0
+    for ($i = 1; $i -le 20; $i++) {
+        if ($Rep -ge $script:DuneFactionTierThresholds[$i]) { $tier = $i }
+        else { break }
+    }
+    return $tier
+}
+
+# Updates ReputationAmount inside actors.properties.FactionPlayerComponent.
+# {0}=actor_id, {1}=faction name, {2}=rep amount.
+$script:DuneFactionComponentRepSqlTpl = @'
+UPDATE dune.actors a
+SET properties = jsonb_set(
+    a.properties,
+    ARRAY['FactionPlayerComponent','m_FactionDataArray', (sub.idx - 1)::text, 'ReputationAmount'],
+    to_jsonb({2}::int))
+FROM (
+    SELECT ord AS idx
+    FROM dune.actors aa,
+         jsonb_array_elements(aa.properties->'FactionPlayerComponent'->'m_FactionDataArray')
+             WITH ORDINALITY AS arr(elem, ord)
+    WHERE aa.id = {0}::bigint AND elem->'Faction'->>'Name' = '{1}'
+) sub
+WHERE a.id = {0}::bigint;
+'@
+
+function Invoke-DunePlayerGiveFactionRep {
+    param([string]$Ip, [long]$ActorId, [int]$FactionId, [int]$Delta)
+    if ($ActorId -le 0) { return @{ ok = $false; error = 'actor_id is required.' } }
+    $readSql = "SELECT COALESCE(reputation_amount, 0) AS rep FROM dune.player_faction_reputation WHERE actor_id = $ActorId::bigint AND faction_id = $FactionId::smallint;"
+    $cur = Invoke-DuneSqlQuery -Ip $Ip -Sql $readSql -ReadOnly $true -MaxRows 1 -TimeoutSec 15
+    $currentRep = 0
+    if ($cur.ok) {
+        $maps = ConvertTo-DuneRowMaps -Result $cur
+        if ($maps.Count -ge 1) { $currentRep = [int](ConvertTo-DuneInt $maps[0]['rep']) }
+    }
+    $newRep = $currentRep + $Delta
+    if ($newRep -lt 0) { $newRep = 0 }
+    if ($newRep -gt $script:DuneFactionRepCap) { $newRep = $script:DuneFactionRepCap }
+
+    $sql1 = "SELECT dune.set_player_faction_reputation($ActorId::bigint, $FactionId::smallint, $newRep::integer);"
+    $r1 = Invoke-DuneSqlQuery -Ip $Ip -Sql $sql1 -ReadOnly $false -MaxRows 1 -TimeoutSec 30
+    if (-not $r1.ok) { return @{ ok = $false; error = "set_player_faction_reputation: $($r1.error)" } }
+
+    $fName = Get-DuneFactionDisplayName $FactionId
+    $safeName = ConvertTo-DuneSqlString $fName
+    $sql2 = [string]::Format($script:DuneFactionComponentRepSqlTpl, $ActorId, $safeName, $newRep)
+    $r2 = Invoke-DuneSqlQuery -Ip $Ip -Sql $sql2 -ReadOnly $false -MaxRows 1 -TimeoutSec 30
+    if (-not $r2.ok) { return @{ ok = $false; error = "update FactionPlayerComponent rep: $($r2.error)" } }
+
+    $tier = Convert-DuneRepToTier $newRep
+    $tierName = Get-DuneFactionTierName $FactionId $tier
+    return @{
+        ok = $true
+        message = "Set $fName rep to $newRep -> tier $tier ($tierName) for actor $ActorId."
+        rep = $newRep
+        tier = $tier
+        tier_name = $tierName
+        faction = $fName
+    }
+}
+
+# ----- Set Faction Tier ----------------------------------------------------
+function Invoke-DunePlayerSetFactionTier {
+    param([string]$Ip, [long]$ActorId, [int]$FactionId, [int]$Tier)
+    if ($ActorId -le 0) { return @{ ok = $false; error = 'actor_id is required.' } }
+    if ($Tier -lt 0 -or $Tier -gt 20) { return @{ ok = $false; error = 'tier must be 0..20.' } }
+    $rep = $script:DuneFactionTierThresholds[$Tier]
+    if ($Tier -gt 0) { $rep = $rep + 1 }
+
+    $sql1 = "SELECT dune.set_player_faction_reputation($ActorId::bigint, $FactionId::smallint, $rep::integer);"
+    $r1 = Invoke-DuneSqlQuery -Ip $Ip -Sql $sql1 -ReadOnly $false -MaxRows 1 -TimeoutSec 30
+    if (-not $r1.ok) { return @{ ok = $false; error = "set_player_faction_reputation: $($r1.error)" } }
+
+    $fName = Get-DuneFactionDisplayName $FactionId
+    $safeName = ConvertTo-DuneSqlString $fName
+    $sql2 = [string]::Format($script:DuneFactionComponentRepSqlTpl, $ActorId, $safeName, $rep)
+    $r2 = Invoke-DuneSqlQuery -Ip $Ip -Sql $sql2 -ReadOnly $false -MaxRows 1 -TimeoutSec 30
+    if (-not $r2.ok) { return @{ ok = $false; error = "update FactionPlayerComponent rep: $($r2.error)" } }
+
+    $tierName = Get-DuneFactionTierName $FactionId $Tier
+    return @{
+        ok = $true
+        message = "Set $fName to tier $Tier ($tierName) - rep $rep for actor $ActorId."
+        rep = $rep; tier = $Tier; tier_name = $tierName; faction = $fName
+    }
+}
+
+# ----- Landsraad scrip (auto-resolve non-Solari currency) ------------------
+
+$script:DuneScripCurrencyIdCache = $null
+
+function Resolve-DuneScripCurrencyId {
+    param([string]$Ip)
+    if ($null -ne $script:DuneScripCurrencyIdCache) { return $script:DuneScripCurrencyIdCache }
+    $sql = @'
+SELECT currency_id, COALESCE(SUM(balance), 0) AS total
+FROM dune.player_virtual_currency_balances
+WHERE currency_id <> dune.get_solaris_id()
+GROUP BY currency_id
+ORDER BY total DESC, currency_id;
+'@
+    $res = Invoke-DuneSqlQuery -Ip $Ip -Sql $sql -ReadOnly $true -MaxRows 50 -TimeoutSec 15
+    if (-not $res.ok) { return $null }
+    $rows = ConvertTo-DuneRowMaps -Result $res
+    if ($rows.Count -eq 1) {
+        $id = [int](ConvertTo-DuneInt $rows[0]['currency_id'])
+        $script:DuneScripCurrencyIdCache = $id
+        return $id
+    }
+    return $null
+}
+
+function Invoke-DunePlayerGiveScrip {
+    param([string]$Ip, [long]$ActorId, [long]$Delta, [int]$CurrencyIdOverride = 0)
+    if ($ActorId -le 0) { return @{ ok = $false; error = 'actor_id is required.' } }
+    $currencyId = if ($CurrencyIdOverride -gt 0) { $CurrencyIdOverride } else { Resolve-DuneScripCurrencyId -Ip $Ip }
+    if ($null -eq $currencyId) {
+        return @{ ok = $false; error = 'Could not auto-resolve scrip currency id (0 or 2+ non-Solaris balances). Pass currency_id explicitly.' }
+    }
+    $sql = "SELECT dune.adjust_player_virtual_currency_balance($ActorId::bigint, $currencyId::smallint, $Delta::bigint);"
+    $r = Invoke-DuneSqlQuery -Ip $Ip -Sql $sql -ReadOnly $false -MaxRows 1 -TimeoutSec 30
+    if (-not $r.ok) { return @{ ok = $false; error = $r.error } }
+    $balSql = "SELECT balance FROM dune.player_virtual_currency_balances WHERE player_controller_id = $ActorId::bigint AND currency_id = $currencyId::smallint;"
+    $bal = Invoke-DuneSqlQuery -Ip $Ip -Sql $balSql -ReadOnly $true -MaxRows 1 -TimeoutSec 10
+    $balance = $null
+    if ($bal.ok) {
+        $maps = ConvertTo-DuneRowMaps -Result $bal
+        if ($maps.Count -ge 1) { $balance = [int64](ConvertTo-DuneInt $maps[0]['balance']) }
+    }
+    return @{
+        ok = $true
+        message = "Added $Delta scrip (currency $currencyId) to player $ActorId - new balance $balance."
+        balance = $balance; currency_id = $currencyId
+    }
+}
+
+# ----- Character XP table (verbatim from db.go) ----------------------------
+
+$script:DuneMaxCharXp = 344440L
+$script:DuneCumulativeXpByLevel = @(
+    0, 40, 215, 440, 740, 1240, 1790, 2390, 2990, 3590, 4190,
+    4790, 5390, 5990, 6590, 7190, 7790, 8390, 8990, 9590, 10190,
+    10790, 11390, 11990, 12590, 13190, 13790, 14390, 14990, 15590, 16190,
+    16790, 17390, 17990, 18590, 19190, 19790, 20390, 20990, 21590, 22190,
+    22790, 23390, 23990, 24590, 25190, 25790, 26390, 26990, 27590, 28190,
+    28790, 29390, 29990, 30590, 31190, 31790, 32390, 32990, 33590, 34190,
+    34790, 35390, 35990, 36590, 37190, 37790, 38390, 38990, 39590, 40190,
+    40790, 41390, 41990, 42590, 43190, 43790, 44390, 44990, 45590, 46190,
+    46790, 47390, 47990, 48590, 49190, 49790, 50390, 50990, 51590, 52190,
+    52790, 53390, 53990, 54590, 55190, 55790, 56390, 56990, 57590, 58190,
+    58840, 59490, 60140, 60790, 61440, 62090, 62740, 63390, 64040, 64690,
+    65340, 65990, 66640, 67290, 67940, 68590, 69240, 69890, 70540, 71190,
+    71840, 72490, 73140, 73790, 74440, 75090, 75740, 76391, 77044, 77699,
+    78357, 79018, 79683, 80353, 81030, 81714, 82407, 83110, 83825, 84554,
+    85298, 86060, 86842, 87646, 88475, 89332, 90220, 91141, 92100, 93099,
+    94143, 95235, 96380, 97582, 98845, 100175, 101576, 103054, 104614, 106263,
+    108006, 109849, 111799, 113862, 116046, 118358, 120806, 123397, 126139, 129041,
+    132112, 135360, 138795, 142426, 146263, 150316, 154596, 159114, 163880, 168906,
+    174203, 179784, 185661, 191846, 198353, 205195, 212385, 219938, 227868, 236190,
+    244918, 254069, 263657, 273700, 284213, 295214, 306719, 318746, 331314, 344440
+)
+
+function Convert-DuneXpToLevel {
+    param([long]$Xp)
+    if ($Xp -le 0) { return 0 }
+    $lo = 1; $hi = 200
+    while ($lo -lt $hi) {
+        $mid = [int](($lo + $hi + 1) / 2)
+        if ($script:DuneCumulativeXpByLevel[$mid] -le $Xp) { $lo = $mid }
+        else { $hi = $mid - 1 }
+    }
+    return $lo
+}
+
+function Get-DuneIntelAtLevel {
+    param([int]$Level)
+    if ($Level -le 0) { return 0 }
+    if ($Level -eq 1) { return 4 }
+    if ($Level -le 3) { return 4 + ($Level - 1) * 2 }
+    if ($Level -le 15) { return 8 + ($Level - 3) * 3 }
+    if ($Level -le 30) { return 44 + ($Level - 15) * 5 }
+    if ($Level -le 50) { return 119 + ($Level - 30) * 10 }
+    if ($Level -le 69) { return 319 + ($Level - 50) * 20 }
+    if ($Level -le 85) { return 699 + ($Level - 69) * 30 }
+    if ($Level -le 125) { return 1179 + ($Level - 85) * 40 }
+    return 2779
+}
+
+function Get-DuneKeystoneSpBonus {
+    param([int[]]$Ids)
+    if (-not $Ids) { return 0 }
+    $bonus = 0
+    foreach ($id in $Ids) {
+        if ($id -eq 7 -or $id -eq 14 -or $id -eq 21) { $bonus++ }
+    }
+    return $bonus
+}
+
+# ----- Character XP / Intel cascade ---------------------------------------
+# dune-admin keeps this strictly OFFLINE — the in-memory FLevelComponent
+# overwrites the DB row at logout, so changes applied to an online char get
+# silently reverted. We mirror that contract.
+
+function Get-DunePlayerLevelComponentRow {
+    param([string]$Ip, [long]$ActorId)
+    $sql = @"
+SELECT fge.id::text AS entity_id,
+       fge.properties->'FLevelComponent'->>'TotalXPEarned' AS xp_text,
+       fge.properties->'FLevelComponent'->>'SkillPointsSpent' AS sp_spent_text,
+       fge.properties->'FLevelComponent'->>'TotalSkillPointsEarned' AS sp_total_text
+FROM dune.actor_fgl_entities afe
+JOIN dune.fgl_entities fge ON fge.id = afe.fgl_entity_id
+WHERE afe.actor_id = $ActorId::bigint AND afe.fgl_entity_slot = 'DuneCharacter'
+LIMIT 1;
+"@
+    $r = Invoke-DuneSqlQuery -Ip $Ip -Sql $sql -ReadOnly $true -MaxRows 1 -TimeoutSec 15
+    if (-not $r.ok) { return @{ ok = $false; error = $r.error } }
+    $maps = ConvertTo-DuneRowMaps -Result $r
+    if ($maps.Count -eq 0) { return @{ ok = $false; error = "No DuneCharacter FLevelComponent found for actor $ActorId." } }
+    $row = $maps[0]
+    return @{
+        ok = $true
+        entity_id = [string]$row['entity_id']
+        xp = [int64](ConvertTo-DuneInt $row['xp_text'])
+        sp_spent = [int](ConvertTo-DuneInt $row['sp_spent_text'])
+        sp_total = [int](ConvertTo-DuneInt $row['sp_total_text'])
+    }
+}
+
+function Get-DunePlayerControllerFromPawn {
+    param([string]$Ip, [long]$PawnId)
+    $sql = "SELECT actor_id::text AS cid FROM dune.player_state WHERE player_pawn_id = $PawnId::bigint LIMIT 1;"
+    $r = Invoke-DuneSqlQuery -Ip $Ip -Sql $sql -ReadOnly $true -MaxRows 1 -TimeoutSec 10
+    if (-not $r.ok) { return $null }
+    $maps = ConvertTo-DuneRowMaps -Result $r
+    if ($maps.Count -eq 0) { return $null }
+    return [int64](ConvertTo-DuneInt $maps[0]['cid'])
+}
+
+function Get-DunePlayerKeystoneIds {
+    param([string]$Ip, [long]$ActorId)
+    $sql = "SELECT COALESCE(properties->'KeystonePlayerComponent'->'m_PurchasedKeystoneIDs', '[]'::jsonb) AS ids FROM dune.actors WHERE id = $ActorId::bigint;"
+    $r = Invoke-DuneSqlQuery -Ip $Ip -Sql $sql -ReadOnly $true -MaxRows 1 -TimeoutSec 10
+    if (-not $r.ok) { return @() }
+    $maps = ConvertTo-DuneRowMaps -Result $r
+    if ($maps.Count -eq 0) { return @() }
+    $raw = [string]$maps[0]['ids']
+    if (-not $raw) { return @() }
+    try {
+        $arr = $raw | ConvertFrom-Json
+        if ($null -eq $arr) { return @() }
+        return @($arr | ForEach-Object { [int]$_ })
+    } catch { return @() }
+}
+
+function Invoke-DunePlayerGetCharXp {
+    param([string]$Ip, [long]$ActorId)
+    if ($ActorId -le 0) { return @{ ok = $false; error = 'actor_id is required.' } }
+    $row = Get-DunePlayerLevelComponentRow -Ip $Ip -ActorId $ActorId
+    if (-not $row.ok) { return @{ ok = $false; error = $row.error } }
+    $lvl = Convert-DuneXpToLevel $row.xp
+    return @{
+        ok = $true
+        actor_id = $ActorId
+        xp = $row.xp
+        level = $lvl
+        skill_points_spent = $row.sp_spent
+        skill_points_total = $row.sp_total
+    }
+}
+
+# Cascade: writes XP + TotalSkillPointsEarned + UnspentSkillPoints into
+# FLevelComponent[1], and Intel (TechKnowledgePoints) into actors.properties.
+# {0}=entity_id {1}=xp {2}=total_sp {3}=unspent_sp.
+$script:DuneAwardCharXpFglSqlTpl = @'
+UPDATE dune.fgl_entities
+SET properties = jsonb_set(
+    jsonb_set(
+        jsonb_set(properties,
+            '{{FLevelComponent,1,TotalXPEarned}}', to_jsonb({1}::bigint)),
+        '{{FLevelComponent,1,TotalSkillPointsEarned}}', to_jsonb({2}::int)),
+    '{{FLevelComponent,1,UnspentSkillPoints}}', to_jsonb({3}::int))
+WHERE id = {0}::bigint;
+'@
+
+# {0}=actor_id {1}=intel
+$script:DuneSetIntelSqlTpl = @'
+UPDATE dune.actors
+SET properties = jsonb_set(properties,
+    '{{TechKnowledgePlayerComponent,m_TechKnowledgePoints}}',
+    to_jsonb({1}::int))
+WHERE id = {0}::bigint;
+'@
+
+function Invoke-DunePlayerAwardCharXp {
+    param(
+        [string]$Ip,
+        [long]$PawnId,
+        [long]$XpDelta
+    )
+    if ($PawnId -le 0) { return @{ ok = $false; error = 'pawn_id is required.' } }
+    $off = Test-DunePlayerOffline -Ip $Ip -PawnId $PawnId
+    if (-not $off.ok) { return @{ ok = $false; error = $off.reason } }
+
+    $controller = Get-DunePlayerControllerFromPawn -Ip $Ip -PawnId $PawnId
+    if ($null -eq $controller -or $controller -le 0) { return @{ ok = $false; error = "Could not resolve player_controller from pawn $PawnId." } }
+
+    $cur = Get-DunePlayerLevelComponentRow -Ip $Ip -ActorId $controller
+    if (-not $cur.ok) { return @{ ok = $false; error = $cur.error } }
+
+    $newXp = $cur.xp + $XpDelta
+    if ($newXp -lt 0) { $newXp = 0 }
+    if ($newXp -gt $script:DuneMaxCharXp) { $newXp = $script:DuneMaxCharXp }
+
+    $newLevel = Convert-DuneXpToLevel $newXp
+    $keystoneIds = Get-DunePlayerKeystoneIds -Ip $Ip -ActorId $controller
+    $keystoneBonus = Get-DuneKeystoneSpBonus -Ids $keystoneIds
+    $totalSp = $newLevel + $keystoneBonus
+    $unspent = $totalSp - $cur.sp_spent
+    if ($unspent -lt 0) { $unspent = 0 }
+    $newIntel = Get-DuneIntelAtLevel $newLevel
+
+    $sqlFgl = [string]::Format($script:DuneAwardCharXpFglSqlTpl, $cur.entity_id, $newXp, $totalSp, $unspent)
+    $r1 = Invoke-DuneSqlQuery -Ip $Ip -Sql $sqlFgl -ReadOnly $false -MaxRows 1 -TimeoutSec 30
+    if (-not $r1.ok) { return @{ ok = $false; error = "update FLevelComponent: $($r1.error)" } }
+
+    $sqlIntel = [string]::Format($script:DuneSetIntelSqlTpl, $controller, $newIntel)
+    $r2 = Invoke-DuneSqlQuery -Ip $Ip -Sql $sqlIntel -ReadOnly $false -MaxRows 1 -TimeoutSec 30
+    if (-not $r2.ok) { return @{ ok = $false; error = "update Intel: $($r2.error)" } }
+
+    return @{
+        ok = $true
+        message = "Awarded $XpDelta XP - now $newXp XP / level $newLevel ($totalSp SP, $unspent unspent, intel $newIntel)."
+        xp = $newXp; level = $newLevel
+        skill_points_total = $totalSp
+        skill_points_unspent = $unspent
+        intel = $newIntel
+    }
+}
+
+function Invoke-DunePlayerAwardIntel {
+    param(
+        [string]$Ip,
+        [long]$PawnId,
+        [long]$ActorId,
+        [int]$IntelDelta
+    )
+    $controller = $ActorId
+    if ($controller -le 0 -and $PawnId -gt 0) {
+        $controller = Get-DunePlayerControllerFromPawn -Ip $Ip -PawnId $PawnId
+    }
+    if ($null -eq $controller -or $controller -le 0) { return @{ ok = $false; error = 'actor_id (or pawn_id) is required.' } }
+    if ($PawnId -gt 0) {
+        $off = Test-DunePlayerOffline -Ip $Ip -PawnId $PawnId
+        if (-not $off.ok) { return @{ ok = $false; error = $off.reason } }
+    }
+    $readSql = "SELECT COALESCE((properties->'TechKnowledgePlayerComponent'->>'m_TechKnowledgePoints')::int, 0) AS intel FROM dune.actors WHERE id = $controller::bigint;"
+    $r = Invoke-DuneSqlQuery -Ip $Ip -Sql $readSql -ReadOnly $true -MaxRows 1 -TimeoutSec 10
+    $cur = 0
+    if ($r.ok) {
+        $maps = ConvertTo-DuneRowMaps -Result $r
+        if ($maps.Count -ge 1) { $cur = [int](ConvertTo-DuneInt $maps[0]['intel']) }
+    }
+    $newIntel = $cur + $IntelDelta
+    if ($newIntel -lt 0) { $newIntel = 0 }
+    $sql = [string]::Format($script:DuneSetIntelSqlTpl, $controller, $newIntel)
+    $w = Invoke-DuneSqlQuery -Ip $Ip -Sql $sql -ReadOnly $false -MaxRows 1 -TimeoutSec 30
+    if (-not $w.ok) { return @{ ok = $false; error = $w.error } }
+    return @{
+        ok = $true
+        message = "Set Intel to $newIntel (was $cur, delta $IntelDelta) for actor $controller."
+        intel = $newIntel
+    }
+}
+
+# ----- Returning Player Award --------------------------------------------
+
+function Invoke-DunePlayerGrantReturningAward {
+    param([string]$Ip, [long]$AccountId)
+    $resolve = Get-DuneRawFuncomId -Ip $Ip -AccountId $AccountId
+    if (-not $resolve.ok) { return @{ ok = $false; error = $resolve.error } }
+    $funcom = ConvertTo-DuneSqlString $resolve.funcom_id
+    $sql = @"
+UPDATE dune.accounts a
+SET account = jsonb_set(
+    jsonb_set(
+        COALESCE(a.account, '{}'::jsonb),
+        '{returningPlayerAward,eligible}', to_jsonb(true)),
+    '{returningPlayerAward,dismissed}', to_jsonb(false))
+WHERE "user" = $funcom;
+"@
+    $r = Invoke-DuneSqlQuery -Ip $Ip -Sql $sql -ReadOnly $false -MaxRows 1 -TimeoutSec 15
+    if (-not $r.ok) { return @{ ok = $false; error = $r.error } }
+    return @{ ok = $true; message = "Granted returning-player award to account $AccountId." }
+}
+
+function Invoke-DunePlayerDismissReturningAward {
+    param([string]$Ip, [long]$AccountId)
+    $resolve = Get-DuneRawFuncomId -Ip $Ip -AccountId $AccountId
+    if (-not $resolve.ok) { return @{ ok = $false; error = $resolve.error } }
+    $funcom = ConvertTo-DuneSqlString $resolve.funcom_id
+    $sql = @"
+UPDATE dune.accounts a
+SET account = jsonb_set(
+    jsonb_set(
+        COALESCE(a.account, '{}'::jsonb),
+        '{returningPlayerAward,eligible}', to_jsonb(false)),
+    '{returningPlayerAward,dismissed}', to_jsonb(true))
+WHERE "user" = $funcom;
+"@
+    $r = Invoke-DuneSqlQuery -Ip $Ip -Sql $sql -ReadOnly $false -MaxRows 1 -TimeoutSec 15
+    if (-not $r.ok) { return @{ ok = $false; error = $r.error } }
+    return @{ ok = $true; message = "Dismissed returning-player award for account $AccountId." }
+}
+
+# ----- Delete Account (DESTRUCTIVE) --------------------------------------
+# Mirrors db.go cmdDeleteAccount: nukes characters, actors, fgl entities,
+# RMQ traces, and the accounts row in dependency order.
+function Invoke-DunePlayerDeleteAccount {
+    param([string]$Ip, [long]$AccountId)
+    if ($AccountId -le 0) { return @{ ok = $false; error = 'account_id is required.' } }
+    $resolve = Get-DuneRawFuncomId -Ip $Ip -AccountId $AccountId
+    if (-not $resolve.ok) { return @{ ok = $false; error = $resolve.error } }
+    $funcom = ConvertTo-DuneSqlString $resolve.funcom_id
+
+    $sql = @"
+DO `$`$
+DECLARE
+    v_account_id bigint := $AccountId;
+    v_funcom text := $funcom;
+BEGIN
+    -- character actors
+    DELETE FROM dune.actor_fgl_entities afe
+    USING dune.actors a
+    WHERE afe.actor_id = a.id AND a.account_id = v_account_id;
+
+    DELETE FROM dune.fgl_entities fge
+    WHERE fge.id IN (
+        SELECT afe.fgl_entity_id FROM dune.actor_fgl_entities afe
+        JOIN dune.actors a ON a.id = afe.actor_id
+        WHERE a.account_id = v_account_id
+    );
+
+    DELETE FROM dune.player_virtual_currency_balances
+    WHERE player_controller_id IN (SELECT id FROM dune.actors WHERE account_id = v_account_id);
+
+    DELETE FROM dune.player_faction_reputation
+    WHERE actor_id IN (SELECT id FROM dune.actors WHERE account_id = v_account_id);
+
+    DELETE FROM dune.player_state
+    WHERE player_pawn_id IN (SELECT id FROM dune.actors WHERE account_id = v_account_id);
+
+    DELETE FROM dune.actors WHERE account_id = v_account_id;
+
+    DELETE FROM dune.accounts WHERE id = v_account_id OR "user" = v_funcom;
+END
+`$`$;
+"@
+    $r = Invoke-DuneSqlQuery -Ip $Ip -Sql $sql -ReadOnly $false -MaxRows 1 -TimeoutSec 60
+    if (-not $r.ok) { return @{ ok = $false; error = $r.error } }
+    return @{ ok = $true; message = "Deleted account $AccountId (funcom $($resolve.funcom_id)) and all associated characters." }
+}
