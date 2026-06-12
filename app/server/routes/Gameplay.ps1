@@ -385,6 +385,13 @@ Register-DuneRoute -Method POST -Path '/api/gameplay/market-bot/tick/list' -Hand
 # live vendor snapshot (which hangs on fresh BGs with no NPC orders) and
 # the mask-cache SSH refresh — uses the bundled catalog + mask seed file
 # only. ?dry=1 (or body { dryRun: true }) reports the plan WITHOUT writing.
+#
+# Live (non-dry) runs are dispatched to a dedicated background runspace
+# via Start-DuneBotSeedAsync — the POST returns immediately with
+# { ok, running, started } and progress is published into
+# Get-DuneNativeBotStatus.seed_progress for the UI's existing status poll.
+# Dry runs still execute synchronously because the caller wants the plan
+# in the response body.
 # ---------------------------------------------------------------------------
 Register-DuneRoute -Method POST -Path '/api/gameplay/market-bot/seed' -Handler {
     param($req, $res, $routeParams, $body)
@@ -393,9 +400,21 @@ Register-DuneRoute -Method POST -Path '/api/gameplay/market-bot/seed' -Handler {
         $q = (Get-DuneQ -Request $req -Name 'dry').ToLower()
         if ($q -eq '1' -or $q -eq 'true' -or $q -eq 'yes') { $dry = $true }
         if (Test-DuneBodyTruthy -Body $body -Name 'dryRun') { $dry = $true }
-        $summary = Invoke-DuneBotSeedMarket -DryRun:$dry
-        $status = if ($summary.ok) { 200 } else { 503 }
-        Write-DuneJson -Response $res -Status $status -Body $summary
+
+        if ($dry) {
+            $summary = Invoke-DuneBotSeedMarket -DryRun
+            $status = if ($summary.ok) { 200 } else { 503 }
+            Write-DuneJson -Response $res -Status $status -Body $summary
+            return
+        }
+
+        $launch = Start-DuneBotSeedAsync -ServerDir $script:DuneServerDir
+        if (-not $launch.ok) {
+            $status = if ($launch.running) { 409 } else { 500 }
+            Write-DuneJson -Response $res -Status $status -Body $launch
+            return
+        }
+        Write-DuneJson -Response $res -Status 202 -Body $launch
     } catch {
         Write-DuneError -Response $res -Status 500 -Message "Bot seed market failed: $($_.Exception.Message)"
     }

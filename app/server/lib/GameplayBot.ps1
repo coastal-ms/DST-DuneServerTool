@@ -366,6 +366,7 @@ function Read-DuneBotState {
         last_list_result  = $null
         error_count       = 0
         last_error        = ''
+        seed_progress     = $null   # see Invoke-DuneBotSeedMarket
     }
     $path = Get-DuneBotStatePath
     if (Test-Path -LiteralPath $path) {
@@ -1264,13 +1265,58 @@ function Invoke-DuneBotSeedMarket {
         message       = ''
     }
 
+    # Tiny helper: stamp seed_progress so the UI's existing status poll can
+    # render a live progress bar without the seed POST needing to stay open.
+    # Skipped for dry runs (those return synchronously to the caller anyway).
+    $writeProgress = {
+        param([hashtable]$Patch, [bool]$Running = $true)
+        if ($DryRun) { return }
+        try {
+            $st = Read-DuneBotState
+            $base = @{}
+            if ($st.seed_progress) {
+                if ($st.seed_progress -is [hashtable]) {
+                    foreach ($k in $st.seed_progress.Keys) { $base[$k] = $st.seed_progress[$k] }
+                } else {
+                    foreach ($p in $st.seed_progress.PSObject.Properties) { $base[$p.Name] = $p.Value }
+                }
+            }
+            foreach ($k in $Patch.Keys) { $base[$k] = $Patch[$k] }
+            $base['running'] = $Running
+            $base['updated'] = (Get-Date).ToUniversalTime().ToString('o')
+            $st.seed_progress = $base
+            Save-DuneBotState -State $st
+        } catch {}
+    }
+
+    & $writeProgress @{
+        phase        = 'starting'
+        chunks_done  = 0
+        chunks_total = 0
+        inserted     = 0
+        eligible     = 0
+        considered   = 0
+        errors       = 0
+        message      = ''
+        started      = (Get-Date).ToUniversalTime().ToString('o')
+    } $true
+
     $ctx = Get-DuneDbContext
-    if (-not $ctx.ok) { $summary.ok = $false; $summary.message = $ctx.message; return $summary }
+    if (-not $ctx.ok) {
+        $summary.ok = $false; $summary.message = $ctx.message
+        & $writeProgress @{ phase = 'error'; message = $summary.message } $false
+        return $summary
+    }
 
     $ident = Get-DuneBotIdentity -Ip $ctx.ip -CreateIfMissing:(!$DryRun)
-    if (-not $ident.ok) { $summary.ok = $false; $summary.message = $ident.error; return $summary }
+    if (-not $ident.ok) {
+        $summary.ok = $false; $summary.message = $ident.error
+        & $writeProgress @{ phase = 'error'; message = $summary.message } $false
+        return $summary
+    }
     if ($ident.ownerId -le 0) {
         $summary.message = 'Bot not provisioned (run any live tick once to create the Duke actor).'
+        & $writeProgress @{ phase = 'error'; message = $summary.message } $false
         return $summary
     }
 
@@ -1279,11 +1325,16 @@ function Invoke-DuneBotSeedMarket {
     # templates) so a brand-new BG has immediate coverage.
     $maskCache = Read-DuneBotMaskCache
     $summary.masks_known = $maskCache.Count
+    & $writeProgress @{ phase = 'reading-listings'; masks_known = $summary.masks_known } $true
 
     # Need to know what's already there to compute per-template "need".
     # For a fresh seed this is one fast SSH read.
     $cl = Get-DuneBotCurrentListings -Ip $ctx.ip -OwnerId $ident.ownerId -ExchangeId $ident.exchangeId
-    if (-not $cl.ok) { $summary.ok = $false; $summary.message = "current listings: $($cl.error)"; return $summary }
+    if (-not $cl.ok) {
+        $summary.ok = $false; $summary.message = "current listings: $($cl.error)"
+        & $writeProgress @{ phase = 'error'; message = $summary.message } $false
+        return $summary
+    }
     $current = $cl.byTemplate
     foreach ($k in $current.Keys) { $summary.listed_before += @($current[$k]).Count }
 
@@ -1325,6 +1376,14 @@ function Invoke-DuneBotSeedMarket {
         return $summary
     }
 
+    $chunksTotal = [int][Math]::Ceiling($work.Count / [double]$ChunkSize)
+    & $writeProgress @{
+        phase        = 'writing'
+        chunks_total = $chunksTotal
+        eligible     = $summary.eligible
+        considered   = $summary.considered
+    } $true
+
     # Build one BEGIN/COMMIT per chunk of $ChunkSize templates. Each per-
     # template block is one WITH-CTE statement that bulk-inserts $need
     # listings in a single statement.
@@ -1348,10 +1407,26 @@ function Invoke-DuneBotSeedMarket {
         } else {
             $summary.errors++
             $summary.message = "chunk $($summary.chunks) failed: $($r.error)"
+            & $writeProgress @{
+                phase       = 'error'
+                chunks_done = $summary.chunks
+                inserted    = $summary.inserted
+                errors      = $summary.errors
+                message     = $summary.message
+            } $false
             # Stop on the first failed chunk — likely a schema mismatch or
             # exchange-id problem, and continuing would just multiply noise.
             break
         }
+        # Live progress write after each chunk so the UI's status poll picks
+        # it up almost immediately (no need to wait for the seed POST to
+        # return — the POST returns immediately when called via the async
+        # wrapper anyway).
+        & $writeProgress @{
+            phase       = 'writing'
+            chunks_done = $summary.chunks
+            inserted    = $summary.inserted
+        } $true
         $i = $endIdx + 1
     }
 
@@ -1373,7 +1448,121 @@ function Invoke-DuneBotSeedMarket {
     if ($summary.message)      { $state.last_error  = [string]$summary.message }
     Save-DuneBotState -State $state
 
+    # Final progress mark — running=false, phase=done|error. UI uses this to
+    # stop polling at the higher cadence and re-enable the Seed market button.
+    & $writeProgress @{
+        phase         = if ($summary.errors -gt 0) { 'error' } else { 'done' }
+        chunks_done   = $summary.chunks
+        inserted      = $summary.inserted
+        errors        = $summary.errors
+        listed_after  = $summary.listed_after
+        listed_before = $summary.listed_before
+        message       = $summary.message
+        finished      = (Get-Date).ToUniversalTime().ToString('o')
+    } $false
+
     return $summary
+}
+
+# Fire-and-forget seed wrapper for the HTTP handler. Spins a dedicated
+# runspace (mirrors Start-DuneGameplayBotScheduler), returns immediately.
+# Refuses to launch a second seed while one is already in flight — the
+# seed_progress.running flag (persisted in gameplay-bot-state.json) is the
+# cross-runspace lock. The launched runspace dot-sources the same lib set
+# the scheduler does, so all helpers (Read-DuneBotConfig, Invoke-DuneSqlQuery,
+# Get-DuneDbContext, Save-DuneBotState, etc.) are available exactly as in
+# the main runspace.
+function Start-DuneBotSeedAsync {
+    param([string]$ServerDir)
+    $st = Read-DuneBotState
+    if ($st.seed_progress) {
+        $running = $false
+        if ($st.seed_progress -is [hashtable]) {
+            $running = [bool]$st.seed_progress['running']
+        } else {
+            try { $running = [bool]$st.seed_progress.running } catch { $running = $false }
+        }
+        if ($running) {
+            return @{
+                ok       = $false
+                running  = $true
+                progress = $st.seed_progress
+                error    = 'A seed market run is already in progress.'
+            }
+        }
+    }
+    if (-not $ServerDir -or -not (Test-Path -LiteralPath $ServerDir)) {
+        return @{ ok = $false; error = "Start-DuneBotSeedAsync: server dir not found ('$ServerDir')." }
+    }
+
+    # Stamp 'starting' synchronously so the very next /status call sees
+    # running=true even if the runspace hasn't had its first wakeup yet.
+    $st.seed_progress = @{
+        phase        = 'starting'
+        chunks_done  = 0
+        chunks_total = 0
+        inserted     = 0
+        eligible     = 0
+        considered   = 0
+        errors       = 0
+        message      = ''
+        running      = $true
+        started      = (Get-Date).ToUniversalTime().ToString('o')
+        updated      = (Get-Date).ToUniversalTime().ToString('o')
+    }
+    Save-DuneBotState -State $st
+
+    try {
+        $rs = [runspacefactory]::CreateRunspace()
+        $rs.ApartmentState = 'MTA'
+        $rs.ThreadOptions  = 'ReuseThread'
+        $rs.Open()
+        $ps = [powershell]::Create()
+        $ps.Runspace = $rs
+        [void]$ps.AddScript({
+            param($ServerDir)
+            try {
+                $boot = Join-Path $ServerDir 'lib\Bootstrap.ps1'
+                if (Test-Path $boot) { . $boot }
+                Get-ChildItem -Path (Join-Path $ServerDir 'lib') -Filter '*.ps1' | ForEach-Object {
+                    if ($_.Name -ieq 'Bootstrap.ps1') { return }
+                    try { . $_.FullName } catch {}
+                }
+                [void](Invoke-DuneBotSeedMarket)
+            } catch {
+                # Anything that escapes the lib lands here — make sure we
+                # clear the running flag so the UI doesn't get stuck.
+                try {
+                    $st2 = Read-DuneBotState
+                    $st2.seed_progress = @{
+                        phase    = 'error'
+                        running  = $false
+                        message  = "Seed runspace crashed: $($_.Exception.Message)"
+                        updated  = (Get-Date).ToUniversalTime().ToString('o')
+                        finished = (Get-Date).ToUniversalTime().ToString('o')
+                    }
+                    Save-DuneBotState -State $st2
+                } catch {}
+            }
+        }).AddArgument($ServerDir)
+        [void]$ps.BeginInvoke()
+        return @{ ok = $true; running = $true; message = 'Seed market started.' }
+    } catch {
+        # Bootstrap failed — clear the running flag so the UI doesn't hang
+        # on a phantom "starting" state forever.
+        try {
+            $st3 = Read-DuneBotState
+            $st3.seed_progress = @{
+                phase    = 'error'
+                running  = $false
+                message  = "Failed to spawn seed runspace: $($_.Exception.Message)"
+                updated  = (Get-Date).ToUniversalTime().ToString('o')
+                finished = (Get-Date).ToUniversalTime().ToString('o')
+            }
+            Save-DuneBotState -State $st3
+        } catch {}
+        return @{ ok = $false; running = $false; error = "Failed to spawn seed runspace: $($_.Exception.Message)" }
+    }
 }
 
 # Wipe NPC orders owned by any actor whose class is not 'Duke'. Used to evict
@@ -1435,6 +1624,7 @@ function Get-DuneNativeBotStatus {
         listings_by_class     = @()      # [{class; count}]
         legacy_listings_count = $null    # NPC listings owned by non-Duke actors
         provisioned           = $false
+        seed_progress         = $state.seed_progress
         source                = 'live'
     }
     $ctx = Get-DuneDbContext

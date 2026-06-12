@@ -88,6 +88,24 @@ export interface BotStatusByClass {
   count: number
 }
 
+export interface BotSeedProgress {
+  phase?: 'starting' | 'reading-listings' | 'writing' | 'done' | 'error' | string
+  running?: boolean
+  chunks_done?: number
+  chunks_total?: number
+  inserted?: number
+  eligible?: number
+  considered?: number
+  masks_known?: number
+  errors?: number
+  listed_before?: number
+  listed_after?: number
+  message?: string
+  started?: string
+  updated?: string
+  finished?: string
+}
+
 export interface BotStatus {
   configured?: boolean
   running: boolean
@@ -104,6 +122,7 @@ export interface BotStatus {
   provisioned?: boolean
   error_count?: number
   error?: string
+  seed_progress?: BotSeedProgress | null
   source?: DataSource
   db_message?: string
 }
@@ -370,10 +389,29 @@ export function runBotListTick(dryRun: boolean) {
   })
 }
 
-export function runBotSeedMarket(dryRun: boolean) {
-  return api<BotSeedResult>(`/api/gameplay/market-bot/seed${dryRun ? '?dry=1' : ''}`, {
+// Live seed market is dispatched into a dedicated server-side runspace —
+// the POST returns immediately with this ack and progress is published into
+// BotStatus.seed_progress (polled via getBotStatus). 409 means "already
+// running" and the body still carries the current progress snapshot.
+export interface BotSeedLaunch {
+  ok: boolean
+  running?: boolean
+  message?: string
+  error?: string
+  progress?: BotSeedProgress
+}
+
+export function runBotSeedDryRun() {
+  return api<BotSeedResult>('/api/gameplay/market-bot/seed?dry=1', {
     method: 'POST',
-    body: JSON.stringify({ dryRun }),
+    body: JSON.stringify({ dryRun: true }),
+  })
+}
+
+export function startBotSeedMarket() {
+  return api<BotSeedLaunch>('/api/gameplay/market-bot/seed', {
+    method: 'POST',
+    body: JSON.stringify({}),
   })
 }
 
