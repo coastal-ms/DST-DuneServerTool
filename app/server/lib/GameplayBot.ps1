@@ -218,6 +218,7 @@ function Get-DuneBotConfigDefaults {
         listings_per_grade   = 5             # concurrent NPC listings per (template, grade)
         stackables_only      = $false        # v11.5.9: default OFF — list gear too
         price_cap            = 100000        # HARD ceiling in Solari (sane-pricing patch)
+        price_floor          = 50            # HARD minimum (before grade multiplier) — mirrors dune-market-bot's noVendorPrice fallback
         default_unit_price   = 100           # fallback for unknown templates
         # Per-tier base prices, mirroring 0001-sane-pricing-100k-cap.patch.
         tier_base_prices     = @{ '0' = 10; '1' = 50; '2' = 200; '3' = 800; '4' = 3000; '5' = 10000; '6' = 30000 }
@@ -345,6 +346,7 @@ function Save-DuneBotConfig {
     $v = _Get $Incoming 'mask_refresh_interval'; if ($null -ne $v) { $cfg['mask_refresh_interval'] = [Math]::Min(604800, [Math]::Max(300, [int]$v)) }
     $v = _Get $Incoming 'listings_per_grade';if ($null -ne $v) { $cfg['listings_per_grade'] = [Math]::Min(50, [Math]::Max(1, [int]$v)) }
     $v = _Get $Incoming 'price_cap';         if ($null -ne $v) { $cfg['price_cap'] = [Math]::Max(1, [int]$v) }
+    $v = _Get $Incoming 'price_floor';       if ($null -ne $v) { $cfg['price_floor'] = [Math]::Max(0, [int]$v) }
     $v = _Get $Incoming 'default_unit_price';if ($null -ne $v) { $cfg['default_unit_price'] = [Math]::Max(1, [int]$v) }
     $v = _Get $Incoming 'max_buys_per_tick'; if ($null -ne $v) { $cfg['max_buys_per_tick'] = [Math]::Min(500, [Math]::Max(1, [int]$v)) }
     $v = _Get $Incoming 'die_size';          if ($null -ne $v) { $cfg['die_size']   = [Math]::Min(1000, [Math]::Max(2, [int]$v)) }
@@ -1035,6 +1037,7 @@ function Get-DuneBotRoundedPrice {
 function Get-DuneBotItemPrice {
     param([hashtable]$Cfg, [hashtable]$Cand, [int]$Grade = 0)
     $cap = [int]$Cfg.price_cap
+    $floorCfg = if ($Cfg.ContainsKey('price_floor')) { [int]$Cfg.price_floor } else { 50 }
     $overrides = [hashtable]$Cfg.price_overrides
     if ($overrides -and $overrides.ContainsKey($Cand.template_id)) {
         return Limit-DuneBotPrice -Price ([double]$overrides[$Cand.template_id]) -Cap $cap
@@ -1066,6 +1069,10 @@ function Get-DuneBotItemPrice {
         $ceil = $vp * 2.0
         if ($price -gt $ceil) { $price = $ceil }
     }
+    # Hard global floor — mirrors dune-market-bot's noVendorPrice fallback so
+    # T0/cosmetic/refuse items with no meaningful vendor price never list for
+    # a couple solari. Applied BEFORE grade multiplier so G5 still scales up.
+    if ($floorCfg -gt 0 -and $price -lt $floorCfg) { $price = [double]$floorCfg }
     # Apply per-grade premium AFTER the vendor-bracket clamp so higher grades
     # are allowed to break above the 2× vendor ceiling (a G5 schematic legit-
     # imately sells for ~2× a G0). Caps still enforced by Limit-DuneBotPrice.

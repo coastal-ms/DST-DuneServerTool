@@ -847,9 +847,11 @@ function PricingSection({ draft, setDraft }: { draft: BotConfig; setDraft: (c: B
         </span>
       </div>
 
-      <div className="card p-4 grid grid-cols-1 sm:grid-cols-2 gap-4">
+      <div className="card p-4 grid grid-cols-1 sm:grid-cols-3 gap-4">
         <NumField label="Price cap (Solari)" value={draft.price_cap ?? 100000}
           onChange={v => setDraft({ ...draft, price_cap: v })} />
+        <NumField label="Price floor (Solari, 0 = off)" value={draft.price_floor ?? 50}
+          onChange={v => setDraft({ ...draft, price_floor: v })} />
         <NumField label="Default unit price (fallback)" value={draft.default_unit_price ?? 50}
           onChange={v => setDraft({ ...draft, default_unit_price: v })} />
       </div>

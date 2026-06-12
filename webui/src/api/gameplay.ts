@@ -140,6 +140,7 @@ export interface BotStatus {
 
 export interface BotPricingConfig {
   price_cap: number
+  price_floor: number
   default_unit_price: number
   tier_base_prices: Record<string, number>
   stack_unit_prices: Record<string, number>
