@@ -423,7 +423,7 @@ Register-DuneRoute -Method POST -Path '/api/gameplay/market-bot/seed' -Handler {
             return
         }
 
-        $launch = Start-DuneBotSeedAsync -ServerDir $script:DuneServerDir
+        $launch = Start-DuneBotSeedAsync
         if (-not $launch.ok) {
             $status = if ($launch.running) { 409 } else { 500 }
             Write-DuneJson -Response $res -Status $status -Body $launch

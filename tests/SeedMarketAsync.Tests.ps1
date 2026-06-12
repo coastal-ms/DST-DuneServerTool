@@ -163,4 +163,15 @@ Describe 'Start-DuneBotSeedAsync — fresh launch clears stale errors' -Tag 'Mar
         [string]$after.last_error | Should -Be ''
         [int]$after.error_count   | Should -Be 0
     }
+
+    It 'auto-discovers ServerDir from $PSScriptRoot when called argless' {
+        # The lib captured its ServerDir at dot-source time. It must resolve
+        # to a real folder that contains lib\GameplayBot.ps1 (i.e. the file
+        # we just loaded). Otherwise the async path will fail in any flow
+        # that doesn't pre-set $script:DuneServerDir (dev-server, pool, etc).
+        $script:DuneGameplayBotServerDir | Should -Not -BeNullOrEmpty
+        Test-Path -LiteralPath $script:DuneGameplayBotServerDir | Should -Be $true
+        $libFile = Join-Path $script:DuneGameplayBotServerDir 'lib\GameplayBot.ps1'
+        Test-Path -LiteralPath $libFile | Should -Be $true
+    }
 }
