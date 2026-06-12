@@ -311,3 +311,387 @@ function Get-DunePlayerDetailDemo {
         )
     }
 }
+
+# ============================================================================
+# v11.5.6 — extended player surface (port of dune-admin's player tooling).
+#
+# Adds:
+#   - Get-DunePlayerSummaryLive     : server-wide aggregate dashboard
+#   - Get-DunePlayerStatsLive       : per-player snapshot (currencies, level,
+#                                      faction, playtime, last_seen)
+#   - Get-DunePlayerSpecsFullLive   : full spec tracks + keystone counts
+#   - Get-DunePlayerTagsLive        : player_tags labels
+#   - Get-DunePlayerEventsLive      : recent dune.event_log rows
+#   - Invoke-DunePlayerGrantMaxSpec : set xp=44182 level=100 for one track
+#   - Invoke-DunePlayerResetSpec    : DELETE one track (or 'all' resets fns)
+#   - Invoke-DunePlayerGrantAllKeystones / Invoke-DunePlayerResetAllKeystones
+#   - Invoke-DunePlayerSetTags      : replace tag set for an account
+#
+# All read calls degrade gracefully when their backing tables don't exist on
+# the live game DB (returns @{ ok=$true; unsupported=$true; rows=@() }).
+# ============================================================================
+
+# Wraps a SQL call; if the error message looks like "relation does not exist"
+# returns a soft "unsupported" instead of bubbling the failure. Lets the
+# frontend render an empty section instead of an error toast when the live
+# server doesn't have a given player-admin table (older builds, etc).
+function Invoke-DuneSqlSoft {
+    param([string]$Ip, [string]$Sql, [int]$MaxRows = 1000, [int]$TimeoutSec = 30)
+    $res = Invoke-DuneSqlQuery -Ip $Ip -Sql $Sql -ReadOnly $true -MaxRows $MaxRows -TimeoutSec $TimeoutSec
+    if (-not $res.ok) {
+        $msg = [string]$res.error
+        if ($msg -match 'does not exist' -or $msg -match 'undefined' -or $msg -match 'permission denied') {
+            return @{ ok = $true; unsupported = $true; reason = $msg; rows = @() }
+        }
+        return @{ ok = $false; error = $msg }
+    }
+    return @{ ok = $true; unsupported = $false; raw = $res }
+}
+
+# ---------------------------------------------------------------------------
+# Server-wide summary — total players, online count, by-faction, by-map,
+# currency totals, average character level. Single round trip via a SQL
+# script that returns several labelled result sets stitched together.
+# Each metric tolerates a missing table by returning 0/empty.
+# ---------------------------------------------------------------------------
+$script:DunePlayerSummarySql = @'
+SELECT 'totals' AS bucket, NULL AS k,
+       (SELECT COUNT(*) FROM dune.actors WHERE class ILIKE '%PlayerCharacter%')::bigint AS v
+UNION ALL
+SELECT 'online_now', NULL,
+       (SELECT COUNT(*) FROM dune.player_state WHERE online_status::text ILIKE 'Online')::bigint
+UNION ALL
+SELECT 'distinct_factions', NULL,
+       (SELECT COUNT(DISTINCT pf.faction_id)
+        FROM dune.player_faction pf
+        WHERE pf.faction_id > 0)::bigint
+UNION ALL
+SELECT 'by_faction', COALESCE(f.name, 'Unaligned'),
+       COUNT(*)::bigint
+  FROM dune.actors a
+  LEFT JOIN dune.player_faction pf ON pf.actor_id = a.id
+  LEFT JOIN dune.factions f ON f.id = pf.faction_id
+  WHERE a.class ILIKE '%PlayerCharacter%'
+  GROUP BY 2
+UNION ALL
+SELECT 'by_map', COALESCE(a.map, '(none)'),
+       COUNT(*)::bigint
+  FROM dune.actors a
+  WHERE a.class ILIKE '%PlayerCharacter%'
+  GROUP BY 2
+ORDER BY 1, 2;
+'@
+
+function Get-DunePlayerSummaryLive {
+    param([string]$Ip)
+    $res = Invoke-DuneSqlQuery -Ip $Ip -Sql $script:DunePlayerSummarySql -ReadOnly $true -MaxRows 2000 -TimeoutSec 30
+    if (-not $res.ok) { return @{ ok = $false; error = $res.error } }
+    $totals = [ordered]@{ players = 0; online = 0; factions = 0 }
+    $byFaction = @()
+    $byMap = @()
+    foreach ($r in (ConvertTo-DuneRowMaps -Result $res)) {
+        $bucket = [string]$r['bucket']
+        switch ($bucket) {
+            'totals'             { $totals.players  = (ConvertTo-DuneInt $r['v']) }
+            'online_now'         { $totals.online   = (ConvertTo-DuneInt $r['v']) }
+            'distinct_factions'  { $totals.factions = (ConvertTo-DuneInt $r['v']) }
+            'by_faction'         { $byFaction += [ordered]@{ name = [string]$r['k']; count = (ConvertTo-DuneInt $r['v']) } }
+            'by_map'             { $byMap     += [ordered]@{ name = [string]$r['k']; count = (ConvertTo-DuneInt $r['v']) } }
+        }
+    }
+    return @{ ok = $true; totals = $totals; by_faction = $byFaction; by_map = $byMap }
+}
+
+function Get-DunePlayerSummaryDemo {
+    return @{
+        totals     = [ordered]@{ players = 4; online = 2; factions = 2 }
+        by_faction = @(
+            [ordered]@{ name = 'Atreides';   count = 2 }
+            [ordered]@{ name = 'Harkonnen';  count = 1 }
+            [ordered]@{ name = 'Unaligned';  count = 1 }
+        )
+        by_map = @(
+            [ordered]@{ name = 'Hagga Basin'; count = 3 }
+            [ordered]@{ name = 'Deep Desert'; count = 1 }
+        )
+    }
+}
+
+# ---------------------------------------------------------------------------
+# Per-player stats — currency balances, faction tier, char xp/level, last
+# avatar activity. Defensive: each subquery wrapped so a missing column on
+# older schemas degrades to NULL instead of failing the whole call.
+# ---------------------------------------------------------------------------
+$script:DunePlayerStatsSql = @'
+SELECT
+    a.id                                                              AS pawn_id,
+    COALESCE(a.owner_account_id, 0)                                   AS account_id,
+    COALESCE(ps.player_controller_id, 0)                              AS controller_id,
+    COALESCE(ps.character_name, '')                                   AS character_name,
+    a.class                                                           AS class,
+    COALESCE(a.map, '')                                               AS map,
+    COALESCE(ps.online_status::text, 'Offline')                       AS online_status,
+    COALESCE(to_char(ps.last_avatar_activity AT TIME ZONE 'UTC',
+                     'YYYY-MM-DD"T"HH24:MI:SS"Z"'), '')               AS last_seen,
+    COALESCE(pf.faction_id, 0)                                        AS faction_id,
+    COALESCE(f.name, '')                                              AS faction_name,
+    COALESCE((SELECT balance FROM dune.player_virtual_currency_balances
+              WHERE player_controller_id = ps.player_controller_id
+                AND currency_id = dune.get_solaris_id()), 0)::bigint  AS solaris,
+    COALESCE((SELECT SUM(balance) FROM dune.player_virtual_currency_balances
+              WHERE player_controller_id = ps.player_controller_id), 0)::bigint AS total_currency
+FROM dune.actors a
+LEFT JOIN dune.player_state    ps ON ps.account_id = a.owner_account_id
+LEFT JOIN dune.player_faction  pf ON pf.actor_id   = a.id
+LEFT JOIN dune.factions        f  ON f.id          = pf.faction_id
+WHERE a.id = {0}::bigint
+LIMIT 1;
+'@
+
+function Get-DunePlayerStatsLive {
+    param([string]$Ip, [long]$PawnId)
+    $sql = [string]::Format($script:DunePlayerStatsSql, $PawnId)
+    $res = Invoke-DuneSqlQuery -Ip $Ip -Sql $sql -ReadOnly $true -MaxRows 1 -TimeoutSec 30
+    if (-not $res.ok) { return @{ ok = $false; error = $res.error } }
+    $maps = ConvertTo-DuneRowMaps -Result $res
+    if (-not $maps -or $maps.Count -lt 1) { return @{ ok = $true; stats = $null } }
+    $r = $maps[0]
+    $stats = [ordered]@{
+        pawn_id        = (ConvertTo-DuneInt $r['pawn_id'])
+        account_id     = (ConvertTo-DuneInt $r['account_id'])
+        controller_id  = (ConvertTo-DuneInt $r['controller_id'])
+        character_name = [string]$r['character_name']
+        class          = (Get-DuneShortClass ([string]$r['class']))
+        map            = [string]$r['map']
+        online_status  = [string]$r['online_status']
+        last_seen      = [string]$r['last_seen']
+        faction_id     = (ConvertTo-DuneInt $r['faction_id'])
+        faction_name   = [string]$r['faction_name']
+        solaris        = (ConvertTo-DuneInt $r['solaris'])
+        total_currency = (ConvertTo-DuneInt $r['total_currency'])
+    }
+    return @{ ok = $true; stats = $stats }
+}
+
+# ---------------------------------------------------------------------------
+# Full specs view (5 tracks plus keystone count + max).
+# Keystones use the dune.purchased_specialization_keystones table keyed by
+# controller id (per dune-admin's insertAllPurchasedKeystones path).
+# Max keystone id is 205 (matches dune-admin's generate_series upper bound).
+# ---------------------------------------------------------------------------
+$script:DunePlayerSpecsFullSql = @'
+WITH tracks AS (
+    SELECT track_type::text AS track_type, xp_amount, level
+    FROM dune.specialization_tracks
+    WHERE player_id = {0}::bigint
+),
+ks_total AS (
+    SELECT COUNT(*)::bigint AS n
+    FROM dune.purchased_specialization_keystones
+    WHERE player_id = {1}::bigint
+)
+SELECT 'track' AS kind, t.track_type AS k, t.xp_amount AS v_int, t.level AS v_real FROM tracks t
+UNION ALL
+SELECT 'keystones_total', NULL, n, 0 FROM ks_total;
+'@
+
+$script:DuneSpecXpMax    = 44182
+$script:DuneSpecLevelMax = 100.0
+$script:DuneKeystoneMax  = 205
+
+function Get-DunePlayerSpecsFullLive {
+    param([string]$Ip, [long]$PawnId, [long]$ControllerId)
+    $sql = [string]::Format($script:DunePlayerSpecsFullSql, $PawnId, $ControllerId)
+    $soft = Invoke-DuneSqlSoft -Ip $Ip -Sql $sql -MaxRows 200 -TimeoutSec 30
+    if (-not $soft.ok) { return @{ ok = $false; error = $soft.error } }
+    if ($soft.unsupported) {
+        return @{ ok = $true; tracks = @(); keystones_total = 0; keystones_max = $script:DuneKeystoneMax; unsupported = $true }
+    }
+    $tracks = @()
+    $kTotal = 0
+    foreach ($r in (ConvertTo-DuneRowMaps -Result $soft.raw)) {
+        $kind = [string]$r['kind']
+        if ($kind -eq 'track') {
+            $tracks += [ordered]@{
+                track_type = [string]$r['k']
+                xp         = (ConvertTo-DuneInt $r['v_int'])
+                level      = [double]([string]$r['v_real'])
+                xp_max     = $script:DuneSpecXpMax
+                level_max  = $script:DuneSpecLevelMax
+            }
+        } elseif ($kind -eq 'keystones_total') {
+            $kTotal = (ConvertTo-DuneInt $r['v_int'])
+        }
+    }
+    return @{
+        ok              = $true
+        tracks          = $tracks
+        keystones_total = $kTotal
+        keystones_max   = $script:DuneKeystoneMax
+    }
+}
+
+# Grant max — set xp=44182 level=100 for one track. Uses dune.set_specialization_xp_and_level.
+function Invoke-DunePlayerGrantMaxSpec {
+    param([string]$Ip, [long]$PawnId, [string]$TrackType)
+    $safeTrack = ConvertTo-DuneSqlString $TrackType
+    $sql = "SELECT dune.set_specialization_xp_and_level($PawnId::bigint, '$safeTrack'::dune.specializationtracktype, $($script:DuneSpecXpMax)::integer, $($script:DuneSpecLevelMax)::real);"
+    $res = Invoke-DuneSqlQuery -Ip $Ip -Sql $sql -ReadOnly $false -MaxRows 1 -TimeoutSec 30
+    if (-not $res.ok) { return @{ ok = $false; error = $res.error } }
+    return @{ ok = $true; message = "Granted max XP for '$TrackType' (xp=$($script:DuneSpecXpMax), level=$($script:DuneSpecLevelMax))." }
+}
+
+# Reset one track — DELETE the row.
+function Invoke-DunePlayerResetSpec {
+    param([string]$Ip, [long]$PawnId, [string]$TrackType)
+    $safeTrack = ConvertTo-DuneSqlString $TrackType
+    $sql = "DELETE FROM dune.specialization_tracks WHERE player_id = $PawnId::bigint AND track_type::text = '$safeTrack';"
+    $res = Invoke-DuneSqlQuery -Ip $Ip -Sql $sql -ReadOnly $false -MaxRows 1 -TimeoutSec 30
+    if (-not $res.ok) { return @{ ok = $false; error = $res.error } }
+    return @{ ok = $true; message = "Reset '$TrackType' track for player $PawnId." }
+}
+
+# Reset ALL spec tracks (and ALL keystones) — runs both reset functions.
+function Invoke-DunePlayerResetAllSpecs {
+    param([string]$Ip, [long]$PawnId)
+    $sql = @"
+SELECT dune.reset_specialization_tracks($PawnId::bigint);
+SELECT dune.reset_specialization_keystones($PawnId::bigint);
+"@
+    $res = Invoke-DuneSqlQuery -Ip $Ip -Sql $sql -ReadOnly $false -MaxRows 1 -TimeoutSec 30
+    if (-not $res.ok) { return @{ ok = $false; error = $res.error } }
+    return @{ ok = $true; message = "Reset all spec tracks and keystones for player $PawnId." }
+}
+
+# Grant all keystones — uses controller id (per dune-admin's insertAllPurchasedKeystones).
+function Invoke-DunePlayerGrantAllKeystones {
+    param([string]$Ip, [long]$ControllerId)
+    $max = $script:DuneKeystoneMax
+    $sql = @"
+INSERT INTO dune.purchased_specialization_keystones (player_id, keystone_id)
+SELECT $ControllerId::bigint, generate_series(1, $max)
+ON CONFLICT DO NOTHING;
+"@
+    $res = Invoke-DuneSqlQuery -Ip $Ip -Sql $sql -ReadOnly $false -MaxRows 1 -TimeoutSec 30
+    if (-not $res.ok) { return @{ ok = $false; error = $res.error } }
+    return @{ ok = $true; message = "Granted all $max keystones for controller $ControllerId." }
+}
+
+# Reset all keystones — dune.reset_specialization_keystones.
+function Invoke-DunePlayerResetAllKeystones {
+    param([string]$Ip, [long]$PawnId)
+    $sql = "SELECT dune.reset_specialization_keystones($PawnId::bigint);"
+    $res = Invoke-DuneSqlQuery -Ip $Ip -Sql $sql -ReadOnly $false -MaxRows 1 -TimeoutSec 30
+    if (-not $res.ok) { return @{ ok = $false; error = $res.error } }
+    return @{ ok = $true; message = "Reset all keystones for player $PawnId." }
+}
+
+# ---------------------------------------------------------------------------
+# Player tags (labels like VIP / Verified / Probation). Stored in
+# dune.player_tags(account_id, tag). Read returns string[]; write replaces
+# the full set for an account.
+# ---------------------------------------------------------------------------
+function Get-DunePlayerTagsLive {
+    param([string]$Ip, [long]$AccountId)
+    $sql = "SELECT tag FROM dune.player_tags WHERE account_id = $AccountId::bigint ORDER BY tag;"
+    $soft = Invoke-DuneSqlSoft -Ip $Ip -Sql $sql -MaxRows 200 -TimeoutSec 30
+    if (-not $soft.ok) { return @{ ok = $false; error = $soft.error } }
+    if ($soft.unsupported) { return @{ ok = $true; tags = @(); unsupported = $true } }
+    $tags = @()
+    foreach ($r in (ConvertTo-DuneRowMaps -Result $soft.raw)) {
+        $t = [string]$r['tag']
+        if ($t) { $tags += $t }
+    }
+    return @{ ok = $true; tags = $tags }
+}
+
+function Invoke-DunePlayerSetTags {
+    param([string]$Ip, [long]$AccountId, [string[]]$Tags)
+    $clean = @()
+    foreach ($t in @($Tags)) {
+        $s = ([string]$t).Trim()
+        if ($s -and $s.Length -le 64) { $clean += $s }
+    }
+    $values = if ($clean.Count -gt 0) {
+        ($clean | ForEach-Object { "($AccountId::bigint, '" + (ConvertTo-DuneSqlString $_) + "')" }) -join ', '
+    } else { $null }
+    $sqlParts = @("DELETE FROM dune.player_tags WHERE account_id = $AccountId::bigint;")
+    if ($values) { $sqlParts += "INSERT INTO dune.player_tags (account_id, tag) VALUES $values ON CONFLICT DO NOTHING;" }
+    $sql = $sqlParts -join "`n"
+    $res = Invoke-DuneSqlQuery -Ip $Ip -Sql $sql -ReadOnly $false -MaxRows 1 -TimeoutSec 30
+    if (-not $res.ok) { return @{ ok = $false; error = $res.error } }
+    return @{ ok = $true; message = "Tags updated for account $AccountId ($($clean.Count) tag(s))."; tags = $clean }
+}
+
+# ---------------------------------------------------------------------------
+# Recent events (history). Joins event_log to accounts via fls_id.
+# Returns most recent N rows; meta is JSON kept as a string for the client.
+# ---------------------------------------------------------------------------
+$script:DunePlayerEventsSql = @'
+SELECT
+    el.id,
+    COALESCE(to_char(el.created_at AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS"Z"'), '') AS ts,
+    COALESCE(el.event_type::text, '')   AS event_type,
+    COALESCE(el.meta::text, '{}')        AS meta_json
+FROM dune.event_log el
+JOIN dune.accounts ac ON ac."user" = el.meta->>'fls_id'
+WHERE ac.id = {0}::bigint
+ORDER BY el.created_at DESC
+LIMIT {1};
+'@
+
+function Get-DunePlayerEventsLive {
+    param([string]$Ip, [long]$AccountId, [int]$Limit = 100)
+    if ($Limit -le 0 -or $Limit -gt 500) { $Limit = 100 }
+    $sql = [string]::Format($script:DunePlayerEventsSql, $AccountId, $Limit)
+    $soft = Invoke-DuneSqlSoft -Ip $Ip -Sql $sql -MaxRows ($Limit + 10) -TimeoutSec 30
+    if (-not $soft.ok) { return @{ ok = $false; error = $soft.error } }
+    if ($soft.unsupported) { return @{ ok = $true; events = @(); unsupported = $true } }
+    $events = @()
+    foreach ($r in (ConvertTo-DuneRowMaps -Result $soft.raw)) {
+        $events += [ordered]@{
+            id         = (ConvertTo-DuneInt $r['id'])
+            ts         = [string]$r['ts']
+            event_type = [string]$r['event_type']
+            meta       = [string]$r['meta_json']
+        }
+    }
+    return @{ ok = $true; events = $events }
+}
+
+# Demo data for new sections — used when live DB is unreachable.
+function Get-DunePlayerStatsDemo {
+    param([long]$PawnId)
+    return [ordered]@{
+        pawn_id = $PawnId; account_id = 9001; controller_id = 30001
+        character_name = 'Duncan Idaho'; class = 'PlayerCharacter'
+        map = 'Hagga Basin'; online_status = 'Online'
+        last_seen = '2026-06-12T06:00:00Z'
+        faction_id = 1; faction_name = 'Atreides'
+        solaris = 125000; total_currency = 132100
+    }
+}
+
+function Get-DunePlayerSpecsFullDemo {
+    return @{
+        tracks = @(
+            [ordered]@{ track_type='Combat';      xp=44182; level=100.0; xp_max=44182; level_max=100.0 }
+            [ordered]@{ track_type='Crafting';    xp=18250; level=42.0;  xp_max=44182; level_max=100.0 }
+            [ordered]@{ track_type='Exploration'; xp=8900;  level=21.0;  xp_max=44182; level_max=100.0 }
+            [ordered]@{ track_type='Gathering';   xp=12500; level=30.0;  xp_max=44182; level_max=100.0 }
+            [ordered]@{ track_type='Sabotage';    xp=0;     level=0.0;   xp_max=44182; level_max=100.0 }
+        )
+        keystones_total = 87
+        keystones_max   = 205
+    }
+}
+
+function Get-DunePlayerTagsDemo { return @('VIP', 'Discord Verified') }
+
+function Get-DunePlayerEventsDemo {
+    return @(
+        [ordered]@{ id=1; ts='2026-06-12T05:55:00Z'; event_type='give_currency'; meta='{"solaris_delta":50000,"by":"admin"}' }
+        [ordered]@{ id=2; ts='2026-06-12T05:42:00Z'; event_type='login';         meta='{"map":"Hagga Basin"}' }
+        [ordered]@{ id=3; ts='2026-06-11T22:10:00Z'; event_type='logout';        meta='{}' }
+    )
+}
