@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { Icon } from './Icon'
 import { getMigrationNotice, ackMigrationNotice, type MigrationNotice } from '../api/update'
+import { isLocalViewer } from '../util/viewer'
 
 // Blocking, one-time notice shown to anyone upgrading across the dune-admin
 // decoupling (pre-12.x -> 12.x). It explains that DST no longer bundles or
@@ -8,6 +9,11 @@ import { getMigrationNotice, ackMigrationNotice, type MigrationNotice } from '..
 // their old dune-admin folder lives so they can still run it. The update flow
 // is gated server-side until this is acknowledged, and the overlay sits above
 // the whole app so it can't be skipped.
+//
+// Host-only: launching dune-admin and the folder path are concerns for the
+// machine running the server, not a remote Tailscale / LAN viewer. Remote
+// viewers are never shown the notice (and the backend refuses to hand them the
+// path or accept their acknowledgement).
 export function DecoupleNoticeModal() {
   const [notice, setNotice] = useState<MigrationNotice | null>(null)
   const [acked, setAcked] = useState(false)
@@ -16,6 +22,7 @@ export function DecoupleNoticeModal() {
   const [copied, setCopied] = useState(false)
 
   useEffect(() => {
+    if (!isLocalViewer()) return
     let cancelled = false
     getMigrationNotice()
       .then((n) => { if (!cancelled) setNotice(n) })
@@ -23,6 +30,7 @@ export function DecoupleNoticeModal() {
     return () => { cancelled = true }
   }, [])
 
+  if (!isLocalViewer()) return null
   if (!notice || !notice.needed || acked) return null
 
   const portalUrl = notice.portalUrl || 'https://dune-admin.layout.tools'
