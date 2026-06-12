@@ -744,6 +744,23 @@ function Confirm-NoPlayersOnline {
     return ($proceed -eq "YES")
 }
 
+# Returns $true if any battlegroup pod (sg/mq/sgw/tr/bgd) is currently
+# present on the VM. Used to short-circuit `battlegroup stop` calls when
+# nothing is running -- otherwise the VM-side helper script runs its own
+# 90-second polling loop even when the namespace is already empty.
+function Test-DuneBattlegroupHasPods {
+    param(
+        [Parameter(Mandatory)] [string] $Ip,
+        [Parameter(Mandatory)] [string] $SshUser,
+        [Parameter(Mandatory)] [string] $SshKey
+    )
+    $raw = ssh -o BatchMode=yes -o StrictHostKeyChecking=no -o LogLevel=QUIET -i "$SshKey" "$SshUser@$Ip" `
+        "sudo k3s kubectl get pods -A --no-headers 2>/dev/null | grep -E '(-sg-|-mq-|-sgw-|-tr-|-bgd-)' | wc -l"
+    $n = ($raw -replace '\D','')
+    if (-not $n) { return $false }
+    return ([int]$n -gt 0)
+}
+
 function Wait-MapPodReady {
     param(
         [Parameter(Mandatory)] [string] $Ip,
@@ -1470,10 +1487,14 @@ while ($true) {
         # ---- Step 1: stop battlegroup ----
         Write-Host ""
         Write-Host "[1/3] Stopping battlegroup..." -ForegroundColor Cyan
-        ssh -t -o StrictHostKeyChecking=no -o LogLevel=QUIET -i "$sshKey" "$sshUser@$ip" "$bgBinPath stop"
-        if ($LASTEXITCODE -ne 0) {
-            Write-Warning "battlegroup stop returned exit code $LASTEXITCODE. Aborting reboot."
-            continue
+        if (-not (Test-DuneBattlegroupHasPods -Ip $ip -SshUser $sshUser -SshKey $sshKey)) {
+            Write-Host "  Battlegroup not running (no game/infra pods) - skipping stop." -ForegroundColor DarkGray
+        } else {
+            ssh -t -o StrictHostKeyChecking=no -o LogLevel=QUIET -i "$sshKey" "$sshUser@$ip" "$bgBinPath stop"
+            if ($LASTEXITCODE -ne 0) {
+                Write-Warning "battlegroup stop returned exit code $LASTEXITCODE. Aborting reboot."
+                continue
+            }
         }
 
         # Wait for game/infra pods to fully terminate (only db/fb/operator pods should remain).
@@ -1727,11 +1748,15 @@ while ($true) {
         # ---- Step 1: stop battlegroup ----
         Write-Host ""
         Write-Host "[1/2] Stopping battlegroup..." -ForegroundColor Cyan
-        ssh -t -o StrictHostKeyChecking=no -o LogLevel=QUIET -i "$sshKey" "$sshUser@$ip" "$bgBinPath stop"
-        if ($LASTEXITCODE -ne 0) {
-            Write-Warning "battlegroup stop returned exit code $LASTEXITCODE."
-            $force = Read-Host "Continue with VM shutdown anyway? (YES to continue)"
-            if ($force -ne "YES") { continue }
+        if (-not (Test-DuneBattlegroupHasPods -Ip $ip -SshUser $sshUser -SshKey $sshKey)) {
+            Write-Host "  Battlegroup not running (no game/infra pods) - skipping stop." -ForegroundColor DarkGray
+        } else {
+            ssh -t -o StrictHostKeyChecking=no -o LogLevel=QUIET -i "$sshKey" "$sshUser@$ip" "$bgBinPath stop"
+            if ($LASTEXITCODE -ne 0) {
+                Write-Warning "battlegroup stop returned exit code $LASTEXITCODE."
+                $force = Read-Host "Continue with VM shutdown anyway? (YES to continue)"
+                if ($force -ne "YES") { continue }
+            }
         }
 
         # Wait for game/infra pods to terminate so player data is fully persisted to DB.
