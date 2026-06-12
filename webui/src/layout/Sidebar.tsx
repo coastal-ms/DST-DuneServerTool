@@ -110,9 +110,11 @@ export function Sidebar({ collapsed }: Props) {
           collapsed ? 'px-2 justify-center' : 'px-5'
         } py-4 border-b border-border flex items-center gap-2.5`}
       >
-        <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-accent-bright to-accent flex items-center justify-center shadow-lg shadow-accent/20 shrink-0">
-          <Icon name="Hexagon" size={18} className="text-base" strokeWidth={2.5} />
-        </div>
+        <img
+          src="/logo.png"
+          alt="Dune Server Tool logo"
+          className="w-9 h-9 rounded-full shrink-0 object-contain"
+        />
         {!collapsed && (
           <div className="flex-1 min-w-0">
             <div className="text-sm font-semibold tracking-wide">Dune Server Tool</div>
