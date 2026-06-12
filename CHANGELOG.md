@@ -13,6 +13,36 @@ here cover everything those tags shipped.
 
 ## [Unreleased]
 
+## [11.5.5] - 2026-06-12
+
+### Fixed
+- **Market Bot mask harvest no longer hangs the UI.** v11.5.4 added a
+  per-list-tick `SELECT DISTINCT template_id, category_mask FROM
+  dune.dune_exchange_orders` call that ran on every 30-min list tick. When
+  the SSH control socket got wedged (a known intermittent failure mode of
+  long-lived ssh sessions), that 60s timeout cascaded into every UI refresh
+  that hit `/api/bot/listings/preview`, freezing every panel because the
+  HTTP listener fell back to single-threaded inline dispatch.
+- Mask refresh is now throttled by a new `mask_refresh_interval` config
+  (default **6 hours**). Funcom category masks are server-binary constants
+  per `template_id` so daily-scale harvest is plenty — the bundled 1378-
+  entry seed already covers ~83% of the catalog on every install.
+- The mask-refresh timestamp is stamped to disk **before** the SSH call, so
+  a wedged ssh that gets killed at the 15s timeout cannot cause back-to-
+  back retries on every subsequent tick.
+- `Invoke-DuneBotListTick` now writes `state.last_list_tick` at the start
+  of the non-dry-run path, so a SSH hang downstream cannot cause the
+  scheduler to re-fire the same tick 15 s later.
+- Tightened mask-harvest SSH timeout from 60s to **15s** and vendor
+  snapshot SSH timeout from 60s to **25s** so a wedged connection fails
+  fast instead of blocking the entire backend.
+- Hardened all scheduler/throttle timestamp comparisons against PowerShell
+  5.1's `ConvertFrom-Json` ISO 8601 → DateTime auto-conversion, which
+  double-shifted parsed times (string round-trip + `.ToUniversalTime()`)
+  and could push the "last run" instant hours into the future, defeating
+  every elapsed-time check. A new `ConvertTo-DuneBotUtcInstant` helper
+  normalises both string and DateTime inputs to a true UTC instant.
+
 ## [11.5.4] - 2026-06-12
 
 ### Added
