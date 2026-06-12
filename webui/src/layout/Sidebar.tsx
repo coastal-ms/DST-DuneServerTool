@@ -117,6 +117,7 @@ export function Sidebar({ collapsed }: Props) {
           <div className="flex-1 min-w-0">
             <div className="text-sm font-semibold tracking-wide">Dune Server Tool</div>
             <div className="text-[10px] text-text-dim uppercase tracking-widest">Management Portal</div>
+            <div className="text-[10px] text-text-dim tracking-wide mt-0.5">Thank you Hawk_I5</div>
           </div>
         )}
       </div>
