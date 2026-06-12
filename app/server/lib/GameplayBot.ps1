@@ -1243,7 +1243,12 @@ SELECT id, $stack, $ItemPrice FROM ins_orders;
 function Invoke-DuneBotSeedMarket {
     param(
         [switch]$DryRun,
-        [int]$ChunkSize = 200
+        # 50 templates × listings_per_grade (default 5) = ~250 inserts per chunk.
+        # 200 was too big on slower VMs — the SSH read timed out at 300s even
+        # though Postgres had already committed, leaving the seed in a false
+        # "chunk 1 failed" state. 50 keeps each chunk well under a minute on
+        # constrained hardware AND lets the progress bar update 4× as often.
+        [int]$ChunkSize = 50
     )
     $cfg = Read-DuneBotConfig
     # Force catalog-seed mode for this call regardless of saved config — the
@@ -1399,7 +1404,7 @@ function Invoke-DuneBotSeedMarket {
             [void]$sb.AppendLine($chunk)
         }
         [void]$sb.AppendLine('COMMIT;')
-        $r = Invoke-DuneSqlQuery -Ip $ctx.ip -Sql ($sb.ToString()) -ReadOnly $false -MaxRows 5 -TimeoutSec 300 -Bulk
+        $r = Invoke-DuneSqlQuery -Ip $ctx.ip -Sql ($sb.ToString()) -ReadOnly $false -MaxRows 5 -TimeoutSec 600 -Bulk
         $summary.chunks++
         if ($r.ok) {
             # Sum up the planned insertions in this chunk into the running total.
