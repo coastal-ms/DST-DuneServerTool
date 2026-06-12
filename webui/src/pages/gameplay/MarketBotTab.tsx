@@ -137,7 +137,13 @@ export function MarketBotTab() {
     setListTicking(true); setListTick(null); setError(null)
     try {
       const r = await runBotListTick(false)
-      setListTick(r)
+      if (!r.ok && !r.running) {
+        setError(r.error ?? 'Failed to start list tick.')
+        return
+      }
+      // Live tick is async server-side — refresh status so the button stays
+      // disabled while list_tick_progress.running is true, and let the
+      // existing 10s status poll pick up the completion.
       getBotStatus().then(setStatus).catch(() => {})
     } catch (e) { setError(e instanceof Error ? e.message : String(e)) }
     finally { setListTicking(false) }
@@ -145,6 +151,8 @@ export function MarketBotTab() {
 
   const seedProgress: BotSeedProgress | null = status?.seed_progress ?? null
   const seeding = !!seedProgress?.running
+  const listTickRunningServer = !!status?.list_tick_progress?.running
+  const listTickBusy = listTicking || listTickRunningServer
   const [dismissingError, setDismissingError] = useState(false)
 
   const dismissError = async () => {
@@ -178,15 +186,16 @@ export function MarketBotTab() {
     }
   }
 
-  // While a seed is running, poll status every 2s instead of 10s so the
-  // progress bar actually moves. Reverts to normal cadence once it stops.
+  // While a seed OR list tick is running, poll status every 2s instead of
+  // 10s so the progress bar / button state updates promptly. Reverts to
+  // normal cadence once both finish.
   useEffect(() => {
-    if (!seeding) return
+    if (!seeding && !listTickRunningServer) return
     const id = window.setInterval(() => {
       getBotStatus().then(setStatus).catch(() => {})
     }, 2000)
     return () => window.clearInterval(id)
-  }, [seeding])
+  }, [seeding, listTickRunningServer])
 
   const maintainBalance = async () => {
     if (!draft) return
@@ -388,7 +397,7 @@ export function MarketBotTab() {
       )}
 
       {draft && sub === 'list' && (
-        <ListSection draft={draft} setDraft={setDraft} listTick={listTick} listTicking={listTicking}
+        <ListSection draft={draft} setDraft={setDraft} listTick={listTick} listTicking={listTickBusy}
           snapshot={snapshot} snapshotLoading={snapshotLoading}
           seeding={seeding} seedLaunchError={seedLaunchError}
           clearing={clearing}

@@ -371,9 +371,25 @@ Register-DuneRoute -Method POST -Path '/api/gameplay/market-bot/tick/list' -Hand
         $q = (Get-DuneQ -Request $req -Name 'dry').ToLower()
         if ($q -eq '1' -or $q -eq 'true' -or $q -eq 'yes') { $dry = $true }
         if (Test-DuneBodyTruthy -Body $body -Name 'dryRun') { $dry = $true }
-        $summary = Invoke-DuneBotListTick -DryRun:$dry
-        $status = if ($summary.ok) { 200 } else { 503 }
-        Write-DuneJson -Response $res -Status $status -Body $summary
+
+        if ($dry) {
+            $summary = Invoke-DuneBotListTick -DryRun
+            $status = if ($summary.ok) { 200 } else { 503 }
+            Write-DuneJson -Response $res -Status $status -Body $summary
+            return
+        }
+
+        # Live list tick is dispatched to a background runspace so the
+        # single HTTP server runspace stays free to handle status polls and
+        # other UI traffic. The button spinner clears on the 202; progress
+        # comes back via Get-DuneNativeBotStatus.list_tick_progress.
+        $launch = Start-DuneBotListTickAsync
+        if (-not $launch.ok) {
+            $status = if ($launch.running) { 409 } else { 500 }
+            Write-DuneJson -Response $res -Status $status -Body $launch
+            return
+        }
+        Write-DuneJson -Response $res -Status 202 -Body $launch
     } catch {
         Write-DuneError -Response $res -Status 500 -Message "Bot list tick failed: $($_.Exception.Message)"
     }
