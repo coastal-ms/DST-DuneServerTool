@@ -139,6 +139,16 @@ function ConvertTo-DuneRowMaps {
 
 function ConvertTo-DuneInt {
     param($Value)
+    if ($null -eq $Value) { return 0L }
+    # Defend against single-element arrays / Object[] coming out of
+    # ConvertFrom-Json for ambiguously typed JSON values. PowerShell's
+    # [int]@(5) cast is unreliable and [int]$arr fails outright with
+    # "Cannot convert ... System.Object[] to System.Int32".
+    if ($Value -is [System.Array] -or $Value -is [System.Collections.IList]) {
+        $arr = @($Value)
+        if ($arr.Count -eq 0) { return 0L }
+        $Value = $arr[0]
+    }
     $n = 0L
     if ([Int64]::TryParse([string]$Value, [ref]$n)) { return $n }
     return 0L
