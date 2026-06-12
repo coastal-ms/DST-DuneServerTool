@@ -264,7 +264,9 @@ function Get-DuneMarketListingsLive {
             order_id    = [string]$r['id']
             template_id = [string]$r['template_id']
             owner_type  = if ($isNpc) { 'bot' } else { 'player' }
-            owner_name  = if ($isNpc) { 'Duke' } else { [string]$r['owner_name'] }
+            # owner_name = actor.class for NPCs (Duke, Revy, etc.) or the
+            # character_name fallback for players; never hard-code one bot name.
+            owner_name  = [string]$r['owner_name']
             price       = (ConvertTo-DuneInt $r['item_price']) * 10
             stock       = (ConvertTo-DuneInt $r['stock'])
             quality     = (ConvertTo-DuneInt $r['quality'])
@@ -284,7 +286,7 @@ function Get-DuneMarketSalesLive {
             order_id    = [string]$r['order_id']
             template_id = [string]$r['template_id']
             seller_type = if ($isNpc) { 'bot' } else { 'player' }
-            seller_name = if ($isNpc) { 'Duke' } else { [string]$r['seller_name'] }
+            seller_name = [string]$r['seller_name']
             price       = (ConvertTo-DuneInt $r['item_price']) * 10
             quantity    = (ConvertTo-DuneInt $r['stack_size'])
         }

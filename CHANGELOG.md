@@ -15,6 +15,60 @@ here cover everything those tags shipped.
 
 ## [11.5.2] - 2026-06-11
 
+### Added
+- **Native Market Bot ("Duke") sell side — listing tick, sane-pricing
+  formula, and per-template overrides.** Duke (the native bot) used to
+  only *buy* player listings; it now also *lists* its own NPC stock on
+  the in-game market. On each list tick the bot snapshots live NPC
+  vendor inventory from `dune.dune_exchange_orders`, applies the
+  sane-pricing formula (tier base price × category factor × rarity
+  multiplier × vendor multiplier × grade multiplier), and tops every
+  (template, grade) up to a configurable per-grade quota. A hard
+  **100,000 Solari cap** is enforced for every price, every time
+  (matches the dune-admin sane-pricing patch). Stale listings priced
+  more than 20% away from the new target are purged before re-listing.
+  Buy ticks and list ticks run on independent intervals from the same
+  in-process scheduler — no extra service.
+- **Market Bot tab: full sell-side UI.** New *List side* sub-tab with
+  dry-run + live list-tick buttons, listing-tuning controls
+  (`list_tick_interval`, `listings_per_grade`, `stackables_only`,
+  `price_cap`, `default_unit_price`), a *Vendor snapshot preview*
+  table that shows what the bot **would** list (derived from the live
+  NPC vendor inventory, before writing) and the target price for each
+  row. New *Pricing rules* sub-tab with editable tier base prices,
+  stack unit prices, category factors, rarity multipliers, grade
+  multipliers, vendor multipliers, and a per-template price-override
+  table.
+- **Honest NPC listing counters.** The Market Bot status strip now
+  reports **Duke's listings** *and* **total NPC listings** separately,
+  plus a per-actor-class breakdown chip row so it's obvious when there
+  are NPC listings owned by something other than Duke (e.g. leftover
+  Revy orphans from the old external dune-admin bot integration). A
+  *Last list tick* timestamp sits next to *Last buy tick*.
+- **Wipe legacy NPC listings.** One-click cleanup button on the Market
+  Bot tab that permanently deletes any NPC `dune_exchange_orders`
+  whose actor `class` is not `Duke` (Revy orphans, etc.). Player
+  listings and Duke's own listings are never touched. Hidden when
+  there are no legacy rows; warns with the exact row count when
+  there are.
+- **Tier-1 access-point exchange detection.** `Get-DuneBotIdentity`
+  now tries to resolve Duke's exchange via
+  `dune.dune_exchange_accesspoints` (Tier 1 access point) before
+  falling back to the existing actor-name / hardcoded lookups, so the
+  bot can self-provision on a fresh server with no Duke yet.
+
+### Changed
+- **Market tab owner labels are now honest.** The Sales and Listings
+  panes previously hardcoded `Duke` for every NPC row. The SQL already
+  projected `COALESCE(player_state.character_name, actors.class,
+  'Unknown')`; the UI now actually surfaces that column, so leftover
+  Revy / other-class NPC orders are labelled correctly.
+- **Sane-pricing one-shot migration.** The first time a v11.5.2 server
+  loads its bot config, the six pricing-multiplier tables are
+  force-written to the dune-admin sane-pricing defaults (gated by
+  `sane_defaults_revision < 1`, so subsequent edits are preserved on
+  later restarts).
+
 ### Fixed
 - **Gameplay → Blueprints: offline players' blueprints now show their
   owner.** The list query previously joined `player_state` through the
@@ -26,6 +80,9 @@ here cover everything those tags shipped.
   actors.owner_account_id`, the same pattern the Storage view uses), with
   the original pawn-based link kept as a COALESCE fallback for parity.
   Read-only change, only affects the `owner_name` column.
+- **Buy-tick candidate query now returns `quality_level`.** Older
+  servers without a `quality_level` column on `dune_exchange_orders`
+  still work via a `COALESCE(o.quality_level, 0)` guard.
 
 ## [11.5.1] - 2026-06-11
 

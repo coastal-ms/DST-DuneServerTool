@@ -119,7 +119,7 @@ export function MarketTab() {
           sub={`${fmtNum(stats?.bot_listings)} bot · ${fmtNum(stats?.player_listings)} player`} />
         <StatCard label="Unique items" value={fmtNum(stats?.unique_items)} icon="Boxes" />
         <StatCard label="Total stock" value={fmtNum(stats?.total_stock)} icon="Package"
-          sub={`${fmtNum(stats?.bot_stock)} on Duke`} />
+          sub={`${fmtNum(stats?.bot_stock)} on bots`} />
         <StatCard label="Bot stock share" icon="Bot"
           value={stats && stats.total_stock > 0 ? `${Math.round((stats.bot_stock / stats.total_stock) * 100)}%` : '—'} />
       </section>

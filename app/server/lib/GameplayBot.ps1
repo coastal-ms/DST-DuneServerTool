@@ -48,6 +48,7 @@ function Get-DuneBotStatePath {
 function Get-DuneBotConfigDefaults {
     [ordered]@{
         enabled           = $false
+        # Buy side (existing — d12 gamble buy).
         buy_tick_interval = 120
         max_buys_per_tick = 25
         die_size          = 12
@@ -55,7 +56,50 @@ function Get-DuneBotConfigDefaults {
         target_balance    = 9000000000000
         maintain_balance  = $true
         disabled_items    = @()
+        # ----- Listing side (sane-pricing port of dune-admin/internal/marketbot) -----
+        list_tick_interval   = 1800          # 30 min between list ticks
+        listings_per_grade   = 5             # concurrent NPC listings per (template, grade)
+        stackables_only      = $true         # v11.5.2 scope: skip gradeable gear
+        price_cap            = 100000        # HARD ceiling in Solari (sane-pricing patch)
+        default_unit_price   = 100           # fallback for unknown templates
+        # Per-tier base prices, mirroring 0001-sane-pricing-100k-cap.patch.
+        tier_base_prices     = @{ '0' = 10; '1' = 50; '2' = 200; '3' = 800; '4' = 3000; '5' = 10000; '6' = 30000 }
+        stack_unit_prices    = @{ '0' = 1;  '1' = 1;  '2' = 5;   '3' = 20;  '4' = 75;   '5' = 250;   '6' = 800   }
+        category_factors     = @{ augment = 0.6; schematic = 1.0; gear = 0.8 }
+        grade_multipliers    = @(1.0, 1.25, 1.55, 2.0, 2.6, 3.3)
+        rarity_multipliers   = @{ common = 1.0; rare = 1.03; unique = 1.05; memento = 1.08 }
+        vendor_multipliers   = @{ all = 0.95 }
+        # Per-template manual price override (template_id -> integer Solari).
+        price_overrides      = @{}
+        # Marker for one-time sane-defaults migration on load.
+        sane_defaults_revision = 1
     }
+}
+
+# Coerce a JSON-deserialised PSCustomObject (or null) into a plain hashtable
+# whose values are numeric. Used for tier/stack/rarity/multiplier configs.
+function ConvertFrom-DuneBotJsonMap {
+    param($Value, [hashtable]$Default, [switch]$IntValues)
+    if ($null -eq $Value) { return $Default }
+    $out = @{}
+    if ($Value -is [System.Collections.IDictionary]) {
+        foreach ($k in $Value.Keys) { $out[[string]$k] = if ($IntValues) { [int]$Value[$k] } else { [double]$Value[$k] } }
+    } elseif ($Value.PSObject -and $Value.PSObject.Properties) {
+        foreach ($p in $Value.PSObject.Properties) {
+            try { $out[[string]$p.Name] = if ($IntValues) { [int]$p.Value } else { [double]$p.Value } } catch {}
+        }
+    }
+    if ($out.Count -eq 0) { return $Default }
+    return $out
+}
+
+function ConvertFrom-DuneBotJsonArray {
+    param($Value, [array]$Default)
+    if ($null -eq $Value) { return $Default }
+    $arr = @()
+    foreach ($v in @($Value)) { try { $arr += [double]$v } catch {} }
+    if ($arr.Count -eq 0) { return $Default }
+    return ,$arr
 }
 
 function Read-DuneBotConfig {
@@ -68,13 +112,36 @@ function Read-DuneBotConfig {
                 if ($null -ne $json.PSObject.Properties[$k]) {
                     $v = $json.$k
                     switch ($k) {
-                        'enabled'          { $cfg[$k] = [bool]$v }
-                        'maintain_balance' { $cfg[$k] = [bool]$v }
-                        'disabled_items'   { $cfg[$k] = @($v | ForEach-Object { [string]$_ } | Where-Object { $_ }) }
-                        'target_balance'   { $cfg[$k] = [int64]$v }
-                        default            { $cfg[$k] = [int]$v }
+                        'enabled'              { $cfg[$k] = [bool]$v }
+                        'maintain_balance'     { $cfg[$k] = [bool]$v }
+                        'stackables_only'      { $cfg[$k] = [bool]$v }
+                        'disabled_items'       { $cfg[$k] = @($v | ForEach-Object { [string]$_ } | Where-Object { $_ }) }
+                        'target_balance'       { $cfg[$k] = [int64]$v }
+                        'tier_base_prices'     { $cfg[$k] = ConvertFrom-DuneBotJsonMap -Value $v -Default $cfg[$k] -IntValues }
+                        'stack_unit_prices'    { $cfg[$k] = ConvertFrom-DuneBotJsonMap -Value $v -Default $cfg[$k] -IntValues }
+                        'category_factors'     { $cfg[$k] = ConvertFrom-DuneBotJsonMap -Value $v -Default $cfg[$k] }
+                        'rarity_multipliers'   { $cfg[$k] = ConvertFrom-DuneBotJsonMap -Value $v -Default $cfg[$k] }
+                        'vendor_multipliers'   { $cfg[$k] = ConvertFrom-DuneBotJsonMap -Value $v -Default $cfg[$k] }
+                        'grade_multipliers'    { $cfg[$k] = ConvertFrom-DuneBotJsonArray -Value $v -Default $cfg[$k] }
+                        'price_overrides'      { $cfg[$k] = ConvertFrom-DuneBotJsonMap -Value $v -Default @{} -IntValues }
+                        default                { $cfg[$k] = [int]$v }
                     }
                 }
+            }
+            # One-shot migration: if a pre-listing config is loaded, force-overwrite
+            # the multiplier tables to the patched sane-pricing defaults so users
+            # don't get stuck with stale legacy values.
+            $rev = 0
+            if ($json.PSObject.Properties['sane_defaults_revision']) { try { $rev = [int]$json.sane_defaults_revision } catch {} }
+            if ($rev -lt 1) {
+                $defaults = Get-DuneBotConfigDefaults
+                $cfg['tier_base_prices']    = $defaults['tier_base_prices']
+                $cfg['stack_unit_prices']   = $defaults['stack_unit_prices']
+                $cfg['category_factors']    = $defaults['category_factors']
+                $cfg['grade_multipliers']   = $defaults['grade_multipliers']
+                $cfg['rarity_multipliers']  = $defaults['rarity_multipliers']
+                $cfg['vendor_multipliers']  = $defaults['vendor_multipliers']
+                $cfg['sane_defaults_revision'] = 1
             }
         } catch {}
     }
@@ -95,16 +162,30 @@ function Save-DuneBotConfig {
     }
     $v = _Get $Incoming 'enabled';           if ($null -ne $v) { $cfg['enabled'] = [bool]$v }
     $v = _Get $Incoming 'maintain_balance';  if ($null -ne $v) { $cfg['maintain_balance'] = [bool]$v }
+    $v = _Get $Incoming 'stackables_only';   if ($null -ne $v) { $cfg['stackables_only'] = [bool]$v }
     $v = _Get $Incoming 'buy_tick_interval'; if ($null -ne $v) { $cfg['buy_tick_interval'] = [Math]::Max(10,  [int]$v) }
+    $v = _Get $Incoming 'list_tick_interval';if ($null -ne $v) { $cfg['list_tick_interval'] = [Math]::Max(60, [int]$v) }
+    $v = _Get $Incoming 'listings_per_grade';if ($null -ne $v) { $cfg['listings_per_grade'] = [Math]::Min(50, [Math]::Max(1, [int]$v)) }
+    $v = _Get $Incoming 'price_cap';         if ($null -ne $v) { $cfg['price_cap'] = [Math]::Max(1, [int]$v) }
+    $v = _Get $Incoming 'default_unit_price';if ($null -ne $v) { $cfg['default_unit_price'] = [Math]::Max(1, [int]$v) }
     $v = _Get $Incoming 'max_buys_per_tick'; if ($null -ne $v) { $cfg['max_buys_per_tick'] = [Math]::Min(500, [Math]::Max(1, [int]$v)) }
     $v = _Get $Incoming 'die_size';          if ($null -ne $v) { $cfg['die_size']   = [Math]::Min(1000, [Math]::Max(2, [int]$v)) }
     $v = _Get $Incoming 'die_target';        if ($null -ne $v) { $cfg['die_target'] = [Math]::Max(1, [int]$v) }
     $v = _Get $Incoming 'target_balance';    if ($null -ne $v) { $cfg['target_balance'] = [Math]::Max(0L, [int64]$v) }
     $v = _Get $Incoming 'disabled_items'
     if ($null -ne $v) { $cfg['disabled_items'] = @($v | ForEach-Object { [string]$_ } | Where-Object { $_ }) }
+    $v = _Get $Incoming 'tier_base_prices';  if ($null -ne $v) { $cfg['tier_base_prices']   = ConvertFrom-DuneBotJsonMap -Value $v -Default $cfg['tier_base_prices']   -IntValues }
+    $v = _Get $Incoming 'stack_unit_prices'; if ($null -ne $v) { $cfg['stack_unit_prices']  = ConvertFrom-DuneBotJsonMap -Value $v -Default $cfg['stack_unit_prices']  -IntValues }
+    $v = _Get $Incoming 'category_factors';  if ($null -ne $v) { $cfg['category_factors']   = ConvertFrom-DuneBotJsonMap -Value $v -Default $cfg['category_factors']  }
+    $v = _Get $Incoming 'rarity_multipliers';if ($null -ne $v) { $cfg['rarity_multipliers'] = ConvertFrom-DuneBotJsonMap -Value $v -Default $cfg['rarity_multipliers']}
+    $v = _Get $Incoming 'vendor_multipliers';if ($null -ne $v) { $cfg['vendor_multipliers'] = ConvertFrom-DuneBotJsonMap -Value $v -Default $cfg['vendor_multipliers']}
+    $v = _Get $Incoming 'grade_multipliers'; if ($null -ne $v) { $cfg['grade_multipliers']  = ConvertFrom-DuneBotJsonArray -Value $v -Default $cfg['grade_multipliers'] }
+    $v = _Get $Incoming 'price_overrides';   if ($null -ne $v) { $cfg['price_overrides']    = ConvertFrom-DuneBotJsonMap -Value $v -Default @{} -IntValues }
 
     # die_target must be within 1..die_size to ever win.
     if ($cfg['die_target'] -gt $cfg['die_size']) { $cfg['die_target'] = $cfg['die_size'] }
+    # Bump the revision so a config saved through the UI is never re-migrated.
+    $cfg['sane_defaults_revision'] = 1
 
     $path = Get-DuneBotConfigPath
     $dir = Split-Path -Parent $path
@@ -115,10 +196,12 @@ function Save-DuneBotConfig {
 
 function Read-DuneBotState {
     $state = [ordered]@{
-        last_buy_tick = $null
-        last_result   = $null
-        error_count   = 0
-        last_error    = ''
+        last_buy_tick   = $null
+        last_list_tick  = $null
+        last_result     = $null
+        last_list_result = $null
+        error_count     = 0
+        last_error      = ''
     }
     $path = Get-DuneBotStatePath
     if (Test-Path -LiteralPath $path) {
@@ -183,6 +266,10 @@ function Get-DuneBotIdentity {
             # stays 0 and provisioned is false.
             $exId = 0L
             foreach ($q in @(
+                # Tier 1 (upstream parity): the access-point table is the
+                # authoritative exchange index even on virgin servers with no
+                # player orders yet.
+                'SELECT ap.exchange_id FROM dune.dune_exchange_accesspoints ap JOIN dune.dune_exchanges e ON e.id = ap.exchange_id ORDER BY ap.id LIMIT 1',
                 'SELECT exchange_id FROM dune.dune_exchange_orders WHERE is_npc_order = FALSE LIMIT 1',
                 'SELECT id FROM dune.dune_exchanges ORDER BY id LIMIT 1',
                 "SELECT dune.get_dune_exchange_id('Global')"
@@ -215,9 +302,11 @@ SELECT id FROM ins UNION ALL SELECT id FROM existing LIMIT 1;
         $null = Invoke-DuneSqlQuery -Ip $Ip -Sql "SELECT dune.dune_exchange_get_user_id($ownerId)" -ReadOnly $false -MaxRows 5 -TimeoutSec 30
     }
 
-    # Exchange id (try the same fallbacks dune-admin uses).
+    # Exchange id (try the same fallbacks dune-admin uses, with the upstream
+    # access-point cascade prepended so we always pick the canonical exchange).
     $exchangeId = 0L
     foreach ($q in @(
+        'SELECT ap.exchange_id FROM dune.dune_exchange_accesspoints ap JOIN dune.dune_exchanges e ON e.id = ap.exchange_id ORDER BY ap.id LIMIT 1',
         'SELECT exchange_id FROM dune.dune_exchange_orders WHERE is_npc_order = FALSE LIMIT 1',
         'SELECT id FROM dune.dune_exchanges ORDER BY id LIMIT 1',
         "SELECT dune.get_dune_exchange_id('Global')"
@@ -359,6 +448,7 @@ function Invoke-DuneBotBuyTick {
     $limit = $maxBuys * 10
     $candSql = @"
 SELECT o.id, o.template_id, o.item_price, COALESCE(o.item_id, 0) AS item_id, o.owner_id,
+       COALESCE(o.quality_level, 0) AS quality_level,
        COALESCE(i.stack_size, s.initial_stack_size) AS actual_stack
 FROM dune.dune_exchange_orders o
 JOIN dune.dune_exchange_sell_orders s ON s.order_id = o.id
@@ -448,6 +538,387 @@ COMMIT;
     return $summary
 }
 
+# ============================================================================
+# LISTING SIDE — port of dune-admin/internal/marketbot with the sane-pricing
+# 100k-cap patch (recovered from DST commit cf903665).
+# ----------------------------------------------------------------------------
+# Catalog source: DB-derived. We snapshot the live game's NPC vendor inventory
+# (existing is_npc_order rows) to learn per-template {vendor_price, category_
+# mask, max_stack_size}. The bot then lists items from that snapshot only,
+# applying the patched sane-pricing formula (tier base price * category factor
+# * rarity multiplier, vendor floor + 2x ceiling, hard 100k cap). This keeps
+# the bot self-bootstrapping — no out-of-band item-data.json to ship.
+# ============================================================================
+
+function Get-DuneBotVendorSnapshot {
+    param([string]$Ip, [int64]$ExchangeId)
+    $sql = @"
+SELECT o.template_id,
+       MAX(o.item_price)                                 AS max_price,
+       MAX(o.category_mask)                              AS category_mask,
+       MAX(o.category_depth)                             AS category_depth,
+       MAX(COALESCE(i.stack_size, s.initial_stack_size)) AS max_stack,
+       COUNT(*)                                          AS occurrences
+FROM dune.dune_exchange_orders o
+JOIN dune.dune_exchange_sell_orders s ON s.order_id = o.id
+LEFT JOIN dune.items i ON i.id = o.item_id
+WHERE o.is_npc_order = TRUE AND o.exchange_id = $ExchangeId
+GROUP BY o.template_id
+"@
+    $r = Invoke-DuneSqlQuery -Ip $Ip -Sql $sql -ReadOnly $true -MaxRows 50000 -TimeoutSec 60
+    if (-not $r.ok) { return @{ ok = $false; error = $r.error } }
+    $snap = @{}
+    foreach ($row in (ConvertTo-DuneRowMaps -Result $r)) {
+        $tmpl = [string]$row['template_id']
+        if (-not $tmpl) { continue }
+        $snap[$tmpl] = @{
+            template_id    = $tmpl
+            vendor_price   = ConvertTo-DuneInt $row['max_price']
+            category_mask  = ConvertTo-DuneInt $row['category_mask']
+            category_depth = ConvertTo-DuneInt $row['category_depth']
+            max_stack      = ConvertTo-DuneInt $row['max_stack']
+            occurrences    = ConvertTo-DuneInt $row['occurrences']
+        }
+    }
+    return @{ ok = $true; snapshot = $snap }
+}
+
+# Pull a tier hint from a template_id like "WaterRationMk3" / "Spice_T4".
+function Get-DuneBotTierFromTemplate {
+    param([string]$Template)
+    if ($Template -match '_T(\d)') { return [int]$Matches[1] }
+    if ($Template -match 'Mk(\d)') { return [int]$Matches[1] }
+    return 0
+}
+
+# Merge vendor snapshot with bundled item metadata + DST's existing equipment
+# heuristic. Returns the eligible-to-list candidate list filtered by config.
+function Resolve-DuneBotListingCandidates {
+    param([hashtable]$Snapshot, [hashtable]$Cfg)
+    # Lazy-load gameplay-item-data.json via the Gameplay lib helpers.
+    if (Get-Command Initialize-DuneGameplayItemData -ErrorAction SilentlyContinue) {
+        Initialize-DuneGameplayItemData
+    }
+    $rules = if ($null -ne $script:DuneGameplayItemRules) { $script:DuneGameplayItemRules } else { @{} }
+    $stackablesOnly = [bool]$Cfg.stackables_only
+    $disabled = @{}; foreach ($d in @($Cfg.disabled_items)) { $disabled[[string]$d] = $true }
+    $candidates = @()
+    foreach ($tmpl in $Snapshot.Keys) {
+        if ($disabled.ContainsKey($tmpl)) { continue }
+        $sn = $Snapshot[$tmpl]
+        $rule = if ($rules.ContainsKey($tmpl)) { $rules[$tmpl] } else { $null }
+        $cat    = if ($rule) { [string]$rule.category } else { '' }
+        $tier   = if ($rule) { [int]$rule.tier } else { 0 }
+        $rarity = if ($rule) { ([string]$rule.rarity).ToLower() } else { '' }
+        if (-not $tier)   { $tier = Get-DuneBotTierFromTemplate -Template $tmpl }
+        if (-not $rarity) { $rarity = 'common' }
+        # Stackability: trust the vendor snapshot (max_stack > 1 means the game
+        # has actually stacked this template). Fall back to category prefix.
+        $isStackable = ($sn.max_stack -gt 1)
+        if (-not $isStackable -and $cat -and (Get-Command Test-DuneIsEquipmentCategory -ErrorAction SilentlyContinue)) {
+            $isStackable = -not (Test-DuneIsEquipmentCategory -Category $cat)
+        }
+        if ($stackablesOnly -and -not $isStackable) { continue }
+        # Listing requires a real category_mask — without it the item is
+        # invisible in every in-game market tab.
+        if ($sn.category_mask -le 0) { continue }
+        $candidates += @{
+            template_id    = $tmpl
+            vendor_price   = $sn.vendor_price
+            category_mask  = $sn.category_mask
+            category_depth = $sn.category_depth
+            stack_max      = if ($sn.max_stack -gt 0) { $sn.max_stack } else { 1 }
+            tier           = $tier
+            rarity         = $rarity
+            category       = $cat
+            is_stackable   = $isStackable
+        }
+    }
+    return ,$candidates
+}
+
+function Get-DuneBotCategoryFactor {
+    param([hashtable]$Cfg, [hashtable]$Cand)
+    $factors = [hashtable]$Cfg.category_factors
+    $tmplLc = $Cand.template_id.ToLower()
+    if ($tmplLc.EndsWith('_schematic')) { if ($factors.ContainsKey('schematic')) { return [double]$factors['schematic'] } }
+    $cat = ([string]$Cand.category).ToLower()
+    if ($cat -match 'augment')          { if ($factors.ContainsKey('augment'))   { return [double]$factors['augment']   } }
+    if ($factors.ContainsKey('gear'))   { return [double]$factors['gear'] }
+    return 1.0
+}
+
+function Limit-DuneBotPrice {
+    param([double]$Price, [int]$Cap)
+    if ($Price -lt 1)    { return 1 }
+    if ($Price -gt $Cap) { return $Cap }
+    return [int][Math]::Round($Price)
+}
+
+# Magnitude-aware rounding (matches sane-pricing patch's roundPrice).
+function Get-DuneBotRoundedPrice {
+    param([double]$Price)
+    if ($Price -ge 1000000) { return [int]([Math]::Round($Price / 100000) * 100000) }
+    if ($Price -ge 100000)  { return [int]([Math]::Round($Price / 10000)  * 10000)  }
+    if ($Price -ge 10000)   { return [int]([Math]::Round($Price / 1000)   * 1000)   }
+    if ($Price -ge 1000)    { return [int]([Math]::Round($Price / 100)    * 100)    }
+    if ($Price -ge 100)     { return [int]([Math]::Round($Price / 10)     * 10)     }
+    return [int][Math]::Round($Price)
+}
+
+# Per-stack listing price (returns the item_price column value — player-facing
+# Solari is item_price * 10). Respects per-template override, then sane-pricing
+# tier/category/rarity formula, vendor floor (vendor*0.95) and 2x vendor ceiling.
+function Get-DuneBotItemPrice {
+    param([hashtable]$Cfg, [hashtable]$Cand)
+    $cap = [int]$Cfg.price_cap
+    $overrides = [hashtable]$Cfg.price_overrides
+    if ($overrides -and $overrides.ContainsKey($Cand.template_id)) {
+        return Limit-DuneBotPrice -Price ([double]$overrides[$Cand.template_id]) -Cap $cap
+    }
+    $tierKey = [string]([int]$Cand.tier)
+    $rarityMult = 1.0
+    $rm = [hashtable]$Cfg.rarity_multipliers
+    if ($rm -and $rm.ContainsKey($Cand.rarity)) { $rarityMult = [double]$rm[$Cand.rarity] }
+    $price = 0.0
+    if ($Cand.is_stackable) {
+        $unit = [double]$Cfg.default_unit_price
+        $sm = [hashtable]$Cfg.stack_unit_prices
+        if ($sm -and $sm.ContainsKey($tierKey)) { $unit = [double]$sm[$tierKey] }
+        $price = $unit * $rarityMult
+    } else {
+        $base = [double]$Cfg.default_unit_price
+        $tbp = [hashtable]$Cfg.tier_base_prices
+        if ($tbp -and $tbp.ContainsKey($tierKey)) { $base = [double]$tbp[$tierKey] }
+        $factor = Get-DuneBotCategoryFactor -Cfg $Cfg -Cand $Cand
+        $price = $base * $factor * $rarityMult
+    }
+    $vp = [double]$Cand.vendor_price
+    if ($vp -ge 10) {
+        $vmAll = 0.95
+        $vm = [hashtable]$Cfg.vendor_multipliers
+        if ($vm -and $vm.ContainsKey('all')) { $vmAll = [double]$vm['all'] }
+        $floor = $vp * $vmAll
+        if ($price -lt $floor) { $price = $floor }
+        $ceil = $vp * 2.0
+        if ($price -gt $ceil) { $price = $ceil }
+    }
+    $rounded = Get-DuneBotRoundedPrice -Price $price
+    return Limit-DuneBotPrice -Price $rounded -Cap $cap
+}
+
+# Snapshot of Duke's own current listings keyed by template_id.
+function Get-DuneBotCurrentListings {
+    param([string]$Ip, [int64]$OwnerId, [int64]$ExchangeId)
+    $sql = @"
+SELECT o.id, o.template_id, COALESCE(o.item_id, 0) AS item_id, o.item_price,
+       COALESCE(i.stack_size, s.initial_stack_size) AS stack_size,
+       COALESCE(o.quality_level, 0)                 AS quality_level
+FROM dune.dune_exchange_orders o
+JOIN dune.dune_exchange_sell_orders s ON s.order_id = o.id
+LEFT JOIN dune.items i ON i.id = o.item_id
+WHERE o.owner_id = $OwnerId AND o.is_npc_order = TRUE AND o.exchange_id = $ExchangeId
+"@
+    $r = Invoke-DuneSqlQuery -Ip $Ip -Sql $sql -ReadOnly $true -MaxRows 50000 -TimeoutSec 60
+    if (-not $r.ok) { return @{ ok = $false; error = $r.error } }
+    $by = @{}
+    foreach ($row in (ConvertTo-DuneRowMaps -Result $r)) {
+        $tmpl = [string]$row['template_id']
+        if (-not $by.ContainsKey($tmpl)) { $by[$tmpl] = @() }
+        $by[$tmpl] += @{
+            order_id   = ConvertTo-DuneInt $row['id']
+            item_id    = ConvertTo-DuneInt $row['item_id']
+            item_price = ConvertTo-DuneInt $row['item_price']
+            stack_size = ConvertTo-DuneInt $row['stack_size']
+        }
+    }
+    return @{ ok = $true; byTemplate = $by }
+}
+
+# INSERT one (items, dune_exchange_orders, dune_exchange_sell_orders) trio.
+function New-DuneBotListing {
+    param([string]$Ip, $Ident, [hashtable]$Cand, [int]$ItemPrice, [int64]$OrderExpiry)
+    $tmplLit = ConvertTo-DuneSqlLiteral $Cand.template_id
+    $stack   = [int]$Cand.stack_max
+    $mask    = [int]$Cand.category_mask
+    $depth   = [int]$Cand.category_depth
+    $sql = @"
+BEGIN;
+SELECT dune.get_exchange_inventory_id($($Ident.exchangeId)) AS bot_inv_id \gset
+INSERT INTO dune.items (inventory_id, position_index, template_id, stack_size, stats, quality_level)
+SELECT :bot_inv_id,
+       COALESCE((SELECT MAX(position_index) + 1 FROM dune.items WHERE inventory_id = :bot_inv_id), 0),
+       '$tmplLit', $stack, '{}', 0
+RETURNING id AS new_item_id \gset
+INSERT INTO dune.dune_exchange_orders
+  (exchange_id, access_point_id, owner_id, template_id, expiration_time,
+   durability_cur, durability_max, item_price, category_mask, category_depth,
+   is_npc_order, item_id, quality_level)
+VALUES ($($Ident.exchangeId), $($Ident.accessPointId), $($Ident.ownerId), '$tmplLit', $OrderExpiry,
+        1.0, 1.0, $ItemPrice, $mask, $depth, TRUE, :new_item_id, 0)
+RETURNING id AS new_order_id \gset
+INSERT INTO dune.dune_exchange_sell_orders (order_id, initial_stack_size, wear_normalized_price)
+VALUES (:new_order_id, $stack, $ItemPrice);
+COMMIT;
+"@
+    $r = Invoke-DuneSqlQuery -Ip $Ip -Sql $sql -ReadOnly $false -MaxRows 5 -TimeoutSec 45
+    if (-not $r.ok) { return @{ ok = $false; error = $r.error } }
+    return @{ ok = $true }
+}
+
+# Top-up list tick. -DryRun reports the plan without writing.
+function Invoke-DuneBotListTick {
+    param([switch]$DryRun)
+    $cfg = Read-DuneBotConfig
+    $summary = [ordered]@{
+        ok            = $true
+        dryRun        = [bool]$DryRun
+        enabled       = [bool]$cfg.enabled
+        considered    = 0
+        eligible      = 0
+        listed_before = 0
+        listed_after  = 0
+        inserted      = 0
+        deleted       = 0
+        errors        = 0
+        planned       = @()
+        message       = ''
+    }
+    $ctx = Get-DuneDbContext
+    if (-not $ctx.ok) { $summary.ok = $false; $summary.message = $ctx.message; return $summary }
+
+    $ident = Get-DuneBotIdentity -Ip $ctx.ip -CreateIfMissing:(!$DryRun)
+    if (-not $ident.ok) { $summary.ok = $false; $summary.message = $ident.error; return $summary }
+    if ($ident.ownerId -le 0) {
+        $summary.message = 'Bot not provisioned (run any live tick once to create the Duke actor).'
+        return $summary
+    }
+
+    $vs = Get-DuneBotVendorSnapshot -Ip $ctx.ip -ExchangeId $ident.exchangeId
+    if (-not $vs.ok) { $summary.ok = $false; $summary.message = "vendor snapshot: $($vs.error)"; return $summary }
+    $summary.considered = $vs.snapshot.Count
+
+    $cl = Get-DuneBotCurrentListings -Ip $ctx.ip -OwnerId $ident.ownerId -ExchangeId $ident.exchangeId
+    if (-not $cl.ok) { $summary.ok = $false; $summary.message = "current listings: $($cl.error)"; return $summary }
+    $current = $cl.byTemplate
+    foreach ($k in $current.Keys) { $summary.listed_before += @($current[$k]).Count }
+
+    $candidates = Resolve-DuneBotListingCandidates -Snapshot $vs.snapshot -Cfg $cfg
+    $summary.eligible = @($candidates).Count
+
+    $perGrade = [int]$cfg.listings_per_grade
+    $orderExpiry = if ($DryRun) { 999999999L } else { Get-DuneBotOrderExpiry -Ip $ctx.ip }
+
+    foreach ($cand in $candidates) {
+        $target = Get-DuneBotItemPrice -Cfg $cfg -Cand $cand
+        $existing = if ($current.ContainsKey($cand.template_id)) { @($current[$cand.template_id]) } else { @() }
+        $aligned = @($existing | Where-Object { $_.item_price -eq $target })
+        $stale   = @($existing | Where-Object { $_.item_price -ne $target })
+        $need    = $perGrade - $aligned.Count
+        if ($need -lt 0) { $need = 0 }
+
+        $summary.planned += ,([ordered]@{
+            template_id  = $cand.template_id
+            target_price = ($target * 10)
+            stack_max    = $cand.stack_max
+            existing     = $existing.Count
+            aligned      = $aligned.Count
+            stale        = $stale.Count
+            to_insert    = $need
+            tier         = $cand.tier
+            rarity       = $cand.rarity
+            stackable    = [bool]$cand.is_stackable
+        })
+
+        if ($DryRun) { continue }
+
+        if ($stale.Count -gt 0) {
+            $orderIds = ($stale | ForEach-Object { $_.order_id }) -join ','
+            $itemIds  = ($stale | Where-Object { $_.item_id -gt 0 } | ForEach-Object { $_.item_id }) -join ','
+            $delItems = if ($itemIds) { "DELETE FROM dune.items WHERE id IN ($itemIds);" } else { '' }
+            $delSql = @"
+BEGIN;
+DELETE FROM dune.dune_exchange_sell_orders WHERE order_id IN ($orderIds);
+DELETE FROM dune.dune_exchange_orders WHERE id IN ($orderIds) AND owner_id = $($ident.ownerId) AND is_npc_order = TRUE;
+$delItems
+COMMIT;
+"@
+            $dr = Invoke-DuneSqlQuery -Ip $ctx.ip -Sql $delSql -ReadOnly $false -MaxRows 5 -TimeoutSec 60
+            if ($dr.ok) {
+                $summary.deleted += $stale.Count
+            } else {
+                $summary.errors++
+                $summary.message = "stale delete $($cand.template_id): $($dr.error)"
+            }
+        }
+
+        for ($i = 0; $i -lt $need; $i++) {
+            $r = New-DuneBotListing -Ip $ctx.ip -Ident $ident -Cand $cand -ItemPrice $target -OrderExpiry $orderExpiry
+            if ($r.ok) {
+                $summary.inserted++
+            } else {
+                $summary.errors++
+                $summary.message = "list $($cand.template_id): $($r.error)"
+                break
+            }
+        }
+    }
+
+    $cl2 = Get-DuneBotCurrentListings -Ip $ctx.ip -OwnerId $ident.ownerId -ExchangeId $ident.exchangeId
+    if ($cl2.ok) { foreach ($k in $cl2.byTemplate.Keys) { $summary.listed_after += @($cl2.byTemplate[$k]).Count } }
+
+    if (-not $DryRun) {
+        $state = Read-DuneBotState
+        $state.last_list_tick   = (Get-Date).ToUniversalTime().ToString('o')
+        $state.last_list_result = @{
+            considered = $summary.considered; eligible = $summary.eligible
+            inserted   = $summary.inserted;   deleted  = $summary.deleted
+            errors     = $summary.errors;     dryRun   = $false
+        }
+        if ($summary.errors -gt 0) { $state.error_count = ([int]$state.error_count + [int]$summary.errors) }
+        if ($summary.message)      { $state.last_error  = [string]$summary.message }
+        Save-DuneBotState -State $state
+    }
+    return $summary
+}
+
+# Wipe NPC orders owned by any actor whose class is not 'Duke'. Used to evict
+# leftover Revy orphans from the old external dune-admin integration.
+function Clear-DuneBotLegacyListings {
+    $ctx = Get-DuneDbContext
+    if (-not $ctx.ok) { return @{ ok = $false; error = $ctx.message } }
+    $cntSql = @"
+SELECT COUNT(*) FROM dune.dune_exchange_orders o
+JOIN dune.actors a ON a.id = o.owner_id
+WHERE o.is_npc_order = TRUE AND a.class <> 'Duke'
+"@
+    $cnt = Get-DuneBotScalar -Ip $ctx.ip -Sql $cntSql
+    $before = if ($cnt.ok) { ConvertTo-DuneInt $cnt.value } else { 0L }
+    if ($before -le 0) { return @{ ok = $true; cleared = 0; message = 'No legacy NPC listings to clear.' } }
+    $sql = @"
+BEGIN;
+DELETE FROM dune.items WHERE id IN (
+  SELECT o.item_id FROM dune.dune_exchange_orders o
+  JOIN dune.actors a ON a.id = o.owner_id
+  WHERE o.is_npc_order = TRUE AND a.class <> 'Duke' AND o.item_id IS NOT NULL
+);
+DELETE FROM dune.dune_exchange_sell_orders WHERE order_id IN (
+  SELECT o.id FROM dune.dune_exchange_orders o
+  JOIN dune.actors a ON a.id = o.owner_id
+  WHERE o.is_npc_order = TRUE AND a.class <> 'Duke'
+);
+DELETE FROM dune.dune_exchange_orders WHERE id IN (
+  SELECT o.id FROM dune.dune_exchange_orders o
+  JOIN dune.actors a ON a.id = o.owner_id
+  WHERE o.is_npc_order = TRUE AND a.class <> 'Duke'
+);
+COMMIT;
+"@
+    $r = Invoke-DuneSqlQuery -Ip $ctx.ip -Sql $sql -ReadOnly $false -MaxRows 5 -TimeoutSec 120
+    if (-not $r.ok) { return @{ ok = $false; error = $r.error } }
+    return @{ ok = $true; cleared = $before }
+}
+
 # ----------------------------------------------------------------------------
 # Native bot status for the UI (replaces the external proxy status).
 # ----------------------------------------------------------------------------
@@ -455,18 +926,22 @@ function Get-DuneNativeBotStatus {
     $cfg = Read-DuneBotConfig
     $state = Read-DuneBotState
     $out = [ordered]@{
-        configured     = $true
-        running        = [bool]$cfg.enabled
-        enabled        = [bool]$cfg.enabled
-        die_size       = [int]$cfg.die_size
-        die_target     = [int]$cfg.die_target
-        last_buy_tick  = $state.last_buy_tick
-        error_count    = [int]$state.error_count
-        error          = [string]$state.last_error
-        balance        = $null
-        listing_count  = $null
-        provisioned    = $false
-        source         = 'live'
+        configured            = $true
+        running               = [bool]$cfg.enabled
+        enabled               = [bool]$cfg.enabled
+        die_size              = [int]$cfg.die_size
+        die_target            = [int]$cfg.die_target
+        last_buy_tick         = $state.last_buy_tick
+        last_list_tick        = $state.last_list_tick
+        error_count           = [int]$state.error_count
+        error                 = [string]$state.last_error
+        balance               = $null
+        listing_count         = $null    # Duke's own NPC listings
+        listings_npc_total    = $null    # ALL NPC listings (any actor class)
+        listings_by_class     = @()      # [{class; count}]
+        legacy_listings_count = $null    # NPC listings owned by non-Duke actors
+        provisioned           = $false
+        source                = 'live'
     }
     $ctx = Get-DuneDbContext
     if (-not $ctx.ok) {
@@ -475,12 +950,38 @@ function Get-DuneNativeBotStatus {
         return $out
     }
     $ident = Get-DuneBotIdentity -Ip $ctx.ip
-    if ($ident.ok) {
+    if ($ident.ok -and $ident.ownerId -gt 0) {
         $out.provisioned = $true
         $bal = Get-DuneBotBalance -Ip $ctx.ip -OwnerId $ident.ownerId
         if ($bal.ok) { $out.balance = $bal.balance }
         $lc = Get-DuneBotScalar -Ip $ctx.ip -Sql "SELECT COUNT(*) FROM dune.dune_exchange_orders WHERE owner_id = $($ident.ownerId) AND is_npc_order = TRUE"
         if ($lc.ok) { $out.listing_count = ConvertTo-DuneInt $lc.value }
+    }
+    # All-NPC-orders breakdown — runs regardless of whether Duke is provisioned
+    # so the UI surfaces leftover Revy/etc. listings honestly.
+    $tot = Get-DuneBotScalar -Ip $ctx.ip -Sql 'SELECT COUNT(*) FROM dune.dune_exchange_orders WHERE is_npc_order = TRUE'
+    if ($tot.ok) { $out.listings_npc_total = ConvertTo-DuneInt $tot.value }
+    $brkSql = @"
+SELECT COALESCE(a.class, '?') AS owner_class, COUNT(*) AS n
+FROM dune.dune_exchange_orders o
+LEFT JOIN dune.actors a ON a.id = o.owner_id
+WHERE o.is_npc_order = TRUE
+GROUP BY a.class
+ORDER BY n DESC
+"@
+    $brk = Invoke-DuneSqlQuery -Ip $ctx.ip -Sql $brkSql -ReadOnly $true -MaxRows 100 -TimeoutSec 30
+    if ($brk.ok) {
+        $rows = ConvertTo-DuneRowMaps -Result $brk
+        $legacy = 0L
+        $list = @()
+        foreach ($r in $rows) {
+            $cls = [string]$r['owner_class']
+            $n   = ConvertTo-DuneInt $r['n']
+            $list += [ordered]@{ class = $cls; count = $n }
+            if ($cls -ne 'Duke') { $legacy += $n }
+        }
+        $out.listings_by_class = $list
+        $out.legacy_listings_count = $legacy
     }
     return $out
 }
@@ -518,15 +1019,25 @@ function Start-DuneGameplayBotScheduler {
                     $cfg = Read-DuneBotConfig
                     if ($cfg.enabled) {
                         $state = Read-DuneBotState
-                        $due = $true
+                        # Buy tick.
+                        $dueBuy = $true
                         if ($state.last_buy_tick) {
                             try {
                                 $last = [datetime]::Parse($state.last_buy_tick).ToUniversalTime()
-                                $elapsed = ([datetime]::UtcNow - $last).TotalSeconds
-                                $due = ($elapsed -ge [int]$cfg.buy_tick_interval)
-                            } catch { $due = $true }
+                                $dueBuy = (([datetime]::UtcNow - $last).TotalSeconds -ge [int]$cfg.buy_tick_interval)
+                            } catch { $dueBuy = $true }
                         }
-                        if ($due) { [void](Invoke-DuneBotBuyTick) }
+                        if ($dueBuy) { [void](Invoke-DuneBotBuyTick) }
+                        # List tick (independent cadence).
+                        $state2 = Read-DuneBotState
+                        $dueList = $true
+                        if ($state2.last_list_tick) {
+                            try {
+                                $lastL = [datetime]::Parse($state2.last_list_tick).ToUniversalTime()
+                                $dueList = (([datetime]::UtcNow - $lastL).TotalSeconds -ge [int]$cfg.list_tick_interval)
+                            } catch { $dueList = $true }
+                        }
+                        if ($dueList) { [void](Invoke-DuneBotListTick) }
                     }
                 } catch {}
                 Start-Sleep -Seconds 15
