@@ -870,3 +870,418 @@ export function setCoriolisPartitionSeed(partitionId: number, seed: number) {
     method: 'POST', body: JSON.stringify({ partition_id: partitionId, seed }),
   })
 }
+
+// ===========================================================================
+// v11.5.9 — Phase A/B/C/G+H/I — full dune-admin player surface port.
+// Adds the remaining 40+ endpoints not previously surfaced. Existing
+// wrappers above (giveSolari, giveItem, renamePlayer, awardSpecXp,
+// setPlayerTags, fillWater) are kept untouched for back-compat.
+// ===========================================================================
+
+// ----- Shared player-target type ------------------------------------------
+// Most v11.5.9 RMQ-live handlers accept either fls_id (preferred) or actor_id
+// (server resolves fls). This helper keeps call sites readable.
+export interface PlayerTarget {
+  fls_id?: string
+  actor_id?: number
+}
+function targetBody(t: PlayerTarget, rest: Record<string, unknown> = {}) {
+  const out: Record<string, unknown> = { ...rest }
+  if (t.fls_id)   out.fls_id   = t.fls_id
+  if (t.actor_id) out.actor_id = t.actor_id
+  return JSON.stringify(out)
+}
+
+// ---------------------------------------------------------------------------
+// Phase A — currency / progression / admin writes (5 + 3 endpoints)
+// ---------------------------------------------------------------------------
+
+export function giveScrip(accountId: number, amount: number) {
+  return api<WriteResult>('/api/gameplay/players/give-scrip', {
+    method: 'POST', body: JSON.stringify({ account_id: accountId, amount }),
+  })
+}
+
+export type FactionId = 'atreides' | 'harkonnen' | string
+export function giveFactionRep(accountId: number, faction: FactionId, delta: number) {
+  return api<WriteResult>('/api/gameplay/players/give-faction-rep', {
+    method: 'POST', body: JSON.stringify({ account_id: accountId, faction, delta }),
+  })
+}
+
+export function setFactionTier(accountId: number, faction: FactionId, tier: number) {
+  return api<WriteResult>('/api/gameplay/players/set-faction-tier', {
+    method: 'POST', body: JSON.stringify({ account_id: accountId, faction, tier }),
+  })
+}
+
+// Phase A award-char-xp: increments character XP + level + SP + intel.
+export function awardCharXp(pawnId: number, delta: number) {
+  return api<WriteResult>('/api/gameplay/players/award-char-xp', {
+    method: 'POST', body: JSON.stringify({ pawn_id: pawnId, delta }),
+  })
+}
+
+export function awardIntel(controllerId: number, amount: number) {
+  return api<WriteResult>('/api/gameplay/players/award-intel', {
+    method: 'POST', body: JSON.stringify({ controller_id: controllerId, amount }),
+  })
+}
+
+export function returningPlayerAward(accountId: number) {
+  return api<WriteResult>('/api/gameplay/players/returning-player-award', {
+    method: 'POST', body: JSON.stringify({ account_id: accountId }),
+  })
+}
+
+export function dismissReturningPlayerAward(accountId: number) {
+  return api<WriteResult>('/api/gameplay/players/dismiss-returning-player-award', {
+    method: 'POST', body: JSON.stringify({ account_id: accountId }),
+  })
+}
+
+// PERMANENT — purges the account row + dependent rows. No undo.
+export function deleteAccount(accountId: number) {
+  return api<WriteResult>('/api/gameplay/players/delete-account', {
+    method: 'POST', body: JSON.stringify({ account_id: accountId }),
+  })
+}
+
+// ---------------------------------------------------------------------------
+// Phase B — read endpoints (12 + 3 catalogs)
+// ---------------------------------------------------------------------------
+
+export interface OnlinePlayer {
+  account_id: number
+  display_name: string
+  fls_id?: string
+  pawn_id?: number
+  controller_id?: number
+  partition_id?: number
+}
+export interface PlayersOnlineResponse {
+  ok: boolean
+  source: DataSource
+  players: OnlinePlayer[]
+  liveError?: string
+}
+export function getPlayersOnline(demo?: boolean) {
+  return api<PlayersOnlineResponse>(`/api/gameplay/players/online${qs({ demo: demo ? 1 : undefined })}`)
+}
+
+export interface FactionRow { id: string; display_name: string; aliases?: string[] }
+export function getFactionCatalog() {
+  return api<{ ok: boolean; factions: FactionRow[]; source: DataSource }>('/api/gameplay/players/factions')
+}
+
+export interface SpecTrackCatalog { id: string; name: string; tracks: Array<{ id: string; name: string }> }
+export function getSpecCatalog() {
+  return api<{ ok: boolean; specs: SpecTrackCatalog[]; source: DataSource }>('/api/gameplay/players/specs')
+}
+
+export interface JourneyStep { id: string; name: string; completed: boolean; current?: boolean }
+export function getPlayerJourney(id: number, demo?: boolean) {
+  return api<{ ok: boolean; account_id: number; steps: JourneyStep[]; source: DataSource }>(
+    `/api/gameplay/players/${id}/journey${qs({ demo: demo ? 1 : undefined })}`)
+}
+
+// Full character dump - shape is intentionally loose (mirrors dune-admin export).
+export function exportPlayerData(id: number, demo?: boolean) {
+  return api<{ ok: boolean; account_id: number; data: Record<string, unknown>; source: DataSource }>(
+    `/api/gameplay/players/${id}/export${qs({ demo: demo ? 1 : undefined })}`)
+}
+
+export interface CharXpResponse {
+  ok: boolean
+  account_id: number
+  pawn_id?: number
+  level: number
+  xp: number
+  xp_to_next?: number
+  unspent_skill_points?: number
+  total_skill_points_earned?: number
+  source: DataSource
+}
+export function getPlayerCharXp(id: number, demo?: boolean) {
+  return api<CharXpResponse>(`/api/gameplay/players/${id}/char-xp${qs({ demo: demo ? 1 : undefined })}`)
+}
+
+export interface KeystoneRow { id: string; name?: string; unlocked_at?: string }
+export function getPlayerKeystones(id: number, demo?: boolean) {
+  return api<{ ok: boolean; keystones: KeystoneRow[]; source: DataSource }>(
+    `/api/gameplay/players/${id}/keystones${qs({ demo: demo ? 1 : undefined })}`)
+}
+
+export interface PlayerVehicleRow {
+  vehicle_id: number
+  template: string
+  display_name?: string
+  fuel?: number
+  durability?: number
+}
+export function getPlayerVehicles(id: number, demo?: boolean) {
+  return api<{ ok: boolean; vehicles: PlayerVehicleRow[]; source: DataSource }>(
+    `/api/gameplay/players/${id}/vehicles${qs({ demo: demo ? 1 : undefined })}`)
+}
+
+export interface DungeonRunRow { dungeon_id: string; cleared: boolean; best_time_seconds?: number }
+export function getPlayerDungeons(id: number, demo?: boolean) {
+  return api<{ ok: boolean; runs: DungeonRunRow[]; source: DataSource }>(
+    `/api/gameplay/players/${id}/dungeons${qs({ demo: demo ? 1 : undefined })}`)
+}
+
+export interface PlayerIdsResponse {
+  ok: boolean
+  account_id: number
+  pawn_id?: number
+  controller_id?: number
+  fls_id?: string
+  source: DataSource
+}
+export function getPlayerIds(id: number) {
+  return api<PlayerIdsResponse>(`/api/gameplay/players/${id}/player-ids`)
+}
+
+export interface PartitionRow { id: number; map: string; display_name?: string; is_blocked?: boolean }
+export function getPartitions() {
+  return api<{ ok: boolean; partitions: PartitionRow[]; source: DataSource }>('/api/gameplay/players/partitions')
+}
+
+export interface ContractRow { id: string; name: string; faction?: string; tier?: number }
+export function getContracts() {
+  return api<{ ok: boolean; contracts: ContractRow[]; source: DataSource }>('/api/gameplay/contracts')
+}
+
+export interface ProgressionPreset {
+  id: string
+  name: string
+  description?: string
+  nodes: string[]
+}
+export function getProgressionPresets() {
+  return api<{ ok: boolean; presets: ProgressionPreset[]; source: DataSource }>('/api/gameplay/progression/presets')
+}
+
+// ---------------------------------------------------------------------------
+// Phase C/D/E/F — items / vehicles / teleport / progression / contracts /
+// jobs / codex / tutorials (20 endpoints)
+// ---------------------------------------------------------------------------
+
+export interface GiveItemEntry { template: string; qty: number; quality?: number }
+export function giveItems(pawnId: number, items: GiveItemEntry[]) {
+  return api<WriteResult>('/api/gameplay/players/give-items', {
+    method: 'POST', body: JSON.stringify({ pawn_id: pawnId, items }),
+  })
+}
+
+export function repairGear(pawnId: number) {
+  return api<WriteResult>('/api/gameplay/players/repair-gear', {
+    method: 'POST', body: JSON.stringify({ pawn_id: pawnId }),
+  })
+}
+
+export function repairVehicle(vehicleId: number) {
+  return api<WriteResult>('/api/gameplay/players/repair-vehicle', {
+    method: 'POST', body: JSON.stringify({ vehicle_id: vehicleId }),
+  })
+}
+
+export function refuelVehicle(vehicleId: number, fuel?: number) {
+  const body: Record<string, unknown> = { vehicle_id: vehicleId }
+  if (typeof fuel === 'number') body.fuel = fuel
+  return api<WriteResult>('/api/gameplay/players/refuel-vehicle', {
+    method: 'POST', body: JSON.stringify(body),
+  })
+}
+
+// Teleport A -> B. Auto-dispatches: if source is online, server uses RMQ
+// TeleportToExact; if offline, falls back to admin_move_offline_player_to_partition.
+export function teleportToPlayer(sourcePawnId: number, targetPawnId: number) {
+  return api<WriteResult>('/api/gameplay/players/teleport-to-player', {
+    method: 'POST', body: JSON.stringify({ source_pawn_id: sourcePawnId, target_pawn_id: targetPawnId }),
+  })
+}
+
+export function progressionUnlock(pawnId: number, nodeIds: string[]) {
+  return api<WriteResult>('/api/gameplay/players/progression-unlock', {
+    method: 'POST', body: JSON.stringify({ pawn_id: pawnId, node_ids: nodeIds }),
+  })
+}
+
+export function progressionReverse(pawnId: number, nodeIds: string[]) {
+  return api<WriteResult>('/api/gameplay/players/progression-reverse', {
+    method: 'POST', body: JSON.stringify({ pawn_id: pawnId, node_ids: nodeIds }),
+  })
+}
+
+export function applyProgressionPreset(pawnId: number, presetId: string) {
+  return api<WriteResult>('/api/gameplay/players/progression/apply-preset', {
+    method: 'POST', body: JSON.stringify({ pawn_id: pawnId, preset_id: presetId }),
+  })
+}
+
+export function completeJourneyStep(accountId: number, stepId: string) {
+  return api<WriteResult>('/api/gameplay/players/journey/complete', {
+    method: 'POST', body: JSON.stringify({ account_id: accountId, step_id: stepId }),
+  })
+}
+
+export function resetJourney(accountId: number) {
+  return api<WriteResult>('/api/gameplay/players/journey/reset', {
+    method: 'POST', body: JSON.stringify({ account_id: accountId }),
+  })
+}
+
+export function wipeJourney(accountId: number) {
+  return api<WriteResult>('/api/gameplay/players/journey/wipe', {
+    method: 'POST', body: JSON.stringify({ account_id: accountId }),
+  })
+}
+
+export function completeContract(accountId: number, contractId: string) {
+  return api<WriteResult>('/api/gameplay/players/contract/complete', {
+    method: 'POST', body: JSON.stringify({ account_id: accountId, contract_id: contractId }),
+  })
+}
+
+export function completeContracts(accountId: number, contractIds: string[]) {
+  return api<WriteResult>('/api/gameplay/players/contracts/complete', {
+    method: 'POST', body: JSON.stringify({ account_id: accountId, contract_ids: contractIds }),
+  })
+}
+
+export function reverseContracts(accountId: number, contractIds: string[]) {
+  return api<WriteResult>('/api/gameplay/players/contracts/reverse', {
+    method: 'POST', body: JSON.stringify({ account_id: accountId, contract_ids: contractIds }),
+  })
+}
+
+export function grantJobSkills(pawnId: number, jobId: string) {
+  return api<WriteResult>('/api/gameplay/players/grant-job-skills', {
+    method: 'POST', body: JSON.stringify({ pawn_id: pawnId, job_id: jobId }),
+  })
+}
+
+export function resetJobSkills(pawnId: number, jobId: string) {
+  return api<WriteResult>('/api/gameplay/players/reset-job-skills', {
+    method: 'POST', body: JSON.stringify({ pawn_id: pawnId, job_id: jobId }),
+  })
+}
+
+export function setStarterClass(pawnId: number, classId: string) {
+  return api<WriteResult>('/api/gameplay/players/set-starter-class', {
+    method: 'POST', body: JSON.stringify({ pawn_id: pawnId, class_id: classId }),
+  })
+}
+
+export function deleteTutorials(accountId: number) {
+  return api<WriteResult>('/api/gameplay/players/delete-tutorials', {
+    method: 'POST', body: JSON.stringify({ account_id: accountId }),
+  })
+}
+
+export function wipeCodex(accountId: number) {
+  return api<WriteResult>('/api/gameplay/players/wipe-codex', {
+    method: 'POST', body: JSON.stringify({ account_id: accountId }),
+  })
+}
+
+// ---------------------------------------------------------------------------
+// Phase G+H — RMQ live commands (require RabbitMQ pipeline; need ONLINE player)
+// + grant-live (pg_notify, works online or offline).
+// ---------------------------------------------------------------------------
+
+export function kickPlayer(t: PlayerTarget) {
+  return api<WriteResult>('/api/gameplay/players/kick', {
+    method: 'POST', body: targetBody(t),
+  })
+}
+
+export function setSkillPoints(t: PlayerTarget, skillPoints: number) {
+  return api<WriteResult>('/api/gameplay/players/set-skill-points', {
+    method: 'POST', body: targetBody(t, { skill_points: skillPoints }),
+  })
+}
+
+export function cleanPlayerInventory(t: PlayerTarget) {
+  return api<WriteResult>('/api/gameplay/players/clean-inventory', {
+    method: 'POST', body: targetBody(t),
+  })
+}
+
+export function resetProgressionLive(t: PlayerTarget) {
+  return api<WriteResult>('/api/gameplay/players/reset-progression', {
+    method: 'POST', body: targetBody(t),
+  })
+}
+
+export function setSkillModuleLive(t: PlayerTarget, moduleId: string, level: number) {
+  return api<WriteResult>('/api/gameplay/players/set-skill-module', {
+    method: 'POST', body: targetBody(t, { module_id: moduleId, level }),
+  })
+}
+
+export function giveItemLive(t: PlayerTarget, template: string, qty: number, quality: number) {
+  return api<WriteResult>('/api/gameplay/players/give-item-live', {
+    method: 'POST', body: targetBody(t, { template, qty, quality }),
+  })
+}
+
+export function cheatScript(t: PlayerTarget, script: string) {
+  return api<WriteResult>('/api/gameplay/players/cheat-script', {
+    method: 'POST', body: targetBody(t, { script }),
+  })
+}
+
+// Landsraad-style grant; pops a Claim Rewards prompt for the player.
+// Works whether the player is online or offline (pg_notify trigger).
+export function grantLive(controllerId: number, template: string, amount: number) {
+  return api<WriteResult>('/api/gameplay/players/grant-live', {
+    method: 'POST', body: JSON.stringify({ controller_id: controllerId, template, amount }),
+  })
+}
+
+export interface SpawnVehicleInput {
+  target: PlayerTarget
+  template: string
+  location?: { x: number; y: number; z: number }
+}
+export function spawnVehicle(input: SpawnVehicleInput) {
+  const body: Record<string, unknown> = { template: input.template }
+  if (input.target.fls_id)   body.fls_id   = input.target.fls_id
+  if (input.target.actor_id) body.actor_id = input.target.actor_id
+  if (input.location)        body.location = input.location
+  return api<WriteResult>('/api/gameplay/vehicles/spawn', {
+    method: 'POST', body: JSON.stringify(body),
+  })
+}
+
+export function chatWhisper(flsId: string, message: string) {
+  return api<WriteResult>('/api/gameplay/chat/whisper', {
+    method: 'POST', body: JSON.stringify({ fls_id: flsId, message }),
+  })
+}
+
+// ---------------------------------------------------------------------------
+// Phase I — tags add/remove delta (separate from setPlayerTags overwrite)
+// ---------------------------------------------------------------------------
+
+export function updatePlayerTags(accountId: number, add: string[], remove: string[]) {
+  return api<WriteResult>('/api/gameplay/players/update-tags', {
+    method: 'POST', body: JSON.stringify({ account_id: accountId, add, remove }),
+  })
+}
+
+// ---------------------------------------------------------------------------
+// §10 — storage owner debug
+// ---------------------------------------------------------------------------
+
+export interface StorageOwnerDebug {
+  ok: boolean
+  placeable_id: number
+  debug?: Record<string, unknown>
+  source: DataSource
+}
+export function getStorageOwnerDebug(placeableId: number) {
+  return api<StorageOwnerDebug>(`/api/gameplay/storage/${placeableId}/owner-debug`)
+}
