@@ -297,6 +297,11 @@ export function Dashboard() {
           <div className="flex items-center justify-between mb-2">
             <h2 className="text-sm font-semibold uppercase tracking-wider text-text-muted flex items-center gap-2">
               <Icon name="ServerCog" size={14} className="text-accent" /> Game servers
+            </h2>
+            <div className="flex items-center gap-2">
+              {gameServers.length > 0 && (
+                <span className="text-[10px] text-text-dim">{gameServers.length} pod{gameServers.length === 1 ? '' : 's'}</span>
+              )}
               <button
                 type="button"
                 onClick={() => { void forceRefresh() }}
@@ -306,10 +311,7 @@ export function Dashboard() {
               >
                 <Icon name="RefreshCw" size={13} className={loading ? 'animate-spin' : ''} />
               </button>
-            </h2>
-            {gameServers.length > 0 && (
-              <span className="text-[10px] text-text-dim">{gameServers.length} pod{gameServers.length === 1 ? '' : 's'}</span>
-            )}
+            </div>
           </div>
           {!bgReady ? (
             <p className="text-sm text-text-dim italic">Battlegroup must be running.</p>
