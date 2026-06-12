@@ -43,6 +43,30 @@ function Invoke-DuneSqlRaw {
     return ($out -join "`n")
 }
 
+# Bulk-write variant: streams the SQL through ssh stdin so payloads larger
+# than the OS command-line limit (~32 KB on Windows, ~128 KB total argv on
+# Linux ssh sessions) still execute. The remote command itself is tiny —
+# it just consumes stdin, base64-decodes it, and pipes the result straight
+# into psql. Use this for the Seed Market chunked transactions; the
+# standard Invoke-DuneSqlRaw path is fine for everything else.
+function Invoke-DuneSqlRawStdin {
+    param(
+        [string]$Ip,
+        [string]$Sql,
+        [int]$TimeoutSec = 30,
+        [switch]$Csv
+    )
+    $pod = Find-V6DbPod -Ip $Ip
+    $b64 = [Convert]::ToBase64String([Text.Encoding]::UTF8.GetBytes($Sql))
+    $flags = if ($Csv) { '-X --csv' } else { '-X -A' }
+    # Remote cmd reads base64 bytes off OUR stdin (which Invoke-V6Ssh writes
+    # via -StdinData), decodes them, and feeds the SQL into psql. Total
+    # remote command length is < 200 chars regardless of payload size.
+    $cmd = "base64 -d | sudo kubectl exec -i -n $($pod.ns) $($pod.name) -- psql -U dune -d dune -p 15432 -v ON_ERROR_STOP=1 $flags 2>&1"
+    $out = Invoke-V6Ssh -Ip $Ip -Cmd $cmd -TimeoutSec $TimeoutSec -StdinData $b64
+    return ($out -join "`n")
+}
+
 # -----------------------------------------------------------------------------
 # Wrap user SQL with a READ ONLY transaction. Postgres rejects writes inside
 # READ ONLY — no client-side parsing or string filtering needed.
@@ -152,7 +176,8 @@ function Invoke-DuneSqlQuery {
         [string]$Sql,
         [bool]$ReadOnly = $true,
         [int]$MaxRows = 0,
-        [int]$TimeoutSec = 30
+        [int]$TimeoutSec = 30,
+        [switch]$Bulk
     )
     if (-not $Sql -or -not $Sql.Trim()) {
         return @{ ok = $false; error = 'Empty SQL.' }
@@ -161,7 +186,15 @@ function Invoke-DuneSqlQuery {
 
     $effective = if ($ReadOnly) { Wrap-DuneReadOnlySql -Sql $Sql } else { $Sql }
     $start = [DateTime]::UtcNow
-    $raw = Invoke-DuneSqlRaw -Ip $Ip -Sql $effective -TimeoutSec $TimeoutSec -Csv
+    # -Bulk: route through the stdin-streaming variant so payloads larger
+    # than the Windows OS command-line limit (~32 KB after base64 expansion)
+    # don't fail with "The filename or extension is too long". Use for
+    # multi-statement transactions like the Seed Market chunked inserts.
+    if ($Bulk) {
+        $raw = Invoke-DuneSqlRawStdin -Ip $Ip -Sql $effective -TimeoutSec $TimeoutSec -Csv
+    } else {
+        $raw = Invoke-DuneSqlRaw -Ip $Ip -Sql $effective -TimeoutSec $TimeoutSec -Csv
+    }
     $durationMs = [int](([DateTime]::UtcNow - $start).TotalMilliseconds)
 
     if (Test-DunePsqlError -Output $raw) {
