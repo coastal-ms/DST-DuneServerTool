@@ -556,24 +556,7 @@ function Invoke-DunePlayerTeleportToPlayer {
     if ($SourcePawnId -le 0) { return @{ ok = $false; error = 'source_pawn_id is required.' } }
     if ($TargetPawnId -le 0) { return @{ ok = $false; error = 'target_pawn_id is required.' } }
 
-    # source must be offline to use the offline path (online path needs RMQ, deferred to Phase H)
-    $off = Test-DunePlayerOffline -Ip $Ip -PawnId $SourcePawnId
-    if (-not $off.ok) { return @{ ok = $false; error = "$($off.reason). RMQ online-teleport not yet wired." } }
-
-    # source account -> FLS funcom_id
-    $srcAcct = 0L
-    $srcSql = "SELECT account_id::text AS aid FROM dune.player_state WHERE player_pawn_id = $SourcePawnId::bigint LIMIT 1;"
-    $sr = Invoke-DuneSqlQuery -Ip $Ip -Sql $srcSql -ReadOnly $true -MaxRows 1 -TimeoutSec 10
-    if ($sr.ok) {
-        $maps = ConvertTo-DuneRowMaps -Result $sr
-        if ($maps.Count -ge 1) { $srcAcct = [int64](ConvertTo-DuneInt $maps[0]['aid']) }
-    }
-    if ($srcAcct -le 0) { return @{ ok = $false; error = "source pawn $SourcePawnId has no account row." } }
-    $fls = Get-DuneRawFuncomId -Ip $Ip -AccountId $srcAcct
-    if (-not $fls.ok) { return @{ ok = $false; error = $fls.error } }
-    $safeFls = ConvertTo-DuneSqlString $fls.funcom_id
-
-    # target pawn coords
+    # target pawn coords (needed for both online and offline paths)
     $tgtSql = @"
 SELECT (location->>'X')::float8 AS x,
        (location->>'Y')::float8 AS y,
@@ -585,6 +568,32 @@ FROM dune.actors WHERE id = $TargetPawnId::bigint;
     $tmaps = ConvertTo-DuneRowMaps -Result $tr
     if ($tmaps.Count -eq 0) { return @{ ok = $false; error = "target pawn $TargetPawnId not found." } }
     $tx = [double]$tmaps[0]['x']; $ty = [double]$tmaps[0]['y']; $tz = [double]$tmaps[0]['z']
+
+    # Online path -> RMQ TeleportToExact. Offline path -> admin_move_offline_player_to_partition.
+    $off = Test-DunePlayerOffline -Ip $Ip -PawnId $SourcePawnId
+    if (-not $off.ok) {
+        # Online: send TeleportToExact via RMQ to the source player's FLS id.
+        $flsResolve = Resolve-DuneFlsIdFromActorId -Ip $Ip -ActorId $SourcePawnId
+        if (-not $flsResolve.ok) { return @{ ok = $false; error = "resolve source fls id: $($flsResolve.error)" } }
+        $res = Invoke-DuneRmqTeleportToExact -FlsId $flsResolve.fls_id -X $tx -Y $ty -Z $tz
+        if (-not $res.ok) { return $res }
+        $res.message = "Sent TeleportToExact to online pawn $SourcePawnId -> ($tx, $ty, $tz) via RMQ."
+        $res.path = 'rmq'; $res.x = $tx; $res.y = $ty; $res.z = $tz
+        return $res
+    }
+
+    # Offline: source must resolve to an account/FLS id.
+    $srcAcct = 0L
+    $srcSql = "SELECT owner_account_id::text AS aid FROM dune.actors WHERE id = $SourcePawnId::bigint LIMIT 1;"
+    $sr = Invoke-DuneSqlQuery -Ip $Ip -Sql $srcSql -ReadOnly $true -MaxRows 1 -TimeoutSec 10
+    if ($sr.ok) {
+        $maps = ConvertTo-DuneRowMaps -Result $sr
+        if ($maps.Count -ge 1) { $srcAcct = [int64](ConvertTo-DuneInt $maps[0]['aid']) }
+    }
+    if ($srcAcct -le 0) { return @{ ok = $false; error = "source pawn $SourcePawnId has no account row." } }
+    $fls = Get-DuneRawFuncomId -Ip $Ip -AccountId $srcAcct
+    if (-not $fls.ok) { return @{ ok = $false; error = $fls.error } }
+    $safeFls = ConvertTo-DuneSqlString $fls.funcom_id
 
     # resolve partition
     $pid = 0L
@@ -604,7 +613,8 @@ FROM dune.actors WHERE id = $TargetPawnId::bigint;
     if (-not $r.ok) { return @{ ok = $false; error = "admin_move_offline_player_to_partition: $($r.error)" } }
     return @{
         ok = $true
-        message = "Teleported pawn $SourcePawnId -> ($tx, $ty, $tz) on partition $pid (offline path)."
+        message = "Teleported offline pawn $SourcePawnId -> ($tx, $ty, $tz) on partition $pid."
+        path = 'offline'
         partition = $pid; x = $tx; y = $ty; z = $tz
     }
 }
