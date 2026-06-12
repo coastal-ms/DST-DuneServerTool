@@ -9,8 +9,9 @@
 
 import { useCallback, useEffect, useMemo, useState, type ReactElement } from 'react'
 import { Icon } from '../../../components/Icon'
+import { ItemPicker } from '../../../components/ItemPicker'
 import {
-  awardSpecXp, deleteInventoryItem, getPlayerEvents, getPlayerSpecs, getPlayerStats,
+  awardSpecXp, deleteInventoryItem, fillWater, getPlayerEvents, getPlayerSpecs, getPlayerStats,
   getPlayerTags, giveItem, giveSolari, grantAllKeystones, grantMaxSpec,
   renamePlayer, repairInventoryItem, resetAllKeystones, resetAllSpecs, resetSpec,
   setPlayerTags,
@@ -388,25 +389,38 @@ function EventRow({ ev }: { ev: PlayerEvent }) {
 }
 
 // ---------------------------------------------------------------------------
-// Actions — write surface. Give Solari / Give Item / Rename. Inventory mgmt
-// and per-track XP already covered by Inventory + Specs sections.
+// Actions — write surface. Give Solari / Give Item / Rename / Fill Water.
+// Inventory mgmt and per-track XP already covered by Inventory + Specs sections.
+// v11.5.7: Give Item now uses the ItemPicker typeahead; Fill Water added
+// (offline-safe SQL refill of stillsuits + literjons).
 // ---------------------------------------------------------------------------
 export function ActionsSection({ player, canWrite, flash, onChanged }: SectionProps) {
   const [form, setForm] = useState<'solari' | 'item' | 'rename' | null>(null)
   const [busy, setBusy] = useState(false)
 
-  const run = async (fn: () => Promise<{ message: string }>, label: string) => {
+  // Give-item form state lives at the section level so the ItemPicker keeps
+  // its selection when the user tabs to Quantity / Quality fields.
+  const [giveTpl, setGiveTpl] = useState('')
+  const [giveQty, setGiveQty] = useState('1')
+  const [giveQual, setGiveQual] = useState('0')
+
+  const run = async (fn: () => Promise<{ message: string }>, label: string, closeAfter = true) => {
     setBusy(true)
     try {
       const r = await fn()
       flash(r.message || `${label} done.`, 'ok')
-      setForm(null)
+      if (closeAfter) setForm(null)
       onChanged()
     } catch (e) {
       flash(e instanceof Error ? e.message : String(e), 'err')
     } finally {
       setBusy(false)
     }
+  }
+
+  const handleFillWater = () => {
+    if (!confirm(`Refill all water-fillable items (stillsuits, literjons, dewpacks) for ${player.name}?\n\nOnline players: takes effect on next relog.`)) return
+    run(() => fillWater(player.id), 'Fill Water', false)
   }
 
   if (!canWrite) {
@@ -429,6 +443,9 @@ export function ActionsSection({ player, canWrite, flash, onChanged }: SectionPr
         <button className="btn-secondary" disabled={busy} onClick={() => setForm(form === 'rename' ? null : 'rename')}>
           <Icon name="PenLine" size={13} /> Rename
         </button>
+        <button className="btn-secondary" disabled={busy} onClick={handleFillWater} title="Refill stillsuits + literjons to max">
+          <Icon name="Droplets" size={13} /> Fill Water
+        </button>
       </div>
 
       {form === 'solari' && (
@@ -437,11 +454,39 @@ export function ActionsSection({ player, canWrite, flash, onChanged }: SectionPr
         ]} onSubmit={v => run(() => giveSolari(player.controller_id, Number(v.amount) || 0), 'Give Solari')} />
       )}
       {form === 'item' && (
-        <InlineForm busy={busy} submitLabel="Give Item" fields={[
-          { key: 'template', label: 'Item template id', type: 'text', placeholder: 'e.g. Spice_Melange' },
-          { key: 'qty',      label: 'Quantity',         type: 'number', placeholder: '1' },
-          { key: 'quality',  label: 'Quality (0–5)',    type: 'number', placeholder: '0' },
-        ]} onSubmit={v => run(() => giveItem(player.id, String(v.template || '').trim(), Number(v.qty) || 0, Number(v.quality) || 0), 'Give Item')} />
+        <div className="card p-3 space-y-3">
+          <ItemPicker
+            label="Item — type to search by name or template id"
+            value={giveTpl}
+            onChange={setGiveTpl}
+            autoFocus
+            disabled={busy}
+          />
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="block text-[11px] uppercase tracking-wider text-text-dim mb-1">Quantity</label>
+              <input type="number" min={1} value={giveQty} disabled={busy}
+                onChange={e => setGiveQty(e.target.value)}
+                className="w-full px-3 py-2 rounded-lg bg-surface-2 border border-border text-text text-sm focus:outline-none focus:ring-2 focus:ring-ibad focus:border-ibad/50" />
+            </div>
+            <div>
+              <label className="block text-[11px] uppercase tracking-wider text-text-dim mb-1">Quality (0–5)</label>
+              <input type="number" min={0} max={5} value={giveQual} disabled={busy}
+                onChange={e => setGiveQual(e.target.value)}
+                className="w-full px-3 py-2 rounded-lg bg-surface-2 border border-border text-text text-sm focus:outline-none focus:ring-2 focus:ring-ibad focus:border-ibad/50" />
+            </div>
+          </div>
+          <button
+            className="btn-primary w-full"
+            disabled={busy || !giveTpl.trim()}
+            onClick={() => run(
+              () => giveItem(player.id, giveTpl.trim(), Number(giveQty) || 1, Number(giveQual) || 0),
+              'Give Item',
+            )}
+          >
+            {busy ? <Icon name="Loader2" size={13} className="animate-spin" /> : <Icon name="Check" size={13} />} Give Item
+          </button>
+        </div>
       )}
       {form === 'rename' && (
         <InlineForm busy={busy} submitLabel="Rename" fields={[

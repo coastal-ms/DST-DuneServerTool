@@ -695,3 +695,71 @@ function Get-DunePlayerEventsDemo {
         [ordered]@{ id=3; ts='2026-06-11T22:10:00Z'; event_type='logout';        meta='{}' }
     )
 }
+
+# ---------------------------------------------------------------------------
+# v11.5.7 — Fill Water (offline path). Ported from dune-admin db.go:6325
+# cmdRefillWaterOffline. Sets all water-fillable items in the actor's relevant
+# inventories to their MaxAmount via jsonb_set. Takes effect on next relog for
+# online players; instant for offline players.
+#
+# Source list: dune-admin fillables_gen.go waterFillableTemplates (49 entries,
+# generated from DT_ItemTableFillables.json — FillableTypeRestriction=Water).
+# repairGearInventoryTypes mirrors dune-admin's set (0,1,14,15,27,30).
+# ---------------------------------------------------------------------------
+$script:DuneWaterFillableTemplates = @(
+    'advancedstillsuit','combat_nati_fremenexile04_top','decajon','dewpack',
+    'highcapacityliterjon','highcapacityliterjon_02','highcapacityliterjon_03',
+    'highcapacityliterjon_04','highcapacityliterjon_05','highcapacityliterjon_06',
+    'literjon','literjon_03','literjon_04','literjon_05','literjon_06',
+    'literjon_07','literjon_08','literjon_09','literjon_t6','simplestillsuit',
+    'stillsuit_choam_01_top','stillsuit_choam_02_top','stillsuit_choam_04_top',
+    'stillsuit_choam_05_top','stillsuit_choam_06_top',
+    'stillsuit_choam_unique_dashed02_top','stillsuit_choam_unique_dashed03_top',
+    'stillsuit_choam_unique_dashed04_top','stillsuit_choam_unique_dashed05_top',
+    'stillsuit_choam_unique_dashed06_top','stillsuit_nati_05_body',
+    'stillsuit_nati_06_body','stillsuit_nati_07_body','stillsuit_nati_08_body',
+    'stillsuit_nati_arrakeen05_body','stillsuit_neut_leaking01_top',
+    'stillsuit_neut_patchy02_top','stillsuit_unique_armored_01_top',
+    'stillsuit_unique_armored_02_top','stillsuit_unique_armored_03_top',
+    'stillsuit_unique_armored_04_top','stillsuit_unique_armored_05_top',
+    'stillsuit_unique_armored_06_top','stillsuit_unique_efficient_04_top',
+    'stillsuit_unique_efficient_05_top','stillsuit_unique_efficient_06_top',
+    'stillsuit_unique_highcapacity_06_top','stillsuit_unique_thermalsuit_06_top',
+    'waterpack_consumable'
+)
+$script:DuneWaterFillableInventoryTypes = @(0, 1, 14, 15, 27, 30)
+
+function Invoke-DunePlayerFillWater {
+    param([string]$Ip, [long]$PawnId)
+    if ($PawnId -le 0) { return @{ ok = $false; error = 'pawn_id (actor id) is required.' } }
+    $tmplCsv = ($script:DuneWaterFillableTemplates | ForEach-Object { "'" + $_ + "'" }) -join ','
+    $invCsv  = ($script:DuneWaterFillableInventoryTypes -join ',')
+    $sql = @"
+WITH upd AS (
+    UPDATE dune.items i
+    SET stats = jsonb_set(
+        i.stats,
+        '{FFillableItemStats,1,CurrentAmount}',
+        (i.stats->'FFillableItemStats'->1->'MaxAmount')
+    )
+    FROM dune.inventories inv
+    WHERE inv.actor_id = $PawnId::bigint
+      AND inv.inventory_type = ANY(ARRAY[$invCsv]::int[])
+      AND i.inventory_id = inv.id
+      AND lower(i.template_id) = ANY(ARRAY[$tmplCsv]::text[])
+      AND i.stats ? 'FFillableItemStats'
+      AND (i.stats->'FFillableItemStats'->1->'MaxAmount') IS NOT NULL
+    RETURNING i.id
+)
+SELECT COUNT(*)::bigint AS refilled FROM upd;
+"@
+    $res = Invoke-DuneSqlQuery -Ip $Ip -Sql $sql -ReadOnly $false -MaxRows 1 -TimeoutSec 30
+    if (-not $res.ok) { return @{ ok = $false; error = $res.error } }
+    $maps = ConvertTo-DuneRowMaps -Result $res
+    $count = 0
+    if ($maps.Count -ge 1) { $count = [int](ConvertTo-DuneInt $maps[0]['refilled']) }
+    if ($count -le 0) {
+        return @{ ok = $true; refilled = 0; message = 'No water-fillable items found for that player (already empty inventory or no stillsuits/jons).' }
+    }
+    return @{ ok = $true; refilled = $count; message = "Refilled $count water-fillable item(s). Online players: takes effect on next relog." }
+}

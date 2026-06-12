@@ -13,6 +13,52 @@ here cover everything those tags shipped.
 
 ## [Unreleased]
 
+## [11.5.7] - 2026-06-12
+
+### Added — User-reported hotfixes (Phase 1.5 of dune-admin player port)
+
+This release responds to direct user feedback on the v11.5.6 Players tab and pulls
+forward two features from the planned v11.5.9 work so users aren't blocked:
+
+- **Give Item search autocomplete** (reported by Chopper) — both the
+  *Players → Actions → Give Item* form and the *Storage → Add Items* form now
+  show a typeahead dropdown that searches the live game catalog (`/api/catalog/items`)
+  by friendly name *or* template id as you type. Selecting a result fills the
+  template id automatically. The catalog is fetched lazily on first focus and
+  cached for the session.
+- **Fill Water** (reported by Chopper) — restores the Icehunter add-on feature.
+  Adds a *Fill Water* button to *Players → Actions* that refills every
+  fillable water container in the selected player's storage, gear, mounts,
+  vehicles, dropship and chests to max. SQL is ported verbatim from
+  dune-admin's `cmdRefillWaterOffline` so it covers the same 49 fillable
+  templates and 6 inventory types. Online players see the effect on their
+  next relog (game server caches inventory in memory); offline players see
+  it immediately on next login.
+- **Coriolis Storm seed control** (requested by [user]) — new
+  *Coriolis Storm Seeds* panel under *Players → Server Overview* (visible
+  when no player is selected). Three scopes:
+  - **Farm seed** — reroll, stay on current, or set a specific seed for the
+    whole farm (cascades to every map and partition, triggers cleanup of
+    corpses + loose loot).
+  - **Map seed** — same controls per individual map (Hagga Basin, Vermillius
+    Gap, etc.). Cascades to that map's partitions.
+  - **Partition seed** — collapsible list with the same controls per
+    partition for fine-grained tweaks.
+  Uses the existing `dune.debug_get_coriolis_seeds()` / `debug_set_*_seed()`
+  Postgres routines, so private servers that have these routines available
+  get the live experience and others fall back to a demo view automatically.
+
+### Notes
+
+- The heavy *Progression / Contracts / Journey* port originally planned for
+  v11.5.7 has been deferred to v11.5.8 so these blocker-tier user fixes
+  could ship same-day.
+- Backend wiring is in `app/server/lib/CoriolisAdmin.ps1` +
+  `app/server/routes/CoriolisAdmin.ps1` and the new
+  `Invoke-DunePlayerFillWater` in `app/server/lib/GameplayPlayers.ps1`.
+  Frontend wiring uses the new reusable `ItemPicker` component in
+  `webui/src/components/ItemPicker.tsx`.
+
 ## [11.5.6] - 2026-06-12
 
 ### Added — Player admin foundation (Phase 1 of dune-admin player port)
