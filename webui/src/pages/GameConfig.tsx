@@ -2,7 +2,6 @@ import { useState, useEffect, useMemo, useCallback, type FormEvent, type ReactEl
 import { PageHeader } from '../components/PageHeader'
 import { Icon } from '../components/Icon'
 import { useStatus } from '../hooks/useStatus'
-import { useUpdateCheck } from '../hooks/useUpdateCheck'
 import { api } from '../api/client'
 import {
   getGameConfigSchema,
@@ -36,12 +35,6 @@ import { SpicefieldsCard } from './gameconfig/SpicefieldsCard'
 type LoadState = 'idle' | 'loading' | 'ready' | 'error' | 'unavailable'
 
 const SANDWORM_ENABLED_KEY = 'sandworm.dune.Enabled'
-
-// Stores the DST version the risk disclaimer was acknowledged for. When the
-// user ticks "remember", we save the current version here; the modal then only
-// re-appears after a DST update (version mismatch). Sentinel 'acknowledged' is
-// used when the version isn't known yet and never triggers a re-show.
-const DISCLAIMER_ACK_KEY = 'dst.gameConfig.disclaimerAck'
 
 // Bool literal pairs per type so toggles emit exactly what UE expects.
 function boolPair(type: GameConfigField['type']): { on: string; off: string } | null {
@@ -84,44 +77,6 @@ function sectionIsManaged(data: GameConfigResponse, field: GameConfigField): boo
 export function GameConfig() {
   const { status } = useStatus()
   const vmRunning = status?.vm?.running === true
-  const { data: upd } = useUpdateCheck()
-  const currentVersion = upd?.currentVersion ?? ''
-
-  // Risk disclaimer shown on first visit to this page (and again after updates).
-  const [disclaimerOpen, setDisclaimerOpen] = useState<boolean>(() => {
-    try {
-      return localStorage.getItem(DISCLAIMER_ACK_KEY) === null
-    } catch {
-      return true
-    }
-  })
-  const [disclaimerRemember, setDisclaimerRemember] = useState(true)
-
-  // Re-show the disclaimer when DST has been updated since it was acknowledged.
-  useEffect(() => {
-    if (!currentVersion) return
-    try {
-      const ack = localStorage.getItem(DISCLAIMER_ACK_KEY)
-      if (ack && ack !== 'acknowledged' && ack !== currentVersion) {
-        setDisclaimerOpen(true)
-      }
-    } catch {
-      /* ignore */
-    }
-  }, [currentVersion])
-
-  const acknowledgeDisclaimer = useCallback(() => {
-    try {
-      if (disclaimerRemember) {
-        localStorage.setItem(DISCLAIMER_ACK_KEY, currentVersion || 'acknowledged')
-      } else {
-        localStorage.removeItem(DISCLAIMER_ACK_KEY)
-      }
-    } catch {
-      /* ignore */
-    }
-    setDisclaimerOpen(false)
-  }, [disclaimerRemember, currentVersion])
 
   const [schema, setSchema] = useState<GameConfigCategory[] | null>(null)
   const [cfg, setCfg] = useState<GameConfigResponse | null>(null)
@@ -788,13 +743,6 @@ export function GameConfig() {
         open={sandwormModalOpen}
         onCancel={() => setSandwormModalOpen(false)}
         onConfirm={confirmSandwormEnable}
-      />
-
-      <ConfigDisclaimerModal
-        open={disclaimerOpen}
-        remember={disclaimerRemember}
-        onToggleRemember={setDisclaimerRemember}
-        onAcknowledge={acknowledgeDisclaimer}
       />
 
       {backupsOpen && (
@@ -1677,66 +1625,3 @@ function SandwormConfirmModal({
   )
 }
 
-// -----------------------------------------------------------------------------
-// Risk disclaimer modal — shown on first visit (and again after DST updates)
-// -----------------------------------------------------------------------------
-
-function ConfigDisclaimerModal({
-  open, remember, onToggleRemember, onAcknowledge,
-}: {
-  open: boolean
-  remember: boolean
-  onToggleRemember: (v: boolean) => void
-  onAcknowledge: () => void
-}) {
-  if (!open) return null
-
-  return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm p-4">
-      <div className="card p-0 max-w-md w-full border-danger/40">
-        <div className="px-5 py-4 border-b border-border flex items-center gap-2">
-          <Icon name="AlertTriangle" size={18} className="text-danger" />
-          <h3 className="font-semibold text-text">Proceed with caution</h3>
-        </div>
-
-        <div className="px-5 py-4 space-y-3 text-sm text-text leading-relaxed">
-          <p>
-            These settings directly edit your server's configuration. Incorrect
-            values can{' '}
-            <span className="font-semibold text-danger">
-              cause irreversible damage
-            </span>{' '}
-            to your world and save data.
-          </p>
-          <p className="text-text-muted">
-            Back up your settings before changing anything. You use this page at
-            your own risk.
-          </p>
-
-          <label className="flex items-center gap-2 pt-1 cursor-pointer select-none">
-            <input
-              type="checkbox"
-              checked={remember}
-              onChange={e => onToggleRemember(e.target.checked)}
-              className="h-4 w-4 rounded border-border bg-surface-2 accent-accent-bright"
-            />
-            <span className="text-xs text-text-muted">
-              Remember selection (show again only after a DST update)
-            </span>
-          </label>
-        </div>
-
-        <div className="px-5 py-3 border-t border-border flex items-center justify-end">
-          <button
-            type="button"
-            onClick={onAcknowledge}
-            className="btn-primary"
-          >
-            <Icon name="Check" size={14} />
-            I acknowledge
-          </button>
-        </div>
-      </div>
-    </div>
-  )
-}
