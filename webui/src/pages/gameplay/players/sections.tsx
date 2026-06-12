@@ -517,10 +517,15 @@ const ACTIONS: ActionDef[] = [
 
   // ----- Danger Zone -----
   { id: 'delete-account', group: 'Danger', label: 'Delete Account (permanent)', icon: 'AlertTriangle',
-    confirm: p => `PERMANENTLY delete account ${p.account_id} (${p.name})? This cannot be undone. Type the player name in the next prompt to confirm.`,
     run: p => {
-      const typed = window.prompt(`Confirm by typing the character name: ${p.name}`) || ''
-      if (typed.trim() !== p.name) throw new Error('Confirmation name did not match. Aborted.')
+      const typed = window.prompt(
+        `PERMANENTLY delete account ${p.account_id} (${p.name}).\n` +
+        `This cannot be undone.\n\n` +
+        `Type  i acknowledge  to proceed:`
+      ) || ''
+      if (typed.trim().toLowerCase() !== 'i acknowledge') {
+        throw new Error('Did not type "i acknowledge" — delete aborted.')
+      }
       return deleteAccount(p.account_id)
     } },
 ]
