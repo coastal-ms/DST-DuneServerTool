@@ -40,7 +40,7 @@ export function StatusBar() {
     <header className="h-14 shrink-0 border-b border-border bg-surface/60 backdrop-blur-md px-5 flex items-center justify-between">
       <div className="flex items-center gap-2 text-sm text-text-muted">
         <Icon name="Server" size={16} className="text-text-dim" />
-        <span>Dune Awakening dedicated server</span>
+        <span>Dune Self Host Server Tool</span>
       </div>
       <div className="flex items-center gap-2">
         <span className={portPillClass(ports, 7777, 'UDP')} title="Game server ports (forward on your router/firewall)">
