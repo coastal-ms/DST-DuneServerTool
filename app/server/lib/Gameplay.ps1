@@ -52,12 +52,16 @@ function Initialize-DuneGameplayItemData {
             foreach ($p in $json.items.PSObject.Properties) {
                 $v = $p.Value
                 $rules[$p.Name] = @{
-                    name           = [string]$v.name
-                    category       = [string]$v.category
-                    tier           = if ($null -ne $v.tier) { [int]$v.tier } else { 0 }
-                    rarity         = [string]$v.rarity
-                    icon           = [string]$v.icon
-                    max_durability = if ($null -ne $v.max_durability) { [double]$v.max_durability } else { 0.0 }
+                    name              = [string]$v.name
+                    category          = [string]$v.category
+                    tier              = if ($null -ne $v.tier) { [int]$v.tier } else { 0 }
+                    rarity            = [string]$v.rarity
+                    icon              = [string]$v.icon
+                    max_durability    = if ($null -ne $v.max_durability) { [double]$v.max_durability } else { 0.0 }
+                    stack_max         = if ($null -ne $v.stack_max) { [int]$v.stack_max } else { 0 }
+                    vendor_price      = if ($null -ne $v.vendor_price) { [int]$v.vendor_price } else { 0 }
+                    is_gradeable      = [bool]$v.is_gradeable
+                    min_quality_level = if ($null -ne $v.min_quality_level) { [int]$v.min_quality_level } else { 0 }
                 }
             }
         }
