@@ -4,7 +4,7 @@ import { ItemPicker } from '../../components/ItemPicker'
 import {
   getBotStatus, getBotConfig, saveBotConfig, runBotTick, runBotListTick,
   startBotSeedMarket, botExec,
-  setBotBalance, clearBotListings, clearBotLegacyListings, getBotVendorSnapshot,
+  setBotBalance, clearBotListings, clearBotLegacyListings, clearBotError, getBotVendorSnapshot,
   type BotStatus, type BotConfig, type BotTickResult, type BotListTickResult,
   type BotSeedProgress,
   type BotVendorCandidate,
@@ -12,6 +12,18 @@ import {
 import { fmtSolari, fmtNum, SourceBadge } from './shared'
 
 type SubTab = 'buy' | 'list' | 'pricing'
+
+// Keep the seed-progress banner visible for ~30s after a seed finishes so the
+// user gets a chance to read the final counters even if they navigated to
+// another subtab during the run.
+function isRecentSeedFinish(p: BotSeedProgress | null | undefined): boolean {
+  if (!p || p.running) return false
+  const ts = p.finished ?? p.updated
+  if (!ts) return false
+  const t = Date.parse(ts)
+  if (Number.isNaN(t)) return false
+  return Date.now() - t < 30_000
+}
 
 export function MarketBotTab() {
   const [status, setStatus] = useState<BotStatus | null>(null)
@@ -133,6 +145,17 @@ export function MarketBotTab() {
 
   const seedProgress: BotSeedProgress | null = status?.seed_progress ?? null
   const seeding = !!seedProgress?.running
+  const [dismissingError, setDismissingError] = useState(false)
+
+  const dismissError = async () => {
+    setDismissingError(true)
+    try {
+      await clearBotError()
+      const s = await getBotStatus().catch(() => null)
+      if (s) setStatus(s)
+    } catch { /* swallow — banner stays */ }
+    finally { setDismissingError(false) }
+  }
 
   const doSeedMarket = async () => {
     const perGrade = draft?.listings_per_grade ?? 5
@@ -311,8 +334,33 @@ export function MarketBotTab() {
       )}
 
       {status?.error && (
-        <div className="card p-3 mb-4 text-sm text-danger break-words">
-          <span className="font-semibold">Bot error:</span> {status.error}
+        <div className="card p-3 mb-4 text-sm text-danger break-words flex items-start gap-3">
+          <div className="flex-1">
+            <span className="font-semibold">Bot error:</span> {status.error}
+          </div>
+          <button
+            className="btn-secondary text-xs shrink-0"
+            disabled={dismissingError}
+            onClick={dismissError}
+            title="Dismiss this stale error message">
+            <Icon name={dismissingError ? 'Loader2' : 'X'} size={13} className={dismissingError ? 'animate-spin' : ''} />
+            Dismiss
+          </button>
+        </div>
+      )}
+
+      {/* Seed market progress — surfaced ABOVE the subtab nav so it's visible
+          from any subtab. Only renders while a seed is running, or for ~30s
+          after one completes so the user can see the final state. */}
+      {seedProgress && (seeding || isRecentSeedFinish(seedProgress)) && (
+        <div className="card p-3 mb-4 border-l-2 border-l-accent">
+          <div className="text-xs uppercase tracking-wider text-text-dim mb-2 flex items-center gap-2">
+            <Icon name={seeding ? 'Loader2' : (seedProgress.phase === 'error' ? 'AlertCircle' : 'CheckCircle2')}
+                  size={14}
+                  className={seeding ? 'animate-spin text-accent' : (seedProgress.phase === 'error' ? 'text-danger' : 'text-success')} />
+            Seed market — {seeding ? 'in progress' : (seedProgress.phase === 'error' ? 'failed' : 'done')}
+          </div>
+          <SeedProgressView progress={seedProgress} />
         </div>
       )}
 
@@ -529,7 +577,9 @@ function ListSection({ draft, setDraft, listTick, listTicking, snapshot, snapsho
         {seedLaunchError && (
           <div className="text-danger text-xs mb-2">Launch failed: {seedLaunchError}</div>
         )}
-        {seedProgress && <SeedProgressView progress={seedProgress} />}
+        {seeding && (
+          <div className="text-[11px] text-accent">Seed running — see progress banner above.</div>
+        )}
       </div>
 
       <div className="card p-4">
