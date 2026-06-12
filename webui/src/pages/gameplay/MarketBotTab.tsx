@@ -2,9 +2,9 @@ import { useCallback, useEffect, useState } from 'react'
 import { Icon } from '../../components/Icon'
 import { ItemPicker } from '../../components/ItemPicker'
 import {
-  getBotStatus, getBotConfig, saveBotConfig, runBotTick, runBotListTick, botExec,
+  getBotStatus, getBotConfig, saveBotConfig, runBotTick, runBotListTick, runBotSeedMarket, botExec,
   setBotBalance, clearBotListings, clearBotLegacyListings, getBotVendorSnapshot,
-  type BotStatus, type BotConfig, type BotTickResult, type BotListTickResult,
+  type BotStatus, type BotConfig, type BotTickResult, type BotListTickResult, type BotSeedResult,
   type BotVendorCandidate,
 } from '../../api/gameplay'
 import { fmtSolari, fmtNum, SourceBadge } from './shared'
@@ -23,6 +23,8 @@ export function MarketBotTab() {
   const [ticking, setTicking] = useState(false)
   const [listTick, setListTick] = useState<BotListTickResult | null>(null)
   const [listTicking, setListTicking] = useState(false)
+  const [seedResult, setSeedResult] = useState<BotSeedResult | null>(null)
+  const [seeding, setSeeding] = useState(false)
   const [balanceBusy, setBalanceBusy] = useState(false)
   const [clearing, setClearing] = useState(false)
   const [clearingLegacy, setClearingLegacy] = useState(false)
@@ -126,6 +128,23 @@ export function MarketBotTab() {
       if (!dry) getBotStatus().then(setStatus).catch(() => {})
     } catch (e) { setError(e instanceof Error ? e.message : String(e)) }
     finally { setListTicking(false) }
+  }
+
+  const doSeedMarket = async (dry: boolean) => {
+    if (!dry) {
+      const perGrade = draft?.listings_per_grade ?? 5
+      const ok = window.confirm(
+        `Bulk-seed the market: insert up to ${perGrade} NPC listings per catalogued template (~1000–1400 templates depending on the Stackables-only toggle). This bypasses the live vendor snapshot and writes straight to the DB.\n\nProceed?`,
+      )
+      if (!ok) return
+    }
+    setSeeding(true); setSeedResult(null); setError(null)
+    try {
+      const r = await runBotSeedMarket(dry)
+      setSeedResult(r)
+      if (!dry) getBotStatus().then(setStatus).catch(() => {})
+    } catch (e) { setError(e instanceof Error ? e.message : String(e)) }
+    finally { setSeeding(false) }
   }
 
   const maintainBalance = async () => {
@@ -305,7 +324,8 @@ export function MarketBotTab() {
       {draft && sub === 'list' && (
         <ListSection draft={draft} setDraft={setDraft} listTick={listTick} listTicking={listTicking}
           snapshot={snapshot} snapshotLoading={snapshotLoading}
-          onListTick={doListTick} onLoadSnapshot={loadSnapshot} />
+          seedResult={seedResult} seeding={seeding}
+          onListTick={doListTick} onLoadSnapshot={loadSnapshot} onSeedMarket={doSeedMarket} />
       )}
 
       {draft && sub === 'pricing' && (
@@ -462,14 +482,41 @@ function BuyTickResultView({ tick }: { tick: BotTickResult }) {
 // List section — sell-side scheduler + listing tuning + vendor snapshot preview.
 // ---------------------------------------------------------------------------
 function ListSection({ draft, setDraft, listTick, listTicking, snapshot, snapshotLoading,
-  onListTick, onLoadSnapshot }: {
+  seedResult, seeding,
+  onListTick, onLoadSnapshot, onSeedMarket }: {
     draft: BotConfig; setDraft: (c: BotConfig) => void;
     listTick: BotListTickResult | null; listTicking: boolean;
     snapshot: BotVendorCandidate[] | null; snapshotLoading: boolean;
+    seedResult: BotSeedResult | null; seeding: boolean;
     onListTick: (dry: boolean) => void; onLoadSnapshot: () => void;
+    onSeedMarket: (dry: boolean) => void;
   }) {
   return (
     <div className="space-y-4">
+      <div className="card p-4 border-l-2 border-l-accent">
+        <div className="flex items-center justify-between mb-2">
+          <h4 className="text-xs uppercase tracking-wider text-text-dim flex items-center gap-2">
+            <Icon name="Sparkles" size={14} className="text-accent" /> Seed market (immediate bulk-list)
+          </h4>
+          <div className="flex items-center gap-2">
+            <button className="btn-secondary" disabled={seeding} onClick={() => onSeedMarket(true)}>
+              <Icon name={seeding ? 'Loader2' : 'FlaskConical'} size={15} className={seeding ? 'animate-spin' : ''} /> Dry run
+            </button>
+            <button className="btn-primary" disabled={seeding} onClick={() => onSeedMarket(false)}>
+              <Icon name={seeding ? 'Loader2' : 'Zap'} size={15} className={seeding ? 'animate-spin' : ''} /> Seed market
+            </button>
+          </div>
+        </div>
+        <p className="text-[11px] text-text-dim mb-2">
+          Bypasses the live NPC vendor snapshot (which depends on the in-game market already having activity)
+          and the mask-cache SSH refresh. Walks the bundled item catalog intersected with the persistent mask cache
+          and tops Duke up to <span className="font-mono">{draft.listings_per_grade}</span> per template in one
+          batched transaction per ~200 templates. Use this on a fresh BG when <em>Run a list tick</em> reports
+          0 eligible items.
+        </p>
+        {seedResult && <SeedResultView result={seedResult} />}
+      </div>
+
       <div className="card p-4">
         <div className="flex items-center justify-between mb-2">
           <h4 className="text-xs uppercase tracking-wider text-text-dim flex items-center gap-2">
@@ -551,6 +598,60 @@ function ListSection({ draft, setDraft, listTick, listTicking, snapshot, snapsho
           </div>
         )}
       </div>
+    </div>
+  )
+}
+
+function SeedResultView({ result }: { result: BotSeedResult }) {
+  return (
+    <div className="text-sm">
+      <div className="flex flex-wrap gap-x-4 gap-y-1 text-text-muted">
+        <span><span className="text-text-dim">masks known:</span> {fmtNum(result.masks_known)}</span>
+        <span><span className="text-text-dim">considered:</span> {fmtNum(result.considered)}</span>
+        <span><span className="text-text-dim">eligible:</span> {fmtNum(result.eligible)}</span>
+        <span><span className="text-text-dim">listed before:</span> {fmtNum(result.listed_before)}</span>
+        <span className={result.dryRun ? 'text-accent' : 'text-success'}>
+          <span className="text-text-dim">listed after:</span> {fmtNum(result.listed_after)}
+        </span>
+        <span><span className="text-text-dim">inserted:</span> {fmtNum(result.inserted)}</span>
+        <span><span className="text-text-dim">chunks:</span> {fmtNum(result.chunks)}</span>
+        {result.errors > 0 && <span className="text-danger"><span className="text-text-dim">errors:</span> {fmtNum(result.errors)}</span>}
+      </div>
+      {result.dryRun && <div className="mt-1 text-[11px] text-accent">Dry run — nothing was written.</div>}
+      {result.message && <div className="mt-1 text-[11px] text-danger break-words">{result.message}</div>}
+      {result.planned?.length > 0 && (
+        <div className="mt-2 max-h-48 overflow-auto rounded-lg border border-border">
+          <table className="w-full text-xs">
+            <thead className="text-text-dim bg-surface-2 sticky top-0">
+              <tr>
+                <th className="text-left px-2 py-1">Template</th>
+                <th className="text-right px-2 py-1">Target</th>
+                <th className="text-right px-2 py-1">Stack</th>
+                <th className="text-right px-2 py-1">Existing</th>
+                <th className="text-right px-2 py-1">To insert</th>
+                <th className="text-left px-2 py-1">Source</th>
+              </tr>
+            </thead>
+            <tbody>
+              {result.planned.slice(0, 200).map((p, i) => (
+                <tr key={`${p.template_id}-${i}`} className="border-t border-border">
+                  <td className="px-2 py-1 font-mono text-text truncate max-w-[260px]">{p.template_id}</td>
+                  <td className="px-2 py-1 text-right font-mono text-accent-bright">{fmtSolari(p.target_price)}</td>
+                  <td className="px-2 py-1 text-right">{fmtNum(p.stack_max)}</td>
+                  <td className="px-2 py-1 text-right text-text-muted">{p.existing}{p.aligned !== p.existing && <span className="text-text-dim"> ({p.aligned} ok)</span>}</td>
+                  <td className="px-2 py-1 text-right text-success">{p.to_insert}</td>
+                  <td className="px-2 py-1 text-[10px] uppercase text-text-dim">{p.source}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+          {result.planned.length > 200 && (
+            <div className="px-2 py-1 text-[11px] text-text-dim border-t border-border">
+              Showing first 200 of {fmtNum(result.planned.length)} planned actions.
+            </div>
+          )}
+        </div>
+      )}
     </div>
   )
 }

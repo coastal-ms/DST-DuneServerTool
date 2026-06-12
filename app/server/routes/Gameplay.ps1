@@ -380,6 +380,28 @@ Register-DuneRoute -Method POST -Path '/api/gameplay/market-bot/tick/list' -Hand
 }
 
 # ---------------------------------------------------------------------------
+# POST /api/gameplay/market-bot/seed — IMMEDIATE seed: bulk-list every
+# catalogued template up to listings_per_grade in one shot. Bypasses the
+# live vendor snapshot (which hangs on fresh BGs with no NPC orders) and
+# the mask-cache SSH refresh — uses the bundled catalog + mask seed file
+# only. ?dry=1 (or body { dryRun: true }) reports the plan WITHOUT writing.
+# ---------------------------------------------------------------------------
+Register-DuneRoute -Method POST -Path '/api/gameplay/market-bot/seed' -Handler {
+    param($req, $res, $routeParams, $body)
+    try {
+        $dry = $false
+        $q = (Get-DuneQ -Request $req -Name 'dry').ToLower()
+        if ($q -eq '1' -or $q -eq 'true' -or $q -eq 'yes') { $dry = $true }
+        if (Test-DuneBodyTruthy -Body $body -Name 'dryRun') { $dry = $true }
+        $summary = Invoke-DuneBotSeedMarket -DryRun:$dry
+        $status = if ($summary.ok) { 200 } else { 503 }
+        Write-DuneJson -Response $res -Status $status -Body $summary
+    } catch {
+        Write-DuneError -Response $res -Status 500 -Message "Bot seed market failed: $($_.Exception.Message)"
+    }
+}
+
+# ---------------------------------------------------------------------------
 # GET /api/gameplay/market-bot/vendor-snapshot — preview what the bot WOULD
 # list (catalog derived from live NPC vendor inventory). Useful for tuning
 # pricing rules before flipping the bot on.
