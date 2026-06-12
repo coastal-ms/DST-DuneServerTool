@@ -2,9 +2,11 @@ import { useCallback, useEffect, useState } from 'react'
 import { Icon } from '../../components/Icon'
 import { ItemPicker } from '../../components/ItemPicker'
 import {
-  getBotStatus, getBotConfig, saveBotConfig, runBotTick, runBotListTick, runBotSeedMarket, botExec,
+  getBotStatus, getBotConfig, saveBotConfig, runBotTick, runBotListTick,
+  startBotSeedMarket, botExec,
   setBotBalance, clearBotListings, clearBotLegacyListings, getBotVendorSnapshot,
-  type BotStatus, type BotConfig, type BotTickResult, type BotListTickResult, type BotSeedResult,
+  type BotStatus, type BotConfig, type BotTickResult, type BotListTickResult,
+  type BotSeedProgress,
   type BotVendorCandidate,
 } from '../../api/gameplay'
 import { fmtSolari, fmtNum, SourceBadge } from './shared'
@@ -23,8 +25,7 @@ export function MarketBotTab() {
   const [ticking, setTicking] = useState(false)
   const [listTick, setListTick] = useState<BotListTickResult | null>(null)
   const [listTicking, setListTicking] = useState(false)
-  const [seedResult, setSeedResult] = useState<BotSeedResult | null>(null)
-  const [seeding, setSeeding] = useState(false)
+  const [seedLaunchError, setSeedLaunchError] = useState<string | null>(null)
   const [balanceBusy, setBalanceBusy] = useState(false)
   const [clearing, setClearing] = useState(false)
   const [clearingLegacy, setClearingLegacy] = useState(false)
@@ -130,20 +131,39 @@ export function MarketBotTab() {
     finally { setListTicking(false) }
   }
 
+  const seedProgress: BotSeedProgress | null = status?.seed_progress ?? null
+  const seeding = !!seedProgress?.running
+
   const doSeedMarket = async () => {
     const perGrade = draft?.listings_per_grade ?? 5
     const ok = window.confirm(
-      `Bulk-seed the market: insert up to ${perGrade} NPC listings per catalogued template (~1000–1400 templates depending on the Stackables-only toggle). This bypasses the live vendor snapshot and writes straight to the DB.\n\nProceed?`,
+      `Bulk-seed the market: insert up to ${perGrade} NPC listings per catalogued template (~1000–1400 templates depending on the Stackables-only toggle). This bypasses the live vendor snapshot and writes straight to the DB.\n\nThe seed runs in the background — you can leave this page open and watch the progress bar, or come back later. The button reactivates once it finishes.\n\nProceed?`,
     )
     if (!ok) return
-    setSeeding(true); setSeedResult(null); setError(null)
+    setSeedLaunchError(null); setError(null)
     try {
-      const r = await runBotSeedMarket(false)
-      setSeedResult(r)
+      const r = await startBotSeedMarket()
+      if (!r.ok && !r.running) {
+        setSeedLaunchError(r.error ?? 'Failed to start seed market.')
+        return
+      }
+      // Refresh status immediately so the progress bar appears without
+      // waiting for the next 10s poll interval.
       getBotStatus().then(setStatus).catch(() => {})
-    } catch (e) { setError(e instanceof Error ? e.message : String(e)) }
-    finally { setSeeding(false) }
+    } catch (e) {
+      setSeedLaunchError(e instanceof Error ? e.message : String(e))
+    }
   }
+
+  // While a seed is running, poll status every 2s instead of 10s so the
+  // progress bar actually moves. Reverts to normal cadence once it stops.
+  useEffect(() => {
+    if (!seeding) return
+    const id = window.setInterval(() => {
+      getBotStatus().then(setStatus).catch(() => {})
+    }, 2000)
+    return () => window.clearInterval(id)
+  }, [seeding])
 
   const maintainBalance = async () => {
     if (!draft) return
@@ -322,7 +342,7 @@ export function MarketBotTab() {
       {draft && sub === 'list' && (
         <ListSection draft={draft} setDraft={setDraft} listTick={listTick} listTicking={listTicking}
           snapshot={snapshot} snapshotLoading={snapshotLoading}
-          seedResult={seedResult} seeding={seeding}
+          seedProgress={seedProgress} seeding={seeding} seedLaunchError={seedLaunchError}
           onListTick={doListTick} onLoadSnapshot={loadSnapshot} onSeedMarket={doSeedMarket} />
       )}
 
@@ -480,12 +500,12 @@ function BuyTickResultView({ tick }: { tick: BotTickResult }) {
 // List section — sell-side scheduler + listing tuning + vendor snapshot preview.
 // ---------------------------------------------------------------------------
 function ListSection({ draft, setDraft, listTick, listTicking, snapshot, snapshotLoading,
-  seedResult, seeding,
+  seedProgress, seeding, seedLaunchError,
   onListTick, onLoadSnapshot, onSeedMarket }: {
     draft: BotConfig; setDraft: (c: BotConfig) => void;
     listTick: BotListTickResult | null; listTicking: boolean;
     snapshot: BotVendorCandidate[] | null; snapshotLoading: boolean;
-    seedResult: BotSeedResult | null; seeding: boolean;
+    seedProgress: BotSeedProgress | null; seeding: boolean; seedLaunchError: string | null;
     onListTick: () => void; onLoadSnapshot: () => void;
     onSeedMarket: () => void;
   }) {
@@ -497,17 +517,19 @@ function ListSection({ draft, setDraft, listTick, listTicking, snapshot, snapsho
             <Icon name="Sparkles" size={14} className="text-accent" /> Seed market (immediate bulk-list)
           </h4>
           <button className="btn-primary" disabled={seeding} onClick={onSeedMarket}>
-            <Icon name={seeding ? 'Loader2' : 'Zap'} size={15} className={seeding ? 'animate-spin' : ''} /> Seed market
+            <Icon name={seeding ? 'Loader2' : 'Zap'} size={15} className={seeding ? 'animate-spin' : ''} /> {seeding ? 'Seeding…' : 'Seed market'}
           </button>
         </div>
         <p className="text-[11px] text-text-dim mb-2">
           Bypasses the live NPC vendor snapshot (which depends on the in-game market already having activity)
           and the mask-cache SSH refresh. Walks the bundled item catalog intersected with the persistent mask cache
           and tops Duke up to <span className="font-mono">{draft.listings_per_grade}</span> per template in one
-          batched transaction per ~200 templates. Use this on a fresh BG when <em>Run a list tick</em> reports
-          0 eligible items.
+          batched transaction per ~200 templates. Runs in the background — the button reactivates when it finishes.
         </p>
-        {seedResult && <SeedResultView result={seedResult} />}
+        {seedLaunchError && (
+          <div className="text-danger text-xs mb-2">Launch failed: {seedLaunchError}</div>
+        )}
+        {seedProgress && <SeedProgressView progress={seedProgress} />}
       </div>
 
       <div className="card p-4">
@@ -589,55 +611,57 @@ function ListSection({ draft, setDraft, listTick, listTicking, snapshot, snapsho
   )
 }
 
-function SeedResultView({ result }: { result: BotSeedResult }) {
+function SeedProgressView({ progress }: { progress: BotSeedProgress }) {
+  const running = !!progress.running
+  const done = progress.chunks_done ?? 0
+  const total = progress.chunks_total ?? 0
+  const pct = total > 0 ? Math.min(100, Math.round((done / total) * 100)) : (running ? 0 : 100)
+  const isError = progress.phase === 'error'
+  const isDone  = progress.phase === 'done'
+  const barClass = isError ? 'bg-danger' : isDone ? 'bg-success' : 'bg-accent'
+  const label = running
+    ? (progress.phase === 'starting' ? 'Starting…'
+      : progress.phase === 'reading-listings' ? "Reading Duke's current listings…"
+      : progress.phase === 'writing' ? `Writing chunk ${fmtNum(done)} of ${fmtNum(total || done)}`
+      : `Phase: ${progress.phase ?? '?'}`)
+    : isError ? 'Failed'
+    : isDone ? 'Done'
+    : (progress.phase ?? 'idle')
+
   return (
-    <div className="text-sm">
-      <div className="flex flex-wrap gap-x-4 gap-y-1 text-text-muted">
-        <span><span className="text-text-dim">masks known:</span> {fmtNum(result.masks_known)}</span>
-        <span><span className="text-text-dim">considered:</span> {fmtNum(result.considered)}</span>
-        <span><span className="text-text-dim">eligible:</span> {fmtNum(result.eligible)}</span>
-        <span><span className="text-text-dim">listed before:</span> {fmtNum(result.listed_before)}</span>
-        <span className={result.dryRun ? 'text-accent' : 'text-success'}>
-          <span className="text-text-dim">listed after:</span> {fmtNum(result.listed_after)}
-        </span>
-        <span><span className="text-text-dim">inserted:</span> {fmtNum(result.inserted)}</span>
-        <span><span className="text-text-dim">chunks:</span> {fmtNum(result.chunks)}</span>
-        {result.errors > 0 && <span className="text-danger"><span className="text-text-dim">errors:</span> {fmtNum(result.errors)}</span>}
-      </div>
-      {result.dryRun && <div className="mt-1 text-[11px] text-accent">Dry run — nothing was written.</div>}
-      {result.message && <div className="mt-1 text-[11px] text-danger break-words">{result.message}</div>}
-      {result.planned?.length > 0 && (
-        <div className="mt-2 max-h-48 overflow-auto rounded-lg border border-border">
-          <table className="w-full text-xs">
-            <thead className="text-text-dim bg-surface-2 sticky top-0">
-              <tr>
-                <th className="text-left px-2 py-1">Template</th>
-                <th className="text-right px-2 py-1">Target</th>
-                <th className="text-right px-2 py-1">Stack</th>
-                <th className="text-right px-2 py-1">Existing</th>
-                <th className="text-right px-2 py-1">To insert</th>
-                <th className="text-left px-2 py-1">Source</th>
-              </tr>
-            </thead>
-            <tbody>
-              {result.planned.slice(0, 200).map((p, i) => (
-                <tr key={`${p.template_id}-${i}`} className="border-t border-border">
-                  <td className="px-2 py-1 font-mono text-text truncate max-w-[260px]">{p.template_id}</td>
-                  <td className="px-2 py-1 text-right font-mono text-accent-bright">{fmtSolari(p.target_price)}</td>
-                  <td className="px-2 py-1 text-right">{fmtNum(p.stack_max)}</td>
-                  <td className="px-2 py-1 text-right text-text-muted">{p.existing}{p.aligned !== p.existing && <span className="text-text-dim"> ({p.aligned} ok)</span>}</td>
-                  <td className="px-2 py-1 text-right text-success">{p.to_insert}</td>
-                  <td className="px-2 py-1 text-[10px] uppercase text-text-dim">{p.source}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-          {result.planned.length > 200 && (
-            <div className="px-2 py-1 text-[11px] text-text-dim border-t border-border">
-              Showing first 200 of {fmtNum(result.planned.length)} planned actions.
-            </div>
-          )}
+    <div className="text-sm space-y-2">
+      <div className="flex items-center gap-2">
+        <div className="flex-1 h-2 rounded-full bg-surface-2 overflow-hidden">
+          <div className={`h-full ${barClass} transition-all duration-300`} style={{ width: `${pct}%` }} />
         </div>
+        <span className="font-mono text-xs text-text-dim w-12 text-right">{pct}%</span>
+      </div>
+      <div className="text-xs text-text-muted">{label}</div>
+      <div className="flex flex-wrap gap-x-4 gap-y-1 text-text-muted text-xs">
+        {progress.masks_known != null && (
+          <span><span className="text-text-dim">masks known:</span> {fmtNum(progress.masks_known)}</span>
+        )}
+        {progress.considered != null && (
+          <span><span className="text-text-dim">considered:</span> {fmtNum(progress.considered)}</span>
+        )}
+        {progress.eligible != null && (
+          <span><span className="text-text-dim">eligible:</span> {fmtNum(progress.eligible)}</span>
+        )}
+        {progress.inserted != null && (
+          <span className="text-success"><span className="text-text-dim">inserted:</span> {fmtNum(progress.inserted)}</span>
+        )}
+        {total > 0 && (
+          <span><span className="text-text-dim">chunks:</span> {fmtNum(done)} / {fmtNum(total)}</span>
+        )}
+        {progress.errors != null && progress.errors > 0 && (
+          <span className="text-danger"><span className="text-text-dim">errors:</span> {fmtNum(progress.errors)}</span>
+        )}
+        {progress.listed_after != null && (
+          <span><span className="text-text-dim">listed after:</span> {fmtNum(progress.listed_after)}</span>
+        )}
+      </div>
+      {progress.message && (
+        <div className={`text-[11px] break-words ${isError ? 'text-danger' : 'text-text-dim'}`}>{progress.message}</div>
       )}
     </div>
   )
