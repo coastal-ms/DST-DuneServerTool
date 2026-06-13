@@ -13,6 +13,19 @@ here cover everything those tags shipped.
 
 ## [Unreleased]
 
+## [12.0.9] - 2026-06-12
+
+### Added
+
+- **Coriolis Storm Seeds panel is back on the Players → Server Overview** (shown
+  when no player is selected). It was trimmed in post-v12 polish; restored and
+  now **locked behind an explicit risk gate**. The controls render only after
+  acknowledging a severe-consequences warning ("these rewrite world-reset
+  generation and wipe corpses / loose loot when a seed changes — no undo"), and
+  every apply still has its own confirm. The backend is unchanged — it wraps the
+  same dune-admin debug routines (`debug_set_farm_seed` / `debug_set_map_seed` /
+  `debug_set_partition_seed`) at farm / map / partition scope.
+
 ## [12.0.8] - 2026-06-12
 
 ### Fixed
