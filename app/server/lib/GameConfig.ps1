@@ -556,9 +556,36 @@ function ConvertTo-DuneIniManaged {
         $managedByName[$name] = $entry
     }
     # Remaining body sections = those whose name is NOT a managed target.
+    # De-dupe: a section name may legitimately appear more than once in the input
+    # body (a pre-existing duplicate header). Emitting both copies leaves a
+    # duplicate header in the output, and UE5 honours the FIRST header while
+    # last-key-wins on values, silently dropping later keys. Collapse duplicates
+    # into a single section at the FIRST occurrence's position, appending later
+    # bodies in file order, so every section name appears exactly once.
     $remaining = New-Object 'System.Collections.Generic.List[object]'
+    $remainingByName = @{}
+    $remainingCount = @{}
     foreach ($s in $doc.sections) {
-        if (-not $targetSet.ContainsKey($s.name)) { $remaining.Add($s) }
+        if ($targetSet.ContainsKey($s.name)) { continue }
+        if ($remainingByName.ContainsKey($s.name)) {
+            $existing = $remainingByName[$s.name]
+            foreach ($l in $s.body) { $existing.body.Add($l) }
+            $remainingCount[$s.name] = $remainingCount[$s.name] + 1
+        } else {
+            $entry = @{ name = $s.name; header = $s.header; body = (New-Object 'System.Collections.Generic.List[string]') }
+            foreach ($l in $s.body) { $entry.body.Add($l) }
+            $remaining.Add($entry)
+            $remainingByName[$s.name] = $entry
+            $remainingCount[$s.name] = 1
+        }
+    }
+    # Only merge bodies for names that actually collapsed (>1 occurrence) so a
+    # normal single-occurrence section round-trips byte-for-byte. Merge keeps the
+    # first scalar-key position carrying the last-wins value (engine semantics).
+    foreach ($entry in $remaining) {
+        if ($remainingCount[$entry.name] -gt 1) {
+            $entry.body = Merge-DuneSectionBody -Lines $entry.body
+        }
     }
 
     # Apply updates into their managed sections.
