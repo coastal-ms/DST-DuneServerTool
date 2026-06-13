@@ -199,11 +199,20 @@ function ContainerDetail({ container, demo, onClose, onChanged }: {
         </div>
 
         {canWrite ? (
-          <div className="flex flex-wrap gap-2 mb-3">
-            <button className="btn-primary" disabled={busy} onClick={() => setShowAdd(s => !s)}>
-              <Icon name="PackagePlus" size={14} /> Add Items
-            </button>
-          </div>
+          <>
+            <div className="flex flex-wrap gap-2 mb-2">
+              <button className="btn-primary" disabled={busy} onClick={() => setShowAdd(s => !s)}>
+                <Icon name="PackagePlus" size={14} /> Add Items
+              </button>
+            </div>
+            <div className="mb-3 text-[11px] text-warning border-l-2 border-warning bg-warning/10 rounded px-2.5 py-1.5 flex items-start gap-1.5">
+              <Icon name="AlertTriangle" size={12} className="shrink-0 mt-0.5" />
+              <span>
+                Items added here only appear in-game after a <strong>battlegroup (server zone) restart</strong> —
+                the game caches container contents while the zone is loaded.
+              </span>
+            </div>
+          </>
         ) : (
           <div className="text-xs text-text-dim mb-3 flex items-center gap-1.5">
             <Icon name="Lock" size={12} /> Editing is available when the live game database is connected.

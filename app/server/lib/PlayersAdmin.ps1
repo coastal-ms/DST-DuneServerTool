@@ -231,6 +231,9 @@ function Invoke-DunePlayerGiveScrip {
 # ----- Character XP table (verbatim from db.go) ----------------------------
 
 $script:DuneMaxCharXp = 344440L
+# Most intel a character can hold (cumulative through max level). Mirrors the
+# reference tool's maxIntelPoints headroom clamp (#208).
+$script:DuneMaxIntelPoints = 2779
 $script:DuneCumulativeXpByLevel = @(
     0, 40, 215, 440, 740, 1240, 1790, 2390, 2990, 3590, 4190,
     4790, 5390, 5990, 6590, 7190, 7790, 8390, 8990, 9590, 10190,
@@ -334,6 +337,16 @@ function Get-DunePlayerControllerFromPawn {
     return [int64](ConvertTo-DuneInt $maps[0]['cid'])
 }
 
+function Get-DunePlayerPawnFromController {
+    param([string]$Ip, [long]$ControllerId)
+    $sql = "SELECT player_pawn_id::text AS pid FROM dune.player_state WHERE player_controller_id = $ControllerId::bigint LIMIT 1;"
+    $r = Invoke-DuneSqlQuery -Ip $Ip -Sql $sql -ReadOnly $true -MaxRows 1 -TimeoutSec 10
+    if (-not $r.ok) { return $null }
+    $maps = ConvertTo-DuneRowMaps -Result $r
+    if ($maps.Count -eq 0) { return $null }
+    return [int64](ConvertTo-DuneInt $maps[0]['pid'])
+}
+
 function Get-DunePlayerKeystoneIds {
     param([string]$Ip, [long]$ActorId)
     $sql = "SELECT COALESCE(properties->'KeystonePlayerComponent'->'m_PurchasedKeystoneIDs', '[]'::jsonb) AS ids FROM dune.actors WHERE id = $ActorId::bigint;"
@@ -404,10 +417,13 @@ function Invoke-DunePlayerAwardCharXp {
     $off = Test-DunePlayerOffline -Ip $Ip -PawnId $PawnId
     if (-not $off.ok) { return @{ ok = $false; error = $off.reason } }
 
-    $controller = Get-DunePlayerControllerFromPawn -Ip $Ip -PawnId $PawnId
-    if ($null -eq $controller -or $controller -le 0) { return @{ ok = $false; error = "Could not resolve player_controller from pawn $PawnId." } }
-
-    $cur = Get-DunePlayerLevelComponentRow -Ip $Ip -ActorId $controller
+    # All character progression data - FLevelComponent (XP/SP), KeystonePlayerComponent,
+    # and TechKnowledgePlayerComponent (intel) - lives on the player's PAWN actor (the
+    # DuneCharacter), NOT the controller. The reference tool keys cmdAwardCharXP entirely
+    # on the pawn (readCharXPState / fetchKeystoneBonusForPawn / intel update). Writing to
+    # the controller reads an empty FLevelComponent and lands the grant on a junk actor the
+    # game never reads, so offline char-xp silently no-ops.
+    $cur = Get-DunePlayerLevelComponentRow -Ip $Ip -ActorId $PawnId
     if (-not $cur.ok) { return @{ ok = $false; error = $cur.error } }
 
     $newXp = $cur.xp + $XpDelta
@@ -415,7 +431,7 @@ function Invoke-DunePlayerAwardCharXp {
     if ($newXp -gt $script:DuneMaxCharXp) { $newXp = $script:DuneMaxCharXp }
 
     $newLevel = Convert-DuneXpToLevel $newXp
-    $keystoneIds = Get-DunePlayerKeystoneIds -Ip $Ip -ActorId $controller
+    $keystoneIds = Get-DunePlayerKeystoneIds -Ip $Ip -ActorId $PawnId
     $keystoneBonus = Get-DuneKeystoneSpBonus -Ids $keystoneIds
     $totalSp = $newLevel + $keystoneBonus
     $unspent = $totalSp - $cur.sp_spent
@@ -426,7 +442,7 @@ function Invoke-DunePlayerAwardCharXp {
     $r1 = Invoke-DuneSqlQuery -Ip $Ip -Sql $sqlFgl -ReadOnly $false -MaxRows 1 -TimeoutSec 30
     if (-not $r1.ok) { return @{ ok = $false; error = "update FLevelComponent: $($r1.error)" } }
 
-    $sqlIntel = [string]::Format($script:DuneSetIntelSqlTpl, $controller, $newIntel)
+    $sqlIntel = [string]::Format($script:DuneSetIntelSqlTpl, $PawnId, $newIntel)
     $r2 = Invoke-DuneSqlQuery -Ip $Ip -Sql $sqlIntel -ReadOnly $false -MaxRows 1 -TimeoutSec 30
     if (-not $r2.ok) { return @{ ok = $false; error = "update Intel: $($r2.error)" } }
 
@@ -447,24 +463,24 @@ function Invoke-DunePlayerAwardIntel {
         [long]$ActorId,
         [int]$IntelDelta
     )
-    $controller = $ActorId
-    if ($controller -le 0 -and $PawnId -gt 0) {
-        $controller = Get-DunePlayerControllerFromPawn -Ip $Ip -PawnId $PawnId
+    # Intel (TechKnowledgePlayerComponent.m_TechKnowledgePoints) lives on the
+    # player's PAWN actor - the same actor that holds the backpack inventory - NOT
+    # the controller. Writing it to the controller creates a junk component the
+    # game never reads, so the grant silently no-ops (shows nothing in-game). This
+    # matches the reference tool, which keys awardIntel on player_pawn_id, and our
+    # own working give-item path, which writes to the pawn. Prefer the pawn id the
+    # UI sends; fall back to resolving it from the controller id.
+    $pawn = $PawnId
+    if ($pawn -le 0 -and $ActorId -gt 0) {
+        $pawn = Get-DunePlayerPawnFromController -Ip $Ip -ControllerId $ActorId
     }
-    if ($null -eq $controller -or $controller -le 0) { return @{ ok = $false; error = 'actor_id (or pawn_id) is required.' } }
+    if ($null -eq $pawn -or $pawn -le 0) { return @{ ok = $false; error = 'pawn_id (or actor_id) is required.' } }
     # Reject online players: the game server holds the actor's intel in memory
     # while online and flushes on logout, so a direct DB write here would be
     # silently clobbered (no live RMQ command exists to set tech knowledge).
-    # Gate by pawn id when we have it, otherwise resolve online state from the
-    # controller id (the UI calls this with controller_id only).
-    if ($PawnId -gt 0) {
-        $off = Test-DunePlayerOffline -Ip $Ip -PawnId $PawnId
-        if (-not $off.ok) { return @{ ok = $false; error = $off.reason } }
-    } else {
-        $off = Test-DunePlayerOfflineByController -Ip $Ip -ControllerId $controller
-        if (-not $off.ok) { return @{ ok = $false; error = $off.reason } }
-    }
-    $readSql = "SELECT COALESCE((properties->'TechKnowledgePlayerComponent'->>'m_TechKnowledgePoints')::int, 0) AS intel FROM dune.actors WHERE id = $controller::bigint;"
+    $off = Test-DunePlayerOffline -Ip $Ip -PawnId $pawn
+    if (-not $off.ok) { return @{ ok = $false; error = $off.reason } }
+    $readSql = "SELECT COALESCE((properties->'TechKnowledgePlayerComponent'->>'m_TechKnowledgePoints')::int, 0) AS intel FROM dune.actors WHERE id = $pawn::bigint;"
     $r = Invoke-DuneSqlQuery -Ip $Ip -Sql $readSql -ReadOnly $true -MaxRows 1 -TimeoutSec 10
     $cur = 0
     if ($r.ok) {
@@ -473,12 +489,13 @@ function Invoke-DunePlayerAwardIntel {
     }
     $newIntel = $cur + $IntelDelta
     if ($newIntel -lt 0) { $newIntel = 0 }
-    $sql = [string]::Format($script:DuneSetIntelSqlTpl, $controller, $newIntel)
+    if ($newIntel -gt $script:DuneMaxIntelPoints) { $newIntel = $script:DuneMaxIntelPoints }
+    $sql = [string]::Format($script:DuneSetIntelSqlTpl, $pawn, $newIntel)
     $w = Invoke-DuneSqlQuery -Ip $Ip -Sql $sql -ReadOnly $false -MaxRows 1 -TimeoutSec 30
     if (-not $w.ok) { return @{ ok = $false; error = $w.error } }
     return @{
         ok = $true
-        message = "Set Intel to $newIntel (was $cur, delta $IntelDelta) for actor $controller."
+        message = "Set Intel to $newIntel (was $cur, delta $IntelDelta) for player $pawn."
         intel = $newIntel
     }
 }

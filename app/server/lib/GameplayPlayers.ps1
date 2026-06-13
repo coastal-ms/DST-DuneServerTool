@@ -669,7 +669,7 @@ SELECT
     el.id,
     COALESCE(to_char(el.created_at AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS"Z"'), '') AS ts,
     COALESCE(el.event_type::text, '')   AS event_type,
-    COALESCE(el.meta::text, '{}')        AS meta_json
+    COALESCE(el.meta::text, '{{}}')        AS meta_json
 FROM dune.event_log el
 JOIN dune.accounts ac ON ac."user" = el.meta->>'fls_id'
 WHERE ac.id = {0}::bigint

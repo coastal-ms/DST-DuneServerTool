@@ -409,9 +409,12 @@ interface ActionDef {
   label: string
   icon: string
   liveOnly?: boolean      // requires player to be online (RMQ path)
+  offlineOnly?: boolean   // requires player to be offline (DB write the game caches in memory)
   fields?: ActionField[]
   custom?: 'give-item' | 'give-item-live' | 'whisper'
   confirm?: (p: Player) => string  // confirm message; if returns '' no prompt
+  doubleConfirm?: boolean // also requires a typed "i acknowledge" prompt inside run()
+  rowNote?: string        // short italic note shown inline on the row heading
   run: (p: Player, v: Record<string, string>) => Promise<{ message: string }>
 }
 
@@ -423,7 +426,7 @@ const ACTIONS: ActionDef[] = [
   { id: 'give-scrip', group: 'Currency', label: 'Give Scrip', icon: 'Banknote',
     fields: [{ key: 'amount', label: 'Amount', type: 'number', placeholder: '500' }],
     run: (p, v) => giveScrip(p.account_id, Number(v.amount) || 0) },
-  { id: 'give-intel', group: 'Currency', label: 'Give Intel', icon: 'BookOpen',
+  { id: 'give-intel', group: 'Currency', label: 'Give Intel', icon: 'BookOpen', offlineOnly: true,
     fields: [{ key: 'amount', label: 'Tech Knowledge Points', type: 'number', placeholder: '100' }],
     run: (p, v) => awardIntel(p.controller_id, p.id, Number(v.amount) || 0) },
   { id: 'grant-live', group: 'Currency', label: 'Grant Reward (popup)', icon: 'Gift',
@@ -434,7 +437,7 @@ const ACTIONS: ActionDef[] = [
     run: (p, v) => grantLive(p.controller_id, String(v.template || '').trim(), Number(v.amount) || 1) },
 
   // ----- Progression -----
-  { id: 'award-char-xp', group: 'Progression', label: 'Award Character XP', icon: 'TrendingUp',
+  { id: 'award-char-xp', group: 'Progression', label: 'Award Character XP', icon: 'TrendingUp', liveOnly: true,
     fields: [{ key: 'delta', label: 'XP delta', type: 'number', placeholder: '5000' }],
     run: (p, v) => awardCharXp(p.id, Number(v.delta) || 0) },
   { id: 'set-skill-points', group: 'Progression', label: 'Set Skill Points (live)', icon: 'Sparkles', liveOnly: true,
@@ -453,11 +456,19 @@ const ACTIONS: ActionDef[] = [
     ],
     run: (p, v) => setFactionTier(p.account_id, String(v.faction || '').trim(), Number(v.tier) || 0) },
   { id: 'reset-progression', group: 'Progression', label: 'Reset Progression (live)', icon: 'RotateCcw', liveOnly: true,
-    confirm: p => `Reset ALL progression for ${p.name}? Cannot be undone.`,
+    rowNote: 'Single confirmation required',
+    confirm: p => `Reset ALL progression for ${p.name}? Cannot be undone.\n\n` +
+      `This single confirmation is required so the action can't run on an accidental click.`,
     run: p => resetProgressionLive({ actor_id: p.id }) },
   { id: 'reset-journey', group: 'Progression', label: 'Reset Journey', icon: 'Map',
+    rowNote: 'Single confirmation required',
+    confirm: p => `Reset ${p.name}'s journey/quest progress? They'll restart the current journey step. This cannot be undone.\n\n` +
+      `This single confirmation is required so the action can't run on an accidental click.`,
     run: p => resetJourney(p.account_id) },
   { id: 'wipe-journey', group: 'Progression', label: 'Wipe Journey (restart)', icon: 'RefreshCw',
+    rowNote: 'Single confirmation required',
+    confirm: p => `WIPE ${p.name}'s entire journey and restart it from the beginning? All journey/quest progress is lost. This cannot be undone.\n\n` +
+      `This single confirmation is required so the action can't run on an accidental click.`,
     run: p => wipeJourney(p.account_id) },
 
   // ----- Items -----
@@ -499,7 +510,21 @@ const ACTIONS: ActionDef[] = [
     run: (p, v) => renamePlayer(p.account_id, String(v.name || '').trim()) },
   { id: 'set-starter-class', group: 'Identity', label: 'Set Starter Class', icon: 'Compass',
     fields: [{ key: 'class', label: 'Class id', type: 'text', placeholder: 'mentat' }],
-    run: (p, v) => setStarterClass(p.id, String(v.class || '').trim()) },
+    doubleConfirm: true,
+    rowNote: 'Double confirmation required',
+    confirm: p => `Set ${p.name}'s starter class?\n\n` +
+      `This is the FIRST of two confirmations. If you continue, the next step asks you to type an acknowledgement before the change is applied. This cannot be undone.`,
+    run: (p, v) => {
+      const typed = window.prompt(
+        `SECOND confirmation — set ${p.name}'s starter class to "${String(v.class || '').trim()}".\n` +
+        `This cannot be undone.\n\n` +
+        `Type  i acknowledge  to proceed:`
+      ) || ''
+      if (typed.trim().toLowerCase() !== 'i acknowledge') {
+        throw new Error('Did not type "i acknowledge" — change aborted.')
+      }
+      return setStarterClass(p.id, String(v.class || '').trim())
+    } },
   { id: 'tags-add-remove', group: 'Identity', label: 'Update Tags (add / remove)', icon: 'Tag',
     fields: [
       { key: 'add',    label: 'Add (comma-separated)',    type: 'text', placeholder: 'vip, tester' },
@@ -513,7 +538,21 @@ const ACTIONS: ActionDef[] = [
   { id: 'delete-tutorials', group: 'Identity', label: 'Clear Tutorial Flags', icon: 'Eraser',
     run: p => deleteTutorials(p.account_id) },
   { id: 'wipe-codex', group: 'Identity', label: 'Wipe Codex', icon: 'BookX',
-    run: p => wipeCodex(p.account_id) },
+    doubleConfirm: true,
+    rowNote: 'Double confirmation required',
+    confirm: p => `Wipe ${p.name}'s codex?\n\n` +
+      `This is the FIRST of two confirmations. If you continue, the next step asks you to type an acknowledgement before the codex is wiped. This cannot be undone.`,
+    run: p => {
+      const typed = window.prompt(
+        `SECOND confirmation — WIPE ${p.name}'s codex.\n` +
+        `This cannot be undone.\n\n` +
+        `Type  i acknowledge  to proceed:`
+      ) || ''
+      if (typed.trim().toLowerCase() !== 'i acknowledge') {
+        throw new Error('Did not type "i acknowledge" — wipe aborted.')
+      }
+      return wipeCodex(p.account_id)
+    } },
   { id: 'returning-award', group: 'Identity', label: 'Grant Returning-Player Award', icon: 'Star',
     run: p => returningPlayerAward(p.account_id) },
   { id: 'dismiss-returning', group: 'Identity', label: 'Dismiss Returning-Player Award', icon: 'X',
@@ -521,9 +560,13 @@ const ACTIONS: ActionDef[] = [
 
   // ----- Danger Zone -----
   { id: 'delete-account', group: 'Danger', label: 'Delete Account (permanent)', icon: 'AlertTriangle',
+    doubleConfirm: true,
+    rowNote: 'Double confirmation required',
+    confirm: p => `Permanently delete account ${p.account_id} (${p.name})?\n\n` +
+      `This is the FIRST of two confirmations. If you continue, the next step asks you to type an acknowledgement before the account is deleted. This cannot be undone.`,
     run: p => {
       const typed = window.prompt(
-        `PERMANENTLY delete account ${p.account_id} (${p.name}).\n` +
+        `SECOND confirmation — PERMANENTLY delete account ${p.account_id} (${p.name}).\n` +
         `This cannot be undone.\n\n` +
         `Type  i acknowledge  to proceed:`
       ) || ''
@@ -543,25 +586,11 @@ export function ActionsSection({ player, canWrite, flash, onChanged }: SectionPr
   const [openId, setOpenId] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
 
-  // Give-item form state lives at the section level so the ItemPicker keeps
-  // its selection when the user tabs to Quantity / Quality fields.
-  // giveTpl is the template_id we post to the API. giveName is the friendly
-  // display name shown in the picker after a selection — clears once the
-  // user types again, so picker continues to filter the live search query.
-  const [giveTpl, setGiveTpl]   = useState('')
-  const [giveName, setGiveName] = useState('')
-  const [giveQty, setGiveQty]   = useState('1')
-  const [giveQual, setGiveQual] = useState('0')
-  const [whisper, setWhisper]   = useState('')
-
   const isOnline = (player.online_status || '').toLowerCase() === 'online'
 
-  const openAction = (id: string) => {
-    if (openId === id) { setOpenId(null); return }
-    setOpenId(id)
-    if (id === 'give-item' || id === 'give-item-live') { setGiveTpl(''); setGiveName(''); setGiveQty('1'); setGiveQual('0') }
-    if (id === 'whisper') setWhisper('')
-  }
+  // Accordion toggle: clicking an open row closes it. Each form owns its own
+  // state, so it resets naturally when a row unmounts on close.
+  const openAction = (id: string) => setOpenId(o => (o === id ? null : id))
 
   const runAction = async (def: ActionDef, exec: () => Promise<{ message: string }>) => {
     if (def.confirm) {
@@ -616,89 +645,139 @@ export function ActionsSection({ player, canWrite, flash, onChanged }: SectionPr
         const acts = grouped[group]
         if (!acts || acts.length === 0) return null
         return (
-          <div key={group} className="space-y-2">
+          <div key={group} className="space-y-1.5">
             <div className="text-[11px] uppercase tracking-wider text-text-dim font-medium flex items-center gap-2">
               {group === 'Danger' && <Icon name="AlertTriangle" size={11} className="text-error" />}
               {group}
             </div>
-            <div className="flex flex-wrap gap-2">
-              {acts.map(a => {
-                const disabled = busy || (a.liveOnly && !isOnline)
-                const btnClass = group === 'Danger' ? 'btn-secondary text-error border-error/50' : 'btn-secondary'
-                return (
-                  <button
-                    key={a.id}
-                    className={btnClass}
-                    disabled={disabled}
-                    onClick={() => openAction(a.id)}
-                    title={a.liveOnly ? 'Requires player to be online' : undefined}
-                  >
-                    <Icon name={a.icon} size={13} /> {a.label}
-                  </button>
-                )
-              })}
+            <div className="space-y-1.5">
+              {acts.map(a => (
+                <ActionRow key={a.id} def={a} player={player} busy={busy} isOnline={isOnline}
+                  open={openId === a.id} danger={group === 'Danger'}
+                  onToggle={() => openAction(a.id)} runAction={runAction} />
+              ))}
             </div>
-
-            {acts.filter(a => a.id === openId).map(def => {
-              // Custom forms (item picker, whisper textarea).
-              if (def.custom === 'give-item' || def.custom === 'give-item-live') {
-                return (
-                  <div key={def.id} className="card p-3 space-y-3">
-                    <ItemPicker label="Item — type to search by name or template id"
-                      value={giveTpl} displayValue={giveName || giveTpl}
-                      onChange={(tpl, item) => { setGiveTpl(tpl); setGiveName(item ? item.name : '') }}
-                      autoFocus disabled={busy} />
-                    <div className="grid grid-cols-2 gap-3">
-                      <div>
-                        <label className="block text-[11px] uppercase tracking-wider text-text-dim mb-1">Quantity</label>
-                        <input type="number" min={1} value={giveQty} disabled={busy}
-                          onChange={e => setGiveQty(e.target.value)}
-                          className="w-full px-3 py-2 rounded-lg bg-surface-2 border border-border text-text text-sm focus:outline-none focus:ring-2 focus:ring-ibad focus:border-ibad/50" />
-                      </div>
-                      <div>
-                        <label className="block text-[11px] uppercase tracking-wider text-text-dim mb-1">Quality (0-5)</label>
-                        <input type="number" min={0} max={5} value={giveQual} disabled={busy}
-                          onChange={e => setGiveQual(e.target.value)}
-                          className="w-full px-3 py-2 rounded-lg bg-surface-2 border border-border text-text text-sm focus:outline-none focus:ring-2 focus:ring-ibad focus:border-ibad/50" />
-                      </div>
-                    </div>
-                    <button className="btn-primary w-full" disabled={busy || !isValidTemplateId(giveTpl)}
-                      onClick={() => runAction(def, () => def.custom === 'give-item-live'
-                        ? giveItemLive({ actor_id: player.id }, giveTpl.trim(), Number(giveQty) || 1, Number(giveQual) || 0)
-                        : giveItem(player.id, giveTpl.trim(), Number(giveQty) || 1, Number(giveQual) || 0))}>
-                      {busy ? <Icon name="Loader2" size={13} className="animate-spin" /> : <Icon name="Check" size={13} />} {def.label}
-                    </button>
-                  </div>
-                )
-              }
-              if (def.custom === 'whisper') {
-                return (
-                  <div key={def.id} className="card p-3 space-y-3">
-                    <label className="block text-[11px] uppercase tracking-wider text-text-dim mb-1">Whisper message</label>
-                    <textarea rows={3} value={whisper} disabled={busy}
-                      onChange={e => setWhisper(e.target.value)} placeholder="Hello from the admin tool"
-                      className="w-full px-3 py-2 rounded-lg bg-surface-2 border border-border text-text text-sm focus:outline-none focus:ring-2 focus:ring-ibad focus:border-ibad/50 resize-none" />
-                    <div className="text-[11px] text-text-muted">
-                      Note: chat/whisper external publish is experimental — broker accepts but the game may silently drop.
-                    </div>
-                    <button className="btn-primary w-full" disabled={busy || !whisper.trim()}
-                      onClick={() => runAction(def, () => chatWhisper(String(player.id), whisper.trim()))}>
-                      {busy ? <Icon name="Loader2" size={13} className="animate-spin" /> : <Icon name="Send" size={13} />} Send Whisper
-                    </button>
-                  </div>
-                )
-              }
-              // Standard form built from field defs.
-              return (
-                <InlineForm key={def.id} busy={busy} submitLabel={def.label}
-                  fields={def.fields || []}
-                  onSubmit={v => runAction(def, () => def.run(player, v))}
-                />
-              )
-            })}
           </div>
         )
       })}
+    </div>
+  )
+}
+
+// ---------------------------------------------------------------------------
+// ActionRow — one accordion row for a single ActionDef. The row header is a
+// full-width clickable list item; clicking expands the action's form inline
+// directly beneath it. Replaces the older wrap-of-buttons layout so the panel
+// reads as a vertical list rather than a wall of buttons.
+// ---------------------------------------------------------------------------
+function ActionRow({ def, player, busy, isOnline, open, danger, onToggle, runAction }: {
+  def: ActionDef
+  player: Player
+  busy: boolean
+  isOnline: boolean
+  open: boolean
+  danger?: boolean
+  onToggle: () => void
+  runAction: (def: ActionDef, exec: () => Promise<{ message: string }>) => void
+}) {
+  const disabled = busy || (!!def.liveOnly && !isOnline) || (!!def.offlineOnly && isOnline)
+  return (
+    <div className="card overflow-hidden">
+      <button type="button"
+        className={`w-full flex items-center gap-2.5 px-3 py-2 text-left text-sm transition-colors ${disabled ? 'opacity-50 cursor-not-allowed' : 'hover:bg-surface-2'} ${danger ? 'text-error' : 'text-text'}`}
+        disabled={disabled}
+        onClick={onToggle}
+        title={def.liveOnly ? 'Requires player to be online' : def.offlineOnly ? 'Requires player to be offline — the game caches this value in memory while online and overwrites it on logout' : undefined}>
+        <Icon name={def.icon} size={14} className={`shrink-0 ${danger ? 'text-error' : 'text-text-dim'}`} />
+        <span className="flex-1 min-w-0 truncate font-medium">{def.label}</span>
+        {def.rowNote && (
+          <span className="shrink-0 hidden sm:flex items-center gap-1.5 text-xs">
+            <span className="text-text-dim">---</span>
+            <span className="italic text-white">{def.rowNote}</span>
+          </span>
+        )}
+        {def.liveOnly && (
+          <span className="text-[10px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded bg-warning/20 text-warning border border-warning/50 shrink-0">LIVE REQ'D</span>
+        )}
+        {def.offlineOnly && (
+          <span className="text-[10px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded bg-info/20 text-info border border-info/50 shrink-0">OFFLINE REQ'D</span>
+        )}
+        <Icon name={open ? 'ChevronDown' : 'ChevronRight'} size={14} className="shrink-0 text-text-dim" />
+      </button>
+      {open && (
+        <div className="border-t border-border p-3">
+          {def.custom === 'give-item' || def.custom === 'give-item-live' ? (
+            <GiveItemForm busy={busy} submitLabel={def.label}
+              onSubmit={(tpl, qty, qual) => runAction(def, () => def.custom === 'give-item-live'
+                ? giveItemLive({ actor_id: player.id }, tpl, qty, qual)
+                : giveItem(player.id, tpl, qty, qual))} />
+          ) : def.custom === 'whisper' ? (
+            <WhisperForm busy={busy}
+              onSubmit={msg => runAction(def, () => chatWhisper(String(player.id), msg))} />
+          ) : (
+            <InlineForm busy={busy} submitLabel={def.label} fields={def.fields || []}
+              onSubmit={v => runAction(def, () => def.run(player, v))} />
+          )}
+        </div>
+      )}
+    </div>
+  )
+}
+
+// Self-contained give-item form (item picker + qty/quality). Owns its own
+// state so it resets whenever the accordion row mounts. Renders without a card
+// wrapper — ActionRow provides the container.
+function GiveItemForm({ busy, submitLabel, onSubmit }: {
+  busy: boolean; submitLabel: string; onSubmit: (tpl: string, qty: number, qual: number) => void
+}) {
+  const [giveTpl, setGiveTpl]   = useState('')
+  const [giveName, setGiveName] = useState('')
+  const [giveQty, setGiveQty]   = useState('1')
+  const [giveQual, setGiveQual] = useState('0')
+  return (
+    <div className="space-y-3">
+      <ItemPicker label="Item — type to search by name or template id"
+        value={giveTpl} displayValue={giveName || giveTpl}
+        onChange={(tpl, item) => { setGiveTpl(tpl); setGiveName(item ? item.name : '') }}
+        autoFocus disabled={busy} />
+      <div className="grid grid-cols-2 gap-3">
+        <div>
+          <label className="block text-[11px] uppercase tracking-wider text-text-dim mb-1">Quantity</label>
+          <input type="number" min={1} value={giveQty} disabled={busy}
+            onChange={e => setGiveQty(e.target.value)}
+            className="w-full px-3 py-2 rounded-lg bg-surface-2 border border-border text-text text-sm focus:outline-none focus:ring-2 focus:ring-ibad focus:border-ibad/50" />
+        </div>
+        <div>
+          <label className="block text-[11px] uppercase tracking-wider text-text-dim mb-1">Quality (0-5)</label>
+          <input type="number" min={0} max={5} value={giveQual} disabled={busy}
+            onChange={e => setGiveQual(e.target.value)}
+            className="w-full px-3 py-2 rounded-lg bg-surface-2 border border-border text-text text-sm focus:outline-none focus:ring-2 focus:ring-ibad focus:border-ibad/50" />
+        </div>
+      </div>
+      <button className="btn-primary w-full" disabled={busy || !isValidTemplateId(giveTpl)}
+        onClick={() => onSubmit(giveTpl.trim(), Number(giveQty) || 1, Number(giveQual) || 0)}>
+        {busy ? <Icon name="Loader2" size={13} className="animate-spin" /> : <Icon name="Check" size={13} />} {submitLabel}
+      </button>
+    </div>
+  )
+}
+
+// Self-contained whisper form. Renders without a card wrapper.
+function WhisperForm({ busy, onSubmit }: { busy: boolean; onSubmit: (msg: string) => void }) {
+  const [whisper, setWhisper] = useState('')
+  return (
+    <div className="space-y-3">
+      <label className="block text-[11px] uppercase tracking-wider text-text-dim mb-1">Whisper message</label>
+      <textarea rows={3} value={whisper} disabled={busy}
+        onChange={e => setWhisper(e.target.value)} placeholder="Hello from the admin tool"
+        className="w-full px-3 py-2 rounded-lg bg-surface-2 border border-border text-text text-sm focus:outline-none focus:ring-2 focus:ring-ibad focus:border-ibad/50 resize-none" />
+      <div className="text-[11px] text-text-muted">
+        Note: chat/whisper external publish is experimental — broker accepts but the game may silently drop.
+      </div>
+      <button className="btn-primary w-full" disabled={busy || !whisper.trim()}
+        onClick={() => onSubmit(whisper.trim())}>
+        {busy ? <Icon name="Loader2" size={13} className="animate-spin" /> : <Icon name="Send" size={13} />} Send Whisper
+      </button>
     </div>
   )
 }
@@ -714,10 +793,6 @@ function ItemsActionBlock({ player, canWrite, flash, onChanged }: {
 }) {
   const [openId, setOpenId] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
-  const [giveTpl, setGiveTpl]   = useState('')
-  const [giveName, setGiveName] = useState('')
-  const [giveQty, setGiveQty]   = useState('1')
-  const [giveQual, setGiveQual] = useState('0')
 
   const isOnline = (player.online_status || '').toLowerCase() === 'online'
 
@@ -725,11 +800,7 @@ function ItemsActionBlock({ player, canWrite, flash, onChanged }: {
 
   if (!canWrite || acts.length === 0) return null
 
-  const openAction = (id: string) => {
-    if (openId === id) { setOpenId(null); return }
-    setOpenId(id)
-    if (id === 'give-item' || id === 'give-item-live') { setGiveTpl(''); setGiveName(''); setGiveQty('1'); setGiveQual('0') }
-  }
+  const openAction = (id: string) => setOpenId(o => (o === id ? null : id))
 
   const runAction = async (def: ActionDef, exec: () => Promise<{ message: string }>) => {
     if (def.confirm) {
@@ -750,58 +821,11 @@ function ItemsActionBlock({ player, canWrite, flash, onChanged }: {
   }
 
   return (
-    <div className="space-y-2 mb-2">
-      <div className="flex flex-wrap gap-2">
-        {acts.map(a => {
-          const disabled = busy || (a.liveOnly && !isOnline)
-          return (
-            <button key={a.id} className="btn-secondary" disabled={disabled}
-              onClick={() => openAction(a.id)}
-              title={a.liveOnly ? 'Requires player to be online' : undefined}>
-              <Icon name={a.icon} size={13} /> {a.label}
-            </button>
-          )
-        })}
-      </div>
-
-      {acts.filter(a => a.id === openId).map(def => {
-        if (def.custom === 'give-item' || def.custom === 'give-item-live') {
-          return (
-            <div key={def.id} className="card p-3 space-y-3">
-              <ItemPicker label="Item — type to search by name or template id"
-                value={giveTpl} displayValue={giveName || giveTpl}
-                onChange={(tpl, item) => { setGiveTpl(tpl); setGiveName(item ? item.name : '') }}
-                autoFocus disabled={busy} />
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="block text-[11px] uppercase tracking-wider text-text-dim mb-1">Quantity</label>
-                  <input type="number" min={1} value={giveQty} disabled={busy}
-                    onChange={e => setGiveQty(e.target.value)}
-                    className="w-full px-3 py-2 rounded-lg bg-surface-2 border border-border text-text text-sm focus:outline-none focus:ring-2 focus:ring-ibad focus:border-ibad/50" />
-                </div>
-                <div>
-                  <label className="block text-[11px] uppercase tracking-wider text-text-dim mb-1">Quality (0-5)</label>
-                  <input type="number" min={0} max={5} value={giveQual} disabled={busy}
-                    onChange={e => setGiveQual(e.target.value)}
-                    className="w-full px-3 py-2 rounded-lg bg-surface-2 border border-border text-text text-sm focus:outline-none focus:ring-2 focus:ring-ibad focus:border-ibad/50" />
-                </div>
-              </div>
-              <button className="btn-primary w-full" disabled={busy || !isValidTemplateId(giveTpl)}
-                onClick={() => runAction(def, () => def.custom === 'give-item-live'
-                  ? giveItemLive({ actor_id: player.id }, giveTpl.trim(), Number(giveQty) || 1, Number(giveQual) || 0)
-                  : giveItem(player.id, giveTpl.trim(), Number(giveQty) || 1, Number(giveQual) || 0))}>
-                {busy ? <Icon name="Loader2" size={13} className="animate-spin" /> : <Icon name="Check" size={13} />} {def.label}
-              </button>
-            </div>
-          )
-        }
-        return (
-          <InlineForm key={def.id} busy={busy} submitLabel={def.label}
-            fields={def.fields || []}
-            onSubmit={v => runAction(def, () => def.run(player, v))}
-          />
-        )
-      })}
+    <div className="space-y-1.5 mb-2">
+      {acts.map(a => (
+        <ActionRow key={a.id} def={a} player={player} busy={busy} isOnline={isOnline}
+          open={openId === a.id} onToggle={() => openAction(a.id)} runAction={runAction} />
+      ))}
     </div>
   )
 }
@@ -999,7 +1023,7 @@ function InlineForm({ fields, submitLabel, busy, onSubmit }: {
 }) {
   const [values, setValues] = useState<Record<string, string>>({})
   return (
-    <div className="card p-3 space-y-2">
+    <div className="space-y-2">
       {fields.map(f => (
         <div key={f.key}>
           <label className="block text-[11px] uppercase tracking-wider text-text-dim mb-1">{f.label}</label>
