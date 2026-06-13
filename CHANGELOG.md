@@ -13,6 +13,25 @@ here cover everything those tags shipped.
 
 ## [Unreleased]
 
+## [12.0.12] - 2026-06-12
+
+### Fixed
+
+- **Specialization XP now loads correctly on the Players → Specs tab.** Every
+  track previously showed **Lv 0/100 · 0 XP** even for maxed characters. The
+  Specs view was reading specialization tracks by the pawn/actor id, but the
+  game stores them (and purchased keystones) under the player's controller id —
+  so the lookup found nothing. All specialization reads and writes (award XP,
+  grant max, reset track, reset all, reset keystones) now key off the controller
+  id, matching how keystones already worked.
+
+### Changed
+
+- **Default Market Bot (Duke) starting balance** raised to 454,720,162,028
+  Solari so the bot can sustain large buy-side activity out of the box.
+- **Clearer GM bot labelling on the Players tab** — the built-in GM bot is now
+  explained as a Funcom system NPC, so it isn't mistaken for a real player.
+
 ## [12.0.11] - 2026-06-12
 
 ### Changed
