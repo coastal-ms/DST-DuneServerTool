@@ -425,7 +425,7 @@ const ACTIONS: ActionDef[] = [
     run: (p, v) => giveScrip(p.account_id, Number(v.amount) || 0) },
   { id: 'give-intel', group: 'Currency', label: 'Give Intel', icon: 'BookOpen',
     fields: [{ key: 'amount', label: 'Tech Knowledge Points', type: 'number', placeholder: '100' }],
-    run: (p, v) => awardIntel(p.controller_id, Number(v.amount) || 0) },
+    run: (p, v) => awardIntel(p.controller_id, p.id, Number(v.amount) || 0) },
   { id: 'grant-live', group: 'Currency', label: 'Grant Reward (popup)', icon: 'Gift',
     fields: [
       { key: 'template', label: 'Item template id', type: 'text', placeholder: 'Item_…' },

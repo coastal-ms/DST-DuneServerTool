@@ -78,9 +78,10 @@ describe('Phase A — currency / progression writes', () => {
     expect(last().body).toEqual({ pawn_id: 99, delta: 10_000 })
   })
 
-  it('awardIntel sends actor_id + delta (backend award-intel contract)', async () => {
-    await gp.awardIntel(123, 50)
-    expect(last().body).toEqual({ actor_id: 123, delta: 50 })
+  it('awardIntel sends actor_id + pawn_id + delta (backend award-intel contract)', async () => {
+    await gp.awardIntel(123, 99, 50)
+    expect(last().url).toBe('/api/gameplay/players/award-intel')
+    expect(last().body).toEqual({ actor_id: 123, pawn_id: 99, delta: 50 })
   })
 
   it('returningPlayerAward + dismiss... only need account_id', async () => {
