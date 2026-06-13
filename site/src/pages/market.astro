@@ -1,123 +1,150 @@
 ---
 import Base from "../layouts/Base.astro";
-import PageHeader from "../components/PageHeader.astro";
+
+// Core concept cards — the at-a-glance "what is this" grid.
+const cards = [
+  {
+    icon: "🪙",
+    title: "The Exchange",
+    body: "The in-game market where players buy and sell items for Solari. On a busy server it grows into thousands of listings. For each item you see the lowest price, available stock, and recent sales.",
+  },
+  {
+    icon: "🤖",
+    title: "Duke sells",
+    body: "Duke is an automated NPC trader that stocks the shelves at sensible prices, so there's always something to buy and a baseline price to compare against. New listings appear on a timer.",
+  },
+  {
+    icon: "💰",
+    title: "Duke buys",
+    body: "Duke is also a customer. It regularly buys items players have listed, so you have a dependable way to sell your loot and earn Solari instead of waiting for another player to show up.",
+  },
+  {
+    icon: "📊",
+    title: "Fair pricing",
+    body: "Prices blend item tier, category, rarity, and quality grade, anchored to the real in-game vendor price — with a hard ceiling of 100,000 Solari per listing so nothing ever runs away.",
+  },
+];
+
+// Player tips.
+const tips = [
+  {
+    title: "Selling loot?",
+    body: "List at or just below Duke's price and items move quickly — Duke or another player tends to pick up fairly-priced listings.",
+  },
+  {
+    title: "Shopping?",
+    body: "Sort by lowest price. Duke's listings give you a reliable floor, but players will sometimes undercut it for a bargain.",
+  },
+  {
+    title: "Pricing your stock?",
+    body: "Use Duke's listing for the same item as your reference, then decide whether to match it or undercut.",
+  },
+  {
+    title: "Play the long game.",
+    body: "Duke buys randomly and prices are capped, so the market rewards steady trading over single big scores.",
+  },
+];
+
+// Admin checklist (titles/bodies may contain inline markup).
+const admin = [
+  {
+    title: "Starting fresh",
+    body: "Seed the market once to stock it instantly, then enable the bot to keep it alive on its timers.",
+  },
+  {
+    title: "Switching from an older bot?",
+    body: "DST detects leftover listings from a previous bot (e.g. &quot;Revy&quot;) and offers a one-click wipe before Duke starts. Player listings are never touched.",
+  },
+  {
+    title: "Tuning",
+    body: "Lower the die size or shorten the buy interval to make Duke buy more aggressively; raise listings-per-grade for variety; set per-item price overrides for full control.",
+  },
+  {
+    title: "Previewing",
+    body: "Use the dry-run option to see what a buy round would do, and the vendor-snapshot preview to sanity-check pricing before going live.",
+  },
+];
 ---
 
 <Base
   title="Market &amp; Market Bot — DST"
   description="How the in-game Exchange and the Duke market bot work on a DST-run Dune: Awakening server — for players, in plain language."
 >
-  <PageHeader
-    eyebrow="Player guide"
-    title="The Market &amp; the Market Bot"
-    intro="Your server runs an automated trader called Duke that keeps the in-game Exchange stocked and gives you a reliable way to buy and sell. Here's what it is and how to get the most out of it — no technical knowledge needed."
-  />
-
-  <section class="mx-auto max-w-3xl px-6 pb-16 space-y-12 text-dune-text">
-    <!-- The market ------------------------------------------------------- -->
-    <div>
-      <h2 class="text-2xl font-semibold mb-4">What the market is</h2>
-      <p class="text-dune-muted leading-relaxed mb-3">
-        The <strong class="text-dune-text">Exchange</strong> is the in-game
-        market where players buy and sell items for Solari. Anyone can put an
-        item up for sale at a price, and anyone can buy what's listed. On a busy
-        server that builds up into thousands of listings — a living economy of
-        gear, schematics, and materials.
-      </p>
-      <p class="text-dune-muted leading-relaxed">
-        For each item you'll see the <strong class="text-dune-text">lowest
-        price</strong> it's selling for, how much <strong class="text-dune-text">stock</strong>
-        is available, and recent sales. Think of it as your price-check and
-        shopping dashboard for the whole server.
-      </p>
-    </div>
-
-    <!-- Duke ------------------------------------------------------------- -->
-    <div>
-      <h2 class="text-2xl font-semibold mb-4">Meet Duke, the market bot</h2>
-      <p class="text-dune-muted leading-relaxed mb-3">
-        A quiet server has an empty, boring market — nothing to buy and no
-        prices to compare against. <strong class="text-dune-text">Duke</strong>
-        is an automated NPC trader that keeps the economy alive. It does two
-        jobs around the clock:
-      </p>
-      <div class="grid sm:grid-cols-2 gap-4">
-        <div class="rounded-xl border border-dune-border bg-dune-surface p-5">
-          <h3 class="font-semibold text-lg mb-2">Duke sells</h3>
-          <p class="text-dune-muted text-sm leading-relaxed">
-            Duke stocks the shelves, automatically listing items at sensible
-            prices so there's always something to buy and a baseline price to
-            compare against. New listings appear on a timer.
-          </p>
-        </div>
-        <div class="rounded-xl border border-dune-border bg-dune-surface p-5">
-          <h3 class="font-semibold text-lg mb-2">Duke buys</h3>
-          <p class="text-dune-muted text-sm leading-relaxed">
-            Duke is also a customer. It regularly buys items players have
-            listed, so you have a dependable way to <em>sell</em> your loot and
-            earn Solari instead of waiting for another player to show up.
-          </p>
-        </div>
+  <div class="mx-auto max-w-6xl px-6">
+    <!-- Hero ------------------------------------------------------------- -->
+    <section class="py-20 text-center">
+      <div class="font-mono text-xs uppercase tracking-widest text-dune-accent mb-4">
+        Player guide
       </div>
-      <p class="text-dune-muted leading-relaxed mt-4">
-        Duke buys on purpose, not greedily. For each item it considers, it
-        "rolls a die" and only buys on a winning roll — so it nudges the economy
-        along instead of hoovering up everything and crashing prices. It keeps a
+      <h1 class="text-5xl sm:text-6xl font-semibold tracking-tight leading-[1.05]">
+        The Market &amp;
+        <span class="text-dune-accent">the Market Bot</span>
+      </h1>
+      <p class="mx-auto mt-6 max-w-2xl text-lg text-dune-muted leading-relaxed">
+        Your server runs an automated trader called Duke that keeps the in-game
+        Exchange stocked and gives you a dependable way to buy and sell. Here's
+        how it works, in plain language — no technical knowledge needed.
+      </p>
+    </section>
+
+    <!-- Core concept cards ----------------------------------------------- -->
+    <section class="grid sm:grid-cols-2 gap-5 pb-8">
+      {cards.map((c) => (
+        <div class="rounded-2xl border border-dune-border bg-dune-surface p-6 hover:border-dune-accent/50 transition-colors">
+          <div class="text-3xl mb-3" aria-hidden="true">{c.icon}</div>
+          <h2 class="text-lg font-semibold mb-2">{c.title}</h2>
+          <p class="text-sm text-dune-muted leading-relaxed">{c.body}</p>
+        </div>
+      ))}
+    </section>
+
+    <!-- How Duke buys (the random-roll explainer) ------------------------ -->
+    <section class="mx-auto max-w-3xl text-center py-16">
+      <h2 class="text-2xl font-semibold mb-3">Duke trades on purpose, not greedily</h2>
+      <p class="text-dune-muted leading-relaxed">
+        For each item Duke considers buying, it "rolls a die" and only buys on a
+        winning roll. That keeps it from hoovering up the whole market and
+        crashing prices — it nudges the economy along instead. Duke also keeps a
         large Solari balance so it can always afford to buy.
       </p>
-    </div>
+    </section>
 
-    <!-- Pricing ---------------------------------------------------------- -->
-    <div>
-      <h2 class="text-2xl font-semibold mb-4">Why prices look the way they do</h2>
-      <p class="text-dune-muted leading-relaxed mb-3">
-        Duke doesn't price things at random. It uses a common-sense recipe that
-        combines:
-      </p>
-      <ul class="space-y-2 text-dune-muted leading-relaxed">
-        <li><strong class="text-dune-text">Item tier</strong> — more advanced items cost more.</li>
-        <li><strong class="text-dune-text">Category</strong> — gear, schematics, and augments are weighted differently.</li>
-        <li><strong class="text-dune-text">Rarity</strong> — rare and unique items get a small premium.</li>
-        <li><strong class="text-dune-text">Quality grade</strong> — a top-grade version is priced higher than a basic one.</li>
-        <li><strong class="text-dune-text">The real in-game vendor price</strong> — Duke stays anchored near it, so prices never drift into fantasy territory.</li>
-      </ul>
-      <div class="mt-4 rounded-md border border-amber-500/40 bg-amber-500/10 p-3 text-sm leading-relaxed text-dune-muted">
-        On top of all that there's a hard ceiling of
-        <strong class="text-dune-text">100,000 Solari</strong> per listing — no
-        single item Duke lists can ever be priced above it. It's a safety rail
-        that prevents absurd, economy-breaking prices.
+    <!-- Player tips ------------------------------------------------------ -->
+    <section class="py-8">
+      <h2 class="text-2xl font-semibold text-center mb-8">Getting the most out of it</h2>
+      <div class="grid sm:grid-cols-2 gap-5">
+        {tips.map((t) => (
+          <div class="rounded-xl border border-dune-border bg-dune-surface/60 p-5">
+            <h3 class="font-semibold mb-1">{t.title}</h3>
+            <p class="text-sm text-dune-muted leading-relaxed">{t.body}</p>
+          </div>
+        ))}
       </div>
-    </div>
+    </section>
 
-    <!-- Tips ------------------------------------------------------------- -->
-    <div>
-      <h2 class="text-2xl font-semibold mb-4">Getting the most out of it</h2>
-      <ul class="space-y-2 text-dune-muted leading-relaxed">
-        <li><strong class="text-dune-text">Selling loot?</strong> List items at or just below Duke's price and they'll move quickly — Duke (or another player) tends to pick up fairly-priced listings.</li>
-        <li><strong class="text-dune-text">Shopping?</strong> Sort by lowest price. Duke's listings give you a reliable floor, but players will sometimes undercut it for a bargain.</li>
-        <li><strong class="text-dune-text">Pricing your own stock?</strong> Use Duke's listing for the same item as your reference point, then decide whether to match it or undercut.</li>
-        <li><strong class="text-dune-text">Don't expect to get rich on one item.</strong> Duke buys randomly and prices are capped, so the market rewards steady trading over single big scores.</li>
-      </ul>
-    </div>
-
-    <!-- Admin note ------------------------------------------------------- -->
-    <div>
-      <h2 class="text-2xl font-semibold mb-4">For server admins</h2>
-      <p class="text-dune-muted leading-relaxed mb-3">
-        Everything above is driven from DST's <strong class="text-dune-text">Gameplay
-        → Market</strong> and <strong class="text-dune-text">Market Bot</strong>
-        tabs. The bot has three sub-tabs — <strong class="text-dune-text">Buy</strong>,
-        <strong class="text-dune-text">List</strong>, and <strong class="text-dune-text">Pricing
-        rules</strong> — plus a one-click <strong class="text-dune-text">Seed
-        market</strong> that fills the Exchange instantly instead of waiting for
-        the timers.
-      </p>
-      <ul class="space-y-2 text-dune-muted leading-relaxed">
-        <li><strong class="text-dune-text">Starting fresh:</strong> Seed the market once to stock it, then enable the bot to keep it alive on its timers.</li>
-        <li><strong class="text-dune-text">Switching from an older bot?</strong> DST detects leftover listings from a previous bot (e.g. "Revy") and offers a one-click wipe before Duke starts — take it, so two bots don't fight over the same market. Player listings are never touched.</li>
-        <li><strong class="text-dune-text">Tuning:</strong> lower the die size or shorten the buy interval to make Duke buy more aggressively; raise listings-per-grade for more variety; set per-item price overrides for full control.</li>
-        <li><strong class="text-dune-text">Previewing:</strong> use the dry-run option to see what a buy round <em>would</em> do, and the vendor-snapshot preview to sanity-check pricing before going live.</li>
-      </ul>
-    </div>
-  </section>
+    <!-- Admin section ---------------------------------------------------- -->
+    <section class="py-16">
+      <div class="mx-auto max-w-3xl text-center mb-8">
+        <div class="font-mono text-xs uppercase tracking-widest text-dune-accent mb-3">
+          For server admins
+        </div>
+        <h2 class="text-2xl font-semibold mb-3">Running the bot from DST</h2>
+        <p class="text-dune-muted leading-relaxed">
+          Everything above is driven from DST's <strong class="text-dune-text">Gameplay
+          &rarr; Market</strong> and <strong class="text-dune-text">Market Bot</strong>
+          tabs — three sub-tabs (Buy / List / Pricing rules) plus a one-click
+          <strong class="text-dune-text">Seed market</strong> that fills the
+          Exchange instantly.
+        </p>
+      </div>
+      <div class="grid sm:grid-cols-2 gap-5">
+        {admin.map((a) => (
+          <div class="rounded-xl border border-dune-border bg-dune-surface/60 p-5">
+            <h3 class="font-semibold mb-1" set:html={a.title}></h3>
+            <p class="text-sm text-dune-muted leading-relaxed" set:html={a.body}></p>
+          </div>
+        ))}
+      </div>
+    </section>
+  </div>
 </Base>
