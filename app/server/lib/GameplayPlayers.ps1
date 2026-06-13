@@ -68,7 +68,9 @@ WHERE player_controller_id = {0}::bigint
 ORDER BY currency_id
 '@
 
-# Specialization tracks for one pawn id ($1).
+# Specialization tracks for one controller id ($1).
+# NOTE: dune.specialization_tracks.player_id stores the player CONTROLLER id,
+# not the pawn/actor id (matches purchased_specialization_keystones).
 $script:DunePlayerSpecsSql = @'
 SELECT track_type::text AS track_type, xp_amount, level
 FROM dune.specialization_tracks
@@ -100,7 +102,7 @@ function Get-DunePlayersLive {
 function Get-DunePlayerDetailLive {
     param([string]$Ip, [long]$PawnId, [long]$ControllerId)
     $invSql  = [string]::Format($script:DunePlayerInventorySql, $PawnId)
-    $specSql = [string]::Format($script:DunePlayerSpecsSql, $PawnId)
+    $specSql = [string]::Format($script:DunePlayerSpecsSql, $ControllerId)
     $curSql  = [string]::Format($script:DunePlayerCurrencySql, $ControllerId)
 
     $invRes  = Invoke-DuneSqlQuery -Ip $Ip -Sql $invSql  -ReadOnly $true -MaxRows 5000 -TimeoutSec 30
@@ -173,14 +175,15 @@ function Invoke-DunePlayerRename {
 }
 
 # Award specialization XP (award-xp): UPDATE, INSERT if no row. Hard cap 44182.
+# Keyed by controller id (specialization_tracks.player_id = controller id).
 function Invoke-DunePlayerAwardXp {
-    param([string]$Ip, [long]$PawnId, [string]$TrackType, [int]$Delta)
+    param([string]$Ip, [long]$ControllerId, [string]$TrackType, [int]$Delta)
     $safeTrack = ConvertTo-DuneSqlString $TrackType
     $cap = 44182
     $updSql = @"
 UPDATE dune.specialization_tracks
 SET xp_amount = GREATEST(LEAST(xp_amount + ($Delta)::integer, $cap::integer), 0)
-WHERE player_id = $PawnId::bigint AND track_type::text = '$safeTrack';
+WHERE player_id = $ControllerId::bigint AND track_type::text = '$safeTrack';
 "@
     $upd = Invoke-DuneSqlQuery -Ip $Ip -Sql $updSql -ReadOnly $false -MaxRows 1 -TimeoutSec 30
     if (-not $upd.ok) { return @{ ok = $false; error = $upd.error } }
@@ -188,7 +191,7 @@ WHERE player_id = $PawnId::bigint AND track_type::text = '$safeTrack';
         $start = [Math]::Max(0, [Math]::Min($Delta, $cap))
         $insSql = @"
 INSERT INTO dune.specialization_tracks (player_id, track_type, xp_amount, level)
-VALUES ($PawnId::bigint, '$safeTrack'::dune.specializationtracktype, $start::integer, 0::real);
+VALUES ($ControllerId::bigint, '$safeTrack'::dune.specializationtracktype, $start::integer, 0::real);
 "@
         $ins = Invoke-DuneSqlQuery -Ip $Ip -Sql $insSql -ReadOnly $false -MaxRows 1 -TimeoutSec 30
         if (-not $ins.ok) { return @{ ok = $false; error = $ins.error } }
@@ -481,15 +484,16 @@ function Get-DunePlayerStatsLive {
 
 # ---------------------------------------------------------------------------
 # Full specs view (5 tracks plus keystone count + max).
-# Keystones use the dune.purchased_specialization_keystones table keyed by
-# controller id (per the reference implementation's insertAllPurchasedKeystones path).
+# Both dune.specialization_tracks and dune.purchased_specialization_keystones
+# key off the player CONTROLLER id (player_id column = controller id), NOT the
+# pawn/actor id (per the reference implementation's insertAllPurchasedKeystones path).
 # Max keystone id is 205 (matches the reference implementation's generate_series upper bound).
 # ---------------------------------------------------------------------------
 $script:DunePlayerSpecsFullSql = @'
 WITH tracks AS (
     SELECT track_type::text AS track_type, xp_amount, level
     FROM dune.specialization_tracks
-    WHERE player_id = {0}::bigint
+    WHERE player_id = {1}::bigint
 ),
 ks_total AS (
     SELECT COUNT(*)::bigint AS n
@@ -539,34 +543,34 @@ function Get-DunePlayerSpecsFullLive {
 
 # Grant max — set xp=44182 level=100 for one track. Uses dune.set_specialization_xp_and_level.
 function Invoke-DunePlayerGrantMaxSpec {
-    param([string]$Ip, [long]$PawnId, [string]$TrackType)
+    param([string]$Ip, [long]$ControllerId, [string]$TrackType)
     $safeTrack = ConvertTo-DuneSqlString $TrackType
-    $sql = "SELECT dune.set_specialization_xp_and_level($PawnId::bigint, '$safeTrack'::dune.specializationtracktype, $($script:DuneSpecXpMax)::integer, $($script:DuneSpecLevelMax)::real);"
+    $sql = "SELECT dune.set_specialization_xp_and_level($ControllerId::bigint, '$safeTrack'::dune.specializationtracktype, $($script:DuneSpecXpMax)::integer, $($script:DuneSpecLevelMax)::real);"
     $res = Invoke-DuneSqlQuery -Ip $Ip -Sql $sql -ReadOnly $false -MaxRows 1 -TimeoutSec 30
     if (-not $res.ok) { return @{ ok = $false; error = $res.error } }
     return @{ ok = $true; message = "Granted max XP for '$TrackType' (xp=$($script:DuneSpecXpMax), level=$($script:DuneSpecLevelMax))." }
 }
 
-# Reset one track — DELETE the row.
+# Reset one track — DELETE the row (keyed by controller id).
 function Invoke-DunePlayerResetSpec {
-    param([string]$Ip, [long]$PawnId, [string]$TrackType)
+    param([string]$Ip, [long]$ControllerId, [string]$TrackType)
     $safeTrack = ConvertTo-DuneSqlString $TrackType
-    $sql = "DELETE FROM dune.specialization_tracks WHERE player_id = $PawnId::bigint AND track_type::text = '$safeTrack';"
+    $sql = "DELETE FROM dune.specialization_tracks WHERE player_id = $ControllerId::bigint AND track_type::text = '$safeTrack';"
     $res = Invoke-DuneSqlQuery -Ip $Ip -Sql $sql -ReadOnly $false -MaxRows 1 -TimeoutSec 30
     if (-not $res.ok) { return @{ ok = $false; error = $res.error } }
-    return @{ ok = $true; message = "Reset '$TrackType' track for player $PawnId." }
+    return @{ ok = $true; message = "Reset '$TrackType' track for controller $ControllerId." }
 }
 
-# Reset ALL spec tracks (and ALL keystones) — runs both reset functions.
+# Reset ALL spec tracks (and ALL keystones) — runs both reset functions (keyed by controller id).
 function Invoke-DunePlayerResetAllSpecs {
-    param([string]$Ip, [long]$PawnId)
+    param([string]$Ip, [long]$ControllerId)
     $sql = @"
-SELECT dune.reset_specialization_tracks($PawnId::bigint);
-SELECT dune.reset_specialization_keystones($PawnId::bigint);
+SELECT dune.reset_specialization_tracks($ControllerId::bigint);
+SELECT dune.reset_specialization_keystones($ControllerId::bigint);
 "@
     $res = Invoke-DuneSqlQuery -Ip $Ip -Sql $sql -ReadOnly $false -MaxRows 1 -TimeoutSec 30
     if (-not $res.ok) { return @{ ok = $false; error = $res.error } }
-    return @{ ok = $true; message = "Reset all spec tracks and keystones for player $PawnId." }
+    return @{ ok = $true; message = "Reset all spec tracks and keystones for controller $ControllerId." }
 }
 
 # Grant all keystones — uses controller id (per the reference implementation's insertAllPurchasedKeystones).
@@ -583,13 +587,13 @@ ON CONFLICT DO NOTHING;
     return @{ ok = $true; message = "Granted all $max keystones for controller $ControllerId." }
 }
 
-# Reset all keystones — dune.reset_specialization_keystones.
+# Reset all keystones — dune.reset_specialization_keystones (keyed by controller id).
 function Invoke-DunePlayerResetAllKeystones {
-    param([string]$Ip, [long]$PawnId)
-    $sql = "SELECT dune.reset_specialization_keystones($PawnId::bigint);"
+    param([string]$Ip, [long]$ControllerId)
+    $sql = "SELECT dune.reset_specialization_keystones($ControllerId::bigint);"
     $res = Invoke-DuneSqlQuery -Ip $Ip -Sql $sql -ReadOnly $false -MaxRows 1 -TimeoutSec 30
     if (-not $res.ok) { return @{ ok = $false; error = $res.error } }
-    return @{ ok = $true; message = "Reset all keystones for player $PawnId." }
+    return @{ ok = $true; message = "Reset all keystones for controller $ControllerId." }
 }
 
 # ---------------------------------------------------------------------------
