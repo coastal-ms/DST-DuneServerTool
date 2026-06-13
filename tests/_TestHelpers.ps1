@@ -29,6 +29,27 @@ function Import-DstLib {
     }
 }
 
+# Dot-source one route file (app\server\routes) into GLOBAL scope, stubbing the
+# HTTP registration shims first so the file's Register-DuneRoute calls no-op.
+# Mirrors Import-DstLib's function-promotion so `It` blocks see the functions.
+function Import-DstRoute {
+    param([Parameter(Mandatory)][string] $RelativePath)
+    Register-DstStubs
+    $full = Join-Path (Get-DstRepoRoot) (Join-Path 'app\server\routes' $RelativePath)
+    if (-not (Test-Path $full)) { throw "Missing route: $RelativePath ($full)" }
+
+    $before = @{}
+    foreach ($f in Get-ChildItem function:) { $before[$f.Name] = $true }
+
+    . $full
+
+    foreach ($f in Get-ChildItem function:) {
+        if (-not $before.ContainsKey($f.Name)) {
+            Set-Item -Path "function:global:$($f.Name)" -Value $f.ScriptBlock
+        }
+    }
+}
+
 # Stub the HTTP-server registration shims so route files can load in tests.
 function Register-DstStubs {
     if (-not (Get-Command Register-DuneRoute -ErrorAction SilentlyContinue)) {

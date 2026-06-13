@@ -56,6 +56,13 @@ here cover everything those tags shipped.
   the tool no longer writes dead keys. (Real gameplay scaling such as
   `Dune.GlobalMiningOutputMultiplier` is unaffected.)
 
+- **Diagnostic bundle now captures the live game config.** The "Save Logs" ZIP
+  (and the `report-issue` CLI) now includes a redacted `UserGame.ini` /
+  `UserEngine.ini` snapshot pulled from the VM when reachable, headlined with an
+  automatic duplicate-section-header check, so "my setting didn't apply" Game
+  Config bugs can be diagnosed from a single attachment. The bug-report template
+  gained targeted Game Config and Give Item sections to collect the right detail.
+
 ## [12.0.13] - 2026-06-13
 
 ### Changed

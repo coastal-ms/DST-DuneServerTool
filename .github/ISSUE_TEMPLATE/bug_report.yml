@@ -20,8 +20,10 @@ body:
         > Desktop (Explorer pops with the ZIP selected). **Drag the ZIP
         > into the comment area below** to attach all logs at once — VM IPs,
         > SSH paths, Windows usernames, and config secrets are redacted before
-        > the ZIP is written. The bundle's `manifest.txt` lists what's inside
-        > and any sanitization warnings.
+        > the ZIP is written. The bundle includes a redacted **UserGame.ini /
+        > UserEngine.ini snapshot** (with an automatic duplicate-section-header
+        > check) when the VM is reachable, and its `manifest.txt` lists what's
+        > inside and any sanitization warnings.
 
         **✅ Do open an issue here** when the tool shows you a problem, e.g.:
         - The **Server Health** page shows the battlegroup as **Unknown** with
@@ -132,6 +134,57 @@ body:
       label: What you expected to happen
     validations:
       required: true
+
+  - type: textarea
+    id: gameconfig_diag
+    attributes:
+      label: Game Config — setting that didn't apply (only for Game Config / INI bugs)
+      description: |
+        For "I changed a setting but it had no effect in-game", or values that
+        seem ignored / duplicated (e.g. base expansion, player inventory
+        capacity, XP / Fame). The diagnostic ZIP now bundles a redacted
+        **UserGame.ini / UserEngine.ini snapshot** headlined with a
+        duplicate-section-header check — attaching it (see below) is the single
+        most useful thing for these bugs. Also tell us:
+
+        - Which exact setting(s) you changed, and to what value.
+        - What DST shows for that value after a reload vs what you see in-game.
+        - Whether you **restarted the server zone** after saving (server INI
+          changes only take effect after a zone restart).
+
+        Leave blank if your bug isn't about Game Config.
+      placeholder: |
+        Changed: Base > Max Building Extensions 5 -> 8; Player Inventory Volume 185 -> 195
+        DST shows 195 after reload; in-game still behaves like 185.
+        Zone restarted after save? yes
+      render: shell
+    validations:
+      required: false
+
+  - type: textarea
+    id: giveitem_diag
+    attributes:
+      label: Give Item — item that didn't appear (only for Give Item / Storage bugs)
+      description: |
+        For items that show in DST's listing but don't appear in-game (player
+        inventory or a storage container). Tell us:
+
+        - The exact item — its **name AND the template id** shown in the picker
+          (e.g. `Copper Ingot — CopperBar`). If you only see a number, paste it.
+        - Destination: player inventory, or a storage container (and its type).
+        - Quantity / quality, and whether it's a stackable resource or equipment.
+        - Did it show in DST's listing? Did it show in-game **after a server zone
+          restart** / relog?
+
+        Leave blank if your bug isn't about giving items.
+      placeholder: |
+        Item: Copper Ingot — template "CopperBar" (or raw id 859)
+        Destination: Storage container "Un-used Vehicle Parts" (MediumStorageContainer)
+        Qty 10, quality 0, stackable
+        Showed in DST list: yes. Showed in-game after zone restart: no.
+      render: shell
+    validations:
+      required: false
 
   - type: textarea
     id: connection_diag
