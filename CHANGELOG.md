@@ -23,8 +23,8 @@ here cover everything those tags shipped.
   acknowledging a severe-consequences warning ("these rewrite world-reset
   generation and wipe corpses / loose loot when a seed changes — no undo"), and
   every apply still has its own confirm. The backend is unchanged — it wraps the
-  same dune-admin debug routines (`debug_set_farm_seed` / `debug_set_map_seed` /
-  `debug_set_partition_seed`) at farm / map / partition scope.
+  game's `debug_set_farm_seed` / `debug_set_map_seed` / `debug_set_partition_seed`
+  database routines at farm / map / partition scope.
 
 ## [12.0.8] - 2026-06-12
 
@@ -123,9 +123,9 @@ sister "Restore Destroyed" action that operates on items at 0/NULL durability.
   three cards (`GenericBroadcastComposer`, `ShutdownBroadcastComposer`,
   `WhisperComposer`) now render at the top of the Gameplay overview tab so
   ops don't have to dig for them. Same three cards are also reachable as a
-  standalone page at `/broadcasts` (new top-nav entry). Mirrors the spirit
-  of dune-admin's `/api/v1/notify`, but goes through DST's existing V6
-  `ServiceBroadcast` for messaging and per-player whisper for whispers.
+  standalone page at `/broadcasts` (new top-nav entry). Goes through DST's
+  existing V6 `ServiceBroadcast` for messaging and per-player whisper for
+  whispers.
 
 - **Durability column on inventory rows.** Equipped and backpack items now
   show `current / max` durability inline in mono, colored by ratio:
@@ -144,8 +144,8 @@ sister "Restore Destroyed" action that operates on items at 0/NULL durability.
 ## [12.0.3] - 2026-06-12
 
 Players-tab parity sweep after Chopper/Ogmosis reports on v12.0.2 — Fill Water
-and Give Item now match dune-admin's "no relog needed" behavior for online
-players, plus a CSS bleed fix on the item picker dropdown and the
+and Give Item now have "no relog needed" behavior for online players, plus a
+CSS bleed fix on the item picker dropdown and the
 display-name-vs-template-id confusion users hit when searching the catalog.
 
 ### Fixed
@@ -169,9 +169,8 @@ display-name-vs-template-id confusion users hit when searching the catalog.
   the message now reflects what actually happened.
 
 - **Repair button mis-labeled.** "Repair Equipped Gear" already covered the
-  backpack (`inventory_type = 0` is included in `repairGearInventoryTypes`),
-  matching dune-admin's behavior. Renamed to "Repair All Items" so the label
-  matches what it does.
+  backpack (`inventory_type = 0` is included in `repairGearInventoryTypes`).
+  Renamed to "Repair All Items" so the label matches what it does.
 
 - **Item picker dropdown bled through to the inventory list behind it.** Five
   call sites used the Tailwind class `bg-surface-1`, but the theme only

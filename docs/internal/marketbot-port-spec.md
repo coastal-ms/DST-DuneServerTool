@@ -5,19 +5,19 @@ I now have all the information needed. Let me compile the comprehensive implemen
 
 ---
 
-# Dune Admin Market Bot — Full Port Spec for PowerShell/Postgres-via-SSH
+# Market Bot — Full Port Spec for PowerShell/Postgres-via-SSH
 
 **Reference sources:**
-- `Icehunter/dune-admin` HEAD commit `f6dfc68fc6ef324c51038293c34c20fb995a1c31` (latest public HEAD, v0.33.x era — v0.34.0 introduced the `@heroui-pro/react` licence break)
+- `the upstream reference repository` HEAD commit `f6dfc68fc6ef324c51038293c34c20fb995a1c31` (latest public HEAD, v0.33.x era — v0.34.0 introduced the `@heroui-pro/react` licence break)
 - `coastal-ms/DST-DuneServerTool` branch `coastal-ms/version-11.5.2` tip commit `5d7e92b60d13ae0a27485831fd57dccfbc123e45`
-- Sane-pricing patch at DST commit `cf903665c49a2b645d2f9987c22e4fca9159599d` (parent of `665364e1cf...` "Remove dune-admin integration")
-- DST fix commit `421693ae8fb0e5751928625200b4e7e1efc232f2` ("v10.1.15: fix pricing patch on dune-admin v0.23.2")
+- Sane-pricing patch at DST commit `cf903665c49a2b645d2f9987c22e4fca9159599d` (parent of `665364e1cf...` "Remove reference implementation integration")
+- DST fix commit `421693ae8fb0e5751928625200b4e7e1efc232f2` ("v10.1.15: fix pricing patch on reference implementation v0.23.2")
 
 ---
 
 ## Canonical Version Note
 
-The **canonical reference version for the sane-pricing patch** is dune-admin **v0.23.2**. DST commit `421693ae` explicitly states "fix pricing patch on dune-admin v0.23.2" — this is the version the patch was calibrated against. The upstream HEAD (`f6dfc68f`) has substantially refactored the exchange module (e.g. `buyPlayerListings` now takes `gameNow int64` as a parameter, the pricing engine is different), but the patch's Go symbols map cleanly onto it. Use the upstream HEAD for all SQL column shapes (they have not changed materially from v0.23.2). When the commit body says "v0.23.2 added `gameNow int64` to `buyPlayerListings`", it means the upstream HEAD at `f6dfc68f` already matches that v0.23.2 signature — no further adjustment needed.
+The **canonical reference version for the sane-pricing patch** is reference implementation **v0.23.2**. DST commit `421693ae` explicitly states "fix pricing patch on reference implementation v0.23.2" — this is the version the patch was calibrated against. The upstream HEAD (`f6dfc68f`) has substantially refactored the exchange module (e.g. `buyPlayerListings` now takes `gameNow int64` as a parameter, the pricing engine is different), but the patch's Go symbols map cleanly onto it. Use the upstream HEAD for all SQL column shapes (they have not changed materially from v0.23.2). When the commit body says "v0.23.2 added `gameNow int64` to `buyPlayerListings`", it means the upstream HEAD at `f6dfc68f` already matches that v0.23.2 signature — no further adjustment needed.
 
 ---
 
@@ -27,7 +27,7 @@ The **canonical reference version for the sane-pricing patch** is dune-admin **v
 
 The bot uses **`class = 'Revy'`** in `dune.actors`.
 
-**Source:** `Icehunter/dune-admin:internal/marketbot/exchange.go` (SHA `d927cb87`):
+**Source:** `the upstream reference repository:internal/marketbot/exchange.go` (SHA `d927cb87`):
 
 ```go
 err := e.db.QueryRow(ctx,
@@ -72,7 +72,7 @@ if currentBalance < seedFloor {
 }
 ```
 
-**Source:** `Icehunter/dune-admin:internal/marketbot/exchange.go:initBotUser`
+**Source:** `the upstream reference repository:internal/marketbot/exchange.go:initBotUser`
 
 ### `actors` Row Column Values
 
@@ -122,7 +122,7 @@ SELECT DISTINCT access_point_id FROM dune.dune_exchange_orders WHERE exchange_id
 SELECT dune.get_exchange_inventory_id($exchangeId)
 ```
 
-**Source:** `Icehunter/dune-admin:internal/marketbot/exchange.go:Init` and `detectExchangeID`, `detectAccessPointID`.
+**Source:** `the upstream reference repository:internal/marketbot/exchange.go:Init` and `detectExchangeID`, `detectAccessPointID`.
 
 ### DST Port Divergence on Identity
 
@@ -139,7 +139,7 @@ DST's `Get-DuneBotIdentity` uses class **`'Duke'`** instead of `'Revy'`, and ski
 | `ListInterval` | **30 minutes** | `list_interval` |
 | `BuyInterval` | **5 minutes** | `buy_interval` |
 
-**Source:** `Icehunter/dune-admin:internal/marketbot/bot.go`:
+**Source:** `the upstream reference repository:internal/marketbot/bot.go`:
 ```go
 if cfg.ListInterval == 0 {
     cfg.ListInterval = 30 * time.Minute
@@ -180,7 +180,7 @@ func runLoop(ctx, logger, cfg, ex, catalog) {
 }
 ```
 
-**Source:** `Icehunter/dune-admin:internal/marketbot/bot.go:runLoop`
+**Source:** `the upstream reference repository:internal/marketbot/bot.go:runLoop`
 
 **Key design:** The loop checks at minute granularity. On startup, one combined tick fires immediately. Each subsequent tick fires when `now > nextDue`, not on a strict wall-clock schedule.
 
@@ -216,7 +216,7 @@ ListTick:
   11. Refresh balance and listing_count for status reporting
 ```
 
-**Source:** `Icehunter/dune-admin:internal/marketbot/exchange.go:ListTick`
+**Source:** `the upstream reference repository:internal/marketbot/exchange.go:ListTick`
 
 ### Quota Check: Top-Up vs. Spawn Fresh
 
@@ -300,7 +300,7 @@ RETURNING id
 | `quality_level` | Grade (0–5) |
 | `stats` | `'{}'` (empty JSON) |
 
-**Source:** `Icehunter/dune-admin:internal/marketbot/exchange.go:createListingsBatch`
+**Source:** `the upstream reference repository:internal/marketbot/exchange.go:createListingsBatch`
 
 ### Step 2: INSERT order row
 
@@ -347,7 +347,7 @@ VALUES
 | `initial_stack_size` | `StackMax` |
 | `wear_normalized_price` | Same as `item_price` (listing price) |
 
-**Source:** `Icehunter/dune-admin:internal/marketbot/exchange.go:createListingsBatch`
+**Source:** `the upstream reference repository:internal/marketbot/exchange.go:createListingsBatch`
 
 ### Expiration Time Calculation
 
@@ -379,7 +379,7 @@ ORDER BY expiration_time DESC LIMIT 1
 
 ## Section 3b — Listing Price Calculation
 
-### Upstream Pricing (dune-admin HEAD, unpatched)
+### Upstream Pricing (reference implementation HEAD, unpatched)
 
 The upstream `pricing.go` uses a complex multi-branch formula:
 
@@ -416,11 +416,11 @@ T0: 5  T1: 20  T2: 80  T3: 200  T4: 600  T5: 1,500  T6: 4,000
 
 **Market price influence (`fetchMarketPrices`):** Uses `dune_exchange_get_item_price_stats(template_ids[])` to get real market minimum. If market min < `adjusted × 0.9`, price trends toward `(adjusted + market_min) / 2`.
 
-**Source:** `Icehunter/dune-admin:internal/marketbot/pricing.go` (SHA `de6592d4`)
+**Source:** `the upstream reference repository:internal/marketbot/pricing.go` (SHA `de6592d4`)
 
 ### Sane-Pricing Patch (DST / Coastal) — THE AUTHORITATIVE RULES
 
-**Patch file:** `coastal-ms/DST-DuneServerTool:app/resources/dune-admin-patches/0001-sane-pricing-100k-cap.patch` (SHA `6dbd524ef7a5c80dba9acd2ce04afab7686050c9`, at commit `cf903665`)
+**Patch file:** `coastal-ms/DST-DuneServerTool:app/resources/legacy-admin-patches/0001-sane-pricing-100k-cap.patch` (SHA `6dbd524ef7a5c80dba9acd2ce04afab7686050c9`, at commit `cf903665`)
 
 **What it changes:** Replaces upstream's rarity-weighted pricing (which produced multi-million-solari T6 listings) with a tier-driven model capped at 100,000 Solari, calibrated for a small private server (~2 active players, ~5–20k Solari/hr).
 
@@ -568,7 +568,7 @@ if roll := rand.Intn(12) + 1; roll != 5 {
 
 > This section repeats the patch in spec form rather than code form for the implementer.
 
-**Patch source:** `coastal-ms/DST-DuneServerTool:app/resources/dune-admin-patches/0001-sane-pricing-100k-cap.patch` (commit `cf903665`). Files touched: `pricing.go`, `config.go`, `config_test.go`, `exchange.go`.
+**Patch source:** `coastal-ms/DST-DuneServerTool:app/resources/legacy-admin-patches/0001-sane-pricing-100k-cap.patch` (commit `cf903665`). Files touched: `pricing.go`, `config.go`, `config_test.go`, `exchange.go`.
 
 **What the patch does:**
 1. Hard-caps all listings at **100,000 Solari** (`maxAnyPrice`). No exception.
@@ -590,11 +590,11 @@ If you see upstream values (rarity=1/5/2, vendor=1/5/2, grade=1/1/1.25/1.5/1.75/
 
 ---
 
-## Section 5 — Configuration Surface (Upstream dune-admin UI)
+## Section 5 — Configuration Surface (Upstream reference implementation UI)
 
 ### Runtime Config Schema (`configValues`)
 
-**Source:** `Icehunter/dune-admin:internal/marketbot/config.go` (SHA `1d32425b`)
+**Source:** `the upstream reference repository:internal/marketbot/config.go` (SHA `1d32425b`)
 
 ```json
 {
@@ -630,7 +630,7 @@ If you see upstream values (rarity=1/5/2, vendor=1/5/2, grade=1/1/1.25/1.5/1.75/
 
 Config is persisted via `SaveState(path, configValues)` to a JSON file at the path specified by `BotConfig.StatePath`. The format matches the JSON wire format above. State is loaded on startup; UI applies through `PUT /config` (partial JSON patch). The state file is written atomically (tmp file + rename).
 
-### HTTP API Endpoints (upstream dune-admin embedded bot)
+### HTTP API Endpoints (upstream reference implementation embedded bot)
 
 | Method | Path | Purpose |
 |--------|------|---------|
@@ -646,9 +646,9 @@ Config is persisted via `SaveState(path, configValues)` to a JSON file at the pa
 
 **Auth:** `Authorization: Bearer <token>` header. Token set via `BotConfig.APIToken` (corresponding `market_bot_token` in `config.yaml`). Empty token = all auth endpoints disabled (401).
 
-### UI Fields (dune-admin web panel, inferred from config schema and API)
+### UI Fields (reference implementation web panel, inferred from config schema and API)
 
-The dune-admin web UI's Bot Control panel surfaces all `configValues` fields plus:
+The reference implementation web UI's Bot Control panel surfaces all `configValues` fields plus:
 - Enable/disable toggle
 - Buy interval slider/input
 - List interval slider/input
@@ -764,7 +764,7 @@ WHERE owner_id = $ownerID AND is_npc_order = TRUE;
 
 All three steps run in a single transaction. Player listings, fulfilled-order history, and the bot's Solari balance are untouched.
 
-**Source:** `Icehunter/dune-admin:internal/marketbot/exchange.go:CleanupListings`
+**Source:** `the upstream reference repository:internal/marketbot/exchange.go:CleanupListings`
 
 ### DST's `Clear-DuneBotListings` (functionally equivalent)
 
@@ -890,7 +890,7 @@ COMMIT;
 
 ## Section 9 — Other Operator-Facing Knobs
 
-### From Upstream dune-admin Config
+### From Upstream reference implementation Config
 
 All the following are exposed via `PUT /config` (partial JSON patch) and saved to the state file:
 
@@ -959,7 +959,7 @@ The bot resolves masks via a three-tier precedence:
 2. **UniqueSchematicsMask** for schematics in a UNIQUE SCHEMATICS subcategory
 3. **CategoryMask** from the item's category path
 
-**Source:** `Icehunter/dune-admin:internal/marketbot/pricing.go:CategoryMask` and `UniqueSchematicsMask` (SHA `de6592d4`)
+**Source:** `the upstream reference repository:internal/marketbot/pricing.go:CategoryMask` and `UniqueSchematicsMask` (SHA `de6592d4`)
 
 For the PowerShell port: implement the player-order cache read first (Tier 1 covers the vast majority of items); implement the static code tables only for items not yet seen in any player order. The full code tables from `pricing.go` (knownCodes, depth3Parent, weaponPathRemap, uniqueSchematicsD2, uniqueSchematicsD3) run to ~150 lines and should be reproduced verbatim as a lookup hashtable.
 
@@ -1078,13 +1078,13 @@ The following checklist is for the PowerShell implementer. Each item corresponds
 
 ## Gaps and Uncertainties
 
-1. **Sane-pricing patch is the only representation of Coastal's customizations.** The patch was removed from the DST repo at commit `665364e1` (2026-06-11) when dune-admin v0.34.0 adopted the non-free `@heroui-pro/react` package and the external bot integration was dropped entirely. The patch content recovered at `cf903665` is the definitive final version of the patch as shipped in DST v10.2.6+.
+1. **Sane-pricing patch is the only representation of Coastal's customizations.** The patch was removed from the DST repo at commit `665364e1` (2026-06-11) when reference implementation v0.34.0 adopted the non-free `@heroui-pro/react` package and the external bot integration was dropped entirely. The patch content recovered at `cf903665` is the definitive final version of the patch as shipped in DST v10.2.6+.
 
 2. **`dune.dune_exchange_get_item_price_stats`** — The market-price fetching proc is used upstream for adaptive drift. Its exact signature and return columns could not be verified from source alone; the upstream calls it as `SELECT * FROM dune.dune_exchange_get_item_price_stats($1::text[])` returning columns `(template_id, min_price, avg_price)`. This is optional for Phase 1 of the port; the simpler `adjustPrice` drift (sold fraction only) can be implemented without it.
 
 3. **`dune.get_exchange_inventory_id`** and **`dune.dune_exchange_get_user_id`** — These stored procedures are called by the upstream bot but their body is in the game server's Postgres schema (not open source). They appear to be simple upsert-or-create procedures. If they don't exist on the target DB, the port will need to implement the equivalent logic manually.
 
-4. **Item-data.json** — The catalog file (`item-data.json`) is not present in the dune-admin GitHub repo (it's generated from game data). The PowerShell port needs this file to know tier, rarity, StackMax, IsSchematic, IsGradeable, MinQualityLevel, MinPrice, MaxPrice, and Category for each template ID. Verify the file location from dune-admin's runtime config (`item_data_path` in `config.yaml`, defaulting to `item-data.json` in the working directory).
+4. **Item-data.json** — The catalog file (`item-data.json`) is not present in the reference implementation GitHub repo (it's generated from game data). The PowerShell port needs this file to know tier, rarity, StackMax, IsSchematic, IsGradeable, MinQualityLevel, MinPrice, MaxPrice, and Category for each template ID. Verify the file location from reference implementation's runtime config (`item_data_path` in `config.yaml`, defaulting to `item-data.json` in the working directory).
 
 5. **`position_index` auto-increment** — The upstream tracks `nextPos` in memory and increments it per insert. The PowerShell port will need to re-read the max from DB on each list-tick startup (since the scheduler runs in a fresh runspace). Re-reading `SELECT COALESCE(MAX(position_index), -1)+1 FROM dune.items WHERE inventory_id=$botInvId` at the start of each `Invoke-DuneBotListTick` is the correct approach.
 

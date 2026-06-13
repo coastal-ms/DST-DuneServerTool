@@ -1,6 +1,6 @@
 {
   "_meta": {
-    "source": "dune-admin/db.go (climbTheRanksNodes, climbTheRanksStoryNodes, climbTheRanksStoryNodes{Atreides,Harkonnen}, landsraadMissionNodes{Atreides,Harkonnen})",
+    "source": "reference implementation db.go (climbTheRanksNodes, climbTheRanksStoryNodes, climbTheRanksStoryNodes{Atreides,Harkonnen}, landsraadMissionNodes{Atreides,Harkonnen})",
     "purpose": "Static journey-node arrays used by progression-unlock + progression-reverse. Kept here as JSON so DST can ship them with the installer without hard-coding 90+ strings into PowerShell."
   },
   "climb_the_ranks_nodes": [

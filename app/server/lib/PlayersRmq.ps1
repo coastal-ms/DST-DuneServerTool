@@ -1,6 +1,6 @@
 ﻿# PlayersRmq.ps1
 # High-level handlers that publish RMQ ServerCommand messages for live
-# (online-player) operations. Ports dune-admin handlers_rmq.go logic:
+# (online-player) operations. Ports the reference implementation handlers_rmq.go logic:
 # parameter validation, optional FLS id resolution from actor_id, lightweight
 # capacity check for give-item-live, and the static "Claim Rewards" path
 # for grant-live (which is pg_notify-based, not RMQ).
@@ -11,7 +11,7 @@
 # Depends on Rmq.ps1 (Send-DuneRmqServerCommand + typed wrappers),
 # Database.ps1 (Invoke-DuneSqlQuery), PlayersAdmin.ps1, PlayersWrites.ps1.
 
-# Best-effort backpack capacity guard. Mirrors dune-admin checkInventoryCapacity
+# Best-effort backpack capacity guard. Mirrors the reference implementation checkInventoryCapacity
 # but only enforces the slot cap (max_item_count). Volume is left to the
 # game server. Returns @{ ok=$true } when room exists or when no cap is set.
 function Test-DuneInventoryCapacity {
@@ -159,7 +159,7 @@ function Invoke-DunePlayerCheatScriptLive {
 
 # cmdGrantLive: NOT an RMQ command. Inserts into dune.landsraad_house_rewards
 # with house_name='AdminGrant'; the pg_notify trigger surfaces a Claim Rewards
-# popup to the player whether online or offline. Mirrors dune-admin db.go.
+# popup to the player whether online or offline. Mirrors the reference implementation db.go.
 function Invoke-DunePlayerGrantLive {
     param(
         [Parameter(Mandatory)] [string] $Ip,
@@ -220,7 +220,7 @@ function Invoke-DuneChatWhisperLive {
     $res = Invoke-DuneRmqSendWhisper -TargetFlsId $TargetFlsId -TargetName $TargetName -SenderName $SenderName -Message $Message -ImpersonatedFlsId $ImpersonatedFlsId
     if ($res.ok) {
         $res.message = "Whisper sent to $TargetFlsId (broker accepted; in-game delivery is experimental)."
-        $res.note    = "dune-admin/Adain external chat publish recipe is not live-tested - check the target's whispers tab to confirm delivery."
+        $res.note    = "The external chat publish recipe is not live-tested - check the target's whispers tab to confirm delivery."
     }
     return $res
 }

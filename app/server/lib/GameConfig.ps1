@@ -13,13 +13,13 @@
 #   removed from the body, so there is exactly one copy and DST is the sole author
 #   of that section going forward. Structure (comments, array lines, complex
 #   single-line values) is preserved verbatim. Duplicate scalar keys are collapsed
-#   to the last-wins value. Any pre-existing dune-admin managed block is migrated
+#   to the last-wins value. Any pre-existing the reference implementation managed block is migrated
 #   (adopted) into the DST block and its markers removed. If a BEGIN marker is
 #   found without a matching END the writer refuses to touch the file (data-loss
 #   guard). The file is backed up server-side before every write.
 
 # -----------------------------------------------------------------------------
-# DST managed-block markers. ASCII ONLY (dune-admin used a non-ASCII em-dash that
+# DST managed-block markers. ASCII ONLY (the reference implementation used a non-ASCII em-dash that
 # mangles to mojibake under CP1252 round-trips).
 # -----------------------------------------------------------------------------
 $script:DstManagedBegin = '; ===== Dune Server Tool (DST) managed section BEGIN - do not hand-edit between these markers ====='
@@ -142,10 +142,10 @@ $script:DuneGameConfigSchema = @(
     # --- Vehicles (engine cvars) ---
     @{ Section=$script:DuneGcSecConsole; Key='dw.VehicleDurabilityDamageMultiplier'; File='engine'; Type='float'; Min=0; Max=10; Default='1.0'; Label='Vehicle Durability Damage'; Help='Durability damage multiplier for vehicles. 0 = off.'; Category='Vehicles' }
 
-    # --- Parity additions (dune-admin serverSettingsSchema) ---
+    # --- Parity additions (the reference implementation serverSettingsSchema) ---
     # ACCURACY NOTE (pending validation against the live UserGame.ini): the keys
     # below were NOT found in the stock DefaultGame.ini dump (docs/Dune_Server_INI_Field_Sheet.md,
-    # game 1.4.0.0) and are NOT in dune-admin's evidence-validated schema. They may
+    # game 1.4.0.0) and are NOT in the reference implementation's evidence-validated schema. They may
     # be no-ops as written and need confirmation before relying on them:
     #   - m_BuildingDecayRateMultiplier / bEnableBuildingStability / m_BaseBackupExtensions
     #     (m_BaseBackupExtensions duplicates the real m_BaseBackupMaxExtensions above)
@@ -439,7 +439,7 @@ function ConvertFrom-DuneIniDoc {
         }
 
         if ($inManaged -and -not $sawManagedHeaderSection) {
-            # dune-admin block header comments before the first managed section: drop.
+            # the reference implementation block header comments before the first managed section: drop.
             continue
         }
         if ($null -ne $cur) {
@@ -857,7 +857,7 @@ echo "===END==="
 
 # Best-effort type inference for an arbitrary INI scalar — used so the UI can
 # render the right input control (bool toggle vs number vs free text) for keys
-# the static schema doesn't know about. Mirrors dune-admin's inferType.
+# the static schema doesn't know about. Mirrors the reference implementation's inferType.
 function Get-DuneGameConfigInferType {
     param([string]$Value)
     $v = "$Value".Trim()

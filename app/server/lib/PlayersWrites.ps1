@@ -1,4 +1,4 @@
-﻿# PlayersWrites.ps1 — v11.5.9 player write actions ported from dune-admin.
+﻿# PlayersWrites.ps1 — v11.5.9 player write actions ported from the reference implementation.
 # Covers Phases C, D, E, F of the v11.5.9 port (37 endpoints across):
 #   §3 items, §4 vehicles, §5 teleport (offline), §6 progression/journey/
 #   contracts/jobs/codex, §10 storage owner debug.
@@ -7,7 +7,7 @@
 # @{ ok=$true|$false; message; ... }. Routes wrap via Invoke-DunePlayerWriteRoute
 # from routes/GameplayPlayers.ps1.
 #
-# Schema notes (verified against dune-admin db.go):
+# Schema notes (verified against the reference implementation db.go):
 #   * fgl_entities is keyed by `entity_id` (NOT id), and game components live in
 #     the `components` jsonb column (NOT properties).
 #   * actor_fgl_entities joins via `entity_id` (NOT fgl_entity_id).
@@ -96,7 +96,7 @@ function Get-DuneNodesForPreset {
 }
 
 # ---------------------------------------------------------------------------
-# Helpers — pawn / account / faction lookups (matching dune-admin behaviour)
+# Helpers — pawn / account / faction lookups (matching the reference implementation behaviour)
 # ---------------------------------------------------------------------------
 
 function Get-DunePlayerPawnFromAccount {

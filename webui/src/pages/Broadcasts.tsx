@@ -11,7 +11,7 @@ export function Broadcasts() {
       <PageHeader
         icon="Megaphone"
         title="Broadcasts & whispers"
-        description="Server-wide announcements, shutdown countdowns, and per-player whispers. Mirrors dune-admin's /notify, wired straight to the in-game courier."
+        description="Server-wide announcements, shutdown countdowns, and per-player whispers, wired straight to the in-game courier."
       />
       <AdminComposers className="mt-4" />
     </div>

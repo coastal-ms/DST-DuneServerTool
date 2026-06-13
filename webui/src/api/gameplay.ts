@@ -1,4 +1,4 @@
-// Gameplay API — native Market / Exchange + Market Bot, ported from dune-admin.
+// Gameplay API — native Market / Exchange + Market Bot, ported from the reference implementation.
 // All market responses carry a `source: 'live' | 'demo'` flag so the UI can
 // label whether data came from the live game DB or the bundled demo dataset.
 import { api } from './client'
@@ -571,7 +571,7 @@ export function repairInventoryItem(itemId: number) {
 }
 
 // ---------------------------------------------------------------------------
-// v11.5.6 — extended player surface (port of dune-admin's player tooling).
+// v11.5.6 — extended player surface (port of the reference implementation's player tooling).
 // ---------------------------------------------------------------------------
 
 export interface PlayerSummaryBucket { name: string; count: number }
@@ -992,7 +992,7 @@ export function setCoriolisPartitionSeed(partitionId: number, seed: number) {
 }
 
 // ===========================================================================
-// v11.5.9 — Phase A/B/C/G+H/I — full dune-admin player surface port.
+// v11.5.9 — Phase A/B/C/G+H/I — full the reference implementation player surface port.
 // Adds the remaining 40+ endpoints not previously surfaced. Existing
 // wrappers above (giveSolari, giveItem, renamePlayer, awardSpecXp,
 // setPlayerTags, fillWater) are kept untouched for back-compat.
@@ -1105,7 +1105,7 @@ export function getPlayerJourney(id: number, demo?: boolean) {
     `/api/gameplay/players/${id}/journey${qs({ demo: demo ? 1 : undefined })}`)
 }
 
-// Full character dump - shape is intentionally loose (mirrors dune-admin export).
+// Full character dump - shape is intentionally loose (mirrors the reference implementation export).
 export function exportPlayerData(id: number, demo?: boolean) {
   return api<{ ok: boolean; account_id: number; data: Record<string, unknown>; source: DataSource }>(
     `/api/gameplay/players/${id}/export${qs({ demo: demo ? 1 : undefined })}`)

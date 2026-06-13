@@ -47,10 +47,10 @@ export function installUpdate() {
 }
 
 /**
- * One-time "DST is now decoupled from Dune-Admin" notice. `needed` is true only
+ * One-time "DST is now decoupled from the reference implementation" notice. `needed` is true only
  * for installs upgraded from a pre-decouple build (<= 11.4.13) that haven't
  * acknowledged yet. `duneAdminFolder` is recovered from the legacy
- * `DuneAdminExe` config value so the user can still launch dune-admin manually.
+ * `DuneAdminExe` config value so the user can still launch the reference implementation manually.
  */
 export interface MigrationNotice {
   needed: boolean

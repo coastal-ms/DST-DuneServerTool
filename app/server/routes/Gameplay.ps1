@@ -1,5 +1,5 @@
 ﻿# Gameplay API — native Market / Exchange + Market Bot routes.
-# Mirrors dune-admin's /api/v1/market[-bot]/* surface under /api/gameplay/*.
+# Mirrors the reference implementation's /api/v1/market[-bot]/* surface under /api/gameplay/*.
 #
 # Data source resolution for market endpoints:
 #   - ?demo=1            -> always bundled demo dataset (source: "demo")
@@ -348,7 +348,7 @@ Register-DuneRoute -Method POST -Path '/api/gameplay/market-bot/clear-listings' 
 # ---------------------------------------------------------------------------
 # POST /api/gameplay/market-bot/clear-legacy-listings — wipe NPC orders owned
 # by any actor class that ISN'T Duke (Revy orphans from the old external
-# dune-admin integration, etc.). One-shot cleanup; player listings untouched.
+# the reference implementation integration, etc.). One-shot cleanup; player listings untouched.
 # ---------------------------------------------------------------------------
 Register-DuneRoute -Method POST -Path '/api/gameplay/market-bot/clear-legacy-listings' -Handler {
     param($req, $res, $routeParams, $body)

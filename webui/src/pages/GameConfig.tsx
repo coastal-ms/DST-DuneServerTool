@@ -533,7 +533,7 @@ export function GameConfig() {
         <div>
           When you change a setting, DST relocates that setting&apos;s entire section into a managed block at the
           bottom of the file and becomes its owner — keeping one clean copy, preserving structure, and migrating
-          any existing dune-admin block. The original file is backed up on the server before every write.
+          any existing managed block. The original file is backed up on the server before every write.
         </div>
       </div>
 
@@ -1112,7 +1112,7 @@ function BoolToggle({ on, off, value, disabled, onChange }: { on: string; off: s
 // All default settings browser — lazy-loads DefaultGame.ini + DefaultEngine.ini
 // straight from the live game-server pod. Every section is a collapsible card;
 // every key is editable and saved back to UserGame/UserEngine.ini via the
-// existing explicit PUT /api/gameconfig form. Mirrors dune-admin's "Server
+// existing explicit PUT /api/gameconfig form. Mirrors the reference implementation's "Server
 // Settings" page.
 // -----------------------------------------------------------------------------
 
