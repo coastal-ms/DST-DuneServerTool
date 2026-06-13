@@ -1,11 +1,11 @@
-﻿# Gameplay — Players (native port of dune-admin's player tooling).
+﻿# Gameplay — Players (native port of the reference implementation's player tooling).
 #
 # Reads the live game Postgres through the same Invoke-DuneSqlQuery bridge the
-# Market features use, so dune-admin's SQL ports verbatim. Every getter returns
+# Market features use, so the reference implementation's SQL ports verbatim. Every getter returns
 # @{ ok; ... } and the routes wrap them with the live/demo + `source` convention.
 #
 # Write actions (give solari, award spec XP, rename, give/delete/repair item)
-# call the SAME server-side stored procedures and statements dune-admin uses,
+# call the SAME server-side stored procedures and statements the reference implementation uses,
 # run with -ReadOnly:$false. They are surfaced behind explicit confirm UI.
 #
 # Helpers reused from Gameplay.ps1: ConvertTo-DuneRowMaps, ConvertTo-DuneInt,
@@ -29,7 +29,7 @@ function Get-DuneShortClass {
 }
 
 # ----------------------------------------------------------------------------
-# SQL — Players (ported from dune-admin db.go). All read-only.
+# SQL — Players (ported from the reference implementation db.go). All read-only.
 # ----------------------------------------------------------------------------
 $script:DunePlayersListSql = @'
 SELECT a.id,
@@ -318,7 +318,7 @@ function Get-DunePlayerDetailDemo {
 }
 
 # ============================================================================
-# v11.5.6 — extended player surface (port of dune-admin's player tooling).
+# v11.5.6 — extended player surface (port of the reference implementation's player tooling).
 #
 # Adds:
 #   - Get-DunePlayerSummaryLive     : server-wide aggregate dashboard
@@ -482,8 +482,8 @@ function Get-DunePlayerStatsLive {
 # ---------------------------------------------------------------------------
 # Full specs view (5 tracks plus keystone count + max).
 # Keystones use the dune.purchased_specialization_keystones table keyed by
-# controller id (per dune-admin's insertAllPurchasedKeystones path).
-# Max keystone id is 205 (matches dune-admin's generate_series upper bound).
+# controller id (per the reference implementation's insertAllPurchasedKeystones path).
+# Max keystone id is 205 (matches the reference implementation's generate_series upper bound).
 # ---------------------------------------------------------------------------
 $script:DunePlayerSpecsFullSql = @'
 WITH tracks AS (
@@ -569,7 +569,7 @@ SELECT dune.reset_specialization_keystones($PawnId::bigint);
     return @{ ok = $true; message = "Reset all spec tracks and keystones for player $PawnId." }
 }
 
-# Grant all keystones — uses controller id (per dune-admin's insertAllPurchasedKeystones).
+# Grant all keystones — uses controller id (per the reference implementation's insertAllPurchasedKeystones).
 function Invoke-DunePlayerGrantAllKeystones {
     param([string]$Ip, [long]$ControllerId)
     $max = $script:DuneKeystoneMax
@@ -629,7 +629,7 @@ function Invoke-DunePlayerSetTags {
     return @{ ok = $true; message = "Tags updated for account $AccountId ($($clean.Count) tag(s))."; tags = $clean }
 }
 
-# v11.5.9 - update_player_tags delta path. Mirrors dune-admin cmdUpdatePlayerTags:
+# v11.5.9 - update_player_tags delta path. Mirrors the reference implementation cmdUpdatePlayerTags:
 # calls dune.update_player_tags(account_id, add[], remove[]) via the stored
 # proc rather than DELETE-INSERT, so the server-side trigger logic (faction
 # rep cascades, journey hooks) fires correctly.
@@ -727,15 +727,15 @@ function Get-DunePlayerEventsDemo {
 }
 
 # ---------------------------------------------------------------------------
-# v11.5.7 — Fill Water (offline path). Ported from dune-admin db.go:6325
+# v11.5.7 — Fill Water (offline path). Ported from the reference implementation db.go:6325
 # cmdRefillWaterOffline. Sets all water-fillable items in the actor's relevant
 # inventories to their MaxAmount via jsonb_set. Takes effect on next relog for
 # online players; instant for offline players.
 #
-# Source list: dune-admin fillables_gen.go waterFillableTemplates (49 entries,
+# Source list: the reference implementation fillables_gen.go waterFillableTemplates (49 entries,
 # generated from DT_ItemTableFillables.json — FillableTypeRestriction=Water).
 # repairGearInventoryTypes is DST's narrowed set (0,1,15): backpack + equipped
-# armor + equipped weapons only. (dune-admin's original set also included emote
+# armor + equipped weapons only. (the reference implementation's original set also included emote
 # and empty buckets 14/27/30, which Repair/Restore should not touch.)
 # ---------------------------------------------------------------------------
 $script:DuneWaterFillableTemplates = @(

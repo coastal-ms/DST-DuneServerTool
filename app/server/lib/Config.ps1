@@ -20,7 +20,7 @@ $script:DuneConfigKeys = @(
 
 # Keys that ONLY a pre-decouple (<= 11.4.13) build ever wrote into
 # dune-server.config. Their presence on disk is how we know a config was
-# created before DST was split off from the dune-admin companion app — a fresh
+# created before DST was split off from the companion admin tool — a fresh
 # 12.x install never writes them. Used to drive the one-time decoupling notice.
 $script:DuneLegacyAdminKeys = @(
     'DuneAdminExe',
@@ -112,16 +112,16 @@ function Test-DuneConfigComplete {
 
 # Decoupling notice ----------------------------------------------------------
 #
-# As of v12.x DST is a standalone tool: the bundled dune-admin companion and
-# its in-app launch commands were removed (dune-admin is now run separately and
+# As of v12.x DST is a standalone tool: the bundled companion admin tool and
+# its in-app launch commands were removed (that tool is now run separately and
 # reached at https://dune-admin.layout.tools). Anyone upgrading from a
 # pre-decouple build (<= 11.4.13) must be told this once, and shown where their
-# old dune-admin folder lives so they can still launch it.
+# old companion-tool folder lives so they can still launch it.
 #
-# Detection: pre-decouple builds wrote dune-admin-era keys (see
+# Detection: pre-decouple builds wrote the reference implementation-era keys (see
 # $script:DuneLegacyAdminKeys) into dune-server.config; a fresh 12.x install
 # never does. We treat the presence of any of those keys as "this user came
-# from the dune-admin era". `DecoupleNoticeAck` is set once the user
+# from the bundled-companion era". `DecoupleNoticeAck` is set once the user
 # acknowledges, after which the notice never shows again.
 function Get-DuneDecoupleNotice {
     $raw = Read-DuneConfigRaw

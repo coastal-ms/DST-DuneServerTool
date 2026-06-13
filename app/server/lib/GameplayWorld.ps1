@@ -1,10 +1,10 @@
 ﻿# Gameplay — World (Bases, Storage, Blueprints). Read-only native port of
-# dune-admin's list views. SQL ported verbatim from dune-admin db.go. Each
+# the reference implementation's list views. SQL ported verbatim from the reference implementation db.go. Each
 # getter returns @{ ok; ... }; the routes apply the live/demo + `source`
 # convention. Helpers reused from Gameplay.ps1 / GameplayPlayers.ps1.
 
 # ----------------------------------------------------------------------------
-# BASES — list (id, name, pieces, placeables). dune-admin has no delete handler
+# BASES — list (id, name, pieces, placeables). the reference implementation has no delete handler
 # so this is read-only by design.
 # ----------------------------------------------------------------------------
 $script:DuneBasesListSql = @'
@@ -180,7 +180,7 @@ FROM dune.building_blueprints bb
 LEFT JOIN dune.items i ON i.id = bb.item_id
 LEFT JOIN dune.inventories inv ON inv.id = i.inventory_id
 LEFT JOIN dune.actors a ON a.id = inv.actor_id
--- Owner resolution: dune-admin's original join (ps.player_pawn_id = a.id) only
+-- Owner resolution: the legacy join (ps.player_pawn_id = a.id) only
 -- matches a player whose pawn is currently spawned/loaded, so offline players'
 -- blueprints render with a blank owner (looked like "only the host's blueprints
 -- show up"). Resolve primarily by the persistent account link (same pattern the
@@ -227,9 +227,9 @@ function Get-DuneBlueprintsDemo {
 }
 
 # ----------------------------------------------------------------------------
-# BLUEPRINT EXPORT / IMPORT — native port of dune-admin handlers_blueprints.go.
+# BLUEPRINT EXPORT / IMPORT — native port of the reference implementation handlers_blueprints.go.
 # Export reads instances/placeables/pentashields into a portable JSON file
-# (field names match dune-admin exactly for cross-tool compatibility). Import
+# (field names match the reference implementation exactly for cross-tool compatibility). Import
 # recreates the blueprint as a BuildingBlueprint_CopyDevice in a player's
 # backpack via one atomic PL/pgSQL DO block (the SQL bridge runs each call as a
 # separate psql invocation, so a single statement is the only way to stay
@@ -238,7 +238,7 @@ function Get-DuneBlueprintsDemo {
 
 # building_type values game-saved blueprints commonly mark provides_stability=true.
 # Used only as a fallback when importing legacy JSON without the per-instance flag;
-# fresh exports always carry the exact bool. Mirrors dune-admin's structuralBuildingTypes.
+# fresh exports always carry the exact bool. Mirrors the reference implementation's structuralBuildingTypes.
 $script:DuneStructuralBuildingTypes = @{
     'Atreides_Outpost_Column'                  = $true
     'Atreides_Outpost_Column_Corner'           = $true
@@ -289,7 +289,7 @@ function ConvertTo-DuneFloat {
 }
 
 # Format a value as a Postgres real literal element (invariant, single-precision
-# shortest round-trip — matches the float32 cast dune-admin uses).
+# shortest round-trip — matches the float32 cast the reference implementation uses).
 function Format-DuneReal {
     param($Value)
     return ([float](ConvertTo-DuneFloat $Value)).ToString([System.Globalization.CultureInfo]::InvariantCulture)
@@ -441,7 +441,7 @@ function Import-DuneBlueprintLive {
         }
     }
 
-    # Resolve instance rows (instance_id + stability fall back per dune-admin).
+    # Resolve instance rows (instance_id + stability fall back per the reference implementation).
     $instRows = [System.Collections.Generic.List[string]]::new()
     for ($i = 0; $i -lt $instancesRaw.Count; $i++) {
         $inst = $instancesRaw[$i]
@@ -565,10 +565,10 @@ function Join-DuneBlueprintInserts {
 
 # ----------------------------------------------------------------------------
 # STORAGE WRITE — add items to / remove items from a container. Native port of
-# dune-admin's give-item / give-items / delete-item. Items added or removed
+# the reference implementation's give-item / give-items / delete-item. Items added or removed
 # only become visible to other players after a server zone restart (the game
 # caches container contents); the UI surfaces that warning. All require a live
-# DB. dune-admin inserts each item fresh (no stacking merge) with minimal valid
+# DB. the reference implementation inserts each item fresh (no stacking merge) with minimal valid
 # stats; the capacity check + insert run as one atomic CTE here.
 # ----------------------------------------------------------------------------
 function Invoke-DuneStorageGiveItem {
@@ -621,7 +621,7 @@ SELECT (SELECT id FROM ins)  AS item_id,
 }
 
 # Batch add — loops Invoke-DuneStorageGiveItem, collecting given/skipped (mirrors
-# dune-admin's give-items). Each item is a hashtable/PSObject { template, qty, quality }.
+# the reference implementation's give-items). Each item is a hashtable/PSObject { template, qty, quality }.
 function Invoke-DuneStorageGiveItems {
     param([string]$Ip, [long]$ContainerId, $Items)
     $given = @(); $skipped = @()
@@ -652,7 +652,7 @@ function Invoke-DuneStorageDeleteItem {
 }
 
 # ----------------------------------------------------------------------------
-# BASE EXPORT — native port of dune-admin handlers_bases.go. Reads a base's
+# BASE EXPORT — native port of the reference implementation handlers_bases.go. Reads a base's
 # building_instances (7-element transform: x,y,z + quaternion) and its
 # placeables, recenters everything on the base centroid, converts quaternions
 # to yaw (instances) / euler (placeables), and extracts pentashield scale from

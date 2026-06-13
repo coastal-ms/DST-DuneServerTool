@@ -1,5 +1,5 @@
 // Compact composer cards for the three admin "talk to players" actions that
-// dune-admin exposes via its /api/v1/notify endpoint: a generic on-screen
+// the reference implementation exposes via its /api/v1/notify endpoint: a generic on-screen
 // message ("broadcast"), a shutdown countdown ("server alert"), and a
 // per-player chat whisper ("GM whisper"). DST already had backends for all
 // three but only the standalone Broadcasts page wired the first two — and
@@ -100,7 +100,7 @@ export function GenericBroadcastComposer() {
 
 // ---------------------------------------------------------------------------
 // Shutdown/restart countdown ("Server Alert"). The big red banner Chopper saw.
-// Mirrors dune-admin's /notify with the ServiceBroadcast routing key — wraps
+// Mirrors the reference implementation's /notify with the ServiceBroadcast routing key — wraps
 // our richer Send-V6ShutdownBroadcast which supports Restart/Shutdown/
 // Maintenance/Update types and a Cancel action.
 // ---------------------------------------------------------------------------

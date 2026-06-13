@@ -77,7 +77,7 @@ export function OverviewTab({ onOpenTab }: { onOpenTab: (tab: GameplaySubTab) =>
 
   return (
     <div>
-      {/* Quick admin actions — broadcasts + whispers, mirrors dune-admin /notify */}
+      {/* Quick admin actions — broadcasts + whispers, mirrors the reference implementation /notify */}
       <AdminComposers className="mb-4" />
 
       {/* Intro */}
@@ -89,7 +89,7 @@ export function OverviewTab({ onOpenTab }: { onOpenTab: (tab: GameplaySubTab) =>
           <div>
             <h2 className="text-lg font-semibold text-text">A native gameplay console</h2>
             <p className="text-sm text-text-muted mt-1 max-w-3xl">
-              Everything the open-source Dune admin portal does, rebuilt inside Dune Server Tool — one console,
+              A complete gameplay admin console, built into Dune Server Tool — one console,
               one theme, no second program to install. The Market and Market Bot tabs are live now and read
               straight from your game database. The rest is mapped below.
             </p>

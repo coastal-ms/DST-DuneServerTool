@@ -1,9 +1,9 @@
-﻿# Gameplay lib — native port of the open-source dune-admin Market / Exchange
+﻿# Gameplay lib — native port of the legacy Market / Exchange
 # and Market Bot features. Runs entirely inside the DST backend (one console).
 #
 # Market data is read straight from the live game Postgres via the existing
 # Invoke-DuneSqlQuery bridge (psql over kubectl/SSH) — the SAME database and
-# schema dune-admin used, so its SQL ports verbatim. Item names/categories/
+# schema the reference implementation used, so its SQL ports verbatim. Item names/categories/
 # tiers are enriched from the bundled app\data\gameplay-item-data.json.
 #
 # Every market getter returns @{ source = 'live' | 'demo'; ... }. When the
@@ -13,7 +13,7 @@
 #
 # The Market Bot is an external HTTP service (Duke). We proxy to it with
 # Invoke-RestMethod using the configured address + bearer token, mirroring
-# dune-admin's botProxy. Lifecycle (start/stop/restart) is left as a no-op
+# the reference implementation's botProxy. Lifecycle (start/stop/restart) is left as a no-op
 # stub here and surfaced honestly in the UI until the control plane is wired.
 
 # ----------------------------------------------------------------------------
@@ -111,7 +111,7 @@ function Get-DuneItemKind {
     return 'item'
 }
 
-# Reclassify "*_Schematic" items under schematics/<first-segment> (matches dune-admin).
+# Reclassify "*_Schematic" items under schematics/<first-segment> (matches the reference implementation).
 function Get-DuneSchematicCategory {
     param([string]$TemplateId, [string]$BaseCategory)
     if (-not $TemplateId.ToLower().EndsWith('_schematic')) { return $BaseCategory }
@@ -165,7 +165,7 @@ function Test-DuneTruthy {
 }
 
 # ----------------------------------------------------------------------------
-# Market — live SQL (ported from dune-admin db_market.go), prices stored x0.1
+# Market — live SQL (ported from the reference implementation db_market.go), prices stored x0.1
 # so multiply by 10; NPC orders are shown as the bot vendor "Duke".
 # ----------------------------------------------------------------------------
 $script:DuneMarketItemsSql = @'
