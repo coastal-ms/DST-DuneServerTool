@@ -900,31 +900,62 @@ export interface CatalogItem {
   category: string
 }
 
+interface RawCatalogEntry {
+  templateId?: string
+  template_id?: string
+  name?: string
+  category?: string
+}
+
 interface CatalogResponse {
   _meta?: { count?: number; source?: string }
-  items: Record<string, { name: string; category: string }>
+  meta?: { total?: number; source?: string }
+  // The backend (/api/catalog/items -> Get-DuneItemCatalog) serializes `items`
+  // as an ARRAY of { templateId, name, category }. Older/alternate builds may
+  // emit a dict keyed by template_id. flattenItemCatalog handles both.
+  items: RawCatalogEntry[] | Record<string, { name?: string; category?: string }>
 }
 
 let _catalogCache: CatalogItem[] | null = null
 let _catalogPromise: Promise<CatalogItem[]> | null = null
 
 /**
- * Load + cache the full item catalog. The /api/catalog/items response is a
- * dict of { template_id: { name, category } }; we flatten to an array so the
- * autocomplete can sort + slice efficiently. ~5k entries, ~110KB JSON; only
- * fetched once per session.
+ * Normalize the /api/catalog/items payload into CatalogItem[]. Critically, the
+ * template_id MUST be the game class string (e.g. "AzuriteOre"), never an array
+ * index — the give-item guard rejects numeric ids, so an index would make every
+ * picked item unselectable. Reads the entry's `templateId` field for the array
+ * shape, or the object key for the dict shape.
+ */
+export function flattenItemCatalog(raw: CatalogResponse['items'] | undefined | null): CatalogItem[] {
+  const flat: CatalogItem[] = []
+  if (Array.isArray(raw)) {
+    for (const e of raw) {
+      const tid = String(e?.templateId ?? e?.template_id ?? '').trim()
+      if (!tid) continue
+      flat.push({ template_id: tid, name: e?.name || tid, category: e?.category || '' })
+    }
+  } else if (raw && typeof raw === 'object') {
+    const dict = raw as Record<string, { name?: string; category?: string }>
+    for (const tid of Object.keys(dict)) {
+      const key = tid.trim()
+      if (!key) continue
+      const v = dict[tid]
+      flat.push({ template_id: key, name: v?.name || key, category: v?.category || '' })
+    }
+  }
+  flat.sort((a, b) => a.name.localeCompare(b.name))
+  return flat
+}
+
+/**
+ * Load + cache the full item catalog. ~979 entries, ~110KB JSON; only fetched
+ * once per session. See flattenItemCatalog for the shape handling.
  */
 export function getItemCatalog(): Promise<CatalogItem[]> {
   if (_catalogCache) return Promise.resolve(_catalogCache)
   if (_catalogPromise) return _catalogPromise
   _catalogPromise = api<CatalogResponse>('/api/catalog/items').then(r => {
-    const items = r.items || {}
-    const flat: CatalogItem[] = []
-    for (const tid of Object.keys(items)) {
-      const v = items[tid]
-      flat.push({ template_id: tid, name: v?.name || tid, category: v?.category || '' })
-    }
-    flat.sort((a, b) => a.name.localeCompare(b.name))
+    const flat = flattenItemCatalog(r.items)
     _catalogCache = flat
     _catalogPromise = null
     return flat

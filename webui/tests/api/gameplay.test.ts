@@ -396,3 +396,38 @@ describe('isValidTemplateId — numeric give-item guard', () => {
   })
 })
 
+describe('flattenItemCatalog — catalog shape parsing', () => {
+  // The backend serializes `items` as an ARRAY of { templateId, name, category }.
+  // The parser must read templateId, NOT the array index, or every picked item
+  // gets a numeric template_id and the give-item guard makes it unselectable.
+  it('reads the class-string templateId from the array shape (the live bug)', () => {
+    const out = gp.flattenItemCatalog([
+      { templateId: 'AzuriteOre', name: 'Copper Ore', category: 'Resources' },
+      { templateId: 'CopperBar', name: 'Copper Ingot', category: 'Resources' },
+    ])
+    const copper = out.find(i => i.name === 'Copper Ore')
+    expect(copper?.template_id).toBe('AzuriteOre')
+    // No entry may carry a bare-numeric template_id (would be rejected on pick).
+    expect(out.every(i => gp.isValidTemplateId(i.template_id))).toBe(true)
+    expect(out.every(i => !/^\d+$/.test(i.template_id))).toBe(true)
+  })
+
+  it('still supports the legacy dict shape', () => {
+    const out = gp.flattenItemCatalog({
+      AzuriteOre: { name: 'Copper Ore', category: 'Resources' },
+    })
+    expect(out[0]?.template_id).toBe('AzuriteOre')
+    expect(out[0]?.name).toBe('Copper Ore')
+  })
+
+  it('sorts by display name and skips entries with no template id', () => {
+    const out = gp.flattenItemCatalog([
+      { templateId: 'Zeta', name: 'Zeta Thing', category: '' },
+      { templateId: '', name: 'No Id', category: '' },
+      { templateId: 'Alpha', name: 'Alpha Thing', category: '' },
+    ])
+    expect(out.map(i => i.template_id)).toEqual(['Alpha', 'Zeta'])
+  })
+})
+
+

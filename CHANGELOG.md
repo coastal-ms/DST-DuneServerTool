@@ -17,6 +17,17 @@ here cover everything those tags shipped.
 
 ### Fixed
 
+- **Gameplay Admin item picker now lets you select catalog items.** The
+  `/api/catalog/items` response serializes its items as an array of
+  `{ templateId, name, category }`, but the web UI parsed it as a dictionary —
+  so every catalog entry was assigned its array index (a bare number) as the
+  template id while keeping its real display name. Picking an item (e.g. "Copper
+  Ore") therefore committed a numeric id, which the give-item guard correctly
+  rejects, leaving the selection stuck with a "pick an item from the list"
+  warning and a disabled Give button. The parser now reads the entry's
+  `templateId` field (with a dictionary fallback for older builds), so picked
+  items resolve to their real class string and can be given again.
+
 - **Gameplay Admin "Give Item" now renders in-game.** Items given to a player's
   backpack were inserted with an empty `stats` JSON (`{}`), which the game cannot
   deserialize — so the row existed in the database (and showed in DST's listing)
