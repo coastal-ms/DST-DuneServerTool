@@ -95,6 +95,34 @@ function Get-DuneGameplayItemName {
     return $TemplateId
 }
 
+# Stats blob for a freshly-inserted give-item row. The game cannot deserialize an
+# item with empty stats ('{}') and silently drops it on zone/login load, so the
+# row exists in the DB but never materializes in-game. It also needs the SHAPE
+# that matches the item kind:
+#   * stackable resources (stack_max > 1, e.g. Copper Ingot, Basalt) require
+#     "FItemStackAndDurabilityStats":[[],{"DecayedMaxDurability":0.0}] — without
+#     the DecayedMaxDurability key the game drops them (Discord/SpiceSilo report).
+#   * equipment / non-stackables use the FCustomizationStats + empty-durability
+#     shape, which is the shipped-safe default for everything else.
+# Mirrors the proven icehunter port (Add-V6InventoryItem) and app\data\stat-reference.json.
+# stack_max comes from gameplay-item-data.json; the dead Test-DuneIsEquipmentCategory
+# heuristic is NOT used (its prefix list is never initialized). Returns a bare
+# JSON literal (no SQL quoting) — the value is one of two fixed constants.
+function Get-DuneGiveItemStatsJson {
+    param([string]$TemplateId)
+    $stackMax = 0
+    if ($TemplateId -and (Get-Command Get-DuneGameplayItemRule -ErrorAction SilentlyContinue)) {
+        try {
+            $rule = Get-DuneGameplayItemRule -TemplateId $TemplateId
+            if ($null -ne $rule -and $null -ne $rule.stack_max) { $stackMax = [int]$rule.stack_max }
+        } catch {}
+    }
+    if ($stackMax -gt 1) {
+        return '{"FItemStackAndDurabilityStats":[[],{"DecayedMaxDurability":0.0}]}'
+    }
+    return '{"FCustomizationStats":[[],{}],"FItemStackAndDurabilityStats":[[],{}]}'
+}
+
 # Classify an inventory item as a normal 'item', an 'emote', or a 'contract'
 # (quest) item so the Players view can separate clutter from real gear/loot.
 # Emotes and contract turn-in items are not in the catalog metadata (no
