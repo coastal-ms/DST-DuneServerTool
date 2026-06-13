@@ -13,6 +13,21 @@ here cover everything those tags shipped.
 
 ## [Unreleased]
 
+## [12.0.10] - 2026-06-12
+
+### Fixed
+
+- **Blueprints now show the right owner instead of only one player.** The
+  Blueprints list resolved a blueprint's owner through the copy-device item's
+  inventory → actor → account. But most blueprints' copy-device items sit inside
+  a storage container, whose actor has no account link — so every container-held
+  blueprint rendered with a blank owner and the tab looked like only one player
+  had any (OWNERS: 1). Added a fallback that resolves the container's owner via
+  the same placeable-ownership chain the Storage view uses (placeable → entity →
+  permission rank → player → account), picking the lowest rank (base owner) on
+  shared bases. Verified against a live server: all blueprints now attribute to
+  their actual owners.
+
 ## [12.0.9] - 2026-06-12
 
 ### Added
