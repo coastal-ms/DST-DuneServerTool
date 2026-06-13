@@ -234,7 +234,10 @@ WHERE i.id = $ItemId::bigint;
 }
 
 # Give item (give-item): stack onto a matching backpack stack or insert a new one.
-# Single data-modifying CTE so it runs atomically in one psql call.
+# Single data-modifying CTE so it runs atomically in one psql call. New rows must
+# stamp acquisition_time with the current epoch — the game treats acquisition_time=0
+# (1970) items as fully decayed and drops them on load, so an offline give would
+# vanish on the player's next login.
 function Invoke-DunePlayerGiveItem {
     param([string]$Ip, [long]$PawnId, [string]$Template, [long]$Qty, [long]$Quality)
     $safeTmpl = ConvertTo-DuneSqlString $Template
@@ -257,10 +260,10 @@ upd AS (
     RETURNING id
 ),
 ins AS (
-    INSERT INTO dune.items (inventory_id, stack_size, position_index, template_id, quality_level, stats)
+    INSERT INTO dune.items (inventory_id, stack_size, position_index, template_id, quality_level, acquisition_time, stats)
     SELECT inv.id, $Qty::bigint,
         (SELECT COALESCE(MAX(position_index), -1) + 1 FROM dune.items WHERE inventory_id = inv.id),
-        '$safeTmpl', $Quality::bigint, '{}'::jsonb
+        '$safeTmpl', $Quality::bigint, EXTRACT(EPOCH FROM now())::bigint, '{}'::jsonb
     FROM inv
     WHERE NOT EXISTS (SELECT 1 FROM existing)
     RETURNING id
