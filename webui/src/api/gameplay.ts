@@ -1045,9 +1045,9 @@ export function awardCharXp(pawnId: number, delta: number, category = 'Combat') 
   })
 }
 
-export function awardIntel(controllerId: number, amount: number) {
+export function awardIntel(controllerId: number, pawnId: number, amount: number) {
   return api<WriteResult>('/api/gameplay/players/award-intel', {
-    method: 'POST', body: JSON.stringify({ actor_id: controllerId, delta: amount }),
+    method: 'POST', body: JSON.stringify({ actor_id: controllerId, pawn_id: pawnId, delta: amount }),
   })
 }
 

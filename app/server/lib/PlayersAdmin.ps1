@@ -35,6 +35,24 @@ function Test-DunePlayerOffline {
     return @{ ok = $true; reason = $null }
 }
 
+# Same offline check as Test-DunePlayerOffline but resolved from the controller
+# (actor) id instead of the pawn id. Lets writes that only know the controller
+# (e.g. award-intel, which the UI calls with controller_id) still reject an
+# online player. A missing player_state row is treated as offline.
+function Test-DunePlayerOfflineByController {
+    param([string]$Ip, [long]$ControllerId)
+    $sql = "SELECT online_status::text AS status FROM dune.player_state WHERE player_controller_id = $ControllerId::bigint LIMIT 1;"
+    $r = Invoke-DuneSqlQuery -Ip $Ip -Sql $sql -ReadOnly $true -MaxRows 1 -TimeoutSec 10
+    if (-not $r.ok) { return @{ ok = $true; reason = $null } }
+    $maps = ConvertTo-DuneRowMaps -Result $r
+    if ($maps.Count -eq 0) { return @{ ok = $true; reason = $null } }
+    $status = [string]$maps[0]['status']
+    if ($status -ne 'Offline') {
+        return @{ ok = $false; reason = "player is currently $status - log out first, then apply the edit" }
+    }
+    return @{ ok = $true; reason = $null }
+}
+
 # ----- Faction reputation tables (verbatim from db.go) ---------------------
 
 $script:DuneFactionTierThresholds = @(
@@ -363,11 +381,16 @@ WHERE entity_id = {0}::bigint;
 '@
 
 # {0}=actor_id {1}=intel
+# COALESCE + jsonb_build_object so a missing TechKnowledgePlayerComponent parent
+# is created (plain jsonb_set leaves the JSON unchanged when the parent path is
+# absent, which silently no-ops the write). Existing sibling keys are preserved.
 $script:DuneSetIntelSqlTpl = @'
 UPDATE dune.actors
-SET properties = jsonb_set(properties,
-    '{{TechKnowledgePlayerComponent,m_TechKnowledgePoints}}',
-    to_jsonb({1}::int))
+SET properties = jsonb_set(
+    COALESCE(properties, '{{}}'::jsonb),
+    '{{TechKnowledgePlayerComponent}}',
+    COALESCE(properties->'TechKnowledgePlayerComponent', '{{}}'::jsonb)
+        || jsonb_build_object('m_TechKnowledgePoints', to_jsonb({1}::int)))
 WHERE id = {0}::bigint;
 '@
 
@@ -429,8 +452,16 @@ function Invoke-DunePlayerAwardIntel {
         $controller = Get-DunePlayerControllerFromPawn -Ip $Ip -PawnId $PawnId
     }
     if ($null -eq $controller -or $controller -le 0) { return @{ ok = $false; error = 'actor_id (or pawn_id) is required.' } }
+    # Reject online players: the game server holds the actor's intel in memory
+    # while online and flushes on logout, so a direct DB write here would be
+    # silently clobbered (no live RMQ command exists to set tech knowledge).
+    # Gate by pawn id when we have it, otherwise resolve online state from the
+    # controller id (the UI calls this with controller_id only).
     if ($PawnId -gt 0) {
         $off = Test-DunePlayerOffline -Ip $Ip -PawnId $PawnId
+        if (-not $off.ok) { return @{ ok = $false; error = $off.reason } }
+    } else {
+        $off = Test-DunePlayerOfflineByController -Ip $Ip -ControllerId $controller
         if (-not $off.ok) { return @{ ok = $false; error = $off.reason } }
     }
     $readSql = "SELECT COALESCE((properties->'TechKnowledgePlayerComponent'->>'m_TechKnowledgePoints')::int, 0) AS intel FROM dune.actors WHERE id = $controller::bigint;"
