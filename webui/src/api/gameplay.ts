@@ -470,9 +470,9 @@ export function getBotVendorSnapshot() {
 // Players
 // ---------------------------------------------------------------------------
 export interface Player {
-  id: number            // pawn actor id (inventory / spec writes)
+  id: number            // pawn actor id (inventory writes)
   account_id: number    // rename, tags
-  controller_id: number // currency writes
+  controller_id: number // currency + specialization (tracks/keystones) writes
   name: string
   class: string
   map: string
@@ -552,9 +552,9 @@ export function renamePlayer(accountId: number, name: string) {
   })
 }
 
-export function awardSpecXp(pawnId: number, trackType: string, delta: number) {
+export function awardSpecXp(controllerId: number, trackType: string, delta: number) {
   return api<WriteResult>('/api/gameplay/players/award-xp', {
-    method: 'POST', body: JSON.stringify({ pawn_id: pawnId, track_type: trackType, delta }),
+    method: 'POST', body: JSON.stringify({ controller_id: controllerId, track_type: trackType, delta }),
   })
 }
 
@@ -638,21 +638,21 @@ export function getPlayerSpecs(pawnId: number, controllerId: number, demo?: bool
   })}`)
 }
 
-export function grantMaxSpec(pawnId: number, trackType: string) {
+export function grantMaxSpec(controllerId: number, trackType: string) {
   return api<WriteResult>('/api/gameplay/players/grant-max-spec', {
-    method: 'POST', body: JSON.stringify({ pawn_id: pawnId, track_type: trackType }),
+    method: 'POST', body: JSON.stringify({ controller_id: controllerId, track_type: trackType }),
   })
 }
 
-export function resetSpec(pawnId: number, trackType: string) {
+export function resetSpec(controllerId: number, trackType: string) {
   return api<WriteResult>('/api/gameplay/players/reset-spec', {
-    method: 'POST', body: JSON.stringify({ pawn_id: pawnId, track_type: trackType }),
+    method: 'POST', body: JSON.stringify({ controller_id: controllerId, track_type: trackType }),
   })
 }
 
-export function resetAllSpecs(pawnId: number) {
+export function resetAllSpecs(controllerId: number) {
   return api<WriteResult>('/api/gameplay/players/reset-all-specs', {
-    method: 'POST', body: JSON.stringify({ pawn_id: pawnId }),
+    method: 'POST', body: JSON.stringify({ controller_id: controllerId }),
   })
 }
 
@@ -662,9 +662,9 @@ export function grantAllKeystones(controllerId: number) {
   })
 }
 
-export function resetAllKeystones(pawnId: number) {
+export function resetAllKeystones(controllerId: number) {
   return api<WriteResult>('/api/gameplay/players/reset-all-keystones', {
-    method: 'POST', body: JSON.stringify({ pawn_id: pawnId }),
+    method: 'POST', body: JSON.stringify({ controller_id: controllerId }),
   })
 }
 
