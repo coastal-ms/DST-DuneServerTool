@@ -1,6 +1,5 @@
 import { useNavigate } from 'react-router-dom'
 import { Icon } from '../../components/Icon'
-import { AdminComposers } from '../../components/AdminComposers'
 import { useApi } from '../../hooks/useApi'
 import type { GameplayStatus } from '../../api/gameplay'
 import type { GameplaySubTab } from '../GameplayEnvironment'
@@ -77,9 +76,6 @@ export function OverviewTab({ onOpenTab }: { onOpenTab: (tab: GameplaySubTab) =>
 
   return (
     <div>
-      {/* Quick admin actions — broadcasts + whispers, mirrors the reference implementation /notify */}
-      <AdminComposers className="mb-4" />
-
       {/* Intro */}
       <div className="card p-5 mb-4">
         <div className="flex items-start gap-3">
