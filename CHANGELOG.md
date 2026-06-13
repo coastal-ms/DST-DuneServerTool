@@ -46,6 +46,14 @@ here cover everything those tags shipped.
   were silently ignored. The writer now guarantees each section name appears exactly
   once, so managed overrides take effect.
 
+- **The "apply on each client" reminder is now a centered popup.** After saving a
+  setting that's read by both the server and the game client (e.g. landclaim
+  segments, building restrictions), the notice with the **Apply to my client**
+  button rendered inline at the top of the page — so when you'd scrolled down the
+  settings list to save, it appeared off-screen and was easy to miss, leaving the
+  local client `Game.ini` unchanged. It now opens as a modal that's visible
+  regardless of scroll position.
+
 ### Changed
 
 - **Removed XP / Fame / Progression (and related) multiplier settings from Game

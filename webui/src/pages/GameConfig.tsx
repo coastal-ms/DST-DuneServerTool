@@ -645,57 +645,65 @@ export function GameConfig() {
         </div>
       )}
       {clientApply && (
-        <div className="card p-3 mb-4 border-warning/40 bg-warning/10 text-sm">
-          <div className="flex items-start gap-2">
-            <Icon name="MonitorSmartphone" size={16} className="text-warning mt-0.5 shrink-0" />
-            <div className="flex-1 min-w-0">
-              <div className="font-medium text-text mb-1">Also apply these on each player's client</div>
-              <p className="text-text-muted mb-2">
-                The setting{clientApply.items.length === 1 ? '' : 's'} below {clientApply.items.length === 1 ? 'is' : 'are'} read by
-                both the server and the game client. The server is updated, but each player must mirror {clientApply.items.length === 1 ? 'it' : 'them'} in
-                their local client config for it to take full effect:
-              </p>
-              <ul className="space-y-1 mb-2">
-                {clientApply.items.map(it => (
-                  <li key={it.key} className="font-mono text-xs text-text">
-                    <span className="text-text-muted">[{it.section}]</span>{' '}
-                    {it.key}={it.value}
-                    <span className="text-text-muted"> — {it.label}</span>
-                  </li>
-                ))}
-              </ul>
-              <p className="text-text-muted">
-                Add {clientApply.items.length === 1 ? 'it' : 'them'} under the matching section in each client's:
-              </p>
-              <code className="block mt-1 px-2 py-1 rounded bg-surface-2 text-text text-xs break-all">{clientApply.path}</code>
-              <div className="flex items-center gap-2 mt-3">
-                <button
-                  type="button"
-                  onClick={() => void onApplyToClient()}
-                  disabled={applying}
-                  className="btn-primary"
-                  title="Let DST write these settings into your own client's Game.ini on this PC"
-                >
-                  <Icon name={applying ? 'Loader2' : 'MonitorCog'} size={14} className={applying ? 'animate-spin' : ''} />
-                  {applying ? 'Applying…' : 'Apply to my client'}
-                </button>
-                <button type="button" onClick={() => setClientApply(null)} className="btn-ghost text-xs">
-                  I&apos;ll do it manually
-                </button>
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4"
+          onClick={() => setClientApply(null)}
+        >
+          <div
+            className="card w-full max-w-lg max-h-[85vh] overflow-y-auto border-warning/40 bg-surface text-sm"
+            onClick={e => e.stopPropagation()}
+          >
+            <div className="flex items-start gap-2 p-4">
+              <Icon name="MonitorSmartphone" size={18} className="text-warning mt-0.5 shrink-0" />
+              <div className="flex-1 min-w-0">
+                <div className="font-semibold text-text mb-1">Also apply these on each player's client</div>
+                <p className="text-text-muted mb-2">
+                  The setting{clientApply.items.length === 1 ? '' : 's'} below {clientApply.items.length === 1 ? 'is' : 'are'} read by
+                  both the server and the game client. The server is updated, but each player must mirror {clientApply.items.length === 1 ? 'it' : 'them'} in
+                  their local client config for it to take full effect:
+                </p>
+                <ul className="space-y-1 mb-2">
+                  {clientApply.items.map(it => (
+                    <li key={it.key} className="font-mono text-xs text-text">
+                      <span className="text-text-muted">[{it.section}]</span>{' '}
+                      {it.key}={it.value}
+                      <span className="text-text-muted"> — {it.label}</span>
+                    </li>
+                  ))}
+                </ul>
+                <p className="text-text-muted">
+                  Add {clientApply.items.length === 1 ? 'it' : 'them'} under the matching section in each client's:
+                </p>
+                <code className="block mt-1 px-2 py-1 rounded bg-surface-2 text-text text-xs break-all">{clientApply.path}</code>
+                <div className="flex items-center gap-2 mt-3">
+                  <button
+                    type="button"
+                    onClick={() => void onApplyToClient()}
+                    disabled={applying}
+                    className="btn-primary"
+                    title="Let DST write these settings into your own client's Game.ini on this PC"
+                  >
+                    <Icon name={applying ? 'Loader2' : 'MonitorCog'} size={14} className={applying ? 'animate-spin' : ''} />
+                    {applying ? 'Applying…' : 'Apply to my client'}
+                  </button>
+                  <button type="button" onClick={() => setClientApply(null)} className="btn-ghost text-xs">
+                    I&apos;ll do it manually
+                  </button>
+                </div>
+                <p className="text-[11px] text-text-dim mt-2">
+                  “Apply to my client” only changes <span className="font-mono break-all">{clientInfo?.path ?? 'your local client Game.ini'}</span> on
+                  this machine (backed up first). Other players still apply manually.
+                </p>
               </div>
-              <p className="text-[11px] text-text-dim mt-2">
-                “Apply to my client” only changes <span className="font-mono break-all">{clientInfo?.path ?? 'your local client Game.ini'}</span> on
-                this machine (backed up first). Other players still apply manually.
-              </p>
+              <button
+                type="button"
+                className="btn-icon shrink-0"
+                title="Dismiss"
+                onClick={() => setClientApply(null)}
+              >
+                <Icon name="X" size={14} />
+              </button>
             </div>
-            <button
-              type="button"
-              className="btn-icon shrink-0"
-              title="Dismiss"
-              onClick={() => setClientApply(null)}
-            >
-              <Icon name="X" size={14} />
-            </button>
           </div>
         </div>
       )}
