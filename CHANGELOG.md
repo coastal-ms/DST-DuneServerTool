@@ -13,6 +13,29 @@ here cover everything those tags shipped.
 
 ## [Unreleased]
 
+## [12.0.7] - 2026-06-12
+
+Fixes the durability target used by the repair actions, which capped items to a
+catalog value (often 100) instead of their real maximum.
+
+### Fixed
+
+- **Repair now restores items to their true maximum durability.** Repair All
+  Items, the per-item repair (wrench), and Restore Destroyed Items all derived
+  the target durability from the item catalog (falling back to `100`). But a
+  player's in-game stats/perks raise an item's durability cap, so the real
+  maximum is per-player and only the item's own `MaxDurability` knows it. All
+  three actions now set `MaxDurability`, `CurrentDurability`, and
+  `DecayedMaxDurability` equal to the **highest of the item's own three values**
+  — no catalog, no hard-coded default. (Restore Destroyed keeps the catalog max
+  only as a floor for items whose stats block is missing entirely.)
+
+### Added
+
+- **Refresh inventory button** on the player Inventory section, so you can
+  re-pull the item list (and see updated durability after a repair) without
+  reselecting the player.
+
 ## [12.0.6] - 2026-06-12
 
 Follow-up to v12.0.5: applies the same `acquisition_time` fix to the two other

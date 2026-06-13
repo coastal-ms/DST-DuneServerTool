@@ -206,27 +206,29 @@ function Invoke-DunePlayerDeleteItem {
     return @{ ok = $true; message = "Deleted item $ItemId." }
 }
 
-# Repair item (repair-item): restore CurrentDurability/DecayedMaxDurability to MaxDurability.
+# Repair item (repair-item): set MaxDurability/CurrentDurability/DecayedMaxDurability
+# all equal to the HIGHEST of the item's own three values ("highest number wins").
+# No catalog lookup, no hard-coded default — the item's own MaxDurability is the
+# true cap (decay only lowers Current + DecayedMax, never Max).
 function Invoke-DunePlayerRepairItem {
     param([string]$Ip, [long]$ItemId)
     $sql = @"
 UPDATE dune.items i
-SET stats = jsonb_set(
-    jsonb_set(i.stats,
-        '{FItemStackAndDurabilityStats,1,CurrentDurability}',
-        to_jsonb(t.val), true),
-    '{FItemStackAndDurabilityStats,1,DecayedMaxDurability}',
-    to_jsonb(t.val), true)
+SET stats = jsonb_set(jsonb_set(jsonb_set(i.stats,
+        '{FItemStackAndDurabilityStats,1,MaxDurability}',        to_jsonb(t.val), true),
+        '{FItemStackAndDurabilityStats,1,CurrentDurability}',    to_jsonb(t.val), true),
+        '{FItemStackAndDurabilityStats,1,DecayedMaxDurability}', to_jsonb(t.val), true)
 FROM (
-    SELECT COALESCE(
-        (stats->'FItemStackAndDurabilityStats'->1->>'MaxDurability')::float8,
-        100.0
+    SELECT GREATEST(
+        COALESCE((stats->'FItemStackAndDurabilityStats'->1->>'MaxDurability')::float8, 0),
+        COALESCE((stats->'FItemStackAndDurabilityStats'->1->>'CurrentDurability')::float8, 0),
+        COALESCE((stats->'FItemStackAndDurabilityStats'->1->>'DecayedMaxDurability')::float8, 0)
     ) AS val
     FROM dune.items
     WHERE id = $ItemId::bigint
       AND stats ? 'FItemStackAndDurabilityStats'
 ) AS t
-WHERE i.id = $ItemId::bigint;
+WHERE i.id = $ItemId::bigint AND t.val > 0;
 "@
     $res = Invoke-DuneSqlQuery -Ip $Ip -Sql $sql -ReadOnly $false -MaxRows 1 -TimeoutSec 30
     if (-not $res.ok) { return @{ ok = $false; error = $res.error } }
