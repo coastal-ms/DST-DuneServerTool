@@ -15,14 +15,14 @@ here cover everything those tags shipped.
 
 ## [12.0.0] - 2026-06-12
 
-Major milestone — full dune-admin portal port lands directly inside DST.
+Major milestone — full Gameplay Admin build-out lands directly inside DST.
 Adds 54 player-management endpoints, a bucketed Actions panel covering every
 admin operation, market seeding/management with grade fan-out, Hide-GM derived
 views, and an installer migration that wipes legacy autostart on upgrade.
 
-### Added — dune-admin port (Phases A through K)
+### Added — Gameplay Admin build-out (Phases A through K)
 
-Complete reimplementation of the upstream Icehunter/dune-admin portal as
+Complete reimplementation of the prior external admin tooling as
 native DST surfaces. No more "open second tool to manage players" — every
 admin operation Coastal needed lives in the Gameplay Admin tab.
 
@@ -165,7 +165,7 @@ add-item forms (Players → Give Item, Storage → Add Items).
 
 ### v11.5.7 - 2026-06-12
 
-#### Added — User-reported hotfixes (Phase 1.5 of dune-admin player port)
+#### Added — User-reported hotfixes (Phase 1.5 of Gameplay Admin player port)
 
 This release responds to direct user feedback on the v11.5.6 Players tab and pulls
 forward two features from the planned v11.5.9 work so users aren't blocked:
@@ -180,7 +180,7 @@ forward two features from the planned v11.5.9 work so users aren't blocked:
   Adds a *Fill Water* button to *Players → Actions* that refills every
   fillable water container in the selected player's storage, gear, mounts,
   vehicles, dropship and chests to max. SQL is ported verbatim from
-  dune-admin's `cmdRefillWaterOffline` so it covers the same 49 fillable
+  Gameplay Admin's `cmdRefillWaterOffline` so it covers the same 49 fillable
   templates and 6 inventory types. Online players see the effect on their
   next relog (game server caches inventory in memory); offline players see
   it immediately on next login.
@@ -211,10 +211,10 @@ forward two features from the planned v11.5.9 work so users aren't blocked:
 
 ### v11.5.6 - 2026-06-12
 
-#### Added — Player admin foundation (Phase 1 of dune-admin player port)
+#### Added — Player admin foundation (Phase 1 of Gameplay Admin player port)
 
 The Gameplay > Players tab has been rebuilt as a two-column workspace mirroring
-[dune-admin.layout.tools/#/players](https://dune-admin.layout.tools/#/players),
+[Gameplay Admin.layout.tools/#/players](https://Gameplay Admin.layout.tools/#/players),
 which is the primary player-management surface coastal-ms players rely on.
 This release is the foundation that the rest of the port (Phases 2–5) will
 extend.
@@ -305,7 +305,7 @@ extend.
   `SELECT DISTINCT template_id, category_mask, category_depth
    FROM dune.dune_exchange_orders WHERE category_mask != 0`. Mirrors the
   persistent `categories` SQLite cache in
-  `Icehunter/dune-admin/internal/marketbot/exchange.go`. Category masks
+  `prior external admin tooling/internal/marketbot/exchange.go`. Category masks
   are Funcom server-binary constants per template, so one harvest gives
   every install full coverage without per-user setup or visiting an
   in-game NPC vendor. Tracked in the tick summary as `masks_known` and
@@ -318,7 +318,7 @@ extend.
 #### Notes
 - Bundled seed currently covers ~83% of the 1658-item catalog. The
   remaining ~280 templates fill in automatically as users hit them via
-  in-game orders; a planned v11.5.5 port of dune-admin's pure-functional
+  in-game orders; a planned v11.5.5 port of Gameplay Admin's pure-functional
   `CategoryMask` / `UniqueSchematicsMask` (`internal/marketbot/pricing.go`)
   will compute masks from category paths so coverage reaches 100%
   without any DB harvest.
@@ -361,7 +361,7 @@ extend.
   multiplier × vendor multiplier × grade multiplier), and tops every
   (template, grade) up to a configurable per-grade quota. A hard
   **100,000 Solari cap** is enforced for every price, every time
-  (matches the dune-admin sane-pricing patch). Stale listings priced
+  (matches the Gameplay Admin sane-pricing patch). Stale listings priced
   more than 20% away from the new target are purged before re-listing.
   Buy ticks and list ticks run on independent intervals from the same
   in-process scheduler — no extra service.
@@ -379,7 +379,7 @@ extend.
   reports **Duke's listings** *and* **total NPC listings** separately,
   plus a per-actor-class breakdown chip row so it's obvious when there
   are NPC listings owned by something other than Duke (e.g. leftover
-  Revy orphans from the old external dune-admin bot integration). A
+  Revy orphans from the old external Gameplay Admin bot integration). A
   *Last list tick* timestamp sits next to *Last buy tick*.
 - **Wipe legacy NPC listings.** One-click cleanup button on the Market
   Bot tab that permanently deletes any NPC `dune_exchange_orders`
@@ -401,7 +401,7 @@ extend.
   Revy / other-class NPC orders are labelled correctly.
 - **Sane-pricing one-shot migration.** The first time a v11.5.2 server
   loads its bot config, the six pricing-multiplier tables are
-  force-written to the dune-admin sane-pricing defaults (gated by
+  force-written to the Gameplay Admin sane-pricing defaults (gated by
   `sane_defaults_revision < 1`, so subsequent edits are preserved on
   later restarts).
 
@@ -470,11 +470,11 @@ extend.
 ### v11.5.0 - 2026-06-11
 
 New edition. Headlines: the native **Gameplay Admin** console (the
-open-source Dune admin portal rebuilt inside DST) and a **Game Config**
+Gameplay Admin portal rebuilt inside DST) and a **Game Config**
 editor in BETA.
 
 #### Added
-- **Gameplay Admin (native Dune admin portal).** A tabbed console —
+- **Gameplay Admin (native Gameplay Admin portal).** A tabbed console —
   Overview, Market / Exchange, Market Bot, Players, Bases, Storage, and
   Blueprints — built on the same SSH + psql bridge as the rest of DST, so
   there's no second program to install. Market and Market Bot read the live
@@ -486,7 +486,7 @@ editor in BETA.
   `UserEngine.ini` that scans the live INIs on load, shows each setting's
   Funcom default until you override it, and writes changes into a
   DST-managed block (with whole-section relocation, dedup, and migration of
-  any legacy dune-admin block). The original file is backed up on the server
+  any legacy Gameplay Admin block). The original file is backed up on the server
   before every write. A BETA banner, a **Backup settings** button, and a
   **View backups** button (lists recent `.dstbak-*` restore points) make the
   experimental nature and the restore path obvious.
@@ -674,12 +674,12 @@ editor in BETA.
   service in place instead of opening the embed tab.** The button is renamed
   **Start/Restart Dune Admin Service** and, instead of navigating to the
   Dune Admin tab (or popping a browser), it re-kicks off the merged-console
-  reattachment process — it relaunches the `dune-admin` process and re-mirrors
+  reattachment process — it relaunches the `Gameplay Admin` process and re-mirrors
   its `[admin]`-prefixed output back into DST's wrapping console. Use it after
-  a dune-admin update (which was crashing the embedded console) or if the embed
+  a Gameplay Admin update (which was crashing the embedded console) or if the embed
   drops out; view the panel itself in the dedicated **Dune Admin** menu-bar tab.
   The card shows a "Relaunching…" spinner and a confirmation message, and stays
-  disabled until dune-admin is installed and the VM is running.
+  disabled until Gameplay Admin is installed and the VM is running.
 
 ### v11.4.5 - 2026-06-07
 
@@ -742,25 +742,25 @@ editor in BETA.
   close DuneShell.** v11.4.2 disarmed the backend's app-window watcher
   when autostart was registered, but the DuneShell viewer's own
   `FormClosing` handler was still firing its full teardown sequence:
-  `POST /api/shutdown`, kill `dune-admin.exe`, then sweep up
+  `POST /api/shutdown`, kill `Gameplay Admin.exe`, then sweep up
   `DuneServer.exe` by name. The end result was the backend going down
   anyway -- "Shutdown requested via /api/shutdown" in `dune-server.log`
   even though the watcher had logged "Keep-alive mode active." The
   backend now writes a live `keep-alive.flag` sentinel (refreshed on
   startup AND on every Help -> Run at Windows startup toggle), and
   DuneShell's `StopCompanionProcesses` returns early when the sentinel
-  is present -- no shutdown POST, no dune-admin kill, no DuneServer.exe
+  is present -- no shutdown POST, no Gameplay Admin kill, no DuneServer.exe
   sweep. Toggling autostart at runtime now also takes effect without a
   restart: the watcher consults the same sentinel before stopping the
   listener.
-- **dune-admin's "Open in browser" link now actually opens in the OS
+- **Gameplay Admin's "Open in browser" link now actually opens in the OS
   browser** instead of replacing the portal inside the DST app window.
   The shell's new-window handler used to treat any loopback URL as
-  "stay in this WebView" — but dune-admin runs on its own loopback
-  port, so clicking dune-admin's "Open in browser" link navigated the
-  shell away from the DST portal into the standalone dune-admin view.
+  "stay in this WebView" — but Gameplay Admin runs on its own loopback
+  port, so clicking Gameplay Admin's "Open in browser" link navigated the
+  shell away from the DST portal into the standalone Gameplay Admin view.
   Now only URLs whose loopback port matches the portal's own port stay
-  in the shell; every other loopback port (dune-admin's port, any
+  in the shell; every other loopback port (Gameplay Admin's port, any
   localhost helper tool) is handed to the OS default browser, the
   same as non-localhost links.
 
@@ -839,87 +839,87 @@ editor in BETA.
 ### v11.3.2 - 2026-06-05
 
 #### Fixed
-- **dune-admin console window now actually hidden.** v11.3.0 shipped the
-  cmd.exe + `-Hidden` settings approach for hiding dune-admin's console
+- **Gameplay Admin console window now actually hidden.** v11.3.0 shipped the
+  cmd.exe + `-Hidden` settings approach for hiding Gameplay Admin's console
   window, but `-Hidden` on `New-ScheduledTaskSettingsSet` only hides the
   task in Task Scheduler's UI — the spawned cmd.exe console still
   appeared on screen (just empty, because stdout/stderr were redirected
-  to the log file). dune-admin is now launched via a tiny
-  `launch-dune-admin.vbs` invoking `WScript.Shell.Run` with
+  to the log file). Gameplay Admin is now launched via a tiny
+  `launch-Gameplay Admin.vbs` invoking `WScript.Shell.Run` with
   `intWindowStyle=0` (SW_HIDE) — a Windows-subsystem host with no
   window of its own, which then spawns cmd hidden with the same
   redirection. Result: one console window for the whole stack
-  (DuneServer's), with `[admin]`-prefixed dune-admin lines mirrored in
+  (DuneServer's), with `[admin]`-prefixed Gameplay Admin lines mirrored in
   exactly as v11.3.0 advertised.
 
 ### v11.3.1 - 2026-06-05
 
 #### Fixed
-- **dune-admin reachable through the friend remote-portal bridge.**
+- **Gameplay Admin reachable through the friend remote-portal bridge.**
   v11.2.0 added the friend helper (DSTConsole.exe) and the Dune Admin
-  embed tab, but dune-admin was still bound to `127.0.0.1` only — so
+  embed tab, but Gameplay Admin was still bound to `127.0.0.1` only — so
   when the friend loaded the embed tab through Tailscale, the iframe
-  pointed at the host's tailnet name on dune-admin's port and got a
+  pointed at the host's tailnet name on Gameplay Admin's port and got a
   "took too long to respond" error because nothing answered on that
-  interface. DST now rewrites dune-admin's `listen_addr` to
+  interface. DST now rewrites Gameplay Admin's `listen_addr` to
   `0.0.0.0:<port>` and opens a matching Windows Firewall inbound rule
   (Private + Domain profiles — Tailscale's tun adapter is Private)
-  whenever it launches dune-admin. Both ops are idempotent and run
-  every launch. dune-admin's own auth still gates the surface.
-- **dune-admin console window is now actually hidden.** v11.3.0 shipped
-  the cmd.exe + `-Hidden` settings approach for hiding dune-admin's
+  whenever it launches Gameplay Admin. Both ops are idempotent and run
+  every launch. Gameplay Admin's own auth still gates the surface.
+- **Gameplay Admin console window is now actually hidden.** v11.3.0 shipped
+  the cmd.exe + `-Hidden` settings approach for hiding Gameplay Admin's
   console window, but `-Hidden` on `New-ScheduledTaskSettingsSet` only
   hides the task in Task Scheduler's UI — the spawned cmd.exe console
   still appeared on screen (just empty, because stdout/stderr were
-  redirected to the log file). dune-admin is now launched via a tiny
-  `launch-dune-admin.vbs` invoking `WScript.Shell.Run` with
+  redirected to the log file). Gameplay Admin is now launched via a tiny
+  `launch-Gameplay Admin.vbs` invoking `WScript.Shell.Run` with
   `intWindowStyle=0` (SW_HIDE) — a Windows-subsystem host with no
   window of its own, which then spawns cmd hidden with the same
   redirection. Result: one console window for the whole stack
-  (DuneServer's), with `[admin]`-prefixed dune-admin lines mirrored in.
+  (DuneServer's), with `[admin]`-prefixed Gameplay Admin lines mirrored in.
 
 ### v11.3.0 - 2026-06-05
 
 #### Changed
-- **Combined console window — backend + dune-admin streams in one place.**
-  Previously DST and dune-admin each opened their own Windows console
-  window, so the desktop had two consoles to track. dune-admin now
+- **Combined console window — backend + Gameplay Admin streams in one place.**
+  Previously DST and Gameplay Admin each opened their own Windows console
+  window, so the desktop had two consoles to track. Gameplay Admin now
   launches with its console hidden (scheduled task wrapped in `cmd.exe`
   with stdout/stderr redirected to
-  `%LOCALAPPDATA%\DuneServer\logs\dune-admin.log`) and the DuneServer
+  `%LOCALAPPDATA%\DuneServer\logs\Gameplay Admin.log`) and the DuneServer
   process tails that log in a background runspace, mirroring every line
   into its own console with an `[admin]` prefix. Net result: one console
-  window showing backend output and dune-admin output interleaved, with
-  the dune-admin lines clearly labelled. The dune-admin web UI (and the
+  window showing backend output and Gameplay Admin output interleaved, with
+  the Gameplay Admin lines clearly labelled. The Gameplay Admin web UI (and the
   Dune Admin embed tab inside DST) is unaffected — only the on-host
   console window changes.
 
 ### v11.2.0 - 2026-06-05
 
 #### Added
-- **dune-admin embedded inside DST.** When DST detects a configured
-  dune-admin install (its `config.yaml` is parseable), a new **Dune
+- **Gameplay Admin embedded inside DST.** When DST detects a configured
+  Gameplay Admin install (its `config.yaml` is parseable), a new **Dune
   Admin** menu item appears immediately to the right of Help — with a
-  small green/grey dot indicating whether dune-admin is currently
-  listening. Clicking it routes to `/dune-admin`, which renders
-  dune-admin's full web UI in a flush iframe under a slim DST header
-  (Reload + "Open in browser" actions). When dune-admin isn't yet
+  small green/grey dot indicating whether Gameplay Admin is currently
+  listening. Clicking it routes to `/Gameplay Admin`, which renders
+  Gameplay Admin's full web UI in a flush iframe under a slim DST header
+  (Reload + "Open in browser" actions). When Gameplay Admin isn't yet
   listening, the page offers a one-click **Start** button that runs
-  the existing `dune-admin` command; the page then polls fast (1.5s)
+  the existing `Gameplay Admin` command; the page then polls fast (1.5s)
   until the UI is up, then drops back to a 15s heartbeat. The
   Dashboard's "Start the Dune Admin Tool" button and the Settings page's
   post-install launcher now route to this embed page instead of
-  spawning the dune-admin process into its own browser tab, so the user
-  experience is "click → see dune-admin inside DST" with no external
+  spawning the Gameplay Admin process into its own browser tab, so the user
+  experience is "click → see Gameplay Admin inside DST" with no external
   windows.
 
-- **Friend access to dune-admin via the bridge.** The embed page is
+- **Friend access to Gameplay Admin via the bridge.** The embed page is
   bridge-aware: when DST is being viewed through the Tailscale friend
   bridge (i.e. `window.location.hostname` is the host's tailnet name
   rather than 127.0.0.1), the iframe `src` is rewritten to
-  `http://<host-tailnet>:<dune-admin-port>` so the friend's WebView2
-  hits the host's dune-admin instance directly, reusing the existing
-  Tailscale ACL as the trust boundary. dune-admin's default listener
+  `http://<host-tailnet>:<Gameplay Admin-port>` so the friend's WebView2
+  hits the host's Gameplay Admin instance directly, reusing the existing
+  Tailscale ACL as the trust boundary. Gameplay Admin's default listener
   binds all interfaces, so no bridge proxy logic is needed.
 
 - **Friend helper — WebSocket proxy.** The bridge now transparently
@@ -957,13 +957,13 @@ editor in BETA.
 
 - **Closing the DST window now stops the whole stack.** Previously,
   closing the portal window left the elevated PowerShell backend
-  (`DuneServer.exe`) and any spawned `dune-admin` terminal silently
+  (`DuneServer.exe`) and any spawned `Gameplay Admin` terminal silently
   running in the background, which surprised users — especially now
-  that dune-admin renders inside the portal. The shell's `FormClosing`
+  that Gameplay Admin renders inside the portal. The shell's `FormClosing`
   handler now (1) fires a graceful `POST /api/shutdown` to the backend
   using the same loopback URL+token the WebView is on (750ms hard
   timeout so window close isn't perceptibly delayed), (2) terminates
-  any `dune-admin*` processes, and (3) sweeps up any remaining
+  any `Gameplay Admin*` processes, and (3) sweeps up any remaining
   `DuneServer.exe` as a safety net. Skipped when the shell is launched
   standalone (`--no-wait-file`), where no paired backend is assumed.
 
@@ -978,22 +978,22 @@ editor in BETA.
   `node_modules/` excluded). Required check on PRs.
 
 #### Fixed
-- **Suppress redundant dune-admin browser pop when launched from the
+- **Suppress redundant Gameplay Admin browser pop when launched from the
   embed.** Clicking Start in the new Dune Admin tab launched the
-  `dune-admin` command, which historically `Start-Process`'d the URL
+  `Gameplay Admin` command, which historically `Start-Process`'d the URL
   in the user's default browser as well — popping a second window on
   top of the iframe. The API command runner now sets
   `DST_DUNE_ADMIN_NO_BROWSER=1` on the spawned admin pwsh and
   `dune-server.ps1` honors it, skipping the browser open. Users
-  running the `dune-admin` CLI command directly are unaffected.
+  running the `Gameplay Admin` CLI command directly are unaffected.
 
 ### v11.1.0 - 2026-06-05
 
 #### Removed
 - **Characters sidebar entry + dead character API surface.** The
   "Characters" entry under Game Data was a launcher button for
-  `dune-admin.exe` (Icehunter's separate character/player editor) and is
-  now gone — dune-admin is its own Windows app and is launched from the
+  `Gameplay Admin.exe` (Icehunter's separate character/player editor) and is
+  now gone — Gameplay Admin is its own Windows app and is launched from the
   Start menu / desktop shortcut directly. Along with the link, the
   unused `/api/characters*` route family (13 endpoints in
   `app/server/routes/Characters.ps1`), its backing helper
@@ -1001,7 +1001,7 @@ editor in BETA.
   and the unused `Character*` / `SpecTrack` / `CurrencyRow` / etc.
   TypeScript types are all removed. DST never rendered any of the
   character data itself — every code path was dead surface that pointed
-  at dune-admin. dune-admin integration (updater under Settings,
+  at Gameplay Admin. Gameplay Admin integration (updater under Settings,
   bundled SSH key, port/URL resolver, `setup` flow's optional download
   step) is unchanged.
 
@@ -1228,8 +1228,8 @@ _Consolidated entry covering every release in the v10.x series (36 patches). Tag
 ### v10.2.6 - 2026-06-04
 
 #### Fixed
-- **Dune-admin pricing patch: rebuild now survives upstream file-to-directory
-  refactors.** After Icehunter/dune-admin v0.24.0 refactored
+- **Gameplay Admin pricing patch: rebuild now survives upstream file-to-directory
+  refactors.** After prior external admin tooling v0.24.0 refactored
   `web/src/tabs/WelcomePackageTab.tsx` into `web/src/tabs/WelcomePackageTab/`
   (`index.tsx` + `views/` + `types.ts`), every "Reinstall + keep sane-pricing
   patch" failed with `pnpm build` errors:
@@ -1242,10 +1242,10 @@ _Consolidated entry covering every release in the v10.x series (36 patches). Tag
   TypeScript/Vite module resolution prefers a bare `.tsx` over a sibling
   `dir/index.tsx`, so the stale file shadowed the new directory and `tsc`
   saw the wrong export shape. Go build succeeded (the patched
-  `dune-admin.exe` was replaced cleanly with v0.24.0), but the embedded
+  `Gameplay Admin.exe` was replaced cleanly with v0.24.0), but the embedded
   web UI never compiled, so the build wrapper failed with exit 1 and the
   marketplace bot panel was effectively unbuildable.
-- `app/resources/dune-admin-patches/build-patched.ps1` now scans
+- `app/resources/Gameplay Admin-patches/build-patched.ps1` now scans
   `web/src/` for any `Foo.tsx` / `Foo.ts` that has a sibling `Foo/`
   directory containing `index.tsx` / `index.ts`, and deletes the flat
   file before running `pnpm install` / `pnpm build`. The check is safe
@@ -1376,7 +1376,7 @@ _Consolidated entry covering every release in the v10.x series (36 patches). Tag
     serialize read-modify-write mutations behind named `SemaphoreSlim`s
     shared across all workers. Applied to Map SpinUp (`director.ini`),
     config save, backup-schedule, on-demand map start/stop/fix-partitions,
-    and the update + dune-admin install flows — so two concurrent toggles
+    and the update + Gameplay Admin install flows — so two concurrent toggles
     can no longer clobber each other's writes.
   - **Backpressure.** A `SemaphoreSlim(16,16)` gate caps in-flight handlers;
     when saturated, new requests get an immediate **503** instead of queuing
@@ -1388,7 +1388,7 @@ _Consolidated entry covering every release in the v10.x series (36 patches). Tag
     pool fails to initialize for any reason, the server falls back to the
     legacy inline dispatch rather than failing to start.
 #### Fixed
-- **Pricing patch now applies cleanly on dune-admin v0.23.2** (and absorbs
+- **Pricing patch now applies cleanly on Gameplay Admin v0.23.2** (and absorbs
   future minor upstream context drift automatically). v0.23.2 added a
   `gameNow int64` parameter to `Exchange.buyPlayerListings`, which broke a
   context line in the bundled `0001-sane-pricing-100k-cap.patch` and caused
@@ -1427,7 +1427,7 @@ _Consolidated entry covering every release in the v10.x series (36 patches). Tag
   of CPU. Because every HTTP API handler runs inline on the listener
   thread (see _Known limitations_ below), that one stuck handler froze
   the entire backend UI — Map SpinUp, Web Interfaces, Active Spice, the
-  dune-admin Check button, and any other VM-touching panel all showed
+  Gameplay Admin Check button, and any other VM-touching panel all showed
   `Loading…` forever until the orphaned ssh process was killed manually.
   The function now spawns ssh as a managed `System.Diagnostics.Process`,
   drains stdout/stderr asynchronously to avoid pipe-buffer deadlock, and
@@ -1623,7 +1623,7 @@ _Consolidated entry covering every release in the v10.x series (36 patches). Tag
 
 #### Removed
 - **The "Wipe all listings" testing tool was removed from the Settings page.**
-  dune-admin now ships its own **Wipe Listings** control in its market-bot
+  Gameplay Admin now ships its own **Wipe Listings** control in its market-bot
   panel, which owns that job directly. The portal's `POST /api/db/wipe-bot-listings`
   route and the Settings-page wipe panel (checkbox + button) are gone, removing a
   duplicate, destructive DB action from the tool.
@@ -1631,8 +1631,8 @@ _Consolidated entry covering every release in the v10.x series (36 patches). Tag
 ### v10.1.6 - 2026-06-01
 
 #### Changed
-- **The portal no longer wastes time reinstalling dune-admin when it's already
-  patched.** When sane-pricing auto-apply is enabled and the dune-admin binary
+- **The portal no longer wastes time reinstalling Gameplay Admin when it's already
+  patched.** When sane-pricing auto-apply is enabled and the Gameplay Admin binary
   on disk is already the patched build for the exact upstream version *and* the
   same gamble-die config, the install route now detects this up front (via the
   patched stamp written next to the exe) and no-ops instead of downloading,
@@ -1666,9 +1666,9 @@ _Consolidated entry covering every release in the v10.x series (36 patches). Tag
   fragile embedded quoting).
 
 #### Fixed
-- **dune-admin gets its own loopback port when another app squats 8080.** When a
-  foreign process (e.g. CubeCoders AMP) already holds the configured dune-admin
-  port, the launcher now moves dune-admin to a free `127.0.0.1` port instead of
+- **Gameplay Admin gets its own loopback port when another app squats 8080.** When a
+  foreign process (e.g. CubeCoders AMP) already holds the configured Gameplay Admin
+  port, the launcher now moves Gameplay Admin to a free `127.0.0.1` port instead of
   surfacing an unreachable `[::1]` URL.
 - **Auto-update no longer gets stuck reporting the old version.** The runtime
   version constant compiled into `DuneServer.exe` is now bumped together with the
@@ -1678,21 +1678,21 @@ _Consolidated entry covering every release in the v10.x series (36 patches). Tag
 
 #### Added
 - **The installer now offers to install the pricing-patch build tools.** The
-  optional "sane pricing" market patch compiles a patched `dune-admin.exe` from
+  optional "sane pricing" market patch compiles a patched `Gameplay Admin.exe` from
   source, which needs Node.js, Go and Git. At install time DST checks whether
   those are present and, if any are missing, offers to install them via winget
   (your choice — skip it if you don't use the patch). If the install can't be
   done on your PC, it shows what to install manually and where to get it; the
   Dune Server Tool itself installs and works regardless. This avoids the patch
   build trying to bootstrap a toolchain on-demand later.
-- **Deferred sane-pricing patch when you delete `~/.dune-admin` on reinstall.**
-  Rebuilding the patched `dune-admin.exe` requires the on-disk source/config to be
+- **Deferred sane-pricing patch when you delete `~/.Gameplay Admin` on reinstall.**
+  Rebuilding the patched `Gameplay Admin.exe` requires the on-disk source/config to be
   present, and the exe is locked while the first-run setup wizard is open. If you
-  elect to delete your `.dune-admin` folder during a reinstall, the portal no
+  elect to delete your `.Gameplay Admin` folder during a reinstall, the portal no
   longer tries to rebuild mid-setup (which failed with exit 1). Instead it records
-  a pending marker, tells you the pricing patch will not deploy until dune-admin is
-  reconfigured, and then automatically polls. Once setup finishes and dune-admin is
-  listening, the patch applies on its own (it briefly stops dune-admin to swap in
+  a pending marker, tells you the pricing patch will not deploy until Gameplay Admin is
+  reconfigured, and then automatically polls. Once setup finishes and Gameplay Admin is
+  listening, the patch applies on its own (it briefly stops Gameplay Admin to swap in
   the patched build).
 
 #### Fixed
@@ -1714,42 +1714,42 @@ _Consolidated entry covering every release in the v10.x series (36 patches). Tag
 ### v10.1.2 - 2026-05-31
 
 #### Fixed
-- **dune-admin now opens on the correct per-user port instead of a hardcoded
-  `8080`.** dune-admin's listen port is configurable (`listen_addr` in
-  `~/.dune-admin/config.yaml`): it defaults to `:8080`, but its setup wizard
+- **Gameplay Admin now opens on the correct per-user port instead of a hardcoded
+  `8080`.** Gameplay Admin's listen port is configurable (`listen_addr` in
+  `~/.Gameplay Admin/config.yaml`): it defaults to `:8080`, but its setup wizard
   writes whatever you choose — notably `:18080` when the `amp` control plane is
   selected, since CubeCoders AMP commonly squats `8080`. The portal was assuming
   `8080` everywhere, so AMP users (and anyone on a custom port) had the
   **Characters** link land on the wrong app's panel. DST now resolves the real
   port from `listen_addr` and opens that exact URL.
-- **The browser no longer opens before dune-admin is actually ready.** Clicking
-  **Characters** previously launched dune-admin and opened the web UI after a
-  fixed 1-second wait — so if dune-admin was still running first-time setup (or
+- **The browser no longer opens before Gameplay Admin is actually ready.** Clicking
+  **Characters** previously launched Gameplay Admin and opened the web UI after a
+  fixed 1-second wait — so if Gameplay Admin was still running first-time setup (or
   its port was taken), the browser opened prematurely onto a dead port or
-  another app. DST now waits (up to ~30s) until dune-admin is listening on its
-  configured port **and** verifies the process holding that port is dune-admin
-  itself (not AMP) before opening. If dune-admin isn't set up yet, or the port
+  another app. DST now waits (up to ~30s) until Gameplay Admin is listening on its
+  configured port **and** verifies the process holding that port is Gameplay Admin
+  itself (not AMP) before opening. If Gameplay Admin isn't set up yet, or the port
   is owned by something else, it shows clear guidance instead of opening the
   wrong thing.
-- **dune-admin now opens correctly even when it shares port 8080 with AMP on a
+- **Gameplay Admin now opens correctly even when it shares port 8080 with AMP on a
   different IP family.** When CubeCoders AMP already holds the IPv4 wildcard
-  (`0.0.0.0:8080`), dune-admin can only bind the IPv6 wildcard (`[::]:8080`).
+  (`0.0.0.0:8080`), Gameplay Admin can only bind the IPv6 wildcard (`[::]:8080`).
   In that split, `localhost` resolves to `127.0.0.1` first and lands on AMP's
-  panel — even though dune-admin *is* listening on the same port number. DST now
+  panel — even though Gameplay Admin *is* listening on the same port number. DST now
   inspects the actual listeners and, when there's a cross-family conflict, opens
-  the loopback literal that dune-admin owns exclusively (`http://[::1]:<port>`),
-  so the **Characters** link reliably opens dune-admin instead of AMP. The
-  readiness probe was also fixed to test the dune-admin-owned address, so it can
-  no longer report AMP as "dune-admin is listening."
+  the loopback literal that Gameplay Admin owns exclusively (`http://[::1]:<port>`),
+  so the **Characters** link reliably opens Gameplay Admin instead of AMP. The
+  readiness probe was also fixed to test the Gameplay Admin-owned address, so it can
+  no longer report AMP as "Gameplay Admin is listening."
 
 #### Added
-- `GET /api/dune-admin/web-url` — single source of truth for dune-admin's
+- `GET /api/Gameplay Admin/web-url` — single source of truth for Gameplay Admin's
   effective URL/port (`configured`, `port`, `listenAddr`, `url`, `listening`,
   `ownerProcess`, `listeningIsDuneAdmin`). The UI reads this instead of guessing
-  `8080`, so fallbacks never open a non-dune-admin panel.
+  `8080`, so fallbacks never open a non-Gameplay Admin panel.
 
 #### Changed
-- **The sane-pricing patch no longer re-downloads the dune-admin web UI's whole
+- **The sane-pricing patch no longer re-downloads the Gameplay Admin web UI's whole
   dependency tree on every reinstall.** The web UI is identical across
   pricing-patch rebuilds (the patch only touches Go), so the patched build now
   skips `pnpm install` + `pnpm build` when the prerequisites are already in
@@ -1790,21 +1790,21 @@ _Consolidated entry covering every release in the v10.x series (36 patches). Tag
   `GET /api/system/dependencies/install-status`.
 
 #### Changed
-- **dune-admin links now open the LOCAL instance** (`http://localhost:<port>/#/...`,
+- **Gameplay Admin links now open the LOCAL instance** (`http://localhost:<port>/#/...`,
   port derived from `listen_addr`, default 8080) instead of the hosted
-  `dune-admin.layout.tools` site. The hosted UI is a different origin from your
-  local dune-admin API, which caused "Failed to fetch" and a sign-in wall; the
-  embedded, same-origin UI dune-admin serves needs neither. Updated the launcher,
+  `Gameplay Admin.layout.tools` site. The hosted UI is a different origin from your
+  local Gameplay Admin API, which caused "Failed to fetch" and a sign-in wall; the
+  embedded, same-origin UI Gameplay Admin serves needs neither. Updated the launcher,
   sidebar "Characters" link, setup-wizard link, and README.
 
 #### Fixed
 - **Market Bot diagnostic false "not configured".** The troubleshooter inferred
   "configured" from two legacy `config.yaml` keys (`market_bot_addr` /
-  `market_bot_container`) that modern dune-admin leaves empty, so a perfectly
+  `market_bot_container`) that modern Gameplay Admin leaves empty, so a perfectly
   healthy running bot showed as "not configured." It now trusts the cache DB
   (`market-bot-cache.db` exists **and** is locked = the bot process holds it
   open = running), and the panel reports "running" accordingly.
-- **HTTP-probe 404 meaning corrected.** A 404 at dune-admin's root no longer
+- **HTTP-probe 404 meaning corrected.** A 404 at Gameplay Admin's root no longer
   reads as benign — it specifically means the binary was built **without the
   embedded web UI** (`-tags embed`). The diagnostic now flags this as a warning
   and points at updating DST / reinstalling to get an embed build, rather than
@@ -1813,12 +1813,12 @@ _Consolidated entry covering every release in the v10.x series (36 patches). Tag
 ### v10.0.12 - 2026-05-31
 
 #### Fixed
-- **Patched dune-admin builds served no web UI ("can't access dune-admin / the
+- **Patched Gameplay Admin builds served no web UI ("can't access Gameplay Admin / the
   Market Bot panel").** The local pricing-patch build ran a plain `go build`,
   which omits the `embed` build tag and never built the SPA — so the rebuilt
-  `dune-admin.exe` served the API and market bot but returned 404 for the entire
+  `Gameplay Admin.exe` served the API and market bot but returned 404 for the entire
   web portal. The patched build now builds the web UI (`pnpm install && pnpm
-  build`), stages it into `cmd/dune-admin/dist`, and compiles with
+  build`), stages it into `cmd/Gameplay Admin/dist`, and compiles with
   `go build -tags embed`, matching upstream's release binary. Adds a build-time
   Node.js + pnpm requirement (pnpm auto-enabled via corepack); the build now
   fails fast with guidance if Node is missing instead of producing a UI-less
@@ -1835,7 +1835,7 @@ _Consolidated entry covering every release in the v10.x series (36 patches). Tag
   `PipelineStoppedException` into the pump. The tray pump now traps thread
   exceptions and exits cleanly, and teardown waits for the watcher/tray helpers to
   self-terminate instead of stopping their pipelines.
-- **dune-admin diagnostics: "Cannot overwrite variable HOME …" error.** The sidecar
+- **Gameplay Admin diagnostics: "Cannot overwrite variable HOME …" error.** The sidecar
   resolver assigned to `$home`, a read-only automatic variable in the compiled-exe
   host, so the diagnostics report errored on machines running the installed build
   (it happened to work in a dev PowerShell session). Renamed the local variable.
@@ -1843,12 +1843,12 @@ _Consolidated entry covering every release in the v10.x series (36 patches). Tag
 ### v10.0.10 - 2026-05-31
 
 #### Added
-- **dune-admin diagnostics.** Settings → dune-admin card now has a "Troubleshoot
-  dune-admin" panel that runs a one-shot health report: backend reachability on
+- **Gameplay Admin diagnostics.** Settings → Gameplay Admin card now has a "Troubleshoot
+  Gameplay Admin" panel that runs a one-shot health report: backend reachability on
   the SPA's expected port, config.yaml vs environment-variable precedence, stale
-  `~/.dune-admin` sidecar shadowing, duplicate-instance detection (which locks
+  `~/.Gameplay Admin` sidecar shadowing, duplicate-instance detection (which locks
   the market-bot cache DB), and pricing-patch build state. Surfaces colour-coded
-  findings with hints plus a "Copy report" button so issues like the dune-admin
+  findings with hints plus a "Copy report" button so issues like the Gameplay Admin
   portal's "Failed to fetch" can be self-diagnosed or shared for support.
 
 #### Removed
@@ -1856,7 +1856,7 @@ _Consolidated entry covering every release in the v10.x series (36 patches). Tag
   store, its "Refresh config files" / "Use local config files" controls, and the
   `UseLocalConfigFiles` config key have been removed — they added maintenance
   overhead and could shadow the configured SSH key. The SSH key is still copied
-  into the dune-admin folder automatically whenever dune-admin is installed or
+  into the Gameplay Admin folder automatically whenever Gameplay Admin is installed or
   updated, and the `rotate-ssh-key` command continues to re-copy the freshly
   rotated key there, so no functionality is lost.
 
@@ -1930,7 +1930,7 @@ Displayed in-app as **X (0.5)**.
   (DuneShell, a self-contained WebView2 host) instead of a browser tab, for a
   clean app-like feel. A slim native menu at the top provides **Server Health**
   and **Settings** navigation (plus **View → Reload / Open in browser**).
-  External links (websites, the dune-admin web UI) still open in your default
+  External links (websites, the Gameplay Admin web UI) still open in your default
   browser, and console commands still spawn their own windows.
   - The window is freely resizable and opens at 2000×1196 by default; its size,
     position and maximized state are remembered between launches.
@@ -1959,10 +1959,10 @@ Displayed in-app as **X (0.4)**.
 
 #### Changed
 
-- **Reinstalling dune-admin now reopens it after wiping the stale config
-  folder.** When you confirm "delete" on the stale `.dune-admin` preflight
+- **Reinstalling Gameplay Admin now reopens it after wiping the stale config
+  folder.** When you confirm "delete" on the stale `.Gameplay Admin` preflight
   prompt during an install, the market bot's config and DB pointers are gone —
-  so DST now launches dune-admin once the install (and any pricing-patch
+  so DST now launches Gameplay Admin once the install (and any pricing-patch
   rebuild) finishes, letting you re-run market-bot setup right away. The launch
   is deferred until the rebuild completes so the running exe can't lock it.
 
@@ -2006,7 +2006,7 @@ Displayed in-app as **X (0.1)**. Bug-fix release.
 
 #### Fixed
 
-- **dune-admin reinstall/setup no longer deletes the `~/.dune-admin` config
+- **Gameplay Admin reinstall/setup no longer deletes the `~/.Gameplay Admin` config
   folder without asking.** The stale-folder preflight used `window.confirm()`,
   which is fired after an `await` (the folder-existence check). Browsers expire
   the click's user-activation across the `await` and then suppress the dialog,
@@ -2027,7 +2027,7 @@ Displayed in-app as **X (0.1)**. Bug-fix release.
 
 ### v10.0.0 - 2026-05-30
 
-Displayed in-app as **X**. Feature release rolling up everything since 6.3.2. Focus: dune-admin
+Displayed in-app as **X**. Feature release rolling up everything since 6.3.2. Focus: Gameplay Admin
 operability (config-files handling, SSH-key rotation, folder picker, reliable
 reinstall) plus market-bot pricing correctness and a testing-only listings wipe.
 
@@ -2039,23 +2039,23 @@ reinstall) plus market-bot pricing correctness and a testing-only listings wipe.
   (existing configs are preserved). Backend splits raw-vs-effective config.
 - **DST config-files store.** `Sync-DstConfigFiles` maintains a backup snapshot
   under `%APPDATA%\DuneServer\configFiles\` (sshKey + .pub, dune-server.config,
-  a dune-admin `config.yaml` backup) and re-dumps the SSH key into the dune-admin
+  a Gameplay Admin `config.yaml` backup) and re-dumps the SSH key into the Gameplay Admin
   folder. Backup/re-dump only — normal paths always win; opt-in, never required.
   New endpoints `GET /api/config-files` and `POST /api/config-files/sync`, with a
   "Local config files" panel + Refresh button in Settings.
 - **Generate new SSH key button** next to the SshKey field. Runs `rotate-ssh-key`,
   waits for completion, then `Sync-DstConfigFiles` propagates the new key
   everywhere. New `POST /api/config/rotate-ssh-key`.
-- **dune-admin folder picker.** The dune-admin path field is now a folder picker
-  (the tool installs `dune-admin.exe`, so the exe doesn't exist at config time).
+- **Gameplay Admin folder picker.** The Gameplay Admin path field is now a folder picker
+  (the tool installs `Gameplay Admin.exe`, so the exe doesn't exist at config time).
   Backend normalizes folder vs. exe paths transparently.
 - **VM heartbeat sensor** on the Game-servers card — an animated liveness pulse
   pinned to the bottom of the card, driven by the VM probe.
-- **"Wipe all listings" testing button** (Settings → dune-admin updates). Guarded
+- **"Wipe all listings" testing button** (Settings → Gameplay Admin updates). Guarded
   by an "I approve" checkbox + confirm dialog; clears the market bot's exchange
   orders/items so it re-lists from scratch. Testing only. New
   `POST /api/db/wipe-bot-listings`.
-- **Market-bot pricing defaults re-seed.** The sane-pricing dune-admin patch now
+- **Market-bot pricing defaults re-seed.** The sane-pricing Gameplay Admin patch now
   carries a one-time defaults migration: when an older persisted config is loaded,
   the Grade/Rarity/Vendor multiplier defaults are re-seeded once to the current
   sane values, then operator edits afterward stick. Fixes bots that were stuck on
@@ -2066,20 +2066,20 @@ reinstall) plus market-bot pricing correctness and a testing-only listings wipe.
 
 - **Header port pills** split into individual green/neutral indicators driven by
   per-port probes instead of one combined pill.
-- **Reinstalling dune-admin now always offers to delete a stale `.dune-admin`
+- **Reinstalling Gameplay Admin now always offers to delete a stale `.Gameplay Admin`
   folder** (not just on first install / folder change). A stale dotfolder was the
   real cause behind "bot won't start / no market"; the prompt is context-aware
   (setting up / changing folder / reinstalling) and never auto-deletes.
-- Single-instance enforcement: any running `dune-admin` is stopped before launch.
+- Single-instance enforcement: any running `Gameplay Admin` is stopped before launch.
 
 #### Removed
 
-- **Characters page** removed. The sidebar entry now launches dune-admin and opens
+- **Characters page** removed. The sidebar entry now launches Gameplay Admin and opens
   the players URL (guarded so it only fires when the server is running).
 - **Market-bot database health check** (added in 6.3.1) removed. It TCP-probed
-  `127.0.0.1:15432`, but the embedded bot dials Postgres over dune-admin's own
+  `127.0.0.1:15432`, but the embedded bot dials Postgres over Gameplay Admin's own
   in-process pool with no local listener, so the probe was a persistent false
-  negative even while the bot listed thousands of items. The `.dune-admin`
+  negative even while the bot listed thousands of items. The `.Gameplay Admin`
   reinstall delete-prompt addresses the real "bot won't start" cause.
 
 ## [6.0.0] - 2026-05-26 .. 2026-05-30
@@ -2090,10 +2090,10 @@ _Consolidated entry covering every release in the v6.x series (38 patches). Tags
 
 #### Added
 
-- **Auto-stop running dune-admin instances before an update.** The install/update
-  route now proactively kills any running `dune-admin` process (matched by name
-  and by the configured exe path) before overwriting `dune-admin.exe`, then waits
-  for the file lock to release. This fixes the case where dune-admin is running
+- **Auto-stop running Gameplay Admin instances before an update.** The install/update
+  route now proactively kills any running `Gameplay Admin` process (matched by name
+  and by the configured exe path) before overwriting `Gameplay Admin.exe`, then waits
+  for the file lock to release. This fixes the case where Gameplay Admin is running
   with **no visible window** (e.g. launched detached / by the embedded bot) and
   the user has no way to close it by hand — previously the update bailed with a
   "file is locked" error (HTTP 423). Stopped PIDs are reported back in the install
@@ -2102,24 +2102,24 @@ _Consolidated entry covering every release in the v6.x series (38 patches). Tags
 
 
 Diagnostic follow-up to the recurring "No market bot connected" reports. The
-embedded market bot dials Postgres (`db_host:db_port` from dune-admin's
+embedded market bot dials Postgres (`db_host:db_port` from Gameplay Admin's
 `config.yaml`) at startup; in kubectl/k3s setups that DB is reached over a
-tunnel, and if the tunnel is down when dune-admin launches the bot fails
-silently and dune-admin just shows an empty market with no explanation.
+tunnel, and if the tunnel is down when Gameplay Admin launches the bot fails
+silently and Gameplay Admin just shows an empty market with no explanation.
 
 Thanks to **Techtonic** for the legwork that pinned this to an unreachable
 `127.0.0.1:15432` at runtime.
 
 #### Added
 
-- **Market-bot database health check** (Settings → dune-admin updates). Reads
-  `db_host` / `db_port` / `market_bot_enabled` from dune-admin's `config.yaml`
+- **Market-bot database health check** (Settings → Gameplay Admin updates). Reads
+  `db_host` / `db_port` / `market_bot_enabled` from Gameplay Admin's `config.yaml`
   and does a short TCP probe (1.5s timeout) against that host:port, surfacing one
   of: **reachable** (bot should start), **unreachable** (tunnel/DB down — the bot
   will fail and the market will be blank, with guidance to bring the tunnel up
-  before launching dune-admin), **disabled**, or **not set up yet**. A **Recheck**
+  before launching Gameplay Admin), **disabled**, or **not set up yet**. A **Recheck**
   button re-runs the probe after fixing the tunnel.
-  - New endpoint `GET /api/dune-admin/market-bot-health`.
+  - New endpoint `GET /api/Gameplay Admin/market-bot-health`.
   - Purely diagnostic — reads config and probes a port; changes nothing.
 
 
@@ -2132,7 +2132,7 @@ hard-coded in the patch.
 
 #### Added
 
-- **Gamble die config for the pricing patch** (Settings → dune-admin updates).
+- **Gamble die config for the pricing patch** (Settings → Gameplay Admin updates).
   Two new inputs — **Die size (N)** and **Buy on roll** — let you tune the bot's
   buy frequency. The bot rolls a 1–N die per candidate listing and only buys when
   it hits the target number, so a larger die means fewer buys. Defaults (12 / 5)
@@ -2141,7 +2141,7 @@ hard-coded in the patch.
   - Persisted to `dune-server.config` as `GambleDieSize` / `GambleTarget`.
   - Validated both client- and server-side: die size ≥ 2, and buy-on-roll
     between 1 and the die size.
-  - Baked into the patched `dune-admin.exe` at **build time** via the
+  - Baked into the patched `Gameplay Admin.exe` at **build time** via the
     `-GambleDie` / `-GambleTarget` parameters on `build-patched.ps1`, written with
     LF endings and reverted from the working tree after the build (tree stays
     clean). Non-default values rewrite the gamble-roll in `exchange.go`; the build
@@ -2171,7 +2171,7 @@ Thanks again to **Techtonic** for catching this the moment 6.2.3 unblocked his b
 
 ### v6.2.3 - 2026-05-30
 
-Hardens the dune-admin pricing-patch rebuild against line-ending corruption,
+Hardens the Gameplay Admin pricing-patch rebuild against line-ending corruption,
 polishes the in-app updater messaging, and fixes a couple of UI papercuts.
 
 Big thanks to **Techtonic** on Discord for surfacing the patch-apply failure that
@@ -2183,7 +2183,7 @@ led to the root-cause fix below.
   stale relative to current source."** The bundled `0001-sane-pricing-100k-cap.patch`
   had been silently rewritten with **CRLF** line endings (cross-tree/OneDrive sync).
   `git apply` matches context lines byte-for-byte, so a CRLF patch never applies to
-  the LF Go source — against **any** upstream dune-admin version. This masqueraded as
+  the LF Go source — against **any** upstream Gameplay Admin version. This masqueraded as
   a "stale baseline" problem. Three-layer fix:
   - The committed patch is normalized back to **LF**.
   - `build-patched.ps1` now **self-heals**: it detects CR bytes in any patch and
@@ -2324,11 +2324,11 @@ Fix: **Setup Wizard Step 3 (initial-setup) opened a console that "ran one thing 
   not point at the Self-Hosted Server install (the folder containing
   `battlegroup-management`).
 
-Feature: **dune-admin market bot "d12 gamble buy" pricing mode**, plus Settings quality-of-life.
+Feature: **Gameplay Admin market bot "d12 gamble buy" pricing mode**, plus Settings quality-of-life.
 
 #### Added
 
-- **dune-admin market bot — d12 gamble buy:** the bundled sane-pricing patch now
+- **Gameplay Admin market bot — d12 gamble buy:** the bundled sane-pricing patch now
   replaces the market bot's price-threshold buy gate with a dice roll. On every
   buy tick, each candidate player listing rolls a 12-sided die; only a **5**
   buys the item — **regardless of price** — otherwise it is skipped. The
@@ -2336,11 +2336,11 @@ Feature: **dune-admin market bot "d12 gamble buy" pricing mode**, plus Settings 
   skips still apply; only the price comparison is replaced by the gamble. This
   ships inside `0001-sane-pricing-100k-cap.patch` (now also patches
   `internal/marketbot/exchange.go`) and is applied automatically when you
-  install/rebuild dune-admin with the pricing patch enabled.
+  install/rebuild Gameplay Admin with the pricing patch enabled.
 - **Settings — folder/file locator buttons:** each path field (Steam path, SSH
-  key, dune-admin.exe) now has a **Browse** button that opens a native
+  key, Gameplay Admin.exe) now has a **Browse** button that opens a native
   Windows folder/file picker via `POST /api/browse-path`.
-- **Settings — Icehunter branding:** the dune-admin.exe card header and the
+- **Settings — Icehunter branding:** the Gameplay Admin.exe card header and the
   updater pointer text now carry the "by Icehunter" badge / live repo link,
   matching the Commands page.
 
@@ -2352,17 +2352,17 @@ Feature: **dune-admin market bot "d12 gamble buy" pricing mode**, plus Settings 
 
 ### v6.1.31 - 2026-05-30
 
-Patch: **dune-admin install now auto-copies your SSH key into the dune-admin folder.**
+Patch: **Gameplay Admin install now auto-copies your SSH key into the Gameplay Admin folder.**
 
 #### Fixed
 
-- **dune-admin install / setup wizard:** every call to `POST /api/dune-admin/install`
-  and `POST /api/dune-admin/setup` now copies the user's SSH private key (and
-  `.pub` if present) into the dune-admin install folder as `sshKey` /
-  `sshKey.pub`. dune-admin's SSH/kubectl-over-SSH layer reads `./sshKey`
+- **Gameplay Admin install / setup wizard:** every call to `POST /api/Gameplay Admin/install`
+  and `POST /api/Gameplay Admin/setup` now copies the user's SSH private key (and
+  `.pub` if present) into the Gameplay Admin install folder as `sshKey` /
+  `sshKey.pub`. Gameplay Admin's SSH/kubectl-over-SSH layer reads `./sshKey`
   first, so this is what makes the binary actually able to authenticate
   against the VM right after install — previously the user had to copy the
-  file in by hand or `dune-admin server start` would fail to reach the VM.
+  file in by hand or `Gameplay Admin server start` would fail to reach the VM.
   The CLI `rotate-ssh-key` flow already did this (since v6.0.x); the web
   install paths now match.
   - Source-of-truth selection: newest mtime between the configured
@@ -2374,7 +2374,7 @@ Patch: **dune-admin install now auto-copies your SSH key into the dune-admin fol
     perms) does not break the binary install. The result is surfaced
     as `sshKeyCopy: { ok, skipped, source, dest, message }` in the
     `/install` and `/setup` JSON response and the Settings page now
-    shows a "SSH key copied next to dune-admin.exe" confirmation or
+    shows a "SSH key copied next to Gameplay Admin.exe" confirmation or
     a "WARNING: SSH key was NOT copied" toast with the underlying
     reason.
   - New helper `Copy-DuneAdminSshKey` in `app/server/routes/DuneAdmin.ps1`;
@@ -2423,7 +2423,7 @@ Patch: **Auto-updater wizard now appears in foreground; Server Health "Active sp
 
 ### v6.1.29 - 2026-05-29
 
-Patch: **Spicefields live-commit toggle + 5-second click rate limiter; dune-admin Icehunter credit.**
+Patch: **Spicefields live-commit toggle + 5-second click rate limiter; Gameplay Admin Icehunter credit.**
 
 #### Added
 - **Spicefields card — live-commit "spawning" toggle.** Each row's spawning
@@ -2441,8 +2441,8 @@ Patch: **Spicefields live-commit toggle + 5-second click rate limiter; dune-admi
   are per-row and per-button independent (toggling row A doesn't cool down
   row B's Save). Defense-in-depth: the cooldown is also enforced inside the
   click handler so a stale render can't bypass it.
-- **Commands page — `dune-admin` button shows an "Icehunter" credit badge.**
-  Small inline badge in the bottom-right of the dune-admin command tile
+- **Commands page — `Gameplay Admin` button shows an "Icehunter" credit badge.**
+  Small inline badge in the bottom-right of the Gameplay Admin command tile
   linking to https://github.com/Icehunter (clicking the badge does not
   launch the command — `stopPropagation` on the link).
 
@@ -2488,10 +2488,10 @@ Patch: **Fix v6.1.26 wrapper-script regression that broke every install.**
 
 ### v6.1.26 - 2026-05-29
 
-Patch: **Make dune-admin pricing-patch reinstalls reliably succeed.**
+Patch: **Make Gameplay Admin pricing-patch reinstalls reliably succeed.**
 
 #### Fixed
-- **Sane-pricing patch is now in sync with dune-admin v0.14.2.** The previous
+- **Sane-pricing patch is now in sync with Gameplay Admin v0.14.2.** The previous
   patch was authored against a v0.13.x baseline whose `defaultConfig()` block
   only had `common/unique/memento` rarities. v0.14.2 added a `rare` rarity
   and shipped different stock multiplier values, so `git apply --check`
@@ -2531,7 +2531,7 @@ Patch: **Make dune-admin pricing-patch reinstalls reliably succeed.**
 #### Removed
 - **HEAD-clone fallback experiment removed.** Briefly considered shipping
   a "if the v0.14.x tarball build fails with marketbot symbol errors,
-  fall back to cloning dune-admin HEAD and patching that" safety net.
+  fall back to cloning Gameplay Admin HEAD and patching that" safety net.
   Investigation showed the tarball wasn't actually incomplete — the bug
   was our stale patch + the corrupting `git restore` path described
   above. With both of those fixed, the HEAD fallback would never trigger
@@ -2544,12 +2544,12 @@ Patch: **Make dune-admin pricing-patch reinstalls reliably succeed.**
 Patch: **Fix install hang when pricing-patch is enabled.**
 
 #### Fixed
-- **dune-admin install button no longer freezes the entire server.** When
+- **Gameplay Admin install button no longer freezes the entire server.** When
   `AutoApplyPricingPatch=true`, the v6.1.22-v6.1.24 install route ran
   `build-patched.ps1` synchronously with `Process.WaitForExit(15 min)` on
   the HTTP listener thread. PowerShell's HttpListener handles one request
   at a time, so every other API call (`/healthz`, `/api/ports`,
-  `/api/dune-admin/check`, etc.) would stall for the entire Go build —
+  `/api/Gameplay Admin/check`, etc.) would stall for the entire Go build —
   the UI's polling loops would all time out, the Install button would
   appear stuck on "Installing...", and impatient re-clicks compounded
   the jam by queueing more requests behind the build. After ~3-15 minutes
@@ -2563,13 +2563,13 @@ Patch: **Fix install hang when pricing-patch is enabled.**
   `pricingPatch: { status: 'running', logFile, statusFile, pid }`. The
   background `pwsh.exe` process writes its terminal state to a JSON
   status file at
-  `%LOCALAPPDATA%\DuneServer\dune-admin-pricing\rebuild-status.json`.
-- **New `GET /api/dune-admin/pricing-patch-status` endpoint** returns
+  `%LOCALAPPDATA%\DuneServer\Gameplay Admin-pricing\rebuild-status.json`.
+- **New `GET /api/Gameplay Admin/pricing-patch-status` endpoint** returns
   `{ status, startedAt, finishedAt, exitCode, error, logFile, logTail }`.
   Falls back to `'failed'` if the wrapper PID is dead but no terminal
   status was written (catches mid-build crashes).
 - **Settings page polls the status endpoint every 2s** while
-  `status === 'running'`, shows a separate "Rebuilding patched dune-admin"
+  `status === 'running'`, shows a separate "Rebuilding patched Gameplay Admin"
   chip with elapsed time + the last 40 lines of build log. The Install
   button reactivates immediately after the binary swap — operators can
   navigate away or trigger other actions while the rebuild completes.
@@ -2579,21 +2579,21 @@ Patch: **Fix install hang when pricing-patch is enabled.**
 
 ### v6.1.24 - 2026-05-29
 
-Patch: **One-button dune-admin first-run setup wizard.**
+Patch: **One-button Gameplay Admin first-run setup wizard.**
 
 #### Added
-- **New "Install + run setup wizard" button in Settings → dune-admin update card.**
-  Aimed at users who've never set up dune-admin before. Click once, and the
+- **New "Install + run setup wizard" button in Settings → Gameplay Admin update card.**
+  Aimed at users who've never set up Gameplay Admin before. Click once, and the
   Dune Server Tool will:
-  1. Download + extract the latest `dune-admin_windows_amd64.zip` into the
+  1. Download + extract the latest `the prior external admin tool installer` into the
      `DuneAdminExe` parent folder (if the binary isn't already there).
   2. Open a **visible cmd.exe console window** running
-     `dune-admin.exe -setup` — the interactive wizard that walks through
+     `Gameplay Admin.exe -setup` — the interactive wizard that walks through
      control-plane choice (amp / kubectl / docker / local), SSH host / user
      / key, DB credentials, broker addresses, and backup directory.
   3. When the wizard exits successfully AND
-     `%USERPROFILE%\.dune-admin\config.yaml` was written, auto-launch
-     `dune-admin.exe` in a separate window so the server starts listening
+     `%USERPROFILE%\.Gameplay Admin\config.yaml` was written, auto-launch
+     `Gameplay Admin.exe` in a separate window so the server starts listening
      on `http://localhost:8080` immediately.
   4. Leave the setup window open ("Press any key to close") so wizard
      errors stay visible.
@@ -2604,8 +2604,8 @@ Patch: **One-button dune-admin first-run setup wizard.**
   wizard: every user's deployment is different (their VM IP, SSH key path,
   BG namespace, DB password, broker addresses are unique to their setup).
 
-  New API route: `POST /api/dune-admin/setup`. The existing
-  `GET /api/dune-admin/check` response now also returns `configYamlPath`
+  New API route: `POST /api/Gameplay Admin/setup`. The existing
+  `GET /api/Gameplay Admin/check` response now also returns `configYamlPath`
   and `configYamlExists` so the frontend can hide the button after a
   successful first-run setup.
 
@@ -2644,7 +2644,7 @@ Patch: **Fix silent startup crash on Restricted-policy / MOTW-tagged machines, p
 - **Re-saved 4 `.ps1` files with UTF-8 BOM** per the v6.1.16 permanent
   rule: `app/DuneServer.ps1`, `dune-server.ps1`,
   `app/server/routes/DuneAdmin.ps1`,
-  `app/resources/dune-admin-patches/build-patched.ps1`. Two of them
+  `app/resources/Gameplay Admin-patches/build-patched.ps1`. Two of them
   (`dune-server.ps1` and `build-patched.ps1`) had parse errors under
   Windows PowerShell 5.1 because of em-dashes mis-decoded as Windows-1252.
 
@@ -2669,23 +2669,23 @@ Patch: **Fix silent startup crash on Restricted-policy / MOTW-tagged machines, p
 
 ### v6.1.22 - 2026-05-28
 
-Patch: **Fold sane-pricing into the dune-admin updater (with opt-in checkbox).**
+Patch: **Fold sane-pricing into the Gameplay Admin updater (with opt-in checkbox).**
 
 #### Added
-- **Auto-apply Coastal's sane-pricing patch on every dune-admin update.**
-  New checkbox in Settings → dune-admin update card:
+- **Auto-apply Coastal's sane-pricing patch on every Gameplay Admin update.**
+  New checkbox in Settings → Gameplay Admin update card:
   *"Keep Coastal's sane-pricing patch applied after each update."* When
-  checked, every dune-admin Install/Update also pulls the matching
-  source tarball, overlays it onto the user's dune-admin source dir,
-  then rebuilds `dune-admin.exe` locally with the 100k-cap pricing patch.
+  checked, every Gameplay Admin Install/Update also pulls the matching
+  source tarball, overlays it onto the user's Gameplay Admin source dir,
+  then rebuilds `Gameplay Admin.exe` locally with the 100k-cap pricing patch.
   Uncheck and click Install again to revert to the pristine upstream
   binary. Persists as `AutoApplyPricingPatch=true|false` in
   `dune-server.config`.
-- **dune-admin updater now syncs source.** Every Install action now
+- **Gameplay Admin updater now syncs source.** Every Install action now
   downloads two assets from the GitHub release: the Windows binary zip
   (as before) AND the `*_source.tar.gz` tarball. The tarball is
   extracted with `tar.exe` and overlaid onto the source repo via
-  `robocopy`, with `.git/`, the running `dune-admin.exe`, sidecar
+  `robocopy`, with `.git/`, the running `Gameplay Admin.exe`, sidecar
   versions, and any "market bot cache/" directory excluded. This keeps
   the user's source in lockstep with the running binary version, so the
   patch always rebuilds against the source it was generated against.
@@ -2694,8 +2694,8 @@ Patch: **Fold sane-pricing into the dune-admin updater (with opt-in checkbox).**
   reinstall the current version at will (button reads "Reinstall vX.Y.Z"
   when already on latest). This is what lets the "uncheck and reupdate
   to revert" flow work without waiting for a new release.
-- **Regenerated `0001-sane-pricing-100k-cap.patch` for dune-admin
-  v0.13.0.** Phase 0 refactor (Icehunter/dune-admin#52) changed the
+- **Regenerated `0001-sane-pricing-100k-cap.patch` for Gameplay Admin
+  v0.13.0.** Phase 0 refactor (prior external admin tooling#52) changed the
   context lines around the patched regions, so the old patch refused
   to apply on fresh upstream. The new patch is functionally identical
   (same numerical targets, same 100k hard cap, same tier-driven model)
@@ -2711,7 +2711,7 @@ Patch: **Fold sane-pricing into the dune-admin updater (with opt-in checkbox).**
 #### Fixed
 - **Build deadlock + handle-leak in build-patched.ps1.** The previous
   apply path redirected the child build script's stdout/stderr through
-  .NET pipes, but the script ends by launching the rebuilt dune-admin
+  .NET pipes, but the script ends by launching the rebuilt Gameplay Admin
   (a long-lived server) which inherited those handles and held them
   open forever. The auto-rebuild path in the updater now uses
   file-based logging (no .NET pipe redirection) plus a 15-minute hard
@@ -2732,50 +2732,50 @@ Patch: **Hide the Broadcasts feature from the UI.**
 
 ### v6.1.20 - 2026-05-28
 
-Feature: **Apply Coastal's sane-pricing patch to dune-admin from the Database page.**
+Feature: **Apply Coastal's sane-pricing patch to Gameplay Admin from the Database page.**
 
 #### Added
-- **Database → "dune-admin Sane-Pricing Patch (Coastal)" card.** One-click
+- **Database → "Gameplay Admin Sane-Pricing Patch (Coastal)" card.** One-click
   installs Coastal's tier-driven market-bot pricing model (with hard 100k
-  cap per listing) into the user's local dune-admin v0.13.0+ source repo.
+  cap per listing) into the user's local Gameplay Admin v0.13.0+ source repo.
   Bundles `0001-sane-pricing-100k-cap.patch` + `build-patched.ps1` with
   the installer; the card stages them into the user's
-  `<dune-admin>\scripts\patches\` and `\scripts\` then runs
-  `build-patched.ps1 -Restart` to rebuild dune-admin.exe in place and
-  relaunch it. Restore button swaps `dune-admin.exe.upstream` back over
+  `<Gameplay Admin>\scripts\patches\` and `\scripts\` then runs
+  `build-patched.ps1 -Restart` to rebuild Gameplay Admin.exe in place and
+  relaunch it. Restore button swaps `Gameplay Admin.exe.upstream` back over
   the patched binary.
 - **Preconditions checklist** displayed inline beside the buttons so the
   user can see exactly what needs to be in place before applying:
   - DuneAdminExe set in Settings + file exists
-  - dune-admin v0.13.0+ source repo detected at the parent dir of DuneAdminExe
+  - Gameplay Admin v0.13.0+ source repo detected at the parent dir of DuneAdminExe
   - `git` and `go` available on PATH (with `winget install` commands shown
     for one-click PowerShell copy)
   - Bundled patch file present in the install
-  - dune-admin reachable on `localhost:8080` with `market-bot` mode `embedded`
+  - Gameplay Admin reachable on `localhost:8080` with `market-bot` mode `embedded`
   Each unmet row shows a tailored "Fix:" line and (where applicable) a
-  copyable PowerShell command. The dune-admin-not-running command is
+  copyable PowerShell command. The Gameplay Admin-not-running command is
   parameterized with the user's actual DuneAdminExe path and also
   stops `AMP-ADS01` first when that's the cause of the :8080 conflict.
 - **Help (?) button** in the top-left of the portal sidebar, next to the
   title. Opens a prefilled GitHub bug-report template (tool version
   auto-filled). Restores discoverability of the issue tracker the CLI's
   `report-issue` command already targeted.
-- New API routes: `GET /api/dune-admin/pricing-patch/status`,
-  `POST /api/dune-admin/pricing-patch/apply`,
-  `POST /api/dune-admin/pricing-patch/restore`.
+- New API routes: `GET /api/Gameplay Admin/pricing-patch/status`,
+  `POST /api/Gameplay Admin/pricing-patch/apply`,
+  `POST /api/Gameplay Admin/pricing-patch/restore`.
 
 #### Changed
 - Sidebar title renamed **Dune Server** → **Dune Server Tool** (also in
   the PWA-install tooltip + the Chrome/Edge install instruction).
 - `.github/ISSUE_TEMPLATE/bug_report.yml` surfaces refreshed for the v6.1
   web portal layout: added Database (Sane-Pricing Patch card), Bot Control
-  / Market, Broadcasts, Settings (dune-admin updater / self-updater),
+  / Market, Broadcasts, Settings (Gameplay Admin updater / self-updater),
   PWA install / desktop-app shell, and Sidebar / help button entries.
   Removed legacy "Desktop app — *" prefixes.
 
 #### Notes
 - Apply succeeds only when every precondition is met (HTTP 412 otherwise).
-- A sidecar marker `dune-admin.exe.coastal-sane-pricing` is written next to
+- A sidecar marker `Gameplay Admin.exe.coastal-sane-pricing` is written next to
   the patched exe so the card can detect that the patch is already applied
   across restarts of Dune Server Tool.
 
@@ -2796,22 +2796,22 @@ Patch: **Fix Settings page silently dropping all configuration changes.**
 
 ### v6.1.18 - 2026-05-27
 
-Patch: **dune-admin updater in Settings** + **Broadcasts shutdown fix**.
+Patch: **Gameplay Admin updater in Settings** + **Broadcasts shutdown fix**.
 
 #### Added
-- **dune-admin.exe updater** in Settings. A new collapsible card under
+- **Gameplay Admin.exe updater** in Settings. A new collapsible card under
   the Dune Server self-updater shows the installed version vs. the
-  latest [`Icehunter/dune-admin`](https://github.com/Icehunter/dune-admin)
-  release and one-click installs the `dune-admin_windows_amd64.zip`
+  latest [`prior external admin tooling`](https://github.com/prior external admin tooling)
+  release and one-click installs the `the prior external admin tool installer`
   asset over the configured `DuneAdminExe` path. Writes a
   `<exe>.version` sidecar file so the installed version persists across
   checks (Go binaries built with goreleaser have no Win32
-  FileVersionInfo). New routes: `GET /api/dune-admin/check`,
-  `POST /api/dune-admin/install`. Refuses to overwrite a running EXE
+  FileVersionInfo). New routes: `GET /api/Gameplay Admin/check`,
+  `POST /api/Gameplay Admin/install`. Refuses to overwrite a running EXE
   (returns 423 Locked).
 
 #### Changed
-- Settings page restructured: **Updates** card and **dune-admin.exe**
+- Settings page restructured: **Updates** card and **Gameplay Admin.exe**
   card now live at the top of the page, both minimized by default with
   compact status pills shown in the collapsed header. Both auto-check
   on mount so the pills are populated without expanding.
@@ -2826,7 +2826,7 @@ Patch: **dune-admin updater in Settings** + **Broadcasts shutdown fix**.
   NTP-synced so there's no meaningful drift.
 
 #### Notes
-- README brought current: added Broadcasts, DD Map, dune-admin updater,
+- README brought current: added Broadcasts, DD Map, Gameplay Admin updater,
   and PWA install sections; removed stale tray-icon references that
   v6.1.7 had already retired.
 - Scrubbed real VM/public IPs out of `tools/Redact-Screenshots.ps1`
@@ -3330,8 +3330,8 @@ Fixed
 ### v6.1.2 - 2026-05-26
 
 Patch: **single-instance gate** (clicking the desktop shortcut multiple times
-no longer spawns multiple servers or UAC prompts) and **`dune-admin` self-heal**
-when the bundled `dune-admin.exe` is missing.
+no longer spawns multiple servers or UAC prompts) and **`Gameplay Admin` self-heal**
+when the bundled `Gameplay Admin.exe` is missing.
 
 Fixed
 - **Multi-instance bug** — every click of the desktop shortcut spawned a
@@ -3347,15 +3347,15 @@ Fixed
   admin via the in-script self-elevate (`Start-Process -Verb RunAs`); CLI
   commands still get admin via `dune-server.ps1`'s
   `#Requires -RunAsAdministrator`.
-- Command 18 (`dune-admin`) silently registered a scheduled task
+- Command 18 (`Gameplay Admin`) silently registered a scheduled task
   pointed at a missing executable when `DuneAdminExe` in
   `dune-server.config` pointed nowhere — the spawned console window
-  flashed and closed, dune-admin.exe never started, and the
-  `dune-admin.layout.tools` web UI loaded but showed no data because
+  flashed and closed, Gameplay Admin.exe never started, and the
+  `Gameplay Admin.layout.tools` web UI loaded but showed no data because
   its local backend wasn't running.
-- The `dune-admin` handler now `Test-Path`s the configured EXE
+- The `Gameplay Admin` handler now `Test-Path`s the configured EXE
   first. If missing or unset it offers to download the latest
-  release from `github.com/Icehunter/dune-admin` (reuses the
+  release from `github.com/prior external admin tooling` (reuses the
   existing `Install-DuneAdminLatest` helper), persists the new
   path back to `dune-server.config`, and seeds the install
   directory with the current SSH key — same flow as
@@ -3580,7 +3580,7 @@ are consolidated into this single 6.0.0 entry.
   browse common tables (read-only by default with an explicit Edit-mode
   toggle); one-click "Open psql shell" into the embedded terminal.
 - **🔧 Settings page.** Everything the old setup wizard asked, but
-  editable any time: server install folder, SSH key path, dune-admin
+  editable any time: server install folder, SSH key path, Gameplay Admin
   path, Windows username, port-check URL template, theme, log retention.
   Changes save on the fly — no restart needed.
 - **🧙 Setup Wizard page.** Runs automatically on first launch; re-runnable
@@ -3853,7 +3853,7 @@ this single 4.0.0 entry.
   clean Add/Remove Programs entry, **legacy-config auto-detection**
   during install, **user data preserved on uninstall** (uninstaller
   never touches `%APPDATA%\DuneServer\`).
-- **Installer config wizard** (5 pages): server folder, SSH key, dune-admin
+- **Installer config wizard** (5 pages): server folder, SSH key, Gameplay Admin
   exe, Windows username, port-verification mode. Native Browse pickers
   with smart auto-detected defaults. Values written to
   `dune-server.config` at install time so the app launches fully
@@ -3861,7 +3861,7 @@ this single 4.0.0 entry.
   _(originally 4.0.8)_
 - **"Download Latest from GitHub..." button** on the installer's Dune
   Admin Tool page that fetches the latest `windows_amd64.zip` from
-  [Icehunter/dune-admin](https://github.com/Icehunter/dune-admin),
+  [prior external admin tooling](https://github.com/prior external admin tooling),
   extracts it, and auto-fills the path field. _(originally 4.1.0)_
 - **"Check for Updates" button** + **Installed / Latest version labels**
   in the status header. Hits the GitHub Releases API for
@@ -3933,13 +3933,13 @@ this single 4.0.0 entry.
   panel already displays live status with 30s auto-refresh); the
   underlying `status` CLI command remains for `.bat` and `-Cmd` users.
   _(originally 4.0.2)_
-- **Dune-admin "Web UI" launch** now opens directly to the **Players**
-  route (`https://dune-admin.layout.tools/#/players`). _(originally
+- **Gameplay Admin "Web UI" launch** now opens directly to the **Players**
+  route (`https://Gameplay Admin.layout.tools/#/players`). _(originally
   4.0.7)_
 - **All "open this URL" menu items now use `Start-Process $url`**
   (registered protocol handler) instead of `Start-Process explorer.exe
   $url`, which stopped working correctly on Windows 11 24H2. Affects
-  `report-issue`, `setup-guide`, `dune-admin` web UI,
+  `report-issue`, `setup-guide`, `Gameplay Admin` web UI,
   `open-file-browser`, `open-director`. _(originally 4.5.2)_
 - **Cards stay enabled for drag/drop even when greyed out.** Previously
   greyed-out commands couldn't receive drag events, so separators
@@ -4034,13 +4034,13 @@ at the time. Also folds in the v3.0.1 / v3.1.2 patches.
 - **`-Cmd <name>` parameter** on `dune-server.ps1` for non-interactive
   dispatch. Skips the menu, runs one handler, exits. Used by the web
   UI; also handy for shortcuts and scripts.
-- **`dune-admin` install offer during setup** (step 3). Prompts to
+- **`Gameplay Admin` install offer during setup** (step 3). Prompts to
   download the latest release from
-  [`Icehunter/dune-admin`](https://github.com/Icehunter/dune-admin) to
+  [`prior external admin tooling`](https://github.com/prior external admin tooling) to
   a folder you choose, use an existing local install, or skip. Stored
   path goes into `dune-server.config`.
-- **SSH key auto-copy to `dune-admin` folder.** Setup and
-  `rotate-ssh-key` keep the dune-admin install dir's key file in sync
+- **SSH key auto-copy to `Gameplay Admin` folder.** Setup and
+  `rotate-ssh-key` keep the Gameplay Admin install dir's key file in sync
   with the freshest copy (compares
   `%LOCALAPPDATA%\DuneAwakeningServer\sshKey` against the path stored
   in `dune-server.config`).
@@ -4163,7 +4163,7 @@ at the time. Also folds in the v3.0.1 / v3.1.2 patches.
   window of last 20 entries per phase).
 - Code organization tidy-up in `dune-server.ps1` and
   `web/Start-DuneWeb.ps1`. Tool command keys settled at 17/18/19/20
-  (`ssh`, `dune-admin`, `setup-guide`, `report-issue`). _(originally
+  (`ssh`, `Gameplay Admin`, `setup-guide`, `report-issue`). _(originally
   3.1.2)_
 
 [Unreleased]: https://github.com/coastal-ms/DST-DuneServerTool/compare/v6.1.2...HEAD
