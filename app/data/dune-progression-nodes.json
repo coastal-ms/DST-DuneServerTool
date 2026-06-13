@@ -119,5 +119,5 @@
     "Swordmaster":   "Skills.Ability.DeflectionSlow",
     "Trooper":       "Skills.Ability.SuspensorGrenade_Reduction"
   },
-  "repair_gear_inventory_types": [0, 1, 14, 15, 27, 30]
+  "repair_gear_inventory_types": [0, 1, 15]
 }

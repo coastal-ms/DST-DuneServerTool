@@ -732,7 +732,9 @@ function Get-DunePlayerEventsDemo {
 #
 # Source list: dune-admin fillables_gen.go waterFillableTemplates (49 entries,
 # generated from DT_ItemTableFillables.json — FillableTypeRestriction=Water).
-# repairGearInventoryTypes mirrors dune-admin's set (0,1,14,15,27,30).
+# repairGearInventoryTypes is DST's narrowed set (0,1,15): backpack + equipped
+# armor + equipped weapons only. (dune-admin's original set also included emote
+# and empty buckets 14/27/30, which Repair/Restore should not touch.)
 # ---------------------------------------------------------------------------
 $script:DuneWaterFillableTemplates = @(
     'advancedstillsuit','combat_nati_fremenexile04_top','decajon','dewpack',
