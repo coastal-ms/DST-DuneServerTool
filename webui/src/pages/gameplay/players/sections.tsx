@@ -21,7 +21,7 @@ import {
   restoreDestroyed,
   returningPlayerAward, setFactionTier, setPlayerTags, setSkillPoints,
   setStarterClass, teleportToPlayer, updatePlayerTags, wipeCodex, wipeJourney,
-  chatWhisper,
+  chatWhisper, isValidTemplateId,
   type Player, type PlayerEvent, type PlayerStats, type SpecTrackFull,
 } from '../../../api/gameplay'
 import { fmtNum, fmtSolari } from '../shared'
@@ -662,7 +662,7 @@ export function ActionsSection({ player, canWrite, flash, onChanged }: SectionPr
                           className="w-full px-3 py-2 rounded-lg bg-surface-2 border border-border text-text text-sm focus:outline-none focus:ring-2 focus:ring-ibad focus:border-ibad/50" />
                       </div>
                     </div>
-                    <button className="btn-primary w-full" disabled={busy || !giveTpl.trim()}
+                    <button className="btn-primary w-full" disabled={busy || !isValidTemplateId(giveTpl)}
                       onClick={() => runAction(def, () => def.custom === 'give-item-live'
                         ? giveItemLive({ actor_id: player.id }, giveTpl.trim(), Number(giveQty) || 1, Number(giveQual) || 0)
                         : giveItem(player.id, giveTpl.trim(), Number(giveQty) || 1, Number(giveQual) || 0))}>
@@ -786,7 +786,7 @@ function ItemsActionBlock({ player, canWrite, flash, onChanged }: {
                     className="w-full px-3 py-2 rounded-lg bg-surface-2 border border-border text-text text-sm focus:outline-none focus:ring-2 focus:ring-ibad focus:border-ibad/50" />
                 </div>
               </div>
-              <button className="btn-primary w-full" disabled={busy || !giveTpl.trim()}
+              <button className="btn-primary w-full" disabled={busy || !isValidTemplateId(giveTpl)}
                 onClick={() => runAction(def, () => def.custom === 'give-item-live'
                   ? giveItemLive({ actor_id: player.id }, giveTpl.trim(), Number(giveQty) || 1, Number(giveQual) || 0)
                   : giveItem(player.id, giveTpl.trim(), Number(giveQty) || 1, Number(giveQual) || 0))}>

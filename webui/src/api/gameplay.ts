@@ -881,6 +881,19 @@ export function downloadBlueprintFile(blueprint: BlueprintFile, filename: string
 // v11.5.7 — Item catalog (for autocomplete), Fill Water, Coriolis admin.
 // ---------------------------------------------------------------------------
 
+/**
+ * A valid give-item template id is a game class string (e.g. "CopperBar"),
+ * never a bare number. The game's dune.items.template_id can't resolve a numeric
+ * id, so such rows are inserted but render invisible and get dropped on zone/login
+ * load. Reject empty and purely-numeric ids so they can't reach a give request.
+ */
+export function isValidTemplateId(t: string): boolean {
+  const s = (t ?? '').trim()
+  if (!s) return false
+  if (/^\d+$/.test(s)) return false
+  return /[A-Za-z]/.test(s)
+}
+
 export interface CatalogItem {
   template_id: string
   name: string

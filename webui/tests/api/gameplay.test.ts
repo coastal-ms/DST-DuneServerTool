@@ -376,3 +376,23 @@ describe('error path', () => {
     })
   })
 })
+
+describe('isValidTemplateId — numeric give-item guard', () => {
+  it('accepts real class-string template ids', () => {
+    for (const t of ['CopperBar', 'Buggy_Booster_Mk6', 'BuildingBlueprint_CopyDevice', 'Combat_Light_SpiceMask']) {
+      expect(gp.isValidTemplateId(t)).toBe(true)
+    }
+  })
+
+  it('rejects a purely-numeric id (the "859" leak)', () => {
+    expect(gp.isValidTemplateId('859')).toBe(false)
+    expect(gp.isValidTemplateId('  859  ')).toBe(false)
+    expect(gp.isValidTemplateId('0')).toBe(false)
+  })
+
+  it('rejects empty / whitespace-only ids', () => {
+    expect(gp.isValidTemplateId('')).toBe(false)
+    expect(gp.isValidTemplateId('   ')).toBe(false)
+  })
+})
+
