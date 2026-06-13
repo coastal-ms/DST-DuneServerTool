@@ -72,10 +72,10 @@ describe('Phase A — currency / progression writes', () => {
     expect(last().body).toEqual({ account_id: 7, faction: 'harkonnen', tier: 12 })
   })
 
-  it('awardCharXp uses pawn_id + delta', async () => {
+  it('awardCharXp uses pawn_id + delta + default category', async () => {
     await gp.awardCharXp(99, 10_000)
     expect(last().url).toBe('/api/gameplay/players/award-char-xp')
-    expect(last().body).toEqual({ pawn_id: 99, delta: 10_000 })
+    expect(last().body).toEqual({ pawn_id: 99, delta: 10_000, category: 'Combat' })
   })
 
   it('awardIntel sends actor_id + pawn_id + delta (backend award-intel contract)', async () => {

@@ -29,6 +29,27 @@ here cover everything those tags shipped.
   container also failed to render. Covers the single and bulk give/add paths.
   (#144, #176)
 
+- **Gameplay Admin "Give Item" no longer leaks a numeric template id.** A numeric
+  id typed or pasted into the item field (instead of a class string picked from the
+  catalog) was written straight to `dune.items.template_id`, which the game cannot
+  resolve — the row existed (and showed in DST's listing) but the item was invisible
+  in-game and dropped on the next zone/login load. The backend now rejects a
+  non-class-string template id (empty or all-digits) across the player, storage,
+  single, bulk, and live give paths, and the picker disables the give/add action
+  with an inline hint when the value isn't a valid class string. (#176)
+
+- **Gameplay Admin "Give Intel" no longer silently no-ops for online players.** The
+  portal sent only `actor_id`, so the backend skipped its online check and wrote
+  directly to `dune.actors` — which the game server overwrites from memory on
+  logout, so the intel never stuck. Giving intel to an online player is now rejected
+  with a clear "log out first" message, and the offline write was hardened to create
+  the `TechKnowledgePlayerComponent` parent when missing. (#176)
+
+- **Gameplay Admin "Award Character XP" now works for online players.** Awarding XP
+  to a logged-in character previously errored; it now routes online awards through
+  the game server's live `AwardXP` path (no relog needed) and keeps the offline
+  database write for logged-out characters. (#176)
+
 - **Gameplay Admin "Give Intel" no longer errors.** The action failed with
   `actor_id or pawn_id is required.` because the web portal sent `controller_id`/
   `amount` while the backend expected `actor_id`/`delta`. The portal now sends the
