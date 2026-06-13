@@ -13,6 +13,40 @@ here cover everything those tags shipped.
 
 ## [Unreleased]
 
+## [12.0.1] - 2026-06-12
+
+Hotfix for the Game Config "page goes blank" bug reported on v12.0.0, plus
+the diagnostics gap that made it untriageable in the wild.
+
+### Fixed
+
+- **Game Config blank-screen recovery.** Wrapped every route in a React error
+  boundary so a single render exception can no longer white-out the entire
+  WebView. Crashes now show an in-place error with Retry / Reload buttons
+  instead of an empty window. (#KEN-1)
+- **Game Config defensive guards.** Hardened the helper functions and JSX
+  iteration in `GameConfig.tsx` so a malformed/partial config response from
+  the API (missing `game` or `engine` bundle, missing `fields` on a category,
+  missing `options` on a select field) no longer throws during render.
+- **Schema fetch retry.** The page now retries `getGameConfigSchema()` up to
+  3 times with backoff before declaring the page errored, and adds an
+  explicit Retry button to the error banner so a transient API hiccup at
+  load time no longer requires navigating away.
+
+### Diagnostics
+
+- **WebView2 DevTools enabled.** Pressing **F12** in the desktop shell now
+  opens Chromium DevTools. Previously DevTools were hard-disabled, which made
+  it impossible for users to inspect render crashes themselves.
+- **`webview2-debug.log` now actually gets written.** The bug-report template
+  and `Save Logs` workflow have referenced this file since v11, but nothing
+  ever wrote it. The desktop shell now subscribes to the WebView2 DevTools
+  Protocol (`Runtime.consoleAPICalled`, `Runtime.exceptionThrown`,
+  `ProcessFailed`) and appends error/warn/assert/trace messages to
+  `%APPDATA%\DuneServer\webview2-debug.log` with a 2 MB ring buffer. Future
+  diagnostic ZIPs will include the actual JS exception that caused any
+  blank-screen issue.
+
 ## [12.0.0] - 2026-06-12
 
 Major milestone — full Gameplay Admin build-out lands directly inside DST.

@@ -44,18 +44,24 @@ function boolPair(type: GameConfigField['type']): { on: string; off: string } | 
   return null
 }
 
-function bundleFor(data: GameConfigResponse, file: 'game' | 'engine'): GameConfigFileBundle {
-  return file === 'game' ? data.game : data.engine
+function bundleFor(data: GameConfigResponse, file: 'game' | 'engine'): GameConfigFileBundle | null {
+  // Defensive: a malformed / partial server response could omit one of the
+  // bundles. Returning null lets every caller short-circuit to an "unset"
+  // value instead of throwing on `.effective` and white-outing the form.
+  if (!data) return null
+  const b = file === 'game' ? data.game : data.engine
+  return b ?? null
 }
 
 function fieldDefault(field: GameConfigField): string {
-  return field.default ?? ''
+  return field?.default ?? ''
 }
 
 // Live value written in the battlegroup's INI for this field ('' when unset or VM down).
 function liveValue(data: GameConfigResponse | null, field: GameConfigField): string {
-  if (!data) return ''
-  return bundleFor(data, field.file).effective?.[`${field.section}||${field.key}`] ?? ''
+  if (!data || !field) return ''
+  const b = bundleFor(data, field.file)
+  return b?.effective?.[`${field.section}||${field.key}`] ?? ''
 }
 
 // A field is "customized" when the live file overrides it with a value other than the default.
@@ -71,7 +77,9 @@ function currentValue(data: GameConfigResponse | null, field: GameConfigField): 
 }
 
 function sectionIsManaged(data: GameConfigResponse, field: GameConfigField): boolean {
-  return bundleFor(data, field.file).managedSections?.includes(field.section) ?? false
+  if (!data || !field) return false
+  const b = bundleFor(data, field.file)
+  return b?.managedSections?.includes(field.section) ?? false
 }
 
 export function GameConfig() {
@@ -259,8 +267,10 @@ export function GameConfig() {
   // so every field is populated even before (or without) a live battlegroup.
   const seedValues = useCallback((cats: GameConfigCategory[], data: GameConfigResponse | null) => {
     const out: Record<string, string> = {}
-    for (const cat of cats) {
-      for (const f of cat.fields) out[f.key] = currentValue(data, f)
+    for (const cat of cats ?? []) {
+      for (const f of cat?.fields ?? []) {
+        if (f?.key) out[f.key] = currentValue(data, f)
+      }
     }
     return out
   }, [])
@@ -270,8 +280,13 @@ export function GameConfig() {
     setLoadError(null)
     setSavedMsg(null)
     try {
-      const sch = schema ?? (await getGameConfigSchema()).schema
-      if (!schema) setSchema(sch)
+      let sch = schema
+      if (!sch) {
+        const resp = await getGameConfigSchema()
+        sch = resp?.schema
+        if (!Array.isArray(sch)) throw new Error('Game config schema response was empty or malformed.')
+        setSchema(sch)
+      }
       const data = await getGameConfig()
       setCfg(data)
       const seeded = seedValues(sch, data)
@@ -289,12 +304,25 @@ export function GameConfig() {
     void (async () => {
       let s = schema
       if (!s) {
-        try {
-          const resp = await getGameConfigSchema()
-          s = resp.schema
-          setSchema(s)
-        } catch (e) {
-          setLoadError(e instanceof Error ? e.message : String(e))
+        // Retry the schema fetch up to 3 times — the WebView2 occasionally races
+        // the dev/prod server startup, and a single failure here previously
+        // left the page in a permanent error state until the user navigated away.
+        let lastErr: unknown = null
+        for (let attempt = 0; attempt < 3; attempt++) {
+          try {
+            const resp = await getGameConfigSchema()
+            if (!Array.isArray(resp?.schema)) throw new Error('Schema response was empty or malformed.')
+            s = resp.schema
+            setSchema(s)
+            lastErr = null
+            break
+          } catch (e) {
+            lastErr = e
+            if (attempt < 2) await new Promise(r => setTimeout(r, 400 * (attempt + 1)))
+          }
+        }
+        if (!s) {
+          setLoadError(lastErr instanceof Error ? lastErr.message : String(lastErr ?? 'Failed to load schema'))
           setLoadState('error')
           return
         }
@@ -304,9 +332,15 @@ export function GameConfig() {
       } else {
         // No live battlegroup: populate every field with its funcom default so the
         // form is readable. Editing/saving is gated until the VM is up.
-        const seeded = seedValues(s, null)
-        setValues(seeded)
-        setOriginals(seeded)
+        try {
+          const seeded = seedValues(s, null)
+          setValues(seeded)
+          setOriginals(seeded)
+        } catch (e) {
+          // Seeding should never throw with the guards in seedValues, but if it
+          // does we still want to leave the page in a recoverable state.
+          console.error('GameConfig seedValues failed', e)
+        }
         setCfg(null)
         setLoadState('unavailable')
         setLoadError('Showing Funcom defaults — start the battlegroup to load live values and edit.')
@@ -330,11 +364,11 @@ export function GameConfig() {
     return schema
       .map(cat => ({
         category: cat.category,
-        fields: cat.fields.filter(
+        fields: (cat.fields ?? []).filter(
           f =>
-            f.label.toLowerCase().includes(q) ||
-            f.key.toLowerCase().includes(q) ||
-            (f.help ?? '').toLowerCase().includes(q) ||
+            (f?.label ?? '').toLowerCase().includes(q) ||
+            (f?.key ?? '').toLowerCase().includes(q) ||
+            (f?.help ?? '').toLowerCase().includes(q) ||
             cat.category.toLowerCase().includes(q),
         ),
       }))
@@ -583,8 +617,15 @@ export function GameConfig() {
         </div>
       )}
       {loadState === 'error' && loadError && (
-        <div className="card p-4 mb-4 border-danger/40 bg-danger/10 text-danger text-sm flex items-center gap-2">
-          <Icon name="AlertCircle" size={14} /> {loadError}
+        <div className="card p-4 mb-4 border-danger/40 bg-danger/10 text-danger text-sm flex items-center justify-between gap-2">
+          <span className="flex items-center gap-2"><Icon name="AlertCircle" size={14} /> {loadError}</span>
+          <button
+            type="button"
+            onClick={() => void loadAll()}
+            className="px-3 py-1 rounded bg-danger/20 hover:bg-danger/30 text-danger text-xs font-medium"
+          >
+            Retry
+          </button>
         </div>
       )}
       {saveError && (
@@ -675,21 +716,23 @@ export function GameConfig() {
 
           <div className="space-y-5">
             {(filteredSchema ?? []).map(cat => (
-              <CategoryCard key={cat.category} category={cat.category} count={cat.fields.length}>
+              <CategoryCard key={cat.category} category={cat.category} count={(cat.fields ?? []).length}>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-x-6 gap-y-4">
-                  {cat.fields.map(f => (
-                    <FieldRow
-                      key={`${f.section}||${f.key}`}
-                      field={f}
-                      value={values[f.key] ?? ''}
-                      onChange={v => handleFieldChange(f.key, v)}
-                      disabled={loadState !== 'ready' || saving}
-                      isDirty={(values[f.key] ?? '') !== (originals[f.key] ?? '')}
-                      isSet={liveValue(cfg, f) !== ''}
-                      isCustom={isCustomized(cfg, f)}
-                      defaultValue={fieldDefault(f)}
-                      managed={cfg ? sectionIsManaged(cfg, f) : false}
-                    />
+                  {(cat.fields ?? []).map(f => (
+                    f && f.key ? (
+                      <FieldRow
+                        key={`${f.section}||${f.key}`}
+                        field={f}
+                        value={values[f.key] ?? ''}
+                        onChange={v => handleFieldChange(f.key, v)}
+                        disabled={loadState !== 'ready' || saving}
+                        isDirty={(values[f.key] ?? '') !== (originals[f.key] ?? '')}
+                        isSet={liveValue(cfg, f) !== ''}
+                        isCustom={isCustomized(cfg, f)}
+                        defaultValue={fieldDefault(f)}
+                        managed={cfg ? sectionIsManaged(cfg, f) : false}
+                      />
+                    ) : null
                   ))}
                 </div>
               </CategoryCard>
@@ -993,8 +1036,8 @@ function FieldRow({ field, value, onChange, disabled, isDirty, isSet, isCustom, 
       {field.type === 'select' && field.options ? (
         <select value={value} disabled={disabled} onChange={e => onChange(e.target.value)} className={inputBase}>
           <option value="">(unset)</option>
-          {field.options.map(o => (
-            <option key={o.value} value={o.value}>{o.label}</option>
+          {(field.options ?? []).filter(o => o && typeof o.value === 'string').map(o => (
+            <option key={o.value} value={o.value}>{o.label ?? o.value}</option>
           ))}
         </select>
       ) : pair ? (
