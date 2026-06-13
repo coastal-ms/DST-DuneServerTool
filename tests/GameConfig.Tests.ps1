@@ -153,3 +153,30 @@ KeyA=1
         $out | Should -Match '\+ArrayKey=bar'
     }
 }
+
+Describe 'DuneGameConfigSchema: no fictional no-op keys' -Tag 'GameConfig' {
+
+    # Guards against regressing the m_Global*Multiplier keys that the reference
+    # implementation (Icehunter/dune-admin #122 / #139) proved are no-ops: they are
+    # absent from the real engine DefaultGame.ini, so DST writing them under any
+    # section header does nothing in-game (Discord report: XP / Fame / Progression
+    # multipliers had no effect). DST must not ship these dead, misleading keys.
+    It 'excludes every fictional m_Global*Multiplier key from the schema' {
+        $fictional = @(
+            'm_GlobalHealthMultiplier'
+            'm_GlobalDamageToNpcsMultiplier'
+            'm_GlobalDamageToPlayersMultiplier'
+            'm_GlobalXPMultiplier'
+            'm_GlobalProgressionSpeedMultiplier'
+            'm_GlobalFameMultiplier'
+            'm_GlobalHarvestAmountMultiplier'
+            'm_GlobalHarvestHealthMultiplier'
+            'm_GlobalBuildingDamageMultiplier'
+            'm_InventoryWeightMultiplier'
+        )
+        $keys = $script:DuneGameConfigSchema | ForEach-Object { $_.Key }
+        foreach ($f in $fictional) {
+            $keys | Should -Not -Contain $f -Because "$f is a proven no-op key and must not be written"
+        }
+    }
+}
