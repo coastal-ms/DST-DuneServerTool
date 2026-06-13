@@ -171,17 +171,17 @@ Register-DuneRoute -Method POST -Path '/api/gameplay/players/rename' -Handler {
     }
 }
 
-# POST /api/gameplay/players/award-xp  { pawn_id, track_type, delta }
+# POST /api/gameplay/players/award-xp  { controller_id, track_type, delta }
 Register-DuneRoute -Method POST -Path '/api/gameplay/players/award-xp' -Handler {
     param($req, $res, $routeParams, $body)
     try {
-        $pawn = Get-DuneBodyInt -Body $body -Name 'pawn_id'
+        $cid = Get-DuneBodyInt -Body $body -Name 'controller_id'
         $track = [string](Get-DuneBodyValue -Body $body -Name 'track_type')
         $delta = Get-DuneBodyInt -Body $body -Name 'delta'
-        if ($null -eq $pawn -or $pawn -le 0) { Write-DuneError -Response $res -Status 400 -Message 'pawn_id is required.'; return }
+        if ($null -eq $cid -or $cid -le 0) { Write-DuneError -Response $res -Status 400 -Message 'controller_id is required.'; return }
         if (-not $track) { Write-DuneError -Response $res -Status 400 -Message 'track_type is required.'; return }
         if ($null -eq $delta) { Write-DuneError -Response $res -Status 400 -Message 'delta must be an integer.'; return }
-        Invoke-DunePlayerWriteRoute -Response $res -Action { param($ip) Invoke-DunePlayerAwardXp -Ip $ip -PawnId $pawn -TrackType $track -Delta ([int]$delta) }
+        Invoke-DunePlayerWriteRoute -Response $res -Action { param($ip) Invoke-DunePlayerAwardXp -Ip $ip -ControllerId $cid -TrackType $track -Delta ([int]$delta) }
     } catch {
         Write-DuneError -Response $res -Status 500 -Message "Award XP failed: $($_.Exception.Message)"
     }
@@ -294,41 +294,41 @@ Register-DuneRoute -Method GET -Path '/api/gameplay/players/specs' -Handler {
     }
 }
 
-# POST /api/gameplay/players/grant-max-spec  { pawn_id, track_type }
+# POST /api/gameplay/players/grant-max-spec  { controller_id, track_type }
 Register-DuneRoute -Method POST -Path '/api/gameplay/players/grant-max-spec' -Handler {
     param($req, $res, $routeParams, $body)
     try {
-        $pawn  = Get-DuneBodyInt -Body $body -Name 'pawn_id'
+        $cid   = Get-DuneBodyInt -Body $body -Name 'controller_id'
         $track = [string](Get-DuneBodyValue -Body $body -Name 'track_type')
-        if ($null -eq $pawn -or $pawn -le 0) { Write-DuneError -Response $res -Status 400 -Message 'pawn_id is required.'; return }
+        if ($null -eq $cid -or $cid -le 0) { Write-DuneError -Response $res -Status 400 -Message 'controller_id is required.'; return }
         if (-not $track) { Write-DuneError -Response $res -Status 400 -Message 'track_type is required.'; return }
-        Invoke-DunePlayerWriteRoute -Response $res -Action { param($ip) Invoke-DunePlayerGrantMaxSpec -Ip $ip -PawnId $pawn -TrackType $track }
+        Invoke-DunePlayerWriteRoute -Response $res -Action { param($ip) Invoke-DunePlayerGrantMaxSpec -Ip $ip -ControllerId $cid -TrackType $track }
     } catch {
         Write-DuneError -Response $res -Status 500 -Message "Grant max spec failed: $($_.Exception.Message)"
     }
 }
 
-# POST /api/gameplay/players/reset-spec  { pawn_id, track_type }
+# POST /api/gameplay/players/reset-spec  { controller_id, track_type }
 Register-DuneRoute -Method POST -Path '/api/gameplay/players/reset-spec' -Handler {
     param($req, $res, $routeParams, $body)
     try {
-        $pawn  = Get-DuneBodyInt -Body $body -Name 'pawn_id'
+        $cid   = Get-DuneBodyInt -Body $body -Name 'controller_id'
         $track = [string](Get-DuneBodyValue -Body $body -Name 'track_type')
-        if ($null -eq $pawn -or $pawn -le 0) { Write-DuneError -Response $res -Status 400 -Message 'pawn_id is required.'; return }
+        if ($null -eq $cid -or $cid -le 0) { Write-DuneError -Response $res -Status 400 -Message 'controller_id is required.'; return }
         if (-not $track) { Write-DuneError -Response $res -Status 400 -Message 'track_type is required.'; return }
-        Invoke-DunePlayerWriteRoute -Response $res -Action { param($ip) Invoke-DunePlayerResetSpec -Ip $ip -PawnId $pawn -TrackType $track }
+        Invoke-DunePlayerWriteRoute -Response $res -Action { param($ip) Invoke-DunePlayerResetSpec -Ip $ip -ControllerId $cid -TrackType $track }
     } catch {
         Write-DuneError -Response $res -Status 500 -Message "Reset spec failed: $($_.Exception.Message)"
     }
 }
 
-# POST /api/gameplay/players/reset-all-specs  { pawn_id } — tracks + keystones.
+# POST /api/gameplay/players/reset-all-specs  { controller_id } — tracks + keystones.
 Register-DuneRoute -Method POST -Path '/api/gameplay/players/reset-all-specs' -Handler {
     param($req, $res, $routeParams, $body)
     try {
-        $pawn = Get-DuneBodyInt -Body $body -Name 'pawn_id'
-        if ($null -eq $pawn -or $pawn -le 0) { Write-DuneError -Response $res -Status 400 -Message 'pawn_id is required.'; return }
-        Invoke-DunePlayerWriteRoute -Response $res -Action { param($ip) Invoke-DunePlayerResetAllSpecs -Ip $ip -PawnId $pawn }
+        $cid = Get-DuneBodyInt -Body $body -Name 'controller_id'
+        if ($null -eq $cid -or $cid -le 0) { Write-DuneError -Response $res -Status 400 -Message 'controller_id is required.'; return }
+        Invoke-DunePlayerWriteRoute -Response $res -Action { param($ip) Invoke-DunePlayerResetAllSpecs -Ip $ip -ControllerId $cid }
     } catch {
         Write-DuneError -Response $res -Status 500 -Message "Reset all specs failed: $($_.Exception.Message)"
     }
@@ -346,13 +346,13 @@ Register-DuneRoute -Method POST -Path '/api/gameplay/players/grant-all-keystones
     }
 }
 
-# POST /api/gameplay/players/reset-all-keystones  { pawn_id }
+# POST /api/gameplay/players/reset-all-keystones  { controller_id }
 Register-DuneRoute -Method POST -Path '/api/gameplay/players/reset-all-keystones' -Handler {
     param($req, $res, $routeParams, $body)
     try {
-        $pawn = Get-DuneBodyInt -Body $body -Name 'pawn_id'
-        if ($null -eq $pawn -or $pawn -le 0) { Write-DuneError -Response $res -Status 400 -Message 'pawn_id is required.'; return }
-        Invoke-DunePlayerWriteRoute -Response $res -Action { param($ip) Invoke-DunePlayerResetAllKeystones -Ip $ip -PawnId $pawn }
+        $cid = Get-DuneBodyInt -Body $body -Name 'controller_id'
+        if ($null -eq $cid -or $cid -le 0) { Write-DuneError -Response $res -Status 400 -Message 'controller_id is required.'; return }
+        Invoke-DunePlayerWriteRoute -Response $res -Action { param($ip) Invoke-DunePlayerResetAllKeystones -Ip $ip -ControllerId $cid }
     } catch {
         Write-DuneError -Response $res -Status 500 -Message "Reset all keystones failed: $($_.Exception.Message)"
     }
