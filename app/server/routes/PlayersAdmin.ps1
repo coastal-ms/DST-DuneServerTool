@@ -50,15 +50,32 @@ Register-DuneRoute -Method POST -Path '/api/gameplay/players/set-faction-tier' -
     }
 }
 
-# POST /api/gameplay/players/award-char-xp  { pawn_id, delta }
+# POST /api/gameplay/players/award-char-xp  { pawn_id, delta, fls_id?, category? }
+# Auto-routes (mirrors give-item): OFFLINE players get the direct DB write
+# (Invoke-DunePlayerAwardCharXp, which sets total XP + level/SP + intel); ONLINE
+# players get the game-native RMQ AwardXP ServerCommand so the write isn't
+# clobbered on logout. Response carries path = 'rmq' | 'sql'.
 Register-DuneRoute -Method POST -Path '/api/gameplay/players/award-char-xp' -Handler {
     param($req, $res, $routeParams, $body)
     try {
         $pawn = Get-DuneBodyInt -Body $body -Name 'pawn_id'
         $delta = Get-DuneBodyInt -Body $body -Name 'delta'
+        $fls = [string](Get-DuneBodyValue -Body $body -Name 'fls_id')
+        $cat = [string](Get-DuneBodyValue -Body $body -Name 'category')
+        if ([string]::IsNullOrWhiteSpace($cat)) { $cat = 'Combat' }
         if ($null -eq $pawn -or $pawn -le 0) { Write-DuneError -Response $res -Status 400 -Message 'pawn_id is required.'; return }
         if ($null -eq $delta) { Write-DuneError -Response $res -Status 400 -Message 'delta must be an integer.'; return }
-        Invoke-DunePlayerWriteRoute -Response $res -Action { param($ip) Invoke-DunePlayerAwardCharXp -Ip $ip -PawnId $pawn -XpDelta $delta }
+        Invoke-DunePlayerWriteRoute -Response $res -Action {
+            param($ip)
+            $off = Test-DunePlayerOffline -Ip $ip -PawnId $pawn
+            if (-not $off.ok) {
+                # Player is online — apply live via RMQ AwardXP instead of the DB write.
+                return Invoke-DunePlayerAwardCharXpLive -Ip $ip -FlsId $fls -ActorId $pawn -XpDelta $delta -Category $cat
+            }
+            $r = Invoke-DunePlayerAwardCharXp -Ip $ip -PawnId $pawn -XpDelta $delta
+            if ($r.ok -and -not $r.path) { $r['path'] = 'sql' }
+            return $r
+        }
     } catch {
         Write-DuneError -Response $res -Status 500 -Message "Award char XP failed: $($_.Exception.Message)"
     }
