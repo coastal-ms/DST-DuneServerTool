@@ -29,6 +29,9 @@ export function PlayersTab() {
   const [hideGm, setHideGm]     = useState<boolean>(() => {
     try { return localStorage.getItem('dst.players.hideGm') === '1' } catch { return false }
   })
+  const [gmNoticeDismissed, setGmNoticeDismissed] = useState<boolean>(() => {
+    try { return localStorage.getItem('dst.players.gmNoticeDismissed') === '1' } catch { return false }
+  })
   const [selectedId, setSel]    = useState<number | null>(null)
   const [section, setSection]   = useState<SectionId>('stats')
   const [flash, setFlash]       = useState<{ msg: string; kind: 'ok' | 'err' } | null>(null)
@@ -188,6 +191,44 @@ export function PlayersTab() {
 
       {source === 'demo' && <DemoNotice liveError={liveError} what="player data" />}
       {error && <div className="card p-3 mb-4 text-sm text-danger break-words">{error}</div>}
+
+      {/* GM bot explainer — shown only when a "GM" entry is actually present in
+          the live data, when the user hasn't already hidden it, and when they
+          haven't dismissed this notice. New users have repeatedly thought the
+          GM row was a real player who joined their server, so the explainer
+          calls it out and offers a one-click toggle. */}
+      {!hideGm && !gmNoticeDismissed && players.some(p => (p.name || '').trim().toLowerCase() === 'gm') && (
+        <div className="card p-3 mb-4 text-xs flex items-start gap-3 border-accent/30 bg-accent/5">
+          <Icon name="Info" size={14} className="text-accent-bright shrink-0 mt-0.5" />
+          <div className="flex-1 min-w-0">
+            <div className="text-text">
+              <span className="font-medium">Heads up:</span> the player named <span className="font-mono">GM</span> is
+              a Funcom-seeded system NPC used by the server for admin broadcasts — it isn't a real player who joined,
+              and it doesn't occupy a slot. New servers and some patches re-seed it automatically.
+            </div>
+            <div className="mt-1.5 flex items-center gap-2">
+              <button
+                type="button"
+                onClick={() => {
+                  setHideGm(true)
+                  try { localStorage.setItem('dst.players.hideGm', '1') } catch { /* ignore */ }
+                }}
+                className="px-2 py-0.5 rounded bg-accent/20 hover:bg-accent/30 text-accent-bright text-[11px] font-medium">
+                Hide GM bot
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setGmNoticeDismissed(true)
+                  try { localStorage.setItem('dst.players.gmNoticeDismissed', '1') } catch { /* ignore */ }
+                }}
+                className="px-2 py-0.5 rounded bg-surface-2 hover:bg-surface-3 text-text-muted hover:text-text text-[11px]">
+                Got it
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Two-column body */}
       <div className="grid grid-cols-1 lg:grid-cols-[320px_1fr] gap-4">
