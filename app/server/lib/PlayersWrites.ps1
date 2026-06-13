@@ -394,8 +394,11 @@ function Invoke-DunePlayerGiveItemsBulk {
     return @{ ok = $ok; message = $msg; results = @($results); failures = $failures; total = $total }
 }
 
-# Repair equipped gear — OFFLINE only. Loops items in repair_gear_inventory_types,
-# sets CurrentDurability AND DecayedMaxDurability to the catalog max.
+# Repair equipped gear — OFFLINE only. Sets every durability item in the gear
+# inventory types to the HIGHEST of its own three durability fields
+# (Max/Current/DecayedMax) and makes all three match. The item's own
+# MaxDurability already bakes in that player's stat/perk durability bonuses
+# (which differ per player), so it — not the catalog — is the source of truth.
 function Invoke-DunePlayerRepairGear {
     param([string]$Ip, [long]$PawnId)
     if ($PawnId -le 0) { return @{ ok = $false; error = 'pawn_id is required.' } }
@@ -407,51 +410,38 @@ function Invoke-DunePlayerRepairGear {
     $invTypesArr = '(' + (($invTypes | ForEach-Object { "$_::int" }) -join ',') + ')'
 
     $sql = @"
-SELECT i.id::text AS item_id, i.template_id AS template,
-       COALESCE((i.stats->'FItemStackAndDurabilityStats'->1->>'MaxDurability')::float8, 0)::text AS stat_max
-FROM dune.items i
-JOIN dune.inventories inv ON inv.id = i.inventory_id
-WHERE inv.actor_id = $PawnId::bigint
-  AND inv.inventory_type IN $invTypesArr
-  AND i.stats ? 'FItemStackAndDurabilityStats';
+WITH tgt AS (
+    SELECT i.id AS item_id,
+           GREATEST(
+               COALESCE((i.stats->'FItemStackAndDurabilityStats'->1->>'MaxDurability')::float8, 0),
+               COALESCE((i.stats->'FItemStackAndDurabilityStats'->1->>'CurrentDurability')::float8, 0),
+               COALESCE((i.stats->'FItemStackAndDurabilityStats'->1->>'DecayedMaxDurability')::float8, 0)
+           ) AS val
+    FROM dune.items i
+    JOIN dune.inventories inv ON inv.id = i.inventory_id
+    WHERE inv.actor_id = $PawnId::bigint
+      AND inv.inventory_type IN $invTypesArr
+      AND i.stats ? 'FItemStackAndDurabilityStats'
+)
+UPDATE dune.items i
+SET stats = jsonb_set(jsonb_set(jsonb_set(i.stats,
+        '{FItemStackAndDurabilityStats,1,MaxDurability}',        to_jsonb(tgt.val), true),
+        '{FItemStackAndDurabilityStats,1,CurrentDurability}',    to_jsonb(tgt.val), true),
+        '{FItemStackAndDurabilityStats,1,DecayedMaxDurability}', to_jsonb(tgt.val), true)
+FROM tgt
+WHERE i.id = tgt.item_id AND tgt.val > 0
+RETURNING i.id::text AS item_id;
 "@
-    $r = Invoke-DuneSqlQuery -Ip $Ip -Sql $sql -ReadOnly $true -MaxRows 1000 -TimeoutSec 30
-    if (-not $r.ok) { return @{ ok = $false; error = "list equipped items: $($r.error)" } }
-    $items = ConvertTo-DuneRowMaps -Result $r
-    if ($items.Count -eq 0) {
-        return @{ ok = $true; message = 'No equipped items with durability stats — nothing to repair.'; repaired = 0 }
-    }
-
-    $repaired = 0; $skipped = 0
-    foreach ($row in $items) {
-        $itemId = [int64](ConvertTo-DuneInt $row['item_id'])
-        $tmpl = [string]$row['template']
-        $rule = Get-DuneGameplayItemRule -TemplateId $tmpl
-        $max = [double]$rule.max_durability
-        if ($max -le 0) {
-            $statMax = 0.0
-            [double]::TryParse([string]$row['stat_max'], [ref]$statMax) | Out-Null
-            if ($statMax -gt 0) { $max = $statMax } else { $max = 100.0 }
-        }
-        $upd = @"
-UPDATE dune.items
-SET stats = jsonb_set(
-    jsonb_set(stats,
-        '{FItemStackAndDurabilityStats,1,CurrentDurability}',
-        to_jsonb($max::float8)),
-    '{FItemStackAndDurabilityStats,1,DecayedMaxDurability}',
-    to_jsonb($max::float8))
-WHERE id = $itemId::bigint;
-"@
-        $ur = Invoke-DuneSqlQuery -Ip $Ip -Sql $upd -ReadOnly $false -MaxRows 1 -TimeoutSec 30
-        if (-not $ur.ok) { $skipped++; continue }
-        $repaired++
+    $r = Invoke-DuneSqlQuery -Ip $Ip -Sql $sql -ReadOnly $false -MaxRows 5000 -TimeoutSec 60
+    if (-not $r.ok) { return @{ ok = $false; error = "repair gear: $($r.error)" } }
+    $repaired = @(ConvertTo-DuneRowMaps -Result $r).Count
+    if ($repaired -eq 0) {
+        return @{ ok = $true; message = 'No gear with durability stats — nothing to repair.'; repaired = 0 }
     }
     return @{
         ok = $true
-        message = "Repaired $repaired item(s) on pawn $PawnId (skipped $skipped)."
+        message = "Repaired $repaired item(s) to full durability on pawn $PawnId."
         repaired = $repaired
-        skipped = $skipped
     }
 }
 
@@ -515,19 +505,26 @@ WHERE inv.actor_id = $PawnId::bigint
         if ($curVal -gt 0) { $alreadyOk++; continue }
 
         if ($hasBlk) {
-            # Stats block is present — just re-seed CurrentDurability and
-            # DecayedMaxDurability the same way Invoke-DunePlayerRepairGear
-            # does. jsonb_set defaults to create_if_missing=true so this also
-            # handles the case where only the inner keys went missing.
+            # Stats block is present but durability is zeroed — re-seed all three
+            # fields to the HIGHEST of the item's own Max/Current/DecayedMax
+            # (which already include this player's stat/perk durability bonuses),
+            # with the catalog max only as a floor in case every field was zeroed.
             $upd = @"
-UPDATE dune.items
-SET stats = jsonb_set(
-    jsonb_set(stats,
-        '{FItemStackAndDurabilityStats,1,CurrentDurability}',
-        to_jsonb($max::float8)),
-    '{FItemStackAndDurabilityStats,1,DecayedMaxDurability}',
-    to_jsonb($max::float8))
-WHERE id = $itemId::bigint;
+UPDATE dune.items i
+SET stats = jsonb_set(jsonb_set(jsonb_set(i.stats,
+        '{FItemStackAndDurabilityStats,1,MaxDurability}',        to_jsonb(t.val), true),
+        '{FItemStackAndDurabilityStats,1,CurrentDurability}',    to_jsonb(t.val), true),
+        '{FItemStackAndDurabilityStats,1,DecayedMaxDurability}', to_jsonb(t.val), true)
+FROM (
+    SELECT GREATEST(
+        COALESCE((stats->'FItemStackAndDurabilityStats'->1->>'MaxDurability')::float8, 0),
+        COALESCE((stats->'FItemStackAndDurabilityStats'->1->>'CurrentDurability')::float8, 0),
+        COALESCE((stats->'FItemStackAndDurabilityStats'->1->>'DecayedMaxDurability')::float8, 0),
+        $max::float8
+    ) AS val
+    FROM dune.items WHERE id = $itemId::bigint
+) AS t
+WHERE i.id = $itemId::bigint AND t.val > 0;
 "@
         } else {
             # Stats block missing entirely — graft a fresh one in. The shape
