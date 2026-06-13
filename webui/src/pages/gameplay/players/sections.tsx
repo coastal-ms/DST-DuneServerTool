@@ -858,6 +858,11 @@ export function InventorySection({ player, canWrite, demo, refreshKey, flash, on
 
   return (
     <div className="space-y-4">
+      <div className="flex items-center justify-end">
+        <button className="btn-secondary" disabled={loading || busy} onClick={() => setTick(t => t + 1)}>
+          <Icon name="RefreshCw" size={13} className={loading ? 'animate-spin' : ''} /> Refresh inventory
+        </button>
+      </div>
       <ItemList title={`Inventory (${fmtNum(groups.gear.length)})`} icon="Backpack" items={groups.gear}
         canWrite={canWrite} busy={busy} run={run}
         extra={<ItemsActionBlock player={player} canWrite={canWrite} flash={flash} onChanged={() => { onChanged(); setTick(t => t + 1) }} />} />
