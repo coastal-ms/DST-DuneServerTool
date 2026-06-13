@@ -518,7 +518,7 @@ internal sealed class MainForm : Form
 
     private void ApplyStartupBounds()
     {
-        var def = new Size(2000, 1196);
+        var def = new Size(2000, 1300);
         var saved = LoadWindowState();
 
         Rectangle bounds;
