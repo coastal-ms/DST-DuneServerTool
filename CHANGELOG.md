@@ -13,6 +13,49 @@ here cover everything those tags shipped.
 
 ## [Unreleased]
 
+## [12.0.14] - 2026-06-13
+
+### Fixed
+
+- **Gameplay Admin "Give Item" now renders in-game.** Items given to a player's
+  backpack were inserted with an empty `stats` JSON (`{}`), which the game cannot
+  deserialize — so the row existed in the database (and showed in DST's listing)
+  but the item never appeared in-game and was dropped on the next zone/login load.
+  The give-item insert now writes the correct stats block, branching by item type:
+  stackable resources get `FItemStackAndDurabilityStats` with `DecayedMaxDurability`,
+  while equipment/non-stackable items get the full customization + durability shape.
+  The same fix is applied to the storage-container "Add Items" path, which had been
+  applying an equipment-only shape to every item, so stackable resources added to a
+  container also failed to render. Covers the single and bulk give/add paths.
+  (#144, #176)
+
+- **Gameplay Admin "Give Intel" no longer errors.** The action failed with
+  `actor_id or pawn_id is required.` because the web portal sent `controller_id`/
+  `amount` while the backend expected `actor_id`/`delta`. The portal now sends the
+  correct fields, targeting the right actor. (#176)
+
+- **Gameplay Admin "Give XP" no longer errors.** XP Delta failed with
+  `Could not resolve player_controller from pawn N.` because the resolver queried a
+  nonexistent column (`actor_id`) on `dune.player_state`; it now reads
+  `player_controller_id`. (#176)
+
+- **Game Config no longer writes duplicate INI section headers.** When a
+  `UserGame.ini` already contained a section that DST also manages, the writer could
+  emit that `[/Script/DuneSandbox.*]` header twice. Unreal honors the first header,
+  so DST's overrides (base-expansion limits, player inventory size/volume, etc.)
+  were silently ignored. The writer now guarantees each section name appears exactly
+  once, so managed overrides take effect.
+
+### Changed
+
+- **Removed XP / Fame / Progression (and related) multiplier settings from Game
+  Config.** These 10 `m_Global*Multiplier` keys (XP, Fame, Progression speed,
+  Health, damage, harvest, building damage, inventory weight) are not real engine
+  settings — they do not exist in the game's `DefaultGame.ini`, so writing them had
+  no effect under any section. They have been removed from the configuration UI so
+  the tool no longer writes dead keys. (Real gameplay scaling such as
+  `Dune.GlobalMiningOutputMultiplier` is unaffected.)
+
 ## [12.0.13] - 2026-06-13
 
 ### Changed
