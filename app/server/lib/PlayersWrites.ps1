@@ -45,7 +45,7 @@ function _Load-DuneProgressionNodesCatalog {
         landsraadMissionNodesAtreides   = @()
         landsraadMissionNodesHarkonnen  = @()
         starterAbilityByJob             = @{}
-        repairGearInventoryTypes        = @(0, 1, 14, 15, 27, 30)
+        repairGearInventoryTypes        = @(0, 1, 15)
     }
     $p = _Resolve-DuneCatalog 'dune-progression-nodes.json'
     if (-not $p) { $script:DuneProgressionNodesCatalog = $empty; return }
@@ -59,7 +59,7 @@ function _Load-DuneProgressionNodesCatalog {
             landsraadMissionNodesAtreides   = @($json.landsraad_mission_nodes_atreides   | ForEach-Object { [string]$_ })
             landsraadMissionNodesHarkonnen  = @($json.landsraad_mission_nodes_harkonnen  | ForEach-Object { [string]$_ })
             starterAbilityByJob             = @{}
-            repairGearInventoryTypes        = @(0, 1, 14, 15, 27, 30)
+            repairGearInventoryTypes        = @(0, 1, 15)
         }
         if ($json.starter_ability_by_job) {
             foreach ($prop in $json.starter_ability_by_job.PSObject.Properties) {
