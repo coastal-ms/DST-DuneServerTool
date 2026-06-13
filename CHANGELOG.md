@@ -13,6 +13,32 @@ here cover everything those tags shipped.
 
 ## [Unreleased]
 
+## [12.0.2] - 2026-06-12
+
+Same-day hotfix on top of v12.0.1 — confirms the v12.0.1 diagnostics work
+and fixes the actual render exception they captured.
+
+### Fixed
+
+- **Game Config render crash.** The page would render then immediately hit
+  `TypeError: managedSections.includes is not a function`, which the v12.0.1
+  error boundary caught (no more blank page) but still left users on a red
+  error card instead of the form. Root cause was a PowerShell + ConvertTo-Json
+  quirk: `Get-DuneIniManagedSectionNames` returned `@($names.Keys)`, which
+  serialized as `{}` (empty hashtable) or as a scalar string (single-element
+  array unwrap) instead of a JSON array. The webui's `sectionIsManaged()`
+  then called `.includes` on a non-array and threw on every field row.
+  - Server: `Get-DuneIniManagedSectionNames` now returns `,[string[]]@($names.Keys)`
+    (comma operator + explicit cast) to force a JSON array every time.
+  - Client: `sectionIsManaged()` is now type-tolerant — checks `Array.isArray`
+    before `.includes`, and accepts a single string as a one-element list.
+
+### Diagnostics confirmation
+
+- v12.0.1's `webview2-debug.log` writer worked exactly as designed — it caught
+  the exception with a full JS stack trace on first reproduction, which is
+  what enabled this same-day fix.
+
 ## [12.0.1] - 2026-06-12
 
 Hotfix for the Game Config "page goes blank" bug reported on v12.0.0, plus
