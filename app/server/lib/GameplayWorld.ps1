@@ -171,7 +171,7 @@ function Get-DuneStorageItemsDemo {
 # ----------------------------------------------------------------------------
 $script:DuneBlueprintsListSql = @'
 SELECT bb.id,
-       COALESCE(NULLIF(ps_acct.character_name, ''), ps_pawn.character_name, '') AS owner_name,
+       COALESCE(NULLIF(ps_acct.character_name, ''), NULLIF(ps_pawn.character_name, ''), ps_plac.owner_name, '') AS owner_name,
        COALESCE(bb.item_id, 0)         AS item_id,
        COALESCE(inst.cnt, 0)           AS pieces,
        COALESCE(plac.cnt, 0)           AS placeables,
@@ -180,13 +180,31 @@ FROM dune.building_blueprints bb
 LEFT JOIN dune.items i ON i.id = bb.item_id
 LEFT JOIN dune.inventories inv ON inv.id = i.inventory_id
 LEFT JOIN dune.actors a ON a.id = inv.actor_id
--- Owner resolution: the legacy join (ps.player_pawn_id = a.id) only
--- matches a player whose pawn is currently spawned/loaded, so offline players'
--- blueprints render with a blank owner (looked like "only the host's blueprints
--- show up"). Resolve primarily by the persistent account link (same pattern the
--- Storage view uses), falling back to the live-pawn link for parity.
+-- Owner resolution: the legacy join (ps.player_pawn_id = a.id) only matches a
+-- player whose pawn is currently spawned/loaded, so offline players' blueprints
+-- render with a blank owner. Resolve primarily by the persistent account link,
+-- falling back to the live-pawn link. CRITICAL THIRD FALLBACK: most blueprints'
+-- copy-device items live INSIDE a storage container (placeable), not a player's
+-- character inventory — so `a` is the container actor, whose owner_account_id is
+-- NULL and the first two joins yield nothing (this made every container-held
+-- blueprint show a blank owner, looking like "only one player has blueprints").
+-- The ps_plac lateral resolves the container's owner via the same placeable
+-- ownership chain the Storage view uses (placeable -> fgl entity -> permission
+-- rank -> player -> account), picking the lowest rank (base owner) on shared bases.
 LEFT JOIN dune.player_state ps_acct ON ps_acct.account_id = a.owner_account_id
 LEFT JOIN dune.player_state ps_pawn ON ps_pawn.player_pawn_id = a.id
+LEFT JOIN dune.placeables pl ON pl.id = a.id
+LEFT JOIN LATERAL (
+    SELECT ps_p.character_name AS owner_name
+    FROM dune.actor_fgl_entities afe
+    JOIN dune.permission_actor_rank par ON par.permission_actor_id = afe.actor_id
+    JOIN dune.actors pa_p ON pa_p.id = par.player_id
+    JOIN dune.player_state ps_p ON ps_p.account_id = pa_p.owner_account_id
+    WHERE afe.entity_id = pl.owner_entity_id AND pl.owner_entity_id <> 0
+      AND NULLIF(ps_p.character_name, '') IS NOT NULL
+    ORDER BY par.rank ASC, par.player_id ASC
+    LIMIT 1
+) ps_plac ON true
 LEFT JOIN (
     SELECT building_blueprint_id, COUNT(*) AS cnt
     FROM dune.building_blueprint_instances
