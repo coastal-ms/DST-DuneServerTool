@@ -112,7 +112,13 @@ Register-DuneRoute -Method POST -Path '/api/gameplay/players/give-solari' -Handl
     }
 }
 
-# POST /api/gameplay/players/give-item  { pawn_id, template, qty, quality }
+# POST /api/gameplay/players/give-item  { pawn_id, template, qty, quality, fls_id? }
+# v12.0.3 — Auto-routes between online (RMQ ServerCommand, instant) and offline
+# (SQL backpack insert, requires relog for online) based on player state.
+# - Online + quality<=0     → RMQ live (instant in-game)
+# - Online + quality>0      → SQL (preserves quality; player must relog)
+# - Offline                 → SQL (will appear on next login)
+# Response includes 'path' = 'rmq' | 'sql'. Use /give-item-live for explicit RMQ override.
 Register-DuneRoute -Method POST -Path '/api/gameplay/players/give-item' -Handler {
     param($req, $res, $routeParams, $body)
     try {
@@ -120,11 +126,32 @@ Register-DuneRoute -Method POST -Path '/api/gameplay/players/give-item' -Handler
         $tmpl = [string](Get-DuneBodyValue -Body $body -Name 'template')
         $qty  = Get-DuneBodyInt -Body $body -Name 'qty'
         $qual = Get-DuneBodyInt -Body $body -Name 'quality'
+        $fls  = [string](Get-DuneBodyValue -Body $body -Name 'fls_id')
         if ($null -eq $qual) { $qual = 0L }
         if ($null -eq $pawn -or $pawn -le 0) { Write-DuneError -Response $res -Status 400 -Message 'pawn_id is required.'; return }
         if (-not $tmpl) { Write-DuneError -Response $res -Status 400 -Message 'template is required.'; return }
         if ($null -eq $qty -or $qty -le 0) { Write-DuneError -Response $res -Status 400 -Message 'qty must be a positive integer.'; return }
-        Invoke-DunePlayerWriteRoute -Response $res -Action { param($ip) Invoke-DunePlayerGiveItem -Ip $ip -PawnId $pawn -Template $tmpl -Qty $qty -Quality $qual }
+
+        Invoke-DunePlayerWriteRoute -Response $res -Action {
+            param($ip)
+            $off = Test-DunePlayerOffline -Ip $ip -PawnId $pawn
+            $isOnline = -not $off.ok
+            # Online + default quality → RMQ live (instant, no relog)
+            if ($isOnline -and $qual -le 0) {
+                $r = Invoke-DunePlayerGiveItemLive -Ip $ip -ActorId $pawn -FlsId $fls -Template $tmpl -Quantity ([int]$qty) -Durability 1.0
+                if ($r.ok -and -not $r.path) { $r['path'] = 'rmq' }
+                return $r
+            }
+            # Otherwise SQL (offline, OR online with custom quality)
+            $r = Invoke-DunePlayerGiveItem -Ip $ip -PawnId $pawn -Template $tmpl -Qty $qty -Quality $qual
+            if ($r.ok) {
+                $r['path'] = 'sql'
+                if ($isOnline) {
+                    $r['message'] = "$($r.message) Player is online — they must relog to see the item (quality $qual cannot be delivered live)."
+                }
+            }
+            return $r
+        }
     } catch {
         Write-DuneError -Response $res -Status 500 -Message "Give item failed: $($_.Exception.Message)"
     }

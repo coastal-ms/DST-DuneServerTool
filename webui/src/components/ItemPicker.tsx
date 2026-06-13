@@ -13,14 +13,18 @@ import { filterCatalog, getItemCatalog, type CatalogItem } from '../api/gameplay
 
 interface Props {
   value: string
-  onChange: (templateId: string) => void
+  onChange: (templateId: string, item?: CatalogItem) => void
+  /** Optional display text shown in the input. Defaults to `value`. Lets the
+   *  parent show a friendly name (e.g. "Spice Melange") while keeping the
+   *  underlying template_id as the value sent to the API. */
+  displayValue?: string
   label?: string
   placeholder?: string
   autoFocus?: boolean
   disabled?: boolean
 }
 
-export function ItemPicker({ value, onChange, label, placeholder, autoFocus, disabled }: Props) {
+export function ItemPicker({ value, onChange, displayValue, label, placeholder, autoFocus, disabled }: Props) {
   const inputId = useId()
   const [catalog, setCatalog] = useState<CatalogItem[] | null>(null)
   const [catalogError, setCatalogError] = useState<string | null>(null)
@@ -39,8 +43,11 @@ export function ItemPicker({ value, onChange, label, placeholder, autoFocus, dis
       .finally(() => setCatalogLoading(false))
   }, [catalog, catalogLoading])
 
-  // Compute matches against current value.
-  const matches: CatalogItem[] = catalog ? filterCatalog(catalog, value, 20) : []
+  // What's shown in the input. Display name when one is provided (post-pick),
+  // otherwise the raw value (which is also the live search query).
+  const shown = displayValue ?? value
+  // Filter against whatever text is currently visible to the user.
+  const matches: CatalogItem[] = catalog ? filterCatalog(catalog, shown, 20) : []
 
   // Close popup on outside click.
   useEffect(() => {
@@ -53,7 +60,9 @@ export function ItemPicker({ value, onChange, label, placeholder, autoFocus, dis
   }, [])
 
   const pick = (it: CatalogItem) => {
-    onChange(it.template_id)
+    // Pass the item so the parent can show a friendly label in the input
+    // while still posting template_id to the API.
+    onChange(it.template_id, it)
     setOpen(false)
     setActive(0)
   }
@@ -85,7 +94,7 @@ export function ItemPicker({ value, onChange, label, placeholder, autoFocus, dis
           spellCheck={false}
           disabled={disabled}
           autoFocus={autoFocus}
-          value={value}
+          value={shown}
           placeholder={placeholder || 'e.g. spice, stillsuit, literjon…'}
           onFocus={() => { ensureCatalog(); setOpen(true) }}
           onChange={e => { onChange(e.target.value); setOpen(true); setActive(0) }}
@@ -95,8 +104,8 @@ export function ItemPicker({ value, onChange, label, placeholder, autoFocus, dis
         <Icon name="Search" size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-text-dim pointer-events-none" />
       </div>
 
-      {open && (catalogLoading || catalogError || matches.length > 0 || value.trim().length > 0) && (
-        <div className="absolute left-0 right-0 mt-1 z-30 max-h-72 overflow-y-auto rounded-lg border border-border bg-surface-1 shadow-2xl">
+      {open && (catalogLoading || catalogError || matches.length > 0 || shown.trim().length > 0) && (
+        <div className="absolute left-0 right-0 mt-1 z-50 max-h-72 overflow-y-auto rounded-lg border border-border bg-surface shadow-2xl">
           {catalogLoading && (
             <div className="px-3 py-2 text-xs text-text-dim flex items-center gap-2">
               <Icon name="Loader2" size={12} className="animate-spin" /> Loading item catalog…
@@ -107,9 +116,9 @@ export function ItemPicker({ value, onChange, label, placeholder, autoFocus, dis
               Catalog load failed: {catalogError}
             </div>
           )}
-          {!catalogLoading && !catalogError && matches.length === 0 && value.trim().length > 0 && (
+          {!catalogLoading && !catalogError && matches.length === 0 && shown.trim().length > 0 && (
             <div className="px-3 py-2 text-xs text-text-dim">
-              No items match "{value}". Type fewer letters or paste the exact template id.
+              No items match "{shown}". Type fewer letters or paste the exact template id.
             </div>
           )}
           {matches.map((it, i) => (

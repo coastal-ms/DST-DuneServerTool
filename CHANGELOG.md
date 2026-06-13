@@ -13,6 +13,84 @@ here cover everything those tags shipped.
 
 ## [Unreleased]
 
+## [12.0.4] - 2026-06-12
+
+Follow-up to v12.0.3 after Chopper's "where are the broadcast / whisper boxes"
+and "Repair doesn't bring back completely-dead items" feedback. Adds a shared
+admin-messaging surface at the top of Gameplay Overview (and at `/broadcasts`),
+exposes durability in inventory rows so dead gear is visible, and adds a
+sister "Restore Destroyed" action that operates on items at 0/NULL durability.
+
+### Added
+
+- **Broadcast / shutdown / whisper composers on Gameplay Overview.** The
+  three cards (`GenericBroadcastComposer`, `ShutdownBroadcastComposer`,
+  `WhisperComposer`) now render at the top of the Gameplay overview tab so
+  ops don't have to dig for them. Same three cards are also reachable as a
+  standalone page at `/broadcasts` (new top-nav entry). Mirrors the spirit
+  of dune-admin's `/api/v1/notify`, but goes through DST's existing V6
+  `ServiceBroadcast` for messaging and per-player whisper for whispers.
+
+- **Durability column on inventory rows.** Equipped and backpack items now
+  show `current / max` durability inline in mono, colored by ratio:
+  bold-red for fully dead (≤0), red <25%, amber <50%, dimmed above. Data
+  already flowed from `GameplayPlayers.ps1`; only the UI was missing.
+
+- **Restore Destroyed Items action** (Chopper request). New
+  `Invoke-DunePlayerRestoreDestroyedGear` PowerShell + new
+  `/api/gameplay/players/restore-destroyed` route + new "Restore Destroyed
+  Items" button in the Players action list. Targets only items where
+  `CurrentDurability` is 0 or NULL (and re-grafts the stats block if it's
+  gone entirely), so it's safe to run alongside the regular "Repair All
+  Items" without double-touching healthy gear. Skips items still > 0
+  durability and reports the per-bucket count.
+
+## [12.0.3] - 2026-06-12
+
+Players-tab parity sweep after Chopper/Ogmosis reports on v12.0.2 — Fill Water
+and Give Item now match dune-admin's "no relog needed" behavior for online
+players, plus a CSS bleed fix on the item picker dropdown and the
+display-name-vs-template-id confusion users hit when searching the catalog.
+
+### Fixed
+
+- **Give Item delivered but invisible until relog** (issue
+  [#144](https://github.com/coastal-ms/DST-DuneServerTool/issues/144)). The
+  `/give-item` route was SQL-only, so items handed to online players landed in
+  the database but not in the player's in-memory inventory — exactly the
+  Ogmosis-described "I see nothing until I relog" symptom. The route now
+  auto-routes: online + quality 0 → RMQ `ServerCommand` (live, instant);
+  online + quality > 0 → SQL with an explicit "relog required" warning since
+  RMQ can't carry quality; offline → SQL as before. The split
+  "Give Item (offline-safe)" / "Give Item (live)" buttons are now a single
+  "Give Item" that picks the right path automatically; the explicit
+  "Give Item (force live)" button is retained as an override.
+
+- **Fill Water "next relog" message was wrong for online players.** The route
+  already auto-routed online → RMQ in v12.0.2, but the success message still
+  carried the offline path's "online players: takes effect on next relog"
+  footnote regardless of which path ran. Dropped the misleading footnote;
+  the message now reflects what actually happened.
+
+- **Repair button mis-labeled.** "Repair Equipped Gear" already covered the
+  backpack (`inventory_type = 0` is included in `repairGearInventoryTypes`),
+  matching dune-admin's behavior. Renamed to "Repair All Items" so the label
+  matches what it does.
+
+- **Item picker dropdown bled through to the inventory list behind it.** Five
+  call sites used the Tailwind class `bg-surface-1`, but the theme only
+  defines `--color-surface`, `--color-surface-2`, `--color-surface-3` — there
+  is no `--color-surface-1`, so the class resolved to transparent. Replaced
+  with `bg-surface` and bumped the picker's dropdown z-index from 30 to 50
+  so it sits above other floating cards.
+
+- **Item picker showed template_id after selection.** When you picked
+  "Spice Melange" from the dropdown, the input collapsed to the raw
+  template_id, making the field unreadable on the next interaction. The
+  picker now shows the friendly name in the input while still posting the
+  template_id to the API. Typing after a pick clears the friendly-name
+  override and resumes live filtering.
+
 ## [12.0.2] - 2026-06-12
 
 Same-day hotfix on top of v12.0.1 — confirms the v12.0.1 diagnostics work
