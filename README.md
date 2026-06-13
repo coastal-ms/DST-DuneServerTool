@@ -31,7 +31,7 @@ browser and keeps the server running in the background.
 
 ### New in v12.0.0
 
-- **Full dune-admin portal port.** The open-source Dune admin portal lives
+- **full Gameplay Admin build-out.** the Gameplay Admin portal lives
   natively inside DST as the **Gameplay Admin** tab — 54 player-management
   endpoints (currency, faction rep, char XP, items, vehicles, teleport,
   progression, contracts, jobs, codex, storage), an RMQ-backed
@@ -225,7 +225,7 @@ Resources & Loot, Players, Spicefields, Performance, and more. The page
 **scans the live INIs on load** and shows each setting's **Funcom default**
 until you override it; your edits are written into a clearly-marked
 **DST-managed block** that DST owns (whole-section relocation, dedup, and
-migration of any legacy dune-admin block), and the original file is **backed
+migration of any legacy Gameplay Admin block), and the original file is **backed
 up on the server before every write**. A prominent BETA banner reminds you to
 hit **Backup settings** first — and a **View backups** button lists the recent
 `.dstbak-*` restore points next to each file. Save flushes the files back to
@@ -236,7 +236,7 @@ reflected immediately.
 
 ![Gameplay Admin page](docs/img/gameplay-admin.png)
 
-The open-source **Dune admin portal, rebuilt natively inside DST** — one
+The open-source **Gameplay Admin portal, rebuilt natively inside DST** — one
 console, one theme, no second program to install. A tabbed surface
 (**Overview, Market, Market Bot, Players, Bases, Storage, Blueprints**) sits
 on top of the same SSH + psql bridge the rest of DST uses, and v12.0.0
