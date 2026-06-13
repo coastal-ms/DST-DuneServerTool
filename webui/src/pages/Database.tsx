@@ -49,6 +49,25 @@ export function Database() {
   }, [])
 
   async function runMaint(name: 'backup' | 'import') {
+    // Restore (import) is a full, destructive replace of the entire BG database —
+    // every player, base, inventory, storage, blueprint, and the market rolls back
+    // to the chosen snapshot and everything since is permanently lost. Gate it
+    // behind a typed confirmation so it can't be triggered by a stray click.
+    if (name === 'import') {
+      const typed = window.prompt(
+        'FULL DATABASE RESTORE — SEVERE, IRREVERSIBLE.\n\n' +
+        'This REPLACES the entire battlegroup database with the backup you pick in the console window. ' +
+        'ALL players, bases, inventories, storage, blueprints, and the market will be rolled back to that snapshot. ' +
+        'Everything created since the backup is permanently lost. This cannot be undone.\n\n' +
+        'Take a fresh backup first if you have not. The battlegroup must be stopped.\n\n' +
+        'Type RESTORE to continue:',
+      )
+      if (typed == null) return
+      if (typed.trim().toUpperCase() !== 'RESTORE') {
+        showToast('err', 'Restore cancelled — confirmation text did not match.')
+        return
+      }
+    }
     setLaunching(name)
     try {
       const r = await api<CmdLaunch>(`/api/commands/run/${name}`, { method: 'POST' })
@@ -241,7 +260,7 @@ export function Database() {
           title="Restore Backup"
           icon="Upload"
           tone="ibad"
-          description="Replace the BG database with a previously taken backup. The battlegroup must be stopped, and this operation cannot be undone."
+          description="Full destructive restore — REPLACES the entire BG database with a previously taken backup. All players, bases, inventories, storage, blueprints, and the market roll back to that snapshot; everything since is permanently lost. The battlegroup must be stopped, and this cannot be undone."
           hint={
             !vmRunning ? 'VM must be running to restore a backup.'
             : bgState === 'running' ? 'Stop the battlegroup first to avoid database corruption.'
