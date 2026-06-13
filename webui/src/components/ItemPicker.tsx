@@ -9,7 +9,7 @@
 
 import { useCallback, useEffect, useId, useRef, useState } from 'react'
 import { Icon } from './Icon'
-import { filterCatalog, getItemCatalog, type CatalogItem } from '../api/gameplay'
+import { filterCatalog, getItemCatalog, isValidTemplateId, type CatalogItem } from '../api/gameplay'
 
 interface Props {
   value: string
@@ -142,6 +142,13 @@ export function ItemPicker({ value, onChange, displayValue, label, placeholder, 
               )}
             </button>
           ))}
+        </div>
+      )}
+
+      {!open && value.trim().length > 0 && !isValidTemplateId(value) && (
+        <div className="mt-1 text-[11px] text-warning flex items-center gap-1">
+          <Icon name="AlertTriangle" size={11} className="shrink-0" />
+          Numbers aren't valid item ids — pick an item from the list.
         </div>
       )}
     </div>

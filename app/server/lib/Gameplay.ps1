@@ -123,6 +123,25 @@ function Get-DuneGiveItemStatsJson {
     return '{"FCustomizationStats":[[],{}],"FItemStackAndDurabilityStats":[[],{}]}'
 }
 
+# Validate a give-item template id before it reaches an INSERT. The game's
+# dune.items.template_id is a class string (e.g. CopperBar, Buggy_Booster_Mk6);
+# a purely-numeric id ("859") can never resolve, so the row is inserted but the
+# item is invisible in-game and dropped on zone/login load. Reject empty and
+# numeric ids with a clear message. Non-numeric unknowns are allowed through
+# (class strings legitimately exist that aren't in the bundled catalog), since
+# numeric is the proven, unambiguous failure mode.
+function Test-DuneValidGiveTemplate {
+    param([string]$TemplateId)
+    $t = if ($null -ne $TemplateId) { $TemplateId.Trim() } else { '' }
+    if (-not $t) {
+        return @{ ok = $false; error = 'Item id is required.' }
+    }
+    if ($t -match '^\d+$') {
+        return @{ ok = $false; error = "Invalid item id '$t' — expected a class name (e.g. CopperBar), not a number. Pick the item from the search list." }
+    }
+    return @{ ok = $true }
+}
+
 # Classify an inventory item as a normal 'item', an 'emote', or a 'contract'
 # (quest) item so the Players view can separate clutter from real gear/loot.
 # Emotes and contract turn-in items are not in the catalog metadata (no

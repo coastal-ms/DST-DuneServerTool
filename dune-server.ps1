@@ -21,7 +21,7 @@ param(
 # Wraps the original battlegroup.ps1 menu and adds extra tools
 # ============================================================
 
-$script:ToolVersion = "12.0.13"
+$script:ToolVersion = "12.0.14"
 
 # Cold-boot readiness budgets (seconds). A fresh battlegroup's FIRST boot can
 # take 10-30 min: k3s + funcom-operators initialize, metrics-server restarts a
@@ -825,10 +825,10 @@ function Get-DuneRemotePartitionScriptPath {
 }
 
 function Invoke-DuneRemotePartitionScript {
-    # Stages the bundled dune-clear-partitions.start to /tmp on the VM via scp,
-    # runs it once with sudo, removes the staged copy. No persistent install,
-    # no boot script, no cron. Returns @{ ok; rc; output }. Best-effort —
-    # never throws.
+    # Stages the bundled dune-clear-partitions.start to /tmp on the VM via an
+    # ssh exec + base64 stream (no scp/sftp dependency), runs it once with sudo,
+    # removes the staged copy. No persistent install, no boot script, no cron.
+    # Returns @{ ok; rc; output }. Best-effort - never throws.
     param(
         [Parameter(Mandatory)][string]$Ip
     )
@@ -838,28 +838,30 @@ function Invoke-DuneRemotePartitionScript {
     }
 
     $stamp     = [Guid]::NewGuid().ToString('N').Substring(0, 12)
-    $localTmp  = Join-Path $env:TEMP "dune-cp-$stamp.sh"
     $remoteTmp = "/tmp/dune-cp-$stamp.sh"
 
     # Force LF line endings — Alpine /bin/sh chokes on CRLF.
     $raw = [System.IO.File]::ReadAllText($local)
     $lf  = $raw -replace "`r`n", "`n" -replace "`r", "`n"
-    [System.IO.File]::WriteAllBytes($localTmp, [Text.Encoding]::UTF8.GetBytes($lf))
 
-    try {
-        & scp -o BatchMode=yes -o StrictHostKeyChecking=no -o LogLevel=QUIET `
-              -i "$sshKey" $localTmp "${sshUser}@${Ip}:${remoteTmp}" 2>&1 | Out-Null
-        if ($LASTEXITCODE -ne 0) {
-            return @{ ok = $false; rc = $LASTEXITCODE; output = @("scp of partition-clear script failed (exit $LASTEXITCODE).") }
-        }
-        $output = & ssh -o BatchMode=yes -o StrictHostKeyChecking=no -o LogLevel=QUIET `
-                        -i "$sshKey" "$sshUser@$Ip" `
-                        "sudo -n sh $remoteTmp; rc=`$?; rm -f $remoteTmp; exit `$rc" 2>&1
-        $rc = $LASTEXITCODE
-        return @{ ok = ($rc -eq 0); rc = $rc; output = @($output) }
-    } finally {
-        Remove-Item -LiteralPath $localTmp -Force -ErrorAction SilentlyContinue
+    # Stage over an ssh exec channel (base64 on stdin) instead of scp. Modern
+    # OpenSSH scp (9.0+) uses the SFTP protocol, which needs sftp-server on the
+    # remote; some VM images omit it where sshd_config expects (e.g.
+    # /usr/lib/ssh/sftp-server missing), so scp fails with
+    # "bash: line 1: /usr/lib/ssh/sftp-server: No such file or directory".
+    # base64 over ssh exec needs only a shell + busybox base64.
+    $b64 = [Convert]::ToBase64String([Text.Encoding]::UTF8.GetBytes($lf))
+
+    $stageOut = $b64 | & ssh -o BatchMode=yes -o StrictHostKeyChecking=no -o LogLevel=QUIET `
+          -i "$sshKey" "${sshUser}@${Ip}" "base64 -d > $remoteTmp && echo DUNE_STAGED_OK" 2>&1
+    if (($stageOut -join "`n") -notmatch 'DUNE_STAGED_OK') {
+        return @{ ok = $false; rc = ($LASTEXITCODE); output = @("staging partition-clear script over ssh failed.", "$stageOut") }
     }
+    $output = & ssh -o BatchMode=yes -o StrictHostKeyChecking=no -o LogLevel=QUIET `
+                    -i "$sshKey" "$sshUser@$Ip" `
+                    "sudo -n sh $remoteTmp; rc=`$?; rm -f $remoteTmp; exit `$rc" 2>&1
+    $rc = $LASTEXITCODE
+    return @{ ok = ($rc -eq 0); rc = $rc; output = @($output) }
 }
 
 function Invoke-OnDemandPartitionClear {
