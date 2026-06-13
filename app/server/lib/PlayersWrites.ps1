@@ -445,13 +445,13 @@ RETURNING i.id::text AS item_id;
     }
 }
 
-# Restore destroyed gear — OFFLINE only. Targets items where CurrentDurability
-# is 0 or NULL (Chopper's "completely dead" case the standard Repair didn't
-# obviously cover). Same inventory_type scope as RepairGear. For items that
-# still have the FItemStackAndDurabilityStats stats block we just re-seed
-# CurrentDurability + DecayedMaxDurability to the catalog max. For items
-# missing the block we (re)build it inline so the game treats the item as
-# whole again. Returns counts so the UI can report exactly what happened.
+# Restore destroyed gear — OFFLINE only. Targets ONLY items that already have an
+# FItemStackAndDurabilityStats block and whose CurrentDurability is 0 or NULL
+# (Chopper's "completely dead" case the standard Repair didn't obviously cover).
+# Same inventory_type scope as RepairGear. Each match is re-seeded to the highest
+# of its own three durability fields. It deliberately does NOT graft a durability
+# block onto items that lack one — resources, consumables, and contract items
+# legitimately have no durability and must be left alone.
 function Invoke-DunePlayerRestoreDestroyedGear {
     param([string]$Ip, [long]$PawnId)
     if ($PawnId -le 0) { return @{ ok = $false; error = 'pawn_id is required.' } }
@@ -462,96 +462,47 @@ function Invoke-DunePlayerRestoreDestroyedGear {
     $invTypes = $script:DuneProgressionNodesCatalog.repairGearInventoryTypes
     $invTypesArr = '(' + (($invTypes | ForEach-Object { "$_::int" }) -join ',') + ')'
 
-    # Select EVERY item in the gear inventory types, regardless of whether the
-    # durability stats block is present — we want both the "dead but stats
-    # still there" case AND the "stats block gone" case. We then decide per
-    # row what update to run.
+    # Only touch items that ALREADY carry an FItemStackAndDurabilityStats block
+    # AND are dead (CurrentDurability <= 0). We never graft a durability block
+    # onto an item that doesn't have one — resources, consumables, welding wire,
+    # staking units, contract items, etc. legitimately have no durability and
+    # must be left untouched. Each dead item is re-seeded to the HIGHEST of its
+    # own three durability fields (the item's own MaxDurability already bakes in
+    # this player's stat/perk bonuses, so it is the source of truth).
     $sql = @"
-SELECT i.id::text AS item_id,
-       i.template_id AS template,
-       COALESCE((i.stats->'FItemStackAndDurabilityStats'->1->>'CurrentDurability')::float8, -1)::text AS cur,
-       COALESCE((i.stats->'FItemStackAndDurabilityStats'->1->>'MaxDurability')::float8, 0)::text     AS stat_max,
-       (i.stats ? 'FItemStackAndDurabilityStats')::text AS has_block
-FROM dune.items i
-JOIN dune.inventories inv ON inv.id = i.inventory_id
-WHERE inv.actor_id = $PawnId::bigint
-  AND inv.inventory_type IN $invTypesArr;
-"@
-    $r = Invoke-DuneSqlQuery -Ip $Ip -Sql $sql -ReadOnly $true -MaxRows 1000 -TimeoutSec 30
-    if (-not $r.ok) { return @{ ok = $false; error = "list gear: $($r.error)" } }
-    $items = ConvertTo-DuneRowMaps -Result $r
-    if ($items.Count -eq 0) {
-        return @{ ok = $true; message = 'No gear in equipped/backpack slots — nothing to restore.'; restored = 0; skipped = 0 }
-    }
-
-    $restored = 0; $skipped = 0; $alreadyOk = 0
-    foreach ($row in $items) {
-        $itemId  = [int64](ConvertTo-DuneInt $row['item_id'])
-        $tmpl    = [string]$row['template']
-        $hasBlk  = ([string]$row['has_block']) -eq 't'
-        $curVal  = 0.0; [double]::TryParse([string]$row['cur'], [ref]$curVal) | Out-Null
-        $rule    = Get-DuneGameplayItemRule -TemplateId $tmpl
-        $max     = [double]$rule.max_durability
-        if ($max -le 0) {
-            $statMax = 0.0
-            [double]::TryParse([string]$row['stat_max'], [ref]$statMax) | Out-Null
-            if ($statMax -gt 0) { $max = $statMax } else { $max = 100.0 }
-        }
-
-        # Only act on truly destroyed items: cur < 0 means the stats key was
-        # missing entirely (our COALESCE substituted -1); cur == 0 means it
-        # was present but the durability is zeroed. Anything > 0 is fine,
-        # leave it for the regular Repair button.
-        if ($curVal -gt 0) { $alreadyOk++; continue }
-
-        if ($hasBlk) {
-            # Stats block is present but durability is zeroed — re-seed all three
-            # fields to the HIGHEST of the item's own Max/Current/DecayedMax
-            # (which already include this player's stat/perk durability bonuses),
-            # with the catalog max only as a floor in case every field was zeroed.
-            $upd = @"
+WITH tgt AS (
+    SELECT i.id AS item_id,
+           GREATEST(
+               COALESCE((i.stats->'FItemStackAndDurabilityStats'->1->>'MaxDurability')::float8, 0),
+               COALESCE((i.stats->'FItemStackAndDurabilityStats'->1->>'CurrentDurability')::float8, 0),
+               COALESCE((i.stats->'FItemStackAndDurabilityStats'->1->>'DecayedMaxDurability')::float8, 0)
+           ) AS val
+    FROM dune.items i
+    JOIN dune.inventories inv ON inv.id = i.inventory_id
+    WHERE inv.actor_id = $PawnId::bigint
+      AND inv.inventory_type IN $invTypesArr
+      AND i.stats ? 'FItemStackAndDurabilityStats'
+      AND COALESCE((i.stats->'FItemStackAndDurabilityStats'->1->>'CurrentDurability')::float8, 0) <= 0
+)
 UPDATE dune.items i
 SET stats = jsonb_set(jsonb_set(jsonb_set(i.stats,
-        '{FItemStackAndDurabilityStats,1,MaxDurability}',        to_jsonb(t.val), true),
-        '{FItemStackAndDurabilityStats,1,CurrentDurability}',    to_jsonb(t.val), true),
-        '{FItemStackAndDurabilityStats,1,DecayedMaxDurability}', to_jsonb(t.val), true)
-FROM (
-    SELECT GREATEST(
-        COALESCE((stats->'FItemStackAndDurabilityStats'->1->>'MaxDurability')::float8, 0),
-        COALESCE((stats->'FItemStackAndDurabilityStats'->1->>'CurrentDurability')::float8, 0),
-        COALESCE((stats->'FItemStackAndDurabilityStats'->1->>'DecayedMaxDurability')::float8, 0),
-        $max::float8
-    ) AS val
-    FROM dune.items WHERE id = $itemId::bigint
-) AS t
-WHERE i.id = $itemId::bigint AND t.val > 0;
+        '{FItemStackAndDurabilityStats,1,MaxDurability}',        to_jsonb(tgt.val), true),
+        '{FItemStackAndDurabilityStats,1,CurrentDurability}',    to_jsonb(tgt.val), true),
+        '{FItemStackAndDurabilityStats,1,DecayedMaxDurability}', to_jsonb(tgt.val), true)
+FROM tgt
+WHERE i.id = tgt.item_id AND tgt.val > 0
+RETURNING i.id::text AS item_id;
 "@
-        } else {
-            # Stats block missing entirely — graft a fresh one in. The shape
-            # mirrors what live items look like ([[<descriptor array>], {<stats>}])
-            # — we leave the descriptor array empty since the game backfills it
-            # on next interaction. CurrentDurability + DecayedMaxDurability +
-            # MaxDurability all get the catalog max so the item shows full.
-            $block = @"
-'{"FItemStackAndDurabilityStats":[[], {"CurrentDurability":$max,"DecayedMaxDurability":$max,"MaxDurability":$max}]}'::jsonb
-"@
-            $upd = @"
-UPDATE dune.items
-SET stats = COALESCE(stats, '{}'::jsonb) || $block
-WHERE id = $itemId::bigint;
-"@
-        }
-
-        $ur = Invoke-DuneSqlQuery -Ip $Ip -Sql $upd -ReadOnly $false -MaxRows 1 -TimeoutSec 30
-        if (-not $ur.ok) { $skipped++; continue }
-        $restored++
+    $r = Invoke-DuneSqlQuery -Ip $Ip -Sql $sql -ReadOnly $false -MaxRows 5000 -TimeoutSec 60
+    if (-not $r.ok) { return @{ ok = $false; error = "restore destroyed: $($r.error)" } }
+    $restored = @(ConvertTo-DuneRowMaps -Result $r).Count
+    if ($restored -eq 0) {
+        return @{ ok = $true; message = 'No destroyed items with a durability block — nothing to restore.'; restored = 0 }
     }
     return @{
         ok = $true
-        message = "Restored $restored destroyed item(s) on pawn $PawnId (already ok: $alreadyOk, skipped: $skipped)."
+        message = "Restored $restored destroyed item(s) to full durability on pawn $PawnId."
         restored = $restored
-        skipped = $skipped
-        already_ok = $alreadyOk
     }
 }
 
