@@ -1036,9 +1036,12 @@ export function setFactionTier(accountId: number, faction: FactionId, tier: numb
 }
 
 // Phase A award-char-xp: increments character XP + level + SP + intel.
-export function awardCharXp(pawnId: number, delta: number) {
+// Auto-routes server-side: offline players get a direct DB write; online players
+// get the game-native RMQ AwardXP command (category-based, default Combat) so the
+// award isn't clobbered on logout. Response.path = 'rmq' (live) | 'sql' (offline).
+export function awardCharXp(pawnId: number, delta: number, category = 'Combat') {
   return api<WriteResult>('/api/gameplay/players/award-char-xp', {
-    method: 'POST', body: JSON.stringify({ pawn_id: pawnId, delta }),
+    method: 'POST', body: JSON.stringify({ pawn_id: pawnId, delta, category }),
   })
 }
 
