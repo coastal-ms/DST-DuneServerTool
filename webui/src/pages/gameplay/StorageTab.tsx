@@ -252,6 +252,7 @@ function AddItemsForm({ busy, onSubmit, onCancel }: {
 }) {
   const [staged, setStaged] = useState<StorageGiveItemInput[]>([])
   const [template, setTemplate] = useState('')
+  const [templateName, setTemplateName] = useState('')
   const [qty, setQty] = useState('1')
   const [quality, setQuality] = useState('0')
 
@@ -259,7 +260,7 @@ function AddItemsForm({ busy, onSubmit, onCancel }: {
     const t = template.trim()
     if (!t) return
     setStaged(s => [...s, { template: t, qty: Math.max(1, Number(qty) || 1), quality: Math.max(0, Number(quality) || 0) }])
-    setTemplate(''); setQty('1'); setQuality('0')
+    setTemplate(''); setTemplateName(''); setQty('1'); setQuality('0')
   }
 
   return (
@@ -267,7 +268,8 @@ function AddItemsForm({ busy, onSubmit, onCancel }: {
       <ItemPicker
         label="Item — type to search by name or template id"
         value={template}
-        onChange={setTemplate}
+        displayValue={templateName || template}
+        onChange={(tpl, item) => { setTemplate(tpl); setTemplateName(item ? item.name : '') }}
         disabled={busy}
       />
       <div className="grid grid-cols-2 gap-2">
