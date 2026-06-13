@@ -243,6 +243,15 @@ export function SpicefieldsCard({ vmRunning }: Props) {
         read-only and reflect what is on the map right now.
       </p>
 
+      <div className="mb-3 px-3 py-2 rounded border border-info/40 bg-info/10 text-info text-xs flex items-start gap-2">
+        <Icon name="Info" size={13} className="mt-0.5 shrink-0" />
+        <span>
+          These Spice adjustments take effect immediately and do not persist across BG
+          restarts. They are based on the last BG start of the SpiceField settings in the
+          ini files below.
+        </span>
+      </div>
+
       {err && (
         <div className="mb-3 px-3 py-2 rounded border border-danger/40 bg-danger/10 text-danger text-xs flex items-center gap-2">
           <Icon name="AlertCircle" size={13} /> {err}
