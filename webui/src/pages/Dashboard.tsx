@@ -227,7 +227,7 @@ export function Dashboard() {
             <Icon name="Gamepad2" size={16} className="text-accent" />
           </div>
           <p className="text-sm text-text-muted mt-2 flex-1">
-            Native market, exchange, and bot tools — the Dune admin portal, rebuilt right here in one console.
+            Native market, exchange, and bot tools — full gameplay administration, right here in one console.
           </p>
           <button className="btn-primary mt-3 self-start shrink-0" onClick={() => navigate('/gameplay')}>
             <Icon name="ArrowRight" size={15} /> Open Gameplay Admin

@@ -1,7 +1,7 @@
 // ItemPicker — typeahead autocomplete for the item catalog.
 // v11.5.7. Used in player Give Item, storage Give Item, etc.
 //
-// Behaviour mirrors dune-admin's item search: lazy-load the catalog on first
+// Behaviour mirrors the reference implementation's item search: lazy-load the catalog on first
 // keystroke, filter on every change with substring match against display
 // name OR template_id (case-insensitive), show up to 20 matches in a popup
 // listing "Name — template_id (category)". Arrow keys + Enter to select,

@@ -1,5 +1,5 @@
 # PlayersRmq.ps1 - v11.5.9 live (RMQ) player command routes ported from
-# dune-admin handlers_rmq.go. All routes publish to the mq-game broker via
+# the reference implementation handlers_rmq.go. All routes publish to the mq-game broker via
 # rabbitmqctl eval over SSH. The HTTP response indicates whether the command
 # was queued; the game server applies it asynchronously.
 

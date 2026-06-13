@@ -129,11 +129,11 @@ Register-DuneRoute -Method GET -Path '/api/update/check' -Handler {
 }
 
 # GET /api/update/migration-notice — one-time "DST is now decoupled from
-# dune-admin" notice. `needed` is true only for installs upgraded from a
+# the reference implementation" notice. `needed` is true only for installs upgraded from a
 # pre-decouple build (see Get-DuneDecoupleNotice).
 #
-# Loopback-only: the notice exposes the host's local dune-admin folder path and
-# is a host-machine concern (the host runs dune-admin, not a remote Tailscale /
+# Loopback-only: the notice exposes the host's local the reference implementation folder path and
+# is a host-machine concern (the host runs the reference implementation, not a remote Tailscale /
 # LAN viewer). Remote callers must never see the path or be blocked by it.
 function Test-DuneUpdateLoopbackRequest {
     param($req)
@@ -208,7 +208,7 @@ Register-DuneRoute -Method POST -Path '/api/update/install' -Handler {
     }
     try {
       try {
-        # Gate: a user upgrading across the dune-admin decoupling must read and
+        # Gate: a user upgrading across the companion-tool decoupling must read and
         # acknowledge the one-time notice before any further update can run.
         $notice = Get-DuneDecoupleNotice
         if ($notice.Needed) {

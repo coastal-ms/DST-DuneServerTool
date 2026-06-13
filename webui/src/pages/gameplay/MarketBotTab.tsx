@@ -843,7 +843,7 @@ function PricingSection({ draft, setDraft }: { draft: BotConfig; setDraft: (c: B
         <Icon name="TriangleAlert" size={14} className="text-warning shrink-0 mt-0.5" />
         <span>
           Sane-pricing defaults (100 k Solari hard cap, tier base prices, category factors, rarity multipliers,
-          and 95 % vendor floor) are ported from the dune-admin patch. Touch with care — these directly drive
+          and 95 % vendor floor) govern the bot's pricing. Touch with care — these directly drive
           every listing the bot writes.
         </span>
       </div>

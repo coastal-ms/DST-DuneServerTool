@@ -1,4 +1,4 @@
-﻿# PlayersWrites.ps1 — v11.5.9 player write routes ported from dune-admin.
+﻿# PlayersWrites.ps1 — v11.5.9 player write routes ported from the reference implementation.
 # Wires Phase C/D/E/F endpoints onto the HTTP server. All routes use
 # Invoke-DunePlayerWriteRoute + Get-DuneBodyInt/Value from routes/GameplayPlayers.ps1.
 
@@ -322,7 +322,7 @@ Register-DuneRoute -Method GET -Path '/api/gameplay/storage/owner-debug' -Handle
 # ---------------------------------------------------------------------------
 
 # POST /api/gameplay/players/update-tags  { account_id, add?[], remove?[] }
-# Mirrors dune-admin cmdUpdatePlayerTags (calls dune.update_player_tags proc
+# Mirrors the reference implementation cmdUpdatePlayerTags (calls dune.update_player_tags proc
 # so server-side triggers fire). Separate from POST /tags (overwrite model)
 # which is kept for back-compat.
 Register-DuneRoute -Method POST -Path '/api/gameplay/players/update-tags' -Handler {
