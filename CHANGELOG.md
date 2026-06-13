@@ -13,6 +13,23 @@ here cover everything those tags shipped.
 
 ## [Unreleased]
 
+## [12.0.13] - 2026-06-13
+
+### Changed
+
+- **Restore Backup is now gated behind a typed confirmation.** The Database tab's
+  Restore Backup runs a full destructive `battlegroup import` — it replaces the
+  entire BG database, rolling every player, base, inventory, storage container,
+  blueprint, and the market back to the chosen snapshot (everything since is
+  lost). It previously launched on a single click; it now requires typing
+  `RESTORE` to proceed, and the card text spells out the full-wipe scope.
+
+- **Spice Fields card clarifies its edits are immediate + non-persistent.** Added
+  a notice to Game Config → Spice Fields (`dune.spicefield_types`): the
+  adjustments take effect immediately and do not persist across BG restarts;
+  they're based on the last BG start of the SpiceField settings in the INI files
+  shown below.
+
 ## [12.0.12] - 2026-06-12
 
 ### Fixed
