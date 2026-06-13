@@ -146,11 +146,11 @@ export function SpecsSection({ player, canWrite, demo, refreshKey, flash, onChan
                 <Icon name="Star" size={13} /> Grant Max Keystones
               </button>
               <button className="btn-secondary text-warning" disabled={busy}
-                onClick={() => { if (window.confirm(`Reset ALL keystones for ${player.name}? Cannot be undone.`)) void run(() => resetAllKeystones(player.id), 'Reset all keystones') }}>
+                onClick={() => { if (window.confirm(`Reset ALL keystones for ${player.name}? Cannot be undone.`)) void run(() => resetAllKeystones(player.controller_id), 'Reset all keystones') }}>
                 <Icon name="RotateCcw" size={13} /> Reset All Keystones
               </button>
               <button className="btn-secondary text-danger" disabled={busy}
-                onClick={() => { if (window.confirm(`Reset ALL spec tracks + keystones for ${player.name}? Cannot be undone.`)) void run(() => resetAllSpecs(player.id), 'Reset all specs') }}>
+                onClick={() => { if (window.confirm(`Reset ALL spec tracks + keystones for ${player.name}? Cannot be undone.`)) void run(() => resetAllSpecs(player.controller_id), 'Reset all specs') }}>
                 <Icon name="AlertTriangle" size={13} /> Reset All
               </button>
             </>
@@ -173,9 +173,9 @@ export function SpecsSection({ player, canWrite, demo, refreshKey, flash, onChan
             const t = tracks.find(x => x.track_type.toLowerCase() === name.toLowerCase())
             return (
               <SpecRow key={name} name={name} track={t} canWrite={canWrite} busy={busy}
-                onGrantMax={() => void run(() => grantMaxSpec(player.id, name), 'Grant max')}
-                onReset={() => void run(() => resetSpec(player.id, name), 'Reset')}
-                onAdd5k={() => run(() => awardSpecXp(player.id, name, 5000), '+5000 XP')}
+                onGrantMax={() => void run(() => grantMaxSpec(player.controller_id, name), 'Grant max')}
+                onReset={() => void run(() => resetSpec(player.controller_id, name), 'Reset')}
+                onAdd5k={() => run(() => awardSpecXp(player.controller_id, name, 5000), '+5000 XP')}
               />
             )
           })}
