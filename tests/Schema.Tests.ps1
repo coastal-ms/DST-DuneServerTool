@@ -56,7 +56,7 @@ Describe 'Schema: dune.actor_fgl_entities join columns' -Tag 'Schema' {
 
 Describe 'Schema: FLevelComponent is an array' -Tag 'Schema' {
     It 'PlayersAdmin.ps1 indexes FLevelComponent as an array element (->1)' {
-        # The dune-admin schema stores FLevelComponent as a JSON array; reads
+        # The game schema stores FLevelComponent as a JSON array; reads
         # must go components->'FLevelComponent'->1->>'X'. A bare
         # components->'FLevelComponent'->>'X' returns NULL silently.
         $content = Get-LibContent 'PlayersAdmin.ps1'

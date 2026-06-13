@@ -77,7 +77,7 @@ Register-DuneRoute -Method GET -Path '/api/gameconfig' -Handler {
 #        resolved from the schema), OR
 #        { updates: [ { file, section, key, value }, ... ] } (explicit/raw).
 # Every touched section is relocated into the DST-managed block (whole-section
-# absorption); any pre-existing dune-admin block is migrated. Returns the
+# absorption); any pre-existing the reference implementation block is migrated. Returns the
 # freshly-fetched config so the client can refresh its state.
 # -----------------------------------------------------------------------------
 Register-DuneRoute -Method PUT -Path '/api/gameconfig' -Handler {

@@ -2,7 +2,7 @@
 # Generic ServerCommand publisher + courier (chat) publisher for the
 # battlegroup's mq-game RabbitMQ broker.
 #
-# Mirrors dune-admin's rmq_commands.go: builds the {Version, AuthToken,
+# Mirrors the reference implementation's rmq_commands.go: builds the {Version, AuthToken,
 # MessageContent} envelope, base64-encodes it host-side, ships a tiny Erlang
 # script over SSH -> sudo kubectl exec -> rabbitmqctl eval. Uses the same
 # AuthToken and exchange/routing-key conventions as send-dune-broadcast and
@@ -33,7 +33,7 @@ function Send-DuneRmqServerCommand {
         return @{ ok = $false; status = 503; message = $_.Exception.Message }
     }
 
-    # Marshal inner -> envelope -> base64, mirroring dune-admin/publishServerCommand.
+    # Marshal inner -> envelope -> base64, mirroring the reference implementation/publishServerCommand.
     $innerJson = (ConvertTo-Json $Fields -Depth 8 -Compress)
     $envelope = [ordered]@{
         Version        = 2
@@ -109,7 +109,7 @@ rabbit_queue_type:publish_at_most_once(X, Msg).
 # ── FLS id resolution ─────────────────────────────────────────────────────────
 
 # Resolves the accounts."user" hex Funcom UUID (the PlayerId form RMQ
-# ServerCommands expect) for a player-pawn actor_id. Mirrors dune-admin's
+# ServerCommands expect) for a player-pawn actor_id. Mirrors the reference implementation's
 # flsIDFromActorID — joins dune.actors -> dune.accounts and returns "user".
 function Resolve-DuneFlsIdFromActorId {
     param([Parameter(Mandatory)] [string] $Ip,

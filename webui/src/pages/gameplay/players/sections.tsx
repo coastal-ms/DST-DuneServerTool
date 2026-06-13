@@ -396,7 +396,7 @@ function EventRow({ ev }: { ev: PlayerEvent }) {
 }
 
 // ---------------------------------------------------------------------------
-// Actions — write surface. v11.5.9: full dune-admin player toolkit.
+// Actions — write surface. v11.5.9: full the reference implementation player toolkit.
 // Bucketed into Currency / Progression / Items / Vehicle / Live (RMQ) /
 // Identity / Danger Zone for discoverability. All actions use the inline-form
 // pattern: click button to open form, fill fields, submit.

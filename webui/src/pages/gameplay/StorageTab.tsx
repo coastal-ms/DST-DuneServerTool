@@ -246,7 +246,7 @@ function ContainerDetail({ container, demo, onClose, onChanged }: {
 }
 
 // Staged "Add Items" form: build a list of template/qty/quality rows, then
-// submit them all at once (mirrors dune-admin's AddItemsModal).
+// submit them all at once (mirrors the reference implementation's AddItemsModal).
 function AddItemsForm({ busy, onSubmit, onCancel }: {
   busy: boolean; onSubmit: (items: StorageGiveItemInput[]) => void; onCancel: () => void
 }) {

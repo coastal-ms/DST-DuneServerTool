@@ -1,6 +1,6 @@
 ﻿# GameplayBot lib — native Market Bot ("Duke").
 #
-# This is the native port of dune-admin's marketbot buy side. Instead of
+# This is the native port of the reference implementation's marketbot buy side. Instead of
 # proxying to an external Revy process, the buy loop runs INSIDE the DST
 # backend and writes directly to the live game Postgres via the same
 # Invoke-DuneSqlQuery bridge the Market reads use (psql over kubectl/SSH).
@@ -11,7 +11,7 @@
 # MaxBuys and the disabled-items skip still apply. The 100k sane-pricing /
 # listing side of the old patch is intentionally NOT ported.
 #
-# The buy transaction mirrors dune-admin/internal/marketbot/exchange.go
+# The buy transaction mirrors the reference implementation/internal/marketbot/exchange.go
 # buyPlayerListings verbatim (insert seller payment log order, fulfilled-order
 # record completion_type=4, debit bot balance, delete the player's sell order +
 # order + backing item) so the game client shows the seller "Take Solari".
@@ -142,7 +142,7 @@ function Save-DuneBotMaskCache {
 
 # Harvest masks from EVERY non-zero-mask order on the exchange (player, NPC,
 # prior Duke listings — all are valid). Mirrors refreshCategoryCache() from
-# dune-admin/internal/marketbot/exchange.go. Returns the merged cache so the
+# the reference implementation/internal/marketbot/exchange.go. Returns the merged cache so the
 # caller can pass it straight to Resolve-DuneBotListingCandidates.
 #
 # v11.5.5: throttled by $RefreshIntervalSec (default 6h). The bundled seed
@@ -213,7 +213,7 @@ function Get-DuneBotConfigDefaults {
         target_balance    = 9000000000000
         maintain_balance  = $true
         disabled_items    = @()
-        # ----- Listing side (sane-pricing port of dune-admin/internal/marketbot) -----
+        # ----- Listing side (sane-pricing port of the reference implementation/internal/marketbot) -----
         list_tick_interval   = 1800          # 30 min between list ticks
         listings_per_grade   = 5             # concurrent NPC listings per (template, grade)
         stackables_only      = $false        # v11.5.9: default OFF — list gear too
@@ -538,7 +538,7 @@ SELECT id FROM ins UNION ALL SELECT id FROM existing LIMIT 1;
         $null = Invoke-DuneSqlQuery -Ip $Ip -Sql "SELECT dune.dune_exchange_get_user_id($ownerId)" -ReadOnly $false -MaxRows 5 -TimeoutSec 30
     }
 
-    # Exchange id (try the same fallbacks dune-admin uses, with the upstream
+    # Exchange id (try the same fallbacks the reference implementation uses, with the upstream
     # access-point cascade prepended so we always pick the canonical exchange).
     # Every tier JOINs against dune_exchanges so a stale access-point or
     # player-order row pointing at a wiped exchange id can never be returned —
@@ -712,8 +712,8 @@ function Invoke-DuneMarketItemsCacheBust {
 # ----------------------------------------------------------------------------
 # Order-expiry horizon for the seller payment log order. We derive it natively
 # from the live DB (latest real, non-sentinel expiration_time ~= now + 24h game
-# time) instead of porting dune-admin's epoch-learning machinery. Falls back to
-# the 999_999_999 sentinel dune-admin uses when the epoch is unknown.
+# time) instead of porting the reference implementation's epoch-learning machinery. Falls back to
+# the 999_999_999 sentinel the reference implementation uses when the epoch is unknown.
 # ----------------------------------------------------------------------------
 function Get-DuneBotOrderExpiry {
     param([string]$Ip)
@@ -854,7 +854,7 @@ COMMIT;
 }
 
 # ============================================================================
-# LISTING SIDE — port of dune-admin/internal/marketbot with the sane-pricing
+# LISTING SIDE — port of the reference implementation/internal/marketbot with the sane-pricing
 # 100k-cap patch (recovered from DST commit cf903665).
 # ----------------------------------------------------------------------------
 # Catalog source: DB-derived. We snapshot the live game's NPC vendor inventory
@@ -1126,7 +1126,7 @@ WHERE o.owner_id = $OwnerId AND o.is_npc_order = TRUE AND o.exchange_id = $Excha
 # get one listing tier (grade 0), gradeable equipment gets the full 0–5
 # (or MinQualityLevel–5 for augments that only drop at higher grades). This
 # is what drives DST seed up from ~1 listing/template to ~6× for gradeable
-# gear, closing most of the gap against dune-admin's seed output.
+# gear, closing most of the gap against the reference implementation's seed output.
 function Get-DuneBotApplicableGrades {
     param([hashtable]$Cand, $Rule)
     # Stackables don't have a quality grade in-game.
@@ -2106,7 +2106,7 @@ function Clear-DuneBotError {
 }
 
 # Wipe NPC orders owned by any actor whose class is not 'Duke'. Used to evict
-# leftover Revy orphans from the old external dune-admin integration.
+# leftover Revy orphans from the old external the reference implementation integration.
 function Clear-DuneBotLegacyListings {
     $ctx = Get-DuneDbContext
     if (-not $ctx.ok) { return @{ ok = $false; error = $ctx.message } }

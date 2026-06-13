@@ -1,4 +1,4 @@
-﻿# PlayersAdmin.ps1 — v11.5.9 player admin extras ported from dune-admin.
+﻿# PlayersAdmin.ps1 — v11.5.9 player admin extras ported from the reference implementation.
 # Covers §2 currency writes + §7 returning-award/delete-account + shared helpers
 # (faction tables, char-XP table, offline check, raw funcom-id lookup).
 #
@@ -273,7 +273,7 @@ function Get-DuneKeystoneSpBonus {
 }
 
 # ----- Character XP / Intel cascade ---------------------------------------
-# dune-admin keeps this strictly OFFLINE — the in-memory FLevelComponent
+# the reference implementation keeps this strictly OFFLINE — the in-memory FLevelComponent
 # overwrites the DB row at logout, so changes applied to an online char get
 # silently reverted. We mirror that contract.
 
