@@ -210,7 +210,7 @@ function Get-DuneBotConfigDefaults {
         max_buys_per_tick = 25
         die_size          = 12
         die_target        = 5
-        target_balance    = 9000000000000
+        target_balance    = 454720162028
         maintain_balance  = $true
         disabled_items    = @()
         # ----- Listing side (sane-pricing port of dune-admin/internal/marketbot) -----
