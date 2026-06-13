@@ -13,6 +13,19 @@ here cover everything those tags shipped.
 
 ## [Unreleased]
 
+## [12.0.8] - 2026-06-12
+
+### Fixed
+
+- **Restore Destroyed no longer adds durability to items that have none.** The
+  action used to graft a fresh `FItemStackAndDurabilityStats` block (with the
+  catalog max, often 100) onto any in-scope item missing one — so resources,
+  consumables, welding material, staking units, ammo, and contract items wrongly
+  gained a durability bar. It now only re-seeds items that **already carry** a
+  durability block **and** have a real durability value (`> 0`) that is currently
+  dead (`CurrentDurability <= 0`); an empty/zero durability block means the item
+  has no durability and is left untouched. The graft path is removed entirely.
+
 ## [12.0.7] - 2026-06-12
 
 Fixes the durability target used by the repair actions, which capped items to a
