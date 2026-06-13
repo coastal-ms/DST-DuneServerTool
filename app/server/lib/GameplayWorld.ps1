@@ -575,6 +575,9 @@ function Invoke-DuneStorageGiveItem {
     param([string]$Ip, [long]$ContainerId, [string]$Template, [long]$Qty, [long]$Quality)
     if ($Qty -le 0) { $Qty = 1 }
     $safeTmpl = ConvertTo-DuneSqlString $Template
+    # acquisition_time must be the current epoch: the game treats acquisition_time=0
+    # (1970) items as fully decayed and drops them from the container on zone load,
+    # so they show in DST but never appear in-game even after a restart.
     $sql = @"
 WITH inv AS (
     SELECT id, COALESCE(max_item_count, 0) AS maxc
@@ -588,8 +591,10 @@ cur AS (
     GROUP BY inv.id, inv.maxc
 ),
 ins AS (
-    INSERT INTO dune.items (inventory_id, template_id, stack_size, quality_level, position_index, stats)
-    SELECT cur.inv_id, '$safeTmpl', $Qty::bigint, $Quality::bigint, cur.cnt,
+    INSERT INTO dune.items (inventory_id, template_id, stack_size, quality_level, position_index, acquisition_time, stats)
+    SELECT cur.inv_id, '$safeTmpl', $Qty::bigint, $Quality::bigint,
+           COALESCE((SELECT MAX(position_index) + 1 FROM dune.items WHERE inventory_id = cur.inv_id), 0),
+           EXTRACT(EPOCH FROM now())::bigint,
            '{"FCustomizationStats":[[],{}],"FItemStackAndDurabilityStats":[[],{}]}'::jsonb
     FROM cur
     WHERE cur.maxc = 0 OR cur.cnt < cur.maxc
