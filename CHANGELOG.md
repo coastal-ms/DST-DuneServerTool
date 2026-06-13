@@ -13,6 +13,18 @@ here cover everything those tags shipped.
 
 ## [Unreleased]
 
+## [12.0.11] - 2026-06-12
+
+### Changed
+
+- **Removed the broadcast / shutdown / whisper composer cards from the top of
+  Gameplay → Overview.** They're now reached from the dedicated **Broadcasts**
+  left-nav item (and its `/broadcasts` page), so the duplicate cards on the
+  overview were just taking up space.
+- **Taller default app window.** Bumped the default window height so the added
+  Broadcasts nav item no longer pushes the sidebar into a frame scrollbar on a
+  fresh launch. (Only affects installs with no saved window size.)
+
 ## [12.0.10] - 2026-06-12
 
 ### Fixed
