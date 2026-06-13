@@ -13,9 +13,145 @@ here cover everything those tags shipped.
 
 ## [Unreleased]
 
-## [11.5.8] - 2026-06-12
+## [12.0.0] - 2026-06-12
 
-### Changed — Item search autocomplete everywhere (user requirement)
+Major milestone — full dune-admin portal port lands directly inside DST.
+Adds 54 player-management endpoints, a bucketed Actions panel covering every
+admin operation, market seeding/management with grade fan-out, Hide-GM derived
+views, and an installer migration that wipes legacy autostart on upgrade.
+
+### Added — dune-admin port (Phases A through K)
+
+Complete reimplementation of the upstream Icehunter/dune-admin portal as
+native DST surfaces. No more "open second tool to manage players" — every
+admin operation Coastal needed lives in the Gameplay Admin tab.
+
+- **Phase A** — Backend foundations: currency, faction rep, char XP,
+  returning-player award, delete-account routes + schema migrations.
+- **Phase B** — §1 read endpoints (12): online, factions, specs, journey,
+  export, keystones, vehicles, dungeons, player-ids, partitions, contracts,
+  presets.
+- **Phase C** — Phase A schema fixes + 21 endpoints across
+  items/vehicles/teleport/progression/contracts/jobs/codex/storage.
+- **Phase G + H** — RMQ `ServerCommand` foundation with 11 live handlers
+  (kick, ban, mute, etc.) and online-player teleport path that routes
+  through the gateway instead of the database.
+- **Phase I** — Merged fill-water dispatch and added `update-tags` delta
+  route (avoids full-tag replacement when only one tag changes).
+- **Phase J** — TypeScript API client wrappers for all 54 player endpoints
+  (`webui/src/api/players.ts`), strongly typed against the PowerShell
+  handlers.
+- **Phase K** — Bucketed Actions panel exposing all 28 player actions,
+  grouped by intent (Lifecycle / Communication / Inventory / Progression
+  / Punishment / Diagnostics). Replaces the flat list of buttons.
+
+### Added — Players tab UI
+
+- **Hide GM toggle** — persists to `localStorage` (`dst.players.hideGm`).
+  When on, the GM player is filtered out of the list, the Online/Faction
+  StatCards, and the Server Overview bucket counts. Eye/EyeOff icon.
+- **Player deselection** — three new ways to return to Server Overview:
+  click the selected row again, click the new X Close button on the
+  player header card, or press Escape (skips when an input/textarea is
+  focused so it doesn't steal Esc from inline give-item or whisper forms).
+- **Items section moved into Inventory** — Give Item (offline-safe + live
+  variants), Repair Equipped Gear, Fill Water, and Clean Inventory now
+  render inline between the name and the inventory item list. New
+  `extra?: ReactNode` slot on `ItemList` enables this in-place rendering.
+
+### Added — Market + Market Bot
+
+- **Seed market** — bulk-list every catalogued template in one shot,
+  with live progress bar, abort button, smaller chunks (50, then bumped
+  to 100), and longer SSH timeout (600s). Big SQL chunks stream via
+  ssh stdin to dodge the Windows argv length limit.
+- **Grade fan-out** — Seed market now fans out across quality grades 0-5
+  per template (previously seeded only grade 0).
+- **Bulk INSERT collapse** — 100 per-template WITH-CTE statements
+  collapsed into one bulk INSERT per chunk (kills per-chunk
+  full-table-scan loop).
+- **15s TTL cache** — Market enriched item list cached for 15 seconds
+  (fixes sort lag on big catalogs).
+- **Clear Duke listings** — wipes ALL items in Duke's inventory (not just
+  referenced ones), fixes orphan-inventory accumulation.
+- **MarketBot price_floor** — configurable per-template (default 50),
+  prevents bot from listing trivially-priced items.
+- **List subtab polish** — grade-aware + chunk-batched list tick, async
+  list tick (no UI freeze on slow ticks), `stop force-stackable when rule
+  says otherwise`, include `is_gradeable` / `stack_max` in item-rules
+  cache, vendor snapshot excludes Duke.
+- **Per-template price overrides UI** — replaces two `window.prompt`
+  dialogs with an inline form using the `ItemPicker` typeahead (no more
+  typing raw template ids from memory).
+- **Market table** — added pagination (50 rows/page, page nav) to the
+  Listings view; sticky header and per-column sort retained.
+
+### Changed — Players + GameplayBot reliability
+
+- **Players → faction join** — joins `player_faction` via controller id
+  instead of pawn id (the pawn id rotates per-life, breaking joins for
+  players who'd respawned since the last server boot).
+- **GameplayBot** — auto-clears stale `*_progress.running` flags on DST
+  startup and BG-restart commands. Previously a crash mid-tick left the
+  flag set forever, blocking subsequent runs.
+- **Characters → delete account** — now requires typing the literal
+  phrase `i acknowledge` to confirm (single-click confirm was too easy
+  to fire by accident).
+- **Characters** — dropped routine `confirm()` spam on safe actions
+  (water fill, repair, etc.); only destructive ops confirm now.
+- **Shutdown / reboot** — skips `battlegroup stop` when no pods running
+  (saves ~30s on an already-stopped BG).
+
+### Changed — Installer (v12.0.0 migration)
+
+- **Legacy autostart wipe on upgrade from pre-12.0.0** — pre-12 DST
+  registered per-user scheduled tasks at
+  `\Dune Server\DuneServer-Autostart-<sid>` for autostart-on-login. The
+  v12 model changes how these are tracked, so the installer's new
+  `[Run]` entry runs the same `Get-ScheduledTask | Unregister-ScheduledTask`
+  pipeline used by `[UninstallRun]` — but **only** when upgrading from a
+  prior major version (`< 12`). Future v12.0.x → v12.0.y in-app updates
+  do not wipe the user's autostart preference.
+- **Migration gating** — new `[Code]` helpers `GetPriorInstalledVersion`
+  (reads `Software\Microsoft\Windows\CurrentVersion\Uninstall\{AppId}_is1`
+  with WOW6432Node fallback), `VersionMajor` (uses `StrToIntDef` with -1
+  sentinel for empty/garbage versions), and `ShouldClearLegacyAutostart`.
+
+### Fixed — v11.5.x patch series (rolled up into 12.0.0)
+
+Everything that shipped as 11.5.0–11.5.8 over the past day, consolidated
+here. See git log for individual commit subjects.
+
+- UTF-8 BOM added to non-ASCII `.ps1` files (fixes PS 5.1 mojibake).
+- `ConvertTo-DuneInt` + Coriolis seed casts hardened against PS5.1 array
+  unwrap edge cases.
+- Seed market: derive `ServerDir` at lib load time (pool/dev-server
+  agnostic), drop unused `seedProgress` prop from `ListSection`,
+  dismissible error banner + global seed progress banner.
+- `useMemo` hoisted above early return in `ActionsSection` (Phase K
+  rules-of-hooks fix).
+- 145 → 188-test suite (108 Pester → 151 Pester + 37 Vitest).
+- Item search autocomplete (typeahead) extended to *every* item input
+  across the app (was previously only on Players → Give Item and
+  Storage → Add Items).
+
+### Tests
+
+- **Pester**: 151 passed / 151 total (PS5.1 parse + PS7 dot-source +
+  route registrations across 50+ files).
+- **Vitest**: 37 passed / 37 total (webui unit tests).
+- **UI smoke**: 15 surfaces walked via Playwright, zero console errors
+  (Server Health, Commands, PowerShell, Game Config, Gameplay Admin
+  [+ Players / Market / Market Bot sub-tabs], DD Map, Database, Sietches,
+  Map SpinUp, Settings, Tailscale, Setup Wizard).
+
+## [11.0.0] - 2026-06-04 .. 2026-06-12
+
+_Consolidated entry covering every release in the v11.x series (32 patches). Tags on GitHub still exist for each individual release._
+
+### v11.5.8 - 2026-06-12
+
+#### Changed — Item search autocomplete everywhere (user requirement)
 
 Follow-up to v11.5.7. User requirement: *every* item search box across the
 app must use the typeahead dropdown introduced in v11.5.7, not just the two
@@ -27,9 +163,9 @@ add-item forms (Players → Give Item, Storage → Add Items).
   item search and a number field for the override price, with Add / Cancel
   buttons. No more typing raw template ids from memory.
 
-## [11.5.7] - 2026-06-12
+### v11.5.7 - 2026-06-12
 
-### Added — User-reported hotfixes (Phase 1.5 of dune-admin player port)
+#### Added — User-reported hotfixes (Phase 1.5 of dune-admin player port)
 
 This release responds to direct user feedback on the v11.5.6 Players tab and pulls
 forward two features from the planned v11.5.9 work so users aren't blocked:
@@ -62,7 +198,7 @@ forward two features from the planned v11.5.9 work so users aren't blocked:
   Postgres routines, so private servers that have these routines available
   get the live experience and others fall back to a demo view automatically.
 
-### Notes
+#### Notes
 
 - The heavy *Progression / Contracts / Journey* port originally planned for
   v11.5.7 has been deferred to v11.5.8 so these blocker-tier user fixes
@@ -73,9 +209,9 @@ forward two features from the planned v11.5.9 work so users aren't blocked:
   Frontend wiring uses the new reusable `ItemPicker` component in
   `webui/src/components/ItemPicker.tsx`.
 
-## [11.5.6] - 2026-06-12
+### v11.5.6 - 2026-06-12
 
-### Added — Player admin foundation (Phase 1 of dune-admin player port)
+#### Added — Player admin foundation (Phase 1 of dune-admin player port)
 
 The Gameplay > Players tab has been rebuilt as a two-column workspace mirroring
 [dune-admin.layout.tools/#/players](https://dune-admin.layout.tools/#/players),
@@ -113,7 +249,7 @@ extend.
   Rename** writes on a dedicated tab. Live-DB writes only; demo mode shows a
   locked-padlock notice.
 
-### Notes
+#### Notes
 
 - Sections that depend on optional tables (`player_tags`, `event_log`) degrade
   to "feature unavailable" cards when the live game DB doesn't have them
@@ -127,9 +263,9 @@ extend.
   Journey land in v11.5.7; Inventory bulk-edit + Give-Currency expansions +
   Vehicles in v11.5.8.
 
-## [11.5.5] - 2026-06-12
+### v11.5.5 - 2026-06-12
 
-### Fixed
+#### Fixed
 - **Market Bot mask harvest no longer hangs the UI.** v11.5.4 added a
   per-list-tick `SELECT DISTINCT template_id, category_mask FROM
   dune.dune_exchange_orders` call that ran on every 30-min list tick. When
@@ -157,9 +293,9 @@ extend.
   every elapsed-time check. A new `ConvertTo-DuneBotUtcInstant` helper
   normalises both string and DateTime inputs to a true UTC instant.
 
-## [11.5.4] - 2026-06-12
+### v11.5.4 - 2026-06-12
 
-### Added
+#### Added
 - **Market Bot catalog-seed mask cache.** Duke now lists items on
   brand-new battlegroups that have zero NPC vendor orders. A bundled
   seed file (`app/data/gameplay-bot-mask-seed.json`, 1378 templates
@@ -179,7 +315,7 @@ extend.
   `vendor_price` then `default_unit_price`). New config flag
   `seed_from_catalog` (default `true`) controls catalog augmentation.
 
-### Notes
+#### Notes
 - Bundled seed currently covers ~83% of the 1658-item catalog. The
   remaining ~280 templates fill in automatically as users hit them via
   in-game orders; a planned v11.5.5 port of dune-admin's pure-functional
@@ -187,9 +323,9 @@ extend.
   will compute masks from category paths so coverage reaches 100%
   without any DB harvest.
 
-## [11.5.3] - 2026-06-11
+### v11.5.3 - 2026-06-11
 
-### Fixed
+#### Fixed
 - **Market Bot list tick failing with `inventories_exchange_id_fkey`
   violation on fresh battlegroups or after a Duke wipe.** `Get-DuneBotIdentity`'s
   exchange-id cascade had two read paths that didn't validate the resolved
@@ -213,9 +349,9 @@ extend.
   that was already mitigated, at the cost of an unrecoverable UI lock
   when it misbehaved.
 
-## [11.5.2] - 2026-06-11
+### v11.5.2 - 2026-06-11
 
-### Added
+#### Added
 - **Native Market Bot ("Duke") sell side — listing tick, sane-pricing
   formula, and per-template overrides.** Duke (the native bot) used to
   only *buy* player listings; it now also *lists* its own NPC stock on
@@ -257,7 +393,7 @@ extend.
   falling back to the existing actor-name / hardcoded lookups, so the
   bot can self-provision on a fresh server with no Duke yet.
 
-### Changed
+#### Changed
 - **Market tab owner labels are now honest.** The Sales and Listings
   panes previously hardcoded `Duke` for every NPC row. The SQL already
   projected `COALESCE(player_state.character_name, actors.class,
@@ -269,7 +405,7 @@ extend.
   `sane_defaults_revision < 1`, so subsequent edits are preserved on
   later restarts).
 
-### Fixed
+#### Fixed
 - **Bot enable now offers to wipe foreign-bot listings before starting.**
   When the operator flips Duke to *Enabled*, the toggle now first checks
   for non-Duke NPC orders sitting in `dune.dune_exchange_orders` (Revy
@@ -308,9 +444,9 @@ extend.
   servers without a `quality_level` column on `dune_exchange_orders`
   still work via a `COALESCE(o.quality_level, 0)` guard.
 
-## [11.5.1] - 2026-06-11
+### v11.5.1 - 2026-06-11
 
-### Added
+#### Added
 - **All default settings browser (Game Config).** A new collapsible
   *All default settings* card on the Game Config page reads the
   battlegroup's live `DefaultGame.ini` and `DefaultEngine.ini` straight
@@ -331,13 +467,13 @@ extend.
   selection** checkbox. The acknowledgement is stored locally per DST
   version, so a fresh release re-prompts you to re-read the warning.
 
-## [12.3.0] - 2026-06-11
+### v11.5.0 - 2026-06-11
 
 New edition. Headlines: the native **Gameplay Admin** console (the
 open-source Dune admin portal rebuilt inside DST) and a **Game Config**
 editor in BETA.
 
-### Added
+#### Added
 - **Gameplay Admin (native Dune admin portal).** A tabbed console —
   Overview, Market / Exchange, Market Bot, Players, Bases, Storage, and
   Blueprints — built on the same SSH + psql bridge as the rest of DST, so
@@ -355,14 +491,14 @@ editor in BETA.
   **View backups** button (lists recent `.dstbak-*` restore points) make the
   experimental nature and the restore path obvious.
 
-### Changed
+#### Changed
 - **Docs + marketing site refreshed** around a curated six-screenshot tour
   (Server Health, Commands, Game Config BETA, Gameplay Admin, Database,
   Settings), all recaptured with PII scrubbed.
 
-## [11.4.13] - 2026-06-11
+### v11.4.13 - 2026-06-11
 
-### Added
+#### Added
 - **Open Funcom's battlegroup.bat from Settings.** A new **"Funcom
   BattleGroup.bat"** button sits above the Browse button on the Steam install
   path field (Settings → Tool configuration). It opens the original
@@ -372,9 +508,9 @@ editor in BETA.
   `.bat` (which itself runs `battlegroup.ps1` and pauses on exit) with
   administrator rights.
 
-## [11.4.12] - 2026-06-11
+### v11.4.12 - 2026-06-11
 
-### Fixed
+#### Fixed
 - **"Report an issue" now actually produces the diagnostics ZIP.** The Help →
   Report an issue bundle staged the archive to a `...zip.tmp` path before
   renaming it into place. Under Windows PowerShell 5.1 — which the packaged
@@ -395,9 +531,9 @@ editor in BETA.
   flagging that the `rotate-ssh-key` warning was unreadable before the window
   closed.
 
-## [11.4.11] - 2026-06-10
+### v11.4.11 - 2026-06-10
 
-### Fixed
+#### Fixed
 - **Rotating the SSH key can no longer silently lock you out.** Settings →
   SSH key → "Generate new" (the `rotate-ssh-key` command) regenerates the
   local key and then authorizes it on the VM by SSHing in with the `dune`
@@ -418,7 +554,7 @@ editor in BETA.
   warnings (such as the fallback-location notice), or a clear error with
   manual log-attach instructions when the bundle can't be built.
 
-### Changed
+#### Changed
 - **Verified compatible with Dune: Awakening 1.4.5.0.** Confirmed DST
   v11.4.11 works against Funcom's latest release — both the game client and
   the self-hosted server software — tested live against the 1.4.5.0 server
@@ -441,9 +577,9 @@ editor in BETA.
   and the install page. The 1.4.5.0 on-demand partition drift behavior is
   unchanged, so the `dune-clear-partitions` workaround remains required.
 
-## [11.4.10] - 2026-06-10
+### v11.4.10 - 2026-06-10
 
-### Fixed
+#### Fixed
 - **Reboot / Start BG no longer hang for up to 15 minutes on the "Waiting for
   DB pod(s) Ready…" step.** The readiness gate matched database pods by the
   `-db-` name pattern, which also caught the one-shot `db-dbdepl-util` Job pod
@@ -458,9 +594,9 @@ editor in BETA.
   (`db-dbdepl-sts-*`). Verified against the live cluster: the new filter
   returns exactly the DB pod where the old one returned four.
 
-## [11.4.9] - 2026-06-10
+### v11.4.9 - 2026-06-10
 
-### Fixed
+#### Fixed
 - **The "Update available" banner now appears as soon as a new release is
   detected — including right after you click "Check now" in Settings.**
   Previously the global banner and the Settings update card each kept their
@@ -473,9 +609,9 @@ editor in BETA.
   poll, the startup check, or a manual "Check now") updates the banner
   immediately, with no full page reload required.
 
-## [11.4.8] - 2026-06-10
+### v11.4.8 - 2026-06-10
 
-### Added
+#### Added
 - **New VM command: `change-vm-ip` ("Change VM IP").** Lets you change the
   VM's network address — or switch how it gets one — without leaving DST.
   Choose DHCP (automatic from your router) or a static IP (simple, or
@@ -483,14 +619,14 @@ editor in BETA.
   VM over SSH and networking is restarted in place. Available in the VM
   section of the Commands page (and the CLI menu) whenever the VM is running.
 
-### Changed
+#### Changed
 - **"Start BG Only" no longer waits 45s before clearing on-demand map
   partition pins.** On a plain `start` the VM is already up and the operator
   pins the on-demand ServerSets quickly, so the post-start settle is now
   **9s** instead of 45s — the window closes much sooner. `restart`, `reboot`,
   and `startup` keep their existing settle times.
 
-### Fixed
+#### Fixed
 - **The app no longer gets stuck on "Connecting to Dune Server Tool…
   (attempt N)" after the backend's listener silently dies.** A prior
   DuneServer process can keep running (and keep holding the single-instance
@@ -506,9 +642,9 @@ editor in BETA.
   window) is started automatically. Clicking the shortcut now self-heals the
   stuck state instead of compounding it.
 
-## [11.4.7] - 2026-06-07
+### v11.4.7 - 2026-06-07
 
-### Fixed
+#### Fixed
 - **Commands launched from the web UI can no longer freeze on a stray
   mouse click.** Each command opens in a new elevated console, which
   inherited Windows' default **QuickEdit Mode** — clicking or dragging
@@ -521,7 +657,7 @@ editor in BETA.
   title bar. `dune-server.ps1` now clears `ENABLE_QUICK_EDIT_INPUT` on its
   console at startup, so every Commands-menu action is click-proof.
 
-### Changed
+#### Changed
 - **Command menu entries now show plain-language labels instead of raw
   command ids**, making the scope of each action obvious at a glance:
   `start-vm` → **Start VM Only**, `startup` → **Start Full Stack**,
@@ -531,9 +667,9 @@ editor in BETA.
   The underlying command ids are unchanged, so saved layouts and
   shortcuts keep working.
 
-## [11.4.6] - 2026-06-07
+### v11.4.6 - 2026-06-07
 
-### Changed
+#### Changed
 - **Server Health → "Start the Dune Admin Tool" card now restarts the
   service in place instead of opening the embed tab.** The button is renamed
   **Start/Restart Dune Admin Service** and, instead of navigating to the
@@ -545,9 +681,9 @@ editor in BETA.
   The card shows a "Relaunching…" spinner and a confirmation message, and stays
   disabled until dune-admin is installed and the VM is running.
 
-## [11.4.5] - 2026-06-07
+### v11.4.5 - 2026-06-07
 
-### Changed
+#### Changed
 - **Server Health → Battlegroup info: "BG state" now reads "Healthy" (green)
   while the operator is reconciling.** The Funcom battlegroup operator sits in
   its `Reconciling` / `Reconciling Ready` phase as its normal steady state
@@ -560,16 +696,16 @@ editor in BETA.
   operator settles map churn. The Database / Gateway / Director rows and the
   Game Servers table keep their literal per-component colouring.
 
-### Added
+#### Added
 - **Server Health → Battlegroup info: a "Show raw output" toggle.** A small
   button at the bottom-right of the Battlegroup Info card reveals the raw
   `battlegroup status` text from the VM on demand ("Hide raw output" collapses
   it again). It's per-visit — the panel resets to hidden when you navigate
   away from the page.
 
-## [11.4.4] - 2026-06-05
+### v11.4.4 - 2026-06-05
 
-### Changed
+#### Changed
 - **In-app updater is now ~7-10s faster end-to-end** (typical update
   drops from ~30s to ~20s). Three independent cuts in the same
   release:
@@ -599,9 +735,9 @@ editor in BETA.
   the install footprint. Deferred unless update time is still felt
   to be a problem after this release.
 
-## [11.4.3] - 2026-06-05
+### v11.4.3 - 2026-06-05
 
-### Fixed
+#### Fixed
 - **Autostart keep-alive now actually keeps the backend running when you
   close DuneShell.** v11.4.2 disarmed the backend's app-window watcher
   when autostart was registered, but the DuneShell viewer's own
@@ -628,9 +764,9 @@ editor in BETA.
   localhost helper tool) is handed to the OS default browser, the
   same as non-localhost links.
 
-## [11.4.2] - 2026-06-05
+### v11.4.2 - 2026-06-05
 
-### Changed
+#### Changed
 - **Autostart now means "background service" immediately, not just at the
   next logon.** Toggling Help -> Run at Windows startup ON previously
   only changed behaviour at the next logon (the scheduled task launched
@@ -647,9 +783,9 @@ editor in BETA.
   itself. Toggling autostart OFF mid-run is unchanged (the next launch
   reverts to the old "close = stop" semantic).
 
-## [11.4.1] - 2026-06-05
+### v11.4.1 - 2026-06-05
 
-### Fixed
+#### Fixed
 - **DuneServer.exe failed to boot on every v11.4.0 install** with a parse
   error in `Autostart.ps1`. PS2EXE compiles against Windows PowerShell
   5.1, which reads BOM-less `.ps1` files as the system ANSI codepage
@@ -664,9 +800,9 @@ editor in BETA.
   silently again — the installer build now refuses to compile if any
   bundled `.ps1` fails to parse under PS 5.1.
 
-## [11.4.0] - 2026-06-05
+### v11.4.0 - 2026-06-05
 
-### Added
+#### Added
 - **Run at Windows startup toggle (Help menu).** New opt-in toggle in
   the Help dropdown of the top toolbar. When enabled, DuneServer launches
   automatically at every Windows sign-in via a per-user Task Scheduler
@@ -682,9 +818,9 @@ editor in BETA.
   uninstaller removes all `DuneServer-Autostart-*` scheduled tasks
   automatically. Off by default; opt-in only.
 
-## [11.3.3] - 2026-06-05
+### v11.3.3 - 2026-06-05
 
-### Security
+#### Security
 - **Free-form PowerShell page is now local-only.** The `/terminal` page
   (and its `/ws/terminal` WebSocket) lets anyone with the page open type
   arbitrary commands that run as the DuneServer service user on the
@@ -700,9 +836,9 @@ editor in BETA.
   unaffected — friends can still drive Restart Battlegroup, Clear
   Partitions, Spin Up Map, etc.
 
-## [11.3.2] - 2026-06-05
+### v11.3.2 - 2026-06-05
 
-### Fixed
+#### Fixed
 - **dune-admin console window now actually hidden.** v11.3.0 shipped the
   cmd.exe + `-Hidden` settings approach for hiding dune-admin's console
   window, but `-Hidden` on `New-ScheduledTaskSettingsSet` only hides the
@@ -716,9 +852,9 @@ editor in BETA.
   (DuneServer's), with `[admin]`-prefixed dune-admin lines mirrored in
   exactly as v11.3.0 advertised.
 
-## [11.3.1] - 2026-06-05
+### v11.3.1 - 2026-06-05
 
-### Fixed
+#### Fixed
 - **dune-admin reachable through the friend remote-portal bridge.**
   v11.2.0 added the friend helper (DSTConsole.exe) and the Dune Admin
   embed tab, but dune-admin was still bound to `127.0.0.1` only — so
@@ -742,9 +878,9 @@ editor in BETA.
   redirection. Result: one console window for the whole stack
   (DuneServer's), with `[admin]`-prefixed dune-admin lines mirrored in.
 
-## [11.3.0] - 2026-06-05
+### v11.3.0 - 2026-06-05
 
-### Changed
+#### Changed
 - **Combined console window — backend + dune-admin streams in one place.**
   Previously DST and dune-admin each opened their own Windows console
   window, so the desktop had two consoles to track. dune-admin now
@@ -758,9 +894,9 @@ editor in BETA.
   Dune Admin embed tab inside DST) is unaffected — only the on-host
   console window changes.
 
-## [11.2.0] - 2026-06-05
+### v11.2.0 - 2026-06-05
 
-### Added
+#### Added
 - **dune-admin embedded inside DST.** When DST detects a configured
   dune-admin install (its `config.yaml` is parseable), a new **Dune
   Admin** menu item appears immediately to the right of Help — with a
@@ -812,7 +948,7 @@ editor in BETA.
   area" guarantee — `app/`, `webui/`, `site/`, and `dune-server.ps1`
   are untouched.
 
-### Changed
+#### Changed
 - **Single-item menu groups render as direct links.** The Server
   Health group has exactly one page, so showing a dropdown was pure
   friction (click to open, click again to navigate). Any nav group
@@ -831,7 +967,7 @@ editor in BETA.
   `DuneServer.exe` as a safety net. Skipped when the shell is launched
   standalone (`--no-wait-file`), where no paired backend is assumed.
 
-### Security
+#### Security
 - **CI PII guard** (`.github/workflows/pii-guard.yml`). After the
   2026-06-05 incident in which a personal name was committed to
   documentation and required a full filter-repo history rewrite, every
@@ -841,7 +977,7 @@ editor in BETA.
   doesn't trip the scan. Scan covers tracked files only (`.git/` and
   `node_modules/` excluded). Required check on PRs.
 
-### Fixed
+#### Fixed
 - **Suppress redundant dune-admin browser pop when launched from the
   embed.** Clicking Start in the new Dune Admin tab launched the
   `dune-admin` command, which historically `Start-Process`'d the URL
@@ -851,9 +987,9 @@ editor in BETA.
   `dune-server.ps1` honors it, skipping the browser open. Users
   running the `dune-admin` CLI command directly are unaffected.
 
-## [11.1.0] - 2026-06-05
+### v11.1.0 - 2026-06-05
 
-### Removed
+#### Removed
 - **Characters sidebar entry + dead character API surface.** The
   "Characters" entry under Game Data was a launcher button for
   `dune-admin.exe` (Icehunter's separate character/player editor) and is
@@ -869,7 +1005,7 @@ editor in BETA.
   bundled SSH key, port/URL resolver, `setup` flow's optional download
   step) is unchanged.
 
-### Added
+#### Added
 - **Remote portal — mobile-friendly subset of DST behind Cloudflare Tunnel + Access.**
   A new top-level SPA tree under `/remote/*` (Dashboard + Maps) lets you
   view VM/battlegroup state, check the last 3 backups, and run safe
@@ -895,7 +1031,7 @@ editor in BETA.
   covering cloudflared install, tunnel create, hostname mapping, and
   CF Access policy setup.
 
-### Security
+#### Security
 - The remote portal requires **both** Cloudflare Access (per-email or
   IdP allowlist enforced at the edge) **and** the existing DuneToken
   (injected into the served `index.html` for `/remote/*` paths so a
@@ -903,13 +1039,13 @@ editor in BETA.
   Fail-closed: missing CF header, malformed ACL, or empty `owner`
   field all return 401 and the remote portal stays disabled.
 
-### Deferred to v11.2.0
+#### Deferred to v11.2.0
 - `restart-bg`, `backup-now`, player-kick, WebSocket live-log tail,
   desktop push notifications, browser-side CF Access JWT validation.
 
-## [11.0.3] - 2026-06-05
+### v11.0.3 - 2026-06-05
 
-### Fixed
+#### Fixed
 - **Windows Defender false positive on `DuneServerSetup.exe` (`Trojan:Script/Wacatac.H!ml`).**
   v11.0.1 introduced `Sync-DunePartitionAutomation`, which delivered an
   install payload to the VM via `ssh ... "echo <b64> | base64 -d | sudo sh"`.
@@ -924,15 +1060,15 @@ editor in BETA.
   that had the boot script + cron installed by v11.0.1 / v11.0.2 keep working
   harmlessly until the VM is rebuilt.)
 
-### Changed
+#### Changed
 - **Partition-clear now fires on the click, not on the clock.** The 15-min
   cron watchdog is gone; partitions are cleared inline whenever DST issues
   a Start, Restart, `startup`, `reboot`, or `fix-on-demand-maps` command —
   which is the only path a player-facing on-demand map ever needs.
 
-## [11.0.1] - 2026-06-05
+### v11.0.1 - 2026-06-05
 
-### Fixed
+#### Fixed
 - **Auto-clear pinned on-demand map partitions on every battlegroup start.**
   Previously, after a Commands-menu `startup`, `reboot`, `start`, or `restart`,
   the Funcom server-operator would re-pin `igwsss.spec.partitions:[N]` for
@@ -944,7 +1080,7 @@ editor in BETA.
   warns), with a short settling delay so the operator has time to reconcile
   before the clean-up pass.
 
-### Added
+#### Added
 - **VM-side partition automation is now versioned and self-healing.** The
   installer ships `app/resources/remote-scripts/dune-clear-partitions.start`,
   and every start / restart / reboot calls a new `Sync-DunePartitionAutomation`
@@ -955,9 +1091,9 @@ editor in BETA.
   fresh-from-Funcom Alpine image all get the boot script + 15-min watchdog
   installed automatically — no SSH-and-paste required.
 
-## [11.0.0] - 2026-06-04
+### v11.0.0 - 2026-06-04
 
-### Added
+#### Added
 - **Theming engine — full preset picker + custom color overrides + import/export.**
   Settings → Appearance now lets you swap the portal palette without rebuilding
   or editing CSS. Ships with 6 built-in presets:
@@ -992,7 +1128,7 @@ editor in BETA.
   page also recolors live (background, foreground, cursor, ANSI palette)
   when the theme changes — no Terminal-page refresh required.
 
-### Changed
+#### Changed
 - **`.btn-primary` text-color bug fixed.** The primary-button class was
   previously declared as `bg-accent text-base` — `text-base` is the
   Tailwind font-size utility (1rem) and never set a text color, so the
@@ -1014,9 +1150,13 @@ editor in BETA.
   portal (`fmtToolVersion`) and the marketing site (`formatDisplayVersion`);
   both now render `v<major>.<minor>.<patch>` to match the git tags.
 
-## [10.2.8] - 2026-06-04
+## [10.0.0] - 2026-05-30 .. 2026-06-04
 
-### Added
+_Consolidated entry covering every release in the v10.x series (36 patches). Tags on GitHub still exist for each individual release._
+
+### v10.2.8 - 2026-06-04
+
+#### Added
 - **Map SpinUp page: "Fix partitions" button.** New action in the page header
   invokes the existing `POST /api/maps/fix-partitions` endpoint (which runs
   the remote `/etc/local.d/dune-clear-partitions.start` script) to clear the
@@ -1032,7 +1172,7 @@ editor in BETA.
   excluded by suffix matching — and any map with a running pod is skipped
   so live sessions are never disturbed.
 
-### Changed
+#### Changed
 - **Boot script `/etc/local.d/dune-clear-partitions.start` hardened on the
   VM** (manual install — not part of this app release, documented here for
   history). The pre-existing script waited for the K3s API and the `igwsss`
@@ -1048,9 +1188,9 @@ editor in BETA.
   (`/etc/periodic/15min/dune-clear-partitions`) is unchanged and continues
   to act as belt-and-suspenders.
 
-## [10.2.7] - 2026-06-04
+### v10.2.7 - 2026-06-04
 
-### Changed
+#### Changed
 - **In-app updater is now silent.** Clicking *Install update* now closes the
   Dune Server app and console after a 3-second grace period, then runs the
   Inno installer with `/VERYSILENT /SUPPRESSMSGBOXES /NORESTART /NOCANCEL` in
@@ -1078,16 +1218,16 @@ editor in BETA.
   Existing v10.2.6 configs are grandfathered (blank schema + valid
   ConsolePresence → use it and backfill schema=1).
 
-### Fixed
+#### Fixed
 - **Apostrophe-in-username crash in the updater relauncher.** Paths embedded
   into the generated `DuneRelaunch-*.ps1` are now escaped (`'` → `''`)
   before being interpolated into single-quoted PowerShell literals, so usernames
   like `C:\Users\O'Brien\AppData\...` no longer break the relauncher with a
   parse error on the first sleep.
 
-## [10.2.6] - 2026-06-04
+### v10.2.6 - 2026-06-04
 
-### Fixed
+#### Fixed
 - **Dune-admin pricing patch: rebuild now survives upstream file-to-directory
   refactors.** After Icehunter/dune-admin v0.24.0 refactored
   `web/src/tabs/WelcomePackageTab.tsx` into `web/src/tabs/WelcomePackageTab/`
@@ -1117,9 +1257,9 @@ editor in BETA.
   gets rebuilt instead of reused. Fixes future upstream refactors of
   this shape without needing per-release patches.
 
-## [10.2.5] - 2026-06-03
+### v10.2.5 - 2026-06-03
 
-### Added
+#### Added
 - **Help → Create GitHub Issue + Save Logs** in the top menu bar — one
   click opens the prefilled `bug_report.yml` issue form **and** drops a
   redacted `dst-diagnostics-<timestamp>.zip` on the user's Desktop with
@@ -1135,7 +1275,7 @@ editor in BETA.
   secrets for `SshKey`, `WindowsUser`, `SteamPath`, `DuneAdminExe`,
   `PortCheckUrlTemplate` from every text file written into the bundle.
 
-### Changed
+#### Changed
 - **Bug report template (`bug_report.yml`)** updated for the v10.2.x
   app layout — surface dropdown now lists Server Health, Commands,
   PowerShell, Characters, Game Config, DD Map, Database, Sietches, Map
@@ -1148,29 +1288,29 @@ editor in BETA.
   desktop app's Help → Create GitHub Issue + Save Logs flow for the
   one-click attachable ZIP. URL-prefilled diagnostics are unchanged.
 
-### Removed
+#### Removed
 - Legacy `bug_report.md` issue template (duplicate on the issue
   chooser; the YAML form supersedes it).
 
-## [10.2.4] - 2026-06-03
+### v10.2.4 - 2026-06-03
 
-### Changed
+#### Changed
 - **Help dropdown** in the top menu bar moved from the right edge to
   immediately right of `System` (the last sidebar group). Removed the
   flex spacer that pushed it to the far right; the dropdown panel now
   anchors `left-0` so it opens directly under the Help button.
 
-## [10.2.3] - 2026-06-03
+### v10.2.3 - 2026-06-03
 
-### Changed
+#### Changed
 - **Map SpinUp icon** changed from `Power` to `Globe` in both the
   sidebar and the Database menubar dropdown — more representative of
   what the page does (spawn a region/map server) and stops it from
   looking like a generic on/off control.
 
-## [10.2.2] - 2026-06-03
+### v10.2.2 - 2026-06-03
 
-### Removed
+#### Removed
 - **Native WinForms `MenuStrip`** (the thin strip directly under the
   Windows title bar with `Server Health · Settings · View`). Redundant
   with the React top menu bar shipped in v10.2.0 — it duplicated nav
@@ -1178,17 +1318,17 @@ editor in BETA.
   `BuildMenu()` and the unused `NavigateRoute` helper in `MainForm.cs`
   are gone.
 
-## [10.2.1] - 2026-06-03
+### v10.2.1 - 2026-06-03
 
-### Changed
+#### Changed
 - **Top menu bar and its dropdowns are now fully opaque.** Removed the
   semi-transparent surface tint + `backdrop-blur-md` (menubar strip) and
   the `card` translucency + `backdrop-blur-sm` (dropdown panels) so page
   content underneath no longer bleeds through. Solid `bg-surface` on both.
 
-## [10.2.0] - 2026-06-03
+### v10.2.0 - 2026-06-03
 
-### Added
+#### Added
 - **Top menu bar** above the StatusBar (classic desktop-app layout). One
   dropdown per nav group — **Server Health**, **PowerShell**, **Game Data**,
   **Database**, **System** — plus a rightmost **Help** dropdown for
@@ -1205,7 +1345,7 @@ editor in BETA.
 - **`Database` nav group** (both in the menubar dropdown and the left
   sidebar). Houses Database, Sietches, and Map SpinUp.
 
-### Changed
+#### Changed
 - **Sidebar regrouping.** **Database**, **Sietches**, and **Map SpinUp**
   moved out of `Game Data` and into the new `Database` group. `Game Data`
   now contains Characters, Game Config, and DD Map.
@@ -1213,9 +1353,9 @@ editor in BETA.
   new menubar's Characters item share one launch implementation (no
   behavior change — same skip-if-running + port-resolve fallback).
 
-## [10.1.15] - 2026-06-03
+### v10.1.15 - 2026-06-03
 
-### Changed
+#### Changed
 - **HTTP API handlers now run on a runspace pool instead of inline on the
   listener thread** (closes the v10.1.14 _Known limitation_; issue #47). The
   single-threaded `HttpListener` loop used to run every `/api/*` handler
@@ -1247,7 +1387,7 @@ editor in BETA.
     cap), and the accept loop reaps finished pipelines each iteration. If the
     pool fails to initialize for any reason, the server falls back to the
     legacy inline dispatch rather than failing to start.
-### Fixed
+#### Fixed
 - **Pricing patch now applies cleanly on dune-admin v0.23.2** (and absorbs
   future minor upstream context drift automatically). v0.23.2 added a
   `gameNow int64` parameter to `Exchange.buyPlayerListings`, which broke a
@@ -1256,7 +1396,7 @@ editor in BETA.
   in the **Pricing** screen. The patch has been updated to match the new
   `buyPlayerListings(ctx, orderExpiry, gameNow, snap)` signature.
 
-### Added
+#### Added
 - **Fuzz-tolerant patch fallback in `build-patched.ps1`.** When `git apply`
   refuses a hunk (typically because upstream changed a context line), the
   build script now falls back to GNU `patch.exe` (shipped with Git for
@@ -1272,12 +1412,12 @@ editor in BETA.
   surfaces in the UI log when the fallback fires so the bundled patch can
   be refreshed against the new upstream.
 
-### Internal
+#### Internal
 - Bumped version to 10.1.15.
 
-## [10.1.14] - 2026-06-03
+### v10.1.14 - 2026-06-03
 
-### Fixed
+#### Fixed
 - **`Invoke-V6Ssh -TimeoutSec` is now actually enforced.** The function
   accepted a `-TimeoutSec` parameter but completely ignored it — the only
   OpenSSH-level timeout being set was `ConnectTimeout=8`, which caps the
@@ -1301,7 +1441,7 @@ editor in BETA.
   fails, OpenSSH itself will now tear down a silent session within
   ~30 s instead of clinging to it forever.
 
-### Known limitations (deferred to v10.1.15)
+#### Known limitations (deferred to v10.1.15)
 - The HTTP listener still dispatches API route handlers inline on a
   single thread (`app/server/HttpServer.ps1:298-327`); only WebSocket
   upgrades are pushed onto a runspace pool. A slow handler still blocks
@@ -1312,9 +1452,9 @@ editor in BETA.
   503 when the pool is saturated), and async response cleanup — is
   designed for v10.1.15 in a follow-up issue.
 
-## [10.1.13] - 2026-06-03
+### v10.1.13 - 2026-06-03
 
-### Fixed
+#### Fixed
 - **In-app updater no longer silently reports "up to date" when a newer
   release has no installer attached.** Previously the `available` flag on
   `/api/update/check` was gated on **both** "newer tag exists" **and** "a
@@ -1337,7 +1477,7 @@ editor in BETA.
   MapSpinUp fix and the updater-honesty fix together, with a proper
   installer attached.
 
-### Changed
+#### Changed
 - Release-readiness rule (now enforced by checklist): **every** DST GitHub
   release must upload `DuneServerSetup.exe` as its sole asset. Code-only
   releases are forbidden - the asset-less v10.1.12 broke this rule and
@@ -1354,7 +1494,7 @@ editor in BETA.
   was removed - it masked malformed releases and conflicts with the
   one-asset rule.
 
-## [10.1.12] - 2026-06-03
+### v10.1.12 - 2026-06-03
 
 > **Note:** v10.1.12 was tagged and a GitHub release was published, but
 > the release was missing its `DuneServerSetup.exe` asset and the four
@@ -1364,7 +1504,7 @@ editor in BETA.
 > has been carried forward into v10.1.13, which ships with a working
 > installer. **Use v10.1.13 instead.**
 
-### Fixed
+#### Fixed
 - **MapSpinUp no longer no-ops on DeepDesert_1, SH_Arrakeen, and
   SH_HarkoVillage after the Funcom director image update
   (`1973075-0-shipping` → `1979201-0-shipping`).** The new director only
@@ -1377,9 +1517,9 @@ editor in BETA.
   written with no spaces (Funcom-strict format).
   (coastal-ms/DST-DuneServerTool#44)
 
-## [10.1.11] - 2026-06-03
+### v10.1.11 - 2026-06-03
 
-### Fixed
+#### Fixed
 - **Battlegroup no longer shows a bare "Unknown" when SSH fails — the Dashboard
   now tells you _why_.** The status snapshot runs `battlegroup status` over a
   non-interactive (`BatchMode=yes`) SSH session. Previously, if that SSH call
@@ -1399,7 +1539,7 @@ editor in BETA.
   `ssh-keygen -p`). New helpers `Test-DuneSshKeyEncrypted` and
   `Get-DuneSshFailureReason` in `app/server/lib/Status.ps1`.
 
-### Changed
+#### Changed
 - **Bug-report template (the in-app **?** help button) now covers VM/SSH
   diagnostics and tells you exactly where to find them.** The template used to
   tell users *not* to report any SSH/VM-connectivity problem — which hid the
@@ -1412,9 +1552,9 @@ editor in BETA.
   key from an unauthorized one. The CLI `report-issue` wording and the legacy
   Markdown template were updated to match.
 
-## [10.1.10] - 2026-06-02
+### v10.1.10 - 2026-06-02
 
-### Fixed
+#### Fixed
 - **"Web Portal" sidebar button now actually opens the browser.** Clicking the
   button in 10.1.9 set the server-side detach flag but the WebView2 host
   silently dropped the "open URL and close" message — the React UI posts a JS
@@ -1434,9 +1574,9 @@ editor in BETA.
 - **Dialog buttons are now stacked full-width** (primary on top, Cancel
   below) so they read cleanly on narrow layouts.
 
-## [10.1.9] - 2026-06-02
+### v10.1.9 - 2026-06-02
 
-### Changed
+#### Changed
 - **Sidebar "Install as app" button is gone, replaced by "Web Portal".**
   Dune Server Tool now ships as a real native app window (WebView2), so the
   old PWA-install affordance was redundant. The new **Web Portal** button
@@ -1445,7 +1585,7 @@ editor in BETA.
   server running in the background** so the browser tab keeps working with
   no restart and no token rotation.
 
-### Added
+#### Added
 - **Detach + restore lifecycle.** A new `/api/portal/open-in-browser`
   endpoint sets a detach flag the app-window watcher honors (so closing the
   shell after "Web Portal" no longer stops the listener). Reopening Dune
@@ -1453,15 +1593,15 @@ editor in BETA.
   prior server and starts a fresh one (one UAC prompt, fresh token, fresh
   app window) — no orphaned headless processes pile up across the day.
 
-### Fixed
+#### Fixed
 - WebView2 host bridge (`chrome.webview.postMessage`) is now wired into the
   React portal so the page can ask the native shell to open URLs in the
   default browser. Previously the shell only consumed `window.open`
   intercepts via `NewWindowRequested`, which couldn't reach loopback URLs.
 
-## [10.1.8] - 2026-06-02
+### v10.1.8 - 2026-06-02
 
-### Added
+#### Added
 - **Backup Schedule card on the Database page.** The portal now installs a
   recurring `battlegroup backup` cron on the VM directly from the UI, with
   optional auto-pruning of dump files older than N days. Presets cover hourly,
@@ -1479,18 +1619,18 @@ editor in BETA.
   unchanged. Note that the schedule lives on the VM, so reprovisioning the VM
   loses it and it must be re-installed from the card.
 
-## [10.1.7] - 2026-06-01
+### v10.1.7 - 2026-06-01
 
-### Removed
+#### Removed
 - **The "Wipe all listings" testing tool was removed from the Settings page.**
   dune-admin now ships its own **Wipe Listings** control in its market-bot
   panel, which owns that job directly. The portal's `POST /api/db/wipe-bot-listings`
   route and the Settings-page wipe panel (checkbox + button) are gone, removing a
   duplicate, destructive DB action from the tool.
 
-## [10.1.6] - 2026-06-01
+### v10.1.6 - 2026-06-01
 
-### Changed
+#### Changed
 - **The portal no longer wastes time reinstalling dune-admin when it's already
   patched.** When sane-pricing auto-apply is enabled and the dune-admin binary
   on disk is already the patched build for the exact upstream version *and* the
@@ -1503,9 +1643,9 @@ editor in BETA.
 - The Settings page now reports "already up to date and patched" instead of
   running a redundant reinstall, and re-checks update status afterward.
 
-## [10.1.5] - 2026-05-31
+### v10.1.5 - 2026-05-31
 
-### Fixed
+#### Fixed
 - **The portal no longer kills its own server right after an update/relaunch.**
   The app-window watcher (which stops the server when you close the window) was
   armed on the specific DuneShell window the server launched. Because DuneShell
@@ -1518,14 +1658,14 @@ editor in BETA.
   server if **no** DuneShell window survives a short grace period; if one does, it
   re-arms on it and keeps serving. Closing the last window still stops the server.
 
-## [10.1.4] - 2026-05-31
+### v10.1.4 - 2026-05-31
 
-### Added
+#### Added
 - **Map SpinUp page** — spin native maps up or down on the live battlegroup by
   patching `director.ini` via a base64-piped `kubectl patch --patch-file` (no
   fragile embedded quoting).
 
-### Fixed
+#### Fixed
 - **dune-admin gets its own loopback port when another app squats 8080.** When a
   foreign process (e.g. CubeCoders AMP) already holds the configured dune-admin
   port, the launcher now moves dune-admin to a free `127.0.0.1` port instead of
@@ -1534,9 +1674,9 @@ editor in BETA.
   version constant compiled into `DuneServer.exe` is now bumped together with the
   installer metadata, so the update banner clears correctly after installing.
 
-## [10.1.3] - 2026-05-31
+### v10.1.3 - 2026-05-31
 
-### Added
+#### Added
 - **The installer now offers to install the pricing-patch build tools.** The
   optional "sane pricing" market patch compiles a patched `dune-admin.exe` from
   source, which needs Node.js, Go and Git. At install time DST checks whether
@@ -1555,7 +1695,7 @@ editor in BETA.
   listening, the patch applies on its own (it briefly stops dune-admin to swap in
   the patched build).
 
-### Fixed
+#### Fixed
 - **The desktop window no longer gets stuck on "Hmmm… can't reach this page".**
   DuneShell (the WebView2 app window) revealed the page on the first navigation
   regardless of whether it succeeded, so if it started a moment before the portal's
@@ -1571,9 +1711,9 @@ editor in BETA.
   build wrapper now probes each pnpm candidate with `--version` and falls back to
   `corepack pnpm`, so the web-UI build resolves a working pnpm reliably.
 
-## [10.1.2] - 2026-05-31
+### v10.1.2 - 2026-05-31
 
-### Fixed
+#### Fixed
 - **dune-admin now opens on the correct per-user port instead of a hardcoded
   `8080`.** dune-admin's listen port is configurable (`listen_addr` in
   `~/.dune-admin/config.yaml`): it defaults to `:8080`, but its setup wizard
@@ -1602,13 +1742,13 @@ editor in BETA.
   readiness probe was also fixed to test the dune-admin-owned address, so it can
   no longer report AMP as "dune-admin is listening."
 
-### Added
+#### Added
 - `GET /api/dune-admin/web-url` — single source of truth for dune-admin's
   effective URL/port (`configured`, `port`, `listenAddr`, `url`, `listening`,
   `ownerProcess`, `listeningIsDuneAdmin`). The UI reads this instead of guessing
   `8080`, so fallbacks never open a non-dune-admin panel.
 
-### Changed
+#### Changed
 - **The sane-pricing patch no longer re-downloads the dune-admin web UI's whole
   dependency tree on every reinstall.** The web UI is identical across
   pricing-patch rebuilds (the patch only touches Go), so the patched build now
@@ -1623,7 +1763,7 @@ editor in BETA.
 
 
 
-### Fixed
+#### Fixed
 - **Hotfix: the app failed to start ("Dune Server bootstrap failed").** Two
   diagnostics strings shipped in 10.1.0 used syntax that Windows PowerShell 5.1
   (the engine the packaged `DuneServer.exe` runs under) could not parse, so
@@ -1634,9 +1774,9 @@ editor in BETA.
   (PowerShell 7 only). Both replaced with 5.1-safe equivalents; all dot-sourced
   `lib/`/`routes/` files now verified to parse under 5.1.
 
-## [10.1.0] - 2026-05-31
+### v10.1.0 - 2026-05-31
 
-### Added
+#### Added
 - **"DST needs X — install it?" dependency popup.** When a feature needs a build
   tool that's missing (Go, Git, Node.js), DST now detects it and offers to
   install it for you via `winget` from a single modal, instead of failing the
@@ -1649,7 +1789,7 @@ editor in BETA.
   `POST /api/system/dependencies/install`,
   `GET /api/system/dependencies/install-status`.
 
-### Changed
+#### Changed
 - **dune-admin links now open the LOCAL instance** (`http://localhost:<port>/#/...`,
   port derived from `listen_addr`, default 8080) instead of the hosted
   `dune-admin.layout.tools` site. The hosted UI is a different origin from your
@@ -1657,7 +1797,7 @@ editor in BETA.
   embedded, same-origin UI dune-admin serves needs neither. Updated the launcher,
   sidebar "Characters" link, setup-wizard link, and README.
 
-### Fixed
+#### Fixed
 - **Market Bot diagnostic false "not configured".** The troubleshooter inferred
   "configured" from two legacy `config.yaml` keys (`market_bot_addr` /
   `market_bot_container`) that modern dune-admin leaves empty, so a perfectly
@@ -1670,9 +1810,9 @@ editor in BETA.
   and points at updating DST / reinstalling to get an embed build, rather than
   suggesting unrelated workarounds.
 
-## [10.0.12] - 2026-05-31
+### v10.0.12 - 2026-05-31
 
-### Fixed
+#### Fixed
 - **Patched dune-admin builds served no web UI ("can't access dune-admin / the
   Market Bot panel").** The local pricing-patch build ran a plain `go build`,
   which omits the `embed` build tag and never built the SPA — so the rebuilt
@@ -1685,9 +1825,9 @@ editor in BETA.
   binary. To unblock immediately on an older build, uncheck "Keep Coastal's
   sane-pricing patch" and reinstall to use the upstream prebuilt binary.
 
-## [10.0.11] - 2026-05-31
+### v10.0.11 - 2026-05-31
 
-### Fixed
+#### Fixed
 - **Crash on close when the console is sent to the system tray.** Picking "Send to
   system tray" then closing the app window could pop a .NET "Unhandled exception …
   The pipeline has been stopped" dialog. Shutdown force-stopped the tray runspace
@@ -1700,9 +1840,9 @@ editor in BETA.
   host, so the diagnostics report errored on machines running the installed build
   (it happened to work in a dev PowerShell session). Renamed the local variable.
 
-## [10.0.10] - 2026-05-31
+### v10.0.10 - 2026-05-31
 
-### Added
+#### Added
 - **dune-admin diagnostics.** Settings → dune-admin card now has a "Troubleshoot
   dune-admin" panel that runs a one-shot health report: backend reachability on
   the SPA's expected port, config.yaml vs environment-variable precedence, stale
@@ -1711,7 +1851,7 @@ editor in BETA.
   findings with hints plus a "Copy report" button so issues like the dune-admin
   portal's "Failed to fetch" can be self-diagnosed or shared for support.
 
-### Removed
+#### Removed
 - **"Use local config files" feature.** The `%APPDATA%\DuneServer\configFiles`
   store, its "Refresh config files" / "Use local config files" controls, and the
   `UseLocalConfigFiles` config key have been removed — they added maintenance
@@ -1720,7 +1860,7 @@ editor in BETA.
   updated, and the `rotate-ssh-key` command continues to re-copy the freshly
   rotated key there, so no functionality is lost.
 
-### Changed
+#### Changed
 - **Console + app-window share one lifecycle.** Closing the DuneShell app window
   now stops the server/console, and closing the console (or picking "Quit" from
   the tray) closes the app window — symmetric cleanup, one console + one app
@@ -1730,7 +1870,7 @@ editor in BETA.
 
 
 
-### Fixed
+#### Fixed
 - `startup` and `reboot` no longer abort before starting the battlegroup when a
   pre-start readiness check is slow. Previously, if the k3s API, operator pods,
   or operator webhook endpoints didn't report Ready within their (already
@@ -1740,9 +1880,9 @@ editor in BETA.
   VM-IP and SSH checks remain hard prerequisites because the battlegroup is
   started over SSH and cannot run without them.
 
-## [10.0.8] - 2026-05-31
+### v10.0.8 - 2026-05-31
 
-### Fixed
+#### Fixed
 - Clicking the desktop shortcut while the server is already running now
   re-opens (and focuses) the standalone app window instead of opening the
   portal in a web browser. The single-instance handler predated the app
@@ -1754,9 +1894,9 @@ editor in BETA.
   also prevents the "both the app and a browser tab opened" behavior seen
   right after an in-app update.
 
-## [10.0.7] - 2026-05-31
+### v10.0.7 - 2026-05-31
 
-### Fixed
+#### Fixed
 - Standalone app window can no longer restore off-screen. The saved
   position is now clamped onto a currently-connected monitor with the
   title bar always reachable: it snaps to the display it overlaps most
@@ -1765,28 +1905,26 @@ editor in BETA.
   saved on a secondary monitor that was later disconnected — or parked
   far off the primary display — could open where it couldn't be seen.
 
-## [10.0.6] - 2026-05-31
+### v10.0.6 - 2026-05-31
 
-### Changed
+#### Changed
 - **License switched from MIT to Apache 2.0** to add explicit
   notice-preservation (Section 4) and trademark-protection (Section 6)
   clauses. You can still use, fork, and modify freely; redistributors must
   now preserve the `NOTICE` file and credit the original author. Added new
   top-level `NOTICE` file and README "License & attribution" section.
 
-### Fixed
+#### Fixed
 - App launcher now closes any stale `DuneShell` window from a previous run
   (e.g. left over after an in-app update, where the relauncher restarted
   `DuneServer.exe` but the prior WebView2 window kept pointing at the
   now-dead server). Guarantees exactly one app window after launch.
 
-
-
-## [10.0.5] - 2026-05-31
+### v10.0.5 - 2026-05-31
 
 Displayed in-app as **X (0.5)**.
 
-### Added
+#### Added
 
 - **Standalone app window.** The portal now opens in its own desktop window
   (DuneShell, a self-contained WebView2 host) instead of a browser tab, for a
@@ -1801,11 +1939,11 @@ Displayed in-app as **X (0.5)**.
     If `DuneShell.exe` is missing, the launcher automatically falls back to the
     browser.
 
-## [10.0.4] - 2026-05-30
+### v10.0.4 - 2026-05-30
 
 Displayed in-app as **X (0.4)**.
 
-### Added
+#### Added
 
 - **"Fix on-demand maps" action.** Re-runs the VM's partition-cleanup script
   (`/etc/local.d/dune-clear-partitions.start`) to clear the drifted
@@ -1819,7 +1957,7 @@ Displayed in-app as **X (0.4)**.
     the **Database** page with an inline output pane
     (`POST /api/maps/fix-partitions`).
 
-### Changed
+#### Changed
 
 - **Reinstalling dune-admin now reopens it after wiping the stale config
   folder.** When you confirm "delete" on the stale `.dune-admin` preflight
@@ -1828,12 +1966,11 @@ Displayed in-app as **X (0.4)**.
   rebuild) finishes, letting you re-run market-bot setup right away. The launch
   is deferred until the rebuild completes so the running exe can't lock it.
 
-
-## [10.0.3] - 2026-05-30
+### v10.0.3 - 2026-05-30
 
 Displayed in-app as **X (0.3)**. Cosmetic rebrand — no functional changes.
 
-### Changed
+#### Changed
 
 - **Rebranded the app to "Dune Server Tool"** across all user-visible surfaces:
   browser tab title, web app manifest, Settings page, Dashboard elevation hint,
@@ -1845,7 +1982,7 @@ Displayed in-app as **X (0.3)**. Cosmetic rebrand — no functional changes.
   Server Tool"). Updated all in-code repo references (update checker, issue links,
   badges). Old URLs continue to redirect automatically.
 
-### Notes
+#### Notes
 
 - **Existing installs upgrade in place** — they keep their current install folder
   (`C:\Program Files\Dune Server`) and only the display name changes.
@@ -1854,22 +1991,20 @@ Displayed in-app as **X (0.3)**. Cosmetic rebrand — no functional changes.
   the user-data directories (`%APPDATA%\DuneServer`, `%LOCALAPPDATA%\DuneServer`)
   all stay the same, so auto-update and existing configuration are preserved.
 
-
-## [10.0.2] - 2026-05-30
+### v10.0.2 - 2026-05-30
 
 Displayed in-app as **X (0.2)**. Patch release.
 
-### Changed
+#### Changed
 
 - **Server Health now refreshes every 10 seconds** (was 30s) so the Game Ready
   State heartbeat and game-server pod status reflect the live server much faster.
 
-
-## [10.0.1] - 2026-05-30
+### v10.0.1 - 2026-05-30
 
 Displayed in-app as **X (0.1)**. Bug-fix release.
 
-### Fixed
+#### Fixed
 
 - **dune-admin reinstall/setup no longer deletes the `~/.dune-admin` config
   folder without asking.** The stale-folder preflight used `window.confirm()`,
@@ -1880,7 +2015,7 @@ Displayed in-app as **X (0.1)**. Bug-fix release.
   Delete & continue) that always renders and defaults to non-destructive;
   Cancel aborts the reinstall/setup entirely.
 
-### Changed
+#### Changed
 
 - **Server Health heartbeat now reflects login readiness.** The heartbeat sensor
   (relabeled **"Game Ready State"**) is driven by the `Survival_1` map pod — the
@@ -1890,14 +2025,13 @@ Displayed in-app as **X (0.1)**. Bug-fix release.
   operator's reconcile state, which could read healthy before the map was joinable.
 - Refreshed all README portal screenshots (PII scrubbed).
 
-
-## [10.0.0] - 2026-05-30
+### v10.0.0 - 2026-05-30
 
 Displayed in-app as **X**. Feature release rolling up everything since 6.3.2. Focus: dune-admin
 operability (config-files handling, SSH-key rotation, folder picker, reliable
 reinstall) plus market-bot pricing correctness and a testing-only listings wipe.
 
-### Added
+#### Added
 
 - **Local config-files support.** A new "Use local config files" toggle (Settings)
   switches the server between the effective merged config and a raw local file,
@@ -1928,7 +2062,7 @@ reinstall) plus market-bot pricing correctness and a testing-only listings wipe.
   stale multiplier defaults from earlier patch versions. The pricing-logic patch
   sets bot-level defaults at patch time; operators can still adjust them later.
 
-### Changed
+#### Changed
 
 - **Header port pills** split into individual green/neutral indicators driven by
   per-port probes instead of one combined pill.
@@ -1938,7 +2072,7 @@ reinstall) plus market-bot pricing correctness and a testing-only listings wipe.
   (setting up / changing folder / reinstalling) and never auto-deletes.
 - Single-instance enforcement: any running `dune-admin` is stopped before launch.
 
-### Removed
+#### Removed
 
 - **Characters page** removed. The sidebar entry now launches dune-admin and opens
   the players URL (guarded so it only fires when the server is running).
@@ -1948,10 +2082,13 @@ reinstall) plus market-bot pricing correctness and a testing-only listings wipe.
   negative even while the bot listed thousands of items. The `.dune-admin`
   reinstall delete-prompt addresses the real "bot won't start" cause.
 
+## [6.0.0] - 2026-05-26 .. 2026-05-30
 
-## [6.3.2] - 2026-05-30
+_Consolidated entry covering every release in the v6.x series (38 patches). Tags on GitHub still exist for each individual release._
 
-### Added
+### v6.3.2 - 2026-05-30
+
+#### Added
 
 - **Auto-stop running dune-admin instances before an update.** The install/update
   route now proactively kills any running `dune-admin` process (matched by name
@@ -1973,7 +2110,7 @@ silently and dune-admin just shows an empty market with no explanation.
 Thanks to **Techtonic** for the legwork that pinned this to an unreachable
 `127.0.0.1:15432` at runtime.
 
-### Added
+#### Added
 
 - **Market-bot database health check** (Settings → dune-admin updates). Reads
   `db_host` / `db_port` / `market_bot_enabled` from dune-admin's `config.yaml`
@@ -1993,7 +2130,7 @@ on one winning number (a d12, buy-on-5 — roughly a 1-in-12 chance per listing)
 those values are now configurable from the Settings page instead of being
 hard-coded in the patch.
 
-### Added
+#### Added
 
 - **Gamble die config for the pricing patch** (Settings → dune-admin updates).
   Two new inputs — **Die size (N)** and **Buy on roll** — let you tune the bot's
@@ -2021,7 +2158,7 @@ always been lurking right behind it.
 
 Thanks again to **Techtonic** for catching this the moment 6.2.3 unblocked his build.
 
-### Fixed
+#### Fixed
 
 - **Pricing-patch rebuild failed with "You cannot call a method on a null-valued
   expression" right after `go build` started** (`fatal: not a git repository`).
@@ -2032,7 +2169,7 @@ Thanks again to **Techtonic** for catching this the moment 6.2.3 unblocked his b
   missing `VERSION` file) as **best-effort**: it stamps `commit=unknown` instead of
   crashing, so the rebuild completes.
 
-## [6.2.3] - 2026-05-30
+### v6.2.3 - 2026-05-30
 
 Hardens the dune-admin pricing-patch rebuild against line-ending corruption,
 polishes the in-app updater messaging, and fixes a couple of UI papercuts.
@@ -2040,7 +2177,7 @@ polishes the in-app updater messaging, and fixes a couple of UI papercuts.
 Big thanks to **Techtonic** on Discord for surfacing the patch-apply failure that
 led to the root-cause fix below.
 
-### Fixed
+#### Fixed
 
 - **Pricing-patch rebuild failed with "Patch does not apply cleanly" / "Patch is
   stale relative to current source."** The bundled `0001-sane-pricing-100k-cap.patch`
@@ -2061,14 +2198,14 @@ led to the root-cause fix below.
   An empty battlegroup namespace now reads **"Battlegroup not started (namespace is
   empty)."**
 
-### Changed
+#### Changed
 
 - **In-app updater messaging.** Replaced the modal/redirect dance with a clear
   full-screen status that tells you plainly to **close all leftover Dune Server
   browser tabs and console windows** once the new window opens. No more scripted
   tab-closing promises the browser can't keep.
 
-## [6.2.2] - 2026-05-30
+### v6.2.2 - 2026-05-30
 
 Makes cold first boots reliable: raises the cluster-readiness timeouts and stops
 SSH key-auth failures from silently hanging the startup flow.
@@ -2076,7 +2213,7 @@ SSH key-auth failures from silently hanging the startup flow.
 Big thanks to **Techtonic** on Discord for patiently working through a cold
 first-boot bring-up and surfacing both of these issues.
 
-### Fixed
+#### Fixed
 
 - **Startup could hang indefinitely on "Waiting for DB pod(s) Ready…" when SSH
   key auth wasn't working.** The DB / operator readiness phases run their `ssh`
@@ -2088,7 +2225,7 @@ first-boot bring-up and surfacing both of these issues.
   clear guidance (run `rotate-ssh-key`, or how to append the key's `.pub` to
   `~/.ssh/authorized_keys`) when it can't connect.
 
-### Changed
+#### Changed
 
 - **Cold-boot cluster-readiness timeouts raised.** A fresh battlegroup's *first*
   boot can take 10–30 min (k3s + funcom-operators initializing, `metrics-server`
@@ -2098,13 +2235,12 @@ first-boot bring-up and surfacing both of these issues.
   5 min. Startup/reboot now also warn up front that "first boot can take 10–30
   min." Both the `startup` and `reboot` readiness blocks were updated.
 
-
-## [6.2.1] - 2026-05-30
+### v6.2.1 - 2026-05-30
 
 Fixes the sane-pricing patch build, adds new pre-flight checks, and lets the
 updater actually close the old window.
 
-### Fixed
+#### Fixed
 
 - **`build-patched.ps1` failed with `The term 'git' is not recognized…` when the
   sane-pricing patch was applied from Settings.** The patch builder is launched by
@@ -2117,7 +2253,7 @@ updater actually close the old window.
   fails fast with an actionable **"Install Git for Windows (winget install Git.Git)"**
   message if neither can be found.
 
-### Added
+#### Added
 
 - **Pre-flight wizard now checks for Git and SSH-key authorization, with
   copy-paste fixes.** Each failing check shows the exact PowerShell command (with a
@@ -2133,7 +2269,7 @@ updater actually close the old window.
   - Existing **Administrator**, **Hyper-V**, and **disk-space** checks now also
     carry copy-paste fix commands.
 
-### Changed
+#### Changed
 
 - **The portal now opens as an app-mode window (Edge/Chrome `--app=`) when
   available.** App windows are script-closable, so the in-app updater's
@@ -2142,12 +2278,11 @@ updater actually close the old window.
   no Chromium browser is found (where the browser still blocks auto-close, and the
   takeover screen + manual Close button remain).
 
-
-## [6.2.0] - 2026-05-30
+### v6.2.0 - 2026-05-30
 
 Feature: **updater "this window is offline" takeover**, plus a release-history cleanup.
 
-### Added
+#### Added
 
 - **Update flow now takes over the whole portal when an update launches.** Clicking
   **Update now** previously left a small banner while the old window stayed fully
@@ -2162,7 +2297,7 @@ Feature: **updater "this window is offline" takeover**, plus a release-history c
   automatically when the installer finishes. _(This screen ships inside the new
   build, so it appears on the **next** update onward.)_
 
-### Changed
+#### Changed
 
 - **Pruned GitHub releases** from 32 entries down to a clean set: one release per
   major for **v1–v5**, split by minor for v6 (**v6.0**, **v6.1**, **v6.2**). Each
@@ -2171,7 +2306,7 @@ Feature: **updater "this window is offline" takeover**, plus a release-history c
 
 Fix: **Setup Wizard Step 3 (initial-setup) opened a console that "ran one thing and closed."**
 
-### Fixed
+#### Fixed
 
 - **Setup Wizard Step 3 / `initial-setup` console closing instantly:** the tool
   dot-sourced Funcom's `initial-setup.ps1` directly into `dune-server.ps1`, so the
@@ -2191,7 +2326,7 @@ Fix: **Setup Wizard Step 3 (initial-setup) opened a console that "ran one thing 
 
 Feature: **dune-admin market bot "d12 gamble buy" pricing mode**, plus Settings quality-of-life.
 
-### Added
+#### Added
 
 - **dune-admin market bot — d12 gamble buy:** the bundled sane-pricing patch now
   replaces the market bot's price-threshold buy gate with a dice roll. On every
@@ -2209,18 +2344,17 @@ Feature: **dune-admin market bot "d12 gamble buy" pricing mode**, plus Settings 
   updater pointer text now carry the "by Icehunter" badge / live repo link,
   matching the Commands page.
 
-### Fixed
+#### Fixed
 
 - **Native path picker:** fixed an "Argument type cannot be System.Void" error
   in the new browse route by using `$null = $ps.AddArgument(...)` instead of a
   `[void]…| Out-Null` call chain.
 
-
-## [6.1.31] - 2026-05-30
+### v6.1.31 - 2026-05-30
 
 Patch: **dune-admin install now auto-copies your SSH key into the dune-admin folder.**
 
-### Fixed
+#### Fixed
 
 - **dune-admin install / setup wizard:** every call to `POST /api/dune-admin/install`
   and `POST /api/dune-admin/setup` now copies the user's SSH private key (and
@@ -2247,12 +2381,11 @@ Patch: **dune-admin install now auto-copies your SSH key into the dune-admin fol
     mirrors the CLI's `Resolve-FreshSshKey` + `Copy-SshKeyToDir` pattern
     from `dune-server.ps1` so both code paths stay consistent.
 
-
-## [6.1.30] - 2026-05-29
+### v6.1.30 - 2026-05-29
 
 Patch: **Auto-updater wizard now appears in foreground; Server Health "Active spice" card has per-row spawning checkboxes.**
 
-### Added
+#### Added
 - **Server Health → Active spice card — new "Active" column with
   per-row spawning checkboxes.** A checkbox is rendered to the right
   of the Primed column for every spicefield row, reflecting and
@@ -2266,7 +2399,7 @@ Patch: **Auto-updater wizard now appears in foreground; Server Health "Active sp
 - This replaces the previous read-only red "OFF" indicator — the
   checkbox state itself now conveys ON/OFF, and the row is editable.
 
-### Fixed
+#### Fixed
 - **Installer wizard hidden behind other windows after clicking "Update".**
   The relauncher script that bridges the running `DuneServer.exe` to the
   Inno installer was running in a hidden powershell window. Hidden
@@ -2288,12 +2421,11 @@ Patch: **Auto-updater wizard now appears in foreground; Server Health "Active sp
   - Net effect: the wizard is the **first window the user sees** after
     clicking Update, not buried behind the browser.
 
-
-## [6.1.29] - 2026-05-29
+### v6.1.29 - 2026-05-29
 
 Patch: **Spicefields live-commit toggle + 5-second click rate limiter; dune-admin Icehunter credit.**
 
-### Added
+#### Added
 - **Spicefields card — live-commit "spawning" toggle.** Each row's spawning
   checkbox now writes to Postgres the moment you click it, no Save needed.
   Backed by a dedicated guard-railed endpoint
@@ -2314,16 +2446,15 @@ Patch: **Spicefields live-commit toggle + 5-second click rate limiter; dune-admi
   linking to https://github.com/Icehunter (clicking the badge does not
   launch the command — `stopPropagation` on the link).
 
-### Changed
+#### Changed
 - Spicefields `isDirty` no longer considers `isSpawningActive` (it's
   committed live now, so it should never make the row "dirty").
 
-
-## [6.1.28] - 2026-05-29
+### v6.1.28 - 2026-05-29
 
 Patch: **Idempotent reinstall — pre-patch snapshot/restore instead of git restore.**
 
-### Fixed
+#### Fixed
 - **Back-to-back reinstalls now succeed.** `build-patched.ps1` used to clean
   up after a successful build by running `git restore` on each patched file.
   That reverted the file to the user's *local* git HEAD, which on a typical
@@ -2340,12 +2471,11 @@ Patch: **Idempotent reinstall — pre-patch snapshot/restore instead of git rest
   Install clicks are now true no-ops on disk and each rebuild starts from
   a clean v0.15.0 baseline.
 
-
-## [6.1.27] - 2026-05-29
+### v6.1.27 - 2026-05-29
 
 Patch: **Fix v6.1.26 wrapper-script regression that broke every install.**
 
-### Fixed
+#### Fixed
 - **Pricing-patch wrapper now actually executes.** v6.1.26's
   `Start-DuneAdminPricingRebuild` here-string template emitted `""..""`
   (two literal double-quotes around the value) instead of `"..."` for two
@@ -2356,11 +2486,11 @@ Patch: **Fix v6.1.26 wrapper-script regression that broke every install.**
   corrected the wrapper parses, runs `build-patched.ps1`, writes the log,
   and transitions to `success`/`failed` like it did in v6.1.24/v6.1.25.
 
-## [6.1.26] - 2026-05-29
+### v6.1.26 - 2026-05-29
 
 Patch: **Make dune-admin pricing-patch reinstalls reliably succeed.**
 
-### Fixed
+#### Fixed
 - **Sane-pricing patch is now in sync with dune-admin v0.14.2.** The previous
   patch was authored against a v0.13.x baseline whose `defaultConfig()` block
   only had `common/unique/memento` rarities. v0.14.2 added a `rare` rarity
@@ -2389,7 +2519,7 @@ Patch: **Make dune-admin pricing-patch reinstalls reliably succeed.**
   a clear "patch is stale — update the Dune Server Tool" diagnostic
   instead of mangling the tree.
 
-### Changed
+#### Changed
 - **Install button is fully idempotent — reinstall as many times as you
   want.** If a previous pricing-patch rebuild is still running when you
   click Install again, the new wrapper now walks `Win32_Process` for any
@@ -2398,7 +2528,7 @@ Patch: **Make dune-admin pricing-patch reinstalls reliably succeed.**
   the status JSON immediately. Repeated clicks no longer orphan
   background work or leave the UI stuck on a stale "running" chip.
 
-### Removed
+#### Removed
 - **HEAD-clone fallback experiment removed.** Briefly considered shipping
   a "if the v0.14.x tarball build fails with marketbot symbol errors,
   fall back to cloning dune-admin HEAD and patching that" safety net.
@@ -2409,12 +2539,11 @@ Patch: **Make dune-admin pricing-patch reinstalls reliably succeed.**
   build that v0.14.2 does not need, so the added complexity earned its
   way out.
 
-
-## [6.1.25] - 2026-05-29
+### v6.1.25 - 2026-05-29
 
 Patch: **Fix install hang when pricing-patch is enabled.**
 
-### Fixed
+#### Fixed
 - **dune-admin install button no longer freezes the entire server.** When
   `AutoApplyPricingPatch=true`, the v6.1.22-v6.1.24 install route ran
   `build-patched.ps1` synchronously with `Process.WaitForExit(15 min)` on
@@ -2428,7 +2557,7 @@ Patch: **Fix install hang when pricing-patch is enabled.**
   handles from the queued+abandoned requests and often had to be killed
   manually.
 
-### Changed
+#### Changed
 - **Pricing-patch rebuild now runs fully detached.** The install route
   returns 200 as soon as the binary swap completes, with
   `pricingPatch: { status: 'running', logFile, statusFile, pid }`. The
@@ -2448,12 +2577,11 @@ Patch: **Fix install hang when pricing-patch is enabled.**
   in-flight from a previous tab/session, so refreshing the page doesn't
   hide a still-running build.
 
-
-## [6.1.24] - 2026-05-29
+### v6.1.24 - 2026-05-29
 
 Patch: **One-button dune-admin first-run setup wizard.**
 
-### Added
+#### Added
 - **New "Install + run setup wizard" button in Settings → dune-admin update card.**
   Aimed at users who've never set up dune-admin before. Click once, and the
   Dune Server Tool will:
@@ -2481,12 +2609,11 @@ Patch: **One-button dune-admin first-run setup wizard.**
   and `configYamlExists` so the frontend can hide the button after a
   successful first-run setup.
 
-
-## [6.1.23] - 2026-05-29
+### v6.1.23 - 2026-05-29
 
 Patch: **Fix silent startup crash on Restricted-policy / MOTW-tagged machines, plus preflight checker.**
 
-### Fixed
+#### Fixed
 - **Launcher silently died on Windows machines with `ExecutionPolicy=Restricted`
   OR with Mark-of-the-Web on the installer's unpacked files** (window opened,
   UAC fired, window closed, no log, no popup, no portal). Two root causes
@@ -2521,7 +2648,7 @@ Patch: **Fix silent startup crash on Restricted-policy / MOTW-tagged machines, p
   (`dune-server.ps1` and `build-patched.ps1`) had parse errors under
   Windows PowerShell 5.1 because of em-dashes mis-decoded as Windows-1252.
 
-### Added
+#### Added
 - **`tools/preflight/` — drop-in checker users can run when something is
   wrong.** `DunePreflight.bat` (launcher) + `DunePreflight.ps1` (WinForms
   results window) + `README.md`. Verifies elevation, OS build floor,
@@ -2540,12 +2667,11 @@ Patch: **Fix silent startup crash on Restricted-policy / MOTW-tagged machines, p
   clipboard report** but kept in the live GUI rows so the user can act
   on it locally.
 
-
-## [6.1.22] - 2026-05-28
+### v6.1.22 - 2026-05-28
 
 Patch: **Fold sane-pricing into the dune-admin updater (with opt-in checkbox).**
 
-### Added
+#### Added
 - **Auto-apply Coastal's sane-pricing patch on every dune-admin update.**
   New checkbox in Settings → dune-admin update card:
   *"Keep Coastal's sane-pricing patch applied after each update."* When
@@ -2576,13 +2702,13 @@ Patch: **Fold sane-pricing into the dune-admin updater (with opt-in checkbox).**
   and was verified by `go vet` + `go test ./internal/marketbot/...`
   against current upstream.
 
-### Removed
+#### Removed
 - **Manual sane-pricing card on the Database page** (`SanePricingCard.tsx`,
   `duneAdminPricing.ts`, `DuneAdminPricingPatch.ps1` routes). Replaced
   entirely by the auto-apply checkbox above — one source of truth, one
   knob, no separate apply/restore dance.
 
-### Fixed
+#### Fixed
 - **Build deadlock + handle-leak in build-patched.ps1.** The previous
   apply path redirected the child build script's stdout/stderr through
   .NET pipes, but the script ends by launching the rebuilt dune-admin
@@ -2593,24 +2719,22 @@ Patch: **Fold sane-pricing into the dune-admin updater (with opt-in checkbox).**
   `cmd /c start "" "$exe"` to `Start-Process $exe` for the final
   relaunch, so no inherited handles ever leak.
 
-
-## [6.1.21] - 2026-05-28
+### v6.1.21 - 2026-05-28
 
 Patch: **Hide the Broadcasts feature from the UI.**
 
-### Removed
+#### Removed
 - **Broadcasts** nav item and `/broadcasts` route removed from the
   sidebar / app. The page is no longer reachable from the portal.
   Backend routes (`/api/broadcasts/generic`, `/api/broadcasts/shutdown`)
   and the `Broadcast.ps1` helper remain in the installed app as dormant
   code in case the feature is brought back later.
 
-
-## [6.1.20] - 2026-05-28
+### v6.1.20 - 2026-05-28
 
 Feature: **Apply Coastal's sane-pricing patch to dune-admin from the Database page.**
 
-### Added
+#### Added
 - **Database → "dune-admin Sane-Pricing Patch (Coastal)" card.** One-click
   installs Coastal's tier-driven market-bot pricing model (with hard 100k
   cap per listing) into the user's local dune-admin v0.13.0+ source repo.
@@ -2640,7 +2764,7 @@ Feature: **Apply Coastal's sane-pricing patch to dune-admin from the Database pa
   `POST /api/dune-admin/pricing-patch/apply`,
   `POST /api/dune-admin/pricing-patch/restore`.
 
-### Changed
+#### Changed
 - Sidebar title renamed **Dune Server** → **Dune Server Tool** (also in
   the PWA-install tooltip + the Chrome/Edge install instruction).
 - `.github/ISSUE_TEMPLATE/bug_report.yml` surfaces refreshed for the v6.1
@@ -2649,17 +2773,17 @@ Feature: **Apply Coastal's sane-pricing patch to dune-admin from the Database pa
   PWA install / desktop-app shell, and Sidebar / help button entries.
   Removed legacy "Desktop app — *" prefixes.
 
-### Notes
+#### Notes
 - Apply succeeds only when every precondition is met (HTTP 412 otherwise).
 - A sidecar marker `dune-admin.exe.coastal-sane-pricing` is written next to
   the patched exe so the card can detect that the patch is already applied
   across restarts of Dune Server Tool.
 
-## [6.1.19] - 2026-05-28
+### v6.1.19 - 2026-05-28
 
 Patch: **Fix Settings page silently dropping all configuration changes.**
 
-### Fixed
+#### Fixed
 - **Settings page edits were silently discarded.** Saving any field
   (e.g. `DuneAdminExe`, `SteamPath`, `SshKey`, port-check mode) appeared
   to succeed but the value reverted on the next load. Root cause: the
@@ -2670,11 +2794,11 @@ Patch: **Fix Settings page silently dropping all configuration changes.**
   reached the persisted file. Handler now unwraps the `values` wrapper
   first, then merges into the on-disk `dune-server.config`.
 
-## [6.1.18] - 2026-05-27
+### v6.1.18 - 2026-05-27
 
 Patch: **dune-admin updater in Settings** + **Broadcasts shutdown fix**.
 
-### Added
+#### Added
 - **dune-admin.exe updater** in Settings. A new collapsible card under
   the Dune Server self-updater shows the installed version vs. the
   latest [`Icehunter/dune-admin`](https://github.com/Icehunter/dune-admin)
@@ -2686,13 +2810,13 @@ Patch: **dune-admin updater in Settings** + **Broadcasts shutdown fix**.
   `POST /api/dune-admin/install`. Refuses to overwrite a running EXE
   (returns 423 Locked).
 
-### Changed
+#### Changed
 - Settings page restructured: **Updates** card and **dune-admin.exe**
   card now live at the top of the page, both minimized by default with
   compact status pills shown in the collapsed header. Both auto-check
   on mount so the pills are populated without expanding.
 
-### Fixed
+#### Fixed
 - Broadcasts → Server Alert: shutdown timestamp is now computed
   host-side (`[DateTimeOffset]::UtcNow.AddMinutes(...)`) instead of
   via `ssh ... date -d '+N minutes' +%s`. The SSH round-trip
@@ -2701,19 +2825,18 @@ Patch: **dune-admin updater in Settings** + **Broadcasts shutdown fix**.
   *"Could not compute shutdown timestamp on the VM."* Both clocks are
   NTP-synced so there's no meaningful drift.
 
-### Notes
+#### Notes
 - README brought current: added Broadcasts, DD Map, dune-admin updater,
   and PWA install sections; removed stale tray-icon references that
   v6.1.7 had already retired.
 - Scrubbed real VM/public IPs out of `tools/Redact-Screenshots.ps1`
   comments.
 
-
-## [6.1.17] - 2026-05-27
+### v6.1.17 - 2026-05-27
 
 Minor: **Broadcasts feature** + **Install as App** (PWA) + **DD Map**.
 
-### Added
+#### Added
 - **Broadcasts page** under the Terminal nav group. Two cards (Message,
   Server Alert) let the operator push in-game notifications and
   shutdown/restart countdowns to every connected player.
@@ -2739,17 +2862,16 @@ Minor: **Broadcasts feature** + **Install as App** (PWA) + **DD Map**.
   in a new tab. Both sites block iframe embedding, so the portal surfaces
   the links in a consistent card layout instead.
 
-### Changed
+#### Changed
 - Static file server now serves `.webmanifest` with
   `application/manifest+json` so browsers recognize the PWA manifest.
 
-### Removed
+#### Removed
 - Deep Desert / Arrakeen / Harko Village on-demand map-pod startup cards
   from Server Health. The dashboard now focuses on battlegroup, port,
   and component health.
 
-
-## [6.1.16] - 2026-05-27
+### v6.1.16 - 2026-05-27
 
 Patch: **Critical startup fix — restore the server's ability to launch.**
 
@@ -2762,7 +2884,7 @@ whose default file-encoding is Windows-1252 — it mis-decoded the em-dash
 as `â€"` and the parser died. Standalone `pwsh` 7 defaults to UTF-8, so
 this never surfaced during dev / interactive testing.
 
-### Fixed
+#### Fixed
 - Re-saved 7 `.ps1` files with UTF-8 BOM so the ps2exe-hosted runtime
   parses them correctly: `PlayerGuard.ps1`, `Commands.ps1` (route),
   `Shutdown.ps1` (route), `Update.ps1` (route), `app/DuneServer.ps1`,
@@ -2771,14 +2893,13 @@ this never surfaced during dev / interactive testing.
   the rest had non-ASCII in comments / string literals that hadn't yet
   triggered a parse error but would have eventually.
 
-### Notes
+#### Notes
 - Permanent rule: any `.ps1` that will be dot-sourced by the
   ps2exe-compiled `DuneServer.exe` **must** be saved with a UTF-8 BOM if
   it contains any non-ASCII byte. Pure-ASCII files are fine without BOM.
 - v6.1.15's interactive auto-update path is preserved.
 
-
-## [6.1.15] - 2026-05-27
+### v6.1.15 - 2026-05-27
 
 Patch: **Auto-update goes interactive.**
 
@@ -2810,8 +2931,7 @@ Notes
   (anyone running the installer manually with `/VERYSILENT` still gets a
   relaunch), but it is no longer on the auto-update path.
 
-
-## [6.1.14] - 2026-05-27
+### v6.1.14 - 2026-05-27
 
 Patch: **Auto-update relaunch fix.**
 
@@ -2854,8 +2974,7 @@ Notes
   v6.1.14 onward, auto-update will relaunch correctly without manual
   intervention.
 
-
-## [6.1.13] - 2026-05-27
+### v6.1.13 - 2026-05-27
 
 Patch: **Players-online guard on mutating endpoints.**
 
@@ -2897,8 +3016,7 @@ Notes
   defaults to read-only and requires an explicit toggle + `window.confirm`
   for arbitrary SQL.
 
-
-## [6.1.12] - 2026-05-27
+### v6.1.12 - 2026-05-27
 
 Patch: **Buttons no longer word-wrap.**
 
@@ -2908,8 +3026,7 @@ Fixed
   wrapping onto two lines in narrow header layouts (most visible on the
   Commands page action bar). Affects every button in the app.
 
-
-## [6.1.11] - 2026-05-27
+### v6.1.11 - 2026-05-27
 
 Patch: **"Terminal" renamed to "PowerShell" everywhere it's user-visible.**
 
@@ -2922,8 +3039,7 @@ Changed
 The URL (`/terminal`) and route handlers (`app/server/routes/Terminal.ps1`)
 are unchanged — this is a label-only rename.
 
-
-## [6.1.10] - 2026-05-27
+### v6.1.10 - 2026-05-27
 
 Patch: **Commands page rebuilt around three first-class sections — renamable,
 dynamically sized, with a deterministic default layout.**
@@ -2971,8 +3087,7 @@ Fixed
   is no override layer to disagree with the order layer, so a command's
   section is unambiguous and survives the round trip to the server.
 
-
-## [6.1.9] - 2026-05-27
+### v6.1.9 - 2026-05-27
 
 Patch: **Commands page restyled as raised buttons + cross-section drag, and
 the sidebar "Terminal" section header renamed to "PowerShell".**
@@ -3003,8 +3118,7 @@ Changed
   **PowerShell** to better describe what the embedded session actually is.
   Individual nav item labels (*Commands*, *Terminal*) are unchanged.
 
-
-## [6.1.8] - 2026-05-27
+### v6.1.8 - 2026-05-27
 
 Patch: **Sandworm-enable confirmation gate, dashboard shutdown button removed,
 Arrakeen card layout fix, Terminal SSH launch button, and a `jsonb_set`
@@ -3068,8 +3182,7 @@ Fixed
   operation is a no-op rather than a row-wipe when the path is absent. No
   behavioural change on the happy path; this is purely a safety guard.
 
-
-## [6.1.7] - 2026-05-26
+### v6.1.7 - 2026-05-26
 
 Patch: **Fix per-refresh popup-window flash on the dashboard; remove the
 tray icon (workaround no longer needed).**
@@ -3105,7 +3218,7 @@ Removed
   `Start-DuneHttpServer`; the URL-publish job that only existed to
   feed the tray menu is gone.
 
-## [6.1.6] - 2026-05-26
+### v6.1.6 - 2026-05-26
 
 Patch: **Max primed mirrors Max active on the Game Config / Spicefields card,
 plus two new on-demand map pod cards (Arrakeen + Harko Village) and extra
@@ -3131,7 +3244,7 @@ Changed
   `app/server/lib/Maps.ps1` (`$script:DuneOnDemandMaps`) plus a single
   `<MapPodCard …/>` in `pages/Dashboard.tsx`.
 
-## [6.1.5] - 2026-05-26
+### v6.1.5 - 2026-05-26
 
 Patch: **Public port-check now falls back to canyouseeme.org when
 yougetsignal.com rate-limits the request.**
@@ -3150,8 +3263,7 @@ Fixed
   - parses the canyouseeme verdict (`<b>Success:</b> I can see your
     service` → open; `<b>Error:</b> I could not see...` → closed).
 
-
-## [6.1.4] - 2026-05-26
+### v6.1.4 - 2026-05-26
 
 Patch: **drag-and-drop reorder on the Commands page**, plus a fix for a
 relaunch-after-Shutdown race that briefly showed every panel as "Unknown"
@@ -3188,8 +3300,7 @@ Fixed
     releases the single-instance mutex, rather than relying on OS
     process-exit cleanup (which is racy under fast reopen).
 
-
-## [6.1.3] - 2026-05-26
+### v6.1.3 - 2026-05-26
 
 Patch: **silence Write-DuneLog popup modals on startup**, plus a new
 in-portal **Shutdown** button.
@@ -3216,7 +3327,7 @@ Fixed
   running as the compiled `DuneServer.exe`, log lines now go to the log file
   only — no popups.
 
-## [6.1.2] - 2026-05-26
+### v6.1.2 - 2026-05-26
 
 Patch: **single-instance gate** (clicking the desktop shortcut multiple times
 no longer spawns multiple servers or UAC prompts) and **`dune-admin` self-heal**
@@ -3252,7 +3363,7 @@ Fixed
   pause with **"Press Enter to close this window"** so the user
   actually sees what happened before the console disappears.
 
-## [6.1.1] - 2026-05-26
+### v6.1.1 - 2026-05-26
 
 Patch: **headless launcher with system-tray icon**. The console window
 that v6.1.0 showed ("Dune Server v… / Serving from … / [dune-http]
@@ -3274,7 +3385,7 @@ Changed
 Existing v6.1.0 users will see the **auto-update banner** within ~6h
 and can apply v6.1.1 in-place from Settings → Updates.
 
-## [6.1.0] - 2026-05-26
+### v6.1.0 - 2026-05-26
 
 Major release: **web portal rewrite**. The WPF UI is gone — replaced
 by a local HTTP server (`System.Net.HttpListener`) bound to
@@ -3289,7 +3400,7 @@ rebuilding. The new stack is a single static asset bundle plus a
 tiny PowerShell HTTP server — no native deps, no XAML, no embedded
 browser engine.
 
-### Added
+#### Added
 
 - **Web portal frontend** in `webui/` (Vite + React + TypeScript +
   Tailwind), built into `webui/dist/` and bundled by the installer.
@@ -3321,7 +3432,7 @@ browser engine.
 - **Setup Wizard page** — 6-step linear flow with preflight checks,
   config summary, install, security/networking review, finalize.
 
-### Changed
+#### Changed
 
 - **Installer payload** — removed `app/pages/`, `app/styles/`,
   `app/web/`, `app/lib/WebView2/`, `app/lib/Pty.Net/`. Added
@@ -3331,14 +3442,14 @@ browser engine.
 - `Build-Exe.ps1` no longer passes ps2exe flags `-NoConsole`, `-STA`,
   `-NoOutput`, `-NoError` — v6.1 wants a real console window.
 
-### Removed
+#### Removed
 
 - All v6.0.x WPF UI source (`app/pages/*.ps1`,
   `app/styles/Theme.xaml`).
 - `app/web/` (xterm host HTML + assets — now an npm dep in webui).
 - `app/lib/Pty.Net/` and `app/lib/WebView2/` native DLLs.
 
-### Added (post-rewrite refinements)
+#### Added (post-rewrite refinements)
 
 - **Server Health: structured Battlegroup Info + Game Servers cards** —
   splits the raw `kubectl get bg` text into typed fields (name, state,
@@ -3363,7 +3474,7 @@ browser engine.
 - **Characters: faction reputation** — Faction Rep tab now pulls live
   data from `dune.player_faction_reputation`.
 
-### Fixed (post-rewrite)
+#### Fixed (post-rewrite)
 
 - **Maps: on-demand spin-up** — bind partitions and clear
   `dedicatedScaling` when patching the maps CRD, so on-demand maps
@@ -3383,7 +3494,7 @@ browser engine.
   `%APPDATA%\DuneServer\` location, regardless of how the EXE was
   launched.
 
-### Changed (post-rewrite)
+#### Changed (post-rewrite)
 
 - **Dashboard: "Status" → "BG state"** under Battlegroup Info, with
   a "map churn" hint so operators can tell whether a reconcile is
@@ -3415,7 +3526,7 @@ browser engine.
   web-portal launcher. This is the last manual installer download
   v6.1+ users will ever need.
 
-## [6.0.0] - 2026-05-26
+### v6.0.0 - 2026-05-26
 
 **6.0.1 hotfix (2026-05-26):** Fixed startup crash _"XAML load failed:
 Provide value on 'System.Windows.StaticResourceExtension' threw an
@@ -3441,7 +3552,7 @@ All v6 dev iterations (page scaffolding, theme unification, layout polish,
 async-loading overlays, character/game-config wiring, port lookup, etc.)
 are consolidated into this single 6.0.0 entry.
 
-### Added
+#### Added
 
 - **Page-based navigation surface** in `app/pages/`. Each page is a
   self-contained module exposing `New-*Page` / `Show-*Page` /
@@ -3499,7 +3610,7 @@ are consolidated into this single 6.0.0 entry.
     - WebView2 runtime version field.
     - Updated transcript / log path hints, including the WebView2 debug log.
 
-### Changed
+#### Changed
 
 - **Default window dimensions** computed from `SystemParameters.WorkArea`
   at `Window.Add_Loaded` time (75% × 75% minus a ~240 px width margin,
@@ -3520,7 +3631,7 @@ are consolidated into this single 6.0.0 entry.
   Discord `@allcoast`, LICENSE copyright `Coastal`. No personal-path
   artifacts in shipped binaries.
 
-### Removed
+#### Removed
 
 - **Single output pane / left-rail-of-buttons layout** from v4.x / v5.x —
   replaced wholesale by the page-based navigation surface. The embedded
@@ -3528,7 +3639,7 @@ are consolidated into this single 6.0.0 entry.
   any CLI command spawned from a page), but it's no longer the
   centerpiece of the UI.
 
-### Fixed
+#### Fixed
 
 - **Monitoring File Browser + Director URLs** disappearing when the
   header row was resized (cards used `DockPanel.LastChildFill=True` and
@@ -3542,7 +3653,7 @@ are consolidated into this single 6.0.0 entry.
   into a cache and the tick handler only re-renders when the cached
   values actually change.
 
-### Notes for developers
+#### Notes for developers
 
 - **Page module contract** (`app/pages/<Page>.ps1`):
     - `New-<Page>Page` returns the root `Border` (an instance of
@@ -3569,6 +3680,10 @@ are consolidated into this single 6.0.0 entry.
 
 ## [5.0.0] - 2026-05-25
 
+_Consolidated entry covering every release in the v5.x series (1 patch). Tags on GitHub still exist for each individual release._
+
+### v5.0.0 - 2026-05-25
+
 Major release: **embedded terminal pane**. The right pane is now a real
 ConPTY-backed xterm.js terminal. Every command — including interactive
 ones that previously required a popup PowerShell window — runs inside
@@ -3580,7 +3695,7 @@ Consolidates **5.0.0**, **5.0.1**, and **5.0.2** — the initial-setup
 guard and the public-documentation PII scrub shipped as point releases
 are folded in here under their respective sections.
 
-### Added
+#### Added
 
 - **Embedded terminal renderer** in the right pane, backed by a real
   ConPTY. Implemented with:
@@ -3596,7 +3711,7 @@ are folded in here under their respective sections.
   missing (rare on Win11, possible on minimal Win10 / Windows Server),
   a friendly prompt links the user to the official Microsoft installer.
 
-### Changed
+#### Changed
 
 - **Every command now runs inside the embedded terminal**, including
   commands that previously opened a separate PowerShell window:
@@ -3627,7 +3742,7 @@ are folded in here under their respective sections.
   (`203.0.113.45`); installer `MyAppURL` points to the correct
   `coastal-ms` GitHub org. _(originally 5.0.2)_
 
-### Removed
+#### Removed
 
 - **Legacy web portal** — the entire `web/` directory (`Start-DuneWeb.ps1`,
   `public/index.html`, `public/app.js`, `public/styles.css`,
@@ -3645,7 +3760,7 @@ are folded in here under their respective sections.
   the old `TextBox`-based pane needed to look non-interactive). The
   terminal handles its own mouse routing.
 
-### Fixed
+#### Fixed
 
 - **PTY data + exit handlers actually fire.** PowerShell scriptblocks
   bound to events that are raised from a non-runspace background thread
@@ -3680,13 +3795,13 @@ are folded in here under their respective sections.
   `https://` protocol handler. _(carried in from v4.5.2's fix; restated
   here because v5.0.0 inherits the same launch paths)_
 
-### Internal
+#### Internal
 
 - New `Test-CorePodsRunningFromText` parser + `$script:LastCorePodsRunning`
   state mirror, wired into the same status-callback path as `Set-BgState`
   and synced through the click-handler closure shim. _(originally 5.0.1)_
 
-### Notes for developers
+#### Notes for developers
 
 - The full dependency bundle adds ~2.7 MB to the installer (Pty.Net +
   WebView2 managed/native + xterm.js assets).
@@ -3700,6 +3815,10 @@ are folded in here under their respective sections.
 
 ## [4.0.0] - 2026-05-24
 
+_Consolidated entry covering every release in the v4.x series (1 patch). Tags on GitHub still exist for each individual release._
+
+### v4.0.0 - 2026-05-24
+
 Major release: **native Windows desktop app** as the new primary entry
 point — packaged as `DuneServerSetup.exe` (Inno Setup installer wrapping
 a ps2exe-compiled `DuneServer.exe`). The `.bat` launcher and (at the
@@ -3711,7 +3830,7 @@ button styling, update checker, port-check status line, draggable
 separators, and assorted ship-day stabilization patches) is folded into
 this single 4.0.0 entry.
 
-### Added
+#### Added
 
 - **Desktop app (`app/DuneServer.ps1` → `DuneServer.exe` →
   `DuneServerSetup.exe`).** PowerShell + WPF host wrapping every CLI
@@ -3775,7 +3894,7 @@ this single 4.0.0 entry.
   Refresh button forces a fresh hit; 30s auto-refresh paints from a
   5-minute cache. _(originally 4.4.0)_
 
-### Changed
+#### Changed
 
 - **`dune-server.ps1` writable files moved to `%APPDATA%\DuneServer\`**
   (`dune-server.config`, `.boot-times.json`,
@@ -3828,7 +3947,7 @@ this single 4.0.0 entry.
   unavailable commands show a friendly message on click and a tooltip
   hint that drag-reorder still works. _(originally 4.5.1)_
 
-### Removed
+#### Removed
 
 - **Web Portal menu entry** (`web` / key `b`) from both the desktop app
   and the legacy CLI menu. The `web/` folder and `Start-DuneWeb.ps1`
@@ -3836,7 +3955,7 @@ this single 4.0.0 entry.
   launchable from the app. (Fully removed in v5.0.0.) _(originally
   4.3.0)_
 
-### Fixed
+#### Fixed
 
 - **Battlegroup status header never populated** in the v4.0.0 ship —
   background `Start-Job` calling `Get-VM` from a ps2exe binary lost its
@@ -3884,7 +4003,7 @@ this single 4.0.0 entry.
   blue when an update exists; the YesNo "Update Available" prompt only
   appears on explicit Check-for-Updates clicks. _(originally 4.3.1)_
 
-### Notes for developers
+#### Notes for developers
 
 - The compiled `DuneServer.exe` is unsigned — Windows SmartScreen will
   warn on first run ("Unknown publisher"). Click "More info" → "Run
@@ -3895,11 +4014,15 @@ this single 4.0.0 entry.
 
 ## [3.0.0] - 2026-05-24
 
+_Consolidated entry covering every release in the v3.x series (1 patch). Tags on GitHub still exist for each individual release._
+
+### v3.0.0 - 2026-05-24
+
 Consolidation release. Supersedes all prior 2.x releases — the 2.0.0
 through 2.0.6 GitHub Releases were rolled into this single 3.0.0 entry
 at the time. Also folds in the v3.0.1 / v3.1.2 patches.
 
-### Added
+#### Added
 
 - **Localhost web UI** (`b. web` menu option).
   [Pode](https://github.com/Badgerati/Pode)-based server on
@@ -3939,7 +4062,7 @@ at the time. Also folds in the v3.0.1 / v3.1.2 patches.
   bringing the host online. Web portal mirrors the new key layout.
   _(originally 3.0.1)_
 
-### Changed
+#### Changed
 
 - **Menu rename + reorder.** `graceful-shutdown` is now just `shutdown`
   (`d.`), `graceful-reboot` is just `reboot` (`e.`). Behavior unchanged
@@ -3967,7 +4090,7 @@ at the time. Also folds in the v3.0.1 / v3.1.2 patches.
   Refresh button. Powered by a new `GET /api/bg-status` endpoint in
   `web/Start-DuneWeb.ps1`. _(originally 3.0.1)_
 
-### Fixed
+#### Fixed
 
 - **Web UI showed "Error fetching status" and rendered no command
   buttons.** Pode route scriptblocks run in isolated runspaces and
@@ -4021,7 +4144,7 @@ at the time. Also folds in the v3.0.1 / v3.1.2 patches.
   `dune-server.bat` wrapper also reports the PowerShell exit code
   before pausing. _(originally 3.0.1)_
 
-### Removed
+#### Removed
 
 - **`b. start-vm` and `c. stop-vm` menu entries.** The graceful
   counterparts (`c. startup` cold-starts the full stack; `d. shutdown`
@@ -4030,7 +4153,7 @@ at the time. Also folds in the v3.0.1 / v3.1.2 patches.
   existing automation calling them by name. `start-vm` was later
   re-added as a real menu entry in 3.0.1.)
 
-### Internal
+#### Internal
 
 - New helpers: `Install-DuneAdminLatest`, `Resolve-FreshSshKey`,
   `Copy-SshKeyToDir`, `New-DuneDesktopShortcut`, `Get-BootTimes`,

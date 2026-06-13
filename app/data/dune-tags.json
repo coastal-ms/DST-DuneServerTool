@@ -1,0 +1,1667 @@
+{
+  "journey_node_tags": {
+    "DA_DLC_LostHarvest.DiggingDeeper.AssistKief2.LeaveHarkoAndWait": [
+      "Contract.Target.Interaction.MTX.Ch1.Journey4.ElaraCalled"
+    ],
+    "DA_DLC_LostHarvest.DiggingDeeper.AssistKief2.ReachLabExit": [
+      "Contract.Tracking.Completed.MTX.Ch1.Journey3.Completed"
+    ],
+    "DA_DLC_LostHarvest.HuntingTheSpheres": [
+      "Contract.Target.Interaction.MTX.Ch1.Journey4.ElaraCalled"
+    ],
+    "DA_FQ_ClimbTheRanks.PoisonedSpice_Harkonnen.LeverageYourFindings.ReturnToVonKonig": [
+      "Contract.Tracking.FactionStory.CanBeAmbushedBySponsor"
+    ],
+    "DA_FQ_ClimbTheRanks.Rank5To20.MeetSponsor.TalkToSponsor": [
+      "DialogueFlags.Factions.CannotBetray"
+    ],
+    "DA_FQ_ClimbTheRanks.Rank5To20.ReachRank20.GrindRanks": [
+      "DialogueFlags.Factions.CannotBetray"
+    ],
+    "DA_FQ_ClimbTheRanks.Rank5To20.StartLandsraadOnboarding.ReportToMasterOfAssassins": [
+      "Journey.LandsraadContractsUnlocked"
+    ],
+    "DA_FQ_ClimbTheRanks.TransitionToCh3_Atre.TheCall.AnswerTheCall": [
+      "DialogueFlags.Factions.CannotBetray"
+    ],
+    "DA_FQ_ClimbTheRanks.TransitionToCh3_Hark.TheCall.AnswerTheCall": [
+      "DialogueFlags.Factions.CannotBetray"
+    ],
+    "DA_LDR_Combat_FalseFlagStrike_01.Neutralize the camp on the heights": [
+      "Contract.Target.Interaction.Landsraad.ErythriteCave.CanPickUpMiniBoss2Item"
+    ],
+    "DA_LDR_Combat_FalseFlagStrike_01.Travel to the Blushing Cavern from the Overland map": [
+      "Contract.Target.Interaction.Landsraad.ErythriteCave.CanPickUpMiniBoss1Item"
+    ],
+    "DA_LDR_Combat_GhostsOfTsimpo.The Cistern.Find the supplies near the Cistern": [
+      "Contract.Target.Interaction.Landsraad.GhostsOfTsimpo.CanReadGhostsLog"
+    ],
+    "DA_LDR_Combat_GhostsOfTsimpo.The Old Fortress.Enter the Fortress": [
+      "Contract.Target.Interaction.Landsraad.GhostsOfTsimpo.CanSpawnGhostBoss"
+    ],
+    "DA_LDR_Combat_SpringingATrap.Activate the radio beacon inside the cave": [
+      "Contract.Target.Interaction.Landsraad.ErythriteCave.LargeCaveAmbush"
+    ],
+    "DA_LDR_Combat_ThePriceOfWater.Cutting Off the Flow.Reach the Water Shipping Depot": [
+      "Contract.Target.Interaction.Landsraad.ThePriceOfWater.CanReadShippingManfiest",
+      "Contract.Target.Interaction.Landsraad.ThePriceOfWater.CanSpawnEngineer"
+    ],
+    "DA_LDR_Combat_ThePriceOfWater.Turning off the Tap.Reach the Launchpad": [
+      "Contract.Target.Interaction.Landsraad.ThePriceOfWater.CanSpawnCaptain"
+    ],
+    "DA_LDR_Combat_ThePriceOfWater.Turning off the Tap.Sabotage the Spice Lighter": [
+      "Contract.Target.Interaction.Landsraad.ThePriceOfWater.SabotagedShip"
+    ],
+    "DA_LDR_Crafting_HarnessingThePowerOfTheStorm_01.Travel To Testing Station 152": [
+      "Contract.Target.Interaction.Landsraad.Ecolab152Electric.GatherComponents"
+    ],
+    "DA_LDR_Crafting_Phasedancers.Cavern of Illusions.Search the Cave of Illusions": [
+      "Contract.Target.Interaction.Landsraad.Phasedancers.CanReadJongleurLog"
+    ],
+    "DA_LDR_Crafting_Phasedancers.Cavern of Illusions.Use Solido Dissembler with Projection Array": [
+      "Contract.Target.Interaction.Landsraad.Phasedancers.CaveEntranceRevealed"
+    ],
+    "DA_LDR_Crafting_Phasedancers.Dissembling Reality.Craft a Solido Dissembler": [
+      "Contract.Target.Interaction.Landsraad.RareMetals.SecretCave"
+    ],
+    "DA_LDR_Crafting_RareMetals.Behind Closed Doors.Find the Scientists' Living Quarters": [
+      "Contract.Target.Interaction.Landsraad.RareMetals.CanReadInstructions"
+    ],
+    "DA_LDR_Crafting_RareMetals.Extracting the Essence.Reach the Field Research Office": [
+      "Contract.Target.Interaction.Landsraad.RareMetals.CanReadFieldResearchNotes"
+    ],
+    "DA_LDR_Gathering_FieldOfFlowers_01.TravelTo": [
+      "Contract.Location.Landsraad.LifecycleofCacti.Step2"
+    ],
+    "DA_LDR_Gathering_RockAndRoots.Harvest of Secrets.Reach the Glasshouse": [
+      "Contract.Target.Interaction.Landsraad.RockAndRoots.CanReadTuberCultData"
+    ],
+    "DA_LDR_Gathering_RockAndRoots.Reaping Results.Reach the R&D Lab": [
+      "Contract.Target.Interaction.Landsraad.RockAndRoots.CanReadWaterFilterReport"
+    ],
+    "DA_LDR_Gathering_RockAndRoots.Rocks in the Machinery.Reach the Asteroid": [
+      "Contract.Target.Interaction.Landsraad.RockAndRoots.CanReadWaterExtractionData"
+    ],
+    "DA_LDR_Subterfuge_ATrailOfBlood.ScanLab": [
+      "Contract.Location.Landsraad.OldQuarry.Part2"
+    ],
+    "DA_LDR_Subterfuge_ATrailOfBlood.TravelToTheQuarry": [
+      "Contract.Location.Landsraad.OldQuarry.Part1"
+    ],
+    "DA_LDR_Subterfuge_ExpedientPolitics.The Griffins.Search the Administration District for Information": [
+      "Contract.Target.Interaction.Landsraad.ExpedientPolitics.CanReadHarkonnenNote"
+    ],
+    "DA_LDR_Subterfuge_ExpedientPolitics.The Hawks.Search the Lower District for Information": [
+      "Contract.Target.Interaction.Landsraad.ExpedientPolitics.CanReadAtrediesNote"
+    ],
+    "DA_LDR_Subterfuge_ExpedientPolitics.Voices From the Dust.Search the Council Hall for Information": [
+      "Contract.Target.Interaction.Landsraad.ExpedientPolitics.CanReadSurvivorsNote"
+    ],
+    "DA_LDR_Subterfuge_InTheShadows.Retrieve the cargo manifest": [
+      "Contract.Target.Interaction.Landsraad.Calypso.SecretCargoAmbush"
+    ],
+    "DA_LDR_Subterfuge_PoisoningTheWell.The Saboteur\u2019s Gift.Reach the drop-off location": [
+      "Contract.Target.Interaction.Landsraad.PoisoningTheWell.CanReadSaboteurInstructions"
+    ],
+    "DA_LDR_Syndicate_Assassination_1.DA_LDR_Syndicate_Assassination_1_2": [
+      "Contract.Tracking.Active.Syndicate_Assassination_1.Condition.Syndicate_Assassination_1_2"
+    ],
+    "DA_MQ_ANewBeginning.Aql No 1.FabricateStillsuit.Equip the Stillsuit": [
+      "BigMoments.Stillsuit.Trigger"
+    ],
+    "DA_MQ_ANewBeginning.Blood to Water.Make water from blood.Deposit blood into the blood purifier": [
+      "Journey.SpiceDream.TriggerFirstDream"
+    ],
+    "DA_MQ_ANewBeginning.Building Basics.Power your base.Add fuel to generator and power the shield": [
+      "BigMoments.Base.Trigger"
+    ],
+    "DA_MQ_ANewBeginning.Dangerous Mission": [
+      "Contract.Tracking.Journey.EcolabCompleted"
+    ],
+    "DA_MQ_ANewBeginning.Dangerous Mission No 2": [
+      "BigMoments.Zantara.CanTrigger"
+    ],
+    "DA_MQ_ANewBeginning.Dangerous Mission No 2.Build a Sandbike.Drive the bike": [
+      "BigMoments.Bike.Trigger"
+    ],
+    "DA_MQ_ANewBeginning.Dangerous Mission No 2.Build a Sandbike.Put all parts together using the Welding Torch": [
+      "Contract.UniqueInstance.Journey.AssembledSandbike"
+    ],
+    "DA_MQ_ANewBeginning.Reach Civilization": [
+      "Contract.Tracking.Journey.ShipwreckCompleted"
+    ],
+    "DA_MQ_ANewBeginning.Reach Civilization.Tradepost.Buy a unique Literjon schematic from the vendor": [
+      "Contract.UniqueInstance.Journey.BoughtLiterjon"
+    ],
+    "DA_MQ_ANewBeginning.Reach Civilization.Tradepost.PickupContract": [
+      "Contract.UniqueInstance.ZantaraBounty.Taken"
+    ],
+    "DA_MQ_ANewBeginning.Reach Civilization.Tradepost.Travel to the Tradepost": [
+      "Contract.UniqueInstance.Journey.ArrivedAtTradepost"
+    ],
+    "DA_MQ_AssassinsHandbook.ANewTarget.MeetTheContact2.AcceptTheWaterFatKill": [
+      "Journey.TheWaterFat.Progression.Unlocked"
+    ],
+    "DA_MQ_AssassinsHandbook.ASignFromAbove.InvestigateTheMeteorCrashSite.ReachSafety": [
+      "Journey.WreckOfHepahestus.Progression.Completed"
+    ],
+    "DA_MQ_AssassinsHandbook.Epilogue": [
+      "Journey.Act2.Completed",
+      "Journey.Chapter2.Noctua.TriggerFirstDialogue",
+      "Journey.Chapter2.Progression.Unlocked"
+    ],
+    "DA_MQ_AssassinsHandbook.FurtherInstructions": [
+      "Journey.WreckOfHepahestus.Progression.Unlocked"
+    ],
+    "DA_MQ_AssassinsHandbook.FurtherInstructions.ReturnToTheSpider2.ReturnToHBSAndWait": [
+      "Journey.SpiceDream.TriggerSecondDream"
+    ],
+    "DA_MQ_AssassinsHandbook.Intro.MeettheInformant.AcceptTheFirstKill": [
+      "Journey.Act2.FirstKillAccepted"
+    ],
+    "DA_MQ_AssassinsHandbook.LastTarget.MeetTheContact.AcceptTheJackalKill": [
+      "Journey.TheJackal.Progression.Unlocked"
+    ],
+    "DA_MQ_AssassinsHandbook.SearchingForAnswers.FindTheSourceOfTheDecryptedMessage.ReachSafeLocation": [
+      "Journey.OldCarthag.Progression.Completed"
+    ],
+    "DA_MQ_AssassinsHandbook.SecondTarget.ReturnToTheSpider1.AcceptTheSecondKill": [
+      "Journey.Act2.SecondKillAccepted"
+    ],
+    "DA_MQ_AssassinsHandbook.TheGlutton.FindThGluttonsDiningRoom.ExitGluttonRoom": [
+      "Journey.TheGlutton.Progression.Completed"
+    ],
+    "DA_MQ_AssassinsHandbook.TheGlutton.LearnAboutYourTarget.FindTheHostageInTheSlaversBase": [
+      "Journey.TheGlutton.Progression.KeyAcquired"
+    ],
+    "DA_MQ_AssassinsHandbook.TheJackal.TheJackal.ExitJackalAlley": [
+      "Journey.TheJackal.Progression.Completed"
+    ],
+    "DA_MQ_AssassinsHandbook.TheParanoid.FindTheParanoidsPrayerRoom.ExitParanoidRoom": [
+      "Journey.TheParanoid.Progression.Completed"
+    ],
+    "DA_MQ_AssassinsHandbook.TheWaterFat.TheWaterFatTask.CompleteTheAssasination": [
+      "Journey.TheWaterFat.Progression.AssassinationComplete"
+    ],
+    "DA_MQ_AssassinsHandbook.TheWaterFat.TheWaterFatTask.ReachSafeArea": [
+      "Journey.TheWaterFat.Progression.Completed"
+    ],
+    "DA_MQ_FindTheFremen.Epilogue": [
+      "Journey.Act1.Completed"
+    ],
+    "DA_MQ_FindTheFremen.Epilogue.WaitingForAriste.WaitForTheCall": [
+      "Journey.Act1.Completed"
+    ],
+    "DA_MQ_FindTheFremen.FifthTest.FifthQuestion.CompleteFifthTest": [
+      "JourneySets.Fremkit.Thumper"
+    ],
+    "DA_MQ_FindTheFremen.FirstTest.FirstQuestion.CompleteFirstTest": [
+      "JourneySets.Fremkit.Stillsuit"
+    ],
+    "DA_MQ_FindTheFremen.FourthTest.FourthQuestion.CompleteFourthTest": [
+      "JourneySets.Fremkit.CryssKnife"
+    ],
+    "DA_MQ_FindTheFremen.SecondTest.SecondQuestion.CompleteSecondTest": [
+      "JourneySets.Fremkit.StaticCompactor"
+    ],
+    "DA_MQ_FindTheFremen.SeventhTest": [
+      "Journey.TheSietch.Progression.Unlocked"
+    ],
+    "DA_MQ_FindTheFremen.SeventhTest.SeventhQuestion.CompleteSeventhTest": [
+      "JourneySets.Fremkit.Stilltent"
+    ],
+    "DA_MQ_FindTheFremen.TheSietch.SietchLocationParent.EscapeTheSietch": [
+      "Journey.TheSietch.Progression.Completed"
+    ],
+    "DA_MQ_TheGreatConvention.CalledToACount.DiscussionWithFenring.TalkToCountFenring": [
+      "Journey.Chapter2.CalledToACount.Completed"
+    ],
+    "DA_MQ_TheGreatConvention.CalledToACount.MeetElaraInHarko.SpeakToElara": [
+      "Journey.Chapter2.CalledToACount.Unlocked"
+    ],
+    "DA_MQ_TheGreatConvention.NoctuasCall.UnexpectedVisitor.ListenToNoctua": [
+      "Journey.Chapter2.Progression.Unlocked",
+      "Journey.Chapter2.Noctua.IntroCompleted"
+    ],
+    "DA_MQ_TheGreatConvention.NoctuasReturn.FromBeyond.AMessageFromNoctua": [
+      "Journey.Chapter2.Progression.Completed"
+    ],
+    "DA_MQ_TheGreatConvention.ProcesVerbalEngineersWorkshop.DiscussFindings.SpeakWithTors": [
+      "Journey.Chapter2.ProcesVerbal.BarMurder.Progression.Completed",
+      "Journey.Chapter2.ProcesVerbal.ApartmentMurder.Progression.Unlocked"
+    ],
+    "DA_MQ_TheGreatConvention.ProcesVerbalTheApartment.DeepDesertBase.ReportToTors": [
+      "Journey.Chapter2.ProcesVerbal.ApartmentMurder.Hint.Paintings"
+    ],
+    "DA_MQ_TheGreatConvention.ProcesVerbalTheApartment.SecondMurderDiscussFindings.SecondMurderSpeakWithBlackMarketTrader": [
+      "Journey.Chapter2.ProcesVerbal.ApartmentMurder.Progression.Completed"
+    ],
+    "DA_MQ_TheGreatConvention.ProcesVerbalTheApartment.TheSecondVictim.SecondMurderSpeakToTors": [
+      "Journey.Chapter2.ProcesVerbal.ApartmentMurder.Progression.DeepDesert"
+    ],
+    "DA_MQ_TheGreatConvention.ProcesVerbalTheBanquet": [
+      "Journey.Chapter2.TheBloodline.Progression.Unlocked"
+    ],
+    "DA_MQ_TheGreatConvention.ProcesVerbalTheBanquet.FirstVictim.ReportToDhood": [
+      "Journey.Chapter2.ProcesVerbal.BanquetMurder.Hint.WineSpill"
+    ],
+    "DA_MQ_TheGreatConvention.ProcesVerbalTheBanquet.SecondVictim.SearchForClues2": [
+      "Journey.Chapter2.ProcesVerbal.BanquetMurder.AmbroseVisible"
+    ],
+    "DA_MQ_TheGreatConvention.ProcesVerbalTheBanquet.SecondVictim.TalkToButler": [
+      "Journey.Chapter2.ProcesVerbal.BanquetMurder.Hint.Flowers"
+    ],
+    "DA_MQ_TheGreatConvention.ProcesVerbalTheBanquet.ThirdVictim.DiscussFindingsTors": [
+      "Journey.Chapter2.ProcesVerbal.BanquetMurder.TrailTors"
+    ],
+    "DA_MQ_TheGreatConvention.ProcesVerbalTheBanquet.ThirdVictim.TalkToButler2": [
+      "Journey.Chapter2.ProcesVerbal.BanquetMurder.Hint.Handprint"
+    ],
+    "DA_MQ_TheGreatConvention.ProcesVerbalTheBanquet.TrailTors.ReturnToElara": [
+      "Journey.Chapter2.ProcesVerbal.Progression.Completed"
+    ],
+    "DA_MQ_TheGreatConvention.ProcesVerbalTheBar.InvestigateMurder.FirstMurderDiscussFindings": [
+      "Journey.Chapter2.ProcesVerbal.BarMurder.Progression.Workshop"
+    ],
+    "DA_MQ_TheGreatConvention.ProcesVerbalTheBar.MeetChiefInvestigator.TravelToArrakeenBarMurder": [
+      "Journey.Chapter2.ProcesVerbal.BarMurder.Progression.Unlocked"
+    ],
+    "DA_MQ_TheGreatConvention.TheBloodline": [
+      "Journey.Chapter2.Noctua.TriggerReturn",
+      "Journey.Chapter2.TheBloodline.Progression.Completed"
+    ],
+    "DA_MQ_TheGreatConvention.TheBloodline.MeetAriste.SpeakToAristeAtSalusanBull": [
+      "Journey.Chapter2.TheBloodline.Progression.SalusanBullCompleted"
+    ],
+    "DA_MQ_TheGreatConventionPt2": [
+      "Journey.Chapter3.Progression.Completed"
+    ],
+    "DA_MQ_TheGreatConventionPt2.OutsideTheLaw": [
+      "Journey.Chapter3.OutsideTheLaw.Progression.Completed",
+      "Journey.Chapter3.NoctuasMessage.TriggerMessage"
+    ],
+    "DA_MQ_TheGreatConventionPt2.OutsideTheLaw.ForbiddenKnowledge.MeetElara2": [
+      "Journey.Chapter3.OutsideTheLaw.Progression.Unlocked"
+    ],
+    "DA_MQ_TheGreatConventionPt2.TheArtOfKanly1.The Arena.FindElarasContact": [
+      "Dialogueflags.AoK.VitorArsenVisible",
+      "DialogueFlags.AoK.ThraxStanding",
+      "Journey.ArtOfKanly.DuelingRing.NPC.SinnuVisible"
+    ],
+    "DA_MQ_TheGreatConventionPt2.TheArtOfKanly2.Task1FindContact": [
+      "Journey.Chapter3.ArtOfKanly.Task1.Progression.Part1Complete"
+    ],
+    "DA_MQ_TheGreatConventionPt2.TheArtOfKanly2.Task1Intro": [
+      "Journey.Chapter3.ArtOfKanly.Task1.Progression.Unlocked"
+    ],
+    "DA_MQ_TheGreatConventionPt2.TheArtOfKanly2.Task1ObtainRadiationCore": [
+      "Journey.Chapter3.ArtOfKanly.Task1.Progression.Completed"
+    ],
+    "DA_MQ_TheGreatConventionPt2.TheArtOfKanly2.Task1ObtainRadiationCore.Task1AttemptToPickupRadiationCore": [
+      "Journey.Chapter3.ArtOfKanly.Task1.Progression.LocatedRadiationCore"
+    ],
+    "DA_MQ_TheGreatConventionPt2.TheArtOfKanly2.Task1ObtainRadiationCore.Task1CloseRadiationCore": [
+      "Journey.Chapter3.ArtOfKanly.Task1.Progression.ClosedRadiationCore"
+    ],
+    "DA_MQ_TheGreatConventionPt2.TheArtOfKanly2.Task1ObtainRadiationCore.Task1GoToShipwreck": [
+      "Journey.Chapter3.ArtOfKanly.Task1.Progression.EnteredShipwreck"
+    ],
+    "DA_MQ_TheGreatConventionPt2.TheArtOfKanly2.Task1ObtainRadiationCore.Task1PickupRadiationCore": [
+      "Journey.Chapter3.ArtOfKanly.Task1.Progression.Part2Complete"
+    ],
+    "DA_MQ_TheGreatConventionPt2.TheArtOfKanly3.Task2Intro": [
+      "Journey.Chapter3.ArtOfKanly.Task2.Progression.Unlocked"
+    ],
+    "DA_MQ_TheGreatConventionPt2.TheArtOfKanly3.Task2ObtainElaccaShipment": [
+      "Journey.Chapter3.ArtOfKanly.Task2.Progression.Completed"
+    ],
+    "DA_MQ_TheGreatConventionPt2.TheArtOfKanly3.Task2ObtainElaccaShipment.Task2GetElaccaShipment": [
+      "Journey.Chapter3.ArtOfKanly.Task2.Progression.Part2Complete"
+    ],
+    "DA_MQ_TheGreatConventionPt2.TheArtOfKanly4.Task3BringSuboid": [
+      "Journey.Chapter3.ArtOfKanly.Task3.Progression.Completed"
+    ],
+    "DA_MQ_TheGreatConventionPt2.TheArtOfKanly4.Task3CaptureASuboid.Task3EnterFinalRoom": [
+      "Journey.Chapter3.ArtOfKanly.Task3.Progression.EnteredFinalRoom"
+    ],
+    "DA_MQ_TheGreatConventionPt2.TheArtOfKanly4.Task3CaptureASuboid.Task3ObtainSuboid": [
+      "Journey.Chapter3.ArtOfKanly.Task3.Progression.Part1Complete"
+    ],
+    "DA_MQ_TheGreatConventionPt2.TheArtOfKanly4.Task3Intro": [
+      "Journey.Chapter3.ArtOfKanly.Task3.Progression.Unlocked"
+    ],
+    "DA_MQ_TheGreatConventionPt2.TheArtOfKanly5.Task4BringGhola": [
+      "Journey.Chapter3.ArtOfKanly.Task4.Progression.Completed",
+      "Journey.Chapter3.ArtOfKanly.Tasks.Completed"
+    ],
+    "DA_MQ_TheGreatConventionPt2.TheArtOfKanly5.Task4CaptureAGhola.Task4ObtainGhola": [
+      "Journey.Chapter3.ArtOfKanly.Task4.Progression.Part1Complete"
+    ],
+    "DA_MQ_TheGreatConventionPt2.TheArtOfKanly5.Task4Intro": [
+      "Journey.Chapter3.ArtOfKanly.Task4.Progression.Unlocked"
+    ]
+  },
+  "contract_tags": {
+    "DA_CT_Arrakeen_Banquet_01": [
+      "Contract.Tracking.Completed.Arrakeen_Banquet_01"
+    ],
+    "DA_CT_Arrakeen_Banquet_02": [
+      "Contract.Tracking.Completed.Arrakeen_Banquet_02"
+    ],
+    "DA_CT_Arrakeen_Banquet_02_delivery_contract": [
+      "Contract.Tracking.Completed.Arrakeen_Banquet_02_delivery_contract"
+    ],
+    "DA_CT_Arrakeen_Banquet_03": [
+      "Contract.Tracking.Completed.Arrakeen_Banquet_03"
+    ],
+    "DA_CT_Arrakeen_Banquet_Container_01": [
+      "Contract.Tracking.Completed.Arrakeen_Banquet_Container_01"
+    ],
+    "DA_CT_Arrakeen_BouncerDuty_01": [
+      "Contract.Tracking.Completed.Arrakeen_BouncerDuty_01"
+    ],
+    "DA_CT_Arrakeen_Recustomizer_01": [
+      "Contract.Tracking.Completed.Arrakeen_Recustomizer_01"
+    ],
+    "DA_CT_Arrakeen_Recustomizer_02": [
+      "Contract.Target.Dialogue.RecustomizationFunnel.SuppliesReleased",
+      "Contract.Tracking.Completed.Arrakeen_Recustomizer_02"
+    ],
+    "DA_CT_Arrakeen_SocialHub_Scandal_01": [
+      "Contract.Tracking.Completed.Arakeen_SocialHub_Scandal_01"
+    ],
+    "DA_CT_DLC_B1C2_Journey4_EcolabA": [
+      "Contract.Tracking.Completed.MTX.Ch1.Journey4-A.Completed"
+    ],
+    "DA_CT_DLC_B1C2_Journey4_EcolabB": [
+      "Contract.Tracking.Completed.MTX.Ch1.Journey4-B.Completed"
+    ],
+    "DA_CT_Fac_Atre_Rank00_02_FacFunnel": [
+      "Contract.Tracking.AtreidesFactionUnlocked",
+      "Contract.Tracking.Completed.Fac_Atre_Rank00_02_FacFunnel"
+    ],
+    "DA_CT_Fac_Atre_Rank00_02_SpyReport": [
+      "Contract.Tracking.Completed.Fac_Atre_Rank00_02_SpyReport"
+    ],
+    "DA_CT_Fac_Atre_Rank01_01_DeliverSteel": [
+      "Contract.Tracking.Completed.FactionStoryline.Atreides_Tier1_Contract1",
+      "Contract.Tracking.Completed.Fac_Atre_Rank01_01_DeliverSteel"
+    ],
+    "DA_CT_Fac_Atre_Rank01_02_Lanov": [
+      "Contract.Tracking.Completed.FactionStoryline.Atreides_Tier1_Contract3",
+      "Contract.Tracking.FactionStory.R1C3Completed_Atreides",
+      "Contract.Tracking.Completed.Fac_Atre_Rank01_02_Lanov"
+    ],
+    "DA_CT_Fac_Atre_Rank01_03_KillSlavers": [
+      "Contract.Tracking.Completed.FactionStoryline.Atreides_Tier1_Contract2",
+      "Contract.Tracking.FactionStory.R1C2Completed_Atreides",
+      "Contract.Tracking.Completed.Fac_Atre_Rank01_03_KillSlavers"
+    ],
+    "DA_CT_Fac_Atre_Rank01_04_TestLoyalty": [
+      "Contract.Tracking.FactionStory.TestOfLoyaltyCompleted",
+      "Faction.Atreides.Tier2",
+      "Contract.Tracking.Completed.Fac_Atre_Rank01_04_TestLoyalty"
+    ],
+    "DA_CT_Fac_Atre_Rank02_01_DeepExtraction": [
+      "Contract.Tracking.Completed.FactionStoryline.Atreides_Tier2_Contract1"
+    ],
+    "DA_CT_Fac_Atre_Rank02_01_DeliverErythrite": [
+      "Contract.Tracking.Completed.FactionStoryline.Atreides_Tier2_Contract1"
+    ],
+    "DA_CT_Fac_Atre_Rank02_02_IDTags": [
+      "Contract.Tracking.Completed.FactionStoryline.Atreides_Tier2_Contract2"
+    ],
+    "DA_CT_Fac_Atre_Rank02_03_KillDeserters": [
+      "Contract.Tracking.Completed.FactionStoryline.Atreides_Tier2_Contract3",
+      "Contract.Tracking.FactionStory.R2C3Completed"
+    ],
+    "DA_CT_Fac_Atre_Rank02_04_HarkIntelligence": [
+      "Contract.Tracking.Completed.FactionStoryline.Atreides_Tier2_Contract4"
+    ],
+    "DA_CT_Fac_Atre_Rank02_05_Kytheria": [
+      "Contract.Tracking.FactionsKytheriaInvestigationCompleted",
+      "Faction.Atreides.Tier3",
+      "Contract.Tracking.Completed.Fac_Atre_Rank02_05_Kytheria"
+    ],
+    "DA_CT_Fac_Atre_Rank02_06_Katrina": [
+      "Contract.Tracking.Completed.Fac_Atre_Rank02_06_Katrina"
+    ],
+    "DA_CT_Fac_Atre_Rank02_BetrayalMaxim": [
+      "DialogueFlags.Factions.Betrayal.Harkonnen",
+      "Contract.Tracking.Completed.Fac_Atre_Rank02_BetrayalMaxim"
+    ],
+    "DA_CT_Fac_Atre_Rank02_BetrayalPiter": [
+      "DialogueFlags.Factions.Betrayal.Harkonnen",
+      "Contract.Tracking.Completed.Fac_Atre_Rank02_BetrayalPiter"
+    ],
+    "DA_CT_Fac_Atre_Rank02_BetrayalSimone": [
+      "Contract.Tracking.Completed.FactionStoryline.Betrayal.Simone"
+    ],
+    "DA_CT_Fac_Atre_Rank03_01_SandFlies": [
+      "Contract.Tracking.Completed.FactionStoryline.Atreides.Rank3.Contract1",
+      "Contract.Tracking.FactionStory.R3C1Completed"
+    ],
+    "DA_CT_Fac_Atre_Rank03_02_TrippYates": [
+      "Contract.Tracking.Completed.FactionStoryline.Atreides.Rank3.Contract2",
+      "Contract.Tracking.FactionStory.R3C2Completed"
+    ],
+    "DA_CT_Fac_Atre_Rank03_03_RedScorpion": [
+      "Contract.Tracking.Completed.FactionStoryline.Atreides.Rank3.Contract3",
+      "Contract.Tracking.FactionStory.R3C3Completed"
+    ],
+    "DA_CT_Fac_Atre_Rank03_04_StoneSentinel": [
+      "Contract.Tracking.Completed.FactionStoryline.Atreides.Rank3.Contract4",
+      "Contract.Tracking.FactionStory.R3C4Completed"
+    ],
+    "DA_CT_Fac_Atre_Rank03_07_Ambrose_P1": [
+      "Contract.Tracking.Completed.Fac_Atre_Rank03_07_Ambrose_P1"
+    ],
+    "DA_CT_Fac_Atre_Rank03_08_Ambrose_P2_DidNotUsePoison": [
+      "Contract.Tracking.Completed.Fac_Atre_Rank03_08_Ambrose_P2_DidNotUsePoison"
+    ],
+    "DA_CT_Fac_Atre_Rank03_09_Ambrose_P2_UsedPoison": [
+      "Contract.Tracking.FactionStory.HideAmbroseLucifera",
+      "Contract.Tracking.Completed.Fac_Atre_Rank03_09_Ambrose_P2_UsedPoison"
+    ],
+    "DA_CT_Fac_Atre_Rank03_10_MeetThufir": [
+      "Contract.Tracking.Completed.Fac_Atre_Rank03_10_MeetThufir"
+    ],
+    "DA_CT_Fac_Atre_Rank04_01_Oslow": [
+      "Contract.Tracking.FactionStory.R4C1Completed",
+      "Contract.Tracking.Completed.FactionStoryline.Atreides.Rank4.Contract1"
+    ],
+    "DA_CT_Fac_Atre_Rank04_02_MaasKharetRecruiter": [
+      "Contract.Tracking.Completed.FactionStoryline.Atreides.Rank4.Contract2",
+      "Contract.Tracking.FactionStory.R4C2Completed"
+    ],
+    "DA_CT_Fac_Atre_Rank04_03_MysaTarril": [
+      "Contract.Tracking.Completed.FactionStoryline.Atreides.Rank4.Contract3",
+      "Contract.Tracking.FactionStory.R4C3Completed"
+    ],
+    "DA_CT_Fac_Atre_Rank04_04_Jorba": [
+      "Contract.Tracking.Completed.FactionStoryline.Atreides.Rank4.Contract4",
+      "Contract.Tracking.FactionStory.R4C4Completed"
+    ],
+    "DA_CT_Fac_Atre_Rank04_05_Skorda": [
+      "Contract.Tracking.FactionStory.R4C5Completed",
+      "Contract.Tracking.Completed.Fac_Atre_Rank04_05_Skorda"
+    ],
+    "DA_CT_Fac_Atre_Rank04_06_TaintedSpice": [
+      "Contract.Tracking.Completed.FactionStoryline.Atreides.Rank4.Contract6",
+      "Contract.Tracking.FactionStory.R4C6Completed"
+    ],
+    "DA_CT_Fac_Atre_Rank20": [
+      "Contract.Tracking.Completed.Fac_Atre_Rank20"
+    ],
+    "DA_CT_Fac_Hark_Rank00_02_FacFunnel": [
+      "Contract.Tracking.HarkonnenFactionUnlocked",
+      "Contract.Tracking.Completed.Fac_Hark_Rank00_02_FacFunnel"
+    ],
+    "DA_CT_Fac_Hark_Rank00_02_SpyReport": [
+      "Contract.Tracking.Completed.Fac_Hark_Rank00_02_SpyReport"
+    ],
+    "DA_CT_Fac_Hark_Rank01_01_PlantEvidence": [
+      "Contract.Tracking.Completed.FactionStoryline.Harkonnen_Tier1_Contract1"
+    ],
+    "DA_CT_Fac_Hark_Rank01_02_Bohannon": [
+      "Contract.Tracking.Completed.FactionStoryline.Harkonnen_Tier1_Contract3",
+      "Contract.Tracking.FactionStory.R1C3Completed_Harkonnen"
+    ],
+    "DA_CT_Fac_Hark_Rank01_03_KillSlavers": [
+      "Contract.Tracking.Completed.FactionStoryline.Harkonnen_Tier1_Contract2",
+      "Contract.Tracking.FactionStory.R1C2Completed_Harkonnen"
+    ],
+    "DA_CT_Fac_Hark_Rank01_04_TestTreachery": [
+      "Contract.Tracking.FactionStory.TestOfTreacheryCompleted",
+      "Faction.Harkonnen.Tier2",
+      "Contract.Tracking.Completed.Fac_Hark_Rank01_04_TestTreachery"
+    ],
+    "DA_CT_Fac_Hark_Rank02_01_FruitsOfYourLabor": [
+      "Contract.Tracking.Completed.FactionStoryline.Harkonnen_Tier2_Contract1"
+    ],
+    "DA_CT_Fac_Hark_Rank02_02_DeliverHoltzman": [
+      "Contract.Tracking.Completed.FactionStoryline.Harkonnen_Tier2_Contract2"
+    ],
+    "DA_CT_Fac_Hark_Rank02_03_KillDeserters": [
+      "Contract.Tracking.Completed.FactionStoryline.Harkonnen_Tier2_Contract3",
+      "Contract.Tracking.FactionStory.R2C3Completed"
+    ],
+    "DA_CT_Fac_Hark_Rank02_04_HarkIntelligence": [
+      "Contract.Tracking.Completed.FactionStoryline.Harkonnen_Tier2_Contract4"
+    ],
+    "DA_CT_Fac_Hark_Rank02_05_Kytheria": [
+      "Contract.Tracking.FactionsKytheriaInvestigationCompleted",
+      "Contract.Tracking.Completed.Fac_Hark_Rank02_05_Kytheria"
+    ],
+    "DA_CT_Fac_Hark_Rank02_05_KytheriaP2": [
+      "Faction.Harkonnen.Tier3",
+      "Contract.Tracking.Completed.Fac_Hark_Rank02_05_KytheriaP2"
+    ],
+    "DA_CT_Fac_Hark_Rank02_06_Katrina": [
+      "Contract.Tracking.Completed.Fac_Hark_Rank02_06_Katrina"
+    ],
+    "DA_CT_Fac_Hark_Rank02_BetrayalAnton": [
+      "Contract.Tracking.Completed.Fac_Hark_Rank02_BetrayalAnton"
+    ],
+    "DA_CT_Fac_Hark_Rank03_01_SandFlies": [
+      "Contract.Tracking.Completed.FactionStoryline.Harkonnen.Rank3.Contract1",
+      "Contract.Tracking.FactionStory.R3C1Completed"
+    ],
+    "DA_CT_Fac_Hark_Rank03_02_TrippYates": [
+      "Contract.Tracking.Completed.FactionStoryline.Harkonnen.Rank3.Contract2",
+      "Contract.Tracking.FactionStory.R3C2Completed"
+    ],
+    "DA_CT_Fac_Hark_Rank03_03_RedScorpion": [
+      "Contract.Tracking.Completed.FactionStoryline.Harkonnen.Rank3.Contract3",
+      "Contract.Tracking.FactionStory.R3C3Completed"
+    ],
+    "DA_CT_Fac_Hark_Rank03_04_StoneSentinel": [
+      "Contract.Tracking.Completed.FactionStoryline.Harkonnen.Rank3.Contract4",
+      "Contract.Tracking.FactionStory.R3C4Completed"
+    ],
+    "DA_CT_Fac_Hark_Rank03_07_SurviveAmbush": [
+      "Contract.Tracking.FactionStory.SurvivedVonKonigAmbush",
+      "Contract.Tracking.Completed.Fac_Hark_Rank03_07_SurviveAmbush"
+    ],
+    "DA_CT_Fac_Hark_Rank03_08_KillPiter": [
+      "DialogueFlags.Factions.TriedToPoisonPiter",
+      "Contract.Tracking.Completed.Fac_Hark_Rank03_08_KillPiter"
+    ],
+    "DA_CT_Fac_Hark_Rank03_08_KillPiterP2": [
+      "Contract.Tracking.Completed.Fac_Hark_Rank03_08_KillPiterP2"
+    ],
+    "DA_CT_Fac_Hark_Rank03_10_MeetPiter": [
+      "Contract.Tracking.Completed.Fac_Hark_Rank03_10_MeetPiter"
+    ],
+    "DA_CT_Fac_Hark_Rank03_BetrayalAndrea": [
+      "Contract.Tracking.Completed.Fac_Hark_Rank03_BetrayalAndrea"
+    ],
+    "DA_CT_Fac_Hark_Rank04_01_Oslow": [
+      "Contract.Tracking.Completed.FactionStoryline.Harkonnen.Rank4.Contract1",
+      "Contract.Tracking.FactionStory.R4C1Completed"
+    ],
+    "DA_CT_Fac_Hark_Rank04_02_MaasKharetRecruiter": [
+      "Contract.Tracking.Completed.FactionStoryline.Harkonnen.Rank4.Contract2",
+      "Contract.Tracking.FactionStory.R4C2Completed"
+    ],
+    "DA_CT_Fac_Hark_Rank04_03_MysaTarril": [
+      "Contract.Tracking.Completed.FactionStoryline.Harkonnen.Rank4.Contract3",
+      "Contract.Tracking.FactionStory.R4C3Completed"
+    ],
+    "DA_CT_Fac_Hark_Rank04_04_Jorba": [
+      "Contract.Tracking.Completed.FactionStoryline.Harkonnen.Rank4.Contract4",
+      "Contract.Tracking.FactionStory.R4C4Completed"
+    ],
+    "DA_CT_Fac_Hark_Rank04_05_Skorda": [
+      "Contract.Tracking.FactionStory.R4C5Completed",
+      "Contract.Tracking.Completed.Fac_Hark_Rank04_05_Skorda"
+    ],
+    "DA_CT_Fac_Hark_Rank04_06_TaintedSpice": [
+      "Contract.Tracking.Completed.FactionStoryline.Harkonnen.Rank4.Contract6",
+      "Contract.Tracking.FactionStory.R4C6Completed"
+    ],
+    "DA_CT_Fac_Hark_Rank04_BetrayalThufir": [
+      "Contract.Tracking.Completed.Fac_Hark_Rank04_BetrayalThufir"
+    ],
+    "DA_CT_Fac_Hark_Rank20": [
+      "Contract.Tracking.Completed.Fac_Hark_Rank20"
+    ],
+    "DA_CT_HarkoVillage_Misc1_01": [
+      "Contract.Tracking.Completed.HarkoVillage_Misc1_01"
+    ],
+    "DA_CT_HarkoVillage_Recustomizer_01": [
+      "Contract.Tracking.Completed.HarkoVillage_Recustomizer_01"
+    ],
+    "DA_CT_Harko_Intrigue_01": [
+      "Contract.Tracking.Completed.Harko_Intrigue_01"
+    ],
+    "DA_CT_Harko_Intrigue_03": [
+      "Contract.Tracking.Completed.Harko_Intrigue_03"
+    ],
+    "DA_CT_Harko_MarketManipulation_01": [
+      "Contract.Tracking.Completed.Harko_MarketManipulation_01"
+    ],
+    "DA_CT_MTXEvent_ChoamWreckage_Deliver_ChoamCargo": [
+      "Contract.Tracking.Completed.ChoamWreckage_Deliver_ChoamCargo"
+    ],
+    "DA_CT_MTXEvent_ChoamWreckage_Kill_Kirab_01": [
+      "Contract.Tracking.Completed.ChoamWreckage_Kill_Kirab_01"
+    ],
+    "DA_CT_MTXEvent_ChoamWreckage_Sabotage_Emplacements": [
+      "Contract.Tracking.Completed.ChoamWreckage_Sabotage_Emplacements"
+    ],
+    "DA_CT_MTX_Ch1_Journey1_CommsRepair1": [
+      "Contract.Tracking.Completed.MTX.Ch1.Journey1.CommsRepair1"
+    ],
+    "DA_CT_MTX_Ch1_Journey1_CommsRepair2": [
+      "Contract.Tracking.Completed.MTX.Ch1.Journey1.CommsRepair2"
+    ],
+    "DA_CT_MTX_Ch1_Journey1_CommsRepair3": [
+      "Contract.Tracking.Completed.MTX.Ch1.Journey1.DranghComplete"
+    ],
+    "DA_CT_MTX_Ch1_Journey1_GunsAmmo": [
+      "Contract.Tracking.Completed.MTX.Ch1.Journey1.GunsAmmo"
+    ],
+    "DA_CT_MTX_Ch1_Journey1_KirabHunt": [
+      "Contract.Tracking.Completed.MTX.Ch1.Journey1.KirabHunt"
+    ],
+    "DA_CT_MTX_Ch1_Journey1_MedSupplies": [
+      "Contract.Tracking.Completed.MTX.Ch1.Journey1.MedSupplies"
+    ],
+    "DA_CT_MTX_Ch1_Journey1_MissingDunemen": [
+      "Contract.Tracking.Completed.MTX.Ch1.Journey1.MissingDunemen"
+    ],
+    "DA_CT_MTX_Ch1_Journey1_SavingDunemen": [
+      "Contract.Tracking.Completed.MTX.Ch1.Journey1.SavingDunemen"
+    ],
+    "DA_CT_MTX_Ch1_Journey1_StrandedDunemenFinal": [
+      "Contract.Tracking.Completed.MTX.Ch1.Journey1.Completed"
+    ],
+    "DA_CT_MTX_Ch1_Journey2_ScavengingLead": [
+      "Contract.Tracking.Completed.MTX.Ch1.Journey2.Completed"
+    ],
+    "DA_CT_MTX_Ch1_Journey3_LostLab": [
+      "Contract.Tracking.Completed.MTX.Ch1.Journey3.Completed"
+    ],
+    "DA_CT_Survival1_Deserters1_01": [
+      "Contract.Tracking.Completed.Deserters1_Contract1"
+    ],
+    "DA_CT_Survival1_Deserters1_02": [
+      "Contract.Tracking.Completed.Deserters1_Contract2"
+    ],
+    "DA_CT_Survival1_Deserters1_03": [
+      "Contract.Tracking.Completed.Deserters1_Contract3"
+    ],
+    "DA_CT_Survival1_Deserters1_04": [
+      "Contract.Tracking.Completed.Deserters1_Contract4"
+    ],
+    "DA_CT_Survival1_Deserters2_01": [
+      "Contract.Tracking.Completed.Deserters2.Contract1"
+    ],
+    "DA_CT_Survival1_Deserters2_02": [
+      "Contract.Tracking.Completed.Deserters2.Contract2"
+    ],
+    "DA_CT_Survival1_Deserters2_03": [
+      "Contract.Tracking.Completed.Deserters2.Contract3"
+    ],
+    "DA_CT_Survival1_Deserters2_04": [
+      "Contract.Tracking.Completed.Deserters2.Contract4"
+    ],
+    "DA_CT_Survival1_DynEnc_AssassinJabalE_01": [
+      "Contract.Tracking.Completed.Survival1_DynEnc_AssassinJabalE_01"
+    ],
+    "DA_CT_Survival1_DynEnc_AssassinJabalE_02": [
+      "Contract.Tracking.Completed.Survival1_DynEnc_AssassinJabalE_02"
+    ],
+    "DA_CT_Survival1_DynEnc_AssassinJabalW_01": [
+      "Contract.Tracking.Completed.Survival1_DynEnc_AssassinJabalW_01"
+    ],
+    "DA_CT_Survival1_DynEnc_AssassinJabalW_02": [
+      "Contract.Tracking.Completed.Survival1_DynEnc_AssassinJabalW_02"
+    ],
+    "DA_CT_Survival1_DynEnc_AssassinMysa_01": [
+      "Contract.Tracking.Completed.DynEnc_AssassinMysa_01"
+    ],
+    "DA_CT_Survival1_DynEnc_AssassinMysa_02": [
+      "Contract.Tracking.Completed.Survival1_DynEnc_AssassinMysa_02"
+    ],
+    "DA_CT_Survival1_DynEnc_AssassinOodham_01": [
+      "Contract.Tracking.Completed.Survival1_DynEnc_AssassinOodham_01"
+    ],
+    "DA_CT_Survival1_DynEnc_AssassinOodham_02": [
+      "Contract.Tracking.Completed.Survival1_DynEnc_AssassinOodham_02"
+    ],
+    "DA_CT_Survival1_DynEnc_AssassinRiftL_01": [
+      "Contract.Tracking.Completed.Survival1_DynEnc_AssassinRiftL_01"
+    ],
+    "DA_CT_Survival1_DynEnc_AssassinRiftL_02": [
+      "Contract.Tracking.Completed.Survival1_DynEnc_AssassinRiftL_02"
+    ],
+    "DA_CT_Survival1_DynEnc_AssassinRiftU_01": [
+      "Contract.Tracking.Completed.Survival1_DynEnc_AssassinRiftU_01"
+    ],
+    "DA_CT_Survival1_DynEnc_AssassinRiftU_02": [
+      "Contract.Tracking.Completed.Survival1_DynEnc_AssassinRiftU_02"
+    ],
+    "DA_CT_Survival1_DynEnc_AssassinVermilliusE_01": [
+      "Contract.Tracking.Completed.Survival1_DynEnc_AssassinVermilliusE_01"
+    ],
+    "DA_CT_Survival1_DynEnc_AssassinVermilliusE_02": [
+      "Contract.Tracking.Completed.Survival1_DynEnc_AssassinVermilliusE_02"
+    ],
+    "DA_CT_Survival1_DynEnc_AssassinVermilliusW_01": [
+      "Contract.Tracking.Completed.Survival1_DynEnc_AssassinVermilliusW_01"
+    ],
+    "DA_CT_Survival1_DynEnc_AssassinVermilliusW_02": [
+      "Contract.Tracking.Completed.Survival1_DynEnc_AssassinVermilliusW_02"
+    ],
+    "DA_CT_Survival1_DynEnc_AssassinWallE_01": [
+      "Contract.Tracking.Completed.Survival1_DynEnc_AssassinWallE_01"
+    ],
+    "DA_CT_Survival1_DynEnc_AssassinWallE_02": [
+      "Contract.Tracking.Completed.Survival1_DynEnc_AssassinWallE_02"
+    ],
+    "DA_CT_Survival1_DynEnc_AssassinWallW_01": [
+      "Contract.Tracking.Completed.Survival1_DynEnc_AssassinWallW_01"
+    ],
+    "DA_CT_Survival1_DynEnc_AssassinWallW_02": [
+      "Contract.Tracking.Completed.Survival1_DynEnc_AssassinWallW_02"
+    ],
+    "DA_CT_Survival1_DynEnc_Pilgrim_01": [
+      "Contract.Tracking.Completed.Pilgrims.Totem_01",
+      "Contract.Status.Survival1_DynEnc_Pilgrims1.AnyFinished"
+    ],
+    "DA_CT_Survival1_DynEnc_Pilgrim_02": [
+      "Contract.Tracking.Completed.Pilgrims.Totem_02",
+      "Contract.Status.Survival1_DynEnc_Pilgrims1.AnyFinished"
+    ],
+    "DA_CT_Survival1_DynEnc_Pilgrim_03": [
+      "Contract.Tracking.Completed.Pilgrims.Totem_03",
+      "Contract.Status.Survival1_DynEnc_Pilgrims1.AnyFinished"
+    ],
+    "DA_CT_Survival1_DynEnc_Pilgrim_04": [
+      "Contract.Tracking.Completed.Pilgrims.Totem_04",
+      "Contract.Status.Survival1_DynEnc_Pilgrims1.AnyFinished"
+    ],
+    "DA_CT_Survival1_DynEnc_Pilgrim_05": [
+      "Contract.Tracking.Completed.Pilgrims.Totem_05",
+      "Contract.Status.Survival1_DynEnc_Pilgrims1.AnyFinished"
+    ],
+    "DA_CT_Survival1_DynEnc_Pilgrim_06": [
+      "Contract.Tracking.Completed.Pilgrims.Totem_06",
+      "Contract.Status.Survival1_DynEnc_Pilgrims1.AnyFinished"
+    ],
+    "DA_CT_Survival1_DynEnc_StrandedJunk_01": [
+      "Contract.Tracking.Completed.Survival1_DynEnc_StrandedJunk_01"
+    ],
+    "DA_CT_Survival1_DynEnc_StrandedJunk_02": [
+      "Contract.Tracking.Completed.Survival1_DynEnc_StrandedJunk_02"
+    ],
+    "DA_CT_Survival1_DynEnc_StrandedJunk_03": [
+      "Contract.Tracking.Completed.Survival1_DynEnc_StrandedJunk_03"
+    ],
+    "DA_CT_Survival1_DynEnc_StrandedJunk_04": [
+      "Contract.Tracking.Completed.Survival1_DynEnc_StrandedJunk_04"
+    ],
+    "DA_CT_Survival1_DynEnc_StrandedJunk_05": [
+      "Contract.Tracking.Completed.Survival1_DynEnc_StrandedJunk_05"
+    ],
+    "DA_CT_Survival1_DynEnc_StrandedOre_01": [
+      "Contract.Tracking.Completed.Survival1_DynEnc_StrandedOre_01"
+    ],
+    "DA_CT_Survival1_DynEnc_StrandedOre_02": [
+      "Contract.Tracking.Completed.Survival1_DynEnc_StrandedOre_02"
+    ],
+    "DA_CT_Survival1_DynEnc_StrandedOre_03": [
+      "Contract.Tracking.Completed.Survival1_DynEnc_StrandedOre_03"
+    ],
+    "DA_CT_Survival1_DynEnc_StrandedOre_04": [
+      "Contract.Tracking.Completed.Survival1_DynEnc_StrandedOre_04"
+    ],
+    "DA_CT_Survival1_DynEnc_StrandedOre_05": [
+      "Contract.Tracking.Completed.Survival1_DynEnc_StrandedOre_05"
+    ],
+    "DA_CT_Survival1_DynEnc_StrandedOre_06": [
+      "Contract.Tracking.Completed.Survival1_DynEnc_StrandedOre_06"
+    ],
+    "DA_CT_Survival1_DynEnc_StrandedOre_07": [
+      "Contract.Tracking.Completed.Survival1_DynEnc_StrandedOre_07"
+    ],
+    "DA_CT_Survival1_DynEnc_StrandedSheol_01": [
+      "Contract.Tracking.Completed.Survival1_DynEnc_StrandedSheol_01"
+    ],
+    "DA_CT_Survival1_DynEnc_StrandedSheol_02": [
+      "Contract.Tracking.Completed.Survival1_DynEnc_StrandedSheol_02"
+    ],
+    "DA_CT_Survival1_DynEnc_StrandedSheol_03": [
+      "Contract.Tracking.Completed.Survival1_DynEnc_StrandedSheol_03"
+    ],
+    "DA_CT_Survival1_DynEnc_StrandedSheol_04": [
+      "Contract.Tracking.Completed.Survival1_DynEnc_StrandedSheol_04"
+    ],
+    "DA_CT_Survival1_DynEnc_StrandedSheol_05": [
+      "Contract.Tracking.Completed.Survival1_DynEnc_StrandedSheol_05"
+    ],
+    "DA_CT_Survival1_Funnel_01_Griffin": [
+      "Contract.Tracking.Completed.TradepostFunnels.GriffinsReach.1"
+    ],
+    "DA_CT_Survival1_Funnel_02_Griffin": [
+      "Contract.Tracking.Completed.TradepostFunnels.GriffinsReach.2"
+    ],
+    "DA_CT_Survival1_Funnel_03_Anvil": [
+      "Contract.Tracking.Completed.TradepostFunnels.RedDesert.2"
+    ],
+    "DA_CT_Survival1_Funnel_04_AtreFortressPinnacle": [
+      "Contract.Tracking.Completed.AtreidesFortressFunnel"
+    ],
+    "DA_CT_Survival1_Funnel_05_AtreFortressAnvil": [
+      "Contract.Tracking.Completed.AtreidesFortressFunnel"
+    ],
+    "DA_CT_Survival1_Funnel_06_HarkFortress": [
+      "Contract.Tracking.Completed.TradepostFunnels.HarkonnenBase"
+    ],
+    "DA_CT_Survival1_Funnel_07_Crossroads": [
+      "Contract.Tracking.Completed.TradepostFunnels.Crossroads"
+    ],
+    "DA_CT_Survival1_Funnel_08_Anvil": [
+      "Contract.Tracking.Completed.TradepostFunnels.RedDesert.1"
+    ],
+    "DA_CT_Survival1_Funnel_08_Pinnacle": [
+      "Contract.Tracking.Completed.TradepostFunnels.PinnacleStation"
+    ],
+    "DA_CT_Survival1_Kirab1_01": [
+      "Contract.Tracking.Completed.Kirab1_Contract1"
+    ],
+    "DA_CT_Survival1_Kirab1_02": [
+      "Contract.Tracking.Completed.Kirab1_Contract2"
+    ],
+    "DA_CT_Survival1_Kirab1_03": [
+      "Contract.Tracking.Completed.Kirab1_Contract3"
+    ],
+    "DA_CT_Survival1_Kirab1_04": [
+      "Contract.Tracking.Completed.Kirab1_Contract4"
+    ],
+    "DA_CT_Survival1_Kirab2_01": [
+      "Contract.Tracking.Completed.Kirab2.Contract1"
+    ],
+    "DA_CT_Survival1_Kirab2_02": [
+      "Contract.Tracking.Completed.Kirab2.Contract2"
+    ],
+    "DA_CT_Survival1_Kirab2_03": [
+      "Contract.Tracking.Completed.Kirab2.Contract3"
+    ],
+    "DA_CT_Survival1_Kirab2_04": [
+      "Contract.Tracking.Completed.Kirab2.Contract4"
+    ],
+    "DA_CT_Survival1_Kirab2_05": [
+      "Contract.Tracking.Completed.Kirab2.Contract5"
+    ],
+    "DA_CT_Survival1_MaasKharet1_01": [
+      "Contract.Tracking.Completed.MaasKharet1_Contract1"
+    ],
+    "DA_CT_Survival1_MaasKharet1_02": [
+      "Contract.Tracking.Completed.MaasKharet1_Contract2"
+    ],
+    "DA_CT_Survival1_MaasKharet1_03": [
+      "Contract.Tracking.Completed.MaasKharet1_Contract3"
+    ],
+    "DA_CT_Survival1_MaasKharet1_04": [
+      "Contract.Tracking.Completed.MaasKharet1_Contract4"
+    ],
+    "DA_CT_Survival1_MaasKharet2_01": [
+      "Contract.Tracking.Completed.MaasKharet2.Contract1"
+    ],
+    "DA_CT_Survival1_MaasKharet2_02": [
+      "Contract.Tracking.Completed.MaasKharet2.Contract2"
+    ],
+    "DA_CT_Survival1_MaasKharet2_03": [
+      "Contract.Tracking.Completed.MaasKharet2.Contract3"
+    ],
+    "DA_CT_Survival1_MaasKharet2_04": [
+      "Contract.Tracking.Completed.MaasKharet2.Contract4"
+    ],
+    "DA_CT_Survival1_MaasKharet3_01": [
+      "Contract.Tracking.Completed.MaasKharet3.Contract1"
+    ],
+    "DA_CT_Survival1_MaasKharet3_02": [
+      "Contract.Tracking.Completed.MaasKharet3.Contract2"
+    ],
+    "DA_CT_Survival1_MaasKharet3_03": [
+      "Contract.Tracking.Completed.MaasKharet3.Contract3"
+    ],
+    "DA_CT_Survival1_MaasKharet3_04": [
+      "Contract.Tracking.Completed.MaasKharet3.Contract4"
+    ],
+    "DA_CT_Survival1_Misc_01_HotIce": [
+      "Contract.Tracking.Completed.Ecolab197_KillNumber_Boss_01"
+    ],
+    "DA_CT_Survival1_Misc_02_InnaHiller": [
+      "Contract.Tracking.Completed.Ecolab_010_kill_boss"
+    ],
+    "DA_CT_Survival1_Misc_03_Blight": [
+      "Contract.Tracking.Completed.Ecolab002.KillNumber"
+    ],
+    "DA_CT_Survival1_Misc_04_Vials": [
+      "Contract.Tracking.Completed.Ecolab002_Delivery_Vials"
+    ],
+    "DA_CT_Survival1_Misc_05_CHOAMEquipment": [
+      "Contract.Tracking.Completed.Ecolab029.CHOAMEquipment"
+    ],
+    "DA_CT_Survival1_Misc_06_Olmen": [
+      "Contract.Tracking.Completed.Ecolab163.Investigate"
+    ],
+    "DA_CT_Survival1_Misc_07_ZantaraBounty": [
+      "Contract.Tracking.Completed.ZantaraBounty"
+    ],
+    "DA_CT_Survival1_SandFlies1_01": [
+      "Contract.Tracking.Completed.ScoutStoneSentinel"
+    ],
+    "DA_CT_Survival1_SandFlies1_02": [
+      "Contract.Tracking.Completed.KillSandflies"
+    ],
+    "DA_CT_Survival1_SandFlies1_03": [
+      "Contract.Tracking.Completed.SandFliesIntel"
+    ],
+    "DA_CT_Survival1_SandFlies1_04": [
+      "Contract.Tracking.Completed.Sandflies1_RaidTrainingCamp"
+    ],
+    "DA_CT_Survival1_SandFlies1_05": [
+      "Contract.Tracking.Completed.Ecolab142_KillBoss"
+    ],
+    "DA_CT_Survival1_SandFlies2A_01": [
+      "Contract.Tracking.Completed.Sandflies2a.Contract1"
+    ],
+    "DA_CT_Survival1_SandFlies2A_02": [
+      "Contract.Tracking.Completed.Sandflies2a.Contract2"
+    ],
+    "DA_CT_Survival1_SandFlies2A_03": [
+      "Contract.Tracking.Completed.Sandflies2a.Contract3"
+    ],
+    "DA_CT_Survival1_SandFlies2A_04": [
+      "Contract.Tracking.Completed.Sandflies2a.Contract4"
+    ],
+    "DA_CT_Survival1_SandFlies2_01": [
+      "Contract.Tracking.Completed.SandFlies2_Contract1"
+    ],
+    "DA_CT_Survival1_SandFlies2_02": [
+      "Contract.Tracking.Completed.SandFlies2_Contract2"
+    ],
+    "DA_CT_Survival1_SandFlies2_03": [
+      "Contract.Tracking.Completed.SandFlies2_Contract3"
+    ],
+    "DA_CT_Survival1_SandFlies2_04": [
+      "Contract.Tracking.Completed.SandFlies2_Contract4"
+    ],
+    "DA_CT_Survival1_Scavengers1_01": [
+      "Contract.Tracking.Completed.Scavengers1_Contract1",
+      "Contract.UniqueInstance.Journey.FirstContractDone"
+    ],
+    "DA_CT_Survival1_Scavengers1_01A": [
+      "Contract.Tracking.Completed.Scavengers1_Contract1A",
+      "Contract.UniqueInstance.Journey.FirstContractDone"
+    ],
+    "DA_CT_Survival1_Scavengers1_02": [
+      "Contract.Tracking.Completed.Scavengers1_Contract2"
+    ],
+    "DA_CT_Survival1_Scavengers1_03": [
+      "Contract.Tracking.Completed.Scavengers1_Contract3"
+    ],
+    "DA_CT_Survival1_Scavengers1_04": [
+      "Contract.Tracking.Completed.Scavengers1_Contract4"
+    ],
+    "DA_CT_Survival1_Scavengers1_05": [
+      "Contract.Tracking.Completed.Scavengers1_Contract5"
+    ],
+    "DA_CT_Survival1_Slavers1_01": [
+      "Contract.Tracking.Completed.Slavers1_Contract1"
+    ],
+    "DA_CT_Survival1_Slavers1_02_FirstSlaverContract": [
+      "Contract.Tracking.Completed.Slavers1_Contract2"
+    ],
+    "DA_CT_Survival1_Slavers1_03": [
+      "Contract.Tracking.Completed.Slavers1_Contract3"
+    ],
+    "DA_CT_Survival1_Slavers1_04": [
+      "Contract.Tracking.Completed.Ecolab076_PlantBook",
+      "Contract.Tracking.Completed.Slavers1_Contract4"
+    ],
+    "DA_CT_Survival1_Slavers1_05": [
+      "Contract.Tracking.Completed.Slavers1_Contract5"
+    ],
+    "DA_CT_Survival1_Slavers1_06": [
+      "Contract.Tracking.Completed.Slavers1_Contract6"
+    ],
+    "DA_CT_Survival1_Slavers2_01": [
+      "Contract.Tracking.Completed.Slavers2.Contract1"
+    ],
+    "DA_CT_Survival1_Slavers2_02": [
+      "Contract.Tracking.Completed.Slavers2.Contract2"
+    ],
+    "DA_CT_Survival1_Slavers2_03": [
+      "Contract.Tracking.Completed.Slavers2.Contract3"
+    ],
+    "DA_CT_Survival1_Slavers2_04": [
+      "Contract.Tracking.Completed.Slavers2.Contract4"
+    ],
+    "DA_CT_Survival1_Slavers3_01": [
+      "Contract.Tracking.Completed.Slavers3.Contract1"
+    ],
+    "DA_CT_Survival1_Slavers3_02": [
+      "Contract.Tracking.Completed.Slavers3.Contract2"
+    ],
+    "DA_CT_Survival1_Slavers3_03": [
+      "Contract.Tracking.Completed.Slavers3.Contract3"
+    ],
+    "DA_CT_Survival1_Slavers3_04": [
+      "Contract.Tracking.Completed.Slavers3.Contract4"
+    ],
+    "DA_CT_Trainer_BeneGesserit1_01": [
+      "DialogueFlags.Contracts.BeneGesseritT1Complete",
+      "Contract.Tracking.Completed.Trainer_BeneGesserit1_01"
+    ],
+    "DA_CT_Trainer_BeneGesserit2_01": [
+      "Contract.Tracking.Completed.AdvancedBeneGesseritTrainer.Contract1"
+    ],
+    "DA_CT_Trainer_BeneGesserit2_02": [
+      "Contract.Tracking.Completed.AdvancedBeneGesseritTrainer.Contract2"
+    ],
+    "DA_CT_Trainer_BeneGesserit2_03": [
+      "Contract.Tracking.Completed.AdvancedBeneGesseritTrainer.Contract3"
+    ],
+    "DA_CT_Trainer_BeneGesserit2_04": [
+      "Contract.Tracking.Completed.AdvancedBeneGesseritTrainer.Contract4"
+    ],
+    "DA_CT_Trainer_BeneGesserit2_05": [
+      "Contract.Tracking.Completed.AdvancedBeneGesseritTrainer.Contract5"
+    ],
+    "DA_CT_Trainer_Mentat1_01": [
+      "DialogueFlags.Contracts.MentatT1Complete",
+      "Contract.Tracking.Completed.Trainer_Mentat1_01"
+    ],
+    "DA_CT_Trainer_Mentat2_01": [
+      "Contract.Tracking.Completed.ZaynDeWitte.Contract1"
+    ],
+    "DA_CT_Trainer_Mentat2_02": [
+      "Contract.Tracking.Completed.ZaynDeWitte.Contract2",
+      "Contract.Target.Dialogue.ZaynDeWitte.Contract2.CompletedAny"
+    ],
+    "DA_CT_Trainer_Mentat2_02_Hark": [
+      "Contract.Tracking.Completed.ZaynDeWitte.Contract2_Hark",
+      "Contract.Target.Dialogue.ZaynDeWitte.Contract2.CompletedAny"
+    ],
+    "DA_CT_Trainer_Mentat2_03": [
+      "Contract.Tracking.Completed.ZaynDeWitte.Contract3"
+    ],
+    "DA_CT_Trainer_Mentat2_04": [
+      "Contract.Tracking.Completed.ZaynDeWitte.Contract4",
+      "Contract.Target.Dialogue.ZaynDeWitte.Contract4.CompletedAny"
+    ],
+    "DA_CT_Trainer_Mentat2_04_Hark": [
+      "Contract.Tracking.Completed.ZaynDeWitte.Contract4_Hark",
+      "Contract.Target.Dialogue.ZaynDeWitte.Contract4.CompletedAny"
+    ],
+    "DA_CT_Trainer_Mentat2_05": [
+      "Contract.Tracking.Completed.ZaynDeWitte.Contract5"
+    ],
+    "DA_CT_Trainer_Mentat2_06": [
+      "Contract.Tracking.Completed.ZaynDeWitte.Contract6"
+    ],
+    "DA_CT_Trainer_Planetologist1_01": [
+      "DialogueFlags.Contracts.PlanetologistT1Complete",
+      "Contract.Tracking.Completed.Trainer_Planetologist1_01"
+    ],
+    "DA_CT_Trainer_Planetologist1_01A": [
+      "Contract.Tracking.Completed.Planetologist1A"
+    ],
+    "DA_CT_Trainer_Planetologist2_01": [
+      "Contract.Tracking.Completed.AdvancedPlanetologistTrainer.Contract1"
+    ],
+    "DA_CT_Trainer_Planetologist2_02A": [
+      "Contract.Tracking.Completed.AdvancedPlanetologistTrainer.Contract2"
+    ],
+    "DA_CT_Trainer_Planetologist2_03A": [
+      "Contract.Tracking.Completed.AdvancedPlanetologistTrainer.Contract3"
+    ],
+    "DA_CT_Trainer_Planetologist2_04_Atre": [
+      "Contract.Tracking.Completed.AdvancedPlanetologistTrainer.Contract4Atre",
+      "Contract.Target.Dialogue.DerekChinara.AdvancedContract4.EitherContractComplete"
+    ],
+    "DA_CT_Trainer_Planetologist2_04_Hark": [
+      "Contract.Tracking.Completed.AdvancedPlanetologistTrainer.Contract4Hark",
+      "Contract.Target.Dialogue.DerekChinara.AdvancedContract4.EitherContractComplete"
+    ],
+    "DA_CT_Trainer_Planetologist2_05A": [
+      "Contract.Tracking.Completed.AdvancedPlanetologistTrainer.Contract5"
+    ],
+    "DA_CT_Trainer_Planetologist2_06": [
+      "Contract.Tracking.Completed.AdvancedPlanetologistTrainer.Contract6"
+    ],
+    "DA_CT_Trainer_Planetologist2_07": [
+      "Contract.Tracking.Completed.AdvancedPlanetologistTrainer.Contract7"
+    ],
+    "DA_CT_Trainer_Planetologist2_08": [
+      "Contract.Tracking.Completed.AdvancedPlanetologistTrainer.Contract8"
+    ],
+    "DA_CT_Trainer_Swordmaster1_01": [
+      "DialogueFlags.Contracts.SwordmasterT1Complete",
+      "Contract.Tracking.Completed.Trainer_Swordmaster1_01"
+    ],
+    "DA_CT_Trainer_Swordmaster2_01": [
+      "Contract.Tracking.Completed.SeronVarlin.Contract1"
+    ],
+    "DA_CT_Trainer_Swordmaster2_03": [
+      "Contract.Tracking.Completed.SeronVarlin.Contract3"
+    ],
+    "DA_CT_Trainer_Swordmaster2_03_TleilaxuContract": [
+      "Contract.Tracking.Completed.SeronVarlin.Contract3_TleilaxuContract"
+    ],
+    "DA_CT_Trainer_Swordmaster2_04": [
+      "Contract.Tracking.Completed.SeronVarlin.Contract4"
+    ],
+    "DA_CT_Trainer_Swordmaster2_05_pt1": [
+      "Contract.Tracking.Completed.SeronVarlin.Contract5pt1"
+    ],
+    "DA_CT_Trainer_Swordmaster2_06": [
+      "Contract.Tracking.Completed.SeronVarlin.Contract6"
+    ],
+    "DA_CT_Trainer_Swordmaster2_06_dummy": [
+      "Contract.Tracking.Completed.SeronVarlin.Contract6Dummy"
+    ],
+    "DA_CT_Trainer_Trooper1_01": [
+      "DialogueFlags.Contracts.TrooperT1Complete",
+      "Contract.Tracking.Completed.Trainer_Trooper1_01"
+    ],
+    "DA_CT_Trainer_Trooper1_01A": [
+      "DialogueFlags.Contracts.TrooperT1Complete",
+      "Contract.Tracking.Completed.Trainer_Trooper1_01A"
+    ],
+    "DA_CT_Trainer_Trooper2_01": [
+      "Contract.Tracking.Completed.KaraValk.Contract1"
+    ],
+    "DA_CT_Trainer_Trooper2_02": [
+      "Contract.Tracking.Completed.KaraValk.Contract2"
+    ],
+    "DA_CT_Trainer_Trooper2_03": [
+      "Contract.Tracking.Completed.KaraValk.Contract3"
+    ],
+    "DA_CT_Trainer_Trooper2_04": [
+      "Contract.Tracking.Completed.KaraValk.Contract4"
+    ],
+    "DA_CT_Trainer_Trooper2_05": [
+      "Contract.Tracking.Completed.KaraValk.Contract5"
+    ],
+    "DA_CT_Trainer_Trooper2_06": [
+      "Contract.Tracking.Completed.KaraValk.Contract6"
+    ]
+  },
+  "contract_aliases": {
+    "Arrakeen_Banquet_01": "DA_CT_Arrakeen_Banquet_01",
+    "Arrakeen_Banquet_02": "DA_CT_Arrakeen_Banquet_02",
+    "Arrakeen_Banquet_02_delivery_contract": "DA_CT_Arrakeen_Banquet_02_delivery_contract",
+    "Arrakeen_Banquet_03": "DA_CT_Arrakeen_Banquet_03",
+    "Arrakeen_Banquet_Container_01": "DA_CT_Arrakeen_Banquet_Container_01",
+    "Arrakeen_BouncerDuty_01": "DA_CT_Arrakeen_BouncerDuty_01",
+    "Arrakeen_Recustomizer_01": "DA_CT_Arrakeen_Recustomizer_01",
+    "Arrakeen_Recustomizer_02": "DA_CT_Arrakeen_Recustomizer_02",
+    "Arrakeen_SocialHub_Scandal_01": "DA_CT_Arrakeen_SocialHub_Scandal_01",
+    "DLC_B1C2_Journey4_EcolabA": "DA_CT_DLC_B1C2_Journey4_EcolabA",
+    "DLC_B1C2_Journey4_EcolabB": "DA_CT_DLC_B1C2_Journey4_EcolabB",
+    "Fac_Atre_Rank00_02_FacFunnel": "DA_CT_Fac_Atre_Rank00_02_FacFunnel",
+    "Fac_Atre_Rank00_02_SpyReport": "DA_CT_Fac_Atre_Rank00_02_SpyReport",
+    "Fac_Atre_Rank01_01_DeliverSteel": "DA_CT_Fac_Atre_Rank01_01_DeliverSteel",
+    "Fac_Atre_Rank01_02_Lanov": "DA_CT_Fac_Atre_Rank01_02_Lanov",
+    "Fac_Atre_Rank01_03_KillSlavers": "DA_CT_Fac_Atre_Rank01_03_KillSlavers",
+    "Fac_Atre_Rank01_04_TestLoyalty": "DA_CT_Fac_Atre_Rank01_04_TestLoyalty",
+    "Fac_Atre_Rank02_01_DeepExtraction": "DA_CT_Fac_Atre_Rank02_01_DeepExtraction",
+    "Fac_Atre_Rank02_01_DeliverErythrite": "DA_CT_Fac_Atre_Rank02_01_DeliverErythrite",
+    "Fac_Atre_Rank02_02_IDTags": "DA_CT_Fac_Atre_Rank02_02_IDTags",
+    "Fac_Atre_Rank02_03_KillDeserters": "DA_CT_Fac_Atre_Rank02_03_KillDeserters",
+    "Fac_Atre_Rank02_04_HarkIntelligence": "DA_CT_Fac_Atre_Rank02_04_HarkIntelligence",
+    "Fac_Atre_Rank02_05_Kytheria": "DA_CT_Fac_Atre_Rank02_05_Kytheria",
+    "Fac_Atre_Rank02_06_Katrina": "DA_CT_Fac_Atre_Rank02_06_Katrina",
+    "Fac_Atre_Rank02_BetrayalMaxim": "DA_CT_Fac_Atre_Rank02_BetrayalMaxim",
+    "Fac_Atre_Rank02_BetrayalPiter": "DA_CT_Fac_Atre_Rank02_BetrayalPiter",
+    "Fac_Atre_Rank02_BetrayalSimone": "DA_CT_Fac_Atre_Rank02_BetrayalSimone",
+    "Fac_Atre_Rank03_01_SandFlies": "DA_CT_Fac_Atre_Rank03_01_SandFlies",
+    "Fac_Atre_Rank03_02_TrippYates": "DA_CT_Fac_Atre_Rank03_02_TrippYates",
+    "Fac_Atre_Rank03_03_RedScorpion": "DA_CT_Fac_Atre_Rank03_03_RedScorpion",
+    "Fac_Atre_Rank03_04_StoneSentinel": "DA_CT_Fac_Atre_Rank03_04_StoneSentinel",
+    "Fac_Atre_Rank03_07_Ambrose_P1": "DA_CT_Fac_Atre_Rank03_07_Ambrose_P1",
+    "Fac_Atre_Rank03_08_Ambrose_P2_DidNotUsePoison": "DA_CT_Fac_Atre_Rank03_08_Ambrose_P2_DidNotUsePoison",
+    "Fac_Atre_Rank03_09_Ambrose_P2_UsedPoison": "DA_CT_Fac_Atre_Rank03_09_Ambrose_P2_UsedPoison",
+    "Fac_Atre_Rank03_10_MeetThufir": "DA_CT_Fac_Atre_Rank03_10_MeetThufir",
+    "Fac_Atre_Rank04_01_Oslow": "DA_CT_Fac_Atre_Rank04_01_Oslow",
+    "Fac_Atre_Rank04_02_MaasKharetRecruiter": "DA_CT_Fac_Atre_Rank04_02_MaasKharetRecruiter",
+    "Fac_Atre_Rank04_03_MysaTarril": "DA_CT_Fac_Atre_Rank04_03_MysaTarril",
+    "Fac_Atre_Rank04_04_Jorba": "DA_CT_Fac_Atre_Rank04_04_Jorba",
+    "Fac_Atre_Rank04_05_Skorda": "DA_CT_Fac_Atre_Rank04_05_Skorda",
+    "Fac_Atre_Rank04_06_TaintedSpice": "DA_CT_Fac_Atre_Rank04_06_TaintedSpice",
+    "Fac_Atre_Rank20": "DA_CT_Fac_Atre_Rank20",
+    "Fac_Hark_Rank00_02_FacFunnel": "DA_CT_Fac_Hark_Rank00_02_FacFunnel",
+    "Fac_Hark_Rank00_02_SpyReport": "DA_CT_Fac_Hark_Rank00_02_SpyReport",
+    "Fac_Hark_Rank01_01_PlantEvidence": "DA_CT_Fac_Hark_Rank01_01_PlantEvidence",
+    "Fac_Hark_Rank01_02_Bohannon": "DA_CT_Fac_Hark_Rank01_02_Bohannon",
+    "Fac_Hark_Rank01_03_KillSlavers": "DA_CT_Fac_Hark_Rank01_03_KillSlavers",
+    "Fac_Hark_Rank01_04_TestTreachery": "DA_CT_Fac_Hark_Rank01_04_TestTreachery",
+    "Fac_Hark_Rank02_01_FruitsOfYourLabor": "DA_CT_Fac_Hark_Rank02_01_FruitsOfYourLabor",
+    "Fac_Hark_Rank02_02_DeliverHoltzman": "DA_CT_Fac_Hark_Rank02_02_DeliverHoltzman",
+    "Fac_Hark_Rank02_03_KillDeserters": "DA_CT_Fac_Hark_Rank02_03_KillDeserters",
+    "Fac_Hark_Rank02_04_HarkIntelligence": "DA_CT_Fac_Hark_Rank02_04_HarkIntelligence",
+    "Fac_Hark_Rank02_05_Kytheria": "DA_CT_Fac_Hark_Rank02_05_Kytheria",
+    "Fac_Hark_Rank02_05_KytheriaP2": "DA_CT_Fac_Hark_Rank02_05_KytheriaP2",
+    "Fac_Hark_Rank02_06_Katrina": "DA_CT_Fac_Hark_Rank02_06_Katrina",
+    "Fac_Hark_Rank02_BetrayalAnton": "DA_CT_Fac_Hark_Rank02_BetrayalAnton",
+    "Fac_Hark_Rank03_01_SandFlies": "DA_CT_Fac_Hark_Rank03_01_SandFlies",
+    "Fac_Hark_Rank03_02_TrippYates": "DA_CT_Fac_Hark_Rank03_02_TrippYates",
+    "Fac_Hark_Rank03_03_RedScorpion": "DA_CT_Fac_Hark_Rank03_03_RedScorpion",
+    "Fac_Hark_Rank03_04_StoneSentinel": "DA_CT_Fac_Hark_Rank03_04_StoneSentinel",
+    "Fac_Hark_Rank03_07_SurviveAmbush": "DA_CT_Fac_Hark_Rank03_07_SurviveAmbush",
+    "Fac_Hark_Rank03_08_KillPiter": "DA_CT_Fac_Hark_Rank03_08_KillPiter",
+    "Fac_Hark_Rank03_08_KillPiterP2": "DA_CT_Fac_Hark_Rank03_08_KillPiterP2",
+    "Fac_Hark_Rank03_10_MeetPiter": "DA_CT_Fac_Hark_Rank03_10_MeetPiter",
+    "Fac_Hark_Rank03_BetrayalAndrea": "DA_CT_Fac_Hark_Rank03_BetrayalAndrea",
+    "Fac_Hark_Rank04_01_Oslow": "DA_CT_Fac_Hark_Rank04_01_Oslow",
+    "Fac_Hark_Rank04_02_MaasKharetRecruiter": "DA_CT_Fac_Hark_Rank04_02_MaasKharetRecruiter",
+    "Fac_Hark_Rank04_03_MysaTarril": "DA_CT_Fac_Hark_Rank04_03_MysaTarril",
+    "Fac_Hark_Rank04_04_Jorba": "DA_CT_Fac_Hark_Rank04_04_Jorba",
+    "Fac_Hark_Rank04_05_Skorda": "DA_CT_Fac_Hark_Rank04_05_Skorda",
+    "Fac_Hark_Rank04_06_TaintedSpice": "DA_CT_Fac_Hark_Rank04_06_TaintedSpice",
+    "Fac_Hark_Rank04_BetrayalThufir": "DA_CT_Fac_Hark_Rank04_BetrayalThufir",
+    "Fac_Hark_Rank20": "DA_CT_Fac_Hark_Rank20",
+    "HarkoVillage_Misc1_01": "DA_CT_HarkoVillage_Misc1_01",
+    "HarkoVillage_Recustomizer_01": "DA_CT_HarkoVillage_Recustomizer_01",
+    "Harko_Intrigue_01": "DA_CT_Harko_Intrigue_01",
+    "Harko_Intrigue_03": "DA_CT_Harko_Intrigue_03",
+    "Harko_MarketManipulation_01": "DA_CT_Harko_MarketManipulation_01",
+    "MTXEvent_ChoamWreckage_Deliver_ChoamCargo": "DA_CT_MTXEvent_ChoamWreckage_Deliver_ChoamCargo",
+    "MTXEvent_ChoamWreckage_Kill_Kirab_01": "DA_CT_MTXEvent_ChoamWreckage_Kill_Kirab_01",
+    "MTXEvent_ChoamWreckage_Sabotage_Emplacements": "DA_CT_MTXEvent_ChoamWreckage_Sabotage_Emplacements",
+    "MTX_Ch1_Journey1_CommsRepair1": "DA_CT_MTX_Ch1_Journey1_CommsRepair1",
+    "MTX_Ch1_Journey1_CommsRepair2": "DA_CT_MTX_Ch1_Journey1_CommsRepair2",
+    "MTX_Ch1_Journey1_CommsRepair3": "DA_CT_MTX_Ch1_Journey1_CommsRepair3",
+    "MTX_Ch1_Journey1_GunsAmmo": "DA_CT_MTX_Ch1_Journey1_GunsAmmo",
+    "MTX_Ch1_Journey1_KirabHunt": "DA_CT_MTX_Ch1_Journey1_KirabHunt",
+    "MTX_Ch1_Journey1_MedSupplies": "DA_CT_MTX_Ch1_Journey1_MedSupplies",
+    "MTX_Ch1_Journey1_MissingDunemen": "DA_CT_MTX_Ch1_Journey1_MissingDunemen",
+    "MTX_Ch1_Journey1_SavingDunemen": "DA_CT_MTX_Ch1_Journey1_SavingDunemen",
+    "MTX_Ch1_Journey1_StrandedDunemenFinal": "DA_CT_MTX_Ch1_Journey1_StrandedDunemenFinal",
+    "MTX_Ch1_Journey2_ScavengingLead": "DA_CT_MTX_Ch1_Journey2_ScavengingLead",
+    "MTX_Ch1_Journey3_LostLab": "DA_CT_MTX_Ch1_Journey3_LostLab",
+    "Survival1_Deserters1_01": "DA_CT_Survival1_Deserters1_01",
+    "Survival1_Deserters1_02": "DA_CT_Survival1_Deserters1_02",
+    "Survival1_Deserters1_03": "DA_CT_Survival1_Deserters1_03",
+    "Survival1_Deserters1_04": "DA_CT_Survival1_Deserters1_04",
+    "Survival1_Deserters2_01": "DA_CT_Survival1_Deserters2_01",
+    "Survival1_Deserters2_02": "DA_CT_Survival1_Deserters2_02",
+    "Survival1_Deserters2_03": "DA_CT_Survival1_Deserters2_03",
+    "Survival1_Deserters2_04": "DA_CT_Survival1_Deserters2_04",
+    "Survival1_DynEnc_AssassinJabalE_01": "DA_CT_Survival1_DynEnc_AssassinJabalE_01",
+    "Survival1_DynEnc_AssassinJabalE_02": "DA_CT_Survival1_DynEnc_AssassinJabalE_02",
+    "Survival1_DynEnc_AssassinJabalW_01": "DA_CT_Survival1_DynEnc_AssassinJabalW_01",
+    "Survival1_DynEnc_AssassinJabalW_02": "DA_CT_Survival1_DynEnc_AssassinJabalW_02",
+    "Survival1_DynEnc_AssassinMysa_01": "DA_CT_Survival1_DynEnc_AssassinMysa_01",
+    "Survival1_DynEnc_AssassinMysa_02": "DA_CT_Survival1_DynEnc_AssassinMysa_02",
+    "Survival1_DynEnc_AssassinOodham_01": "DA_CT_Survival1_DynEnc_AssassinOodham_01",
+    "Survival1_DynEnc_AssassinOodham_02": "DA_CT_Survival1_DynEnc_AssassinOodham_02",
+    "Survival1_DynEnc_AssassinRiftL_01": "DA_CT_Survival1_DynEnc_AssassinRiftL_01",
+    "Survival1_DynEnc_AssassinRiftL_02": "DA_CT_Survival1_DynEnc_AssassinRiftL_02",
+    "Survival1_DynEnc_AssassinRiftU_01": "DA_CT_Survival1_DynEnc_AssassinRiftU_01",
+    "Survival1_DynEnc_AssassinRiftU_02": "DA_CT_Survival1_DynEnc_AssassinRiftU_02",
+    "Survival1_DynEnc_AssassinVermilliusE_01": "DA_CT_Survival1_DynEnc_AssassinVermilliusE_01",
+    "Survival1_DynEnc_AssassinVermilliusE_02": "DA_CT_Survival1_DynEnc_AssassinVermilliusE_02",
+    "Survival1_DynEnc_AssassinVermilliusW_01": "DA_CT_Survival1_DynEnc_AssassinVermilliusW_01",
+    "Survival1_DynEnc_AssassinVermilliusW_02": "DA_CT_Survival1_DynEnc_AssassinVermilliusW_02",
+    "Survival1_DynEnc_AssassinWallE_01": "DA_CT_Survival1_DynEnc_AssassinWallE_01",
+    "Survival1_DynEnc_AssassinWallE_02": "DA_CT_Survival1_DynEnc_AssassinWallE_02",
+    "Survival1_DynEnc_AssassinWallW_01": "DA_CT_Survival1_DynEnc_AssassinWallW_01",
+    "Survival1_DynEnc_AssassinWallW_02": "DA_CT_Survival1_DynEnc_AssassinWallW_02",
+    "Survival1_DynEnc_Pilgrim_01": "DA_CT_Survival1_DynEnc_Pilgrim_01",
+    "Survival1_DynEnc_Pilgrim_02": "DA_CT_Survival1_DynEnc_Pilgrim_02",
+    "Survival1_DynEnc_Pilgrim_03": "DA_CT_Survival1_DynEnc_Pilgrim_03",
+    "Survival1_DynEnc_Pilgrim_04": "DA_CT_Survival1_DynEnc_Pilgrim_04",
+    "Survival1_DynEnc_Pilgrim_05": "DA_CT_Survival1_DynEnc_Pilgrim_05",
+    "Survival1_DynEnc_Pilgrim_06": "DA_CT_Survival1_DynEnc_Pilgrim_06",
+    "Survival1_DynEnc_StrandedJunk_01": "DA_CT_Survival1_DynEnc_StrandedJunk_01",
+    "Survival1_DynEnc_StrandedJunk_02": "DA_CT_Survival1_DynEnc_StrandedJunk_02",
+    "Survival1_DynEnc_StrandedJunk_03": "DA_CT_Survival1_DynEnc_StrandedJunk_03",
+    "Survival1_DynEnc_StrandedJunk_04": "DA_CT_Survival1_DynEnc_StrandedJunk_04",
+    "Survival1_DynEnc_StrandedJunk_05": "DA_CT_Survival1_DynEnc_StrandedJunk_05",
+    "Survival1_DynEnc_StrandedOre_01": "DA_CT_Survival1_DynEnc_StrandedOre_01",
+    "Survival1_DynEnc_StrandedOre_02": "DA_CT_Survival1_DynEnc_StrandedOre_02",
+    "Survival1_DynEnc_StrandedOre_03": "DA_CT_Survival1_DynEnc_StrandedOre_03",
+    "Survival1_DynEnc_StrandedOre_04": "DA_CT_Survival1_DynEnc_StrandedOre_04",
+    "Survival1_DynEnc_StrandedOre_05": "DA_CT_Survival1_DynEnc_StrandedOre_05",
+    "Survival1_DynEnc_StrandedOre_06": "DA_CT_Survival1_DynEnc_StrandedOre_06",
+    "Survival1_DynEnc_StrandedOre_07": "DA_CT_Survival1_DynEnc_StrandedOre_07",
+    "Survival1_DynEnc_StrandedSheol_01": "DA_CT_Survival1_DynEnc_StrandedSheol_01",
+    "Survival1_DynEnc_StrandedSheol_02": "DA_CT_Survival1_DynEnc_StrandedSheol_02",
+    "Survival1_DynEnc_StrandedSheol_03": "DA_CT_Survival1_DynEnc_StrandedSheol_03",
+    "Survival1_DynEnc_StrandedSheol_04": "DA_CT_Survival1_DynEnc_StrandedSheol_04",
+    "Survival1_DynEnc_StrandedSheol_05": "DA_CT_Survival1_DynEnc_StrandedSheol_05",
+    "Survival1_Funnel_01_Griffin": "DA_CT_Survival1_Funnel_01_Griffin",
+    "Survival1_Funnel_02_Griffin": "DA_CT_Survival1_Funnel_02_Griffin",
+    "Survival1_Funnel_03_Anvil": "DA_CT_Survival1_Funnel_03_Anvil",
+    "Survival1_Funnel_04_AtreFortressPinnacle": "DA_CT_Survival1_Funnel_04_AtreFortressPinnacle",
+    "Survival1_Funnel_05_AtreFortressAnvil": "DA_CT_Survival1_Funnel_05_AtreFortressAnvil",
+    "Survival1_Funnel_06_HarkFortress": "DA_CT_Survival1_Funnel_06_HarkFortress",
+    "Survival1_Funnel_07_Crossroads": "DA_CT_Survival1_Funnel_07_Crossroads",
+    "Survival1_Funnel_08_Anvil": "DA_CT_Survival1_Funnel_08_Anvil",
+    "Survival1_Funnel_08_Pinnacle": "DA_CT_Survival1_Funnel_08_Pinnacle",
+    "Survival1_Kirab1_01": "DA_CT_Survival1_Kirab1_01",
+    "Survival1_Kirab1_02": "DA_CT_Survival1_Kirab1_02",
+    "Survival1_Kirab1_03": "DA_CT_Survival1_Kirab1_03",
+    "Survival1_Kirab1_04": "DA_CT_Survival1_Kirab1_04",
+    "Survival1_Kirab2_01": "DA_CT_Survival1_Kirab2_01",
+    "Survival1_Kirab2_02": "DA_CT_Survival1_Kirab2_02",
+    "Survival1_Kirab2_03": "DA_CT_Survival1_Kirab2_03",
+    "Survival1_Kirab2_04": "DA_CT_Survival1_Kirab2_04",
+    "Survival1_Kirab2_05": "DA_CT_Survival1_Kirab2_05",
+    "Survival1_MaasKharet1_01": "DA_CT_Survival1_MaasKharet1_01",
+    "Survival1_MaasKharet1_02": "DA_CT_Survival1_MaasKharet1_02",
+    "Survival1_MaasKharet1_03": "DA_CT_Survival1_MaasKharet1_03",
+    "Survival1_MaasKharet1_04": "DA_CT_Survival1_MaasKharet1_04",
+    "Survival1_MaasKharet2_01": "DA_CT_Survival1_MaasKharet2_01",
+    "Survival1_MaasKharet2_02": "DA_CT_Survival1_MaasKharet2_02",
+    "Survival1_MaasKharet2_03": "DA_CT_Survival1_MaasKharet2_03",
+    "Survival1_MaasKharet2_04": "DA_CT_Survival1_MaasKharet2_04",
+    "Survival1_MaasKharet3_01": "DA_CT_Survival1_MaasKharet3_01",
+    "Survival1_MaasKharet3_02": "DA_CT_Survival1_MaasKharet3_02",
+    "Survival1_MaasKharet3_03": "DA_CT_Survival1_MaasKharet3_03",
+    "Survival1_MaasKharet3_04": "DA_CT_Survival1_MaasKharet3_04",
+    "Survival1_Misc_01_HotIce": "DA_CT_Survival1_Misc_01_HotIce",
+    "Survival1_Misc_02_InnaHiller": "DA_CT_Survival1_Misc_02_InnaHiller",
+    "Survival1_Misc_03_Blight": "DA_CT_Survival1_Misc_03_Blight",
+    "Survival1_Misc_04_Vials": "DA_CT_Survival1_Misc_04_Vials",
+    "Survival1_Misc_05_CHOAMEquipment": "DA_CT_Survival1_Misc_05_CHOAMEquipment",
+    "Survival1_Misc_06_Olmen": "DA_CT_Survival1_Misc_06_Olmen",
+    "Survival1_Misc_07_ZantaraBounty": "DA_CT_Survival1_Misc_07_ZantaraBounty",
+    "Survival1_SandFlies1_01": "DA_CT_Survival1_SandFlies1_01",
+    "Survival1_SandFlies1_02": "DA_CT_Survival1_SandFlies1_02",
+    "Survival1_SandFlies1_03": "DA_CT_Survival1_SandFlies1_03",
+    "Survival1_SandFlies1_04": "DA_CT_Survival1_SandFlies1_04",
+    "Survival1_SandFlies1_05": "DA_CT_Survival1_SandFlies1_05",
+    "Survival1_SandFlies2A_01": "DA_CT_Survival1_SandFlies2A_01",
+    "Survival1_SandFlies2A_02": "DA_CT_Survival1_SandFlies2A_02",
+    "Survival1_SandFlies2A_03": "DA_CT_Survival1_SandFlies2A_03",
+    "Survival1_SandFlies2A_04": "DA_CT_Survival1_SandFlies2A_04",
+    "Survival1_SandFlies2_01": "DA_CT_Survival1_SandFlies2_01",
+    "Survival1_SandFlies2_02": "DA_CT_Survival1_SandFlies2_02",
+    "Survival1_SandFlies2_03": "DA_CT_Survival1_SandFlies2_03",
+    "Survival1_SandFlies2_04": "DA_CT_Survival1_SandFlies2_04",
+    "Survival1_Scavengers1_01": "DA_CT_Survival1_Scavengers1_01",
+    "Survival1_Scavengers1_01A": "DA_CT_Survival1_Scavengers1_01A",
+    "Survival1_Scavengers1_02": "DA_CT_Survival1_Scavengers1_02",
+    "Survival1_Scavengers1_03": "DA_CT_Survival1_Scavengers1_03",
+    "Survival1_Scavengers1_04": "DA_CT_Survival1_Scavengers1_04",
+    "Survival1_Scavengers1_05": "DA_CT_Survival1_Scavengers1_05",
+    "Survival1_Slavers1_01": "DA_CT_Survival1_Slavers1_01",
+    "Survival1_Slavers1_02_FirstSlaverContract": "DA_CT_Survival1_Slavers1_02_FirstSlaverContract",
+    "Survival1_Slavers1_03": "DA_CT_Survival1_Slavers1_03",
+    "Survival1_Slavers1_04": "DA_CT_Survival1_Slavers1_04",
+    "Survival1_Slavers1_05": "DA_CT_Survival1_Slavers1_05",
+    "Survival1_Slavers1_06": "DA_CT_Survival1_Slavers1_06",
+    "Survival1_Slavers2_01": "DA_CT_Survival1_Slavers2_01",
+    "Survival1_Slavers2_02": "DA_CT_Survival1_Slavers2_02",
+    "Survival1_Slavers2_03": "DA_CT_Survival1_Slavers2_03",
+    "Survival1_Slavers2_04": "DA_CT_Survival1_Slavers2_04",
+    "Survival1_Slavers3_01": "DA_CT_Survival1_Slavers3_01",
+    "Survival1_Slavers3_02": "DA_CT_Survival1_Slavers3_02",
+    "Survival1_Slavers3_03": "DA_CT_Survival1_Slavers3_03",
+    "Survival1_Slavers3_04": "DA_CT_Survival1_Slavers3_04",
+    "Trainer_BeneGesserit1_01": "DA_CT_Trainer_BeneGesserit1_01",
+    "Trainer_BeneGesserit2_01": "DA_CT_Trainer_BeneGesserit2_01",
+    "Trainer_BeneGesserit2_02": "DA_CT_Trainer_BeneGesserit2_02",
+    "Trainer_BeneGesserit2_03": "DA_CT_Trainer_BeneGesserit2_03",
+    "Trainer_BeneGesserit2_04": "DA_CT_Trainer_BeneGesserit2_04",
+    "Trainer_BeneGesserit2_05": "DA_CT_Trainer_BeneGesserit2_05",
+    "Trainer_Mentat1_01": "DA_CT_Trainer_Mentat1_01",
+    "Trainer_Mentat2_01": "DA_CT_Trainer_Mentat2_01",
+    "Trainer_Mentat2_02": "DA_CT_Trainer_Mentat2_02",
+    "Trainer_Mentat2_02_Hark": "DA_CT_Trainer_Mentat2_02_Hark",
+    "Trainer_Mentat2_03": "DA_CT_Trainer_Mentat2_03",
+    "Trainer_Mentat2_04": "DA_CT_Trainer_Mentat2_04",
+    "Trainer_Mentat2_04_Hark": "DA_CT_Trainer_Mentat2_04_Hark",
+    "Trainer_Mentat2_05": "DA_CT_Trainer_Mentat2_05",
+    "Trainer_Mentat2_06": "DA_CT_Trainer_Mentat2_06",
+    "Trainer_Planetologist1_01": "DA_CT_Trainer_Planetologist1_01",
+    "Trainer_Planetologist1_01A": "DA_CT_Trainer_Planetologist1_01A",
+    "Trainer_Planetologist2_01": "DA_CT_Trainer_Planetologist2_01",
+    "Trainer_Planetologist2_02A": "DA_CT_Trainer_Planetologist2_02A",
+    "Trainer_Planetologist2_03A": "DA_CT_Trainer_Planetologist2_03A",
+    "Trainer_Planetologist2_04_Atre": "DA_CT_Trainer_Planetologist2_04_Atre",
+    "Trainer_Planetologist2_04_Hark": "DA_CT_Trainer_Planetologist2_04_Hark",
+    "Trainer_Planetologist2_05A": "DA_CT_Trainer_Planetologist2_05A",
+    "Trainer_Planetologist2_06": "DA_CT_Trainer_Planetologist2_06",
+    "Trainer_Planetologist2_07": "DA_CT_Trainer_Planetologist2_07",
+    "Trainer_Planetologist2_08": "DA_CT_Trainer_Planetologist2_08",
+    "Trainer_Swordmaster1_01": "DA_CT_Trainer_Swordmaster1_01",
+    "Trainer_Swordmaster2_01": "DA_CT_Trainer_Swordmaster2_01",
+    "Trainer_Swordmaster2_03": "DA_CT_Trainer_Swordmaster2_03",
+    "Trainer_Swordmaster2_03_TleilaxuContract": "DA_CT_Trainer_Swordmaster2_03_TleilaxuContract",
+    "Trainer_Swordmaster2_04": "DA_CT_Trainer_Swordmaster2_04",
+    "Trainer_Swordmaster2_05_pt1": "DA_CT_Trainer_Swordmaster2_05_pt1",
+    "Trainer_Swordmaster2_06": "DA_CT_Trainer_Swordmaster2_06",
+    "Trainer_Swordmaster2_06_dummy": "DA_CT_Trainer_Swordmaster2_06_dummy",
+    "Trainer_Trooper1_01": "DA_CT_Trainer_Trooper1_01",
+    "Trainer_Trooper1_01A": "DA_CT_Trainer_Trooper1_01A",
+    "Trainer_Trooper2_01": "DA_CT_Trainer_Trooper2_01",
+    "Trainer_Trooper2_02": "DA_CT_Trainer_Trooper2_02",
+    "Trainer_Trooper2_03": "DA_CT_Trainer_Trooper2_03",
+    "Trainer_Trooper2_04": "DA_CT_Trainer_Trooper2_04",
+    "Trainer_Trooper2_05": "DA_CT_Trainer_Trooper2_05",
+    "Trainer_Trooper2_06": "DA_CT_Trainer_Trooper2_06"
+  },
+  "contract_skill_grants": {
+    "DA_CT_Trainer_Mentat2_06": [
+      "Skills.Key.CapstoneMentalCalculus"
+    ],
+    "DA_CT_Trainer_Planetologist2_08": [
+      "Skills.Key.CapstoneScientist"
+    ],
+    "DA_CT_Trainer_Swordmaster1_01": [
+      "Skills.Key.Swordmaster1"
+    ],
+    "DA_CT_Trainer_Swordmaster2_01": [
+      "Skills.Key.Swordmaster2"
+    ],
+    "DA_CT_Trainer_Swordmaster2_05_pt1": [
+      "Skills.Key.CapstoneResolve"
+    ],
+    "DA_CT_Trainer_Swordmaster2_06": [
+      "Skills.Key.CapstoneAggression"
+    ],
+    "DA_CT_Trainer_Swordmaster2_06_dummy": [
+      "Skills.Key.CapstoneAggression"
+    ],
+    "DA_CT_Trainer_Trooper2_03": [
+      "Skills.Key.Trooper3"
+    ],
+    "DA_CT_Trainer_Trooper2_04": [
+      "Skills.Key.CapstoneSuspensorTech"
+    ],
+    "DA_CT_Trainer_Trooper2_05": [
+      "Skills.Key.CapstoneGadgets"
+    ]
+  },
+  "job_skill_blocks": {
+    "BeneGesserit": [
+      "Skills.Key.BeneGesserit1",
+      "Skills.Key.BeneGesserit2",
+      "Skills.Key.BeneGesserit3",
+      "Skills.Key.CapstoneManipulation",
+      "Skills.Key.CapstoneSelfControl",
+      "Skills.Key.CapstoneWeirdingWay"
+    ],
+    "Mentat": [
+      "Skills.Key.CapstoneAssassination",
+      "Skills.Key.CapstoneMentalCalculus",
+      "Skills.Key.CapstoneTactician",
+      "Skills.Key.Mentat1",
+      "Skills.Key.Mentat2",
+      "Skills.Key.Mentat3"
+    ],
+    "Planetologist": [
+      "Skills.Key.CapstoneDriver",
+      "Skills.Key.CapstoneExplorer",
+      "Skills.Key.CapstoneScientist",
+      "Skills.Key.Planetologist1",
+      "Skills.Key.Planetologist2",
+      "Skills.Key.Planetologist3"
+    ],
+    "Swordmaster": [
+      "Skills.Key.CapstoneAggression",
+      "Skills.Key.CapstoneBlade",
+      "Skills.Key.CapstoneResolve",
+      "Skills.Key.Swordmaster1",
+      "Skills.Key.Swordmaster2",
+      "Skills.Key.Swordmaster3"
+    ],
+    "Trooper": [
+      "Skills.Key.CapstoneGadgets",
+      "Skills.Key.CapstoneSuspensorTech",
+      "Skills.Key.CapstoneWeaponry",
+      "Skills.Key.Trooper1",
+      "Skills.Key.Trooper2",
+      "Skills.Key.Trooper3"
+    ]
+  },
+  "job_all_modules": {
+    "BeneGesserit": [
+      "Skills.Ability.BinduNerveStrike",
+      "Skills.Ability.Blindspot",
+      "Skills.Ability.Hypersprint",
+      "Skills.Ability.LitanyAgainstFear",
+      "Skills.Ability.VoiceCompel",
+      "Skills.Ability.VoiceStop",
+      "Skills.Ability.WeirdingStep",
+      "Skills.Attribute.Manipulation1",
+      "Skills.Attribute.SelfControl1",
+      "Skills.Attribute.SelfControl2",
+      "Skills.Attribute.SelfControl3",
+      "Skills.Attribute.SelfControl4",
+      "Skills.Attribute.SelfControl5",
+      "Skills.Attribute.WeirdingWay1",
+      "Skills.Attribute.WeirdingWay2",
+      "Skills.Key.BeneGesserit1",
+      "Skills.Key.BeneGesserit2",
+      "Skills.Key.BeneGesserit3",
+      "Skills.Key.CapstoneManipulation",
+      "Skills.Key.CapstoneSelfControl",
+      "Skills.Key.CapstoneWeirdingWay",
+      "Skills.Perk.Backstabber",
+      "Skills.Perk.BinduStability",
+      "Skills.Perk.MetabolizePoison",
+      "Skills.Perk.RegenCap",
+      "Skills.Perk.VoiceAnalysis",
+      "Skills.Spice.BinduDodge",
+      "Skills.Spice.VoiceSplash"
+    ],
+    "Hidden": [
+      "Skills.Ability.ControlSpace",
+      "Skills.Ability.HealerSeeker",
+      "Skills.Ability.HealingCapsule",
+      "Skills.Ability.SuspensorGrenade_Stabilization",
+      "Skills.Ability.SuspensorMine_Stabilization",
+      "Skills.Attribute.Blade3",
+      "Skills.Perk.Gunsmith"
+    ],
+    "Mentat": [
+      "Skills.Ability.HunterSeeker",
+      "Skills.Ability.PoisonCapsuleLauncher",
+      "Skills.Ability.PoisonMine",
+      "Skills.Ability.PortableGenerator",
+      "Skills.Ability.SolidoDecoy",
+      "Skills.Ability.StunDart",
+      "Skills.Ability.SuspensorMine_Amplification",
+      "Skills.Ability.SuspensorMine_Reduction",
+      "Skills.Ability.SuspensorWall",
+      "Skills.Ability.TurretSeeker",
+      "Skills.Attribute.Assassination1",
+      "Skills.Attribute.Assassination2",
+      "Skills.Attribute.MentalCalculus1",
+      "Skills.Attribute.MentalCalculus2",
+      "Skills.Attribute.MentalCalculus3",
+      "Skills.Attribute.MentalCalculus4",
+      "Skills.Attribute.MentalCalculus5",
+      "Skills.Key.CapstoneAssassination",
+      "Skills.Key.CapstoneMentalCalculus",
+      "Skills.Key.CapstoneTactician",
+      "Skills.Key.Mentat1",
+      "Skills.Key.Mentat2",
+      "Skills.Key.Mentat3",
+      "Skills.Perk.ExploitWeakness",
+      "Skills.Perk.HeadShots",
+      "Skills.Perk.IronWill",
+      "Skills.Perk.PoisonTooth",
+      "Skills.Perk.ShieldWeakpoint"
+    ],
+    "Planetologist": [
+      "Skills.Ability.SuspensorPad",
+      "Skills.Attribute.Driver1",
+      "Skills.Attribute.Driver2",
+      "Skills.Attribute.Driver3",
+      "Skills.Attribute.Driver4",
+      "Skills.Attribute.Driver5",
+      "Skills.Attribute.Driver6",
+      "Skills.Attribute.Explorer1",
+      "Skills.Attribute.Explorer2",
+      "Skills.Attribute.Explorer3",
+      "Skills.Attribute.Explorer4",
+      "Skills.Attribute.Explorer5",
+      "Skills.Attribute.Scientist1",
+      "Skills.Attribute.Scientist2",
+      "Skills.Attribute.Scientist3",
+      "Skills.Attribute.Scientist4",
+      "Skills.Attribute.Scientist5",
+      "Skills.Key.CapstoneDriver",
+      "Skills.Key.CapstoneExplorer",
+      "Skills.Key.CapstoneScientist",
+      "Skills.Key.Planetologist1",
+      "Skills.Key.Planetologist2",
+      "Skills.Key.Planetologist3",
+      "Skills.Perk.BatteryExpert",
+      "Skills.Science.m_PowerMax",
+      "Skills.Spice.VehicleHeat"
+    ],
+    "Swordmaster": [
+      "Skills.Ability.BattleCry",
+      "Skills.Ability.CripplingStrike",
+      "Skills.Ability.DeflectionSlow",
+      "Skills.Ability.KneeCharge",
+      "Skills.Ability.RiposteBreak",
+      "Skills.Ability.RiposteInjure",
+      "Skills.Ability.Whirlwind",
+      "Skills.Attribute.Aggression1",
+      "Skills.Attribute.Aggression2",
+      "Skills.Attribute.Aggression3",
+      "Skills.Attribute.Aggression4",
+      "Skills.Attribute.Blade1",
+      "Skills.Attribute.Blade2",
+      "Skills.Attribute.Resolve1",
+      "Skills.Attribute.Resolve2",
+      "Skills.Attribute.UnstoppableAttacks",
+      "Skills.Key.CapstoneAggression",
+      "Skills.Key.CapstoneBlade",
+      "Skills.Key.CapstoneResolve",
+      "Skills.Key.Swordmaster1",
+      "Skills.Key.Swordmaster2",
+      "Skills.Key.Swordmaster3",
+      "Skills.Perk.MeleeChain",
+      "Skills.Perk.SprintStamina",
+      "Skills.Perk.ThriveOnDanger",
+      "Skills.Perk.ToughLunge",
+      "Skills.Spice.ParryBoost",
+      "Skills.Spice.ShadowStrike"
+    ],
+    "Trooper": [
+      "Skills.Ability.AssaultSeeker",
+      "Skills.Ability.CablePull",
+      "Skills.Ability.CollapseGrenade",
+      "Skills.Ability.EnergyCapsule",
+      "Skills.Ability.FragGrenade",
+      "Skills.Ability.MagneticAttractor",
+      "Skills.Ability.SuspensorBlast",
+      "Skills.Ability.SuspensorGrenade_Amplification",
+      "Skills.Ability.SuspensorGrenade_Reduction",
+      "Skills.Attribute.SuspensorTech1",
+      "Skills.Attribute.Weaponry1",
+      "Skills.Attribute.Weaponry2",
+      "Skills.Attribute.Weaponry3",
+      "Skills.Attribute.Weaponry4",
+      "Skills.Attribute.Weaponry5",
+      "Skills.Attribute.Weaponry6",
+      "Skills.Key.CapstoneGadgets",
+      "Skills.Key.CapstoneSuspensorTech",
+      "Skills.Key.CapstoneWeaponry",
+      "Skills.Key.Trooper1",
+      "Skills.Key.Trooper2",
+      "Skills.Key.Trooper3",
+      "Skills.Perk.BodyShots",
+      "Skills.Perk.DeathFromAbove",
+      "Skills.Perk.HeavyWeaponNaib",
+      "Skills.Perk.SuspensorDash",
+      "Skills.Perk.TrooperCooldowns",
+      "Skills.Spice.GadgetReload"
+    ]
+  }
+}

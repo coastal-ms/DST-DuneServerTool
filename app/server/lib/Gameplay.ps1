@@ -52,11 +52,16 @@ function Initialize-DuneGameplayItemData {
             foreach ($p in $json.items.PSObject.Properties) {
                 $v = $p.Value
                 $rules[$p.Name] = @{
-                    name     = [string]$v.name
-                    category = [string]$v.category
-                    tier     = if ($null -ne $v.tier) { [int]$v.tier } else { 0 }
-                    rarity   = [string]$v.rarity
-                    icon     = [string]$v.icon
+                    name              = [string]$v.name
+                    category          = [string]$v.category
+                    tier              = if ($null -ne $v.tier) { [int]$v.tier } else { 0 }
+                    rarity            = [string]$v.rarity
+                    icon              = [string]$v.icon
+                    max_durability    = if ($null -ne $v.max_durability) { [double]$v.max_durability } else { 0.0 }
+                    stack_max         = if ($null -ne $v.stack_max) { [int]$v.stack_max } else { 0 }
+                    vendor_price      = if ($null -ne $v.vendor_price) { [int]$v.vendor_price } else { 0 }
+                    is_gradeable      = [bool]$v.is_gradeable
+                    min_quality_level = if ($null -ne $v.min_quality_level) { [int]$v.min_quality_level } else { 0 }
                 }
             }
         }
@@ -76,7 +81,7 @@ function Get-DuneGameplayItemRule {
     if ($script:DuneGameplayItemRules.ContainsKey($TemplateId)) {
         return $script:DuneGameplayItemRules[$TemplateId]
     }
-    return @{ name = ''; category = ''; tier = 0; rarity = ''; icon = '' }
+    return @{ name = ''; category = ''; tier = 0; rarity = ''; icon = ''; max_durability = 0.0 }
 }
 
 function Get-DuneGameplayItemName {
@@ -138,6 +143,16 @@ function ConvertTo-DuneRowMaps {
 
 function ConvertTo-DuneInt {
     param($Value)
+    if ($null -eq $Value) { return 0L }
+    # Defend against single-element arrays / Object[] coming out of
+    # ConvertFrom-Json for ambiguously typed JSON values. PowerShell's
+    # [int]@(5) cast is unreliable and [int]$arr fails outright with
+    # "Cannot convert ... System.Object[] to System.Int32".
+    if ($Value -is [System.Array] -or $Value -is [System.Collections.IList]) {
+        $arr = @($Value)
+        if ($arr.Count -eq 0) { return 0L }
+        $Value = $arr[0]
+    }
     $n = 0L
     if ([Int64]::TryParse([string]$Value, [ref]$n)) { return $n }
     return 0L
@@ -246,6 +261,42 @@ function Get-DuneMarketItemsLive {
     }
     return @{ ok = $true; items = $items }
 }
+
+# ----------------------------------------------------------------------------
+# Cached wrapper for Get-DuneMarketItemsLive. Sort/filter/page requests all
+# re-fetch the full ~15k-row set; without this cache, every column sort flip
+# in the UI re-hits Postgres for ~1s of SQL + ~0.5s of PS enrichment. With a
+# 15 s TTL, subsequent sort/page/filter requests reuse the enriched list and
+# the table feels instant.
+#
+# Cache is bypassed (and replaced on success) when -NoCache is set, which the
+# route handler wires up to the ?nocache=1 query param so the Refresh button
+# still pulls live data.
+# ----------------------------------------------------------------------------
+$script:DuneMarketItemsCache         = $null
+$script:DuneMarketItemsCacheTtlSec   = 15
+
+function Get-DuneMarketItemsCached {
+    param([string]$Ip, [switch]$NoCache)
+    $now = [DateTime]::UtcNow
+    if (-not $NoCache -and $script:DuneMarketItemsCache -and
+        $script:DuneMarketItemsCache.ip -eq $Ip -and
+        $script:DuneMarketItemsCache.expiresAt -gt $now) {
+        return @{ ok = $true; items = $script:DuneMarketItemsCache.items; cached = $true }
+    }
+    $live = Get-DuneMarketItemsLive -Ip $Ip
+    if ($live.ok) {
+        $script:DuneMarketItemsCache = @{
+            ip        = $Ip
+            items     = $live.items
+            expiresAt = $now.AddSeconds($script:DuneMarketItemsCacheTtlSec)
+        }
+        $live['cached'] = $false
+    }
+    return $live
+}
+
+function Clear-DuneMarketItemsCache { $script:DuneMarketItemsCache = $null }
 
 function Get-DuneMarketListingsLive {
     param([string]$Ip, [string]$TemplateId)

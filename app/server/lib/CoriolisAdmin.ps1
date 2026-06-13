@@ -1,4 +1,4 @@
-# Coriolis Admin — v11.5.7
+﻿# Coriolis Admin — v11.5.7
 #
 # Wraps dune.debug_get_coriolis_seeds() + dune.debug_set_farm_seed() /
 # debug_set_map_seed() / debug_set_partition_seed() so admins can inspect and
@@ -52,15 +52,15 @@ function Get-DuneCoriolisSeedsLive {
     for ($i = 0; $i -lt $mapNames.Count; $i++) {
         $maps += [ordered]@{
             map  = [string]$mapNames[$i]
-            seed = if ($i -lt $mapSeeds.Count) { [int]$mapSeeds[$i] } else { 0 }
+            seed = if ($i -lt $mapSeeds.Count) { [int](ConvertTo-DuneInt $mapSeeds[$i]) } else { 0 }
         }
     }
     $partitions = @()
     for ($i = 0; $i -lt $partIds.Count; $i++) {
         $partitions += [ordered]@{
-            partition_id = [long]$partIds[$i]
+            partition_id = ConvertTo-DuneInt $partIds[$i]
             map          = if ($i -lt $partMaps.Count)  { [string]$partMaps[$i] } else { '' }
-            seed         = if ($i -lt $partSeeds.Count) { [int]$partSeeds[$i] }    else { 0 }
+            seed         = if ($i -lt $partSeeds.Count) { [int](ConvertTo-DuneInt $partSeeds[$i]) } else { 0 }
         }
     }
     return @{ ok = $true; farm_seed = $farm; maps = $maps; partitions = $partitions }

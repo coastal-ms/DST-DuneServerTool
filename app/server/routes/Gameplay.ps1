@@ -47,7 +47,8 @@ Register-DuneRoute -Method GET -Path '/api/gameplay/market/items' -Handler {
         if (-not (Test-DuneDemoRequested $req)) {
             $ctx = Get-DuneDbContext
             if ($ctx.ok) {
-                $live = Get-DuneMarketItemsLive -Ip $ctx.ip
+                $noCache = [bool](Get-DuneQ $req 'nocache')
+                $live = Get-DuneMarketItemsCached -Ip $ctx.ip -NoCache:$noCache
                 if ($live.ok) { $items = $live.items; $source = 'live' }
                 else { $liveError = $live.error }
             } else { $liveError = $ctx.message }
@@ -371,11 +372,97 @@ Register-DuneRoute -Method POST -Path '/api/gameplay/market-bot/tick/list' -Hand
         $q = (Get-DuneQ -Request $req -Name 'dry').ToLower()
         if ($q -eq '1' -or $q -eq 'true' -or $q -eq 'yes') { $dry = $true }
         if (Test-DuneBodyTruthy -Body $body -Name 'dryRun') { $dry = $true }
-        $summary = Invoke-DuneBotListTick -DryRun:$dry
-        $status = if ($summary.ok) { 200 } else { 503 }
-        Write-DuneJson -Response $res -Status $status -Body $summary
+
+        if ($dry) {
+            $summary = Invoke-DuneBotListTick -DryRun
+            $status = if ($summary.ok) { 200 } else { 503 }
+            Write-DuneJson -Response $res -Status $status -Body $summary
+            return
+        }
+
+        # Live list tick is dispatched to a background runspace so the
+        # single HTTP server runspace stays free to handle status polls and
+        # other UI traffic. The button spinner clears on the 202; progress
+        # comes back via Get-DuneNativeBotStatus.list_tick_progress.
+        $launch = Start-DuneBotListTickAsync
+        if (-not $launch.ok) {
+            $status = if ($launch.running) { 409 } else { 500 }
+            Write-DuneJson -Response $res -Status $status -Body $launch
+            return
+        }
+        Write-DuneJson -Response $res -Status 202 -Body $launch
     } catch {
         Write-DuneError -Response $res -Status 500 -Message "Bot list tick failed: $($_.Exception.Message)"
+    }
+}
+
+# ---------------------------------------------------------------------------
+# POST /api/gameplay/market-bot/clear-error — dismiss the persistent
+# last_error banner from the bot state. Resets error_count too. No-op when
+# the banner is already empty.
+# ---------------------------------------------------------------------------
+Register-DuneRoute -Method POST -Path '/api/gameplay/market-bot/clear-error' -Handler {
+    param($req, $res, $routeParams, $body)
+    try {
+        $r = Clear-DuneBotError
+        Write-DuneJson -Response $res -Body $r
+    } catch {
+        Write-DuneError -Response $res -Status 500 -Message "Clear bot error failed: $($_.Exception.Message)"
+    }
+}
+
+# ---------------------------------------------------------------------------
+# POST /api/gameplay/market-bot/seed — IMMEDIATE seed: bulk-list every
+# catalogued template up to listings_per_grade in one shot. Bypasses the
+# live vendor snapshot (which hangs on fresh BGs with no NPC orders) and
+# the mask-cache SSH refresh — uses the bundled catalog + mask seed file
+# only. ?dry=1 (or body { dryRun: true }) reports the plan WITHOUT writing.
+#
+# Live (non-dry) runs are dispatched to a dedicated background runspace
+# via Start-DuneBotSeedAsync — the POST returns immediately with
+# { ok, running, started } and progress is published into
+# Get-DuneNativeBotStatus.seed_progress for the UI's existing status poll.
+# Dry runs still execute synchronously because the caller wants the plan
+# in the response body.
+# ---------------------------------------------------------------------------
+Register-DuneRoute -Method POST -Path '/api/gameplay/market-bot/seed' -Handler {
+    param($req, $res, $routeParams, $body)
+    try {
+        $dry = $false
+        $q = (Get-DuneQ -Request $req -Name 'dry').ToLower()
+        if ($q -eq '1' -or $q -eq 'true' -or $q -eq 'yes') { $dry = $true }
+        if (Test-DuneBodyTruthy -Body $body -Name 'dryRun') { $dry = $true }
+
+        if ($dry) {
+            $summary = Invoke-DuneBotSeedMarket -DryRun
+            $status = if ($summary.ok) { 200 } else { 503 }
+            Write-DuneJson -Response $res -Status $status -Body $summary
+            return
+        }
+
+        $launch = Start-DuneBotSeedAsync
+        if (-not $launch.ok) {
+            $status = if ($launch.running) { 409 } else { 500 }
+            Write-DuneJson -Response $res -Status $status -Body $launch
+            return
+        }
+        Write-DuneJson -Response $res -Status 202 -Body $launch
+    } catch {
+        Write-DuneError -Response $res -Status 500 -Message "Bot seed market failed: $($_.Exception.Message)"
+    }
+}
+
+# POST /api/gameplay/market-bot/seed/abort — interrupt the in-flight seed
+# runspace and clear seed_progress.running so the UI re-enables the
+# "Seed market" button immediately. Safe to call when nothing is running
+# (just clears any orphaned flag).
+Register-DuneRoute -Method POST -Path '/api/gameplay/market-bot/seed/abort' -Handler {
+    param($req, $res, $routeParams, $body)
+    try {
+        $r = Stop-DuneBotSeedAsync
+        Write-DuneJson -Response $res -Body $r
+    } catch {
+        Write-DuneError -Response $res -Status 500 -Message "Bot seed abort failed: $($_.Exception.Message)"
     }
 }
 

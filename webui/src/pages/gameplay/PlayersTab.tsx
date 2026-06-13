@@ -27,6 +27,9 @@ export function PlayersTab() {
   const [error, setError]       = useState<string | null>(null)
   const [search, setSearch]     = useState('')
   const [online, setOnline]     = useState<OnlineFilter>('')
+  const [hideGm, setHideGm]     = useState<boolean>(() => {
+    try { return localStorage.getItem('dst.players.hideGm') === '1' } catch { return false }
+  })
   const [selectedId, setSel]    = useState<number | null>(null)
   const [section, setSection]   = useState<SectionId>('stats')
   const [flash, setFlash]       = useState<{ msg: string; kind: 'ok' | 'err' } | null>(null)
@@ -63,9 +66,31 @@ export function PlayersTab() {
     return () => window.clearTimeout(t)
   }, [flash])
 
+  // Esc closes the open player and returns to the Server Overview. Ignored
+  // when the user is typing in an input/textarea/contenteditable so it does
+  // not steal escapes from inline forms.
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key !== 'Escape') return
+      const t = e.target as HTMLElement | null
+      const tag = t?.tagName
+      if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT' || t?.isContentEditable) return
+      setSel(null)
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [])
+
+  // GM filter applies to the whole tab — counts, summary buckets, and the
+  // list all hide the bot when toggled on.
+  const visiblePlayers = useMemo(
+    () => hideGm ? players.filter(p => (p.name || '').trim().toLowerCase() !== 'gm') : players,
+    [players, hideGm],
+  )
+
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase()
-    let out = players
+    let out = visiblePlayers
     if (q) out = out.filter(p =>
       p.name.toLowerCase().includes(q) ||
       p.faction_name.toLowerCase().includes(q) ||
@@ -79,9 +104,39 @@ export function PlayersTab() {
       if (ao !== bo) return ao - bo
       return (a.name || '').localeCompare(b.name || '')
     })
-  }, [players, search, online])
+  }, [visiblePlayers, search, online])
 
-  const onlineCount = useMemo(() => players.filter(p => isOnline(p.online_status)).length, [players])
+  const onlineCount = useMemo(() => visiblePlayers.filter(p => isOnline(p.online_status)).length, [visiblePlayers])
+
+  // When hiding GM, rebuild the by_faction / by_map / totals locally from
+  // visiblePlayers so the Server Overview buckets and the Factions stat card
+  // do not count the bot. Otherwise pass the API summary through unchanged.
+  const displaySummary = useMemo<PlayerSummaryResponse | null>(() => {
+    if (!hideGm) return summary
+    const buckets = (key: 'faction_name' | 'map') => {
+      const m = new Map<string, number>()
+      for (const p of visiblePlayers) {
+        const name = (p[key] as string) || ''
+        if (!name) continue
+        m.set(name, (m.get(name) || 0) + 1)
+      }
+      return Array.from(m, ([name, count]) => ({ name, count })).sort((a, b) => b.count - a.count)
+    }
+    const by_faction = buckets('faction_name')
+    const by_map = buckets('map')
+    return {
+      ...(summary ?? {}),
+      by_faction,
+      by_map,
+      totals: {
+        ...(summary?.totals ?? {}),
+        players: visiblePlayers.length,
+        online: visiblePlayers.filter(p => isOnline(p.online_status)).length,
+        factions: by_faction.length,
+      },
+    } as PlayerSummaryResponse
+  }, [summary, hideGm, visiblePlayers])
+
   const selected = useMemo(() => players.find(p => p.id === selectedId) ?? null, [players, selectedId])
 
   const refresh = useCallback(() => {
@@ -96,9 +151,9 @@ export function PlayersTab() {
     <div>
       {/* Top-of-tab stat cards */}
       <section className="grid grid-cols-2 md:grid-cols-3 gap-3 mb-4">
-        <StatCard label="Players"    value={fmtNum(players.length)}                                                icon="Users" />
-        <StatCard label="Online now" value={fmtNum(onlineCount)}                                                   icon="Wifi" />
-        <StatCard label="Factions"   value={fmtNum(summary?.totals.factions ?? new Set(players.map(p => p.faction_name).filter(Boolean)).size)} icon="Flag" />
+        <StatCard label="Players"    value={fmtNum(visiblePlayers.length)}                                                icon="Users" />
+        <StatCard label="Online now" value={fmtNum(onlineCount)}                                                          icon="Wifi" />
+        <StatCard label="Factions"   value={fmtNum(displaySummary?.totals.factions ?? new Set(visiblePlayers.map(p => p.faction_name).filter(Boolean)).size)} icon="Flag" />
       </section>
 
       <div className="card p-3 mb-4 flex flex-wrap items-center gap-2">
@@ -115,6 +170,17 @@ export function PlayersTab() {
             </button>
           ))}
         </div>
+        <button onClick={() => {
+            setHideGm(v => {
+              const next = !v
+              try { localStorage.setItem('dst.players.hideGm', next ? '1' : '0') } catch { /* ignore */ }
+              return next
+            })
+          }}
+          title={hideGm ? 'Showing real players only — click to include GM bot' : 'Hide the GM admin bot from the list'}
+          className={`px-3 py-1.5 text-xs rounded-lg border flex items-center gap-1.5 ${hideGm ? 'bg-accent/20 text-accent-bright border-accent/40' : 'bg-surface-2 text-text-muted hover:text-text border-border'}`}>
+          <Icon name={hideGm ? 'EyeOff' : 'Eye'} size={13} /> {hideGm ? 'GM hidden' : 'Hide GM'}
+        </button>
         <button className="btn-secondary" onClick={refresh} disabled={loading}>
           <Icon name="RefreshCw" size={14} className={loading ? 'animate-spin' : ''} /> Refresh
         </button>
@@ -143,7 +209,8 @@ export function PlayersTab() {
                 <div className="px-3 py-6 text-center text-text-dim text-sm">No players match.</div>
               ) : (
                 filtered.map(p => (
-                  <button key={p.id} type="button" onClick={() => setSel(p.id)}
+                  <button key={p.id} type="button" onClick={() => setSel(cur => cur === p.id ? null : p.id)}
+                    title={selectedId === p.id ? 'Click again to close and return to Server Overview' : undefined}
                     className={`w-full flex items-center justify-between gap-2 px-3 py-2 text-left border-b border-border/30 hover:bg-surface-2 ${selectedId === p.id ? 'bg-surface-2 border-l-2 border-l-accent' : ''}`}>
                     <span className="min-w-0 flex-1">
                       <div className="text-sm text-text truncate">{p.name || <span className="italic text-text-dim">Unnamed</span>}</div>
@@ -185,7 +252,7 @@ export function PlayersTab() {
           )}
           {selected ? (
             <div className="space-y-3">
-              <PlayerHeader player={selected} />
+              <PlayerHeader player={selected} onClose={() => setSel(null)} />
               <SectionComponent
                 player={selected}
                 canWrite={source === 'live'}
@@ -197,7 +264,7 @@ export function PlayersTab() {
             </div>
           ) : (
             <>
-              <ServerOverview summary={summary} />
+              <ServerOverview summary={displaySummary} />
               <div className="mt-3">
                 <CoriolisAdmin flash={(msg, kind = 'ok') => setFlash({ msg, kind })} />
               </div>
@@ -209,10 +276,10 @@ export function PlayersTab() {
   )
 }
 
-function PlayerHeader({ player }: { player: Player }) {
+function PlayerHeader({ player, onClose }: { player: Player; onClose: () => void }) {
   return (
     <div className="card p-3 flex items-start justify-between gap-3">
-      <div className="min-w-0">
+      <div className="min-w-0 flex-1">
         <h3 className="text-lg font-semibold text-text truncate">{player.name || 'Unnamed player'}</h3>
         <div className="text-xs text-text-dim flex flex-wrap gap-x-3 gap-y-0.5 mt-1">
           <span><Icon name="Hash" size={11} className="inline" /> pawn {player.id}</span>
@@ -229,6 +296,11 @@ function PlayerHeader({ player }: { player: Player }) {
           </span>
         </div>
       </div>
+      <button type="button" onClick={onClose}
+        title="Close player (back to Server Overview) - Esc"
+        className="shrink-0 text-text-dim hover:text-text rounded-lg p-1.5 hover:bg-surface-2 flex items-center gap-1 text-xs">
+        <Icon name="X" size={14} /> Close
+      </button>
     </div>
   )
 }
