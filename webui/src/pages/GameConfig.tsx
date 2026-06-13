@@ -79,7 +79,13 @@ function currentValue(data: GameConfigResponse | null, field: GameConfigField): 
 function sectionIsManaged(data: GameConfigResponse, field: GameConfigField): boolean {
   if (!data || !field) return false
   const b = bundleFor(data, field.file)
-  return b?.managedSections?.includes(field.section) ?? false
+  // PS+ConvertTo-Json can collapse an empty hashtable to {} or unwrap a
+  // single-element array to a scalar, so managedSections may not always be
+  // an array on the wire. Defensively coerce before calling .includes.
+  const ms = b?.managedSections
+  if (Array.isArray(ms)) return ms.includes(field.section)
+  if (typeof ms === 'string') return ms === field.section
+  return false
 }
 
 export function GameConfig() {

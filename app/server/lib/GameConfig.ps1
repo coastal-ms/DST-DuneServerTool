@@ -652,7 +652,11 @@ function Get-DuneIniManagedSectionNames {
     $doc = ConvertFrom-DuneIniDoc -Raw $Raw
     $names = @{}
     foreach ($s in $doc.sections) { if ($s.managed) { $names[$s.name] = $true } }
-    return @($names.Keys)
+    # Comma operator forces array preservation through the function return so
+    # ConvertTo-Json always serializes [] / ["one"] / [...] rather than
+    # collapsing to {} (empty hashtable) or unwrapping a single-element array
+    # to a scalar string. The webui's sectionIsManaged() expects an array.
+    return ,[string[]]@($names.Keys)
 }
 
 # =============================================================================
