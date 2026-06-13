@@ -514,8 +514,8 @@ BEGIN
     SELECT COALESCE(MAX(position_index), -1) + 1 INTO v_pos
     FROM dune.items WHERE inventory_id = v_inv;
 
-    INSERT INTO dune.items (inventory_id, stack_size, position_index, template_id, quality_level, stats)
-    VALUES (v_inv, 1, v_pos, 'BuildingBlueprint_CopyDevice', 0, '$placeholder'::jsonb)
+    INSERT INTO dune.items (inventory_id, stack_size, position_index, template_id, quality_level, acquisition_time, stats)
+    VALUES (v_inv, 1, v_pos, 'BuildingBlueprint_CopyDevice', 0, EXTRACT(EPOCH FROM now())::bigint, '$placeholder'::jsonb)
     RETURNING id INTO v_item;
 
     INSERT INTO dune.building_blueprints (item_id, player_id, building_blueprint_map)
