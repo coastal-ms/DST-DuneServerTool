@@ -210,10 +210,10 @@ function Get-DuneBotConfigDefaults {
         max_buys_per_tick = 25
         die_size          = 12
         die_target        = 5
-        target_balance    = 9000000000000
+        target_balance    = 454720162028
         maintain_balance  = $true
         disabled_items    = @()
-        # ----- Listing side (sane-pricing port of the reference implementation/internal/marketbot) -----
+        # ----- Listing side (sane-pricing port) -----
         list_tick_interval   = 1800          # 30 min between list ticks
         listings_per_grade   = 5             # concurrent NPC listings per (template, grade)
         stackables_only      = $false        # v11.5.9: default OFF — list gear too
