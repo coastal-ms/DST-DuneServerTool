@@ -28,6 +28,7 @@ export function CoriolisAdmin({ flash }: { flash: Flash }) {
   const [parts, setParts]       = useState<CoriolisPartition[]>([])
   const [busy, setBusy]         = useState(false)
   const [tick, setTick]         = useState(0)
+  const [unlocked, setUnlocked] = useState(false)
 
   // Per-scope draft inputs.
   const [farmDraft, setFarmDraft]               = useState('')
@@ -125,6 +126,38 @@ export function CoriolisAdmin({ flash }: { flash: Flash }) {
         lock the layout across resets, or <em>Reroll</em> to pick a fresh random one.
       </p>
 
+      {/* Severe-consequences warning + lock gate. These settings rewrite world-reset
+          generation and cascade cleanup of corpses / loose loot — there is no undo. */}
+      <div className="rounded-lg border border-danger/40 bg-danger/10 p-3 text-xs space-y-1.5">
+        <div className="flex items-center gap-2 font-semibold text-danger">
+          <Icon name="AlertTriangle" size={14} /> Advanced — world-altering. Severe consequences if misused.
+        </div>
+        <p className="text-text-dim">
+          These are <strong className="text-text">world-reset (Coriolis storm) seeds</strong>. Changing one
+          re-rolls the storm layout and <strong className="text-text">wipes corpses and loose loot</strong> on
+          the next tick — farm scope hits every map and partition. There is <strong className="text-text">no
+          undo</strong>. If you don't know exactly what these do, leave them alone.
+        </p>
+        {unlocked ? (
+          <button className="btn-secondary text-xs" disabled={busy} onClick={() => setUnlocked(false)}>
+            <Icon name="Lock" size={12} /> Lock controls
+          </button>
+        ) : (
+          <button
+            className="btn-secondary text-xs text-danger border-danger/50"
+            disabled={busy}
+            onClick={() => {
+              if (confirm('Unlock Coriolis storm seed controls?\n\nThese rewrite world-reset generation and wipe corpses / loose loot when a seed changes. There is no undo. Only continue if you fully understand the consequences.')) {
+                setUnlocked(true)
+              }
+            }}
+          >
+            <Icon name="Unlock" size={12} /> I understand the risks — unlock controls
+          </button>
+        )}
+      </div>
+
+      {unlocked && (<>
       {/* Farm scope */}
       <div className="rounded-lg border border-border bg-surface-2/40 p-3 space-y-2">
         <div className="flex items-center justify-between">
@@ -207,6 +240,7 @@ export function CoriolisAdmin({ flash }: { flash: Flash }) {
           </div>
         </details>
       )}
+      </>)}
     </div>
   )
 }
