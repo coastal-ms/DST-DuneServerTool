@@ -13,6 +13,25 @@ here cover everything those tags shipped.
 
 ## [Unreleased]
 
+## [12.0.5] - 2026-06-12
+
+Hotfix for Ken's report that items added to a storage container via Gameplay
+Admin show up in DST's container contents but never appear in-game, even after
+a battlegroup restart.
+
+### Fixed
+
+- **Storage "Add Items" now persists to the game.** `Invoke-DuneStorageGiveItem`
+  was inserting `dune.items` rows with `acquisition_time = 0` (the column
+  default). The game treats a 1970-epoch item as fully decayed and drops it
+  from the container on zone load, so the row existed in the DB (and rendered
+  in DST's contents view) but never materialized in-game. The insert now sets
+  `acquisition_time` to the current epoch, matching game-native items. Also
+  switched `position_index` from a raw row count to `MAX(position_index) + 1`
+  so adds into a container with gaps can't collide with an existing slot
+  (mirrors the player give-item and market-bot inserts). Covers both the
+  single `give-item` and the batch `give-items` paths.
+
 ## [12.0.4] - 2026-06-12
 
 Follow-up to v12.0.3 after Chopper's "where are the broadcast / whisper boxes"
