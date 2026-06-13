@@ -13,6 +13,25 @@ here cover everything those tags shipped.
 
 ## [Unreleased]
 
+## [12.0.6] - 2026-06-12
+
+Follow-up to v12.0.5: applies the same `acquisition_time` fix to the two other
+`dune.items` insert paths that shared the bug.
+
+### Fixed
+
+- **Offline player "Give Item" now persists across login.**
+  `Invoke-DunePlayerGiveItem` (the SQL path used for offline players, and for
+  online players given a custom quality) inserted new backpack items with
+  `acquisition_time = 0`, so the game could drop them as fully-decayed on the
+  player's next login. Now stamped with the current epoch. Online default-quality
+  gives are unaffected — they go through the RMQ server command, which sets the
+  timestamp game-side. Also covers the bulk give-items path, which loops this.
+
+- **Blueprint import / copy-device item** now stamps `acquisition_time` on the
+  `BuildingBlueprint_CopyDevice` it inserts into the player's backpack, for the
+  same reason.
+
 ## [12.0.5] - 2026-06-12
 
 Hotfix for Ken's report that items added to a storage container via Gameplay
