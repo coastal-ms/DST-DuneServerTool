@@ -308,7 +308,7 @@ LIMIT 1;
 
 function Get-DunePlayerControllerFromPawn {
     param([string]$Ip, [long]$PawnId)
-    $sql = "SELECT actor_id::text AS cid FROM dune.player_state WHERE player_pawn_id = $PawnId::bigint LIMIT 1;"
+    $sql = "SELECT player_controller_id::text AS cid FROM dune.player_state WHERE player_pawn_id = $PawnId::bigint LIMIT 1;"
     $r = Invoke-DuneSqlQuery -Ip $Ip -Sql $sql -ReadOnly $true -MaxRows 1 -TimeoutSec 10
     if (-not $r.ok) { return $null }
     $maps = ConvertTo-DuneRowMaps -Result $r
