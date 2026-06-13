@@ -205,6 +205,22 @@ export function MapSpinUp() {
         }
       />
 
+      <div className="mb-4 rounded-lg border border-warning/60 bg-warning/15 px-4 py-3 flex items-start gap-3">
+        <Icon name="AlertTriangle" size={20} className="shrink-0 mt-0.5 text-warning" />
+        <div className="text-sm text-warning">
+          <div className="font-bold uppercase tracking-wide mb-1">RAM requirement</div>
+          <span className="text-warning/90">
+            Because the RAM allocated to each map can be customized, some maps may not spin up if the
+            Hyper-V VM doesn't have enough memory to support all of them at once. OverMap, Hagga, and
+            DeepDesert alone can consume <strong>31–35 GB</strong> at the default level — adjust
+            accordingly. Maps will <strong>not</strong> spin down while a player is present, and they
+            also scale on demand when a player tries to enter (though that player may see a longer
+            load while the map spins up). On-demand is the recommended approach; this Map SpinUp page
+            simply lets you start the spawn process ahead of time, before you arrive, if desired.
+          </span>
+        </div>
+      </div>
+
       {error && (
         <div className="card p-4 mb-4 border-danger/40">
           <p className="text-sm text-danger break-words">{error}</p>
@@ -229,7 +245,7 @@ export function MapSpinUp() {
         <>
           <MapGroup
             title="Maps"
-            hint="These keep at least one server warm (MinServers = 1). Some maps don't ship MinServers natively — enabling those may be ignored by the director, or may keep an instance warm and consume RAM (~1+ GB each). Use with care."
+            hint="These keep at least one server warm (MinServers = 1). Some maps don't ship MinServers natively — enabling those may be ignored by the director, or may keep an instance warm and consume RAM. Use with care."
             maps={orderedMaps}
             busy={busy}
             onToggle={onToggle}

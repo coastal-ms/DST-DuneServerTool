@@ -349,11 +349,13 @@ function Invoke-DuneFixOnDemandPartitions {
     # of its log. The script is idempotent and skips any map that already
     # has a running pod, so it's safe to invoke repeatedly.
     #
-    # v11.0.3: stages the bundled script to /tmp on the VM via scp, runs it
+    # v11.0.3: stages the bundled script to /tmp on the VM, runs it
     # once with sudo, removes the staged copy. No persistent install on the
     # VM. (Previously called /etc/local.d/dune-clear-partitions.start
     # installed by Sync-DunePartitionAutomation — that path may not exist
     # on fresh installs, but is still honored when present.)
+    # v12.0.14: staging switched from scp to an ssh exec + base64 stream so
+    # it no longer depends on the remote sftp-server subsystem.
     $ctx = Get-DuneMapsContext
     if (-not $ctx.ok) { return @{ ok=$false; status=$ctx.status; message=$ctx.message } }
 
@@ -375,26 +377,29 @@ function Invoke-DuneFixOnDemandPartitions {
     }
 
     $stamp     = [Guid]::NewGuid().ToString('N').Substring(0, 12)
-    $localTmp  = Join-Path $env:TEMP "dune-cp-$stamp.sh"
     $remoteTmp = "/tmp/dune-cp-$stamp.sh"
 
     # Force LF — Alpine /bin/sh chokes on CRLF.
     $raw = [System.IO.File]::ReadAllText($local)
     $lf  = $raw -replace "`r`n", "`n" -replace "`r", "`n"
-    [System.IO.File]::WriteAllBytes($localTmp, [Text.Encoding]::UTF8.GetBytes($lf))
 
-    $output = ''
-    try {
-        & scp -o BatchMode=yes -o StrictHostKeyChecking=no -o LogLevel=QUIET `
-              -i "$key" $localTmp "dune@${ip}:${remoteTmp}" 2>&1 | Out-Null
-        if ($LASTEXITCODE -ne 0) {
-            return @{ ok=$false; status=500; message="scp of partition-clear script failed (exit $LASTEXITCODE)." }
-        }
-        $runRaw = Invoke-V6Ssh -Ip $ip -Cmd "sudo -n sh $remoteTmp; rc=`$?; rm -f $remoteTmp; exit `$rc" -TimeoutSec 120
-        $output = (($runRaw -join "`n")).Trim()
-    } finally {
-        Remove-Item -LiteralPath $localTmp -Force -ErrorAction SilentlyContinue
+    # Stage the script over an ssh exec channel (base64 piped on stdin) rather
+    # than scp. Modern OpenSSH scp (9.0+) speaks the SFTP protocol, which needs
+    # sftp-server on the remote; some VM images don't ship it where sshd_config
+    # expects (e.g. /usr/lib/ssh/sftp-server missing), so scp fails with
+    # "bash: line 1: /usr/lib/ssh/sftp-server: No such file or directory" and
+    # on-demand maps never get their partition pin cleared. ssh exec + base64
+    # needs only a shell and busybox base64, which every supported image has.
+    $b64 = [Convert]::ToBase64String([Text.Encoding]::UTF8.GetBytes($lf))
+
+    $stageRaw = Invoke-V6Ssh -Ip $ip -Cmd "base64 -d > $remoteTmp && echo DUNE_STAGED_OK" -StdinData $b64 -TimeoutSec 60
+    $staged   = (($stageRaw -join "`n"))
+    if ($staged -notmatch 'DUNE_STAGED_OK') {
+        return @{ ok=$false; status=500; message="Staging partition-clear script over ssh failed: $($staged.Trim())" }
     }
+
+    $runRaw = Invoke-V6Ssh -Ip $ip -Cmd "sudo -n sh $remoteTmp; rc=`$?; rm -f $remoteTmp; exit `$rc" -TimeoutSec 120
+    $output = (($runRaw -join "`n")).Trim()
 
     $tailRaw = Invoke-V6Ssh -Ip $ip -Cmd 'tail -n 10 /var/log/dune-clear-partitions.log' -TimeoutSec 30
     $logTail = (($tailRaw -join "`n")).Trim()
