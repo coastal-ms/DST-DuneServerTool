@@ -130,6 +130,9 @@ function Invoke-DunePlayerGiveItemLive {
     if ($Quantity -le 0)   { $Quantity = 1 }
     if ($Durability -le 0) { $Durability = 1.0 }
 
+    $tv = Test-DuneValidGiveTemplate -TemplateId $Template
+    if (-not $tv.ok) { return @{ ok = $false; error = $tv.error } }
+
     if ($ActorId -gt 0) {
         $cap = Test-DuneInventoryCapacity -Ip $Ip -PawnId $ActorId -Template $Template -Quantity $Quantity
         if (-not $cap.ok) { return $cap }
@@ -141,6 +144,43 @@ function Invoke-DunePlayerGiveItemLive {
     if ($res.ok) {
         $res.message = "Sent $Quantity x $Template to online player $($r.fls_id) via server command."
         $res.path    = 'rmq'
+    }
+    return $res
+}
+
+# Live character-XP award. The offline DB path (Invoke-DunePlayerAwardCharXp)
+# writes TotalXPEarned directly; that gets clobbered while the player is online,
+# so for online players we send the game-native RMQ AwardXP ServerCommand and let
+# the game server roll it into character level / SP / intel itself.
+#
+# AwardXP is category-based (Combat / Exploration / Science) and additive only.
+# Character level/SP derive from TOTAL character XP = the sum across the three
+# categories, so awarding the full delta to a single default category yields the
+# same total/level. Category is therefore cosmetic for this admin goal; we default
+# to Combat and keep it a parameter for flexibility.
+function Invoke-DunePlayerAwardCharXpLive {
+    param(
+        [string] $Ip,
+        [string] $FlsId,
+        [long]   $ActorId = 0,
+        [Parameter(Mandatory)] [long] $XpDelta,
+        [string] $Category = 'Combat'
+    )
+    if ($XpDelta -le 0) {
+        return @{ ok = $false; error = 'Live XP awards are additive only (delta must be > 0). To reduce XP, log the player out and apply the edit offline.' }
+    }
+    $valid = @('Combat', 'Exploration', 'Science')
+    $cat = $valid | Where-Object { $_ -ieq [string]$Category } | Select-Object -First 1
+    if (-not $cat) { $cat = 'Combat' }
+
+    $r = Resolve-DuneFlsIdOrError -Ip $Ip -FlsId $FlsId -ActorId $ActorId
+    if (-not $r.ok) { return @{ ok = $false; error = $r.error } }
+
+    $res = Invoke-DuneRmqAwardXp -FlsId $r.fls_id -Category $cat -Experience ([int]$XpDelta)
+    if ($res.ok) {
+        $res.message = "Awarded $XpDelta $cat XP live to online player $($r.fls_id) via server command - the game applies the resulting level / skill points."
+        $res.path    = 'rmq'
+        $res.category = $cat
     }
     return $res
 }

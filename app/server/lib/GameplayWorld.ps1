@@ -591,6 +591,8 @@ function Join-DuneBlueprintInserts {
 # ----------------------------------------------------------------------------
 function Invoke-DuneStorageGiveItem {
     param([string]$Ip, [long]$ContainerId, [string]$Template, [long]$Qty, [long]$Quality)
+    $tv = Test-DuneValidGiveTemplate -TemplateId $Template
+    if (-not $tv.ok) { return @{ ok = $false; error = $tv.error } }
     if ($Qty -le 0) { $Qty = 1 }
     $safeTmpl = ConvertTo-DuneSqlString $Template
     $statsJson = ConvertTo-DuneSqlString (Get-DuneGiveItemStatsJson -TemplateId $Template)

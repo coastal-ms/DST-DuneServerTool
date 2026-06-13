@@ -62,6 +62,21 @@ function Invoke-DstRedaction {
     return $out
 }
 
+# Returns the section-header names that appear more than once in an INI body,
+# formatted "Name xN". Pure (no SSH/IO) so it's unit-testable. Duplicate
+# headers are the root cause of the "DST override silently ignored" class of
+# Game Config bugs (UE5 honours the first header + last-key-wins), so surfacing
+# them at the top of each snapshot makes triage a one-liner.
+function Get-DstIniDuplicateHeaders {
+    param([string]$Raw)
+    if ([string]::IsNullOrEmpty($Raw)) { return @() }
+    $headers = [regex]::Matches($Raw, '(?m)^\s*\[(.+?)\]\s*$') | ForEach-Object { $_.Groups[1].Value }
+    return @(
+        $headers | Group-Object | Where-Object { $_.Count -gt 1 } |
+            ForEach-Object { "$($_.Name) x$($_.Count)" }
+    )
+}
+
 # --- Bundle builder ----------------------------------------------------------
 
 function Get-DstDesktopPath {
@@ -235,6 +250,46 @@ function New-DstDiagnosticBundle {
         $warnings.Add('No dune-server-*.log CLI transcripts found.')
     }
 
+    # 6b) Live game-config INI snapshot (best-effort over SSH) ----------------
+    # The duplicate-section-header / "my setting didn't apply" class of bug can
+    # only be diagnosed from the ACTUAL on-disk UserGame.ini / UserEngine.ini,
+    # so pull a redacted copy when the VM is reachable. Never fatal — an absent
+    # or unreachable VM is a warning and the rest of the bundle still builds.
+    if ((Get-Command Get-DuneGameConfigContext -ErrorAction SilentlyContinue) -and
+        (Get-Command Get-DuneGameConfig -ErrorAction SilentlyContinue)) {
+        try {
+            $ctx = Get-DuneGameConfigContext
+            if ($ctx.ok) {
+                $gc = Get-DuneGameConfig -Ip $ctx.ip
+                foreach ($pair in @(
+                    @{ key = 'game';   file = 'UserGame.ini' },
+                    @{ key = 'engine'; file = 'UserEngine.ini' }
+                )) {
+                    $node = $gc[$pair.key]
+                    $raw  = if ($node) { [string]$node.raw } else { '' }
+                    if ([string]::IsNullOrWhiteSpace($raw)) {
+                        $warnings.Add("Game config: $($pair.file) came back empty (source: $($gc.source)).")
+                        continue
+                    }
+                    $dupes   = Get-DstIniDuplicateHeaders -Raw $raw
+                    $dupLine = if ($dupes.Count -gt 0) { 'DUPLICATE SECTION HEADERS: ' + ($dupes -join '; ') } else { 'No duplicate section headers detected.' }
+                    $header  = "# $($pair.file) snapshot (sanitized; source: $($gc.source); path: $($node.path))`r`n# $dupLine`r`n`r`n"
+                    $san     = $header + (Invoke-DstRedaction -Text $raw @redactArgs)
+                    $outName = "$($pair.file).snapshot.txt"
+                    $out     = Join-Path $stageDir $outName
+                    Set-Content -LiteralPath $out -Value $san -Encoding UTF8
+                    $included.Add(@{ name = $outName; bytes = (Get-Item -LiteralPath $out).Length })
+                }
+            } else {
+                $warnings.Add("Game config INI snapshot skipped: $($ctx.message)")
+            }
+        } catch {
+            $warnings.Add("Game config INI snapshot failed: $($_.Exception.Message)")
+        }
+    } else {
+        $warnings.Add('Game config helpers not loaded — INI snapshot skipped.')
+    }
+
     # 7) Manifest ------------------------------------------------------------
     $manLines = [System.Collections.Generic.List[string]]::new()
     $manLines.Add("Dune Server Tool diagnostic bundle")
@@ -246,6 +301,9 @@ function New-DstDiagnosticBundle {
     $manLines.Add('  - WindowsUser / SshKey / SteamPath values    -> <user> / <ssh-key-path> / <steam-path>')
     $manLines.Add('  - ?t=<token> query params                  -> ?t=<redacted>')
     $manLines.Add('  - INI key=value redaction for the keys above as a safety net')
+    $manLines.Add('')
+    $manLines.Add('Game config snapshots (UserGame.ini / UserEngine.ini) are pulled live from')
+    $manLines.Add('the VM when reachable, sanitized, and headlined with a duplicate-section check.')
     $manLines.Add('')
     $manLines.Add('Files included:')
     foreach ($f in $included) {

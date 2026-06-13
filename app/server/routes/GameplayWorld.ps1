@@ -194,6 +194,8 @@ Register-DuneRoute -Method POST -Path '/api/gameplay/storage/give-item' -Handler
         if ($null -eq $cid -or $cid -le 0) { Write-DuneError -Response $res -Status 400 -Message 'container_id is required.'; return }
         if (-not $tmpl) { Write-DuneError -Response $res -Status 400 -Message 'template is required.'; return }
         if ($null -eq $qty -or $qty -le 0) { $qty = 1L }
+        $tv = Test-DuneValidGiveTemplate -TemplateId $tmpl
+        if (-not $tv.ok) { Write-DuneError -Response $res -Status 400 -Message $tv.error; return }
         Invoke-DunePlayerWriteRoute -Response $res -Action { param($ip) Invoke-DuneStorageGiveItem -Ip $ip -ContainerId $cid -Template $tmpl -Qty $qty -Quality $qual }
     } catch {
         Write-DuneError -Response $res -Status 500 -Message "Storage give item failed: $($_.Exception.Message)"

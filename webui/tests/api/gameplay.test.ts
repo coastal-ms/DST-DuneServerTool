@@ -72,15 +72,16 @@ describe('Phase A — currency / progression writes', () => {
     expect(last().body).toEqual({ account_id: 7, faction: 'harkonnen', tier: 12 })
   })
 
-  it('awardCharXp uses pawn_id + delta', async () => {
+  it('awardCharXp uses pawn_id + delta + default category', async () => {
     await gp.awardCharXp(99, 10_000)
     expect(last().url).toBe('/api/gameplay/players/award-char-xp')
-    expect(last().body).toEqual({ pawn_id: 99, delta: 10_000 })
+    expect(last().body).toEqual({ pawn_id: 99, delta: 10_000, category: 'Combat' })
   })
 
-  it('awardIntel sends actor_id + delta (backend award-intel contract)', async () => {
-    await gp.awardIntel(123, 50)
-    expect(last().body).toEqual({ actor_id: 123, delta: 50 })
+  it('awardIntel sends actor_id + pawn_id + delta (backend award-intel contract)', async () => {
+    await gp.awardIntel(123, 99, 50)
+    expect(last().url).toBe('/api/gameplay/players/award-intel')
+    expect(last().body).toEqual({ actor_id: 123, pawn_id: 99, delta: 50 })
   })
 
   it('returningPlayerAward + dismiss... only need account_id', async () => {
@@ -375,3 +376,58 @@ describe('error path', () => {
     })
   })
 })
+
+describe('isValidTemplateId — numeric give-item guard', () => {
+  it('accepts real class-string template ids', () => {
+    for (const t of ['CopperBar', 'Buggy_Booster_Mk6', 'BuildingBlueprint_CopyDevice', 'Combat_Light_SpiceMask']) {
+      expect(gp.isValidTemplateId(t)).toBe(true)
+    }
+  })
+
+  it('rejects a purely-numeric id (the "859" leak)', () => {
+    expect(gp.isValidTemplateId('859')).toBe(false)
+    expect(gp.isValidTemplateId('  859  ')).toBe(false)
+    expect(gp.isValidTemplateId('0')).toBe(false)
+  })
+
+  it('rejects empty / whitespace-only ids', () => {
+    expect(gp.isValidTemplateId('')).toBe(false)
+    expect(gp.isValidTemplateId('   ')).toBe(false)
+  })
+})
+
+describe('flattenItemCatalog — catalog shape parsing', () => {
+  // The backend serializes `items` as an ARRAY of { templateId, name, category }.
+  // The parser must read templateId, NOT the array index, or every picked item
+  // gets a numeric template_id and the give-item guard makes it unselectable.
+  it('reads the class-string templateId from the array shape (the live bug)', () => {
+    const out = gp.flattenItemCatalog([
+      { templateId: 'AzuriteOre', name: 'Copper Ore', category: 'Resources' },
+      { templateId: 'CopperBar', name: 'Copper Ingot', category: 'Resources' },
+    ])
+    const copper = out.find(i => i.name === 'Copper Ore')
+    expect(copper?.template_id).toBe('AzuriteOre')
+    // No entry may carry a bare-numeric template_id (would be rejected on pick).
+    expect(out.every(i => gp.isValidTemplateId(i.template_id))).toBe(true)
+    expect(out.every(i => !/^\d+$/.test(i.template_id))).toBe(true)
+  })
+
+  it('still supports the legacy dict shape', () => {
+    const out = gp.flattenItemCatalog({
+      AzuriteOre: { name: 'Copper Ore', category: 'Resources' },
+    })
+    expect(out[0]?.template_id).toBe('AzuriteOre')
+    expect(out[0]?.name).toBe('Copper Ore')
+  })
+
+  it('sorts by display name and skips entries with no template id', () => {
+    const out = gp.flattenItemCatalog([
+      { templateId: 'Zeta', name: 'Zeta Thing', category: '' },
+      { templateId: '', name: 'No Id', category: '' },
+      { templateId: 'Alpha', name: 'Alpha Thing', category: '' },
+    ])
+    expect(out.map(i => i.template_id)).toEqual(['Alpha', 'Zeta'])
+  })
+})
+
+
