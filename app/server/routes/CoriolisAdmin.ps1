@@ -1,4 +1,4 @@
-# Coriolis Admin routes — v11.5.7
+﻿# Coriolis Admin routes — v11.5.7
 #
 # Endpoints for inspecting and setting Coriolis storm seeds. Mounted under
 # /api/gameplay/coriolis/* so it lives next to the existing Gameplay admin

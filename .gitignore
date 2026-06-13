@@ -44,3 +44,6 @@ docs/img/_originals/
 # break ripgrep (os error 383). Never commit.
 *.todelete.gone~*
 *~RF*.TMP
+
+testResults.xml
+

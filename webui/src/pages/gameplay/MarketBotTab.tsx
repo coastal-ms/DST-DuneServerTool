@@ -2,14 +2,28 @@ import { useCallback, useEffect, useState } from 'react'
 import { Icon } from '../../components/Icon'
 import { ItemPicker } from '../../components/ItemPicker'
 import {
-  getBotStatus, getBotConfig, saveBotConfig, runBotTick, runBotListTick, botExec,
-  setBotBalance, clearBotListings, clearBotLegacyListings, getBotVendorSnapshot,
+  getBotStatus, getBotConfig, saveBotConfig, runBotTick, runBotListTick,
+  startBotSeedMarket, abortBotSeedMarket, botExec,
+  setBotBalance, clearBotListings, clearBotLegacyListings, clearBotError, getBotVendorSnapshot,
   type BotStatus, type BotConfig, type BotTickResult, type BotListTickResult,
+  type BotSeedProgress,
   type BotVendorCandidate,
 } from '../../api/gameplay'
 import { fmtSolari, fmtNum, SourceBadge } from './shared'
 
 type SubTab = 'buy' | 'list' | 'pricing'
+
+// Keep the seed-progress banner visible for ~30s after a seed finishes so the
+// user gets a chance to read the final counters even if they navigated to
+// another subtab during the run.
+function isRecentSeedFinish(p: BotSeedProgress | null | undefined): boolean {
+  if (!p || p.running) return false
+  const ts = p.finished ?? p.updated
+  if (!ts) return false
+  const t = Date.parse(ts)
+  if (Number.isNaN(t)) return false
+  return Date.now() - t < 30_000
+}
 
 export function MarketBotTab() {
   const [status, setStatus] = useState<BotStatus | null>(null)
@@ -23,6 +37,7 @@ export function MarketBotTab() {
   const [ticking, setTicking] = useState(false)
   const [listTick, setListTick] = useState<BotListTickResult | null>(null)
   const [listTicking, setListTicking] = useState(false)
+  const [seedLaunchError, setSeedLaunchError] = useState<string | null>(null)
   const [balanceBusy, setBalanceBusy] = useState(false)
   const [clearing, setClearing] = useState(false)
   const [clearingLegacy, setClearingLegacy] = useState(false)
@@ -118,15 +133,83 @@ export function MarketBotTab() {
     finally { setTicking(false) }
   }
 
-  const doListTick = async (dry: boolean) => {
+  const doListTick = async () => {
     setListTicking(true); setListTick(null); setError(null)
     try {
-      const r = await runBotListTick(dry)
-      setListTick(r)
-      if (!dry) getBotStatus().then(setStatus).catch(() => {})
+      const r = await runBotListTick(false)
+      if (!r.ok && !r.running) {
+        setError(r.error ?? 'Failed to start list tick.')
+        return
+      }
+      // Live tick is async server-side — refresh status so the button stays
+      // disabled while list_tick_progress.running is true, and let the
+      // existing 10s status poll pick up the completion.
+      getBotStatus().then(setStatus).catch(() => {})
     } catch (e) { setError(e instanceof Error ? e.message : String(e)) }
     finally { setListTicking(false) }
   }
+
+  const seedProgress: BotSeedProgress | null = status?.seed_progress ?? null
+  const seeding = !!seedProgress?.running
+  const listTickRunningServer = !!status?.list_tick_progress?.running
+  const listTickBusy = listTicking || listTickRunningServer
+  const [dismissingError, setDismissingError] = useState(false)
+
+  const dismissError = async () => {
+    setDismissingError(true)
+    try {
+      await clearBotError()
+      const s = await getBotStatus().catch(() => null)
+      if (s) setStatus(s)
+    } catch { /* swallow — banner stays */ }
+    finally { setDismissingError(false) }
+  }
+
+  const doSeedMarket = async () => {
+    const perGrade = draft?.listings_per_grade ?? 5
+    const ok = window.confirm(
+      `Bulk-seed the market: insert up to ${perGrade} NPC listings per catalogued template (~1000–1400 templates depending on the Stackables-only toggle). This bypasses the live vendor snapshot and writes straight to the DB.\n\nThe seed runs in the background — you can leave this page open and watch the progress bar, or come back later. The button reactivates once it finishes.\n\nProceed?`,
+    )
+    if (!ok) return
+    setSeedLaunchError(null); setError(null)
+    try {
+      const r = await startBotSeedMarket()
+      if (!r.ok && !r.running) {
+        setSeedLaunchError(r.error ?? 'Failed to start seed market.')
+        return
+      }
+      // Refresh status immediately so the progress bar appears without
+      // waiting for the next 10s poll interval.
+      getBotStatus().then(setStatus).catch(() => {})
+    } catch (e) {
+      setSeedLaunchError(e instanceof Error ? e.message : String(e))
+    }
+  }
+
+  const [aborting, setAborting] = useState(false)
+  const doAbortSeed = async () => {
+    if (aborting) return
+    setAborting(true)
+    try {
+      await abortBotSeedMarket()
+      getBotStatus().then(setStatus).catch(() => {})
+    } catch (e) {
+      setSeedLaunchError(e instanceof Error ? e.message : String(e))
+    } finally {
+      setAborting(false)
+    }
+  }
+
+  // While a seed OR list tick is running, poll status every 2s instead of
+  // 10s so the progress bar / button state updates promptly. Reverts to
+  // normal cadence once both finish.
+  useEffect(() => {
+    if (!seeding && !listTickRunningServer) return
+    const id = window.setInterval(() => {
+      getBotStatus().then(setStatus).catch(() => {})
+    }, 2000)
+    return () => window.clearInterval(id)
+  }, [seeding, listTickRunningServer])
 
   const maintainBalance = async () => {
     if (!draft) return
@@ -140,11 +223,15 @@ export function MarketBotTab() {
   }
 
   const clearListings = async () => {
-    if (!window.confirm("Delete ALL of Duke's market listings? Player listings are not affected. This cannot be undone.")) return
+    if (!window.confirm("Delete ALL of Duke's market listings AND wipe his entire NPC inventory (including any orphan items left behind by previous runs)? Player listings are not affected. This cannot be undone.")) return
     setClearing(true); setError(null); setSaveMsg(null)
     try {
       const r = await clearBotListings()
-      setSaveMsg(r.message ?? `Cleared ${fmtNum(r.cleared)} of Duke's listings.`)
+      let msg = r.message ?? `Cleared ${fmtNum(r.cleared)} of Duke's listings.`
+      if (r.orphans && r.orphans > 0) {
+        msg = `${msg} (Removed ${fmtNum(r.orphans)} orphan item(s) from inventory ${r.inventory_id ?? '?'}.)`
+      }
+      setSaveMsg(msg)
       getBotStatus().then(setStatus).catch(() => {})
     } catch (e) { setError(e instanceof Error ? e.message : String(e)) }
     finally { setClearing(false) }
@@ -274,8 +361,39 @@ export function MarketBotTab() {
       )}
 
       {status?.error && (
-        <div className="card p-3 mb-4 text-sm text-danger break-words">
-          <span className="font-semibold">Bot error:</span> {status.error}
+        <div className="card p-3 mb-4 text-sm text-danger break-words flex items-start gap-3">
+          <div className="flex-1">
+            <span className="font-semibold">Bot error:</span> {status.error}
+          </div>
+          <button
+            className="btn-secondary text-xs shrink-0"
+            disabled={dismissingError}
+            onClick={dismissError}
+            title="Dismiss this stale error message">
+            <Icon name={dismissingError ? 'Loader2' : 'X'} size={13} className={dismissingError ? 'animate-spin' : ''} />
+            Dismiss
+          </button>
+        </div>
+      )}
+
+      {/* Seed market progress — surfaced ABOVE the subtab nav so it's visible
+          from any subtab. Only renders while a seed is running, or for ~30s
+          after one completes so the user can see the final state. */}
+      {seedProgress && (seeding || isRecentSeedFinish(seedProgress)) && (
+        <div className="card p-3 mb-4 border-l-2 border-l-accent">
+          <div className="text-xs uppercase tracking-wider text-text-dim mb-2 flex items-center gap-2">
+            <Icon name={seeding ? 'Loader2' : (seedProgress.phase === 'error' ? 'AlertCircle' : (seedProgress.phase === 'aborted' ? 'XCircle' : 'CheckCircle2'))}
+                  size={14}
+                  className={seeding ? 'animate-spin text-accent' : (seedProgress.phase === 'error' ? 'text-danger' : (seedProgress.phase === 'aborted' ? 'text-warning' : 'text-success'))} />
+            Seed market — {seeding ? 'in progress' : (seedProgress.phase === 'error' ? 'failed' : (seedProgress.phase === 'aborted' ? 'aborted' : 'done'))}
+            {seeding && (
+              <button className="btn-secondary ml-auto text-xs" disabled={aborting} onClick={() => { void doAbortSeed() }}>
+                <Icon name={aborting ? 'Loader2' : 'X'} size={13} className={aborting ? 'animate-spin' : ''} />
+                {aborting ? 'Aborting…' : 'Abort'}
+              </button>
+            )}
+          </div>
+          <SeedProgressView progress={seedProgress} />
         </div>
       )}
 
@@ -297,15 +415,18 @@ export function MarketBotTab() {
 
       {draft && sub === 'buy' && (
         <BuySection draft={draft} setDraft={setDraft} status={status} tick={tick} ticking={ticking}
-          clearing={clearing} balanceBusy={balanceBusy}
-          onTick={doTick} onClear={clearListings} onMaintainBalance={maintainBalance}
+          balanceBusy={balanceBusy}
+          onTick={doTick} onMaintainBalance={maintainBalance}
           onToggleEnabled={toggleEnabled} />
       )}
 
       {draft && sub === 'list' && (
-        <ListSection draft={draft} setDraft={setDraft} listTick={listTick} listTicking={listTicking}
+        <ListSection draft={draft} setDraft={setDraft} listTick={listTick} listTicking={listTickBusy}
           snapshot={snapshot} snapshotLoading={snapshotLoading}
-          onListTick={doListTick} onLoadSnapshot={loadSnapshot} />
+          seeding={seeding} seedLaunchError={seedLaunchError}
+          clearing={clearing}
+          onListTick={doListTick} onLoadSnapshot={loadSnapshot} onSeedMarket={doSeedMarket}
+          onClear={clearListings} />
       )}
 
       {draft && sub === 'pricing' && (
@@ -333,11 +454,11 @@ export function MarketBotTab() {
 // ---------------------------------------------------------------------------
 // Buy section — existing dice-roll buy tuning + clear-listings.
 // ---------------------------------------------------------------------------
-function BuySection({ draft, setDraft, status, tick, ticking, clearing, balanceBusy,
-  onTick, onClear, onMaintainBalance, onToggleEnabled }: {
+function BuySection({ draft, setDraft, status, tick, ticking, balanceBusy,
+  onTick, onMaintainBalance, onToggleEnabled }: {
     draft: BotConfig; setDraft: (c: BotConfig) => void; status: BotStatus | null;
-    tick: BotTickResult | null; ticking: boolean; clearing: boolean; balanceBusy: boolean;
-    onTick: (dry: boolean) => void; onClear: () => void; onMaintainBalance: () => void;
+    tick: BotTickResult | null; ticking: boolean; balanceBusy: boolean;
+    onTick: (dry: boolean) => void; onMaintainBalance: () => void;
     onToggleEnabled: (v: boolean) => void;
   }) {
   return (
@@ -348,10 +469,6 @@ function BuySection({ draft, setDraft, status, tick, ticking, clearing, balanceB
             <Icon name="Dices" size={14} className="text-accent" /> Run a buy tick
           </h4>
           <div className="flex items-center gap-2">
-            <button className="btn-secondary" disabled={clearing} onClick={onClear}
-              title="Delete all of Duke's own market listings.">
-              <Icon name={clearing ? 'Loader2' : 'Trash2'} size={15} className={clearing ? 'animate-spin' : ''} /> Clear Duke listings
-            </button>
             <button className="btn-secondary" disabled={ticking} onClick={() => onTick(true)}>
               <Icon name={ticking ? 'Loader2' : 'FlaskConical'} size={15} className={ticking ? 'animate-spin' : ''} /> Dry run
             </button>
@@ -462,24 +579,52 @@ function BuyTickResultView({ tick }: { tick: BotTickResult }) {
 // List section — sell-side scheduler + listing tuning + vendor snapshot preview.
 // ---------------------------------------------------------------------------
 function ListSection({ draft, setDraft, listTick, listTicking, snapshot, snapshotLoading,
-  onListTick, onLoadSnapshot }: {
+  seeding, seedLaunchError, clearing,
+  onListTick, onLoadSnapshot, onSeedMarket, onClear }: {
     draft: BotConfig; setDraft: (c: BotConfig) => void;
     listTick: BotListTickResult | null; listTicking: boolean;
     snapshot: BotVendorCandidate[] | null; snapshotLoading: boolean;
-    onListTick: (dry: boolean) => void; onLoadSnapshot: () => void;
+    seeding: boolean; seedLaunchError: string | null;
+    clearing: boolean;
+    onListTick: () => void; onLoadSnapshot: () => void;
+    onSeedMarket: () => void; onClear: () => void;
   }) {
   return (
     <div className="space-y-4">
+      <div className="card p-4 border-l-2 border-l-accent">
+        <div className="flex items-center justify-between mb-2">
+          <h4 className="text-xs uppercase tracking-wider text-text-dim flex items-center gap-2">
+            <Icon name="Sparkles" size={14} className="text-accent" /> Seed market (immediate bulk-list)
+          </h4>
+          <button className="btn-primary" disabled={seeding} onClick={onSeedMarket}>
+            <Icon name={seeding ? 'Loader2' : 'Zap'} size={15} className={seeding ? 'animate-spin' : ''} /> {seeding ? 'Seeding…' : 'Seed market'}
+          </button>
+        </div>
+        <p className="text-[11px] text-text-dim mb-2">
+          Bypasses the live NPC vendor snapshot (which depends on the in-game market already having activity)
+          and the mask-cache SSH refresh. Walks the bundled item catalog intersected with the persistent mask cache
+          and tops Duke up to <span className="font-mono">{draft.listings_per_grade}</span> per template in one
+          batched transaction per ~100 templates. Runs in the background — the button reactivates when it finishes.
+        </p>
+        {seedLaunchError && (
+          <div className="text-danger text-xs mb-2">Launch failed: {seedLaunchError}</div>
+        )}
+        {seeding && (
+          <div className="text-[11px] text-accent">Seed running — see progress banner above.</div>
+        )}
+      </div>
+
       <div className="card p-4">
         <div className="flex items-center justify-between mb-2">
           <h4 className="text-xs uppercase tracking-wider text-text-dim flex items-center gap-2">
             <Icon name="Tags" size={14} className="text-accent" /> Run a list tick
           </h4>
           <div className="flex items-center gap-2">
-            <button className="btn-secondary" disabled={listTicking} onClick={() => onListTick(true)}>
-              <Icon name={listTicking ? 'Loader2' : 'FlaskConical'} size={15} className={listTicking ? 'animate-spin' : ''} /> Dry run
+            <button className="btn-secondary" disabled={clearing} onClick={onClear}
+              title="Delete all of Duke's own market listings.">
+              <Icon name={clearing ? 'Loader2' : 'Trash2'} size={15} className={clearing ? 'animate-spin' : ''} /> Clear Duke listings
             </button>
-            <button className="btn-primary" disabled={listTicking} onClick={() => onListTick(false)}>
+            <button className="btn-primary" disabled={listTicking} onClick={onListTick}>
               <Icon name={listTicking ? 'Loader2' : 'Play'} size={15} className={listTicking ? 'animate-spin' : ''} /> Run now
             </button>
           </div>
@@ -487,7 +632,6 @@ function ListSection({ draft, setDraft, listTick, listTicking, snapshot, snapsho
         <p className="text-[11px] text-text-dim mb-2">
           Snapshots live NPC vendor inventory, applies sane-pricing rules, and tops up Duke's own listings to
           <span className="font-mono"> {draft.listings_per_grade}</span> per (item, grade).
-          Dry run shows the planned actions without writing.
         </p>
         {listTick && <ListTickResultView tick={listTick} />}
       </div>
@@ -497,7 +641,7 @@ function ListSection({ draft, setDraft, listTick, listTicking, snapshot, snapsho
           onChange={v => setDraft({ ...draft, list_tick_interval: v })} />
         <NumField label="Listings / grade" value={draft.listings_per_grade}
           onChange={v => setDraft({ ...draft, listings_per_grade: v })} />
-        <Toggle label="Stackables only (v11.5.2)" checked={draft.stackables_only}
+        <Toggle label="Stackables only" checked={draft.stackables_only}
           onChange={v => setDraft({ ...draft, stackables_only: v })} />
       </div>
 
@@ -551,6 +695,65 @@ function ListSection({ draft, setDraft, listTick, listTicking, snapshot, snapsho
           </div>
         )}
       </div>
+    </div>
+  )
+}
+
+function SeedProgressView({ progress }: { progress: BotSeedProgress }) {
+  const running = !!progress.running
+  const done = progress.chunks_done ?? 0
+  const total = progress.chunks_total ?? 0
+  const pct = total > 0 ? Math.min(100, Math.round((done / total) * 100)) : (running ? 0 : 100)
+  const isError = progress.phase === 'error'
+  const isDone  = progress.phase === 'done'
+  const barClass = isError ? 'bg-danger' : isDone ? 'bg-success' : 'bg-accent'
+  const label = running
+    ? (progress.phase === 'starting' ? 'Starting…'
+      : progress.phase === 'reading-listings' ? "Reading Duke's current listings…"
+      : progress.phase === 'writing' ? `Writing chunk ${fmtNum(done)} of ${fmtNum(total || done)}`
+      : `Phase: ${progress.phase ?? '?'}`)
+    : isError ? 'Failed'
+    : isDone ? 'Done'
+    : (progress.phase ?? 'idle')
+
+  return (
+    <div className="text-sm space-y-2">
+      <div className="flex items-center gap-2">
+        <div className="flex-1 h-2 rounded-full bg-surface-2 overflow-hidden">
+          <div className={`h-full ${barClass} transition-all duration-300`} style={{ width: `${pct}%` }} />
+        </div>
+        <span className="font-mono text-xs text-text-dim w-12 text-right">{pct}%</span>
+      </div>
+      <div className="text-xs text-text-muted">{label}</div>
+      <div className="flex flex-wrap gap-x-4 gap-y-1 text-text-muted text-xs">
+        {progress.masks_known != null && (
+          <span><span className="text-text-dim">masks known:</span> {fmtNum(progress.masks_known)}</span>
+        )}
+        {progress.considered != null && (
+          <span><span className="text-text-dim">considered:</span> {fmtNum(progress.considered)}</span>
+        )}
+        {progress.eligible != null && (
+          <span><span className="text-text-dim">eligible:</span> {fmtNum(progress.eligible)}</span>
+        )}
+        {progress.inserted != null && (
+          <span className="text-success"><span className="text-text-dim">inserted:</span> {fmtNum(progress.inserted)}</span>
+        )}
+        {total > 0 && (
+          <span><span className="text-text-dim">chunks:</span> {fmtNum(done)} / {fmtNum(total)}</span>
+        )}
+        {progress.errors != null && progress.errors > 0 && (
+          <span className="text-danger"><span className="text-text-dim">errors:</span> {fmtNum(progress.errors)}</span>
+        )}
+        {progress.listed_after != null && (
+          <span><span className="text-text-dim">listed after:</span> {fmtNum(progress.listed_after)}</span>
+        )}
+        {progress.last_chunk_ms != null && progress.last_chunk_ms > 0 && (
+          <span><span className="text-text-dim">last chunk:</span> {(progress.last_chunk_ms / 1000).toFixed(1)}s</span>
+        )}
+      </div>
+      {progress.message && (
+        <div className={`text-[11px] break-words ${isError ? 'text-danger' : 'text-text-dim'}`}>{progress.message}</div>
+      )}
     </div>
   )
 }
@@ -644,9 +847,11 @@ function PricingSection({ draft, setDraft }: { draft: BotConfig; setDraft: (c: B
         </span>
       </div>
 
-      <div className="card p-4 grid grid-cols-1 sm:grid-cols-2 gap-4">
+      <div className="card p-4 grid grid-cols-1 sm:grid-cols-3 gap-4">
         <NumField label="Price cap (Solari)" value={draft.price_cap ?? 100000}
           onChange={v => setDraft({ ...draft, price_cap: v })} />
+        <NumField label="Price floor (Solari, 0 = off)" value={draft.price_floor ?? 50}
+          onChange={v => setDraft({ ...draft, price_floor: v })} />
         <NumField label="Default unit price (fallback)" value={draft.default_unit_price ?? 50}
           onChange={v => setDraft({ ...draft, default_unit_price: v })} />
       </div>

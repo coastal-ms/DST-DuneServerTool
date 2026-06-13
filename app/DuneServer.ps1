@@ -1,4 +1,4 @@
-# Dune Server — entry point (v6.1 web portal)
+﻿# Dune Server — entry point (v6.1 web portal)
 #
 # Bootstrap: pick a free port, start HttpListener, open default browser at the
 # tokened localhost URL. The full UI is the React SPA in webui/dist/.
@@ -148,7 +148,7 @@ public static extern bool IsIconic(System.IntPtr hWnd);
 }
 
 # Version (one of the 5 sync'd constants; see persistent-notes.md)
-$script:DuneToolVersion = '11.5.8'
+$script:DuneToolVersion = '12.0.0'
 
 # ---------- Restart-on-detach handoff -----------------------------------------
 # When a prior "Web Portal" detach left the server running headless, the
