@@ -35,7 +35,7 @@ function FixBlock({ fix }: { fix: string }) {
     <div className="mt-2">
       <div className="text-xs text-text-dim mb-1">{caption}</div>
       <div className="flex items-stretch gap-2">
-        <code className="flex-1 min-w-0 text-xs font-mono bg-surface-1 border border-border rounded px-2 py-1.5 overflow-x-auto whitespace-pre">{command}</code>
+        <code className="flex-1 min-w-0 text-xs font-mono bg-surface border border-border rounded px-2 py-1.5 overflow-x-auto whitespace-pre">{command}</code>
         <button
           type="button"
           onClick={copy}

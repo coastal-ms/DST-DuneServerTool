@@ -138,7 +138,7 @@ export function CoriolisAdmin({ flash }: { flash: Flash }) {
             value={farmDraft}
             onChange={e => setFarmDraft(e.target.value)}
             disabled={busy}
-            className="flex-1 px-3 py-2 rounded-lg bg-surface-1 border border-border text-text text-sm font-mono focus:outline-none focus:ring-2 focus:ring-ibad focus:border-ibad/50"
+            className="flex-1 px-3 py-2 rounded-lg bg-surface border border-border text-text text-sm font-mono focus:outline-none focus:ring-2 focus:ring-ibad focus:border-ibad/50"
             placeholder="seed"
           />
           <button className="btn-secondary text-xs" disabled={busy} onClick={reroll} title="Pick a fresh random seed">
@@ -168,7 +168,7 @@ export function CoriolisAdmin({ flash }: { flash: Flash }) {
                   value={mapDrafts[m.map] ?? ''}
                   onChange={e => setMapDrafts(d => ({ ...d, [m.map]: e.target.value }))}
                   disabled={busy}
-                  className="flex-1 px-3 py-1.5 rounded-lg bg-surface-1 border border-border text-text text-sm font-mono focus:outline-none focus:ring-2 focus:ring-ibad focus:border-ibad/50"
+                  className="flex-1 px-3 py-1.5 rounded-lg bg-surface border border-border text-text text-sm font-mono focus:outline-none focus:ring-2 focus:ring-ibad focus:border-ibad/50"
                 />
                 <button className="btn-secondary text-xs" disabled={busy} onClick={() => applyMap(m.map)}>
                   <Icon name="Check" size={11} /> Apply
@@ -197,7 +197,7 @@ export function CoriolisAdmin({ flash }: { flash: Flash }) {
                   value={partDrafts[p.partition_id] ?? ''}
                   onChange={e => setPartDrafts(d => ({ ...d, [p.partition_id]: e.target.value }))}
                   disabled={busy}
-                  className="flex-1 px-3 py-1.5 rounded-lg bg-surface-1 border border-border text-text text-sm font-mono focus:outline-none focus:ring-2 focus:ring-ibad focus:border-ibad/50"
+                  className="flex-1 px-3 py-1.5 rounded-lg bg-surface border border-border text-text text-sm font-mono focus:outline-none focus:ring-2 focus:ring-ibad focus:border-ibad/50"
                 />
                 <button className="btn-secondary text-xs" disabled={busy} onClick={() => applyPart(p)}>
                   <Icon name="Check" size={11} /> Apply

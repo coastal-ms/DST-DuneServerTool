@@ -18,6 +18,7 @@ import {
   giveScrip, giveSolari, grantAllKeystones, grantLive, grantMaxSpec,
   kickPlayer, refuelVehicle, renamePlayer, repairGear, repairInventoryItem,
   resetAllKeystones, resetAllSpecs, resetJourney, resetProgressionLive, resetSpec,
+  restoreDestroyed,
   returningPlayerAward, setFactionTier, setPlayerTags, setSkillPoints,
   setStarterClass, teleportToPlayer, updatePlayerTags, wipeCodex, wipeJourney,
   chatWhisper,
@@ -460,12 +461,15 @@ const ACTIONS: ActionDef[] = [
     run: p => wipeJourney(p.account_id) },
 
   // ----- Items -----
-  { id: 'give-item',      group: 'Items', label: 'Give Item (offline-safe)', icon: 'PackagePlus', custom: 'give-item',
+  { id: 'give-item',      group: 'Items', label: 'Give Item', icon: 'PackagePlus', custom: 'give-item',
     run: () => Promise.resolve({ message: '' }) },
-  { id: 'give-item-live', group: 'Items', label: 'Give Item (live)',         icon: 'Zap', liveOnly: true, custom: 'give-item-live',
+  { id: 'give-item-live', group: 'Items', label: 'Give Item (force live)', icon: 'Zap', liveOnly: true, custom: 'give-item-live',
     run: () => Promise.resolve({ message: '' }) },
-  { id: 'repair-gear', group: 'Items', label: 'Repair Equipped Gear', icon: 'Wrench',
+  { id: 'repair-gear', group: 'Items', label: 'Repair All Items', icon: 'Wrench',
     run: p => repairGear(p.id) },
+  { id: 'restore-destroyed', group: 'Items', label: 'Restore Destroyed Items', icon: 'Heart',
+    confirm: p => `Restore destroyed gear on ${p.name}? Re-seeds CurrentDurability for items at 0/NULL.`,
+    run: p => restoreDestroyed(p.id) },
   { id: 'fill-water', group: 'Items', label: 'Fill Water', icon: 'Droplets',
     run: p => fillWater(p.id) },
   { id: 'clean-inventory', group: 'Items', label: 'Clean Inventory (live)', icon: 'Trash', liveOnly: true,
@@ -541,7 +545,11 @@ export function ActionsSection({ player, canWrite, flash, onChanged }: SectionPr
 
   // Give-item form state lives at the section level so the ItemPicker keeps
   // its selection when the user tabs to Quantity / Quality fields.
+  // giveTpl is the template_id we post to the API. giveName is the friendly
+  // display name shown in the picker after a selection — clears once the
+  // user types again, so picker continues to filter the live search query.
   const [giveTpl, setGiveTpl]   = useState('')
+  const [giveName, setGiveName] = useState('')
   const [giveQty, setGiveQty]   = useState('1')
   const [giveQual, setGiveQual] = useState('0')
   const [whisper, setWhisper]   = useState('')
@@ -551,7 +559,7 @@ export function ActionsSection({ player, canWrite, flash, onChanged }: SectionPr
   const openAction = (id: string) => {
     if (openId === id) { setOpenId(null); return }
     setOpenId(id)
-    if (id === 'give-item' || id === 'give-item-live') { setGiveTpl(''); setGiveQty('1'); setGiveQual('0') }
+    if (id === 'give-item' || id === 'give-item-live') { setGiveTpl(''); setGiveName(''); setGiveQty('1'); setGiveQual('0') }
     if (id === 'whisper') setWhisper('')
   }
 
@@ -637,7 +645,9 @@ export function ActionsSection({ player, canWrite, flash, onChanged }: SectionPr
                 return (
                   <div key={def.id} className="card p-3 space-y-3">
                     <ItemPicker label="Item — type to search by name or template id"
-                      value={giveTpl} onChange={setGiveTpl} autoFocus disabled={busy} />
+                      value={giveTpl} displayValue={giveName || giveTpl}
+                      onChange={(tpl, item) => { setGiveTpl(tpl); setGiveName(item ? item.name : '') }}
+                      autoFocus disabled={busy} />
                     <div className="grid grid-cols-2 gap-3">
                       <div>
                         <label className="block text-[11px] uppercase tracking-wider text-text-dim mb-1">Quantity</label>
@@ -705,6 +715,7 @@ function ItemsActionBlock({ player, canWrite, flash, onChanged }: {
   const [openId, setOpenId] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
   const [giveTpl, setGiveTpl]   = useState('')
+  const [giveName, setGiveName] = useState('')
   const [giveQty, setGiveQty]   = useState('1')
   const [giveQual, setGiveQual] = useState('0')
 
@@ -717,7 +728,7 @@ function ItemsActionBlock({ player, canWrite, flash, onChanged }: {
   const openAction = (id: string) => {
     if (openId === id) { setOpenId(null); return }
     setOpenId(id)
-    if (id === 'give-item' || id === 'give-item-live') { setGiveTpl(''); setGiveQty('1'); setGiveQual('0') }
+    if (id === 'give-item' || id === 'give-item-live') { setGiveTpl(''); setGiveName(''); setGiveQty('1'); setGiveQual('0') }
   }
 
   const runAction = async (def: ActionDef, exec: () => Promise<{ message: string }>) => {
@@ -758,7 +769,9 @@ function ItemsActionBlock({ player, canWrite, flash, onChanged }: {
           return (
             <div key={def.id} className="card p-3 space-y-3">
               <ItemPicker label="Item — type to search by name or template id"
-                value={giveTpl} onChange={setGiveTpl} autoFocus disabled={busy} />
+                value={giveTpl} displayValue={giveName || giveTpl}
+                onChange={(tpl, item) => { setGiveTpl(tpl); setGiveName(item ? item.name : '') }}
+                autoFocus disabled={busy} />
               <div className="grid grid-cols-2 gap-3">
                 <div>
                   <label className="block text-[11px] uppercase tracking-wider text-text-dim mb-1">Quantity</label>
@@ -878,29 +891,46 @@ function ItemList({ title, icon, items, canWrite, busy, run, collapsed, extra }:
           <div className="text-sm text-text-dim italic py-1">No items.</div>
         ) : (
           <div className="space-y-1">
-            {items.map(it => (
-              <div key={it.id} className="flex items-center justify-between text-sm bg-surface-2 rounded-lg px-3 py-2 border border-border/50">
-                <span className="truncate max-w-[320px]">
-                  <span className="text-text">{it.name || it.template_id}</span>
-                  {it.quality > 0 && <span className={`ml-1.5 text-[11px] ${qualityClass(it.quality)}`}>Q{it.quality}</span>}
-                  <span className="ml-1.5 font-mono text-text-dim text-xs">×{fmtNum(it.stack_size)}</span>
-                </span>
-                {canWrite && (
-                  <span className="flex items-center gap-2 shrink-0">
-                    {it.durability !== 'N/A' && (
-                      <button className="text-info hover:text-accent-bright" title="Repair to full" disabled={busy}
-                        onClick={() => run(() => repairInventoryItem(it.id), 'Repair')}>
-                        <Icon name="Wrench" size={13} />
-                      </button>
+            {items.map(it => {
+              const curN = parseFloat(it.durability)
+              const maxN = parseFloat(it.max_durability)
+              const hasDur = it.durability !== 'N/A' && Number.isFinite(curN) && Number.isFinite(maxN) && maxN > 0
+              const ratio = hasDur ? curN / maxN : 1
+              const durCls =
+                !hasDur          ? 'text-text-dim' :
+                ratio <= 0.0001  ? 'text-danger font-semibold' :  // fully dead
+                ratio < 0.25     ? 'text-danger' :
+                ratio < 0.5      ? 'text-warning' :
+                                   'text-text-dim'
+              return (
+                <div key={it.id} className="flex items-center justify-between text-sm bg-surface-2 rounded-lg px-3 py-2 border border-border/50">
+                  <span className="truncate max-w-[320px]">
+                    <span className="text-text">{it.name || it.template_id}</span>
+                    {it.quality > 0 && <span className={`ml-1.5 text-[11px] ${qualityClass(it.quality)}`}>Q{it.quality}</span>}
+                    {hasDur && (
+                      <span className={`ml-1.5 font-mono text-[11px] ${durCls}`} title={`Durability ${curN.toFixed(0)} / ${maxN.toFixed(0)} (${Math.round(ratio * 100)}%)`}>
+                        {curN.toFixed(0)}/{maxN.toFixed(0)}
+                      </span>
                     )}
-                    <button className="text-danger/80 hover:text-danger" title="Delete item" disabled={busy}
-                      onClick={() => void run(() => deleteInventoryItem(it.id), 'Delete')}>
-                      <Icon name="Trash2" size={13} />
-                    </button>
+                    <span className="ml-1.5 font-mono text-text-dim text-xs">×{fmtNum(it.stack_size)}</span>
                   </span>
-                )}
-              </div>
-            ))}
+                  {canWrite && (
+                    <span className="flex items-center gap-2 shrink-0">
+                      {it.durability !== 'N/A' && (
+                        <button className="text-info hover:text-accent-bright" title="Repair to full" disabled={busy}
+                          onClick={() => run(() => repairInventoryItem(it.id), 'Repair')}>
+                          <Icon name="Wrench" size={13} />
+                        </button>
+                      )}
+                      <button className="text-danger/80 hover:text-danger" title="Delete item" disabled={busy}
+                        onClick={() => void run(() => deleteInventoryItem(it.id), 'Delete')}>
+                        <Icon name="Trash2" size={13} />
+                      </button>
+                    </span>
+                  )}
+                </div>
+              )
+            })}
           </div>
         )
       )}

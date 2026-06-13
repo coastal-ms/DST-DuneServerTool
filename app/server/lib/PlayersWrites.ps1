@@ -455,6 +455,109 @@ WHERE id = $itemId::bigint;
     }
 }
 
+# Restore destroyed gear — OFFLINE only. Targets items where CurrentDurability
+# is 0 or NULL (Chopper's "completely dead" case the standard Repair didn't
+# obviously cover). Same inventory_type scope as RepairGear. For items that
+# still have the FItemStackAndDurabilityStats stats block we just re-seed
+# CurrentDurability + DecayedMaxDurability to the catalog max. For items
+# missing the block we (re)build it inline so the game treats the item as
+# whole again. Returns counts so the UI can report exactly what happened.
+function Invoke-DunePlayerRestoreDestroyedGear {
+    param([string]$Ip, [long]$PawnId)
+    if ($PawnId -le 0) { return @{ ok = $false; error = 'pawn_id is required.' } }
+    $off = Test-DunePlayerOffline -Ip $Ip -PawnId $PawnId
+    if (-not $off.ok) { return @{ ok = $false; error = $off.reason } }
+
+    _Load-DuneProgressionNodesCatalog
+    $invTypes = $script:DuneProgressionNodesCatalog.repairGearInventoryTypes
+    $invTypesArr = '(' + (($invTypes | ForEach-Object { "$_::int" }) -join ',') + ')'
+
+    # Select EVERY item in the gear inventory types, regardless of whether the
+    # durability stats block is present — we want both the "dead but stats
+    # still there" case AND the "stats block gone" case. We then decide per
+    # row what update to run.
+    $sql = @"
+SELECT i.id::text AS item_id,
+       i.template_id AS template,
+       COALESCE((i.stats->'FItemStackAndDurabilityStats'->1->>'CurrentDurability')::float8, -1)::text AS cur,
+       COALESCE((i.stats->'FItemStackAndDurabilityStats'->1->>'MaxDurability')::float8, 0)::text     AS stat_max,
+       (i.stats ? 'FItemStackAndDurabilityStats')::text AS has_block
+FROM dune.items i
+JOIN dune.inventories inv ON inv.id = i.inventory_id
+WHERE inv.actor_id = $PawnId::bigint
+  AND inv.inventory_type IN $invTypesArr;
+"@
+    $r = Invoke-DuneSqlQuery -Ip $Ip -Sql $sql -ReadOnly $true -MaxRows 1000 -TimeoutSec 30
+    if (-not $r.ok) { return @{ ok = $false; error = "list gear: $($r.error)" } }
+    $items = ConvertTo-DuneRowMaps -Result $r
+    if ($items.Count -eq 0) {
+        return @{ ok = $true; message = 'No gear in equipped/backpack slots — nothing to restore.'; restored = 0; skipped = 0 }
+    }
+
+    $restored = 0; $skipped = 0; $alreadyOk = 0
+    foreach ($row in $items) {
+        $itemId  = [int64](ConvertTo-DuneInt $row['item_id'])
+        $tmpl    = [string]$row['template']
+        $hasBlk  = ([string]$row['has_block']) -eq 't'
+        $curVal  = 0.0; [double]::TryParse([string]$row['cur'], [ref]$curVal) | Out-Null
+        $rule    = Get-DuneGameplayItemRule -TemplateId $tmpl
+        $max     = [double]$rule.max_durability
+        if ($max -le 0) {
+            $statMax = 0.0
+            [double]::TryParse([string]$row['stat_max'], [ref]$statMax) | Out-Null
+            if ($statMax -gt 0) { $max = $statMax } else { $max = 100.0 }
+        }
+
+        # Only act on truly destroyed items: cur < 0 means the stats key was
+        # missing entirely (our COALESCE substituted -1); cur == 0 means it
+        # was present but the durability is zeroed. Anything > 0 is fine,
+        # leave it for the regular Repair button.
+        if ($curVal -gt 0) { $alreadyOk++; continue }
+
+        if ($hasBlk) {
+            # Stats block is present — just re-seed CurrentDurability and
+            # DecayedMaxDurability the same way Invoke-DunePlayerRepairGear
+            # does. jsonb_set defaults to create_if_missing=true so this also
+            # handles the case where only the inner keys went missing.
+            $upd = @"
+UPDATE dune.items
+SET stats = jsonb_set(
+    jsonb_set(stats,
+        '{FItemStackAndDurabilityStats,1,CurrentDurability}',
+        to_jsonb($max::float8)),
+    '{FItemStackAndDurabilityStats,1,DecayedMaxDurability}',
+    to_jsonb($max::float8))
+WHERE id = $itemId::bigint;
+"@
+        } else {
+            # Stats block missing entirely — graft a fresh one in. The shape
+            # mirrors what live items look like ([[<descriptor array>], {<stats>}])
+            # — we leave the descriptor array empty since the game backfills it
+            # on next interaction. CurrentDurability + DecayedMaxDurability +
+            # MaxDurability all get the catalog max so the item shows full.
+            $block = @"
+'{"FItemStackAndDurabilityStats":[[], {"CurrentDurability":$max,"DecayedMaxDurability":$max,"MaxDurability":$max}]}'::jsonb
+"@
+            $upd = @"
+UPDATE dune.items
+SET stats = COALESCE(stats, '{}'::jsonb) || $block
+WHERE id = $itemId::bigint;
+"@
+        }
+
+        $ur = Invoke-DuneSqlQuery -Ip $Ip -Sql $upd -ReadOnly $false -MaxRows 1 -TimeoutSec 30
+        if (-not $ur.ok) { $skipped++; continue }
+        $restored++
+    }
+    return @{
+        ok = $true
+        message = "Restored $restored destroyed item(s) on pawn $PawnId (already ok: $alreadyOk, skipped: $skipped)."
+        restored = $restored
+        skipped = $skipped
+        already_ok = $alreadyOk
+    }
+}
+
 # ---------------------------------------------------------------------------
 # §4 — Vehicles
 # ---------------------------------------------------------------------------
