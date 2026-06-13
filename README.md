@@ -8,12 +8,12 @@
 [![License: Apache 2.0](https://img.shields.io/badge/License-Apache_2.0-blue.svg)](LICENSE)
 [![Latest release](https://img.shields.io/github/v/release/coastal-ms/DST-DuneServerTool?sort=semver)](https://github.com/coastal-ms/DST-DuneServerTool/releases/latest)
 
-The current release is **v11.5.2**. The in-app version label and the
-website show plain semver tags (e.g. `v11.5.2`) — the previous
+The current release is **v12.0.0**. The in-app version label and the
+website show plain semver tags (e.g. `v12.0.0`) — the previous
 Roman-numeral stylization has been removed.
 
 > ## ✅ Confirmed compatible with Dune: Awakening **1.4.5.0**
-> DST **v11.5.2** is verified working against the **latest Funcom release** —
+> DST **v12.0.0** is verified working against the **latest Funcom release** —
 > both the game **client** and the **self-hosted server** software — as of the
 > **1.4.5.0** patch (June 10, 2026). Compatibility was checked live against a
 > running self-hosted server on that build (server image `1988751-0-shipping`),
@@ -29,7 +29,38 @@ browser and keeps the server running in the background.
 
 ![Server Health](docs/img/server-health.png)
 
-### New in the v11 series
+### New in v12.0.0
+
+- **Full dune-admin portal port.** The open-source Dune admin portal lives
+  natively inside DST as the **Gameplay Admin** tab — 54 player-management
+  endpoints (currency, faction rep, char XP, items, vehicles, teleport,
+  progression, contracts, jobs, codex, storage), an RMQ-backed
+  `ServerCommand` channel with 11 live online-player handlers, a typed
+  TypeScript client for every endpoint, and a bucketed **Actions** panel
+  grouping all 28 player actions by intent (Lifecycle / Communication /
+  Inventory / Progression / Punishment / Diagnostics).
+- **Players tab polish.** A **Hide GM** toggle (Eye / EyeOff,
+  localStorage-persisted) filters the GM player out of the list, the
+  Online / Faction StatCards, and the Server Overview bucket counts in one
+  click. Three new ways to deselect a player and return to Server Overview:
+  click the selected row again, press Escape, or hit the new X Close
+  button on the player card header. The **Items** actions (Give Item,
+  Repair Equipped Gear, Fill Water, Clean Inventory) moved into the
+  Inventory section so they sit between the player's name and inventory
+  list rather than buried in a separate group.
+- **Market + Market Bot.** **Seed market** bulk-lists every catalogued
+  template across all 6 quality grades in one shot, with live progress
+  bar, abort button, and bulk INSERT chunking that survives huge catalogs
+  on the Windows argv limit. A 15s TTL cache on enriched listings kills
+  sort lag, **Clear Duke listings** wipes orphan inventory rather than
+  just the referenced ones, and a configurable per-template `price_floor`
+  (default 50) keeps the bot from listing trivially-priced items.
+- **Installer migration.** Upgrading from pre-12.0.0 wipes the legacy
+  per-user autostart scheduled tasks (`\Dune Server\DuneServer-Autostart-<sid>`),
+  but later v12.0.x → v12.0.y in-app updates preserve your autostart
+  preference.
+
+### Carried forward from v11
 
 - **All default settings browser (Game Config).** A collapsible *All
   default settings* card reads the battlegroup's live `DefaultGame.ini` and
@@ -50,7 +81,6 @@ browser and keeps the server running in the background.
   refused server-side, for any viewer that isn't on the host machine itself.
 - **Run at Windows startup.** An opt-in **Help → Run at Windows startup**
   toggle keeps the server alive in the tray across sign-ins.
-- **Faster in-app updates.** End-to-end update time dropped by ~7–10s.
 
 See [`CHANGELOG.md`](CHANGELOG.md) for the full release history and
 [`CONTRIBUTING.md`](CONTRIBUTING.md) for the change-control workflow.
@@ -209,17 +239,34 @@ reflected immediately.
 The open-source **Dune admin portal, rebuilt natively inside DST** — one
 console, one theme, no second program to install. A tabbed surface
 (**Overview, Market, Market Bot, Players, Bases, Storage, Blueprints**) sits
-on top of the same SSH + psql bridge the rest of DST uses. **Market /
-Exchange** aggregates every active listing by item (lowest price, stock, bot
-vs. player split, recent sales) and **Market Bot** runs the native bot
-("Duke") — both *buys* player listings and *lists* its own NPC stock via
-sane-pricing rules (tier × category × rarity × vendor × grade, 100,000
-Solari hard cap, per-template overrides), with three sub-tabs (Buy /
-List / Pricing rules), a vendor-snapshot preview, per-actor-class
-listing breakdown, and a safety net that detects leftover listings from
-any prior bot deployment (e.g. Revy from the old external Go market-bot)
-and offers a one-click wipe before Duke starts ticking. Both read your
-**live game Postgres** directly.
+on top of the same SSH + psql bridge the rest of DST uses, and v12.0.0
+completes the port:
+
+- **Market / Exchange** aggregates every active listing by item (lowest
+  price, stock, bot vs. player split, recent sales). The enriched list is
+  cached for 15 seconds so sort/filter on big catalogs stays instant.
+- **Market Bot ("Duke")** both *buys* player listings and *lists* its own
+  NPC stock via sane-pricing rules (tier × category × rarity × vendor ×
+  grade, 100,000 Solari hard cap, per-template overrides with an inline
+  typeahead picker). Three sub-tabs (**Buy / List / Pricing rules**), a
+  vendor-snapshot preview, per-actor-class listing breakdown, and a
+  safety net that detects leftover listings from any prior bot deployment
+  (e.g. Revy from the old external Go market-bot) and offers a one-click
+  wipe before Duke starts ticking.
+- **Seed market** bulk-lists every catalogued template across all six
+  quality grades in one shot with a live progress bar, abort button, and
+  bulk-INSERT chunking that survives huge catalogs.
+- **Players** ships the full 54-endpoint admin surface: a bucketed
+  **Actions** panel covering all 28 player actions (Lifecycle /
+  Communication / Inventory / Progression / Punishment / Diagnostics), a
+  **Hide GM** toggle that filters the GM out of the list *and* the
+  Online / Faction StatCards and Server Overview bucket counts, the
+  **Items** actions (Give Item online + offline-safe, Repair Equipped
+  Gear, Fill Water, Clean Inventory) folded into the Inventory section
+  between the player's name and item list, and three ways to deselect a
+  player (click the row again, Esc, or the new X Close button) to return
+  to Server Overview.
+
 When the battlegroup is offline the page falls back to a realistic **demo
 dataset** (clearly badged) so the tools are explorable out of the box and flip
 to live data automatically once the battlegroup is running.
