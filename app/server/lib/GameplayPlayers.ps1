@@ -246,6 +246,7 @@ WHERE i.id = $ItemId::bigint AND t.val > 0;
 function Invoke-DunePlayerGiveItem {
     param([string]$Ip, [long]$PawnId, [string]$Template, [long]$Qty, [long]$Quality)
     $safeTmpl = ConvertTo-DuneSqlString $Template
+    $statsJson = ConvertTo-DuneSqlString (Get-DuneGiveItemStatsJson -TemplateId $Template)
     $sql = @"
 WITH inv AS (
     SELECT id FROM dune.inventories
@@ -268,7 +269,7 @@ ins AS (
     INSERT INTO dune.items (inventory_id, stack_size, position_index, template_id, quality_level, acquisition_time, stats)
     SELECT inv.id, $Qty::bigint,
         (SELECT COALESCE(MAX(position_index), -1) + 1 FROM dune.items WHERE inventory_id = inv.id),
-        '$safeTmpl', $Quality::bigint, EXTRACT(EPOCH FROM now())::bigint, '{}'::jsonb
+        '$safeTmpl', $Quality::bigint, EXTRACT(EPOCH FROM now())::bigint, '$statsJson'::jsonb
     FROM inv
     WHERE NOT EXISTS (SELECT 1 FROM existing)
     RETURNING id
