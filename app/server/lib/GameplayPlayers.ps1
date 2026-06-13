@@ -786,5 +786,5 @@ SELECT COUNT(*)::bigint AS refilled FROM upd;
     if ($count -le 0) {
         return @{ ok = $true; refilled = 0; message = 'No water-fillable items found for that player (already empty inventory or no stillsuits/jons).' }
     }
-    return @{ ok = $true; refilled = $count; message = "Refilled $count water-fillable item(s). Online players: takes effect on next relog." }
+    return @{ ok = $true; refilled = $count; message = "Refilled $count water-fillable item(s)." }
 }

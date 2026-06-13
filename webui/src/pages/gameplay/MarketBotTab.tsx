@@ -827,6 +827,7 @@ function PricingSection({ draft, setDraft }: { draft: BotConfig; setDraft: (c: B
 
   const [showAddOverride, setShowAddOverride] = useState(false)
   const [newTmpl, setNewTmpl] = useState('')
+  const [newName, setNewName] = useState('')
   const [newPrice, setNewPrice] = useState('0')
 
   const setMap = (key: 'tier_base_prices' | 'stack_unit_prices' | 'category_factors' | 'rarity_multipliers' | 'vendor_multipliers',
@@ -921,7 +922,8 @@ function PricingSection({ draft, setDraft }: { draft: BotConfig; setDraft: (c: B
           <div className="mb-3 p-3 rounded-lg bg-surface-2 border border-border space-y-2">
             <ItemPicker
               value={newTmpl}
-              onChange={setNewTmpl}
+              displayValue={newName || newTmpl}
+              onChange={(tpl, item) => { setNewTmpl(tpl); setNewName(item ? item.name : '') }}
               label="Item"
               placeholder="Type to search items by name or template id…"
               autoFocus
@@ -940,7 +942,7 @@ function PricingSection({ draft, setDraft }: { draft: BotConfig; setDraft: (c: B
                   const n = parseInt(newPrice, 10)
                   if (!tmpl || !Number.isFinite(n) || n < 0) return
                   setDraft({ ...draft, price_overrides: { ...overrides, [tmpl]: n } })
-                  setNewTmpl(''); setNewPrice('0'); setShowAddOverride(false)
+                  setNewTmpl(''); setNewName(''); setNewPrice('0'); setShowAddOverride(false)
                 }}>
                 <Icon name="Plus" size={14} /> Add
               </button>

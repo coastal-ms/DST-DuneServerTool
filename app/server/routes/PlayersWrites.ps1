@@ -32,6 +32,21 @@ Register-DuneRoute -Method POST -Path '/api/gameplay/players/repair-gear' -Handl
     }
 }
 
+# POST /api/gameplay/players/restore-destroyed  { pawn_id }
+# Sister of repair-gear that targets items where CurrentDurability is 0 or NULL
+# (Chopper's "completely dead" case). Same gear-slot scope. Re-seeds durability
+# stats; also grafts the FItemStackAndDurabilityStats block when missing.
+Register-DuneRoute -Method POST -Path '/api/gameplay/players/restore-destroyed' -Handler {
+    param($req, $res, $routeParams, $body)
+    try {
+        $pawn = Get-DuneBodyInt -Body $body -Name 'pawn_id'
+        if ($null -eq $pawn -or $pawn -le 0) { Write-DuneError -Response $res -Status 400 -Message 'pawn_id is required.'; return }
+        Invoke-DunePlayerWriteRoute -Response $res -Action { param($ip) Invoke-DunePlayerRestoreDestroyedGear -Ip $ip -PawnId $pawn }
+    } catch {
+        Write-DuneError -Response $res -Status 500 -Message "Restore destroyed failed: $($_.Exception.Message)"
+    }
+}
+
 # ---------------------------------------------------------------------------
 # §4 — Vehicles
 # ---------------------------------------------------------------------------

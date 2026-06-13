@@ -1200,6 +1200,12 @@ export function repairGear(pawnId: number) {
   })
 }
 
+export function restoreDestroyed(pawnId: number) {
+  return api<WriteResult>('/api/gameplay/players/restore-destroyed', {
+    method: 'POST', body: JSON.stringify({ pawn_id: pawnId }),
+  })
+}
+
 export function repairVehicle(vehicleId: number) {
   return api<WriteResult>('/api/gameplay/players/repair-vehicle', {
     method: 'POST', body: JSON.stringify({ vehicle_id: vehicleId }),

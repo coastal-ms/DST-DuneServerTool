@@ -12,6 +12,7 @@ import { SetupWizard } from './pages/SetupWizard'
 import { Settings } from './pages/Settings'
 import { TerminalPage } from './pages/Terminal'
 import { Tailscale } from './pages/Tailscale'
+import { Broadcasts } from './pages/Broadcasts'
 import { PageStub } from './pages/PageStub'
 import { StatusProvider } from './hooks/useStatus'
 import { isLocalViewer } from './util/viewer'
@@ -48,6 +49,7 @@ export default function App() {
           />
           <Route path="/gameconfig" element={<Boundary name="Game Config"><GameConfig /></Boundary>} />
           <Route path="/gameplay"   element={<Boundary name="Gameplay Admin"><GameplayEnvironment /></Boundary>} />
+          <Route path="/broadcasts" element={<Boundary name="Broadcasts"><Broadcasts /></Boundary>} />
           <Route path="/database"   element={<Boundary name="Database"><Database /></Boundary>} />
           <Route path="/sietches"   element={<Boundary name="Sietches"><Sietches /></Boundary>} />
           <Route path="/dd-map"     element={<Boundary name="Deep Desert Map"><DDMap /></Boundary>} />
