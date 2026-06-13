@@ -32,6 +32,15 @@ Follow-up to v12.0.5: applies the same `acquisition_time` fix to the two other
   `BuildingBlueprint_CopyDevice` it inserts into the player's backpack, for the
   same reason.
 
+### Changed
+
+- **Repair All Items / Restore Destroyed Items now scope to the player's own
+  gear only** (inventory types `0, 1, 15` — backpack, equipped armor, equipped
+  weapons). The previous set also included the emote and empty buckets
+  (`14, 27, 30`); Restore Destroyed in particular would rebuild a durability
+  stats block on items that should never have one (e.g. emotes). Both actions
+  now leave those untouched.
+
 ## [12.0.5] - 2026-06-12
 
 Hotfix for Ken's report that items added to a storage container via Gameplay
