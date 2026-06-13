@@ -121,6 +121,31 @@ export function GameConfig() {
   const [clientErr, setClientErr] = useState<string | null>(null)
   const [clientViewOpen, setClientViewOpen] = useState(false)
   const [applying, setApplying] = useState(false)
+  const [clientSnippetCopied, setClientSnippetCopied] = useState(false)
+
+  // INI text the admin can hand to OTHER players (who don't run DST) to paste
+  // into their own client Game.ini — grouped by section, last-write-wins order.
+  const clientSnippet = useMemo(() => {
+    if (!clientApply || clientApply.items.length === 0) return ''
+    const bySection = new Map<string, string[]>()
+    for (const it of clientApply.items) {
+      const lines = bySection.get(it.section) ?? []
+      lines.push(`${it.key}=${it.value}`)
+      bySection.set(it.section, lines)
+    }
+    return [...bySection.entries()]
+      .map(([section, lines]) => [`[${section}]`, ...lines].join('\n'))
+      .join('\n\n')
+  }, [clientApply])
+
+  const onCopyClientSnippet = useCallback(async () => {
+    if (!clientSnippet) return
+    try {
+      await navigator.clipboard.writeText(clientSnippet)
+      setClientSnippetCopied(true)
+      setTimeout(() => setClientSnippetCopied(false), 1500)
+    } catch { /* clipboard may be unavailable; the snippet is still shown */ }
+  }, [clientSnippet])
 
   const refreshClient = useCallback(async () => {
     try {
@@ -675,6 +700,27 @@ export function GameConfig() {
                   Add {clientApply.items.length === 1 ? 'it' : 'them'} under the matching section in each client's:
                 </p>
                 <code className="block mt-1 px-2 py-1 rounded bg-surface-2 text-text text-xs break-all">{clientApply.path}</code>
+
+                <div className="mt-3 pt-3 border-t border-border">
+                  <div className="flex items-center justify-between gap-2 mb-1">
+                    <span className="font-medium text-text">Send this to your other players</span>
+                    <button
+                      type="button"
+                      onClick={() => void onCopyClientSnippet()}
+                      className="btn-ghost text-xs"
+                      title="Copy the INI lines to share with players who don't run DST"
+                    >
+                      <Icon name={clientSnippetCopied ? 'Check' : 'Copy'} size={13} />
+                      {clientSnippetCopied ? 'Copied' : 'Copy'}
+                    </button>
+                  </div>
+                  <p className="text-text-muted mb-1">
+                    Players who don&apos;t run DST can paste these exact lines into their own
+                    {' '}<span className="font-mono">{clientApply.path}</span> (merge under the matching section headers):
+                  </p>
+                  <pre className="px-2 py-1.5 rounded bg-surface-2 text-text text-xs whitespace-pre-wrap break-all overflow-x-auto">{clientSnippet}</pre>
+                </div>
+
                 <div className="flex items-center gap-2 mt-3">
                   <button
                     type="button"

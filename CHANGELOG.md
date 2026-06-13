@@ -52,7 +52,8 @@ here cover everything those tags shipped.
   button rendered inline at the top of the page — so when you'd scrolled down the
   settings list to save, it appeared off-screen and was easy to miss, leaving the
   local client `Game.ini` unchanged. It now opens as a modal that's visible
-  regardless of scroll position.
+  regardless of scroll position, and includes a copy-paste-ready INI snippet the
+  admin can hand to other players who don't run DST.
 
 ### Changed
 
