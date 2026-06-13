@@ -132,6 +132,9 @@ Register-DuneRoute -Method POST -Path '/api/gameplay/players/give-item' -Handler
         if (-not $tmpl) { Write-DuneError -Response $res -Status 400 -Message 'template is required.'; return }
         if ($null -eq $qty -or $qty -le 0) { Write-DuneError -Response $res -Status 400 -Message 'qty must be a positive integer.'; return }
 
+        $tv = Test-DuneValidGiveTemplate -TemplateId $tmpl
+        if (-not $tv.ok) { Write-DuneError -Response $res -Status 400 -Message $tv.error; return }
+
         Invoke-DunePlayerWriteRoute -Response $res -Action {
             param($ip)
             $off = Test-DunePlayerOffline -Ip $ip -PawnId $pawn

@@ -13,6 +13,158 @@ here cover everything those tags shipped.
 
 ## [Unreleased]
 
+## [12.0.14] - 2026-06-13
+
+### Fixed
+
+- **Gameplay Admin "Give Intel" now lands in-game.** Intel
+  (`TechKnowledgePlayerComponent.m_TechKnowledgePoints`) lives on the player's
+  **pawn** actor — the same actor that holds the backpack — but the offline grant
+  wrote it to the **controller**, creating a junk component the game never reads,
+  so the points showed in DST but never appeared in-game. The award now targets
+  the pawn (matching the reference tool and our working give-item path), resolves
+  the pawn from the controller id when needed, and clamps the total to the
+  spendable cap (2779). (#182)
+- **Gameplay Admin "Award Character XP" is now flagged live-only.** The offline XP
+  cascade read and wrote `FLevelComponent` (XP / skill points), the keystone
+  skill-point bonus, and the intel cascade against the **controller** actor; those
+  reads/writes are now correctly keyed on the **pawn** (matching the reference
+  `cmdAwardCharXP`). However, the game recomputes/caches the level component for
+  logged-in characters, so an offline grant still doesn't reliably land in-game —
+  only the live (logged-in) RMQ AwardXP path does. The action is therefore marked
+  **LIVE REQ'D** in the UI and only enabled while the player is online.
+- **Map "Fix partitions" / on-demand map spin-up no longer fails on VMs without
+  sftp-server.** Staging the partition-clear script used `scp`, and modern OpenSSH
+  `scp` (9.0+) speaks the SFTP protocol — which requires the `sftp-server`
+  subsystem on the remote. On some VM images that binary isn't where sshd expects
+  it (e.g. `/usr/lib/ssh/sftp-server` missing), so the transfer died with
+  `bash: line 1: /usr/lib/ssh/sftp-server: No such file or directory` and the
+  DeepDesert / SH_Arrakeen / SH_HarkoVillage partition pin was never cleared. The
+  script is now streamed over a plain `ssh` exec channel (base64 on stdin), which
+  needs only a shell and `base64` — no SFTP subsystem. Applies to both the desktop
+  "Fix partitions" button and the automatic clear on Start/Restart.
+- **Player "History" tab no longer errors out.** Opening a player's History threw
+  `Exception calling "Format" with "3" argument(s): "Input string was not in a
+  correct format."` for every player — the events query template used a literal
+  `'{}'` JSON default that `[string]::Format` misread as a malformed placeholder.
+  The brace is now escaped, so history loads.
+- **Gameplay Admin player actions are now a list, not a wall of buttons.** Each
+  action is a single full-width row grouped by category; clicking a row expands
+  its form inline directly beneath it (accordion), replacing the previous
+  button-grid layout.
+
+- **Gameplay Admin "Give Item" picker no longer mangles catalog template ids.**
+  The catalog endpoint returns an array of
+  `{ templateId, name, category }`, but the web UI parsed it as a dictionary —
+  so every catalog entry was assigned its array index (a bare number) as the
+  template id while keeping its real display name. Picking an item (e.g. "Copper
+  Ore") therefore committed a numeric id, which the give-item guard correctly
+  rejects, leaving the selection stuck with a "pick an item from the list"
+  warning and a disabled Give button. The parser now reads the entry's
+  `templateId` field (with a dictionary fallback for older builds), so picked
+  items resolve to their real class string and can be given again.
+
+- **Gameplay Admin "Give Item" now renders in-game.** Items given to a player's
+  backpack were inserted with an empty `stats` JSON (`{}`), which the game cannot
+  deserialize — so the row existed in the database (and showed in DST's listing)
+  but the item never appeared in-game and was dropped on the next zone/login load.
+  The give-item insert now writes the correct stats block, branching by item type:
+  stackable resources get `FItemStackAndDurabilityStats` with `DecayedMaxDurability`,
+  while equipment/non-stackable items get the full customization + durability shape.
+  The same fix is applied to the storage-container "Add Items" path, which had been
+  applying an equipment-only shape to every item, so stackable resources added to a
+  container also failed to render. Covers the single and bulk give/add paths.
+  (#144, #176)
+
+- **Storage "Add Items" now warns about the required restart.** Items added to a
+  storage container only become visible in-game after a battlegroup (server zone)
+  restart, because the game caches container contents while the zone is loaded.
+  The container detail panel now shows this notice directly under the **Add Items**
+  button so admins know to restart the battlegroup after staging items.
+
+- **Gameplay Admin "Give Item" no longer leaks a numeric template id.** A numeric
+  id typed or pasted into the item field (instead of a class string picked from the
+  catalog) was written straight to `dune.items.template_id`, which the game cannot
+  resolve — the row existed (and showed in DST's listing) but the item was invisible
+  in-game and dropped on the next zone/login load. The backend now rejects a
+  non-class-string template id (empty or all-digits) across the player, storage,
+  single, bulk, and live give paths, and the picker disables the give/add action
+  with an inline hint when the value isn't a valid class string. (#176)
+
+- **Gameplay Admin "Give Intel" no longer silently no-ops for online players.** The
+  portal sent only `actor_id`, so the backend skipped its online check and wrote
+  directly to `dune.actors` — which the game server overwrites from memory on
+  logout, so the intel never stuck. Giving intel to an online player is now rejected
+  with a clear "log out first" message, and the offline write was hardened to create
+  the `TechKnowledgePlayerComponent` parent when missing. (#176)
+
+- **Gameplay Admin "Award Character XP" now works for online players.** Awarding XP
+  to a logged-in character previously errored; it now routes online awards through
+  the game server's live `AwardXP` path (no relog needed) and keeps the offline
+  database write for logged-out characters. (#176)
+
+- **Gameplay Admin "Give Intel" no longer errors.** The action failed with
+  `actor_id or pawn_id is required.` because the web portal sent `controller_id`/
+  `amount` while the backend expected `actor_id`/`delta`. The portal now sends the
+  correct fields, targeting the right actor. (#176)
+
+- **Gameplay Admin "Give XP" no longer errors.** XP Delta failed with
+  `Could not resolve player_controller from pawn N.` because the resolver queried a
+  nonexistent column (`actor_id`) on `dune.player_state`; it now reads
+  `player_controller_id`. (#176)
+
+- **Game Config no longer writes duplicate INI section headers.** When a
+  `UserGame.ini` already contained a section that DST also manages, the writer could
+  emit that `[/Script/DuneSandbox.*]` header twice. Unreal honors the first header,
+  so DST's overrides (base-expansion limits, player inventory size/volume, etc.)
+  were silently ignored. The writer now guarantees each section name appears exactly
+  once, so managed overrides take effect.
+
+- **The "apply on each client" reminder is now a centered popup.** After saving a
+  setting that's read by both the server and the game client (e.g. landclaim
+  segments, building restrictions), the notice with the **Apply to my client**
+  button rendered inline at the top of the page — so when you'd scrolled down the
+  settings list to save, it appeared off-screen and was easy to miss, leaving the
+  local client `Game.ini` unchanged. It now opens as a modal that's visible
+  regardless of scroll position, and includes a copy-paste-ready INI snippet the
+  admin can hand to other players who don't run DST.
+
+### Changed
+
+- **Removed XP / Fame / Progression (and related) multiplier settings from Game
+  Config.** These 10 `m_Global*Multiplier` keys (XP, Fame, Progression speed,
+  Health, damage, harvest, building damage, inventory weight) are not real engine
+  settings — they do not exist in the game's `DefaultGame.ini`, so writing them had
+  no effect under any section. They have been removed from the configuration UI so
+  the tool no longer writes dead keys. (Real gameplay scaling such as
+  `Dune.GlobalMiningOutputMultiplier` is unaffected.)
+
+- **Diagnostic bundle now captures the live game config.** The "Save Logs" ZIP
+  (and the `report-issue` CLI) now includes a redacted `UserGame.ini` /
+  `UserEngine.ini` snapshot pulled from the VM when reachable, headlined with an
+  automatic duplicate-section-header check, so "my setting didn't apply" Game
+  Config bugs can be diagnosed from a single attachment. The bug-report template
+  gained targeted Game Config and Give Item sections to collect the right detail.
+
+- **"Give Intel" is now flagged offline-only in the UI.** The game caches a
+  player's `TechKnowledgePlayerComponent` in memory while they're logged in, so a
+  live DB edit would be clobbered on logout — intel can only be granted to an
+  **offline** character (the backend already rejects online grants). The action
+  now shows an **OFFLINE REQ'D** badge and is disabled while the player is online,
+  matching the existing **LIVE REQ'D** treatment on Award Character XP.
+
+- **"Reset Journey" and "Wipe Journey" now confirm before running.** Both actions
+  are destructive to a player's questline/journey progress, so they now prompt for
+  confirmation instead of running on a single click.
+
+- **Map SpinUp page now explains the RAM trade-off and on-demand scaling.** Because
+  each map's RAM allocation is customizable, an under-provisioned Hyper-V VM can't
+  warm every map at once (OverMap, Hagga, and DeepDesert alone can run 31–35 GB at
+  default), so extra maps stay pending. A prominent banner now explains this, notes
+  that maps won't spin down while a player is present, and clarifies that maps also
+  scale on demand when a player enters (at the cost of a longer first load) — with
+  this page provided to optionally warm a map ahead of arrival.
+
 ## [12.0.13] - 2026-06-13
 
 ### Changed
