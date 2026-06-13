@@ -245,6 +245,8 @@ WHERE i.id = $ItemId::bigint AND t.val > 0;
 # vanish on the player's next login.
 function Invoke-DunePlayerGiveItem {
     param([string]$Ip, [long]$PawnId, [string]$Template, [long]$Qty, [long]$Quality)
+    $tv = Test-DuneValidGiveTemplate -TemplateId $Template
+    if (-not $tv.ok) { return @{ ok = $false; error = $tv.error } }
     $safeTmpl = ConvertTo-DuneSqlString $Template
     $statsJson = ConvertTo-DuneSqlString (Get-DuneGiveItemStatsJson -TemplateId $Template)
     $sql = @"

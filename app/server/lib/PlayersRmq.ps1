@@ -130,6 +130,9 @@ function Invoke-DunePlayerGiveItemLive {
     if ($Quantity -le 0)   { $Quantity = 1 }
     if ($Durability -le 0) { $Durability = 1.0 }
 
+    $tv = Test-DuneValidGiveTemplate -TemplateId $Template
+    if (-not $tv.ok) { return @{ ok = $false; error = $tv.error } }
+
     if ($ActorId -gt 0) {
         $cap = Test-DuneInventoryCapacity -Ip $Ip -PawnId $ActorId -Template $Template -Quantity $Quantity
         if (-not $cap.ok) { return $cap }

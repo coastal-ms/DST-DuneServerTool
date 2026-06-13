@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react'
 import { Icon } from '../../components/Icon'
 import { ItemPicker } from '../../components/ItemPicker'
 import {
-  getStorage, getStorageItems, giveItemsToStorage, deleteStorageItem,
+  getStorage, getStorageItems, giveItemsToStorage, deleteStorageItem, isValidTemplateId,
   type StorageContainer, type InventoryItem, type DataSource, type StorageGiveItemInput,
 } from '../../api/gameplay'
 import { fmtNum, SourceBadge, StatCard, DemoNotice, qualityClass } from './shared'
@@ -258,7 +258,7 @@ function AddItemsForm({ busy, onSubmit, onCancel }: {
 
   const add = () => {
     const t = template.trim()
-    if (!t) return
+    if (!t || !isValidTemplateId(t)) return
     setStaged(s => [...s, { template: t, qty: Math.max(1, Number(qty) || 1), quality: Math.max(0, Number(quality) || 0) }])
     setTemplate(''); setTemplateName(''); setQty('1'); setQuality('0')
   }
@@ -284,7 +284,7 @@ function AddItemsForm({ busy, onSubmit, onCancel }: {
             className="w-full px-3 py-2 rounded-lg bg-surface-2 border border-border text-text text-sm focus:outline-none focus:ring-2 focus:ring-ibad focus:border-ibad/50" />
         </div>
       </div>
-      <button className="btn-secondary w-full" onClick={add} disabled={busy || !template.trim()}>
+      <button className="btn-secondary w-full" onClick={add} disabled={busy || !isValidTemplateId(template)}>
         <Icon name="Plus" size={14} /> Add to list
       </button>
 
