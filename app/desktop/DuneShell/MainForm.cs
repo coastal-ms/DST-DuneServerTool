@@ -96,7 +96,11 @@ internal sealed class MainForm : Form
         var core = _web.CoreWebView2;
         core.Settings.AreDefaultContextMenusEnabled = true;
         core.Settings.IsStatusBarEnabled = false;
-        core.Settings.AreDevToolsEnabled = false;
+        // v12.0.1: DevTools enabled so users can press F12 and read JS console
+        // errors when a page misbehaves. The console output is also captured to
+        // %APPDATA%\DuneServer\webview2-debug.log by InitDiagnosticLogging below
+        // and bundled into Help -> Create GitHub Issue + Save Logs.
+        core.Settings.AreDevToolsEnabled = true;
 
         core.NewWindowRequested += OnNewWindowRequested;
         core.NavigationCompleted += OnNavigationCompleted;
@@ -107,8 +111,196 @@ internal sealed class MainForm : Form
             Text = string.IsNullOrWhiteSpace(t) ? "Dune Server Tool" : $"{t} — Dune Server Tool";
         };
 
+        await InitDiagnosticLoggingAsync(core);
+
         _web.Source = new Uri(url);
         _targetUrl = url;
+    }
+
+    // ----- Diagnostic logging -------------------------------------------------
+    //
+    // v12.0.1: subscribe to WebView2 DevTools Protocol events so unhandled JS
+    // exceptions and console.error/warn calls land in
+    // %APPDATA%\DuneServer\webview2-debug.log. The diagnostics bundle
+    // (Help -> Create GitHub Issue + Save Logs) tails the last 200 KB of that
+    // file, which previously was always missing because nothing ever wrote it.
+    //
+    // We cap the file at WebView2LogMaxBytes and trim from the front on the
+    // next write when we exceed it, so a chatty page can't fill the user's
+    // disk. Writes are best-effort and silently swallow IO errors.
+
+    private const long WebView2LogMaxBytes = 2L * 1024 * 1024;  // 2 MB cap
+    private static readonly object _logLock = new();
+
+    private static string WebView2LogPath => Path.Combine(
+        Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
+        "DuneServer", "webview2-debug.log");
+
+    private async Task InitDiagnosticLoggingAsync(CoreWebView2 core)
+    {
+        try
+        {
+            // Runtime.enable is a prerequisite for consoleAPICalled /
+            // exceptionThrown events to fire on the protocol channel.
+            await core.CallDevToolsProtocolMethodAsync("Runtime.enable", "{}");
+
+            var consoleRecv = core.GetDevToolsProtocolEventReceiver("Runtime.consoleAPICalled");
+            consoleRecv.DevToolsProtocolEventReceived += OnConsoleApiCalled;
+
+            var exceptionRecv = core.GetDevToolsProtocolEventReceiver("Runtime.exceptionThrown");
+            exceptionRecv.DevToolsProtocolEventReceived += OnRuntimeExceptionThrown;
+
+            core.ProcessFailed += OnProcessFailed;
+
+            AppendDiagnosticLine($"[shell] DST v{typeof(MainForm).Assembly.GetName().Version} logging started; WebView2 runtime {core.Environment.BrowserVersionString}");
+        }
+        catch (Exception ex)
+        {
+            // Logging is best-effort. If the DevTools protocol can't be wired
+            // (older WebView2 runtime, etc.) the app still works — we just
+            // won't capture console output.
+            AppendDiagnosticLine($"[shell] failed to wire diagnostic logging: {ex.Message}");
+        }
+    }
+
+    private void OnConsoleApiCalled(object? sender, CoreWebView2DevToolsProtocolEventReceivedEventArgs e)
+    {
+        try
+        {
+            using var doc = System.Text.Json.JsonDocument.Parse(e.ParameterObjectAsJson);
+            var root = doc.RootElement;
+            string type = root.TryGetProperty("type", out var t) ? (t.GetString() ?? "log") : "log";
+
+            // We only persist console.error / console.warn / console.assert /
+            // console.trace — debug / info / log are extremely noisy on a
+            // live React page and rarely useful for postmortem analysis.
+            bool keep = type is "error" or "warning" or "warn" or "assert" or "trace";
+            if (!keep) return;
+
+            var sb = new StringBuilder();
+            sb.Append("[console.").Append(type).Append("] ");
+            if (root.TryGetProperty("args", out var args) && args.ValueKind == System.Text.Json.JsonValueKind.Array)
+            {
+                bool first = true;
+                foreach (var a in args.EnumerateArray())
+                {
+                    if (!first) sb.Append(' ');
+                    first = false;
+                    if (a.TryGetProperty("value", out var v))
+                        sb.Append(v.ToString());
+                    else if (a.TryGetProperty("description", out var d))
+                        sb.Append(d.GetString());
+                    else
+                        sb.Append(a.ToString());
+                }
+            }
+            if (root.TryGetProperty("stackTrace", out var st) &&
+                st.TryGetProperty("callFrames", out var cf) &&
+                cf.ValueKind == System.Text.Json.JsonValueKind.Array)
+            {
+                foreach (var frame in cf.EnumerateArray())
+                {
+                    string fn  = frame.TryGetProperty("functionName", out var f) ? (f.GetString() ?? "") : "";
+                    string url = frame.TryGetProperty("url",          out var u) ? (u.GetString() ?? "") : "";
+                    int line   = frame.TryGetProperty("lineNumber",   out var l) ? l.GetInt32() : 0;
+                    sb.Append("\r\n    at ").Append(string.IsNullOrEmpty(fn) ? "(anonymous)" : fn)
+                      .Append(" (").Append(url).Append(':').Append(line + 1).Append(')');
+                }
+            }
+            AppendDiagnosticLine(sb.ToString());
+        }
+        catch { /* best-effort */ }
+    }
+
+    private void OnRuntimeExceptionThrown(object? sender, CoreWebView2DevToolsProtocolEventReceivedEventArgs e)
+    {
+        try
+        {
+            using var doc = System.Text.Json.JsonDocument.Parse(e.ParameterObjectAsJson);
+            var root = doc.RootElement;
+            if (!root.TryGetProperty("exceptionDetails", out var ex)) return;
+
+            var sb = new StringBuilder("[exception] ");
+            if (ex.TryGetProperty("text", out var txt)) sb.Append(txt.GetString());
+            if (ex.TryGetProperty("exception", out var exo) &&
+                exo.TryGetProperty("description", out var exd))
+            {
+                sb.Append(" :: ").Append(exd.GetString());
+            }
+            else if (ex.TryGetProperty("exception", out var exo2) &&
+                     exo2.TryGetProperty("value", out var exv))
+            {
+                sb.Append(" :: ").Append(exv.ToString());
+            }
+            if (ex.TryGetProperty("url",        out var u))  sb.Append("\r\n    url:    ").Append(u.GetString());
+            if (ex.TryGetProperty("lineNumber", out var ln)) sb.Append("\r\n    line:   ").Append(ln.GetInt32() + 1);
+            if (ex.TryGetProperty("stackTrace", out var st) &&
+                st.TryGetProperty("callFrames", out var cf) &&
+                cf.ValueKind == System.Text.Json.JsonValueKind.Array)
+            {
+                foreach (var frame in cf.EnumerateArray())
+                {
+                    string fn  = frame.TryGetProperty("functionName", out var f) ? (f.GetString() ?? "") : "";
+                    string url = frame.TryGetProperty("url",          out var u2) ? (u2.GetString() ?? "") : "";
+                    int line   = frame.TryGetProperty("lineNumber",   out var l) ? l.GetInt32() : 0;
+                    sb.Append("\r\n    at ").Append(string.IsNullOrEmpty(fn) ? "(anonymous)" : fn)
+                      .Append(" (").Append(url).Append(':').Append(line + 1).Append(')');
+                }
+            }
+            AppendDiagnosticLine(sb.ToString());
+        }
+        catch { /* best-effort */ }
+    }
+
+    private void OnProcessFailed(object? sender, CoreWebView2ProcessFailedEventArgs e)
+    {
+        try
+        {
+            AppendDiagnosticLine(
+                $"[process-failed] kind={e.ProcessFailedKind} reason={e.Reason} exitCode={e.ExitCode} status={e.ProcessDescription}");
+        }
+        catch { /* best-effort */ }
+    }
+
+    private static void AppendDiagnosticLine(string line)
+    {
+        if (string.IsNullOrEmpty(line)) return;
+        try
+        {
+            string path = WebView2LogPath;
+            string dir = Path.GetDirectoryName(path)!;
+            Directory.CreateDirectory(dir);
+            string stamped = $"{DateTime.Now:yyyy-MM-dd HH:mm:ss.fff}  {line}\r\n";
+
+            lock (_logLock)
+            {
+                // Front-trim when over cap so the file behaves like a ring buffer.
+                // Keeps the most recent ~half so old context still survives a
+                // single noisy burst.
+                try
+                {
+                    var fi = new FileInfo(path);
+                    if (fi.Exists && fi.Length > WebView2LogMaxBytes)
+                    {
+                        long keep = WebView2LogMaxBytes / 2;
+                        var bytes = File.ReadAllBytes(path);
+                        if (bytes.Length > keep)
+                        {
+                            int start = (int)(bytes.Length - keep);
+                            // Skip to the next line boundary so we don't leave
+                            // a half line at the top of the file.
+                            for (; start < bytes.Length; start++)
+                                if (bytes[start] == (byte)'\n') { start++; break; }
+                            File.WriteAllBytes(path, new ArraySegment<byte>(bytes, start, bytes.Length - start).ToArray());
+                        }
+                    }
+                }
+                catch { /* best-effort trim */ }
+
+                File.AppendAllText(path, stamped, Encoding.UTF8);
+            }
+        }
+        catch { /* logging must never throw into the caller */ }
     }
 
     private async void OnNavigationCompleted(object? sender, CoreWebView2NavigationCompletedEventArgs e)
