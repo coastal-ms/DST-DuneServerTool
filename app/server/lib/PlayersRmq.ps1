@@ -1,4 +1,4 @@
-# PlayersRmq.ps1
+﻿# PlayersRmq.ps1
 # High-level handlers that publish RMQ ServerCommand messages for live
 # (online-player) operations. Ports the reference implementation handlers_rmq.go logic:
 # parameter validation, optional FLS id resolution from actor_id, lightweight
