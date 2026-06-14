@@ -898,6 +898,8 @@ export interface CatalogItem {
   template_id: string
   name: string
   category: string
+  gradeable?: boolean
+  tier?: number
 }
 
 interface RawCatalogEntry {
@@ -905,6 +907,8 @@ interface RawCatalogEntry {
   template_id?: string
   name?: string
   category?: string
+  gradeable?: boolean
+  tier?: number
 }
 
 interface CatalogResponse {
@@ -913,7 +917,7 @@ interface CatalogResponse {
   // The backend (/api/catalog/items -> Get-DuneItemCatalog) serializes `items`
   // as an ARRAY of { templateId, name, category }. Older/alternate builds may
   // emit a dict keyed by template_id. flattenItemCatalog handles both.
-  items: RawCatalogEntry[] | Record<string, { name?: string; category?: string }>
+  items: RawCatalogEntry[] | Record<string, { name?: string; category?: string; gradeable?: boolean; tier?: number }>
 }
 
 let _catalogCache: CatalogItem[] | null = null
@@ -932,15 +936,15 @@ export function flattenItemCatalog(raw: CatalogResponse['items'] | undefined | n
     for (const e of raw) {
       const tid = String(e?.templateId ?? e?.template_id ?? '').trim()
       if (!tid) continue
-      flat.push({ template_id: tid, name: e?.name || tid, category: e?.category || '' })
+      flat.push({ template_id: tid, name: e?.name || tid, category: e?.category || '', gradeable: !!e?.gradeable, tier: e?.tier })
     }
   } else if (raw && typeof raw === 'object') {
-    const dict = raw as Record<string, { name?: string; category?: string }>
+    const dict = raw as Record<string, { name?: string; category?: string; gradeable?: boolean; tier?: number }>
     for (const tid of Object.keys(dict)) {
       const key = tid.trim()
       if (!key) continue
       const v = dict[tid]
-      flat.push({ template_id: key, name: v?.name || key, category: v?.category || '' })
+      flat.push({ template_id: key, name: v?.name || key, category: v?.category || '', gradeable: !!v?.gradeable, tier: v?.tier })
     }
   }
   flat.sort((a, b) => a.name.localeCompare(b.name))
@@ -967,15 +971,38 @@ export function getItemCatalog(): Promise<CatalogItem[]> {
 }
 
 /**
+ * Distinct, alphabetically-sorted list of non-empty categories in the catalog.
+ * Drives the ItemPicker category selector.
+ */
+export function catalogCategories(catalog: CatalogItem[]): string[] {
+  const set = new Set<string>()
+  for (const it of catalog) {
+    const c = (it.category || '').trim()
+    if (c) set.add(c)
+  }
+  return Array.from(set).sort((a, b) => a.localeCompare(b))
+}
+
+/**
  * Case-insensitive substring filter over name OR template_id. Returns up to
  * `limit` matches sorted by best-match (template_id prefix > name prefix >
  * substring), then alphabetically.
+ *
+ * When `category` is set, results are restricted to that category. An empty
+ * query normally returns nothing (we don't dump 1.3k items), but if a category
+ * is selected an empty query lists that category's items alphabetically so the
+ * selector alone is a usable browse mode.
  */
-export function filterCatalog(catalog: CatalogItem[], query: string, limit = 20): CatalogItem[] {
+export function filterCatalog(catalog: CatalogItem[], query: string, limit = 20, category = ''): CatalogItem[] {
   const q = query.trim().toLowerCase()
-  if (!q) return []
+  const cat = category.trim()
+  const inCat = cat ? catalog.filter(it => (it.category || '').trim() === cat) : catalog
+  if (!q) {
+    if (!cat) return []
+    return inCat.slice().sort((a, b) => a.name.localeCompare(b.name)).slice(0, limit)
+  }
   const out: { item: CatalogItem; rank: number }[] = []
-  for (const it of catalog) {
+  for (const it of inCat) {
     const tid = it.template_id.toLowerCase()
     const nm  = it.name.toLowerCase()
     let rank = -1
@@ -1060,22 +1087,33 @@ function targetBody(t: PlayerTarget, rest: Record<string, unknown> = {}) {
 // Phase A — currency / progression / admin writes (5 + 3 endpoints)
 // ---------------------------------------------------------------------------
 
-export function giveScrip(accountId: number, amount: number) {
+export function giveScrip(controllerId: number, amount: number) {
   return api<WriteResult>('/api/gameplay/players/give-scrip', {
-    method: 'POST', body: JSON.stringify({ account_id: accountId, amount }),
+    method: 'POST', body: JSON.stringify({ actor_id: controllerId, delta: amount }),
   })
 }
 
 export type FactionId = 'atreides' | 'harkonnen' | string
-export function giveFactionRep(accountId: number, faction: FactionId, delta: number) {
+
+// The faction-write routes expect a numeric faction_id (1=Atreides, 2=Harkonnen,
+// 4=Smuggler). The UI collects a name (or a raw number), so normalize here.
+const FACTION_NAME_TO_ID: Record<string, number> = { atreides: 1, harkonnen: 2, smuggler: 4 }
+function resolveFactionId(faction: FactionId): number {
+  const key = String(faction || '').trim().toLowerCase()
+  if (FACTION_NAME_TO_ID[key] != null) return FACTION_NAME_TO_ID[key]
+  const n = Number(key)
+  return Number.isFinite(n) ? n : 0
+}
+
+export function giveFactionRep(controllerId: number, faction: FactionId, delta: number) {
   return api<WriteResult>('/api/gameplay/players/give-faction-rep', {
-    method: 'POST', body: JSON.stringify({ account_id: accountId, faction, delta }),
+    method: 'POST', body: JSON.stringify({ actor_id: controllerId, faction_id: resolveFactionId(faction), delta }),
   })
 }
 
-export function setFactionTier(accountId: number, faction: FactionId, tier: number) {
+export function setFactionTier(controllerId: number, faction: FactionId, tier: number) {
   return api<WriteResult>('/api/gameplay/players/set-faction-tier', {
-    method: 'POST', body: JSON.stringify({ account_id: accountId, faction, tier }),
+    method: 'POST', body: JSON.stringify({ actor_id: controllerId, faction_id: resolveFactionId(faction), tier }),
   })
 }
 
@@ -1223,6 +1261,7 @@ export interface ProgressionPreset {
   id: string
   name: string
   description?: string
+  node_count?: number
   nodes: string[]
 }
 export function getProgressionPresets() {
@@ -1287,9 +1326,9 @@ export function progressionReverse(pawnId: number, nodeIds: string[]) {
   })
 }
 
-export function applyProgressionPreset(pawnId: number, presetId: string) {
+export function applyProgressionPreset(accountId: number, presetId: string) {
   return api<WriteResult>('/api/gameplay/players/progression/apply-preset', {
-    method: 'POST', body: JSON.stringify({ pawn_id: pawnId, preset_id: presetId }),
+    method: 'POST', body: JSON.stringify({ account_id: accountId, preset_id: presetId }),
   })
 }
 
@@ -1416,14 +1455,20 @@ export function grantLive(controllerId: number, template: string, amount: number
 
 export interface SpawnVehicleInput {
   target: PlayerTarget
-  template: string
+  className: string
+  templateName?: string
+  persistent?: boolean
+  faction?: string
   location?: { x: number; y: number; z: number }
 }
 export function spawnVehicle(input: SpawnVehicleInput) {
-  const body: Record<string, unknown> = { template: input.template }
-  if (input.target.fls_id)   body.fls_id   = input.target.fls_id
-  if (input.target.actor_id) body.actor_id = input.target.actor_id
-  if (input.location)        body.location = input.location
+  const body: Record<string, unknown> = { class_name: input.className }
+  if (input.target.fls_id)      body.fls_id        = input.target.fls_id
+  if (input.target.actor_id)    body.actor_id      = input.target.actor_id
+  if (input.templateName)       body.template_name = input.templateName
+  if (input.persistent != null) body.persistent    = input.persistent
+  if (input.faction)            body.faction       = input.faction
+  if (input.location) { body.x = input.location.x; body.y = input.location.y; body.z = input.location.z }
   return api<WriteResult>('/api/gameplay/vehicles/spawn', {
     method: 'POST', body: JSON.stringify(body),
   })

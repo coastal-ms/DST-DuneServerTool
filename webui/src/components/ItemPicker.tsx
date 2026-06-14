@@ -7,9 +7,9 @@
 // listing "Name — template_id (category)". Arrow keys + Enter to select,
 // Escape to clear.
 
-import { useCallback, useEffect, useId, useRef, useState } from 'react'
+import { useCallback, useEffect, useId, useMemo, useRef, useState } from 'react'
 import { Icon } from './Icon'
-import { filterCatalog, getItemCatalog, isValidTemplateId, type CatalogItem } from '../api/gameplay'
+import { catalogCategories, filterCatalog, getItemCatalog, isValidTemplateId, type CatalogItem } from '../api/gameplay'
 
 interface Props {
   value: string
@@ -31,6 +31,7 @@ export function ItemPicker({ value, onChange, displayValue, label, placeholder, 
   const [catalogLoading, setCatalogLoading] = useState(false)
   const [open, setOpen] = useState(false)
   const [active, setActive] = useState(0)
+  const [category, setCategory] = useState('')
   const wrapRef = useRef<HTMLDivElement>(null)
 
   // Lazy-load on first focus.
@@ -43,11 +44,14 @@ export function ItemPicker({ value, onChange, displayValue, label, placeholder, 
       .finally(() => setCatalogLoading(false))
   }, [catalog, catalogLoading])
 
+  // Categories for the narrowing selector (depends on the loaded catalog).
+  const categories = useMemo(() => (catalog ? catalogCategories(catalog) : []), [catalog])
+
   // What's shown in the input. Display name when one is provided (post-pick),
   // otherwise the raw value (which is also the live search query).
   const shown = displayValue ?? value
-  // Filter against whatever text is currently visible to the user.
-  const matches: CatalogItem[] = catalog ? filterCatalog(catalog, shown, 20) : []
+  // Filter against whatever text is currently visible, narrowed by category.
+  const matches: CatalogItem[] = catalog ? filterCatalog(catalog, shown, 20, category) : []
 
   // Close popup on outside click.
   useEffect(() => {
@@ -86,25 +90,38 @@ export function ItemPicker({ value, onChange, displayValue, label, placeholder, 
           {label}
         </label>
       )}
-      <div className="relative">
-        <input
-          id={inputId}
-          type="text"
-          autoComplete="off"
-          spellCheck={false}
+      <div className="flex gap-2 mb-2">
+        <select
+          aria-label="Filter by category"
           disabled={disabled}
-          autoFocus={autoFocus}
-          value={shown}
-          placeholder={placeholder || 'e.g. spice, stillsuit, literjon…'}
-          onFocus={() => { ensureCatalog(); setOpen(true) }}
-          onChange={e => { onChange(e.target.value); setOpen(true); setActive(0) }}
-          onKeyDown={onKey}
-          className="w-full pl-9 pr-3 py-2 rounded-lg bg-surface-2 border border-border text-text text-sm focus:outline-none focus:ring-2 focus:ring-ibad focus:border-ibad/50"
-        />
-        <Icon name="Search" size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-text-dim pointer-events-none" />
+          value={category}
+          onFocus={ensureCatalog}
+          onChange={e => { setCategory(e.target.value); ensureCatalog(); setOpen(true); setActive(0) }}
+          className="shrink-0 max-w-[45%] px-2 py-2 rounded-lg bg-surface-2 border border-border text-text text-sm focus:outline-none focus:ring-2 focus:ring-ibad focus:border-ibad/50"
+        >
+          <option value="">All categories</option>
+          {categories.map(c => <option key={c} value={c}>{c}</option>)}
+        </select>
+        <div className="relative flex-1">
+          <input
+            id={inputId}
+            type="text"
+            autoComplete="off"
+            spellCheck={false}
+            disabled={disabled}
+            autoFocus={autoFocus}
+            value={shown}
+            placeholder={placeholder || 'e.g. spice, stillsuit, literjon…'}
+            onFocus={() => { ensureCatalog(); setOpen(true) }}
+            onChange={e => { onChange(e.target.value); setOpen(true); setActive(0) }}
+            onKeyDown={onKey}
+            className="w-full pl-9 pr-3 py-2 rounded-lg bg-surface-2 border border-border text-text text-sm focus:outline-none focus:ring-2 focus:ring-ibad focus:border-ibad/50"
+          />
+          <Icon name="Search" size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-text-dim pointer-events-none" />
+        </div>
       </div>
 
-      {open && (catalogLoading || catalogError || matches.length > 0 || shown.trim().length > 0) && (
+      {open && (catalogLoading || catalogError || matches.length > 0 || shown.trim().length > 0 || category !== '') && (
         <div className="absolute left-0 right-0 mt-1 z-50 max-h-72 overflow-y-auto rounded-lg border border-border bg-surface shadow-2xl">
           {catalogLoading && (
             <div className="px-3 py-2 text-xs text-text-dim flex items-center gap-2">
