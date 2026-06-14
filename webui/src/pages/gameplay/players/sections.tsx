@@ -481,6 +481,9 @@ const ACTIONS: ActionDef[] = [
   { id: 'give-item',      group: 'Items', label: 'Give Item', icon: 'PackagePlus', custom: 'give-item',
     rowNote: 'Works online or offline — delivered instantly when online, on next login when offline',
     run: () => Promise.resolve({ message: '' }) },
+  { id: 'give-vehicle-kit', group: 'Items', label: 'Give Vehicle Kit', icon: 'Truck', custom: 'vehicle-kit',
+    rowNote: 'Parts + fuel cell + welding torch Mk5 — works online or offline, needs inventory space',
+    run: () => Promise.resolve({ message: '' }) },
   { id: 'repair-gear', group: 'Items', label: 'Repair All Items', icon: 'Wrench',
     run: p => repairGear(p.id) },
   { id: 'restore-destroyed', group: 'Items', label: 'Restore Destroyed Items', icon: 'Heart',
@@ -493,9 +496,6 @@ const ACTIONS: ActionDef[] = [
     run: p => cleanPlayerInventory({ actor_id: p.id }) },
 
   // ----- Vehicle -----
-  { id: 'give-vehicle-kit', group: 'Vehicle', label: 'Give Vehicle Kit', icon: 'Truck', custom: 'vehicle-kit',
-    rowNote: 'Parts + fuel cell + welding torch Mk5 — works online or offline, needs inventory space',
-    run: () => Promise.resolve({ message: '' }) },
   { id: 'spawn-vehicle', group: 'Vehicle', label: 'Spawn Vehicle', icon: 'Car', liveOnly: true, custom: 'spawn-vehicle',
     rowNote: 'Spawns at the player — requires them online',
     run: () => Promise.resolve({ message: '' }) },
