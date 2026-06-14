@@ -363,10 +363,23 @@ WHERE template_id = 'ContractItem'
 # Bulk give: loops the existing single-template give. Items is an array of
 # @{ template = '...'; qty = N; quality = M }.
 function Invoke-DunePlayerGiveItemsBulk {
-    param([string]$Ip, [long]$PawnId, $Items)
+    param([string]$Ip, [long]$PawnId, $Items, [string]$FlsId)
     if ($PawnId -le 0) { return @{ ok = $false; error = 'pawn_id is required.' } }
     if (-not $Items -or @($Items).Count -eq 0) {
         return @{ ok = $false; error = 'items[] is required.' }
+    }
+    # Route each item the same way the single give-item endpoint does: an online
+    # player keeps their inventory in memory, so a direct SQL write is ignored and
+    # overwritten on the next save (the item never appears, or vanishes on relog).
+    # Default-quality gives to an online player must therefore go through the RMQ
+    # live path. Custom-quality gives can't be delivered live, so they fall back to
+    # SQL with a "must relog" note. Resolve online status + fls_id once up front.
+    $off = Test-DunePlayerOffline -Ip $Ip -PawnId $PawnId
+    $isOnline = -not $off.ok
+    $fls = $FlsId
+    if ($isOnline -and [string]::IsNullOrWhiteSpace($fls)) {
+        $fr = Resolve-DuneFlsIdOrError -Ip $Ip -ActorId $PawnId
+        if ($fr.ok) { $fls = [string]$fr.fls_id }
     }
     $results = New-Object System.Collections.Generic.List[object]
     $failures = 0
@@ -380,7 +393,20 @@ function Invoke-DunePlayerGiveItemsBulk {
             $failures++; continue
         }
         if ($qty -le 0) { $qty = 1 }
-        $r = Invoke-DunePlayerGiveItem -Ip $Ip -PawnId $PawnId -Template $tmpl -Qty $qty -Quality ([int64]$qlevel)
+        if ($isOnline -and $qlevel -le 0 -and -not [string]::IsNullOrWhiteSpace($fls)) {
+            # Online + default quality → RMQ live (instant, no relog)
+            $r = Invoke-DunePlayerGiveItemLive -Ip $Ip -ActorId $PawnId -FlsId $fls -Template $tmpl -Quantity ([int]$qty) -Durability 1.0
+            if ($r.ok -and -not $r.path) { $r['path'] = 'rmq' }
+        } else {
+            # Offline, OR online with custom quality / unresolved fls → SQL
+            $r = Invoke-DunePlayerGiveItem -Ip $Ip -PawnId $PawnId -Template $tmpl -Qty $qty -Quality ([int64]$qlevel)
+            if ($r.ok) {
+                $r['path'] = 'sql'
+                if ($isOnline) {
+                    $r['message'] = "$($r.message) Player is online — they must relog to see this item."
+                }
+            }
+        }
         $results.Add($r)
         if (-not $r.ok) { $failures++ }
     }

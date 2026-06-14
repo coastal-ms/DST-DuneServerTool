@@ -64,6 +64,14 @@ here cover everything those tags shipped.
 
 ### Fixed
 
+- **Give Package / bulk give-items now works on online players, not just
+  offline ones.** The bulk give path always wrote directly to the inventory
+  tables in SQL. An online player keeps their inventory in memory, so those
+  writes were ignored and overwritten on the next save — the items only
+  appeared for offline players. Bulk give now uses the same routing as the
+  single Give Item: a default-quality give to an online player is delivered
+  live via the server command path (instant, no relog), and a custom-quality
+  give falls back to SQL with a "must relog" note. Offline gives are unchanged.
 - **Give Package / bulk give-items no longer fails with "Argument types do not
   match."** The `/players/give-items` handler accumulated its per-item results in
   a `List[object]` and then wrapped it with `@(...)` — a pattern that throws on
