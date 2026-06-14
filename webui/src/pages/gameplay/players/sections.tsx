@@ -22,10 +22,12 @@ import {
   restoreDestroyed,
   returningPlayerAward, setFactionTier, setPlayerTags, setSkillPoints,
   setStarterClass, spawnVehicle, teleportToPlayer, updatePlayerTags, wipeCodex, wipeJourney,
-  chatWhisper, isValidTemplateId,
+  chatWhisper, isValidTemplateId, getItemCatalog,
+  giveItems, getItemPackages, saveItemPackage, deleteItemPackage,
   type Player, type PlayerEvent, type PlayerStats, type ProgressionPreset, type SpecTrackFull,
+  type CatalogItem, type ItemPackage, type GiveItemEntry,
 } from '../../../api/gameplay'
-import { VEHICLE_CATALOG } from '../../../data/vehicles'
+import { VEHICLE_CATALOG, VEHICLE_KIT_FUEL_TEMPLATE, VEHICLE_KIT_TORCH_TEMPLATE, type VehicleTemplate } from '../../../data/vehicles'
 import { fmtNum, fmtSolari } from '../shared'
 
 type Flash = (msg: string, kind?: 'ok' | 'err') => void
@@ -413,7 +415,7 @@ interface ActionDef {
   liveOnly?: boolean      // requires player to be online (RMQ path)
   offlineOnly?: boolean   // requires player to be offline (DB write the game caches in memory)
   fields?: ActionField[]
-  custom?: 'give-item' | 'whisper' | 'spawn-vehicle' | 'quick-presets'
+  custom?: 'give-item' | 'whisper' | 'spawn-vehicle' | 'quick-presets' | 'vehicle-kit' | 'give-package'
   confirm?: (p: Player) => string  // confirm message; if returns '' no prompt
   doubleConfirm?: boolean // also requires a typed "i acknowledge" prompt inside run()
   rowNote?: string        // short italic note shown inline on the row heading
@@ -479,6 +481,12 @@ const ACTIONS: ActionDef[] = [
   // ----- Items -----
   { id: 'give-item',      group: 'Items', label: 'Give Item', icon: 'PackagePlus', custom: 'give-item',
     rowNote: 'Works online or offline — delivered instantly when online, on next login when offline',
+    run: () => Promise.resolve({ message: '' }) },
+  { id: 'give-vehicle-kit', group: 'Items', label: 'Give Vehicle Kit', icon: 'Truck', custom: 'vehicle-kit',
+    rowNote: 'Parts + fuel cell + welding torch Mk5 — works online or offline, needs inventory space',
+    run: () => Promise.resolve({ message: '' }) },
+  { id: 'give-package', group: 'Items', label: 'Give Package', icon: 'PackageCheck', custom: 'give-package',
+    rowNote: 'Hand a saved item package to this player — build & reuse your own bundles. Works online or offline',
     run: () => Promise.resolve({ message: '' }) },
   { id: 'repair-gear', group: 'Items', label: 'Repair All Items', icon: 'Wrench',
     run: p => repairGear(p.id) },
@@ -727,9 +735,24 @@ function ActionRow({ def, player, busy, isOnline, open, danger, onToggle, runAct
             <SpawnVehicleForm busy={busy}
               onSubmit={(className, templateName, persistent) => runAction(def, () =>
                 spawnVehicle({ target: { actor_id: player.id }, className, templateName: templateName || undefined, persistent }))} />
+          ) : def.custom === 'vehicle-kit' ? (
+            <VehicleKitForm busy={busy}
+              onSubmit={veh => runAction(def, async () => {
+                const parts = [...veh.kit, ...veh.unique, VEHICLE_KIT_FUEL_TEMPLATE, VEHICLE_KIT_TORCH_TEMPLATE]
+                for (const tpl of parts) await giveItem(player.id, tpl, 1, 0)
+                const count = veh.kit.length + veh.unique.length
+                return { message: `Gave ${veh.label} kit — ${count} part${count === 1 ? '' : 's'} + Large Fuel Cell + Welding Torch Mk5 to ${player.name}.` }
+              })} />
           ) : def.custom === 'quick-presets' ? (
             <QuickPresetsForm busy={busy}
               onSubmit={presetId => runAction(def, () => applyProgressionPreset(player.account_id, presetId))} />
+          ) : def.custom === 'give-package' ? (
+            <GivePackageForm busy={busy} playerName={player.name}
+              onGive={(items, pkgName) => runAction(def, async () => {
+                await giveItems(player.id, items)
+                const n = items.length
+                return { message: `Gave package "${pkgName}" — ${n} item${n === 1 ? '' : 's'} to ${player.name}.` }
+              })} />
           ) : (
             <InlineForm busy={busy} submitLabel={def.label} fields={def.fields || []}
               onSubmit={v => runAction(def, () => def.run(player, v))} />
@@ -788,6 +811,202 @@ function GiveItemForm({ busy, submitLabel, onSubmit, onSubmitTierSet }: {
   )
 }
 
+// Admin-defined item packages: build and reuse named bundles of items, then
+// hand the whole bundle to the selected player in one click. Packages are
+// global (shared across the app + remote portal), persisted server-side. This
+// form owns two modes — a give/list view and an inline create/edit editor.
+interface PkgDraftRow { template: string; name: string; qty: string; quality: string }
+
+function GivePackageForm({ busy, playerName, onGive }: {
+  busy: boolean; playerName: string
+  onGive: (items: GiveItemEntry[], pkgName: string) => void
+}) {
+  const [packages, setPackages] = useState<ItemPackage[]>([])
+  const [loading, setLoading]   = useState(true)
+  const [err, setErr]           = useState<string | null>(null)
+  const [selectedId, setSelectedId] = useState('')
+  const [mode, setMode]         = useState<'list' | 'edit'>('list')
+  const [draftId, setDraftId]   = useState<string | undefined>(undefined)
+  const [draftName, setDraftName] = useState('')
+  const [draftRows, setDraftRows] = useState<PkgDraftRow[]>([])
+  const [saving, setSaving]     = useState(false)
+
+  const load = useCallback(async (preferId?: string) => {
+    setLoading(true); setErr(null)
+    try {
+      const list = await getItemPackages()
+      setPackages(list)
+      setSelectedId(prev => {
+        const want = preferId ?? prev
+        return list.some(p => p.id === want) ? want : (list[0]?.id ?? '')
+      })
+    } catch (e) {
+      setErr(e instanceof Error ? e.message : String(e))
+    } finally {
+      setLoading(false)
+    }
+  }, [])
+
+  useEffect(() => { void load() }, [load])
+
+  const selected = packages.find(p => p.id === selectedId) ?? null
+
+  const startNew = () => {
+    setDraftId(undefined); setDraftName('')
+    setDraftRows([{ template: '', name: '', qty: '1', quality: '0' }])
+    setErr(null); setMode('edit')
+  }
+  const startEdit = () => {
+    if (!selected) return
+    setDraftId(selected.id); setDraftName(selected.name)
+    setDraftRows(selected.items.map(it => ({ template: it.template, name: it.template, qty: String(it.qty), quality: String(it.quality ?? 0) })))
+    setErr(null); setMode('edit')
+  }
+
+  const draftItems: GiveItemEntry[] = draftRows
+    .filter(r => isValidTemplateId(r.template))
+    .map(r => ({ template: r.template.trim(), qty: Number(r.qty) || 1, quality: Number(r.quality) || 0 }))
+  const canSave = draftName.trim().length > 0 && draftItems.length > 0
+
+  const save = async () => {
+    if (!canSave) return
+    setSaving(true); setErr(null)
+    try {
+      const saved = await saveItemPackage({ id: draftId, name: draftName.trim(), items: draftItems })
+      setMode('list')
+      await load(saved.id)
+    } catch (e) {
+      setErr(e instanceof Error ? e.message : String(e))
+    } finally {
+      setSaving(false)
+    }
+  }
+  const remove = async () => {
+    if (!selected) return
+    setSaving(true); setErr(null)
+    try {
+      await deleteItemPackage(selected.id)
+      await load()
+    } catch (e) {
+      setErr(e instanceof Error ? e.message : String(e))
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  if (mode === 'edit') {
+    return (
+      <div className="space-y-3">
+        <div>
+          <label className="block text-[11px] uppercase tracking-wider text-text-dim mb-1">Package name</label>
+          <input type="text" value={draftName} disabled={saving} maxLength={80}
+            placeholder="e.g. Starter survival kit"
+            onChange={e => setDraftName(e.target.value)}
+            className="w-full px-3 py-2 rounded-lg bg-surface-2 border border-border text-text text-sm focus:outline-none focus:ring-2 focus:ring-ibad focus:border-ibad/50" />
+        </div>
+        <div className="space-y-3">
+          {draftRows.map((row, i) => (
+            <div key={i} className="rounded-lg border border-border p-2.5 space-y-2">
+              <div className="flex items-center justify-between">
+                <span className="text-[11px] uppercase tracking-wider text-text-dim">Item {i + 1}</span>
+                <button type="button" disabled={saving} title="Remove item"
+                  onClick={() => setDraftRows(rows => rows.filter((_, j) => j !== i))}
+                  className="text-text-dim hover:text-error transition-colors">
+                  <Icon name="X" size={14} />
+                </button>
+              </div>
+              <ItemPicker value={row.template} displayValue={row.name || row.template}
+                onChange={(tpl, item) => setDraftRows(rows => rows.map((r, j) => j === i ? { ...r, template: tpl, name: item ? item.name : '' } : r))}
+                disabled={saving} placeholder="type to search by name or template id" />
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-[11px] uppercase tracking-wider text-text-dim mb-1">Quantity</label>
+                  <input type="number" min={1} value={row.qty} disabled={saving}
+                    onChange={e => setDraftRows(rows => rows.map((r, j) => j === i ? { ...r, qty: e.target.value } : r))}
+                    className="w-full px-3 py-2 rounded-lg bg-surface-2 border border-border text-text text-sm focus:outline-none focus:ring-2 focus:ring-ibad focus:border-ibad/50" />
+                </div>
+                <div>
+                  <label className="block text-[11px] uppercase tracking-wider text-text-dim mb-1">Tier — Mk1-Mk6 (0-5)</label>
+                  <input type="number" min={0} max={5} value={row.quality} disabled={saving}
+                    onChange={e => setDraftRows(rows => rows.map((r, j) => j === i ? { ...r, quality: e.target.value } : r))}
+                    className="w-full px-3 py-2 rounded-lg bg-surface-2 border border-border text-text text-sm focus:outline-none focus:ring-2 focus:ring-ibad focus:border-ibad/50" />
+                </div>
+              </div>
+            </div>
+          ))}
+        </div>
+        <button className="btn-secondary w-full" disabled={saving}
+          onClick={() => setDraftRows(rows => [...rows, { template: '', name: '', qty: '1', quality: '0' }])}>
+          <Icon name="Plus" size={13} /> Add item
+        </button>
+        {err && <div className="text-xs text-error">{err}</div>}
+        <div className="grid grid-cols-2 gap-2">
+          <button className="btn-secondary" disabled={saving}
+            onClick={() => { setMode('list'); setErr(null) }}>
+            Cancel
+          </button>
+          <button className="btn-primary" disabled={saving || !canSave}
+            onClick={() => void save()}>
+            {saving ? <Icon name="Loader2" size={13} className="animate-spin" /> : <Icon name="Check" size={13} />} Save package
+          </button>
+        </div>
+      </div>
+    )
+  }
+
+  return (
+    <div className="space-y-3">
+      {loading ? (
+        <div className="text-xs text-text-dim flex items-center gap-2">
+          <Icon name="Loader2" size={12} className="animate-spin" /> Loading packages…
+        </div>
+      ) : packages.length === 0 ? (
+        <div className="text-xs text-text-dim">No packages yet. Create one to reuse a bundle of items.</div>
+      ) : (
+        <>
+          <div>
+            <label className="block text-[11px] uppercase tracking-wider text-text-dim mb-1">Package</label>
+            <select value={selectedId} disabled={busy || saving}
+              onChange={e => setSelectedId(e.target.value)}
+              className="w-full px-3 py-2 rounded-lg bg-surface-2 border border-border text-text text-sm focus:outline-none focus:ring-2 focus:ring-ibad focus:border-ibad/50">
+              {packages.map(p => <option key={p.id} value={p.id}>{p.name} ({p.items.length})</option>)}
+            </select>
+          </div>
+          {selected && (
+            <ul className="text-xs text-text-dim space-y-1 max-h-40 overflow-y-auto rounded-lg border border-border p-2">
+              {selected.items.map((it, i) => (
+                <li key={i} className="flex items-center gap-2">
+                  <Icon name="Box" size={11} className="shrink-0 text-text-dim/70" />
+                  <span className="flex-1 min-w-0 truncate font-mono">{it.template}</span>
+                  <span className="shrink-0">x{it.qty}{it.quality ? ` · Mk${it.quality + 1}` : ''}</span>
+                </li>
+              ))}
+            </ul>
+          )}
+        </>
+      )}
+      {err && <div className="text-xs text-error">{err}</div>}
+      {selected && (
+        <button className="btn-primary w-full" disabled={busy || saving}
+          onClick={() => onGive(selected.items, selected.name)}>
+          {busy ? <Icon name="Loader2" size={13} className="animate-spin" /> : <Icon name="Check" size={13} />} Give to {playerName}
+        </button>
+      )}
+      <div className="grid grid-cols-3 gap-2">
+        <button className="btn-secondary" disabled={busy || saving} onClick={startNew}>
+          <Icon name="Plus" size={13} /> New
+        </button>
+        <button className="btn-secondary" disabled={busy || saving || !selected} onClick={startEdit}>
+          <Icon name="Pencil" size={13} /> Edit
+        </button>
+        <button className="btn-secondary" disabled={busy || saving || !selected} onClick={() => void remove()}>
+          {saving ? <Icon name="Loader2" size={13} className="animate-spin" /> : <Icon name="Trash2" size={13} />} Delete
+        </button>
+      </div>
+    </div>
+  )
+}
+
 // Self-contained spawn-vehicle form. Picks a vehicle blueprint + optional tier
 // template; spawns it on the selected player (RMQ — requires them online).
 function SpawnVehicleForm({ busy, onSubmit }: {
@@ -823,6 +1042,80 @@ function SpawnVehicleForm({ busy, onSubmit }: {
       <button className="btn-primary w-full" disabled={busy}
         onClick={() => onSubmit(veh.className, tpl, persistent)}>
         {busy ? <Icon name="Loader2" size={13} className="animate-spin" /> : <Icon name="Car" size={13} />} Spawn Vehicle
+      </button>
+    </div>
+  )
+}
+
+// Self-contained "Give Vehicle Kit" form. Picks a vehicle that has discrete
+// part items and previews its Mk6 parts list; submitting hands every part plus
+// a Large Vehicle Fuel Cell and a Welding Torch Mk5 into the player's inventory
+// via the normal give-item path (works online or offline). Vehicles the game
+// has no part items for (Tank / Treadwheel / Container) are omitted — use the
+// live Spawn Vehicle action for those.
+function VehicleKitForm({ busy, onSubmit }: {
+  busy: boolean; onSubmit: (veh: VehicleTemplate) => void
+}) {
+  const kitVehicles = useMemo(() => VEHICLE_CATALOG.filter(v => v.kit.length > 0), [])
+  const [vid, setVid] = useState(kitVehicles[0]?.id ?? '')
+  const [names, setNames] = useState<Record<string, string>>({})
+  const veh = kitVehicles.find(v => v.id === vid) || kitVehicles[0]
+  const selectCls = 'w-full px-3 py-2 rounded-lg bg-surface-2 border border-border text-text text-sm focus:outline-none focus:ring-2 focus:ring-ibad focus:border-ibad/50'
+
+  // Resolve readable part names from the item catalog for the preview. Falls
+  // back to the raw template id if the catalog hasn't loaded or lacks an entry.
+  useEffect(() => {
+    let cancelled = false
+    getItemCatalog()
+      .then((cat: CatalogItem[]) => {
+        if (cancelled) return
+        const map: Record<string, string> = {}
+        for (const it of cat) map[it.template_id] = it.name
+        setNames(map)
+      })
+      .catch(() => { /* preview just shows template ids */ })
+    return () => { cancelled = true }
+  }, [])
+
+  if (!veh) return <div className="text-sm text-text-muted">No vehicles with part kits available.</div>
+
+  const label = (tpl: string) => names[tpl] || tpl
+
+  return (
+    <div className="space-y-3">
+      <div>
+        <label className="block text-[11px] uppercase tracking-wider text-text-dim mb-1">Vehicle</label>
+        <select value={vid} disabled={busy} className={selectCls}
+          onChange={e => setVid(e.target.value)}>
+          {kitVehicles.map(v => <option key={v.id} value={v.id}>{v.label}</option>)}
+        </select>
+      </div>
+      <div className="rounded-lg border border-border bg-surface-2 p-3 text-sm">
+        <div className="text-[11px] uppercase tracking-wider text-text-dim mb-1.5">
+          Delivers {veh.kit.length + veh.unique.length} part{veh.kit.length + veh.unique.length === 1 ? '' : 's'} (Mk6) + fuel + tool
+        </div>
+        <ul className="space-y-0.5 text-text-muted">
+          {veh.kit.map(tpl => (
+            <li key={tpl} className="flex items-center gap-1.5">
+              <Icon name="Cog" size={12} className="shrink-0 text-text-dim" /> {label(tpl)}
+            </li>
+          ))}
+          {veh.unique.map(tpl => (
+            <li key={tpl} className="flex items-center gap-1.5 text-ibad">
+              <Icon name="Sparkles" size={12} className="shrink-0" /> {label(tpl)}
+            </li>
+          ))}
+          <li className="flex items-center gap-1.5 text-amber-200/90">
+            <Icon name="Fuel" size={12} className="shrink-0" /> {label(VEHICLE_KIT_FUEL_TEMPLATE)}
+          </li>
+          <li className="flex items-center gap-1.5 text-amber-200/90">
+            <Icon name="Wrench" size={12} className="shrink-0" /> {label(VEHICLE_KIT_TORCH_TEMPLATE)}
+          </li>
+        </ul>
+      </div>
+      <button className="btn-primary w-full" disabled={busy}
+        onClick={() => onSubmit(veh)}>
+        {busy ? <Icon name="Loader2" size={13} className="animate-spin" /> : <Icon name="Truck" size={13} />} Give Vehicle Kit
       </button>
     </div>
   )

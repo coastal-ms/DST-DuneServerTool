@@ -12,9 +12,10 @@ Register-DuneRoute -Method POST -Path '/api/gameplay/players/give-items' -Handle
     try {
         $pawn = Get-DuneBodyInt -Body $body -Name 'pawn_id'
         $items = Get-DuneBodyValue -Body $body -Name 'items'
+        $fls = [string](Get-DuneBodyValue -Body $body -Name 'fls_id')
         if ($null -eq $pawn -or $pawn -le 0) { Write-DuneError -Response $res -Status 400 -Message 'pawn_id is required.'; return }
         if ($null -eq $items) { Write-DuneError -Response $res -Status 400 -Message 'items[] is required.'; return }
-        Invoke-DunePlayerWriteRoute -Response $res -Action { param($ip) Invoke-DunePlayerGiveItemsBulk -Ip $ip -PawnId $pawn -Items $items }
+        Invoke-DunePlayerWriteRoute -Response $res -Action { param($ip) Invoke-DunePlayerGiveItemsBulk -Ip $ip -PawnId $pawn -Items $items -FlsId $fls }
     } catch {
         Write-DuneError -Response $res -Status 500 -Message "Give items failed: $($_.Exception.Message)"
     }

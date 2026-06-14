@@ -1280,6 +1280,30 @@ export function giveItems(pawnId: number, items: GiveItemEntry[]) {
   })
 }
 
+// Admin-defined item packages — a saved, named bundle of items an admin can
+// hand to any player in one click (delivered via giveItems). Persisted
+// server-side (%APPDATA%\DuneServer\item-packages.json) so they survive restarts
+// and are shared across the desktop app and the remote portal.
+export interface ItemPackage { id: string; name: string; items: GiveItemEntry[] }
+
+export async function getItemPackages(): Promise<ItemPackage[]> {
+  const r = await api<{ ok: boolean; packages: ItemPackage[] }>('/api/gameplay/item-packages')
+  return r.packages ?? []
+}
+
+export async function saveItemPackage(pkg: { id?: string; name: string; items: GiveItemEntry[] }): Promise<ItemPackage> {
+  const r = await api<{ ok: boolean; package: ItemPackage }>('/api/gameplay/item-packages', {
+    method: 'PUT', body: JSON.stringify(pkg),
+  })
+  return r.package
+}
+
+export function deleteItemPackage(id: string) {
+  return api<{ ok: boolean; removed: boolean }>(`/api/gameplay/item-packages?id=${encodeURIComponent(id)}`, {
+    method: 'DELETE',
+  })
+}
+
 export function repairGear(pawnId: number) {
   return api<WriteResult>('/api/gameplay/players/repair-gear', {
     method: 'POST', body: JSON.stringify({ pawn_id: pawnId }),

@@ -15,6 +15,28 @@ here cover everything those tags shipped.
 
 ### Added
 
+- **Give Package** Player Action (Inventory section) — build and reuse your own
+  named **item packages** (bundles of items, each with a quantity and tier
+  Mk1–Mk6), then hand a whole package to any player in one click. Create, edit,
+  and delete packages right from the form; they're saved server-side
+  (`item-packages.json`) so they persist across restarts and are shared between
+  the desktop app and the remote portal. Delivery uses the normal give-items
+  path, so it works **online or offline** as long as there's inventory space.
+- **Give Vehicle Kit** Player Action (Vehicle group) — a reliable, RMQ-free way
+  to hand a player a complete vehicle. Picks one of the six CHOAM vehicles that
+  have craftable part items (Sandbike, Buggy, Sandcrawler, and Light/Medium/
+  Transport Ornithopters) and delivers its full **Mk6 part set** (chassis,
+  engine, PSU, hull, locomotion, boost, …) **plus 1 Large Vehicle Fuel Cell and
+  1 Welding Torch Mk5** straight into the player's inventory via the normal
+  give-item path. Works **online or offline** (delivered instantly when online,
+  on next login when offline) as long as there's inventory space — no live RMQ
+  spawn required. Each kit also includes the vehicle's **named/unique top-tier
+  modules** (e.g. Mohandis engine, Night Rider boost, Albatross/Hummingbird/Roc
+  wings) plus the **Scout Ornithopter Storage Mk4** (Light) and **Assault
+  Ornithopter Storage Mk5** (Medium). The form previews the exact parts before
+  you hand them over.
+  (Tank / Treadwheel / Container have no discrete part items in the game, so they
+  remain on the live **Spawn Vehicle** action only.)
 - **Spawn Vehicle** Player Action (Vehicle group) — spawns any of the nine CHOAM
   vehicles (Sandbike, Buggy, Tank, Sandcrawler, Treadwheel, Container Vehicle,
   and Light/Medium/Transport Ornithopters) on the selected player, with an
@@ -42,6 +64,27 @@ here cover everything those tags shipped.
 
 ### Fixed
 
+- **Give Package / bulk give-items now works on online players, not just
+  offline ones.** The bulk give path always wrote directly to the inventory
+  tables in SQL. An online player keeps their inventory in memory, so those
+  writes were ignored and overwritten on the next save — the items only
+  appeared for offline players. Bulk give now uses the same routing as the
+  single Give Item: a default-quality give to an online player is delivered
+  live via the server command path (instant, no relog), and a custom-quality
+  give falls back to SQL with a "must relog" note. Offline gives are unchanged.
+- **Give Package / bulk give-items no longer fails with "Argument types do not
+  match."** The `/players/give-items` handler accumulated its per-item results in
+  a `List[object]` and then wrapped it with `@(...)` — a pattern that throws on
+  the PowerShell runtime the server uses (wrapping a `List[object]` in the array
+  operator is rejected, even when empty). Switched to `.ToArray()`, so giving a
+  saved package (or any multi-item give) now succeeds online or offline.
+- **Server Health no longer goes stale while the app is left open.** The shared
+  polling hook used a plain `setInterval`, which browsers throttle in
+  backgrounded tabs and freeze entirely while the machine sleeps — so returning
+  to an always-open Server Health window could show minutes-old status until the
+  next delayed tick. Polling now also refreshes the instant the page regains
+  visibility or window focus (coalesced with a short staleness guard so it never
+  double-fetches right after a tick), keeping the 24/7 window current.
 - **Apply Quick Preset actually completes its nodes now.** The progression-preset
   apply routine iterated a `journey_nodes`/`label` shape the catalog loader never
   produced (it emits `nodes`/`name`), so applying any preset silently completed
