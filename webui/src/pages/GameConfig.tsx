@@ -154,6 +154,20 @@ export function GameConfig() {
   const [mismatchMsg, setMismatchMsg] = useState<string | null>(null)
   const [mismatchFallback, setMismatchFallback] = useState(false)
   const [mismatchCopied, setMismatchCopied] = useState(false)
+  // Signature of the mismatch set the user last dismissed ("Not now"/close),
+  // persisted so we don't re-nag with the modal on every page load for the same
+  // unchanged values. A successful fix clears it; a genuinely new/changed
+  // mismatch produces a different signature and surfaces again.
+  const [mismatchDismissedSig, setMismatchDismissedSig] = useState<string>(() => {
+    try { return window.localStorage.getItem('dst.gameconfig.mismatchDismissed') ?? '' } catch { return '' }
+  })
+  const persistMismatchDismissed = useCallback((sig: string) => {
+    setMismatchDismissedSig(sig)
+    try {
+      if (sig) window.localStorage.setItem('dst.gameconfig.mismatchDismissed', sig)
+      else window.localStorage.removeItem('dst.gameconfig.mismatchDismissed')
+    } catch { /* localStorage may be unavailable; in-memory state still applies */ }
+  }, [])
 
   // INI text the admin can hand to OTHER players (who don't run DST) to paste
   // into their own client Game.ini — grouped by section, last-write-wins order.
@@ -214,6 +228,16 @@ export function GameConfig() {
       .join('\n\n')
   }, [clientMismatches])
 
+  // Stable signature of the current mismatch set: changes only when the set of
+  // keys or their server/client values change. Drives "don't re-nag" logic.
+  const mismatchSignature = useMemo(() => {
+    if (clientMismatches.length === 0) return ''
+    return clientMismatches
+      .map(m => `${m.section}||${m.key}=${m.serverValue}>${m.clientValue ?? ''}`)
+      .sort()
+      .join('|')
+  }, [clientMismatches])
+
   const onCopyMismatchSnippet = useCallback(async () => {
     if (!mismatchSnippet) return
     try {
@@ -223,17 +247,31 @@ export function GameConfig() {
     } catch { /* clipboard may be unavailable; the snippet is still shown */ }
   }, [mismatchSnippet])
 
-  // Auto-surface the popup once per detected mismatch set; reset when it clears.
+  // Auto-surface the popup once per detected mismatch set, but NOT if the user
+  // already dismissed this exact set (persisted across reloads). When the
+  // mismatch clears (e.g. after a fix), drop any saved dismissal so a future
+  // genuine mismatch can surface again.
   useEffect(() => {
-    if (clientMismatches.length > 0 && !mismatchAutoShown) {
+    if (mismatchSignature === '') {
+      if (mismatchAutoShown) setMismatchAutoShown(false)
+      if (mismatchOpen) setMismatchOpen(false)
+      if (mismatchDismissedSig) persistMismatchDismissed('')
+      return
+    }
+    if (!mismatchAutoShown && mismatchSignature !== mismatchDismissedSig) {
       setMismatchOpen(true)
       setMismatchAutoShown(true)
     }
-    if (clientMismatches.length === 0 && mismatchAutoShown) {
-      setMismatchAutoShown(false)
-      setMismatchOpen(false)
-    }
-  }, [clientMismatches.length, mismatchAutoShown])
+  }, [mismatchSignature, mismatchAutoShown, mismatchOpen, mismatchDismissedSig, persistMismatchDismissed])
+
+  // Close the modal without fixing; remember this exact mismatch set so it
+  // doesn't auto-pop again until the underlying values change.
+  const onDismissMismatch = useCallback(() => {
+    persistMismatchDismissed(mismatchSignature)
+    setMismatchOpen(false)
+    setMismatchFallback(false)
+    setMismatchErr(null)
+  }, [mismatchSignature, persistMismatchDismissed])
 
   // Write the server's values into the local client Game.ini. The click itself is
   // the user's consent to edit that file; DST backs it up first. Falls back to a
@@ -799,7 +837,7 @@ export function GameConfig() {
       {mismatchOpen && clientMismatches.length > 0 && (
         <div
           className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4"
-          onClick={() => setMismatchOpen(false)}
+          onClick={() => onDismissMismatch()}
         >
           <div
             className="card w-full max-w-xl max-h-[85vh] overflow-y-auto border-warning/40 bg-surface text-sm"
@@ -862,7 +900,7 @@ export function GameConfig() {
                       <Icon name={mismatchFixing ? 'Loader2' : 'MonitorCog'} size={14} className={mismatchFixing ? 'animate-spin' : ''} />
                       {mismatchFixing ? 'Fixing…' : 'Fix my client config'}
                     </button>
-                    <button type="button" onClick={() => setMismatchOpen(false)} className="btn-ghost text-xs">
+                    <button type="button" onClick={() => onDismissMismatch()} className="btn-ghost text-xs">
                       Not now
                     </button>
                   </div>
@@ -885,7 +923,7 @@ export function GameConfig() {
                       <span className="font-mono break-all">{clientInfo?.path ?? 'your client Game.ini'}</span>:
                     </p>
                     <pre className="px-2 py-1.5 rounded bg-surface-2 text-text text-xs whitespace-pre-wrap break-all overflow-x-auto">{mismatchSnippet}</pre>
-                    <button type="button" onClick={() => setMismatchOpen(false)} className="btn-ghost text-xs mt-2">
+                    <button type="button" onClick={() => onDismissMismatch()} className="btn-ghost text-xs mt-2">
                       Close
                     </button>
                   </div>
@@ -900,7 +938,7 @@ export function GameConfig() {
                 type="button"
                 className="btn-icon shrink-0"
                 title="Dismiss"
-                onClick={() => setMismatchOpen(false)}
+                onClick={() => onDismissMismatch()}
               >
                 <Icon name="X" size={14} />
               </button>
