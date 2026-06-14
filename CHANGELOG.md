@@ -13,6 +13,8 @@ here cover everything those tags shipped.
 
 ## [Unreleased]
 
+## [12.0.19] - 2026-06-13
+
 ### Added
 
 - **Give Package** Player Action (Inventory section) — build and reuse your own
