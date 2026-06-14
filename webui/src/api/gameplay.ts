@@ -971,15 +971,38 @@ export function getItemCatalog(): Promise<CatalogItem[]> {
 }
 
 /**
+ * Distinct, alphabetically-sorted list of non-empty categories in the catalog.
+ * Drives the ItemPicker category selector.
+ */
+export function catalogCategories(catalog: CatalogItem[]): string[] {
+  const set = new Set<string>()
+  for (const it of catalog) {
+    const c = (it.category || '').trim()
+    if (c) set.add(c)
+  }
+  return Array.from(set).sort((a, b) => a.localeCompare(b))
+}
+
+/**
  * Case-insensitive substring filter over name OR template_id. Returns up to
  * `limit` matches sorted by best-match (template_id prefix > name prefix >
  * substring), then alphabetically.
+ *
+ * When `category` is set, results are restricted to that category. An empty
+ * query normally returns nothing (we don't dump 1.3k items), but if a category
+ * is selected an empty query lists that category's items alphabetically so the
+ * selector alone is a usable browse mode.
  */
-export function filterCatalog(catalog: CatalogItem[], query: string, limit = 20): CatalogItem[] {
+export function filterCatalog(catalog: CatalogItem[], query: string, limit = 20, category = ''): CatalogItem[] {
   const q = query.trim().toLowerCase()
-  if (!q) return []
+  const cat = category.trim()
+  const inCat = cat ? catalog.filter(it => (it.category || '').trim() === cat) : catalog
+  if (!q) {
+    if (!cat) return []
+    return inCat.slice().sort((a, b) => a.name.localeCompare(b.name)).slice(0, limit)
+  }
   const out: { item: CatalogItem; rank: number }[] = []
-  for (const it of catalog) {
+  for (const it of inCat) {
     const tid = it.template_id.toLowerCase()
     const nm  = it.name.toLowerCase()
     let rank = -1
