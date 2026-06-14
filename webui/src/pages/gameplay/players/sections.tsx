@@ -12,6 +12,7 @@ import { Icon } from '../../../components/Icon'
 import { ItemPicker } from '../../../components/ItemPicker'
 import {
   awardCharXp, awardIntel, awardSpecXp, cheatScript, cleanPlayerInventory,
+  applyProgressionPreset, getProgressionPresets,
   deleteAccount, deleteInventoryItem, deleteTutorials,
   dismissReturningPlayerAward, fillWater, getPlayerEvents, getPlayerSpecs,
   getPlayerStats, getPlayerTags, giveFactionRep, giveItem,
@@ -22,7 +23,7 @@ import {
   returningPlayerAward, setFactionTier, setPlayerTags, setSkillPoints,
   setStarterClass, spawnVehicle, teleportToPlayer, updatePlayerTags, wipeCodex, wipeJourney,
   chatWhisper, isValidTemplateId,
-  type Player, type PlayerEvent, type PlayerStats, type SpecTrackFull,
+  type Player, type PlayerEvent, type PlayerStats, type ProgressionPreset, type SpecTrackFull,
 } from '../../../api/gameplay'
 import { VEHICLE_CATALOG } from '../../../data/vehicles'
 import { fmtNum, fmtSolari } from '../shared'
@@ -412,7 +413,7 @@ interface ActionDef {
   liveOnly?: boolean      // requires player to be online (RMQ path)
   offlineOnly?: boolean   // requires player to be offline (DB write the game caches in memory)
   fields?: ActionField[]
-  custom?: 'give-item' | 'whisper' | 'spawn-vehicle'
+  custom?: 'give-item' | 'whisper' | 'spawn-vehicle' | 'quick-presets'
   confirm?: (p: Player) => string  // confirm message; if returns '' no prompt
   doubleConfirm?: boolean // also requires a typed "i acknowledge" prompt inside run()
   rowNote?: string        // short italic note shown inline on the row heading
@@ -456,6 +457,9 @@ const ACTIONS: ActionDef[] = [
       { key: 'tier',    label: 'Tier (0-20)', type: 'number', placeholder: '10', min: 0, max: 20 },
     ],
     run: (p, v) => setFactionTier(p.controller_id, String(v.faction || '').trim(), Number(v.tier) || 0) },
+  { id: 'apply-progression-preset', group: 'Progression', label: 'Apply Quick Preset', icon: 'Zap', custom: 'quick-presets',
+    rowNote: 'Completes a story/journey chapter instantly',
+    run: () => Promise.resolve({ message: '' }) },
   { id: 'reset-progression', group: 'Progression', label: 'Reset Progression (live)', icon: 'RotateCcw', liveOnly: true,
     rowNote: 'Single confirmation required',
     confirm: p => `Reset ALL progression for ${p.name}? Cannot be undone.\n\n` +
@@ -723,6 +727,9 @@ function ActionRow({ def, player, busy, isOnline, open, danger, onToggle, runAct
             <SpawnVehicleForm busy={busy}
               onSubmit={(className, templateName, persistent) => runAction(def, () =>
                 spawnVehicle({ target: { actor_id: player.id }, className, templateName: templateName || undefined, persistent }))} />
+          ) : def.custom === 'quick-presets' ? (
+            <QuickPresetsForm busy={busy}
+              onSubmit={presetId => runAction(def, () => applyProgressionPreset(player.account_id, presetId))} />
           ) : (
             <InlineForm busy={busy} submitLabel={def.label} fields={def.fields || []}
               onSubmit={v => runAction(def, () => def.run(player, v))} />
@@ -836,6 +843,58 @@ function WhisperForm({ busy, onSubmit }: { busy: boolean; onSubmit: (msg: string
       <button className="btn-primary w-full" disabled={busy || !whisper.trim()}
         onClick={() => onSubmit(whisper.trim())}>
         {busy ? <Icon name="Loader2" size={13} className="animate-spin" /> : <Icon name="Send" size={13} />} Send Whisper
+      </button>
+    </div>
+  )
+}
+
+// Self-contained quick-preset form. Fetches the progression preset catalog on
+// mount and applies the chosen preset (completes its journey nodes) by
+// account_id. Renders without a card wrapper — ActionRow provides the container.
+function QuickPresetsForm({ busy, onSubmit }: { busy: boolean; onSubmit: (presetId: string) => void }) {
+  const [presets, setPresets] = useState<ProgressionPreset[]>([])
+  const [sel, setSel] = useState('')
+  const [loading, setLoading] = useState(true)
+  const [err, setErr] = useState('')
+
+  useEffect(() => {
+    let alive = true
+    setLoading(true)
+    getProgressionPresets()
+      .then(r => {
+        if (!alive) return
+        const list = r.presets || []
+        setPresets(list)
+        setSel(list[0]?.id || '')
+      })
+      .catch(e => { if (alive) setErr(e instanceof Error ? e.message : String(e)) })
+      .finally(() => { if (alive) setLoading(false) })
+    return () => { alive = false }
+  }, [])
+
+  const chosen = presets.find(p => p.id === sel)
+  const selectCls = 'w-full px-3 py-2 rounded-lg bg-surface-2 border border-border text-text text-sm focus:outline-none focus:ring-2 focus:ring-ibad focus:border-ibad/50'
+
+  if (loading) return <div className="text-sm text-text-dim flex items-center gap-2"><Icon name="Loader2" size={13} className="animate-spin" /> Loading presets…</div>
+  if (err) return <div className="text-sm text-danger">{err}</div>
+  if (presets.length === 0) return <div className="text-sm text-text-dim">No presets available.</div>
+
+  return (
+    <div className="space-y-3">
+      <div>
+        <label className="block text-[11px] uppercase tracking-wider text-text-dim mb-1">Preset</label>
+        <select value={sel} disabled={busy} className={selectCls} onChange={e => setSel(e.target.value)}>
+          {presets.map(p => (
+            <option key={p.id} value={p.id}>
+              {p.name}{typeof p.node_count === 'number' && p.node_count > 0 ? ` (${p.node_count} nodes)` : ''}
+            </option>
+          ))}
+        </select>
+      </div>
+      {chosen?.description && <div className="text-xs text-text-muted">{chosen.description}</div>}
+      <button className="btn-primary w-full" disabled={busy || !sel}
+        onClick={() => onSubmit(sel)}>
+        {busy ? <Icon name="Loader2" size={13} className="animate-spin" /> : <Icon name="Zap" size={13} />} Apply Preset
       </button>
     </div>
   )

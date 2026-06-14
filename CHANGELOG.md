@@ -33,9 +33,21 @@ here cover everything those tags shipped.
   just the VM for maintenance. Available when the VM is running; while a
   battlegroup is live it steers you to **Stop Full Stack** for a graceful
   shutdown instead of pulling the VM out from under a running game.
+- **Apply Quick Preset** Player Action (Progression group) — completes a whole
+  story/journey chapter in one click from a dropdown of presets (Skip NPE,
+  Complete: A New Beginning, Find the Fremen, All of Act 1, Unlock All Lore,
+  and the Vermillius/Deep Desert/Taxation/Overland tutorial skips). Each option
+  shows its node count and a description; applies by account id so it works
+  online or offline.
 
 ### Fixed
 
+- **Apply Quick Preset actually completes its nodes now.** The progression-preset
+  apply routine iterated a `journey_nodes`/`label` shape the catalog loader never
+  produced (it emits `nodes`/`name`), so applying any preset silently completed
+  0/0 nodes and the feature was never wired into the UI. Fixed the field names and
+  wired the new **Apply Quick Preset** action; the web client also sent `pawn_id`
+  where the route expects `account_id`, which is now corrected.
 - **Player Action forms no longer jump when you submit.** The result banner in
   the Players tab rendered in-flow at the top of the panel, so showing a success
   or error message pushed the whole panel — including the open action's form and

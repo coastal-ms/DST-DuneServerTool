@@ -141,7 +141,7 @@ describe('Phase C/D/E/F — items, vehicles, teleport, progression, jobs', () =>
 
     await gp.applyProgressionPreset(11, 'survival-starter')
     expect(last().url).toBe('/api/gameplay/players/progression/apply-preset')
-    expect(last().body).toEqual({ pawn_id: 11, preset_id: 'survival-starter' })
+    expect(last().body).toEqual({ account_id: 11, preset_id: 'survival-starter' })
   })
 
   it('journey: complete + reset + wipe', async () => {

@@ -1261,6 +1261,7 @@ export interface ProgressionPreset {
   id: string
   name: string
   description?: string
+  node_count?: number
   nodes: string[]
 }
 export function getProgressionPresets() {
@@ -1325,9 +1326,9 @@ export function progressionReverse(pawnId: number, nodeIds: string[]) {
   })
 }
 
-export function applyProgressionPreset(pawnId: number, presetId: string) {
+export function applyProgressionPreset(accountId: number, presetId: string) {
   return api<WriteResult>('/api/gameplay/players/progression/apply-preset', {
-    method: 'POST', body: JSON.stringify({ pawn_id: pawnId, preset_id: presetId }),
+    method: 'POST', body: JSON.stringify({ account_id: accountId, preset_id: presetId }),
   })
 }
 
