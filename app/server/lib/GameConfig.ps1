@@ -288,15 +288,20 @@ function Set-DuneIniValuesInPlace {
             $target = @{ name = $secName; header = "[$secName]"; body = (New-Object 'System.Collections.Generic.List[string]'); managed = $false }
             $doc.sections.Add($target)
         }
-        $replaced = $false
+        # Replace the FIRST scalar occurrence and strip any later duplicates of the
+        # same key in this section. UE5 (and Get-DuneIniEffective) are last-wins, so
+        # leaving a trailing duplicate would shadow our write and the value would
+        # never appear to change. Collapsing to a single line keeps effective==written.
+        $replaced  = $false
+        $removeIdx = New-Object 'System.Collections.Generic.List[int]'
         for ($i = 0; $i -lt $target.body.Count; $i++) {
             $info = Get-DuneIniLineKey $target.body[$i]
             if ($info -and -not $info.isArray -and $info.key -eq $key) {
-                $target.body[$i] = $valLine
-                $replaced = $true
-                break
+                if (-not $replaced) { $target.body[$i] = $valLine; $replaced = $true }
+                else { $removeIdx.Add($i) }
             }
         }
+        for ($j = $removeIdx.Count - 1; $j -ge 0; $j--) { $target.body.RemoveAt($removeIdx[$j]) }
         if (-not $replaced) { $target.body.Add($valLine) }
     }
     $out = New-Object 'System.Collections.Generic.List[string]'
