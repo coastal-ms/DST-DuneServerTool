@@ -154,6 +154,59 @@ KeyA=1
     }
 }
 
+Describe 'Set-DuneIniValuesInPlace: client-file duplicate-key collapse' -Tag 'GameConfig' {
+
+    # Regression for the v12.0.16 report: the client Game.ini carried the same
+    # scalar key TWICE in one section (e.g. PlayerInventoryStartingSize=100 then
+    # =145). The in-place writer replaced only the FIRST occurrence, but UE5 and
+    # Get-DuneIniEffective are last-wins, so the trailing duplicate shadowed the
+    # write and the "Fix" never cleared the mismatch.
+    It 'collapses a duplicate scalar key to a single line carrying the written value' {
+        $raw = @"
+[/Script/DuneSandbox.InventorySystemSettings]
+PlayerInventoryStartingSize=100
+PlayerInventoryStartingSize=145
+"@
+        $out = Set-DuneIniValuesInPlace -Raw $raw `
+            -Updates @(@{ section = $script:SecInventory; key = 'PlayerInventoryStartingSize'; value = '100' }) `
+            -QuotedKeys @{}
+
+        # exactly one occurrence of the key remains...
+        $hits = @(($out -replace "`r", '' -split "`n") | Where-Object { $_.Trim() -match '^PlayerInventoryStartingSize\s*=' })
+        $hits.Count | Should -Be 1
+        # ...and the effective (last-wins) value is the one we wrote
+        (Get-EffectiveValue -Raw $out -Section $script:SecInventory -Key 'PlayerInventoryStartingSize') | Should -Be '100'
+        (Get-DuneIniEffective -Raw $out)["$($script:SecInventory)||PlayerInventoryStartingSize"] | Should -Be '100'
+    }
+
+    It 'upserts a brand-new key into an existing section without duplicating it' {
+        $raw = "[/Script/DuneSandbox.InventorySystemSettings]`nOtherKey=1`n"
+        $out = Set-DuneIniValuesInPlace -Raw $raw `
+            -Updates @(@{ section = $script:SecInventory; key = 'PlayerInventoryStartingSize'; value = '50' }) `
+            -QuotedKeys @{}
+        $hits = @(($out -replace "`r", '' -split "`n") | Where-Object { $_.Trim() -match '^PlayerInventoryStartingSize\s*=' })
+        $hits.Count | Should -Be 1
+        (Get-DuneIniEffective -Raw $out)["$($script:SecInventory)||PlayerInventoryStartingSize"] | Should -Be '50'
+    }
+
+    It 'leaves array (+/-) lines untouched when collapsing a scalar duplicate' {
+        $raw = @"
+[/Script/DuneSandbox.InventorySystemSettings]
++SomeArray=a
+PlayerInventoryStartingSize=100
++SomeArray=b
+PlayerInventoryStartingSize=145
+"@
+        $out = Set-DuneIniValuesInPlace -Raw $raw `
+            -Updates @(@{ section = $script:SecInventory; key = 'PlayerInventoryStartingSize'; value = '100' }) `
+            -QuotedKeys @{}
+        $out | Should -Match '\+SomeArray=a'
+        $out | Should -Match '\+SomeArray=b'
+        $hits = @(($out -replace "`r", '' -split "`n") | Where-Object { $_.Trim() -match '^PlayerInventoryStartingSize\s*=' })
+        $hits.Count | Should -Be 1
+    }
+}
+
 Describe 'DuneGameConfigSchema: no fictional no-op keys' -Tag 'GameConfig' {
 
     # Guards against regressing the m_Global*Multiplier keys that the reference
