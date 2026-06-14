@@ -15,6 +15,13 @@ here cover everything those tags shipped.
 
 ### Fixed
 
+- **Add Item search list now scrolls to the last result.** The picker's results
+  popup was absolutely positioned inside an `overflow-hidden` card, so its lower
+  rows (and scrollbar) were clipped behind the next section and unreachable —
+  especially noticeable now the catalog is larger. The popup is rendered through
+  a portal with fixed positioning anchored to the search field, a viewport-aware
+  max-height, and keyboard navigation that scrolls the highlighted item into
+  view, so every match is reachable.
 - **Market Bot** — fixed `dune_exchange_orders_access_point_id_fkey` foreign-key
   violation when enabling the bot or clicking **Seed Market** (#194). The bot's
   access-point resolution defaulted to a hard-coded `access_point_id = 1` and

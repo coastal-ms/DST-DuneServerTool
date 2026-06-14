@@ -7,7 +7,8 @@
 // listing "Name — template_id (category)". Arrow keys + Enter to select,
 // Escape to clear.
 
-import { useCallback, useEffect, useId, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useId, useLayoutEffect, useMemo, useRef, useState } from 'react'
+import { createPortal } from 'react-dom'
 import { Icon } from './Icon'
 import { catalogCategories, filterCatalog, getItemCatalog, isValidTemplateId, type CatalogItem } from '../api/gameplay'
 
@@ -33,6 +34,20 @@ export function ItemPicker({ value, onChange, displayValue, label, placeholder, 
   const [active, setActive] = useState(0)
   const [category, setCategory] = useState('')
   const wrapRef = useRef<HTMLDivElement>(null)
+  const rowRef = useRef<HTMLDivElement>(null)
+  const popRef = useRef<HTMLDivElement>(null)
+  // Fixed-position coordinates for the portaled results popup, anchored under
+  // the search row. Portaling to <body> escapes the ancestor `overflow-hidden`
+  // card that was clipping the list and preventing scroll to the last items.
+  const [pos, setPos] = useState<{ left: number; top: number; width: number; maxH: number } | null>(null)
+
+  const updatePos = useCallback(() => {
+    const r = rowRef.current?.getBoundingClientRect()
+    if (!r) return
+    const top = r.bottom + 4
+    const maxH = Math.min(288, Math.max(160, window.innerHeight - top - 12))
+    setPos({ left: r.left, top, width: r.width, maxH })
+  }, [])
 
   // Lazy-load on first focus.
   const ensureCatalog = useCallback(() => {
@@ -53,15 +68,37 @@ export function ItemPicker({ value, onChange, displayValue, label, placeholder, 
   // Filter against whatever text is currently visible, narrowed by category.
   const matches: CatalogItem[] = catalog ? filterCatalog(catalog, shown, 20, category) : []
 
-  // Close popup on outside click.
+  // Close popup on outside click (treat the portaled popup as "inside").
   useEffect(() => {
     function onDoc(e: MouseEvent) {
-      if (!wrapRef.current) return
-      if (!wrapRef.current.contains(e.target as Node)) setOpen(false)
+      const t = e.target as Node
+      if (wrapRef.current?.contains(t)) return
+      if (popRef.current?.contains(t)) return
+      setOpen(false)
     }
     document.addEventListener('mousedown', onDoc)
     return () => document.removeEventListener('mousedown', onDoc)
   }, [])
+
+  // Keep the portaled popup anchored to the input while open (re-measure before
+  // paint and on any scroll/resize so it tracks the field).
+  useLayoutEffect(() => {
+    if (!open) return
+    updatePos()
+    const onMove = () => updatePos()
+    window.addEventListener('scroll', onMove, true)
+    window.addEventListener('resize', onMove)
+    return () => {
+      window.removeEventListener('scroll', onMove, true)
+      window.removeEventListener('resize', onMove)
+    }
+  }, [open, updatePos])
+
+  // Keep the highlighted (keyboard-active) item scrolled into view.
+  useEffect(() => {
+    if (!open) return
+    popRef.current?.querySelector<HTMLElement>(`[data-idx="${active}"]`)?.scrollIntoView({ block: 'nearest' })
+  }, [active, open])
 
   const pick = (it: CatalogItem) => {
     // Pass the item so the parent can show a friendly label in the input
@@ -90,7 +127,7 @@ export function ItemPicker({ value, onChange, displayValue, label, placeholder, 
           {label}
         </label>
       )}
-      <div className="flex gap-2 mb-2">
+      <div ref={rowRef} className="flex gap-2 mb-2">
         <select
           aria-label="Filter by category"
           disabled={disabled}
@@ -121,8 +158,12 @@ export function ItemPicker({ value, onChange, displayValue, label, placeholder, 
         </div>
       </div>
 
-      {open && (catalogLoading || catalogError || matches.length > 0 || shown.trim().length > 0 || category !== '') && (
-        <div className="absolute left-0 right-0 mt-1 z-50 max-h-72 overflow-y-auto rounded-lg border border-border bg-surface shadow-2xl">
+      {open && pos && (catalogLoading || catalogError || matches.length > 0 || shown.trim().length > 0 || category !== '') && createPortal(
+        <div
+          ref={popRef}
+          style={{ position: 'fixed', left: pos.left, top: pos.top, width: pos.width, maxHeight: pos.maxH }}
+          className="z-[100] overflow-y-auto overscroll-contain rounded-lg border border-border bg-surface shadow-2xl"
+        >
           {catalogLoading && (
             <div className="px-3 py-2 text-xs text-text-dim flex items-center gap-2">
               <Icon name="Loader2" size={12} className="animate-spin" /> Loading item catalog…
@@ -142,6 +183,7 @@ export function ItemPicker({ value, onChange, displayValue, label, placeholder, 
             <button
               key={it.template_id}
               type="button"
+              data-idx={i}
               onMouseEnter={() => setActive(i)}
               onMouseDown={e => { e.preventDefault(); pick(it) }}
               className={`w-full text-left px-3 py-2 flex items-center gap-2 text-sm ${
@@ -159,7 +201,8 @@ export function ItemPicker({ value, onChange, displayValue, label, placeholder, 
               )}
             </button>
           ))}
-        </div>
+        </div>,
+        document.body
       )}
 
       {!open && value.trim().length > 0 && !isValidTemplateId(value) && (
