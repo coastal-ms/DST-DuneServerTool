@@ -13,6 +13,20 @@ here cover everything those tags shipped.
 
 ## [Unreleased]
 
+## [12.0.17] - 2026-06-13
+
+### Fixed
+
+- **"Fix my client config" now actually clears the mismatch when the same key
+  appears twice in your client `Game.ini`.** Some client files carry a setting
+  more than once in the same section (e.g. `PlayerInventoryStartingSize=100`
+  followed by `=145`). UE5 — and DST's own reader — use the *last* occurrence,
+  but the in-place writer was only updating the *first* one and leaving the
+  trailing duplicate behind. The result: clicking **Fix** appeared to do nothing
+  and the "client doesn't match the server" warning never went away. The writer
+  now collapses duplicate scalar keys to a single line carrying the written
+  value, so a fix takes effect and the mismatch clears.
+
 ## [12.0.16] - 2026-06-13
 
 ### Fixed
