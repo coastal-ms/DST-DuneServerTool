@@ -31,6 +31,18 @@ const sections = [
     body: "the Gameplay Admin portal, rebuilt natively inside DST as a complete in-tree port (54 player-management endpoints, RMQ-backed online command channel, 28-action bucketed Actions panel). Market / Exchange and Market Bot tabs read your live game Postgres directly (and fall back to a realistic demo dataset when the battlegroup is offline). Duke — the native bot — both buys player listings and lists its own NPC stock with sane-pricing rules (tier × category × rarity × vendor × grade, 100,000 Solari hard cap, per-template overrides), and **Seed market** bulk-lists every catalogued template across all six quality grades in one shot. A safety net detects leftover listings from any prior bot (e.g. Revy from the old Go market-bot) and offers a one-click wipe before Duke starts ticking. The Players tab adds a Hide GM toggle, an inlined Items action group inside Inventory, and three ways to deselect a player — Bases, Storage, and Blueprints round out the toolset. A shared admin-messaging surface (server broadcast, timed shutdown notice, and per-player whisper) sits at the top of the Gameplay overview and on its own Broadcasts page, inventory rows show live current / max durability colour-tiered by wear, and a Restore Destroyed Items action brings completely-dead gear back from zero durability alongside the regular Repair.",
   },
   {
+    id: "give-package",
+    title: "Give Package",
+    img: "give-package.png",
+    body: "New in v12.0.19 — build and reuse your own item packages. Create named bundles of any items (each with a quantity and tier Mk1–Mk6), then hand a whole package to any player in one click from their Inventory section. Packages are created, edited, and deleted right from the form and saved server-side (item-packages.json), so they persist across restarts and are shared between the desktop app and the remote portal. Delivery uses the normal give-items path, so it works online or offline as long as there's inventory space.",
+  },
+  {
+    id: "give-vehicle-kit",
+    title: "Give Vehicle Kit",
+    img: "give-vehicle-kit.png",
+    body: "New in v12.0.19 — hand a player a whole vehicle without a live RMQ spawn. Pick one of the six CHOAM vehicles with craftable part items (Sandbike, Buggy, Sandcrawler, and Light/Medium/Transport Ornithopters) and DST delivers its full Mk6 part set — chassis, engine, PSU, hull, locomotion, boost — plus 1 Large Vehicle Fuel Cell and 1 Welding Torch Mk5 straight into the player's inventory. Each kit also includes the vehicle's named/unique top-tier modules (Mohandis engine, Night Rider boost, Albatross/Hummingbird/Roc wings) and the Scout Ornithopter Storage Mk4 (Light) / Assault Ornithopter Storage Mk5 (Medium). The form previews the exact parts before you hand them over, and it works online or offline as long as there's inventory space.",
+  },
+  {
     id: "database",
     title: "Database",
     img: "database.png",
