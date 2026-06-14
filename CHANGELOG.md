@@ -13,8 +13,31 @@ here cover everything those tags shipped.
 
 ## [Unreleased]
 
+### Added
+
+- **Stop VM Only** command (VM section, next to **Start VM Only**) — powers off
+  just the VM for maintenance. Available when the VM is running; while a
+  battlegroup is live it steers you to **Stop Full Stack** for a graceful
+  shutdown instead of pulling the VM out from under a running game.
+
 ### Fixed
 
+- **Give Scrip, Give Faction Rep, and Set Faction Tier now work.** These Player
+  Actions sent the wrong identifier (`account_id`) under the wrong field names,
+  so every attempt failed with *"actor_id is required."* They now send the
+  player's **controller id** (the key the currency and faction-reputation tables
+  are actually keyed on, matching Give Solari), and the faction actions map the
+  faction name (atreides/harkonnen/smuggler) to its numeric id the routes expect.
+- **Game Config now always reads the current battlegroup's INI.** The resolved
+  `UserGame.ini` / `UserEngine.ini` path was cached for the life of the process.
+  Because that path lives under the battlegroup's storage directory — whose hash
+  is **unique per battlegroup** — switching to another VM, or rebuilding the
+  battlegroup on the **same IP**, left the cache pointing at an INI that no longer
+  existed (every setting silently showed its **DEFAULT** value) or, if the old
+  directory lingered, at stale config. DST now resolves the live path on every
+  read and write, taking both files from the single newest `UserSettings`
+  directory so they always come from the same battlegroup, and falls back to the
+  seed template only when no battlegroup has been provisioned yet.
 - **Give Item now respects real inventory capacity (volume + slots).** Adding a
   stacked item (e.g. a single 500-stack) no longer fails with a false "not enough
   slots" error. The capacity check now mirrors the game's own model: a stack

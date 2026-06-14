@@ -1060,22 +1060,33 @@ function targetBody(t: PlayerTarget, rest: Record<string, unknown> = {}) {
 // Phase A — currency / progression / admin writes (5 + 3 endpoints)
 // ---------------------------------------------------------------------------
 
-export function giveScrip(accountId: number, amount: number) {
+export function giveScrip(controllerId: number, amount: number) {
   return api<WriteResult>('/api/gameplay/players/give-scrip', {
-    method: 'POST', body: JSON.stringify({ account_id: accountId, amount }),
+    method: 'POST', body: JSON.stringify({ actor_id: controllerId, delta: amount }),
   })
 }
 
 export type FactionId = 'atreides' | 'harkonnen' | string
-export function giveFactionRep(accountId: number, faction: FactionId, delta: number) {
+
+// The faction-write routes expect a numeric faction_id (1=Atreides, 2=Harkonnen,
+// 4=Smuggler). The UI collects a name (or a raw number), so normalize here.
+const FACTION_NAME_TO_ID: Record<string, number> = { atreides: 1, harkonnen: 2, smuggler: 4 }
+function resolveFactionId(faction: FactionId): number {
+  const key = String(faction || '').trim().toLowerCase()
+  if (FACTION_NAME_TO_ID[key] != null) return FACTION_NAME_TO_ID[key]
+  const n = Number(key)
+  return Number.isFinite(n) ? n : 0
+}
+
+export function giveFactionRep(controllerId: number, faction: FactionId, delta: number) {
   return api<WriteResult>('/api/gameplay/players/give-faction-rep', {
-    method: 'POST', body: JSON.stringify({ account_id: accountId, faction, delta }),
+    method: 'POST', body: JSON.stringify({ actor_id: controllerId, faction_id: resolveFactionId(faction), delta }),
   })
 }
 
-export function setFactionTier(accountId: number, faction: FactionId, tier: number) {
+export function setFactionTier(controllerId: number, faction: FactionId, tier: number) {
   return api<WriteResult>('/api/gameplay/players/set-faction-tier', {
-    method: 'POST', body: JSON.stringify({ account_id: accountId, faction, tier }),
+    method: 'POST', body: JSON.stringify({ actor_id: controllerId, faction_id: resolveFactionId(faction), tier }),
   })
 }
 

@@ -15,6 +15,7 @@
 $script:DuneCommands = @(
     @{ Section='VM'; Key='a';  Name='initial-setup';   Mode='Console'; Requires='none';    DisabledWhen='core-pods-running'; Desc='Run the initial VM setup wizard' }
     @{ Section='VM'; Key='c';  Name='start-vm';        Label='Start VM Only';      Mode='InApp';   Requires='exists';  DisabledWhen='vm-running';  Desc='Power on the VM only (no battlegroup)' }
+    @{ Section='VM'; Key='b';  Name='stop-vm';         Label='Stop VM Only';       Mode='InApp';   Requires='running'; DisabledWhen='bg-running';  Desc='Power off the VM only (no battlegroup) - use Stop Full Stack while a battlegroup is running' }
     @{ Section='VM'; Key='d';  Name='startup';         Label='Start Full Stack';   Mode='Console'; Requires='exists';  DisabledWhen='bg-running';  Desc='Power on VM, start battlegroup, wait for maps Ready' }
     @{ Section='VM'; Key='e';  Name='shutdown';        Label='Stop Full Stack';    Mode='Console'; Requires='running'; Desc='Stop battlegroup, power off VM' }
     @{ Section='VM'; Key='f';  Name='reboot';          Label='Reboot Full Stack';  Mode='Console'; Requires='running'; Desc='Stop battlegroup, reboot VM, start battlegroup' }
@@ -149,7 +150,7 @@ function Get-DuneCommandOrderFile {
 
 function Get-DuneDefaultCommandLayout {
     $priority = @{
-        'start'    = 0; 'start-vm'   = 0; 'startup' = 0
+        'start'    = 0; 'start-vm'   = 0; 'startup' = 0; 'stop-vm' = 0
         'reboot'   = 1; 'shutdown'   = 1; 'stop'    = 1
     }
     $sorted = @(
