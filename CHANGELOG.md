@@ -13,6 +13,8 @@ here cover everything those tags shipped.
 
 ## [Unreleased]
 
+## [12.0.20] - 2026-06-14
+
 ### Fixed
 
 - **Add Item search list now scrolls to the last result.** The picker's results
