@@ -42,6 +42,13 @@ here cover everything those tags shipped.
 
 ### Fixed
 
+- **Server Health no longer goes stale while the app is left open.** The shared
+  polling hook used a plain `setInterval`, which browsers throttle in
+  backgrounded tabs and freeze entirely while the machine sleeps — so returning
+  to an always-open Server Health window could show minutes-old status until the
+  next delayed tick. Polling now also refreshes the instant the page regains
+  visibility or window focus (coalesced with a short staleness guard so it never
+  double-fetches right after a tick), keeping the 24/7 window current.
 - **Apply Quick Preset actually completes its nodes now.** The progression-preset
   apply routine iterated a `journey_nodes`/`label` shape the catalog loader never
   produced (it emits `nodes`/`name`), so applying any preset silently completed
