@@ -23,7 +23,11 @@ here cover everything those tags shipped.
   1 Welding Torch Mk5** straight into the player's inventory via the normal
   give-item path. Works **online or offline** (delivered instantly when online,
   on next login when offline) as long as there's inventory space — no live RMQ
-  spawn required. The form previews the exact parts before you hand them over.
+  spawn required. Each kit also includes the vehicle's **named/unique top-tier
+  modules** (e.g. Mohandis engine, Night Rider boost, Albatross/Hummingbird/Roc
+  wings) plus the **Scout Ornithopter Storage Mk4** (Light) and **Assault
+  Ornithopter Storage Mk5** (Medium). The form previews the exact parts before
+  you hand them over.
   (Tank / Treadwheel / Container have no discrete part items in the game, so they
   remain on the live **Spawn Vehicle** action only.)
 - **Spawn Vehicle** Player Action (Vehicle group) — spawns any of the nine CHOAM

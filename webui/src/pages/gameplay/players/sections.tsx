@@ -734,9 +734,10 @@ function ActionRow({ def, player, busy, isOnline, open, danger, onToggle, runAct
           ) : def.custom === 'vehicle-kit' ? (
             <VehicleKitForm busy={busy}
               onSubmit={veh => runAction(def, async () => {
-                const parts = [...veh.kit, VEHICLE_KIT_FUEL_TEMPLATE, VEHICLE_KIT_TORCH_TEMPLATE]
+                const parts = [...veh.kit, ...veh.unique, VEHICLE_KIT_FUEL_TEMPLATE, VEHICLE_KIT_TORCH_TEMPLATE]
                 for (const tpl of parts) await giveItem(player.id, tpl, 1, 0)
-                return { message: `Gave ${veh.label} kit — ${veh.kit.length} part${veh.kit.length === 1 ? '' : 's'} + Large Fuel Cell + Welding Torch Mk5 to ${player.name}.` }
+                const count = veh.kit.length + veh.unique.length
+                return { message: `Gave ${veh.label} kit — ${count} part${count === 1 ? '' : 's'} + Large Fuel Cell + Welding Torch Mk5 to ${player.name}.` }
               })} />
           ) : def.custom === 'quick-presets' ? (
             <QuickPresetsForm busy={busy}
@@ -884,12 +885,17 @@ function VehicleKitForm({ busy, onSubmit }: {
       </div>
       <div className="rounded-lg border border-border bg-surface-2 p-3 text-sm">
         <div className="text-[11px] uppercase tracking-wider text-text-dim mb-1.5">
-          Delivers {veh.kit.length} part{veh.kit.length === 1 ? '' : 's'} (Mk6) + fuel + tool
+          Delivers {veh.kit.length + veh.unique.length} part{veh.kit.length + veh.unique.length === 1 ? '' : 's'} (Mk6) + fuel + tool
         </div>
         <ul className="space-y-0.5 text-text-muted">
           {veh.kit.map(tpl => (
             <li key={tpl} className="flex items-center gap-1.5">
               <Icon name="Cog" size={12} className="shrink-0 text-text-dim" /> {label(tpl)}
+            </li>
+          ))}
+          {veh.unique.map(tpl => (
+            <li key={tpl} className="flex items-center gap-1.5 text-ibad">
+              <Icon name="Sparkles" size={12} className="shrink-0" /> {label(tpl)}
             </li>
           ))}
           <li className="flex items-center gap-1.5 text-amber-200/90">
