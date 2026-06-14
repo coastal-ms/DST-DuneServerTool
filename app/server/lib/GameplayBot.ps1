@@ -447,6 +447,44 @@ function Get-DuneBotScalar {
 }
 
 # ----------------------------------------------------------------------------
+# Resolve a VALID access_point_id for the bot's NPC orders. The bot writes into
+# dune.dune_exchange_orders whose access_point_id FK references
+# dune.dune_exchange_accesspoints(id); handing it a phantom id (the old
+# hard-coded default of 1) trips dune_exchange_orders_access_point_id_fkey on
+# any server that has no bot/player orders for that exchange yet — e.g. fresh
+# battlegroups, or upgrades from pre-dune-admin builds. Cascade mirrors the
+# exchange-id hardening: every tier is JOIN-/existence-guarded so a stale row
+# can never return an id that isn't a live FK target.
+# ----------------------------------------------------------------------------
+function Resolve-DuneBotAccessPointId {
+    param([string]$Ip, [int64]$ExchangeId)
+    $apId = 0L
+    foreach ($q in @(
+        # Tier 1 (authoritative): an access point belonging to this exchange.
+        "SELECT id FROM dune.dune_exchange_accesspoints WHERE exchange_id = $ExchangeId ORDER BY id LIMIT 1",
+        # Tier 2: reuse the access point from an existing order, JOIN-guarded so a
+        # stale order row pointing at a wiped access point can't return a phantom.
+        "SELECT o.access_point_id FROM dune.dune_exchange_orders o JOIN dune.dune_exchange_accesspoints ap ON ap.id = o.access_point_id WHERE o.exchange_id = $ExchangeId LIMIT 1",
+        # Tier 3: any access point on the server (the accesspoints row may carry a
+        # different exchange_id than the one we resolved).
+        'SELECT id FROM dune.dune_exchange_accesspoints ORDER BY id LIMIT 1'
+    )) {
+        $r = Get-DuneBotScalar -Ip $Ip -Sql $q
+        if ($r.ok -and $r.value) { $apId = ConvertTo-DuneInt $r.value; if ($apId -gt 0) { break } }
+    }
+    if ($apId -le 0) {
+        return @{ ok = $false; error = 'no exchange access point found — build/place an Exchange in-world before seeding the market.' }
+    }
+    # Final guard: confirm the resolved id is a live FK target before we hand it
+    # to an INSERT.
+    $v = Get-DuneBotScalar -Ip $Ip -Sql "SELECT id FROM dune.dune_exchange_accesspoints WHERE id = $apId"
+    if (-not ($v.ok -and $v.value)) {
+        return @{ ok = $false; error = "resolved access point id $apId is not a valid FK target." }
+    }
+    return @{ ok = $true; value = $apId }
+}
+
+# ----------------------------------------------------------------------------
 # Bot identity — port of initBotUser + exchange/access-point resolution.
 # Read-only by default; -CreateIfMissing performs the (idempotent) writes that
 # provision the Duke actor + exchange user. Cached per-runspace once resolved.
@@ -513,9 +551,10 @@ function Get-DuneBotIdentity {
                 }
             }
             if ($exId -le 0) { return @{ ok = $false; provisioned = $false; error = 'could not resolve exchange id.' } }
-            $apId = 1L
-            $ap0 = Get-DuneBotScalar -Ip $Ip -Sql "SELECT DISTINCT access_point_id FROM dune.dune_exchange_orders WHERE exchange_id = $exId LIMIT 1"
-            if ($ap0.ok -and $ap0.value) { $apId = ConvertTo-DuneInt $ap0.value }
+            # Read-only/dry path: resolve best-effort. No order insert happens
+            # here, so a missing access point is non-fatal for preview.
+            $apr = Resolve-DuneBotAccessPointId -Ip $Ip -ExchangeId $exId
+            $apId = if ($apr.ok) { $apr.value } else { 0L }
             return @{ ok = $true; provisioned = $false; ownerId = 0L; exchangeId = $exId; accessPointId = $apId }
         }
         # Idempotent create-or-fetch in one statement. Only matches Dukes that
@@ -565,10 +604,11 @@ SELECT id FROM ins UNION ALL SELECT id FROM existing LIMIT 1;
     }
     if ($exchangeId -le 0) { return @{ ok = $false; error = 'could not resolve exchange id.' } }
 
-    # Access point id.
-    $accessPointId = 1L
-    $ap = Get-DuneBotScalar -Ip $Ip -Sql "SELECT DISTINCT access_point_id FROM dune.dune_exchange_orders WHERE exchange_id = $exchangeId LIMIT 1"
-    if ($ap.ok -and $ap.value) { $accessPointId = ConvertTo-DuneInt $ap.value }
+    # Access point id — must be a live FK target in dune_exchange_accesspoints,
+    # otherwise the order insert trips dune_exchange_orders_access_point_id_fkey.
+    $apMain = Resolve-DuneBotAccessPointId -Ip $Ip -ExchangeId $exchangeId
+    if (-not $apMain.ok) { return @{ ok = $false; error = $apMain.error } }
+    $accessPointId = $apMain.value
 
     $ident = @{ ok = $true; provisioned = $true; ownerId = $ownerId; exchangeId = $exchangeId; accessPointId = $accessPointId }
     $script:DuneBotIdentityCache = $ident

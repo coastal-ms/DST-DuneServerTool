@@ -13,6 +13,19 @@ here cover everything those tags shipped.
 
 ## [Unreleased]
 
+### Fixed
+
+- **Market Bot** — fixed `dune_exchange_orders_access_point_id_fkey` foreign-key
+  violation when enabling the bot or clicking **Seed Market** (#194). The bot's
+  access-point resolution defaulted to a hard-coded `access_point_id = 1` and
+  only checked existing orders, so on servers with no bot orders yet (fresh
+  battlegroups, or upgrades from pre-`dune-admin`-removal builds) it handed the
+  order insert a non-existent access point and the FK rejected it. Resolution
+  now cascades through the authoritative `dune_exchange_accesspoints` table
+  (JOIN-/existence-guarded at every tier) and validates the id is a live FK
+  target before inserting, mirroring the existing exchange-id hardening.
+
+
 ## [12.0.19] - 2026-06-13
 
 ### Added
