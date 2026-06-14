@@ -22,10 +22,11 @@ import {
   restoreDestroyed,
   returningPlayerAward, setFactionTier, setPlayerTags, setSkillPoints,
   setStarterClass, spawnVehicle, teleportToPlayer, updatePlayerTags, wipeCodex, wipeJourney,
-  chatWhisper, isValidTemplateId,
+  chatWhisper, isValidTemplateId, getItemCatalog,
   type Player, type PlayerEvent, type PlayerStats, type ProgressionPreset, type SpecTrackFull,
+  type CatalogItem,
 } from '../../../api/gameplay'
-import { VEHICLE_CATALOG } from '../../../data/vehicles'
+import { VEHICLE_CATALOG, VEHICLE_KIT_FUEL_TEMPLATE, VEHICLE_KIT_TORCH_TEMPLATE, type VehicleTemplate } from '../../../data/vehicles'
 import { fmtNum, fmtSolari } from '../shared'
 
 type Flash = (msg: string, kind?: 'ok' | 'err') => void
@@ -413,7 +414,7 @@ interface ActionDef {
   liveOnly?: boolean      // requires player to be online (RMQ path)
   offlineOnly?: boolean   // requires player to be offline (DB write the game caches in memory)
   fields?: ActionField[]
-  custom?: 'give-item' | 'whisper' | 'spawn-vehicle' | 'quick-presets'
+  custom?: 'give-item' | 'whisper' | 'spawn-vehicle' | 'quick-presets' | 'vehicle-kit'
   confirm?: (p: Player) => string  // confirm message; if returns '' no prompt
   doubleConfirm?: boolean // also requires a typed "i acknowledge" prompt inside run()
   rowNote?: string        // short italic note shown inline on the row heading
@@ -492,6 +493,9 @@ const ACTIONS: ActionDef[] = [
     run: p => cleanPlayerInventory({ actor_id: p.id }) },
 
   // ----- Vehicle -----
+  { id: 'give-vehicle-kit', group: 'Vehicle', label: 'Give Vehicle Kit', icon: 'Truck', custom: 'vehicle-kit',
+    rowNote: 'Parts + fuel cell + welding torch Mk5 — works online or offline, needs inventory space',
+    run: () => Promise.resolve({ message: '' }) },
   { id: 'spawn-vehicle', group: 'Vehicle', label: 'Spawn Vehicle', icon: 'Car', liveOnly: true, custom: 'spawn-vehicle',
     rowNote: 'Spawns at the player — requires them online',
     run: () => Promise.resolve({ message: '' }) },
@@ -727,6 +731,13 @@ function ActionRow({ def, player, busy, isOnline, open, danger, onToggle, runAct
             <SpawnVehicleForm busy={busy}
               onSubmit={(className, templateName, persistent) => runAction(def, () =>
                 spawnVehicle({ target: { actor_id: player.id }, className, templateName: templateName || undefined, persistent }))} />
+          ) : def.custom === 'vehicle-kit' ? (
+            <VehicleKitForm busy={busy}
+              onSubmit={veh => runAction(def, async () => {
+                const parts = [...veh.kit, VEHICLE_KIT_FUEL_TEMPLATE, VEHICLE_KIT_TORCH_TEMPLATE]
+                for (const tpl of parts) await giveItem(player.id, tpl, 1, 0)
+                return { message: `Gave ${veh.label} kit — ${veh.kit.length} part${veh.kit.length === 1 ? '' : 's'} + Large Fuel Cell + Welding Torch Mk5 to ${player.name}.` }
+              })} />
           ) : def.custom === 'quick-presets' ? (
             <QuickPresetsForm busy={busy}
               onSubmit={presetId => runAction(def, () => applyProgressionPreset(player.account_id, presetId))} />
@@ -823,6 +834,75 @@ function SpawnVehicleForm({ busy, onSubmit }: {
       <button className="btn-primary w-full" disabled={busy}
         onClick={() => onSubmit(veh.className, tpl, persistent)}>
         {busy ? <Icon name="Loader2" size={13} className="animate-spin" /> : <Icon name="Car" size={13} />} Spawn Vehicle
+      </button>
+    </div>
+  )
+}
+
+// Self-contained "Give Vehicle Kit" form. Picks a vehicle that has discrete
+// part items and previews its Mk6 parts list; submitting hands every part plus
+// a Large Vehicle Fuel Cell and a Welding Torch Mk5 into the player's inventory
+// via the normal give-item path (works online or offline). Vehicles the game
+// has no part items for (Tank / Treadwheel / Container) are omitted — use the
+// live Spawn Vehicle action for those.
+function VehicleKitForm({ busy, onSubmit }: {
+  busy: boolean; onSubmit: (veh: VehicleTemplate) => void
+}) {
+  const kitVehicles = useMemo(() => VEHICLE_CATALOG.filter(v => v.kit.length > 0), [])
+  const [vid, setVid] = useState(kitVehicles[0]?.id ?? '')
+  const [names, setNames] = useState<Record<string, string>>({})
+  const veh = kitVehicles.find(v => v.id === vid) || kitVehicles[0]
+  const selectCls = 'w-full px-3 py-2 rounded-lg bg-surface-2 border border-border text-text text-sm focus:outline-none focus:ring-2 focus:ring-ibad focus:border-ibad/50'
+
+  // Resolve readable part names from the item catalog for the preview. Falls
+  // back to the raw template id if the catalog hasn't loaded or lacks an entry.
+  useEffect(() => {
+    let cancelled = false
+    getItemCatalog()
+      .then((cat: CatalogItem[]) => {
+        if (cancelled) return
+        const map: Record<string, string> = {}
+        for (const it of cat) map[it.template_id] = it.name
+        setNames(map)
+      })
+      .catch(() => { /* preview just shows template ids */ })
+    return () => { cancelled = true }
+  }, [])
+
+  if (!veh) return <div className="text-sm text-text-muted">No vehicles with part kits available.</div>
+
+  const label = (tpl: string) => names[tpl] || tpl
+
+  return (
+    <div className="space-y-3">
+      <div>
+        <label className="block text-[11px] uppercase tracking-wider text-text-dim mb-1">Vehicle</label>
+        <select value={vid} disabled={busy} className={selectCls}
+          onChange={e => setVid(e.target.value)}>
+          {kitVehicles.map(v => <option key={v.id} value={v.id}>{v.label}</option>)}
+        </select>
+      </div>
+      <div className="rounded-lg border border-border bg-surface-2 p-3 text-sm">
+        <div className="text-[11px] uppercase tracking-wider text-text-dim mb-1.5">
+          Delivers {veh.kit.length} part{veh.kit.length === 1 ? '' : 's'} (Mk6) + fuel + tool
+        </div>
+        <ul className="space-y-0.5 text-text-muted">
+          {veh.kit.map(tpl => (
+            <li key={tpl} className="flex items-center gap-1.5">
+              <Icon name="Cog" size={12} className="shrink-0 text-text-dim" /> {label(tpl)}
+            </li>
+          ))}
+          <li className="flex items-center gap-1.5 text-amber-200/90">
+            <Icon name="Fuel" size={12} className="shrink-0" /> {label(VEHICLE_KIT_FUEL_TEMPLATE)}
+          </li>
+          <li className="flex items-center gap-1.5 text-amber-200/90">
+            <Icon name="Wrench" size={12} className="shrink-0" /> {label(VEHICLE_KIT_TORCH_TEMPLATE)}
+          </li>
+        </ul>
+      </div>
+      <button className="btn-primary w-full" disabled={busy}
+        onClick={() => onSubmit(veh)}>
+        {busy ? <Icon name="Loader2" size={13} className="animate-spin" /> : <Icon name="Truck" size={13} />} Give Vehicle Kit
       </button>
     </div>
   )

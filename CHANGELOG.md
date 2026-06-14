@@ -15,6 +15,17 @@ here cover everything those tags shipped.
 
 ### Added
 
+- **Give Vehicle Kit** Player Action (Vehicle group) — a reliable, RMQ-free way
+  to hand a player a complete vehicle. Picks one of the six CHOAM vehicles that
+  have craftable part items (Sandbike, Buggy, Sandcrawler, and Light/Medium/
+  Transport Ornithopters) and delivers its full **Mk6 part set** (chassis,
+  engine, PSU, hull, locomotion, boost, …) **plus 1 Large Vehicle Fuel Cell and
+  1 Welding Torch Mk5** straight into the player's inventory via the normal
+  give-item path. Works **online or offline** (delivered instantly when online,
+  on next login when offline) as long as there's inventory space — no live RMQ
+  spawn required. The form previews the exact parts before you hand them over.
+  (Tank / Treadwheel / Container have no discrete part items in the game, so they
+  remain on the live **Spawn Vehicle** action only.)
 - **Spawn Vehicle** Player Action (Vehicle group) — spawns any of the nine CHOAM
   vehicles (Sandbike, Buggy, Tank, Sandcrawler, Treadwheel, Container Vehicle,
   and Light/Medium/Transport Ornithopters) on the selected player, with an
