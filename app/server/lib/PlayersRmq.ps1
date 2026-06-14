@@ -318,6 +318,24 @@ function Invoke-DuneVehicleSpawnLive {
     )
     $r = Resolve-DuneFlsIdOrError -Ip $Ip -FlsId $FlsId -ActorId $ActorId
     if (-not $r.ok) { return @{ ok = $false; error = $r.error } }
+    # Spawn at the target's pawn when no explicit coords were supplied. The UI
+    # passes the player's pawn/actor id; read its live location from dune.actors
+    # so the vehicle drops on the player rather than at map origin (0,0,0).
+    if ($X -eq 0.0 -and $Y -eq 0.0 -and $Z -eq 0.0 -and $ActorId -gt 0) {
+        $locSql = @"
+SELECT (location->>'X')::float8 AS x,
+       (location->>'Y')::float8 AS y,
+       (location->>'Z')::float8 AS z
+FROM dune.actors WHERE id = $ActorId::bigint;
+"@
+        $lr = Invoke-DuneSqlQuery -Ip $Ip -Sql $locSql -ReadOnly $true -MaxRows 1 -TimeoutSec 10
+        if ($lr.ok) {
+            $lmaps = ConvertTo-DuneRowMaps -Result $lr
+            if ($lmaps.Count -gt 0 -and $null -ne $lmaps[0]['x']) {
+                $X = [double]$lmaps[0]['x']; $Y = [double]$lmaps[0]['y']; $Z = [double]$lmaps[0]['z']
+            }
+        }
+    }
     $res = Invoke-DuneRmqSpawnVehicleAt -FlsId $r.fls_id -ClassName $ClassName -X $X -Y $Y -Z $Z -Rotation $Rotation -TemplateName $TemplateName -Persistent $Persistent -Faction $Faction
     if ($res.ok) { $res.message = "Spawn $ClassName command sent for $($r.fls_id)." }
     return $res

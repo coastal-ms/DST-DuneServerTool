@@ -898,6 +898,8 @@ export interface CatalogItem {
   template_id: string
   name: string
   category: string
+  gradeable?: boolean
+  tier?: number
 }
 
 interface RawCatalogEntry {
@@ -905,6 +907,8 @@ interface RawCatalogEntry {
   template_id?: string
   name?: string
   category?: string
+  gradeable?: boolean
+  tier?: number
 }
 
 interface CatalogResponse {
@@ -913,7 +917,7 @@ interface CatalogResponse {
   // The backend (/api/catalog/items -> Get-DuneItemCatalog) serializes `items`
   // as an ARRAY of { templateId, name, category }. Older/alternate builds may
   // emit a dict keyed by template_id. flattenItemCatalog handles both.
-  items: RawCatalogEntry[] | Record<string, { name?: string; category?: string }>
+  items: RawCatalogEntry[] | Record<string, { name?: string; category?: string; gradeable?: boolean; tier?: number }>
 }
 
 let _catalogCache: CatalogItem[] | null = null
@@ -932,15 +936,15 @@ export function flattenItemCatalog(raw: CatalogResponse['items'] | undefined | n
     for (const e of raw) {
       const tid = String(e?.templateId ?? e?.template_id ?? '').trim()
       if (!tid) continue
-      flat.push({ template_id: tid, name: e?.name || tid, category: e?.category || '' })
+      flat.push({ template_id: tid, name: e?.name || tid, category: e?.category || '', gradeable: !!e?.gradeable, tier: e?.tier })
     }
   } else if (raw && typeof raw === 'object') {
-    const dict = raw as Record<string, { name?: string; category?: string }>
+    const dict = raw as Record<string, { name?: string; category?: string; gradeable?: boolean; tier?: number }>
     for (const tid of Object.keys(dict)) {
       const key = tid.trim()
       if (!key) continue
       const v = dict[tid]
-      flat.push({ template_id: key, name: v?.name || key, category: v?.category || '' })
+      flat.push({ template_id: key, name: v?.name || key, category: v?.category || '', gradeable: !!v?.gradeable, tier: v?.tier })
     }
   }
   flat.sort((a, b) => a.name.localeCompare(b.name))
@@ -1427,14 +1431,20 @@ export function grantLive(controllerId: number, template: string, amount: number
 
 export interface SpawnVehicleInput {
   target: PlayerTarget
-  template: string
+  className: string
+  templateName?: string
+  persistent?: boolean
+  faction?: string
   location?: { x: number; y: number; z: number }
 }
 export function spawnVehicle(input: SpawnVehicleInput) {
-  const body: Record<string, unknown> = { template: input.template }
-  if (input.target.fls_id)   body.fls_id   = input.target.fls_id
-  if (input.target.actor_id) body.actor_id = input.target.actor_id
-  if (input.location)        body.location = input.location
+  const body: Record<string, unknown> = { class_name: input.className }
+  if (input.target.fls_id)      body.fls_id        = input.target.fls_id
+  if (input.target.actor_id)    body.actor_id      = input.target.actor_id
+  if (input.templateName)       body.template_name = input.templateName
+  if (input.persistent != null) body.persistent    = input.persistent
+  if (input.faction)            body.faction       = input.faction
+  if (input.location) { body.x = input.location.x; body.y = input.location.y; body.z = input.location.z }
   return api<WriteResult>('/api/gameplay/vehicles/spawn', {
     method: 'POST', body: JSON.stringify(body),
   })

@@ -20,10 +20,11 @@ import {
   resetAllKeystones, resetAllSpecs, resetJourney, resetProgressionLive, resetSpec,
   restoreDestroyed,
   returningPlayerAward, setFactionTier, setPlayerTags, setSkillPoints,
-  setStarterClass, teleportToPlayer, updatePlayerTags, wipeCodex, wipeJourney,
+  setStarterClass, spawnVehicle, teleportToPlayer, updatePlayerTags, wipeCodex, wipeJourney,
   chatWhisper, isValidTemplateId,
   type Player, type PlayerEvent, type PlayerStats, type SpecTrackFull,
 } from '../../../api/gameplay'
+import { VEHICLE_CATALOG } from '../../../data/vehicles'
 import { fmtNum, fmtSolari } from '../shared'
 
 type Flash = (msg: string, kind?: 'ok' | 'err') => void
@@ -411,7 +412,7 @@ interface ActionDef {
   liveOnly?: boolean      // requires player to be online (RMQ path)
   offlineOnly?: boolean   // requires player to be offline (DB write the game caches in memory)
   fields?: ActionField[]
-  custom?: 'give-item' | 'whisper'
+  custom?: 'give-item' | 'whisper' | 'spawn-vehicle'
   confirm?: (p: Player) => string  // confirm message; if returns '' no prompt
   doubleConfirm?: boolean // also requires a typed "i acknowledge" prompt inside run()
   rowNote?: string        // short italic note shown inline on the row heading
@@ -487,6 +488,9 @@ const ACTIONS: ActionDef[] = [
     run: p => cleanPlayerInventory({ actor_id: p.id }) },
 
   // ----- Vehicle -----
+  { id: 'spawn-vehicle', group: 'Vehicle', label: 'Spawn Vehicle', icon: 'Car', liveOnly: true, custom: 'spawn-vehicle',
+    rowNote: 'Spawns at the player — requires them online',
+    run: () => Promise.resolve({ message: '' }) },
   { id: 'refuel-vehicle', group: 'Vehicle', label: 'Refuel Vehicle', icon: 'Fuel',
     fields: [{ key: 'vid', label: 'Vehicle id', type: 'number', placeholder: '12345' }],
     run: (_p, v) => refuelVehicle(Number(v.vid) || 0) },
@@ -707,10 +711,18 @@ function ActionRow({ def, player, busy, isOnline, open, danger, onToggle, runAct
         <div className="border-t border-border p-3">
           {def.custom === 'give-item' ? (
             <GiveItemForm busy={busy} submitLabel={def.label}
-              onSubmit={(tpl, qty, qual) => runAction(def, () => giveItem(player.id, tpl, qty, qual))} />
+              onSubmit={(tpl, qty, qual) => runAction(def, () => giveItem(player.id, tpl, qty, qual))}
+              onSubmitTierSet={(tpl, qty) => runAction(def, async () => {
+                for (let q = 0; q <= 5; q++) await giveItem(player.id, tpl, qty, q)
+                return { message: `Gave ${tpl} Mk1–Mk6 (x${qty} each) to ${player.name}.` }
+              })} />
           ) : def.custom === 'whisper' ? (
             <WhisperForm busy={busy}
               onSubmit={msg => runAction(def, () => chatWhisper(String(player.id), msg))} />
+          ) : def.custom === 'spawn-vehicle' ? (
+            <SpawnVehicleForm busy={busy}
+              onSubmit={(className, templateName, persistent) => runAction(def, () =>
+                spawnVehicle({ target: { actor_id: player.id }, className, templateName: templateName || undefined, persistent }))} />
           ) : (
             <InlineForm busy={busy} submitLabel={def.label} fields={def.fields || []}
               onSubmit={v => runAction(def, () => def.run(player, v))} />
@@ -724,18 +736,21 @@ function ActionRow({ def, player, busy, isOnline, open, danger, onToggle, runAct
 // Self-contained give-item form (item picker + qty/quality). Owns its own
 // state so it resets whenever the accordion row mounts. Renders without a card
 // wrapper — ActionRow provides the container.
-function GiveItemForm({ busy, submitLabel, onSubmit }: {
-  busy: boolean; submitLabel: string; onSubmit: (tpl: string, qty: number, qual: number) => void
+function GiveItemForm({ busy, submitLabel, onSubmit, onSubmitTierSet }: {
+  busy: boolean; submitLabel: string
+  onSubmit: (tpl: string, qty: number, qual: number) => void
+  onSubmitTierSet: (tpl: string, qty: number) => void
 }) {
   const [giveTpl, setGiveTpl]   = useState('')
   const [giveName, setGiveName] = useState('')
   const [giveQty, setGiveQty]   = useState('1')
   const [giveQual, setGiveQual] = useState('0')
+  const [gradeable, setGradeable] = useState(false)
   return (
     <div className="space-y-3">
       <ItemPicker label="Item — type to search by name or template id"
         value={giveTpl} displayValue={giveName || giveTpl}
-        onChange={(tpl, item) => { setGiveTpl(tpl); setGiveName(item ? item.name : '') }}
+        onChange={(tpl, item) => { setGiveTpl(tpl); setGiveName(item ? item.name : ''); setGradeable(!!item?.gradeable) }}
         autoFocus disabled={busy} />
       <div className="grid grid-cols-2 gap-3">
         <div>
@@ -745,7 +760,7 @@ function GiveItemForm({ busy, submitLabel, onSubmit }: {
             className="w-full px-3 py-2 rounded-lg bg-surface-2 border border-border text-text text-sm focus:outline-none focus:ring-2 focus:ring-ibad focus:border-ibad/50" />
         </div>
         <div>
-          <label className="block text-[11px] uppercase tracking-wider text-text-dim mb-1">Quality (0-5)</label>
+          <label className="block text-[11px] uppercase tracking-wider text-text-dim mb-1">Tier — Mk1-Mk6 (0-5)</label>
           <input type="number" min={0} max={5} value={giveQual} disabled={busy}
             onChange={e => setGiveQual(e.target.value)}
             className="w-full px-3 py-2 rounded-lg bg-surface-2 border border-border text-text text-sm focus:outline-none focus:ring-2 focus:ring-ibad focus:border-ibad/50" />
@@ -754,6 +769,53 @@ function GiveItemForm({ busy, submitLabel, onSubmit }: {
       <button className="btn-primary w-full" disabled={busy || !isValidTemplateId(giveTpl)}
         onClick={() => onSubmit(giveTpl.trim(), Number(giveQty) || 1, Number(giveQual) || 0)}>
         {busy ? <Icon name="Loader2" size={13} className="animate-spin" /> : <Icon name="Check" size={13} />} {submitLabel}
+      </button>
+      {gradeable && (
+        <button className="btn-secondary w-full" disabled={busy || !isValidTemplateId(giveTpl)}
+          title="Gives one of this item at every grade, Mk1 through Mk6"
+          onClick={() => onSubmitTierSet(giveTpl.trim(), Number(giveQty) || 1)}>
+          {busy ? <Icon name="Loader2" size={13} className="animate-spin" /> : <Icon name="Layers" size={13} />} Give whole tier set (Mk1-Mk6)
+        </button>
+      )}
+    </div>
+  )
+}
+
+// Self-contained spawn-vehicle form. Picks a vehicle blueprint + optional tier
+// template; spawns it on the selected player (RMQ — requires them online).
+function SpawnVehicleForm({ busy, onSubmit }: {
+  busy: boolean; onSubmit: (className: string, templateName: string, persistent: boolean) => void
+}) {
+  const [vid, setVid] = useState(VEHICLE_CATALOG[0].id)
+  const [tpl, setTpl] = useState('')
+  const [persistent, setPersistent] = useState(false)
+  const veh = VEHICLE_CATALOG.find(v => v.id === vid) || VEHICLE_CATALOG[0]
+  const selectCls = 'w-full px-3 py-2 rounded-lg bg-surface-2 border border-border text-text text-sm focus:outline-none focus:ring-2 focus:ring-ibad focus:border-ibad/50'
+  return (
+    <div className="space-y-3">
+      <div>
+        <label className="block text-[11px] uppercase tracking-wider text-text-dim mb-1">Vehicle</label>
+        <select value={vid} disabled={busy} className={selectCls}
+          onChange={e => { setVid(e.target.value); setTpl('') }}>
+          {VEHICLE_CATALOG.map(v => <option key={v.id} value={v.id}>{v.label}</option>)}
+        </select>
+      </div>
+      <div>
+        <label className="block text-[11px] uppercase tracking-wider text-text-dim mb-1">Tier template</label>
+        <select value={tpl} disabled={busy} className={selectCls}
+          onChange={e => setTpl(e.target.value)}>
+          <option value="">Base (no template)</option>
+          {veh.templates.map(t => <option key={t} value={t}>{t}</option>)}
+        </select>
+      </div>
+      <label className="flex items-center gap-2 text-sm text-text-muted">
+        <input type="checkbox" checked={persistent} disabled={busy}
+          onChange={e => setPersistent(e.target.checked)} />
+        Persistent (survives server restart)
+      </label>
+      <button className="btn-primary w-full" disabled={busy}
+        onClick={() => onSubmit(veh.className, tpl, persistent)}>
+        {busy ? <Icon name="Loader2" size={13} className="animate-spin" /> : <Icon name="Car" size={13} />} Spawn Vehicle
       </button>
     </div>
   )

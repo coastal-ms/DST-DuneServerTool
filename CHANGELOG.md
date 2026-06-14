@@ -15,6 +15,20 @@ here cover everything those tags shipped.
 
 ### Added
 
+- **Spawn Vehicle** Player Action (Vehicle group) — spawns any of the nine CHOAM
+  vehicles (Sandbike, Buggy, Tank, Sandcrawler, Treadwheel, Container Vehicle,
+  and Light/Medium/Transport Ornithopters) on the selected player, with an
+  optional tier-template loadout (e.g. *T6_Combat*, *T5_Inventory*) and a
+  *Persistent* toggle. The vehicle drops at the player's current position;
+  requires the player to be online.
+- **Give whole tier set (Mk1–Mk6)** in the Give Item form. When the selected
+  item is gradeable gear (weapon, armor, stillsuit, augment), one click hands
+  over the item at every grade Mk1 through Mk6. Works online (delivered
+  instantly) or offline (on next login), same as a normal Give Item.
+- **Full gradeable-gear catalog.** The item catalog now includes every gradeable
+  weapon, garment, augment, and schematic (~1.3k entries total), each tagged with
+  its `gradeable` flag and base `tier`, so all tier gear is searchable and
+  tier-set-giveable from the Add Item / Give Item picker.
 - **Stop VM Only** command (VM section, next to **Start VM Only**) — powers off
   just the VM for maintenance. Available when the VM is running; while a
   battlegroup is live it steers you to **Stop Full Stack** for a graceful
@@ -22,6 +36,12 @@ here cover everything those tags shipped.
 
 ### Fixed
 
+- **Player Action forms no longer jump when you submit.** The result banner in
+  the Players tab rendered in-flow at the top of the panel, so showing a success
+  or error message pushed the whole panel — including the open action's form and
+  its submit button — downward (most visible on **Cheat Script**, whose errors
+  keep the form open). The banner is now a fixed-position toast that floats over
+  the page without shifting any content.
 - **Give Scrip, Give Faction Rep, and Set Faction Tier now work.** These Player
   Actions sent the wrong identifier (`account_id`) under the wrong field names,
   so every attempt failed with *"actor_id is required."* They now send the
