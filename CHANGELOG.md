@@ -64,6 +64,12 @@ here cover everything those tags shipped.
 
 ### Fixed
 
+- **Give Package / bulk give-items no longer fails with "Argument types do not
+  match."** The `/players/give-items` handler accumulated its per-item results in
+  a `List[object]` and then wrapped it with `@(...)` — a pattern that throws on
+  the PowerShell runtime the server uses (wrapping a `List[object]` in the array
+  operator is rejected, even when empty). Switched to `.ToArray()`, so giving a
+  saved package (or any multi-item give) now succeeds online or offline.
 - **Server Health no longer goes stale while the app is left open.** The shared
   polling hook used a plain `setInterval`, which browsers throttle in
   backgrounded tabs and freeze entirely while the machine sleeps — so returning

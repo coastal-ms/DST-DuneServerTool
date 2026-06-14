@@ -391,7 +391,7 @@ function Invoke-DunePlayerGiveItemsBulk {
     } else {
         "$($total - $failures)/$total item templates gave OK; $failures failed."
     }
-    return @{ ok = $ok; message = $msg; results = @($results); failures = $failures; total = $total }
+    return @{ ok = $ok; message = $msg; results = $results.ToArray(); failures = $failures; total = $total }
 }
 
 # Repair equipped gear — OFFLINE only. Sets every durability item in the gear
