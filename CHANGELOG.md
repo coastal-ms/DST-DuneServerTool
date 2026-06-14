@@ -24,7 +24,13 @@ here cover everything those tags shipped.
   now cascades through the authoritative `dune_exchange_accesspoints` table
   (JOIN-/existence-guarded at every tier) and validates the id is a live FK
   target before inserting, mirroring the existing exchange-id hardening.
-
+- **Add Item search now finds every item the app knows about.** The "Add Item"
+  picker (Player/Storage inventory editors) is backed by `item-catalog.json`,
+  which was scraped from a single source and missing 552 real templates — most
+  visibly raw resources like **Spice Sand**, **Water**, and **Plant Fiber**, plus
+  many garments, vehicle modules, weapons, tools, and components. Backfilled the
+  catalog from the app-bundled `gameplay-item-data.json` so all of these are now
+  searchable and giveable (1294 → 1846 entries).
 
 ## [12.0.19] - 2026-06-13
 
