@@ -13,6 +13,24 @@ here cover everything those tags shipped.
 
 ## [Unreleased]
 
+## [12.0.16] - 2026-06-13
+
+### Fixed
+
+- **Native folder/file picker no longer opens behind the DST window.** DST's UI
+  is hosted in a separate process (the WebView2 app window), so when you clicked
+  a "Browse…" button the picker was created by the backend process and Windows'
+  foreground lock pushed it *behind* the app — you had to alt-tab to find it. The
+  picker now briefly attaches to the foreground thread and forces itself to the
+  front, so it appears on top where you'd expect.
+- **The "your client config doesn't match the server" popup no longer re-nags on
+  every page load.** Once you dismiss it ("Not now" / close) for a given
+  mismatch, it stays dismissed (remembered across reloads) and only the small
+  inline banner remains, which you can click to reopen it. It auto-surfaces again
+  only if the underlying server/client values actually change. Fixing the
+  mismatch (or it otherwise resolving) clears the dismissal so a future genuine
+  mismatch can still alert you.
+
 ## [12.0.15] - 2026-06-13
 
 ### Changed
