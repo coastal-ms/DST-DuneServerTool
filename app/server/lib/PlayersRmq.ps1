@@ -156,6 +156,22 @@ function Invoke-DunePlayerFillWaterLive {
     return $res
 }
 
+# Base water (cisterns/windtraps) lives in live game state — it is NOT persisted
+# per-cistern in Postgres — so the only way to top it is the same per-player RMQ
+# ServerCommand the live Fill Water uses. UpdateAllWaterFillables is keyed by the
+# player's FLS id, so it only affects THAT player's own water containers (their
+# bases + carried items), never other players' bases. Online-only: an offline
+# player has no live session to apply it to.
+function Invoke-DunePlayerFillBaseWaterLive {
+    param([string] $Ip, [string] $FlsId, [long] $ActorId = 0, [int] $WaterAmount = 1000000)
+    $r = Resolve-DuneFlsIdOrError -Ip $Ip -FlsId $FlsId -ActorId $ActorId
+    if (-not $r.ok) { return @{ ok = $false; error = $r.error } }
+    if ($WaterAmount -le 0) { $WaterAmount = 1000000 }
+    $res = Invoke-DuneRmqUpdateAllWaterFillables -FlsId $r.fls_id -WaterAmount $WaterAmount
+    if ($res.ok) { $res.message = "Base water fill sent for $($r.fls_id) — all of that player's own water containers (cisterns, windtraps, jons) topped to $WaterAmount. Effect is live in-game." }
+    return $res
+}
+
 function Invoke-DunePlayerSetSkillPointsLive {
     param([string] $Ip, [string] $FlsId, [long] $ActorId = 0, [int] $SkillPoints = 0)
     $r = Resolve-DuneFlsIdOrError -Ip $Ip -FlsId $FlsId -ActorId $ActorId

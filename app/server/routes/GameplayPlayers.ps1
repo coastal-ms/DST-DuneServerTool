@@ -446,3 +446,40 @@ Register-DuneRoute -Method POST -Path '/api/gameplay/players/fill-water' -Handle
         Write-DuneError -Response $res -Status 500 -Message "Fill water failed: $($_.Exception.Message)"
     }
 }
+
+# v12.0.21 — POST /api/gameplay/players/fill-base-water  { pawn_id|actor_id|fls_id, water_amount? }
+# Fills all water containers in the player's OWN bases (cisterns, windtraps) plus
+# their carried fillables. Cistern/windtrap water is live game state with no
+# per-cistern DB column, so this is online-only via RMQ UpdateAllWaterFillables.
+# The command is keyed by the one player's FLS id, so it only ever touches THAT
+# player's own containers — never other players' bases. Offline players are
+# rejected with a clear message (nothing to write).
+Register-DuneRoute -Method POST -Path '/api/gameplay/players/fill-base-water' -Handler {
+    param($req, $res, $routeParams, $body)
+    try {
+        $pawn = Get-DuneBodyInt -Body $body -Name 'pawn_id'
+        if (-not $pawn) { $pawn = Get-DuneBodyInt -Body $body -Name 'actor_id' }
+        if (-not $pawn) { $pawn = Get-DuneBodyInt -Body $body -Name 'id' }
+        $fls  = [string](Get-DuneBodyValue -Body $body -Name 'fls_id')
+        if ((-not $pawn -or $pawn -le 0) -and [string]::IsNullOrWhiteSpace($fls)) {
+            Write-DuneError -Response $res -Status 400 -Message 'pawn_id (actor id) or fls_id is required.'
+            return
+        }
+        $amt = Get-DuneBodyInt -Body $body -Name 'water_amount'
+        if ($null -eq $amt -or $amt -le 0) { $amt = 1000000 }
+
+        Invoke-DunePlayerWriteRoute -Response $res -Action {
+            param($ip)
+            # Base/cistern water is live game state — require the player online.
+            if ([string]::IsNullOrWhiteSpace($fls) -and $pawn -gt 0) {
+                $off = Test-DunePlayerOffline -Ip $ip -PawnId $pawn
+                if ($off.ok) {
+                    return @{ ok = $false; error = 'Player must be online to fill base water. Cistern/windtrap water is live game state with no offline DB path — ask them to log in, then fill.' }
+                }
+            }
+            Invoke-DunePlayerFillBaseWaterLive -Ip $ip -FlsId $fls -ActorId ([long]$pawn) -WaterAmount ([int]$amt)
+        }
+    } catch {
+        Write-DuneError -Response $res -Status 500 -Message "Fill base water failed: $($_.Exception.Message)"
+    }
+}
