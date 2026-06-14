@@ -1,4 +1,4 @@
-﻿# Gameplay API — Players. Read views (list + detail) follow the live/demo +
+# Gameplay API — Players. Read views (list + detail) follow the live/demo +
 # `source` convention; write actions require a live DB (no demo writes) and
 # mirror the reference implementation's stored procedures. Shared helpers Get-DuneQ /
 # Test-DuneDemoRequested come from routes/Gameplay.ps1 (loaded first).
