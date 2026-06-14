@@ -69,12 +69,12 @@ $script:DuneGameConfigSchema = @(
     @{ Section=$script:DuneGcSecUrl; Key='IGWPort'; File='engine'; Type='int'; Min=1024; Max=65535; Default='7780'; Label='IGW Port (starting)'; Help='Starting inter-server port; must not overlap the game port range.'; Category='Network' }
 
     # --- Survival ---
-    @{ Section=$script:DuneGcSecGame; Key='m_WaterConsumptionRate'; File='game'; Type='float'; Min=0; Default='1.0'; Label='Water Consumption Rate'; Help='How quickly players consume water.'; Category='Survival' }
-    @{ Section=$script:DuneGcSecGame; Key='m_WaterConsumptionInStormMultiplier'; File='game'; Type='float'; Min=0; Default='2.0'; Label='Water Consumption in Storm'; Help='Additional water drain during sandstorms.'; Category='Survival' }
-    @{ Section=$script:DuneGcSecGame; Key='m_PlayerStartingWater'; File='game'; Type='float'; Min=0; Default='100.0'; Label='Player Starting Water'; Help='Water amount when a player spawns.'; Category='Survival' }
-    @{ Section=$script:DuneGcSecOnline; Key='m_DefaultReconnectGracePeriodSeconds'; File='game'; Type='int'; Min=0; Unit='sec'; Default='300'; Label='Reconnect Grace Period'; Help="Seconds a player's corpse persists after disconnect."; Category='Survival' }
-    @{ Section=$script:DuneGcSecDurab; Key='m_ItemDurabilityLossMultiplier'; File='game'; Type='float'; Min=0; Max=10; Default='1.0'; Label='Item Durability Loss Multiplier'; Help='Scales durability loss for all items. 0 = off.'; Category='Survival' }
-    @{ Section=$script:DuneGcSecDurab; Key='UpdateRateInSeconds'; File='game'; Type='float'; Min=0; Max=10; Unit='sec'; Default='1.0'; Label='Item Decay Rate'; Help='Deterioration tick rate. 0 = off, 1-10 typical.'; Category='Survival' }
+    @{ Section=$script:DuneGcSecGame; Key='m_WaterConsumptionRate'; File='game'; Type='float'; Min=0; Default='1.0'; Label='Water Consumption Rate'; Help='How quickly players consume water. Also needs client-side apply.'; ClientApply=$true; Category='Survival' }
+    @{ Section=$script:DuneGcSecGame; Key='m_WaterConsumptionInStormMultiplier'; File='game'; Type='float'; Min=0; Default='2.0'; Label='Water Consumption in Storm'; Help='Additional water drain during sandstorms. Also needs client-side apply.'; ClientApply=$true; Category='Survival' }
+    @{ Section=$script:DuneGcSecGame; Key='m_PlayerStartingWater'; File='game'; Type='float'; Min=0; Default='100.0'; Label='Player Starting Water'; Help='Water amount when a player spawns. Also needs client-side apply.'; ClientApply=$true; Category='Survival' }
+    @{ Section=$script:DuneGcSecOnline; Key='m_DefaultReconnectGracePeriodSeconds'; File='game'; Type='int'; Min=0; Unit='sec'; Default='300'; Label='Reconnect Grace Period'; Help="Seconds a player's corpse persists after disconnect. Also needs client-side apply."; ClientApply=$true; Category='Survival' }
+    @{ Section=$script:DuneGcSecDurab; Key='m_ItemDurabilityLossMultiplier'; File='game'; Type='float'; Min=0; Max=10; Default='1.0'; Label='Item Durability Loss Multiplier'; Help='Scales durability loss for all items. 0 = off. Also needs client-side apply.'; ClientApply=$true; Category='Survival' }
+    @{ Section=$script:DuneGcSecDurab; Key='UpdateRateInSeconds'; File='game'; Type='float'; Min=0; Max=10; Unit='sec'; Default='1.0'; Label='Item Decay Rate'; Help='Deterioration tick rate. 0 = off, 1-10 typical. Also needs client-side apply.'; ClientApply=$true; Category='Survival' }
 
     # --- Resources & Economy (engine ConsoleVariables) ---
     @{ Section=$script:DuneGcSecConsole; Key='Dune.GlobalMiningOutputMultiplier'; File='engine'; Type='float'; Min=0; Default='1.0'; Label='Global Mining Multiplier'; Help='Scales hand-mining resource output.'; Category='Resources & Economy' }
@@ -183,7 +183,9 @@ $script:DuneGameConfigResolvedEngine = $null
 # Funcom's shipped DefaultGame.ini). The remaining flagged keys were confirmed by
 # live in-game testing on a self-hosted server: the change had NO effect until the
 # same value was also set in the client Game.ini. Sections currently flagged
-# ClientApply=$true above: BuildingSettings, InventorySystemSettings,
+# ClientApply=$true above: DuneGameMode (Survival: water + starting water),
+# PlayerOnlineStateSettings (reconnect grace), ItemDeteriorationConstants
+# (durability/decay), BuildingSettings, InventorySystemSettings,
 # CoriolisSubsystem, SpiceHarvestingSystem, SandwormSettings.
 $script:DuneGameConfigClientPath = '%LOCALAPPDATA%\DuneSandbox\Saved\Config\WindowsClient\Game.ini'
 

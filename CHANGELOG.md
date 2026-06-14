@@ -13,6 +13,18 @@ here cover everything those tags shipped.
 
 ## [Unreleased]
 
+## [12.0.18] - 2026-06-13
+
+### Changed
+
+- **Survival settings are now client-mirrored.** The six **Survival** options
+  (Water Consumption Rate, Water Consumption in Storm, Player Starting Water,
+  Reconnect Grace Period, Item Durability Loss Multiplier, Item Decay Rate) are
+  read by the game client as well as the server, so they now flow through the
+  same client-apply path as Building/Inventory/Spice/etc.: DST can mirror them
+  into your local client `Game.ini`, and the client/server mismatch check now
+  covers them too.
+
 ## [12.0.17] - 2026-06-13
 
 ### Fixed
