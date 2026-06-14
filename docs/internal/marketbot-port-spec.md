@@ -107,14 +107,26 @@ SELECT id FROM dune.dune_exchanges ORDER BY id LIMIT 1
 SELECT dune.get_dune_exchange_id('Global')
 ```
 
-**Access Point ID** — 2-tier cascade:
+**Access Point ID** — 3-tier cascade, every tier existence-/JOIN-guarded so the
+resolved id is always a live FK target for `dune_exchange_orders_access_point_id_fkey`
+(never the old hard-coded `1`, which trips the FK on servers with no bot orders yet):
 ```sql
--- Tier 1 (from access points table):
+-- Tier 1 (authoritative — access point belonging to this exchange):
 SELECT id FROM dune.dune_exchange_accesspoints WHERE exchange_id = $exchangeId ORDER BY id LIMIT 1
 
--- Tier 2 (from existing player orders):
-SELECT DISTINCT access_point_id FROM dune.dune_exchange_orders WHERE exchange_id = $exchangeId LIMIT 1
--- Falls back to 1 if both fail
+-- Tier 2 (reuse an existing order's access point, JOIN-guarded against the
+-- accesspoints table so a stale order can't return a phantom id):
+SELECT o.access_point_id FROM dune.dune_exchange_orders o
+  JOIN dune.dune_exchange_accesspoints ap ON ap.id = o.access_point_id
+  WHERE o.exchange_id = $exchangeId LIMIT 1
+
+-- Tier 3 (any access point on the server):
+SELECT id FROM dune.dune_exchange_accesspoints ORDER BY id LIMIT 1
+
+-- Final guard: re-validate the resolved id exists in dune_exchange_accesspoints.
+-- If nothing resolves on the write path, fail with an actionable error
+-- (operator must build/place an Exchange in-world) rather than inserting a
+-- phantom access_point_id.
 ```
 
 **Exchange Inventory ID** (for `items.inventory_id`):
