@@ -14,7 +14,7 @@ import {
   awardCharXp, awardIntel, awardSpecXp, cheatScript, cleanPlayerInventory,
   deleteAccount, deleteInventoryItem, deleteTutorials,
   dismissReturningPlayerAward, fillWater, getPlayerEvents, getPlayerSpecs,
-  getPlayerStats, getPlayerTags, giveFactionRep, giveItem, giveItemLive,
+  getPlayerStats, getPlayerTags, giveFactionRep, giveItem,
   giveScrip, giveSolari, grantAllKeystones, grantLive, grantMaxSpec,
   kickPlayer, refuelVehicle, renamePlayer, repairGear, repairInventoryItem,
   resetAllKeystones, resetAllSpecs, resetJourney, resetProgressionLive, resetSpec,
@@ -411,7 +411,7 @@ interface ActionDef {
   liveOnly?: boolean      // requires player to be online (RMQ path)
   offlineOnly?: boolean   // requires player to be offline (DB write the game caches in memory)
   fields?: ActionField[]
-  custom?: 'give-item' | 'give-item-live' | 'whisper'
+  custom?: 'give-item' | 'whisper'
   confirm?: (p: Player) => string  // confirm message; if returns '' no prompt
   doubleConfirm?: boolean // also requires a typed "i acknowledge" prompt inside run()
   rowNote?: string        // short italic note shown inline on the row heading
@@ -473,8 +473,7 @@ const ACTIONS: ActionDef[] = [
 
   // ----- Items -----
   { id: 'give-item',      group: 'Items', label: 'Give Item', icon: 'PackagePlus', custom: 'give-item',
-    run: () => Promise.resolve({ message: '' }) },
-  { id: 'give-item-live', group: 'Items', label: 'Give Item (force live)', icon: 'Zap', liveOnly: true, custom: 'give-item-live',
+    rowNote: 'Works online or offline — delivered instantly when online, on next login when offline',
     run: () => Promise.resolve({ message: '' }) },
   { id: 'repair-gear', group: 'Items', label: 'Repair All Items', icon: 'Wrench',
     run: p => repairGear(p.id) },
@@ -706,11 +705,9 @@ function ActionRow({ def, player, busy, isOnline, open, danger, onToggle, runAct
       </button>
       {open && (
         <div className="border-t border-border p-3">
-          {def.custom === 'give-item' || def.custom === 'give-item-live' ? (
+          {def.custom === 'give-item' ? (
             <GiveItemForm busy={busy} submitLabel={def.label}
-              onSubmit={(tpl, qty, qual) => runAction(def, () => def.custom === 'give-item-live'
-                ? giveItemLive({ actor_id: player.id }, tpl, qty, qual)
-                : giveItem(player.id, tpl, qty, qual))} />
+              onSubmit={(tpl, qty, qual) => runAction(def, () => giveItem(player.id, tpl, qty, qual))} />
           ) : def.custom === 'whisper' ? (
             <WhisperForm busy={busy}
               onSubmit={msg => runAction(def, () => chatWhisper(String(player.id), msg))} />

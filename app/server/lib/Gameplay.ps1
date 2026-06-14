@@ -59,6 +59,7 @@ function Initialize-DuneGameplayItemData {
                     icon              = [string]$v.icon
                     max_durability    = if ($null -ne $v.max_durability) { [double]$v.max_durability } else { 0.0 }
                     stack_max         = if ($null -ne $v.stack_max) { [int]$v.stack_max } else { 0 }
+                    volume            = if ($null -ne $v.volume) { [double]$v.volume } else { 0.0 }
                     vendor_price      = if ($null -ne $v.vendor_price) { [int]$v.vendor_price } else { 0 }
                     is_gradeable      = [bool]$v.is_gradeable
                     min_quality_level = if ($null -ne $v.min_quality_level) { [int]$v.min_quality_level } else { 0 }

@@ -11,20 +11,62 @@
 # Depends on Rmq.ps1 (Send-DuneRmqServerCommand + typed wrappers),
 # Database.ps1 (Invoke-DuneSqlQuery), PlayersAdmin.ps1, PlayersWrites.ps1.
 
-# Best-effort backpack capacity guard. Mirrors the reference implementation checkInventoryCapacity
-# but only enforces the slot cap (max_item_count). Volume is left to the
-# game server. Returns @{ ok=$true } when room exists or when no cap is set.
+# Per-item inventory volume, resolved the way the game does: a catalogued item's
+# `volume` is authoritative (0 is valid — the item takes no space), otherwise fall
+# back to the live DB volume_override for that template, otherwise 0 (unknown =
+# treats as weightless). Mirrors the reference implementation resolveItemVolume.
+function Resolve-DuneItemVolume {
+    param([Parameter(Mandatory)] [string] $Ip, [Parameter(Mandatory)] [string] $Template)
+    $rule = Get-DuneGameplayItemRule -TemplateId $Template
+    if ($rule -and $rule.ContainsKey('volume') -and $null -ne $rule.volume) { return [double]$rule.volume }
+    $safe = ($Template -replace "'", "''")
+    $sql = "SELECT MAX(volume_override)::text AS v FROM dune.items WHERE template_id = '$safe' AND volume_override IS NOT NULL;"
+    $r = Invoke-DuneSqlQuery -Ip $Ip -Sql $sql -ReadOnly $true -MaxRows 1 -TimeoutSec 10
+    if ($r.ok) {
+        $m = ConvertTo-DuneRowMaps -Result $r
+        if ($m.Count -ge 1 -and $m[0]['v']) { $v = [double]([string]$m[0]['v']); if ($v -gt 0) { return $v } }
+    }
+    return 0.0
+}
+
+# Max stack size for a template: catalogued stack_max wins, else the largest
+# stack_size seen live for that template+quality, else 1. Mirrors the reference
+# implementation resolveStackMax.
+function Resolve-DuneStackMax {
+    param([Parameter(Mandatory)] [string] $Ip, [Parameter(Mandatory)] [string] $Template, [long] $Quality = 0)
+    $rule = Get-DuneGameplayItemRule -TemplateId $Template
+    if ($rule -and $rule.ContainsKey('stack_max') -and [int]$rule.stack_max -gt 0) { return [int]$rule.stack_max }
+    $safe = ($Template -replace "'", "''")
+    $sql = "SELECT COALESCE(MAX(stack_size), 0)::text AS s FROM dune.items WHERE template_id = '$safe' AND quality_level = $Quality::bigint;"
+    $r = Invoke-DuneSqlQuery -Ip $Ip -Sql $sql -ReadOnly $true -MaxRows 1 -TimeoutSec 10
+    if ($r.ok) {
+        $m = ConvertTo-DuneRowMaps -Result $r
+        if ($m.Count -ge 1 -and $m[0]['s']) { $s = [int](ConvertTo-DuneInt $m[0]['s']); if ($s -gt 0) { return $s } }
+    }
+    return 1
+}
+
+# Best-effort backpack capacity guard. Ports the reference implementation
+# checkInventoryCapacity: this game's inventory cap is VOLUME-based
+# (inventories.max_item_volume), with an optional slot cap (max_item_count).
+# A stack occupies ONE slot, but the whole stack's VOLUME (per-item volume x
+# stack_size) counts against the volume cap. Either cap is enforced only when
+# set (> 0); when neither is set the game server validates. Returns @{ ok=$true }
+# when the add fits.
 function Test-DuneInventoryCapacity {
     param(
         [Parameter(Mandatory)] [string] $Ip,
         [Parameter(Mandatory)] [long]   $PawnId,
         [Parameter(Mandatory)] [string] $Template,
-        [int] $Quantity = 1
+        [int]  $Quantity = 1,
+        [long] $Quality  = 0
     )
     if ($Quantity -lt 1) { $Quantity = 1 }
 
     $sql = @"
-SELECT id::text AS inv_id, COALESCE(max_item_count, -1) AS max_slots
+SELECT id::text AS inv_id,
+       COALESCE(max_item_count, -1)  AS max_slots,
+       COALESCE(max_item_volume, -1) AS max_vol
 FROM dune.inventories
 WHERE actor_id = $PawnId::bigint AND inventory_type = 0
 LIMIT 1;
@@ -35,26 +77,62 @@ LIMIT 1;
     if ($maps.Count -eq 0) { return @{ ok = $true; note = 'no backpack inventory row; game server will validate.' } }
     $invId    = [int64](ConvertTo-DuneInt $maps[0]['inv_id'])
     $maxSlots = [int](ConvertTo-DuneInt $maps[0]['max_slots'])
-    if ($maxSlots -le 0) { return @{ ok = $true } }
+    $maxVol   = [double]([string]$maps[0]['max_vol'])
+    $hasSlotCap   = $maxSlots -gt 0
+    $hasVolumeCap = $maxVol   -gt 0
+    if (-not $hasSlotCap -and -not $hasVolumeCap) { return @{ ok = $true } }
 
-    $cSql = "SELECT COUNT(*)::text AS c FROM dune.items WHERE inventory_id = $invId::bigint;"
-    $cr = Invoke-DuneSqlQuery -Ip $Ip -Sql $cSql -ReadOnly $true -MaxRows 1 -TimeoutSec 10
-    if (-not $cr.ok) { return @{ ok = $true; note = 'item count failed; game server will validate.' } }
-    $cmaps = ConvertTo-DuneRowMaps -Result $cr
-    $used = if ($cmaps.Count -ge 1) { [int](ConvertTo-DuneInt $cmaps[0]['c']) } else { 0 }
-
-    $rule = Get-DuneGameplayItemRule -Template $Template
-    $stackMax = 1
-    if ($rule -and $rule.max_stack -is [int] -and $rule.max_stack -gt 0) { $stackMax = [int]$rule.max_stack }
-    $newStacks = [int][Math]::Ceiling($Quantity / [double]$stackMax)
-    $freeSlots = $maxSlots - $used
-    if ($freeSlots -lt $newStacks) {
-        return @{
-            ok = $false
-            error = "Inventory full: need $newStacks free slot(s), have $freeSlots."
+    # Tally current usage: one row = one slot; volume = per-item volume x stack_size.
+    $itemsSql = "SELECT template_id AS t, stack_size::text AS ss, COALESCE(volume_override, -1)::text AS vov FROM dune.items WHERE inventory_id = $invId::bigint;"
+    $ir = Invoke-DuneSqlQuery -Ip $Ip -Sql $itemsSql -ReadOnly $true -MaxRows 100000 -TimeoutSec 15
+    if (-not $ir.ok) { return @{ ok = $true; note = 'item scan failed; game server will validate.' } }
+    $imaps = ConvertTo-DuneRowMaps -Result $ir
+    $usedSlots  = $imaps.Count
+    $usedVolume = 0.0
+    if ($hasVolumeCap) {
+        foreach ($it in $imaps) {
+            $ss  = [double](ConvertTo-DuneInt $it['ss'])
+            $vov = [double]([string]$it['vov'])
+            $iv  = 0.0
+            if ($vov -gt 0) {
+                $iv = $vov
+            } else {
+                $itRule = Get-DuneGameplayItemRule -TemplateId ([string]$it['t'])
+                if ($itRule -and $itRule.ContainsKey('volume') -and $null -ne $itRule.volume) { $iv = [double]$itRule.volume }
+            }
+            $usedVolume += $iv * $ss
         }
     }
-    return @{ ok = $true; free_slots = $freeSlots; new_stacks = $newStacks }
+
+    # Volume gate (primary — capacity is volume-based in this game).
+    if ($hasVolumeCap) {
+        $perItemVol = Resolve-DuneItemVolume -Ip $Ip -Template $Template
+        if ($perItemVol -gt 0) {
+            $availVol = $maxVol - $usedVolume
+            if ($availVol -lt 0) { $availVol = 0 }
+            $maxByVolume = [long][Math]::Floor($availVol / $perItemVol)
+            if ($maxByVolume -lt $Quantity) {
+                return @{
+                    ok = $false
+                    error = ("Over volume limit: room for {0} more {1} ({2:N1}/{3:N1} volume used)." -f $maxByVolume, $Template, $usedVolume, $maxVol)
+                }
+            }
+        }
+        # perItemVol == 0: item takes no volume, always fits.
+    }
+
+    # Slot gate (only when a slot cap is set; a stack occupies one slot).
+    if ($hasSlotCap) {
+        $stackMax = Resolve-DuneStackMax -Ip $Ip -Template $Template -Quality $Quality
+        if ($stackMax -lt 1) { $stackMax = 1 }
+        $newStacks = [int][Math]::Ceiling($Quantity / [double]$stackMax)
+        $freeSlots = $maxSlots - $usedSlots
+        if ($freeSlots -lt $newStacks) {
+            return @{ ok = $false; error = "Inventory full: need $newStacks free slot(s), have $freeSlots." }
+        }
+        return @{ ok = $true; free_slots = $freeSlots; new_stacks = $newStacks }
+    }
+    return @{ ok = $true }
 }
 
 # ── handlers ──────────────────────────────────────────────────────────────────

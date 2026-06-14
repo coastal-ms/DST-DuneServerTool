@@ -13,6 +13,25 @@ here cover everything those tags shipped.
 
 ## [Unreleased]
 
+### Fixed
+
+- **Give Item now respects real inventory capacity (volume + slots).** Adding a
+  stacked item (e.g. a single 500-stack) no longer fails with a false "not enough
+  slots" error. The capacity check now mirrors the game's own model: a stack
+  occupies **one slot**, while the stack's **volume** (per-item volume ×
+  stack_size) counts against the inventory's volume cap
+  (`max_item_volume`/`PlayerInventoryStartingVolumeCapacity`). The slot cap is
+  only enforced when the inventory actually has one. Previously the guard tried to
+  reserve a slot for every item in a stack and ignored volume entirely.
+
+### Changed
+
+- **Give Item works the same online or offline.** Removed the separate
+  "Give Item (force live)" action — the single **Give Item** auto-routes:
+  delivered instantly to online players, applied to the backpack for offline
+  players (visible on their next login). Both paths are gated only on whether the
+  item fits in the inventory.
+
 ## [12.0.18] - 2026-06-13
 
 ### Changed
