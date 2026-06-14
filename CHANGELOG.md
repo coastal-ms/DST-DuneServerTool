@@ -13,6 +13,30 @@ here cover everything those tags shipped.
 
 ## [Unreleased]
 
+## [12.0.15] - 2026-06-13
+
+### Changed
+
+- **More Game Config settings are now flagged "also apply to your client."**
+  Some gameplay settings only take effect in-game when the matching value is
+  also present in the player's local client `Game.ini` — not just the server's
+  VM ini. Previously DST flagged only the two BuildingSettings keys that
+  Funcom's setup template calls out. Live in-game testing (corroborated by
+  community reverse-engineering notes) showed whole sections behave the same
+  way, so the client-mirror flag now covers 14 keys across **Building**,
+  **Inventory**, **Coriolis / Storm Cycle**, **Spice**, and **Sandworm**.
+
+### Added
+
+- **Client/server mismatch popup on the Game Config page.** When a client
+  config folder is set, DST now checks on page load whether your local client
+  `Game.ini` disagrees with the server on any *customized* client-mirror
+  setting (e.g. server says `5`, your client still says `4`). If so, a popup
+  lists each mismatch (Setting / Server / Your client) and offers **"Fix my
+  client config"**, which writes the server values into your client `Game.ini`
+  after backing the file up. If DST can't write the file, it shows a
+  copy-paste snippet so you can apply it yourself. No mismatch means no popup.
+
 ## [12.0.14] - 2026-06-13
 
 ### Fixed
