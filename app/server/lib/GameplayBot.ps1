@@ -217,8 +217,15 @@ function Get-DuneBotConfigDefaults {
         list_tick_interval   = 1800          # 30 min between list ticks
         listings_per_grade   = 5             # concurrent NPC listings per (template, grade)
         stackables_only      = $false        # v11.5.9: default OFF — list gear too
-        price_cap            = 100000        # HARD ceiling in Solari (sane-pricing patch)
+        price_cap            = 100000        # HARD ceiling on the stored item_price column (sane-pricing patch)
         price_floor          = 50            # HARD minimum (before grade multiplier) — mirrors dune-market-bot's noVendorPrice fallback
+        # Optional player-facing Solari cap. The in-game price shown to players
+        # is the stored item_price * 10, so price_cap=100000 actually displays
+        # as up to 1,000,000 Solari. When display_cap_enabled is ON, no listing's
+        # displayed price (item_price * 10) may exceed display_cap_solari.
+        # Defaulted OFF so the higher prices remain the out-of-box behaviour.
+        display_cap_enabled  = $false
+        display_cap_solari   = 100000
         default_unit_price   = 100           # fallback for unknown templates
         # Per-tier base prices, mirroring 0001-sane-pricing-100k-cap.patch.
         tier_base_prices     = @{ '0' = 10; '1' = 50; '2' = 200; '3' = 800; '4' = 3000; '5' = 10000; '6' = 30000 }
@@ -283,6 +290,7 @@ function Read-DuneBotConfig {
                         'enabled'              { $cfg[$k] = [bool]$v }
                         'maintain_balance'     { $cfg[$k] = [bool]$v }
                         'stackables_only'      { $cfg[$k] = [bool]$v }
+                        'display_cap_enabled'  { $cfg[$k] = [bool]$v }
                         'seed_from_catalog'    { $cfg[$k] = [bool]$v }
                         'disabled_items'       { $cfg[$k] = @($v | ForEach-Object { [string]$_ } | Where-Object { $_ }) }
                         'target_balance'       { $cfg[$k] = [int64]$v }
@@ -347,6 +355,8 @@ function Save-DuneBotConfig {
     $v = _Get $Incoming 'listings_per_grade';if ($null -ne $v) { $cfg['listings_per_grade'] = [Math]::Min(50, [Math]::Max(1, [int]$v)) }
     $v = _Get $Incoming 'price_cap';         if ($null -ne $v) { $cfg['price_cap'] = [Math]::Max(1, [int]$v) }
     $v = _Get $Incoming 'price_floor';       if ($null -ne $v) { $cfg['price_floor'] = [Math]::Max(0, [int]$v) }
+    $v = _Get $Incoming 'display_cap_enabled'; if ($null -ne $v) { $cfg['display_cap_enabled'] = [bool]$v }
+    $v = _Get $Incoming 'display_cap_solari';  if ($null -ne $v) { $cfg['display_cap_solari'] = [Math]::Max(10, [int]$v) }
     $v = _Get $Incoming 'default_unit_price';if ($null -ne $v) { $cfg['default_unit_price'] = [Math]::Max(1, [int]$v) }
     $v = _Get $Incoming 'max_buys_per_tick'; if ($null -ne $v) { $cfg['max_buys_per_tick'] = [Math]::Min(500, [Math]::Max(1, [int]$v)) }
     $v = _Get $Incoming 'die_size';          if ($null -ne $v) { $cfg['die_size']   = [Math]::Min(1000, [Math]::Max(2, [int]$v)) }
@@ -1025,10 +1035,20 @@ function Resolve-DuneBotListingCandidates {
             $isStackable = -not (Test-DuneIsEquipmentCategory -Category $cat)
         }
         if ($stackablesOnly -and -not $isStackable) { continue }
-        # Stack max: snapshot first, then bundled catalog, then 1.
+        # Stack max: for genuinely stackable items, take the LARGER of the live
+        # vendor snapshot and the bundled catalog stack. The live NPC vendor
+        # often stocks refined resources as a single unit (e.g. Plastone,
+        # Plastanium Ingot), so trusting the snapshot blindly made Duke list
+        # them as stacks of 1 while items absent from the snapshot fell back to
+        # the catalog's real stack (500). Using MAX keeps every stackable
+        # resource consistent at its true catalog stack. Non-stackable gear
+        # stays at one item per listing.
+        $ruleStack = if ($rule -and [int]$rule.stack_max -gt 0) { [int]$rule.stack_max } else { 0 }
         $stackMax = 1
-        if ($snStack -gt 0) { $stackMax = $snStack }
-        elseif ($rule -and [int]$rule.stack_max -gt 0) { $stackMax = [int]$rule.stack_max }
+        if ($isStackable) {
+            $stackMax = [Math]::Max($snStack, $ruleStack)
+            if ($stackMax -lt 1) { $stackMax = 1 }
+        }
         # Vendor price: snapshot first (live in-game Funcom price), then
         # bundled catalog vendor_price, then default_unit_price.
         $vendor = 0
@@ -1129,7 +1149,16 @@ function Get-DuneBotItemPrice {
         $price = $price * [double]$script:DuneBotGradePriceMult[$Grade]
     }
     $rounded = Get-DuneBotRoundedPrice -Price $price
-    return Limit-DuneBotPrice -Price $rounded -Cap $cap
+    $result = Limit-DuneBotPrice -Price $rounded -Cap $cap
+    # Optional player-facing Solari cap (default OFF). In-game price = item_price
+    # * 10, so to keep the displayed number at/under display_cap_solari we clamp
+    # item_price to floor(display_cap_solari / 10).
+    if ([bool]$Cfg.display_cap_enabled) {
+        $displayCapItemPrice = [int][Math]::Floor([double]$Cfg.display_cap_solari / 10.0)
+        if ($displayCapItemPrice -lt 1) { $displayCapItemPrice = 1 }
+        if ($result -gt $displayCapItemPrice) { $result = $displayCapItemPrice }
+    }
+    return $result
 }
 
 # Snapshot of Duke's own current listings keyed by template_id.

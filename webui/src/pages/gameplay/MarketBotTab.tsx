@@ -842,19 +842,32 @@ function PricingSection({ draft, setDraft }: { draft: BotConfig; setDraft: (c: B
       <div className="card p-3 text-xs text-text-muted border-l-2 border-warning flex items-start gap-2">
         <Icon name="TriangleAlert" size={14} className="text-warning shrink-0 mt-0.5" />
         <span>
-          Sane-pricing defaults (100 k Solari hard cap, tier base prices, category factors, rarity multipliers,
+          Sane-pricing defaults (item_price cap, tier base prices, category factors, rarity multipliers,
           and 95 % vendor floor) govern the bot's pricing. Touch with care — these directly drive
           every listing the bot writes.
         </span>
       </div>
 
       <div className="card p-4 grid grid-cols-1 sm:grid-cols-3 gap-4">
-        <NumField label="Price cap (Solari)" value={draft.price_cap ?? 100000}
+        <NumField label="Price cap (item_price)" value={draft.price_cap ?? 100000}
           onChange={v => setDraft({ ...draft, price_cap: v })} />
-        <NumField label="Price floor (Solari, 0 = off)" value={draft.price_floor ?? 50}
+        <NumField label="Price floor (item_price, 0 = off)" value={draft.price_floor ?? 50}
           onChange={v => setDraft({ ...draft, price_floor: v })} />
         <NumField label="Default unit price (fallback)" value={draft.default_unit_price ?? 50}
           onChange={v => setDraft({ ...draft, default_unit_price: v })} />
+      </div>
+
+      <div className="card p-4 space-y-3">
+        <Toggle label="Cap displayed price (Solari)" checked={draft.display_cap_enabled ?? false}
+          onChange={v => setDraft({ ...draft, display_cap_enabled: v })} />
+        <p className="text-[11px] text-text-dim">
+          Off by default. The in-game Solari shown to players is the stored item_price × 10, so the
+          Price cap above (100,000) actually displays as up to 1,000,000 Solari. Turn this on to cap
+          the real player-facing number — e.g. 100,000 keeps every Duke listing at or under 100 k Solari.
+        </p>
+        <NumField label="Displayed price cap (Solari)" value={draft.display_cap_solari ?? 100000}
+          disabled={!(draft.display_cap_enabled ?? false)}
+          onChange={v => setDraft({ ...draft, display_cap_solari: v })} />
       </div>
 
       <div className="card p-4">
