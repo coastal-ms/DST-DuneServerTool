@@ -855,15 +855,16 @@ function Invoke-DunePlayerApplyProgressionPreset {
 
     $completed = 0
     $errs = @()
-    foreach ($node in $preset.journey_nodes) {
+    foreach ($node in $preset.nodes) {
         $r = Invoke-DunePlayerCompleteJourneyNode -Ip $Ip -AccountId $AccountId -NodeId $node -SkipMsg
         if ($r.ok) { $completed++ }
         else { $errs += "$node : $($r.error)" }
     }
+    $total = @($preset.nodes).Count
     $ok = $errs.Count -eq 0
-    $msg = "Applied preset '$PresetId' ($($preset.label)): completed $completed/$($preset.journey_nodes.Count) journey node(s)."
+    $msg = "Applied preset '$PresetId' ($($preset.name)): completed $completed/$total journey node(s)."
     if ($errs.Count -gt 0) { $msg += " Failures: $($errs -join '; ')" }
-    return @{ ok = $ok; message = $msg; completed = $completed; total = $preset.journey_nodes.Count }
+    return @{ ok = $ok; message = $msg; completed = $completed; total = $total }
 }
 
 function Invoke-DunePlayerCompleteJourneyNode {

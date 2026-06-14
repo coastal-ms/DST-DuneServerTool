@@ -1,13 +1,16 @@
 {
   "_meta": {
-    "total": 979,
+    "total": 1294,
     "source": "awakening.wiki",
-    "scraped": "2026-05-20"
+    "scraped": "2026-05-20",
+    "gradeable": 378
   },
   "items": {
     "SMG_Unique_LargeMag_06": {
       "name": "A Dart for Every Man",
-      "category": "Weapons - Ranged"
+      "category": "Weapons - Ranged",
+      "gradeable": true,
+      "tier": 6
     },
     "UniqueSmg1": {
       "name": "Abulurd's Rapture",
@@ -163,7 +166,9 @@
     },
     "Shotgun_Unique_LargeMag_06": {
       "name": "Ambition",
-      "category": "Weapons - Ranged"
+      "category": "Weapons - Ranged",
+      "gradeable": true,
+      "tier": 6
     },
     "Combat_Neut_SmugglerDeserterUnique01_Boots": {
       "name": "Aren's Boots",
@@ -407,7 +412,9 @@
     },
     "LMG_Unique_RapidFire_06": {
       "name": "Bashar's Command",
-      "category": "Weapons - Ranged"
+      "category": "Weapons - Ranged",
+      "gradeable": true,
+      "tier": 6
     },
     "BasicLighting_Patent": {
       "name": "Basic Lighting",
@@ -683,23 +690,33 @@
     },
     "Combat_Heavy_Unique_Reinforced_Boots_06": {
       "name": "Bulwark Boots",
-      "category": "Garments - Feet"
+      "category": "Garments - Feet",
+      "gradeable": true,
+      "tier": 6
     },
     "Combat_Heavy_Unique_Reinforced_Top_06": {
       "name": "Bulwark Chest",
-      "category": "Garments - Chest"
+      "category": "Garments - Chest",
+      "gradeable": true,
+      "tier": 6
     },
     "Combat_Heavy_Unique_Reinforced_Gloves_06": {
       "name": "Bulwark Gloves",
-      "category": "Garments - Hands"
+      "category": "Garments - Hands",
+      "gradeable": true,
+      "tier": 6
     },
     "Combat_Heavy_Unique_Reinforced_Helmet_06": {
       "name": "Bulwark Helmet",
-      "category": "Garments - Head"
+      "category": "Garments - Head",
+      "gradeable": true,
+      "tier": 6
     },
     "Combat_Heavy_Unique_Reinforced_Bottom_06": {
       "name": "Bulwark Leggings",
-      "category": "Garments - Legs"
+      "category": "Garments - Legs",
+      "gradeable": true,
+      "tier": 6
     },
     "ContractSlavers1DeserterArmors": {
       "name": "Bundle of Deserter Clothes",
@@ -915,7 +932,9 @@
     },
     "UniqueDirk_04": {
       "name": "Cauterizer",
-      "category": "Weapons - Melee"
+      "category": "Weapons - Melee",
+      "gradeable": true,
+      "tier": 6
     },
     "ContractSeronVarlinDamasteelSword": {
       "name": "Ceremonial Damasteel Sword",
@@ -959,7 +978,9 @@
     },
     "Combat_Heavy_Unique_PowerEfficient_Gloves_06": {
       "name": "Circuit Gauntlets",
-      "category": "Garments - Hands"
+      "category": "Garments - Hands",
+      "gradeable": true,
+      "tier": 6
     },
     "UniqueThumper": {
       "name": "Thumper",
@@ -1042,7 +1063,7 @@
       "category": "Contract Items"
     },
     "nlckv": {
-      "name": "Cultivating Hufuf Vines in Artificial Environments \u2014 E. Goetha",
+      "name": "Cultivating Hufuf Vines in Artificial Environments — E. Goetha",
       "category": "Misc"
     },
     "WaterPack_Consumable": {
@@ -1091,7 +1112,9 @@
     },
     "Combat_Light_Unique_BiomeHeat_Top_06": {
       "name": "Desert Garb",
-      "category": "Garments - Chest"
+      "category": "Garments - Chest",
+      "gradeable": true,
+      "tier": 6
     },
     "ContractZaynDeWitteDeserterBloodSample": {
       "name": "Deserter Tissue Sample",
@@ -1175,7 +1198,9 @@
     },
     "LongRifle_Unique_Poison_06": {
       "name": "Dunewatcher",
-      "category": "Misc"
+      "category": "Misc",
+      "gradeable": true,
+      "tier": 6
     },
     "DuraluminumRod": {
       "name": "Duraluminum Ingot",
@@ -1227,23 +1252,33 @@
     },
     "Combat_Neut_AtreidesDeserterUnique05_Boots": {
       "name": "Executor's Boots",
-      "category": "Garments - Feet"
+      "category": "Garments - Feet",
+      "gradeable": true,
+      "tier": 6
     },
     "Combat_Neut_AtreidesDeserterUnique05_Top": {
       "name": "Executor's Chestpiece",
-      "category": "Garments - Chest"
+      "category": "Garments - Chest",
+      "gradeable": true,
+      "tier": 6
     },
     "Combat_Neut_AtreidesDeserterUnique05_Gloves": {
       "name": "Executor's Gauntlets",
-      "category": "Garments - Hands"
+      "category": "Garments - Hands",
+      "gradeable": true,
+      "tier": 6
     },
     "Combat_Neut_AtreidesDeserterUnique05_Helmet": {
       "name": "Executor's Helmet",
-      "category": "Garments - Head"
+      "category": "Garments - Head",
+      "gradeable": true,
+      "tier": 6
     },
     "Combat_Neut_AtreidesDeserterUnique05_Bottom": {
       "name": "Executor's Pants",
-      "category": "Garments - Legs"
+      "category": "Garments - Legs",
+      "gradeable": true,
+      "tier": 6
     },
     "ContractExperimentalMissileComponent": {
       "name": "Experimental Missile Component",
@@ -1263,7 +1298,9 @@
     },
     "Kindjal_Unique_Blood_06": {
       "name": "Feyd's Drinker",
-      "category": "Weapons - Melee"
+      "category": "Weapons - Melee",
+      "gradeable": true,
+      "tier": 6
     },
     "UniqueDirk_Story_Feyd": {
       "name": "Feyd's Take-Down Blade",
@@ -1419,7 +1456,9 @@
     },
     "UniqueRapier_03": {
       "name": "Halleck's Pick",
-      "category": "Weapons - Melee"
+      "category": "Weapons - Melee",
+      "gradeable": true,
+      "tier": 6
     },
     "Scanner_Unique_Body_03": {
       "name": "Handheld Life Scanner Mk3",
@@ -1527,7 +1566,9 @@
     },
     "Combat_Light_Unique_Climbing_Gloves_06": {
       "name": "Hook-claw Gloves",
-      "category": "Garments - Hands"
+      "category": "Garments - Hands",
+      "gradeable": true,
+      "tier": 6
     },
     "Shotgun_Unique_Explosive_04": {
       "name": "House Burst Drillshot",
@@ -1603,7 +1644,9 @@
     },
     "Combat_Light_Unique_ReduceSuspensor_Top_06": {
       "name": "Idaho's Charge",
-      "category": "Garments - Chest"
+      "category": "Garments - Chest",
+      "gradeable": true,
+      "tier": 6
     },
     "Social_Neut_ImperialCasual_Boots": {
       "name": "Imperial Casual Shoes",
@@ -1615,19 +1658,27 @@
     },
     "Stillsuit_Unique_Armored_06_Boots": {
       "name": "Imperial Stillsuit Boots",
-      "category": "Resources"
+      "category": "Resources",
+      "gradeable": true,
+      "tier": 6
     },
     "Stillsuit_Unique_Armored_06_Top": {
       "name": "Imperial Stillsuit Garment",
-      "category": "Resources"
+      "category": "Resources",
+      "gradeable": true,
+      "tier": 6
     },
     "Stillsuit_Unique_Armored_06_Gloves": {
       "name": "Imperial Stillsuit Gloves",
-      "category": "Resources"
+      "category": "Resources",
+      "gradeable": true,
+      "tier": 6
     },
     "Stillsuit_Unique_Armored_06_Mask": {
       "name": "Imperial Stillsuit Mask",
-      "category": "Resources"
+      "category": "Resources",
+      "gradeable": true,
+      "tier": 6
     },
     "ogv8a": {
       "name": "Imperial Testing Station Records",
@@ -1699,7 +1750,9 @@
     },
     "UniqueAr_Burst_06": {
       "name": "Indara's Lullaby",
-      "category": "Misc"
+      "category": "Misc",
+      "gradeable": true,
+      "tier": 6
     },
     "MiningTool_2h_Heavy": {
       "name": "Industrial Cutteray Mk4",
@@ -1775,7 +1828,9 @@
     },
     "Combat_Light_Unique_Stamina_Bottom_06": {
       "name": "Ix-core Leggings",
-      "category": "Resources"
+      "category": "Resources",
+      "gradeable": true,
+      "tier": 6
     },
     "WoHIxianDecoder": {
       "name": "Ixian Decoder",
@@ -2411,7 +2466,9 @@
     },
     "Stillsuit_Unique_HeatMitigation_06_Mask": {
       "name": "Pardot's Hood",
-      "category": "Garments - Head"
+      "category": "Garments - Head",
+      "gradeable": true,
+      "tier": 6
     },
     "OldImperialComponent2": {
       "name": "Particle Capacitor",
@@ -2427,11 +2484,15 @@
     },
     "Shotgun_Unique_Blood_06": {
       "name": "Penetrator",
-      "category": "Weapons - Ranged"
+      "category": "Weapons - Ranged",
+      "gradeable": true,
+      "tier": 6
     },
     "UniqueScattergun5": {
       "name": "Perforator",
-      "category": "Weapons - Ranged"
+      "category": "Weapons - Ranged",
+      "gradeable": true,
+      "tier": 6
     },
     "PortableLight": {
       "name": "Personal Light",
@@ -2439,23 +2500,33 @@
     },
     "Combat_Neut_SmugglerDeserterUnique06_Boots": {
       "name": "Pincushion Boots",
-      "category": "Garments - Feet"
+      "category": "Garments - Feet",
+      "gradeable": true,
+      "tier": 6
     },
     "Combat_Neut_SmugglerDeserterUnique06_Top": {
       "name": "Pincushion Chestpiece",
-      "category": "Garments - Chest"
+      "category": "Garments - Chest",
+      "gradeable": true,
+      "tier": 6
     },
     "Combat_Neut_SmugglerDeserterUnique06_Gloves": {
       "name": "Pincushion Gauntlets",
-      "category": "Garments - Hands"
+      "category": "Garments - Hands",
+      "gradeable": true,
+      "tier": 6
     },
     "Combat_Neut_SmugglerDeserterUnique06_Helmet": {
       "name": "Pincushion Helmet",
-      "category": "Garments - Head"
+      "category": "Garments - Head",
+      "gradeable": true,
+      "tier": 6
     },
     "Combat_Neut_SmugglerDeserterUnique06_Bottom": {
       "name": "Pincushion Pants",
-      "category": "Garments - Legs"
+      "category": "Garments - Legs",
+      "gradeable": true,
+      "tier": 6
     },
     "UniqueAr2": {
       "name": "Pipecleaner",
@@ -2475,7 +2546,9 @@
     },
     "LMG_Unique_Power_06": {
       "name": "Plasma Cannon",
-      "category": "Weapons - Ranged"
+      "category": "Weapons - Ranged",
+      "gradeable": true,
+      "tier": 6
     },
     "T6RefinedResourceA": {
       "name": "Plastanium Ingot",
@@ -2519,7 +2592,9 @@
     },
     "Combat_Heavy_Unique_PowerIncrease_Top_06": {
       "name": "Power Harness",
-      "category": "Garments - Chest"
+      "category": "Garments - Chest",
+      "gradeable": true,
+      "tier": 6
     },
     "PowerPack5": {
       "name": "Power Pack Mk1",
@@ -2615,7 +2690,9 @@
     },
     "Shotgun_Unique_Explosive_06": {
       "name": "Regis Burst Drillshot",
-      "category": "Weapons - Ranged"
+      "category": "Weapons - Ranged",
+      "gradeable": true,
+      "tier": 6
     },
     "Dirk_3": {
       "name": "Regis Dirk",
@@ -2627,7 +2704,9 @@
     },
     "HeavyPistol_Unique_Bleed_06": {
       "name": "Regis Disruptor Pistol",
-      "category": "Weapons - Ranged"
+      "category": "Weapons - Ranged",
+      "gradeable": true,
+      "tier": 6
     },
     "SmugShot5": {
       "name": "Regis Drillshot FK7",
@@ -2671,7 +2750,9 @@
     },
     "LongRifle_Unique_LargeMag_06": {
       "name": "Regis Tripleshot Repeating Rifle",
-      "category": "Misc"
+      "category": "Misc",
+      "gradeable": true,
+      "tier": 6
     },
     "AtreLMG5": {
       "name": "Regis Vulcan GAU-92",
@@ -2683,11 +2764,15 @@
     },
     "Kindjal_Unique_Stamina_06": {
       "name": "Replica Pulse-knife",
-      "category": "Weapons - Melee"
+      "category": "Weapons - Melee",
+      "gradeable": true,
+      "tier": 6
     },
     "UniqueSword_05": {
       "name": "Replica Pulse-sword",
-      "category": "Weapons - Melee"
+      "category": "Weapons - Melee",
+      "gradeable": true,
+      "tier": 6
     },
     "RespawnBeacon": {
       "name": "Respawn Beacon",
@@ -2719,7 +2804,9 @@
     },
     "UniqueAr4": {
       "name": "Salusan Vengeance",
-      "category": "Weapons - Ranged"
+      "category": "Weapons - Ranged",
+      "gradeable": true,
+      "tier": 6
     },
     "ScrapMetal": {
       "name": "Salvaged Metal",
@@ -2931,7 +3018,9 @@
     },
     "UniqueSmg3": {
       "name": "Sardaukar Intimidator",
-      "category": "Weapons - Ranged"
+      "category": "Weapons - Ranged",
+      "gradeable": true,
+      "tier": 6
     },
     "Stillsuit_Unique_Armored_05_Boots": {
       "name": "Saturnine Stillsuit Boots",
@@ -3175,7 +3264,9 @@
     },
     "HeavyPistol_Unique_Headshot_06": {
       "name": "Seethe",
-      "category": "Weapons - Ranged"
+      "category": "Weapons - Ranged",
+      "gradeable": true,
+      "tier": 6
     },
     "D_ContractSemutaNotes": {
       "name": "Semuta Notes",
@@ -3231,7 +3322,9 @@
     },
     "Stillsuit_Unique_HighCapacity_06_Top": {
       "name": "Shaddam's Bladder",
-      "category": "Garments - Chest"
+      "category": "Garments - Chest",
+      "gradeable": true,
+      "tier": 6
     },
     "Stillsuit_Unique_HeatMitigation_05_Mask": {
       "name": "Shaded Hood",
@@ -3271,7 +3364,9 @@
     },
     "UniqueScattergun_Fire_06": {
       "name": "Shellburster",
-      "category": "Weapons - Ranged"
+      "category": "Weapons - Ranged",
+      "gradeable": true,
+      "tier": 6
     },
     "JourneyShieldDissembler": {
       "name": "Shield Dissembler",
@@ -3291,7 +3386,9 @@
     },
     "UniqueSda_Doubleshot_06": {
       "name": "Shishakli's Bite",
-      "category": "Weapons - Ranged"
+      "category": "Weapons - Ranged",
+      "gradeable": true,
+      "tier": 6
     },
     "Combat_Heavy_Unique_PowerEfficient_Gloves_03": {
       "name": "Shock Gauntlets",
@@ -3527,7 +3624,9 @@
     },
     "UniqueRapier_Power_06": {
       "name": "Static Needle",
-      "category": "Weapons - Melee"
+      "category": "Weapons - Melee",
+      "gradeable": true,
+      "tier": 6
     },
     "Combat_Light_Unique_BiomeHeat_Top_05": {
       "name": "Station Garb",
@@ -3639,7 +3738,9 @@
     },
     "Combat_Light_Unique_WormThreat_Boots_06": {
       "name": "Tabr Softstep Boots",
-      "category": "Garments - Feet"
+      "category": "Garments - Feet",
+      "gradeable": true,
+      "tier": 6
     },
     "ContractFactionTaintedSpiceContainer": {
       "name": "Tainted Spice",
@@ -3659,7 +3760,9 @@
     },
     "RocketLauncher_Unique_Homing_06": {
       "name": "The Ancient Way",
-      "category": "Misc"
+      "category": "Misc",
+      "gradeable": true,
+      "tier": 6
     },
     "Bloodsack_Unique_Durable_06": {
       "name": "The Baron's Bloodbag",
@@ -3691,23 +3794,33 @@
     },
     "Combat_Hark_MedUnique02_Boots": {
       "name": "The Forge Boots",
-      "category": "Garments - Feet"
+      "category": "Garments - Feet",
+      "gradeable": true,
+      "tier": 6
     },
     "Combat_Hark_MedUnique02_Top": {
       "name": "The Forge Chestpiece",
-      "category": "Garments - Chest"
+      "category": "Garments - Chest",
+      "gradeable": true,
+      "tier": 6
     },
     "Combat_Hark_MedUnique02_Gloves": {
       "name": "The Forge Gloves",
-      "category": "Garments - Hands"
+      "category": "Garments - Hands",
+      "gradeable": true,
+      "tier": 6
     },
     "Combat_Hark_MedUnique02_Helmet": {
       "name": "The Forge Helmet",
-      "category": "Garments - Head"
+      "category": "Garments - Head",
+      "gradeable": true,
+      "tier": 6
     },
     "Combat_Hark_MedUnique02_Bottom": {
       "name": "The Forge Pants",
-      "category": "Garments - Legs"
+      "category": "Garments - Legs",
+      "gradeable": true,
+      "tier": 6
     },
     "Hook_01": {
       "name": "The Glutton's Hook",
@@ -3787,7 +3900,9 @@
     },
     "UniqueFlameThrower_02": {
       "name": "Vaporizer",
-      "category": "Misc"
+      "category": "Misc",
+      "gradeable": true,
+      "tier": 6
     },
     "VehicleBackupTool": {
       "name": "Vehicle Backup Tool",
@@ -3799,19 +3914,27 @@
     },
     "Stillsuit_Unique_Efficient_06_Boots": {
       "name": "Villari's Stillsuit Boots",
-      "category": "Garments - Feet"
+      "category": "Garments - Feet",
+      "gradeable": true,
+      "tier": 6
     },
     "Stillsuit_Unique_Efficient_06_Top": {
       "name": "Villari's Stillsuit Garment",
-      "category": "Garments - Chest"
+      "category": "Garments - Chest",
+      "gradeable": true,
+      "tier": 6
     },
     "Stillsuit_Unique_Efficient_06_Gloves": {
       "name": "Villari's Stillsuit Gloves",
-      "category": "Garments - Hands"
+      "category": "Garments - Hands",
+      "gradeable": true,
+      "tier": 6
     },
     "Stillsuit_Unique_Efficient_06_Mask": {
       "name": "Villari's Stillsuit Mask",
-      "category": "Garments - Head"
+      "category": "Garments - Head",
+      "gradeable": true,
+      "tier": 6
     },
     "SandcrawlerEngine_Unique_Speed_06": {
       "name": "Walker Sandcrawler Engine Mk6",
@@ -3839,7 +3962,9 @@
     },
     "UniqueSda6": {
       "name": "Way of the Misr",
-      "category": "Weapons - Ranged"
+      "category": "Weapons - Ranged",
+      "gradeable": true,
+      "tier": 6
     },
     "UniqueSda2": {
       "name": "Way of the Wanderer",
@@ -3903,7 +4028,9 @@
     },
     "Combat_Light_Unique_DewReap_Gloves_06": {
       "name": "Yueh's Reaper Gloves",
-      "category": "Garments - Hands"
+      "category": "Garments - Hands",
+      "gradeable": true,
+      "tier": 6
     },
     "UniqueAr_Burst_03": {
       "name": "Zaal's Companion",
@@ -3920,6 +4047,1896 @@
     "ContractZaynDeWitteDeserterMinimicFilm": {
       "name": "Zayn's Minimic Film",
       "category": "Contract Items"
+    },
+    "Combat_Light_Unique_Scanning_Helmet_06": {
+      "name": "Wayfinder Helm",
+      "category": "Garments - Head",
+      "gradeable": true,
+      "tier": 6
+    },
+    "Stillsuit_Choam_Unique_Dashed06_Top": {
+      "name": "Crew Chief’s Stillsuit Garment",
+      "category": "Garments - Chest",
+      "gradeable": true,
+      "tier": 6
+    },
+    "Radiation_Suit_T6_Unique_Armored": {
+      "name": "Tactical Radiation Suit",
+      "category": "Garments",
+      "gradeable": true,
+      "tier": 6
+    },
+    "Exoskeleton_Heavy06_Unique_Top": {
+      "name": "Combat Exoskeleton Chestpiece",
+      "category": "Garments - Chest",
+      "gradeable": true,
+      "tier": 6
+    },
+    "Assassin_Light06_Unique_Helmet": {
+      "name": "Phantom Whisper Helm",
+      "category": "Garments - Head",
+      "gradeable": true,
+      "tier": 6
+    },
+    "Assassin_Light06_Unique_Top": {
+      "name": "Phantom Whisper Chestpiece",
+      "category": "Garments - Chest",
+      "gradeable": true,
+      "tier": 6
+    },
+    "Unique_Sword_BleedyBlocky_6": {
+      "name": "Spike Hilt Sword",
+      "category": "Weapons - Melee",
+      "gradeable": true,
+      "tier": 6
+    },
+    "Fireballer_3": {
+      "name": "Plastanium Pyrocket",
+      "category": "Weapons - Ranged",
+      "gradeable": true,
+      "tier": 6
+    },
+    "UniqueAr6_Electric": {
+      "name": "Experimental Lightning Gun",
+      "category": "Weapons - Ranged",
+      "gradeable": true,
+      "tier": 6
+    },
+    "UniqueDualBlades_6": {
+      "name": "Burning Blades",
+      "category": "Weapons - Melee",
+      "gradeable": true,
+      "tier": 6
+    },
+    "B1C4_Unique_HarkAr2": {
+      "name": "The Angry Adder",
+      "category": "Weapons - Ranged",
+      "gradeable": true,
+      "tier": 6
+    },
+    "B1C4_Unique_LMG2": {
+      "name": "The Hateful Barker",
+      "category": "Weapons - Ranged",
+      "gradeable": true,
+      "tier": 6
+    },
+    "B1C4_Unique_SmugDmr1": {
+      "name": "Blind Fury",
+      "category": "Weapons - Ranged",
+      "gradeable": true,
+      "tier": 6
+    },
+    "B1C4_Unique_Dirk2": {
+      "name": "Eel’s Tooth",
+      "category": "Weapons - Melee",
+      "gradeable": true,
+      "tier": 6
+    },
+    "B1C4_Unique_DualBlades1": {
+      "name": "Leech’s Maw",
+      "category": "Weapons - Melee",
+      "gradeable": true,
+      "tier": 6
+    },
+    "B1C4_Unique_Kindjal2": {
+      "name": "Serpent’s Fang",
+      "category": "Weapons - Melee",
+      "gradeable": true,
+      "tier": 6
+    },
+    "B1C4_Unique_Sword2": {
+      "name": "Branding Blade",
+      "category": "Weapons - Melee",
+      "gradeable": true,
+      "tier": 6
+    },
+    "B1C4_Unique_HeavyPistol2": {
+      "name": "Hell-Fury Pistol",
+      "category": "Weapons - Ranged",
+      "gradeable": true,
+      "tier": 6
+    },
+    "B1C4_Unique_Rapier2": {
+      "name": "Prescient Edge",
+      "category": "Weapons - Melee",
+      "gradeable": true,
+      "tier": 6
+    },
+    "B1C4_Unique_SMG2": {
+      "name": "Spitting Cobra",
+      "category": "Weapons - Ranged",
+      "gradeable": true,
+      "tier": 6
+    },
+    "T6_Augment_Acuracy1": {
+      "name": "Precision Barrel Adjuster",
+      "category": "Augments",
+      "gradeable": true,
+      "tier": 6
+    },
+    "T6_Augment_Armor1": {
+      "name": "Concussive Dampening",
+      "category": "Augments",
+      "gradeable": true,
+      "tier": 6
+    },
+    "T6_Augment_Armor10": {
+      "name": "Energy Resistant Weave",
+      "category": "Augments",
+      "gradeable": true,
+      "tier": 6
+    },
+    "T6_Augment_Armor11": {
+      "name": "Detoxifying Fabrics",
+      "category": "Augments",
+      "gradeable": true,
+      "tier": 6
+    },
+    "T6_Augment_Armor12": {
+      "name": "Dart-proof Latticing",
+      "category": "Augments",
+      "gradeable": true,
+      "tier": 6
+    },
+    "T6_Augment_Armor13": {
+      "name": "Flame-resistant Fabrics",
+      "category": "Augments",
+      "gradeable": true,
+      "tier": 6
+    },
+    "T6_Augment_Armor14": {
+      "name": "Blade-warding Weave",
+      "category": "Augments",
+      "gradeable": true,
+      "tier": 6
+    },
+    "T6_Augment_Armor16": {
+      "name": "Radiation Absorbing Fabrics",
+      "category": "Augments",
+      "gradeable": true,
+      "tier": 6
+    },
+    "T6_Augment_Armor17": {
+      "name": "Radiation Shielded Latticing",
+      "category": "Augments",
+      "gradeable": true,
+      "tier": 6
+    },
+    "T6_Augment_Armor2": {
+      "name": "Concussive Redirection",
+      "category": "Augments",
+      "gradeable": true,
+      "tier": 6
+    },
+    "T6_Augment_Armor4": {
+      "name": "Penetrative Reinforcement",
+      "category": "Augments",
+      "gradeable": true,
+      "tier": 6
+    },
+    "T6_Augment_Armor5": {
+      "name": "Energy Dispersing Padding",
+      "category": "Augments",
+      "gradeable": true,
+      "tier": 6
+    },
+    "T6_Augment_Armor6": {
+      "name": "Garment Reinforcement",
+      "category": "Augments",
+      "gradeable": true,
+      "tier": 6
+    },
+    "T6_Augment_Armor8": {
+      "name": "Desert-tested Weave",
+      "category": "Augments",
+      "gradeable": true,
+      "tier": 6
+    },
+    "T6_Augment_Armor9": {
+      "name": "Curative-infused Padding",
+      "category": "Augments",
+      "gradeable": true,
+      "tier": 6
+    },
+    "T6_Augment_BR1": {
+      "name": "Karpov 38 Pressurizer",
+      "category": "Augments",
+      "gradeable": true,
+      "tier": 6
+    },
+    "T6_Augment_BR2": {
+      "name": "Karpov 38 Dart Sprayer",
+      "category": "Augments",
+      "gradeable": true,
+      "tier": 6
+    },
+    "T6_Augment_BR3": {
+      "name": "Karpov 38 Heavy Kit",
+      "category": "Augments",
+      "gradeable": true,
+      "tier": 6
+    },
+    "T6_Augment_BR4": {
+      "name": "Karpov 38 Focuser",
+      "category": "Augments",
+      "gradeable": true,
+      "tier": 6
+    },
+    "T6_Augment_BR8": {
+      "name": "Karpov 38 Precision Kit",
+      "category": "Augments",
+      "gradeable": true,
+      "tier": 6
+    },
+    "T6_Augment_Damage1": {
+      "name": "Heavy Caliber Upgrade",
+      "category": "Augments",
+      "gradeable": true,
+      "tier": 6
+    },
+    "T6_Augment_DeathDurabilityOff": {
+      "name": "Protective Coating",
+      "category": "Augments",
+      "gradeable": true,
+      "tier": 6
+    },
+    "T6_Augment_Fireballer1": {
+      "name": "Pyrocket Supercharger",
+      "category": "Augments",
+      "gradeable": true,
+      "tier": 6
+    },
+    "T6_Augment_Fireballer2": {
+      "name": "Pyrocket Quickloader",
+      "category": "Augments",
+      "gradeable": true,
+      "tier": 6
+    },
+    "T6_Augment_Flamethrower1": {
+      "name": "Flamethrower Amplifier",
+      "category": "Augments",
+      "gradeable": true,
+      "tier": 6
+    },
+    "T6_Augment_Flamethrower2": {
+      "name": "Flamethrower Superheater",
+      "category": "Augments",
+      "gradeable": true,
+      "tier": 6
+    },
+    "T6_Augment_Flamethrower3": {
+      "name": "Flamethrower Nozzle Extension",
+      "category": "Augments",
+      "gradeable": true,
+      "tier": 6
+    },
+    "T6_Augment_Flamethrower4": {
+      "name": "Flamethrower Quickloader",
+      "category": "Augments",
+      "gradeable": true,
+      "tier": 6
+    },
+    "T6_Augment_Headshotdamage1": {
+      "name": "Tactical Enhancer",
+      "category": "Augments",
+      "gradeable": true,
+      "tier": 6
+    },
+    "T6_Augment_HeavyPistol1": {
+      "name": "Rafiq Snubnose Heavy Kit",
+      "category": "Augments",
+      "gradeable": true,
+      "tier": 6
+    },
+    "T6_Augment_HeavyPistol2": {
+      "name": "Rafiq Snubnose Disruptive Coating",
+      "category": "Augments",
+      "gradeable": true,
+      "tier": 6
+    },
+    "T6_Augment_HeavyPistol3": {
+      "name": "Rafiq Snubnose Quickdraw Assembly",
+      "category": "Augments",
+      "gradeable": true,
+      "tier": 6
+    },
+    "T6_Augment_HeavyPistol4": {
+      "name": "Rafiq Snubnose Expander",
+      "category": "Augments",
+      "gradeable": true,
+      "tier": 6
+    },
+    "T6_Augment_HeavyPistol5": {
+      "name": "Rafiq Snubnose Sprayer",
+      "category": "Augments",
+      "gradeable": true,
+      "tier": 6
+    },
+    "T6_Augment_Lasgun1": {
+      "name": "Lasgun Focuser",
+      "category": "Augments",
+      "gradeable": true,
+      "tier": 6
+    },
+    "T6_Augment_Lasgun2": {
+      "name": "Lasgun Extender",
+      "category": "Augments",
+      "gradeable": true,
+      "tier": 6
+    },
+    "T6_Augment_Lasgun3": {
+      "name": "Lasgun Harmonizer",
+      "category": "Augments",
+      "gradeable": true,
+      "tier": 6
+    },
+    "T6_Augment_Lasgun4": {
+      "name": "Lasgun Amplifier",
+      "category": "Augments",
+      "gradeable": true,
+      "tier": 6
+    },
+    "T6_Augment_Lmg1": {
+      "name": "VULCAN GAU-92 Expander",
+      "category": "Augments",
+      "gradeable": true,
+      "tier": 6
+    },
+    "T6_Augment_Lmg4": {
+      "name": "VULCAN GAU-92 Focuser",
+      "category": "Augments",
+      "gradeable": true,
+      "tier": 6
+    },
+    "T6_Augment_Lmg5": {
+      "name": "VULCAN GAU-92 Disruptive Coating",
+      "category": "Augments",
+      "gradeable": true,
+      "tier": 6
+    },
+    "T6_Augment_Lmg6": {
+      "name": "VULCAN GAU-92 Sprayer",
+      "category": "Augments",
+      "gradeable": true,
+      "tier": 6
+    },
+    "T6_Augment_Magazinecapacity1": {
+      "name": "Capacity Expander",
+      "category": "Augments",
+      "gradeable": true,
+      "tier": 6
+    },
+    "T6_Augment_MaulaPistol1": {
+      "name": "Maula Pistol Sprayer",
+      "category": "Augments",
+      "gradeable": true,
+      "tier": 6
+    },
+    "T6_Augment_MaulaPistol2": {
+      "name": "Maula Pistol Disruptive Coating",
+      "category": "Augments",
+      "gradeable": true,
+      "tier": 6
+    },
+    "T6_Augment_MaulaPistol3": {
+      "name": "Maula Pistol Expander",
+      "category": "Augments",
+      "gradeable": true,
+      "tier": 6
+    },
+    "T6_Augment_MaulaPistol4": {
+      "name": "Maula Pistol Barrel Extender",
+      "category": "Augments",
+      "gradeable": true,
+      "tier": 6
+    },
+    "T6_Augment_MaulaPistol5": {
+      "name": "Maula Pistol Tactical Enhancer",
+      "category": "Augments",
+      "gradeable": true,
+      "tier": 6
+    },
+    "T6_Augment_Melee1": {
+      "name": "Blade Sharpener",
+      "category": "Augments",
+      "gradeable": true,
+      "tier": 6
+    },
+    "T6_Augment_Melee2": {
+      "name": "Blade Grip Adjuster",
+      "category": "Augments",
+      "gradeable": true,
+      "tier": 6
+    },
+    "T6_Augment_Melee3": {
+      "name": "Blade Flexi-Coating",
+      "category": "Augments",
+      "gradeable": true,
+      "tier": 6
+    },
+    "T6_Augment_Melee4": {
+      "name": "Aggressive Grip Adjuster",
+      "category": "Augments",
+      "gradeable": true,
+      "tier": 6
+    },
+    "T6_Augment_Melee5": {
+      "name": "Lightweight Adjuster",
+      "category": "Augments",
+      "gradeable": true,
+      "tier": 6
+    },
+    "T6_Augment_Melee6": {
+      "name": "Heavy Blade Adjuster",
+      "category": "Augments",
+      "gradeable": true,
+      "tier": 6
+    },
+    "T6_Augment_Melee7": {
+      "name": "Defensive Grip Adjuster",
+      "category": "Augments",
+      "gradeable": true,
+      "tier": 6
+    },
+    "T6_Augment_Melee8": {
+      "name": "Blade Optimizer",
+      "category": "Augments",
+      "gradeable": true,
+      "tier": 6
+    },
+    "T6_Augment_Melee9": {
+      "name": "Edge Optimizer",
+      "category": "Augments",
+      "gradeable": true,
+      "tier": 6
+    },
+    "T6_Augment_Range1": {
+      "name": "Barrel Extender",
+      "category": "Augments",
+      "gradeable": true,
+      "tier": 6
+    },
+    "T6_Augment_Rateoffire1": {
+      "name": "Quick-release Trigger",
+      "category": "Augments",
+      "gradeable": true,
+      "tier": 6
+    },
+    "T6_Augment_Recoil1": {
+      "name": "Recoil Adjuster",
+      "category": "Augments",
+      "gradeable": true,
+      "tier": 6
+    },
+    "T6_Augment_ReloadSpeed1": {
+      "name": "Quickloader",
+      "category": "Augments",
+      "gradeable": true,
+      "tier": 6
+    },
+    "T6_Augment_RocketLauncher1": {
+      "name": "Missile Launcher Fragmenter",
+      "category": "Augments",
+      "gradeable": true,
+      "tier": 6
+    },
+    "T6_Augment_RocketLauncher2": {
+      "name": "Missile Launcher Disruptive Coating",
+      "category": "Augments",
+      "gradeable": true,
+      "tier": 6
+    },
+    "T6_Augment_RocketLauncher3": {
+      "name": "Missile Launcher Quickloader",
+      "category": "Augments",
+      "gradeable": true,
+      "tier": 6
+    },
+    "T6_Augment_RocketLauncher4": {
+      "name": "Missile Launcher Heavy Payload",
+      "category": "Augments",
+      "gradeable": true,
+      "tier": 6
+    },
+    "T6_Augment_Scattergun2": {
+      "name": "GRDA 44 Tactical Amplifier",
+      "category": "Augments",
+      "gradeable": true,
+      "tier": 6
+    },
+    "T6_Augment_Scattergun4": {
+      "name": "GRDA 44 Expander",
+      "category": "Augments",
+      "gradeable": true,
+      "tier": 6
+    },
+    "T6_Augment_Scattergun5": {
+      "name": "GRDA 44 Amplifier",
+      "category": "Augments",
+      "gradeable": true,
+      "tier": 6
+    },
+    "T6_Augment_Scattergun6": {
+      "name": "GRDA 44 Optimizer",
+      "category": "Augments",
+      "gradeable": true,
+      "tier": 6
+    },
+    "T6_Augment_Scattergun7": {
+      "name": "GRDA 44 Sprayer",
+      "category": "Augments",
+      "gradeable": true,
+      "tier": 6
+    },
+    "T6_Augment_Scattergun8": {
+      "name": "GRDA 44 Micro-Rigidity Coating",
+      "category": "Augments",
+      "gradeable": true,
+      "tier": 6
+    },
+    "T6_Augment_Shielddamage1": {
+      "name": "Disruptive Coating",
+      "category": "Augments",
+      "gradeable": true,
+      "tier": 6
+    },
+    "T6_Augment_Shotgun1": {
+      "name": "Drillshot FK7 Tactical Adjuster",
+      "category": "Augments",
+      "gradeable": true,
+      "tier": 6
+    },
+    "T6_Augment_Shotgun2": {
+      "name": "Drillshot FK7 Amplifier",
+      "category": "Augments",
+      "gradeable": true,
+      "tier": 6
+    },
+    "T6_Augment_Shotgun3": {
+      "name": "Drillshot FK7 Optimizer",
+      "category": "Augments",
+      "gradeable": true,
+      "tier": 6
+    },
+    "T6_Augment_Shotgun4": {
+      "name": "Drillshot FK7 Sprayer",
+      "category": "Augments",
+      "gradeable": true,
+      "tier": 6
+    },
+    "T6_Augment_Shotgun5": {
+      "name": "Drillshot FK7 Quickloader",
+      "category": "Augments",
+      "gradeable": true,
+      "tier": 6
+    },
+    "T6_Augment_smg1": {
+      "name": "Disruptor M11 Precision Tuning",
+      "category": "Augments",
+      "gradeable": true,
+      "tier": 6
+    },
+    "T6_Augment_smg2": {
+      "name": "Disruptor M11 Quickloader",
+      "category": "Augments",
+      "gradeable": true,
+      "tier": 6
+    },
+    "T6_Augment_smg3": {
+      "name": "Disruptor M11 Shield Breaker",
+      "category": "Augments",
+      "gradeable": true,
+      "tier": 6
+    },
+    "T6_Augment_smg4": {
+      "name": "Disruptor M11 Sprayer",
+      "category": "Augments",
+      "gradeable": true,
+      "tier": 6
+    },
+    "T6_Augment_Smg5": {
+      "name": "Disruptor M11 Amplifier",
+      "category": "Augments",
+      "gradeable": true,
+      "tier": 6
+    },
+    "T6_Augment_smg7": {
+      "name": "Disruptor M11 Heavy Kit",
+      "category": "Augments",
+      "gradeable": true,
+      "tier": 6
+    },
+    "T6_Augment_Spitdartrifle2": {
+      "name": "JABAL Spitdart Tactical Enhancer",
+      "category": "Augments",
+      "gradeable": true,
+      "tier": 6
+    },
+    "T6_Augment_Spitdartrifle3": {
+      "name": "JABAL Spitdart Range Adjuster",
+      "category": "Augments",
+      "gradeable": true,
+      "tier": 6
+    },
+    "T6_Augment_SpitdartRifle5": {
+      "name": "JABAL Spitdart Amplifier",
+      "category": "Augments",
+      "gradeable": true,
+      "tier": 6
+    },
+    "T6_Augment_SpitdartRifle6": {
+      "name": "JABAL Spitdart Disruptive Coating",
+      "category": "Augments",
+      "gradeable": true,
+      "tier": 6
+    },
+    "T6_Augment_SpitdartRifle7": {
+      "name": "JABAL Spitdart Expander",
+      "category": "Augments",
+      "gradeable": true,
+      "tier": 6
+    },
+    "T6_Augment_SpitdartRifle8": {
+      "name": "JABAL Spitdart Toxicity Amplifier",
+      "category": "Augments",
+      "gradeable": true,
+      "tier": 6
+    },
+    "T6_Augment_Armor3": {
+      "name": "Woven Reinforcement",
+      "category": "Augments",
+      "gradeable": true,
+      "tier": 6
+    },
+    "T6_Augment_Ch5_BR1": {
+      "name": "Karpov 38 Sniper Barrel",
+      "category": "Augments",
+      "gradeable": true,
+      "tier": 6
+    },
+    "T6_Augment_Ch5_Fireballer1": {
+      "name": "Pyrocket Decimator ",
+      "category": "Augments",
+      "gradeable": true,
+      "tier": 6
+    },
+    "T6_Augment_Ch5_Flamethrower1": {
+      "name": "Flamethrower Decimator",
+      "category": "Augments",
+      "gradeable": true,
+      "tier": 6
+    },
+    "T6_Augment_Ch5_Heavypistol1": {
+      "name": "Rafiq Snubnose Marksman",
+      "category": "Augments",
+      "gradeable": true,
+      "tier": 6
+    },
+    "T6_Augment_Ch5_Lasgun1": {
+      "name": "Lasgun Concentrator",
+      "category": "Augments",
+      "gradeable": true,
+      "tier": 6
+    },
+    "T6_Augment_Ch5_LMG1": {
+      "name": "VULCAN GAU-92 Accelerator",
+      "category": "Augments",
+      "gradeable": true,
+      "tier": 6
+    },
+    "T6_Augment_Ch5_Maulapistol1": {
+      "name": "Maula Pistol Antipersonnel Rounds",
+      "category": "Augments",
+      "gradeable": true,
+      "tier": 6
+    },
+    "T6_Augment_Ch5_RocketLauncher1": {
+      "name": "Missile Launcher Obliterator",
+      "category": "Augments",
+      "gradeable": true,
+      "tier": 6
+    },
+    "T6_Augment_Ch5_Scattergun1": {
+      "name": "Scattergun Rampage-Enhancement",
+      "category": "Augments",
+      "gradeable": true,
+      "tier": 6
+    },
+    "T6_Augment_Ch5_Shotgun1": {
+      "name": "Drillshot FK7 Spray-and-Pray",
+      "category": "Augments",
+      "gradeable": true,
+      "tier": 6
+    },
+    "T6_Augment_Ch5_SMG1": {
+      "name": "Disruptor M11 Personnel-Buster",
+      "category": "Augments",
+      "gradeable": true,
+      "tier": 6
+    },
+    "T6_Augment_Ch5_Spitdart1": {
+      "name": "JABAL Spitdart Ranger",
+      "category": "Augments",
+      "gradeable": true,
+      "tier": 6
+    },
+    "T6_Augment_Ch5_Melee1": {
+      "name": "Heavy Metal Blade Coating",
+      "category": "Augments",
+      "gradeable": true,
+      "tier": 6
+    },
+    "T6_Augment_Ch5_Melee3": {
+      "name": "Blade Blood Grooves",
+      "category": "Augments",
+      "gradeable": true,
+      "tier": 6
+    },
+    "T6_ChoamLg2_Schematic": {
+      "name": "Black Market K-28 Lasgun",
+      "category": "Schematics",
+      "gradeable": true,
+      "tier": 6
+    },
+    "T6_UniqueFlamethrower_Prototype_2_Schematic": {
+      "name": "Glasser",
+      "category": "Schematics",
+      "gradeable": true,
+      "tier": 6
+    },
+    "Combat_Neut_SmugglerDeserterUnique06_Helmet_Schematic": {
+      "name": "Pincushion Helmet",
+      "category": "Schematics",
+      "gradeable": true,
+      "tier": 6
+    },
+    "Combat_Neut_SmugglerDeserterUnique06_Top_Schematic": {
+      "name": "Pincushion Chestpiece",
+      "category": "Schematics",
+      "gradeable": true,
+      "tier": 6
+    },
+    "Combat_Neut_SmugglerDeserterUnique06_Bottom_Schematic": {
+      "name": "Pincushion Pants",
+      "category": "Schematics",
+      "gradeable": true,
+      "tier": 6
+    },
+    "Combat_Neut_SmugglerDeserterUnique06_Gloves_Schematic": {
+      "name": "Pincushion Gauntlets",
+      "category": "Schematics",
+      "gradeable": true,
+      "tier": 6
+    },
+    "Combat_Neut_SmugglerDeserterUnique06_Boots_Schematic": {
+      "name": "Pincushion Boots",
+      "category": "Schematics",
+      "gradeable": true,
+      "tier": 6
+    },
+    "Combat_Neut_AtreidesDeserterUnique05_Helmet_Schematic": {
+      "name": "Executor's Helmet",
+      "category": "Schematics",
+      "gradeable": true,
+      "tier": 6
+    },
+    "Combat_Neut_AtreidesDeserterUnique05_Top_Schematic": {
+      "name": "Executor's Chestpiece",
+      "category": "Schematics",
+      "gradeable": true,
+      "tier": 6
+    },
+    "Combat_Neut_AtreidesDeserterUnique05_Bottom_Schematic": {
+      "name": "Executor's Pants",
+      "category": "Schematics",
+      "gradeable": true,
+      "tier": 6
+    },
+    "Combat_Neut_AtreidesDeserterUnique05_Gloves_Schematic": {
+      "name": "Executor's Gauntlets",
+      "category": "Schematics",
+      "gradeable": true,
+      "tier": 6
+    },
+    "Combat_Neut_AtreidesDeserterUnique05_Boots_Schematic": {
+      "name": "Executor's Boots",
+      "category": "Schematics",
+      "gradeable": true,
+      "tier": 6
+    },
+    "Combat_Hark_MedUnique02_Helmet_Schematic": {
+      "name": "The Forge Helmet",
+      "category": "Schematics",
+      "gradeable": true,
+      "tier": 6
+    },
+    "Combat_Hark_MedUnique02_Top_Schematic": {
+      "name": "The Forge Chestpiece",
+      "category": "Schematics",
+      "gradeable": true,
+      "tier": 6
+    },
+    "Combat_Hark_MedUnique02_Bottom_Schematic": {
+      "name": "The Forge Pants",
+      "category": "Schematics",
+      "gradeable": true,
+      "tier": 6
+    },
+    "Combat_Hark_MedUnique02_Gloves_Schematic": {
+      "name": "The Forge Gloves",
+      "category": "Schematics",
+      "gradeable": true,
+      "tier": 6
+    },
+    "Combat_Hark_MedUnique02_Boots_Schematic": {
+      "name": "The Forge Boots",
+      "category": "Schematics",
+      "gradeable": true,
+      "tier": 6
+    },
+    "Combat_Heavy_Unique_Reinforced_Bottom_06_Schematic": {
+      "name": "Bulwark Leggings",
+      "category": "Schematics",
+      "gradeable": true,
+      "tier": 6
+    },
+    "Combat_Heavy_Unique_Reinforced_Gloves_06_Schematic": {
+      "name": "Bulwark Gloves",
+      "category": "Schematics",
+      "gradeable": true,
+      "tier": 6
+    },
+    "Combat_Heavy_Unique_Reinforced_Helmet_06_Schematic": {
+      "name": "Bulwark Helmet",
+      "category": "Schematics",
+      "gradeable": true,
+      "tier": 6
+    },
+    "Combat_Heavy_Unique_Reinforced_Boots_06_Schematic": {
+      "name": "Bulwark Boots",
+      "category": "Schematics",
+      "gradeable": true,
+      "tier": 6
+    },
+    "Combat_Heavy_Unique_Reinforced_Top_06_Schematic": {
+      "name": "Bulwark Chest",
+      "category": "Schematics",
+      "gradeable": true,
+      "tier": 6
+    },
+    "Stillsuit_Unique_Armored_06_Mask_Schematic": {
+      "name": "Imperial Stillsuit Mask",
+      "category": "Schematics",
+      "gradeable": true,
+      "tier": 6
+    },
+    "Stillsuit_Unique_Armored_06_Boots_Schematic": {
+      "name": "Imperial Stillsuit Boots",
+      "category": "Schematics",
+      "gradeable": true,
+      "tier": 6
+    },
+    "Stillsuit_Unique_Armored_06_Gloves_Schematic": {
+      "name": "Imperial Stillsuit Gloves",
+      "category": "Schematics",
+      "gradeable": true,
+      "tier": 6
+    },
+    "Stillsuit_Unique_Armored_06_Top_Schematic": {
+      "name": "Imperial Stillsuit Garment",
+      "category": "Schematics",
+      "gradeable": true,
+      "tier": 6
+    },
+    "Stillsuit_Unique_Efficient_06_Boots_Schematic": {
+      "name": "Villari's Stillsuit Boots",
+      "category": "Schematics",
+      "gradeable": true,
+      "tier": 6
+    },
+    "Stillsuit_Unique_Efficient_06_Gloves_Schematic": {
+      "name": "Villari's Stillsuit Gloves",
+      "category": "Schematics",
+      "gradeable": true,
+      "tier": 6
+    },
+    "Stillsuit_Unique_Efficient_06_Mask_Schematic": {
+      "name": "Villari's Stillsuit Mask",
+      "category": "Schematics",
+      "gradeable": true,
+      "tier": 6
+    },
+    "Stillsuit_Unique_Efficient_06_Top_Schematic": {
+      "name": "Villari's Stillsuit Garment",
+      "category": "Schematics",
+      "gradeable": true,
+      "tier": 6
+    },
+    "Combat_Heavy_Unique_PowerEfficient_Gloves_06_Schematic": {
+      "name": "Circuit Gauntlets",
+      "category": "Schematics",
+      "gradeable": true,
+      "tier": 6
+    },
+    "Combat_Heavy_Unique_PowerIncrease_Top_06_Schematic": {
+      "name": "Power Harness",
+      "category": "Schematics",
+      "gradeable": true,
+      "tier": 6
+    },
+    "Combat_Light_Unique_Scanning_Helmet_06_Schematic": {
+      "name": "Wayfinder Helm",
+      "category": "Schematics",
+      "gradeable": true,
+      "tier": 6
+    },
+    "Combat_Light_Unique_WormThreat_Boots_06_Schematic": {
+      "name": "Tabr Softstep Boots",
+      "category": "Schematics",
+      "gradeable": true,
+      "tier": 6
+    },
+    "Combat_Light_Unique_Climbing_Gloves_06_Schematic": {
+      "name": "Hook-claw Gloves",
+      "category": "Schematics",
+      "gradeable": true,
+      "tier": 6
+    },
+    "Combat_Light_Unique_Stamina_Bottom_06_Schematic": {
+      "name": "Ix-core Leggings",
+      "category": "Schematics",
+      "gradeable": true,
+      "tier": 6
+    },
+    "Stillsuit_Unique_HighCapacity_06_Top_Schematic": {
+      "name": "Shaddam's Bladder",
+      "category": "Schematics",
+      "gradeable": true,
+      "tier": 6
+    },
+    "Stillsuit_Unique_HeatMitigation_06_Mask_Schematic": {
+      "name": "Pardot's Hood",
+      "category": "Schematics",
+      "gradeable": true,
+      "tier": 6
+    },
+    "Combat_Light_Unique_DewReap_Gloves_06_Schematic": {
+      "name": "Yueh's Reaper Gloves",
+      "category": "Schematics",
+      "gradeable": true,
+      "tier": 6
+    },
+    "Combat_Light_Unique_ReduceSuspensor_Top_06_Schematic": {
+      "name": "Idaho's Charge",
+      "category": "Schematics",
+      "gradeable": true,
+      "tier": 6
+    },
+    "UniqueSda6_Schematic": {
+      "name": "Way of the Misr",
+      "category": "Schematics",
+      "gradeable": true,
+      "tier": 6
+    },
+    "UniqueSword_05_Schematic": {
+      "name": "Replica Pulse-sword",
+      "category": "Schematics",
+      "gradeable": true,
+      "tier": 6
+    },
+    "UniqueScattergun5_Schematic": {
+      "name": "Perforator",
+      "category": "Schematics",
+      "gradeable": true,
+      "tier": 6
+    },
+    "UniqueDirk_04_Schematic": {
+      "name": "Cauterizer",
+      "category": "Schematics",
+      "gradeable": true,
+      "tier": 6
+    },
+    "UniqueAr4_Schematic": {
+      "name": "Salusan Vengeance",
+      "category": "Schematics",
+      "gradeable": true,
+      "tier": 6
+    },
+    "UniqueRapier_03_Schematic": {
+      "name": "Halleck's Pick",
+      "category": "Schematics",
+      "gradeable": true,
+      "tier": 6
+    },
+    "UniqueSmg3_Schematic": {
+      "name": "Sardaukar Intimidator",
+      "category": "Schematics",
+      "gradeable": true,
+      "tier": 6
+    },
+    "SMG_Unique_LargeMag_06_Schematic": {
+      "name": "A Dart for Every Man",
+      "category": "Schematics",
+      "gradeable": true,
+      "tier": 6
+    },
+    "Kindjal_Unique_Blood_06_Schematic": {
+      "name": "Feyd's Drinker",
+      "category": "Schematics",
+      "gradeable": true,
+      "tier": 6
+    },
+    "LongRifle_Unique_Poison_06_Schematic": {
+      "name": "Dunewatcher",
+      "category": "Schematics",
+      "gradeable": true,
+      "tier": 6
+    },
+    "HeavyPistol_Unique_Bleed_06_Schematic": {
+      "name": "Regis Disruptor Pistol",
+      "category": "Schematics",
+      "gradeable": true,
+      "tier": 6
+    },
+    "LMG_Unique_RapidFire_06_Schematic": {
+      "name": "Bashar's Command",
+      "category": "Schematics",
+      "gradeable": true,
+      "tier": 6
+    },
+    "Shotgun_Unique_Explosive_06_Schematic": {
+      "name": "Regis Burst Drillshot",
+      "category": "Schematics",
+      "gradeable": true,
+      "tier": 6
+    },
+    "RocketLauncher_Unique_Homing_06_Schematic": {
+      "name": "The Ancient Way",
+      "category": "Schematics",
+      "gradeable": true,
+      "tier": 6
+    },
+    "UniqueSda_Doubleshot_06_Schematic": {
+      "name": "Shishakli's Bite",
+      "category": "Schematics",
+      "gradeable": true,
+      "tier": 6
+    },
+    "UniqueScattergun_Fire_06_Schematic": {
+      "name": "Shellburster",
+      "category": "Schematics",
+      "gradeable": true,
+      "tier": 6
+    },
+    "HeavyPistol_Unique_Headshot_06_Schematic": {
+      "name": "Seethe",
+      "category": "Schematics",
+      "gradeable": true,
+      "tier": 6
+    },
+    "LongRifle_Unique_LargeMag_06_Schematic": {
+      "name": "Regis Tripleshot Repeating Rifle",
+      "category": "Schematics",
+      "gradeable": true,
+      "tier": 6
+    },
+    "LMG_Unique_Power_06_Schematic": {
+      "name": "Plasma Cannon",
+      "category": "Schematics",
+      "gradeable": true,
+      "tier": 6
+    },
+    "Shotgun_Unique_Blood_06_Schematic": {
+      "name": "Penetrator",
+      "category": "Schematics",
+      "gradeable": true,
+      "tier": 6
+    },
+    "UniqueAr_Burst_06_Schematic": {
+      "name": "Indara's Lullaby",
+      "category": "Schematics",
+      "gradeable": true,
+      "tier": 6
+    },
+    "Kindjal_Unique_Stamina_06_Schematic": {
+      "name": "Replica Pulse-knife",
+      "category": "Schematics",
+      "gradeable": true,
+      "tier": 6
+    },
+    "UniqueRapier_Power_06_Schematic": {
+      "name": "Static Needle",
+      "category": "Schematics",
+      "gradeable": true,
+      "tier": 6
+    },
+    "Combat_Light_Unique_BiomeHeat_Top_06_Schematic": {
+      "name": "Desert Garb",
+      "category": "Schematics",
+      "gradeable": true,
+      "tier": 6
+    },
+    "UniqueFlameThrower_02_Schematic": {
+      "name": "Vaporizer",
+      "category": "Schematics",
+      "gradeable": true,
+      "tier": 6
+    },
+    "Shotgun_Unique_LargeMag_06_Schematic": {
+      "name": "Ambition",
+      "category": "Schematics",
+      "gradeable": true,
+      "tier": 6
+    },
+    "Unique_Sword_BleedyBlocky_6_Schematic": {
+      "name": "Spike Hilt Sword",
+      "category": "Schematics",
+      "gradeable": true,
+      "tier": 6
+    },
+    "Stillsuit_Choam_Unique_Dashed06_Top_Schematic": {
+      "name": "Crew Chief’s Stillsuit Garment",
+      "category": "Schematics",
+      "gradeable": true,
+      "tier": 6
+    },
+    "Unique_MiscEquipment_FullSuspensorBelt_Durability_Schematic": {
+      "name": "Elohim-Class Suspensor Belt",
+      "category": "Schematics",
+      "gradeable": true,
+      "tier": 6
+    },
+    "PowerPack_Unique_Capacity_06_Schematic": {
+      "name": "Accelerator Power Pack",
+      "category": "Schematics",
+      "gradeable": true,
+      "tier": 6
+    },
+    "UniqueAr6_Electric_Schematic": {
+      "name": "Experimental Lightning Gun",
+      "category": "Schematics",
+      "gradeable": true,
+      "tier": 6
+    },
+    "Fireballer_3_Schematic": {
+      "name": "Plastanium Pyrocket",
+      "category": "Schematics",
+      "gradeable": true,
+      "tier": 6
+    },
+    "T6_Augment_Acuracy1_Schematic": {
+      "name": "Precision Barrel Adjuster",
+      "category": "Schematics",
+      "gradeable": true,
+      "tier": 6
+    },
+    "T6_Augment_Armor1_Schematic": {
+      "name": "Concussive Dampening",
+      "category": "Schematics",
+      "gradeable": true,
+      "tier": 6
+    },
+    "T6_Augment_Armor10_Schematic": {
+      "name": "Energy Resistant Weave",
+      "category": "Schematics",
+      "gradeable": true,
+      "tier": 6
+    },
+    "T6_Augment_Armor11_Schematic": {
+      "name": "Detoxifying Fabrics",
+      "category": "Schematics",
+      "gradeable": true,
+      "tier": 6
+    },
+    "T6_Augment_Armor12_Schematic": {
+      "name": "Dart-proof Latticing",
+      "category": "Schematics",
+      "gradeable": true,
+      "tier": 6
+    },
+    "T6_Augment_Armor13_Schematic": {
+      "name": "Flame-resistant Fabrics",
+      "category": "Schematics",
+      "gradeable": true,
+      "tier": 6
+    },
+    "T6_Augment_Armor14_Schematic": {
+      "name": "Blade-warding Weave",
+      "category": "Schematics",
+      "gradeable": true,
+      "tier": 6
+    },
+    "T6_Augment_Armor16_Schematic": {
+      "name": "Radiation Absorbing Fabrics",
+      "category": "Schematics",
+      "gradeable": true,
+      "tier": 6
+    },
+    "T6_Augment_Armor17_Schematic": {
+      "name": "Radiation Shielded Latticing",
+      "category": "Schematics",
+      "gradeable": true,
+      "tier": 6
+    },
+    "T6_Augment_Armor2_Schematic": {
+      "name": "Concussive Redirection",
+      "category": "Schematics",
+      "gradeable": true,
+      "tier": 6
+    },
+    "T6_Augment_Armor4_Schematic": {
+      "name": "Penetrative Reinforcement",
+      "category": "Schematics",
+      "gradeable": true,
+      "tier": 6
+    },
+    "T6_Augment_Armor5_Schematic": {
+      "name": "Energy Dispersing Padding",
+      "category": "Schematics",
+      "gradeable": true,
+      "tier": 6
+    },
+    "T6_Augment_Armor6_Schematic": {
+      "name": "Garment Reinforcement",
+      "category": "Schematics",
+      "gradeable": true,
+      "tier": 6
+    },
+    "T6_Augment_Armor8_Schematic": {
+      "name": "Desert-tested Weave",
+      "category": "Schematics",
+      "gradeable": true,
+      "tier": 6
+    },
+    "T6_Augment_Armor9_Schematic": {
+      "name": "Curative-infused Padding",
+      "category": "Schematics",
+      "gradeable": true,
+      "tier": 6
+    },
+    "T6_Augment_BR1_Schematic": {
+      "name": "Karpov 38 Pressurizer",
+      "category": "Schematics",
+      "gradeable": true,
+      "tier": 6
+    },
+    "T6_Augment_BR2_Schematic": {
+      "name": "Karpov 38 Dart Sprayer",
+      "category": "Schematics",
+      "gradeable": true,
+      "tier": 6
+    },
+    "T6_Augment_BR3_Schematic": {
+      "name": "Karpov 38 Heavy Kit",
+      "category": "Schematics",
+      "gradeable": true,
+      "tier": 6
+    },
+    "T6_Augment_BR4_Schematic": {
+      "name": "Karpov 38 Focuser",
+      "category": "Schematics",
+      "gradeable": true,
+      "tier": 6
+    },
+    "T6_Augment_BR8_Schematic": {
+      "name": "Karpov 38 Precision Kit",
+      "category": "Schematics",
+      "gradeable": true,
+      "tier": 6
+    },
+    "T6_Augment_Damage1_Schematic": {
+      "name": "Heavy Caliber Upgrade",
+      "category": "Schematics",
+      "gradeable": true,
+      "tier": 6
+    },
+    "T6_Augment_DeathDurabilityOff_Schematic": {
+      "name": "Protective Coating",
+      "category": "Schematics",
+      "gradeable": true,
+      "tier": 6
+    },
+    "T6_Augment_Fireballer1_Schematic": {
+      "name": "Pyrocket Supercharger",
+      "category": "Schematics",
+      "gradeable": true,
+      "tier": 6
+    },
+    "T6_Augment_Fireballer2_Schematic": {
+      "name": "Pyrocket Quickloader",
+      "category": "Schematics",
+      "gradeable": true,
+      "tier": 6
+    },
+    "T6_Augment_Flamethrower1_Schematic": {
+      "name": "Flamethrower Amplifier",
+      "category": "Schematics",
+      "gradeable": true,
+      "tier": 6
+    },
+    "T6_Augment_Flamethrower2_Schematic": {
+      "name": "Flamethrower Superheater",
+      "category": "Schematics",
+      "gradeable": true,
+      "tier": 6
+    },
+    "T6_Augment_Flamethrower3_Schematic": {
+      "name": "Flamethrower Nozzle Extension",
+      "category": "Schematics",
+      "gradeable": true,
+      "tier": 6
+    },
+    "T6_Augment_Flamethrower4_Schematic": {
+      "name": "Flamethrower Quickloader",
+      "category": "Schematics",
+      "gradeable": true,
+      "tier": 6
+    },
+    "T6_Augment_Headshotdamage1_Schematic": {
+      "name": "Tactical Enhancer",
+      "category": "Schematics",
+      "gradeable": true,
+      "tier": 6
+    },
+    "T6_Augment_HeavyPistol1_Schematic": {
+      "name": "Rafiq Snubnose Heavy Kit",
+      "category": "Schematics",
+      "gradeable": true,
+      "tier": 6
+    },
+    "T6_Augment_HeavyPistol2_Schematic": {
+      "name": "Rafiq Snubnose Disruptive Coating",
+      "category": "Schematics",
+      "gradeable": true,
+      "tier": 6
+    },
+    "T6_Augment_HeavyPistol3_Schematic": {
+      "name": "Rafiq Snubnose Quickdraw Assembly",
+      "category": "Schematics",
+      "gradeable": true,
+      "tier": 6
+    },
+    "T6_Augment_HeavyPistol4_Schematic": {
+      "name": "Rafiq Snubnose Expander",
+      "category": "Schematics",
+      "gradeable": true,
+      "tier": 6
+    },
+    "T6_Augment_HeavyPistol5_Schematic": {
+      "name": "Rafiq Snubnose Sprayer",
+      "category": "Schematics",
+      "gradeable": true,
+      "tier": 6
+    },
+    "T6_Augment_Lasgun1_Schematic": {
+      "name": "Lasgun Focuser",
+      "category": "Schematics",
+      "gradeable": true,
+      "tier": 6
+    },
+    "T6_Augment_Lasgun2_Schematic": {
+      "name": "Lasgun Extender",
+      "category": "Schematics",
+      "gradeable": true,
+      "tier": 6
+    },
+    "T6_Augment_Lasgun3_Schematic": {
+      "name": "Lasgun Harmonizer",
+      "category": "Schematics",
+      "gradeable": true,
+      "tier": 6
+    },
+    "T6_Augment_Lasgun4_Schematic": {
+      "name": "Lasgun Amplifier",
+      "category": "Schematics",
+      "gradeable": true,
+      "tier": 6
+    },
+    "T6_Augment_Lmg1_Schematic": {
+      "name": "VULCAN GAU-92 Expander",
+      "category": "Schematics",
+      "gradeable": true,
+      "tier": 6
+    },
+    "T6_Augment_Lmg4_Schematic": {
+      "name": "VULCAN GAU-92 Focuser",
+      "category": "Schematics",
+      "gradeable": true,
+      "tier": 6
+    },
+    "T6_Augment_Lmg5_Schematic": {
+      "name": "VULCAN GAU-92 Disruptive Coating",
+      "category": "Schematics",
+      "gradeable": true,
+      "tier": 6
+    },
+    "T6_Augment_Lmg6_Schematic": {
+      "name": "VULCAN GAU-92 Sprayer",
+      "category": "Schematics",
+      "gradeable": true,
+      "tier": 6
+    },
+    "T6_Augment_Magazinecapacity1_Schematic": {
+      "name": "Capacity Expander",
+      "category": "Schematics",
+      "gradeable": true,
+      "tier": 6
+    },
+    "T6_Augment_MaulaPistol1_Schematic": {
+      "name": "Maula Pistol Sprayer",
+      "category": "Schematics",
+      "gradeable": true,
+      "tier": 6
+    },
+    "T6_Augment_MaulaPistol2_Schematic": {
+      "name": "Maula Pistol Disruptive Coating",
+      "category": "Schematics",
+      "gradeable": true,
+      "tier": 6
+    },
+    "T6_Augment_MaulaPistol3_Schematic": {
+      "name": "Maula Pistol Expander",
+      "category": "Schematics",
+      "gradeable": true,
+      "tier": 6
+    },
+    "T6_Augment_MaulaPistol4_Schematic": {
+      "name": "Maula Pistol Barrel Extender",
+      "category": "Schematics",
+      "gradeable": true,
+      "tier": 6
+    },
+    "T6_Augment_MaulaPistol5_Schematic": {
+      "name": "Maula Pistol Tactical Enhancer",
+      "category": "Schematics",
+      "gradeable": true,
+      "tier": 6
+    },
+    "T6_Augment_Melee1_Schematic": {
+      "name": "Blade Sharpener",
+      "category": "Schematics",
+      "gradeable": true,
+      "tier": 6
+    },
+    "T6_Augment_Melee2_Schematic": {
+      "name": "Blade Grip Adjuster",
+      "category": "Schematics",
+      "gradeable": true,
+      "tier": 6
+    },
+    "T6_Augment_Melee3_Schematic": {
+      "name": "Blade Flexi-Coating",
+      "category": "Schematics",
+      "gradeable": true,
+      "tier": 6
+    },
+    "T6_Augment_Melee4_Schematic": {
+      "name": "Aggressive Grip Adjuster",
+      "category": "Schematics",
+      "gradeable": true,
+      "tier": 6
+    },
+    "T6_Augment_Melee5_Schematic": {
+      "name": "Lightweight Adjuster",
+      "category": "Schematics",
+      "gradeable": true,
+      "tier": 6
+    },
+    "T6_Augment_Melee6_Schematic": {
+      "name": "Heavy Blade Adjuster",
+      "category": "Schematics",
+      "gradeable": true,
+      "tier": 6
+    },
+    "T6_Augment_Melee7_Schematic": {
+      "name": "Defensive Grip Adjuster",
+      "category": "Schematics",
+      "gradeable": true,
+      "tier": 6
+    },
+    "T6_Augment_Melee8_Schematic": {
+      "name": "Blade Optimizer",
+      "category": "Schematics",
+      "gradeable": true,
+      "tier": 6
+    },
+    "T6_Augment_Melee9_Schematic": {
+      "name": "Edge Optimizer",
+      "category": "Schematics",
+      "gradeable": true,
+      "tier": 6
+    },
+    "T6_Augment_Range1_Schematic": {
+      "name": "Barrel Extender",
+      "category": "Schematics",
+      "gradeable": true,
+      "tier": 6
+    },
+    "T6_Augment_Rateoffire1_Schematic": {
+      "name": "Quick-release Trigger",
+      "category": "Schematics",
+      "gradeable": true,
+      "tier": 6
+    },
+    "T6_Augment_Recoil1_Schematic": {
+      "name": "Recoil Adjuster",
+      "category": "Schematics",
+      "gradeable": true,
+      "tier": 6
+    },
+    "T6_Augment_ReloadSpeed1_Schematic": {
+      "name": "Quickloader",
+      "category": "Schematics",
+      "gradeable": true,
+      "tier": 6
+    },
+    "T6_Augment_RocketLauncher1_Schematic": {
+      "name": "Missile Launcher Fragmenter",
+      "category": "Schematics",
+      "gradeable": true,
+      "tier": 6
+    },
+    "T6_Augment_RocketLauncher2_Schematic": {
+      "name": "Missile Launcher Disruptive Coating",
+      "category": "Schematics",
+      "gradeable": true,
+      "tier": 6
+    },
+    "T6_Augment_RocketLauncher3_Schematic": {
+      "name": "Missile Launcher Quickloader",
+      "category": "Schematics",
+      "gradeable": true,
+      "tier": 6
+    },
+    "T6_Augment_RocketLauncher4_Schematic": {
+      "name": "Missile Launcher Heavy Payload",
+      "category": "Schematics",
+      "gradeable": true,
+      "tier": 6
+    },
+    "T6_Augment_Scattergun2_Schematic": {
+      "name": "GRDA 44 Tactical Amplifier",
+      "category": "Schematics",
+      "gradeable": true,
+      "tier": 6
+    },
+    "T6_Augment_Scattergun4_Schematic": {
+      "name": "GRDA 44 Expander",
+      "category": "Schematics",
+      "gradeable": true,
+      "tier": 6
+    },
+    "T6_Augment_Scattergun5_Schematic": {
+      "name": "GRDA 44 Amplifier",
+      "category": "Schematics",
+      "gradeable": true,
+      "tier": 6
+    },
+    "T6_Augment_Scattergun6_Schematic": {
+      "name": "GRDA 44 Optimizer",
+      "category": "Schematics",
+      "gradeable": true,
+      "tier": 6
+    },
+    "T6_Augment_Scattergun7_Schematic": {
+      "name": "GRDA 44 Sprayer",
+      "category": "Schematics",
+      "gradeable": true,
+      "tier": 6
+    },
+    "T6_Augment_Scattergun8_Schematic": {
+      "name": "GRDA 44 Micro-Rigidity Coating",
+      "category": "Schematics",
+      "gradeable": true,
+      "tier": 6
+    },
+    "T6_Augment_Shielddamage1_Schematic": {
+      "name": "Disruptive Coating",
+      "category": "Schematics",
+      "gradeable": true,
+      "tier": 6
+    },
+    "T6_Augment_Shotgun1_Schematic": {
+      "name": "Drillshot FK7 Tactical Adjuster",
+      "category": "Schematics",
+      "gradeable": true,
+      "tier": 6
+    },
+    "T6_Augment_Shotgun2_Schematic": {
+      "name": "Drillshot FK7 Amplifier",
+      "category": "Schematics",
+      "gradeable": true,
+      "tier": 6
+    },
+    "T6_Augment_Shotgun3_Schematic": {
+      "name": "Drillshot FK7 Optimizer",
+      "category": "Schematics",
+      "gradeable": true,
+      "tier": 6
+    },
+    "T6_Augment_Shotgun4_Schematic": {
+      "name": "Drillshot FK7 Sprayer",
+      "category": "Schematics",
+      "gradeable": true,
+      "tier": 6
+    },
+    "T6_Augment_Shotgun5_Schematic": {
+      "name": "Drillshot FK7 Quickloader",
+      "category": "Schematics",
+      "gradeable": true,
+      "tier": 6
+    },
+    "T6_Augment_smg1_Schematic": {
+      "name": "Disruptor M11 Precision Tuning",
+      "category": "Schematics",
+      "gradeable": true,
+      "tier": 6
+    },
+    "T6_Augment_smg2_Schematic": {
+      "name": "Disruptor M11 Quickloader",
+      "category": "Schematics",
+      "gradeable": true,
+      "tier": 6
+    },
+    "T6_Augment_smg3_Schematic": {
+      "name": "Disruptor M11 Shield Breaker",
+      "category": "Schematics",
+      "gradeable": true,
+      "tier": 6
+    },
+    "T6_Augment_smg4_Schematic": {
+      "name": "Disruptor M11 Sprayer",
+      "category": "Schematics",
+      "gradeable": true,
+      "tier": 6
+    },
+    "T6_Augment_Smg5_Schematic": {
+      "name": "Disruptor M11 Amplifier",
+      "category": "Schematics",
+      "gradeable": true,
+      "tier": 6
+    },
+    "T6_Augment_smg7_Schematic": {
+      "name": "Disruptor M11 Heavy Kit",
+      "category": "Schematics",
+      "gradeable": true,
+      "tier": 6
+    },
+    "T6_Augment_Spitdartrifle2_Schematic": {
+      "name": "JABAL Spitdart Tactical Enhancer",
+      "category": "Schematics",
+      "gradeable": true,
+      "tier": 6
+    },
+    "T6_Augment_Spitdartrifle3_Schematic": {
+      "name": "JABAL Spitdart Range Adjuster",
+      "category": "Schematics",
+      "gradeable": true,
+      "tier": 6
+    },
+    "T6_Augment_SpitdartRifle5_Schematic": {
+      "name": "JABAL Spitdart Amplifier",
+      "category": "Schematics",
+      "gradeable": true,
+      "tier": 6
+    },
+    "T6_Augment_SpitdartRifle6_Schematic": {
+      "name": "JABAL Spitdart Disruptive Coating",
+      "category": "Schematics",
+      "gradeable": true,
+      "tier": 6
+    },
+    "T6_Augment_SpitdartRifle7_Schematic": {
+      "name": "JABAL Spitdart Expander",
+      "category": "Schematics",
+      "gradeable": true,
+      "tier": 6
+    },
+    "T6_Augment_SpitdartRifle8_Schematic": {
+      "name": "JABAL Spitdart Toxicity Amplifier",
+      "category": "Schematics",
+      "gradeable": true,
+      "tier": 6
+    },
+    "T6_Augment_Armor3_Schematic": {
+      "name": "Woven Reinforcement",
+      "category": "Schematics",
+      "gradeable": true,
+      "tier": 6
+    },
+    "Radiation_Suit_T6_Unique_Armored_Schematic": {
+      "name": "Tactical Radiation Suit ",
+      "category": "Schematics",
+      "gradeable": true,
+      "tier": 6
+    },
+    "UniqueDualBlades_6_Schematic": {
+      "name": "Burning Blades",
+      "category": "Schematics",
+      "gradeable": true,
+      "tier": 6
+    },
+    "T6_Augment_Ch5_BR1_Schematic": {
+      "name": "Karpov 38 Sniper Barrel",
+      "category": "Schematics",
+      "gradeable": true,
+      "tier": 6
+    },
+    "T6_Augment_Ch5_Fireballer1_Schematic": {
+      "name": "Pyrocket Decimator ",
+      "category": "Schematics",
+      "gradeable": true,
+      "tier": 6
+    },
+    "T6_Augment_Ch5_Flamethrower1_Schematic": {
+      "name": "Flamethrower Decimator",
+      "category": "Schematics",
+      "gradeable": true,
+      "tier": 6
+    },
+    "T6_Augment_Ch5_Heavypistol1_Schematic": {
+      "name": "Rafiq Snubnose Marksman",
+      "category": "Schematics",
+      "gradeable": true,
+      "tier": 6
+    },
+    "T6_Augment_Ch5_Lasgun1_Schematic": {
+      "name": "Lasgun Concentrator",
+      "category": "Schematics",
+      "gradeable": true,
+      "tier": 6
+    },
+    "T6_Augment_Ch5_LMG1_Schematic": {
+      "name": "VULCAN GAU-92 Accelerator",
+      "category": "Schematics",
+      "gradeable": true,
+      "tier": 6
+    },
+    "T6_Augment_Ch5_Maulapistol1_Schematic": {
+      "name": "Maula Pistol Antipersonnel Rounds",
+      "category": "Schematics",
+      "gradeable": true,
+      "tier": 6
+    },
+    "T6_Augment_Ch5_RocketLauncher1_Schematic": {
+      "name": "Missile Launcher Obliterator",
+      "category": "Schematics",
+      "gradeable": true,
+      "tier": 6
+    },
+    "T6_Augment_Ch5_Scattergun1_Schematic": {
+      "name": "Scattergun Rampage-Enhancement",
+      "category": "Schematics",
+      "gradeable": true,
+      "tier": 6
+    },
+    "T6_Augment_Ch5_Shotgun1_Schematic": {
+      "name": "Drillshot FK7 Spray-and-Pray",
+      "category": "Schematics",
+      "gradeable": true,
+      "tier": 6
+    },
+    "T6_Augment_Ch5_SMG1_Schematic": {
+      "name": "Disruptor M11 Personnel-Buster",
+      "category": "Schematics",
+      "gradeable": true,
+      "tier": 6
+    },
+    "T6_Augment_Ch5_Spitdart1_Schematic": {
+      "name": "JABAL Spitdart Ranger",
+      "category": "Schematics",
+      "gradeable": true,
+      "tier": 6
+    },
+    "T6_Augment_Ch5_Melee1_Schematic": {
+      "name": "Heavy Metal Blade Coating",
+      "category": "Schematics",
+      "gradeable": true,
+      "tier": 6
+    },
+    "T6_Augment_Ch5_Melee3_Schematic": {
+      "name": "Blade Blood Grooves",
+      "category": "Schematics",
+      "gradeable": true,
+      "tier": 6
+    },
+    "B1C4_Unique_HarkAr2_Schematic": {
+      "name": "The Angry Adder",
+      "category": "Schematics",
+      "gradeable": true,
+      "tier": 6
+    },
+    "B1C4_Unique_LMG2_Schematic": {
+      "name": "The Hateful Barker",
+      "category": "Schematics",
+      "gradeable": true,
+      "tier": 6
+    },
+    "B1C4_Unique_SmugDmr1_Schematic": {
+      "name": "Blind Fury",
+      "category": "Schematics",
+      "gradeable": true,
+      "tier": 6
+    },
+    "Exoskeleton_Heavy06_Unique_Top_Schematic": {
+      "name": "Combat Exoskeleton Chestpiece",
+      "category": "Schematics",
+      "gradeable": true,
+      "tier": 6
+    },
+    "Assassin_Light06_Unique_Helmet_Schematic": {
+      "name": "Phantom Whisper Helm",
+      "category": "Schematics",
+      "gradeable": true,
+      "tier": 6
+    },
+    "Assassin_Light06_Unique_Top_Schematic": {
+      "name": "Phantom Whisper Chestpiece",
+      "category": "Schematics",
+      "gradeable": true,
+      "tier": 6
+    },
+    "B1C4_Unique_Dirk2_Schematic": {
+      "name": "Eel’s Tooth",
+      "category": "Schematics",
+      "gradeable": true,
+      "tier": 6
+    },
+    "B1C4_Unique_DualBlades1_Schematic": {
+      "name": "Leech’s Maw",
+      "category": "Schematics",
+      "gradeable": true,
+      "tier": 6
+    },
+    "B1C4_Unique_Kindjal2_Schematic": {
+      "name": "Serpent’s Fang",
+      "category": "Schematics",
+      "gradeable": true,
+      "tier": 6
+    },
+    "B1C4_Unique_Sword2_Schematic": {
+      "name": "Branding Blade",
+      "category": "Schematics",
+      "gradeable": true,
+      "tier": 6
+    },
+    "B1C4_Unique_Rapier2_Schematic": {
+      "name": "Prescient Edge",
+      "category": "Schematics",
+      "gradeable": true,
+      "tier": 6
+    },
+    "B1C4_Unique_SMG2_Schematic": {
+      "name": "Spitting Cobra",
+      "category": "Schematics",
+      "gradeable": true,
+      "tier": 6
+    },
+    "B1C4_Unique_HeavyPistol2_Schematic": {
+      "name": "Hell-Fury Pistol",
+      "category": "Schematics",
+      "gradeable": true,
+      "tier": 6
     }
   }
 }

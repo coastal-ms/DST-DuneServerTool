@@ -287,8 +287,12 @@ export function PlayersTab() {
         {/* Right pane */}
         <section className="min-w-0">
           {flash && (
-            <div className={`card p-2.5 mb-3 text-xs border-l-2 break-words ${flash.kind === 'ok' ? 'text-success border-success' : 'text-danger border-danger'}`}>
-              {flash.msg}
+            <div
+              role="status"
+              className={`fixed bottom-4 right-4 z-50 max-w-sm card p-3 text-xs flex items-start gap-2 shadow-lg break-words border-l-2 ${flash.kind === 'ok' ? 'text-success border-success' : 'text-danger border-danger'}`}
+            >
+              <Icon name={flash.kind === 'ok' ? 'CheckCircle2' : 'AlertCircle'} size={14} className="mt-0.5 shrink-0" />
+              <span>{flash.msg}</span>
             </div>
           )}
           {selected ? (

@@ -165,15 +165,15 @@ $script:DuneGameConfigSchema = @(
 )
 
 # -----------------------------------------------------------------------------
-# Live INI paths inside the BG PVC (resolved via sudo glob, cached per session).
-# Templates are the fallback used when no BG has been provisioned yet.
+# Live INI paths inside the running battlegroup's PVC. These are resolved LIVE on
+# every read/write (never cached): the PVC directory carries a hash that is
+# UNIQUE per battlegroup, so a cached path would point at the wrong - or a
+# deleted - battlegroup's INI after a VM switch or a battlegroup rebuild, even on
+# the same IP. Templates are the fallback used when no BG has been provisioned.
 # -----------------------------------------------------------------------------
-$script:DuneGameConfigLiveGlobGame   = '/var/lib/rancher/k3s/storage/*/Saved/UserSettings/UserGame.ini'
-$script:DuneGameConfigLiveGlobEngine = '/var/lib/rancher/k3s/storage/*/Saved/UserSettings/UserEngine.ini'
+$script:DuneGameConfigLiveGlobDir    = '/var/lib/rancher/k3s/storage/*/Saved/UserSettings'
 $script:DuneGameConfigTplGamePath    = '/home/dune/.dune/download/scripts/setup/config/UserGame.ini'
 $script:DuneGameConfigTplEnginePath  = '/home/dune/.dune/download/scripts/setup/config/UserEngine.ini'
-$script:DuneGameConfigResolvedGame   = $null
-$script:DuneGameConfigResolvedEngine = $null
 
 # Where each player applies the "client-side too" settings. These keys are read
 # by BOTH server and client; changing them server-side only takes full effect
@@ -704,20 +704,24 @@ function Get-DuneGameConfigContext {
 
 function Resolve-DuneGameConfigPaths {
     param([string]$Ip, [switch]$Force)
-    if (-not $Force -and $script:DuneGameConfigResolvedGame -and $script:DuneGameConfigResolvedEngine) {
-        return @{ game = $script:DuneGameConfigResolvedGame; engine = $script:DuneGameConfigResolvedEngine; source = 'cache' }
+    # Resolve LIVE every call - never cache. The User*.ini live under the running
+    # battlegroup's PVC dir, whose hash is UNIQUE per battlegroup, so any cached
+    # path would silently read/write the wrong (or a deleted) battlegroup's INI
+    # after a VM switch or battlegroup rebuild - even on the same IP. We pick the
+    # newest UserGame.ini (file mtime - the game touches it on write) and take
+    # UserEngine.ini from that same dir, so both always come from one battlegroup.
+    # $Force is accepted for call-site compatibility but is a no-op (always live).
+    $dir = ((Invoke-V6Ssh -Ip $Ip -Cmd "sudo bash -c 'ls -t $($script:DuneGameConfigLiveGlobDir)/UserGame.ini 2>/dev/null | head -1 | xargs -r dirname'") -join '').Trim()
+    if ($dir) {
+        $g = "$dir/UserGame.ini"
+        $e = "$dir/UserEngine.ini"
+        $chk = ((Invoke-V6Ssh -Ip $Ip -Cmd "sudo bash -c 'test -f ''$g'' && test -f ''$e'' && echo ok'") -join '').Trim()
+        if ($chk -eq 'ok') {
+            return @{ game = $g; engine = $e; source = 'live' }
+        }
     }
-    $liveGame   = (Invoke-V6Ssh -Ip $Ip -Cmd "sudo bash -c 'ls -t $($script:DuneGameConfigLiveGlobGame) 2>/dev/null | head -1'") -join ''
-    $liveEngine = (Invoke-V6Ssh -Ip $Ip -Cmd "sudo bash -c 'ls -t $($script:DuneGameConfigLiveGlobEngine) 2>/dev/null | head -1'") -join ''
-    $liveGame   = "$liveGame".Trim()
-    $liveEngine = "$liveEngine".Trim()
-    if ($liveGame -and $liveEngine) {
-        $script:DuneGameConfigResolvedGame   = $liveGame
-        $script:DuneGameConfigResolvedEngine = $liveEngine
-        return @{ game = $liveGame; engine = $liveEngine; source = 'live' }
-    }
-    $script:DuneGameConfigResolvedGame   = $script:DuneGameConfigTplGamePath
-    $script:DuneGameConfigResolvedEngine = $script:DuneGameConfigTplEnginePath
+    # No live User*.ini yet (fresh server / battlegroup not provisioned). Fall back
+    # to the seed template so the editor still renders sane defaults.
     return @{ game = $script:DuneGameConfigTplGamePath; engine = $script:DuneGameConfigTplEnginePath; source = 'template' }
 }
 

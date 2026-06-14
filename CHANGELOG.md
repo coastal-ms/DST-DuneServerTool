@@ -13,6 +13,80 @@ here cover everything those tags shipped.
 
 ## [Unreleased]
 
+### Added
+
+- **Spawn Vehicle** Player Action (Vehicle group) — spawns any of the nine CHOAM
+  vehicles (Sandbike, Buggy, Tank, Sandcrawler, Treadwheel, Container Vehicle,
+  and Light/Medium/Transport Ornithopters) on the selected player, with an
+  optional tier-template loadout (e.g. *T6_Combat*, *T5_Inventory*) and a
+  *Persistent* toggle. The vehicle drops at the player's current position;
+  requires the player to be online.
+- **Give whole tier set (Mk1–Mk6)** in the Give Item form. When the selected
+  item is gradeable gear (weapon, armor, stillsuit, augment), one click hands
+  over the item at every grade Mk1 through Mk6. Works online (delivered
+  instantly) or offline (on next login), same as a normal Give Item.
+- **Full gradeable-gear catalog.** The item catalog now includes every gradeable
+  weapon, garment, augment, and schematic (~1.3k entries total), each tagged with
+  its `gradeable` flag and base `tier`, so all tier gear is searchable and
+  tier-set-giveable from the Add Item / Give Item picker.
+- **Stop VM Only** command (VM section, next to **Start VM Only**) — powers off
+  just the VM for maintenance. Available when the VM is running; while a
+  battlegroup is live it steers you to **Stop Full Stack** for a graceful
+  shutdown instead of pulling the VM out from under a running game.
+- **Apply Quick Preset** Player Action (Progression group) — completes a whole
+  story/journey chapter in one click from a dropdown of presets (Skip NPE,
+  Complete: A New Beginning, Find the Fremen, All of Act 1, Unlock All Lore,
+  and the Vermillius/Deep Desert/Taxation/Overland tutorial skips). Each option
+  shows its node count and a description; applies by account id so it works
+  online or offline.
+
+### Fixed
+
+- **Apply Quick Preset actually completes its nodes now.** The progression-preset
+  apply routine iterated a `journey_nodes`/`label` shape the catalog loader never
+  produced (it emits `nodes`/`name`), so applying any preset silently completed
+  0/0 nodes and the feature was never wired into the UI. Fixed the field names and
+  wired the new **Apply Quick Preset** action; the web client also sent `pawn_id`
+  where the route expects `account_id`, which is now corrected.
+- **Player Action forms no longer jump when you submit.** The result banner in
+  the Players tab rendered in-flow at the top of the panel, so showing a success
+  or error message pushed the whole panel — including the open action's form and
+  its submit button — downward (most visible on **Cheat Script**, whose errors
+  keep the form open). The banner is now a fixed-position toast that floats over
+  the page without shifting any content.
+- **Give Scrip, Give Faction Rep, and Set Faction Tier now work.** These Player
+  Actions sent the wrong identifier (`account_id`) under the wrong field names,
+  so every attempt failed with *"actor_id is required."* They now send the
+  player's **controller id** (the key the currency and faction-reputation tables
+  are actually keyed on, matching Give Solari), and the faction actions map the
+  faction name (atreides/harkonnen/smuggler) to its numeric id the routes expect.
+- **Game Config now always reads the current battlegroup's INI.** The resolved
+  `UserGame.ini` / `UserEngine.ini` path was cached for the life of the process.
+  Because that path lives under the battlegroup's storage directory — whose hash
+  is **unique per battlegroup** — switching to another VM, or rebuilding the
+  battlegroup on the **same IP**, left the cache pointing at an INI that no longer
+  existed (every setting silently showed its **DEFAULT** value) or, if the old
+  directory lingered, at stale config. DST now resolves the live path on every
+  read and write, taking both files from the single newest `UserSettings`
+  directory so they always come from the same battlegroup, and falls back to the
+  seed template only when no battlegroup has been provisioned yet.
+- **Give Item now respects real inventory capacity (volume + slots).** Adding a
+  stacked item (e.g. a single 500-stack) no longer fails with a false "not enough
+  slots" error. The capacity check now mirrors the game's own model: a stack
+  occupies **one slot**, while the stack's **volume** (per-item volume ×
+  stack_size) counts against the inventory's volume cap
+  (`max_item_volume`/`PlayerInventoryStartingVolumeCapacity`). The slot cap is
+  only enforced when the inventory actually has one. Previously the guard tried to
+  reserve a slot for every item in a stack and ignored volume entirely.
+
+### Changed
+
+- **Give Item works the same online or offline.** Removed the separate
+  "Give Item (force live)" action — the single **Give Item** auto-routes:
+  delivered instantly to online players, applied to the backpack for offline
+  players (visible on their next login). Both paths are gated only on whether the
+  item fits in the inventory.
+
 ## [12.0.18] - 2026-06-13
 
 ### Changed

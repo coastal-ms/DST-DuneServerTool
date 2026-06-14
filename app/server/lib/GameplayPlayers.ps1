@@ -247,6 +247,10 @@ function Invoke-DunePlayerGiveItem {
     param([string]$Ip, [long]$PawnId, [string]$Template, [long]$Qty, [long]$Quality)
     $tv = Test-DuneValidGiveTemplate -TemplateId $Template
     if (-not $tv.ok) { return @{ ok = $false; error = $tv.error } }
+    # Gate on inventory space (volume + slots), same guard as the live path, so a
+    # give only proceeds when it fits — online or offline.
+    $cap = Test-DuneInventoryCapacity -Ip $Ip -PawnId $PawnId -Template $Template -Quantity ([int]$Qty) -Quality $Quality
+    if (-not $cap.ok) { return $cap }
     $safeTmpl = ConvertTo-DuneSqlString $Template
     $statsJson = ConvertTo-DuneSqlString (Get-DuneGiveItemStatsJson -TemplateId $Template)
     $sql = @"

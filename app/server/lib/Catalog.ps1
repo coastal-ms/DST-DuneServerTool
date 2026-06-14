@@ -39,6 +39,10 @@ function Load-DuneItemCatalog {
                 name       = $prop.Value.name
                 category   = $prop.Value.category
             }
+            if ($prop.Value.PSObject.Properties['gradeable'] -and $prop.Value.gradeable) {
+                $entry['gradeable'] = $true
+                if ($null -ne $prop.Value.tier) { $entry['tier'] = [int]$prop.Value.tier }
+            }
             [void]$list.Add($entry)
             if ($prop.Value.category) { $cats[$prop.Value.category] = $true }
         }
