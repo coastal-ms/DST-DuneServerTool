@@ -164,6 +164,8 @@ export interface BotConfig extends Partial<BotPricingConfig> {
   list_tick_interval: number
   listings_per_grade: number
   stackables_only: boolean
+  display_cap_enabled?: boolean
+  display_cap_solari?: number
   sane_defaults_revision?: number
   configured?: boolean
   source?: DataSource
