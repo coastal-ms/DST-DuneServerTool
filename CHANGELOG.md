@@ -13,6 +13,35 @@ here cover everything those tags shipped.
 
 ## [Unreleased]
 
+## [12.0.21] - 2026-06-14
+
+### Added
+
+- **Fill Base Water** Player Action (Inventory section, next to Fill Water) —
+  tops up all water containers in a player's **own** bases (Water Cisterns,
+  Windtraps) plus their carried fillables in one click. Cistern/windtrap water
+  lives in live game state with no per-cistern database field, so this routes
+  through the per-player `UpdateAllWaterFillables` game command, which is keyed
+  by the player's FLS id and therefore only ever affects **that** player's own
+  containers — never other players' bases. Online-only: offline players are
+  rejected with a clear message and the button shows a **LIVE REQ'D** badge
+  while they're offline.
+
+### Fixed
+
+- **Market Bot** — Duke now lists every stackable resource in consistent full
+  stacks. The bot let the live NPC-vendor snapshot's per-item `max_stack`
+  (often `1` for raw resources) override the catalog stack size, so some
+  resources (e.g. **Plastone**, **Plastanium Ingot**) were sold as single-item
+  listings while others (e.g. **Plasteel Composite Armor Plating**) correctly
+  showed full 500-stacks. Stackable items now use the larger of the snapshot
+  and catalog stack, so every resource lists in its full catalog stack.
+- **Market Bot** — added an optional **displayed-price (Solari) cap**. In-game
+  Solari prices are `item_price × 10`, so the existing 100,000 `item_price` cap
+  actually permitted up to 1,000,000 Solari in-game. A new opt-in toggle
+  (default **off**, preserving the current higher prices) clamps the displayed
+  Solari price to a configurable ceiling.
+
 ## [12.0.20] - 2026-06-14
 
 ### Fixed
