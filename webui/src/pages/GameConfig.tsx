@@ -34,6 +34,15 @@ import { SpicefieldsCard } from './gameconfig/SpicefieldsCard'
 
 type LoadState = 'idle' | 'loading' | 'ready' | 'error' | 'unavailable'
 
+// One server-vs-client disagreement for a customised ClientApply setting.
+type ClientMismatch = {
+  key: string
+  label: string
+  section: string
+  serverValue: string
+  clientValue: string | null
+}
+
 const SANDWORM_ENABLED_KEY = 'sandworm.dune.Enabled'
 
 // Bool literal pairs per type so toggles emit exactly what UE expects.
@@ -74,6 +83,19 @@ function isCustomized(data: GameConfigResponse | null, field: GameConfigField): 
 function currentValue(data: GameConfigResponse | null, field: GameConfigField): string {
   const lv = liveValue(data, field)
   return lv !== '' ? lv : fieldDefault(field)
+}
+
+// Numeric-aware, case-insensitive equality so 4 vs 4.0 and True vs true don't
+// register as mismatches between the server and client INI values.
+function valuesEqual(a: string, b: string): boolean {
+  const ta = (a ?? '').trim()
+  const tb = (b ?? '').trim()
+  if (ta !== '' && tb !== '') {
+    const na = Number(ta)
+    const nb = Number(tb)
+    if (Number.isFinite(na) && Number.isFinite(nb)) return na === nb
+  }
+  return ta.toLowerCase() === tb.toLowerCase()
 }
 
 function sectionIsManaged(data: GameConfigResponse, field: GameConfigField): boolean {
@@ -123,6 +145,16 @@ export function GameConfig() {
   const [applying, setApplying] = useState(false)
   const [clientSnippetCopied, setClientSnippetCopied] = useState(false)
 
+  // Server-vs-client mismatch popup. Auto-shown on load when a configured client
+  // Game.ini disagrees with the server on a customised ClientApply setting.
+  const [mismatchOpen, setMismatchOpen] = useState(false)
+  const [mismatchAutoShown, setMismatchAutoShown] = useState(false)
+  const [mismatchFixing, setMismatchFixing] = useState(false)
+  const [mismatchErr, setMismatchErr] = useState<string | null>(null)
+  const [mismatchMsg, setMismatchMsg] = useState<string | null>(null)
+  const [mismatchFallback, setMismatchFallback] = useState(false)
+  const [mismatchCopied, setMismatchCopied] = useState(false)
+
   // INI text the admin can hand to OTHER players (who don't run DST) to paste
   // into their own client Game.ini — grouped by section, last-write-wins order.
   const clientSnippet = useMemo(() => {
@@ -146,6 +178,86 @@ export function GameConfig() {
       setTimeout(() => setClientSnippetCopied(false), 1500)
     } catch { /* clipboard may be unavailable; the snippet is still shown */ }
   }, [clientSnippet])
+
+  // Client-mirror mismatch detector. For every ClientApply field the admin has
+  // CUSTOMISED on the server (value present and != default), compare the server's
+  // effective value against the player's local client Game.ini. Any that differ
+  // (or are missing client-side) won't take full effect until mirrored locally.
+  const clientMismatches = useMemo<ClientMismatch[]>(() => {
+    if (!schema || !cfg || !clientInfo || !clientInfo.exists) return []
+    const out: ClientMismatch[] = []
+    for (const cat of schema) {
+      for (const f of cat?.fields ?? []) {
+        if (!f?.clientApply || !f.key) continue
+        if (!isCustomized(cfg, f)) continue
+        const serverValue = currentValue(cfg, f)
+        const raw = clientInfo.effective?.[`${f.section}||${f.key}`]
+        const clientValue = raw === undefined || raw === null ? null : String(raw)
+        if (clientValue !== null && valuesEqual(clientValue, serverValue)) continue
+        out.push({ key: f.key, label: f.label, section: f.section, serverValue, clientValue })
+      }
+    }
+    return out
+  }, [schema, cfg, clientInfo])
+
+  // INI snippet of the SERVER values for the mismatched keys (manual-merge / share).
+  const mismatchSnippet = useMemo(() => {
+    if (clientMismatches.length === 0) return ''
+    const bySection = new Map<string, string[]>()
+    for (const m of clientMismatches) {
+      const lines = bySection.get(m.section) ?? []
+      lines.push(`${m.key}=${m.serverValue}`)
+      bySection.set(m.section, lines)
+    }
+    return [...bySection.entries()]
+      .map(([section, lines]) => [`[${section}]`, ...lines].join('\n'))
+      .join('\n\n')
+  }, [clientMismatches])
+
+  const onCopyMismatchSnippet = useCallback(async () => {
+    if (!mismatchSnippet) return
+    try {
+      await navigator.clipboard.writeText(mismatchSnippet)
+      setMismatchCopied(true)
+      setTimeout(() => setMismatchCopied(false), 1500)
+    } catch { /* clipboard may be unavailable; the snippet is still shown */ }
+  }, [mismatchSnippet])
+
+  // Auto-surface the popup once per detected mismatch set; reset when it clears.
+  useEffect(() => {
+    if (clientMismatches.length > 0 && !mismatchAutoShown) {
+      setMismatchOpen(true)
+      setMismatchAutoShown(true)
+    }
+    if (clientMismatches.length === 0 && mismatchAutoShown) {
+      setMismatchAutoShown(false)
+      setMismatchOpen(false)
+    }
+  }, [clientMismatches.length, mismatchAutoShown])
+
+  // Write the server's values into the local client Game.ini. The click itself is
+  // the user's consent to edit that file; DST backs it up first. Falls back to a
+  // copy-box if DST can't write (no folder / permission).
+  const onFixClientMismatch = useCallback(async () => {
+    if (clientMismatches.length === 0) return
+    setMismatchErr(null)
+    setMismatchMsg(null)
+    setMismatchFixing(true)
+    try {
+      const items = clientMismatches.map(m => ({ key: m.key, label: m.label, section: m.section, value: m.serverValue }))
+      const r = await applyGameConfigClient(items, clientInfo?.dir)
+      setClientInfo(r.client)
+      setMismatchMsg(`Synced ${r.applied} setting${r.applied === 1 ? '' : 's'} to your client Game.ini (${r.path}).${r.backup ? ' Previous file backed up.' : ''}`)
+      window.setTimeout(() => setMismatchMsg(null), 8000)
+      setMismatchOpen(false)
+      setMismatchFallback(false)
+    } catch (e) {
+      setMismatchErr(e instanceof Error ? e.message : String(e))
+      setMismatchFallback(true)
+    } finally {
+      setMismatchFixing(false)
+    }
+  }, [clientMismatches, clientInfo])
 
   const refreshClient = useCallback(async () => {
     try {
@@ -667,6 +779,133 @@ export function GameConfig() {
       {savedMsg && (
         <div className="card p-3 mb-4 border-success/40 bg-success/10 text-success text-sm flex items-center gap-2">
           <Icon name="CheckCircle2" size={14} /> {savedMsg}
+        </div>
+      )}
+      {mismatchMsg && (
+        <div className="card p-3 mb-4 border-success/40 bg-success/10 text-success text-sm flex items-center gap-2">
+          <Icon name="CheckCircle2" size={14} /> {mismatchMsg}
+        </div>
+      )}
+      {clientMismatches.length > 0 && !mismatchOpen && (
+        <button
+          type="button"
+          onClick={() => { setMismatchFallback(false); setMismatchErr(null); setMismatchOpen(true) }}
+          className="card p-3 mb-4 w-full text-left border-warning/40 bg-warning/10 text-warning text-sm flex items-center gap-2 hover:bg-warning/15"
+        >
+          <Icon name="MonitorSmartphone" size={14} />
+          {clientMismatches.length} client setting{clientMismatches.length === 1 ? '' : 's'} {clientMismatches.length === 1 ? "doesn't" : "don't"} match the server — review &amp; fix
+        </button>
+      )}
+      {mismatchOpen && clientMismatches.length > 0 && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4"
+          onClick={() => setMismatchOpen(false)}
+        >
+          <div
+            className="card w-full max-w-xl max-h-[85vh] overflow-y-auto border-warning/40 bg-surface text-sm"
+            onClick={e => e.stopPropagation()}
+          >
+            <div className="flex items-start gap-2 p-4">
+              <Icon name="MonitorSmartphone" size={18} className="text-warning mt-0.5 shrink-0" />
+              <div className="flex-1 min-w-0">
+                <div className="font-semibold text-text mb-1">
+                  Your client config doesn&apos;t match the server
+                </div>
+                <p className="text-text-muted mb-3">
+                  {clientMismatches.length === 1 ? 'This setting is' : 'These settings are'} read by both the
+                  server and the game client. Your server uses {clientMismatches.length === 1 ? 'this value' : 'these values'},
+                  but your local client{' '}
+                  <span className="font-mono break-all">{clientInfo?.path ?? 'Game.ini'}</span>{' '}
+                  {clientMismatches.length === 1 ? 'has a different one' : 'has different ones'}. Until they match,
+                  the change won&apos;t take full effect for you in-game.
+                </p>
+
+                <div className="rounded border border-border overflow-hidden mb-3">
+                  <table className="w-full text-xs">
+                    <thead className="bg-surface-2 text-text-muted">
+                      <tr>
+                        <th className="text-left font-medium px-2 py-1">Setting</th>
+                        <th className="text-left font-medium px-2 py-1">Server (VM)</th>
+                        <th className="text-left font-medium px-2 py-1">Your client</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {clientMismatches.map(m => (
+                        <tr key={m.key} className="border-t border-border">
+                          <td className="px-2 py-1">
+                            <div className="text-text">{m.label}</div>
+                            <div className="font-mono text-text-dim text-[11px] break-all">[{m.section}] {m.key}</div>
+                          </td>
+                          <td className="px-2 py-1 font-mono text-success whitespace-nowrap">{m.serverValue}</td>
+                          <td className="px-2 py-1 font-mono text-danger whitespace-nowrap">{m.clientValue ?? '(not set)'}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+
+                {mismatchErr && (
+                  <div className="mb-2 text-danger text-xs flex items-start gap-1">
+                    <Icon name="AlertCircle" size={13} className="mt-0.5 shrink-0" /> {mismatchErr}
+                  </div>
+                )}
+
+                {!mismatchFallback ? (
+                  <div className="flex items-center gap-2">
+                    <button
+                      type="button"
+                      onClick={() => void onFixClientMismatch()}
+                      disabled={mismatchFixing}
+                      className="btn-primary"
+                      title="Let DST write the server's values into your own client's Game.ini on this PC"
+                    >
+                      <Icon name={mismatchFixing ? 'Loader2' : 'MonitorCog'} size={14} className={mismatchFixing ? 'animate-spin' : ''} />
+                      {mismatchFixing ? 'Fixing…' : 'Fix my client config'}
+                    </button>
+                    <button type="button" onClick={() => setMismatchOpen(false)} className="btn-ghost text-xs">
+                      Not now
+                    </button>
+                  </div>
+                ) : (
+                  <div>
+                    <div className="flex items-center justify-between gap-2 mb-1">
+                      <span className="font-medium text-text">DST couldn&apos;t write the file — paste this in yourself</span>
+                      <button
+                        type="button"
+                        onClick={() => void onCopyMismatchSnippet()}
+                        className="btn-ghost text-xs"
+                        title="Copy the correct INI lines"
+                      >
+                        <Icon name={mismatchCopied ? 'Check' : 'Copy'} size={13} />
+                        {mismatchCopied ? 'Copied' : 'Copy'}
+                      </button>
+                    </div>
+                    <p className="text-text-muted mb-1">
+                      Merge these under the matching section headers in{' '}
+                      <span className="font-mono break-all">{clientInfo?.path ?? 'your client Game.ini'}</span>:
+                    </p>
+                    <pre className="px-2 py-1.5 rounded bg-surface-2 text-text text-xs whitespace-pre-wrap break-all overflow-x-auto">{mismatchSnippet}</pre>
+                    <button type="button" onClick={() => setMismatchOpen(false)} className="btn-ghost text-xs mt-2">
+                      Close
+                    </button>
+                  </div>
+                )}
+                <p className="text-[11px] text-text-dim mt-2">
+                  “Fix my client config” only changes{' '}
+                  <span className="font-mono break-all">{clientInfo?.path ?? 'your local client Game.ini'}</span>{' '}
+                  on this machine (backed up first). It never touches other players&apos; configs.
+                </p>
+              </div>
+              <button
+                type="button"
+                className="btn-icon shrink-0"
+                title="Dismiss"
+                onClick={() => setMismatchOpen(false)}
+              >
+                <Icon name="X" size={14} />
+              </button>
+            </div>
+          </div>
         </div>
       )}
       {clientApply && (
