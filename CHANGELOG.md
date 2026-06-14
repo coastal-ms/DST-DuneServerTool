@@ -15,6 +15,13 @@ here cover everything those tags shipped.
 
 ### Added
 
+- **Give Package** Player Action (Inventory section) — build and reuse your own
+  named **item packages** (bundles of items, each with a quantity and tier
+  Mk1–Mk6), then hand a whole package to any player in one click. Create, edit,
+  and delete packages right from the form; they're saved server-side
+  (`item-packages.json`) so they persist across restarts and are shared between
+  the desktop app and the remote portal. Delivery uses the normal give-items
+  path, so it works **online or offline** as long as there's inventory space.
 - **Give Vehicle Kit** Player Action (Vehicle group) — a reliable, RMQ-free way
   to hand a player a complete vehicle. Picks one of the six CHOAM vehicles that
   have craftable part items (Sandbike, Buggy, Sandcrawler, and Light/Medium/
