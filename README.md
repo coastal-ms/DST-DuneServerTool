@@ -29,6 +29,58 @@ browser and keeps the server running in the background.
 
 ![Server Health](docs/img/server-health.png)
 
+### New in v12.0.19
+
+- **Give Package — build your own item bundles.** Create named **item
+  packages** (any mix of items, each with a quantity and tier Mk1–Mk6), then
+  hand a whole package to any player in one click from the player's Inventory
+  section. Packages are created, edited, and deleted right from the form and
+  saved server-side (`item-packages.json`), so they persist across restarts and
+  are shared between the desktop app and the remote portal. Delivery uses the
+  normal give-items path, so it works **online or offline** as long as there's
+  inventory space.
+
+  ![Give Package](docs/img/give-package.png)
+
+- **Give Vehicle Kit — a whole vehicle, no live spawn required.** Pick one of
+  the six CHOAM vehicles that have craftable part items (Sandbike, Buggy,
+  Sandcrawler, and Light/Medium/Transport Ornithopters) and DST drops its full
+  **Mk6 part set** — chassis, engine, PSU, hull, locomotion, boost — **plus 1
+  Large Vehicle Fuel Cell and 1 Welding Torch Mk5** straight into the player's
+  inventory. Each kit also includes the vehicle's **named/unique top-tier
+  modules** (e.g. Mohandis engine, Night Rider boost, Albatross/Hummingbird/Roc
+  wings) and the **Scout Ornithopter Storage Mk4** (Light) / **Assault
+  Ornithopter Storage Mk5** (Medium). The form previews the exact parts before
+  you hand them over, and it works **online or offline** as long as there's
+  inventory space — no live RMQ spawn. (Tank / Treadwheel / Container have no
+  discrete part items in the game, so they stay on the live **Spawn Vehicle**
+  action.)
+
+  ![Give Vehicle Kit](docs/img/give-vehicle-kit.png)
+
+- **Spawn Vehicle** action — spawns any of the nine CHOAM vehicles on the
+  selected online player, with an optional tier-template loadout (e.g.
+  *T6_Combat*, *T5_Inventory*) and a *Persistent* toggle.
+- **Give whole tier set (Mk1–Mk6).** When the selected item is gradeable gear
+  (weapon, armor, stillsuit, augment), one click hands it over at every grade
+  Mk1 through Mk6 — online (instant) or offline (on next login).
+- **Full gradeable-gear catalog (~1.3k entries).** Every gradeable weapon,
+  garment, augment, and schematic is now searchable and tier-set-giveable from
+  the Add Item / Give Item picker, each tagged with its `gradeable` flag and
+  base `tier`.
+- **Apply Quick Preset** action — completes a whole story/journey chapter in one
+  click from a dropdown (Skip NPE, A New Beginning, Find the Fremen, All of Act 1,
+  Unlock All Lore, and the Vermillius/Deep Desert/Taxation/Overland skips).
+  Applies by account id, so it works online or offline.
+- **Stop VM Only** command — powers off just the VM for maintenance; while a
+  battlegroup is live it steers you to **Stop Full Stack** for a graceful
+  shutdown instead.
+- **Fixes:** bulk give (incl. Give Package) now lands on **online** players, not
+  just offline ones; the give-items handler no longer crashes with "Argument
+  types do not match"; Server Health no longer goes stale while the app is left
+  open (polling now refreshes on tab visibility / window focus); and Apply Quick
+  Preset now actually completes its nodes.
+
 ### New in v12.0.0
 
 - **full Gameplay Admin build-out.** the Gameplay Admin portal lives
