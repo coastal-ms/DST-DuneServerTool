@@ -13,6 +13,18 @@ here cover everything those tags shipped.
 
 ## [Unreleased]
 
+## [12.0.22] - 2026-06-14
+
+### Added
+
+- **Website link in the menu bar** — a right-aligned "Website" link opens the
+  project's marketing site in the browser.
+
+### Changed
+
+- Added repo-local Copilot agent instructions (`.github/copilot-instructions.md`)
+  documenting build/test, encoding, versioning, and release conventions.
+
 ## [12.0.21] - 2026-06-14
 
 ### Added
