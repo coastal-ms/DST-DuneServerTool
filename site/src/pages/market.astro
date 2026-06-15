@@ -64,6 +64,54 @@ const admin = [
     body: "Use the dry-run option to see what a buy round would do, and the vendor-snapshot preview to sanity-check pricing before going live.",
   },
 ];
+
+// Numbered setup walkthrough — body strings may contain inline HTML.
+const setup = [
+  {
+    title: "Open the Market Bot tab",
+    body: "In DST, go to <strong class=\"text-dune-text\">Gameplay &rarr; Market Bot</strong>. The page opens on <strong class=\"text-dune-text\">Buy side</strong>; <strong class=\"text-dune-text\">List side</strong> and <strong class=\"text-dune-text\">Pricing rules</strong> are sub-tabs along the top. Status cards at the top show whether the bot is running, how many listings Duke owns, his Solari balance, and any legacy NPC orders still in the exchange.",
+  },
+  {
+    title: "Wipe any leftover bot listings",
+    body: "If the <strong class=\"text-dune-text\">Legacy listings</strong> card shows a non-zero count (e.g. orders left behind by the old external Revy bot), click <strong class=\"text-dune-text\">Wipe legacy</strong> first. DST also re-prompts you when you enable Duke if any are still there. Player listings and Duke&rsquo;s own listings are never affected.",
+  },
+  {
+    title: "Top up Duke&rsquo;s Solari balance",
+    body: "On the <strong class=\"text-dune-text\">Buy side</strong> sub-tab, set <strong class=\"text-dune-text\">Target balance</strong> (default ~450 billion) and turn on <strong class=\"text-dune-text\">Auto-maintain</strong> so Duke refills himself at tick start whenever he drops below half. Click <strong class=\"text-dune-text\">Set to target</strong> to push the balance up to the target immediately.",
+  },
+  {
+    title: "Set the pricing rules (or accept defaults)",
+    body: "Switch to <strong class=\"text-dune-text\">Pricing rules</strong>. The shipped defaults already give a sensible economy: a <strong class=\"text-dune-text\">100,000 item_price</strong> hard cap, tier base prices, rarity / grade / vendor multipliers, and a 95&thinsp;% vendor floor. If you want a true Solari-side ceiling (the in-game number is item_price &times; 10), enable <strong class=\"text-dune-text\">Cap displayed price (Solari)</strong> and set the limit there. Use <strong class=\"text-dune-text\">Per-template price overrides</strong> to pin specific items to manual prices.",
+  },
+  {
+    title: "Tune the listing rate",
+    body: "On <strong class=\"text-dune-text\">List side</strong>, set <strong class=\"text-dune-text\">List tick (s)</strong> for how often Duke tops up his sell orders, and <strong class=\"text-dune-text\">Listings / grade</strong> for how many copies of each (item, grade) he keeps on the shelves. Toggle <strong class=\"text-dune-text\">Stackables only</strong> on if you want Duke to skip non-stackable gear.",
+  },
+  {
+    title: "Seed the market (instant stock)",
+    body: "Still on List side, click <strong class=\"text-dune-text\">Seed market</strong>. This skips the live vendor snapshot and bulk-inserts up to <em>Listings / grade</em> NPC orders per catalogued template (~1000&ndash;1400 templates) in one batched run, so the in-game Exchange has stock immediately. A progress bar appears at the top of the tab and survives page navigation; the button re-enables when it finishes. Recommended for a fresh server or after a database restore.",
+  },
+  {
+    title: "Tune the buy rate (the dice roll)",
+    body: "Back on <strong class=\"text-dune-text\">Buy side</strong>, set <strong class=\"text-dune-text\">Buy tick (s)</strong>, <strong class=\"text-dune-text\">Max buys / tick</strong>, and the <strong class=\"text-dune-text\">Die size</strong> / <strong class=\"text-dune-text\">Winning number</strong>. Each candidate listing rolls 1&ndash;<em>die size</em> and only buys on a winning number, so a smaller die or shorter interval &equals; a more aggressive buyer. Add any template IDs you want Duke to ignore entirely under <strong class=\"text-dune-text\">Disabled items</strong>.",
+  },
+  {
+    title: "Dry-run before going live",
+    body: "Click <strong class=\"text-dune-text\">Dry run</strong> on the Buy side to roll the dice and see which player listings Duke <em>would</em> buy without touching the database. On List side, <strong class=\"text-dune-text\">Refresh snapshot</strong> shows the eligible vendor items with their computed target prices &mdash; a quick sanity check that your pricing rules behave the way you expect before any writes happen.",
+  },
+  {
+    title: "Save the config",
+    body: "Any change above leaves an <strong class=\"text-dune-text\">Unsaved changes</strong> note on the sticky save bar at the bottom. Hit <strong class=\"text-dune-text\">Save config</strong> to persist. <strong class=\"text-dune-text\">Reset</strong> reverts the draft to whatever was last saved.",
+  },
+  {
+    title: "Enable Duke",
+    body: "Flip <strong class=\"text-dune-text\">Bot enabled</strong> on (Buy side, top of the config card). The status banner turns green (<em>Running</em>), and Duke starts buying and listing on his configured timers. If legacy listings are still present, DST will offer the one-click wipe again before letting Duke run.",
+  },
+  {
+    title: "Verify and monitor",
+    body: "Watch the status cards: <strong class=\"text-dune-text\">Bot state</strong> should show <em>Running</em>, <strong class=\"text-dune-text\">Duke listings</strong> climbs as list ticks fire, <strong class=\"text-dune-text\">Balance</strong> drains and tops back up around the target, and <strong class=\"text-dune-text\">Legacy listings</strong> should sit at zero. The <em>Last buy tick</em> / <em>Last list tick</em> timestamps confirm the loops are alive. Hop in-game and search the Exchange &mdash; you should see Duke&rsquo;s listings within a tick or two.",
+  },
+];
 ---
 
 <Base
@@ -144,6 +192,47 @@ const admin = [
             <p class="text-sm text-dune-muted leading-relaxed" set:html={a.body}></p>
           </div>
         ))}
+      </div>
+    </section>
+
+    <!-- Setup walkthrough ------------------------------------------------ -->
+    <section class="py-16">
+      <div class="mx-auto max-w-3xl text-center mb-8">
+        <div class="font-mono text-xs uppercase tracking-widest text-dune-accent mb-3">
+          Setup guide
+        </div>
+        <h2 class="text-2xl font-semibold mb-3">Setting up the Market &amp; pricing tool</h2>
+        <p class="text-dune-muted leading-relaxed">
+          A clean, end-to-end walkthrough for getting Duke live on a fresh
+          server &mdash; or switching to him from an older external bot.
+          Everything below happens in DST under
+          <strong class="text-dune-text">Gameplay &rarr; Market Bot</strong>;
+          no SSH, no config files.
+        </p>
+      </div>
+
+      <div class="mx-auto max-w-3xl rounded-xl border border-dune-border bg-dune-surface p-8 mb-8">
+        <ol class="space-y-6 text-dune-text">
+          {setup.map((s, i) => (
+            <li class="flex gap-4">
+              <span
+                class="shrink-0 w-7 h-7 rounded-full bg-dune-accent text-dune-bg font-semibold flex items-center justify-center text-sm"
+              >{i + 1}</span>
+              <div>
+                <h3 class="font-semibold mb-1" set:html={s.title}></h3>
+                <p class="text-sm text-dune-muted leading-relaxed" set:html={s.body}></p>
+              </div>
+            </li>
+          ))}
+        </ol>
+      </div>
+
+      <div class="mx-auto max-w-3xl rounded-lg border border-dune-accent/40 bg-dune-accent/10 px-5 py-4 text-sm text-dune-text">
+        <strong class="block mb-1">Heads-up.</strong>
+        Every action on this page writes straight to the live game database.
+        Dry-runs and the vendor-snapshot preview are safe; <em>Seed market</em>,
+        <em>Run now</em>, and <em>Wipe legacy</em> are not. Player listings are
+        never touched by any of Duke&rsquo;s controls.
       </div>
     </section>
   </div>
