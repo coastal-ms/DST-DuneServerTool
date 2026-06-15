@@ -601,7 +601,7 @@ const ACTIONS: ActionDef[] = [
 
 // 'Items' is rendered inside the Inventory section (between the inventory
 // title and the items list), not in the Actions section.
-const GROUP_ORDER: ActionGroup[] = ['Currency', 'Progression', 'Vehicle', 'Live', 'Identity', 'Danger']
+const GROUP_ORDER: ActionGroup[] = ['Live', 'Currency', 'Progression', 'Vehicle', 'Identity', 'Danger']
 const ITEMS_GROUP: ActionGroup = 'Items'
 
 export function ActionsSection({ player, canWrite, flash, onChanged }: SectionProps) {
