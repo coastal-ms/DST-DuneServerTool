@@ -37,9 +37,7 @@ function Get-DuneAdminVmCacheStatus {
         }
     }
     $total = 0L
-    if ($files.Count -gt 0) {
-        $total = ($files | Measure-Object -Property size -Sum).Sum
-    }
+    foreach ($f in $files) { $total += [int64]$f.size }
     return @{
         ok         = $true
         files      = $files
