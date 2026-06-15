@@ -29,6 +29,9 @@ function Test-DunePlayerOffline {
     $maps = ConvertTo-DuneRowMaps -Result $r
     if ($maps.Count -eq 0) { return @{ ok = $true; reason = $null } }
     $status = [string]$maps[0]['status']
+    if ($status -eq 'LoggingOut') {
+        return @{ ok = $false; reason = "player is mid-logout - the pod still owns their state in memory and will flush on logout, overwriting any DB write. Grace timer is ~30s on Hagga / Arrakeen / Harkonnen / etc., ~5 min in Deep Desert. Wait until status shows Offline, then retry." }
+    }
     if ($status -ne 'Offline') {
         return @{ ok = $false; reason = "player is currently $status - log out first, then apply the edit" }
     }
@@ -47,6 +50,9 @@ function Test-DunePlayerOfflineByController {
     $maps = ConvertTo-DuneRowMaps -Result $r
     if ($maps.Count -eq 0) { return @{ ok = $true; reason = $null } }
     $status = [string]$maps[0]['status']
+    if ($status -eq 'LoggingOut') {
+        return @{ ok = $false; reason = "player is mid-logout - the pod still owns their state in memory and will flush on logout, overwriting any DB write. Grace timer is ~30s on Hagga / Arrakeen / Harkonnen / etc., ~5 min in Deep Desert. Wait until status shows Offline, then retry." }
+    }
     if ($status -ne 'Offline') {
         return @{ ok = $false; reason = "player is currently $status - log out first, then apply the edit" }
     }
@@ -241,139 +247,24 @@ function Invoke-DunePlayerGiveScrip {
     }
 }
 
-# ----- Base water (cisterns) ------------------------------------------------
+# ----- Base water removed -------------------------------------------------
 #
-# Cistern water lives in dune.fgl_entities.components as
-#   FWaterStorageComponent -> [0, {"m_WaterStored": <int>}]
-# and is fully writable from SQL — there is no ServerCommand that targets
-# offline players' bases, so a direct DB write is the only path that actually
-# moves the needle. We scope writes to "this player's own bases" by walking:
+# Fill Base Water was investigated for v12.1.2 and removed before release.
+# The map pod loads cistern water into RAM on cistern spawn and writes back
+# to dune.fgl_entities.components on its periodic save tick, which means
+# any DB UPDATE we make to FWaterStorageComponent.m_WaterStored gets
+# overwritten before a player ever sees it. We verified end-to-end against
+# the live VM: drained four cisterns to 250-331, ran the DB UPDATE to
+# 100000, restarted the deepdesert pod, and the pod wrote the old in-RAM
+# values straight back to the DB on shutdown. The legacy RMQ
+# UpdateAllWaterFillables ServerCommand only refills carried fillables
+# (Decker's original complaint), so there is no working path today.
 #
-#   player controller actor
-#     -> dune.permission_actor_rank.player_id (rank = 1, the base owner)
-#       -> permission_actor_id == totem actor id
-#         -> dune.actor_fgl_entities -> totem's FGL entity_id
-#           -> dune.placeables.owner_entity_id (cistern's owning totem entity)
-#             -> dune.actors (the cistern actor)
-#               -> dune.actor_fgl_entities -> cistern's FGL entity_id
-#                 -> dune.fgl_entities.components (the actual water value)
-#
-# Capacity caps (clamped per tier so we never write above the in-game max):
-#   BP_WaterCistern         -> 5,000   (small)
-#   BP_MediumWaterCistern   -> 25,000  (medium)
-#   BP_LargeWaterCistern    -> 100,000 (large)
-# Windtraps/BloodWaterExtractors are intentionally skipped — they GENERATE
-# water through filter consumables, not store it.
+# Leaving the placeable->totem->permission_actor_rank chain notes here for
+# the next attempt: if a future game build exposes a per-cistern RPC, the
+# scope query is permission_actor_rank.player_id=<controller> AND rank=1.
 
-function Get-DunePlayerControllerFromPawnAnyState {
-    param([string]$Ip, [long]$PawnId)
-    # Works for both online and offline players by going via owner_account_id
-    # in the actors table, instead of dune.player_state which can lag offline.
-    $sql = @"
-SELECT c.id::text AS cid
-FROM dune.actors c
-JOIN dune.actors p ON p.owner_account_id = c.owner_account_id
-WHERE p.id = $PawnId::bigint
-  AND c.class ILIKE '%DunePlayerController%'
-LIMIT 1;
-"@
-    $r = Invoke-DuneSqlQuery -Ip $Ip -Sql $sql -ReadOnly $true -MaxRows 1 -TimeoutSec 10
-    if (-not $r.ok) { return 0L }
-    $maps = ConvertTo-DuneRowMaps -Result $r
-    if ($maps.Count -eq 0) { return 0L }
-    return [int64](ConvertTo-DuneInt $maps[0]['cid'])
-}
 
-function Invoke-DunePlayerFillBaseWater {
-    param(
-        [string]$Ip,
-        [long]$PawnId = 0,
-        [long]$ControllerId = 0,
-        [int]$WaterAmount = 1000000
-    )
-    if ($WaterAmount -le 0) { $WaterAmount = 1000000 }
-
-    $cid = $ControllerId
-    if ($cid -le 0 -and $PawnId -gt 0) {
-        $cid = Get-DunePlayerControllerFromPawnAnyState -Ip $Ip -PawnId $PawnId
-        if ($cid -le 0) {
-            # Fallback: maybe PawnId IS actually the controller id
-            $cid = $PawnId
-        }
-    }
-    if ($cid -le 0) {
-        return @{ ok = $false; error = 'Could not resolve player controller id for base-water write.' }
-    }
-
-    $sql = @"
-WITH player_totems AS (
-  SELECT permission_actor_id AS totem_id
-  FROM dune.permission_actor_rank
-  WHERE player_id = $cid::bigint AND rank = 1
-),
-player_cisterns AS (
-  SELECT DISTINCT a.id AS actor_id, a.class, afe.entity_id
-  FROM player_totems pt
-  JOIN dune.actor_fgl_entities totem_fgl
-    ON totem_fgl.actor_id = pt.totem_id AND totem_fgl.slot_name = 'Actor'
-  JOIN dune.placeables p ON p.owner_entity_id = totem_fgl.entity_id
-  JOIN dune.actors a ON a.id = p.id
-  JOIN dune.actor_fgl_entities afe
-    ON afe.actor_id = a.id AND afe.slot_name = 'Actor'
-  WHERE a.class ILIKE '%WaterCistern%'
-),
-updated AS (
-  UPDATE dune.fgl_entities fe
-  SET components = jsonb_set(
-    fe.components,
-    '{FWaterStorageComponent,1,m_WaterStored}',
-    to_jsonb(
-      LEAST(
-        $WaterAmount::int,
-        CASE
-          WHEN pc.class ILIKE '%LargeWater%'  THEN 100000
-          WHEN pc.class ILIKE '%MediumWater%' THEN 25000
-          ELSE 5000
-        END
-      )
-    )
-  )
-  FROM player_cisterns pc
-  WHERE fe.entity_id = pc.entity_id
-    AND fe.components ? 'FWaterStorageComponent'
-  RETURNING pc.class
-)
-SELECT
-  COUNT(*)::text                                                                    AS total,
-  SUM(CASE WHEN class ILIKE '%LargeWater%'  THEN 1 ELSE 0 END)::text                AS large_n,
-  SUM(CASE WHEN class ILIKE '%MediumWater%' THEN 1 ELSE 0 END)::text                AS medium_n,
-  SUM(CASE WHEN class ILIKE '%LargeWater%' OR class ILIKE '%MediumWater%'
-           THEN 0 ELSE 1 END)::text                                                 AS small_n
-FROM updated;
-"@
-    $r = Invoke-DuneSqlQuery -Ip $Ip -Sql $sql -ReadOnly $false -MaxRows 1 -TimeoutSec 30
-    if (-not $r.ok) { return @{ ok = $false; error = $r.error } }
-    $maps = ConvertTo-DuneRowMaps -Result $r
-    $total = 0; $lg = 0; $md = 0; $sm = 0
-    if ($maps.Count -ge 1) {
-        $total = [int](ConvertTo-DuneInt $maps[0]['total'])
-        $lg    = [int](ConvertTo-DuneInt $maps[0]['large_n'])
-        $md    = [int](ConvertTo-DuneInt $maps[0]['medium_n'])
-        $sm    = [int](ConvertTo-DuneInt $maps[0]['small_n'])
-    }
-    if ($total -le 0) {
-        return @{
-            ok = $true
-            message = "No cisterns found on player $cid's bases (player owns 0 totems with cisterns, or all cisterns already at target value with no FWaterStorageComponent rows to update)."
-            updated = 0; large = 0; medium = 0; small = 0; controller_id = $cid
-        }
-    }
-    return @{
-        ok = $true
-        message = "Filled $total cistern(s) on player $cid's bases ($lg large, $md medium, $sm small) to capacity (target $WaterAmount, clamped per tier)."
-        updated = $total; large = $lg; medium = $md; small = $sm; controller_id = $cid
-    }
-}
 
 # ----- Character XP table (verbatim from db.go) ----------------------------
 

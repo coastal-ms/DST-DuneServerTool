@@ -14,7 +14,7 @@ import {
   awardCharXp, awardIntel, awardSpecXp, cheatScript, cleanPlayerInventory,
   applyProgressionPreset, getProgressionPresets,
   deleteAccount, deleteInventoryItem, deleteTutorials,
-  dismissReturningPlayerAward, fillWater, fillBaseWater, getPlayerEvents, getPlayerSpecs,
+  dismissReturningPlayerAward, fillWater, getPlayerEvents, getPlayerSpecs,
   getPlayerStats, getPlayerTags, giveFactionRep, giveItem,
   giveScrip, giveSolari, grantAllKeystones, grantLive, grantMaxSpec,
   kickPlayer, refuelVehicle, renamePlayer, repairGear, repairInventoryItem,
@@ -497,10 +497,6 @@ const ACTIONS: ActionDef[] = [
     run: p => restoreDestroyed(p.id) },
   { id: 'fill-water', group: 'Items', label: 'Fill Water', icon: 'Droplets',
     run: p => fillWater(p.id) },
-  { id: 'fill-base-water', group: 'Items', label: 'Fill Base Water', icon: 'Droplets',
-    rowNote: "Tops the player's own base cisterns (small/medium/large) - works online or offline",
-    confirm: p => `Fill all cisterns on ${p.name}'s bases to capacity? Writes directly to cistern DB state - if ${p.name} is online and interacts with a cistern before the next world save, that one may overwrite.`,
-    run: p => fillBaseWater(p.id) },
   { id: 'clean-inventory', group: 'Items', label: 'Clean Inventory (live)', icon: 'Trash', liveOnly: true,
     confirm: p => `WIPE ${p.name}'s inventory? Cannot be undone.`,
     run: p => cleanPlayerInventory({ actor_id: p.id }) },
@@ -608,10 +604,12 @@ export function ActionsSection({ player, canWrite, flash, onChanged }: SectionPr
   const [openId, setOpenId] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
 
-  const isOnline = (player.online_status || '').toLowerCase() === 'online'
-
-  // Accordion toggle: clicking an open row closes it. Each form owns its own
-  // state, so it resets naturally when a row unmounts on close.
+  // A live session exists during Online AND LoggingOut (the logout grace
+  // window where the pod still owns the player's state in memory - 30s on
+  // Hagga / Arrakeen / Harkonnen / etc., 5 min in Deep Desert). liveOnly
+  // actions run via RMQ to that session, so they're valid in both states -
+  // kick during LoggingOut force-flushes instead of waiting out the timer.
+  const hasLiveSession = ['online', 'loggingout'].includes((player.online_status || '').toLowerCase())
   const openAction = (id: string) => setOpenId(o => (o === id ? null : id))
 
   const runAction = async (def: ActionDef, exec: () => Promise<{ message: string }>) => {
@@ -657,9 +655,9 @@ export function ActionsSection({ player, canWrite, flash, onChanged }: SectionPr
 
   return (
     <div className="space-y-4">
-      {!isOnline && (
+      {!hasLiveSession && (
         <div className="card p-2.5 text-xs text-text-muted border-l-2 border-warning flex items-center gap-2">
-          <Icon name="WifiOff" size={12} /> Player is offline — buttons marked "(live)" are disabled (require RMQ + an online player).
+          <Icon name="WifiOff" size={12} /> Player is offline — buttons marked "(live)" are disabled (require RMQ + an online or mid-logout player).
         </div>
       )}
 
@@ -674,7 +672,7 @@ export function ActionsSection({ player, canWrite, flash, onChanged }: SectionPr
             </div>
             <div className="space-y-1.5">
               {acts.map(a => (
-                <ActionRow key={a.id} def={a} player={player} busy={busy} isOnline={isOnline}
+                <ActionRow key={a.id} def={a} player={player} busy={busy} hasLiveSession={hasLiveSession}
                   open={openId === a.id} danger={group === 'Danger'}
                   onToggle={() => openAction(a.id)} runAction={runAction} />
               ))}
@@ -692,17 +690,17 @@ export function ActionsSection({ player, canWrite, flash, onChanged }: SectionPr
 // directly beneath it. Replaces the older wrap-of-buttons layout so the panel
 // reads as a vertical list rather than a wall of buttons.
 // ---------------------------------------------------------------------------
-function ActionRow({ def, player, busy, isOnline, open, danger, onToggle, runAction }: {
+function ActionRow({ def, player, busy, hasLiveSession, open, danger, onToggle, runAction }: {
   def: ActionDef
   player: Player
   busy: boolean
-  isOnline: boolean
+  hasLiveSession: boolean
   open: boolean
   danger?: boolean
   onToggle: () => void
   runAction: (def: ActionDef, exec: () => Promise<{ message: string }>) => void
 }) {
-  const disabled = busy || (!!def.liveOnly && !isOnline) || (!!def.offlineOnly && isOnline)
+  const disabled = busy || (!!def.liveOnly && !hasLiveSession) || (!!def.offlineOnly && hasLiveSession)
   return (
     <div className="card overflow-hidden">
       <button type="button"
@@ -1170,7 +1168,7 @@ function ItemsActionBlock({ player, canWrite, flash, onChanged }: {
   const [openId, setOpenId] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
 
-  const isOnline = (player.online_status || '').toLowerCase() === 'online'
+  const hasLiveSession = ['online', 'loggingout'].includes((player.online_status || '').toLowerCase())
 
   const acts = useMemo(() => ACTIONS.filter(a => a.group === ITEMS_GROUP), [])
 
@@ -1199,7 +1197,7 @@ function ItemsActionBlock({ player, canWrite, flash, onChanged }: {
   return (
     <div className="space-y-1.5 mb-2">
       {acts.map(a => (
-        <ActionRow key={a.id} def={a} player={player} busy={busy} isOnline={isOnline}
+        <ActionRow key={a.id} def={a} player={player} busy={busy} hasLiveSession={hasLiveSession}
           open={openId === a.id} onToggle={() => openAction(a.id)} runAction={runAction} />
       ))}
     </div>
