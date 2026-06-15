@@ -67,12 +67,13 @@ Register-DuneRoute -Method POST -Path '/api/gameplay/coriolis/set-map-seed' -Han
 Register-DuneRoute -Method POST -Path '/api/gameplay/coriolis/set-partition-seed' -Handler {
     param($req, $res, $routeParams, $body)
     try {
-        $pid = Get-DuneBodyInt -Body $body -Name 'partition_id'
+        # $partId, not $pid — $PID is a read-only automatic variable.
+        $partId = Get-DuneBodyInt -Body $body -Name 'partition_id'
         $seed = Get-DuneBodyInt -Body $body -Name 'seed'
-        if ($null -eq $pid -or $pid -le 0) { Write-DuneError -Response $res -Status 400 -Message 'partition_id (positive integer) is required.'; return }
+        if ($null -eq $partId -or $partId -le 0) { Write-DuneError -Response $res -Status 400 -Message 'partition_id (positive integer) is required.'; return }
         if ($null -eq $seed -or $seed -lt 0) { Write-DuneError -Response $res -Status 400 -Message 'seed (non-negative integer) is required.'; return }
         Invoke-DunePlayerWriteRoute -Response $res -Action {
-            param($ip) Invoke-DuneCoriolisSetPartitionSeed -Ip $ip -PartitionId ([long]$pid) -Seed ([int]$seed)
+            param($ip) Invoke-DuneCoriolisSetPartitionSeed -Ip $ip -PartitionId ([long]$partId) -Seed ([int]$seed)
         }
     } catch {
         Write-DuneError -Response $res -Status 500 -Message "Set partition seed failed: $($_.Exception.Message)"

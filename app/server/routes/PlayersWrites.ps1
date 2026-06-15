@@ -137,10 +137,13 @@ Register-DuneRoute -Method POST -Path '/api/gameplay/players/progression/apply-p
     param($req, $res, $routeParams, $body)
     try {
         $acc = Get-DuneBodyInt -Body $body -Name 'account_id'
-        $pid = [string](Get-DuneBodyValue -Body $body -Name 'preset_id')
+        # NOTE: do NOT name this $pid — $PID is a PowerShell read-only automatic
+        # variable (and AllScope), so $pid = ... throws "Cannot overwrite variable
+        # PID because it is read-only or constant." See issue: Apply preset failed.
+        $presetId = [string](Get-DuneBodyValue -Body $body -Name 'preset_id')
         if ($null -eq $acc -or $acc -le 0) { Write-DuneError -Response $res -Status 400 -Message 'account_id is required.'; return }
-        if (-not $pid) { Write-DuneError -Response $res -Status 400 -Message 'preset_id is required.'; return }
-        Invoke-DunePlayerWriteRoute -Response $res -Action { param($ip) Invoke-DunePlayerApplyProgressionPreset -Ip $ip -AccountId $acc -PresetId $pid }
+        if (-not $presetId) { Write-DuneError -Response $res -Status 400 -Message 'preset_id is required.'; return }
+        Invoke-DunePlayerWriteRoute -Response $res -Action { param($ip) Invoke-DunePlayerApplyProgressionPreset -Ip $ip -AccountId $acc -PresetId $presetId }
     } catch {
         Write-DuneError -Response $res -Status 500 -Message "Apply preset failed: $($_.Exception.Message)"
     }

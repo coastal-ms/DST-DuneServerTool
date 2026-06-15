@@ -13,6 +13,20 @@ here cover everything those tags shipped.
 
 ## [Unreleased]
 
+### Fixed
+
+- **Apply Journey preset (and several other gameplay endpoints) no longer fail
+  with "Cannot overwrite variable PID because it is read-only or constant."**
+  Several route/lib handlers used a local variable named `$pid`, which collides
+  with PowerShell's read-only AllScope automatic `$PID` (current process id) and
+  throws on assignment in any scope. Renamed to `$presetId`, `$partId`,
+  `$playerId`, and `$permPid` in `app/server/routes/PlayersWrites.ps1`,
+  `app/server/routes/CoriolisAdmin.ps1`, `app/server/routes/PlayersRead.ps1`,
+  and `app/server/lib/PlayersWrites.ps1`. The Apply Preset path was the
+  user-reported repro (Discord, 2026-06-15); the others were the same latent
+  bug on Set Partition Seed, Keystones, Dungeons, offline teleport, and
+  permission-player lookup.
+
 ## [12.1.1] - 2026-06-15
 
 ### Fixed
