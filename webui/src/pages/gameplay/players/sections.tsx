@@ -485,6 +485,7 @@ const ACTIONS: ActionDef[] = [
     run: () => Promise.resolve({ message: '' }) },
   { id: 'give-vehicle-kit', group: 'Items', label: 'Give Vehicle Kit', icon: 'Truck', custom: 'vehicle-kit',
     rowNote: 'Parts + fuel cell + welding torch Mk5 — works online or offline, needs inventory space',
+    confirm: p => `Give vehicle parts to ${p.name}'s inventory? They'll need to assemble at a Vehicle Assembly. Works online or offline.`,
     run: () => Promise.resolve({ message: '' }) },
   { id: 'give-package', group: 'Items', label: 'Give Package', icon: 'PackageCheck', custom: 'give-package',
     rowNote: 'Hand a saved item package to this player — build & reuse your own bundles. Works online or offline',
@@ -506,6 +507,7 @@ const ACTIONS: ActionDef[] = [
   // ----- Vehicle -----
   { id: 'spawn-vehicle', group: 'Vehicle', label: 'Spawn Vehicle', icon: 'Car', custom: 'spawn-vehicle',
     rowNote: 'Hands unassembled Mk6 parts — assemble at a Vehicle Assembly. Works online or offline',
+    confirm: p => `Give vehicle parts to ${p.name}'s inventory? They'll need to assemble at a Vehicle Assembly. Works online or offline.`,
     run: () => Promise.resolve({ message: '' }) },
   { id: 'refuel-vehicle', group: 'Vehicle', label: 'Refuel Vehicle', icon: 'Fuel',
     fields: [{ key: 'vid', label: 'Vehicle id', type: 'number', placeholder: '12345' }],
