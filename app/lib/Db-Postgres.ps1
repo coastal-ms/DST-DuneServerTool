@@ -131,6 +131,79 @@ function Invoke-V6Ssh {
     }
 }
 
+# Run an arbitrary ssh command with a HIDDEN window (no conhost flash) and
+# return BOTH stdout and stderr separately, plus the process exit code.
+#
+# Why this exists alongside Invoke-V6Ssh:
+#   Invoke-V6Ssh is tuned for the kubectl/psql call path -- it discards
+#   stderr (mirrors the old `2>$null` semantics) and only returns stdout.
+#   The preflight / status code paths need stderr (to surface "Permission
+#   denied" / "Host key verification failed" etc. as actionable hints) AND
+#   the exit code. They used to call `& ssh ... 2>$errFile`, which
+#   silently allocates a fresh conhost window for every spawn when run
+#   from a background runspace whose parent's hidden console isn't
+#   inherited -- producing the "console keeps popping up and disappearing"
+#   flash users see while the dashboard polls (every 10-15 s per panel).
+function Invoke-DuneSshHidden {
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory)] [string]   $Ip,
+        [Parameter(Mandatory)] [string]   $KeyPath,
+        [string[]]                       $SshOptions = @(),
+        [string]                         $RemoteCommand,
+        [string]                         $User       = 'dune',
+        [int]                            $TimeoutSec = 30
+    )
+
+    $psi = [System.Diagnostics.ProcessStartInfo]::new()
+    $psi.FileName               = 'ssh'
+    $psi.RedirectStandardOutput = $true
+    $psi.RedirectStandardError  = $true
+    $psi.UseShellExecute        = $false
+    $psi.CreateNoWindow         = $true
+
+    # Build argv. Same quoting strategy as Invoke-V6Ssh: only quote args
+    # that contain whitespace or quotes, and escape any embedded ".
+    $sshArgs = @('-n') + $SshOptions
+    if ($KeyPath) { $sshArgs += @('-i', $KeyPath) }
+    $sshArgs += @("$User@$Ip")
+    if ($RemoteCommand) { $sshArgs += @($RemoteCommand) }
+    $psi.Arguments = (@($sshArgs) | ForEach-Object {
+        if ($_ -match '[\s"]') { '"' + ($_ -replace '"','\"') + '"' } else { $_ }
+    }) -join ' '
+
+    $proc = [System.Diagnostics.Process]::new()
+    $proc.StartInfo = $psi
+    try {
+        [void]$proc.Start()
+        $outTask  = $proc.StandardOutput.ReadToEndAsync()
+        $errTask  = $proc.StandardError.ReadToEndAsync()
+        $timeoutMs = [int]$TimeoutSec * 1000
+        if (-not $proc.WaitForExit($timeoutMs)) {
+            try { $proc.Kill() } catch {}
+            try { [void]$proc.WaitForExit(2000) } catch {}
+            if (Get-Command Write-DuneLog -ErrorAction SilentlyContinue) {
+                Write-DuneLog "Invoke-DuneSshHidden: ssh to $Ip exceeded ${TimeoutSec}s, killed" 'WARN'
+            }
+            return @{
+                Stdout = @()
+                Stderr = "ssh timed out after ${TimeoutSec}s"
+                Exit   = -1
+            }
+        }
+        [void]$proc.WaitForExit()
+        $stdoutText = $outTask.GetAwaiter().GetResult()
+        $stderrText = $errTask.GetAwaiter().GetResult()
+        return @{
+            Stdout = if ([string]::IsNullOrEmpty($stdoutText)) { @() } else { @($stdoutText -split "`r?`n") }
+            Stderr = $stderrText
+            Exit   = $proc.ExitCode
+        }
+    } finally {
+        try { $proc.Dispose() } catch {}
+    }
+}
+
 function Find-V6DbPod {
     param([string]$Ip, [switch]$Force)
     if (-not $Force -and $script:V6DbPodCache -and ((Get-Date) - $script:V6DbPodCacheTime).TotalSeconds -lt 120) {

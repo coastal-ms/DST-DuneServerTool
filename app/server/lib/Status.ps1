@@ -92,17 +92,23 @@ function Get-DuneBattlegroupSnapshot {
         # Capture stderr separately so a real SSH failure (auth / connection)
         # can be surfaced as a clear reason instead of collapsing into a blank
         # "Unknown" state. LogLevel=ERROR (not QUIET) lets ssh's own diagnostics
-        # through to the error file.
-        $errFile = [System.IO.Path]::GetTempFileName()
-        try {
-            $raw = & ssh -o StrictHostKeyChecking=no -o LogLevel=ERROR `
-                         -o ConnectTimeout=10 -o BatchMode=yes `
-                         -i $sshKey "dune@$($vm.ip)" '/home/dune/.dune/bin/battlegroup status' 2>$errFile
-            $exit   = $LASTEXITCODE
-            $sshErr = if (Test-Path $errFile) { Get-Content -Raw -ErrorAction SilentlyContinue $errFile } else { '' }
-        } finally {
-            Remove-Item $errFile -ErrorAction SilentlyContinue
-        }
+        # through to the error stream.
+        #
+        # Routed through Invoke-DuneSshHidden (ProcessStartInfo + CreateNoWindow=$true)
+        # so background-runspace polling — server-health refresh runs every ~60 s,
+        # and the dashboard fires this path indirectly through several panels —
+        # doesn't pop a transient conhost window for each spawn (the original
+        # `& ssh ... 2>$errFile` allocates a fresh console when the runspace
+        # parent's hidden console handle isn't inherited).
+        $r = Invoke-DuneSshHidden -Ip $vm.ip -KeyPath $sshKey -TimeoutSec 15 -SshOptions @(
+            '-o','StrictHostKeyChecking=no'
+            '-o','LogLevel=ERROR'
+            '-o','ConnectTimeout=10'
+            '-o','BatchMode=yes'
+        ) -RemoteCommand '/home/dune/.dune/bin/battlegroup status'
+        $raw    = $r.Stdout
+        $exit   = $r.Exit
+        $sshErr = $r.Stderr
 
         # `battlegroup status` (a kubectl wrapper) can write status-shaped text —
         # notably the empty-namespace "No resources found" stopped signal — to
