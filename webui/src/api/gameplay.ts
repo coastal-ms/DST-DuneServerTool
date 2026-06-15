@@ -572,6 +572,13 @@ export function repairInventoryItem(itemId: number) {
   })
 }
 
+export function setItemDurability(itemId: number, max: number, current: number, decayed: number) {
+  return api<WriteResult>('/api/gameplay/players/set-item-durability', {
+    method: 'POST',
+    body: JSON.stringify({ item_id: itemId, max, current, decayed }),
+  })
+}
+
 // ---------------------------------------------------------------------------
 // v11.5.6 — extended player surface (port of the reference implementation's player tooling).
 // ---------------------------------------------------------------------------

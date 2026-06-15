@@ -214,6 +214,40 @@ Register-DuneRoute -Method POST -Path '/api/gameplay/players/repair-item' -Handl
     }
 }
 
+# POST /api/gameplay/players/set-item-durability  { item_id, max, current, decayed }
+# Per-item durability editor: writes the three FItemStackAndDurabilityStats
+# fields verbatim. Lets the operator override the GREATEST/catalog guess when
+# it's wrong. Items without the durability block are left untouched (no-op).
+Register-DuneRoute -Method POST -Path '/api/gameplay/players/set-item-durability' -Handler {
+    param($req, $res, $routeParams, $body)
+    try {
+        $iid = Get-DuneBodyInt -Body $body -Name 'item_id'
+        if ($null -eq $iid -or $iid -le 0) { Write-DuneError -Response $res -Status 400 -Message 'item_id is required.'; return }
+        $mv = Get-DuneBodyValue -Body $body -Name 'max'
+        $cv = Get-DuneBodyValue -Body $body -Name 'current'
+        $dv = Get-DuneBodyValue -Body $body -Name 'decayed'
+        if ($null -eq $mv -or $null -eq $cv -or $null -eq $dv) {
+            Write-DuneError -Response $res -Status 400 -Message 'max, current, and decayed are required.'; return
+        }
+        $mxd = 0.0; $crd = 0.0; $dcd = 0.0
+        $ci = [System.Globalization.CultureInfo]::InvariantCulture
+        if (-not [double]::TryParse([string]$mv, [System.Globalization.NumberStyles]::Float, $ci, [ref]$mxd)) {
+            Write-DuneError -Response $res -Status 400 -Message 'max must be a number.'; return
+        }
+        if (-not [double]::TryParse([string]$cv, [System.Globalization.NumberStyles]::Float, $ci, [ref]$crd)) {
+            Write-DuneError -Response $res -Status 400 -Message 'current must be a number.'; return
+        }
+        if (-not [double]::TryParse([string]$dv, [System.Globalization.NumberStyles]::Float, $ci, [ref]$dcd)) {
+            Write-DuneError -Response $res -Status 400 -Message 'decayed must be a number.'; return
+        }
+        Invoke-DunePlayerWriteRoute -Response $res -Action { param($ip)
+            Invoke-DunePlayerSetItemDurability -Ip $ip -ItemId $iid -Max $mxd -Current $crd -Decayed $dcd
+        }
+    } catch {
+        Write-DuneError -Response $res -Status 500 -Message "Set item durability failed: $($_.Exception.Message)"
+    }
+}
+
 # ===========================================================================
 # v11.5.6 — extended player surface routes.
 # ===========================================================================

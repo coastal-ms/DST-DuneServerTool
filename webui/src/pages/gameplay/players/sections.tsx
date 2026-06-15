@@ -18,6 +18,7 @@ import {
   getPlayerStats, getPlayerTags, giveFactionRep, giveItem,
   giveScrip, giveSolari, grantAllKeystones, grantLive, grantMaxSpec,
   kickPlayer, refuelVehicle, renamePlayer, repairGear, repairInventoryItem,
+  setItemDurability,
   resetAllKeystones, resetAllSpecs, resetJourney, resetProgressionLive, resetSpec,
   restoreDestroyed,
   returningPlayerAward, setFactionTier, setPlayerTags, setSkillPoints,
@@ -1257,6 +1258,7 @@ export function InventorySection({ player, canWrite, demo, refreshKey, flash, on
   const [err, setErr] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
   const [tick, setTick] = useState(0)
+  const isOnline = (player.online_status || '').toLowerCase() === 'online'
 
   useEffect(() => {
     let alive = true
@@ -1302,23 +1304,25 @@ export function InventorySection({ player, canWrite, demo, refreshKey, flash, on
         </button>
       </div>
       <ItemList title={`Inventory (${fmtNum(groups.gear.length)})`} icon="Backpack" items={groups.gear}
-        canWrite={canWrite} busy={busy} run={run}
+        canWrite={canWrite} busy={busy} run={run} isOnline={isOnline}
         extra={<ItemsActionBlock player={player} canWrite={canWrite} flash={flash} onChanged={() => { onChanged(); setTick(t => t + 1) }} />} />
       <ItemList title={`Emotes (${fmtNum(groups.emotes.length)})`} icon="Smile" items={groups.emotes} collapsed
-        canWrite={canWrite} busy={busy} run={run} />
+        canWrite={canWrite} busy={busy} run={run} isOnline={isOnline} />
       <ItemList title={`Contract items (${fmtNum(groups.contracts.length)})`} icon="FileText" items={groups.contracts} collapsed
-        canWrite={canWrite} busy={busy} run={run} />
+        canWrite={canWrite} busy={busy} run={run} isOnline={isOnline} />
     </div>
   )
 }
 
-function ItemList({ title, icon, items, canWrite, busy, run, collapsed, extra }: {
+function ItemList({ title, icon, items, canWrite, busy, run, collapsed, extra, isOnline }: {
   title: string; icon: string; items: InventoryItem[]; canWrite: boolean; busy: boolean
   run: (fn: () => Promise<{ message: string }>, label: string) => void | Promise<void>
   collapsed?: boolean
   extra?: React.ReactNode
+  isOnline: boolean
 }) {
   const [open, setOpen] = useState(!collapsed)
+  const [editingId, setEditingId] = useState<number | null>(null)
   if (collapsed && items.length === 0) return null
   return (
     <div>
@@ -1341,35 +1345,56 @@ function ItemList({ title, icon, items, canWrite, busy, run, collapsed, extra }:
               const ratio = hasDur ? curN / maxN : 1
               const durCls =
                 !hasDur          ? 'text-text-dim' :
-                ratio <= 0.0001  ? 'text-danger font-semibold' :  // fully dead
+                ratio <= 0.0001  ? 'text-danger font-semibold' :
                 ratio < 0.25     ? 'text-danger' :
                 ratio < 0.5      ? 'text-warning' :
                                    'text-text-dim'
+              const canEdit = canWrite && it.durability !== 'N/A'
+              const isEditing = canEdit && editingId === it.id
+              const toggleEdit = () => {
+                if (!canEdit) return
+                setEditingId(prev => (prev === it.id ? null : it.id))
+              }
               return (
-                <div key={it.id} className="flex items-center justify-between text-sm bg-surface-2 rounded-lg px-3 py-2 border border-border/50">
-                  <span className="truncate max-w-[320px]">
-                    <span className="text-text">{it.name || it.template_id}</span>
-                    {it.quality > 0 && <span className={`ml-1.5 text-[11px] ${qualityClass(it.quality)}`}>Q{it.quality}</span>}
-                    {hasDur && (
-                      <span className={`ml-1.5 font-mono text-[11px] ${durCls}`} title={`Durability ${curN.toFixed(0)} / ${maxN.toFixed(0)} (${Math.round(ratio * 100)}%)`}>
-                        {curN.toFixed(0)}/{maxN.toFixed(0)}
+                <div key={it.id} className="bg-surface-2 rounded-lg border border-border/50">
+                  <div
+                    className={`flex items-center justify-between text-sm px-3 py-2 ${canEdit ? 'cursor-pointer hover:bg-surface-3/40' : ''}`}
+                    onClick={canEdit ? toggleEdit : undefined}
+                    role={canEdit ? 'button' : undefined}
+                    tabIndex={canEdit ? 0 : undefined}
+                    onKeyDown={canEdit ? (e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); toggleEdit() } }) : undefined}
+                    title={canEdit ? (isEditing ? 'Hide durability editor' : 'Click to edit durability') : undefined}
+                  >
+                    <span className="truncate max-w-[320px]">
+                      {canEdit && (
+                        <Icon name={isEditing ? 'ChevronDown' : 'ChevronRight'} size={11} className="inline-block mr-1 text-text-dim" />
+                      )}
+                      <span className="text-text">{it.name || it.template_id}</span>
+                      {it.quality > 0 && <span className={`ml-1.5 text-[11px] ${qualityClass(it.quality)}`}>Q{it.quality}</span>}
+                      {hasDur && (
+                        <span className={`ml-1.5 font-mono text-[11px] ${durCls}`} title={`Durability ${curN.toFixed(0)} / ${maxN.toFixed(0)} (${Math.round(ratio * 100)}%)`}>
+                          {curN.toFixed(0)}/{maxN.toFixed(0)}
+                        </span>
+                      )}
+                      <span className="ml-1.5 font-mono text-text-dim text-xs">×{fmtNum(it.stack_size)}</span>
+                    </span>
+                    {canWrite && (
+                      <span className="flex items-center gap-2 shrink-0" onClick={e => e.stopPropagation()}>
+                        {it.durability !== 'N/A' && (
+                          <button className="text-info hover:text-accent-bright" title="Repair to full (best-guess from catalog)" disabled={busy}
+                            onClick={() => run(() => repairInventoryItem(it.id), 'Repair')}>
+                            <Icon name="Wrench" size={13} />
+                          </button>
+                        )}
+                        <button className="text-danger/80 hover:text-danger" title="Delete item" disabled={busy}
+                          onClick={() => void run(() => deleteInventoryItem(it.id), 'Delete')}>
+                          <Icon name="Trash2" size={13} />
+                        </button>
                       </span>
                     )}
-                    <span className="ml-1.5 font-mono text-text-dim text-xs">×{fmtNum(it.stack_size)}</span>
-                  </span>
-                  {canWrite && (
-                    <span className="flex items-center gap-2 shrink-0">
-                      {it.durability !== 'N/A' && (
-                        <button className="text-info hover:text-accent-bright" title="Repair to full" disabled={busy}
-                          onClick={() => run(() => repairInventoryItem(it.id), 'Repair')}>
-                          <Icon name="Wrench" size={13} />
-                        </button>
-                      )}
-                      <button className="text-danger/80 hover:text-danger" title="Delete item" disabled={busy}
-                        onClick={() => void run(() => deleteInventoryItem(it.id), 'Delete')}>
-                        <Icon name="Trash2" size={13} />
-                      </button>
-                    </span>
+                  </div>
+                  {isEditing && (
+                    <DurabilityEditor item={it} busy={busy} run={run} isOnline={isOnline} onClose={() => setEditingId(null)} />
                   )}
                 </div>
               )
@@ -1377,6 +1402,109 @@ function ItemList({ title, icon, items, canWrite, busy, run, collapsed, extra }:
           </div>
         )
       )}
+    </div>
+  )
+}
+
+// Inline durability editor — appears underneath an inventory row when the user
+// clicks it. Only rendered when the item already has the
+// FItemStackAndDurabilityStats nodes (it.durability !== 'N/A'), so if a future
+// game patch adds the block to a new item type it picks up the editor
+// automatically — no per-template allowlist.
+function DurabilityEditor({ item, busy, run, isOnline, onClose }: {
+  item: InventoryItem
+  busy: boolean
+  run: (fn: () => Promise<{ message: string }>, label: string) => void | Promise<void>
+  isOnline: boolean
+  onClose: () => void
+}) {
+  const cur0 = parseFloat(item.durability)
+  const max0 = parseFloat(item.max_durability)
+  const [maxStr, setMaxStr] = useState(Number.isFinite(max0) ? String(max0) : '0')
+  const [curStr, setCurStr] = useState(Number.isFinite(cur0) ? String(cur0) : '0')
+  const [decStr, setDecStr] = useState(Number.isFinite(max0) ? String(max0) : '0')
+
+  const parse = (s: string) => {
+    const n = parseFloat(s)
+    return Number.isFinite(n) && n >= 0 ? n : null
+  }
+  const mN = parse(maxStr), cN = parse(curStr), dN = parse(decStr)
+  const valid = mN !== null && cN !== null && dN !== null
+
+  return (
+    <div className="border-t border-border/50 px-3 py-3 bg-surface-1/60 rounded-b-lg space-y-3">
+      <div className="text-[11px] text-text-dim italic flex items-start gap-1.5">
+        <Icon name="Info" size={11} className="mt-0.5 shrink-0" />
+        <span>
+          Repair uses a best-guess maximum from the bundled game-item catalog. The catalog
+          can be out of date or missing values for newer items — if Repair gives the wrong
+          numbers, edit the fields below and Save instead.
+        </span>
+      </div>
+      {isOnline && (
+        <div className="text-[11px] text-warning flex items-start gap-1.5">
+          <Icon name="Wifi" size={11} className="mt-0.5 shrink-0" />
+          <span>
+            Player is online — the game server caches inventory in memory, so the new
+            values write to the database immediately but won't appear in-game until the
+            player relogs.
+          </span>
+        </div>
+      )}
+      <div className="grid grid-cols-3 gap-2">
+        <label className="text-xs">
+          <div className="text-text-dim mb-1">MaxDurability</div>
+          <input
+            type="number" inputMode="decimal" step="any" min="0"
+            value={maxStr}
+            onChange={e => setMaxStr(e.target.value)}
+            disabled={busy}
+            className="w-full font-mono text-sm bg-surface-2 border border-border rounded px-2 py-1"
+          />
+        </label>
+        <label className="text-xs">
+          <div className="text-text-dim mb-1">CurrentDurability</div>
+          <input
+            type="number" inputMode="decimal" step="any" min="0"
+            value={curStr}
+            onChange={e => setCurStr(e.target.value)}
+            disabled={busy}
+            className="w-full font-mono text-sm bg-surface-2 border border-border rounded px-2 py-1"
+          />
+        </label>
+        <label className="text-xs">
+          <div className="text-text-dim mb-1">DecayedMaxDurability</div>
+          <input
+            type="number" inputMode="decimal" step="any" min="0"
+            value={decStr}
+            onChange={e => setDecStr(e.target.value)}
+            disabled={busy}
+            className="w-full font-mono text-sm bg-surface-2 border border-border rounded px-2 py-1"
+          />
+        </label>
+      </div>
+      <div className="flex items-center justify-end gap-2">
+        <button
+          type="button"
+          className="btn-secondary text-xs"
+          disabled={busy}
+          onClick={() => run(() => repairInventoryItem(item.id), 'Repair')}
+        >
+          <Icon name="Wrench" size={12} /> Repair (catalog max)
+        </button>
+        <button
+          type="button"
+          className="btn-primary text-xs"
+          disabled={busy || !valid}
+          onClick={() => {
+            if (!valid) return
+            void run(() => setItemDurability(item.id, mN!, cN!, dN!), 'Save')
+            onClose()
+          }}
+        >
+          <Icon name="Save" size={12} /> Save
+        </button>
+      </div>
     </div>
   )
 }
