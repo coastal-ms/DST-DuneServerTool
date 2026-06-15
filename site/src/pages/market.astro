@@ -20,8 +20,8 @@ const cards = [
   },
   {
     icon: "📊",
-    title: "Fair pricing",
-    body: "Prices blend item tier, category, rarity, and quality grade, anchored to the real in-game vendor price — with a hard ceiling of 100,000 Solari per listing so nothing ever runs away.",
+    title: "Fair pricing, your choice",
+    body: "Prices blend item tier, category, rarity, and quality grade, anchored to the real in-game vendor price. Two modes: <strong>Sane</strong> (the default) caps any single listing at 100,000 Solari so nothing runs away, and <strong>Upstream</strong> uses the original Funcom-style formula with no Solari cap for servers that want a steeper end-game price curve. Server owners can flip between them with one click.",
   },
 ];
 
@@ -41,7 +41,7 @@ const tips = [
   },
   {
     title: "Play the long game.",
-    body: "Duke buys randomly and prices are capped, so the market rewards steady trading over single big scores.",
+    body: "On Sane pricing the per-listing Solari cap (and Duke&rsquo;s deliberate dice-roll buys) reward steady trading over single big scores. On Upstream the ceiling is much higher &mdash; end-game gear can fetch a lot more, but Duke still buys on a roll.",
   },
 ];
 
@@ -53,7 +53,7 @@ const admin = [
   },
   {
     title: "Switching from an older bot?",
-    body: "DST detects leftover listings from a previous bot (e.g. &quot;Revy&quot;) and offers a one-click wipe before Duke starts. Player listings are never touched.",
+    body: "DST&rsquo;s <strong class=\"text-dune-text\">Clear listings</strong> wipes Duke <em>and</em> any leftover &quot;Revy&quot; rows from the old external Go market-bot in one sweep, so there&rsquo;s nothing to clean up by hand before Duke takes over. Player listings are never touched.",
   },
   {
     title: "Tuning",
@@ -69,11 +69,11 @@ const admin = [
 const setup = [
   {
     title: "Open the Market Bot tab",
-    body: "In DST, go to <strong class=\"text-dune-text\">Gameplay &rarr; Market Bot</strong>. The page opens on <strong class=\"text-dune-text\">Buy side</strong>; <strong class=\"text-dune-text\">List side</strong> and <strong class=\"text-dune-text\">Pricing rules</strong> are sub-tabs along the top. Status cards at the top show whether the bot is running, how many listings Duke owns, his Solari balance, and any legacy NPC orders still in the exchange.",
+    body: "In DST, go to <strong class=\"text-dune-text\">Gameplay &rarr; Market Bot</strong>. The page opens on <strong class=\"text-dune-text\">Buy side</strong>; <strong class=\"text-dune-text\">List side</strong> and <strong class=\"text-dune-text\">Pricing rules</strong> are sub-tabs along the top. Status cards at the top show whether the bot is running, how many listings Duke owns, his Solari balance, and the current <strong class=\"text-dune-text\">Pricing mode</strong> (Sane or Upstream).",
   },
   {
     title: "Wipe any leftover bot listings",
-    body: "If the <strong class=\"text-dune-text\">Legacy listings</strong> card shows a non-zero count (e.g. orders left behind by the old external Revy bot), click <strong class=\"text-dune-text\">Wipe legacy</strong> first. DST also re-prompts you when you enable Duke if any are still there. Player listings and Duke&rsquo;s own listings are never affected.",
+    body: "Click <strong class=\"text-dune-text\">Clear listings</strong> to remove anything Duke (or the old external Revy bot) has on the Exchange. It runs both wipes in a single sweep, so there&rsquo;s no separate &ldquo;legacy&rdquo; step to remember. Player listings are never affected.",
   },
   {
     title: "Top up Duke&rsquo;s Solari balance",
@@ -105,11 +105,11 @@ const setup = [
   },
   {
     title: "Enable Duke",
-    body: "Flip <strong class=\"text-dune-text\">Bot enabled</strong> on (Buy side, top of the config card). The status banner turns green (<em>Running</em>), and Duke starts buying and listing on his configured timers. If legacy listings are still present, DST will offer the one-click wipe again before letting Duke run.",
+    body: "Flip <strong class=\"text-dune-text\">Bot enabled</strong> on (Buy side, top of the config card). The status banner turns green (<em>Running</em>), and Duke starts buying and listing on his configured timers. Want a different price curve? Click the <strong class=\"text-dune-text\">Switch</strong> button on the Pricing mode tile to flip between Sane and Upstream &mdash; DST wipes Duke&rsquo;s listings (with a confirm) so the next tick repopulates them at the new prices.",
   },
   {
     title: "Verify and monitor",
-    body: "Watch the status cards: <strong class=\"text-dune-text\">Bot state</strong> should show <em>Running</em>, <strong class=\"text-dune-text\">Duke listings</strong> climbs as list ticks fire, <strong class=\"text-dune-text\">Balance</strong> drains and tops back up around the target, and <strong class=\"text-dune-text\">Legacy listings</strong> should sit at zero. The <em>Last buy tick</em> / <em>Last list tick</em> timestamps confirm the loops are alive. Hop in-game and search the Exchange &mdash; you should see Duke&rsquo;s listings within a tick or two.",
+    body: "Watch the status cards: <strong class=\"text-dune-text\">Bot state</strong> should show <em>Running</em>, <strong class=\"text-dune-text\">Duke listings</strong> climbs as list ticks fire, <strong class=\"text-dune-text\">Balance</strong> drains and tops back up around the target, and <strong class=\"text-dune-text\">Pricing mode</strong> shows whichever formula you picked. The <em>Last buy tick</em> / <em>Last list tick</em> timestamps confirm the loops are alive. Hop in-game and search the Exchange &mdash; you should see Duke&rsquo;s listings within a tick or two.",
   },
 ];
 ---
@@ -231,8 +231,9 @@ const setup = [
         <strong class="block mb-1">Heads-up.</strong>
         Every action on this page writes straight to the live game database.
         Dry-runs and the vendor-snapshot preview are safe; <em>Seed market</em>,
-        <em>Run now</em>, and <em>Wipe legacy</em> are not. Player listings are
-        never touched by any of Duke&rsquo;s controls.
+        <em>Run now</em>, <em>Clear listings</em>, and <em>Switch pricing mode</em>
+        are not. Player listings are never touched by any of Duke&rsquo;s
+        controls.
       </div>
     </section>
   </div>
