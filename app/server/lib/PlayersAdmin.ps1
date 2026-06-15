@@ -29,6 +29,9 @@ function Test-DunePlayerOffline {
     $maps = ConvertTo-DuneRowMaps -Result $r
     if ($maps.Count -eq 0) { return @{ ok = $true; reason = $null } }
     $status = [string]$maps[0]['status']
+    if ($status -eq 'LoggingOut') {
+        return @{ ok = $false; reason = "player is mid-logout - the pod still owns their state in memory and will flush on logout, overwriting any DB write. Grace timer is ~30s on Hagga / Arrakeen / Harkonnen / etc., ~5 min in Deep Desert. Wait until status shows Offline, then retry." }
+    }
     if ($status -ne 'Offline') {
         return @{ ok = $false; reason = "player is currently $status - log out first, then apply the edit" }
     }
@@ -47,6 +50,9 @@ function Test-DunePlayerOfflineByController {
     $maps = ConvertTo-DuneRowMaps -Result $r
     if ($maps.Count -eq 0) { return @{ ok = $true; reason = $null } }
     $status = [string]$maps[0]['status']
+    if ($status -eq 'LoggingOut') {
+        return @{ ok = $false; reason = "player is mid-logout - the pod still owns their state in memory and will flush on logout, overwriting any DB write. Grace timer is ~30s on Hagga / Arrakeen / Harkonnen / etc., ~5 min in Deep Desert. Wait until status shows Offline, then retry." }
+    }
     if ($status -ne 'Offline') {
         return @{ ok = $false; reason = "player is currently $status - log out first, then apply the edit" }
     }
@@ -180,8 +186,16 @@ function Invoke-DunePlayerSetFactionTier {
 }
 
 # ----- Landsraad scrip (auto-resolve non-Solari currency) ------------------
+#
+# The game's virtual-currency catalog is a fixed enum: id 0 = Solaris,
+# id 1 = Landsraad Scrip. dune.get_solaris_id() returns 0, and there is no
+# matching get_landsraad_scrip_id() routine in the DB, so we resolve scrip by
+# (a) scanning existing non-Solaris balances and (b) falling back to the
+# documented default of 1 when the table has no scrip rows yet (fresh server,
+# no player has earned scrip). The override parameter still wins.
 
 $script:DuneScripCurrencyIdCache = $null
+$script:DuneScripCurrencyIdDefault = 1
 
 function Resolve-DuneScripCurrencyId {
     param([string]$Ip)
@@ -194,8 +208,13 @@ GROUP BY currency_id
 ORDER BY total DESC, currency_id;
 '@
     $res = Invoke-DuneSqlQuery -Ip $Ip -Sql $sql -ReadOnly $true -MaxRows 50 -TimeoutSec 15
-    if (-not $res.ok) { return $null }
+    if (-not $res.ok) {
+        return $script:DuneScripCurrencyIdDefault
+    }
     $rows = ConvertTo-DuneRowMaps -Result $res
+    if ($rows.Count -eq 0) {
+        return $script:DuneScripCurrencyIdDefault
+    }
     if ($rows.Count -eq 1) {
         $id = [int](ConvertTo-DuneInt $rows[0]['currency_id'])
         $script:DuneScripCurrencyIdCache = $id
@@ -209,7 +228,7 @@ function Invoke-DunePlayerGiveScrip {
     if ($ActorId -le 0) { return @{ ok = $false; error = 'actor_id is required.' } }
     $currencyId = if ($CurrencyIdOverride -gt 0) { $CurrencyIdOverride } else { Resolve-DuneScripCurrencyId -Ip $Ip }
     if ($null -eq $currencyId) {
-        return @{ ok = $false; error = 'Could not auto-resolve scrip currency id (0 or 2+ non-Solaris balances). Pass currency_id explicitly.' }
+        return @{ ok = $false; error = 'Could not auto-resolve scrip currency id (2+ non-Solaris balances on this server). Pass currency_id explicitly.' }
     }
     $sql = "SELECT dune.adjust_player_virtual_currency_balance($ActorId::bigint, $currencyId::smallint, $Delta::bigint);"
     $r = Invoke-DuneSqlQuery -Ip $Ip -Sql $sql -ReadOnly $false -MaxRows 1 -TimeoutSec 30
@@ -227,6 +246,25 @@ function Invoke-DunePlayerGiveScrip {
         balance = $balance; currency_id = $currencyId
     }
 }
+
+# ----- Base water removed -------------------------------------------------
+#
+# Fill Base Water was investigated for v12.1.2 and removed before release.
+# The map pod loads cistern water into RAM on cistern spawn and writes back
+# to dune.fgl_entities.components on its periodic save tick, which means
+# any DB UPDATE we make to FWaterStorageComponent.m_WaterStored gets
+# overwritten before a player ever sees it. We verified end-to-end against
+# the live VM: drained four cisterns to 250-331, ran the DB UPDATE to
+# 100000, restarted the deepdesert pod, and the pod wrote the old in-RAM
+# values straight back to the DB on shutdown. The legacy RMQ
+# UpdateAllWaterFillables ServerCommand only refills carried fillables
+# (Decker's original complaint), so there is no working path today.
+#
+# Leaving the placeable->totem->permission_actor_rank chain notes here for
+# the next attempt: if a future game build exposes a per-cistern RPC, the
+# scope query is permission_actor_rank.player_id=<controller> AND rank=1.
+
+
 
 # ----- Character XP table (verbatim from db.go) ----------------------------
 

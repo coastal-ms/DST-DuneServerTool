@@ -15,7 +15,24 @@ here cover everything those tags shipped.
 
 ## [12.1.2] - 2026-06-15
 
+This release ships fixes for four user-reported issues from Discord on
+2026-06-15 plus the in-flight `$PID` collision bug (PR #216 / issue #217)
+that bricked Apply Journey preset and several other gameplay endpoints,
+and a Settings card for clearing the Legacy Admin Tool's per-battlegroup
+cache on the VM.
+
 ### Added
+
+- **Remote Access (Cloudflare Tunnel + Access) didactic guide.** A user
+  reported they couldn't follow the old one-line "authenticate, pick a Zone,
+  create a tunnel" instructions because Cloudflare's dashboard doesn't
+  surface "Zone" as an option in that flow. The marketing site's
+  `/remote/` page is now a step-by-step walkthrough: create the free
+  Cloudflare account, add your domain, create the tunnel from the **Networks
+  -> Tunnels** UI, install `cloudflared` on the Windows host, route the
+  public hostname to `http://localhost:8080`, then lock it down with a
+  one-rule Cloudflare Access policy so only your email address can sign in.
+  Linked from the top nav as **Remote**.
 
 - **Settings -> "Legacy Admin Cache" card lets you clear the standalone
   companion tool's per-battlegroup cache on the VM without SSHing in.**
@@ -36,17 +53,80 @@ here cover everything those tags shipped.
 
 ### Fixed
 
-- **Apply Journey preset (and several other gameplay endpoints) no longer fail
-  with "Cannot overwrite variable PID because it is read-only or constant."**
-  Several route/lib handlers used a local variable named `$pid`, which collides
-  with PowerShell's read-only AllScope automatic `$PID` (current process id) and
-  throws on assignment in any scope. Renamed to `$presetId`, `$partId`,
-  `$playerId`, and `$permPid` in `app/server/routes/PlayersWrites.ps1`,
-  `app/server/routes/CoriolisAdmin.ps1`, `app/server/routes/PlayersRead.ps1`,
-  and `app/server/lib/PlayersWrites.ps1`. The Apply Preset path was the
-  user-reported repro (Discord, 2026-06-15); the others were the same latent
-  bug on Set Partition Seed, Keystones, Dungeons, offline teleport, and
-  permission-player lookup.
+- **Live-only actions (kick, whisper, cheat-script, set-skill-points,
+  clean-inventory, etc.) now work during the logout grace window.** They were
+  gated on `online_status === 'Online'`, which disabled them the moment a
+  player hit logout. The pod still owns the player's session for the grace
+  timer (~30s on Hagga / Arrakeen / Harkonnen / etc., ~5 min in Deep Desert),
+  so the RMQ-keyed-to-FLS-session commands are valid for the entire window -
+  kick during `LoggingOut` force-flushes instead of waiting out the timer.
+  Now gated on Online OR LoggingOut.
+
+- **Offline-write guard rejects mid-logout with a clearer message.** The
+  reject path used to say "log out first" even when the player was already
+  `LoggingOut`. It now names the state and explains the grace timer (30s on
+  most maps, 5 min in Deep Desert) so the operator knows what they're waiting
+  for. The existing safety behaviour is unchanged - offline DB writes still
+  refuse anything that isn't strictly `Offline` because the pod will overwrite
+  on the eventual flush.
+
+- **Give Scrip no longer dies on a fresh server.** When the
+  `player_virtual_currency_balances` table has no scrip rows yet (no player
+  has earned any), the auto-resolver fell off the end with
+  *"Could not auto-resolve scrip currency id (0 or 2+ non-Solaris balances)"*.
+  It now falls back to the documented default currency id `1` (Landsraad
+  Scrip) when the table is empty; an explicit `currency_id` override still
+  wins, and the multi-row ambiguous case still requires an explicit id.
+  Closes #219.
+
+- **Apply Journey preset (and several other gameplay endpoints) no longer
+  fail with "Cannot overwrite variable PID because it is read-only or
+  constant."** Several route/lib handlers used a local variable named `$pid`,
+  which collides with PowerShell's read-only AllScope automatic `$PID`
+  (current process id) and throws on assignment in any scope. Renamed to
+  `$presetId`, `$partId`, `$playerId`, and `$permPid` in
+  `app/server/routes/PlayersWrites.ps1`, `app/server/routes/CoriolisAdmin.ps1`,
+  `app/server/routes/PlayersRead.ps1`, and `app/server/lib/PlayersWrites.ps1`.
+  Apply Preset was the user-reported repro (Discord, 2026-06-15); the others
+  were the same latent bug on Set Partition Seed, Keystones, Dungeons,
+  offline teleport, and permission-player lookup. Closes #217.
+
+### Changed
+
+- **Spawn Vehicle now spawns the kit parts in the player's inventory
+  (online or offline) instead of trying to assemble a live vehicle.** The
+  old "Spawn Vehicle" action sent an `RmqSpawnVehicleAt` ServerCommand that
+  the live server completed silently but never actually materialised a
+  vehicle for the player. Both **Spawn Vehicle** and the existing **Give
+  Vehicle Kit** action now share the same handler that gives the player the
+  documented per-vehicle part list (chassis + engine + cockpit + boosters
+  etc.), matching how Vehicle Templates already worked. Works whether the
+  target player is logged in or not. The action row now carries an explicit
+  confirm + caption explaining what the player will receive.
+
+### Removed
+
+- **Fill Base Water (Players -> Actions) has been removed and will not
+  be offered.** The old implementation only refilled inventory water,
+  never the actual base cisterns. We tried two replacement paths and
+  both are blocked by game-server behaviour we can't work around from
+  the tool:
+  - **RMQ `UpdateAllWaterFillables`** (the previous implementation) only
+    fills carried fillables in current game builds; the cistern leg of
+    the command is a no-op.
+  - **Direct DB write** to `dune.fgl_entities.components.FWaterStorageComponent.m_WaterStored`
+    succeeds, but the map pod holds cistern state in RAM and writes it
+    back to Postgres on its periodic save tick - any value we write
+    gets overwritten before a player sees it. Verified end-to-end
+    against the live VM: drained four cisterns to 250-331, ran the
+    UPDATE to 100000, restarted the deepdesert pod, the pod flushed its
+    in-RAM 250-331 over our 100000 on shutdown and the in-game UI still
+    showed 250 after the restart.
+
+  Carry-water (`Fill Water`) is unaffected and still works for the
+  player's own carried containers. If Funcom ever exposes a working
+  base-water command (per-cistern RPC, cache-invalidation hook, or a
+  fixed `UpdateAllWaterFillables`), we'll re-add the feature.
 
 ## [12.1.1] - 2026-06-15
 
