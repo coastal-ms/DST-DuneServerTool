@@ -234,6 +234,22 @@ function Get-DuneBotConfigDefaults {
         grade_multipliers    = @(1.0, 1.25, 1.55, 2.0, 2.6, 3.3)
         rarity_multipliers   = @{ common = 1.0; rare = 1.03; unique = 1.05; memento = 1.08 }
         vendor_multipliers   = @{ all = 0.95 }
+        # ----- Upstream Funcom-style pricing mode (default OFF) -----
+        # When upstream_pricing is TRUE, Get-DuneBotItemPrice routes through
+        # Get-DuneBotItemPriceUpstream which uses the original (pre sane-
+        # pricing patch) marketbot formula: vendor_price * vendor_multiplier
+        # (up to 5x for rare/unique) OR uncapped equipment/schematic/stack
+        # tier tables * rarity multiplier, then grade-multiplied. NO 100k
+        # cap; only a hard int32 safety clamp. Toggling either direction
+        # is intended to be paired with a Duke-listings wipe so the bot
+        # does not thrash old listings as "wrong price".
+        upstream_pricing               = $false
+        upstream_tier_equipment_prices = @{ '0' = 500; '1' = 2000; '2' = 8000; '3' = 30000; '4' = 100000; '5' = 300000; '6' = 750000 }
+        upstream_tier_schematic_prices = @{ '0' = 500; '1' = 500;  '2' = 1500; '3' = 4000;  '4' = 12000;  '5' = 30000;  '6' = 75000  }
+        upstream_stack_unit_prices     = @{ '0' = 5;   '1' = 20;   '2' = 80;   '3' = 200;   '4' = 600;    '5' = 1500;   '6' = 4000   }
+        upstream_rarity_multipliers    = @{ common = 1.0; rare = 5.0; unique = 5.0; memento = 2.0 }
+        upstream_vendor_multipliers    = @{ common = 1.0; rare = 5.0; unique = 5.0; memento = 2.0 }
+        upstream_grade_multipliers     = @(1.0, 1.0, 1.25, 1.5, 1.75, 2.0)
         # Per-template manual price override (template_id -> integer Solari).
         price_overrides      = @{}
         # Marker for one-time sane-defaults migration on load.
@@ -292,6 +308,7 @@ function Read-DuneBotConfig {
                         'stackables_only'      { $cfg[$k] = [bool]$v }
                         'display_cap_enabled'  { $cfg[$k] = [bool]$v }
                         'seed_from_catalog'    { $cfg[$k] = [bool]$v }
+                        'upstream_pricing'     { $cfg[$k] = [bool]$v }
                         'disabled_items'       { $cfg[$k] = @($v | ForEach-Object { [string]$_ } | Where-Object { $_ }) }
                         'target_balance'       { $cfg[$k] = [int64]$v }
                         'tier_base_prices'     { $cfg[$k] = ConvertFrom-DuneBotJsonMap -Value $v -Default $cfg[$k] -IntValues }
@@ -300,6 +317,12 @@ function Read-DuneBotConfig {
                         'rarity_multipliers'   { $cfg[$k] = ConvertFrom-DuneBotJsonMap -Value $v -Default $cfg[$k] }
                         'vendor_multipliers'   { $cfg[$k] = ConvertFrom-DuneBotJsonMap -Value $v -Default $cfg[$k] }
                         'grade_multipliers'    { $cfg[$k] = ConvertFrom-DuneBotJsonArray -Value $v -Default $cfg[$k] }
+                        'upstream_tier_equipment_prices' { $cfg[$k] = ConvertFrom-DuneBotJsonMap -Value $v -Default $cfg[$k] -IntValues }
+                        'upstream_tier_schematic_prices' { $cfg[$k] = ConvertFrom-DuneBotJsonMap -Value $v -Default $cfg[$k] -IntValues }
+                        'upstream_stack_unit_prices'     { $cfg[$k] = ConvertFrom-DuneBotJsonMap -Value $v -Default $cfg[$k] -IntValues }
+                        'upstream_rarity_multipliers'    { $cfg[$k] = ConvertFrom-DuneBotJsonMap -Value $v -Default $cfg[$k] }
+                        'upstream_vendor_multipliers'    { $cfg[$k] = ConvertFrom-DuneBotJsonMap -Value $v -Default $cfg[$k] }
+                        'upstream_grade_multipliers'     { $cfg[$k] = ConvertFrom-DuneBotJsonArray -Value $v -Default $cfg[$k] }
                         'price_overrides'      { $cfg[$k] = ConvertFrom-DuneBotJsonMap -Value $v -Default @{} -IntValues }
                         default                { $cfg[$k] = [int]$v }
                     }
@@ -370,6 +393,13 @@ function Save-DuneBotConfig {
     $v = _Get $Incoming 'rarity_multipliers';if ($null -ne $v) { $cfg['rarity_multipliers'] = ConvertFrom-DuneBotJsonMap -Value $v -Default $cfg['rarity_multipliers']}
     $v = _Get $Incoming 'vendor_multipliers';if ($null -ne $v) { $cfg['vendor_multipliers'] = ConvertFrom-DuneBotJsonMap -Value $v -Default $cfg['vendor_multipliers']}
     $v = _Get $Incoming 'grade_multipliers'; if ($null -ne $v) { $cfg['grade_multipliers']  = ConvertFrom-DuneBotJsonArray -Value $v -Default $cfg['grade_multipliers'] }
+    $v = _Get $Incoming 'upstream_pricing';                if ($null -ne $v) { $cfg['upstream_pricing'] = [bool]$v }
+    $v = _Get $Incoming 'upstream_tier_equipment_prices';  if ($null -ne $v) { $cfg['upstream_tier_equipment_prices'] = ConvertFrom-DuneBotJsonMap -Value $v -Default $cfg['upstream_tier_equipment_prices'] -IntValues }
+    $v = _Get $Incoming 'upstream_tier_schematic_prices';  if ($null -ne $v) { $cfg['upstream_tier_schematic_prices'] = ConvertFrom-DuneBotJsonMap -Value $v -Default $cfg['upstream_tier_schematic_prices'] -IntValues }
+    $v = _Get $Incoming 'upstream_stack_unit_prices';      if ($null -ne $v) { $cfg['upstream_stack_unit_prices']     = ConvertFrom-DuneBotJsonMap -Value $v -Default $cfg['upstream_stack_unit_prices']     -IntValues }
+    $v = _Get $Incoming 'upstream_rarity_multipliers';     if ($null -ne $v) { $cfg['upstream_rarity_multipliers']    = ConvertFrom-DuneBotJsonMap -Value $v -Default $cfg['upstream_rarity_multipliers']    }
+    $v = _Get $Incoming 'upstream_vendor_multipliers';     if ($null -ne $v) { $cfg['upstream_vendor_multipliers']    = ConvertFrom-DuneBotJsonMap -Value $v -Default $cfg['upstream_vendor_multipliers']    }
+    $v = _Get $Incoming 'upstream_grade_multipliers';      if ($null -ne $v) { $cfg['upstream_grade_multipliers']     = ConvertFrom-DuneBotJsonArray -Value $v -Default $cfg['upstream_grade_multipliers']   }
     $v = _Get $Incoming 'price_overrides';   if ($null -ne $v) { $cfg['price_overrides']    = ConvertFrom-DuneBotJsonMap -Value $v -Default @{} -IntValues }
 
     # die_target must be within 1..die_size to ever win.
@@ -1100,11 +1130,80 @@ function Get-DuneBotRoundedPrice {
     return [int][Math]::Round($Price)
 }
 
+# Upstream (pre-sane-pricing patch) Funcom-style pricer. Mirrors the original
+# upstream marketbot reference implementation `basePrice` algorithm:
+#   * Per-template override wins outright (clamped to int32 safety only).
+#   * If the candidate has vendor_price > 0: base = vendor_price * vendor_mult(rarity).
+#   * Else stackable:                       base = stack_unit_price(tier) * rarity_mult.
+#   * Else non-stackable schematic:         base = schematic_tier_price(tier) * rarity_mult.
+#   * Else non-stackable gear:              base = equipment_tier_price(tier) * rarity_mult.
+# Then graded: price = base * upstream_grade_multipliers[Grade].
+# No 100k sane-pricing cap; only an int32 safety ceiling. display_cap (if the
+# operator opted in) still clamps the player-facing Solari number.
+function Get-DuneBotItemPriceUpstream {
+    param([hashtable]$Cfg, [hashtable]$Cand, [int]$Grade = 0)
+    $overrides = [hashtable]$Cfg.price_overrides
+    if ($overrides -and $overrides.ContainsKey($Cand.template_id)) {
+        $ovr = [double]$overrides[$Cand.template_id]
+        if ($ovr -lt 1) { $ovr = 1 }
+        if ($ovr -gt 2147483647) { $ovr = 2147483647 }
+        return [int][Math]::Round($ovr)
+    }
+    $rarity = ([string]$Cand.rarity).ToLower()
+    $rm = [hashtable]$Cfg.upstream_rarity_multipliers
+    $rarityMult = if ($rm -and $rm.ContainsKey($rarity)) { [double]$rm[$rarity] } else { 1.0 }
+    $vm = [hashtable]$Cfg.upstream_vendor_multipliers
+    $vendorMult = if ($vm -and $vm.ContainsKey($rarity)) { [double]$vm[$rarity] } else { 1.0 }
+    $vp = [int]$Cand.vendor_price
+    $base = 0.0
+    if ($vp -gt 0) {
+        $base = [double]$vp * $vendorMult
+    } else {
+        $tierKey = [string]([int]$Cand.tier)
+        $tbl = $null
+        if ($Cand.is_stackable) {
+            $tbl = [hashtable]$Cfg.upstream_stack_unit_prices
+        } else {
+            $tmplLc = ([string]$Cand.template_id).ToLower()
+            $cat    = ([string]$Cand.category).ToLower()
+            $isSchem = $tmplLc.EndsWith('_schematic') -or ($cat -match 'schematic')
+            if ($isSchem) {
+                $tbl = [hashtable]$Cfg.upstream_tier_schematic_prices
+            } else {
+                $tbl = [hashtable]$Cfg.upstream_tier_equipment_prices
+            }
+        }
+        $unit = [double]$Cfg.default_unit_price
+        if ($tbl -and $tbl.ContainsKey($tierKey)) { $unit = [double]$tbl[$tierKey] }
+        $base = $unit * $rarityMult
+    }
+    $gm = @($Cfg.upstream_grade_multipliers)
+    $g = 1.0
+    if ($Grade -ge 0 -and $Grade -lt $gm.Count) { $g = [double]$gm[$Grade] }
+    $price = $base * $g
+    $rounded = Get-DuneBotRoundedPrice -Price $price
+    if ([bool]$Cfg.display_cap_enabled) {
+        $displayCapItemPrice = [int][Math]::Floor([double]$Cfg.display_cap_solari / 10.0)
+        if ($displayCapItemPrice -lt 1) { $displayCapItemPrice = 1 }
+        if ($rounded -gt $displayCapItemPrice) { $rounded = $displayCapItemPrice }
+    }
+    if ($rounded -gt 2147483647) { $rounded = 2147483647 }
+    if ($rounded -lt 1) { $rounded = 1 }
+    return [int]$rounded
+}
+
 # Per-stack listing price (returns the item_price column value — player-facing
 # Solari is item_price * 10). Respects per-template override, then sane-pricing
 # tier/category/rarity formula, vendor floor (vendor*0.95) and 2x vendor ceiling.
 function Get-DuneBotItemPrice {
     param([hashtable]$Cfg, [hashtable]$Cand, [int]$Grade = 0)
+    # Dispatch to the upstream Funcom-style pricer when the operator has
+    # toggled out of sane-pricing. Upstream skips the 100k cap and uses
+    # vendor_price * vendor_multiplier (up to 5x for rare/unique) or the
+    # original equipment / schematic / stack-unit tier tables.
+    if ([bool]$Cfg.upstream_pricing) {
+        return Get-DuneBotItemPriceUpstream -Cfg $Cfg -Cand $Cand -Grade $Grade
+    }
     $cap = [int]$Cfg.price_cap
     $floorCfg = if ($Cfg.ContainsKey('price_floor')) { [int]$Cfg.price_floor } else { 50 }
     $overrides = [hashtable]$Cfg.price_overrides
