@@ -1,0 +1,41 @@
+# Dune Server — systemd user unit (Linux).
+#
+# Install:    cp dune-server.service ~/.config/systemd/user/
+# Enable:     systemctl --user daemon-reload
+#             systemctl --user enable --now dune-server.service
+# Status:     systemctl --user status dune-server.service
+# Logs:       journalctl --user -u dune-server.service -f
+#             (the app also writes ~/.local/state/DuneServer/dune-server.log)
+# Disable:    systemctl --user disable --now dune-server.service
+#
+# This is the Linux replacement for the Windows Task Scheduler "Run at Windows
+# startup" toggle. It runs the backend headless (no browser auto-open) so the
+# user isn't surprised by a tab opening at login. Visit the portal manually at
+# http://127.0.0.1:8765 — the per-launch token is written to
+# ~/.local/state/DuneServer/last-url.txt.
+#
+# To run as a system service instead of per-user, drop this in
+# /etc/systemd/system/ and add an explicit User=, Group=, and Environment=HOME=.
+#
+# Status: UNTESTED handoff scaffold. See LINUX-PORT-STATUS.md.
+
+[Unit]
+Description=Dune Server Tool (DST) backend
+Documentation=https://github.com/coastal-ms/DST-DuneServerTool
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+ExecStart=/usr/bin/dune-server --headless --no-browser
+Restart=on-failure
+RestartSec=5s
+
+# Light hardening — relax if the recipient needs additional fs writes.
+NoNewPrivileges=true
+ProtectSystem=full
+ProtectHome=read-only
+ReadWritePaths=%h/.config/DuneServer %h/.local/state/DuneServer %h/.cache/DuneServer
+
+[Install]
+WantedBy=default.target
