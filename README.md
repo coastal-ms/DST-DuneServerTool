@@ -348,13 +348,24 @@ completes the port:
   price, stock, bot vs. player split, recent sales). The enriched list is
   cached for 15 seconds so sort/filter on big catalogs stays instant.
 - **Market Bot ("Duke")** both *buys* player listings and *lists* its own
-  NPC stock via sane-pricing rules (tier × category × rarity × vendor ×
-  grade, 100,000 Solari hard cap, per-template overrides with an inline
-  typeahead picker). Three sub-tabs (**Buy / List / Pricing rules**), a
+  NPC stock. Two pricing modes, switchable from a header tile:
+  - **Sane** (default): tier × category × rarity × vendor × grade with a
+    100,000 Solari hard cap and a vendor floor — same shape DST has
+    shipped since 12.0.
+  - **Upstream**: the Funcom-style formula from the pre-sane-pricing
+    reference implementation — uncapped tier tables
+    (T0:500 → T6:750,000 equipment, T6:75,000 schematics, per-unit
+    stackables), rarity × grade multipliers, vendor × rarity-mult when
+    the item has a vendor price. Toggling either direction wipes Duke's
+    existing listings after a confirm so the new prices repopulate on
+    the next list tick instead of churning.
+
+  Per-template overrides (with an inline typeahead picker) win in both
+  modes. Three sub-tabs (**Buy / List / Pricing rules**), a
   vendor-snapshot preview, per-actor-class listing breakdown, and a
-  safety net that detects leftover listings from any prior bot deployment
-  (e.g. Revy from the old external Go market-bot) and offers a one-click
-  wipe before Duke starts ticking.
+  one-click **Clear listings** that wipes Duke *and* any leftover Revy
+  rows from the old external Go market-bot in a single sweep — player
+  listings are never touched.
 - **Seed market** bulk-lists every catalogued template across all six
   quality grades in one shot with a live progress bar, abort button, and
   bulk-INSERT chunking that survives huge catalogs.

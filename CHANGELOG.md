@@ -13,6 +13,8 @@ here cover everything those tags shipped.
 
 ## [Unreleased]
 
+## [12.1.0] - 2026-06-15
+
 ### Added
 
 - **Market Bot — upstream Funcom pricing mode**. New "Pricing mode" tile in
@@ -27,6 +29,19 @@ here cover everything those tags shipped.
   listings (with a confirm) so the next list tick repopulates with the new
   prices instead of churning. `display_cap` still caps player-facing Solari
   when the operator opts in. Default is off (sane mode unchanged).
+
+### Changed
+
+- **Clear listings now wipes Duke AND Revy in one sweep**. `Clear-DuneBotListings`
+  used to touch only Duke's rows + items, leaving any legacy Revy NPC listings
+  behind and forcing a second trip to the (now UI-less)
+  `/clear-legacy-listings` route. It now resolves owner_ids for actor
+  `class IN ('Duke','Revy')`, collects every inventory holding their listed
+  items (plus Duke's exchange inventory for orphan-cleanup parity), and runs
+  the existing 3-step delete (`sell_orders → orders → items`) once against
+  the unioned sets. The chunked items-delete loop is preserved for
+  inventories over 500 k rows. Response payload gains `cleared_by_class` and
+  `owner_classes`; `inventory_id` becomes `inventory_ids` (array).
 
 ## [12.0.25] - 2026-06-15
 
