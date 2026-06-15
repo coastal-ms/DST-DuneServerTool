@@ -13,6 +13,23 @@ here cover everything those tags shipped.
 
 ## [Unreleased]
 
+## [12.1.4] - 2026-06-15
+
+Hotfix for the donation button shipped in v12.1.3: the hardcoded
+Tailwind `amber-300` text was unreadable on the **Sietch Tabr** light
+theme (tan-on-tan). Swapped to the theme-adaptive `warning` token,
+which renders as bright amber on the dark themes (Eyes of Ibad,
+Caladan, Giedi Prime, House Harkonnen, Atreides) and deep amber
+`#854d0e` on Sietch Tabr's parchment background — readable everywhere.
+Border and hover state follow the same token. Also bumped the label to
+`font-semibold` so it stands out more in expanded-rail mode.
+
+### Fixed
+
+- **Buy Me a Coffee sidebar link is now readable on every theme**, not
+  just dark ones. Now uses `text-warning` / `border-warning/50` instead
+  of a fixed light-amber color.
+
 ## [12.1.3] - 2026-06-15
 
 Sidebar tweak: adds a **Buy Me a Coffee** donation link between the
