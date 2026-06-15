@@ -707,27 +707,27 @@ FROM dune.actors WHERE id = $TargetPawnId::bigint;
     if (-not $fls.ok) { return @{ ok = $false; error = $fls.error } }
     $safeFls = ConvertTo-DuneSqlString $fls.funcom_id
 
-    # resolve partition
-    $pid = 0L
-    if ($PartitionId -and $PartitionId.HasValue) { $pid = [int64]$PartitionId.Value }
-    if ($pid -le 0) {
+    # resolve partition ($partId, not $pid — $PID is a read-only automatic var)
+    $partId = 0L
+    if ($PartitionId -and $PartitionId.HasValue) { $partId = [int64]$PartitionId.Value }
+    if ($partId -le 0) {
         $pSql = "SELECT id::text AS pid FROM dune.world_partition WHERE COALESCE(is_blocked, false) = false ORDER BY id LIMIT 1;"
         $pr = Invoke-DuneSqlQuery -Ip $Ip -Sql $pSql -ReadOnly $true -MaxRows 1 -TimeoutSec 10
         if ($pr.ok) {
             $pmaps = ConvertTo-DuneRowMaps -Result $pr
-            if ($pmaps.Count -ge 1) { $pid = [int64](ConvertTo-DuneInt $pmaps[0]['pid']) }
+            if ($pmaps.Count -ge 1) { $partId = [int64](ConvertTo-DuneInt $pmaps[0]['pid']) }
         }
-        if ($pid -le 0) { return @{ ok = $false; error = 'no unblocked world_partition rows found.' } }
+        if ($partId -le 0) { return @{ ok = $false; error = 'no unblocked world_partition rows found.' } }
     }
 
-    $sql = "SELECT dune.admin_move_offline_player_to_partition('$safeFls'::text, $pid::bigint, ROW($tx::float8, $ty::float8, $tz::float8)::dune.Vector);"
+    $sql = "SELECT dune.admin_move_offline_player_to_partition('$safeFls'::text, $partId::bigint, ROW($tx::float8, $ty::float8, $tz::float8)::dune.Vector);"
     $r = Invoke-DuneSqlQuery -Ip $Ip -Sql $sql -ReadOnly $false -MaxRows 1 -TimeoutSec 30
     if (-not $r.ok) { return @{ ok = $false; error = "admin_move_offline_player_to_partition: $($r.error)" } }
     return @{
         ok = $true
-        message = "Teleported offline pawn $SourcePawnId -> ($tx, $ty, $tz) on partition $pid."
+        message = "Teleported offline pawn $SourcePawnId -> ($tx, $ty, $tz) on partition $partId."
         path = 'offline'
-        partition = $pid; x = $tx; y = $ty; z = $tz
+        partition = $partId; x = $tx; y = $ty; z = $tz
     }
 }
 
@@ -1343,10 +1343,11 @@ LIMIT 1;
         if ($r4.ok) {
             $m4 = ConvertTo-DuneRowMaps -Result $r4
             if ($m4.Count -ge 1) {
-                $pid = [int64](ConvertTo-DuneInt $m4[0]['pid'])
-                $out['permission_player_id'] = $pid
-                if ($pid -gt 0) {
-                    $sql5 = "SELECT account_id::text AS aid FROM dune.player_state WHERE player_pawn_id = $pid::bigint OR player_controller_id = $pid::bigint LIMIT 1;"
+                # $permPid, not $pid — $PID is a read-only automatic variable.
+                $permPid = [int64](ConvertTo-DuneInt $m4[0]['pid'])
+                $out['permission_player_id'] = $permPid
+                if ($permPid -gt 0) {
+                    $sql5 = "SELECT account_id::text AS aid FROM dune.player_state WHERE player_pawn_id = $permPid::bigint OR player_controller_id = $permPid::bigint LIMIT 1;"
                     $r5 = Invoke-DuneSqlQuery -Ip $Ip -Sql $sql5 -ReadOnly $true -MaxRows 1 -TimeoutSec 10
                     if ($r5.ok) {
                         $m5 = ConvertTo-DuneRowMaps -Result $r5
