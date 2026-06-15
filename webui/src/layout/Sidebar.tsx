@@ -175,6 +175,20 @@ export function Sidebar({ collapsed }: Props) {
             {!collapsed && <span>Web Portal</span>}
           </button>
         )}
+        <a
+          href="https://buymeacoffee.com/coastal_dst"
+          target="_blank"
+          rel="noopener noreferrer"
+          title="Support development — Buy Me a Coffee"
+          className={
+            collapsed
+              ? 'w-full flex items-center justify-center h-8 rounded-md border border-amber-400/30 text-amber-300/90 hover:text-amber-200 hover:bg-amber-400/10 hover:border-amber-400/50 transition-colors'
+              : 'w-full flex items-center justify-center gap-1.5 px-2 py-1.5 rounded-md border border-amber-400/30 text-amber-300/90 hover:text-amber-200 hover:bg-amber-400/10 hover:border-amber-400/50 transition-colors uppercase tracking-widest'
+          }
+        >
+          <Icon name="Coffee" size={collapsed ? 14 : 11} />
+          {!collapsed && <span>Buy Me a Coffee</span>}
+        </a>
         {!collapsed && (
           <div className="flex items-center justify-between">
             <span>{version ? fmtToolVersion(version) : '—'}</span>
