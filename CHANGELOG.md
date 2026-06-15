@@ -13,19 +13,68 @@ here cover everything those tags shipped.
 
 ## [Unreleased]
 
+## [12.1.2] - 2026-06-15
+
+This release ships fixes for the four issues Decker reported in Discord on
+2026-06-15 plus the in-flight `$PID` collision bug (PR #216 / issue #217)
+that bricked Apply Journey preset and several other gameplay endpoints.
+
 ### Fixed
 
-- **Apply Journey preset (and several other gameplay endpoints) no longer fail
-  with "Cannot overwrite variable PID because it is read-only or constant."**
-  Several route/lib handlers used a local variable named `$pid`, which collides
-  with PowerShell's read-only AllScope automatic `$PID` (current process id) and
-  throws on assignment in any scope. Renamed to `$presetId`, `$partId`,
-  `$playerId`, and `$permPid` in `app/server/routes/PlayersWrites.ps1`,
-  `app/server/routes/CoriolisAdmin.ps1`, `app/server/routes/PlayersRead.ps1`,
-  and `app/server/lib/PlayersWrites.ps1`. The Apply Preset path was the
-  user-reported repro (Discord, 2026-06-15); the others were the same latent
-  bug on Set Partition Seed, Keystones, Dungeons, offline teleport, and
-  permission-player lookup.
+- **Fill Base Water now actually fills bases (and works offline).** The
+  previous implementation routed through the per-player
+  `UpdateAllWaterFillables` ServerCommand, which in practice only refilled
+  carried fillables - the base cisterns Decker pointed at were never touched.
+  The action now writes directly to `dune.fgl_entities.components.FWaterStorageComponent.m_WaterStored`
+  for every cistern on a base the target player **owns** (scoped via
+  `permission_actor_rank.rank=1`), capped per tier (5k small / 25k medium /
+  100k large). Works online or offline; windtraps and BloodWaterExtractors are
+  intentionally skipped (they generate water through filter consumables, not
+  store it).
+- **Give Scrip no longer dies on a fresh server.** When the
+  `player_virtual_currency_balances` table has no scrip rows yet (no player
+  has earned any), the auto-resolver fell off the end with
+  *"Could not auto-resolve scrip currency id (0 or 2+ non-Solaris balances)"*.
+  It now falls back to the documented default currency id `1` (Landsraad
+  Scrip) when the table is empty; an explicit `currency_id` override still
+  wins, and the multi-row ambiguous case still requires an explicit id.
+- **Apply Journey preset (and several other gameplay endpoints) no longer
+  fail with "Cannot overwrite variable PID because it is read-only or
+  constant."** Several route/lib handlers used a local variable named `$pid`,
+  which collides with PowerShell's read-only AllScope automatic `$PID`
+  (current process id) and throws on assignment in any scope. Renamed to
+  `$presetId`, `$partId`, `$playerId`, and `$permPid` in
+  `app/server/routes/PlayersWrites.ps1`, `app/server/routes/CoriolisAdmin.ps1`,
+  `app/server/routes/PlayersRead.ps1`, and `app/server/lib/PlayersWrites.ps1`.
+  Apply Preset was the user-reported repro (Discord, 2026-06-15); the others
+  were the same latent bug on Set Partition Seed, Keystones, Dungeons,
+  offline teleport, and permission-player lookup. Closes #217.
+
+### Changed
+
+- **Spawn Vehicle now spawns the kit parts in the player's inventory
+  (online or offline) instead of trying to assemble a live vehicle.** The
+  old "Spawn Vehicle" action sent an `RmqSpawnVehicleAt` ServerCommand that
+  the live server completed silently but never actually materialised a
+  vehicle for the player. Both **Spawn Vehicle** and the existing **Give
+  Vehicle Kit** action now share the same handler that gives the player the
+  documented per-vehicle part list (chassis + engine + cockpit + boosters
+  etc.), matching how Vehicle Templates already worked. Works whether the
+  target player is logged in or not. The action row now carries an explicit
+  confirm + caption explaining what the player will receive.
+
+### Added
+
+- **Remote Access (Cloudflare Tunnel + Access) didactic guide.** Decker
+  reported he couldn't follow the old one-line "authenticate, pick a Zone,
+  create a tunnel" instructions because Cloudflare's dashboard doesn't
+  surface "Zone" as an option in that flow. The marketing site's
+  `/remote/` page is now a step-by-step walkthrough: create the free
+  Cloudflare account, add your domain, create the tunnel from the **Networks
+  -> Tunnels** UI, install `cloudflared` on the Windows host, route the
+  public hostname to `http://localhost:8080`, then lock it down with a
+  one-rule Cloudflare Access policy so only your email address can sign in.
+  Linked from the top nav as **Remote**.
 
 ## [12.1.1] - 2026-06-15
 

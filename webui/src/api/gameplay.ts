@@ -1049,8 +1049,9 @@ export function fillWater(pawnId: number): Promise<FillWaterResponse> {
   })
 }
 
-// Fills the player's OWN base water containers (cisterns, windtraps) via the live
-// per-player RMQ command. Online-only — base water is live game state.
+// Fills the player's OWN base cisterns by writing directly to fgl_entities.components
+// (FWaterStorageComponent.m_WaterStored). Works online or offline; capped per cistern
+// tier. Windtraps/BloodWaterExtractors are skipped (they generate, not store).
 export function fillBaseWater(pawnId: number): Promise<FillWaterResponse> {
   return api<FillWaterResponse>('/api/gameplay/players/fill-base-water', {
     method: 'POST', body: JSON.stringify({ pawn_id: pawnId }),
