@@ -21,16 +21,23 @@ that bricked Apply Journey preset and several other gameplay endpoints.
 
 ### Fixed
 
-- **Fill Base Water now actually fills bases (and works offline).** The
-  previous implementation routed through the per-player
-  `UpdateAllWaterFillables` ServerCommand, which in practice only refilled
-  carried fillables - the base cisterns Decker pointed at were never touched.
-  The action now writes directly to `dune.fgl_entities.components.FWaterStorageComponent.m_WaterStored`
-  for every cistern on a base the target player **owns** (scoped via
-  `permission_actor_rank.rank=1`), capped per tier (5k small / 25k medium /
-  100k large). Works online or offline; windtraps and BloodWaterExtractors are
-  intentionally skipped (they generate water through filter consumables, not
-  store it).
+- **Live-only actions (kick, whisper, cheat-script, set-skill-points,
+  clean-inventory, etc.) now work during the logout grace window.** They were
+  gated on `online_status === 'Online'`, which disabled them the moment a
+  player hit logout. The pod still owns the player's session for the grace
+  timer (~30s on Hagga / Arrakeen / Harkonnen / etc., ~5 min in Deep Desert),
+  so the RMQ-keyed-to-FLS-session commands are valid for the entire window -
+  kick during `LoggingOut` force-flushes instead of waiting out the timer.
+  Now gated on Online OR LoggingOut.
+
+- **Offline-write guard rejects mid-logout with a clearer message.** The
+  reject path used to say "log out first" even when the player was already
+  `LoggingOut`. It now names the state and explains the grace timer (30s on
+  most maps, 5 min in Deep Desert) so the operator knows what they're waiting
+  for. The existing safety behaviour is unchanged - offline DB writes still
+  refuse anything that isn't strictly `Offline` because the pod will overwrite
+  on the eventual flush.
+
 - **Give Scrip no longer dies on a fresh server.** When the
   `player_virtual_currency_balances` table has no scrip rows yet (no player
   has earned any), the auto-resolver fell off the end with
@@ -38,6 +45,7 @@ that bricked Apply Journey preset and several other gameplay endpoints.
   It now falls back to the documented default currency id `1` (Landsraad
   Scrip) when the table is empty; an explicit `currency_id` override still
   wins, and the multi-row ambiguous case still requires an explicit id.
+  Closes #219.
 - **Apply Journey preset (and several other gameplay endpoints) no longer
   fail with "Cannot overwrite variable PID because it is read-only or
   constant."** Several route/lib handlers used a local variable named `$pid`,
@@ -49,6 +57,30 @@ that bricked Apply Journey preset and several other gameplay endpoints.
   Apply Preset was the user-reported repro (Discord, 2026-06-15); the others
   were the same latent bug on Set Partition Seed, Keystones, Dungeons,
   offline teleport, and permission-player lookup. Closes #217.
+
+### Removed
+
+- **Fill Base Water (Players → Actions) has been removed.** Decker reported
+  the old implementation only refilled inventory water, never the actual
+  base cisterns. We tried two replacement paths and both are blocked by
+  game-server behaviour we can't work around from the tool:
+  - **RMQ `UpdateAllWaterFillables`** (the previous implementation) only
+    fills carried fillables in current game builds; the cistern leg of the
+    command is a no-op, which is exactly the bug Decker hit.
+  - **Direct DB write** to `dune.fgl_entities.components.FWaterStorageComponent.m_WaterStored`
+    succeeds, but the map pod holds cistern state in RAM and writes it back
+    to Postgres on its periodic save tick - any value we write gets
+    overwritten before a player sees it. Verified end-to-end against the
+    live VM: drained four cisterns to 250-331, ran the UPDATE to 100000,
+    restarted the deepdesert pod, the pod flushed its in-RAM 250-331 over
+    our 100000 on shutdown and the in-game UI still showed 250 after the
+    restart.
+  Removing the button is the honest call until a per-cistern RPC or pod
+  cache-invalidation hook becomes available. The investigation is tracked
+  in a follow-up issue. Carry-water (`Fill Water`) is unaffected and still
+  works for the player's own carried containers.
+
+
 
 ### Changed
 

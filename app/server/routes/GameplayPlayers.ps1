@@ -481,33 +481,13 @@ Register-DuneRoute -Method POST -Path '/api/gameplay/players/fill-water' -Handle
     }
 }
 
-# v12.1.2 — POST /api/gameplay/players/fill-base-water  { pawn_id|actor_id|fls_id, water_amount? }
-# Fills all water CISTERNS on the player's OWN bases by writing directly to
-# dune.fgl_entities.components (FWaterStorageComponent.m_WaterStored). Ownership
-# is scoped via permission_actor_rank.rank=1 (the totem's primary owner), so it
-# only ever touches THAT player's own cisterns - never other players' bases.
-# Works regardless of online/offline status. The amount is clamped per tier
-# (5k small / 25k medium / 100k large) so we never exceed in-game capacity.
-# Windtraps/BloodWaterExtractors are intentionally skipped (they GENERATE water
-# via filter consumables, they don't store it).
-Register-DuneRoute -Method POST -Path '/api/gameplay/players/fill-base-water' -Handler {
+# v12.1.2: Fill Base Water route removed - see CHANGELOG. Stub kept above to
+# return 410 Gone for any cached UI references; safe to delete once UIs roll.
+Register-DuneRoute -Method POST -Path '/api/gameplay/players/fill-base-water-removed-in-v12.1.2' -Handler {
     param($req, $res, $routeParams, $body)
-    try {
-        $pawn = Get-DuneBodyInt -Body $body -Name 'pawn_id'
-        if (-not $pawn) { $pawn = Get-DuneBodyInt -Body $body -Name 'actor_id' }
-        if (-not $pawn) { $pawn = Get-DuneBodyInt -Body $body -Name 'id' }
-        if (-not $pawn -or $pawn -le 0) {
-            Write-DuneError -Response $res -Status 400 -Message 'pawn_id (actor id) is required.'
-            return
-        }
-        $amt = Get-DuneBodyInt -Body $body -Name 'water_amount'
-        if ($null -eq $amt -or $amt -le 0) { $amt = 1000000 }
-
-        Invoke-DunePlayerWriteRoute -Response $res -Action {
-            param($ip)
-            Invoke-DunePlayerFillBaseWater -Ip $ip -PawnId ([long]$pawn) -WaterAmount ([int]$amt)
-        }
-    } catch {
-        Write-DuneError -Response $res -Status 500 -Message "Fill base water failed: $($_.Exception.Message)"
-    }
+    # Fill Base Water was investigated in v12.1.2 and removed - see CHANGELOG.
+    # The pod holds cistern water in RAM and overwrites our DB writes on its
+    # periodic save, so neither the RMQ ServerCommand path nor a direct DB
+    # write can move the in-game value while the map pod is running.
+    Write-DuneError -Response $res -Status 410 -Message 'Fill Base Water was removed in v12.1.2 - cistern water is owned by the live pod and overwrites DB writes. See CHANGELOG for details.'
 }

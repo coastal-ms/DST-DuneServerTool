@@ -1049,15 +1049,6 @@ export function fillWater(pawnId: number): Promise<FillWaterResponse> {
   })
 }
 
-// Fills the player's OWN base cisterns by writing directly to fgl_entities.components
-// (FWaterStorageComponent.m_WaterStored). Works online or offline; capped per cistern
-// tier. Windtraps/BloodWaterExtractors are skipped (they generate, not store).
-export function fillBaseWater(pawnId: number): Promise<FillWaterResponse> {
-  return api<FillWaterResponse>('/api/gameplay/players/fill-base-water', {
-    method: 'POST', body: JSON.stringify({ pawn_id: pawnId }),
-  })
-}
-
 export interface CoriolisMap       { map: string; seed: number }
 export interface CoriolisPartition { partition_id: number; map: string; seed: number }
 
