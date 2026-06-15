@@ -15,7 +15,7 @@ here cover everything those tags shipped.
 
 ## [12.1.2] - 2026-06-15
 
-This release ships fixes for the four issues Decker reported in Discord on
+This release ships fixes for four user-reported issues from Discord on
 2026-06-15 plus the in-flight `$PID` collision bug (PR #216 / issue #217)
 that bricked Apply Journey preset and several other gameplay endpoints,
 and a Settings card for clearing the Legacy Admin Tool's per-battlegroup
@@ -23,8 +23,8 @@ cache on the VM.
 
 ### Added
 
-- **Remote Access (Cloudflare Tunnel + Access) didactic guide.** Decker
-  reported he couldn't follow the old one-line "authenticate, pick a Zone,
+- **Remote Access (Cloudflare Tunnel + Access) didactic guide.** A user
+  reported they couldn't follow the old one-line "authenticate, pick a Zone,
   create a tunnel" instructions because Cloudflare's dashboard doesn't
   surface "Zone" as an option in that flow. The marketing site's
   `/remote/` page is now a step-by-step walkthrough: create the free
@@ -106,13 +106,13 @@ cache on the VM.
 
 ### Removed
 
-- **Fill Base Water (Players -> Actions) has been removed.** Decker reported
+- **Fill Base Water (Players -> Actions) has been removed.** A user reported
   the old implementation only refilled inventory water, never the actual
   base cisterns. We tried two replacement paths and both are blocked by
   game-server behaviour we can't work around from the tool:
   - **RMQ `UpdateAllWaterFillables`** (the previous implementation) only
     fills carried fillables in current game builds; the cistern leg of the
-    command is a no-op, which is exactly the bug Decker hit.
+    command is a no-op, which is exactly the reported behaviour.
   - **Direct DB write** to `dune.fgl_entities.components.FWaterStorageComponent.m_WaterStored`
     succeeds, but the map pod holds cistern state in RAM and writes it back
     to Postgres on its periodic save tick - any value we write gets
