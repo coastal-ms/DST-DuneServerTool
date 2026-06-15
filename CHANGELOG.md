@@ -13,6 +13,34 @@ here cover everything those tags shipped.
 
 ## [Unreleased]
 
+## [12.1.1] - 2026-06-15
+
+### Fixed
+
+- **Restored the 10 `m_Global*Multiplier` Game Config options that were pulled
+  in v12.0.14.** XP, Damage to NPCs, Damage to Players, Health, Fame,
+  Progression Speed, Harvest Amount, Harvest Health, Building Damage, and
+  Inventory Weight multipliers are back on the Game Config screen — under new
+  **Progression** and **Harvesting** categories (and within **Survival**,
+  **Building**, **Inventory**). v12.0.14's removal relied on an
+  AMP-orchestrated upstream tool's conclusion that these keys were no-ops, but
+  on self-hosted Funcom k3s (DST's target) `UserGame.ini` is loaded at pod
+  startup and scalar `[/Script/DuneSandbox.DuneGameMode]` values *do* apply;
+  the Hexaspark community ServerConfig reference also documents every one of
+  these keys as a real Float setting under `DuneGameMode` with a default of
+  `1.0`. (Discord report from poultrygeist516.)
+
+- **`m_GlobalBuildingDamageMultiplier` now writes to the correct section.** It
+  was previously placed under `[/Script/DuneSandbox.BuildingSettings]`, which
+  the engine ignores; it now writes under `[/Script/DuneSandbox.DuneGameMode]`
+  alongside the other gameplay multipliers, matching the Hexaspark reference.
+
+- **All ten restored multipliers are flagged `ClientApply`.** They are read by
+  both the server and the game client, so saving them now triggers the existing
+  "Apply on each client" notice and the **Apply to my client** button mirrors
+  the new value into the admin's local `Game.ini` — keeping the local client in
+  sync with the server without manual edits.
+
 ## [12.1.0] - 2026-06-15
 
 ### Added
