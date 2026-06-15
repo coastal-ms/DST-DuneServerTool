@@ -271,6 +271,22 @@ export function MenuBar({ sidebarCollapsed, onToggleSidebar }: Props) {
         )}
       </div>
 
+      {/* Marketing site link, pushed to the far right of the menu bar.
+          ml-auto consumes the remaining horizontal space so this sits flush
+          right while the page groups + Help stay left-aligned. */}
+      <a
+        href="https://coastal-ms.github.io/DST-DuneServerTool/"
+        target="_blank"
+        rel="noopener noreferrer"
+        onMouseEnter={() => { if (open !== null) setOpen(null) }}
+        className="ml-auto mr-1 px-3 h-7 inline-flex items-center gap-1.5 rounded-md text-text-muted hover:text-text hover:bg-surface-2/80 transition-colors"
+        title="Open the Dune Server Tool website — screenshots, install guide, and changelog"
+      >
+        <Icon name="Globe" size={14} />
+        <span>Website</span>
+        <Icon name="ExternalLink" size={11} className="text-text-dim" />
+      </a>
+
       {/* Autostart toggle — confirmation modal. Lives at the menubar root
           rather than inside the dropdown so it stays visible after the menu
           closes on click. */}
