@@ -1,0 +1,25 @@
+#!/bin/sh
+# Dune Server — pre-removal hook.
+set -e
+
+case "$1" in
+    remove|upgrade|deconfigure)
+        # If a user has the systemd unit enabled, the unit lives under their
+        # $HOME/.config/systemd/user/ — we never created it, we can't remove
+        # it. Tell them how.
+        cat <<'EOF'
+
+Dune Server is being removed.
+
+User config / logs / state are preserved at:
+    ~/.config/DuneServer/
+    ~/.local/state/DuneServer/
+
+If you previously enabled the systemd user unit, stop it manually:
+    systemctl --user disable --now dune-server.service
+    rm ~/.config/systemd/user/dune-server.service
+EOF
+        ;;
+esac
+
+exit 0

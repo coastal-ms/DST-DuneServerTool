@@ -16,3 +16,11 @@
 # Remote VM scripts pushed by Sync-DunePartitionAutomation must be LF —
 # Alpine /bin/sh sees $'\r' on CRLF and fails with cryptic errors.
 app/resources/remote-scripts/* text eol=lf
+
+# Linux port scaffold — POSIX launcher, systemd unit, debian metadata. These
+# are consumed by bash / dpkg on Linux and break if checked out as CRLF.
+bin/dune-server                          text eol=lf
+packaging/linux/systemd/*.service        text eol=lf
+packaging/linux/debian/control           text eol=lf
+packaging/linux/debian/postinst          text eol=lf
+packaging/linux/debian/prerm             text eol=lf

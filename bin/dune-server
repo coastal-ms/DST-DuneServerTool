@@ -1,0 +1,47 @@
+#!/usr/bin/env bash
+# Dune Server launcher (Linux). Locates the bundled DuneServer-Linux.ps1 and
+# runs it under pwsh. Installed by the .deb package at /usr/bin/dune-server,
+# pointing at /opt/dune-server. Also usable from a source checkout: copy or
+# symlink this file somewhere on $PATH.
+#
+# Status: UNTESTED handoff scaffold. See LINUX-PORT-STATUS.md.
+
+set -euo pipefail
+
+# Resolve real script path (handles symlinks).
+SOURCE="${BASH_SOURCE[0]}"
+while [ -h "$SOURCE" ]; do
+    DIR="$(cd -P "$(dirname "$SOURCE")" >/dev/null 2>&1 && pwd)"
+    SOURCE="$(readlink "$SOURCE")"
+    [[ $SOURCE != /* ]] && SOURCE="$DIR/$SOURCE"
+done
+BIN_DIR="$(cd -P "$(dirname "$SOURCE")" >/dev/null 2>&1 && pwd)"
+
+# Layout candidates:
+#   1. Installed:    /opt/dune-server/app/DuneServer-Linux.ps1   (BIN_DIR is /usr/bin)
+#   2. Source repo:  <repo>/app/DuneServer-Linux.ps1             (BIN_DIR is <repo>/bin)
+ENTRY=""
+for candidate in \
+    "/opt/dune-server/app/DuneServer-Linux.ps1" \
+    "$BIN_DIR/../app/DuneServer-Linux.ps1" \
+    "$BIN_DIR/../../app/DuneServer-Linux.ps1"
+do
+    if [ -f "$candidate" ]; then
+        ENTRY="$(readlink -f "$candidate")"
+        break
+    fi
+done
+
+if [ -z "$ENTRY" ]; then
+    echo "dune-server: could not locate DuneServer-Linux.ps1" >&2
+    echo "  searched: /opt/dune-server/app/  and  $BIN_DIR/../app/" >&2
+    exit 1
+fi
+
+if ! command -v pwsh >/dev/null 2>&1; then
+    echo "dune-server: pwsh (PowerShell 7) is not installed." >&2
+    echo "  Install via: https://learn.microsoft.com/powershell/scripting/install/installing-powershell-on-linux" >&2
+    exit 1
+fi
+
+exec pwsh -NoProfile -ExecutionPolicy Bypass -File "$ENTRY" "$@"
