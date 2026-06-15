@@ -54,7 +54,7 @@ $script:DuneGcSecUrl       = 'URL'
 
 # Category display order (UI renders in this order; unknown categories appended).
 $script:DuneGameConfigCategoryOrder = @(
-    'Server Identity','Network','Survival',
+    'Server Identity','Network','Survival','Progression','Harvesting',
     'Resources & Economy','Building','Inventory','Guilds & Economy',
     'Storm Cycle','PvP & Security','Spice','Taxation','Sandworm','Vehicles'
 )
@@ -69,12 +69,24 @@ $script:DuneGameConfigSchema = @(
     @{ Section=$script:DuneGcSecUrl; Key='IGWPort'; File='engine'; Type='int'; Min=1024; Max=65535; Default='7780'; Label='IGW Port (starting)'; Help='Starting inter-server port; must not overlap the game port range.'; Category='Network' }
 
     # --- Survival ---
+    @{ Section=$script:DuneGcSecGame; Key='m_GlobalHealthMultiplier'; File='game'; Type='float'; Min=0; Default='1.0'; Label='Global Health Multiplier'; Help='Scales the health pool of all entities (players + NPCs). Also needs client-side apply.'; ClientApply=$true; Category='Survival' }
+    @{ Section=$script:DuneGcSecGame; Key='m_GlobalDamageToNpcsMultiplier'; File='game'; Type='float'; Min=0; Default='1.0'; Label='Damage to NPCs Multiplier'; Help='Scales damage dealt to AI enemies. Also needs client-side apply.'; ClientApply=$true; Category='Survival' }
+    @{ Section=$script:DuneGcSecGame; Key='m_GlobalDamageToPlayersMultiplier'; File='game'; Type='float'; Min=0; Default='1.0'; Label='Damage to Players Multiplier'; Help='Scales player-vs-player damage. Also needs client-side apply.'; ClientApply=$true; Category='Survival' }
     @{ Section=$script:DuneGcSecGame; Key='m_WaterConsumptionRate'; File='game'; Type='float'; Min=0; Default='1.0'; Label='Water Consumption Rate'; Help='How quickly players consume water. Also needs client-side apply.'; ClientApply=$true; Category='Survival' }
     @{ Section=$script:DuneGcSecGame; Key='m_WaterConsumptionInStormMultiplier'; File='game'; Type='float'; Min=0; Default='2.0'; Label='Water Consumption in Storm'; Help='Additional water drain during sandstorms. Also needs client-side apply.'; ClientApply=$true; Category='Survival' }
     @{ Section=$script:DuneGcSecGame; Key='m_PlayerStartingWater'; File='game'; Type='float'; Min=0; Default='100.0'; Label='Player Starting Water'; Help='Water amount when a player spawns. Also needs client-side apply.'; ClientApply=$true; Category='Survival' }
     @{ Section=$script:DuneGcSecOnline; Key='m_DefaultReconnectGracePeriodSeconds'; File='game'; Type='int'; Min=0; Unit='sec'; Default='300'; Label='Reconnect Grace Period'; Help="Seconds a player's corpse persists after disconnect. Also needs client-side apply."; ClientApply=$true; Category='Survival' }
     @{ Section=$script:DuneGcSecDurab; Key='m_ItemDurabilityLossMultiplier'; File='game'; Type='float'; Min=0; Max=10; Default='1.0'; Label='Item Durability Loss Multiplier'; Help='Scales durability loss for all items. 0 = off. Also needs client-side apply.'; ClientApply=$true; Category='Survival' }
     @{ Section=$script:DuneGcSecDurab; Key='UpdateRateInSeconds'; File='game'; Type='float'; Min=0; Max=10; Unit='sec'; Default='1.0'; Label='Item Decay Rate'; Help='Deterioration tick rate. 0 = off, 1-10 typical. Also needs client-side apply.'; ClientApply=$true; Category='Survival' }
+
+    # --- Progression ---
+    @{ Section=$script:DuneGcSecGame; Key='m_GlobalXPMultiplier'; File='game'; Type='float'; Min=0; Default='1.0'; Label='XP Multiplier'; Help='Scales all XP gains. Also needs client-side apply.'; ClientApply=$true; Category='Progression' }
+    @{ Section=$script:DuneGcSecGame; Key='m_GlobalProgressionSpeedMultiplier'; File='game'; Type='float'; Min=0; Default='1.0'; Label='Progression Speed Multiplier'; Help='Journey / talent unlock speed scalar. Also needs client-side apply.'; ClientApply=$true; Category='Progression' }
+    @{ Section=$script:DuneGcSecGame; Key='m_GlobalFameMultiplier'; File='game'; Type='float'; Min=0; Default='1.0'; Label='Fame Multiplier'; Help='Scales Fame gained from all sources. Also needs client-side apply.'; ClientApply=$true; Category='Progression' }
+
+    # --- Harvesting ---
+    @{ Section=$script:DuneGcSecGame; Key='m_GlobalHarvestAmountMultiplier'; File='game'; Type='float'; Min=0; Default='1.0'; Label='Harvest Amount Multiplier'; Help='Scales resources gained per harvest strike. Also needs client-side apply.'; ClientApply=$true; Category='Harvesting' }
+    @{ Section=$script:DuneGcSecGame; Key='m_GlobalHarvestHealthMultiplier'; File='game'; Type='float'; Min=0; Default='1.0'; Label='Harvest Health Multiplier'; Help='Scales node health (how long harvestables last). Also needs client-side apply.'; ClientApply=$true; Category='Harvesting' }
 
     # --- Resources & Economy (engine ConsoleVariables) ---
     @{ Section=$script:DuneGcSecConsole; Key='Dune.GlobalMiningOutputMultiplier'; File='engine'; Type='float'; Min=0; Default='1.0'; Label='Global Mining Multiplier'; Help='Scales hand-mining resource output.'; Category='Resources & Economy' }
@@ -86,10 +98,12 @@ $script:DuneGameConfigSchema = @(
     @{ Section=$script:DuneGcSecBuilding; Key='m_BuildingBlueprintMaxExtensions'; File='game'; Type='int'; Min=0; Default='4'; Label='Blueprint Max Extensions'; Help='Maximum blueprint extension slots.'; Category='Building' }
     @{ Section=$script:DuneGcSecBuilding; Key='m_BaseBackupMaxExtensions'; File='game'; Type='int'; Min=0; Default='8'; Label='Base Backup Max Extensions'; Help='Backup (reconstruction) extension slots per base.'; Category='Building' }
     @{ Section=$script:DuneGcSecBuilding; Key='m_bBuildingRestrictionLimitsEnabled'; File='game'; Type='bool'; Default='True'; Label='Building Restriction Limits'; Help='Enforce building restriction limits. Also needs client-side apply.'; ClientApply=$true; Category='Building' }
+    @{ Section=$script:DuneGcSecGame; Key='m_GlobalBuildingDamageMultiplier'; File='game'; Type='float'; Min=0; Default='1.0'; Label='Building Damage Multiplier'; Help='Scales damage dealt to player buildings (0.5 = stronger bases). Also needs client-side apply.'; ClientApply=$true; Category='Building' }
 
     # --- Inventory ---
     @{ Section=$script:DuneGcSecInventory; Key='PlayerInventoryStartingSize'; File='game'; Type='int'; Min=1; Default='35'; Label='Starting Inventory Slots'; Help='Number of inventory slots at spawn. Also needs client-side apply.'; ClientApply=$true; Category='Inventory' }
     @{ Section=$script:DuneGcSecInventory; Key='PlayerInventoryStartingVolumeCapacity'; File='game'; Type='float'; Min=0; Default='175.0'; Label='Starting Inventory Volume'; Help='Volume capacity of the starting inventory. Also needs client-side apply.'; ClientApply=$true; Category='Inventory' }
+    @{ Section=$script:DuneGcSecGame; Key='m_InventoryWeightMultiplier'; File='game'; Type='float'; Min=0; Default='1.0'; Label='Inventory Weight Multiplier'; Help='Scales item weight across all inventories (carry-capacity scalar). Also needs client-side apply.'; ClientApply=$true; Category='Inventory' }
 
     # --- Guilds & Economy ---
     @{ Section=$script:DuneGcSecGuilds; Key='m_MaxGuildMembersAllowed'; File='game'; Type='int'; Min=1; Default='32'; Label='Max Guild Members'; Help='Maximum players per guild.'; Category='Guilds & Economy' }
@@ -183,7 +197,9 @@ $script:DuneGameConfigTplEnginePath  = '/home/dune/.dune/download/scripts/setup/
 # Funcom's shipped DefaultGame.ini). The remaining flagged keys were confirmed by
 # live in-game testing on a self-hosted server: the change had NO effect until the
 # same value was also set in the client Game.ini. Sections currently flagged
-# ClientApply=$true above: DuneGameMode (Survival: water + starting water),
+# ClientApply=$true above: DuneGameMode (Survival: health + damage to NPCs/players
+# + water + starting water + building damage + inventory weight; Progression: XP +
+# progression speed + fame; Harvesting: harvest amount + harvest health),
 # PlayerOnlineStateSettings (reconnect grace), ItemDeteriorationConstants
 # (durability/decay), BuildingSettings, InventorySystemSettings,
 # CoriolisSubsystem, SpiceHarvestingSystem, SandwormSettings.
