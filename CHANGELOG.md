@@ -13,6 +13,23 @@ here cover everything those tags shipped.
 
 ## [Unreleased]
 
+## [12.1.3] - 2026-06-15
+
+Sidebar tweak: adds a **Buy Me a Coffee** donation link between the
+**Web Portal** button and the version row at the bottom of the left
+sidebar. Opens `https://buymeacoffee.com/coastal_dst` in the OS default
+browser (routed via the same WebView2 `NewWindowRequested` ->
+`OpenExternal` path the portal-detach button uses, so it lands in a
+non-elevated Chrome/Edge instance instead of inside the shell). Amber
+tint distinguishes it from the accent-colored Web Portal button; in
+collapsed-rail mode it shows just the Coffee icon.
+
+### Added
+
+- **Sidebar "Buy Me a Coffee" donation link** at
+  `https://buymeacoffee.com/coastal_dst`, between the Web Portal button
+  and the version footer.
+
 ## [12.1.2] - 2026-06-15
 
 This release ships fixes for four user-reported issues from Discord on
