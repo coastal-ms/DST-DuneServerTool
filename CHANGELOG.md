@@ -13,6 +13,20 @@ here cover everything those tags shipped.
 
 ## [Unreleased]
 
+## [12.0.24] - 2026-06-14
+
+### Added
+
+- **Help → Show backend console** / **Hide backend console**. There was
+  previously no UI path that brought the backend PowerShell console window
+  back to a visible foreground window once tray mode hid it. The new menu
+  item (visible only to local viewers, since the new `/api/console` route
+  is loopback-only) calls `ShowWindow(SW_RESTORE)` + `SetForegroundWindow`
+  to un-minimize and pop the console where you're looking; toggling it
+  again hides it via `SW_HIDE`. The label tracks the real window state
+  (refreshes when the Help menu opens) so it correctly says "Show" when
+  hidden / minimized and "Hide" when visible.
+
 ## [12.0.23] - 2026-06-14
 
 ### Fixed
