@@ -5,6 +5,7 @@ import { NAV_ITEMS, GROUP_LABELS, GROUP_ORDER, type NavGroup } from '../nav'
 import { useUpdateCheck } from '../hooks/useUpdateCheck'
 import { buildDiagnosticBundle, type DiagnosticBundle } from '../api/diagnostics'
 import { getAutostartState, setAutostartEnabled, type AutostartState } from '../api/autostart'
+import { getConsoleState, setConsoleVisible, type ConsoleState } from '../api/console'
 import { isLocalViewer } from '../util/viewer'
 
 type MenuKey = NavGroup | 'help'
@@ -36,6 +37,12 @@ export function MenuBar({ sidebarCollapsed, onToggleSidebar }: Props) {
   const [autostartConfirm, setAutostartConfirm] = useState<null | { nextEnabled: boolean }>(null)
   const [autostartError, setAutostartError] = useState<string | null>(null)
 
+  // Backend-console state. Loopback-only (the backend route 403s remote
+  // callers anyway, and the menu item is hidden for them via `local`).
+  // null = not loaded yet / route unavailable on older backends.
+  const [consoleState, setConsoleState] = useState<ConsoleState | null>(null)
+  const [consoleBusy, setConsoleBusy] = useState(false)
+
   // Diagnostics-bundle result, surfaced so the user always learns where the
   // ZIP landed (Desktop vs. %APPDATA% fallback) or why it couldn't be built —
   // instead of the old fire-and-forget that silently swallowed both.
@@ -56,6 +63,39 @@ export function MenuBar({ sidebarCollapsed, onToggleSidebar }: Props) {
   }, [local])
 
   useEffect(() => { void refreshAutostart() }, [refreshAutostart])
+
+  // Console state — refresh when the Help menu opens so the Show / Hide label
+  // tracks the real window state even if the user minimized / restored it
+  // outside the app (e.g. via the taskbar).
+  const refreshConsole = useCallback(async () => {
+    if (!local) return
+    try {
+      const s = await getConsoleState()
+      setConsoleState(s)
+    } catch {
+      setConsoleState(null)
+    }
+  }, [local])
+
+  useEffect(() => { void refreshConsole() }, [refreshConsole])
+  useEffect(() => { if (open === 'help') void refreshConsole() }, [open, refreshConsole])
+
+  const onConsoleToggleClick = async () => {
+    if (!consoleState || !consoleState.available || consoleBusy) return
+    // If currently visible AND not minimized, hide it. Otherwise show it
+    // (this also un-minimizes via SW_RESTORE in the backend).
+    const nextVisible = !(consoleState.visible && !consoleState.minimized)
+    setConsoleBusy(true)
+    try {
+      const s = await setConsoleVisible(nextVisible)
+      setConsoleState(s)
+      setOpen(null)
+    } catch {
+      // Best-effort: leave state as it was, user can retry.
+    } finally {
+      setConsoleBusy(false)
+    }
+  }
 
   const onAutostartToggleClick = () => {
     if (!autostart || !autostart.available || autostartBusy) return
@@ -255,6 +295,35 @@ export function MenuBar({ sidebarCollapsed, onToggleSidebar }: Props) {
                 {autostart.enabled && (
                   <Icon name="Check" size={13} className="text-success mt-1" />
                 )}
+              </button>
+            )}
+            {local && consoleState && consoleState.available && (
+              <button
+                type="button"
+                onClick={onConsoleToggleClick}
+                disabled={consoleBusy}
+                className="w-full flex items-start gap-2 px-2.5 py-1.5 rounded text-sm text-text-muted hover:text-text hover:bg-surface-2 transition-colors text-left disabled:opacity-60 disabled:cursor-wait"
+                title={
+                  consoleState.visible && !consoleState.minimized
+                    ? 'Hide the backend PowerShell console window. The server keeps running — log output still goes to dune-server.log.'
+                    : 'Bring the backend PowerShell console window to the foreground so you can watch the server work in real time.'
+                }
+              >
+                <Icon name="Terminal" size={14} className="mt-0.5" />
+                <span className="flex-1">
+                  <span className="block">
+                    {consoleState.visible && !consoleState.minimized
+                      ? 'Hide backend console'
+                      : 'Show backend console'}
+                  </span>
+                  <span className="block text-[11px] text-text-dim">
+                    {consoleState.visible
+                      ? (consoleState.minimized
+                          ? 'Currently minimized — click to restore to a visible window'
+                          : 'Currently visible — click to hide')
+                      : 'Currently hidden — click to reveal the live server output'}
+                  </span>
+                </span>
               </button>
             )}
             <button
