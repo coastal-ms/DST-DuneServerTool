@@ -106,25 +106,24 @@ cache on the VM.
 
 ### Removed
 
-- **Fill Base Water (Players -> Actions) has been removed.** A user reported
-  the old implementation only refilled inventory water, never the actual
-  base cisterns. We tried two replacement paths and both are blocked by
-  game-server behaviour we can't work around from the tool:
+- **Fill Base Water (Players -> Actions) has been removed and will not
+  be offered.** The old implementation only refilled inventory water,
+  never the actual base cisterns. We tried two replacement paths and
+  both are blocked by game-server behaviour we can't work around from
+  the tool:
   - **RMQ `UpdateAllWaterFillables`** (the previous implementation) only
-    fills carried fillables in current game builds; the cistern leg of the
-    command is a no-op, which is exactly the reported behaviour.
+    fills carried fillables in current game builds; the cistern leg of
+    the command is a no-op.
   - **Direct DB write** to `dune.fgl_entities.components.FWaterStorageComponent.m_WaterStored`
-    succeeds, but the map pod holds cistern state in RAM and writes it back
-    to Postgres on its periodic save tick - any value we write gets
-    overwritten before a player sees it. Verified end-to-end against the
-    live VM: drained four cisterns to 250-331, ran the UPDATE to 100000,
-    restarted the deepdesert pod, the pod flushed its in-RAM 250-331 over
-    our 100000 on shutdown and the in-game UI still showed 250 after the
-    restart.
+    succeeds, but the map pod holds cistern state in RAM and writes it
+    back to Postgres on its periodic save tick - any value we write
+    gets overwritten before a player sees it. Verified end-to-end
+    against the live VM: drained four cisterns to 250-331, ran the
+    UPDATE to 100000, restarted the deepdesert pod, the pod flushed its
+    in-RAM 250-331 over our 100000 on shutdown and the in-game UI still
+    showed 250 after the restart.
 
-  Removing the button is the honest call until a per-cistern RPC or pod
-  cache-invalidation hook becomes available. The investigation is tracked
-  in #221. Carry-water (`Fill Water`) is unaffected and still works for the
+  Carry-water (`Fill Water`) is unaffected and still works for the
   player's own carried containers.
 
 ## [12.1.1] - 2026-06-15

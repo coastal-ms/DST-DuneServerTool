@@ -481,13 +481,10 @@ Register-DuneRoute -Method POST -Path '/api/gameplay/players/fill-water' -Handle
     }
 }
 
-# v12.1.2: Fill Base Water route removed - see CHANGELOG. Stub kept above to
-# return 410 Gone for any cached UI references; safe to delete once UIs roll.
+# v12.1.2: Fill Base Water removed - cistern water is owned by the live pod
+# and overwrites DB writes. Stub kept to return 410 Gone for any cached UI
+# references; safe to delete once UIs roll. This feature will not be offered.
 Register-DuneRoute -Method POST -Path '/api/gameplay/players/fill-base-water-removed-in-v12.1.2' -Handler {
     param($req, $res, $routeParams, $body)
-    # Fill Base Water was investigated in v12.1.2 and removed - see CHANGELOG.
-    # The pod holds cistern water in RAM and overwrites our DB writes on its
-    # periodic save, so neither the RMQ ServerCommand path nor a direct DB
-    # write can move the in-game value while the map pod is running.
     Write-DuneError -Response $res -Status 410 -Message 'Fill Base Water was removed in v12.1.2 - cistern water is owned by the live pod and overwrites DB writes. See CHANGELOG for details.'
 }
