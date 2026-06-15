@@ -14,7 +14,7 @@ import {
   awardCharXp, awardIntel, awardSpecXp, cheatScript, cleanPlayerInventory,
   applyProgressionPreset, getProgressionPresets,
   deleteAccount, deleteInventoryItem, deleteTutorials,
-  dismissReturningPlayerAward, fillWater, fillBaseWater, getPlayerEvents, getPlayerSpecs,
+  dismissReturningPlayerAward, fillWater, getPlayerEvents, getPlayerSpecs,
   getPlayerStats, getPlayerTags, giveFactionRep, giveItem,
   giveScrip, giveSolari, grantAllKeystones, grantLive, grantMaxSpec,
   kickPlayer, refuelVehicle, renamePlayer, repairGear, repairInventoryItem,
@@ -22,7 +22,7 @@ import {
   resetAllKeystones, resetAllSpecs, resetJourney, resetProgressionLive, resetSpec,
   restoreDestroyed,
   returningPlayerAward, setFactionTier, setPlayerTags, setSkillPoints,
-  setStarterClass, spawnVehicle, teleportToPlayer, updatePlayerTags, wipeCodex, wipeJourney,
+  setStarterClass, teleportToPlayer, updatePlayerTags, wipeCodex, wipeJourney,
   chatWhisper, isValidTemplateId, getItemCatalog,
   giveItems, getItemPackages, saveItemPackage, deleteItemPackage,
   type Player, type PlayerEvent, type PlayerStats, type ProgressionPreset, type SpecTrackFull,
@@ -485,6 +485,7 @@ const ACTIONS: ActionDef[] = [
     run: () => Promise.resolve({ message: '' }) },
   { id: 'give-vehicle-kit', group: 'Items', label: 'Give Vehicle Kit', icon: 'Truck', custom: 'vehicle-kit',
     rowNote: 'Parts + fuel cell + welding torch Mk5 — works online or offline, needs inventory space',
+    confirm: p => `Give vehicle parts to ${p.name}'s inventory? They'll need to assemble at a Vehicle Assembly. Works online or offline.`,
     run: () => Promise.resolve({ message: '' }) },
   { id: 'give-package', group: 'Items', label: 'Give Package', icon: 'PackageCheck', custom: 'give-package',
     rowNote: 'Hand a saved item package to this player — build & reuse your own bundles. Works online or offline',
@@ -496,16 +497,14 @@ const ACTIONS: ActionDef[] = [
     run: p => restoreDestroyed(p.id) },
   { id: 'fill-water', group: 'Items', label: 'Fill Water', icon: 'Droplets',
     run: p => fillWater(p.id) },
-  { id: 'fill-base-water', group: 'Items', label: 'Fill Base Water', icon: 'Droplets', liveOnly: true,
-    rowNote: "Tops the player's own base cisterns & windtraps — requires them online",
-    run: p => fillBaseWater(p.id) },
   { id: 'clean-inventory', group: 'Items', label: 'Clean Inventory (live)', icon: 'Trash', liveOnly: true,
     confirm: p => `WIPE ${p.name}'s inventory? Cannot be undone.`,
     run: p => cleanPlayerInventory({ actor_id: p.id }) },
 
   // ----- Vehicle -----
-  { id: 'spawn-vehicle', group: 'Vehicle', label: 'Spawn Vehicle', icon: 'Car', liveOnly: true, custom: 'spawn-vehicle',
-    rowNote: 'Spawns at the player — requires them online',
+  { id: 'spawn-vehicle', group: 'Vehicle', label: 'Spawn Vehicle', icon: 'Car', custom: 'spawn-vehicle',
+    rowNote: 'Hands unassembled Mk6 parts — assemble at a Vehicle Assembly. Works online or offline',
+    confirm: p => `Give vehicle parts to ${p.name}'s inventory? They'll need to assemble at a Vehicle Assembly. Works online or offline.`,
     run: () => Promise.resolve({ message: '' }) },
   { id: 'refuel-vehicle', group: 'Vehicle', label: 'Refuel Vehicle', icon: 'Fuel',
     fields: [{ key: 'vid', label: 'Vehicle id', type: 'number', placeholder: '12345' }],
@@ -598,17 +597,19 @@ const ACTIONS: ActionDef[] = [
 
 // 'Items' is rendered inside the Inventory section (between the inventory
 // title and the items list), not in the Actions section.
-const GROUP_ORDER: ActionGroup[] = ['Currency', 'Progression', 'Vehicle', 'Live', 'Identity', 'Danger']
+const GROUP_ORDER: ActionGroup[] = ['Live', 'Currency', 'Progression', 'Vehicle', 'Identity', 'Danger']
 const ITEMS_GROUP: ActionGroup = 'Items'
 
 export function ActionsSection({ player, canWrite, flash, onChanged }: SectionProps) {
   const [openId, setOpenId] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
 
-  const isOnline = (player.online_status || '').toLowerCase() === 'online'
-
-  // Accordion toggle: clicking an open row closes it. Each form owns its own
-  // state, so it resets naturally when a row unmounts on close.
+  // A live session exists during Online AND LoggingOut (the logout grace
+  // window where the pod still owns the player's state in memory - 30s on
+  // Hagga / Arrakeen / Harkonnen / etc., 5 min in Deep Desert). liveOnly
+  // actions run via RMQ to that session, so they're valid in both states -
+  // kick during LoggingOut force-flushes instead of waiting out the timer.
+  const hasLiveSession = ['online', 'loggingout'].includes((player.online_status || '').toLowerCase())
   const openAction = (id: string) => setOpenId(o => (o === id ? null : id))
 
   const runAction = async (def: ActionDef, exec: () => Promise<{ message: string }>) => {
@@ -654,9 +655,9 @@ export function ActionsSection({ player, canWrite, flash, onChanged }: SectionPr
 
   return (
     <div className="space-y-4">
-      {!isOnline && (
+      {!hasLiveSession && (
         <div className="card p-2.5 text-xs text-text-muted border-l-2 border-warning flex items-center gap-2">
-          <Icon name="WifiOff" size={12} /> Player is offline — buttons marked "(live)" are disabled (require RMQ + an online player).
+          <Icon name="WifiOff" size={12} /> Player is offline — buttons marked "(live)" are disabled (require RMQ + an online or mid-logout player).
         </div>
       )}
 
@@ -671,7 +672,7 @@ export function ActionsSection({ player, canWrite, flash, onChanged }: SectionPr
             </div>
             <div className="space-y-1.5">
               {acts.map(a => (
-                <ActionRow key={a.id} def={a} player={player} busy={busy} isOnline={isOnline}
+                <ActionRow key={a.id} def={a} player={player} busy={busy} hasLiveSession={hasLiveSession}
                   open={openId === a.id} danger={group === 'Danger'}
                   onToggle={() => openAction(a.id)} runAction={runAction} />
               ))}
@@ -689,17 +690,17 @@ export function ActionsSection({ player, canWrite, flash, onChanged }: SectionPr
 // directly beneath it. Replaces the older wrap-of-buttons layout so the panel
 // reads as a vertical list rather than a wall of buttons.
 // ---------------------------------------------------------------------------
-function ActionRow({ def, player, busy, isOnline, open, danger, onToggle, runAction }: {
+function ActionRow({ def, player, busy, hasLiveSession, open, danger, onToggle, runAction }: {
   def: ActionDef
   player: Player
   busy: boolean
-  isOnline: boolean
+  hasLiveSession: boolean
   open: boolean
   danger?: boolean
   onToggle: () => void
   runAction: (def: ActionDef, exec: () => Promise<{ message: string }>) => void
 }) {
-  const disabled = busy || (!!def.liveOnly && !isOnline) || (!!def.offlineOnly && isOnline)
+  const disabled = busy || (!!def.liveOnly && !hasLiveSession) || (!!def.offlineOnly && hasLiveSession)
   return (
     <div className="card overflow-hidden">
       <button type="button"
@@ -735,11 +736,7 @@ function ActionRow({ def, player, busy, isOnline, open, danger, onToggle, runAct
           ) : def.custom === 'whisper' ? (
             <WhisperForm busy={busy}
               onSubmit={msg => runAction(def, () => chatWhisper(String(player.id), msg))} />
-          ) : def.custom === 'spawn-vehicle' ? (
-            <SpawnVehicleForm busy={busy}
-              onSubmit={(className, templateName, persistent) => runAction(def, () =>
-                spawnVehicle({ target: { actor_id: player.id }, className, templateName: templateName || undefined, persistent }))} />
-          ) : def.custom === 'vehicle-kit' ? (
+          ) : def.custom === 'spawn-vehicle' || def.custom === 'vehicle-kit' ? (
             <VehicleKitForm busy={busy}
               onSubmit={veh => runAction(def, async () => {
                 const parts = [...veh.kit, ...veh.unique, VEHICLE_KIT_FUEL_TEMPLATE, VEHICLE_KIT_TORCH_TEMPLATE]
@@ -1011,52 +1008,14 @@ function GivePackageForm({ busy, playerName, onGive }: {
   )
 }
 
-// Self-contained spawn-vehicle form. Picks a vehicle blueprint + optional tier
-// template; spawns it on the selected player (RMQ — requires them online).
-function SpawnVehicleForm({ busy, onSubmit }: {
-  busy: boolean; onSubmit: (className: string, templateName: string, persistent: boolean) => void
-}) {
-  const [vid, setVid] = useState(VEHICLE_CATALOG[0].id)
-  const [tpl, setTpl] = useState('')
-  const [persistent, setPersistent] = useState(false)
-  const veh = VEHICLE_CATALOG.find(v => v.id === vid) || VEHICLE_CATALOG[0]
-  const selectCls = 'w-full px-3 py-2 rounded-lg bg-surface-2 border border-border text-text text-sm focus:outline-none focus:ring-2 focus:ring-ibad focus:border-ibad/50'
-  return (
-    <div className="space-y-3">
-      <div>
-        <label className="block text-[11px] uppercase tracking-wider text-text-dim mb-1">Vehicle</label>
-        <select value={vid} disabled={busy} className={selectCls}
-          onChange={e => { setVid(e.target.value); setTpl('') }}>
-          {VEHICLE_CATALOG.map(v => <option key={v.id} value={v.id}>{v.label}</option>)}
-        </select>
-      </div>
-      <div>
-        <label className="block text-[11px] uppercase tracking-wider text-text-dim mb-1">Tier template</label>
-        <select value={tpl} disabled={busy} className={selectCls}
-          onChange={e => setTpl(e.target.value)}>
-          <option value="">Base (no template)</option>
-          {veh.templates.map(t => <option key={t} value={t}>{t}</option>)}
-        </select>
-      </div>
-      <label className="flex items-center gap-2 text-sm text-text-muted">
-        <input type="checkbox" checked={persistent} disabled={busy}
-          onChange={e => setPersistent(e.target.checked)} />
-        Persistent (survives server restart)
-      </label>
-      <button className="btn-primary w-full" disabled={busy}
-        onClick={() => onSubmit(veh.className, tpl, persistent)}>
-        {busy ? <Icon name="Loader2" size={13} className="animate-spin" /> : <Icon name="Car" size={13} />} Spawn Vehicle
-      </button>
-    </div>
-  )
-}
-
-// Self-contained "Give Vehicle Kit" form. Picks a vehicle that has discrete
-// part items and previews its Mk6 parts list; submitting hands every part plus
-// a Large Vehicle Fuel Cell and a Welding Torch Mk5 into the player's inventory
+// Self-contained vehicle-parts form. Picks a vehicle that has discrete part
+// items and previews its Mk6 parts list; submitting hands every part plus a
+// Large Vehicle Fuel Cell and a Welding Torch Mk5 into the player's inventory
 // via the normal give-item path (works online or offline). Vehicles the game
-// has no part items for (Tank / Treadwheel / Container) are omitted — use the
-// live Spawn Vehicle action for those.
+// has no part items for (Tank / Treadwheel / Container) are omitted — there is
+// no DST path to deliver those because the game has no inventory-form of their
+// chassis/modules. Shared by both the "Spawn Vehicle" and "Give Vehicle Kit"
+// actions, which call the same handler.
 function VehicleKitForm({ busy, onSubmit }: {
   busy: boolean; onSubmit: (veh: VehicleTemplate) => void
 }) {
@@ -1096,7 +1055,7 @@ function VehicleKitForm({ busy, onSubmit }: {
       </div>
       <div className="rounded-lg border border-border bg-surface-2 p-3 text-sm">
         <div className="text-[11px] uppercase tracking-wider text-text-dim mb-1.5">
-          Delivers {veh.kit.length + veh.unique.length} part{veh.kit.length + veh.unique.length === 1 ? '' : 's'} (Mk6) + fuel + tool
+          Delivers {veh.kit.length + veh.unique.length} part{veh.kit.length + veh.unique.length === 1 ? '' : 's'} (Mk6) + fuel + tool — into the player's inventory (online or offline). Assemble at a Vehicle Assembly.
         </div>
         <ul className="space-y-0.5 text-text-muted">
           {veh.kit.map(tpl => (
@@ -1209,7 +1168,7 @@ function ItemsActionBlock({ player, canWrite, flash, onChanged }: {
   const [openId, setOpenId] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
 
-  const isOnline = (player.online_status || '').toLowerCase() === 'online'
+  const hasLiveSession = ['online', 'loggingout'].includes((player.online_status || '').toLowerCase())
 
   const acts = useMemo(() => ACTIONS.filter(a => a.group === ITEMS_GROUP), [])
 
@@ -1238,7 +1197,7 @@ function ItemsActionBlock({ player, canWrite, flash, onChanged }: {
   return (
     <div className="space-y-1.5 mb-2">
       {acts.map(a => (
-        <ActionRow key={a.id} def={a} player={player} busy={busy} isOnline={isOnline}
+        <ActionRow key={a.id} def={a} player={player} busy={busy} hasLiveSession={hasLiveSession}
           open={openId === a.id} onToggle={() => openAction(a.id)} runAction={runAction} />
       ))}
     </div>
