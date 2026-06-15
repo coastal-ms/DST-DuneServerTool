@@ -704,26 +704,80 @@ $script:DuneBotClearChunk = 500000
 function Clear-DuneBotListings {
     $ctx = Get-DuneDbContext
     if (-not $ctx.ok) { return @{ ok = $false; error = $ctx.message } }
-    $ident = Get-DuneBotIdentity -Ip $ctx.ip
-    if (-not $ident.ok) { return @{ ok = $false; error = $ident.error } }
-    if (-not $ident.provisioned -or $ident.ownerId -le 0) {
-        return @{ ok = $true; cleared = 0; items_deleted = 0; message = 'Duke has no listings to clear.' }
+
+    # Owners to wipe: Duke (the native bot) AND Revy (legacy external bot
+    # orphans). One combined sweep so flipping pricing modes / clearing
+    # listings doesn't leave stale Revy rows behind.
+    $oidR = Invoke-DuneSqlQuery -Ip $ctx.ip -Sql "SELECT id, class FROM dune.actors WHERE class IN ('Duke','Revy')" -ReadOnly $true -MaxRows 100 -TimeoutSec 30
+    if (-not $oidR.ok) { return @{ ok = $false; error = "owner lookup: $($oidR.error)" } }
+    $ownerIds = @()
+    $ownerClasses = @{}
+    foreach ($row in (ConvertTo-DuneRowMaps -Result $oidR)) {
+        $oid = ConvertTo-DuneInt $row['id']
+        if ($oid -gt 0) {
+            $ownerIds += $oid
+            $ownerClasses[[string]$oid] = [string]$row['class']
+        }
     }
-    $o  = $ident.ownerId
-    $ex = $ident.exchangeId
+    if ($ownerIds.Count -eq 0) {
+        return @{ ok = $true; cleared = 0; items_deleted = 0; message = 'No Duke or Revy actors found; nothing to clear.' }
+    }
+    $ownerCsv = ($ownerIds -join ',')
 
-    # Resolve Duke's NPC inventory_id (the one all bot items live in). If the
-    # exchange has no inventory yet, there are no orphans to worry about.
-    $invR = Get-DuneBotScalar -Ip $ctx.ip -Sql "SELECT dune.get_exchange_inventory_id($ex)"
-    $invId = if ($invR.ok) { ConvertTo-DuneInt $invR.value } else { 0 }
+    # Collect every inventory that holds items currently listed by Duke/Revy
+    # (so items + their orphans get nuked in one pass) plus Duke's exchange
+    # inventory to preserve the old orphan-cleanup behavior even when Duke
+    # has zero active orders.
+    $invSet = New-Object System.Collections.Generic.HashSet[int64]
+    $invSql = @"
+SELECT DISTINCT i.inventory_id
+FROM dune.dune_exchange_orders o
+JOIN dune.items i ON i.id = o.item_id
+WHERE o.owner_id IN ($ownerCsv) AND o.is_npc_order = TRUE AND i.inventory_id IS NOT NULL
+"@
+    $invR = Invoke-DuneSqlQuery -Ip $ctx.ip -Sql $invSql -ReadOnly $true -MaxRows 100 -TimeoutSec 30
+    if ($invR.ok) {
+        foreach ($row in (ConvertTo-DuneRowMaps -Result $invR)) {
+            $iid = ConvertTo-DuneInt $row['inventory_id']
+            if ($iid -gt 0) { [void]$invSet.Add($iid) }
+        }
+    }
+    $ident = Get-DuneBotIdentity -Ip $ctx.ip
+    if ($ident.ok -and $ident.provisioned -and $ident.exchangeId -gt 0) {
+        $dukeInvR = Get-DuneBotScalar -Ip $ctx.ip -Sql "SELECT dune.get_exchange_inventory_id($($ident.exchangeId))"
+        if ($dukeInvR.ok) {
+            $dukeInv = ConvertTo-DuneInt $dukeInvR.value
+            if ($dukeInv -gt 0) { [void]$invSet.Add($dukeInv) }
+        }
+    }
+    $invIds = @($invSet)
 
+    # Count what's about to disappear (orders + items) for the response message.
     $before = 0L
-    $cnt = Get-DuneBotScalar -Ip $ctx.ip -Sql "SELECT COUNT(*) FROM dune.dune_exchange_orders WHERE owner_id = $o AND is_npc_order = TRUE"
+    $cnt = Get-DuneBotScalar -Ip $ctx.ip -Sql "SELECT COUNT(*) FROM dune.dune_exchange_orders WHERE owner_id IN ($ownerCsv) AND is_npc_order = TRUE"
     if ($cnt.ok) { $before = ConvertTo-DuneInt $cnt.value }
 
+    $breakdown = @{}
+    $brkSql = @"
+SELECT o.owner_id, COUNT(*) AS n
+FROM dune.dune_exchange_orders o
+WHERE o.owner_id IN ($ownerCsv) AND o.is_npc_order = TRUE
+GROUP BY o.owner_id
+"@
+    $brkR = Invoke-DuneSqlQuery -Ip $ctx.ip -Sql $brkSql -ReadOnly $true -MaxRows 100 -TimeoutSec 30
+    if ($brkR.ok) {
+        foreach ($row in (ConvertTo-DuneRowMaps -Result $brkR)) {
+            $cls = $ownerClasses[[string](ConvertTo-DuneInt $row['owner_id'])]
+            if (-not $cls) { $cls = 'unknown' }
+            $existing = if ($breakdown.ContainsKey($cls)) { [int64]$breakdown[$cls] } else { 0L }
+            $breakdown[$cls] = $existing + (ConvertTo-DuneInt $row['n'])
+        }
+    }
+
     $itemsBefore = 0L
-    if ($invId -gt 0) {
-        $ic = Get-DuneBotScalar -Ip $ctx.ip -Sql "SELECT COUNT(*) FROM dune.items WHERE inventory_id = $invId"
+    if ($invIds.Count -gt 0) {
+        $invCsv = ($invIds -join ',')
+        $ic = Get-DuneBotScalar -Ip $ctx.ip -Sql "SELECT COUNT(*) FROM dune.items WHERE inventory_id IN ($invCsv)"
         if ($ic.ok) { $itemsBefore = ConvertTo-DuneInt $ic.value }
     }
 
@@ -732,31 +786,32 @@ function Clear-DuneBotListings {
 BEGIN;
 DELETE FROM dune.dune_exchange_sell_orders WHERE order_id IN (
   SELECT id FROM dune.dune_exchange_orders
-  WHERE owner_id = $o AND is_npc_order = TRUE
+  WHERE owner_id IN ($ownerCsv) AND is_npc_order = TRUE
 );
-DELETE FROM dune.dune_exchange_orders WHERE owner_id = $o AND is_npc_order = TRUE;
+DELETE FROM dune.dune_exchange_orders WHERE owner_id IN ($ownerCsv) AND is_npc_order = TRUE;
 COMMIT;
 "@
     $w = Invoke-DuneSqlQuery -Ip $ctx.ip -Sql $sqlOrders -ReadOnly $false -MaxRows 5 -TimeoutSec 600 -Bulk
     if (-not $w.ok) { return @{ ok = $false; error = "orders: $($w.error)" } }
 
-    # ---- Step 2: nuke ALL items in Duke's inventory (orphans + the rows we
-    # just dereferenced). Small inventories run in one shot; big ones loop
+    # ---- Step 2: nuke ALL items in Duke/Revy inventories (orphans + the rows
+    # we just dereferenced). Small inventories run in one shot; big ones loop
     # with autocommit so each batch fits under the SSH timeout.
     $itemsDeleted = 0L
-    if ($invId -gt 0 -and $itemsBefore -gt 0) {
+    if ($invIds.Count -gt 0 -and $itemsBefore -gt 0) {
+        $invCsv = ($invIds -join ',')
         if ($itemsBefore -le $script:DuneBotClearChunk) {
-            $sqlItems = "BEGIN; DELETE FROM dune.items WHERE inventory_id = $invId; COMMIT;"
+            $sqlItems = "BEGIN; DELETE FROM dune.items WHERE inventory_id IN ($invCsv); COMMIT;"
             $w2 = Invoke-DuneSqlQuery -Ip $ctx.ip -Sql $sqlItems -ReadOnly $false -MaxRows 5 -TimeoutSec 600 -Bulk
             if (-not $w2.ok) { return @{ ok = $false; error = "items: $($w2.error)"; cleared = $before } }
             $itemsDeleted = $itemsBefore
         } else {
             $batch = $script:DuneBotClearChunk
             for ($pass = 0; $pass -lt 100; $pass++) {
-                $sqlBatch = "DELETE FROM dune.items WHERE id IN (SELECT id FROM dune.items WHERE inventory_id = $invId LIMIT $batch);"
+                $sqlBatch = "DELETE FROM dune.items WHERE id IN (SELECT id FROM dune.items WHERE inventory_id IN ($invCsv) LIMIT $batch);"
                 $w3 = Invoke-DuneSqlQuery -Ip $ctx.ip -Sql $sqlBatch -ReadOnly $false -MaxRows 5 -TimeoutSec 600 -Bulk
                 if (-not $w3.ok) { return @{ ok = $false; error = "items batch $($pass+1): $($w3.error)"; cleared = $before; items_deleted = $itemsDeleted } }
-                $remR = Get-DuneBotScalar -Ip $ctx.ip -Sql "SELECT COUNT(*) FROM dune.items WHERE inventory_id = $invId"
+                $remR = Get-DuneBotScalar -Ip $ctx.ip -Sql "SELECT COUNT(*) FROM dune.items WHERE inventory_id IN ($invCsv)"
                 $remaining = if ($remR.ok) { ConvertTo-DuneInt $remR.value } else { 0 }
                 $itemsDeleted = $itemsBefore - $remaining
                 if ($remaining -le 0) { break }
@@ -765,19 +820,28 @@ COMMIT;
     }
 
     $orphans = [Math]::Max(0L, $itemsDeleted - $before)
+    $parts = @()
+    foreach ($cls in @('Duke','Revy')) {
+        if ($breakdown.ContainsKey($cls) -and [int64]$breakdown[$cls] -gt 0) {
+            $parts += "$($breakdown[$cls]) from $cls"
+        }
+    }
+    $detail = if ($parts.Count -gt 0) { ' (' + ($parts -join ', ') + ')' } else { '' }
     $msg = if ($orphans -gt 0) {
-        "Cleared $before listing(s); also removed $orphans orphan item(s) from inventory $invId."
+        "Cleared $before listing(s)$detail; also removed $orphans orphan item(s)."
     } else {
-        "Cleared $before listing(s)."
+        "Cleared $before listing(s)$detail."
     }
     Invoke-DuneMarketItemsCacheBust
     return @{
-        ok            = $true
-        cleared       = $before
-        items_deleted = $itemsDeleted
-        orphans       = $orphans
-        inventory_id  = $invId
-        message       = $msg
+        ok                = $true
+        cleared           = $before
+        items_deleted     = $itemsDeleted
+        orphans           = $orphans
+        inventory_ids     = $invIds
+        owner_classes     = @($ownerClasses.Values | Sort-Object -Unique)
+        cleared_by_class  = $breakdown
+        message           = $msg
     }
 }
 
