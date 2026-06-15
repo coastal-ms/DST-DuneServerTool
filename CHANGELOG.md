@@ -17,7 +17,39 @@ here cover everything those tags shipped.
 
 This release ships fixes for the four issues Decker reported in Discord on
 2026-06-15 plus the in-flight `$PID` collision bug (PR #216 / issue #217)
-that bricked Apply Journey preset and several other gameplay endpoints.
+that bricked Apply Journey preset and several other gameplay endpoints,
+and a Settings card for clearing the Legacy Admin Tool's per-battlegroup
+cache on the VM.
+
+### Added
+
+- **Remote Access (Cloudflare Tunnel + Access) didactic guide.** Decker
+  reported he couldn't follow the old one-line "authenticate, pick a Zone,
+  create a tunnel" instructions because Cloudflare's dashboard doesn't
+  surface "Zone" as an option in that flow. The marketing site's
+  `/remote/` page is now a step-by-step walkthrough: create the free
+  Cloudflare account, add your domain, create the tunnel from the **Networks
+  -> Tunnels** UI, install `cloudflared` on the Windows host, route the
+  public hostname to `http://localhost:8080`, then lock it down with a
+  one-rule Cloudflare Access policy so only your email address can sign in.
+  Linked from the top nav as **Remote**.
+
+- **Settings -> "Legacy Admin Cache" card lets you clear the standalone
+  companion tool's per-battlegroup cache on the VM without SSHing in.**
+  The standalone companion tool (decoupled from DST in 12.x) caches a
+  per-battlegroup yaml on the VM at `~/.dune/sh-<bg-id>*.yaml` and
+  reads the DB password from it. When Funcom's operator rotates the DB
+  password on a reconcile, that cache goes stale and the companion tool
+  keeps presenting the old password on `-setup` until the cache is wiped.
+  The new card shows file count + total size on the VM and a confirm-gated
+  "Clear cache" button that removes only `~/.dune/sh-*.yaml` (leaves
+  operator `bg-*.yaml` snapshots and everything else alone). Every clear
+  silently copies the affected files down to a timestamped folder under
+  `%APPDATA%\DuneServer\legacy-admin-backups\` first, so support can
+  hand-restore the prior contents on request -- there is no in-app
+  restore flow. Backed by `GET /api/dune-admin-cache` and
+  `POST /api/dune-admin-cache/clear`, which reuse the existing Sietch
+  SSH context.
 
 ### Fixed
 
@@ -46,6 +78,7 @@ that bricked Apply Journey preset and several other gameplay endpoints.
   Scrip) when the table is empty; an explicit `currency_id` override still
   wins, and the multi-row ambiguous case still requires an explicit id.
   Closes #219.
+
 - **Apply Journey preset (and several other gameplay endpoints) no longer
   fail with "Cannot overwrite variable PID because it is read-only or
   constant."** Several route/lib handlers used a local variable named `$pid`,
@@ -57,30 +90,6 @@ that bricked Apply Journey preset and several other gameplay endpoints.
   Apply Preset was the user-reported repro (Discord, 2026-06-15); the others
   were the same latent bug on Set Partition Seed, Keystones, Dungeons,
   offline teleport, and permission-player lookup. Closes #217.
-
-### Removed
-
-- **Fill Base Water (Players → Actions) has been removed.** Decker reported
-  the old implementation only refilled inventory water, never the actual
-  base cisterns. We tried two replacement paths and both are blocked by
-  game-server behaviour we can't work around from the tool:
-  - **RMQ `UpdateAllWaterFillables`** (the previous implementation) only
-    fills carried fillables in current game builds; the cistern leg of the
-    command is a no-op, which is exactly the bug Decker hit.
-  - **Direct DB write** to `dune.fgl_entities.components.FWaterStorageComponent.m_WaterStored`
-    succeeds, but the map pod holds cistern state in RAM and writes it back
-    to Postgres on its periodic save tick - any value we write gets
-    overwritten before a player sees it. Verified end-to-end against the
-    live VM: drained four cisterns to 250-331, ran the UPDATE to 100000,
-    restarted the deepdesert pod, the pod flushed its in-RAM 250-331 over
-    our 100000 on shutdown and the in-game UI still showed 250 after the
-    restart.
-  Removing the button is the honest call until a per-cistern RPC or pod
-  cache-invalidation hook becomes available. The investigation is tracked
-  in a follow-up issue. Carry-water (`Fill Water`) is unaffected and still
-  works for the player's own carried containers.
-
-
 
 ### Changed
 
@@ -95,18 +104,28 @@ that bricked Apply Journey preset and several other gameplay endpoints.
   target player is logged in or not. The action row now carries an explicit
   confirm + caption explaining what the player will receive.
 
-### Added
+### Removed
 
-- **Remote Access (Cloudflare Tunnel + Access) didactic guide.** Decker
-  reported he couldn't follow the old one-line "authenticate, pick a Zone,
-  create a tunnel" instructions because Cloudflare's dashboard doesn't
-  surface "Zone" as an option in that flow. The marketing site's
-  `/remote/` page is now a step-by-step walkthrough: create the free
-  Cloudflare account, add your domain, create the tunnel from the **Networks
-  -> Tunnels** UI, install `cloudflared` on the Windows host, route the
-  public hostname to `http://localhost:8080`, then lock it down with a
-  one-rule Cloudflare Access policy so only your email address can sign in.
-  Linked from the top nav as **Remote**.
+- **Fill Base Water (Players -> Actions) has been removed.** Decker reported
+  the old implementation only refilled inventory water, never the actual
+  base cisterns. We tried two replacement paths and both are blocked by
+  game-server behaviour we can't work around from the tool:
+  - **RMQ `UpdateAllWaterFillables`** (the previous implementation) only
+    fills carried fillables in current game builds; the cistern leg of the
+    command is a no-op, which is exactly the bug Decker hit.
+  - **Direct DB write** to `dune.fgl_entities.components.FWaterStorageComponent.m_WaterStored`
+    succeeds, but the map pod holds cistern state in RAM and writes it back
+    to Postgres on its periodic save tick - any value we write gets
+    overwritten before a player sees it. Verified end-to-end against the
+    live VM: drained four cisterns to 250-331, ran the UPDATE to 100000,
+    restarted the deepdesert pod, the pod flushed its in-RAM 250-331 over
+    our 100000 on shutdown and the in-game UI still showed 250 after the
+    restart.
+
+  Removing the button is the honest call until a per-cistern RPC or pod
+  cache-invalidation hook becomes available. The investigation is tracked
+  in #221. Carry-water (`Fill Water`) is unaffected and still works for the
+  player's own carried containers.
 
 ## [12.1.1] - 2026-06-15
 
