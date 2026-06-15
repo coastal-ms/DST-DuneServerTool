@@ -1054,7 +1054,7 @@ function VehicleKitForm({ busy, onSubmit }: {
       </div>
       <div className="rounded-lg border border-border bg-surface-2 p-3 text-sm">
         <div className="text-[11px] uppercase tracking-wider text-text-dim mb-1.5">
-          Delivers {veh.kit.length + veh.unique.length} part{veh.kit.length + veh.unique.length === 1 ? '' : 's'} (Mk6) + fuel + tool
+          Delivers {veh.kit.length + veh.unique.length} part{veh.kit.length + veh.unique.length === 1 ? '' : 's'} (Mk6) + fuel + tool — into the player's inventory (online or offline). Assemble at a Vehicle Assembly.
         </div>
         <ul className="space-y-0.5 text-text-muted">
           {veh.kit.map(tpl => (
