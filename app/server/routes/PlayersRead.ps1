@@ -78,11 +78,12 @@ Register-DuneRoute -Method GET -Path '/api/gameplay/players/export' -Handler {
 Register-DuneRoute -Method GET -Path '/api/gameplay/players/keystones' -Handler {
     param($req, $res, $routeParams, $body)
     try {
-        $pid = 0L
-        [void][Int64]::TryParse((Get-DuneQ $req 'player_id'), [ref]$pid)
-        if ($pid -le 0) { Write-DuneError -Response $res -Status 400 -Message 'player_id is required.'; return }
+        # $playerId, not $pid — $PID is a read-only automatic variable.
+        $playerId = 0L
+        [void][Int64]::TryParse((Get-DuneQ $req 'player_id'), [ref]$playerId)
+        if ($playerId -le 0) { Write-DuneError -Response $res -Status 400 -Message 'player_id is required.'; return }
         Invoke-DunePlayerReadRoute -Response $res -Request $req `
-            -LiveBlock { param($ip) Get-DunePlayerKeystonesLive -Ip $ip -PlayerId $pid } `
+            -LiveBlock { param($ip) Get-DunePlayerKeystonesLive -Ip $ip -PlayerId $playerId } `
             -DemoBlock { @{ ok = $true; keystones = @(); total = 0 } } `
             -PayloadKey 'keystones'
     } catch {
@@ -110,11 +111,12 @@ Register-DuneRoute -Method GET -Path '/api/gameplay/players/vehicles' -Handler {
 Register-DuneRoute -Method GET -Path '/api/gameplay/players/dungeons' -Handler {
     param($req, $res, $routeParams, $body)
     try {
-        $pid = 0L
-        [void][Int64]::TryParse((Get-DuneQ $req 'player_id'), [ref]$pid)
-        if ($pid -le 0) { Write-DuneError -Response $res -Status 400 -Message 'player_id is required.'; return }
+        # $playerId, not $pid — $PID is a read-only automatic variable.
+        $playerId = 0L
+        [void][Int64]::TryParse((Get-DuneQ $req 'player_id'), [ref]$playerId)
+        if ($playerId -le 0) { Write-DuneError -Response $res -Status 400 -Message 'player_id is required.'; return }
         Invoke-DunePlayerReadRoute -Response $res -Request $req `
-            -LiveBlock { param($ip) Get-DunePlayerDungeonsLive -Ip $ip -PlayerId $pid } `
+            -LiveBlock { param($ip) Get-DunePlayerDungeonsLive -Ip $ip -PlayerId $playerId } `
             -DemoBlock { @{ ok = $true; dungeons = @(); total = 0 } } `
             -PayloadKey 'dungeons'
     } catch {
