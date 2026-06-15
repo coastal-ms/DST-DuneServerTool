@@ -124,7 +124,9 @@ cache on the VM.
     showed 250 after the restart.
 
   Carry-water (`Fill Water`) is unaffected and still works for the
-  player's own carried containers.
+  player's own carried containers. If Funcom ever exposes a working
+  base-water command (per-cistern RPC, cache-invalidation hook, or a
+  fixed `UpdateAllWaterFillables`), we'll re-add the feature.
 
 ## [12.1.1] - 2026-06-15
 
