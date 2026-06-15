@@ -209,33 +209,123 @@ function Invoke-DunePlayerDeleteItem {
     return @{ ok = $true; message = "Deleted item $ItemId." }
 }
 
+# Catalog max-durability lookup for a template_id. Wraps Get-DuneGameplayItemRule
+# (gameplay-item-data.json) so a missing template returns 0.0 and the repair
+# logic falls back to the item's own three durability fields.
+function Get-DuneItemCatalogMaxDurability {
+    param([string]$TemplateId)
+    if (-not $TemplateId) { return 0.0 }
+    try {
+        $rule = Get-DuneGameplayItemRule -TemplateId $TemplateId
+        if ($null -ne $rule -and $null -ne $rule.max_durability) {
+            return [double]$rule.max_durability
+        }
+    } catch {}
+    return 0.0
+}
+
+# Format a double for inline SQL with invariant decimal separator (a comma from
+# locale-dependent formatting would break PostgreSQL number parsing).
+function Format-DuneFloatForSql {
+    param([double]$Value)
+    return $Value.ToString([System.Globalization.CultureInfo]::InvariantCulture)
+}
+
 # Repair item (repair-item): set MaxDurability/CurrentDurability/DecayedMaxDurability
-# all equal to the HIGHEST of the item's own three values ("highest number wins").
-# No catalog lookup, no hard-coded default — the item's own MaxDurability is the
-# true cap (decay only lowers Current + DecayedMax, never Max).
+# to GREATEST(catalog.max_durability, item.MaxDurability, item.CurrentDurability,
+# item.DecayedMaxDurability). The catalog (gameplay-item-data.json) carries the
+# factory-spec cap; the item's own three fields can be higher because of per-player
+# stat/perk bonuses (decay only lowers Current + DecayedMax, never Max). Taking
+# the GREATEST of all four guarantees repair never lowers an already-buffed cap
+# and never leaves a buggy item below its catalog spec. Catalog miss => fall back
+# to GREATEST of the item's three fields, same behaviour as v12.0.7-12.0.24.
 function Invoke-DunePlayerRepairItem {
     param([string]$Ip, [long]$ItemId)
+    if ($ItemId -le 0) { return @{ ok = $false; error = 'item_id is required.' } }
+
+    $infoSql = @"
+SELECT template_id,
+       COALESCE((stats->'FItemStackAndDurabilityStats'->1->>'MaxDurability')::float8, 0)        AS m,
+       COALESCE((stats->'FItemStackAndDurabilityStats'->1->>'CurrentDurability')::float8, 0)    AS c,
+       COALESCE((stats->'FItemStackAndDurabilityStats'->1->>'DecayedMaxDurability')::float8, 0) AS d
+FROM dune.items
+WHERE id = $ItemId::bigint
+  AND stats ? 'FItemStackAndDurabilityStats';
+"@
+    $info = Invoke-DuneSqlQuery -Ip $Ip -Sql $infoSql -ReadOnly $true -MaxRows 1 -TimeoutSec 30
+    if (-not $info.ok) { return @{ ok = $false; error = "repair item: $($info.error)" } }
+    $rows = @(ConvertTo-DuneRowMaps -Result $info)
+    if ($rows.Count -eq 0) {
+        return @{ ok = $true; message = "Item $ItemId has no durability block — nothing to repair." }
+    }
+    $tmpl    = [string]$rows[0]['template_id']
+    $itemMax = [double]([string]$rows[0]['m'])
+    $itemCur = [double]([string]$rows[0]['c'])
+    $itemDec = [double]([string]$rows[0]['d'])
+    $catMax  = Get-DuneItemCatalogMaxDurability -TemplateId $tmpl
+    $target  = [Math]::Max([Math]::Max([Math]::Max($catMax, $itemMax), $itemCur), $itemDec)
+    if ($target -le 0) {
+        return @{ ok = $true; message = "Item $ItemId has no usable durability value — left untouched." }
+    }
+    $tval = Format-DuneFloatForSql -Value $target
+
     $sql = @"
 UPDATE dune.items i
 SET stats = jsonb_set(jsonb_set(jsonb_set(i.stats,
-        '{FItemStackAndDurabilityStats,1,MaxDurability}',        to_jsonb(t.val), true),
-        '{FItemStackAndDurabilityStats,1,CurrentDurability}',    to_jsonb(t.val), true),
-        '{FItemStackAndDurabilityStats,1,DecayedMaxDurability}', to_jsonb(t.val), true)
-FROM (
-    SELECT GREATEST(
-        COALESCE((stats->'FItemStackAndDurabilityStats'->1->>'MaxDurability')::float8, 0),
-        COALESCE((stats->'FItemStackAndDurabilityStats'->1->>'CurrentDurability')::float8, 0),
-        COALESCE((stats->'FItemStackAndDurabilityStats'->1->>'DecayedMaxDurability')::float8, 0)
-    ) AS val
-    FROM dune.items
-    WHERE id = $ItemId::bigint
-      AND stats ? 'FItemStackAndDurabilityStats'
-) AS t
-WHERE i.id = $ItemId::bigint AND t.val > 0;
+        '{FItemStackAndDurabilityStats,1,MaxDurability}',        to_jsonb($tval::float8), true),
+        '{FItemStackAndDurabilityStats,1,CurrentDurability}',    to_jsonb($tval::float8), true),
+        '{FItemStackAndDurabilityStats,1,DecayedMaxDurability}', to_jsonb($tval::float8), true)
+WHERE i.id = $ItemId::bigint
+  AND i.stats ? 'FItemStackAndDurabilityStats';
 "@
     $res = Invoke-DuneSqlQuery -Ip $Ip -Sql $sql -ReadOnly $false -MaxRows 1 -TimeoutSec 30
     if (-not $res.ok) { return @{ ok = $false; error = $res.error } }
-    return @{ ok = $true; message = "Repaired item $ItemId to full durability." }
+    return @{ ok = $true; message = "Repaired item $ItemId to $tval durability." }
+}
+
+# Set the three FItemStackAndDurabilityStats fields directly. Per-item editor for
+# the UI: lets the operator override Max / Current / DecayedMax manually when the
+# catalog max-guess is wrong or the durability values are otherwise broken. No
+# offline gate (same as the wrench Repair button); rejects negatives, NaN, and
+# infinities. Items without a durability block are left untouched.
+function Invoke-DunePlayerSetItemDurability {
+    param(
+        [string]$Ip, [long]$ItemId,
+        [double]$Max, [double]$Current, [double]$Decayed
+    )
+    if ($ItemId -le 0) { return @{ ok = $false; error = 'item_id is required.' } }
+    foreach ($pair in @(
+            @{ n='Max';     v=$Max },
+            @{ n='Current'; v=$Current },
+            @{ n='Decayed'; v=$Decayed })) {
+        if ([double]::IsNaN($pair.v) -or [double]::IsInfinity($pair.v)) {
+            return @{ ok = $false; error = "$($pair.n) must be a finite number." }
+        }
+        if ($pair.v -lt 0) {
+            return @{ ok = $false; error = "$($pair.n) must be >= 0." }
+        }
+    }
+    $mv = Format-DuneFloatForSql -Value $Max
+    $cv = Format-DuneFloatForSql -Value $Current
+    $dv = Format-DuneFloatForSql -Value $Decayed
+
+    $sql = @"
+UPDATE dune.items i
+SET stats = jsonb_set(jsonb_set(jsonb_set(i.stats,
+        '{FItemStackAndDurabilityStats,1,MaxDurability}',        to_jsonb($mv::float8), true),
+        '{FItemStackAndDurabilityStats,1,CurrentDurability}',    to_jsonb($cv::float8), true),
+        '{FItemStackAndDurabilityStats,1,DecayedMaxDurability}', to_jsonb($dv::float8), true)
+WHERE i.id = $ItemId::bigint
+  AND i.stats ? 'FItemStackAndDurabilityStats'
+RETURNING i.id::text AS item_id;
+"@
+    $res = Invoke-DuneSqlQuery -Ip $Ip -Sql $sql -ReadOnly $false -MaxRows 1 -TimeoutSec 30
+    if (-not $res.ok) { return @{ ok = $false; error = $res.error } }
+    $affected = @(ConvertTo-DuneRowMaps -Result $res).Count
+    if ($affected -eq 0) {
+        return @{ ok = $true; message = "Item $ItemId has no durability block — nothing changed." }
+    }
+    return @{ ok = $true; message = "Set item $ItemId durability to Max=$mv / Current=$cv / DecayedMax=$dv." }
 }
 
 # Give item (give-item): stack onto a matching backpack stack or insert a new one.

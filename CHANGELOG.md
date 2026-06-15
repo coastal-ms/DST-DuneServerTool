@@ -13,6 +13,41 @@ here cover everything those tags shipped.
 
 ## [Unreleased]
 
+## [12.0.25] - 2026-06-15
+
+### Fixed
+
+- **Repair Items no longer leaves equipment below its factory-spec cap**
+  ([#209](https://github.com/coastal-ms/DST-DuneServerTool/issues/209)).
+  The per-item / Repair All / Restore Destroyed paths now compute the target
+  as `GREATEST(catalog.max_durability, item.MaxDurability, item.CurrentDurability,
+  item.DecayedMaxDurability)` instead of just `GREATEST` of the item's own
+  three fields. The bundled `gameplay-item-data.json` catalog provides the
+  factory cap (e.g. Stillsuit_T4 → 1000, Maula_Pistol → 400, healthpack →
+  100); the item's own MaxDurability still wins when it's higher because of
+  stat/perk bonuses, so buffed players don't get clamped down. Catalog
+  misses fall back to the v12.0.7 behaviour (GREATEST of the item's three
+  fields). Verified live: 959/1658 enriched templates carry a non-zero
+  durability cap.
+
+### Added
+
+- **Inline durability editor on player inventory items.** Click any item in
+  the Players → Inventory list that has the `FItemStackAndDurabilityStats`
+  nodes (the durability badge is shown, not "N/A") and the row expands
+  underneath to a 3-input editor for `MaxDurability`, `CurrentDurability`,
+  and `DecayedMaxDurability`. Two actions: **Repair (catalog max)** runs
+  the same updated `repair-item` flow; **Save** writes the three typed
+  values verbatim via the new `POST /api/gameplay/players/set-item-durability`
+  endpoint. A disclaimer at the top of the editor explains the repair
+  number is a best-guess from the bundled catalog and to edit + Save
+  manually if it's wrong. Works on online and offline players (the editor
+  shows a soft warning for online players that the change won't appear
+  in-game until relog, because the game server caches inventory in memory).
+  Gated entirely on `it.durability !== 'N/A'`, so if a future game patch
+  adds durability nodes to a new item type the editor picks it up
+  automatically — no per-template allowlist.
+
 ## [12.0.24] - 2026-06-14
 
 ### Added
