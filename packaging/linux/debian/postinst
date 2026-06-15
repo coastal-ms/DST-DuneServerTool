@@ -1,0 +1,34 @@
+#!/bin/sh
+# Dune Server — post-install hook.
+set -e
+
+case "$1" in
+    configure)
+        # Make sure the launcher and POSIX script bits are executable.
+        chmod 0755 /usr/bin/dune-server || true
+        chmod 0755 /opt/dune-server/bin/dune-server || true
+
+        cat <<'EOF'
+
+Dune Server Tool installed to /opt/dune-server.
+
+Quick start (per-user, runs in your current session):
+    dune-server                  # opens http://127.0.0.1:8765 in your browser
+
+Run at login (systemd user unit):
+    mkdir -p ~/.config/systemd/user
+    cp /opt/dune-server/packaging/linux/systemd/dune-server.service \
+       ~/.config/systemd/user/
+    systemctl --user daemon-reload
+    systemctl --user enable --now dune-server.service
+
+The per-launch URL (with auth token) is written to:
+    ~/.local/state/DuneServer/last-url.txt
+
+This is an UNTESTED port scaffold. See:
+    /opt/dune-server/LINUX-PORT-STATUS.md
+EOF
+        ;;
+esac
+
+exit 0
