@@ -207,15 +207,20 @@ PlayerInventoryStartingSize=145
     }
 }
 
-Describe 'DuneGameConfigSchema: no fictional no-op keys' -Tag 'GameConfig' {
+Describe 'DuneGameConfigSchema: m_Global*Multiplier keys restored under DuneGameMode' -Tag 'GameConfig' {
 
-    # Guards against regressing the m_Global*Multiplier keys that the reference
-    # implementation (Icehunter/dune-admin #122 / #139) proved are no-ops: they are
-    # absent from the real engine DefaultGame.ini, so DST writing them under any
-    # section header does nothing in-game (Discord report: XP / Fame / Progression
-    # multipliers had no effect). DST must not ship these dead, misleading keys.
-    It 'excludes every fictional m_Global*Multiplier key from the schema' {
-        $fictional = @(
+    # v12.1.1 restored the 10 m_Global*Multiplier keys after they were dropped
+    # in v12.0.14 on AMP-derived evidence (Icehunter/dune-admin #122/#139). The
+    # Hexaspark community ServerConfig reference (mirrored in our Chroma
+    # `infrastructure` collection under sources `hexaspark`) documents every one
+    # of these keys as a real Float setting under [/Script/DuneSandbox.DuneGameMode]
+    # with a default of 1.0; persistent notes also confirm that scalar
+    # DuneGameMode values from UserGame.ini are applied at pod startup on
+    # self-hosted Funcom k3s (DST's target). m_GlobalBuildingDamageMultiplier in
+    # particular MUST sit under DuneGameMode (Hexaspark places it there) and not
+    # under BuildingSettings, which is where v12.0.13 had it.
+    It 'includes every m_Global*Multiplier key under [/Script/DuneSandbox.DuneGameMode] and flags ClientApply' {
+        $required = @(
             'm_GlobalHealthMultiplier'
             'm_GlobalDamageToNpcsMultiplier'
             'm_GlobalDamageToPlayersMultiplier'
@@ -227,9 +232,12 @@ Describe 'DuneGameConfigSchema: no fictional no-op keys' -Tag 'GameConfig' {
             'm_GlobalBuildingDamageMultiplier'
             'm_InventoryWeightMultiplier'
         )
-        $keys = $script:DuneGameConfigSchema | ForEach-Object { $_.Key }
-        foreach ($f in $fictional) {
-            $keys | Should -Not -Contain $f -Because "$f is a proven no-op key and must not be written"
+        $byKey = @{}
+        foreach ($f in $script:DuneGameConfigSchema) { $byKey[$f.Key] = $f }
+        foreach ($k in $required) {
+            $byKey.ContainsKey($k) | Should -BeTrue -Because "$k is a real DuneGameMode multiplier and must be exposed"
+            $byKey[$k].Section     | Should -Be '/Script/DuneSandbox.DuneGameMode' -Because "$k belongs in DuneGameMode per Hexaspark"
+            $byKey[$k].ClientApply | Should -BeTrue -Because "$k is read by both server and client; admin's local Game.ini must mirror it"
         }
     }
 }
