@@ -112,15 +112,24 @@ function Get-DuneSetupPreflight {
             }
             else {
                 $ip = $vm.ip
-                $errFile = [System.IO.Path]::GetTempFileName()
-                $probe = ''
+                $probe  = ''
+                $sshErr = ''
                 try {
-                    $probe = (& ssh -o BatchMode=yes -o StrictHostKeyChecking=no -o LogLevel=ERROR `
-                                -o ConnectTimeout=6 -o PreferredAuthentications=publickey `
-                                -i $keyPath "dune@$ip" 'echo dune-ok' 2>$errFile) -join "`n"
+                    # Same hidden-window routing as the battlegroup status probe
+                    # (Get-DuneBattlegroupSnapshot). The Settings/Setup wizard
+                    # re-runs this check on each panel open + every preflight
+                    # poll, so spawning a visible conhost per call is the most
+                    # frequent flash source on the dashboard.
+                    $r = Invoke-DuneSshHidden -Ip $ip -KeyPath $keyPath -TimeoutSec 10 -SshOptions @(
+                        '-o','BatchMode=yes'
+                        '-o','StrictHostKeyChecking=no'
+                        '-o','LogLevel=ERROR'
+                        '-o','ConnectTimeout=6'
+                        '-o','PreferredAuthentications=publickey'
+                    ) -RemoteCommand 'echo dune-ok'
+                    $probe  = ($r.Stdout -join "`n")
+                    $sshErr = $r.Stderr
                 } catch { }
-                $sshErr = if (Test-Path $errFile) { (Get-Content -Raw -ErrorAction SilentlyContinue $errFile) } else { '' }
-                Remove-Item $errFile -ErrorAction SilentlyContinue
 
                 if ($probe -match 'dune-ok') {
                     $checks.Add(@{

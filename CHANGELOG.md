@@ -13,6 +13,36 @@ here cover everything those tags shipped.
 
 ## [Unreleased]
 
+## [12.0.24] - 2026-06-14
+
+### Added
+
+- **Help → Show backend console** / **Hide backend console**. There was
+  previously no UI path that brought the backend PowerShell console window
+  back to a visible foreground window once tray mode hid it. The new menu
+  item (visible only to local viewers, since the new `/api/console` route
+  is loopback-only) calls `ShowWindow(SW_RESTORE)` + `SetForegroundWindow`
+  to un-minimize and pop the console where you're looking; toggling it
+  again hides it via `SW_HIDE`. The label tracks the real window state
+  (refreshes when the Help menu opens) so it correctly says "Show" when
+  hidden / minimized and "Hide" when visible.
+
+## [12.0.23] - 2026-06-14
+
+### Fixed
+
+- **Console window no longer flashes during dashboard polling.** The
+  battlegroup-status probe (`Get-DuneBattlegroupSnapshot`) and the setup
+  preflight SSH-key check both used to shell out via `& ssh ... 2>$errFile`,
+  which silently allocated a fresh conhost window for every spawn when the
+  caller was a background runspace whose parent's hidden console handle
+  wasn't inherited. With multiple dashboard panels polling at 10–15 s, that
+  produced a steady stream of brief console flashes on top of every other
+  window. Both call sites now route through a new `Invoke-DuneSshHidden`
+  helper that uses `ProcessStartInfo` with `CreateNoWindow = $true` (same
+  pattern `Invoke-V6Ssh` has used since v10.1.14) and exposes stdout, stderr
+  and the exit code so the existing error-translation logic still works.
+
 ## [12.0.22] - 2026-06-14
 
 ### Added
