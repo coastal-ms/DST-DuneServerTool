@@ -74,7 +74,7 @@ export function Settings() {
     }
   }
   async function onClearDaCache() {
-    if (!window.confirm('Delete the dune-admin BG snapshot cache on the VM?\n\nThis removes ~/.dune/sh-*.yaml on the VM. Nothing else is touched. The companion admin tool will re-run its setup discovery (and pick up the current DB password) the next time you launch it with -setup.')) return
+    if (!window.confirm('Delete the Legacy Admin Tool cache on the VM?\n\nThis removes ~/.dune/sh-*.yaml on the VM. Nothing else is touched. The Legacy Admin Tool will re-run its setup discovery (and pick up the current DB password) the next time you launch it with -setup.')) return
     setDaClearing(true)
     setDaMsg(null)
     setDaErr(null)
@@ -407,15 +407,16 @@ export function Settings() {
               <h2 className="text-lg font-semibold">Legacy Admin Cache</h2>
             </div>
             <p className="text-sm text-text-dim">
-              The companion <span className="font-mono">dune-admin</span> tool caches a per-battlegroup snapshot on the VM
+              The Legacy Admin Tool caches a per-battlegroup snapshot on the VM
               at <span className="font-mono">~/.dune/sh-&lt;bg-id&gt;*.yaml</span> and reads the DB password from it. After
-              Funcom rotates the DB password on a reconcile, that cache goes stale and <span className="font-mono">dune-admin -setup</span> keeps
-              presenting the old password. Clearing the cache forces a fresh discovery from the live cluster on its next run.
+              Funcom rotates the DB password on a reconcile, that cache goes stale and the tool keeps
+              presenting the old password on its next <span className="font-mono">-setup</span> run. Clearing the cache forces
+              a fresh discovery from the live cluster.
             </p>
             {daCache && (
               <p className="mt-2 text-xs text-text-dim">
                 {daCache.count === 0 ? (
-                  <span>No cache files present on the VM.</span>
+                  <span>No Legacy Admin Tool cache files present on the VM.</span>
                 ) : (
                   <span>
                     {daCache.count} file{daCache.count === 1 ? '' : 's'} on the VM

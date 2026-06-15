@@ -61,7 +61,7 @@ function Clear-DuneAdminVmCache {
             ok      = $true
             cleared = 0
             files   = @()
-            message = 'No companion admin tool cache files were present on the VM.'
+            message = 'No Legacy Admin Tool cache files were present on the VM.'
         }
     }
 
@@ -89,6 +89,6 @@ function Clear-DuneAdminVmCache {
         ok      = $true
         cleared = $before.Count
         files   = $before
-        message = "Cleared $($before.Count) cache $word from ~/.dune/ on the VM."
+        message = "Cleared $($before.Count) Legacy Admin Tool $word from the VM."
     }
 }
