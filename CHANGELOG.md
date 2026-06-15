@@ -13,6 +13,21 @@ here cover everything those tags shipped.
 
 ## [Unreleased]
 
+### Added
+
+- **Market Bot — upstream Funcom pricing mode**. New "Pricing mode" tile in
+  the Market Bot header replaces the old "Legacy listings" stat; toggling
+  flips Duke between the existing **Sane** formula (100 k Solari cap, vendor
+  floor, 2× vendor ceiling) and the **Upstream** Funcom-style formula taken
+  from the pre-sane-pricing reference implementation. Upstream uses uncapped
+  tier tables (equipment T0:500…T6:750000, schematic T0:500…T6:75000,
+  stackable per-unit T0:5…T6:4000), rarity multipliers, vendor×rarity-mult
+  when the item has a vendor_price, and grade multipliers (G0…G5: 1, 1, 1.25,
+  1.5, 1.75, 2.0). Toggling in either direction wipes Duke's existing
+  listings (with a confirm) so the next list tick repopulates with the new
+  prices instead of churning. `display_cap` still caps player-facing Solari
+  when the operator opts in. Default is off (sane mode unchanged).
+
 ## [12.0.25] - 2026-06-15
 
 ### Fixed

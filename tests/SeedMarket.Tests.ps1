@@ -242,3 +242,84 @@ Describe 'Get-DuneBotItemPrice price_floor' -Tag 'MarketBot' {
         $p | Should -BeLessThan 50
     }
 }
+
+Describe 'Get-DuneBotItemPrice upstream_pricing dispatch' -Tag 'MarketBot' {
+    BeforeAll {
+        # Upstream Funcom-style pricing: vendor_price * vendor_mult(rarity), or
+        # uncapped tier tables when vendor_price is 0. Defaults pulled from the
+        # sane-pricing port spec (Section 3, "Upstream default upstream
+        # multipliers"). No 100 k cap.
+        $script:upstreamCfg = @{
+            upstream_pricing               = $true
+            price_cap                      = 100000      # sane-pricing cap that should be IGNORED in upstream mode
+            price_floor                    = 50
+            price_overrides                = @{}
+            default_unit_price             = 100
+            display_cap_enabled            = $false
+            display_cap_solari             = 100000
+            upstream_tier_equipment_prices = @{ '0' = 500; '1' = 2000; '2' = 8000; '3' = 30000; '4' = 100000; '5' = 300000; '6' = 750000 }
+            upstream_tier_schematic_prices = @{ '0' = 500; '1' = 500;  '2' = 1500; '3' = 4000;  '4' = 12000;  '5' = 30000;  '6' = 75000  }
+            upstream_stack_unit_prices     = @{ '0' = 5;   '1' = 20;   '2' = 80;   '3' = 200;   '4' = 600;    '5' = 1500;   '6' = 4000   }
+            upstream_rarity_multipliers    = @{ common = 1.0; rare = 5.0; unique = 5.0; memento = 2.0 }
+            upstream_vendor_multipliers    = @{ common = 1.0; rare = 5.0; unique = 5.0; memento = 2.0 }
+            upstream_grade_multipliers     = @(1.0, 1.0, 1.25, 1.5, 1.75, 2.0)
+        }
+    }
+
+    It 'uses vendor_price * vendor_multiplier(rarity) when vendor_price > 0' {
+        $cand = @{ template_id = 'Gear_T4'; tier = 4; rarity = 'rare'; is_stackable = $false; vendor_price = 50000; category = 'items/garment/heavyarmor' }
+        # Rare vendor mult = 5.0 -> base = 50000 * 5 = 250000, G0 unchanged.
+        $p = Get-DuneBotItemPrice -Cfg $script:upstreamCfg -Cand $cand -Grade 0
+        $p | Should -BeGreaterOrEqual 200000   # safely above the 100k sane-pricing cap
+    }
+
+    It 'falls back to equipment tier table for non-stackable gear with no vendor_price' {
+        $cand = @{ template_id = 'Gear_T5'; tier = 5; rarity = 'common'; is_stackable = $false; vendor_price = 0; category = 'items/garment/heavyarmor' }
+        # T5 equipment = 300000, common rarity = 1.0, G0 = 1.0 -> ~300000
+        $p = Get-DuneBotItemPrice -Cfg $script:upstreamCfg -Cand $cand -Grade 0
+        $p | Should -BeGreaterOrEqual 250000
+        $p | Should -BeLessOrEqual    400000
+    }
+
+    It 'falls back to schematic tier table for _schematic templates' {
+        $cand = @{ template_id = 'KarpovPistol_T6_Schematic'; tier = 6; rarity = 'common'; is_stackable = $false; vendor_price = 0; category = 'items/weapons/heavypistol' }
+        # T6 schematic = 75000 (much less than T6 equipment = 750000).
+        $p = Get-DuneBotItemPrice -Cfg $script:upstreamCfg -Cand $cand -Grade 0
+        $p | Should -BeGreaterOrEqual 50000
+        $p | Should -BeLessOrEqual    100000
+    }
+
+    It 'falls back to stack-unit table for stackables (per-unit price)' {
+        $cand = @{ template_id = 'Spice_T3'; tier = 3; rarity = 'common'; is_stackable = $true; vendor_price = 0; category = 'items/materials/spice' }
+        # T3 stack-unit = 200 per unit, common rarity = 1.0
+        $p = Get-DuneBotItemPrice -Cfg $script:upstreamCfg -Cand $cand -Grade 0
+        $p | Should -BeGreaterOrEqual 150
+        $p | Should -BeLessOrEqual    300
+    }
+
+    It 'ignores the sane-pricing 100 k cap (rare T6 schematic at G5)' {
+        $cand = @{ template_id = 'KarpovPistol_T6_Schematic'; tier = 6; rarity = 'rare'; is_stackable = $false; vendor_price = 0; category = 'items/weapons/heavypistol' }
+        # T6 schematic 75000 * rare 5.0 * G5 2.0 = 750000 — well above sane 100 k cap.
+        $p = Get-DuneBotItemPrice -Cfg $script:upstreamCfg -Cand $cand -Grade 5
+        $p | Should -BeGreaterOrEqual 500000
+    }
+
+    It 'honors per-template price_overrides (skipping the formula)' {
+        $cfg2 = @{}
+        foreach ($k in $script:upstreamCfg.Keys) { $cfg2[$k] = $script:upstreamCfg[$k] }
+        $cfg2['price_overrides'] = @{ 'SuperRareGear_T6' = 1234567 }
+        $cand = @{ template_id = 'SuperRareGear_T6'; tier = 6; rarity = 'rare'; is_stackable = $false; vendor_price = 0; category = 'items/garment/heavyarmor' }
+        $p = Get-DuneBotItemPrice -Cfg $cfg2 -Cand $cand -Grade 0
+        $p | Should -Be 1234567
+    }
+
+    It 'still honors display_cap when enabled (caps player-facing Solari)' {
+        $cfg2 = @{}
+        foreach ($k in $script:upstreamCfg.Keys) { $cfg2[$k] = $script:upstreamCfg[$k] }
+        $cfg2['display_cap_enabled'] = $true
+        $cfg2['display_cap_solari']  = 100000  # -> item_price clamp at 10000
+        $cand = @{ template_id = 'KarpovPistol_T6_Schematic'; tier = 6; rarity = 'rare'; is_stackable = $false; vendor_price = 0; category = 'items/weapons/heavypistol' }
+        $p = Get-DuneBotItemPrice -Cfg $cfg2 -Cand $cand -Grade 5
+        $p | Should -BeLessOrEqual 10000
+    }
+}

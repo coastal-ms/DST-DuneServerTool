@@ -234,6 +234,22 @@ function Get-DuneBotConfigDefaults {
         grade_multipliers    = @(1.0, 1.25, 1.55, 2.0, 2.6, 3.3)
         rarity_multipliers   = @{ common = 1.0; rare = 1.03; unique = 1.05; memento = 1.08 }
         vendor_multipliers   = @{ all = 0.95 }
+        # ----- Upstream Funcom-style pricing mode (default OFF) -----
+        # When upstream_pricing is TRUE, Get-DuneBotItemPrice routes through
+        # Get-DuneBotItemPriceUpstream which uses the original (pre sane-
+        # pricing patch) marketbot formula: vendor_price * vendor_multiplier
+        # (up to 5x for rare/unique) OR uncapped equipment/schematic/stack
+        # tier tables * rarity multiplier, then grade-multiplied. NO 100k
+        # cap; only a hard int32 safety clamp. Toggling either direction
+        # is intended to be paired with a Duke-listings wipe so the bot
+        # does not thrash old listings as "wrong price".
+        upstream_pricing               = $false
+        upstream_tier_equipment_prices = @{ '0' = 500; '1' = 2000; '2' = 8000; '3' = 30000; '4' = 100000; '5' = 300000; '6' = 750000 }
+        upstream_tier_schematic_prices = @{ '0' = 500; '1' = 500;  '2' = 1500; '3' = 4000;  '4' = 12000;  '5' = 30000;  '6' = 75000  }
+        upstream_stack_unit_prices     = @{ '0' = 5;   '1' = 20;   '2' = 80;   '3' = 200;   '4' = 600;    '5' = 1500;   '6' = 4000   }
+        upstream_rarity_multipliers    = @{ common = 1.0; rare = 5.0; unique = 5.0; memento = 2.0 }
+        upstream_vendor_multipliers    = @{ common = 1.0; rare = 5.0; unique = 5.0; memento = 2.0 }
+        upstream_grade_multipliers     = @(1.0, 1.0, 1.25, 1.5, 1.75, 2.0)
         # Per-template manual price override (template_id -> integer Solari).
         price_overrides      = @{}
         # Marker for one-time sane-defaults migration on load.
@@ -292,6 +308,7 @@ function Read-DuneBotConfig {
                         'stackables_only'      { $cfg[$k] = [bool]$v }
                         'display_cap_enabled'  { $cfg[$k] = [bool]$v }
                         'seed_from_catalog'    { $cfg[$k] = [bool]$v }
+                        'upstream_pricing'     { $cfg[$k] = [bool]$v }
                         'disabled_items'       { $cfg[$k] = @($v | ForEach-Object { [string]$_ } | Where-Object { $_ }) }
                         'target_balance'       { $cfg[$k] = [int64]$v }
                         'tier_base_prices'     { $cfg[$k] = ConvertFrom-DuneBotJsonMap -Value $v -Default $cfg[$k] -IntValues }
@@ -300,6 +317,12 @@ function Read-DuneBotConfig {
                         'rarity_multipliers'   { $cfg[$k] = ConvertFrom-DuneBotJsonMap -Value $v -Default $cfg[$k] }
                         'vendor_multipliers'   { $cfg[$k] = ConvertFrom-DuneBotJsonMap -Value $v -Default $cfg[$k] }
                         'grade_multipliers'    { $cfg[$k] = ConvertFrom-DuneBotJsonArray -Value $v -Default $cfg[$k] }
+                        'upstream_tier_equipment_prices' { $cfg[$k] = ConvertFrom-DuneBotJsonMap -Value $v -Default $cfg[$k] -IntValues }
+                        'upstream_tier_schematic_prices' { $cfg[$k] = ConvertFrom-DuneBotJsonMap -Value $v -Default $cfg[$k] -IntValues }
+                        'upstream_stack_unit_prices'     { $cfg[$k] = ConvertFrom-DuneBotJsonMap -Value $v -Default $cfg[$k] -IntValues }
+                        'upstream_rarity_multipliers'    { $cfg[$k] = ConvertFrom-DuneBotJsonMap -Value $v -Default $cfg[$k] }
+                        'upstream_vendor_multipliers'    { $cfg[$k] = ConvertFrom-DuneBotJsonMap -Value $v -Default $cfg[$k] }
+                        'upstream_grade_multipliers'     { $cfg[$k] = ConvertFrom-DuneBotJsonArray -Value $v -Default $cfg[$k] }
                         'price_overrides'      { $cfg[$k] = ConvertFrom-DuneBotJsonMap -Value $v -Default @{} -IntValues }
                         default                { $cfg[$k] = [int]$v }
                     }
@@ -370,6 +393,13 @@ function Save-DuneBotConfig {
     $v = _Get $Incoming 'rarity_multipliers';if ($null -ne $v) { $cfg['rarity_multipliers'] = ConvertFrom-DuneBotJsonMap -Value $v -Default $cfg['rarity_multipliers']}
     $v = _Get $Incoming 'vendor_multipliers';if ($null -ne $v) { $cfg['vendor_multipliers'] = ConvertFrom-DuneBotJsonMap -Value $v -Default $cfg['vendor_multipliers']}
     $v = _Get $Incoming 'grade_multipliers'; if ($null -ne $v) { $cfg['grade_multipliers']  = ConvertFrom-DuneBotJsonArray -Value $v -Default $cfg['grade_multipliers'] }
+    $v = _Get $Incoming 'upstream_pricing';                if ($null -ne $v) { $cfg['upstream_pricing'] = [bool]$v }
+    $v = _Get $Incoming 'upstream_tier_equipment_prices';  if ($null -ne $v) { $cfg['upstream_tier_equipment_prices'] = ConvertFrom-DuneBotJsonMap -Value $v -Default $cfg['upstream_tier_equipment_prices'] -IntValues }
+    $v = _Get $Incoming 'upstream_tier_schematic_prices';  if ($null -ne $v) { $cfg['upstream_tier_schematic_prices'] = ConvertFrom-DuneBotJsonMap -Value $v -Default $cfg['upstream_tier_schematic_prices'] -IntValues }
+    $v = _Get $Incoming 'upstream_stack_unit_prices';      if ($null -ne $v) { $cfg['upstream_stack_unit_prices']     = ConvertFrom-DuneBotJsonMap -Value $v -Default $cfg['upstream_stack_unit_prices']     -IntValues }
+    $v = _Get $Incoming 'upstream_rarity_multipliers';     if ($null -ne $v) { $cfg['upstream_rarity_multipliers']    = ConvertFrom-DuneBotJsonMap -Value $v -Default $cfg['upstream_rarity_multipliers']    }
+    $v = _Get $Incoming 'upstream_vendor_multipliers';     if ($null -ne $v) { $cfg['upstream_vendor_multipliers']    = ConvertFrom-DuneBotJsonMap -Value $v -Default $cfg['upstream_vendor_multipliers']    }
+    $v = _Get $Incoming 'upstream_grade_multipliers';      if ($null -ne $v) { $cfg['upstream_grade_multipliers']     = ConvertFrom-DuneBotJsonArray -Value $v -Default $cfg['upstream_grade_multipliers']   }
     $v = _Get $Incoming 'price_overrides';   if ($null -ne $v) { $cfg['price_overrides']    = ConvertFrom-DuneBotJsonMap -Value $v -Default @{} -IntValues }
 
     # die_target must be within 1..die_size to ever win.
@@ -674,26 +704,80 @@ $script:DuneBotClearChunk = 500000
 function Clear-DuneBotListings {
     $ctx = Get-DuneDbContext
     if (-not $ctx.ok) { return @{ ok = $false; error = $ctx.message } }
-    $ident = Get-DuneBotIdentity -Ip $ctx.ip
-    if (-not $ident.ok) { return @{ ok = $false; error = $ident.error } }
-    if (-not $ident.provisioned -or $ident.ownerId -le 0) {
-        return @{ ok = $true; cleared = 0; items_deleted = 0; message = 'Duke has no listings to clear.' }
+
+    # Owners to wipe: Duke (the native bot) AND Revy (legacy external bot
+    # orphans). One combined sweep so flipping pricing modes / clearing
+    # listings doesn't leave stale Revy rows behind.
+    $oidR = Invoke-DuneSqlQuery -Ip $ctx.ip -Sql "SELECT id, class FROM dune.actors WHERE class IN ('Duke','Revy')" -ReadOnly $true -MaxRows 100 -TimeoutSec 30
+    if (-not $oidR.ok) { return @{ ok = $false; error = "owner lookup: $($oidR.error)" } }
+    $ownerIds = @()
+    $ownerClasses = @{}
+    foreach ($row in (ConvertTo-DuneRowMaps -Result $oidR)) {
+        $oid = ConvertTo-DuneInt $row['id']
+        if ($oid -gt 0) {
+            $ownerIds += $oid
+            $ownerClasses[[string]$oid] = [string]$row['class']
+        }
     }
-    $o  = $ident.ownerId
-    $ex = $ident.exchangeId
+    if ($ownerIds.Count -eq 0) {
+        return @{ ok = $true; cleared = 0; items_deleted = 0; message = 'No Duke or Revy actors found; nothing to clear.' }
+    }
+    $ownerCsv = ($ownerIds -join ',')
 
-    # Resolve Duke's NPC inventory_id (the one all bot items live in). If the
-    # exchange has no inventory yet, there are no orphans to worry about.
-    $invR = Get-DuneBotScalar -Ip $ctx.ip -Sql "SELECT dune.get_exchange_inventory_id($ex)"
-    $invId = if ($invR.ok) { ConvertTo-DuneInt $invR.value } else { 0 }
+    # Collect every inventory that holds items currently listed by Duke/Revy
+    # (so items + their orphans get nuked in one pass) plus Duke's exchange
+    # inventory to preserve the old orphan-cleanup behavior even when Duke
+    # has zero active orders.
+    $invSet = New-Object System.Collections.Generic.HashSet[int64]
+    $invSql = @"
+SELECT DISTINCT i.inventory_id
+FROM dune.dune_exchange_orders o
+JOIN dune.items i ON i.id = o.item_id
+WHERE o.owner_id IN ($ownerCsv) AND o.is_npc_order = TRUE AND i.inventory_id IS NOT NULL
+"@
+    $invR = Invoke-DuneSqlQuery -Ip $ctx.ip -Sql $invSql -ReadOnly $true -MaxRows 100 -TimeoutSec 30
+    if ($invR.ok) {
+        foreach ($row in (ConvertTo-DuneRowMaps -Result $invR)) {
+            $iid = ConvertTo-DuneInt $row['inventory_id']
+            if ($iid -gt 0) { [void]$invSet.Add($iid) }
+        }
+    }
+    $ident = Get-DuneBotIdentity -Ip $ctx.ip
+    if ($ident.ok -and $ident.provisioned -and $ident.exchangeId -gt 0) {
+        $dukeInvR = Get-DuneBotScalar -Ip $ctx.ip -Sql "SELECT dune.get_exchange_inventory_id($($ident.exchangeId))"
+        if ($dukeInvR.ok) {
+            $dukeInv = ConvertTo-DuneInt $dukeInvR.value
+            if ($dukeInv -gt 0) { [void]$invSet.Add($dukeInv) }
+        }
+    }
+    $invIds = @($invSet)
 
+    # Count what's about to disappear (orders + items) for the response message.
     $before = 0L
-    $cnt = Get-DuneBotScalar -Ip $ctx.ip -Sql "SELECT COUNT(*) FROM dune.dune_exchange_orders WHERE owner_id = $o AND is_npc_order = TRUE"
+    $cnt = Get-DuneBotScalar -Ip $ctx.ip -Sql "SELECT COUNT(*) FROM dune.dune_exchange_orders WHERE owner_id IN ($ownerCsv) AND is_npc_order = TRUE"
     if ($cnt.ok) { $before = ConvertTo-DuneInt $cnt.value }
 
+    $breakdown = @{}
+    $brkSql = @"
+SELECT o.owner_id, COUNT(*) AS n
+FROM dune.dune_exchange_orders o
+WHERE o.owner_id IN ($ownerCsv) AND o.is_npc_order = TRUE
+GROUP BY o.owner_id
+"@
+    $brkR = Invoke-DuneSqlQuery -Ip $ctx.ip -Sql $brkSql -ReadOnly $true -MaxRows 100 -TimeoutSec 30
+    if ($brkR.ok) {
+        foreach ($row in (ConvertTo-DuneRowMaps -Result $brkR)) {
+            $cls = $ownerClasses[[string](ConvertTo-DuneInt $row['owner_id'])]
+            if (-not $cls) { $cls = 'unknown' }
+            $existing = if ($breakdown.ContainsKey($cls)) { [int64]$breakdown[$cls] } else { 0L }
+            $breakdown[$cls] = $existing + (ConvertTo-DuneInt $row['n'])
+        }
+    }
+
     $itemsBefore = 0L
-    if ($invId -gt 0) {
-        $ic = Get-DuneBotScalar -Ip $ctx.ip -Sql "SELECT COUNT(*) FROM dune.items WHERE inventory_id = $invId"
+    if ($invIds.Count -gt 0) {
+        $invCsv = ($invIds -join ',')
+        $ic = Get-DuneBotScalar -Ip $ctx.ip -Sql "SELECT COUNT(*) FROM dune.items WHERE inventory_id IN ($invCsv)"
         if ($ic.ok) { $itemsBefore = ConvertTo-DuneInt $ic.value }
     }
 
@@ -702,31 +786,32 @@ function Clear-DuneBotListings {
 BEGIN;
 DELETE FROM dune.dune_exchange_sell_orders WHERE order_id IN (
   SELECT id FROM dune.dune_exchange_orders
-  WHERE owner_id = $o AND is_npc_order = TRUE
+  WHERE owner_id IN ($ownerCsv) AND is_npc_order = TRUE
 );
-DELETE FROM dune.dune_exchange_orders WHERE owner_id = $o AND is_npc_order = TRUE;
+DELETE FROM dune.dune_exchange_orders WHERE owner_id IN ($ownerCsv) AND is_npc_order = TRUE;
 COMMIT;
 "@
     $w = Invoke-DuneSqlQuery -Ip $ctx.ip -Sql $sqlOrders -ReadOnly $false -MaxRows 5 -TimeoutSec 600 -Bulk
     if (-not $w.ok) { return @{ ok = $false; error = "orders: $($w.error)" } }
 
-    # ---- Step 2: nuke ALL items in Duke's inventory (orphans + the rows we
-    # just dereferenced). Small inventories run in one shot; big ones loop
+    # ---- Step 2: nuke ALL items in Duke/Revy inventories (orphans + the rows
+    # we just dereferenced). Small inventories run in one shot; big ones loop
     # with autocommit so each batch fits under the SSH timeout.
     $itemsDeleted = 0L
-    if ($invId -gt 0 -and $itemsBefore -gt 0) {
+    if ($invIds.Count -gt 0 -and $itemsBefore -gt 0) {
+        $invCsv = ($invIds -join ',')
         if ($itemsBefore -le $script:DuneBotClearChunk) {
-            $sqlItems = "BEGIN; DELETE FROM dune.items WHERE inventory_id = $invId; COMMIT;"
+            $sqlItems = "BEGIN; DELETE FROM dune.items WHERE inventory_id IN ($invCsv); COMMIT;"
             $w2 = Invoke-DuneSqlQuery -Ip $ctx.ip -Sql $sqlItems -ReadOnly $false -MaxRows 5 -TimeoutSec 600 -Bulk
             if (-not $w2.ok) { return @{ ok = $false; error = "items: $($w2.error)"; cleared = $before } }
             $itemsDeleted = $itemsBefore
         } else {
             $batch = $script:DuneBotClearChunk
             for ($pass = 0; $pass -lt 100; $pass++) {
-                $sqlBatch = "DELETE FROM dune.items WHERE id IN (SELECT id FROM dune.items WHERE inventory_id = $invId LIMIT $batch);"
+                $sqlBatch = "DELETE FROM dune.items WHERE id IN (SELECT id FROM dune.items WHERE inventory_id IN ($invCsv) LIMIT $batch);"
                 $w3 = Invoke-DuneSqlQuery -Ip $ctx.ip -Sql $sqlBatch -ReadOnly $false -MaxRows 5 -TimeoutSec 600 -Bulk
                 if (-not $w3.ok) { return @{ ok = $false; error = "items batch $($pass+1): $($w3.error)"; cleared = $before; items_deleted = $itemsDeleted } }
-                $remR = Get-DuneBotScalar -Ip $ctx.ip -Sql "SELECT COUNT(*) FROM dune.items WHERE inventory_id = $invId"
+                $remR = Get-DuneBotScalar -Ip $ctx.ip -Sql "SELECT COUNT(*) FROM dune.items WHERE inventory_id IN ($invCsv)"
                 $remaining = if ($remR.ok) { ConvertTo-DuneInt $remR.value } else { 0 }
                 $itemsDeleted = $itemsBefore - $remaining
                 if ($remaining -le 0) { break }
@@ -735,19 +820,28 @@ COMMIT;
     }
 
     $orphans = [Math]::Max(0L, $itemsDeleted - $before)
+    $parts = @()
+    foreach ($cls in @('Duke','Revy')) {
+        if ($breakdown.ContainsKey($cls) -and [int64]$breakdown[$cls] -gt 0) {
+            $parts += "$($breakdown[$cls]) from $cls"
+        }
+    }
+    $detail = if ($parts.Count -gt 0) { ' (' + ($parts -join ', ') + ')' } else { '' }
     $msg = if ($orphans -gt 0) {
-        "Cleared $before listing(s); also removed $orphans orphan item(s) from inventory $invId."
+        "Cleared $before listing(s)$detail; also removed $orphans orphan item(s)."
     } else {
-        "Cleared $before listing(s)."
+        "Cleared $before listing(s)$detail."
     }
     Invoke-DuneMarketItemsCacheBust
     return @{
-        ok            = $true
-        cleared       = $before
-        items_deleted = $itemsDeleted
-        orphans       = $orphans
-        inventory_id  = $invId
-        message       = $msg
+        ok                = $true
+        cleared           = $before
+        items_deleted     = $itemsDeleted
+        orphans           = $orphans
+        inventory_ids     = $invIds
+        owner_classes     = @($ownerClasses.Values | Sort-Object -Unique)
+        cleared_by_class  = $breakdown
+        message           = $msg
     }
 }
 
@@ -1100,11 +1194,80 @@ function Get-DuneBotRoundedPrice {
     return [int][Math]::Round($Price)
 }
 
+# Upstream (pre-sane-pricing patch) Funcom-style pricer. Mirrors the original
+# upstream marketbot reference implementation `basePrice` algorithm:
+#   * Per-template override wins outright (clamped to int32 safety only).
+#   * If the candidate has vendor_price > 0: base = vendor_price * vendor_mult(rarity).
+#   * Else stackable:                       base = stack_unit_price(tier) * rarity_mult.
+#   * Else non-stackable schematic:         base = schematic_tier_price(tier) * rarity_mult.
+#   * Else non-stackable gear:              base = equipment_tier_price(tier) * rarity_mult.
+# Then graded: price = base * upstream_grade_multipliers[Grade].
+# No 100k sane-pricing cap; only an int32 safety ceiling. display_cap (if the
+# operator opted in) still clamps the player-facing Solari number.
+function Get-DuneBotItemPriceUpstream {
+    param([hashtable]$Cfg, [hashtable]$Cand, [int]$Grade = 0)
+    $overrides = [hashtable]$Cfg.price_overrides
+    if ($overrides -and $overrides.ContainsKey($Cand.template_id)) {
+        $ovr = [double]$overrides[$Cand.template_id]
+        if ($ovr -lt 1) { $ovr = 1 }
+        if ($ovr -gt 2147483647) { $ovr = 2147483647 }
+        return [int][Math]::Round($ovr)
+    }
+    $rarity = ([string]$Cand.rarity).ToLower()
+    $rm = [hashtable]$Cfg.upstream_rarity_multipliers
+    $rarityMult = if ($rm -and $rm.ContainsKey($rarity)) { [double]$rm[$rarity] } else { 1.0 }
+    $vm = [hashtable]$Cfg.upstream_vendor_multipliers
+    $vendorMult = if ($vm -and $vm.ContainsKey($rarity)) { [double]$vm[$rarity] } else { 1.0 }
+    $vp = [int]$Cand.vendor_price
+    $base = 0.0
+    if ($vp -gt 0) {
+        $base = [double]$vp * $vendorMult
+    } else {
+        $tierKey = [string]([int]$Cand.tier)
+        $tbl = $null
+        if ($Cand.is_stackable) {
+            $tbl = [hashtable]$Cfg.upstream_stack_unit_prices
+        } else {
+            $tmplLc = ([string]$Cand.template_id).ToLower()
+            $cat    = ([string]$Cand.category).ToLower()
+            $isSchem = $tmplLc.EndsWith('_schematic') -or ($cat -match 'schematic')
+            if ($isSchem) {
+                $tbl = [hashtable]$Cfg.upstream_tier_schematic_prices
+            } else {
+                $tbl = [hashtable]$Cfg.upstream_tier_equipment_prices
+            }
+        }
+        $unit = [double]$Cfg.default_unit_price
+        if ($tbl -and $tbl.ContainsKey($tierKey)) { $unit = [double]$tbl[$tierKey] }
+        $base = $unit * $rarityMult
+    }
+    $gm = @($Cfg.upstream_grade_multipliers)
+    $g = 1.0
+    if ($Grade -ge 0 -and $Grade -lt $gm.Count) { $g = [double]$gm[$Grade] }
+    $price = $base * $g
+    $rounded = Get-DuneBotRoundedPrice -Price $price
+    if ([bool]$Cfg.display_cap_enabled) {
+        $displayCapItemPrice = [int][Math]::Floor([double]$Cfg.display_cap_solari / 10.0)
+        if ($displayCapItemPrice -lt 1) { $displayCapItemPrice = 1 }
+        if ($rounded -gt $displayCapItemPrice) { $rounded = $displayCapItemPrice }
+    }
+    if ($rounded -gt 2147483647) { $rounded = 2147483647 }
+    if ($rounded -lt 1) { $rounded = 1 }
+    return [int]$rounded
+}
+
 # Per-stack listing price (returns the item_price column value — player-facing
 # Solari is item_price * 10). Respects per-template override, then sane-pricing
 # tier/category/rarity formula, vendor floor (vendor*0.95) and 2x vendor ceiling.
 function Get-DuneBotItemPrice {
     param([hashtable]$Cfg, [hashtable]$Cand, [int]$Grade = 0)
+    # Dispatch to the upstream Funcom-style pricer when the operator has
+    # toggled out of sane-pricing. Upstream skips the 100k cap and uses
+    # vendor_price * vendor_multiplier (up to 5x for rare/unique) or the
+    # original equipment / schematic / stack-unit tier tables.
+    if ([bool]$Cfg.upstream_pricing) {
+        return Get-DuneBotItemPriceUpstream -Cfg $Cfg -Cand $Cand -Grade $Grade
+    }
     $cap = [int]$Cfg.price_cap
     $floorCfg = if ($Cfg.ContainsKey('price_floor')) { [int]$Cfg.price_floor } else { 50 }
     $overrides = [hashtable]$Cfg.price_overrides

@@ -4,7 +4,7 @@ import { ItemPicker } from '../../components/ItemPicker'
 import {
   getBotStatus, getBotConfig, saveBotConfig, runBotTick, runBotListTick,
   startBotSeedMarket, abortBotSeedMarket, botExec,
-  setBotBalance, clearBotListings, clearBotLegacyListings, clearBotError, getBotVendorSnapshot,
+  setBotBalance, clearBotListings, clearBotError, getBotVendorSnapshot,
   type BotStatus, type BotConfig, type BotTickResult, type BotListTickResult,
   type BotSeedProgress,
   type BotVendorCandidate,
@@ -40,7 +40,7 @@ export function MarketBotTab() {
   const [seedLaunchError, setSeedLaunchError] = useState<string | null>(null)
   const [balanceBusy, setBalanceBusy] = useState(false)
   const [clearing, setClearing] = useState(false)
-  const [clearingLegacy, setClearingLegacy] = useState(false)
+  const [togglingPricing, setTogglingPricing] = useState(false)
   const [snapshot, setSnapshot] = useState<BotVendorCandidate[] | null>(null)
   const [snapshotLoading, setSnapshotLoading] = useState(false)
   const [sub, setSub] = useState<SubTab>('buy')
@@ -86,35 +86,6 @@ export function MarketBotTab() {
 
   const toggleEnabled = async (v: boolean) => {
     setError(null)
-    // When the operator enables Duke and the live DB still has NPC orders
-    // from a previous bot (Revy from the upstream Go bot, or anything else
-    // that isn't a clean Duke actor), offer to wipe them right now. Two
-    // bots fighting over the same exchange is the #1 source of mislabeled
-    // listings in-game, so we make this front-and-center on enable.
-    if (v) {
-      const refreshed = await getBotStatus().catch(() => null)
-      if (refreshed) setStatus(refreshed)
-      const legacy = refreshed?.legacy_listings_count ?? status?.legacy_listings_count ?? 0
-      if (legacy > 0) {
-        const breakdown = (refreshed?.listings_by_class ?? status?.listings_by_class ?? [])
-          .filter(b => b.class !== 'Duke')
-          .map(b => `  • ${b.class}: ${fmtNum(b.count)}`)
-          .join('\n')
-        const msg = `Heads up — the live exchange already has ${fmtNum(legacy)} NPC listings from a previous bot:\n\n${breakdown}\n\nThese will keep showing up in-game alongside Duke's listings unless they're removed. Wipe them now before starting Duke?\n\n(Player listings and Duke's own listings are NOT affected. This cannot be undone.)`
-        if (window.confirm(msg)) {
-          setClearingLegacy(true)
-          try {
-            const r = await clearBotLegacyListings()
-            setSaveMsg(r.message ?? `Cleared ${fmtNum(r.cleared)} legacy NPC listings.`)
-          } catch (e) {
-            setError(e instanceof Error ? e.message : String(e))
-            setClearingLegacy(false)
-            return
-          }
-          setClearingLegacy(false)
-        }
-      }
-    }
     try {
       await botExec(v ? 'start' : 'stop')
       if (draft) setDraft({ ...draft, enabled: v })
@@ -237,17 +208,31 @@ export function MarketBotTab() {
     finally { setClearing(false) }
   }
 
-  const clearLegacy = async () => {
-    const n = status?.legacy_listings_count ?? 0
-    if (n <= 0) { setSaveMsg('No legacy (non-Duke) NPC listings to clear.'); return }
-    if (!window.confirm(`Permanently delete ${fmtNum(n)} legacy NPC market listings (any actor whose class is NOT Duke — e.g. leftover Revy orders from the old external bot)?\n\nPlayer listings and Duke's own listings are NOT affected. This cannot be undone.`)) return
-    setClearingLegacy(true); setError(null); setSaveMsg(null)
+  // Switch between sane-pricing (100k cap, tier×category×rarity) and upstream
+  // Funcom-style pricing (vendor×rarity up to 5×, uncapped). Either direction
+  // wipes Duke's current listings so the new prices replace them on the next
+  // list tick instead of triggering a thrash where every listing is flagged as
+  // "wrong price" and recreated piecemeal.
+  const togglePricingMode = async (toUpstream: boolean) => {
+    if (!draft) return
+    const msg = toUpstream
+      ? "Switch Duke to UPSTREAM Funcom pricing?\n\nThis pricing uses vendor_price × rarity (up to 5× for rare/unique) plus the original equipment/schematic/stack tier tables — UNCAPPED. A T6 schematic Flawless can list for hundreds of thousands of Solari.\n\nAll of Duke's current listings will be WIPED so the new prices replace them on the next list tick. This cannot be undone.\n\nProceed?"
+      : "Switch Duke back to SANE pricing (100,000 Solari hard cap)?\n\nAll of Duke's current listings will be WIPED so the new prices replace them on the next list tick. This cannot be undone.\n\nProceed?"
+    if (!window.confirm(msg)) return
+    setTogglingPricing(true); setError(null); setSaveMsg(null)
     try {
-      const r = await clearBotLegacyListings()
-      setSaveMsg(r.message ?? `Cleared ${fmtNum(r.cleared)} legacy NPC listings.`)
+      const next = { ...draft, upstream_pricing: toUpstream }
+      const saved = await saveBotConfig(next)
+      setConfig(saved); setDraft(structuredClone(saved))
+      const r = await clearBotListings()
+      let cleared = `Switched to ${toUpstream ? 'upstream' : 'sane'} pricing — cleared ${fmtNum(r.cleared)} of Duke's listings.`
+      if (r.orphans && r.orphans > 0) {
+        cleared = `${cleared} (Removed ${fmtNum(r.orphans)} orphan item(s) from inventory ${r.inventory_id ?? '?'}.)`
+      }
+      setSaveMsg(`${cleared} Duke will repopulate on the next list tick.`)
       getBotStatus().then(setStatus).catch(() => {})
     } catch (e) { setError(e instanceof Error ? e.message : String(e)) }
-    finally { setClearingLegacy(false) }
+    finally { setTogglingPricing(false) }
   }
 
   const loadSnapshot = async () => {
@@ -263,39 +248,10 @@ export function MarketBotTab() {
     return <div className="text-text-dim py-8 text-center"><Icon name="Loader2" size={20} className="animate-spin inline" /> Loading bot…</div>
   }
 
-  const legacyCount = status?.legacy_listings_count ?? 0
+  const upstreamPricing = !!draft?.upstream_pricing
 
   return (
     <div>
-      {/* Persistent warning: bot is running but the exchange still has
-          listings from another bot. Stays visible until legacy_count is 0. */}
-      {status?.enabled && legacyCount > 0 && (
-        <div className="card p-3 mb-4 border-l-4 border-warning bg-warning/10 flex items-start gap-3">
-          <Icon name="TriangleAlert" size={18} className="text-warning shrink-0 mt-0.5" />
-          <div className="flex-1 min-w-0">
-            <div className="text-sm font-semibold text-warning">
-              Duke is running alongside {fmtNum(legacyCount)} legacy NPC listings from a previous bot.
-            </div>
-            <div className="text-xs text-text-muted mt-1">
-              Players will see both sets in-game until these are cleared. Wipe them so Duke owns the exchange cleanly.
-              {(() => {
-                const others = (status.listings_by_class ?? []).filter(b => b.class !== 'Duke')
-                if (others.length === 0) return null
-                return (
-                  <span className="ml-1">
-                    Affected actor{others.length > 1 ? 's' : ''}: {others.map(b => `${b.class} (${fmtNum(b.count)})`).join(', ')}.
-                  </span>
-                )
-              })()}
-            </div>
-          </div>
-          <button className="btn-primary text-xs shrink-0" disabled={clearingLegacy} onClick={() => { void clearLegacy() }}>
-            <Icon name={clearingLegacy ? 'Loader2' : 'Trash2'} size={13} className={clearingLegacy ? 'animate-spin' : ''} />
-            {' '}Wipe legacy ({fmtNum(legacyCount)})
-          </button>
-        </div>
-      )}
-
       <div className="card p-3 mb-4 text-xs text-text-muted border-l-2 border-accent flex items-start gap-2">
         <Icon name="Info" size={14} className="text-accent shrink-0 mt-0.5" />
         <span>
@@ -304,7 +260,10 @@ export function MarketBotTab() {
           {' '}<span className="font-mono text-accent">d{draft?.die_size ?? 12}</span>; only a roll of
           {' '}<span className="font-mono text-accent">{draft?.die_target ?? 5}</span> buys the item.
           On each <span className="text-text">list tick</span> Duke tops up its own NPC sell orders for items already on
-          the live vendor inventory, priced via the sane-pricing rules (100 k Solari hard cap).
+          the live vendor inventory, priced via the
+          {' '}<span className={`font-semibold ${upstreamPricing ? 'text-warning' : 'text-success'}`}>
+            {upstreamPricing ? 'upstream Funcom (uncapped)' : 'sane-pricing (100 k Solari cap)'}
+          </span> rules.
           Writes go straight to the live game DB — dry-run first.
         </span>
       </div>
@@ -324,9 +283,28 @@ export function MarketBotTab() {
         <StatCard label="Duke listings" value={fmtNum(status?.listing_count)} icon="Tags"
           sub={status?.listings_npc_total != null ? `${fmtNum(status.listings_npc_total)} NPC total` : undefined} />
         <StatCard label="Balance" value={status?.balance != null ? fmtSolari(status.balance) : '—'} icon="Coins" />
-        <StatCard label="Legacy listings" value={fmtNum(legacyCount)} icon="TriangleAlert"
-          tone={legacyCount > 0 ? 'text-warning' : 'text-text-dim'}
-          sub={legacyCount > 0 ? 'non-Duke NPC orders' : 'all NPC orders are Duke'} />
+        {/* Pricing-mode toggle card. Replaces the legacy-listings stat tile.
+            Click cycles between sane and upstream after a confirm + wipe. */}
+        <div className="card p-3 flex flex-col">
+          <div className="flex items-center justify-between">
+            <span className="text-xs uppercase tracking-wider text-text-dim">Pricing mode</span>
+            <Icon name={upstreamPricing ? 'TriangleAlert' : 'ShieldCheck'} size={15}
+              className={upstreamPricing ? 'text-warning' : 'text-success'} />
+          </div>
+          <div className={`mt-1 text-xl font-semibold ${upstreamPricing ? 'text-warning' : 'text-success'}`}>
+            {upstreamPricing ? 'Upstream' : 'Sane'}
+          </div>
+          <div className="text-[11px] text-text-dim mb-2">
+            {upstreamPricing ? 'vendor × rarity, uncapped' : '100 k Solari cap'}
+          </div>
+          <button className="btn-secondary text-[11px] self-start" disabled={togglingPricing || !draft}
+            onClick={() => { void togglePricingMode(!upstreamPricing) }}
+            title="Wipes Duke's listings and switches the pricing formula. The new prices take effect on the next list tick.">
+            <Icon name={togglingPricing ? 'Loader2' : 'ArrowLeftRight'} size={12}
+              className={togglingPricing ? 'animate-spin' : ''} />
+            {' '}{togglingPricing ? 'Switching…' : (upstreamPricing ? 'Switch to sane' : 'Switch to upstream')}
+          </button>
+        </div>
       </section>
 
       {/* Last tick timestamps */}
@@ -342,13 +320,6 @@ export function MarketBotTab() {
         <div className="card p-3 mb-4">
           <div className="flex items-center justify-between mb-2">
             <span className="text-xs uppercase tracking-wider text-text-dim">NPC listings by actor class</span>
-            {legacyCount > 0 && (
-              <button className="btn-secondary text-xs" disabled={clearingLegacy} onClick={() => { void clearLegacy() }}
-                title="Permanently delete NPC orders whose actor class is not Duke (e.g. legacy Revy orphans).">
-                <Icon name={clearingLegacy ? 'Loader2' : 'Trash2'} size={13} className={clearingLegacy ? 'animate-spin' : ''} />
-                {' '}Wipe legacy ({fmtNum(legacyCount)})
-              </button>
-            )}
           </div>
           <div className="flex flex-wrap gap-2">
             {status.listings_by_class.map(b => (

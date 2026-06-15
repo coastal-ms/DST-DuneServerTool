@@ -149,6 +149,18 @@ export interface BotPricingConfig {
   rarity_multipliers: Record<string, number>
   vendor_multipliers: Record<string, number>
   price_overrides: Record<string, number>
+  // Upstream Funcom-style pricing mode (default OFF). When upstream_pricing is
+  // true the bot routes Get-DuneBotItemPrice through the pre-sane-pricing
+  // formula: vendor_price * vendor_mult(rarity) (up to 5x for rare/unique) or
+  // uncapped equipment / schematic / stack tier tables * rarity_mult, then
+  // graded. No 100k Solari cap.
+  upstream_pricing: boolean
+  upstream_tier_equipment_prices: Record<string, number>
+  upstream_tier_schematic_prices: Record<string, number>
+  upstream_stack_unit_prices: Record<string, number>
+  upstream_rarity_multipliers: Record<string, number>
+  upstream_vendor_multipliers: Record<string, number>
+  upstream_grade_multipliers: number[]
 }
 
 export interface BotConfig extends Partial<BotPricingConfig> {
