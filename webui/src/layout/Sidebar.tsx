@@ -182,8 +182,8 @@ export function Sidebar({ collapsed }: Props) {
           title="Support development — Buy Me a Coffee"
           className={
             collapsed
-              ? 'w-full flex items-center justify-center h-8 rounded-md border border-amber-400/30 text-amber-300/90 hover:text-amber-200 hover:bg-amber-400/10 hover:border-amber-400/50 transition-colors'
-              : 'w-full flex items-center justify-center gap-1.5 px-2 py-1.5 rounded-md border border-amber-400/30 text-amber-300/90 hover:text-amber-200 hover:bg-amber-400/10 hover:border-amber-400/50 transition-colors uppercase tracking-widest'
+              ? 'w-full flex items-center justify-center h-8 rounded-md border border-warning/50 text-warning hover:bg-warning/15 hover:border-warning/70 transition-colors'
+              : 'w-full flex items-center justify-center gap-1.5 px-2 py-1.5 rounded-md border border-warning/50 text-warning hover:bg-warning/15 hover:border-warning/70 transition-colors uppercase tracking-widest font-semibold'
           }
         >
           <Icon name="Coffee" size={collapsed ? 14 : 11} />
