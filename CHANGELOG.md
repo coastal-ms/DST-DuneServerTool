@@ -17,18 +17,22 @@ here cover everything those tags shipped.
 
 ### Added
 
-- **Settings -> "dune-admin VM cache" card lets you clear the standalone
-  dune-admin companion tool's per-battlegroup cache on the VM without
-  SSHing in.** The standalone companion tool (decoupled from DST in 12.x)
-  caches a per-battlegroup yaml on the VM at `~/.dune/sh-<bg-id>*.yaml` and
+- **Settings -> "Legacy Admin Cache" card lets you clear the standalone
+  companion tool's per-battlegroup cache on the VM without SSHing in.**
+  The standalone companion tool (decoupled from DST in 12.x) caches a
+  per-battlegroup yaml on the VM at `~/.dune/sh-<bg-id>*.yaml` and
   reads the DB password from it. When Funcom's operator rotates the DB
   password on a reconcile, that cache goes stale and the companion tool
   keeps presenting the old password on `-setup` until the cache is wiped.
   The new card shows file count + total size on the VM and a confirm-gated
   "Clear cache" button that removes only `~/.dune/sh-*.yaml` (leaves
-  operator `bg-*.yaml` snapshots and everything else alone). Backed by
-  `GET /api/dune-admin-cache` and `POST /api/dune-admin-cache/clear`,
-  which reuse the existing Sietch SSH context.
+  operator `bg-*.yaml` snapshots and everything else alone). Every clear
+  silently copies the affected files down to a timestamped folder under
+  `%APPDATA%\DuneServer\legacy-admin-backups\` first, so support can
+  hand-restore the prior contents on request -- there is no in-app
+  restore flow. Backed by `GET /api/dune-admin-cache` and
+  `POST /api/dune-admin-cache/clear`, which reuse the existing Sietch
+  SSH context.
 
 ### Fixed
 
