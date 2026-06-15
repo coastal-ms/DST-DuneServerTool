@@ -10,8 +10,8 @@
 
 **🌐 Website & feature tour: [coastal-ms.github.io/DST-DuneServerTool](https://coastal-ms.github.io/DST-DuneServerTool/)** — screenshots, install guide, and the full changelog.
 
-The current release is **v12.0.19**. The in-app version label and the
-website show plain semver tags (e.g. `v12.0.18`) — the previous
+The current release is **v12.0.24**. The in-app version label and the
+website show plain semver tags (e.g. `v12.0.24`) — the previous
 Roman-numeral stylization has been removed.
 
 > ## ✅ Confirmed compatible with Dune: Awakening **1.4.5.0**
@@ -30,6 +30,54 @@ the sidebar's **Web Portal** button hands the portal off to your default
 browser and keeps the server running in the background.
 
 ![Server Health](docs/img/server-health.png)
+
+### New in v12.0.20–v12.0.24
+
+- **Fill Base Water** Player Action (v12.0.21, Inventory section, next to Fill
+  Water) — tops up all water containers in a player's **own** bases (Water
+  Cisterns, Windtraps) plus their carried fillables in one click. Routes
+  through the per-player `UpdateAllWaterFillables` game command keyed by the
+  player's FLS id, so it only ever affects **that** player's own containers —
+  never other players' bases. Online-only: offline players are rejected with
+  a clear message and the button shows a **LIVE REQ'D** badge while they're
+  offline.
+- **Help → Show / Hide backend console** (v12.0.24) — the first UI path that
+  un-minimizes and restores the backend PowerShell console window once tray
+  mode has hidden it. Backed by a new loopback-only `/api/console` route that
+  calls `ShowWindow(SW_RESTORE)` + `SetForegroundWindow`. The menu label
+  tracks the real window state (refreshed when the Help menu opens), so it
+  correctly reads "Show backend console" whenever the window is hidden *or*
+  minimized to the taskbar.
+- **Add Item search** (v12.0.20) — the picker's results popup now scrolls
+  correctly to the last match (was clipped behind the next section before, so
+  later catalog rows were unreachable) and the catalog gained **552 missing
+  templates** (1294 → 1846 entries). Raw resources like **Spice Sand**,
+  **Water**, and **Plant Fiber**, plus many garments, vehicle modules,
+  weapons, and components, are now searchable and giveable.
+- **Website link** in the menu bar (v12.0.22) — a right-aligned "Website"
+  item opens the project's marketing site in your default browser.
+
+#### Fixes
+
+- **Console window no longer flashes during dashboard polling** (v12.0.23).
+  The battlegroup-status probe (`Get-DuneBattlegroupSnapshot`) and the setup
+  preflight SSH-key check both used to shell out via `& ssh ... 2>$errFile`,
+  which silently allocated a fresh conhost window for every spawn when the
+  caller was a background runspace whose parent's hidden console handle
+  wasn't inherited. With multiple dashboard panels polling at 10–15 s, that
+  produced a steady stream of brief console flashes on top of every other
+  window. Both call sites now route through a new `Invoke-DuneSshHidden`
+  helper (sibling of `Invoke-V6Ssh`) using `ProcessStartInfo` with
+  `CreateNoWindow = $true`.
+- **Market Bot** (v12.0.20–v12.0.21) — fixed `dune_exchange_orders_access_point_id_fkey`
+  foreign-key violation when enabling the bot or clicking **Seed Market** on
+  servers with no bot orders yet (fresh battlegroups, or upgrades from
+  pre-`dune-admin`-removal builds). Access-point resolution now cascades
+  through the authoritative `dune_exchange_accesspoints` table at every
+  tier. Stackable raw resources (e.g. **Plastone**, **Plastanium Ingot**)
+  now list in their full catalog stack instead of single-item listings, and
+  a new opt-in **displayed-Solari-price cap** lets you clamp listing prices
+  below the implicit `item_price × 10` ceiling.
 
 ### New in v12.0.19
 
