@@ -481,22 +481,23 @@ Register-DuneRoute -Method POST -Path '/api/gameplay/players/fill-water' -Handle
     }
 }
 
-# v12.0.21 — POST /api/gameplay/players/fill-base-water  { pawn_id|actor_id|fls_id, water_amount? }
-# Fills all water containers in the player's OWN bases (cisterns, windtraps) plus
-# their carried fillables. Cistern/windtrap water is live game state with no
-# per-cistern DB column, so this is online-only via RMQ UpdateAllWaterFillables.
-# The command is keyed by the one player's FLS id, so it only ever touches THAT
-# player's own containers — never other players' bases. Offline players are
-# rejected with a clear message (nothing to write).
+# v12.1.2 — POST /api/gameplay/players/fill-base-water  { pawn_id|actor_id|fls_id, water_amount? }
+# Fills all water CISTERNS on the player's OWN bases by writing directly to
+# dune.fgl_entities.components (FWaterStorageComponent.m_WaterStored). Ownership
+# is scoped via permission_actor_rank.rank=1 (the totem's primary owner), so it
+# only ever touches THAT player's own cisterns - never other players' bases.
+# Works regardless of online/offline status. The amount is clamped per tier
+# (5k small / 25k medium / 100k large) so we never exceed in-game capacity.
+# Windtraps/BloodWaterExtractors are intentionally skipped (they GENERATE water
+# via filter consumables, they don't store it).
 Register-DuneRoute -Method POST -Path '/api/gameplay/players/fill-base-water' -Handler {
     param($req, $res, $routeParams, $body)
     try {
         $pawn = Get-DuneBodyInt -Body $body -Name 'pawn_id'
         if (-not $pawn) { $pawn = Get-DuneBodyInt -Body $body -Name 'actor_id' }
         if (-not $pawn) { $pawn = Get-DuneBodyInt -Body $body -Name 'id' }
-        $fls  = [string](Get-DuneBodyValue -Body $body -Name 'fls_id')
-        if ((-not $pawn -or $pawn -le 0) -and [string]::IsNullOrWhiteSpace($fls)) {
-            Write-DuneError -Response $res -Status 400 -Message 'pawn_id (actor id) or fls_id is required.'
+        if (-not $pawn -or $pawn -le 0) {
+            Write-DuneError -Response $res -Status 400 -Message 'pawn_id (actor id) is required.'
             return
         }
         $amt = Get-DuneBodyInt -Body $body -Name 'water_amount'
@@ -504,14 +505,7 @@ Register-DuneRoute -Method POST -Path '/api/gameplay/players/fill-base-water' -H
 
         Invoke-DunePlayerWriteRoute -Response $res -Action {
             param($ip)
-            # Base/cistern water is live game state — require the player online.
-            if ([string]::IsNullOrWhiteSpace($fls) -and $pawn -gt 0) {
-                $off = Test-DunePlayerOffline -Ip $ip -PawnId $pawn
-                if ($off.ok) {
-                    return @{ ok = $false; error = 'Player must be online to fill base water. Cistern/windtrap water is live game state with no offline DB path — ask them to log in, then fill.' }
-                }
-            }
-            Invoke-DunePlayerFillBaseWaterLive -Ip $ip -FlsId $fls -ActorId ([long]$pawn) -WaterAmount ([int]$amt)
+            Invoke-DunePlayerFillBaseWater -Ip $ip -PawnId ([long]$pawn) -WaterAmount ([int]$amt)
         }
     } catch {
         Write-DuneError -Response $res -Status 500 -Message "Fill base water failed: $($_.Exception.Message)"
