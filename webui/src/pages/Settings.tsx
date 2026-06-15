@@ -404,7 +404,7 @@ export function Settings() {
           <div className="min-w-0">
             <div className="flex items-center gap-2 mb-1">
               <Icon name="Trash2" size={18} className="text-text-muted" />
-              <h2 className="text-lg font-semibold">dune-admin VM cache</h2>
+              <h2 className="text-lg font-semibold">Legacy Admin Cache</h2>
             </div>
             <p className="text-sm text-text-dim">
               The companion <span className="font-mono">dune-admin</span> tool caches a per-battlegroup snapshot on the VM
