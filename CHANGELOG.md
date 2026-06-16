@@ -15,6 +15,22 @@ here cover everything those tags shipped.
 
 ### Added
 
+- **Delete INI backups from the "View backups" screen.** The backups dialog in
+  Game Config now has a checkbox per backup, Select-all, and a "Delete (N)"
+  button to remove multiple `.dstbak` snapshots from the server at once. Backed
+  by `POST /api/gameconfig/backups/delete`, which validates every path to the
+  `.dstbak` pattern next to the live INI files so it can't remove anything else.
+
+### Changed
+
+- **Client-config apply now says exactly what it did.** When DST writes your
+  client `Game.ini` (Apply to my client / Fix my client config), the result
+  message now distinguishes settings **written** (added/changed) from keys
+  **removed** (reset to default / deprecated-key cleanup), instead of a vague
+  "applied N settings", so you can tell what changed.
+
+### Added
+
 - **"Restart Server on Cycle End" toggle in Game Config → Storm Cycle.** Exposes
   `m_bShouldRestartServerOnCycleEnd` (`CoriolisSubsystem`, default On) so you can
   control whether the dedicated server restarts itself when a Coriolis cycle

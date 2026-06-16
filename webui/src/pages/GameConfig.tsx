@@ -9,6 +9,7 @@ import {
   saveGameConfig,
   backupGameConfig,
   listGameConfigBackups,
+  deleteGameConfigBackups,
   getGameConfigClient,
   setGameConfigClientDir,
   applyGameConfigClient,
@@ -24,6 +25,7 @@ import type {
   GameConfigIniSection,
   GameConfigBackupEntry,
   GameConfigClientApply,
+  GameConfigClientApplyResult,
   GameConfigClientInfo,
   GameConfigDefaultsResponse,
   GameConfigDefaultSection,
@@ -106,8 +108,25 @@ function valuesEqual(a: string, b: string): boolean {
   return ta.toLowerCase() === tb.toLowerCase()
 }
 
-function sectionIsManaged(data: GameConfigResponse, field: GameConfigField): boolean {
-  if (!data || !field) return false
+// Build a human-readable result message for a client-apply that signifies what
+// was WRITTEN (added/changed) vs REMOVED (reset to default / deprecated key
+// cleanup), so the user can tell exactly what DST did to their client Game.ini.
+function describeClientApply(
+  r: GameConfigClientApplyResult,
+  writeVerb: 'Applied' | 'Synced' | 'Wrote' = 'Applied',
+): string {
+  const items = r.items ?? []
+  const removed = items.filter(i => i.remove).length
+  const written = items.length - removed
+  const parts: string[] = []
+  if (written > 0) parts.push(`${r.created ? 'created the file and ' : ''}wrote ${written} setting${written === 1 ? '' : 's'}`)
+  if (removed > 0) parts.push(`removed ${removed} key${removed === 1 ? '' : 's'} (reset/cleanup)`)
+  const what = parts.length > 0 ? parts.join(' and ') : `applied ${r.applied} change${r.applied === 1 ? '' : 's'}`
+  const lead = parts.length > 0 ? '' : `${writeVerb}: `
+  return `${lead}${what.charAt(0).toUpperCase()}${what.slice(1)} in your local client Game.ini (${r.path}).`
+}
+
+function sectionIsManaged(data: GameConfigResponse, field: GameConfigField): boolean {  if (!data || !field) return false
   const b = bundleFor(data, field.file)
   // PS+ConvertTo-Json can collapse an empty hashtable to {} or unwrap a
   // single-element array to a scalar, so managedSections may not always be
@@ -141,6 +160,8 @@ export function GameConfig() {
   const [backupsLoading, setBackupsLoading] = useState(false)
   const [backupsError, setBackupsError] = useState<string | null>(null)
   const [backups, setBackups] = useState<GameConfigBackupEntry[]>([])
+  const [backupSel, setBackupSel] = useState<Set<string>>(new Set())
+  const [backupDeleting, setBackupDeleting] = useState(false)
 
   // Local client config (this PC). DST runs locally, so it can read/write the
   // player's own client Game.ini directly — gated behind explicit user action.
@@ -300,8 +321,8 @@ export function GameConfig() {
       const items = clientMismatches.map(m => ({ key: m.key, label: m.label, section: m.section, value: m.serverValue }))
       const r = await applyGameConfigClient(items, clientInfo?.dir)
       setClientInfo(r.client)
-      setMismatchMsg(`Synced ${r.applied} setting${r.applied === 1 ? '' : 's'} to your client Game.ini (${r.path}).${r.backup ? ' Previous file backed up.' : ''}`)
-      window.setTimeout(() => setMismatchMsg(null), 8000)
+      setMismatchMsg(describeClientApply(r, 'Synced'))
+      window.setTimeout(() => setMismatchMsg(null), 9000)
       setMismatchOpen(false)
       setMismatchFallback(false)
     } catch (e) {
@@ -399,8 +420,7 @@ export function GameConfig() {
     try {
       const r = await applyGameConfigClient(clientApply.items, clientInfo?.dir)
       setClientInfo(r.client)
-      const verb = r.created ? 'Created and wrote' : 'Applied'
-      setClientMsg(`${verb} ${r.applied} setting${r.applied === 1 ? '' : 's'} to your local client (${r.path}).${r.backup ? ' Previous file backed up.' : ''}`)
+      setClientMsg(describeClientApply(r))
       setClientApply(null)
     } catch (e) {
       setClientErr(e instanceof Error ? e.message : String(e))
@@ -432,6 +452,7 @@ export function GameConfig() {
     setBackupsOpen(true)
     setBackupsLoading(true)
     setBackupsError(null)
+    setBackupSel(new Set())
     try {
       const r = await listGameConfigBackups()
       setBackups(r.backups ?? [])
@@ -441,6 +462,34 @@ export function GameConfig() {
       setBackupsLoading(false)
     }
   }, [])
+
+  const toggleBackupSel = useCallback((path: string) => {
+    setBackupSel(prev => {
+      const next = new Set(prev)
+      if (next.has(path)) next.delete(path); else next.add(path)
+      return next
+    })
+  }, [])
+
+  const onDeleteSelectedBackups = useCallback(async () => {
+    const paths = [...backupSel]
+    if (paths.length === 0) return
+    setBackupDeleting(true)
+    setBackupsError(null)
+    try {
+      const r = await deleteGameConfigBackups(paths)
+      const failed = (r.results ?? []).filter(x => !x.ok)
+      setBackups(prev => prev.filter(b => !(backupSel.has(b.path) && !failed.some(f => f.path === b.path))))
+      setBackupSel(new Set())
+      if (failed.length > 0) {
+        setBackupsError(`Deleted ${r.deleted}, but ${failed.length} could not be removed.`)
+      }
+    } catch (e) {
+      setBackupsError(e instanceof Error ? e.message : String(e))
+    } finally {
+      setBackupDeleting(false)
+    }
+  }, [backupSel])
 
   const handleFieldChange = useCallback((key: string, newVal: string) => {
     if (
@@ -1182,19 +1231,31 @@ export function GameConfig() {
               )}
               {!backupsLoading && !backupsError && backups.length > 0 && (
                 <div className="space-y-1.5">
-                  {backups.map(b => (
-                    <div key={b.path} className="flex items-center gap-3 rounded border border-border bg-surface-2/40 px-3 py-2">
-                      <Icon name="FileCog" size={14} className="shrink-0 text-text-dim" />
-                      <div className="min-w-0 flex-1">
-                        <div className="text-sm text-text truncate" title={b.path}>{b.name}</div>
-                        <div className="text-[11px] text-text-dim truncate" title={b.dir}>{b.dir}</div>
-                      </div>
-                      <div className="text-right shrink-0">
-                        <div className="text-xs text-text-muted">{formatBackupStamp(b)}</div>
-                        <div className="text-[11px] text-text-dim">{formatBytes(b.size)}</div>
-                      </div>
-                    </div>
-                  ))}
+                  <div className="flex items-center justify-between px-1 pb-1 text-[11px] text-text-dim">
+                    <button type="button" className="hover:text-text"
+                      onClick={() => setBackupSel(backupSel.size === backups.length ? new Set() : new Set(backups.map(b => b.path)))}>
+                      {backupSel.size === backups.length ? 'Clear all' : 'Select all'}
+                    </button>
+                    <span>{backupSel.size} selected</span>
+                  </div>
+                  {backups.map(b => {
+                    const checked = backupSel.has(b.path)
+                    return (
+                      <label key={b.path} className={`flex items-center gap-3 rounded border px-3 py-2 cursor-pointer ${checked ? 'border-danger/50 bg-danger/5' : 'border-border bg-surface-2/40 hover:bg-surface-3/30'}`}>
+                        <input type="checkbox" checked={checked} onChange={() => toggleBackupSel(b.path)} disabled={backupDeleting}
+                          className="shrink-0 accent-danger" />
+                        <Icon name="FileCog" size={14} className="shrink-0 text-text-dim" />
+                        <div className="min-w-0 flex-1">
+                          <div className="text-sm text-text truncate" title={b.path}>{b.name}</div>
+                          <div className="text-[11px] text-text-dim truncate" title={b.dir}>{b.dir}</div>
+                        </div>
+                        <div className="text-right shrink-0">
+                          <div className="text-xs text-text-muted">{formatBackupStamp(b)}</div>
+                          <div className="text-[11px] text-text-dim">{formatBytes(b.size)}</div>
+                        </div>
+                      </label>
+                    )
+                  })}
                 </div>
               )}
             </div>
@@ -1202,14 +1263,26 @@ export function GameConfig() {
               <button
                 type="button"
                 onClick={() => void onViewBackups()}
-                disabled={backupsLoading}
+                disabled={backupsLoading || backupDeleting}
                 className="btn-secondary"
                 title="Reload the backup list"
               >
                 <Icon name={backupsLoading ? 'Loader2' : 'RefreshCw'} size={14} className={backupsLoading ? 'animate-spin' : ''} />
                 Refresh
               </button>
-              <button type="button" className="btn-primary" onClick={() => setBackupsOpen(false)}>Close</button>
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  className="btn-danger"
+                  disabled={backupSel.size === 0 || backupDeleting}
+                  onClick={() => void onDeleteSelectedBackups()}
+                  title="Permanently delete the selected backup files from the server"
+                >
+                  <Icon name={backupDeleting ? 'Loader2' : 'Trash2'} size={14} className={backupDeleting ? 'animate-spin' : ''} />
+                  {backupDeleting ? 'Deleting…' : `Delete${backupSel.size > 0 ? ` (${backupSel.size})` : ''}`}
+                </button>
+                <button type="button" className="btn-primary" onClick={() => setBackupsOpen(false)}>Close</button>
+              </div>
             </div>
           </div>
         </div>

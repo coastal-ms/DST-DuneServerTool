@@ -167,6 +167,7 @@ export type GameConfigClientApplyItem = {
   label: string
   section: string
   value: string
+  remove?: boolean
 }
 
 export type GameConfigClientApply = {

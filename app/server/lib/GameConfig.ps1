@@ -1395,6 +1395,39 @@ function Get-DuneGameConfigBackups {
     return @{ source = $paths.source; backups = @($sorted) }
 }
 
+# Delete one or more DST backup files (".dstbak-<ts>") next to the live INI files.
+# SECURITY: every path is validated to (a) sit in the same directory as a live
+# UserGame.ini/UserEngine.ini and (b) match the "<inifile>.dstbak-<digits>" name
+# pattern, so this can never rm an arbitrary file. Paths that fail validation are
+# reported as skipped, never deleted. Returns @{ deleted; results = [@{path;ok;reason?}] }.
+function Remove-DuneGameConfigBackups {
+    param([string]$Ip, [string[]]$Paths)
+    if (-not $Paths -or $Paths.Count -eq 0) { return @{ deleted = 0; results = @() } }
+    $resolved = Resolve-DuneGameConfigPaths -Ip $Ip
+    $allowed = @()
+    foreach ($f in @('game','engine')) {
+        $p = if ($f -eq 'game') { $resolved.game } else { $resolved.engine }
+        if ($p) { $allowed += "$p.dstbak-" }
+    }
+    $results = New-Object 'System.Collections.Generic.List[object]'
+    $deleted = 0
+    foreach ($raw in $Paths) {
+        $path = "$raw".Trim()
+        $name = Split-Path -Path $path -Leaf
+        $okPrefix = $false
+        foreach ($pre in $allowed) { if ($path.StartsWith($pre)) { $okPrefix = $true; break } }
+        if (-not $okPrefix -or $name -notmatch '\.dstbak-\d+$' -or $path.Contains("'")) {
+            $results.Add(@{ path = $path; ok = $false; reason = 'not a recognized .dstbak path' })
+            continue
+        }
+        Invoke-V6Ssh -Ip $Ip -Cmd "sudo rm -f '$path'" -TimeoutSec 20 | Out-Null
+        $still = ((Invoke-V6Ssh -Ip $Ip -Cmd "sudo bash -c 'test -f ''$path'' && echo yes || echo no'") -join '').Trim()
+        if ($still -eq 'no') { $deleted++; $results.Add(@{ path = $path; ok = $true }) }
+        else { $results.Add(@{ path = $path; ok = $false; reason = 'delete did not remove the file' }) }
+    }
+    return @{ deleted = $deleted; results = $results.ToArray() }
+}
+
 # =============================================================================
 # SCHEMA API (grouped by category)
 # =============================================================================

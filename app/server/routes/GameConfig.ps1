@@ -198,6 +198,39 @@ Register-DuneRoute -Method GET -Path '/api/gameconfig/backups' -Handler {
     }
 }
 
+# POST /api/gameconfig/backups/delete — delete selected DST backup files.
+# Body: { paths: ["<full path>.dstbak-<ts>", ...] }. Paths are validated
+# server-side to the .dstbak pattern next to the live INI files. 503 w/o VM.
+Register-DuneRoute -Method POST -Path '/api/gameconfig/backups/delete' -Handler {
+    param($req, $res, $routeParams, $body)
+    $ctx = Get-DuneGameConfigContext
+    if (-not $ctx.ok) {
+        Write-DuneError -Response $res -Status $ctx.status -Message $ctx.message
+        return
+    }
+    $paths = New-Object 'System.Collections.Generic.List[string]'
+    if ($body -is [hashtable]) {
+        $raw = $body['paths']
+        if ($raw -is [System.Collections.IEnumerable] -and -not ($raw -is [string])) {
+            foreach ($p in $raw) { $s = "$p".Trim(); if ($s) { $paths.Add($s) } }
+        }
+    }
+    if ($paths.Count -eq 0) {
+        Write-DuneError -Response $res -Status 400 -Message 'No backup paths supplied.'
+        return
+    }
+    try {
+        $r = Remove-DuneGameConfigBackups -Ip $ctx.ip -Paths $paths.ToArray()
+        Write-DuneJson -Response $res -Body @{
+            ok      = $true
+            deleted = $r.deleted
+            results = $r.results
+        }
+    } catch {
+        Write-DuneError -Response $res -Status 500 -Message "Game config backup delete failed: $($_.Exception.Message)"
+    }
+}
+
 # -----------------------------------------------------------------------------
 # LOCAL CLIENT CONFIG endpoints. These run on the admin's own machine (no SSH /
 # no VM context needed) and operate on the player's client Game.ini.
