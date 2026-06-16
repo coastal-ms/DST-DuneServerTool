@@ -1188,6 +1188,56 @@ WHERE fe.entity_id = (
     return @{ ok = $true; message = "Reset $Job skill tree - scanned $($modules.Count) module slot(s)" }
 }
 
+# Unlock a skill-trainer quest line: completes every DA_CT_Trainer_<Job>* contract
+# (applies their reward tags + skill grants, dismisses active contract items) and
+# grants the full job skill tree. Offline-safe (DB writes; takes effect next login).
+function Invoke-DunePlayerUnlockTrainer {
+    param([string]$Ip, [long]$AccountId, [string]$Job)
+    if ($AccountId -le 0) { return @{ ok = $false; error = 'account_id is required.' } }
+    if (-not $Job) { return @{ ok = $false; error = 'job is required.' } }
+    _Load-DuneTagsData
+    if (-not $script:DuneTagsData.jobSkillBlocks.ContainsKey($Job)) {
+        return @{ ok = $false; error = "unknown trainer job '$Job'." }
+    }
+
+    $ids = @(Get-DuneTrainerContractIds -Job $Job)
+    $parts = New-Object System.Collections.Generic.List[string]
+    $contractsDone = 0
+
+    if ($ids.Count -gt 0) {
+        $cr = Invoke-DunePlayerCompleteContracts -Ip $Ip -AccountId $AccountId -ContractIds $ids
+        if (-not $cr.ok) { return @{ ok = $false; error = "trainer contracts: $($cr.error)" } }
+        $contractsDone = [int]$cr.contracts
+        [void]$parts.Add("completed $contractsDone contract(s)")
+    }
+
+    $gr = Invoke-DunePlayerGrantJobSkills -Ip $Ip -AccountId $AccountId -Job $Job
+    if (-not $gr.ok) { return @{ ok = $false; error = "grant skill tree: $($gr.error)" } }
+    [void]$parts.Add('granted full skill tree')
+
+    $label = $Job
+    $summary = if ($parts.Count -gt 0) { " - $($parts -join ', ')" } else { '' }
+    return @{
+        ok = $true
+        message = "Unlocked $label trainer$summary - takes effect on next login"
+        contracts = $contractsDone
+    }
+}
+
+# Unlock a main-quest story line: flips every DA_MQ_<Root>.* journey row complete
+# and applies the union of subtree reward tags (reuses the journey-node engine).
+function Invoke-DunePlayerUnlockMainQuest {
+    param([string]$Ip, [long]$AccountId, [string]$Quest)
+    if ($AccountId -le 0) { return @{ ok = $false; error = 'account_id is required.' } }
+    if (-not $Quest) { return @{ ok = $false; error = 'quest is required.' } }
+    if (-not (Test-DuneMainQuestRoot -Root $Quest)) {
+        return @{ ok = $false; error = "unknown main quest '$Quest'." }
+    }
+    $r = Invoke-DunePlayerCompleteJourneyNode -Ip $Ip -AccountId $AccountId -NodeId $Quest
+    if (-not $r.ok) { return $r }
+    return @{ ok = $true; message = "Unlocked main quest $Quest - $($r.nodes) node(s) completed - takes effect on next login"; nodes = $r.nodes }
+}
+
 function Invoke-DunePlayerSetStarterClass {
     param([string]$Ip, [long]$AccountId, [string]$Job)
     if ($AccountId -le 0) { return @{ ok = $false; error = 'account_id is required.' } }
