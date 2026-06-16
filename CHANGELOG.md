@@ -50,6 +50,14 @@ here cover everything those tags shipped.
   that dropped most members), DST rebuilds it from the full default struct,
   preserves any values already customized in the file, then applies the edit —
   so the ~35 missing members come back instead of staying lost.
+- **Game Config now warns when your client's settings block is incomplete.** The
+  client-vs-server mismatch popup previously only compared settings you'd
+  customized, so a stripped client `LandsraadSettings Data=(...)` stub (missing
+  most members and silently running on game defaults) raised no warning because
+  the missing members sat at default. DST now detects a partial struct box —
+  some members present, some missing — and surfaces "your client is missing part
+  of a settings block" with the missing entries listed; "Fix my client config"
+  rewrites the whole block via the struct-heal path.
 
 ## [12.2.0] - 2026-06-15
 
