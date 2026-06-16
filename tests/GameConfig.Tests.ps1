@@ -298,3 +298,53 @@ PlayerInventoryStartingVolumeCapacity=300.0
         $out | Should -Match 'm_bIsDbWipeEnabled'
     }
 }
+
+Describe 'GameConfig: single-section-per-key consistency' -Tag 'GameConfig' {
+
+    It 'consolidates a key that exists in two managed sections into the one being written' {
+        $secA = '/Script/DuneSandbox.DuneGameMode'
+        $secB = '/Script/DuneSandbox.SandStormConfig'
+        $raw = $script:DstManagedBegin + "`n" +
+               "[$secA]`n" +
+               "m_CycleDurationInDays=36500`n" +
+               "[$secB]`n" +
+               "m_CycleDurationInDays=36500`n" +
+               $script:DstManagedEnd + "`n"
+        # Write the key to its canonical section (CoriolisSubsystem here). The stale
+        # copies in DuneGameMode + SandStormConfig must be scrubbed so exactly one
+        # copy remains.
+        $sec = '/Script/DuneSandbox.CoriolisSubsystem'
+        $updates = @(@{ section = $sec; key = 'm_CycleDurationInDays'; value = '7' })
+        $out = ConvertTo-DuneIniManaged -Raw $raw -Updates $updates -QuotedKeys @{}
+        $hits = @(($out -replace "`r", '' -split "`n") | Where-Object { $_.Trim() -match '^m_CycleDurationInDays\s*=' })
+        $hits.Count | Should -Be 1
+        $hits[0] | Should -Match '=\s*7\s*$'
+    }
+
+    It 'removing a key strips it from EVERY managed section, not just the declared one' {
+        $secA = '/Script/DuneSandbox.DuneGameMode'
+        $secB = '/Script/DuneSandbox.SandStormConfig'
+        $raw = $script:DstManagedBegin + "`n" +
+               "[$secA]`n" +
+               "m_CycleDurationInDays=36500`n" +
+               "m_bIsDbWipeEnabled=False`n" +
+               "[$secB]`n" +
+               "m_CycleDurationInDays=36500`n" +
+               $script:DstManagedEnd + "`n"
+        $sec = '/Script/DuneSandbox.CoriolisSubsystem'
+        $updates = @(@{ section = $sec; key = 'm_CycleDurationInDays'; value = '7'; remove = $true })
+        $out = ConvertTo-DuneIniManaged -Raw $raw -Updates $updates -QuotedKeys @{}
+        $out | Should -Not -Match 'm_CycleDurationInDays'
+        # an unrelated key in one of those sections survives
+        $out | Should -Match 'm_bIsDbWipeEnabled'
+    }
+
+    It 'Get-DuneIniEffectiveByKey returns last-wins value regardless of section' {
+        $raw = "[/Script/DuneSandbox.DuneGameMode]`n" +
+               "m_CycleDurationInDays=36500`n" +
+               "[/Script/DuneSandbox.SandStormConfig]`n" +
+               "m_CycleDurationInDays=7`n"
+        $byKey = Get-DuneIniEffectiveByKey -Raw $raw
+        $byKey['m_CycleDurationInDays'] | Should -Be '7'
+    }
+}

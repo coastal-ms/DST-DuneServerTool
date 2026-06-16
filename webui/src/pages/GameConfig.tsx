@@ -67,10 +67,18 @@ function fieldDefault(field: GameConfigField): string {
 }
 
 // Live value written in the battlegroup's INI for this field ('' when unset or VM down).
+// Primary lookup is by the field's declared section. If the key isn't there but
+// exists in ANOTHER section of the same file (a pre-existing placement that
+// doesn't match DST's canonical section), fall back to the by-key value so the
+// page reflects what's actually in the INI rather than showing the default. DST
+// consolidates the key back into its declared section on the next save.
 function liveValue(data: GameConfigResponse | null, field: GameConfigField): string {
   if (!data || !field) return ''
   const b = bundleFor(data, field.file)
-  return b?.effective?.[`${field.section}||${field.key}`] ?? ''
+  const inSection = b?.effective?.[`${field.section}||${field.key}`]
+  if (inSection !== undefined && inSection !== '') return inSection
+  const byKey = b?.effectiveByKey?.[field.key]
+  return byKey ?? inSection ?? ''
 }
 
 // A field is "customized" when the live file overrides it with a value other than the default.

@@ -74,6 +74,19 @@ here cover everything those tags shipped.
 
 ### Fixed
 
+- **Game Config now reads and writes INI settings in a section-consistent way.**
+  Two related bugs are fixed: (1) on load, a setting whose value lived in a
+  section other than the one DST's schema declares showed as the Funcom
+  **default** instead of its real value (e.g. Coriolis Cycle Length read `7`
+  when the file actually had `36500` under a different section). DST now falls
+  back to a by-key lookup so the page reflects what's actually in
+  `UserGame.ini`/`UserEngine.ini`. (2) On save or reset, DST wrote/removed the
+  key only in its declared section, so a stale copy in another section could
+  shadow the change and the edit appeared to do nothing. DST now guarantees a
+  schema key exists in **exactly one** section — writing or resetting it scrubs
+  every other managed-block copy — so "change it in Game Config" and "remove it
+  from Game Config" are always reflected consistently in the INI.
+
 - **Stale `webui` API tests for `giveScrip`, `giveFactionRep`, `setFactionTier`,
   and `spawnVehicle` now match the live request contract.** The endpoints had
   been refactored (scrip/faction writes switched to `actor_id` + numeric

@@ -151,6 +151,7 @@ export type GameConfigFileBundle = {
   raw: string
   sections: GameConfigIniSection[]
   effective: Record<string, string>
+  effectiveByKey?: Record<string, string>
   managedSections: string[]
 }
 
@@ -228,6 +229,7 @@ export type GameConfigClientInfo = {
   raw: string
   sections: GameConfigIniSection[]
   effective: Record<string, string>
+  effectiveByKey?: Record<string, string>
   managedSections: string[]
 }
 

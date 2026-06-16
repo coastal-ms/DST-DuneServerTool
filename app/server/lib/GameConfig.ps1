@@ -293,6 +293,7 @@ function Get-DuneGameConfigClient {
         raw             = $raw
         sections        = (ConvertTo-DuneIniSectionsApi -Raw $raw)
         effective       = (Get-DuneIniEffective -Raw $raw)
+        effectiveByKey  = (Get-DuneIniEffectiveByKey -Raw $raw)
         managedSections = (Get-DuneIniManagedSectionNames -Raw $raw)
     }
 }
@@ -654,12 +655,22 @@ function ConvertTo-DuneIniManaged {
             $entry = @{ name = $n; body = (New-Object 'System.Collections.Generic.List[string]') }
             $managed.Add($entry); $managedByName[$n] = $entry
         }
+        # Single-section-per-key consistency: a schema key must live in EXACTLY one
+        # section (its canonical one). The same key sitting in two sections (e.g.
+        # m_CycleDurationInDays under both DuneGameMode and SandStormConfig) makes
+        # edits/resets unpredictable — DST would update one copy while a stale copy
+        # in another section shadows it. So whenever we touch a key, first strip it
+        # from EVERY other managed section, then set/remove it in the target.
+        $key = "$($u.key)"
+        foreach ($other in $managed) {
+            if ($other -ne $entry) { Remove-DuneScalarFromBody -Body $other.body -Key $key }
+        }
         if ($u['remove']) {
             # Reset-to-default: strip the key so the default is implied, not written.
-            Remove-DuneScalarFromBody -Body $entry.body -Key "$($u.key)"
+            Remove-DuneScalarFromBody -Body $entry.body -Key $key
         } else {
-            $fmt = Format-DuneIniValue -Key "$($u.key)" -Value $u.value -QuotedKeys $QuotedKeys
-            Set-DuneScalarInBody -Body $entry.body -Key "$($u.key)" -Formatted $fmt
+            $fmt = Format-DuneIniValue -Key $key -Value $u.value -QuotedKeys $QuotedKeys
+            Set-DuneScalarInBody -Body $entry.body -Key $key -Formatted $fmt
         }
     }
 
@@ -762,6 +773,27 @@ function Get-DuneIniEffective {
     return $eff
 }
 
+# Effective value indexed by KEY ALONE (last-wins across every section in file
+# order). The UI uses this as a fallback when a schema field's value isn't in its
+# declared section but DOES exist in another section, so the page reflects what
+# is actually in UserGame.ini/UserEngine.ini instead of falling back to the
+# Funcom default. (DST's write path consolidates such a key back into its
+# canonical section on the next save.)
+function Get-DuneIniEffectiveByKey {
+    param([string]$Raw)
+    $doc = ConvertFrom-DuneIniDoc -Raw $Raw
+    $eff = @{}
+    foreach ($s in $doc.sections) {
+        foreach ($l in $s.body) {
+            $info = Get-DuneIniLineKey $l
+            if ($info -and -not $info.isArray) {
+                $eff["$($info.key)"] = (Get-DuneIniLineValue $l).Trim()
+            }
+        }
+    }
+    return $eff
+}
+
 function Get-DuneIniManagedSectionNames {
     param([string]$Raw)
     $doc = ConvertFrom-DuneIniDoc -Raw $Raw
@@ -831,6 +863,7 @@ function Get-DuneGameConfig {
             raw             = $gameRaw
             sections        = (ConvertTo-DuneIniSectionsApi -Raw $gameRaw)
             effective       = (Get-DuneIniEffective -Raw $gameRaw)
+            effectiveByKey  = (Get-DuneIniEffectiveByKey -Raw $gameRaw)
             managedSections = (Get-DuneIniManagedSectionNames -Raw $gameRaw)
         }
         engine = @{
@@ -838,6 +871,7 @@ function Get-DuneGameConfig {
             raw             = $engineRaw
             sections        = (ConvertTo-DuneIniSectionsApi -Raw $engineRaw)
             effective       = (Get-DuneIniEffective -Raw $engineRaw)
+            effectiveByKey  = (Get-DuneIniEffectiveByKey -Raw $engineRaw)
             managedSections = (Get-DuneIniManagedSectionNames -Raw $engineRaw)
         }
     }
