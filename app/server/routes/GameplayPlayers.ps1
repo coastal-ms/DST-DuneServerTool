@@ -274,6 +274,25 @@ Register-DuneRoute -Method POST -Path '/api/gameplay/players/set-item-water' -Ha
     }
 }
 
+# POST /api/gameplay/players/set-item-stack  { item_id, stack_size }
+# Per-item stack-quantity editor for player inventory: rewrites the stack_size
+# column. Online players cache inventory in RAM, so the value only reflects
+# in-game after the player relogs / the map pod is restarted.
+Register-DuneRoute -Method POST -Path '/api/gameplay/players/set-item-stack' -Handler {
+    param($req, $res, $routeParams, $body)
+    try {
+        $iid = Get-DuneBodyInt -Body $body -Name 'item_id'
+        if ($null -eq $iid -or $iid -le 0) { Write-DuneError -Response $res -Status 400 -Message 'item_id is required.'; return }
+        $ss = Get-DuneBodyInt -Body $body -Name 'stack_size'
+        if ($null -eq $ss -or $ss -lt 1) { Write-DuneError -Response $res -Status 400 -Message 'stack_size must be at least 1.'; return }
+        Invoke-DunePlayerWriteRoute -Response $res -Action { param($ip)
+            Invoke-DunePlayerSetItemStack -Ip $ip -ItemId $iid -StackSize $ss
+        }
+    } catch {
+        Write-DuneError -Response $res -Status 500 -Message "Set item stack failed: $($_.Exception.Message)"
+    }
+}
+
 # ===========================================================================
 # v11.5.6 — extended player surface routes.
 # ===========================================================================

@@ -19,7 +19,7 @@ import {
   giveScrip, giveSolari, grantAllKeystones, grantLive, grantMaxSpec,
   kickPlayer, refuelVehicle, renamePlayer, repairGear, repairInventoryItem,
   getPlayerVehicles,
-  setItemDurability, setItemWater,
+  setItemDurability, setItemStack, setItemWater,
   resetAllKeystones, resetAllSpecs, resetJourney, resetProgressionLive, resetSpec,
   restoreDestroyed,
   returningPlayerAward, setFactionTier, setPlayerTags, setSkillPoints,
@@ -1677,7 +1677,7 @@ function ItemList({ title, icon, items, canWrite, busy, run, collapsed, extra, i
                 ratio < 0.25     ? 'text-danger' :
                 ratio < 0.5      ? 'text-warning' :
                                    'text-text-dim'
-              const canEdit = canWrite && (it.durability !== 'N/A' || hasWater)
+              const canEdit = canWrite
               const isEditing = canEdit && editingId === it.id
               const toggleEdit = () => {
                 if (!canEdit) return
@@ -1691,7 +1691,7 @@ function ItemList({ title, icon, items, canWrite, busy, run, collapsed, extra, i
                     role={canEdit ? 'button' : undefined}
                     tabIndex={canEdit ? 0 : undefined}
                     onKeyDown={canEdit ? (e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); toggleEdit() } }) : undefined}
-                    title={canEdit ? (isEditing ? 'Hide item editor' : 'Click to edit durability / water') : undefined}
+                    title={canEdit ? (isEditing ? 'Hide item editor' : 'Click to edit stack / durability / water') : undefined}
                   >
                     <span className="truncate max-w-[320px]">
                       {canEdit && (
@@ -1728,6 +1728,7 @@ function ItemList({ title, icon, items, canWrite, busy, run, collapsed, extra, i
                   </div>
                   {isEditing && (
                     <div>
+                      <StackEditor item={it} busy={busy} run={run} isOnline={isOnline} onClose={() => setEditingId(null)} />
                       {it.durability !== 'N/A' && (
                         <DurabilityEditor item={it} busy={busy} run={run} isOnline={isOnline} onClose={() => setEditingId(null)} />
                       )}
@@ -1742,6 +1743,61 @@ function ItemList({ title, icon, items, canWrite, busy, run, collapsed, extra, i
           </div>
         )
       )}
+    </div>
+  )
+}
+
+// Inline stack-quantity editor — appears underneath an inventory row for every
+// item (all items carry a stack_size). Writes the stack_size column directly.
+// When the player is online the map pod caches inventory in RAM and flushes it
+// on its save tick, so the value won't reflect in-game until the player relogs.
+function StackEditor({ item, busy, run, isOnline, onClose }: {
+  item: InventoryItem
+  busy: boolean
+  run: (fn: () => Promise<{ message: string }>, label: string) => void | Promise<void>
+  isOnline: boolean
+  onClose: () => void
+}) {
+  const [str, setStr] = useState(String(item.stack_size))
+  const n = parseInt(str, 10)
+  const valid = Number.isFinite(n) && n >= 1
+
+  return (
+    <div className="border-t border-border/50 px-3 py-3 bg-surface-1/60 rounded-b-lg space-y-3">
+      {isOnline && (
+        <div className="text-[11px] text-warning flex items-start gap-1.5">
+          <Icon name="Wifi" size={11} className="mt-0.5 shrink-0" />
+          <span>
+            Player is online — the map pod caches inventory in memory, so the new
+            quantity writes to the database immediately but won't appear in-game
+            until the player relogs.
+          </span>
+        </div>
+      )}
+      <div className="flex items-end gap-2">
+        <label className="text-xs flex-1">
+          <div className="text-text-dim mb-1">Stack quantity</div>
+          <input
+            type="number" inputMode="numeric" step={1} min={1}
+            value={str}
+            onChange={e => setStr(e.target.value)}
+            disabled={busy}
+            className="w-full font-mono text-sm bg-surface-2 border border-border rounded px-2 py-1"
+          />
+        </label>
+        <button
+          type="button"
+          className="btn-primary text-xs"
+          disabled={busy || !valid}
+          onClick={() => {
+            if (!valid) return
+            void run(() => setItemStack(item.id, n), 'Save')
+            onClose()
+          }}
+        >
+          <Icon name="Save" size={12} /> Save
+        </button>
+      </div>
     </div>
   )
 }

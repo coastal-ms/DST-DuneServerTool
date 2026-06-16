@@ -368,6 +368,32 @@ RETURNING i.id::text AS item_id;
     return @{ ok = $true; message = "Set item $ItemId water to $wv. Restart the map pod / battlegroup for it to take effect in-game." }
 }
 
+# Per-item stack-quantity editor for player inventory. stack_size is a plain
+# bigint column on dune.items (NOT inside the stats jsonb), so this is a direct
+# UPDATE. Rejects values below 1 (use the delete action to remove an item).
+# IMPORTANT: when the player is online the map pod caches inventory in RAM and
+# flushes it back on its save tick, so the new quantity won't appear in-game (and
+# may be overwritten) until the player relogs / the pod is restarted. The UI
+# surfaces this caveat.
+function Invoke-DunePlayerSetItemStack {
+    param([string]$Ip, [long]$ItemId, [long]$StackSize)
+    if ($ItemId -le 0) { return @{ ok = $false; error = 'item_id is required.' } }
+    if ($StackSize -lt 1) { return @{ ok = $false; error = 'stack_size must be at least 1.' } }
+    $sql = @"
+UPDATE dune.items
+SET stack_size = $StackSize::bigint
+WHERE id = $ItemId::bigint
+RETURNING id::text AS item_id;
+"@
+    $res = Invoke-DuneSqlQuery -Ip $Ip -Sql $sql -ReadOnly $false -MaxRows 1 -TimeoutSec 30
+    if (-not $res.ok) { return @{ ok = $false; error = $res.error } }
+    $affected = @(ConvertTo-DuneRowMaps -Result $res).Count
+    if ($affected -eq 0) {
+        return @{ ok = $false; error = "Item $ItemId not found." }
+    }
+    return @{ ok = $true; message = "Set item $ItemId stack to $StackSize." }
+}
+
 # Give item (give-item): stack onto a matching backpack stack or insert a new one.
 # Single data-modifying CTE so it runs atomically in one psql call. New rows must
 # stamp acquisition_time with the current epoch — the game treats acquisition_time=0
