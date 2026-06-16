@@ -13,6 +13,8 @@ here cover everything those tags shipped.
 
 ## [Unreleased]
 
+## [12.4.0] - 2026-06-16
+
 ### Added
 
 - **Map SpinUp: "Restart Hagga" and "Restart Deep Desert" buttons.** Centered
