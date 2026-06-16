@@ -13,6 +13,8 @@ here cover everything those tags shipped.
 
 ## [Unreleased]
 
+## [12.3.2] - 2026-06-16
+
 ### Changed
 
 - **Find the Fremen (Trials of Aql) preset now grants the full Sietch journey-tag
