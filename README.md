@@ -31,6 +31,44 @@ browser and keeps the server running in the background.
 
 ![Server Health](docs/img/server-health.png)
 
+### New in v12.2.1
+
+- **Give Vehicle Kit now hands over the correct parts.** The kit contents were
+  fixed so each vehicle actually assembles: **Sandbike** Tread ×3; **Buggy**
+  Tread ×4 plus the Focused Buggy Cutteray Mk6; **Sandcrawler** swaps the base
+  Tread for Dampened Sandcrawler Treads ×2; the **Scout / Assault / Carrier
+  Ornithopters** swap their generic Wing for the named Albatross ×4 / Hummingbird
+  ×6 / Roc ×8 wing modules (Carrier also gains Tail Hull ×2 and Side Hull ×2).
+  The form preview now shows per-part quantities.
+
+  ![Give Vehicle Kit](docs/img/give-vehicle-kit.png)
+
+- **"Allow overflow (drop to ground)" toggle on item & kit gives.** A new
+  checkbox on the Give Item and Give Vehicle Kit forms skips DST's
+  inventory-capacity guard, so a full backpack no longer blocks the give — the
+  game's native command drops whatever doesn't fit on the ground next to the
+  player. Online players only (offline SQL gives can't drop to ground, so the
+  flag is ignored there).
+
+- **Cheat Scripts panel (Players → Live).** One-click buttons fire the named
+  server cheat scripts for an online player — Playtest Setup, Award Player XP,
+  Unlock All Skills / Abilities, Leave Me Alone — plus a freeform box for any
+  other script name. Developer performance harnesses (Start / Stop Hitch Test)
+  sit on a separate **Dev / Perf Scripts** row. Both carry a disclaimer that the
+  scripts originate from the Playtest server and may have no effect on a retail
+  server.
+
+  ![Cheat Scripts panel](docs/img/gameplay-cheat-scripts.png)
+
+- **Landsraad Game Config edits keep the whole settings struct.** Editing a
+  Landsraad value used to seed a minimal `Data=(...)` that dropped the board
+  layouts, messages, and contract settings the game needs. DST now seeds the
+  full default struct first and edits members in place — and *heals* legacy stub
+  boxes written by older builds, restoring the ~35 missing members. Game Config
+  also now **warns when your client's settings block is incomplete** (some
+  members present, some missing) and "Fix my client config" rewrites the whole
+  block.
+
 ### New in v12.2.0
 
 - **Game Config now reads & writes every setting in the right INI section.** A
@@ -46,6 +84,8 @@ browser and keeps the server running in the background.
 - **Players → Landsraad section** — set any player's contribution to any Great
   House (e.g. House Ecaz) to an arbitrary amount; faction + guild totals are
   recomputed automatically.
+
+  ![Players → Landsraad](docs/img/gameplay-landsraad.png)
 - **Per-item water editor** on Players → Inventory for water containers
   (literjons / canteens).
 - **Per-field "Default" button** on every Game Config setting — resetting

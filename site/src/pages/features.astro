@@ -40,7 +40,19 @@ const sections = [
     id: "give-vehicle-kit",
     title: "Give Vehicle Kit",
     img: "give-vehicle-kit.png",
-    body: "New in v12.0.19 — hand a player a whole vehicle without a live RMQ spawn. Pick one of the six CHOAM vehicles with craftable part items (Sandbike, Buggy, Sandcrawler, and Light/Medium/Transport Ornithopters) and DST delivers its full Mk6 part set — chassis, engine, PSU, hull, locomotion, boost — plus 1 Large Vehicle Fuel Cell and 1 Welding Torch Mk5 straight into the player's inventory. Each kit also includes the vehicle's named/unique top-tier modules (Mohandis engine, Night Rider boost, Albatross/Hummingbird/Roc wings) and the Scout Ornithopter Storage Mk4 (Light) / Assault Ornithopter Storage Mk5 (Medium). The form previews the exact parts before you hand them over, and it works online or offline as long as there's inventory space.",
+    body: "Hand a player a whole vehicle without a live RMQ spawn. Pick one of the six CHOAM vehicles with craftable part items (Sandbike, Buggy, Sandcrawler, and Light/Medium/Transport Ornithopters) and DST delivers its full Mk6 part set — chassis, engine, PSU, hull, locomotion, boost — plus a Large Vehicle Fuel Cell and a Welding Torch Mk5, along with each vehicle's named top-tier modules (Mohandis engine, Night Rider boost, ornithopter storage). v12.2.1 corrected the kit contents and added per-part quantities so every vehicle actually assembles: Sandbike Tread ×3, Buggy Tread ×4 plus the Focused Buggy Cutteray Mk6, Sandcrawler's Dampened Treads ×2, and the named Albatross ×4 / Hummingbird ×6 / Roc ×8 ornithopter wing modules (the Carrier also gets Tail Hull ×2 and Side Hull ×2). A new **Allow overflow (drop to ground)** toggle lets a give through even when the player's backpack is full — the game drops whatever doesn't fit next to them. The form previews the exact parts before you hand them over, and it works online or offline as long as there's inventory space.",
+  },
+  {
+    id: "cheat-scripts",
+    title: "Cheat Scripts (Players → Live)",
+    img: "gameplay-cheat-scripts.png",
+    body: "New in v12.2.1 — one-click buttons fire the named server cheat scripts for an online player: Playtest Setup, Award Player XP, Unlock All Skills / Abilities, and Leave Me Alone, plus a freeform box for any other script name. Developer performance harnesses (Start / Stop Hitch Test) sit on a separate Dev / Perf Scripts row. Both carry a disclaimer that the scripts originate from the Playtest server and may have no effect on a retail server.",
+  },
+  {
+    id: "landsraad",
+    title: "Players → Landsraad",
+    img: "gameplay-landsraad.png",
+    body: "Set any player's contribution to any Great House to an arbitrary amount, term by term — faction and guild totals recompute automatically. On the Game Config side, Landsraad edits seed and preserve Funcom's full nested settings struct: v12.2.1 fixed a bug where editing a single Landsraad value could strip the board layouts, messages, and contract settings the game needs, heals stripped struct boxes written by older builds, and warns when your client's copy of the block is incomplete.",
   },
   {
     id: "database",
