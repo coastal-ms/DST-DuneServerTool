@@ -13,6 +13,8 @@ here cover everything those tags shipped.
 
 ## [Unreleased]
 
+## [12.2.2] - 2026-06-16
+
 ### Changed
 
 - **Game Config and Gameplay Admin are out of beta.** Removed the "BETA" pills
