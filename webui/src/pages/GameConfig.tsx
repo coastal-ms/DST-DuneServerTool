@@ -1612,8 +1612,8 @@ function FieldRow({ field, value, onChange, disabled, isDirty, isSet, isCustom, 
 }
 
 function BoolToggle({ on, off, value, disabled, onChange }: { on: string; off: string; value: string; disabled: boolean; onChange: (v: string) => void }) {
-  const isOn = value === on
-  const isOff = value === off
+  const isOn = valuesEqual(value, on)
+  const isOff = valuesEqual(value, off)
   const btn = 'flex-1 px-3 py-2 text-sm font-medium rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed'
   return (
     <div className="flex items-center gap-2">
@@ -1979,12 +1979,12 @@ function DefaultsKeyRow({
           <button
             type="button"
             onClick={() => onChange(pair.off)}
-            className={'px-2 py-1 text-[11px] rounded ' + (displayed === pair.off ? 'bg-danger/20 text-danger border border-danger/40' : 'bg-surface border border-border text-text-muted')}
+            className={'px-2 py-1 text-[11px] rounded ' + (valuesEqual(displayed, pair.off) ? 'bg-danger/20 text-danger border border-danger/40' : 'bg-surface border border-border text-text-muted')}
           >Off</button>
           <button
             type="button"
             onClick={() => onChange(pair.on)}
-            className={'px-2 py-1 text-[11px] rounded ' + (displayed === pair.on ? 'bg-success/20 text-success border border-success/40' : 'bg-surface border border-border text-text-muted')}
+            className={'px-2 py-1 text-[11px] rounded ' + (valuesEqual(displayed, pair.on) ? 'bg-success/20 text-success border border-success/40' : 'bg-surface border border-border text-text-muted')}
           >On</button>
         </div>
       )

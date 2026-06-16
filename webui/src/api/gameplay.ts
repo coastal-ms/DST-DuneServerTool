@@ -171,6 +171,19 @@ export interface BotConfig extends Partial<BotPricingConfig> {
   die_target: number
   target_balance: number
   maintain_balance: boolean
+  over_market_guard: boolean
+  over_market_pct: number
+  over_market_allow_unpriced?: boolean
+  over_market_baseline?: number
+  // Market-follow pricing (v12.5.0+): list at the median of competing player
+  // sell orders + a markup, instead of the formula. All-or-nothing; toggling
+  // requires a Duke-listings wipe (handled server-side on the next list tick).
+  market_follow_enabled?: boolean
+  market_follow_pct?: number
+  market_follow_min_samples?: number
+  market_follow_no_market?: 'formula' | 'skip' | 'baseline'
+  market_follow_baseline?: number
+  market_follow_force_guard?: boolean
   disabled_items: string[]
   // Listing side (sane-pricing port, v11.5.2+).
   list_tick_interval: number
@@ -200,6 +213,7 @@ export interface BotTickResult {
   won: number
   purchased: number
   skipped: number
+  blocked?: number
   errors: number
   die: string
   winners: BotTickWinner[]
@@ -230,6 +244,8 @@ export interface BotListTickResult {
   inserted: number
   deleted: number
   errors: number
+  market_medians?: number
+  wiped?: boolean
   planned: BotListTickPlan[]
   message: string
 }
