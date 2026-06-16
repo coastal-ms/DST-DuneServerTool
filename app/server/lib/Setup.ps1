@@ -5,6 +5,9 @@
 #   - the existing POST /api/commands/run/initial-setup is used by Step 3.
 
 function Get-DuneSetupPreflight {
+    param(
+        [ValidateSet('fresh','existing')][string]$Mode = 'fresh'
+    )
     $checks = [System.Collections.Generic.List[object]]::new()
 
     # 1. Administrator
@@ -33,24 +36,47 @@ function Get-DuneSetupPreflight {
         fix      = if ($hvOk) { $null } else { "Run in an elevated PowerShell, then reboot when prompted:`nEnable-WindowsOptionalFeature -Online -FeatureName Microsoft-Hyper-V -All" }
     }) | Out-Null
 
+    # 2b. OpenSSH client — DST shells out to ssh.exe for EVERY VM operation
+    #     (status probes, server health, game data, key rotation). Missing on
+    #     older Windows builds where the optional feature was never added. This
+    #     is a hard DST prerequisite regardless of which setup path is chosen.
+    $sshOk = [bool](Get-Command ssh -ErrorAction SilentlyContinue)
+    $checks.Add(@{
+        key      = 'openssh'
+        label    = 'OpenSSH client (ssh)'
+        ok       = $sshOk
+        severity = if ($sshOk) { 'ok' } else { 'error' }
+        detail   = if ($sshOk) { 'ssh.exe is on PATH — DST can reach the VM.' } else { 'The OpenSSH client is required for DST to reach the server over SSH. Install the Windows "OpenSSH Client" optional feature.' }
+        fix      = if ($sshOk) { $null } else { "Run in an elevated PowerShell:`nAdd-WindowsCapability -Online -Name OpenSSH.Client~~~~0.0.1.0" }
+    }) | Out-Null
+
     # 3. Disk space (system drive)
+    #    DST only checks what DST itself needs — the app plus room for logs and
+    #    local DB backups/snapshots. It does NOT size the server VM here: on a
+    #    fresh self-host install the user picks the VM's RAM during that flow and
+    #    the install console reports if there isn't enough disk for the image.
+    $DstDiskFloorGB = 5      # DST app + local backups headroom
+    $reqGB = $DstDiskFloorGB
     $diskOk = $false
-    $diskDetail = 'Could not query system drive.'
     $freeGB = 0
+    $diskQueried = $false
     try {
         $sysDrive = Get-PSDrive -PSProvider FileSystem -ErrorAction Stop |
                     Where-Object { $_.Name -eq ($env:SystemDrive[0]) } |
                     Select-Object -First 1
         if ($sysDrive) {
+            $diskQueried = $true
             $freeGB = [math]::Round(($sysDrive.Free / 1GB), 1)
-            $diskOk = ($freeGB -ge 60)
-            $diskDetail = if ($diskOk) {
-                "$freeGB GB free on system drive (recommend 60+ GB)."
-            } else {
-                "Only $freeGB GB free; battlegroup VM needs ~60 GB."
-            }
+            $diskOk = ($freeGB -ge $reqGB)
         }
     } catch { }
+    $diskDetail = if (-not $diskQueried) {
+        'Could not query system drive.'
+    } elseif ($diskOk) {
+        "$freeGB GB free — enough for DST (app + local backups)."
+    } else {
+        "Only $freeGB GB free; DST needs ~$DstDiskFloorGB GB for the app and local backups."
+    }
     $checks.Add(@{
         key      = 'disk'
         label    = 'Disk space (system drive)'

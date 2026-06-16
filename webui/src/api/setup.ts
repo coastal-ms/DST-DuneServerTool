@@ -28,5 +28,8 @@ export interface SetupConfigSummary {
   sshPort: number
 }
 
-export function getPreflight() { return api<PreflightResult>('/api/setup/preflight') }
+export function getPreflight(mode?: 'existing' | 'fresh') {
+  const q = mode ? `?mode=${encodeURIComponent(mode)}` : ''
+  return api<PreflightResult>(`/api/setup/preflight${q}`)
+}
 export function getSetupConfig() { return api<SetupConfigSummary>('/api/setup/config') }

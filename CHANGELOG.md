@@ -13,6 +13,58 @@ here cover everything those tags shipped.
 
 ## [Unreleased]
 
+## [12.5.0] - 2026-06-16
+
+### Added
+
+- **Market bot: market-follow pricing mode.** A new all-or-nothing pricing
+  source that lists every Duke item at the **median of competing players' sell
+  orders** (his own/other bots' listings excluded) times a markup you set
+  (default +10%), instead of the tier/rarity/vendor formula. Built for cases
+  where the formula under-prices items (e.g. augments). Configurable on the
+  **Pricing rules** tab: markup %, minimum competing orders before a median is
+  trusted, and a three-way rule for items nobody else is selling —
+  **Formula** (normal price), **Skip** (leave unlisted), or **Baseline** (a
+  fixed price you enter, also × markup). A collapsible "How it works" explainer
+  and per-control tooltips document each knob. Enabling or disabling the mode
+  wipes and rebuilds Duke's listings on the next list tick so prices switch over
+  cleanly (the bot flags a pending relist automatically). On the buy side, a
+  **Force buy guard** toggle (default on) makes a winning dice roll only buy when
+  the seller's price is within the over-market % of the market median.
+
+- **Market bot: over-market buy guard.** When enabled, a winning d12 roll only
+  buys if the seller's per-unit price is within a configurable percentage
+  (default 5%) of Duke's reference price for that item; a roll that wins but is
+  over the window is skipped and the reason is logged to the console. Items with
+  no resolvable reference are judged against an editable baseline, or — with
+  "Allow items with no market price" on — bought anyway. Controls live on the
+  **Buy side** tab.
+
+- **Setup Wizard: two-path onboarding.** The wizard now asks upfront whether you
+  already have a Dune Awakening server. **"Yes — I already have a server"** skips
+  VM import and goes straight to a new **Connect to your server** step (locate an
+  existing SSH key, generate one, or authorize a new key on the running VM via
+  `/api/config/rotate-ssh-key`). **"No — set one up for me"** keeps the original
+  fresh-install flow (Pre-flight → Configuration → Install → Security →
+  Networking → Finalize).
+
+### Changed
+
+- **Setup Wizard pre-flight runs prerequisite checks first, scoped to the chosen
+  path.** Pre-flight now verifies the OpenSSH client (`ssh.exe`) is present
+  (DST shells out to SSH for every VM operation) and accepts a
+  `?mode=existing|fresh` parameter. The existing-server path only checks that DST
+  itself has enough free disk (~5 GB for the app plus local backups/snapshots);
+  the fresh-install path additionally reports whether there's room for the
+  Hyper-V VM image during the install step.
+
+### Fixed
+
+- **Game Config: boolean toggle highlighting is now case-insensitive.** On/Off
+  pills and the defaults editor now compare values with `valuesEqual`, so a
+  config whose stored boolean differs only in casing (e.g. `True` vs `true`)
+  highlights the correct state.
+
 ## [12.4.0] - 2026-06-16
 
 ### Added

@@ -5,7 +5,9 @@
 Register-DuneRoute -Method GET -Path '/api/setup/preflight' -Handler {
     param($req, $res, $routeParams, $body)
     try {
-        Write-DuneJson -Response $res -Body (Get-DuneSetupPreflight)
+        $mode = (Get-DuneQ $req 'mode')
+        if ($mode -ne 'existing') { $mode = 'fresh' }
+        Write-DuneJson -Response $res -Body (Get-DuneSetupPreflight -Mode $mode)
     } catch {
         Write-DuneError -Response $res -Status 500 -Message $_.Exception.Message
     }
