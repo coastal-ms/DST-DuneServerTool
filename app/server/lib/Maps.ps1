@@ -518,3 +518,91 @@ function Stop-DuneOnDemandMap {
         }
     }
 }
+
+# ---------------------------------------------------------------------------
+# Pod restart — delete the Kubernetes pod(s) backing a map's ServerSet so the
+# operator recreates them fresh. Used by the Map SpinUp page's "Restart" buttons.
+# Pod names follow <bg-id>-sg<map-suffix>-pod-<n> (see
+# app/resources/remote-scripts/dune-clear-partitions.start), so we match on the
+# fixed "-sg-<map>-pod-" infix from the allow-list below — never on user input.
+# This disconnects anyone currently on the map; the operator brings the pod(s)
+# back in ~60-120 s. Survival_1 hosts the persistent Hagga overworld.
+# ---------------------------------------------------------------------------
+$script:DuneRestartablePods = @(
+    @{ Key='survival';   Infix='-sg-survival-1-pod-';   Label='Hagga (Survival_1)' }
+    @{ Key='deepdesert'; Infix='-sg-deepdesert-1-pod-'; Label='Deep Desert'        }
+)
+
+function Restart-DuneMapPods {
+    param([Parameter(Mandatory)][string]$Key)
+    $def = $script:DuneRestartablePods | Where-Object { $_.Key -eq $Key } | Select-Object -First 1
+    if (-not $def) { throw "Unknown restartable pod: $Key" }
+
+    $ctx = Get-DuneMapsContext
+    if (-not $ctx.ok) { return @{ ok=$false; status=$ctx.status; message=$ctx.message; key=$Key } }
+
+    # Single SSH round-trip: list every pod whose name contains the fixed
+    # "-sg-<map>-pod-" infix, delete each (non-blocking), and bracket the
+    # output with sentinels so we can parse found / deleted counts. The infix
+    # is injected via placeholder replace (not PS interpolation) and only ever
+    # comes from the static allow-list above, so there's no shell injection.
+    $bash = @'
+set -u
+KUBE="sudo kubectl"
+INFIX='__INFIX__'
+PODS=$($KUBE get pods -A --no-headers 2>/dev/null | awk -v f="$INFIX" 'index($2,f){print $1" "$2}')
+echo "===PODS==="
+if [ -n "$PODS" ]; then echo "$PODS"; fi
+echo "===DELETE==="
+if [ -n "$PODS" ]; then
+  echo "$PODS" | while read -r ns pod; do
+    [ -z "$ns" ] || [ -z "$pod" ] && continue
+    $KUBE -n "$ns" delete pod "$pod" --wait=false 2>&1
+  done
+fi
+echo "===END==="
+'@
+    $bash = $bash.Replace('__INFIX__', [string]$def.Infix)
+
+    $out = Invoke-V6Ssh -Ip $ctx.vm.ip -Cmd $bash -TimeoutSec 90
+    $raw = (($out -join "`n")).Trim()
+
+    $idxPods = $raw.IndexOf('===PODS===')
+    $idxDel  = $raw.IndexOf('===DELETE===')
+    $idxEnd  = $raw.IndexOf('===END===')
+    if ($idxPods -lt 0 -or $idxDel -lt 0 -or $idxEnd -lt 0) {
+        return @{ ok=$false; status=500; key=$Key; label=$def.Label; raw=$raw; message="Pod restart returned malformed output (missing sentinels): $raw" }
+    }
+    $podsBlock = $raw.Substring($idxPods + '===PODS==='.Length, $idxDel - ($idxPods + '===PODS==='.Length))
+    $delBlock  = $raw.Substring($idxDel  + '===DELETE==='.Length, $idxEnd - ($idxDel + '===DELETE==='.Length))
+
+    $podNames = @(
+        $podsBlock -split "`n" |
+            ForEach-Object { $_.Trim() } |
+            Where-Object { $_ } |
+            ForEach-Object { ($_ -split '\s+')[1] } |
+            Where-Object { $_ }
+    )
+    $podsFound = $podNames.Count
+    $deleted   = @($delBlock -split "`n" | Where-Object { $_ -match '\bdeleted\b' }).Count
+
+    if ($podsFound -eq 0) {
+        return @{
+            ok=$true; key=$Key; label=$def.Label; noop=$true
+            podsFound=0; podsDeleted=0; raw=$raw
+            message="No running $($def.Label) pod(s) found — nothing to restart."
+        }
+    }
+
+    $errish  = ($delBlock -match 'error|Error|ERROR|forbidden|not found')
+    $success = ($deleted -gt 0 -and -not $errish)
+    return @{
+        ok=$success; key=$Key; label=$def.Label
+        podsFound=$podsFound; podsDeleted=$deleted; pods=$podNames; raw=$raw
+        message = if ($success) {
+            "Restarting $($def.Label): deleted $deleted pod(s) — the operator recreates them in ~60-120 s. Anyone on the map was disconnected."
+        } else {
+            ("Pod restart may have failed (found $podsFound, deleted $deleted): " + $delBlock.Trim())
+        }
+    }
+}

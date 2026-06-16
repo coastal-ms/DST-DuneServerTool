@@ -77,3 +77,22 @@ export function fixOnDemandPartitions() {
     method: 'POST',
   })
 }
+
+export interface RestartPodsResult {
+  ok: boolean
+  key: string
+  label?: string
+  noop?: boolean
+  podsFound?: number
+  podsDeleted?: number
+  pods?: string[]
+  raw?: string
+  message?: string
+}
+
+// key: 'survival' (Hagga / Survival_1) | 'deepdesert' (Deep Desert)
+export function restartMapPods(key: 'survival' | 'deepdesert') {
+  return api<RestartPodsResult>('/api/maps/restart-pods', {
+    method: 'POST', body: JSON.stringify({ key }),
+  })
+}
