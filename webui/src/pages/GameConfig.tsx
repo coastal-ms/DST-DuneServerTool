@@ -572,8 +572,8 @@ export function GameConfig() {
       setValues(seeded)
       setOriginals(seeded)
       const n = out.applied ?? dirtyKeys.length
-      setSavedMsg(`Saved ${n} change${n === 1 ? '' : 's'} into the DST-managed block.`)
-      window.setTimeout(() => setSavedMsg(null), 5000)
+      setSavedMsg(`Saved ${n} change${n === 1 ? '' : 's'} into the DST-managed block. Tip: use “Backup settings” to snapshot before big changes — DST no longer auto-backs-up on every save.`)
+      window.setTimeout(() => setSavedMsg(null), 8000)
       // Some settings (e.g. landclaim limits, building restrictions) are read by
       // BOTH server and client — remind the admin to mirror them on each client.
       const ca = out.clientApply

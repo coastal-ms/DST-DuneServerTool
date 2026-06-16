@@ -278,4 +278,23 @@ PlayerInventoryStartingVolumeCapacity=300.0
         Test-DuneGameConfigValueIsDefault -Key 'm_InventoryWeightMultiplier' -Value '2.0'  | Should -BeFalse
         Test-DuneGameConfigValueIsDefault -Key 'm_bBuildingRestrictionLimitsEnabled' -Value 'true' | Should -BeTrue
     }
+
+    It 'scrubs deprecated no-op multiplier keys out of the managed block on any save' {
+        $sec = '/Script/DuneSandbox.DuneGameMode'
+        $raw = $script:DstManagedBegin + "`n" +
+               "[$sec]`n" +
+               "m_GlobalXPMultiplier=1000`n" +
+               "m_GlobalHarvestAmountMultiplier=1.1`n" +
+               "m_InventoryWeightMultiplier=0.8`n" +
+               "m_bIsDbWipeEnabled=False`n" +
+               $script:DstManagedEnd + "`n"
+        # An unrelated save (touch a kept key) must still scrub the dead keys.
+        $updates = @(@{ section = $sec; key = 'm_InventoryWeightMultiplier'; value = '0.5' })
+        $out = ConvertTo-DuneIniManaged -Raw $raw -Updates $updates -QuotedKeys @{}
+        $out | Should -Not -Match 'm_GlobalXPMultiplier'
+        $out | Should -Not -Match 'm_GlobalHarvestAmountMultiplier'
+        # kept keys survive
+        $out | Should -Match 'm_InventoryWeightMultiplier'
+        $out | Should -Match 'm_bIsDbWipeEnabled'
+    }
 }

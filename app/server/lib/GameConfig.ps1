@@ -66,6 +66,22 @@ $script:DuneGameConfigCategoryOrder = @(
     'Storm Cycle','PvP & Security','Spice','Taxation','Sandworm','Vehicles'
 )
 
+# Keys DST USED to expose but removed after proving them no-ops via UserGame.ini
+# (2026-06-15 live test, issue #225). The managed-block writer actively scrubs
+# these from the DST-owned managed block on every save, so they don't linger
+# orphaned in existing users' files now that the schema no longer carries them.
+# Only touches the managed block — never the user's own (body) sections.
+$script:DuneGameConfigDeprecatedManagedKeys = @(
+    'm_GlobalHealthMultiplier'
+    'm_GlobalDamageToNpcsMultiplier'
+    'm_GlobalDamageToPlayersMultiplier'
+    'm_GlobalXPMultiplier'
+    'm_GlobalProgressionSpeedMultiplier'
+    'm_GlobalFameMultiplier'
+    'm_GlobalHarvestAmountMultiplier'
+    'm_GlobalHarvestHealthMultiplier'
+)
+
 $script:DuneGameConfigSchema = @(
     # --- Server Identity (engine ConsoleVariables) ---
     @{ Section=$script:DuneGcSecConsole; Key='Bgd.ServerDisplayName'; File='engine'; Type='string'; Quoted=$true; Wide=$true; Default=''; Label='Server Display Name'; Help='Name shown to players for every Sietch in the battlegroup.'; Category='Server Identity'; Placeholder='Not set (uses world name)' }
@@ -340,9 +356,10 @@ function Set-DuneIniValuesInPlace {
 }
 
 # Apply client-apply updates to the LOCAL client Game.ini. Validates that every
-# key is schema-flagged ClientApply (blocks arbitrary local writes), backs the
-# file up next to itself (.dstbak-<ts>) before writing, and upserts in place.
-# Returns @{ ok; path; backup; created; applied; items }.
+# key is schema-flagged ClientApply (blocks arbitrary local writes) and upserts
+# in place. Does NOT auto-backup (manual backups only). Also scrubs the
+# deprecated no-op multiplier keys so the client file stays clean.
+# Returns @{ ok; path; backup; created; applied; items } (backup always '').
 function Save-DuneGameConfigClient {
     param([object[]]$Updates, [string]$Dir = '')
     if (-not $Updates -or $Updates.Count -eq 0) { throw 'No updates supplied.' }
@@ -361,6 +378,13 @@ function Save-DuneGameConfigClient {
     }
     if ($clean.Count -eq 0) { throw 'No client-applicable keys in the supplied updates.' }
 
+    # Also scrub the deprecated no-op multiplier keys from the client file so a
+    # user's local Game.ini doesn't keep orphaned values DST no longer manages.
+    # (Same server-wins / keep-it-clean intent as the server managed block.)
+    foreach ($dk in $script:DuneGameConfigDeprecatedManagedKeys) {
+        $clean.Add(@{ section = $script:DuneGcSecGame; key = $dk; value = ''; remove = $true })
+    }
+
     $dirResolved = Resolve-DuneGameConfigClientDir -Dir $Dir
     if (-not (Test-Path -LiteralPath $dirResolved)) { throw "Client config folder not found: $dirResolved" }
     $path = Get-DuneGameConfigClientFilePath -Dir $Dir
@@ -376,12 +400,8 @@ function Save-DuneGameConfigClient {
     $new    = Set-DuneIniValuesInPlace -Raw $existing -Updates $clean.ToArray() -QuotedKeys $quoted
     $new    = $new -replace "`r?`n", "`r`n"   # local file is Windows CRLF
 
+    # No auto-backup: client backups are manual to avoid piling up .dstbak files.
     $backup = ''
-    if (-not $created) {
-        $ts     = (Get-Date).ToString('yyyyMMddHHmmss')
-        $backup = "$path.dstbak-$ts"
-        Copy-Item -LiteralPath $path -Destination $backup -Force
-    }
     [IO.File]::WriteAllText($path, $new, (New-Object System.Text.UTF8Encoding($false)))
 
     return @{ ok = $true; path = $path; backup = $backup; created = $created; applied = $clean.Count; items = $clean.ToArray() }
@@ -643,6 +663,20 @@ function ConvertTo-DuneIniManaged {
         }
     }
 
+    # Scrub deprecated keys from DST-owned managed sections. These keys were once
+    # in the schema but were removed after being proven no-ops (see issue #225).
+    # Because the managed block otherwise PRESERVES keys DST no longer recognises,
+    # without this they would be orphaned in every existing user's file forever.
+    # DST owns the managed block ("do not hand-edit"), so scrubbing known-dead keys
+    # from it (and ONLY from it, never the user's own body sections) is safe.
+    if ($managed.Count -gt 0 -and $script:DuneGameConfigDeprecatedManagedKeys.Count -gt 0) {
+        foreach ($entry in $managed) {
+            foreach ($dk in $script:DuneGameConfigDeprecatedManagedKeys) {
+                Remove-DuneScalarFromBody -Body $entry.body -Key $dk
+            }
+        }
+    }
+
     # Drop any managed section whose body is now empty (every key removed) so a
     # reset-to-default doesn't leave a bare [section] header behind.
     if ($managed.Count -gt 0) {
@@ -842,12 +876,14 @@ function Test-DuneGameConfigValueIsDefault {
 }
 
 # Save structured updates. $Updates = array of @{ file; section; key; value }.
-# Backs the file up server-side before writing.
+# Save structured updates. $Updates = array of @{ file; section; key; value }.
+# Does NOT auto-backup — backups are manual (Backup settings button) to avoid
+# cluttering the server PVC with a .dstbak per save.
 function Save-DuneGameConfig {
     param([string]$Ip, [object[]]$Updates)
-    if (-not $Updates -or $Updates.Count -eq 0) { return }    $paths  = Resolve-DuneGameConfigPaths -Ip $Ip
+    if (-not $Updates -or $Updates.Count -eq 0) { return }
+    $paths  = Resolve-DuneGameConfigPaths -Ip $Ip
     $quoted = Get-DuneGameConfigQuotedKeys
-    $ts     = (Get-Date).ToString('yyyyMMddHHmmss')
 
     $byFile = @{ game = (New-Object 'System.Collections.Generic.List[object]'); engine = (New-Object 'System.Collections.Generic.List[object]') }
     foreach ($u in $Updates) {
@@ -860,8 +896,6 @@ function Save-DuneGameConfig {
         $path = if ($f -eq 'game') { $paths.game } else { $paths.engine }
         $raw  = (Invoke-V6Ssh -Ip $Ip -Cmd "sudo cat '$path' 2>/dev/null") -join "`n"
         $new  = ConvertTo-DuneIniManaged -Raw $raw -Updates $byFile[$f].ToArray() -QuotedKeys $quoted
-        # Backup before write (best-effort; ignore failure of cp on template path).
-        Invoke-V6Ssh -Ip $Ip -Cmd "sudo cp '$path' '$path.dstbak-$ts' 2>/dev/null" -TimeoutSec 20 | Out-Null
         $b64 = [Convert]::ToBase64String([Text.Encoding]::UTF8.GetBytes($new))
         Invoke-V6Ssh -Ip $Ip -Cmd "base64 -d | sudo tee '$path' > /dev/null" -StdinData $b64 -TimeoutSec 30 | Out-Null
     }

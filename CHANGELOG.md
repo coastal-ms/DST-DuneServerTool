@@ -13,6 +13,8 @@ here cover everything those tags shipped.
 
 ## [Unreleased]
 
+## [12.2.0] - 2026-06-15
+
 ### Added
 
 - **"Default" button on every Game Config field.** Each setting now has a
@@ -50,6 +52,25 @@ here cover everything those tags shipped.
   the Hexaspark ServerConfig reference, which lists them as real Floats but does
   not reflect the current self-hosted build. Building Damage and Inventory Weight
   multipliers are kept. See issue #225.
+
+- **DST now scrubs the removed no-op multiplier keys out of its managed INI
+  block on the next save.** Removing a key from the schema would otherwise orphan
+  it — the managed-block writer preserves keys it no longer recognises, so any
+  value a user had previously set (e.g. `m_GlobalXPMultiplier`) would linger in
+  the file forever. DST now actively deletes the eight deprecated multiplier keys
+  from its own managed block whenever it writes, without touching the user's own
+  (non-managed) INI sections.
+
+### Changed
+
+- **Game Config no longer auto-backs-up on every save.** DST used to write a
+  `UserGame.ini.dstbak-<timestamp>` (and a client-side copy) on *every* save,
+  which piled up dozens of backup files on the server PVC and in the local
+  client config folder. Backups are now **manual only** — use the existing
+  **Backup settings** button to create a restore point. The save-success message
+  reminds you to do so before big changes. Also scrubs the deprecated multiplier
+  keys from the client `Game.ini` (not just the server file) so a player's local
+  config stays in sync and doesn't keep orphaned no-op values.
 
 ### Fixed
 
