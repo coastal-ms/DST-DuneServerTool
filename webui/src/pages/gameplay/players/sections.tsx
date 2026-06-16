@@ -25,8 +25,10 @@ import {
   setStarterClass, teleportToPlayer, updatePlayerTags, wipeCodex, wipeJourney,
   chatWhisper, isValidTemplateId, getItemCatalog,
   giveItems, getItemPackages, saveItemPackage, deleteItemPackage,
+  getLandsraadOverview, getLandsraadPlayerContributions, setLandsraadContribution,
   type Player, type PlayerEvent, type PlayerStats, type ProgressionPreset, type SpecTrackFull,
   type CatalogItem, type ItemPackage, type GiveItemEntry,
+  type LandsraadHouse, type LandsraadIniSetting,
 } from '../../../api/gameplay'
 import { VEHICLE_CATALOG, VEHICLE_KIT_FUEL_TEMPLATE, VEHICLE_KIT_TORCH_TEMPLATE, type VehicleTemplate } from '../../../data/vehicles'
 import { fmtNum, fmtSolari } from '../shared'
@@ -1644,13 +1646,174 @@ function prettyMeta(meta: string): string {
   }
 }
 
+// ---------------------------------------------------------------------------
+// Landsraad — set a player's per-House contribution for the current term, and
+// show the [LandsraadSettings] INI config for context (#224). Reads DB (term +
+// Houses + the player's present contributions) AND the INI settings.
+// ---------------------------------------------------------------------------
+function LandsraadSection({ player, canWrite, demo, refreshKey, flash, onChanged }: SectionProps) {
+  const [termId, setTermId] = useState(0)
+  const [houses, setHouses] = useState<LandsraadHouse[]>([])
+  const [settings, setSettings] = useState<LandsraadIniSetting[]>([])
+  const [byTask, setByTask] = useState<Record<number, number>>({})
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
+  const [editing, setEditing] = useState<number | null>(null)
+  const [draft, setDraft] = useState('')
+  const [busy, setBusy] = useState(false)
+  const [showSettings, setShowSettings] = useState(false)
+
+  const load = useCallback(async () => {
+    setLoading(true); setError(null)
+    try {
+      const ov = await getLandsraadOverview(demo)
+      const pc = await getLandsraadPlayerContributions(player.controller_id, demo)
+      setTermId(ov.term_id)
+      setHouses(ov.houses ?? [])
+      setSettings(ov.settings ?? [])
+      const map: Record<number, number> = {}
+      for (const c of (pc.contributions ?? [])) map[c.task_id] = c.amount
+      setByTask(map)
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e))
+    } finally {
+      setLoading(false)
+    }
+  }, [player.controller_id, demo])
+
+  useEffect(() => { void load() }, [load, refreshKey])
+
+  const beginEdit = (h: LandsraadHouse) => {
+    if (!canWrite) return
+    setEditing(h.task_id)
+    setDraft(String(byTask[h.task_id] ?? 0))
+  }
+
+  const save = async (taskId: number) => {
+    const amt = parseFloat(draft)
+    if (!Number.isFinite(amt) || amt < 0) { flash('Amount must be a number ≥ 0.', 'err'); return }
+    setBusy(true)
+    try {
+      const r = await setLandsraadContribution(player.controller_id, taskId, amt)
+      flash(r.message ?? 'Saved.', r.ok ? 'ok' : 'err')
+      setEditing(null); onChanged(); await load()
+    } catch (e) {
+      flash(e instanceof Error ? e.message : String(e), 'err')
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  if (loading) {
+    return <div className="flex items-center gap-2 text-sm text-text-muted py-6 justify-center">
+      <Icon name="Loader2" size={16} className="animate-spin" /> Loading Landsraad…
+    </div>
+  }
+  if (error) {
+    return <div className="card p-3 border-danger/40 bg-danger/10 text-danger text-sm flex items-center gap-2">
+      <Icon name="AlertCircle" size={14} /> {error}
+    </div>
+  }
+  if (termId <= 0) {
+    return <div className="text-sm text-text-muted py-6 text-center">No active Landsraad term on this server.</div>
+  }
+
+  return (
+    <div className="space-y-4">
+      <div className="flex items-center justify-between">
+        <div className="text-sm text-text">
+          <span className="text-text-muted">Current term</span> <span className="font-mono">#{termId}</span>
+          <span className="text-text-dim"> · {houses.length} Houses</span>
+        </div>
+        {!canWrite && <span className="text-[11px] text-text-dim">Read-only (start the battlegroup to edit)</span>}
+      </div>
+
+      <div className="text-[11px] text-warning flex items-start gap-1.5">
+        <Icon name="AlertTriangle" size={11} className="mt-0.5 shrink-0" />
+        <span>
+          Setting a contribution writes directly to the live Landsraad tables and
+          recomputes the House's faction + guild totals. The player must belong to a
+          faction. Changes show in-game on the next Landsraad progress update.
+        </span>
+      </div>
+
+      <div className="space-y-1">
+        {houses.map(h => {
+          const cur = byTask[h.task_id] ?? 0
+          const isEditing = editing === h.task_id
+          const pct = h.goal_amount > 0 ? Math.min(100, Math.round((cur / h.goal_amount) * 100)) : 0
+          return (
+            <div key={h.task_id} className="bg-surface-2 rounded-lg border border-border/50">
+              <div
+                className={`flex items-center justify-between text-sm px-3 py-2 ${canWrite ? 'cursor-pointer hover:bg-surface-3/40' : ''}`}
+                onClick={canWrite ? () => (isEditing ? setEditing(null) : beginEdit(h)) : undefined}
+                role={canWrite ? 'button' : undefined}
+                tabIndex={canWrite ? 0 : undefined}
+              >
+                <span className="truncate">
+                  {canWrite && <Icon name={isEditing ? 'ChevronDown' : 'ChevronRight'} size={11} className="inline-block mr-1 text-text-dim" />}
+                  <span className="text-text">{h.display_name}</span>
+                  {h.completed && <span className="ml-1.5 text-[10px] text-success uppercase tracking-wider">done</span>}
+                </span>
+                <span className="font-mono text-xs text-text-muted shrink-0" title={`${cur} / ${h.goal_amount} (${pct}%)`}>
+                  {fmtNum(cur)}/{fmtNum(h.goal_amount)}
+                </span>
+              </div>
+              {isEditing && (
+                <div className="border-t border-border/50 px-3 py-3 bg-surface-1/60 rounded-b-lg flex items-end gap-2" onClick={e => e.stopPropagation()}>
+                  <label className="text-xs flex-1">
+                    <div className="text-text-dim mb-1">Contribution to House {h.display_name}</div>
+                    <input
+                      type="number" inputMode="decimal" step="any" min="0"
+                      value={draft}
+                      onChange={e => setDraft(e.target.value)}
+                      disabled={busy}
+                      className="w-full font-mono text-sm bg-surface-2 border border-border rounded px-2 py-1"
+                    />
+                  </label>
+                  <button type="button" className="btn-primary text-xs" disabled={busy} onClick={() => void save(h.task_id)}>
+                    <Icon name="Save" size={12} /> Save
+                  </button>
+                </div>
+              )}
+            </div>
+          )
+        })}
+      </div>
+
+      {settings.length > 0 && (
+        <div className="border-t border-border/40 pt-3">
+          <button type="button" onClick={() => setShowSettings(s => !s)}
+            className="flex w-full items-center gap-2 text-xs uppercase tracking-wider text-text-dim hover:text-text mb-2">
+            <Icon name={showSettings ? 'ChevronDown' : 'ChevronRight'} size={13} />
+            <Icon name="Settings" size={13} />
+            <span>Landsraad settings (from UserGame.ini)</span>
+          </button>
+          {showSettings && (
+            <div className="space-y-1">
+              <div className="text-[11px] text-text-dim mb-1">These are read-only here — edit them in <span className="text-text">Game Config → Landsraad</span>.</div>
+              {settings.map(s => (
+                <div key={s.key} className="flex items-center justify-between text-xs px-3 py-1.5 bg-surface-2/40 rounded" title={s.help}>
+                  <span className="text-text-muted">{s.label}</span>
+                  <span className="font-mono text-text">{s.value ?? '—'}</span>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  )
+}
+
 // Re-export the section component type for the tab shell.
-export type SectionId = 'stats' | 'specs' | 'tags' | 'history' | 'inventory' | 'actions'
+export type SectionId = 'stats' | 'specs' | 'tags' | 'history' | 'inventory' | 'landsraad' | 'actions'
 
 export const SECTIONS: Array<{ id: SectionId; label: string; icon: string }> = [
   { id: 'stats',     label: 'Stats',     icon: 'User' },
   { id: 'specs',     label: 'Specs',     icon: 'Sparkles' },
   { id: 'inventory', label: 'Inventory', icon: 'Backpack' },
+  { id: 'landsraad', label: 'Landsraad', icon: 'Landmark' },
   { id: 'tags',      label: 'Tags',      icon: 'Tag' },
   { id: 'history',   label: 'History',   icon: 'History' },
   { id: 'actions',   label: 'Actions',   icon: 'Wand2' },
@@ -1662,5 +1825,6 @@ export const SECTION_COMPONENTS: Record<SectionId, (p: SectionProps) => ReactEle
   tags:      TagsSection,
   history:   HistorySection,
   inventory: InventorySection,
+  landsraad: LandsraadSection,
   actions:   ActionsSection,
 }

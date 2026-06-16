@@ -20,6 +20,27 @@ here cover everything those tags shipped.
   control whether the dedicated server restarts itself when a Coriolis cycle
   (season) ends, without hand-editing the INI.
 
+- **New Game Config → Landsraad section.** Exposes the Landsraad settings Funcom
+  stores as scalar members inside the single `[/Script/DuneSandbox.LandsraadSettings]`
+  `Data=(...)` struct (task goal amount, term retention, decree/voting counts,
+  voting-period timings, contract limits, control points, player-voting and
+  territory-control toggles, reveal/progress frequencies). A struct-member engine
+  edits each member in place and preserves the nested members (messages, board
+  layouts, curves, widget paths) byte-for-byte, so it's written exactly where the
+  engine reads it.
+
+- **New Players → Landsraad section (per-House contribution editor).** Pick a
+  player, see the current term's 25 Houses with that player's present
+  contribution, and set the contribution to any House to an arbitrary amount.
+  Writes `landsraad_task_player_contributions` and recomputes the House's faction
+  + guild aggregates so totals stay consistent. Also surfaces the read-only
+  `[LandsraadSettings]` values for context. (Discord request, #224.)
+
+- **New Game Config → Hydration section.** `Hydration Enabled`
+  (`m_bHydrationEnabled`) and `Biome Tier Update Rate`
+  (`m_BiomeTierUpdateRateSeconds`), both client-applied. The hydration/thirst
+  master toggle was never exposed before.
+
 ## [12.2.0] - 2026-06-15
 
 ### Added

@@ -348,3 +348,95 @@ Describe 'GameConfig: single-section-per-key consistency' -Tag 'GameConfig' {
         $byKey['m_CycleDurationInDays'] | Should -Be '7'
     }
 }
+
+Describe 'GameConfig: UE struct-member engine (LandsraadSettings Data blob)' -Tag 'GameConfig' {
+
+    BeforeAll {
+        # Real-shape blob: flat scalars mixed with nested members (messages, curve,
+        # quoted widget paths, gameplay tags) that must survive byte-for-byte.
+        $script:LsBlob = 'Data=(m_NumberOfWeeksTermRetention=4,m_TermStartedMessage=(Name="LandsraadTermStarted"),m_bIsPlayerVotingEnabled=True,m_LandsraadProgressFactionBalanceCurve=/Script/Engine.CurveFloat''"/Game/Dune/Systems/Landsraad/Curve_X.Curve_X"'',m_TaskGoalAmount=5000.0,m_ControlPointsPerCycle=2,m_LandsraadContractsNewMarkerGameplayTags=(GameplayTags=((TagName="X"))),m_ControlPointAreaMaterial="/Game/Dune/M.M")'
+    }
+
+    It 'reads only the flat scalar members' {
+        $m = Get-DuneStructScalarMembers -Blob $script:LsBlob
+        $m['m_NumberOfWeeksTermRetention'] | Should -Be '4'
+        $m['m_bIsPlayerVotingEnabled']     | Should -Be 'True'
+        $m['m_TaskGoalAmount']             | Should -Be '5000.0'
+        $m['m_ControlPointsPerCycle']      | Should -Be '2'
+        # nested / quoted members are NOT surfaced as scalars
+        $m.ContainsKey('m_TermStartedMessage')   | Should -BeFalse
+        $m.ContainsKey('m_ControlPointAreaMaterial') | Should -BeFalse
+    }
+
+    It 'updates a scalar member in place and leaves nested members untouched' {
+        $out = Set-DuneStructScalarMember -Blob $script:LsBlob -Key 'm_TaskGoalAmount' -Value '12000.0'
+        $out | Should -Match 'm_TaskGoalAmount=12000\.0'
+        $out | Should -Not -Match 'm_TaskGoalAmount=5000\.0'
+        # nested members preserved verbatim
+        $out | Should -Match 'm_TermStartedMessage=\(Name="LandsraadTermStarted"\)'
+        $out | Should -Match 'GameplayTags=\(\(TagName="X"\)\)'
+        $out | Should -Match 'm_ControlPointAreaMaterial="/Game/Dune/M\.M"'
+    }
+
+    It 'does not over-match a key that is a prefix of the value or other keys' {
+        $out = Set-DuneStructScalarMember -Blob $script:LsBlob -Key 'm_ControlPointsPerCycle' -Value '9'
+        $m = Get-DuneStructScalarMembers -Blob $out
+        $m['m_ControlPointsPerCycle']      | Should -Be '9'
+        $m['m_NumberOfWeeksTermRetention'] | Should -Be '4'
+        $m['m_TaskGoalAmount']             | Should -Be '5000.0'
+    }
+
+    It 'toggles a bool member' {
+        $out = Set-DuneStructScalarMember -Blob $script:LsBlob -Key 'm_bIsPlayerVotingEnabled' -Value 'False'
+        (Get-DuneStructScalarMembers -Blob $out)['m_bIsPlayerVotingEnabled'] | Should -Be 'False'
+    }
+
+    It 'inserts a missing scalar member after the opening paren' {
+        $out = Set-DuneStructScalarMember -Blob $script:LsBlob -Key 'm_NewSetting' -Value '42'
+        (Get-DuneStructScalarMembers -Blob $out)['m_NewSetting'] | Should -Be '42'
+        # still a single well-formed Data=(...) blob
+        $out | Should -Match '^Data=\('
+        $out | Should -Match '\)$'
+    }
+}
+
+Describe 'GameConfig: Landsraad struct fields integrate with read + save' -Tag 'GameConfig' {
+
+    BeforeAll {
+        $script:LsRaw = "[/Script/DuneSandbox.LandsraadSettings]`n" +
+            'Data=(m_NumberOfWeeksTermRetention=4,m_TermStartedMessage=(Name="X"),m_TaskGoalAmount=5000.0,m_bIsPlayerVotingEnabled=True)' + "`n"
+    }
+
+    It 'surfaces Landsraad struct members in effectiveByKey' {
+        $byKey = Get-DuneIniEffectiveByKey -Raw $script:LsRaw
+        $byKey['m_TaskGoalAmount']             | Should -Be '5000.0'
+        $byKey['m_NumberOfWeeksTermRetention'] | Should -Be '4'
+        $byKey['m_bIsPlayerVotingEnabled']     | Should -Be 'True'
+    }
+
+    It 'Convert-DuneStructUpdates folds member edits into one Data update, preserving nested members' {
+        $updates = @(
+            @{ file='game'; section='/Script/DuneSandbox.LandsraadSettings'; key='m_TaskGoalAmount'; value='12000.0' },
+            @{ file='game'; section='/Script/DuneSandbox.LandsraadSettings'; key='m_bIsPlayerVotingEnabled'; value='False' }
+        )
+        $folded = @(Convert-DuneStructUpdates -Raw $script:LsRaw -Updates $updates)
+        # exactly one update, targeting the Data key
+        $folded.Count | Should -Be 1
+        $folded[0].key | Should -Be 'Data'
+        $folded[0].value | Should -Match 'm_TaskGoalAmount=12000\.0'
+        $folded[0].value | Should -Match 'm_bIsPlayerVotingEnabled=False'
+        # nested member preserved
+        $folded[0].value | Should -Match 'm_TermStartedMessage=\(Name="X"\)'
+    }
+
+    It 'keeps non-struct updates separate from struct folding' {
+        $updates = @(
+            @{ file='game'; section='/Script/DuneSandbox.LandsraadSettings'; key='m_TaskGoalAmount'; value='9000.0' },
+            @{ file='game'; section='/Script/DuneSandbox.DuneGameMode'; key='m_WaterConsumptionRate'; value='2.0' }
+        )
+        $folded = @(Convert-DuneStructUpdates -Raw $script:LsRaw -Updates $updates)
+        $folded.Count | Should -Be 2
+        @($folded | Where-Object { $_.key -eq 'Data' }).Count | Should -Be 1
+        @($folded | Where-Object { $_.key -eq 'm_WaterConsumptionRate' }).Count | Should -Be 1
+    }
+}

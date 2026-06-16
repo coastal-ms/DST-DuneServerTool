@@ -51,6 +51,15 @@ $script:DuneGcSecHazards    = '/Script/DuneSandbox.HazardsSettings'
 $script:DuneGcSecPermission = '/Script/DuneSandbox.PermissionSettings'
 $script:DuneGcSecConsole   = 'ConsoleVariables'
 $script:DuneGcSecUrl       = 'URL'
+$script:DuneGcSecLandsraad = '/Script/DuneSandbox.LandsraadSettings'
+$script:DuneGcSecHydration = '/Script/DuneSandbox.HydrationSubsystem'
+
+# Funcom stores ALL Landsraad settings as scalar members inside ONE nested struct
+# value: [/Script/DuneSandbox.LandsraadSettings] Data=(m_TaskGoalAmount=5000.0,...).
+# Schema fields tagged StructKey='Data' are read from / written to that struct via
+# the UE struct-member engine (Get/Set-DuneStructScalarMember), so they edit the
+# member in place and leave the nested members (messages/curves/widgets) intact.
+$script:DuneGcLandsraadStructKey = 'Data'
 
 # Category display order (UI renders in this order; unknown categories appended).
 # NOTE: 'Progression' and 'Harvesting' categories were removed 2026-06-15 along
@@ -61,9 +70,9 @@ $script:DuneGcSecUrl       = 'URL'
 # issue #225. Do NOT re-add them as UserGame.ini fields without a fresh in-game
 # test showing an actual effect through that channel.
 $script:DuneGameConfigCategoryOrder = @(
-    'Server Identity','Network','Survival',
+    'Server Identity','Network','Survival','Hydration',
     'Resources & Economy','Building','Inventory','Guilds & Economy',
-    'Storm Cycle','PvP & Security','Spice','Taxation','Sandworm','Vehicles'
+    'Storm Cycle','Landsraad','PvP & Security','Spice','Taxation','Sandworm','Vehicles'
 )
 
 # Keys DST USED to expose but removed after proving them no-ops via UserGame.ini
@@ -99,6 +108,10 @@ $script:DuneGameConfigSchema = @(
     @{ Section=$script:DuneGcSecDurab; Key='m_ItemDurabilityLossMultiplier'; File='game'; Type='float'; Min=0; Max=10; Default='1.0'; Label='Item Durability Loss Multiplier'; Help='Scales durability loss for all items. 0 = off. Also needs client-side apply.'; ClientApply=$true; Category='Survival' }
     @{ Section=$script:DuneGcSecDurab; Key='UpdateRateInSeconds'; File='game'; Type='float'; Min=0; Max=10; Unit='sec'; Default='1.0'; Label='Item Decay Rate'; Help='Deterioration tick rate. 0 = off, 1-10 typical. Also needs client-side apply.'; ClientApply=$true; Category='Survival' }
 
+    # --- Hydration ---
+    @{ Section=$script:DuneGcSecHydration; Key='m_bHydrationEnabled'; File='game'; Type='bool'; Default='True'; Label='Hydration Enabled'; Help='Master toggle for the hydration / thirst system. Off = players never get thirsty. Also needs client-side apply.'; ClientApply=$true; Category='Hydration' }
+    @{ Section=$script:DuneGcSecHydration; Key='m_BiomeTierUpdateRateSeconds'; File='game'; Type='float'; Min=0; Unit='sec'; Default='2.5'; Label='Biome Tier Update Rate'; Help='How often (seconds) the biome hydration tier is re-evaluated. Also needs client-side apply.'; ClientApply=$true; Category='Hydration' }
+
     # --- Resources & Economy (engine ConsoleVariables) ---
     @{ Section=$script:DuneGcSecConsole; Key='Dune.GlobalMiningOutputMultiplier'; File='engine'; Type='float'; Min=0; Default='1.0'; Label='Global Mining Multiplier'; Help='Scales hand-mining resource output.'; Category='Resources & Economy' }
     @{ Section=$script:DuneGcSecConsole; Key='Dune.GlobalVehicleMiningOutputMultiplier'; File='engine'; Type='float'; Min=0; Default='1.0'; Label='Vehicle Mining Multiplier'; Help='Scales vehicle-mining resource output.'; Category='Resources & Economy' }
@@ -128,6 +141,23 @@ $script:DuneGameConfigSchema = @(
     @{ Section=$script:DuneGcSecCoriolis; Key='m_bShouldRestartServerOnCycleEnd'; File='game'; Type='bool'; Default='True'; Label='Restart Server on Cycle End'; Help='Whether the dedicated server restarts itself when a Coriolis cycle (season) ends.'; Category='Storm Cycle' }
     @{ Section=$script:DuneGcSecConsole; Key='Sandstorm.Enabled'; File='engine'; Type='bool01'; Default='1'; Label='Sandstorm'; Help='Enable rolling sandstorms.'; Category='Storm Cycle' }
     @{ Section=$script:DuneGcSecConsole; Key='Sandstorm.Treasure.Enabled'; File='engine'; Type='bool01'; Default='1'; Label='Sandstorm Treasure Spawns'; Help='Spawn treasure during sandstorms.'; Category='Storm Cycle' }
+
+    # --- Landsraad (scalar members of [LandsraadSettings] Data=(...)) ---
+    @{ Section=$script:DuneGcSecLandsraad; StructKey=$script:DuneGcLandsraadStructKey; Key='m_TaskGoalAmount'; File='game'; Type='float'; Min=0; Default='5000.0'; Label='Task Goal Amount'; Help='Contribution target for each House task before it completes.'; Category='Landsraad' }
+    @{ Section=$script:DuneGcSecLandsraad; StructKey=$script:DuneGcLandsraadStructKey; Key='m_NumberOfWeeksTermRetention'; File='game'; Type='int'; Min=1; Unit='weeks'; Default='4'; Label='Term Retention'; Help='How many weeks of term history are kept.'; Category='Landsraad' }
+    @{ Section=$script:DuneGcSecLandsraad; StructKey=$script:DuneGcLandsraadStructKey; Key='m_NumberOfDecreesToNominate'; File='game'; Type='int'; Min=0; Default='3'; Label='Decrees to Nominate'; Help='Number of decrees put up for voting each term.'; Category='Landsraad' }
+    @{ Section=$script:DuneGcSecLandsraad; StructKey=$script:DuneGcLandsraadStructKey; Key='m_NumberOfGuildsInHighscoreList'; File='game'; Type='int'; Min=0; Default='5'; Label='Guilds in Highscore List'; Help='How many guilds appear on the contribution highscore list.'; Category='Landsraad' }
+    @{ Section=$script:DuneGcSecLandsraad; StructKey=$script:DuneGcLandsraadStructKey; Key='m_ControlPointsPerCycle'; File='game'; Type='int'; Min=0; Default='2'; Label='Control Points per Cycle'; Help='Territory control points awarded per cycle.'; Category='Landsraad' }
+    @{ Section=$script:DuneGcSecLandsraad; StructKey=$script:DuneGcLandsraadStructKey; Key='m_bIsPlayerVotingEnabled'; File='game'; Type='bool'; Default='True'; Label='Player Voting Enabled'; Help='Whether players can vote on Landsraad decrees.'; Category='Landsraad' }
+    @{ Section=$script:DuneGcSecLandsraad; StructKey=$script:DuneGcLandsraadStructKey; Key='m_bIsTerritoryControlEnabled'; File='game'; Type='bool'; Default='True'; Label='Territory Control Enabled'; Help='Whether the territory-control mechanic is active.'; Category='Landsraad' }
+    @{ Section=$script:DuneGcSecLandsraad; StructKey=$script:DuneGcLandsraadStructKey; Key='m_VotingPeriodDurationInSec'; File='game'; Type='float'; Min=0; Unit='sec'; Default='118500.0'; Label='Voting Period Duration'; Help='Length of the voting window, in seconds.'; Category='Landsraad' }
+    @{ Section=$script:DuneGcSecLandsraad; StructKey=$script:DuneGcLandsraadStructKey; Key='m_VotingPeriodStartBeforeCoriolisCycleInSec'; File='game'; Type='float'; Min=0; Unit='sec'; Default='118800.0'; Label='Voting Starts Before Cycle'; Help='How many seconds before the Coriolis cycle voting opens.'; Category='Landsraad' }
+    @{ Section=$script:DuneGcSecLandsraad; StructKey=$script:DuneGcLandsraadStructKey; Key='m_LandsraadContractsMaxActiveAmount'; File='game'; Type='int'; Min=0; Default='3'; Label='Max Active Contracts'; Help='Maximum simultaneously-active Landsraad contracts per player.'; Category='Landsraad' }
+    @{ Section=$script:DuneGcSecLandsraad; StructKey=$script:DuneGcLandsraadStructKey; Key='m_LandsraadContractsPerVotingBlock'; File='game'; Type='int'; Min=0; Default='3'; Label='Contracts per Voting Block'; Help='Number of contracts offered per voting block.'; Category='Landsraad' }
+    @{ Section=$script:DuneGcSecLandsraad; StructKey=$script:DuneGcLandsraadStructKey; Key='m_LandsraadContractsDailyBonusPerDay'; File='game'; Type='int'; Min=0; Default='5'; Label='Daily Contract Bonus'; Help='Bonus contracts granted per day.'; Category='Landsraad' }
+    @{ Section=$script:DuneGcSecLandsraad; StructKey=$script:DuneGcLandsraadStructKey; Key='m_LandsraadContractsDailyBonusMax'; File='game'; Type='int'; Min=0; Default='35'; Label='Daily Contract Bonus Max'; Help='Maximum accumulated daily contract bonus.'; Category='Landsraad' }
+    @{ Section=$script:DuneGcSecLandsraad; StructKey=$script:DuneGcLandsraadStructKey; Key='m_LandsraadTaskDailyRevealFrequency'; File='game'; Type='float'; Min=0; Default='25.0'; Label='Task Daily Reveal Frequency'; Help='How often new House tasks are revealed each day.'; Category='Landsraad' }
+    @{ Section=$script:DuneGcSecLandsraad; StructKey=$script:DuneGcLandsraadStructKey; Key='m_LandsraadTaskProgressUpdateFrequency'; File='game'; Type='float'; Min=0; Default='15.0'; Label='Task Progress Update Frequency'; Help='How often House task progress is recomputed.'; Category='Landsraad' }
 
     # --- PvP & Security ---
     @{ Section=$script:DuneGcSecPvP; Key='m_bShouldForceEnablePvpOnAllPartitions'; File='game'; Type='bool'; Default='False'; Label='Force PvP on All Partitions'; Help='Override per-partition PvP settings (PvP everywhere).'; Category='PvP & Security' }
@@ -438,6 +468,54 @@ function Get-DuneIniLineValue {
     $eq = $t.IndexOf('=')
     if ($eq -lt 0) { return '' }
     return $t.Substring($eq + 1)
+}
+
+# =============================================================================
+# UE STRUCT-MEMBER ENGINE (for settings Funcom stores as one nested struct, e.g.
+# [/Script/DuneSandbox.LandsraadSettings] Data=(m_TaskGoalAmount=5000.0,...)).
+# We only ever touch SCALAR members (key=number / key=True/False) via an anchored
+# regex, so nested members (messages, curves, widget paths, gameplay tags) are
+# preserved byte-for-byte. We never fully parse the struct — corrupting that line
+# would break the whole feature in-game.
+# =============================================================================
+
+# Read every flat scalar member from a struct blob "(k1=v1,k2=v2,...)". Members
+# whose value opens a nested paren or a quote are SKIPPED (not scalar). Returns a
+# hashtable key -> value (trimmed).
+function Get-DuneStructScalarMembers {
+    param([string]$Blob)
+    $out = @{}
+    if ([string]::IsNullOrWhiteSpace($Blob)) { return $out }
+    # key=value where value has no comma / paren / quote (a flat scalar). Anchored
+    # to a member boundary: start-of-string, '(' or ','.
+    $rx = [regex]'(?:^|[(,])\s*([A-Za-z_][A-Za-z0-9_]*)\s*=\s*([^,()"]+?)\s*(?=[,)]|$)'
+    foreach ($m in $rx.Matches($Blob)) {
+        $out[$m.Groups[1].Value] = $m.Groups[2].Value.Trim()
+    }
+    return $out
+}
+
+# Set (or insert) a scalar member's value inside a struct blob, returning the new
+# blob. If the key exists as a scalar member, its value is replaced in place
+# (anchored so we never match a substring of another key or dive into a nested
+# value). If it doesn't exist, it's inserted right after the opening '('.
+function Set-DuneStructScalarMember {
+    param([string]$Blob, [string]$Key, [string]$Value)
+    if ([string]::IsNullOrWhiteSpace($Key)) { return $Blob }
+    if ([string]::IsNullOrWhiteSpace($Blob)) { $Blob = '()' }
+    $escKey = [regex]::Escape($Key)
+    # (boundary)(key=)(value)  -> keep boundary+key, swap value. Value is a flat
+    # scalar: no comma/paren/quote. Lookahead stops at the next member or ')'.
+    $rx = [regex]("(?<pre>^|[(,])(?<k>\s*" + $escKey + "\s*=\s*)(?<v>[^,()`"]+?)(?=\s*[,)]|$)")
+    if ($rx.IsMatch($Blob)) {
+        return $rx.Replace($Blob, { param($m) $m.Groups['pre'].Value + $m.Groups['k'].Value + $Value }, 1)
+    }
+    # Insert after the first '('. Handle empty "()" without a leading comma.
+    $open = $Blob.IndexOf('(')
+    if ($open -lt 0) { return $Blob }
+    $afterOpen = $Blob.Substring($open + 1)
+    $sep = if ($afterOpen.TrimStart().StartsWith(')')) { '' } else { ',' }
+    return $Blob.Substring(0, $open + 1) + "$Key=$Value$sep" + $afterOpen
 }
 
 function Test-DuneIniHeader {
@@ -792,7 +870,37 @@ function Get-DuneIniEffectiveByKey {
             }
         }
     }
+    # Struct-member fields (e.g. LandsraadSettings Data=(...)) aren't flat keys, so
+    # surface their scalar members by-key too, so the UI shows their real values.
+    foreach ($sm in (Get-DuneSchemaStructTargets)) {
+        $sec = $null
+        foreach ($s in $doc.sections) { if ($s.name -eq $sm.section) { $sec = $s } }
+        if ($null -eq $sec) { continue }
+        foreach ($l in $sec.body) {
+            $info = Get-DuneIniLineKey $l
+            if ($info -and -not $info.isArray -and $info.key -eq $sm.structKey) {
+                $members = Get-DuneStructScalarMembers -Blob (Get-DuneIniLineValue $l)
+                foreach ($k in $members.Keys) { $eff[$k] = $members[$k] }
+            }
+        }
+    }
     return $eff
+}
+
+# Distinct (section, structKey) pairs that the schema declares as struct parents.
+function Get-DuneSchemaStructTargets {
+    $seen = @{}
+    $out = New-Object 'System.Collections.Generic.List[object]'
+    foreach ($f in $script:DuneGameConfigSchema) {
+        if ($f.ContainsKey('StructKey') -and $f.StructKey) {
+            $id = "$($f.Section)||$($f.StructKey)"
+            if (-not $seen.ContainsKey($id)) {
+                $seen[$id] = $true
+                $out.Add(@{ section = $f.Section; structKey = $f.StructKey; file = $f.File })
+            }
+        }
+    }
+    return $out.ToArray()
 }
 
 function Get-DuneIniManagedSectionNames {
@@ -910,7 +1018,64 @@ function Test-DuneGameConfigValueIsDefault {
     return ($a.ToLowerInvariant() -eq $b.ToLowerInvariant())
 }
 
-# Save structured updates. $Updates = array of @{ file; section; key; value }.
+# Build a lookup: key -> @{ section; structKey; default } for every struct-member
+# schema field, so the save path can recognise struct members and fold them.
+function Get-DuneSchemaStructFieldMap {
+    $map = @{}
+    foreach ($f in $script:DuneGameConfigSchema) {
+        if ($f.ContainsKey('StructKey') -and $f.StructKey) {
+            $map[$f.Key] = @{ section = $f.Section; structKey = $f.StructKey; default = [string]$f.Default }
+        }
+    }
+    return $map
+}
+
+# Fold struct-member updates (e.g. LandsraadSettings Data members) into ONE flat
+# update that sets the parent struct key (Data) to the recomputed blob, leaving
+# every non-struct update as-is. $Raw is the current file content (to read the
+# existing blob). Returns the rewritten update list. A struct field's `remove`
+# (reset to default) writes its Funcom default value into the struct rather than
+# deleting the member, so the Data=() blob always stays well-formed.
+function Convert-DuneStructUpdates {
+    param([string]$Raw, [object[]]$Updates)
+    $structMap = Get-DuneSchemaStructFieldMap
+    if ($structMap.Count -eq 0) { return $Updates }
+    $doc = ConvertFrom-DuneIniDoc -Raw $Raw
+    $flat = New-Object 'System.Collections.Generic.List[object]'
+    # Group struct member updates by "section||structKey".
+    $structGroups = @{}
+    foreach ($u in $Updates) {
+        $k = "$($u.key)"
+        if ($structMap.ContainsKey($k)) {
+            $sm = $structMap[$k]
+            $gid = "$($sm.section)||$($sm.structKey)"
+            if (-not $structGroups.ContainsKey($gid)) {
+                $structGroups[$gid] = @{ section = $sm.section; structKey = $sm.structKey; file = "$($u.file)"; members = (New-Object 'System.Collections.Generic.List[object]') }
+            }
+            $val = if ($u['remove']) { $sm.default } else { "$($u.value)" }
+            $structGroups[$gid].members.Add(@{ key = $k; value = $val })
+        } else {
+            $flat.Add($u)
+        }
+    }
+    foreach ($gid in $structGroups.Keys) {
+        $g = $structGroups[$gid]
+        # Current blob for this section's struct key (empty struct if absent).
+        $blob = '()'
+        foreach ($s in $doc.sections) {
+            if ($s.name -eq $g.section) {
+                foreach ($l in $s.body) {
+                    $info = Get-DuneIniLineKey $l
+                    if ($info -and -not $info.isArray -and $info.key -eq $g.structKey) { $blob = (Get-DuneIniLineValue $l) }
+                }
+            }
+        }
+        foreach ($m in $g.members) { $blob = Set-DuneStructScalarMember -Blob $blob -Key $m.key -Value $m.value }
+        $flat.Add(@{ file = $g.file; section = $g.section; key = $g.structKey; value = $blob })
+    }
+    return $flat.ToArray()
+}
+
 # Save structured updates. $Updates = array of @{ file; section; key; value }.
 # Does NOT auto-backup — backups are manual (Backup settings button) to avoid
 # cluttering the server PVC with a .dstbak per save.
@@ -930,7 +1095,10 @@ function Save-DuneGameConfig {
         if ($byFile[$f].Count -eq 0) { continue }
         $path = if ($f -eq 'game') { $paths.game } else { $paths.engine }
         $raw  = (Invoke-V6Ssh -Ip $Ip -Cmd "sudo cat '$path' 2>/dev/null") -join "`n"
-        $new  = ConvertTo-DuneIniManaged -Raw $raw -Updates $byFile[$f].ToArray() -QuotedKeys $quoted
+        # Fold any struct-member updates (e.g. LandsraadSettings Data members) into
+        # a single parent-key update against the file's current blob.
+        $fileUpdates = Convert-DuneStructUpdates -Raw $raw -Updates $byFile[$f].ToArray()
+        $new  = ConvertTo-DuneIniManaged -Raw $raw -Updates $fileUpdates -QuotedKeys $quoted
         $b64 = [Convert]::ToBase64String([Text.Encoding]::UTF8.GetBytes($new))
         Invoke-V6Ssh -Ip $Ip -Cmd "base64 -d | sudo tee '$path' > /dev/null" -StdinData $b64 -TimeoutSec 30 | Out-Null
     }
@@ -1221,6 +1389,7 @@ function Get-DuneGameConfigSchemaApi {
         if ($f.ContainsKey('Placeholder')) { $field.placeholder = $f.Placeholder }
         if ($f.ContainsKey('Wide'))        { $field.wide        = [bool]$f.Wide }
         if ($f.ContainsKey('Quoted'))      { $field.quoted      = [bool]$f.Quoted }
+        if ($f.ContainsKey('StructKey'))   { $field.structKey   = [string]$f.StructKey }
         if ($f.ContainsKey('Options')) {
             $field.options = @($f.Options | ForEach-Object { @{ value = $_.V; label = $_.L } })
         }
