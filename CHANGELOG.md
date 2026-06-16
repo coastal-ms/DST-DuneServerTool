@@ -13,8 +13,6 @@ here cover everything those tags shipped.
 
 ## [Unreleased]
 
-## [12.3.1] - 2026-06-16
-
 ### Fixed
 
 - **Returning-Player Award / character export: `trailing junk after numeric
@@ -23,6 +21,11 @@ here cover everything those tags shipped.
   `7A1728E90111EDDB`) and injected it into SQL **unquoted**, so PostgreSQL 15+
   parsed it as a malformed numeric literal and the write failed. The id is now
   wrapped in single quotes in all four queries. (#239)
+
+## [12.3.1] - 2026-06-16
+
+### Fixed
+
 - **Cheat Scripts: "script_name is required." error.** The Players → Live →
   Cheat Scripts form posted the script under the body key `script`, but the
   `/api/gameplay/players/cheat-script` route reads `script_name`, so every
