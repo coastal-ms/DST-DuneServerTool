@@ -13,6 +13,8 @@ here cover everything those tags shipped.
 
 ## [Unreleased]
 
+## [12.3.1] - 2026-06-16
+
 ### Fixed
 
 - **Cheat Scripts: "script_name is required." error.** The Players → Live →
