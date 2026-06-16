@@ -7,7 +7,7 @@
 // expose action buttons. The parent owns selection + refresh ticks; sections
 // re-fetch when `refreshKey` changes.
 
-import { useCallback, useEffect, useMemo, useState, type ReactElement } from 'react'
+import { useCallback, useEffect, useMemo, useState, type ReactElement, type ReactNode } from 'react'
 import { Icon } from '../../../components/Icon'
 import { ItemPicker } from '../../../components/ItemPicker'
 import {
@@ -18,6 +18,7 @@ import {
   getPlayerStats, getPlayerTags, giveFactionRep, giveItem,
   giveScrip, giveSolari, grantAllKeystones, grantLive, grantMaxSpec,
   kickPlayer, refuelVehicle, renamePlayer, repairGear, repairInventoryItem,
+  getPlayerVehicles,
   setItemDurability, setItemWater,
   resetAllKeystones, resetAllSpecs, resetJourney, resetProgressionLive, resetSpec,
   restoreDestroyed,
@@ -33,6 +34,7 @@ import {
   type CatalogItem, type ItemPackage, type GiveItemEntry,
   type LandsraadHouse, type LandsraadIniSetting,
   type JourneyNode, type TrainerInfo, type TrainerStatus, type MainQuestInfo,
+  type PlayerVehicleRow,
 } from '../../../api/gameplay'
 import { VEHICLE_CATALOG, VEHICLE_KIT_FUEL_TEMPLATE, VEHICLE_KIT_TORCH_TEMPLATE, type VehicleTemplate } from '../../../data/vehicles'
 import { fmtNum, fmtSolari } from '../shared'
@@ -436,7 +438,8 @@ interface ActionDef {
   liveOnly?: boolean      // requires player to be online (RMQ path)
   offlineOnly?: boolean   // requires player to be offline (DB write the game caches in memory)
   fields?: ActionField[]
-  custom?: 'give-item' | 'whisper' | 'spawn-vehicle' | 'quick-presets' | 'vehicle-kit' | 'give-package' | 'cheat-scripts' | 'dev-scripts' | 'unlock-trainers' | 'unlock-mainquest'
+  custom?: 'give-item' | 'whisper' | 'spawn-vehicle' | 'quick-presets' | 'vehicle-kit' | 'give-package' | 'cheat-scripts' | 'dev-scripts' | 'unlock-trainers' | 'unlock-mainquest' | 'refuel-vehicle' | 'starter-class' | 'update-tags'
+  balance?: 'solari' | 'scrip' | 'intel'  // show the player's current balance read-only above the form
   confirm?: (p: Player) => string  // confirm message; if returns '' no prompt
   doubleConfirm?: boolean // also requires a typed "i acknowledge" prompt inside run()
   rowNote?: string        // short italic note shown inline on the row heading
@@ -445,13 +448,13 @@ interface ActionDef {
 
 const ACTIONS: ActionDef[] = [
   // ----- Currency -----
-  { id: 'give-solari', group: 'Currency', label: 'Give Solari', icon: 'Coins',
+  { id: 'give-solari', group: 'Currency', label: 'Give Solari', icon: 'Coins', balance: 'solari',
     fields: [{ key: 'amount', label: 'Amount', type: 'number', placeholder: '10000' }],
     run: (p, v) => giveSolari(p.controller_id, Number(v.amount) || 0) },
-  { id: 'give-scrip', group: 'Currency', label: 'Give Scrip', icon: 'Banknote',
+  { id: 'give-scrip', group: 'Currency', label: 'Give Scrip', icon: 'Banknote', balance: 'scrip',
     fields: [{ key: 'amount', label: 'Amount', type: 'number', placeholder: '500' }],
     run: (p, v) => giveScrip(p.controller_id, Number(v.amount) || 0) },
-  { id: 'give-intel', group: 'Currency', label: 'Give Intel', icon: 'BookOpen', offlineOnly: true,
+  { id: 'give-intel', group: 'Currency', label: 'Give Intel', icon: 'BookOpen', offlineOnly: true, balance: 'intel',
     fields: [{ key: 'amount', label: 'Tech Knowledge Points', type: 'number', placeholder: '100' }],
     run: (p, v) => awardIntel(p.controller_id, p.id, Number(v.amount) || 0) },
   { id: 'grant-live', group: 'Currency', label: 'Grant Reward (popup)', icon: 'Gift',
@@ -538,9 +541,8 @@ const ACTIONS: ActionDef[] = [
     rowNote: 'Hands unassembled Mk6 parts — assemble at a Vehicle Assembly. Works online or offline',
     confirm: p => `Give vehicle parts to ${p.name}'s inventory? They'll need to assemble at a Vehicle Assembly. Works online or offline.`,
     run: () => Promise.resolve({ message: '' }) },
-  { id: 'refuel-vehicle', group: 'Vehicle', label: 'Refuel Vehicle', icon: 'Fuel',
-    fields: [{ key: 'vid', label: 'Vehicle id', type: 'number', placeholder: '12345' }],
-    run: (_p, v) => refuelVehicle(Number(v.vid) || 0) },
+  { id: 'refuel-vehicle', group: 'Vehicle', label: 'Refuel Vehicle', icon: 'Fuel', custom: 'refuel-vehicle',
+    run: () => Promise.resolve({ message: '' }) },
 
   // ----- Live (RMQ) -----
   { id: 'kick', group: 'Live', label: 'Kick Player', icon: 'LogOut', liveOnly: true,
@@ -561,33 +563,14 @@ const ACTIONS: ActionDef[] = [
   { id: 'rename', group: 'Identity', label: 'Rename Character', icon: 'PenLine',
     fields: [{ key: 'name', label: 'New character name', type: 'text' }],
     run: (p, v) => renamePlayer(p.account_id, String(v.name || '').trim()) },
-  { id: 'set-starter-class', group: 'Identity', label: 'Set Starter Class', icon: 'Compass',
-    fields: [{ key: 'class', label: 'Class id', type: 'text', placeholder: 'mentat' }],
+  { id: 'set-starter-class', group: 'Identity', label: 'Set Starter Class', icon: 'Compass', custom: 'starter-class',
     doubleConfirm: true,
     rowNote: 'Double confirmation required',
     confirm: p => `Set ${p.name}'s starter class?\n\n` +
       `This is the FIRST of two confirmations. If you continue, the next step asks you to type an acknowledgement before the change is applied. This cannot be undone.`,
-    run: (p, v) => {
-      const typed = window.prompt(
-        `SECOND confirmation — set ${p.name}'s starter class to "${String(v.class || '').trim()}".\n` +
-        `This cannot be undone.\n\n` +
-        `Type  i acknowledge  to proceed:`
-      ) || ''
-      if (typed.trim().toLowerCase() !== 'i acknowledge') {
-        throw new Error('Did not type "i acknowledge" — change aborted.')
-      }
-      return setStarterClass(p.id, String(v.class || '').trim())
-    } },
-  { id: 'tags-add-remove', group: 'Identity', label: 'Update Tags (add / remove)', icon: 'Tag',
-    fields: [
-      { key: 'add',    label: 'Add (comma-separated)',    type: 'text', placeholder: 'vip, tester' },
-      { key: 'remove', label: 'Remove (comma-separated)', type: 'text', placeholder: 'banned' },
-    ],
-    run: (p, v) => updatePlayerTags(
-      p.account_id,
-      String(v.add || '').split(',').map(s => s.trim()).filter(Boolean),
-      String(v.remove || '').split(',').map(s => s.trim()).filter(Boolean),
-    ) },
+    run: () => Promise.resolve({ message: '' }) },
+  { id: 'tags-add-remove', group: 'Identity', label: 'Update Tags (add / remove)', icon: 'Tag', custom: 'update-tags',
+    run: () => Promise.resolve({ message: '' }) },
   { id: 'delete-tutorials', group: 'Identity', label: 'Clear Tutorial Flags', icon: 'Eraser',
     run: p => deleteTutorials(p.account_id) },
   { id: 'wipe-codex', group: 'Identity', label: 'Wipe Codex', icon: 'BookX',
@@ -635,9 +618,17 @@ const ACTIONS: ActionDef[] = [
 const GROUP_ORDER: ActionGroup[] = ['Live', 'Currency', 'Progression', 'Vehicle', 'Identity', 'Danger']
 const ITEMS_GROUP: ActionGroup = 'Items'
 
-export function ActionsSection({ player, canWrite, flash, onChanged }: SectionProps) {
+export function ActionsSection({ player, canWrite, demo, flash, onChanged }: SectionProps) {
   const [openId, setOpenId] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
+  // Current balances for read-only context on the Give Solari/Scrip/Intel rows,
+  // so admins see what the player already has before adjusting it.
+  const [stats, setStats] = useState<PlayerStats | null>(null)
+  useEffect(() => {
+    let alive = true
+    getPlayerStats(player.id, demo).then(r => { if (alive) setStats(r.stats) }).catch(() => {})
+    return () => { alive = false }
+  }, [player.id, demo])
 
   // A live session exists during Online AND LoggingOut (the logout grace
   // window where the pod still owns the player's state in memory - 30s on
@@ -707,7 +698,7 @@ export function ActionsSection({ player, canWrite, flash, onChanged }: SectionPr
             </div>
             <div className="space-y-1.5">
               {acts.map(a => (
-                <ActionRow key={a.id} def={a} player={player} busy={busy}
+                <ActionRow key={a.id} def={a} player={player} busy={busy} stats={stats}
                   open={openId === a.id} danger={group === 'Danger'}
                   onToggle={() => openAction(a.id)} runAction={runAction} />
               ))}
@@ -725,16 +716,31 @@ export function ActionsSection({ player, canWrite, flash, onChanged }: SectionPr
 // directly beneath it. Replaces the older wrap-of-buttons layout so the panel
 // reads as a vertical list rather than a wall of buttons.
 // ---------------------------------------------------------------------------
-function ActionRow({ def, player, busy, open, danger, onToggle, runAction }: {
+function ActionRow({ def, player, busy, stats, open, danger, onToggle, runAction }: {
   def: ActionDef
   player: Player
   busy: boolean
+  stats: PlayerStats | null
   open: boolean
   danger?: boolean
   onToggle: () => void
   runAction: (def: ActionDef, exec: () => Promise<{ message: string }>) => void
 }) {
   const disabled = busy
+  // Read-only "current balance" note shown above currency actions.
+  const balanceNote = (() => {
+    if (!def.balance || !stats) return null
+    let label = '', value = ''
+    if (def.balance === 'solari') { label = 'Current Solari'; value = fmtSolari(stats.solaris) }
+    else if (def.balance === 'scrip') { label = 'Current Scrip'; value = fmtNum(stats.scrip ?? 0) }
+    else if (def.balance === 'intel') { label = 'Current Intel'; value = `${fmtNum(stats.intel ?? 0)}${stats.intel_max ? ` / ${fmtNum(stats.intel_max)}` : ''}` }
+    return (
+      <div className="flex items-center justify-between rounded-lg bg-surface-2 border border-border/50 px-3 py-2 mb-2 text-sm">
+        <span className="text-text-dim">{label}</span>
+        <span className="font-mono text-text">{value}</span>
+      </div>
+    )
+  })()
   return (
     <div className="card overflow-hidden">
       <button type="button"
@@ -816,8 +822,27 @@ function ActionRow({ def, player, busy, open, danger, onToggle, runAction }: {
                 const n = items.length
                 return { message: `Gave package "${pkgName}" — ${n} item${n === 1 ? '' : 's'} to ${player.name}.` }
               })} />
+          ) : def.custom === 'refuel-vehicle' ? (
+            <RefuelVehicleForm busy={busy} controllerId={player.controller_id} playerName={player.name}
+              onSubmit={vid => runAction(def, () => refuelVehicle(vid))} />
+          ) : def.custom === 'starter-class' ? (
+            <StarterClassForm busy={busy}
+              onSubmit={(job, name) => runAction(def, () => {
+                const typed = window.prompt(
+                  `SECOND confirmation — set ${player.name}'s starter class to "${name}".\n` +
+                  `This cannot be undone.\n\n` +
+                  `Type  i acknowledge  to proceed:`
+                ) || ''
+                if (typed.trim().toLowerCase() !== 'i acknowledge') {
+                  return Promise.reject(new Error('Did not type "i acknowledge" — change aborted.'))
+                }
+                return setStarterClass(player.id, job)
+              })} />
+          ) : def.custom === 'update-tags' ? (
+            <UpdateTagsForm busy={busy} accountId={player.account_id} demo={false}
+              onSubmit={(add, remove) => runAction(def, () => updatePlayerTags(player.account_id, add, remove))} />
           ) : (
-            <InlineForm busy={busy} submitLabel={def.label} fields={def.fields || []}
+            <InlineForm busy={busy} submitLabel={def.label} fields={def.fields || []} note={balanceNote}
               onSubmit={v => runAction(def, () => def.run(player, v))} />
           )}
         </div>
@@ -1539,7 +1564,7 @@ function ItemsActionBlock({ player, canWrite, flash, onChanged }: {
   return (
     <div className="space-y-1.5 mb-2">
       {acts.map(a => (
-        <ActionRow key={a.id} def={a} player={player} busy={busy}
+        <ActionRow key={a.id} def={a} player={player} busy={busy} stats={null}
           open={openId === a.id} onToggle={() => openAction(a.id)} runAction={runAction} />
       ))}
     </div>
@@ -1944,8 +1969,8 @@ function ErrorBox({ msg }: { msg: string }) {
 
 interface FieldDef { key: string; label: string; type: 'text' | 'number' | 'select'; placeholder?: string; options?: { value: string; label: string }[] }
 
-function InlineForm({ fields, submitLabel, busy, onSubmit }: {
-  fields: FieldDef[]; submitLabel: string; busy: boolean; onSubmit: (values: Record<string, string>) => void
+function InlineForm({ fields, submitLabel, busy, note, onSubmit }: {
+  fields: FieldDef[]; submitLabel: string; busy: boolean; note?: ReactNode; onSubmit: (values: Record<string, string>) => void
 }) {
   // Seed select fields with their first option so a dropdown is never submitted
   // empty (the run() handlers also default, but this keeps the UI honest).
@@ -1959,6 +1984,7 @@ function InlineForm({ fields, submitLabel, busy, onSubmit }: {
   const inputCls = 'w-full px-3 py-2 rounded-lg bg-surface-2 border border-border text-text text-sm focus:outline-none focus:ring-2 focus:ring-ibad focus:border-ibad/50'
   return (
     <div className="space-y-2">
+      {note}
       {fields.map(f => (
         <div key={f.key}>
           <label className="block text-[11px] uppercase tracking-wider text-text-dim mb-1">{f.label}</label>
@@ -1977,6 +2003,146 @@ function InlineForm({ fields, submitLabel, busy, onSubmit }: {
       ))}
       <button className="btn-primary w-full" disabled={busy} onClick={() => onSubmit(values)}>
         {busy ? <Icon name="Loader2" size={13} className="animate-spin" /> : <Icon name="Check" size={13} />} {submitLabel}
+      </button>
+    </div>
+  )
+}
+
+const formSelectCls = 'w-full px-3 py-2 rounded-lg bg-surface-2 border border-border text-text text-sm focus:outline-none focus:ring-2 focus:ring-ibad focus:border-ibad/50 disabled:opacity-50'
+
+// Friendly label for a vehicle actor class basename (e.g. "Ornithopter_Mk6"
+// -> "Ornithopter Mk6"). Vehicle ids mean nothing to an admin, so the dropdown
+// shows the name + a short id suffix instead.
+function prettyVehicle(v: PlayerVehicleRow): string {
+  const base = (v.vehicle_name && v.vehicle_name.trim()) ? v.vehicle_name.trim() : (v.class || `Vehicle ${v.id}`)
+  const clean = base.replace(/_+/g, ' ').replace(/\bBP /i, '').trim()
+  const tags: string[] = []
+  if (v.map) tags.push(v.map)
+  if (v.is_backup) tags.push('backup')
+  return `${clean}${tags.length ? ` — ${tags.join(', ')}` : ''} (#${v.id})`
+}
+
+// Refuel Vehicle — pick from the player's actual vehicles instead of typing a
+// raw vehicle id the admin can't know.
+function RefuelVehicleForm({ busy, controllerId, playerName, onSubmit }: {
+  busy: boolean; controllerId: number; playerName: string; onSubmit: (vehicleId: number) => void
+}) {
+  const [vehicles, setVehicles] = useState<PlayerVehicleRow[]>([])
+  const [vid, setVid] = useState('')
+  const [loading, setLoading] = useState(true)
+  const [err, setErr] = useState('')
+  useEffect(() => {
+    let alive = true
+    setLoading(true); setErr('')
+    getPlayerVehicles(controllerId)
+      .then(r => { if (!alive) return; const vs = r.vehicles || []; setVehicles(vs); setVid(vs[0] ? String(vs[0].id) : '') })
+      .catch(e => { if (alive) setErr(e instanceof Error ? e.message : String(e)) })
+      .finally(() => { if (alive) setLoading(false) })
+    return () => { alive = false }
+  }, [controllerId])
+  if (loading) return <Loading label="Loading vehicles…" />
+  if (err) return <ErrorBox msg={err} />
+  if (vehicles.length === 0) return <EmptyBox msg={`No vehicles found for ${playerName}.`} />
+  return (
+    <div className="space-y-2">
+      <label className="block text-[11px] uppercase tracking-wider text-text-dim mb-1">Vehicle</label>
+      <select value={vid} disabled={busy} className={formSelectCls} onChange={e => setVid(e.target.value)}>
+        {vehicles.map(v => <option key={v.id} value={v.id}>{prettyVehicle(v)}</option>)}
+      </select>
+      <button className="btn-primary w-full" disabled={busy || !vid} onClick={() => onSubmit(Number(vid) || 0)}>
+        {busy ? <Icon name="Loader2" size={13} className="animate-spin" /> : <Icon name="Fuel" size={13} />} Refuel Vehicle
+      </button>
+    </div>
+  )
+}
+
+// Set Starter Class — dropdown of the friendly trainer/class names instead of
+// a raw "mentat" job id.
+function StarterClassForm({ busy, onSubmit }: {
+  busy: boolean; onSubmit: (job: string, name: string) => void
+}) {
+  const [classes, setClasses] = useState<TrainerInfo[]>([])
+  const [job, setJob] = useState('')
+  const [loading, setLoading] = useState(true)
+  const [err, setErr] = useState('')
+  useEffect(() => {
+    let alive = true
+    setLoading(true); setErr('')
+    getTrainerCatalog()
+      .then(r => { if (!alive) return; const c = r.trainers || []; setClasses(c); setJob(c[0]?.job ?? '') })
+      .catch(e => { if (alive) setErr(e instanceof Error ? e.message : String(e)) })
+      .finally(() => { if (alive) setLoading(false) })
+    return () => { alive = false }
+  }, [])
+  if (loading) return <Loading label="Loading classes…" />
+  if (err) return <ErrorBox msg={err} />
+  if (classes.length === 0) return <EmptyBox msg="No starter classes available." />
+  const name = classes.find(c => c.job === job)?.name ?? job
+  return (
+    <div className="space-y-2">
+      <label className="block text-[11px] uppercase tracking-wider text-text-dim mb-1">Starter class</label>
+      <select value={job} disabled={busy} className={formSelectCls} onChange={e => setJob(e.target.value)}>
+        {classes.map(c => <option key={c.job} value={c.job}>{c.name}</option>)}
+      </select>
+      <button className="btn-primary w-full" disabled={busy || !job} onClick={() => onSubmit(job, name)}>
+        {busy ? <Icon name="Loader2" size={13} className="animate-spin" /> : <Icon name="Compass" size={13} />} Set Starter Class
+      </button>
+    </div>
+  )
+}
+
+// Update Tags — Remove is a dropdown of the player's CURRENT tags (you can't
+// remove one they don't have); Add accepts a new tag, suggesting existing tags
+// via a datalist. Avoids the comma-separated raw-text boxes.
+function UpdateTagsForm({ busy, accountId, demo, onSubmit }: {
+  busy: boolean; accountId: number; demo: boolean; onSubmit: (add: string[], remove: string[]) => void
+}) {
+  const [current, setCurrent] = useState<string[]>([])
+  const [loading, setLoading] = useState(true)
+  const [err, setErr] = useState('')
+  const [addTag, setAddTag] = useState('')
+  const [removeTag, setRemoveTag] = useState('')
+  useEffect(() => {
+    let alive = true
+    setLoading(true); setErr('')
+    getPlayerTags(accountId, demo)
+      .then(r => { if (alive) setCurrent(r.tags || []) })
+      .catch(e => { if (alive) setErr(e instanceof Error ? e.message : String(e)) })
+      .finally(() => { if (alive) setLoading(false) })
+    return () => { alive = false }
+  }, [accountId, demo])
+  if (loading) return <Loading label="Loading tags…" />
+  if (err) return <ErrorBox msg={err} />
+  const add = addTag.trim()
+  const remove = removeTag.trim()
+  const canSubmit = !!add || !!remove
+  return (
+    <div className="space-y-2">
+      <div>
+        <label className="block text-[11px] uppercase tracking-wider text-text-dim mb-1">Current tags</label>
+        {current.length === 0
+          ? <div className="text-xs text-text-dim">None.</div>
+          : <div className="flex flex-wrap gap-1">{current.map(t => <span key={t} className="text-[11px] px-2 py-0.5 rounded-full bg-surface-3 text-text-muted">{t}</span>)}</div>}
+      </div>
+      <div>
+        <label className="block text-[11px] uppercase tracking-wider text-text-dim mb-1">Add tag</label>
+        <input list="known-tags" value={addTag} placeholder="vip" disabled={busy}
+          onChange={e => setAddTag(e.target.value)} className={formSelectCls} />
+        <datalist id="known-tags">
+          {['vip', 'tester', 'banned', 'verified', 'staff'].map(t => <option key={t} value={t} />)}
+        </datalist>
+      </div>
+      <div>
+        <label className="block text-[11px] uppercase tracking-wider text-text-dim mb-1">Remove tag</label>
+        <select value={removeTag} disabled={busy || current.length === 0} className={formSelectCls}
+          onChange={e => setRemoveTag(e.target.value)}>
+          <option value="">{current.length === 0 ? 'No tags to remove' : '— select —'}</option>
+          {current.map(t => <option key={t} value={t}>{t}</option>)}
+        </select>
+      </div>
+      <button className="btn-primary w-full" disabled={busy || !canSubmit}
+        onClick={() => onSubmit(add ? [add] : [], remove ? [remove] : [])}>
+        {busy ? <Icon name="Loader2" size={13} className="animate-spin" /> : <Icon name="Check" size={13} />} Update Tags
       </button>
     </div>
   )

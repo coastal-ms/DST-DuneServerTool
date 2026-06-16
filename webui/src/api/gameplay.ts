@@ -705,6 +705,9 @@ export interface PlayerStats {
   total_currency: number
   faction_reps?: { faction_id: number; faction_name: string; reputation: number }[]
   faction_rep_cap?: number
+  scrip?: number
+  intel?: number
+  intel_max?: number
 }
 
 export interface PlayerStatsResponse {
@@ -1322,15 +1325,17 @@ export function getPlayerKeystones(id: number, demo?: boolean) {
 }
 
 export interface PlayerVehicleRow {
-  vehicle_id: number
-  template: string
-  display_name?: string
-  fuel?: number
-  durability?: number
+  id: number
+  class: string
+  vehicle_name?: string
+  map?: string
+  chassis_durability?: number
+  is_recovered?: boolean
+  is_backup?: boolean
 }
-export function getPlayerVehicles(id: number, demo?: boolean) {
+export function getPlayerVehicles(controllerId: number, demo?: boolean) {
   return api<{ ok: boolean; vehicles: PlayerVehicleRow[]; source: DataSource }>(
-    `/api/gameplay/players/${id}/vehicles${qs({ demo: demo ? 1 : undefined })}`)
+    `/api/gameplay/players/vehicles${qs({ controller_id: controllerId, demo: demo ? 1 : undefined })}`)
 }
 
 export interface DungeonRunRow { dungeon_id: string; cleared: boolean; best_time_seconds?: number }

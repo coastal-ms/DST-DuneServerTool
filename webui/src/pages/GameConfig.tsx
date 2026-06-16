@@ -804,6 +804,9 @@ export function GameConfig() {
             DST-managed block. <span className="text-text font-medium">Always click “Backup settings” before making changes</span> so
             you have a restore point — backups are saved on the server next to each file and can be restored via the File Browser.
           </p>
+          <p className="text-xs text-warning/90 leading-relaxed mt-1.5">
+            Some of these settings may require a battlegroup restart to take effect.
+          </p>
           <button
             type="button"
             onClick={() => void onBackup()}

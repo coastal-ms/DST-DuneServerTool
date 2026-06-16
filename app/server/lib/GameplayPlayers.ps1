@@ -643,6 +643,39 @@ ORDER BY pfr.faction_id;
     }
     $stats['faction_reps'] = $reps
     $stats['faction_rep_cap'] = if (Get-Variable -Name DuneFactionRepCap -Scope Script -ErrorAction SilentlyContinue) { [int]$script:DuneFactionRepCap } else { 12474 }
+
+    # Scrip (Landsraad Scrip) balance — shown read-only beside the Give Scrip
+    # action so admins see the current standing without guessing.
+    $scrip = 0
+    if ($cid -gt 0) {
+        try {
+            $scripId = Resolve-DuneScripCurrencyId -Ip $Ip
+            if ($null -ne $scripId) {
+                $scSql = "SELECT COALESCE(balance, 0) AS bal FROM dune.player_virtual_currency_balances WHERE player_controller_id = $cid::bigint AND currency_id = $([int]$scripId)::smallint LIMIT 1;"
+                $sc = Invoke-DuneSqlQuery -Ip $Ip -Sql $scSql -ReadOnly $true -MaxRows 1 -TimeoutSec 15
+                if ($sc.ok) {
+                    $scm = ConvertTo-DuneRowMaps -Result $sc
+                    if ($scm.Count -ge 1) { $scrip = (ConvertTo-DuneInt $scm[0]['bal']) }
+                }
+            }
+        } catch {}
+    }
+    $stats['scrip'] = $scrip
+
+    # Intel (TechKnowledgePlayerComponent.m_TechKnowledgePoints) lives on the
+    # pawn actor. Surfaced read-only beside Give Intel.
+    $intel = 0
+    try {
+        $inSql = "SELECT COALESCE((properties->'TechKnowledgePlayerComponent'->>'m_TechKnowledgePoints')::int, 0) AS intel FROM dune.actors WHERE id = $PawnId::bigint;"
+        $inR = Invoke-DuneSqlQuery -Ip $Ip -Sql $inSql -ReadOnly $true -MaxRows 1 -TimeoutSec 15
+        if ($inR.ok) {
+            $inm = ConvertTo-DuneRowMaps -Result $inR
+            if ($inm.Count -ge 1) { $intel = (ConvertTo-DuneInt $inm[0]['intel']) }
+        }
+    } catch {}
+    $stats['intel'] = $intel
+    $stats['intel_max'] = if (Get-Variable -Name DuneMaxIntelPoints -Scope Script -ErrorAction SilentlyContinue) { [int]$script:DuneMaxIntelPoints } else { 2779 }
+
     return @{ ok = $true; stats = $stats }
 }
 
@@ -872,6 +905,7 @@ function Get-DunePlayerStatsDemo {
             [ordered]@{ faction_id = 2; faction_name = 'Harkonnen'; reputation = 1200 }
         )
         faction_rep_cap = 12474
+        scrip = 3250; intel = 540; intel_max = 2779
     }
 }
 
