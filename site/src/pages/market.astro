@@ -21,7 +21,7 @@ const cards = [
   {
     icon: "📊",
     title: "Fair pricing, your choice",
-    body: "Prices blend item tier, category, rarity, and quality grade, anchored to the real in-game vendor price. Two modes: <strong>Sane</strong> (the default) caps any single listing at 100,000 Solari so nothing runs away, and <strong>Upstream</strong> uses the original Funcom-style formula with no Solari cap for servers that want a steeper end-game price curve. Server owners can flip between them with one click.",
+    body: "Prices blend item tier, category, rarity, and quality grade, anchored to the real in-game vendor price. Three modes: <strong>Sane</strong> (the default) caps any single listing at 100,000 Solari so nothing runs away, <strong>Upstream</strong> uses the original Funcom-style formula with no Solari cap for a steeper end-game curve, and <strong>Market-follow</strong> prices straight from the live market — the median of what other players are charging, plus a markup you set. Server owners switch modes with one click.",
   },
 ];
 
@@ -57,7 +57,7 @@ const admin = [
   },
   {
     title: "Tuning",
-    body: "Lower the die size or shorten the buy interval to make Duke buy more aggressively; raise listings-per-grade for variety; set per-item price overrides for full control.",
+    body: "Lower the die size or shorten the buy interval to make Duke buy more aggressively; raise listings-per-grade for variety; set per-item price overrides for full control. Turn on the <strong class=\"text-dune-text\">over-market guard</strong> to stop winning rolls from overpaying for padded listings, and switch to <strong class=\"text-dune-text\">Market-follow</strong> pricing if you'd rather Duke track live player prices than the built-in formula.",
   },
   {
     title: "Previewing",
@@ -81,7 +81,7 @@ const setup = [
   },
   {
     title: "Set the pricing rules (or accept defaults)",
-    body: "Switch to <strong class=\"text-dune-text\">Pricing rules</strong>. The shipped defaults already give a sensible economy: a <strong class=\"text-dune-text\">100,000 item_price</strong> hard cap, tier base prices, rarity / grade / vendor multipliers, and a 95&thinsp;% vendor floor. If you want a true Solari-side ceiling (the in-game number is item_price &times; 10), enable <strong class=\"text-dune-text\">Cap displayed price (Solari)</strong> and set the limit there. Use <strong class=\"text-dune-text\">Per-template price overrides</strong> to pin specific items to manual prices.",
+    body: "Switch to <strong class=\"text-dune-text\">Pricing rules</strong>. The shipped defaults already give a sensible economy: a <strong class=\"text-dune-text\">100,000 item_price</strong> hard cap, tier base prices, rarity / grade / vendor multipliers, and a 95&thinsp;% vendor floor. If you want a true Solari-side ceiling (the in-game number is item_price &times; 10), enable <strong class=\"text-dune-text\">Cap displayed price (Solari)</strong> and set the limit there. Use <strong class=\"text-dune-text\">Per-template price overrides</strong> to pin specific items to manual prices. Prefer to follow the live market instead of the formula? Turn on <strong class=\"text-dune-text\">Market-follow pricing</strong> (top of the Pricing rules tab) to list every item at the <em>median of other players&rsquo; sell orders</em> plus a markup you set (default +10&thinsp;%), with a per-item rule for things nobody else is selling &mdash; price by formula, skip it, or use a baseline you enter. It&rsquo;s all-or-nothing: flipping it on or off wipes and rebuilds Duke&rsquo;s listings at the new prices on the next list tick.",
   },
   {
     title: "Tune the listing rate",
@@ -93,7 +93,7 @@ const setup = [
   },
   {
     title: "Tune the buy rate (the dice roll)",
-    body: "Back on <strong class=\"text-dune-text\">Buy side</strong>, set <strong class=\"text-dune-text\">Buy tick (s)</strong>, <strong class=\"text-dune-text\">Max buys / tick</strong>, and the <strong class=\"text-dune-text\">Die size</strong> / <strong class=\"text-dune-text\">Winning number</strong>. Each candidate listing rolls 1&ndash;<em>die size</em> and only buys on a winning number, so a smaller die or shorter interval &equals; a more aggressive buyer. Add any template IDs you want Duke to ignore entirely under <strong class=\"text-dune-text\">Disabled items</strong>.",
+    body: "Back on <strong class=\"text-dune-text\">Buy side</strong>, set <strong class=\"text-dune-text\">Buy tick (s)</strong>, <strong class=\"text-dune-text\">Max buys / tick</strong>, and the <strong class=\"text-dune-text\">Die size</strong> / <strong class=\"text-dune-text\">Winning number</strong>. Each candidate listing rolls 1&ndash;<em>die size</em> and only buys on a winning number, so a smaller die or shorter interval &equals; a more aggressive buyer. Turn on the <strong class=\"text-dune-text\">Over-market guard</strong> to make a winning roll buy only when the seller&rsquo;s price is within a set percentage (default 5&thinsp;%) of Duke&rsquo;s reference price &mdash; rolls that win but are over the window are skipped and the reason is logged to the console. Add any template IDs you want Duke to ignore entirely under <strong class=\"text-dune-text\">Disabled items</strong>.",
   },
   {
     title: "Dry-run before going live",
@@ -105,7 +105,7 @@ const setup = [
   },
   {
     title: "Enable Duke",
-    body: "Flip <strong class=\"text-dune-text\">Bot enabled</strong> on (Buy side, top of the config card). The status banner turns green (<em>Running</em>), and Duke starts buying and listing on his configured timers. Want a different price curve? Click the <strong class=\"text-dune-text\">Switch</strong> button on the Pricing mode tile to flip between Sane and Upstream &mdash; DST wipes Duke&rsquo;s listings (with a confirm) so the next tick repopulates them at the new prices.",
+    body: "Flip <strong class=\"text-dune-text\">Bot enabled</strong> on (Buy side, top of the config card). The status banner turns green (<em>Running</em>), and Duke starts buying and listing on his configured timers. Want a different price curve? Click the <strong class=\"text-dune-text\">Switch</strong> button on the Pricing mode tile to flip between Sane and Upstream &mdash; or turn on <strong class=\"text-dune-text\">Market-follow</strong> from the Pricing rules tab. Any of these changes wipes Duke&rsquo;s listings (with a confirm) so the next tick repopulates them at the new prices.",
   },
   {
     title: "Verify and monitor",
@@ -152,8 +152,11 @@ const setup = [
       <p class="text-dune-muted leading-relaxed">
         For each item Duke considers buying, it "rolls a die" and only buys on a
         winning roll. That keeps it from hoovering up the whole market and
-        crashing prices — it nudges the economy along instead. Duke also keeps a
-        large Solari balance so it can always afford to buy.
+        crashing prices — it nudges the economy along instead. With the optional
+        <strong class="text-dune-text">over-market guard</strong> on, a winning roll
+        still won't buy if the seller is priced too far above the going rate, so
+        Duke never overpays for a padded listing. Duke also keeps a large Solari
+        balance so it can always afford a fair deal.
       </p>
     </section>
 

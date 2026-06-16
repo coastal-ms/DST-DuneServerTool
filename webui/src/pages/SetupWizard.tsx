@@ -1,23 +1,39 @@
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useState, type ReactNode } from 'react'
 import { Link } from 'react-router-dom'
 import { PageHeader } from '../components/PageHeader'
 import { Icon } from '../components/Icon'
 import { api, ApiError } from '../api/client'
 import { getPreflight, getSetupConfig, type PreflightResult, type SetupConfigSummary } from '../api/setup'
 
+// The wizard branches on a single up-front question: does the operator already
+// have a Dune Awakening battlegroup running (their own VM, or one a previous
+// install left behind), or do they need DST to provision one from scratch?
+//   - 'existing' → skip the VM import entirely; just make sure DST can reach the
+//                  server (locate or generate+authorize the SSH key).
+//   - 'fresh'    → the original flow that runs Funcom's initial-setup.
+type SetupMode = 'existing' | 'fresh'
+
 interface Step {
-  index: number
   title: string
   subtitle: string
+  render: () => ReactNode
 }
 
-const STEPS: Step[] = [
-  { index: 1, title: 'Pre-flight',    subtitle: 'Environment checks' },
-  { index: 2, title: 'Configuration', subtitle: 'Confirm tool settings' },
-  { index: 3, title: 'Installing',    subtitle: 'Import Hyper-V VM' },
-  { index: 4, title: 'Security',      subtitle: 'SSH + firewall' },
-  { index: 5, title: 'Networking',    subtitle: 'Ports + DNS' },
-  { index: 6, title: 'Finalize',      subtitle: 'Wrap-up' },
+const FRESH_STEPS: Step[] = [
+  { title: 'Pre-flight',    subtitle: 'Environment checks',     render: () => <Step1Preflight /> },
+  { title: 'Configuration', subtitle: 'Confirm tool settings',  render: () => <Step2Config /> },
+  { title: 'Install',       subtitle: 'Import Hyper-V VM',       render: () => <Step3Install /> },
+  { title: 'Security',      subtitle: 'SSH + firewall',          render: () => <Step4Security /> },
+  { title: 'Networking',    subtitle: 'Ports + DNS',             render: () => <Step5Networking /> },
+  { title: 'Finalize',      subtitle: 'Wrap-up',                 render: () => <Step6Finalize /> },
+]
+
+const EXISTING_STEPS: Step[] = [
+  { title: 'Pre-flight',  subtitle: 'Environment checks',       render: () => <Step1Preflight existing /> },
+  { title: 'Connect',     subtitle: 'Point DST at your server', render: () => <StepConnectExisting /> },
+  { title: 'Security',    subtitle: 'SSH + firewall',            render: () => <Step4Security /> },
+  { title: 'Networking',  subtitle: 'Ports + DNS',               render: () => <Step5Networking /> },
+  { title: 'Finalize',    subtitle: 'Wrap-up',                   render: () => <Step6Finalize /> },
 ]
 
 function FixBlock({ fix }: { fix: string }) {
@@ -50,61 +66,112 @@ function FixBlock({ fix }: { fix: string }) {
 }
 
 export function SetupWizard() {
+  const [mode, setMode]       = useState<SetupMode | null>(null)
   const [current, setCurrent] = useState(1)
   const [done, setDone]       = useState<Set<number>>(new Set())
 
+  const steps = mode === 'existing' ? EXISTING_STEPS : FRESH_STEPS
+
+  const pick = useCallback((m: SetupMode) => { setMode(m); setCurrent(1); setDone(new Set()) }, [])
+  const restart = useCallback(() => { setMode(null); setCurrent(1); setDone(new Set()) }, [])
   const goNext = useCallback(() => {
     setDone(d => new Set(d).add(current))
-    if (current < STEPS.length) setCurrent(c => c + 1)
-  }, [current])
-  const goBack = useCallback(() => { if (current > 1) setCurrent(c => c - 1) }, [current])
-  const skip   = useCallback(() => { if (current < STEPS.length) setCurrent(c => c + 1) }, [current])
+    setCurrent(c => Math.min(c + 1, steps.length))
+  }, [current, steps.length])
+  const goBack = useCallback(() => {
+    if (current <= 1) { restart(); return }
+    setCurrent(c => c - 1)
+  }, [current, restart])
+  const skip = useCallback(() => { setCurrent(c => Math.min(c + 1, steps.length)) }, [steps.length])
 
   return (
     <>
       <PageHeader
         title="Setup Wizard"
         icon="Wand2"
-        description="One-time guided setup for a fresh Dune Awakening server."
+        description="Guided setup for your Dune Awakening server — whether you're installing fresh or already have one running."
       />
-      <StepIndicator current={current} done={done} />
-      <div className="card p-6">
-        {current === 1 && <Step1Preflight />}
-        {current === 2 && <Step2Config />}
-        {current === 3 && <Step3Install />}
-        {current === 4 && <Step4Security />}
-        {current === 5 && <Step5Networking />}
-        {current === 6 && <Step6Finalize />}
-      </div>
-      <div className="flex items-center justify-between mt-4 pt-3 border-t border-border">
-        <button className="btn-secondary" onClick={goBack} disabled={current === 1}>
-          <Icon name="ArrowLeft" size={14} /> Back
-        </button>
-        <div className="text-xs text-text-dim">
-          Step {current} of {STEPS.length}: {STEPS[current - 1].title}
-        </div>
-        <div className="flex gap-2">
-          {current < STEPS.length && (
-            <button className="btn-ghost" onClick={skip}>Skip step</button>
-          )}
-          <button className="btn-primary" onClick={goNext}>
-            {current >= STEPS.length ? 'Finish' : (<>Next <Icon name="ArrowRight" size={14} /></>)}
-          </button>
-        </div>
-      </div>
+      {mode === null ? (
+        <BranchChooser onPick={pick} />
+      ) : (
+        <>
+          <StepIndicator steps={steps} current={current} done={done} />
+          <div className="card p-6">
+            {steps[current - 1].render()}
+          </div>
+          <div className="flex items-center justify-between mt-4 pt-3 border-t border-border">
+            <button className="btn-secondary" onClick={goBack}>
+              <Icon name="ArrowLeft" size={14} /> {current <= 1 ? 'Change path' : 'Back'}
+            </button>
+            <div className="text-xs text-text-dim">
+              Step {current} of {steps.length}: {steps[current - 1].title}
+            </div>
+            <div className="flex gap-2">
+              {current < steps.length && (
+                <button className="btn-ghost" onClick={skip}>Skip step</button>
+              )}
+              <button className="btn-primary" onClick={goNext}>
+                {current >= steps.length ? 'Finish' : (<>Next <Icon name="ArrowRight" size={14} /></>)}
+              </button>
+            </div>
+          </div>
+        </>
+      )}
     </>
   )
 }
 
-function StepIndicator({ current, done }: { current: number; done: Set<number> }) {
+function BranchChooser({ onPick }: { onPick: (m: SetupMode) => void }) {
+  return (
+    <div className="card p-6">
+      <SectionHeader
+        title="Do you already have a Dune Awakening server?"
+        subtitle="This picks the right path through setup."
+      />
+      <div className="grid gap-4 md:grid-cols-2 mt-2">
+        <button
+          type="button"
+          onClick={() => onPick('existing')}
+          className="text-left p-5 rounded-lg border border-border bg-surface-2 hover:border-accent hover:bg-surface transition"
+        >
+          <div className="flex items-center gap-2 mb-2">
+            <Icon name="ServerCog" size={20} className="text-accent shrink-0" />
+            <span className="font-semibold text-accent">Yes — I already have a server</span>
+          </div>
+          <p className="text-sm text-text-dim">
+            DST connects to your existing battlegroup VM. Nothing is re-installed — we just make sure the tool
+            can reach it by locating or generating the SSH key.
+          </p>
+        </button>
+        <button
+          type="button"
+          onClick={() => onPick('fresh')}
+          className="text-left p-5 rounded-lg border border-border bg-surface-2 hover:border-accent hover:bg-surface transition"
+        >
+          <div className="flex items-center gap-2 mb-2">
+            <Icon name="Download" size={20} className="text-accent shrink-0" />
+            <span className="font-semibold text-accent">No — set one up for me</span>
+          </div>
+          <p className="text-sm text-text-dim">
+            Runs Funcom's <span className="font-mono">initial-setup</span> to download and import the Hyper-V VM,
+            then brings the battlegroup online. Needs ~60&nbsp;GB free and 10–30&nbsp;min.
+          </p>
+        </button>
+      </div>
+    </div>
+  )
+}
+
+function StepIndicator({ steps, current, done }: { steps: Step[]; current: number; done: Set<number> }) {
   return (
     <div className="card p-4 mb-6">
       <ol className="flex items-center justify-between gap-2">
-        {STEPS.map((s, i) => {
-          const isDone = done.has(s.index)
-          const isCurrent = current === s.index
+        {steps.map((s, i) => {
+          const idx = i + 1
+          const isDone = done.has(idx)
+          const isCurrent = current === idx
           return (
-            <li key={s.index} className="flex items-center gap-2 flex-1 min-w-0">
+            <li key={s.title} className="flex items-center gap-2 flex-1 min-w-0">
               <div
                 className={
                   'w-8 h-8 rounded-full flex items-center justify-center shrink-0 text-xs font-semibold border-2 transition ' +
@@ -115,7 +182,7 @@ function StepIndicator({ current, done }: { current: number; done: Set<number> }
                       : 'border-border bg-surface-2 text-text-dim')
                 }
               >
-                {isDone ? <Icon name="Check" size={14} /> : s.index}
+                {isDone ? <Icon name="Check" size={14} /> : idx}
               </div>
               <div className="min-w-0 hidden md:block">
                 <div className={`text-xs font-semibold truncate ${isCurrent ? 'text-accent' : isDone ? 'text-success' : 'text-text-dim'}`}>
@@ -123,7 +190,7 @@ function StepIndicator({ current, done }: { current: number; done: Set<number> }
                 </div>
                 <div className="text-[10px] text-text-dim truncate">{s.subtitle}</div>
               </div>
-              {i < STEPS.length - 1 && (
+              {i < steps.length - 1 && (
                 <div className={`flex-1 h-px ${isDone ? 'bg-success/40' : 'bg-border'}`} />
               )}
             </li>
@@ -143,21 +210,33 @@ function SectionHeader({ title, subtitle }: { title: string; subtitle: string })
   )
 }
 
-function Step1Preflight() {
+function Step1Preflight({ existing = false }: { existing?: boolean }) {
   const [data, setData] = useState<PreflightResult | null>(null)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const refresh = useCallback(async () => {
     setLoading(true); setError(null)
-    try { setData(await getPreflight()) }
+    try { setData(await getPreflight(existing ? 'existing' : 'fresh')) }
     catch (e) { setError(e instanceof ApiError ? e.message : String(e)) }
     finally { setLoading(false) }
-  }, [])
+  }, [existing])
   useEffect(() => { void refresh() }, [refresh])
 
   return (
     <>
-      <SectionHeader title="Pre-flight checks" subtitle="Verify your machine can host the battlegroup." />
+      <SectionHeader
+        title="Pre-flight checks"
+        subtitle={existing
+          ? 'Confirm DST is elevated and can see Hyper-V before connecting.'
+          : 'Verify your machine can host the battlegroup.'}
+      />
+      {existing && (
+        <p className="text-sm text-text-dim mb-3">
+          You already have a server, so the disk check only covers what DST itself needs (app + local
+          backups) — it won't import a new VM. The next step locates or generates the SSH key it needs to
+          reach your battlegroup.
+        </p>
+      )}
       {error && <p className="text-sm text-danger mb-3">{error}</p>}
       {!data ? (
         <p className="text-sm text-text-dim italic">{loading ? 'Checking…' : 'No data.'}</p>
@@ -231,6 +310,168 @@ function Step2Config() {
           <dt className="text-text-dim">SSH port</dt>
           <dd className="font-mono">{cfg.sshPort}</dd>
         </dl>
+      )}
+    </>
+  )
+}
+
+function StepConnectExisting() {
+  const [values, setValues]   = useState<Record<string, string>>({})
+  const [pf, setPf]           = useState<PreflightResult | null>(null)
+  const [loading, setLoading] = useState(true)
+  const [saving, setSaving]   = useState(false)
+  const [browsing, setBrowsing] = useState(false)
+  const [rotating, setRotating] = useState(false)
+  const [msg, setMsg]         = useState<string | null>(null)
+  const [error, setError]     = useState<string | null>(null)
+
+  const loadCfg = useCallback(async () => {
+    const out = await api<{ values: Record<string, string> }>('/api/config')
+    setValues({ ...out.values })
+  }, [])
+  const loadPf = useCallback(async () => {
+    try { setPf(await getPreflight('existing')) } catch { /* surfaced below via missing check */ }
+  }, [])
+  useEffect(() => {
+    void (async () => {
+      setLoading(true)
+      try { await Promise.all([loadCfg(), loadPf()]) }
+      catch (e) { setError(e instanceof ApiError ? e.message : String(e)) }
+      finally { setLoading(false) }
+    })()
+  }, [loadCfg, loadPf])
+
+  const sshCheck = pf?.checks.find(c => c.key === 'sshkey')
+
+  const browseKey = useCallback(async () => {
+    setBrowsing(true); setError(null)
+    try {
+      const r = await api<{ ok: boolean; cancelled: boolean; path: string }>('/api/browse-path', {
+        method: 'POST',
+        body: JSON.stringify({
+          mode: 'file',
+          current: values.SshKey ?? '',
+          title: 'Select your SSH private key',
+          filter: 'SSH key (sshKey;*.pem;*.key)|sshKey;*.pem;*.key|All files (*.*)|*.*',
+        }),
+      })
+      if (r.ok && !r.cancelled && r.path) setValues(v => ({ ...v, SshKey: r.path }))
+    } catch (e) {
+      setError(e instanceof ApiError ? e.message : String(e))
+    } finally {
+      setBrowsing(false)
+    }
+  }, [values.SshKey])
+
+  const save = useCallback(async () => {
+    const key = (values.SshKey ?? '').trim()
+    if (!key) { setError('Enter or browse to your SSH private key first.'); return }
+    setSaving(true); setError(null); setMsg(null)
+    try {
+      await api<{ ok: boolean; complete: boolean }>('/api/config', {
+        method: 'PUT',
+        body: JSON.stringify({ values: { SshKey: key } }),
+      })
+      setMsg('Saved. Re-checking the connection…')
+      await loadPf()
+    } catch (e) {
+      setError(e instanceof ApiError ? e.message : String(e))
+    } finally {
+      setSaving(false)
+    }
+  }, [values.SshKey, loadPf])
+
+  const recheck = useCallback(async () => {
+    setMsg(null); setError(null)
+    await loadPf()
+  }, [loadPf])
+
+  const generate = useCallback(async () => {
+    if (!window.confirm('Generate a NEW SSH key and authorize it on the VM?\n\nThe VM must be running. A console window opens and asks for the \'dune\' user\'s password — you MUST type it there to authorize the new key. If you close it without entering the password, DST stays locked out until you re-run this.')) return
+    setRotating(true); setMsg(null); setError(null)
+    try {
+      const r = await api<{ ok: boolean; rotated: boolean; message?: string }>('/api/config/rotate-ssh-key', { method: 'POST' })
+      setMsg(r.message ?? (r.ok ? 'SSH key generated and authorized.' : 'Rotation did not complete.'))
+      if (!r.ok && r.message) setError(r.message)
+      await loadCfg()
+      await loadPf()
+    } catch (e) {
+      setError(e instanceof ApiError ? e.message : String(e))
+    } finally {
+      setRotating(false)
+    }
+  }, [loadCfg, loadPf])
+
+  const tone = sshCheck?.ok ? 'text-success'
+    : sshCheck?.severity === 'warning' ? 'text-warning'
+    : 'text-text-dim'
+  const icon = sshCheck?.ok ? 'CheckCircle2'
+    : sshCheck?.severity === 'warning' ? 'AlertTriangle'
+    : 'Info'
+
+  return (
+    <>
+      <SectionHeader title="Connect to your server" subtitle="Point DST at your existing battlegroup." />
+      <p className="text-sm text-text-dim mb-4">
+        DST reaches the <span className="font-mono">dune-awakening</span> VM over SSH. Tell it which private
+        key to use — either <strong>locate the key</strong> you already have, or <strong>generate a new one</strong>{' '}
+        and authorize it on the running VM.
+      </p>
+
+      {loading ? (
+        <p className="text-sm text-text-dim italic">Loading…</p>
+      ) : (
+        <>
+          <label className="block text-sm font-medium text-text mb-1">SSH private key path</label>
+          <div className="flex items-stretch gap-2 mb-2">
+            <input
+              type="text"
+              value={values.SshKey ?? ''}
+              onChange={e => setValues(v => ({ ...v, SshKey: e.target.value }))}
+              placeholder="C:\Users\<you>\AppData\Local\DuneAwakeningServer\sshKey"
+              className="flex-1 min-w-0 text-sm font-mono bg-surface border border-border rounded px-2 py-1.5"
+            />
+            <button type="button" className="btn-secondary shrink-0" onClick={() => { void browseKey() }} disabled={browsing}>
+              <Icon name="FolderOpen" size={14} /> {browsing ? 'Browsing…' : 'Locate'}
+            </button>
+          </div>
+
+          <div className="flex flex-wrap gap-2 mb-4">
+            <button type="button" className="btn-primary" onClick={() => { void save() }} disabled={saving}>
+              <Icon name={saving ? 'Loader2' : 'Save'} size={14} className={saving ? 'animate-spin' : ''} />
+              {saving ? 'Saving…' : 'Save & verify'}
+            </button>
+            <button type="button" className="btn-secondary" onClick={() => { void generate() }} disabled={rotating}>
+              <Icon name={rotating ? 'Loader2' : 'KeyRound'} size={14} className={rotating ? 'animate-spin' : ''} />
+              {rotating ? 'Generating…' : 'Generate & authorize new key'}
+            </button>
+            <button type="button" className="btn-ghost" onClick={() => { void recheck() }}>
+              <Icon name="RefreshCw" size={14} /> Re-check connection
+            </button>
+          </div>
+
+          {sshCheck && (
+            <div className="flex items-start gap-3 p-3 rounded border border-border bg-surface-2 mb-2">
+              <Icon name={icon} size={18} className={`${tone} shrink-0 mt-0.5`} />
+              <div className="min-w-0 flex-1">
+                <div className={`text-sm font-medium ${tone}`}>
+                  {sshCheck.ok ? 'DST can reach your server' : 'Connection not verified yet'}
+                </div>
+                <div className="text-xs text-text-dim mt-0.5 break-words">{sshCheck.detail}</div>
+                {!sshCheck.ok && sshCheck.fix && <FixBlock fix={sshCheck.fix} />}
+              </div>
+            </div>
+          )}
+
+          {msg   && <p className="mt-2 text-xs text-text-muted border-l-2 border-accent pl-2 break-words">{msg}</p>}
+          {error && <p className="mt-2 text-xs text-danger break-words">{error}</p>}
+
+          <p className="mt-4 text-xs text-text-dim">
+            The <span className="font-mono">Steam install path</span> is only needed for fresh installs and a few
+            client-config helpers — set it later on the{' '}
+            <Link to="/settings" className="text-accent hover:underline">Settings</Link> page if you want those.
+          </p>
+        </>
       )}
     </>
   )

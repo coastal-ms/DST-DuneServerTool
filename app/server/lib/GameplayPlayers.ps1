@@ -617,6 +617,65 @@ function Get-DunePlayerStatsLive {
         solaris        = (ConvertTo-DuneInt $r['solaris'])
         total_currency = (ConvertTo-DuneInt $r['total_currency'])
     }
+    # Per-faction reputation already applied to this player (keyed off the
+    # controller/actor id, same as the give-faction-rep write). Surfaced so the
+    # Stats tab shows current standing before an admin adjusts it.
+    $reps = @()
+    $cid = [long]$stats['controller_id']
+    if ($cid -gt 0) {
+        $repSql = @"
+SELECT pfr.faction_id::int AS fid, f.name AS fname, COALESCE(pfr.reputation_amount, 0) AS rep
+FROM dune.player_faction_reputation pfr
+JOIN dune.factions f ON f.id = pfr.faction_id
+WHERE pfr.actor_id = $cid::bigint
+ORDER BY pfr.faction_id;
+"@
+        $rr = Invoke-DuneSqlQuery -Ip $Ip -Sql $repSql -ReadOnly $true -MaxRows 50 -TimeoutSec 20
+        if ($rr.ok) {
+            foreach ($row in (ConvertTo-DuneRowMaps -Result $rr)) {
+                $reps += [ordered]@{
+                    faction_id   = (ConvertTo-DuneInt $row['fid'])
+                    faction_name = [string]$row['fname']
+                    reputation   = (ConvertTo-DuneInt $row['rep'])
+                }
+            }
+        }
+    }
+    $stats['faction_reps'] = $reps
+    $stats['faction_rep_cap'] = if (Get-Variable -Name DuneFactionRepCap -Scope Script -ErrorAction SilentlyContinue) { [int]$script:DuneFactionRepCap } else { 12474 }
+
+    # Scrip (Landsraad Scrip) balance — shown read-only beside the Give Scrip
+    # action so admins see the current standing without guessing.
+    $scrip = 0
+    if ($cid -gt 0) {
+        try {
+            $scripId = Resolve-DuneScripCurrencyId -Ip $Ip
+            if ($null -ne $scripId) {
+                $scSql = "SELECT COALESCE(balance, 0) AS bal FROM dune.player_virtual_currency_balances WHERE player_controller_id = $cid::bigint AND currency_id = $([int]$scripId)::smallint LIMIT 1;"
+                $sc = Invoke-DuneSqlQuery -Ip $Ip -Sql $scSql -ReadOnly $true -MaxRows 1 -TimeoutSec 15
+                if ($sc.ok) {
+                    $scm = ConvertTo-DuneRowMaps -Result $sc
+                    if ($scm.Count -ge 1) { $scrip = (ConvertTo-DuneInt $scm[0]['bal']) }
+                }
+            }
+        } catch {}
+    }
+    $stats['scrip'] = $scrip
+
+    # Intel (TechKnowledgePlayerComponent.m_TechKnowledgePoints) lives on the
+    # pawn actor. Surfaced read-only beside Give Intel.
+    $intel = 0
+    try {
+        $inSql = "SELECT COALESCE((properties->'TechKnowledgePlayerComponent'->>'m_TechKnowledgePoints')::int, 0) AS intel FROM dune.actors WHERE id = $PawnId::bigint;"
+        $inR = Invoke-DuneSqlQuery -Ip $Ip -Sql $inSql -ReadOnly $true -MaxRows 1 -TimeoutSec 15
+        if ($inR.ok) {
+            $inm = ConvertTo-DuneRowMaps -Result $inR
+            if ($inm.Count -ge 1) { $intel = (ConvertTo-DuneInt $inm[0]['intel']) }
+        }
+    } catch {}
+    $stats['intel'] = $intel
+    $stats['intel_max'] = if (Get-Variable -Name DuneMaxIntelPoints -Scope Script -ErrorAction SilentlyContinue) { [int]$script:DuneMaxIntelPoints } else { 2779 }
+
     return @{ ok = $true; stats = $stats }
 }
 
@@ -841,6 +900,12 @@ function Get-DunePlayerStatsDemo {
         last_seen = '2026-06-12T06:00:00Z'
         faction_id = 1; faction_name = 'Atreides'
         solaris = 125000; total_currency = 132100
+        faction_reps = @(
+            [ordered]@{ faction_id = 1; faction_name = 'Atreides';  reputation = 8400 }
+            [ordered]@{ faction_id = 2; faction_name = 'Harkonnen'; reputation = 1200 }
+        )
+        faction_rep_cap = 12474
+        scrip = 3250; intel = 540; intel_max = 2779
     }
 }
 

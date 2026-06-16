@@ -475,6 +475,33 @@ function BuySection({ draft, setDraft, status, tick, ticking, balanceBusy,
           <NumField label="Winning number" value={draft.die_target}
             onChange={v => setDraft({ ...draft, die_target: v })} />
         </div>
+        <div className="mt-4 pt-3 border-t border-border">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 items-end">
+            <Toggle label="Over-market guard" checked={draft.over_market_guard ?? false}
+              onChange={v => setDraft({ ...draft, over_market_guard: v })} />
+            <NumField label="Max over market (%)" value={draft.over_market_pct ?? 5}
+              onChange={v => setDraft({ ...draft, over_market_pct: v })}
+              disabled={!(draft.over_market_guard ?? false)} />
+            <NumField label="No-price baseline" value={draft.over_market_baseline ?? 100}
+              onChange={v => setDraft({ ...draft, over_market_baseline: v })}
+              disabled={!(draft.over_market_guard ?? false) || (draft.over_market_allow_unpriced ?? false)} />
+          </div>
+          <div className="mt-3">
+            <Toggle label="Allow items with no market price"
+              checked={draft.over_market_allow_unpriced ?? false}
+              onChange={v => setDraft({ ...draft, over_market_allow_unpriced: v })}
+              disabled={!(draft.over_market_guard ?? false)} />
+          </div>
+          <p className="text-[11px] text-text-dim mt-2">
+            When on, a winning roll only buys if the seller's price is within this percentage of Duke's
+            reference (market) price for the item. A roll that wins but is over the window is skipped and
+            the reason is logged to the console.
+          </p>
+          <p className="text-[11px] text-text-dim mt-1">
+            For items Duke has no market price for: leave <em>Allow…</em> off to judge them against the
+            editable <em>No-price baseline</em>, or turn it on to buy them anyway (no reference → can't judge).
+          </p>
+        </div>
       </div>
 
       <div className="card p-4">
@@ -519,6 +546,7 @@ function BuyTickResultView({ tick }: { tick: BotTickResult }) {
         <span className={tick.dryRun ? 'text-accent' : 'text-success'}>
           <span className="text-text-dim">{tick.dryRun ? 'would buy:' : 'purchased:'}</span> {fmtNum(tick.purchased)}
         </span>
+        {(tick.blocked ?? 0) > 0 && <span className="text-warning"><span className="text-text-dim">over-market:</span> {fmtNum(tick.blocked ?? 0)}</span>}
         {tick.errors > 0 && <span className="text-danger"><span className="text-text-dim">errors:</span> {fmtNum(tick.errors)}</span>}
       </div>
       {tick.dryRun && <div className="mt-1 text-[11px] text-accent">Dry run — nothing was written.</div>}
@@ -741,6 +769,8 @@ function ListTickResultView({ tick }: { tick: BotListTickResult }) {
         </span>
         <span><span className="text-text-dim">inserted:</span> {fmtNum(tick.inserted)}</span>
         <span><span className="text-text-dim">deleted:</span> {fmtNum(tick.deleted)}</span>
+        {(tick.market_medians ?? 0) > 0 && <span className="text-accent"><span className="text-text-dim">market medians:</span> {fmtNum(tick.market_medians ?? 0)}</span>}
+        {tick.wiped && <span className="text-warning"><span className="text-text-dim">listings:</span> wiped & rebuilding</span>}
         {tick.errors > 0 && <span className="text-danger"><span className="text-text-dim">errors:</span> {fmtNum(tick.errors)}</span>}
       </div>
       {tick.dryRun && <div className="mt-1 text-[11px] text-accent">Dry run — nothing was written.</div>}
@@ -783,6 +813,110 @@ function ListTickResultView({ tick }: { tick: BotListTickResult }) {
 }
 
 // ---------------------------------------------------------------------------
+// Market-follow pricing card. Lists at the median of competing player sell
+// orders + a markup, instead of the formula. All-or-nothing; toggling wipes &
+// rebuilds Duke's listings on the next list tick (server flags relist_pending
+// in Save-DuneBotConfig). Includes a collapsible explainer + per-control
+// tooltips so operators understand each knob.
+// ---------------------------------------------------------------------------
+function MarketFollowCard({ draft, setDraft }: { draft: BotConfig; setDraft: (c: BotConfig) => void }) {
+  const on = draft.market_follow_enabled ?? false
+  const noMarket = draft.market_follow_no_market ?? 'formula'
+  const noMarketOpts: [string, string, string][] = [
+    ['formula', 'Formula', 'List at the normal tier/rarity/vendor price'],
+    ['skip', 'Skip', "Don't list items with no competing market"],
+    ['baseline', 'Baseline', 'List at a fixed baseline price you set'],
+  ]
+  const toggleFollow = (next: boolean) => {
+    const msg = next
+      ? "Turn ON market-follow pricing?\n\nDuke will price EVERY listing from the live market — the median of other players' sell orders for each item, plus your markup. This is all-or-nothing: it replaces the formula/upstream pricing entirely.\n\nDuke's current listings will be WIPED and rebuilt at the new prices on the next list tick. This cannot be undone.\n\nProceed?"
+      : "Turn OFF market-follow pricing?\n\nDuke will go back to formula/upstream pricing for every listing.\n\nDuke's current listings will be WIPED and rebuilt on the next list tick. This cannot be undone.\n\nProceed?"
+    if (!window.confirm(msg)) return
+    setDraft({ ...draft, market_follow_enabled: next })
+  }
+  return (
+    <div className="card p-4 space-y-3 border-l-2 border-accent">
+      <div className="flex items-center justify-between gap-3">
+        <h4 className="text-xs uppercase tracking-wider text-text-dim flex items-center gap-2">
+          <Icon name="TrendingUp" size={14} className="text-accent" /> Market-follow pricing
+        </h4>
+        <span className={`text-[11px] px-2 py-0.5 rounded-full ${on ? 'bg-accent/20 text-accent' : 'bg-surface-3 text-text-dim'}`}>
+          {on ? 'ON — following market' : 'OFF — using formula'}
+        </span>
+      </div>
+
+      <Toggle label="Follow market price (median + %)" checked={on} onChange={toggleFollow} />
+
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 items-end">
+        <div title="Duke lists at the market median for an item, multiplied by (1 + this %). Start at 10%.">
+          <NumField label="Market markup (%)" value={draft.market_follow_pct ?? 10}
+            onChange={v => setDraft({ ...draft, market_follow_pct: v })} disabled={!on} />
+        </div>
+        <div title="Minimum number of competing sell orders before Duke trusts a median. Below this, the no-market rule applies.">
+          <NumField label="Min competing orders" value={draft.market_follow_min_samples ?? 1}
+            onChange={v => setDraft({ ...draft, market_follow_min_samples: v })} disabled={!on} />
+        </div>
+        {noMarket === 'baseline' && (
+          <div title="Price used (times 1 + markup%) for items nobody else is selling, when 'Baseline' is chosen below.">
+            <NumField label="Baseline price (item_price)" value={draft.market_follow_baseline ?? 100}
+              onChange={v => setDraft({ ...draft, market_follow_baseline: v })} disabled={!on} />
+          </div>
+        )}
+      </div>
+
+      <div>
+        <span className="block text-[11px] uppercase tracking-wider text-text-dim mb-1">When nobody else is selling an item</span>
+        <div className="inline-flex rounded-lg border border-border overflow-hidden">
+          {noMarketOpts.map(([val, label, tip]) => (
+            <button key={val} type="button" disabled={!on} title={tip}
+              onClick={() => setDraft({ ...draft, market_follow_no_market: val as 'formula' | 'skip' | 'baseline' })}
+              className={`px-3 py-1.5 text-xs font-medium transition-colors disabled:opacity-50 ${noMarket === val ? 'bg-accent text-bg' : 'bg-surface-2 text-text-muted hover:text-text'}`}>
+              {label}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      <div title="When on, the buy-side over-market guard (dice roll AND price within the over-market % of the market median) is forced on in this mode, even if the standalone guard toggle on the Buy tab is off.">
+        <Toggle label="Force buy guard in this mode" checked={draft.market_follow_force_guard ?? true}
+          onChange={v => setDraft({ ...draft, market_follow_force_guard: v })} disabled={!on} />
+      </div>
+
+      <details className="rounded-lg border border-border bg-surface-2/40 p-3">
+        <summary className="text-sm font-medium text-text cursor-pointer select-none">How market-follow pricing works</summary>
+        <div className="mt-2 space-y-2 text-[11px] text-text-muted leading-relaxed">
+          <p>
+            <strong>The basis.</strong> For each item, Duke finds the <strong>median</strong> price of all
+            <em> other</em> players' current sell orders (his own and other bots' listings are excluded), per
+            quality grade where there's data. He then lists at <span className="font-mono">median × (1 + markup%)</span>.
+            Use this when the formula under-prices things (e.g. augments).
+          </p>
+          <p>
+            <strong>Min competing orders.</strong> A median is only trusted once at least this many other
+            sellers are listing the item. Thinner markets fall through to the no-market rule.
+          </p>
+          <p>
+            <strong>When nobody else is selling.</strong> <em>Formula</em> keeps Duke listing the item at the
+            normal tier/rarity price; <em>Skip</em> leaves it unlisted; <em>Baseline</em> lists it at the fixed
+            baseline price you set (also × 1 + markup%).
+          </p>
+          <p>
+            <strong>Buy side.</strong> With <em>Force buy guard</em> on, a winning dice roll only buys when the
+            seller's price is within the over-market % (set on the Buy tab) of the market median — so Duke never
+            overpays even while following the market. Everything else on the buy side is bypassed except the dice roll.
+          </p>
+          <p className="text-warning">
+            <strong>All-or-nothing + wipe.</strong> This replaces the formula/upstream pricing for every listing.
+            Enabling or disabling it wipes and rebuilds all of Duke's listings on the next list tick so prices
+            switch over cleanly.
+          </p>
+        </div>
+      </details>
+    </div>
+  )
+}
+
+// ---------------------------------------------------------------------------
 // Pricing section — the sane-pricing knobs (100 k cap, tier base prices,
 // rarity / vendor / grade multipliers, per-template overrides).
 // ---------------------------------------------------------------------------
@@ -810,6 +944,8 @@ function PricingSection({ draft, setDraft }: { draft: BotConfig; setDraft: (c: B
 
   return (
     <div className="space-y-4">
+      <MarketFollowCard draft={draft} setDraft={setDraft} />
+
       <div className="card p-3 text-xs text-text-muted border-l-2 border-warning flex items-start gap-2">
         <Icon name="TriangleAlert" size={14} className="text-warning shrink-0 mt-0.5" />
         <span>

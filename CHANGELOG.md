@@ -13,6 +13,91 @@ here cover everything those tags shipped.
 
 ## [Unreleased]
 
+## [12.5.0] - 2026-06-16
+
+### Added
+
+- **Market bot: market-follow pricing mode.** A new all-or-nothing pricing
+  source that lists every Duke item at the **median of competing players' sell
+  orders** (his own/other bots' listings excluded) times a markup you set
+  (default +10%), instead of the tier/rarity/vendor formula. Built for cases
+  where the formula under-prices items (e.g. augments). Configurable on the
+  **Pricing rules** tab: markup %, minimum competing orders before a median is
+  trusted, and a three-way rule for items nobody else is selling —
+  **Formula** (normal price), **Skip** (leave unlisted), or **Baseline** (a
+  fixed price you enter, also × markup). A collapsible "How it works" explainer
+  and per-control tooltips document each knob. Enabling or disabling the mode
+  wipes and rebuilds Duke's listings on the next list tick so prices switch over
+  cleanly (the bot flags a pending relist automatically). On the buy side, a
+  **Force buy guard** toggle (default on) makes a winning dice roll only buy when
+  the seller's price is within the over-market % of the market median.
+
+- **Market bot: over-market buy guard.** When enabled, a winning d12 roll only
+  buys if the seller's per-unit price is within a configurable percentage
+  (default 5%) of Duke's reference price for that item; a roll that wins but is
+  over the window is skipped and the reason is logged to the console. Items with
+  no resolvable reference are judged against an editable baseline, or — with
+  "Allow items with no market price" on — bought anyway. Controls live on the
+  **Buy side** tab.
+
+- **Setup Wizard: two-path onboarding.** The wizard now asks upfront whether you
+  already have a Dune Awakening server. **"Yes — I already have a server"** skips
+  VM import and goes straight to a new **Connect to your server** step (locate an
+  existing SSH key, generate one, or authorize a new key on the running VM via
+  `/api/config/rotate-ssh-key`). **"No — set one up for me"** keeps the original
+  fresh-install flow (Pre-flight → Configuration → Install → Security →
+  Networking → Finalize).
+
+- **Market browser: filter by full category, not just the top level.** The
+  category dropdown on the Market tab now lists every real category (grouped by
+  top-level, e.g. *Items → Weapons / Sidearm*) instead of only `items` /
+  `schematics`, so you can narrow listings to a specific category. Each group
+  also keeps an "All <group>" option.
+
+- **Players: faction reputation is shown and the give/set-tier faction picker is
+  a dropdown.** The Stats tab now reads each player's current per-faction
+  standing (Atreides / Harkonnen, with the 12,474 cap) from
+  `player_faction_reputation`. The *Give Faction Rep* and *Set Faction Tier*
+  actions now use an Atreides / Harkonnen dropdown instead of a free-text box you
+  had to type into.
+
+- **Players: Actions panel uses friendly dropdowns and shows current values
+  instead of raw IDs.** *Refuel Vehicle* picks from a dropdown of the player's
+  actual vehicles (friendly name + map) rather than a raw vehicle id;
+  *Set Starter Class* is a dropdown of the named classes (Swordmaster, Mentat,
+  …) instead of a typed job id; *Update Tags* removes via a dropdown of the
+  player's current tags (and lists them) and adds with tag suggestions. The
+  *Give Solari / Give Scrip / Give Intel* rows now show the player's current
+  balance (read-only) above the amount, and the Stats tab reads Scrip and Intel
+  balances alongside Solari.
+
+- **Game Config: note that some settings need a battlegroup restart.** The Game
+  Config intro now calls out that some settings may require a battlegroup restart
+  to take effect.
+
+### Changed
+
+- **Setup Wizard pre-flight runs prerequisite checks first, scoped to the chosen
+  path.** Pre-flight now verifies the OpenSSH client (`ssh.exe`) is present
+  (DST shells out to SSH for every VM operation) and accepts a
+  `?mode=existing|fresh` parameter. The existing-server path only checks that DST
+  itself has enough free disk (~5 GB for the app plus local backups/snapshots);
+  the fresh-install path additionally reports whether there's room for the
+  Hyper-V VM image during the install step.
+
+### Fixed
+
+- **Market search box now actually filters.** The market items search was a
+  no-op: a case-insensitive variable-name collision in `Select-DuneMarketItems`
+  (`$search` aliased the `$Search` parameter and blanked it) meant the typed term
+  was dropped and every item was returned. Searching by item name or template id
+  now narrows the list as expected.
+
+- **Game Config: boolean toggle highlighting is now case-insensitive.** On/Off
+  pills and the defaults editor now compare values with `valuesEqual`, so a
+  config whose stored boolean differs only in casing (e.g. `True` vs `true`)
+  highlights the correct state.
+
 ## [12.4.0] - 2026-06-16
 
 ### Added
