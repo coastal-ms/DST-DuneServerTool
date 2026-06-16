@@ -17,6 +17,23 @@ here cover everything those tags shipped.
 
 ### Added
 
+- **Stack-quantity editing for storage & player inventory.** Click any item in a
+  storage container (Gameplay Admin → Storage) or a player's inventory (Gameplay
+  Admin → Players → inventory) to expand an inline editor and set its stack
+  quantity directly, the same click-to-edit pattern as the durability/water
+  editors. Writes the `stack_size` column (live DB only, minimum 1). The editor
+  surfaces the usual caveats: storage changes only appear in-game after a server
+  zone (battlegroup) restart, and edits to an online player's inventory only show
+  after they relog. New `set-item-stack` routes back both surfaces.
+
+- **Map SpinUp loading indicator + failure diagnosis.** Enabling an on-demand
+  map (Deep Desert, Arrakeen, Harko Village) now shows a live elapsed "Loading…"
+  counter on the card that polls the pod state and auto-resolves to the Warm pill
+  once the director schedules the pod. If the pod doesn't come up within five
+  minutes the card shows an inline error explaining *why* (partitions still
+  pinned/disabled, map not in the battlegroup CRD, no free VM RAM to schedule a
+  pod, or simply still reconciling) with a dismiss button.
+
 - **Market bot: market-follow pricing mode.** A new all-or-nothing pricing
   source that lists every Duke item at the **median of competing players' sell
   orders** (his own/other bots' listings excluded) times a markup you set

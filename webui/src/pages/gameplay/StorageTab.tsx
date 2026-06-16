@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react'
 import { Icon } from '../../components/Icon'
 import { ItemPicker } from '../../components/ItemPicker'
 import {
-  getStorage, getStorageItems, giveItemsToStorage, deleteStorageItem, isValidTemplateId,
+  getStorage, getStorageItems, giveItemsToStorage, deleteStorageItem, setStorageItemStack, isValidTemplateId,
   type StorageContainer, type InventoryItem, type DataSource, type StorageGiveItemInput,
 } from '../../api/gameplay'
 import { fmtNum, SourceBadge, StatCard, DemoNotice, qualityClass } from './shared'
@@ -137,6 +137,7 @@ function ContainerDetail({ container, demo, onClose, onChanged }: {
   const [busy, setBusy] = useState(false)
   const [flash, setFlash] = useState<string | null>(null)
   const [showAdd, setShowAdd] = useState(false)
+  const [editingId, setEditingId] = useState<number | null>(null)
   const canWrite = !demo
 
   const loadItems = useCallback(() => {
@@ -175,6 +176,19 @@ function ContainerDetail({ container, demo, onClose, onChanged }: {
       const r = await giveItemsToStorage(container.id, staged)
       setShowAdd(false)
       afterWrite(r.message || 'Items added.')
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e))
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  const handleSetStack = async (it: InventoryItem, stackSize: number) => {
+    setBusy(true); setError(null); setFlash(null)
+    try {
+      const r = await setStorageItemStack(it.id, stackSize)
+      setEditingId(null)
+      afterWrite(r.message || 'Stack quantity updated.')
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e))
     } finally {
@@ -232,23 +246,98 @@ function ContainerDetail({ container, demo, onClose, onChanged }: {
           <div className="text-text-dim text-sm py-4">Empty container.</div>
         ) : (
           <div className="space-y-1">
-            {items.map(it => (
-              <div key={it.id} className="flex items-center justify-between text-sm bg-surface-2 rounded-lg px-3 py-2 border border-border/50">
-                <span className="truncate max-w-[220px]">
-                  <span className="text-text">{it.name}</span>
-                  {it.quality > 0 && <span className={`ml-1.5 text-[11px] ${qualityClass(it.quality)}`}>Q{it.quality}</span>}
-                  <span className="ml-1.5 font-mono text-text-dim text-xs">×{fmtNum(it.stack_size)}</span>
-                </span>
-                {canWrite && (
-                  <button className="text-danger/80 hover:text-danger shrink-0" title="Remove item" disabled={busy}
-                    onClick={() => { void handleDelete(it) }}>
-                    <Icon name="Trash2" size={14} />
-                  </button>
-                )}
-              </div>
-            ))}
+            {items.map(it => {
+              const isEditing = canWrite && editingId === it.id
+              const toggleEdit = () => {
+                if (!canWrite) return
+                setEditingId(prev => (prev === it.id ? null : it.id))
+              }
+              return (
+                <div key={it.id} className="bg-surface-2 rounded-lg border border-border/50">
+                  <div
+                    className={`flex items-center justify-between text-sm px-3 py-2 ${canWrite ? 'cursor-pointer hover:bg-surface-3/40' : ''}`}
+                    onClick={canWrite ? toggleEdit : undefined}
+                    role={canWrite ? 'button' : undefined}
+                    tabIndex={canWrite ? 0 : undefined}
+                    onKeyDown={canWrite ? (e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); toggleEdit() } }) : undefined}
+                    title={canWrite ? (isEditing ? 'Hide stack editor' : 'Click to edit stack quantity') : undefined}
+                  >
+                    <span className="truncate max-w-[220px]">
+                      {canWrite && (
+                        <Icon name={isEditing ? 'ChevronDown' : 'ChevronRight'} size={11} className="inline-block mr-1 text-text-dim" />
+                      )}
+                      <span className="text-text">{it.name}</span>
+                      {it.quality > 0 && <span className={`ml-1.5 text-[11px] ${qualityClass(it.quality)}`}>Q{it.quality}</span>}
+                      <span className="ml-1.5 font-mono text-text-dim text-xs">×{fmtNum(it.stack_size)}</span>
+                    </span>
+                    {canWrite && (
+                      <button className="text-danger/80 hover:text-danger shrink-0" title="Remove item" disabled={busy}
+                        onClick={e => { e.stopPropagation(); void handleDelete(it) }}>
+                        <Icon name="Trash2" size={14} />
+                      </button>
+                    )}
+                  </div>
+                  {isEditing && (
+                    <StackEditor item={it} busy={busy} onSave={n => { void handleSetStack(it, n) }} onClose={() => setEditingId(null)} />
+                  )}
+                </div>
+              )
+            })}
           </div>
         )}
+      </div>
+    </div>
+  )
+}
+
+// Inline stack-quantity editor — appears underneath a container item row when
+// the user clicks it (mirrors the inventory durability/water editors). Writes
+// the stack_size column directly; the new value only appears in-game after a
+// server zone (battlegroup) restart because the pod caches container contents.
+function StackEditor({ item, busy, onSave, onClose }: {
+  item: InventoryItem
+  busy: boolean
+  onSave: (stackSize: number) => void
+  onClose: () => void
+}) {
+  const [str, setStr] = useState(String(item.stack_size))
+  const n = parseInt(str, 10)
+  const valid = Number.isFinite(n) && n >= 1
+
+  return (
+    <div className="border-t border-border/50 px-3 py-3 bg-surface-1/60 rounded-b-lg space-y-3">
+      <div className="text-[11px] text-warning flex items-start gap-1.5">
+        <Icon name="AlertTriangle" size={11} className="mt-0.5 shrink-0" />
+        <span>
+          Changing the stack quantity writes to the database immediately, but the
+          new amount only appears in-game after a <strong>battlegroup (server zone)
+          restart</strong> — the game caches container contents while the zone is
+          loaded. Setting a quantity above the item's normal stack cap may be
+          clamped by the game on load.
+        </span>
+      </div>
+      <div className="flex items-end gap-2">
+        <label className="text-xs flex-1">
+          <div className="text-text-dim mb-1">Stack quantity</div>
+          <input
+            type="number" inputMode="numeric" step={1} min={1}
+            value={str}
+            onChange={e => setStr(e.target.value)}
+            disabled={busy}
+            className="w-full font-mono text-sm bg-surface-2 border border-border rounded px-2 py-1"
+          />
+        </label>
+        <button type="button" className="btn-secondary text-xs" disabled={busy} onClick={onClose}>
+          Cancel
+        </button>
+        <button
+          type="button"
+          className="btn-primary text-xs"
+          disabled={busy || !valid}
+          onClick={() => { if (valid) onSave(n) }}
+        >
+          <Icon name="Save" size={12} /> Save
+        </button>
       </div>
     </div>
   )

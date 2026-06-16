@@ -616,6 +616,13 @@ export function setItemWater(itemId: number, amount: number) {
   })
 }
 
+export function setItemStack(itemId: number, stackSize: number) {
+  return api<WriteResult>('/api/gameplay/players/set-item-stack', {
+    method: 'POST',
+    body: JSON.stringify({ item_id: itemId, stack_size: stackSize }),
+  })
+}
+
 // ---------------------------------------------------------------------------
 // Landsraad house-contribution admin (#224).
 // ---------------------------------------------------------------------------
@@ -968,6 +975,12 @@ export function giveItemsToStorage(containerId: number, items: StorageGiveItemIn
 export function deleteStorageItem(itemId: number) {
   return api<WriteResult>('/api/gameplay/storage/delete-item', {
     method: 'POST', body: JSON.stringify({ item_id: itemId }),
+  })
+}
+
+export function setStorageItemStack(itemId: number, stackSize: number) {
+  return api<WriteResult>('/api/gameplay/storage/set-item-stack', {
+    method: 'POST', body: JSON.stringify({ item_id: itemId, stack_size: stackSize }),
   })
 }
 
