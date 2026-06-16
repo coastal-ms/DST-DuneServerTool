@@ -794,17 +794,13 @@ export function GameConfig() {
         }
       />
 
-      {/* BETA / experimental notice */}
+      {/* Backup reminder */}
       <div className="card p-4 mb-4 border-ibad/40 bg-ibad/5 text-sm flex items-start gap-3">
         <Icon name="FlaskConical" size={18} className="mt-0.5 shrink-0 text-ibad" />
         <div className="flex-1 min-w-0">
-          <div className="flex items-center gap-2 mb-1">
-            <span className="text-[10px] font-semibold uppercase tracking-wider px-1.5 py-0.5 rounded bg-ibad/15 text-ibad">Beta</span>
-            <span className="font-semibold text-text">Experimental feature</span>
-          </div>
           <p className="text-xs text-text-muted leading-relaxed">
             Game Config writes directly to your live battlegroup&apos;s <span className="font-mono">UserGame.ini</span> /{' '}
-            <span className="font-mono">UserEngine.ini</span>. It&apos;s still being refined and values are written into a
+            <span className="font-mono">UserEngine.ini</span>. Values are written into a
             DST-managed block. <span className="text-text font-medium">Always click “Backup settings” before making changes</span> so
             you have a restore point — backups are saved on the server next to each file and can be restored via the File Browser.
           </p>

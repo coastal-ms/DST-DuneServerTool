@@ -13,6 +13,13 @@ here cover everything those tags shipped.
 
 ## [Unreleased]
 
+### Changed
+
+- **Game Config and Gameplay Admin are out of beta.** Removed the "BETA" pills
+  from their left-nav items and dropped the "Experimental feature" tag from the
+  Game Config header (the back-up-before-you-edit reminder and Backup / View
+  backups buttons stay).
+
 ## [12.2.1] - 2026-06-16
 
 ### Added
