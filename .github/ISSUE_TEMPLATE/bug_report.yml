@@ -65,7 +65,7 @@ body:
     attributes:
       label: Tool version
       description: Shown in the bottom-left of the web portal sidebar (status bar) and in the CLI menu header. Auto-filled when launched from **Help → Create GitHub Issue** in the top menu bar, or from the CLI `report-issue` command.
-      placeholder: "v12.2.0"
+      placeholder: "v12.2.1"
     validations:
       required: true
 
@@ -84,6 +84,9 @@ body:
         - Web portal — Gameplay Admin — Overview
         - Web portal — Gameplay Admin — Market / Market Bot
         - Web portal — Gameplay Admin — Players
+        - Web portal — Gameplay Admin — Players — Give Item / Give Package / Give Vehicle Kit (incl. "Allow overflow")
+        - Web portal — Gameplay Admin — Players — Cheat Scripts / Dev-Perf Scripts (Live)
+        - Web portal — Gameplay Admin — Players — Landsraad (contribution editor)
         - Web portal — Gameplay Admin — Bases
         - Web portal — Gameplay Admin — Storage
         - Web portal — Gameplay Admin — Blueprints (incl. Blueprint Designer link)
@@ -111,7 +114,7 @@ body:
     attributes:
       label: Specific page / button / command
       description: Which button, tab, menu letter/number, or `-Cmd <name>` triggered the bug?
-      placeholder: "e.g. Server Health 'Restart battlegroup' button, Game Config > Spicefields > Save, Game Config > client INI 'Open in Notepad', Gameplay Admin > Market Bot > toggle, Gameplay Admin > Players > Give Item, Gameplay Admin > Players > Actions > Punishment > Ban, Gameplay Admin > Players > Hide GM toggle, Gameplay Admin > Blueprints > 'Blueprint Designer' link, Tailscale > 'Admin console', Database > Backup Schedule presets > Hourly, Map SpinUp > Survival_2, Help > Create GitHub Issue, CLI option 'e. reboot', or -Cmd startup"
+      placeholder: "e.g. Server Health 'Restart battlegroup' button, Game Config > Spicefields > Save, Game Config > Landsraad > Save, Game Config > client INI 'Fix my client config', Gameplay Admin > Market Bot > toggle, Gameplay Admin > Players > Give Item (Allow overflow), Gameplay Admin > Players > Give Vehicle Kit > Sandbike (Allow overflow), Gameplay Admin > Players > Cheat Scripts > Award Player XP, Gameplay Admin > Players > Landsraad > set House Ecaz, Gameplay Admin > Players > Actions > Punishment > Ban, Gameplay Admin > Players > Hide GM toggle, Tailscale > 'Admin console', Database > Backup Schedule presets > Hourly, Map SpinUp > Survival_2, Help > Create GitHub Issue, CLI option 'e. reboot', or -Cmd startup"
     validations:
       required: true
 
@@ -164,10 +167,12 @@ body:
   - type: textarea
     id: giveitem_diag
     attributes:
-      label: Give Item — item that didn't appear (only for Give Item / Storage bugs)
+      label: Give Item / Give Vehicle Kit — item or part that didn't appear (Give Item, Give Package, or a vehicle kit)
       description: |
-        For items that show in DST's listing but don't appear in-game (player
-        inventory or a storage container). Tell us:
+        For items or vehicle parts that show in DST's listing/preview but don't
+        appear in-game (player inventory or a storage container).
+
+        **Give Item / Give Package** — tell us:
 
         - The exact item — its **name AND the template id** shown in the picker
           (e.g. `Copper Ingot — CopperBar`). If you only see a number, paste it.
@@ -176,12 +181,78 @@ body:
         - Did it show in DST's listing? Did it show in-game **after a server zone
           restart** / relog?
 
-        Leave blank if your bug isn't about giving items.
+        **Give Vehicle Kit** — tell us:
+
+        - Which **vehicle** you picked (Sandbike, Buggy, Sandcrawler, Scout /
+          Assault / Carrier Ornithopter).
+        - Which **part(s)** were missing or wrong, and the **quantity** the
+          preview showed vs what landed (e.g. *preview said Tread ×3, only 1
+          arrived*).
+        - Whether **"Allow overflow (drop to ground)"** was ticked, and whether
+          the player was **online or offline** (overflow only applies online).
+        - Did the parts show in the form's preview? Did they appear in-game after
+          a relog / zone restart?
+
+        Leave blank if your bug isn't about giving items or vehicle kits.
       placeholder: |
-        Item: Copper Ingot — template "CopperBar" (or raw id 859)
-        Destination: Storage container "Un-used Vehicle Parts" (MediumStorageContainer)
-        Qty 10, quality 0, stackable
-        Showed in DST list: yes. Showed in-game after zone restart: no.
+        Item/kit: Give Vehicle Kit > Sandbike
+        Missing/wrong: preview showed Tread Mk6 ×3, only 1 Tread arrived
+        Allow overflow: on. Player online: yes
+        Showed in preview: yes. Showed in-game after relog: partial
+      render: shell
+    validations:
+      required: false
+
+  - type: textarea
+    id: cheatscripts_diag
+    attributes:
+      label: Cheat Scripts / Dev-Perf Scripts — script had no effect (Players → Live)
+      description: |
+        For the Players → Live **Cheat Scripts** and **Dev / Perf Scripts** rows.
+        Note that these scripts originate from the Playtest server and **may
+        legitimately do nothing on a retail server** — tell us so we can tell a
+        real bug apart from an expected no-op:
+
+        - Which **button** (e.g. Playtest Setup, Award Player XP, Unlock All
+          Skills / Abilities, Leave Me Alone, Start/Stop Hitch Test) **or the
+          freeform script name** you typed.
+        - Was the target player **online**? (Live-only — the buttons are disabled
+          while the player is offline.)
+        - What DST's status line said after firing, and what you expected vs saw
+          in-game.
+
+        Leave blank if your bug isn't about the cheat / dev-perf script buttons.
+      placeholder: |
+        Button / script: Award Player XP
+        Player online: yes
+        DST said: "script dispatched"; in-game XP did not change
+      render: shell
+    validations:
+      required: false
+
+  - type: textarea
+    id: landsraad_diag
+    attributes:
+      label: Landsraad — contribution editor or settings-struct / client-block warning
+      description: |
+        For Players → **Landsraad** (setting a player's House contribution) **or**
+        Game Config Landsraad settings (the nested `LandsraadSettings Data=(...)`
+        struct). The diagnostic ZIP's redacted **UserGame.ini snapshot** captures
+        this struct — attaching it (see below) is the single most useful thing for
+        these bugs. Also tell us:
+
+        - **Contribution editor:** which House and amount you set, what DST showed
+          after reload, and what you saw in-game.
+        - **Settings struct / client warning:** which Landsraad member(s) you
+          edited; whether the **"your client is missing part of a settings block"**
+          warning appeared (and what it listed); and whether **"Fix my client
+          config"** resolved it or members went missing after a save.
+
+        Leave blank if your bug isn't about Landsraad.
+      placeholder: |
+        Edited: Game Config > Landsraad > Voting Period Duration 600 -> 900
+        Client warning appeared: yes — listed ~35 missing members
+        After "Fix my client config": block restored / still missing?
       render: shell
     validations:
       required: false
