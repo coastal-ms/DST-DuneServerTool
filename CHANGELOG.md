@@ -13,6 +13,13 @@ here cover everything those tags shipped.
 
 ## [Unreleased]
 
+### Added
+
+- **"Restart Server on Cycle End" toggle in Game Config → Storm Cycle.** Exposes
+  `m_bShouldRestartServerOnCycleEnd` (`CoriolisSubsystem`, default On) so you can
+  control whether the dedicated server restarts itself when a Coriolis cycle
+  (season) ends, without hand-editing the INI.
+
 ## [12.2.0] - 2026-06-15
 
 ### Added

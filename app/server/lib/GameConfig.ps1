@@ -125,6 +125,7 @@ $script:DuneGameConfigSchema = @(
     @{ Section=$script:DuneGcSecCoriolis; Key='m_CycleDurationInDays'; File='game'; Type='int'; Min=1; Unit='days'; Default='7'; Label='Coriolis Cycle Length'; Help='In-game days between Coriolis storm / season events. Also needs client-side apply.'; ClientApply=$true; Category='Storm Cycle' }
     @{ Section=$script:DuneGcSecStorm; Key='m_bCoriolisAutoSpawnEnabled'; File='game'; Type='bool'; Default='True'; Label='Coriolis Auto-Spawn'; Help='Whether Coriolis storms spawn automatically.'; Category='Storm Cycle' }
     @{ Section=$script:DuneGcSecCoriolis; Key='m_bIsDbWipeEnabled'; File='game'; Type='bool'; Default='True'; Label='Database Wipe on Season End'; Help='Wipe the database when the season ends. Also needs client-side apply.'; ClientApply=$true; Category='Storm Cycle' }
+    @{ Section=$script:DuneGcSecCoriolis; Key='m_bShouldRestartServerOnCycleEnd'; File='game'; Type='bool'; Default='True'; Label='Restart Server on Cycle End'; Help='Whether the dedicated server restarts itself when a Coriolis cycle (season) ends.'; Category='Storm Cycle' }
     @{ Section=$script:DuneGcSecConsole; Key='Sandstorm.Enabled'; File='engine'; Type='bool01'; Default='1'; Label='Sandstorm'; Help='Enable rolling sandstorms.'; Category='Storm Cycle' }
     @{ Section=$script:DuneGcSecConsole; Key='Sandstorm.Treasure.Enabled'; File='engine'; Type='bool01'; Default='1'; Label='Sandstorm Treasure Spawns'; Help='Spawn treasure during sandstorms.'; Category='Storm Cycle' }
 
