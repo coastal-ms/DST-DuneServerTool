@@ -83,6 +83,16 @@ A session worktree may not have warm `webui/node_modules` — run `npm ci` in
   Code-only releases break the in-app updater (it gates on an asset being
   present and silently reports "up to date"). After publishing, verify with
   `gh release view vX.Y.Z --json assets`.
+- **Every release, refresh the bug-report issue template.** When a release adds
+  or changes user-facing features, update
+  `.github/ISSUE_TEMPLATE/bug_report.yml` so bug reports and the log-gathering
+  guidance cover the new surfaces: add/adjust the **"Where did the bug happen?"**
+  dropdown options, the **"Specific page / button"** examples, and any
+  per-feature diagnostic section (e.g. Give Item/Kit, Game Config / Landsraad,
+  Cheat Scripts). Bump the `tool_version` placeholder to the new version. This
+  keeps diagnostics actionable so a hotfix can be triaged fast. If a new feature
+  produces logs the diagnostic bundle (`app/server/routes/Diagnostics.ps1`)
+  doesn't yet collect, extend the bundler too.
 
 ## Git workflow
 
