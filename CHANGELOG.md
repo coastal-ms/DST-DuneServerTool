@@ -13,6 +13,8 @@ here cover everything those tags shipped.
 
 ## [Unreleased]
 
+## [12.2.1] - 2026-06-16
+
 ### Added
 
 - **"Thanks for the Coffee" menu.** A new dropdown sits just to the right of Help
