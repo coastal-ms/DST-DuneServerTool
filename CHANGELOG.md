@@ -61,6 +61,20 @@ here cover everything those tags shipped.
   actions now use an Atreides / Harkonnen dropdown instead of a free-text box you
   had to type into.
 
+- **Players: Actions panel uses friendly dropdowns and shows current values
+  instead of raw IDs.** *Refuel Vehicle* picks from a dropdown of the player's
+  actual vehicles (friendly name + map) rather than a raw vehicle id;
+  *Set Starter Class* is a dropdown of the named classes (Swordmaster, Mentat,
+  …) instead of a typed job id; *Update Tags* removes via a dropdown of the
+  player's current tags (and lists them) and adds with tag suggestions. The
+  *Give Solari / Give Scrip / Give Intel* rows now show the player's current
+  balance (read-only) above the amount, and the Stats tab reads Scrip and Intel
+  balances alongside Solari.
+
+- **Game Config: note that some settings need a battlegroup restart.** The Game
+  Config intro now calls out that some settings may require a battlegroup restart
+  to take effect.
+
 ### Changed
 
 - **Setup Wizard pre-flight runs prerequisite checks first, scoped to the chosen
