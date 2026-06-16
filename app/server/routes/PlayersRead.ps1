@@ -155,6 +155,36 @@ Register-DuneRoute -Method GET -Path '/api/gameplay/players/partitions' -Handler
     }
 }
 
+# GET /api/gameplay/players/trainers  (skill-trainer quest line catalog)
+Register-DuneRoute -Method GET -Path '/api/gameplay/players/trainers' -Handler {
+    param($req, $res, $routeParams, $body)
+    try {
+        $payload = Get-DuneTrainerCatalog
+        Write-DuneJson -Response $res -Body @{
+            trainers = $payload.trainers
+            total    = $payload.total
+            source   = 'catalog'
+        }
+    } catch {
+        Write-DuneError -Response $res -Status 500 -Message "Trainers failed: $($_.Exception.Message)"
+    }
+}
+
+# GET /api/gameplay/players/main-quests  (main-quest story line catalog)
+Register-DuneRoute -Method GET -Path '/api/gameplay/players/main-quests' -Handler {
+    param($req, $res, $routeParams, $body)
+    try {
+        $payload = Get-DuneMainQuestCatalog
+        Write-DuneJson -Response $res -Body @{
+            main_quests = $payload.main_quests
+            total       = $payload.total
+            source      = 'catalog'
+        }
+    } catch {
+        Write-DuneError -Response $res -Status 500 -Message "Main quests failed: $($_.Exception.Message)"
+    }
+}
+
 # GET /api/gameplay/contracts  (contract tag catalog)
 Register-DuneRoute -Method GET -Path '/api/gameplay/contracts' -Handler {
     param($req, $res, $routeParams, $body)

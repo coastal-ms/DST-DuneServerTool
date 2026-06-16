@@ -13,6 +13,30 @@ here cover everything those tags shipped.
 
 ## [Unreleased]
 
+## [12.3.0] - 2026-06-16
+
+### Added
+
+- **Journey Nodes browser (Players → Journey).** A new player section lists every
+  journey/quest node on the account with filter tabs (All / Done / Revealed /
+  Reward), node-id search, and pagination. Each row can be completed (or re-done)
+  or reset individually, and a Wipe All control restarts the whole journey. Works
+  online or offline — changes take effect on the player's next login.
+- **Unlock Trainers (Players → Actions → Progression).** Completes a skill
+  trainer's starting quest line and grants the full job skill tree, broken out
+  per trainer type — Swordmaster, Trooper, Mentat, Bene Gesserit, Planetologist —
+  each with its own Unlock and Reset Skill Tree buttons.
+- **Unlock Main Quest (Players → Actions → Progression).** Completes an entire
+  main-quest story line in one click, chosen from a dropdown (A New Beginning,
+  Find the Fremen, Assassin's Handbook, The Great Convention, and Pt. 2).
+
+### Changed
+
+- **Player action rows no longer block on online/offline status.** Actions that
+  only take full effect on a live session keep their "LIVE REQ'D" badge for
+  guidance, but the rows are always openable so the options are visible
+  regardless of whether the player is online.
+
 ## [12.2.3] - 2026-06-16
 
 ### Changed

@@ -1460,6 +1460,57 @@ export function wipeJourney(accountId: number) {
   })
 }
 
+// Journey Nodes browser — reads every journey_story_node row for the account.
+export interface JourneyNode {
+  node_id: string
+  is_complete: boolean
+  is_revealed: boolean
+  has_pending_reward: boolean
+}
+export function getPlayerJourneyNodes(accountId: number, demo?: boolean) {
+  return api<{ ok: boolean; nodes: JourneyNode[]; total: number; source: DataSource }>(
+    `/api/gameplay/players/journey${qs({ account_id: accountId, demo: demo ? 1 : undefined })}`)
+}
+export function completeJourneyNode(accountId: number, nodeId: string) {
+  return api<WriteResult>('/api/gameplay/players/journey/complete', {
+    method: 'POST', body: JSON.stringify({ account_id: accountId, node_id: nodeId }),
+  })
+}
+export function resetJourneyNode(accountId: number, nodeId: string) {
+  return api<WriteResult>('/api/gameplay/players/journey/reset', {
+    method: 'POST', body: JSON.stringify({ account_id: accountId, node_id: nodeId }),
+  })
+}
+
+// Unlock Trainers — skill-trainer starting quest lines.
+export interface TrainerInfo { job: string; name: string; contract_count: number; skill_count: number }
+export function getTrainerCatalog() {
+  return api<{ ok: boolean; trainers: TrainerInfo[]; total: number; source: DataSource }>(
+    '/api/gameplay/players/trainers')
+}
+export function unlockTrainer(accountId: number, job: string) {
+  return api<WriteResult>('/api/gameplay/players/unlock-trainer', {
+    method: 'POST', body: JSON.stringify({ account_id: accountId, job }),
+  })
+}
+export function resetTrainerSkills(accountId: number, job: string) {
+  return api<WriteResult>('/api/gameplay/players/reset-job-skills', {
+    method: 'POST', body: JSON.stringify({ account_id: accountId, job }),
+  })
+}
+
+// Unlock Main Quest — main-quest story lines.
+export interface MainQuestInfo { id: string; name: string; node_count: number }
+export function getMainQuestCatalog() {
+  return api<{ ok: boolean; main_quests: MainQuestInfo[]; total: number; source: DataSource }>(
+    '/api/gameplay/players/main-quests')
+}
+export function unlockMainQuest(accountId: number, quest: string) {
+  return api<WriteResult>('/api/gameplay/players/unlock-main-quest', {
+    method: 'POST', body: JSON.stringify({ account_id: accountId, quest }),
+  })
+}
+
 export function completeContract(accountId: number, contractId: string) {
   return api<WriteResult>('/api/gameplay/players/contract/complete', {
     method: 'POST', body: JSON.stringify({ account_id: accountId, contract_id: contractId }),

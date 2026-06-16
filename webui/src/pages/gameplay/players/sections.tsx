@@ -26,9 +26,13 @@ import {
   chatWhisper, isValidTemplateId, getItemCatalog,
   giveItems, getItemPackages, saveItemPackage, deleteItemPackage,
   getLandsraadOverview, getLandsraadPlayerContributions, setLandsraadContribution,
+  getPlayerJourneyNodes, completeJourneyNode, resetJourneyNode,
+  getTrainerCatalog, unlockTrainer, resetTrainerSkills,
+  getMainQuestCatalog, unlockMainQuest,
   type Player, type PlayerEvent, type PlayerStats, type ProgressionPreset, type SpecTrackFull,
   type CatalogItem, type ItemPackage, type GiveItemEntry,
   type LandsraadHouse, type LandsraadIniSetting,
+  type JourneyNode, type TrainerInfo, type MainQuestInfo,
 } from '../../../api/gameplay'
 import { VEHICLE_CATALOG, VEHICLE_KIT_FUEL_TEMPLATE, VEHICLE_KIT_TORCH_TEMPLATE, type VehicleTemplate } from '../../../data/vehicles'
 import { fmtNum, fmtSolari } from '../shared'
@@ -418,7 +422,7 @@ interface ActionDef {
   liveOnly?: boolean      // requires player to be online (RMQ path)
   offlineOnly?: boolean   // requires player to be offline (DB write the game caches in memory)
   fields?: ActionField[]
-  custom?: 'give-item' | 'whisper' | 'spawn-vehicle' | 'quick-presets' | 'vehicle-kit' | 'give-package' | 'cheat-scripts' | 'dev-scripts'
+  custom?: 'give-item' | 'whisper' | 'spawn-vehicle' | 'quick-presets' | 'vehicle-kit' | 'give-package' | 'cheat-scripts' | 'dev-scripts' | 'unlock-trainers' | 'unlock-mainquest'
   confirm?: (p: Player) => string  // confirm message; if returns '' no prompt
   doubleConfirm?: boolean // also requires a typed "i acknowledge" prompt inside run()
   rowNote?: string        // short italic note shown inline on the row heading
@@ -464,6 +468,12 @@ const ACTIONS: ActionDef[] = [
     run: (p, v) => setFactionTier(p.controller_id, String(v.faction || '').trim(), Number(v.tier) || 0) },
   { id: 'apply-progression-preset', group: 'Progression', label: 'Apply Quick Preset', icon: 'Zap', custom: 'quick-presets',
     rowNote: 'Completes a story/journey chapter instantly',
+    run: () => Promise.resolve({ message: '' }) },
+  { id: 'unlock-trainers', group: 'Progression', label: 'Unlock Trainers', icon: 'GraduationCap', custom: 'unlock-trainers',
+    rowNote: 'Complete a skill-trainer quest line + grant its skill tree — separated by trainer',
+    run: () => Promise.resolve({ message: '' }) },
+  { id: 'unlock-main-quest', group: 'Progression', label: 'Unlock Main Quest', icon: 'Flag', custom: 'unlock-mainquest',
+    rowNote: 'Complete an entire main-quest story line',
     run: () => Promise.resolve({ message: '' }) },
   { id: 'reset-progression', group: 'Progression', label: 'Reset Progression (live)', icon: 'RotateCcw', liveOnly: true,
     rowNote: 'Single confirmation required',
@@ -662,7 +672,7 @@ export function ActionsSection({ player, canWrite, flash, onChanged }: SectionPr
     <div className="space-y-4">
       {!hasLiveSession && (
         <div className="card p-2.5 text-xs text-text-muted border-l-2 border-warning flex items-center gap-2">
-          <Icon name="WifiOff" size={12} /> Player is offline — buttons marked "(live)" are disabled (require RMQ + an online or mid-logout player).
+          <Icon name="WifiOff" size={12} /> Player is offline — actions marked "LIVE REQ'D" need the player online (RMQ + an online or mid-logout player) to take effect.
         </div>
       )}
 
@@ -677,7 +687,7 @@ export function ActionsSection({ player, canWrite, flash, onChanged }: SectionPr
             </div>
             <div className="space-y-1.5">
               {acts.map(a => (
-                <ActionRow key={a.id} def={a} player={player} busy={busy} hasLiveSession={hasLiveSession}
+                <ActionRow key={a.id} def={a} player={player} busy={busy}
                   open={openId === a.id} danger={group === 'Danger'}
                   onToggle={() => openAction(a.id)} runAction={runAction} />
               ))}
@@ -695,17 +705,16 @@ export function ActionsSection({ player, canWrite, flash, onChanged }: SectionPr
 // directly beneath it. Replaces the older wrap-of-buttons layout so the panel
 // reads as a vertical list rather than a wall of buttons.
 // ---------------------------------------------------------------------------
-function ActionRow({ def, player, busy, hasLiveSession, open, danger, onToggle, runAction }: {
+function ActionRow({ def, player, busy, open, danger, onToggle, runAction }: {
   def: ActionDef
   player: Player
   busy: boolean
-  hasLiveSession: boolean
   open: boolean
   danger?: boolean
   onToggle: () => void
   runAction: (def: ActionDef, exec: () => Promise<{ message: string }>) => void
 }) {
-  const disabled = busy || (!!def.liveOnly && !hasLiveSession) || (!!def.offlineOnly && hasLiveSession)
+  const disabled = busy
   return (
     <div className="card overflow-hidden">
       <button type="button"
@@ -764,6 +773,22 @@ function ActionRow({ def, player, busy, hasLiveSession, open, danger, onToggle, 
           ) : def.custom === 'quick-presets' ? (
             <QuickPresetsForm busy={busy}
               onSubmit={presetId => runAction(def, () => applyProgressionPreset(player.account_id, presetId))} />
+          ) : def.custom === 'unlock-trainers' ? (
+            <UnlockTrainersForm busy={busy}
+              onUnlock={(job, name) => runAction(def, async () => {
+                const r = await unlockTrainer(player.account_id, job)
+                return { message: r.message || `Unlocked ${name} trainer for ${player.name}.` }
+              })}
+              onReset={(job, name) => runAction(def, async () => {
+                const r = await resetTrainerSkills(player.account_id, job)
+                return { message: r.message || `Reset ${name} skill tree for ${player.name}.` }
+              })} />
+          ) : def.custom === 'unlock-mainquest' ? (
+            <UnlockMainQuestForm busy={busy}
+              onSubmit={(quest, name) => runAction(def, async () => {
+                const r = await unlockMainQuest(player.account_id, quest)
+                return { message: r.message || `Unlocked main quest "${name}" for ${player.name}.` }
+              })} />
           ) : def.custom === 'give-package' ? (
             <GivePackageForm busy={busy} playerName={player.name}
               onGive={(items, pkgName) => runAction(def, async () => {
@@ -1294,6 +1319,116 @@ function QuickPresetsForm({ busy, onSubmit }: { busy: boolean; onSubmit: (preset
   )
 }
 
+// Self-contained Unlock-Trainers form. Fetches the skill-trainer catalog on
+// mount and renders one card per trainer type (separated by trainer), each with
+// an "Unlock" button (completes the trainer's quest line + grants the full job
+// skill tree) and a "Reset Skill Tree" button. Renders without a card wrapper.
+function UnlockTrainersForm({ busy, onUnlock, onReset }: {
+  busy: boolean
+  onUnlock: (job: string, name: string) => void
+  onReset: (job: string, name: string) => void
+}) {
+  const [trainers, setTrainers] = useState<TrainerInfo[]>([])
+  const [loading, setLoading] = useState(true)
+  const [err, setErr] = useState('')
+
+  useEffect(() => {
+    let alive = true
+    setLoading(true)
+    getTrainerCatalog()
+      .then(r => { if (alive) setTrainers(r.trainers || []) })
+      .catch(e => { if (alive) setErr(e instanceof Error ? e.message : String(e)) })
+      .finally(() => { if (alive) setLoading(false) })
+    return () => { alive = false }
+  }, [])
+
+  if (loading) return <div className="text-sm text-text-dim flex items-center gap-2"><Icon name="Loader2" size={13} className="animate-spin" /> Loading trainers…</div>
+  if (err) return <div className="text-sm text-danger">{err}</div>
+  if (trainers.length === 0) return <div className="text-sm text-text-dim">No trainers available.</div>
+
+  return (
+    <div className="space-y-3">
+      <div className="text-[11px] text-text-muted">
+        Completes the trainer's starting quest line and grants the full job skill tree. Works online or offline — takes effect on next login.
+      </div>
+      <div className="space-y-2">
+        {trainers.map(t => (
+          <div key={t.job} className="rounded-lg border border-border bg-surface-2 px-3 py-2">
+            <div className="flex items-center gap-2 mb-1.5">
+              <Icon name="GraduationCap" size={14} className="shrink-0 text-text-dim" />
+              <span className="flex-1 min-w-0 text-sm text-text font-medium">{t.name}</span>
+              <span className="text-[11px] text-text-dim">{t.contract_count} quest{t.contract_count === 1 ? '' : 's'} · {t.skill_count} skill block{t.skill_count === 1 ? '' : 's'}</span>
+            </div>
+            <div className="flex gap-2">
+              <button type="button" className="btn-primary flex-1 text-xs" disabled={busy}
+                onClick={() => onUnlock(t.job, t.name)}>
+                {busy ? <Icon name="Loader2" size={12} className="animate-spin" /> : <Icon name="Unlock" size={12} />} Unlock
+              </button>
+              <button type="button" className="btn-secondary shrink-0 text-xs" disabled={busy}
+                onClick={() => onReset(t.job, t.name)} title="Reset this job's skill tree">
+                <Icon name="RotateCcw" size={12} /> Reset Skill Tree
+              </button>
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
+  )
+}
+
+// Self-contained Unlock-Main-Quest form. Fetches the main-quest catalog and
+// completes the chosen story line (flips every node in the subtree complete).
+function UnlockMainQuestForm({ busy, onSubmit }: { busy: boolean; onSubmit: (quest: string, name: string) => void }) {
+  const [quests, setQuests] = useState<MainQuestInfo[]>([])
+  const [sel, setSel] = useState('')
+  const [loading, setLoading] = useState(true)
+  const [err, setErr] = useState('')
+
+  useEffect(() => {
+    let alive = true
+    setLoading(true)
+    getMainQuestCatalog()
+      .then(r => {
+        if (!alive) return
+        const list = r.main_quests || []
+        setQuests(list)
+        setSel(list[0]?.id || '')
+      })
+      .catch(e => { if (alive) setErr(e instanceof Error ? e.message : String(e)) })
+      .finally(() => { if (alive) setLoading(false) })
+    return () => { alive = false }
+  }, [])
+
+  const chosen = quests.find(q => q.id === sel)
+  const selectCls = 'w-full px-3 py-2 rounded-lg bg-surface-2 border border-border text-text text-sm focus:outline-none focus:ring-2 focus:ring-ibad focus:border-ibad/50'
+
+  if (loading) return <div className="text-sm text-text-dim flex items-center gap-2"><Icon name="Loader2" size={13} className="animate-spin" /> Loading main quests…</div>
+  if (err) return <div className="text-sm text-danger">{err}</div>
+  if (quests.length === 0) return <div className="text-sm text-text-dim">No main quests available.</div>
+
+  return (
+    <div className="space-y-3">
+      <div>
+        <label className="block text-[11px] uppercase tracking-wider text-text-dim mb-1">Main quest</label>
+        <select value={sel} disabled={busy} className={selectCls} onChange={e => setSel(e.target.value)}>
+          {quests.map(q => (
+            <option key={q.id} value={q.id}>
+              {q.name}{q.node_count > 0 ? ` (${q.node_count} nodes)` : ''}
+            </option>
+          ))}
+        </select>
+      </div>
+      <div className="text-[11px] text-text-muted">
+        Flips every node in this story line complete and applies its reward tags. Takes effect on next login.
+      </div>
+      <button className="btn-primary w-full" disabled={busy || !sel}
+        onClick={() => onSubmit(sel, chosen?.name || sel)}>
+        {busy ? <Icon name="Loader2" size={13} className="animate-spin" /> : <Icon name="Flag" size={13} />} Unlock Main Quest
+      </button>
+    </div>
+  )
+}
+
 // ---------------------------------------------------------------------------
 // Items action block — the 'Items' group of ACTIONS, rendered inside the
 // Inventory section (between the inventory title and the items list).
@@ -1305,8 +1440,6 @@ function ItemsActionBlock({ player, canWrite, flash, onChanged }: {
 }) {
   const [openId, setOpenId] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
-
-  const hasLiveSession = ['online', 'loggingout'].includes((player.online_status || '').toLowerCase())
 
   const acts = useMemo(() => ACTIONS.filter(a => a.group === ITEMS_GROUP), [])
 
@@ -1335,7 +1468,7 @@ function ItemsActionBlock({ player, canWrite, flash, onChanged }: {
   return (
     <div className="space-y-1.5 mb-2">
       {acts.map(a => (
-        <ActionRow key={a.id} def={a} player={player} busy={busy} hasLiveSession={hasLiveSession}
+        <ActionRow key={a.id} def={a} player={player} busy={busy}
           open={openId === a.id} onToggle={() => openAction(a.id)} runAction={runAction} />
       ))}
     </div>
@@ -1942,8 +2075,171 @@ function LandsraadSection({ player, canWrite, demo, refreshKey, flash, onChanged
   )
 }
 
+// ---------------------------------------------------------------------------
+// Journey — full browser over every journey_story_node row for the account.
+// Filter tabs (All / Done / Revealed / Reward), node-id search, client-side
+// pagination, per-row Complete/Reset, and a Wipe-All control. All writes work
+// online or offline (DB writes); they take effect on the player's next login.
+// ---------------------------------------------------------------------------
+const JOURNEY_PAGE_SIZE = 50
+type JourneyFilter = 'all' | 'done' | 'revealed' | 'reward'
+
+export function JourneySection({ player, canWrite, demo, refreshKey, flash, onChanged }: SectionProps) {
+  const [nodes, setNodes] = useState<JourneyNode[]>([])
+  const [loading, setLoading] = useState(true)
+  const [err, setErr] = useState<string | null>(null)
+  const [busy, setBusy] = useState(false)
+  const [filter, setFilter] = useState<JourneyFilter>('all')
+  const [search, setSearch] = useState('')
+  const [page, setPage] = useState(0)
+  const [tick, setTick] = useState(0)
+
+  useEffect(() => {
+    let alive = true
+    setLoading(true); setErr(null)
+    getPlayerJourneyNodes(player.account_id, demo)
+      .then(r => { if (alive) setNodes(r.nodes || []) })
+      .catch(e => { if (alive) setErr(e instanceof Error ? e.message : String(e)) })
+      .finally(() => { if (alive) setLoading(false) })
+    return () => { alive = false }
+  }, [player.account_id, demo, refreshKey, tick])
+
+  const counts = useMemo(() => ({
+    all: nodes.length,
+    done: nodes.filter(n => n.is_complete).length,
+    revealed: nodes.filter(n => n.is_revealed).length,
+    reward: nodes.filter(n => n.has_pending_reward).length,
+  }), [nodes])
+
+  const filtered = useMemo(() => {
+    const q = search.trim().toLowerCase()
+    return nodes.filter(n => {
+      if (filter === 'done' && !n.is_complete) return false
+      if (filter === 'revealed' && !n.is_revealed) return false
+      if (filter === 'reward' && !n.has_pending_reward) return false
+      if (q && !n.node_id.toLowerCase().includes(q)) return false
+      return true
+    })
+  }, [nodes, filter, search])
+
+  useEffect(() => { setPage(0) }, [filter, search])
+
+  const pageCount = Math.max(1, Math.ceil(filtered.length / JOURNEY_PAGE_SIZE))
+  const pageClamped = Math.min(page, pageCount - 1)
+  const pageRows = filtered.slice(pageClamped * JOURNEY_PAGE_SIZE, (pageClamped + 1) * JOURNEY_PAGE_SIZE)
+
+  const run = async (fn: () => Promise<{ message: string }>) => {
+    setBusy(true); setErr(null)
+    try {
+      const r = await fn()
+      flash(r.message, 'ok')
+      onChanged()
+      setTick(t => t + 1)
+    } catch (e) {
+      flash(e instanceof Error ? e.message : String(e), 'err')
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  const wipeAll = () => {
+    if (!window.confirm(
+      `WIPE ${player.name}'s entire journey and restart it from the beginning? All journey/quest progress is lost. This cannot be undone.`
+    )) return
+    void run(() => wipeJourney(player.account_id))
+  }
+
+  if (loading) return <Loading label="Loading journey…" />
+
+  const tabs: Array<{ id: JourneyFilter; label: string; n: number }> = [
+    { id: 'all', label: 'All', n: counts.all },
+    { id: 'done', label: 'Done', n: counts.done },
+    { id: 'revealed', label: 'Revealed', n: counts.revealed },
+    { id: 'reward', label: 'Reward', n: counts.reward },
+  ]
+
+  return (
+    <div className="space-y-3">
+      {err && <ErrorBox msg={err} />}
+
+      <div className="flex flex-wrap items-center gap-2">
+        <div className="flex flex-wrap gap-1">
+          {tabs.map(t => (
+            <button key={t.id} type="button" onClick={() => setFilter(t.id)}
+              className={`px-2.5 py-1 rounded-md text-xs border transition-colors ${filter === t.id ? 'bg-ibad/20 border-ibad/50 text-text' : 'bg-surface-2 border-border text-text-muted hover:text-text'}`}>
+              {t.label} <span className="text-text-dim">({fmtNum(t.n)})</span>
+            </button>
+          ))}
+        </div>
+        <div className="flex-1 min-w-[160px]">
+          <input type="text" value={search} onChange={e => setSearch(e.target.value)}
+            placeholder="Search node id…"
+            className="w-full px-3 py-1.5 rounded-lg bg-surface-2 border border-border text-text text-sm focus:outline-none focus:ring-2 focus:ring-ibad focus:border-ibad/50" />
+        </div>
+        {canWrite && (
+          <button type="button" className="btn-secondary shrink-0 text-xs text-error" disabled={busy} onClick={wipeAll}
+            title="Delete every journey node for this account">
+            <Icon name="RefreshCw" size={12} /> Wipe All
+          </button>
+        )}
+      </div>
+
+      {nodes.length === 0 ? (
+        <EmptyBox msg={demo ? 'Journey browsing is unavailable in demo mode.' : 'No journey nodes recorded for this player yet.'} />
+      ) : filtered.length === 0 ? (
+        <EmptyBox msg="No nodes match the current filter." />
+      ) : (
+        <>
+          <div className="space-y-1">
+            {pageRows.map(n => (
+              <div key={n.node_id} className="card px-3 py-2 flex items-center gap-2">
+                <span className="flex-1 min-w-0 font-mono text-xs text-text truncate" title={n.node_id}>{n.node_id}</span>
+                <div className="flex items-center gap-1 shrink-0">
+                  {n.is_complete && <span className="text-[10px] font-bold uppercase px-1.5 py-0.5 rounded bg-success/20 text-success border border-success/40">Done</span>}
+                  {n.is_revealed && <span className="text-[10px] font-bold uppercase px-1.5 py-0.5 rounded bg-info/20 text-info border border-info/40">Rev</span>}
+                  {n.has_pending_reward && <span className="text-[10px] font-bold uppercase px-1.5 py-0.5 rounded bg-warning/20 text-warning border border-warning/40">Reward</span>}
+                </div>
+                {canWrite && (
+                  <div className="flex items-center gap-1 shrink-0">
+                    <button type="button" className="btn-secondary text-[11px] px-2 py-1" disabled={busy}
+                      onClick={() => void run(() => completeJourneyNode(player.account_id, n.node_id))}
+                      title={n.is_complete ? 'Re-apply completion + reward tags' : 'Complete this node + subtree'}>
+                      <Icon name="Check" size={11} /> {n.is_complete ? 'Re-do' : 'Complete'}
+                    </button>
+                    <button type="button" className="btn-secondary text-[11px] px-2 py-1" disabled={busy}
+                      onClick={() => void run(() => resetJourneyNode(player.account_id, n.node_id))}
+                      title="Reset this node + subtree">
+                      <Icon name="RotateCcw" size={11} /> Reset
+                    </button>
+                  </div>
+                )}
+              </div>
+            ))}
+          </div>
+
+          {pageCount > 1 && (
+            <div className="flex items-center justify-between text-xs text-text-dim">
+              <span>{fmtNum(filtered.length)} node(s) · page {pageClamped + 1} of {pageCount}</span>
+              <div className="flex gap-1">
+                <button type="button" className="btn-secondary px-2 py-1" disabled={pageClamped <= 0}
+                  onClick={() => setPage(p => Math.max(0, p - 1))}>
+                  <Icon name="ChevronLeft" size={13} />
+                </button>
+                <button type="button" className="btn-secondary px-2 py-1" disabled={pageClamped >= pageCount - 1}
+                  onClick={() => setPage(p => Math.min(pageCount - 1, p + 1))}>
+                  <Icon name="ChevronRight" size={13} />
+                </button>
+              </div>
+            </div>
+          )}
+        </>
+      )}
+    </div>
+  )
+}
+
 // Re-export the section component type for the tab shell.
-export type SectionId = 'stats' | 'specs' | 'tags' | 'history' | 'inventory' | 'landsraad' | 'actions'
+export type SectionId = 'stats' | 'specs' | 'tags' | 'history' | 'inventory' | 'landsraad' | 'journey' | 'actions'
 
 export const SECTIONS: Array<{ id: SectionId; label: string; icon: string }> = [
   { id: 'stats',     label: 'Stats',     icon: 'User' },
@@ -1952,6 +2248,7 @@ export const SECTIONS: Array<{ id: SectionId; label: string; icon: string }> = [
   { id: 'landsraad', label: 'Landsraad', icon: 'Landmark' },
   { id: 'tags',      label: 'Tags',      icon: 'Tag' },
   { id: 'history',   label: 'History',   icon: 'History' },
+  { id: 'journey',   label: 'Journey',   icon: 'Map' },
   { id: 'actions',   label: 'Actions',   icon: 'Wand2' },
 ]
 
@@ -1962,5 +2259,6 @@ export const SECTION_COMPONENTS: Record<SectionId, (p: SectionProps) => ReactEle
   history:   HistorySection,
   inventory: InventorySection,
   landsraad: LandsraadSection,
+  journey:   JourneySection,
   actions:   ActionsSection,
 }
