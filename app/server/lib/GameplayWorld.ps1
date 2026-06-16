@@ -672,6 +672,31 @@ function Invoke-DuneStorageDeleteItem {
     return @{ ok = $true; message = "Removed item $ItemId from container." }
 }
 
+# Set the stack_size column on a single container item (storage stack-quantity
+# editor). stack_size is a plain bigint column on dune.items (NOT inside the
+# stats jsonb), so this is a direct UPDATE. Rejects values below 1 (use the
+# delete action to remove an item). Like every other storage write, the new
+# quantity only becomes visible in-game after a server zone (battlegroup)
+# restart, because the map pod caches container contents in RAM.
+function Invoke-DuneStorageSetItemStack {
+    param([string]$Ip, [long]$ItemId, [long]$StackSize)
+    if ($ItemId -le 0) { return @{ ok = $false; error = 'item_id is required.' } }
+    if ($StackSize -lt 1) { return @{ ok = $false; error = 'stack_size must be at least 1.' } }
+    $sql = @"
+UPDATE dune.items
+SET stack_size = $StackSize::bigint
+WHERE id = $ItemId::bigint
+RETURNING id::text AS item_id;
+"@
+    $res = Invoke-DuneSqlQuery -Ip $Ip -Sql $sql -ReadOnly $false -MaxRows 1 -TimeoutSec 30
+    if (-not $res.ok) { return @{ ok = $false; error = $res.error } }
+    $affected = @(ConvertTo-DuneRowMaps -Result $res).Count
+    if ($affected -eq 0) {
+        return @{ ok = $false; error = "Item $ItemId not found." }
+    }
+    return @{ ok = $true; message = "Set item $ItemId stack to $StackSize. Restart the server zone for it to appear in-game." }
+}
+
 # ----------------------------------------------------------------------------
 # BASE EXPORT — native port of the reference implementation handlers_bases.go. Reads a base's
 # building_instances (7-element transform: x,y,z + quaternion) and its
