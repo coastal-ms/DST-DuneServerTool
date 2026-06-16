@@ -742,7 +742,7 @@ function ActionRow({ def, player, busy, hasLiveSession, open, danger, onToggle, 
             <VehicleKitForm busy={busy}
               onSubmit={veh => runAction(def, async () => {
                 const parts = [...veh.kit, ...veh.unique, VEHICLE_KIT_FUEL_TEMPLATE, VEHICLE_KIT_TORCH_TEMPLATE]
-                for (const tpl of parts) await giveItem(player.id, tpl, 1, 0)
+                for (const tpl of parts) await giveItem(player.id, tpl, veh.qty?.[tpl] ?? 1, 0)
                 const count = veh.kit.length + veh.unique.length
                 return { message: `Gave ${veh.label} kit — ${count} part${count === 1 ? '' : 's'} + Large Fuel Cell + Welding Torch Mk5 to ${player.name}.` }
               })} />
@@ -1045,6 +1045,8 @@ function VehicleKitForm({ busy, onSubmit }: {
   if (!veh) return <div className="text-sm text-text-muted">No vehicles with part kits available.</div>
 
   const label = (tpl: string) => names[tpl] || tpl
+  const qtyOf = (tpl: string) => veh.qty?.[tpl] ?? 1
+  const qtySuffix = (tpl: string) => qtyOf(tpl) > 1 ? ` ×${qtyOf(tpl)}` : ''
 
   return (
     <div className="space-y-3">
@@ -1062,12 +1064,12 @@ function VehicleKitForm({ busy, onSubmit }: {
         <ul className="space-y-0.5 text-text-muted">
           {veh.kit.map(tpl => (
             <li key={tpl} className="flex items-center gap-1.5">
-              <Icon name="Cog" size={12} className="shrink-0 text-text-dim" /> {label(tpl)}
+              <Icon name="Cog" size={12} className="shrink-0 text-text-dim" /> {label(tpl)}{qtySuffix(tpl)}
             </li>
           ))}
           {veh.unique.map(tpl => (
             <li key={tpl} className="flex items-center gap-1.5 text-ibad">
-              <Icon name="Sparkles" size={12} className="shrink-0" /> {label(tpl)}
+              <Icon name="Sparkles" size={12} className="shrink-0" /> {label(tpl)}{qtySuffix(tpl)}
             </li>
           ))}
           <li className="flex items-center gap-1.5 text-amber-200/90">

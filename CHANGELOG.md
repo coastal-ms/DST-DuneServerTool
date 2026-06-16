@@ -13,6 +13,17 @@ here cover everything those tags shipped.
 
 ## [Unreleased]
 
+### Fixed
+
+- **Give Vehicle Kit now delivers the correct parts and quantities.** The kit
+  contents were corrected so each vehicle assembles properly: Sandbike Tread ×3;
+  Buggy Tread ×4 plus the Focused Buggy Cutteray Mk6; Sandcrawler drops the base
+  Tread in favour of Dampened Sandcrawler Treads ×2; Scout Ornithopter swaps its
+  Wing for Albatross Wing Module Mk6 ×4; Assault Ornithopter swaps its Wing for
+  Hummingbird Wing Module Mk6 ×6; Carrier Ornithopter swaps its Wing for Roc
+  Carrier Wing ×8 and now delivers Tail Hull ×2 and Side Hull ×2. The kit action
+  and its preview gained per-part quantity support.
+
 ## [12.2.0] - 2026-06-15
 
 ### Added
