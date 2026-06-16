@@ -602,6 +602,24 @@ export function GameConfig() {
     return keys
   }, [values, originals])
 
+  // Flat key -> field lookup (for default values, struct flags, etc.).
+  const fieldByKey = useMemo(() => {
+    const m: Record<string, GameConfigField> = {}
+    for (const cat of schema ?? []) for (const f of cat?.fields ?? []) if (f?.key) m[f.key] = f
+    return m
+  }, [schema])
+
+  // For a client-apply item, decide whether mirroring it ADDS, UPDATES, or
+  // REMOVES the key in the client Game.ini, so the modal can show it per-line.
+  const clientApplyAction = useCallback((it: { key: string; section: string; value: string }): { label: 'Add' | 'Update' | 'Remove'; cls: string } => {
+    const def = fieldByKey[it.key]?.default ?? ''
+    if (def !== '' && valuesEqual(it.value, def)) return { label: 'Remove', cls: 'text-danger' }
+    const flat = clientInfo?.effective?.[`${it.section}||${it.key}`]
+    const cur = (flat === undefined || flat === null) ? clientInfo?.effectiveByKey?.[it.key] : flat
+    if (cur === undefined || cur === null || String(cur) === '') return { label: 'Add', cls: 'text-success' }
+    return { label: 'Update', cls: 'text-warning' }
+  }, [fieldByKey, clientInfo])
+
   const filteredSchema = useMemo(() => {
     if (!schema) return null
     const q = search.trim().toLowerCase()
@@ -1029,13 +1047,19 @@ export function GameConfig() {
                   their local client config for it to take full effect:
                 </p>
                 <ul className="space-y-1 mb-2">
-                  {clientApply.items.map(it => (
-                    <li key={it.key} className="font-mono text-xs text-text">
-                      <span className="text-text-muted">[{it.section}]</span>{' '}
-                      {it.key}={it.value}
-                      <span className="text-text-muted"> — {it.label}</span>
-                    </li>
-                  ))}
+                  {clientApply.items.map(it => {
+                    const act = clientApplyAction(it)
+                    return (
+                      <li key={it.key} className="font-mono text-xs text-text flex items-start gap-1.5">
+                        <span className={`shrink-0 font-sans font-semibold uppercase text-[10px] px-1.5 py-0.5 rounded bg-surface-2 ${act.cls}`}>{act.label}</span>
+                        <span className="min-w-0">
+                          <span className="text-text-muted">[{it.section}]</span>{' '}
+                          {act.label === 'Remove' ? <span className="line-through text-text-dim">{it.key}={it.value}</span> : <>{it.key}={it.value}</>}
+                          <span className="text-text-muted"> — {it.label}</span>
+                        </span>
+                      </li>
+                    )
+                  })}
                 </ul>
                 <p className="text-text-muted">
                   Add {clientApply.items.length === 1 ? 'it' : 'them'} under the matching section in each client's:
