@@ -53,6 +53,12 @@ $script:DuneGcSecConsole   = 'ConsoleVariables'
 $script:DuneGcSecUrl       = 'URL'
 $script:DuneGcSecLandsraad = '/Script/DuneSandbox.LandsraadSettings'
 $script:DuneGcSecHydration = '/Script/DuneSandbox.HydrationSubsystem'
+$script:DuneGcSecGameBase  = '/Script/DuneSandbox.DuneSandboxGameModeBase'
+$script:DuneGcSecSpiceAddict = '/Script/DuneSandbox.SpiceAddictionSubsystem'
+$script:DuneGcSecTimeOfDay = '/Script/DuneSandbox.TimeOfDaySettings'
+$script:DuneGcSecRespawn   = '/Script/DuneSandbox.RespawnSettings'
+$script:DuneGcSecEncounters = '/Script/DuneSandbox.EncountersSubsystem'
+$script:DuneGcSecContracts = '/Script/DuneSandbox.ContractsSubsystem'
 
 # Funcom stores ALL Landsraad settings as scalar members inside ONE nested struct
 # value: [/Script/DuneSandbox.LandsraadSettings] Data=(m_TaskGoalAmount=5000.0,...).
@@ -70,9 +76,9 @@ $script:DuneGcLandsraadStructKey = 'Data'
 # issue #225. Do NOT re-add them as UserGame.ini fields without a fresh in-game
 # test showing an actual effect through that channel.
 $script:DuneGameConfigCategoryOrder = @(
-    'Server Identity','Network','Survival','Hydration',
+    'Server Identity','Network','Survival','Hydration','Loot & Death',
     'Resources & Economy','Building','Inventory','Guilds & Economy',
-    'Storm Cycle','Landsraad','PvP & Security','Spice','Taxation','Sandworm','Vehicles'
+    'Storm Cycle','Landsraad','PvP & Security','Spice','Taxation','Encounters','Sandworm','Vehicles'
 )
 
 # Keys DST USED to expose but removed after proving them no-ops via UserGame.ini
@@ -107,10 +113,17 @@ $script:DuneGameConfigSchema = @(
     @{ Section=$script:DuneGcSecOnline; Key='m_DefaultReconnectGracePeriodSeconds'; File='game'; Type='int'; Min=0; Unit='sec'; Default='300'; Label='Reconnect Grace Period'; Help="Seconds a player's corpse persists after disconnect. Also needs client-side apply."; ClientApply=$true; Category='Survival' }
     @{ Section=$script:DuneGcSecDurab; Key='m_ItemDurabilityLossMultiplier'; File='game'; Type='float'; Min=0; Max=10; Default='1.0'; Label='Item Durability Loss Multiplier'; Help='Scales durability loss for all items. 0 = off. Also needs client-side apply.'; ClientApply=$true; Category='Survival' }
     @{ Section=$script:DuneGcSecDurab; Key='UpdateRateInSeconds'; File='game'; Type='float'; Min=0; Max=10; Unit='sec'; Default='1.0'; Label='Item Decay Rate'; Help='Deterioration tick rate. 0 = off, 1-10 typical. Also needs client-side apply.'; ClientApply=$true; Category='Survival' }
+    @{ Section=$script:DuneGcSecRespawn; Key='m_bCrossMapRespawnDropItems'; File='game'; Type='bool'; Default='True'; Label='Drop Items on Cross-Map Respawn'; Help='Whether items are dropped when a player respawns on a different map. Also needs client-side apply.'; ClientApply=$true; Category='Survival' }
 
     # --- Hydration ---
     @{ Section=$script:DuneGcSecHydration; Key='m_bHydrationEnabled'; File='game'; Type='bool'; Default='True'; Label='Hydration Enabled'; Help='Master toggle for the hydration / thirst system. Off = players never get thirsty. Also needs client-side apply.'; ClientApply=$true; Category='Hydration' }
     @{ Section=$script:DuneGcSecHydration; Key='m_BiomeTierUpdateRateSeconds'; File='game'; Type='float'; Min=0; Unit='sec'; Default='2.5'; Label='Biome Tier Update Rate'; Help='How often (seconds) the biome hydration tier is re-evaluated. Also needs client-side apply.'; ClientApply=$true; Category='Hydration' }
+
+    # --- Loot & Death (DuneSandboxGameModeBase) ---
+    @{ Section=$script:DuneGcSecGameBase; Key='m_bShouldPlayersDropLootOnDeath'; File='game'; Type='bool'; Default='False'; Label='Players Drop Loot on Death'; Help='Whether a player drops their inventory as loot when killed (PvP looting). Also needs client-side apply.'; ClientApply=$true; Category='Loot & Death' }
+    @{ Section=$script:DuneGcSecGameBase; Key='m_bShouldPlayersDropLootOnDefeat'; File='game'; Type='bool'; Default='True'; Label='Players Drop Loot on Defeat'; Help='Whether a player drops loot when downed/defeated (not a full death). Also needs client-side apply.'; ClientApply=$true; Category='Loot & Death' }
+    @{ Section=$script:DuneGcSecGameBase; Key='m_bShouldPlayersLoseItemsOnDeath'; File='game'; Type='bool'; Default='True'; Label='Players Lose Items on Death'; Help='Whether a player loses items from their inventory on death. Also needs client-side apply.'; ClientApply=$true; Category='Loot & Death' }
+    @{ Section=$script:DuneGcSecGameBase; Key='m_bShouldNpcDropLootOnDeath'; File='game'; Type='bool'; Default='True'; Label='NPCs Drop Loot on Death'; Help='Whether NPCs drop loot when killed. Also needs client-side apply.'; ClientApply=$true; Category='Loot & Death' }
 
     # --- Resources & Economy (engine ConsoleVariables) ---
     @{ Section=$script:DuneGcSecConsole; Key='Dune.GlobalMiningOutputMultiplier'; File='engine'; Type='float'; Min=0; Default='1.0'; Label='Global Mining Multiplier'; Help='Scales hand-mining resource output.'; Category='Resources & Economy' }
@@ -141,23 +154,27 @@ $script:DuneGameConfigSchema = @(
     @{ Section=$script:DuneGcSecCoriolis; Key='m_bShouldRestartServerOnCycleEnd'; File='game'; Type='bool'; Default='True'; Label='Restart Server on Cycle End'; Help='Whether the dedicated server restarts itself when a Coriolis cycle (season) ends.'; Category='Storm Cycle' }
     @{ Section=$script:DuneGcSecConsole; Key='Sandstorm.Enabled'; File='engine'; Type='bool01'; Default='1'; Label='Sandstorm'; Help='Enable rolling sandstorms.'; Category='Storm Cycle' }
     @{ Section=$script:DuneGcSecConsole; Key='Sandstorm.Treasure.Enabled'; File='engine'; Type='bool01'; Default='1'; Label='Sandstorm Treasure Spawns'; Help='Spawn treasure during sandstorms.'; Category='Storm Cycle' }
+    @{ Section=$script:DuneGcSecStorm; Key='m_bCoriolisDoesDamage'; File='game'; Type='bool'; Default='False'; Label='Coriolis Storm Does Damage'; Help='Whether being caught in a Coriolis storm damages players. Also needs client-side apply.'; ClientApply=$true; Category='Storm Cycle' }
+    @{ Section=$script:DuneGcSecStorm; Key='m_bSandStormDebrisEnabled'; File='game'; Type='bool'; Default='True'; Label='Sandstorm Debris'; Help='Whether sandstorms spawn flying debris.'; Category='Storm Cycle' }
+    @{ Section=$script:DuneGcSecTimeOfDay; Key='m_bTimeOfDayEnabled'; File='game'; Type='bool'; Default='True'; Label='Time of Day Cycle'; Help='Whether the day/night cycle advances.'; Category='Storm Cycle' }
 
     # --- Landsraad (scalar members of [LandsraadSettings] Data=(...)) ---
-    @{ Section=$script:DuneGcSecLandsraad; StructKey=$script:DuneGcLandsraadStructKey; Key='m_TaskGoalAmount'; File='game'; Type='float'; Min=0; Default='5000.0'; Label='Task Goal Amount'; Help='Contribution target for each House task before it completes.'; Category='Landsraad' }
-    @{ Section=$script:DuneGcSecLandsraad; StructKey=$script:DuneGcLandsraadStructKey; Key='m_NumberOfWeeksTermRetention'; File='game'; Type='int'; Min=1; Unit='weeks'; Default='4'; Label='Term Retention'; Help='How many weeks of term history are kept.'; Category='Landsraad' }
-    @{ Section=$script:DuneGcSecLandsraad; StructKey=$script:DuneGcLandsraadStructKey; Key='m_NumberOfDecreesToNominate'; File='game'; Type='int'; Min=0; Default='3'; Label='Decrees to Nominate'; Help='Number of decrees put up for voting each term.'; Category='Landsraad' }
-    @{ Section=$script:DuneGcSecLandsraad; StructKey=$script:DuneGcLandsraadStructKey; Key='m_NumberOfGuildsInHighscoreList'; File='game'; Type='int'; Min=0; Default='5'; Label='Guilds in Highscore List'; Help='How many guilds appear on the contribution highscore list.'; Category='Landsraad' }
-    @{ Section=$script:DuneGcSecLandsraad; StructKey=$script:DuneGcLandsraadStructKey; Key='m_ControlPointsPerCycle'; File='game'; Type='int'; Min=0; Default='2'; Label='Control Points per Cycle'; Help='Territory control points awarded per cycle.'; Category='Landsraad' }
-    @{ Section=$script:DuneGcSecLandsraad; StructKey=$script:DuneGcLandsraadStructKey; Key='m_bIsPlayerVotingEnabled'; File='game'; Type='bool'; Default='True'; Label='Player Voting Enabled'; Help='Whether players can vote on Landsraad decrees.'; Category='Landsraad' }
-    @{ Section=$script:DuneGcSecLandsraad; StructKey=$script:DuneGcLandsraadStructKey; Key='m_bIsTerritoryControlEnabled'; File='game'; Type='bool'; Default='True'; Label='Territory Control Enabled'; Help='Whether the territory-control mechanic is active.'; Category='Landsraad' }
-    @{ Section=$script:DuneGcSecLandsraad; StructKey=$script:DuneGcLandsraadStructKey; Key='m_VotingPeriodDurationInSec'; File='game'; Type='float'; Min=0; Unit='sec'; Default='118500.0'; Label='Voting Period Duration'; Help='Length of the voting window, in seconds.'; Category='Landsraad' }
-    @{ Section=$script:DuneGcSecLandsraad; StructKey=$script:DuneGcLandsraadStructKey; Key='m_VotingPeriodStartBeforeCoriolisCycleInSec'; File='game'; Type='float'; Min=0; Unit='sec'; Default='118800.0'; Label='Voting Starts Before Cycle'; Help='How many seconds before the Coriolis cycle voting opens.'; Category='Landsraad' }
-    @{ Section=$script:DuneGcSecLandsraad; StructKey=$script:DuneGcLandsraadStructKey; Key='m_LandsraadContractsMaxActiveAmount'; File='game'; Type='int'; Min=0; Default='3'; Label='Max Active Contracts'; Help='Maximum simultaneously-active Landsraad contracts per player.'; Category='Landsraad' }
-    @{ Section=$script:DuneGcSecLandsraad; StructKey=$script:DuneGcLandsraadStructKey; Key='m_LandsraadContractsPerVotingBlock'; File='game'; Type='int'; Min=0; Default='3'; Label='Contracts per Voting Block'; Help='Number of contracts offered per voting block.'; Category='Landsraad' }
-    @{ Section=$script:DuneGcSecLandsraad; StructKey=$script:DuneGcLandsraadStructKey; Key='m_LandsraadContractsDailyBonusPerDay'; File='game'; Type='int'; Min=0; Default='5'; Label='Daily Contract Bonus'; Help='Bonus contracts granted per day.'; Category='Landsraad' }
-    @{ Section=$script:DuneGcSecLandsraad; StructKey=$script:DuneGcLandsraadStructKey; Key='m_LandsraadContractsDailyBonusMax'; File='game'; Type='int'; Min=0; Default='35'; Label='Daily Contract Bonus Max'; Help='Maximum accumulated daily contract bonus.'; Category='Landsraad' }
-    @{ Section=$script:DuneGcSecLandsraad; StructKey=$script:DuneGcLandsraadStructKey; Key='m_LandsraadTaskDailyRevealFrequency'; File='game'; Type='float'; Min=0; Default='25.0'; Label='Task Daily Reveal Frequency'; Help='How often new House tasks are revealed each day.'; Category='Landsraad' }
-    @{ Section=$script:DuneGcSecLandsraad; StructKey=$script:DuneGcLandsraadStructKey; Key='m_LandsraadTaskProgressUpdateFrequency'; File='game'; Type='float'; Min=0; Default='15.0'; Label='Task Progress Update Frequency'; Help='How often House task progress is recomputed.'; Category='Landsraad' }
+    @{ Section=$script:DuneGcSecLandsraad; StructKey=$script:DuneGcLandsraadStructKey; Key='m_TaskGoalAmount'; File='game'; Type='float'; Min=0; Default='5000.0'; Label='Task Goal Amount'; Help='Contribution target for each House task before it completes.'; ClientApply=$true; Category='Landsraad' }
+    @{ Section=$script:DuneGcSecLandsraad; StructKey=$script:DuneGcLandsraadStructKey; Key='m_NumberOfWeeksTermRetention'; File='game'; Type='int'; Min=1; Unit='weeks'; Default='4'; Label='Term Retention'; Help='How many weeks of term history are kept.'; ClientApply=$true; Category='Landsraad' }
+    @{ Section=$script:DuneGcSecLandsraad; StructKey=$script:DuneGcLandsraadStructKey; Key='m_NumberOfDecreesToNominate'; File='game'; Type='int'; Min=0; Default='3'; Label='Decrees to Nominate'; Help='Number of decrees put up for voting each term.'; ClientApply=$true; Category='Landsraad' }
+    @{ Section=$script:DuneGcSecLandsraad; StructKey=$script:DuneGcLandsraadStructKey; Key='m_NumberOfGuildsInHighscoreList'; File='game'; Type='int'; Min=0; Default='5'; Label='Guilds in Highscore List'; Help='How many guilds appear on the contribution highscore list.'; ClientApply=$true; Category='Landsraad' }
+    @{ Section=$script:DuneGcSecLandsraad; StructKey=$script:DuneGcLandsraadStructKey; Key='m_ControlPointsPerCycle'; File='game'; Type='int'; Min=0; Default='2'; Label='Control Points per Cycle'; Help='Territory control points awarded per cycle.'; ClientApply=$true; Category='Landsraad' }
+    @{ Section=$script:DuneGcSecLandsraad; StructKey=$script:DuneGcLandsraadStructKey; Key='m_bIsPlayerVotingEnabled'; File='game'; Type='bool'; Default='True'; Label='Player Voting Enabled'; Help='Whether players can vote on Landsraad decrees.'; ClientApply=$true; Category='Landsraad' }
+    @{ Section=$script:DuneGcSecLandsraad; StructKey=$script:DuneGcLandsraadStructKey; Key='m_bIsTerritoryControlEnabled'; File='game'; Type='bool'; Default='True'; Label='Territory Control Enabled'; Help='Whether the territory-control mechanic is active.'; ClientApply=$true; Category='Landsraad' }
+    @{ Section=$script:DuneGcSecLandsraad; StructKey=$script:DuneGcLandsraadStructKey; Key='m_VotingPeriodDurationInSec'; File='game'; Type='float'; Min=0; Unit='sec'; Default='118500.0'; Label='Voting Period Duration'; Help='Length of the voting window, in seconds.'; ClientApply=$true; Category='Landsraad' }
+    @{ Section=$script:DuneGcSecLandsraad; StructKey=$script:DuneGcLandsraadStructKey; Key='m_VotingPeriodStartBeforeCoriolisCycleInSec'; File='game'; Type='float'; Min=0; Unit='sec'; Default='118800.0'; Label='Voting Starts Before Cycle'; Help='How many seconds before the Coriolis cycle voting opens.'; ClientApply=$true; Category='Landsraad' }
+    @{ Section=$script:DuneGcSecLandsraad; StructKey=$script:DuneGcLandsraadStructKey; Key='m_LandsraadContractsMaxActiveAmount'; File='game'; Type='int'; Min=0; Default='3'; Label='Max Active Contracts'; Help='Maximum simultaneously-active Landsraad contracts per player.'; ClientApply=$true; Category='Landsraad' }
+    @{ Section=$script:DuneGcSecLandsraad; StructKey=$script:DuneGcLandsraadStructKey; Key='m_LandsraadContractsPerVotingBlock'; File='game'; Type='int'; Min=0; Default='3'; Label='Contracts per Voting Block'; Help='Number of contracts offered per voting block.'; ClientApply=$true; Category='Landsraad' }
+    @{ Section=$script:DuneGcSecLandsraad; StructKey=$script:DuneGcLandsraadStructKey; Key='m_LandsraadContractsDailyBonusPerDay'; File='game'; Type='int'; Min=0; Default='5'; Label='Daily Contract Bonus'; Help='Bonus contracts granted per day.'; ClientApply=$true; Category='Landsraad' }
+    @{ Section=$script:DuneGcSecLandsraad; StructKey=$script:DuneGcLandsraadStructKey; Key='m_LandsraadContractsDailyBonusMax'; File='game'; Type='int'; Min=0; Default='35'; Label='Daily Contract Bonus Max'; Help='Maximum accumulated daily contract bonus.'; ClientApply=$true; Category='Landsraad' }
+    @{ Section=$script:DuneGcSecLandsraad; StructKey=$script:DuneGcLandsraadStructKey; Key='m_LandsraadTaskDailyRevealFrequency'; File='game'; Type='float'; Min=0; Default='25.0'; Label='Task Daily Reveal Frequency'; Help='How often new House tasks are revealed each day.'; ClientApply=$true; Category='Landsraad' }
+    @{ Section=$script:DuneGcSecLandsraad; StructKey=$script:DuneGcLandsraadStructKey; Key='m_LandsraadTaskProgressUpdateFrequency'; File='game'; Type='float'; Min=0; Default='15.0'; Label='Task Progress Update Frequency'; Help='How often House task progress is recomputed.'; ClientApply=$true; Category='Landsraad' }
+    @{ Section=$script:DuneGcSecLandsraad; Key='bIsLandsraadEnabled'; File='game'; Type='bool'; Default='True'; Label='Landsraad Enabled'; Help='Master toggle for the entire Landsraad system. Also needs client-side apply.'; ClientApply=$true; Category='Landsraad' }
 
     # --- PvP & Security ---
     @{ Section=$script:DuneGcSecPvP; Key='m_bShouldForceEnablePvpOnAllPartitions'; File='game'; Type='bool'; Default='False'; Label='Force PvP on All Partitions'; Help='Override per-partition PvP settings (PvP everywhere).'; Category='PvP & Security' }
@@ -166,6 +183,8 @@ $script:DuneGameConfigSchema = @(
     # --- Spice ---
     @{ Section=$script:DuneGcSecSpice; Key='m_PrimeRateInSeconds'; File='game'; Type='float'; Min=0; Unit='sec'; Default='30.0'; Label='Spice Prime Rate'; Help='Seconds between spice node priming ticks. Also needs client-side apply.'; ClientApply=$true; Category='Spice' }
     @{ Section=$script:DuneGcSecSpice; Key='m_NodeValueToSpiceResourceRatio'; File='game'; Type='float'; Min=0; Default='10.0'; Label='Node Value to Spice Ratio'; Help='Converts node value into harvestable spice. Also needs client-side apply.'; ClientApply=$true; Category='Spice' }
+    @{ Section=$script:DuneGcSecSpiceAddict; Key='m_bIsSpiceAddictionEnabled'; File='game'; Type='bool'; Default='True'; Label='Spice Addiction Enabled'; Help='Whether players develop spice addiction over time. Also needs client-side apply.'; ClientApply=$true; Category='Spice' }
+    @{ Section=$script:DuneGcSecSpiceAddict; Key='m_bIsSpiceVisionEnabled'; File='game'; Type='bool'; Default='True'; Label='Spice Vision Enabled'; Help='Whether spice vision effects are active. Also needs client-side apply.'; ClientApply=$true; Category='Spice' }
 
     # --- Taxation ---
     @{ Section=$script:DuneGcSecTaxation; Key='m_bTaxationEnabled'; File='game'; Type='bool'; Default='False'; Label='Taxation Enabled'; Help='Whether the taxation system is active.'; Category='Taxation' }
@@ -180,6 +199,13 @@ $script:DuneGameConfigSchema = @(
     @{ Section=$script:DuneGcSecSandworm; Key='WormDetectionDistance'; File='game'; Type='float'; Min=0; Default='5000.0'; Label='Worm Detection Distance'; Help='Distance at which worms detect players. Also needs client-side apply.'; ClientApply=$true; Category='Sandworm' }
     @{ Section=$script:DuneGcSecSandworm; Key='m_MinWormSpawnInternal'; File='game'; Type='float'; Min=0; Unit='sec'; Default='300.0'; Label='Min Worm Spawn Interval'; Help='Minimum seconds between worm spawns. Also needs client-side apply.'; ClientApply=$true; Category='Sandworm' }
     @{ Section=$script:DuneGcSecHazards; Key='m_SandwormQuicksandSpeedModifier'; File='game'; Type='float'; Min=0; Default='0.25'; Label='Quicksand Speed Modifier'; Help='Movement speed multiplier in quicksand.'; Category='Sandworm' }
+    @{ Section=$script:DuneGcSecSandworm; Key='m_bEnableDangerZones'; File='game'; Type='bool'; Default='True'; Label='Worm Danger Zones'; Help='Whether sandworm danger zones are generated. Also needs client-side apply.'; ClientApply=$true; Category='Sandworm' }
+    @{ Section=$script:DuneGcSecSandworm; Key='m_bGiantWormSystemEnabled'; File='game'; Type='bool'; Default='True'; Label='Giant Worm System'; Help='Whether the giant sandworm system is active. Also needs client-side apply.'; ClientApply=$true; Category='Sandworm' }
+    @{ Section=$script:DuneGcSecSandworm; Key='m_bEnableHibernation'; File='game'; Type='bool'; Default='True'; Label='Worm Hibernation'; Help='Whether sandworms hibernate when no players are nearby (performance).'; Category='Sandworm' }
+
+    # --- Encounters ---
+    @{ Section=$script:DuneGcSecEncounters; Key='m_bAreRandomEncountersEnabled'; File='game'; Type='bool'; Default='True'; Label='Random Encounters'; Help='Whether random world encounters spawn. Also needs client-side apply.'; ClientApply=$true; Category='Encounters' }
+    @{ Section=$script:DuneGcSecContracts; Key='m_bIsEnabled'; File='game'; Type='bool'; Default='True'; Label='Contracts Enabled'; Help='Master toggle for the contracts subsystem. Also needs client-side apply.'; ClientApply=$true; Category='Encounters' }
 
     # --- Vehicles (engine cvars) ---
     @{ Section=$script:DuneGcSecConsole; Key='dw.VehicleDurabilityDamageMultiplier'; File='engine'; Type='float'; Min=0; Max=10; Default='1.0'; Label='Vehicle Durability Damage'; Help='Durability damage multiplier for vehicles. 0 = off.'; Category='Vehicles' }
@@ -429,7 +455,11 @@ function Save-DuneGameConfigClient {
     }
 
     $quoted = Get-DuneGameConfigQuotedKeys
-    $new    = Set-DuneIniValuesInPlace -Raw $existing -Updates $clean.ToArray() -QuotedKeys $quoted
+    # Fold any struct-member updates (e.g. LandsraadSettings Data members) into a
+    # single Data write against the CLIENT file's current blob, exactly like the
+    # server path — the client reads the same Data=(...) struct.
+    $folded = Convert-DuneStructUpdates -Raw $existing -Updates $clean.ToArray()
+    $new    = Set-DuneIniValuesInPlace -Raw $existing -Updates $folded -QuotedKeys $quoted
     $new    = $new -replace "`r?`n", "`r`n"   # local file is Windows CRLF
 
     # No auto-backup: client backups are manual to avoid piling up .dstbak files.

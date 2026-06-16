@@ -41,6 +41,25 @@ here cover everything those tags shipped.
   (`m_BiomeTierUpdateRateSeconds`), both client-applied. The hydration/thirst
   master toggle was never exposed before.
 
+- **Many real gameplay toggles from Funcom's stock config are now exposed.** All
+  are present in the shipped `DefaultGame.ini` (unlike the removed no-op
+  multipliers). New **Loot & Death** category (Players Drop Loot on Death /
+  Defeat, Players Lose Items on Death, NPCs Drop Loot). New **Encounters**
+  category (Random Encounters, Contracts Enabled). Added to existing categories:
+  Coriolis Storm Does Damage, Sandstorm Debris, Time of Day Cycle (Storm Cycle);
+  Spice Addiction Enabled, Spice Vision Enabled (Spice); Worm Danger Zones, Giant
+  Worm System, Worm Hibernation (Sandworm); Drop Items on Cross-Map Respawn
+  (Survival); and the master `Landsraad Enabled` toggle.
+
+### Fixed
+
+- **Landsraad settings now correctly apply client-side.** The client `Game.ini`
+  carries the same `[/Script/DuneSandbox.LandsraadSettings] Data=(...)` struct, so
+  these settings need to be mirrored on the client. They are now flagged
+  client-applied, and the client writer folds the edits into the client's `Data`
+  struct (it previously only handled flat keys, which would have written them to
+  the wrong place).
+
 ## [12.2.0] - 2026-06-15
 
 ### Added
