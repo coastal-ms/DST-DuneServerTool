@@ -213,6 +213,20 @@ function Get-DuneBotConfigDefaults {
         target_balance    = 454720162028
         maintain_balance  = $true
         disabled_items    = @()
+        # Over-market buy guard (default OFF). When ON, a winning dice roll only
+        # buys if the seller's per-unit price is within over_market_pct% of Duke's
+        # own reference ("market") price for that template. When a roll wins but
+        # the price is over the window, the buy is skipped and the reason is
+        # logged to the console. over_market_allow_unpriced decides what happens
+        # for templates with no resolvable reference price: OFF (default) treats
+        # them as over_market_baseline (default 100) and can block them; ON
+        # bypasses the guard for those items (no reference -> can't judge ->
+        # allow the buy). over_market_baseline is the operator-editable fallback
+        # price used for those no-reference items when the guard is enforced.
+        over_market_guard         = $false
+        over_market_pct           = 5
+        over_market_allow_unpriced = $false
+        over_market_baseline      = 100
         # ----- Listing side (sane-pricing port) -----
         list_tick_interval   = 1800          # 30 min between list ticks
         listings_per_grade   = 5             # concurrent NPC listings per (template, grade)
@@ -250,6 +264,31 @@ function Get-DuneBotConfigDefaults {
         upstream_rarity_multipliers    = @{ common = 1.0; rare = 5.0; unique = 5.0; memento = 2.0 }
         upstream_vendor_multipliers    = @{ common = 1.0; rare = 5.0; unique = 5.0; memento = 2.0 }
         upstream_grade_multipliers     = @(1.0, 1.0, 1.25, 1.5, 1.75, 2.0)
+        # ----- Market-follow pricing mode (default OFF) -----
+        # When market_follow_enabled is TRUE, Duke prices each listing from the
+        # LIVE market: the median item_price of all *other* sellers' sell orders
+        # for that template (per quality_level where available, else template-
+        # level), times (1 + market_follow_pct/100). This bypasses the formula /
+        # upstream / sane-pricing price source entirely (it takes precedence).
+        # market_follow_min_samples is the minimum number of competing sell
+        # orders required before a median is trusted. When a template has no
+        # usable market (fewer than min_samples competing orders),
+        # market_follow_no_market decides the fallback:
+        #   'formula'  -> price via the normal Get-DuneBotItemPrice formula
+        #   'skip'     -> do not list that template at all in this mode
+        #   'baseline' -> list at market_follow_baseline * (1 + pct/100)
+        # market_follow_force_guard, when ON, forces the over-market buy guard
+        # (dice + over_market_pct window, judged against the median market price)
+        # even if over_market_guard is OFF. Toggling market_follow_enabled either
+        # direction requires a Duke-listings wipe (the pricing basis changes), so
+        # Save-DuneBotConfig flags relist_pending and the next list tick clears
+        # Duke's listings before re-listing.
+        market_follow_enabled     = $false
+        market_follow_pct         = 10
+        market_follow_min_samples = 1
+        market_follow_no_market   = 'formula'
+        market_follow_baseline    = 100
+        market_follow_force_guard = $true
         # Per-template manual price override (template_id -> integer Solari).
         price_overrides      = @{}
         # Marker for one-time sane-defaults migration on load.
@@ -309,6 +348,11 @@ function Read-DuneBotConfig {
                         'display_cap_enabled'  { $cfg[$k] = [bool]$v }
                         'seed_from_catalog'    { $cfg[$k] = [bool]$v }
                         'upstream_pricing'     { $cfg[$k] = [bool]$v }
+                        'over_market_guard'    { $cfg[$k] = [bool]$v }
+                        'over_market_allow_unpriced' { $cfg[$k] = [bool]$v }
+                        'market_follow_enabled'      { $cfg[$k] = [bool]$v }
+                        'market_follow_force_guard'  { $cfg[$k] = [bool]$v }
+                        'market_follow_no_market'    { $cfg[$k] = [string]$v }
                         'disabled_items'       { $cfg[$k] = @($v | ForEach-Object { [string]$_ } | Where-Object { $_ }) }
                         'target_balance'       { $cfg[$k] = [int64]$v }
                         'tier_base_prices'     { $cfg[$k] = ConvertFrom-DuneBotJsonMap -Value $v -Default $cfg[$k] -IntValues }
@@ -360,6 +404,9 @@ function Read-DuneBotConfig {
 function Save-DuneBotConfig {
     param($Incoming)
     $cfg = Read-DuneBotConfig
+    # Capture the pre-save market-follow toggle so we can detect a transition
+    # below (either direction requires a Duke-listings wipe + relist).
+    $prevFollow = [bool]$cfg['market_follow_enabled']
     function _Get($obj, $name) {
         if ($null -eq $obj) { return $null }
         if ($obj -is [System.Collections.IDictionary]) {
@@ -384,6 +431,22 @@ function Save-DuneBotConfig {
     $v = _Get $Incoming 'max_buys_per_tick'; if ($null -ne $v) { $cfg['max_buys_per_tick'] = [Math]::Min(500, [Math]::Max(1, [int]$v)) }
     $v = _Get $Incoming 'die_size';          if ($null -ne $v) { $cfg['die_size']   = [Math]::Min(1000, [Math]::Max(2, [int]$v)) }
     $v = _Get $Incoming 'die_target';        if ($null -ne $v) { $cfg['die_target'] = [Math]::Max(1, [int]$v) }
+    $v = _Get $Incoming 'over_market_guard'; if ($null -ne $v) { $cfg['over_market_guard'] = [bool]$v }
+    $v = _Get $Incoming 'over_market_pct';   if ($null -ne $v) { $cfg['over_market_pct'] = [Math]::Min(1000, [Math]::Max(0, [int]$v)) }
+    $v = _Get $Incoming 'over_market_allow_unpriced'; if ($null -ne $v) { $cfg['over_market_allow_unpriced'] = [bool]$v }
+    $v = _Get $Incoming 'over_market_baseline'; if ($null -ne $v) { $cfg['over_market_baseline'] = [Math]::Max(1, [int]$v) }
+    # ----- Market-follow pricing -----
+    $v = _Get $Incoming 'market_follow_enabled';     if ($null -ne $v) { $cfg['market_follow_enabled'] = [bool]$v }
+    $v = _Get $Incoming 'market_follow_pct';         if ($null -ne $v) { $cfg['market_follow_pct'] = [Math]::Min(100000, [Math]::Max(0, [int]$v)) }
+    $v = _Get $Incoming 'market_follow_min_samples'; if ($null -ne $v) { $cfg['market_follow_min_samples'] = [Math]::Min(1000, [Math]::Max(1, [int]$v)) }
+    $v = _Get $Incoming 'market_follow_no_market'
+    if ($null -ne $v) {
+        $nm = ([string]$v).ToLowerInvariant()
+        if ($nm -notin @('formula','skip','baseline')) { $nm = 'formula' }
+        $cfg['market_follow_no_market'] = $nm
+    }
+    $v = _Get $Incoming 'market_follow_baseline';    if ($null -ne $v) { $cfg['market_follow_baseline'] = [Math]::Max(1, [int]$v) }
+    $v = _Get $Incoming 'market_follow_force_guard'; if ($null -ne $v) { $cfg['market_follow_force_guard'] = [bool]$v }
     $v = _Get $Incoming 'target_balance';    if ($null -ne $v) { $cfg['target_balance'] = [Math]::Max(0L, [int64]$v) }
     $v = _Get $Incoming 'disabled_items'
     if ($null -ne $v) { $cfg['disabled_items'] = @($v | ForEach-Object { [string]$_ } | Where-Object { $_ }) }
@@ -407,6 +470,17 @@ function Save-DuneBotConfig {
     # Bump the revision so a config saved through the UI is never re-migrated.
     $cfg['sane_defaults_revision'] = 1
 
+    # Market-follow toggle changed direction -> the pricing basis is now
+    # different, so Duke's existing listings are stale. Flag relist_pending in
+    # bot state; the next list tick wipes Duke's listings before re-listing.
+    if ([bool]$cfg['market_follow_enabled'] -ne $prevFollow) {
+        try {
+            $st = Read-DuneBotState
+            $st['relist_pending'] = $true
+            Save-DuneBotState -State $st
+        } catch {}
+    }
+
     $path = Get-DuneBotConfigPath
     $dir = Split-Path -Parent $path
     if ($dir -and -not (Test-Path -LiteralPath $dir)) { New-Item -ItemType Directory -Path $dir -Force | Out-Null }
@@ -424,6 +498,7 @@ function Read-DuneBotState {
         error_count       = 0
         last_error        = ''
         seed_progress     = $null   # see Invoke-DuneBotSeedMarket
+        relist_pending    = $false  # set when market_follow_enabled toggles; next list tick wipes + relists
     }
     $path = Get-DuneBotStatePath
     if (Test-Path -LiteralPath $path) {
@@ -883,6 +958,7 @@ function Invoke-DuneBotBuyTick {
         won         = 0
         purchased   = 0
         skipped     = 0
+        blocked     = 0
         errors      = 0
         die         = "d$($cfg.die_size) need $($cfg.die_target)"
         winners     = @()
@@ -928,6 +1004,58 @@ LIMIT $limit
     $dieSize = [int]$cfg.die_size
     $dieTarget = [int]$cfg.die_target
 
+    # Over-market buy guard. When ON, a winning roll only buys if the seller's
+    # per-unit price is within over_market_pct% of Duke's reference (market)
+    # price for that template. Build a per-template metadata map once (the same
+    # vendor snapshot + persistent mask cache + catalog resolve the list side
+    # uses) so we can price any candidate; templates with no resolvable metadata
+    # fall back to default_unit_price (baseline 100).
+    #
+    # Market-follow interaction: when market_follow_enabled, the reference price
+    # becomes the live median of competing player sell orders (the same basis
+    # Duke lists against), and market_follow_force_guard forces this guard ON
+    # even when over_market_guard is OFF — so in follow mode the buy side is
+    # always "dice roll AND within over_market_pct% of market median".
+    $followOn  = [bool]$cfg.market_follow_enabled
+    $guardOn   = [bool]$cfg.over_market_guard -or ($followOn -and [bool]$cfg.market_follow_force_guard)
+    $overPct   = [int]$cfg.over_market_pct
+    $allowUnpriced = [bool]$cfg.over_market_allow_unpriced
+    $baseline  = [Math]::Max(1, [int]$cfg.over_market_baseline)
+    $metaByTemplate = @{}
+    $followMedianMap = @{}
+    if ($guardOn) {
+        try {
+            # Mirror the list side's candidate build so the reference map covers
+            # the full catalog (mask cache + seed_from_catalog), not just the
+            # exchange-scoped vendor snapshot. Read (not Update) the mask cache
+            # so a guarded buy tick never triggers an extra SSH/mask refresh.
+            $maskCache = Read-DuneBotMaskCache
+            $snap = Get-DuneBotVendorSnapshot -Ip $ctx.ip -ExchangeId $ident.exchangeId -ExcludeOwnerId $ident.ownerId
+            $snapData = if ($snap.ok) { $snap.snapshot } else { @{} }
+            # Resolve with stackables_only off (so gear gets a real reference
+            # price) and seed_from_catalog on (so catalog-only templates a
+            # player might sell resolve too). $cfg is an OrderedDictionary,
+            # which has no Clone(); copy keys into a fresh one.
+            $refCfg = [ordered]@{}
+            foreach ($k in $cfg.Keys) { $refCfg[$k] = $cfg[$k] }
+            $refCfg['stackables_only']  = $false
+            $refCfg['seed_from_catalog'] = $true
+            # NB: Resolve-DuneBotListingCandidates returns a comma-wrapped array
+            # (',$candidates'); consuming it via @(...) collapses every candidate
+            # into one wrapped element, so assign plainly then iterate.
+            $refCands = Resolve-DuneBotListingCandidates -Snapshot $snapData -Cfg $refCfg -MaskCache $maskCache
+            foreach ($c in $refCands) {
+                $metaByTemplate[[string]$c.template_id] = $c
+            }
+            # In follow mode the reference is the live market median, not the
+            # formula price; snapshot it once for this tick.
+            if ($followOn) {
+                $fm = Get-DuneBotMarketMedianSnapshot -Ip $ctx.ip -ExchangeId $ident.exchangeId -ExcludeOwnerId $ident.ownerId
+                if ($fm.ok) { $followMedianMap = $fm.map }
+            }
+        } catch { }
+    }
+
     foreach ($row in $rows) {
         if ($summary.purchased -ge $maxBuys) { break }
 
@@ -946,6 +1074,42 @@ LIMIT $limit
         $stack     = ConvertTo-DuneInt $row['actual_stack']
         if ($stack -le 0) { $stack = 1 }
         $totalCost = $price * $stack
+
+        # Over-market guard: dice hit, but bail if the price is above the window.
+        if ($guardOn) {
+            $grade = ConvertTo-DuneInt $row['quality_level']
+            if ($grade -lt 0) { $grade = 0 } elseif ($grade -gt 5) { $grade = 5 }
+            $meta = $metaByTemplate[$tmpl]
+            # Reference price: in follow mode use the live market median for this
+            # (template, grade) — falling back to the template-level median — then
+            # to the formula price, then to the editable baseline.
+            $ref = 0
+            $fromMarket = $false
+            if ($followOn) {
+                $mk = "$tmpl|$grade"
+                if ($followMedianMap.ContainsKey($mk)) { $ref = [int]$followMedianMap[$mk].median; $fromMarket = $true }
+                elseif ($followMedianMap.ContainsKey($tmpl)) { $ref = [int]$followMedianMap[$tmpl].median; $fromMarket = $true }
+            }
+            if ($ref -le 0) {
+                $ref = if ($meta) { [int](Get-DuneBotItemPrice -Cfg $cfg -Cand $meta -Grade $grade) } else { 0 }
+            }
+            $hasRef = ($ref -gt 0)
+            if (-not $hasRef -and -not $allowUnpriced) { $ref = $baseline }  # no reference -> editable baseline
+            # Enforce the window when we have a reference (real or baseline).
+            # When there's no reference AND the operator opted to allow unpriced
+            # buys, $ref stays 0 here so the guard is skipped for this item.
+            if ($ref -gt 0) {
+                $maxAllowed = [double]$ref * (1.0 + ($overPct / 100.0))
+                if ([double]$price -gt $maxAllowed) {
+                    $summary.blocked++
+                    $refLabel = if ($fromMarket) { "market median $ref" } elseif ($hasRef) { "ref $ref" } else { "no market price, baseline $ref" }
+                    $reason = "Duke: dice hit on $tmpl (order $orderId) but skipped - listed at $price, over market ($refLabel + $overPct% = max $([int][Math]::Floor($maxAllowed)))."
+                    if (Get-Command Write-DuneLog -ErrorAction SilentlyContinue) { try { Write-DuneLog $reason } catch { } }
+                    $summary.message = $reason
+                    continue
+                }
+            }
+        }
 
         $winner = [ordered]@{ template_id = $tmpl; order_id = $orderId; price = ($price * 10); stack = $stack; roll = $roll }
 
@@ -988,7 +1152,7 @@ COMMIT;
     $state = Read-DuneBotState
     $state = @{
         last_buy_tick = (Get-Date).ToUniversalTime().ToString('o')
-        last_result   = @{ candidates = $summary.candidates; rolled = $summary.rolled; won = $summary.won; purchased = $summary.purchased; errors = $summary.errors; dryRun = $summary.dryRun }
+        last_result   = @{ candidates = $summary.candidates; rolled = $summary.rolled; won = $summary.won; purchased = $summary.purchased; blocked = $summary.blocked; errors = $summary.errors; dryRun = $summary.dryRun }
         error_count   = ([int]$state.error_count + [int]$summary.errors)
         last_error    = [string]$summary.message
     }
@@ -1324,6 +1488,114 @@ function Get-DuneBotItemPrice {
     return $result
 }
 
+# ----------------------------------------------------------------------------
+# Market-follow pricing: snapshot the median competing market price per template
+# (and per quality grade where data exists) from OTHER sellers' player sell
+# orders, so Duke can list at median * (1 + market_follow_pct/100). Player
+# listings only (is_npc_order = FALSE) — that excludes Duke/Revy/other NPC bots
+# and the seeded NPC vendor inventory, leaving the real player market. Returns
+# a map keyed "template|grade" (grade-specific) AND "template" (all-grade
+# aggregate, used as fallback when a specific grade has no competing orders).
+# ----------------------------------------------------------------------------
+function Get-DuneBotMarketMedianSnapshot {
+    param([string]$Ip, [int64]$ExchangeId, [int64]$ExcludeOwnerId = 0)
+    $excludeClause = if ($ExcludeOwnerId -gt 0) { "AND o.owner_id <> $ExcludeOwnerId" } else { '' }
+    $sql = @"
+SELECT o.template_id,
+       o.quality_level,
+       percentile_cont(0.5) WITHIN GROUP (ORDER BY o.item_price) AS median_price,
+       COUNT(*) AS n
+FROM dune.dune_exchange_orders o
+JOIN dune.dune_exchange_sell_orders s ON s.order_id = o.id
+WHERE o.exchange_id = $ExchangeId
+  AND o.is_npc_order = FALSE
+  AND o.item_price > 0
+  $excludeClause
+GROUP BY GROUPING SETS ((o.template_id, o.quality_level), (o.template_id))
+"@
+    $r = Invoke-DuneSqlQuery -Ip $Ip -Sql $sql -ReadOnly $true -MaxRows 200000 -TimeoutSec 30
+    if (-not $r.ok) { return @{ ok = $false; error = $r.error } }
+    $map = @{}
+    foreach ($row in (ConvertTo-DuneRowMaps -Result $r)) {
+        $tmpl = [string]$row['template_id']
+        if (-not $tmpl) { continue }
+        $median = [double](ConvertTo-DuneInt $row['median_price'])
+        $n = ConvertTo-DuneInt $row['n']
+        $qlRaw = $row['quality_level']
+        if ($null -eq $qlRaw -or [string]$qlRaw -eq '') {
+            # template-level (all grades) aggregate row from the GROUPING SET.
+            $map[$tmpl] = @{ median = $median; n = $n }
+        } else {
+            $grade = ConvertTo-DuneInt $qlRaw
+            $map["$tmpl|$grade"] = @{ median = $median; n = $n }
+        }
+    }
+    return @{ ok = $true; map = $map; count = $map.Count }
+}
+
+# Resolve a per-grade listing price honouring market-follow mode. When
+# market_follow_enabled is OFF this is just Get-DuneBotItemPrice. When ON and a
+# trusted median exists (>= market_follow_min_samples competing orders, grade-
+# specific first then template-level), price = round(median * (1 + pct/100)).
+# When no usable market exists, market_follow_no_market decides: 'formula' (the
+# normal pricer), 'baseline' (market_follow_baseline * (1+pct)), or 'skip'
+# (returns $null so the caller omits the listing). Market-follow deliberately
+# bypasses price_cap/price_floor (the operator opts into following the live
+# market); only an int32 safety clamp and the optional display cap apply.
+function Get-DuneBotListingPrice {
+    param([hashtable]$Cfg, [hashtable]$Cand, [int]$Grade = 0, [hashtable]$MedianMap)
+    if (-not [bool]$Cfg.market_follow_enabled) {
+        return (Get-DuneBotItemPrice -Cfg $Cfg -Cand $Cand -Grade $Grade)
+    }
+    $minS = if ($Cfg.ContainsKey('market_follow_min_samples')) { [int]$Cfg.market_follow_min_samples } else { 1 }
+    if ($minS -lt 1) { $minS = 1 }
+    $pct = [double]$Cfg.market_follow_pct
+    $mult = 1.0 + ($pct / 100.0)
+    $tmpl = [string]$Cand.template_id
+    $entry = $null
+    if ($MedianMap) {
+        $key = "$tmpl|$([int]$Grade)"
+        if ($MedianMap.ContainsKey($key) -and [int]$MedianMap[$key].n -ge $minS) {
+            $entry = $MedianMap[$key]
+        } elseif ($MedianMap.ContainsKey($tmpl) -and [int]$MedianMap[$tmpl].n -ge $minS) {
+            $entry = $MedianMap[$tmpl]
+        }
+    }
+    if ($entry) {
+        return (Limit-DuneBotMarketFollowPrice -Cfg $Cfg -Price ([double]$entry.median * $mult))
+    }
+    $mode = if ($Cfg.ContainsKey('market_follow_no_market')) { [string]$Cfg.market_follow_no_market } else { 'formula' }
+    switch ($mode) {
+        'skip'     { return $null }
+        'baseline' { return (Limit-DuneBotMarketFollowPrice -Cfg $Cfg -Price ([double]$Cfg.market_follow_baseline * $mult)) }
+        default    { return (Get-DuneBotItemPrice -Cfg $Cfg -Cand $Cand -Grade $Grade) }
+    }
+}
+
+# Display-safe variant: like Get-DuneBotListingPrice but returns 0 instead of
+# $null when market-follow 'skip' yields no listing, so summary math is safe.
+function Get-DuneBotListingPriceOrZero {
+    param([hashtable]$Cfg, [hashtable]$Cand, [int]$Grade = 0, [hashtable]$MedianMap)
+    $p = Get-DuneBotListingPrice -Cfg $Cfg -Cand $Cand -Grade $Grade -MedianMap $MedianMap
+    if ($null -eq $p) { return 0 }
+    return [int]$p
+}
+
+# Clamp helper for market-follow prices: magnitude rounding + int32 safety +
+# optional operator display cap. Intentionally skips price_cap/price_floor.
+function Limit-DuneBotMarketFollowPrice {
+    param([hashtable]$Cfg, [double]$Price)
+    $rounded = Get-DuneBotRoundedPrice -Price $Price
+    if ([bool]$Cfg.display_cap_enabled) {
+        $displayCapItemPrice = [int][Math]::Floor([double]$Cfg.display_cap_solari / 10.0)
+        if ($displayCapItemPrice -lt 1) { $displayCapItemPrice = 1 }
+        if ($rounded -gt $displayCapItemPrice) { $rounded = $displayCapItemPrice }
+    }
+    if ($rounded -gt 2147483647) { $rounded = 2147483647 }
+    if ($rounded -lt 1) { $rounded = 1 }
+    return [int]$rounded
+}
+
 # Snapshot of Duke's own current listings keyed by template_id.
 function Get-DuneBotCurrentListings {
     param([string]$Ip, [int64]$OwnerId, [int64]$ExchangeId)
@@ -1447,6 +1719,8 @@ function Invoke-DuneBotListTick {
         inserted      = 0
         deleted       = 0
         errors        = 0
+        market_medians = 0
+        wiped         = $false
         planned       = @()
         message       = ''
     }
@@ -1458,6 +1732,22 @@ function Invoke-DuneBotListTick {
     if ($ident.ownerId -le 0) {
         $summary.message = 'Bot not provisioned (run any live tick once to create the Duke actor).'
         return $summary
+    }
+
+    # Market-follow relist: when the operator toggled market_follow_enabled
+    # (either direction) the pricing basis changed, so Duke's existing listings
+    # are stale and must be wiped before re-listing under the new basis. The
+    # flag is set in Save-DuneBotConfig. On a real tick we clear Duke's listings
+    # and drop the flag; on a dry run we only report that a wipe is pending.
+    $relistState = Read-DuneBotState
+    if ([bool]$relistState.relist_pending) {
+        $summary.wiped = $true
+        if (-not $DryRun) {
+            $clr = Clear-DuneBotListings
+            if (-not $clr.ok) { $summary.ok = $false; $summary.message = "relist wipe: $($clr.error)"; return $summary }
+            $relistState.relist_pending = $false
+            Save-DuneBotState -State $relistState
+        }
     }
 
     # v11.5.5: stamp last_list_tick BEFORE the SSH-heavy work so a wedged
@@ -1473,6 +1763,17 @@ function Invoke-DuneBotListTick {
     $vs = Get-DuneBotVendorSnapshot -Ip $ctx.ip -ExchangeId $ident.exchangeId -ExcludeOwnerId $ident.ownerId
     if (-not $vs.ok) { $summary.ok = $false; $summary.message = "vendor snapshot: $($vs.error)"; return $summary }
     $summary.considered = $vs.snapshot.Count
+
+    # Market-follow: snapshot the live player market so pricing can follow the
+    # median of competing sell orders. Built once per tick and threaded through
+    # Get-DuneBotListingPrice below. Empty map when the mode is OFF.
+    $medianMap = @{}
+    if ([bool]$cfg.market_follow_enabled) {
+        $ms = Get-DuneBotMarketMedianSnapshot -Ip $ctx.ip -ExchangeId $ident.exchangeId -ExcludeOwnerId $ident.ownerId
+        if (-not $ms.ok) { $summary.ok = $false; $summary.message = "market median snapshot: $($ms.error)"; return $summary }
+        $medianMap = $ms.map
+        $summary.market_medians = $ms.count
+    }
 
     # Refresh persistent mask cache from any non-zero-mask order on this
     # exchange (player, NPC, prior Duke). Seeded with the bundled snapshot
@@ -1524,8 +1825,21 @@ function Invoke-DuneBotListTick {
         foreach ($g in $grades) { $gradesSeen[[int]$g] = $true }
 
         foreach ($grade in $grades) {
-            $target = Get-DuneBotItemPrice -Cfg $cfg -Cand $cand -Grade $grade
+            $target = Get-DuneBotListingPrice -Cfg $cfg -Cand $cand -Grade $grade -MedianMap $medianMap
             $atGrade = @($existing | Where-Object { [int]$_.quality_level -eq [int]$grade })
+            if ($null -eq $target) {
+                # Market-follow 'skip' with no competing market: do not list this
+                # grade, and retire any Duke listings already on it.
+                if ($atGrade.Count -gt 0) {
+                    $tmplStale += $atGrade.Count
+                    if (-not $DryRun) {
+                        foreach ($s in $atGrade) {
+                            $deleteIds += @{ order_id = [int64]$s.order_id; item_id = [int64]$s.item_id }
+                        }
+                    }
+                }
+                continue
+            }
             $aligned = @($atGrade | Where-Object { $_.item_price -eq $target })
             $stale   = @($atGrade | Where-Object { $_.item_price -ne $target })
             $need    = $perGrade - $aligned.Count
@@ -1564,7 +1878,7 @@ function Invoke-DuneBotListTick {
 
         $summary.planned += ,([ordered]@{
             template_id  = $cand.template_id
-            target_price = ((Get-DuneBotItemPrice -Cfg $cfg -Cand $cand -Grade 0) * 10)
+            target_price = ((Get-DuneBotListingPriceOrZero -Cfg $cfg -Cand $cand -Grade 0 -MedianMap $medianMap) * 10)
             stack_max    = $cand.stack_max
             existing     = $existing.Count
             aligned      = $tmplAligned
@@ -1852,6 +2166,19 @@ function Invoke-DuneBotSeedMarket {
     $current = $cl.byTemplate
     foreach ($k in $current.Keys) { $summary.listed_before += @($current[$k]).Count }
 
+    # Market-follow: snapshot the live player market once so seed pricing can
+    # follow the median of competing sell orders. Empty map when mode is OFF.
+    $medianMap = @{}
+    if ([bool]$cfg.market_follow_enabled) {
+        $ms = Get-DuneBotMarketMedianSnapshot -Ip $ctx.ip -ExchangeId $ident.exchangeId -ExcludeOwnerId $ident.ownerId
+        if (-not $ms.ok) {
+            $summary.ok = $false; $summary.message = "market median snapshot: $($ms.error)"
+            & $writeProgress @{ phase = 'error'; message = $summary.message } $false
+            return $summary
+        }
+        $medianMap = $ms.map
+    }
+
     # Build candidates from the bundled catalog INTERSECTED with mask cache.
     # An empty snapshot is fine because seed_from_catalog is forced on.
     $candidates = Resolve-DuneBotListingCandidates -Snapshot @{} -Cfg $cfg -MaskCache $maskCache
@@ -1874,7 +2201,8 @@ function Invoke-DuneBotSeedMarket {
         # Sum to_insert across grades for the per-template planning summary.
         $tmplPlanInsert = 0
         foreach ($grade in $grades) {
-            $target = Get-DuneBotItemPrice -Cfg $cfg -Cand $cand -Grade $grade
+            $target = Get-DuneBotListingPrice -Cfg $cfg -Cand $cand -Grade $grade -MedianMap $medianMap
+            if ($null -eq $target) { continue }   # market-follow 'skip' with no market
             $aligned = @($existing | Where-Object { [int]$_.quality_level -eq $grade -and $_.item_price -eq $target })
             $need = $perGrade - $aligned.Count
             if ($need -lt 0) { $need = 0 }
@@ -1886,7 +2214,7 @@ function Invoke-DuneBotSeedMarket {
         }
         $summary.planned += ,([ordered]@{
             template_id  = $cand.template_id
-            target_price = ((Get-DuneBotItemPrice -Cfg $cfg -Cand $cand -Grade 0) * 10)   # display value (Solari)
+            target_price = ((Get-DuneBotListingPriceOrZero -Cfg $cfg -Cand $cand -Grade 0 -MedianMap $medianMap) * 10)   # display value (Solari)
             stack_max    = $cand.stack_max
             existing     = $existing.Count
             grades       = @($grades)

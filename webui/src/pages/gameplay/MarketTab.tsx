@@ -99,15 +99,34 @@ export function MarketTab() {
     getMarketCategories().then(r => setCategories(r.categories)).catch(() => {})
   }, [])
 
-  const topCategories = useMemo(() => {
-    // Group by first segment for a compact dropdown.
-    const set = new Set<string>()
+  const categoryGroups = useMemo(() => {
+    // Group the full category paths by their top-level segment so the filter
+    // can offer every real category (e.g. items/weapons/sidearm), not just the
+    // top level. The backend filters by prefix, so the group value itself
+    // ("items") still works as an "all of this group" filter.
+    const groups = new Map<string, string[]>()
     for (const c of categories) {
       const first = c.split('/')[0]
-      if (first) set.add(first)
+      if (!first) continue
+      if (!groups.has(first)) groups.set(first, [])
+      const arr = groups.get(first)
+      if (arr && c !== first && !arr.includes(c)) arr.push(c)
     }
-    return Array.from(set).sort()
+    return Array.from(groups.entries())
+      .sort((a, b) => a[0].localeCompare(b[0]))
+      .map(([group, cats]) => ({ group, cats: cats.sort() }))
   }, [categories])
+
+  // "items/weapons/sidearm" (group "items") -> "Weapons / Sidearm"
+  const prettySub = (cat: string, group: string) => {
+    const rest = cat.startsWith(group + '/') ? cat.slice(group.length + 1) : cat
+    return rest
+      .split('/')
+      .filter(Boolean)
+      .map(s => s.charAt(0).toUpperCase() + s.slice(1))
+      .join(' / ')
+  }
+  const titleCase = (s: string) => s.charAt(0).toUpperCase() + s.slice(1)
 
   const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE))
 
@@ -137,9 +156,14 @@ export function MarketTab() {
           />
         </div>
         <select value={category} onChange={e => setCategory(e.target.value)}
-          className="px-3 py-2 rounded-lg bg-surface-2 border border-border text-text text-sm focus:outline-none focus:ring-2 focus:ring-ibad">
+          className="px-3 py-2 rounded-lg bg-surface-2 border border-border text-text text-sm focus:outline-none focus:ring-2 focus:ring-ibad max-w-[220px]">
           <option value="">All categories</option>
-          {topCategories.map(c => <option key={c} value={c}>{c}</option>)}
+          {categoryGroups.map(g => (
+            <optgroup key={g.group} label={titleCase(g.group)}>
+              <option value={g.group}>All {titleCase(g.group)}</option>
+              {g.cats.map(c => <option key={c} value={c}>{prettySub(c, g.group)}</option>)}
+            </optgroup>
+          ))}
         </select>
         <div className="flex rounded-lg border border-border overflow-hidden">
           {[['', 'All'], ['bot', 'Duke'], ['player', 'Players']].map(([val, label]) => (

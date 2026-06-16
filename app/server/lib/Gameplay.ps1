@@ -453,13 +453,16 @@ function Select-DuneMarketItems {
         [string]$SortBy, [string]$SortDir,
         [int]$Page = 0, [int]$Limit = 100
     )
-    $search = ''
-    if ($Search) { $search = $Search.ToLower() }
+    # NB: PowerShell variable names are case-insensitive, so a local named
+    # $search would alias (and clobber) the $Search parameter. Use a distinct
+    # name so the incoming term survives.
+    $searchLc = ''
+    if ($Search) { $searchLc = $Search.ToLower() }
     $filtered = @()
     foreach ($it in $Items) {
-        if ($search) {
-            if (-not ([string]$it.display_name).ToLower().Contains($search) -and
-                -not ([string]$it.template_id).ToLower().Contains($search)) { continue }
+        if ($searchLc) {
+            if (-not ([string]$it.display_name).ToLower().Contains($searchLc) -and
+                -not ([string]$it.template_id).ToLower().Contains($searchLc)) { continue }
         }
         if ($Category -and -not ([string]$it.category).StartsWith($Category)) { continue }
         if ($Tier) {

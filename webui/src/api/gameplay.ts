@@ -171,6 +171,19 @@ export interface BotConfig extends Partial<BotPricingConfig> {
   die_target: number
   target_balance: number
   maintain_balance: boolean
+  over_market_guard: boolean
+  over_market_pct: number
+  over_market_allow_unpriced?: boolean
+  over_market_baseline?: number
+  // Market-follow pricing (v12.5.0+): list at the median of competing player
+  // sell orders + a markup, instead of the formula. All-or-nothing; toggling
+  // requires a Duke-listings wipe (handled server-side on the next list tick).
+  market_follow_enabled?: boolean
+  market_follow_pct?: number
+  market_follow_min_samples?: number
+  market_follow_no_market?: 'formula' | 'skip' | 'baseline'
+  market_follow_baseline?: number
+  market_follow_force_guard?: boolean
   disabled_items: string[]
   // Listing side (sane-pricing port, v11.5.2+).
   list_tick_interval: number
@@ -200,6 +213,7 @@ export interface BotTickResult {
   won: number
   purchased: number
   skipped: number
+  blocked?: number
   errors: number
   die: string
   winners: BotTickWinner[]
@@ -230,6 +244,8 @@ export interface BotListTickResult {
   inserted: number
   deleted: number
   errors: number
+  market_medians?: number
+  wiped?: boolean
   planned: BotListTickPlan[]
   message: string
 }
@@ -687,6 +703,11 @@ export interface PlayerStats {
   faction_name: string
   solaris: number
   total_currency: number
+  faction_reps?: { faction_id: number; faction_name: string; reputation: number }[]
+  faction_rep_cap?: number
+  scrip?: number
+  intel?: number
+  intel_max?: number
 }
 
 export interface PlayerStatsResponse {
@@ -1304,15 +1325,17 @@ export function getPlayerKeystones(id: number, demo?: boolean) {
 }
 
 export interface PlayerVehicleRow {
-  vehicle_id: number
-  template: string
-  display_name?: string
-  fuel?: number
-  durability?: number
+  id: number
+  class: string
+  vehicle_name?: string
+  map?: string
+  chassis_durability?: number
+  is_recovered?: boolean
+  is_backup?: boolean
 }
-export function getPlayerVehicles(id: number, demo?: boolean) {
+export function getPlayerVehicles(controllerId: number, demo?: boolean) {
   return api<{ ok: boolean; vehicles: PlayerVehicleRow[]; source: DataSource }>(
-    `/api/gameplay/players/${id}/vehicles${qs({ demo: demo ? 1 : undefined })}`)
+    `/api/gameplay/players/vehicles${qs({ controller_id: controllerId, demo: demo ? 1 : undefined })}`)
 }
 
 export interface DungeonRunRow { dungeon_id: string; cleared: boolean; best_time_seconds?: number }
