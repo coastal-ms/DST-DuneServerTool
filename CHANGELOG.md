@@ -22,6 +22,15 @@ here cover everything those tags shipped.
   Alone, custom script name, etc.) failed with a 400. The web UI now sends the
   documented `script_name` field. (#235)
 
+### Changed
+
+- **Clarified Landsraad Game Config help text.** The **Task Goal Amount**
+  (`m_TaskGoalAmount`) and **Decrees to Nominate** (`m_NumberOfDecreesToNominate`)
+  fields now explain that these values are consumed when the next Landsraad term
+  is generated — the currently-running term keeps its existing seeded values
+  until it rolls over. The tool already writes both values correctly; the delay
+  is server-side behavior, not a write bug (#234).
+
 ## [12.3.0] - 2026-06-16
 
 ### Added
