@@ -13,6 +13,15 @@ here cover everything those tags shipped.
 
 ## [Unreleased]
 
+### Changed
+
+- **Find the Fremen (Trials of Aql) preset now grants the full Sietch journey-tag
+  set.** Verified against a completed live character, the preset was missing five
+  in-Sietch interaction flags. Added `Journey.TheSietch.Interactions.Lesson1Completed`,
+  `Lesson2Completed`, `Lesson3Completed`, `DeathStillInteracted`, and
+  `SafeInteracted` so the preset reproduces every Find-the-Fremen journey tag a
+  real completed character holds. (#236)
+
 ### Fixed
 
 - **Returning-Player Award / character export: `trailing junk after numeric
