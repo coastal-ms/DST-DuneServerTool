@@ -31,6 +31,35 @@ browser and keeps the server running in the background.
 
 ![Server Health](docs/img/server-health.png)
 
+### New in v12.2.0
+
+- **Game Config now reads & writes every setting in the right INI section.** A
+  value that lived in a different section than DST expected used to show as the
+  Funcom default and edits could silently fail to apply. DST now reflects the
+  real INI value and guarantees each setting lives in exactly one section — so
+  toggles actually take effect and resets are consistent.
+- **New Game Config sections:** **Landsraad**, **Hydration**, **Loot & Death**,
+  and **Encounters** — plus many more real toggles in Storm Cycle, Spice,
+  Sandworm, and Survival. The Landsraad settings live inside Funcom's single
+  nested config struct; DST edits each one in place and preserves everything
+  else, and mirrors them to the client too.
+- **Players → Landsraad section** — set any player's contribution to any Great
+  House (e.g. House Ecaz) to an arbitrary amount; faction + guild totals are
+  recomputed automatically.
+- **Per-item water editor** on Players → Inventory for water containers
+  (literjons / canteens).
+- **Per-field "Default" button** on every Game Config setting — resetting
+  *removes* the key from the INI instead of writing the default, keeping files
+  clean. The "apply to my client" flow shows an **Add / Update / Remove** badge
+  per setting.
+- **Manual-only backups** (no more a-backup-on-every-save pile-up) plus
+  **multi-select delete** in the View-backups dialog.
+- **Removed the 8 global multiplier options** (Health, Damage to NPCs/Players,
+  XP, Progression Speed, Fame, Harvest Amount/Health) after **live in-game
+  testing proved they do nothing** on self-hosted — the engine accepts the keys
+  but no gameplay system reads them, and they aren't in Funcom's stock config.
+  Building Damage and Inventory Weight multipliers are kept.
+
 ### New in v12.0.20–v12.0.24
 
 - **Fill Base Water** Player Action (v12.0.21, Inventory section, next to Fill

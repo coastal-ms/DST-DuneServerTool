@@ -13,6 +13,8 @@ here cover everything those tags shipped.
 
 ## [Unreleased]
 
+## [12.2.0] - 2026-06-15
+
 ### Added
 
 - **Delete INI backups from the "View backups" screen.** The backups dialog in
@@ -76,9 +78,7 @@ here cover everything those tags shipped.
   struct (it previously only handled flat keys, which would have written them to
   the wrong place).
 
-## [12.2.0] - 2026-06-15
-
-### Added
+### Added (continued)
 
 - **"Default" button on every Game Config field.** Each setting now has a
   one-click reset to its Funcom default. Resetting to default doesn't just blank
