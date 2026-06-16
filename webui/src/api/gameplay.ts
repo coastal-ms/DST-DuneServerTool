@@ -703,6 +703,8 @@ export interface PlayerStats {
   faction_name: string
   solaris: number
   total_currency: number
+  faction_reps?: { faction_id: number; faction_name: string; reputation: number }[]
+  faction_rep_cap?: number
 }
 
 export interface PlayerStatsResponse {

@@ -93,6 +93,20 @@ export function StatsSection({ player, demo, refreshKey }: SectionProps) {
         <KV k="Controller id" v={`#${stats.controller_id}`} mono />
         <KV k="Faction id"    v={`#${stats.faction_id}`}    mono />
       </Card>
+
+      {stats.faction_reps && stats.faction_reps.length > 0 && (
+        <Card title="Faction reputation">
+          {stats.faction_reps.map(fr => (
+            <KV
+              key={fr.faction_id}
+              k={fr.faction_name || `Faction #${fr.faction_id}`}
+              v={stats.faction_rep_cap
+                ? `${fmtNum(fr.reputation)} / ${fmtNum(stats.faction_rep_cap)}`
+                : fmtNum(fr.reputation)}
+            />
+          ))}
+        </Card>
+      )}
     </div>
   )
 }
@@ -413,7 +427,7 @@ function EventRow({ ev }: { ev: PlayerEvent }) {
 // pattern: click button to open form, fill fields, submit.
 // ---------------------------------------------------------------------------
 type ActionGroup = 'Currency' | 'Progression' | 'Items' | 'Vehicle' | 'Live' | 'Identity' | 'Danger'
-interface ActionField { key: string; label: string; type: 'text' | 'number'; placeholder?: string; min?: number; max?: number }
+interface ActionField { key: string; label: string; type: 'text' | 'number' | 'select'; placeholder?: string; min?: number; max?: number; options?: { value: string; label: string }[] }
 interface ActionDef {
   id: string
   group: ActionGroup
@@ -456,16 +470,22 @@ const ACTIONS: ActionDef[] = [
     run: (p, v) => setSkillPoints({ actor_id: p.id }, Number(v.sp) || 0) },
   { id: 'give-faction-rep', group: 'Progression', label: 'Give Faction Rep', icon: 'Shield',
     fields: [
-      { key: 'faction', label: 'Faction id (atreides / harkonnen)', type: 'text', placeholder: 'atreides' },
+      { key: 'faction', label: 'Faction', type: 'select', options: [
+        { value: 'atreides', label: 'Atreides' },
+        { value: 'harkonnen', label: 'Harkonnen' },
+      ] },
       { key: 'delta',   label: 'Delta',                              type: 'number', placeholder: '500' },
     ],
-    run: (p, v) => giveFactionRep(p.controller_id, String(v.faction || '').trim(), Number(v.delta) || 0) },
+    run: (p, v) => giveFactionRep(p.controller_id, String(v.faction || 'atreides').trim(), Number(v.delta) || 0) },
   { id: 'set-faction-tier', group: 'Progression', label: 'Set Faction Tier', icon: 'BarChart3',
     fields: [
-      { key: 'faction', label: 'Faction id', type: 'text', placeholder: 'atreides' },
+      { key: 'faction', label: 'Faction', type: 'select', options: [
+        { value: 'atreides', label: 'Atreides' },
+        { value: 'harkonnen', label: 'Harkonnen' },
+      ] },
       { key: 'tier',    label: 'Tier (0-20)', type: 'number', placeholder: '10', min: 0, max: 20 },
     ],
-    run: (p, v) => setFactionTier(p.controller_id, String(v.faction || '').trim(), Number(v.tier) || 0) },
+    run: (p, v) => setFactionTier(p.controller_id, String(v.faction || 'atreides').trim(), Number(v.tier) || 0) },
   { id: 'apply-progression-preset', group: 'Progression', label: 'Apply Quick Preset', icon: 'Zap', custom: 'quick-presets',
     rowNote: 'Completes a story/journey chapter instantly',
     run: () => Promise.resolve({ message: '' }) },
@@ -1922,20 +1942,37 @@ function ErrorBox({ msg }: { msg: string }) {
   return <div className="card p-3 text-sm text-danger break-words">{msg}</div>
 }
 
-interface FieldDef { key: string; label: string; type: 'text' | 'number'; placeholder?: string }
+interface FieldDef { key: string; label: string; type: 'text' | 'number' | 'select'; placeholder?: string; options?: { value: string; label: string }[] }
 
 function InlineForm({ fields, submitLabel, busy, onSubmit }: {
   fields: FieldDef[]; submitLabel: string; busy: boolean; onSubmit: (values: Record<string, string>) => void
 }) {
-  const [values, setValues] = useState<Record<string, string>>({})
+  // Seed select fields with their first option so a dropdown is never submitted
+  // empty (the run() handlers also default, but this keeps the UI honest).
+  const [values, setValues] = useState<Record<string, string>>(() => {
+    const seed: Record<string, string> = {}
+    for (const f of fields) {
+      if (f.type === 'select' && f.options && f.options.length > 0) seed[f.key] = f.options[0].value
+    }
+    return seed
+  })
+  const inputCls = 'w-full px-3 py-2 rounded-lg bg-surface-2 border border-border text-text text-sm focus:outline-none focus:ring-2 focus:ring-ibad focus:border-ibad/50'
   return (
     <div className="space-y-2">
       {fields.map(f => (
         <div key={f.key}>
           <label className="block text-[11px] uppercase tracking-wider text-text-dim mb-1">{f.label}</label>
-          <input type={f.type} value={values[f.key] ?? ''} placeholder={f.placeholder}
-            onChange={e => setValues(v => ({ ...v, [f.key]: e.target.value }))}
-            className="w-full px-3 py-2 rounded-lg bg-surface-2 border border-border text-text text-sm focus:outline-none focus:ring-2 focus:ring-ibad focus:border-ibad/50" />
+          {f.type === 'select' ? (
+            <select value={values[f.key] ?? f.options?.[0]?.value ?? ''}
+              onChange={e => setValues(v => ({ ...v, [f.key]: e.target.value }))}
+              className={inputCls}>
+              {(f.options ?? []).map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
+            </select>
+          ) : (
+            <input type={f.type} value={values[f.key] ?? ''} placeholder={f.placeholder}
+              onChange={e => setValues(v => ({ ...v, [f.key]: e.target.value }))}
+              className={inputCls} />
+          )}
         </div>
       ))}
       <button className="btn-primary w-full" disabled={busy} onClick={() => onSubmit(values)}>

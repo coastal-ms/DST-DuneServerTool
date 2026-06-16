@@ -617,6 +617,32 @@ function Get-DunePlayerStatsLive {
         solaris        = (ConvertTo-DuneInt $r['solaris'])
         total_currency = (ConvertTo-DuneInt $r['total_currency'])
     }
+    # Per-faction reputation already applied to this player (keyed off the
+    # controller/actor id, same as the give-faction-rep write). Surfaced so the
+    # Stats tab shows current standing before an admin adjusts it.
+    $reps = @()
+    $cid = [long]$stats['controller_id']
+    if ($cid -gt 0) {
+        $repSql = @"
+SELECT pfr.faction_id::int AS fid, f.name AS fname, COALESCE(pfr.reputation_amount, 0) AS rep
+FROM dune.player_faction_reputation pfr
+JOIN dune.factions f ON f.id = pfr.faction_id
+WHERE pfr.actor_id = $cid::bigint
+ORDER BY pfr.faction_id;
+"@
+        $rr = Invoke-DuneSqlQuery -Ip $Ip -Sql $repSql -ReadOnly $true -MaxRows 50 -TimeoutSec 20
+        if ($rr.ok) {
+            foreach ($row in (ConvertTo-DuneRowMaps -Result $rr)) {
+                $reps += [ordered]@{
+                    faction_id   = (ConvertTo-DuneInt $row['fid'])
+                    faction_name = [string]$row['fname']
+                    reputation   = (ConvertTo-DuneInt $row['rep'])
+                }
+            }
+        }
+    }
+    $stats['faction_reps'] = $reps
+    $stats['faction_rep_cap'] = if (Get-Variable -Name DuneFactionRepCap -Scope Script -ErrorAction SilentlyContinue) { [int]$script:DuneFactionRepCap } else { 12474 }
     return @{ ok = $true; stats = $stats }
 }
 
@@ -841,6 +867,11 @@ function Get-DunePlayerStatsDemo {
         last_seen = '2026-06-12T06:00:00Z'
         faction_id = 1; faction_name = 'Atreides'
         solaris = 125000; total_currency = 132100
+        faction_reps = @(
+            [ordered]@{ faction_id = 1; faction_name = 'Atreides';  reputation = 8400 }
+            [ordered]@{ faction_id = 2; faction_name = 'Harkonnen'; reputation = 1200 }
+        )
+        faction_rep_cap = 12474
     }
 }
 

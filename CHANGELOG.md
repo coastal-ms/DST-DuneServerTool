@@ -48,6 +48,19 @@ here cover everything those tags shipped.
   fresh-install flow (Pre-flight → Configuration → Install → Security →
   Networking → Finalize).
 
+- **Market browser: filter by full category, not just the top level.** The
+  category dropdown on the Market tab now lists every real category (grouped by
+  top-level, e.g. *Items → Weapons / Sidearm*) instead of only `items` /
+  `schematics`, so you can narrow listings to a specific category. Each group
+  also keeps an "All <group>" option.
+
+- **Players: faction reputation is shown and the give/set-tier faction picker is
+  a dropdown.** The Stats tab now reads each player's current per-faction
+  standing (Atreides / Harkonnen, with the 12,474 cap) from
+  `player_faction_reputation`. The *Give Faction Rep* and *Set Faction Tier*
+  actions now use an Atreides / Harkonnen dropdown instead of a free-text box you
+  had to type into.
+
 ### Changed
 
 - **Setup Wizard pre-flight runs prerequisite checks first, scoped to the chosen
@@ -59,6 +72,12 @@ here cover everything those tags shipped.
   Hyper-V VM image during the install step.
 
 ### Fixed
+
+- **Market search box now actually filters.** The market items search was a
+  no-op: a case-insensitive variable-name collision in `Select-DuneMarketItems`
+  (`$search` aliased the `$Search` parameter and blanked it) meant the typed term
+  was dropped and every item was returned. Searching by item name or template id
+  now narrows the list as expected.
 
 - **Game Config: boolean toggle highlighting is now case-insensitive.** On/Off
   pills and the defaults editor now compare values with `valuesEqual`, so a
