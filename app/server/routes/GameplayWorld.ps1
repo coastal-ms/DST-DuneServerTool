@@ -227,3 +227,20 @@ Register-DuneRoute -Method POST -Path '/api/gameplay/storage/delete-item' -Handl
         Write-DuneError -Response $res -Status 500 -Message "Storage delete item failed: $($_.Exception.Message)"
     }
 }
+
+# POST /api/gameplay/storage/set-item-stack  { item_id, stack_size }
+# Per-item stack-quantity editor for container contents. stack_size is a plain
+# bigint column, so this just rewrites it. The new value only appears in-game
+# after a server zone (battlegroup) restart.
+Register-DuneRoute -Method POST -Path '/api/gameplay/storage/set-item-stack' -Handler {
+    param($req, $res, $routeParams, $body)
+    try {
+        $iid = Get-DuneBodyInt -Body $body -Name 'item_id'
+        $ss  = Get-DuneBodyInt -Body $body -Name 'stack_size'
+        if ($null -eq $iid -or $iid -le 0) { Write-DuneError -Response $res -Status 400 -Message 'item_id is required.'; return }
+        if ($null -eq $ss -or $ss -lt 1) { Write-DuneError -Response $res -Status 400 -Message 'stack_size must be at least 1.'; return }
+        Invoke-DunePlayerWriteRoute -Response $res -Action { param($ip) Invoke-DuneStorageSetItemStack -Ip $ip -ItemId $iid -StackSize $ss }
+    } catch {
+        Write-DuneError -Response $res -Status 500 -Message "Storage set item stack failed: $($_.Exception.Message)"
+    }
+}
