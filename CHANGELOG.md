@@ -39,6 +39,11 @@ here cover everything those tags shipped.
   Hummingbird Wing Module Mk6 ×6; Carrier Ornithopter swaps its Wing for Roc
   Carrier Wing ×8 and now delivers Tail Hull ×2 and Side Hull ×2. The kit action
   and its preview gained per-part quantity support.
+- **Landsraad Game Config edits no longer wipe the rest of the LandsraadSettings
+  struct.** When UserGame.ini had no prior struct, DST seeded a minimal
+  `Data=(...)` with only the edited members, dropping board layouts / messages /
+  contract settings the game needs. It now seeds the full DefaultGame.ini struct
+  first and edits members in place.
 
 ## [12.2.0] - 2026-06-15
 

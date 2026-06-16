@@ -419,7 +419,7 @@ function Set-DuneIniValuesInPlace {
 # deprecated no-op multiplier keys so the client file stays clean.
 # Returns @{ ok; path; backup; created; applied; items } (backup always '').
 function Save-DuneGameConfigClient {
-    param([object[]]$Updates, [string]$Dir = '')
+    param([object[]]$Updates, [string]$Dir = '', [string]$DefaultsRaw = '')
     if (-not $Updates -or $Updates.Count -eq 0) { throw 'No updates supplied.' }
 
     $allowed = @{}
@@ -457,8 +457,10 @@ function Save-DuneGameConfigClient {
     $quoted = Get-DuneGameConfigQuotedKeys
     # Fold any struct-member updates (e.g. LandsraadSettings Data members) into a
     # single Data write against the CLIENT file's current blob, exactly like the
-    # server path — the client reads the same Data=(...) struct.
-    $folded = Convert-DuneStructUpdates -Raw $existing -Updates $clean.ToArray()
+    # server path -- the client reads the same Data=(...) struct. When the client
+    # Game.ini has no prior struct, seed the full DefaultGame.ini struct so the
+    # other members are preserved (the route supplies $DefaultsRaw).
+    $folded = Convert-DuneStructUpdates -Raw $existing -Updates $clean.ToArray() -DefaultsRaw $DefaultsRaw
     $new    = Set-DuneIniValuesInPlace -Raw $existing -Updates $folded -QuotedKeys $quoted
     $new    = $new -replace "`r?`n", "`r`n"   # local file is Windows CRLF
 
@@ -1060,14 +1062,52 @@ function Get-DuneSchemaStructFieldMap {
     return $map
 }
 
+# True if any of $Updates targets a struct-member schema field (e.g. a
+# LandsraadSettings Data member). Callers use this to decide whether the
+# (relatively expensive) DefaultGame.ini read is worth doing before saving.
+function Test-DuneUpdatesHaveStructMember {
+    param([object[]]$Updates)
+    if (-not $Updates) { return $false }
+    $structMap = Get-DuneSchemaStructFieldMap
+    if ($structMap.Count -eq 0) { return $false }
+    foreach ($u in $Updates) { if ($structMap.ContainsKey("$($u.key)")) { return $true } }
+    return $false
+}
+
+# Find a struct blob "(...)" for ($Section, $StructKey) in a parsed INI doc.
+# Returns the raw value (which may be the empty struct "()" the file explicitly
+# carries) or $null when the section has no such (non-array) line at all.
+function Get-DuneStructBlobFromDoc {
+    param([object]$Doc, [string]$Section, [string]$StructKey)
+    if (-not $Doc) { return $null }
+    foreach ($s in $Doc.sections) {
+        if ($s.name -eq $Section) {
+            foreach ($l in $s.body) {
+                $info = Get-DuneIniLineKey $l
+                if ($info -and -not $info.isArray -and $info.key -eq $StructKey) { return (Get-DuneIniLineValue $l) }
+            }
+        }
+    }
+    return $null
+}
+
 # Fold struct-member updates (e.g. LandsraadSettings Data members) into ONE flat
 # update that sets the parent struct key (Data) to the recomputed blob, leaving
 # every non-struct update as-is. $Raw is the current file content (to read the
 # existing blob). Returns the rewritten update list. A struct field's `remove`
 # (reset to default) writes its Funcom default value into the struct rather than
 # deleting the member, so the Data=() blob always stays well-formed.
+#
+# $DefaultsRaw is OPTIONAL raw DefaultGame.ini text. When the live file has NO
+# struct line for a (section, structKey) -- typical of a fresh UserGame.ini -- we
+# SEED the full default struct (all ~40 members the game ships) from $DefaultsRaw
+# before folding the operator's edits, so the override does not REPLACE the UE
+# struct with a stripped few-member stub. When the file already carries a struct
+# blob (even "()"), we keep editing it in place and never consult defaults. The
+# pure INI engine stays SSH-free: real callers fetch DefaultGame.ini and pass it
+# in; unit tests can omit $DefaultsRaw entirely.
 function Convert-DuneStructUpdates {
-    param([string]$Raw, [object[]]$Updates)
+    param([string]$Raw, [object[]]$Updates, [string]$DefaultsRaw)
     $structMap = Get-DuneSchemaStructFieldMap
     if ($structMap.Count -eq 0) { return $Updates }
     $doc = ConvertFrom-DuneIniDoc -Raw $Raw
@@ -1088,17 +1128,19 @@ function Convert-DuneStructUpdates {
             $flat.Add($u)
         }
     }
+    $defaultsDoc = $null
+    if (-not [string]::IsNullOrWhiteSpace($DefaultsRaw)) { $defaultsDoc = ConvertFrom-DuneIniDoc -Raw $DefaultsRaw }
     foreach ($gid in $structGroups.Keys) {
         $g = $structGroups[$gid]
-        # Current blob for this section's struct key (empty struct if absent).
-        $blob = '()'
-        foreach ($s in $doc.sections) {
-            if ($s.name -eq $g.section) {
-                foreach ($l in $s.body) {
-                    $info = Get-DuneIniLineKey $l
-                    if ($info -and -not $info.isArray -and $info.key -eq $g.structKey) { $blob = (Get-DuneIniLineValue $l) }
-                }
-            }
+        # Current blob for this section's struct key. $null means the live file has
+        # NO struct line at all (distinct from an explicit, possibly-empty "()").
+        $blob = Get-DuneStructBlobFromDoc -Doc $doc -Section $g.section -StructKey $g.structKey
+        if ($null -eq $blob) {
+            # Fresh file: seed the FULL default struct so the ~35 members the game
+            # ships (board layouts, messages, curves, contract timings, ...) survive
+            # the override instead of being wiped by a stripped few-member stub.
+            $seed = Get-DuneStructBlobFromDoc -Doc $defaultsDoc -Section $g.section -StructKey $g.structKey
+            $blob = if ($null -ne $seed) { $seed } else { '()' }
         }
         foreach ($m in $g.members) { $blob = Set-DuneStructScalarMember -Blob $blob -Key $m.key -Value $m.value }
         $flat.Add(@{ file = $g.file; section = $g.section; key = $g.structKey; value = $blob })
@@ -1121,13 +1163,24 @@ function Save-DuneGameConfig {
         if ($byFile.ContainsKey($f)) { $byFile[$f].Add($u) }
     }
 
+    # When any struct-member edit is present, read DefaultGame/Engine.ini ONCE so a
+    # fresh UserGame.ini can seed the FULL default struct before folding edits
+    # (otherwise the override wipes the ~35 nested LandsraadSettings members). A
+    # defaults-read failure (e.g. no running pod) falls back to prior behaviour.
+    $defaults = $null
+    if (Test-DuneUpdatesHaveStructMember -Updates $Updates) {
+        try { $defaults = Get-DuneGameConfigDefaults -Ip $Ip } catch { $defaults = $null }
+    }
+
     foreach ($f in @('game','engine')) {
         if ($byFile[$f].Count -eq 0) { continue }
         $path = if ($f -eq 'game') { $paths.game } else { $paths.engine }
         $raw  = (Invoke-V6Ssh -Ip $Ip -Cmd "sudo cat '$path' 2>/dev/null") -join "`n"
+        $defRaw = if ($defaults) { if ($f -eq 'game') { "$($defaults.game)" } else { "$($defaults.engine)" } } else { '' }
         # Fold any struct-member updates (e.g. LandsraadSettings Data members) into
-        # a single parent-key update against the file's current blob.
-        $fileUpdates = Convert-DuneStructUpdates -Raw $raw -Updates $byFile[$f].ToArray()
+        # a single parent-key update against the file's current blob (seeding from
+        # defaults when the file has no prior struct).
+        $fileUpdates = Convert-DuneStructUpdates -Raw $raw -Updates $byFile[$f].ToArray() -DefaultsRaw $defRaw
         $new  = ConvertTo-DuneIniManaged -Raw $raw -Updates $fileUpdates -QuotedKeys $quoted
         $b64 = [Convert]::ToBase64String([Text.Encoding]::UTF8.GetBytes($new))
         Invoke-V6Ssh -Ip $Ip -Cmd "base64 -d | sudo tee '$path' > /dev/null" -StdinData $b64 -TimeoutSec 30 | Out-Null
