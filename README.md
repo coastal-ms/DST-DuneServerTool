@@ -385,7 +385,7 @@ that isn't on the host machine itself, the `/terminal` route redirects them to
 Server Health, and the `/ws/terminal` socket is refused server-side for
 non-loopback callers. The curated **Commands** page stays available either way.
 
-### ⚙️ Game Config *(BETA)*
+### ⚙️ Game Config
 
 ![Game Config page](docs/img/game-config.png)
 
@@ -397,7 +397,7 @@ Resources & Loot, Players, Spicefields, Performance, and more. The page
 until you override it; your edits are written into a clearly-marked
 **DST-managed block** that DST owns (whole-section relocation, dedup, and
 migration of any legacy Gameplay Admin block), and the original file is **backed
-up on the server before every write**. A prominent BETA banner reminds you to
+up on the server before every write**. A reminder prompts you to
 hit **Backup settings** first — and a **View backups** button lists the recent
 `.dstbak-*` restore points next to each file. Save flushes the files back to
 the VM and invalidates the Server Health port cache so any port change is
