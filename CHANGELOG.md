@@ -13,6 +13,19 @@ here cover everything those tags shipped.
 
 ## [Unreleased]
 
+### Added
+
+- **Unlock Trainers now reads present values for the selected character.** Each
+  trainer card (Swordmaster, Trooper, Mentat, Bene Gesserit, Planetologist) shows
+  an Unlocked / Partial / Locked badge, a `Starter` marker for the character's
+  starting class, and live ownership counts — how many of the trainer's skill
+  blocks and how many of the full job tree the character already has — instead of
+  a blind Unlock button. Backed by a new offline-safe
+  `GET /api/gameplay/players/trainer-status?account_id=<id>` read that parses the
+  pawn's `FLevelComponent.ModuleData`. The Unlock button reads "Re-grant" once a
+  tree is fully owned. Characters with no pawn yet report everything locked.
+
+
 ## [12.3.2] - 2026-06-16
 
 ### Changed
