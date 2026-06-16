@@ -170,6 +170,23 @@ Register-DuneRoute -Method GET -Path '/api/gameplay/players/trainers' -Handler {
     }
 }
 
+# GET /api/gameplay/players/trainer-status?account_id=<id>
+#   Per-character skill-tree ownership for the Unlock Trainers UI.
+Register-DuneRoute -Method GET -Path '/api/gameplay/players/trainer-status' -Handler {
+    param($req, $res, $routeParams, $body)
+    try {
+        $aid = 0L
+        [void][Int64]::TryParse((Get-DuneQ $req 'account_id'), [ref]$aid)
+        if ($aid -le 0) { Write-DuneError -Response $res -Status 400 -Message 'account_id is required.'; return }
+        Invoke-DunePlayerReadRoute -Response $res -Request $req `
+            -LiveBlock { param($ip) Get-DunePlayerTrainerStatusLive -Ip $ip -AccountId $aid } `
+            -DemoBlock { @{ ok = $true; account_id = $aid; has_pawn = $false; jobs = @(); total = 0 } } `
+            -PayloadKey 'jobs'
+    } catch {
+        Write-DuneError -Response $res -Status 500 -Message "Trainer status failed: $($_.Exception.Message)"
+    }
+}
+
 # GET /api/gameplay/players/main-quests  (main-quest story line catalog)
 Register-DuneRoute -Method GET -Path '/api/gameplay/players/main-quests' -Handler {
     param($req, $res, $routeParams, $body)
