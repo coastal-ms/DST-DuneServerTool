@@ -23,6 +23,11 @@ here cover everything those tags shipped.
   name. Developer performance harnesses (Start/Stop Hitch Test) live on a
   separate **Dev / Perf Scripts** row. Both carry a disclaimer that the scripts
   originate from the Playtest server and may have no effect on a retail server.
+- **"Allow overflow (drop to ground)" toggle on item/kit gives.** A new checkbox
+  on the Give Item and Give Vehicle Kit forms skips DST's inventory-capacity
+  guard so a full backpack no longer blocks the give — the game's native command
+  drops whatever doesn't fit on the ground next to the player. Online players
+  only (offline SQL gives can't drop to ground, so the flag is ignored there).
 
 ### Fixed
 

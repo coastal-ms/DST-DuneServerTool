@@ -74,7 +74,7 @@ Register-DuneRoute -Method POST -Path '/api/gameplay/players/set-skill-module' -
     } catch { Write-DuneError -Response $res -Status 500 -Message "Set skill module failed: $($_.Exception.Message)" }
 }
 
-# POST /api/gameplay/players/give-item-live  { actor_id?, fls_id?, template, qty?, durability? }
+# POST /api/gameplay/players/give-item-live  { actor_id?, fls_id?, template, qty?, durability?, allow_overflow? }
 Register-DuneRoute -Method POST -Path '/api/gameplay/players/give-item-live' -Handler {
     param($req, $res, $routeParams, $body)
     try {
@@ -87,7 +87,8 @@ Register-DuneRoute -Method POST -Path '/api/gameplay/players/give-item-live' -Ha
         $dur = 1.0
         if ($null -ne $durRaw) { try { $dur = [double]$durRaw } catch {} }
         if ($dur -le 0) { $dur = 1.0 }
-        Invoke-DunePlayerWriteRoute -Response $res -Action { param($ip) Invoke-DunePlayerGiveItemLive -Ip $ip -ActorId $aid -FlsId $fls -Template $tpl -Quantity ([int]$qty) -Durability $dur }
+        $overflow = [bool](Get-DuneBodyValue -Body $body -Name 'allow_overflow')
+        Invoke-DunePlayerWriteRoute -Response $res -Action { param($ip) Invoke-DunePlayerGiveItemLive -Ip $ip -ActorId $aid -FlsId $fls -Template $tpl -Quantity ([int]$qty) -Durability $dur -AllowOverflow $overflow }
     } catch { Write-DuneError -Response $res -Status 500 -Message "Give item live failed: $($_.Exception.Message)" }
 }
 

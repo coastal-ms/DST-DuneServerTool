@@ -127,6 +127,7 @@ Register-DuneRoute -Method POST -Path '/api/gameplay/players/give-item' -Handler
         $qty  = Get-DuneBodyInt -Body $body -Name 'qty'
         $qual = Get-DuneBodyInt -Body $body -Name 'quality'
         $fls  = [string](Get-DuneBodyValue -Body $body -Name 'fls_id')
+        $overflow = [bool](Get-DuneBodyValue -Body $body -Name 'allow_overflow')
         if ($null -eq $qual) { $qual = 0L }
         if ($null -eq $pawn -or $pawn -le 0) { Write-DuneError -Response $res -Status 400 -Message 'pawn_id is required.'; return }
         if (-not $tmpl) { Write-DuneError -Response $res -Status 400 -Message 'template is required.'; return }
@@ -141,7 +142,7 @@ Register-DuneRoute -Method POST -Path '/api/gameplay/players/give-item' -Handler
             $isOnline = -not $off.ok
             # Online + default quality → RMQ live (instant, no relog)
             if ($isOnline -and $qual -le 0) {
-                $r = Invoke-DunePlayerGiveItemLive -Ip $ip -ActorId $pawn -FlsId $fls -Template $tmpl -Quantity ([int]$qty) -Durability 1.0
+                $r = Invoke-DunePlayerGiveItemLive -Ip $ip -ActorId $pawn -FlsId $fls -Template $tmpl -Quantity ([int]$qty) -Durability 1.0 -AllowOverflow $overflow
                 if ($r.ok -and -not $r.path) { $r['path'] = 'rmq' }
                 return $r
             }

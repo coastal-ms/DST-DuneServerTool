@@ -733,9 +733,9 @@ function ActionRow({ def, player, busy, hasLiveSession, open, danger, onToggle, 
         <div className="border-t border-border p-3">
           {def.custom === 'give-item' ? (
             <GiveItemForm busy={busy} submitLabel={def.label}
-              onSubmit={(tpl, qty, qual) => runAction(def, () => giveItem(player.id, tpl, qty, qual))}
-              onSubmitTierSet={(tpl, qty) => runAction(def, async () => {
-                for (let q = 0; q <= 5; q++) await giveItem(player.id, tpl, qty, q)
+              onSubmit={(tpl, qty, qual, overflow) => runAction(def, () => giveItem(player.id, tpl, qty, qual, overflow))}
+              onSubmitTierSet={(tpl, qty, overflow) => runAction(def, async () => {
+                for (let q = 0; q <= 5; q++) await giveItem(player.id, tpl, qty, q, overflow)
                 return { message: `Gave ${tpl} Mk1–Mk6 (x${qty} each) to ${player.name}.` }
               })} />
           ) : def.custom === 'whisper' ? (
@@ -743,9 +743,9 @@ function ActionRow({ def, player, busy, hasLiveSession, open, danger, onToggle, 
               onSubmit={msg => runAction(def, () => chatWhisper(String(player.id), msg))} />
           ) : def.custom === 'spawn-vehicle' || def.custom === 'vehicle-kit' ? (
             <VehicleKitForm busy={busy}
-              onSubmit={veh => runAction(def, async () => {
+              onSubmit={(veh, overflow) => runAction(def, async () => {
                 const parts = [...veh.kit, ...veh.unique, VEHICLE_KIT_FUEL_TEMPLATE, VEHICLE_KIT_TORCH_TEMPLATE]
-                for (const tpl of parts) await giveItem(player.id, tpl, veh.qty?.[tpl] ?? 1, 0)
+                for (const tpl of parts) await giveItem(player.id, tpl, veh.qty?.[tpl] ?? 1, 0, overflow)
                 const count = veh.kit.length + veh.unique.length
                 return { message: `Gave ${veh.label} kit — ${count} part${count === 1 ? '' : 's'} + Large Fuel Cell + Welding Torch Mk5 to ${player.name}.` }
               })} />
@@ -786,14 +786,15 @@ function ActionRow({ def, player, busy, hasLiveSession, open, danger, onToggle, 
 // wrapper — ActionRow provides the container.
 function GiveItemForm({ busy, submitLabel, onSubmit, onSubmitTierSet }: {
   busy: boolean; submitLabel: string
-  onSubmit: (tpl: string, qty: number, qual: number) => void
-  onSubmitTierSet: (tpl: string, qty: number) => void
+  onSubmit: (tpl: string, qty: number, qual: number, allowOverflow: boolean) => void
+  onSubmitTierSet: (tpl: string, qty: number, allowOverflow: boolean) => void
 }) {
   const [giveTpl, setGiveTpl]   = useState('')
   const [giveName, setGiveName] = useState('')
   const [giveQty, setGiveQty]   = useState('1')
   const [giveQual, setGiveQual] = useState('0')
   const [gradeable, setGradeable] = useState(false)
+  const [overflow, setOverflow] = useState(false)
   return (
     <div className="space-y-3">
       <ItemPicker label="Item — type to search by name or template id"
@@ -814,18 +815,41 @@ function GiveItemForm({ busy, submitLabel, onSubmit, onSubmitTierSet }: {
             className="w-full px-3 py-2 rounded-lg bg-surface-2 border border-border text-text text-sm focus:outline-none focus:ring-2 focus:ring-ibad focus:border-ibad/50" />
         </div>
       </div>
+      <OverflowToggle checked={overflow} disabled={busy} onChange={setOverflow} />
       <button className="btn-primary w-full" disabled={busy || !isValidTemplateId(giveTpl)}
-        onClick={() => onSubmit(giveTpl.trim(), Number(giveQty) || 1, Number(giveQual) || 0)}>
+        onClick={() => onSubmit(giveTpl.trim(), Number(giveQty) || 1, Number(giveQual) || 0, overflow)}>
         {busy ? <Icon name="Loader2" size={13} className="animate-spin" /> : <Icon name="Check" size={13} />} {submitLabel}
       </button>
       {gradeable && (
         <button className="btn-secondary w-full" disabled={busy || !isValidTemplateId(giveTpl)}
           title="Gives one of this item at every grade, Mk1 through Mk6"
-          onClick={() => onSubmitTierSet(giveTpl.trim(), Number(giveQty) || 1)}>
+          onClick={() => onSubmitTierSet(giveTpl.trim(), Number(giveQty) || 1, overflow)}>
           {busy ? <Icon name="Loader2" size={13} className="animate-spin" /> : <Icon name="Layers" size={13} />} Give whole tier set (Mk1-Mk6)
         </button>
       )}
     </div>
+  )
+}
+
+// Shared "drop overflow to the ground" toggle. When checked, the give skips
+// DST's inventory-capacity guard so the game's native AddItemToInventory command
+// handles a full backpack by dropping the excess on the ground. Online players
+// only — offline (SQL) gives can't drop to ground, so the flag is ignored there.
+function OverflowToggle({ checked, disabled, onChange }: {
+  checked: boolean; disabled: boolean; onChange: (v: boolean) => void
+}) {
+  return (
+    <label className="flex items-start gap-2 text-xs text-text-muted cursor-pointer select-none">
+      <input type="checkbox" checked={checked} disabled={disabled}
+        onChange={e => onChange(e.target.checked)}
+        className="mt-0.5 accent-ibad" />
+      <span>
+        <span className="text-text">Allow overflow (drop to ground)</span>
+        <span className="block text-[11px] text-text-dim">
+          If the inventory is full, drop the items that don't fit on the ground next to the player. Online players only.
+        </span>
+      </span>
+    </label>
   )
 }
 
@@ -1034,11 +1058,12 @@ function GivePackageForm({ busy, playerName, onGive }: {
 // chassis/modules. Shared by both the "Spawn Vehicle" and "Give Vehicle Kit"
 // actions, which call the same handler.
 function VehicleKitForm({ busy, onSubmit }: {
-  busy: boolean; onSubmit: (veh: VehicleTemplate) => void
+  busy: boolean; onSubmit: (veh: VehicleTemplate, allowOverflow: boolean) => void
 }) {
   const kitVehicles = useMemo(() => VEHICLE_CATALOG.filter(v => v.kit.length > 0), [])
   const [vid, setVid] = useState(kitVehicles[0]?.id ?? '')
   const [names, setNames] = useState<Record<string, string>>({})
+  const [overflow, setOverflow] = useState(false)
   const veh = kitVehicles.find(v => v.id === vid) || kitVehicles[0]
   const selectCls = 'w-full px-3 py-2 rounded-lg bg-surface-2 border border-border text-text text-sm focus:outline-none focus:ring-2 focus:ring-ibad focus:border-ibad/50'
 
@@ -1095,8 +1120,9 @@ function VehicleKitForm({ busy, onSubmit }: {
           </li>
         </ul>
       </div>
+      <OverflowToggle checked={overflow} disabled={busy} onChange={setOverflow} />
       <button className="btn-primary w-full" disabled={busy}
-        onClick={() => onSubmit(veh)}>
+        onClick={() => onSubmit(veh, overflow)}>
         {busy ? <Icon name="Loader2" size={13} className="animate-spin" /> : <Icon name="Truck" size={13} />} Give Vehicle Kit
       </button>
     </div>
