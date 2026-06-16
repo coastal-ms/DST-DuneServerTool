@@ -1102,10 +1102,17 @@ function Get-DuneStructBlobFromDoc {
 # struct line for a (section, structKey) -- typical of a fresh UserGame.ini -- we
 # SEED the full default struct (all ~40 members the game ships) from $DefaultsRaw
 # before folding the operator's edits, so the override does not REPLACE the UE
-# struct with a stripped few-member stub. When the file already carries a struct
-# blob (even "()"), we keep editing it in place and never consult defaults. The
-# pure INI engine stays SSH-free: real callers fetch DefaultGame.ini and pass it
-# in; unit tests can omit $DefaultsRaw entirely.
+# struct with a stripped few-member stub. Two seeding triggers:
+#   1. File has NO struct line at all (fresh UserGame.ini) -> seed full default.
+#   2. File HAS a struct line but it's a legacy STUB (fewer scalar members than
+#      the default box ships, written by an older DST build) -> rebuild from the
+#      full default box and overlay the file's existing members so real
+#      customizations survive while the ~35 dropped members are healed back.
+# A struct box that is already at least as complete as the defaults is edited in
+# place and NEVER reseeded (don't clobber a genuinely full/custom box). When
+# $DefaultsRaw is empty/unavailable we can't reconstruct, so we keep the
+# edit-in-place behaviour. The pure INI engine stays SSH-free: real callers fetch
+# DefaultGame.ini and pass it in; unit tests can omit $DefaultsRaw entirely.
 function Convert-DuneStructUpdates {
     param([string]$Raw, [object[]]$Updates, [string]$DefaultsRaw)
     $structMap = Get-DuneSchemaStructFieldMap
@@ -1135,12 +1142,25 @@ function Convert-DuneStructUpdates {
         # Current blob for this section's struct key. $null means the live file has
         # NO struct line at all (distinct from an explicit, possibly-empty "()").
         $blob = Get-DuneStructBlobFromDoc -Doc $doc -Section $g.section -StructKey $g.structKey
+        $seed = if ($defaultsDoc) { Get-DuneStructBlobFromDoc -Doc $defaultsDoc -Section $g.section -StructKey $g.structKey } else { $null }
         if ($null -eq $blob) {
             # Fresh file: seed the FULL default struct so the ~35 members the game
             # ships (board layouts, messages, curves, contract timings, ...) survive
             # the override instead of being wiped by a stripped few-member stub.
-            $seed = Get-DuneStructBlobFromDoc -Doc $defaultsDoc -Section $g.section -StructKey $g.structKey
             $blob = if ($null -ne $seed) { $seed } else { '()' }
+        } elseif ($null -ne $seed) {
+            # File HAS a struct line. Heal a legacy STUB: if it carries fewer scalar
+            # members than the default box ships, it's missing members the game needs
+            # (an older DST build wrote a stripped box). Rebuild from the full default
+            # box, then overlay the file's existing members so real customizations are
+            # preserved. A box already at least as complete as defaults is left as-is.
+            $existingMembers = Get-DuneStructScalarMembers -Blob $blob
+            $defaultMembers  = Get-DuneStructScalarMembers -Blob $seed
+            if ($existingMembers.Count -lt $defaultMembers.Count) {
+                $healed = $seed
+                foreach ($mk in $existingMembers.Keys) { $healed = Set-DuneStructScalarMember -Blob $healed -Key $mk -Value $existingMembers[$mk] }
+                $blob = $healed
+            }
         }
         foreach ($m in $g.members) { $blob = Set-DuneStructScalarMember -Blob $blob -Key $m.key -Value $m.value }
         $flat.Add(@{ file = $g.file; section = $g.section; key = $g.structKey; value = $blob })

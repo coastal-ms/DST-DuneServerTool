@@ -45,7 +45,11 @@ here cover everything those tags shipped.
   struct.** When UserGame.ini had no prior struct, DST seeded a minimal
   `Data=(...)` with only the edited members, dropping board layouts / messages /
   contract settings the game needs. It now seeds the full DefaultGame.ini struct
-  first and edits members in place.
+  first and edits members in place. It also heals legacy stub boxes: if the live
+  file already contains a stripped `Data=(...)` (written by an older DST build
+  that dropped most members), DST rebuilds it from the full default struct,
+  preserves any values already customized in the file, then applies the edit —
+  so the ~35 missing members come back instead of staying lost.
 
 ## [12.2.0] - 2026-06-15
 

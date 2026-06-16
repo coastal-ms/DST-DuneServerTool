@@ -476,4 +476,30 @@ Describe 'GameConfig: Landsraad struct fields integrate with read + save' -Tag '
         $folded[0].value | Should -Match 'm_TermStartedMessage=\(Name="X"\)'
         $folded[0].value | Should -Not -Match 'm_ExtraDefaultOnly'
     }
+
+    It 'heals a legacy STUB box in place, restoring dropped default members and keeping customizations' {
+        # An older DST build wrote a stripped 5-member stub into the live file.
+        $stubRaw = "[/Script/DuneSandbox.LandsraadSettings]`n" +
+            'Data=(m_LandsraadTaskProgressUpdateFrequency=15.0,m_LandsraadTaskDailyRevealFrequency=25.0,m_VotingPeriodStartBeforeCoriolisCycleInSec=118800.0,m_VotingPeriodDurationInSec=118500.0,m_TaskGoalAmount=9999.0)' + "`n"
+        # Full default box ships many more members the stub dropped.
+        $defaultsRaw = "[/Script/DuneSandbox.LandsraadSettings]`n" +
+            'Data=(m_NumberOfDecreesToNominate=5,m_TaskGoalAmount=26000,m_LandsraadTaskProgressUpdateFrequency=10.0,m_LandsraadTaskDailyRevealFrequency=20.0,m_VotingPeriodStartBeforeCoriolisCycleInSec=100000.0,m_VotingPeriodDurationInSec=100000.0,m_ControlPointsPerCycle=10,m_TermStartedMessage=(Name="LandsraadTermStarted"),m_BoardLayouts=((Houses=2)),m_ContributionCurve=(Keys=((Time=0.0,Value=1.0))))' + "`n"
+        $updates = @(
+            @{ file='game'; section='/Script/DuneSandbox.LandsraadSettings'; key='m_TaskGoalAmount'; value='12000' }
+        )
+        $folded = @(Convert-DuneStructUpdates -Raw $stubRaw -Updates $updates -DefaultsRaw $defaultsRaw)
+        $folded.Count   | Should -Be 1
+        $folded[0].key  | Should -Be 'Data'
+        # operator edit applied
+        $folded[0].value | Should -Match 'm_TaskGoalAmount=12000'
+        # dropped default members healed back (nested + scalar)
+        $folded[0].value | Should -Match 'm_TermStartedMessage=\(Name="LandsraadTermStarted"\)'
+        $folded[0].value | Should -Match 'm_BoardLayouts=\(\(Houses=2\)\)'
+        $folded[0].value | Should -Match 'm_ContributionCurve=\(Keys='
+        $folded[0].value | Should -Match 'm_NumberOfDecreesToNominate=5'
+        $folded[0].value | Should -Match 'm_ControlPointsPerCycle=10'
+        # the stub's OWN customized values are preserved (not reset to defaults)
+        $folded[0].value | Should -Match 'm_LandsraadTaskProgressUpdateFrequency=15\.0'
+        $folded[0].value | Should -Match 'm_VotingPeriodDurationInSec=118500\.0'
+    }
 }
