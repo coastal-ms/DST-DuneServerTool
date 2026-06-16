@@ -1602,7 +1602,7 @@ export function giveItemLive(t: PlayerTarget, template: string, qty: number, qua
 
 export function cheatScript(t: PlayerTarget, script: string) {
   return api<WriteResult>('/api/gameplay/players/cheat-script', {
-    method: 'POST', body: targetBody(t, { script }),
+    method: 'POST', body: targetBody(t, { script_name: script }),
   })
 }
 
