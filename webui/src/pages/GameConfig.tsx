@@ -213,7 +213,14 @@ export function GameConfig() {
         if (!f?.clientApply || !f.key) continue
         if (!isCustomized(cfg, f)) continue
         const serverValue = currentValue(cfg, f)
-        const raw = clientInfo.effective?.[`${f.section}||${f.key}`]
+        // Client value: prefer the flat section||key, but fall back to the by-key
+        // map so struct members (e.g. LandsraadSettings Data=(...) scalars) — which
+        // aren't flat keys — are compared by their real client value instead of
+        // always reading as missing (which made the mismatch never clear).
+        const flat = clientInfo.effective?.[`${f.section}||${f.key}`]
+        const raw = (flat === undefined || flat === null)
+          ? clientInfo.effectiveByKey?.[f.key]
+          : flat
         const clientValue = raw === undefined || raw === null ? null : String(raw)
         if (clientValue !== null && valuesEqual(clientValue, serverValue)) continue
         out.push({ key: f.key, label: f.label, section: f.section, serverValue, clientValue })
