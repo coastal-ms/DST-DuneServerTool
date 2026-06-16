@@ -207,20 +207,16 @@ PlayerInventoryStartingSize=145
     }
 }
 
-Describe 'DuneGameConfigSchema: m_Global*Multiplier keys restored under DuneGameMode' -Tag 'GameConfig' {
+Describe 'DuneGameConfigSchema: only proven m_Global*Multiplier keys remain' -Tag 'GameConfig' {
 
-    # v12.1.1 restored the 10 m_Global*Multiplier keys after they were dropped
-    # in v12.0.14 on AMP-derived evidence (Icehunter/dune-admin #122/#139). The
-    # Hexaspark community ServerConfig reference (mirrored in our Chroma
-    # `infrastructure` collection under sources `hexaspark`) documents every one
-    # of these keys as a real Float setting under [/Script/DuneSandbox.DuneGameMode]
-    # with a default of 1.0; persistent notes also confirm that scalar
-    # DuneGameMode values from UserGame.ini are applied at pod startup on
-    # self-hosted Funcom k3s (DST's target). m_GlobalBuildingDamageMultiplier in
-    # particular MUST sit under DuneGameMode (Hexaspark places it there) and not
-    # under BuildingSettings, which is where v12.0.13 had it.
-    It 'includes every m_Global*Multiplier key under [/Script/DuneSandbox.DuneGameMode] and flags ClientApply' {
-        $required = @(
+    # 2026-06-15: live in-game testing proved m_GlobalDamageToNpcsMultiplier and
+    # m_GlobalXPMultiplier are NO-OPS via UserGame.ini on self-hosted (UE parses
+    # the key but no gameplay system reads it). By Neil's call the no-op /
+    # unverified multipliers were pulled, leaving only the two intentionally kept
+    # (Building Damage + Inventory Weight). See issue #225. Do NOT re-add the
+    # removed keys without a fresh in-game test showing a real effect.
+    It 'no longer exposes the multipliers that were removed' {
+        $removed = @(
             'm_GlobalHealthMultiplier'
             'm_GlobalDamageToNpcsMultiplier'
             'm_GlobalDamageToPlayersMultiplier'
@@ -229,15 +225,57 @@ Describe 'DuneGameConfigSchema: m_Global*Multiplier keys restored under DuneGame
             'm_GlobalFameMultiplier'
             'm_GlobalHarvestAmountMultiplier'
             'm_GlobalHarvestHealthMultiplier'
-            'm_GlobalBuildingDamageMultiplier'
-            'm_InventoryWeightMultiplier'
         )
-        $byKey = @{}
-        foreach ($f in $script:DuneGameConfigSchema) { $byKey[$f.Key] = $f }
-        foreach ($k in $required) {
-            $byKey.ContainsKey($k) | Should -BeTrue -Because "$k is a real DuneGameMode multiplier and must be exposed"
-            $byKey[$k].Section     | Should -Be '/Script/DuneSandbox.DuneGameMode' -Because "$k belongs in DuneGameMode per Hexaspark"
-            $byKey[$k].ClientApply | Should -BeTrue -Because "$k is read by both server and client; admin's local Game.ini must mirror it"
+        $keys = @{}
+        foreach ($f in $script:DuneGameConfigSchema) { $keys[$f.Key] = $true }
+        foreach ($k in $removed) {
+            $keys.ContainsKey($k) | Should -BeFalse -Because "$k was proven/assumed no-op via UserGame.ini and removed (issue #225)"
         }
+    }
+}
+
+Describe 'GameConfig: reset-to-default removes the key from the INI' -Tag 'GameConfig' {
+
+    It 'ConvertTo-DuneIniManaged drops a managed scalar when remove=$true' {
+        $raw = @"
+[$script:SecBuilding]
+m_BuildingBlueprintMaxExtensions=99
+m_bBuildingRestrictionLimitsEnabled=False
+"@
+        $updates = @(@{ section = $script:SecBuilding; key = 'm_BuildingBlueprintMaxExtensions'; value = '4'; remove = $true })
+        $out = ConvertTo-DuneIniManaged -Raw $raw -Updates $updates -QuotedKeys @{}
+        $out | Should -Not -Match 'm_BuildingBlueprintMaxExtensions'
+        # the untouched key survives
+        $out | Should -Match 'm_bBuildingRestrictionLimitsEnabled'
+    }
+
+    It 'ConvertTo-DuneIniManaged omits a managed section header when all its keys are removed' {
+        $raw = @"
+[$script:SecBuilding]
+m_BuildingBlueprintMaxExtensions=99
+"@
+        $updates = @(@{ section = $script:SecBuilding; key = 'm_BuildingBlueprintMaxExtensions'; value = '4'; remove = $true })
+        $out = ConvertTo-DuneIniManaged -Raw $raw -Updates $updates -QuotedKeys @{}
+        (Get-HeaderCount -Raw $out -Name $script:SecBuilding) | Should -Be 0
+    }
+
+    It 'Set-DuneIniValuesInPlace removes a client-file scalar when remove=$true' {
+        $raw = @"
+[$script:SecInventory]
+PlayerInventoryStartingSize=100
+PlayerInventoryStartingVolumeCapacity=300.0
+"@
+        $out = Set-DuneIniValuesInPlace -Raw $raw `
+            -Updates @(@{ section = $script:SecInventory; key = 'PlayerInventoryStartingSize'; value = '35'; remove = $true }) `
+            -QuotedKeys @{}
+        $out | Should -Not -Match 'PlayerInventoryStartingSize'
+        $out | Should -Match 'PlayerInventoryStartingVolumeCapacity'
+    }
+
+    It 'Test-DuneGameConfigValueIsDefault is numeric/bool aware' {
+        Test-DuneGameConfigValueIsDefault -Key 'm_InventoryWeightMultiplier' -Value '1.0'  | Should -BeTrue
+        Test-DuneGameConfigValueIsDefault -Key 'm_InventoryWeightMultiplier' -Value '1'    | Should -BeTrue
+        Test-DuneGameConfigValueIsDefault -Key 'm_InventoryWeightMultiplier' -Value '2.0'  | Should -BeFalse
+        Test-DuneGameConfigValueIsDefault -Key 'm_bBuildingRestrictionLimitsEnabled' -Value 'true' | Should -BeTrue
     }
 }

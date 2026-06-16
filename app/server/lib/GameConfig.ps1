@@ -53,8 +53,15 @@ $script:DuneGcSecConsole   = 'ConsoleVariables'
 $script:DuneGcSecUrl       = 'URL'
 
 # Category display order (UI renders in this order; unknown categories appended).
+# NOTE: 'Progression' and 'Harvesting' categories were removed 2026-06-15 along
+# with their m_Global* multiplier keys (XP / Progression Speed / Fame / Harvest
+# Amount / Harvest Health) plus Health / Damage-to-NPCs / Damage-to-Players,
+# after live in-game testing proved them no-ops on self-hosted (the UE INI parser
+# accepts the keys but no gameplay system reads them from UserGame.ini). See
+# issue #225. Do NOT re-add them as UserGame.ini fields without a fresh in-game
+# test showing an actual effect through that channel.
 $script:DuneGameConfigCategoryOrder = @(
-    'Server Identity','Network','Survival','Progression','Harvesting',
+    'Server Identity','Network','Survival',
     'Resources & Economy','Building','Inventory','Guilds & Economy',
     'Storm Cycle','PvP & Security','Spice','Taxation','Sandworm','Vehicles'
 )
@@ -69,24 +76,12 @@ $script:DuneGameConfigSchema = @(
     @{ Section=$script:DuneGcSecUrl; Key='IGWPort'; File='engine'; Type='int'; Min=1024; Max=65535; Default='7780'; Label='IGW Port (starting)'; Help='Starting inter-server port; must not overlap the game port range.'; Category='Network' }
 
     # --- Survival ---
-    @{ Section=$script:DuneGcSecGame; Key='m_GlobalHealthMultiplier'; File='game'; Type='float'; Min=0; Default='1.0'; Label='Global Health Multiplier'; Help='Scales the health pool of all entities (players + NPCs). Also needs client-side apply.'; ClientApply=$true; Category='Survival' }
-    @{ Section=$script:DuneGcSecGame; Key='m_GlobalDamageToNpcsMultiplier'; File='game'; Type='float'; Min=0; Default='1.0'; Label='Damage to NPCs Multiplier'; Help='Scales damage dealt to AI enemies. Also needs client-side apply.'; ClientApply=$true; Category='Survival' }
-    @{ Section=$script:DuneGcSecGame; Key='m_GlobalDamageToPlayersMultiplier'; File='game'; Type='float'; Min=0; Default='1.0'; Label='Damage to Players Multiplier'; Help='Scales player-vs-player damage. Also needs client-side apply.'; ClientApply=$true; Category='Survival' }
     @{ Section=$script:DuneGcSecGame; Key='m_WaterConsumptionRate'; File='game'; Type='float'; Min=0; Default='1.0'; Label='Water Consumption Rate'; Help='How quickly players consume water. Also needs client-side apply.'; ClientApply=$true; Category='Survival' }
     @{ Section=$script:DuneGcSecGame; Key='m_WaterConsumptionInStormMultiplier'; File='game'; Type='float'; Min=0; Default='2.0'; Label='Water Consumption in Storm'; Help='Additional water drain during sandstorms. Also needs client-side apply.'; ClientApply=$true; Category='Survival' }
     @{ Section=$script:DuneGcSecGame; Key='m_PlayerStartingWater'; File='game'; Type='float'; Min=0; Default='100.0'; Label='Player Starting Water'; Help='Water amount when a player spawns. Also needs client-side apply.'; ClientApply=$true; Category='Survival' }
     @{ Section=$script:DuneGcSecOnline; Key='m_DefaultReconnectGracePeriodSeconds'; File='game'; Type='int'; Min=0; Unit='sec'; Default='300'; Label='Reconnect Grace Period'; Help="Seconds a player's corpse persists after disconnect. Also needs client-side apply."; ClientApply=$true; Category='Survival' }
     @{ Section=$script:DuneGcSecDurab; Key='m_ItemDurabilityLossMultiplier'; File='game'; Type='float'; Min=0; Max=10; Default='1.0'; Label='Item Durability Loss Multiplier'; Help='Scales durability loss for all items. 0 = off. Also needs client-side apply.'; ClientApply=$true; Category='Survival' }
     @{ Section=$script:DuneGcSecDurab; Key='UpdateRateInSeconds'; File='game'; Type='float'; Min=0; Max=10; Unit='sec'; Default='1.0'; Label='Item Decay Rate'; Help='Deterioration tick rate. 0 = off, 1-10 typical. Also needs client-side apply.'; ClientApply=$true; Category='Survival' }
-
-    # --- Progression ---
-    @{ Section=$script:DuneGcSecGame; Key='m_GlobalXPMultiplier'; File='game'; Type='float'; Min=0; Default='1.0'; Label='XP Multiplier'; Help='Scales all XP gains. Also needs client-side apply.'; ClientApply=$true; Category='Progression' }
-    @{ Section=$script:DuneGcSecGame; Key='m_GlobalProgressionSpeedMultiplier'; File='game'; Type='float'; Min=0; Default='1.0'; Label='Progression Speed Multiplier'; Help='Journey / talent unlock speed scalar. Also needs client-side apply.'; ClientApply=$true; Category='Progression' }
-    @{ Section=$script:DuneGcSecGame; Key='m_GlobalFameMultiplier'; File='game'; Type='float'; Min=0; Default='1.0'; Label='Fame Multiplier'; Help='Scales Fame gained from all sources. Also needs client-side apply.'; ClientApply=$true; Category='Progression' }
-
-    # --- Harvesting ---
-    @{ Section=$script:DuneGcSecGame; Key='m_GlobalHarvestAmountMultiplier'; File='game'; Type='float'; Min=0; Default='1.0'; Label='Harvest Amount Multiplier'; Help='Scales resources gained per harvest strike. Also needs client-side apply.'; ClientApply=$true; Category='Harvesting' }
-    @{ Section=$script:DuneGcSecGame; Key='m_GlobalHarvestHealthMultiplier'; File='game'; Type='float'; Min=0; Default='1.0'; Label='Harvest Health Multiplier'; Help='Scales node health (how long harvestables last). Also needs client-side apply.'; ClientApply=$true; Category='Harvesting' }
 
     # --- Resources & Economy (engine ConsoleVariables) ---
     @{ Section=$script:DuneGcSecConsole; Key='Dune.GlobalMiningOutputMultiplier'; File='engine'; Type='float'; Min=0; Default='1.0'; Label='Global Mining Multiplier'; Help='Scales hand-mining resource output.'; Category='Resources & Economy' }
@@ -298,10 +293,23 @@ function Set-DuneIniValuesInPlace {
         $secName = "$($u.section)"
         $key     = "$($u.key)"
         if (-not $secName -or -not $key) { continue }
-        $valLine = "$key=" + (Format-DuneIniValue -Key $key -Value $u.value -QuotedKeys $QuotedKeys)
         # Target the LAST section with this name (UE5 last-wins ordering).
         $target = $null
         foreach ($s in $doc.sections) { if ($s.name -eq $secName) { $target = $s } }
+        if ($u['remove']) {
+            # Reset-to-default: remove every scalar occurrence of the key (if the
+            # section doesn't exist there's nothing to do).
+            if ($null -ne $target) {
+                $removeAll = New-Object 'System.Collections.Generic.List[int]'
+                for ($i = 0; $i -lt $target.body.Count; $i++) {
+                    $info = Get-DuneIniLineKey $target.body[$i]
+                    if ($info -and -not $info.isArray -and $info.key -eq $key) { $removeAll.Add($i) }
+                }
+                for ($j = $removeAll.Count - 1; $j -ge 0; $j--) { $target.body.RemoveAt($removeAll[$j]) }
+            }
+            continue
+        }
+        $valLine = "$key=" + (Format-DuneIniValue -Key $key -Value $u.value -QuotedKeys $QuotedKeys)
         if ($null -eq $target) {
             $target = @{ name = $secName; header = "[$secName]"; body = (New-Object 'System.Collections.Generic.List[string]'); managed = $false }
             $doc.sections.Add($target)
@@ -348,7 +356,8 @@ function Save-DuneGameConfigClient {
         $k = "$($u.key)"
         if (-not $allowed.ContainsKey($k)) { continue }
         $f = $allowed[$k]
-        $clean.Add(@{ section = $f.Section; key = $k; value = "$($u.value)" })
+        $rm = if ($null -ne $u['remove']) { [bool]$u['remove'] } else { (Test-DuneGameConfigValueIsDefault -Key $k -Value "$($u.value)") }
+        $clean.Add(@{ section = $f.Section; key = $k; value = "$($u.value)"; remove = $rm })
     }
     if ($clean.Count -eq 0) { throw 'No client-applicable keys in the supplied updates.' }
 
@@ -520,6 +529,19 @@ function Set-DuneScalarInBody {
     $Body.Add("$Key=$Formatted")
 }
 
+# Remove every scalar occurrence of $Key from a section body (leaves array +/-
+# lines and other keys untouched). Used when a field is reset to its Funcom
+# default so the key disappears from the managed block instead of being written.
+function Remove-DuneScalarFromBody {
+    param([System.Collections.Generic.List[string]]$Body, [string]$Key)
+    for ($i = $Body.Count - 1; $i -ge 0; $i--) {
+        $info = Get-DuneIniLineKey $Body[$i]
+        if ($info -and -not $info.isArray -and $info.key -eq $Key) {
+            $Body.RemoveAt($i)
+        }
+    }
+}
+
 function Remove-DuneTrailingBlankLines {
     param([System.Collections.Generic.List[string]]$Lines)
     while ($Lines.Count -gt 0 -and $Lines[$Lines.Count - 1].Trim() -eq '') {
@@ -612,8 +634,25 @@ function ConvertTo-DuneIniManaged {
             $entry = @{ name = $n; body = (New-Object 'System.Collections.Generic.List[string]') }
             $managed.Add($entry); $managedByName[$n] = $entry
         }
-        $fmt = Format-DuneIniValue -Key "$($u.key)" -Value $u.value -QuotedKeys $QuotedKeys
-        Set-DuneScalarInBody -Body $entry.body -Key "$($u.key)" -Formatted $fmt
+        if ($u['remove']) {
+            # Reset-to-default: strip the key so the default is implied, not written.
+            Remove-DuneScalarFromBody -Body $entry.body -Key "$($u.key)"
+        } else {
+            $fmt = Format-DuneIniValue -Key "$($u.key)" -Value $u.value -QuotedKeys $QuotedKeys
+            Set-DuneScalarInBody -Body $entry.body -Key "$($u.key)" -Formatted $fmt
+        }
+    }
+
+    # Drop any managed section whose body is now empty (every key removed) so a
+    # reset-to-default doesn't leave a bare [section] header behind.
+    if ($managed.Count -gt 0) {
+        $kept = New-Object 'System.Collections.Generic.List[object]'
+        foreach ($entry in $managed) {
+            $hasContent = $false
+            foreach ($l in $entry.body) { if ($l.Trim() -ne '') { $hasContent = $true; break } }
+            if ($hasContent) { $kept.Add($entry) }
+        }
+        $managed = $kept
     }
 
     # Render body (preamble + remaining sections).
@@ -779,12 +818,34 @@ function Get-DuneGameConfigQuotedKeys {
     return $q
 }
 
+# Numeric/bool-aware comparison of a submitted value against a field's Funcom
+# default. When they match, the caller drops the key from the INI (a reset) so
+# defaults never clutter the managed block or the client Game.ini. Mirrors the
+# webui valuesEqual() logic: 4 == 4.0, True == true, trimmed, case-insensitive.
+function Test-DuneGameConfigValueIsDefault {
+    param([string]$Key, [string]$Value)
+    $field = $null
+    foreach ($f in $script:DuneGameConfigSchema) { if ($f.Key -eq $Key) { $field = $f; break } }
+    if ($null -eq $field) { return $false }
+    if (-not $field.ContainsKey('Default')) { return $false }
+    $def = [string]$field.Default
+    $a = "$Value".Trim()
+    $b = "$def".Trim()
+    if ($a -ne '' -and $b -ne '') {
+        $na = 0.0; $nb = 0.0
+        $ci = [System.Globalization.CultureInfo]::InvariantCulture
+        $sa = [double]::TryParse($a, [System.Globalization.NumberStyles]::Float, $ci, [ref]$na)
+        $sb = [double]::TryParse($b, [System.Globalization.NumberStyles]::Float, $ci, [ref]$nb)
+        if ($sa -and $sb) { return ($na -eq $nb) }
+    }
+    return ($a.ToLowerInvariant() -eq $b.ToLowerInvariant())
+}
+
 # Save structured updates. $Updates = array of @{ file; section; key; value }.
 # Backs the file up server-side before writing.
 function Save-DuneGameConfig {
     param([string]$Ip, [object[]]$Updates)
-    if (-not $Updates -or $Updates.Count -eq 0) { return }
-    $paths  = Resolve-DuneGameConfigPaths -Ip $Ip
+    if (-not $Updates -or $Updates.Count -eq 0) { return }    $paths  = Resolve-DuneGameConfigPaths -Ip $Ip
     $quoted = Get-DuneGameConfigQuotedKeys
     $ts     = (Get-Date).ToString('yyyyMMddHHmmss')
 

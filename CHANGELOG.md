@@ -15,6 +15,15 @@ here cover everything those tags shipped.
 
 ### Added
 
+- **"Default" button on every Game Config field.** Each setting now has a
+  one-click reset to its Funcom default. Resetting to default doesn't just blank
+  the input — on save the key is **removed** from the DST-managed block in
+  `UserGame.ini`/`UserEngine.ini` (and from the client `Game.ini` when the field
+  is client-applied), so default values never clutter the INI files. A managed
+  section whose keys are all reset is dropped entirely, leaving no bare
+  `[section]` header. The button is disabled when the field already equals its
+  default.
+
 - **Per-item water editor on Players → Inventory.** Water containers
   (literjons / canteens — anything whose item data carries an
   `FFillableItemStats` block with `FillableType = "Water"`) now show a water
@@ -26,6 +35,21 @@ here cover everything those tags shipped.
   prominent warning that the new value won't appear in-game until the map pod /
   battlegroup is restarted, because the live server caches inventory in memory
   and flushes it back to the database on its save tick.
+
+### Removed
+
+- **Removed eight `m_Global*Multiplier` Game Config options proven / assumed to
+  be no-ops on self-hosted.** Live in-game testing on 2026-06-15 confirmed that
+  Damage-to-NPCs and XP multipliers set through `UserGame.ini` have **zero**
+  effect (the UE INI parser accepts the key — no "Unknown property" warning —
+  but no gameplay system reads it; same class of problem as the cooked-DataTable
+  BaseBackupTool restriction). Removed: Global Health, Damage to NPCs, Damage to
+  Players, XP, Progression Speed, Fame, Harvest Amount, and Harvest Health
+  multipliers, along with the now-empty **Progression** and **Harvesting**
+  categories. This re-applies the v12.0.14 stance after v12.1.1 restored them on
+  the Hexaspark ServerConfig reference, which lists them as real Floats but does
+  not reflect the current self-hosted build. Building Damage and Inventory Weight
+  multipliers are kept. See issue #225.
 
 ### Fixed
 

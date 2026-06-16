@@ -1331,6 +1331,11 @@ function FieldRow({ field, value, onChange, disabled, isDirty, isSet, isCustom, 
   const isNumber = field.type === 'int' || field.type === 'float'
   const wide = field.wide
 
+  // Whether the current input already equals the Funcom default (numeric/bool
+  // aware), so the reset button can be disabled when there's nothing to reset.
+  const atDefault = valuesEqual(value, defaultValue)
+  const resetToDefault = () => { if (!disabled && !atDefault) onChange(defaultValue) }
+
   return (
     <div className={wide ? 'md:col-span-2' : ''}>
       <label className="flex items-center justify-between text-sm font-medium mb-1.5 gap-2">
@@ -1339,6 +1344,15 @@ function FieldRow({ field, value, onChange, disabled, isDirty, isSet, isCustom, 
           {isDirty && <span className="w-1.5 h-1.5 rounded-full bg-ibad shrink-0" title="Modified" />}
         </span>
         <span className="flex items-center gap-1 shrink-0">
+          <button
+            type="button"
+            onClick={resetToDefault}
+            disabled={disabled || atDefault}
+            title={atDefault ? 'Already at the Funcom default' : `Reset to default (${formatDefaultDisplay(field, defaultValue)}) — removes the key from the INI on save`}
+            className="text-[9px] font-semibold uppercase tracking-wider px-1.5 py-0.5 rounded bg-surface-2 text-text-muted hover:text-text hover:bg-surface-3 disabled:opacity-40 disabled:cursor-not-allowed inline-flex items-center gap-1"
+          >
+            <Icon name="RotateCcw" size={10} /> Default
+          </button>
           {managed && (
             <span className="text-[9px] font-semibold uppercase tracking-wider px-1.5 py-0.5 rounded bg-accent/15 text-accent-bright" title="DST owns this section in the managed block">
               DST

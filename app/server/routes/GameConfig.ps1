@@ -111,7 +111,8 @@ Register-DuneRoute -Method PUT -Path '/api/gameconfig' -Handler {
                 if ($schemaMap.ContainsKey($key)) { if (-not $sec) { $sec = $schemaMap[$key].section }; if (-not $file) { $file = $schemaMap[$key].file } }
             }
             if (-not $sec -or -not $file) { continue }
-            $structured.Add(@{ file = $file; section = $sec; key = $key; value = "$($u.value)" })
+            $rm = (Test-DuneGameConfigValueIsDefault -Key $key -Value "$($u.value)")
+            $structured.Add(@{ file = $file; section = $sec; key = $key; value = "$($u.value)"; remove = $rm })
         }
     } else {
         # Schema-keyed object form: resolve section/file from the schema.
@@ -119,7 +120,8 @@ Register-DuneRoute -Method PUT -Path '/api/gameconfig' -Handler {
         foreach ($k in $keys) {
             if (-not $schemaMap.ContainsKey($k)) { continue }
             $v = if ($updates -is [hashtable]) { $updates[$k] } else { $updates.$k }
-            $structured.Add(@{ file = $schemaMap[$k].file; section = $schemaMap[$k].section; key = $k; value = "$v" })
+            $rm = (Test-DuneGameConfigValueIsDefault -Key $k -Value "$v")
+            $structured.Add(@{ file = $schemaMap[$k].file; section = $schemaMap[$k].section; key = $k; value = "$v"; remove = $rm })
         }
     }
 
