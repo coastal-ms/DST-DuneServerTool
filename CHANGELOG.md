@@ -30,6 +30,9 @@ here cover everything those tags shipped.
   is generated — the currently-running term keeps its existing seeded values
   until it rolls over. The tool already writes both values correctly; the delay
   is server-side behavior, not a write bug (#234).
+- Clarified the "Complete: Find the Fremen (Trials of Aql)" progression preset
+  description to note it does not unlock active-ability slots — those come from
+  the separate Spice Agony progression, which this preset does not grant (#236).
 
 ## [12.3.0] - 2026-06-16
 
