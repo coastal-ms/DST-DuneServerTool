@@ -27,12 +27,12 @@ import {
   giveItems, getItemPackages, saveItemPackage, deleteItemPackage,
   getLandsraadOverview, getLandsraadPlayerContributions, setLandsraadContribution,
   getPlayerJourneyNodes, completeJourneyNode, resetJourneyNode,
-  getTrainerCatalog, unlockTrainer, resetTrainerSkills,
+  getTrainerCatalog, getTrainerStatus, unlockTrainer, resetTrainerSkills,
   getMainQuestCatalog, unlockMainQuest,
   type Player, type PlayerEvent, type PlayerStats, type ProgressionPreset, type SpecTrackFull,
   type CatalogItem, type ItemPackage, type GiveItemEntry,
   type LandsraadHouse, type LandsraadIniSetting,
-  type JourneyNode, type TrainerInfo, type MainQuestInfo,
+  type JourneyNode, type TrainerInfo, type TrainerStatus, type MainQuestInfo,
 } from '../../../api/gameplay'
 import { VEHICLE_CATALOG, VEHICLE_KIT_FUEL_TEMPLATE, VEHICLE_KIT_TORCH_TEMPLATE, type VehicleTemplate } from '../../../data/vehicles'
 import { fmtNum, fmtSolari } from '../shared'
@@ -774,7 +774,7 @@ function ActionRow({ def, player, busy, open, danger, onToggle, runAction }: {
             <QuickPresetsForm busy={busy}
               onSubmit={presetId => runAction(def, () => applyProgressionPreset(player.account_id, presetId))} />
           ) : def.custom === 'unlock-trainers' ? (
-            <UnlockTrainersForm busy={busy}
+            <UnlockTrainersForm busy={busy} accountId={player.account_id}
               onUnlock={(job, name) => runAction(def, async () => {
                 const r = await unlockTrainer(player.account_id, job)
                 return { message: r.message || `Unlocked ${name} trainer for ${player.name}.` }
@@ -1319,28 +1319,45 @@ function QuickPresetsForm({ busy, onSubmit }: { busy: boolean; onSubmit: (preset
   )
 }
 
-// Self-contained Unlock-Trainers form. Fetches the skill-trainer catalog on
-// mount and renders one card per trainer type (separated by trainer), each with
-// an "Unlock" button (completes the trainer's quest line + grants the full job
+// Self-contained Unlock-Trainers form. Fetches the skill-trainer catalog AND
+// the selected character's current ownership on mount, then renders one card
+// per trainer type (separated by trainer). Each card shows present values —
+// which skill blocks / tree modules the character already has — plus an
+// "Unlock" button (completes the trainer's quest line + grants the full job
 // skill tree) and a "Reset Skill Tree" button. Renders without a card wrapper.
-function UnlockTrainersForm({ busy, onUnlock, onReset }: {
+function UnlockTrainersForm({ busy, accountId, onUnlock, onReset }: {
   busy: boolean
+  accountId: number
   onUnlock: (job: string, name: string) => void
   onReset: (job: string, name: string) => void
 }) {
   const [trainers, setTrainers] = useState<TrainerInfo[]>([])
+  const [status, setStatus] = useState<Record<string, TrainerStatus>>({})
+  const [hasPawn, setHasPawn] = useState(true)
   const [loading, setLoading] = useState(true)
   const [err, setErr] = useState('')
 
   useEffect(() => {
     let alive = true
     setLoading(true)
-    getTrainerCatalog()
-      .then(r => { if (alive) setTrainers(r.trainers || []) })
+    Promise.all([
+      getTrainerCatalog(),
+      getTrainerStatus(accountId).catch(() => null),
+    ])
+      .then(([cat, st]) => {
+        if (!alive) return
+        setTrainers(cat.trainers || [])
+        if (st) {
+          setHasPawn(st.has_pawn)
+          const map: Record<string, TrainerStatus> = {}
+          for (const j of st.jobs || []) map[j.job] = j
+          setStatus(map)
+        }
+      })
       .catch(e => { if (alive) setErr(e instanceof Error ? e.message : String(e)) })
       .finally(() => { if (alive) setLoading(false) })
     return () => { alive = false }
-  }, [])
+  }, [accountId])
 
   if (loading) return <div className="text-sm text-text-dim flex items-center gap-2"><Icon name="Loader2" size={13} className="animate-spin" /> Loading trainers…</div>
   if (err) return <div className="text-sm text-danger">{err}</div>
@@ -1351,18 +1368,51 @@ function UnlockTrainersForm({ busy, onUnlock, onReset }: {
       <div className="text-[11px] text-text-muted">
         Completes the trainer's starting quest line and grants the full job skill tree. Works online or offline — takes effect on next login.
       </div>
+      {!hasPawn && (
+        <div className="text-[11px] text-warning">
+          This character has no pawn yet (never logged in) — current skill data can't be read, so everything shows as locked.
+        </div>
+      )}
       <div className="space-y-2">
-        {trainers.map(t => (
+        {trainers.map(t => {
+          const st = status[t.job]
+          const owned = st?.blocks_owned ?? 0
+          const total = st?.blocks_total ?? t.skill_count
+          const isUnlocked = st?.unlocked ?? false
+          const isPartial = !isUnlocked && owned > 0
+          return (
           <div key={t.job} className="rounded-lg border border-border bg-surface-2 px-3 py-2">
             <div className="flex items-center gap-2 mb-1.5">
               <Icon name="GraduationCap" size={14} className="shrink-0 text-text-dim" />
               <span className="flex-1 min-w-0 text-sm text-text font-medium">{t.name}</span>
-              <span className="text-[11px] text-text-dim">{t.contract_count} quest{t.contract_count === 1 ? '' : 's'} · {t.skill_count} skill block{t.skill_count === 1 ? '' : 's'}</span>
+              {st?.is_starter && (
+                <span className="text-[10px] uppercase tracking-wide rounded px-1.5 py-0.5 bg-surface-3 text-text-dim border border-border">Starter</span>
+              )}
+              {st && (
+                isUnlocked ? (
+                  <span className="text-[10px] font-medium rounded px-1.5 py-0.5 bg-success/15 text-success border border-success/30">Unlocked</span>
+                ) : isPartial ? (
+                  <span className="text-[10px] font-medium rounded px-1.5 py-0.5 bg-warning/15 text-warning border border-warning/30">Partial</span>
+                ) : (
+                  <span className="text-[10px] font-medium rounded px-1.5 py-0.5 bg-surface-3 text-text-dim border border-border">Locked</span>
+                )
+              )}
+            </div>
+            <div className="flex items-center gap-2 mb-1.5 text-[11px] text-text-dim">
+              <span>{t.contract_count} quest{t.contract_count === 1 ? '' : 's'}</span>
+              <span>·</span>
+              <span>{owned}/{total} skill block{total === 1 ? '' : 's'}</span>
+              {st && st.modules_total > 0 && (
+                <>
+                  <span>·</span>
+                  <span>{st.modules_owned}/{st.modules_total} tree skills</span>
+                </>
+              )}
             </div>
             <div className="flex gap-2">
               <button type="button" className="btn-primary flex-1 text-xs" disabled={busy}
                 onClick={() => onUnlock(t.job, t.name)}>
-                {busy ? <Icon name="Loader2" size={12} className="animate-spin" /> : <Icon name="Unlock" size={12} />} Unlock
+                {busy ? <Icon name="Loader2" size={12} className="animate-spin" /> : <Icon name="Unlock" size={12} />} {isUnlocked ? 'Re-grant' : 'Unlock'}
               </button>
               <button type="button" className="btn-secondary shrink-0 text-xs" disabled={busy}
                 onClick={() => onReset(t.job, t.name)} title="Reset this job's skill tree">
@@ -1370,7 +1420,8 @@ function UnlockTrainersForm({ busy, onUnlock, onReset }: {
               </button>
             </div>
           </div>
-        ))}
+          )
+        })}
       </div>
     </div>
   )

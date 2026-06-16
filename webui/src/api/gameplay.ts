@@ -1488,6 +1488,17 @@ export function getTrainerCatalog() {
   return api<{ ok: boolean; trainers: TrainerInfo[]; total: number; source: DataSource }>(
     '/api/gameplay/players/trainers')
 }
+// Per-character skill-tree ownership, used to show present values in the UI.
+export interface TrainerStatus {
+  job: string; name: string
+  blocks_owned: number; blocks_total: number
+  modules_owned: number; modules_total: number
+  unlocked: boolean; is_starter: boolean
+}
+export function getTrainerStatus(accountId: number) {
+  return api<{ ok: boolean; account_id: number; has_pawn: boolean; jobs: TrainerStatus[]; total: number; source: DataSource }>(
+    `/api/gameplay/players/trainer-status?account_id=${accountId}`)
+}
 export function unlockTrainer(accountId: number, job: string) {
   return api<WriteResult>('/api/gameplay/players/unlock-trainer', {
     method: 'POST', body: JSON.stringify({ account_id: accountId, job }),
