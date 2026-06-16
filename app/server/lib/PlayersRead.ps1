@@ -480,6 +480,91 @@ function Get-DuneTrainerCatalog {
     return @{ ok = $true; trainers = $list; total = $list.Count }
 }
 
+# ----- §1.13a GET /players/trainer-status?account_id=<id> -----------------
+# Per-character skill-tree ownership. Reads the pawn's ModuleData
+# (FLevelComponent.1.ModuleData, keyed by (TagName="...")) plus its
+# StarterSkillTreeTag, then reports per trainer job how many of the trainer's
+# skill blocks and how many of the full job module set the character already
+# has - so the UI can show present values instead of a blind Unlock button.
+# Offline-safe (pure DB read); reports everything locked when no pawn exists.
+function Get-DunePlayerTrainerStatusLive {
+    param([string]$Ip, [long]$AccountId)
+    if ($AccountId -le 0) { return @{ ok = $false; error = 'account_id is required.' } }
+    $tags = Get-DuneTagsData
+
+    $build = {
+        param([hashtable]$Owned, [string]$StarterJob, [bool]$HasPawn)
+        $jobs = @()
+        foreach ($job in $script:DuneTrainerJobOrder) {
+            if (-not $tags.jobSkillBlocks.ContainsKey($job)) { continue }
+            $blocks = @($tags.jobSkillBlocks[$job] | ForEach-Object { [string]$_ })
+            $modules = if ($tags.jobAllModules.ContainsKey($job)) { @($tags.jobAllModules[$job] | ForEach-Object { [string]$_ }) } else { @() }
+            $blocksOwned = 0
+            foreach ($b in $blocks) { if ($Owned.ContainsKey($b)) { $blocksOwned++ } }
+            $modulesOwned = 0
+            foreach ($mm in $modules) { if ($Owned.ContainsKey($mm)) { $modulesOwned++ } }
+            $jobs += @{
+                job           = [string]$job
+                name          = [string]$script:DuneTrainerJobLabels[$job]
+                blocks_owned  = $blocksOwned
+                blocks_total  = $blocks.Count
+                modules_owned = $modulesOwned
+                modules_total = $modules.Count
+                unlocked      = ($blocks.Count -gt 0 -and $blocksOwned -ge $blocks.Count)
+                is_starter    = ($StarterJob -eq $job)
+            }
+        }
+        return @{ ok = $true; account_id = $AccountId; has_pawn = $HasPawn; jobs = $jobs; total = $jobs.Count }
+    }
+
+    $pawnID = Get-DunePlayerPawnFromAccount -Ip $Ip -AccountId $AccountId
+    if ($pawnID -le 0) { return (& $build @{} '' $false) }
+
+    # Pull every ModuleData key + the starter skill-tree tag in one read.
+    $sql = @"
+SELECT 'module'::text AS kind, jsonb_object_keys(md) AS val
+FROM (
+    SELECT fe.components->'FLevelComponent'->1->'ModuleData' AS md
+    FROM dune.fgl_entities fe
+    JOIN dune.actor_fgl_entities afe ON afe.entity_id = fe.entity_id
+    WHERE afe.actor_id = $pawnID::bigint AND afe.slot_name = 'DuneCharacter'
+    LIMIT 1
+) s
+WHERE md IS NOT NULL
+UNION ALL
+SELECT 'starter'::text AS kind,
+       fe.components->'FLevelComponent'->1->'StarterSkillTreeTag'->>'TagName' AS val
+FROM dune.fgl_entities fe
+JOIN dune.actor_fgl_entities afe ON afe.entity_id = fe.entity_id
+WHERE afe.actor_id = $pawnID::bigint AND afe.slot_name = 'DuneCharacter';
+"@
+    $r = Invoke-DuneSqlQuery -Ip $Ip -Sql $sql -ReadOnly $true -MaxRows 5000 -TimeoutSec 30
+    if (-not $r.ok) { return @{ ok = $false; error = $r.error } }
+    $rows = ConvertTo-DuneRowMaps -Result $r
+
+    # ModuleData keys look like (TagName="Skills.Key.Swordmaster1"); strip to the
+    # inner tag name so they can be matched against the job block / module lists.
+    $owned = @{}
+    $starterTag = ''
+    foreach ($row in $rows) {
+        $kind = [string]$row['kind']
+        $val = [string]$row['val']
+        if ($kind -eq 'starter') { if ($val) { $starterTag = $val }; continue }
+        if (-not $val) { continue }
+        $m = [regex]::Match($val, '"([^"]+)"')
+        $tag = if ($m.Success) { $m.Groups[1].Value } else { $val }
+        $owned[$tag] = $true
+    }
+
+    $starterJob = ''
+    if ($starterTag -and $starterTag.StartsWith('Skills.Key.') -and $starterTag.EndsWith('1')) {
+        $sj = $starterTag.Substring(11)
+        $starterJob = $sj.Substring(0, $sj.Length - 1)
+    }
+
+    return (& $build $owned $starterJob $true)
+}
+
 # ----- §1.14 GET /players/main-quests -------------------------------------
 # Main-quest story lines. Each is a DA_MQ_<Root> subtree in journey_node_tags;
 # completing the root node flips every DA_MQ_<Root>.* journey row complete and

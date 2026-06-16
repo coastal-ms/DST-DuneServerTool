@@ -17,6 +17,28 @@ Register-DuneRoute -Method POST -Path '/api/maps/fix-partitions' -Handler {
     }
 }
 
+# Static route — restart (delete) the pod(s) backing a map's ServerSet so the
+# operator recreates them fresh. Body: { key: 'survival' | 'deepdesert' }.
+# POST so there's no collision with the GET /api/maps/{key} param route.
+Register-DuneRoute -Method POST -Path '/api/maps/restart-pods' -Handler {
+    param($req, $res, $routeParams, $body)
+    try {
+        $key = [string](Get-DuneBodyValue -Body $body -Name 'key')
+        if ([string]::IsNullOrWhiteSpace($key)) {
+            Write-DuneError -Response $res -Status 400 -Message 'key is required (survival or deepdesert).'
+            return
+        }
+        $result = Invoke-WithDuneLock -Name 'ondemand-maps' -Script { Restart-DuneMapPods -Key $key }
+        if (-not $result.ok -and $result.status) {
+            Write-DuneError -Response $res -Status $result.status -Message $result.message
+            return
+        }
+        Write-DuneJson -Response $res -Body $result
+    } catch {
+        Write-DuneError -Response $res -Status 500 -Message $_.Exception.Message
+    }
+}
+
 Register-DuneRoute -Method GET -Path '/api/maps/{key}' -Handler {
     param($req, $res, $routeParams, $body)
     try {
