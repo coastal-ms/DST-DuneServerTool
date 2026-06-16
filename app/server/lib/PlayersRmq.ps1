@@ -203,7 +203,8 @@ function Invoke-DunePlayerGiveItemLive {
         [string] $FlsId,
         [Parameter(Mandatory)] [string] $Template,
         [int]    $Quantity = 1,
-        [double] $Durability = 1.0
+        [double] $Durability = 1.0,
+        [bool]   $AllowOverflow = $false
     )
     if ($Quantity -le 0)   { $Quantity = 1 }
     if ($Durability -le 0) { $Durability = 1.0 }
@@ -211,7 +212,10 @@ function Invoke-DunePlayerGiveItemLive {
     $tv = Test-DuneValidGiveTemplate -TemplateId $Template
     if (-not $tv.ok) { return @{ ok = $false; error = $tv.error } }
 
-    if ($ActorId -gt 0) {
+    # When AllowOverflow is set we skip the capacity guard and let the game's
+    # native AddItemToInventory ServerCommand handle the overflow — it drops the
+    # items that don't fit onto the ground next to the online player.
+    if ($ActorId -gt 0 -and -not $AllowOverflow) {
         $cap = Test-DuneInventoryCapacity -Ip $Ip -PawnId $ActorId -Template $Template -Quantity $Quantity
         if (-not $cap.ok) { return $cap }
     }

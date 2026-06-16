@@ -121,6 +121,10 @@ export type GameConfigField = {
   max?: number
   quoted?: boolean
   clientApply?: boolean
+  // When set, this field is a scalar member of a nested struct (e.g. the
+  // LandsraadSettings Data=(...) box) rather than a flat INI key. Members that
+  // share a (file, section, structKey) are written into one struct line.
+  structKey?: string
   options?: GameConfigFieldOption[]
 }
 

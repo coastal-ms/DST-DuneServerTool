@@ -418,7 +418,7 @@ interface ActionDef {
   liveOnly?: boolean      // requires player to be online (RMQ path)
   offlineOnly?: boolean   // requires player to be offline (DB write the game caches in memory)
   fields?: ActionField[]
-  custom?: 'give-item' | 'whisper' | 'spawn-vehicle' | 'quick-presets' | 'vehicle-kit' | 'give-package'
+  custom?: 'give-item' | 'whisper' | 'spawn-vehicle' | 'quick-presets' | 'vehicle-kit' | 'give-package' | 'cheat-scripts' | 'dev-scripts'
   confirm?: (p: Player) => string  // confirm message; if returns '' no prompt
   doubleConfirm?: boolean // also requires a typed "i acknowledge" prompt inside run()
   rowNote?: string        // short italic note shown inline on the row heading
@@ -520,9 +520,12 @@ const ACTIONS: ActionDef[] = [
     run: (p, v) => teleportToPlayer(p.id, Number(v.target) || 0) },
   { id: 'whisper', group: 'Live', label: 'Whisper', icon: 'MessageCircle', liveOnly: true, custom: 'whisper',
     run: () => Promise.resolve({ message: '' }) },
-  { id: 'cheat-script', group: 'Live', label: 'Cheat Script', icon: 'Terminal', liveOnly: true,
-    fields: [{ key: 'script', label: 'Cheat command', type: 'text', placeholder: 'ce God' }],
-    run: (p, v) => cheatScript({ actor_id: p.id }, String(v.script || '').trim()) },
+  { id: 'cheat-script', group: 'Live', label: 'Cheat Scripts', icon: 'Terminal', liveOnly: true, custom: 'cheat-scripts',
+    rowNote: 'Fire a server cheat script — loadouts, XP, unlock skills/abilities. Online only',
+    run: () => Promise.resolve({ message: '' }) },
+  { id: 'dev-scripts', group: 'Live', label: 'Dev / Perf Scripts', icon: 'FlaskConical', liveOnly: true, custom: 'dev-scripts',
+    rowNote: 'Developer performance-test harnesses (hitch tests). Playtest-only, online only',
+    run: () => Promise.resolve({ message: '' }) },
 
   // ----- Identity -----
   { id: 'rename', group: 'Identity', label: 'Rename Character', icon: 'PenLine',
@@ -730,9 +733,9 @@ function ActionRow({ def, player, busy, hasLiveSession, open, danger, onToggle, 
         <div className="border-t border-border p-3">
           {def.custom === 'give-item' ? (
             <GiveItemForm busy={busy} submitLabel={def.label}
-              onSubmit={(tpl, qty, qual) => runAction(def, () => giveItem(player.id, tpl, qty, qual))}
-              onSubmitTierSet={(tpl, qty) => runAction(def, async () => {
-                for (let q = 0; q <= 5; q++) await giveItem(player.id, tpl, qty, q)
+              onSubmit={(tpl, qty, qual, overflow) => runAction(def, () => giveItem(player.id, tpl, qty, qual, overflow))}
+              onSubmitTierSet={(tpl, qty, overflow) => runAction(def, async () => {
+                for (let q = 0; q <= 5; q++) await giveItem(player.id, tpl, qty, q, overflow)
                 return { message: `Gave ${tpl} Mk1–Mk6 (x${qty} each) to ${player.name}.` }
               })} />
           ) : def.custom === 'whisper' ? (
@@ -740,11 +743,23 @@ function ActionRow({ def, player, busy, hasLiveSession, open, danger, onToggle, 
               onSubmit={msg => runAction(def, () => chatWhisper(String(player.id), msg))} />
           ) : def.custom === 'spawn-vehicle' || def.custom === 'vehicle-kit' ? (
             <VehicleKitForm busy={busy}
-              onSubmit={veh => runAction(def, async () => {
+              onSubmit={(veh, overflow) => runAction(def, async () => {
                 const parts = [...veh.kit, ...veh.unique, VEHICLE_KIT_FUEL_TEMPLATE, VEHICLE_KIT_TORCH_TEMPLATE]
-                for (const tpl of parts) await giveItem(player.id, tpl, 1, 0)
+                for (const tpl of parts) await giveItem(player.id, tpl, veh.qty?.[tpl] ?? 1, 0, overflow)
                 const count = veh.kit.length + veh.unique.length
                 return { message: `Gave ${veh.label} kit — ${count} part${count === 1 ? '' : 's'} + Large Fuel Cell + Welding Torch Mk5 to ${player.name}.` }
+              })} />
+          ) : def.custom === 'cheat-scripts' ? (
+            <CheatScriptForm busy={busy}
+              onSubmit={name => runAction(def, async () => {
+                await cheatScript({ actor_id: player.id }, name)
+                return { message: `Sent cheat script "${name}" to ${player.name}.` }
+              })} />
+          ) : def.custom === 'dev-scripts' ? (
+            <DevScriptForm busy={busy}
+              onSubmit={name => runAction(def, async () => {
+                await cheatScript({ actor_id: player.id }, name)
+                return { message: `Sent dev script "${name}" to ${player.name}.` }
               })} />
           ) : def.custom === 'quick-presets' ? (
             <QuickPresetsForm busy={busy}
@@ -771,14 +786,15 @@ function ActionRow({ def, player, busy, hasLiveSession, open, danger, onToggle, 
 // wrapper — ActionRow provides the container.
 function GiveItemForm({ busy, submitLabel, onSubmit, onSubmitTierSet }: {
   busy: boolean; submitLabel: string
-  onSubmit: (tpl: string, qty: number, qual: number) => void
-  onSubmitTierSet: (tpl: string, qty: number) => void
+  onSubmit: (tpl: string, qty: number, qual: number, allowOverflow: boolean) => void
+  onSubmitTierSet: (tpl: string, qty: number, allowOverflow: boolean) => void
 }) {
   const [giveTpl, setGiveTpl]   = useState('')
   const [giveName, setGiveName] = useState('')
   const [giveQty, setGiveQty]   = useState('1')
   const [giveQual, setGiveQual] = useState('0')
   const [gradeable, setGradeable] = useState(false)
+  const [overflow, setOverflow] = useState(false)
   return (
     <div className="space-y-3">
       <ItemPicker label="Item — type to search by name or template id"
@@ -799,18 +815,41 @@ function GiveItemForm({ busy, submitLabel, onSubmit, onSubmitTierSet }: {
             className="w-full px-3 py-2 rounded-lg bg-surface-2 border border-border text-text text-sm focus:outline-none focus:ring-2 focus:ring-ibad focus:border-ibad/50" />
         </div>
       </div>
+      <OverflowToggle checked={overflow} disabled={busy} onChange={setOverflow} />
       <button className="btn-primary w-full" disabled={busy || !isValidTemplateId(giveTpl)}
-        onClick={() => onSubmit(giveTpl.trim(), Number(giveQty) || 1, Number(giveQual) || 0)}>
+        onClick={() => onSubmit(giveTpl.trim(), Number(giveQty) || 1, Number(giveQual) || 0, overflow)}>
         {busy ? <Icon name="Loader2" size={13} className="animate-spin" /> : <Icon name="Check" size={13} />} {submitLabel}
       </button>
       {gradeable && (
         <button className="btn-secondary w-full" disabled={busy || !isValidTemplateId(giveTpl)}
           title="Gives one of this item at every grade, Mk1 through Mk6"
-          onClick={() => onSubmitTierSet(giveTpl.trim(), Number(giveQty) || 1)}>
+          onClick={() => onSubmitTierSet(giveTpl.trim(), Number(giveQty) || 1, overflow)}>
           {busy ? <Icon name="Loader2" size={13} className="animate-spin" /> : <Icon name="Layers" size={13} />} Give whole tier set (Mk1-Mk6)
         </button>
       )}
     </div>
+  )
+}
+
+// Shared "drop overflow to the ground" toggle. When checked, the give skips
+// DST's inventory-capacity guard so the game's native AddItemToInventory command
+// handles a full backpack by dropping the excess on the ground. Online players
+// only — offline (SQL) gives can't drop to ground, so the flag is ignored there.
+function OverflowToggle({ checked, disabled, onChange }: {
+  checked: boolean; disabled: boolean; onChange: (v: boolean) => void
+}) {
+  return (
+    <label className="flex items-start gap-2 text-xs text-text-muted cursor-pointer select-none">
+      <input type="checkbox" checked={checked} disabled={disabled}
+        onChange={e => onChange(e.target.checked)}
+        className="mt-0.5 accent-ibad" />
+      <span>
+        <span className="text-text">Allow overflow (drop to ground)</span>
+        <span className="block text-[11px] text-text-dim">
+          If the inventory is full, drop the items that don't fit on the ground next to the player. Online players only.
+        </span>
+      </span>
+    </label>
   )
 }
 
@@ -1019,11 +1058,12 @@ function GivePackageForm({ busy, playerName, onGive }: {
 // chassis/modules. Shared by both the "Spawn Vehicle" and "Give Vehicle Kit"
 // actions, which call the same handler.
 function VehicleKitForm({ busy, onSubmit }: {
-  busy: boolean; onSubmit: (veh: VehicleTemplate) => void
+  busy: boolean; onSubmit: (veh: VehicleTemplate, allowOverflow: boolean) => void
 }) {
   const kitVehicles = useMemo(() => VEHICLE_CATALOG.filter(v => v.kit.length > 0), [])
   const [vid, setVid] = useState(kitVehicles[0]?.id ?? '')
   const [names, setNames] = useState<Record<string, string>>({})
+  const [overflow, setOverflow] = useState(false)
   const veh = kitVehicles.find(v => v.id === vid) || kitVehicles[0]
   const selectCls = 'w-full px-3 py-2 rounded-lg bg-surface-2 border border-border text-text text-sm focus:outline-none focus:ring-2 focus:ring-ibad focus:border-ibad/50'
 
@@ -1045,6 +1085,8 @@ function VehicleKitForm({ busy, onSubmit }: {
   if (!veh) return <div className="text-sm text-text-muted">No vehicles with part kits available.</div>
 
   const label = (tpl: string) => names[tpl] || tpl
+  const qtyOf = (tpl: string) => veh.qty?.[tpl] ?? 1
+  const qtySuffix = (tpl: string) => qtyOf(tpl) > 1 ? ` ×${qtyOf(tpl)}` : ''
 
   return (
     <div className="space-y-3">
@@ -1062,12 +1104,12 @@ function VehicleKitForm({ busy, onSubmit }: {
         <ul className="space-y-0.5 text-text-muted">
           {veh.kit.map(tpl => (
             <li key={tpl} className="flex items-center gap-1.5">
-              <Icon name="Cog" size={12} className="shrink-0 text-text-dim" /> {label(tpl)}
+              <Icon name="Cog" size={12} className="shrink-0 text-text-dim" /> {label(tpl)}{qtySuffix(tpl)}
             </li>
           ))}
           {veh.unique.map(tpl => (
             <li key={tpl} className="flex items-center gap-1.5 text-ibad">
-              <Icon name="Sparkles" size={12} className="shrink-0" /> {label(tpl)}
+              <Icon name="Sparkles" size={12} className="shrink-0" /> {label(tpl)}{qtySuffix(tpl)}
             </li>
           ))}
           <li className="flex items-center gap-1.5 text-amber-200/90">
@@ -1078,10 +1120,104 @@ function VehicleKitForm({ busy, onSubmit }: {
           </li>
         </ul>
       </div>
+      <OverflowToggle checked={overflow} disabled={busy} onChange={setOverflow} />
       <button className="btn-primary w-full" disabled={busy}
-        onClick={() => onSubmit(veh)}>
+        onClick={() => onSubmit(veh, overflow)}>
         {busy ? <Icon name="Loader2" size={13} className="animate-spin" /> : <Icon name="Truck" size={13} />} Give Vehicle Kit
       </button>
+    </div>
+  )
+}
+
+// Cheat-script panel. Buttons fire named server cheat scripts (CheatScript
+// ServerCommand) for the online player — loadouts, XP, skill/ability unlocks.
+// The named scripts are defined server-side in the game's [CheatScript.*] INI;
+// DST can only invoke ones the server ships. These are transcribed from the
+// Dune: Awakening PLAYTEST server, so they may be absent / no-ops on a retail
+// dedicated server (see the disclaimer). A freeform box sends any other name.
+const CHEAT_SCRIPTS: { name: string; label: string; desc: string; icon: string; group: string }[] = [
+  { name: 'PlaytestSetup',      label: 'Playtest Setup',         desc: 'Full loadout — resets progression, refills, grants a large weapon/armor/consumable kit, awards XP, unlocks skills (items by display name).', icon: 'PackagePlus', group: 'Loadout & Progression' },
+  { name: 'PlaytestSetupAdmin', label: 'Playtest Setup (Admin)', desc: 'Same as Playtest Setup but items are referenced by class string only.', icon: 'PackagePlus', group: 'Loadout & Progression' },
+  { name: 'AwardPlayerXP',      label: 'Award Player XP',        desc: 'Grants 10,000 XP in each of the three categories.', icon: 'Star', group: 'Loadout & Progression' },
+  { name: 'UnlockAllSkills',    label: 'Unlock All Skills',      desc: 'Sets every key skill module and capstone to level 1.', icon: 'Sparkles', group: 'Loadout & Progression' },
+  { name: 'UnlockAllAbilities', label: 'Unlock All Abilities',   desc: 'Sets every ability module to level 1.', icon: 'Sparkles', group: 'Loadout & Progression' },
+  { name: 'LeaveMeAlone',       label: 'Leave Me Alone',         desc: 'Clears nearby threats and disables environmental hazards (NPCs, sandstorms, worms).', icon: 'ShieldOff', group: 'Utility' },
+]
+
+// Dev/perf-test harnesses, kept on a separate action row.
+const DEV_SCRIPTS: { name: string; label: string; desc: string; icon: string }[] = [
+  { name: 'StartHitchVehicleTest', label: 'Start Hitch Test', desc: 'Dev/perf harness — forces frame hitches and unsteady FPS.', icon: 'Activity' },
+  { name: 'StopHitchVehicleTest',  label: 'Stop Hitch Test',  desc: 'Reverts the hitch/FPS performance test.', icon: 'Activity' },
+]
+
+function PlaytestDisclaimer() {
+  return (
+    <div className="rounded-lg border border-warning/40 bg-warning/10 px-3 py-2 text-xs text-warning flex items-start gap-2">
+      <Icon name="TriangleAlert" size={14} className="shrink-0 mt-0.5" />
+      <span>
+        These scripts come from the Dune: Awakening <strong>Playtest</strong> server and are defined server-side. On a
+        retail dedicated server they may be absent and have <strong>no effect</strong>. Online players only.
+      </span>
+    </div>
+  )
+}
+
+function ScriptButton({ s, busy, onSubmit }: {
+  s: { name: string; label: string; desc: string; icon: string }; busy: boolean; onSubmit: (name: string) => void
+}) {
+  return (
+    <button type="button" disabled={busy} onClick={() => onSubmit(s.name)} title={s.desc}
+      className="w-full flex items-start gap-2 px-2.5 py-1.5 rounded border border-border bg-surface-2 hover:bg-surface-3 text-left text-sm text-text-muted hover:text-text transition-colors disabled:opacity-60 disabled:cursor-wait">
+      <Icon name={s.icon} size={14} className="mt-0.5 shrink-0 text-text-dim" />
+      <span className="flex-1 min-w-0">
+        <span className="block text-text">{s.label}</span>
+        <span className="block text-[11px] text-text-dim">{s.desc}</span>
+      </span>
+    </button>
+  )
+}
+
+function CheatScriptForm({ busy, onSubmit }: { busy: boolean; onSubmit: (name: string) => void }) {
+  const [freeform, setFreeform] = useState('')
+  const groups = ['Loadout & Progression', 'Utility']
+  const inputCls = 'w-full px-3 py-2 rounded-lg bg-surface-2 border border-border text-text text-sm focus:outline-none focus:ring-2 focus:ring-ibad focus:border-ibad/50'
+  return (
+    <div className="space-y-3">
+      <PlaytestDisclaimer />
+      {groups.map(g => (
+        <div key={g}>
+          <div className="text-[11px] uppercase tracking-wider text-text-dim mb-1.5">{g}</div>
+          <div className="space-y-1.5">
+            {CHEAT_SCRIPTS.filter(s => s.group === g).map(s => (
+              <ScriptButton key={s.name} s={s} busy={busy} onSubmit={onSubmit} />
+            ))}
+          </div>
+        </div>
+      ))}
+      <div>
+        <label className="block text-[11px] uppercase tracking-wider text-text-dim mb-1">Other script name</label>
+        <div className="flex gap-2">
+          <input type="text" value={freeform} disabled={busy} placeholder="e.g. PlaytestSetup"
+            className={inputCls} onChange={e => setFreeform(e.target.value)} />
+          <button type="button" className="btn-primary shrink-0" disabled={busy || !freeform.trim()}
+            onClick={() => onSubmit(freeform.trim())}>
+            {busy ? <Icon name="Loader2" size={13} className="animate-spin" /> : <Icon name="Send" size={13} />} Send
+          </button>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+function DevScriptForm({ busy, onSubmit }: { busy: boolean; onSubmit: (name: string) => void }) {
+  return (
+    <div className="space-y-3">
+      <PlaytestDisclaimer />
+      <div className="space-y-1.5">
+        {DEV_SCRIPTS.map(s => (
+          <ScriptButton key={s.name} s={s} busy={busy} onSubmit={onSubmit} />
+        ))}
+      </div>
     </div>
   )
 }
