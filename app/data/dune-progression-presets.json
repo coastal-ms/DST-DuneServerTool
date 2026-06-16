@@ -24,7 +24,7 @@
     "nodes": [
       "DA_MQ_FindTheFremen"
     ],
-    "description": "All 7 trials, the Sietch, and Epilogue. Unlocks the Fremkit (Stillsuit, Thumper, Cryss Knife, etc.) and completes Act 1."
+    "description": "All 7 trials, the Sietch, and Epilogue. Unlocks the Fremkit (Stillsuit, Thumper, Cryss Knife, etc.) and completes Act 1. Does not unlock active-ability slots - those come from the separate Spice Agony progression, which this preset does not grant."
   },
   {
     "id": "act1_complete",
