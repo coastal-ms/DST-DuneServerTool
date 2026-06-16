@@ -211,8 +211,8 @@ Describe 'DuneGameConfigSchema: only proven m_Global*Multiplier keys remain' -Ta
 
     # 2026-06-15: live in-game testing proved m_GlobalDamageToNpcsMultiplier and
     # m_GlobalXPMultiplier are NO-OPS via UserGame.ini on self-hosted (UE parses
-    # the key but no gameplay system reads it). By Neil's call the no-op /
-    # unverified multipliers were pulled, leaving only the two intentionally kept
+    # the key but no gameplay system reads it). The no-op / unverified multipliers
+    # were pulled, leaving only the two intentionally kept
     # (Building Damage + Inventory Weight). See issue #225. Do NOT re-add the
     # removed keys without a fresh in-game test showing a real effect.
     It 'no longer exposes the multipliers that were removed' {
