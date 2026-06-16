@@ -511,6 +511,8 @@ export interface InventoryItem {
   quality: number
   durability: string
   max_durability: string
+  water_amount: string
+  water_type: string
 }
 
 export interface SpecTrack {
@@ -588,6 +590,69 @@ export function setItemDurability(itemId: number, max: number, current: number, 
   return api<WriteResult>('/api/gameplay/players/set-item-durability', {
     method: 'POST',
     body: JSON.stringify({ item_id: itemId, max, current, decayed }),
+  })
+}
+
+export function setItemWater(itemId: number, amount: number) {
+  return api<WriteResult>('/api/gameplay/players/set-item-water', {
+    method: 'POST',
+    body: JSON.stringify({ item_id: itemId, amount }),
+  })
+}
+
+// ---------------------------------------------------------------------------
+// Landsraad house-contribution admin (#224).
+// ---------------------------------------------------------------------------
+export interface LandsraadHouse {
+  task_id: number
+  board_index: number
+  house_name: string
+  display_name: string
+  goal_amount: number
+  completed: boolean
+  winning_faction_id: number
+}
+export interface LandsraadIniSetting {
+  key: string
+  label: string
+  help: string
+  value: string | null
+}
+export interface LandsraadOverviewResponse {
+  term_id: number
+  houses: LandsraadHouse[]
+  settings: LandsraadIniSetting[]
+  settings_error?: string | null
+  source: DataSource
+  liveError?: string
+}
+export interface LandsraadContribution {
+  task_id: number
+  house_name: string
+  display_name: string
+  amount: number
+}
+export interface LandsraadContributionsResponse {
+  term_id: number
+  contributions: LandsraadContribution[]
+  source: DataSource
+  liveError?: string
+}
+
+export function getLandsraadOverview(demo?: boolean) {
+  return api<LandsraadOverviewResponse>(`/api/gameplay/landsraad/overview${qs({ demo: demo ? 1 : undefined })}`)
+}
+
+export function getLandsraadPlayerContributions(controllerId: number, demo?: boolean) {
+  return api<LandsraadContributionsResponse>(`/api/gameplay/landsraad/player-contributions${qs({
+    controller: controllerId, demo: demo ? 1 : undefined,
+  })}`)
+}
+
+export function setLandsraadContribution(controllerId: number, taskId: number, amount: number) {
+  return api<WriteResult>('/api/gameplay/landsraad/set-contribution', {
+    method: 'POST',
+    body: JSON.stringify({ controller_id: controllerId, task_id: taskId, amount }),
   })
 }
 

@@ -111,7 +111,8 @@ Register-DuneRoute -Method PUT -Path '/api/gameconfig' -Handler {
                 if ($schemaMap.ContainsKey($key)) { if (-not $sec) { $sec = $schemaMap[$key].section }; if (-not $file) { $file = $schemaMap[$key].file } }
             }
             if (-not $sec -or -not $file) { continue }
-            $structured.Add(@{ file = $file; section = $sec; key = $key; value = "$($u.value)" })
+            $rm = (Test-DuneGameConfigValueIsDefault -Key $key -Value "$($u.value)")
+            $structured.Add(@{ file = $file; section = $sec; key = $key; value = "$($u.value)"; remove = $rm })
         }
     } else {
         # Schema-keyed object form: resolve section/file from the schema.
@@ -119,7 +120,8 @@ Register-DuneRoute -Method PUT -Path '/api/gameconfig' -Handler {
         foreach ($k in $keys) {
             if (-not $schemaMap.ContainsKey($k)) { continue }
             $v = if ($updates -is [hashtable]) { $updates[$k] } else { $updates.$k }
-            $structured.Add(@{ file = $schemaMap[$k].file; section = $schemaMap[$k].section; key = $k; value = "$v" })
+            $rm = (Test-DuneGameConfigValueIsDefault -Key $k -Value "$v")
+            $structured.Add(@{ file = $schemaMap[$k].file; section = $schemaMap[$k].section; key = $k; value = "$v"; remove = $rm })
         }
     }
 
@@ -193,6 +195,39 @@ Register-DuneRoute -Method GET -Path '/api/gameconfig/backups' -Handler {
         }
     } catch {
         Write-DuneError -Response $res -Status 500 -Message "Game config backup list failed: $($_.Exception.Message)"
+    }
+}
+
+# POST /api/gameconfig/backups/delete — delete selected DST backup files.
+# Body: { paths: ["<full path>.dstbak-<ts>", ...] }. Paths are validated
+# server-side to the .dstbak pattern next to the live INI files. 503 w/o VM.
+Register-DuneRoute -Method POST -Path '/api/gameconfig/backups/delete' -Handler {
+    param($req, $res, $routeParams, $body)
+    $ctx = Get-DuneGameConfigContext
+    if (-not $ctx.ok) {
+        Write-DuneError -Response $res -Status $ctx.status -Message $ctx.message
+        return
+    }
+    $paths = New-Object 'System.Collections.Generic.List[string]'
+    if ($body -is [hashtable]) {
+        $raw = $body['paths']
+        if ($raw -is [System.Collections.IEnumerable] -and -not ($raw -is [string])) {
+            foreach ($p in $raw) { $s = "$p".Trim(); if ($s) { $paths.Add($s) } }
+        }
+    }
+    if ($paths.Count -eq 0) {
+        Write-DuneError -Response $res -Status 400 -Message 'No backup paths supplied.'
+        return
+    }
+    try {
+        $r = Remove-DuneGameConfigBackups -Ip $ctx.ip -Paths $paths.ToArray()
+        Write-DuneJson -Response $res -Body @{
+            ok      = $true
+            deleted = $r.deleted
+            results = $r.results
+        }
+    } catch {
+        Write-DuneError -Response $res -Status 500 -Message "Game config backup delete failed: $($_.Exception.Message)"
     }
 }
 
