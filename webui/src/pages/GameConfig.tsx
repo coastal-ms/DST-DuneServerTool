@@ -43,6 +43,10 @@ type ClientMismatch = {
   section: string
   serverValue: string
   clientValue: string | null
+  // True when this entry belongs to a structurally-incomplete client struct box
+  // (a stripped "stub" — see clientMismatches). Drives the "your client is
+  // missing part of a settings block" notice, distinct from a plain value diff.
+  structural?: boolean
 }
 
 const SANDWORM_ENABLED_KEY = 'sandworm.dune.Enabled'
@@ -222,17 +226,61 @@ export function GameConfig() {
     } catch { /* clipboard may be unavailable; the snippet is still shown */ }
   }, [clientSnippet])
 
+  // Schema struct groups (file||section||structKey) -> member field keys. Used to
+  // detect a structurally-incomplete client struct box, e.g. a stripped
+  // LandsraadSettings Data=(...) stub that's missing members the game ships. A
+  // UE struct override REPLACES the whole box, so a stub silently drops every
+  // member it omits back to a built-in default — without ever differing on a
+  // value the admin customised, so the plain value detector below can't see it.
+  const structMemberGroups = useMemo(() => {
+    const groups = new Map<string, { file: string; section: string; structKey: string; keys: string[] }>()
+    if (!schema) return groups
+    for (const cat of schema) {
+      for (const f of cat?.fields ?? []) {
+        if (!f?.clientApply || !f.key || !f.structKey) continue
+        const id = `${f.file}||${f.section}||${f.structKey}`
+        const g = groups.get(id) ?? { file: f.file, section: f.section, structKey: f.structKey, keys: [] }
+        g.keys.push(f.key)
+        groups.set(id, g)
+      }
+    }
+    return groups
+  }, [schema])
+
   // Client-mirror mismatch detector. For every ClientApply field the admin has
   // CUSTOMISED on the server (value present and != default), compare the server's
   // effective value against the player's local client Game.ini. Any that differ
   // (or are missing client-side) won't take full effect until mirrored locally.
+  //
+  // Plus a STRUCTURAL pass: when a client struct box is a partial stub (some
+  // members present, some missing), surface every member that's missing or
+  // differs — even ones at server default — so clicking Fix rewrites the box
+  // whole (the server-side apply reseeds the full struct). This catches a
+  // stripped LandsraadSettings box that the value-only pass would miss because
+  // the missing members sit at default and so never register as customised.
   const clientMismatches = useMemo<ClientMismatch[]>(() => {
     if (!schema || !cfg || !clientInfo || !clientInfo.exists) return []
+    // Struct groups that are a PARTIAL stub client-side: at least one member
+    // present AND at least one missing. A complete box (all present) is healthy;
+    // an entirely-absent box is "not applied yet" (handled by the value path
+    // for any customised members), not a stub — only the partial case is drift.
+    const stubGroups = new Set<string>()
+    for (const [id, g] of structMemberGroups) {
+      let present = 0
+      let missing = 0
+      for (const mk of g.keys) {
+        const v = clientInfo.effectiveByKey?.[mk]
+        if (v === undefined || v === null) missing++
+        else present++
+      }
+      if (present > 0 && missing > 0) stubGroups.add(id)
+    }
     const out: ClientMismatch[] = []
     for (const cat of schema) {
       for (const f of cat?.fields ?? []) {
         if (!f?.clientApply || !f.key) continue
-        if (!isCustomized(cfg, f)) continue
+        const groupId = f.structKey ? `${f.file}||${f.section}||${f.structKey}` : null
+        const inStub = groupId ? stubGroups.has(groupId) : false
         const serverValue = currentValue(cfg, f)
         // Client value: prefer the flat section||key, but fall back to the by-key
         // map so struct members (e.g. LandsraadSettings Data=(...) scalars) — which
@@ -243,12 +291,22 @@ export function GameConfig() {
           ? clientInfo.effectiveByKey?.[f.key]
           : flat
         const clientValue = raw === undefined || raw === null ? null : String(raw)
+        if (inStub) {
+          if (clientValue !== null && valuesEqual(clientValue, serverValue)) continue
+          out.push({ key: f.key, label: f.label, section: f.section, serverValue, clientValue, structural: true })
+          continue
+        }
+        if (!isCustomized(cfg, f)) continue
         if (clientValue !== null && valuesEqual(clientValue, serverValue)) continue
         out.push({ key: f.key, label: f.label, section: f.section, serverValue, clientValue })
       }
     }
     return out
-  }, [schema, cfg, clientInfo])
+  }, [schema, cfg, clientInfo, structMemberGroups])
+
+  // True when any mismatch comes from a stripped/incomplete client struct box —
+  // drives the stronger "your client is missing part of a settings block" copy.
+  const hasStructuralDrift = useMemo(() => clientMismatches.some(m => m.structural), [clientMismatches])
 
   // INI snippet of the SERVER values for the mismatched keys (manual-merge / share).
   const mismatchSnippet = useMemo(() => {
@@ -913,7 +971,9 @@ export function GameConfig() {
           className="card p-3 mb-4 w-full text-left border-warning/40 bg-warning/10 text-warning text-sm flex items-center gap-2 hover:bg-warning/15"
         >
           <Icon name="MonitorSmartphone" size={14} />
-          {clientMismatches.length} client setting{clientMismatches.length === 1 ? '' : 's'} {clientMismatches.length === 1 ? "doesn't" : "don't"} match the server — review &amp; fix
+          {hasStructuralDrift
+            ? <>Your client is missing part of a settings block — review &amp; fix</>
+            : <>{clientMismatches.length} client setting{clientMismatches.length === 1 ? '' : 's'} {clientMismatches.length === 1 ? "doesn't" : "don't"} match the server — review &amp; fix</>}
         </button>
       )}
       {mismatchOpen && clientMismatches.length > 0 && (
@@ -929,14 +989,30 @@ export function GameConfig() {
               <Icon name="MonitorSmartphone" size={18} className="text-warning mt-0.5 shrink-0" />
               <div className="flex-1 min-w-0">
                 <div className="font-semibold text-text mb-1">
-                  Your client config doesn&apos;t match the server
+                  {hasStructuralDrift
+                    ? 'Your client is missing part of a settings block'
+                    : 'Your client config doesn\u2019t match the server'}
                 </div>
+                {hasStructuralDrift && (
+                  <p className="text-warning mb-2 flex items-start gap-1.5">
+                    <Icon name="AlertTriangle" size={14} className="mt-0.5 shrink-0" />
+                    <span>
+                      Your local client{' '}
+                      <span className="font-mono break-all">{clientInfo?.path ?? 'Game.ini'}</span>{' '}
+                      has an <strong>incomplete</strong> settings block — it carries only some of the
+                      entries the game expects, so the rest silently fall back to built-in defaults
+                      in-game (a stripped struct from an older write). Fixing rewrites the whole block.
+                    </span>
+                  </p>
+                )}
                 <p className="text-text-muted mb-3">
                   {clientMismatches.length === 1 ? 'This setting is' : 'These settings are'} read by both the
                   server and the game client. Your server uses {clientMismatches.length === 1 ? 'this value' : 'these values'},
                   but your local client{' '}
                   <span className="font-mono break-all">{clientInfo?.path ?? 'Game.ini'}</span>{' '}
-                  {clientMismatches.length === 1 ? 'has a different one' : 'has different ones'}. Until they match,
+                  {hasStructuralDrift
+                    ? 'is missing or differs on them'
+                    : (clientMismatches.length === 1 ? 'has a different one' : 'has different ones')}. Until they match,
                   the change won&apos;t take full effect for you in-game.
                 </p>
 

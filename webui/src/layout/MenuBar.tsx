@@ -8,7 +8,7 @@ import { getAutostartState, setAutostartEnabled, type AutostartState } from '../
 import { getConsoleState, setConsoleVisible, type ConsoleState } from '../api/console'
 import { isLocalViewer } from '../util/viewer'
 
-type MenuKey = NavGroup | 'help'
+type MenuKey = NavGroup | 'help' | 'coffee'
 
 type Props = {
   sidebarCollapsed: boolean
@@ -336,6 +336,32 @@ export function MenuBar({ sidebarCollapsed, onToggleSidebar }: Props) {
                 {sidebarCollapsed ? 'Expand Sidebar' : 'Collapse Sidebar'}
               </span>
             </button>
+          </div>
+        )}
+      </div>
+
+      {/* "Thanks for the Coffee" — supporter credits, sits immediately to the
+          right of Help. The entries are plain credit lines, not links. */}
+      <div className="relative">
+        <button
+          type="button"
+          onClick={() => setOpen(open === 'coffee' ? null : 'coffee')}
+          onMouseEnter={() => { if (open !== null) setOpen('coffee') }}
+          className={`px-3 h-7 inline-flex items-center gap-1.5 rounded-md transition-colors ${
+            open === 'coffee'
+              ? 'bg-surface-3 text-text'
+              : 'text-text-muted hover:text-text hover:bg-surface-2/80'
+          }`}
+        >
+          <Icon name="Coffee" size={14} />
+          <span>Thanks for the Coffee</span>
+        </button>
+        {open === 'coffee' && (
+          <div className="absolute left-0 top-full mt-1 min-w-[220px] bg-surface border border-border rounded-xl p-1 shadow-xl shadow-black/40 z-50">
+            <div className="flex items-center gap-2 px-2.5 py-1.5 rounded text-sm text-text-muted">
+              <Icon name="Heart" size={14} className="text-ibad shrink-0" />
+              <span className="flex-1">Decker (@decker177)</span>
+            </div>
           </div>
         )}
       </div>

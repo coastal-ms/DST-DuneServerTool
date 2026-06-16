@@ -13,6 +13,52 @@ here cover everything those tags shipped.
 
 ## [Unreleased]
 
+## [12.2.1] - 2026-06-16
+
+### Added
+
+- **"Thanks for the Coffee" menu.** A new dropdown sits just to the right of Help
+  in the top menu bar, crediting supporters — starting with Decker (@decker177).
+- **Cheat Scripts panel (Players → Live).** Buttons fire the named server cheat
+  scripts for an online player — Playtest Setup, Award Player XP, Unlock All
+  Skills/Abilities, Leave Me Alone — plus a freeform box for any other script
+  name. Developer performance harnesses (Start/Stop Hitch Test) live on a
+  separate **Dev / Perf Scripts** row. Both carry a disclaimer that the scripts
+  originate from the Playtest server and may have no effect on a retail server.
+- **"Allow overflow (drop to ground)" toggle on item/kit gives.** A new checkbox
+  on the Give Item and Give Vehicle Kit forms skips DST's inventory-capacity
+  guard so a full backpack no longer blocks the give — the game's native command
+  drops whatever doesn't fit on the ground next to the player. Online players
+  only (offline SQL gives can't drop to ground, so the flag is ignored there).
+
+### Fixed
+
+- **Give Vehicle Kit now delivers the correct parts and quantities.** The kit
+  contents were corrected so each vehicle assembles properly: Sandbike Tread ×3;
+  Buggy Tread ×4 plus the Focused Buggy Cutteray Mk6; Sandcrawler drops the base
+  Tread in favour of Dampened Sandcrawler Treads ×2; Scout Ornithopter swaps its
+  Wing for Albatross Wing Module Mk6 ×4; Assault Ornithopter swaps its Wing for
+  Hummingbird Wing Module Mk6 ×6; Carrier Ornithopter swaps its Wing for Roc
+  Carrier Wing ×8 and now delivers Tail Hull ×2 and Side Hull ×2. The kit action
+  and its preview gained per-part quantity support.
+- **Landsraad Game Config edits no longer wipe the rest of the LandsraadSettings
+  struct.** When UserGame.ini had no prior struct, DST seeded a minimal
+  `Data=(...)` with only the edited members, dropping board layouts / messages /
+  contract settings the game needs. It now seeds the full DefaultGame.ini struct
+  first and edits members in place. It also heals legacy stub boxes: if the live
+  file already contains a stripped `Data=(...)` (written by an older DST build
+  that dropped most members), DST rebuilds it from the full default struct,
+  preserves any values already customized in the file, then applies the edit —
+  so the ~35 missing members come back instead of staying lost.
+- **Game Config now warns when your client's settings block is incomplete.** The
+  client-vs-server mismatch popup previously only compared settings you'd
+  customized, so a stripped client `LandsraadSettings Data=(...)` stub (missing
+  most members and silently running on game defaults) raised no warning because
+  the missing members sat at default. DST now detects a partial struct box —
+  some members present, some missing — and surfaces "your client is missing part
+  of a settings block" with the missing entries listed; "Fix my client config"
+  rewrites the whole block via the struct-heal path.
+
 ## [12.2.0] - 2026-06-15
 
 ### Added

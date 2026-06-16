@@ -291,7 +291,17 @@ Register-DuneRoute -Method PUT -Path '/api/gameconfig/client/apply' -Handler {
         return
     }
     try {
-        $r = Save-DuneGameConfigClient -Updates $updates.ToArray() -Dir $dir
+        # Seed-from-defaults needs DefaultGame.ini (a live pod read); only pay for
+        # it when a Landsraad-style struct member is actually being applied, and
+        # tolerate failure so non-struct client edits still apply offline.
+        $defaultsRaw = ''
+        if (Test-DuneUpdatesHaveStructMember -Updates $updates.ToArray()) {
+            try {
+                $ctx = Get-DuneGameConfigContext
+                if ($ctx.ok) { $defaultsRaw = "$((Get-DuneGameConfigDefaults -Ip $ctx.ip).game)" }
+            } catch { $defaultsRaw = '' }
+        }
+        $r = Save-DuneGameConfigClient -Updates $updates.ToArray() -Dir $dir -DefaultsRaw $defaultsRaw
         $client = Get-DuneGameConfigClient -Dir $dir
         Write-DuneJson -Response $res -Body @{
             ok      = $true

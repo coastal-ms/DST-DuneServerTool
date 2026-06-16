@@ -556,9 +556,9 @@ export function giveSolari(controllerId: number, amount: number) {
   })
 }
 
-export function giveItem(pawnId: number, template: string, qty: number, quality: number) {
+export function giveItem(pawnId: number, template: string, qty: number, quality: number, allowOverflow = false) {
   return api<WriteResult>('/api/gameplay/players/give-item', {
-    method: 'POST', body: JSON.stringify({ pawn_id: pawnId, template, qty, quality }),
+    method: 'POST', body: JSON.stringify({ pawn_id: pawnId, template, qty, quality, allow_overflow: allowOverflow }),
   })
 }
 
