@@ -102,14 +102,6 @@ browser and keeps the server running in the background.
 
 ### New in v12.0.20–v12.0.24
 
-- **Fill Base Water** Player Action (v12.0.21, Inventory section, next to Fill
-  Water) — tops up all water containers in a player's **own** bases (Water
-  Cisterns, Windtraps) plus their carried fillables in one click. Routes
-  through the per-player `UpdateAllWaterFillables` game command keyed by the
-  player's FLS id, so it only ever affects **that** player's own containers —
-  never other players' bases. Online-only: offline players are rejected with
-  a clear message and the button shows a **LIVE REQ'D** badge while they're
-  offline.
 - **Help → Show / Hide backend console** (v12.0.24) — the first UI path that
   un-minimizes and restores the backend PowerShell console window once tray
   mode has hidden it. Backed by a new loopback-only `/api/console` route that
