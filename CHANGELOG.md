@@ -13,6 +13,26 @@ here cover everything those tags shipped.
 
 ## [Unreleased]
 
+## [12.3.2] - 2026-06-16
+
+### Changed
+
+- **Find the Fremen (Trials of Aql) preset now grants the full Sietch journey-tag
+  set.** Verified against a completed live character, the preset was missing five
+  in-Sietch interaction flags. Added `Journey.TheSietch.Interactions.Lesson1Completed`,
+  `Lesson2Completed`, `Lesson3Completed`, `DeathStillInteracted`, and
+  `SafeInteracted` so the preset reproduces every Find-the-Fremen journey tag a
+  real completed character holds. (#236)
+
+### Fixed
+
+- **Returning-Player Award / character export: `trailing junk after numeric
+  literal` error.** Grant / Dismiss Returning-Player Award, Delete Account, and
+  character export resolved a player's Funcom `"user"` id (a hex string such as
+  `7A1728E90111EDDB`) and injected it into SQL **unquoted**, so PostgreSQL 15+
+  parsed it as a malformed numeric literal and the write failed. The id is now
+  wrapped in single quotes in all four queries. (#239)
+
 ## [12.3.1] - 2026-06-16
 
 ### Fixed

@@ -552,7 +552,7 @@ SET account = jsonb_set(
         COALESCE(a.account, '{}'::jsonb),
         '{returningPlayerAward,eligible}', to_jsonb(true)),
     '{returningPlayerAward,dismissed}', to_jsonb(false))
-WHERE "user" = $funcom;
+WHERE "user" = '$funcom';
 "@
     $r = Invoke-DuneSqlQuery -Ip $Ip -Sql $sql -ReadOnly $false -MaxRows 1 -TimeoutSec 15
     if (-not $r.ok) { return @{ ok = $false; error = $r.error } }
@@ -571,7 +571,7 @@ SET account = jsonb_set(
         COALESCE(a.account, '{}'::jsonb),
         '{returningPlayerAward,eligible}', to_jsonb(false)),
     '{returningPlayerAward,dismissed}', to_jsonb(true))
-WHERE "user" = $funcom;
+WHERE "user" = '$funcom';
 "@
     $r = Invoke-DuneSqlQuery -Ip $Ip -Sql $sql -ReadOnly $false -MaxRows 1 -TimeoutSec 15
     if (-not $r.ok) { return @{ ok = $false; error = $r.error } }
@@ -592,7 +592,7 @@ function Invoke-DunePlayerDeleteAccount {
 DO `$`$
 DECLARE
     v_account_id bigint := $AccountId;
-    v_funcom text := $funcom;
+    v_funcom text := '$funcom';
 BEGIN
     -- character actors
     DELETE FROM dune.actor_fgl_entities afe

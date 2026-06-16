@@ -241,7 +241,7 @@ function Get-DunePlayerExportLive {
     $resolve = Get-DuneRawFuncomId -Ip $Ip -AccountId $AccountId
     if (-not $resolve.ok) { return @{ ok = $false; error = $resolve.error } }
     $funcom = ConvertTo-DuneSqlString $resolve.funcom_id
-    $sql = "SELECT dune.character_transfer_export($funcom)::text AS export_json;"
+    $sql = "SELECT dune.character_transfer_export('$funcom')::text AS export_json;"
     $r = Invoke-DuneSqlQuery -Ip $Ip -Sql $sql -ReadOnly $true -MaxRows 1 -TimeoutSec 60
     if (-not $r.ok) { return @{ ok = $false; error = $r.error } }
     $rows = ConvertTo-DuneRowMaps -Result $r

@@ -213,6 +213,13 @@
     "DA_MQ_FindTheFremen.TheSietch.SietchLocationParent.EscapeTheSietch": [
       "Journey.TheSietch.Progression.Completed"
     ],
+    "DA_MQ_FindTheFremen.TheSietch.SietchLocationParent.SietchInteractions": [
+      "Journey.TheSietch.Interactions.Lesson1Completed",
+      "Journey.TheSietch.Interactions.Lesson2Completed",
+      "Journey.TheSietch.Interactions.Lesson3Completed",
+      "Journey.TheSietch.Interactions.DeathStillInteracted",
+      "Journey.TheSietch.Interactions.SafeInteracted"
+    ],
     "DA_MQ_TheGreatConvention.CalledToACount.DiscussionWithFenring.TalkToCountFenring": [
       "Journey.Chapter2.CalledToACount.Completed"
     ],
