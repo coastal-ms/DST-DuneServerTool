@@ -63,6 +63,13 @@ export function listGameConfigBackups() {
   return api<GameConfigBackupListResponse>('/api/gameconfig/backups')
 }
 
+export function deleteGameConfigBackups(paths: string[]) {
+  return api<{ ok: boolean; deleted: number; results: Array<{ path: string; ok: boolean; reason?: string }> }>(
+    '/api/gameconfig/backups/delete',
+    { method: 'POST', body: JSON.stringify({ paths }) },
+  )
+}
+
 // --- Local client config (admin's own machine) -----------------------------
 
 export function getGameConfigClient() {

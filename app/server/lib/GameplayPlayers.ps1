@@ -53,7 +53,9 @@ ORDER BY a.id
 $script:DunePlayerInventorySql = @'
 SELECT i.id, i.template_id, i.stack_size, COALESCE(i.quality_level, 0) AS quality_level,
        COALESCE((i.stats->'FItemStackAndDurabilityStats'->1->>'CurrentDurability'), 'N/A') AS durability,
-       COALESCE((i.stats->'FItemStackAndDurabilityStats'->1->>'MaxDurability'), 'N/A')     AS max_durability
+       COALESCE((i.stats->'FItemStackAndDurabilityStats'->1->>'MaxDurability'), 'N/A')     AS max_durability,
+       COALESCE((i.stats->'FFillableItemStats'->1->>'CurrentAmount'), 'N/A')               AS water_amount,
+       COALESCE((i.stats->'FFillableItemStats'->1->>'FillableType'), '')                   AS water_type
 FROM dune.items i
 JOIN dune.inventories inv ON i.inventory_id = inv.id
 WHERE inv.actor_id = {0}::bigint
@@ -124,6 +126,8 @@ function Get-DunePlayerDetailLive {
             quality        = (ConvertTo-DuneInt $r['quality_level'])
             durability     = [string]$r['durability']
             max_durability = [string]$r['max_durability']
+            water_amount   = [string]$r['water_amount']
+            water_type     = [string]$r['water_type']
         }
     }
     $specs = @()
@@ -328,6 +332,42 @@ RETURNING i.id::text AS item_id;
     return @{ ok = $true; message = "Set item $ItemId durability to Max=$mv / Current=$cv / DecayedMax=$dv." }
 }
 
+# Per-item water editor. Writes FFillableItemStats[1].CurrentAmount verbatim for
+# any item carrying that block (water canteens/literjons + stillsuit hydration).
+# Capacity is cooked into the item template, NOT stored per-item, so there is no
+# max field to write — only the current amount. Rejects negatives, NaN and
+# infinities. Items without the fillable block are left untouched (no-op).
+# IMPORTANT: the map pod caches inventory in RAM and flushes it back to Postgres
+# on its periodic save tick, so a value written here will NOT appear in-game (and
+# may be overwritten) until that map's pod / the battlegroup is restarted. The UI
+# surfaces this caveat.
+function Invoke-DunePlayerSetItemWater {
+    param([string]$Ip, [long]$ItemId, [double]$Amount)
+    if ($ItemId -le 0) { return @{ ok = $false; error = 'item_id is required.' } }
+    if ([double]::IsNaN($Amount) -or [double]::IsInfinity($Amount)) {
+        return @{ ok = $false; error = 'amount must be a finite number.' }
+    }
+    if ($Amount -lt 0) { return @{ ok = $false; error = 'amount must be >= 0.' } }
+    $wv = Format-DuneFloatForSql -Value $Amount
+
+    $sql = @"
+UPDATE dune.items i
+SET stats = jsonb_set(i.stats,
+        '{FFillableItemStats,1,CurrentAmount}', to_jsonb($wv::float8), true)
+WHERE i.id = $ItemId::bigint
+  AND i.stats ? 'FFillableItemStats'
+  AND i.stats->'FFillableItemStats'->1->>'FillableType' = 'Water'
+RETURNING i.id::text AS item_id;
+"@
+    $res = Invoke-DuneSqlQuery -Ip $Ip -Sql $sql -ReadOnly $false -MaxRows 1 -TimeoutSec 30
+    if (-not $res.ok) { return @{ ok = $false; error = $res.error } }
+    $affected = @(ConvertTo-DuneRowMaps -Result $res).Count
+    if ($affected -eq 0) {
+        return @{ ok = $true; message = "Item $ItemId is not a water container — nothing changed." }
+    }
+    return @{ ok = $true; message = "Set item $ItemId water to $wv. Restart the map pod / battlegroup for it to take effect in-game." }
+}
+
 # Give item (give-item): stack onto a matching backpack stack or insert a new one.
 # Single data-modifying CTE so it runs atomically in one psql call. New rows must
 # stamp acquisition_time with the current epoch — the game treats acquisition_time=0
@@ -399,12 +439,13 @@ function Get-DunePlayerDetailDemo {
     return @{
         ok = $true
         inventory = @(
-            [ordered]@{ id=70001; template_id='Stillsuit_T4'; name='Stillsuit (Mk IV)'; kind='item'; stack_size=1; quality=3; durability='842.0'; max_durability='1000.0' }
-            [ordered]@{ id=70002; template_id='Spice_Melange'; name='Spice Melange'; kind='item'; stack_size=1200; quality=0; durability='N/A'; max_durability='N/A' }
-            [ordered]@{ id=70003; template_id='Maula_Pistol'; name='Maula Pistol'; kind='item'; stack_size=1; quality=4; durability='310.0'; max_durability='400.0' }
-            [ordered]@{ id=70004; template_id='Emote_AtreSalute_01'; name='Atreides Salute'; kind='emote'; stack_size=1; quality=0; durability='N/A'; max_durability='N/A' }
-            [ordered]@{ id=70005; template_id='Emote_Wave_01'; name='Wave'; kind='emote'; stack_size=1; quality=0; durability='N/A'; max_durability='N/A' }
-            [ordered]@{ id=70006; template_id='D_ContractSmugglerDocuments'; name='Smuggler Documents'; kind='contract'; stack_size=1; quality=0; durability='N/A'; max_durability='N/A' }
+            [ordered]@{ id=70001; template_id='Stillsuit_T4'; name='Stillsuit (Mk IV)'; kind='item'; stack_size=1; quality=3; durability='842.0'; max_durability='1000.0'; water_amount='420.0'; water_type='' }
+            [ordered]@{ id=70002; template_id='Spice_Melange'; name='Spice Melange'; kind='item'; stack_size=1200; quality=0; durability='N/A'; max_durability='N/A'; water_amount='N/A'; water_type='' }
+            [ordered]@{ id=70003; template_id='Maula_Pistol'; name='Maula Pistol'; kind='item'; stack_size=1; quality=4; durability='310.0'; max_durability='400.0'; water_amount='N/A'; water_type='' }
+            [ordered]@{ id=70004; template_id='Emote_AtreSalute_01'; name='Atreides Salute'; kind='emote'; stack_size=1; quality=0; durability='N/A'; max_durability='N/A'; water_amount='N/A'; water_type='' }
+            [ordered]@{ id=70005; template_id='Emote_Wave_01'; name='Wave'; kind='emote'; stack_size=1; quality=0; durability='N/A'; max_durability='N/A'; water_amount='N/A'; water_type='' }
+            [ordered]@{ id=70006; template_id='D_ContractSmugglerDocuments'; name='Smuggler Documents'; kind='contract'; stack_size=1; quality=0; durability='N/A'; max_durability='N/A'; water_amount='N/A'; water_type='' }
+            [ordered]@{ id=70007; template_id='HighCapacityLiterjon_05'; name='High-Capacity Literjon'; kind='item'; stack_size=1; quality=2; durability='N/A'; max_durability='N/A'; water_amount='2500.0'; water_type='Water' }
         )
         specs = @(
             [ordered]@{ track_type='Trooper'; xp=44182; level=100.0 }

@@ -13,6 +13,151 @@ here cover everything those tags shipped.
 
 ## [Unreleased]
 
+### Added
+
+- **Delete INI backups from the "View backups" screen.** The backups dialog in
+  Game Config now has a checkbox per backup, Select-all, and a "Delete (N)"
+  button to remove multiple `.dstbak` snapshots from the server at once. Backed
+  by `POST /api/gameconfig/backups/delete`, which validates every path to the
+  `.dstbak` pattern next to the live INI files so it can't remove anything else.
+
+### Changed
+
+- **Client-config apply now says exactly what it did.** When DST writes your
+  client `Game.ini` (Apply to my client / Fix my client config), the result
+  message now distinguishes settings **written** (added/changed) from keys
+  **removed** (reset to default / deprecated-key cleanup), instead of a vague
+  "applied N settings", so you can tell what changed.
+
+### Added
+
+- **"Restart Server on Cycle End" toggle in Game Config → Storm Cycle.** Exposes
+  `m_bShouldRestartServerOnCycleEnd` (`CoriolisSubsystem`, default On) so you can
+  control whether the dedicated server restarts itself when a Coriolis cycle
+  (season) ends, without hand-editing the INI.
+
+- **New Game Config → Landsraad section.** Exposes the Landsraad settings Funcom
+  stores as scalar members inside the single `[/Script/DuneSandbox.LandsraadSettings]`
+  `Data=(...)` struct (task goal amount, term retention, decree/voting counts,
+  voting-period timings, contract limits, control points, player-voting and
+  territory-control toggles, reveal/progress frequencies). A struct-member engine
+  edits each member in place and preserves the nested members (messages, board
+  layouts, curves, widget paths) byte-for-byte, so it's written exactly where the
+  engine reads it.
+
+- **New Players → Landsraad section (per-House contribution editor).** Pick a
+  player, see the current term's 25 Houses with that player's present
+  contribution, and set the contribution to any House to an arbitrary amount.
+  Writes `landsraad_task_player_contributions` and recomputes the House's faction
+  + guild aggregates so totals stay consistent. Also surfaces the read-only
+  `[LandsraadSettings]` values for context. (Discord request, #224.)
+
+- **New Game Config → Hydration section.** `Hydration Enabled`
+  (`m_bHydrationEnabled`) and `Biome Tier Update Rate`
+  (`m_BiomeTierUpdateRateSeconds`), both client-applied. The hydration/thirst
+  master toggle was never exposed before.
+
+- **Many real gameplay toggles from Funcom's stock config are now exposed.** All
+  are present in the shipped `DefaultGame.ini` (unlike the removed no-op
+  multipliers). New **Loot & Death** category (Players Drop Loot on Death /
+  Defeat, Players Lose Items on Death, NPCs Drop Loot). New **Encounters**
+  category (Random Encounters, Contracts Enabled). Added to existing categories:
+  Coriolis Storm Does Damage, Sandstorm Debris, Time of Day Cycle (Storm Cycle);
+  Spice Addiction Enabled, Spice Vision Enabled (Spice); Worm Danger Zones, Giant
+  Worm System, Worm Hibernation (Sandworm); Drop Items on Cross-Map Respawn
+  (Survival); and the master `Landsraad Enabled` toggle.
+
+### Fixed
+
+- **Landsraad settings now correctly apply client-side.** The client `Game.ini`
+  carries the same `[/Script/DuneSandbox.LandsraadSettings] Data=(...)` struct, so
+  these settings need to be mirrored on the client. They are now flagged
+  client-applied, and the client writer folds the edits into the client's `Data`
+  struct (it previously only handled flat keys, which would have written them to
+  the wrong place).
+
+## [12.2.0] - 2026-06-15
+
+### Added
+
+- **"Default" button on every Game Config field.** Each setting now has a
+  one-click reset to its Funcom default. Resetting to default doesn't just blank
+  the input — on save the key is **removed** from the DST-managed block in
+  `UserGame.ini`/`UserEngine.ini` (and from the client `Game.ini` when the field
+  is client-applied), so default values never clutter the INI files. A managed
+  section whose keys are all reset is dropped entirely, leaving no bare
+  `[section]` header. The button is disabled when the field already equals its
+  default.
+
+- **Per-item water editor on Players → Inventory.** Water containers
+  (literjons / canteens — anything whose item data carries an
+  `FFillableItemStats` block with `FillableType = "Water"`) now show a water
+  badge in the inventory list and expand to an inline editor where you can set
+  the stored amount directly. Backed by `POST /api/gameplay/players/set-item-water`
+  (writes `FFillableItemStats[1].CurrentAmount`). Gear that merely holds
+  hydration (stillsuits) is deliberately excluded — only true containers are
+  editable, enforced on both the UI and the SQL write. The editor carries a
+  prominent warning that the new value won't appear in-game until the map pod /
+  battlegroup is restarted, because the live server caches inventory in memory
+  and flushes it back to the database on its save tick.
+
+### Removed
+
+- **Removed eight `m_Global*Multiplier` Game Config options proven / assumed to
+  be no-ops on self-hosted.** Live in-game testing on 2026-06-15 confirmed that
+  Damage-to-NPCs and XP multipliers set through `UserGame.ini` have **zero**
+  effect (the UE INI parser accepts the key — no "Unknown property" warning —
+  but no gameplay system reads it; same class of problem as the cooked-DataTable
+  BaseBackupTool restriction). Removed: Global Health, Damage to NPCs, Damage to
+  Players, XP, Progression Speed, Fame, Harvest Amount, and Harvest Health
+  multipliers, along with the now-empty **Progression** and **Harvesting**
+  categories. This re-applies the v12.0.14 stance after v12.1.1 restored them on
+  the Hexaspark ServerConfig reference, which lists them as real Floats but does
+  not reflect the current self-hosted build. Building Damage and Inventory Weight
+  multipliers are kept. See issue #225.
+
+- **DST now scrubs the removed no-op multiplier keys out of its managed INI
+  block on the next save.** Removing a key from the schema would otherwise orphan
+  it — the managed-block writer preserves keys it no longer recognises, so any
+  value a user had previously set (e.g. `m_GlobalXPMultiplier`) would linger in
+  the file forever. DST now actively deletes the eight deprecated multiplier keys
+  from its own managed block whenever it writes, without touching the user's own
+  (non-managed) INI sections.
+
+### Changed
+
+- **Game Config no longer auto-backs-up on every save.** DST used to write a
+  `UserGame.ini.dstbak-<timestamp>` (and a client-side copy) on *every* save,
+  which piled up dozens of backup files on the server PVC and in the local
+  client config folder. Backups are now **manual only** — use the existing
+  **Backup settings** button to create a restore point. The save-success message
+  reminds you to do so before big changes. Also scrubs the deprecated multiplier
+  keys from the client `Game.ini` (not just the server file) so a player's local
+  config stays in sync and doesn't keep orphaned no-op values.
+
+### Fixed
+
+- **Game Config now reads and writes INI settings in a section-consistent way.**
+  Two related bugs are fixed: (1) on load, a setting whose value lived in a
+  section other than the one DST's schema declares showed as the Funcom
+  **default** instead of its real value (e.g. Coriolis Cycle Length read `7`
+  when the file actually had `36500` under a different section). DST now falls
+  back to a by-key lookup so the page reflects what's actually in
+  `UserGame.ini`/`UserEngine.ini`. (2) On save or reset, DST wrote/removed the
+  key only in its declared section, so a stale copy in another section could
+  shadow the change and the edit appeared to do nothing. DST now guarantees a
+  schema key exists in **exactly one** section — writing or resetting it scrubs
+  every other managed-block copy — so "change it in Game Config" and "remove it
+  from Game Config" are always reflected consistently in the INI.
+
+- **Stale `webui` API tests for `giveScrip`, `giveFactionRep`, `setFactionTier`,
+  and `spawnVehicle` now match the live request contract.** The endpoints had
+  been refactored (scrip/faction writes switched to `actor_id` + numeric
+  `faction_id` + `delta`; vehicle spawn to `class_name` + flattened `x/y/z`) but
+  the tests still asserted the old `account_id` / `faction` name / `template` /
+  nested `location` payloads, so the gameplay API suite had 4 red tests. Tests
+  updated to the current contract; full `webui` suite is green.
+
 ## [12.1.4] - 2026-06-15
 
 Hotfix for the donation button shipped in v12.1.3: the hardcoded

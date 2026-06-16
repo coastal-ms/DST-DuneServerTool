@@ -248,6 +248,31 @@ Register-DuneRoute -Method POST -Path '/api/gameplay/players/set-item-durability
     }
 }
 
+# POST /api/gameplay/players/set-item-water  { item_id, amount }
+# Per-item water editor: writes FFillableItemStats[1].CurrentAmount for water
+# canteens/literjons + stillsuit hydration. Items without the fillable block are
+# left untouched (no-op). The value only reflects in-game after the map pod /
+# battlegroup is restarted (pod caches inventory in RAM).
+Register-DuneRoute -Method POST -Path '/api/gameplay/players/set-item-water' -Handler {
+    param($req, $res, $routeParams, $body)
+    try {
+        $iid = Get-DuneBodyInt -Body $body -Name 'item_id'
+        if ($null -eq $iid -or $iid -le 0) { Write-DuneError -Response $res -Status 400 -Message 'item_id is required.'; return }
+        $av = Get-DuneBodyValue -Body $body -Name 'amount'
+        if ($null -eq $av) { Write-DuneError -Response $res -Status 400 -Message 'amount is required.'; return }
+        $amt = 0.0
+        $ci = [System.Globalization.CultureInfo]::InvariantCulture
+        if (-not [double]::TryParse([string]$av, [System.Globalization.NumberStyles]::Float, $ci, [ref]$amt)) {
+            Write-DuneError -Response $res -Status 400 -Message 'amount must be a number.'; return
+        }
+        Invoke-DunePlayerWriteRoute -Response $res -Action { param($ip)
+            Invoke-DunePlayerSetItemWater -Ip $ip -ItemId $iid -Amount $amt
+        }
+    } catch {
+        Write-DuneError -Response $res -Status 500 -Message "Set item water failed: $($_.Exception.Message)"
+    }
+}
+
 # ===========================================================================
 # v11.5.6 — extended player surface routes.
 # ===========================================================================

@@ -207,20 +207,16 @@ PlayerInventoryStartingSize=145
     }
 }
 
-Describe 'DuneGameConfigSchema: m_Global*Multiplier keys restored under DuneGameMode' -Tag 'GameConfig' {
+Describe 'DuneGameConfigSchema: only proven m_Global*Multiplier keys remain' -Tag 'GameConfig' {
 
-    # v12.1.1 restored the 10 m_Global*Multiplier keys after they were dropped
-    # in v12.0.14 on AMP-derived evidence (Icehunter/dune-admin #122/#139). The
-    # Hexaspark community ServerConfig reference (mirrored in our Chroma
-    # `infrastructure` collection under sources `hexaspark`) documents every one
-    # of these keys as a real Float setting under [/Script/DuneSandbox.DuneGameMode]
-    # with a default of 1.0; persistent notes also confirm that scalar
-    # DuneGameMode values from UserGame.ini are applied at pod startup on
-    # self-hosted Funcom k3s (DST's target). m_GlobalBuildingDamageMultiplier in
-    # particular MUST sit under DuneGameMode (Hexaspark places it there) and not
-    # under BuildingSettings, which is where v12.0.13 had it.
-    It 'includes every m_Global*Multiplier key under [/Script/DuneSandbox.DuneGameMode] and flags ClientApply' {
-        $required = @(
+    # 2026-06-15: live in-game testing proved m_GlobalDamageToNpcsMultiplier and
+    # m_GlobalXPMultiplier are NO-OPS via UserGame.ini on self-hosted (UE parses
+    # the key but no gameplay system reads it). The no-op / unverified multipliers
+    # were pulled, leaving only the two intentionally kept
+    # (Building Damage + Inventory Weight). See issue #225. Do NOT re-add the
+    # removed keys without a fresh in-game test showing a real effect.
+    It 'no longer exposes the multipliers that were removed' {
+        $removed = @(
             'm_GlobalHealthMultiplier'
             'm_GlobalDamageToNpcsMultiplier'
             'm_GlobalDamageToPlayersMultiplier'
@@ -229,15 +225,218 @@ Describe 'DuneGameConfigSchema: m_Global*Multiplier keys restored under DuneGame
             'm_GlobalFameMultiplier'
             'm_GlobalHarvestAmountMultiplier'
             'm_GlobalHarvestHealthMultiplier'
-            'm_GlobalBuildingDamageMultiplier'
-            'm_InventoryWeightMultiplier'
         )
-        $byKey = @{}
-        foreach ($f in $script:DuneGameConfigSchema) { $byKey[$f.Key] = $f }
-        foreach ($k in $required) {
-            $byKey.ContainsKey($k) | Should -BeTrue -Because "$k is a real DuneGameMode multiplier and must be exposed"
-            $byKey[$k].Section     | Should -Be '/Script/DuneSandbox.DuneGameMode' -Because "$k belongs in DuneGameMode per Hexaspark"
-            $byKey[$k].ClientApply | Should -BeTrue -Because "$k is read by both server and client; admin's local Game.ini must mirror it"
+        $keys = @{}
+        foreach ($f in $script:DuneGameConfigSchema) { $keys[$f.Key] = $true }
+        foreach ($k in $removed) {
+            $keys.ContainsKey($k) | Should -BeFalse -Because "$k was proven/assumed no-op via UserGame.ini and removed (issue #225)"
         }
+    }
+}
+
+Describe 'GameConfig: reset-to-default removes the key from the INI' -Tag 'GameConfig' {
+
+    It 'ConvertTo-DuneIniManaged drops a managed scalar when remove=$true' {
+        $raw = @"
+[$script:SecBuilding]
+m_BuildingBlueprintMaxExtensions=99
+m_bBuildingRestrictionLimitsEnabled=False
+"@
+        $updates = @(@{ section = $script:SecBuilding; key = 'm_BuildingBlueprintMaxExtensions'; value = '4'; remove = $true })
+        $out = ConvertTo-DuneIniManaged -Raw $raw -Updates $updates -QuotedKeys @{}
+        $out | Should -Not -Match 'm_BuildingBlueprintMaxExtensions'
+        # the untouched key survives
+        $out | Should -Match 'm_bBuildingRestrictionLimitsEnabled'
+    }
+
+    It 'ConvertTo-DuneIniManaged omits a managed section header when all its keys are removed' {
+        $raw = @"
+[$script:SecBuilding]
+m_BuildingBlueprintMaxExtensions=99
+"@
+        $updates = @(@{ section = $script:SecBuilding; key = 'm_BuildingBlueprintMaxExtensions'; value = '4'; remove = $true })
+        $out = ConvertTo-DuneIniManaged -Raw $raw -Updates $updates -QuotedKeys @{}
+        (Get-HeaderCount -Raw $out -Name $script:SecBuilding) | Should -Be 0
+    }
+
+    It 'Set-DuneIniValuesInPlace removes a client-file scalar when remove=$true' {
+        $raw = @"
+[$script:SecInventory]
+PlayerInventoryStartingSize=100
+PlayerInventoryStartingVolumeCapacity=300.0
+"@
+        $out = Set-DuneIniValuesInPlace -Raw $raw `
+            -Updates @(@{ section = $script:SecInventory; key = 'PlayerInventoryStartingSize'; value = '35'; remove = $true }) `
+            -QuotedKeys @{}
+        $out | Should -Not -Match 'PlayerInventoryStartingSize'
+        $out | Should -Match 'PlayerInventoryStartingVolumeCapacity'
+    }
+
+    It 'Test-DuneGameConfigValueIsDefault is numeric/bool aware' {
+        Test-DuneGameConfigValueIsDefault -Key 'm_InventoryWeightMultiplier' -Value '1.0'  | Should -BeTrue
+        Test-DuneGameConfigValueIsDefault -Key 'm_InventoryWeightMultiplier' -Value '1'    | Should -BeTrue
+        Test-DuneGameConfigValueIsDefault -Key 'm_InventoryWeightMultiplier' -Value '2.0'  | Should -BeFalse
+        Test-DuneGameConfigValueIsDefault -Key 'm_bBuildingRestrictionLimitsEnabled' -Value 'true' | Should -BeTrue
+    }
+
+    It 'scrubs deprecated no-op multiplier keys out of the managed block on any save' {
+        $sec = '/Script/DuneSandbox.DuneGameMode'
+        $raw = $script:DstManagedBegin + "`n" +
+               "[$sec]`n" +
+               "m_GlobalXPMultiplier=1000`n" +
+               "m_GlobalHarvestAmountMultiplier=1.1`n" +
+               "m_InventoryWeightMultiplier=0.8`n" +
+               "m_bIsDbWipeEnabled=False`n" +
+               $script:DstManagedEnd + "`n"
+        # An unrelated save (touch a kept key) must still scrub the dead keys.
+        $updates = @(@{ section = $sec; key = 'm_InventoryWeightMultiplier'; value = '0.5' })
+        $out = ConvertTo-DuneIniManaged -Raw $raw -Updates $updates -QuotedKeys @{}
+        $out | Should -Not -Match 'm_GlobalXPMultiplier'
+        $out | Should -Not -Match 'm_GlobalHarvestAmountMultiplier'
+        # kept keys survive
+        $out | Should -Match 'm_InventoryWeightMultiplier'
+        $out | Should -Match 'm_bIsDbWipeEnabled'
+    }
+}
+
+Describe 'GameConfig: single-section-per-key consistency' -Tag 'GameConfig' {
+
+    It 'consolidates a key that exists in two managed sections into the one being written' {
+        $secA = '/Script/DuneSandbox.DuneGameMode'
+        $secB = '/Script/DuneSandbox.SandStormConfig'
+        $raw = $script:DstManagedBegin + "`n" +
+               "[$secA]`n" +
+               "m_CycleDurationInDays=36500`n" +
+               "[$secB]`n" +
+               "m_CycleDurationInDays=36500`n" +
+               $script:DstManagedEnd + "`n"
+        # Write the key to its canonical section (CoriolisSubsystem here). The stale
+        # copies in DuneGameMode + SandStormConfig must be scrubbed so exactly one
+        # copy remains.
+        $sec = '/Script/DuneSandbox.CoriolisSubsystem'
+        $updates = @(@{ section = $sec; key = 'm_CycleDurationInDays'; value = '7' })
+        $out = ConvertTo-DuneIniManaged -Raw $raw -Updates $updates -QuotedKeys @{}
+        $hits = @(($out -replace "`r", '' -split "`n") | Where-Object { $_.Trim() -match '^m_CycleDurationInDays\s*=' })
+        $hits.Count | Should -Be 1
+        $hits[0] | Should -Match '=\s*7\s*$'
+    }
+
+    It 'removing a key strips it from EVERY managed section, not just the declared one' {
+        $secA = '/Script/DuneSandbox.DuneGameMode'
+        $secB = '/Script/DuneSandbox.SandStormConfig'
+        $raw = $script:DstManagedBegin + "`n" +
+               "[$secA]`n" +
+               "m_CycleDurationInDays=36500`n" +
+               "m_bIsDbWipeEnabled=False`n" +
+               "[$secB]`n" +
+               "m_CycleDurationInDays=36500`n" +
+               $script:DstManagedEnd + "`n"
+        $sec = '/Script/DuneSandbox.CoriolisSubsystem'
+        $updates = @(@{ section = $sec; key = 'm_CycleDurationInDays'; value = '7'; remove = $true })
+        $out = ConvertTo-DuneIniManaged -Raw $raw -Updates $updates -QuotedKeys @{}
+        $out | Should -Not -Match 'm_CycleDurationInDays'
+        # an unrelated key in one of those sections survives
+        $out | Should -Match 'm_bIsDbWipeEnabled'
+    }
+
+    It 'Get-DuneIniEffectiveByKey returns last-wins value regardless of section' {
+        $raw = "[/Script/DuneSandbox.DuneGameMode]`n" +
+               "m_CycleDurationInDays=36500`n" +
+               "[/Script/DuneSandbox.SandStormConfig]`n" +
+               "m_CycleDurationInDays=7`n"
+        $byKey = Get-DuneIniEffectiveByKey -Raw $raw
+        $byKey['m_CycleDurationInDays'] | Should -Be '7'
+    }
+}
+
+Describe 'GameConfig: UE struct-member engine (LandsraadSettings Data blob)' -Tag 'GameConfig' {
+
+    BeforeAll {
+        # Real-shape blob: flat scalars mixed with nested members (messages, curve,
+        # quoted widget paths, gameplay tags) that must survive byte-for-byte.
+        $script:LsBlob = 'Data=(m_NumberOfWeeksTermRetention=4,m_TermStartedMessage=(Name="LandsraadTermStarted"),m_bIsPlayerVotingEnabled=True,m_LandsraadProgressFactionBalanceCurve=/Script/Engine.CurveFloat''"/Game/Dune/Systems/Landsraad/Curve_X.Curve_X"'',m_TaskGoalAmount=5000.0,m_ControlPointsPerCycle=2,m_LandsraadContractsNewMarkerGameplayTags=(GameplayTags=((TagName="X"))),m_ControlPointAreaMaterial="/Game/Dune/M.M")'
+    }
+
+    It 'reads only the flat scalar members' {
+        $m = Get-DuneStructScalarMembers -Blob $script:LsBlob
+        $m['m_NumberOfWeeksTermRetention'] | Should -Be '4'
+        $m['m_bIsPlayerVotingEnabled']     | Should -Be 'True'
+        $m['m_TaskGoalAmount']             | Should -Be '5000.0'
+        $m['m_ControlPointsPerCycle']      | Should -Be '2'
+        # nested / quoted members are NOT surfaced as scalars
+        $m.ContainsKey('m_TermStartedMessage')   | Should -BeFalse
+        $m.ContainsKey('m_ControlPointAreaMaterial') | Should -BeFalse
+    }
+
+    It 'updates a scalar member in place and leaves nested members untouched' {
+        $out = Set-DuneStructScalarMember -Blob $script:LsBlob -Key 'm_TaskGoalAmount' -Value '12000.0'
+        $out | Should -Match 'm_TaskGoalAmount=12000\.0'
+        $out | Should -Not -Match 'm_TaskGoalAmount=5000\.0'
+        # nested members preserved verbatim
+        $out | Should -Match 'm_TermStartedMessage=\(Name="LandsraadTermStarted"\)'
+        $out | Should -Match 'GameplayTags=\(\(TagName="X"\)\)'
+        $out | Should -Match 'm_ControlPointAreaMaterial="/Game/Dune/M\.M"'
+    }
+
+    It 'does not over-match a key that is a prefix of the value or other keys' {
+        $out = Set-DuneStructScalarMember -Blob $script:LsBlob -Key 'm_ControlPointsPerCycle' -Value '9'
+        $m = Get-DuneStructScalarMembers -Blob $out
+        $m['m_ControlPointsPerCycle']      | Should -Be '9'
+        $m['m_NumberOfWeeksTermRetention'] | Should -Be '4'
+        $m['m_TaskGoalAmount']             | Should -Be '5000.0'
+    }
+
+    It 'toggles a bool member' {
+        $out = Set-DuneStructScalarMember -Blob $script:LsBlob -Key 'm_bIsPlayerVotingEnabled' -Value 'False'
+        (Get-DuneStructScalarMembers -Blob $out)['m_bIsPlayerVotingEnabled'] | Should -Be 'False'
+    }
+
+    It 'inserts a missing scalar member after the opening paren' {
+        $out = Set-DuneStructScalarMember -Blob $script:LsBlob -Key 'm_NewSetting' -Value '42'
+        (Get-DuneStructScalarMembers -Blob $out)['m_NewSetting'] | Should -Be '42'
+        # still a single well-formed Data=(...) blob
+        $out | Should -Match '^Data=\('
+        $out | Should -Match '\)$'
+    }
+}
+
+Describe 'GameConfig: Landsraad struct fields integrate with read + save' -Tag 'GameConfig' {
+
+    BeforeAll {
+        $script:LsRaw = "[/Script/DuneSandbox.LandsraadSettings]`n" +
+            'Data=(m_NumberOfWeeksTermRetention=4,m_TermStartedMessage=(Name="X"),m_TaskGoalAmount=5000.0,m_bIsPlayerVotingEnabled=True)' + "`n"
+    }
+
+    It 'surfaces Landsraad struct members in effectiveByKey' {
+        $byKey = Get-DuneIniEffectiveByKey -Raw $script:LsRaw
+        $byKey['m_TaskGoalAmount']             | Should -Be '5000.0'
+        $byKey['m_NumberOfWeeksTermRetention'] | Should -Be '4'
+        $byKey['m_bIsPlayerVotingEnabled']     | Should -Be 'True'
+    }
+
+    It 'Convert-DuneStructUpdates folds member edits into one Data update, preserving nested members' {
+        $updates = @(
+            @{ file='game'; section='/Script/DuneSandbox.LandsraadSettings'; key='m_TaskGoalAmount'; value='12000.0' },
+            @{ file='game'; section='/Script/DuneSandbox.LandsraadSettings'; key='m_bIsPlayerVotingEnabled'; value='False' }
+        )
+        $folded = @(Convert-DuneStructUpdates -Raw $script:LsRaw -Updates $updates)
+        # exactly one update, targeting the Data key
+        $folded.Count | Should -Be 1
+        $folded[0].key | Should -Be 'Data'
+        $folded[0].value | Should -Match 'm_TaskGoalAmount=12000\.0'
+        $folded[0].value | Should -Match 'm_bIsPlayerVotingEnabled=False'
+        # nested member preserved
+        $folded[0].value | Should -Match 'm_TermStartedMessage=\(Name="X"\)'
+    }
+
+    It 'keeps non-struct updates separate from struct folding' {
+        $updates = @(
+            @{ file='game'; section='/Script/DuneSandbox.LandsraadSettings'; key='m_TaskGoalAmount'; value='9000.0' },
+            @{ file='game'; section='/Script/DuneSandbox.DuneGameMode'; key='m_WaterConsumptionRate'; value='2.0' }
+        )
+        $folded = @(Convert-DuneStructUpdates -Raw $script:LsRaw -Updates $updates)
+        $folded.Count | Should -Be 2
+        @($folded | Where-Object { $_.key -eq 'Data' }).Count | Should -Be 1
+        @($folded | Where-Object { $_.key -eq 'm_WaterConsumptionRate' }).Count | Should -Be 1
     }
 }

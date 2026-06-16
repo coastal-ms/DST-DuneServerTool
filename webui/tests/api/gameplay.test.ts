@@ -56,20 +56,20 @@ describe('Phase A — currency / progression writes', () => {
     const c = last()
     expect(c.url).toBe('/api/gameplay/players/give-scrip')
     expect(c.method).toBe('POST')
-    expect(c.body).toEqual({ account_id: 42, amount: 1000 })
+    expect(c.body).toEqual({ actor_id: 42, delta: 1000 })
     expect(c.headers['content-type']).toBe('application/json')
     expect(c.headers['accept']).toBe('application/json')
   })
 
   it('giveFactionRep includes faction id + delta', async () => {
     await gp.giveFactionRep(7, 'atreides', -5)
-    expect(last().body).toEqual({ account_id: 7, faction: 'atreides', delta: -5 })
+    expect(last().body).toEqual({ actor_id: 7, faction_id: 1, delta: -5 })
     expect(last().url).toBe('/api/gameplay/players/give-faction-rep')
   })
 
   it('setFactionTier sends tier as a plain number', async () => {
     await gp.setFactionTier(7, 'harkonnen', 12)
-    expect(last().body).toEqual({ account_id: 7, faction: 'harkonnen', tier: 12 })
+    expect(last().body).toEqual({ actor_id: 7, faction_id: 2, tier: 12 })
   })
 
   it('awardCharXp uses pawn_id + delta + default category', async () => {
@@ -239,19 +239,19 @@ describe('Phase G+H — RMQ live commands (PlayerTarget shape)', () => {
   })
 
   it('spawnVehicle copies fls_id/actor_id + optional location', async () => {
-    await gp.spawnVehicle({ target: { fls_id: 'F-x' }, template: 'tpl.ornithopter' })
+    await gp.spawnVehicle({ target: { fls_id: 'F-x' }, className: 'tpl.ornithopter' })
     expect(last().url).toBe('/api/gameplay/vehicles/spawn')
-    expect(last().body).toEqual({ template: 'tpl.ornithopter', fls_id: 'F-x' })
+    expect(last().body).toEqual({ class_name: 'tpl.ornithopter', fls_id: 'F-x' })
 
     await gp.spawnVehicle({
       target: { actor_id: 1 },
-      template: 'tpl.sandbike',
+      className: 'tpl.sandbike',
       location: { x: 1, y: 2, z: 3 },
     })
     expect(last().body).toEqual({
-      template: 'tpl.sandbike',
+      class_name: 'tpl.sandbike',
       actor_id: 1,
-      location: { x: 1, y: 2, z: 3 },
+      x: 1, y: 2, z: 3,
     })
   })
 
@@ -281,6 +281,13 @@ describe('Phase I — tags delta + auto-dispatch fill-water', () => {
     await gp.fillWater(11)
     expect(last().url).toBe('/api/gameplay/players/fill-water')
     expect(last().body).toEqual({ pawn_id: 11 })
+  })
+
+  it('setItemWater posts item_id + amount to set-item-water', async () => {
+    await gp.setItemWater(70007, 2500)
+    expect(last().url).toBe('/api/gameplay/players/set-item-water')
+    expect(last().method).toBe('POST')
+    expect(last().body).toEqual({ item_id: 70007, amount: 2500 })
   })
 })
 
