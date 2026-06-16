@@ -13,6 +13,13 @@ here cover everything those tags shipped.
 
 ## [Unreleased]
 
+## [12.2.3] - 2026-06-16
+
+### Changed
+
+- **"Thanks for the Coffee" menu.** Added Ogmosis (@ogmosis) and boosterfuel
+  (@boosterfuel) to the supporter credits.
+
 ## [12.2.2] - 2026-06-16
 
 ### Changed
