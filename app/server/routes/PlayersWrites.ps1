@@ -233,6 +233,34 @@ Register-DuneRoute -Method POST -Path '/api/gameplay/players/contracts/reverse' 
     }
 }
 
+# POST /api/gameplay/players/unlock-trainer  { account_id, job }
+Register-DuneRoute -Method POST -Path '/api/gameplay/players/unlock-trainer' -Handler {
+    param($req, $res, $routeParams, $body)
+    try {
+        $acc = Get-DuneBodyInt -Body $body -Name 'account_id'
+        $job = [string](Get-DuneBodyValue -Body $body -Name 'job')
+        if ($null -eq $acc -or $acc -le 0) { Write-DuneError -Response $res -Status 400 -Message 'account_id is required.'; return }
+        if (-not $job) { Write-DuneError -Response $res -Status 400 -Message 'job is required.'; return }
+        Invoke-DunePlayerWriteRoute -Response $res -Action { param($ip) Invoke-DunePlayerUnlockTrainer -Ip $ip -AccountId $acc -Job $job }
+    } catch {
+        Write-DuneError -Response $res -Status 500 -Message "Unlock trainer failed: $($_.Exception.Message)"
+    }
+}
+
+# POST /api/gameplay/players/unlock-main-quest  { account_id, quest }
+Register-DuneRoute -Method POST -Path '/api/gameplay/players/unlock-main-quest' -Handler {
+    param($req, $res, $routeParams, $body)
+    try {
+        $acc = Get-DuneBodyInt -Body $body -Name 'account_id'
+        $quest = [string](Get-DuneBodyValue -Body $body -Name 'quest')
+        if ($null -eq $acc -or $acc -le 0) { Write-DuneError -Response $res -Status 400 -Message 'account_id is required.'; return }
+        if (-not $quest) { Write-DuneError -Response $res -Status 400 -Message 'quest is required.'; return }
+        Invoke-DunePlayerWriteRoute -Response $res -Action { param($ip) Invoke-DunePlayerUnlockMainQuest -Ip $ip -AccountId $acc -Quest $quest }
+    } catch {
+        Write-DuneError -Response $res -Status 500 -Message "Unlock main quest failed: $($_.Exception.Message)"
+    }
+}
+
 # POST /api/gameplay/players/grant-job-skills  { account_id, job }
 Register-DuneRoute -Method POST -Path '/api/gameplay/players/grant-job-skills' -Handler {
     param($req, $res, $routeParams, $body)

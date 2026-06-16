@@ -442,3 +442,95 @@ function Get-DuneProgressionPresetsCatalog {
     $cat = Get-DuneProgressionPresetCatalog
     return @{ ok = $true; presets = @($cat); total = @($cat).Count }
 }
+
+# ----- §1.13 GET /players/trainers ----------------------------------------
+# Skill-trainer quest lines. Each job's starting quest line is a set of
+# DA_CT_Trainer_<Job><tier>_<nn> contracts (transcribed into dune-tags.json).
+# Completing them + granting the job skill tree = "unlock trainer".
+$script:DuneTrainerJobOrder = @('Swordmaster', 'Trooper', 'Mentat', 'BeneGesserit', 'Planetologist')
+$script:DuneTrainerJobLabels = @{
+    Swordmaster   = 'Swordmaster'
+    Trooper       = 'Trooper'
+    Mentat        = 'Mentat'
+    BeneGesserit  = 'Bene Gesserit'
+    Planetologist = 'Planetologist'
+}
+
+function Get-DuneTrainerContractIds {
+    param([string]$Job)
+    $tags = Get-DuneTagsData
+    $esc = [regex]::Escape($Job)
+    $ids = @($tags.contractTags.Keys | Where-Object { $_ -match "^DA_CT_Trainer_$esc\d" } | Sort-Object)
+    return $ids
+}
+
+function Get-DuneTrainerCatalog {
+    $tags = Get-DuneTagsData
+    $list = @()
+    foreach ($job in $script:DuneTrainerJobOrder) {
+        if (-not $tags.jobSkillBlocks.ContainsKey($job)) { continue }
+        $ids = Get-DuneTrainerContractIds -Job $job
+        $list += @{
+            job            = [string]$job
+            name           = [string]$script:DuneTrainerJobLabels[$job]
+            contract_count = @($ids).Count
+            skill_count    = @($tags.jobSkillBlocks[$job]).Count
+        }
+    }
+    return @{ ok = $true; trainers = $list; total = $list.Count }
+}
+
+# ----- §1.14 GET /players/main-quests -------------------------------------
+# Main-quest story lines. Each is a DA_MQ_<Root> subtree in journey_node_tags;
+# completing the root node flips every DA_MQ_<Root>.* journey row complete and
+# applies the union of subtree reward tags.
+$script:DuneMainQuestOrder = @(
+    'DA_MQ_ANewBeginning',
+    'DA_MQ_FindTheFremen',
+    'DA_MQ_AssassinsHandbook',
+    'DA_MQ_TheGreatConvention',
+    'DA_MQ_TheGreatConventionPt2'
+)
+$script:DuneMainQuestLabels = @{
+    DA_MQ_ANewBeginning         = 'A New Beginning'
+    DA_MQ_FindTheFremen         = 'Find the Fremen'
+    DA_MQ_AssassinsHandbook     = "Assassin's Handbook"
+    DA_MQ_TheGreatConvention    = 'The Great Convention'
+    DA_MQ_TheGreatConventionPt2 = 'The Great Convention (Pt. 2)'
+}
+
+function Get-DuneMainQuestRoots {
+    $tags = Get-DuneTagsData
+    $counts = @{}
+    foreach ($k in $tags.journeyNodeTags.Keys) {
+        if ($k -notlike 'DA_MQ_*') { continue }
+        $dot = $k.IndexOf('.')
+        $root = if ($dot -gt 0) { $k.Substring(0, $dot) } else { $k }
+        if ($counts.ContainsKey($root)) { $counts[$root]++ } else { $counts[$root] = 1 }
+    }
+    return $counts
+}
+
+function Get-DuneMainQuestCatalog {
+    $counts = Get-DuneMainQuestRoots
+    $list = @()
+    $seen = @{}
+    foreach ($root in $script:DuneMainQuestOrder) {
+        $seen[$root] = $true
+        $name = if ($script:DuneMainQuestLabels.ContainsKey($root)) { $script:DuneMainQuestLabels[$root] } else { $root }
+        $n = if ($counts.ContainsKey($root)) { [int]$counts[$root] } else { 0 }
+        $list += @{ id = [string]$root; name = [string]$name; node_count = $n }
+    }
+    foreach ($root in ($counts.Keys | Sort-Object)) {
+        if ($seen.ContainsKey($root)) { continue }
+        $name = ($root -replace '^DA_MQ_', '') -creplace '(?<!^)([A-Z])', ' $1'
+        $list += @{ id = [string]$root; name = [string]$name.Trim(); node_count = [int]$counts[$root] }
+    }
+    return @{ ok = $true; main_quests = $list; total = $list.Count }
+}
+
+function Test-DuneMainQuestRoot {
+    param([string]$Root)
+    $counts = Get-DuneMainQuestRoots
+    return $counts.ContainsKey($Root)
+}
