@@ -13,6 +13,15 @@ here cover everything those tags shipped.
 
 ## [Unreleased]
 
+### Fixed
+
+- **Cheat Scripts: "script_name is required." error.** The Players → Live →
+  Cheat Scripts form posted the script under the body key `script`, but the
+  `/api/gameplay/players/cheat-script` route reads `script_name`, so every
+  script (Playtest Setup, Award Player XP, Unlock All Skills/Abilities, Leave Me
+  Alone, custom script name, etc.) failed with a 400. The web UI now sends the
+  documented `script_name` field. (#235)
+
 ## [12.3.0] - 2026-06-16
 
 ### Added
