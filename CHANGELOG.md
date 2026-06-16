@@ -13,6 +13,11 @@ here cover everything those tags shipped.
 
 ## [Unreleased]
 
+### Added
+
+- **"Thanks for the Coffee" menu.** A new dropdown sits just to the right of Help
+  in the top menu bar, crediting supporters — starting with Decker (@decker177).
+
 ### Fixed
 
 - **Give Vehicle Kit now delivers the correct parts and quantities.** The kit
