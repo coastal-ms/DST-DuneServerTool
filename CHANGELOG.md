@@ -17,6 +17,12 @@ here cover everything those tags shipped.
 
 - **"Thanks for the Coffee" menu.** A new dropdown sits just to the right of Help
   in the top menu bar, crediting supporters — starting with Decker (@decker177).
+- **Cheat Scripts panel (Players → Live).** Buttons fire the named server cheat
+  scripts for an online player — Playtest Setup, Award Player XP, Unlock All
+  Skills/Abilities, Leave Me Alone — plus a freeform box for any other script
+  name. Developer performance harnesses (Start/Stop Hitch Test) live on a
+  separate **Dev / Perf Scripts** row. Both carry a disclaimer that the scripts
+  originate from the Playtest server and may have no effect on a retail server.
 
 ### Fixed
 
