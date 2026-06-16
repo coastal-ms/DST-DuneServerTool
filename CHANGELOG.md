@@ -13,6 +13,30 @@ here cover everything those tags shipped.
 
 ## [Unreleased]
 
+### Added
+
+- **Per-item water editor on Players → Inventory.** Water containers
+  (literjons / canteens — anything whose item data carries an
+  `FFillableItemStats` block with `FillableType = "Water"`) now show a water
+  badge in the inventory list and expand to an inline editor where you can set
+  the stored amount directly. Backed by `POST /api/gameplay/players/set-item-water`
+  (writes `FFillableItemStats[1].CurrentAmount`). Gear that merely holds
+  hydration (stillsuits) is deliberately excluded — only true containers are
+  editable, enforced on both the UI and the SQL write. The editor carries a
+  prominent warning that the new value won't appear in-game until the map pod /
+  battlegroup is restarted, because the live server caches inventory in memory
+  and flushes it back to the database on its save tick.
+
+### Fixed
+
+- **Stale `webui` API tests for `giveScrip`, `giveFactionRep`, `setFactionTier`,
+  and `spawnVehicle` now match the live request contract.** The endpoints had
+  been refactored (scrip/faction writes switched to `actor_id` + numeric
+  `faction_id` + `delta`; vehicle spawn to `class_name` + flattened `x/y/z`) but
+  the tests still asserted the old `account_id` / `faction` name / `template` /
+  nested `location` payloads, so the gameplay API suite had 4 red tests. Tests
+  updated to the current contract; full `webui` suite is green.
+
 ## [12.1.4] - 2026-06-15
 
 Hotfix for the donation button shipped in v12.1.3: the hardcoded

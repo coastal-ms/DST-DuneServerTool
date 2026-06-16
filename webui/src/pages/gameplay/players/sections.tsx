@@ -18,7 +18,7 @@ import {
   getPlayerStats, getPlayerTags, giveFactionRep, giveItem,
   giveScrip, giveSolari, grantAllKeystones, grantLive, grantMaxSpec,
   kickPlayer, refuelVehicle, renamePlayer, repairGear, repairInventoryItem,
-  setItemDurability,
+  setItemDurability, setItemWater,
   resetAllKeystones, resetAllSpecs, resetJourney, resetProgressionLive, resetSpec,
   restoreDestroyed,
   returningPlayerAward, setFactionTier, setPlayerTags, setSkillPoints,
@@ -1301,6 +1301,8 @@ function ItemList({ title, icon, items, canWrite, busy, run, collapsed, extra, i
               const curN = parseFloat(it.durability)
               const maxN = parseFloat(it.max_durability)
               const hasDur = it.durability !== 'N/A' && Number.isFinite(curN) && Number.isFinite(maxN) && maxN > 0
+              const waterN = parseFloat(it.water_amount)
+              const hasWater = it.water_amount !== 'N/A' && it.water_type === 'Water' && Number.isFinite(waterN)
               const ratio = hasDur ? curN / maxN : 1
               const durCls =
                 !hasDur          ? 'text-text-dim' :
@@ -1308,7 +1310,7 @@ function ItemList({ title, icon, items, canWrite, busy, run, collapsed, extra, i
                 ratio < 0.25     ? 'text-danger' :
                 ratio < 0.5      ? 'text-warning' :
                                    'text-text-dim'
-              const canEdit = canWrite && it.durability !== 'N/A'
+              const canEdit = canWrite && (it.durability !== 'N/A' || hasWater)
               const isEditing = canEdit && editingId === it.id
               const toggleEdit = () => {
                 if (!canEdit) return
@@ -1322,7 +1324,7 @@ function ItemList({ title, icon, items, canWrite, busy, run, collapsed, extra, i
                     role={canEdit ? 'button' : undefined}
                     tabIndex={canEdit ? 0 : undefined}
                     onKeyDown={canEdit ? (e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); toggleEdit() } }) : undefined}
-                    title={canEdit ? (isEditing ? 'Hide durability editor' : 'Click to edit durability') : undefined}
+                    title={canEdit ? (isEditing ? 'Hide item editor' : 'Click to edit durability / water') : undefined}
                   >
                     <span className="truncate max-w-[320px]">
                       {canEdit && (
@@ -1333,6 +1335,11 @@ function ItemList({ title, icon, items, canWrite, busy, run, collapsed, extra, i
                       {hasDur && (
                         <span className={`ml-1.5 font-mono text-[11px] ${durCls}`} title={`Durability ${curN.toFixed(0)} / ${maxN.toFixed(0)} (${Math.round(ratio * 100)}%)`}>
                           {curN.toFixed(0)}/{maxN.toFixed(0)}
+                        </span>
+                      )}
+                      {hasWater && (
+                        <span className="ml-1.5 font-mono text-[11px] text-info" title={`Water ${waterN.toFixed(0)}`}>
+                          <Icon name="Droplet" size={10} className="inline-block mr-0.5 -mt-0.5" />{waterN.toFixed(0)}
                         </span>
                       )}
                       <span className="ml-1.5 font-mono text-text-dim text-xs">×{fmtNum(it.stack_size)}</span>
@@ -1353,7 +1360,14 @@ function ItemList({ title, icon, items, canWrite, busy, run, collapsed, extra, i
                     )}
                   </div>
                   {isEditing && (
-                    <DurabilityEditor item={it} busy={busy} run={run} isOnline={isOnline} onClose={() => setEditingId(null)} />
+                    <div>
+                      {it.durability !== 'N/A' && (
+                        <DurabilityEditor item={it} busy={busy} run={run} isOnline={isOnline} onClose={() => setEditingId(null)} />
+                      )}
+                      {hasWater && (
+                        <WaterEditor item={it} busy={busy} run={run} onClose={() => setEditingId(null)} />
+                      )}
+                    </div>
                   )}
                 </div>
               )
@@ -1463,6 +1477,75 @@ function DurabilityEditor({ item, busy, run, isOnline, onClose }: {
         >
           <Icon name="Save" size={12} /> Save
         </button>
+      </div>
+    </div>
+  )
+}
+
+// Inline water editor — appears underneath an inventory row for any item that
+// carries the FFillableItemStats block (water canteens / literjons + stillsuit
+// hydration), so new water-holding items pick up the editor automatically with
+// no per-template allowlist. Capacity is cooked into the template (no per-item
+// max), so only the current amount is editable. The value will NOT reflect
+// in-game until the map pod / battlegroup is restarted — the pod caches
+// inventory in RAM and flushes it over DB writes on its save tick.
+function WaterEditor({ item, busy, run, onClose }: {
+  item: InventoryItem
+  busy: boolean
+  run: (fn: () => Promise<{ message: string }>, label: string) => void | Promise<void>
+  onClose: () => void
+}) {
+  const amt0 = parseFloat(item.water_amount)
+  const [amtStr, setAmtStr] = useState(Number.isFinite(amt0) ? String(amt0) : '0')
+  const n = parseFloat(amtStr)
+  const valid = Number.isFinite(n) && n >= 0
+
+  return (
+    <div className="border-t border-border/50 px-3 py-3 bg-surface-1/60 rounded-b-lg space-y-3">
+      <div className="text-[11px] text-warning flex items-start gap-1.5">
+        <Icon name="AlertTriangle" size={11} className="mt-0.5 shrink-0" />
+        <span>
+          Editing the water amount writes to the database immediately, but the map
+          server caches inventory in memory and flushes it back on its save tick.
+          The new value will <strong>not</strong> appear in-game until that map's
+          pod / the battlegroup is restarted.
+        </span>
+      </div>
+      <div className="text-[11px] text-warning flex items-start gap-1.5">
+        <Icon name="Droplet" size={11} className="mt-0.5 shrink-0" />
+        <span>
+          Filling a container <strong>above its normal capacity</strong> costs
+          durability — the further over the limit you go, the more durability the
+          overfill requires. If you raise the water well past the container's cap,
+          bump this item's durability in the editor above to match, otherwise the
+          game may clamp the overfill or burn the container's durability down.
+        </span>
+      </div>
+      <div className="grid grid-cols-2 gap-2 items-end">
+        <label className="text-xs">
+          <div className="text-text-dim mb-1">Water amount{item.water_type ? ` (${item.water_type})` : ''}</div>
+          <input
+            type="number" inputMode="decimal" step="any" min="0"
+            value={amtStr}
+            onChange={e => setAmtStr(e.target.value)}
+            disabled={busy}
+            className="w-full font-mono text-sm bg-surface-2 border border-border rounded px-2 py-1"
+          />
+        </label>
+        <div className="flex items-center justify-end">
+          <button
+            type="button"
+            className="btn-primary text-xs"
+            disabled={busy || !valid}
+            onClick={() => {
+              if (!valid) return
+              void run(() => setItemWater(item.id, n), 'Save')
+              onClose()
+            }}
+          >
+            <Icon name="Save" size={12} /> Save water
+          </button>
+        </div>
       </div>
     </div>
   )

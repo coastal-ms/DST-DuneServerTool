@@ -511,6 +511,8 @@ export interface InventoryItem {
   quality: number
   durability: string
   max_durability: string
+  water_amount: string
+  water_type: string
 }
 
 export interface SpecTrack {
@@ -588,6 +590,13 @@ export function setItemDurability(itemId: number, max: number, current: number, 
   return api<WriteResult>('/api/gameplay/players/set-item-durability', {
     method: 'POST',
     body: JSON.stringify({ item_id: itemId, max, current, decayed }),
+  })
+}
+
+export function setItemWater(itemId: number, amount: number) {
+  return api<WriteResult>('/api/gameplay/players/set-item-water', {
+    method: 'POST',
+    body: JSON.stringify({ item_id: itemId, amount }),
   })
 }
 
