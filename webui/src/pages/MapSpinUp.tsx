@@ -20,7 +20,7 @@ import { PageHeader } from '../components/PageHeader'
 import { Icon } from '../components/Icon'
 import { ApiError } from '../api/client'
 import { getMapSpinUp, setMapSpinUp, type SpinUpMap } from '../api/mapSpinUp'
-import { fixOnDemandPartitions } from '../api/maps'
+import { fixOnDemandPartitions, restartMapPods } from '../api/maps'
 
 // Most-used maps pinned to the front by default — these fill the first row.
 // Everything else keeps the backend's order beneath them. Users can drag any
@@ -66,6 +66,7 @@ export function MapSpinUp() {
   const [busy, setBusy] = useState<string | null>(null)
   const [fixBusy, setFixBusy] = useState(false)
   const [fixLog, setFixLog] = useState<string | null>(null)
+  const [restartBusy, setRestartBusy] = useState<string | null>(null)
   const [order, setOrder] = useState<string[] | null>(null)
 
   const refresh = useCallback(async () => {
@@ -122,6 +123,30 @@ export function MapSpinUp() {
       setError(e instanceof ApiError ? e.message : String(e))
     } finally {
       setFixBusy(false)
+    }
+  }, [])
+
+  const onRestartPods = useCallback(async (key: 'survival' | 'deepdesert', label: string) => {
+    const ok = window.confirm(
+      `Restart the ${label} pod(s)?\n\n`
+      + 'This deletes the running Kubernetes pod(s); the operator recreates them '
+      + 'fresh in about 60-120 seconds.\n\n'
+      + 'Anyone currently on the map will be disconnected. '
+      + (key === 'survival'
+        ? 'Survival_1 hosts the persistent Hagga overworld, so this affects the main world.'
+        : 'Use this when Deep Desert is stuck or misbehaving.'),
+    )
+    if (!ok) return
+    setRestartBusy(key); setMessage(null); setError(null); setFixLog(null)
+    try {
+      const r = await restartMapPods(key)
+      setMessage(r.message ?? `${label} restart requested.`)
+      if (!r.ok) setError(r.message ?? 'The restart may not have applied.')
+      if (r.raw) setFixLog(r.raw)
+    } catch (e) {
+      setError(e instanceof ApiError ? e.message : String(e))
+    } finally {
+      setRestartBusy(null)
     }
   }, [])
 
@@ -204,6 +229,27 @@ export function MapSpinUp() {
           </>
         }
       />
+
+      <div className="mb-4 flex flex-wrap items-center justify-center gap-3">
+        <button
+          className="btn-secondary"
+          onClick={() => { void onRestartPods('survival', 'Hagga (Survival_1)') }}
+          disabled={loading || busy !== null || fixBusy || restartBusy !== null}
+          title="Delete and recreate the Survival_1 (Hagga overworld) pod(s). Disconnects anyone on the main world; the operator brings them back in ~60-120s."
+        >
+          <Icon name={restartBusy === 'survival' ? 'Loader2' : 'RotateCcw'} size={15} className={restartBusy === 'survival' ? 'animate-spin' : ''} />
+          {restartBusy === 'survival' ? 'Restarting…' : 'Restart Hagga'}
+        </button>
+        <button
+          className="btn-secondary"
+          onClick={() => { void onRestartPods('deepdesert', 'Deep Desert') }}
+          disabled={loading || busy !== null || fixBusy || restartBusy !== null}
+          title="Delete and recreate the DeepDesert_1 pod(s). Disconnects anyone in Deep Desert; the operator brings them back in ~60-120s."
+        >
+          <Icon name={restartBusy === 'deepdesert' ? 'Loader2' : 'RotateCcw'} size={15} className={restartBusy === 'deepdesert' ? 'animate-spin' : ''} />
+          {restartBusy === 'deepdesert' ? 'Restarting…' : 'Restart Deep Desert'}
+        </button>
+      </div>
 
       <div className="mb-4 rounded-lg border border-warning/60 bg-warning/15 px-4 py-3 flex items-start gap-3">
         <Icon name="AlertTriangle" size={20} className="shrink-0 mt-0.5 text-warning" />
