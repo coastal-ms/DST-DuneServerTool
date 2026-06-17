@@ -1000,6 +1000,32 @@ WHERE account_id = $AccountId::bigint
     return @{ ok = $true; message = "Reset $NodeId$extra"; tags_removed = $removeTags.Count }
 }
 
+function Invoke-DunePlayerResetJourneyNodes {
+    param([string]$Ip, [long]$AccountId)
+    if ($AccountId -le 0) { return @{ ok = $false; error = 'account_id is required.' } }
+
+    $upd = @"
+UPDATE dune.journey_story_node
+SET complete_condition_state = 'false'::jsonb,
+    has_pending_reward       = false
+WHERE account_id = $AccountId::bigint;
+"@
+    $r = Invoke-DuneSqlQuery -Ip $Ip -Sql $upd -ReadOnly $false -MaxRows 1 -TimeoutSec 60
+    if (-not $r.ok) { return @{ ok = $false; error = "reset journey nodes: $($r.error)" } }
+    $updated = Get-DuneSqlAffected $r
+
+    $allTags = Get-DuneAllJourneyTags
+    $extra = ''
+    if ($allTags.Count -gt 0) {
+        $arr = ConvertTo-DunePgTextArray $allTags
+        $rt = "SELECT dune.update_player_tags($AccountId::bigint, ARRAY[]::text[], $arr);"
+        $rr = Invoke-DuneSqlQuery -Ip $Ip -Sql $rt -ReadOnly $false -MaxRows 1 -TimeoutSec 60
+        if (-not $rr.ok) { return @{ ok = $false; error = "remove all journey tags: $($rr.error)" } }
+        $extra = ", removed $($allTags.Count) journey tag(s)"
+    }
+    return @{ ok = $true; message = "Reset journey for account $AccountId - reset $updated node(s)$extra"; nodes = $updated; tags_removed = $allTags.Count }
+}
+
 function Invoke-DunePlayerWipeJourneyNodes {
     param([string]$Ip, [long]$AccountId)
     if ($AccountId -le 0) { return @{ ok = $false; error = 'account_id is required.' } }
@@ -1423,4 +1449,3 @@ LIMIT 1;
 
     return @{ ok = $true; result = $out }
 }
-
