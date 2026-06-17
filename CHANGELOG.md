@@ -17,6 +17,16 @@ here cover everything those tags shipped.
 
 ### Fixed
 
+- **Non-ASCII characters in INI files corrupted into mojibake (e.g. UTF-8
+  comment banners in UserGame.ini).** The SSH transport that reads remote files
+  (`Invoke-V6Ssh` / `Invoke-DuneSshHidden`) decoded the process output using the
+  Windows console code page (CP850 / Windows-1252) instead of UTF-8, so any
+  non-ASCII bytes — like the box-drawing banners in a hand-edited `UserGame.ini`
+  — came back as garbage. A subsequent Game Config save then re-encoded that
+  garbage as UTF-8 and wrote it to disk, permanently corrupting the file. The
+  transport now decodes remote stdout/stderr as UTF-8 (a strict superset of
+  ASCII, so a no-op for normal output), preserving non-ASCII content end to end.
+
 - **Game Config boolean toggles reverting to Off after switching On (Coriolis
   Auto-Spawn and any default-`True` toggle).** Toggling a bool whose value
   matched its schema default correctly triggers a reset — the key is removed

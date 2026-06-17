@@ -56,6 +56,14 @@ function Invoke-V6Ssh {
     $psi.RedirectStandardError  = $true
     $psi.UseShellExecute        = $false
     $psi.CreateNoWindow         = $true
+    # Decode the remote process output as UTF-8. Without this the StreamReader
+    # falls back to the Windows console code page (CP850 / Windows-1252), which
+    # mojibakes any non-ASCII bytes — e.g. UTF-8 box-drawing comment banners in
+    # UserGame.ini. Once such a mangled string is written back to disk (Game
+    # Config save re-encodes as UTF-8) the file is permanently corrupted. UTF-8
+    # is a strict superset of ASCII so this is a no-op for the common case.
+    $psi.StandardOutputEncoding = [System.Text.UTF8Encoding]::new($false)
+    $psi.StandardErrorEncoding  = [System.Text.UTF8Encoding]::new($false)
     if ($StdinData) { $psi.RedirectStandardInput = $true }
 
     # PS 5.1 lacks ProcessStartInfo.ArgumentList — build the command line
@@ -161,6 +169,10 @@ function Invoke-DuneSshHidden {
     $psi.RedirectStandardError  = $true
     $psi.UseShellExecute        = $false
     $psi.CreateNoWindow         = $true
+    # Decode remote output as UTF-8 (see Invoke-V6Ssh) so non-ASCII bytes from
+    # the pod aren't mojibaked by the Windows console code page.
+    $psi.StandardOutputEncoding = [System.Text.UTF8Encoding]::new($false)
+    $psi.StandardErrorEncoding  = [System.Text.UTF8Encoding]::new($false)
 
     # Build argv. Same quoting strategy as Invoke-V6Ssh: only quote args
     # that contain whitespace or quotes, and escape any embedded ".
