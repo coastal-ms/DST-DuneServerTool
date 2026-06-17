@@ -1,7 +1,7 @@
 ﻿# BackupSchedule.ps1 - Routes for the Database page's Backup Schedule card.
 #
 # GET /api/db/backup-schedule         - current schedule + VM cron health
-# PUT /api/db/backup-schedule         - install/replace schedule, body { preset, retentionDays }
+# PUT /api/db/backup-schedule         - install/replace schedule, body { preset, keepLast }
 # GET /api/db/backup-history          - recent .backup files + log tail
 #
 # All routes are VM-gated via Get-DuneBackupContext (defined in
@@ -30,20 +30,20 @@ Register-DuneRoute -Method PUT -Path '/api/db/backup-schedule' -Handler {
         return
     }
     $preset = $null
-    $retention = 0
+    $keepLast = 0
     if ($body -is [hashtable]) {
         if ($body.ContainsKey('preset'))        { $preset    = [string]$body.preset }
-        if ($body.ContainsKey('retentionDays')) { try { $retention = [int]$body.retentionDays } catch { $retention = -1 } }
+        if ($body.ContainsKey('keepLast')) { try { $keepLast = [int]$body.keepLast } catch { $keepLast = -1 } }
     } elseif ($body) {
         if ($body.preset)                       { $preset    = [string]$body.preset }
-        if ($null -ne $body.retentionDays)      { try { $retention = [int]$body.retentionDays } catch { $retention = -1 } }
+        if ($null -ne $body.keepLast)      { try { $keepLast = [int]$body.keepLast } catch { $keepLast = -1 } }
     }
     if (-not $preset) {
         Write-DuneError -Response $res -Status 400 -Message 'Body must include "preset" (string).'
         return
     }
     try {
-        $result = Invoke-WithDuneLock -Name 'backup-schedule' -Script { Set-DuneBackupSchedule -Ip $ctx.ip -Preset $preset -RetentionDays $retention }
+        $result = Invoke-WithDuneLock -Name 'backup-schedule' -Script { Set-DuneBackupSchedule -Ip $ctx.ip -Preset $preset -KeepLast $keepLast }
         if (-not $result.ok) {
             Write-DuneError -Response $res -Status ([int]$result.status) -Message $result.message
             return

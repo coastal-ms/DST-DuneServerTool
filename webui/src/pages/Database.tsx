@@ -616,7 +616,7 @@ function BackupScheduleCard({ vmRunning, showToast }: BackupScheduleCardProps) {
   // Draft state — initialised from `schedule` when it loads, then locally
   // editable so the user can preview their choice before clicking Save.
   const [draftPreset, setDraftPreset]       = useState<string>('Off')
-  const [draftRetention, setDraftRetention] = useState<number>(30)
+  const [draftKeepLast, setDraftKeepLast]   = useState<number>(8)
 
   const loadAll = useCallback(async () => {
     if (!vmRunning) {
@@ -629,7 +629,7 @@ function BackupScheduleCard({ vmRunning, showToast }: BackupScheduleCardProps) {
       setSchedule(sched)
       setHistory(hist)
       setDraftPreset(sched.preset === 'Custom' ? 'Off' : sched.preset)
-      setDraftRetention(sched.retentionDays)
+      setDraftKeepLast(sched.keepLast > 0 ? sched.keepLast : (sched.preset === 'Off' ? 8 : 0))
     } catch (e) {
       setErr(e instanceof Error ? e.message : String(e))
       setSchedule(null); setHistory(null)
@@ -649,18 +649,18 @@ function BackupScheduleCard({ vmRunning, showToast }: BackupScheduleCardProps) {
     // Likewise, if there are still unmanaged lines outside our block, allow
     // saving so the user can clean them up by re-installing.
     if (schedule.hasUnmanagedBackupLines) return true
-    return draftPreset !== schedule.preset || draftRetention !== schedule.retentionDays
-  }, [schedule, draftPreset, draftRetention])
+    return draftPreset !== schedule.preset || draftKeepLast !== schedule.keepLast
+  }, [schedule, draftPreset, draftKeepLast])
 
   async function save() {
     if (!schedule) return
     setSaving(true)
     try {
-      const updated = await putBackupSchedule({ preset: draftPreset, retentionDays: draftRetention })
+      const updated = await putBackupSchedule({ preset: draftPreset, keepLast: draftKeepLast })
       setSchedule(updated)
       setDraftPreset(updated.preset === 'Custom' ? 'Off' : updated.preset)
-      setDraftRetention(updated.retentionDays)
-      showToast('ok', draftPreset === 'Off' ? 'Schedule disabled.' : `Schedule saved (${draftPreset}, retention ${draftRetention}d).`)
+      setDraftKeepLast(updated.keepLast > 0 ? updated.keepLast : (updated.preset === 'Off' ? 8 : 0))
+      showToast('ok', draftPreset === 'Off' ? 'Schedule disabled.' : `Schedule saved (${draftPreset}, keep last ${draftKeepLast}).`)
       // Refresh history in the background so the user sees the new schedule
       // reflected immediately when the next cron run lands.
       void getBackupHistory({ recent: 5, logLines: 50 }).then(setHistory).catch(() => {})
@@ -769,17 +769,17 @@ function BackupScheduleCard({ vmRunning, showToast }: BackupScheduleCardProps) {
         </label>
         <label className="flex flex-col gap-1 text-xs">
           <span className="text-text-muted font-medium">
-            Retention (days){draftRetention === 0 ? ' — keep forever' : ''}
+            Keep last (count){draftKeepLast === 0 ? ' — keep forever' : ''}
           </span>
           <input
             type="number"
             min={0}
-            max={3650}
+            max={1000}
             step={1}
-            value={draftRetention}
+            value={draftKeepLast}
             onChange={e => {
               const n = parseInt(e.target.value || '0', 10)
-              setDraftRetention(Number.isFinite(n) ? Math.max(0, Math.min(3650, n)) : 0)
+              setDraftKeepLast(Number.isFinite(n) ? Math.max(0, Math.min(1000, n)) : 0)
             }}
             disabled={!vmRunning || loading || saving || draftPreset === 'Off'}
             className="px-2 py-1.5 rounded bg-surface-2 border border-border text-text text-sm font-mono w-full"
@@ -814,9 +814,9 @@ function BackupScheduleCard({ vmRunning, showToast }: BackupScheduleCardProps) {
           {schedule.enabled
             ? <>
                 <strong className="text-text">{schedule.preset}</strong>
-                {schedule.retentionDays > 0
-                  ? <> · retention <strong className="text-text">{schedule.retentionDays}d</strong></>
-                  : <> · no retention pruning</>}
+                {schedule.keepLast > 0
+                  ? <> · keep last <strong className="text-text">{schedule.keepLast}</strong> backups</>
+                  : <> · keep forever</>}
               </>
             : <strong className="text-text">Off</strong>}
           {' · '}VM time <span className="font-mono">{schedule.vmNowUtc} ({tzLabel})</span>
