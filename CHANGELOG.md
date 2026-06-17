@@ -13,6 +13,10 @@ here cover everything those tags shipped.
 
 ## [Unreleased]
 
+### Changed
+
+- **Framework Maintenance.**
+
 ## [12.5.8] - 2026-06-17
 
 ### Added
