@@ -771,10 +771,21 @@ function ConvertTo-DuneIniManaged {
         # m_CycleDurationInDays under both DuneGameMode and SandStormConfig) makes
         # edits/resets unpredictable — DST would update one copy while a stale copy
         # in another section shadows it. So whenever we touch a key, first strip it
-        # from EVERY other managed section, then set/remove it in the target.
+        # from EVERY other section, then set/remove it in the target.
+        #
+        # This includes UNMANAGED body sections: a stale/foreign copy of the key
+        # under a non-canonical section (e.g. an older DST schema that placed
+        # m_bCoriolisAutoSpawnEnabled under CoriolisSubsystem, or a hand edit) would
+        # otherwise survive a reset-to-default and shadow our write via the UI's
+        # by-key fallback — leaving the setting stuck on its old value (the
+        # "Coriolis Auto-Spawn won't toggle back On" bug). Consolidating every
+        # occurrence into the declared section makes that section authoritative.
         $key = "$($u.key)"
         foreach ($other in $managed) {
             if ($other -ne $entry) { Remove-DuneScalarFromBody -Body $other.body -Key $key }
+        }
+        foreach ($other in $remaining) {
+            Remove-DuneScalarFromBody -Body $other.body -Key $key
         }
         if ($u['remove']) {
             # Reset-to-default: strip the key so the default is implied, not written.
