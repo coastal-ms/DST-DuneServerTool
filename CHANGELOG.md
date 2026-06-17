@@ -13,6 +13,15 @@ here cover everything those tags shipped.
 
 ## [Unreleased]
 
+## [12.5.3] - 2026-06-17
+
+### Fixed
+
+- **Unlock Main Quest** now applies `Journey.RewardsUnblocked` tag when unlocking
+  the Fremen questline (DA_MQ_FindTheFremen). This tag is normally set by game
+  code during cutscenes and may be required to unlock the 3rd ability slot,
+  prescience, and corpse pickup. (#253)
+
 ## [12.5.2] - 2026-06-16
 
 ### Added

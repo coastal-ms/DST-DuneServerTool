@@ -14,15 +14,15 @@ const funcomVersion = "1.4.5.0";
 const features = [
   {
     title: "Server Health at a glance",
-    body: "Battlegroup + VM status, live TCP port checks, per-pod game-server health, and live spice-field counts — all on the landing page.",
+    body: "Battlegroup + VM status, live TCP port checks, per-pod game-server health, live spice-field counts, and Map SpinUp loading diagnostics with clear failure reasons when a map will not come up.",
   },
   {
-    title: "Full Gameplay Admin",
-    body: "the Gameplay Admin portal, ported native into DST — 54 player endpoints, RMQ-backed online command channel, bucketed action panel, build-your-own Give Package bundles, one-click Give Vehicle Kit part sets, and the Duke market bot with grade-aware seeding.",
+    title: "Gameplay Admin, expanded",
+    body: "The Gameplay Admin portal now covers Landsraad Houses editing, stack-quantity editing for storage and inventory, market-bot pricing modes (formula, market-follow, and over-market buy guard), and the built-in cheat-script controls.",
   },
   {
-    title: "Game config & database editor",
-    body: "Grouped editors for UserGame.ini / UserEngine.ini plus a Monaco SQL editor over the server's Postgres — every write goes through guard-railed psql.",
+    title: "Setup, config & database",
+    body: "A two-path Setup Wizard for fresh installs or existing servers, grouped INI editors, and Postgres-backed backup + SQL workflows — all guarded by DST-managed writes and safe defaults.",
   },
 ];
 ---
@@ -115,21 +115,20 @@ const features = [
         What's in the box
       </h2>
       <div class="grid sm:grid-cols-2 gap-x-12 gap-y-3 text-dune-muted">
-        <div>✓ Server health dashboard</div>
-        <div>✓ Live spice-field controls</div>
-        <div>✓ Game config (UserGame.ini / UserEngine.ini)</div>
+        <div>✓ Server health dashboard + map-spin-up diagnostics</div>
+        <div>✓ Live spice-field controls + restart actions</div>
+        <div>✓ Game config (UserGame.ini / UserEngine.ini) with Landsraad + Coriolis seed controls</div>
         <div>✓ Embedded PowerShell terminal</div>
-        <div>✓ Monaco SQL editor over Postgres</div>
-        <div>✓ Database backup + scheduling</div>
-        <div>✓ Per-map on-demand spin-up</div>
-        <div>✓ Setup wizard (Hyper-V, SSH, firewall)</div>
+        <div>✓ Monaco SQL editor over Postgres + backup scheduling</div>
+        <div>✓ Two-path Setup Wizard for existing servers or fresh installs</div>
+        <div>✓ Remote portal support for phone-friendly monitoring</div>
         <div>✓ Built-in auto-updater</div>
         <div>✓ Optional auto-start at Windows sign-in</div>
         <div>✓ Six built-in themes + custom color picker</div>
-        <div>✓ Full Gameplay Admin (54 player endpoints, 28 actions)</div>
+        <div>✓ Full Gameplay Admin (54 player-management endpoints, Landsraad Houses, stack edits, market-bot pricing modes)</div>
         <div>✓ Build-your-own Give Package item bundles</div>
         <div>✓ One-click Give Vehicle Kit (Mk6 parts + fuel + tool)</div>
-        <div>✓ Native Duke market bot — Sane, Upstream or Market-follow pricing, grade-aware seed</div>
+        <div>✓ Native Duke market bot with formula, market-follow, and over-market buy guard</div>
       </div>
       <div class="mt-8 flex flex-wrap gap-4">
         <a

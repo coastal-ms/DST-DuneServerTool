@@ -11,7 +11,7 @@ import DownloadButton from "../components/DownloadButton.astro";
   <PageHeader
     eyebrow="Install"
     title="Quick install"
-    intro="DST is a single Windows installer. One UAC prompt (Hyper-V needs admin) and you're up."
+    intro="DST is a single Windows installer. One UAC prompt (Hyper-V needs admin) and you're up, whether you're connecting to an existing server or bringing a fresh setup online."
   />
 
   <section class="mx-auto max-w-3xl px-6 pb-12">
@@ -50,8 +50,9 @@ import DownloadButton from "../components/DownloadButton.astro";
           >
           <div>
             Launch from <strong>Start Menu → Dune Server</strong>. The first
-            launch opens the Setup Wizard, which asks for your server install
-            folder and SSH key. Answers are saved to
+            launch opens the Setup Wizard, which asks whether you already have
+            a Dune server and then walks you through either a fresh install or
+            a connection to an existing VM / SSH key. Answers are saved to
             <span class="font-mono text-dune-muted">%APPDATA%\DuneServer\</span
             >
             and survive reinstalls.
