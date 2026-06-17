@@ -30,6 +30,13 @@ here cover everything those tags shipped.
 
 ### Changed
 
+- **Coriolis Storm Seeds: correct the valid seed range.** The seed inputs (farm /
+  per-map / per-partition) now accept **-1** (auto / clear a forced seed) and cap
+  at **0–11**, matching the game's 12 pre-built Coriolis world layouts
+  (`m_CycleSeeds`). Previously the boxes rejected `-1` and **Reroll** generated a
+  meaningless multi-billion value; Reroll now picks a random `0–11`. Validation is
+  enforced in the UI, the route, and the seed-write functions.
+
 - **Cheat Scripts and Dev / Perf Scripts now require a double confirmation.**
   Firing a cheat script or dev/perf script (Gameplay Admin → Players → Live)
   prompts twice — an initial confirm plus a typed `i acknowledge` — matching the
