@@ -38,26 +38,8 @@ function healthClass(v: string | undefined): string {
   return 'text-text'
 }
 
-// BG state shown under Battlegroup Info is the Funcom operator's "Status"
-// column — a kube-operator reconcile phase. It normally sits in
-// "Reconciling" / "Reconciling Ready" while the battlegroup is perfectly
-// healthy, so both healthy and reconciling are surfaced as a green "Healthy".
-// Yellow/red are reserved for genuine transitions or faults — the per-component
-// Database / Gateway / Director rows below show real component health.
-function bgStateDisplay(v: string | undefined): { cls: string; label: string } {
-  const raw = (v ?? '').trim()
-  const s = raw.toLowerCase()
-  if (!s) return { cls: 'text-text-dim', label: '—' }
-  // Genuine fault → red.
-  if (/(fail|error|unhealthy|crash|degraded|fault|stopp|\bfalse\b)/.test(s)) {
-    return { cls: 'text-danger', label: raw }
-  }
-  // Healthy or reconciling → green "Healthy".
-  if (/(healthy|ready|reconcil|running|\btrue\b)/.test(s)) {
-    return { cls: 'text-success', label: 'Healthy' }
-  }
-  // Anything else (starting / updating / pending …) is an in-progress transition.
-  return { cls: 'text-warning', label: raw }
+function findSurvivalServer(servers: BgGameServer[]): BgGameServer | undefined {
+  return servers.find(s => /survival[_-]?1/i.test(s.map))
 }
 
 function GameServerRow({ s }: { s: BgGameServer }) {
@@ -83,7 +65,7 @@ function survivalHeartbeat(servers: BgGameServer[], loading: boolean): {
   label: string
   beating: boolean
 } {
-  const sv = servers.find(s => /survival[_-]?1/i.test(s.map))
+  const sv = findSurvivalServer(servers)
   if (!sv) {
     if (loading) return { cls: 'text-text-dim', label: 'No signal', beating: false }
     return { cls: 'text-danger', label: 'Not Ready', beating: true }
@@ -122,6 +104,7 @@ export function Dashboard() {
   const bg = BG_STYLES[bgState]
   const bgInfo = status?.bg?.info ?? null
   const gameServers = status?.bg?.gameServers ?? []
+  const survivalPhase = findSurvivalServer(gameServers)?.phase?.trim() || ''
   const ports = status?.ports
   const tcp = ports?.results.filter(r => r.protocol === 'TCP') ?? []
   const openTcp = tcp.filter(r => r.status === 'open').length
@@ -255,15 +238,9 @@ export function Dashboard() {
             <p className="text-sm text-text-dim italic">No battlegroup info yet.</p>
           ) : (
             <dl className="grid grid-cols-[110px_1fr] gap-x-3 gap-y-1 text-sm leading-snug">
-              <dt className="text-text-dim" title="Funcom BG operator's overall state. 'Reconciling' is the operator's normal steady state while it manages the battlegroup, so it's reported as Healthy. The DB / Gateway / Director rows below show actual component health.">BG state</dt>
-              <dd className={bgStateDisplay(bgInfo.status).cls} title={`Operator status: ${bgInfo.status || 'unknown'}`}>
-                {bgStateDisplay(bgInfo.status).label}
-                {/reconcil/i.test(bgInfo.status || '') && (
-                  <span className="ml-2 text-[10px] uppercase tracking-wider text-text-dim font-normal"
-                        title="The BG operator is reconciling — its steady state while managing the battlegroup, usually settling a map spin-up/down. The DB / Gateway / Director rows below show actual component health.">
-                    reconciling
-                  </span>
-                )}
+              <dt className="text-text-dim" title="Survival_1 game-server phase. This is the login-facing battlegroup status signal.">BG Status</dt>
+              <dd className={healthClass(survivalPhase)} title={`Survival_1 phase: ${survivalPhase || 'unknown'}`}>
+                {survivalPhase || '—'}
               </dd>
               <dt className="text-text-dim">Database</dt>
               <dd className={healthClass(bgInfo.database)}>{bgInfo.database || '—'}</dd>
