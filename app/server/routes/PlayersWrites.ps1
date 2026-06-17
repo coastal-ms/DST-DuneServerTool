@@ -234,6 +234,10 @@ Register-DuneRoute -Method POST -Path '/api/gameplay/players/contracts/reverse' 
 }
 
 # POST /api/gameplay/players/unlock-trainer  { account_id, job }
+# Offline-only: skill grants write to the character's FLevelComponent in Postgres,
+# but the map pod holds the authoritative copy in RAM while the player is online.
+# If they're online when we write, the pod flushes its RAM state on logout and
+# overwrites our grants. Same class of issue as Fill Base Water (#221).
 Register-DuneRoute -Method POST -Path '/api/gameplay/players/unlock-trainer' -Handler {
     param($req, $res, $routeParams, $body)
     try {
@@ -241,13 +245,21 @@ Register-DuneRoute -Method POST -Path '/api/gameplay/players/unlock-trainer' -Ha
         $job = [string](Get-DuneBodyValue -Body $body -Name 'job')
         if ($null -eq $acc -or $acc -le 0) { Write-DuneError -Response $res -Status 400 -Message 'account_id is required.'; return }
         if (-not $job) { Write-DuneError -Response $res -Status 400 -Message 'job is required.'; return }
-        Invoke-DunePlayerWriteRoute -Response $res -Action { param($ip) Invoke-DunePlayerUnlockTrainer -Ip $ip -AccountId $acc -Job $job }
+        Invoke-DunePlayerWriteRoute -Response $res -Action {
+            param($ip)
+            $off = Test-DunePlayerOfflineByAccount -Ip $ip -AccountId $acc
+            if (-not $off.ok) {
+                return @{ ok = $false; error = "Player must be offline to unlock trainers. $($off.reason)" }
+            }
+            Invoke-DunePlayerUnlockTrainer -Ip $ip -AccountId $acc -Job $job
+        }
     } catch {
         Write-DuneError -Response $res -Status 500 -Message "Unlock trainer failed: $($_.Exception.Message)"
     }
 }
 
 # POST /api/gameplay/players/unlock-main-quest  { account_id, quest }
+# Offline-only: same FLevelComponent RAM-authority issue as unlock-trainer.
 Register-DuneRoute -Method POST -Path '/api/gameplay/players/unlock-main-quest' -Handler {
     param($req, $res, $routeParams, $body)
     try {
@@ -255,13 +267,21 @@ Register-DuneRoute -Method POST -Path '/api/gameplay/players/unlock-main-quest' 
         $quest = [string](Get-DuneBodyValue -Body $body -Name 'quest')
         if ($null -eq $acc -or $acc -le 0) { Write-DuneError -Response $res -Status 400 -Message 'account_id is required.'; return }
         if (-not $quest) { Write-DuneError -Response $res -Status 400 -Message 'quest is required.'; return }
-        Invoke-DunePlayerWriteRoute -Response $res -Action { param($ip) Invoke-DunePlayerUnlockMainQuest -Ip $ip -AccountId $acc -Quest $quest }
+        Invoke-DunePlayerWriteRoute -Response $res -Action {
+            param($ip)
+            $off = Test-DunePlayerOfflineByAccount -Ip $ip -AccountId $acc
+            if (-not $off.ok) {
+                return @{ ok = $false; error = "Player must be offline to unlock main quests. $($off.reason)" }
+            }
+            Invoke-DunePlayerUnlockMainQuest -Ip $ip -AccountId $acc -Quest $quest
+        }
     } catch {
         Write-DuneError -Response $res -Status 500 -Message "Unlock main quest failed: $($_.Exception.Message)"
     }
 }
 
 # POST /api/gameplay/players/grant-job-skills  { account_id, job }
+# Offline-only: same FLevelComponent RAM-authority issue as unlock-trainer.
 Register-DuneRoute -Method POST -Path '/api/gameplay/players/grant-job-skills' -Handler {
     param($req, $res, $routeParams, $body)
     try {
@@ -269,13 +289,21 @@ Register-DuneRoute -Method POST -Path '/api/gameplay/players/grant-job-skills' -
         $job = [string](Get-DuneBodyValue -Body $body -Name 'job')
         if ($null -eq $acc -or $acc -le 0) { Write-DuneError -Response $res -Status 400 -Message 'account_id is required.'; return }
         if (-not $job) { Write-DuneError -Response $res -Status 400 -Message 'job is required.'; return }
-        Invoke-DunePlayerWriteRoute -Response $res -Action { param($ip) Invoke-DunePlayerGrantJobSkills -Ip $ip -AccountId $acc -Job $job }
+        Invoke-DunePlayerWriteRoute -Response $res -Action {
+            param($ip)
+            $off = Test-DunePlayerOfflineByAccount -Ip $ip -AccountId $acc
+            if (-not $off.ok) {
+                return @{ ok = $false; error = "Player must be offline to grant job skills. $($off.reason)" }
+            }
+            Invoke-DunePlayerGrantJobSkills -Ip $ip -AccountId $acc -Job $job
+        }
     } catch {
         Write-DuneError -Response $res -Status 500 -Message "Grant job skills failed: $($_.Exception.Message)"
     }
 }
 
 # POST /api/gameplay/players/reset-job-skills  { account_id, job }
+# Offline-only: same FLevelComponent RAM-authority issue as unlock-trainer.
 Register-DuneRoute -Method POST -Path '/api/gameplay/players/reset-job-skills' -Handler {
     param($req, $res, $routeParams, $body)
     try {
@@ -283,13 +311,21 @@ Register-DuneRoute -Method POST -Path '/api/gameplay/players/reset-job-skills' -
         $job = [string](Get-DuneBodyValue -Body $body -Name 'job')
         if ($null -eq $acc -or $acc -le 0) { Write-DuneError -Response $res -Status 400 -Message 'account_id is required.'; return }
         if (-not $job) { Write-DuneError -Response $res -Status 400 -Message 'job is required.'; return }
-        Invoke-DunePlayerWriteRoute -Response $res -Action { param($ip) Invoke-DunePlayerResetJobSkills -Ip $ip -AccountId $acc -Job $job }
+        Invoke-DunePlayerWriteRoute -Response $res -Action {
+            param($ip)
+            $off = Test-DunePlayerOfflineByAccount -Ip $ip -AccountId $acc
+            if (-not $off.ok) {
+                return @{ ok = $false; error = "Player must be offline to reset job skills. $($off.reason)" }
+            }
+            Invoke-DunePlayerResetJobSkills -Ip $ip -AccountId $acc -Job $job
+        }
     } catch {
         Write-DuneError -Response $res -Status 500 -Message "Reset job skills failed: $($_.Exception.Message)"
     }
 }
 
 # POST /api/gameplay/players/set-starter-class  { account_id, job }
+# Offline-only: same FLevelComponent RAM-authority issue as unlock-trainer.
 Register-DuneRoute -Method POST -Path '/api/gameplay/players/set-starter-class' -Handler {
     param($req, $res, $routeParams, $body)
     try {
@@ -297,7 +333,14 @@ Register-DuneRoute -Method POST -Path '/api/gameplay/players/set-starter-class' 
         $job = [string](Get-DuneBodyValue -Body $body -Name 'job')
         if ($null -eq $acc -or $acc -le 0) { Write-DuneError -Response $res -Status 400 -Message 'account_id is required.'; return }
         if (-not $job) { Write-DuneError -Response $res -Status 400 -Message 'job is required.'; return }
-        Invoke-DunePlayerWriteRoute -Response $res -Action { param($ip) Invoke-DunePlayerSetStarterClass -Ip $ip -AccountId $acc -Job $job }
+        Invoke-DunePlayerWriteRoute -Response $res -Action {
+            param($ip)
+            $off = Test-DunePlayerOfflineByAccount -Ip $ip -AccountId $acc
+            if (-not $off.ok) {
+                return @{ ok = $false; error = "Player must be offline to set starter class. $($off.reason)" }
+            }
+            Invoke-DunePlayerSetStarterClass -Ip $ip -AccountId $acc -Job $job
+        }
     } catch {
         Write-DuneError -Response $res -Status 500 -Message "Set starter class failed: $($_.Exception.Message)"
     }
