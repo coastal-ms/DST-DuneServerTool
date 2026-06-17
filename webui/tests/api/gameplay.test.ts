@@ -87,7 +87,7 @@ describe('Phase A — currency / progression writes', () => {
   it('deleteAccount targets /delete-account', async () => {
     await gp.deleteAccount(404)
     expect(last().url).toBe('/api/gameplay/players/delete-account')
-    expect(last().body).toEqual({ account_id: 404 })
+    expect(last().body).toEqual({ account_id: 404, confirm: 'DELETE' })
   })
 })
 
