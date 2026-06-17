@@ -10,7 +10,7 @@ const sections = [
     id: "health",
     title: "Server Health",
     img: "server-health.png",
-    body: "Default landing page. Combined battlegroup + VM state, live TCP port verdicts, per-pod game-server status, active spice-field counts pulled live from Postgres with tiered colours and at-cap highlighting, public port checks with provider fallback, and one-click log exports. BG state reads a green 'Healthy' while the operator is healthy or reconciling (its normal steady state), with a per-visit toggle to reveal the raw battlegroup status output.",
+    body: "Default landing page. Combined battlegroup + VM state, live TCP port verdicts, per-pod game-server status, active spice-field counts pulled live from Postgres, and Map SpinUp loading diagnostics with restart actions and clear failure reasons when a map will not come up.",
   },
   {
     id: "commands",
@@ -22,13 +22,13 @@ const sections = [
     id: "gameconfig",
     title: "Game Config",
     img: "game-config.png",
-    body: "Grouped editor for UserGame.ini and UserEngine.ini with every setting labelled and typed. It reads the live INIs on load and shows your real values wherever they live in the file (no more phantom 'default' readings), then writes changes into a DST-managed block — guaranteeing each setting lives in exactly one section so toggles actually take effect. Sections cover Survival, Hydration, Storm Cycle, Landsraad, Loot & Death, Encounters, Spice, Sandworm and more — including the Landsraad settings Funcom packs into a single nested struct, edited in place. Every field has a one-click Default that *removes* the override from the INI, and client-applied settings show an Add / Update / Remove preview before you mirror them to your own game. An *All default settings* browser reads the live DefaultGame.ini / DefaultEngine.ini straight from the battlegroup. Backups are one click away — make a restore point when you want one, then multi-select and delete old snapshots from the View backups dialog.",
+    body: "Grouped editor for UserGame.ini and UserEngine.ini with every setting labelled and typed. It reads the live INIs on load, writes changes into DST-managed blocks, and now covers Landsraad / Coriolis seed controls, per-setting reset-to-default behavior, and the newer backup restore points. The same workflow also powers DST's two-path Setup Wizard for existing servers or fresh installs.",
   },
   {
     id: "gameplay",
     title: "Gameplay Admin",
     img: "gameplay-admin.png",
-    body: "the Gameplay Admin portal, rebuilt natively inside DST as a complete in-tree port (54 player-management endpoints, RMQ-backed online command channel, 28-action bucketed Actions panel). Market / Exchange and Market Bot tabs read your live game Postgres directly (and fall back to a realistic demo dataset when the battlegroup is offline). Duke — the native bot — both buys player listings and lists its own NPC stock under one of three pricing modes: **Sane** (tier × category × rarity × vendor × grade, 100,000 Solari hard cap — the default) or **Upstream** Funcom-style (uncapped tier tables, vendor × rarity-mult, grade scaling), both toggled from the header, plus **Market-follow** (lists at the median of competing players' sell orders × a markup you set, with a per-item rule for unsold items) — switching any mode wipes Duke's listings so the new prices repopulate cleanly. An optional **over-market buy guard** keeps a winning dice roll from overpaying when a seller is priced too far above the going rate. Per-template overrides win in either formula mode, and **Seed market** bulk-lists every catalogued template across all six quality grades in one shot. **Clear listings** wipes Duke and any leftover Revy rows from the old external Go market-bot in a single sweep. The Players tab adds a Hide GM toggle, an inlined Items action group inside Inventory, and three ways to deselect a player — Bases, Storage, and Blueprints round out the toolset.     A shared admin-messaging surface (server broadcast, timed shutdown notice, and per-player whisper) sits at the top of the Gameplay overview and on its own Broadcasts page, inventory rows show live current / max durability colour-tiered by wear, and a Restore Destroyed Items action brings completely-dead gear back from zero durability alongside the regular Repair. A new **Landsraad** tab lets you set any player's contribution to any Great House to an arbitrary amount (faction + guild totals recomputed automatically), and water containers get an inline editor to set their stored water.",
+    body: "The Gameplay Admin portal is a full in-tree port with 54 player-management endpoints and a bucketed Actions panel. Recent additions include a Landsraad Houses tab for editing house reward milestones, inline stack-quantity editing in Storage and player inventory, and Duke's market-bot pricing modes — formula, market-follow, and over-market buy guard — plus the built-in Cheat Scripts and Landsraad contribution controls.",
   },
   {
     id: "give-package",
@@ -64,7 +64,7 @@ const sections = [
     id: "settings",
     title: "Settings",
     img: "settings.png",
-    body: "Everything the setup wizard asked you, editable any time. Steam path and SSH-key pickers, Windows username, port-check provider selection, Appearance themes, Remote Access, and the DST auto-updater.",
+    body: "The Settings page reflects the same choices the Setup Wizard makes, plus the newer remote-access and appearance controls. It covers the two-path installer experience, Steam path and SSH-key selection, Windows username, port-check provider, themes, remote-access policy, and auto-updater preferences.",
   },
 ];
 ---
