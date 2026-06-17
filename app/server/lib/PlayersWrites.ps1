@@ -1235,6 +1235,17 @@ function Invoke-DunePlayerUnlockMainQuest {
     }
     $r = Invoke-DunePlayerCompleteJourneyNode -Ip $Ip -AccountId $AccountId -NodeId $Quest
     if (-not $r.ok) { return $r }
+
+    # Apply Journey.RewardsUnblocked for FindTheFremen completion (unlocks 3rd ability slot, prescience, etc.)
+    # This tag is normally set by game code during cutscenes, not by journey node completion.
+    if ($Quest -eq 'DA_MQ_FindTheFremen') {
+        $extraTags = @('Journey.RewardsUnblocked')
+        $bumpRes = Invoke-DuneApplyTagsWithTierBump -Ip $Ip -AccountId $AccountId -Tags $extraTags
+        if (-not $bumpRes.ok) {
+            return @{ ok = $false; error = "apply RewardsUnblocked: $($bumpRes.error)" }
+        }
+    }
+
     return @{ ok = $true; message = "Unlocked main quest $Quest - $($r.nodes) node(s) completed - takes effect on next login"; nodes = $r.nodes }
 }
 
