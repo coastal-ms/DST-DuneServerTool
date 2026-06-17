@@ -59,6 +59,26 @@ function Test-DunePlayerOfflineByController {
     return @{ ok = $true; reason = $null }
 }
 
+# Same offline check as Test-DunePlayerOffline but resolved from the account id.
+# Lets writes that only know the account (e.g. unlock-trainer) still reject an
+# online player. A missing player_state row is treated as offline.
+function Test-DunePlayerOfflineByAccount {
+    param([string]$Ip, [long]$AccountId)
+    $sql = "SELECT online_status::text AS status FROM dune.player_state WHERE account_id = $AccountId::bigint LIMIT 1;"
+    $r = Invoke-DuneSqlQuery -Ip $Ip -Sql $sql -ReadOnly $true -MaxRows 1 -TimeoutSec 10
+    if (-not $r.ok) { return @{ ok = $true; reason = $null } }
+    $maps = ConvertTo-DuneRowMaps -Result $r
+    if ($maps.Count -eq 0) { return @{ ok = $true; reason = $null } }
+    $status = [string]$maps[0]['status']
+    if ($status -eq 'LoggingOut') {
+        return @{ ok = $false; reason = "player is mid-logout — the pod still owns their character in memory and will flush on logout, overwriting skill grants. Grace timer is ~30s on Hagga / Arrakeen / Harkonnen / etc., ~5 min in Deep Desert. Wait until status shows Offline, then retry." }
+    }
+    if ($status -ne 'Offline') {
+        return @{ ok = $false; reason = "player is currently $status — skill grants write to the character's FLevelComponent, which the pod will overwrite when they log out. Have them log out first, then apply." }
+    }
+    return @{ ok = $true; reason = $null }
+}
+
 # ----- Faction reputation tables (verbatim from db.go) ---------------------
 
 $script:DuneFactionTierThresholds = @(

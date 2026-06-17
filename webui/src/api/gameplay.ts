@@ -679,6 +679,41 @@ export function setLandsraadContribution(controllerId: number, taskId: number, a
   })
 }
 
+// Landsraad reward thresholds/items admin (#250).
+export interface LandsraadRewardTier {
+  threshold: number
+  template_id: string
+  amount: number
+}
+export interface LandsraadRewardHouse {
+  task_id: number
+  house_name: string
+  display_name: string
+  board_index: number
+  tiers: LandsraadRewardTier[]
+}
+export interface LandsraadRewardsResponse {
+  term_id: number
+  houses: LandsraadRewardHouse[]
+  source: DataSource
+  liveError?: string
+}
+export function getLandsraadRewards(demo?: boolean) {
+  return api<LandsraadRewardsResponse>(`/api/gameplay/landsraad/rewards${qs({ demo: demo ? 1 : undefined })}`)
+}
+export function setLandsraadThresholds(mappings: { old: number; new: number }[]) {
+  return api<WriteResult>('/api/gameplay/landsraad/set-thresholds', {
+    method: 'POST',
+    body: JSON.stringify({ mappings }),
+  })
+}
+export function setLandsraadRewardTier(taskId: number, threshold: number, templateId?: string, amount?: number) {
+  return api<WriteResult>('/api/gameplay/landsraad/set-reward-tier', {
+    method: 'POST',
+    body: JSON.stringify({ task_id: taskId, threshold, template_id: templateId, amount }),
+  })
+}
+
 // ---------------------------------------------------------------------------
 // v11.5.6 — extended player surface (port of the reference implementation's player tooling).
 // ---------------------------------------------------------------------------
