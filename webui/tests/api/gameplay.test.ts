@@ -142,6 +142,7 @@ describe('Phase C/D/E/F — items, vehicles, teleport, progression, jobs', () =>
 
     await gp.resetJourney(5)
     expect(last().url).toBe('/api/gameplay/players/journey/reset')
+    expect(last().body).toEqual({ account_id: 5 })
 
     await gp.wipeJourney(5)
     expect(last().url).toBe('/api/gameplay/players/journey/wipe')
@@ -428,5 +429,4 @@ describe('flattenItemCatalog — catalog shape parsing', () => {
     expect(out.map(i => i.template_id)).toEqual(['Alpha', 'Zeta'])
   })
 })
-
 

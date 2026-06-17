@@ -163,15 +163,18 @@ Register-DuneRoute -Method POST -Path '/api/gameplay/players/journey/complete' -
     }
 }
 
-# POST /api/gameplay/players/journey/reset  { account_id, node_id }
+# POST /api/gameplay/players/journey/reset  { account_id, node_id? }
 Register-DuneRoute -Method POST -Path '/api/gameplay/players/journey/reset' -Handler {
     param($req, $res, $routeParams, $body)
     try {
         $acc = Get-DuneBodyInt -Body $body -Name 'account_id'
         $node = [string](Get-DuneBodyValue -Body $body -Name 'node_id')
         if ($null -eq $acc -or $acc -le 0) { Write-DuneError -Response $res -Status 400 -Message 'account_id is required.'; return }
-        if (-not $node) { Write-DuneError -Response $res -Status 400 -Message 'node_id is required.'; return }
-        Invoke-DunePlayerWriteRoute -Response $res -Action { param($ip) Invoke-DunePlayerResetJourneyNode -Ip $ip -AccountId $acc -NodeId $node }
+        Invoke-DunePlayerWriteRoute -Response $res -Action {
+            param($ip)
+            if ($node) { Invoke-DunePlayerResetJourneyNode -Ip $ip -AccountId $acc -NodeId $node }
+            else { Invoke-DunePlayerResetJourneyNodes -Ip $ip -AccountId $acc }
+        }
     } catch {
         Write-DuneError -Response $res -Status 500 -Message "Reset journey failed: $($_.Exception.Message)"
     }
