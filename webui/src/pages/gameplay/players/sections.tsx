@@ -438,7 +438,7 @@ interface ActionDef {
   liveOnly?: boolean      // requires player to be online (RMQ path)
   offlineOnly?: boolean   // requires player to be offline (DB write the game caches in memory)
   fields?: ActionField[]
-  custom?: 'give-item' | 'whisper' | 'spawn-vehicle' | 'quick-presets' | 'vehicle-kit' | 'give-package' | 'cheat-scripts' | 'dev-scripts' | 'unlock-trainers' | 'unlock-mainquest' | 'refuel-vehicle' | 'starter-class' | 'update-tags'
+  custom?: 'give-item' | 'grant-reward' | 'whisper' | 'spawn-vehicle' | 'quick-presets' | 'vehicle-kit' | 'give-package' | 'cheat-scripts' | 'dev-scripts' | 'unlock-trainers' | 'unlock-mainquest' | 'refuel-vehicle' | 'starter-class' | 'update-tags'
   balance?: 'solari' | 'scrip' | 'intel'  // show the player's current balance read-only above the form
   confirm?: (p: Player) => string  // confirm message; if returns '' no prompt
   doubleConfirm?: boolean // also requires a typed "i acknowledge" prompt inside run()
@@ -457,12 +457,9 @@ const ACTIONS: ActionDef[] = [
   { id: 'give-intel', group: 'Currency', label: 'Give Intel', icon: 'BookOpen', offlineOnly: true, balance: 'intel',
     fields: [{ key: 'amount', label: 'Tech Knowledge Points', type: 'number', placeholder: '100' }],
     run: (p, v) => awardIntel(p.controller_id, p.id, Number(v.amount) || 0) },
-  { id: 'grant-live', group: 'Currency', label: 'Grant Reward (popup)', icon: 'Gift',
-    fields: [
-      { key: 'template', label: 'Item template id', type: 'text', placeholder: 'Item_…' },
-      { key: 'amount',   label: 'Amount',           type: 'number', placeholder: '1' },
-    ],
-    run: (p, v) => grantLive(p.controller_id, String(v.template || '').trim(), Number(v.amount) || 1) },
+  { id: 'grant-live', group: 'Currency', label: 'Grant Reward (popup)', icon: 'Gift', custom: 'grant-reward',
+    rowNote: 'Sends a Claim Rewards popup — works online or offline',
+    run: () => Promise.resolve({ message: '' }) },
 
   // ----- Progression -----
   { id: 'award-char-xp', group: 'Progression', label: 'Award Character XP', icon: 'TrendingUp', liveOnly: true,
@@ -775,6 +772,9 @@ function ActionRow({ def, player, busy, stats, open, danger, onToggle, runAction
                 for (let q = 0; q <= 5; q++) await giveItem(player.id, tpl, qty, q, overflow)
                 return { message: `Gave ${tpl} Mk1–Mk6 (x${qty} each) to ${player.name}.` }
               })} />
+          ) : def.custom === 'grant-reward' ? (
+            <GrantRewardForm busy={busy} submitLabel={def.label}
+              onSubmit={(tpl, amount) => runAction(def, () => grantLive(player.controller_id, tpl, amount))} />
           ) : def.custom === 'whisper' ? (
             <WhisperForm busy={busy}
               onSubmit={msg => runAction(def, () => chatWhisper(String(player.id), msg))} />
@@ -865,6 +865,40 @@ function ActionRow({ def, player, busy, stats, open, danger, onToggle, runAction
           )}
         </div>
       )}
+    </div>
+  )
+}
+
+// Grant Reward (popup) form — shared ItemPicker (search + categories + friendly
+// names) + amount. Unlike Give Item this doesn't write to inventory directly; it
+// queues a Claim Rewards popup the player accepts in-game (works online or
+// offline). Renders without a card wrapper — ActionRow provides the container.
+function GrantRewardForm({ busy, submitLabel, onSubmit }: {
+  busy: boolean; submitLabel: string
+  onSubmit: (tpl: string, amount: number) => void
+}) {
+  const [tpl, setTpl]       = useState('')
+  const [name, setName]     = useState('')
+  const [amount, setAmount] = useState('1')
+  return (
+    <div className="space-y-3">
+      <ItemPicker label="Item — type to search by name or template id"
+        value={tpl} displayValue={name || tpl}
+        onChange={(t, item) => { setTpl(t); setName(item ? item.name : '') }}
+        autoFocus disabled={busy} />
+      <div>
+        <label className="block text-[11px] uppercase tracking-wider text-text-dim mb-1">Amount</label>
+        <input type="number" min={1} value={amount} disabled={busy}
+          onChange={e => setAmount(e.target.value)}
+          className="w-full px-3 py-2 rounded-lg bg-surface-2 border border-border text-text text-sm focus:outline-none focus:ring-2 focus:ring-ibad focus:border-ibad/50" />
+      </div>
+      <p className="text-[11px] text-text-dim">
+        Queues a <span className="text-text">Claim Rewards</span> popup the player accepts in-game — delivered whether they're online or offline.
+      </p>
+      <button className="btn-primary w-full" disabled={busy || !isValidTemplateId(tpl)}
+        onClick={() => onSubmit(tpl.trim(), Number(amount) || 1)}>
+        {busy ? <Icon name="Loader2" size={13} className="animate-spin" /> : <Icon name="Check" size={13} />} {submitLabel}
+      </button>
     </div>
   )
 }

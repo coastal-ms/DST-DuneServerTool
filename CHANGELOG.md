@@ -13,6 +13,22 @@ here cover everything those tags shipped.
 
 ## [Unreleased]
 
+## [12.5.5] - 2026-06-16
+
+### Changed
+
+- **Grant Reward (popup)** (Gameplay → Players → Currency) now uses the shared
+  item picker — search by friendly name, filter by category, and pick from the
+  catalog — instead of a raw "Item template id" text box. Matches the Give Item
+  and storage Add-Item flows, so admins no longer have to know the exact
+  internal template id (e.g. typing "spice" now resolves to the real item).
+
+### Fixed
+
+- Corrected two webui gameplay API read calls to pass ids as query parameters
+  (`account_id`, `player_id`, `actor_id`, `controller_id`) so they match the
+  backend handlers, fixing the previously failing API tests.
+
 ## [12.5.4] - 2026-06-16
 
 ### Removed
