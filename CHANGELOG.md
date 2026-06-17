@@ -13,6 +13,8 @@ here cover everything those tags shipped.
 
 ## [Unreleased]
 
+## [12.5.2] - 2026-06-16
+
 ### Added
 
 - **Landsraad Houses tab** (Gameplay Admin → Landsraad Houses). View and edit the
