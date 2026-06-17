@@ -10,6 +10,7 @@ BeforeAll {
 
     $script:SecBuilding  = '/Script/DuneSandbox.BuildingSettings'
     $script:SecInventory = '/Script/DuneSandbox.InventorySystemSettings'
+    $script:SecCrafting  = '/Script/DuneSandbox.CraftingSettings'
 
     # Count how many times a given section header occurs in rendered output.
     function Get-HeaderCount {
@@ -231,6 +232,70 @@ Describe 'DuneGameConfigSchema: only proven m_Global*Multiplier keys remain' -Ta
         foreach ($k in $removed) {
             $keys.ContainsKey($k) | Should -BeFalse -Because "$k was proven/assumed no-op via UserGame.ini and removed (issue #225)"
         }
+    }
+}
+
+Describe 'DuneGameConfigSchema: CraftingSettings fields' -Tag 'GameConfig' {
+
+    It 'exposes repair and recycler weights as server-and-client game settings' {
+        $fields = @{}
+        foreach ($f in $script:DuneGameConfigSchema) { $fields[$f.Key] = $f }
+
+        foreach ($k in @('m_RepairCostWeight', 'm_RecyclerOutputWeight')) {
+            $fields.ContainsKey($k) | Should -BeTrue
+            $fields[$k].Section | Should -Be $script:SecCrafting
+            $fields[$k].File | Should -Be 'game'
+            $fields[$k].Type | Should -Be 'float'
+            $fields[$k].Default | Should -Be '1.0'
+            $fields[$k].ClientApply | Should -BeTrue
+        }
+    }
+
+    It 'includes Crafting in the curated schema API order' {
+        $cats = @((Get-DuneGameConfigSchemaApi) | ForEach-Object { $_.category })
+        $cats | Should -Contain 'Crafting'
+        ([array]::IndexOf($cats, 'Crafting')) | Should -BeGreaterThan ([array]::IndexOf($cats, 'Resources & Economy'))
+        ([array]::IndexOf($cats, 'Crafting')) | Should -BeLessThan ([array]::IndexOf($cats, 'Building'))
+    }
+
+    It 'returns repair and recycler weights in the client-apply notice after server save' {
+        $notice = Get-DuneGameConfigClientApplyNotice -Updates @(
+            @{ file='game'; section=$script:SecCrafting; key='m_RepairCostWeight'; value='0.5' },
+            @{ file='game'; section=$script:SecCrafting; key='m_RecyclerOutputWeight'; value='2.0' }
+        )
+        $items = @($notice.items)
+        $items.Count | Should -Be 2
+        @($items | ForEach-Object { $_.key }) | Should -Contain 'm_RepairCostWeight'
+        @($items | ForEach-Object { $_.key }) | Should -Contain 'm_RecyclerOutputWeight'
+        foreach ($it in $items) {
+            $it.section | Should -Be $script:SecCrafting
+        }
+    }
+
+    It 'persists repair and recycler weights into the server-side managed block' {
+        $out = ConvertTo-DuneIniManaged -Raw '' -Updates @(
+            @{ section=$script:SecCrafting; key='m_RepairCostWeight'; value='0.5' },
+            @{ section=$script:SecCrafting; key='m_RecyclerOutputWeight'; value='2.0' }
+        ) -QuotedKeys @{}
+
+        (Get-HeaderCount -Raw $out -Name $script:SecCrafting) | Should -Be 1
+        $out.IndexOf('[' + $script:SecCrafting + ']') | Should -BeGreaterThan ($out.IndexOf($script:DstManagedBegin))
+        (Get-EffectiveValue -Raw $out -Section $script:SecCrafting -Key 'm_RepairCostWeight') | Should -Be '0.5'
+        (Get-EffectiveValue -Raw $out -Section $script:SecCrafting -Key 'm_RecyclerOutputWeight') | Should -Be '2.0'
+    }
+
+    It 'allows the client-side writer to persist repair and recycler weights' {
+        $dir = (Get-PSDrive TestDrive).Root
+        $result = Save-DuneGameConfigClient -Dir $dir -Updates @(
+            @{ key='m_RepairCostWeight'; value='0.25' },
+            @{ key='m_RecyclerOutputWeight'; value='1.75' }
+        )
+
+        $result.ok | Should -BeTrue
+        $raw = [IO.File]::ReadAllText((Join-Path $dir 'Game.ini'))
+        (Get-HeaderCount -Raw $raw -Name $script:SecCrafting) | Should -Be 1
+        (Get-EffectiveValue -Raw $raw -Section $script:SecCrafting -Key 'm_RepairCostWeight') | Should -Be '0.25'
+        (Get-EffectiveValue -Raw $raw -Section $script:SecCrafting -Key 'm_RecyclerOutputWeight') | Should -Be '1.75'
     }
 }
 
