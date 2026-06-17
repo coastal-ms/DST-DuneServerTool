@@ -13,6 +13,60 @@ here cover everything those tags shipped.
 
 ## [Unreleased]
 
+## [12.5.1] - 2026-06-16
+
+### Fixed
+
+- **Non-ASCII characters in INI files corrupted into mojibake (e.g. UTF-8
+  comment banners in UserGame.ini).** The SSH transport that reads remote files
+  (`Invoke-V6Ssh` / `Invoke-DuneSshHidden`) decoded the process output using the
+  Windows console code page (CP850 / Windows-1252) instead of UTF-8, so any
+  non-ASCII bytes — like the box-drawing banners in a hand-edited `UserGame.ini`
+  — came back as garbage. A subsequent Game Config save then re-encoded that
+  garbage as UTF-8 and wrote it to disk, permanently corrupting the file. The
+  transport now decodes remote stdout/stderr as UTF-8 (a strict superset of
+  ASCII, so a no-op for normal output), preserving non-ASCII content end to end.
+
+- **Game Config boolean toggles reverting to Off after switching On (Coriolis
+  Auto-Spawn and any default-`True` toggle).** Toggling a bool whose value
+  matched its schema default correctly triggers a reset — the key is removed
+  from the user INI so it falls back to the default — but a stale copy of that
+  same key left behind in a *different / unmanaged* INI section could shadow the
+  canonical value, so the UI re-read the old `False` and the switch snapped back
+  to Off. The INI writer now strips a touched key from **every** section,
+  including unmanaged body sections, so the declared section is authoritative
+  and the toggle sticks. Added regression tests covering the stale-unmanaged-copy
+  case.
+
+### Changed
+
+- **Coriolis Storm Seeds: correct the valid seed range.** The seed inputs (farm /
+  per-map / per-partition) now accept **-1** (auto / clear a forced seed) and cap
+  at **0–11**, matching the game's 12 pre-built Coriolis world layouts
+  (`m_CycleSeeds`). Previously the boxes rejected `-1` and **Reroll** generated a
+  meaningless multi-billion value; Reroll now picks a random `0–11`. Validation is
+  enforced in the UI, the route, and the seed-write functions.
+
+- **Coriolis Storm Seeds: fix every map name collapsing into one row.** The read
+  path round-tripped the map / partition name arrays as JSON text through the
+  psql CSV layer; the embedded commas and quotes collided with CSV field parsing,
+  so all map names merged into a single space-joined "Per map" row (and per-map
+  **Apply** then failed with "map (string) is required"). The query now lets
+  Postgres split the arrays with `unnest()` and returns one clean scalar row per
+  map / partition, so each map lists and applies individually.
+
+- **Coriolis Storm Seeds: bulk "apply to all" and "reset all to game default".**
+  The Farm control is now clearly labelled as the apply-to-everything action
+  ("Farm — all maps + partitions" / "Apply to all"), and a new **Reset all to
+  game default** button clears every forced seed (farm + every map + every
+  partition) back to `-1` (auto) in one click. Both reuse the cascading farm
+  write, each behind its own confirmation.
+
+- **Cheat Scripts and Dev / Perf Scripts now require a double confirmation.**
+  Firing a cheat script or dev/perf script (Gameplay Admin → Players → Live)
+  prompts twice — an initial confirm plus a typed `i acknowledge` — matching the
+  existing guard on destructive actions like wipe-codex and delete-account.
+
 ## [12.5.0] - 2026-06-16
 
 ### Added

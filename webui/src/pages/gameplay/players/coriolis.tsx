@@ -73,27 +73,34 @@ export function CoriolisAdmin({ flash }: { flash: Flash }) {
 
   const applyFarm = () => {
     const seed = Number(farmDraft)
-    if (!Number.isFinite(seed) || seed < 0) return flash('Farm seed must be a non-negative integer.', 'err')
+    if (!Number.isFinite(seed) || seed < -1 || seed > 11) return flash('Farm seed must be -1 (auto) or 0-11.', 'err')
     if (!confirm(`Set FARM coriolis seed to ${seed}?\n\nThis cascades to every map + partition and (when changed) cleans up corpses / coriolis-affected loose state.`)) return
     run(() => setCoriolisFarmSeed(seed), 'Set farm seed')
   }
   const applyMap = (map: string) => {
     const seed = Number(mapDrafts[map])
-    if (!Number.isFinite(seed) || seed < 0) return flash(`Map seed for ${map} must be a non-negative integer.`, 'err')
+    if (!Number.isFinite(seed) || seed < -1 || seed > 11) return flash(`Map seed for ${map} must be -1 (auto) or 0-11.`, 'err')
     if (!confirm(`Set MAP "${map}" coriolis seed to ${seed}?\n\nCascades to that map's partitions.`)) return
     run(() => setCoriolisMapSeed(map, seed), `Set ${map} seed`)
   }
   const applyPart = (p: CoriolisPartition) => {
     const seed = Number(partDrafts[p.partition_id])
-    if (!Number.isFinite(seed) || seed < 0) return flash(`Partition seed must be a non-negative integer.`, 'err')
+    if (!Number.isFinite(seed) || seed < -1 || seed > 11) return flash(`Partition seed must be -1 (auto) or 0-11.`, 'err')
     if (!confirm(`Set PARTITION ${p.partition_id} (${p.map}) coriolis seed to ${seed}?`)) return
     run(() => setCoriolisPartitionSeed(p.partition_id, seed), `Set partition ${p.partition_id} seed`)
   }
   const reroll = () => {
-    const seed = Math.floor(Math.random() * 2_000_000_000) + 1
+    const seed = Math.floor(Math.random() * 12)
     setFarmDraft(String(seed))
   }
   const stay = () => setFarmDraft(String(farmSeed))
+  // Revert every scope (farm + all maps + all partitions) to the game default
+  // (-1 = no forced seed / auto). The farm write already cascades to every map
+  // and partition, so a single -1 farm apply clears them all.
+  const resetAllDefault = () => {
+    if (!confirm('Reset ALL Coriolis seeds — farm, every map, and every partition — to game default (-1 = auto)?\n\nThis clears every forced seed so the game picks layouts on its own. Where a seed actually changes, the next storm tick runs the usual cleanup. No undo.')) return
+    run(() => setCoriolisFarmSeed(-1), 'Reset all seeds to game default')
+  }
 
   if (loading) {
     return (
@@ -121,9 +128,12 @@ export function CoriolisAdmin({ flash }: { flash: Flash }) {
       </div>
 
       <p className="text-xs text-text-dim">
-        World-reset seeds drive Coriolis storm layout (spawns, dunes, loot scatter). Changing a seed
-        triggers cleanup (corpses, loose loot) on next storm tick. Use <em>Stay on current</em> to
-        lock the layout across resets, or <em>Reroll</em> to pick a fresh random one.
+        World-reset seeds drive Coriolis storm layout (spawns, dunes, loot scatter). Valid seeds are
+        <strong>0–11</strong> (the 12 pre-built layouts); enter <strong>-1</strong> to clear a forced
+        seed (auto). Changing a seed triggers cleanup (corpses, loose loot) on next storm tick. Use
+        <em>Stay on current</em> to lock the layout across resets, or <em>Reroll</em> to pick a fresh
+        random one. <strong>Farm</strong> stamps one seed onto every map + partition at once;
+        <strong>Reset all to game default</strong> clears every forced seed back to -1.
       </p>
 
       {/* Severe-consequences warning + lock gate. These settings rewrite world-reset
@@ -158,16 +168,17 @@ export function CoriolisAdmin({ flash }: { flash: Flash }) {
       </div>
 
       {unlocked && (<>
-      {/* Farm scope */}
+      {/* Farm scope — applies to every map + partition at once */}
       <div className="rounded-lg border border-border bg-surface-2/40 p-3 space-y-2">
         <div className="flex items-center justify-between">
-          <div className="text-sm font-medium text-text">Farm (all maps)</div>
+          <div className="text-sm font-medium text-text">Farm — all maps + partitions</div>
           <div className="font-mono text-xs text-text-dim">current: {farmSeed}</div>
         </div>
         <div className="flex items-center gap-2">
           <input
             type="number"
-            min={0}
+            min={-1}
+            max={11}
             value={farmDraft}
             onChange={e => setFarmDraft(e.target.value)}
             disabled={busy}
@@ -180,8 +191,21 @@ export function CoriolisAdmin({ flash }: { flash: Flash }) {
           <button className="btn-secondary text-xs" disabled={busy} onClick={stay} title="Reset draft to current seed (no change on apply)">
             <Icon name="Lock" size={12} /> Stay
           </button>
-          <button className="btn-primary text-xs" disabled={busy || farmDraft === ''} onClick={applyFarm}>
-            <Icon name="Check" size={12} /> Apply
+          <button className="btn-primary text-xs" disabled={busy || farmDraft === ''} onClick={applyFarm} title="Stamp this seed onto every map and partition">
+            <Icon name="Check" size={12} /> Apply to all
+          </button>
+        </div>
+        <div className="flex items-center justify-between gap-2 pt-1 border-t border-border/60">
+          <p className="text-[11px] text-text-dim">
+            Clear every forced seed (farm + all maps + all partitions) back to the game default.
+          </p>
+          <button
+            className="btn-secondary text-xs text-warning border-warning/40"
+            disabled={busy}
+            onClick={resetAllDefault}
+            title="Set farm, every map, and every partition back to -1 (auto)"
+          >
+            <Icon name="RotateCcw" size={12} /> Reset all to game default
           </button>
         </div>
       </div>
@@ -197,7 +221,8 @@ export function CoriolisAdmin({ flash }: { flash: Flash }) {
                 <span className="font-mono text-[11px] text-text-dim w-24">cur: {m.seed}</span>
                 <input
                   type="number"
-                  min={0}
+                  min={-1}
+                  max={11}
                   value={mapDrafts[m.map] ?? ''}
                   onChange={e => setMapDrafts(d => ({ ...d, [m.map]: e.target.value }))}
                   disabled={busy}
@@ -226,7 +251,8 @@ export function CoriolisAdmin({ flash }: { flash: Flash }) {
                 <span className="font-mono text-[11px] text-text-dim w-24">cur: {p.seed}</span>
                 <input
                   type="number"
-                  min={0}
+                  min={-1}
+                  max={11}
                   value={partDrafts[p.partition_id] ?? ''}
                   onChange={e => setPartDrafts(d => ({ ...d, [p.partition_id]: e.target.value }))}
                   disabled={busy}

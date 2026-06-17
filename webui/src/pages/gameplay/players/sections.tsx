@@ -553,10 +553,16 @@ const ACTIONS: ActionDef[] = [
   { id: 'whisper', group: 'Live', label: 'Whisper', icon: 'MessageCircle', liveOnly: true, custom: 'whisper',
     run: () => Promise.resolve({ message: '' }) },
   { id: 'cheat-script', group: 'Live', label: 'Cheat Scripts', icon: 'Terminal', liveOnly: true, custom: 'cheat-scripts',
-    rowNote: 'Fire a server cheat script — loadouts, XP, unlock skills/abilities. Online only',
+    doubleConfirm: true,
+    rowNote: 'Fire a server cheat script — loadouts, XP, unlock skills/abilities. Online only · Double confirmation required',
+    confirm: p => `Run a cheat script on ${p.name}?\n\n` +
+      `This is the FIRST of two confirmations. Cheat scripts run server-side game commands (loadouts, XP, skill/ability unlocks) and cannot be undone. If you continue, the next step asks you to type an acknowledgement before the script fires.`,
     run: () => Promise.resolve({ message: '' }) },
   { id: 'dev-scripts', group: 'Live', label: 'Dev / Perf Scripts', icon: 'FlaskConical', liveOnly: true, custom: 'dev-scripts',
-    rowNote: 'Developer performance-test harnesses (hitch tests). Playtest-only, online only',
+    doubleConfirm: true,
+    rowNote: 'Developer performance-test harnesses (hitch tests). Playtest-only, online only · Double confirmation required',
+    confirm: p => `Run a dev/perf script on ${p.name}?\n\n` +
+      `This is the FIRST of two confirmations. These are developer performance-test harnesses that change the running game session. If you continue, the next step asks you to type an acknowledgement before the script fires.`,
     run: () => Promise.resolve({ message: '' }) },
 
   // ----- Identity -----
@@ -787,12 +793,28 @@ function ActionRow({ def, player, busy, stats, open, danger, onToggle, runAction
           ) : def.custom === 'cheat-scripts' ? (
             <CheatScriptForm busy={busy}
               onSubmit={name => runAction(def, async () => {
+                const typed = window.prompt(
+                  `SECOND confirmation — fire cheat script "${name}" on ${player.name}.\n` +
+                  `This runs a server-side cheat command and cannot be undone.\n\n` +
+                  `Type  i acknowledge  to proceed:`
+                ) || ''
+                if (typed.trim().toLowerCase() !== 'i acknowledge') {
+                  return Promise.reject(new Error('Did not type "i acknowledge" — cheat script aborted.'))
+                }
                 await cheatScript({ actor_id: player.id }, name)
                 return { message: `Sent cheat script "${name}" to ${player.name}.` }
               })} />
           ) : def.custom === 'dev-scripts' ? (
             <DevScriptForm busy={busy}
               onSubmit={name => runAction(def, async () => {
+                const typed = window.prompt(
+                  `SECOND confirmation — fire dev script "${name}" on ${player.name}.\n` +
+                  `This runs a server-side dev/perf command and cannot be undone.\n\n` +
+                  `Type  i acknowledge  to proceed:`
+                ) || ''
+                if (typed.trim().toLowerCase() !== 'i acknowledge') {
+                  return Promise.reject(new Error('Did not type "i acknowledge" — dev script aborted.'))
+                }
                 await cheatScript({ actor_id: player.id }, name)
                 return { message: `Sent dev script "${name}" to ${player.name}.` }
               })} />
