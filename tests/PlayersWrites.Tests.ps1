@@ -76,6 +76,23 @@ Describe 'Get-DuneSqlAffected' -Tag 'Pure' {
     }
 }
 
+Describe 'Resolve-DuneRepairDurabilityTarget' -Tag 'Pure' {
+    It 'keeps no-current empty durability blocks untouched' {
+        Resolve-DuneRepairDurabilityTarget -CatalogMax 0 -ItemMax 0 -ItemCurrent 0 -ItemDecayedMax 0 -HasCurrent $false | Should -Be 0
+    }
+    It 'repairs current-only zero or low durability items to 100' {
+        Resolve-DuneRepairDurabilityTarget -CatalogMax 0 -ItemMax 0 -ItemCurrent 0 -ItemDecayedMax 0 -HasCurrent $true | Should -Be 100
+        Resolve-DuneRepairDurabilityTarget -CatalogMax 0 -ItemMax 0 -ItemCurrent 50 -ItemDecayedMax 0 -HasCurrent $true | Should -Be 100
+    }
+    It 'rounds current-only values between 100 and 200 up to 200' {
+        Resolve-DuneRepairDurabilityTarget -CatalogMax 0 -ItemMax 0 -ItemCurrent 150 -ItemDecayedMax 0 -HasCurrent $true | Should -Be 200
+    }
+    It 'preserves known higher catalog or item caps' {
+        Resolve-DuneRepairDurabilityTarget -CatalogMax 400 -ItemMax 0 -ItemCurrent 50 -ItemDecayedMax 0 -HasCurrent $true | Should -Be 400
+        Resolve-DuneRepairDurabilityTarget -CatalogMax 0 -ItemMax 250 -ItemCurrent 50 -ItemDecayedMax 0 -HasCurrent $true | Should -Be 250
+    }
+}
+
 Describe 'Invoke-DunePlayerUpdateTags' -Tag 'TagsDelta' {
     BeforeEach {
         $script:capturedSql = $null
@@ -85,6 +102,7 @@ Describe 'Invoke-DunePlayerUpdateTags' -Tag 'TagsDelta' {
             return @{ ok = $true; message = 'SELECT 1' }
         }
     }
+
     AfterEach {
         Remove-Item function:global:Invoke-DuneSqlQuery -ErrorAction SilentlyContinue
     }
@@ -117,5 +135,51 @@ Describe 'Invoke-DunePlayerUpdateTags' -Tag 'TagsDelta' {
     It 'skips blank tags after trimming' {
         Invoke-DunePlayerUpdateTags -Ip '1.2.3.4' -AccountId 7 -Add @('  ', 'real') -Remove @() | Out-Null
         $script:capturedSql | Should -Match "ARRAY\['real'\]::text\[\]"
+    }
+}
+
+Describe 'Invoke-DunePlayerGiveItemsBulk overflow' -Tag 'Pure' {
+    BeforeEach {
+        $script:liveArgs = $null
+        function global:Get-DuneBodyValue {
+            param($Body, [string]$Name)
+            if ($Body -is [System.Collections.IDictionary] -and $Body.Contains($Name)) { return $Body[$Name] }
+            if ($null -ne $Body -and $Body.PSObject.Properties[$Name]) { return $Body.$Name }
+            return $null
+        }
+        function global:Get-DuneBodyInt {
+            param($Body, [string]$Name)
+            $v = Get-DuneBodyValue -Body $Body -Name $Name
+            if ($null -eq $v -or $v -eq '') { return $null }
+            return [int64]$v
+        }
+        function global:Test-DunePlayerOffline { return @{ ok = $false } }
+        function global:Resolve-DuneFlsIdOrError { return @{ ok = $true; fls_id = 'fls-test' } }
+        function global:Invoke-DunePlayerGiveItemLive {
+            param($Ip, $ActorId, $FlsId, $Template, $Quantity, $Durability, $AllowOverflow)
+            $script:liveArgs = @{
+                Ip = $Ip; ActorId = $ActorId; FlsId = $FlsId; Template = $Template
+                Quantity = $Quantity; Durability = $Durability; AllowOverflow = $AllowOverflow
+            }
+            return @{ ok = $true; path = 'rmq' }
+        }
+    }
+    AfterEach {
+        Remove-Item function:global:Get-DuneBodyValue -ErrorAction SilentlyContinue
+        Remove-Item function:global:Get-DuneBodyInt -ErrorAction SilentlyContinue
+        Remove-Item function:global:Test-DunePlayerOffline -ErrorAction SilentlyContinue
+        Remove-Item function:global:Resolve-DuneFlsIdOrError -ErrorAction SilentlyContinue
+        Remove-Item function:global:Invoke-DunePlayerGiveItemLive -ErrorAction SilentlyContinue
+    }
+
+    It 'passes AllowOverflow to live package item gives' {
+        $items = @(@{ template = 'Ammo'; qty = 500; quality = 0 })
+
+        $r = Invoke-DunePlayerGiveItemsBulk -Ip '1.2.3.4' -PawnId 24 -Items $items -AllowOverflow $true
+
+        $r.ok | Should -BeTrue
+        $script:liveArgs.AllowOverflow | Should -BeTrue
+        $script:liveArgs.Template | Should -Be 'Ammo'
+        $script:liveArgs.Quantity | Should -Be 500
     }
 }

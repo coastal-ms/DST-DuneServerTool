@@ -235,6 +235,28 @@ function Format-DuneFloatForSql {
     return $Value.ToString([System.Globalization.CultureInfo]::InvariantCulture)
 }
 
+function ConvertTo-DuneBool {
+    param($Value)
+    if ($Value -is [bool]) { return $Value }
+    $s = ([string]$Value).Trim()
+    return ($s -in @('1', 't', 'true', 'y', 'yes'))
+}
+
+function Resolve-DuneRepairDurabilityTarget {
+    param(
+        [double]$CatalogMax,
+        [double]$ItemMax,
+        [double]$ItemCurrent,
+        [double]$ItemDecayedMax,
+        [bool]$HasCurrent = $false
+    )
+    $target = [Math]::Max([Math]::Max([Math]::Max($CatalogMax, $ItemMax), $ItemCurrent), $ItemDecayedMax)
+    if ($target -le 0 -and -not $HasCurrent) { return 0.0 }
+    if ($target -lt 100) { return 100.0 }
+    if ($target -gt 100 -and $target -lt 200) { return 200.0 }
+    return $target
+}
+
 # Repair item (repair-item): set MaxDurability/CurrentDurability/DecayedMaxDurability
 # to GREATEST(catalog.max_durability, item.MaxDurability, item.CurrentDurability,
 # item.DecayedMaxDurability). The catalog (gameplay-item-data.json) carries the
@@ -251,7 +273,8 @@ function Invoke-DunePlayerRepairItem {
 SELECT template_id,
        COALESCE((stats->'FItemStackAndDurabilityStats'->1->>'MaxDurability')::float8, 0)        AS m,
        COALESCE((stats->'FItemStackAndDurabilityStats'->1->>'CurrentDurability')::float8, 0)    AS c,
-       COALESCE((stats->'FItemStackAndDurabilityStats'->1->>'DecayedMaxDurability')::float8, 0) AS d
+       COALESCE((stats->'FItemStackAndDurabilityStats'->1->>'DecayedMaxDurability')::float8, 0) AS d,
+       (stats->'FItemStackAndDurabilityStats'->1 ? 'CurrentDurability') AS has_c
 FROM dune.items
 WHERE id = $ItemId::bigint
   AND stats ? 'FItemStackAndDurabilityStats';
@@ -267,7 +290,8 @@ WHERE id = $ItemId::bigint
     $itemCur = [double]([string]$rows[0]['c'])
     $itemDec = [double]([string]$rows[0]['d'])
     $catMax  = Get-DuneItemCatalogMaxDurability -TemplateId $tmpl
-    $target  = [Math]::Max([Math]::Max([Math]::Max($catMax, $itemMax), $itemCur), $itemDec)
+    $hasCur  = ConvertTo-DuneBool $rows[0]['has_c']
+    $target  = Resolve-DuneRepairDurabilityTarget -CatalogMax $catMax -ItemMax $itemMax -ItemCurrent $itemCur -ItemDecayedMax $itemDec -HasCurrent $hasCur
     if ($target -le 0) {
         return @{ ok = $true; message = "Item $ItemId has no usable durability value — left untouched." }
     }

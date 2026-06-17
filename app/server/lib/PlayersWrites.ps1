@@ -363,7 +363,7 @@ WHERE template_id = 'ContractItem'
 # Bulk give: loops the existing single-template give. Items is an array of
 # @{ template = '...'; qty = N; quality = M }.
 function Invoke-DunePlayerGiveItemsBulk {
-    param([string]$Ip, [long]$PawnId, $Items, [string]$FlsId)
+    param([string]$Ip, [long]$PawnId, $Items, [string]$FlsId, [bool]$AllowOverflow = $false)
     if ($PawnId -le 0) { return @{ ok = $false; error = 'pawn_id is required.' } }
     if (-not $Items -or @($Items).Count -eq 0) {
         return @{ ok = $false; error = 'items[] is required.' }
@@ -395,7 +395,7 @@ function Invoke-DunePlayerGiveItemsBulk {
         if ($qty -le 0) { $qty = 1 }
         if ($isOnline -and $qlevel -le 0 -and -not [string]::IsNullOrWhiteSpace($fls)) {
             # Online + default quality → RMQ live (instant, no relog)
-            $r = Invoke-DunePlayerGiveItemLive -Ip $Ip -ActorId $PawnId -FlsId $fls -Template $tmpl -Quantity ([int]$qty) -Durability 1.0
+            $r = Invoke-DunePlayerGiveItemLive -Ip $Ip -ActorId $PawnId -FlsId $fls -Template $tmpl -Quantity ([int]$qty) -Durability 1.0 -AllowOverflow $AllowOverflow
             if ($r.ok -and -not $r.path) { $r['path'] = 'rmq' }
         } else {
             # Offline, OR online with custom quality / unresolved fls → SQL
@@ -440,7 +440,8 @@ function Invoke-DunePlayerRepairGear {
 SELECT i.id, i.template_id,
        COALESCE((i.stats->'FItemStackAndDurabilityStats'->1->>'MaxDurability')::float8, 0)        AS m,
        COALESCE((i.stats->'FItemStackAndDurabilityStats'->1->>'CurrentDurability')::float8, 0)    AS c,
-       COALESCE((i.stats->'FItemStackAndDurabilityStats'->1->>'DecayedMaxDurability')::float8, 0) AS d
+       COALESCE((i.stats->'FItemStackAndDurabilityStats'->1->>'DecayedMaxDurability')::float8, 0) AS d,
+       (i.stats->'FItemStackAndDurabilityStats'->1 ? 'CurrentDurability') AS has_c
 FROM dune.items i
 JOIN dune.inventories inv ON inv.id = i.inventory_id
 WHERE inv.actor_id = $PawnId::bigint
@@ -457,7 +458,8 @@ WHERE inv.actor_id = $PawnId::bigint
         $iCur = [double]([string]$r['c'])
         $iDec = [double]([string]$r['d'])
         $cMax = Get-DuneItemCatalogMaxDurability -TemplateId $tmpl
-        $target = [Math]::Max([Math]::Max([Math]::Max($cMax, $iMax), $iCur), $iDec)
+        $hasCur = ConvertTo-DuneBool $r['has_c']
+        $target = Resolve-DuneRepairDurabilityTarget -CatalogMax $cMax -ItemMax $iMax -ItemCurrent $iCur -ItemDecayedMax $iDec -HasCurrent $hasCur
         if ($target -gt 0) {
             $iid  = [long]$r['id']
             $tval = Format-DuneFloatForSql -Value $target
@@ -514,7 +516,8 @@ function Invoke-DunePlayerRestoreDestroyedGear {
 SELECT i.id, i.template_id,
        COALESCE((i.stats->'FItemStackAndDurabilityStats'->1->>'MaxDurability')::float8, 0)        AS m,
        COALESCE((i.stats->'FItemStackAndDurabilityStats'->1->>'CurrentDurability')::float8, 0)    AS c,
-       COALESCE((i.stats->'FItemStackAndDurabilityStats'->1->>'DecayedMaxDurability')::float8, 0) AS d
+       COALESCE((i.stats->'FItemStackAndDurabilityStats'->1->>'DecayedMaxDurability')::float8, 0) AS d,
+       (i.stats->'FItemStackAndDurabilityStats'->1 ? 'CurrentDurability') AS has_c
 FROM dune.items i
 JOIN dune.inventories inv ON inv.id = i.inventory_id
 WHERE inv.actor_id = $PawnId::bigint
@@ -532,7 +535,8 @@ WHERE inv.actor_id = $PawnId::bigint
         $iCur = [double]([string]$r['c'])
         $iDec = [double]([string]$r['d'])
         $cMax = Get-DuneItemCatalogMaxDurability -TemplateId $tmpl
-        $target = [Math]::Max([Math]::Max([Math]::Max($cMax, $iMax), $iCur), $iDec)
+        $hasCur = ConvertTo-DuneBool $r['has_c']
+        $target = Resolve-DuneRepairDurabilityTarget -CatalogMax $cMax -ItemMax $iMax -ItemCurrent $iCur -ItemDecayedMax $iDec -HasCurrent $hasCur
         if ($target -gt 0) {
             $iid  = [long]$r['id']
             $tval = Format-DuneFloatForSql -Value $target
