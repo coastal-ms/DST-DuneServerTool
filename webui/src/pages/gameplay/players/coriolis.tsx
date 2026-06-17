@@ -73,24 +73,24 @@ export function CoriolisAdmin({ flash }: { flash: Flash }) {
 
   const applyFarm = () => {
     const seed = Number(farmDraft)
-    if (!Number.isFinite(seed) || seed < 0) return flash('Farm seed must be a non-negative integer.', 'err')
+    if (!Number.isFinite(seed) || seed < -1 || seed > 11) return flash('Farm seed must be -1 (auto) or 0-11.', 'err')
     if (!confirm(`Set FARM coriolis seed to ${seed}?\n\nThis cascades to every map + partition and (when changed) cleans up corpses / coriolis-affected loose state.`)) return
     run(() => setCoriolisFarmSeed(seed), 'Set farm seed')
   }
   const applyMap = (map: string) => {
     const seed = Number(mapDrafts[map])
-    if (!Number.isFinite(seed) || seed < 0) return flash(`Map seed for ${map} must be a non-negative integer.`, 'err')
+    if (!Number.isFinite(seed) || seed < -1 || seed > 11) return flash(`Map seed for ${map} must be -1 (auto) or 0-11.`, 'err')
     if (!confirm(`Set MAP "${map}" coriolis seed to ${seed}?\n\nCascades to that map's partitions.`)) return
     run(() => setCoriolisMapSeed(map, seed), `Set ${map} seed`)
   }
   const applyPart = (p: CoriolisPartition) => {
     const seed = Number(partDrafts[p.partition_id])
-    if (!Number.isFinite(seed) || seed < 0) return flash(`Partition seed must be a non-negative integer.`, 'err')
+    if (!Number.isFinite(seed) || seed < -1 || seed > 11) return flash(`Partition seed must be -1 (auto) or 0-11.`, 'err')
     if (!confirm(`Set PARTITION ${p.partition_id} (${p.map}) coriolis seed to ${seed}?`)) return
     run(() => setCoriolisPartitionSeed(p.partition_id, seed), `Set partition ${p.partition_id} seed`)
   }
   const reroll = () => {
-    const seed = Math.floor(Math.random() * 2_000_000_000) + 1
+    const seed = Math.floor(Math.random() * 12)
     setFarmDraft(String(seed))
   }
   const stay = () => setFarmDraft(String(farmSeed))
@@ -121,9 +121,11 @@ export function CoriolisAdmin({ flash }: { flash: Flash }) {
       </div>
 
       <p className="text-xs text-text-dim">
-        World-reset seeds drive Coriolis storm layout (spawns, dunes, loot scatter). Changing a seed
-        triggers cleanup (corpses, loose loot) on next storm tick. Use <em>Stay on current</em> to
-        lock the layout across resets, or <em>Reroll</em> to pick a fresh random one.
+        World-reset seeds drive Coriolis storm layout (spawns, dunes, loot scatter). Valid seeds are
+        <strong>0–11</strong> (the 12 pre-built layouts); enter <strong>-1</strong> to clear a forced
+        seed (auto). Changing a seed triggers cleanup (corpses, loose loot) on next storm tick. Use
+        <em>Stay on current</em> to lock the layout across resets, or <em>Reroll</em> to pick a fresh
+        random one.
       </p>
 
       {/* Severe-consequences warning + lock gate. These settings rewrite world-reset
@@ -167,7 +169,8 @@ export function CoriolisAdmin({ flash }: { flash: Flash }) {
         <div className="flex items-center gap-2">
           <input
             type="number"
-            min={0}
+            min={-1}
+            max={11}
             value={farmDraft}
             onChange={e => setFarmDraft(e.target.value)}
             disabled={busy}
@@ -197,7 +200,8 @@ export function CoriolisAdmin({ flash }: { flash: Flash }) {
                 <span className="font-mono text-[11px] text-text-dim w-24">cur: {m.seed}</span>
                 <input
                   type="number"
-                  min={0}
+                  min={-1}
+                  max={11}
                   value={mapDrafts[m.map] ?? ''}
                   onChange={e => setMapDrafts(d => ({ ...d, [m.map]: e.target.value }))}
                   disabled={busy}
@@ -226,7 +230,8 @@ export function CoriolisAdmin({ flash }: { flash: Flash }) {
                 <span className="font-mono text-[11px] text-text-dim w-24">cur: {p.seed}</span>
                 <input
                   type="number"
-                  min={0}
+                  min={-1}
+                  max={11}
                   value={partDrafts[p.partition_id] ?? ''}
                   onChange={e => setPartDrafts(d => ({ ...d, [p.partition_id]: e.target.value }))}
                   disabled={busy}

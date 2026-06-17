@@ -88,7 +88,7 @@ function Get-DuneCoriolisSeedsDemo {
 # ----------------------------------------------------------------------------
 function Invoke-DuneCoriolisSetFarmSeed {
     param([string]$Ip, [int]$Seed)
-    if ($Seed -lt 0) { return @{ ok = $false; error = 'Seed must be a non-negative 32-bit integer.' } }
+    if ($Seed -lt -1 -or $Seed -gt 11) { return @{ ok = $false; error = 'Seed must be -1 (auto) or 0-11 (one of the 12 Coriolis world layouts).' } }
     $sql = "SELECT dune.debug_set_farm_seed($Seed::int);"
     $res = Invoke-DuneSqlQuery -Ip $Ip -Sql $sql -ReadOnly $false -MaxRows 1 -TimeoutSec 15
     if (-not $res.ok) { return @{ ok = $false; error = $res.error } }
@@ -98,7 +98,7 @@ function Invoke-DuneCoriolisSetFarmSeed {
 function Invoke-DuneCoriolisSetMapSeed {
     param([string]$Ip, [string]$Map, [int]$Seed)
     if (-not $Map) { return @{ ok = $false; error = 'map name is required.' } }
-    if ($Seed -lt 0) { return @{ ok = $false; error = 'Seed must be a non-negative 32-bit integer.' } }
+    if ($Seed -lt -1 -or $Seed -gt 11) { return @{ ok = $false; error = 'Seed must be -1 (auto) or 0-11 (one of the 12 Coriolis world layouts).' } }
     $safeMap = ConvertTo-DuneSqlString $Map
     $sql = "SELECT dune.debug_set_map_seed('$safeMap'::text, $Seed::int);"
     $res = Invoke-DuneSqlQuery -Ip $Ip -Sql $sql -ReadOnly $false -MaxRows 1 -TimeoutSec 15
@@ -109,7 +109,7 @@ function Invoke-DuneCoriolisSetMapSeed {
 function Invoke-DuneCoriolisSetPartitionSeed {
     param([string]$Ip, [long]$PartitionId, [int]$Seed)
     if ($PartitionId -le 0) { return @{ ok = $false; error = 'partition_id is required.' } }
-    if ($Seed -lt 0) { return @{ ok = $false; error = 'Seed must be a non-negative 32-bit integer.' } }
+    if ($Seed -lt -1 -or $Seed -gt 11) { return @{ ok = $false; error = 'Seed must be -1 (auto) or 0-11 (one of the 12 Coriolis world layouts).' } }
     $sql = "SELECT dune.debug_set_partition_seed($PartitionId::bigint, $Seed::int);"
     $res = Invoke-DuneSqlQuery -Ip $Ip -Sql $sql -ReadOnly $false -MaxRows 1 -TimeoutSec 15
     if (-not $res.ok) { return @{ ok = $false; error = $res.error } }
