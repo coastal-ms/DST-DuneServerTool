@@ -540,41 +540,41 @@ function Invoke-DunePlayerAwardIntel {
 
 # ----- Returning Player Award --------------------------------------------
 
+# The returning-player reward is NOT stored on dune.accounts (that table has no
+# JSONB column - the original port wrote to a non-existent "account" column and
+# always errored with "column a.account does not exist", issue #249). Verified
+# against a live server: the reward is timestamp-gated state on the player,
+# stored in dune.encrypted_player_state (the base table; dune.player_state is a
+# view over it that only decrypts the character name). A reward is present when
+# last_returning_player_awarded_time IS NOT NULL, so Grant stamps it to now()
+# and Dismiss clears it. Keyed by account_id.
 function Invoke-DunePlayerGrantReturningAward {
     param([string]$Ip, [long]$AccountId)
-    $resolve = Get-DuneRawFuncomId -Ip $Ip -AccountId $AccountId
-    if (-not $resolve.ok) { return @{ ok = $false; error = $resolve.error } }
-    $funcom = ConvertTo-DuneSqlString $resolve.funcom_id
+    if ($AccountId -le 0) { return @{ ok = $false; error = 'account_id is required.' } }
     $sql = @"
-UPDATE dune.accounts a
-SET account = jsonb_set(
-    jsonb_set(
-        COALESCE(a.account, '{}'::jsonb),
-        '{returningPlayerAward,eligible}', to_jsonb(true)),
-    '{returningPlayerAward,dismissed}', to_jsonb(false))
-WHERE "user" = '$funcom';
+UPDATE dune.encrypted_player_state
+SET last_returning_player_awarded_time = now()
+WHERE account_id = $AccountId::bigint
+RETURNING account_id;
 "@
     $r = Invoke-DuneSqlQuery -Ip $Ip -Sql $sql -ReadOnly $false -MaxRows 1 -TimeoutSec 15
     if (-not $r.ok) { return @{ ok = $false; error = $r.error } }
+    if ([int]$r.rowCount -lt 1) { return @{ ok = $false; error = "No player state found for account $AccountId." } }
     return @{ ok = $true; message = "Granted returning-player award to account $AccountId." }
 }
 
 function Invoke-DunePlayerDismissReturningAward {
     param([string]$Ip, [long]$AccountId)
-    $resolve = Get-DuneRawFuncomId -Ip $Ip -AccountId $AccountId
-    if (-not $resolve.ok) { return @{ ok = $false; error = $resolve.error } }
-    $funcom = ConvertTo-DuneSqlString $resolve.funcom_id
+    if ($AccountId -le 0) { return @{ ok = $false; error = 'account_id is required.' } }
     $sql = @"
-UPDATE dune.accounts a
-SET account = jsonb_set(
-    jsonb_set(
-        COALESCE(a.account, '{}'::jsonb),
-        '{returningPlayerAward,eligible}', to_jsonb(false)),
-    '{returningPlayerAward,dismissed}', to_jsonb(true))
-WHERE "user" = '$funcom';
+UPDATE dune.encrypted_player_state
+SET last_returning_player_awarded_time = NULL
+WHERE account_id = $AccountId::bigint
+RETURNING account_id;
 "@
     $r = Invoke-DuneSqlQuery -Ip $Ip -Sql $sql -ReadOnly $false -MaxRows 1 -TimeoutSec 15
     if (-not $r.ok) { return @{ ok = $false; error = $r.error } }
+    if ([int]$r.rowCount -lt 1) { return @{ ok = $false; error = "No player state found for account $AccountId." } }
     return @{ ok = $true; message = "Dismissed returning-player award for account $AccountId." }
 }
 

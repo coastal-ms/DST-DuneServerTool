@@ -17,6 +17,19 @@ here cover everything those tags shipped.
 
 ### Fixed
 
+- **Grant / Dismiss Returning-Player Award failed with `column a.account does
+  not exist`.** Both actions (Gameplay Admin → Players) wrote the
+  `returningPlayerAward` flag into a JSONB column named `account` on
+  `dune.accounts` — but that table has no such column (it only holds `id`,
+  `user`, `funcom_id`, `takeoverable`, `platform_id`, `platform_name`), so
+  Postgres rejected every call and nothing was ever written. Verified against a
+  live server that the returning-player reward is actually timestamp-gated state
+  on the player, stored in `dune.encrypted_player_state` (the base table;
+  `dune.player_state` is a view over it that decrypts the character name): a
+  reward is present when `last_returning_player_awarded_time` is set. **Grant**
+  now stamps that column to `now()` and **Dismiss** clears it, keyed by
+  `account_id`, targeting the correct table. (#249)
+
 - **Non-ASCII characters in INI files corrupted into mojibake (e.g. UTF-8
   comment banners in UserGame.ini).** The SSH transport that reads remote files
   (`Invoke-V6Ssh` / `Invoke-DuneSshHidden`) decoded the process output using the
