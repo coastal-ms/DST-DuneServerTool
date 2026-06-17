@@ -37,6 +37,14 @@ here cover everything those tags shipped.
   meaningless multi-billion value; Reroll now picks a random `0–11`. Validation is
   enforced in the UI, the route, and the seed-write functions.
 
+- **Coriolis Storm Seeds: fix every map name collapsing into one row.** The read
+  path round-tripped the map / partition name arrays as JSON text through the
+  psql CSV layer; the embedded commas and quotes collided with CSV field parsing,
+  so all map names merged into a single space-joined "Per map" row (and per-map
+  **Apply** then failed with "map (string) is required"). The query now lets
+  Postgres split the arrays with `unnest()` and returns one clean scalar row per
+  map / partition, so each map lists and applies individually.
+
 - **Cheat Scripts and Dev / Perf Scripts now require a double confirmation.**
   Firing a cheat script or dev/perf script (Gameplay Admin → Players → Live)
   prompts twice — an initial confirm plus a typed `i acknowledge` — matching the
