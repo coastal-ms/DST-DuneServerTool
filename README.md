@@ -1,5 +1,4 @@
-# Simple Dune Server Management Tool
-
+# DST - Dune Server Management Tool
 > By Coastal (Discord `@allcoast`). A Windows management portal for your
 > self-hosted **Dune: Awakening** dedicated server — without ever opening a
 > raw SSH shell or hand-editing YAML.
