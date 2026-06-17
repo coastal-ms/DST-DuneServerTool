@@ -45,6 +45,13 @@ here cover everything those tags shipped.
   Postgres split the arrays with `unnest()` and returns one clean scalar row per
   map / partition, so each map lists and applies individually.
 
+- **Coriolis Storm Seeds: bulk "apply to all" and "reset all to game default".**
+  The Farm control is now clearly labelled as the apply-to-everything action
+  ("Farm — all maps + partitions" / "Apply to all"), and a new **Reset all to
+  game default** button clears every forced seed (farm + every map + every
+  partition) back to `-1` (auto) in one click. Both reuse the cascading farm
+  write, each behind its own confirmation.
+
 - **Cheat Scripts and Dev / Perf Scripts now require a double confirmation.**
   Firing a cheat script or dev/perf script (Gameplay Admin → Players → Live)
   prompts twice — an initial confirm plus a typed `i acknowledge` — matching the
