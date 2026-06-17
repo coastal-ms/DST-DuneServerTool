@@ -1330,13 +1330,13 @@ export function getSpecCatalog() {
 export interface JourneyStep { id: string; name: string; completed: boolean; current?: boolean }
 export function getPlayerJourney(id: number, demo?: boolean) {
   return api<{ ok: boolean; account_id: number; steps: JourneyStep[]; source: DataSource }>(
-    `/api/gameplay/players/${id}/journey${qs({ demo: demo ? 1 : undefined })}`)
+    `/api/gameplay/players/journey${qs({ account_id: id, demo: demo ? 1 : undefined })}`)
 }
 
 // Full character dump - shape is intentionally loose (mirrors the reference implementation export).
 export function exportPlayerData(id: number, demo?: boolean) {
   return api<{ ok: boolean; account_id: number; data: Record<string, unknown>; source: DataSource }>(
-    `/api/gameplay/players/${id}/export${qs({ demo: demo ? 1 : undefined })}`)
+    `/api/gameplay/players/export${qs({ account_id: id, demo: demo ? 1 : undefined })}`)
 }
 
 export interface CharXpResponse {
@@ -1351,13 +1351,13 @@ export interface CharXpResponse {
   source: DataSource
 }
 export function getPlayerCharXp(id: number, demo?: boolean) {
-  return api<CharXpResponse>(`/api/gameplay/players/${id}/char-xp${qs({ demo: demo ? 1 : undefined })}`)
+  return api<CharXpResponse>(`/api/gameplay/players/char-xp${qs({ actor_id: id, demo: demo ? 1 : undefined })}`)
 }
 
 export interface KeystoneRow { id: string; name?: string; unlocked_at?: string }
 export function getPlayerKeystones(id: number, demo?: boolean) {
   return api<{ ok: boolean; keystones: KeystoneRow[]; source: DataSource }>(
-    `/api/gameplay/players/${id}/keystones${qs({ demo: demo ? 1 : undefined })}`)
+    `/api/gameplay/players/keystones${qs({ player_id: id, demo: demo ? 1 : undefined })}`)
 }
 
 export interface PlayerVehicleRow {
@@ -1377,7 +1377,7 @@ export function getPlayerVehicles(controllerId: number, demo?: boolean) {
 export interface DungeonRunRow { dungeon_id: string; cleared: boolean; best_time_seconds?: number }
 export function getPlayerDungeons(id: number, demo?: boolean) {
   return api<{ ok: boolean; runs: DungeonRunRow[]; source: DataSource }>(
-    `/api/gameplay/players/${id}/dungeons${qs({ demo: demo ? 1 : undefined })}`)
+    `/api/gameplay/players/dungeons${qs({ player_id: id, demo: demo ? 1 : undefined })}`)
 }
 
 export interface PlayerIdsResponse {
@@ -1389,7 +1389,7 @@ export interface PlayerIdsResponse {
   source: DataSource
 }
 export function getPlayerIds(id: number) {
-  return api<PlayerIdsResponse>(`/api/gameplay/players/${id}/player-ids`)
+  return api<PlayerIdsResponse>(`/api/gameplay/players/player-ids${qs({ actor_id: id })}`)
 }
 
 export interface PartitionRow { id: number; map: string; display_name?: string; is_blocked?: boolean }

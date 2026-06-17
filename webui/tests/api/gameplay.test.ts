@@ -221,7 +221,7 @@ describe('Phase G+H — RMQ live commands (PlayerTarget shape)', () => {
 
   it('cheatScript sends script string verbatim', async () => {
     await gp.cheatScript({ fls_id: 'F-x' }, 'god')
-    expect(last().body).toEqual({ fls_id: 'F-x', script: 'god' })
+    expect(last().body).toEqual({ fls_id: 'F-x', script_name: 'god' })
   })
 
   it('grantLive uses controller_id (NOT a PlayerTarget) + template + amount', async () => {
@@ -309,27 +309,27 @@ describe('Phase B — read endpoints (GET, no body)', () => {
     expect(last().url).toBe('/api/gameplay/progression/presets')
   })
 
-  it('per-player reads embed the id in the URL', async () => {
+  it('per-player reads embed the id in the URL query', async () => {
     await gp.getPlayerJourney(123)
-    expect(last().url).toBe('/api/gameplay/players/123/journey')
+    expect(last().url).toBe('/api/gameplay/players/journey?account_id=123')
 
     await gp.exportPlayerData(123)
-    expect(last().url).toBe('/api/gameplay/players/123/export')
+    expect(last().url).toBe('/api/gameplay/players/export?account_id=123')
 
     await gp.getPlayerCharXp(123)
-    expect(last().url).toBe('/api/gameplay/players/123/char-xp')
+    expect(last().url).toBe('/api/gameplay/players/char-xp?actor_id=123')
 
     await gp.getPlayerKeystones(123)
-    expect(last().url).toBe('/api/gameplay/players/123/keystones')
+    expect(last().url).toBe('/api/gameplay/players/keystones?player_id=123')
 
     await gp.getPlayerVehicles(123)
-    expect(last().url).toBe('/api/gameplay/players/123/vehicles')
+    expect(last().url).toBe('/api/gameplay/players/vehicles?controller_id=123')
 
     await gp.getPlayerDungeons(123)
-    expect(last().url).toBe('/api/gameplay/players/123/dungeons')
+    expect(last().url).toBe('/api/gameplay/players/dungeons?player_id=123')
 
     await gp.getPlayerIds(123)
-    expect(last().url).toBe('/api/gameplay/players/123/player-ids')
+    expect(last().url).toBe('/api/gameplay/players/player-ids?actor_id=123')
   })
 
   it('getStorageOwnerDebug embeds placeable id', async () => {
