@@ -13,6 +13,15 @@ here cover everything those tags shipped.
 
 ## [Unreleased]
 
+## [12.5.6] - 2026-06-17
+
+### Added
+
+- **Game Config -> Crafting** now exposes `m_RepairCostWeight` and
+  `m_RecyclerOutputWeight` from `[/Script/DuneSandbox.CraftingSettings]`,
+  including the existing client-side apply flow so admins can mirror the
+  settings into their local `Game.ini`.
+
 ## [12.5.5] - 2026-06-16
 
 ### Changed
