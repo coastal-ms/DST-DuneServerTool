@@ -1291,7 +1291,7 @@ export function awardIntel(controllerId: number, pawnId: number, amount: number)
 // PERMANENT — purges the account row + dependent rows. No undo.
 export function deleteAccount(accountId: number) {
   return api<WriteResult>('/api/gameplay/players/delete-account', {
-    method: 'POST', body: JSON.stringify({ account_id: accountId }),
+    method: 'POST', body: JSON.stringify({ account_id: accountId, confirm: 'DELETE' }),
   })
 }
 
