@@ -30,6 +30,10 @@ browser and keeps the server running in the background.
 
 ![Server Health](docs/img/server-health.png)
 
+### New in next release
+
+- **Framework Maintenance.**
+
 ### New in v12.2.1
 
 - **Give Vehicle Kit now hands over the correct parts.** The kit contents were

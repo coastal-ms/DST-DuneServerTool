@@ -1,6 +1,6 @@
 {
   "_meta": {
-    "total": 1846,
+    "total": 1847,
     "source": "awakening.wiki",
     "scraped": "2026-05-20",
     "gradeable": 378,
@@ -3518,6 +3518,10 @@
     "BuildingBlueprint_CopyDevice": {
       "name": "Solido Replicator",
       "category": "Misc"
+    },
+    "SolarisCoin": {
+      "name": "Solari",
+      "category": "Resources"
     },
     "Kindjal_Unique_Stamina_04": {
       "name": "Spark-Knife",

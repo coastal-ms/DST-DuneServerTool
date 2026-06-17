@@ -37,6 +37,7 @@ $script:DuneKnownStackableItemLimits = @{
     InfantryRocketAmmo = 500
     Napalm            = 500
     RocketAmmo        = 500
+    SolarisCoin       = [int]::MaxValue
 }
 
 # Max stack size for a template: catalogued stack_max wins, else known

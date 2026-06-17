@@ -13,6 +13,17 @@ here cover everything those tags shipped.
 
 ## [Unreleased]
 
+### Changed
+
+- **Framework Maintenance.**
+
+### Fixed
+
+- **Solari is selectable in inventory item pickers.** Added the `SolarisCoin`
+  inventory template to the shared item catalog and expanded picker browsing so
+  the Resources category can scroll far enough to reach it. Solari quantity gives
+  are also treated as stackable by the inventory capacity guard.
+
 ## [12.5.8] - 2026-06-17
 
 ### Added
