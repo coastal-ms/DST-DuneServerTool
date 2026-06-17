@@ -4,9 +4,9 @@
 # Source of truth is a single block in the VM's root crontab, delimited by:
 #   # DST-BACKUP BEGIN
 #   # DST-BACKUP-PRESET: <name>
-#   # DST-BACKUP-RETENTION: <days>
+#   # DST-BACKUP-KEEP-LAST: <count>
 #   <preset cron line(s)>
-#   <retention cron line, if days > 0>
+#   <keep-last cron line, if count > 0>
 #   # DST-BACKUP END
 #
 # Markers are ASCII-only on purpose — they have to round-trip through
@@ -139,13 +139,13 @@ function Invoke-DuneBackupShell {
 }
 
 # -----------------------------------------------------------------------------
-# Build the rendered crontab block from a preset + retention. Returns either
+# Build the rendered crontab block from a preset + keepLast. Returns either
 # a string (the block, including trailing newline) or $null for 'Off'.
 # -----------------------------------------------------------------------------
 function New-DuneBackupBlock {
     param(
         [Parameter(Mandatory)][string]$Preset,
-        [int]$RetentionDays = 0
+        [int]$KeepLast = 0
     )
     if (-not $script:DuneBackupPresets.ContainsKey($Preset)) {
         throw "Unknown preset: $Preset"
@@ -155,16 +155,16 @@ function New-DuneBackupBlock {
     $lines = @()
     $lines += $script:DuneBackupBeginMarker
     $lines += "# DST-BACKUP-PRESET: $Preset"
-    $lines += "# DST-BACKUP-RETENTION: $RetentionDays"
+    $lines += "# DST-BACKUP-KEEP-LAST: $KeepLast"
     foreach ($cronExpr in $script:DuneBackupPresets[$Preset].crons) {
         $lines += "$cronExpr $script:DuneBackupCmd"
     }
-    if ($RetentionDays -gt 0) {
+    if ($KeepLast -gt 0) {
         # Narrow the retention pattern to filenames that match Funcom's own
         # battlegroup-dump naming (<bg>-YYYYMMDD-HHMMSS.backup[.yaml]) so we
         # never delete a manually-named snapshot like 'pre-patch-X.backup'.
-        $namePat = '*-[0-9][0-9][0-9][0-9][0-9][0-9][0-9][0-9]-[0-9][0-9][0-9][0-9][0-9][0-9].backup'
-        $find = "find $script:DuneBackupDumpDir -type f \( -name '$namePat' -o -name '$namePat.yaml' \) -mtime +$RetentionDays -delete"
+        $namePat = '*-[0-9][0-9][0-9][0-9][0-9][0-9][0-9][0-9]-[0-9][0-9][0-9][0-9][0-9][0-9].backup*'
+        $find = "ls -t $script:DuneBackupDumpDir/$namePat 2>/dev/null | tail -n +$($KeepLast + 1) | xargs -r rm"
         $lines += "15 5 * * * $find"
     }
     $lines += $script:DuneBackupEndMarker
@@ -174,7 +174,7 @@ function New-DuneBackupBlock {
 # -----------------------------------------------------------------------------
 # Parse a crontab string into managed-block + leftover lines.
 # Returns @{ block = <hashtable or $null>; outsideText = string; hasUnmanagedBackupLines = bool }.
-# Block hashtable has: preset, retentionDays, raw, looksTampered.
+# Block hashtable has: preset, keepLast, raw, looksTampered.
 # -----------------------------------------------------------------------------
 function ConvertFrom-DuneBackupCrontab {
     param([string]$CrontabText)
@@ -201,16 +201,16 @@ function ConvertFrom-DuneBackupCrontab {
     $blockInfo = $null
     if ($blockLines.Count -gt 0 -or $CrontabText -match [regex]::Escape($script:DuneBackupBeginMarker)) {
         $preset = $null
-        $retention = 0
+        $keepLast = 0
         foreach ($bl in $blockLines) {
             if ($bl -match '^# DST-BACKUP-PRESET:\s*(\S+)') { $preset = $Matches[1] }
-            elseif ($bl -match '^# DST-BACKUP-RETENTION:\s*(\d+)') { $retention = [int]$Matches[1] }
+            elseif ($bl -match '^# DST-BACKUP-(?:KEEP-LAST|RETENTION):\s*(\d+)') { $keepLast = [int]$Matches[1] }
         }
         if (-not $preset) { $preset = 'Custom' }
         $blockInfo = @{
-            preset        = $preset
-            retentionDays = $retention
-            raw           = ($blockLines -join "`n")
+            preset   = $preset
+            keepLast = $keepLast
+            raw      = ($blockLines -join "`n")
         }
     }
 
@@ -280,16 +280,16 @@ sudo crontab -l 2>&1 || true
 
     $enabled = $false
     $preset = 'Off'
-    $retention = 0
+    $keepLast = 0
     $looksTampered = $false
     $inferredFromUnmanaged = $false
     if ($parsed.block) {
-        $preset    = $parsed.block.preset
-        $retention = $parsed.block.retentionDays
-        $enabled   = ($preset -ne 'Off')
-        # If the rendered block doesn't match the stored preset+retention any
+        $preset   = $parsed.block.preset
+        $keepLast = $parsed.block.keepLast
+        $enabled  = ($preset -ne 'Off')
+        # If the rendered block doesn't match the stored preset+keepLast any
         # more, the operator likely edited it by hand. Surface that to the UI.
-        $expected = (New-DuneBackupBlock -Preset $preset -RetentionDays $retention)
+        $expected = (New-DuneBackupBlock -Preset $preset -KeepLast $keepLast)
         if ($expected) {
             $expectedInner = ($expected.TrimEnd("`n") -split "`n" | Select-Object -Skip 1 | Select-Object -SkipLast 1) -join "`n"
             if ($expectedInner -ne $parsed.block.raw) { $looksTampered = $true }
@@ -311,7 +311,7 @@ sudo crontab -l 2>&1 || true
     return @{
         enabled                   = $enabled
         preset                    = $preset
-        retentionDays             = $retention
+        keepLast                  = $keepLast
         vmTimezone                = $tz
         vmNowUtc                  = $vmNowUtc
         crondRunning              = [bool]$crondRunning
@@ -333,16 +333,16 @@ function Set-DuneBackupSchedule {
     param(
         [Parameter(Mandatory)][string]$Ip,
         [Parameter(Mandatory)][string]$Preset,
-        [int]$RetentionDays = 0
+        [int]$KeepLast = 0
     )
     if (-not $script:DuneBackupPresets.ContainsKey($Preset)) {
         return @{ ok=$false; status=400; message="Unknown preset: $Preset" }
     }
-    if ($RetentionDays -lt 0 -or $RetentionDays -gt 3650) {
-        return @{ ok=$false; status=400; message="retentionDays must be 0..3650 (got $RetentionDays)." }
+    if ($KeepLast -lt 0 -or $KeepLast -gt 1000) {
+        return @{ ok=$false; status=400; message="keepLast must be 0..1000 (got $KeepLast)." }
     }
 
-    $newBlock = New-DuneBackupBlock -Preset $Preset -RetentionDays $RetentionDays
+    $newBlock = New-DuneBackupBlock -Preset $Preset -KeepLast $KeepLast
     $newBlockB64 = if ($newBlock) { [Convert]::ToBase64String([Text.Encoding]::UTF8.GetBytes($newBlock)) } else { '' }
 
     # Whole RMW (read existing crontab, strip our block, append new block,
@@ -434,8 +434,8 @@ sudo crontab -l 2>&1 || true
         if (-not $parsed.block) {
             return @{ ok=$false; status=502; message='Crontab does not contain a DST-BACKUP block after save.' }
         }
-        if ($parsed.block.preset -ne $Preset -or $parsed.block.retentionDays -ne $RetentionDays) {
-            return @{ ok=$false; status=502; message="Verification mismatch: got preset=$($parsed.block.preset), retention=$($parsed.block.retentionDays)." }
+        if ($parsed.block.preset -ne $Preset -or $parsed.block.keepLast -ne $KeepLast) {
+            return @{ ok=$false; status=502; message="Verification mismatch: got preset=$($parsed.block.preset), keepLast=$($parsed.block.keepLast)." }
         }
     }
 
