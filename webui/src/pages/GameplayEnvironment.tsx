@@ -8,9 +8,10 @@ import { PlayersTab } from './gameplay/PlayersTab'
 import { BasesTab } from './gameplay/BasesTab'
 import { StorageTab } from './gameplay/StorageTab'
 import { BlueprintsTab } from './gameplay/BlueprintsTab'
+import { LandsraadTab } from './gameplay/LandsraadTab'
 
 export type GameplaySubTab =
-  | 'overview' | 'market' | 'marketbot' | 'players' | 'bases' | 'storage' | 'blueprints'
+  | 'overview' | 'market' | 'marketbot' | 'players' | 'bases' | 'storage' | 'blueprints' | 'landsraad'
 
 const TABS: { id: GameplaySubTab; label: string; icon: string }[] = [
   { id: 'overview',  label: 'Overview', icon: 'LayoutGrid' },
@@ -20,6 +21,7 @@ const TABS: { id: GameplaySubTab; label: string; icon: string }[] = [
   { id: 'bases',     label: 'Bases',    icon: 'Castle' },
   { id: 'storage',   label: 'Storage',  icon: 'Package' },
   { id: 'blueprints', label: 'Blueprints', icon: 'ScrollText' },
+  { id: 'landsraad', label: 'Landsraad Houses', icon: 'Landmark' },
 ]
 
 export function GameplayEnvironment() {
@@ -58,6 +60,7 @@ export function GameplayEnvironment() {
       {tab === 'bases' && <BasesTab />}
       {tab === 'storage' && <StorageTab />}
       {tab === 'blueprints' && <BlueprintsTab />}
+      {tab === 'landsraad' && <LandsraadTab />}
     </>
   )
 }

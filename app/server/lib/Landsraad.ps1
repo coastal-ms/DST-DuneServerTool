@@ -226,3 +226,168 @@ GROUP BY gm.guild_id, pc.faction_id;
         house   = $house
     }
 }
+
+# ---------------------------------------------------------------------------
+# Landsraad task rewards admin — read + edit the milestone items/thresholds.
+# ---------------------------------------------------------------------------
+
+# Read ALL reward rows (landsraad_task_rewards) for the current term's tasks,
+# grouped by task (house). Returns @{ ok; term_id; houses=@( @{ task_id; house_name;
+# display_name; tiers=@( @{ threshold; template_id; amount } ) } ) }.
+function Get-DuneLandsraadRewards {
+    param([string]$Ip)
+    $term = Get-DuneLandsraadCurrentTermId -Ip $Ip
+    if (-not $term.ok) { return @{ ok = $false; error = $term.error } }
+    if ($term.term_id -le 0) { return @{ ok = $true; term_id = 0; houses = @() } }
+    
+    # Join rewards -> tasks for the current term, order by task (board_index) then threshold.
+    $sql = @"
+SELECT t.id AS task_id, t.house_name, t.board_index,
+       r.threshold, r.template_id, r.amount
+FROM dune.landsraad_task_rewards r
+JOIN dune.landsraad_tasks t ON t.id = r.task_id
+WHERE t.term_id = $($term.term_id)::bigint
+ORDER BY t.board_index, r.threshold;
+"@
+    $res = Invoke-DuneSqlQuery -Ip $Ip -Sql $sql -ReadOnly $true -MaxRows 500 -TimeoutSec 20
+    if (-not $res.ok) { return @{ ok = $false; error = "rewards: $($res.error)" } }
+    
+    $rows = ConvertTo-DuneRowMaps -Result $res
+    # Group by task_id into house -> tiers structure.
+    $houseMap = @{}
+    foreach ($row in $rows) {
+        $tid = [long](ConvertTo-DuneInt $row['task_id'])
+        if (-not $houseMap.ContainsKey($tid)) {
+            $hn = [string]$row['house_name']
+            $houseMap[$tid] = [ordered]@{
+                task_id      = $tid
+                house_name   = $hn
+                display_name = (Get-DuneLandsraadHouseDisplay $hn)
+                board_index  = [int](ConvertTo-DuneInt $row['board_index'])
+                tiers        = New-Object 'System.Collections.Generic.List[object]'
+            }
+        }
+        $houseMap[$tid].tiers.Add([ordered]@{
+            threshold   = [int](ConvertTo-DuneInt $row['threshold'])
+            template_id = [string]$row['template_id']
+            amount      = [int](ConvertTo-DuneInt $row['amount'])
+        })
+    }
+    
+    $houses = @($houseMap.Values | Sort-Object board_index)
+    return @{ ok = $true; term_id = $term.term_id; houses = $houses }
+}
+
+# Bulk-set reward thresholds across ALL tasks for the current term using a CASE
+# mapping (Discord pattern). Takes an array of @{ old; new } mappings. Example:
+# @( @{old=700;new=250}, @{old=3500;new=1250}, @{old=7000;new=2500},
+#    @{old=10500;new=3750}, @{old=14000;new=5000} )
+# Updates every row where threshold matches an 'old' value to its 'new' value.
+# Returns @{ ok; message; updated_count; thresholds=@(distinct new thresholds) }.
+function Set-DuneLandsraadRewardThresholds {
+    param([string]$Ip, [array]$Mappings)
+    if ($null -eq $Mappings -or $Mappings.Count -eq 0) {
+        return @{ ok = $false; error = 'mappings array is required (e.g. @( @{old=700;new=250}, ... )).' }
+    }
+    $term = Get-DuneLandsraadCurrentTermId -Ip $Ip
+    if (-not $term.ok) { return @{ ok = $false; error = $term.error } }
+    if ($term.term_id -le 0) { return @{ ok = $false; error = 'No active Landsraad term — cannot update reward thresholds.' } }
+    
+    # Build CASE threshold WHEN <old> THEN <new> ... ELSE threshold END
+    $whenClauses = @()
+    foreach ($m in $Mappings) {
+        $old = [int]$m.old
+        $new = [int]$m.new
+        if ($old -le 0 -or $new -le 0) { continue }
+        $whenClauses += "WHEN $old THEN $new"
+    }
+    if ($whenClauses.Count -eq 0) {
+        return @{ ok = $false; error = 'No valid mappings (each must have old>0 and new>0).' }
+    }
+    $caseExpr = "CASE threshold " + ($whenClauses -join ' ') + " ELSE threshold END"
+    
+    # UPDATE only rows for the current term's tasks. WITH t AS subquery ensures we
+    # touch only this term's rewards even if task_id values from older terms exist.
+    # NOTE: Must be two separate queries — compound "UPDATE; SELECT" returns only the
+    # UPDATE's empty rowset through the SQL proxy.
+    $updateSql = @"
+WITH current_term_tasks AS (
+    SELECT id FROM dune.landsraad_tasks WHERE term_id = $($term.term_id)::bigint
+)
+UPDATE dune.landsraad_task_rewards r
+SET threshold = $caseExpr
+FROM current_term_tasks t
+WHERE r.task_id = t.id;
+"@
+    $upd = Invoke-DuneSqlQuery -Ip $Ip -Sql $updateSql -ReadOnly $false -MaxRows 1 -TimeoutSec 30
+    if (-not $upd.ok) { return @{ ok = $false; error = "set thresholds: $($upd.error)" } }
+
+    # Fetch the new distinct thresholds for the response message.
+    $selectSql = @"
+SELECT DISTINCT threshold FROM dune.landsraad_task_rewards r
+JOIN dune.landsraad_tasks t ON t.id = r.task_id
+WHERE t.term_id = $($term.term_id)::bigint
+ORDER BY threshold;
+"@
+    $res = Invoke-DuneSqlQuery -Ip $Ip -Sql $selectSql -ReadOnly $true -MaxRows 100 -TimeoutSec 15
+    if (-not $res.ok) { return @{ ok = $false; error = "fetch thresholds: $($res.error)" } }
+
+    $maps = ConvertTo-DuneRowMaps -Result $res
+    $thresholds = @($maps | ForEach-Object { [int](ConvertTo-DuneInt $_['threshold']) } | Sort-Object)
+    
+    return @{
+        ok             = $true
+        message        = "Updated reward thresholds for term $($term.term_id). New thresholds: $($thresholds -join ', ')."
+        updated_count  = $upd.rowCount
+        thresholds     = $thresholds
+    }
+}
+
+# Set a single reward tier's item (template_id) and/or amount for one house (task).
+# Finds the row matching (task_id, threshold) and updates template_id and/or amount.
+# Pass $TemplateId and/or $Amount (at least one required). Returns @{ ok; message; house }.
+function Set-DuneLandsraadRewardTier {
+    param([string]$Ip, [long]$TaskId, [int]$Threshold, [string]$TemplateId, [int]$Amount)
+    if ($TaskId -le 0) { return @{ ok = $false; error = 'task_id is required.' } }
+    if ($Threshold -le 0) { return @{ ok = $false; error = 'threshold is required.' } }
+    if ([string]::IsNullOrWhiteSpace($TemplateId) -and $Amount -le 0) {
+        return @{ ok = $false; error = 'At least one of template_id or amount must be provided.' }
+    }
+    
+    # Validate task exists + grab house name for the message.
+    $tsql = "SELECT house_name FROM dune.landsraad_tasks WHERE id = $TaskId::bigint;"
+    $tr = Invoke-DuneSqlQuery -Ip $Ip -Sql $tsql -ReadOnly $true -MaxRows 1 -TimeoutSec 10
+    if (-not $tr.ok) { return @{ ok = $false; error = "task lookup: $($tr.error)" } }
+    $tmaps = ConvertTo-DuneRowMaps -Result $tr
+    if ($tmaps.Count -eq 0) { return @{ ok = $false; error = "No Landsraad task with id $TaskId." } }
+    $house = Get-DuneLandsraadHouseDisplay ([string]$tmaps[0]['house_name'])
+    
+    # Build SET clause dynamically.
+    $setParts = @()
+    if (-not [string]::IsNullOrWhiteSpace($TemplateId)) {
+        $tEsc = ConvertTo-DuneSqlString $TemplateId
+        $setParts += "template_id = '$tEsc'"
+    }
+    if ($Amount -gt 0) {
+        $setParts += "amount = $Amount::int"
+    }
+    $setClause = $setParts -join ', '
+    
+    $sql = @"
+UPDATE dune.landsraad_task_rewards
+SET $setClause
+WHERE task_id = $TaskId::bigint AND threshold = $Threshold::int
+RETURNING task_id;
+"@
+    $res = Invoke-DuneSqlQuery -Ip $Ip -Sql $sql -ReadOnly $false -MaxRows 1 -TimeoutSec 15
+    if (-not $res.ok) { return @{ ok = $false; error = "set tier: $($res.error)" } }
+    if ([int]$res.rowCount -lt 1) {
+        return @{ ok = $false; error = "No reward row found for House $house (task $TaskId) at threshold $Threshold." }
+    }
+    
+    return @{
+        ok      = $true
+        message = "Updated House $house threshold $Threshold reward."
+        house   = $house
+    }
+}

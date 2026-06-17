@@ -13,6 +13,29 @@ here cover everything those tags shipped.
 
 ## [Unreleased]
 
+### Added
+
+- **Landsraad Houses tab** (Gameplay Admin → Landsraad Houses). View and edit the
+  reward milestones for each Landsraad house in the current term:
+  - **Bulk Threshold Edit**: remap all thresholds at once (e.g. when lowering the
+    task goal from 15 000 to 5 000, map 700→250, 3 500→1 250, etc.). Presets for
+    the "5k goal" scale and a reverse-to-Funcom-defaults are one click away.
+  - **Per-tier item/amount edit**: expand any house card, click a tier row, and
+    change its `template_id` (item) or `amount` directly.
+  - Inline help explains every field so operators know what they're adjusting.
+
+### Fixed
+
+- **Landsraad bulk threshold edit wrote all zeros.** The compound `UPDATE; SELECT`
+  SQL returned only the UPDATE's empty column set through the proxy; now uses two
+  separate queries so the response shows the actual new thresholds.
+
+- **Skill-related writes (Unlock Trainer, Grant Job Skills, etc.) silently failed
+  when the player was online.** Pod RAM authority overwrote DB changes on logout.
+  These routes now require the player to be fully offline and return a clear error
+  if they aren't: `unlock-trainer`, `unlock-main-quest`, `grant-job-skills`,
+  `reset-job-skills`, `set-starter-class`.
+
 ## [12.5.1] - 2026-06-16
 
 ### Fixed
