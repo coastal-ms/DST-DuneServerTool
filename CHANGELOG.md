@@ -13,6 +13,15 @@ here cover everything those tags shipped.
 
 ## [Unreleased]
 
+## [12.5.4] - 2026-06-16
+
+### Removed
+
+- **Grant / Dismiss Returning-Player Award** player actions (Gameplay Admin →
+  Players → Identity). Removed the two actions along with their API routes
+  (`/api/gameplay/players/returning-player-award`,
+  `/api/gameplay/players/dismiss-returning-player-award`) and backend handlers.
+
 ## [12.5.3] - 2026-06-17
 
 ### Fixed

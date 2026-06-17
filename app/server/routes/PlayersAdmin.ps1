@@ -1,5 +1,5 @@
 ﻿# PlayersAdmin.ps1 — v11.5.9 player admin routes ported from the reference implementation §2 + §7.
-# Currency / progression writes + returning-player-award + delete-account.
+# Currency / progression writes + delete-account.
 # Uses Invoke-DunePlayerWriteRoute + Get-DuneBodyInt/Value from routes/GameplayPlayers.ps1.
 
 # POST /api/gameplay/players/give-scrip  { actor_id, delta, currency_id? }
@@ -111,30 +111,6 @@ Register-DuneRoute -Method GET -Path '/api/gameplay/players/char-xp' -Handler {
             -PayloadKey 'char_xp'
     } catch {
         Write-DuneError -Response $res -Status 500 -Message "Get char XP failed: $($_.Exception.Message)"
-    }
-}
-
-# POST /api/gameplay/players/returning-player-award  { account_id }
-Register-DuneRoute -Method POST -Path '/api/gameplay/players/returning-player-award' -Handler {
-    param($req, $res, $routeParams, $body)
-    try {
-        $aid = Get-DuneBodyInt -Body $body -Name 'account_id'
-        if ($null -eq $aid -or $aid -le 0) { Write-DuneError -Response $res -Status 400 -Message 'account_id is required.'; return }
-        Invoke-DunePlayerWriteRoute -Response $res -Action { param($ip) Invoke-DunePlayerGrantReturningAward -Ip $ip -AccountId $aid }
-    } catch {
-        Write-DuneError -Response $res -Status 500 -Message "Grant returning award failed: $($_.Exception.Message)"
-    }
-}
-
-# POST /api/gameplay/players/dismiss-returning-player-award  { account_id }
-Register-DuneRoute -Method POST -Path '/api/gameplay/players/dismiss-returning-player-award' -Handler {
-    param($req, $res, $routeParams, $body)
-    try {
-        $aid = Get-DuneBodyInt -Body $body -Name 'account_id'
-        if ($null -eq $aid -or $aid -le 0) { Write-DuneError -Response $res -Status 400 -Message 'account_id is required.'; return }
-        Invoke-DunePlayerWriteRoute -Response $res -Action { param($ip) Invoke-DunePlayerDismissReturningAward -Ip $ip -AccountId $aid }
-    } catch {
-        Write-DuneError -Response $res -Status 500 -Message "Dismiss returning award failed: $($_.Exception.Message)"
     }
 }
 

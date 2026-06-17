@@ -84,14 +84,6 @@ describe('Phase A — currency / progression writes', () => {
     expect(last().body).toEqual({ actor_id: 123, pawn_id: 99, delta: 50 })
   })
 
-  it('returningPlayerAward + dismiss... only need account_id', async () => {
-    await gp.returningPlayerAward(5)
-    expect(last().body).toEqual({ account_id: 5 })
-    await gp.dismissReturningPlayerAward(5)
-    expect(last().url).toBe('/api/gameplay/players/dismiss-returning-player-award')
-    expect(last().body).toEqual({ account_id: 5 })
-  })
-
   it('deleteAccount targets /delete-account', async () => {
     await gp.deleteAccount(404)
     expect(last().url).toBe('/api/gameplay/players/delete-account')

@@ -14,7 +14,7 @@ import {
   awardCharXp, awardIntel, awardSpecXp, cheatScript, cleanPlayerInventory,
   applyProgressionPreset, getProgressionPresets,
   deleteAccount, deleteInventoryItem, deleteTutorials,
-  dismissReturningPlayerAward, fillWater, getPlayerEvents, getPlayerSpecs,
+  fillWater, getPlayerEvents, getPlayerSpecs,
   getPlayerStats, getPlayerTags, giveFactionRep, giveItem,
   giveScrip, giveSolari, grantAllKeystones, grantLive, grantMaxSpec,
   kickPlayer, refuelVehicle, renamePlayer, repairGear, repairInventoryItem,
@@ -22,7 +22,7 @@ import {
   setItemDurability, setItemStack, setItemWater,
   resetAllKeystones, resetAllSpecs, resetJourney, resetProgressionLive, resetSpec,
   restoreDestroyed,
-  returningPlayerAward, setFactionTier, setPlayerTags, setSkillPoints,
+  setFactionTier, setPlayerTags, setSkillPoints,
   setStarterClass, teleportToPlayer, updatePlayerTags, wipeCodex, wipeJourney,
   chatWhisper, isValidTemplateId, getItemCatalog,
   giveItems, getItemPackages, saveItemPackage, deleteItemPackage,
@@ -595,10 +595,6 @@ const ACTIONS: ActionDef[] = [
       }
       return wipeCodex(p.account_id)
     } },
-  { id: 'returning-award', group: 'Identity', label: 'Grant Returning-Player Award', icon: 'Star',
-    run: p => returningPlayerAward(p.account_id) },
-  { id: 'dismiss-returning', group: 'Identity', label: 'Dismiss Returning-Player Award', icon: 'X',
-    run: p => dismissReturningPlayerAward(p.account_id) },
 
   // ----- Danger Zone -----
   { id: 'delete-account', group: 'Danger', label: 'Delete Account (permanent)', icon: 'AlertTriangle',

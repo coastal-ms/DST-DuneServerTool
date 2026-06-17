@@ -1288,18 +1288,6 @@ export function awardIntel(controllerId: number, pawnId: number, amount: number)
   })
 }
 
-export function returningPlayerAward(accountId: number) {
-  return api<WriteResult>('/api/gameplay/players/returning-player-award', {
-    method: 'POST', body: JSON.stringify({ account_id: accountId }),
-  })
-}
-
-export function dismissReturningPlayerAward(accountId: number) {
-  return api<WriteResult>('/api/gameplay/players/dismiss-returning-player-award', {
-    method: 'POST', body: JSON.stringify({ account_id: accountId }),
-  })
-}
-
 // PERMANENT — purges the account row + dependent rows. No undo.
 export function deleteAccount(accountId: number) {
   return api<WriteResult>('/api/gameplay/players/delete-account', {
