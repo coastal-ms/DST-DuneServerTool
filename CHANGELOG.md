@@ -13,6 +13,31 @@ here cover everything those tags shipped.
 
 ## [Unreleased]
 
+## [12.5.8] - 2026-06-17
+
+### Added
+
+- **Give Package can import tcno.co item lists.** Paste the two-line
+  `Item name:` / quantity format from tcno.co, let DST resolve names through the
+  item catalog, then review the generated package rows, pick a package name, and
+  save it.
+
+### Fixed
+
+- **Give Item capacity check now treats ammo as stackable.** Light Darts and
+  other picker-only ammo templates are missing `stack_max` in the gameplay item
+  metadata, so DST fell back to one slot per item and falsely rejected valid
+  stack gives (e.g. 500 Light Darts with 111 open slots).
+- **Give Package can allow overflow like Vehicle Kits.** Package gives now pass
+  the overflow/drop-to-ground option through the live RMQ item path instead of
+  always enforcing inventory capacity.
+- **Inventory repair now handles current-only durability items.** Items with a
+  durability block but no catalog/max durability repair to 100 when below 100,
+  or to 200 when between 100 and 200, instead of reporting no usable durability.
+- **Game Config INI section rows support Ctrl+C.** Focus a section row in
+  All Default Settings or Advanced INI contents and press Ctrl+C to copy the
+  bracketed section header.
+
 ## [12.5.7] - 2026-06-17
 
 ### Added
