@@ -13,6 +13,28 @@ here cover everything those tags shipped.
 
 ## [Unreleased]
 
+## [12.5.1] - 2026-06-16
+
+### Fixed
+
+- **Game Config boolean toggles reverting to Off after switching On (Coriolis
+  Auto-Spawn and any default-`True` toggle).** Toggling a bool whose value
+  matched its schema default correctly triggers a reset — the key is removed
+  from the user INI so it falls back to the default — but a stale copy of that
+  same key left behind in a *different / unmanaged* INI section could shadow the
+  canonical value, so the UI re-read the old `False` and the switch snapped back
+  to Off. The INI writer now strips a touched key from **every** section,
+  including unmanaged body sections, so the declared section is authoritative
+  and the toggle sticks. Added regression tests covering the stale-unmanaged-copy
+  case.
+
+### Changed
+
+- **Cheat Scripts and Dev / Perf Scripts now require a double confirmation.**
+  Firing a cheat script or dev/perf script (Gameplay Admin → Players → Live)
+  prompts twice — an initial confirm plus a typed `i acknowledge` — matching the
+  existing guard on destructive actions like wipe-codex and delete-account.
+
 ## [12.5.0] - 2026-06-16
 
 ### Added
