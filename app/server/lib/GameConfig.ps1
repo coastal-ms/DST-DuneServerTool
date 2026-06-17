@@ -59,6 +59,7 @@ $script:DuneGcSecTimeOfDay = '/Script/DuneSandbox.TimeOfDaySettings'
 $script:DuneGcSecRespawn   = '/Script/DuneSandbox.RespawnSettings'
 $script:DuneGcSecEncounters = '/Script/DuneSandbox.EncountersSubsystem'
 $script:DuneGcSecContracts = '/Script/DuneSandbox.ContractsSubsystem'
+$script:DuneGcSecCrafting  = '/Script/DuneSandbox.CraftingSettings'
 
 # Funcom stores ALL Landsraad settings as scalar members inside ONE nested struct
 # value: [/Script/DuneSandbox.LandsraadSettings] Data=(m_TaskGoalAmount=5000.0,...).
@@ -77,7 +78,7 @@ $script:DuneGcLandsraadStructKey = 'Data'
 # test showing an actual effect through that channel.
 $script:DuneGameConfigCategoryOrder = @(
     'Server Identity','Network','Survival','Hydration','Loot & Death',
-    'Resources & Economy','Building','Inventory','Guilds & Economy',
+    'Resources & Economy','Crafting','Building','Inventory','Guilds & Economy',
     'Storm Cycle','Landsraad','PvP & Security','Spice','Taxation','Encounters','Sandworm','Vehicles'
 )
 
@@ -129,6 +130,10 @@ $script:DuneGameConfigSchema = @(
     @{ Section=$script:DuneGcSecConsole; Key='Dune.GlobalMiningOutputMultiplier'; File='engine'; Type='float'; Min=0; Default='1.0'; Label='Global Mining Multiplier'; Help='Scales hand-mining resource output.'; Category='Resources & Economy' }
     @{ Section=$script:DuneGcSecConsole; Key='Dune.GlobalVehicleMiningOutputMultiplier'; File='engine'; Type='float'; Min=0; Default='1.0'; Label='Vehicle Mining Multiplier'; Help='Scales vehicle-mining resource output.'; Category='Resources & Economy' }
     @{ Section=$script:DuneGcSecConsole; Key='SecurityZones.PvpResourceMultiplier'; File='engine'; Type='float'; Min=0; Default='1.0'; Label='PvP Resource Multiplier'; Help='Resource yield multiplier inside PvP zones.'; Category='Resources & Economy' }
+
+    # --- Crafting ---
+    @{ Section=$script:DuneGcSecCrafting; Key='m_RepairCostWeight'; File='game'; Type='float'; Min=0; Default='1.0'; Label='Repair Cost Weight'; Help='Scales repair costs. Also needs client-side apply.'; ClientApply=$true; Category='Crafting' }
+    @{ Section=$script:DuneGcSecCrafting; Key='m_RecyclerOutputWeight'; File='game'; Type='float'; Min=0; Default='1.0'; Label='Recycler Output Weight'; Help='Scales recycler output. Also needs client-side apply.'; ClientApply=$true; Category='Crafting' }
 
     # --- Building ---
     @{ Section=$script:DuneGcSecBuilding; Key='m_MaxNumLandclaimSegments'; File='game'; Type='int'; Min=1; Default='6'; Label='Max Landclaim Segments'; Help='Maximum territory claim segments. Also needs client-side apply.'; ClientApply=$true; Category='Building' }
@@ -261,16 +266,16 @@ $script:DuneGameConfigTplEnginePath  = '/home/dune/.dune/download/scripts/setup/
 # by BOTH server and client; changing them server-side only takes full effect
 # once each player mirrors them in their LOCAL client config. Funcom's setup
 # template flags some keys as "!Needs to also be applied to each client!"
-# (corroborated for the two BuildingSettings keys by the snapetech RE index of
-# Funcom's shipped DefaultGame.ini). The remaining flagged keys were confirmed by
-# live in-game testing on a self-hosted server: the change had NO effect until the
+# (corroborated for BuildingSettings by the snapetech RE index of Funcom's
+# shipped DefaultGame.ini). The remaining flagged keys were confirmed by live
+# in-game testing on a self-hosted server: the change had NO effect until the
 # same value was also set in the client Game.ini. Sections currently flagged
-# ClientApply=$true above: DuneGameMode (Survival: health + damage to NPCs/players
-# + water + starting water + building damage + inventory weight; Progression: XP +
-# progression speed + fame; Harvesting: harvest amount + harvest health),
-# PlayerOnlineStateSettings (reconnect grace), ItemDeteriorationConstants
-# (durability/decay), BuildingSettings, InventorySystemSettings,
-# CoriolisSubsystem, SpiceHarvestingSystem, SandwormSettings.
+# ClientApply=$true above include DuneGameMode, PlayerOnlineStateSettings,
+# ItemDeteriorationConstants, CraftingSettings, BuildingSettings,
+# InventorySystemSettings, CoriolisSubsystem, LandsraadSettings,
+# SpiceHarvestingSystem, SandstormConfig, HydrationSubsystem,
+# DuneSandboxGameModeBase, SpiceAddictionSubsystem, RespawnSettings,
+# EncountersSubsystem, ContractsSubsystem, and SandwormSettings.
 $script:DuneGameConfigClientPath = '%LOCALAPPDATA%\DuneSandbox\Saved\Config\WindowsClient\Game.ini'
 
 # Build the post-save "apply this on each client too" reminder from a set of
