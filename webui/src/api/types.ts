@@ -362,7 +362,7 @@ export type BackupPreset = {
 export type BackupSchedule = {
   enabled: boolean
   preset: string
-  retentionDays: number
+  keepLast: number
   vmTimezone: string
   vmNowUtc: string
   crondRunning: boolean

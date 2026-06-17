@@ -32,10 +32,10 @@ export function getBackupSchedule() {
   return api<BackupSchedule>('/api/db/backup-schedule')
 }
 
-export function putBackupSchedule(opts: { preset: string; retentionDays: number }) {
+export function putBackupSchedule(opts: { preset: string; keepLast: number }) {
   return api<BackupSchedule>('/api/db/backup-schedule', {
     method: 'PUT',
-    body: JSON.stringify({ preset: opts.preset, retentionDays: opts.retentionDays }),
+    body: JSON.stringify({ preset: opts.preset, keepLast: opts.keepLast }),
   })
 }
 
