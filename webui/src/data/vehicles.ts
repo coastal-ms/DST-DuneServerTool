@@ -108,6 +108,6 @@ export const VEHICLE_CATALOG: VehicleTemplate[] = [
     templates: ['T6_Boost'],
     kit: ['OrnithopterTransportChassis_6', 'OrnithopterTransportEngine_6', 'OrnithopterTransportGenerator_6', 'OrnithopterTransportHull_6', 'OrnithopterTransportHullFront_6', 'OrnithopterTransportHullBack_6', 'OrnithopterTransportBoost_6'],
     unique: ['OrnithopterTransportLocomotion_Unique_Speed_6', 'OrnithopterTransportBoost_Unique_LessHeat_06'],
-    qty: { OrnithopterTransportLocomotion_Unique_Speed_6: 8, OrnithopterTransportHullBack_6: 2, OrnithopterTransportHullFront_6: 2 },
+    qty: { OrnithopterTransportLocomotion_Unique_Speed_6: 8, OrnithopterTransportHullBack_6: 2, OrnithopterTransportHullFront_6: 2, FuelCanister_Large: 3 },
   },
 ]
