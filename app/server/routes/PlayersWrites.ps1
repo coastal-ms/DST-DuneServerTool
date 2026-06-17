@@ -6,16 +6,17 @@
 # §3 — Items / inventory
 # ---------------------------------------------------------------------------
 
-# POST /api/gameplay/players/give-items  { pawn_id, items:[{template,qty,quality}] }
+# POST /api/gameplay/players/give-items  { pawn_id, items:[{template,qty,quality}], allow_overflow? }
 Register-DuneRoute -Method POST -Path '/api/gameplay/players/give-items' -Handler {
     param($req, $res, $routeParams, $body)
     try {
         $pawn = Get-DuneBodyInt -Body $body -Name 'pawn_id'
         $items = Get-DuneBodyValue -Body $body -Name 'items'
         $fls = [string](Get-DuneBodyValue -Body $body -Name 'fls_id')
+        $overflow = [bool](Get-DuneBodyValue -Body $body -Name 'allow_overflow')
         if ($null -eq $pawn -or $pawn -le 0) { Write-DuneError -Response $res -Status 400 -Message 'pawn_id is required.'; return }
         if ($null -eq $items) { Write-DuneError -Response $res -Status 400 -Message 'items[] is required.'; return }
-        Invoke-DunePlayerWriteRoute -Response $res -Action { param($ip) Invoke-DunePlayerGiveItemsBulk -Ip $ip -PawnId $pawn -Items $items -FlsId $fls }
+        Invoke-DunePlayerWriteRoute -Response $res -Action { param($ip) Invoke-DunePlayerGiveItemsBulk -Ip $ip -PawnId $pawn -Items $items -FlsId $fls -AllowOverflow $overflow }
     } catch {
         Write-DuneError -Response $res -Status 500 -Message "Give items failed: $($_.Exception.Message)"
     }

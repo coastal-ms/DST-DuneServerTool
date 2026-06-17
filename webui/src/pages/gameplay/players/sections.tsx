@@ -25,6 +25,7 @@ import {
   setFactionTier, setPlayerTags, setSkillPoints,
   setStarterClass, teleportToPlayer, updatePlayerTags, wipeCodex, wipeJourney,
   chatWhisper, isValidTemplateId, getItemCatalog,
+  parseTcnoPackageText,
   giveItems, getItemPackages, saveItemPackage, deleteItemPackage,
   getLandsraadOverview, getLandsraadPlayerContributions, setLandsraadContribution,
   getPlayerJourneyNodes, completeJourneyNode, resetJourneyNode,
@@ -846,8 +847,8 @@ function ActionRow({ def, player, busy, stats, open, danger, onToggle, runAction
               })} />
           ) : def.custom === 'give-package' ? (
             <GivePackageForm busy={busy} playerName={player.name}
-              onGive={(items, pkgName) => runAction(def, async () => {
-                await giveItems(player.id, items)
+              onGive={(items, pkgName, overflow) => runAction(def, async () => {
+                await giveItems(player.id, items, overflow)
                 const n = items.length
                 return { message: `Gave package "${pkgName}" — ${n} item${n === 1 ? '' : 's'} to ${player.name}.` }
               })} />
@@ -994,16 +995,18 @@ interface PkgDraftRow { template: string; name: string; qty: string; quality: st
 
 function GivePackageForm({ busy, playerName, onGive }: {
   busy: boolean; playerName: string
-  onGive: (items: GiveItemEntry[], pkgName: string) => void
+  onGive: (items: GiveItemEntry[], pkgName: string, allowOverflow: boolean) => void
 }) {
   const [packages, setPackages] = useState<ItemPackage[]>([])
   const [loading, setLoading]   = useState(true)
   const [err, setErr]           = useState<string | null>(null)
   const [selectedId, setSelectedId] = useState('')
-  const [mode, setMode]         = useState<'list' | 'edit'>('list')
+  const [mode, setMode]         = useState<'list' | 'edit' | 'import'>('list')
   const [draftId, setDraftId]   = useState<string | undefined>(undefined)
   const [draftName, setDraftName] = useState('')
   const [draftRows, setDraftRows] = useState<PkgDraftRow[]>([])
+  const [importText, setImportText] = useState('')
+  const [overflow, setOverflow] = useState(false)
   const [saving, setSaving]     = useState(false)
 
   const load = useCallback(async (preferId?: string) => {
@@ -1030,6 +1033,11 @@ function GivePackageForm({ busy, playerName, onGive }: {
     setDraftId(undefined); setDraftName('')
     setDraftRows([{ template: '', name: '', qty: '1', quality: '0' }])
     setErr(null); setMode('edit')
+  }
+  const startImport = () => {
+    setDraftId(undefined); setDraftName('')
+    setImportText('')
+    setErr(null); setMode('import')
   }
   const startEdit = () => {
     if (!selected) return
@@ -1067,6 +1075,70 @@ function GivePackageForm({ busy, playerName, onGive }: {
     } finally {
       setSaving(false)
     }
+  }
+
+  const importPackage = async () => {
+    setSaving(true); setErr(null)
+    try {
+      const catalog = await getItemCatalog()
+      const parsed = parseTcnoPackageText(importText, catalog)
+      if (parsed.warnings.length > 0) {
+        setErr(parsed.warnings.join(' '))
+        return
+      }
+      if (parsed.items.length === 0) {
+        setErr('Paste at least one item and quantity.')
+        return
+      }
+      setDraftId(undefined)
+      setDraftName(draftName.trim() || 'Imported package')
+      setDraftRows(parsed.items.map(it => ({
+        template: it.template,
+        name: it.name,
+        qty: String(it.qty),
+        quality: String(it.quality ?? 0),
+      })))
+      setMode('edit')
+    } catch (e) {
+      setErr(e instanceof Error ? e.message : String(e))
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  if (mode === 'import') {
+    return (
+      <div className="space-y-3">
+        <div>
+          <label className="block text-[11px] uppercase tracking-wider text-text-dim mb-1">Package name</label>
+          <input type="text" value={draftName} disabled={saving} maxLength={80}
+            placeholder="e.g. Deep Desert run kit"
+            onChange={e => setDraftName(e.target.value)}
+            className="w-full px-3 py-2 rounded-lg bg-surface-2 border border-border text-text text-sm focus:outline-none focus:ring-2 focus:ring-ibad focus:border-ibad/50" />
+        </div>
+        <div>
+          <label className="block text-[11px] uppercase tracking-wider text-text-dim mb-1">Paste tcno.co item list</label>
+          <textarea value={importText} disabled={saving} rows={10}
+            placeholder={'Complex Machinery:\n50\nDuraluminum Ingot:\n150'}
+            onChange={e => setImportText(e.target.value)}
+            className="w-full px-3 py-2 rounded-lg bg-surface-2 border border-border text-text text-sm font-mono focus:outline-none focus:ring-2 focus:ring-ibad focus:border-ibad/50" />
+          <div className="mt-1 text-[11px] text-text-dim">
+            Format: item name line ending with ":" followed by quantity on the next line.
+          </div>
+        </div>
+        {err && <div className="text-xs text-error">{err}</div>}
+        <div className="grid grid-cols-2 gap-2">
+          <button className="btn-secondary" disabled={saving}
+            onClick={() => { setMode('list'); setErr(null) }}>
+            Cancel
+          </button>
+          <button className="btn-primary" disabled={saving || !importText.trim()}
+            onClick={() => void importPackage()}>
+            {saving ? <Icon name="Loader2" size={13} className="animate-spin" /> : <Icon name="Upload" size={13} />} Import to editor
+          </button>
+        </div>
+      </div>
+    )
   }
 
   if (mode === 'edit') {
@@ -1161,15 +1233,19 @@ function GivePackageForm({ busy, playerName, onGive }: {
         </>
       )}
       {err && <div className="text-xs text-error">{err}</div>}
+      {selected && <OverflowToggle checked={overflow} disabled={busy || saving} onChange={setOverflow} />}
       {selected && (
         <button className="btn-primary w-full" disabled={busy || saving}
-          onClick={() => onGive(selected.items, selected.name)}>
+          onClick={() => onGive(selected.items, selected.name, overflow)}>
           {busy ? <Icon name="Loader2" size={13} className="animate-spin" /> : <Icon name="Check" size={13} />} Give to {playerName}
         </button>
       )}
-      <div className="grid grid-cols-3 gap-2">
+      <div className="grid grid-cols-4 gap-2">
         <button className="btn-secondary" disabled={busy || saving} onClick={startNew}>
           <Icon name="Plus" size={13} /> New
+        </button>
+        <button className="btn-secondary" disabled={busy || saving} onClick={startImport}>
+          <Icon name="Upload" size={13} /> Import
         </button>
         <button className="btn-secondary" disabled={busy || saving || !selected} onClick={startEdit}>
           <Icon name="Pencil" size={13} /> Edit

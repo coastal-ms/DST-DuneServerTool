@@ -21,7 +21,7 @@ param(
 # Wraps the original battlegroup.ps1 menu and adds extra tools
 # ============================================================
 
-$script:ToolVersion = "12.5.7"
+$script:ToolVersion = "12.5.8"
 
 # Cold-boot readiness budgets (seconds). A fresh battlegroup's FIRST boot can
 # take 10-30 min: k3s + funcom-operators initialize, metrics-server restarts a
@@ -830,7 +830,8 @@ function Invoke-DuneRemotePartitionScript {
     # removes the staged copy. No persistent install, no boot script, no cron.
     # Returns @{ ok; rc; output }. Best-effort - never throws.
     param(
-        [Parameter(Mandatory)][string]$Ip
+        [Parameter(Mandatory)][string]$Ip,
+        [int]$WaitAttempts = 60
     )
     $local = Get-DuneRemotePartitionScriptPath
     if (-not $local) {
@@ -859,13 +860,13 @@ function Invoke-DuneRemotePartitionScript {
     }
     $output = & ssh -o BatchMode=yes -o StrictHostKeyChecking=no -o LogLevel=QUIET `
                     -i "$sshKey" "$sshUser@$Ip" `
-                    "sudo -n sh $remoteTmp; rc=`$?; rm -f $remoteTmp; exit `$rc" 2>&1
+                    "sudo -n DUNE_CLEAR_ATTEMPTS=$WaitAttempts sh $remoteTmp; rc=`$?; rm -f $remoteTmp; exit `$rc" 2>&1
     $rc = $LASTEXITCODE
     return @{ ok = ($rc -eq 0); rc = $rc; output = @($output) }
 }
 
 function Invoke-OnDemandPartitionClear {
-    # Best-effort wrapper: settle for DelaySec to let the Funcom server-operator
+    # Best-effort wrapper: optionally settle for DelaySec to let the Funcom server-operator
     # finish reconciling on-demand ServerSets (otherwise the script runs before
     # partitions are pinned and finds nothing to clear), stage the bundled
     # script to /tmp on the VM, run it once with sudo, remove it, then tail
@@ -877,7 +878,8 @@ function Invoke-OnDemandPartitionClear {
     param(
         [Parameter(Mandatory)][string]$Ip,
         [int]$DelaySec = 30,
-        [string]$Phase = 'post-start'
+        [string]$Phase = 'post-start',
+        [switch]$Fast
     )
     Write-Host ""
     Write-Host "[$Phase] Clearing on-demand map partition pins (auto-fix so DeepDesert / Arrakeen / Harko spawn on demand)..." -ForegroundColor Cyan
@@ -887,7 +889,8 @@ function Invoke-OnDemandPartitionClear {
         Start-Sleep -Seconds $DelaySec
     }
 
-    $result = Invoke-DuneRemotePartitionScript -Ip $Ip
+    $waitAttempts = if ($Fast) { 1 } else { 60 }
+    $result = Invoke-DuneRemotePartitionScript -Ip $Ip -WaitAttempts $waitAttempts
     $runOut = $result.output
     $runRc  = $result.rc
 
@@ -1464,7 +1467,7 @@ while ($true) {
         # the next player without manual intervention. Skipped if `bg start`
         # itself failed (no point waiting on operator that never reconciled).
         if ($bgStartExit -eq 0) {
-            Invoke-OnDemandPartitionClear -Ip $ip -DelaySec 15 -Phase 'post-startup'
+            Invoke-OnDemandPartitionClear -Ip $ip -DelaySec 0 -Phase 'post-startup' -Fast
         } else {
             Write-Host "  Skipped on-demand partition auto-clear because battlegroup start exited $bgStartExit." -ForegroundColor DarkYellow
         }
@@ -2138,11 +2141,10 @@ while ($true) {
     # partition pins so DD/Arrakeen/Harko spawn for the next player without
     # the user having to invoke fix-on-demand-maps manually.
     if ($bgFallbackExit -eq 0 -and ($cmdName -eq 'start' -or $cmdName -eq 'restart')) {
-        # 'start' brings up a battlegroup that was not running, on an already-up
-        # VM; the operator pins on-demand ServerSets quickly, so a short settle
-        # is enough. 'restart' keeps the longer delay (battlegroup churn).
-        $settleSec = if ($cmdName -eq 'start') { 9 } else { 45 }
-        Invoke-OnDemandPartitionClear -Ip $ip -DelaySec $settleSec -Phase "post-$cmdName"
+        # Run in fast mode: no fixed settle delay and only one remote wait pass.
+        # The persistent VM watchdog / manual Fix Partitions command covers
+        # slower post-reconcile drift without making every start feel hung.
+        Invoke-OnDemandPartitionClear -Ip $ip -DelaySec 0 -Phase "post-$cmdName" -Fast
     }
 
     # After start/restart, resolve director port

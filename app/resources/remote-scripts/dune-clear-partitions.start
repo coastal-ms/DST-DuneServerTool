@@ -26,6 +26,7 @@ set -u
 LOG=/var/log/dune-clear-partitions.log
 MAP_SUFFIXES="-deepdesert-1 -sh-arrakeen -sh-harkovillage"
 KUBE="/usr/local/bin/k3s kubectl"
+WAIT_ATTEMPTS="${DUNE_CLEAR_ATTEMPTS:-60}"
 
 ts() { date "+%Y-%m-%d %H:%M:%S"; }
 log() { echo "[$(ts)] $*" >> "$LOG"; }
@@ -33,7 +34,7 @@ log() { echo "[$(ts)] $*" >> "$LOG"; }
 log "dune-clear-partitions: start"
 
 # Wait up to 5 min for k3s API + igwsss CRD to be available.
-for i in $(seq 1 60); do
+for i in $(seq 1 "$WAIT_ATTEMPTS"); do
   if $KUBE get igwsss --all-namespaces >/dev/null 2>&1; then
     log "api + igwsss CRD ready after ${i} attempts"
     break
@@ -61,7 +62,7 @@ has_expected_match() {
 # Wait up to 5 min for at least one expected map igwsss object to exist.
 # This is the race-window fix: CRD can be reachable before the server-operator
 # has created the per-map ServerSetScale instances during a fresh boot.
-for i in $(seq 1 60); do
+for i in $(seq 1 "$WAIT_ATTEMPTS"); do
   if [ -n "$(has_expected_match)" ]; then
     log "expected map igwsss object(s) present after ${i} attempts"
     break

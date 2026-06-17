@@ -29,13 +29,27 @@ function Resolve-DuneItemVolume {
     return 0.0
 }
 
-# Max stack size for a template: catalogued stack_max wins, else the largest
-# stack_size seen live for that template+quality, else 1. Mirrors the reference
-# implementation resolveStackMax.
+# Picker-only ammo templates are absent from gameplay-item-data.json, so they
+# have no catalogued stack_max even though the game stacks them.
+$script:DuneKnownStackableItemLimits = @{
+    Ammo              = 500
+    HeavyAmmo         = 500
+    InfantryRocketAmmo = 500
+    Napalm            = 500
+    RocketAmmo        = 500
+}
+
+# Max stack size for a template: catalogued stack_max wins, else known
+# picker-only stackables, else the largest stack_size seen live for that
+# template+quality, else 1. Mirrors the reference implementation resolveStackMax
+# with DST catalog backfill for items missing from gameplay-item-data.json.
 function Resolve-DuneStackMax {
     param([Parameter(Mandatory)] [string] $Ip, [Parameter(Mandatory)] [string] $Template, [long] $Quality = 0)
     $rule = Get-DuneGameplayItemRule -TemplateId $Template
     if ($rule -and $rule.ContainsKey('stack_max') -and [int]$rule.stack_max -gt 0) { return [int]$rule.stack_max }
+    if ($script:DuneKnownStackableItemLimits.ContainsKey($Template)) {
+        return [int]$script:DuneKnownStackableItemLimits[$Template]
+    }
     $safe = ($Template -replace "'", "''")
     $sql = "SELECT COALESCE(MAX(stack_size), 0)::text AS s FROM dune.items WHERE template_id = '$safe' AND quality_level = $Quality::bigint;"
     $r = Invoke-DuneSqlQuery -Ip $Ip -Sql $sql -ReadOnly $true -MaxRows 1 -TimeoutSec 10

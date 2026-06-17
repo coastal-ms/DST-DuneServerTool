@@ -1171,6 +1171,64 @@ export function filterCatalog(catalog: CatalogItem[], query: string, limit = 20,
   return out.slice(0, limit).map(o => o.item)
 }
 
+export interface PackageImportItem extends GiveItemEntry {
+  name: string
+}
+
+export interface PackageImportResult {
+  items: PackageImportItem[]
+  warnings: string[]
+}
+
+function normalizePackageItemName(s: string): string {
+  return s.trim().replace(/\s+/g, ' ').toLowerCase()
+}
+
+export function parseTcnoPackageText(raw: string, catalog: CatalogItem[]): PackageImportResult {
+  const lines = raw.split(/\r?\n/).map(l => l.trim()).filter(Boolean)
+  const byName = new Map<string, CatalogItem>()
+  const byTemplate = new Map<string, CatalogItem>()
+  for (const item of catalog) {
+    const nameKey = normalizePackageItemName(item.name)
+    const templateKey = normalizePackageItemName(item.template_id)
+    if (nameKey && !byName.has(nameKey)) byName.set(nameKey, item)
+    if (templateKey && !byTemplate.has(templateKey)) byTemplate.set(templateKey, item)
+  }
+
+  const items: PackageImportItem[] = []
+  const warnings: string[] = []
+  for (let i = 0; i < lines.length; i += 2) {
+    const nameLine = lines[i] ?? ''
+    const qtyLine = lines[i + 1] ?? ''
+    if (!nameLine.endsWith(':')) {
+      warnings.push(`Line ${i + 1}: expected "Item name:"`)
+      continue
+    }
+    if (!qtyLine) {
+      warnings.push(`Line ${i + 2}: missing quantity for ${nameLine.slice(0, -1).trim()}`)
+      continue
+    }
+    const itemName = nameLine.slice(0, -1).trim()
+    const qty = Number.parseInt(qtyLine, 10)
+    if (!Number.isFinite(qty) || qty < 1) {
+      warnings.push(`Line ${i + 2}: invalid quantity "${qtyLine}" for ${itemName}`)
+      continue
+    }
+    const key = normalizePackageItemName(itemName)
+    const match = byName.get(key) ?? byTemplate.get(key)
+    if (!match) {
+      warnings.push(`Unknown item "${itemName}"`)
+      continue
+    }
+    items.push({ template: match.template_id, name: match.name, qty, quality: 0 })
+  }
+
+  if (lines.length % 2 === 1 && lines.length > 0 && !lines[lines.length - 1]?.endsWith(':')) {
+    warnings.push(`Line ${lines.length}: quantity has no item name`)
+  }
+  return { items, warnings }
+}
+
 export interface FillWaterResponse {
   ok: boolean
   message: string
@@ -1419,9 +1477,9 @@ export function getProgressionPresets() {
 // ---------------------------------------------------------------------------
 
 export interface GiveItemEntry { template: string; qty: number; quality?: number }
-export function giveItems(pawnId: number, items: GiveItemEntry[]) {
+export function giveItems(pawnId: number, items: GiveItemEntry[], allowOverflow = false) {
   return api<WriteResult>('/api/gameplay/players/give-items', {
-    method: 'POST', body: JSON.stringify({ pawn_id: pawnId, items }),
+    method: 'POST', body: JSON.stringify({ pawn_id: pawnId, items, allow_overflow: allowOverflow }),
   })
 }
 

@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo, useCallback, type FormEvent, type ReactElement } from 'react'
+import { useState, useEffect, useMemo, useCallback, type FormEvent, type KeyboardEvent, type ReactElement } from 'react'
 import { PageHeader } from '../components/PageHeader'
 import { Icon } from '../components/Icon'
 import { useStatus } from '../hooks/useStatus'
@@ -110,6 +110,19 @@ function valuesEqual(a: string, b: string): boolean {
     if (Number.isFinite(na) && Number.isFinite(nb)) return na === nb
   }
   return ta.toLowerCase() === tb.toLowerCase()
+}
+
+function copyTextToClipboard(text: string) {
+  const write = navigator.clipboard?.writeText(text)
+  if (write) void write.catch(() => { /* clipboard may be unavailable */ })
+}
+
+function copyIniSectionFromKey(e: KeyboardEvent<HTMLElement>, sectionName: string) {
+  if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'c') {
+    e.preventDefault()
+    e.stopPropagation()
+    copyTextToClipboard(`[${sectionName}]`)
+  }
 }
 
 // Build a human-readable result message for a client-apply that signifies what
@@ -1906,7 +1919,9 @@ function DefaultsSectionCard({
       <button
         type="button"
         onClick={onToggle}
+        onKeyDown={e => copyIniSectionFromKey(e, section.name)}
         className="w-full flex items-center justify-between px-3 py-2 bg-surface-2 hover:bg-surface-3 transition-colors text-left"
+        title={`Click to ${expanded ? 'collapse' : 'expand'}; Ctrl+C copies [${section.name}]`}
       >
         <span className="flex items-center gap-2 min-w-0">
           <Icon name={expanded ? 'ChevronDown' : 'ChevronRight'} size={13} className="shrink-0 text-text-muted" />
@@ -2094,7 +2109,12 @@ function AdvancedIniBrowser({ cfg }: { cfg: GameConfigResponse }) {
 function IniSectionBlock({ section }: { section: GameConfigIniSection }) {
   return (
     <div className="border border-border rounded-lg overflow-hidden">
-      <div className="flex items-center justify-between px-3 py-2 bg-surface-2">
+      <div
+        tabIndex={0}
+        onKeyDown={e => copyIniSectionFromKey(e, section.name)}
+        className="flex items-center justify-between px-3 py-2 bg-surface-2 focus:outline-none focus:ring-2 focus:ring-accent/50"
+        title={`Ctrl+C copies [${section.name}]`}
+      >
         <span className="font-mono text-xs text-text truncate" title={section.name}>[{section.name}]</span>
         {section.managed && (
           <span className="text-[9px] font-semibold uppercase tracking-wider px-1.5 py-0.5 rounded bg-accent/15 text-accent-bright shrink-0">
@@ -2205,4 +2225,3 @@ function SandwormConfirmModal({
     </div>
   )
 }
-

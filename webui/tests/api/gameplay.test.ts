@@ -92,14 +92,14 @@ describe('Phase A — currency / progression writes', () => {
 })
 
 describe('Phase C/D/E/F — items, vehicles, teleport, progression, jobs', () => {
-  it('giveItems forwards the items array', async () => {
+  it('giveItems forwards the items array and overflow flag', async () => {
     const items = [
       { template: 'sword', qty: 1, quality: 5 },
       { template: 'shield', qty: 2 },
     ]
-    await gp.giveItems(11, items)
+    await gp.giveItems(11, items, true)
     expect(last().url).toBe('/api/gameplay/players/give-items')
-    expect(last().body).toEqual({ pawn_id: 11, items })
+    expect(last().body).toEqual({ pawn_id: 11, items, allow_overflow: true })
   })
 
   it('repairGear / repairVehicle / refuelVehicle hit the right URLs', async () => {
@@ -430,3 +430,41 @@ describe('flattenItemCatalog — catalog shape parsing', () => {
   })
 })
 
+describe('parseTcnoPackageText', () => {
+  const catalog: gp.CatalogItem[] = [
+    { template_id: 'ComplexMachinery', name: 'Complex Machinery', category: 'Resources' },
+    { template_id: 'DuraluminumRod', name: 'Duraluminum Ingot', category: 'Resources' },
+    { template_id: 'PlastaniumBar', name: 'Plastanium Ingot', category: 'Resources' },
+    { template_id: 'Silicone', name: 'Silicone Block', category: 'Resources' },
+    { template_id: 'MelangeSpice', name: 'Spice Melange', category: 'Resources' },
+  ]
+
+  it('imports tcno two-line item/quantity format by display name', () => {
+    const parsed = gp.parseTcnoPackageText(`Complex Machinery:
+50
+Duraluminum Ingot:
+150
+Plastanium Ingot:
+70
+Silicone Block:
+104
+Spice Melange:
+39`, catalog)
+
+    expect(parsed.warnings).toEqual([])
+    expect(parsed.items).toEqual([
+      { template: 'ComplexMachinery', name: 'Complex Machinery', qty: 50, quality: 0 },
+      { template: 'DuraluminumRod', name: 'Duraluminum Ingot', qty: 150, quality: 0 },
+      { template: 'PlastaniumBar', name: 'Plastanium Ingot', qty: 70, quality: 0 },
+      { template: 'Silicone', name: 'Silicone Block', qty: 104, quality: 0 },
+      { template: 'MelangeSpice', name: 'Spice Melange', qty: 39, quality: 0 },
+    ])
+  })
+
+  it('reports unknown names without creating partial hidden failures', () => {
+    const parsed = gp.parseTcnoPackageText('Mystery Goo:\n5', catalog)
+
+    expect(parsed.items).toEqual([])
+    expect(parsed.warnings).toEqual(['Unknown item "Mystery Goo"'])
+  })
+})
