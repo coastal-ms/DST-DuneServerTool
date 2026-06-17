@@ -3,7 +3,7 @@
 //
 // Behaviour mirrors the reference implementation's item search: lazy-load the catalog on first
 // keystroke, filter on every change with substring match against display
-// name OR template_id (case-insensitive), show up to 20 matches in a popup
+// name OR template_id (case-insensitive), show up to 200 matches in a scrollable popup
 // listing "Name — template_id (category)". Arrow keys + Enter to select,
 // Escape to clear.
 
@@ -66,7 +66,7 @@ export function ItemPicker({ value, onChange, displayValue, label, placeholder, 
   // otherwise the raw value (which is also the live search query).
   const shown = displayValue ?? value
   // Filter against whatever text is currently visible, narrowed by category.
-  const matches: CatalogItem[] = catalog ? filterCatalog(catalog, shown, 20, category) : []
+  const matches: CatalogItem[] = catalog ? filterCatalog(catalog, shown, 200, category) : []
 
   // Close popup on outside click (treat the portaled popup as "inside").
   useEffect(() => {
