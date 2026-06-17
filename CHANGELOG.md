@@ -13,6 +13,10 @@ here cover everything those tags shipped.
 
 ## [Unreleased]
 
+### Changed
+
+- **Wipe Journey now requires a typed double-confirmation.** Because wiping a player's entire journey is extremely destructive and cannot be undone, the action (both the menu item and the "Wipe All" button inside the Journey browser) now requires typing `i acknowledge` to proceed, aligning it with Wipe Codex and Delete Account.
+
 ## [12.5.6] - 2026-06-17
 
 ### Added
