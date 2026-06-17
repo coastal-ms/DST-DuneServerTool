@@ -506,10 +506,21 @@ const ACTIONS: ActionDef[] = [
       `This single confirmation is required so the action can't run on an accidental click.`,
     run: p => resetJourney(p.account_id) },
   { id: 'wipe-journey', group: 'Progression', label: 'Wipe Journey (restart)', icon: 'RefreshCw',
-    rowNote: 'Single confirmation required',
+    doubleConfirm: true,
+    rowNote: 'Double confirmation required',
     confirm: p => `WIPE ${p.name}'s entire journey and restart it from the beginning? All journey/quest progress is lost. This cannot be undone.\n\n` +
-      `This single confirmation is required so the action can't run on an accidental click.`,
-    run: p => wipeJourney(p.account_id) },
+      `This is the FIRST of two confirmations. If you continue, the next step asks you to type an acknowledgement before the journey is wiped.`,
+    run: p => {
+      const typed = window.prompt(
+        `SECOND confirmation — WIPE ${p.name}'s journey.\n` +
+        `This cannot be undone.\n\n` +
+        `Type  i acknowledge  to proceed:`
+      ) || ''
+      if (typed.trim().toLowerCase() !== 'i acknowledge') {
+        throw new Error('Did not type "i acknowledge" — wipe aborted.')
+      }
+      return wipeJourney(p.account_id)
+    } },
 
   // ----- Items -----
   { id: 'give-item',      group: 'Items', label: 'Give Item', icon: 'PackagePlus', custom: 'give-item',
@@ -2506,8 +2517,18 @@ export function JourneySection({ player, canWrite, demo, refreshKey, flash, onCh
 
   const wipeAll = () => {
     if (!window.confirm(
-      `WIPE ${player.name}'s entire journey and restart it from the beginning? All journey/quest progress is lost. This cannot be undone.`
+      `WIPE ${player.name}'s entire journey and restart it from the beginning? All journey/quest progress is lost. This cannot be undone.\n\n` +
+      `This is the FIRST of two confirmations. If you continue, the next step asks you to type an acknowledgement before the journey is wiped.`
     )) return
+    const typed = window.prompt(
+      `SECOND confirmation — WIPE ${player.name}'s journey.\n` +
+      `This cannot be undone.\n\n` +
+      `Type  i acknowledge  to proceed:`
+    ) || ''
+    if (typed.trim().toLowerCase() !== 'i acknowledge') {
+      flash('Did not type "i acknowledge" — wipe aborted.', 'err')
+      return
+    }
     void run(() => wipeJourney(player.account_id))
   }
 
