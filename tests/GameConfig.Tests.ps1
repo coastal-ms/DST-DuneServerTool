@@ -339,6 +339,39 @@ Describe 'GameConfig: single-section-per-key consistency' -Tag 'GameConfig' {
         $out | Should -Match 'm_bIsDbWipeEnabled'
     }
 
+    It 'reset-to-default strips a stale copy from an UNMANAGED body section (Coriolis Auto-Spawn toggle-on bug)' {
+        # A foreign/older placement of the key sits in an unmanaged section the
+        # update does not target. Toggling the field back to its default sends
+        # remove=$true against the canonical section; without scrubbing the body
+        # copy it would survive and shadow the read (stuck on the old value).
+        $foreign = '/Script/DuneSandbox.CoriolisSubsystem'
+        $raw = "[$foreign]`n" +
+               "m_bCoriolisAutoSpawnEnabled=False`n" +
+               "m_CycleDurationInDays=7`n"
+        $canonical = '/Script/DuneSandbox.SandStormConfig'
+        $updates = @(@{ section = $canonical; key = 'm_bCoriolisAutoSpawnEnabled'; value = 'True'; remove = $true })
+        $out = ConvertTo-DuneIniManaged -Raw $raw -Updates $updates -QuotedKeys @{}
+        $byKey = Get-DuneIniEffectiveByKey -Raw $out
+        # The shadow copy is gone, so the UI falls back to the schema default (On).
+        $byKey['m_bCoriolisAutoSpawnEnabled'] | Should -BeNullOrEmpty
+        # An unrelated key in that foreign section is untouched.
+        $byKey['m_CycleDurationInDays'] | Should -Be '7'
+    }
+
+    It 'setting a value consolidates a stale UNMANAGED body copy into the canonical section' {
+        $foreign = '/Script/DuneSandbox.CoriolisSubsystem'
+        $raw = "[$foreign]`n" +
+               "m_bCoriolisAutoSpawnEnabled=False`n"
+        $canonical = '/Script/DuneSandbox.SandStormConfig'
+        $updates = @(@{ section = $canonical; key = 'm_bCoriolisAutoSpawnEnabled'; value = 'False'; remove = $false })
+        $out = ConvertTo-DuneIniManaged -Raw $raw -Updates $updates -QuotedKeys @{}
+        # Exactly one occurrence of the key, and it lives under the canonical section.
+        $hits = @(($out -replace "`r", '' -split "`n") | Where-Object { $_.Trim() -match '^m_bCoriolisAutoSpawnEnabled\s*=' })
+        $hits.Count | Should -Be 1
+        $eff = Get-DuneIniEffective -Raw $out
+        $eff["$canonical||m_bCoriolisAutoSpawnEnabled"] | Should -Be 'False'
+    }
+
     It 'Get-DuneIniEffectiveByKey returns last-wins value regardless of section' {
         $raw = "[/Script/DuneSandbox.DuneGameMode]`n" +
                "m_CycleDurationInDays=36500`n" +

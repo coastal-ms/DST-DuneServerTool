@@ -37,7 +37,7 @@ Register-DuneRoute -Method POST -Path '/api/gameplay/coriolis/set-farm-seed' -Ha
     param($req, $res, $routeParams, $body)
     try {
         $seed = Get-DuneBodyInt -Body $body -Name 'seed'
-        if ($null -eq $seed -or $seed -lt 0) { Write-DuneError -Response $res -Status 400 -Message 'seed (non-negative integer) is required.'; return }
+        if ($null -eq $seed -or $seed -lt -1 -or $seed -gt 11) { Write-DuneError -Response $res -Status 400 -Message 'seed must be -1 (auto) or 0-11.'; return }
         Invoke-DunePlayerWriteRoute -Response $res -Action {
             param($ip) Invoke-DuneCoriolisSetFarmSeed -Ip $ip -Seed ([int]$seed)
         }
@@ -54,7 +54,7 @@ Register-DuneRoute -Method POST -Path '/api/gameplay/coriolis/set-map-seed' -Han
         if ($body -and $body.PSObject.Properties['map']) { $map = [string]$body.map }
         $seed = Get-DuneBodyInt -Body $body -Name 'seed'
         if (-not $map) { Write-DuneError -Response $res -Status 400 -Message 'map (string) is required.'; return }
-        if ($null -eq $seed -or $seed -lt 0) { Write-DuneError -Response $res -Status 400 -Message 'seed (non-negative integer) is required.'; return }
+        if ($null -eq $seed -or $seed -lt -1 -or $seed -gt 11) { Write-DuneError -Response $res -Status 400 -Message 'seed must be -1 (auto) or 0-11.'; return }
         Invoke-DunePlayerWriteRoute -Response $res -Action {
             param($ip) Invoke-DuneCoriolisSetMapSeed -Ip $ip -Map $map -Seed ([int]$seed)
         }
@@ -71,7 +71,7 @@ Register-DuneRoute -Method POST -Path '/api/gameplay/coriolis/set-partition-seed
         $partId = Get-DuneBodyInt -Body $body -Name 'partition_id'
         $seed = Get-DuneBodyInt -Body $body -Name 'seed'
         if ($null -eq $partId -or $partId -le 0) { Write-DuneError -Response $res -Status 400 -Message 'partition_id (positive integer) is required.'; return }
-        if ($null -eq $seed -or $seed -lt 0) { Write-DuneError -Response $res -Status 400 -Message 'seed (non-negative integer) is required.'; return }
+        if ($null -eq $seed -or $seed -lt -1 -or $seed -gt 11) { Write-DuneError -Response $res -Status 400 -Message 'seed must be -1 (auto) or 0-11.'; return }
         Invoke-DunePlayerWriteRoute -Response $res -Action {
             param($ip) Invoke-DuneCoriolisSetPartitionSeed -Ip $ip -PartitionId ([long]$partId) -Seed ([int]$seed)
         }
