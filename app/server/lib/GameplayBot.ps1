@@ -1074,13 +1074,6 @@ LIMIT $limit
         $stack     = ConvertTo-DuneInt $row['actual_stack']
         if ($stack -le 0) { $stack = 1 }
         $totalCost = $price * $stack
-        # Player-facing Solari = stored item_price * 10 (the same convention the
-        # sell side uses, and the listing price the seller chose in-game). The
-        # seller payout order + Duke's balance debit are denominated in literal
-        # Solari, so they must use the *display* value, not the raw item_price.
-        # Writing the raw value here underpaid sellers 10x (issue #274).
-        $payoutUnit  = $price * 10
-        $payoutTotal = $totalCost * 10
 
         # Over-market guard: dice hit, but bail if the price is above the window.
         if ($guardOn) {
@@ -1118,7 +1111,7 @@ LIMIT $limit
             }
         }
 
-        $winner = [ordered]@{ template_id = $tmpl; order_id = $orderId; price = $payoutUnit; stack = $stack; roll = $roll }
+        $winner = [ordered]@{ template_id = $tmpl; order_id = $orderId; price = ($price * 10); stack = $stack; roll = $roll }
 
         if ($DryRun) {
             $summary.purchased++   # would-buy count
@@ -1134,12 +1127,12 @@ INSERT INTO dune.dune_exchange_orders
   (exchange_id, access_point_id, owner_id, template_id, expiration_time,
    durability_cur, durability_max, item_price, category_mask, category_depth, is_npc_order)
 VALUES ($($ident.exchangeId), $($ident.accessPointId), $sellerId, '$tmplLit', $orderExpiry,
-        1.0, 1.0, $payoutUnit, 0, 0, FALSE)
+        1.0, 1.0, $price, 0, 0, FALSE)
 RETURNING id AS logid \gset
 INSERT INTO dune.dune_exchange_fulfilled_orders
   (order_id, source_order_id, completion_type, stack_size, original_order_id)
 VALUES (:logid, NULL, 4, $stack, $orderId);
-UPDATE dune.dune_exchange_users SET solari_balance = solari_balance - $payoutTotal WHERE owner_id = $($ident.ownerId);
+UPDATE dune.dune_exchange_users SET solari_balance = solari_balance - $totalCost WHERE owner_id = $($ident.ownerId);
 DELETE FROM dune.dune_exchange_sell_orders WHERE order_id = $orderId;
 DELETE FROM dune.dune_exchange_orders WHERE id = $orderId;
 $itemDelete
