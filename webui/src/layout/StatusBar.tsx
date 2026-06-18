@@ -35,14 +35,28 @@ export function StatusBar() {
   const ports = status?.ports ?? null
   const bgKey = (status?.bg?.state ?? 'unknown') as BgState | 'unknown'
   const bg    = BG_STYLES[bgKey] ?? BG_STYLES.unknown
+  const serverName = (status?.serverName ?? '').trim()
 
   return (
-    <header className="h-14 shrink-0 border-b border-border bg-surface/60 backdrop-blur-md px-5 flex items-center justify-between">
-      <div className="flex items-center gap-2 text-sm text-text-muted">
+    <header className="h-14 shrink-0 border-b border-border bg-surface/60 backdrop-blur-md px-5 flex items-center justify-between gap-4">
+      <div className="flex items-center gap-2 text-sm text-text-muted shrink-0">
         <Icon name="Server" size={16} className="text-text-dim" />
         <span>Dune Self Host Server Tool</span>
       </div>
-      <div className="flex items-center gap-2">
+      <div className="flex-1 flex items-center justify-center min-w-0">
+        {serverName && (
+          <div className="flex items-center gap-2 min-w-0">
+            <Icon name="Server" size={20} className="text-accent shrink-0" />
+            <span
+              className="text-[22px] leading-none font-semibold tracking-tight text-text truncate"
+              title={`Server: ${serverName}`}
+            >
+              {serverName}
+            </span>
+          </div>
+        )}
+      </div>
+      <div className="flex items-center gap-2 shrink-0">
         <span className={portPillClass(ports, 7777, 'UDP')} title="Game server ports (forward on your router/firewall)">
           <Icon name="Plug" size={11} /> 7777–7810 UDP
         </span>

@@ -8,11 +8,16 @@ Register-DuneRoute -Method GET -Path '/api/status' -Handler {
     }
     $ports = $null
     try { $ports = Get-DunePortStatus } catch { $ports = $null }
+    $serverName = ''
+    if ($vm.running -and (Get-Command Get-DuneServerName -ErrorAction SilentlyContinue)) {
+        try { $serverName = Get-DuneServerName } catch { $serverName = '' }
+    }
     Write-DuneJson -Response $res -Body @{
-        vm    = $vm
-        bg    = $bg
-        ports = $ports
-        ts    = (Get-Date).ToString('o')
+        vm         = $vm
+        bg         = $bg
+        ports      = $ports
+        serverName = $serverName
+        ts         = (Get-Date).ToString('o')
     }
 }
 
@@ -26,10 +31,15 @@ Register-DuneRoute -Method POST -Path '/api/status/refresh' -Handler {
     }
     $ports = $null
     try { $ports = Get-DunePortStatus -Force } catch { $ports = $null }
+    $serverName = ''
+    if ($vm.running -and (Get-Command Get-DuneServerName -ErrorAction SilentlyContinue)) {
+        try { $serverName = Get-DuneServerName -Force } catch { $serverName = '' }
+    }
     Write-DuneJson -Response $res -Body @{
-        vm    = $vm
-        bg    = $bg
-        ports = $ports
-        ts    = (Get-Date).ToString('o')
+        vm         = $vm
+        bg         = $bg
+        ports      = $ports
+        serverName = $serverName
+        ts         = (Get-Date).ToString('o')
     }
 }
