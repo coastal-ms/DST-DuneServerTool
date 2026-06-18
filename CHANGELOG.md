@@ -13,6 +13,28 @@ here cover everything those tags shipped.
 
 ## [Unreleased]
 
+## [12.6.0] - 2026-06-17
+
+### Added
+
+- **Progression Unlock (Players → Progression).** New panel that completes the
+  `DA_FQ_ClimbTheRanks` journey nodes and writes the faction tier tags +
+  reputation for a player. Pick a faction (Atreides or Harkonnen) and a stage —
+  **Ch3 Start** (faction tier 5, start of chapter 3) or **Rank 19 Eligible**
+  (tier 19 plus the Landsraad onboarding nodes) — then **Apply Unlock** or
+  **Reverse Unlock**. Takes effect on the player's next login.
+- **Tag search in the player Tags editor.** The Add box is now a typeahead over
+  the known gameplay-tag catalog: search as you type, see a friendly breadcrumb
+  name above each raw tag id, and pick from an inline scrollable list paginated
+  25 per page. Tags the player already has are excluded from suggestions. Backed
+  by a new `GET /api/gameplay/tags/catalog` endpoint.
+
+### Changed
+
+- **Player Tags list display.** The current tags are now shown as a paginated
+  vertical row list (25 per page) matching the Journey browser, instead of a
+  wrapped chip cloud.
+
 ## [12.5.9] - 2026-06-17
 
 ### Changed
