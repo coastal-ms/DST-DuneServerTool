@@ -1171,11 +1171,96 @@ export function filterCatalog(catalog: CatalogItem[], query: string, limit = 20,
   return out.slice(0, limit).map(o => o.item)
 }
 
-export interface PackageImportItem extends GiveItemEntry {
-  name: string
+// ---------------------------------------------------------------------------
+// Tag catalog — the universe of known gameplay tags (Contract.*, DialogueFlags.*,
+// Journey.*, etc.) that can be written to a player. Powers the Tags editor
+// typeahead. The backend serves the raw tag strings; we derive a friendly label
+// + category client-side so the picker reads "Friendly Name  raw.tag.id".
+// ---------------------------------------------------------------------------
+export interface TagCatalogEntry {
+  tag: string       // raw tag string written to the player
+  label: string     // friendly, humanized breadcrumb label
+  category: string  // first dotted segment (Contract, DialogueFlags, Journey, …)
 }
 
-export interface PackageImportResult {
+/** First dotted segment of a tag, e.g. "Contract" — used as a coarse category. */
+export function tagCategory(tag: string): string {
+  const i = tag.indexOf('.')
+  return (i > 0 ? tag.slice(0, i) : tag).trim()
+}
+
+/** Humanize one tag segment: de-CamelCase, split letter/digit runs, drop underscores. */
+function humanizeSegment(seg: string): string {
+  return seg
+    .replace(/_/g, ' ')
+    .replace(/([a-z0-9])([A-Z])/g, '$1 $2')
+    .replace(/([A-Za-z])([0-9])/g, '$1 $2')
+    .replace(/\s+/g, ' ')
+    .trim()
+}
+
+/** Friendly breadcrumb label for a tag, e.g.
+ *  "Contract.Tracking.Completed.SeronVarlin.Contract1" ->
+ *  "Contract › Tracking › Completed › Seron Varlin › Contract 1". */
+export function tagFriendlyLabel(tag: string): string {
+  const parts = tag.split('.').map(humanizeSegment).filter(Boolean)
+  return parts.length ? parts.join(' › ') : tag
+}
+
+let _tagCatalogCache: TagCatalogEntry[] | null = null
+let _tagCatalogPromise: Promise<TagCatalogEntry[]> | null = null
+
+interface TagCatalogResponse { tags?: string[]; total?: number; source?: string }
+
+/** Load + cache the known-tag catalog (~400 entries). Fetched once per session. */
+export function getTagCatalog(): Promise<TagCatalogEntry[]> {
+  if (_tagCatalogCache) return Promise.resolve(_tagCatalogCache)
+  if (_tagCatalogPromise) return _tagCatalogPromise
+  _tagCatalogPromise = api<TagCatalogResponse>('/api/gameplay/tags/catalog').then(r => {
+    const flat = (r.tags || [])
+      .map(t => String(t).trim())
+      .filter(Boolean)
+      .map(tag => ({ tag, label: tagFriendlyLabel(tag), category: tagCategory(tag) }))
+      .sort((a, b) => a.label.localeCompare(b.label))
+    _tagCatalogCache = flat
+    _tagCatalogPromise = null
+    return flat
+  }).catch(e => {
+    _tagCatalogPromise = null
+    throw e
+  })
+  return _tagCatalogPromise
+}
+
+/**
+ * Case-insensitive filter over friendly label OR raw tag. Entries whose tag is
+ * in `exclude` (tags the player already has) are dropped. Empty query returns
+ * the first `limit` entries so focusing the field shows a browsable list.
+ */
+export function filterTagCatalog(
+  catalog: TagCatalogEntry[], query: string, limit = 50, exclude?: Set<string>,
+): TagCatalogEntry[] {
+  const q = query.trim().toLowerCase()
+  const avail = exclude && exclude.size > 0 ? catalog.filter(e => !exclude.has(e.tag)) : catalog
+  if (!q) return avail.slice(0, limit)
+  const out: { entry: TagCatalogEntry; rank: number }[] = []
+  for (const e of avail) {
+    const tag = e.tag.toLowerCase()
+    const lbl = e.label.toLowerCase()
+    let rank = -1
+    if (tag === q || lbl === q)                 rank = 0
+    else if (tag.startsWith(q))                 rank = 1
+    else if (lbl.startsWith(q))                 rank = 2
+    else if (tag.includes(q) || lbl.includes(q)) rank = 3
+    if (rank >= 0) out.push({ entry: e, rank })
+  }
+  out.sort((a, b) => a.rank - b.rank || a.entry.label.localeCompare(b.entry.label))
+  return out.slice(0, limit).map(o => o.entry)
+}
+
+export interface PackageImportItem extends GiveItemEntry {
+  name: string
+}export interface PackageImportResult {
   items: PackageImportItem[]
   warnings: string[]
 }
@@ -1541,15 +1626,18 @@ export function teleportToPlayer(sourcePawnId: number, targetPawnId: number) {
   })
 }
 
-export function progressionUnlock(pawnId: number, nodeIds: string[]) {
+// Progression Unlock — completes the DA_FQ_ClimbTheRanks journey nodes for the
+// chosen faction and writes the faction tier tags + reputation. preset picks how
+// far: 'ch3_start' (tier 5) or 'rank19_eligible' (tier 19, +Landsraad nodes).
+export function progressionUnlock(actorId: number, faction: string, preset: string) {
   return api<WriteResult>('/api/gameplay/players/progression-unlock', {
-    method: 'POST', body: JSON.stringify({ pawn_id: pawnId, node_ids: nodeIds }),
+    method: 'POST', body: JSON.stringify({ actor_id: actorId, faction, preset }),
   })
 }
 
-export function progressionReverse(pawnId: number, nodeIds: string[]) {
+export function progressionReverse(actorId: number, faction: string, preset: string) {
   return api<WriteResult>('/api/gameplay/players/progression-reverse', {
-    method: 'POST', body: JSON.stringify({ pawn_id: pawnId, node_ids: nodeIds }),
+    method: 'POST', body: JSON.stringify({ actor_id: actorId, faction, preset }),
   })
 }
 
