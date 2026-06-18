@@ -13,6 +13,8 @@ here cover everything those tags shipped.
 
 ## [Unreleased]
 
+## [12.6.2] - 2026-06-17
+
 ### Fixed
 
 - **Market Bot underpaid sellers 10× on buy.** When Duke bought a player's sell
