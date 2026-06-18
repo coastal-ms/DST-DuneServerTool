@@ -290,6 +290,13 @@ export function TagsSection({ player, canWrite, demo, refreshKey, flash, onChang
     setDraft('')
     setDirty(true)
   }
+  const addTagValues = (raws: string[]) => {
+    const cleaned = raws.map(r => r.trim()).filter(Boolean)
+    if (cleaned.length === 0) return
+    const next = Array.from(new Set([...tags, ...cleaned])).sort()
+    if (next.length !== tags.length) { setTags(next); setDirty(true) }
+    setDraft('')
+  }
   const remove = (t: string) => { setTags(tags.filter(x => x !== t)); setDirty(true) }
 
   const save = async () => {
@@ -326,7 +333,7 @@ export function TagsSection({ player, canWrite, demo, refreshKey, flash, onChang
       {canWrite && !unsupported && (
         <div className="flex gap-2 items-start">
           <TagPicker value={draft} onChange={setDraft} exclude={tags}
-            onPick={addTagValue} onEnterRaw={add} disabled={busy}
+            onPick={addTagValue} onPickMany={addTagValues} onEnterRaw={add} disabled={busy}
             placeholder="Search tags to add by name or id…" />
           <button className="btn-secondary" onClick={add} disabled={busy || !draft.trim()}>
             <Icon name="Plus" size={13} /> Add
