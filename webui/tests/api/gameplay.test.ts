@@ -124,12 +124,13 @@ describe('Phase C/D/E/F — items, vehicles, teleport, progression, jobs', () =>
   })
 
   it('progressionUnlock + progressionReverse + applyProgressionPreset', async () => {
-    await gp.progressionUnlock(11, ['n1', 'n2'])
-    expect(last().body).toEqual({ pawn_id: 11, node_ids: ['n1', 'n2'] })
+    await gp.progressionUnlock(11, 'atreides', 'ch3_start')
+    expect(last().url).toBe('/api/gameplay/players/progression-unlock')
+    expect(last().body).toEqual({ actor_id: 11, faction: 'atreides', preset: 'ch3_start' })
 
-    await gp.progressionReverse(11, ['n1'])
+    await gp.progressionReverse(11, 'harkonnen', 'rank19_eligible')
     expect(last().url).toBe('/api/gameplay/players/progression-reverse')
-    expect(last().body).toEqual({ pawn_id: 11, node_ids: ['n1'] })
+    expect(last().body).toEqual({ actor_id: 11, faction: 'harkonnen', preset: 'rank19_eligible' })
 
     await gp.applyProgressionPreset(11, 'survival-starter')
     expect(last().url).toBe('/api/gameplay/players/progression/apply-preset')

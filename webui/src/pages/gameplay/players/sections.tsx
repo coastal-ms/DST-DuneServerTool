@@ -10,9 +10,11 @@
 import { useCallback, useEffect, useMemo, useState, type ReactElement, type ReactNode } from 'react'
 import { Icon } from '../../../components/Icon'
 import { ItemPicker } from '../../../components/ItemPicker'
+import { TagPicker } from '../../../components/TagPicker'
 import {
   awardCharXp, awardIntel, awardSpecXp, cheatScript, cleanPlayerInventory,
   applyProgressionPreset, getProgressionPresets,
+  progressionUnlock, progressionReverse,
   deleteAccount, deleteInventoryItem, deleteTutorials,
   fillWater, getPlayerEvents, getPlayerSpecs,
   getPlayerStats, getPlayerTags, giveFactionRep, giveItem,
@@ -277,8 +279,9 @@ export function TagsSection({ player, canWrite, demo, refreshKey, flash, onChang
     return () => { alive = false }
   }, [player.account_id, demo, refreshKey])
 
-  const add = () => {
-    const t = draft.trim()
+  const add = () => addTagValue(draft)
+  const addTagValue = (raw: string) => {
+    const t = raw.trim()
     if (!t) return
     if (tags.includes(t)) { setDraft(''); return }
     setTags([...tags, t].sort())
@@ -312,9 +315,23 @@ export function TagsSection({ player, canWrite, demo, refreshKey, flash, onChang
         </div>
       )}
 
+      {canWrite && !unsupported && (
+        <div className="flex gap-2 items-start">
+          <TagPicker value={draft} onChange={setDraft} exclude={tags}
+            onPick={addTagValue} onEnterRaw={add} disabled={busy}
+            placeholder="Search tags by name or id…" />
+          <button className="btn-secondary" onClick={add} disabled={busy || !draft.trim()}>
+            <Icon name="Plus" size={13} /> Add
+          </button>
+          <button className="btn-primary" onClick={save} disabled={busy || !dirty}>
+            <Icon name="Save" size={13} /> Save
+          </button>
+        </div>
+      )}
+
       <div className="card p-3">
         {tags.length === 0 ? (
-          <div className="text-sm text-text-dim">No tags. Add one below.</div>
+          <div className="text-sm text-text-dim">No tags. Add one above.</div>
         ) : (
           <div className="flex flex-wrap gap-2">
             {tags.map(t => (
@@ -330,21 +347,6 @@ export function TagsSection({ player, canWrite, demo, refreshKey, flash, onChang
           </div>
         )}
       </div>
-
-      {canWrite && !unsupported && (
-        <div className="flex gap-2">
-          <input type="text" value={draft} onChange={e => setDraft(e.target.value)}
-            placeholder="Add tag (e.g. VIP, Banned, Verified)…" maxLength={64}
-            onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); add() } }}
-            className="flex-1 px-3 py-2 rounded-lg bg-surface-2 border border-border text-text text-sm focus:outline-none focus:ring-2 focus:ring-ibad focus:border-ibad/50" />
-          <button className="btn-secondary" onClick={add} disabled={busy || !draft.trim()}>
-            <Icon name="Plus" size={13} /> Add
-          </button>
-          <button className="btn-primary" onClick={save} disabled={busy || !dirty}>
-            <Icon name="Save" size={13} /> Save
-          </button>
-        </div>
-      )}
     </div>
   )
 }
@@ -439,7 +441,7 @@ interface ActionDef {
   liveOnly?: boolean      // requires player to be online (RMQ path)
   offlineOnly?: boolean   // requires player to be offline (DB write the game caches in memory)
   fields?: ActionField[]
-  custom?: 'give-item' | 'grant-reward' | 'whisper' | 'spawn-vehicle' | 'quick-presets' | 'vehicle-kit' | 'give-package' | 'cheat-scripts' | 'dev-scripts' | 'unlock-trainers' | 'unlock-mainquest' | 'refuel-vehicle' | 'starter-class' | 'update-tags'
+  custom?: 'give-item' | 'grant-reward' | 'whisper' | 'spawn-vehicle' | 'quick-presets' | 'vehicle-kit' | 'give-package' | 'cheat-scripts' | 'dev-scripts' | 'unlock-trainers' | 'unlock-mainquest' | 'progression-unlock' | 'refuel-vehicle' | 'starter-class' | 'update-tags'
   balance?: 'solari' | 'scrip' | 'intel'  // show the player's current balance read-only above the form
   confirm?: (p: Player) => string  // confirm message; if returns '' no prompt
   doubleConfirm?: boolean // also requires a typed "i acknowledge" prompt inside run()
@@ -489,6 +491,9 @@ const ACTIONS: ActionDef[] = [
     run: (p, v) => setFactionTier(p.controller_id, String(v.faction || 'atreides').trim(), Number(v.tier) || 0) },
   { id: 'apply-progression-preset', group: 'Progression', label: 'Apply Quick Preset', icon: 'Zap', custom: 'quick-presets',
     rowNote: 'Completes a story/journey chapter instantly',
+    run: () => Promise.resolve({ message: '' }) },
+  { id: 'progression-unlock', group: 'Progression', label: 'Progression Unlock', icon: 'Milestone', custom: 'progression-unlock',
+    rowNote: 'Completes DA_FQ_ClimbTheRanks journey nodes + writes faction tier tags',
     run: () => Promise.resolve({ message: '' }) },
   { id: 'unlock-trainers', group: 'Progression', label: 'Unlock Trainers', icon: 'GraduationCap', custom: 'unlock-trainers',
     rowNote: 'Complete a skill-trainer quest line + grant its skill tree — separated by trainer',
@@ -844,6 +849,16 @@ function ActionRow({ def, player, busy, stats, open, danger, onToggle, runAction
               onSubmit={(quest, name) => runAction(def, async () => {
                 const r = await unlockMainQuest(player.account_id, quest)
                 return { message: r.message || `Unlocked main quest "${name}" for ${player.name}.` }
+              })} />
+          ) : def.custom === 'progression-unlock' ? (
+            <ProgressionUnlockForm busy={busy}
+              onUnlock={(faction, preset, presetName) => runAction(def, async () => {
+                const r = await progressionUnlock(player.id, faction, preset)
+                return { message: r.message || `Progression unlock (${presetName}) applied for ${player.name}.` }
+              })}
+              onReverse={(faction, preset, presetName) => runAction(def, async () => {
+                const r = await progressionReverse(player.id, faction, preset)
+                return { message: r.message || `Progression unlock (${presetName}) reversed for ${player.name}.` }
               })} />
           ) : def.custom === 'give-package' ? (
             <GivePackageForm busy={busy} playerName={player.name}
@@ -1660,6 +1675,60 @@ function UnlockMainQuestForm({ busy, onSubmit }: { busy: boolean; onSubmit: (que
         onClick={() => onSubmit(sel, chosen?.name || sel)}>
         {busy ? <Icon name="Loader2" size={13} className="animate-spin" /> : <Icon name="Flag" size={13} />} Unlock Main Quest
       </button>
+    </div>
+  )
+}
+
+// Progression Unlock — faction + stage picker that drives the existing
+// progression-unlock / progression-reverse routes. Completes the
+// DA_FQ_ClimbTheRanks journey nodes for the chosen faction and writes the
+// faction tier tags + reputation. 'Ch3 Start' = tier 5 (start of chapter 3);
+// 'Rank 19 Eligible' = tier 19 + the Landsraad onboarding nodes. Works for both
+// Atreides and Harkonnen. Takes effect on next login.
+const PROGRESSION_PRESETS: { value: string; label: string }[] = [
+  { value: 'ch3_start', label: 'Ch3 Start' },
+  { value: 'rank19_eligible', label: 'Rank 19 Eligible' },
+]
+function ProgressionUnlockForm({ busy, onUnlock, onReverse }: {
+  busy: boolean
+  onUnlock: (faction: string, preset: string, presetName: string) => void
+  onReverse: (faction: string, preset: string, presetName: string) => void
+}) {
+  const [faction, setFaction] = useState('atreides')
+  const [preset, setPreset] = useState('ch3_start')
+  const presetName = PROGRESSION_PRESETS.find(p => p.value === preset)?.label || preset
+  const selectCls = 'w-full px-3 py-2 rounded-lg bg-surface-2 border border-border text-text text-sm focus:outline-none focus:ring-2 focus:ring-ibad focus:border-ibad/50'
+  return (
+    <div className="space-y-3">
+      <div className="grid grid-cols-2 gap-2">
+        <div>
+          <label className="block text-[11px] uppercase tracking-wider text-text-dim mb-1">Faction</label>
+          <select value={faction} disabled={busy} className={selectCls} onChange={e => setFaction(e.target.value)}>
+            <option value="atreides">Atreides</option>
+            <option value="harkonnen">Harkonnen</option>
+          </select>
+        </div>
+        <div>
+          <label className="block text-[11px] uppercase tracking-wider text-text-dim mb-1">Stage</label>
+          <select value={preset} disabled={busy} className={selectCls} onChange={e => setPreset(e.target.value)}>
+            {PROGRESSION_PRESETS.map(p => <option key={p.value} value={p.value}>{p.label}</option>)}
+          </select>
+        </div>
+      </div>
+      <div className="text-[11px] text-text-muted">
+        Completes the <span className="text-text">DA_FQ_ClimbTheRanks</span> journey nodes and writes the faction tier tags + reputation.
+        {' '}<span className="text-text">Ch3 Start</span> sets tier 5; <span className="text-text">Rank 19 Eligible</span> sets tier 19 and adds the Landsraad onboarding nodes. Takes effect on next login.
+      </div>
+      <div className="flex gap-2">
+        <button className="btn-primary flex-1" disabled={busy}
+          onClick={() => onUnlock(faction, preset, presetName)}>
+          {busy ? <Icon name="Loader2" size={13} className="animate-spin" /> : <Icon name="Milestone" size={13} />} Apply Unlock
+        </button>
+        <button className="btn-ghost flex-1" disabled={busy}
+          onClick={() => onReverse(faction, preset, presetName)}>
+          {busy ? <Icon name="Loader2" size={13} className="animate-spin" /> : <Icon name="Undo2" size={13} />} Reverse Unlock
+        </button>
+      </div>
     </div>
   )
 }
