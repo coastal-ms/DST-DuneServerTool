@@ -59,6 +59,7 @@ export type StatusSnapshot = {
   vm: VmStatus
   bg: BattlegroupSnapshot | null
   ports: PortStatus | null
+  serverName?: string | null
   ts: string
 }
 

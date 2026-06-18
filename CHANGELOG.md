@@ -13,6 +13,17 @@ here cover everything those tags shipped.
 
 ## [Unreleased]
 
+## [12.7.0] - 2026-06-17
+
+### Added
+
+- **Server name shown in the top header.** The player-facing server name (the
+  battlegroup title shown in the in-game server browser, e.g. "Reapers") now
+  renders, large and centered, between the tool name and the status pills so you
+  can tell at a glance which server the tool is managing. Read from the
+  battlegroup CRD (`spec.title`) over SSH and cached (5 min TTL); the manual
+  refresh button re-reads it. Hidden when the VM is down or no battlegroup exists.
+
 ## [12.6.2] - 2026-06-17
 
 ### Fixed

@@ -262,6 +262,15 @@ $script:DuneGameConfigLiveGlobDir    = '/var/lib/rancher/k3s/storage/*/Saved/Use
 $script:DuneGameConfigTplGamePath    = '/home/dune/.dune/download/scripts/setup/config/UserGame.ini'
 $script:DuneGameConfigTplEnginePath  = '/home/dune/.dune/download/scripts/setup/config/UserEngine.ini'
 
+# Cached, player-facing server name shown in the in-game server browser. This is
+# the battlegroup title (CRD spec.title, e.g. "Reapers") — NOT Bgd.ServerDisplayName
+# (which is the per-Sietch/world label). Read from the battlegroup CRD over SSH so
+# the header status bar can show it; cached with a short TTL so the 10 s status poll
+# never pays for a fresh SSH read every tick.
+$script:DuneServerNameCache   = $null
+$script:DuneServerNameFetched = [datetime]::MinValue
+$script:DuneServerNameTtlSecs = 300
+
 # Where each player applies the "client-side too" settings. These keys are read
 # by BOTH server and client; changing them server-side only takes full effect
 # once each player mirrors them in their LOCAL client config. Funcom's setup
@@ -1032,6 +1041,49 @@ function Get-DuneGameConfig {
             managedSections = (Get-DuneIniManagedSectionNames -Raw $engineRaw)
         }
     }
+}
+
+# Player-facing server name (the battlegroup title shown in the in-game server
+# browser, e.g. "Reapers") for the status header. Read from the battlegroup CRD's
+# spec.title, falling back to the operator-managed annotation. Returns '' when the
+# VM is down, no battlegroup exists, or SSH is unavailable. Cached for
+# $DuneServerNameTtlSecs so the frequent status poll repaints from cache; -Force
+# re-reads (used by the manual refresh).
+function Get-DuneServerName {
+    param([switch]$Force)
+
+    $age = ([datetime]::UtcNow - $script:DuneServerNameFetched).TotalSeconds
+    if (-not $Force -and $script:DuneServerNameCache -ne $null -and $age -lt $script:DuneServerNameTtlSecs) {
+        return $script:DuneServerNameCache
+    }
+
+    $name = ''
+    try {
+        $ctx = Get-DuneGameConfigContext
+        if ($ctx.ok -and (Get-Command Get-V6Battlegroup -ErrorAction SilentlyContinue)) {
+            $info = Get-V6Battlegroup -Ip $ctx.ip
+            $bg   = $info.Bg
+            $title = $null
+            if ($bg.PSObject.Properties['spec'] -and $bg.spec.PSObject.Properties['title']) {
+                $title = "$($bg.spec.title)"
+            }
+            if ([string]::IsNullOrWhiteSpace($title) -and
+                $bg.PSObject.Properties['metadata'] -and
+                $bg.metadata.PSObject.Properties['annotations']) {
+                $ann = $bg.metadata.annotations
+                if ($ann.PSObject.Properties['igw.funcom.com/battlegroup-title']) {
+                    $title = "$($ann.'igw.funcom.com/battlegroup-title')"
+                }
+            }
+            if ($title) { $name = $title.Trim() }
+        }
+    } catch {
+        $name = if ($script:DuneServerNameCache) { $script:DuneServerNameCache } else { '' }
+    }
+
+    $script:DuneServerNameCache   = $name
+    $script:DuneServerNameFetched = [datetime]::UtcNow
+    return $name
 }
 
 # Quoted-key lookup for the writer (string keys that must be wrapped in quotes).
