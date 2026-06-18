@@ -13,6 +13,15 @@ here cover everything those tags shipped.
 
 ## [Unreleased]
 
+### Fixed
+
+- **Market Bot underpaid sellers 10× on buy.** When Duke bought a player's sell
+  listing, the seller payment order (and Duke's balance debit) used the raw
+  stored `item_price` instead of the player-facing Solari value (`item_price ×
+  10`). A listing worth 180,000 Solari paid the seller only 18,000. The payout
+  and debit are now denominated in Solari so sellers receive exactly their
+  listed price. (#274)
+
 ## [12.6.1] - 2026-06-17
 
 ### Fixed
