@@ -13,6 +13,8 @@ here cover everything those tags shipped.
 
 ## [Unreleased]
 
+## [12.6.1] - 2026-06-17
+
 ### Fixed
 
 - **Player Tags search now lets you actually add a tag.** Each suggestion is an
