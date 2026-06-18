@@ -13,6 +13,15 @@ here cover everything those tags shipped.
 
 ## [Unreleased]
 
+### Fixed
+
+- **Player Tags search now lets you actually add a tag.** Each suggestion is an
+  explicit clickable "+ Add" row. Matches are grouped by their shared breadcrumb
+  prefix (so a set like `Contract.Tracking.Completed.SeronVarlin.Contract1..6`
+  reads as one group), and every group with more than one tag gets an
+  **"Add all (N)"** button to add the whole set at once. Suggestions paginate by
+  group.
+
 ## [12.6.0] - 2026-06-17
 
 ### Added

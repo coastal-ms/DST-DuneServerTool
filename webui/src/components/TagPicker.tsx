@@ -1,23 +1,32 @@
 // TagPicker — typeahead autocomplete for the known gameplay-tag catalog.
 // Used in the player Tags editor. Lazy-loads the catalog on first focus, filters
-// on every keystroke against the friendly label OR the raw tag, and renders the
-// matches as an INLINE, scrollable, paginated list (25 per page) directly under
-// the input — not a floating popup, so it scrolls normally even when the editor
-// sits at the bottom of a long page. Tags the player already has are excluded.
-// Picking a row emits the raw tag string.
+// on every keystroke against the friendly label OR the raw tag, then GROUPS the
+// matches by their parent breadcrumb (everything except the final segment) so
+// related tags read as a set. Each group shows an "Add all (N)" button; each
+// leaf tag is an explicit "+ Add" row. Results render inline (not a floating
+// popup) and paginate by group. Tags the player already has are excluded.
 
 import { useCallback, useEffect, useId, useMemo, useRef, useState } from 'react'
 import { Icon } from './Icon'
-import { filterTagCatalog, getTagCatalog, type TagCatalogEntry } from '../api/gameplay'
+import { filterTagCatalog, getTagCatalog, tagFriendlyLabel, type TagCatalogEntry } from '../api/gameplay'
 
-const PAGE_SIZE = 25
+const GROUPS_PER_PAGE = 8
+
+interface TagGroup {
+  key: string            // parent prefix (raw), '' for single-segment tags
+  label: string          // friendly breadcrumb of the parent
+  leafLabel: (tag: string) => string
+  entries: TagCatalogEntry[]
+}
 
 interface Props {
   value: string
   onChange: (text: string) => void
-  /** Called when a suggestion is chosen — receives the raw tag string. */
+  /** Add a single tag (raw string). */
   onPick: (tag: string) => void
-  /** Called on Enter when no suggestion is active — lets the parent add the raw typed text. */
+  /** Add a whole set of tags at once (raw strings). */
+  onPickMany?: (tags: string[]) => void
+  /** Called on Enter when there are no suggestions — add the raw typed text. */
   onEnterRaw?: () => void
   /** Tags the player already has — excluded from suggestions. */
   exclude?: string[]
@@ -26,16 +35,45 @@ interface Props {
   disabled?: boolean
 }
 
-export function TagPicker({ value, onChange, onPick, onEnterRaw, exclude, placeholder, autoFocus, disabled }: Props) {
+// Friendly label for just the final segment of a tag (the leaf within its group).
+function leafFriendly(tag: string): string {
+  const parts = tag.split('.')
+  const last = parts[parts.length - 1] || tag
+  return tagFriendlyLabel(last)
+}
+
+function groupMatches(entries: TagCatalogEntry[]): TagGroup[] {
+  const byKey = new Map<string, TagCatalogEntry[]>()
+  for (const e of entries) {
+    const segs = e.tag.split('.')
+    const key = segs.length > 1 ? segs.slice(0, -1).join('.') : ''
+    const arr = byKey.get(key)
+    if (arr) arr.push(e)
+    else byKey.set(key, [e])
+  }
+  const groups: TagGroup[] = []
+  for (const [key, arr] of byKey) {
+    groups.push({
+      key,
+      label: key ? tagFriendlyLabel(key) : 'Ungrouped',
+      leafLabel: leafFriendly,
+      entries: arr.slice().sort((a, b) => a.tag.localeCompare(b.tag)),
+    })
+  }
+  groups.sort((a, b) => a.label.localeCompare(b.label))
+  return groups
+}
+
+export function TagPicker({
+  value, onChange, onPick, onPickMany, onEnterRaw, exclude, placeholder, autoFocus, disabled,
+}: Props) {
   const inputId = useId()
   const [catalog, setCatalog] = useState<TagCatalogEntry[] | null>(null)
   const [catalogError, setCatalogError] = useState<string | null>(null)
   const [catalogLoading, setCatalogLoading] = useState(false)
   const [open, setOpen] = useState(false)
-  const [active, setActive] = useState(0)
   const [page, setPage] = useState(0)
   const wrapRef = useRef<HTMLDivElement>(null)
-  const listRef = useRef<HTMLDivElement>(null)
 
   const ensureCatalog = useCallback(() => {
     if (catalog || catalogLoading) return
@@ -47,13 +85,15 @@ export function TagPicker({ value, onChange, onPick, onEnterRaw, exclude, placeh
   }, [catalog, catalogLoading])
 
   const excludeSet = useMemo(() => new Set(exclude || []), [exclude])
-  const matches: TagCatalogEntry[] = catalog
-    ? filterTagCatalog(catalog, value, Number.MAX_SAFE_INTEGER, excludeSet)
-    : []
+  const matches: TagCatalogEntry[] = useMemo(
+    () => (catalog ? filterTagCatalog(catalog, value, Number.MAX_SAFE_INTEGER, excludeSet) : []),
+    [catalog, value, excludeSet],
+  )
+  const groups = useMemo(() => groupMatches(matches), [matches])
 
-  const pageCount = Math.max(1, Math.ceil(matches.length / PAGE_SIZE))
+  const pageCount = Math.max(1, Math.ceil(groups.length / GROUPS_PER_PAGE))
   const pageClamped = Math.min(page, pageCount - 1)
-  const visible = matches.slice(pageClamped * PAGE_SIZE, pageClamped * PAGE_SIZE + PAGE_SIZE)
+  const visibleGroups = groups.slice(pageClamped * GROUPS_PER_PAGE, (pageClamped + 1) * GROUPS_PER_PAGE)
 
   // Close when clicking outside the picker.
   useEffect(() => {
@@ -65,28 +105,20 @@ export function TagPicker({ value, onChange, onPick, onEnterRaw, exclude, placeh
     return () => document.removeEventListener('mousedown', onDoc)
   }, [])
 
-  // Keep the highlighted row scrolled into view within the list.
-  useEffect(() => {
-    if (!open) return
-    listRef.current?.querySelector<HTMLElement>(`[data-idx="${active}"]`)?.scrollIntoView({ block: 'nearest' })
-  }, [active, open])
+  const setQuery = (text: string) => { onChange(text); setOpen(true); setPage(0) }
+  const goPage = (p: number) => setPage(Math.max(0, Math.min(p, pageCount - 1)))
 
-  const setQuery = (text: string) => { onChange(text); setOpen(true); setActive(0); setPage(0) }
-  const goPage = (p: number) => { setPage(Math.max(0, Math.min(p, pageCount - 1))); setActive(0) }
-
-  const pick = (e: TagCatalogEntry) => { onPick(e.tag); setActive(0) }
+  const addOne = (tag: string) => onPick(tag)
+  const addGroup = (g: TagGroup) => {
+    const tags = g.entries.map(e => e.tag)
+    if (onPickMany) onPickMany(tags)
+    else tags.forEach(onPick)
+  }
 
   const onKey = (e: React.KeyboardEvent<HTMLInputElement>) => {
-    if (e.key === 'ArrowDown') {
-      if (!open && catalog) { setOpen(true); setActive(0) }
-      else setActive(a => Math.min(a + 1, Math.max(visible.length - 1, 0)))
+    if (e.key === 'Enter') {
       e.preventDefault()
-    } else if (e.key === 'ArrowUp') {
-      setActive(a => Math.max(a - 1, 0)); e.preventDefault()
-    } else if (e.key === 'Enter') {
-      e.preventDefault()
-      if (open && visible.length > 0) pick(visible[active])
-      else onEnterRaw?.()
+      onEnterRaw?.()
     } else if (e.key === 'Escape') {
       setOpen(false); e.preventDefault()
     }
@@ -118,7 +150,7 @@ export function TagPicker({ value, onChange, onPick, onEnterRaw, exclude, placeh
             <span>
               {catalogLoading ? 'Loading tag catalog…'
                 : catalogError ? <span className="text-danger">Load failed</span>
-                : `${matches.length} match${matches.length === 1 ? '' : 'es'}`}
+                : `${matches.length} tag${matches.length === 1 ? '' : 's'} in ${groups.length} group${groups.length === 1 ? '' : 's'}`}
             </span>
             {pageCount > 1 && (
               <span className="flex items-center gap-2">
@@ -135,7 +167,7 @@ export function TagPicker({ value, onChange, onPick, onEnterRaw, exclude, placeh
             )}
           </div>
 
-          <div ref={listRef} className="max-h-72 overflow-y-auto overscroll-contain divide-y divide-border/60">
+          <div className="max-h-80 overflow-y-auto overscroll-contain">
             {catalogError && (
               <div className="px-3 py-2 text-xs text-danger">{catalogError}</div>
             )}
@@ -146,20 +178,36 @@ export function TagPicker({ value, onChange, onPick, onEnterRaw, exclude, placeh
                   : 'No more tags to add.'}
               </div>
             )}
-            {visible.map((e, i) => (
-              <div
-                key={e.tag}
-                data-idx={i}
-                role="button"
-                tabIndex={-1}
-                onMouseEnter={() => setActive(i)}
-                onMouseDown={ev => { ev.preventDefault(); pick(e) }}
-                className={`px-3 py-2 cursor-pointer flex flex-col gap-0.5 ${
-                  i === active ? 'bg-surface-2' : 'hover:bg-surface-2/60'
-                }`}
-              >
-                <span className="text-sm text-text">{e.label}</span>
-                <span className="text-[11px] font-mono text-text-dim truncate">{e.tag}</span>
+            {visibleGroups.map(g => (
+              <div key={g.key || '__ungrouped__'} className="border-b border-border/60 last:border-b-0">
+                <div className="flex items-center justify-between gap-2 px-3 py-1.5 bg-surface-2/40">
+                  <span className="min-w-0 truncate text-[11px] uppercase tracking-wider text-text-dim" title={g.label}>
+                    {g.label} <span className="text-text-dim/70">({g.entries.length})</span>
+                  </span>
+                  {g.entries.length > 1 && (
+                    <button type="button" className="btn-secondary text-[11px] px-2 py-0.5 shrink-0"
+                      onMouseDown={ev => { ev.preventDefault(); addGroup(g) }}
+                      title={`Add all ${g.entries.length} tags in this set`}>
+                      <Icon name="Plus" size={11} /> Add all ({g.entries.length})
+                    </button>
+                  )}
+                </div>
+                {g.entries.map(e => (
+                  <button
+                    key={e.tag}
+                    type="button"
+                    onMouseDown={ev => { ev.preventDefault(); addOne(e.tag) }}
+                    className="w-full text-left px-3 py-2 flex items-center gap-2 hover:bg-surface-2 group"
+                  >
+                    <span className="flex-1 min-w-0">
+                      <span className="block text-sm text-text">{g.leafLabel(e.tag)}</span>
+                      <span className="block text-[11px] font-mono text-text-dim truncate">{e.tag}</span>
+                    </span>
+                    <span className="shrink-0 inline-flex items-center gap-1 text-[11px] text-text-dim group-hover:text-text">
+                      <Icon name="Plus" size={12} /> Add
+                    </span>
+                  </button>
+                ))}
               </div>
             ))}
           </div>
