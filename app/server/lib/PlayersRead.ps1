@@ -118,6 +118,30 @@ function Get-DuneTagsData {
     return $script:DuneTagsData
 }
 
+# ----- §1.0b GET /tags/catalog --------------------------------------------
+# The universe of known gameplay tags that can be written to a player, drawn
+# from the static catalog (journey_node_tags values + contract_tags values).
+# Used by the player Tags editor to power a typeahead. The frontend derives a
+# friendly label + category from each raw tag string.
+function Get-DuneTagCatalog {
+    $tags = Get-DuneTagsData
+    $set = @{}
+    foreach ($k in $tags.journeyNodeTags.Keys) {
+        foreach ($t in @($tags.journeyNodeTags[$k])) {
+            $s = [string]$t
+            if ($s) { $set[$s] = $true }
+        }
+    }
+    foreach ($k in $tags.contractTags.Keys) {
+        foreach ($t in @($tags.contractTags[$k])) {
+            $s = [string]$t
+            if ($s) { $set[$s] = $true }
+        }
+    }
+    $list = @($set.Keys | Sort-Object)
+    return @{ ok = $true; tags = $list; total = $list.Count }
+}
+
 # ----- §1.1 GET /players/online -------------------------------------------
 function Get-DunePlayersOnlineLive {
     param([string]$Ip)

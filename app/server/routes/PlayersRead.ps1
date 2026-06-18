@@ -202,6 +202,21 @@ Register-DuneRoute -Method GET -Path '/api/gameplay/players/main-quests' -Handle
     }
 }
 
+# GET /api/gameplay/tags/catalog  (known gameplay tag universe for the Tags editor typeahead)
+Register-DuneRoute -Method GET -Path '/api/gameplay/tags/catalog' -Handler {
+    param($req, $res, $routeParams, $body)
+    try {
+        $payload = Get-DuneTagCatalog
+        Write-DuneJson -Response $res -Body @{
+            tags   = $payload.tags
+            total  = $payload.total
+            source = 'catalog'
+        }
+    } catch {
+        Write-DuneError -Response $res -Status 500 -Message "Tag catalog failed: $($_.Exception.Message)"
+    }
+}
+
 # GET /api/gameplay/contracts  (contract tag catalog)
 Register-DuneRoute -Method GET -Path '/api/gameplay/contracts' -Handler {
     param($req, $res, $routeParams, $body)
