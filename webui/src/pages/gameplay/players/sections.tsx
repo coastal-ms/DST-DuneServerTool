@@ -260,6 +260,7 @@ function SpecRow({ name, track, canWrite, busy, onGrantMax, onReset, onAdd5k }: 
 // Tags — chip list with add/remove + Save button. Writes the full set in
 // one POST (matches backend's replace semantics).
 // ---------------------------------------------------------------------------
+const TAGS_PAGE_SIZE = 25
 export function TagsSection({ player, canWrite, demo, refreshKey, flash, onChanged }: SectionProps) {
   const [tags, setTags] = useState<string[]>([])
   const [draft, setDraft] = useState('')
@@ -268,6 +269,7 @@ export function TagsSection({ player, canWrite, demo, refreshKey, flash, onChang
   const [loading, setLoading] = useState(true)
   const [busy, setBusy] = useState(false)
   const [err, setErr] = useState<string | null>(null)
+  const [tagPage, setTagPage] = useState(0)
 
   useEffect(() => {
     let alive = true
@@ -304,6 +306,12 @@ export function TagsSection({ player, canWrite, demo, refreshKey, flash, onChang
     }
   }
 
+  const filteredTags = tags
+
+  const tagPageCount = Math.max(1, Math.ceil(filteredTags.length / TAGS_PAGE_SIZE))
+  const tagPageClamped = Math.min(tagPage, tagPageCount - 1)
+  const tagRows = filteredTags.slice(tagPageClamped * TAGS_PAGE_SIZE, (tagPageClamped + 1) * TAGS_PAGE_SIZE)
+
   if (loading) return <Loading label="Loading tags…" />
 
   return (
@@ -319,7 +327,7 @@ export function TagsSection({ player, canWrite, demo, refreshKey, flash, onChang
         <div className="flex gap-2 items-start">
           <TagPicker value={draft} onChange={setDraft} exclude={tags}
             onPick={addTagValue} onEnterRaw={add} disabled={busy}
-            placeholder="Search tags by name or id…" />
+            placeholder="Search tags to add by name or id…" />
           <button className="btn-secondary" onClick={add} disabled={busy || !draft.trim()}>
             <Icon name="Plus" size={13} /> Add
           </button>
@@ -329,24 +337,41 @@ export function TagsSection({ player, canWrite, demo, refreshKey, flash, onChang
         </div>
       )}
 
-      <div className="card p-3">
-        {tags.length === 0 ? (
-          <div className="text-sm text-text-dim">No tags. Add one above.</div>
-        ) : (
-          <div className="flex flex-wrap gap-2">
-            {tags.map(t => (
-              <span key={t} className="inline-flex items-center gap-1.5 px-2 py-1 rounded-full bg-surface-2 border border-border text-xs text-text">
-                {t}
+      {tags.length === 0 ? (
+        <EmptyBox msg="No tags. Add one above." />
+      ) : (
+        <>
+          <div className="space-y-1">
+            {tagRows.map(t => (
+              <div key={t} className="card px-3 py-2 flex items-center gap-2">
+                <span className="flex-1 min-w-0 font-mono text-xs text-text truncate" title={t}>{t}</span>
                 {canWrite && !unsupported && (
-                  <button className="text-text-dim hover:text-danger" onClick={() => remove(t)} title="Remove">
-                    <Icon name="X" size={11} />
+                  <button type="button" className="btn-secondary text-[11px] px-2 py-1 text-error shrink-0"
+                    onClick={() => remove(t)} title="Remove tag">
+                    <Icon name="X" size={11} /> Remove
                   </button>
                 )}
-              </span>
+              </div>
             ))}
           </div>
-        )}
-      </div>
+
+          {tagPageCount > 1 && (
+            <div className="flex items-center justify-between text-xs text-text-dim">
+              <span>{fmtNum(filteredTags.length)} tag(s) · page {tagPageClamped + 1} of {tagPageCount}</span>
+              <div className="flex gap-1">
+                <button type="button" className="btn-secondary px-2 py-1" disabled={tagPageClamped <= 0}
+                  onClick={() => setTagPage(p => Math.max(0, p - 1))}>
+                  <Icon name="ChevronLeft" size={13} />
+                </button>
+                <button type="button" className="btn-secondary px-2 py-1" disabled={tagPageClamped >= tagPageCount - 1}
+                  onClick={() => setTagPage(p => Math.min(tagPageCount - 1, p + 1))}>
+                  <Icon name="ChevronRight" size={13} />
+                </button>
+              </div>
+            </div>
+          )}
+        </>
+      )}
     </div>
   )
 }
