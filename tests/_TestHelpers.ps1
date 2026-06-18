@@ -15,15 +15,15 @@ function Import-DstLib {
     $full = Join-Path (Get-DstRepoRoot) (Join-Path 'app\server\lib' $RelativePath)
     if (-not (Test-Path $full)) { throw "Missing lib: $RelativePath ($full)" }
 
-    # Snapshot existing function names so we can detect what was added.
-    $before = @{}
-    foreach ($f in Get-ChildItem function:) { $before[$f.Name] = $true }
-
     . $full
 
-    # Promote any newly defined function to global scope.
+    $fullResolved = (Resolve-Path -LiteralPath $full).Path
+
+    # Promote functions from the sourced file to global scope. Re-promoting
+    # existing names matters when a prior test imported the same lib before its
+    # dependencies; otherwise Pester keeps stale global closures across files.
     foreach ($f in Get-ChildItem function:) {
-        if (-not $before.ContainsKey($f.Name)) {
+        if ($f.ScriptBlock.File -eq $fullResolved) {
             Set-Item -Path "function:global:$($f.Name)" -Value $f.ScriptBlock
         }
     }
@@ -38,13 +38,12 @@ function Import-DstRoute {
     $full = Join-Path (Get-DstRepoRoot) (Join-Path 'app\server\routes' $RelativePath)
     if (-not (Test-Path $full)) { throw "Missing route: $RelativePath ($full)" }
 
-    $before = @{}
-    foreach ($f in Get-ChildItem function:) { $before[$f.Name] = $true }
-
     . $full
 
+    $fullResolved = (Resolve-Path -LiteralPath $full).Path
+
     foreach ($f in Get-ChildItem function:) {
-        if (-not $before.ContainsKey($f.Name)) {
+        if ($f.ScriptBlock.File -eq $fullResolved) {
             Set-Item -Path "function:global:$($f.Name)" -Value $f.ScriptBlock
         }
     }
