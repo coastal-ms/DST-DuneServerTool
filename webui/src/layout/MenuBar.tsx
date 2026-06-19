@@ -256,6 +256,23 @@ export function MenuBar({ sidebarCollapsed, onToggleSidebar }: Props) {
         </button>
         {open === 'help' && (
           <div className="absolute left-0 top-full mt-1 min-w-[260px] bg-surface border border-border rounded-xl p-1 shadow-xl shadow-black/40 z-50">
+            <a
+              href="https://discord.gg/tj2x7cywSC"
+              target="_blank"
+              rel="noopener noreferrer"
+              onClick={() => setOpen(null)}
+              className="w-full flex items-start gap-2 px-2.5 py-1.5 rounded text-sm text-text-muted hover:text-text hover:bg-surface-2 transition-colors text-left"
+              title="Join the DST community Discord — install/setup help, hosting questions, Game Config tips, and release announcements."
+            >
+              <Icon name="MessagesSquare" size={14} className="mt-0.5" />
+              <span className="flex-1">
+                <span className="block">Join the DST Community Discord</span>
+                <span className="block text-[11px] text-text-dim">
+                  Community &amp; hosting help, tips, and release news
+                </span>
+              </span>
+              <Icon name="ExternalLink" size={11} className="text-text-dim mt-1" />
+            </a>
             <button
               type="button"
               onClick={onReportIssue}

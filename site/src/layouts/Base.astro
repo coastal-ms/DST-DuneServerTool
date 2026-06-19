@@ -14,6 +14,7 @@ const nav = [
   { href: "install", label: "Install" },
   { href: "remote", label: "Remote" },
   { href: "changelog", label: "Changelog" },
+  { href: "community", label: "Community" },
   { href: "about", label: "About" },
 ];
 const url = new URL(Astro.url.pathname, Astro.site);
@@ -89,12 +90,6 @@ const ogImg = new URL(ogImage ?? `${base}og.png`, Astro.site).toString();
             class="text-dune-muted hover:text-dune-text transition-colors"
             rel="noopener"
             target="_blank">Report Issue</a
-          >
-          <a
-            href="https://discord.gg/tj2x7cywSC"
-            class="text-dune-accent hover:text-dune-accent-soft transition-colors"
-            rel="noopener"
-            target="_blank">Discord</a
           >
         </nav>
       </div>
