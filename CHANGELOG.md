@@ -13,6 +13,8 @@ here cover everything those tags shipped.
 
 ## [Unreleased]
 
+## [12.8.0] - 2026-06-18
+
 ### Added
 
 - **Market Bot: "Reset to defaults" button.** The Market Bot tab now has a
