@@ -43,3 +43,30 @@ Register-DuneRoute -Method POST -Path '/api/status/refresh' -Handler {
         ts         = (Get-Date).ToString('o')
     }
 }
+
+# POST /api/server/name — rename the server (battlegroup spec.title shown in the
+# in-game server browser). RESTART-class: the operator recreates the battlegroup
+# pods to apply the new title, so players are disconnected briefly. No data loss.
+Register-DuneRoute -Method POST -Path '/api/server/name' -Handler {
+    param($req, $res, $routeParams, $body)
+    try {
+        $name = $null
+        if ($body -and $body.PSObject.Properties['name']) { $name = [string]$body.name }
+        if ([string]::IsNullOrWhiteSpace($name)) {
+            Write-DuneError -Response $res -Status 400 -Message 'A non-empty "name" is required.'
+            return
+        }
+        if (-not (Get-Command Set-DuneServerName -ErrorAction SilentlyContinue)) {
+            Write-DuneError -Response $res -Status 503 -Message 'Server rename helper unavailable.'
+            return
+        }
+        $r = Set-DuneServerName -Name $name
+        if (-not $r.ok -and $r.status) {
+            Write-DuneError -Response $res -Status $r.status -Message $r.message
+            return
+        }
+        Write-DuneJson -Response $res -Body $r
+    } catch {
+        Write-DuneError -Response $res -Status 500 -Message $_.Exception.Message
+    }
+}

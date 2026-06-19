@@ -202,3 +202,49 @@ function Remove-V6Sietch {
         Raw                = (($out -join "`n")).Trim()
     }
 }
+
+function Set-V6BattlegroupTitle {
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory)][string]$Ip,
+        [Parameter(Mandatory)][string]$Title
+    )
+
+    # The player-facing server name shown in the in-game server browser and on
+    # status pages (e.g. dunestatus) is the battlegroup CRD's spec.title. It is
+    # owned by the user-side kubectl manager (NOT the operator), so a direct
+    # JSON-patch sticks and is not reverted on reconcile. The title is injected
+    # into pod env (BATTLEGROUP_TITLE / gateway_display_name) and several
+    # configmaps, so the operator must recreate the pods to apply it: renaming
+    # therefore RESTARTS the battlegroup (players disconnect briefly). Identity,
+    # PVC and world data key off the immutable metadata.name, never the title,
+    # so a rename never risks data loss.
+    $clean = ([string]$Title -replace '[\x00-\x1F\x7F]', '').Trim()
+    if ([string]::IsNullOrWhiteSpace($clean)) { throw "Server name cannot be empty." }
+    if ($clean.Length -gt 64) { throw "Server name must be 64 characters or fewer." }
+
+    $info = Get-V6Battlegroup -Ip $Ip
+    $old  = ''
+    if ($info.Bg.PSObject.Properties['spec'] -and $info.Bg.spec.PSObject.Properties['title']) {
+        $old = "$($info.Bg.spec.title)"
+    }
+
+    # 'add' replaces the value when the member already exists (RFC 6902) and
+    # also covers the unlikely case where title is absent. The whole patch is
+    # base64-encoded and decoded on the remote, so the title value never touches
+    # the shell command line - no injection risk regardless of its characters.
+    $patches = @( @{ op = 'add'; path = '/spec/title'; value = $clean } )
+    $patchJson = $patches | ConvertTo-Json -Depth 10 -Compress
+    if ($patchJson -notmatch '^\s*\[') { $patchJson = "[$patchJson]" }
+    $b64 = [Convert]::ToBase64String([Text.Encoding]::UTF8.GetBytes($patchJson))
+    $cmd = "sudo kubectl patch battlegroup $($info.Name) -n $($info.Ns) --type=json -p `"`$(echo $b64 | base64 -d)`" 2>&1"
+    $out = Invoke-V6Ssh -Ip $Ip -Cmd $cmd -TimeoutSec 60
+    $raw = (($out -join "`n")).Trim()
+    $ok  = ($raw -match 'patched' -or $raw -match 'no change')
+    return @{
+        Success  = [bool]$ok
+        OldTitle = $old
+        NewTitle = $clean
+        Raw      = $raw
+    }
+}
