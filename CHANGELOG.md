@@ -13,6 +13,16 @@ here cover everything those tags shipped.
 
 ## [Unreleased]
 
+### Added
+
+- **Market Bot: "Reset to defaults" button.** The Market Bot tab now has a
+  one-click button (in the Save bar, shared across all sub-tabs) that restores
+  every buy, list, and pricing setting to its out-of-box default. The bot's
+  enabled (on/off) state is preserved so a reset never silently starts or stops
+  it, and Duke's existing listings are re-priced on the next list tick. The
+  existing "Reset" button (which only discards unsaved edits) was renamed to
+  "Revert" to avoid confusion.
+
 ## [12.7.1] - 2026-06-18
 
 ### Fixed
