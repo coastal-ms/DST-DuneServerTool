@@ -23,6 +23,9 @@ here cover everything those tags shipped.
   then applies the documented Dune IP-change workflow: Windows host route, VM
   public-IP alias, exact four-line `settings.conf`, K3s ExternalIP, NAT, and a
   restart of affected game pods.
+- **DDNS hostnames can be saved for later.** The Public IP / DDNS card now has
+  a Save button next to the hostname box so operators can store their DDNS name
+  in config without resolving or applying a public-IP change.
 
 ### Fixed
 
@@ -33,6 +36,10 @@ here cover everything those tags shipped.
   overflowed the Windows ~32 KB command-line limit. The import now streams the
   SQL through stdin (the same path already used for bulk market seeding), so
   blueprints of any size import correctly.
+- **Server Health loads faster after startup.** Normal status polling now reuses
+  short-lived battlegroup and port-status cache data, avoids duplicate SSH status
+  probes during initial page load, and only does the slower server-name lookup on
+  an explicit refresh.
 
 ## [12.8.1] - 2026-06-19
 
