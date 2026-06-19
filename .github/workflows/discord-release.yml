@@ -1,0 +1,75 @@
+name: Announce release to Discord
+
+# Posts a formatted message to the DST community Discord #releases channel
+# whenever a GitHub release is published. Uses a Discord webhook URL stored as
+# the repo secret DISCORD_RELEASE_WEBHOOK (the bot/webhook lives in #releases).
+#
+# Also runnable manually (workflow_dispatch) to (re)announce a specific tag,
+# which is handy for testing without cutting a new release.
+
+on:
+  release:
+    types: [published]
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: 'Release tag to announce (leave blank for the latest)'
+        required: false
+
+permissions:
+  contents: read
+
+jobs:
+  announce:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Post release to Discord
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GITHUB_REPOSITORY: ${{ github.repository }}
+          WEBHOOK: ${{ secrets.DISCORD_RELEASE_WEBHOOK }}
+          EVENT_TAG: ${{ github.event.release.tag_name }}
+          INPUT_TAG: ${{ github.event.inputs.tag }}
+        run: |
+          set -euo pipefail
+
+          if [ -z "${WEBHOOK:-}" ]; then
+            echo "DISCORD_RELEASE_WEBHOOK is not set; skipping Discord announcement."
+            exit 0
+          fi
+
+          tag="${EVENT_TAG:-${INPUT_TAG:-}}"
+          if [ -z "$tag" ]; then
+            tag=$(gh release view --repo "$GITHUB_REPOSITORY" --json tagName -q .tagName)
+          fi
+          echo "Announcing release: $tag"
+
+          rel=$(gh release view "$tag" --repo "$GITHUB_REPOSITORY" --json name,tagName,body,url)
+          name=$(printf '%s' "$rel" | jq -r '.name // .tagName')
+          url=$(printf '%s' "$rel" | jq -r '.url')
+          # Discord embed descriptions cap at 4096; keep it readable at ~1500.
+          body=$(printf '%s' "$rel" | jq -r '.body // ""' | head -c 1500)
+
+          payload=$(jq -n \
+            --arg t "🚀 $name" \
+            --arg d "$body" \
+            --arg u "$url" \
+            '{
+               username: "DST Releases",
+               embeds: [ {
+                 title: $t,
+                 url: $u,
+                 description: $d,
+                 color: 15844367,
+                 footer: { text: "Download the DuneServerSetup.exe asset from the release page · in-app updater offers it within ~6h" }
+               } ]
+             }')
+
+          http=$(curl -sS -o /dev/null -w '%{http_code}' \
+            -X POST -H "Content-Type: application/json" \
+            -d "$payload" "$WEBHOOK")
+          echo "Discord webhook responded: HTTP $http"
+          case "$http" in
+            2*) echo "Posted $tag to Discord." ;;
+            *)  echo "Discord webhook failed (HTTP $http)."; exit 1 ;;
+          esac
