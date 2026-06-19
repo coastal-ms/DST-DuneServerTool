@@ -277,6 +277,26 @@ export function Settings() {
 
   async function onSubmit(e: FormEvent) {
     e.preventDefault()
+    // Confirm gate (issue #295): changing the database port silently breaks
+    // Players/Bases/Storage if it's wrong, so make the user acknowledge it and
+    // — importantly — show the OLD value so they can write it down before
+    // changing it.
+    const newDbPort = (values['DbPort'] ?? '').trim()
+    const oldDbPortRaw = (cfg?.values?.DbPort ?? '').trim()
+    const oldDbPort = oldDbPortRaw || '15432 (default)'
+    if (newDbPort !== oldDbPortRaw) {
+      const target = newDbPort || '15432 (default)'
+      const ok = window.confirm(
+        `Change the database port?\n\n`
+        + `  Current port:  ${oldDbPort}\n`
+        + `  New port:      ${target}\n\n`
+        + `Write down the current port (${oldDbPort}) in case you need to switch back. `
+        + `DST queries PostgreSQL on this port for Players, Bases and Storage — if it's `
+        + `wrong, those pages show up empty. Use "Test connection" to verify the new port.\n\n`
+        + `Save this change?`,
+      )
+      if (!ok) return
+    }
     setSaving(true)
     setError(null)
     setSaved(null)
