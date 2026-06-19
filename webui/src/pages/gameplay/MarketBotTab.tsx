@@ -922,6 +922,7 @@ function MarketFollowCard({ draft, setDraft }: { draft: BotConfig; setDraft: (c:
 // ---------------------------------------------------------------------------
 function PricingSection({ draft, setDraft }: { draft: BotConfig; setDraft: (c: BotConfig) => void }) {
   const tbp = draft.tier_base_prices ?? {}
+  const stp = draft.schematic_tier_prices ?? {}
   const sup = draft.stack_unit_prices ?? {}
   const cf  = draft.category_factors ?? {}
   const rm  = draft.rarity_multipliers ?? {}
@@ -935,7 +936,7 @@ function PricingSection({ draft, setDraft }: { draft: BotConfig; setDraft: (c: B
   const [newName, setNewName] = useState('')
   const [newPrice, setNewPrice] = useState('0')
 
-  const setMap = (key: 'tier_base_prices' | 'stack_unit_prices' | 'category_factors' | 'rarity_multipliers' | 'vendor_multipliers',
+  const setMap = (key: 'tier_base_prices' | 'schematic_tier_prices' | 'stack_unit_prices' | 'category_factors' | 'rarity_multipliers' | 'vendor_multipliers',
                   next: Record<string, number>) => {
     setDraft({ ...draft, [key]: next })
   }
@@ -985,6 +986,17 @@ function PricingSection({ draft, setDraft }: { draft: BotConfig; setDraft: (c: B
               onChange={v => setMap('tier_base_prices', { ...tbp, [t]: v })} />
           ))}
         </div>
+        <h4 className="text-xs uppercase tracking-wider text-text-dim mt-4 mb-2">Schematic tier prices (non-stackable)</h4>
+        <div className="grid grid-cols-7 gap-2">
+          {tierKeys.map(t => (
+            <NumField key={`stp-${t}`} label={`T${t}`} value={stp[t] ?? 0}
+              onChange={v => setMap('schematic_tier_prices', { ...stp, [t]: v })} />
+          ))}
+        </div>
+        <p className="mt-1 text-[11px] text-text-dim">
+          Schematics (blueprints) price off this table × rarity and ignore the in-game NPC vendor
+          price — without it every schematic of a tier listed at the same flat ~2× vendor number.
+        </p>
         <h4 className="text-xs uppercase tracking-wider text-text-dim mt-4 mb-2">Stack unit prices (stackable, per unit)</h4>
         <div className="grid grid-cols-7 gap-2">
           {tierKeys.map(t => (

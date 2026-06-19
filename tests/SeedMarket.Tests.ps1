@@ -323,3 +323,105 @@ Describe 'Get-DuneBotItemPrice upstream_pricing dispatch' -Tag 'MarketBot' {
         $p | Should -BeLessOrEqual 10000
     }
 }
+
+Describe 'Test-DuneBotIsSchematic detection' -Tag 'MarketBot' {
+    It 'matches the "<Item>_Schematic" suffix form' {
+        Test-DuneBotIsSchematic -TemplateId 'T6_ChoamLg2_Schematic' | Should -BeTrue
+    }
+    It 'matches the "Schematic_<Item>" prefix form' {
+        Test-DuneBotIsSchematic -TemplateId 'Schematic_UniqueBattleRifle' | Should -BeTrue
+    }
+    It 'matches the "<Item>Schematic" no-underscore form' {
+        Test-DuneBotIsSchematic -TemplateId 'ChoamHeavyLasgunSchematic' | Should -BeTrue
+    }
+    It 'matches via category when the template id has no token' {
+        Test-DuneBotIsSchematic -TemplateId 'SomeBlueprint' -Category 'items/schematic/weapon' | Should -BeTrue
+    }
+    It 'does NOT match ordinary gear' {
+        Test-DuneBotIsSchematic -TemplateId 'Radiation_Suit_T6' -Category 'items/garment/utilitywearables' | Should -BeFalse
+    }
+}
+
+Describe 'Get-DuneBotTierFromTemplate leading prefix' -Tag 'MarketBot' {
+    It 'reads a leading T<n> prefix' {
+        Get-DuneBotTierFromTemplate -Template 'T6_ChoamLg2_Schematic' | Should -Be 6
+    }
+    It 'reads T<n> immediately before Schematic' {
+        Get-DuneBotTierFromTemplate -Template 'T6SchematicFragmentQL1' | Should -Be 6
+    }
+    It 'still reads the _T<n> infix form' {
+        Get-DuneBotTierFromTemplate -Template 'KarpovPistol_T5' | Should -Be 5
+    }
+    It 'still reads the Mk<n> form' {
+        Get-DuneBotTierFromTemplate -Template 'WaterRationMk3' | Should -Be 3
+    }
+}
+
+Describe 'Get-DuneBotItemPrice schematic pricing (sane mode)' -Tag 'MarketBot' {
+    BeforeAll {
+        $script:schCfg = @{
+            price_cap             = 100000000
+            price_floor           = 50
+            price_overrides       = @{}
+            rarity_multipliers    = @{ 'common' = 1.0; 'unique' = 1.05 }
+            tier_base_prices      = @{ '6' = 30000 }
+            schematic_tier_prices = @{ '6' = 75000; '3' = 4000 }
+            stack_unit_prices     = @{ '6' = 800 }
+            category_factors      = @{ 'schematic' = 1.0; 'gear' = 0.8 }
+            vendor_multipliers    = @{ 'all' = 0.95 }
+            default_unit_price    = 1
+        }
+    }
+
+    It 'prices a T6 schematic off schematic_tier_prices, ignoring the vendor ceiling' {
+        # vendor_price=1000 -> old 2x ceiling would crush to ~2000. New: 75000.
+        $cand = @{ template_id = 'T6_ChoamLg2_Schematic'; tier = 6; rarity = 'common'; is_stackable = $false; vendor_price = 1000; category = 'items/weapons/lasgun' }
+        $p = Get-DuneBotItemPrice -Cfg $script:schCfg -Cand $cand -Grade 0
+        $p | Should -BeGreaterThan 50000
+    }
+
+    It 'applies rarity multiplier to schematics' {
+        $common = @{ template_id = 'Schematic_UniqueDirk'; tier = 6; rarity = 'common'; is_stackable = $false; vendor_price = 0; category = 'items/weapons/shortblades' }
+        $unique = @{ template_id = 'Schematic_UniqueDirk'; tier = 6; rarity = 'unique'; is_stackable = $false; vendor_price = 0; category = 'items/weapons/shortblades' }
+        $pc = Get-DuneBotItemPrice -Cfg $script:schCfg -Cand $common -Grade 0
+        $pu = Get-DuneBotItemPrice -Cfg $script:schCfg -Cand $unique -Grade 0
+        $pu | Should -BeGreaterThan $pc
+    }
+
+    It 'different schematic tiers produce different prices (multipliers restored)' {
+        $t3 = @{ template_id = 'Schematic_UniqueCutteray4'; tier = 3; rarity = 'common'; is_stackable = $false; vendor_price = 1000; category = 'items/utility/gatheringtools/cutteray' }
+        $t6 = @{ template_id = 'T6_ChoamLg2_Schematic';     tier = 6; rarity = 'common'; is_stackable = $false; vendor_price = 1000; category = 'items/weapons/lasgun' }
+        $p3 = Get-DuneBotItemPrice -Cfg $script:schCfg -Cand $t3 -Grade 0
+        $p6 = Get-DuneBotItemPrice -Cfg $script:schCfg -Cand $t6 -Grade 0
+        $p6 | Should -BeGreaterThan $p3
+    }
+
+    It 'stackable schematic-fragment resources still price via the stack table (not the schematic table)' {
+        $frag = @{ template_id = 'T6SchematicFragmentQL1'; tier = 6; rarity = 'common'; is_stackable = $true; vendor_price = 500; category = 'items/misc/components' }
+        $p = Get-DuneBotItemPrice -Cfg $script:schCfg -Cand $frag -Grade 0
+        # stack unit T6 = 800; would be ~75000 if mis-routed to the schematic table.
+        $p | Should -BeLessThan 5000
+    }
+}
+
+Describe 'Get-DuneBotItemPriceUpstream schematic with vendor price' -Tag 'MarketBot' {
+    It 'routes a non-stackable schematic through the schematic tier table even when vendor_price > 0' {
+        $cfg = @{
+            upstream_pricing               = $true
+            price_cap                      = 100000
+            price_overrides                = @{}
+            default_unit_price             = 100
+            display_cap_enabled            = $false
+            upstream_tier_equipment_prices = @{ '6' = 750000 }
+            upstream_tier_schematic_prices = @{ '6' = 75000 }
+            upstream_stack_unit_prices     = @{ '6' = 4000 }
+            upstream_rarity_multipliers    = @{ common = 1.0 }
+            upstream_vendor_multipliers    = @{ common = 1.0 }
+            upstream_grade_multipliers     = @(1.0)
+        }
+        # vendor_price=2000 -> old upstream = 2000*1 = 2000. New: schematic table 75000.
+        $cand = @{ template_id = 'T6_ChoamLg2_Schematic'; tier = 6; rarity = 'common'; is_stackable = $false; vendor_price = 2000; category = 'items/weapons/lasgun' }
+        $p = Get-DuneBotItemPrice -Cfg $cfg -Cand $cand -Grade 0
+        $p | Should -BeGreaterThan 50000
+    }
+}
