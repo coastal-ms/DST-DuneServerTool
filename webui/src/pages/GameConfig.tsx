@@ -3,6 +3,7 @@ import { PageHeader } from '../components/PageHeader'
 import { Icon } from '../components/Icon'
 import { useStatus } from '../hooks/useStatus'
 import { api } from '../api/client'
+import { ServerNameCard } from './gameconfig/ServerNameCard'
 import {
   getGameConfigSchema,
   getGameConfig,
@@ -155,7 +156,7 @@ function sectionIsManaged(data: GameConfigResponse, field: GameConfigField): boo
 }
 
 export function GameConfig() {
-  const { status } = useStatus()
+  const { status, forceRefresh } = useStatus()
   const vmRunning = status?.vm?.running === true
 
   const [schema, setSchema] = useState<GameConfigCategory[] | null>(null)
@@ -853,6 +854,13 @@ export function GameConfig() {
           <Icon name="AlertCircle" size={14} /> {backupError}
         </div>
       )}
+
+      {/* Server name (battlegroup title shown in the in-game server browser) */}
+      <ServerNameCard
+        vmRunning={vmRunning}
+        currentName={(status?.serverName ?? '').trim()}
+        onRenamed={() => { void forceRefresh() }}
+      />
 
       {/* How-it-works note */}
       <div className="card p-3 mb-4 border-border bg-surface-2/40 text-xs text-text-muted flex items-start gap-2">
