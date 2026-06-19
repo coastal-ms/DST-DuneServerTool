@@ -13,6 +13,8 @@ here cover everything those tags shipped.
 
 ## [Unreleased]
 
+## [12.8.3] - 2026-06-19
+
 ### Added
 
 - **Community Discord.** A new **Discord** link in the app menu bar (next to
