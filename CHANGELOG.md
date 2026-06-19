@@ -13,6 +13,8 @@ here cover everything those tags shipped.
 
 ## [Unreleased]
 
+## [12.8.1] - 2026-06-19
+
 ### Added
 
 - **Rename your server from Game Config.** The Game Config page now has a
