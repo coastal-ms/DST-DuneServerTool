@@ -2,7 +2,7 @@ import { useCallback, useEffect, useState } from 'react'
 import { Icon } from '../../components/Icon'
 import { ItemPicker } from '../../components/ItemPicker'
 import {
-  getBotStatus, getBotConfig, saveBotConfig, runBotTick, runBotListTick,
+  getBotStatus, getBotConfig, saveBotConfig, resetBotConfig, runBotTick, runBotListTick,
   startBotSeedMarket, abortBotSeedMarket, botExec,
   setBotBalance, clearBotListings, clearBotError, getBotVendorSnapshot,
   type BotStatus, type BotConfig, type BotTickResult, type BotListTickResult,
@@ -32,6 +32,7 @@ export function MarketBotTab() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [saving, setSaving] = useState(false)
+  const [resetting, setResetting] = useState(false)
   const [saveMsg, setSaveMsg] = useState<string | null>(null)
   const [tick, setTick] = useState<BotTickResult | null>(null)
   const [ticking, setTicking] = useState(false)
@@ -82,6 +83,23 @@ export function MarketBotTab() {
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e))
     } finally { setSaving(false) }
+  }
+
+  // Restore every Market Bot tuning value to its factory default. The bot's
+  // enabled (on/off) state is preserved server-side so a reset never silently
+  // starts or stops it. Any in-progress Duke listings get re-priced on the
+  // next list tick (the backend flags relist_pending).
+  const resetToDefaults = async () => {
+    if (!window.confirm("Reset all Market Bot settings to their defaults?\n\nThis restores every buy, list, and pricing value to the out-of-box defaults. Duke's on/off state is kept, and his existing listings will be re-priced on the next list tick. This cannot be undone.")) return
+    setResetting(true); setSaveMsg(null); setError(null)
+    try {
+      const restored = await resetBotConfig()
+      setConfig(restored); setDraft(structuredClone(restored))
+      setSaveMsg('Settings reset to defaults.')
+      getBotStatus().then(setStatus).catch(() => {})
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e))
+    } finally { setResetting(false) }
   }
 
   const toggleEnabled = async (v: boolean) => {
@@ -410,8 +428,11 @@ export function MarketBotTab() {
           <button className="btn-primary" disabled={!dirty || saving} onClick={() => { void save() }}>
             <Icon name={saving ? 'Loader2' : 'Save'} size={15} className={saving ? 'animate-spin' : ''} /> Save config
           </button>
-          <button className="btn-secondary" disabled={!dirty || saving} onClick={() => setDraft(structuredClone(config))}>
-            Reset
+          <button className="btn-secondary" disabled={!dirty || saving} onClick={() => setDraft(structuredClone(config))} title="Discard unsaved edits and revert to the last saved configuration">
+            Revert
+          </button>
+          <button className="btn-secondary" disabled={saving || resetting} onClick={() => { void resetToDefaults() }} title="Restore every Market Bot setting to its factory default (keeps the bot's on/off state)">
+            <Icon name={resetting ? 'Loader2' : 'RotateCcw'} size={15} className={resetting ? 'animate-spin' : ''} /> Reset to defaults
           </button>
           {saveMsg && <span className="text-xs text-success">{saveMsg}</span>}
           {error && <span className="text-xs text-danger break-words">{error}</span>}
