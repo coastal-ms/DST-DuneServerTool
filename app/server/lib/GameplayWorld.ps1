@@ -553,7 +553,11 @@ END
 `$DST`$;
 "@
 
-    $raw = Invoke-DuneSqlRaw -Ip $Ip -Sql $do -TimeoutSec 180
+    # Stream the DO block through ssh stdin instead of the command line: a large
+    # blueprint (many instances/placeables) builds a multi-KB SQL payload that
+    # overflows the Windows ~32 KB command-line limit, surfacing as
+    # 'The filename or extension is too long' when the ssh process is started.
+    $raw = Invoke-DuneSqlRawStdin -Ip $Ip -Sql $do -TimeoutSec 180
     if (Test-DunePsqlError -Output $raw) {
         return @{ ok = $false; error = (Get-DunePsqlErrorMessage -Output $raw) }
     }

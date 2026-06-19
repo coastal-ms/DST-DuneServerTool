@@ -13,6 +13,16 @@ here cover everything those tags shipped.
 
 ## [Unreleased]
 
+### Fixed
+
+- **Blueprint import no longer fails on large blueprints.** Importing a
+  blueprint with many pieces could fail with `Blueprint import failed:
+  Exception calling "Start" with "0" argument(s): "The filename or extension is
+  too long"`. The generated SQL was passed on the command line, and a big build
+  overflowed the Windows ~32 KB command-line limit. The import now streams the
+  SQL through stdin (the same path already used for bulk market seeding), so
+  blueprints of any size import correctly.
+
 ## [12.8.1] - 2026-06-19
 
 ### Added
