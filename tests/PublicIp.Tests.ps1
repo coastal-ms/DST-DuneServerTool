@@ -50,6 +50,22 @@ Describe 'DDNS hostname validation' {
     It 'rejects invalid hostname labels' {
         (Test-DuneDdnsHostname -Hostname '-bad.example.com').ok | Should -BeFalse
     }
+
+    It 'saves a normalized hostname without resolving it' {
+        $script:savedPublicIpConfig = $null
+        function Save-DuneConfig {
+            param([hashtable]$Config)
+            $script:savedPublicIpConfig = $Config
+            return $Config
+        }
+
+        $r = Save-DunePublicIpHostname -Hostname 'Your-Server.DDNS.net'
+
+        $r.ok | Should -BeTrue
+        $r.hostname | Should -Be 'your-server.ddns.net'
+        $script:savedPublicIpConfig.PublicIpMode | Should -Be 'ddns'
+        $script:savedPublicIpConfig.DdnsHostname | Should -Be 'your-server.ddns.net'
+    }
 }
 
 Describe 'settings.conf renderer' {
