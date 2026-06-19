@@ -20,8 +20,16 @@ $script:DuneConfigKeys = @(
     'MarketBotAddr',
     'MarketBotToken',
     'DecoupleNoticeAck',
-    'ClientConfigPath'
+    'ClientConfigPath',
+    'DbPort'
 )
+
+# Default in-pod PostgreSQL port. All DST DB access runs as
+# `kubectl exec <db-pod> -- psql -p <port>`, so this is the port the postgres
+# process listens on INSIDE the cluster pod, not a port reachable from Windows.
+# Funcom's stock self-hosted server uses 15432; some setups differ (e.g. 15433),
+# which previously made Players/Bases/Storage show empty with no error.
+$script:DuneDefaultDbPort = 15432
 
 # Keys that ONLY a pre-decouple (<= 11.4.13) build ever wrote into
 # dune-server.config. Their presence on disk is how we know a config was
@@ -81,6 +89,22 @@ function Get-DstOpenInAppWindow {
 # distinct function so callers have a single "resolved config" entry point.
 function Read-DuneConfig {
     return Read-DuneConfigRaw
+}
+
+# Resolve the in-pod PostgreSQL port DST should use. Reads the DbPort config key,
+# validates it as a 1-65535 integer, and falls back to the Funcom default
+# (15432) when unset or invalid.
+function Get-DuneDbPort {
+    $default = if ($script:DuneDefaultDbPort) { $script:DuneDefaultDbPort } else { 15432 }
+    try {
+        $raw = Read-DuneConfigRaw
+        $v = if ($raw.Contains('DbPort')) { [string]$raw['DbPort'] } else { '' }
+        $parsed = 0
+        if ($v -and [int]::TryParse($v.Trim(), [ref]$parsed) -and $parsed -ge 1 -and $parsed -le 65535) {
+            return $parsed
+        }
+    } catch {}
+    return $default
 }
 
 function Save-DuneConfig {

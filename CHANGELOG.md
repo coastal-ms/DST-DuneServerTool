@@ -13,6 +13,28 @@ here cover everything those tags shipped.
 
 ## [Unreleased]
 
+### Added
+
+- **Configurable database port (issue #295).** Settings gains a **Database port**
+  field (default `15432`) and a **Test connection** button on a new **Database
+  connection** card. DST reads Players / Bases / Storage from the server's
+  in-pod PostgreSQL over this port; servers whose database listens elsewhere
+  (e.g. `15433`) previously showed those pages empty with no error. The test
+  runs `SELECT 1`, reports a clear "can't reach the database on :&lt;port&gt;"
+  message instead of silent empty data, and auto-probes common ports
+  (15432 / 15433 / 5432) to suggest the right one.
+
+### Fixed
+
+- **Web Portal no longer strands you on a "page is unavailable" error (issue
+  #280).** Clicking **Web Portal** used to close the app window immediately, so
+  if your browser couldn't reach `127.0.0.1` (antivirus, VPN or proxy blocking
+  loopback), you were left with a dead page and no UI. The app window now stays
+  open until the browser actually connects, then closes automatically. If the
+  browser can't reach the server, the window stays usable and offers a
+  **Copy portal URL** fallback so you can open it in another browser or after
+  adding a loopback bypass.
+
 ## [12.8.3] - 2026-06-19
 
 ### Added

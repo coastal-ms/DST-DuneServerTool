@@ -435,6 +435,15 @@ $bgSetupPath   = "$($cfg.SteamPath)\battlegroup-management"
 # Default existing installs (no PortCheckMode in config) to built-in.
 $portCheckMode = if ($cfg.PortCheckMode) { $cfg.PortCheckMode } else { 'builtin' }
 $portCheckUrl  = $cfg.PortCheckUrlTemplate
+# In-pod PostgreSQL port (default 15432). Configurable via the DbPort key so
+# servers whose DB listens elsewhere (e.g. 15433) still work.
+$dbPort        = 15432
+if ($cfg.ContainsKey('DbPort') -and "$($cfg['DbPort'])".Trim()) {
+    $parsedDbPort = 0
+    if ([int]::TryParse("$($cfg['DbPort'])".Trim(), [ref]$parsedDbPort) -and $parsedDbPort -ge 1 -and $parsedDbPort -le 65535) {
+        $dbPort = $parsedDbPort
+    }
+}
 
 # Sample ports we probe (representative of each forwarded range).
 # UDP 7777-7810 is checked at first + last; TCP 31982 is single-port.
@@ -707,9 +716,10 @@ function Get-OnlinePlayers {
     $pgNs  = $parts[0].Trim()
     $pgPod = $parts[1].Trim()
 
-    # Query online players. The cluster's postgres listens on 15432 (not default 5432).
+    # Query online players. The cluster's postgres listens on $dbPort (default
+    # 15432, configurable via the DbPort config key).
     $sql = "SELECT character_name FROM player_state WHERE online_status = 'Online' AND character_name IS NOT NULL ORDER BY character_name;"
-    $cmd = "sudo k3s kubectl exec -n '$pgNs' '$pgPod' -- env PGPASSWORD=dune psql -h 127.0.0.1 -p 15432 -U dune -d dune -t -A -c `"$sql`" 2>&1"
+    $cmd = "sudo k3s kubectl exec -n '$pgNs' '$pgPod' -- env PGPASSWORD=dune psql -h 127.0.0.1 -p $dbPort -U dune -d dune -t -A -c `"$sql`" 2>&1"
     $raw = ssh -o BatchMode=yes -o StrictHostKeyChecking=no -o LogLevel=QUIET -i "$sshKey" "$sshUser@$ip" $cmd
     $rawText = ($raw | Out-String)
     if ($LASTEXITCODE -ne 0 -or $rawText -match 'error|FATAL|ERROR') {

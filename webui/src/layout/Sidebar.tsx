@@ -1,5 +1,5 @@
 import { NavLink } from 'react-router-dom'
-import { useState } from 'react'
+import { useState, useRef } from 'react'
 import { createPortal } from 'react-dom'
 import { Icon } from '../components/Icon'
 import { NAV_ITEMS, GROUP_LABELS, GROUP_ORDER } from '../nav'
@@ -28,6 +28,15 @@ export function Sidebar({ collapsed }: Props) {
   const [showPortalConfirm, setShowPortalConfirm] = useState(false)
   const [portalDetaching, setPortalDetaching] = useState(false)
   const [portalError, setPortalError] = useState<string | null>(null)
+  // Issue #280 recovery flow: after handing the portal to the default browser
+  // we keep the app window open until the browser checks in with the server.
+  // 'confirm' = pre-flight dialog · 'waiting' = browser opened, polling for
+  // check-in · 'failed' = browser never reached the server (offer Copy URL +
+  // close anyway).
+  const [portalPhase, setPortalPhase] = useState<'confirm' | 'waiting' | 'failed'>('confirm')
+  const [portalUrl, setPortalUrl] = useState<string | null>(null)
+  const [portalCopied, setPortalCopied] = useState(false)
+  const portalCancelRef = useRef(false)
 
   // "Web Portal" is meaningful only inside the native shell. In a regular
   // browser tab the user is already in their browser, so we hide the button.
@@ -37,6 +46,7 @@ export function Sidebar({ collapsed }: Props) {
     if (portalDetaching) return
     setPortalDetaching(true)
     setPortalError(null)
+    portalCancelRef.current = false
     try {
       // Tell the server to flag itself as "intentionally detached" — the
       // app-window watcher in ConsoleHost.ps1 reads this flag and skips the
@@ -45,20 +55,79 @@ export function Sidebar({ collapsed }: Props) {
         '/api/portal/open-in-browser', { method: 'POST' },
       )
       if (!r?.url) throw new Error('Server did not return a portal URL.')
+      setPortalUrl(r.url)
       const wv = getWebView2()
       if (wv) {
-        wv.postMessage({ action: 'open-and-close', url: r.url })
+        // Open the browser but KEEP this window open. We wait for the freshly
+        // opened browser tab to check in with the server (proving it could
+        // actually reach 127.0.0.1) before closing ourselves. If it never
+        // checks in, the user keeps a working app window + Copy URL fallback
+        // instead of being stranded on a "page unavailable" error (issue #280).
+        wv.postMessage({ action: 'open', url: r.url })
+        setPortalPhase('waiting')
+        void waitForBrowserCheckin()
       } else {
         // Browser fallback: just open the URL in a new tab. We can't close
         // our own window from a regular browser tab.
         window.open(r.url, '_blank', 'noopener')
+        setShowPortalConfirm(false)
       }
-      setShowPortalConfirm(false)
     } catch (e) {
       setPortalError(e instanceof Error ? e.message : String(e))
     } finally {
       setPortalDetaching(false)
     }
+  }
+
+  // Poll the server until the browser we just opened checks in, then close the
+  // app window. Times out into the 'failed' state so the user can copy the URL
+  // or close anyway.
+  const waitForBrowserCheckin = async () => {
+    const deadline = Date.now() + 30000
+    while (Date.now() < deadline) {
+      await new Promise(res => setTimeout(res, 1200))
+      if (portalCancelRef.current) return
+      let checkedIn = false
+      try {
+        const s = await api<{ checkedIn: boolean }>('/api/portal/checkin-status')
+        checkedIn = !!s?.checkedIn
+      } catch { /* transient — keep polling */ }
+      if (portalCancelRef.current) return
+      if (checkedIn) {
+        const wv = getWebView2()
+        if (wv) wv.postMessage({ action: 'close' })
+        return
+      }
+    }
+    if (!portalCancelRef.current) setPortalPhase('failed')
+  }
+
+  // User gave up on the browser hand-off — re-attach so a normal window close
+  // tears the server down again, and reset the dialog.
+  const onCancelPortalHandoff = async () => {
+    portalCancelRef.current = true
+    try { await api('/api/portal/reattach', { method: 'POST' }) } catch { /* best effort */ }
+    setShowPortalConfirm(false)
+    setPortalPhase('confirm')
+    setPortalUrl(null)
+    setPortalError(null)
+  }
+
+  // Browser confirmed unreachable but the user wants to close anyway (server
+  // stays running because it's already detached; they can paste the URL into a
+  // working browser later).
+  const onCloseAnyway = () => {
+    const wv = getWebView2()
+    if (wv) wv.postMessage({ action: 'close' })
+  }
+
+  const onCopyPortalUrl = async () => {
+    if (!portalUrl) return
+    try {
+      await navigator.clipboard.writeText(portalUrl)
+      setPortalCopied(true)
+      setTimeout(() => setPortalCopied(false), 2000)
+    } catch { /* clipboard blocked — the URL is shown in the box to copy manually */ }
   }
 
   const groups = GROUP_ORDER.map(g => ({
@@ -163,8 +232,8 @@ export function Sidebar({ collapsed }: Props) {
         {inShellWindow && (
           <button
             type="button"
-            onClick={() => { setPortalError(null); setShowPortalConfirm(true) }}
-            title="Open the portal in your default web browser and close this app window"
+            onClick={() => { setPortalError(null); setPortalPhase('confirm'); setShowPortalConfirm(true) }}
+            title="Open the portal in your default web browser (the app window stays open until the browser connects)"
             className={
               collapsed
                 ? 'w-full flex items-center justify-center h-8 rounded-md border border-accent/30 text-accent-bright/90 hover:text-accent-bright hover:bg-accent/10 hover:border-accent/50 transition-colors'
@@ -200,7 +269,7 @@ export function Sidebar({ collapsed }: Props) {
       {showPortalConfirm && createPortal(
         <div
           className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4"
-          onClick={() => { if (!portalDetaching) setShowPortalConfirm(false) }}
+          onClick={() => { if (!portalDetaching && portalPhase === 'confirm') setShowPortalConfirm(false) }}
         >
           <div
             className="card p-5 max-w-md w-full text-text"
@@ -210,41 +279,114 @@ export function Sidebar({ collapsed }: Props) {
               <Icon name="ExternalLink" size={16} className="text-accent" />
               <h3 className="text-sm font-semibold uppercase tracking-widest text-accent">Open in web browser</h3>
             </div>
-            <p className="text-sm text-text-muted mb-2">
-              The Dune Server Tool <strong>app window will close</strong> and the portal will open in your <strong>default web browser</strong>.
-            </p>
-            <p className="text-sm text-text-muted mb-2">
-              Your server keeps running in the background — the browser tab will work normally.
-            </p>
-            <p className="text-sm text-text-muted">
-              Reopen Dune Server Tool any time to bring the app window back (the running server will be restarted).
-            </p>
-            {portalError && (
-              <div className="mt-3 text-xs text-red-400 bg-red-950/40 border border-red-900/60 rounded px-3 py-2">
-                {portalError}
-              </div>
+
+            {portalPhase === 'confirm' && (
+              <>
+                <p className="text-sm text-text-muted mb-2">
+                  The portal will open in your <strong>default web browser</strong>. The app window <strong>stays open</strong> until the browser connects, then closes automatically.
+                </p>
+                <p className="text-sm text-text-muted mb-2">
+                  Your server keeps running in the background — the browser tab will work normally.
+                </p>
+                <p className="text-sm text-text-muted">
+                  Reopen Dune Server Tool any time to bring the app window back (the running server will be restarted).
+                </p>
+                {portalError && (
+                  <div className="mt-3 text-xs text-red-400 bg-red-950/40 border border-red-900/60 rounded px-3 py-2">
+                    {portalError}
+                  </div>
+                )}
+                <div className="mt-4 flex flex-col gap-2">
+                  <button
+                    className="btn-primary w-full justify-center"
+                    onClick={() => { void onOpenWebPortal() }}
+                    disabled={portalDetaching}
+                  >
+                    <Icon name={portalDetaching ? 'Loader2' : 'ExternalLink'} size={12} className={portalDetaching ? 'animate-spin' : ''} />
+                    {portalDetaching ? 'Opening…' : 'Open in browser'}
+                  </button>
+                  <button
+                    className="btn-secondary w-full justify-center"
+                    onClick={() => setShowPortalConfirm(false)}
+                    disabled={portalDetaching}
+                  >
+                    <Icon name="X" size={12} /> Cancel
+                  </button>
+                </div>
+              </>
             )}
-            <div className="mt-4 flex flex-col gap-2">
-              <button
-                className="btn-primary w-full justify-center"
-                onClick={() => { void onOpenWebPortal() }}
-                disabled={portalDetaching}
-              >
-                <Icon name={portalDetaching ? 'Loader2' : 'ExternalLink'} size={12} className={portalDetaching ? 'animate-spin' : ''} />
-                {portalDetaching ? 'Opening…' : 'Open in browser'}
-              </button>
-              <button
-                className="btn-secondary w-full justify-center"
-                onClick={() => setShowPortalConfirm(false)}
-                disabled={portalDetaching}
-              >
-                <Icon name="X" size={12} /> Cancel
-              </button>
-            </div>
+
+            {portalPhase === 'waiting' && (
+              <>
+                <p className="text-sm text-text-muted mb-3 flex items-center gap-2">
+                  <Icon name="Loader2" size={14} className="animate-spin text-accent" />
+                  Waiting for your browser to open the portal…
+                </p>
+                <p className="text-xs text-text-dim mb-3">
+                  This window will close automatically once your browser connects. If your browser shows a “page unavailable” error, it may be blocked from reaching the server (antivirus, VPN or proxy) — use the URL below.
+                </p>
+                {portalUrl && <PortalUrlBox url={portalUrl} copied={portalCopied} onCopy={onCopyPortalUrl} />}
+                <div className="mt-4 flex flex-col gap-2">
+                  <button
+                    className="btn-secondary w-full justify-center"
+                    onClick={() => { void onCancelPortalHandoff() }}
+                  >
+                    <Icon name="X" size={12} /> Cancel — keep app window open
+                  </button>
+                </div>
+              </>
+            )}
+
+            {portalPhase === 'failed' && (
+              <>
+                <p className="text-sm text-text-muted mb-2 flex items-center gap-2">
+                  <Icon name="AlertTriangle" size={14} className="text-warning" />
+                  Your browser didn’t reach the server.
+                </p>
+                <p className="text-xs text-text-dim mb-3">
+                  The app window is still working, so nothing is lost. Your browser is likely blocked from <span className="font-mono">127.0.0.1</span> by antivirus, a VPN, or a proxy. Copy the URL below and open it in another browser, or add a loopback bypass and try again.
+                </p>
+                {portalUrl && <PortalUrlBox url={portalUrl} copied={portalCopied} onCopy={onCopyPortalUrl} />}
+                <div className="mt-4 flex flex-col gap-2">
+                  <button
+                    className="btn-secondary w-full justify-center"
+                    onClick={() => { void onCancelPortalHandoff() }}
+                  >
+                    <Icon name="ArrowLeft" size={12} /> Keep using the app window
+                  </button>
+                  <button
+                    className="btn-ghost w-full justify-center text-text-dim"
+                    onClick={onCloseAnyway}
+                    title="Close the app window anyway — the server stays running so you can open the URL later"
+                  >
+                    <Icon name="X" size={12} /> Close app window anyway
+                  </button>
+                </div>
+              </>
+            )}
           </div>
         </div>,
         document.body,
       )}
     </aside>
+  )
+}
+
+function PortalUrlBox({ url, copied, onCopy }: { url: string; copied: boolean; onCopy: () => void }) {
+  return (
+    <div className="flex items-center gap-2">
+      <code className="flex-1 min-w-0 truncate text-xs bg-black/40 border border-border rounded px-2 py-1.5 font-mono" title={url}>
+        {url}
+      </code>
+      <button
+        type="button"
+        onClick={onCopy}
+        className="btn-secondary shrink-0"
+        title="Copy portal URL"
+      >
+        <Icon name={copied ? 'Check' : 'Copy'} size={13} />
+        {copied ? 'Copied' : 'Copy'}
+      </button>
+    </div>
   )
 }

@@ -439,6 +439,20 @@ internal sealed class MainForm : Form
             // WebMessageReceived handler can return cleanly first.
             BeginInvoke(new Action(() => { try { Close(); } catch { } }));
         }
+        else if (string.Equals(action, "open", StringComparison.OrdinalIgnoreCase))
+        {
+            // Issue #280: open the portal in the default browser but KEEP this
+            // window open. The React UI waits for the browser to check in with
+            // the server before asking us to close (a separate "close" message),
+            // so a browser that can't reach 127.0.0.1 leaves the user with a
+            // working app window + Copy URL fallback instead of a dead window.
+            if (!string.IsNullOrWhiteSpace(url)) OpenExternal(url);
+        }
+        else if (string.Equals(action, "close", StringComparison.OrdinalIgnoreCase))
+        {
+            // Browser confirmed it reached the server — safe to close now.
+            BeginInvoke(new Action(() => { try { Close(); } catch { } }));
+        }
     }
 
     private static void OpenExternal(string url)
