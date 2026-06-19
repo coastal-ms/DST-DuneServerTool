@@ -7,6 +7,7 @@ import { checkForUpdate, installUpdate, type UpdateCheck } from '../api/update'
 import { publishUpdateCheck } from '../hooks/useUpdateCheck'
 import { fmtToolVersion } from '../format'
 import { AppearanceCard } from './settings/AppearanceCard'
+import { PublicIpCard } from './settings/PublicIpCard'
 import { RemoteAccessCard } from './settings/RemoteAccessCard'
 
 const FIELDS: {
@@ -397,6 +398,8 @@ export function Settings() {
       <AppearanceCard />
 
       <RemoteAccessCard />
+
+      <PublicIpCard />
 
       {/* --- dune-admin VM cache (companion admin tool, decoupled in 12.x) --- */}
       <div className="card mb-4 p-6">
