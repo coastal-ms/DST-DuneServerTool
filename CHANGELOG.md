@@ -13,6 +13,8 @@ here cover everything those tags shipped.
 
 ## [Unreleased]
 
+## [12.9.0] - 2026-06-19
+
 ### Added
 
 - **Configurable database port (issue #295).** Settings gains a **Database port**
