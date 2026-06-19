@@ -243,6 +243,12 @@ function Get-DuneBotConfigDefaults {
         default_unit_price   = 100           # fallback for unknown templates
         # Per-tier base prices, mirroring 0001-sane-pricing-100k-cap.patch.
         tier_base_prices     = @{ '0' = 10; '1' = 50; '2' = 200; '3' = 800; '4' = 3000; '5' = 10000; '6' = 30000 }
+        # Per-tier prices for non-stackable SCHEMATICS (blueprints). Schematics are
+        # priced off this table x rarity (x grade) and intentionally IGNORE the live
+        # NPC vendor price: their in-game vendor price is low + uniform, so the old
+        # 2x-vendor ceiling crushed every T6 schematic to a flat ~20k regardless of
+        # tier (issue #281). Defaults mirror the tuned upstream schematic table.
+        schematic_tier_prices = @{ '0' = 500; '1' = 500; '2' = 1500; '3' = 4000; '4' = 12000; '5' = 30000; '6' = 75000 }
         stack_unit_prices    = @{ '0' = 1;  '1' = 1;  '2' = 5;   '3' = 20;  '4' = 75;   '5' = 250;   '6' = 800   }
         category_factors     = @{ augment = 0.6; schematic = 1.0; gear = 0.8 }
         grade_multipliers    = @(1.0, 1.25, 1.55, 2.0, 2.6, 3.3)
@@ -356,6 +362,7 @@ function Read-DuneBotConfig {
                         'disabled_items'       { $cfg[$k] = @($v | ForEach-Object { [string]$_ } | Where-Object { $_ }) }
                         'target_balance'       { $cfg[$k] = [int64]$v }
                         'tier_base_prices'     { $cfg[$k] = ConvertFrom-DuneBotJsonMap -Value $v -Default $cfg[$k] -IntValues }
+                        'schematic_tier_prices' { $cfg[$k] = ConvertFrom-DuneBotJsonMap -Value $v -Default $cfg[$k] -IntValues }
                         'stack_unit_prices'    { $cfg[$k] = ConvertFrom-DuneBotJsonMap -Value $v -Default $cfg[$k] -IntValues }
                         'category_factors'     { $cfg[$k] = ConvertFrom-DuneBotJsonMap -Value $v -Default $cfg[$k] }
                         'rarity_multipliers'   { $cfg[$k] = ConvertFrom-DuneBotJsonMap -Value $v -Default $cfg[$k] }
@@ -394,6 +401,16 @@ function Read-DuneBotConfig {
             if ($rev -lt 2) {
                 $cfg['stackables_only']         = $false
                 $cfg['sane_defaults_revision']  = 2
+            }
+            # rev 3 (issue #281): seed the new schematic_tier_prices table for
+            # configs saved before it existed so schematics stop pricing at the
+            # flat NPC vendor price. Only seeds when the saved JSON lacks the key
+            # (an explicit user-tuned table is preserved by the switch above).
+            if ($rev -lt 3) {
+                if (-not $json.PSObject.Properties['schematic_tier_prices']) {
+                    $cfg['schematic_tier_prices'] = (Get-DuneBotConfigDefaults)['schematic_tier_prices']
+                }
+                $cfg['sane_defaults_revision'] = 3
             }
         } catch {}
     }
@@ -451,6 +468,7 @@ function Save-DuneBotConfig {
     $v = _Get $Incoming 'disabled_items'
     if ($null -ne $v) { $cfg['disabled_items'] = @($v | ForEach-Object { [string]$_ } | Where-Object { $_ }) }
     $v = _Get $Incoming 'tier_base_prices';  if ($null -ne $v) { $cfg['tier_base_prices']   = ConvertFrom-DuneBotJsonMap -Value $v -Default $cfg['tier_base_prices']   -IntValues }
+    $v = _Get $Incoming 'schematic_tier_prices'; if ($null -ne $v) { $cfg['schematic_tier_prices'] = ConvertFrom-DuneBotJsonMap -Value $v -Default $cfg['schematic_tier_prices'] -IntValues }
     $v = _Get $Incoming 'stack_unit_prices'; if ($null -ne $v) { $cfg['stack_unit_prices']  = ConvertFrom-DuneBotJsonMap -Value $v -Default $cfg['stack_unit_prices']  -IntValues }
     $v = _Get $Incoming 'category_factors';  if ($null -ne $v) { $cfg['category_factors']   = ConvertFrom-DuneBotJsonMap -Value $v -Default $cfg['category_factors']  }
     $v = _Get $Incoming 'rarity_multipliers';if ($null -ne $v) { $cfg['rarity_multipliers'] = ConvertFrom-DuneBotJsonMap -Value $v -Default $cfg['rarity_multipliers']}
@@ -1220,11 +1238,31 @@ GROUP BY o.template_id
 }
 
 # Pull a tier hint from a template_id like "WaterRationMk3" / "Spice_T4".
+# Funcom schematics often carry the tier as a LEADING token (e.g.
+# "T6_ChoamLg2_Schematic", "T6SchematicFragmentQL1"), so we also match a
+# leading / standalone T<n> in addition to the "_T<n>" / "Mk<n>" infix forms.
 function Get-DuneBotTierFromTemplate {
     param([string]$Template)
     if ($Template -match '_T(\d)') { return [int]$Matches[1] }
     if ($Template -match 'Mk(\d)') { return [int]$Matches[1] }
+    if ($Template -match '(?:^|[^A-Za-z])T(\d)') { return [int]$Matches[1] }
     return 0
+}
+
+# True when a template is a (non-stackable) schematic blueprint. Funcom names
+# schematics three ways: "<Item>_Schematic" suffix, "Schematic_<Item>" prefix,
+# and "<Item>Schematic" with no underscore. Match the "schematic" token in any
+# of those positions, or via the bundled category. NOTE: callers gate this on
+# non-stackable items, so stackable "...SchematicFragment..." crafting resources
+# (which price via the stack table) never reach the schematic pricing path.
+function Test-DuneBotIsSchematic {
+    param([string]$TemplateId, [string]$Category = '')
+    $t = ([string]$TemplateId).ToLower()
+    if ($t -match '(?:^|_)schematic(?:$|_)') { return $true }
+    if ($t.EndsWith('schematic'))            { return $true }
+    if ($t.StartsWith('schematic'))          { return $true }
+    if (([string]$Category).ToLower() -match 'schematic') { return $true }
+    return $false
 }
 
 # Merge vendor snapshot with bundled item metadata + DST's existing equipment
@@ -1340,7 +1378,9 @@ function Get-DuneBotCategoryFactor {
     param([hashtable]$Cfg, [hashtable]$Cand)
     $factors = [hashtable]$Cfg.category_factors
     $tmplLc = $Cand.template_id.ToLower()
-    if ($tmplLc.EndsWith('_schematic')) { if ($factors.ContainsKey('schematic')) { return [double]$factors['schematic'] } }
+    if (Test-DuneBotIsSchematic -TemplateId $Cand.template_id -Category $Cand.category) {
+        if ($factors.ContainsKey('schematic')) { return [double]$factors['schematic'] }
+    }
     $cat = ([string]$Cand.category).ToLower()
     if ($cat -match 'augment')          { if ($factors.ContainsKey('augment'))   { return [double]$factors['augment']   } }
     if ($factors.ContainsKey('gear'))   { return [double]$factors['gear'] }
@@ -1391,7 +1431,17 @@ function Get-DuneBotItemPriceUpstream {
     $vendorMult = if ($vm -and $vm.ContainsKey($rarity)) { [double]$vm[$rarity] } else { 1.0 }
     $vp = [int]$Cand.vendor_price
     $base = 0.0
-    if ($vp -gt 0) {
+    # Non-stackable schematics are priced off the schematic tier table x rarity
+    # and IGNORE the vendor price (issue #281) — the live NPC vendor price is low
+    # + uniform, so vendor x mult collapsed every schematic onto the same number.
+    $isSchem = (-not $Cand.is_stackable) -and (Test-DuneBotIsSchematic -TemplateId $Cand.template_id -Category $Cand.category)
+    if ($isSchem) {
+        $tierKey = [string]([int]$Cand.tier)
+        $tbl = [hashtable]$Cfg.upstream_tier_schematic_prices
+        $unit = [double]$Cfg.default_unit_price
+        if ($tbl -and $tbl.ContainsKey($tierKey)) { $unit = [double]$tbl[$tierKey] }
+        $base = $unit * $rarityMult
+    } elseif ($vp -gt 0) {
         $base = [double]$vp * $vendorMult
     } else {
         $tierKey = [string]([int]$Cand.tier)
@@ -1399,14 +1449,7 @@ function Get-DuneBotItemPriceUpstream {
         if ($Cand.is_stackable) {
             $tbl = [hashtable]$Cfg.upstream_stack_unit_prices
         } else {
-            $tmplLc = ([string]$Cand.template_id).ToLower()
-            $cat    = ([string]$Cand.category).ToLower()
-            $isSchem = $tmplLc.EndsWith('_schematic') -or ($cat -match 'schematic')
-            if ($isSchem) {
-                $tbl = [hashtable]$Cfg.upstream_tier_schematic_prices
-            } else {
-                $tbl = [hashtable]$Cfg.upstream_tier_equipment_prices
-            }
+            $tbl = [hashtable]$Cfg.upstream_tier_equipment_prices
         }
         $unit = [double]$Cfg.default_unit_price
         if ($tbl -and $tbl.ContainsKey($tierKey)) { $unit = [double]$tbl[$tierKey] }
@@ -1450,11 +1493,19 @@ function Get-DuneBotItemPrice {
     $rm = [hashtable]$Cfg.rarity_multipliers
     if ($rm -and $rm.ContainsKey($Cand.rarity)) { $rarityMult = [double]$rm[$Cand.rarity] }
     $price = 0.0
+    $isSchem = (-not $Cand.is_stackable) -and (Test-DuneBotIsSchematic -TemplateId $Cand.template_id -Category $Cand.category)
     if ($Cand.is_stackable) {
         $unit = [double]$Cfg.default_unit_price
         $sm = [hashtable]$Cfg.stack_unit_prices
         if ($sm -and $sm.ContainsKey($tierKey)) { $unit = [double]$sm[$tierKey] }
         $price = $unit * $rarityMult
+    } elseif ($isSchem) {
+        # Schematics: price off the dedicated schematic tier table x rarity. No
+        # category factor and (below) no vendor floor/ceiling — see issue #281.
+        $base = [double]$Cfg.default_unit_price
+        $stp = [hashtable]$Cfg.schematic_tier_prices
+        if ($stp -and $stp.ContainsKey($tierKey)) { $base = [double]$stp[$tierKey] }
+        $price = $base * $rarityMult
     } else {
         $base = [double]$Cfg.default_unit_price
         $tbp = [hashtable]$Cfg.tier_base_prices
@@ -1462,8 +1513,10 @@ function Get-DuneBotItemPrice {
         $factor = Get-DuneBotCategoryFactor -Cfg $Cfg -Cand $Cand
         $price = $base * $factor * $rarityMult
     }
+    # Vendor floor/ceiling clamp — SKIPPED for schematics so their tier table
+    # drives the price instead of the low, uniform in-game NPC vendor price.
     $vp = [double]$Cand.vendor_price
-    if ($vp -ge 10) {
+    if (-not $isSchem -and $vp -ge 10) {
         $vmAll = 0.95
         $vm = [hashtable]$Cfg.vendor_multipliers
         if ($vm -and $vm.ContainsKey('all')) { $vmAll = [double]$vm['all'] }
