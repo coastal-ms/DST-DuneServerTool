@@ -29,6 +29,46 @@ function Get-V6SshKeyPath {
     return $null
 }
 
+# Resolve the in-pod PostgreSQL port. This is the port the postgres process
+# listens on INSIDE the cluster pod (reached via `kubectl exec -- psql -p`), not
+# a port reachable from Windows. Funcom's stock server uses 15432; the DbPort
+# config key lets operators whose DB is on a different port (e.g. 15433) point
+# DST at it instead of silently seeing empty Players/Bases/Storage. Reads fresh
+# each call (no cache) so a Settings change takes effect without a restart.
+function Get-V6DbPort {
+    $default = 15432
+    try {
+        if (Get-Command Get-DuneDbPort -ErrorAction SilentlyContinue) { return (Get-DuneDbPort) }
+        $cfg = $null
+        if (Get-Command Read-Config -ErrorAction SilentlyContinue) {
+            $cfg = Read-Config
+        } else {
+            $cfgPath = $null
+            if ($script:ConfigFile -and (Test-Path $script:ConfigFile)) { $cfgPath = $script:ConfigFile }
+            elseif (Test-Path "$env:APPDATA\DuneServer\dune-server.config") { $cfgPath = "$env:APPDATA\DuneServer\dune-server.config" }
+            if ($cfgPath) {
+                $cfg = @{}
+                Get-Content $cfgPath | ForEach-Object {
+                    if ($_ -match '^([^#=]+)=(.*)$') { $cfg[$Matches[1].Trim()] = $Matches[2].Trim() }
+                }
+            }
+        }
+        if ($cfg) {
+            $raw = $null
+            if ($cfg -is [System.Collections.IDictionary]) {
+                if ($cfg.Contains('DbPort')) { $raw = [string]$cfg['DbPort'] }
+            } elseif ($cfg.PSObject -and $cfg.PSObject.Properties['DbPort']) {
+                $raw = [string]$cfg.DbPort
+            }
+            $parsed = 0
+            if ($raw -and [int]::TryParse($raw.Trim(), [ref]$parsed) -and $parsed -ge 1 -and $parsed -le 65535) {
+                return $parsed
+            }
+        }
+    } catch {}
+    return $default
+}
+
 function Invoke-V6Ssh {
     param([string]$Ip, [string]$Cmd, [int]$TimeoutSec = 30, [string]$StdinData)
     # Strip CRs from the command — here-strings in CRLF-saved .ps1 files
@@ -234,10 +274,50 @@ function Find-V6DbPod {
 function Invoke-V6Psql {
     param([string]$Ip, [string]$Sql, [int]$TimeoutSec = 30)
     $pod = Find-V6DbPod -Ip $Ip
+    $port = Get-V6DbPort
     $b64 = [Convert]::ToBase64String([Text.Encoding]::UTF8.GetBytes($Sql))
-    $cmd = "echo $b64 | base64 -d | sudo kubectl exec -i -n $($pod.ns) $($pod.name) -- psql -U dune -d dune -p 15432 -t -A 2>&1"
+    $cmd = "echo $b64 | base64 -d | sudo kubectl exec -i -n $($pod.ns) $($pod.name) -- psql -U dune -d dune -p $port -t -A 2>&1"
     $out = Invoke-V6Ssh -Ip $Ip -Cmd $cmd -TimeoutSec $TimeoutSec
     return (($out -join "`n")).Trim()
+}
+
+# Detect a PostgreSQL "can't reach the server" failure in psql output (wrong
+# port, server down) as opposed to a SQL error. Used to surface a clear
+# "can't reach database on :<port>" message instead of empty data.
+function Test-DunePsqlConnError {
+    param([string]$Output)
+    if (-not $Output) { return $false }
+    return ($Output -match '(?i)could not connect to server|Connection refused|could not translate host|server closed the connection|No route to host|Connection timed out')
+}
+
+# Run a lightweight `SELECT 1` against a given (or configured) in-pod port and
+# report whether Postgres is reachable. Powers the Settings "Test connection"
+# button and the auto-probe that suggests a different port (e.g. 15433) when the
+# configured one is dead.
+function Test-DuneDbConnection {
+    param([string]$Ip, [int]$Port = 0, [int]$TimeoutSec = 20)
+    if ($Port -le 0) { $Port = Get-V6DbPort }
+    $result = @{ ok = $false; port = $Port; message = ''; raw = '' }
+    try {
+        $pod = Find-V6DbPod -Ip $Ip
+    } catch {
+        $result.message = "Postgres pod not found. Make sure the battlegroup is running and fully initialized."
+        return $result
+    }
+    $cmd = "sudo kubectl exec -i -n $($pod.ns) $($pod.name) -- psql -U dune -d dune -p $Port -t -A -c 'SELECT 1' 2>&1"
+    $out = (Invoke-V6Ssh -Ip $Ip -Cmd $cmd -TimeoutSec $TimeoutSec) -join "`n"
+    $result.raw = $out.Trim()
+    if ($out -match '(?m)^\s*1\s*$') {
+        $result.ok = $true
+        $result.message = "Connected to PostgreSQL on port $Port."
+    } elseif (Test-DunePsqlConnError -Output $out) {
+        $result.message = "Can't reach the database on port $Port. The PostgreSQL server is not listening there."
+    } elseif ($out -match '(?i)ERROR|FATAL') {
+        $result.message = "PostgreSQL on port $Port returned an error: $($result.raw)"
+    } else {
+        $result.message = "Unexpected response from port $Port`: $($result.raw)"
+    }
+    return $result
 }
 
 function ConvertFrom-V6PsqlJson {
