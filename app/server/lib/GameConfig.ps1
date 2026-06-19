@@ -1086,6 +1086,42 @@ function Get-DuneServerName {
     return $name
 }
 
+# Rename the server: patches the battlegroup CRD's spec.title (the name shown in
+# the in-game server browser / status pages). This is a RESTART-class action -
+# the operator recreates the battlegroup pods to apply the new title, so players
+# are disconnected briefly and the server blips out of the browser then returns
+# under the new name. No data is touched (identity/world key off the immutable
+# metadata.name, not the title). Busts the cached name so the status header
+# repaints immediately.
+function Set-DuneServerName {
+    param([Parameter(Mandatory)][string]$Name)
+
+    $ctx = Get-DuneGameConfigContext
+    if (-not $ctx.ok) { return @{ ok=$false; status=$ctx.status; message=$ctx.message } }
+    if (-not (Get-Command Set-V6BattlegroupTitle -ErrorAction SilentlyContinue)) {
+        return @{ ok=$false; status=503; message='Battlegroup helper unavailable (K8s.ps1 not loaded).' }
+    }
+
+    try {
+        $res = Set-V6BattlegroupTitle -Ip $ctx.ip -Title $Name
+    } catch {
+        return @{ ok=$false; status=400; message=$_.Exception.Message }
+    }
+    if (-not $res.Success) {
+        return @{ ok=$false; status=502; message="kubectl patch failed: $($res.Raw)" }
+    }
+
+    $script:DuneServerNameCache   = $res.NewTitle
+    $script:DuneServerNameFetched = [datetime]::UtcNow
+
+    return @{
+        ok      = $true
+        oldName = $res.OldTitle
+        newName = $res.NewTitle
+        message = "Server renamed to `"$($res.NewTitle)`". The battlegroup is restarting to apply the new name - players are disconnected briefly and it may take a minute to reappear in the server browser."
+    }
+}
+
 # Quoted-key lookup for the writer (string keys that must be wrapped in quotes).
 function Get-DuneGameConfigQuotedKeys {
     $q = @{}

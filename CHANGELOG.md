@@ -13,6 +13,20 @@ here cover everything those tags shipped.
 
 ## [Unreleased]
 
+## [12.8.1] - 2026-06-19
+
+### Added
+
+- **Rename your server from Game Config.** The Game Config page now has a
+  "Server name" card that renames the server as it appears in the in-game
+  server browser and on status pages (e.g. dunestatus). It patches the
+  battlegroup's title directly — no INI editing or YAML by hand. Because the
+  new name has to be baked into the running game pods, applying it **restarts
+  the battlegroup**: connected players are disconnected briefly and the server
+  drops out of the browser before returning under the new name, so the action
+  is gated behind a typed `RESTART` confirmation and a clear warning. Your
+  world and player data are never touched.
+
 ## [12.8.0] - 2026-06-18
 
 ### Added
