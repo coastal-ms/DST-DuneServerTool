@@ -388,6 +388,12 @@ export function saveBotConfig(cfg: Partial<BotConfig>) {
   })
 }
 
+export function resetBotConfig() {
+  return api<BotConfig>('/api/gameplay/market-bot/config/reset', {
+    method: 'POST',
+  })
+}
+
 export function runBotTick(dryRun: boolean) {
   return api<BotTickResult>(`/api/gameplay/market-bot/tick${dryRun ? '?dry=1' : ''}`, {
     method: 'POST',

@@ -237,6 +237,22 @@ Register-DuneRoute -Method PUT -Path '/api/gameplay/market-bot/config' -Handler 
     }
 }
 
+# POST /api/gameplay/market-bot/config/reset — restore factory defaults.
+# Preserves the current enabled (on/off) state; resets all tuning.
+Register-DuneRoute -Method POST -Path '/api/gameplay/market-bot/config/reset' -Handler {
+    param($req, $res, $routeParams, $body)
+    try {
+        $saved = Reset-DuneBotConfig
+        $out = @{}
+        foreach ($k in $saved.Keys) { $out[$k] = $saved[$k] }
+        $out['configured'] = $true
+        $out['source'] = 'live'
+        Write-DuneJson -Response $res -Body $out
+    } catch {
+        Write-DuneError -Response $res -Status 500 -Message "Bot config reset failed: $($_.Exception.Message)"
+    }
+}
+
 # ---------------------------------------------------------------------------
 # POST /api/gameplay/market-bot/exec  (start|stop|restart)
 # Native lifecycle = flip the persisted `enabled` flag; the background

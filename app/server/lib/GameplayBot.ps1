@@ -506,6 +506,39 @@ function Save-DuneBotConfig {
     return $cfg
 }
 
+# ---------------------------------------------------------------------------
+# Reset the bot config back to factory defaults. The current enabled (on/off)
+# state is preserved so a reset never silently starts or stops the bot — only
+# the tuning (buy/list/pricing) is restored. Stamps the latest sane-defaults
+# revision so no migration re-runs on next load, and flags relist_pending so
+# the next list tick re-prices Duke's listings from the restored defaults.
+# Returns the saved config.
+# ---------------------------------------------------------------------------
+function Reset-DuneBotConfig {
+    $prevEnabled = $false
+    try { $prevEnabled = [bool](Read-DuneBotConfig)['enabled'] } catch {}
+
+    $cfg = Get-DuneBotConfigDefaults
+    $cfg['enabled'] = $prevEnabled
+    # Latest migration revision (see Read-DuneBotConfig) so a freshly-reset
+    # config is never re-migrated/clobbered on the next read.
+    $cfg['sane_defaults_revision'] = 3
+
+    # Pricing basis is back to defaults -> any existing Duke listings are now
+    # stale; flag a relist so the next list tick wipes + re-prices them.
+    try {
+        $st = Read-DuneBotState
+        $st['relist_pending'] = $true
+        Save-DuneBotState -State $st
+    } catch {}
+
+    $path = Get-DuneBotConfigPath
+    $dir = Split-Path -Parent $path
+    if ($dir -and -not (Test-Path -LiteralPath $dir)) { New-Item -ItemType Directory -Path $dir -Force | Out-Null }
+    ($cfg | ConvertTo-Json -Depth 6) | Set-Content -LiteralPath $path -Encoding UTF8
+    return $cfg
+}
+
 function Read-DuneBotState {
     $state = [ordered]@{
         last_buy_tick     = $null
