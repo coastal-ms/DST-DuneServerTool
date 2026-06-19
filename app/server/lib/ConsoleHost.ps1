@@ -63,6 +63,46 @@ function Clear-DuneAppDetached {
     } catch { }
 }
 
+# Portal browser check-in (issue #280). When the user clicks "Web Portal", the
+# app window must NOT close until we know the external browser actually reached
+# the server (some environments — AV/proxy/CGNAT — block the browser from
+# 127.0.0.1 even though the in-app WebView2 can reach it). The freshly-opened
+# browser tab POSTs /api/portal/checkin, which writes this file; the still-open
+# app window polls /api/portal/checkin-status and only then closes itself.
+# A file is used (not $script: state) because API handlers run in a runspace
+# pool with no shared script scope across requests — same reason the detach
+# flag is file-backed.
+function Get-DunePortalCheckinFile {
+    $dir = Join-Path $env:LOCALAPPDATA 'DuneServer'
+    return (Join-Path $dir 'portal-browser-checkin.flag')
+}
+
+function Set-DunePortalBrowserCheckin {
+    try {
+        $file = Get-DunePortalCheckinFile
+        $dir = Split-Path -Parent $file
+        if (-not (Test-Path -LiteralPath $dir)) {
+            New-Item -ItemType Directory -Path $dir -Force | Out-Null
+        }
+        Set-Content -LiteralPath $file -Value ((Get-Date).ToString('o')) -Encoding UTF8 -Force
+    } catch { }
+}
+
+function Clear-DunePortalBrowserCheckin {
+    try {
+        $file = Get-DunePortalCheckinFile
+        if (Test-Path -LiteralPath $file) {
+            Remove-Item -LiteralPath $file -Force -ErrorAction SilentlyContinue
+        }
+    } catch { }
+}
+
+function Test-DunePortalBrowserCheckin {
+    try {
+        return (Test-Path -LiteralPath (Get-DunePortalCheckinFile))
+    } catch { return $false }
+}
+
 # Sentinel file consumed by DuneShell's FormClosing teardown AND by the
 # app-window watcher runspace. When this file exists, neither side should
 # tear the backend down on shell close -- the user has opted into

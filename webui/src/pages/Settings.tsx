@@ -35,6 +35,9 @@ const FIELDS: {
   { key: 'PortCheckUrlTemplate', label: 'Port-check URL template',
     placeholder: 'https://example.com/check?ip={ip}&port={port}&protocol={protocol}',
     help: 'Used when mode is "custom". Tokens: {ip} {port} {protocol}' },
+  { key: 'DbPort', label: 'Database port',
+    placeholder: '15432',
+    help: 'In-pod PostgreSQL port DST queries for Players / Bases / Storage. Funcom\'s default is 15432 — change it only if your server\'s database listens elsewhere (e.g. 15433). Use "Test connection" below after changing it.' },
 ]
 
 export function Settings() {
@@ -51,6 +54,13 @@ export function Settings() {
   const [sshRotateMsg, setSshRotateMsg] = useState<string | null>(null)
   const [openingBat, setOpeningBat] = useState(false)
   const [batMsg, setBatMsg] = useState<string | null>(null)
+  // Database connection test (issue #295): verify the configured in-pod
+  // PostgreSQL port is reachable, and surface a clear message + suggested port
+  // instead of silently showing empty Players / Bases / Storage.
+  const [dbTesting, setDbTesting] = useState(false)
+  const [dbTestMsg, setDbTestMsg] = useState<string | null>(null)
+  const [dbTestOk, setDbTestOk] = useState<boolean | null>(null)
+  const [dbSuggestedPort, setDbSuggestedPort] = useState<number | null>(null)
   // dune-admin VM cache: companion admin tool caches a stale BG snapshot
   // on the VM at ~/.dune/sh-<bg-id>*.yaml; clearing it forces its setup
   // wizard to re-discover the live DB password etc.
@@ -111,6 +121,35 @@ export function Settings() {
     } finally {
       setOpeningBat(false)
     }
+  }
+  async function onTestDbConnection() {
+    setDbTesting(true)
+    setDbTestMsg(null)
+    setDbTestOk(null)
+    setDbSuggestedPort(null)
+    try {
+      const raw = (values['DbPort'] ?? '').trim()
+      const port = raw ? Number(raw) : undefined
+      const r = await api<{ ok: boolean; port: number; message: string; suggestedPort?: number }>(
+        '/api/db/test-connection',
+        { method: 'POST', body: JSON.stringify({ port: Number.isFinite(port) ? port : undefined, probe: true }) },
+      )
+      setDbTestOk(r.ok)
+      setDbTestMsg(r.message)
+      if (r.suggestedPort) setDbSuggestedPort(r.suggestedPort)
+    } catch (e) {
+      setDbTestOk(false)
+      setDbTestMsg(e instanceof Error ? e.message : String(e))
+    } finally {
+      setDbTesting(false)
+    }
+  }
+  function applySuggestedPort() {
+    if (dbSuggestedPort == null) return
+    setValues(v => ({ ...v, DbPort: String(dbSuggestedPort) }))
+    setDbSuggestedPort(null)
+    setDbTestMsg('Database port updated — click "Save settings" below to persist it, then test again.')
+    setDbTestOk(null)
   }
   async function onRotateSshKey() {
     if (!window.confirm('Generate a NEW SSH key?\n\nThis regenerates the key and authorizes it on the dune-awakening VM. The VM must be running.\n\nA console window will open and ask for the \'dune\' user\'s password — you MUST type it there to authorize the new key on the VM. If you close that prompt without entering the password, DST will be locked out of the server until you re-run this. The console will tell you if authorization succeeded.')) return
@@ -400,6 +439,52 @@ export function Settings() {
       <RemoteAccessCard />
 
       <PublicIpCard />
+
+      {/* --- Database connection (issue #295) --- */}
+      <div className="card mb-4 p-6">
+        <div className="flex items-start justify-between gap-3">
+          <div className="min-w-0">
+            <div className="flex items-center gap-2 mb-1">
+              <Icon name="Database" size={18} className="text-text-muted" />
+              <h2 className="text-lg font-semibold">Database connection</h2>
+            </div>
+            <p className="text-sm text-text-dim">
+              DST reads Players, Bases and Storage from the server's PostgreSQL
+              database on port <span className="font-mono">{(values['DbPort'] ?? '').trim() || '15432'}</span>.
+              If those pages are empty, the database may be listening on a
+              different port — set it in <span className="font-medium">Database port</span> below
+              and test it here. The VM must be running.
+            </p>
+            {dbTestMsg && (
+              <p className={`mt-2 text-xs flex items-center gap-1.5 ${dbTestOk === false ? 'text-danger' : dbTestOk === true ? 'text-success' : 'text-text-dim'}`}>
+                <Icon name={dbTestOk === false ? 'AlertCircle' : dbTestOk === true ? 'CheckCircle2' : 'Info'} size={13} />
+                {dbTestMsg}
+              </p>
+            )}
+            {dbSuggestedPort != null && (
+              <button
+                type="button"
+                onClick={applySuggestedPort}
+                className="mt-2 btn-secondary"
+              >
+                <Icon name="ArrowRight" size={14} /> Use port {dbSuggestedPort}
+              </button>
+            )}
+          </div>
+          <div className="flex items-center gap-2 shrink-0">
+            <button
+              type="button"
+              onClick={() => void onTestDbConnection()}
+              disabled={dbTesting}
+              title="Run SELECT 1 against the configured database port"
+              className="btn-secondary"
+            >
+              <Icon name={dbTesting ? 'Loader2' : 'PlugZap'} size={15} className={dbTesting ? 'animate-spin' : ''} />
+              {dbTesting ? 'Testing…' : 'Test connection'}
+            </button>
+          </div>
+        </div>
+      </div>
 
       {/* --- dune-admin VM cache (companion admin tool, decoupled in 12.x) --- */}
       <div className="card mb-4 p-6">

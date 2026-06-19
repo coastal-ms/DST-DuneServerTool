@@ -36,9 +36,10 @@ function Invoke-DuneSqlRaw {
         [switch]$Csv
     )
     $pod = Find-V6DbPod -Ip $Ip
+    $port = Get-V6DbPort
     $b64 = [Convert]::ToBase64String([Text.Encoding]::UTF8.GetBytes($Sql))
     $flags = if ($Csv) { '-X --csv' } else { '-X -A' }
-    $cmd = "echo $b64 | base64 -d | sudo kubectl exec -i -n $($pod.ns) $($pod.name) -- psql -U dune -d dune -p 15432 -v ON_ERROR_STOP=1 $flags 2>&1"
+    $cmd = "echo $b64 | base64 -d | sudo kubectl exec -i -n $($pod.ns) $($pod.name) -- psql -U dune -d dune -p $port -v ON_ERROR_STOP=1 $flags 2>&1"
     $out = Invoke-V6Ssh -Ip $Ip -Cmd $cmd -TimeoutSec $TimeoutSec
     return ($out -join "`n")
 }
@@ -57,12 +58,13 @@ function Invoke-DuneSqlRawStdin {
         [switch]$Csv
     )
     $pod = Find-V6DbPod -Ip $Ip
+    $port = Get-V6DbPort
     $b64 = [Convert]::ToBase64String([Text.Encoding]::UTF8.GetBytes($Sql))
     $flags = if ($Csv) { '-X --csv' } else { '-X -A' }
     # Remote cmd reads base64 bytes off OUR stdin (which Invoke-V6Ssh writes
     # via -StdinData), decodes them, and feeds the SQL into psql. Total
     # remote command length is < 200 chars regardless of payload size.
-    $cmd = "base64 -d | sudo kubectl exec -i -n $($pod.ns) $($pod.name) -- psql -U dune -d dune -p 15432 -v ON_ERROR_STOP=1 $flags 2>&1"
+    $cmd = "base64 -d | sudo kubectl exec -i -n $($pod.ns) $($pod.name) -- psql -U dune -d dune -p $port -v ON_ERROR_STOP=1 $flags 2>&1"
     $out = Invoke-V6Ssh -Ip $Ip -Cmd $cmd -TimeoutSec $TimeoutSec -StdinData $b64
     return ($out -join "`n")
 }
