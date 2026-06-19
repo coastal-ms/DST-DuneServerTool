@@ -90,6 +90,12 @@ const ogImg = new URL(ogImage ?? `${base}og.png`, Astro.site).toString();
             rel="noopener"
             target="_blank">Report Issue</a
           >
+          <a
+            href="https://discord.gg/tj2x7cywSC"
+            class="text-dune-accent hover:text-dune-accent-soft transition-colors"
+            rel="noopener"
+            target="_blank">Discord</a
+          >
         </nav>
       </div>
     </header>
@@ -113,8 +119,13 @@ const ogImg = new URL(ogImage ?? `${base}og.png`, Astro.site).toString();
           > license.
         </div>
         <div class="font-mono text-xs">
-          by Coastal · Discord
-          <span class="text-dune-text">@allcoast</span>
+          by Coastal ·
+          <a
+            href="https://discord.gg/tj2x7cywSC"
+            class="text-dune-text underline decoration-dotted hover:text-dune-accent"
+            rel="noopener"
+            target="_blank">Join the Discord</a
+          >
         </div>
       </div>
     </footer>

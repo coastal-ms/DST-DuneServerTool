@@ -761,6 +761,20 @@ sitting at your desk.
 
 ---
 
+## Community & support
+
+Join the **DST community Discord** for install/setup help, hosting and
+networking questions, Game Config tips, release announcements, and general
+chat with other self-hosters:
+
+> 👉 [**Join the DST Discord**](https://discord.gg/tj2x7cywSC)
+
+It's the best place for "how do I…" questions and hosting help. For anything
+that needs a code fix, please still open a GitHub issue (below) so it's
+tracked publicly.
+
+---
+
 ## Reporting issues
 
 Hit a bug, error, or unexpected behavior? **Please open a GitHub issue**
@@ -785,9 +799,10 @@ pre-fills most of this for you and opens the GitHub form in your browser.
 **Sanitize first** — remove IPs, hostnames, usernames, and any key file
 contents before submitting.
 
-Discord pings to `@allcoast` are fine for quick questions, but use the
-issue tracker for anything that needs a fix — it keeps the history public
-so other admins can find the same answer.
+Quick questions are also welcome in the [DST community
+Discord](https://discord.gg/tj2x7cywSC), but use the issue tracker for
+anything that needs a fix — it keeps the history public so other admins can
+find the same answer.
 
 ---
 
