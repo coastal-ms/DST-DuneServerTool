@@ -217,7 +217,7 @@ export function PublicIpCard() {
             <input
               type="text"
               value={hostname}
-              placeholder="dunecoastal.myvnc.com"
+              placeholder="your-server.ddns.net"
               onChange={e => { setHostname(e.target.value); clearValidation() }}
               className="flex-1 min-w-0 px-3 py-2 rounded-lg bg-surface-2 border border-border text-text font-mono text-sm placeholder:text-text-dim focus:outline-none focus:ring-2 focus:ring-ibad focus:border-ibad/50"
             />
@@ -234,7 +234,7 @@ export function PublicIpCard() {
             <input
               type="text"
               value={manualIp}
-              placeholder="50.123.76.96"
+              placeholder="8.8.8.8"
               onChange={e => { setManualIp(e.target.value); clearValidation() }}
               className="flex-1 min-w-0 px-3 py-2 rounded-lg bg-surface-2 border border-border text-text font-mono text-sm placeholder:text-text-dim focus:outline-none focus:ring-2 focus:ring-ibad focus:border-ibad/50"
             />
