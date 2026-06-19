@@ -1,0 +1,113 @@
+---
+import Base from "../layouts/Base.astro";
+import PageHeader from "../components/PageHeader.astro";
+
+const invite = "https://discord.gg/tj2x7cywSC";
+
+const categories = [
+  {
+    name: "Information",
+    body: "Welcome & rules, announcements, releases, and a rolling changelog — new builds are posted here automatically.",
+  },
+  {
+    name: "DST Support",
+    body: "Install & setup, hosting help, Game Config & Landsraad, Gameplay Admin, Market Bot, Cheat Scripts, plus bug-report and feature-request channels.",
+  },
+  {
+    name: "Server Admins",
+    body: "A space for verified self-hosters to swap configs, show off their servers, and coordinate Landsraad events.",
+  },
+  {
+    name: "Community",
+    body: "General chat, introductions, screenshots & clips, and off-topic — hang out with other Dune: Awakening hosts.",
+  },
+];
+
+const helpTopics = [
+  "Installing DST and first-run setup",
+  "Port forwarding, public IP / DDNS, and firewall issues",
+  "Game Config & Landsraad tweaks",
+  "Gameplay Admin, Market Bot, and Cheat Scripts",
+  "General Dune: Awakening dedicated-server questions",
+];
+---
+
+<Base
+  title="Community — DST"
+  description="Join the DST community Discord for install, hosting, and Game Config help, plus release news and chat with other Dune: Awakening self-hosters."
+>
+  <PageHeader
+    eyebrow="Community"
+    title="The DST community"
+    intro="A Discord server for everyone running a self-hosted Dune: Awakening dedicated server with DST — the place to go for help, tips, and release news."
+  />
+
+  <section class="mx-auto max-w-6xl px-6 pb-10">
+    <div
+      class="rounded-xl border border-dune-accent/40 bg-dune-accent/5 p-8 sm:p-10 sm:flex sm:items-center sm:justify-between gap-8"
+    >
+      <div>
+        <h2 class="text-2xl font-semibold mb-2">Get help &amp; hang out</h2>
+        <p class="text-dune-muted leading-relaxed max-w-2xl">
+          Ask install, hosting, and Game Config questions, share configs and
+          screenshots, and get notified the moment a new release drops. It's
+          free and open to everyone.
+        </p>
+      </div>
+      <div class="mt-6 sm:mt-0 shrink-0">
+        <a
+          href={invite}
+          rel="noopener"
+          target="_blank"
+          class="inline-flex items-center gap-2 rounded-lg bg-dune-accent hover:bg-dune-accent-soft text-dune-bg font-medium px-6 py-3 transition-colors"
+        >
+          Join the Discord →
+        </a>
+      </div>
+    </div>
+  </section>
+
+  <section class="mx-auto max-w-6xl px-6 py-8">
+    <h2 class="text-2xl font-semibold mb-6">What you'll find inside</h2>
+    <div class="grid sm:grid-cols-2 gap-6">
+      {
+        categories.map((c) => (
+          <div class="rounded-lg border border-dune-border bg-dune-surface p-6">
+            <h3 class="text-lg font-semibold text-dune-text mb-2">{c.name}</h3>
+            <p class="text-sm text-dune-muted leading-relaxed">{c.body}</p>
+          </div>
+        ))
+      }
+    </div>
+  </section>
+
+  <section class="mx-auto max-w-6xl px-6 py-8">
+    <div class="rounded-xl border border-dune-border bg-dune-surface p-8 sm:p-10">
+      <h2 class="text-2xl font-semibold mb-4">Great for getting help with</h2>
+      <div class="grid sm:grid-cols-2 gap-x-12 gap-y-3 text-dune-muted">
+        {helpTopics.map((t) => <div>✓ {t}</div>)}
+      </div>
+      <p class="mt-8 text-sm text-dune-muted leading-relaxed border-t border-dune-border pt-6">
+        Found a reproducible bug? Please open a
+        <a
+          href="https://github.com/coastal-ms/DST-DuneServerTool/issues/new/choose"
+          rel="noopener"
+          class="text-dune-accent hover:text-dune-accent-soft"
+          >GitHub issue</a
+        > so it can be tracked and fixed — the Discord is best for questions and
+        chat, the issue tracker for anything that needs a code change.
+      </p>
+    </div>
+  </section>
+
+  <section class="mx-auto max-w-6xl px-6 pb-20">
+    <a
+      href={invite}
+      rel="noopener"
+      target="_blank"
+      class="inline-flex items-center gap-2 rounded-lg bg-dune-accent hover:bg-dune-accent-soft text-dune-bg font-medium px-6 py-3 transition-colors"
+    >
+      Join the DST Discord →
+    </a>
+  </section>
+</Base>

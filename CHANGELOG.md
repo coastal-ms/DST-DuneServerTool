@@ -18,9 +18,10 @@ here cover everything those tags shipped.
 - **Community Discord.** A new **Discord** link in the app menu bar (next to
   Website) and in the **Help** menu opens the DST community server for
   install/setup help, hosting questions, Game Config tips, and release
-  announcements. The marketing site (header, homepage Community section,
-  About page, footer), README, and the issue-template chooser link to it as
-  well.
+  announcements. The marketing site gains a dedicated **Community** page
+  (linked from the header nav), plus a homepage Community section, an About
+  page link, and a footer link; the README and issue-template chooser link to
+  it as well.
 
 ## [12.8.2] - 2026-06-19
 
