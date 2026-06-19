@@ -1050,11 +1050,15 @@ function Get-DuneGameConfig {
 # $DuneServerNameTtlSecs so the frequent status poll repaints from cache; -Force
 # re-reads (used by the manual refresh).
 function Get-DuneServerName {
-    param([switch]$Force)
+    param([switch]$Force, [switch]$CachedOnly)
 
     $age = ([datetime]::UtcNow - $script:DuneServerNameFetched).TotalSeconds
     if (-not $Force -and $script:DuneServerNameCache -ne $null -and $age -lt $script:DuneServerNameTtlSecs) {
         return $script:DuneServerNameCache
+    }
+    if ($CachedOnly) {
+        if ($script:DuneServerNameCache) { return $script:DuneServerNameCache }
+        return ''
     }
 
     $name = ''

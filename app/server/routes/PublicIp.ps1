@@ -25,6 +25,14 @@ Register-DuneRoute -Method POST -Path '/api/public-ip/resolve' -Handler {
     Write-DuneJson -Response $res -Body @{ ok=$true; hostname=$r.hostname; publicIp=$r.publicIp; candidates=@($r.candidates) }
 }
 
+Register-DuneRoute -Method POST -Path '/api/public-ip/hostname' -Handler {
+    param($req, $res, $routeParams, $body)
+    $hostname = [string](Get-DunePublicIpBodyValue -Body $body -Name 'hostname' -Default '')
+    $r = Save-DunePublicIpHostname -Hostname $hostname
+    if (-not $r.ok) { Write-DuneError -Response $res -Status ([int]$r.status) -Message $r.message; return }
+    Write-DuneJson -Response $res -Body @{ ok=$true; hostname=$r.hostname }
+}
+
 Register-DuneRoute -Method POST -Path '/api/public-ip/validate' -Handler {
     param($req, $res, $routeParams, $body)
     $publicIp = [string](Get-DunePublicIpBodyValue -Body $body -Name 'publicIp' -Default '')

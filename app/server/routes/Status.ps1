@@ -10,7 +10,7 @@ Register-DuneRoute -Method GET -Path '/api/status' -Handler {
     try { $ports = Get-DunePortStatus } catch { $ports = $null }
     $serverName = ''
     if ($vm.running -and (Get-Command Get-DuneServerName -ErrorAction SilentlyContinue)) {
-        try { $serverName = Get-DuneServerName } catch { $serverName = '' }
+        try { $serverName = Get-DuneServerName -CachedOnly } catch { $serverName = '' }
     }
     Write-DuneJson -Response $res -Body @{
         vm         = $vm
@@ -27,7 +27,7 @@ Register-DuneRoute -Method POST -Path '/api/status/refresh' -Handler {
     $vm = Get-DuneVmStatus
     $bg = $null
     if ($vm.running) {
-        try { $bg = Get-DuneBattlegroupSnapshot } catch { $bg = @{ available=$false; reason=$_.Exception.Message } }
+        try { $bg = Get-DuneBattlegroupSnapshot -Force } catch { $bg = @{ available=$false; reason=$_.Exception.Message } }
     }
     $ports = $null
     try { $ports = Get-DunePortStatus -Force } catch { $ports = $null }

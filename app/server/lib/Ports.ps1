@@ -100,22 +100,20 @@ function Get-DunePortStatus {
         return @{ mode = $mode; publicIp = $null; results = @() }
     }
 
-    $pubIp = Get-DunePublicIp
     $now   = Get-Date
-    $cacheAgeOk = $script:DunePortCheckCache -and
-                  ($script:DunePortCheckPubIp -eq $pubIp) -and
-                  (($now - $script:DunePortCheckFetched).TotalSeconds -lt $script:DunePortCheckTtlSecs)
-
-    if (-not $Force.IsPresent -and $cacheAgeOk) {
+    if (-not $Force.IsPresent -and
+        $script:DunePortCheckCache -and
+        (($now - $script:DunePortCheckFetched).TotalSeconds -lt $script:DunePortCheckTtlSecs)) {
         return @{
             mode      = $mode
-            publicIp  = $pubIp
+            publicIp  = $script:DunePortCheckPubIp
             results   = $script:DunePortCheckCache
             cached    = $true
             ageSecs   = [int]($now - $script:DunePortCheckFetched).TotalSeconds
         }
     }
 
+    $pubIp = Get-DunePublicIp
     $results = @()
     foreach ($p in $script:DuneRequiredPorts) {
         $status = switch ($mode) {

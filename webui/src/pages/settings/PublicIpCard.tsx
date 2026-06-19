@@ -35,6 +35,11 @@ type ValidateResponse = {
   publicIp: string
 }
 
+type SaveHostnameResponse = {
+  ok: boolean
+  hostname: string
+}
+
 type ApplyResponse = {
   ok: boolean
   publicIp: string
@@ -56,7 +61,7 @@ export function PublicIpCard() {
   const [manualIp, setManualIp] = useState('')
   const [targetIp, setTargetIp] = useState('')
   const [validatedInput, setValidatedInput] = useState('')
-  const [working, setWorking] = useState<'resolve' | 'validate' | 'apply' | null>(null)
+  const [working, setWorking] = useState<'resolve' | 'save-hostname' | 'validate' | 'apply' | null>(null)
   const [message, setMessage] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [steps, setSteps] = useState<PublicIpStep[]>([])
@@ -105,6 +110,25 @@ export function PublicIpCard() {
       setTargetIp(r.publicIp)
       setValidatedInput(r.hostname)
       setMessage(`${r.hostname} resolves to ${r.publicIp}.`)
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e))
+    } finally {
+      setWorking(null)
+    }
+  }
+
+  async function saveHostname() {
+    setWorking('save-hostname')
+    setError(null)
+    setMessage(null)
+    try {
+      const r = await api<SaveHostnameResponse>('/api/public-ip/hostname', {
+        method: 'POST',
+        body: JSON.stringify({ hostname }),
+      })
+      setHostname(r.hostname)
+      setStatus(prev => prev ? { ...prev, mode: 'ddns', hostname: r.hostname } : prev)
+      setMessage(`Saved ${r.hostname} for future public IP changes.`)
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e))
     } finally {
@@ -221,6 +245,10 @@ export function PublicIpCard() {
               onChange={e => { setHostname(e.target.value); clearValidation() }}
               className="flex-1 min-w-0 px-3 py-2 rounded-lg bg-surface-2 border border-border text-text font-mono text-sm placeholder:text-text-dim focus:outline-none focus:ring-2 focus:ring-ibad focus:border-ibad/50"
             />
+            <button type="button" onClick={() => void saveHostname()} disabled={working !== null || !hostname.trim()} className="btn-secondary shrink-0">
+              <Icon name={working === 'save-hostname' ? 'Loader2' : 'Save'} size={15} className={working === 'save-hostname' ? 'animate-spin' : ''} />
+              Save
+            </button>
             <button type="button" onClick={() => void resolveHostname()} disabled={working !== null || !hostname.trim()} className="btn-secondary shrink-0">
               <Icon name={working === 'resolve' ? 'Loader2' : 'Search'} size={15} className={working === 'resolve' ? 'animate-spin' : ''} />
               Resolve hostname
