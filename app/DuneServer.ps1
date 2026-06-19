@@ -551,6 +551,13 @@ $script:DuneServerDir = $serverDir
 $duneLogFile = Join-Path $serverDir 'lib\DuneLog.ps1'
 if (Test-Path -LiteralPath $duneLogFile) { . $duneLogFile }
 
+# Load Platform next so the OS predicates ($script:DuneIsWindows etc. +
+# Test-DuneIsWindows/Linux) are available to every subsequent loader. It is also
+# re-dot-sourced by the lib loop below and by the HttpServer worker runspaces;
+# the file only defines functions + sets idempotent script vars, so that's safe.
+$dunePlatformFile = Join-Path $serverDir 'lib\Platform.ps1'
+if (Test-Path -LiteralPath $dunePlatformFile) { . $dunePlatformFile }
+
 $script:DuneLogFilePath = Join-Path $env:LOCALAPPDATA 'DuneServer\dune-server.log'
 Initialize-DuneLog -Path $script:DuneLogFilePath
 

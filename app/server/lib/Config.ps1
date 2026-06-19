@@ -20,7 +20,14 @@ $script:DuneConfigKeys = @(
     'MarketBotAddr',
     'MarketBotToken',
     'DecoupleNoticeAck',
-    'ClientConfigPath'
+    'ClientConfigPath',
+    # Cross-platform / Linux libvirt settings. Unused on Windows (Hyper-V is
+    # discovered by name); on Linux they drive the libvirt VM provider.
+    'VmName',          # libvirt domain / Hyper-V VM name (default: dune-awakening)
+    'ServerHost',      # explicit server IP/hostname; when set, DST manages this
+                       # host over SSH directly and skips VM discovery (remote or
+                       # always-on box). Linux only.
+    'LibvirtUri'       # libvirt connection URI (default: qemu:///system). Linux only.
 )
 
 # Keys that ONLY a pre-decouple (<= 11.4.13) build ever wrote into

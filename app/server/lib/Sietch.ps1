@@ -40,17 +40,13 @@ function Get-DuneSietchContext {
 }
 
 function _Get-DuneVmAssignedRamGB {
-    try {
-        $vm = Get-VM -Name 'dune-awakening' -ErrorAction Stop
-        return [math]::Round($vm.MemoryAssigned / 1GB, 1)
-    } catch { return 0 }
+    # Platform-neutral (Hyper-V MemoryAssigned / libvirt dominfo). 0 when unknown.
+    try { return [double](Get-DuneVmInfo).assignedRamGB } catch { return 0 }
 }
 
 function _Get-DuneHostRamGB {
-    try {
-        $cs = Get-CimInstance Win32_ComputerSystem -ErrorAction Stop
-        return [math]::Round($cs.TotalPhysicalMemory / 1GB, 1)
-    } catch { return 0 }
+    # Platform-neutral (Win32_ComputerSystem / /proc/meminfo). 0 when unknown.
+    return (Get-DuneHostRamGB)
 }
 
 function Get-DuneSietchOverview {

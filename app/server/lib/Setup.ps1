@@ -10,31 +10,78 @@ function Get-DuneSetupPreflight {
     )
     $checks = [System.Collections.Generic.List[object]]::new()
 
-    # 1. Administrator
-    $isAdmin = $false
-    try {
-        $id = [Security.Principal.WindowsIdentity]::GetCurrent()
-        $isAdmin = ([Security.Principal.WindowsPrincipal]$id).IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)
-    } catch { }
-    $checks.Add(@{
-        key      = 'admin'
-        label    = 'Administrator privileges'
-        ok       = [bool]$isAdmin
-        severity = if ($isAdmin) { 'ok' } else { 'error' }
-        detail   = if ($isAdmin) { 'Dune Server is running elevated.' } else { 'Hyper-V cmdlets require admin. Relaunch with elevation.' }
-        fix      = if ($isAdmin) { $null } else { "Close the tool, then relaunch it elevated:`nStart-Process 'C:\Program Files\Dune Server\DuneServer.exe' -Verb RunAs" }
-    }) | Out-Null
+    $onWindows = Test-DuneIsWindows
+    # When the operator points DST at an existing/remote host over SSH, no local
+    # hypervisor is needed at all, so the virtualization checks soften to 'info'.
+    $serverHostSet = $false
+    try { $serverHostSet = [bool](Read-DuneConfig).ServerHost } catch { }
 
-    # 2. Hyper-V module
-    $hvOk = [bool](Get-Command Get-VM -ErrorAction SilentlyContinue)
-    $checks.Add(@{
-        key      = 'hyperv'
-        label    = 'Hyper-V PowerShell module'
-        ok       = $hvOk
-        severity = if ($hvOk) { 'ok' } else { 'error' }
-        detail   = if ($hvOk) { 'Get-VM cmdlet is available.' } else { 'Hyper-V module not installed. Enable Hyper-V via Windows Features.' }
-        fix      = if ($hvOk) { $null } else { "Run in an elevated PowerShell, then reboot when prompted:`nEnable-WindowsOptionalFeature -Online -FeatureName Microsoft-Hyper-V -All" }
-    }) | Out-Null
+    if ($onWindows) {
+        # 1. Administrator (Hyper-V needs elevation)
+        $isAdmin = $false
+        try {
+            $id = [Security.Principal.WindowsIdentity]::GetCurrent()
+            $isAdmin = ([Security.Principal.WindowsPrincipal]$id).IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)
+        } catch { }
+        $checks.Add(@{
+            key      = 'admin'
+            label    = 'Administrator privileges'
+            ok       = [bool]$isAdmin
+            severity = if ($isAdmin) { 'ok' } else { 'error' }
+            detail   = if ($isAdmin) { 'Dune Server is running elevated.' } else { 'Hyper-V cmdlets require admin. Relaunch with elevation.' }
+            fix      = if ($isAdmin) { $null } else { "Close the tool, then relaunch it elevated:`nStart-Process 'C:\Program Files\Dune Server\DuneServer.exe' -Verb RunAs" }
+        }) | Out-Null
+
+        # 2. Hyper-V module
+        $hvOk = [bool](Get-Command Get-VM -ErrorAction SilentlyContinue)
+        $checks.Add(@{
+            key      = 'hyperv'
+            label    = 'Hyper-V PowerShell module'
+            ok       = $hvOk
+            severity = if ($hvOk) { 'ok' } else { 'error' }
+            detail   = if ($hvOk) { 'Get-VM cmdlet is available.' } else { 'Hyper-V module not installed. Enable Hyper-V via Windows Features.' }
+            fix      = if ($hvOk) { $null } else { "Run in an elevated PowerShell, then reboot when prompted:`nEnable-WindowsOptionalFeature -Online -FeatureName Microsoft-Hyper-V -All" }
+        }) | Out-Null
+    } else {
+        # 1. libvirt access (Linux): no root needed — membership in the 'libvirt'
+        #    (or 'kvm') group grants access to qemu:///system. Root also works.
+        $inLibvirtGroup = $false
+        try {
+            $groups = (& id -nG 2>$null) -split '\s+'
+            $inLibvirtGroup = ($groups -contains 'libvirt') -or ($groups -contains 'kvm') -or ($groups -contains 'libvirtd')
+        } catch { }
+        $isRoot = $false
+        try { $isRoot = ((& id -u 2>$null) -as [int]) -eq 0 } catch { }
+        $privOk = $inLibvirtGroup -or $isRoot -or $serverHostSet
+        $checks.Add(@{
+            key      = 'admin'
+            label    = 'libvirt access'
+            ok       = [bool]$privOk
+            severity = if ($privOk) { 'ok' } elseif ($serverHostSet) { 'info' } else { 'warning' }
+            detail   = if ($serverHostSet) { 'Managing an existing host over SSH (ServerHost set); local libvirt access not required.' }
+                       elseif ($privOk) { 'You can reach the local libvirt daemon (group membership or root).' }
+                       else { "Your user isn't in the 'libvirt' group, so DST can't manage a local KVM VM. Add yourself and re-login." }
+            fix      = if ($privOk) { $null } else { "sudo usermod -aG libvirt `$USER   # then log out and back in" }
+        }) | Out-Null
+
+        # 2. libvirt + KVM (Linux): the Hyper-V equivalent.
+        $virshOk = [bool](Get-Command virsh -ErrorAction SilentlyContinue)
+        $kvmOk   = Test-Path '/dev/kvm'
+        $virtOk  = ($virshOk -and $kvmOk) -or $serverHostSet
+        $checks.Add(@{
+            key      = 'hyperv'
+            label    = 'libvirt / KVM'
+            ok       = [bool]$virtOk
+            severity = if ($virtOk) { 'ok' } elseif ($serverHostSet) { 'info' } else { 'error' }
+            detail   = if ($serverHostSet) { 'ServerHost is set — DST will manage that host over SSH; no local hypervisor needed.' }
+                       elseif ($virtOk) { "virsh is available and /dev/kvm is present." }
+                       elseif (-not $virshOk) { 'virsh (libvirt-clients) not found. Install it, or set ServerHost to manage an existing host over SSH.' }
+                       else { '/dev/kvm not present — KVM acceleration unavailable (BIOS virtualization off, or no nested virt).' }
+            fix      = if ($virtOk) { $null }
+                       elseif (-not $virshOk) { 'sudo apt install libvirt-daemon-system libvirt-clients qemu-system-x86' }
+                       else { 'Enable virtualization (VT-x/AMD-V) in your BIOS/UEFI, then reboot.' }
+        }) | Out-Null
+    }
 
     # 2b. OpenSSH client — DST shells out to ssh.exe for EVERY VM operation
     #     (status probes, server health, game data, key rotation). Missing on
@@ -46,8 +93,12 @@ function Get-DuneSetupPreflight {
         label    = 'OpenSSH client (ssh)'
         ok       = $sshOk
         severity = if ($sshOk) { 'ok' } else { 'error' }
-        detail   = if ($sshOk) { 'ssh.exe is on PATH — DST can reach the VM.' } else { 'The OpenSSH client is required for DST to reach the server over SSH. Install the Windows "OpenSSH Client" optional feature.' }
-        fix      = if ($sshOk) { $null } else { "Run in an elevated PowerShell:`nAdd-WindowsCapability -Online -Name OpenSSH.Client~~~~0.0.1.0" }
+        detail   = if ($sshOk) { 'ssh is on PATH — DST can reach the server.' }
+                   elseif ($onWindows) { 'The OpenSSH client is required for DST to reach the server over SSH. Install the Windows "OpenSSH Client" optional feature.' }
+                   else { 'The OpenSSH client is required for DST to reach the server over SSH.' }
+        fix      = if ($sshOk) { $null }
+                   elseif ($onWindows) { "Run in an elevated PowerShell:`nAdd-WindowsCapability -Online -Name OpenSSH.Client~~~~0.0.1.0" }
+                   else { 'sudo apt install openssh-client' }
     }) | Out-Null
 
     # 3. Disk space (system drive)
@@ -61,9 +112,21 @@ function Get-DuneSetupPreflight {
     $freeGB = 0
     $diskQueried = $false
     try {
-        $sysDrive = Get-PSDrive -PSProvider FileSystem -ErrorAction Stop |
-                    Where-Object { $_.Name -eq ($env:SystemDrive[0]) } |
-                    Select-Object -First 1
+        if ($onWindows) {
+            $sysDrive = Get-PSDrive -PSProvider FileSystem -ErrorAction Stop |
+                        Where-Object { $_.Name -eq ($env:SystemDrive[0]) } |
+                        Select-Object -First 1
+        } else {
+            # Free space on the filesystem holding the state dir (defaults to /home or /).
+            $stateDir = if (Get-Command Get-DuneStateDir -ErrorAction SilentlyContinue) { Get-DuneStateDir } else { $env:HOME }
+            $sysDrive = Get-PSDrive -PSProvider FileSystem -ErrorAction Stop |
+                        Where-Object { $_.Root -and ($stateDir -like ($_.Root + '*')) } |
+                        Sort-Object { $_.Root.Length } -Descending | Select-Object -First 1
+            if (-not $sysDrive) {
+                $sysDrive = Get-PSDrive -PSProvider FileSystem -ErrorAction Stop |
+                            Where-Object { $_.Root -eq '/' } | Select-Object -First 1
+            }
+        }
         if ($sysDrive) {
             $diskQueried = $true
             $freeGB = [math]::Round(($sysDrive.Free / 1GB), 1)

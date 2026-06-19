@@ -1,22 +1,23 @@
 Package: dune-server
-Version: 12.0.24
+Version: 12.8.2
 Section: games
 Priority: optional
 Architecture: all
 Depends: powershell (>= 7.4), openssh-client, xdg-utils
-Recommends: postgresql-client, jq
-Suggests: rabbitmq-server
+Recommends: postgresql-client, jq, python3-gi, gir1.2-webkit2-4.1, gir1.2-gtk-3.0, libvirt-clients
+Suggests: rabbitmq-server, libvirt-daemon-system, qemu-system-x86
 Maintainer: Coastal <coastal-ms@users.noreply.github.com>
 Homepage: https://github.com/coastal-ms/DST-DuneServerTool
-Description: Self-hosted Dune: Awakening server management portal (Linux scaffold)
+Description: Self-hosted Dune: Awakening server management portal
  Dune Server Tool (DST) is a self-hosted management portal for the Dune:
  Awakening dedicated server. It runs a local PowerShell + Vite web UI on
- 127.0.0.1 with a per-launch tokenized URL.
+ 127.0.0.1 with a per-launch tokenized URL, served either in your browser or
+ in a native GTK desktop window (the Recommends pull in WebKitGTK for that).
  .
- This .deb is an UNTESTED handoff scaffold of the Linux port. The PowerShell
- backend, web UI, and SSH paths come over from the Windows build largely
- unchanged; Hyper-V-dependent routes (local VM dashboard, sietch resize)
- will return graceful "not supported on Linux" responses at runtime.
+ The PowerShell backend, web UI, and SSH/kubectl management come over from the
+ Windows build and run under pwsh. Where Windows uses Hyper-V to host the
+ server VM, the Linux build uses libvirt/KVM (install the Suggests), or you can
+ point DST at an existing server over SSH (set ServerHost in dune-server.config)
+ and skip local virtualization entirely.
  .
- See /opt/dune-server/LINUX-PORT-STATUS.md for what works, what's stubbed,
- and where to start fixing things up.
+ See /opt/dune-server/LINUX-PORT-STATUS.md for the current state of the port.

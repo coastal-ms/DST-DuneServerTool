@@ -1,179 +1,118 @@
-# Linux port — handoff status
+# Linux support — status
 
-> **This is an untested scaffold, not a working Linux port.** It exists so
-> someone other than the current Windows maintainer can pick the Linux build
-> up without starting from a blank repo. Expect bugs on first run; some
-> features will return graceful "not supported on Linux" responses and a few
-> will straight up throw.
+> **DST now runs on Linux.** The PowerShell backend runs under `pwsh`, the
+> portal is served to your browser or a **native GTK window**, the Hyper-V layer
+> is replaced by **libvirt/KVM** (or an SSH-reachable host), autostart uses
+> **systemd**, and the build ships a **.deb**. Every change is OS-guarded, so the
+> Windows build is unaffected — Windows and Linux run the same code.
 
-## Scope of this scaffold
+This replaces the original "untested scaffold" handoff. What follows is the
+current state, what's verified, and the few things that still need validation on
+real hardware.
 
-What was asked for: enough Linux scaffolding to hand the project to a Linux
-maintainer who wants to keep DST going on Ubuntu / Debian. Specifically:
+## How it runs
 
-- A Linux entrypoint that boots the existing PowerShell backend under `pwsh`.
-- A POSIX launcher (`bin/dune-server`) and a systemd user unit so the backend
-  can be started by hand or at login.
-- A `.deb` packaging script (`packaging/linux/build-deb.sh`) that produces a
-  single installable artifact for Debian / Ubuntu.
+Same architecture as Windows: a PowerShell backend (`System.Net.HttpListener`)
+hosts the React SPA on `127.0.0.1` with a per-launch tokenized URL. On Linux:
 
-What is explicitly **out of scope** for the scaffold:
+| Concern              | Windows                       | Linux                                            |
+|----------------------|-------------------------------|--------------------------------------------------|
+| Runtime              | ps2exe + `pwsh.exe`           | `pwsh` (PowerShell 7)                             |
+| Entry point          | `app/DuneServer.ps1`          | `app/DuneServer-Linux.ps1` (via `bin/dune-server`)|
+| UI surface           | WebView2 (`DuneShell.exe`)    | **GTK3 + WebKit2GTK** (`app/desktop/linux/dune-shell.py`), browser fallback |
+| Server VM            | Hyper-V (`Get-VM`, `Start/Stop-VM`) | **libvirt/KVM** (`virsh`), or an SSH host via `ServerHost` |
+| Host facts           | `Win32_ComputerSystem`        | `/proc/meminfo`                                  |
+| Autostart            | Task Scheduler (`--headless`) | **systemd `--user`** unit                        |
+| Config / state dirs  | `%APPDATA%` / `%LOCALAPPDATA%`| XDG (`~/.config`, `~/.local/state`) via env shim |
+| In-app update        | Downloads `DuneServerSetup.exe` | Reports the `apt` upgrade path                 |
 
-- No native shell (no Linux replacement for the WinForms + WebView2
-  `DuneShell.exe`). The Linux entrypoint opens the user's default browser via
-  `xdg-open`, full stop. A Tauri / WebKitGTK replacement is the obvious next
-  step but is not done here.
-- No CI matrix entry for Linux. The Windows-only `Build-Installer.ps1` and
-  `Build-Exe.ps1` are untouched.
-- No actual run on a Linux box. Nothing in this branch has been started.
+The cross-platform seam is `app/server/lib/Platform.ps1` (OS predicates) and
+`app/server/lib/VmProvider.ps1` (the VM abstraction). Every Windows code path is
+preserved verbatim behind `if (Test-DuneIsWindows) { … }`.
 
-## How the backend boots on Linux
+## Deployment models on Linux
 
-Entry point: `app/DuneServer-Linux.ps1` (run by `bin/dune-server`).
+The Dune dedicated server is Linux/k3s software. On Linux you have two ways to
+let DST reach it:
 
-The big simplification vs. `app/DuneServer.ps1`:
+1. **Local libvirt/KVM VM** — DST manages a KVM guest exactly like it manages a
+   Hyper-V VM on Windows (power on/off, read IP/RAM via `virsh`). Install
+   `libvirt-daemon-system libvirt-clients qemu-system-x86` and add yourself to
+   the `libvirt` group. The VM name comes from `VmName` in `dune-server.config`
+   (default `dune-awakening`); the libvirt URI from `LibvirtUri`
+   (default `qemu:///system`).
+2. **Existing / remote host over SSH** — set `ServerHost` in
+   `dune-server.config` to an IP or hostname and DST skips VM discovery
+   entirely, managing that host purely over SSH + kubectl. No local hypervisor
+   needed. Good for a remote box or native k3s.
 
-| Windows entry                         | Linux entry                       |
-|---------------------------------------|-----------------------------------|
-| Self-elevates for Hyper-V             | Skipped                           |
-| Minimizes own console via Win32       | Skipped                           |
-| Launches `DuneShell.exe` (WebView2)   | Opens browser via `xdg-open`      |
-| Reads `%LOCALAPPDATA%\DuneServer\…`   | XDG shim — see "compat shim" below |
-| Writes scheduled task for autostart   | systemd user unit                 |
+## Verified on Linux (Ubuntu 26.04, pwsh 7.6.3)
 
-### XDG compatibility shim
+- All 84 backend `.ps1` files + the CLI parse clean under `pwsh`.
+- The backend boots end-to-end: `bin/dune-server` binds `127.0.0.1`, serves the
+  portal (HTTP 200 on `/`, the tokened URL, and `/api/status`), and the **API
+  handler pool initializes** (2..16 runspaces) — concurrent requests succeed.
+- `VmProvider` Linux paths: host RAM from `/proc/meminfo`; `virsh`
+  domstate/domifaddr/dominfo parsers validated against real `virsh` output; the
+  `ServerHost` static-override path; clean, actionable errors when `virsh` is
+  absent.
+- Setup-wizard preflight reports libvirt/KVM, the `libvirt` group, `/dev/kvm`,
+  SSH, and disk correctly on Linux.
+- systemd autostart: `available` is true when `systemctl` is present; the user
+  unit is generated correctly; enable/disable wired to `systemctl --user`.
+- The GTK shell compiles, its widgets construct (GTK3 + WebKit2GTK 4.1), and its
+  URL/keep-alive helpers behave.
+- `scripts/linux-smoke.ps1` (parse + dot-source the whole backend) passes; CI
+  runs it on every PR (`.github/workflows/linux-smoke.yml`).
 
-The PowerShell backend has dozens of references like
-`Join-Path $env:APPDATA 'DuneServer'` and
-`Join-Path $env:LOCALAPPDATA 'DuneServer'`. Refactoring every one of them
-would touch most of `app/server/lib/` and `app/server/routes/` and risks
-breaking the Windows build.
+## Not yet validated on real hardware
 
-Instead, `DuneServer-Linux.ps1` rewrites the two env vars at startup so the
-existing paths still resolve to sensible Linux locations:
+- **libvirt VM power flows** (`Start-DuneVm`/`Stop-DuneVm` and the CLI's
+  start/stop/restart with the live counter): implemented against `virsh`
+  (`start` / graceful `shutdown` → forced `destroy`), but not exercised against
+  a live KVM domain. Search the code for `[Linux path: UNTESTED]`.
+- End-to-end battlegroup management over SSH against a real Dune server VM.
+- The GTK shell against a live portal session on a desktop (rendered offscreen
+  in CI only).
 
-```
-$env:APPDATA       -> $XDG_CONFIG_HOME or ~/.config       (config, JSON state)
-$env:LOCALAPPDATA  -> $XDG_STATE_HOME  or ~/.local/state  (logs, last-url)
-```
+## Install / run
 
-That makes the on-disk layout end up as:
-
-```
-~/.config/DuneServer/dune-server.config
-~/.config/DuneServer/item-packages.json
-~/.config/DuneServer/gameplay-bot.json
-~/.local/state/DuneServer/dune-server.log
-~/.local/state/DuneServer/last-url.txt
-```
-
-A clean follow-up is to introduce `Get-DuneConfigDir` / `Get-DuneStateDir`
-helpers and migrate callers off the env vars.
-
-## What we expect to work
-
-These are the parts that read as cross-platform-safe but **have not been run
-on Linux**:
-
-- `app/server/HttpServer.ps1` — `System.Net.HttpListener` works on
-  PowerShell 7 / Linux. Bound to `127.0.0.1` only, so no Windows-only URL
-  ACL setup is needed.
-- Route handlers that do nothing more than read / write JSON files under the
-  XDG dirs (item packages, gameplay bot config, broadcasts, links, catalog).
-- Anything that shells out to `ssh` / `ssh-keygen` (the lib code calls
-  `ssh-keygen` and `ssh` without an `.exe` suffix — Linux has both).
-- `app/lib/Db-Postgres.ps1` — uses `psql` via `Invoke-Expression`, no
-  Windows-specific path assumptions in the SQL paths themselves.
-- The webui (Vite build) — no Windows ties.
-
-## What we expect to fail or degrade
-
-- **Hyper-V routes** (`Status.ps1` → `Get-VM`, `Sietch.ps1` → `Get-VM` /
-  `Win32_ComputerSystem`, `Setup.ps1` preflight, etc.): on Linux the `Get-VM`
-  cmdlet does not exist, the try/catch catches the missing-command error,
-  and the routes return a "VM status unavailable" payload. The dashboard
-  will show empty / unknown VM state. The right long-term fix is libvirt
-  bindings or treating DST as a pure remote-SSH-only manager on Linux.
-- **Autostart route** (`app/server/lib/Autostart.ps1`): the existing code
-  already gates on `Test-DuneAutostartAvailable`, which returns `$false`
-  whenever the process isn't the compiled `.exe`. On Linux that's always
-  the case, so the Help → "Run at startup" toggle is reported as
-  unavailable. Use the systemd user unit instead.
-- **Backend-console show/hide** (`app/server/routes/Console.ps1`): same
-  story — `$script:DuneIsCompiledExe` is never set on Linux, so the route
-  reports `available: false`. Fine; there's no console window to manage.
-- **In-app updater** (`app/server/routes/Update.ps1`): hard-coded to download
-  and run `DuneServerSetup.exe`. On Linux it should be replaced with an
-  `apt install --reinstall dune-server` call (or just disabled). Currently
-  it will try to run the Inno installer and fail.
-- **`app/server/lib/MapSpinUp.ps1`** — there's a comment about ssh.exe arg
-  quoting; verify the same code path works when `ssh` is OpenSSH on Linux.
-  Looks correct on inspection, but unverified.
-- **`app/server/lib/Commands.ps1`** — invokes `pwsh.exe` by name in one
-  error path. Replace with `pwsh`.
-- **Diagnostics route** — the WebView2 registry probe in
-  `app/server/routes/Diagnostics.ps1` reads `HKLM:`/`HKCU:` which will fail
-  inside a `try`/`catch`. The diagnostic line will just be blank.
-
-## How to install / run
-
-### From source (quickest)
+### From source
 
 ```bash
-sudo apt install powershell openssh-client xdg-utils nodejs npm
+sudo apt install powershell openssh-client xdg-utils nodejs npm \
+                 python3-gi gir1.2-webkit2-4.1 gir1.2-gtk-3.0
+# optional, for a local KVM server VM:
+sudo apt install libvirt-daemon-system libvirt-clients qemu-system-x86
+sudo usermod -aG libvirt "$USER"   # then re-login
+
 cd webui && npm ci && npm run build && cd ..
 ./bin/dune-server
 ```
 
-The first run will:
-
-1. Create `~/.config/DuneServer/` and `~/.local/state/DuneServer/`.
-2. Bind `http://127.0.0.1:8765/` (next free port if 8765 is taken).
-3. Write the per-launch tokened URL to
-   `~/.local/state/DuneServer/last-url.txt`.
-4. `xdg-open` that URL.
-
-### From a .deb
-
-On a Debian / Ubuntu host (NOT Windows — `dpkg-deb` only):
+### From a .deb (Debian / Ubuntu)
 
 ```bash
 ./packaging/linux/build-deb.sh
-sudo apt install ./packaging/linux/output/dune-server_12.0.24_all.deb
+sudo apt install ./packaging/linux/output/dune-server_<version>_all.deb
 dune-server
 ```
 
-### Run at login
+### Autostart at login
+
+Toggle **Help → Run at startup** in the UI, or:
 
 ```bash
-mkdir -p ~/.config/systemd/user
-cp /opt/dune-server/packaging/linux/systemd/dune-server.service \
-   ~/.config/systemd/user/
-systemctl --user daemon-reload
 systemctl --user enable --now dune-server.service
 journalctl --user -u dune-server.service -f
 ```
 
-## What I'd hand to the next maintainer
+## Notes for maintainers
 
-In rough priority order:
-
-1. **Actually run it.** The scaffold has not been booted once. Expect at
-   least one path / module-load surprise.
-2. **Decide on the native shell story.** The Linux build is "open in default
-   browser" today. Either accept that forever, or scaffold a Tauri shell so
-   DST feels like an app on Linux too.
-3. **Refactor the XDG shim out.** Replace
-   `Join-Path $env:APPDATA 'DuneServer'` with a `Get-DuneConfigDir` helper
-   that does the right thing on both OSes, and remove the env-var rewrite
-   from `DuneServer-Linux.ps1`.
-4. **Decide what to do about Hyper-V.** Either gate the routes behind
-   `$IsWindows` and return a clean 501 with a "use a remote SSH-only
-   deployment on Linux" message, or write a libvirt equivalent of the
-   handful of `Get-VM` calls in `Status.ps1` / `Sietch.ps1`.
-5. **Wire `DuneServer-Linux.ps1` into the version-sync check** in
-   `app/installer/Build-Installer.ps1`. There are now six files that need to
-   agree on the release version; the script only checks five.
-6. **CI**: add an Ubuntu runner that at minimum dot-sources every `lib/*.ps1`
-   and `routes/*.ps1` under pwsh — the cheapest possible smoke test that
-   guards against future Windows-only top-level code creeping in.
+- Version is kept in lock-step across Windows and Linux: `Build-Installer.ps1`'s
+  version gate now checks `DuneServer-Linux.ps1` and `packaging/linux/debian/control`
+  too (7 stamps total).
+- The XDG env-var shim (`DuneServer-Linux.ps1`) is deliberate: it lets the ~46
+  `Join-Path $env:APPDATA 'DuneServer'` call sites resolve correctly on Linux
+  without a risky 46-site refactor. New code should prefer
+  `Get-DuneConfigDir` / `Get-DuneStateDir` from `Platform.ps1`.

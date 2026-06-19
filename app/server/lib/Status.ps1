@@ -52,29 +52,11 @@ function Get-DuneSshFailureReason {
 }
 
 function Get-DuneVmStatus {
-    try {
-        $vm = Get-VM -Name $script:DuneVmName -ErrorAction Stop
-        $ip = ($vm | Get-VMNetworkAdapter).IPAddresses |
-              Where-Object { $_ -match '^\d+\.\d+\.\d+\.\d+$' } | Select-Object -First 1
-        return @{
-            exists  = $true
-            name    = $script:DuneVmName
-            state   = $vm.State.ToString()
-            running = ($vm.State -eq 'Running')
-            ip      = $ip
-            uptime  = if ($vm.Uptime) { [int]$vm.Uptime.TotalSeconds } else { 0 }
-        }
-    } catch {
-        return @{
-            exists  = $false
-            name    = $script:DuneVmName
-            state   = 'NotFound'
-            running = $false
-            ip      = $null
-            uptime  = 0
-            error   = $_.Exception.Message
-        }
-    }
+    # The VM read is platform-specific (Hyper-V on Windows, libvirt on Linux, or
+    # a static ServerHost override). Get-DuneVmInfo (VmProvider.ps1) owns that
+    # branch and returns a superset of the keys this function historically did,
+    # so the route contract is unchanged on Windows.
+    return Get-DuneVmInfo
 }
 
 function Get-DuneBattlegroupSnapshotCacheEntry {

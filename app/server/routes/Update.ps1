@@ -200,6 +200,22 @@ Register-DuneRoute -Method POST -Path '/api/update/migration-notice/ack' -Handle
 # POST /api/update/install — download installer asset and run it silently
 Register-DuneRoute -Method POST -Path '/api/update/install' -Handler {
     param($req, $res, $routeParams, $body)
+    # On Linux the app is installed from a .deb, so in-app self-update would mean
+    # downloading and running a Windows installer (.exe) — which doesn't apply.
+    # Report the package-manager upgrade path instead of attempting it.
+    if ((Get-Command Test-DuneIsWindows -ErrorAction SilentlyContinue) -and -not (Test-DuneIsWindows)) {
+        $latest = $null
+        try { $rel = Get-DuneLatestRelease; if ($rel) { $latest = ($rel.tag -replace '^v','') } } catch {}
+        Write-DuneJson -Response $res -Body @{
+            launched        = $false
+            packageManaged  = $true
+            currentVersion  = $script:DuneToolVersion
+            latestVersion   = $latest
+            reason          = 'On Linux, update DST through your package manager rather than in-app.'
+            instructions    = 'sudo apt update && sudo apt install --only-upgrade dune-server   # or install the latest dune-server_*.deb from the Releases page'
+        }
+        return
+    }
     # Serialize installs: never let two update flows download + relaunch at once.
     $updLock = Get-DuneLock -Name 'update-install'
     if (-not $updLock.Wait(0)) {

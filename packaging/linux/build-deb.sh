@@ -57,6 +57,7 @@ trap 'rm -rf "$STAGE"' EXIT
 
 INSTALL_PREFIX="$STAGE/opt/dune-server"
 mkdir -p "$INSTALL_PREFIX/app" \
+         "$INSTALL_PREFIX/app/desktop/linux" \
          "$INSTALL_PREFIX/webui" \
          "$INSTALL_PREFIX/bin" \
          "$INSTALL_PREFIX/packaging/linux/systemd" \
@@ -70,6 +71,9 @@ cp -r "$REPO_ROOT/app/lib"      "$INSTALL_PREFIX/app/" 2>/dev/null || true
 cp -r "$REPO_ROOT/app/assets"   "$INSTALL_PREFIX/app/" 2>/dev/null || true
 cp    "$REPO_ROOT/app/DuneServer-Linux.ps1" "$INSTALL_PREFIX/app/"
 cp    "$REPO_ROOT/dune-server.ps1"          "$INSTALL_PREFIX/"
+
+# Native GTK desktop shell (the Linux counterpart to DuneShell.exe).
+cp    "$REPO_ROOT/app/desktop/linux/dune-shell.py" "$INSTALL_PREFIX/app/desktop/linux/"
 
 # Web UI
 cp -r "$REPO_ROOT/webui/dist"  "$INSTALL_PREFIX/webui/"
@@ -90,6 +94,7 @@ ln -s /opt/dune-server/bin/dune-server "$STAGE/usr/bin/dune-server"
 chmod 0755 "$INSTALL_PREFIX/bin/dune-server"
 find "$INSTALL_PREFIX/app" -name '*.ps1' -exec chmod 0644 {} \;
 chmod 0755 "$INSTALL_PREFIX/app/DuneServer-Linux.ps1"
+chmod 0755 "$INSTALL_PREFIX/app/desktop/linux/dune-shell.py"
 
 # ---------- DEBIAN/ metadata --------------------------------------------------
 cp "$DEBIAN_TEMPLATE/control"  "$STAGE/DEBIAN/control"

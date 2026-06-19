@@ -37,6 +37,9 @@ tmp/
 app/build/output/
 app/installer/output/
 
+# Linux .deb build output (built locally / in CI)
+packaging/linux/output/
+
 # Pre-redaction screenshot originals — contain real PII, never commit
 docs/img/_originals/
 

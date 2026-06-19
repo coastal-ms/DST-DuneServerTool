@@ -1,4 +1,9 @@
-#Requires -RunAsAdministrator
+# NOTE: the former `#Requires -RunAsAdministrator` pragma was replaced by the
+# runtime gate below. `#Requires -RunAsAdministrator` refuses to run under pwsh
+# on Linux (there is no Windows "Administrator" role), which blocked the Linux
+# port entirely. The gate preserves the exact Windows behaviour (refuse unless
+# elevated, for Hyper-V) while letting Linux through, where libvirt access comes
+# from 'libvirt' group membership rather than elevation.
 
 [CmdletBinding()]
 param(
@@ -22,6 +27,23 @@ param(
 # ============================================================
 
 $script:ToolVersion = "12.8.2"
+
+# Admin gate (replaces the former #Requires -RunAsAdministrator). On Windows the
+# tool drives Hyper-V and genuinely needs elevation; on Linux it does not.
+# Robust against Windows PowerShell 5.1, where $IsWindows is undefined.
+$script:DuneCliOnWindows = (-not (Test-Path variable:IsWindows)) -or $IsWindows
+if ($script:DuneCliOnWindows) {
+    $duneCliIsAdmin = $false
+    try {
+        $duneCliId = [System.Security.Principal.WindowsIdentity]::GetCurrent()
+        $duneCliPr = New-Object System.Security.Principal.WindowsPrincipal($duneCliId)
+        $duneCliIsAdmin = $duneCliPr.IsInRole([System.Security.Principal.WindowsBuiltInRole]::Administrator)
+    } catch { $duneCliIsAdmin = $false }
+    if (-not $duneCliIsAdmin) {
+        Write-Error 'Dune Server requires Administrator privileges (Hyper-V management). Re-run from an elevated PowerShell.'
+        exit 1
+    }
+}
 
 # Cold-boot readiness budgets (seconds). A fresh battlegroup's FIRST boot can
 # take 10-30 min: k3s + funcom-operators initialize, metrics-server restarts a
@@ -125,6 +147,71 @@ public static extern bool SetConsoleMode(System.IntPtr hConsoleHandle, uint dwMo
 Disable-DuneConsoleQuickEdit
 
 $scriptDir = Split-Path -Parent $MyInvocation.MyCommand.Path
+
+# ============================================================
+#  CROSS-PLATFORM VM LAYER  (Hyper-V on Windows, libvirt on Linux)
+# ============================================================
+# The VM power/read operations below run against Hyper-V on Windows and libvirt
+# (virsh) on Linux. The shared provider lives in app/server/lib so the CLI and
+# the web portal use one implementation. On Windows every wrapper executes the
+# ORIGINAL Hyper-V call verbatim, so Windows behaviour is unchanged.
+#
+# NOTE: the Linux/libvirt power paths are implemented but NOT yet validated
+# against a live libvirt domain (no KVM guest was available at port time).
+$script:DuneVmProviderReady = $false
+$duneCliLibDir = Join-Path $scriptDir 'app/server/lib'
+if (Test-Path -LiteralPath (Join-Path $duneCliLibDir 'VmProvider.ps1')) {
+    try {
+        . (Join-Path $duneCliLibDir 'Platform.ps1')
+        . (Join-Path $duneCliLibDir 'VmProvider.ps1')
+        $script:DuneVmProviderReady = $true
+    } catch { $script:DuneVmProviderReady = $false }
+}
+# Robust OS flag even if the provider failed to load (5.1 leaves $IsWindows unset).
+$script:DuneCliIsWindows = if (Get-Command Test-DuneIsWindows -ErrorAction SilentlyContinue) {
+    Test-DuneIsWindows
+} else {
+    (-not (Test-Path variable:IsWindows)) -or $IsWindows
+}
+
+# Start the VM and return once the hypervisor reports it; callers poll readiness.
+function Invoke-DuneVmStart {
+    param([Parameter(Mandatory)][string]$Name)
+    if ($script:DuneCliIsWindows) { Start-VM -Name $Name | Out-Null; return }
+    $r = Start-DuneVm -Name $Name
+    if (-not $r.ok) { throw "Failed to start VM '$Name': $($r.message)" }
+}
+
+# Stop the VM. Default = graceful (Hyper-V Stop-VM -Force / virsh shutdown).
+# -Hard = immediate power-off (Hyper-V -TurnOff / virsh destroy).
+function Invoke-DuneVmStop {
+    param([Parameter(Mandatory)][string]$Name, [switch]$Hard)
+    if ($script:DuneCliIsWindows) {
+        if ($Hard)  { Stop-VM -Name $Name -TurnOff -Force | Out-Null }
+        else        { Stop-VM -Name $Name -Force | Out-Null }
+        return
+    }
+    $r = Stop-DuneVm -Name $Name -Force:$Hard
+    if (-not $r.ok) { throw "Failed to stop VM '$Name': $($r.message)" }
+}
+
+function Test-DuneVmIsRunning {
+    param([Parameter(Mandatory)][string]$Name)
+    if ($script:DuneCliIsWindows) {
+        $vm = Get-VM -Name $Name -ErrorAction SilentlyContinue
+        return ([bool]$vm -and $vm.State -eq 'Running')
+    }
+    return [bool](Get-DuneVmInfo -Name $Name).running
+}
+
+function Get-DuneVmIp {
+    param([Parameter(Mandatory)][string]$Name)
+    if ($script:DuneCliIsWindows) {
+        return (Get-VMNetworkAdapter -VMName $Name).IPAddresses |
+               Where-Object { $_ -match '^\d+\.\d+\.\d+\.\d+$' } | Select-Object -First 1
+    }
+    return (Get-DuneVmInfo -Name $Name).ip
+}
 
 # ============================================================
 #  WRITABLE DATA DIRECTORY  (APPDATA migration)
@@ -627,17 +714,23 @@ function Invoke-WithLiveCounter {
 
 # --- Detect VM state ---
 function Get-VmInfo {
-    $vm = Get-VM -Name $vmName -ErrorAction SilentlyContinue
-    $exists  = [bool]$vm
-    $state   = if ($exists) { $vm.State } else { 'Missing' }
-    $running = $exists -and $vm.State -eq 'Running'
-    $ip      = $null
-    if ($running) {
-        $ip = (Get-VMNetworkAdapter -VMName $vmName).IPAddresses |
-              Where-Object { $_ -match '^\d+\.\d+\.\d+\.\d+$' } |
-              Select-Object -First 1
+    if ($script:DuneCliIsWindows) {
+        $vm = Get-VM -Name $vmName -ErrorAction SilentlyContinue
+        $exists  = [bool]$vm
+        $state   = if ($exists) { $vm.State } else { 'Missing' }
+        $running = $exists -and $vm.State -eq 'Running'
+        $ip      = $null
+        if ($running) {
+            $ip = (Get-VMNetworkAdapter -VMName $vmName).IPAddresses |
+                  Where-Object { $_ -match '^\d+\.\d+\.\d+\.\d+$' } |
+                  Select-Object -First 1
+        }
+        return @{ Exists = $exists; State = $state; Running = $running; Ip = $ip }
     }
-    return @{ Exists = $exists; State = $state; Running = $running; Ip = $ip }
+    # Linux / libvirt (or static ServerHost) via the shared provider.
+    $i = Get-DuneVmInfo -Name $vmName
+    $state = if ($i.exists) { $i.state } else { 'Missing' }
+    return @{ Exists = [bool]$i.exists; State = $state; Running = [bool]$i.running; Ip = $i.ip }
 }
 
 # Issue Stop-VM as a background job, render a live MM:SS counter while the VM
@@ -653,35 +746,58 @@ function Stop-VmWithEscalation {
         [int]$TotalSec = 240
     )
     $start = Get-Date
-    $jobs = @()
-    $jobs += Start-Job -ScriptBlock {
-        param($n) Stop-VM -Name $n -Force -ErrorAction SilentlyContinue
-    } -ArgumentList $Name
-    $escalated = $false
-    try {
+    if ($script:DuneCliIsWindows) {
+        # --- Hyper-V (original, verbatim) ---
+        $jobs = @()
+        $jobs += Start-Job -ScriptBlock {
+            param($n) Stop-VM -Name $n -Force -ErrorAction SilentlyContinue
+        } -ArgumentList $Name
+        $escalated = $false
+        try {
+            while ($true) {
+                $vm = Get-VM -Name $Name -ErrorAction SilentlyContinue
+                if (-not $vm -or $vm.State -eq 'Off') { break }
+                $elapsed = [int]((Get-Date) - $start).TotalSeconds
+                if (-not $escalated -and $elapsed -ge $GracefulSec) {
+                    Complete-WaitCounter -Message "Graceful shutdown still running after $(Format-Duration $elapsed) (state: $($vm.State)) - escalating to hard power-off." -Color Yellow
+                    $jobs += Start-Job -ScriptBlock {
+                        param($n) Stop-VM -Name $n -TurnOff -Force -ErrorAction SilentlyContinue
+                    } -ArgumentList $Name
+                    $escalated = $true
+                }
+                if ($elapsed -ge $TotalSec) {
+                    throw "VM '$Name' did not reach Off state within $(Format-Duration $elapsed) (last state: $($vm.State))."
+                }
+                Write-WaitCounter -Start $start -Label "$Label (state: $($vm.State))..." -EstimateText $EstimateText
+                Start-Sleep -Seconds 2
+            }
+        } finally {
+            foreach ($j in $jobs) {
+                try {
+                    Stop-Job -Job $j -ErrorAction SilentlyContinue | Out-Null
+                    Remove-Job -Job $j -Force -ErrorAction SilentlyContinue | Out-Null
+                } catch {}
+            }
+        }
+    } else {
+        # --- libvirt: virsh shutdown (graceful) then destroy (hard). virsh
+        # returns immediately, so we issue the signal and poll state directly
+        # rather than running it in a background job. [Linux path: UNTESTED] ---
+        Invoke-DuneVmStop -Name $Name          # graceful (virsh shutdown)
+        $escalated = $false
         while ($true) {
-            $vm = Get-VM -Name $Name -ErrorAction SilentlyContinue
-            if (-not $vm -or $vm.State -eq 'Off') { break }
+            if (-not (Test-DuneVmIsRunning -Name $Name)) { break }
             $elapsed = [int]((Get-Date) - $start).TotalSeconds
             if (-not $escalated -and $elapsed -ge $GracefulSec) {
-                Complete-WaitCounter -Message "Graceful shutdown still running after $(Format-Duration $elapsed) (state: $($vm.State)) - escalating to hard power-off." -Color Yellow
-                $jobs += Start-Job -ScriptBlock {
-                    param($n) Stop-VM -Name $n -TurnOff -Force -ErrorAction SilentlyContinue
-                } -ArgumentList $Name
+                Complete-WaitCounter -Message "Graceful shutdown still running after $(Format-Duration $elapsed) - escalating to hard power-off." -Color Yellow
+                Invoke-DuneVmStop -Name $Name -Hard   # virsh destroy
                 $escalated = $true
             }
             if ($elapsed -ge $TotalSec) {
-                throw "VM '$Name' did not reach Off state within $(Format-Duration $elapsed) (last state: $($vm.State))."
+                throw "VM '$Name' did not reach Off state within $(Format-Duration $elapsed)."
             }
-            Write-WaitCounter -Start $start -Label "$Label (state: $($vm.State))..." -EstimateText $EstimateText
+            Write-WaitCounter -Start $start -Label "$Label..." -EstimateText $EstimateText
             Start-Sleep -Seconds 2
-        }
-    } finally {
-        foreach ($j in $jobs) {
-            try {
-                Stop-Job -Job $j -ErrorAction SilentlyContinue | Out-Null
-                Remove-Job -Job $j -Force -ErrorAction SilentlyContinue | Out-Null
-            } catch {}
         }
     }
     return [int]((Get-Date) - $start).TotalSeconds
@@ -1215,8 +1331,8 @@ while ($true) {
 
     if ($cmdName -eq "start-vm") {
         Write-Host "Starting VM '$vmName'..." -ForegroundColor Cyan
-        Start-VM -Name $vmName | Out-Null
-        do { Start-Sleep -Seconds 2; $vm = Get-VM -Name $vmName } while ($vm.State -ne 'Running')
+        Invoke-DuneVmStart -Name $vmName
+        do { Start-Sleep -Seconds 2 } while (-not (Test-DuneVmIsRunning -Name $vmName))
         Write-Host "VM started." -ForegroundColor Green
 
         $ip = $null; $timeout = 120; $elapsed = 0; $dots = 0
@@ -1224,8 +1340,7 @@ while ($true) {
             $dots = ($dots % 3) + 1
             Write-Host -NoNewline "`rWaiting for VM to acquire an IP address$('.' * $dots)   "
             Start-Sleep -Seconds 1; $elapsed += 1
-            $ip = (Get-VMNetworkAdapter -VMName $vmName).IPAddresses |
-                  Where-Object { $_ -match '^\d+\.\d+\.\d+\.\d+$' } | Select-Object -First 1
+            $ip = Get-DuneVmIp -Name $vmName
         }
         Write-Host ""
         if (-not $ip) { Write-Warning "Could not determine VM IP after $timeout seconds." }
@@ -1235,7 +1350,7 @@ while ($true) {
 
     if ($cmdName -eq "stop-vm") {
         Write-Host "Stopping VM '$vmName'..." -ForegroundColor Cyan
-        Stop-VM -Name $vmName -Force | Out-Null
+        Invoke-DuneVmStop -Name $vmName
         Write-Host "VM stopped." -ForegroundColor Green
         continue
     }
@@ -1261,8 +1376,8 @@ while ($true) {
             $estVm = Format-PhaseEstimate 'vm-start'
             if ($estVm) { Write-Host "  $estVm" -ForegroundColor DarkGray }
             $t_vm = Get-Date
-            Start-VM -Name $vmName | Out-Null
-            do { Start-Sleep -Seconds 2; $vm = Get-VM -Name $vmName } while ($vm.State -ne 'Running')
+            Invoke-DuneVmStart -Name $vmName
+            do { Start-Sleep -Seconds 2 } while (-not (Test-DuneVmIsRunning -Name $vmName))
             Save-PhaseTiming 'vm-start' ([int]((Get-Date) - $t_vm).TotalSeconds)
             $estIp = Format-PhaseEstimate 'vm-ip'
             $ipHint = if ($estIp) { " $estIp" } else { "" }
@@ -1274,8 +1389,7 @@ while ($true) {
                 $dots = ($dots % 3) + 1
                 Write-Host -NoNewline ("`r  Waiting for IP$('.' * $dots)   ")
                 Start-Sleep -Seconds 1; $elapsed += 1
-                $newIp = (Get-VMNetworkAdapter -VMName $vmName).IPAddresses |
-                          Where-Object { $_ -match '^\d+\.\d+\.\d+\.\d+$' } | Select-Object -First 1
+                $newIp = Get-DuneVmIp -Name $vmName
             }
             Write-Host ""
             if (-not $newIp) { Write-Warning "VM did not acquire IP within $(Format-Duration $timeout). Aborting."; continue }
@@ -1551,8 +1665,8 @@ while ($true) {
             continue
         }
         $t_vm = Get-Date
-        Start-VM -Name $vmName | Out-Null
-        do { Start-Sleep -Seconds 2; $vm = Get-VM -Name $vmName } while ($vm.State -ne 'Running')
+        Invoke-DuneVmStart -Name $vmName
+        do { Start-Sleep -Seconds 2 } while (-not (Test-DuneVmIsRunning -Name $vmName))
         Save-PhaseTiming 'vm-start' ([int]((Get-Date) - $t_vm).TotalSeconds)
         $estIp = Format-PhaseEstimate 'vm-ip'
         $ipHint = if ($estIp) { " $estIp" } else { "" }
@@ -1564,8 +1678,7 @@ while ($true) {
             $dots = ($dots % 3) + 1
             Write-Host -NoNewline ("`r  Waiting for IP$('.' * $dots)   ")
             Start-Sleep -Seconds 1; $elapsed += 1
-            $newIp = (Get-VMNetworkAdapter -VMName $vmName).IPAddresses |
-                      Where-Object { $_ -match '^\d+\.\d+\.\d+\.\d+$' } | Select-Object -First 1
+            $newIp = Get-DuneVmIp -Name $vmName
         }
         Write-Host ""
         if (-not $newIp) { Write-Warning "VM did not acquire IP within $(Format-Duration $timeout). Aborting."; continue }

@@ -42,16 +42,19 @@ if (-not $IsLinux -and -not $IsMacOS) {
 # (Get-DuneConfigDir / Get-DuneStateDir) — left as future work.
 
 function Initialize-DuneLinuxEnv {
-    $home = $env:HOME
-    if (-not $home) { $home = [System.Environment]::GetFolderPath('UserProfile') }
-    if (-not $home) {
+    # NB: do NOT use $home here — it's a read-only automatic variable, and
+    # assigning to it under $ErrorActionPreference='Stop' is a terminating error
+    # that crashes the bootstrap before the logger is even defined.
+    $userHome = $env:HOME
+    if (-not $userHome) { $userHome = [System.Environment]::GetFolderPath('UserProfile') }
+    if (-not $userHome) {
         Write-Host 'Cannot determine $HOME on this host.' -ForegroundColor Red
         exit 1
     }
 
-    $configHome = if ($env:XDG_CONFIG_HOME) { $env:XDG_CONFIG_HOME } else { Join-Path $home '.config' }
-    $stateHome  = if ($env:XDG_STATE_HOME)  { $env:XDG_STATE_HOME }  else { Join-Path $home '.local/state' }
-    $cacheHome  = if ($env:XDG_CACHE_HOME)  { $env:XDG_CACHE_HOME }  else { Join-Path $home '.cache' }
+    $configHome = if ($env:XDG_CONFIG_HOME) { $env:XDG_CONFIG_HOME } else { Join-Path $userHome '.config' }
+    $stateHome  = if ($env:XDG_STATE_HOME)  { $env:XDG_STATE_HOME }  else { Join-Path $userHome '.local/state' }
+    $cacheHome  = if ($env:XDG_CACHE_HOME)  { $env:XDG_CACHE_HOME }  else { Join-Path $userHome '.cache' }
 
     foreach ($d in @($configHome, $stateHome, $cacheHome,
                      (Join-Path $configHome 'DuneServer'),
@@ -64,7 +67,7 @@ function Initialize-DuneLinuxEnv {
     $env:APPDATA      = $configHome
     $env:LOCALAPPDATA = $stateHome
     # USERPROFILE is referenced in a few places (mostly diagnostics).
-    if (-not $env:USERPROFILE) { $env:USERPROFILE = $home }
+    if (-not $env:USERPROFILE) { $env:USERPROFILE = $userHome }
 }
 
 Initialize-DuneLinuxEnv
@@ -169,16 +172,25 @@ if (-not $script:MainScript) {
 # ---------- Tool version (kept in sync with DuneServer.ps1) -------------------
 # Mirrored manually for the scaffold. Build-Installer's version-sync check
 # does NOT currently know about this file — see LINUX-PORT-STATUS.md.
-$script:DuneToolVersion = '12.0.24'
+$script:DuneToolVersion = '12.8.2'
 
 # ---------- Load server + routes ----------------------------------------------
 $duneLogFile = Join-Path $serverDir 'lib/DuneLog.ps1'
 if (Test-Path -LiteralPath $duneLogFile) { . $duneLogFile }
 
+# Platform predicates — available before the lib loop (re-loaded there too).
+$dunePlatformFile = Join-Path $serverDir 'lib/Platform.ps1'
+if (Test-Path -LiteralPath $dunePlatformFile) { . $dunePlatformFile }
+
 $script:DuneLogFilePath = Join-Path $env:LOCALAPPDATA 'DuneServer/dune-server.log'
 Initialize-DuneLog -Path $script:DuneLogFilePath
 
 . (Join-Path $serverDir 'HttpServer.ps1')
+
+# HttpServer.ps1 initializes $script:DuneServerDir = $null at load, which clobbers
+# the assignment above. Re-set it so the API handler pool (Initialize-DuneApiPool)
+# can find the server dir instead of falling back to single-threaded inline dispatch.
+$script:DuneServerDir = $serverDir
 
 $libDir = Join-Path $serverDir 'lib'
 if (Test-Path $libDir) {
@@ -205,12 +217,47 @@ try {
     Write-DuneLog "Could not remove stale last-url.txt: $($_.Exception.Message)" 'WARN'
 }
 
-# ---------- Browser opener (async, after listener binds) ----------------------
-# On Linux we use xdg-open. We poll last-url.txt (written by HttpServer.ps1
-# once the listener binds) and hand the URL to xdg-open. No DuneShell, no
-# WebView2 — the user's default browser is the UI surface.
-$browserJob = $null
+# ---------- UI surface: native GTK shell, else browser ------------------------
+# Preferred: the native desktop shell (app/desktop/linux/dune-shell.py — GTK3 +
+# WebKit2GTK), the Linux counterpart to DuneShell.exe. It polls last-url.txt
+# itself and renders the portal in its own window. Falls back to xdg-open (a
+# normal browser tab) when the shell, python3, or the GTK/WebKit GIR bindings
+# aren't present, or when OpenInAppWindow=false in config.
+$script:DuneShellLaunched = $false
+
+function Test-DuneGtkShellDeps {
+    param([string]$Python)
+    if (-not $Python) { return $false }
+    try {
+        & $Python -c "import gi; gi.require_version('Gtk','3.0'); gi.require_version('WebKit2','4.1')" 2>$null
+        return ($LASTEXITCODE -eq 0)
+    } catch { return $false }
+}
+
 if ($script:DuneOpenBrowser) {
+    $openInApp = $true
+    try { if (Get-Command Get-DstOpenInAppWindow -ErrorAction SilentlyContinue) { $openInApp = [bool](Get-DstOpenInAppWindow) } } catch {}
+    $hasDisplay = [bool]($env:DISPLAY -or $env:WAYLAND_DISPLAY)
+    $shellScript = Find-DuneSubpath 'app/desktop/linux/dune-shell.py'
+    $python = (Get-Command python3 -ErrorAction SilentlyContinue).Source
+    if ($openInApp -and $hasDisplay -and $shellScript -and (Test-DuneGtkShellDeps -Python $python)) {
+        try {
+            # Detached: the shell is a sibling UI process; it polls last-url.txt
+            # and asks the backend to shut down (POST /api/shutdown) on close.
+            Start-Process -FilePath $python -ArgumentList @($shellScript) -ErrorAction Stop | Out-Null
+            $script:DuneShellLaunched = $true
+            Write-DuneLog "Opening portal in native GTK shell: $shellScript"
+        } catch {
+            Write-DuneLog "GTK shell failed to launch ($($_.Exception.Message)); falling back to browser" 'WARN'
+        }
+    }
+}
+
+# ---------- Browser opener (async, after listener binds) ----------------------
+# Fallback when the native shell wasn't launched: poll last-url.txt (written by
+# HttpServer.ps1 once the listener binds) and hand the URL to xdg-open.
+$browserJob = $null
+if ($script:DuneOpenBrowser -and -not $script:DuneShellLaunched) {
     $browserJob = Start-Job -ScriptBlock {
         param($urlFile)
         $deadline = (Get-Date).AddSeconds(30)

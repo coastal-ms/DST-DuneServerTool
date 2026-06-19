@@ -9,8 +9,8 @@
 
 **🌐 Website & feature tour: [coastal-ms.github.io/DST-DuneServerTool](https://coastal-ms.github.io/DST-DuneServerTool/)** — screenshots, install guide, and the full changelog.
 
-The current release is **v12.0.24**. The in-app version label and the
-website show plain semver tags (e.g. `v12.0.24`) — the previous
+The current release is **v12.8.2**. The in-app version label and the
+website show plain semver tags (e.g. `v12.8.2`) — the previous
 Roman-numeral stylization has been removed.
 
 > ## ✅ Confirmed compatible with Dune: Awakening **1.4.5.0**
@@ -33,6 +33,12 @@ browser and keeps the server running in the background.
 ### New in next release
 
 - **Framework Maintenance.**
+- **Linux support.** DST now runs on Linux: the PowerShell backend runs under
+  `pwsh`, the portal opens in a native GTK window (or your browser), the Hyper-V
+  layer is replaced by **libvirt/KVM** (or point DST at an existing host over SSH
+  with `ServerHost`), autostart uses **systemd**, and there's a `.deb`. Windows
+  is unaffected — every platform difference is OS-guarded and both run the same
+  code. See [LINUX-PORT-STATUS.md](LINUX-PORT-STATUS.md).
 
 ### New in v12.2.1
 

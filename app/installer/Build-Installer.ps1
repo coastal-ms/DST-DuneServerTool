@@ -44,7 +44,11 @@ $versionFiles = @(
     @{ Path = Join-Path $appRoot  'DuneServer.ps1';                  Pattern = "\`$script:DuneToolVersion\s*=\s*'([0-9]+\.[0-9]+\.[0-9]+)'"; Label = '$script:DuneToolVersion' },
     @{ Path = Join-Path $appRoot  'build\Build-Exe.ps1';             Pattern = "\[string\]\`$Version\s*=\s*'([0-9]+\.[0-9]+\.[0-9]+)'";     Label = 'Build-Exe.ps1 default $Version' },
     @{ Path = Join-Path $appRoot  'installer\DuneServer.iss';        Pattern = '#define\s+MyAppVersion\s+"([0-9]+\.[0-9]+\.[0-9]+)"';       Label = 'MyAppVersion' },
-    @{ Path = Join-Path $appRoot  'desktop\DuneShell\DuneShell.csproj'; Pattern = '<Version>([0-9]+\.[0-9]+\.[0-9]+)</Version>';            Label = 'DuneShell <Version>' }
+    @{ Path = Join-Path $appRoot  'desktop\DuneShell\DuneShell.csproj'; Pattern = '<Version>([0-9]+\.[0-9]+\.[0-9]+)</Version>';            Label = 'DuneShell <Version>' },
+    # Linux port — kept in lock-step with the Windows release so the .deb and the
+    # Linux entry point never ship a stale version (historically drifted to 12.0.24).
+    @{ Path = Join-Path $appRoot  'DuneServer-Linux.ps1';            Pattern = "\`$script:DuneToolVersion\s*=\s*'([0-9]+\.[0-9]+\.[0-9]+)'"; Label = '$script:DuneToolVersion (Linux)' },
+    @{ Path = Join-Path $repoRoot 'packaging/linux/debian/control';  Pattern = '(?m)^Version:\s+([0-9]+\.[0-9]+\.[0-9]+)\s*$';              Label = 'Debian control Version' }
 )
 if (-not $SkipVersionCheck) {
     $stampReport = foreach ($vf in $versionFiles) {
@@ -69,9 +73,9 @@ if (-not $SkipVersionCheck) {
     }
     if ($distinct.Count -ne 1) {
         Write-Host ""
-        throw "Version stamps disagree (found: $($distinct -join ', ')). Bump all 5 files to the same release version before building, or pass -SkipVersionCheck for a deliberate intermediate build."
+        throw "Version stamps disagree (found: $($distinct -join ', ')). Bump all $($versionFiles.Count) files to the same release version before building, or pass -SkipVersionCheck for a deliberate intermediate build."
     }
-    Write-Host "  All 5 stamps match: $($distinct[0])" -ForegroundColor Green
+    Write-Host "  All $($versionFiles.Count) stamps match: $($distinct[0])" -ForegroundColor Green
     Write-Host ""
 }
 

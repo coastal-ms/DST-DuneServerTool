@@ -346,15 +346,36 @@ function Invoke-DuneCommandExternal {
     # or error) stays readable instead of the window closing instantly. InApp
     # commands capture stdout and must never pause, so they don't get the flag.
     if ($cmd.Mode -eq 'Console') { $argList += '-PauseOnExit' }
-    $startArgs = @{
-        FilePath         = $script:PwshExe
-        ArgumentList     = $argList
-        WorkingDirectory = (Split-Path -Parent $script:MainScript)
-        WindowStyle      = 'Normal'
-        Verb             = 'RunAs'   # dune-server.ps1 requires admin
-        PassThru         = $true
+    $workDir = (Split-Path -Parent $script:MainScript)
+
+    if (Test-DuneIsWindows) {
+        # Windows: elevate (Hyper-V needs admin) and open in a normal console.
+        $proc = Start-Process -FilePath $script:PwshExe -ArgumentList $argList `
+            -WorkingDirectory $workDir -WindowStyle 'Normal' -Verb 'RunAs' -PassThru
+    } else {
+        # Linux: no UAC. Console-mode commands are interactive (SSH terminal, pod
+        # shell, editors) and need a real terminal window; launch one via the
+        # Debian-standard x-terminal-emulator alternative (falling back through
+        # common emulators). InApp commands and the no-terminal fallback run
+        # detached under pwsh directly. Elevation, when a specific command needs
+        # it, is the command's own concern (sudo), not a blanket RunAs.
+        if ($cmd.Mode -eq 'Console') {
+            $term = $null
+            foreach ($t in @('x-terminal-emulator','gnome-terminal','konsole','xfce4-terminal','xterm')) {
+                $resolved = Get-Command $t -ErrorAction SilentlyContinue
+                if ($resolved) { $term = $resolved.Source; break }
+            }
+            if ($term) {
+                # `-e <prog> <args...>` is honoured by x-terminal-emulator/xterm/konsole.
+                $termArgs = @('-e', $script:PwshExe) + $argList
+                $proc = Start-Process -FilePath $term -ArgumentList $termArgs -WorkingDirectory $workDir -PassThru
+            } else {
+                $proc = Start-Process -FilePath $script:PwshExe -ArgumentList $argList -WorkingDirectory $workDir -PassThru
+            }
+        } else {
+            $proc = Start-Process -FilePath $script:PwshExe -ArgumentList $argList -WorkingDirectory $workDir -PassThru
+        }
     }
-    $proc = Start-Process @startArgs
     return @{
         ok      = $true
         name    = $cmd.Name

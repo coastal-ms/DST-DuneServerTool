@@ -13,6 +13,39 @@ here cover everything those tags shipped.
 
 ## [Unreleased]
 
+### Added
+
+- **Linux support for the full app.** DST now runs on Linux under `pwsh`, with
+  every platform difference OS-guarded so the Windows build is byte-for-byte
+  unchanged (both run the same code):
+  - **Native GTK desktop shell** (`app/desktop/linux/dune-shell.py`, GTK3 +
+    WebKit2GTK) — the Linux counterpart to `DuneShell.exe`; falls back to the
+    browser via `xdg-open`.
+  - **libvirt/KVM VM provider** (`app/server/lib/VmProvider.ps1`) replacing
+    Hyper-V — power/state/IP/RAM via `virsh` — or set `ServerHost` to manage an
+    existing/remote host over SSH with no local hypervisor.
+  - **systemd `--user` autostart** replacing Task Scheduler.
+  - **Setup-wizard preflight** checks libvirt/KVM, the `libvirt` group,
+    `/dev/kvm`, SSH and disk on Linux.
+  - **`.deb` packaging** bundles the backend, web UI, launcher and GTK shell,
+    and pulls the right runtime dependencies.
+  - New `Platform.ps1` (OS detection + XDG dir helpers); new config keys
+    `VmName`, `ServerHost`, `LibvirtUri`.
+  - CI smoke job (`linux-smoke`) parses + dot-sources the whole backend under
+    `pwsh`, builds the web UI, and compiles the shell on every PR.
+
+### Fixed
+
+- **Linux entry point crashed on startup** assigning to the read-only `$home`
+  automatic variable; reworked to `$userHome`.
+- **API handler pool** fell back to single-threaded inline dispatch on Linux
+  (server dir cleared on load + backslash startup paths); now initializes the
+  runspace pool on Linux too.
+- **In-app updater** on Linux no longer attempts to run the Windows
+  `DuneServerSetup.exe`; it reports the package-manager upgrade path.
+- The release version-sync gate now also covers `DuneServer-Linux.ps1` and the
+  Debian `control` file, so the Linux artifacts can't ship a stale version.
+
 ## [12.8.2] - 2026-06-19
 
 ### Added

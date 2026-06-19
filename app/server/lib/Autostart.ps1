@@ -47,6 +47,11 @@ function Get-DuneAutostartTaskName {
 # format it for us rather than glueing $env:USERDOMAIN + $env:USERNAME, which
 # loses Microsoft-account / AzureAD shapes.
 function Get-DuneAutostartUserName {
+    if (-not (Test-DuneIsWindows)) {
+        if ($env:USER) { return $env:USER }
+        if ($env:LOGNAME) { return $env:LOGNAME }
+        try { return ((& id -un 2>$null) | Out-String).Trim() } catch { return 'user' }
+    }
     try {
         return [System.Security.Principal.WindowsIdentity]::GetCurrent().Name
     } catch {
@@ -74,11 +79,63 @@ function Get-DuneAutostartExePath {
     }
 }
 
-# True only when the autostart feature is usable on this process — i.e. we're
-# the compiled .exe and have a valid path to register. Surfaced to the React UI
-# so it can grey the Help item out instead of crashing on a dev build.
+# ---- Linux: systemd --user autostart -----------------------------------------
+# The Linux equivalent of the Task Scheduler logon task. We enable a per-user
+# systemd unit (dune-server.service) that runs the launcher headless at login.
+# No elevation needed — `systemctl --user` is per-session.
+function Get-DuneSystemdUnitName { return 'dune-server.service' }
+
+function Test-DuneSystemctlAvailable {
+    return [bool](Get-Command systemctl -ErrorAction SilentlyContinue)
+}
+
+function Invoke-DuneSystemctlUser {
+    param([Parameter(Mandatory)][string[]]$Arguments)
+    $out = (& systemctl --user @Arguments 2>&1 | Out-String)
+    return [pscustomobject]@{ Exit = $LASTEXITCODE; Output = $out.TrimEnd() }
+}
+
+# Ensure ~/.config/systemd/user/dune-server.service exists; generate it pointing
+# at the installed launcher (or the source-tree bin/dune-server) if it doesn't.
+function Install-DuneSystemdUnit {
+    $base = if ($env:XDG_CONFIG_HOME) { $env:XDG_CONFIG_HOME } else { Join-Path $env:HOME '.config' }
+    $unitDir = Join-Path $base 'systemd/user'
+    $unitPath = Join-Path $unitDir (Get-DuneSystemdUnitName)
+    if (Test-Path -LiteralPath $unitPath) { return $unitPath }
+    if (-not (Test-Path -LiteralPath $unitDir)) { New-Item -ItemType Directory -Path $unitDir -Force | Out-Null }
+
+    $launcher = (Get-Command dune-server -ErrorAction SilentlyContinue).Source
+    if (-not $launcher) {
+        $cand = Join-Path (Split-Path -Parent $script:AppDir) 'bin/dune-server'
+        if (Test-Path -LiteralPath $cand) { $launcher = (Resolve-Path -LiteralPath $cand).Path }
+    }
+    if (-not $launcher) { $launcher = 'dune-server' }
+
+    $unit = @"
+[Unit]
+Description=Dune Server Tool (DST) - self-hosted Dune: Awakening server portal
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+ExecStart=$launcher --headless --no-browser
+Restart=on-failure
+RestartSec=5
+
+[Install]
+WantedBy=default.target
+"@
+    Set-Content -LiteralPath $unitPath -Value $unit -Encoding UTF8
+    return $unitPath
+}
+
+# True only when the autostart feature is usable on this process. On Windows we
+# must be the compiled .exe; on Linux we just need systemctl (systemd --user).
+# Surfaced to the React UI so it can grey the Help item out where unsupported.
 function Test-DuneAutostartAvailable {
-    return [bool](Get-DuneAutostartExePath)
+    if (Test-DuneIsWindows) { return [bool](Get-DuneAutostartExePath) }
+    return (Test-DuneSystemctlAvailable)
 }
 
 # Whether the scheduled task currently exists for THIS user. We additionally
@@ -86,6 +143,12 @@ function Test-DuneAutostartAvailable {
 # task pointing at an old install (or a foreign task at the same path) doesn't
 # masquerade as "enabled".
 function Test-DuneAutostartEnabled {
+    if (-not (Test-DuneIsWindows)) {
+        if (-not (Test-DuneSystemctlAvailable)) { return $false }
+        # `is-enabled` prints enabled/disabled/static/... and sets exit code.
+        $r = Invoke-DuneSystemctlUser -Arguments @('is-enabled', (Get-DuneSystemdUnitName))
+        return ($r.Output -match '^(enabled|enabled-runtime)\b')
+    }
     $folder = Get-DuneAutostartTaskFolder
     $name   = Get-DuneAutostartTaskName
     try {
@@ -108,6 +171,23 @@ function Test-DuneAutostartEnabled {
 # Create / replace the scheduled task. Caller must be elevated (DuneServer is).
 # Returns a hashtable: @{ ok = $bool; error = '<message>' }.
 function Register-DuneAutostart {
+    if (-not (Test-DuneIsWindows)) {
+        if (-not (Test-DuneSystemctlAvailable)) {
+            return @{ ok = $false; error = 'systemctl (systemd --user) is not available on this host.' }
+        }
+        try {
+            $unitPath = Install-DuneSystemdUnit
+            [void](Invoke-DuneSystemctlUser -Arguments @('daemon-reload'))
+            $en = Invoke-DuneSystemctlUser -Arguments @('enable', '--now', (Get-DuneSystemdUnitName))
+            if ($en.Exit -ne 0) { return @{ ok = $false; error = $en.Output } }
+            if (Get-Command Write-DuneLog -ErrorAction SilentlyContinue) {
+                Write-DuneLog "Autostart enabled: systemd user unit '$unitPath' (enable --now)"
+            }
+            return @{ ok = $true }
+        } catch {
+            return @{ ok = $false; error = $_.Exception.Message }
+        }
+    }
     $exe = Get-DuneAutostartExePath
     if (-not $exe) {
         return @{ ok = $false; error = 'Autostart is only available from the installed DuneServer.exe (not a dev pwsh build).' }
@@ -160,6 +240,18 @@ function Register-DuneAutostart {
 
 # Remove the scheduled task. No-op (still returns ok=$true) if it didn't exist.
 function Unregister-DuneAutostart {
+    if (-not (Test-DuneIsWindows)) {
+        if (-not (Test-DuneSystemctlAvailable)) { return @{ ok = $true } }
+        try {
+            $r = Invoke-DuneSystemctlUser -Arguments @('disable', '--now', (Get-DuneSystemdUnitName))
+            if (Get-Command Write-DuneLog -ErrorAction SilentlyContinue) {
+                Write-DuneLog "Autostart disabled: systemd user unit '$(Get-DuneSystemdUnitName)' (disable --now, exit $($r.Exit))"
+            }
+            return @{ ok = $true }
+        } catch {
+            return @{ ok = $false; error = $_.Exception.Message }
+        }
+    }
     $folder = Get-DuneAutostartTaskFolder
     $name   = Get-DuneAutostartTaskName
     try {
@@ -197,6 +289,16 @@ function Unregister-DuneAutostart {
 
 # Bundled state object used by the API route + the lifecycle decision.
 function Get-DuneAutostartState {
+    if (-not (Test-DuneIsWindows)) {
+        return [pscustomobject]@{
+            enabled   = Test-DuneAutostartEnabled
+            available = Test-DuneAutostartAvailable
+            taskName  = Get-DuneSystemdUnitName
+            taskPath  = 'systemd --user'
+            exePath   = (Get-Command dune-server -ErrorAction SilentlyContinue).Source
+            user      = Get-DuneAutostartUserName
+        }
+    }
     return [pscustomobject]@{
         enabled   = Test-DuneAutostartEnabled
         available = Test-DuneAutostartAvailable

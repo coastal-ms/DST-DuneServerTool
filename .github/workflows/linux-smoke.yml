@@ -1,0 +1,45 @@
+name: Linux smoke
+
+# Guards the Linux port: every PR (and Linux-relevant pushes) must keep the
+# PowerShell backend parsing AND dot-sourcing cleanly under pwsh on Linux, the
+# webui building, and the GTK shell compiling. Catches Windows-only top-level
+# code creeping back into the cross-platform backend.
+on:
+  push:
+    branches: [main]
+    paths:
+      - '**/*.ps1'
+      - 'app/desktop/linux/**'
+      - 'webui/**'
+      - 'packaging/linux/**'
+      - '.github/workflows/linux-smoke.yml'
+  pull_request:
+    branches: [main]
+
+jobs:
+  linux-smoke:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      # pwsh is preinstalled on ubuntu-latest runners.
+      - name: Backend parse + load smoke (pwsh on Linux)
+        shell: pwsh
+        run: ./scripts/linux-smoke.ps1
+
+      - name: Compile the GTK desktop shell
+        run: python3 -m py_compile app/desktop/linux/dune-shell.py
+
+      - name: Build the web UI
+        run: |
+          cd webui
+          npm ci
+          npm run build
+          test -f dist/index.html
+
+      - name: Validate Debian packaging metadata
+        run: |
+          # control file must parse a Version and the build script must be sane bash.
+          grep -qE '^Version: [0-9]+\.[0-9]+\.[0-9]+$' packaging/linux/debian/control
+          bash -n packaging/linux/build-deb.sh

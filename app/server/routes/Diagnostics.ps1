@@ -99,6 +99,20 @@ function Get-DstDesktopPath {
 }
 
 function Get-DstWebView2Version {
+    # WebView2 is the Windows desktop shell's renderer. On Linux the portal is
+    # served to a browser or the GTK shell, so report the WebKitGTK version if
+    # available instead of probing the (nonexistent) Windows registry.
+    if ((Get-Command Test-DuneIsWindows -ErrorAction SilentlyContinue) -and -not (Test-DuneIsWindows)) {
+        foreach ($pc in @('webkit2gtk-4.1', 'webkitgtk-6.0', 'webkit2gtk-4.0')) {
+            try {
+                if (Get-Command pkg-config -ErrorAction SilentlyContinue) {
+                    $v = (& pkg-config --modversion $pc 2>$null | Out-String).Trim()
+                    if ($v) { return "WebKitGTK $v ($pc)" }
+                }
+            } catch {}
+        }
+        return '(WebKitGTK not detected)'
+    }
     foreach ($p in @(
         'HKLM:\SOFTWARE\WOW6432Node\Microsoft\EdgeUpdate\Clients\{F3017226-FE2A-4295-8BDF-00C3A9A7E4C5}',
         'HKLM:\SOFTWARE\Microsoft\EdgeUpdate\Clients\{F3017226-FE2A-4295-8BDF-00C3A9A7E4C5}',
