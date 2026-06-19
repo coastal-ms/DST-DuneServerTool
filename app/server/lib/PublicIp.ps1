@@ -100,6 +100,25 @@ function Resolve-DunePublicIpHostname {
     return @{ ok=$true; hostname=$hv.hostname; publicIp=$public[0]; candidates=@($public) }
 }
 
+function Save-DunePublicIpHostname {
+    param([string]$Hostname)
+    $hv = Test-DuneDdnsHostname -Hostname $Hostname
+    if (-not $hv.ok) { return $hv }
+
+    $save = {
+        Save-DuneConfig -Config @{
+            PublicIpMode = 'ddns'
+            DdnsHostname = $hv.hostname
+        } | Out-Null
+    }
+    if (Get-Command Invoke-WithDuneLock -ErrorAction SilentlyContinue) {
+        Invoke-WithDuneLock -Name 'config' -Script $save | Out-Null
+    } else {
+        & $save
+    }
+    return @{ ok=$true; hostname=$hv.hostname }
+}
+
 function New-DuneSettingsConfText {
     param(
         [Parameter(Mandatory)][string]$Battlegroup,

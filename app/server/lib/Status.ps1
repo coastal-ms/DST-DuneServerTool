@@ -1,6 +1,11 @@
 ﻿# Status — VM + Battlegroup snapshots via Hyper-V and SSH.
 
 $script:DuneVmName = 'dune-awakening'
+$script:DuneBattlegroupSnapshotCache   = $null
+$script:DuneBattlegroupSnapshotFetched = [datetime]::MinValue
+$script:DuneBattlegroupSnapshotTtlSecs = 8
+$script:DuneBattlegroupSnapshotLock    = [object]::new()
+$script:DuneBattlegroupSnapshotCacheKey = '__cache:status-bg-snapshot'
 
 # Detect whether an SSH private key file is passphrase-protected (encrypted).
 # Returns $true / $false, or $null when it can't be determined (file missing,
@@ -72,7 +77,89 @@ function Get-DuneVmStatus {
     }
 }
 
+function Get-DuneBattlegroupSnapshotCacheEntry {
+    $table = $script:DuneApiLockTable
+    if ($table) {
+        [System.Threading.Monitor]::Enter($table.SyncRoot)
+        try {
+            if ($table.ContainsKey($script:DuneBattlegroupSnapshotCacheKey)) {
+                return $table[$script:DuneBattlegroupSnapshotCacheKey]
+            }
+        } finally {
+            [System.Threading.Monitor]::Exit($table.SyncRoot)
+        }
+        return $null
+    }
+    if ($script:DuneBattlegroupSnapshotCache -eq $null) { return $null }
+    return @{
+        Snapshot = $script:DuneBattlegroupSnapshotCache
+        Fetched  = $script:DuneBattlegroupSnapshotFetched
+    }
+}
+
+function Set-DuneBattlegroupSnapshotCacheEntry {
+    param($Snapshot)
+    $entry = @{
+        Snapshot = $Snapshot
+        Fetched  = [datetime]::UtcNow
+    }
+    $table = $script:DuneApiLockTable
+    if ($table) {
+        [System.Threading.Monitor]::Enter($table.SyncRoot)
+        try {
+            $table[$script:DuneBattlegroupSnapshotCacheKey] = $entry
+        } finally {
+            [System.Threading.Monitor]::Exit($table.SyncRoot)
+        }
+    } else {
+        $script:DuneBattlegroupSnapshotCache = $Snapshot
+        $script:DuneBattlegroupSnapshotFetched = $entry.Fetched
+    }
+}
+
+function Get-DuneBattlegroupSnapshotCached {
+    $entry = Get-DuneBattlegroupSnapshotCacheEntry
+    if (-not $entry) { return $null }
+    $snapshot = $entry.Snapshot
+    $fetched  = [datetime]$entry.Fetched
+    if ($snapshot -ne $null -and (([datetime]::UtcNow - $fetched).TotalSeconds -lt $script:DuneBattlegroupSnapshotTtlSecs)) {
+        return $snapshot
+    }
+    return $null
+}
+
 function Get-DuneBattlegroupSnapshot {
+    param([switch]$Force)
+
+    if (-not $Force.IsPresent) {
+        $cached = Get-DuneBattlegroupSnapshotCached
+        if ($cached -ne $null) { return $cached }
+    }
+
+    $refresh = {
+        if (-not $Force.IsPresent) {
+            $cached = Get-DuneBattlegroupSnapshotCached
+            if ($cached -ne $null) { return $cached }
+        }
+
+        $snapshot = Get-DuneBattlegroupSnapshotFresh
+        Set-DuneBattlegroupSnapshotCacheEntry -Snapshot $snapshot
+        return $snapshot
+    }
+
+    if (Get-Command Invoke-WithDuneLock -ErrorAction SilentlyContinue) {
+        return Invoke-WithDuneLock -Name 'status-bg-snapshot-cache' -TimeoutSec 20 -Script $refresh
+    }
+
+    [System.Threading.Monitor]::Enter($script:DuneBattlegroupSnapshotLock)
+    try {
+        return & $refresh
+    } finally {
+        [System.Threading.Monitor]::Exit($script:DuneBattlegroupSnapshotLock)
+    }
+}
+
+function Get-DuneBattlegroupSnapshotFresh {
     $vm = Get-DuneVmStatus
     $result = @{ available = $false; vm = $vm; output = ''; reason = '' }
 
