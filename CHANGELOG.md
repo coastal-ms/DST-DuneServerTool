@@ -13,6 +13,17 @@ here cover everything those tags shipped.
 
 ## [Unreleased]
 
+## [12.8.2] - 2026-06-19
+
+### Added
+
+- **Settings can apply a changed public IP from DDNS or manual entry.** The new
+  Settings -> Public IP / DDNS card resolves a DDNS hostname or validates a
+  typed public IPv4 address, shows the numeric target, requires confirmation,
+  then applies the documented Dune IP-change workflow: Windows host route, VM
+  public-IP alias, exact four-line `settings.conf`, K3s ExternalIP, NAT, and a
+  restart of affected game pods.
+
 ### Fixed
 
 - **Blueprint import no longer fails on large blueprints.** Importing a
