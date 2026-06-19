@@ -143,6 +143,7 @@ export interface BotPricingConfig {
   price_floor: number
   default_unit_price: number
   tier_base_prices: Record<string, number>
+  schematic_tier_prices: Record<string, number>
   stack_unit_prices: Record<string, number>
   category_factors: Record<string, number>
   grade_multipliers: number[]

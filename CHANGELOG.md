@@ -13,6 +13,26 @@ here cover everything those tags shipped.
 
 ## [Unreleased]
 
+## [12.7.1] - 2026-06-18
+
+### Fixed
+
+- **Market Bot: schematics priced at a flat ~vendor amount (T6 stuck ~20k),
+  ignoring tier/rarity multipliers.** In sane-pricing mode every non-stackable
+  listing was clamped to a 2× live-NPC-vendor-price ceiling. Because the game
+  sells schematics at a low, uniform vendor price, the tier formula was crushed
+  to ~2× vendor — identical across every T6 schematic — and since schematics
+  aren't gradeable, the grade multiplier (the only factor allowed past that
+  ceiling) never applied. Schematics are now priced off a dedicated
+  **`schematic_tier_prices`** table × rarity (× grade) and **bypass the vendor
+  floor/ceiling**, so tiers and rarities scale again. The upstream pricer now
+  routes schematics through its schematic tier table even when a vendor price is
+  present. Schematic detection is also more robust (catches the `_Schematic`
+  suffix, `Schematic_` prefix and no-underscore `…Schematic` forms, plus a
+  leading `T<n>` tier prefix); stackable schematic-fragment crafting resources
+  are unaffected. A new "Schematic tier prices" editor is available under Market
+  Bot → pricing. (#281)
+
 ## [12.7.0] - 2026-06-17
 
 ### Added
