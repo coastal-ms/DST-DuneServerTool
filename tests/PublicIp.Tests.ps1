@@ -10,9 +10,9 @@ Describe 'Public IP validation' {
     }
 
     It 'accepts a public IPv4 literal' {
-        $r = Assert-DuneManualPublicIp -PublicIp '50.123.76.96'
+        $r = Assert-DuneManualPublicIp -PublicIp '8.8.8.8'
         $r.ok | Should -BeTrue
-        $r.publicIp | Should -Be '50.123.76.96'
+        $r.publicIp | Should -Be '8.8.8.8'
     }
 
     It 'rejects malformed IPv4' {
@@ -22,7 +22,7 @@ Describe 'Public IP validation' {
     }
 
     It 'rejects private IPv4' {
-        $r = Assert-DuneManualPublicIp -PublicIp '192.168.23.219'
+        $r = Assert-DuneManualPublicIp -PublicIp '192.168.1.50'
         $r.ok | Should -BeFalse
         $r.message | Should -Match 'private'
     }
@@ -33,8 +33,8 @@ Describe 'Public IP validation' {
     }
 
     It 'rejects unchanged last-applied IP' {
-        function global:Read-DuneConfig { @{ LastAppliedPublicIp = '50.123.76.96' } }
-        $r = Assert-DuneManualPublicIp -PublicIp '50.123.76.96'
+        function global:Read-DuneConfig { @{ LastAppliedPublicIp = '8.8.8.8' } }
+        $r = Assert-DuneManualPublicIp -PublicIp '8.8.8.8'
         $r.ok | Should -BeFalse
         $r.status | Should -Be 409
     }
@@ -42,9 +42,9 @@ Describe 'Public IP validation' {
 
 Describe 'DDNS hostname validation' {
     It 'normalizes a valid hostname' {
-        $r = Test-DuneDdnsHostname -Hostname 'DuneCoastal.MyVNC.com'
+        $r = Test-DuneDdnsHostname -Hostname 'Your-Server.DDNS.net'
         $r.ok | Should -BeTrue
-        $r.hostname | Should -Be 'dunecoastal.myvnc.com'
+        $r.hostname | Should -Be 'your-server.ddns.net'
     }
 
     It 'rejects invalid hostname labels' {
@@ -54,17 +54,17 @@ Describe 'DDNS hostname validation' {
 
 Describe 'settings.conf renderer' {
     It 'renders exactly four lines' {
-        $text = New-DuneSettingsConfText -Battlegroup 'sh-test' -Image 'registry.funcom.com/funcom/self-hosting/seabass-server:1988751-0-shipping' -VmIp '192.168.23.219' -PublicIp '50.123.76.96'
+        $text = New-DuneSettingsConfText -Battlegroup 'sh-test' -Image 'registry.funcom.com/funcom/self-hosting/seabass-server:1988751-0-shipping' -VmIp '192.168.1.50' -PublicIp '8.8.8.8'
         $lines = $text -split "`n"
         $lines.Count | Should -Be 5
         $lines[0] | Should -Be 'sh-test'
         $lines[1] | Should -Be 'registry.funcom.com/funcom/self-hosting/seabass-server:1988751-0-shipping'
-        $lines[2] | Should -Be '192.168.23.219'
-        $lines[3] | Should -Be '50.123.76.96'
+        $lines[2] | Should -Be '192.168.1.50'
+        $lines[3] | Should -Be '8.8.8.8'
         $lines[4] | Should -Be ''
     }
 
     It 'rejects embedded JSON image lines' {
-        { New-DuneSettingsConfText -Battlegroup 'sh-test' -Image '{"image":"bad"}' -VmIp '192.168.23.219' -PublicIp '50.123.76.96' } | Should -Throw
+        { New-DuneSettingsConfText -Battlegroup 'sh-test' -Image '{"image":"bad"}' -VmIp '192.168.1.50' -PublicIp '8.8.8.8' } | Should -Throw
     }
 }

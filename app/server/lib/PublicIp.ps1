@@ -15,7 +15,7 @@ function Test-DuneIPv4Literal {
 function Test-DunePublicIPv4 {
     param([string]$Ip)
     if (-not (Test-DuneIPv4Literal -Ip $Ip)) {
-        return @{ ok = $false; status = 400; message = 'Enter a valid IPv4 address, for example 50.123.76.96.' }
+        return @{ ok = $false; status = 400; message = 'Enter a valid IPv4 address, for example 8.8.8.8.' }
     }
     $parts = @($Ip -split '\.' | ForEach-Object { [int]$_ })
     $a = $parts[0]; $b = $parts[1]
@@ -59,7 +59,7 @@ function Test-DuneDdnsHostname {
     $h = ([string]$Hostname).Trim().ToLowerInvariant()
     if ([string]::IsNullOrWhiteSpace($h)) { return @{ ok=$false; status=400; message='Enter a DDNS hostname.' } }
     if ($h.Length -gt 253 -or $h -notmatch '^[a-z0-9][a-z0-9.-]*[a-z0-9]$' -or $h -match '\.\.' -or $h -notmatch '\.') {
-        return @{ ok=$false; status=400; message='Enter a valid hostname, for example dunecoastal.myvnc.com.' }
+        return @{ ok=$false; status=400; message='Enter a valid hostname, for example your-server.ddns.net.' }
     }
     foreach ($label in @($h -split '\.')) {
         if ($label.Length -lt 1 -or $label.Length -gt 63 -or $label -notmatch '^[a-z0-9](?:[a-z0-9-]*[a-z0-9])?$') {
