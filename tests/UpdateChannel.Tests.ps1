@@ -114,3 +114,23 @@ Describe 'Get-DuneSelectedRelease channel resolution' {
         $r.isPrerelease | Should -BeFalse
     }
 }
+
+Describe 'Get-DuneUpdateInstalledPrerelease (running-build marker)' {
+    It 'is false when the marker key is absent (normal stable install)' {
+        function global:Read-DuneConfigRaw { @{ UpdateChannel = 'stable' } }
+        Get-DuneUpdateInstalledPrerelease | Should -BeFalse
+    }
+    It 'is true only after a pre-release build was installed' {
+        function global:Read-DuneConfigRaw { @{ UpdateInstalledPrerelease = 'true' } }
+        Get-DuneUpdateInstalledPrerelease | Should -BeTrue
+    }
+    It 'is false when a later stable install wrote false' {
+        function global:Read-DuneConfigRaw { @{ UpdateInstalledPrerelease = 'false' } }
+        Get-DuneUpdateInstalledPrerelease | Should -BeFalse
+    }
+    It 'does not key off the channel preference (toggling Test alone stays false)' {
+        # User toggled to Test (preference set) but never installed a pre-release.
+        function global:Read-DuneConfigRaw { @{ UpdateChannel = 'test' } }
+        Get-DuneUpdateInstalledPrerelease | Should -BeFalse
+    }
+}

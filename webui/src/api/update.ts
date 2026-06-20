@@ -28,6 +28,14 @@ export interface UpdateCheck {
   error?: string
   /** Update channel this check resolved against: 'stable' (default) or 'test'. */
   channel?: 'stable' | 'test'
+  /**
+   * True when the build CURRENTLY RUNNING was installed from a GitHub
+   * pre-release (a targeted test build), as recorded by the updater at install
+   * time. This — not `channel` — drives the app-wide "running a test build"
+   * indicator, so merely toggling the channel preference (which only affects
+   * the next install) does not light it up.
+   */
+  runningIsPrerelease?: boolean
   /** True when the resolved release is a GitHub pre-release (test channel). */
   isPrerelease?: boolean
   /** The exact tag the updater resolved to act on (stable latest or pinned pre-release). */

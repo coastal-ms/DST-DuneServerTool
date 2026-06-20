@@ -34,7 +34,7 @@ const BG_STYLES: Record<BgState | 'unknown', { cls: string; label: string }> = {
 export function StatusBar() {
   const { status, loading, forceRefresh } = useStatus()
   const { data: upd } = useUpdateCheck()
-  const onTestChannel = upd?.channel === 'test'
+  const onTestChannel = upd?.runningIsPrerelease === true
   const vm    = status?.vm ?? null
   const ports = status?.ports ?? null
   const bgKey = (status?.bg?.state ?? 'unknown') as BgState | 'unknown'
@@ -65,9 +65,9 @@ export function StatusBar() {
           <Link
             to="/settings"
             className="pill-warning hover:bg-warning/20 transition-colors"
-            title="This install is on the Test update channel — it receives pre-release builds shared for verification. Click to open Settings and switch back to Stable."
+            title="This install is running a pre-release TEST build (installed from the Test channel for verification before it goes live). Click to open Settings, switch to Stable, and install the released build."
           >
-            <Icon name="FlaskConical" size={11} /> TEST CHANNEL
+            <Icon name="FlaskConical" size={11} /> TEST BUILD
           </Link>
         )}
         <span className={portPillClass(ports, 7777, 'UDP')} title="Game server ports (forward on your router/firewall)">
