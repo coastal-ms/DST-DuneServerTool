@@ -5,6 +5,7 @@ import {
   getStorage, getStorageItems, giveItemsToStorage, deleteStorageItem, setStorageItemStack, isValidTemplateId,
   type StorageContainer, type InventoryItem, type DataSource, type StorageGiveItemInput,
 } from '../../api/gameplay'
+import { GivePackageForm } from './players/sections'
 import { fmtNum, SourceBadge, StatCard, DemoNotice, qualityClass } from './shared'
 
 type SortKey = 'id' | 'name' | 'class' | 'owner_name' | 'item_count'
@@ -137,6 +138,7 @@ function ContainerDetail({ container, demo, onClose, onChanged }: {
   const [busy, setBusy] = useState(false)
   const [flash, setFlash] = useState<string | null>(null)
   const [showAdd, setShowAdd] = useState(false)
+  const [showPackage, setShowPackage] = useState(false)
   const [editingId, setEditingId] = useState<number | null>(null)
   const canWrite = !demo
 
@@ -183,6 +185,20 @@ function ContainerDetail({ container, demo, onClose, onChanged }: {
     }
   }
 
+  const handleGivePackage = async (items: StorageGiveItemInput[], pkgName: string) => {
+    setBusy(true); setError(null); setFlash(null)
+    try {
+      const r = await giveItemsToStorage(container.id, items)
+      setShowPackage(false)
+      const n = items.length
+      afterWrite(r.message || `Added package "${pkgName}" — ${n} item${n === 1 ? '' : 's'}.`)
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e))
+    } finally {
+      setBusy(false)
+    }
+  }
+
   const handleSetStack = async (it: InventoryItem, stackSize: number) => {
     setBusy(true); setError(null); setFlash(null)
     try {
@@ -215,8 +231,11 @@ function ContainerDetail({ container, demo, onClose, onChanged }: {
         {canWrite ? (
           <>
             <div className="flex flex-wrap gap-2 mb-2">
-              <button className="btn-primary" disabled={busy} onClick={() => setShowAdd(s => !s)}>
+              <button className="btn-primary" disabled={busy} onClick={() => { setShowAdd(s => !s); setShowPackage(false) }}>
                 <Icon name="PackagePlus" size={14} /> Add Items
+              </button>
+              <button className="btn-secondary" disabled={busy} onClick={() => { setShowPackage(s => !s); setShowAdd(false) }}>
+                <Icon name="PackageCheck" size={14} /> Give Package
               </button>
             </div>
             <div className="mb-3 text-[11px] text-warning border-l-2 border-warning bg-warning/10 rounded px-2.5 py-1.5 flex items-start gap-1.5">
@@ -234,6 +253,20 @@ function ContainerDetail({ container, demo, onClose, onChanged }: {
         )}
 
         {showAdd && <AddItemsForm busy={busy} onSubmit={handleAdd} onCancel={() => setShowAdd(false)} />}
+
+        {showPackage && (
+          <div className="card p-3 mb-3">
+            <GivePackageForm
+              busy={busy}
+              targetLabel={container.name || 'container'}
+              showOverflow={false}
+              onGive={(items, pkgName) => void handleGivePackage(
+                items.map(it => ({ template: it.template, qty: it.qty, quality: it.quality ?? 0 })),
+                pkgName,
+              )}
+            />
+          </div>
+        )}
 
         {flash && <div className="text-sm text-success mb-3 flex items-center gap-2"><Icon name="CheckCircle2" size={15} /> {flash}</div>}
 
