@@ -183,3 +183,22 @@ Describe 'Invoke-DunePlayerGiveItemsBulk overflow' -Tag 'Pure' {
         $script:liveArgs.Quantity | Should -Be 500
     }
 }
+
+Describe 'Get-DuneAqlTrialCatalog' -Tag 'Pure' {
+    It 'includes Trial 4 keyed as "4"' {
+        $cat = Get-DuneAqlTrialCatalog
+        ($cat | Where-Object { $_.id -eq '4' }) | Should -Not -BeNullOrEmpty
+    }
+    It 'maps Trial 4 to the FourthTest journey node' {
+        $t4 = Get-DuneAqlTrialCatalog | Where-Object { $_.id -eq '4' }
+        $t4.node | Should -Be 'DA_MQ_FindTheFremen.FourthTest'
+    }
+    It 'awards the Cryss Knife recipe for Trial 4 (the ability-slot trigger)' {
+        $t4 = Get-DuneAqlTrialCatalog | Where-Object { $_.id -eq '4' }
+        $t4.recipe | Should -Be 'RCP_Crysknife_Recipe'
+    }
+    It 'includes the JourneySets.Fremkit.CryssKnife tag in the Trial 4 delta' {
+        $t4 = Get-DuneAqlTrialCatalog | Where-Object { $_.id -eq '4' }
+        $t4.tags | Should -Contain 'JourneySets.Fremkit.CryssKnife'
+    }
+}

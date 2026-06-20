@@ -1279,6 +1279,127 @@ function Invoke-DunePlayerUnlockMainQuest {
     return @{ ok = $true; message = "Unlocked main quest $Quest - $($r.nodes) node(s) completed - takes effect on next login"; nodes = $r.nodes }
 }
 
+# ---------------------------------------------------------------------------
+# Recipe knowledge grant. Some progression rewards (e.g. completing an Aql
+# trial) are an awarded crafting recipe stored on the player's pawn, in
+#   TechKnowledgePlayerComponent.m_TechKnowledge.m_TechKnowledgeData[]
+# as { ItemKey, bIsNewEntry, UnlockedState }. The game reads that recipe
+# ownership directly, NOT a journey/player tag, so the Tags editor cannot
+# reproduce the award. Completing the content in-game flips the recipe to
+# "Purchased"; this helper does the same for a character a tag-only edit left
+# stuck. ItemKeys are verified against live pawn TechKnowledge data.
+# ---------------------------------------------------------------------------
+
+# Flip a recipe to "Purchased" (or append it when absent) in a character's pawn
+# TechKnowledge. Offline-only at the route layer (pawn JSON is RAM-authoritative
+# while connected); takes effect on next login.
+function Invoke-DuneGrantRecipe {
+    param([string]$Ip, [long]$AccountId, [string]$RecipeKey)
+    if ($AccountId -le 0) { return @{ ok = $false; error = 'account_id is required.' } }
+    if (-not $RecipeKey) { return @{ ok = $false; error = 'recipe key is required.' } }
+
+    $pawnID = Get-DunePlayerPawnFromAccount -Ip $Ip -AccountId $AccountId
+    if ($pawnID -le 0) { return @{ ok = $false; error = "no pawn for account $AccountId." } }
+
+    $rk = ConvertTo-DuneSqlString $RecipeKey
+    $path = "'{TechKnowledgePlayerComponent,m_TechKnowledge,m_TechKnowledgeData}'"
+    $sql = @"
+UPDATE dune.actors a
+SET properties = jsonb_set(a.properties, $path,
+  CASE WHEN EXISTS (
+         SELECT 1 FROM jsonb_array_elements(a.properties #> $path) e
+         WHERE e->>'ItemKey' = '$rk')
+       THEN (SELECT jsonb_agg(
+                 CASE WHEN e->>'ItemKey' = '$rk'
+                      THEN jsonb_set(e, '{UnlockedState}', '"Purchased"', true)
+                      ELSE e END)
+             FROM jsonb_array_elements(a.properties #> $path) e)
+       ELSE COALESCE(a.properties #> $path, '[]'::jsonb)
+            || jsonb_build_object('ItemKey', '$rk', 'bIsNewEntry', false, 'UnlockedState', 'Purchased')
+  END, true)
+WHERE a.id = $pawnID::bigint
+  AND a.properties #> $path IS NOT NULL;
+"@
+    $r = Invoke-DuneSqlQuery -Ip $Ip -Sql $sql -ReadOnly $false -MaxRows 1 -TimeoutSec 30
+    if (-not $r.ok) { return @{ ok = $false; error = "grant recipe: $($r.error)" } }
+    $updated = (Get-DuneSqlAffected $r)
+    if ($updated -eq 0) {
+        return @{ ok = $false; error = "pawn $pawnID has no TechKnowledge component yet (character may not have started)." }
+    }
+    return @{ ok = $true; message = "Granted recipe $RecipeKey - takes effect on next login"; recipe = $RecipeKey }
+}
+
+# ---------------------------------------------------------------------------
+# Aql trial completion deltas. Each entry is the FULL set of account changes
+# observed in a before/after snapshot diff when the trial is completed in-game:
+# the journey node to complete, the gameplay tags that flip (including the
+# BigMoments cinematic triggers), and the recipe awarded into pawn TechKnowledge
+# (the award that unlocks the empty ability slot the trial opens). Applying all
+# three reproduces a physical completion for a character that a tag-only edit
+# left stuck, WITHOUT touching later trials - only the named subtree is
+# completed, so the next trial proceeds normally in-game. Only trials with a
+# measured diff are listed; add more as they are snapshotted.
+# ---------------------------------------------------------------------------
+$script:DuneAqlTrialDeltas = [ordered]@{
+    '4' = @{
+        label       = 'Trial 4 of Aql (unlocks 3rd ability slot)'
+        journeyNode = 'DA_MQ_FindTheFremen.FourthTest'
+        tags        = @('BigMoments.Bike.Trigger', 'BigMoments.Stillsuit.Trigger', 'JourneySets.Fremkit.CryssKnife')
+        recipe      = 'RCP_Crysknife_Recipe'
+    }
+}
+
+function Get-DuneAqlTrialCatalog {
+    $list = @()
+    foreach ($k in $script:DuneAqlTrialDeltas.Keys) {
+        $d = $script:DuneAqlTrialDeltas[$k]
+        $list += @{ id = $k; label = [string]$d.label; node = [string]$d.journeyNode; tags = @($d.tags); recipe = [string]$d.recipe }
+    }
+    return $list
+}
+
+# Apply the full snapshot diff for an Aql trial: complete the journey subtree,
+# apply every tag that flips, and grant the awarded recipe. Offline-only at the
+# route layer. Takes effect on next login.
+function Invoke-DuneApplyAqlTrial {
+    param([string]$Ip, [long]$AccountId, [string]$Trial)
+    if ($AccountId -le 0) { return @{ ok = $false; error = 'account_id is required.' } }
+    if (-not $Trial) { return @{ ok = $false; error = 'trial is required.' } }
+    $key = ([string]$Trial).Trim()
+    if (-not $script:DuneAqlTrialDeltas.Contains($key)) {
+        return @{ ok = $false; error = "unknown Aql trial '$Trial'." }
+    }
+    $delta = $script:DuneAqlTrialDeltas[$key]
+
+    # 1) Complete the journey node subtree (also applies its mapped reward tags).
+    #    Scoped to this trial's subtree only, so later trials are untouched.
+    $jr = Invoke-DunePlayerCompleteJourneyNode -Ip $Ip -AccountId $AccountId -NodeId ([string]$delta.journeyNode)
+    if (-not $jr.ok) { return @{ ok = $false; error = $jr.error } }
+
+    # 2) Apply the remaining diff tags (e.g. the BigMoments cinematic triggers)
+    #    that the node-to-tag map does not cover.
+    $tags = @($delta.tags)
+    if ($tags.Count -gt 0) {
+        $tr = Invoke-DuneApplyTagsWithTierBump -Ip $Ip -AccountId $AccountId -Tags $tags
+        if (-not $tr.ok) { return @{ ok = $false; error = "apply trial tags: $($tr.error)" } }
+    }
+
+    # 3) Grant the awarded recipe into pawn TechKnowledge. This award is what
+    #    unlocks the empty ability slot the trial opens.
+    $recipeName = ''
+    if ($delta.recipe) {
+        $gr = Invoke-DuneGrantRecipe -Ip $Ip -AccountId $AccountId -RecipeKey ([string]$delta.recipe)
+        if (-not $gr.ok) { return @{ ok = $false; error = "grant trial recipe: $($gr.error)" } }
+        $recipeName = [string]$gr.recipe
+    }
+
+    return @{
+        ok      = $true
+        message = "Applied $($delta.label): journey subtree completed, $($tags.Count) tag(s), recipe $recipeName - takes effect on next login"
+        trial   = $key
+    }
+}
+
 function Invoke-DunePlayerSetStarterClass {
     param([string]$Ip, [long]$AccountId, [string]$Job)
     if ($AccountId -le 0) { return @{ ok = $false; error = 'account_id is required.' } }
