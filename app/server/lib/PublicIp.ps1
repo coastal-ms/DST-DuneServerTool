@@ -536,6 +536,25 @@ if [ "$need_fix" = "1" ]; then
 fi
 sed -n '1,4p' /home/dune/.dune/settings.conf
 
+step utilities-ip
+# change-battlegroup-ip updates the game servers but NOT the utility pods'
+# HOST_DATACENTER_IP_ADDRESS (director / serverGateway / textRouter / etc.),
+# leaving them advertising the OLD public IP. Reconcile every utility's env to
+# NEW_IP so they relaunch correct. Requires jq (ships with the k3s tooling);
+# skipped gracefully if absent.
+if command -v jq >/dev/null 2>&1; then
+  for u in $(sudo kubectl get battlegroup "$BG_NAME" -n "$BG_NS" -o json 2>/dev/null | jq -r '.spec.utilities // {} | keys[]' 2>/dev/null); do
+    idx=$(sudo kubectl get battlegroup "$BG_NAME" -n "$BG_NS" -o json 2>/dev/null | jq -r --arg u "$u" '((.spec.utilities[$u].spec.envVars // []) | map(.name) | index("HOST_DATACENTER_IP_ADDRESS")) // -1' 2>/dev/null)
+    { [ -z "$idx" ] || [ "$idx" = "-1" ] || [ "$idx" = "null" ]; } && continue
+    cur=$(sudo kubectl get battlegroup "$BG_NAME" -n "$BG_NS" -o jsonpath="{.spec.utilities.$u.spec.envVars[$idx].value}" 2>/dev/null)
+    if [ -n "$cur" ] && [ "$cur" != "$NEW_IP" ]; then
+      sudo kubectl patch battlegroup "$BG_NAME" -n "$BG_NS" --type=json -p "[{\"op\":\"replace\",\"path\":\"/spec/utilities/$u/spec/envVars/$idx/value\",\"value\":\"$NEW_IP\"}]" >/dev/null 2>&1 && echo "reconciled utility '$u' HOST_DATACENTER_IP_ADDRESS: $cur -> $NEW_IP"
+    fi
+  done
+else
+  echo "jq not available; skipping utility HOST_DATACENTER_IP_ADDRESS reconcile"
+fi
+
 step wait
 ready=0
 for i in $(seq 1 60); do
