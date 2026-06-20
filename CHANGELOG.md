@@ -13,6 +13,17 @@ here cover everything those tags shipped.
 
 ## [Unreleased]
 
+## [12.9.6] - 2026-06-20
+
+### Added
+
+- **App-wide Test-channel indicator.** When an install is on the **Test** update
+  channel, a **TEST CHANNEL** badge now appears in the top status bar (visible on
+  every page) and next to the version in the sidebar footer. Both link to
+  *Settings &rarr; Dune Server Tool updates* so it's one click to switch back to
+  *Stable*. This makes it obvious at a glance that an install is running a
+  pre-release verification build.
+
 ## [12.9.5] - 2026-06-20
 
 ### Added
