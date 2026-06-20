@@ -13,6 +13,8 @@ here cover everything those tags shipped.
 
 ## [Unreleased]
 
+## [12.9.3] - 2026-06-20
+
 ### Added
 
 - **Storage → container detail: "Give Package".** Hand a saved item package to
