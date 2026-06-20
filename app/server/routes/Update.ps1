@@ -206,6 +206,43 @@ function Get-DuneSelectedRelease {
     }
 }
 
+# Pure decision for "can the in-app updater install the selected release?" Shared
+# by GET /api/update/check (the `installable` flag) and POST /api/update/install
+# (the `blocked` gate) so the two never drift.
+#
+#   Diff                = Compare-DuneSemver(selectedTag, runningVersion)
+#   Channel             = 'stable' | 'test'
+#   HasAsset            = selected release carries DuneServerSetup.exe
+#   RunningIsPrerelease = the build currently running was installed from a pre-release
+#
+# Test channel: install whenever the selected pre-release differs from the
+# running build (forward, sideways, or rollback between -testN candidates).
+# Stable channel: classic "strictly newer" rule, RELAXED when the running build
+# is a pre-release so a tester can always return to the live release even though
+# it is not newer (downgrade to the last Stable or a same-version reinstall that
+# clears the TEST BUILD indicator).
+function Get-DuneInstallDecision {
+    param(
+        [int]$Diff = 0,
+        [string]$Channel = 'stable',
+        [bool]$HasAsset = $false,
+        [bool]$RunningIsPrerelease = $false
+    )
+    $available = ($Diff -gt 0)
+    if ($Channel -eq 'test') {
+        $installable = $HasAsset -and ($Diff -ne 0)
+        $blocked     = ($Diff -eq 0)
+    } else {
+        $installable = $HasAsset -and ($available -or $RunningIsPrerelease)
+        $blocked     = ($Diff -le 0) -and (-not $RunningIsPrerelease)
+    }
+    [pscustomobject]@{
+        available   = $available
+        installable = $installable
+        blocked     = $blocked
+    }
+}
+
 # --- Routes ------------------------------------------------------------------
 
 # GET /api/update/check[?force=1] — compare current vs latest release
@@ -249,11 +286,16 @@ Register-DuneRoute -Method GET -Path '/api/update/check' -Handler {
         # a specific pre-release, so installing it is allowed whenever it
         # differs from the running build (sideways re-install or rollback to an
         # earlier -testN build are both intentional). On Stable the classic
-        # "strictly newer" rule applies.
-        $isTest       = ($channel -eq 'test')
-        $available    = ($diff -gt 0)
+        # "strictly newer" rule applies - EXCEPT when the running build is a
+        # pre-release (Test build). In that case Stable must stay installable
+        # even when not strictly newer so a tester can always return to the live
+        # release (a downgrade to the last Stable, or a same-version reinstall
+        # to clear the TEST BUILD indicator). Without this a Test build is a
+        # dead-end: the live release is never "newer", so the button stays off.
         $hasAsset     = -not [string]::IsNullOrEmpty($rel.assetUrl)
-        $installable  = if ($isTest) { $hasAsset -and ($diff -ne 0) } else { $available -and $hasAsset }
+        $decision     = Get-DuneInstallDecision -Diff $diff -Channel $channel -HasAsset $hasAsset -RunningIsPrerelease $runningIsPrerelease
+        $available    = $decision.available
+        $installable  = $decision.installable
         Write-DuneJson -Response $res -Body @{
             available       = $available
             installable     = $installable
@@ -409,13 +451,19 @@ Register-DuneRoute -Method POST -Path '/api/update/install' -Handler {
             Write-DuneError -Response $res -Status 503 -Message 'No installer asset available on the selected release.'
             return
         }
-        # Channel-aware gate. Stable blocks anything not strictly newer. Test
-        # only blocks re-installing the exact same build (diff == 0); a
-        # deliberate sideways install or rollback to an earlier -testN build is
-        # allowed so a tester can move between candidate builds at will.
+        # Channel-aware gate. Stable blocks anything not strictly newer, UNLESS
+        # the running build is a pre-release (Test build) - then a stable install
+        # is always allowed so the tester can return to the live release even
+        # though it is not "newer" (downgrade to last Stable, or same-version
+        # reinstall to clear the TEST BUILD indicator). Test only blocks
+        # re-installing the exact same build (diff == 0); a deliberate sideways
+        # install or rollback to an earlier -testN build is allowed so a tester
+        # can move between candidate builds at will.
         $channel = Get-DuneUpdateChannel
+        $runningIsPrerelease = Get-DuneUpdateInstalledPrerelease
         $diff = Compare-DuneSemver -A $rel.tag -B ([string]$script:DuneToolVersion)
-        $blocked = if ($channel -eq 'test') { $diff -eq 0 } else { $diff -le 0 }
+        $hasAsset = -not [string]::IsNullOrEmpty($rel.assetUrl)
+        $blocked = (Get-DuneInstallDecision -Diff $diff -Channel $channel -HasAsset $hasAsset -RunningIsPrerelease $runningIsPrerelease).blocked
         if ($blocked) {
             Write-DuneJson -Response $res -Body @{
                 launched = $false
