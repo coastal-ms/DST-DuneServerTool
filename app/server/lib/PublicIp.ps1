@@ -332,7 +332,7 @@ function Invoke-DunePublicIpApply {
     }
 
     try {
-        Invoke-WithDuneLock -Name 'public-ip-change' -TimeoutSec 5 -Script {
+        $applyWork = {
             $target = ([string]$PublicIp).Trim()
             $steps.Add((New-DunePublicIpStepResult 'validate' 'Validate target IP' 'running' "Checking $target.")) | Out-Null
             & $pub 'running'
@@ -611,6 +611,15 @@ echo "BGIP_DONE"
                 LastAppliedPublicIp = $target
             } | Out-Null
         }
+        # Serialize concurrent applies when the named-lock helper is available
+        # (HttpServer.ps1). The async launcher's running-flag already guards
+        # against double-runs, so fall back to running directly if the helper
+        # isn't loaded in this runspace.
+        if (Get-Command Invoke-WithDuneLock -ErrorAction SilentlyContinue) {
+            Invoke-WithDuneLock -Name 'public-ip-change' -TimeoutSec 5 -Script $applyWork
+        } else {
+            & $applyWork
+        }
         $state.phase = 'done'; $state.running = $false
         $state.finished = (Get-Date).ToUniversalTime().ToString('o')
         & $pub 'done'
@@ -674,6 +683,10 @@ function Start-DunePublicIpApplyAsync {
             try {
                 $boot = Join-Path $ServerDir 'lib\Bootstrap.ps1'
                 if (Test-Path $boot) { . $boot }
+                # Load HttpServer.ps1 too so Invoke-WithDuneLock / Get-DuneLock
+                # (defined there, not in lib/) are available to the apply.
+                $http = Join-Path $ServerDir 'HttpServer.ps1'
+                if (Test-Path $http) { . $http }
                 Get-ChildItem -Path (Join-Path $ServerDir 'lib') -Filter '*.ps1' | ForEach-Object {
                     if ($_.Name -ieq 'Bootstrap.ps1') { return }
                     try { . $_.FullName } catch {}
