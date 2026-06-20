@@ -13,6 +13,8 @@ here cover everything those tags shipped.
 
 ## [Unreleased]
 
+## [12.9.2] - 2026-06-19
+
 ### Added
 
 - **Players → Journey: new "Incomplete" filter tab.** Sits between Done and
