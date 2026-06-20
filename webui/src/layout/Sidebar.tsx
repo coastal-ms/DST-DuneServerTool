@@ -25,6 +25,7 @@ type Props = {
 export function Sidebar({ collapsed }: Props) {
   const { data: upd } = useUpdateCheck()
   const version = upd?.currentVersion ?? ''
+  const onTestChannel = upd?.channel === 'test'
   const [showPortalConfirm, setShowPortalConfirm] = useState(false)
   const [portalDetaching, setPortalDetaching] = useState(false)
   const [portalError, setPortalError] = useState<string | null>(null)
@@ -258,9 +259,29 @@ export function Sidebar({ collapsed }: Props) {
           <Icon name="Coffee" size={collapsed ? 14 : 11} />
           {!collapsed && <span>Buy Me a Coffee</span>}
         </a>
+        {collapsed && onTestChannel && (
+          <NavLink
+            to="/settings"
+            title="Test update channel — receiving pre-release builds. Click to open Settings."
+            className="w-full flex items-center justify-center h-8 rounded-md border border-warning/50 text-warning hover:bg-warning/15 hover:border-warning/70 transition-colors"
+          >
+            <Icon name="FlaskConical" size={14} />
+          </NavLink>
+        )}
         {!collapsed && (
           <div className="flex items-center justify-between">
-            <span>{version ? fmtToolVersion(version) : '—'}</span>
+            <span className="flex items-center gap-1.5">
+              {version ? fmtToolVersion(version) : '—'}
+              {onTestChannel && (
+                <NavLink
+                  to="/settings"
+                  title="Test update channel — receiving pre-release builds. Click to open Settings and switch back to Stable."
+                  className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[9px] font-semibold uppercase tracking-wider border border-warning/40 bg-warning/10 text-warning hover:bg-warning/20 transition-colors"
+                >
+                  <Icon name="FlaskConical" size={9} /> Test
+                </NavLink>
+              )}
+            </span>
             <span className="font-mono">coastal-ms</span>
           </div>
         )}

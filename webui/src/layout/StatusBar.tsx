@@ -1,5 +1,7 @@
+import { Link } from 'react-router-dom'
 import { Icon } from '../components/Icon'
 import { useStatus } from '../hooks/useStatus'
+import { useUpdateCheck } from '../hooks/useUpdateCheck'
 import type { BgState, VmStatus, PortStatus } from '../api/types'
 
 function vmPillClass(vm: VmStatus | undefined | null): string {
@@ -31,6 +33,8 @@ const BG_STYLES: Record<BgState | 'unknown', { cls: string; label: string }> = {
 
 export function StatusBar() {
   const { status, loading, forceRefresh } = useStatus()
+  const { data: upd } = useUpdateCheck()
+  const onTestChannel = upd?.channel === 'test'
   const vm    = status?.vm ?? null
   const ports = status?.ports ?? null
   const bgKey = (status?.bg?.state ?? 'unknown') as BgState | 'unknown'
@@ -57,6 +61,15 @@ export function StatusBar() {
         )}
       </div>
       <div className="flex items-center gap-2 shrink-0">
+        {onTestChannel && (
+          <Link
+            to="/settings"
+            className="pill-warning hover:bg-warning/20 transition-colors"
+            title="This install is on the Test update channel — it receives pre-release builds shared for verification. Click to open Settings and switch back to Stable."
+          >
+            <Icon name="FlaskConical" size={11} /> TEST CHANNEL
+          </Link>
+        )}
         <span className={portPillClass(ports, 7777, 'UDP')} title="Game server ports (forward on your router/firewall)">
           <Icon name="Plug" size={11} /> 7777–7810 UDP
         </span>
