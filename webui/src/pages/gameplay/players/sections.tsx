@@ -205,7 +205,11 @@ export function SpecsSection({ player, canWrite, demo, refreshKey, flash, onChan
               <SpecRow key={name} name={name} track={t} canWrite={canWrite} busy={busy}
                 onGrantMax={() => void run(() => grantMaxSpec(player.controller_id, name), 'Grant max')}
                 onReset={() => void run(() => resetSpec(player.controller_id, name), 'Reset')}
-                onAdd5k={() => run(() => awardSpecXp(player.controller_id, name, 5000), '+5000 XP')}
+                onAdd5k={() => {
+                  if (window.confirm(`Add 5,000 ${name} XP to ${player.name}?\n\nThis writes the track's stored XP, which the game treats as authoritative on next login. If the character has in-game spec progress not yet saved to the server, it can be overwritten (the stored value wins). Make sure you have a database backup before using this. The change appears in-game after a full re-login.`)) {
+                    void run(() => awardSpecXp(player.controller_id, name, 5000), '+5000 XP')
+                  }
+                }}
               />
             )
           })}

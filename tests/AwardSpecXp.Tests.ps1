@@ -1,13 +1,14 @@
 # Tests the offline specialization-XP grant (the "+5000 XP" button on
 # Players -> Specs): Invoke-DunePlayerAwardXp in lib/GameplayPlayers.ps1.
 #
-# Regression guard for the Discord-reported bug "Specs +5K Grant shows applied
-# in DST but not in-game": the old code did a raw `UPDATE ... SET xp_amount`
-# only, leaving `level` stale and bypassing the Funcom stored proc, so the
-# grant never reflected in-game. The fix routes through
-# dune.set_specialization_xp_and_level (writes BOTH xp_amount and level),
-# caps XP at the max, recomputes level on the 0..max -> 0..100 scale, and
-# never demotes a level already earned in-game.
+# Behavior: ADD the delta to the stored track, seeding the row from 0 when none
+# exists (insert-at-delta), routing through dune.set_specialization_xp_and_level
+# (writes BOTH xp_amount and level). The game treats specialization_tracks as
+# authoritative on login, so the value reflects in-game after a full re-login.
+# Caps XP at the max, recomputes level on the 0..max -> 0..100 scale, and never
+# demotes a level already earned in-game. The UI gates the button behind a
+# confirm warning because seeding from 0 sets (not adds to) any hidden in-save
+# progress that was never persisted to this table.
 
 BeforeAll {
     . (Join-Path $PSScriptRoot '_TestHelpers.ps1')
@@ -85,7 +86,7 @@ Describe 'Invoke-DunePlayerAwardXp (offline spec XP grant)' -Tag 'Players' {
         $script:lastWriteSql | Should -Match '90::real'    # level preserved, not lowered
     }
 
-    It 'creates the track via the stored proc when none exists yet' {
+    It 'seeds the track via the stored proc when none exists yet (insert-at-delta)' {
         $script:curRow = $null
         $r = Invoke-DunePlayerAwardXp -Ip '1.2.3.4' -ControllerId 555 -TrackType 'Crafting' -Delta 5000
         $r.ok | Should -BeTrue

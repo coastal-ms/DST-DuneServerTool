@@ -178,8 +178,19 @@ function Invoke-DunePlayerRename {
     return @{ ok = $true; message = "Renamed character to '$Name'." }
 }
 
-# Award specialization XP (award-xp): UPDATE, INSERT if no row. Hard cap 44182.
-# Keyed by controller id (specialization_tracks.player_id = controller id).
+# Award specialization XP (award-xp): ADD the delta to the stored track, seeding
+# the row from zero when none exists. Hard cap 44182. Keyed by controller id
+# (specialization_tracks.player_id = controller id).
+#
+# specialization_tracks is the table the game reads on login and treats as
+# authoritative, so the new value is reflected in-game after a full re-login. When
+# no row exists the current value is treated as 0 and the row is created at the
+# delta (matches the reference implementation's award path). NOTE: for a character
+# whose real progress has not been persisted to this table, this seeds from 0 and
+# therefore sets the absolute value rather than adding to hidden in-save progress;
+# this is the intended, accepted admin behavior. Routes through the SAME Funcom
+# stored proc as Grant Max (dune.set_specialization_xp_and_level), writing BOTH
+# xp_amount and level so the grant reflects in-game.
 function Invoke-DunePlayerAwardXp {
     param([string]$Ip, [long]$ControllerId, [string]$TrackType, [int]$Delta)
     $safeTrack = ConvertTo-DuneSqlString $TrackType
