@@ -968,11 +968,23 @@ VALUES ($AccountId::bigint, '$safeNode', false,
     $bumpRes = Invoke-DuneApplyTagsWithTierBump -Ip $Ip -AccountId $AccountId -Tags $tags
     if (-not $bumpRes.ok) { return @{ ok = $false; error = $bumpRes.error } }
 
-    if ($SkipMsg) { return @{ ok = $true } }
+    # Grant any recipes this subtree awards. The recipe award (stored on the pawn
+    # TechKnowledge) is what unlocks the related ability slot / gear - not a tag -
+    # so every journey-completion path must grant it here. Best-effort: a missing
+    # pawn TechKnowledge component must not fail the journey completion.
+    $recipes = Get-DuneRecipesForJourneyNodeSubtree -NodeId $NodeId
+    $recipeCount = 0
+    foreach ($rcp in $recipes) {
+        $rr = Invoke-DuneGrantRecipe -Ip $Ip -AccountId $AccountId -RecipeKey $rcp
+        if ($rr.ok) { $recipeCount++ }
+    }
+    $recipeMsg = if ($recipeCount -gt 0) { ", +$recipeCount recipe(s)" } else { '' }
+
+    if ($SkipMsg) { return @{ ok = $true; recipes = $recipeCount } }
     return @{
         ok = $true
-        message = "Completed $NodeId + $updated node(s)$($bumpRes.extra) - takes effect on next login"
-        nodes = $updated; tags = $tags.Count
+        message = "Completed $NodeId + $updated node(s)$($bumpRes.extra)$recipeMsg - takes effect on next login"
+        nodes = $updated; tags = $tags.Count; recipes = $recipeCount
     }
 }
 
@@ -1330,6 +1342,39 @@ WHERE a.id = $pawnID::bigint
 }
 
 # ---------------------------------------------------------------------------
+# Journey node -> awarded recipe map. Completing a journey node in-game grants a
+# crafting recipe into the pawn's TechKnowledge, and that award (not a tag) is
+# what unlocks the related ability slot / gear. This is the single source of
+# truth so EVERY path that completes journey nodes (Apply Aql Trial, Unlock Main
+# Quest, Apply Quick Preset, single Complete) grants the recipe via the shared
+# Invoke-DunePlayerCompleteJourneyNode chokepoint. Mirrors the JourneySets.Fremkit.*
+# tag map in dune-tags.json; recipe ItemKeys verified against live pawn data.
+# ---------------------------------------------------------------------------
+$script:DuneJourneyNodeRecipes = [ordered]@{
+    'DA_MQ_FindTheFremen.FirstTest.FirstQuestion.CompleteFirstTest'      = 'RCP_LeakyStillsuit_Top_Recipe'
+    'DA_MQ_FindTheFremen.SecondTest.SecondQuestion.CompleteSecondTest'   = 'RCP_ChoamStaticCompactorRecipe'
+    'DA_MQ_FindTheFremen.FourthTest.FourthQuestion.CompleteFourthTest'   = 'RCP_Crysknife_Recipe'
+    'DA_MQ_FindTheFremen.FifthTest.FifthQuestion.CompleteFifthTest'      = 'RCP_T4_Structure_Thumper1_Recipe'
+    'DA_MQ_FindTheFremen.SeventhTest.SeventhQuestion.CompleteSeventhTest' = 'RCP_StilltentRecipe'
+}
+
+# Recipes awarded by a journey node and everything beneath it (subtree match),
+# mirroring Get-DuneTagsForJourneyNodeSubtree. De-duplicated.
+function Get-DuneRecipesForJourneyNodeSubtree {
+    param([string]$NodeId)
+    $out = New-Object System.Collections.Generic.List[string]
+    $seen = @{}
+    $prefix = $NodeId + '.'
+    foreach ($node in $script:DuneJourneyNodeRecipes.Keys) {
+        if ($node -eq $NodeId -or $node.StartsWith($prefix)) {
+            $rcp = [string]$script:DuneJourneyNodeRecipes[$node]
+            if ($rcp -and -not $seen.ContainsKey($rcp)) { $seen[$rcp] = $true; [void]$out.Add($rcp) }
+        }
+    }
+    return @($out)
+}
+
+# ---------------------------------------------------------------------------
 # Aql trial completion deltas. Each entry is the FULL set of account changes
 # observed in a before/after snapshot diff when the trial is completed in-game:
 # the journey node to complete, the gameplay tags that flip (including the
@@ -1358,9 +1403,10 @@ function Get-DuneAqlTrialCatalog {
     return $list
 }
 
-# Apply the full snapshot diff for an Aql trial: complete the journey subtree,
-# apply every tag that flips, and grant the awarded recipe. Offline-only at the
-# route layer. Takes effect on next login.
+# Apply the full snapshot diff for an Aql trial: complete the journey subtree
+# (which, via the shared node->recipe map, also grants the awarded recipe that
+# unlocks the ability slot) and apply the extra cinematic-trigger tags the
+# node->tag map doesn't cover. Offline-only at the route layer. Next login.
 function Invoke-DuneApplyAqlTrial {
     param([string]$Ip, [long]$AccountId, [string]$Trial)
     if ($AccountId -le 0) { return @{ ok = $false; error = 'account_id is required.' } }
@@ -1384,18 +1430,14 @@ function Invoke-DuneApplyAqlTrial {
         if (-not $tr.ok) { return @{ ok = $false; error = "apply trial tags: $($tr.error)" } }
     }
 
-    # 3) Grant the awarded recipe into pawn TechKnowledge. This award is what
-    #    unlocks the empty ability slot the trial opens.
-    $recipeName = ''
-    if ($delta.recipe) {
-        $gr = Invoke-DuneGrantRecipe -Ip $Ip -AccountId $AccountId -RecipeKey ([string]$delta.recipe)
-        if (-not $gr.ok) { return @{ ok = $false; error = "grant trial recipe: $($gr.error)" } }
-        $recipeName = [string]$gr.recipe
-    }
+    # 3) The journey completion in step 1 already granted this trial's recipe via
+    #    the shared node->recipe map (Get-DuneRecipesForJourneyNodeSubtree), which
+    #    is what unlocks the empty ability slot the trial opens.
+    $recipeCount = [int]$jr.recipes
 
     return @{
         ok      = $true
-        message = "Applied $($delta.label): journey subtree completed, $($tags.Count) tag(s), recipe $recipeName - takes effect on next login"
+        message = "Applied $($delta.label): journey subtree completed, $($tags.Count) extra tag(s), $recipeCount recipe(s) - takes effect on next login"
         trial   = $key
     }
 }
