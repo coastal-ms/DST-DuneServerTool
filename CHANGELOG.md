@@ -22,6 +22,15 @@ here cover everything those tags shipped.
   the owner is offline — it's a direct database write — and, like all container
   edits, the items appear in-game after the next battlegroup (server zone)
   restart.
+- **Players → Progression: new "Apply Aql Trial" action.** Reproduces the full
+  account diff of completing a Trial of Aql in-game — completes the trial's
+  journey subtree, applies the gameplay tags that flip, and grants the recipe
+  award that unlocks the corresponding ability slot. The slot is gated by recipe
+  knowledge on the character's pawn (TechKnowledge), not a journey tag, so the
+  Tags editor alone never unlocked it — this fixes characters a tag-only edit
+  left stuck. Offline-only (the pawn blob is RAM-authoritative while online) and
+  only the named trial's subtree is completed, so later trials proceed normally.
+  Ships Trial 4 (3rd ability slot / Cryss Knife recipe).
 
 ## [12.9.2] - 2026-06-19
 
