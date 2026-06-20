@@ -26,13 +26,17 @@ here cover everything those tags shipped.
 
 ### Fixed
 
-- **+5K spec grant not reflecting in-game.** Gameplay Admin &rarr; Players &rarr;
-  Specs "+5K Grant" wrote `xp_amount` directly to `dune.specialization_tracks`
-  and never updated level, so the change did not appear in-game.
-  `Invoke-DunePlayerAwardXp` now routes through the same Funcom stored proc as
-  "Grant Max" (`dune.set_specialization_xp_and_level`): it reads current
-  xp/level, adds the clamped delta, recomputes level without demoting, and writes
-  both. Appears in-game after a full client re-login.
+- **+5K spec grant not reflecting in-game / behaving as an absolute set.**
+  Gameplay Admin &rarr; Players &rarr; Specs "+5K Grant" wrote `xp_amount`
+  directly to `dune.specialization_tracks` and never updated level, so the change
+  did not appear in-game. `Invoke-DunePlayerAwardXp` now routes through the same
+  Funcom stored proc as "Grant Max" (`dune.set_specialization_xp_and_level`): it
+  reads current xp/level, adds the clamped delta, recomputes level without
+  demoting, and writes both. When no track row exists yet the value is seeded from
+  zero (created at the delta). The button is now gated behind a confirm warning
+  noting that `specialization_tracks` is authoritative on login (so seeding can
+  overwrite un-persisted in-game progress) and to keep a database backup. Appears
+  in-game after a full client re-login.
 
 ## [12.9.6] - 2026-06-20
 
