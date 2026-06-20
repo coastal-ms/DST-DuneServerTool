@@ -13,6 +13,17 @@ here cover everything those tags shipped.
 
 ## [Unreleased]
 
+### Fixed
+
+- **Public IP / DDNS: "did not resolve to a usable public IPv4 address" on the
+  first attempt.** Right after a network or public-IP change, the first DDNS
+  lookup could hit a brief empty answer that Windows then negative-cached,
+  making every retry keep failing until the cache expired (the "click off, wait,
+  then it resolves" symptom). DST now retries the lookup a few times and falls
+  back to querying public resolvers (1.1.1.1 / 8.8.8.8) directly, which bypasses
+  a poisoned local DNS cache, so a hostname that genuinely resolves succeeds on
+  the first click.
+
 ## [12.9.3] - 2026-06-20
 
 ### Added

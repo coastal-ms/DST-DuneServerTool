@@ -68,6 +68,36 @@ Describe 'DDNS hostname validation' {
     }
 }
 
+Describe 'DDNS hostname resolution resilience' {
+    It 'retries when the first lookup returns nothing (transient negative cache)' {
+        $script:resolveCalls = 0
+        Mock -CommandName Get-DuneHostnameIPv4Records -MockWith {
+            $script:resolveCalls++
+            if ($script:resolveCalls -lt 2) { return @() }
+            return @('50.123.76.96')
+        }
+        $r = Resolve-DunePublicIpHostname -Hostname 'dunecoastal.myvnc.com'
+        $r.ok | Should -BeTrue
+        $r.publicIp | Should -Be '50.123.76.96'
+        $script:resolveCalls | Should -BeGreaterThan 1
+    }
+
+    It 'fails cleanly after exhausting retries when nothing resolves' {
+        Mock -CommandName Get-DuneHostnameIPv4Records -MockWith { @() }
+        $r = Resolve-DunePublicIpHostname -Hostname 'dunecoastal.myvnc.com'
+        $r.ok | Should -BeFalse
+        $r.status | Should -Be 400
+        $r.message | Should -Match 'Could not resolve'
+    }
+
+    It 'ignores private answers and reports no usable public IP' {
+        Mock -CommandName Get-DuneHostnameIPv4Records -MockWith { @('192.168.23.219') }
+        $r = Resolve-DunePublicIpHostname -Hostname 'dunecoastal.myvnc.com'
+        $r.ok | Should -BeFalse
+        $r.message | Should -Match 'usable public IPv4'
+    }
+}
+
 Describe 'settings.conf renderer' {
     It 'renders exactly four lines' {
         $text = New-DuneSettingsConfText -Battlegroup 'sh-test' -Image 'registry.funcom.com/funcom/self-hosting/seabass-server:1988751-0-shipping' -VmIp '192.168.1.50' -PublicIp '8.8.8.8'

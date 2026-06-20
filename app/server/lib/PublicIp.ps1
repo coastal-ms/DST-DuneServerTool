@@ -162,24 +162,51 @@ function Test-DuneDdnsHostname {
     return @{ ok=$true; hostname=$h }
 }
 
+# Gather A records for a hostname using whichever method first yields an
+# answer. The system resolver is tried first, then direct queries to public
+# resolvers (1.1.1.1 / 8.8.8.8). Querying a specific -Server bypasses the
+# Windows DNS Client cache, so a momentary negative answer cached right after
+# a network/IP change (DDNS providers like No-IP use very low TTLs and lag a
+# few seconds to propagate) cannot keep poisoning subsequent lookups. A final
+# .NET GetHostAddresses pass covers hosts-file / odd-resolver setups.
+function Get-DuneHostnameIPv4Records {
+    param([string]$Name)
+    $sources = @(
+        { Resolve-DnsName -Name $Name -Type A -DnsOnly -NoHostsFile -ErrorAction Stop }
+        { Resolve-DnsName -Name $Name -Type A -Server '1.1.1.1' -DnsOnly -NoHostsFile -ErrorAction Stop }
+        { Resolve-DnsName -Name $Name -Type A -Server '8.8.8.8' -DnsOnly -NoHostsFile -ErrorAction Stop }
+    )
+    foreach ($src in $sources) {
+        try {
+            $ips = @(& $src |
+                Where-Object { $_.IPAddress } |
+                Select-Object -ExpandProperty IPAddress -Unique)
+            if ($ips.Count -gt 0) { return $ips }
+        } catch { }
+    }
+    try {
+        return @([System.Net.Dns]::GetHostAddresses($Name) |
+            Where-Object { $_.AddressFamily -eq [System.Net.Sockets.AddressFamily]::InterNetwork } |
+            ForEach-Object { $_.ToString() } |
+            Select-Object -Unique)
+    } catch { return @() }
+}
+
 function Resolve-DunePublicIpHostname {
     param([string]$Hostname)
     $hv = Test-DuneDdnsHostname -Hostname $Hostname
     if (-not $hv.ok) { return $hv }
+    # Retry a few times: a lookup fired immediately after an IP/network change
+    # can briefly return nothing before the DDNS record propagates. Without the
+    # retry the user sees a spurious "did not resolve" until the answer settles.
     $records = @()
-    try {
-        $records = @(Resolve-DnsName -Name $hv.hostname -Type A -ErrorAction Stop |
-            Where-Object { $_.IPAddress } |
-            Select-Object -ExpandProperty IPAddress -Unique)
-    } catch {
-        try {
-            $records = @([System.Net.Dns]::GetHostAddresses($hv.hostname) |
-                Where-Object { $_.AddressFamily -eq [System.Net.Sockets.AddressFamily]::InterNetwork } |
-                ForEach-Object { $_.ToString() } |
-                Select-Object -Unique)
-        } catch {
-            return @{ ok=$false; status=400; message="Could not resolve hostname '$($hv.hostname)' to an IPv4 address." }
-        }
+    for ($attempt = 1; $attempt -le 4; $attempt++) {
+        $records = @(Get-DuneHostnameIPv4Records -Name $hv.hostname)
+        if ($records.Count -gt 0) { break }
+        if ($attempt -lt 4) { Start-Sleep -Milliseconds 1200 }
+    }
+    if ($records.Count -lt 1) {
+        return @{ ok=$false; status=400; message="Could not resolve hostname '$($hv.hostname)' to an IPv4 address." }
     }
     $public = @()
     foreach ($r in $records) {
