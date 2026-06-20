@@ -16,14 +16,57 @@ $script:DuneUpdateCache = $null    # cached release lookup (1 h TTL)
 # --- Helpers -----------------------------------------------------------------
 
 function Compare-DuneSemver {
+    # Prerelease-aware semver compare. Returns <0 if A<B, 0 if equal, >0 if A>B.
+    # Numeric core (major.minor.patch) compares first. On a tie, semver
+    # precedence applies: a build with NO prerelease tag outranks the same core
+    # WITH one (12.9.5 > 12.9.5-test1), and among prereleases the dot-separated
+    # identifiers compare left-to-right (12.9.5-test1 < 12.9.5-test2,
+    # rc.1 < rc.2). This is what lets a tester on a -testN build roll onto the
+    # final release when they switch back to the Stable channel.
     param([string]$A, [string]$B)
-    $clean = { param($v) ($v -replace '^v','').Split('+')[0].Split('-')[0] }
-    $pa = (& $clean $A).Split('.') | ForEach-Object { [int]($_ -as [int]) }
-    $pb = (& $clean $B).Split('.') | ForEach-Object { [int]($_ -as [int]) }
-    for ($i = 0; $i -lt [Math]::Max($pa.Count, $pb.Count); $i++) {
-        $x = if ($i -lt $pa.Count) { $pa[$i] } else { 0 }
-        $y = if ($i -lt $pb.Count) { $pb[$i] } else { 0 }
+    $parse = {
+        param($v)
+        $s = ($v -replace '^v','').Split('+')[0]   # strip leading v + build metadata
+        $dash = $s.IndexOf('-')
+        if ($dash -ge 0) { $core = $s.Substring(0, $dash); $pre = $s.Substring($dash + 1) }
+        else             { $core = $s;                      $pre = '' }
+        [pscustomobject]@{
+            Core = @($core.Split('.') | ForEach-Object { [int]($_ -as [int]) })
+            Pre  = if ($pre) { @($pre.Split('.')) } else { @() }
+        }
+    }
+    $pa = & $parse $A
+    $pb = & $parse $B
+    $maxc = [Math]::Max($pa.Core.Count, $pb.Core.Count)
+    for ($i = 0; $i -lt $maxc; $i++) {
+        $x = if ($i -lt $pa.Core.Count) { $pa.Core[$i] } else { 0 }
+        $y = if ($i -lt $pb.Core.Count) { $pb.Core[$i] } else { 0 }
         if ($x -ne $y) { return ($x - $y) }
+    }
+    # Normalize to arrays: a single-identifier prerelease (e.g. 'test1') is
+    # stored as a scalar string on the parse object, so re-wrap with @() before
+    # indexing or `$x[0]` would index the string's first character.
+    $preA = @($pa.Pre); $preB = @($pb.Pre)
+    $aHasPre = $preA.Count -gt 0
+    $bHasPre = $preB.Count -gt 0
+    if (-not $aHasPre -and -not $bHasPre) { return 0 }
+    if (-not $aHasPre) { return 1 }   # A final, B prerelease -> A wins
+    if (-not $bHasPre) { return -1 }  # A prerelease, B final -> B wins
+    $maxp = [Math]::Max($preA.Count, $preB.Count)
+    for ($i = 0; $i -lt $maxp; $i++) {
+        if ($i -ge $preA.Count) { return -1 }   # shorter prerelease set ranks lower
+        if ($i -ge $preB.Count) { return 1 }
+        $ai = [string]$preA[$i]; $bi = [string]$preB[$i]
+        $an = 0; $bn = 0
+        $aNum = [int]::TryParse($ai, [ref]$an)
+        $bNum = [int]::TryParse($bi, [ref]$bn)
+        if ($aNum -and $bNum) { if ($an -ne $bn) { return ($an - $bn) } }
+        elseif ($aNum)        { return -1 }   # numeric identifier ranks below alphanumeric
+        elseif ($bNum)        { return 1 }
+        else {
+            $cmp = [string]::CompareOrdinal($ai, $bi)
+            if ($cmp -ne 0) { return $cmp }
+        }
     }
     return 0
 }
@@ -70,6 +113,99 @@ function Get-DuneLatestRelease {
     }
 }
 
+$script:DuneReleasesCache = $null   # cached /releases list (1 h TTL)
+
+# Fetch the repo's recent releases (newest-first), each normalized to the same
+# shape Get-DuneLatestRelease emits plus isPrerelease/isDraft. Throws on
+# network failure so callers can decide how to degrade.
+function Get-DuneReleases {
+    param([switch]$Force)
+    $now = [DateTime]::UtcNow
+    if (-not $Force -and $script:DuneReleasesCache -and
+        ($now - $script:DuneReleasesCache.fetchedAt).TotalMinutes -lt 60) {
+        return $script:DuneReleasesCache.releases
+    }
+    [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
+    $headers = @{ 'User-Agent' = $script:DuneUpdateUA; 'Accept' = 'application/vnd.github+json' }
+    $uri = "https://api.github.com/repos/$($script:DuneUpdateRepo)/releases?per_page=30"
+    $rels = Invoke-RestMethod -Uri $uri -Headers $headers -TimeoutSec 15 -ErrorAction Stop
+    $mapped = foreach ($rel in $rels) {
+        $asset = $rel.assets | Where-Object { $_.name -eq 'DuneServerSetup.exe' } | Select-Object -First 1
+        [pscustomobject]@{
+            tag          = [string]$rel.tag_name
+            name         = [string]$rel.name
+            htmlUrl      = [string]$rel.html_url
+            publishedAt  = [string]$rel.published_at
+            releaseNotes = [string]$rel.body
+            isPrerelease = [bool]$rel.prerelease
+            isDraft      = [bool]$rel.draft
+            assetName    = if ($asset) { [string]$asset.name } else { $null }
+            assetUrl     = if ($asset) { [string]$asset.browser_download_url } else { $null }
+            assetSize    = if ($asset) { [int64]$asset.size } else { 0 }
+        }
+    }
+    $script:DuneReleasesCache = [pscustomobject]@{ fetchedAt = $now; releases = @($mapped) }
+    return $script:DuneReleasesCache.releases
+}
+
+# Test-channel candidates: published pre-releases that actually carry the
+# installer asset, newest-first. These populate the Settings dropdown.
+function Get-DunePreReleaseList {
+    param([switch]$Force)
+    return @(Get-DuneReleases -Force:$Force |
+        Where-Object { $_.isPrerelease -and -not $_.isDraft -and $_.assetUrl })
+}
+
+# Resolve which release the in-app updater should act on for THIS install,
+# honoring the configured channel + pinned pre-release tag. Returns the same
+# object shape as Get-DuneLatestRelease, annotated with `channel` and
+# `isPrerelease`. On the test channel: pin an explicit tag if set and still
+# available, else default to the newest pre-release. Falls back to the stable
+# release if the test channel has no usable pre-release so a tester is never
+# stranded.
+function Get-DuneSelectedRelease {
+    param([switch]$Force)
+    $channel = Get-DuneUpdateChannel
+    if ($channel -ne 'test') {
+        $rel = Get-DuneLatestRelease -Force:$Force
+        if ($rel) {
+            Add-Member -InputObject $rel -NotePropertyName channel      -NotePropertyValue 'stable' -Force
+            Add-Member -InputObject $rel -NotePropertyName isPrerelease -NotePropertyValue $false   -Force
+        }
+        return $rel
+    }
+    try {
+        $list = Get-DunePreReleaseList -Force:$Force
+    } catch {
+        return [pscustomobject]@{ fetchedAt = [DateTime]::UtcNow; tag = $null; channel = 'test'; error = $_.Exception.Message }
+    }
+    if (-not $list -or $list.Count -eq 0) {
+        $rel = Get-DuneLatestRelease -Force:$Force
+        if ($rel) {
+            Add-Member -InputObject $rel -NotePropertyName channel      -NotePropertyValue 'test' -Force
+            Add-Member -InputObject $rel -NotePropertyName isPrerelease -NotePropertyValue $false -Force
+        }
+        return $rel
+    }
+    $pin = Get-DuneUpdatePreReleaseTag
+    $chosen = $null
+    if ($pin) { $chosen = $list | Where-Object { $_.tag -eq $pin } | Select-Object -First 1 }
+    if (-not $chosen) { $chosen = $list[0] }   # newest available pre-release
+    return [pscustomobject]@{
+        fetchedAt    = [DateTime]::UtcNow
+        tag          = $chosen.tag
+        name         = $chosen.name
+        htmlUrl      = $chosen.htmlUrl
+        publishedAt  = $chosen.publishedAt
+        releaseNotes = $chosen.releaseNotes
+        assetName    = $chosen.assetName
+        assetUrl     = $chosen.assetUrl
+        assetSize    = $chosen.assetSize
+        channel      = 'test'
+        isPrerelease = $true
+    }
+}
+
 # --- Routes ------------------------------------------------------------------
 
 # GET /api/update/check[?force=1] — compare current vs latest release
@@ -80,11 +216,13 @@ Register-DuneRoute -Method GET -Path '/api/update/check' -Handler {
         if ($req.QueryString['force']) {
             $force = ($req.QueryString['force'] -eq '1' -or $req.QueryString['force'] -eq 'true')
         }
-        $rel     = Get-DuneLatestRelease -Force:$force
+        $rel     = Get-DuneSelectedRelease -Force:$force
         $current = [string]$script:DuneToolVersion
+        $channel = Get-DuneUpdateChannel
         if (-not $rel -or $rel.error) {
             Write-DuneJson -Response $res -Body @{
                 available       = $false
+                channel         = $channel
                 currentVersion  = $current
                 checkedAt       = (Get-Date).ToString('o')
                 error           = $rel.error
@@ -94,8 +232,7 @@ Register-DuneRoute -Method GET -Path '/api/update/check' -Handler {
         $diff      = Compare-DuneSemver -A $rel.tag -B $current
         # `available` means a newer release exists (independent of whether an
         # installer asset is attached). `installable` is the stricter flag:
-        # newer release AND the installer .exe is uploaded so the in-app
-        # auto-updater can actually run it.
+        # the in-app auto-updater can actually run it.
         #
         # Background: every DST release MUST upload `DuneServerSetup.exe` as
         # its only asset (hard project rule). If a release is ever published
@@ -105,13 +242,23 @@ Register-DuneRoute -Method GET -Path '/api/update/check' -Handler {
         # the UI to silently report "up to date" while a newer tag is live;
         # that's what happened with v10.1.12 (shipped asset-less) and is the
         # bug this split fixes.
+        #
+        # Channel nuance: on the Test channel the user has deliberately pinned
+        # a specific pre-release, so installing it is allowed whenever it
+        # differs from the running build (sideways re-install or rollback to an
+        # earlier -testN build are both intentional). On Stable the classic
+        # "strictly newer" rule applies.
+        $isTest       = ($channel -eq 'test')
         $available    = ($diff -gt 0)
         $hasAsset     = -not [string]::IsNullOrEmpty($rel.assetUrl)
-        $installable  = $available -and $hasAsset
+        $installable  = if ($isTest) { $hasAsset -and ($diff -ne 0) } else { $available -and $hasAsset }
         Write-DuneJson -Response $res -Body @{
             available       = $available
             installable     = $installable
             assetMissing    = ($available -and -not $hasAsset)
+            channel         = $channel
+            isPrerelease    = [bool]$rel.isPrerelease
+            selectedTag     = $rel.tag
             currentVersion  = $current
             latestVersion   = ($rel.tag -replace '^v','')
             tagName         = $rel.tag
@@ -122,6 +269,41 @@ Register-DuneRoute -Method GET -Path '/api/update/check' -Handler {
             assetName       = $rel.assetName
             assetSize       = $rel.assetSize
             checkedAt       = (Get-Date).ToString('o')
+        }
+    } catch {
+        Write-DuneError -Response $res -Status 500 -Message $_.Exception.Message
+    }
+}
+
+# GET /api/update/prereleases[?force=1] — list test-channel candidate builds
+# (published pre-releases that carry the installer asset, newest-first) for the
+# Settings pre-release picker. `selectedTag` echoes the currently pinned tag;
+# an empty pin means "latest" (the first item).
+Register-DuneRoute -Method GET -Path '/api/update/prereleases' -Handler {
+    param($req, $res, $routeParams, $body)
+    try {
+        $force = $false
+        if ($req.QueryString['force']) {
+            $force = ($req.QueryString['force'] -eq '1' -or $req.QueryString['force'] -eq 'true')
+        }
+        $list  = Get-DunePreReleaseList -Force:$force
+        $items = foreach ($r in $list) {
+            @{
+                tag         = $r.tag
+                name        = $r.name
+                version     = ($r.tag -replace '^v','')
+                publishedAt = $r.publishedAt
+                releaseUrl  = $r.htmlUrl
+                assetSize   = $r.assetSize
+                hasAsset    = $true
+            }
+        }
+        Write-DuneJson -Response $res -Body @{
+            channel     = Get-DuneUpdateChannel
+            selectedTag = Get-DuneUpdatePreReleaseTag
+            count       = @($items).Count
+            releases    = @($items)
+            checkedAt   = (Get-Date).ToString('o')
         }
     } catch {
         Write-DuneError -Response $res -Status 500 -Message $_.Exception.Message
@@ -219,13 +401,19 @@ Register-DuneRoute -Method POST -Path '/api/update/install' -Handler {
             }
             return
         }
-        $rel = Get-DuneLatestRelease
+        $rel = Get-DuneSelectedRelease
         if (-not $rel -or -not $rel.assetUrl) {
-            Write-DuneError -Response $res -Status 503 -Message 'No installer asset available on latest release.'
+            Write-DuneError -Response $res -Status 503 -Message 'No installer asset available on the selected release.'
             return
         }
+        # Channel-aware gate. Stable blocks anything not strictly newer. Test
+        # only blocks re-installing the exact same build (diff == 0); a
+        # deliberate sideways install or rollback to an earlier -testN build is
+        # allowed so a tester can move between candidate builds at will.
+        $channel = Get-DuneUpdateChannel
         $diff = Compare-DuneSemver -A $rel.tag -B ([string]$script:DuneToolVersion)
-        if ($diff -le 0) {
+        $blocked = if ($channel -eq 'test') { $diff -eq 0 } else { $diff -le 0 }
+        if ($blocked) {
             Write-DuneJson -Response $res -Body @{
                 launched = $false
                 reason   = 'Already up to date.'

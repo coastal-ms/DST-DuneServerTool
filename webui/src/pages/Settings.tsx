@@ -3,7 +3,7 @@ import { PageHeader } from '../components/PageHeader'
 import { Icon } from '../components/Icon'
 import { api } from '../api/client'
 import type { ConfigResponse } from '../api/types'
-import { checkForUpdate, installUpdate, type UpdateCheck } from '../api/update'
+import { checkForUpdate, installUpdate, listPreReleases, setUpdateChannel, setPreReleaseTag, type UpdateCheck, type PreReleaseInfo } from '../api/update'
 import { publishUpdateCheck } from '../hooks/useUpdateCheck'
 import { fmtToolVersion } from '../format'
 import { AppearanceCard } from './settings/AppearanceCard'
@@ -213,6 +213,68 @@ export function Settings() {
   // Collapsible-card state — both update cards start minimized.
   const [updExpanded, setUpdExpanded] = useState(false)
 
+  // Update channel + selectable pre-release (test channel). 'stable' follows
+  // the newest non-prerelease release; 'test' opts into targeted pre-release
+  // builds and reveals a dropdown to pick which one (default = newest).
+  const [updChannel, setUpdChannel] = useState<'stable' | 'test'>('stable')
+  const [preReleases, setPreReleases] = useState<PreReleaseInfo[]>([])
+  const [selectedTag, setSelectedTag] = useState<string>('')   // '' = latest
+  const [prLoading, setPrLoading] = useState(false)
+  const [updSwitching, setUpdSwitching] = useState(false)
+
+  async function loadPreReleases() {
+    setPrLoading(true)
+    try {
+      const r = await listPreReleases({ force: true })
+      setPreReleases(r.releases ?? [])
+      return r.releases ?? []
+    } catch (e) {
+      setUpdErr(e instanceof Error ? e.message : String(e))
+      return []
+    } finally {
+      setPrLoading(false)
+    }
+  }
+
+  async function onChangeChannel(next: 'stable' | 'test') {
+    if (next === updChannel || updSwitching) return
+    setUpdSwitching(true)
+    setUpdErr(null)
+    setUpdMsg(null)
+    try {
+      // Switching to Test with no prior pin defaults to "latest" (empty tag);
+      // the backend resolves that to the newest available pre-release.
+      const tag = next === 'test' ? selectedTag : ''
+      await setUpdateChannel(next, tag)
+      setUpdChannel(next)
+      if (next === 'test') {
+        await loadPreReleases()
+      } else {
+        setSelectedTag('')
+      }
+      await onCheckUpdate()
+    } catch (e) {
+      setUpdErr(e instanceof Error ? e.message : String(e))
+    } finally {
+      setUpdSwitching(false)
+    }
+  }
+
+  async function onSelectPreRelease(tag: string) {
+    setUpdSwitching(true)
+    setUpdErr(null)
+    setUpdMsg(null)
+    try {
+      await setPreReleaseTag(tag)
+      setSelectedTag(tag)
+      await onCheckUpdate()
+    } catch (e) {
+      setUpdErr(e instanceof Error ? e.message : String(e))
+    } finally {
+      setUpdSwitching(false)
+    }
+  }
+
   async function onCheckUpdate() {
     setUpdChecking(true)
     setUpdErr(null)
@@ -253,6 +315,13 @@ export function Settings() {
         const out = await api<ConfigResponse>('/api/config')
         setCfg(out)
         setValues({ ...out.values })
+        // Hydrate the update-channel toggle from persisted config.
+        const ch = (out.values?.UpdateChannel ?? '').trim().toLowerCase()
+        const isTest = ch === 'test' || ch === 'beta' || ch === 'prerelease' || ch === 'pre-release'
+        const pin = (out.values?.UpdatePreReleaseTag ?? '').trim()
+        setUpdChannel(isTest ? 'test' : 'stable')
+        setSelectedTag(pin)
+        if (isTest) { void loadPreReleases() }
       } catch (e) {
         setError(e instanceof Error ? e.message : String(e))
       } finally {
@@ -366,6 +435,11 @@ export function Settings() {
             <h2 className="text-lg font-semibold">Dune Server Tool updates</h2>
           </div>
           <div className="flex items-center gap-2">
+            {updChannel === 'test' && (
+              <span className="pill-warning text-xs flex items-center gap-1">
+                <Icon name="FlaskConical" size={11} /> Test
+              </span>
+            )}
             {updCheck && (
               <>
                 <span className="pill-muted text-xs">{fmtToolVersion(updCheck.currentVersion)}</span>
@@ -392,6 +466,66 @@ export function Settings() {
               </button>
             </div>
 
+            {/* Update channel toggle + selectable pre-release (test channel) */}
+            <div className="border-t border-border pt-3 space-y-2">
+              <div className="flex items-center gap-3 flex-wrap">
+                <span className="text-sm font-medium">Update channel</span>
+                <div className="inline-flex rounded-md border border-border overflow-hidden" role="group" aria-label="Update channel">
+                  <button
+                    type="button"
+                    onClick={() => onChangeChannel('stable')}
+                    disabled={updSwitching}
+                    className={`px-3 py-1.5 text-xs font-medium transition-colors ${updChannel === 'stable' ? 'bg-accent text-accent-fg' : 'bg-surface-2/40 text-text-muted hover:bg-surface-2'}`}
+                    aria-pressed={updChannel === 'stable'}
+                  >
+                    Stable
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => onChangeChannel('test')}
+                    disabled={updSwitching}
+                    className={`px-3 py-1.5 text-xs font-medium transition-colors border-l border-border ${updChannel === 'test' ? 'bg-warning text-accent-fg' : 'bg-surface-2/40 text-text-muted hover:bg-surface-2'}`}
+                    aria-pressed={updChannel === 'test'}
+                  >
+                    <Icon name="FlaskConical" size={12} className="inline -mt-0.5 mr-1" />
+                    Test
+                  </button>
+                </div>
+                {updSwitching && <Icon name="Loader2" size={14} className="animate-spin text-text-dim" />}
+              </div>
+              <p className="text-xs text-text-dim">
+                {updChannel === 'stable'
+                  ? 'Stable: receive the latest released version that everyone gets.'
+                  : 'Test: receive pre-release builds shared for verification before they go live. Pick which build below — the newest is selected by default.'}
+              </p>
+
+              {updChannel === 'test' && (
+                <div className="flex items-center gap-2 flex-wrap">
+                  <span className="text-sm">Pre-release build</span>
+                  {prLoading ? (
+                    <span className="text-xs text-text-dim flex items-center gap-1.5">
+                      <Icon name="Loader2" size={13} className="animate-spin" /> Loading…
+                    </span>
+                  ) : preReleases.length === 0 ? (
+                    <span className="text-xs text-text-dim">No pre-release builds available right now.</span>
+                  ) : (
+                    <select
+                      value={selectedTag || preReleases[0]?.tag || ''}
+                      onChange={e => void onSelectPreRelease(e.target.value)}
+                      disabled={updSwitching}
+                      className="bg-surface-2 border border-border rounded-md px-2 py-1.5 text-sm"
+                    >
+                      {preReleases.map((pr, i) => (
+                        <option key={pr.tag} value={pr.tag}>
+                          {pr.name?.trim() ? `${pr.name} (${pr.tag})` : pr.tag}{i === 0 ? ' — newest' : ''}
+                        </option>
+                      ))}
+                    </select>
+                  )}
+                </div>
+              )}
+            </div>
+
             {updCheck && (
               <div className="text-sm border-t border-border pt-3 flex flex-wrap items-center gap-3">
                 <span className="pill-muted">Current · {fmtToolVersion(updCheck.currentVersion)}</span>
@@ -405,7 +539,7 @@ export function Settings() {
                     release notes
                   </a>
                 )}
-                {updCheck.available && (updCheck.installable ?? true) && (
+                {(updCheck.installable ?? updCheck.available) && (
                   <button
                     type="button"
                     onClick={onInstallUpdate}
@@ -413,10 +547,14 @@ export function Settings() {
                     className="btn-primary ml-auto"
                   >
                     <Icon name={updInstalling ? 'Loader2' : 'Download'} size={15} className={updInstalling ? 'animate-spin' : ''} />
-                    {updInstalling ? 'Installing…' : `Update to ${fmtToolVersion(updCheck.latestVersion)}`}
+                    {updInstalling
+                      ? 'Installing…'
+                      : updCheck.channel === 'test'
+                        ? `Install ${fmtToolVersion(updCheck.latestVersion)}`
+                        : `Update to ${fmtToolVersion(updCheck.latestVersion)}`}
                   </button>
                 )}
-                {updCheck.available && updCheck.installable === false && (
+                {updCheck.assetMissing && (
                   <span className="text-xs text-warning ml-auto flex items-center gap-1.5">
                     <Icon name="AlertCircle" size={14} />
                     Newer version available, but this release has no installer attached. Use the{' '}
@@ -431,8 +569,12 @@ export function Settings() {
                     .
                   </span>
                 )}
-                {!updCheck.available && !updCheck.error && (
-                  <span className="text-xs text-text-dim ml-auto">You're on the latest version.</span>
+                {!(updCheck.installable ?? updCheck.available) && !updCheck.assetMissing && !updCheck.error && (
+                  <span className="text-xs text-text-dim ml-auto">
+                    {updCheck.channel === 'test'
+                      ? "You're on this test build."
+                      : "You're on the latest version."}
+                  </span>
                 )}
                 {updCheck.error && (
                   <span className="text-xs text-danger ml-auto">Check failed: {updCheck.error}</span>

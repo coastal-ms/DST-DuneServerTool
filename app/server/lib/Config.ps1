@@ -21,7 +21,9 @@ $script:DuneConfigKeys = @(
     'MarketBotToken',
     'DecoupleNoticeAck',
     'ClientConfigPath',
-    'DbPort'
+    'DbPort',
+    'UpdateChannel',
+    'UpdatePreReleaseTag'
 )
 
 # Default in-pod PostgreSQL port. All DST DB access runs as
@@ -105,6 +107,30 @@ function Get-DuneDbPort {
         }
     } catch {}
     return $default
+}
+
+# Update channel the in-app updater follows: 'stable' (default) or 'test'.
+# 'stable' serves the newest non-prerelease GitHub release (everyone). 'test'
+# opts into GitHub pre-releases (targeted Discord test builds). Any value other
+# than an explicit test/beta/prerelease token resolves to stable.
+function Get-DuneUpdateChannel {
+    try {
+        $raw = Read-DuneConfigRaw
+        $v = if ($raw.Contains('UpdateChannel')) { [string]$raw['UpdateChannel'] } else { '' }
+        if ($v -match '^(?i:test|beta|prerelease|pre-release)$') { return 'test' }
+    } catch {}
+    return 'stable'
+}
+
+# Specific pre-release tag the user pinned on the test channel (e.g.
+# 'v12.9.5-test1'). Empty string means "latest" (newest available build).
+function Get-DuneUpdatePreReleaseTag {
+    try {
+        $raw = Read-DuneConfigRaw
+        $v = if ($raw.Contains('UpdatePreReleaseTag')) { [string]$raw['UpdatePreReleaseTag'] } else { '' }
+        return $v.Trim()
+    } catch {}
+    return ''
 }
 
 function Save-DuneConfig {
