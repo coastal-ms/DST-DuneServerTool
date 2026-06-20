@@ -13,6 +13,8 @@ here cover everything those tags shipped.
 
 ## [Unreleased]
 
+## [12.9.3] - 2026-06-20
+
 ### Added
 
 - **Storage → container detail: "Give Package".** Hand a saved item package to
@@ -31,6 +33,13 @@ here cover everything those tags shipped.
   left stuck. Offline-only (the pawn blob is RAM-authoritative while online) and
   only the named trial's subtree is completed, so later trials proceed normally.
   Ships Trial 4 (3rd ability slot / Cryss Knife recipe).
+- **Find-the-Fremen completion now unlocks abilities everywhere.** The recipe
+  award is granted through the shared journey-completion path, so completing the
+  questline via **Unlock Main Quest**, **Apply Quick Preset** (Find the Fremen /
+  All of Act 1), a single **Complete node**, or **Apply Aql Trial** all grant the
+  matching Fremkit recipes (Stillsuit, Static Compactor, Cryss Knife, Thumper,
+  Stilltent) — and therefore the ability slot. Previously those paths completed
+  the journey but left the slot locked.
 
 ## [12.9.2] - 2026-06-19
 

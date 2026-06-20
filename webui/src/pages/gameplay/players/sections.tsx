@@ -1741,7 +1741,10 @@ function AqlTrialForm({ busy, onSubmit }: { busy: boolean; onSubmit: (trial: str
     getAqlTrials()
       .then(r => {
         if (!alive) return
-        const list = r.trials || []
+        // ConvertTo-Json -Compress unwraps a single-element array into an object,
+        // so a one-trial catalog arrives as an object, not an array. Coerce.
+        const raw = r.trials as AqlTrialInfo[] | AqlTrialInfo | undefined
+        const list = Array.isArray(raw) ? raw : raw ? [raw] : []
         setTrials(list)
         setSel(list[0]?.id || '')
       })
