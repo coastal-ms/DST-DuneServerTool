@@ -84,3 +84,46 @@ Describe 'settings.conf renderer' {
         { New-DuneSettingsConfText -Battlegroup 'sh-test' -Image '{"image":"bad"}' -VmIp '192.168.1.50' -PublicIp '8.8.8.8' } | Should -Throw
     }
 }
+
+Describe 'Public IP apply state file' {
+    BeforeAll {
+        $script:tmpState = Join-Path ([System.IO.Path]::GetTempPath()) ("dst-apply-state-{0}.json" -f ([guid]::NewGuid()))
+        function global:Get-DunePublicIpApplyStatePath { $script:tmpState }
+    }
+    AfterAll {
+        Remove-Item -LiteralPath $script:tmpState -Force -ErrorAction SilentlyContinue
+        Remove-Item Function:\Get-DunePublicIpApplyStatePath -Force -ErrorAction SilentlyContinue
+    }
+    BeforeEach {
+        Remove-Item -LiteralPath $script:tmpState -Force -ErrorAction SilentlyContinue
+    }
+
+    It 'returns an idle state when no file exists' {
+        $st = Read-DunePublicIpApplyState
+        $st.phase | Should -Be 'idle'
+        $st.running | Should -BeFalse
+    }
+
+    It 'round-trips a saved state' {
+        Save-DunePublicIpApplyState -State @{ phase='running'; running=$true; publicIp='8.8.8.8'; steps=@(@{ id='a'; label='A'; status='done' }) }
+        $st = Read-DunePublicIpApplyState
+        $st.phase | Should -Be 'running'
+        $st.publicIp | Should -Be '8.8.8.8'
+        @($st.steps).Count | Should -Be 1
+    }
+
+    It 'self-heals a stale running flag (no progress for >15 min)' {
+        $old = (Get-Date).ToUniversalTime().AddMinutes(-20).ToString('o')
+        Save-DunePublicIpApplyState -State @{ phase='running'; running=$true; publicIp='8.8.8.8'; steps=@(); updated=$old }
+        $st = Get-DunePublicIpApplyStatus
+        $st.running | Should -BeFalse
+        $st.phase | Should -Be 'error'
+    }
+
+    It 'leaves a fresh running state alone' {
+        $fresh = (Get-Date).ToUniversalTime().ToString('o')
+        Save-DunePublicIpApplyState -State @{ phase='running'; running=$true; publicIp='8.8.8.8'; steps=@(); updated=$fresh }
+        $st = Get-DunePublicIpApplyStatus
+        $st.running | Should -BeTrue
+    }
+}

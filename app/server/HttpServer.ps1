@@ -22,7 +22,14 @@ $script:DuneApiInFlight  = $null   # synchronized list of {Ps;Handle;Release} fo
 $script:DuneApiLockTable = $null   # shared synchronized name -> SemaphoreSlim registry (named locks)
 $script:DuneApiCtx       = $null   # immutable server-context injected into every worker
 $script:DuneApiMax       = 16      # max concurrent handlers == pool max == gate count
-$script:DuneServerDir    = $null   # server/ dir (for the pool's startup dot-sources)
+# server/ dir (for the pool's startup dot-sources). Guard the declaration: the
+# entrypoint (DuneServer.ps1 / DuneServer-Linux.ps1) sets this BEFORE dot-sourcing
+# us, so an unconditional `= $null` here would clobber it back to empty and the API
+# handler pool would silently fall back to single-threaded inline dispatch (every
+# slow handler then head-of-line-blocks the whole UI — the bug issue #47 fixed).
+if (-not (Get-Variable -Name DuneServerDir -Scope Script -ErrorAction SilentlyContinue)) {
+    $script:DuneServerDir = $null
+}
 
 # ---------- MIME ---------------------------------------------------------------
 
