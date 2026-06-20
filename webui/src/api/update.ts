@@ -26,6 +26,33 @@ export interface UpdateCheck {
   assetSize?: number
   checkedAt: string
   error?: string
+  /** Update channel this check resolved against: 'stable' (default) or 'test'. */
+  channel?: 'stable' | 'test'
+  /** True when the resolved release is a GitHub pre-release (test channel). */
+  isPrerelease?: boolean
+  /** The exact tag the updater resolved to act on (stable latest or pinned pre-release). */
+  selectedTag?: string
+}
+
+/** One test-channel candidate build for the Settings pre-release picker. */
+export interface PreReleaseInfo {
+  tag: string
+  name?: string
+  version: string
+  publishedAt?: string
+  releaseUrl?: string
+  assetSize?: number
+  hasAsset: boolean
+}
+
+export interface PreReleaseList {
+  channel: 'stable' | 'test'
+  /** Currently pinned tag; empty string means "latest" (the first item). */
+  selectedTag: string
+  count: number
+  releases: PreReleaseInfo[]
+  checkedAt?: string
+  error?: string
 }
 
 export interface UpdateInstallResult {
@@ -44,6 +71,38 @@ export function checkForUpdate(opts: { force?: boolean } = {}) {
 
 export function installUpdate() {
   return api<UpdateInstallResult>(`/api/update/install`, { method: 'POST', body: '{}' })
+}
+
+/**
+ * List test-channel candidate builds (published pre-releases that carry the
+ * installer asset, newest-first) for the Settings pre-release picker.
+ */
+export function listPreReleases(opts: { force?: boolean } = {}) {
+  const qs = opts.force ? '?force=1' : ''
+  return api<PreReleaseList>(`/api/update/prereleases${qs}`)
+}
+
+/**
+ * Persist the update channel + pinned pre-release tag via the generic config
+ * endpoint. Sends only the two keys; the backend merges them into the existing
+ * config without disturbing other settings. Pass an empty `preReleaseTag` to
+ * mean "latest".
+ */
+export function setUpdateChannel(channel: 'stable' | 'test', preReleaseTag = '') {
+  return api<{ ok: boolean; values: Record<string, string> }>(`/api/config`, {
+    method: 'PUT',
+    body: JSON.stringify({
+      values: { UpdateChannel: channel, UpdatePreReleaseTag: preReleaseTag },
+    }),
+  })
+}
+
+/** Persist just the pinned pre-release tag (test channel). Empty = latest. */
+export function setPreReleaseTag(preReleaseTag: string) {
+  return api<{ ok: boolean; values: Record<string, string> }>(`/api/config`, {
+    method: 'PUT',
+    body: JSON.stringify({ values: { UpdatePreReleaseTag: preReleaseTag } }),
+  })
 }
 
 /**
