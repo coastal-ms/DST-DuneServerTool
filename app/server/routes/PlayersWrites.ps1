@@ -164,6 +164,43 @@ Register-DuneRoute -Method POST -Path '/api/gameplay/players/journey/complete' -
     }
 }
 
+# GET /api/gameplay/players/aql-trials  (Aql trial unlock catalog for the UI)
+Register-DuneRoute -Method GET -Path '/api/gameplay/players/aql-trials' -Handler {
+    param($req, $res, $routeParams, $body)
+    try {
+        $trials = Get-DuneAqlTrialCatalog
+        Write-DuneJson -Response $res -Body @{ trials = $trials; total = $trials.Count; source = 'catalog' }
+    } catch {
+        Write-DuneError -Response $res -Status 500 -Message "Aql trials catalog failed: $($_.Exception.Message)"
+    }
+}
+
+# POST /api/gameplay/players/apply-aql-trial  { account_id, trial }
+# Offline-only: writes the pawn TechKnowledge blob, which is RAM-authoritative
+# while the player is online. Reproduces the full snapshot diff of completing an
+# Aql trial - journey subtree + tags + the awarded recipe that unlocks the
+# ability slot - for a character a tag-only edit left stuck. Only the named
+# trial's subtree is completed, so later trials proceed normally in-game.
+Register-DuneRoute -Method POST -Path '/api/gameplay/players/apply-aql-trial' -Handler {
+    param($req, $res, $routeParams, $body)
+    try {
+        $acc = Get-DuneBodyInt -Body $body -Name 'account_id'
+        $trial = [string](Get-DuneBodyValue -Body $body -Name 'trial')
+        if ($null -eq $acc -or $acc -le 0) { Write-DuneError -Response $res -Status 400 -Message 'account_id is required.'; return }
+        if (-not $trial) { Write-DuneError -Response $res -Status 400 -Message 'trial is required.'; return }
+        Invoke-DunePlayerWriteRoute -Response $res -Action {
+            param($ip)
+            $off = Test-DunePlayerOfflineByAccount -Ip $ip -AccountId $acc
+            if (-not $off.ok) {
+                return @{ ok = $false; error = "Player must be offline to apply an Aql trial. $($off.reason)" }
+            }
+            Invoke-DuneApplyAqlTrial -Ip $ip -AccountId $acc -Trial $trial
+        }
+    } catch {
+        Write-DuneError -Response $res -Status 500 -Message "Apply Aql trial failed: $($_.Exception.Message)"
+    }
+}
+
 # POST /api/gameplay/players/journey/reset  { account_id, node_id? }
 Register-DuneRoute -Method POST -Path '/api/gameplay/players/journey/reset' -Handler {
     param($req, $res, $routeParams, $body)
