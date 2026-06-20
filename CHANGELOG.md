@@ -13,6 +13,34 @@ here cover everything those tags shipped.
 
 ## [Unreleased]
 
+## [12.9.1] - 2026-06-19
+
+### Fixed
+
+- **Public IP / DDNS apply no longer freezes the whole app.** The `/api` handler
+  runspace pool (added so a slow request can't block the UI) was silently failing
+  to initialize in the shipped build, so DST ran single-threaded and the
+  multi-minute Public IP apply locked up the entire interface. The pool now
+  initializes correctly.
+- **The apply is now resilient and can't half-brick the server.** It runs in the
+  background with live, streamed step-by-step progress and an elapsed timer (so it
+  never looks hung, and you can leave the page and come back). New safeguards
+  mirror the manual recovery procedure: it aborts before writing if the
+  battlegroup/image/VM details can't be read (the cause of a blank `settings.conf`),
+  verifies `settings.conf` is intact (and repairs it if the Funcom helper corrupts
+  it), fixes a legacy boot script that re-applied an old IP on every reboot,
+  propagates the new IP to the battlegroup **and its utility services** (director /
+  gateway / text router) — not just the game servers — and verifies the external
+  IP and RabbitMQ port at the end.
+- **Re-applying the current IP is now allowed** — the apply is a repair/re-assert
+  tool, so re-running it (e.g. after the VM config drifts) no longer errors with
+  "Target IP is unchanged," and an apply error no longer leaves the UI spinning.
+
+### Added
+
+- `tools/Run-DevServer.ps1` to run the backend from source for local development
+  without building the installer.
+
 ## [12.9.0] - 2026-06-19
 
 ### Added
