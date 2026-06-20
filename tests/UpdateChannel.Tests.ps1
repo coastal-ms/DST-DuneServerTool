@@ -134,3 +134,56 @@ Describe 'Get-DuneUpdateInstalledPrerelease (running-build marker)' {
         Get-DuneUpdateInstalledPrerelease | Should -BeFalse
     }
 }
+
+Describe 'Get-DuneInstallDecision (install/blocked gate)' {
+    Context 'Stable channel, running a normal (non-prerelease) build' {
+        It 'installs a strictly newer release' {
+            $d = Get-DuneInstallDecision -Diff 1 -Channel 'stable' -HasAsset $true -RunningIsPrerelease $false
+            $d.installable | Should -BeTrue
+            $d.blocked     | Should -BeFalse
+        }
+        It 'blocks a same-version reinstall' {
+            $d = Get-DuneInstallDecision -Diff 0 -Channel 'stable' -HasAsset $true -RunningIsPrerelease $false
+            $d.installable | Should -BeFalse
+            $d.blocked     | Should -BeTrue
+        }
+        It 'blocks a downgrade' {
+            $d = Get-DuneInstallDecision -Diff -1 -Channel 'stable' -HasAsset $true -RunningIsPrerelease $false
+            $d.installable | Should -BeFalse
+            $d.blocked     | Should -BeTrue
+        }
+        It 'never installs without an asset even when newer' {
+            (Get-DuneInstallDecision -Diff 1 -Channel 'stable' -HasAsset $false -RunningIsPrerelease $false).installable | Should -BeFalse
+        }
+    }
+
+    Context 'Stable channel, running a pre-release (Test) build - return-to-live' {
+        It 'allows returning to the live release as a downgrade' {
+            # running 12.9.7-test1 (reports 12.9.7); live stable is 12.9.6 => diff < 0
+            $d = Get-DuneInstallDecision -Diff -1 -Channel 'stable' -HasAsset $true -RunningIsPrerelease $true
+            $d.installable | Should -BeTrue
+            $d.blocked     | Should -BeFalse
+        }
+        It 'allows a same-version live reinstall (clears the TEST BUILD indicator)' {
+            # after fold: live stable == 12.9.7, running 12.9.7-test1 => diff == 0
+            $d = Get-DuneInstallDecision -Diff 0 -Channel 'stable' -HasAsset $true -RunningIsPrerelease $true
+            $d.installable | Should -BeTrue
+            $d.blocked     | Should -BeFalse
+        }
+        It 'still requires an installer asset' {
+            (Get-DuneInstallDecision -Diff -1 -Channel 'stable' -HasAsset $false -RunningIsPrerelease $true).installable | Should -BeFalse
+        }
+    }
+
+    Context 'Test channel' {
+        It 'installs any pre-release that differs from the running build' {
+            (Get-DuneInstallDecision -Diff 1  -Channel 'test' -HasAsset $true -RunningIsPrerelease $true).installable | Should -BeTrue
+            (Get-DuneInstallDecision -Diff -1 -Channel 'test' -HasAsset $true -RunningIsPrerelease $true).installable | Should -BeTrue
+        }
+        It 'blocks reinstalling the exact same pre-release build' {
+            $d = Get-DuneInstallDecision -Diff 0 -Channel 'test' -HasAsset $true -RunningIsPrerelease $true
+            $d.installable | Should -BeFalse
+            $d.blocked     | Should -BeTrue
+        }
+    }
+}
