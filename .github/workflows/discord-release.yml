@@ -1,14 +1,8 @@
 name: Announce release to Discord
 
-# Posts a formatted message to a DST community Discord channel whenever a GitHub
-# release is published.
-#
-# Routing depends on whether the release is a pre-release:
-#   * Real release  -> #releases channel, via secret DISCORD_RELEASE_WEBHOOK.
-#   * Pre-release    -> the bug/testing channel, via secret DISCORD_TEST_WEBHOOK
-#     (a "🧪 test build" post so the bug reporter knows to install and validate
-#     it). Pre-releases are NOT official, so they never hit the #releases feed.
-# If the channel's webhook secret is missing, the announcement is skipped.
+# Posts a formatted message to the DST community Discord #releases channel
+# whenever a GitHub release is published. Uses a Discord webhook URL stored as
+# the repo secret DISCORD_RELEASE_WEBHOOK (the webhook lives in #releases).
 #
 # Also runnable manually (workflow_dispatch) to (re)announce a specific tag,
 # which is handy for testing without cutting a new release.
@@ -28,22 +22,27 @@ permissions:
 jobs:
   announce:
     runs-on: ubuntu-latest
-    # Real releases post to #releases; pre-releases post to the bug/testing
-    # channel as a "🧪 test build" so bug reporters know to install and validate
-    # them. Pre-releases are NOT official and never hit the #releases feed.
-    # workflow_dispatch has no release context, so the prerelease flag is derived
-    # from the release itself below.
+    # Never announce pre-releases. Pre-releases are an occasional, scenario-
+    # specific tool (e.g. handing a targeted test build to a bug reporter for
+    # in-game validation) and must stay silent in the community channels — only
+    # real releases get the "🚀 release" post. workflow_dispatch has no release
+    # context, so this guard is a no-op for manual (re)announcements.
+    if: ${{ github.event_name == 'workflow_dispatch' || github.event.release.prerelease == false }}
     steps:
       - name: Post release to Discord
         env:
           GH_TOKEN: ${{ github.token }}
           GITHUB_REPOSITORY: ${{ github.repository }}
-          RELEASE_WEBHOOK: ${{ secrets.DISCORD_RELEASE_WEBHOOK }}
-          TEST_WEBHOOK: ${{ secrets.DISCORD_TEST_WEBHOOK }}
+          WEBHOOK: ${{ secrets.DISCORD_RELEASE_WEBHOOK }}
           EVENT_TAG: ${{ github.event.release.tag_name }}
           INPUT_TAG: ${{ github.event.inputs.tag }}
         run: |
           set -euo pipefail
+
+          if [ -z "${WEBHOOK:-}" ]; then
+            echo "DISCORD_RELEASE_WEBHOOK is not set; skipping Discord announcement."
+            exit 0
+          fi
 
           tag="${EVENT_TAG:-${INPUT_TAG:-}}"
           if [ -z "$tag" ]; then
@@ -51,56 +50,30 @@ jobs:
           fi
           echo "Announcing release: $tag"
 
-          rel=$(gh release view "$tag" --repo "$GITHUB_REPOSITORY" --json name,tagName,body,url,isPrerelease)
+          rel=$(gh release view "$tag" --repo "$GITHUB_REPOSITORY" --json name,tagName,body,url)
           name=$(printf '%s' "$rel" | jq -r '.name // .tagName')
           url=$(printf '%s' "$rel" | jq -r '.url')
-          prerelease=$(printf '%s' "$rel" | jq -r '.isPrerelease')
           # Discord embed descriptions cap at 4096; keep it readable at ~1500.
           body=$(printf '%s' "$rel" | jq -r '.body // ""' | head -c 1500)
 
-          if [ "$prerelease" = "true" ]; then
-            webhook="${TEST_WEBHOOK:-}"
-            channel="bug/testing"
-            title_prefix="🧪"
-            color=15105570  # orange — test build
-            footer="Test build — install via the in-app updater: Settings → Dune Server Tool updates → Test channel. Please install and report back."
-            if [ -z "$webhook" ]; then
-              echo "DISCORD_TEST_WEBHOOK is not set; skipping pre-release announcement."
-              exit 0
-            fi
-          else
-            webhook="${RELEASE_WEBHOOK:-}"
-            channel="#releases"
-            title_prefix="🚀"
-            color=15844367  # gold — release
-            footer="Download the DuneServerSetup.exe asset from the release page · in-app updater offers it within ~6h"
-            if [ -z "$webhook" ]; then
-              echo "DISCORD_RELEASE_WEBHOOK is not set; skipping release announcement."
-              exit 0
-            fi
-          fi
-          echo "Posting to $channel"
-
           payload=$(jq -n \
-            --arg t "$title_prefix $name" \
+            --arg t "🚀 $name" \
             --arg d "$body" \
             --arg u "$url" \
-            --argjson c "$color" \
-            --arg f "$footer" \
             '{
                username: "DST Releases",
                embeds: [ {
                  title: $t,
                  url: $u,
                  description: $d,
-                 color: $c,
-                 footer: { text: $f }
+                 color: 15844367,
+                 footer: { text: "Download the DuneServerSetup.exe asset from the release page · in-app updater offers it within ~6h" }
                } ]
              }')
 
           http=$(curl -sS -o /dev/null -w '%{http_code}' \
             -X POST -H "Content-Type: application/json" \
-            -d "$payload" "$webhook")
+            -d "$payload" "$WEBHOOK")
           echo "Discord webhook responded: HTTP $http"
           case "$http" in
             2*) echo "Posted $tag to Discord." ;;
