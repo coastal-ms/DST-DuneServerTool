@@ -22,12 +22,6 @@ permissions:
 jobs:
   announce:
     runs-on: ubuntu-latest
-    # Never announce pre-releases. Pre-releases are an occasional, scenario-
-    # specific tool (e.g. handing a targeted test build to a bug reporter for
-    # in-game validation) and must stay silent in the community channels — only
-    # real releases get the "🚀 release" post. workflow_dispatch has no release
-    # context, so this guard is a no-op for manual (re)announcements.
-    if: ${{ github.event_name == 'workflow_dispatch' || github.event.release.prerelease == false }}
     steps:
       - name: Post release to Discord
         env:

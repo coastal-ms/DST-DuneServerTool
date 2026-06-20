@@ -183,47 +183,25 @@ function Invoke-DunePlayerRename {
 function Invoke-DunePlayerAwardXp {
     param([string]$Ip, [long]$ControllerId, [string]$TrackType, [int]$Delta)
     $safeTrack = ConvertTo-DuneSqlString $TrackType
-    $cap    = $script:DuneSpecXpMax      # 44182
-    $lvlMax = $script:DuneSpecLevelMax   # 100.0
-
-    # Read the current track so we can add the delta AND recompute level.
-    # Routes through the SAME Funcom stored proc as Grant Max
-    # (dune.set_specialization_xp_and_level), which writes BOTH xp_amount and
-    # level. The old path did a raw UPDATE of xp_amount only, leaving `level`
-    # stale and bypassing the proc, so the grant showed in DST but never
-    # reflected in-game. Level scales 0..cap XP -> 0..100 (anchored by Grant
-    # Max's 44182 -> 100); we never demote a level already earned in-game.
-    # Offline/RAM-authoritative: appears in-game only after a full client
-    # re-login (a BG/zone reboot is not enough).
-    $selSql = @"
-SELECT xp_amount, level FROM dune.specialization_tracks
+    $cap = 44182
+    $updSql = @"
+UPDATE dune.specialization_tracks
+SET xp_amount = GREATEST(LEAST(xp_amount + ($Delta)::integer, $cap::integer), 0)
 WHERE player_id = $ControllerId::bigint AND track_type::text = '$safeTrack';
 "@
-    $sel = Invoke-DuneSqlQuery -Ip $Ip -Sql $selSql -ReadOnly $true -MaxRows 1 -TimeoutSec 30
-    if (-not $sel.ok) { return @{ ok = $false; error = $sel.error } }
-
-    $curXp = 0; $curLevel = 0.0; $exists = $false
-    $rows = @(ConvertTo-DuneRowMaps -Result $sel)
-    if ($rows.Count -gt 0) {
-        $exists   = $true
-        $curXp    = [int](ConvertTo-DuneInt $rows[0]['xp_amount'])
-        $curLevel = [double]([string]$rows[0]['level'])
+    $upd = Invoke-DuneSqlQuery -Ip $Ip -Sql $updSql -ReadOnly $false -MaxRows 1 -TimeoutSec 30
+    if (-not $upd.ok) { return @{ ok = $false; error = $upd.error } }
+    if (([string]$upd.message) -match 'UPDATE\s+0') {
+        $start = [Math]::Max(0, [Math]::Min($Delta, $cap))
+        $insSql = @"
+INSERT INTO dune.specialization_tracks (player_id, track_type, xp_amount, level)
+VALUES ($ControllerId::bigint, '$safeTrack'::dune.specializationtracktype, $start::integer, 0::real);
+"@
+        $ins = Invoke-DuneSqlQuery -Ip $Ip -Sql $insSql -ReadOnly $false -MaxRows 1 -TimeoutSec 30
+        if (-not $ins.ok) { return @{ ok = $false; error = $ins.error } }
+        return @{ ok = $true; message = "Created '$TrackType' track with $start XP." }
     }
-
-    $newXp = [int][Math]::Max(0, [Math]::Min([long]$curXp + $Delta, [long]$cap))
-    $scaledLevel = [Math]::Min($lvlMax, [double]$newXp * $lvlMax / $cap)
-    $newLevel = [Math]::Max($curLevel, $scaledLevel)
-    $newLevelSql = Format-DuneFloatForSql $newLevel
-
-    $sql = "SELECT dune.set_specialization_xp_and_level($ControllerId::bigint, '$safeTrack'::dune.specializationtracktype, $newXp::integer, $newLevelSql::real);"
-    $res = Invoke-DuneSqlQuery -Ip $Ip -Sql $sql -ReadOnly $false -MaxRows 1 -TimeoutSec 30
-    if (-not $res.ok) { return @{ ok = $false; error = $res.error } }
-
-    $lvlDisp = [Math]::Round($newLevel, 1)
-    if ($exists) {
-        return @{ ok = $true; message = "Adjusted '$TrackType' XP by $Delta (now $newXp / $cap, level $lvlDisp). Offline edit - appears in-game after a full re-login." }
-    }
-    return @{ ok = $true; message = "Created '$TrackType' track with $newXp XP (level $lvlDisp). Offline edit - appears in-game after a full re-login." }
+    return @{ ok = $true; message = "Adjusted '$TrackType' XP by $Delta (capped at $cap)." }
 }
 
 # Delete item (delete-item): dune.delete_item(id).
