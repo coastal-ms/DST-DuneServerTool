@@ -17,12 +17,14 @@ here cover everything those tags shipped.
 
 ### Added
 
-- **App-wide Test-channel indicator.** When an install is on the **Test** update
-  channel, a **TEST CHANNEL** badge now appears in the top status bar (visible on
-  every page) and next to the version in the sidebar footer. Both link to
-  *Settings &rarr; Dune Server Tool updates* so it's one click to switch back to
-  *Stable*. This makes it obvious at a glance that an install is running a
-  pre-release verification build.
+- **App-wide "test build" indicator.** When the **currently running build** was
+  installed from a pre-release (a targeted Test-channel verification build), a
+  **TEST BUILD** badge appears in the top status bar (visible on every page) and
+  next to the version in the sidebar footer. Both link to *Settings &rarr; Dune
+  Server Tool updates*. The indicator keys off what was actually **installed**
+  (recorded by the updater at install time), not the channel preference — so
+  toggling the Stable/Test switch alone never lights it; only installing a
+  pre-release build does, and a later Stable install clears it.
 
 ## [12.9.5] - 2026-06-20
 

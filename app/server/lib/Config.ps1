@@ -23,7 +23,9 @@ $script:DuneConfigKeys = @(
     'ClientConfigPath',
     'DbPort',
     'UpdateChannel',
-    'UpdatePreReleaseTag'
+    'UpdatePreReleaseTag',
+    'UpdateInstalledPrerelease',
+    'UpdateInstalledTag'
 )
 
 # Default in-pod PostgreSQL port. All DST DB access runs as
@@ -131,6 +133,23 @@ function Get-DuneUpdatePreReleaseTag {
         return $v.Trim()
     } catch {}
     return ''
+}
+
+# Whether the build currently installed was itself a GitHub pre-release (a
+# targeted Discord test build), as recorded by the in-app updater at the moment
+# it launched that install. This is the truth source for the app-wide "running a
+# test build" indicator — NOT the UpdateChannel preference. Merely toggling the
+# channel to Test (a preference that takes effect on the NEXT install) must not
+# light the indicator; only actually installing a pre-release build does. A
+# subsequent stable install writes 'false' and clears it. Absent/blank => false
+# (a normal stable install never wrote it).
+function Get-DuneUpdateInstalledPrerelease {
+    try {
+        $raw = Read-DuneConfigRaw
+        $v = if ($raw.Contains('UpdateInstalledPrerelease')) { [string]$raw['UpdateInstalledPrerelease'] } else { '' }
+        return ($v -match '^(?i:true|1|yes)$')
+    } catch {}
+    return $false
 }
 
 function Save-DuneConfig {

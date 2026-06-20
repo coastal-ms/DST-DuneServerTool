@@ -219,13 +219,15 @@ Register-DuneRoute -Method GET -Path '/api/update/check' -Handler {
         $rel     = Get-DuneSelectedRelease -Force:$force
         $current = [string]$script:DuneToolVersion
         $channel = Get-DuneUpdateChannel
+        $runningIsPrerelease = Get-DuneUpdateInstalledPrerelease
         if (-not $rel -or $rel.error) {
             Write-DuneJson -Response $res -Body @{
-                available       = $false
-                channel         = $channel
-                currentVersion  = $current
-                checkedAt       = (Get-Date).ToString('o')
-                error           = $rel.error
+                available           = $false
+                channel             = $channel
+                runningIsPrerelease = $runningIsPrerelease
+                currentVersion      = $current
+                checkedAt           = (Get-Date).ToString('o')
+                error               = $rel.error
             }
             return
         }
@@ -257,6 +259,7 @@ Register-DuneRoute -Method GET -Path '/api/update/check' -Handler {
             installable     = $installable
             assetMissing    = ($available -and -not $hasAsset)
             channel         = $channel
+            runningIsPrerelease = $runningIsPrerelease
             isPrerelease    = [bool]$rel.isPrerelease
             selectedTag     = $rel.tag
             currentVersion  = $current
@@ -444,6 +447,22 @@ Register-DuneRoute -Method POST -Path '/api/update/install' -Handler {
             Write-DuneError -Response $res -Status 500 -Message "Download failed: $dest not present after fetch."
             return
         }
+
+        # Record the truth source for the app-wide "running a test build"
+        # indicator at the moment we commit to launching this install: was the
+        # build we're about to install a GitHub pre-release? The new build reads
+        # this from config on startup. We deliberately key the indicator off
+        # what was actually INSTALLED, not the UpdateChannel preference, so that
+        # merely toggling the channel (which only affects the next install)
+        # never lights the indicator. A later stable install writes 'false'.
+        try {
+            Invoke-WithDuneLock -Name 'config' -Script {
+                Save-DuneConfig @{
+                    UpdateInstalledPrerelease = if ([bool]$rel.isPrerelease) { 'true' } else { 'false' }
+                    UpdateInstalledTag        = [string]$rel.tag
+                }
+            } | Out-Null
+        } catch {}
 
         # Respond to the client FIRST so the browser sees confirmation
         # before we tear ourselves down. The relauncher below kills this
