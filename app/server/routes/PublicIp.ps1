@@ -36,7 +36,9 @@ Register-DuneRoute -Method POST -Path '/api/public-ip/hostname' -Handler {
 Register-DuneRoute -Method POST -Path '/api/public-ip/validate' -Handler {
     param($req, $res, $routeParams, $body)
     $publicIp = [string](Get-DunePublicIpBodyValue -Body $body -Name 'publicIp' -Default '')
-    $v = Assert-DuneManualPublicIp -PublicIp $publicIp
+    # Allow re-validating an already-applied IP: this is a repair/re-assert tool,
+    # so re-applying the same IP (when the VM config has drifted) is valid.
+    $v = Assert-DuneManualPublicIp -PublicIp $publicIp -AllowUnchanged
     if (-not $v.ok) { Write-DuneError -Response $res -Status ([int]$v.status) -Message $v.message; return }
     Write-DuneJson -Response $res -Body @{ ok=$true; publicIp=$v.publicIp }
 }
@@ -67,14 +69,14 @@ Register-DuneRoute -Method POST -Path '/api/public-ip/apply' -Handler {
             Write-DuneError -Response $res -Status 409 -Message "DDNS changed before apply. $($r.hostname) now resolves to $(@($r.candidates) -join ', '), not $resolvedIp."
             return
         }
-        $v = Assert-DuneManualPublicIp -PublicIp $resolvedIp
+        $v = Assert-DuneManualPublicIp -PublicIp $resolvedIp -AllowUnchanged
         if (-not $v.ok) { Write-DuneError -Response $res -Status ([int]$v.status) -Message $v.message; return }
         $target = $resolvedIp
         $launch = Start-DunePublicIpApplyAsync -PublicIp $target -Mode 'ddns' -Hostname $r.hostname
     }
     elseif ($mode -eq 'manual') {
         $publicIp = [string](Get-DunePublicIpBodyValue -Body $body -Name 'publicIp' -Default '')
-        $v = Assert-DuneManualPublicIp -PublicIp $publicIp
+        $v = Assert-DuneManualPublicIp -PublicIp $publicIp -AllowUnchanged
         if (-not $v.ok) { Write-DuneError -Response $res -Status ([int]$v.status) -Message $v.message; return }
         $target = $v.publicIp
         $launch = Start-DunePublicIpApplyAsync -PublicIp $target -Mode 'manual'

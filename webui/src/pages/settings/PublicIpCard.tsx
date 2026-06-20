@@ -269,9 +269,10 @@ export function PublicIpCard() {
       setWorking(null)
       if (e instanceof ApiError) {
         const eb = e.body as Partial<ApplyResponse> | undefined
-        if (eb?.steps) setSteps(eb.steps)
+        setSteps(eb?.steps ?? [])
         setError(eb?.error ?? e.message)
       } else {
+        setSteps([])
         setError(e instanceof Error ? e.message : String(e))
       }
     }
