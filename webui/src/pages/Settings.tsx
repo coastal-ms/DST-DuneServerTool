@@ -309,6 +309,42 @@ export function Settings() {
     }
   }
 
+  // Return-to-live: a tester on a pre-release (Test) build gets back onto the
+  // live release in one click. Force the Stable channel (clearing any pinned
+  // pre-release) so the check resolves the live release, then install it. The
+  // backend stable gate is relaxed for pre-release builds, so this works even
+  // though the live release is not strictly "newer" (it's a downgrade or a
+  // same-version reinstall that also clears the TEST BUILD indicator).
+  async function onReturnToLive() {
+    setUpdInstalling(true)
+    setUpdErr(null)
+    setUpdMsg(null)
+    try {
+      if (updChannel !== 'stable') {
+        await setUpdateChannel('stable', '')
+        setUpdChannel('stable')
+        setSelectedTag('')
+      }
+      const res = await checkForUpdate({ force: true })
+      setUpdCheck(res)
+      publishUpdateCheck(res)
+      if (!(res.installable ?? res.available)) {
+        setUpdErr(res.error ?? 'The live release is not installable right now.')
+        return
+      }
+      const r = await installUpdate()
+      if (r.launched) {
+        setUpdMsg(`Installer launched — returning to the live release ${fmtToolVersion(r.toVersion)}. The portal will go offline briefly, then relaunch.`)
+      } else {
+        setUpdErr(r.reason ?? 'Installer did not launch.')
+      }
+    } catch (e) {
+      setUpdErr(e instanceof Error ? e.message : String(e))
+    } finally {
+      setUpdInstalling(false)
+    }
+  }
+
   useEffect(() => {
     void (async () => {
       try {
@@ -456,6 +492,24 @@ export function Settings() {
 
         {updExpanded && (
           <div className="px-6 pb-5 space-y-3">
+            {updCheck?.runningIsPrerelease && (
+              <div className="rounded-md border border-warning/40 bg-warning/10 px-3 py-2.5 flex items-center gap-3 flex-wrap">
+                <Icon name="FlaskConical" size={15} className="text-warning shrink-0" />
+                <span className="text-sm">
+                  You're running a <span className="font-semibold text-warning">TEST build</span>
+                  {updCheck.currentVersion ? ` (${fmtToolVersion(updCheck.currentVersion)})` : ''}. Done testing? Return to the live release.
+                </span>
+                <button
+                  type="button"
+                  onClick={onReturnToLive}
+                  disabled={updInstalling}
+                  className="btn-secondary ml-auto shrink-0"
+                >
+                  <Icon name={updInstalling ? 'Loader2' : 'Undo2'} size={15} className={updInstalling ? 'animate-spin' : ''} />
+                  {updInstalling ? 'Working…' : 'Return to live release'}
+                </button>
+              </div>
+            )}
             <div className="flex items-center justify-between">
               <p className="text-sm text-text-dim">
                 Checks GitHub releases for newer versions. Installs silently — Start Menu icon keeps working, your config in <span className="font-mono">%APPDATA%\DuneServer</span> is preserved.
@@ -539,7 +593,7 @@ export function Settings() {
                     release notes
                   </a>
                 )}
-                {(updCheck.installable ?? updCheck.available) && (
+                {(updCheck.installable ?? updCheck.available) && !(updCheck.channel !== 'test' && updCheck.runningIsPrerelease === true && !updCheck.available) && (
                   <button
                     type="button"
                     onClick={onInstallUpdate}

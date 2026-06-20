@@ -13,6 +13,27 @@ here cover everything those tags shipped.
 
 ## [Unreleased]
 
+### Added
+
+- **Return to the live release from a Test build.** A build installed from a
+  pre-release (Test channel) is no longer a dead-end: *Settings &rarr; Dune
+  Server Tool updates* now shows a **"Return to live release"** control whenever
+  the running build is a pre-release. One click switches back to the Stable
+  channel (clearing any pinned pre-release) and installs the live release — even
+  though it isn't strictly "newer" — which also clears the **TEST BUILD**
+  indicator. The Stable install gate is relaxed for pre-release builds so the
+  live release stays installable as a downgrade or same-version reinstall.
+
+### Fixed
+
+- **+5K spec grant not reflecting in-game.** Gameplay Admin &rarr; Players &rarr;
+  Specs "+5K Grant" wrote `xp_amount` directly to `dune.specialization_tracks`
+  and never updated level, so the change did not appear in-game.
+  `Invoke-DunePlayerAwardXp` now routes through the same Funcom stored proc as
+  "Grant Max" (`dune.set_specialization_xp_and_level`): it reads current
+  xp/level, adds the clamped delta, recomputes level without demoting, and writes
+  both. Appears in-game after a full client re-login.
+
 ## [12.9.6] - 2026-06-20
 
 ### Added
