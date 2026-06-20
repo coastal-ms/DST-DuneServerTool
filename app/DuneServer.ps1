@@ -556,6 +556,12 @@ Initialize-DuneLog -Path $script:DuneLogFilePath
 
 . (Join-Path $serverDir 'HttpServer.ps1')
 
+# Re-assert the server dir AFTER dot-sourcing HttpServer.ps1. Its top-level
+# declaration is guarded, but re-setting here is a second guarantee that the
+# API handler pool (issue #47) gets a valid ServerDir and never silently falls
+# back to single-threaded inline dispatch (which freezes the UI on slow ops).
+$script:DuneServerDir = $serverDir
+
 # Web-portal lib modules (Config, Status, Ports, Characters, etc.)
 $libDir = Join-Path $serverDir 'lib'
 if (Test-Path $libDir) {

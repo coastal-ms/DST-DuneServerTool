@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { ApiError, api } from '../../api/client'
 import { Icon } from '../../components/Icon'
 
@@ -47,6 +47,15 @@ type ApplyResponse = {
   steps?: PublicIpStep[]
 }
 
+type ApplyStatus = {
+  phase?: 'idle' | 'starting' | 'running' | 'done' | 'error'
+  running?: boolean
+  publicIp?: string
+  steps?: PublicIpStep[]
+  started?: string
+  error?: string
+}
+
 function stepClass(status: PublicIpStep['status']): string {
   if (status === 'done') return 'text-success'
   if (status === 'failed') return 'text-danger'
@@ -65,6 +74,50 @@ export function PublicIpCard() {
   const [message, setMessage] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [steps, setSteps] = useState<PublicIpStep[]>([])
+  const [applyRunning, setApplyRunning] = useState(false)
+  const [applyStarted, setApplyStarted] = useState<number | null>(null)
+  const [now, setNow] = useState(Date.now())
+  const pollRef = useRef<number | null>(null)
+
+  function stopPolling() {
+    if (pollRef.current !== null) { window.clearInterval(pollRef.current); pollRef.current = null }
+  }
+
+  // Pull the latest apply progress from the server. Returns true while the
+  // apply is still running so the caller can keep polling.
+  async function refreshApplyStatus(): Promise<boolean> {
+    try {
+      const s = await api<ApplyStatus>('/api/public-ip/apply/status')
+      if (s.steps && s.steps.length) setSteps(s.steps)
+      if (s.phase === 'done') {
+        setApplyRunning(false); setWorking(null)
+        setError(null)
+        setMessage(`Applied public IP ${s.publicIp ?? targetIp}.`)
+        void loadStatus()
+        return false
+      }
+      if (s.phase === 'error') {
+        setApplyRunning(false); setWorking(null)
+        setError(s.error || 'Public IP change failed.')
+        return false
+      }
+      setApplyRunning(Boolean(s.running))
+      return Boolean(s.running)
+    } catch {
+      // Transient poll failure (server busy mid-restart) — keep polling.
+      return true
+    }
+  }
+
+  function startPolling() {
+    stopPolling()
+    pollRef.current = window.setInterval(() => {
+      void (async () => {
+        const stillRunning = await refreshApplyStatus()
+        if (!stillRunning) stopPolling()
+      })()
+    }, 2000)
+  }
 
   async function loadStatus() {
     setLoading(true)
@@ -83,11 +136,40 @@ export function PublicIpCard() {
 
   useEffect(() => { void loadStatus() }, [])
 
+  // Resume showing live progress if an apply is already running on the server
+  // (e.g. the user reloaded the page or reopened the app mid-change). Also tear
+  // down polling on unmount.
+  useEffect(() => {
+    void (async () => {
+      try {
+        const s = await api<ApplyStatus>('/api/public-ip/apply/status')
+        if (s.running) {
+          setWorking('apply')
+          setApplyRunning(true)
+          if (s.steps && s.steps.length) setSteps(s.steps)
+          setApplyStarted(s.started ? Date.parse(s.started) : Date.now())
+          startPolling()
+        }
+      } catch { /* ignore */ }
+    })()
+    return () => stopPolling()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+
+  // Tick a clock once per second while an apply runs, for the elapsed timer.
+  useEffect(() => {
+    if (!applyRunning) return
+    const id = window.setInterval(() => setNow(Date.now()), 1000)
+    return () => window.clearInterval(id)
+  }, [applyRunning])
+
+  const elapsedSec = applyStarted ? Math.max(0, Math.floor((now - applyStarted) / 1000)) : 0
+
   const currentInput = useMemo(() => (
     mode === 'ddns' ? hostname.trim().toLowerCase() : manualIp.trim()
   ), [mode, hostname, manualIp])
 
-  const canApply = Boolean(targetIp && validatedInput === currentInput && working !== 'apply')
+  const canApply = Boolean(targetIp && validatedInput === currentInput && working !== 'apply' && !applyRunning)
 
   function clearValidation() {
     setTargetIp('')
@@ -162,34 +244,37 @@ export function PublicIpCard() {
     const label = mode === 'ddns' ? `${hostname.trim()} -> ${targetIp}` : targetIp
     if (!window.confirm(
       `Apply public IP change?\n\nTarget: ${label}\n\n`
-      + 'This updates the Windows route, VM public IP alias, Dune settings.conf, K3s ExternalIP, NAT, and restarts affected game pods.',
+      + 'This updates the Windows route, VM public IP alias, Dune settings.conf, K3s ExternalIP, the battlegroup (change-battlegroup-ip), NAT, and restarts the battlegroup. '
+      + 'It can take several minutes and will briefly disconnect connected players. You can safely leave this page — it keeps running on the server.',
     )) return
 
     setWorking('apply')
+    setApplyRunning(true)
     setError(null)
     setMessage(null)
-    setSteps([{ id: 'client', label: 'Apply request sent', status: 'running', detail: 'Waiting for the backend to finish.' }])
+    setApplyStarted(Date.now())
+    setSteps([{ id: 'client', label: 'Apply request sent', status: 'running', detail: 'Starting the public IP change on the server.' }])
     try {
       const body = mode === 'ddns'
         ? { mode, hostname, resolvedIp: targetIp, confirmed: true }
         : { mode, publicIp: targetIp, confirmed: true }
-      const r = await api<ApplyResponse>('/api/public-ip/apply', {
+      await api<ApplyResponse>('/api/public-ip/apply', {
         method: 'POST',
         body: JSON.stringify(body),
       })
-      setSteps(r.steps ?? [])
-      setMessage(`Applied public IP ${r.publicIp}.`)
-      await loadStatus()
+      // 202 Accepted — the apply now runs in the background; poll for progress.
+      startPolling()
     } catch (e) {
+      setApplyRunning(false)
+      setWorking(null)
       if (e instanceof ApiError) {
-        const body = e.body as Partial<ApplyResponse> | undefined
-        if (body?.steps) setSteps(body.steps)
-        setError(body?.error ?? e.message)
+        const eb = e.body as Partial<ApplyResponse> | undefined
+        setSteps(eb?.steps ?? [])
+        setError(eb?.error ?? e.message)
       } else {
+        setSteps([])
         setError(e instanceof Error ? e.message : String(e))
       }
-    } finally {
-      setWorking(null)
     }
   }
 
@@ -292,6 +377,20 @@ export function PublicIpCard() {
         <p className="mt-3 text-sm text-danger flex items-center gap-1.5">
           <Icon name="AlertCircle" size={14} /> {error}
         </p>
+      )}
+
+      {applyRunning && (
+        <div className="mt-4 rounded-lg border border-warning/40 bg-warning/10 p-3 text-sm flex items-start gap-2">
+          <Icon name="Loader2" size={15} className="animate-spin text-warning mt-0.5" />
+          <div>
+            <div className="text-warning font-medium">
+              Applying public IP change… {Math.floor(elapsedSec / 60)}m {elapsedSec % 60}s
+            </div>
+            <div className="text-xs text-text-dim mt-0.5">
+              This can take several minutes (battlegroup restart). It's safe to leave this page — the change keeps running on the server and progress resumes when you come back.
+            </div>
+          </div>
+        </div>
       )}
 
       {steps.length > 0 && (
