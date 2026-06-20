@@ -2627,12 +2627,12 @@ function LandsraadSection({ player, canWrite, demo, refreshKey, flash, onChanged
 
 // ---------------------------------------------------------------------------
 // Journey — full browser over every journey_story_node row for the account.
-// Filter tabs (All / Done / Revealed / Reward), node-id search, client-side
+// Filter tabs (All / Done / Incomplete / Revealed / Reward), node-id search, client-side
 // pagination, per-row Complete/Reset, and a Wipe-All control. All writes work
 // online or offline (DB writes); they take effect on the player's next login.
 // ---------------------------------------------------------------------------
 const JOURNEY_PAGE_SIZE = 50
-type JourneyFilter = 'all' | 'done' | 'revealed' | 'reward'
+type JourneyFilter = 'all' | 'done' | 'incomplete' | 'revealed' | 'reward'
 
 export function JourneySection({ player, canWrite, demo, refreshKey, flash, onChanged }: SectionProps) {
   const [nodes, setNodes] = useState<JourneyNode[]>([])
@@ -2657,6 +2657,7 @@ export function JourneySection({ player, canWrite, demo, refreshKey, flash, onCh
   const counts = useMemo(() => ({
     all: nodes.length,
     done: nodes.filter(n => n.is_complete).length,
+    incomplete: nodes.filter(n => !n.is_complete).length,
     revealed: nodes.filter(n => n.is_revealed).length,
     reward: nodes.filter(n => n.has_pending_reward).length,
   }), [nodes])
@@ -2665,6 +2666,7 @@ export function JourneySection({ player, canWrite, demo, refreshKey, flash, onCh
     const q = search.trim().toLowerCase()
     return nodes.filter(n => {
       if (filter === 'done' && !n.is_complete) return false
+      if (filter === 'incomplete' && n.is_complete) return false
       if (filter === 'revealed' && !n.is_revealed) return false
       if (filter === 'reward' && !n.has_pending_reward) return false
       if (q && !n.node_id.toLowerCase().includes(q)) return false
@@ -2714,6 +2716,7 @@ export function JourneySection({ player, canWrite, demo, refreshKey, flash, onCh
   const tabs: Array<{ id: JourneyFilter; label: string; n: number }> = [
     { id: 'all', label: 'All', n: counts.all },
     { id: 'done', label: 'Done', n: counts.done },
+    { id: 'incomplete', label: 'Incomplete', n: counts.incomplete },
     { id: 'revealed', label: 'Revealed', n: counts.revealed },
     { id: 'reward', label: 'Reward', n: counts.reward },
   ]
