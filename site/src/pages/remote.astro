@@ -203,6 +203,9 @@ ingress:
           <h3 class="font-semibold text-lg mb-2">Step 8 · Run the tunnel + enable in DST</h3>
           <p class="text-dune-muted text-sm mb-2">Start the tunnel from PowerShell:</p>
           <pre class="bg-dune-bg border border-dune-border rounded-md p-3 text-xs font-mono overflow-x-auto">cloudflared tunnel run dune-portal</pre>
+          <div class="rounded-md border border-dune-border bg-dune-bg p-3 mt-3">
+            <p class="text-dune-muted text-sm"><strong class="text-dune-text">Expected output — this is success, not a hang.</strong> <span class="font-mono">cloudflared tunnel run</span> is a long-running process: it does <em>not</em> finish and hand your prompt back. It prints a few <span class="font-mono">Registered tunnel connection</span> lines with <span class="font-mono">connIndex=0</span> through <span class="font-mono">connIndex=3</span> — those are the four redundant connections it opens to Cloudflare's edge. Once you reach <span class="font-mono">connIndex=3</span> the tunnel is <strong>live</strong> and the window will simply sit there with no further output. That is the healthy, running state — it is not frozen or stuck. Leave the window open and move on to the next step.</p>
+          </div>
           <p class="text-dune-muted text-sm mt-3">Or install it as a Windows service so it survives reboots (run admin PowerShell):</p>
           <pre class="bg-dune-bg border border-dune-border rounded-md p-3 text-xs font-mono overflow-x-auto">cloudflared service install
 Start-Service cloudflared</pre>
@@ -239,6 +242,11 @@ Start-Service cloudflared</pre>
         <div class="rounded-xl border border-dune-border bg-dune-surface p-5">
           <h3 class="font-semibold mb-2"><span class="font-mono">cloudflared tunnel login</span> shows no zones</h3>
           <p class="text-dune-muted text-sm">Either no domain is on your Cloudflare account, or it's still <span class="font-mono">Pending</span>. Back to <a class="underline text-dune-text" href="#prereqs">Prerequisites</a> — wait for <strong>Active</strong> before retrying.</p>
+        </div>
+
+        <div class="rounded-xl border border-dune-border bg-dune-surface p-5">
+          <h3 class="font-semibold mb-2"><span class="font-mono">cloudflared tunnel run</span> looks frozen / stuck at <span class="font-mono">connIndex=3</span></h3>
+          <p class="text-dune-muted text-sm">It isn't stuck — that's the tunnel <strong>working</strong>. <span class="font-mono">cloudflared tunnel run</span> is a foreground daemon, not a one-shot command, so it never returns you to the prompt. The <span class="font-mono">connIndex=0</span>–<span class="font-mono">connIndex=3</span> lines are its four edge connections registering; once all four are up the window goes quiet and stays running. Leave it open and browse to <span class="font-mono">https://dune.yourdomain.xyz/remote/</span> — if you only see a 502 or 1033 <em>after</em> the page loads, that's a separate issue covered below. If the page loads fine, you're done; to keep the tunnel up after closing the window or rebooting, install it as a service (Step 8).</p>
         </div>
 
         <div class="rounded-xl border border-dune-border bg-dune-surface p-5">
