@@ -13,6 +13,32 @@ here cover everything those tags shipped.
 
 ## [Unreleased]
 
+## [12.9.5] - 2026-06-20
+
+### Added
+
+- **Update channel toggle (Stable / Test) with a selectable pre-release picker.**
+  Settings &rarr; *Dune Server Tool updates* now has a **Stable / Test** switch.
+  *Stable* tracks the newest released version everyone gets (unchanged default).
+  *Test* opts the install into pre-release builds shared for verification before
+  they go live, and reveals a dropdown to pick which pre-release to run &mdash; the
+  newest build is selected by default. This lets a specific bug reporter install
+  a targeted fix build, confirm it, and then roll onto the final release simply
+  by switching back to *Stable*. The choice persists in `dune-server.config`
+  (`UpdateChannel`, `UpdatePreReleaseTag`).
+
+### Changed
+
+- **Version comparison is now prerelease-aware.** The in-app updater understands
+  semver pre-release precedence (`12.9.5` &gt; `12.9.5-test2` &gt; `12.9.5-test1`
+  &gt; `12.9.4`), so a tester on a `-testN` build is correctly offered the final
+  release when they return to the Stable channel. On the Test channel, installing
+  the selected build is allowed whenever it differs from the running build
+  (deliberate sideways install or rollback between candidate builds), while the
+  Stable channel keeps the strict "only strictly newer" rule.
+- New host API `GET /api/update/prereleases` lists the available pre-release
+  builds (those carrying the installer asset) for the picker.
+
 ## [12.9.4] - 2026-06-20
 
 ### Fixed
