@@ -202,3 +202,26 @@ Describe 'Get-DuneAqlTrialCatalog' -Tag 'Pure' {
         $t4.tags | Should -Contain 'JourneySets.Fremkit.CryssKnife'
     }
 }
+
+Describe 'Get-DuneRecipesForJourneyNodeSubtree' -Tag 'Pure' {
+    It 'returns the Cryss Knife recipe for the Trial 4 subtree' {
+        $r = Get-DuneRecipesForJourneyNodeSubtree -NodeId 'DA_MQ_FindTheFremen.FourthTest'
+        $r | Should -Contain 'RCP_Crysknife_Recipe'
+    }
+    It 'returns ONLY the Cryss Knife recipe for the Trial 4 subtree (not other trials)' {
+        $r = @(Get-DuneRecipesForJourneyNodeSubtree -NodeId 'DA_MQ_FindTheFremen.FourthTest')
+        $r.Count | Should -Be 1
+    }
+    It 'returns all five Fremkit recipes for the whole Find the Fremen quest' {
+        $r = Get-DuneRecipesForJourneyNodeSubtree -NodeId 'DA_MQ_FindTheFremen'
+        $r | Should -Contain 'RCP_LeakyStillsuit_Top_Recipe'
+        $r | Should -Contain 'RCP_ChoamStaticCompactorRecipe'
+        $r | Should -Contain 'RCP_Crysknife_Recipe'
+        $r | Should -Contain 'RCP_T4_Structure_Thumper1_Recipe'
+        $r | Should -Contain 'RCP_StilltentRecipe'
+    }
+    It 'returns nothing for an unrelated node' {
+        $r = @(Get-DuneRecipesForJourneyNodeSubtree -NodeId 'DA_MQ_ANewBeginning')
+        $r.Count | Should -Be 0
+    }
+}
