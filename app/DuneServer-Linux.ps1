@@ -180,6 +180,10 @@ Initialize-DuneLog -Path $script:DuneLogFilePath
 
 . (Join-Path $serverDir 'HttpServer.ps1')
 
+# Re-assert after dot-sourcing HttpServer.ps1 so the API handler pool always
+# gets a valid ServerDir (see DuneServer.ps1 for the full rationale).
+$script:DuneServerDir = $serverDir
+
 $libDir = Join-Path $serverDir 'lib'
 if (Test-Path $libDir) {
     Get-ChildItem -Path $libDir -Filter '*.ps1' | ForEach-Object { . $_.FullName }
