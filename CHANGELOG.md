@@ -13,6 +13,21 @@ here cover everything those tags shipped.
 
 ## [Unreleased]
 
+## [12.9.5] - 2026-06-20
+
+### Fixed
+
+- **Gameplay Admin -> Players -> Specs: "+5K Grant" applied in DST but did not
+  show in-game.** The +5K grant wrote `xp_amount` directly to
+  `dune.specialization_tracks` and never touched `level`, so the server's
+  in-memory progression state was never refreshed the way the working "Grant
+  Max" action does. The grant now goes through the same Funcom stored procedure
+  (`dune.set_specialization_xp_and_level`) used by Grant Max: it reads the
+  current xp/level, adds the delta (clamped to the track cap), recomputes the
+  matching level without ever demoting the player, and writes both values. As
+  with other offline progression edits, the change appears in-game after a full
+  client re-login.
+
 ## [12.9.4] - 2026-06-20
 
 ### Fixed
