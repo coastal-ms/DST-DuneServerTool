@@ -13,6 +13,8 @@ here cover everything those tags shipped.
 
 ## [Unreleased]
 
+## [12.9.4] - 2026-06-20
+
 ### Fixed
 
 - **Public IP / DDNS: "did not resolve to a usable public IPv4 address" on the
