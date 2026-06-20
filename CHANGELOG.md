@@ -13,6 +13,13 @@ here cover everything those tags shipped.
 
 ## [Unreleased]
 
+### Added
+
+- **Players → Journey: new "Incomplete" filter tab.** Sits between Done and
+  Revealed and lists only nodes that haven't been completed yet, so you can see
+  at a glance what's left for a player (and Complete them) instead of scrolling
+  past the finished ones.
+
 ## [12.9.1] - 2026-06-19
 
 ### Fixed
