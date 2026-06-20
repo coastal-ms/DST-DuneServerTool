@@ -1040,10 +1040,14 @@ function OverflowToggle({ checked, disabled, onChange }: {
 // form owns two modes — a give/list view and an inline create/edit editor.
 interface PkgDraftRow { template: string; name: string; qty: string; quality: string }
 
-function GivePackageForm({ busy, playerName, onGive }: {
-  busy: boolean; playerName: string
+export function GivePackageForm({ busy, playerName, targetLabel, showOverflow = true, onGive }: {
+  busy: boolean
+  playerName?: string
+  targetLabel?: string
+  showOverflow?: boolean
   onGive: (items: GiveItemEntry[], pkgName: string, allowOverflow: boolean) => void
 }) {
+  const giveLabel = targetLabel ?? playerName ?? 'player'
   const [packages, setPackages] = useState<ItemPackage[]>([])
   const [loading, setLoading]   = useState(true)
   const [err, setErr]           = useState<string | null>(null)
@@ -1280,11 +1284,11 @@ function GivePackageForm({ busy, playerName, onGive }: {
         </>
       )}
       {err && <div className="text-xs text-error">{err}</div>}
-      {selected && <OverflowToggle checked={overflow} disabled={busy || saving} onChange={setOverflow} />}
+      {showOverflow && selected && <OverflowToggle checked={overflow} disabled={busy || saving} onChange={setOverflow} />}
       {selected && (
         <button className="btn-primary w-full" disabled={busy || saving}
           onClick={() => onGive(selected.items, selected.name, overflow)}>
-          {busy ? <Icon name="Loader2" size={13} className="animate-spin" /> : <Icon name="Check" size={13} />} Give to {playerName}
+          {busy ? <Icon name="Loader2" size={13} className="animate-spin" /> : <Icon name="Check" size={13} />} Give to {giveLabel}
         </button>
       )}
       <div className="grid grid-cols-4 gap-2">

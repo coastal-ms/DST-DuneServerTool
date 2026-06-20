@@ -13,6 +13,16 @@ here cover everything those tags shipped.
 
 ## [Unreleased]
 
+### Added
+
+- **Storage → container detail: "Give Package".** Hand a saved item package to
+  any storage container in one click, alongside the existing "Add Items" picker.
+  Reuses the same shared packages as Players → Give Package (build/import/edit
+  them from either place), so you can drop a whole bundle into a box. Works while
+  the owner is offline — it's a direct database write — and, like all container
+  edits, the items appear in-game after the next battlegroup (server zone)
+  restart.
+
 ## [12.9.2] - 2026-06-19
 
 ### Added
