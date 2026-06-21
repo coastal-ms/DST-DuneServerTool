@@ -23,10 +23,11 @@ here cover everything those tags shipped.
   Incoming Webhook URL, and use **Send test message** to verify it. The post is
   a clean embed (server name, minutes-to-restart, scheduled local time, reason)
   and fires at most once per restart, riding the same once-per-day lead window
-  as the in-game broadcast. The webhook URL is stored host-locally, never sent
-  back to the browser, and is redacted from logs and the diagnostics bundle. A
-  Discord outage never blocks or delays the restart (retries on 429/5xx, then
-  logs and moves on).
+  as the in-game broadcast. You can optionally have the alert **@-mention a
+  role** (paste a role ID, or use `everyone`/`here`) so members get pinged. The
+  webhook URL is stored host-locally, never sent back to the browser, and is
+  redacted from logs and the diagnostics bundle. A Discord outage never blocks
+  or delays the restart (retries on 429/5xx, then logs and moves on).
 
 ### Fixed
 

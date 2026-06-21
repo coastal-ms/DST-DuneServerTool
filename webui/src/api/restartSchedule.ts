@@ -8,6 +8,7 @@ export interface RestartSchedule {
   broadcastLeadMinutes: number // 0 = no broadcast
   discordEnabled: boolean
   discordWebhookSet: boolean   // whether a webhook URL is stored (URL is write-only)
+  discordMentionId: string     // role id or 'everyone'/'here' to ping; '' = no ping
   lastRestartDate: string
   lastResult: string
   updateAvailable: boolean
@@ -35,6 +36,7 @@ export function saveRestartSchedule(body: {
   broadcastLeadMinutes: number
   discordEnabled: boolean
   discordWebhookUrl?: string   // omit to leave the stored URL unchanged
+  discordMentionId?: string    // omit to leave the stored mention unchanged
 }) {
   return api<RestartSchedule>('/api/restart-schedule', {
     method: 'PUT',
