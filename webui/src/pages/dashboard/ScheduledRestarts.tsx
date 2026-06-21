@@ -258,7 +258,7 @@ export function ScheduledRestarts() {
                       {webhookSet && !clearWebhook && (
                         <button
                           type="button"
-                          onClick={() => { setClearWebhook(true); setWebhookInput('') }}
+                          onClick={() => { setClearWebhook(true); setWebhookInput(''); setDiscordEnabled(false) }}
                           className="text-[11px] text-danger hover:underline"
                         >
                           Remove saved webhook
