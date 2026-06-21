@@ -59,8 +59,11 @@ This will:
    daemon can bind it).
 2. Create a Windows Firewall inbound rule allowing 47900/TCP **only on
    the Tailscale interface**.
-3. Register a Scheduled Task `DST Friend Helper Bridge` that runs the
-   daemon at user logon and restarts it every minute on failure.
+3. Register a Scheduled Task `DST Friend Helper Bridge` that runs a
+   supervisor loop at user logon. The supervisor relaunches the daemon
+   within seconds if it crashes or is killed, so the bridge self-heals
+   without waiting on a restart trigger. A 2-minute keepalive trigger is
+   kept as a backstop in case the supervisor process itself is killed.
 4. Start the task immediately.
 
 Verify locally:

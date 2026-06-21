@@ -7,10 +7,14 @@
       1. Registers a URL ACL so a non-admin user can bind http://+:<port>/.
       2. Creates an inbound Windows Firewall rule scoped to the Tailscale
          interface only (no LAN / no public exposure).
-      3. Registers a Scheduled Task that runs DstHelperBridge.ps1 under
-         PowerShell 7 (pwsh.exe) at user logon, self-healing via a 2-minute
-         keepalive trigger (relaunches the daemon if it dies; IgnoreNew avoids
-         duplicates while it is healthy).
+      3. Registers a Scheduled Task that runs a *supervisor loop* under
+         PowerShell 7 (pwsh.exe) at user logon. The supervisor relaunches
+         DstHelperBridge.ps1 within seconds whenever it exits (crash, error, or
+         external kill), so the bridge self-heals without depending on a
+         restart/keepalive trigger firing. A 2-minute keepalive trigger plus the
+         logon trigger are kept as a backstop for the rarer case of the
+         supervisor process itself being killed (IgnoreNew avoids duplicates
+         while it is healthy).
 
     Must be run elevated (admin) — both the URL ACL and the firewall rule
     require admin rights to create.
@@ -106,18 +110,28 @@ function Ensure-ScheduledTask {
         Unregister-ScheduledTask -TaskName $TaskName -Confirm:$false
     }
 
+    # The task action is a *supervisor loop*, not the daemon directly. It
+    # relaunches DstHelperBridge.ps1 within seconds whenever the daemon exits
+    # for any reason — crash, unhandled error, or an external kill (which exits
+    # 0xC000013A and is logged by Task Scheduler as a stop, not a failure, so
+    # RestartOnFailure never fires for it). Because the supervisor is the
+    # long-lived task process, the daemon dying no longer ends the task, so
+    # recovery does not depend on a keepalive/repetition trigger firing. The
+    # 5-second sleep prevents a tight crash loop if the daemon can't start (e.g.
+    # a missing URL ACL). The bridge re-reads last-url.txt and binds a fresh
+    # listener on every launch, so relaunching is always safe.
+    $supervisorCmd = "while (`$true) { try { & '$BridgeScriptPath' -Port $Port } catch { } Start-Sleep -Seconds 5 }"
     $action = New-ScheduledTaskAction `
         -Execute $pwsh `
-        -Argument "-NoLogo -NoProfile -ExecutionPolicy Bypass -File `"$BridgeScriptPath`" -Port $Port"
+        -Argument "-NoLogo -NoProfile -WindowStyle Hidden -ExecutionPolicy Bypass -Command `"$supervisorCmd`""
 
-    # Two triggers keep the daemon alive across crashes, kills, and sleep/wake:
-    #   1. AtLogOn      — start when the host user signs in.
+    # Two triggers cover the cases the supervisor loop cannot heal by itself
+    # (i.e. the supervisor process itself ending):
+    #   1. AtLogOn      — start when the host user signs in (reboot / re-login).
     #   2. Keepalive    — re-fire every 2 minutes, indefinitely. Combined with
     #                     MultipleInstances=IgnoreNew below this is a no-op while
-    #                     the daemon is healthy, but relaunches it within ~2 min
-    #                     if it has died. RestartOnFailure alone is insufficient:
-    #                     an externally-killed daemon (exit 0xC000013A) is logged
-    #                     as a stop, not a failure, so it never restarted.
+    #                     the supervisor is healthy, but relaunches it within
+    #                     ~2 min if the supervisor process itself was killed.
     # A large finite RepetitionDuration is used because [TimeSpan]::MaxValue
     # trips a known Register-ScheduledTask bug.
     $logonTrigger = New-ScheduledTaskTrigger -AtLogOn -User "$env:USERDOMAIN\$env:USERNAME"
@@ -145,7 +159,7 @@ function Ensure-ScheduledTask {
         -Trigger @($logonTrigger, $keepAlive) `
         -Settings $settings `
         -Principal $principal `
-        -Description 'Reverse-proxies friend helper requests over Tailscale to the locally running DST instance. Self-healing: a 2-minute keepalive trigger relaunches the daemon if it dies; IgnoreNew prevents duplicates while it is healthy.' | Out-Null
+        -Description 'Reverse-proxies friend helper requests over Tailscale to the locally running DST instance. Self-healing: a supervisor loop relaunches the daemon within seconds if it crashes or is killed; a 2-minute keepalive trigger restarts the supervisor itself if it dies; IgnoreNew prevents duplicates while it is healthy.' | Out-Null
 }
 
 Assert-Elevated
