@@ -416,6 +416,20 @@ function New-DuneSchedulerInitialSessionState {
             [void]$iss.StartupScripts.Add($f.FullName)
         }
     }
+
+    # Propagate the active log file into the runspace so Write-DuneLog actually
+    # writes there. The runspace dot-sources DuneLog.ps1 but never runs
+    # Initialize-DuneLog, so without this its $script:DuneLogPath stays $null and
+    # every scheduler/broadcast/restart line is silently dropped. The runspace
+    # scripts call Set-DuneLogPath (header-less, no roll) with this value.
+    $logPath = $script:DuneLogPath
+    if (-not $logPath) { $logPath = Join-Path $env:LOCALAPPDATA 'DuneServer\dune-server.log' }
+    if ($logPath) {
+        [void]$iss.Variables.Add(
+            [System.Management.Automation.Runspaces.SessionStateVariableEntry]::new(
+                'DuneSchedulerLogPath', $logPath, 'Active Dune log file for runspace logging'))
+    }
+
     return $iss
 }
 
@@ -442,6 +456,9 @@ function Start-DuneFuncomUpdateCheckAsync {
         $ps = [powershell]::Create()
         $ps.Runspace = $rs
         [void]$ps.AddScript({
+            if ($DuneSchedulerLogPath -and (Get-Command Set-DuneLogPath -ErrorAction SilentlyContinue)) {
+                try { Set-DuneLogPath -Path $DuneSchedulerLogPath } catch {}
+            }
             try { [void](Get-DuneFuncomServerUpdateStatus -Persist) } catch {
                 if (Get-Command Write-DuneLog -ErrorAction SilentlyContinue) {
                     try { Write-DuneLog "async update check error: $($_.Exception.Message)" 'WARN' } catch {}
@@ -478,6 +495,9 @@ function Start-DuneRestartScheduler {
         $ps = [powershell]::Create()
         $ps.Runspace = $rs
         [void]$ps.AddScript({
+            if ($DuneSchedulerLogPath -and (Get-Command Set-DuneLogPath -ErrorAction SilentlyContinue)) {
+                try { Set-DuneLogPath -Path $DuneSchedulerLogPath } catch {}
+            }
             while ($true) {
                 try { Invoke-DuneRestartScheduleTick } catch {
                     if (Get-Command Write-DuneLog -ErrorAction SilentlyContinue) {
