@@ -34,10 +34,9 @@ here cover everything those tags shipped.
   prettifier (strip known prefixes, underscores &rarr; spaces). The raw
   technical name is still available on hover.
 - **Specs editing now sets a track's Level directly (0–100) instead of XP.**
-  Gameplay Admin &rarr; Players &rarr; Specs gives each track an editable
-  **Level** field, pre-filled with the track's current level. Type the exact
-  level you want (0 to the cap, 100) and click **Set** (or press Enter): DST
-  writes that level straight to `dune.specialization_tracks` via the Funcom
+  Gameplay Admin &rarr; Players &rarr; Specs gives each track a **Level slider**
+  (0–100) pre-filled with the track's current level — drag it, or type into the
+  adjacent box for precision — then click **Set** (or press Enter): DST writes that level straight to `dune.specialization_tracks` via the Funcom
   stored proc (`dune.set_specialization_xp_and_level`, the same path as "Grant
   Max"). This supersedes the earlier "set exact XP" field, which exposed a real
   bug: each track stores **both** a level and an XP value, and the game treats
