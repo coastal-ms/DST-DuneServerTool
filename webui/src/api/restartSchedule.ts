@@ -6,6 +6,8 @@ export interface RestartSchedule {
   enabled: boolean
   time: string                 // 24h HH:mm in the DST host's local time
   broadcastLeadMinutes: number // 0 = no broadcast
+  discordEnabled: boolean
+  discordWebhookSet: boolean   // whether a webhook URL is stored (URL is write-only)
   lastRestartDate: string
   lastResult: string
   updateAvailable: boolean
@@ -31,6 +33,8 @@ export function saveRestartSchedule(body: {
   enabled: boolean
   time: string
   broadcastLeadMinutes: number
+  discordEnabled: boolean
+  discordWebhookUrl?: string   // omit to leave the stored URL unchanged
 }) {
   return api<RestartSchedule>('/api/restart-schedule', {
     method: 'PUT',
@@ -40,6 +44,12 @@ export function saveRestartSchedule(body: {
 
 export function checkFuncomUpdate() {
   return api<FuncomUpdateResult>('/api/restart-schedule/check-update', {
+    method: 'POST',
+  })
+}
+
+export function testDiscordWebhook() {
+  return api<{ ok: boolean; message: string }>('/api/restart-schedule/test-discord', {
     method: 'POST',
   })
 }

@@ -29,6 +29,9 @@ function Invoke-DstRedaction {
     # 1) ?t=<token>  -> ?t=<redacted>   (the local-portal auth token)
     $out = [regex]::Replace($out, '([?&;])t=[^&\s"''<>]+', '$1t=<redacted>')
 
+    # 1b) Discord webhook URL token -> <redacted> (secret: grants channel posts)
+    $out = [regex]::Replace($out, '(/api/webhooks/\d+/)[A-Za-z0-9_-]+', '${1}<redacted>')
+
     # 2) IPv4 addresses (but leave 127.0.0.1 / 0.0.0.0 / 255.255.255.255 alone —
     #    those carry no identifying info and matter for log readability).
     $out = [regex]::Replace($out, '\b(?!(?:127\.0\.0\.1|0\.0\.0\.0|255\.255\.255\.255)\b)(?:\d{1,3}\.){3}\d{1,3}\b', '<ip>')
@@ -290,12 +293,26 @@ function New-DstDiagnosticBundle {
         $warnings.Add('Game config helpers not loaded — INI snapshot skipped.')
     }
 
-    # 6c) Scheduled-restart state (no secrets — times + build ids) ------------
+    # 6c) Scheduled-restart state -------------------------------------------
     # Helps diagnose "my restart didn't fire" / stale Funcom-update badge bugs.
+    # The discordWebhookUrl is a secret (grants posting to the user's channel),
+    # so it is stripped before the file is staged — never include it.
     try {
         $restartState = Join-Path $env:LOCALAPPDATA 'DuneServer\restart-schedule.json'
         if (Test-Path -LiteralPath $restartState) {
             $rsRaw = Get-Content -LiteralPath $restartState -Raw -ErrorAction Stop
+            try {
+                $rsObj = $rsRaw | ConvertFrom-Json -ErrorAction Stop
+                if ($rsObj.PSObject.Properties['discordWebhookUrl']) {
+                    $rsObj.discordWebhookUrl = if ([string]$rsObj.discordWebhookUrl) { '<redacted>' } else { '' }
+                }
+                $rsRaw = $rsObj | ConvertTo-Json -Depth 5
+            } catch {
+                # If parsing fails, fall back to a regex scrub so a secret can
+                # never leak through a malformed file.
+                $rsRaw = [regex]::Replace($rsRaw, '("discordWebhookUrl"\s*:\s*")[^"]*(")', '${1}<redacted>${2}')
+            }
+            $rsRaw = Invoke-DstRedaction -Text $rsRaw @redactArgs
             $out = Join-Path $stageDir 'restart-schedule.json'
             Set-Content -LiteralPath $out -Value $rsRaw -Encoding UTF8
             $included.Add(@{ name = 'restart-schedule.json'; bytes = (Get-Item -LiteralPath $out).Length })
@@ -314,6 +331,7 @@ function New-DstDiagnosticBundle {
     $manLines.Add('  - C:\Users\<anyone>\... paths              -> C:\Users\<user>\...')
     $manLines.Add('  - WindowsUser / SshKey / SteamPath values    -> <user> / <ssh-key-path> / <steam-path>')
     $manLines.Add('  - ?t=<token> query params                  -> ?t=<redacted>')
+    $manLines.Add('  - Discord webhook URL token                -> /api/webhooks/<id>/<redacted>')
     $manLines.Add('  - INI key=value redaction for the keys above as a safety net')
     $manLines.Add('')
     $manLines.Add('Game config snapshots (UserGame.ini / UserEngine.ini) are pulled live from')
