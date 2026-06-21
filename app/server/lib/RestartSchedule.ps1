@@ -52,6 +52,7 @@ function Get-DuneRestartScheduleDefault {
         broadcastLeadMinutes = 10
         discordEnabled       = $false
         discordWebhookUrl    = ''
+        discordMentionId     = ''
         lastBroadcastDate    = ''
         lastDiscordNoticeDate = ''
         lastRestartDate      = ''
@@ -89,6 +90,7 @@ function Get-DuneRestartSchedule {
     $state.updateAvailable      = [bool]$state.updateAvailable
     $state.discordEnabled       = [bool]$state.discordEnabled
     $state.discordWebhookUrl    = [string]$state.discordWebhookUrl
+    $state.discordMentionId     = [string]$state.discordMentionId
     try { $state.broadcastLeadMinutes = [int]$state.broadcastLeadMinutes } catch { $state.broadcastLeadMinutes = 10 }
     return $state
 }
@@ -109,6 +111,31 @@ function Test-DuneDiscordWebhookUrl {
     return ($Url -match '^https://(?:(?:canary|ptb)\.)?discord(?:app)?\.com/api/webhooks/\d+/[A-Za-z0-9_-]+$')
 }
 
+# Normalize a user-entered "mention on alert" value. Accepts an empty string
+# (no ping), the keywords 'everyone'/'here', a raw role id (17-20 digit
+# snowflake), or a pasted role mention like <@&123...>. Returns the cleaned
+# value to store, or $null when the input is not a valid mention target.
+function Resolve-DuneDiscordMentionInput {
+    param([string]$Mention)
+    if ([string]::IsNullOrWhiteSpace($Mention)) { return '' }
+    $m = $Mention.Trim()
+    if ($m -match '^@?(everyone|here)$') { return $Matches[1].ToLowerInvariant() }
+    if ($m -match '^<@&(\d{17,20})>$')   { return $Matches[1] }
+    if ($m -match '^\d{17,20}$')         { return $m }
+    return $null
+}
+
+# Turn a stored mention value into the Discord payload bits (content prefix +
+# allowed_mentions) so a ping actually fires. Empty -> no ping at all.
+function Get-DuneDiscordMentionPayload {
+    param([string]$Mention)
+    $m = if ($null -eq $Mention) { '' } else { $Mention.Trim() }
+    if ($m -eq 'everyone') { return @{ content = '@everyone'; allowed = @{ parse = @('everyone') } } }
+    if ($m -eq 'here')     { return @{ content = '@here';     allowed = @{ parse = @('everyone') } } }
+    if ($m -match '^\d{17,20}$') { return @{ content = "<@&$m>"; allowed = @{ parse = @(); roles = @($m) } } }
+    return @{ content = ''; allowed = @{ parse = @() } }
+}
+
 # Validate + persist user-facing fields (enable/time/lead + Discord notify).
 # Leaves the run stamps and update-check fields untouched. Returns the full
 # updated state. A $null DiscordWebhookUrl means "leave the stored URL as-is"
@@ -119,7 +146,8 @@ function Set-DuneRestartSchedule {
         [string]$Time,
         [int]$BroadcastLeadMinutes,
         [bool]$DiscordEnabled,
-        [string]$DiscordWebhookUrl
+        [string]$DiscordWebhookUrl,
+        [string]$DiscordMentionId
     )
     if ($Time -notmatch '^([01]\d|2[0-3]):([0-5]\d)$') {
         return @{ ok = $false; status = 400; message = "Invalid time '$Time'. Use 24-hour HH:mm (e.g. 04:00)." }
@@ -139,14 +167,24 @@ function Set-DuneRestartSchedule {
         return @{ ok = $false; status = 400; message = 'Enable Discord notifications requires a webhook URL.' }
     }
 
+    # $null mention means "leave as-is"; anything else is validated then stored.
+    $effectiveMention = if ($null -ne $DiscordMentionId) {
+        $resolved = Resolve-DuneDiscordMentionInput $DiscordMentionId
+        if ($null -eq $resolved) {
+            return @{ ok = $false; status = 400; message = 'Invalid mention. Use a role ID (Discord > right-click role > Copy Role ID), or the keyword everyone or here.' }
+        }
+        $resolved
+    } else { [string]$state.discordMentionId }
+
     $state.enabled              = $Enabled
     $state.time                 = $Time
     $state.broadcastLeadMinutes = $BroadcastLeadMinutes
     $state.discordEnabled       = $DiscordEnabled
     $state.discordWebhookUrl    = $effectiveUrl
+    $state.discordMentionId     = $effectiveMention
     Save-DuneRestartSchedule -State $state
     if (Get-Command Write-DuneLog -ErrorAction SilentlyContinue) {
-        Write-DuneLog "restart schedule saved: enabled=$Enabled time=$Time lead=$BroadcastLeadMinutes discord=$DiscordEnabled discordUrlSet=$([bool]$effectiveUrl)"
+        Write-DuneLog "restart schedule saved: enabled=$Enabled time=$Time lead=$BroadcastLeadMinutes discord=$DiscordEnabled discordUrlSet=$([bool]$effectiveUrl) discordMention=$([bool]$effectiveMention)"
     }
     return @{ ok = $true; schedule = $state }
 }
@@ -186,7 +224,8 @@ function Send-DuneDiscordWebhook {
         [string]$ServerName,
         [int]$MinutesToRestart,
         [datetime]$RestartAt,
-        [string]$Reason
+        [string]$Reason,
+        [string]$MentionId
     )
     if (-not (Test-DuneDiscordWebhookUrl $Url)) {
         return @{ ok = $false; status = 400; message = 'Invalid Discord webhook URL.' }
@@ -215,9 +254,11 @@ function Send-DuneDiscordWebhook {
     $payload = [ordered]@{
         username = 'DST Server'
         embeds   = @($embed)
-        # No @everyone/@here pings in the MVP.
-        allowed_mentions = @{ parse = @() }
     }
+    # Optional role/@everyone/@here ping. Empty mention => no ping (parse: []).
+    $mp = Get-DuneDiscordMentionPayload $MentionId
+    if ($mp.content) { $payload.content = $mp.content }
+    $payload.allowed_mentions = $mp.allowed
     $json = $payload | ConvertTo-Json -Depth 6
 
     $attempts = 0
@@ -473,7 +514,7 @@ function Invoke-DuneRestartScheduleTick {
                     }
                     $reason = if ($state.updateAvailable) { 'Scheduled daily BG maintenance (Funcom server update available)' } else { 'Scheduled daily BG maintenance' }
                     $d = Send-DuneDiscordWebhook -Url $state.discordWebhookUrl -ServerName $serverName `
-                        -MinutesToRestart $lead -RestartAt $restartAt -Reason $reason
+                        -MinutesToRestart $lead -RestartAt $restartAt -Reason $reason -MentionId $state.discordMentionId
                     if (Get-Command Write-DuneLog -ErrorAction SilentlyContinue) {
                         $dm = if ($d -and $d.ok) { "sent (HTTP $($d.status))" } else { "failed: $($d.message)" }
                         Write-DuneLog "scheduled restart discord notice $dm [$(Get-DuneRedactedWebhookUrl $state.discordWebhookUrl)]"

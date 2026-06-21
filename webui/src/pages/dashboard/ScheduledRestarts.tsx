@@ -12,6 +12,9 @@ import {
 // Client-side sanity check for a Discord incoming-webhook URL. The server
 // re-validates; this just gives fast inline feedback.
 const WEBHOOK_RE = /^https:\/\/(?:(?:canary|ptb)\.)?discord(?:app)?\.com\/api\/webhooks\/\d+\/[\w-]+$/
+// Optional "mention on alert" target: empty, the keyword everyone/here, a raw
+// role id (17-20 digit snowflake), or a pasted <@&id> role mention.
+const MENTION_RE = /^(?:@?(?:everyone|here)|<@&\d{17,20}>|\d{17,20})$/
 
 // Spell the lead minutes the same way the in-game broadcast does, so the
 // preview line matches what players will see.
@@ -48,6 +51,7 @@ export function ScheduledRestarts() {
   const [webhookInput, setWebhookInput] = useState('')
   const [webhookSet, setWebhookSet] = useState(false)
   const [clearWebhook, setClearWebhook] = useState(false)
+  const [mention, setMention] = useState('')
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
   const [checking, setChecking] = useState(false)
@@ -66,6 +70,7 @@ export function ScheduledRestarts() {
       setWebhookSet(s.discordWebhookSet)
       setWebhookInput('')
       setClearWebhook(false)
+      setMention(s.discordMentionId || '')
     } catch (e) {
       setMsg({ kind: 'err', text: e instanceof ApiError ? e.message : 'Failed to load schedule.' })
     } finally {
@@ -76,6 +81,7 @@ export function ScheduledRestarts() {
   useEffect(() => { void load() }, [load])
 
   const webhookInputValid = webhookInput.trim() === '' || WEBHOOK_RE.test(webhookInput.trim())
+  const mentionValid = mention.trim() === '' || MENTION_RE.test(mention.trim())
   // Will a webhook be stored after this save?
   const effectiveWebhookSet = clearWebhook ? false : (webhookSet || webhookInput.trim() !== '')
 
@@ -85,8 +91,8 @@ export function ScheduledRestarts() {
     try {
       const body: {
         enabled: boolean; time: string; broadcastLeadMinutes: number
-        discordEnabled: boolean; discordWebhookUrl?: string
-      } = { enabled, time, broadcastLeadMinutes: lead, discordEnabled }
+        discordEnabled: boolean; discordWebhookUrl?: string; discordMentionId?: string
+      } = { enabled, time, broadcastLeadMinutes: lead, discordEnabled, discordMentionId: mention.trim() }
       if (clearWebhook) body.discordWebhookUrl = ''
       else if (webhookInput.trim() !== '') body.discordWebhookUrl = webhookInput.trim()
       const s = await saveRestartSchedule(body)
@@ -95,13 +101,14 @@ export function ScheduledRestarts() {
       setWebhookSet(s.discordWebhookSet)
       setWebhookInput('')
       setClearWebhook(false)
+      setMention(s.discordMentionId || '')
       setMsg({ kind: 'ok', text: 'Schedule saved.' })
     } catch (e) {
       setMsg({ kind: 'err', text: e instanceof ApiError ? e.message : 'Save failed.' })
     } finally {
       setSaving(false)
     }
-  }, [enabled, time, lead, discordEnabled, webhookInput, clearWebhook])
+  }, [enabled, time, lead, discordEnabled, webhookInput, clearWebhook, mention])
 
   const runCheck = useCallback(async () => {
     setChecking(true)
@@ -130,9 +137,9 @@ export function ScheduledRestarts() {
     }
   }, [])
 
-  const discordDirty = !!sched && (sched.discordEnabled !== discordEnabled || webhookInput.trim() !== '' || clearWebhook)
+  const discordDirty = !!sched && (sched.discordEnabled !== discordEnabled || webhookInput.trim() !== '' || clearWebhook || (sched.discordMentionId || '') !== mention.trim())
   const dirty = !!sched && (sched.enabled !== enabled || sched.time !== time || sched.broadcastLeadMinutes !== lead || discordDirty)
-  const canSave = dirty && webhookInputValid && !(discordEnabled && !effectiveWebhookSet)
+  const canSave = dirty && webhookInputValid && mentionValid && !(discordEnabled && !effectiveWebhookSet)
 
   return (
     <div className="card p-5">
@@ -267,6 +274,27 @@ export function ScheduledRestarts() {
                     </div>
                     {!webhookInputValid && (
                       <p className="text-[11px] text-danger mt-1">That doesn't look like a Discord webhook URL.</p>
+                    )}
+                  </div>
+
+                  <div>
+                    <label className="block text-xs uppercase tracking-wider text-text-dim mb-1">
+                      Mention on alert <span className="normal-case text-text-dim">(optional)</span>
+                    </label>
+                    <input
+                      type="text"
+                      value={mention}
+                      onChange={e => setMention(e.target.value)}
+                      placeholder="Role ID, or everyone / here"
+                      autoComplete="off"
+                      aria-label="Discord mention on alert"
+                      className={FIELD_CLASS}
+                    />
+                    <p className="text-[11px] text-text-dim mt-1">
+                      Pings a role when the alert posts. Paste a role ID (Discord → enable Developer Mode → right-click the role → Copy Role ID), or type <code>everyone</code> or <code>here</code>. Leave blank for no ping.
+                    </p>
+                    {!mentionValid && (
+                      <p className="text-[11px] text-danger mt-1">Enter a role ID (17–20 digits), or the keyword everyone or here.</p>
                     )}
                   </div>
 
