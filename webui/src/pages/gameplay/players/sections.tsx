@@ -12,7 +12,7 @@ import { Icon } from '../../../components/Icon'
 import { ItemPicker } from '../../../components/ItemPicker'
 import { TagPicker } from '../../../components/TagPicker'
 import {
-  awardCharXp, awardIntel, awardSpecXp, cheatScript, cleanPlayerInventory,
+  awardCharXp, awardIntel, setSpecXp, cheatScript, cleanPlayerInventory,
   applyProgressionPreset, getProgressionPresets,
   progressionUnlock, progressionReverse,
   deleteAccount, deleteInventoryItem, deleteTutorials,
@@ -118,7 +118,8 @@ export function StatsSection({ player, demo, refreshKey }: SectionProps) {
 
 // ---------------------------------------------------------------------------
 // Specs — 5 tracks + keystone counter. Header buttons grant/reset all
-// keystones; per-row buttons grant max XP / reset one track / +5000 XP.
+// keystones; per-row controls: editable XP field (set exact value) +
+// grant max XP / reset one track.
 // ---------------------------------------------------------------------------
 export function SpecsSection({ player, canWrite, demo, refreshKey, flash, onChanged }: SectionProps) {
   const [tracks, setTracks] = useState<SpecTrackFull[]>([])
@@ -205,9 +206,9 @@ export function SpecsSection({ player, canWrite, demo, refreshKey, flash, onChan
               <SpecRow key={name} name={name} track={t} canWrite={canWrite} busy={busy}
                 onGrantMax={() => void run(() => grantMaxSpec(player.controller_id, name), 'Grant max')}
                 onReset={() => void run(() => resetSpec(player.controller_id, name), 'Reset')}
-                onAdd5k={() => {
-                  if (window.confirm(`Add 5,000 ${name} XP to ${player.name}?\n\nThis writes the track's stored XP, which the game treats as authoritative on next login. If the character has in-game spec progress not yet saved to the server, it can be overwritten (the stored value wins). Make sure you have a database backup before using this. The change appears in-game after a full re-login.`)) {
-                    void run(() => awardSpecXp(player.controller_id, name, 5000), '+5000 XP')
+                onSetXp={(xp) => {
+                  if (window.confirm(`Set ${name} XP to ${xp.toLocaleString()} for ${player.name}?\n\nThis writes the track's stored XP directly, which the game treats as authoritative on next login. If the character has in-game spec progress not yet saved to the server, it can be overwritten (the stored value wins). Make sure you have a database backup before using this. The change appears in-game after a full re-login.`)) {
+                    void run(() => setSpecXp(player.controller_id, name, xp), 'Set XP')
                   }
                 }}
               />
@@ -221,15 +222,24 @@ export function SpecsSection({ player, canWrite, demo, refreshKey, flash, onChan
 
 const SPEC_TRACK_ORDER = ['Combat', 'Crafting', 'Exploration', 'Gathering', 'Sabotage']
 
-function SpecRow({ name, track, canWrite, busy, onGrantMax, onReset, onAdd5k }: {
+function SpecRow({ name, track, canWrite, busy, onGrantMax, onReset, onSetXp }: {
   name: string; track: SpecTrackFull | undefined; canWrite: boolean; busy: boolean
-  onGrantMax: () => void; onReset: () => void; onAdd5k: () => void
+  onGrantMax: () => void; onReset: () => void; onSetXp: (xp: number) => void
 }) {
   const xp = track?.xp ?? 0
   const level = Math.round(track?.level ?? 0)
   const xpMax = track?.xp_max ?? 44182
   const levelMax = Math.round(track?.level_max ?? 100)
   const pct = Math.min(100, Math.max(0, (xp / xpMax) * 100))
+
+  const [draft, setDraft] = useState<string>(String(xp))
+  // Re-sync the field to the live value whenever the track reloads.
+  useEffect(() => { setDraft(String(xp)) }, [xp])
+
+  const parsed = Math.trunc(Number(draft))
+  const valid = draft.trim() !== '' && Number.isFinite(parsed) && parsed >= 0 && parsed <= xpMax
+  const changed = valid && parsed !== xp
+
   return (
     <div className="card p-3">
       <div className="flex items-center justify-between gap-3">
@@ -243,9 +253,16 @@ function SpecRow({ name, track, canWrite, busy, onGrantMax, onReset, onAdd5k }: 
           </div>
         </div>
         {canWrite && (
-          <div className="flex gap-1.5 shrink-0">
-            <button className="btn-secondary" disabled={busy} title="+5000 XP" onClick={onAdd5k}>
-              <Icon name="Plus" size={13} /> 5k
+          <div className="flex items-center gap-1.5 shrink-0">
+            <input
+              type="number" inputMode="numeric" step={1} min={0} max={xpMax}
+              className="w-24 font-mono text-sm bg-surface-2 border border-border rounded px-2 py-1" value={draft} disabled={busy}
+              title={`Set exact XP (0–${fmtNum(xpMax)})`}
+              onChange={e => setDraft(e.target.value)}
+              onKeyDown={e => { if (e.key === 'Enter' && changed) onSetXp(parsed) }}
+            />
+            <button className="btn-secondary" disabled={busy || !changed} title={`Set XP to typed value (0–${fmtNum(xpMax)})`} onClick={() => onSetXp(parsed)}>
+              <Icon name="Check" size={13} /> Set
             </button>
             <button className="btn-secondary" disabled={busy} title="Grant max XP for this track" onClick={onGrantMax}>
               <Icon name="ChevronsUp" size={13} /> Max
