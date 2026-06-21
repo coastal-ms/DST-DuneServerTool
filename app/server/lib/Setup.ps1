@@ -168,7 +168,7 @@ function Get-DuneSetupPreflight {
                     if ((Test-DuneSshKeyEncrypted -KeyPath $keyPath) -eq $true) {
                         $checks.Add(@{
                             key = 'sshkey'; label = 'SSH key authorized on VM'; ok = $false; severity = 'warning'
-                            detail = "This SSH key is passphrase-protected, so the tool can't use it for background checks (battlegroup status, server health, game data) — those run non-interactively and can't answer a passphrase prompt. An interactive SSH terminal still works because it can prompt you, which is why the VM looks reachable while the dashboard shows Unknown. Fix it with the Rotate SSH Key action (VM menu, key 'g') to generate a passphrase-less key, or strip the passphrase from this one."
+                            detail = "This SSH key is passphrase-protected, so the tool can't use it for background checks (battlegroup status, server health, game data) — those run non-interactively and can't answer a passphrase prompt. An interactive SSH terminal still works because it can prompt you, which is why the VM looks reachable while the dashboard shows Unknown. Fix it in Settings - SSH key with the 'Remove passphrase' button (keeps this same key, no VM changes), or rotate to a passphrase-less key with the Rotate SSH Key action (VM menu, key 'g')."
                             fix    = "Remove the passphrase from the existing key (press Enter when asked for the new passphrase to leave it empty):`nssh-keygen -p -f `"$keyPath`""
                         }) | Out-Null
                     }
