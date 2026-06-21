@@ -637,7 +637,47 @@ business logic — they're not separate codebases.
 
 ---
 
-## Remote access *(advanced — no third-party software)*
+## Remote access & Mobile App *(via Tailscale)*
+
+DST ships with a **Mobile App** companion that lets you monitor server health, view live player lists, and manage basic gameplay admin directly from your phone.
+
+Because the DST Desktop backend exposes full admin capabilities, it **strictly binds to 127.0.0.1 (localhost) and cannot be port-forwarded.** Exposing the DST HTTP API to the public internet would be a massive security risk.
+
+To securely connect the mobile app to your PC, DST requires **Tailscale**, a zero-config VPN.
+
+### Mobile App Setup
+
+1. **Install Tailscale on your Host PC**
+   - Download and install Tailscale from [tailscale.com](https://tailscale.com/download/windows).
+   - Log in and ensure the machine is connected to your Tailnet.
+
+2. **Install the DST Helper Bridge**
+   - Because DST binds to `127.0.0.1`, Tailscale traffic needs a bridge to reach it securely.
+   - Open PowerShell **as Administrator** on your Host PC.
+   - Run the bridge installer:
+     ```powershell
+     & "C:\Program Files\Dune Server Tool\helper\bridge\Install-Bridge.ps1"
+     ```
+   - This creates an inbound Windows Firewall rule allowing traffic *only* on the Tailscale interface, and sets up a background task to proxy that traffic to DST.
+
+3. **Connect the Mobile App**
+   - Install Tailscale on your phone and log in to the same Tailnet account.
+   - Ensure Tailscale says "Connected" on your phone.
+   - Open the **DST Desktop App** and go to **Settings > Mobile App Card**.
+   - Scan the generated QR code with the DST Mobile App. If your camera is unavailable, use the "Enter Code Manually" button in the app and type the IP, Port, and Token shown on your PC.
+
+### Adding a Co-Admin via Tailscale
+
+You can grant remote access to a friend without opening router ports:
+1. Have them install Tailscale on their PC.
+2. In your Tailscale Admin Console, share your host machine with their Tailscale email.
+3. Have them follow the setup instructions in the `helper/friend` directory of this repo.
+
+> **Note:** The built-in PowerShell terminal page inside the DST web UI is strictly refused over remote connections (including Tailscale). It will only load if you are physically sitting at the host machine using `127.0.0.1`.
+
+---
+
+## Remote access *(advanced — SSH Tunnel)*
 
 DST binds its web portal to `127.0.0.1` only — there is **no** built-in
 remote login, and exposing the port to the public internet would be unsafe
