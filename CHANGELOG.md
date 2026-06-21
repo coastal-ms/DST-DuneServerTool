@@ -35,20 +35,24 @@ here cover everything those tags shipped.
   naming the Map Spin-Up page already uses. Unknown maps fall back to a generic
   prettifier (strip known prefixes, underscores &rarr; spaces). The raw
   technical name is still available on hover.
-- **Specs editing now sets a track's Level directly (0–100) instead of XP.**
-  Gameplay Admin &rarr; Players &rarr; Specs gives each track a **Level slider**
-  (0–100) pre-filled with the track's current level — drag it, or type into the
-  adjacent box for precision — then click **Set** (or press Enter): DST writes that level straight to `dune.specialization_tracks` via the Funcom
-  stored proc (`dune.set_specialization_xp_and_level`, the same path as "Grant
-  Max"). This supersedes the earlier "set exact XP" field, which exposed a real
-  bug: each track stores **both** a level and an XP value, and the game treats
+
+### Fixed
+
+- **Specs edits showed the wrong value in-game / after re-login (#319).** Setting
+  a specialization track's XP applied a value that didn't match what was typed
+  once the character re-logged (e.g. typing 20,000 showed 11,947). Root cause:
+  each track stores **both** a `level` and an `xp_amount`, and the game treats
   the **level** as authoritative — on login it keeps the level and *recomputes*
-  `xp_amount` from it on its own non-linear curve. DST derived the level from the
-  typed XP with a straight-line formula, so the level it wrote didn't match the
-  game's curve (e.g. typing 20,000 XP wrote a level the game read as ~45, then on
-  login the game rewrote the XP to 11,947). Editing the level — the value the
-  game keeps and the one shown in-game (LVL 53, etc.) — makes the set stick
-  exactly after re-login; XP is now a read-only derived readout. **Max** and
+  `xp_amount` from it on its own non-linear curve. DST let admins type **XP** and
+  derived the level with a straight-line formula, which didn't match the game's
+  curve. The Specs editor now sets the **Level (0–100)** directly via a **slider**
+  (with a synced number box for precision), pre-filled with the track's current
+  level; click **Set** (or press Enter) and DST writes that level straight to
+  `dune.specialization_tracks` via the Funcom stored proc
+  (`dune.set_specialization_xp_and_level`, the same path as "Grant Max"). The
+  game keeps the level on login, so the set sticks exactly; XP is now a read-only
+  derived readout. This supersedes the earlier "+5K grant" and "set exact XP"
+  approaches, which both fought the game's level-derived XP. **Max** and
   **Reset** (per track) and the bulk keystone actions are unchanged. The Set
   action is gated behind a confirm warning noting that `specialization_tracks` is
   authoritative on login (so it can overwrite un-persisted in-game progress) and
