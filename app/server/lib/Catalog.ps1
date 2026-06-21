@@ -7,6 +7,7 @@
 $script:DuneItemCatalog       = $null  # array of @{templateId; name; category}
 $script:DuneItemCategories    = $null  # sorted unique category strings
 $script:DuneItemCatalogMeta   = $null  # {total; source; scraped} from JSON
+$script:DuneVehicleKitCatalog = $null  # {fuelTemplate; torchTemplate; vehicles[]} from vehicle-kits.json
 
 function Get-DuneItemCatalogPath {
     foreach ($candidate in @(
@@ -67,6 +68,53 @@ function Get-DuneItemCatalog {
         categories = $script:DuneItemCategories
         items      = $script:DuneItemCatalog
     }
+}
+
+# Vehicle-kit catalog — single source of truth for the Give Vehicle Kit action,
+# shared by the desktop web UI and the mobile app. Loaded from
+# app\data\vehicle-kits.json and cached for the process lifetime.
+function Load-DuneVehicleKitCatalog {
+    if ($script:DuneVehicleKitCatalog) { return }
+    $empty = @{ fuelTemplate = ''; torchTemplate = ''; vehicles = @() }
+    $path = $null
+    foreach ($candidate in @(
+        (Join-Path $PSScriptRoot '..\..\data\vehicle-kits.json'),
+        (Join-Path (Split-Path -Parent $PSScriptRoot) '..\data\vehicle-kits.json')
+    )) {
+        try { $path = (Resolve-Path -LiteralPath $candidate -ErrorAction Stop).Path; break } catch {}
+    }
+    if (-not $path) { $script:DuneVehicleKitCatalog = $empty; return }
+    try {
+        $json = Get-Content -LiteralPath $path -Raw | ConvertFrom-Json
+        $vehicles = @()
+        foreach ($v in @($json.vehicles)) {
+            $qty = [ordered]@{}
+            if ($v.PSObject.Properties['qty'] -and $v.qty) {
+                foreach ($p in $v.qty.PSObject.Properties) { $qty[$p.Name] = [int]$p.Value }
+            }
+            $vehicles += [ordered]@{
+                id        = [string]$v.id
+                label     = [string]$v.label
+                className = [string]$v.className
+                templates = @($v.templates | ForEach-Object { [string]$_ })
+                kit       = @($v.kit       | ForEach-Object { [string]$_ })
+                unique    = @($v.unique    | ForEach-Object { [string]$_ })
+                qty       = $qty
+            }
+        }
+        $script:DuneVehicleKitCatalog = @{
+            fuelTemplate  = [string]$json.fuelTemplate
+            torchTemplate = [string]$json.torchTemplate
+            vehicles      = $vehicles
+        }
+    } catch {
+        $script:DuneVehicleKitCatalog = $empty
+    }
+}
+
+function Get-DuneVehicleKitCatalog {
+    Load-DuneVehicleKitCatalog
+    return $script:DuneVehicleKitCatalog
 }
 
 function Get-DuneStackLimitForCategory {

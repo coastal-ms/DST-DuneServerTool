@@ -107,6 +107,9 @@ Source: "..\resources\remote-scripts\*"; DestDir: "{app}\resources\remote-script
 ; DunePreflight.ps1 is the WinForms results window, README.md explains usage.
 Source: "..\..\tools\preflight\*"; DestDir: "{app}\tools\preflight"; Flags: ignoreversion recursesubdirs
 
+; Tailscale mobile app bridge daemon
+Source: "..\..\helper\bridge\*"; DestDir: "{app}\helper\bridge"; Flags: ignoreversion recursesubdirs
+
 [Icons]
 ; Start Menu shortcut (always created)
 Name: "{group}\{#MyAppName}"; Filename: "{app}\{#MyAppExeName}"; IconFilename: "{app}\{#MyAppExeName}"; Comment: "Dune Awakening server management"; Flags: runminimized
@@ -151,6 +154,9 @@ Filename: "powershell.exe"; Parameters: "-NoProfile -ExecutionPolicy Bypass -Com
 ; autostart preference. Idempotent; never blocks install on failure.
 Filename: "powershell.exe"; Parameters: "-NoProfile -ExecutionPolicy Bypass -Command ""try {{ Get-ScheduledTask -TaskPath '\Dune Server\' -ErrorAction SilentlyContinue | Where-Object {{ $_.TaskName -like 'DuneServer-Autostart-*' }} | Unregister-ScheduledTask -Confirm:$false -ErrorAction SilentlyContinue }} catch {{}}"""; Flags: runhidden waituntilterminated; Check: ShouldClearLegacyAutostart
 
+; Install Tailscale proxy bridge for mobile app
+Filename: "powershell.exe"; Parameters: "-NoProfile -ExecutionPolicy Bypass -File ""{app}\helper\bridge\Install-Bridge.ps1"""; Flags: runhidden waituntilterminated
+
 ; Launch immediately after install. Two entries so both interactive AND
 ; silent (auto-update) installs relaunch the app:
 ;   * Interactive: postinstall shows the "Launch Dune Server" checkbox on
@@ -172,6 +178,9 @@ Type: filesandordirs; Name: "{app}"
 ; per user; iterate and remove them all. RunHidden, never block uninstall on
 ; failure (the task may already be gone, the folder may not exist, etc.).
 Filename: "powershell.exe"; Parameters: "-NoProfile -ExecutionPolicy Bypass -Command ""try {{ Get-ScheduledTask -TaskPath '\Dune Server\' -ErrorAction SilentlyContinue | Where-Object {{ $_.TaskName -like 'DuneServer-Autostart-*' }} | Unregister-ScheduledTask -Confirm:$false -ErrorAction SilentlyContinue }} catch {{}}"""; Flags: runhidden; RunOnceId: "RemoveDuneAutostartTasks"
+
+; Remove Tailscale proxy bridge
+Filename: "powershell.exe"; Parameters: "-NoProfile -ExecutionPolicy Bypass -File ""{app}\helper\bridge\Uninstall-Bridge.ps1"""; Flags: runhidden; RunOnceId: "RemoveTailscaleBridge"
 
 [Code]
 // ============================================================

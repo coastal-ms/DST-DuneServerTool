@@ -363,7 +363,7 @@ WHERE template_id = 'ContractItem'
 # Bulk give: loops the existing single-template give. Items is an array of
 # @{ template = '...'; qty = N; quality = M }.
 function Invoke-DunePlayerGiveItemsBulk {
-    param([string]$Ip, [long]$PawnId, $Items, [string]$FlsId, [bool]$AllowOverflow = $false)
+    param([string]$Ip, [long]$PawnId, $Items, [string]$FlsId, [bool]$AllowOverflow = $true)
     if ($PawnId -le 0) { return @{ ok = $false; error = 'pawn_id is required.' } }
     if (-not $Items -or @($Items).Count -eq 0) {
         return @{ ok = $false; error = 'items[] is required.' }
@@ -383,6 +383,12 @@ function Invoke-DunePlayerGiveItemsBulk {
     }
     $results = New-Object System.Collections.Generic.List[object]
     $failures = 0
+    # Each RMQ ServerCommand is applied asynchronously by the game; firing several
+    # AddItemToInventory commands back-to-back can outrun the deposit so later items
+    # (often the bulky vehicle modules at the end of a kit) silently never land.
+    # Space consecutive live gives so the game finishes depositing each before the next.
+    $rmqGives = 0
+    $rmqSpacingMs = 500
     foreach ($it in $Items) {
         $tmpl = [string](Get-DuneBodyValue -Body $it -Name 'template')
         $qty = [int64](Get-DuneBodyInt -Body $it -Name 'qty')
@@ -395,8 +401,10 @@ function Invoke-DunePlayerGiveItemsBulk {
         if ($qty -le 0) { $qty = 1 }
         if ($isOnline -and $qlevel -le 0 -and -not [string]::IsNullOrWhiteSpace($fls)) {
             # Online + default quality → RMQ live (instant, no relog)
+            if ($rmqGives -gt 0) { Start-Sleep -Milliseconds $rmqSpacingMs }
             $r = Invoke-DunePlayerGiveItemLive -Ip $Ip -ActorId $PawnId -FlsId $fls -Template $tmpl -Quantity ([int]$qty) -Durability 1.0 -AllowOverflow $AllowOverflow
             if ($r.ok -and -not $r.path) { $r['path'] = 'rmq' }
+            $rmqGives++
         } else {
             # Offline, OR online with custom quality / unresolved fls → SQL
             $r = Invoke-DunePlayerGiveItem -Ip $Ip -PawnId $PawnId -Template $tmpl -Qty $qty -Quality ([int64]$qlevel)
