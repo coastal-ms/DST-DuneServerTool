@@ -29,6 +29,17 @@ function Initialize-DuneLog {
     } catch { }
 }
 
+# Point logging at an existing log file WITHOUT rolling it or writing a header.
+# Used by background runspaces (e.g. the restart scheduler) that dot-source this
+# file fresh: they would otherwise have $script:DuneLogPath = $null and silently
+# drop every Write-DuneLog. They must share the main process's log file, so a
+# header/roll here would be wrong and could race the main thread's appends.
+function Set-DuneLogPath {
+    [CmdletBinding()]
+    param([Parameter(Mandatory)][string]$Path)
+    $script:DuneLogPath = $Path
+}
+
 function Write-DuneLog {
     [CmdletBinding()]
     param(

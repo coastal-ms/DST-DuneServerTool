@@ -13,6 +13,20 @@ here cover everything those tags shipped.
 
 ## [Unreleased]
 
+### Fixed
+
+- **Scheduled restart logs are now actually written.** The daily-restart
+  scheduler runs on its own background runspace, which dot-sourced the logging
+  helper but never pointed it at the active log file — so its per-tick lines
+  (pre-restart broadcast sent/failed, "scheduled restart firing", and the
+  restart result) were silently dropped and never reached
+  `%LOCALAPPDATA%\DuneServer\dune-server.log`. Only the one-time "restart
+  scheduler started" line (written from the main thread) ever showed up, which
+  made it impossible to confirm afterwards whether the in-game maintenance
+  broadcast had fired. The scheduler (and the concurrent post-restart
+  update-check) runspaces now inherit the main process's log path, so these
+  events are recorded and auditable.
+
 ## [12.9.9] - 2026-06-20
 
 ### Added
