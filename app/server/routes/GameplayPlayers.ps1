@@ -175,19 +175,19 @@ Register-DuneRoute -Method POST -Path '/api/gameplay/players/rename' -Handler {
     }
 }
 
-# POST /api/gameplay/players/award-xp  { controller_id, track_type, delta }
-Register-DuneRoute -Method POST -Path '/api/gameplay/players/award-xp' -Handler {
+# POST /api/gameplay/players/set-spec-xp  { controller_id, track_type, xp }
+Register-DuneRoute -Method POST -Path '/api/gameplay/players/set-spec-xp' -Handler {
     param($req, $res, $routeParams, $body)
     try {
         $cid = Get-DuneBodyInt -Body $body -Name 'controller_id'
         $track = [string](Get-DuneBodyValue -Body $body -Name 'track_type')
-        $delta = Get-DuneBodyInt -Body $body -Name 'delta'
+        $xp = Get-DuneBodyInt -Body $body -Name 'xp'
         if ($null -eq $cid -or $cid -le 0) { Write-DuneError -Response $res -Status 400 -Message 'controller_id is required.'; return }
         if (-not $track) { Write-DuneError -Response $res -Status 400 -Message 'track_type is required.'; return }
-        if ($null -eq $delta) { Write-DuneError -Response $res -Status 400 -Message 'delta must be an integer.'; return }
-        Invoke-DunePlayerWriteRoute -Response $res -Action { param($ip) Invoke-DunePlayerAwardXp -Ip $ip -ControllerId $cid -TrackType $track -Delta ([int]$delta) }
+        if ($null -eq $xp) { Write-DuneError -Response $res -Status 400 -Message 'xp must be an integer.'; return }
+        Invoke-DunePlayerWriteRoute -Response $res -Action { param($ip) Invoke-DunePlayerSetSpecXp -Ip $ip -ControllerId $cid -TrackType $track -Xp ([int]$xp) }
     } catch {
-        Write-DuneError -Response $res -Status 500 -Message "Award XP failed: $($_.Exception.Message)"
+        Write-DuneError -Response $res -Status 500 -Message "Set spec XP failed: $($_.Exception.Message)"
     }
 }
 

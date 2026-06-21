@@ -24,18 +24,24 @@ here cover everything those tags shipped.
   indicator. The Stable install gate is relaxed for pre-release builds so the
   live release stays installable as a downgrade or same-version reinstall.
 
-### Fixed
+### Changed
 
-- **+5K spec grant not reflecting in-game / behaving as an absolute set.**
-  Gameplay Admin &rarr; Players &rarr; Specs "+5K Grant" wrote `xp_amount`
-  directly to `dune.specialization_tracks` and never updated level, so the change
-  did not appear in-game. `Invoke-DunePlayerAwardXp` now routes through the same
-  Funcom stored proc as "Grant Max" (`dune.set_specialization_xp_and_level`): it
-  reads current xp/level, adds the clamped delta, recomputes level without
-  demoting, and writes both. When no track row exists yet the value is seeded from
-  zero (created at the delta). The button is now gated behind a confirm warning
-  noting that `specialization_tracks` is authoritative on login (so seeding can
-  overwrite un-persisted in-game progress) and to keep a database backup. Appears
+- **Specs XP editing is now a direct "set exact value" field instead of a "+5K"
+  add button.** Gameplay Admin &rarr; Players &rarr; Specs gives each track an
+  editable XP field, pre-filled with the track's current stored XP. Type the exact
+  value you want (0 to the track max, 44182) and click **Set** (or press Enter):
+  DST writes that value and its matching level straight to
+  `dune.specialization_tracks` via the Funcom stored proc
+  (`dune.set_specialization_xp_and_level`, the same path as "Grant Max"). This
+  replaces the previous **+5K** add button, which read the stored XP and added to
+  it — but the stored value is only authoritative on login and often reads 0 while
+  live progress sits in the game's memory, so the add repeatedly landed on a flat
+  5,000 and rapid presses could double-read the same base. Setting an absolute
+  value removes the read/add race entirely: the admin sees the value and sets it.
+  **Max** and **Reset** (per track) and the bulk keystone actions are unchanged.
+  The Set action is gated behind a confirm warning noting that
+  `specialization_tracks` is authoritative on login (so it can overwrite
+  un-persisted in-game progress) and to keep a database backup; the value appears
   in-game after a full client re-login.
 
 ## [12.9.6] - 2026-06-20
