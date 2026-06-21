@@ -13,6 +13,48 @@ here cover everything those tags shipped.
 
 ## [Unreleased]
 
+## [12.9.8] - 2026-06-20
+
+### Added
+
+- **Scheduled battlegroup restarts.** A new **Scheduled restarts** card on the
+  Server Health page lets you set one automatic battlegroup restart per day at a
+  time you choose (your PC's local clock). An optional **broadcast lead** sends
+  an in-game notice that many minutes ahead — titled *Game Server Restart* with
+  the message *"The game server will be restarting in &lt;n&gt; minutes for our
+  scheduled daily BG maintenance."* (the number is spelled out to match the
+  popup). The restart runs in the background over SSH with no console window.
+  Because the schedule lives inside the tool, it only fires **while the Dune
+  Server Tool is open and running** — the card states this plainly.
+- **Funcom server-update indicator.** During each scheduled restart (and via a
+  **Check for server update** button) the tool compares the installed dedicated-
+  server build against the latest public build on Steam (non-destructive). When
+  Funcom has shipped an update, an **Update** badge appears on the Battlegroup
+  Info card; the update is picked up automatically on the next scheduled
+  restart. The latest build is now read from a lightweight public API (~1s)
+  rather than spinning up steamcmd on the VM, and the check runs in parallel
+  with the restart so it never delays it.
+- **Pods page.** A new **Pods** entry under Server Health lists every Kubernetes
+  pod in the battlegroup cluster (namespace, ready count, status, restarts).
+  Click a pod to see its recent events and a `describe` tail — handy for
+  diagnosing crash loops or stuck pods without dropping to a shell.
+- **Backup / restart overlap guard.** A scheduled VM backup now skips itself if
+  it would fire during a scheduled battlegroup restart, so the two never run at
+  once. The restart drops a short-lived marker on the VM just before (and during)
+  the restart, and the backup cron checks for it and defers that run (resuming
+  normally afterwards). Re-save your backup schedule once to pick up the guard.
+
+### Fixed
+
+- **Server name no longer flickers between the real name and "Unknown".** The
+  name shown in the top status bar and on the Game Config page is served by a
+  pool of request handlers, each of which kept its own in-memory cache; whichever
+  handler answered a given 10-second status poll either had the name warm
+  ("Reapers") or cold ("Unknown"), so both the banner and the card flipped in
+  unison every few seconds. The last-known-good name is now persisted to a shared
+  host-local cache that every handler reads, so the name resolves once and stays
+  put.
+
 ## [12.9.7] - 2026-06-20
 
 ### Added

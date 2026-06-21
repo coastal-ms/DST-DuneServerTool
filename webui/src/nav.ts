@@ -18,6 +18,7 @@ export type NavItem = {
 
 export const NAV_ITEMS: NavItem[] = [
   { to: '/',            label: 'Server Health', icon: 'LayoutDashboard', group: 'overview' },
+  { to: '/pods',        label: 'Pods',          icon: 'Boxes',           group: 'overview' },
   { to: '/commands',    label: 'Commands',     icon: 'Zap',             group: 'terminal' },
   { to: '/terminal',    label: 'PowerShell',   icon: 'SquareTerminal',  group: 'terminal', localOnly: true },
   { to: '/gameconfig',  label: 'Game Config',  icon: 'Sliders',         group: 'data' },

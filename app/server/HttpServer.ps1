@@ -646,6 +646,17 @@ function Start-DuneHttpServer {
         }
     }
 
+    # Launch the in-process scheduled-restart loop. It lives in this process, so
+    # it only fires while DST is open and running (the UI states this). Failure
+    # to start must not block the server from accepting requests.
+    if (Get-Command Start-DuneRestartScheduler -ErrorAction SilentlyContinue) {
+        try { Start-DuneRestartScheduler -ServerDir $script:DuneServerDir } catch {
+            if (Get-Command Write-DuneLog -ErrorAction SilentlyContinue) {
+                Write-DuneLog "restart scheduler launch failed: $($_.Exception.Message)" 'WARN'
+            }
+        }
+    }
+
     try {
         while ($listener.IsListening) {
             # Reap finished worker pipelines from the previous wait.

@@ -55,11 +55,19 @@ export type PortStatus = {
   ageSecs?: number
 }
 
+export type FuncomUpdateBadge = {
+  available: boolean
+  installedBuild?: string
+  latestBuild?: string
+  checkedAt?: string
+}
+
 export type StatusSnapshot = {
   vm: VmStatus
   bg: BattlegroupSnapshot | null
   ports: PortStatus | null
   serverName?: string | null
+  funcomUpdate?: FuncomUpdateBadge | null
   ts: string
 }
 
