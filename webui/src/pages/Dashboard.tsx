@@ -7,6 +7,7 @@ import { BgSpiceSummary } from './dashboard/BgSpiceSummary'
 import type { BgState, BgGameServer } from '../api/types'
 import { getLinks, type LinksResponse } from '../api/links'
 import { api, ApiError } from '../api/client'
+import { mapLabel } from '../util/mapLabel'
 
 const BG_STYLES: Record<BgState | 'unknown', { cls: string; label: string }> = {
   running:  { cls: 'text-success', label: 'Running'  },
@@ -45,7 +46,7 @@ function findSurvivalServer(servers: BgGameServer[]): BgGameServer | undefined {
 function GameServerRow({ s }: { s: BgGameServer }) {
   return (
     <tr className="border-t border-border/30">
-      <td className="py-1 pr-3 font-medium">{s.map}</td>
+      <td className="py-1 pr-3 font-medium" title={s.map}>{mapLabel(s.map)}</td>
       <td className={`py-1 pr-3 ${healthClass(s.phase)}`}>{s.phase || '—'}</td>
       <td className={`py-1 pr-3 ${healthClass(s.ready)}`}>{s.ready || '—'}</td>
       <td className="py-1 pr-3 font-mono">{s.players || '0'}</td>
