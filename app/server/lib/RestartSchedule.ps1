@@ -146,8 +146,11 @@ function Set-DuneRestartSchedule {
         [string]$Time,
         [int]$BroadcastLeadMinutes,
         [bool]$DiscordEnabled,
-        [string]$DiscordWebhookUrl,
-        [string]$DiscordMentionId
+        # [object] (not [string]) so a genuine $null survives parameter binding
+        # and means "leave the stored value unchanged". A [string] param coerces
+        # $null to '', which would wrongly read as "clear it".
+        [object]$DiscordWebhookUrl,
+        [object]$DiscordMentionId
     )
     if ($Time -notmatch '^([01]\d|2[0-3]):([0-5]\d)$') {
         return @{ ok = $false; status = 400; message = "Invalid time '$Time'. Use 24-hour HH:mm (e.g. 04:00)." }
@@ -159,7 +162,7 @@ function Set-DuneRestartSchedule {
 
     # Resolve the effective webhook URL: a non-$null value replaces it (empty
     # string clears it); $null keeps the previously-stored URL.
-    $effectiveUrl = if ($null -ne $DiscordWebhookUrl) { $DiscordWebhookUrl.Trim() } else { [string]$state.discordWebhookUrl }
+    $effectiveUrl = if ($null -ne $DiscordWebhookUrl) { ([string]$DiscordWebhookUrl).Trim() } else { [string]$state.discordWebhookUrl }
     if ($effectiveUrl -and -not (Test-DuneDiscordWebhookUrl $effectiveUrl)) {
         return @{ ok = $false; status = 400; message = 'Invalid Discord webhook URL. Expected https://discord.com/api/webhooks/<id>/<token>.' }
     }
@@ -169,7 +172,7 @@ function Set-DuneRestartSchedule {
 
     # $null mention means "leave as-is"; anything else is validated then stored.
     $effectiveMention = if ($null -ne $DiscordMentionId) {
-        $resolved = Resolve-DuneDiscordMentionInput $DiscordMentionId
+        $resolved = Resolve-DuneDiscordMentionInput ([string]$DiscordMentionId)
         if ($null -eq $resolved) {
             return @{ ok = $false; status = 400; message = 'Invalid mention. Use a role ID (Discord > right-click role > Copy Role ID), or the keyword everyone or here.' }
         }

@@ -13,6 +13,8 @@ here cover everything those tags shipped.
 
 ## [Unreleased]
 
+## [12.10.0] - 2026-06-21
+
 ### Added
 
 - **Optional Discord notification when a scheduled restart is imminent.** The
@@ -30,6 +32,14 @@ here cover everything those tags shipped.
   or delays the restart (retries on 429/5xx, then logs and moves on).
 
 ### Fixed
+
+- **Saving the restart schedule no longer wipes a stored Discord webhook.**
+  Changing any restart setting (e.g. the time) while leaving the Discord
+  section untouched failed with "Enable Discord notifications requires a
+  webhook URL", because the host couldn't tell "leave the saved URL as-is"
+  apart from "clear it" — the unchanged-URL sentinel was being coerced to an
+  empty value. Saving with the webhook left blank now correctly keeps the
+  stored URL (and any saved mention).
 
 - **Scheduled restart logs are now actually written.** The daily-restart
   scheduler runs on its own background runspace, which dot-sourced the logging
