@@ -5,8 +5,13 @@ import {
   getRestartSchedule,
   saveRestartSchedule,
   checkFuncomUpdate,
+  testDiscordWebhook,
   type RestartSchedule,
 } from '../../api/restartSchedule'
+
+// Client-side sanity check for a Discord incoming-webhook URL. The server
+// re-validates; this just gives fast inline feedback.
+const WEBHOOK_RE = /^https:\/\/(?:(?:canary|ptb)\.)?discord(?:app)?\.com\/api\/webhooks\/\d+\/[\w-]+$/
 
 // Spell the lead minutes the same way the in-game broadcast does, so the
 // preview line matches what players will see.
@@ -39,9 +44,14 @@ export function ScheduledRestarts() {
   const [enabled, setEnabled] = useState(false)
   const [time, setTime] = useState('04:00')
   const [lead, setLead] = useState(10)
+  const [discordEnabled, setDiscordEnabled] = useState(false)
+  const [webhookInput, setWebhookInput] = useState('')
+  const [webhookSet, setWebhookSet] = useState(false)
+  const [clearWebhook, setClearWebhook] = useState(false)
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
   const [checking, setChecking] = useState(false)
+  const [testing, setTesting] = useState(false)
   const [msg, setMsg] = useState<{ kind: 'ok' | 'err'; text: string } | null>(null)
 
   const load = useCallback(async () => {
@@ -52,6 +62,10 @@ export function ScheduledRestarts() {
       setEnabled(s.enabled)
       setTime(s.time || '04:00')
       setLead(typeof s.broadcastLeadMinutes === 'number' ? s.broadcastLeadMinutes : 10)
+      setDiscordEnabled(s.discordEnabled)
+      setWebhookSet(s.discordWebhookSet)
+      setWebhookInput('')
+      setClearWebhook(false)
     } catch (e) {
       setMsg({ kind: 'err', text: e instanceof ApiError ? e.message : 'Failed to load schedule.' })
     } finally {
@@ -61,19 +75,33 @@ export function ScheduledRestarts() {
 
   useEffect(() => { void load() }, [load])
 
+  const webhookInputValid = webhookInput.trim() === '' || WEBHOOK_RE.test(webhookInput.trim())
+  // Will a webhook be stored after this save?
+  const effectiveWebhookSet = clearWebhook ? false : (webhookSet || webhookInput.trim() !== '')
+
   const save = useCallback(async () => {
     setSaving(true)
     setMsg(null)
     try {
-      const s = await saveRestartSchedule({ enabled, time, broadcastLeadMinutes: lead })
+      const body: {
+        enabled: boolean; time: string; broadcastLeadMinutes: number
+        discordEnabled: boolean; discordWebhookUrl?: string
+      } = { enabled, time, broadcastLeadMinutes: lead, discordEnabled }
+      if (clearWebhook) body.discordWebhookUrl = ''
+      else if (webhookInput.trim() !== '') body.discordWebhookUrl = webhookInput.trim()
+      const s = await saveRestartSchedule(body)
       setSched(s)
+      setDiscordEnabled(s.discordEnabled)
+      setWebhookSet(s.discordWebhookSet)
+      setWebhookInput('')
+      setClearWebhook(false)
       setMsg({ kind: 'ok', text: 'Schedule saved.' })
     } catch (e) {
       setMsg({ kind: 'err', text: e instanceof ApiError ? e.message : 'Save failed.' })
     } finally {
       setSaving(false)
     }
-  }, [enabled, time, lead])
+  }, [enabled, time, lead, discordEnabled, webhookInput, clearWebhook])
 
   const runCheck = useCallback(async () => {
     setChecking(true)
@@ -89,7 +117,22 @@ export function ScheduledRestarts() {
     }
   }, [load])
 
-  const dirty = !!sched && (sched.enabled !== enabled || sched.time !== time || sched.broadcastLeadMinutes !== lead)
+  const runTest = useCallback(async () => {
+    setTesting(true)
+    setMsg(null)
+    try {
+      const r = await testDiscordWebhook()
+      setMsg({ kind: 'ok', text: r.message })
+    } catch (e) {
+      setMsg({ kind: 'err', text: e instanceof ApiError ? e.message : 'Test message failed.' })
+    } finally {
+      setTesting(false)
+    }
+  }, [])
+
+  const discordDirty = !!sched && (sched.discordEnabled !== discordEnabled || webhookInput.trim() !== '' || clearWebhook)
+  const dirty = !!sched && (sched.enabled !== enabled || sched.time !== time || sched.broadcastLeadMinutes !== lead || discordDirty)
+  const canSave = dirty && webhookInputValid && !(discordEnabled && !effectiveWebhookSet)
 
   return (
     <div className="card p-5">
@@ -170,6 +213,81 @@ export function ScheduledRestarts() {
                   maintenance.</div>
               </div>
             )}
+
+            {/* Discord notification (Phase 1: "restart imminent" only) */}
+            <div className="border-t border-border/50 pt-4 mt-1">
+              <label className="flex items-center gap-3 cursor-pointer select-none">
+                <input
+                  type="checkbox"
+                  checked={discordEnabled}
+                  onChange={e => setDiscordEnabled(e.target.checked)}
+                  className="h-4 w-4 accent-accent"
+                />
+                <span className="text-sm font-medium flex items-center gap-2">
+                  <Icon name="MessageSquare" size={14} className="text-accent" /> Also post to a Discord channel
+                </span>
+              </label>
+              <p className="text-[11px] text-text-dim mt-1 ml-7">
+                Posts a "restart imminent" message during the broadcast lead window. Needs a broadcast lead above 0.
+                Create an Incoming Webhook in Discord (Channel → Edit → Integrations → Webhooks → New Webhook → Copy URL).
+              </p>
+
+              {discordEnabled && (
+                <div className="mt-3 ml-7 flex flex-col gap-2">
+                  <div>
+                    <label className="block text-xs uppercase tracking-wider text-text-dim mb-1">
+                      Discord webhook URL
+                    </label>
+                    <input
+                      type="password"
+                      value={webhookInput}
+                      onChange={e => { setWebhookInput(e.target.value); setClearWebhook(false) }}
+                      placeholder={webhookSet && !clearWebhook ? 'Webhook saved ••••••••  (type to replace)' : 'https://discord.com/api/webhooks/…'}
+                      autoComplete="off"
+                      aria-label="Discord webhook URL"
+                      className={FIELD_CLASS}
+                    />
+                    <div className="flex items-center justify-between gap-2 mt-1 flex-wrap">
+                      <p className="text-[11px] text-text-dim">
+                        {clearWebhook
+                          ? 'Saved webhook will be removed on save.'
+                          : webhookSet
+                            ? 'A webhook is stored. Leave blank to keep it.'
+                            : 'Paste your channel webhook URL.'}
+                      </p>
+                      {webhookSet && !clearWebhook && (
+                        <button
+                          type="button"
+                          onClick={() => { setClearWebhook(true); setWebhookInput(''); setDiscordEnabled(false) }}
+                          className="text-[11px] text-danger hover:underline"
+                        >
+                          Remove saved webhook
+                        </button>
+                      )}
+                    </div>
+                    {!webhookInputValid && (
+                      <p className="text-[11px] text-danger mt-1">That doesn't look like a Discord webhook URL.</p>
+                    )}
+                  </div>
+
+                  <div>
+                    <button
+                      type="button"
+                      onClick={() => { void runTest() }}
+                      disabled={testing || !webhookSet || webhookInput.trim() !== '' || clearWebhook}
+                      className="btn-secondary"
+                      title={
+                        !webhookSet || webhookInput.trim() !== '' || clearWebhook
+                          ? 'Save a webhook URL first, then send a test message.'
+                          : 'Send a one-off test message to your Discord channel.'
+                      }
+                    >
+                      <Icon name="Send" size={14} className={testing ? 'animate-pulse' : ''} /> {testing ? 'Sending…' : 'Send test message'}
+                    </button>
+                  </div>
+                </div>
+              )}
+            </div>
           </div>
 
           {msg && (
@@ -189,7 +307,7 @@ export function ScheduledRestarts() {
             <button
               type="button"
               onClick={() => { void save() }}
-              disabled={saving || !dirty}
+              disabled={saving || !canSave}
               className="btn-primary"
             >
               <Icon name="Save" size={15} /> {saving ? 'Saving…' : 'Save schedule'}
