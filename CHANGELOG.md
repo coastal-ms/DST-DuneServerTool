@@ -30,6 +30,20 @@ here cover everything those tags shipped.
   re-adding — background checks start working within a few seconds. The
   dashboard and setup-wizard warnings now point at this button as the easy fix.
 
+### Fixed
+
+- **Detached browser portal now recovers automatically after a restart or
+  update.** When you hand the portal off to a real browser (Web Portal → open in
+  browser) and the tool then restarts or self-updates, the per-launch auth token
+  rotates and the listener briefly drops — which used to strand the browser tab
+  with dead `TypeError: Failed to fetch` panels (the WebView2 app window
+  reconnects on its own, a browser tab did not). The browser portal now detects
+  the drop, shows a brief **"Reconnecting…"** screen while the tool comes back,
+  and reloads itself to pick up the fresh token — no manual refresh or re-launch
+  needed. Opening `http://127.0.0.1:<port>/` directly (without the `?t=` token in
+  the URL) also works now, because the client trusts the token the backend
+  already injects into the page.
+
 ## [12.9.8] - 2026-06-20
 
 ### Added

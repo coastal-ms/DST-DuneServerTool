@@ -1,7 +1,12 @@
+import { reportNetworkError, reportResponse } from './connection'
+
 const API_BASE = ''  // same-origin
 const TOKEN_KEY = 'dune.token'
 
 function getToken(): string {
+  // 1. Explicit handoff from the app/portal via ?t= on the launch URL. Highest
+  //    priority because it's the freshest signal and only present right after a
+  //    navigation; we stash it and strip it from the address bar.
   const url = new URL(window.location.href)
   const fromUrl = url.searchParams.get('t')
   if (fromUrl) {
@@ -10,6 +15,19 @@ function getToken(): string {
     window.history.replaceState({}, '', url.toString())
     return fromUrl
   }
+  // 2. The backend injects the CURRENT per-launch token into index.html as
+  //    window.__duneRemoteToken on every page load (HttpServer.ps1). Since the
+  //    token rotates on every server restart, this injected value is
+  //    authoritative — trust it over a possibly-stale sessionStorage copy so a
+  //    plain reload recovers an orphaned browser tab after a restart/update.
+  const injected = (typeof window !== 'undefined' && window.__duneRemoteToken) || ''
+  if (injected) {
+    if (sessionStorage.getItem(TOKEN_KEY) !== injected) {
+      sessionStorage.setItem(TOKEN_KEY, injected)
+    }
+    return injected
+  }
+  // 3. Fall back to whatever we last stored.
   return sessionStorage.getItem(TOKEN_KEY) ?? ''
 }
 
@@ -35,7 +53,19 @@ export async function api<T = unknown>(
   }
   if (token) headers.set('X-Dune-Token', token)
 
-  const res = await fetch(`${API_BASE}${path}`, { ...init, headers })
+  let res: Response
+  try {
+    res = await fetch(`${API_BASE}${path}`, { ...init, headers })
+  } catch (e) {
+    // Network-level failure (server restarting / listener down). Flag it so the
+    // reconnect overlay can take over and recover, then surface the error.
+    reportNetworkError()
+    throw e
+  }
+  // Got an HTTP response — the listener is up. A 401 with a token we sent means
+  // the per-launch token rotated (server restarted): connection.ts turns that
+  // into a recovery too.
+  reportResponse(res.status, !!token)
   const text = await res.text()
   let body: unknown = undefined
   if (text) {

@@ -19,6 +19,7 @@ import { PageStub } from './pages/PageStub'
 import { StatusProvider } from './hooks/useStatus'
 import { isLocalViewer } from './util/viewer'
 import { api } from './api/client'
+import { ReconnectOverlay } from './components/ReconnectOverlay'
 import { PageErrorBoundary } from './components/PageErrorBoundary'
 
 // Wrap every route subtree in an error boundary so an unhandled render
@@ -53,6 +54,7 @@ export default function App() {
 
   return (
     <StatusProvider>
+      <ReconnectOverlay />
       <AppShell>
         <Routes>
           <Route path="/"           element={<Boundary name="Dashboard"><Dashboard /></Boundary>} />
