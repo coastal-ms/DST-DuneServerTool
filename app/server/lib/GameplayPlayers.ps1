@@ -178,38 +178,47 @@ function Invoke-DunePlayerRename {
     return @{ ok = $true; message = "Renamed character to '$Name'." }
 }
 
-# Set specialization XP (set-spec-xp): write an ABSOLUTE xp value for one track,
-# clamped 0..44182, and write the matching scaled level. Keyed by controller id
-# (specialization_tracks.player_id = controller id).
+# Set specialization LEVEL (set-spec-level): write an ABSOLUTE level for one track,
+# clamped 0..100. Keyed by controller id (specialization_tracks.player_id =
+# controller id).
 #
-# The admin sees the track's current XP in the UI and types the target value, so a
-# direct authoritative write is the clearest, most predictable model - no add math,
-# no read-then-write race, no guessing the stored base (the old +5K add fought the
-# login-authoritative table, which often reads 0 even when live progress is higher,
-# and double-clicks could double-read the same base and both land on 5000).
+# Why level, not XP: each track stores both `level` and `xp_amount`. The game
+# treats `level` as authoritative - on login it KEEPS the level and RECOMPUTES
+# `xp_amount` from it on its own non-linear curve. Writing an XP value and deriving
+# the level linearly (the old set-spec-xp behaviour) therefore mismatched the
+# game's curve: typing 20000 xp wrote a level the game read as ~45, and on login
+# the game rewrote xp_amount to 11947 (the curve value for that level). So the
+# admin types the LEVEL they want, which is also the value shown in-game (LVL 53).
 #
 # Routes through dune.set_specialization_xp_and_level, a plain upsert of BOTH
-# xp_amount and level (confirmed: no triggers, no recompute, login only READS this
-# table). Writing `level` alongside `xp_amount` is what makes the value reflect
-# in-game; level scales 0..cap XP -> 0..100 (anchored by Grant Max's 44182 -> 100).
-# specialization_tracks is login-authoritative, so the new value appears in-game
-# only after a full client re-login (a BG/zone reboot is not enough).
-function Invoke-DunePlayerSetSpecXp {
-    param([string]$Ip, [long]$ControllerId, [string]$TrackType, [int]$Xp)
+# columns (confirmed: no triggers, login only READS this table). We write the
+# target level plus an xp_amount placeholder so the panel/bar look right before
+# login; the game overwrites xp_amount from the level on the next login regardless.
+# The placeholder is a quadratic best-fit of observed game curve points
+# (0->0, 45.27->11947, 53.09->15718, 100->44182) so the pre-login readout is close
+# to what the game will settle on. specialization_tracks is login-authoritative, so
+# the new level appears in-game only after a full client re-login (a BG/zone reboot
+# is not enough).
+function Invoke-DunePlayerSetSpecLevel {
+    param([string]$Ip, [long]$ControllerId, [string]$TrackType, [int]$Level)
     $safeTrack = ConvertTo-DuneSqlString $TrackType
     $cap    = $script:DuneSpecXpMax      # 44182
     $lvlMax = $script:DuneSpecLevelMax   # 100.0
 
-    $newXp = [int][Math]::Max(0, [Math]::Min([long]$Xp, [long]$cap))
-    $newLevel = [Math]::Min($lvlMax, [double]$newXp * $lvlMax / $cap)
-    $newLevelSql = Format-DuneFloatForSql $newLevel
+    $newLevel = [int][Math]::Max(0, [Math]::Min([long]$Level, [long]$lvlMax))
 
+    # xp_amount placeholder from the observed game curve: xp ~= 3.107*L^2 + 131.1*L.
+    # Clamped 0..cap; the game recomputes the exact value from the level on login.
+    $estXp = [int][Math]::Round((3.107 * $newLevel * $newLevel) + (131.1 * $newLevel))
+    $newXp = [int][Math]::Max(0, [Math]::Min([long]$estXp, [long]$cap))
+    if ($newLevel -ge $lvlMax) { $newXp = $cap }
+
+    $newLevelSql = Format-DuneFloatForSql ([double]$newLevel)
     $sql = "SELECT dune.set_specialization_xp_and_level($ControllerId::bigint, '$safeTrack'::dune.specializationtracktype, $newXp::integer, $newLevelSql::real);"
     $res = Invoke-DuneSqlQuery -Ip $Ip -Sql $sql -ReadOnly $false -MaxRows 1 -TimeoutSec 30
     if (-not $res.ok) { return @{ ok = $false; error = $res.error } }
 
-    $lvlDisp = [Math]::Round($newLevel, 1)
-    return @{ ok = $true; message = "Set '$TrackType' XP to $newXp / $cap (level $lvlDisp). Offline edit - appears in-game after a full re-login." }
+    return @{ ok = $true; message = "Set '$TrackType' to level $newLevel / $([int]$lvlMax). Offline edit - appears in-game after a full re-login." }
 }
 
 # Delete item (delete-item): dune.delete_item(id).

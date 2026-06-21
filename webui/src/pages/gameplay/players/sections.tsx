@@ -12,7 +12,7 @@ import { Icon } from '../../../components/Icon'
 import { ItemPicker } from '../../../components/ItemPicker'
 import { TagPicker } from '../../../components/TagPicker'
 import {
-  awardCharXp, awardIntel, setSpecXp, cheatScript, cleanPlayerInventory,
+  awardCharXp, awardIntel, setSpecLevel, cheatScript, cleanPlayerInventory,
   applyProgressionPreset, getProgressionPresets,
   progressionUnlock, progressionReverse,
   deleteAccount, deleteInventoryItem, deleteTutorials,
@@ -118,8 +118,9 @@ export function StatsSection({ player, demo, refreshKey }: SectionProps) {
 
 // ---------------------------------------------------------------------------
 // Specs — 5 tracks + keystone counter. Header buttons grant/reset all
-// keystones; per-row controls: editable XP field (set exact value) +
-// grant max XP / reset one track.
+// keystones; per-row controls: editable Level field (set exact level) +
+// grant max / reset one track. Level is the game-authoritative value (the
+// game keeps level and recomputes xp from it on login); xp is shown read-only.
 // ---------------------------------------------------------------------------
 export function SpecsSection({ player, canWrite, demo, refreshKey, flash, onChanged }: SectionProps) {
   const [tracks, setTracks] = useState<SpecTrackFull[]>([])
@@ -206,9 +207,9 @@ export function SpecsSection({ player, canWrite, demo, refreshKey, flash, onChan
               <SpecRow key={name} name={name} track={t} canWrite={canWrite} busy={busy}
                 onGrantMax={() => void run(() => grantMaxSpec(player.controller_id, name), 'Grant max')}
                 onReset={() => void run(() => resetSpec(player.controller_id, name), 'Reset')}
-                onSetXp={(xp) => {
-                  if (window.confirm(`Set ${name} XP to ${xp.toLocaleString()} for ${player.name}?\n\nThis writes the track's stored XP directly, which the game treats as authoritative on next login. If the character has in-game spec progress not yet saved to the server, it can be overwritten (the stored value wins). Make sure you have a database backup before using this. The change appears in-game after a full re-login.`)) {
-                    void run(() => setSpecXp(player.controller_id, name, xp), 'Set XP')
+                onSetLevel={(level) => {
+                  if (window.confirm(`Set ${name} to level ${level} for ${player.name}?\n\nThis writes the track's level directly, which the game treats as authoritative on next login (it recomputes the track's XP from this level). If the character has in-game spec progress not yet saved to the server, it can be overwritten (the stored value wins). Make sure you have a database backup before using this. The change appears in-game after a full re-login.`)) {
+                    void run(() => setSpecLevel(player.controller_id, name, level), 'Set level')
                   }
                 }}
               />
@@ -222,23 +223,23 @@ export function SpecsSection({ player, canWrite, demo, refreshKey, flash, onChan
 
 const SPEC_TRACK_ORDER = ['Combat', 'Crafting', 'Exploration', 'Gathering', 'Sabotage']
 
-function SpecRow({ name, track, canWrite, busy, onGrantMax, onReset, onSetXp }: {
+function SpecRow({ name, track, canWrite, busy, onGrantMax, onReset, onSetLevel }: {
   name: string; track: SpecTrackFull | undefined; canWrite: boolean; busy: boolean
-  onGrantMax: () => void; onReset: () => void; onSetXp: (xp: number) => void
+  onGrantMax: () => void; onReset: () => void; onSetLevel: (level: number) => void
 }) {
   const xp = track?.xp ?? 0
   const level = Math.round(track?.level ?? 0)
   const xpMax = track?.xp_max ?? 44182
   const levelMax = Math.round(track?.level_max ?? 100)
-  const pct = Math.min(100, Math.max(0, (xp / xpMax) * 100))
+  const pct = Math.min(100, Math.max(0, (level / levelMax) * 100))
 
-  const [draft, setDraft] = useState<string>(String(xp))
+  const [draft, setDraft] = useState<string>(String(level))
   // Re-sync the field to the live value whenever the track reloads.
-  useEffect(() => { setDraft(String(xp)) }, [xp])
+  useEffect(() => { setDraft(String(level)) }, [level])
 
   const parsed = Math.trunc(Number(draft))
-  const valid = draft.trim() !== '' && Number.isFinite(parsed) && parsed >= 0 && parsed <= xpMax
-  const changed = valid && parsed !== xp
+  const valid = draft.trim() !== '' && Number.isFinite(parsed) && parsed >= 0 && parsed <= levelMax
+  const changed = valid && parsed !== level
 
   return (
     <div className="card p-3">
@@ -255,16 +256,16 @@ function SpecRow({ name, track, canWrite, busy, onGrantMax, onReset, onSetXp }: 
         {canWrite && (
           <div className="flex items-center gap-1.5 shrink-0">
             <input
-              type="number" inputMode="numeric" step={1} min={0} max={xpMax}
-              className="w-24 font-mono text-sm bg-surface-2 border border-border rounded px-2 py-1" value={draft} disabled={busy}
-              title={`Set exact XP (0–${fmtNum(xpMax)})`}
+              type="number" inputMode="numeric" step={1} min={0} max={levelMax}
+              className="w-20 font-mono text-sm bg-surface-2 border border-border rounded px-2 py-1" value={draft} disabled={busy}
+              title={`Set exact level (0–${levelMax})`}
               onChange={e => setDraft(e.target.value)}
-              onKeyDown={e => { if (e.key === 'Enter' && changed) onSetXp(parsed) }}
+              onKeyDown={e => { if (e.key === 'Enter' && changed) onSetLevel(parsed) }}
             />
-            <button className="btn-secondary" disabled={busy || !changed} title={`Set XP to typed value (0–${fmtNum(xpMax)})`} onClick={() => onSetXp(parsed)}>
+            <button className="btn-secondary" disabled={busy || !changed} title={`Set level to typed value (0–${levelMax})`} onClick={() => onSetLevel(parsed)}>
               <Icon name="Check" size={13} /> Set
             </button>
-            <button className="btn-secondary" disabled={busy} title="Grant max XP for this track" onClick={onGrantMax}>
+            <button className="btn-secondary" disabled={busy} title="Grant max level for this track" onClick={onGrantMax}>
               <Icon name="ChevronsUp" size={13} /> Max
             </button>
             <button className="btn-secondary text-warning" disabled={busy} title="Reset this track" onClick={onReset}>

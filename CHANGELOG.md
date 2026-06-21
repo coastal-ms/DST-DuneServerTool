@@ -33,23 +33,26 @@ here cover everything those tags shipped.
   naming the Map Spin-Up page already uses. Unknown maps fall back to a generic
   prettifier (strip known prefixes, underscores &rarr; spaces). The raw
   technical name is still available on hover.
-- **Specs XP editing is now a direct "set exact value" field instead of a "+5K"
-  add button.** Gameplay Admin &rarr; Players &rarr; Specs gives each track an
-  editable XP field, pre-filled with the track's current stored XP. Type the exact
-  value you want (0 to the track max, 44182) and click **Set** (or press Enter):
-  DST writes that value and its matching level straight to
-  `dune.specialization_tracks` via the Funcom stored proc
-  (`dune.set_specialization_xp_and_level`, the same path as "Grant Max"). This
-  replaces the previous **+5K** add button, which read the stored XP and added to
-  it — but the stored value is only authoritative on login and often reads 0 while
-  live progress sits in the game's memory, so the add repeatedly landed on a flat
-  5,000 and rapid presses could double-read the same base. Setting an absolute
-  value removes the read/add race entirely: the admin sees the value and sets it.
-  **Max** and **Reset** (per track) and the bulk keystone actions are unchanged.
-  The Set action is gated behind a confirm warning noting that
-  `specialization_tracks` is authoritative on login (so it can overwrite
-  un-persisted in-game progress) and to keep a database backup; the value appears
-  in-game after a full client re-login.
+- **Specs editing now sets a track's Level directly (0–100) instead of XP.**
+  Gameplay Admin &rarr; Players &rarr; Specs gives each track an editable
+  **Level** field, pre-filled with the track's current level. Type the exact
+  level you want (0 to the cap, 100) and click **Set** (or press Enter): DST
+  writes that level straight to `dune.specialization_tracks` via the Funcom
+  stored proc (`dune.set_specialization_xp_and_level`, the same path as "Grant
+  Max"). This supersedes the earlier "set exact XP" field, which exposed a real
+  bug: each track stores **both** a level and an XP value, and the game treats
+  the **level** as authoritative — on login it keeps the level and *recomputes*
+  `xp_amount` from it on its own non-linear curve. DST derived the level from the
+  typed XP with a straight-line formula, so the level it wrote didn't match the
+  game's curve (e.g. typing 20,000 XP wrote a level the game read as ~45, then on
+  login the game rewrote the XP to 11,947). Editing the level — the value the
+  game keeps and the one shown in-game (LVL 53, etc.) — makes the set stick
+  exactly after re-login; XP is now a read-only derived readout. **Max** and
+  **Reset** (per track) and the bulk keystone actions are unchanged. The Set
+  action is gated behind a confirm warning noting that `specialization_tracks` is
+  authoritative on login (so it can overwrite un-persisted in-game progress) and
+  to keep a database backup; the change appears in-game after a full client
+  re-login.
 
 ## [12.9.6] - 2026-06-20
 
