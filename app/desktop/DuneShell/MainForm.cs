@@ -28,7 +28,7 @@ internal sealed class MainForm : Form
     // tray's "Quit (stops server)" is the explicit shutdown from the tray.
     private NotifyIcon? _tray;
     private ToolStripMenuItem? _trayMinItem;
-    private bool _minimizeToTray = true;
+    private bool _minimizeToTray;
     private bool _trayBalloonShown;
     private FormWindowState _restoreState = FormWindowState.Normal;
 
@@ -626,7 +626,7 @@ internal sealed class MainForm : Form
     private void ToggleMinimizeToTray()
     {
         // CheckOnClick has already flipped the menu item before this fires.
-        _minimizeToTray = _trayMinItem?.Checked ?? true;
+        _minimizeToTray = _trayMinItem?.Checked ?? false;
         SaveWindowState();
     }
 
@@ -656,7 +656,7 @@ internal sealed class MainForm : Form
         public int W { get; set; }
         public int H { get; set; }
         public bool Max { get; set; }
-        // Nullable so pre-12.10.1 state files (no field) default to enabled.
+        // Nullable so pre-12.10.1 state files (no field) default to disabled.
         public bool? MinTray { get; set; }
     }
 
@@ -669,7 +669,7 @@ internal sealed class MainForm : Form
         var def = new Size(2000, 1300);
         var saved = LoadWindowState();
 
-        _minimizeToTray = saved?.MinTray ?? true;
+        _minimizeToTray = saved?.MinTray ?? false;
 
         Rectangle bounds;
         if (saved != null && saved.W >= MinimumSize.Width && saved.H >= MinimumSize.Height)
