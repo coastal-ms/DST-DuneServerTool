@@ -290,6 +290,20 @@ function New-DstDiagnosticBundle {
         $warnings.Add('Game config helpers not loaded — INI snapshot skipped.')
     }
 
+    # 6c) Scheduled-restart state (no secrets — times + build ids) ------------
+    # Helps diagnose "my restart didn't fire" / stale Funcom-update badge bugs.
+    try {
+        $restartState = Join-Path $env:LOCALAPPDATA 'DuneServer\restart-schedule.json'
+        if (Test-Path -LiteralPath $restartState) {
+            $rsRaw = Get-Content -LiteralPath $restartState -Raw -ErrorAction Stop
+            $out = Join-Path $stageDir 'restart-schedule.json'
+            Set-Content -LiteralPath $out -Value $rsRaw -Encoding UTF8
+            $included.Add(@{ name = 'restart-schedule.json'; bytes = (Get-Item -LiteralPath $out).Length })
+        }
+    } catch {
+        $warnings.Add("Restart-schedule state read failed: $($_.Exception.Message)")
+    }
+
     # 7) Manifest ------------------------------------------------------------
     $manLines = [System.Collections.Generic.List[string]]::new()
     $manLines.Add("Dune Server Tool diagnostic bundle")

@@ -1,0 +1,84 @@
+﻿# RestartSchedule.ps1 - Routes for the Scheduled Restarts card (Server Health).
+#
+# GET  /api/restart-schedule               - current schedule + last update-check state
+# PUT  /api/restart-schedule               - save settings, body { enabled, time, broadcastLeadMinutes }
+# POST /api/restart-schedule/check-update  - run a Funcom server-update check now (VM-gated, slow)
+#
+# The schedule lives host-side (JSON in %LOCALAPPDATA%\DuneServer) and the
+# scheduler only runs while DST is open, so GET/PUT work even when the VM is
+# stopped - only the live update check needs the VM.
+
+Register-DuneRoute -Method GET -Path '/api/restart-schedule' -Handler {
+    param($req, $res, $routeParams, $body)
+    try {
+        $state = Get-DuneRestartSchedule
+        Write-DuneJson -Response $res -Body @{
+            enabled              = [bool]$state.enabled
+            time                 = [string]$state.time
+            broadcastLeadMinutes = [int]$state.broadcastLeadMinutes
+            lastRestartDate      = [string]$state.lastRestartDate
+            lastResult           = [string]$state.lastResult
+            updateAvailable      = [bool]$state.updateAvailable
+            installedBuild       = [string]$state.installedBuild
+            latestBuild          = [string]$state.latestBuild
+            updateCheckedAt      = [string]$state.updateCheckedAt
+        }
+    } catch {
+        Write-DuneError -Response $res -Status 500 -Message $_.Exception.Message
+    }
+}
+
+Register-DuneRoute -Method PUT -Path '/api/restart-schedule' -Handler {
+    param($req, $res, $routeParams, $body)
+    $enabled = $false
+    $time = $null
+    $lead = 10
+    if ($body -is [hashtable]) {
+        if ($body.ContainsKey('enabled'))              { $enabled = [bool]$body.enabled }
+        if ($body.ContainsKey('time'))                 { $time = [string]$body.time }
+        if ($body.ContainsKey('broadcastLeadMinutes')) { try { $lead = [int]$body.broadcastLeadMinutes } catch { $lead = -1 } }
+    } elseif ($body) {
+        if ($null -ne $body.enabled)              { $enabled = [bool]$body.enabled }
+        if ($body.time)                           { $time = [string]$body.time }
+        if ($null -ne $body.broadcastLeadMinutes) { try { $lead = [int]$body.broadcastLeadMinutes } catch { $lead = -1 } }
+    }
+    if (-not $time) {
+        Write-DuneError -Response $res -Status 400 -Message 'Body must include "time" (HH:mm).'
+        return
+    }
+    try {
+        $r = Set-DuneRestartSchedule -Enabled $enabled -Time $time -BroadcastLeadMinutes $lead
+        if (-not $r.ok) {
+            Write-DuneError -Response $res -Status ([int]$r.status) -Message $r.message
+            return
+        }
+        $state = $r.schedule
+        Write-DuneJson -Response $res -Body @{
+            enabled              = [bool]$state.enabled
+            time                 = [string]$state.time
+            broadcastLeadMinutes = [int]$state.broadcastLeadMinutes
+            lastRestartDate      = [string]$state.lastRestartDate
+            lastResult           = [string]$state.lastResult
+            updateAvailable      = [bool]$state.updateAvailable
+            installedBuild       = [string]$state.installedBuild
+            latestBuild          = [string]$state.latestBuild
+            updateCheckedAt      = [string]$state.updateCheckedAt
+        }
+    } catch {
+        Write-DuneError -Response $res -Status 500 -Message "Schedule save failed: $($_.Exception.Message)"
+    }
+}
+
+Register-DuneRoute -Method POST -Path '/api/restart-schedule/check-update' -Handler {
+    param($req, $res, $routeParams, $body)
+    try {
+        $r = Get-DuneFuncomServerUpdateStatus -Persist
+        if (-not $r.ok -and $r.status) {
+            Write-DuneError -Response $res -Status ([int]$r.status) -Message $r.message
+            return
+        }
+        Write-DuneJson -Response $res -Body $r
+    } catch {
+        Write-DuneError -Response $res -Status 502 -Message "Update check failed: $($_.Exception.Message)"
+    }
+}
