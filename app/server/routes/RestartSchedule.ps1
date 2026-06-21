@@ -17,6 +17,10 @@ Register-DuneRoute -Method GET -Path '/api/restart-schedule' -Handler {
             time                 = [string]$state.time
             broadcastLeadMinutes = [int]$state.broadcastLeadMinutes
             discordEnabled       = [bool]$state.discordEnabled
+            discordNotifyOnline  = [bool]$state.discordNotifyOnline
+            discordNotifyOffline = [bool]$state.discordNotifyOffline
+            discordNotifyRestarting = [bool]$state.discordNotifyRestarting
+            discordNotifyUpdate  = [bool]$state.discordNotifyUpdate
             discordWebhookSet    = [bool]([string]$state.discordWebhookUrl)
             discordMentionId     = [string]$state.discordMentionId
             lastRestartDate      = [string]$state.lastRestartDate
@@ -37,6 +41,10 @@ Register-DuneRoute -Method PUT -Path '/api/restart-schedule' -Handler {
     $time = $null
     $lead = 10
     $discordEnabled = $false
+    $discordNotifyOnline = $false
+    $discordNotifyOffline = $false
+    $discordNotifyRestarting = $false
+    $discordNotifyUpdate = $false
     # $null webhook means "leave the stored URL unchanged" so the secret never
     # has to round-trip through the browser. Only a present key updates it.
     $discordWebhookUrl = $null
@@ -46,6 +54,10 @@ Register-DuneRoute -Method PUT -Path '/api/restart-schedule' -Handler {
         if ($body.ContainsKey('time'))                 { $time = [string]$body.time }
         if ($body.ContainsKey('broadcastLeadMinutes')) { try { $lead = [int]$body.broadcastLeadMinutes } catch { $lead = -1 } }
         if ($body.ContainsKey('discordEnabled'))       { $discordEnabled = [bool]$body.discordEnabled }
+        if ($body.ContainsKey('discordNotifyOnline'))  { $discordNotifyOnline = [bool]$body.discordNotifyOnline }
+        if ($body.ContainsKey('discordNotifyOffline')) { $discordNotifyOffline = [bool]$body.discordNotifyOffline }
+        if ($body.ContainsKey('discordNotifyRestarting')) { $discordNotifyRestarting = [bool]$body.discordNotifyRestarting }
+        if ($body.ContainsKey('discordNotifyUpdate'))  { $discordNotifyUpdate = [bool]$body.discordNotifyUpdate }
         if ($body.ContainsKey('discordWebhookUrl'))    { $discordWebhookUrl = [string]$body.discordWebhookUrl }
         if ($body.ContainsKey('discordMentionId'))     { $discordMentionId = [string]$body.discordMentionId }
     } elseif ($body) {
@@ -53,6 +65,10 @@ Register-DuneRoute -Method PUT -Path '/api/restart-schedule' -Handler {
         if ($body.time)                           { $time = [string]$body.time }
         if ($null -ne $body.broadcastLeadMinutes) { try { $lead = [int]$body.broadcastLeadMinutes } catch { $lead = -1 } }
         if ($null -ne $body.discordEnabled)       { $discordEnabled = [bool]$body.discordEnabled }
+        if ($null -ne $body.discordNotifyOnline)  { $discordNotifyOnline = [bool]$body.discordNotifyOnline }
+        if ($null -ne $body.discordNotifyOffline) { $discordNotifyOffline = [bool]$body.discordNotifyOffline }
+        if ($null -ne $body.discordNotifyRestarting) { $discordNotifyRestarting = [bool]$body.discordNotifyRestarting }
+        if ($null -ne $body.discordNotifyUpdate)  { $discordNotifyUpdate = [bool]$body.discordNotifyUpdate }
         if ($body.PSObject.Properties['discordWebhookUrl']) { $discordWebhookUrl = [string]$body.discordWebhookUrl }
         if ($body.PSObject.Properties['discordMentionId'])  { $discordMentionId = [string]$body.discordMentionId }
     }
@@ -62,7 +78,7 @@ Register-DuneRoute -Method PUT -Path '/api/restart-schedule' -Handler {
     }
     try {
         $r = Set-DuneRestartSchedule -Enabled $enabled -Time $time -BroadcastLeadMinutes $lead `
-            -DiscordEnabled $discordEnabled -DiscordWebhookUrl $discordWebhookUrl -DiscordMentionId $discordMentionId
+            -DiscordEnabled $discordEnabled -DiscordNotifyOnline $discordNotifyOnline -DiscordNotifyOffline $discordNotifyOffline -DiscordNotifyRestarting $discordNotifyRestarting -DiscordNotifyUpdate $discordNotifyUpdate -DiscordWebhookUrl $discordWebhookUrl -DiscordMentionId $discordMentionId
         if (-not $r.ok) {
             Write-DuneError -Response $res -Status ([int]$r.status) -Message $r.message
             return
@@ -73,6 +89,10 @@ Register-DuneRoute -Method PUT -Path '/api/restart-schedule' -Handler {
             time                 = [string]$state.time
             broadcastLeadMinutes = [int]$state.broadcastLeadMinutes
             discordEnabled       = [bool]$state.discordEnabled
+            discordNotifyOnline  = [bool]$state.discordNotifyOnline
+            discordNotifyOffline = [bool]$state.discordNotifyOffline
+            discordNotifyRestarting = [bool]$state.discordNotifyRestarting
+            discordNotifyUpdate  = [bool]$state.discordNotifyUpdate
             discordWebhookSet    = [bool]([string]$state.discordWebhookUrl)
             discordMentionId     = [string]$state.discordMentionId
             lastRestartDate      = [string]$state.lastRestartDate

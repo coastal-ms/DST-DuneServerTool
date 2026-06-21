@@ -7,6 +7,10 @@ export interface RestartSchedule {
   time: string                 // 24h HH:mm in the DST host's local time
   broadcastLeadMinutes: number // 0 = no broadcast
   discordEnabled: boolean
+  discordNotifyOnline: boolean
+  discordNotifyOffline: boolean
+  discordNotifyRestarting: boolean
+  discordNotifyUpdate: boolean
   discordWebhookSet: boolean   // whether a webhook URL is stored (URL is write-only)
   discordMentionId: string     // role id or 'everyone'/'here' to ping; '' = no ping
   lastRestartDate: string
@@ -35,6 +39,10 @@ export function saveRestartSchedule(body: {
   time: string
   broadcastLeadMinutes: number
   discordEnabled: boolean
+  discordNotifyOnline: boolean
+  discordNotifyOffline: boolean
+  discordNotifyRestarting: boolean
+  discordNotifyUpdate: boolean
   discordWebhookUrl?: string   // omit to leave the stored URL unchanged
   discordMentionId?: string    // omit to leave the stored mention unchanged
 }) {
