@@ -12,7 +12,7 @@ import { Icon } from '../../../components/Icon'
 import { ItemPicker } from '../../../components/ItemPicker'
 import { TagPicker } from '../../../components/TagPicker'
 import {
-  awardCharXp, awardIntel, awardSpecXp, cheatScript, cleanPlayerInventory,
+  awardCharXp, awardIntel, setSpecLevel, cheatScript, cleanPlayerInventory,
   applyProgressionPreset, getProgressionPresets,
   progressionUnlock, progressionReverse,
   deleteAccount, deleteInventoryItem, deleteTutorials,
@@ -118,7 +118,9 @@ export function StatsSection({ player, demo, refreshKey }: SectionProps) {
 
 // ---------------------------------------------------------------------------
 // Specs — 5 tracks + keystone counter. Header buttons grant/reset all
-// keystones; per-row buttons grant max XP / reset one track / +5000 XP.
+// keystones; per-row controls: editable Level field (set exact level) +
+// grant max / reset one track. Level is the game-authoritative value (the
+// game keeps level and recomputes xp from it on login); xp is shown read-only.
 // ---------------------------------------------------------------------------
 export function SpecsSection({ player, canWrite, demo, refreshKey, flash, onChanged }: SectionProps) {
   const [tracks, setTracks] = useState<SpecTrackFull[]>([])
@@ -205,7 +207,11 @@ export function SpecsSection({ player, canWrite, demo, refreshKey, flash, onChan
               <SpecRow key={name} name={name} track={t} canWrite={canWrite} busy={busy}
                 onGrantMax={() => void run(() => grantMaxSpec(player.controller_id, name), 'Grant max')}
                 onReset={() => void run(() => resetSpec(player.controller_id, name), 'Reset')}
-                onAdd5k={() => run(() => awardSpecXp(player.controller_id, name, 5000), '+5000 XP')}
+                onSetLevel={(level) => {
+                  if (window.confirm(`Set ${name} to level ${level} for ${player.name}?\n\nThis writes the track's level directly, which the game treats as authoritative on next login (it recomputes the track's XP from this level). If the character has in-game spec progress not yet saved to the server, it can be overwritten (the stored value wins). Make sure you have a database backup before using this. The change appears in-game after a full re-login.`)) {
+                    void run(() => setSpecLevel(player.controller_id, name, level), 'Set level')
+                  }
+                }}
               />
             )
           })}
@@ -217,15 +223,24 @@ export function SpecsSection({ player, canWrite, demo, refreshKey, flash, onChan
 
 const SPEC_TRACK_ORDER = ['Combat', 'Crafting', 'Exploration', 'Gathering', 'Sabotage']
 
-function SpecRow({ name, track, canWrite, busy, onGrantMax, onReset, onAdd5k }: {
+function SpecRow({ name, track, canWrite, busy, onGrantMax, onReset, onSetLevel }: {
   name: string; track: SpecTrackFull | undefined; canWrite: boolean; busy: boolean
-  onGrantMax: () => void; onReset: () => void; onAdd5k: () => void
+  onGrantMax: () => void; onReset: () => void; onSetLevel: (level: number) => void
 }) {
   const xp = track?.xp ?? 0
   const level = Math.round(track?.level ?? 0)
   const xpMax = track?.xp_max ?? 44182
   const levelMax = Math.round(track?.level_max ?? 100)
-  const pct = Math.min(100, Math.max(0, (xp / xpMax) * 100))
+  const pct = Math.min(100, Math.max(0, (level / levelMax) * 100))
+
+  const [draft, setDraft] = useState<string>(String(level))
+  // Re-sync the field to the live value whenever the track reloads.
+  useEffect(() => { setDraft(String(level)) }, [level])
+
+  const parsed = Math.trunc(Number(draft))
+  const valid = draft.trim() !== '' && Number.isFinite(parsed) && parsed >= 0 && parsed <= levelMax
+  const changed = valid && parsed !== level
+
   return (
     <div className="card p-3">
       <div className="flex items-center justify-between gap-3">
@@ -233,22 +248,44 @@ function SpecRow({ name, track, canWrite, busy, onGrantMax, onReset, onAdd5k }: 
           <div className="text-sm font-medium text-text">{name}</div>
           <div className="text-[11px] text-text-dim font-mono">Lv {level}/{levelMax} · {fmtNum(xp)}/{fmtNum(xpMax)} xp</div>
         </div>
-        <div className="flex-1 mx-2">
-          <div className="h-1.5 bg-surface-2 rounded-full overflow-hidden">
-            <div className="h-full bg-accent" style={{ width: `${pct}%` }} />
-          </div>
-        </div>
-        {canWrite && (
-          <div className="flex gap-1.5 shrink-0">
-            <button className="btn-secondary" disabled={busy} title="+5000 XP" onClick={onAdd5k}>
-              <Icon name="Plus" size={13} /> 5k
-            </button>
-            <button className="btn-secondary" disabled={busy} title="Grant max XP for this track" onClick={onGrantMax}>
-              <Icon name="ChevronsUp" size={13} /> Max
-            </button>
-            <button className="btn-secondary text-warning" disabled={busy} title="Reset this track" onClick={onReset}>
-              <Icon name="RotateCcw" size={13} />
-            </button>
+        {canWrite ? (
+          <>
+            <div className="flex-1 mx-2 flex items-center gap-2">
+              <input
+                type="range" min={0} max={levelMax} step={1}
+                className="flex-1 h-1.5 accent-accent cursor-pointer disabled:cursor-not-allowed"
+                value={valid ? parsed : level} disabled={busy}
+                title={`Drag to set level (0–${levelMax})`}
+                onChange={e => setDraft(e.target.value)}
+              />
+              <span className="text-[11px] text-text-dim font-mono w-14 text-right tabular-nums">
+                Lv {valid ? parsed : level}/{levelMax}
+              </span>
+            </div>
+            <div className="flex items-center gap-1.5 shrink-0">
+              <input
+                type="number" inputMode="numeric" step={1} min={0} max={levelMax}
+                className="w-16 font-mono text-sm bg-surface-2 border border-border rounded px-2 py-1" value={draft} disabled={busy}
+                title={`Set exact level (0–${levelMax})`}
+                onChange={e => setDraft(e.target.value)}
+                onKeyDown={e => { if (e.key === 'Enter' && changed) onSetLevel(parsed) }}
+              />
+              <button className="btn-secondary" disabled={busy || !changed} title={`Set level to typed value (0–${levelMax})`} onClick={() => onSetLevel(parsed)}>
+                <Icon name="Check" size={13} /> Set
+              </button>
+              <button className="btn-secondary" disabled={busy} title="Grant max level for this track" onClick={onGrantMax}>
+                <Icon name="ChevronsUp" size={13} /> Max
+              </button>
+              <button className="btn-secondary text-warning" disabled={busy} title="Reset this track" onClick={onReset}>
+                <Icon name="RotateCcw" size={13} />
+              </button>
+            </div>
+          </>
+        ) : (
+          <div className="flex-1 mx-2">
+            <div className="h-1.5 bg-surface-2 rounded-full overflow-hidden">
+              <div className="h-full bg-accent" style={{ width: `${pct}%` }} />
+            </div>
           </div>
         )}
       </div>
