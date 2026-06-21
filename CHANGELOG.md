@@ -13,6 +13,8 @@ here cover everything those tags shipped.
 
 ## [Unreleased]
 
+## [12.9.9] - 2026-06-20
+
 ### Added
 
 - **Remove passphrase from your SSH key — without rotating it.** When a key is
