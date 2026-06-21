@@ -13,6 +13,8 @@ here cover everything those tags shipped.
 
 ## [Unreleased]
 
+## [12.10.0] - 2026-06-21
+
 ### Added
 
 - **Optional Discord notification when a scheduled restart is imminent.** The
