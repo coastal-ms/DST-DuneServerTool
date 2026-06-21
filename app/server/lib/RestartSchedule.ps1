@@ -50,7 +50,10 @@ function Get-DuneRestartScheduleDefault {
         enabled              = $false
         time                 = '04:00'
         broadcastLeadMinutes = 10
+        discordEnabled       = $false
+        discordWebhookUrl    = ''
         lastBroadcastDate    = ''
+        lastDiscordNoticeDate = ''
         lastRestartDate      = ''
         lastMarkerDate       = ''
         updateAvailable      = $false
@@ -84,6 +87,8 @@ function Get-DuneRestartSchedule {
     # Normalize types.
     $state.enabled              = [bool]$state.enabled
     $state.updateAvailable      = [bool]$state.updateAvailable
+    $state.discordEnabled       = [bool]$state.discordEnabled
+    $state.discordWebhookUrl    = [string]$state.discordWebhookUrl
     try { $state.broadcastLeadMinutes = [int]$state.broadcastLeadMinutes } catch { $state.broadcastLeadMinutes = 10 }
     return $state
 }
@@ -95,13 +100,26 @@ function Save-DuneRestartSchedule {
     Set-Content -LiteralPath $path -Value $json -Encoding UTF8 -Force
 }
 
-# Validate + persist user-facing fields (enable/time/lead). Leaves the run
-# stamps and update-check fields untouched. Returns the full updated state.
+# Returns $true when the string looks like a Discord incoming-webhook URL.
+# Used both at save time (reject anything else so a bot token or arbitrary host
+# can't be stored / SSRF'd) and before sending. Empty is treated as "not set".
+function Test-DuneDiscordWebhookUrl {
+    param([string]$Url)
+    if ([string]::IsNullOrWhiteSpace($Url)) { return $false }
+    return ($Url -match '^https://(?:(?:canary|ptb)\.)?discord(?:app)?\.com/api/webhooks/\d+/[A-Za-z0-9_-]+$')
+}
+
+# Validate + persist user-facing fields (enable/time/lead + Discord notify).
+# Leaves the run stamps and update-check fields untouched. Returns the full
+# updated state. A $null DiscordWebhookUrl means "leave the stored URL as-is"
+# so the secret never has to round-trip back through the browser.
 function Set-DuneRestartSchedule {
     param(
         [bool]$Enabled,
         [string]$Time,
-        [int]$BroadcastLeadMinutes
+        [int]$BroadcastLeadMinutes,
+        [bool]$DiscordEnabled,
+        [string]$DiscordWebhookUrl
     )
     if ($Time -notmatch '^([01]\d|2[0-3]):([0-5]\d)$') {
         return @{ ok = $false; status = 400; message = "Invalid time '$Time'. Use 24-hour HH:mm (e.g. 04:00)." }
@@ -110,12 +128,25 @@ function Set-DuneRestartSchedule {
     if ($BroadcastLeadMinutes -gt 60) { $BroadcastLeadMinutes = 60 }
 
     $state = Get-DuneRestartSchedule
+
+    # Resolve the effective webhook URL: a non-$null value replaces it (empty
+    # string clears it); $null keeps the previously-stored URL.
+    $effectiveUrl = if ($null -ne $DiscordWebhookUrl) { $DiscordWebhookUrl.Trim() } else { [string]$state.discordWebhookUrl }
+    if ($effectiveUrl -and -not (Test-DuneDiscordWebhookUrl $effectiveUrl)) {
+        return @{ ok = $false; status = 400; message = 'Invalid Discord webhook URL. Expected https://discord.com/api/webhooks/<id>/<token>.' }
+    }
+    if ($DiscordEnabled -and -not $effectiveUrl) {
+        return @{ ok = $false; status = 400; message = 'Enable Discord notifications requires a webhook URL.' }
+    }
+
     $state.enabled              = $Enabled
     $state.time                 = $Time
     $state.broadcastLeadMinutes = $BroadcastLeadMinutes
+    $state.discordEnabled       = $DiscordEnabled
+    $state.discordWebhookUrl    = $effectiveUrl
     Save-DuneRestartSchedule -State $state
     if (Get-Command Write-DuneLog -ErrorAction SilentlyContinue) {
-        Write-DuneLog "restart schedule saved: enabled=$Enabled time=$Time lead=$BroadcastLeadMinutes"
+        Write-DuneLog "restart schedule saved: enabled=$Enabled time=$Time lead=$BroadcastLeadMinutes discord=$DiscordEnabled discordUrlSet=$([bool]$effectiveUrl)"
     }
     return @{ ok = $true; schedule = $state }
 }
@@ -135,6 +166,89 @@ function ConvertTo-DuneNumberWords {
     $r = $N % 10
     if ($r -eq 0) { return $tens[$t] }
     return ($tens[$t] + '-' + $ones[$r])
+}
+
+# Mask a Discord webhook URL for log output: keep the host + id, drop the token.
+function Get-DuneRedactedWebhookUrl {
+    param([string]$Url)
+    if ([string]::IsNullOrWhiteSpace($Url)) { return '<none>' }
+    return ([regex]::Replace($Url, '(/api/webhooks/\d+/)[A-Za-z0-9_-]+', '${1}<redacted>'))
+}
+
+# Post the "restart imminent" embed to a Discord incoming webhook. Pure outbound
+# HTTPS from the DST host - no inbound/NAT requirement. Best-effort and fully
+# self-contained: it NEVER throws (the caller runs inside the scheduler tick),
+# retries briefly on 429/5xx, and only ever logs a redacted URL. Returns
+# @{ ok; status; message }.
+function Send-DuneDiscordWebhook {
+    param(
+        [Parameter(Mandatory)][string]$Url,
+        [string]$ServerName,
+        [int]$MinutesToRestart,
+        [datetime]$RestartAt,
+        [string]$Reason
+    )
+    if (-not (Test-DuneDiscordWebhookUrl $Url)) {
+        return @{ ok = $false; status = 400; message = 'Invalid Discord webhook URL.' }
+    }
+
+    $name = if ([string]::IsNullOrWhiteSpace($ServerName)) { 'Dune server' } else { $ServerName }
+    $minText = if ($MinutesToRestart -eq 1) { '1 minute' } else { "$MinutesToRestart minutes" }
+    $whenLocal = $RestartAt.ToString('HH:mm')
+    # Discord renders <t:unix:t> in each viewer's own timezone.
+    $unix = [int][double]::Parse((Get-Date $RestartAt -UFormat %s))
+    $reasonText = if ([string]::IsNullOrWhiteSpace($Reason)) { 'Scheduled daily BG maintenance' } else { $Reason }
+    $warn = [System.Char]::ConvertFromUtf32(0x26A0)  # warning sign - kept as a codepoint so this .ps1 stays ASCII
+
+    $embed = [ordered]@{
+        title       = "$warn $name restarting in $minText"
+        description = "Scheduled battlegroup maintenance restart. The server will go down shortly and should be back up soon after."
+        color       = 16763904
+        fields      = @(
+            [ordered]@{ name = 'Server';         value = $name;                       inline = $true }
+            [ordered]@{ name = 'Restarts in';    value = $minText;                    inline = $true }
+            [ordered]@{ name = 'Scheduled time'; value = "$whenLocal local (<t:$unix:t>)"; inline = $true }
+            [ordered]@{ name = 'Reason';          value = $reasonText;                 inline = $false }
+        )
+        footer      = [ordered]@{ text = 'Posted by Dune Server Tool' }
+    }
+    $payload = [ordered]@{
+        username = 'DST Server'
+        embeds   = @($embed)
+        # No @everyone/@here pings in the MVP.
+        allowed_mentions = @{ parse = @() }
+    }
+    $json = $payload | ConvertTo-Json -Depth 6
+
+    $attempts = 0
+    $maxAttempts = 3
+    while ($true) {
+        $attempts++
+        try {
+            $resp = Invoke-WebRequest -Uri $Url -Method Post -ContentType 'application/json; charset=utf-8' `
+                -Body ([System.Text.Encoding]::UTF8.GetBytes($json)) -UseBasicParsing -TimeoutSec 15 -ErrorAction Stop
+            $code = [int]$resp.StatusCode
+            return @{ ok = $true; status = $code; message = "Discord notice sent (HTTP $code)." }
+        } catch {
+            $code = 0
+            $retryAfter = 0
+            $exResp = $_.Exception.Response
+            if ($exResp) {
+                try { $code = [int]$exResp.StatusCode } catch {}
+                try {
+                    $ra = $exResp.Headers['Retry-After']
+                    if ($ra) { [double]$raD = 0; if ([double]::TryParse($ra, [ref]$raD)) { $retryAfter = $raD } }
+                } catch {}
+            }
+            $transient = ($code -eq 429 -or ($code -ge 500 -and $code -le 599) -or $code -eq 0)
+            if ($transient -and $attempts -lt $maxAttempts) {
+                $delay = if ($retryAfter -gt 0) { [math]::Min($retryAfter, 10) } else { [math]::Min(2 * $attempts, 6) }
+                Start-Sleep -Seconds $delay
+                continue
+            }
+            return @{ ok = $false; status = $code; message = "Discord notice failed (HTTP $code): $($_.Exception.Message)" }
+        }
+    }
 }
 
 # Non-destructive Funcom server-update check: compare the installed build id
@@ -345,6 +459,35 @@ function Invoke-DuneRestartScheduleTick {
                     Write-DuneLog "scheduled restart broadcast error: $($_.Exception.Message)" 'WARN'
                 }
             }
+
+            # --- Outbound Discord "restart imminent" notice (once/day) ---
+            # Rides the same lead window as the in-game broadcast but keeps its
+            # own dedupe stamp + enable flag so the two channels are independent.
+            # A Discord failure must never throw out of the tick.
+            $state = Get-DuneRestartSchedule
+            if ($state.discordEnabled -and $state.discordWebhookUrl -and $state.lastDiscordNoticeDate -ne $today) {
+                try {
+                    $serverName = ''
+                    if (Get-Command Get-DuneServerName -ErrorAction SilentlyContinue) {
+                        try { $serverName = Get-DuneServerName -CachedOnly } catch { $serverName = '' }
+                    }
+                    $reason = if ($state.updateAvailable) { 'Scheduled daily BG maintenance (Funcom server update available)' } else { 'Scheduled daily BG maintenance' }
+                    $d = Send-DuneDiscordWebhook -Url $state.discordWebhookUrl -ServerName $serverName `
+                        -MinutesToRestart $lead -RestartAt $restartAt -Reason $reason
+                    if (Get-Command Write-DuneLog -ErrorAction SilentlyContinue) {
+                        $dm = if ($d -and $d.ok) { "sent (HTTP $($d.status))" } else { "failed: $($d.message)" }
+                        Write-DuneLog "scheduled restart discord notice $dm [$(Get-DuneRedactedWebhookUrl $state.discordWebhookUrl)]"
+                    }
+                    $state = Get-DuneRestartSchedule
+                    $state.lastDiscordNoticeDate = $today
+                    Save-DuneRestartSchedule -State $state
+                } catch {
+                    if (Get-Command Write-DuneLog -ErrorAction SilentlyContinue) {
+                        Write-DuneLog "scheduled restart discord notice error: $($_.Exception.Message)" 'WARN'
+                    }
+                }
+            }
+
             $state = Get-DuneRestartSchedule
             $state.lastBroadcastDate = $today
             Save-DuneRestartSchedule -State $state
@@ -352,6 +495,7 @@ function Invoke-DuneRestartScheduleTick {
             # Missed the lead window (DST launched late). Mark done so we don't
             # fire a stale notice; the restart window below still applies.
             $state.lastBroadcastDate = $today
+            $state.lastDiscordNoticeDate = $today
             Save-DuneRestartSchedule -State $state
         }
     }

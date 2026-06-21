@@ -13,6 +13,21 @@ here cover everything those tags shipped.
 
 ## [Unreleased]
 
+### Added
+
+- **Optional Discord notification when a scheduled restart is imminent.** The
+  daily battlegroup restart can now also post a "restart imminent" message to a
+  Discord channel during the existing pre-restart broadcast window — so players
+  get advance warning even when they aren't in-game. It's **off by default**:
+  enable it under **Server Health → Scheduled restarts**, paste a Discord
+  Incoming Webhook URL, and use **Send test message** to verify it. The post is
+  a clean embed (server name, minutes-to-restart, scheduled local time, reason)
+  and fires at most once per restart, riding the same once-per-day lead window
+  as the in-game broadcast. The webhook URL is stored host-locally, never sent
+  back to the browser, and is redacted from logs and the diagnostics bundle. A
+  Discord outage never blocks or delays the restart (retries on 429/5xx, then
+  logs and moves on).
+
 ### Fixed
 
 - **Scheduled restart logs are now actually written.** The daily-restart
