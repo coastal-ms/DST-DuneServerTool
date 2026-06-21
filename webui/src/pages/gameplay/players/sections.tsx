@@ -248,29 +248,44 @@ function SpecRow({ name, track, canWrite, busy, onGrantMax, onReset, onSetLevel 
           <div className="text-sm font-medium text-text">{name}</div>
           <div className="text-[11px] text-text-dim font-mono">Lv {level}/{levelMax} · {fmtNum(xp)}/{fmtNum(xpMax)} xp</div>
         </div>
-        <div className="flex-1 mx-2">
-          <div className="h-1.5 bg-surface-2 rounded-full overflow-hidden">
-            <div className="h-full bg-accent" style={{ width: `${pct}%` }} />
-          </div>
-        </div>
-        {canWrite && (
-          <div className="flex items-center gap-1.5 shrink-0">
-            <input
-              type="number" inputMode="numeric" step={1} min={0} max={levelMax}
-              className="w-20 font-mono text-sm bg-surface-2 border border-border rounded px-2 py-1" value={draft} disabled={busy}
-              title={`Set exact level (0–${levelMax})`}
-              onChange={e => setDraft(e.target.value)}
-              onKeyDown={e => { if (e.key === 'Enter' && changed) onSetLevel(parsed) }}
-            />
-            <button className="btn-secondary" disabled={busy || !changed} title={`Set level to typed value (0–${levelMax})`} onClick={() => onSetLevel(parsed)}>
-              <Icon name="Check" size={13} /> Set
-            </button>
-            <button className="btn-secondary" disabled={busy} title="Grant max level for this track" onClick={onGrantMax}>
-              <Icon name="ChevronsUp" size={13} /> Max
-            </button>
-            <button className="btn-secondary text-warning" disabled={busy} title="Reset this track" onClick={onReset}>
-              <Icon name="RotateCcw" size={13} />
-            </button>
+        {canWrite ? (
+          <>
+            <div className="flex-1 mx-2 flex items-center gap-2">
+              <input
+                type="range" min={0} max={levelMax} step={1}
+                className="flex-1 h-1.5 accent-accent cursor-pointer disabled:cursor-not-allowed"
+                value={valid ? parsed : level} disabled={busy}
+                title={`Drag to set level (0–${levelMax})`}
+                onChange={e => setDraft(e.target.value)}
+              />
+              <span className="text-[11px] text-text-dim font-mono w-14 text-right tabular-nums">
+                Lv {valid ? parsed : level}/{levelMax}
+              </span>
+            </div>
+            <div className="flex items-center gap-1.5 shrink-0">
+              <input
+                type="number" inputMode="numeric" step={1} min={0} max={levelMax}
+                className="w-16 font-mono text-sm bg-surface-2 border border-border rounded px-2 py-1" value={draft} disabled={busy}
+                title={`Set exact level (0–${levelMax})`}
+                onChange={e => setDraft(e.target.value)}
+                onKeyDown={e => { if (e.key === 'Enter' && changed) onSetLevel(parsed) }}
+              />
+              <button className="btn-secondary" disabled={busy || !changed} title={`Set level to typed value (0–${levelMax})`} onClick={() => onSetLevel(parsed)}>
+                <Icon name="Check" size={13} /> Set
+              </button>
+              <button className="btn-secondary" disabled={busy} title="Grant max level for this track" onClick={onGrantMax}>
+                <Icon name="ChevronsUp" size={13} /> Max
+              </button>
+              <button className="btn-secondary text-warning" disabled={busy} title="Reset this track" onClick={onReset}>
+                <Icon name="RotateCcw" size={13} />
+              </button>
+            </div>
+          </>
+        ) : (
+          <div className="flex-1 mx-2">
+            <div className="h-1.5 bg-surface-2 rounded-full overflow-hidden">
+              <div className="h-full bg-accent" style={{ width: `${pct}%` }} />
+            </div>
           </div>
         )}
       </div>
