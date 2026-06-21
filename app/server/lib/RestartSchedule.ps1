@@ -25,6 +25,8 @@ $script:DuneRestartSchedulerRunspace = $null
 $script:DuneRestartSchedulerPowerShell = $null
 $script:DuneFuncomCheckRunspace = $null
 $script:DuneFuncomCheckPowerShell = $null
+$script:DuneDiscordLastBgState = $null
+$script:DuneDiscordLastUpdateAvailable = $null
 
 # Steam app id for the Dune: Awakening dedicated server. Discovered at runtime
 # from the install's appmanifest file; this is only the fallback.
@@ -51,6 +53,10 @@ function Get-DuneRestartScheduleDefault {
         time                 = '04:00'
         broadcastLeadMinutes = 10
         discordEnabled       = $false
+        discordNotifyOnline  = $false
+        discordNotifyOffline = $false
+        discordNotifyRestarting = $false
+        discordNotifyUpdate  = $false
         discordWebhookUrl    = ''
         discordMentionId     = ''
         lastBroadcastDate    = ''
@@ -89,6 +95,10 @@ function Get-DuneRestartSchedule {
     $state.enabled              = [bool]$state.enabled
     $state.updateAvailable      = [bool]$state.updateAvailable
     $state.discordEnabled       = [bool]$state.discordEnabled
+    $state.discordNotifyOnline  = [bool]$state.discordNotifyOnline
+    $state.discordNotifyOffline = [bool]$state.discordNotifyOffline
+    $state.discordNotifyRestarting = [bool]$state.discordNotifyRestarting
+    $state.discordNotifyUpdate  = [bool]$state.discordNotifyUpdate
     $state.discordWebhookUrl    = [string]$state.discordWebhookUrl
     $state.discordMentionId     = [string]$state.discordMentionId
     try { $state.broadcastLeadMinutes = [int]$state.broadcastLeadMinutes } catch { $state.broadcastLeadMinutes = 10 }
@@ -146,6 +156,10 @@ function Set-DuneRestartSchedule {
         [string]$Time,
         [int]$BroadcastLeadMinutes,
         [bool]$DiscordEnabled,
+        [bool]$DiscordNotifyOnline,
+        [bool]$DiscordNotifyOffline,
+        [bool]$DiscordNotifyRestarting,
+        [bool]$DiscordNotifyUpdate,
         # [object] (not [string]) so a genuine $null survives parameter binding
         # and means "leave the stored value unchanged". A [string] param coerces
         # $null to '', which would wrongly read as "clear it".
@@ -166,7 +180,7 @@ function Set-DuneRestartSchedule {
     if ($effectiveUrl -and -not (Test-DuneDiscordWebhookUrl $effectiveUrl)) {
         return @{ ok = $false; status = 400; message = 'Invalid Discord webhook URL. Expected https://discord.com/api/webhooks/<id>/<token>.' }
     }
-    if ($DiscordEnabled -and -not $effectiveUrl) {
+    if (($DiscordEnabled -or $DiscordNotifyOnline -or $DiscordNotifyOffline -or $DiscordNotifyRestarting -or $DiscordNotifyUpdate) -and -not $effectiveUrl) {
         return @{ ok = $false; status = 400; message = 'Enable Discord notifications requires a webhook URL.' }
     }
 
@@ -183,6 +197,10 @@ function Set-DuneRestartSchedule {
     $state.time                 = $Time
     $state.broadcastLeadMinutes = $BroadcastLeadMinutes
     $state.discordEnabled       = $DiscordEnabled
+    $state.discordNotifyOnline  = $DiscordNotifyOnline
+    $state.discordNotifyOffline = $DiscordNotifyOffline
+    $state.discordNotifyRestarting = $DiscordNotifyRestarting
+    $state.discordNotifyUpdate  = $DiscordNotifyUpdate
     $state.discordWebhookUrl    = $effectiveUrl
     $state.discordMentionId     = $effectiveMention
     Save-DuneRestartSchedule -State $state
@@ -586,6 +604,123 @@ function Invoke-DuneRestartScheduleTick {
     }
 }
 
+# Track state changes for Discord notifications (Online, Offline, Restarting, Update Available).
+function Invoke-DuneDiscordStateMonitorTick {
+    $state = Get-DuneRestartSchedule
+    if (-not $state.discordWebhookUrl) { return }
+    if (-not $state.discordNotifyOnline -and -not $state.discordNotifyOffline -and -not $state.discordNotifyRestarting -and -not $state.discordNotifyUpdate) { return }
+
+    $vm = Get-DuneVmStatus
+    $bgState = 'unknown'
+    if ($vm.running) {
+        if (Get-Command Get-DuneBattlegroupSnapshot -ErrorAction SilentlyContinue) {
+            try {
+                $bg = Get-DuneBattlegroupSnapshot
+                if ($bg -and $bg.available) { $bgState = $bg.state }
+                elseif ($bg -and $bg.state) { $bgState = $bg.state }
+            } catch {}
+        }
+    }
+
+    $lastState = $script:DuneDiscordLastBgState
+    $script:DuneDiscordLastBgState = $bgState
+
+    if ($lastState -and $lastState -ne 'unknown' -and $bgState -ne 'unknown' -and $lastState -ne $bgState) {
+        $serverName = ''
+        if (Get-Command Get-DuneServerName -ErrorAction SilentlyContinue) {
+            try { $serverName = Get-DuneServerName -CachedOnly } catch { $serverName = '' }
+        }
+        $name = if ([string]::IsNullOrWhiteSpace($serverName)) { 'Dune server' } else { $serverName }
+
+        $fire = $false
+        $title = ''
+        $color = 0
+
+        if ($bgState -eq 'running' -and $state.discordNotifyOnline) {
+            $fire = $true
+            $title = "$([System.Char]::ConvertFromUtf32(0x2705)) $name is online"
+            $color = 5763719
+        } elseif ($bgState -eq 'stopped' -and $state.discordNotifyOffline) {
+            $fire = $true
+            $title = "$([System.Char]::ConvertFromUtf32(0x1F6D1)) $name is offline"
+            $color = 15548997
+        } elseif (($bgState -eq 'starting' -or $bgState -eq 'updating' -or $bgState -eq 'stopping') -and $state.discordNotifyRestarting) {
+            if ($lastState -ne 'starting' -and $lastState -ne 'updating' -and $lastState -ne 'stopping') {
+                $fire = $true
+                $title = "$([System.Char]::ConvertFromUtf32(0x26A0)) $name is restarting"
+                $color = 16763904
+            }
+        }
+
+        if ($fire) {
+            $embed = [ordered]@{
+                title = $title
+                color = $color
+                timestamp = (Get-Date).ToUniversalTime().ToString('o')
+            }
+            $payload = @{ embeds = @($embed) }
+            $mentionPayload = Get-DuneDiscordMentionPayload $state.discordMentionId
+            if ($mentionPayload.content) {
+                $payload.content = $mentionPayload.content
+                $payload.allowed_mentions = $mentionPayload.allowed
+            }
+
+            try {
+                $json = $payload | ConvertTo-Json -Depth 5
+                [void](Invoke-RestMethod -Uri $state.discordWebhookUrl -Method Post -Body $json -ContentType 'application/json')
+                if (Get-Command Write-DuneLog -ErrorAction SilentlyContinue) {
+                    Write-DuneLog "discord state monitor fired '$bgState' [$(Get-DuneRedactedWebhookUrl $state.discordWebhookUrl)]"
+                }
+            } catch {
+                if (Get-Command Write-DuneLog -ErrorAction SilentlyContinue) {
+                    Write-DuneLog "discord state monitor error: $($_.Exception.Message)" 'WARN'
+                }
+            }
+        }
+    }
+
+    $lastUpdate = $script:DuneDiscordLastUpdateAvailable
+    $curUpdate = $state.updateAvailable
+    $script:DuneDiscordLastUpdateAvailable = $curUpdate
+
+    if ($lastUpdate -ne $null -and $curUpdate -and -not $lastUpdate -and $state.discordNotifyUpdate) {
+        $serverName = ''
+        if (Get-Command Get-DuneServerName -ErrorAction SilentlyContinue) {
+            try { $serverName = Get-DuneServerName -CachedOnly } catch { $serverName = '' }
+        }
+        $name = if ([string]::IsNullOrWhiteSpace($serverName)) { 'Dune server' } else { $serverName }
+
+        $embed = [ordered]@{
+            title = "$([System.Char]::ConvertFromUtf32(0x1F4E6)) Update available for $name"
+            description = "A new game server update has been detected. Schedule a restart or update it manually."
+            color = 3447003
+            fields = @(
+                [ordered]@{ name = 'Installed Build'; value = if ($state.installedBuild) { $state.installedBuild } else { 'Unknown' }; inline = $true },
+                [ordered]@{ name = 'Latest Build'; value = if ($state.latestBuild) { $state.latestBuild } else { 'Unknown' }; inline = $true }
+            )
+            timestamp = (Get-Date).ToUniversalTime().ToString('o')
+        }
+        $payload = @{ embeds = @($embed) }
+        $mentionPayload = Get-DuneDiscordMentionPayload $state.discordMentionId
+        if ($mentionPayload.content) {
+            $payload.content = $mentionPayload.content
+            $payload.allowed_mentions = $mentionPayload.allowed
+        }
+
+        try {
+            $json = $payload | ConvertTo-Json -Depth 5
+            [void](Invoke-RestMethod -Uri $state.discordWebhookUrl -Method Post -Body $json -ContentType 'application/json')
+            if (Get-Command Write-DuneLog -ErrorAction SilentlyContinue) {
+                Write-DuneLog "discord state monitor fired 'update available' [$(Get-DuneRedactedWebhookUrl $state.discordWebhookUrl)]"
+            }
+        } catch {
+            if (Get-Command Write-DuneLog -ErrorAction SilentlyContinue) {
+                Write-DuneLog "discord state monitor error (update): $($_.Exception.Message)" 'WARN'
+            }
+        }
+    }
+}
+
 # Build an InitialSessionState that loads the same server libs as the API pool
 # so every helper the scheduler tick (or the async update checker) needs is in
 # scope. Shared by Start-DuneRestartScheduler and Start-DuneFuncomUpdateCheckAsync.
@@ -690,6 +825,11 @@ function Start-DuneRestartScheduler {
                 try { Invoke-DuneRestartScheduleTick } catch {
                     if (Get-Command Write-DuneLog -ErrorAction SilentlyContinue) {
                         try { Write-DuneLog "restart scheduler tick error: $($_.Exception.Message)" 'WARN' } catch {}
+                    }
+                }
+                try { Invoke-DuneDiscordStateMonitorTick } catch {
+                    if (Get-Command Write-DuneLog -ErrorAction SilentlyContinue) {
+                        try { Write-DuneLog "discord state monitor tick error: $($_.Exception.Message)" 'WARN' } catch {}
                     }
                 }
                 Start-Sleep -Seconds 30

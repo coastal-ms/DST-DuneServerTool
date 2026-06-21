@@ -48,6 +48,10 @@ export function ScheduledRestarts() {
   const [time, setTime] = useState('04:00')
   const [lead, setLead] = useState(10)
   const [discordEnabled, setDiscordEnabled] = useState(false)
+  const [discordNotifyOnline, setDiscordNotifyOnline] = useState(false)
+  const [discordNotifyOffline, setDiscordNotifyOffline] = useState(false)
+  const [discordNotifyRestarting, setDiscordNotifyRestarting] = useState(false)
+  const [discordNotifyUpdate, setDiscordNotifyUpdate] = useState(false)
   const [webhookInput, setWebhookInput] = useState('')
   const [webhookSet, setWebhookSet] = useState(false)
   const [clearWebhook, setClearWebhook] = useState(false)
@@ -70,6 +74,10 @@ export function ScheduledRestarts() {
       setTime(s.time || '04:00')
       setLead(typeof s.broadcastLeadMinutes === 'number' ? s.broadcastLeadMinutes : 10)
       setDiscordEnabled(s.discordEnabled)
+      setDiscordNotifyOnline(s.discordNotifyOnline)
+      setDiscordNotifyOffline(s.discordNotifyOffline)
+      setDiscordNotifyRestarting(s.discordNotifyRestarting)
+      setDiscordNotifyUpdate(s.discordNotifyUpdate)
       setWebhookSet(s.discordWebhookSet)
       setWebhookInput('')
       setClearWebhook(false)
@@ -98,13 +106,17 @@ export function ScheduledRestarts() {
     try {
       const body: {
         enabled: boolean; time: string; broadcastLeadMinutes: number
-        discordEnabled: boolean; discordWebhookUrl?: string; discordMentionId?: string
-      } = { enabled, time, broadcastLeadMinutes: lead, discordEnabled, discordMentionId: mention.trim() }
+        discordEnabled: boolean; discordNotifyOnline: boolean; discordNotifyOffline: boolean; discordNotifyRestarting: boolean; discordNotifyUpdate: boolean; discordWebhookUrl?: string; discordMentionId?: string
+      } = { enabled, time, broadcastLeadMinutes: lead, discordEnabled, discordNotifyOnline, discordNotifyOffline, discordNotifyRestarting, discordNotifyUpdate, discordMentionId: mention.trim() }
       if (clearWebhook) body.discordWebhookUrl = ''
       else if (webhookInput.trim() !== '') body.discordWebhookUrl = webhookInput.trim()
       const s = await saveRestartSchedule(body)
       setSched(s)
       setDiscordEnabled(s.discordEnabled)
+      setDiscordNotifyOnline(s.discordNotifyOnline)
+      setDiscordNotifyOffline(s.discordNotifyOffline)
+      setDiscordNotifyRestarting(s.discordNotifyRestarting)
+      setDiscordNotifyUpdate(s.discordNotifyUpdate)
       setWebhookSet(s.discordWebhookSet)
       setWebhookInput('')
       setClearWebhook(false)
@@ -144,9 +156,10 @@ export function ScheduledRestarts() {
     }
   }, [])
 
-  const discordDirty = !!sched && (sched.discordEnabled !== discordEnabled || webhookInput.trim() !== '' || clearWebhook || (sched.discordMentionId || '') !== mention.trim())
+  const discordDirty = !!sched && (sched.discordEnabled !== discordEnabled || sched.discordNotifyOnline !== discordNotifyOnline || sched.discordNotifyOffline !== discordNotifyOffline || sched.discordNotifyRestarting !== discordNotifyRestarting || sched.discordNotifyUpdate !== discordNotifyUpdate || webhookInput.trim() !== '' || clearWebhook || (sched.discordMentionId || '') !== mention.trim())
   const dirty = !!sched && (sched.enabled !== enabled || sched.time !== time || sched.broadcastLeadMinutes !== lead || discordDirty)
-  const canSave = dirty && webhookInputValid && mentionValid && !(discordEnabled && !effectiveWebhookSet)
+  const anyDiscordEvent = discordEnabled || discordNotifyOnline || discordNotifyOffline || discordNotifyRestarting || discordNotifyUpdate
+  const canSave = dirty && webhookInputValid && mentionValid && !(anyDiscordEvent && !effectiveWebhookSet)
 
   return (
     <div className="card p-5">
@@ -244,62 +257,126 @@ export function ScheduledRestarts() {
               </div>
             )}
 
-            {/* Discord notification (Phase 1: "restart imminent" only) */}
+            {/* Discord notifications */}
             <div className="border-t border-border/50 pt-4 mt-1">
-              <label className="flex items-center gap-3 cursor-pointer select-none">
-                <input
-                  type="checkbox"
-                  checked={discordEnabled}
-                  onChange={e => setDiscordEnabled(e.target.checked)}
-                  className="h-4 w-4 accent-accent"
-                />
-                <span className="text-sm font-medium flex items-center gap-2">
-                  <Icon name="MessageSquare" size={14} className="text-accent" /> Also post to a Discord channel
-                </span>
-              </label>
-              <p className="text-[11px] text-text-dim mt-1 ml-7">
-                Posts a "restart imminent" message during the broadcast lead window. Needs a broadcast lead above 0.
-                Create an Incoming Webhook in Discord (Channel → Edit → Integrations → Webhooks → New Webhook → Copy URL).
+              <h3 className="text-sm font-medium flex items-center gap-2 mb-2">
+                <Icon name="MessageSquare" size={14} className="text-accent" /> Discord Notifications
+              </h3>
+              <p className="text-[11px] text-text-dim mb-4">
+                Push server state alerts to a Discord channel. Create an Incoming Webhook in Discord (Channel → Edit → Integrations → Webhooks → New Webhook → Copy URL).
               </p>
 
-              {discordEnabled && (
-                <div className="mt-3 ml-7 flex flex-col gap-2">
-                  <div>
-                    <label className="block text-xs uppercase tracking-wider text-text-dim mb-1">
-                      Discord webhook URL
-                    </label>
-                    <input
-                      type="password"
-                      value={webhookInput}
-                      onChange={e => { setWebhookInput(e.target.value); setClearWebhook(false) }}
-                      placeholder={webhookSet && !clearWebhook ? 'Webhook saved ••••••••  (type to replace)' : 'https://discord.com/api/webhooks/…'}
-                      autoComplete="off"
-                      aria-label="Discord webhook URL"
-                      className={FIELD_CLASS}
-                    />
-                    <div className="flex items-center justify-between gap-2 mt-1 flex-wrap">
-                      <p className="text-[11px] text-text-dim">
-                        {clearWebhook
-                          ? 'Saved webhook will be removed on save.'
-                          : webhookSet
-                            ? 'A webhook is stored. Leave blank to keep it.'
-                            : 'Paste your channel webhook URL.'}
-                      </p>
-                      {webhookSet && !clearWebhook && (
-                        <button
-                          type="button"
-                          onClick={() => { setClearWebhook(true); setWebhookInput(''); setDiscordEnabled(false) }}
-                          className="text-[11px] text-danger hover:underline"
-                        >
-                          Remove saved webhook
-                        </button>
-                      )}
-                    </div>
-                    {!webhookInputValid && (
-                      <p className="text-[11px] text-danger mt-1">That doesn't look like a Discord webhook URL.</p>
-                    )}
-                  </div>
+              <div className="flex flex-col gap-2 mb-4">
+                <label className="block text-xs uppercase tracking-wider text-text-dim mb-1">
+                  Discord webhook URL
+                </label>
+                <input
+                  type="password"
+                  value={webhookInput}
+                  onChange={e => { setWebhookInput(e.target.value); setClearWebhook(false) }}
+                  placeholder={webhookSet && !clearWebhook ? 'Webhook saved ••••••••  (type to replace)' : 'https://discord.com/api/webhooks/…'}
+                  autoComplete="off"
+                  aria-label="Discord webhook URL"
+                  className={FIELD_CLASS}
+                />
+                <div className="flex items-center justify-between gap-2 mt-1 flex-wrap">
+                  <p className="text-[11px] text-text-dim">
+                    {clearWebhook
+                      ? 'Saved webhook will be removed on save.'
+                      : webhookSet
+                        ? 'A webhook is stored. Leave blank to keep it.'
+                        : 'Paste your channel webhook URL.'}
+                  </p>
+                  {webhookSet && !clearWebhook && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setClearWebhook(true)
+                        setWebhookInput('')
+                        setDiscordEnabled(false)
+                        setDiscordNotifyOnline(false)
+                        setDiscordNotifyOffline(false)
+                        setDiscordNotifyRestarting(false)
+                        setDiscordNotifyUpdate(false)
+                      }}
+                      className="text-[11px] text-danger hover:underline"
+                    >
+                      Remove saved webhook
+                    </button>
+                  )}
+                </div>
+                {!webhookInputValid && (
+                  <p className="text-[11px] text-danger mt-1">That doesn't look like a Discord webhook URL.</p>
+                )}
+              </div>
 
+              {effectiveWebhookSet && (
+                <div className="flex flex-col gap-3 mb-4 p-3 bg-surface-2 rounded-lg border border-border/50">
+                  <label className="flex items-start gap-3 cursor-pointer select-none">
+                    <input
+                      type="checkbox"
+                      checked={discordEnabled}
+                      onChange={e => setDiscordEnabled(e.target.checked)}
+                      className="h-4 w-4 accent-accent mt-0.5"
+                    />
+                    <div>
+                      <span className="text-sm font-medium block leading-none">Advance Warning</span>
+                      <span className="text-[11px] text-text-dim mt-1 block">Posts a "restart imminent" message {lead > 0 ? `${lead} minutes` : 'right'} before a scheduled restart.</span>
+                    </div>
+                  </label>
+                  <label className="flex items-start gap-3 cursor-pointer select-none">
+                    <input
+                      type="checkbox"
+                      checked={discordNotifyOnline}
+                      onChange={e => setDiscordNotifyOnline(e.target.checked)}
+                      className="h-4 w-4 accent-accent mt-0.5"
+                    />
+                    <div>
+                      <span className="text-sm font-medium block leading-none">Online</span>
+                      <span className="text-[11px] text-text-dim mt-1 block">When the server finishes booting and comes online.</span>
+                    </div>
+                  </label>
+                  <label className="flex items-start gap-3 cursor-pointer select-none">
+                    <input
+                      type="checkbox"
+                      checked={discordNotifyOffline}
+                      onChange={e => setDiscordNotifyOffline(e.target.checked)}
+                      className="h-4 w-4 accent-accent mt-0.5"
+                    />
+                    <div>
+                      <span className="text-sm font-medium block leading-none">Offline</span>
+                      <span className="text-[11px] text-text-dim mt-1 block">When the server stops or crashes.</span>
+                    </div>
+                  </label>
+                  <label className="flex items-start gap-3 cursor-pointer select-none">
+                    <input
+                      type="checkbox"
+                      checked={discordNotifyRestarting}
+                      onChange={e => setDiscordNotifyRestarting(e.target.checked)}
+                      className="h-4 w-4 accent-accent mt-0.5"
+                    />
+                    <div>
+                      <span className="text-sm font-medium block leading-none">Restarting</span>
+                      <span className="text-[11px] text-text-dim mt-1 block">When the server begins restarting.</span>
+                    </div>
+                  </label>
+                  <label className="flex items-start gap-3 cursor-pointer select-none">
+                    <input
+                      type="checkbox"
+                      checked={discordNotifyUpdate}
+                      onChange={e => setDiscordNotifyUpdate(e.target.checked)}
+                      className="h-4 w-4 accent-accent mt-0.5"
+                    />
+                    <div>
+                      <span className="text-sm font-medium block leading-none">Update Available</span>
+                      <span className="text-[11px] text-text-dim mt-1 block">When a new Funcom game update is detected.</span>
+                    </div>
+                  </label>
+                </div>
+              )}
+
+              {effectiveWebhookSet && (
+                <div className="flex flex-col gap-2">
                   <div>
                     <label className="block text-xs uppercase tracking-wider text-text-dim mb-1">
                       Mention on alert <span className="normal-case text-text-dim">(optional)</span>

@@ -13,6 +13,12 @@ here cover everything those tags shipped.
 
 ## [Unreleased]
 
+## [12.10.3] - 2026-06-21
+
+### Added
+
+- **Server State Webhooks:** The scheduled restarts card now includes individual toggles to notify a Discord channel when the server goes online, goes offline, or is restarting.
+
 ## [12.10.2] - 2026-06-21
 
 ### Changed
