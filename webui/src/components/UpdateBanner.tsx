@@ -134,6 +134,9 @@ export function UpdateBanner() {
   const onInstall = async () => {
     setInstalling(true)
     setInstallErr(null)
+    // Signal the reconnect overlay to stand down for this tab: the updater
+    // intentionally takes the server down, and <UpdatingPage> owns that UX.
+    ;(window as unknown as { __duneUpdating?: boolean }).__duneUpdating = true
     try {
       const res = await installUpdate()
       if (res.launched) {
@@ -141,9 +144,11 @@ export function UpdateBanner() {
         setLaunched(true)
       } else {
         setInstallErr(res.reason ?? 'Installer did not launch.')
+        ;(window as unknown as { __duneUpdating?: boolean }).__duneUpdating = false
       }
     } catch (e) {
       setInstallErr(e instanceof Error ? e.message : String(e))
+      ;(window as unknown as { __duneUpdating?: boolean }).__duneUpdating = false
     } finally {
       setInstalling(false)
     }
