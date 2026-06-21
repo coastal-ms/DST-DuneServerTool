@@ -18,7 +18,11 @@
       "adaptiveIcon": {
         "backgroundColor": "#ffffff"
       },
-      "package": "com.coastal.duneserver"
+      "package": "com.coastal.duneserver",
+      "permissions": [
+        "android.permission.CAMERA",
+        "android.permission.RECORD_AUDIO"
+      ]
     },
     "web": {
       "bundler": "metro",
@@ -35,6 +39,13 @@
     ],
     "experiments": {
       "typedRoutes": true
-    }
+    },
+    "extra": {
+      "router": {},
+      "eas": {
+        "projectId": "16d2dab3-6ffa-4198-8e3a-cf46f0646b0c"
+      }
+    },
+    "owner": "coastaldst"
   }
 }
