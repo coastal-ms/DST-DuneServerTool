@@ -13,6 +13,8 @@ here cover everything those tags shipped.
 
 ## [Unreleased]
 
+## [12.9.7] - 2026-06-20
+
 ### Added
 
 - **Return to the live release from a Test build.** A build installed from a
