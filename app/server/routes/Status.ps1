@@ -10,15 +10,32 @@ Register-DuneRoute -Method GET -Path '/api/status' -Handler {
     try { $ports = Get-DunePortStatus } catch { $ports = $null }
     $serverName = ''
     if ($vm.running -and (Get-Command Get-DuneServerName -ErrorAction SilentlyContinue)) {
-        try { $serverName = Get-DuneServerName -CachedOnly } catch { $serverName = '' }
+        try { $serverName = Get-DuneServerName } catch { $serverName = '' }
     }
     Write-DuneJson -Response $res -Body @{
-        vm         = $vm
-        bg         = $bg
-        ports      = $ports
-        serverName = $serverName
-        ts         = (Get-Date).ToString('o')
+        vm           = $vm
+        bg           = $bg
+        ports        = $ports
+        serverName   = $serverName
+        funcomUpdate = (Get-DuneFuncomUpdateBadge)
+        ts           = (Get-Date).ToString('o')
     }
+}
+
+# Read the last persisted Funcom server-update result from the restart-schedule
+# state file. Cheap (no SSH) - the live check runs during scheduled restarts or
+# via POST /api/restart-schedule/check-update.
+function Get-DuneFuncomUpdateBadge {
+    try {
+        if (-not (Get-Command Get-DuneRestartSchedule -ErrorAction SilentlyContinue)) { return $null }
+        $s = Get-DuneRestartSchedule
+        return @{
+            available      = [bool]$s.updateAvailable
+            installedBuild = [string]$s.installedBuild
+            latestBuild    = [string]$s.latestBuild
+            checkedAt      = [string]$s.updateCheckedAt
+        }
+    } catch { return $null }
 }
 
 # POST /api/status/refresh — force re-check (ports + everything)

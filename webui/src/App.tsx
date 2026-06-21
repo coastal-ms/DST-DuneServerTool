@@ -2,6 +2,7 @@ import { Routes, Route, Navigate } from 'react-router-dom'
 import { useEffect } from 'react'
 import { AppShell } from './layout/AppShell'
 import { Dashboard } from './pages/Dashboard'
+import { Pods } from './pages/Pods'
 import { Commands } from './pages/Commands'
 import { GameConfig } from './pages/GameConfig'
 import { GameplayEnvironment } from './pages/GameplayEnvironment'
@@ -55,6 +56,7 @@ export default function App() {
       <AppShell>
         <Routes>
           <Route path="/"           element={<Boundary name="Dashboard"><Dashboard /></Boundary>} />
+          <Route path="/pods"        element={<Boundary name="Pods"><Pods /></Boundary>} />
           <Route path="/commands"   element={<Boundary name="Commands"><Commands /></Boundary>} />
           <Route
             path="/terminal"

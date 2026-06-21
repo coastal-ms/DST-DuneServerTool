@@ -49,7 +49,13 @@ $script:DuneBackupPresets = @{
     'WeeklyMonUtc04'  = @{ label='Weekly, Monday 04:00';           crons=@('0 4 * * 1') }
 }
 
-$script:DuneBackupCmd = '/home/dune/.dune/bin/battlegroup backup >> /var/log/dune-backup.log 2>&1'
+# The scheduled backup is wrapped in a guard that skips it when a DST-driven
+# battlegroup restart is in progress: RestartSchedule.ps1 touches
+# /tmp/dst-restart-active just before (and during) the restart, and `find -mmin
+# -30` here treats a marker touched within the last 30 minutes as "active". The
+# guard fails safe - any error in the check falls through to running the backup
+# normally - and contains no literal '%' so it is crontab-safe.
+$script:DuneBackupCmd = 'if find /tmp/dst-restart-active -mmin -30 2>/dev/null | grep -q .; then echo "$(date) dst: backup skipped - BG restart window active" >> /var/log/dune-backup.log; else /home/dune/.dune/bin/battlegroup backup >> /var/log/dune-backup.log 2>&1; fi'
 $script:DuneBackupBeginMarker = '# DST-BACKUP BEGIN'
 $script:DuneBackupEndMarker   = '# DST-BACKUP END'
 $script:DuneBackupDumpDir     = '/funcom/artifacts/database-dumps'

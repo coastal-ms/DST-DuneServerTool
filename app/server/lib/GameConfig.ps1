@@ -271,6 +271,41 @@ $script:DuneServerNameCache   = $null
 $script:DuneServerNameFetched = [datetime]::MinValue
 $script:DuneServerNameTtlSecs = 300
 
+# The /api handler runs in a runspace POOL; each runspace has its own $script:
+# scope, so an in-memory-only name cache flickers in the UI - whichever runspace
+# serves a given 10 s status poll either has a warm cache (shows "Reapers") or a
+# cold one (shows "Unknown"). Persist the last-known-good name + fetch time to a
+# shared host-local JSON file so every runspace converges on the same value and
+# only one runspace per TTL window pays for the SSH read.
+function Get-DuneServerNameStatePath {
+    $dir = Join-Path $env:LOCALAPPDATA 'DuneServer'
+    if (-not (Test-Path -LiteralPath $dir)) { New-Item -ItemType Directory -Path $dir -Force | Out-Null }
+    return (Join-Path $dir 'server-name.json')
+}
+function Read-DuneServerNameState {
+    try {
+        $p = Get-DuneServerNameStatePath
+        if (Test-Path -LiteralPath $p) {
+            $o = Get-Content -LiteralPath $p -Raw -ErrorAction Stop | ConvertFrom-Json -ErrorAction Stop
+            $n = if ($o.PSObject.Properties['name']) { [string]$o.name } else { '' }
+            $t = [datetime]::MinValue
+            if ($o.PSObject.Properties['fetchedAt']) {
+                try { $t = [datetime]::Parse([string]$o.fetchedAt, $null, [System.Globalization.DateTimeStyles]::RoundtripKind) } catch {}
+            }
+            return @{ name = $n; fetchedAt = $t }
+        }
+    } catch {}
+    return @{ name = ''; fetchedAt = [datetime]::MinValue }
+}
+function Write-DuneServerNameState {
+    param([string]$Name)
+    try {
+        if ([string]::IsNullOrWhiteSpace($Name)) { return }
+        $obj = [pscustomobject]@{ name = $Name.Trim(); fetchedAt = ([datetime]::UtcNow.ToString('o')) }
+        Set-Content -LiteralPath (Get-DuneServerNameStatePath) -Value ($obj | ConvertTo-Json) -Encoding UTF8 -Force
+    } catch {}
+}
+
 # Where each player applies the "client-side too" settings. These keys are read
 # by BOTH server and client; changing them server-side only takes full effect
 # once each player mirrors them in their LOCAL client config. Funcom's setup
@@ -1052,11 +1087,19 @@ function Get-DuneGameConfig {
 function Get-DuneServerName {
     param([switch]$Force, [switch]$CachedOnly)
 
-    $age = ([datetime]::UtcNow - $script:DuneServerNameFetched).TotalSeconds
-    if (-not $Force -and $script:DuneServerNameCache -ne $null -and $age -lt $script:DuneServerNameTtlSecs) {
-        return $script:DuneServerNameCache
+    # Shared cross-runspace cache (see Read/Write-DuneServerNameState above) takes
+    # precedence over the per-runspace in-memory cache so the pooled status poll
+    # never flickers between the real name and "Unknown".
+    $shared = Read-DuneServerNameState
+    $sharedAge = ([datetime]::UtcNow - $shared.fetchedAt).TotalSeconds
+
+    if (-not $Force -and $shared.name -and $sharedAge -lt $script:DuneServerNameTtlSecs) {
+        $script:DuneServerNameCache   = $shared.name
+        $script:DuneServerNameFetched = [datetime]::UtcNow
+        return $shared.name
     }
     if ($CachedOnly) {
+        if ($shared.name) { return $shared.name }
         if ($script:DuneServerNameCache) { return $script:DuneServerNameCache }
         return ''
     }
@@ -1082,12 +1125,22 @@ function Get-DuneServerName {
             if ($title) { $name = $title.Trim() }
         }
     } catch {
-        $name = if ($script:DuneServerNameCache) { $script:DuneServerNameCache } else { '' }
+        $name = if ($shared.name) { $shared.name } else { '' }
     }
 
-    $script:DuneServerNameCache   = $name
+    if ($name) {
+        $script:DuneServerNameCache   = $name
+        $script:DuneServerNameFetched = [datetime]::UtcNow
+        Write-DuneServerNameState -Name $name
+        return $name
+    }
+
+    # Fetch yielded nothing (e.g. VM/BG down) - keep showing the last known good
+    # name rather than blanking the header.
+    if ($shared.name) { return $shared.name }
+    $script:DuneServerNameCache   = ''
     $script:DuneServerNameFetched = [datetime]::UtcNow
-    return $name
+    return ''
 }
 
 # Rename the server: patches the battlegroup CRD's spec.title (the name shown in
@@ -1117,6 +1170,7 @@ function Set-DuneServerName {
 
     $script:DuneServerNameCache   = $res.NewTitle
     $script:DuneServerNameFetched = [datetime]::UtcNow
+    Write-DuneServerNameState -Name $res.NewTitle
 
     return @{
         ok      = $true
