@@ -13,6 +13,8 @@ here cover everything those tags shipped.
 
 ## [Unreleased]
 
+## [12.10.1] - 2026-06-21
+
 ### Changed
 
 - **Scheduled restarts card is now collapsible.** The "Scheduled restarts" card
