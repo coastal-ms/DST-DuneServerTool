@@ -13,6 +13,21 @@ here cover everything those tags shipped.
 
 ## [Unreleased]
 
+### Added
+
+- **Remove passphrase from your SSH key — without rotating it.** When a key is
+  passphrase-protected, DST's background checks (battlegroup status, server
+  health, game data) can't use it: they run non-interactively and can't answer a
+  passphrase prompt, so the dashboard shows **Unknown** even though an
+  interactive SSH terminal still works. Previously the only in-app fix was
+  **Rotate SSH Key**, which generates a *brand-new* key that then has to be
+  re-authorized on the VM. There's now a **Remove passphrase** button on the
+  Settings → SSH key field: enter the key's current passphrase and DST strips it
+  off the existing key in place (`POST /api/config/strip-ssh-passphrase`). The
+  key pair is unchanged, so it stays authorized on the VM and nothing needs
+  re-adding — background checks start working within a few seconds. The
+  dashboard and setup-wizard warnings now point at this button as the easy fix.
+
 ## [12.9.8] - 2026-06-20
 
 ### Added

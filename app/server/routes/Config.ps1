@@ -106,6 +106,77 @@ Register-DuneRoute -Method POST -Path '/api/config/rotate-ssh-key' -Handler {
     }
 }
 
+# POST /api/config/strip-ssh-passphrase — remove the passphrase from the EXISTING
+# SSH key in place. Unlike rotation, this keeps the same key pair, so its public
+# half stays in dune@VM:~/.ssh/authorized_keys and nothing has to be re-authorized
+# on the VM. Background checks (battlegroup status, server health, game data) run
+# non-interactively and can't answer a passphrase prompt, so an unencrypted private
+# key is what lets them work. Body: { passphrase: "<current passphrase>" }.
+Register-DuneRoute -Method POST -Path '/api/config/strip-ssh-passphrase' -Handler {
+    param($req, $res, $routeParams, $body)
+
+    $cfg     = Read-DuneConfig
+    $keyPath = if ($cfg) { [string]$cfg.SshKey } else { '' }
+    if (-not $keyPath) {
+        Write-DuneError -Response $res -Status 400 -Message 'No SSH key is configured. Set the SSH key path in Settings first.'
+        return
+    }
+    if (-not (Test-Path -LiteralPath $keyPath)) {
+        Write-DuneError -Response $res -Status 404 -Message "Configured SSH key file not found: $keyPath"
+        return
+    }
+
+    $passphrase = ''
+    if ($body -is [hashtable] -and $body.Contains('passphrase')) { $passphrase = [string]$body['passphrase'] }
+    elseif ($body -and $body.passphrase)                        { $passphrase = [string]$body.passphrase }
+
+    # Already unencrypted? Nothing to do — keep it idempotent so the button is safe
+    # to click on a key that's already fine.
+    if ((Test-DuneSshKeyEncrypted -KeyPath $keyPath) -eq $false) {
+        Write-DuneJson -Response $res -Body @{
+            ok        = $true
+            stripped  = $false
+            encrypted = $false
+            message   = 'This SSH key already has no passphrase — background checks can use it as-is.'
+        }
+        return
+    }
+
+    if (-not $passphrase) {
+        Write-DuneError -Response $res -Status 400 -Message "Enter the key's current passphrase so it can be removed."
+        return
+    }
+
+    try {
+        # `ssh-keygen -p` changes the passphrase in place: -P is the old passphrase,
+        # -N '' sets an empty new one. Fully non-interactive, so it runs without a
+        # console prompt. Only the private key file is rewritten; the .pub (and thus
+        # the key authorized on the VM) is unchanged.
+        $out  = & ssh-keygen -p -P $passphrase -N '' -f $keyPath 2>&1
+        $code = $LASTEXITCODE
+        $text = ($out | Out-String).Trim()
+
+        if ($code -ne 0 -or (Test-DuneSshKeyEncrypted -KeyPath $keyPath) -eq $true) {
+            if ($text -match '(?im)incorrect passphrase|failed to load|invalid format|bad passphrase|unable to load') {
+                Write-DuneError -Response $res -Status 400 -Message 'That passphrase is incorrect — the key was not changed. Try again with the key''s current passphrase.'
+            } else {
+                $detail = if ($text) { $text } else { "ssh-keygen exited $code" }
+                Write-DuneError -Response $res -Status 500 -Message "Could not remove the passphrase: $detail"
+            }
+            return
+        }
+
+        Write-DuneJson -Response $res -Body @{
+            ok        = $true
+            stripped  = $true
+            encrypted = $false
+            message   = 'Passphrase removed. The key is otherwise unchanged, so it stays authorized on the VM — background checks will start working within a few seconds.'
+        }
+    } catch {
+        Write-DuneError -Response $res -Status 500 -Message "Could not remove the SSH key passphrase: $($_.Exception.Message)"
+    }
+}
+
 # POST /api/config/open-battlegroup-bat — open Funcom's original battlegroup.bat
 # (located in the root of the Steam install folder) in an elevated window. The
 # .bat launches battlegroup.ps1 and pauses on exit. The API server already runs
