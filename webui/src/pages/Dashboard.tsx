@@ -4,6 +4,7 @@ import { PageHeader } from '../components/PageHeader'
 import { Icon } from '../components/Icon'
 import { useStatus } from '../hooks/useStatus'
 import { BgSpiceSummary } from './dashboard/BgSpiceSummary'
+import { ScheduledRestarts } from './dashboard/ScheduledRestarts'
 import type { BgState, BgGameServer } from '../api/types'
 import { getLinks, type LinksResponse } from '../api/links'
 import { api, ApiError } from '../api/client'
@@ -225,11 +226,21 @@ export function Dashboard() {
             <h2 className="text-sm font-semibold uppercase tracking-wider text-text-muted flex items-center gap-2">
               <Icon name="Activity" size={14} className="text-accent" /> Battlegroup info
             </h2>
-            {status?.bg?.name && (
-              <span className="text-[10px] font-mono text-text-dim truncate ml-2" title={status.bg.name}>
-                {status.bg.name}
-              </span>
-            )}
+            <div className="flex items-center gap-2 min-w-0">
+              {status?.funcomUpdate?.available && (
+                <span
+                  className="inline-flex items-center gap-1 text-[10px] font-semibold uppercase tracking-wider text-warning border border-warning/40 bg-warning/10 rounded px-1.5 py-0.5 shrink-0"
+                  title={`Funcom has released a server update (installed build ${status.funcomUpdate.installedBuild || '?'}, latest ${status.funcomUpdate.latestBuild || '?'}). It is applied automatically on the next scheduled restart.`}
+                >
+                  <Icon name="ArrowUpCircle" size={11} /> Update
+                </span>
+              )}
+              {status?.bg?.name && (
+                <span className="text-[10px] font-mono text-text-dim truncate" title={status.bg.name}>
+                  {status.bg.name}
+                </span>
+              )}
+            </div>
           </div>
           {!bgReady ? (
             <p className="text-sm text-text-dim italic">
@@ -382,6 +393,10 @@ export function Dashboard() {
             </ul>
           )}
         </div>
+      </section>
+
+      <section className="mb-4">
+        <ScheduledRestarts />
       </section>
 
       <section className="grid grid-cols-1 lg:grid-cols-2 gap-4 mb-4">
