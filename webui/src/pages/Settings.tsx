@@ -52,6 +52,14 @@ export function Settings() {
   // finish, then propagates the fresh key everywhere DST uses it.
   const [sshRotating, setSshRotating] = useState(false)
   const [sshRotateMsg, setSshRotateMsg] = useState<string | null>(null)
+  // "Remove passphrase (keep same key)" — strips the passphrase off the existing
+  // key in place (no rotation, nothing to re-authorize on the VM), so background
+  // checks that run non-interactively can use it.
+  const [sshStripOpen, setSshStripOpen] = useState(false)
+  const [sshStripPass, setSshStripPass] = useState('')
+  const [sshStripping, setSshStripping] = useState(false)
+  const [sshStripMsg, setSshStripMsg] = useState<string | null>(null)
+  const [sshStripOk, setSshStripOk] = useState<boolean | null>(null)
   const [openingBat, setOpeningBat] = useState(false)
   const [batMsg, setBatMsg] = useState<string | null>(null)
   // Database connection test (issue #295): verify the configured in-pod
@@ -173,6 +181,30 @@ export function Settings() {
       setError(e instanceof Error ? e.message : String(e))
     } finally {
       setSshRotating(false)
+    }
+  }
+
+  async function onStripSshPassphrase() {
+    setSshStripping(true)
+    setSshStripMsg(null)
+    setSshStripOk(null)
+    setError(null)
+    try {
+      const r = await api<{ ok: boolean; stripped: boolean; message?: string }>(
+        '/api/config/strip-ssh-passphrase',
+        { method: 'POST', body: JSON.stringify({ passphrase: sshStripPass }) },
+      )
+      setSshStripOk(r.ok)
+      setSshStripMsg(r.message ?? (r.ok ? 'Passphrase removed.' : 'Could not remove the passphrase.'))
+      if (r.ok) {
+        setSshStripPass('')
+        setSshStripOpen(false)
+      }
+    } catch (e) {
+      setSshStripOk(false)
+      setSshStripMsg(e instanceof Error ? e.message : String(e))
+    } finally {
+      setSshStripping(false)
     }
   }
 
@@ -834,6 +866,17 @@ export function Settings() {
                     {sshRotating ? 'Rotating…' : 'Generate new'}
                   </button>
                 )}
+                {f.key === 'SshKey' && (
+                  <button
+                    type="button"
+                    onClick={() => { setSshStripOpen(o => !o); setSshStripMsg(null) }}
+                    title="Strip the passphrase off this key without rotating it (keeps the same key, no VM changes)"
+                    className="btn-secondary shrink-0"
+                  >
+                    <Icon name="KeyRound" size={15} />
+                    Remove passphrase
+                  </button>
+                )}
                 </div>
               </>
             ) : (
@@ -847,6 +890,42 @@ export function Settings() {
               />
             )}
             {f.help && <p className="mt-1 text-xs text-text-dim">{f.help}</p>}
+            {f.key === 'SshKey' && sshStripOpen && (
+              <div className="mt-2 rounded-lg border border-border bg-surface-2 p-3 space-y-2">
+                <p className="text-xs text-text-dim">
+                  Removes the passphrase from this key <span className="text-text">without rotating it</span> — the key pair
+                  stays the same, so it remains authorized on the VM and nothing needs re-adding. Background checks run
+                  non-interactively and can't answer a passphrase prompt, which is why a passphrase-protected key shows the
+                  dashboard as Unknown. Enter the key's current passphrase:
+                </p>
+                <div className="flex items-stretch gap-2">
+                  <input
+                    type="password"
+                    autoComplete="off"
+                    value={sshStripPass}
+                    placeholder="Current passphrase"
+                    onChange={e => setSshStripPass(e.target.value)}
+                    onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); void onStripSshPassphrase() } }}
+                    className="flex-1 min-w-0 px-3 py-2 rounded-lg bg-surface border border-border text-text text-sm
+                               placeholder:text-text-dim focus:outline-none focus:ring-2 focus:ring-ibad focus:border-ibad/50"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => void onStripSshPassphrase()}
+                    disabled={sshStripping}
+                    className="btn-secondary shrink-0"
+                  >
+                    <Icon name={sshStripping ? 'Loader2' : 'KeyRound'} size={15} className={sshStripping ? 'animate-spin' : ''} />
+                    {sshStripping ? 'Removing…' : 'Remove passphrase'}
+                  </button>
+                </div>
+              </div>
+            )}
+            {f.key === 'SshKey' && sshStripMsg && (
+              <p className={`mt-1 text-xs flex items-center gap-1.5 ${sshStripOk ? 'text-success' : 'text-danger'}`}>
+                <Icon name={sshStripOk ? 'CheckCircle2' : 'AlertTriangle'} size={13} /> {sshStripMsg}
+              </p>
+            )}
             {f.key === 'SshKey' && sshRotateMsg && (
               <p className="mt-1 text-xs text-success flex items-center gap-1.5">
                 <Icon name="CheckCircle2" size={13} /> {sshRotateMsg}
