@@ -26,6 +26,13 @@ here cover everything those tags shipped.
 
 ### Changed
 
+- **Dashboard "Game Servers" table now shows friendly map names.** Each row's
+  Map column displays the human label (e.g. **Arrakeen** instead of
+  `SH_Arrakeen`, **Harko Village** instead of `SH_HarkoVillage`, **Deep Desert**
+  instead of `DeepDesert_1`, **Hagga Basin** instead of `Survival_1`) — the same
+  naming the Map Spin-Up page already uses. Unknown maps fall back to a generic
+  prettifier (strip known prefixes, underscores &rarr; spaces). The raw
+  technical name is still available on hover.
 - **Specs XP editing is now a direct "set exact value" field instead of a "+5K"
   add button.** Gameplay Admin &rarr; Players &rarr; Specs gives each track an
   editable XP field, pre-filled with the track's current stored XP. Type the exact
