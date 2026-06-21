@@ -15,6 +15,16 @@ here cover everything those tags shipped.
 
 ## [12.10.1] - 2026-06-21
 
+### Added
+
+- **Minimize the app to the system tray.** Minimizing the Dune Server Tool
+  window now tucks it into the system tray (keeping the backend running) instead
+  of leaving a taskbar button. Left-click or double-click the tray icon to
+  reopen; right-click for **Open Dune Server Tool**, a **Minimize to tray**
+  toggle (on by default, remembered across launches), and **Quit (stops
+  server)**. Closing the window with the **X** still shuts the server down as
+  before.
+
 ### Changed
 
 - **Scheduled restarts card is now collapsible.** The "Scheduled restarts" card

@@ -21,6 +21,17 @@ internal sealed class MainForm : Form
     private int _navRetries;
     private const int MaxNavRetries = 20;
 
+    // ----- Minimize-to-tray state --------------------------------------------
+    // When enabled, minimizing the window hides it (and its taskbar button) and
+    // leaves a single NotifyIcon in the system tray that reopens the portal.
+    // Closing the window via the X still tears the backend down as before; the
+    // tray's "Quit (stops server)" is the explicit shutdown from the tray.
+    private NotifyIcon? _tray;
+    private ToolStripMenuItem? _trayMinItem;
+    private bool _minimizeToTray = true;
+    private bool _trayBalloonShown;
+    private FormWindowState _restoreState = FormWindowState.Normal;
+
     public MainForm(string? initialUrl, bool useWaitFile)
     {
         _initialUrl = initialUrl;
@@ -35,11 +46,15 @@ internal sealed class MainForm : Form
         ApplyStartupBounds();
         BackColor = Color.FromArgb(17, 19, 24);
         TryLoadIcon();
+        BuildTrayIcon();
+
+        Resize += OnResizeToTray;
 
         FormClosing += (_, _) =>
         {
             SaveWindowState();
             StopCompanionProcesses();
+            DisposeTrayIcon();
         };
 
         // The React portal owns its own top menu bar, so the native window has
@@ -515,6 +530,123 @@ internal sealed class MainForm : Form
         }
     }
 
+    // ----- Minimize to tray ---------------------------------------------------
+    //
+    // A single NotifyIcon, visible for the lifetime of the window, lets the user
+    // tuck DST out of the way without stopping the backend. Left-click or
+    // double-click reopens; the right-click menu exposes a persisted
+    // "Minimize to tray" toggle and an explicit "Quit (stops server)".
+
+    private void BuildTrayIcon()
+    {
+        try
+        {
+            var menu = new ContextMenuStrip();
+
+            var open = new ToolStripMenuItem("Open Dune Server Tool", null, (_, _) => RestoreFromTray());
+            open.Font = new Font(open.Font, FontStyle.Bold);
+
+            _trayMinItem = new ToolStripMenuItem("Minimize to tray", null, (_, _) => ToggleMinimizeToTray())
+            {
+                CheckOnClick = true,
+                Checked = _minimizeToTray,
+            };
+
+            var quit = new ToolStripMenuItem("Quit (stops server)", null, (_, _) => Close());
+
+            menu.Items.Add(open);
+            menu.Items.Add(_trayMinItem);
+            menu.Items.Add(new ToolStripSeparator());
+            menu.Items.Add(quit);
+
+            _tray = new NotifyIcon
+            {
+                Text = "Dune Server Tool",
+                Visible = true,
+                ContextMenuStrip = menu,
+                Icon = Icon ?? SystemIcons.Application,
+            };
+            _tray.MouseClick += (_, e) =>
+            {
+                if (e.Button == MouseButtons.Left) RestoreFromTray();
+            };
+            _tray.DoubleClick += (_, _) => RestoreFromTray();
+        }
+        catch
+        {
+            // tray is a convenience; never block startup on it
+        }
+    }
+
+    private void OnResizeToTray(object? sender, EventArgs e)
+    {
+        if (WindowState == FormWindowState.Minimized)
+        {
+            if (_minimizeToTray) HideToTray();
+        }
+        else
+        {
+            // Remember whether to restore to Normal or Maximized later.
+            _restoreState = WindowState;
+        }
+    }
+
+    private void HideToTray()
+    {
+        ShowInTaskbar = false;
+        Hide();
+
+        if (_tray != null && !_trayBalloonShown)
+        {
+            _trayBalloonShown = true;
+            try
+            {
+                _tray.BalloonTipTitle = "Dune Server Tool";
+                _tray.BalloonTipText =
+                    "Still running in the tray. Click the icon to reopen, or right-click \u2192 Quit to stop the server.";
+                _tray.ShowBalloonTip(4000);
+            }
+            catch
+            {
+                // balloon is optional
+            }
+        }
+    }
+
+    private void RestoreFromTray()
+    {
+        Show();
+        ShowInTaskbar = true;
+        WindowState = _restoreState == FormWindowState.Minimized
+            ? FormWindowState.Normal
+            : _restoreState;
+        Activate();
+    }
+
+    private void ToggleMinimizeToTray()
+    {
+        // CheckOnClick has already flipped the menu item before this fires.
+        _minimizeToTray = _trayMinItem?.Checked ?? true;
+        SaveWindowState();
+    }
+
+    private void DisposeTrayIcon()
+    {
+        try
+        {
+            if (_tray != null)
+            {
+                _tray.Visible = false;
+                _tray.Dispose();
+                _tray = null;
+            }
+        }
+        catch
+        {
+            // best-effort
+        }
+    }
+
     // ----- Window size/position persistence ----------------------------------
 
     private sealed class WinState
@@ -524,6 +656,8 @@ internal sealed class MainForm : Form
         public int W { get; set; }
         public int H { get; set; }
         public bool Max { get; set; }
+        // Nullable so pre-12.10.1 state files (no field) default to enabled.
+        public bool? MinTray { get; set; }
     }
 
     private static string WindowStateFile => Path.Combine(
@@ -534,6 +668,8 @@ internal sealed class MainForm : Form
     {
         var def = new Size(2000, 1300);
         var saved = LoadWindowState();
+
+        _minimizeToTray = saved?.MinTray ?? true;
 
         Rectangle bounds;
         if (saved != null && saved.W >= MinimumSize.Width && saved.H >= MinimumSize.Height)
@@ -547,7 +683,10 @@ internal sealed class MainForm : Form
 
         Bounds = bounds;
         if (saved?.Max == true)
+        {
             WindowState = FormWindowState.Maximized;
+            _restoreState = FormWindowState.Maximized;
+        }
     }
 
     /// <summary>
@@ -626,7 +765,8 @@ internal sealed class MainForm : Form
                 Y = b.Y,
                 W = b.Width,
                 H = b.Height,
-                Max = WindowState == FormWindowState.Maximized
+                Max = WindowState == FormWindowState.Maximized,
+                MinTray = _minimizeToTray
             };
             string dir = Path.GetDirectoryName(WindowStateFile)!;
             Directory.CreateDirectory(dir);
