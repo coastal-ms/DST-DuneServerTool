@@ -57,6 +57,9 @@ export function ScheduledRestarts() {
   const [checking, setChecking] = useState(false)
   const [testing, setTesting] = useState(false)
   const [msg, setMsg] = useState<{ kind: 'ok' | 'err'; text: string } | null>(null)
+  const [expanded, setExpanded] = useState<boolean>(() => {
+    try { return localStorage.getItem('dst.schedRestarts.expanded') === '1' } catch { return false }
+  })
 
   const load = useCallback(async () => {
     setLoading(true)
@@ -79,6 +82,10 @@ export function ScheduledRestarts() {
   }, [])
 
   useEffect(() => { void load() }, [load])
+
+  useEffect(() => {
+    try { localStorage.setItem('dst.schedRestarts.expanded', expanded ? '1' : '0') } catch { /* ignore */ }
+  }, [expanded])
 
   const webhookInputValid = webhookInput.trim() === '' || WEBHOOK_RE.test(webhookInput.trim())
   const mentionValid = mention.trim() === '' || MENTION_RE.test(mention.trim())
@@ -143,30 +150,46 @@ export function ScheduledRestarts() {
 
   return (
     <div className="card p-5">
-      <div className="flex items-center justify-between mb-3 gap-3 flex-wrap">
+      <button
+        type="button"
+        onClick={() => setExpanded(v => !v)}
+        aria-expanded={expanded}
+        className="w-full flex items-center justify-between gap-3 text-left"
+      >
         <h2 className="text-sm font-semibold uppercase tracking-wider text-text-muted flex items-center gap-2">
+          <Icon name={expanded ? 'ChevronDown' : 'ChevronRight'} size={14} className="text-text-dim" />
           <Icon name="CalendarClock" size={14} className="text-accent" /> Scheduled restarts
         </h2>
-        {sched?.updateAvailable && (
-          <span
-            className="inline-flex items-center gap-1 text-[10px] font-semibold uppercase tracking-wider text-warning border border-warning/40 bg-warning/10 rounded px-1.5 py-0.5"
-            title={`Funcom update available (installed ${sched.installedBuild || '?'}, latest ${sched.latestBuild || '?'}).`}
-          >
-            <Icon name="ArrowUpCircle" size={11} /> Server update available
-          </span>
-        )}
-      </div>
+        <div className="flex items-center gap-2 flex-wrap justify-end">
+          {!expanded && sched && (
+            <span className="text-[11px] font-medium text-text-dim normal-case">
+              {sched.enabled ? `Daily ${sched.time}` : 'Off'}
+              {sched.enabled && sched.discordEnabled ? ' · Discord on' : ''}
+            </span>
+          )}
+          {sched?.updateAvailable && (
+            <span
+              className="inline-flex items-center gap-1 text-[10px] font-semibold uppercase tracking-wider text-warning border border-warning/40 bg-warning/10 rounded px-1.5 py-0.5"
+              title={`Funcom update available (installed ${sched.installedBuild || '?'}, latest ${sched.latestBuild || '?'}).`}
+            >
+              <Icon name="ArrowUpCircle" size={11} /> Server update available
+            </span>
+          )}
+        </div>
+      </button>
 
-      <div className="flex items-start gap-2 text-xs text-warning bg-warning/10 border border-warning/30 rounded-md px-3 py-2 mb-4">
-        <Icon name="Info" size={14} className="mt-0.5 shrink-0" />
-        <span>
-          This runs inside the Dune Server Tool, so scheduled restarts only fire while
-          <span className="font-semibold"> DST is open and running</span> on this PC. Closing the tool
-          pauses the schedule.
-        </span>
-      </div>
+      {expanded && (
+        <div className="mt-4">
+          <div className="flex items-start gap-2 text-xs text-warning bg-warning/10 border border-warning/30 rounded-md px-3 py-2 mb-4">
+            <Icon name="Info" size={14} className="mt-0.5 shrink-0" />
+            <span>
+              This runs inside the Dune Server Tool, so scheduled restarts only fire while
+              <span className="font-semibold"> DST is open and running</span> on this PC. Closing the tool
+              pauses the schedule.
+            </span>
+          </div>
 
-      {loading ? (
+          {loading ? (
         <p className="text-sm text-text-dim italic">Loading…</p>
       ) : (
         <>
@@ -350,6 +373,8 @@ export function ScheduledRestarts() {
             </p>
           )}
         </>
+          )}
+        </div>
       )}
     </div>
   )

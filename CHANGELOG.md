@@ -13,6 +13,14 @@ here cover everything those tags shipped.
 
 ## [Unreleased]
 
+### Changed
+
+- **Scheduled restarts card is now collapsible.** The "Scheduled restarts" card
+  on the Server Health page rolls up to a compact banner (showing the daily
+  restart time / Off and a "Discord on" hint) to reclaim screen space. Click the
+  header to expand or collapse; the choice is remembered per browser. The
+  "Server update available" badge stays visible on the collapsed banner.
+
 ## [12.10.0] - 2026-06-21
 
 ### Added
