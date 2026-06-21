@@ -13,6 +13,15 @@ here cover everything those tags shipped.
 
 ## [Unreleased]
 
+## [12.10.2] - 2026-06-21
+
+### Changed
+
+- **Minimize to tray is now off by default.** Minimizing the Dune Server Tool
+  window keeps its normal taskbar button unless you opt in. Turn it on any time
+  via the tray icon's right-click **Minimize to tray** toggle (the choice is
+  still remembered across launches).
+
 ## [12.10.1] - 2026-06-21
 
 ### Added
