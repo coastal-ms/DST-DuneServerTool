@@ -36,7 +36,7 @@ function Get-DuneSshFailureReason {
     # is the classic "interactive SSH works but the dashboard shows Unknown" trap.
     if ($err -match '(?im)Permission denied|no supported authentication|authentication fail|publickey') {
         if ((Test-DuneSshKeyEncrypted -KeyPath $KeyPath) -eq $true) {
-            return "SSH key is passphrase-protected, so background checks (battlegroup status, server health, game data) can't use it — they run non-interactively and can't answer a passphrase prompt. An interactive SSH terminal still works because it can prompt you. Fix it with the Rotate SSH Key action (VM menu, key 'g'), or strip the passphrase: ssh-keygen -p -f `"$KeyPath`""
+            return "SSH key is passphrase-protected, so background checks (battlegroup status, server health, game data) can't use it — they run non-interactively and can't answer a passphrase prompt. An interactive SSH terminal still works because it can prompt you. Fix it in Settings - SSH key with the 'Remove passphrase' button (keeps this same key, no VM changes), or strip it manually: ssh-keygen -p -f `"$KeyPath`""
         }
         return "VM rejected the SSH key (its public half isn't in dune@VM:~/.ssh/authorized_keys). Run the Rotate SSH Key action (VM menu, key 'g') to generate and authorize a fresh key."
     }
