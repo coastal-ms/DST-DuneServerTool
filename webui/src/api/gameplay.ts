@@ -591,9 +591,9 @@ export function renamePlayer(accountId: number, name: string) {
   })
 }
 
-export function setSpecXp(controllerId: number, trackType: string, xp: number) {
-  return api<WriteResult>('/api/gameplay/players/set-spec-xp', {
-    method: 'POST', body: JSON.stringify({ controller_id: controllerId, track_type: trackType, xp }),
+export function setSpecLevel(controllerId: number, trackType: string, level: number) {
+  return api<WriteResult>('/api/gameplay/players/set-spec-level', {
+    method: 'POST', body: JSON.stringify({ controller_id: controllerId, track_type: trackType, level }),
   })
 }
 
@@ -1370,7 +1370,7 @@ export function setCoriolisPartitionSeed(partitionId: number, seed: number) {
 // ===========================================================================
 // v11.5.9 — Phase A/B/C/G+H/I — full the reference implementation player surface port.
 // Adds the remaining 40+ endpoints not previously surfaced. Existing
-// wrappers above (giveSolari, giveItem, renamePlayer, setSpecXp,
+// wrappers above (giveSolari, giveItem, renamePlayer, setSpecLevel,
 // setPlayerTags, fillWater) are kept untouched for back-compat.
 // ===========================================================================
 
