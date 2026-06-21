@@ -5,6 +5,19 @@ Authoritative, repo-local guidance for AI agents working on this repository.
 notes, chat transcripts, or paths outside the checkout.** If a rule is missing
 here, add it here in the same change.
 
+## What DST is (orientation)
+
+DST (Dune Server Tool) is a **Windows admin application for running a private
+*Dune: Awakening* dedicated server**. It is three parts that ship as one
+installer: a **PowerShell backend** (`app/server`, compiled to `DuneServer.exe`)
+exposing a localhost HTTP API, a **React + TypeScript web UI** (`webui`) served
+to a **WebView2 desktop shell** (`app/desktop/DuneShell`), plus a top-level
+launcher (`dune-server.ps1`). It manages the game server VM, its Postgres game
+DB, game/INI config, and live gameplay admin (players, items, storage, specs,
+Landsraad, market bot). The repo `coastal-ms/DST-DuneServerTool` is public and
+forkable. Day-to-day work is: reproduce a reported bug, fix it across the
+PS backend + webui, build the installer, ship a release.
+
 ## Repository layout
 
 - `app/server/` — PowerShell backend: `lib/` (business logic) + `routes/` (HTTP API).
