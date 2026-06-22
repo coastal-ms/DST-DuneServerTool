@@ -13,8 +13,15 @@
     devices reach it exclusively through a Cloudflare quick tunnel — cloudflared
     runs on this same PC and connects OUT to Cloudflare, then forwards inbound
     requests to 127.0.0.1 locally. Nothing is exposed on the LAN or the public
-    internet, so no firewall rule or URL ACL is needed. The DuneToken returned by
-    /_dst/token is defense-in-depth.
+    internet, so no firewall rule or URL ACL is needed.
+
+    The /_dst/token endpoint (which hands out the current DuneToken) is served
+    ONLY to genuinely-local requests: any request bearing Cloudflare/proxy edge
+    headers (Cf-Ray, Cf-Connecting-Ip, X-Forwarded-For, ...) is refused, so the
+    admin token can never leak out over a tunnel — including a Cloudflare quick
+    tunnel, which has no Access gate. The mobile app receives the token via the
+    pairing QR and the /remote portal via server-side injection, so no
+    legitimate remote caller needs /_dst/token.
 
 .PARAMETER Port
     TCP port to listen on. Default 47900.
@@ -320,6 +327,21 @@ function Invoke-WsProxy {
     }
 }
 
+function Test-DuneRequestIsLocal {
+    # The bridge binds loopback only, and cloudflared connects to it from
+    # 127.0.0.1 — so RemoteEndPoint is ALWAYS loopback and cannot distinguish a
+    # genuine local request from one tunneled in. Cloudflare (quick OR named
+    # tunnel) always injects edge headers (Cf-Ray / Cf-Connecting-Ip) and
+    # cloudflared adds X-Forwarded-For; a real local request (e.g. the desktop
+    # app or curl 127.0.0.1) carries none of these. Treat the presence of ANY
+    # proxy/edge header as "arrived through a tunnel" and therefore NOT local.
+    param([System.Net.HttpListenerRequest]$Request)
+    foreach ($h in @('Cf-Ray','Cf-Connecting-Ip','Cf-Worker','X-Forwarded-For','X-Forwarded-Proto','Cf-Warp-Tag-Id')) {
+        if ($Request.Headers[$h]) { return $false }
+    }
+    return $true
+}
+
 function Invoke-Request {
     param([System.Net.HttpListenerContext]$Context)
     $req = $Context.Request
@@ -329,6 +351,18 @@ function Invoke-Request {
 
     try {
         if ($path -eq '/_dst/token') {
+            # SECURITY: never hand the admin token to a request that arrived
+            # through a tunnel. Over a Cloudflare quick tunnel (the default free
+            # path) there is no Access gate, so an unauthenticated GET here would
+            # otherwise leak full-admin credentials to anyone with the URL. The
+            # mobile app receives the token out-of-band via the pairing QR, and
+            # the /remote co-admin portal gets it via server-side HTML injection,
+            # so no legitimate REMOTE caller ever needs this endpoint.
+            if (-not (Test-DuneRequestIsLocal -Request $req)) {
+                Send-JsonResponse -Response $res -StatusCode 403 -Body @{ error = 'The bridge token endpoint is only available locally. Pair the mobile app with the QR code, or use the /remote portal.' }
+                Write-BridgeLog "403 $($req.HttpMethod) $path from $client (token-handout refused: tunneled request)"
+                return
+            }
             $dst = Get-CurrentDst
             Send-JsonResponse -Response $res -StatusCode 200 -Body @{
                 url   = $dst.BaseUrl
