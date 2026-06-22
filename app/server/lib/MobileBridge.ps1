@@ -139,13 +139,18 @@ function Invoke-DuneBridgeRepair {
         return @{ ok = $false; error = 'PowerShell executable not found to run the bridge installer.' }
     }
 
-    $args = @('-NoLogo','-NoProfile','-WindowStyle','Hidden','-ExecutionPolicy','Bypass','-File', $installer, '-Port', $script:DuneMobileBridgePort)
+    # Build a single, properly-quoted argument string. Start-Process -ArgumentList
+    # with an ARRAY does not quote elements that contain spaces, and the installer
+    # path is under "C:\Program Files\Dune Server\..." — passing it as an array
+    # element split the path and made pwsh exit 64 (usage error). A quoted string
+    # is the only reliable way to pass a space-containing -File path.
+    $argString = '-NoLogo -NoProfile -WindowStyle Hidden -ExecutionPolicy Bypass -File "{0}" -Port {1}' -f $installer, $script:DuneMobileBridgePort
     try {
         if ($NoWait) {
-            Start-Process -FilePath $pwsh -ArgumentList $args -WindowStyle Hidden | Out-Null
+            Start-Process -FilePath $pwsh -ArgumentList $argString -WindowStyle Hidden | Out-Null
             return @{ ok = $true; started = $true }
         }
-        $p = Start-Process -FilePath $pwsh -ArgumentList $args -WindowStyle Hidden -Wait -PassThru
+        $p = Start-Process -FilePath $pwsh -ArgumentList $argString -WindowStyle Hidden -Wait -PassThru
         if ($p.ExitCode -ne 0) {
             return @{ ok = $false; error = "Bridge setup exited with code $($p.ExitCode)." }
         }
