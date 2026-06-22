@@ -39,16 +39,26 @@ Register-DuneRoute -Method GET -Path '/api/mobile/pairing' -Handler {
             }
         } catch {}
 
-        # Preferred (stable): the custom domain reached past Cloudflare Access via
-        # the service token. The app sends CF-Access-Client-Id/Secret to clear the
-        # Access gate, so this is the durable address that survives reboots.
-        if ($hostUrl -and $svc) {
+        # Preferred (reliable, no domain, no Cloudflare): Tailscale Funnel. A
+        # stable public HTTPS URL the phone app + browser use directly. This is
+        # the default remote transport now that anonymous quick tunnels proved
+        # unreliable.
+        try {
+            if (Get-Command Get-DuneTailscaleFunnelUrl -ErrorAction SilentlyContinue) {
+                $fu = Get-DuneTailscaleFunnelUrl
+                if ($fu) { $url = $fu; $source = 'funnel' }
+            }
+        } catch {}
+
+        # Next (stable): the custom domain reached past Cloudflare Access via the
+        # service token (advanced, bring-your-own-domain).
+        if (-not $url -and $hostUrl -and $svc) {
             $url = $hostUrl
             $source = 'domain-service-token'
             $cfClientId = $svc.clientId
             $cfClientSecret = $svc.clientSecret
         }
-        # Otherwise the free quick tunnel (no Access gate; token-authed).
+        # Otherwise the free quick tunnel (legacy; unreliable, kept as fallback).
         if (-not $url) {
             try {
                 if (Get-Command Get-DuneQuickTunnelStatus -ErrorAction SilentlyContinue) {
