@@ -13,6 +13,18 @@ here cover everything those tags shipped.
 
 ## [Unreleased]
 
+## [12.10.4] - 2026-06-22
+
+### Fixed
+
+- **Server State Webhook toggles now persist when you save the schedule.** The
+  Online / Offline / Restarting / Update-available checkboxes in the Scheduled
+  Restarts card were reverting on save because the save action captured a stale
+  copy of those toggles, writing their old (unchecked) values back. As a result
+  the state-change notifications never fired even when the toggles appeared
+  enabled. Saving now stores exactly what's shown, so the online / offline /
+  restarting / update messages send as configured.
+
 ## [12.10.3] - 2026-06-21
 
 ### Added

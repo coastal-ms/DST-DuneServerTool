@@ -127,7 +127,7 @@ export function ScheduledRestarts() {
     } finally {
       setSaving(false)
     }
-  }, [enabled, time, lead, discordEnabled, webhookInput, clearWebhook, mention])
+  }, [enabled, time, lead, discordEnabled, discordNotifyOnline, discordNotifyOffline, discordNotifyRestarting, discordNotifyUpdate, webhookInput, clearWebhook, mention])
 
   const runCheck = useCallback(async () => {
     setChecking(true)
