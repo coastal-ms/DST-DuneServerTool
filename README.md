@@ -637,43 +637,30 @@ business logic — they're not separate codebases.
 
 ---
 
-## Remote access & Mobile App *(via Tailscale)*
+## Remote access & Mobile App
 
 DST ships with a **Mobile App** companion that lets you monitor server health, view live player lists, and manage basic gameplay admin directly from your phone.
 
-Because the DST Desktop backend exposes full admin capabilities, it **strictly binds to 127.0.0.1 (localhost) and cannot be port-forwarded.** Exposing the DST HTTP API to the public internet would be a massive security risk.
-
-To securely connect the mobile app to your PC, DST requires **Tailscale**, a zero-config VPN.
+Because the DST Desktop backend exposes full admin capabilities, it **strictly binds to 127.0.0.1 (localhost) and is never exposed on your LAN or the public internet.** To reach it from your phone (or a friend's browser), DST uses a **Cloudflare quick tunnel**: a small bundled `cloudflared` helper connects *outbound* from your PC to Cloudflare and hands back a temporary `https://<random>.trycloudflare.com` address. Nothing inbound is opened — **no VPN, no account, no domain, and no router port-forwarding.**
 
 ### Mobile App Setup
 
-1. **Install Tailscale on your Host PC**
-   - Download and install Tailscale from [tailscale.com](https://tailscale.com/download/windows).
-   - Log in and ensure the machine is connected to your Tailnet.
+1. Open the **DST Desktop App** → **Settings → Mobile App**.
+2. Click **Start secure tunnel**. DST launches the tunnel and shows a QR code.
+3. Open the **DST Mobile App** and scan the QR code. (No camera? Tap **Enter Code Manually** and paste the URL + token shown.)
 
-2. **Install the DST Helper Bridge**
-   - Because DST binds to `127.0.0.1`, Tailscale traffic needs a bridge to reach it securely.
-   - Open PowerShell **as Administrator** on your Host PC.
-   - Run the bridge installer:
-     ```powershell
-     & "C:\Program Files\Dune Server Tool\helper\bridge\Install-Bridge.ps1"
-     ```
-   - This creates an inbound Windows Firewall rule allowing traffic *only* on the Tailscale interface, and sets up a background task to proxy that traffic to DST.
+That's it — your friends need **nothing** installed on their phones. The loopback bridge that the tunnel points at is installed automatically and never leaves `127.0.0.1`.
 
-3. **Connect the Mobile App**
-   - Install Tailscale on your phone and log in to the same Tailnet account.
-   - Ensure Tailscale says "Connected" on your phone.
-   - Open the **DST Desktop App** and go to **Settings > Mobile App Card**.
-   - Scan the generated QR code with the DST Mobile App. If your camera is unavailable, use the "Enter Code Manually" button in the app and type the IP, Port, and Token shown on your PC.
+> The quick-tunnel address changes every time the tunnel restarts. If you stop/start it, re-scan the QR code. For a **permanent** address (and email-gated access), see *Co-admin access* below.
 
-### Adding a Co-Admin via Tailscale
+### Co-admin access (a friend's browser)
 
-You can grant remote access to a friend without opening router ports:
-1. Have them install Tailscale on their PC.
-2. In your Tailscale Admin Console, share your host machine with their Tailscale email.
-3. Have them follow the setup instructions in the `helper/friend` directory of this repo.
+A friend can reach your **web portal** the same way:
 
-> **Note:** The built-in PowerShell terminal page inside the DST web UI is strictly refused over remote connections (including Tailscale). It will only load if you are physically sitting at the host machine using `127.0.0.1`.
+- **Free / quick:** start the secure tunnel and share the `https://…trycloudflare.com` URL + token. Anyone with the URL + token has full admin — share only with people you trust at that level.
+- **Stable / gated (optional upgrade):** if you own a domain, point it at a Cloudflare **named tunnel** and enable **Cloudflare Access** so only specific email addresses can reach a fixed hostname (e.g. `dune.example.com`). Set the owner email and admin allow-list under **Settings → Remote Access**; DST gates `/api/remote/*` on the `Cf-Access-Authenticated-User-Email` header plus its per-launch token.
+
+> **Note:** The built-in PowerShell terminal page inside the DST web UI is strictly refused over remote connections. It will only load if you are physically at the host machine using `127.0.0.1`.
 
 ---
 

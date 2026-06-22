@@ -33,6 +33,7 @@ export function RemoteAccessCard() {
   const [auditLoading, setAuditLoading] = useState(false)
   const [newAdmin, setNewAdmin] = useState('')
   const [ownerBuffer, setOwnerBuffer] = useState('')   // remembered owner while toggled off
+  const [enabled, setEnabled] = useState(false)        // UI on/off, decoupled from owner so you can enable THEN type the owner
 
   const load = useCallback(async () => {
     setLoading(true); setError(null)
@@ -40,6 +41,7 @@ export function RemoteAccessCard() {
       const [a, c] = await Promise.allSettled([getAcl(), getCloudflaredStatus()])
       if (a.status === 'fulfilled') {
         setAcl(a.value)
+        setEnabled(!!a.value.owner)
         if (a.value.owner) setOwnerBuffer(a.value.owner)
       } else throw a.reason
       if (c.status === 'fulfilled') setCf(c.value)
@@ -54,8 +56,6 @@ export function RemoteAccessCard() {
     if (expanded && !acl) void load()
   }, [expanded, acl, load])
 
-  const enabled = !!acl?.owner
-
   const updateAcl = (patch: Partial<RemoteAcl>) => {
     if (!acl) return
     setAcl({ ...acl, ...patch })
@@ -63,11 +63,14 @@ export function RemoteAccessCard() {
 
   const onToggleEnabled = (v: boolean) => {
     if (!acl) return
+    setEnabled(v)
     if (v) {
-      // Restoring — prefer the remembered owner; fall back to empty (user must fill in)
-      updateAcl({ owner: ownerBuffer })
+      // Enable now; the owner field becomes editable. Restore a remembered
+      // owner if we have one — otherwise leave it blank for the user to fill in.
+      if (ownerBuffer && !acl.owner) updateAcl({ owner: ownerBuffer })
     } else {
-      // Disabling — stash the current owner so we can restore it next toggle
+      // Disabling — stash the current owner so we can restore it next toggle,
+      // then clear it (empty owner = disabled server-side).
       if (acl.owner) setOwnerBuffer(acl.owner)
       updateAcl({ owner: '' })
     }
@@ -96,10 +99,15 @@ export function RemoteAccessCard() {
 
   const onSave = async () => {
     if (!acl) return
+    if (enabled && !acl.owner.trim()) {
+      setError('Enter the owner email (it must match your Cloudflare Access login) to enable remote access.')
+      return
+    }
     setSaving(true); setError(null); setSavedMsg(null)
     try {
       const saved = await saveAcl(acl)
       setAcl(saved)
+      setEnabled(!!saved.owner)
       if (saved.owner) setOwnerBuffer(saved.owner)
       setSavedMsg('Saved.')
       window.setTimeout(() => setSavedMsg(null), 3000)
