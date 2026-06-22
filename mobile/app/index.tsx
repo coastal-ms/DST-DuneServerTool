@@ -58,6 +58,10 @@ export default function App() {
   // DM State
   const [dmBody, setDmBody] = useState('');
 
+  // Connection diagnostic — exact URL + real error from the status fetch, shown
+  // on the dashboard so connection failures can be diagnosed without a debugger.
+  const [connDiag, setConnDiag] = useState<string>('');
+
   // Tracks which async action is in-flight so its button stays pressed/disabled
   // with a spinner until the request + confirmation alert returns.
   const [busyAction, setBusyAction] = useState<string | null>(null);
@@ -90,14 +94,17 @@ export default function App() {
 
   const fetchStatus = async () => {
     if (!serverInfo) return;
+    const url = `http://${serverInfo.ip}:${serverInfo.port}/api/status`;
     try {
-      const res = await fetch(`http://${serverInfo.ip}:${serverInfo.port}/api/status`, {
+      const res = await fetch(url, {
         headers: { 'X-Dune-Token': serverInfo.token }
       });
       const data = await res.json();
       setServerState(data);
+      setConnDiag('');
     } catch (e) {
       setServerState(null);
+      setConnDiag(`URL: ${url}\nError: ${e instanceof Error ? (e.name + ': ' + e.message) : String(e)}`);
     }
   };
 
@@ -598,6 +605,9 @@ export default function App() {
             <Text style={[styles.alertText, { color: '#fca5a5' }]}>
               Cannot reach server. Ensure Tailscale is installed and connected on your device.
             </Text>
+            {connDiag ? (
+              <Text selectable style={{ color: '#fecaca', fontSize: 11, fontFamily: 'Courier', marginTop: 8 }}>{connDiag}</Text>
+            ) : null}
           </View>
         )}
         
