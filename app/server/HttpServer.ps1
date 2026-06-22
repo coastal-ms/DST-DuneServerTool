@@ -505,7 +505,11 @@ function Write-DuneFile {
         # tiny <script> tag that exposes the per-launch DuneToken to the
         # remote SPA. Issue #74: this is how the SPA gets the token without
         # the user having to paste it on a phone.
-        [switch]$InjectRemoteToken
+        [switch]$InjectRemoteToken,
+        # Inject this specific token instead of the per-launch DuneToken. Used by
+        # the magic-link path (public Funnel browser portal) to inject the STABLE
+        # remote token so the SPA keeps authenticating across server restarts.
+        [string]$TokenOverride
     )
     if (-not (Test-Path -LiteralPath $Path -PathType Leaf)) {
         Write-DuneError -Response $Response -Status 404 -Message 'Not found'
@@ -525,7 +529,8 @@ function Write-DuneFile {
         # index.html is small (~1 KB); read it as text, do the replacement,
         # then emit UTF-8 bytes. Never cached (we already set no-cache above).
         $html = Get-Content -LiteralPath $Path -Raw -Encoding UTF8
-        $tokenLiteral = if ($script:DuneToken) { ($script:DuneToken -replace '"','\"') } else { '' }
+        $injTok = if ($TokenOverride) { $TokenOverride } else { $script:DuneToken }
+        $tokenLiteral = if ($injTok) { ($injTok -replace '"','\"') } else { '' }
         $script = '<script>window.__duneRemoteToken="' + $tokenLiteral + '";</script>'
         $html = $html -replace '<!--\s*DUNE_REMOTE_BOOTSTRAP\s*-->', $script
         $bytes = [System.Text.Encoding]::UTF8.GetBytes($html)
@@ -567,10 +572,27 @@ function Resolve-DuneStaticPath {
 
 function Test-DuneToken {
     param($Request)
-    if ([string]::IsNullOrEmpty($script:DuneToken)) { return $true }  # dev-mode escape hatch
     $hdr = $Request.Headers['X-Dune-Token']
     if (-not $hdr) { $hdr = $Request.QueryString['t'] }
-    return ($hdr -eq $script:DuneToken)
+
+    # Per-launch token (desktop portal + local API). Empty == dev-mode escape hatch.
+    if ([string]::IsNullOrEmpty($script:DuneToken)) { return $true }
+    if ($hdr -eq $script:DuneToken) { return $true }
+
+    # Permanent remote token (the paired mobile app / friend magic link). The
+    # per-launch token rotates every start, so the phone holds this stable one
+    # instead. Loaded once and cached in this (main-loop) runspace.
+    if ([string]::IsNullOrEmpty($script:DuneRemoteToken)) {
+        try {
+            if (Get-Command Get-DuneRemoteToken -ErrorAction SilentlyContinue) {
+                $script:DuneRemoteToken = [string](Get-DuneRemoteToken)
+            }
+        } catch {}
+    }
+    if (-not [string]::IsNullOrEmpty($script:DuneRemoteToken) -and $hdr -eq $script:DuneRemoteToken) {
+        return $true
+    }
+    return $false
 }
 
 # ---------- Main loop ----------------------------------------------------------
@@ -753,8 +775,20 @@ function Invoke-DuneContext {
                     if ($remote) {
                         try { $isLoopback = [System.Net.IPAddress]::IsLoopback($remote) } catch { $isLoopback = $false }
                     }
-                    if (-not $isLoopback) {
-                        Write-Host "[ws] 403 local-only path '$rawPath' from $remote" -ForegroundColor Yellow
+                    # SECURITY: the mobile/remote bridge and cloudflared both
+                    # connect from 127.0.0.1, so RemoteEndPoint alone marks a
+                    # TUNNELED request as loopback and would wrongly allow it.
+                    # Any Cloudflare / proxy edge header means the request arrived
+                    # through the tunnel (never present on a genuine host-local
+                    # request), so treat it as NON-local regardless of the socket
+                    # address. Keeps the free-form Terminal host-only even though
+                    # the full dashboard is now reachable remotely.
+                    $isTunneled = $false
+                    foreach ($h in @('Cf-Access-Authenticated-User-Email','Cf-Ray','Cf-Connecting-Ip','X-Forwarded-For','X-Forwarded-Proto')) {
+                        try { if ($req.Headers[$h]) { $isTunneled = $true; break } } catch {}
+                    }
+                    if ((-not $isLoopback) -or $isTunneled) {
+                        Write-Host "[ws] 403 local-only path '$rawPath' from $remote (tunneled=$isTunneled)" -ForegroundColor Yellow
                         $res.StatusCode = 403
                         $res.OutputStream.Close()
                         return
@@ -921,16 +955,63 @@ function Invoke-DuneContext {
         return
     }
 
+    # When the full portal is reached through the Cloudflare tunnel by an
+    # authenticated, allow-listed user (CF Access identity verified against the
+    # remote ACL), inject the per-launch token into index.html so the portal's
+    # API calls authenticate -- the same mechanism the /remote/ portal uses.
+    # This makes the FULL dashboard usable remotely. A genuine local request
+    # (the desktop app, which carries no CF Access header) is unaffected and
+    # keeps its existing token path. The free-form Terminal stays host-only via
+    # the LocalOnly tunnel guard above.
+    $injectForRemote = $false
+    $injectTokenOverride = ''
+
+    # Magic-link auth for the PUBLIC browser portal (e.g. over Tailscale Funnel,
+    # which is public and adds no identity header). A request carrying
+    # ?key=<remoteToken> -- or the dune_key cookie set from a prior one -- gets the
+    # STABLE remote token injected so the SPA authenticates, and we set the cookie
+    # so navigation/reloads without ?key stay authed. Same trust as the phone QR:
+    # whoever has the link has access. The token rotates only on demand, not per
+    # launch, so the portal keeps working across restarts.
+    try {
+        $rt = ''
+        if (Get-Command Get-DuneRemoteToken -ErrorAction SilentlyContinue) { $rt = [string](Get-DuneRemoteToken) }
+        if ($rt) {
+            $providedKey = ''
+            try { $providedKey = [string]$req.QueryString['key'] } catch {}
+            if (-not $providedKey) {
+                try { $ck = $req.Cookies['dune_key']; if ($ck) { $providedKey = [string]$ck.Value } } catch {}
+            }
+            if ($providedKey -and $providedKey -eq $rt) {
+                $injectForRemote = $true
+                $injectTokenOverride = $rt
+                try { $res.Headers['Set-Cookie'] = "dune_key=$rt; Path=/; HttpOnly; SameSite=Lax" } catch {}
+            }
+        }
+    } catch {}
+
+    # When the full portal is reached through the Cloudflare tunnel by an
+    # authenticated, allow-listed user (CF Access identity verified against the
+    # remote ACL), inject the per-launch token into index.html so the portal's
+    # API calls authenticate -- the same mechanism the /remote/ portal uses.
+    try {
+        if (-not $injectForRemote -and $req.Headers['Cf-Access-Authenticated-User-Email']) {
+            $auth = Test-DuneRemoteRequest -Request $req
+            $injectForRemote = [bool]$auth.ok
+        }
+    } catch {}
+
     $filePath = Resolve-DuneStaticPath -UrlPath $rawPath
     if ($filePath -and (Test-Path -LiteralPath $filePath -PathType Leaf)) {
-        Write-DuneFile -Response $res -Path $filePath
+        $isIndex = ($filePath -match '\\index\.html$')
+        Write-DuneFile -Response $res -Path $filePath -InjectRemoteToken:($injectForRemote -and $isIndex) -TokenOverride $injectTokenOverride
         return
     }
 
     # SPA fallback — serve index.html for client-side routes
     $indexPath = Join-Path $script:DuneDistRoot 'index.html'
     if (Test-Path -LiteralPath $indexPath -PathType Leaf) {
-        Write-DuneFile -Response $res -Path $indexPath
+        Write-DuneFile -Response $res -Path $indexPath -InjectRemoteToken:$injectForRemote -TokenOverride $injectTokenOverride
         return
     }
 

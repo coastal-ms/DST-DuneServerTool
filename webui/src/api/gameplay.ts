@@ -1132,6 +1132,68 @@ export function getItemCatalog(): Promise<CatalogItem[]> {
   return _catalogPromise
 }
 
+// ===========================================================================
+// Vehicle-kit catalog — single source of truth for the Give Vehicle Kit action,
+// served by GET /api/catalog/vehicle-kits (app/data/vehicle-kits.json). Shared by
+// this web UI and the mobile app so a kit change is one server-side edit.
+// `className`/`templates` describe the SpawnVehicleAt loadout; `kit`/`unique`/`qty`
+// drive the give-kit delivery.
+// ===========================================================================
+export interface VehicleTemplate {
+  id: string
+  label: string
+  className: string
+  templates: string[]
+  kit: string[]
+  unique: string[]
+  qty?: Record<string, number>
+}
+
+export interface VehicleKitCatalog {
+  fuelTemplate: string
+  torchTemplate: string
+  vehicles: VehicleTemplate[]
+}
+
+// ConvertTo-Json -Compress (Write-DuneJson) unwraps a single-element array into a
+// bare value, so any of these list fields can arrive as a scalar — coerce back.
+function _toStrArray(x: unknown): string[] {
+  if (Array.isArray(x)) return x.map(v => String(v))
+  if (x === null || x === undefined || x === '') return []
+  return [String(x)]
+}
+
+let _vehicleKitCache: VehicleKitCatalog | null = null
+let _vehicleKitPromise: Promise<VehicleKitCatalog> | null = null
+
+export function getVehicleKitCatalog(): Promise<VehicleKitCatalog> {
+  if (_vehicleKitCache) return Promise.resolve(_vehicleKitCache)
+  if (_vehicleKitPromise) return _vehicleKitPromise
+  _vehicleKitPromise = api<Partial<VehicleKitCatalog>>('/api/catalog/vehicle-kits').then(r => {
+    const rawVehicles = Array.isArray(r?.vehicles) ? r.vehicles : (r?.vehicles ? [r.vehicles as VehicleTemplate] : [])
+    const cat: VehicleKitCatalog = {
+      fuelTemplate: r?.fuelTemplate || 'FuelCanister_Large',
+      torchTemplate: r?.torchTemplate || 'RepairTool5',
+      vehicles: rawVehicles.map((v: any) => ({
+        id: String(v?.id ?? ''),
+        label: String(v?.label ?? v?.id ?? ''),
+        className: String(v?.className ?? ''),
+        templates: _toStrArray(v?.templates),
+        kit: _toStrArray(v?.kit),
+        unique: _toStrArray(v?.unique),
+        qty: (v?.qty && typeof v.qty === 'object') ? v.qty as Record<string, number> : {},
+      })).filter(v => v.id),
+    }
+    _vehicleKitCache = cat
+    _vehicleKitPromise = null
+    return cat
+  }).catch(e => {
+    _vehicleKitPromise = null
+    throw e
+  })
+  return _vehicleKitPromise
+}
+
 /**
  * Distinct, alphabetically-sorted list of non-empty categories in the catalog.
  * Drives the ItemPicker category selector.

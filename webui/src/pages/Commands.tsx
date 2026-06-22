@@ -25,7 +25,13 @@ import { Icon } from '../components/Icon'
 import { useStatus } from '../hooks/useStatus'
 import { useApi } from '../hooks/useApi'
 import { api } from '../api/client'
+import { isLocalViewer } from '../util/viewer'
 import type { Command, CommandsResponse } from '../api/types'
+
+// Commands that remote (Cloudflare-tunnel) viewers are allowed to see and run.
+// Everything else is hidden remotely and refused server-side. Keep in sync with
+// $remoteAllowedCommands in app/server/routes/Commands.ps1.
+const REMOTE_ALLOWED = new Set(['startup', 'start', 'restart', 'start-vm', 'reboot'])
 
 type LaunchResult = {
   ok: boolean
@@ -332,10 +338,14 @@ export function Commands() {
   }, [cmdsState.data?.commands])
 
   // Resolve each section's command-name array into Command objects, dropping
-  // any unknown names defensively.
+  // any unknown names defensively. Remote viewers only see the allow-listed
+  // commands (REMOTE_ALLOWED); the server enforces the same list on run.
   const grouped = useMemo(() => {
+    const local = isLocalViewer()
     return effective.sections.map(arr =>
-      arr.map(n => commandsByName.get(n)).filter((c): c is Command => Boolean(c))
+      arr.map(n => commandsByName.get(n))
+        .filter((c): c is Command => Boolean(c))
+        .filter(c => local || REMOTE_ALLOWED.has(c.name))
     ) as [Command[], Command[], Command[]]
   }, [effective.sections, commandsByName])
 
@@ -472,6 +482,11 @@ export function Commands() {
     useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates }),
   )
 
+  // Remote (tunnel) viewers get a read-only, curated page: only the allow-listed
+  // commands render (see `grouped`), and layout editing — drag/reorder, rename,
+  // reset — is disabled so a remote user can't rearrange the host's layout.
+  const readOnly = !isLocalViewer()
+
   return (
     <>
       <PageHeader
@@ -485,14 +500,16 @@ export function Commands() {
                 <Icon name="Loader2" size={12} className="animate-spin" /> Saving layout…
               </span>
             )}
-            <button
-              className="btn-secondary"
-              onClick={resetLayout}
-              disabled={savingLayout}
-              title="Reset section names + assignments to default"
-            >
-              <Icon name="RotateCcw" size={14} /> Reset layout
-            </button>
+            {!readOnly && (
+              <button
+                className="btn-secondary"
+                onClick={resetLayout}
+                disabled={savingLayout}
+                title="Reset section names + assignments to default"
+              >
+                <Icon name="RotateCcw" size={14} /> Reset layout
+              </button>
+            )}
             <button
               className="btn-secondary"
               onClick={() => { void cmdsState.refresh(); void forceRefresh() }}
@@ -522,7 +539,7 @@ export function Commands() {
       )}
 
       <DndContext
-        sensors={sensors}
+        sensors={readOnly ? [] : sensors}
         collisionDetection={closestCorners}
         onDragStart={handleDragStart}
         onDragOver={handleDragOver}
@@ -539,7 +556,7 @@ export function Commands() {
                     name={effective.names[idx]}
                     sectionIdx={idx}
                     onRename={(n) => renameSection(idx, n)}
-                    disabled={savingLayout}
+                    disabled={savingLayout || readOnly}
                   />
                   <span className="text-xs text-text-dim shrink-0">
                     {items.length} {items.length === 1 ? 'command' : 'commands'}

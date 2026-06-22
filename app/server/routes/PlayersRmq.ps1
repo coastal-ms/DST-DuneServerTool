@@ -87,7 +87,10 @@ Register-DuneRoute -Method POST -Path '/api/gameplay/players/give-item-live' -Ha
         $dur = 1.0
         if ($null -ne $durRaw) { try { $dur = [double]$durRaw } catch {} }
         if ($dur -le 0) { $dur = 1.0 }
-        $overflow = [bool](Get-DuneBodyValue -Body $body -Name 'allow_overflow')
+        # Drop-to-ground (overflow) defaults ON: an omitted flag means allow it, so
+        # a full inventory never silently swallows the give. Pass false explicitly to opt out.
+        $ovRaw = Get-DuneBodyValue -Body $body -Name 'allow_overflow'
+        $overflow = if ($null -eq $ovRaw) { $true } else { [bool]$ovRaw }
         Invoke-DunePlayerWriteRoute -Response $res -Action { param($ip) Invoke-DunePlayerGiveItemLive -Ip $ip -ActorId $aid -FlsId $fls -Template $tpl -Quantity ([int]$qty) -Durability $dur -AllowOverflow $overflow }
     } catch { Write-DuneError -Response $res -Status 500 -Message "Give item live failed: $($_.Exception.Message)" }
 }

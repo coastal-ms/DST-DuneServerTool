@@ -13,7 +13,10 @@ Register-DuneRoute -Method POST -Path '/api/gameplay/players/give-items' -Handle
         $pawn = Get-DuneBodyInt -Body $body -Name 'pawn_id'
         $items = Get-DuneBodyValue -Body $body -Name 'items'
         $fls = [string](Get-DuneBodyValue -Body $body -Name 'fls_id')
-        $overflow = [bool](Get-DuneBodyValue -Body $body -Name 'allow_overflow')
+        # Drop-to-ground (overflow) defaults ON so a full inventory never silently
+        # swallows kit parts; pass allow_overflow=false explicitly to opt out.
+        $ovRaw = Get-DuneBodyValue -Body $body -Name 'allow_overflow'
+        $overflow = if ($null -eq $ovRaw) { $true } else { [bool]$ovRaw }
         if ($null -eq $pawn -or $pawn -le 0) { Write-DuneError -Response $res -Status 400 -Message 'pawn_id is required.'; return }
         if ($null -eq $items) { Write-DuneError -Response $res -Status 400 -Message 'items[] is required.'; return }
         Invoke-DunePlayerWriteRoute -Response $res -Action { param($ip) Invoke-DunePlayerGiveItemsBulk -Ip $ip -PawnId $pawn -Items $items -FlsId $fls -AllowOverflow $overflow }
