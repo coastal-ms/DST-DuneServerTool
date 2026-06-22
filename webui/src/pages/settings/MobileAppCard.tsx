@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react'
 import { QRCodeSVG } from 'qrcode.react'
 import { Icon } from '../../components/Icon'
 import { api } from '../../api/client'
+import { isLocalViewer } from '../../util/viewer'
 
 interface BridgeStatus {
   ready: boolean
@@ -43,6 +44,9 @@ export function MobileAppCard() {
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [data, setData] = useState<MobilePairingData | null>(null)
+  const [copied, setCopied] = useState(false)
+  const [showLink, setShowLink] = useState(false)
+  const localViewer = isLocalViewer()
 
   const [bridge, setBridge] = useState<BridgeStatus | null>(null)
   const [bridgeLoading, setBridgeLoading] = useState(false)
@@ -284,12 +288,46 @@ export function MobileAppCard() {
                 Hide QR Code
               </button>
 
+              {localViewer && pairUrl && data.remoteToken && (
+                <div className="form-group" style={{ marginTop: '1.25rem' }}>
+                  <label>Browser portal link (give this to a co-admin)</label>
+                  <div className="help-text">They open it in any browser — no app, no install, no typing. Anyone with this link can manage the server, so only share it with people you trust.</div>
+                  {!showLink ? (
+                    <button className="btn" style={{ marginTop: '0.5rem' }} onClick={() => setShowLink(true)}>
+                      <Icon name="Eye" /> Show portal link
+                    </button>
+                  ) : (
+                    <>
+                      <div style={{ marginTop: '0.5rem', fontSize: '12px', fontFamily: 'monospace', wordBreak: 'break-all', background: 'var(--surface-2, #1e293b)', padding: '0.5rem', borderRadius: '6px' }}>
+                        {`${pairUrl.replace(/\/+$/, '')}/?key=${data.remoteToken}`}
+                      </div>
+                      <div className="flex items-center gap-2" style={{ marginTop: '0.5rem' }}>
+                        <button
+                          className="btn-primary"
+                          onClick={() => {
+                            const link = `${pairUrl.replace(/\/+$/, '')}/?key=${data.remoteToken}`
+                            void navigator.clipboard.writeText(link)
+                            setCopied(true)
+                            window.setTimeout(() => setCopied(false), 2000)
+                          }}
+                        >
+                          <Icon name={copied ? 'Check' : 'Copy'} /> {copied ? 'Copied!' : 'Copy portal link'}
+                        </button>
+                        <button className="btn" onClick={() => setShowLink(false)}>
+                          <Icon name="EyeOff" /> Hide
+                        </button>
+                      </div>
+                    </>
+                  )}
+                </div>
+              )}
+
               {pairUrl && (
                 <div style={{ marginTop: '2rem', padding: '1rem', backgroundColor: '#f8fafc', borderRadius: '8px', border: '1px solid #e0f2fe' }}>
                   <h4 style={{ margin: '0 0 0.5rem 0', fontSize: '14px', color: '#0369a1' }}>Manual Entry Details</h4>
                   <div style={{ fontSize: '13px', fontFamily: 'monospace', color: '#334155' }}>
                     <div style={{ marginBottom: '4px', wordBreak: 'break-all' }}><strong>URL:</strong> {pairUrl}</div>
-                    <div style={{ wordBreak: 'break-all' }}><strong>Token:</strong> {data.token}</div>
+                    {localViewer && <div style={{ wordBreak: 'break-all' }}><strong>Token:</strong> {data.remoteToken || data.token}</div>}
                   </div>
                   <div className="help-text" style={{ marginTop: '0.5rem' }}>
                     On the same network you can also use <code>http://&lt;this-pc-lan-ip&gt;:{bridgePort}</code>.
