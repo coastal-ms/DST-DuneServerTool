@@ -25,7 +25,9 @@ $script:DuneConfigKeys = @(
     'UpdateChannel',
     'UpdatePreReleaseTag',
     'UpdateInstalledPrerelease',
-    'UpdateInstalledTag'
+    'UpdateInstalledTag',
+    'RemoteAccessMode',
+    'QuickTunnelLastUrl'
 )
 
 # Default in-pod PostgreSQL port. All DST DB access runs as

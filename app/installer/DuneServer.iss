@@ -16,7 +16,7 @@
 ;                 -> NOT touched by install or uninstall (preserves user config)
 
 #define MyAppName        "Dune Server Tool"
-#define MyAppVersion "12.10.3"
+#define MyAppVersion "12.11.0"
 #define MyAppPublisher   "Dune Awakening Self-Hosted Tool"
 #define MyAppURL         "https://github.com/coastal-ms/DST-DuneServerTool"
 #define MyAppExeName     "DuneServer.exe"
@@ -107,8 +107,12 @@ Source: "..\resources\remote-scripts\*"; DestDir: "{app}\resources\remote-script
 ; DunePreflight.ps1 is the WinForms results window, README.md explains usage.
 Source: "..\..\tools\preflight\*"; DestDir: "{app}\tools\preflight"; Flags: ignoreversion recursesubdirs
 
-; Tailscale mobile app bridge daemon
+; Mobile/remote app bridge daemon (loopback reverse-proxy)
 Source: "..\..\helper\bridge\*"; DestDir: "{app}\helper\bridge"; Flags: ignoreversion recursesubdirs
+
+; cloudflared — powers the free Cloudflare quick tunnel for mobile/remote access.
+; Staged into app\installer\vendor\ by Build-Installer.ps1 before compilation.
+Source: "vendor\cloudflared.exe"; DestDir: "{app}"; Flags: ignoreversion
 
 [Icons]
 ; Start Menu shortcut (always created)
@@ -154,7 +158,7 @@ Filename: "powershell.exe"; Parameters: "-NoProfile -ExecutionPolicy Bypass -Com
 ; autostart preference. Idempotent; never blocks install on failure.
 Filename: "powershell.exe"; Parameters: "-NoProfile -ExecutionPolicy Bypass -Command ""try {{ Get-ScheduledTask -TaskPath '\Dune Server\' -ErrorAction SilentlyContinue | Where-Object {{ $_.TaskName -like 'DuneServer-Autostart-*' }} | Unregister-ScheduledTask -Confirm:$false -ErrorAction SilentlyContinue }} catch {{}}"""; Flags: runhidden waituntilterminated; Check: ShouldClearLegacyAutostart
 
-; Install Tailscale proxy bridge for mobile app
+; Install mobile/remote app bridge (loopback proxy + self-healing task)
 Filename: "powershell.exe"; Parameters: "-NoProfile -ExecutionPolicy Bypass -File ""{app}\helper\bridge\Install-Bridge.ps1"""; Flags: runhidden waituntilterminated
 
 ; Launch immediately after install. Two entries so both interactive AND
@@ -179,8 +183,8 @@ Type: filesandordirs; Name: "{app}"
 ; failure (the task may already be gone, the folder may not exist, etc.).
 Filename: "powershell.exe"; Parameters: "-NoProfile -ExecutionPolicy Bypass -Command ""try {{ Get-ScheduledTask -TaskPath '\Dune Server\' -ErrorAction SilentlyContinue | Where-Object {{ $_.TaskName -like 'DuneServer-Autostart-*' }} | Unregister-ScheduledTask -Confirm:$false -ErrorAction SilentlyContinue }} catch {{}}"""; Flags: runhidden; RunOnceId: "RemoveDuneAutostartTasks"
 
-; Remove Tailscale proxy bridge
-Filename: "powershell.exe"; Parameters: "-NoProfile -ExecutionPolicy Bypass -File ""{app}\helper\bridge\Uninstall-Bridge.ps1"""; Flags: runhidden; RunOnceId: "RemoveTailscaleBridge"
+; Remove mobile/remote app bridge
+Filename: "powershell.exe"; Parameters: "-NoProfile -ExecutionPolicy Bypass -File ""{app}\helper\bridge\Uninstall-Bridge.ps1"""; Flags: runhidden; RunOnceId: "RemoveMobileBridge"
 
 [Code]
 // ============================================================

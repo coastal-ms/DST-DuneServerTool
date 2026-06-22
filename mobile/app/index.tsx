@@ -39,12 +39,17 @@ export default function App() {
   // while a QR is in view) only pairs ONCE. State updates lag a render behind, so
   // a ref is the only reliable guard against duplicate "Paired successfully" alerts.
   const pairingLock = useRef(false);
-  const [serverInfo, setServerInfo] = useState<{ip: string, port: number, token: string} | null>(null);
+  type ServerInfo = { url?: string; ip?: string; port?: number; token: string };
+  const [serverInfo, setServerInfo] = useState<ServerInfo | null>(null);
+  // Build the API base URL. New pairings store a full `url` (a Cloudflare quick
+  // tunnel, a custom hostname, or http://<lan-ip>:<port>); legacy pairings
+  // stored ip+port, still honored as a fallback for already-paired devices.
+  const apiBase = (si: ServerInfo) => (si.url ? si.url.replace(/\/+$/, '') : `http://${si.ip}:${si.port}`);
+  const apiHost = (si: ServerInfo) => apiBase(si).replace(/^https?:\/\//, '');
   const [serverState, setServerState] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [manualMode, setManualMode] = useState(false);
-  const [manualIp, setManualIp] = useState('');
-  const [manualPort, setManualPort] = useState('47900');
+  const [manualUrl, setManualUrl] = useState('');
   const [manualToken, setManualToken] = useState('');
   
   // Navigation State
@@ -94,7 +99,7 @@ export default function App() {
 
   const fetchStatus = async () => {
     if (!serverInfo) return;
-    const url = `http://${serverInfo.ip}:${serverInfo.port}/api/status`;
+    const url = `${apiBase(serverInfo)}/api/status`;
     try {
       const res = await fetch(url, {
         headers: { 'X-Dune-Token': serverInfo.token }
@@ -112,7 +117,7 @@ export default function App() {
     if (!serverInfo) return;
     setLoadingPlayers(true);
     try {
-      const res = await fetch(`http://${serverInfo.ip}:${serverInfo.port}/api/gameplay/players`, {
+      const res = await fetch(`${apiBase(serverInfo)}/api/gameplay/players`, {
         headers: { 'X-Dune-Token': serverInfo.token }
       });
       const data = await res.json();
@@ -129,7 +134,7 @@ export default function App() {
     if (!serverInfo) return;
     setLoadingMaps(true);
     try {
-      const res = await fetch(`http://${serverInfo.ip}:${serverInfo.port}/api/map-spinup`, {
+      const res = await fetch(`${apiBase(serverInfo)}/api/map-spinup`, {
         headers: { 'X-Dune-Token': serverInfo.token }
       });
       const data = await res.json();
@@ -146,7 +151,7 @@ export default function App() {
   const fetchCatalog = async () => {
     if (!serverInfo) return;
     try {
-      const res = await fetch(`http://${serverInfo.ip}:${serverInfo.port}/api/catalog/items`, {
+      const res = await fetch(`${apiBase(serverInfo)}/api/catalog/items`, {
         headers: { 'X-Dune-Token': serverInfo.token }
       });
       const data = await res.json();
@@ -163,7 +168,7 @@ export default function App() {
   const fetchVehicleKits = async () => {
     if (!serverInfo) return;
     try {
-      const res = await fetch(`http://${serverInfo.ip}:${serverInfo.port}/api/catalog/vehicle-kits`, {
+      const res = await fetch(`${apiBase(serverInfo)}/api/catalog/vehicle-kits`, {
         headers: { 'X-Dune-Token': serverInfo.token }
       });
       const data = await res.json();
@@ -193,11 +198,14 @@ export default function App() {
   }, [serverInfo]);
 
   const handleManualPair = () => {
-    if (!manualIp || !manualPort || !manualToken) {
-      alert('Please fill out all fields.');
+    if (!manualUrl || !manualToken) {
+      alert('Please enter the server URL and token.');
       return;
     }
-    const payload = { ip: manualIp, port: parseInt(manualPort, 10), token: manualToken };
+    let u = manualUrl.trim();
+    if (!/^https?:\/\//i.test(u)) u = 'https://' + u;   // tunnel/hostname defaults to https
+    u = u.replace(/\/+$/, '');
+    const payload = { url: u, token: manualToken.trim() };
     setServerInfo(payload);
     AsyncStorage.setItem('dst_server', JSON.stringify(payload));
     alert('Paired successfully!');
@@ -206,7 +214,7 @@ export default function App() {
   const restartServer = async () => {
     if (!serverInfo) return;
     try {
-      const res = await fetch(`http://${serverInfo.ip}:${serverInfo.port}/api/commands/run/restart`, {
+      const res = await fetch(`${apiBase(serverInfo)}/api/commands/run/restart`, {
         method: 'POST',
         headers: { 'X-Dune-Token': serverInfo.token }
       });
@@ -218,7 +226,7 @@ export default function App() {
   const rebootStack = async () => {
     if (!serverInfo) return;
     try {
-      const res = await fetch(`http://${serverInfo.ip}:${serverInfo.port}/api/commands/run/reboot`, {
+      const res = await fetch(`${apiBase(serverInfo)}/api/commands/run/reboot`, {
         method: 'POST',
         headers: { 'X-Dune-Token': serverInfo.token }
       });
@@ -232,7 +240,7 @@ export default function App() {
     if (!title) { alert('Title is required.'); return; }
     if (actionKey) setBusyAction(actionKey);
     try {
-      const res = await fetch(`http://${serverInfo.ip}:${serverInfo.port}/api/broadcasts/generic`, {
+      const res = await fetch(`${apiBase(serverInfo)}/api/broadcasts/generic`, {
         method: 'POST',
         headers: { 'X-Dune-Token': serverInfo.token, 'Content-Type': 'application/json' },
         body: JSON.stringify({ title, body, durationSec: 30 })
@@ -253,7 +261,7 @@ export default function App() {
     setTimeout(() => setMapCooldowns(prev => ({ ...prev, [mapId]: false })), 5000);
     const newEnabled = !currentEnabled;
     try {
-      const res = await fetch(`http://${serverInfo.ip}:${serverInfo.port}/api/map-spinup/${encodeURIComponent(mapId)}`, {
+      const res = await fetch(`${apiBase(serverInfo)}/api/map-spinup/${encodeURIComponent(mapId)}`, {
         method: 'POST',
         headers: { 'X-Dune-Token': serverInfo.token, 'Content-Type': 'application/json' },
         body: JSON.stringify({ enabled: newEnabled })
@@ -267,7 +275,7 @@ export default function App() {
     if (!serverInfo) return;
     if (actionKey) setBusyAction(actionKey);
     try {
-      const res = await fetch(`http://${serverInfo.ip}:${serverInfo.port}${endpoint}`, {
+      const res = await fetch(`${apiBase(serverInfo)}${endpoint}`, {
         method: 'POST',
         headers: { 'X-Dune-Token': serverInfo.token, 'Content-Type': 'application/json' },
         body: JSON.stringify(payload)
@@ -286,7 +294,7 @@ export default function App() {
   const giveOneItem = async (template: string, qty: number): Promise<{ ok: boolean; error?: string }> => {
     if (!serverInfo || !selectedPlayer) return { ok: false, error: 'not connected' };
     try {
-      const res = await fetch(`http://${serverInfo.ip}:${serverInfo.port}/api/gameplay/players/give-item`, {
+      const res = await fetch(`${apiBase(serverInfo)}/api/gameplay/players/give-item`, {
         method: 'POST',
         headers: { 'X-Dune-Token': serverInfo.token, 'Content-Type': 'application/json' },
         body: JSON.stringify({ pawn_id: selectedPlayer.id, template, qty, quality: 0, allow_overflow: true })
@@ -330,7 +338,7 @@ export default function App() {
     const items = parts.map(template => ({ template, qty: vehicle.qty?.[template] ?? 1, quality: 0 }));
     setBusyAction(`kit-${vehicle.id}`);
     try {
-      const res = await fetch(`http://${serverInfo.ip}:${serverInfo.port}/api/gameplay/players/give-items`, {
+      const res = await fetch(`${apiBase(serverInfo)}/api/gameplay/players/give-items`, {
         method: 'POST',
         headers: { 'X-Dune-Token': serverInfo.token, 'Content-Type': 'application/json' },
         body: JSON.stringify({ pawn_id: selectedPlayer.id, items, allow_overflow: true })
@@ -352,9 +360,16 @@ export default function App() {
     setScanned(true);
     try {
       const payload = JSON.parse(result.data);
-      if (payload.ip && payload.port && payload.token) {
-        setServerInfo(payload);
-        AsyncStorage.setItem('dst_server', JSON.stringify(payload));
+      let normalized: ServerInfo | null = null;
+      if (payload.url && payload.token) {
+        normalized = { url: String(payload.url).replace(/\/+$/, ''), token: String(payload.token) };
+      } else if (payload.ip && payload.port && payload.token) {
+        // legacy QR payload (ip/port) — kept for backward compatibility
+        normalized = { url: `http://${payload.ip}:${payload.port}`, token: String(payload.token) };
+      }
+      if (normalized) {
+        setServerInfo(normalized);
+        AsyncStorage.setItem('dst_server', JSON.stringify(normalized));
         alert('Paired successfully!');
       } else {
         alert('Invalid QR Code.');
@@ -394,13 +409,12 @@ export default function App() {
         <Text style={styles.title}>Pair with Server</Text>
         <Text style={styles.subtitle}>Scan the pairing code from the DST Desktop app Settings tab.</Text>
         <View style={styles.alertBox}>
-          <Text style={styles.alertText}><Text style={{ fontWeight: 'bold' }}>Requirement:</Text> You must have the Tailscale app installed and active on this device to connect.</Text>
+          <Text style={styles.alertText}><Text style={{ fontWeight: 'bold' }}>No VPN needed.</Text> Start the secure tunnel in the DST Desktop app (Settings &gt; Mobile App), then scan the code it shows.</Text>
         </View>
         {manualMode ? (
           <View style={styles.card}>
             <Text style={styles.cardTitle}>Manual Entry</Text>
-            <TextInput style={styles.input} placeholder="Tailscale IP" placeholderTextColor="#64748b" value={manualIp} onChangeText={setManualIp} autoCapitalize="none" />
-            <TextInput style={styles.input} placeholder="Port" placeholderTextColor="#64748b" value={manualPort} onChangeText={setManualPort} keyboardType="numeric" />
+            <TextInput style={styles.input} placeholder="Server URL (e.g. https://xxx.trycloudflare.com)" placeholderTextColor="#64748b" value={manualUrl} onChangeText={setManualUrl} autoCapitalize="none" autoCorrect={false} keyboardType="url" />
             <TextInput style={styles.input} placeholder="Token" placeholderTextColor="#64748b" value={manualToken} onChangeText={setManualToken} autoCapitalize="none" secureTextEntry />
             <View style={{ marginTop: 10 }}><DstButton title="Connect" onPress={handleManualPair} /></View>
             <View style={{ marginTop: 10 }}><DstButton title="Back to Scanner" type="secondary" onPress={() => setManualMode(false)} /></View>
@@ -579,7 +593,7 @@ export default function App() {
     <ScrollView style={styles.container} contentContainerStyle={{ paddingBottom: 40 }} keyboardShouldPersistTaps="handled">
       <StatusBar barStyle="light-content" />
       <Text style={styles.title}>DST Dashboard</Text>
-      <Text style={styles.subtitle}>Connected to {serverInfo.ip}</Text>
+      <Text style={styles.subtitle}>Connected to {apiHost(serverInfo)}</Text>
       
       <View style={styles.card}>
         <Text style={styles.cardTitle}>Server State</Text>
@@ -603,7 +617,7 @@ export default function App() {
         ) : (
           <View style={[styles.alertBox, { backgroundColor: '#7f1d1d', borderColor: '#991b1b' }]}>
             <Text style={[styles.alertText, { color: '#fca5a5' }]}>
-              Cannot reach server. Ensure Tailscale is installed and connected on your device.
+              Cannot reach server. Make sure the secure tunnel is running in the DST Desktop app, then re-pair if its address changed.
             </Text>
             {connDiag ? (
               <Text selectable style={{ color: '#fecaca', fontSize: 11, fontFamily: 'Courier', marginTop: 8 }}>{connDiag}</Text>

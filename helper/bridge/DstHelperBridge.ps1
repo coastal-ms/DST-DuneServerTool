@@ -1,4 +1,4 @@
-<#
+﻿<#
 .SYNOPSIS
     DST Friend Helper bridge daemon. Runs on the host's PC.
 
@@ -9,11 +9,12 @@
     launch). All non-special paths are reverse-proxied to the current DST
     process on 127.0.0.1.
 
-    Trust boundary: this listener binds to all interfaces, but the companion
-    Windows Firewall rule (see Install-Bridge.ps1) restricts inbound traffic
-    to the Tailscale interface only. Tailscale ACLs gate which devices on
-    the tailnet can reach this port. The DuneToken returned by /_dst/token
-    is defense-in-depth.
+    Trust boundary: this listener binds to LOOPBACK (127.0.0.1) only. Remote
+    devices reach it exclusively through a Cloudflare quick tunnel — cloudflared
+    runs on this same PC and connects OUT to Cloudflare, then forwards inbound
+    requests to 127.0.0.1 locally. Nothing is exposed on the LAN or the public
+    internet, so no firewall rule or URL ACL is needed. The DuneToken returned by
+    /_dst/token is defense-in-depth.
 
 .PARAMETER Port
     TCP port to listen on. Default 47900.
@@ -34,10 +35,10 @@ param(
     [int]$Port = 47900,
     [string]$LastUrlPath = (Join-Path $env:LOCALAPPDATA 'DuneServer\last-url.txt'),
     [string]$LogPath,
-    # Override the listener URL prefix. Default binds all interfaces and
-    # relies on the Tailscale-scoped firewall rule for inbound filtering.
-    # For local testing without admin/URLACL, set this to
-    # 'http://localhost:<port>/' or 'http://127.0.0.1:<port>/'.
+    # Override the listener URL prefix. Defaults to loopback (127.0.0.1), which
+    # needs no admin / URL ACL and is reached remotely only via the local
+    # cloudflared quick tunnel. Set to 'http://+:<port>/' only for legacy setups
+    # that front the bridge with their own firewall-scoped exposure.
     [string]$Prefix
 )
 
@@ -376,10 +377,10 @@ function Invoke-Request {
 
 function Start-Bridge {
     $listener = [System.Net.HttpListener]::new()
-    # Bind to all interfaces by default; the firewall rule scopes inbound to
-    # Tailscale. The -Prefix override lets you bind to localhost for local
-    # testing without admin / URL ACL.
-    $effectivePrefix = if ($Prefix) { $Prefix } else { "http://+:$Port/" }
+    # Bind to loopback by default: cloudflared connects locally, so nothing needs
+    # to be exposed on the LAN/public interfaces and no admin/URL ACL is required.
+    # The -Prefix override allows legacy all-interfaces binding if ever needed.
+    $effectivePrefix = if ($Prefix) { $Prefix } else { "http://127.0.0.1:$Port/" }
     $listener.Prefixes.Add($effectivePrefix)
 
     try {

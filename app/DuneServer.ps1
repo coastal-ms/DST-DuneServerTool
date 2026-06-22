@@ -148,7 +148,7 @@ public static extern bool IsIconic(System.IntPtr hWnd);
 }
 
 # Version (one of the 5 sync'd constants; see persistent-notes.md)
-$script:DuneToolVersion = '12.10.3'
+$script:DuneToolVersion = '12.11.0'
 
 # ---------- Restart-on-detach handoff -----------------------------------------
 # When a prior "Web Portal" detach left the server running headless, the
@@ -581,12 +581,12 @@ if (Get-Command Start-DuneGameplayBotScheduler -ErrorAction SilentlyContinue) {
     try { [void](Start-DuneGameplayBotScheduler -ServerDir $serverDir) } catch {}
 }
 
-# Self-heal the mobile-app bridge (Tailscale-scoped firewall rule + URL ACL +
-# background task). Covers the common failure where Tailscale wasn't connected
-# when DST was installed, so the installer's firewall step silently failed and
-# the phone could never reach the server. No-op unless elevated, Tailscale is up,
-# and something is actually missing; repairs in the background so startup isn't
-# delayed. Fully best-effort — never blocks or crashes startup.
+# Self-heal the mobile-app bridge (the loopback reverse-proxy + its background
+# task). Covers the case where the bridge task or listener is missing. The bridge
+# binds 127.0.0.1 only and is reached remotely via the Cloudflare quick tunnel,
+# so no admin/firewall is involved. No-op unless something is actually missing;
+# repairs in the background so startup isn't delayed. Fully best-effort — never
+# blocks or crashes startup.
 if (Get-Command Initialize-DuneMobileBridge -ErrorAction SilentlyContinue) {
     try { Initialize-DuneMobileBridge -ServerDir $serverDir } catch {}
 }

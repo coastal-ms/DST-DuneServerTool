@@ -8,9 +8,6 @@ interface BridgeStatus {
   port: number
   elevated: boolean
   canRepair: boolean
-  tailscaleUp: boolean
-  tailscaleIp?: string | null
-  firewallRule: boolean
   task: boolean
   taskState: string
   listening: boolean
@@ -20,23 +17,36 @@ interface BridgeStatus {
 
 interface MobilePairingData {
   token: string
+  url?: string | null
+  source?: string
   port: number
-  publicIp?: string
-  tailscaleIp?: string
-  hostname?: string
   bridge?: BridgeStatus | null
+}
+
+interface QuickTunnelStatus {
+  running: boolean
+  url: string
+  pid: number
+  startedAt?: string
+  installed: boolean
+  cloudflaredPath?: string
+  cloudflaredVersion?: string
+  lastUrl?: string
 }
 
 export function MobileAppCard() {
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [data, setData] = useState<MobilePairingData | null>(null)
-  const [selectedIp, setSelectedIp] = useState<string>('')
 
   const [bridge, setBridge] = useState<BridgeStatus | null>(null)
   const [bridgeLoading, setBridgeLoading] = useState(false)
   const [repairing, setRepairing] = useState(false)
   const [repairError, setRepairError] = useState<string | null>(null)
+
+  const [tunnel, setTunnel] = useState<QuickTunnelStatus | null>(null)
+  const [tunnelBusy, setTunnelBusy] = useState(false)
+  const [tunnelError, setTunnelError] = useState<string | null>(null)
 
   const loadBridge = async () => {
     setBridgeLoading(true)
@@ -44,16 +54,22 @@ export function MobileAppCard() {
       const res = await api<BridgeStatus>('/api/mobile/bridge-status')
       setBridge(res)
     } catch {
-      // Older server or unavailable — leave the banner hidden rather than alarm.
       setBridge(null)
     } finally {
       setBridgeLoading(false)
     }
   }
 
-  // Probe bridge health on mount so the connectivity banner is visible without
-  // first generating a QR code.
-  useEffect(() => { void loadBridge() }, [])
+  const loadTunnel = async () => {
+    try {
+      const res = await api<QuickTunnelStatus>('/api/remote-access/quick-tunnel/status')
+      setTunnel(res)
+    } catch {
+      setTunnel(null)
+    }
+  }
+
+  useEffect(() => { void loadBridge(); void loadTunnel() }, [])
 
   const repairBridge = async () => {
     setRepairing(true)
@@ -70,6 +86,38 @@ export function MobileAppCard() {
     }
   }
 
+  const startTunnel = async () => {
+    setTunnelBusy(true)
+    setTunnelError(null)
+    try {
+      const res = await api<{ ok: boolean; url?: string; status?: QuickTunnelStatus }>('/api/remote-access/quick-tunnel/start', { method: 'POST' })
+      if (res.status) setTunnel(res.status)
+      else await loadTunnel()
+      await load()
+    } catch (e) {
+      setTunnelError(e instanceof Error ? e.message : String(e))
+      await loadTunnel()
+    } finally {
+      setTunnelBusy(false)
+    }
+  }
+
+  const stopTunnel = async () => {
+    setTunnelBusy(true)
+    setTunnelError(null)
+    try {
+      const res = await api<{ ok: boolean; status?: QuickTunnelStatus }>('/api/remote-access/quick-tunnel/stop', { method: 'POST' })
+      if (res.status) setTunnel(res.status)
+      else await loadTunnel()
+      await load()
+    } catch (e) {
+      setTunnelError(e instanceof Error ? e.message : String(e))
+      await loadTunnel()
+    } finally {
+      setTunnelBusy(false)
+    }
+  }
+
   const load = async () => {
     setLoading(true)
     setError(null)
@@ -77,9 +125,6 @@ export function MobileAppCard() {
       const res = await api<MobilePairingData>('/api/mobile/pairing')
       setData(res)
       if (res.bridge) setBridge(res.bridge)
-      // Pick best default
-      if (res.tailscaleIp) setSelectedIp(res.tailscaleIp)
-      else setSelectedIp('')
     } catch (e) {
       setError(String(e))
     } finally {
@@ -87,14 +132,9 @@ export function MobileAppCard() {
     }
   }
 
-  // Single source of truth for the port: the server reports the bridge port.
   const bridgePort = data?.port ?? bridge?.port ?? 47900
-
-  const qrPayload = data && data.tailscaleIp && selectedIp === data.tailscaleIp ? JSON.stringify({
-    ip: data.tailscaleIp,
-    port: bridgePort,
-    token: data.token
-  }) : ''
+  const pairUrl = data?.url ?? (tunnel?.running ? tunnel.url : '') ?? ''
+  const qrPayload = data && pairUrl ? JSON.stringify({ url: pairUrl, token: data.token }) : ''
 
   return (
     <div className="card">
@@ -103,31 +143,71 @@ export function MobileAppCard() {
       </div>
       <div className="card-body">
 
-        {/* Bridge connectivity banner — surfaces the firewall/Tailscale/bridge
-            health that determines whether phones can actually reach the server. */}
+        {/* Secure remote access (Cloudflare quick tunnel). Free, no account, no
+            domain, no router port-forward — cloudflared connects out from this PC
+            and hands back an HTTPS URL the phone can reach. */}
+        <div className="card p-3" style={{ marginBottom: '1rem' }}>
+          <div className="flex items-center gap-2" style={{ fontWeight: 600 }}>
+            <Icon name="Globe" size={16} /> Secure remote access
+            {tunnel && (
+              tunnel.installed
+                ? <span className="badge safe" style={{ marginLeft: 'auto' }}>cloudflared installed</span>
+                : <span className="badge" style={{ marginLeft: 'auto' }}>cloudflared not found</span>
+            )}
+          </div>
+
+          {tunnel && !tunnel.installed && (
+            <div className="text-text-muted text-sm" style={{ marginTop: '0.5rem' }}>
+              cloudflared ships with Dune Server. If this says “not found”, reinstall DST or install it from{' '}
+              <a href="https://developers.cloudflare.com/cloudflare-one/connections/connect-networks/downloads/" target="_blank" rel="noreferrer">Cloudflare</a>.
+            </div>
+          )}
+
+          {tunnel?.running ? (
+            <div style={{ marginTop: '0.75rem' }}>
+              <div className="card p-2 border-success/40 bg-success/10 text-success text-sm flex items-center gap-2">
+                <Icon name="CheckCircle2" size={16} /> Tunnel active
+              </div>
+              <div style={{ marginTop: '0.5rem', fontSize: '13px', fontFamily: 'monospace', wordBreak: 'break-all' }}>{tunnel.url}</div>
+              <button className="btn" style={{ marginTop: '0.5rem' }} disabled={tunnelBusy} onClick={() => void stopTunnel()}>
+                {tunnelBusy ? <><Icon name="Loader2" className="animate-spin" /> Working…</> : <><Icon name="Square" /> Stop tunnel</>}
+              </button>
+              <div className="help-text" style={{ marginTop: '0.5rem' }}>
+                This address changes each time the tunnel restarts — re-scan the QR code if you stop and start it.
+                For a permanent address, add your own domain under <strong>Remote Access</strong>.
+              </div>
+            </div>
+          ) : (
+            <div style={{ marginTop: '0.75rem' }}>
+              <button className="btn-primary" disabled={tunnelBusy || (tunnel ? !tunnel.installed : false)} onClick={() => void startTunnel()}>
+                {tunnelBusy ? <><Icon name="Loader2" className="animate-spin" /> Starting…</> : <><Icon name="Play" /> Start secure tunnel</>}
+              </button>
+              <div className="help-text" style={{ marginTop: '0.5rem' }}>
+                Free and private: no account, no domain, no router setup. Start the tunnel, then scan the QR code with the mobile app.
+              </div>
+            </div>
+          )}
+          {tunnelError && <div className="text-danger text-sm" style={{ marginTop: '0.5rem' }}>{tunnelError}</div>}
+        </div>
+
+        {/* Local bridge health — the loopback proxy phones reach through the
+            tunnel. Binds 127.0.0.1 only, so no admin/firewall is involved. */}
         {bridge && (
           bridge.ready ? (
             <div className="card p-3 border-success/40 bg-success/10 text-success text-sm flex items-center gap-2" style={{ marginBottom: '1rem' }}>
-              <Icon name="CheckCircle2" size={16} /> Mobile bridge ready — phones on your Tailnet can reach this server (port {bridge.port}).
+              <Icon name="CheckCircle2" size={16} /> Mobile bridge ready (local port {bridge.port}).
             </div>
           ) : (
             <div className="card p-3 border-warning/40 bg-warning/10 text-sm" style={{ marginBottom: '1rem' }}>
               <div className="flex items-center gap-2 text-warning" style={{ fontWeight: 600 }}>
-                <Icon name="AlertTriangle" size={16} /> Mobile bridge not reachable
+                <Icon name="AlertTriangle" size={16} /> Mobile bridge not running
               </div>
               <ul style={{ margin: '0.5rem 0 0', paddingLeft: '1.25rem' }} className="text-text-muted">
                 {bridge.issues.map((it, i) => <li key={i}>{it}</li>)}
               </ul>
-              {bridge.canRepair ? (
-                <button className="btn-primary" style={{ marginTop: '0.75rem' }} disabled={repairing} onClick={() => void repairBridge()}>
-                  {repairing ? <><Icon name="Loader2" className="animate-spin" /> Repairing…</> : <><Icon name="Wrench" /> Repair Mobile Bridge</>}
-                </button>
-              ) : !bridge.elevated ? (
-                <div className="text-text-muted" style={{ marginTop: '0.75rem', fontSize: '13px' }}>
-                  <span style={{ verticalAlign: 'text-bottom', marginRight: 4, display: 'inline-block' }}><Icon name="Info" size={13} /></span>
-                  Restart Dune Server Tool <strong>as administrator</strong> to let it fix the firewall automatically.
-                </div>
-              ) : null}
+              <button className="btn-primary" style={{ marginTop: '0.75rem' }} disabled={repairing} onClick={() => void repairBridge()}>
+                {repairing ? <><Icon name="Loader2" className="animate-spin" /> Repairing…</> : <><Icon name="Wrench" /> Repair Mobile Bridge</>}
+              </button>
               {repairError && <div className="text-danger text-sm" style={{ marginTop: '0.5rem' }}>{repairError}</div>}
               <button className="btn" style={{ marginTop: '0.5rem' }} disabled={bridgeLoading || repairing} onClick={() => void loadBridge()}>
                 {bridgeLoading ? 'Checking…' : 'Re-check'}
@@ -137,9 +217,8 @@ export function MobileAppCard() {
         )}
 
         <p className="help-text" style={{ marginBottom: '1rem' }}>
-          Scan this code with the DST mobile app to securely connect to your server.
-          <br /><br />
-          <strong>Important for your users:</strong> Anyone using the mobile app to connect to your server <strong>must</strong> have <a href="https://tailscale.com/download" target="_blank" rel="noreferrer" style={{color: '#0066cc'}}>Tailscale</a> installed on their phone and be authenticated to your Tailnet. You do not need to port forward your router.
+          Start the secure tunnel above, then scan this code with the DST mobile app to connect.
+          Your friends need <strong>nothing</strong> installed on their phones — no VPN, no account.
         </p>
 
         {!data && !loading && (
@@ -158,40 +237,32 @@ export function MobileAppCard() {
                 <QRCodeSVG value={qrPayload} size={200} />
               </div>
             ) : (
-              <div className="text-secondary" style={{ width: 200, textAlign: 'center' }}>No IP selected</div>
+              <div className="text-secondary" style={{ width: 200, textAlign: 'center' }}>
+                Start the secure tunnel (or add a domain under Remote Access) to generate a QR code.
+              </div>
             )}
-            
+
             <div style={{ flex: 1, minWidth: '300px' }}>
               <div className="form-group">
                 <label>Connection Address</label>
-                <div className="help-text">Which address should the mobile app use to reach this server?</div>
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem', marginTop: '0.5rem' }}>
-                  {data.tailscaleIp ? (
-                    <label style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', cursor: 'pointer' }}>
-                      <input type="radio" name="mobile_ip" checked={selectedIp === data.tailscaleIp} onChange={() => setSelectedIp(data.tailscaleIp!)} />
-                      Tailscale IP ({data.tailscaleIp}) <span className="badge safe">Recommended</span>
-                    </label>
-                  ) : (
-                    <div className="text-danger text-sm" style={{ padding: '0.5rem', backgroundColor: '#fee2e2', borderRadius: '4px' }}>
-                      <span style={{ display: 'inline-flex', alignItems: 'center', gap: '4px', verticalAlign: 'text-bottom' }}>
-                        <Icon name="AlertTriangle" size={16} />
-                        Tailscale is required for secure mobile access. Please install Tailscale on this PC and your mobile device.
-                      </span>
-                    </div>
-                  )}
+                <div className="help-text">The mobile app will use this address to reach your server.</div>
+                <div style={{ marginTop: '0.5rem', fontSize: '13px', fontFamily: 'monospace', wordBreak: 'break-all' }}>
+                  {pairUrl ? pairUrl : <span className="text-text-muted">No remote address yet — start the tunnel above.</span>}
                 </div>
               </div>
               <button className="btn" onClick={() => setData(null)} style={{ marginTop: '1rem' }}>
                 Hide QR Code
               </button>
-              
-              {data.tailscaleIp && (
+
+              {pairUrl && (
                 <div style={{ marginTop: '2rem', padding: '1rem', backgroundColor: '#f8fafc', borderRadius: '8px', border: '1px solid #e0f2fe' }}>
                   <h4 style={{ margin: '0 0 0.5rem 0', fontSize: '14px', color: '#0369a1' }}>Manual Entry Details</h4>
                   <div style={{ fontSize: '13px', fontFamily: 'monospace', color: '#334155' }}>
-                    <div style={{ marginBottom: '4px' }}><strong>IP:</strong> {data.tailscaleIp}</div>
-                    <div style={{ marginBottom: '4px' }}><strong>Port:</strong> {bridgePort}</div>
+                    <div style={{ marginBottom: '4px', wordBreak: 'break-all' }}><strong>URL:</strong> {pairUrl}</div>
                     <div style={{ wordBreak: 'break-all' }}><strong>Token:</strong> {data.token}</div>
+                  </div>
+                  <div className="help-text" style={{ marginTop: '0.5rem' }}>
+                    On the same network you can also use <code>http://&lt;this-pc-lan-ip&gt;:{bridgePort}</code>.
                   </div>
                 </div>
               )}

@@ -10,7 +10,7 @@ body:
 
         This issue tracker is for **bugs in this tool's code** — the desktop
         app (Server Health, Commands, PowerShell, Game Config, Gameplay Admin,
-        DD Map, Database, Sietches, Map SpinUp, Settings, Tailscale, Setup
+        DD Map, Database, Sietches, Map SpinUp, Settings, Setup
         Wizard), the PowerShell script (`dune-server.ps1`), the `.bat`
         launcher, and the installer (`DuneServerSetup.exe`).
 
@@ -107,7 +107,7 @@ body:
         - Web portal — Settings — Public IP / DDNS (hostname resolve, manual IP, apply)
         - Web portal — Settings — Database connection (Database port / Test connection — empty Players/Bases/Storage)
         - Web portal — Settings (Dune Server Tool self-updater — incl. Stable/Test channel toggle + pre-release picker)
-        - Web portal — Tailscale (remote-access / device list)
+        - Web portal — Settings — Mobile App / secure tunnel (Cloudflare quick tunnel pairing)
         - Web portal — Setup Wizard / first-run
         - Web portal — Top menu bar / Help dropdown
         - Web portal — Sidebar / top status bar (server name, port/VM/BG pills, refresh) / window chrome
@@ -125,7 +125,7 @@ body:
     attributes:
       label: Specific page / button / command
       description: Which button, tab, menu letter/number, or `-Cmd <name>` triggered the bug?
-      placeholder: "e.g. Server Health 'Restart battlegroup' button, Server Health > Scheduled restarts > Save schedule, Server Health > Scheduled restarts > Send test message (Discord), Server Health > Scheduled restarts > Check for server update, Pods > select pod > events, Settings > Dune Server Tool updates > Test channel toggle, Settings > Dune Server Tool updates > pre-release dropdown, Settings > Public IP / DDNS > Save hostname, Settings > Public IP / DDNS > Resolve hostname, Settings > Public IP / DDNS > Apply public IP, Settings > Database connection > Test connection, Settings > Database port (empty Players/Bases/Storage), Settings > SSH key > Remove passphrase, Settings > SSH key > Generate new, Sidebar > Web Portal > Open in browser ('page is unavailable'), Game Config > Server name > Rename & restart, Game Config > Spicefields > Save, Game Config > Landsraad > Save, Game Config > Crafting > Repair Cost Weight, Game Config > All Default Settings > Ctrl+C section header, Game Config > client INI 'Fix my client config', Gameplay Admin > Market Bot > toggle, Gameplay Admin > Market Bot > Reset to defaults, Gameplay Admin > Market Bot > Pricing rules > Market-follow pricing toggle, Gameplay Admin > Market Bot > Pricing rules > Market markup %, Gameplay Admin > Market Bot > Buy side > Over-market guard, Gameplay Admin > Players > Give Item (Allow overflow), Gameplay Admin > Players > Give Package > Import tcno.co list, Gameplay Admin > Players > Give Package (Allow overflow), Gameplay Admin > Players > Give Vehicle Kit > Sandbike (Allow overflow), Gameplay Admin > Players > inventory item > Repair, Gameplay Admin > Players > inventory item > Stack quantity, Gameplay Admin > Storage > container item > Stack quantity, Gameplay Admin > Players > Cheat Scripts > Award Player XP, Gameplay Admin > Players > Specs > Set Level (per-track slider), Gameplay Admin > Players > Specs > Max / Reset (per track), Gameplay Admin > Players > Journey > Complete node, Gameplay Admin > Players > Progression > Progression Unlock > Apply Unlock (Atreides Ch3 Start), Gameplay Admin > Players > Tags > search/add tag, Gameplay Admin > Players > Actions > Unlock Trainers > Swordmaster, Gameplay Admin > Players > Actions > Unlock Main Quest > A New Beginning, Gameplay Admin > Players > Progression > Apply Aql Trial > Trial 4 (3rd ability slot), Gameplay Admin > Players > Landsraad > set House Ecaz, Gameplay Admin > Players > Actions > Punishment > Ban, Gameplay Admin > Players > Hide GM toggle, Tailscale > 'Admin console', Database > Backup Schedule presets > Hourly, Map SpinUp > Survival_2, Map SpinUp > Arrakeen loading counter, Map SpinUp > Restart Hagga, Help > Create GitHub Issue, CLI option 'e. reboot', or -Cmd startup"
+      placeholder: "e.g. Server Health 'Restart battlegroup' button, Server Health > Scheduled restarts > Save schedule, Server Health > Scheduled restarts > Send test message (Discord), Server Health > Scheduled restarts > Check for server update, Pods > select pod > events, Settings > Dune Server Tool updates > Test channel toggle, Settings > Dune Server Tool updates > pre-release dropdown, Settings > Public IP / DDNS > Save hostname, Settings > Public IP / DDNS > Resolve hostname, Settings > Public IP / DDNS > Apply public IP, Settings > Database connection > Test connection, Settings > Database port (empty Players/Bases/Storage), Settings > SSH key > Remove passphrase, Settings > SSH key > Generate new, Sidebar > Web Portal > Open in browser ('page is unavailable'), Game Config > Server name > Rename & restart, Game Config > Spicefields > Save, Game Config > Landsraad > Save, Game Config > Crafting > Repair Cost Weight, Game Config > All Default Settings > Ctrl+C section header, Game Config > client INI 'Fix my client config', Gameplay Admin > Market Bot > toggle, Gameplay Admin > Market Bot > Reset to defaults, Gameplay Admin > Market Bot > Pricing rules > Market-follow pricing toggle, Gameplay Admin > Market Bot > Pricing rules > Market markup %, Gameplay Admin > Market Bot > Buy side > Over-market guard, Gameplay Admin > Players > Give Item (Allow overflow), Gameplay Admin > Players > Give Package > Import tcno.co list, Gameplay Admin > Players > Give Package (Allow overflow), Gameplay Admin > Players > Give Vehicle Kit > Sandbike (Allow overflow), Gameplay Admin > Players > inventory item > Repair, Gameplay Admin > Players > inventory item > Stack quantity, Gameplay Admin > Storage > container item > Stack quantity, Gameplay Admin > Players > Cheat Scripts > Award Player XP, Gameplay Admin > Players > Specs > Set Level (per-track slider), Gameplay Admin > Players > Specs > Max / Reset (per track), Gameplay Admin > Players > Journey > Complete node, Gameplay Admin > Players > Progression > Progression Unlock > Apply Unlock (Atreides Ch3 Start), Gameplay Admin > Players > Tags > search/add tag, Gameplay Admin > Players > Actions > Unlock Trainers > Swordmaster, Gameplay Admin > Players > Actions > Unlock Main Quest > A New Beginning, Gameplay Admin > Players > Progression > Apply Aql Trial > Trial 4 (3rd ability slot), Gameplay Admin > Players > Landsraad > set House Ecaz, Gameplay Admin > Players > Actions > Punishment > Ban, Gameplay Admin > Players > Hide GM toggle, Settings > Mobile App > Start secure tunnel, Settings > Mobile App > Repair Mobile Bridge, Database > Backup Schedule presets > Hourly, Map SpinUp > Survival_2, Map SpinUp > Arrakeen loading counter, Map SpinUp > Restart Hagga, Help > Create GitHub Issue, CLI option 'e. reboot', or -Cmd startup"
     validations:
       required: true
 
@@ -317,27 +317,30 @@ body:
       required: false
 
   - type: textarea
-    id: tailscale_diag
+    id: remote_access_diag
     attributes:
-      label: Tailscale status (only if your bug is on the Tailscale page)
+      label: Mobile App / remote access (only if your bug is about pairing or the secure tunnel)
       description: |
-        The Tailscale page wraps the local `tailscale` CLI (read-only). If the
-        page is empty, stuck, or wrong, paste the output of the following from a
-        terminal on the **machine running the tool** (redact public/100.x IPs and
-        device names you'd rather not share):
+        Mobile and remote access use a Cloudflare **quick tunnel**: DST runs
+        `cloudflared` which connects out and hands back an
+        `https://<random>.trycloudflare.com` URL the phone reaches. A local
+        loopback **bridge** (127.0.0.1:47900) proxies into DST. If pairing fails
+        or the tunnel won't start, note:
+
+        - What **Settings → Mobile App** shows: "cloudflared not found", the tunnel
+          URL (you can redact the random part), or "Mobile bridge not running".
+        - Whether the phone shows "Cannot reach server" after scanning.
+        - On the host, the bridge health probe:
 
         ```
-        tailscale version
-        tailscale status
+        curl http://127.0.0.1:47900/_dst/health
         ```
 
-        Also note what the page itself shows: "Tailscale isn't installed", the
-        "Tailscale isn't connected (state: …)" card, or a populated device list
-        with something wrong. Leave blank if your bug isn't about Tailscale.
+        Leave blank if your bug isn't about mobile/remote access.
       placeholder: |
-        Page shows: "Tailscale isn't connected (state: NeedsLogin)"
-        tailscale version: 1.xx.x
-        tailscale status: <redacted>
+        Settings > Mobile App shows: tunnel active https://<redacted>.trycloudflare.com
+        Phone shows: "Cannot reach server"
+        curl http://127.0.0.1:47900/_dst/health: {"ok":true}
       render: shell
     validations:
       required: false

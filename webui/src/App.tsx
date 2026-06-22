@@ -13,7 +13,6 @@ import { MapSpinUp } from './pages/MapSpinUp'
 import { SetupWizard } from './pages/SetupWizard'
 import { Settings } from './pages/Settings'
 import { TerminalPage } from './pages/Terminal'
-import { Tailscale } from './pages/Tailscale'
 import { Broadcasts } from './pages/Broadcasts'
 import { PageStub } from './pages/PageStub'
 import { StatusProvider } from './hooks/useStatus'
@@ -34,10 +33,10 @@ function Boundary({ name, children }: { name: string; children: React.ReactNode 
 export default function App() {
   // The free-form PowerShell page can run arbitrary commands on the host
   // as the DuneServer service user. It's safe locally (you're already on
-  // the host with admin) but a foot-gun for remote viewers (friend over
-  // Tailscale), so we redirect /terminal to Server Health for them. The
-  // backend /ws/terminal route enforces this too — this is just the UX
-  // half so the page doesn't render an empty failing terminal.
+  // the host with admin) but a foot-gun for remote viewers (a friend on the
+  // Cloudflare remote portal), so we redirect /terminal to Server Health for
+  // them. The backend /ws/terminal route enforces this too — this is just the
+  // UX half so the page doesn't render an empty failing terminal.
   const showTerminal = isLocalViewer()
 
   // Issue #280: when the portal is loaded in a real browser (not the app's
@@ -75,12 +74,6 @@ export default function App() {
           <Route path="/map-spinup" element={<Boundary name="Map SpinUp"><MapSpinUp /></Boundary>} />
           <Route path="/settings"   element={<Boundary name="Settings"><Settings /></Boundary>} />
           <Route path="/setup"      element={<Boundary name="Setup Wizard"><SetupWizard /></Boundary>} />
-          <Route
-            path="/tailscale"
-            element={isLocalViewer()
-              ? <Boundary name="Tailscale"><Tailscale /></Boundary>
-              : <Navigate to="/" replace />}
-          />
           {/* /monitoring merged into Dashboard in v6.1 — redirect old path */}
           <Route path="/monitoring" element={<Boundary name="Dashboard"><Dashboard /></Boundary>} />
           <Route path="*"           element={<PageStub title="Not Found"   icon="HelpCircle"      description="No page at that path." phase="—" />} />
