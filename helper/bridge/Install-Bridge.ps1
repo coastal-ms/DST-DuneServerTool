@@ -50,20 +50,46 @@ function Ensure-ScheduledTask {
         Unregister-ScheduledTask -TaskName $TaskName -Confirm:$false
     }
 
-    # The task action is a *supervisor loop*, not the daemon directly. It
-    # relaunches DstHelperBridge.ps1 within seconds whenever the daemon exits
-    # for any reason — crash, unhandled error, or an external kill (which exits
-    # 0xC000013A and is logged by Task Scheduler as a stop, not a failure, so
-    # RestartOnFailure never fires for it). Because the supervisor is the
-    # long-lived task process, the daemon dying no longer ends the task, so
-    # recovery does not depend on a keepalive/repetition trigger firing. The
-    # 5-second sleep prevents a tight crash loop if the daemon can't start. The
-    # bridge re-reads last-url.txt and binds a fresh loopback listener on every
-    # launch, so relaunching is always safe.
-    $supervisorCmd = "while (`$true) { try { & '$BridgeScriptPath' -Port $Port } catch { } Start-Sleep -Seconds 5 }"
-    $action = New-ScheduledTaskAction `
-        -Execute $pwsh `
-        -Argument "-NoLogo -NoProfile -WindowStyle Hidden -ExecutionPolicy Bypass -Command `"$supervisorCmd`""
+    # ----- Silent launch via a VBScript shim -----------------------------------
+    # `-WindowStyle Hidden` does NOT reliably suppress the console for a console
+    # app (pwsh) started by Task Scheduler in an interactive session: Windows
+    # allocates a visible conhost window before the flag applies, so the bridge
+    # console kept flashing/staying open. WshShell.Run(cmd, 0, False) creates the
+    # process with the window hidden FROM THE START (window style 0), which is the
+    # only reliable way to keep it silent (same shim the DST Discord bot uses).
+    #
+    # The supervisor loop and the VBS shim are generated into a user-writable dir
+    # (the install dir under Program Files is read-only at runtime). The supervisor
+    # is a real .ps1 file (no console-escaping nightmares): a process-wide mutex
+    # makes only ONE supervisor survive (a duplicate exits immediately); it then
+    # relaunches the daemon within ~5s whenever it exits. The daemon has its OWN
+    # single-instance mutex too (see DstHelperBridge.ps1).
+    $dataDir = Join-Path $env:LOCALAPPDATA 'DuneServer'
+    if (-not (Test-Path -LiteralPath $dataDir)) { New-Item -ItemType Directory -Path $dataDir -Force | Out-Null }
+    $supervisorPs1 = Join-Path $dataDir 'bridge-supervisor.ps1'
+    $launcherVbs   = Join-Path $dataDir 'run-bridge-hidden.vbs'
+
+    $supervisorBody = @"
+`$c = `$false
+`$sm = [System.Threading.Mutex]::new(`$true, 'Global\DstBridgeSup_$Port', [ref]`$c)
+try { if (-not `$c -and -not `$sm.WaitOne(0)) { return } } catch {}
+while (`$true) {
+    try { & '$BridgeScriptPath' -Port $Port } catch {}
+    Start-Sleep -Seconds 5
+}
+"@
+    Set-Content -LiteralPath $supervisorPs1 -Value $supervisorBody -Encoding UTF8 -Force
+
+    $pwshForVbs = $pwsh -replace '"', '""'
+    $supForVbs  = $supervisorPs1 -replace '"', '""'
+    $vbsBody = @"
+Dim sh
+Set sh = CreateObject("WScript.Shell")
+sh.Run """$pwshForVbs"" -NoLogo -NoProfile -ExecutionPolicy Bypass -WindowStyle Hidden -File ""$supForVbs""", 0, False
+"@
+    Set-Content -LiteralPath $launcherVbs -Value $vbsBody -Encoding ASCII -Force
+
+    $action = New-ScheduledTaskAction -Execute 'wscript.exe' -Argument "`"$launcherVbs`""
 
     # Two triggers cover the cases the supervisor loop cannot heal by itself
     # (i.e. the supervisor process itself ending):

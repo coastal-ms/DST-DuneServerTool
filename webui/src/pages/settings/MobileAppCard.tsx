@@ -21,6 +21,11 @@ interface MobilePairingData {
   source?: string
   port: number
   bridge?: BridgeStatus | null
+  rendezvousBase?: string
+  pairingId?: string
+  remoteToken?: string
+  cfAccessClientId?: string
+  cfAccessClientSecret?: string
 }
 
 interface QuickTunnelStatus {
@@ -134,7 +139,26 @@ export function MobileAppCard() {
 
   const bridgePort = data?.port ?? bridge?.port ?? 47900
   const pairUrl = data?.url ?? (tunnel?.running ? tunnel.url : '') ?? ''
-  const qrPayload = data && pairUrl ? JSON.stringify({ url: pairUrl, token: data.token }) : ''
+  // Prefer the zero-config rendezvous identity: the phone stores the stable
+  // pairingId + permanent remoteToken and resolves the live address itself, so a
+  // single scan keeps working across reboots / tunnel-address changes. The url +
+  // per-launch token remain in the payload for legacy/LAN fallback.
+  const hasRendezvous = !!(data?.rendezvousBase && data?.pairingId && data?.remoteToken)
+  const qrPayload = data && (hasRendezvous || pairUrl)
+    ? JSON.stringify({
+        ...(hasRendezvous ? {
+          rendezvousBase: data.rendezvousBase,
+          pairingId: data.pairingId,
+          remoteToken: data.remoteToken,
+        } : {}),
+        ...(pairUrl ? { url: pairUrl } : {}),
+        token: data.token,
+        ...(data.cfAccessClientId && data.cfAccessClientSecret ? {
+          cfAccessClientId: data.cfAccessClientId,
+          cfAccessClientSecret: data.cfAccessClientSecret,
+        } : {}),
+      })
+    : ''
 
   return (
     <div className="card">
@@ -173,8 +197,9 @@ export function MobileAppCard() {
                 {tunnelBusy ? <><Icon name="Loader2" className="animate-spin" /> Working…</> : <><Icon name="Square" /> Stop tunnel</>}
               </button>
               <div className="help-text" style={{ marginTop: '0.5rem' }}>
-                This address changes each time the tunnel restarts — re-scan the QR code if you stop and start it.
-                For a permanent address, add your own domain under <strong>Remote Access</strong>.
+                You only scan <strong>once</strong>. The app saves a permanent pairing code and
+                finds your server automatically every time it connects — even though this
+                address changes when the tunnel restarts, you never need to re-scan.
               </div>
             </div>
           ) : (
@@ -183,7 +208,7 @@ export function MobileAppCard() {
                 {tunnelBusy ? <><Icon name="Loader2" className="animate-spin" /> Starting…</> : <><Icon name="Play" /> Start secure tunnel</>}
               </button>
               <div className="help-text" style={{ marginTop: '0.5rem' }}>
-                Free and private: no account, no domain, no router setup. Start the tunnel, then scan the QR code with the mobile app.
+                Free and private: no account, no domain, no router setup. Start the tunnel, then scan the QR code once with the mobile app.
               </div>
             </div>
           )}

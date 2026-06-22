@@ -52,6 +52,53 @@ Register-DuneRoute -Method PUT -Path '/api/remote-access/acl' -Handler {
     }
 }
 
+Register-DuneRoute -Method GET -Path '/api/remote-access/mobile-service-token' -Handler {
+    param($req, $res, $routeParams, $body)
+    try {
+        $st = Get-DuneMobileServiceToken
+        Write-DuneJson -Response $res -Body @{
+            configured = ([bool]$st.clientId -and [bool]$st.clientSecret)
+            clientId   = $st.clientId
+        }
+    } catch {
+        Write-DuneError -Response $res -Status 500 -Message $_.Exception.Message
+    }
+}
+
+# Save or clear the mobile Cloudflare Access service token. An empty clientId AND
+# clientSecret clears it. The secret is write-only from the UI's perspective: it
+# is accepted here but never echoed back by the GET route.
+Register-DuneRoute -Method PUT -Path '/api/remote-access/mobile-service-token' -Handler {
+    param($req, $res, $routeParams, $body)
+    try {
+        $clientId = ''
+        $clientSecret = ''
+        if ($body -is [hashtable]) {
+            if ($body.ContainsKey('clientId'))     { $clientId     = [string]$body['clientId'] }
+            if ($body.ContainsKey('clientSecret')) { $clientSecret = [string]$body['clientSecret'] }
+        } elseif ($null -ne $body) {
+            if ($body.PSObject.Properties.Name -contains 'clientId')     { $clientId     = [string]$body.clientId }
+            if ($body.PSObject.Properties.Name -contains 'clientSecret') { $clientSecret = [string]$body.clientSecret }
+        }
+        $clientId = $clientId.Trim()
+        $clientSecret = $clientSecret.Trim()
+
+        if (-not $clientId -and -not $clientSecret) {
+            Clear-DuneMobileServiceToken
+            Write-DuneJson -Response $res -Body @{ configured = $false; clientId = '' }
+            return
+        }
+        if (-not $clientId -or -not $clientSecret) {
+            Write-DuneError -Response $res -Status 400 -Message 'Both Client ID and Client Secret are required.'
+            return
+        }
+        $saved = Save-DuneMobileServiceToken -ClientId $clientId -ClientSecret $clientSecret
+        Write-DuneJson -Response $res -Body @{ configured = $true; clientId = $saved.clientId }
+    } catch {
+        Write-DuneError -Response $res -Status 500 -Message "Save failed: $($_.Exception.Message)"
+    }
+}
+
 Register-DuneRoute -Method GET -Path '/api/remote-access/audit-log' -Handler {
     param($req, $res, $routeParams, $body)
     try {

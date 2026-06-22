@@ -5,9 +5,12 @@ import {
   saveAcl,
   getAuditLog,
   getCloudflaredStatus,
+  getMobileServiceToken,
+  saveMobileServiceToken,
   type RemoteAcl,
   type CloudflaredStatus,
   type RemoteAuditEntry,
+  type MobileServiceTokenStatus,
 } from '../../api/remoteAccess'
 
 // Settings → Remote Access card (issue #74).
@@ -35,16 +38,29 @@ export function RemoteAccessCard() {
   const [ownerBuffer, setOwnerBuffer] = useState('')   // remembered owner while toggled off
   const [enabled, setEnabled] = useState(false)        // UI on/off, decoupled from owner so you can enable THEN type the owner
 
+  // Mobile Cloudflare Access service token (lets the phone app reach the custom
+  // domain past Access without an interactive login). The secret is write-only:
+  // the server never echoes it back, so the input stays blank unless re-entered.
+  const [svc, setSvc] = useState<MobileServiceTokenStatus | null>(null)
+  const [svcClientId, setSvcClientId] = useState('')
+  const [svcClientSecret, setSvcClientSecret] = useState('')
+  const [svcSaving, setSvcSaving] = useState(false)
+  const [svcMsg, setSvcMsg] = useState<string | null>(null)
+
   const load = useCallback(async () => {
     setLoading(true); setError(null)
     try {
-      const [a, c] = await Promise.allSettled([getAcl(), getCloudflaredStatus()])
+      const [a, c, s] = await Promise.allSettled([getAcl(), getCloudflaredStatus(), getMobileServiceToken()])
       if (a.status === 'fulfilled') {
         setAcl(a.value)
         setEnabled(!!a.value.owner)
         if (a.value.owner) setOwnerBuffer(a.value.owner)
       } else throw a.reason
       if (c.status === 'fulfilled') setCf(c.value)
+      if (s.status === 'fulfilled') {
+        setSvc(s.value)
+        setSvcClientId(s.value.clientId)
+      }
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e))
     } finally {
@@ -115,6 +131,22 @@ export function RemoteAccessCard() {
       setError(e instanceof Error ? e.message : String(e))
     } finally {
       setSaving(false)
+    }
+  }
+
+  const onSaveSvc = async () => {
+    setSvcSaving(true); setError(null); setSvcMsg(null)
+    try {
+      const saved = await saveMobileServiceToken(svcClientId.trim(), svcClientSecret.trim())
+      setSvc(saved)
+      setSvcClientId(saved.clientId)
+      setSvcClientSecret('')
+      setSvcMsg(saved.configured ? 'Saved.' : 'Cleared.')
+      window.setTimeout(() => setSvcMsg(null), 3000)
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e))
+    } finally {
+      setSvcSaving(false)
     }
   }
 
@@ -233,6 +265,52 @@ export function RemoteAccessCard() {
                   The hostname you mapped in Cloudflare. Stored for documentation —
                   DST doesn&apos;t configure cloudflared itself.
                 </p>
+              </div>
+
+              <div className="border-t border-border pt-4">
+                <label className="block text-sm font-medium mb-1">
+                  Mobile app access for this domain (service token)
+                  <span className="ml-2 pill-muted text-xs">advanced / optional</span>
+                </label>
+                <p className="text-xs text-text-dim mb-2">
+                  Only needed if you want the <strong>phone app</strong> to reach your
+                  custom domain (which is behind Cloudflare Access). Create a Service
+                  Token in Cloudflare Zero Trust, add a <em>Service Auth</em> policy to
+                  this app, and paste the Client ID + Secret here. Most hosts don&apos;t
+                  need this — the default zero-setup pairing already works.
+                  {svc?.configured && <span className="text-success"> Currently configured.</span>}
+                </p>
+                <input
+                  type="text"
+                  value={svcClientId}
+                  onChange={e => setSvcClientId(e.target.value)}
+                  className="w-full px-3 py-2 mb-2 rounded-lg bg-surface-2 border border-border text-text font-mono text-sm"
+                  placeholder="Client ID (….access)"
+                />
+                <input
+                  type="password"
+                  value={svcClientSecret}
+                  onChange={e => setSvcClientSecret(e.target.value)}
+                  className="w-full px-3 py-2 rounded-lg bg-surface-2 border border-border text-text font-mono text-sm"
+                  placeholder={svc?.configured ? 'Client Secret (hidden — re-enter to change)' : 'Client Secret'}
+                />
+                <div className="flex items-center gap-3 mt-2">
+                  <button type="button" onClick={() => { void onSaveSvc() }} disabled={svcSaving} className="btn-secondary">
+                    <Icon name={svcSaving ? 'Loader2' : 'Save'} size={14} className={svcSaving ? 'animate-spin' : ''} />
+                    {svcSaving ? 'Saving…' : 'Save service token'}
+                  </button>
+                  {svc?.configured && (
+                    <button
+                      type="button"
+                      onClick={() => { setSvcClientId(''); setSvcClientSecret(''); void onSaveSvc() }}
+                      disabled={svcSaving}
+                      className="btn-ghost text-sm"
+                    >
+                      Clear
+                    </button>
+                  )}
+                  {svcMsg && <span className="text-sm text-success">{svcMsg}</span>}
+                </div>
               </div>
 
               <div>

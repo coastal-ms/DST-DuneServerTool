@@ -207,7 +207,16 @@ function Start-DuneQuickTunnel {
 
     try {
         if (Get-Command Save-DuneConfig -ErrorAction SilentlyContinue) {
-            [void](Save-DuneConfig @{ QuickTunnelLastUrl = $url; RemoteAccessMode = 'quicktunnel' })
+            [void](Save-DuneConfig @{ QuickTunnelLastUrl = $url; RemoteAccessMode = 'quicktunnel'; RemoteAccessAutoStart = $true })
+        }
+    } catch {}
+
+    # Register this URL with the vendor rendezvous so the paired phone can find us
+    # by our stable pairing id even though this URL changes each restart.
+    # Best-effort: a rendezvous hiccup must not fail tunnel start.
+    try {
+        if (Get-Command Publish-DuneRendezvous -ErrorAction SilentlyContinue) {
+            [void](Publish-DuneRendezvous -Url $url)
         }
     } catch {}
 
@@ -228,8 +237,47 @@ function Stop-DuneQuickTunnel {
         }
     }
     Clear-DuneQuickTunnelState
+    try {
+        if (Get-Command Save-DuneConfig -ErrorAction SilentlyContinue) {
+            [void](Save-DuneConfig @{ RemoteAccessAutoStart = $false })
+        }
+    } catch {}
     if (Get-Command Write-DuneLog -ErrorAction SilentlyContinue) {
         Write-DuneLog 'QuickTunnel: stopped'
     }
     return @{ ok = $true; status = (Get-DuneQuickTunnelStatus) }
+}
+
+# Startup auto-start. If the host enabled remote access, bring the tunnel back up
+# (if down) and republish the current address to the rendezvous on every launch,
+# so a paired phone reconnects after a reboot with NO re-scan. Lean + non-blocking.
+function Initialize-DuneQuickTunnel {
+    try {
+        $autoStart = $false
+        if (Get-Command Read-DuneConfig -ErrorAction SilentlyContinue) {
+            $cfg = Read-DuneConfig
+            if ($cfg) {
+                $v = $cfg.RemoteAccessAutoStart
+                if ($v -eq $true -or "$v" -eq 'True' -or "$v" -eq 'true' -or "$v" -eq '1') { $autoStart = $true }
+            }
+        }
+        if (-not $autoStart) { return }
+
+        $st = Get-DuneQuickTunnelStatus
+        if ($st.running) {
+            if ($st.url -and (Get-Command Publish-DuneRendezvous -ErrorAction SilentlyContinue)) {
+                [void](Publish-DuneRendezvous -Url $st.url)
+            }
+            return
+        }
+        # Not running: start it in the background (Start-DuneQuickTunnel publishes).
+        $libDir = $PSScriptRoot
+        Start-Job -ScriptBlock {
+            param($dir)
+            try {
+                Get-ChildItem -Path $dir -Filter *.ps1 -ErrorAction SilentlyContinue | ForEach-Object { . $_.FullName }
+                if (Get-Command Start-DuneQuickTunnel -ErrorAction SilentlyContinue) { [void](Start-DuneQuickTunnel) }
+            } catch {}
+        } -ArgumentList $libDir | Out-Null
+    } catch {}
 }

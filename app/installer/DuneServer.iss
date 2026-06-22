@@ -541,6 +541,20 @@ begin
   // session and exit on their own once the parent EXE is gone.
 end;
 
+procedure StopRunningCloudflared();
+var
+  resultCode: Integer;
+begin
+  // The bundled cloudflared (free quick tunnel) runs FROM the install dir and
+  // locks its own EXE during an update, which is what triggers Setup's scary
+  // "applications in use: cloudflared" page. Stop it before the file-copy phase
+  // so updates are silent. DST relaunches the tunnel automatically after the
+  // update and republishes its new address to the rendezvous, so a paired phone
+  // simply reconnects on its own - no re-pairing / re-scanning.
+  Exec('taskkill.exe', '/F /IM cloudflared.exe /T',
+       '', SW_HIDE, ewWaitUntilTerminated, resultCode);
+end;
+
 function UninstallPreviousVersion(): Boolean;
 var
   uninstCmd, exePath, args: string;
@@ -618,6 +632,7 @@ end;
 function PrepareToInstall(var NeedsRestart: Boolean): String;
 begin
   NeedsRestart := False;
+  StopRunningCloudflared();
   UninstallPreviousVersion();
   Result := '';
 end;

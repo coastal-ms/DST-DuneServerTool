@@ -15,24 +15,54 @@ Register-DuneRoute -Method GET -Path '/api/mobile/pairing' -Handler {
 
         $url = $null
         $source = 'none'
+        $cfClientId = ''
+        $cfClientSecret = ''
+
+        # Resolve the configured custom hostname (if any) and the mobile service
+        # token (if any) up front.
+        $hostUrl = $null
         try {
-            if (Get-Command Get-DuneQuickTunnelStatus -ErrorAction SilentlyContinue) {
-                $qt = Get-DuneQuickTunnelStatus
-                if ($qt -and $qt.running -and $qt.url) { $url = [string]$qt.url; $source = 'quicktunnel' }
+            if (Get-Command Get-DuneRemoteAcl -ErrorAction SilentlyContinue) {
+                $acl = Get-DuneRemoteAcl
+                if ($acl -and $acl.hostname) {
+                    $h = [string]$acl.hostname
+                    if ($h -notmatch '^https?://') { $h = "https://$h" }
+                    $hostUrl = $h.TrimEnd('/')
+                }
             }
         } catch {}
+        $svc = $null
+        try {
+            if (Get-Command Get-DuneMobileServiceToken -ErrorAction SilentlyContinue) {
+                $s = Get-DuneMobileServiceToken
+                if ($s -and $s.clientId -and $s.clientSecret) { $svc = $s }
+            }
+        } catch {}
+
+        # Preferred (stable): the custom domain reached past Cloudflare Access via
+        # the service token. The app sends CF-Access-Client-Id/Secret to clear the
+        # Access gate, so this is the durable address that survives reboots.
+        if ($hostUrl -and $svc) {
+            $url = $hostUrl
+            $source = 'domain-service-token'
+            $cfClientId = $svc.clientId
+            $cfClientSecret = $svc.clientSecret
+        }
+        # Otherwise the free quick tunnel (no Access gate; token-authed).
         if (-not $url) {
             try {
-                if (Get-Command Get-DuneRemoteAcl -ErrorAction SilentlyContinue) {
-                    $acl = Get-DuneRemoteAcl
-                    if ($acl -and $acl.hostname) {
-                        $h = [string]$acl.hostname
-                        if ($h -notmatch '^https?://') { $h = "https://$h" }
-                        $url = $h.TrimEnd('/')
-                        $source = 'domain'
-                    }
+                if (Get-Command Get-DuneQuickTunnelStatus -ErrorAction SilentlyContinue) {
+                    $qt = Get-DuneQuickTunnelStatus
+                    if ($qt -and $qt.running -and $qt.url) { $url = [string]$qt.url; $source = 'quicktunnel' }
                 }
             } catch {}
+        }
+        # Last resort: the bare custom domain with NO service token. The browser
+        # portal can still reach it (email login), but the app cannot pass Access
+        # without the service token — kept so the UI can prompt the user.
+        if (-not $url -and $hostUrl) {
+            $url = $hostUrl
+            $source = 'domain'
         }
 
         $bridge = $null
@@ -40,12 +70,35 @@ Register-DuneRoute -Method GET -Path '/api/mobile/pairing' -Handler {
             try { $bridge = Get-DuneBridgeStatus } catch {}
         }
 
+        # Zero-config rendezvous identity: the phone stores the stable pairingId +
+        # permanent remoteToken and resolves the CURRENT url from the rendezvous on
+        # every use, so it keeps working after reboots / tunnel restarts with no
+        # re-pairing. The per-launch token + url above remain for legacy/fallback.
+        $rendezvousBase = ''
+        $pairingId      = ''
+        $remoteToken    = ''
+        try {
+            if (Get-Command Get-DuneRemoteIdentity -ErrorAction SilentlyContinue) {
+                $ident = Get-DuneRemoteIdentity
+                $pairingId   = [string]$ident.pairingId
+                $remoteToken = [string]$ident.remoteToken
+            }
+            if (Get-Command Get-DuneRendezvousBase -ErrorAction SilentlyContinue) {
+                $rendezvousBase = [string](Get-DuneRendezvousBase)
+            }
+        } catch {}
+
         Write-DuneJson -Response $res -Body @{
-            token  = $script:DuneToken
-            url    = $url
-            source = $source
-            port   = $port
-            bridge = $bridge
+            token                = $script:DuneToken
+            url                  = $url
+            source               = $source
+            port                 = $port
+            bridge               = $bridge
+            cfAccessClientId     = $cfClientId
+            cfAccessClientSecret = $cfClientSecret
+            rendezvousBase       = $rendezvousBase
+            pairingId            = $pairingId
+            remoteToken          = $remoteToken
         }
     } catch {
         Write-DuneError -Response $res -Status 500 -Message $_.Exception.Message

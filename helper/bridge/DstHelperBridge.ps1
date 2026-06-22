@@ -440,4 +440,43 @@ function Start-Bridge {
     }
 }
 
-Start-Bridge
+# SINGLE-INSTANCE GUARD. Two daemons both registering the SAME http.sys prefix
+# (http://127.0.0.1:47900/) was the cause of recurring "bridge running but not
+# responding" wedges: http.sys round-robins queued requests between the two
+# registrations, so if EITHER instance is busy/stuck (e.g. a blocked request),
+# requests routed to it hang and /_dst/health times out. A process-wide named
+# mutex guarantees exactly one daemon ever owns the listener. A duplicate
+# instance (spawned by a duplicate supervisor) returns immediately WITHOUT
+# binding; its supervisor simply retries on its next loop. We must NOT call
+# `exit` here — the supervisor invokes this script with `&` in its own process,
+# so `exit` would kill the supervisor too; `return` cleanly ends only this script.
+$mutexName = "Global\DstHelperBridge_$Port"
+$createdNew = $false
+$bridgeMutex = $null
+try {
+    $bridgeMutex = [System.Threading.Mutex]::new($true, $mutexName, [ref]$createdNew)
+} catch {
+    # Fall back to running without the guard rather than failing closed.
+    $bridgeMutex = $null
+}
+
+if ($bridgeMutex -and -not $createdNew) {
+    # Another daemon owns the port. Briefly wait in case it is shutting down,
+    # then yield so we never double-register the prefix.
+    $acquired = $false
+    try { $acquired = $bridgeMutex.WaitOne(2000) } catch { $acquired = $false }
+    if (-not $acquired) {
+        Write-BridgeLog "Another bridge instance already owns port $Port; this instance is yielding."
+        try { $bridgeMutex.Dispose() } catch { }
+        return
+    }
+}
+
+try {
+    Start-Bridge
+} finally {
+    if ($bridgeMutex) {
+        try { $bridgeMutex.ReleaseMutex() } catch { }
+        try { $bridgeMutex.Dispose() } catch { }
+    }
+}
