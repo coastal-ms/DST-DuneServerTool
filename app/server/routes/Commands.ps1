@@ -115,6 +115,22 @@ Register-DuneRoute -Method POST -Path '/api/commands/run/{name}' -Handler {
         return
     }
 
+    # Remote (tunneled) callers may only run an explicit allow-list of safe,
+    # non-destructive commands. A request arriving through the Cloudflare tunnel
+    # always carries CF/proxy edge headers (never present on a genuine
+    # host-local request), so use their presence to decide. Local requests on
+    # the host are unrestricted. Keep this list in sync with the Commands page's
+    # REMOTE_ALLOWED set (webui/src/pages/Commands.tsx).
+    $remoteAllowedCommands = @('startup', 'start', 'restart', 'start-vm', 'reboot')
+    $isTunneled = $false
+    foreach ($h in @('Cf-Access-Authenticated-User-Email', 'Cf-Ray', 'Cf-Connecting-Ip', 'X-Forwarded-For', 'X-Forwarded-Proto')) {
+        try { if ($req.Headers[$h]) { $isTunneled = $true; break } } catch {}
+    }
+    if ($isTunneled -and ($name -notin $remoteAllowedCommands)) {
+        Write-DuneError -Response $res -Status 403 -Message "Command '$name' is not available remotely."
+        return
+    }
+
     # Server-side availability check — refuse if command isn't currently available.
     $state = Get-DuneCurrentState
     $av    = Get-DuneCommandAvailability -Command $cmd -State $state
