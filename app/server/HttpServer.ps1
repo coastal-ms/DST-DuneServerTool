@@ -753,8 +753,20 @@ function Invoke-DuneContext {
                     if ($remote) {
                         try { $isLoopback = [System.Net.IPAddress]::IsLoopback($remote) } catch { $isLoopback = $false }
                     }
-                    if (-not $isLoopback) {
-                        Write-Host "[ws] 403 local-only path '$rawPath' from $remote" -ForegroundColor Yellow
+                    # SECURITY: the mobile/remote bridge and cloudflared both
+                    # connect from 127.0.0.1, so RemoteEndPoint alone marks a
+                    # TUNNELED request as loopback and would wrongly allow it.
+                    # Any Cloudflare / proxy edge header means the request arrived
+                    # through the tunnel (never present on a genuine host-local
+                    # request), so treat it as NON-local regardless of the socket
+                    # address. Keeps the free-form Terminal host-only even though
+                    # the full dashboard is now reachable remotely.
+                    $isTunneled = $false
+                    foreach ($h in @('Cf-Access-Authenticated-User-Email','Cf-Ray','Cf-Connecting-Ip','X-Forwarded-For','X-Forwarded-Proto')) {
+                        try { if ($req.Headers[$h]) { $isTunneled = $true; break } } catch {}
+                    }
+                    if ((-not $isLoopback) -or $isTunneled) {
+                        Write-Host "[ws] 403 local-only path '$rawPath' from $remote (tunneled=$isTunneled)" -ForegroundColor Yellow
                         $res.StatusCode = 403
                         $res.OutputStream.Close()
                         return
@@ -921,16 +933,33 @@ function Invoke-DuneContext {
         return
     }
 
+    # When the full portal is reached through the Cloudflare tunnel by an
+    # authenticated, allow-listed user (CF Access identity verified against the
+    # remote ACL), inject the per-launch token into index.html so the portal's
+    # API calls authenticate -- the same mechanism the /remote/ portal uses.
+    # This makes the FULL dashboard usable remotely. A genuine local request
+    # (the desktop app, which carries no CF Access header) is unaffected and
+    # keeps its existing token path. The free-form Terminal stays host-only via
+    # the LocalOnly tunnel guard above.
+    $injectForRemote = $false
+    try {
+        if ($req.Headers['Cf-Access-Authenticated-User-Email']) {
+            $auth = Test-DuneRemoteRequest -Request $req
+            $injectForRemote = [bool]$auth.ok
+        }
+    } catch {}
+
     $filePath = Resolve-DuneStaticPath -UrlPath $rawPath
     if ($filePath -and (Test-Path -LiteralPath $filePath -PathType Leaf)) {
-        Write-DuneFile -Response $res -Path $filePath
+        $isIndex = ($filePath -match '\\index\.html$')
+        Write-DuneFile -Response $res -Path $filePath -InjectRemoteToken:($injectForRemote -and $isIndex)
         return
     }
 
     # SPA fallback — serve index.html for client-side routes
     $indexPath = Join-Path $script:DuneDistRoot 'index.html'
     if (Test-Path -LiteralPath $indexPath -PathType Leaf) {
-        Write-DuneFile -Response $res -Path $indexPath
+        Write-DuneFile -Response $res -Path $indexPath -InjectRemoteToken:$injectForRemote
         return
     }
 
