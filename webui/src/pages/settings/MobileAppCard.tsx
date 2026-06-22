@@ -139,26 +139,31 @@ export function MobileAppCard() {
 
   const bridgePort = data?.port ?? bridge?.port ?? 47900
   const pairUrl = data?.url ?? (tunnel?.running ? tunnel.url : '') ?? ''
-  // Prefer the zero-config rendezvous identity: the phone stores the stable
-  // pairingId + permanent remoteToken and resolves the live address itself, so a
-  // single scan keeps working across reboots / tunnel-address changes. The url +
-  // per-launch token remain in the payload for legacy/LAN fallback.
+  // Prefer a direct stable URL (Tailscale Funnel / custom domain) — the QR is a
+  // clean { url, token } the app uses as-is. The token is the permanent remote
+  // token (survives restarts). The rendezvous payload is only a fallback for the
+  // legacy quick-tunnel path (ephemeral URL); Funnel needs none of it.
   const hasRendezvous = !!(data?.rendezvousBase && data?.pairingId && data?.remoteToken)
-  const qrPayload = data && (hasRendezvous || pairUrl)
-    ? JSON.stringify({
-        ...(hasRendezvous ? {
-          rendezvousBase: data.rendezvousBase,
-          pairingId: data.pairingId,
-          remoteToken: data.remoteToken,
-        } : {}),
-        ...(pairUrl ? { url: pairUrl } : {}),
-        token: data.token,
-        ...(data.cfAccessClientId && data.cfAccessClientSecret ? {
-          cfAccessClientId: data.cfAccessClientId,
-          cfAccessClientSecret: data.cfAccessClientSecret,
-        } : {}),
-      })
-    : ''
+  const stableToken = data?.remoteToken || data?.token || ''
+  const qrPayload = !data
+    ? ''
+    : pairUrl
+      ? JSON.stringify({
+          url: pairUrl,
+          token: stableToken,
+          ...(data.cfAccessClientId && data.cfAccessClientSecret ? {
+            cfAccessClientId: data.cfAccessClientId,
+            cfAccessClientSecret: data.cfAccessClientSecret,
+          } : {}),
+        })
+      : hasRendezvous
+        ? JSON.stringify({
+            rendezvousBase: data.rendezvousBase,
+            pairingId: data.pairingId,
+            remoteToken: data.remoteToken,
+            token: data.token,
+          })
+        : ''
 
   return (
     <div className="card">
