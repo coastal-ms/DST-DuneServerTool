@@ -327,7 +327,7 @@ export function MobileAppCard() {
                   <h4 style={{ margin: '0 0 0.5rem 0', fontSize: '14px', color: '#0369a1' }}>Manual Entry Details</h4>
                   <div style={{ fontSize: '13px', fontFamily: 'monospace', color: '#334155' }}>
                     <div style={{ marginBottom: '4px', wordBreak: 'break-all' }}><strong>URL:</strong> {pairUrl}</div>
-                    {localViewer && <div style={{ wordBreak: 'break-all' }}><strong>Token:</strong> {data.remoteToken || data.token}</div>}
+                    <div style={{ wordBreak: 'break-all' }}><strong>Token:</strong> {data.token}</div>
                   </div>
                   <div className="help-text" style={{ marginTop: '0.5rem' }}>
                     On the same network you can also use <code>http://&lt;this-pc-lan-ip&gt;:{bridgePort}</code>.
