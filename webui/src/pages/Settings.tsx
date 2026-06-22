@@ -9,6 +9,7 @@ import { fmtToolVersion } from '../format'
 import { AppearanceCard } from './settings/AppearanceCard'
 import { PublicIpCard } from './settings/PublicIpCard'
 import { RemoteAccessCard } from './settings/RemoteAccessCard'
+import { MobileAppCard } from './settings/MobileAppCard'
 
 const FIELDS: {
   key: string
@@ -950,6 +951,7 @@ export function Settings() {
         </div>
       </form>
 
+      <MobileAppCard />
     </>
   )
 }

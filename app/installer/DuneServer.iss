@@ -16,7 +16,7 @@
 ;                 -> NOT touched by install or uninstall (preserves user config)
 
 #define MyAppName        "Dune Server Tool"
-#define MyAppVersion "12.10.3"
+#define MyAppVersion "12.11.0"
 #define MyAppPublisher   "Dune Awakening Self-Hosted Tool"
 #define MyAppURL         "https://github.com/coastal-ms/DST-DuneServerTool"
 #define MyAppExeName     "DuneServer.exe"
@@ -107,6 +107,13 @@ Source: "..\resources\remote-scripts\*"; DestDir: "{app}\resources\remote-script
 ; DunePreflight.ps1 is the WinForms results window, README.md explains usage.
 Source: "..\..\tools\preflight\*"; DestDir: "{app}\tools\preflight"; Flags: ignoreversion recursesubdirs
 
+; Mobile/remote app bridge daemon (loopback reverse-proxy)
+Source: "..\..\helper\bridge\*"; DestDir: "{app}\helper\bridge"; Flags: ignoreversion recursesubdirs
+
+; cloudflared — powers the free Cloudflare quick tunnel for mobile/remote access.
+; Staged into app\installer\vendor\ by Build-Installer.ps1 before compilation.
+Source: "vendor\cloudflared.exe"; DestDir: "{app}"; Flags: ignoreversion
+
 [Icons]
 ; Start Menu shortcut (always created)
 Name: "{group}\{#MyAppName}"; Filename: "{app}\{#MyAppExeName}"; IconFilename: "{app}\{#MyAppExeName}"; Comment: "Dune Awakening server management"; Flags: runminimized
@@ -151,6 +158,9 @@ Filename: "powershell.exe"; Parameters: "-NoProfile -ExecutionPolicy Bypass -Com
 ; autostart preference. Idempotent; never blocks install on failure.
 Filename: "powershell.exe"; Parameters: "-NoProfile -ExecutionPolicy Bypass -Command ""try {{ Get-ScheduledTask -TaskPath '\Dune Server\' -ErrorAction SilentlyContinue | Where-Object {{ $_.TaskName -like 'DuneServer-Autostart-*' }} | Unregister-ScheduledTask -Confirm:$false -ErrorAction SilentlyContinue }} catch {{}}"""; Flags: runhidden waituntilterminated; Check: ShouldClearLegacyAutostart
 
+; Install mobile/remote app bridge (loopback proxy + self-healing task)
+Filename: "powershell.exe"; Parameters: "-NoProfile -ExecutionPolicy Bypass -File ""{app}\helper\bridge\Install-Bridge.ps1"""; Flags: runhidden waituntilterminated
+
 ; Launch immediately after install. Two entries so both interactive AND
 ; silent (auto-update) installs relaunch the app:
 ;   * Interactive: postinstall shows the "Launch Dune Server" checkbox on
@@ -172,6 +182,9 @@ Type: filesandordirs; Name: "{app}"
 ; per user; iterate and remove them all. RunHidden, never block uninstall on
 ; failure (the task may already be gone, the folder may not exist, etc.).
 Filename: "powershell.exe"; Parameters: "-NoProfile -ExecutionPolicy Bypass -Command ""try {{ Get-ScheduledTask -TaskPath '\Dune Server\' -ErrorAction SilentlyContinue | Where-Object {{ $_.TaskName -like 'DuneServer-Autostart-*' }} | Unregister-ScheduledTask -Confirm:$false -ErrorAction SilentlyContinue }} catch {{}}"""; Flags: runhidden; RunOnceId: "RemoveDuneAutostartTasks"
+
+; Remove mobile/remote app bridge
+Filename: "powershell.exe"; Parameters: "-NoProfile -ExecutionPolicy Bypass -File ""{app}\helper\bridge\Uninstall-Bridge.ps1"""; Flags: runhidden; RunOnceId: "RemoveMobileBridge"
 
 [Code]
 // ============================================================
@@ -528,6 +541,20 @@ begin
   // session and exit on their own once the parent EXE is gone.
 end;
 
+procedure StopRunningCloudflared();
+var
+  resultCode: Integer;
+begin
+  // The bundled cloudflared (free quick tunnel) runs FROM the install dir and
+  // locks its own EXE during an update, which is what triggers Setup's scary
+  // "applications in use: cloudflared" page. Stop it before the file-copy phase
+  // so updates are silent. DST relaunches the tunnel automatically after the
+  // update and republishes its new address to the rendezvous, so a paired phone
+  // simply reconnects on its own - no re-pairing / re-scanning.
+  Exec('taskkill.exe', '/F /IM cloudflared.exe /T',
+       '', SW_HIDE, ewWaitUntilTerminated, resultCode);
+end;
+
 function UninstallPreviousVersion(): Boolean;
 var
   uninstCmd, exePath, args: string;
@@ -605,6 +632,7 @@ end;
 function PrepareToInstall(var NeedsRestart: Boolean): String;
 begin
   NeedsRestart := False;
+  StopRunningCloudflared();
   UninstallPreviousVersion();
   Result := '';
 end;

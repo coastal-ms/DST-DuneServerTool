@@ -637,7 +637,34 @@ business logic — they're not separate codebases.
 
 ---
 
-## Remote access *(advanced — no third-party software)*
+## Remote access & Mobile App
+
+DST ships with a **Mobile App** companion that lets you monitor server health, view live player lists, and manage basic gameplay admin directly from your phone.
+
+Because the DST Desktop backend exposes full admin capabilities, it **strictly binds to 127.0.0.1 (localhost) and is never exposed on your LAN or the public internet.** To reach it from your phone (or a friend's browser), DST uses a **Cloudflare quick tunnel**: a small bundled `cloudflared` helper connects *outbound* from your PC to Cloudflare and hands back a temporary `https://<random>.trycloudflare.com` address. Nothing inbound is opened — **no VPN, no account, no domain, and no router port-forwarding.**
+
+### Mobile App Setup
+
+1. Open the **DST Desktop App** → **Settings → Mobile App**.
+2. Click **Start secure tunnel**. DST launches the tunnel and shows a QR code.
+3. Open the **DST Mobile App** and scan the QR code. (No camera? Tap **Enter Code Manually** and paste the URL + token shown.)
+
+That's it — your friends need **nothing** installed on their phones. The loopback bridge that the tunnel points at is installed automatically and never leaves `127.0.0.1`.
+
+> The quick-tunnel address changes every time the tunnel restarts. If you stop/start it, re-scan the QR code. For a **permanent** address (and email-gated access), see *Co-admin access* below.
+
+### Co-admin access (a friend's browser)
+
+A friend can reach your **web portal** the same way:
+
+- **Free / quick:** start the secure tunnel and share the `https://…trycloudflare.com` URL + token. Anyone with the URL + token has full admin — share only with people you trust at that level.
+- **Stable / gated (optional upgrade):** if you own a domain, point it at a Cloudflare **named tunnel** and enable **Cloudflare Access** so only specific email addresses can reach a fixed hostname (e.g. `dune.example.com`). Set the owner email and admin allow-list under **Settings → Remote Access**; DST gates `/api/remote/*` on the `Cf-Access-Authenticated-User-Email` header plus its per-launch token.
+
+> **Note:** The built-in PowerShell terminal page inside the DST web UI is strictly refused over remote connections. It will only load if you are physically at the host machine using `127.0.0.1`.
+
+---
+
+## Remote access *(advanced — SSH Tunnel)*
 
 DST binds its web portal to `127.0.0.1` only — there is **no** built-in
 remote login, and exposing the port to the public internet would be unsafe

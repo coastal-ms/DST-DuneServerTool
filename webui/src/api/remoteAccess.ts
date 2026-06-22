@@ -48,3 +48,21 @@ export function getAuditLog(lines = 50): Promise<{ entries: RemoteAuditEntry[]; 
 export function getCloudflaredStatus(): Promise<CloudflaredStatus> {
   return api<CloudflaredStatus>('/api/remote-access/cloudflared-status')
 }
+
+export interface MobileServiceTokenStatus {
+  configured: boolean
+  clientId: string
+}
+
+export function getMobileServiceToken(): Promise<MobileServiceTokenStatus> {
+  return api<MobileServiceTokenStatus>('/api/remote-access/mobile-service-token')
+}
+
+// Save (both fields) or clear (both empty) the mobile Cloudflare Access service
+// token. The secret is write-only: the GET route never echoes it back.
+export function saveMobileServiceToken(clientId: string, clientSecret: string): Promise<MobileServiceTokenStatus> {
+  return api<MobileServiceTokenStatus>('/api/remote-access/mobile-service-token', {
+    method: 'PUT',
+    body: JSON.stringify({ clientId, clientSecret }),
+  })
+}

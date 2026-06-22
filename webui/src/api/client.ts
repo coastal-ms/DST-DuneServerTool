@@ -31,6 +31,24 @@ function getToken(): string {
   return sessionStorage.getItem(TOKEN_KEY) ?? ''
 }
 
+// Whether the full (desktop) portal has any usable auth token. Used to detect a
+// remote viewer who reached the full portal "/" over a tunnel with NO token
+// (e.g. a friend who opened the Cloudflare hostname root): every API call would
+// 401 and the dashboard would render an alarming "Invalid or missing token"
+// shell. main.tsx uses this to redirect such viewers to the proper /remote/
+// portal instead. The SSH co-admin pattern carries a ?t= token, so it is
+// unaffected.
+export function hasUsableToken(): boolean {
+  try {
+    if (typeof window === 'undefined') return true
+    const url = new URL(window.location.href)
+    if (url.searchParams.get('t')) return true
+    if ((window as unknown as { __duneRemoteToken?: string }).__duneRemoteToken) return true
+    if (sessionStorage.getItem(TOKEN_KEY)) return true
+  } catch { /* fall through */ }
+  return false
+}
+
 export class ApiError extends Error {
   status: number
   body?: unknown
@@ -80,8 +98,7 @@ export async function api<T = unknown>(
   return body as T
 }
 
-export function wsUrl(path: string): string {
-  const token = getToken()
+export function wsUrl(path: string): string {  const token = getToken()
   const proto = window.location.protocol === 'https:' ? 'wss:' : 'ws:'
   const host = window.location.host
   const sep = path.includes('?') ? '&' : '?'

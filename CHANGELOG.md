@@ -13,6 +13,23 @@ here cover everything those tags shipped.
 
 ## [Unreleased]
 
+## [12.11.0] - 2026-06-21
+
+### Changed
+
+- **Remote access and the Mobile App now use a free Cloudflare quick tunnel instead of Tailscale.** Open **Settings → Mobile App** and click **Start secure tunnel** — DST runs the bundled `cloudflared`, which connects outbound to Cloudflare and returns an `https://…trycloudflare.com` address. No VPN, no account, no domain, and no router port-forwarding; people using the app need nothing installed on their phones. Scan the QR code (or paste the URL + token) to pair.
+- **The mobile bridge now binds loopback (127.0.0.1) only.** Because cloudflared connects locally, the bridge no longer needs a Windows Firewall rule, a URL ACL, or administrator rights — a simpler, more private setup that works without elevation.
+- **The mobile app pairs by URL.** Pairing payloads are now `{url, token}` (legacy `{ip, port, token}` codes still work), so the same app reaches your server over a quick tunnel, your own domain, or `http://<lan-ip>:47900` on the same network.
+
+### Added
+
+- **Bundled cloudflared** for one-click secure tunnels, with Start/Stop tunnel controls and live status in **Settings → Mobile App**.
+- **Optional stable address (bring your own domain):** keep using the existing **Settings → Remote Access** Cloudflare named-tunnel + Access path for a permanent, email-gated hostname.
+
+### Removed
+
+- **Tailscale integration** (the Tailscale settings page, its API, and the host/phone Tailscale requirements). Remote access no longer depends on any third-party VPN.
+
 ## [12.10.3] - 2026-06-21
 
 ### Added

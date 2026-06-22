@@ -48,6 +48,88 @@ function Get-DuneRemoteAuditLogPath {
     return (Join-Path $dir 'remote-audit.log')
 }
 
+function Get-DuneMobileServiceTokenPath {
+    $dir = Join-Path $env:APPDATA 'DuneServer'
+    return (Join-Path $dir 'mobile-service-token.json')
+}
+
+# ---------- Mobile Cloudflare Access service token ---------------------------
+#
+# The mobile app reaches the stable custom domain (which sits behind Cloudflare
+# Access) by sending a Cloudflare Access SERVICE TOKEN — a non-interactive
+# Client ID + Client Secret pair the host creates in the Cloudflare Zero Trust
+# dashboard. The app sends them as CF-Access-Client-Id / CF-Access-Client-Secret
+# headers; Cloudflare validates them at the edge and lets the request through to
+# the tunnel without an email login. DST itself still gates on the per-launch
+# DuneToken, so the service token only proves "this request is allowed past the
+# Access gate" — it is NOT a DST credential.
+#
+# Stored locally in %APPDATA%\DuneServer\mobile-service-token.json. The secret
+# is a Cloudflare credential, not a DST one, but it is still sensitive: it is
+# handed to the phone via the pairing QR and is never returned by the GET route
+# (only a `configured` flag + the non-secret Client ID).
+
+# Returns @{ clientId=''; clientSecret='' }. Never writes to disk; a missing or
+# malformed file yields the empty default so callers don't have to nil-check.
+function Get-DuneMobileServiceToken {
+    $default = @{ clientId = ''; clientSecret = '' }
+    $path = Get-DuneMobileServiceTokenPath
+    if (-not (Test-Path -LiteralPath $path)) { return $default }
+    try {
+        $raw = Get-Content -LiteralPath $path -Raw -Encoding UTF8 -ErrorAction Stop
+        if ([string]::IsNullOrWhiteSpace($raw)) { return $default }
+        $obj = $raw | ConvertFrom-Json -ErrorAction Stop
+    } catch {
+        try {
+            if (Get-Command Write-DuneLog -ErrorAction SilentlyContinue) {
+                Write-DuneLog "mobile-service-token.json malformed; ignored. $($_.Exception.Message)" 'WARN'
+            }
+        } catch {}
+        return $default
+    }
+    $clientId = ''
+    if ($obj.PSObject.Properties.Name -contains 'clientId' -and $obj.clientId) {
+        $clientId = ([string]$obj.clientId).Trim()
+    }
+    $clientSecret = ''
+    if ($obj.PSObject.Properties.Name -contains 'clientSecret' -and $obj.clientSecret) {
+        $clientSecret = ([string]$obj.clientSecret).Trim()
+    }
+    return @{ clientId = $clientId; clientSecret = $clientSecret }
+}
+
+# Atomic write (temp + Move-Item -Force), same crash-safety pattern as the ACL.
+function Save-DuneMobileServiceToken {
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory)][string]$ClientId,
+        [Parameter(Mandatory)][string]$ClientSecret
+    )
+    $out = [ordered]@{
+        clientId     = $ClientId.Trim()
+        clientSecret = $ClientSecret.Trim()
+    }
+    $path = Get-DuneMobileServiceTokenPath
+    $dir  = Split-Path -Parent $path
+    if (-not (Test-Path -LiteralPath $dir)) {
+        New-Item -ItemType Directory -Path $dir -Force | Out-Null
+    }
+    $tmp = "$path.tmp"
+    $json = ($out | ConvertTo-Json -Depth 4)
+    Set-Content -LiteralPath $tmp -Value $json -Encoding UTF8 -Force
+    Move-Item -LiteralPath $tmp -Destination $path -Force
+    return $out
+}
+
+# Remove the stored service token (disables stable-domain app access; pairing
+# then falls back to the quick tunnel). Idempotent.
+function Clear-DuneMobileServiceToken {
+    $path = Get-DuneMobileServiceTokenPath
+    try {
+        if (Test-Path -LiteralPath $path) { Remove-Item -LiteralPath $path -Force }
+    } catch {}
+}
+
 # ---------- ACL --------------------------------------------------------------
 
 # Returns a hashtable {owner=''; admins=@()} even when the file is missing or

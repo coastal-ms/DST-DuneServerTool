@@ -219,7 +219,7 @@ function Invoke-DunePlayerGiveItemLive {
         [Parameter(Mandatory)] [string] $Template,
         [int]    $Quantity = 1,
         [double] $Durability = 1.0,
-        [bool]   $AllowOverflow = $false
+        [bool]   $AllowOverflow = $true
     )
     if ($Quantity -le 0)   { $Quantity = 1 }
     if ($Durability -le 0) { $Durability = 1.0 }

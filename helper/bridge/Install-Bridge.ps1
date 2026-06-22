@@ -1,96 +1,36 @@
-<#
+﻿<#
 .SYNOPSIS
-    Installs the DST Friend Helper bridge as a Scheduled Task on the host's PC.
+    Installs the DST mobile/remote bridge as a Scheduled Task on the host's PC.
 
 .DESCRIPTION
-    Performs three setup steps (all idempotent):
-      1. Registers a URL ACL so a non-admin user can bind http://+:<port>/.
-      2. Creates an inbound Windows Firewall rule scoped to the Tailscale
-         interface only (no LAN / no public exposure).
-      3. Registers a Scheduled Task that runs a *supervisor loop* under
-         PowerShell 7 (pwsh.exe) at user logon. The supervisor relaunches
-         DstHelperBridge.ps1 within seconds whenever it exits (crash, error, or
-         external kill), so the bridge self-heals without depending on a
-         restart/keepalive trigger firing. A 2-minute keepalive trigger plus the
-         logon trigger are kept as a backstop for the rarer case of the
-         supervisor process itself being killed (IgnoreNew avoids duplicates
-         while it is healthy).
+    Registers a Scheduled Task that runs a *supervisor loop* under PowerShell 7
+    (pwsh.exe) at user logon. The supervisor relaunches DstHelperBridge.ps1
+    within seconds whenever it exits (crash, error, or external kill), so the
+    bridge self-heals without depending on a restart/keepalive trigger firing. A
+    2-minute keepalive trigger plus the logon trigger are kept as a backstop for
+    the rarer case of the supervisor process itself being killed (IgnoreNew
+    avoids duplicates while it is healthy).
 
-    Must be run elevated (admin) — both the URL ACL and the firewall rule
-    require admin rights to create.
+    The bridge binds LOOPBACK (127.0.0.1) only and is reached remotely via a
+    Cloudflare quick tunnel (cloudflared connects out from this PC). Because
+    nothing is exposed on the LAN/public interfaces, this installer needs NO
+    admin rights, NO URL ACL, and NO Windows Firewall rule.
 
 .PARAMETER Port
-    TCP port to bind. Default 47900. Must match Install/Friend config.
+    TCP loopback port to bind. Default 47900. Must match the DST app's bridge port.
 
 .PARAMETER TaskName
     Scheduled task name. Default 'DST Friend Helper Bridge'.
-
-.PARAMETER TailscaleInterfaceAlias
-    Windows interface alias for Tailscale. Default 'Tailscale'.
 #>
 
 [CmdletBinding()]
 param(
     [int]$Port = 47900,
-    [string]$TaskName = 'DST Friend Helper Bridge',
-    [string]$TailscaleInterfaceAlias = 'Tailscale'
+    [string]$TaskName = 'DST Friend Helper Bridge'
 )
 
 $ErrorActionPreference = 'Stop'
 Set-StrictMode -Version Latest
-
-function Assert-Elevated {
-    $id = [System.Security.Principal.WindowsIdentity]::GetCurrent()
-    $principal = [System.Security.Principal.WindowsPrincipal]::new($id)
-    if (-not $principal.IsInRole([System.Security.Principal.WindowsBuiltInRole]::Administrator)) {
-        throw "Install-Bridge.ps1 must be run from an elevated (admin) PowerShell."
-    }
-}
-
-function Ensure-UrlAcl {
-    param([int]$Port)
-    $url = "http://+:$Port/"
-    $user = "$env:USERDOMAIN\$env:USERNAME"
-    Write-Host "Registering URL ACL: $url for $user ..."
-    # `netsh http add urlacl` is idempotent-ish: it errors if the ACL exists.
-    # Delete-then-add is the simplest path to a clean state.
-    & netsh http delete urlacl url=$url 2>&1 | Out-Null
-    $out = & netsh http add urlacl url=$url user=$user 2>&1
-    if ($LASTEXITCODE -ne 0) {
-        throw "netsh add urlacl failed: $out"
-    }
-}
-
-function Ensure-FirewallRule {
-    param(
-        [int]$Port,
-        [string]$InterfaceAlias
-    )
-    $ruleName = "DST Friend Helper Bridge ($Port/TCP, Tailscale)"
-    Write-Host "Configuring firewall rule '$ruleName' (Tailscale only) ..."
-
-    $existing = Get-NetFirewallRule -DisplayName $ruleName -ErrorAction SilentlyContinue
-    if ($existing) {
-        Remove-NetFirewallRule -DisplayName $ruleName
-    }
-
-    # Resolve the interface alias to its index. Fail loudly with a helpful
-    # message if Tailscale isn't installed / interface is named differently.
-    $iface = Get-NetIPInterface -InterfaceAlias $InterfaceAlias -ErrorAction SilentlyContinue | Select-Object -First 1
-    if (-not $iface) {
-        throw "No network interface with alias '$InterfaceAlias' found. Is Tailscale installed and running? `nList available interfaces: Get-NetIPInterface | Select-Object InterfaceAlias"
-    }
-
-    New-NetFirewallRule `
-        -DisplayName $ruleName `
-        -Direction Inbound `
-        -Action Allow `
-        -Protocol TCP `
-        -LocalPort $Port `
-        -InterfaceAlias $InterfaceAlias `
-        -Profile Any `
-        -Description 'Allow inbound to DST Friend Helper Bridge on the Tailscale interface only.' | Out-Null
-}
 
 function Ensure-ScheduledTask {
     param(
@@ -110,20 +50,46 @@ function Ensure-ScheduledTask {
         Unregister-ScheduledTask -TaskName $TaskName -Confirm:$false
     }
 
-    # The task action is a *supervisor loop*, not the daemon directly. It
-    # relaunches DstHelperBridge.ps1 within seconds whenever the daemon exits
-    # for any reason — crash, unhandled error, or an external kill (which exits
-    # 0xC000013A and is logged by Task Scheduler as a stop, not a failure, so
-    # RestartOnFailure never fires for it). Because the supervisor is the
-    # long-lived task process, the daemon dying no longer ends the task, so
-    # recovery does not depend on a keepalive/repetition trigger firing. The
-    # 5-second sleep prevents a tight crash loop if the daemon can't start (e.g.
-    # a missing URL ACL). The bridge re-reads last-url.txt and binds a fresh
-    # listener on every launch, so relaunching is always safe.
-    $supervisorCmd = "while (`$true) { try { & '$BridgeScriptPath' -Port $Port } catch { } Start-Sleep -Seconds 5 }"
-    $action = New-ScheduledTaskAction `
-        -Execute $pwsh `
-        -Argument "-NoLogo -NoProfile -WindowStyle Hidden -ExecutionPolicy Bypass -Command `"$supervisorCmd`""
+    # ----- Silent launch via a VBScript shim -----------------------------------
+    # `-WindowStyle Hidden` does NOT reliably suppress the console for a console
+    # app (pwsh) started by Task Scheduler in an interactive session: Windows
+    # allocates a visible conhost window before the flag applies, so the bridge
+    # console kept flashing/staying open. WshShell.Run(cmd, 0, False) creates the
+    # process with the window hidden FROM THE START (window style 0), which is the
+    # only reliable way to keep it silent (same shim the DST Discord bot uses).
+    #
+    # The supervisor loop and the VBS shim are generated into a user-writable dir
+    # (the install dir under Program Files is read-only at runtime). The supervisor
+    # is a real .ps1 file (no console-escaping nightmares): a process-wide mutex
+    # makes only ONE supervisor survive (a duplicate exits immediately); it then
+    # relaunches the daemon within ~5s whenever it exits. The daemon has its OWN
+    # single-instance mutex too (see DstHelperBridge.ps1).
+    $dataDir = Join-Path $env:LOCALAPPDATA 'DuneServer'
+    if (-not (Test-Path -LiteralPath $dataDir)) { New-Item -ItemType Directory -Path $dataDir -Force | Out-Null }
+    $supervisorPs1 = Join-Path $dataDir 'bridge-supervisor.ps1'
+    $launcherVbs   = Join-Path $dataDir 'run-bridge-hidden.vbs'
+
+    $supervisorBody = @"
+`$c = `$false
+`$sm = [System.Threading.Mutex]::new(`$true, 'Global\DstBridgeSup_$Port', [ref]`$c)
+try { if (-not `$c -and -not `$sm.WaitOne(0)) { return } } catch {}
+while (`$true) {
+    try { & '$BridgeScriptPath' -Port $Port } catch {}
+    Start-Sleep -Seconds 5
+}
+"@
+    Set-Content -LiteralPath $supervisorPs1 -Value $supervisorBody -Encoding UTF8 -Force
+
+    $pwshForVbs = $pwsh -replace '"', '""'
+    $supForVbs  = $supervisorPs1 -replace '"', '""'
+    $vbsBody = @"
+Dim sh
+Set sh = CreateObject("WScript.Shell")
+sh.Run """$pwshForVbs"" -NoLogo -NoProfile -ExecutionPolicy Bypass -WindowStyle Hidden -File ""$supForVbs""", 0, False
+"@
+    Set-Content -LiteralPath $launcherVbs -Value $vbsBody -Encoding ASCII -Force
+
+    $action = New-ScheduledTaskAction -Execute 'wscript.exe' -Argument "`"$launcherVbs`""
 
     # Two triggers cover the cases the supervisor loop cannot heal by itself
     # (i.e. the supervisor process itself ending):
@@ -159,23 +125,28 @@ function Ensure-ScheduledTask {
         -Trigger @($logonTrigger, $keepAlive) `
         -Settings $settings `
         -Principal $principal `
-        -Description 'Reverse-proxies friend helper requests over Tailscale to the locally running DST instance. Self-healing: a supervisor loop relaunches the daemon within seconds if it crashes or is killed; a 2-minute keepalive trigger restarts the supervisor itself if it dies; IgnoreNew prevents duplicates while it is healthy.' | Out-Null
+        -Description 'Reverse-proxies mobile/remote requests on loopback to the locally running DST instance (reached externally via a Cloudflare quick tunnel). Self-healing: a supervisor loop relaunches the daemon within seconds if it crashes or is killed; a 2-minute keepalive trigger restarts the supervisor itself if it dies; IgnoreNew prevents duplicates while it is healthy.' | Out-Null
 }
-
-Assert-Elevated
 
 $bridgeScript = Join-Path $PSScriptRoot 'DstHelperBridge.ps1'
 if (-not (Test-Path -LiteralPath $bridgeScript)) {
     throw "DstHelperBridge.ps1 not found next to installer at $bridgeScript"
 }
 
-Ensure-UrlAcl -Port $Port
-Ensure-FirewallRule -Port $Port -InterfaceAlias $TailscaleInterfaceAlias
+# Best-effort cleanup of the legacy all-interfaces exposure from older
+# (Tailscale-era) installs: the firewall rule and URL ACL are no longer used now
+# that the bridge binds loopback only. Ignore failures (not present / not admin).
+try {
+    $legacyRule = Get-NetFirewallRule -DisplayName '*Friend Helper Bridge*' -ErrorAction SilentlyContinue
+    if ($legacyRule) { $legacyRule | Remove-NetFirewallRule -ErrorAction SilentlyContinue }
+} catch {}
+try { & netsh http delete urlacl url="http://+:$Port/" 2>&1 | Out-Null } catch {}
+
 Ensure-ScheduledTask -TaskName $TaskName -Port $Port -BridgeScriptPath $bridgeScript
 
 Write-Host ""
 Write-Host "Bridge installed." -ForegroundColor Green
-Write-Host "  Port:          $Port/TCP (Tailscale interface only)"
+Write-Host "  Port:          $Port/TCP (loopback only; reached via Cloudflare tunnel)"
 Write-Host "  Task:          $TaskName"
 Write-Host "  Script:        $bridgeScript"
 Write-Host ""

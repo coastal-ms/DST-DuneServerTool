@@ -47,3 +47,6 @@ docs/img/_originals/
 
 testResults.xml
 
+
+# Staged cloudflared binary (downloaded/copied at build time, not committed)
+app/installer/vendor/

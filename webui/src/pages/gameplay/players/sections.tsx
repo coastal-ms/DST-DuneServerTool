@@ -33,13 +33,14 @@ import {
   getPlayerJourneyNodes, completeJourneyNode, resetJourneyNode,
   getTrainerCatalog, getTrainerStatus, unlockTrainer, resetTrainerSkills,
   getMainQuestCatalog, unlockMainQuest, getAqlTrials, applyAqlTrial,
+  getVehicleKitCatalog,
   type Player, type PlayerEvent, type PlayerStats, type ProgressionPreset, type SpecTrackFull,
   type CatalogItem, type ItemPackage, type GiveItemEntry,
   type LandsraadHouse, type LandsraadIniSetting,
   type JourneyNode, type TrainerInfo, type TrainerStatus, type MainQuestInfo, type AqlTrialInfo,
   type PlayerVehicleRow,
+  type VehicleTemplate, type VehicleKitCatalog,
 } from '../../../api/gameplay'
-import { VEHICLE_CATALOG, VEHICLE_KIT_FUEL_TEMPLATE, VEHICLE_KIT_TORCH_TEMPLATE, type VehicleTemplate } from '../../../data/vehicles'
 import { fmtNum, fmtSolari } from '../shared'
 
 type Flash = (msg: string, kind?: 'ok' | 'err') => void
@@ -869,8 +870,7 @@ function ActionRow({ def, player, busy, stats, open, danger, onToggle, runAction
               onSubmit={msg => runAction(def, () => chatWhisper(String(player.id), msg))} />
           ) : def.custom === 'spawn-vehicle' || def.custom === 'vehicle-kit' ? (
             <VehicleKitForm busy={busy}
-              onSubmit={(veh, overflow) => runAction(def, async () => {
-                const parts = [...veh.kit, ...veh.unique, VEHICLE_KIT_FUEL_TEMPLATE, VEHICLE_KIT_TORCH_TEMPLATE]
+              onSubmit={(veh, parts, overflow) => runAction(def, async () => {
                 for (const tpl of parts) await giveItem(player.id, tpl, veh.qty?.[tpl] ?? 1, 0, overflow)
                 const count = veh.kit.length + veh.unique.length
                 return { message: `Gave ${veh.label} kit — ${count} part${count === 1 ? '' : 's'} + Large Fuel Cell + Welding Torch Mk5 to ${player.name}.` }
@@ -1364,14 +1364,29 @@ export function GivePackageForm({ busy, playerName, targetLabel, showOverflow = 
 // chassis/modules. Shared by both the "Spawn Vehicle" and "Give Vehicle Kit"
 // actions, which call the same handler.
 function VehicleKitForm({ busy, onSubmit }: {
-  busy: boolean; onSubmit: (veh: VehicleTemplate, allowOverflow: boolean) => void
+  busy: boolean; onSubmit: (veh: VehicleTemplate, parts: string[], allowOverflow: boolean) => void
 }) {
-  const kitVehicles = useMemo(() => VEHICLE_CATALOG.filter(v => v.kit.length > 0), [])
-  const [vid, setVid] = useState(kitVehicles[0]?.id ?? '')
+  const [catalog, setCatalog] = useState<VehicleKitCatalog | null>(null)
+  const [catErr, setCatErr] = useState(false)
+  const [vid, setVid] = useState('')
   const [names, setNames] = useState<Record<string, string>>({})
   const [overflow, setOverflow] = useState(false)
-  const veh = kitVehicles.find(v => v.id === vid) || kitVehicles[0]
   const selectCls = 'w-full px-3 py-2 rounded-lg bg-surface-2 border border-border text-text text-sm focus:outline-none focus:ring-2 focus:ring-ibad focus:border-ibad/50'
+
+  // Fetch the shared vehicle-kit catalog once (single source of truth, served by
+  // the backend). Default the selection to the first vehicle that has part items.
+  useEffect(() => {
+    let cancelled = false
+    getVehicleKitCatalog()
+      .then(cat => {
+        if (cancelled) return
+        setCatalog(cat)
+        const first = cat.vehicles.find(v => v.kit.length > 0)
+        if (first) setVid(first.id)
+      })
+      .catch(() => { if (!cancelled) setCatErr(true) })
+    return () => { cancelled = true }
+  }, [])
 
   // Resolve readable part names from the item catalog for the preview. Falls
   // back to the raw template id if the catalog hasn't loaded or lacks an entry.
@@ -1388,11 +1403,17 @@ function VehicleKitForm({ busy, onSubmit }: {
     return () => { cancelled = true }
   }, [])
 
+  if (catErr) return <div className="text-sm text-danger">Failed to load vehicle catalog.</div>
+  if (!catalog) return <div className="text-sm text-text-muted">Loading vehicle catalog…</div>
+
+  const kitVehicles = catalog.vehicles.filter(v => v.kit.length > 0)
+  const veh = kitVehicles.find(v => v.id === vid) || kitVehicles[0]
   if (!veh) return <div className="text-sm text-text-muted">No vehicles with part kits available.</div>
 
   const label = (tpl: string) => names[tpl] || tpl
   const qtyOf = (tpl: string) => veh.qty?.[tpl] ?? 1
   const qtySuffix = (tpl: string) => qtyOf(tpl) > 1 ? ` ×${qtyOf(tpl)}` : ''
+  const parts = [...veh.kit, ...veh.unique, catalog.fuelTemplate, catalog.torchTemplate]
 
   return (
     <div className="space-y-3">
@@ -1419,16 +1440,16 @@ function VehicleKitForm({ busy, onSubmit }: {
             </li>
           ))}
           <li className="flex items-center gap-1.5 text-amber-200/90">
-            <Icon name="Fuel" size={12} className="shrink-0" /> {label(VEHICLE_KIT_FUEL_TEMPLATE)}
+            <Icon name="Fuel" size={12} className="shrink-0" /> {label(catalog.fuelTemplate)}
           </li>
           <li className="flex items-center gap-1.5 text-amber-200/90">
-            <Icon name="Wrench" size={12} className="shrink-0" /> {label(VEHICLE_KIT_TORCH_TEMPLATE)}
+            <Icon name="Wrench" size={12} className="shrink-0" /> {label(catalog.torchTemplate)}
           </li>
         </ul>
       </div>
       <OverflowToggle checked={overflow} disabled={busy} onChange={setOverflow} />
       <button className="btn-primary w-full" disabled={busy}
-        onClick={() => onSubmit(veh, overflow)}>
+        onClick={() => onSubmit(veh, parts, overflow)}>
         {busy ? <Icon name="Loader2" size={13} className="animate-spin" /> : <Icon name="Truck" size={13} />} Give Vehicle Kit
       </button>
     </div>

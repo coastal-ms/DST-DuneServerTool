@@ -127,7 +127,10 @@ Register-DuneRoute -Method POST -Path '/api/gameplay/players/give-item' -Handler
         $qty  = Get-DuneBodyInt -Body $body -Name 'qty'
         $qual = Get-DuneBodyInt -Body $body -Name 'quality'
         $fls  = [string](Get-DuneBodyValue -Body $body -Name 'fls_id')
-        $overflow = [bool](Get-DuneBodyValue -Body $body -Name 'allow_overflow')
+        # Drop-to-ground (overflow) defaults ON so a full inventory never silently
+        # swallows the give; pass allow_overflow=false explicitly to opt out.
+        $ovRaw = Get-DuneBodyValue -Body $body -Name 'allow_overflow'
+        $overflow = if ($null -eq $ovRaw) { $true } else { [bool]$ovRaw }
         if ($null -eq $qual) { $qual = 0L }
         if ($null -eq $pawn -or $pawn -le 0) { Write-DuneError -Response $res -Status 400 -Message 'pawn_id is required.'; return }
         if (-not $tmpl) { Write-DuneError -Response $res -Status 400 -Message 'template is required.'; return }

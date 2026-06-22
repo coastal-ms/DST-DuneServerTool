@@ -10,7 +10,7 @@ export type NavItem = {
   badge?: string
   // When true, this item is hidden from the sidebar / menubar for any
   // viewer that isn't on the host machine itself (e.g. a friend reaching
-  // the portal over Tailscale). The corresponding /api or /ws routes
+  // the portal remotely). The corresponding /api or /ws routes
   // MUST also enforce loopback-only on the server — the client filter is
   // just a UX hide, not a security boundary.
   localOnly?: boolean
@@ -29,7 +29,6 @@ export const NAV_ITEMS: NavItem[] = [
   { to: '/sietches',    label: 'Sietches',     icon: 'Network',         group: 'database' },
   { to: '/map-spinup',  label: 'Map SpinUp',   icon: 'Globe',           group: 'database' },
   { to: '/settings',    label: 'Settings',     icon: 'Settings',        group: 'system' },
-  { to: '/tailscale',   label: 'Tailscale',    icon: 'Share2',          group: 'system', localOnly: true },
   { to: '/setup',       label: 'Setup Wizard', icon: 'Wand2',           group: 'system' },
 ]
 
