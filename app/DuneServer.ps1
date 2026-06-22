@@ -581,6 +581,16 @@ if (Get-Command Start-DuneGameplayBotScheduler -ErrorAction SilentlyContinue) {
     try { [void](Start-DuneGameplayBotScheduler -ServerDir $serverDir) } catch {}
 }
 
+# Self-heal the mobile-app bridge (Tailscale-scoped firewall rule + URL ACL +
+# background task). Covers the common failure where Tailscale wasn't connected
+# when DST was installed, so the installer's firewall step silently failed and
+# the phone could never reach the server. No-op unless elevated, Tailscale is up,
+# and something is actually missing; repairs in the background so startup isn't
+# delayed. Fully best-effort — never blocks or crashes startup.
+if (Get-Command Initialize-DuneMobileBridge -ErrorAction SilentlyContinue) {
+    try { Initialize-DuneMobileBridge -ServerDir $serverDir } catch {}
+}
+
 # ---------- Token --------------------------------------------------------------
 
 $script:LaunchToken = [Guid]::NewGuid().ToString('N')

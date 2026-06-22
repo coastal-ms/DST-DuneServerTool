@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { StyleSheet, Text, View, ScrollView, ActivityIndicator, TextInput, TouchableOpacity, StatusBar } from 'react-native';
 import { CameraView, useCameraPermissions } from 'expo-camera';
 import AsyncStorage from '@react-native-async-storage/async-storage';
@@ -35,6 +35,10 @@ const DEFAULT_KIT_TORCH_TEMPLATE = 'RepairTool5';
 export default function App() {
   const [permission, requestPermission] = useCameraPermissions();
   const [scanned, setScanned] = useState(false);
+  // Synchronous lock so the camera's rapid-fire onBarcodeScanned (many calls/sec
+  // while a QR is in view) only pairs ONCE. State updates lag a render behind, so
+  // a ref is the only reliable guard against duplicate "Paired successfully" alerts.
+  const pairingLock = useRef(false);
   const [serverInfo, setServerInfo] = useState<{ip: string, port: number, token: string} | null>(null);
   const [serverState, setServerState] = useState<any>(null);
   const [loading, setLoading] = useState(true);
@@ -336,6 +340,8 @@ export default function App() {
   };
 
   const handleBarCodeScanned = (result: any) => {
+    if (pairingLock.current) return;   // ignore the burst of repeat callbacks
+    pairingLock.current = true;
     setScanned(true);
     try {
       const payload = JSON.parse(result.data);
@@ -343,13 +349,21 @@ export default function App() {
         setServerInfo(payload);
         AsyncStorage.setItem('dst_server', JSON.stringify(payload));
         alert('Paired successfully!');
-      } else alert('Invalid QR Code.');
-    } catch (e) { alert('Invalid QR Code format.'); }
+      } else {
+        alert('Invalid QR Code.');
+        pairingLock.current = false;   // allow another scan attempt
+      }
+    } catch (e) {
+      alert('Invalid QR Code format.');
+      pairingLock.current = false;
+    }
   };
 
   const disconnect = () => {
     setServerInfo(null);
     setServerState(null);
+    pairingLock.current = false;
+    setScanned(false);
     AsyncStorage.removeItem('dst_server');
   };
 
@@ -389,7 +403,7 @@ export default function App() {
             <View style={styles.cameraContainer}>
               <CameraView style={styles.camera} facing="back" onBarcodeScanned={scanned ? undefined : handleBarCodeScanned} barcodeScannerSettings={{ barcodeTypes: ["qr"] }} />
             </View>
-            {scanned && <View style={{ marginTop: 15 }}><DstButton title="Tap to Scan Again" onPress={() => setScanned(false)} /></View>}
+            {scanned && <View style={{ marginTop: 15 }}><DstButton title="Tap to Scan Again" onPress={() => { pairingLock.current = false; setScanned(false); }} /></View>}
             <View style={{ marginTop: 25 }}><DstButton title="Enter Code Manually" type="secondary" onPress={() => setManualMode(true)} /></View>
           </>
         )}
