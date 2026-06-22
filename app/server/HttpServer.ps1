@@ -567,10 +567,27 @@ function Resolve-DuneStaticPath {
 
 function Test-DuneToken {
     param($Request)
-    if ([string]::IsNullOrEmpty($script:DuneToken)) { return $true }  # dev-mode escape hatch
     $hdr = $Request.Headers['X-Dune-Token']
     if (-not $hdr) { $hdr = $Request.QueryString['t'] }
-    return ($hdr -eq $script:DuneToken)
+
+    # Per-launch token (desktop portal + local API). Empty == dev-mode escape hatch.
+    if ([string]::IsNullOrEmpty($script:DuneToken)) { return $true }
+    if ($hdr -eq $script:DuneToken) { return $true }
+
+    # Permanent remote token (the paired mobile app / friend magic link). The
+    # per-launch token rotates every start, so the phone holds this stable one
+    # instead. Loaded once and cached in this (main-loop) runspace.
+    if ([string]::IsNullOrEmpty($script:DuneRemoteToken)) {
+        try {
+            if (Get-Command Get-DuneRemoteToken -ErrorAction SilentlyContinue) {
+                $script:DuneRemoteToken = [string](Get-DuneRemoteToken)
+            }
+        } catch {}
+    }
+    if (-not [string]::IsNullOrEmpty($script:DuneRemoteToken) -and $hdr -eq $script:DuneRemoteToken) {
+        return $true
+    }
+    return $false
 }
 
 # ---------- Main loop ----------------------------------------------------------

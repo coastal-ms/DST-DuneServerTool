@@ -1,7 +1,15 @@
 import { useState, useEffect, useRef } from 'react';
 import { StyleSheet, Text, View, ScrollView, ActivityIndicator, TextInput, TouchableOpacity, StatusBar } from 'react-native';
 import { CameraView, useCameraPermissions } from 'expo-camera';
-import AsyncStorage from '@react-native-async-storage/async-storage';
+import * as SecureStore from 'expo-secure-store';
+
+// Pairing is persisted in the OS keychain/keystore (encrypted at rest) via
+// expo-secure-store, NOT AsyncStorage (which is plaintext on disk). The payload
+// is a small JSON blob, well under SecureStore's ~2KB per-item limit.
+const STORE_KEY = 'dst_server';
+const saveServer = (s: any) => SecureStore.setItemAsync(STORE_KEY, JSON.stringify(s));
+const loadServer = () => SecureStore.getItemAsync(STORE_KEY);
+const clearServer = () => SecureStore.deleteItemAsync(STORE_KEY);
 
 // --- Custom UI Components ---
 const DstButton = ({ title, onPress, type = 'primary', disabled = false, loading = false }: { title: string, onPress: () => void, type?: 'primary'|'danger'|'warning'|'secondary', disabled?: boolean, loading?: boolean }) => {
@@ -39,13 +47,75 @@ export default function App() {
   // while a QR is in view) only pairs ONCE. State updates lag a render behind, so
   // a ref is the only reliable guard against duplicate "Paired successfully" alerts.
   const pairingLock = useRef(false);
-  type ServerInfo = { url?: string; ip?: string; port?: number; token: string };
+  type ServerInfo = {
+    url?: string; ip?: string; port?: number; token?: string;
+    // Zero-config rendezvous pairing: resolve the live url from pairingId and
+    // authenticate with the permanent remoteToken (survives server reboots).
+    rendezvousBase?: string; pairingId?: string; remoteToken?: string;
+    // Optional advanced (bring-your-own-domain behind Cloudflare Access).
+    cfAccessClientId?: string; cfAccessClientSecret?: string;
+  };
   const [serverInfo, setServerInfo] = useState<ServerInfo | null>(null);
   // Build the API base URL. New pairings store a full `url` (a Cloudflare quick
   // tunnel, a custom hostname, or http://<lan-ip>:<port>); legacy pairings
   // stored ip+port, still honored as a fallback for already-paired devices.
   const apiBase = (si: ServerInfo) => (si.url ? si.url.replace(/\/+$/, '') : `http://${si.ip}:${si.port}`);
   const apiHost = (si: ServerInfo) => apiBase(si).replace(/^https?:\/\//, '');
+
+  // Current resolved base URL (from the rendezvous), cached across renders, plus
+  // a reactive copy for display. Reset whenever serverInfo changes.
+  const resolvedBaseRef = useRef<string | null>(null);
+  const [liveHost, setLiveHost] = useState('');
+
+  // Auth headers for every API call: the permanent remoteToken when present
+  // (rendezvous pairing), else the legacy per-launch token. CF Access service
+  // token headers are added only for the optional bring-your-own-domain path.
+  const authHeaders = (si: ServerInfo, extra?: Record<string, string>): Record<string, string> => {
+    const h: Record<string, string> = { 'X-Dune-Token': (si.remoteToken || si.token || '') };
+    if (si.cfAccessClientId && si.cfAccessClientSecret) {
+      h['CF-Access-Client-Id'] = si.cfAccessClientId;
+      h['CF-Access-Client-Secret'] = si.cfAccessClientSecret;
+    }
+    return { ...h, ...(extra || {}) };
+  };
+
+  // Resolve the CURRENT base URL. Prefers the rendezvous (pairingId -> live url)
+  // so the app keeps working after the tunnel's address changes; falls back to a
+  // directly-stored url / ip:port (legacy pairings, LAN).
+  const resolveBase = async (si: ServerInfo, force = false): Promise<string> => {
+    if (!force && resolvedBaseRef.current) return resolvedBaseRef.current;
+    if (si.rendezvousBase && si.pairingId) {
+      try {
+        const r = await fetch(`${si.rendezvousBase.replace(/\/+$/, '')}/r/${encodeURIComponent(si.pairingId)}`);
+        if (r.ok) {
+          const j = await r.json();
+          if (j && j.url) {
+            const u = String(j.url).replace(/\/+$/, '');
+            resolvedBaseRef.current = u;
+            setLiveHost(u.replace(/^https?:\/\//, ''));
+            return u;
+          }
+        }
+      } catch {}
+    }
+    const fallback = apiBase(si);
+    resolvedBaseRef.current = fallback;
+    setLiveHost(fallback.replace(/^https?:\/\//, ''));
+    return fallback;
+  };
+
+  // Fetch against the server, auto-resolving (and re-resolving once on failure)
+  // the current address via the rendezvous. Injects auth headers automatically.
+  const apiFetch = async (si: ServerInfo, path: string, init?: RequestInit): Promise<Response> => {
+    const headers = authHeaders(si, init?.headers as Record<string, string> | undefined);
+    let base = await resolveBase(si, false);
+    try {
+      return await fetch(`${base}${path}`, { ...init, headers });
+    } catch (e) {
+      base = await resolveBase(si, true);   // address may have moved (tunnel restart)
+      return await fetch(`${base}${path}`, { ...init, headers });
+    }
+  };
   const [serverState, setServerState] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [manualMode, setManualMode] = useState(false);
@@ -91,7 +161,7 @@ export default function App() {
   const [vehicleCatalog, setVehicleCatalog] = useState<{ fuelTemplate: string; torchTemplate: string; vehicles: any[] } | null>(null);
 
   useEffect(() => {
-    AsyncStorage.getItem('dst_server').then(data => {
+    loadServer().then(data => {
       if (data) setServerInfo(JSON.parse(data));
       setLoading(false);
     });
@@ -99,17 +169,15 @@ export default function App() {
 
   const fetchStatus = async () => {
     if (!serverInfo) return;
-    const url = `${apiBase(serverInfo)}/api/status`;
     try {
-      const res = await fetch(url, {
-        headers: { 'X-Dune-Token': serverInfo.token }
-      });
+      const res = await apiFetch(serverInfo, '/api/status');
       const data = await res.json();
       setServerState(data);
       setConnDiag('');
     } catch (e) {
       setServerState(null);
-      setConnDiag(`URL: ${url}\nError: ${e instanceof Error ? (e.name + ': ' + e.message) : String(e)}`);
+      const base = resolvedBaseRef.current || apiBase(serverInfo);
+      setConnDiag(`URL: ${base}/api/status\nError: ${e instanceof Error ? (e.name + ': ' + e.message) : String(e)}`);
     }
   };
 
@@ -117,9 +185,7 @@ export default function App() {
     if (!serverInfo) return;
     setLoadingPlayers(true);
     try {
-      const res = await fetch(`${apiBase(serverInfo)}/api/gameplay/players`, {
-        headers: { 'X-Dune-Token': serverInfo.token }
-      });
+      const res = await apiFetch(serverInfo, '/api/gameplay/players');
       const data = await res.json();
       const online = (data.players || []).filter((p: any) => p.online_status === 'Online');
       setPlayers(online);
@@ -134,9 +200,7 @@ export default function App() {
     if (!serverInfo) return;
     setLoadingMaps(true);
     try {
-      const res = await fetch(`${apiBase(serverInfo)}/api/map-spinup`, {
-        headers: { 'X-Dune-Token': serverInfo.token }
-      });
+      const res = await apiFetch(serverInfo, '/api/map-spinup');
       const data = await res.json();
       if (data.ok && data.maps) {
         setMaps(data.maps);
@@ -151,9 +215,7 @@ export default function App() {
   const fetchCatalog = async () => {
     if (!serverInfo) return;
     try {
-      const res = await fetch(`${apiBase(serverInfo)}/api/catalog/items`, {
-        headers: { 'X-Dune-Token': serverInfo.token }
-      });
+      const res = await apiFetch(serverInfo, '/api/catalog/items');
       const data = await res.json();
       if (Array.isArray(data.items)) setCatalog(data.items);
       else if (data.items) setCatalog(Object.keys(data.items).map(k => ({ templateId: k, ...data.items[k] })));
@@ -168,9 +230,7 @@ export default function App() {
   const fetchVehicleKits = async () => {
     if (!serverInfo) return;
     try {
-      const res = await fetch(`${apiBase(serverInfo)}/api/catalog/vehicle-kits`, {
-        headers: { 'X-Dune-Token': serverInfo.token }
-      });
+      const res = await apiFetch(serverInfo, '/api/catalog/vehicle-kits');
       const data = await res.json();
       const rawVehicles = Array.isArray(data.vehicles) ? data.vehicles : (data.vehicles ? [data.vehicles] : []);
       setVehicleCatalog({
@@ -189,6 +249,7 @@ export default function App() {
 
   useEffect(() => {
     if (serverInfo) {
+      resolvedBaseRef.current = null;   // re-resolve address for the new pairing
       fetchStatus();
       fetchPlayers();
       fetchMaps();
@@ -207,16 +268,15 @@ export default function App() {
     u = u.replace(/\/+$/, '');
     const payload = { url: u, token: manualToken.trim() };
     setServerInfo(payload);
-    AsyncStorage.setItem('dst_server', JSON.stringify(payload));
+    saveServer(payload);
     alert('Paired successfully!');
   };
 
   const restartServer = async () => {
     if (!serverInfo) return;
     try {
-      const res = await fetch(`${apiBase(serverInfo)}/api/commands/run/restart`, {
+      const res = await apiFetch(serverInfo, '/api/commands/run/restart', {
         method: 'POST',
-        headers: { 'X-Dune-Token': serverInfo.token }
       });
       if (res.ok) alert('Restart command sent successfully!');
       else alert(`Failed to restart: ${await res.text()}`);
@@ -226,9 +286,8 @@ export default function App() {
   const rebootStack = async () => {
     if (!serverInfo) return;
     try {
-      const res = await fetch(`${apiBase(serverInfo)}/api/commands/run/reboot`, {
+      const res = await apiFetch(serverInfo, '/api/commands/run/reboot', {
         method: 'POST',
-        headers: { 'X-Dune-Token': serverInfo.token }
       });
       if (res.ok) alert('Reboot command sent successfully!');
       else alert(`Failed to reboot: ${await res.text()}`);
@@ -240,9 +299,9 @@ export default function App() {
     if (!title) { alert('Title is required.'); return; }
     if (actionKey) setBusyAction(actionKey);
     try {
-      const res = await fetch(`${apiBase(serverInfo)}/api/broadcasts/generic`, {
+      const res = await apiFetch(serverInfo, '/api/broadcasts/generic', {
         method: 'POST',
-        headers: { 'X-Dune-Token': serverInfo.token, 'Content-Type': 'application/json' },
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ title, body, durationSec: 30 })
       });
       if (res.ok) {
@@ -261,9 +320,9 @@ export default function App() {
     setTimeout(() => setMapCooldowns(prev => ({ ...prev, [mapId]: false })), 5000);
     const newEnabled = !currentEnabled;
     try {
-      const res = await fetch(`${apiBase(serverInfo)}/api/map-spinup/${encodeURIComponent(mapId)}`, {
+      const res = await apiFetch(serverInfo, `/api/map-spinup/${encodeURIComponent(mapId)}`, {
         method: 'POST',
-        headers: { 'X-Dune-Token': serverInfo.token, 'Content-Type': 'application/json' },
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ enabled: newEnabled })
       });
       if (res.ok) setMaps(prev => prev.map(m => m.map === mapId ? { ...m, enabled: newEnabled } : m));
@@ -275,9 +334,9 @@ export default function App() {
     if (!serverInfo) return;
     if (actionKey) setBusyAction(actionKey);
     try {
-      const res = await fetch(`${apiBase(serverInfo)}${endpoint}`, {
+      const res = await apiFetch(serverInfo, endpoint, {
         method: 'POST',
-        headers: { 'X-Dune-Token': serverInfo.token, 'Content-Type': 'application/json' },
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload)
       });
       if (res.ok) alert(successMsg);
@@ -294,9 +353,9 @@ export default function App() {
   const giveOneItem = async (template: string, qty: number): Promise<{ ok: boolean; error?: string }> => {
     if (!serverInfo || !selectedPlayer) return { ok: false, error: 'not connected' };
     try {
-      const res = await fetch(`${apiBase(serverInfo)}/api/gameplay/players/give-item`, {
+      const res = await apiFetch(serverInfo, '/api/gameplay/players/give-item', {
         method: 'POST',
-        headers: { 'X-Dune-Token': serverInfo.token, 'Content-Type': 'application/json' },
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ pawn_id: selectedPlayer.id, template, qty, quality: 0, allow_overflow: true })
       });
       if (res.ok) return { ok: true };
@@ -338,9 +397,9 @@ export default function App() {
     const items = parts.map(template => ({ template, qty: vehicle.qty?.[template] ?? 1, quality: 0 }));
     setBusyAction(`kit-${vehicle.id}`);
     try {
-      const res = await fetch(`${apiBase(serverInfo)}/api/gameplay/players/give-items`, {
+      const res = await apiFetch(serverInfo, '/api/gameplay/players/give-items', {
         method: 'POST',
-        headers: { 'X-Dune-Token': serverInfo.token, 'Content-Type': 'application/json' },
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ pawn_id: selectedPlayer.id, items, allow_overflow: true })
       });
       const count = vehicle.kit.length + (vehicle.unique?.length || 0);
@@ -361,15 +420,33 @@ export default function App() {
     try {
       const payload = JSON.parse(result.data);
       let normalized: ServerInfo | null = null;
-      if (payload.url && payload.token) {
-        normalized = { url: String(payload.url).replace(/\/+$/, ''), token: String(payload.token) };
+      const opt = (v: any) => (v === undefined || v === null || v === '' ? undefined : String(v));
+      // Preferred: zero-config rendezvous pairing (stable id + permanent token).
+      if ((payload.rendezvousBase && payload.pairingId && payload.remoteToken)) {
+        normalized = {
+          rendezvousBase: opt(payload.rendezvousBase),
+          pairingId: opt(payload.pairingId),
+          remoteToken: opt(payload.remoteToken),
+          url: payload.url ? String(payload.url).replace(/\/+$/, '') : undefined,
+          token: opt(payload.token),
+          cfAccessClientId: opt(payload.cfAccessClientId),
+          cfAccessClientSecret: opt(payload.cfAccessClientSecret),
+        };
+      } else if (payload.url && (payload.token || payload.remoteToken)) {
+        normalized = {
+          url: String(payload.url).replace(/\/+$/, ''),
+          token: opt(payload.token),
+          remoteToken: opt(payload.remoteToken),
+          cfAccessClientId: opt(payload.cfAccessClientId),
+          cfAccessClientSecret: opt(payload.cfAccessClientSecret),
+        };
       } else if (payload.ip && payload.port && payload.token) {
         // legacy QR payload (ip/port) — kept for backward compatibility
         normalized = { url: `http://${payload.ip}:${payload.port}`, token: String(payload.token) };
       }
       if (normalized) {
         setServerInfo(normalized);
-        AsyncStorage.setItem('dst_server', JSON.stringify(normalized));
+        saveServer(normalized);
         alert('Paired successfully!');
       } else {
         alert('Invalid QR Code.');
@@ -386,7 +463,9 @@ export default function App() {
     setServerState(null);
     pairingLock.current = false;
     setScanned(false);
-    AsyncStorage.removeItem('dst_server');
+    resolvedBaseRef.current = null;
+    setLiveHost('');
+    clearServer();
   };
 
   if (loading) return <View style={styles.container}><ActivityIndicator size="large" color="#0ea5e9" /></View>;
@@ -593,7 +672,7 @@ export default function App() {
     <ScrollView style={styles.container} contentContainerStyle={{ paddingBottom: 40 }} keyboardShouldPersistTaps="handled">
       <StatusBar barStyle="light-content" />
       <Text style={styles.title}>DST Dashboard</Text>
-      <Text style={styles.subtitle}>Connected to {apiHost(serverInfo)}</Text>
+      <Text style={styles.subtitle}>Connected to {liveHost || (serverInfo.rendezvousBase ? 'your server' : apiHost(serverInfo))}</Text>
       
       <View style={styles.card}>
         <Text style={styles.cardTitle}>Server State</Text>
@@ -617,7 +696,7 @@ export default function App() {
         ) : (
           <View style={[styles.alertBox, { backgroundColor: '#7f1d1d', borderColor: '#991b1b' }]}>
             <Text style={[styles.alertText, { color: '#fca5a5' }]}>
-              Cannot reach server. Make sure the secure tunnel is running in the DST Desktop app, then re-pair if its address changed.
+              Can&apos;t reach your server right now. It may be starting up or briefly offline — the app will keep retrying and reconnect automatically. You do not need to re-scan.
             </Text>
             {connDiag ? (
               <Text selectable style={{ color: '#fecaca', fontSize: 11, fontFamily: 'Courier', marginTop: 8 }}>{connDiag}</Text>
