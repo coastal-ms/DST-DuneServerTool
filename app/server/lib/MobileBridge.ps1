@@ -129,8 +129,12 @@ function Invoke-DuneBridgeRepair {
     if (-not $installer) {
         return @{ ok = $false; error = 'Could not find the bridge installer (helper\bridge\Install-Bridge.ps1) in the DST installation.' }
     }
-    $pwsh = (Get-Command pwsh.exe -ErrorAction SilentlyContinue)?.Source
-    if (-not $pwsh) { $pwsh = (Get-Command powershell.exe -ErrorAction SilentlyContinue)?.Source }
+    $pwshCmd = Get-Command pwsh.exe -ErrorAction SilentlyContinue
+    $pwsh = if ($pwshCmd) { $pwshCmd.Source } else { $null }
+    if (-not $pwsh) {
+        $psCmd = Get-Command powershell.exe -ErrorAction SilentlyContinue
+        if ($psCmd) { $pwsh = $psCmd.Source }
+    }
     if (-not $pwsh) {
         return @{ ok = $false; error = 'PowerShell executable not found to run the bridge installer.' }
     }
