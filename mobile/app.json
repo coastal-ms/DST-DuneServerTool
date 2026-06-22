@@ -15,10 +15,10 @@
     "ios": {
       "supportsTablet": true,
       "bundleIdentifier": "com.coastal.duneserver",
-      "buildNumber": "5",
+      "buildNumber": "7",
       "infoPlist": {
         "ITSAppUsesNonExemptEncryption": false,
-        "NSLocalNetworkUsageDescription": "Dune Server Tool connects to your private game server over your Tailscale network.",
+        "NSLocalNetworkUsageDescription": "Dune Server Tool connects to your private game server over a secure connection.",
         "NSAppTransportSecurity": {
           "NSAllowsArbitraryLoads": true
         }
