@@ -5,6 +5,8 @@ import './index.css'
 import App from './App.tsx'
 import RemoteApp from './pages/remote/RemoteApp'
 import { ThemeProvider } from './theme/ThemeContext'
+import { isLocalViewer } from './util/viewer'
+import { hasUsableToken } from './api/client'
 
 // Capture install prompt as early as possible so it's not lost before the
 // React hook mounts. The hook checks window.__dunePwaPrompt on first render.
@@ -27,6 +29,16 @@ if ('serviceWorker' in navigator) {
 // status APIs that would 401 over the CF tunnel.
 const isRemote = window.location.pathname === '/remote'
   || window.location.pathname.startsWith('/remote/')
+
+// A remote viewer who lands on the FULL portal ("/", etc.) with no auth token
+// would see a broken dashboard where every call 401s ("Invalid or missing
+// token"). That happens when a friend opens the Cloudflare hostname root
+// instead of /remote/. Send them to the proper mobile-first remote portal,
+// which is Cloudflare-Access-gated and receives an injected token. Local
+// viewers and SSH co-admins (who carry a ?t= token) are unaffected.
+if (!isRemote && !isLocalViewer() && !hasUsableToken()) {
+  window.location.replace('/remote/')
+}
 
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
