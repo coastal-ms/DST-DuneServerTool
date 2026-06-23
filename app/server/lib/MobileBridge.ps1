@@ -97,7 +97,7 @@ function Get-DuneBridgeStatus {
 # loopback only, so NO admin is required (no URL ACL, no firewall rule).
 # Returns @{ ok; error?; status? }.
 function Invoke-DuneBridgeRepair {
-    param([switch]$NoWait)
+    param([switch]$NoWait, [switch]$RunWhenSignedOut)
 
     $installer = Get-DuneBridgeInstallerPath
     if (-not $installer) {
@@ -119,6 +119,7 @@ function Invoke-DuneBridgeRepair {
     # element split the path and made pwsh exit 64 (usage error). A quoted string
     # is the only reliable way to pass a space-containing -File path.
     $argString = '-NoLogo -NoProfile -WindowStyle Hidden -ExecutionPolicy Bypass -File "{0}" -Port {1}' -f $installer, $script:DuneMobileBridgePort
+    if ($RunWhenSignedOut) { $argString += ' -RunWhenSignedOut' }
     try {
         if ($NoWait) {
             Start-Process -FilePath $pwsh -ArgumentList $argString -WindowStyle Hidden | Out-Null

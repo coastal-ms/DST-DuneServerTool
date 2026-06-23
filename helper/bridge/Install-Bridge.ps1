@@ -26,7 +26,12 @@
 [CmdletBinding()]
 param(
     [int]$Port = 47900,
-    [string]$TaskName = 'DST Friend Helper Bridge'
+    [string]$TaskName = 'DST Friend Helper Bridge',
+    # When set, register the task to run "whether the user is logged on or not"
+    # (LogonType S4U) with a boot trigger, so the bridge survives sign-out — used
+    # by DST's "Stay online when signed out" service mode. The bridge is
+    # loopback-only and needs no profile secrets, so S4U (no password) is enough.
+    [switch]$RunWhenSignedOut
 )
 
 $ErrorActionPreference = 'Stop'
@@ -36,7 +41,8 @@ function Ensure-ScheduledTask {
     param(
         [string]$TaskName,
         [int]$Port,
-        [string]$BridgeScriptPath
+        [string]$BridgeScriptPath,
+        [switch]$RunWhenSignedOut
     )
     Write-Host "Registering scheduled task '$TaskName' ..."
 
@@ -89,7 +95,16 @@ sh.Run """$pwshForVbs"" -NoLogo -NoProfile -ExecutionPolicy Bypass -WindowStyle 
 "@
     Set-Content -LiteralPath $launcherVbs -Value $vbsBody -Encoding ASCII -Force
 
-    $action = New-ScheduledTaskAction -Execute 'wscript.exe' -Argument "`"$launcherVbs`""
+    # Action: when signed-out (S4U / session 0) there is no interactive desktop to
+    # flash a console on, so launch pwsh DIRECTLY on the supervisor (the VBS shim
+    # exists only to hide the console in an interactive session and can misbehave
+    # without a desktop). When running interactively, keep the hidden-VBS launch.
+    if ($RunWhenSignedOut) {
+        $action = New-ScheduledTaskAction -Execute $pwsh `
+            -Argument ('-NoLogo -NoProfile -ExecutionPolicy Bypass -WindowStyle Hidden -File "{0}"' -f $supervisorPs1)
+    } else {
+        $action = New-ScheduledTaskAction -Execute 'wscript.exe' -Argument "`"$launcherVbs`""
+    }
 
     # Two triggers cover the cases the supervisor loop cannot heal by itself
     # (i.e. the supervisor process itself ending):
@@ -104,6 +119,13 @@ sh.Run """$pwshForVbs"" -NoLogo -NoProfile -ExecutionPolicy Bypass -WindowStyle 
     $keepAlive    = New-ScheduledTaskTrigger -Once -At (Get-Date).AddMinutes(1) `
         -RepetitionInterval (New-TimeSpan -Minutes 2) `
         -RepetitionDuration (New-TimeSpan -Days 3650)
+    # Service mode also needs the bridge up BEFORE anyone signs in (boot), so it's
+    # already serving the portal/phone for a host that reboots while signed out.
+    $triggers = if ($RunWhenSignedOut) {
+        @((New-ScheduledTaskTrigger -AtStartup), $logonTrigger, $keepAlive)
+    } else {
+        @($logonTrigger, $keepAlive)
+    }
 
     $settings = New-ScheduledTaskSettingsSet `
         -AllowStartIfOnBatteries `
@@ -114,15 +136,25 @@ sh.Run """$pwshForVbs"" -NoLogo -NoProfile -ExecutionPolicy Bypass -WindowStyle 
         -RestartCount 999 `
         -ExecutionTimeLimit (New-TimeSpan -Hours 0)
 
-    $principal = New-ScheduledTaskPrincipal `
-        -UserId "$env:USERDOMAIN\$env:USERNAME" `
-        -LogonType Interactive `
-        -RunLevel Limited
+    # S4U = "run whether the user is logged on or not" WITHOUT storing a password.
+    # The bridge only binds loopback and proxies to DST, so it needs no network
+    # credentials or profile secrets — S4U is sufficient and survives sign-out.
+    $principal = if ($RunWhenSignedOut) {
+        New-ScheduledTaskPrincipal `
+            -UserId "$env:USERDOMAIN\$env:USERNAME" `
+            -LogonType S4U `
+            -RunLevel Limited
+    } else {
+        New-ScheduledTaskPrincipal `
+            -UserId "$env:USERDOMAIN\$env:USERNAME" `
+            -LogonType Interactive `
+            -RunLevel Limited
+    }
 
     Register-ScheduledTask `
         -TaskName $TaskName `
         -Action $action `
-        -Trigger @($logonTrigger, $keepAlive) `
+        -Trigger $triggers `
         -Settings $settings `
         -Principal $principal `
         -Description 'Reverse-proxies mobile/remote requests on loopback to the locally running DST instance (reached externally via a Cloudflare quick tunnel). Self-healing: a supervisor loop relaunches the daemon within seconds if it crashes or is killed; a 2-minute keepalive trigger restarts the supervisor itself if it dies; IgnoreNew prevents duplicates while it is healthy.' | Out-Null
@@ -142,7 +174,7 @@ try {
 } catch {}
 try { & netsh http delete urlacl url="http://+:$Port/" 2>&1 | Out-Null } catch {}
 
-Ensure-ScheduledTask -TaskName $TaskName -Port $Port -BridgeScriptPath $bridgeScript
+Ensure-ScheduledTask -TaskName $TaskName -Port $Port -BridgeScriptPath $bridgeScript -RunWhenSignedOut:$RunWhenSignedOut
 
 Write-Host ""
 Write-Host "Bridge installed." -ForegroundColor Green
