@@ -13,6 +13,19 @@ here cover everything those tags shipped.
 
 ## [Unreleased]
 
+## [12.10.8] - 2026-06-22
+
+First public/stable release of the Server State Webhook reliability work
+(verified on the test channel as 12.10.4–12.10.7, now promoted to stable).
+
+### Fixed
+
+- **Server State Discord notifications (Online / Offline / Restarting / Update) now fire reliably**, driven by whether Hagga Basin (Survival_1) is actually joinable rather than a coarse "running" check that a normal restart never tripped. Online posts when Hagga Basin is joinable; Restarting posts once when it drops out of Ready; Offline posts only after the server has been down for more than ~a minute (a quick restart won't post a false offline); Update posts when the scheduled-restart update check finds a new Funcom build.
+- **The Online / Offline / Restarting / Update toggles now persist when you save the schedule** — they were reverting to off on save, which also stopped the notifications from firing.
+- **"Send test message" now sends a sample of each enabled notification**, not just the restart message, so you can preview exactly what each event looks like.
+- **The Settings page no longer goes fully blank if one card errors** — each card is isolated, so an unexpected render error shows a small inline notice for just that card while the rest of Settings keeps working.
+- Added an in-app note clarifying these notifications are detected while the Dune Server Tool is running and only for the server it manages — changes made directly on the VM via `battlegroup.bat`, or while DST is closed, aren't detected.
+
 ## [12.10.7] - 2026-06-22
 
 ### Fixed
