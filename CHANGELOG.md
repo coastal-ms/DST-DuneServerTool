@@ -13,13 +13,15 @@ here cover everything those tags shipped.
 
 ## [Unreleased]
 
-## [12.11.0] - 2026-06-21
+## [12.11.0] - 2026-06-23
 
 ### Added
 
 - **Mobile apps (iOS TestFlight + Android APK)** that manage your server from your phone.
 - **Tailscale Funnel is the new recommended remote transport for the phone app and zero-domain hosts.** Install Tailscale on the host and enable a Funnel on the bridge port (`tailscale funnel --bg http://127.0.0.1:47900`) to get a stable public HTTPS `…ts.net` address — no domain, no router port-forwarding, CGNAT-proof. DST ships only the local bridge + Funnel detection; it doesn't bundle or manage Tailscale.
 - **Permanent remote token + URL-based pairing.** Pairing payloads are now `{url, token}` (legacy `{ip, port, token}` codes still work), and the token survives restarts so a paired phone keeps working without re-scanning. Magic-link browser portal (`…/?key=<token>`) lets a trusted co-admin open the portal in any browser.
+- **Optional "Keep serving while DST is closed" service.** From the **Help** menu you can install a background service so the portal, phone apps, scheduled restarts and Discord notifications keep running while the DST window is closed — including while your PC is locked — and it loads at sign-in. Honest scope: you must stay signed in to Windows; a full sign-out stops remote access.
+- **Diagnostics bundle now probes the Gameplay Admin read path.** `Help → Create GitHub Issue + Save Logs` includes a new `gameplay-read-probe.txt` that re-runs the Players/Bases list queries and records counts only (never player names or ids), so "Players/Bases show rows but blank names / 0 pieces" reports (e.g. after a character transfer) are triageable at a glance.
 
 ### Changed
 
