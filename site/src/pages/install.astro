@@ -99,8 +99,9 @@ import DownloadButton from "../components/DownloadButton.astro";
           class="underline decoration-dotted hover:text-dune-text"
           >Remote portal</a
         >
-        — phone-friendly view of status + map spin-up/down behind a
-        Cloudflare Tunnel + Access policy. Setup is BYO Cloudflare account.
+        — phone-friendly view of status + map spin-up/down. Recommended
+        setup is a free Tailscale Funnel (no domain); a bring-your-own
+        Cloudflare domain is supported as an advanced option.
       </li>
     </ul>
 
@@ -114,6 +115,17 @@ import DownloadButton from "../components/DownloadButton.astro";
       effect at the next launch. The toggle is loopback-only — remote
       viewers can't enable it on your host. The uninstaller cleans up the
       scheduled task automatically.
+    </p>
+
+    <h2 class="text-2xl font-semibold mb-4">Optional: keep serving while DST is closed</h2>
+    <p class="text-dune-muted leading-relaxed mb-4">
+      Off by default. Open <strong class="text-dune-text">Help → Keep serving
+      while DST is closed</strong> to install a background service so the
+      portal, phone apps, scheduled restarts, and Discord notifications keep
+      running while the DST window is closed — including while your PC is
+      locked — and load at sign-in. You must stay signed in to Windows; a full
+      sign-out stops remote access. Host-only (remote viewers can't enable it),
+      and the uninstaller removes the service.
     </p>
 
     <h2 class="text-2xl font-semibold mb-4">Where things live</h2>
