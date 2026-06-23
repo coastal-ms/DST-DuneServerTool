@@ -67,7 +67,7 @@ jobs:
                  url: $u,
                  description: $d,
                  color: 15844367,
-                 footer: { text: "Download the DuneServerSetup.exe asset from the release page · in-app updater offers it within ~6h" }
+                 footer: { text: "Download the DuneServerSetup.exe asset from the release page · the in-app updater offers it on your next launch (or within ~6h if DST is left running)" }
                } ]
              }')
 
