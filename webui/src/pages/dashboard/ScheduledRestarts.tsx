@@ -127,7 +127,7 @@ export function ScheduledRestarts() {
     } finally {
       setSaving(false)
     }
-  }, [enabled, time, lead, discordEnabled, webhookInput, clearWebhook, mention])
+  }, [enabled, time, lead, discordEnabled, discordNotifyOnline, discordNotifyOffline, discordNotifyRestarting, discordNotifyUpdate, webhookInput, clearWebhook, mention])
 
   const runCheck = useCallback(async () => {
     setChecking(true)
@@ -333,7 +333,7 @@ export function ScheduledRestarts() {
                     />
                     <div>
                       <span className="text-sm font-medium block leading-none">Online</span>
-                      <span className="text-[11px] text-text-dim mt-1 block">When the server finishes booting and comes online.</span>
+                      <span className="text-[11px] text-text-dim mt-1 block">When Hagga Basin finishes loading and the server is joinable.</span>
                     </div>
                   </label>
                   <label className="flex items-start gap-3 cursor-pointer select-none">
@@ -345,7 +345,7 @@ export function ScheduledRestarts() {
                     />
                     <div>
                       <span className="text-sm font-medium block leading-none">Offline</span>
-                      <span className="text-[11px] text-text-dim mt-1 block">When the server stops or crashes.</span>
+                      <span className="text-[11px] text-text-dim mt-1 block">When the server has been down for more than a minute (a quick restart won't trigger it).</span>
                     </div>
                   </label>
                   <label className="flex items-start gap-3 cursor-pointer select-none">
@@ -357,7 +357,7 @@ export function ScheduledRestarts() {
                     />
                     <div>
                       <span className="text-sm font-medium block leading-none">Restarting</span>
-                      <span className="text-[11px] text-text-dim mt-1 block">When the server begins restarting.</span>
+                      <span className="text-[11px] text-text-dim mt-1 block">When the server drops offline to restart (start of a restart cycle).</span>
                     </div>
                   </label>
                   <label className="flex items-start gap-3 cursor-pointer select-none">
@@ -369,9 +369,15 @@ export function ScheduledRestarts() {
                     />
                     <div>
                       <span className="text-sm font-medium block leading-none">Update Available</span>
-                      <span className="text-[11px] text-text-dim mt-1 block">When a new Funcom game update is detected.</span>
+                      <span className="text-[11px] text-text-dim mt-1 block">When the scheduled-restart update check finds a new Funcom build.</span>
                     </div>
                   </label>
+                  <div className="flex items-start gap-2 mt-1 pt-2 border-t border-border/50 text-[11px] text-text-dim">
+                    <Icon name="Info" size={13} className="mt-0.5 flex-none text-text-muted" />
+                    <span>
+                      Online / Offline / Restarting are detected while the Dune Server Tool is running, and only for the server it manages. Starting, stopping, or restarting the battlegroup directly on the VM (via <code>battlegroup.bat</code>) — or any change made while DST is closed — won't be detected. Use DST's own Server Health commands and Scheduled Restarts so these fire reliably.
+                    </span>
+                  </div>
                 </div>
               )}
 
@@ -402,16 +408,21 @@ export function ScheduledRestarts() {
                     <button
                       type="button"
                       onClick={() => { void runTest() }}
-                      disabled={testing || !webhookSet || webhookInput.trim() !== '' || clearWebhook}
+                      disabled={testing || !webhookSet || webhookInput.trim() !== '' || clearWebhook || discordDirty}
                       className="btn-secondary"
                       title={
                         !webhookSet || webhookInput.trim() !== '' || clearWebhook
                           ? 'Save a webhook URL first, then send a test message.'
-                          : 'Send a one-off test message to your Discord channel.'
+                          : discordDirty
+                            ? 'Save your changes first — the test sends a sample of each currently-saved notification.'
+                            : 'Sends a sample of each enabled notification (online / offline / restarting / update) to your Discord channel.'
                       }
                     >
                       <Icon name="Send" size={14} className={testing ? 'animate-pulse' : ''} /> {testing ? 'Sending…' : 'Send test message'}
                     </button>
+                    <p className="text-[11px] text-text-dim mt-1">
+                      Sends one sample message for each notification you have enabled above, so you can see exactly what each will look like.
+                    </p>
                   </div>
                 </div>
               )}

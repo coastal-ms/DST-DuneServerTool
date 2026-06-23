@@ -321,6 +321,80 @@ function New-DstDiagnosticBundle {
         $warnings.Add("Restart-schedule state read failed: $($_.Exception.Message)")
     }
 
+    # 6d) Gameplay Admin read-path probe ------------------------------------
+    # The "Players/Bases show top-level rows but blank names / unaligned
+    # factions / 0 pieces" class of bug (e.g. after a character transfer)
+    # cannot be diagnosed from transcripts or INI snapshots - it lives in the
+    # live DB read path. Re-run the exact list queries the Gameplay Admin grid
+    # uses and record COUNTS ONLY (never player names, account ids, or any
+    # other PII) so triage can tell "no rows" from "rows but no detail" at a
+    # glance. Best-effort: an unreachable DB is a warning, not fatal.
+    if ((Get-Command Get-DuneDbContext -ErrorAction SilentlyContinue) -and
+        (Get-Command Get-DunePlayersLive -ErrorAction SilentlyContinue) -and
+        (Get-Command Get-DuneBasesLive -ErrorAction SilentlyContinue)) {
+        try {
+            $probe = [System.Collections.Generic.List[string]]::new()
+            $probe.Add('# Gameplay Admin read-path probe (counts only - no player names / ids / PII)')
+            $probe.Add("# Generated $(Get-Date -Format 'o')")
+            $probe.Add('# Symptom map: rows>0 with all names blank => row exists but the name/')
+            $probe.Add('#   account join returns nothing (e.g. encrypted_accounts empty or a')
+            $probe.Add('#   different DB after a character transfer). rows=0 => no data at all.')
+            $probe.Add('')
+            $dctx = Get-DuneDbContext
+            if (-not $dctx.ok) {
+                $probe.Add("DB context: NOT available - $($dctx.message)")
+            } else {
+                $probe.Add('DB context: available')
+                $probe.Add('')
+                try {
+                    $pl = Get-DunePlayersLive -Ip $dctx.ip
+                    if (-not $pl.ok) {
+                        $probe.Add("players: QUERY FAILED - $($pl.error)")
+                    } else {
+                        $rows = @($pl.players)
+                        $n = $rows.Count
+                        $blankName = @($rows | Where-Object { [string]::IsNullOrWhiteSpace([string]$_.name) }).Count
+                        $noFaction = @($rows | Where-Object { $_.faction_id -eq 0 -and [string]::IsNullOrWhiteSpace([string]$_.faction_name) }).Count
+                        $online    = @($rows | Where-Object { [string]$_.online_status -match 'online' }).Count
+                        $probe.Add("players: $n rows")
+                        $probe.Add("  blank name:        $blankName / $n")
+                        $probe.Add("  unaligned faction: $noFaction / $n")
+                        $probe.Add("  online:            $online / $n")
+                        if ($n -gt 0 -and $blankName -eq $n) {
+                            $probe.Add('  >> ALL names blank: player rows resolve but the name/account join is empty.')
+                        }
+                    }
+                } catch { $probe.Add("players: PROBE ERROR - $($_.Exception.Message)") }
+                $probe.Add('')
+                try {
+                    $bs = Get-DuneBasesLive -Ip $dctx.ip
+                    if (-not $bs.ok) {
+                        $probe.Add("bases: QUERY FAILED - $($bs.error)")
+                    } else {
+                        $brows = @($bs.bases)
+                        $bn = $brows.Count
+                        $bBlankName  = @($brows | Where-Object { [string]::IsNullOrWhiteSpace([string]$_.name) }).Count
+                        $bZeroPieces = @($brows | Where-Object { $_.pieces -eq 0 }).Count
+                        $probe.Add("bases: $bn rows")
+                        $probe.Add("  blank name: $bBlankName / $bn")
+                        $probe.Add("  0 pieces:   $bZeroPieces / $bn")
+                        if ($bn -gt 0 -and $bZeroPieces -eq $bn) {
+                            $probe.Add('  >> ALL bases 0 pieces: building rows exist but the building_instances join is empty.')
+                        }
+                    }
+                } catch { $probe.Add("bases: PROBE ERROR - $($_.Exception.Message)") }
+            }
+            $probeText = Invoke-DstRedaction -Text ($probe -join "`r`n") @redactArgs
+            $out = Join-Path $stageDir 'gameplay-read-probe.txt'
+            Set-Content -LiteralPath $out -Value $probeText -Encoding UTF8
+            $included.Add(@{ name = 'gameplay-read-probe.txt'; bytes = (Get-Item -LiteralPath $out).Length })
+        } catch {
+            $warnings.Add("Gameplay read-path probe failed: $($_.Exception.Message)")
+        }
+    } else {
+        $warnings.Add('Gameplay read helpers not loaded - read-path probe skipped.')
+    }
+
     # 7) Manifest ------------------------------------------------------------
     $manLines = [System.Collections.Generic.List[string]]::new()
     $manLines.Add("Dune Server Tool diagnostic bundle")
@@ -336,6 +410,10 @@ function New-DstDiagnosticBundle {
     $manLines.Add('')
     $manLines.Add('Game config snapshots (UserGame.ini / UserEngine.ini) are pulled live from')
     $manLines.Add('the VM when reachable, sanitized, and headlined with a duplicate-section check.')
+    $manLines.Add('')
+    $manLines.Add('gameplay-read-probe.txt re-runs the Players/Bases list queries and records')
+    $manLines.Add('COUNTS ONLY (no player names or ids) so "rows but blank detail" bugs are')
+    $manLines.Add('triageable; absent when the DB is unreachable (see Warnings).')
     $manLines.Add('')
     $manLines.Add('Files included:')
     foreach ($f in $included) {

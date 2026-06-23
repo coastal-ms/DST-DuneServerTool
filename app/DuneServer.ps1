@@ -591,13 +591,6 @@ if (Get-Command Initialize-DuneMobileBridge -ErrorAction SilentlyContinue) {
     try { Initialize-DuneMobileBridge -ServerDir $serverDir } catch {}
 }
 
-# Auto-start the Cloudflare quick tunnel if the host enabled remote access, and
-# republish our current address to the rendezvous, so a paired phone reconnects
-# after a reboot with no manual step. Best-effort, non-blocking.
-if (Get-Command Initialize-DuneQuickTunnel -ErrorAction SilentlyContinue) {
-    try { Initialize-DuneQuickTunnel } catch {}
-}
-
 # ---------- Token --------------------------------------------------------------
 
 $script:LaunchToken = [Guid]::NewGuid().ToString('N')
@@ -696,9 +689,15 @@ try {
         $script:DuneAutostartRegistered = [bool](Test-DuneAutostartEnabled)
     }
 } catch { $script:DuneAutostartRegistered = $false }
-$script:DuneKeepAliveAfterShellClose = [bool]$script:DuneHeadlessMode -or $script:DuneAutostartRegistered
-if ($script:DuneAutostartRegistered -and -not $script:DuneHeadlessMode) {
-    Write-DuneLog "Autostart task registered for this user - closing the DuneShell window will leave the backend console running; click the shortcut again to re-open the viewer, or stop the backend explicitly via the tray / console window"
+$script:DuneServiceModeRegistered = $false
+try {
+    if (Get-Command Test-DuneServiceEnabled -ErrorAction SilentlyContinue) {
+        $script:DuneServiceModeRegistered = [bool](Test-DuneServiceEnabled)
+    }
+} catch { $script:DuneServiceModeRegistered = $false }
+$script:DuneKeepAliveAfterShellClose = [bool]$script:DuneHeadlessMode -or $script:DuneAutostartRegistered -or $script:DuneServiceModeRegistered
+if (($script:DuneAutostartRegistered -or $script:DuneServiceModeRegistered) -and -not $script:DuneHeadlessMode) {
+    Write-DuneLog "Autostart/service task registered for this user - closing the DuneShell window will leave the backend console running; click the shortcut again to re-open the viewer, or stop the backend explicitly via the tray / console window"
 }
 # Sync the on-disk keep-alive sentinel so DuneShell's FormClosing teardown
 # knows to skip its /api/shutdown + DuneServer.exe sweep

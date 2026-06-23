@@ -5,6 +5,7 @@ import { NAV_ITEMS, GROUP_LABELS, GROUP_ORDER, type NavGroup } from '../nav'
 import { useUpdateCheck } from '../hooks/useUpdateCheck'
 import { buildDiagnosticBundle, type DiagnosticBundle } from '../api/diagnostics'
 import { getAutostartState, setAutostartEnabled, type AutostartState } from '../api/autostart'
+import { getServiceModeState, setServiceModeEnabled, type ServiceModeState } from '../api/serviceMode'
 import { getConsoleState, setConsoleVisible, type ConsoleState } from '../api/console'
 import { isLocalViewer } from '../util/viewer'
 
@@ -37,6 +38,14 @@ export function MenuBar({ sidebarCollapsed, onToggleSidebar }: Props) {
   const [autostartConfirm, setAutostartConfirm] = useState<null | { nextEnabled: boolean }>(null)
   const [autostartError, setAutostartError] = useState<string | null>(null)
 
+  // Service mode ("keep serving while DST is closed"). Local-viewer only; enabling
+  // pops a modal that captures the Windows password (sent once over loopback).
+  const [service, setService] = useState<ServiceModeState | null>(null)
+  const [serviceBusy, setServiceBusy] = useState(false)
+  const [serviceModal, setServiceModal] = useState<null | { nextEnabled: boolean }>(null)
+  const [servicePassword, setServicePassword] = useState('')
+  const [serviceError, setServiceError] = useState<string | null>(null)
+
   // Backend-console state. Loopback-only (the backend route 403s remote
   // callers anyway, and the menu item is hidden for them via `local`).
   // null = not loaded yet / route unavailable on older backends.
@@ -63,6 +72,17 @@ export function MenuBar({ sidebarCollapsed, onToggleSidebar }: Props) {
   }, [local])
 
   useEffect(() => { void refreshAutostart() }, [refreshAutostart])
+
+  const refreshService = useCallback(async () => {
+    if (!local) return
+    try {
+      setService(await getServiceModeState())
+    } catch {
+      setService(null)
+    }
+  }, [local])
+
+  useEffect(() => { void refreshService() }, [refreshService])
 
   // Console state — refresh when the Help menu opens so the Show / Hide label
   // tracks the real window state even if the user minimized / restored it
@@ -117,6 +137,38 @@ export function MenuBar({ sidebarCollapsed, onToggleSidebar }: Props) {
       setAutostartError(e instanceof Error ? e.message : String(e))
     } finally {
       setAutostartBusy(false)
+    }
+  }
+
+  const onServiceToggleClick = () => {
+    if (!service || !service.available || serviceBusy) return
+    setServiceError(null)
+    setServicePassword('')
+    setServiceModal({ nextEnabled: !service.enabled })
+    setOpen(null)
+  }
+
+  const onServiceConfirm = async () => {
+    if (!serviceModal) return
+    const target = serviceModal.nextEnabled
+    if (target && servicePassword.trim() === '') {
+      setServiceError('Enter your Windows password to install the service.')
+      return
+    }
+    setServiceBusy(true)
+    setServiceError(null)
+    try {
+      const s = await setServiceModeEnabled(target, target ? servicePassword : undefined)
+      setService(s)
+      setServicePassword('')
+      setServiceModal(null)
+      // Enabling service mode supersedes plain autostart on the backend; refresh
+      // so the "Run at Windows startup" toggle reflects the removed task.
+      void refreshAutostart()
+    } catch (e) {
+      setServiceError(e instanceof Error ? e.message : String(e))
+    } finally {
+      setServiceBusy(false)
     }
   }
 
@@ -314,6 +366,32 @@ export function MenuBar({ sidebarCollapsed, onToggleSidebar }: Props) {
                 )}
               </button>
             )}
+            {local && service && service.available && (
+              <button
+                type="button"
+                onClick={onServiceToggleClick}
+                disabled={serviceBusy}
+                className="w-full flex items-start gap-2 px-2.5 py-1.5 rounded text-sm text-text-muted hover:text-text hover:bg-surface-2 transition-colors text-left disabled:opacity-60 disabled:cursor-wait"
+                title={
+                  service.enabled
+                    ? 'The portal, phone apps, scheduled restarts and Discord notifications keep running while DST is closed, including while your PC is locked. Loads at sign-in. Click to remove the service.'
+                    : 'Install a service so the portal and phone apps stay online while DST is closed (and while your PC is locked). Loads at sign-in; you stay signed in to Windows.'
+                }
+              >
+                <Icon name="ServerCog" size={14} className="mt-0.5" />
+                <span className="flex-1">
+                  <span className="block">Keep serving while DST is closed</span>
+                  <span className="block text-[11px] text-text-dim">
+                    {service.enabled
+                      ? 'Installed — backend runs without DST open and loads at sign-in (works while locked)'
+                      : 'Off — portal and phone need DST open'}
+                  </span>
+                </span>
+                {service.enabled && (
+                  <Icon name="Check" size={13} className="text-success mt-1" />
+                )}
+              </button>
+            )}
             {local && consoleState && consoleState.available && (
               <button
                 type="button"
@@ -482,6 +560,80 @@ export function MenuBar({ sidebarCollapsed, onToggleSidebar }: Props) {
                   : autostartConfirm.nextEnabled
                     ? 'Enable autostart'
                     : 'Disable autostart'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Service mode — enable captures the Windows password; disable confirms. */}
+      {serviceModal && (
+        <div
+          className="fixed inset-0 z-[60] bg-black/60 flex items-center justify-center p-4"
+          onClick={() => { if (!serviceBusy) { setServiceModal(null); setServiceError(null); setServicePassword('') } }}
+        >
+          <div
+            className="bg-surface border border-border rounded-xl shadow-2xl max-w-md w-full p-5"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-start gap-3 mb-3">
+              <Icon name="ServerCog" size={20} className="text-accent-bright mt-0.5" />
+              <div className="flex-1">
+                <h2 className="text-base font-semibold text-text mb-1">
+                  {serviceModal.nextEnabled ? 'Keep serving while DST is closed?' : 'Remove the always-on service?'}
+                </h2>
+                <p className="text-sm text-text-muted leading-snug">
+                  {serviceModal.nextEnabled
+                    ? 'Installs a Windows scheduled task that runs the Dune Server backend in the background and loads it at sign-in — so the portal, phone apps, scheduled restarts and Discord notifications keep working while DST is closed, including while your PC is locked. You need to stay signed in to Windows; a full sign-out stops remote access. Windows stores your password (encrypted) so the task can run as you with access to your SSH key and Hyper-V.'
+                    : 'The backend will no longer run on its own. The portal and phone apps stay up only while DST is open. The currently running backend keeps going until you quit it.'}
+                </p>
+              </div>
+            </div>
+            {serviceModal.nextEnabled && (
+              <div className="mb-3">
+                <label className="block text-xs text-text-dim mb-1">
+                  Windows password for <span className="font-mono">{service?.user}</span>
+                </label>
+                <input
+                  type="password"
+                  autoFocus
+                  value={servicePassword}
+                  onChange={(e) => setServicePassword(e.target.value)}
+                  onKeyDown={(e) => { if (e.key === 'Enter' && !serviceBusy) void onServiceConfirm() }}
+                  placeholder="Your Windows sign-in password"
+                  className="w-full px-3 py-2 rounded-lg bg-surface-2 border border-border text-text"
+                  autoComplete="off"
+                />
+                <p className="text-[11px] text-text-dim mt-1">
+                  Used once to register the task. DST never stores it; Windows keeps it encrypted in Task Scheduler. Host-only — this option is hidden for remote viewers.
+                </p>
+              </div>
+            )}
+            {serviceError && (
+              <div className="mb-3 p-2 rounded bg-danger/10 border border-danger/30 text-sm text-danger">
+                {serviceError}
+              </div>
+            )}
+            <div className="flex justify-end gap-2">
+              <button
+                type="button"
+                onClick={() => { setServiceModal(null); setServiceError(null); setServicePassword('') }}
+                disabled={serviceBusy}
+                className="px-3 py-1.5 rounded text-sm text-text-muted hover:text-text hover:bg-surface-2 disabled:opacity-60"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={() => { void onServiceConfirm() }}
+                disabled={serviceBusy}
+                className="px-3 py-1.5 rounded text-sm bg-accent text-white hover:bg-accent-bright disabled:opacity-60 disabled:cursor-wait"
+              >
+                {serviceBusy
+                  ? 'Working…'
+                  : serviceModal.nextEnabled
+                    ? 'Install service'
+                    : 'Remove service'}
               </button>
             </div>
           </div>

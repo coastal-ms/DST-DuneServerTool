@@ -179,10 +179,12 @@ export function RemoteAccessCard() {
         <div className="flex items-center gap-2">
           {enabled
             ? <span className="pill-success text-xs">enabled</span>
-            : <span className="pill-muted text-xs">disabled</span>}
+            : <span className="pill-muted text-xs">advanced / optional</span>}
           {cf?.installed
             ? <span className="pill-info text-xs">cloudflared {cf.version || 'detected'}</span>
-            : <span className="pill-warning text-xs">cloudflared not detected</span>}
+            : enabled
+              ? <span className="pill-warning text-xs">cloudflared not detected</span>
+              : null}
         </div>
       </button>
 
@@ -203,6 +205,16 @@ export function RemoteAccessCard() {
 
           {acl && (
             <>
+              <div className="text-xs text-text-muted bg-surface-2/60 border border-border rounded-lg px-3 py-2 flex items-start gap-2">
+                <Icon name="Info" size={14} className="mt-0.5 flex-none" />
+                <span>
+                  <strong>Advanced / optional — most hosts don&apos;t need this.</strong> For the
+                  mobile app and remote portal, the recommended path is <strong>Tailscale Funnel</strong>
+                  (set up from the <strong>Mobile App</strong> card) — no domain, no Cloudflare account.
+                  This card is only for bringing your <strong>own Cloudflare domain</strong> for a
+                  permanent, email-gated hostname.
+                </span>
+              </div>
               <p className="text-sm text-text-muted">
                 Lets you and 1–3 trusted admins reach a mobile-friendly subset of DST
                 (Dashboard + Maps) from outside the LAN via a Cloudflare Tunnel +

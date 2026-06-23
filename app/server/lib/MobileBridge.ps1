@@ -1,13 +1,14 @@
 ﻿# MobileBridge.ps1 — manage the DST mobile-app bridge.
 #
 # The mobile app (and a friend's browser) reach the localhost-only DST API over a
-# Cloudflare quick tunnel (see QuickTunnel.ps1). cloudflared connects OUT from
-# this PC to a small reverse-proxy "bridge" (helper/bridge/DstHelperBridge.ps1)
-# that listens on a STABLE LOOPBACK port (47900) and forwards to DST's dynamic
-# loopback port. Because cloudflared connects from localhost, the bridge binds
-# 127.0.0.1 only — nothing inbound is exposed, so there is NO URL ACL, NO Windows
-# Firewall rule, and NO admin requirement. A self-healing scheduled task keeps
-# the daemon running, created by helper/bridge/Install-Bridge.ps1.
+# public transport — Tailscale Funnel (preferred) or a Cloudflare named-tunnel +
+# Access custom domain. The transport connects OUT from this PC to a small
+# reverse-proxy "bridge" (helper/bridge/DstHelperBridge.ps1) that listens on a
+# STABLE LOOPBACK port (47900) and forwards to DST's dynamic loopback port.
+# Because the transport connects from localhost, the bridge binds 127.0.0.1 only
+# — nothing inbound is exposed, so there is NO URL ACL, NO Windows Firewall rule,
+# and NO admin requirement. A self-healing scheduled task keeps the daemon
+# running, created by helper/bridge/Install-Bridge.ps1.
 #
 # This module is the single source of truth for the bridge PORT (so pairing,
 # install, and status never drift), plus:
@@ -75,8 +76,8 @@ function Get-DuneBridgeStatus {
     elseif (-not $healthOk) { [void]$issues.Add('The bridge is running but not responding yet (DST may still be starting).') }
 
     # The bridge is the LOCAL piece; remote reachability is provided separately by
-    # the Cloudflare quick tunnel (QuickTunnel.ps1). "ready" here means the local
-    # loopback proxy is up and answering.
+    # the public transport (Tailscale Funnel or the Cloudflare named-tunnel domain).
+    # "ready" here means the local loopback proxy is up and answering.
     $ready = ($listening -and $healthOk)
 
     return @{
