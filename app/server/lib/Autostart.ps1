@@ -314,6 +314,20 @@ function Register-DuneServiceMode {
     # autostart task; remove it so we don't run two headless launches.
     try { [void](Unregister-DuneAutostart) } catch {}
 
+    # The loopback bridge that the phone/Funnel connect THROUGH is normally a
+    # per-session (Interactive) task that dies on sign-out — which would leave the
+    # backend up but unreachable. Re-register it to also run whether-logged-on-or-
+    # not (S4U, no password needed) so the whole chain survives sign-out.
+    try {
+        if (Get-Command Invoke-DuneBridgeRepair -ErrorAction SilentlyContinue) {
+            [void](Invoke-DuneBridgeRepair -RunWhenSignedOut)
+        }
+    } catch {
+        if (Get-Command Write-DuneLog -ErrorAction SilentlyContinue) {
+            Write-DuneLog "Service mode: failed to upgrade bridge to run-when-signed-out: $($_.Exception.Message)" 'WARN'
+        }
+    }
+
     if (Get-Command Write-DuneLog -ErrorAction SilentlyContinue) {
         Write-DuneLog "Service mode enabled: registered '$folder$name' for $user (runs whether logged on or not; exe: $exe)"
     }
@@ -339,6 +353,18 @@ function Unregister-DuneServiceMode {
         }
         if (Get-Command Write-DuneLog -ErrorAction SilentlyContinue) {
             Write-DuneLog "Service mode disabled: removed scheduled task '$folder$name'"
+        }
+        # Restore the bridge to its normal per-session (Interactive) task so we're
+        # not leaving an always-on bridge behind once the backend no longer runs
+        # when signed out.
+        try {
+            if (Get-Command Invoke-DuneBridgeRepair -ErrorAction SilentlyContinue) {
+                [void](Invoke-DuneBridgeRepair)
+            }
+        } catch {
+            if (Get-Command Write-DuneLog -ErrorAction SilentlyContinue) {
+                Write-DuneLog "Service mode: failed to restore normal bridge task: $($_.Exception.Message)" 'WARN'
+            }
         }
         if (Get-Command Update-DuneKeepAliveFlag -ErrorAction SilentlyContinue) {
             try { [void](Update-DuneKeepAliveFlag) } catch {}
