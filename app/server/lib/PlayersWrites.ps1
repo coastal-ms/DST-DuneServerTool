@@ -1386,8 +1386,10 @@ function Get-DuneRecipesForJourneyNodeSubtree {
 # Aql trial completion deltas. Each entry is the FULL set of account changes
 # observed in a before/after snapshot diff when the trial is completed in-game:
 # the journey node to complete, the gameplay tags that flip (including the
-# BigMoments cinematic triggers), and the recipe awarded into pawn TechKnowledge
-# (the award that unlocks the empty ability slot the trial opens). Applying all
+# BigMoments cinematic triggers AND Journey.RewardsUnblocked - the cutscene-set
+# tag that actually unlocks the 3rd ability slot + prescience, which journey
+# node completion alone does not set), and the recipe awarded into pawn
+# TechKnowledge (the award that unlocks the trial's gear). Applying all
 # three reproduces a physical completion for a character that a tag-only edit
 # left stuck, WITHOUT touching later trials - only the named subtree is
 # completed, so the next trial proceeds normally in-game. Only trials with a
@@ -1397,7 +1399,7 @@ $script:DuneAqlTrialDeltas = [ordered]@{
     '4' = @{
         label       = 'Trial 4 of Aql (unlocks 3rd ability slot)'
         journeyNode = 'DA_MQ_FindTheFremen.FourthTest'
-        tags        = @('BigMoments.Bike.Trigger', 'BigMoments.Stillsuit.Trigger', 'JourneySets.Fremkit.CryssKnife')
+        tags        = @('BigMoments.Bike.Trigger', 'BigMoments.Stillsuit.Trigger', 'JourneySets.Fremkit.CryssKnife', 'Journey.RewardsUnblocked')
         recipe      = 'RCP_Crysknife_Recipe'
     }
 }

@@ -13,6 +13,10 @@ here cover everything those tags shipped.
 
 ## [Unreleased]
 
+### Fixed
+
+- **Apply Aql Trial now unlocks the 3rd ability slot and prescience.** Trial 4 completed the journey subtree, tags, and Crysknife recipe, but never set `Journey.RewardsUnblocked` — the cutscene-driven tag that actually opens the 3rd active-ability slot and prescience (the Unlock Main Quest path already set it; Apply Aql Trial did not). Added it to the Trial 4 delta so the two ability rewards unlock on next login. (Reported by Decker.)
+
 ## [12.11.0] - 2026-06-23
 
 ### Added
