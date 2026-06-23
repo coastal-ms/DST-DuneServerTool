@@ -27,6 +27,14 @@ $script:DuneFuncomCheckRunspace = $null
 $script:DuneFuncomCheckPowerShell = $null
 $script:DuneDiscordLastBgState = $null
 $script:DuneDiscordLastUpdateAvailable = $null
+# Server-state notification trackers (Online when Hagga/Survival_1 is Ready;
+# Offline only after the server has been down for a debounce window so a normal
+# restart doesn't post a false "offline"). Reset per up/down cycle.
+$script:DuneDiscordLastHaggaReady = $null   # $true/$false once observed; $null before first tick
+$script:DuneDiscordOfflineSince = $null     # UTC time the server went not-ready (after being ready)
+$script:DuneDiscordOfflineSent = $false     # offline notice already sent for this down-period
+$script:DuneDiscordRestartingSent = $false  # restarting notice already sent for this down-period
+$script:DuneDiscordOfflineDebounceSecs = 75 # how long not-ready before "offline" fires (~1 min+)
 
 # Steam app id for the Dune: Awakening dedicated server. Discovered at runtime
 # from the install's appmanifest file; this is only the fallback.
@@ -291,6 +299,102 @@ function Send-DuneDiscordWebhook {
                 -Body ([System.Text.Encoding]::UTF8.GetBytes($json)) -UseBasicParsing -TimeoutSec 15 -ErrorAction Stop
             $code = [int]$resp.StatusCode
             return @{ ok = $true; status = $code; message = "Discord notice sent (HTTP $code)." }
+        } catch {
+            $code = 0
+            $retryAfter = 0
+            $exResp = $_.Exception.Response
+            if ($exResp) {
+                try { $code = [int]$exResp.StatusCode } catch {}
+                try {
+                    $ra = $exResp.Headers['Retry-After']
+                    if ($ra) { [double]$raD = 0; if ([double]::TryParse($ra, [ref]$raD)) { $retryAfter = $raD } }
+                } catch {}
+            }
+            $transient = ($code -eq 429 -or ($code -ge 500 -and $code -le 599) -or $code -eq 0)
+            if ($transient -and $attempts -lt $maxAttempts) {
+                $delay = if ($retryAfter -gt 0) { [math]::Min($retryAfter, 10) } else { [math]::Min(2 * $attempts, 6) }
+                Start-Sleep -Seconds $delay
+                continue
+            }
+            return @{ ok = $false; status = $code; message = "Discord notice failed (HTTP $code): $($_.Exception.Message)" }
+        }
+    }
+}
+
+# Build the Discord embed for a single server-state notice. Shared by the live
+# state monitor and the "send test message" route so a test looks EXACTLY like
+# the real notification for that event. State is one of online/offline/
+# restarting/update. -Test only swaps the footer so a test post is labelled as
+# such. Titles use codepoints (ConvertFromUtf32) so this .ps1 stays ASCII.
+function New-DuneDiscordStateEmbed {
+    param(
+        [Parameter(Mandatory)][ValidateSet('online','offline','restarting','update')][string]$State,
+        [string]$ServerName,
+        [string]$InstalledBuild,
+        [string]$LatestBuild,
+        [switch]$Test
+    )
+    $name  = if ([string]::IsNullOrWhiteSpace($ServerName)) { 'Dune server' } else { $ServerName }
+    $check = [System.Char]::ConvertFromUtf32(0x2705)
+    $stop  = [System.Char]::ConvertFromUtf32(0x1F6D1)
+    $warn  = [System.Char]::ConvertFromUtf32(0x26A0)
+    $pkg   = [System.Char]::ConvertFromUtf32(0x1F4E6)
+    switch ($State) {
+        'online' {
+            $embed = [ordered]@{ title = "$check $name is online"; description = 'The game server is up and reachable.'; color = 5763719 }
+        }
+        'offline' {
+            $embed = [ordered]@{ title = "$stop $name is offline"; description = 'The game server has gone down.'; color = 15548997 }
+        }
+        'restarting' {
+            $embed = [ordered]@{ title = "$warn $name is restarting"; description = 'The game server is restarting and should be back shortly.'; color = 16763904 }
+        }
+        'update' {
+            $inst = if ($InstalledBuild) { $InstalledBuild } else { 'Unknown' }
+            $late = if ($LatestBuild) { $LatestBuild } else { 'Unknown' }
+            $embed = [ordered]@{
+                title       = "$pkg Update available for $name"
+                description = 'A new game server update has been detected. Schedule a restart or update it manually.'
+                color       = 3447003
+                fields      = @(
+                    [ordered]@{ name = 'Installed Build'; value = $inst; inline = $true },
+                    [ordered]@{ name = 'Latest Build';    value = $late; inline = $true }
+                )
+            }
+        }
+    }
+    $embed.timestamp = (Get-Date).ToUniversalTime().ToString('o')
+    $embed.footer    = [ordered]@{ text = if ($Test) { 'Test notification - Dune Server Tool' } else { 'Posted by Dune Server Tool' } }
+    return $embed
+}
+
+# Post a prebuilt embed to a Discord incoming webhook with the same best-effort
+# retry/redaction contract as Send-DuneDiscordWebhook. Never throws. Returns
+# @{ ok; status; message }. Used by the state monitor and the test route.
+function Send-DuneDiscordEmbed {
+    param(
+        [Parameter(Mandatory)][string]$Url,
+        [Parameter(Mandatory)]$Embed,
+        [string]$MentionId
+    )
+    if (-not (Test-DuneDiscordWebhookUrl $Url)) {
+        return @{ ok = $false; status = 400; message = 'Invalid Discord webhook URL.' }
+    }
+    $payload = [ordered]@{ username = 'DST Server'; embeds = @($Embed) }
+    $mp = Get-DuneDiscordMentionPayload $MentionId
+    if ($mp.content) { $payload.content = $mp.content }
+    $payload.allowed_mentions = $mp.allowed
+    $json = $payload | ConvertTo-Json -Depth 6
+
+    $attempts = 0
+    $maxAttempts = 3
+    while ($true) {
+        $attempts++
+        try {
+            $resp = Invoke-WebRequest -Uri $Url -Method Post -ContentType 'application/json; charset=utf-8' `
+                -Body ([System.Text.Encoding]::UTF8.GetBytes($json)) -UseBasicParsing -TimeoutSec 15 -ErrorAction Stop
+            $code = [int]$resp.StatusCode
+            return @{ ok = $true; status = $code; message = "Sent (HTTP $code)." }
         } catch {
             $code = 0
             $retryAfter = 0
@@ -604,77 +708,127 @@ function Invoke-DuneRestartScheduleTick {
     }
 }
 
+# True when the persistent Hagga Basin overworld (Survival_1) is Ready - i.e.
+# players can actually join. Read from the battlegroup snapshot's parsed
+# gameServers (map/phase/ready). Falls back to the coarse running state when the
+# status output has no parseable game-server rows.
+function Test-DuneGameServerReady {
+    param($Gs)
+    if (-not $Gs) { return $false }
+    $ready = "$($Gs.ready)".Trim()
+    $phase = "$($Gs.phase)".Trim()
+    if ($ready -match '^(\d+)\s*/\s*(\d+)$') {
+        $n = [int]$Matches[1]; $m = [int]$Matches[2]
+        return ($m -ge 1 -and $n -ge $m)
+    }
+    if ($ready -match '(?i)^true$')      { return $true }
+    if ($phase -match '(?i)\bReady\b')   { return $true }
+    return $false
+}
+
+function Test-DuneHaggaReady {
+    param($Snapshot)
+    if (-not $Snapshot) { return $false }
+    $servers = @()
+    if ($Snapshot.gameServers) { $servers = @($Snapshot.gameServers) }
+    if ($servers.Count -gt 0) {
+        # Prefer the Survival_1 / Hagga row when the status names it.
+        $hagga = @($servers | Where-Object { "$($_.map)" -match '(?i)survival|hagga' })
+        if ($hagga.Count -gt 0) {
+            foreach ($h in $hagga) { if (Test-DuneGameServerReady $h) { return $true } }
+            return $false
+        }
+        # Status didn't name the survival map - treat any Ready game server as online.
+        foreach ($s in $servers) { if (Test-DuneGameServerReady $s) { return $true } }
+        return $false
+    }
+    # No parseable game-server rows - fall back to the coarse battlegroup state.
+    return ("$($Snapshot.state)" -eq 'running')
+}
+
 # Track state changes for Discord notifications (Online, Offline, Restarting, Update Available).
+#
+# NOTE: this only observes state while DST is running. It fires:
+#   - Online      when Hagga Basin (Survival_1) becomes Ready (joinable),
+#   - Restarting  once, when the server drops out of Ready into a transitional state,
+#   - Offline     once, after the server has been not-Ready for the debounce window,
+#   - Update      when the scheduled-restart update check detects a new Funcom build.
+# Changes made directly on the VM (battlegroup.bat) while DST is closed are not seen.
 function Invoke-DuneDiscordStateMonitorTick {
     $state = Get-DuneRestartSchedule
     if (-not $state.discordWebhookUrl) { return }
     if (-not $state.discordNotifyOnline -and -not $state.discordNotifyOffline -and -not $state.discordNotifyRestarting -and -not $state.discordNotifyUpdate) { return }
 
+    $serverName = ''
+    if (Get-Command Get-DuneServerName -ErrorAction SilentlyContinue) {
+        try { $serverName = Get-DuneServerName -CachedOnly } catch { $serverName = '' }
+    }
+    $name = if ([string]::IsNullOrWhiteSpace($serverName)) { 'Dune server' } else { $serverName }
+
     $vm = Get-DuneVmStatus
     $bgState = 'unknown'
+    $haggaReady = $false
     if ($vm.running) {
         if (Get-Command Get-DuneBattlegroupSnapshot -ErrorAction SilentlyContinue) {
             try {
                 $bg = Get-DuneBattlegroupSnapshot
-                if ($bg -and $bg.available) { $bgState = $bg.state }
-                elseif ($bg -and $bg.state) { $bgState = $bg.state }
+                if ($bg) {
+                    if ($bg.state) { $bgState = $bg.state }
+                    $haggaReady = Test-DuneHaggaReady -Snapshot $bg
+                }
             } catch {}
         }
     }
 
-    $lastState = $script:DuneDiscordLastBgState
-    $script:DuneDiscordLastBgState = $bgState
+    $lastHagga = $script:DuneDiscordLastHaggaReady
 
-    if ($lastState -and $lastState -ne 'unknown' -and $bgState -ne 'unknown' -and $lastState -ne $bgState) {
-        $serverName = ''
-        if (Get-Command Get-DuneServerName -ErrorAction SilentlyContinue) {
-            try { $serverName = Get-DuneServerName -CachedOnly } catch { $serverName = '' }
-        }
-        $name = if ([string]::IsNullOrWhiteSpace($serverName)) { 'Dune server' } else { $serverName }
-
-        $fire = $false
-        $title = ''
-        $color = 0
-
-        if ($bgState -eq 'running' -and $state.discordNotifyOnline) {
-            $fire = $true
-            $title = "$([System.Char]::ConvertFromUtf32(0x2705)) $name is online"
-            $color = 5763719
-        } elseif ($bgState -eq 'stopped' -and $state.discordNotifyOffline) {
-            $fire = $true
-            $title = "$([System.Char]::ConvertFromUtf32(0x1F6D1)) $name is offline"
-            $color = 15548997
-        } elseif (($bgState -eq 'starting' -or $bgState -eq 'updating' -or $bgState -eq 'stopping') -and $state.discordNotifyRestarting) {
-            if ($lastState -ne 'starting' -and $lastState -ne 'updating' -and $lastState -ne 'stopping') {
-                $fire = $true
-                $title = "$([System.Char]::ConvertFromUtf32(0x26A0)) $name is restarting"
-                $color = 16763904
-            }
+    $fireState = $null
+    if ($haggaReady) {
+        # Up and joinable. Fire Online only on an observed not-ready -> ready
+        # transition (so opening DST against an already-up server is silent).
+        if ($lastHagga -eq $false -and $state.discordNotifyOnline) { $fireState = 'online' }
+        $script:DuneDiscordOfflineSince   = $null
+        $script:DuneDiscordOfflineSent    = $false
+        $script:DuneDiscordRestartingSent = $false
+    } else {
+        # Not joinable. Only start tracking a down-period once we've actually
+        # seen the server Ready this session (a ready -> not-ready transition),
+        # so a server that's intentionally down when DST opens stays silent.
+        if ($lastHagga -eq $true) {
+            $script:DuneDiscordOfflineSince   = [datetime]::UtcNow
+            $script:DuneDiscordOfflineSent    = $false
+            $script:DuneDiscordRestartingSent = $false
         }
 
-        if ($fire) {
-            $embed = [ordered]@{
-                title = $title
-                color = $color
-                timestamp = (Get-Date).ToUniversalTime().ToString('o')
+        if ($script:DuneDiscordOfflineSince) {
+            # Restarting: announce once as soon as a real down-period begins
+            # (covers DST commands, scheduled restarts, and the bat path while
+            # DST is open).
+            if ($state.discordNotifyRestarting -and -not $script:DuneDiscordRestartingSent) {
+                $fireState = 'restarting'
+                $script:DuneDiscordRestartingSent = $true
             }
-            $payload = @{ embeds = @($embed) }
-            $mentionPayload = Get-DuneDiscordMentionPayload $state.discordMentionId
-            if ($mentionPayload.content) {
-                $payload.content = $mentionPayload.content
-                $payload.allowed_mentions = $mentionPayload.allowed
+            # Offline: only after the down-period exceeds the debounce, so a normal
+            # restart that comes back quickly never posts a false offline.
+            elseif ($state.discordNotifyOffline -and -not $script:DuneDiscordOfflineSent) {
+                $downSecs = ([datetime]::UtcNow - $script:DuneDiscordOfflineSince).TotalSeconds
+                if ($downSecs -ge $script:DuneDiscordOfflineDebounceSecs) {
+                    $fireState = 'offline'
+                    $script:DuneDiscordOfflineSent = $true
+                }
             }
+        }
+    }
+    $script:DuneDiscordLastHaggaReady = $haggaReady
 
-            try {
-                $json = $payload | ConvertTo-Json -Depth 5
-                [void](Invoke-RestMethod -Uri $state.discordWebhookUrl -Method Post -Body $json -ContentType 'application/json')
-                if (Get-Command Write-DuneLog -ErrorAction SilentlyContinue) {
-                    Write-DuneLog "discord state monitor fired '$bgState' [$(Get-DuneRedactedWebhookUrl $state.discordWebhookUrl)]"
-                }
-            } catch {
-                if (Get-Command Write-DuneLog -ErrorAction SilentlyContinue) {
-                    Write-DuneLog "discord state monitor error: $($_.Exception.Message)" 'WARN'
-                }
+    if ($fireState) {
+        $embed = New-DuneDiscordStateEmbed -State $fireState -ServerName $name
+        $r = Send-DuneDiscordEmbed -Url $state.discordWebhookUrl -Embed $embed -MentionId $state.discordMentionId
+        if (Get-Command Write-DuneLog -ErrorAction SilentlyContinue) {
+            if ($r.ok) {
+                Write-DuneLog "discord state monitor fired '$fireState' [$(Get-DuneRedactedWebhookUrl $state.discordWebhookUrl)]"
+            } else {
+                Write-DuneLog "discord state monitor error: $($r.message)" 'WARN'
             }
         }
     }
@@ -690,32 +844,13 @@ function Invoke-DuneDiscordStateMonitorTick {
         }
         $name = if ([string]::IsNullOrWhiteSpace($serverName)) { 'Dune server' } else { $serverName }
 
-        $embed = [ordered]@{
-            title = "$([System.Char]::ConvertFromUtf32(0x1F4E6)) Update available for $name"
-            description = "A new game server update has been detected. Schedule a restart or update it manually."
-            color = 3447003
-            fields = @(
-                [ordered]@{ name = 'Installed Build'; value = if ($state.installedBuild) { $state.installedBuild } else { 'Unknown' }; inline = $true },
-                [ordered]@{ name = 'Latest Build'; value = if ($state.latestBuild) { $state.latestBuild } else { 'Unknown' }; inline = $true }
-            )
-            timestamp = (Get-Date).ToUniversalTime().ToString('o')
-        }
-        $payload = @{ embeds = @($embed) }
-        $mentionPayload = Get-DuneDiscordMentionPayload $state.discordMentionId
-        if ($mentionPayload.content) {
-            $payload.content = $mentionPayload.content
-            $payload.allowed_mentions = $mentionPayload.allowed
-        }
-
-        try {
-            $json = $payload | ConvertTo-Json -Depth 5
-            [void](Invoke-RestMethod -Uri $state.discordWebhookUrl -Method Post -Body $json -ContentType 'application/json')
-            if (Get-Command Write-DuneLog -ErrorAction SilentlyContinue) {
+        $embed = New-DuneDiscordStateEmbed -State 'update' -ServerName $name -InstalledBuild $state.installedBuild -LatestBuild $state.latestBuild
+        $r = Send-DuneDiscordEmbed -Url $state.discordWebhookUrl -Embed $embed -MentionId $state.discordMentionId
+        if (Get-Command Write-DuneLog -ErrorAction SilentlyContinue) {
+            if ($r.ok) {
                 Write-DuneLog "discord state monitor fired 'update available' [$(Get-DuneRedactedWebhookUrl $state.discordWebhookUrl)]"
-            }
-        } catch {
-            if (Get-Command Write-DuneLog -ErrorAction SilentlyContinue) {
-                Write-DuneLog "discord state monitor error (update): $($_.Exception.Message)" 'WARN'
+            } else {
+                Write-DuneLog "discord state monitor error (update): $($r.message)" 'WARN'
             }
         }
     }
