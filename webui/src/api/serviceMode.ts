@@ -1,4 +1,4 @@
-// Service-mode API — backs the "Stay online when signed out" toggle.
+// Service-mode API — backs the "Keep serving while DST is closed" toggle.
 //
 // Loopback-only on the backend: a remote viewer (Tailscale Funnel / Cloudflare
 // domain / LAN) cannot register or remove the always-on scheduled task, and the

@@ -1,4 +1,4 @@
-﻿# Service-mode routes - backs the "Stay online when signed out" toggle.
+﻿# Service-mode routes - backs the "Keep serving while DST is closed" toggle.
 #
 # Loopback-only: a remote viewer (Tailscale Funnel / Cloudflare domain / LAN)
 # with a valid token must NOT be able to register an always-on, run-as-user

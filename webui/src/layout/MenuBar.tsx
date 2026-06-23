@@ -38,7 +38,7 @@ export function MenuBar({ sidebarCollapsed, onToggleSidebar }: Props) {
   const [autostartConfirm, setAutostartConfirm] = useState<null | { nextEnabled: boolean }>(null)
   const [autostartError, setAutostartError] = useState<string | null>(null)
 
-  // Service mode ("stay online when signed out"). Local-viewer only; enabling
+  // Service mode ("keep serving while DST is closed"). Local-viewer only; enabling
   // pops a modal that captures the Windows password (sent once over loopback).
   const [service, setService] = useState<ServiceModeState | null>(null)
   const [serviceBusy, setServiceBusy] = useState(false)
@@ -374,17 +374,17 @@ export function MenuBar({ sidebarCollapsed, onToggleSidebar }: Props) {
                 className="w-full flex items-start gap-2 px-2.5 py-1.5 rounded text-sm text-text-muted hover:text-text hover:bg-surface-2 transition-colors text-left disabled:opacity-60 disabled:cursor-wait"
                 title={
                   service.enabled
-                    ? 'The portal, phone apps, scheduled restarts and Discord notifications keep running even when you sign out. Click to remove the service.'
-                    : 'Install a service so the portal and phone apps stay online even when DST is closed and you are signed out.'
+                    ? 'The portal, phone apps, scheduled restarts and Discord notifications keep running while DST is closed, including while your PC is locked. Loads at sign-in. Click to remove the service.'
+                    : 'Install a service so the portal and phone apps stay online while DST is closed (and while your PC is locked). Loads at sign-in; you stay signed in to Windows.'
                 }
               >
                 <Icon name="ServerCog" size={14} className="mt-0.5" />
                 <span className="flex-1">
-                  <span className="block">Stay online when signed out</span>
+                  <span className="block">Keep serving while DST is closed</span>
                   <span className="block text-[11px] text-text-dim">
                     {service.enabled
-                      ? 'Installed — backend runs as a service, even when signed out'
-                      : 'Off — remote access needs DST open and you signed in'}
+                      ? 'Installed — backend runs without DST open and loads at sign-in (works while locked)'
+                      : 'Off — portal and phone need DST open'}
                   </span>
                 </span>
                 {service.enabled && (
@@ -580,12 +580,12 @@ export function MenuBar({ sidebarCollapsed, onToggleSidebar }: Props) {
               <Icon name="ServerCog" size={20} className="text-accent-bright mt-0.5" />
               <div className="flex-1">
                 <h2 className="text-base font-semibold text-text mb-1">
-                  {serviceModal.nextEnabled ? 'Stay online when signed out?' : 'Remove the always-on service?'}
+                  {serviceModal.nextEnabled ? 'Keep serving while DST is closed?' : 'Remove the always-on service?'}
                 </h2>
                 <p className="text-sm text-text-muted leading-snug">
                   {serviceModal.nextEnabled
-                    ? 'Installs a Windows scheduled task that runs the Dune Server backend whether you are signed in or not — so the portal, phone apps, scheduled restarts and Discord notifications keep working after you sign out or reboot. Windows stores your password (encrypted) so the task can run as you with access to your SSH key and Hyper-V.'
-                    : 'The backend will no longer run while you are signed out. The portal and phone apps stay up only while DST is open. The currently running backend keeps going until you quit it.'}
+                    ? 'Installs a Windows scheduled task that runs the Dune Server backend in the background and loads it at sign-in — so the portal, phone apps, scheduled restarts and Discord notifications keep working while DST is closed, including while your PC is locked. You need to stay signed in to Windows; a full sign-out stops remote access. Windows stores your password (encrypted) so the task can run as you with access to your SSH key and Hyper-V.'
+                    : 'The backend will no longer run on its own. The portal and phone apps stay up only while DST is open. The currently running backend keeps going until you quit it.'}
                 </p>
               </div>
             </div>
