@@ -313,6 +313,102 @@ function Send-DuneDiscordWebhook {
     }
 }
 
+# Build the Discord embed for a single server-state notice. Shared by the live
+# state monitor and the "send test message" route so a test looks EXACTLY like
+# the real notification for that event. State is one of online/offline/
+# restarting/update. -Test only swaps the footer so a test post is labelled as
+# such. Titles use codepoints (ConvertFromUtf32) so this .ps1 stays ASCII.
+function New-DuneDiscordStateEmbed {
+    param(
+        [Parameter(Mandatory)][ValidateSet('online','offline','restarting','update')][string]$State,
+        [string]$ServerName,
+        [string]$InstalledBuild,
+        [string]$LatestBuild,
+        [switch]$Test
+    )
+    $name  = if ([string]::IsNullOrWhiteSpace($ServerName)) { 'Dune server' } else { $ServerName }
+    $check = [System.Char]::ConvertFromUtf32(0x2705)
+    $stop  = [System.Char]::ConvertFromUtf32(0x1F6D1)
+    $warn  = [System.Char]::ConvertFromUtf32(0x26A0)
+    $pkg   = [System.Char]::ConvertFromUtf32(0x1F4E6)
+    switch ($State) {
+        'online' {
+            $embed = [ordered]@{ title = "$check $name is online"; description = 'The game server is up and reachable.'; color = 5763719 }
+        }
+        'offline' {
+            $embed = [ordered]@{ title = "$stop $name is offline"; description = 'The game server has gone down.'; color = 15548997 }
+        }
+        'restarting' {
+            $embed = [ordered]@{ title = "$warn $name is restarting"; description = 'The game server is restarting and should be back shortly.'; color = 16763904 }
+        }
+        'update' {
+            $inst = if ($InstalledBuild) { $InstalledBuild } else { 'Unknown' }
+            $late = if ($LatestBuild) { $LatestBuild } else { 'Unknown' }
+            $embed = [ordered]@{
+                title       = "$pkg Update available for $name"
+                description = 'A new game server update has been detected. Schedule a restart or update it manually.'
+                color       = 3447003
+                fields      = @(
+                    [ordered]@{ name = 'Installed Build'; value = $inst; inline = $true },
+                    [ordered]@{ name = 'Latest Build';    value = $late; inline = $true }
+                )
+            }
+        }
+    }
+    $embed.timestamp = (Get-Date).ToUniversalTime().ToString('o')
+    $embed.footer    = [ordered]@{ text = if ($Test) { 'Test notification - Dune Server Tool' } else { 'Posted by Dune Server Tool' } }
+    return $embed
+}
+
+# Post a prebuilt embed to a Discord incoming webhook with the same best-effort
+# retry/redaction contract as Send-DuneDiscordWebhook. Never throws. Returns
+# @{ ok; status; message }. Used by the state monitor and the test route.
+function Send-DuneDiscordEmbed {
+    param(
+        [Parameter(Mandatory)][string]$Url,
+        [Parameter(Mandatory)]$Embed,
+        [string]$MentionId
+    )
+    if (-not (Test-DuneDiscordWebhookUrl $Url)) {
+        return @{ ok = $false; status = 400; message = 'Invalid Discord webhook URL.' }
+    }
+    $payload = [ordered]@{ username = 'DST Server'; embeds = @($Embed) }
+    $mp = Get-DuneDiscordMentionPayload $MentionId
+    if ($mp.content) { $payload.content = $mp.content }
+    $payload.allowed_mentions = $mp.allowed
+    $json = $payload | ConvertTo-Json -Depth 6
+
+    $attempts = 0
+    $maxAttempts = 3
+    while ($true) {
+        $attempts++
+        try {
+            $resp = Invoke-WebRequest -Uri $Url -Method Post -ContentType 'application/json; charset=utf-8' `
+                -Body ([System.Text.Encoding]::UTF8.GetBytes($json)) -UseBasicParsing -TimeoutSec 15 -ErrorAction Stop
+            $code = [int]$resp.StatusCode
+            return @{ ok = $true; status = $code; message = "Sent (HTTP $code)." }
+        } catch {
+            $code = 0
+            $retryAfter = 0
+            $exResp = $_.Exception.Response
+            if ($exResp) {
+                try { $code = [int]$exResp.StatusCode } catch {}
+                try {
+                    $ra = $exResp.Headers['Retry-After']
+                    if ($ra) { [double]$raD = 0; if ([double]::TryParse($ra, [ref]$raD)) { $retryAfter = $raD } }
+                } catch {}
+            }
+            $transient = ($code -eq 429 -or ($code -ge 500 -and $code -le 599) -or $code -eq 0)
+            if ($transient -and $attempts -lt $maxAttempts) {
+                $delay = if ($retryAfter -gt 0) { [math]::Min($retryAfter, 10) } else { [math]::Min(2 * $attempts, 6) }
+                Start-Sleep -Seconds $delay
+                continue
+            }
+            return @{ ok = $false; status = $code; message = "Discord notice failed (HTTP $code): $($_.Exception.Message)" }
+        }
+    }
+}
+
 # Non-destructive Funcom server-update check: compare the installed build id
 # (from the local appmanifest) against the latest public build id reported by
 # steamcmd's app_info_print. Read-only; takes ~20-30s because steamcmd self-
@@ -632,48 +728,25 @@ function Invoke-DuneDiscordStateMonitorTick {
         }
         $name = if ([string]::IsNullOrWhiteSpace($serverName)) { 'Dune server' } else { $serverName }
 
-        $fire = $false
-        $title = ''
-        $color = 0
-
+        $stateKey = $null
         if ($bgState -eq 'running' -and $state.discordNotifyOnline) {
-            $fire = $true
-            $title = "$([System.Char]::ConvertFromUtf32(0x2705)) $name is online"
-            $color = 5763719
+            $stateKey = 'online'
         } elseif ($bgState -eq 'stopped' -and $state.discordNotifyOffline) {
-            $fire = $true
-            $title = "$([System.Char]::ConvertFromUtf32(0x1F6D1)) $name is offline"
-            $color = 15548997
+            $stateKey = 'offline'
         } elseif (($bgState -eq 'starting' -or $bgState -eq 'updating' -or $bgState -eq 'stopping') -and $state.discordNotifyRestarting) {
             if ($lastState -ne 'starting' -and $lastState -ne 'updating' -and $lastState -ne 'stopping') {
-                $fire = $true
-                $title = "$([System.Char]::ConvertFromUtf32(0x26A0)) $name is restarting"
-                $color = 16763904
+                $stateKey = 'restarting'
             }
         }
 
-        if ($fire) {
-            $embed = [ordered]@{
-                title = $title
-                color = $color
-                timestamp = (Get-Date).ToUniversalTime().ToString('o')
-            }
-            $payload = @{ embeds = @($embed) }
-            $mentionPayload = Get-DuneDiscordMentionPayload $state.discordMentionId
-            if ($mentionPayload.content) {
-                $payload.content = $mentionPayload.content
-                $payload.allowed_mentions = $mentionPayload.allowed
-            }
-
-            try {
-                $json = $payload | ConvertTo-Json -Depth 5
-                [void](Invoke-RestMethod -Uri $state.discordWebhookUrl -Method Post -Body $json -ContentType 'application/json')
-                if (Get-Command Write-DuneLog -ErrorAction SilentlyContinue) {
+        if ($stateKey) {
+            $embed = New-DuneDiscordStateEmbed -State $stateKey -ServerName $name
+            $r = Send-DuneDiscordEmbed -Url $state.discordWebhookUrl -Embed $embed -MentionId $state.discordMentionId
+            if (Get-Command Write-DuneLog -ErrorAction SilentlyContinue) {
+                if ($r.ok) {
                     Write-DuneLog "discord state monitor fired '$bgState' [$(Get-DuneRedactedWebhookUrl $state.discordWebhookUrl)]"
-                }
-            } catch {
-                if (Get-Command Write-DuneLog -ErrorAction SilentlyContinue) {
-                    Write-DuneLog "discord state monitor error: $($_.Exception.Message)" 'WARN'
+                } else {
+                    Write-DuneLog "discord state monitor error: $($r.message)" 'WARN'
                 }
             }
         }
@@ -690,32 +763,13 @@ function Invoke-DuneDiscordStateMonitorTick {
         }
         $name = if ([string]::IsNullOrWhiteSpace($serverName)) { 'Dune server' } else { $serverName }
 
-        $embed = [ordered]@{
-            title = "$([System.Char]::ConvertFromUtf32(0x1F4E6)) Update available for $name"
-            description = "A new game server update has been detected. Schedule a restart or update it manually."
-            color = 3447003
-            fields = @(
-                [ordered]@{ name = 'Installed Build'; value = if ($state.installedBuild) { $state.installedBuild } else { 'Unknown' }; inline = $true },
-                [ordered]@{ name = 'Latest Build'; value = if ($state.latestBuild) { $state.latestBuild } else { 'Unknown' }; inline = $true }
-            )
-            timestamp = (Get-Date).ToUniversalTime().ToString('o')
-        }
-        $payload = @{ embeds = @($embed) }
-        $mentionPayload = Get-DuneDiscordMentionPayload $state.discordMentionId
-        if ($mentionPayload.content) {
-            $payload.content = $mentionPayload.content
-            $payload.allowed_mentions = $mentionPayload.allowed
-        }
-
-        try {
-            $json = $payload | ConvertTo-Json -Depth 5
-            [void](Invoke-RestMethod -Uri $state.discordWebhookUrl -Method Post -Body $json -ContentType 'application/json')
-            if (Get-Command Write-DuneLog -ErrorAction SilentlyContinue) {
+        $embed = New-DuneDiscordStateEmbed -State 'update' -ServerName $name -InstalledBuild $state.installedBuild -LatestBuild $state.latestBuild
+        $r = Send-DuneDiscordEmbed -Url $state.discordWebhookUrl -Embed $embed -MentionId $state.discordMentionId
+        if (Get-Command Write-DuneLog -ErrorAction SilentlyContinue) {
+            if ($r.ok) {
                 Write-DuneLog "discord state monitor fired 'update available' [$(Get-DuneRedactedWebhookUrl $state.discordWebhookUrl)]"
-            }
-        } catch {
-            if (Get-Command Write-DuneLog -ErrorAction SilentlyContinue) {
-                Write-DuneLog "discord state monitor error (update): $($_.Exception.Message)" 'WARN'
+            } else {
+                Write-DuneLog "discord state monitor error (update): $($r.message)" 'WARN'
             }
         }
     }
