@@ -13,22 +13,95 @@ here cover everything those tags shipped.
 
 ## [Unreleased]
 
-## [12.11.0] - 2026-06-21
-
-### Changed
-
-- **Remote access and the Mobile App now use a free Cloudflare quick tunnel instead of Tailscale.** Open **Settings → Mobile App** and click **Start secure tunnel** — DST runs the bundled `cloudflared`, which connects outbound to Cloudflare and returns an `https://…trycloudflare.com` address. No VPN, no account, no domain, and no router port-forwarding; people using the app need nothing installed on their phones. Scan the QR code (or paste the URL + token) to pair.
-- **The mobile bridge now binds loopback (127.0.0.1) only.** Because cloudflared connects locally, the bridge no longer needs a Windows Firewall rule, a URL ACL, or administrator rights — a simpler, more private setup that works without elevation.
-- **The mobile app pairs by URL.** Pairing payloads are now `{url, token}` (legacy `{ip, port, token}` codes still work), so the same app reaches your server over a quick tunnel, your own domain, or `http://<lan-ip>:47900` on the same network.
+## [12.11.0] - 2026-06-23
 
 ### Added
 
-- **Bundled cloudflared** for one-click secure tunnels, with Start/Stop tunnel controls and live status in **Settings → Mobile App**.
-- **Optional stable address (bring your own domain):** keep using the existing **Settings → Remote Access** Cloudflare named-tunnel + Access path for a permanent, email-gated hostname.
+- **Mobile apps (iOS TestFlight + Android APK)** that manage your server from your phone.
+- **Tailscale Funnel is the new recommended remote transport for the phone app and zero-domain hosts.** Install Tailscale on the host and enable a Funnel on the bridge port (`tailscale funnel --bg http://127.0.0.1:47900`) to get a stable public HTTPS `…ts.net` address — no domain, no router port-forwarding, CGNAT-proof. DST ships only the local bridge + Funnel detection; it doesn't bundle or manage Tailscale.
+- **Permanent remote token + URL-based pairing.** Pairing payloads are now `{url, token}` (legacy `{ip, port, token}` codes still work), and the token survives restarts so a paired phone keeps working without re-scanning. Magic-link browser portal (`…/?key=<token>`) lets a trusted co-admin open the portal in any browser.
+- **Optional "Keep serving while DST is closed" service.** From the **Help** menu you can install a background service so the portal, phone apps, scheduled restarts and Discord notifications keep running while the DST window is closed — including while your PC is locked — and it loads at sign-in. Honest scope: you must stay signed in to Windows; a full sign-out stops remote access.
+- **Diagnostics bundle now probes the Gameplay Admin read path.** `Help → Create GitHub Issue + Save Logs` includes a new `gameplay-read-probe.txt` that re-runs the Players/Bases list queries and records counts only (never player names or ids), so "Players/Bases show rows but blank names / 0 pieces" reports (e.g. after a character transfer) are triageable at a glance.
+
+### Changed
+
+- **The mobile bridge now binds loopback (127.0.0.1) only.** Because the transport connects out from the host, the bridge no longer needs a Windows Firewall rule, a URL ACL, or administrator rights — a simpler, more private setup that works without elevation.
+
+### Kept
+
+- **Cloudflare remote access (named-tunnel + Access, bring-your-own-domain) is unchanged** and stays for existing users — set it up under **Settings → Remote Access** for a permanent, email-gated hostname. Pairing prefers a Tailscale Funnel when present, then falls back to this Cloudflare custom domain.
 
 ### Removed
 
-- **Tailscale integration** (the Tailscale settings page, its API, and the host/phone Tailscale requirements). Remote access no longer depends on any third-party VPN.
+- **The anonymous Cloudflare quick tunnel** (bundled `cloudflared` quick-tunnel + the rendezvous indirection) — it proved unreliable (anonymous, throttled, edge-404s). Tailscale Funnel and the Cloudflare custom-domain path replace it; the permanent remote-token logic it carried is retained. Note: this removes only the *anonymous quick tunnel* — the Cloudflare *named-tunnel/Access* domain path above is **not** affected.
+
+## [12.10.8] - 2026-06-22
+
+First public/stable release of the Server State Webhook reliability work
+(verified on the test channel as 12.10.4–12.10.7, now promoted to stable).
+
+### Fixed
+
+- **Server State Discord notifications (Online / Offline / Restarting / Update) now fire reliably**, driven by whether Hagga Basin (Survival_1) is actually joinable rather than a coarse "running" check that a normal restart never tripped. Online posts when Hagga Basin is joinable; Restarting posts once when it drops out of Ready; Offline posts only after the server has been down for more than ~a minute (a quick restart won't post a false offline); Update posts when the scheduled-restart update check finds a new Funcom build.
+- **The Online / Offline / Restarting / Update toggles now persist when you save the schedule** — they were reverting to off on save, which also stopped the notifications from firing.
+- **"Send test message" now sends a sample of each enabled notification**, not just the restart message, so you can preview exactly what each event looks like.
+- **The Settings page no longer goes fully blank if one card errors** — each card is isolated, so an unexpected render error shows a small inline notice for just that card while the rest of Settings keeps working.
+- Added an in-app note clarifying these notifications are detected while the Dune Server Tool is running and only for the server it manages — changes made directly on the VM via `battlegroup.bat`, or while DST is closed, aren't detected.
+
+## [12.10.7] - 2026-06-22
+
+### Fixed
+
+- **Server State Discord notifications now fire reliably.** Online / Offline /
+  Restarting are now driven by whether **Hagga Basin (Survival_1) is actually
+  joinable**, instead of a coarse "running" state change that a normal restart
+  never produced (which is why nothing was firing):
+  - **Online** posts when Hagga Basin finishes loading and the server is
+    joinable.
+  - **Restarting** posts once when the server drops out of Ready to restart.
+  - **Offline** posts only after the server has been down for more than ~a
+    minute, so a normal quick restart no longer posts a false "offline".
+  - **Update Available** continues to post when the scheduled-restart update
+    check detects a new Funcom build.
+- Added an in-app note clarifying these are detected while the Dune Server Tool
+  is running and only for the server it manages — changes made directly on the
+  VM via `battlegroup.bat`, or while DST is closed, aren't detected.
+
+## [12.10.6] - 2026-06-22
+
+### Fixed
+
+- **"Send test message" now tests each enabled notification, not just the
+  restart message.** Previously the test always sent the scheduled-restart
+  embed, so enabling Online / Offline / Restarting / Update-available and
+  clicking test only ever showed the restart message. The test now sends one
+  representative sample per enabled notification type (and the pre-restart
+  broadcast when that toggle is on), each labelled as a test, so you can see
+  exactly what every event will look like. The button now also waits for you to
+  save pending changes so the test reflects your saved configuration.
+
+### Changed
+
+- Live server-state Discord notices (online / offline / restarting) now carry a
+  short description line and a footer, matching the test samples.
+
+## [12.10.5] - 2026-06-22
+
+### Fixed
+
+- **The Settings page no longer goes fully blank if one card hits an error.**
+  Each Settings card (Updates, Appearance, Remote Access, Public IP) is now
+  isolated so an unexpected render error in one — for example a stored setting
+  whose shape differs after switching between a test build and a stable build —
+  shows a small inline "couldn't be displayed" notice for just that card while
+  the rest of Settings keeps working, instead of crashing the whole page.
+- **Server State Webhook toggles now persist when you save the schedule.** The
+  Online / Offline / Restarting / Update-available checkboxes in the Scheduled
+  Restarts card were reverting on save because the save action captured a stale
+  copy of those toggles, writing their old (unchecked) values back. As a result
+  the state-change notifications never fired even when the toggles appeared
+  enabled. Saving now stores exactly what's shown, so the online / offline /
+  restarting / update messages send as configured.
 
 ## [12.10.3] - 2026-06-21
 
