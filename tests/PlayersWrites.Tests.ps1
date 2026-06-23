@@ -184,22 +184,18 @@ Describe 'Invoke-DunePlayerGiveItemsBulk overflow' -Tag 'Pure' {
     }
 }
 
-Describe 'Get-DuneAqlTrialCatalog' -Tag 'Pure' {
-    It 'includes Trial 4 keyed as "4"' {
-        $cat = Get-DuneAqlTrialCatalog
-        ($cat | Where-Object { $_.id -eq '4' }) | Should -Not -BeNullOrEmpty
+Describe 'Get-DuneRewardUnblockTagsForJourneyNode' -Tag 'Pure' {
+    It 'returns Journey.RewardsUnblocked for the Find the Fremen root' {
+        Get-DuneRewardUnblockTagsForJourneyNode -NodeId 'DA_MQ_FindTheFremen' | Should -Contain 'Journey.RewardsUnblocked'
     }
-    It 'maps Trial 4 to the FourthTest journey node' {
-        $t4 = Get-DuneAqlTrialCatalog | Where-Object { $_.id -eq '4' }
-        $t4.node | Should -Be 'DA_MQ_FindTheFremen.FourthTest'
+    It 'matches a descendant node (e.g. a single trial subtree)' {
+        Get-DuneRewardUnblockTagsForJourneyNode -NodeId 'DA_MQ_FindTheFremen.FourthTest' | Should -Contain 'Journey.RewardsUnblocked'
     }
-    It 'awards the Cryss Knife recipe for Trial 4 (the ability-slot trigger)' {
-        $t4 = Get-DuneAqlTrialCatalog | Where-Object { $_.id -eq '4' }
-        $t4.recipe | Should -Be 'RCP_Crysknife_Recipe'
+    It 'returns nothing for an unrelated questline' {
+        @(Get-DuneRewardUnblockTagsForJourneyNode -NodeId 'DA_MQ_ANewBeginning').Count | Should -Be 0
     }
-    It 'includes the JourneySets.Fremkit.CryssKnife tag in the Trial 4 delta' {
-        $t4 = Get-DuneAqlTrialCatalog | Where-Object { $_.id -eq '4' }
-        $t4.tags | Should -Contain 'JourneySets.Fremkit.CryssKnife'
+    It 'does not partial-match a node that merely shares a prefix string' {
+        @(Get-DuneRewardUnblockTagsForJourneyNode -NodeId 'DA_MQ_FindTheFremenExtra').Count | Should -Be 0
     }
 }
 

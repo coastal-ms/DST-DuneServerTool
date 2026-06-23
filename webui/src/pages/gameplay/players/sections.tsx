@@ -32,12 +32,12 @@ import {
   getLandsraadOverview, getLandsraadPlayerContributions, setLandsraadContribution,
   getPlayerJourneyNodes, completeJourneyNode, resetJourneyNode,
   getTrainerCatalog, getTrainerStatus, unlockTrainer, resetTrainerSkills,
-  getMainQuestCatalog, unlockMainQuest, getAqlTrials, applyAqlTrial,
+  getMainQuestCatalog, unlockMainQuest,
   getVehicleKitCatalog,
   type Player, type PlayerEvent, type PlayerStats, type ProgressionPreset, type SpecTrackFull,
   type CatalogItem, type ItemPackage, type GiveItemEntry,
   type LandsraadHouse, type LandsraadIniSetting,
-  type JourneyNode, type TrainerInfo, type TrainerStatus, type MainQuestInfo, type AqlTrialInfo,
+  type JourneyNode, type TrainerInfo, type TrainerStatus, type MainQuestInfo,
   type PlayerVehicleRow,
   type VehicleTemplate, type VehicleKitCatalog,
 } from '../../../api/gameplay'
@@ -511,7 +511,7 @@ interface ActionDef {
   liveOnly?: boolean      // requires player to be online (RMQ path)
   offlineOnly?: boolean   // requires player to be offline (DB write the game caches in memory)
   fields?: ActionField[]
-  custom?: 'give-item' | 'grant-reward' | 'whisper' | 'spawn-vehicle' | 'quick-presets' | 'vehicle-kit' | 'give-package' | 'cheat-scripts' | 'dev-scripts' | 'unlock-trainers' | 'unlock-mainquest' | 'progression-unlock' | 'refuel-vehicle' | 'starter-class' | 'update-tags' | 'aql-trial'
+  custom?: 'give-item' | 'grant-reward' | 'whisper' | 'spawn-vehicle' | 'quick-presets' | 'vehicle-kit' | 'give-package' | 'cheat-scripts' | 'dev-scripts' | 'unlock-trainers' | 'unlock-mainquest' | 'progression-unlock' | 'refuel-vehicle' | 'starter-class' | 'update-tags'
   balance?: 'solari' | 'scrip' | 'intel'  // show the player's current balance read-only above the form
   confirm?: (p: Player) => string  // confirm message; if returns '' no prompt
   doubleConfirm?: boolean // also requires a typed "i acknowledge" prompt inside run()
@@ -559,8 +559,8 @@ const ACTIONS: ActionDef[] = [
       { key: 'tier',    label: 'Tier (0-20)', type: 'number', placeholder: '10', min: 0, max: 20 },
     ],
     run: (p, v) => setFactionTier(p.controller_id, String(v.faction || 'atreides').trim(), Number(v.tier) || 0) },
-  { id: 'apply-progression-preset', group: 'Progression', label: 'Apply Quick Preset', icon: 'Zap', custom: 'quick-presets',
-    rowNote: 'Completes a story/journey chapter instantly',
+  { id: 'apply-progression-preset', group: 'Progression', label: 'Apply Quick Preset', icon: 'Zap', custom: 'quick-presets', offlineOnly: true,
+    rowNote: 'Completes a story/journey chapter instantly — incl. Find the Fremen (3rd ability slot + prescience). Player must be offline.',
     run: () => Promise.resolve({ message: '' }) },
   { id: 'progression-unlock', group: 'Progression', label: 'Progression Unlock', icon: 'Milestone', custom: 'progression-unlock',
     rowNote: 'Completes DA_FQ_ClimbTheRanks journey nodes + writes faction tier tags',
@@ -570,9 +570,6 @@ const ACTIONS: ActionDef[] = [
     run: () => Promise.resolve({ message: '' }) },
   { id: 'unlock-main-quest', group: 'Progression', label: 'Unlock Main Quest', icon: 'Flag', custom: 'unlock-mainquest',
     rowNote: 'Complete an entire main-quest story line',
-    run: () => Promise.resolve({ message: '' }) },
-  { id: 'apply-aql-trial', group: 'Progression', label: 'Apply Aql Trial', icon: 'Sparkles', custom: 'aql-trial',
-    rowNote: 'Reproduces an Aql trial completion — journey + tags + the recipe award that unlocks the ability slot',
     run: () => Promise.resolve({ message: '' }) },
   { id: 'reset-progression', group: 'Progression', label: 'Reset Progression (live)', icon: 'RotateCcw', liveOnly: true,
     rowNote: 'Single confirmation required',
@@ -921,12 +918,6 @@ function ActionRow({ def, player, busy, stats, open, danger, onToggle, runAction
               onSubmit={(quest, name) => runAction(def, async () => {
                 const r = await unlockMainQuest(player.account_id, quest)
                 return { message: r.message || `Unlocked main quest "${name}" for ${player.name}.` }
-              })} />
-          ) : def.custom === 'aql-trial' ? (
-            <AqlTrialForm busy={busy}
-              onSubmit={(trial, label) => runAction(def, async () => {
-                const r = await applyAqlTrial(player.account_id, trial)
-                return { message: r.message || `Applied ${label} for ${player.name}.` }
               })} />
           ) : def.custom === 'progression-unlock' ? (
             <ProgressionUnlockForm busy={busy}
@@ -1777,61 +1768,6 @@ function UnlockMainQuestForm({ busy, onSubmit }: { busy: boolean; onSubmit: (que
       <button className="btn-primary w-full" disabled={busy || !sel}
         onClick={() => onSubmit(sel, chosen?.name || sel)}>
         {busy ? <Icon name="Loader2" size={13} className="animate-spin" /> : <Icon name="Flag" size={13} />} Unlock Main Quest
-      </button>
-    </div>
-  )
-}
-
-// Apply Aql Trial — reproduces the full before/after snapshot diff of completing
-// an Aql trial: completes the journey subtree, applies the tags that flip, and
-// grants the recipe award that unlocks the ability slot. The recipe lives on the
-// pawn (RAM-authoritative while online), so this is offline-only and takes
-// effect on next login. Use it for a character a tag-only edit left stuck.
-function AqlTrialForm({ busy, onSubmit }: { busy: boolean; onSubmit: (trial: string, label: string) => void }) {
-  const [trials, setTrials] = useState<AqlTrialInfo[]>([])
-  const [sel, setSel] = useState('')
-  const [loading, setLoading] = useState(true)
-  const [err, setErr] = useState('')
-
-  useEffect(() => {
-    let alive = true
-    setLoading(true)
-    getAqlTrials()
-      .then(r => {
-        if (!alive) return
-        // ConvertTo-Json -Compress unwraps a single-element array into an object,
-        // so a one-trial catalog arrives as an object, not an array. Coerce.
-        const raw = r.trials as AqlTrialInfo[] | AqlTrialInfo | undefined
-        const list = Array.isArray(raw) ? raw : raw ? [raw] : []
-        setTrials(list)
-        setSel(list[0]?.id || '')
-      })
-      .catch(e => { if (alive) setErr(e instanceof Error ? e.message : String(e)) })
-      .finally(() => { if (alive) setLoading(false) })
-    return () => { alive = false }
-  }, [])
-
-  const chosen = trials.find(t => t.id === sel)
-  const selectCls = 'w-full px-3 py-2 rounded-lg bg-surface-2 border border-border text-text text-sm focus:outline-none focus:ring-2 focus:ring-ibad focus:border-ibad/50'
-
-  if (loading) return <div className="text-sm text-text-dim flex items-center gap-2"><Icon name="Loader2" size={13} className="animate-spin" /> Loading Aql trials…</div>
-  if (err) return <div className="text-sm text-danger">{err}</div>
-  if (trials.length === 0) return <div className="text-sm text-text-dim">No Aql trials available.</div>
-
-  return (
-    <div className="space-y-3">
-      <div>
-        <label className="block text-[11px] uppercase tracking-wider text-text-dim mb-1">Aql trial</label>
-        <select value={sel} disabled={busy} className={selectCls} onChange={e => setSel(e.target.value)}>
-          {trials.map(t => (<option key={t.id} value={t.id}>{t.label}</option>))}
-        </select>
-      </div>
-      <div className="text-[11px] text-text-muted">
-        Completes the trial's journey subtree, applies its tags, and grants the recipe award that unlocks the ability slot. Player must be offline; takes effect on next login. Later trials are untouched.
-      </div>
-      <button className="btn-primary w-full" disabled={busy || !sel}
-        onClick={() => onSubmit(sel, chosen?.label || sel)}>
-        {busy ? <Icon name="Loader2" size={13} className="animate-spin" /> : <Icon name="Sparkles" size={13} />} Apply Aql Trial
       </button>
     </div>
   )

@@ -972,7 +972,13 @@ VALUES ($AccountId::bigint, '$safeNode', false,
         $updated = 1
     }
 
-    $tags = Get-DuneTagsForJourneyNodeSubtree -NodeId $NodeId
+    $tags = @(Get-DuneTagsForJourneyNodeSubtree -NodeId $NodeId)
+    # Reward-unblock tags (e.g. the Find the Fremen 3rd active-ability slot +
+    # prescience) are gated by Journey.RewardsUnblocked, which the game sets via a
+    # cutscene - NOT by journey-node completion - so it is not in the node->tag map.
+    # Apply it here so EVERY completion path (Apply Quick Preset, Unlock Main Quest,
+    # single Complete) grants it. See $script:DuneJourneyRewardUnblockRoots.
+    $tags = @($tags + @(Get-DuneRewardUnblockTagsForJourneyNode -NodeId $NodeId) | Select-Object -Unique)
     $bumpRes = Invoke-DuneApplyTagsWithTierBump -Ip $Ip -AccountId $AccountId -Tags $tags
     if (-not $bumpRes.ok) { return @{ ok = $false; error = $bumpRes.error } }
 
@@ -1285,17 +1291,9 @@ function Invoke-DunePlayerUnlockMainQuest {
     }
     $r = Invoke-DunePlayerCompleteJourneyNode -Ip $Ip -AccountId $AccountId -NodeId $Quest
     if (-not $r.ok) { return $r }
-
-    # Apply Journey.RewardsUnblocked for FindTheFremen completion (unlocks 3rd ability slot, prescience, etc.)
-    # This tag is normally set by game code during cutscenes, not by journey node completion.
-    if ($Quest -eq 'DA_MQ_FindTheFremen') {
-        $extraTags = @('Journey.RewardsUnblocked')
-        $bumpRes = Invoke-DuneApplyTagsWithTierBump -Ip $Ip -AccountId $AccountId -Tags $extraTags
-        if (-not $bumpRes.ok) {
-            return @{ ok = $false; error = "apply RewardsUnblocked: $($bumpRes.error)" }
-        }
-    }
-
+    # Journey.RewardsUnblocked (Find the Fremen 3rd ability slot + prescience) is now
+    # applied centrally inside Invoke-DunePlayerCompleteJourneyNode, so no per-quest
+    # special-case is needed here.
     return @{ ok = $true; message = "Unlocked main quest $Quest - $($r.nodes) node(s) completed - takes effect on next login"; nodes = $r.nodes }
 }
 
@@ -1353,8 +1351,8 @@ WHERE a.id = $pawnID::bigint
 # Journey node -> awarded recipe map. Completing a journey node in-game grants a
 # crafting recipe into the pawn's TechKnowledge, and that award (not a tag) is
 # what unlocks the related ability slot / gear. This is the single source of
-# truth so EVERY path that completes journey nodes (Apply Aql Trial, Unlock Main
-# Quest, Apply Quick Preset, single Complete) grants the recipe via the shared
+# truth so EVERY path that completes journey nodes (Apply Quick Preset, Unlock Main
+# Quest, single Complete) grants the recipe via the shared
 # Invoke-DunePlayerCompleteJourneyNode chokepoint. Mirrors the JourneySets.Fremkit.*
 # tag map in dune-tags.json; recipe ItemKeys verified against live pawn data.
 # ---------------------------------------------------------------------------
@@ -1383,73 +1381,32 @@ function Get-DuneRecipesForJourneyNodeSubtree {
 }
 
 # ---------------------------------------------------------------------------
-# Aql trial completion deltas. Each entry is the FULL set of account changes
-# observed in a before/after snapshot diff when the trial is completed in-game:
-# the journey node to complete, the gameplay tags that flip (including the
-# BigMoments cinematic triggers AND Journey.RewardsUnblocked - the cutscene-set
-# tag that actually unlocks the 3rd ability slot + prescience, which journey
-# node completion alone does not set), and the recipe awarded into pawn
-# TechKnowledge (the award that unlocks the trial's gear). Applying all
-# three reproduces a physical completion for a character that a tag-only edit
-# left stuck, WITHOUT touching later trials - only the named subtree is
-# completed, so the next trial proceeds normally in-game. Only trials with a
-# measured diff are listed; add more as they are snapshotted.
+# Journey node -> reward-unblock tag. Some journey rewards (notably the Find the
+# Fremen 3rd active-ability slot + prescience) are gated by a tag the game sets
+# during a cutscene - Journey.RewardsUnblocked - NOT by journey-node completion.
+# So completing the questline through the tool leaves those rewards stuck unless
+# we also flip this tag. Single source of truth: any path that completes a node
+# at or under one of these roots (Apply Quick Preset, Unlock Main Quest, single
+# Complete) flips the tag via the shared Invoke-DunePlayerCompleteJourneyNode
+# chokepoint. Add roots here as more cutscene-gated rewards are identified.
 # ---------------------------------------------------------------------------
-$script:DuneAqlTrialDeltas = [ordered]@{
-    '4' = @{
-        label       = 'Trial 4 of Aql (unlocks 3rd ability slot)'
-        journeyNode = 'DA_MQ_FindTheFremen.FourthTest'
-        tags        = @('BigMoments.Bike.Trigger', 'BigMoments.Stillsuit.Trigger', 'JourneySets.Fremkit.CryssKnife', 'Journey.RewardsUnblocked')
-        recipe      = 'RCP_Crysknife_Recipe'
+$script:DuneJourneyRewardUnblockRoots = @('DA_MQ_FindTheFremen')
+
+# Returns the reward-unblock tags to apply when completing $NodeId, matched if the
+# node is one of the roots, a descendant of a root, or an ancestor that contains a
+# root (completing the whole questline). De-duplicated.
+function Get-DuneRewardUnblockTagsForJourneyNode {
+    param([string]$NodeId)
+    $out = New-Object System.Collections.Generic.List[string]
+    foreach ($root in $script:DuneJourneyRewardUnblockRoots) {
+        if ($NodeId -eq $root -or
+            $NodeId.StartsWith($root + '.') -or
+            $root.StartsWith($NodeId + '.')) {
+            [void]$out.Add('Journey.RewardsUnblocked')
+            break
+        }
     }
-}
-
-function Get-DuneAqlTrialCatalog {
-    $list = @()
-    foreach ($k in $script:DuneAqlTrialDeltas.Keys) {
-        $d = $script:DuneAqlTrialDeltas[$k]
-        $list += @{ id = $k; label = [string]$d.label; node = [string]$d.journeyNode; tags = @($d.tags); recipe = [string]$d.recipe }
-    }
-    return $list
-}
-
-# Apply the full snapshot diff for an Aql trial: complete the journey subtree
-# (which, via the shared node->recipe map, also grants the awarded recipe that
-# unlocks the ability slot) and apply the extra cinematic-trigger tags the
-# node->tag map doesn't cover. Offline-only at the route layer. Next login.
-function Invoke-DuneApplyAqlTrial {
-    param([string]$Ip, [long]$AccountId, [string]$Trial)
-    if ($AccountId -le 0) { return @{ ok = $false; error = 'account_id is required.' } }
-    if (-not $Trial) { return @{ ok = $false; error = 'trial is required.' } }
-    $key = ([string]$Trial).Trim()
-    if (-not $script:DuneAqlTrialDeltas.Contains($key)) {
-        return @{ ok = $false; error = "unknown Aql trial '$Trial'." }
-    }
-    $delta = $script:DuneAqlTrialDeltas[$key]
-
-    # 1) Complete the journey node subtree (also applies its mapped reward tags).
-    #    Scoped to this trial's subtree only, so later trials are untouched.
-    $jr = Invoke-DunePlayerCompleteJourneyNode -Ip $Ip -AccountId $AccountId -NodeId ([string]$delta.journeyNode)
-    if (-not $jr.ok) { return @{ ok = $false; error = $jr.error } }
-
-    # 2) Apply the remaining diff tags (e.g. the BigMoments cinematic triggers)
-    #    that the node-to-tag map does not cover.
-    $tags = @($delta.tags)
-    if ($tags.Count -gt 0) {
-        $tr = Invoke-DuneApplyTagsWithTierBump -Ip $Ip -AccountId $AccountId -Tags $tags
-        if (-not $tr.ok) { return @{ ok = $false; error = "apply trial tags: $($tr.error)" } }
-    }
-
-    # 3) The journey completion in step 1 already granted this trial's recipe via
-    #    the shared node->recipe map (Get-DuneRecipesForJourneyNodeSubtree), which
-    #    is what unlocks the empty ability slot the trial opens.
-    $recipeCount = [int]$jr.recipes
-
-    return @{
-        ok      = $true
-        message = "Applied $($delta.label): journey subtree completed, $($tags.Count) extra tag(s), $recipeCount recipe(s) - takes effect on next login"
-        trial   = $key
-    }
+    return @($out)
 }
 
 function Invoke-DunePlayerSetStarterClass {
