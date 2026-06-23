@@ -107,8 +107,12 @@ Register-DuneRoute -Method PUT -Path '/api/restart-schedule' -Handler {
     }
 }
 
-# Send a one-off test embed to the saved (or supplied) Discord webhook so the
-# user can verify the integration without waiting for a scheduled restart.
+# Send sample notifications to the saved (or supplied) Discord webhook so the
+# user can verify the integration without waiting for a real event. Sends one
+# representative message PER ENABLED notification type (online / offline /
+# restarting / update-available), plus the pre-restart broadcast when that
+# toggle is on - so the test mirrors exactly what each enabled event will look
+# like, instead of always sending the same restart message.
 Register-DuneRoute -Method POST -Path '/api/restart-schedule/test-discord' -Handler {
     param($req, $res, $routeParams, $body)
     try {
@@ -127,15 +131,46 @@ Register-DuneRoute -Method POST -Path '/api/restart-schedule/test-discord' -Hand
         if (Get-Command Get-DuneServerName -ErrorAction SilentlyContinue) {
             try { $serverName = Get-DuneServerName -CachedOnly } catch { $serverName = '' }
         }
-        $lead = [int]$state.broadcastLeadMinutes
-        if ($lead -le 0) { $lead = 10 }
-        $r = Send-DuneDiscordWebhook -Url $url -ServerName $serverName -MinutesToRestart $lead `
-            -RestartAt ((Get-Date).AddMinutes($lead)) -Reason 'Test notification from Dune Server Tool' -MentionId $state.discordMentionId
-        if (-not $r.ok) {
-            Write-DuneError -Response $res -Status 502 -Message $r.message
+
+        $sent   = New-Object System.Collections.Generic.List[string]
+        $failed = New-Object System.Collections.Generic.List[string]
+
+        # One sample per enabled state toggle, using the same embeds the live
+        # monitor posts (so the test is representative).
+        $stateNotices = @()
+        if ($state.discordNotifyOnline)     { $stateNotices += @{ key = 'online';     label = 'online' } }
+        if ($state.discordNotifyOffline)    { $stateNotices += @{ key = 'offline';    label = 'offline' } }
+        if ($state.discordNotifyRestarting) { $stateNotices += @{ key = 'restarting'; label = 'restarting' } }
+        if ($state.discordNotifyUpdate)     { $stateNotices += @{ key = 'update';     label = 'update available' } }
+
+        foreach ($n in $stateNotices) {
+            $embed = New-DuneDiscordStateEmbed -State $n.key -ServerName $serverName `
+                -InstalledBuild $state.installedBuild -LatestBuild $state.latestBuild -Test
+            $r = Send-DuneDiscordEmbed -Url $url -Embed $embed -MentionId $state.discordMentionId
+            if ($r.ok) { $sent.Add($n.label) } else { $failed.Add("$($n.label) ($($r.message))") }
+            Start-Sleep -Milliseconds 400   # gentle pacing to avoid Discord rate limits
+        }
+
+        # The pre-restart maintenance broadcast (master Discord restart toggle),
+        # and a fallback so the button still demonstrates something when nothing
+        # specific is enabled.
+        $sendRestart = [bool]$state.discordEnabled -or ($stateNotices.Count -eq 0)
+        if ($sendRestart) {
+            $lead = [int]$state.broadcastLeadMinutes
+            if ($lead -le 0) { $lead = 10 }
+            $r = Send-DuneDiscordWebhook -Url $url -ServerName $serverName -MinutesToRestart $lead `
+                -RestartAt ((Get-Date).AddMinutes($lead)) -Reason 'Test notification from Dune Server Tool' -MentionId $state.discordMentionId
+            if ($r.ok) { $sent.Add('scheduled restart') } else { $failed.Add("scheduled restart ($($r.message))") }
+        }
+
+        if ($sent.Count -eq 0) {
+            $msg = if ($failed.Count -gt 0) { "Test failed: $($failed -join '; ')" } else { 'No notifications are enabled to test.' }
+            Write-DuneError -Response $res -Status 502 -Message $msg
             return
         }
-        Write-DuneJson -Response $res -Body @{ ok = $true; message = 'Test message sent to Discord.' }
+        $summary = "Sent $($sent.Count) test notification$(if ($sent.Count -ne 1) { 's' }): $($sent -join ', ')."
+        if ($failed.Count -gt 0) { $summary += " Failed: $($failed -join '; ')." }
+        Write-DuneJson -Response $res -Body @{ ok = $true; message = $summary }
     } catch {
         Write-DuneError -Response $res -Status 502 -Message "Test message failed: $($_.Exception.Message)"
     }
