@@ -13,6 +13,10 @@ here cover everything those tags shipped.
 
 ## [Unreleased]
 
+### Added
+
+- **DNAT self-heal watchdog — fixes remote "Connecting" after a pod restart.** Every battlegroup Start/Restart now installs (and refreshes) a tiny watchdog on the VM that reconciles the host NAT rules — RabbitMQ login (`public:31982` → mq-game pod) and the game ports (`7777-7810`) — from the live cluster state every minute. Previously a pod-only restart (no host reboot) could leave the RabbitMQ rule pointing at a dead pod IP, so remote players hung on **"Connecting"** until the next reboot. The watchdog derives the public IP from the node's ExternalIP (never hardcoded) and retires the old hardcoded-IP sync script. All persistence runs in a staged Linux script, so the packaged installer stays free of the persistence pattern that previously tripped a Defender false positive.
+
 ### Changed
 
 - **Find the Fremen progression is now one action that grants the full reward set.** Completing the "Find the Fremen" questline (via **Apply Quick Preset → Complete: Find the Fremen** or **Unlock Main Quest**) now also applies `Journey.RewardsUnblocked` — the cutscene-gated tag that opens the **3rd active-ability slot + prescience** — alongside the journey completion, all Fremkit recipes, and the questline tags. Previously the reward tag was set inconsistently (only by Unlock Main Quest), so the preset path left the two ability rewards stuck. `Journey.RewardsUnblocked` is now applied centrally in the shared journey-completion path, so every completion route grants it. (Reported by Decker.)
