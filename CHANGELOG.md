@@ -13,6 +13,25 @@ here cover everything those tags shipped.
 
 ## [Unreleased]
 
+## [12.10.7] - 2026-06-22
+
+### Fixed
+
+- **Server State Discord notifications now fire reliably.** Online / Offline /
+  Restarting are now driven by whether **Hagga Basin (Survival_1) is actually
+  joinable**, instead of a coarse "running" state change that a normal restart
+  never produced (which is why nothing was firing):
+  - **Online** posts when Hagga Basin finishes loading and the server is
+    joinable.
+  - **Restarting** posts once when the server drops out of Ready to restart.
+  - **Offline** posts only after the server has been down for more than ~a
+    minute, so a normal quick restart no longer posts a false "offline".
+  - **Update Available** continues to post when the scheduled-restart update
+    check detects a new Funcom build.
+- Added an in-app note clarifying these are detected while the Dune Server Tool
+  is running and only for the server it manages — changes made directly on the
+  VM via `battlegroup.bat`, or while DST is closed, aren't detected.
+
 ## [12.10.6] - 2026-06-22
 
 ### Fixed
