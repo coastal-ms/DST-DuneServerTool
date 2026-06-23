@@ -13,10 +13,16 @@ here cover everything those tags shipped.
 
 ## [Unreleased]
 
-## [12.10.4] - 2026-06-22
+## [12.10.5] - 2026-06-22
 
 ### Fixed
 
+- **The Settings page no longer goes fully blank if one card hits an error.**
+  Each Settings card (Updates, Appearance, Remote Access, Public IP) is now
+  isolated so an unexpected render error in one — for example a stored setting
+  whose shape differs after switching between a test build and a stable build —
+  shows a small inline "couldn't be displayed" notice for just that card while
+  the rest of Settings keeps working, instead of crashing the whole page.
 - **Server State Webhook toggles now persist when you save the schedule.** The
   Online / Offline / Restarting / Update-available checkboxes in the Scheduled
   Restarts card were reverting on save because the save action captured a stale

@@ -9,6 +9,7 @@ import { fmtToolVersion } from '../format'
 import { AppearanceCard } from './settings/AppearanceCard'
 import { PublicIpCard } from './settings/PublicIpCard'
 import { RemoteAccessCard } from './settings/RemoteAccessCard'
+import { SectionErrorBoundary } from '../components/SectionErrorBoundary'
 
 const FIELDS: {
   key: string
@@ -490,6 +491,7 @@ export function Settings() {
       )}
 
       {/* --- Update check card (top, collapsible) ------------------------ */}
+      <SectionErrorBoundary name="Dune Server Tool updates">
       <div className="card mb-4">
         <button
           type="button"
@@ -663,7 +665,7 @@ export function Settings() {
                   </span>
                 )}
                 {updCheck.error && (
-                  <span className="text-xs text-danger ml-auto">Check failed: {updCheck.error}</span>
+                  <span className="text-xs text-danger ml-auto">Check failed: {String(updCheck.error)}</span>
                 )}
               </div>
             )}
@@ -681,12 +683,13 @@ export function Settings() {
           </div>
         )}
       </div>
+      </SectionErrorBoundary>
 
-      <AppearanceCard />
+      <SectionErrorBoundary name="Appearance"><AppearanceCard /></SectionErrorBoundary>
 
-      <RemoteAccessCard />
+      <SectionErrorBoundary name="Remote Access"><RemoteAccessCard /></SectionErrorBoundary>
 
-      <PublicIpCard />
+      <SectionErrorBoundary name="Public IP"><PublicIpCard /></SectionErrorBoundary>
 
       {/* --- Database connection (issue #295) --- */}
       <div className="card mb-4 p-6">
