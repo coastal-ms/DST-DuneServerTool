@@ -53,7 +53,7 @@ export function MobileAppCard() {
     }
   }
 
-  useEffect(() => { void loadBridge() }, [])
+  useEffect(() => { void loadBridge(); void load() }, [])
 
   const repairBridge = async () => {
     setRepairing(true)
@@ -108,9 +108,10 @@ export function MobileAppCard() {
       </div>
       <div className="card-body">
 
-        {/* Secure remote access. The mobile app reaches your server over a stable
-            public HTTPS address — Tailscale Funnel (recommended, no domain) or a
-            Cloudflare custom domain you set up under Remote Access. */}
+        {/* Secure remote access via Tailscale Funnel — the recommended, no-domain
+            path for the mobile app + browser portal. (A Cloudflare custom domain
+            is the advanced alternative, configured under Settings → Remote Access;
+            pairing uses it automatically if set, so it isn't shown here.) */}
         <div className="card p-3" style={{ marginBottom: '1rem' }}>
           <div className="flex items-center gap-2" style={{ fontWeight: 600 }}>
             <Icon name="Globe" size={16} /> Secure remote access
@@ -133,7 +134,9 @@ export function MobileAppCard() {
             </div>
           ) : (
             <div className="help-text" style={{ marginTop: '0.75rem' }}>
-              No remote address yet. Recommended: install <a href="https://tailscale.com/download" target="_blank" rel="noreferrer">Tailscale</a> on this PC and enable a Funnel on the bridge port (<code>tailscale funnel --bg http://127.0.0.1:{bridgePort}</code>) for a free, no-domain public HTTPS address. Or set up a Cloudflare custom domain under <strong>Settings → Remote Access</strong>. Then generate the QR below.
+              No remote address yet. Install <a href="https://tailscale.com/download" target="_blank" rel="noreferrer">Tailscale</a> on this PC, then enable a Funnel on the bridge port for a free, no-domain public HTTPS address:
+              <div style={{ marginTop: '0.5rem', fontSize: '12px', fontFamily: 'monospace', background: 'var(--surface-2, #1e293b)', padding: '0.5rem', borderRadius: '6px', wordBreak: 'break-all' }}>tailscale funnel --bg http://127.0.0.1:{bridgePort}</div>
+              <div style={{ marginTop: '0.5rem' }}>The address appears here automatically once the Funnel is active. (Prefer your own domain? Set up Cloudflare under <strong>Settings → Remote Access</strong> instead.)</div>
             </div>
           )}
         </div>
