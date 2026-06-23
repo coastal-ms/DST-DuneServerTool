@@ -13,15 +13,6 @@ here cover everything those tags shipped.
 
 ## [Unreleased]
 
-### Fixed
-
-- **The Settings page no longer goes fully blank if one card hits an error.**
-  Each Settings card (Updates, Appearance, Remote Access, Public IP, Mobile App)
-  is now isolated so an unexpected render error in one — for example a stored
-  setting whose shape differs after switching between a test build and a stable
-  build — shows a small inline "couldn't be displayed" notice for just that card
-  while the rest of Settings keeps working, instead of crashing the whole page.
-
 ## [12.11.0] - 2026-06-21
 
 ### Changed
