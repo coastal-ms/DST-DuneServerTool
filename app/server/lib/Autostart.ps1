@@ -208,7 +208,7 @@ function Get-DuneAutostartState {
 }
 
 # ===========================================================================
-# Service mode — "stay online when signed out".
+# Service mode — "keep serving while DST is closed".
 #
 # A stronger variant of autostart: the scheduled task runs the headless backend
 # AT BOOT and "whether the user is logged on or not", so the portal + phone apps
@@ -296,7 +296,7 @@ function Register-DuneServiceMode {
             -Password $Password `
             -RunLevel Highest `
             -Settings $settings `
-            -Description "Keeps Dune Server Tool's backend (portal, phone apps, scheduled restarts, Discord notifications) running for $user even when signed out. Managed by the Dune Server Tool — toggle from Settings." `
+            -Description "Keeps Dune Server Tool's backend (portal, phone apps, scheduled restarts, Discord notifications) running for $user while DST is closed, including while the PC is locked, and loads it at sign-in ($user stays signed in to Windows). Managed by the Dune Server Tool - toggle from the Help menu." `
             -Force | Out-Null
     } catch {
         $msg = $_.Exception.Message
