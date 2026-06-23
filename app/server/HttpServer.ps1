@@ -775,8 +775,8 @@ function Invoke-DuneContext {
                     if ($remote) {
                         try { $isLoopback = [System.Net.IPAddress]::IsLoopback($remote) } catch { $isLoopback = $false }
                     }
-                    # SECURITY: the mobile/remote bridge and cloudflared both
-                    # connect from 127.0.0.1, so RemoteEndPoint alone marks a
+                    # SECURITY: the mobile/remote bridge and the tunnel transport
+                    # both connect from 127.0.0.1, so RemoteEndPoint alone marks a
                     # TUNNELED request as loopback and would wrongly allow it.
                     # Any Cloudflare / proxy edge header means the request arrived
                     # through the tunnel (never present on a genuine host-local

@@ -591,13 +591,6 @@ if (Get-Command Initialize-DuneMobileBridge -ErrorAction SilentlyContinue) {
     try { Initialize-DuneMobileBridge -ServerDir $serverDir } catch {}
 }
 
-# Auto-start the Cloudflare quick tunnel if the host enabled remote access, and
-# republish our current address to the rendezvous, so a paired phone reconnects
-# after a reboot with no manual step. Best-effort, non-blocking.
-if (Get-Command Initialize-DuneQuickTunnel -ErrorAction SilentlyContinue) {
-    try { Initialize-DuneQuickTunnel } catch {}
-}
-
 # ---------- Token --------------------------------------------------------------
 
 $script:LaunchToken = [Guid]::NewGuid().ToString('N')

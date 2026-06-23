@@ -22,22 +22,10 @@ interface MobilePairingData {
   source?: string
   port: number
   bridge?: BridgeStatus | null
-  rendezvousBase?: string
   pairingId?: string
   remoteToken?: string
   cfAccessClientId?: string
   cfAccessClientSecret?: string
-}
-
-interface QuickTunnelStatus {
-  running: boolean
-  url: string
-  pid: number
-  startedAt?: string
-  installed: boolean
-  cloudflaredPath?: string
-  cloudflaredVersion?: string
-  lastUrl?: string
 }
 
 export function MobileAppCard() {
@@ -53,10 +41,6 @@ export function MobileAppCard() {
   const [repairing, setRepairing] = useState(false)
   const [repairError, setRepairError] = useState<string | null>(null)
 
-  const [tunnel, setTunnel] = useState<QuickTunnelStatus | null>(null)
-  const [tunnelBusy, setTunnelBusy] = useState(false)
-  const [tunnelError, setTunnelError] = useState<string | null>(null)
-
   const loadBridge = async () => {
     setBridgeLoading(true)
     try {
@@ -69,16 +53,7 @@ export function MobileAppCard() {
     }
   }
 
-  const loadTunnel = async () => {
-    try {
-      const res = await api<QuickTunnelStatus>('/api/remote-access/quick-tunnel/status')
-      setTunnel(res)
-    } catch {
-      setTunnel(null)
-    }
-  }
-
-  useEffect(() => { void loadBridge(); void loadTunnel() }, [])
+  useEffect(() => { void loadBridge() }, [])
 
   const repairBridge = async () => {
     setRepairing(true)
@@ -92,38 +67,6 @@ export function MobileAppCard() {
       await loadBridge()
     } finally {
       setRepairing(false)
-    }
-  }
-
-  const startTunnel = async () => {
-    setTunnelBusy(true)
-    setTunnelError(null)
-    try {
-      const res = await api<{ ok: boolean; url?: string; status?: QuickTunnelStatus }>('/api/remote-access/quick-tunnel/start', { method: 'POST' })
-      if (res.status) setTunnel(res.status)
-      else await loadTunnel()
-      await load()
-    } catch (e) {
-      setTunnelError(e instanceof Error ? e.message : String(e))
-      await loadTunnel()
-    } finally {
-      setTunnelBusy(false)
-    }
-  }
-
-  const stopTunnel = async () => {
-    setTunnelBusy(true)
-    setTunnelError(null)
-    try {
-      const res = await api<{ ok: boolean; status?: QuickTunnelStatus }>('/api/remote-access/quick-tunnel/stop', { method: 'POST' })
-      if (res.status) setTunnel(res.status)
-      else await loadTunnel()
-      await load()
-    } catch (e) {
-      setTunnelError(e instanceof Error ? e.message : String(e))
-      await loadTunnel()
-    } finally {
-      setTunnelBusy(false)
     }
   }
 
@@ -142,32 +85,21 @@ export function MobileAppCard() {
   }
 
   const bridgePort = data?.port ?? bridge?.port ?? 47900
-  const pairUrl = data?.url ?? (tunnel?.running ? tunnel.url : '') ?? ''
-  // Prefer a direct stable URL (Tailscale Funnel / custom domain) — the QR is a
-  // clean { url, token } the app uses as-is. The token is the permanent remote
-  // token (survives restarts). The rendezvous payload is only a fallback for the
-  // legacy quick-tunnel path (ephemeral URL); Funnel needs none of it.
-  const hasRendezvous = !!(data?.rendezvousBase && data?.pairingId && data?.remoteToken)
+  const pairUrl = data?.url ?? ''
+  // A direct stable URL (Tailscale Funnel / Cloudflare custom domain) — the QR is
+  // a clean { url, token } the app uses as-is. The token is the permanent remote
+  // token (survives restarts).
   const stableToken = data?.remoteToken || data?.token || ''
-  const qrPayload = !data
+  const qrPayload = !data || !pairUrl
     ? ''
-    : pairUrl
-      ? JSON.stringify({
-          url: pairUrl,
-          token: stableToken,
-          ...(data.cfAccessClientId && data.cfAccessClientSecret ? {
-            cfAccessClientId: data.cfAccessClientId,
-            cfAccessClientSecret: data.cfAccessClientSecret,
-          } : {}),
-        })
-      : hasRendezvous
-        ? JSON.stringify({
-            rendezvousBase: data.rendezvousBase,
-            pairingId: data.pairingId,
-            remoteToken: data.remoteToken,
-            token: data.token,
-          })
-        : ''
+    : JSON.stringify({
+        url: pairUrl,
+        token: stableToken,
+        ...(data.cfAccessClientId && data.cfAccessClientSecret ? {
+          cfAccessClientId: data.cfAccessClientId,
+          cfAccessClientSecret: data.cfAccessClientSecret,
+        } : {}),
+      })
 
   return (
     <div className="card">
@@ -176,52 +108,34 @@ export function MobileAppCard() {
       </div>
       <div className="card-body">
 
-        {/* Secure remote access (Cloudflare quick tunnel). Free, no account, no
-            domain, no router port-forward — cloudflared connects out from this PC
-            and hands back an HTTPS URL the phone can reach. */}
+        {/* Secure remote access. The mobile app reaches your server over a stable
+            public HTTPS address — Tailscale Funnel (recommended, no domain) or a
+            Cloudflare custom domain you set up under Remote Access. */}
         <div className="card p-3" style={{ marginBottom: '1rem' }}>
           <div className="flex items-center gap-2" style={{ fontWeight: 600 }}>
             <Icon name="Globe" size={16} /> Secure remote access
-            {tunnel && (
-              tunnel.installed
-                ? <span className="badge safe" style={{ marginLeft: 'auto' }}>cloudflared installed</span>
-                : <span className="badge" style={{ marginLeft: 'auto' }}>cloudflared not found</span>
+            {data && (
+              data.url
+                ? <span className="badge safe" style={{ marginLeft: 'auto' }}>{data.source === 'funnel' ? 'Tailscale Funnel' : 'custom domain'}</span>
+                : <span className="badge" style={{ marginLeft: 'auto' }}>not set up</span>
             )}
           </div>
 
-          {tunnel && !tunnel.installed && (
-            <div className="text-text-muted text-sm" style={{ marginTop: '0.5rem' }}>
-              cloudflared ships with Dune Server. If this says “not found”, reinstall DST or install it from{' '}
-              <a href="https://developers.cloudflare.com/cloudflare-one/connections/connect-networks/downloads/" target="_blank" rel="noreferrer">Cloudflare</a>.
-            </div>
-          )}
-
-          {tunnel?.running ? (
+          {data?.url ? (
             <div style={{ marginTop: '0.75rem' }}>
               <div className="card p-2 border-success/40 bg-success/10 text-success text-sm flex items-center gap-2">
-                <Icon name="CheckCircle2" size={16} /> Tunnel active
+                <Icon name="CheckCircle2" size={16} /> Reachable at a stable public address
               </div>
-              <div style={{ marginTop: '0.5rem', fontSize: '13px', fontFamily: 'monospace', wordBreak: 'break-all' }}>{tunnel.url}</div>
-              <button className="btn" style={{ marginTop: '0.5rem' }} disabled={tunnelBusy} onClick={() => void stopTunnel()}>
-                {tunnelBusy ? <><Icon name="Loader2" className="animate-spin" /> Working…</> : <><Icon name="Square" /> Stop tunnel</>}
-              </button>
+              <div style={{ marginTop: '0.5rem', fontSize: '13px', fontFamily: 'monospace', wordBreak: 'break-all' }}>{data.url}</div>
               <div className="help-text" style={{ marginTop: '0.5rem' }}>
-                You only scan <strong>once</strong>. The app saves a permanent pairing code and
-                finds your server automatically every time it connects — even though this
-                address changes when the tunnel restarts, you never need to re-scan.
+                You only scan <strong>once</strong>. The app saves a permanent pairing code and reconnects every time — no re-scanning after a restart.
               </div>
             </div>
           ) : (
-            <div style={{ marginTop: '0.75rem' }}>
-              <button className="btn-primary" disabled={tunnelBusy || (tunnel ? !tunnel.installed : false)} onClick={() => void startTunnel()}>
-                {tunnelBusy ? <><Icon name="Loader2" className="animate-spin" /> Starting…</> : <><Icon name="Play" /> Start secure tunnel</>}
-              </button>
-              <div className="help-text" style={{ marginTop: '0.5rem' }}>
-                Free and private: no account, no domain, no router setup. Start the tunnel, then scan the QR code once with the mobile app.
-              </div>
+            <div className="help-text" style={{ marginTop: '0.75rem' }}>
+              No remote address yet. Recommended: install <a href="https://tailscale.com/download" target="_blank" rel="noreferrer">Tailscale</a> on this PC and enable a Funnel on the bridge port (<code>tailscale funnel --bg http://127.0.0.1:{bridgePort}</code>) for a free, no-domain public HTTPS address. Or set up a Cloudflare custom domain under <strong>Settings → Remote Access</strong>. Then generate the QR below.
             </div>
           )}
-          {tunnelError && <div className="text-danger text-sm" style={{ marginTop: '0.5rem' }}>{tunnelError}</div>}
         </div>
 
         {/* Local bridge health — the loopback proxy phones reach through the
@@ -251,7 +165,7 @@ export function MobileAppCard() {
         )}
 
         <p className="help-text" style={{ marginBottom: '1rem' }}>
-          Start the secure tunnel above, then scan this code with the DST mobile app to connect.
+          Set up a remote address above, then scan this code with the DST mobile app to connect.
           Your friends need <strong>nothing</strong> installed on their phones — no VPN, no account.
         </p>
 
@@ -272,7 +186,7 @@ export function MobileAppCard() {
               </div>
             ) : (
               <div className="text-secondary" style={{ width: 200, textAlign: 'center' }}>
-                Start the secure tunnel (or add a domain under Remote Access) to generate a QR code.
+                Set up a Tailscale Funnel or a Cloudflare domain (Remote Access) to generate a QR code.
               </div>
             )}
 
@@ -281,7 +195,7 @@ export function MobileAppCard() {
                 <label>Connection Address</label>
                 <div className="help-text">The mobile app will use this address to reach your server.</div>
                 <div style={{ marginTop: '0.5rem', fontSize: '13px', fontFamily: 'monospace', wordBreak: 'break-all' }}>
-                  {pairUrl ? pairUrl : <span className="text-text-muted">No remote address yet — start the tunnel above.</span>}
+                  {pairUrl ? pairUrl : <span className="text-text-muted">No remote address yet — set one up above.</span>}
                 </div>
               </div>
               <button className="btn" onClick={() => setData(null)} style={{ marginTop: '1rem' }}>

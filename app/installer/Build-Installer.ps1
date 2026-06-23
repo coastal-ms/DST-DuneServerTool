@@ -222,38 +222,6 @@ if (-not (Test-Path $shellExe)) {
 # Ensure output dir
 if (-not (Test-Path $outDir)) { New-Item -ItemType Directory -Force -Path $outDir | Out-Null }
 
-# Stage cloudflared.exe (powers the free Cloudflare quick tunnel) into
-# installer\vendor so the .iss bundles it to {app}\cloudflared.exe. Source order:
-# explicit override -> dev local-only tools -> official latest download.
-$vendorDir = Join-Path $appRoot 'installer\vendor'
-$cfVendor  = Join-Path $vendorDir 'cloudflared.exe'
-if (-not (Test-Path $vendorDir)) { New-Item -ItemType Directory -Force -Path $vendorDir | Out-Null }
-if (-not (Test-Path $cfVendor)) {
-    $cfSource = $null
-    foreach ($cand in @(
-        $env:DUNE_CLOUDFLARED,
-        (Join-Path $repoRoot 'local-only\tools\cloudflared.exe'),
-        (Join-Path (Split-Path -Parent $repoRoot) 'local-only\tools\cloudflared.exe')
-    )) {
-        if ($cand -and (Test-Path -LiteralPath $cand)) { $cfSource = $cand; break }
-    }
-    if ($cfSource) {
-        Write-Host "Staging cloudflared.exe from $cfSource ..." -ForegroundColor Cyan
-        Copy-Item -LiteralPath $cfSource -Destination $cfVendor -Force
-    } else {
-        $cfUrl = 'https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-windows-amd64.exe'
-        Write-Host "Downloading cloudflared.exe from $cfUrl ..." -ForegroundColor Cyan
-        try {
-            Invoke-WebRequest -Uri $cfUrl -OutFile $cfVendor -UseBasicParsing
-        } catch {
-            throw "Could not stage cloudflared.exe (no local copy and download failed: $($_.Exception.Message)). Place cloudflared.exe at $cfVendor or set `$env:DUNE_CLOUDFLARED."
-        }
-    }
-}
-if (-not (Test-Path $cfVendor)) { throw "cloudflared.exe missing at $cfVendor" }
-Write-Host ("  cloudflared staged ({0:N1} MB)." -f ((Get-Item $cfVendor).Length / 1MB)) -ForegroundColor Green
-Write-Host ""
-
 Write-Host "Compiling installer via $iscc ..." -ForegroundColor Cyan
 $proc = Start-Process -FilePath $iscc -ArgumentList "`"$iss`"" -NoNewWindow -Wait -PassThru
 if ($proc.ExitCode -ne 0) {
