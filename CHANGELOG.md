@@ -15,20 +15,23 @@ here cover everything those tags shipped.
 
 ## [12.11.0] - 2026-06-21
 
-### Changed
-
-- **Remote access and the Mobile App now use a free Cloudflare quick tunnel instead of Tailscale.** Open **Settings → Mobile App** and click **Start secure tunnel** — DST runs the bundled `cloudflared`, which connects outbound to Cloudflare and returns an `https://…trycloudflare.com` address. No VPN, no account, no domain, and no router port-forwarding; people using the app need nothing installed on their phones. Scan the QR code (or paste the URL + token) to pair.
-- **The mobile bridge now binds loopback (127.0.0.1) only.** Because cloudflared connects locally, the bridge no longer needs a Windows Firewall rule, a URL ACL, or administrator rights — a simpler, more private setup that works without elevation.
-- **The mobile app pairs by URL.** Pairing payloads are now `{url, token}` (legacy `{ip, port, token}` codes still work), so the same app reaches your server over a quick tunnel, your own domain, or `http://<lan-ip>:47900` on the same network.
-
 ### Added
 
-- **Bundled cloudflared** for one-click secure tunnels, with Start/Stop tunnel controls and live status in **Settings → Mobile App**.
-- **Optional stable address (bring your own domain):** keep using the existing **Settings → Remote Access** Cloudflare named-tunnel + Access path for a permanent, email-gated hostname.
+- **Mobile apps (iOS TestFlight + Android APK)** that manage your server from your phone.
+- **Tailscale Funnel is the new recommended remote transport for the phone app and zero-domain hosts.** Install Tailscale on the host and enable a Funnel on the bridge port (`tailscale funnel --bg http://127.0.0.1:47900`) to get a stable public HTTPS `…ts.net` address — no domain, no router port-forwarding, CGNAT-proof. DST ships only the local bridge + Funnel detection; it doesn't bundle or manage Tailscale.
+- **Permanent remote token + URL-based pairing.** Pairing payloads are now `{url, token}` (legacy `{ip, port, token}` codes still work), and the token survives restarts so a paired phone keeps working without re-scanning. Magic-link browser portal (`…/?key=<token>`) lets a trusted co-admin open the portal in any browser.
+
+### Changed
+
+- **The mobile bridge now binds loopback (127.0.0.1) only.** Because the transport connects out from the host, the bridge no longer needs a Windows Firewall rule, a URL ACL, or administrator rights — a simpler, more private setup that works without elevation.
+
+### Kept
+
+- **Cloudflare remote access (named-tunnel + Access, bring-your-own-domain) is unchanged** and stays for existing users — set it up under **Settings → Remote Access** for a permanent, email-gated hostname. Pairing prefers a Tailscale Funnel when present, then falls back to this Cloudflare custom domain.
 
 ### Removed
 
-- **Tailscale integration** (the Tailscale settings page, its API, and the host/phone Tailscale requirements). Remote access no longer depends on any third-party VPN.
+- **The anonymous Cloudflare quick tunnel** (bundled `cloudflared` quick-tunnel + the rendezvous indirection) — it proved unreliable (anonymous, throttled, edge-404s). Tailscale Funnel and the Cloudflare custom-domain path replace it; the permanent remote-token logic it carried is retained. Note: this removes only the *anonymous quick tunnel* — the Cloudflare *named-tunnel/Access* domain path above is **not** affected.
 
 ## [12.10.3] - 2026-06-21
 

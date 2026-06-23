@@ -1,14 +1,16 @@
 ﻿# Mobile.ps1 — Routes for pairing the mobile app and managing the loopback bridge
-# that exposes the localhost DST API to the phone over a Cloudflare quick tunnel.
+# that exposes the localhost DST API to the phone over a public transport
+# (Tailscale Funnel, or a Cloudflare named-tunnel + Access custom domain).
 
 Register-DuneRoute -Method GET -Path '/api/mobile/pairing' -Handler {
     param($req, $res, $routeParams, $body)
     try {
-        # URL-based pairing: the phone stores a full base URL + token and calls
-        # ${url}${path}. The URL is the active Cloudflare quick tunnel if running,
-        # else the user's configured remote hostname, else null (the UI then
-        # prompts the user to start the tunnel). The bridge port is returned only
-        # for the LAN/manual fallback (http://<lan-ip>:<port>).
+        # URL-based pairing: the phone stores a full base URL + permanent token
+        # and calls ${url}${path}. The URL is the Tailscale Funnel address if a
+        # Funnel is active, else the user's configured Cloudflare custom hostname,
+        # else null (the UI then prompts the user to set up a transport). The
+        # bridge port is returned only for the LAN/manual fallback
+        # (http://<lan-ip>:<port>).
         $port = if (Get-Command Get-DuneMobileBridgePort -ErrorAction SilentlyContinue) {
             Get-DuneMobileBridgePort
         } else { 47900 }
@@ -39,10 +41,8 @@ Register-DuneRoute -Method GET -Path '/api/mobile/pairing' -Handler {
             }
         } catch {}
 
-        # Preferred (reliable, no domain, no Cloudflare): Tailscale Funnel. A
-        # stable public HTTPS URL the phone app + browser use directly. This is
-        # the default remote transport now that anonymous quick tunnels proved
-        # unreliable.
+        # Preferred (reliable, no domain): Tailscale Funnel. A stable public HTTPS
+        # URL the phone app + browser use directly.
         try {
             if (Get-Command Get-DuneTailscaleFunnelUrl -ErrorAction SilentlyContinue) {
                 $fu = Get-DuneTailscaleFunnelUrl
@@ -50,22 +50,13 @@ Register-DuneRoute -Method GET -Path '/api/mobile/pairing' -Handler {
             }
         } catch {}
 
-        # Next (stable): the custom domain reached past Cloudflare Access via the
+        # Next (stable): the Cloudflare custom domain reached past Access via the
         # service token (advanced, bring-your-own-domain).
         if (-not $url -and $hostUrl -and $svc) {
             $url = $hostUrl
             $source = 'domain-service-token'
             $cfClientId = $svc.clientId
             $cfClientSecret = $svc.clientSecret
-        }
-        # Otherwise the free quick tunnel (legacy; unreliable, kept as fallback).
-        if (-not $url) {
-            try {
-                if (Get-Command Get-DuneQuickTunnelStatus -ErrorAction SilentlyContinue) {
-                    $qt = Get-DuneQuickTunnelStatus
-                    if ($qt -and $qt.running -and $qt.url) { $url = [string]$qt.url; $source = 'quicktunnel' }
-                }
-            } catch {}
         }
         # Last resort: the bare custom domain with NO service token. The browser
         # portal can still reach it (email login), but the app cannot pass Access
@@ -80,11 +71,9 @@ Register-DuneRoute -Method GET -Path '/api/mobile/pairing' -Handler {
             try { $bridge = Get-DuneBridgeStatus } catch {}
         }
 
-        # Zero-config rendezvous identity: the phone stores the stable pairingId +
-        # permanent remoteToken and resolves the CURRENT url from the rendezvous on
-        # every use, so it keeps working after reboots / tunnel restarts with no
-        # re-pairing. The per-launch token + url above remain for legacy/fallback.
-        $rendezvousBase = ''
+        # Permanent remote identity: the phone stores the stable remoteToken so it
+        # keeps working across restarts (the per-launch DuneToken rotates). The QR
+        # carries { url, token } where token is this permanent remoteToken.
         $pairingId      = ''
         $remoteToken    = ''
         try {
@@ -92,9 +81,6 @@ Register-DuneRoute -Method GET -Path '/api/mobile/pairing' -Handler {
                 $ident = Get-DuneRemoteIdentity
                 $pairingId   = [string]$ident.pairingId
                 $remoteToken = [string]$ident.remoteToken
-            }
-            if (Get-Command Get-DuneRendezvousBase -ErrorAction SilentlyContinue) {
-                $rendezvousBase = [string](Get-DuneRendezvousBase)
             }
         } catch {}
 
@@ -106,7 +92,6 @@ Register-DuneRoute -Method GET -Path '/api/mobile/pairing' -Handler {
             bridge               = $bridge
             cfAccessClientId     = $cfClientId
             cfAccessClientSecret = $cfClientSecret
-            rendezvousBase       = $rendezvousBase
             pairingId            = $pairingId
             remoteToken          = $remoteToken
         }
