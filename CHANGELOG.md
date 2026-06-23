@@ -13,9 +13,11 @@ here cover everything those tags shipped.
 
 ## [Unreleased]
 
-### Fixed
+### Changed
 
-- **Apply Aql Trial now unlocks the 3rd ability slot and prescience.** Trial 4 completed the journey subtree, tags, and Crysknife recipe, but never set `Journey.RewardsUnblocked` — the cutscene-driven tag that actually opens the 3rd active-ability slot and prescience (the Unlock Main Quest path already set it; Apply Aql Trial did not). Added it to the Trial 4 delta so the two ability rewards unlock on next login. (Reported by Decker.)
+- **Find the Fremen progression is now one action that grants the full reward set.** Completing the "Find the Fremen" questline (via **Apply Quick Preset → Complete: Find the Fremen** or **Unlock Main Quest**) now also applies `Journey.RewardsUnblocked` — the cutscene-gated tag that opens the **3rd active-ability slot + prescience** — alongside the journey completion, all Fremkit recipes, and the questline tags. Previously the reward tag was set inconsistently (only by Unlock Main Quest), so the preset path left the two ability rewards stuck. `Journey.RewardsUnblocked` is now applied centrally in the shared journey-completion path, so every completion route grants it. (Reported by Decker.)
+- **Removed the separate "Apply Aql Trial" action.** It reproduced a single trial from a one-off DB snapshot that also captured cross-questline noise; the consolidated full-questline completion above replaces it correctly.
+- **Apply Quick Preset and Complete journey node now require the player to be offline**, matching Unlock Main Quest / Unlock Trainers. These writes (journey state + the pawn TechKnowledge recipe blob + reward tags) are RAM-authoritative while a player is connected, so an online edit was silently overwritten on logout; the tool now blocks it with a clear message instead.
 
 ## [12.11.0] - 2026-06-23
 

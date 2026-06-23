@@ -147,7 +147,17 @@ Register-DuneRoute -Method POST -Path '/api/gameplay/players/progression/apply-p
         $presetId = [string](Get-DuneBodyValue -Body $body -Name 'preset_id')
         if ($null -eq $acc -or $acc -le 0) { Write-DuneError -Response $res -Status 400 -Message 'account_id is required.'; return }
         if (-not $presetId) { Write-DuneError -Response $res -Status 400 -Message 'preset_id is required.'; return }
-        Invoke-DunePlayerWriteRoute -Response $res -Action { param($ip) Invoke-DunePlayerApplyProgressionPreset -Ip $ip -AccountId $acc -PresetId $presetId }
+        Invoke-DunePlayerWriteRoute -Response $res -Action {
+            param($ip)
+            # Offline-only: completing journey nodes writes journey_story_node rows,
+            # the pawn TechKnowledge recipe blob, and reward tags - all RAM-authoritative
+            # while the player is connected, so an online edit is overwritten on logout.
+            $off = Test-DunePlayerOfflineByAccount -Ip $ip -AccountId $acc
+            if (-not $off.ok) {
+                return @{ ok = $false; error = "Player must be offline to apply a progression preset. $($off.reason)" }
+            }
+            Invoke-DunePlayerApplyProgressionPreset -Ip $ip -AccountId $acc -PresetId $presetId
+        }
     } catch {
         Write-DuneError -Response $res -Status 500 -Message "Apply preset failed: $($_.Exception.Message)"
     }
@@ -161,46 +171,18 @@ Register-DuneRoute -Method POST -Path '/api/gameplay/players/journey/complete' -
         $node = [string](Get-DuneBodyValue -Body $body -Name 'node_id')
         if ($null -eq $acc -or $acc -le 0) { Write-DuneError -Response $res -Status 400 -Message 'account_id is required.'; return }
         if (-not $node) { Write-DuneError -Response $res -Status 400 -Message 'node_id is required.'; return }
-        Invoke-DunePlayerWriteRoute -Response $res -Action { param($ip) Invoke-DunePlayerCompleteJourneyNode -Ip $ip -AccountId $acc -NodeId $node }
-    } catch {
-        Write-DuneError -Response $res -Status 500 -Message "Complete journey failed: $($_.Exception.Message)"
-    }
-}
-
-# GET /api/gameplay/players/aql-trials  (Aql trial unlock catalog for the UI)
-Register-DuneRoute -Method GET -Path '/api/gameplay/players/aql-trials' -Handler {
-    param($req, $res, $routeParams, $body)
-    try {
-        $trials = Get-DuneAqlTrialCatalog
-        Write-DuneJson -Response $res -Body @{ trials = $trials; total = $trials.Count; source = 'catalog' }
-    } catch {
-        Write-DuneError -Response $res -Status 500 -Message "Aql trials catalog failed: $($_.Exception.Message)"
-    }
-}
-
-# POST /api/gameplay/players/apply-aql-trial  { account_id, trial }
-# Offline-only: writes the pawn TechKnowledge blob, which is RAM-authoritative
-# while the player is online. Reproduces the full snapshot diff of completing an
-# Aql trial - journey subtree + tags + the awarded recipe that unlocks the
-# ability slot - for a character a tag-only edit left stuck. Only the named
-# trial's subtree is completed, so later trials proceed normally in-game.
-Register-DuneRoute -Method POST -Path '/api/gameplay/players/apply-aql-trial' -Handler {
-    param($req, $res, $routeParams, $body)
-    try {
-        $acc = Get-DuneBodyInt -Body $body -Name 'account_id'
-        $trial = [string](Get-DuneBodyValue -Body $body -Name 'trial')
-        if ($null -eq $acc -or $acc -le 0) { Write-DuneError -Response $res -Status 400 -Message 'account_id is required.'; return }
-        if (-not $trial) { Write-DuneError -Response $res -Status 400 -Message 'trial is required.'; return }
         Invoke-DunePlayerWriteRoute -Response $res -Action {
             param($ip)
+            # Offline-only: same RAM-authoritative journey/TechKnowledge writes as the
+            # preset path - an online edit is overwritten when the player logs out.
             $off = Test-DunePlayerOfflineByAccount -Ip $ip -AccountId $acc
             if (-not $off.ok) {
-                return @{ ok = $false; error = "Player must be offline to apply an Aql trial. $($off.reason)" }
+                return @{ ok = $false; error = "Player must be offline to complete a journey node. $($off.reason)" }
             }
-            Invoke-DuneApplyAqlTrial -Ip $ip -AccountId $acc -Trial $trial
+            Invoke-DunePlayerCompleteJourneyNode -Ip $ip -AccountId $acc -NodeId $node
         }
     } catch {
-        Write-DuneError -Response $res -Status 500 -Message "Apply Aql trial failed: $($_.Exception.Message)"
+        Write-DuneError -Response $res -Status 500 -Message "Complete journey failed: $($_.Exception.Message)"
     }
 }
 

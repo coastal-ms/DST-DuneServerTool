@@ -1796,19 +1796,6 @@ export function unlockMainQuest(accountId: number, quest: string) {
   })
 }
 
-// Apply Aql Trial — reproduces the full snapshot diff of completing an Aql
-// trial (journey subtree + tags + the awarded recipe that unlocks the ability
-// slot). Offline-only on the server side.
-export interface AqlTrialInfo { id: string; label: string; node: string; tags: string[]; recipe: string }
-export function getAqlTrials() {
-  return api<{ ok: boolean; trials: AqlTrialInfo[]; total: number; source: DataSource }>(
-    '/api/gameplay/players/aql-trials')
-}
-export function applyAqlTrial(accountId: number, trial: string) {
-  return api<WriteResult>('/api/gameplay/players/apply-aql-trial', {
-    method: 'POST', body: JSON.stringify({ account_id: accountId, trial }),
-  })
-}
 
 export function completeContract(accountId: number, contractId: string) {
   return api<WriteResult>('/api/gameplay/players/contract/complete', {
