@@ -383,7 +383,7 @@ export function MenuBar({ sidebarCollapsed, onToggleSidebar }: Props) {
                   <span className="block">Keep serving while DST is closed</span>
                   <span className="block text-[11px] text-text-dim">
                     {service.enabled
-                      ? 'Installed — backend runs without DST open and loads at sign-in (works while locked)'
+                      ? 'Installed — backend runs without DST open and loads at sign-in (works while locked), must remain signed in'
                       : 'Off — portal and phone need DST open'}
                   </span>
                 </span>
