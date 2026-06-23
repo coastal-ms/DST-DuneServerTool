@@ -206,3 +206,160 @@ function Get-DuneAutostartState {
         user      = Get-DuneAutostartUserName
     }
 }
+
+# ===========================================================================
+# Service mode — "stay online when signed out".
+#
+# A stronger variant of autostart: the scheduled task runs the headless backend
+# AT BOOT and "whether the user is logged on or not", so the portal + phone apps
+# + scheduler + Discord webhooks + market bot keep running even after a sign-out
+# or reboot, with no interactive session.
+#
+# This requires the user's Windows password (Task Scheduler stores it encrypted)
+# so the task can run as the user account WITHOUT an interactive logon — which is
+# what lets DST keep its access to the user-profile SSH key (%APPDATA%) and
+# Hyper-V management. (An S4U / LocalSystem task can't see those.)
+#
+# Separate task name from plain autostart so the two don't collide; enabling
+# service mode removes the weaker autostart task (it's a superset). The password
+# is used ONLY to register the task and is never persisted by DST or logged.
+# ===========================================================================
+
+function Get-DuneServiceTaskName {
+    $suffix = Get-DuneAutostartUserSidShort
+    return "DuneServer-Service-$suffix"
+}
+
+# Whether the always-on service task currently exists for THIS user.
+function Test-DuneServiceEnabled {
+    $folder = Get-DuneAutostartTaskFolder
+    $name   = Get-DuneServiceTaskName
+    try {
+        if (Get-Command Get-ScheduledTask -ErrorAction SilentlyContinue) {
+            $task = Get-ScheduledTask -TaskPath $folder -TaskName $name -ErrorAction SilentlyContinue
+            return [bool]$task
+        }
+    } catch {}
+    try {
+        $fullName = ($folder.TrimEnd('\') + '\' + $name)
+        $null = & schtasks.exe /Query /TN $fullName 2>&1
+        return ($LASTEXITCODE -eq 0)
+    } catch {
+        return $false
+    }
+}
+
+# Register / replace the always-on service task. Requires the caller-supplied
+# Windows password for the current user. Returns @{ ok = $bool; error = '...' }.
+# SECURITY: $Password is used only for Register-ScheduledTask and is never
+# written to disk or the log here.
+function Register-DuneServiceMode {
+    param([Parameter(Mandatory)][string]$Password)
+
+    $exe = Get-DuneAutostartExePath
+    if (-not $exe) {
+        return @{ ok = $false; error = 'Service mode is only available from the installed DuneServer.exe (not a dev pwsh build).' }
+    }
+    if ([string]::IsNullOrEmpty($Password)) {
+        return @{ ok = $false; error = 'A Windows password is required to install the always-on service.' }
+    }
+    if (-not (Get-Command New-ScheduledTaskAction -ErrorAction SilentlyContinue) -or
+        -not (Get-Command Register-ScheduledTask -ErrorAction SilentlyContinue)) {
+        return @{ ok = $false; error = 'The ScheduledTasks PowerShell module is not available on this machine.' }
+    }
+
+    $folder = Get-DuneAutostartTaskFolder
+    $name   = Get-DuneServiceTaskName
+    $user   = Get-DuneAutostartUserName
+
+    try {
+        $action  = New-ScheduledTaskAction -Execute $exe -Argument '--headless'
+        # Boot trigger = runs before any interactive logon; logon trigger covers
+        # the case where the machine is already up when the user signs in.
+        $tBoot   = New-ScheduledTaskTrigger -AtStartup
+        $tLogon  = New-ScheduledTaskTrigger -AtLogOn -User $user
+        $settings = New-ScheduledTaskSettingsSet `
+                        -AllowStartIfOnBatteries `
+                        -DontStopIfGoingOnBatteries `
+                        -StartWhenAvailable `
+                        -ExecutionTimeLimit ([TimeSpan]::Zero) `
+                        -MultipleInstances IgnoreNew
+
+        # Providing -User + -Password sets LogonType = Password, i.e. "run whether
+        # the user is logged on or not" with the user's full profile loaded.
+        Register-ScheduledTask `
+            -TaskPath $folder `
+            -TaskName $name `
+            -Action $action `
+            -Trigger @($tBoot, $tLogon) `
+            -User $user `
+            -Password $Password `
+            -RunLevel Highest `
+            -Settings $settings `
+            -Description "Keeps Dune Server Tool's backend (portal, phone apps, scheduled restarts, Discord notifications) running for $user even when signed out. Managed by the Dune Server Tool — toggle from Settings." `
+            -Force | Out-Null
+    } catch {
+        $msg = $_.Exception.Message
+        # Common case: wrong password. Surface a clean hint without echoing input.
+        if ($msg -match '(?i)password|logon|credential|incorrect|1326|1327') {
+            $msg = "Windows rejected the credentials. Check the password for $user and try again."
+        }
+        if (Get-Command Write-DuneLog -ErrorAction SilentlyContinue) {
+            Write-DuneLog "Service mode enable failed for ${user}: $($_.Exception.Message)" 'ERROR'
+        }
+        return @{ ok = $false; error = $msg }
+    }
+
+    # Success — the always-on task supersedes the plain "while signed in"
+    # autostart task; remove it so we don't run two headless launches.
+    try { [void](Unregister-DuneAutostart) } catch {}
+
+    if (Get-Command Write-DuneLog -ErrorAction SilentlyContinue) {
+        Write-DuneLog "Service mode enabled: registered '$folder$name' for $user (runs whether logged on or not; exe: $exe)"
+    }
+    if (Get-Command Update-DuneKeepAliveFlag -ErrorAction SilentlyContinue) {
+        try { [void](Update-DuneKeepAliveFlag) } catch {}
+    }
+    return @{ ok = $true }
+}
+
+# Remove the always-on service task. No-op (ok=$true) if it didn't exist.
+function Unregister-DuneServiceMode {
+    $folder = Get-DuneAutostartTaskFolder
+    $name   = Get-DuneServiceTaskName
+    try {
+        if (Get-Command Unregister-ScheduledTask -ErrorAction SilentlyContinue) {
+            $existing = Get-ScheduledTask -TaskPath $folder -TaskName $name -ErrorAction SilentlyContinue
+            if ($existing) {
+                Unregister-ScheduledTask -TaskPath $folder -TaskName $name -Confirm:$false -ErrorAction Stop
+            }
+        } else {
+            $fullName = ($folder.TrimEnd('\') + '\' + $name)
+            & schtasks.exe /Delete /TN $fullName /F 2>&1 | Out-Null
+        }
+        if (Get-Command Write-DuneLog -ErrorAction SilentlyContinue) {
+            Write-DuneLog "Service mode disabled: removed scheduled task '$folder$name'"
+        }
+        if (Get-Command Update-DuneKeepAliveFlag -ErrorAction SilentlyContinue) {
+            try { [void](Update-DuneKeepAliveFlag) } catch {}
+        }
+        return @{ ok = $true }
+    } catch {
+        $msg = $_.Exception.Message
+        if (Get-Command Write-DuneLog -ErrorAction SilentlyContinue) {
+            Write-DuneLog "Service mode disable failed: $msg" 'ERROR'
+        }
+        return @{ ok = $false; error = $msg }
+    }
+}
+
+function Get-DuneServiceModeState {
+    return [pscustomobject]@{
+        enabled   = Test-DuneServiceEnabled
+        available = Test-DuneAutostartAvailable
+        taskName  = Get-DuneServiceTaskName
+        taskPath  = Get-DuneAutostartTaskFolder
+        exePath   = Get-DuneAutostartExePath
+        user      = Get-DuneAutostartUserName
+    }
+}

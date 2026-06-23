@@ -152,7 +152,13 @@ function Update-DuneKeepAliveFlag {
             $autostart = [bool](Test-DuneAutostartEnabled)
         }
     } catch { $autostart = $false }
-    $keep = [bool]$script:DuneHeadlessMode -or $autostart
+    $service = $false
+    try {
+        if (Get-Command Test-DuneServiceEnabled -ErrorAction SilentlyContinue) {
+            $service = [bool](Test-DuneServiceEnabled)
+        }
+    } catch { $service = $false }
+    $keep = [bool]$script:DuneHeadlessMode -or $autostart -or $service
     if ($keep) { Set-DuneKeepAliveFlag } else { Clear-DuneKeepAliveFlag }
     return $keep
 }
