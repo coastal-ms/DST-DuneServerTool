@@ -143,11 +143,38 @@ function Invoke-DuneBridgeRepair {
 function Initialize-DuneMobileBridge {
     param([string]$ServerDir)
     try {
+        # When DST's "Stay online when signed out" service mode is enabled, the
+        # bridge must run whether-logged-on-or-not (S4U) so it survives sign-out.
+        # Otherwise it's the normal per-session (Interactive) task. Reconcile on
+        # startup so installing a new build (or flipping service mode) auto-heals
+        # the bridge's logon type without the user re-toggling anything.
+        $wantSignedOut = $false
+        try {
+            if (Get-Command Test-DuneServiceEnabled -ErrorAction SilentlyContinue) {
+                $wantSignedOut = [bool](Test-DuneServiceEnabled)
+            }
+        } catch { $wantSignedOut = $false }
+
         $st = Get-DuneBridgeStatus
-        if ($st.task -and $st.listening) { return }  # already healthy
-        [void](Invoke-DuneBridgeRepair -NoWait)
+
+        # Current logon type of the bridge task (if any), to detect a mismatch.
+        $currentLogon = $null
+        try {
+            $task = Get-ScheduledTask -TaskName $script:DuneMobileBridgeTaskName -ErrorAction SilentlyContinue
+            if ($task) { $currentLogon = [string]$task.Principal.LogonType }
+        } catch {}
+        $isSignedOut = ($currentLogon -eq 'S4U')
+        $modeMismatch = ($null -ne $currentLogon) -and ($isSignedOut -ne $wantSignedOut)
+
+        if ($st.task -and $st.listening -and -not $modeMismatch) { return }  # already healthy + correct mode
+
+        if ($wantSignedOut) {
+            [void](Invoke-DuneBridgeRepair -NoWait -RunWhenSignedOut)
+        } else {
+            [void](Invoke-DuneBridgeRepair -NoWait)
+        }
         if (Get-Command Write-DuneLog -ErrorAction SilentlyContinue) {
-            Write-DuneLog "MobileBridge: auto-heal triggered (task=$($st.task) listening=$($st.listening))."
+            Write-DuneLog "MobileBridge: auto-heal triggered (task=$($st.task) listening=$($st.listening) currentLogon=$currentLogon wantSignedOut=$wantSignedOut)."
         }
     } catch {}
 }
