@@ -923,6 +923,69 @@ function Invoke-OnDemandPartitionClear {
     Write-Host "  Done — on-demand maps will spawn for the next player." -ForegroundColor Green
 }
 
+function Get-DuneDnatWatchScriptPath {
+    $candidates = @(
+        (Join-Path $scriptDir 'resources\remote-scripts\dune-dnat-watch-install.sh')
+        (Join-Path $scriptDir 'app\resources\remote-scripts\dune-dnat-watch-install.sh')
+    )
+    foreach ($p in $candidates) {
+        if (Test-Path -LiteralPath $p) { return $p }
+    }
+    return $null
+}
+
+function Invoke-DuneDnatWatchdogInstall {
+    # Best-effort: stage the bundled DNAT self-heal watchdog installer to /tmp on
+    # the VM (base64 over an ssh exec channel — no scp/sftp dependency), run it
+    # once with sudo, remove it. The installer writes /usr/local/bin/dune-dnat-watch.sh
+    # plus a 1-minute root cron entry so the RabbitMQ (public:31982 -> mq-game pod)
+    # and game-port DNAT rules self-heal after a pod-only battlegroup restart —
+    # which the boot script /etc/local.d/dune-iptables.start misses because it
+    # only re-derives the pod IP at boot. Without this, a pod restart leaves the
+    # RabbitMQ rule pointing at a dead pod IP and remote players hang on
+    # "Connecting" until the next reboot (observed 2026-06-23).
+    #
+    # ALL persistence (the watchdog file + cron line) lives in the staged POSIX-sh
+    # script, never in this app — so the packaged installer carries no
+    # persistence-establishment pattern (that PowerShell pattern is what tripped
+    # the Defender ML false positive Trojan:Script/Wacatac.H!ml in v11.0.1).
+    #
+    # Never throws — a watchdog-install hiccup must not fail a good start/restart.
+    param(
+        [Parameter(Mandatory)][string]$Ip,
+        [string]$Phase = 'post-start'
+    )
+    $local = Get-DuneDnatWatchScriptPath
+    if (-not $local) {
+        Write-Host "  [$Phase] Skipped DNAT self-heal watchdog install (bundled script not found)." -ForegroundColor DarkYellow
+        return
+    }
+
+    $stamp     = [Guid]::NewGuid().ToString('N').Substring(0, 12)
+    $remoteTmp = "/tmp/dune-dnatw-$stamp.sh"
+
+    # Force LF line endings — Alpine /bin/sh chokes on CRLF.
+    $raw = [System.IO.File]::ReadAllText($local)
+    $lf  = $raw -replace "`r`n", "`n" -replace "`r", "`n"
+    $b64 = [Convert]::ToBase64String([Text.Encoding]::UTF8.GetBytes($lf))
+
+    $stageOut = $b64 | & ssh -o BatchMode=yes -o StrictHostKeyChecking=no -o LogLevel=QUIET `
+          -i "$sshKey" "${sshUser}@${Ip}" "base64 -d > $remoteTmp && echo DUNE_STAGED_OK" 2>&1
+    if (($stageOut -join "`n") -notmatch 'DUNE_STAGED_OK') {
+        Write-Host "  [$Phase] DNAT watchdog staging failed (non-fatal): $stageOut" -ForegroundColor DarkYellow
+        return
+    }
+
+    $runOut = & ssh -o BatchMode=yes -o StrictHostKeyChecking=no -o LogLevel=QUIET `
+                    -i "$sshKey" "$sshUser@$Ip" `
+                    "sudo -n sh $remoteTmp; rc=`$?; rm -f $remoteTmp; exit `$rc" 2>&1
+    if (($runOut -join "`n") -match 'DUNE_DNAT_WATCH_OK') {
+        Write-Host "  [$Phase] DNAT self-heal watchdog installed/refreshed — RabbitMQ + game ports auto-recover after pod restarts." -ForegroundColor DarkGray
+    } else {
+        Write-Host "  [$Phase] DNAT watchdog install reported a problem (non-fatal): $runOut" -ForegroundColor DarkYellow
+    }
+}
+
 # ============================================================
 #  MENU DEFINITIONS
 # ============================================================
@@ -1478,6 +1541,7 @@ while ($true) {
         # itself failed (no point waiting on operator that never reconciled).
         if ($bgStartExit -eq 0) {
             Invoke-OnDemandPartitionClear -Ip $ip -DelaySec 0 -Phase 'post-startup' -Fast
+            Invoke-DuneDnatWatchdogInstall -Ip $ip -Phase 'post-startup'
         } else {
             Write-Host "  Skipped on-demand partition auto-clear because battlegroup start exited $bgStartExit." -ForegroundColor DarkYellow
         }
@@ -1740,6 +1804,7 @@ while ($true) {
         # still be reconciling on-demand ServerSets.
         if ($bgStartExit -eq 0) {
             Invoke-OnDemandPartitionClear -Ip $ip -DelaySec 45 -Phase 'post-reboot'
+            Invoke-DuneDnatWatchdogInstall -Ip $ip -Phase 'post-reboot'
         } else {
             Write-Host "  Skipped on-demand partition auto-clear because battlegroup start exited $bgStartExit." -ForegroundColor DarkYellow
         }
@@ -2155,6 +2220,9 @@ while ($true) {
         # The persistent VM watchdog / manual Fix Partitions command covers
         # slower post-reconcile drift without making every start feel hung.
         Invoke-OnDemandPartitionClear -Ip $ip -DelaySec 0 -Phase "post-$cmdName" -Fast
+        # Install/refresh the DNAT self-heal watchdog so the RabbitMQ + game-port
+        # rules recover automatically after a pod-only restart (no host reboot).
+        Invoke-DuneDnatWatchdogInstall -Ip $ip -Phase "post-$cmdName"
     }
 
     # After start/restart, resolve director port
