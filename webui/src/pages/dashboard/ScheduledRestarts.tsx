@@ -402,16 +402,21 @@ export function ScheduledRestarts() {
                     <button
                       type="button"
                       onClick={() => { void runTest() }}
-                      disabled={testing || !webhookSet || webhookInput.trim() !== '' || clearWebhook}
+                      disabled={testing || !webhookSet || webhookInput.trim() !== '' || clearWebhook || discordDirty}
                       className="btn-secondary"
                       title={
                         !webhookSet || webhookInput.trim() !== '' || clearWebhook
                           ? 'Save a webhook URL first, then send a test message.'
-                          : 'Send a one-off test message to your Discord channel.'
+                          : discordDirty
+                            ? 'Save your changes first — the test sends a sample of each currently-saved notification.'
+                            : 'Sends a sample of each enabled notification (online / offline / restarting / update) to your Discord channel.'
                       }
                     >
                       <Icon name="Send" size={14} className={testing ? 'animate-pulse' : ''} /> {testing ? 'Sending…' : 'Send test message'}
                     </button>
+                    <p className="text-[11px] text-text-dim mt-1">
+                      Sends one sample message for each notification you have enabled above, so you can see exactly what each will look like.
+                    </p>
                   </div>
                 </div>
               )}

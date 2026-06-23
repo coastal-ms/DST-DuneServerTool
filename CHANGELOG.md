@@ -13,6 +13,24 @@ here cover everything those tags shipped.
 
 ## [Unreleased]
 
+## [12.10.6] - 2026-06-22
+
+### Fixed
+
+- **"Send test message" now tests each enabled notification, not just the
+  restart message.** Previously the test always sent the scheduled-restart
+  embed, so enabling Online / Offline / Restarting / Update-available and
+  clicking test only ever showed the restart message. The test now sends one
+  representative sample per enabled notification type (and the pre-restart
+  broadcast when that toggle is on), each labelled as a test, so you can see
+  exactly what every event will look like. The button now also waits for you to
+  save pending changes so the test reflects your saved configuration.
+
+### Changed
+
+- Live server-state Discord notices (online / offline / restarting) now carry a
+  short description line and a footer, matching the test samples.
+
 ## [12.10.5] - 2026-06-22
 
 ### Fixed
