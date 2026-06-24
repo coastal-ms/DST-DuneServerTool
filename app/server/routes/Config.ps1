@@ -200,11 +200,15 @@ Register-DuneRoute -Method POST -Path '/api/config/open-battlegroup-bat' -Handle
     }
 
     try {
-        $proc = Start-Process -FilePath $bat -WorkingDirectory $steam -Verb RunAs -PassThru -ErrorAction Stop
+        # Use the session-aware launcher so the window is visible even when the
+        # backend runs in Session 0 (service mode) instead of landing on the
+        # invisible Session 0 desktop.
+        $launch = Start-DuneVisibleElevated -FilePath $bat -WorkingDirectory $steam
         Write-DuneJson -Response $res -Body @{
             ok      = $true
             path    = $bat
-            pid     = if ($proc) { $proc.Id } else { $null }
+            pid     = $launch.pid
+            via     = $launch.via
             message = 'Opened Funcom battlegroup.bat in an elevated window.'
         }
     } catch {
