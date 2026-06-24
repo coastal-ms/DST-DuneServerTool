@@ -680,11 +680,12 @@ function Invoke-DunePlayerTeleportToPlayer {
     if ($SourcePawnId -le 0) { return @{ ok = $false; error = 'source_pawn_id is required.' } }
     if ($TargetPawnId -le 0) { return @{ ok = $false; error = 'target_pawn_id is required.' } }
 
-    # target pawn coords (needed for both online and offline paths)
+    # target pawn coords (needed for both online and offline paths). Coords live in
+    # the `transform` composite (transform.location.x/y/z), NOT a `location` column.
     $tgtSql = @"
-SELECT (location->>'X')::float8 AS x,
-       (location->>'Y')::float8 AS y,
-       (location->>'Z')::float8 AS z
+SELECT (transform).location.x AS x,
+       (transform).location.y AS y,
+       (transform).location.z AS z
 FROM dune.actors WHERE id = $TargetPawnId::bigint;
 "@
     $tr = Invoke-DuneSqlQuery -Ip $Ip -Sql $tgtSql -ReadOnly $true -MaxRows 1 -TimeoutSec 10
@@ -740,6 +741,96 @@ FROM dune.actors WHERE id = $TargetPawnId::bigint;
         message = "Teleported offline pawn $SourcePawnId -> ($tx, $ty, $tz) on partition $partId."
         path = 'offline'
         partition = $partId; x = $tx; y = $ty; z = $tz
+    }
+}
+
+# ---------------------------------------------------------------------------
+# Named teleport / respawn destinations. Each entry is a navigable map or hub
+# with a verified world-partition id + an anchor coordinate (pulled from real
+# actors on that map). `partition` drives admin_move_offline_player_to_partition
+# for teleport; `respawnMap` is the dune.actors.map-style name written into a
+# respawn row. Coords/partitions verified live 2026-06-23 against build 23654991.
+# ---------------------------------------------------------------------------
+$script:DuneTeleportDestinations = @(
+    [ordered]@{ id = 'hagga_basin';   label = 'Hagga Basin';     respawnMap = 'HaggaBasin';       partition = 1;  x = 163939;  y = 316397;  z = 2939  }
+    [ordered]@{ id = 'deep_desert';   label = 'Deep Desert';     respawnMap = 'DeepDesert';       partition = 8;  x = -265065; y = -35981;  z = 2720  }
+    [ordered]@{ id = 'arrakeen';      label = 'Arrakeen';        respawnMap = 'Arrakeen';         partition = 3;  x = 6038;    y = 417;     z = 52228 }
+    [ordered]@{ id = 'harko_village'; label = 'Harko Village';   respawnMap = 'HarkoVillage';     partition = 4;  x = 3630;    y = 1876;    z = 13794 }
+    [ordered]@{ id = 'ruins_tsimpo';  label = 'Ruins of Tsimpo'; respawnMap = 'TheRuinsOfTsimpo'; partition = 28; x = 13393;   y = 16955;   z = 1710  }
+)
+
+function Get-DuneTeleportDestinations {
+    $list = @()
+    foreach ($d in $script:DuneTeleportDestinations) {
+        $list += [ordered]@{ id = [string]$d.id; label = [string]$d.label; map = [string]$d.respawnMap; partition = [int64]$d.partition }
+    }
+    return $list
+}
+
+function Get-DuneTeleportDestinationById {
+    param([string]$Id)
+    $key = ([string]$Id).Trim()
+    foreach ($d in $script:DuneTeleportDestinations) { if ($d.id -eq $key) { return $d } }
+    return $null
+}
+
+# Teleport a player to a named map/hub destination. Offline-only at the route
+# layer: this writes the player's partition + location, which the game caches in
+# RAM while connected. Resolves the source by account -> FLS id, then calls the
+# same admin_move_offline_player_to_partition primitive the teleport-to-player
+# offline path uses.
+function Invoke-DunePlayerTeleportToLocation {
+    param([string]$Ip, [long]$AccountId, [string]$Destination)
+    if ($AccountId -le 0) { return @{ ok = $false; error = 'account_id is required.' } }
+    $dest = Get-DuneTeleportDestinationById -Id $Destination
+    if (-not $dest) { return @{ ok = $false; error = "unknown destination '$Destination'." } }
+
+    $fls = Get-DuneRawFuncomId -Ip $Ip -AccountId $AccountId
+    if (-not $fls.ok) { return @{ ok = $false; error = $fls.error } }
+    $safeFls = ConvertTo-DuneSqlString $fls.funcom_id
+    $x = [double]$dest.x; $y = [double]$dest.y; $z = [double]$dest.z; $part = [int64]$dest.partition
+
+    $sql = "SELECT dune.admin_move_offline_player_to_partition('$safeFls'::text, $part::bigint, ROW($x::float8, $y::float8, $z::float8)::dune.vector);"
+    $r = Invoke-DuneSqlQuery -Ip $Ip -Sql $sql -ReadOnly $false -MaxRows 1 -TimeoutSec 30
+    if (-not $r.ok) { return @{ ok = $false; error = "teleport to location: $($r.error)" } }
+    return @{
+        ok = $true
+        message = "Teleported to $($dest.label) (partition $part) - takes effect on next login."
+        destination = [string]$dest.id; partition = $part; x = $x; y = $y; z = $z
+    }
+}
+
+# Add a respawn point at a named destination for a player. NON-DESTRUCTIVE: this
+# INSERTs a new Transform respawn row and leaves the player's existing respawn
+# points intact. We deliberately do NOT call dune.update_respawn_locations(),
+# which DELETES any existing rows not present in its input array. last_used set
+# to now so the new point sorts as the most recent. Offline-only at the route.
+function Invoke-DunePlayerSetRespawn {
+    param([string]$Ip, [long]$AccountId, [string]$Destination)
+    if ($AccountId -le 0) { return @{ ok = $false; error = 'account_id is required.' } }
+    $dest = Get-DuneTeleportDestinationById -Id $Destination
+    if (-not $dest) { return @{ ok = $false; error = "unknown destination '$Destination'." } }
+
+    $x = [double]$dest.x; $y = [double]$dest.y; $z = [double]$dest.z
+    $safeMap = ConvertTo-DuneSqlString ([string]$dest.respawnMap)
+    $safeGroup = ConvertTo-DuneSqlString ("Admin: " + [string]$dest.label)
+
+    $sql = @"
+INSERT INTO dune.player_respawn_locations
+    (id, account_id, "group", locator_transform, locator_actor_id, locator_name, locator_name_index, map, dimension, last_used_timestamp)
+VALUES (
+    gen_random_uuid(), $AccountId::bigint, '$safeGroup',
+    ROW(ROW($x::float8, $y::float8, $z::float8)::dune.vector, ROW(0,0,0,1)::dune.quaternion)::dune.transform,
+    NULL, NULL, 0, '$safeMap', 0,
+    (extract(epoch from now()) * 1000)::bigint
+);
+"@
+    $r = Invoke-DuneSqlQuery -Ip $Ip -Sql $sql -ReadOnly $false -MaxRows 1 -TimeoutSec 30
+    if (-not $r.ok) { return @{ ok = $false; error = "set respawn: $($r.error)" } }
+    return @{
+        ok = $true
+        message = "Added a respawn point at $($dest.label) - takes effect on next login."
+        destination = [string]$dest.id
     }
 }
 

@@ -25,7 +25,7 @@ import {
   resetAllKeystones, resetAllSpecs, resetJourney, resetProgressionLive, resetSpec,
   restoreDestroyed,
   setFactionTier, setPlayerTags, setSkillPoints,
-  setStarterClass, teleportToPlayer, updatePlayerTags, wipeCodex, wipeJourney,
+  setStarterClass, teleportToPlayer, teleportToLocation, setRespawn, getTeleportDestinations, getPlayers, updatePlayerTags, wipeCodex, wipeJourney,
   chatWhisper, isValidTemplateId, getItemCatalog,
   parseTcnoPackageText,
   giveItems, getItemPackages, saveItemPackage, deleteItemPackage,
@@ -38,7 +38,7 @@ import {
   type CatalogItem, type ItemPackage, type GiveItemEntry,
   type LandsraadHouse, type LandsraadIniSetting,
   type JourneyNode, type TrainerInfo, type TrainerStatus, type MainQuestInfo,
-  type PlayerVehicleRow,
+  type PlayerVehicleRow, type TeleportDestination,
   type VehicleTemplate, type VehicleKitCatalog,
 } from '../../../api/gameplay'
 import { fmtNum, fmtSolari } from '../shared'
@@ -511,7 +511,7 @@ interface ActionDef {
   liveOnly?: boolean      // requires player to be online (RMQ path)
   offlineOnly?: boolean   // requires player to be offline (DB write the game caches in memory)
   fields?: ActionField[]
-  custom?: 'give-item' | 'grant-reward' | 'whisper' | 'spawn-vehicle' | 'quick-presets' | 'vehicle-kit' | 'give-package' | 'cheat-scripts' | 'dev-scripts' | 'unlock-trainers' | 'unlock-mainquest' | 'progression-unlock' | 'refuel-vehicle' | 'starter-class' | 'update-tags'
+  custom?: 'give-item' | 'grant-reward' | 'whisper' | 'spawn-vehicle' | 'quick-presets' | 'vehicle-kit' | 'give-package' | 'cheat-scripts' | 'dev-scripts' | 'unlock-trainers' | 'unlock-mainquest' | 'progression-unlock' | 'refuel-vehicle' | 'starter-class' | 'update-tags' | 'teleport-player' | 'teleport-location' | 'set-respawn'
   balance?: 'solari' | 'scrip' | 'intel'  // show the player's current balance read-only above the form
   confirm?: (p: Player) => string  // confirm message; if returns '' no prompt
   doubleConfirm?: boolean // also requires a typed "i acknowledge" prompt inside run()
@@ -631,9 +631,15 @@ const ACTIONS: ActionDef[] = [
   // ----- Live (RMQ) -----
   { id: 'kick', group: 'Live', label: 'Kick Player', icon: 'LogOut', liveOnly: true,
     run: p => kickPlayer({ actor_id: p.id }) },
-  { id: 'teleport', group: 'Live', label: 'Teleport To Player', icon: 'Move',
-    fields: [{ key: 'target', label: 'Target pawn id', type: 'number', placeholder: '67890' }],
-    run: (p, v) => teleportToPlayer(p.id, Number(v.target) || 0) },
+  { id: 'teleport', group: 'Live', label: 'Teleport To Player', icon: 'Move', custom: 'teleport-player',
+    rowNote: 'Move this player to another player (pick by name)',
+    run: () => Promise.resolve({ message: '' }) },
+  { id: 'teleport-location', group: 'Live', label: 'Teleport To Location', icon: 'MapPin', offlineOnly: true, custom: 'teleport-location',
+    rowNote: 'Move this player to a map or hub (Hagga Basin, Deep Desert, Arrakeen…). Player must be offline.',
+    run: () => Promise.resolve({ message: '' }) },
+  { id: 'set-respawn', group: 'Live', label: 'Set Respawn Location', icon: 'Tent', offlineOnly: true, custom: 'set-respawn',
+    rowNote: 'Add a respawn point at a map or hub (keeps existing ones). Player must be offline.',
+    run: () => Promise.resolve({ message: '' }) },
   { id: 'whisper', group: 'Live', label: 'Whisper', icon: 'MessageCircle', liveOnly: true, custom: 'whisper',
     run: () => Promise.resolve({ message: '' }) },
   { id: 'cheat-script', group: 'Live', label: 'Cheat Scripts', icon: 'Terminal', liveOnly: true, custom: 'cheat-scripts',
@@ -955,12 +961,127 @@ function ActionRow({ def, player, busy, stats, open, danger, onToggle, runAction
           ) : def.custom === 'update-tags' ? (
             <UpdateTagsForm busy={busy} accountId={player.account_id} demo={false}
               onSubmit={(add, remove) => runAction(def, () => updatePlayerTags(player.account_id, add, remove))} />
+          ) : def.custom === 'teleport-player' ? (
+            <TeleportPlayerForm busy={busy} self={player}
+              onSubmit={(targetPawnId, targetName) => runAction(def, async () => {
+                const r = await teleportToPlayer(player.id, targetPawnId)
+                return { message: r.message || `Teleported ${player.name} to ${targetName}.` }
+              })} />
+          ) : def.custom === 'teleport-location' ? (
+            <DestinationForm busy={busy} submitLabel="Teleport To Location" icon="MapPin"
+              note="Moves the player to the chosen map/hub. Player must be offline; takes effect on next login."
+              onSubmit={(destId, destLabel) => runAction(def, async () => {
+                const r = await teleportToLocation(player.account_id, destId)
+                return { message: r.message || `Teleported ${player.name} to ${destLabel}.` }
+              })} />
+          ) : def.custom === 'set-respawn' ? (
+            <DestinationForm busy={busy} submitLabel="Set Respawn Location" icon="Tent"
+              note="Adds a respawn point at the chosen map/hub (existing respawn points are kept). Player must be offline; takes effect on next login."
+              onSubmit={(destId, destLabel) => runAction(def, async () => {
+                const r = await setRespawn(player.account_id, destId)
+                return { message: r.message || `Set ${player.name}'s respawn to ${destLabel}.` }
+              })} />
           ) : (
             <InlineForm busy={busy} submitLabel={def.label} fields={def.fields || []} note={balanceNote}
               onSubmit={v => runAction(def, () => def.run(player, v))} />
           )}
         </div>
       )}
+    </div>
+  )
+}
+
+// Teleport To Player — fetches the roster and picks the target by NAME (resolving
+// to the target's pawn id behind the scenes), so admins never type a raw pawn id.
+function TeleportPlayerForm({ busy, self, onSubmit }: {
+  busy: boolean; self: Player; onSubmit: (targetPawnId: number, targetName: string) => void
+}) {
+  const [players, setPlayers] = useState<Player[]>([])
+  const [sel, setSel] = useState('')
+  const [loading, setLoading] = useState(true)
+  const [err, setErr] = useState('')
+  useEffect(() => {
+    let alive = true
+    setLoading(true)
+    getPlayers()
+      .then(r => {
+        if (!alive) return
+        const list = (r.players || []).filter(p => p.id !== self.id)
+        setPlayers(list)
+        setSel(list[0] ? String(list[0].id) : '')
+      })
+      .catch(e => { if (alive) setErr(e instanceof Error ? e.message : String(e)) })
+      .finally(() => { if (alive) setLoading(false) })
+    return () => { alive = false }
+  }, [self.id])
+  const selectCls = 'w-full px-3 py-2 rounded-lg bg-surface-2 border border-border text-text text-sm focus:outline-none focus:ring-2 focus:ring-ibad focus:border-ibad/50'
+  if (loading) return <div className="text-sm text-text-dim flex items-center gap-2"><Icon name="Loader2" size={13} className="animate-spin" /> Loading players…</div>
+  if (err) return <div className="text-sm text-danger">{err}</div>
+  if (players.length === 0) return <div className="text-sm text-text-dim">No other players to teleport to.</div>
+  const chosen = players.find(p => String(p.id) === sel)
+  return (
+    <div className="space-y-3">
+      <div>
+        <label className="block text-[11px] uppercase tracking-wider text-text-dim mb-1">Teleport to player</label>
+        <select value={sel} disabled={busy} className={selectCls} onChange={e => setSel(e.target.value)}>
+          {players.map(p => (
+            <option key={p.id} value={String(p.id)}>
+              {(p.name && p.name.trim()) ? p.name : `Player ${p.id}`}{p.map ? ` — ${p.map}` : ''}{p.online_status && /online/i.test(p.online_status) ? ' (online)' : ''}
+            </option>
+          ))}
+        </select>
+      </div>
+      <button className="btn-primary w-full" disabled={busy || !sel}
+        onClick={() => onSubmit(Number(sel) || 0, (chosen?.name && chosen.name.trim()) ? chosen.name : `Player ${sel}`)}>
+        {busy ? <Icon name="Loader2" size={13} className="animate-spin" /> : <Icon name="Move" size={13} />} Teleport To Player
+      </button>
+    </div>
+  )
+}
+
+// Destination picker shared by Teleport To Location + Set Respawn — fetches the
+// named map/hub catalog and resolves to the destination id behind the scenes.
+function DestinationForm({ busy, submitLabel, icon, note, onSubmit }: {
+  busy: boolean; submitLabel: string; icon: string; note: string
+  onSubmit: (destId: string, destLabel: string) => void
+}) {
+  const [dests, setDests] = useState<TeleportDestination[]>([])
+  const [sel, setSel] = useState('')
+  const [loading, setLoading] = useState(true)
+  const [err, setErr] = useState('')
+  useEffect(() => {
+    let alive = true
+    setLoading(true)
+    getTeleportDestinations()
+      .then(r => {
+        if (!alive) return
+        const raw = r.destinations as TeleportDestination[] | TeleportDestination | undefined
+        const list = Array.isArray(raw) ? raw : raw ? [raw] : []
+        setDests(list)
+        setSel(list[0]?.id || '')
+      })
+      .catch(e => { if (alive) setErr(e instanceof Error ? e.message : String(e)) })
+      .finally(() => { if (alive) setLoading(false) })
+    return () => { alive = false }
+  }, [])
+  const selectCls = 'w-full px-3 py-2 rounded-lg bg-surface-2 border border-border text-text text-sm focus:outline-none focus:ring-2 focus:ring-ibad focus:border-ibad/50'
+  if (loading) return <div className="text-sm text-text-dim flex items-center gap-2"><Icon name="Loader2" size={13} className="animate-spin" /> Loading destinations…</div>
+  if (err) return <div className="text-sm text-danger">{err}</div>
+  if (dests.length === 0) return <div className="text-sm text-text-dim">No destinations available.</div>
+  const chosen = dests.find(d => d.id === sel)
+  return (
+    <div className="space-y-3">
+      <div>
+        <label className="block text-[11px] uppercase tracking-wider text-text-dim mb-1">Destination</label>
+        <select value={sel} disabled={busy} className={selectCls} onChange={e => setSel(e.target.value)}>
+          {dests.map(d => (<option key={d.id} value={d.id}>{d.label}</option>))}
+        </select>
+      </div>
+      <div className="text-[11px] text-text-muted">{note}</div>
+      <button className="btn-primary w-full" disabled={busy || !sel}
+        onClick={() => onSubmit(sel, chosen?.label || sel)}>
+        {busy ? <Icon name="Loader2" size={13} className="animate-spin" /> : <Icon name={icon} size={13} />} {submitLabel}
+      </button>
     </div>
   )
 }

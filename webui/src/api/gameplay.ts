@@ -1695,6 +1695,25 @@ export function teleportToPlayer(sourcePawnId: number, targetPawnId: number) {
   })
 }
 
+// Named teleport / respawn destinations (maps + hubs) for the pickers.
+export interface TeleportDestination { id: string; label: string; map: string; partition: number }
+export function getTeleportDestinations() {
+  return api<{ ok: boolean; destinations: TeleportDestination[]; total: number; source: string }>(
+    '/api/gameplay/players/teleport-destinations')
+}
+// Teleport a player to a named map/hub. Offline-only on the server side.
+export function teleportToLocation(accountId: number, destination: string) {
+  return api<WriteResult>('/api/gameplay/players/teleport-to-location', {
+    method: 'POST', body: JSON.stringify({ account_id: accountId, destination }),
+  })
+}
+// Add a respawn point at a named destination (non-destructive). Offline-only.
+export function setRespawn(accountId: number, destination: string) {
+  return api<WriteResult>('/api/gameplay/players/set-respawn', {
+    method: 'POST', body: JSON.stringify({ account_id: accountId, destination }),
+  })
+}
+
 // Progression Unlock — completes the DA_FQ_ClimbTheRanks journey nodes for the
 // chosen faction and writes the faction tier tags + reputation. preset picks how
 // far: 'ch3_start' (tier 5) or 'rank19_eligible' (tier 19, +Landsraad nodes).
