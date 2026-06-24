@@ -680,11 +680,12 @@ function Invoke-DunePlayerTeleportToPlayer {
     if ($SourcePawnId -le 0) { return @{ ok = $false; error = 'source_pawn_id is required.' } }
     if ($TargetPawnId -le 0) { return @{ ok = $false; error = 'target_pawn_id is required.' } }
 
-    # target pawn coords (needed for both online and offline paths)
+    # target pawn coords (needed for both online and offline paths). Coords live in
+    # the `transform` composite (transform.location.x/y/z), NOT a `location` column.
     $tgtSql = @"
-SELECT (location->>'X')::float8 AS x,
-       (location->>'Y')::float8 AS y,
-       (location->>'Z')::float8 AS z
+SELECT (transform).location.x AS x,
+       (transform).location.y AS y,
+       (transform).location.z AS z
 FROM dune.actors WHERE id = $TargetPawnId::bigint;
 "@
     $tr = Invoke-DuneSqlQuery -Ip $Ip -Sql $tgtSql -ReadOnly $true -MaxRows 1 -TimeoutSec 10
@@ -740,6 +741,96 @@ FROM dune.actors WHERE id = $TargetPawnId::bigint;
         message = "Teleported offline pawn $SourcePawnId -> ($tx, $ty, $tz) on partition $partId."
         path = 'offline'
         partition = $partId; x = $tx; y = $ty; z = $tz
+    }
+}
+
+# ---------------------------------------------------------------------------
+# Named teleport / respawn destinations. Each entry is a navigable map or hub
+# with a verified world-partition id + an anchor coordinate (pulled from real
+# actors on that map). `partition` drives admin_move_offline_player_to_partition
+# for teleport; `respawnMap` is the dune.actors.map-style name written into a
+# respawn row. Coords/partitions verified live 2026-06-23 against build 23654991.
+# ---------------------------------------------------------------------------
+$script:DuneTeleportDestinations = @(
+    [ordered]@{ id = 'hagga_basin';   label = 'Hagga Basin';     respawnMap = 'HaggaBasin';       partition = 1;  x = 163939;  y = 316397;  z = 2939  }
+    [ordered]@{ id = 'deep_desert';   label = 'Deep Desert';     respawnMap = 'DeepDesert';       partition = 8;  x = -265065; y = -35981;  z = 2720  }
+    [ordered]@{ id = 'arrakeen';      label = 'Arrakeen';        respawnMap = 'Arrakeen';         partition = 3;  x = 6038;    y = 417;     z = 52228 }
+    [ordered]@{ id = 'harko_village'; label = 'Harko Village';   respawnMap = 'HarkoVillage';     partition = 4;  x = 3630;    y = 1876;    z = 13794 }
+    [ordered]@{ id = 'ruins_tsimpo';  label = 'Ruins of Tsimpo'; respawnMap = 'TheRuinsOfTsimpo'; partition = 28; x = 13393;   y = 16955;   z = 1710  }
+)
+
+function Get-DuneTeleportDestinations {
+    $list = @()
+    foreach ($d in $script:DuneTeleportDestinations) {
+        $list += [ordered]@{ id = [string]$d.id; label = [string]$d.label; map = [string]$d.respawnMap; partition = [int64]$d.partition }
+    }
+    return $list
+}
+
+function Get-DuneTeleportDestinationById {
+    param([string]$Id)
+    $key = ([string]$Id).Trim()
+    foreach ($d in $script:DuneTeleportDestinations) { if ($d.id -eq $key) { return $d } }
+    return $null
+}
+
+# Teleport a player to a named map/hub destination. Offline-only at the route
+# layer: this writes the player's partition + location, which the game caches in
+# RAM while connected. Resolves the source by account -> FLS id, then calls the
+# same admin_move_offline_player_to_partition primitive the teleport-to-player
+# offline path uses.
+function Invoke-DunePlayerTeleportToLocation {
+    param([string]$Ip, [long]$AccountId, [string]$Destination)
+    if ($AccountId -le 0) { return @{ ok = $false; error = 'account_id is required.' } }
+    $dest = Get-DuneTeleportDestinationById -Id $Destination
+    if (-not $dest) { return @{ ok = $false; error = "unknown destination '$Destination'." } }
+
+    $fls = Get-DuneRawFuncomId -Ip $Ip -AccountId $AccountId
+    if (-not $fls.ok) { return @{ ok = $false; error = $fls.error } }
+    $safeFls = ConvertTo-DuneSqlString $fls.funcom_id
+    $x = [double]$dest.x; $y = [double]$dest.y; $z = [double]$dest.z; $part = [int64]$dest.partition
+
+    $sql = "SELECT dune.admin_move_offline_player_to_partition('$safeFls'::text, $part::bigint, ROW($x::float8, $y::float8, $z::float8)::dune.vector);"
+    $r = Invoke-DuneSqlQuery -Ip $Ip -Sql $sql -ReadOnly $false -MaxRows 1 -TimeoutSec 30
+    if (-not $r.ok) { return @{ ok = $false; error = "teleport to location: $($r.error)" } }
+    return @{
+        ok = $true
+        message = "Teleported to $($dest.label) (partition $part) - takes effect on next login."
+        destination = [string]$dest.id; partition = $part; x = $x; y = $y; z = $z
+    }
+}
+
+# Add a respawn point at a named destination for a player. NON-DESTRUCTIVE: this
+# INSERTs a new Transform respawn row and leaves the player's existing respawn
+# points intact. We deliberately do NOT call dune.update_respawn_locations(),
+# which DELETES any existing rows not present in its input array. last_used set
+# to now so the new point sorts as the most recent. Offline-only at the route.
+function Invoke-DunePlayerSetRespawn {
+    param([string]$Ip, [long]$AccountId, [string]$Destination)
+    if ($AccountId -le 0) { return @{ ok = $false; error = 'account_id is required.' } }
+    $dest = Get-DuneTeleportDestinationById -Id $Destination
+    if (-not $dest) { return @{ ok = $false; error = "unknown destination '$Destination'." } }
+
+    $x = [double]$dest.x; $y = [double]$dest.y; $z = [double]$dest.z
+    $safeMap = ConvertTo-DuneSqlString ([string]$dest.respawnMap)
+    $safeGroup = ConvertTo-DuneSqlString ("Admin: " + [string]$dest.label)
+
+    $sql = @"
+INSERT INTO dune.player_respawn_locations
+    (id, account_id, "group", locator_transform, locator_actor_id, locator_name, locator_name_index, map, dimension, last_used_timestamp)
+VALUES (
+    gen_random_uuid(), $AccountId::bigint, '$safeGroup',
+    ROW(ROW($x::float8, $y::float8, $z::float8)::dune.vector, ROW(0,0,0,1)::dune.quaternion)::dune.transform,
+    NULL, NULL, 0, '$safeMap', 0,
+    (extract(epoch from now()) * 1000)::bigint
+);
+"@
+    $r = Invoke-DuneSqlQuery -Ip $Ip -Sql $sql -ReadOnly $false -MaxRows 1 -TimeoutSec 30
+    if (-not $r.ok) { return @{ ok = $false; error = "set respawn: $($r.error)" } }
+    return @{
+        ok = $true
+        message = "Added a respawn point at $($dest.label) - takes effect on next login."
+        destination = [string]$dest.id
     }
 }
 
@@ -972,7 +1063,13 @@ VALUES ($AccountId::bigint, '$safeNode', false,
         $updated = 1
     }
 
-    $tags = Get-DuneTagsForJourneyNodeSubtree -NodeId $NodeId
+    $tags = @(Get-DuneTagsForJourneyNodeSubtree -NodeId $NodeId)
+    # Reward-unblock tags (e.g. the Find the Fremen 3rd active-ability slot +
+    # prescience) are gated by Journey.RewardsUnblocked, which the game sets via a
+    # cutscene - NOT by journey-node completion - so it is not in the node->tag map.
+    # Apply it here so EVERY completion path (Apply Quick Preset, Unlock Main Quest,
+    # single Complete) grants it. See $script:DuneJourneyRewardUnblockRoots.
+    $tags = @($tags + @(Get-DuneRewardUnblockTagsForJourneyNode -NodeId $NodeId) | Select-Object -Unique)
     $bumpRes = Invoke-DuneApplyTagsWithTierBump -Ip $Ip -AccountId $AccountId -Tags $tags
     if (-not $bumpRes.ok) { return @{ ok = $false; error = $bumpRes.error } }
 
@@ -1285,17 +1382,9 @@ function Invoke-DunePlayerUnlockMainQuest {
     }
     $r = Invoke-DunePlayerCompleteJourneyNode -Ip $Ip -AccountId $AccountId -NodeId $Quest
     if (-not $r.ok) { return $r }
-
-    # Apply Journey.RewardsUnblocked for FindTheFremen completion (unlocks 3rd ability slot, prescience, etc.)
-    # This tag is normally set by game code during cutscenes, not by journey node completion.
-    if ($Quest -eq 'DA_MQ_FindTheFremen') {
-        $extraTags = @('Journey.RewardsUnblocked')
-        $bumpRes = Invoke-DuneApplyTagsWithTierBump -Ip $Ip -AccountId $AccountId -Tags $extraTags
-        if (-not $bumpRes.ok) {
-            return @{ ok = $false; error = "apply RewardsUnblocked: $($bumpRes.error)" }
-        }
-    }
-
+    # Journey.RewardsUnblocked (Find the Fremen 3rd ability slot + prescience) is now
+    # applied centrally inside Invoke-DunePlayerCompleteJourneyNode, so no per-quest
+    # special-case is needed here.
     return @{ ok = $true; message = "Unlocked main quest $Quest - $($r.nodes) node(s) completed - takes effect on next login"; nodes = $r.nodes }
 }
 
@@ -1353,8 +1442,8 @@ WHERE a.id = $pawnID::bigint
 # Journey node -> awarded recipe map. Completing a journey node in-game grants a
 # crafting recipe into the pawn's TechKnowledge, and that award (not a tag) is
 # what unlocks the related ability slot / gear. This is the single source of
-# truth so EVERY path that completes journey nodes (Apply Aql Trial, Unlock Main
-# Quest, Apply Quick Preset, single Complete) grants the recipe via the shared
+# truth so EVERY path that completes journey nodes (Apply Quick Preset, Unlock Main
+# Quest, single Complete) grants the recipe via the shared
 # Invoke-DunePlayerCompleteJourneyNode chokepoint. Mirrors the JourneySets.Fremkit.*
 # tag map in dune-tags.json; recipe ItemKeys verified against live pawn data.
 # ---------------------------------------------------------------------------
@@ -1383,71 +1472,32 @@ function Get-DuneRecipesForJourneyNodeSubtree {
 }
 
 # ---------------------------------------------------------------------------
-# Aql trial completion deltas. Each entry is the FULL set of account changes
-# observed in a before/after snapshot diff when the trial is completed in-game:
-# the journey node to complete, the gameplay tags that flip (including the
-# BigMoments cinematic triggers), and the recipe awarded into pawn TechKnowledge
-# (the award that unlocks the empty ability slot the trial opens). Applying all
-# three reproduces a physical completion for a character that a tag-only edit
-# left stuck, WITHOUT touching later trials - only the named subtree is
-# completed, so the next trial proceeds normally in-game. Only trials with a
-# measured diff are listed; add more as they are snapshotted.
+# Journey node -> reward-unblock tag. Some journey rewards (notably the Find the
+# Fremen 3rd active-ability slot + prescience) are gated by a tag the game sets
+# during a cutscene - Journey.RewardsUnblocked - NOT by journey-node completion.
+# So completing the questline through the tool leaves those rewards stuck unless
+# we also flip this tag. Single source of truth: any path that completes a node
+# at or under one of these roots (Apply Quick Preset, Unlock Main Quest, single
+# Complete) flips the tag via the shared Invoke-DunePlayerCompleteJourneyNode
+# chokepoint. Add roots here as more cutscene-gated rewards are identified.
 # ---------------------------------------------------------------------------
-$script:DuneAqlTrialDeltas = [ordered]@{
-    '4' = @{
-        label       = 'Trial 4 of Aql (unlocks 3rd ability slot)'
-        journeyNode = 'DA_MQ_FindTheFremen.FourthTest'
-        tags        = @('BigMoments.Bike.Trigger', 'BigMoments.Stillsuit.Trigger', 'JourneySets.Fremkit.CryssKnife')
-        recipe      = 'RCP_Crysknife_Recipe'
+$script:DuneJourneyRewardUnblockRoots = @('DA_MQ_FindTheFremen')
+
+# Returns the reward-unblock tags to apply when completing $NodeId, matched if the
+# node is one of the roots, a descendant of a root, or an ancestor that contains a
+# root (completing the whole questline). De-duplicated.
+function Get-DuneRewardUnblockTagsForJourneyNode {
+    param([string]$NodeId)
+    $out = New-Object System.Collections.Generic.List[string]
+    foreach ($root in $script:DuneJourneyRewardUnblockRoots) {
+        if ($NodeId -eq $root -or
+            $NodeId.StartsWith($root + '.') -or
+            $root.StartsWith($NodeId + '.')) {
+            [void]$out.Add('Journey.RewardsUnblocked')
+            break
+        }
     }
-}
-
-function Get-DuneAqlTrialCatalog {
-    $list = @()
-    foreach ($k in $script:DuneAqlTrialDeltas.Keys) {
-        $d = $script:DuneAqlTrialDeltas[$k]
-        $list += @{ id = $k; label = [string]$d.label; node = [string]$d.journeyNode; tags = @($d.tags); recipe = [string]$d.recipe }
-    }
-    return $list
-}
-
-# Apply the full snapshot diff for an Aql trial: complete the journey subtree
-# (which, via the shared node->recipe map, also grants the awarded recipe that
-# unlocks the ability slot) and apply the extra cinematic-trigger tags the
-# node->tag map doesn't cover. Offline-only at the route layer. Next login.
-function Invoke-DuneApplyAqlTrial {
-    param([string]$Ip, [long]$AccountId, [string]$Trial)
-    if ($AccountId -le 0) { return @{ ok = $false; error = 'account_id is required.' } }
-    if (-not $Trial) { return @{ ok = $false; error = 'trial is required.' } }
-    $key = ([string]$Trial).Trim()
-    if (-not $script:DuneAqlTrialDeltas.Contains($key)) {
-        return @{ ok = $false; error = "unknown Aql trial '$Trial'." }
-    }
-    $delta = $script:DuneAqlTrialDeltas[$key]
-
-    # 1) Complete the journey node subtree (also applies its mapped reward tags).
-    #    Scoped to this trial's subtree only, so later trials are untouched.
-    $jr = Invoke-DunePlayerCompleteJourneyNode -Ip $Ip -AccountId $AccountId -NodeId ([string]$delta.journeyNode)
-    if (-not $jr.ok) { return @{ ok = $false; error = $jr.error } }
-
-    # 2) Apply the remaining diff tags (e.g. the BigMoments cinematic triggers)
-    #    that the node-to-tag map does not cover.
-    $tags = @($delta.tags)
-    if ($tags.Count -gt 0) {
-        $tr = Invoke-DuneApplyTagsWithTierBump -Ip $Ip -AccountId $AccountId -Tags $tags
-        if (-not $tr.ok) { return @{ ok = $false; error = "apply trial tags: $($tr.error)" } }
-    }
-
-    # 3) The journey completion in step 1 already granted this trial's recipe via
-    #    the shared node->recipe map (Get-DuneRecipesForJourneyNodeSubtree), which
-    #    is what unlocks the empty ability slot the trial opens.
-    $recipeCount = [int]$jr.recipes
-
-    return @{
-        ok      = $true
-        message = "Applied $($delta.label): journey subtree completed, $($tags.Count) extra tag(s), $recipeCount recipe(s) - takes effect on next login"
-        trial   = $key
-    }
+    return @($out)
 }
 
 function Invoke-DunePlayerSetStarterClass {

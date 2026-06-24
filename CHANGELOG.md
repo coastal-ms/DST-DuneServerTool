@@ -13,11 +13,45 @@ here cover everything those tags shipped.
 
 ## [Unreleased]
 
+## [12.12.0] - 2026-06-24
+
+Consolidated stable baseline: rolls the 12.11.1 test line (teleport/respawn, DNAT
+self-heal, Find-the-Fremen rewards) and the service-mode console + VM-command
+hardening into one release, and confirms compatibility with the latest game patch.
+
+### Compatibility
+
+- **Verified compatible with Dune: Awakening game patch 1.4.10.0** (and Funcom's
+  follow-up server hotfix). All DST gameplay surfaces — Players, Bases, Items /
+  Give Item·Kit, Landsraad, specialization XP, currency, and the teleport /
+  set-respawn writes — were validated against the patched server database.
+
+### Added
+
+- **Teleport players to maps & hubs, and set their respawn — by name, no IDs.** Gameplay Admin → Players → Live now has **Teleport To Location** (move an offline player to Hagga Basin, Deep Desert, Arrakeen, Harko Village, or the Ruins of Tsimpo) and **Set Respawn Location** (add a respawn point at any of those hubs, keeping the player's existing ones). Both pick the destination from a friendly dropdown. **Teleport To Player** was also fixed to choose the target from a player-name dropdown instead of asking for a raw pawn id. All three are offline-only (these writes are RAM-authoritative while the player is connected) and take effect on next login.
+- **DNAT self-heal watchdog — fixes remote "Connecting" after a pod restart.** Every battlegroup Start/Restart now installs (and refreshes) a tiny watchdog on the VM that reconciles the host NAT rules — RabbitMQ login (`public:31982` → mq-game pod) and the game ports (`7777-7810`) — from the live cluster state every minute. Previously a pod-only restart (no host reboot) could leave the RabbitMQ rule pointing at a dead pod IP, so remote players hung on **"Connecting"** until the next reboot. The watchdog derives the public IP from the node's ExternalIP (never hardcoded) and retires the old hardcoded-IP sync script. All persistence runs in a staged Linux script, so the packaged installer stays free of the persistence pattern that previously tripped a Defender false positive.
+
+### Changed
+
+- **Renamed the VM lifecycle commands to "Start All" / "Stop All" / "Reboot All"** (was "… Full Stack") across the Commands page, the CLI menu, and the mobile app — they bring up or take down the whole stack (VM + battlegroup), so "All" reads clearer.
+- **Removed the redundant "Stop VM Only" command.** It was only ever enabled while the battlegroup was already stopped — exactly when **Stop All** also just powers off the VM — so it was redundant. **Stop All** handles every case (it skips the battlegroup-stop step when nothing is running, then powers off the VM). "Start VM Only" stays, since bringing the VM up without the battlegroup is still useful for running an update.
+- **Find the Fremen progression is now one action that grants the full reward set.** Completing the "Find the Fremen" questline (via **Apply Quick Preset → Complete: Find the Fremen** or **Unlock Main Quest**) now also applies `Journey.RewardsUnblocked` — the cutscene-gated tag that opens the **3rd active-ability slot + prescience** — alongside the journey completion, all Fremkit recipes, and the questline tags. Previously the reward tag was set inconsistently (only by Unlock Main Quest), so the preset path left the two ability rewards stuck. `Journey.RewardsUnblocked` is now applied centrally in the shared journey-completion path, so every completion route grants it. (Reported by Decker.)
+- **Removed the separate "Apply Aql Trial" action.** It reproduced a single trial from a one-off DB snapshot that also captured cross-questline noise; the consolidated full-questline completion above replaces it correctly.
+- **Apply Quick Preset and Complete journey node now require the player to be offline**, matching Unlock Main Quest / Unlock Trainers. These writes (journey state + the pawn TechKnowledge recipe blob + reward tags) are RAM-authoritative while a player is connected, so an online edit was silently overwritten on logout; the tool now blocks it with a clear message instead.
+
+### Fixed
+
+- **Console windows (server `update`, Funcom `battlegroup.bat`, `edit`) appear when the "Keep serving while DST is closed" service is active.** That service runs the backend in Windows **Session 0**, where a normal `Start-Process` opened the console on the invisible Session 0 desktop — so clicking update / edit / Open battlegroup.bat looked like it did nothing (no window, no UAC). DST now detects Session 0 and relays these elevated launches into the signed-in user's interactive session via a one-shot Interactive/Highest scheduled task. Interactive (non-service) launches are unchanged. (Also released as 12.11.2.)
+- **`stop-vm` (CLI escape hatch) escalates to a hard power-off and no longer errors on an already-off VM.** It previously ran a bare `Stop-VM -Force` with no error handling: on an already-off VM it threw, and when the guest didn't honor the Hyper-V graceful shutdown it wrote an error — either way the in-app window flashed shut. It now reuses the same graceful→hard-`TurnOff` escalation as Stop All.
+- **Teleport To Player coordinate lookup.** It read a player's position from a `location` column that no longer exists on the current game build (coordinates moved into the `transform` composite), so the teleport silently failed; it now reads `transform.location`.
+
 ## [12.11.2] - 2026-06-24
 
 ### Fixed
 
-- **Console windows (server `update`, Funcom `battlegroup.bat`, `edit`) now appear when the "Keep serving while DST is closed" service is active.** That service runs the backend in Windows **Session 0**, where a normal `Start-Process` opened the console on the invisible Session 0 desktop — so clicking update / edit / Open battlegroup.bat looked like it did nothing (no window, no UAC). DST now detects Session 0 and relays these elevated launches into the signed-in user's interactive session via a one-shot Interactive/Highest scheduled task, so the window is visible. Interactive (non-service) launches are unchanged. Regression introduced with service mode in 12.11.0.
+- **Console windows now appear when the "Keep serving while DST is closed" service is active** — the backend runs in Windows Session 0, where launches opened on the invisible Session 0 desktop. DST now relays them into the interactive session. Regression introduced with service mode in 12.11.0. (Superseded by 12.12.0.)
+
+## [12.11.0] - 2026-06-23
 
 ## [12.11.0] - 2026-06-23
 
