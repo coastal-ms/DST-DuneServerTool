@@ -100,6 +100,63 @@ Register-DuneRoute -Method POST -Path '/api/gameplay/players/teleport-to-player'
     }
 }
 
+# GET /api/gameplay/players/teleport-destinations  (named maps/hubs for the UI)
+Register-DuneRoute -Method GET -Path '/api/gameplay/players/teleport-destinations' -Handler {
+    param($req, $res, $routeParams, $body)
+    try {
+        $dests = Get-DuneTeleportDestinations
+        Write-DuneJson -Response $res -Body @{ destinations = @($dests); total = @($dests).Count; source = 'catalog' }
+    } catch {
+        Write-DuneError -Response $res -Status 500 -Message "Teleport destinations failed: $($_.Exception.Message)"
+    }
+}
+
+# POST /api/gameplay/players/teleport-to-location  { account_id, destination }
+# Offline-only: writes the player's partition + location (RAM-authoritative while
+# connected). Moves the player to a named map/hub from the destination catalog.
+Register-DuneRoute -Method POST -Path '/api/gameplay/players/teleport-to-location' -Handler {
+    param($req, $res, $routeParams, $body)
+    try {
+        $acc = Get-DuneBodyInt -Body $body -Name 'account_id'
+        $dest = [string](Get-DuneBodyValue -Body $body -Name 'destination')
+        if ($null -eq $acc -or $acc -le 0) { Write-DuneError -Response $res -Status 400 -Message 'account_id is required.'; return }
+        if (-not $dest) { Write-DuneError -Response $res -Status 400 -Message 'destination is required.'; return }
+        Invoke-DunePlayerWriteRoute -Response $res -Action {
+            param($ip)
+            $off = Test-DunePlayerOfflineByAccount -Ip $ip -AccountId $acc
+            if (-not $off.ok) {
+                return @{ ok = $false; error = "Player must be offline to teleport to a location. $($off.reason)" }
+            }
+            Invoke-DunePlayerTeleportToLocation -Ip $ip -AccountId $acc -Destination $dest
+        }
+    } catch {
+        Write-DuneError -Response $res -Status 500 -Message "Teleport to location failed: $($_.Exception.Message)"
+    }
+}
+
+# POST /api/gameplay/players/set-respawn  { account_id, destination }
+# Offline-only: adds a respawn point at a named destination (non-destructive -
+# the player's existing respawn points are preserved).
+Register-DuneRoute -Method POST -Path '/api/gameplay/players/set-respawn' -Handler {
+    param($req, $res, $routeParams, $body)
+    try {
+        $acc = Get-DuneBodyInt -Body $body -Name 'account_id'
+        $dest = [string](Get-DuneBodyValue -Body $body -Name 'destination')
+        if ($null -eq $acc -or $acc -le 0) { Write-DuneError -Response $res -Status 400 -Message 'account_id is required.'; return }
+        if (-not $dest) { Write-DuneError -Response $res -Status 400 -Message 'destination is required.'; return }
+        Invoke-DunePlayerWriteRoute -Response $res -Action {
+            param($ip)
+            $off = Test-DunePlayerOfflineByAccount -Ip $ip -AccountId $acc
+            if (-not $off.ok) {
+                return @{ ok = $false; error = "Player must be offline to set a respawn point. $($off.reason)" }
+            }
+            Invoke-DunePlayerSetRespawn -Ip $ip -AccountId $acc -Destination $dest
+        }
+    } catch {
+        Write-DuneError -Response $res -Status 500 -Message "Set respawn failed: $($_.Exception.Message)"
+    }
+}
+
 # ---------------------------------------------------------------------------
 # §6 — Progression / journey / contracts / jobs / codex / tutorials
 # ---------------------------------------------------------------------------
@@ -147,7 +204,17 @@ Register-DuneRoute -Method POST -Path '/api/gameplay/players/progression/apply-p
         $presetId = [string](Get-DuneBodyValue -Body $body -Name 'preset_id')
         if ($null -eq $acc -or $acc -le 0) { Write-DuneError -Response $res -Status 400 -Message 'account_id is required.'; return }
         if (-not $presetId) { Write-DuneError -Response $res -Status 400 -Message 'preset_id is required.'; return }
-        Invoke-DunePlayerWriteRoute -Response $res -Action { param($ip) Invoke-DunePlayerApplyProgressionPreset -Ip $ip -AccountId $acc -PresetId $presetId }
+        Invoke-DunePlayerWriteRoute -Response $res -Action {
+            param($ip)
+            # Offline-only: completing journey nodes writes journey_story_node rows,
+            # the pawn TechKnowledge recipe blob, and reward tags - all RAM-authoritative
+            # while the player is connected, so an online edit is overwritten on logout.
+            $off = Test-DunePlayerOfflineByAccount -Ip $ip -AccountId $acc
+            if (-not $off.ok) {
+                return @{ ok = $false; error = "Player must be offline to apply a progression preset. $($off.reason)" }
+            }
+            Invoke-DunePlayerApplyProgressionPreset -Ip $ip -AccountId $acc -PresetId $presetId
+        }
     } catch {
         Write-DuneError -Response $res -Status 500 -Message "Apply preset failed: $($_.Exception.Message)"
     }
@@ -161,46 +228,18 @@ Register-DuneRoute -Method POST -Path '/api/gameplay/players/journey/complete' -
         $node = [string](Get-DuneBodyValue -Body $body -Name 'node_id')
         if ($null -eq $acc -or $acc -le 0) { Write-DuneError -Response $res -Status 400 -Message 'account_id is required.'; return }
         if (-not $node) { Write-DuneError -Response $res -Status 400 -Message 'node_id is required.'; return }
-        Invoke-DunePlayerWriteRoute -Response $res -Action { param($ip) Invoke-DunePlayerCompleteJourneyNode -Ip $ip -AccountId $acc -NodeId $node }
-    } catch {
-        Write-DuneError -Response $res -Status 500 -Message "Complete journey failed: $($_.Exception.Message)"
-    }
-}
-
-# GET /api/gameplay/players/aql-trials  (Aql trial unlock catalog for the UI)
-Register-DuneRoute -Method GET -Path '/api/gameplay/players/aql-trials' -Handler {
-    param($req, $res, $routeParams, $body)
-    try {
-        $trials = Get-DuneAqlTrialCatalog
-        Write-DuneJson -Response $res -Body @{ trials = $trials; total = $trials.Count; source = 'catalog' }
-    } catch {
-        Write-DuneError -Response $res -Status 500 -Message "Aql trials catalog failed: $($_.Exception.Message)"
-    }
-}
-
-# POST /api/gameplay/players/apply-aql-trial  { account_id, trial }
-# Offline-only: writes the pawn TechKnowledge blob, which is RAM-authoritative
-# while the player is online. Reproduces the full snapshot diff of completing an
-# Aql trial - journey subtree + tags + the awarded recipe that unlocks the
-# ability slot - for a character a tag-only edit left stuck. Only the named
-# trial's subtree is completed, so later trials proceed normally in-game.
-Register-DuneRoute -Method POST -Path '/api/gameplay/players/apply-aql-trial' -Handler {
-    param($req, $res, $routeParams, $body)
-    try {
-        $acc = Get-DuneBodyInt -Body $body -Name 'account_id'
-        $trial = [string](Get-DuneBodyValue -Body $body -Name 'trial')
-        if ($null -eq $acc -or $acc -le 0) { Write-DuneError -Response $res -Status 400 -Message 'account_id is required.'; return }
-        if (-not $trial) { Write-DuneError -Response $res -Status 400 -Message 'trial is required.'; return }
         Invoke-DunePlayerWriteRoute -Response $res -Action {
             param($ip)
+            # Offline-only: same RAM-authoritative journey/TechKnowledge writes as the
+            # preset path - an online edit is overwritten when the player logs out.
             $off = Test-DunePlayerOfflineByAccount -Ip $ip -AccountId $acc
             if (-not $off.ok) {
-                return @{ ok = $false; error = "Player must be offline to apply an Aql trial. $($off.reason)" }
+                return @{ ok = $false; error = "Player must be offline to complete a journey node. $($off.reason)" }
             }
-            Invoke-DuneApplyAqlTrial -Ip $ip -AccountId $acc -Trial $trial
+            Invoke-DunePlayerCompleteJourneyNode -Ip $ip -AccountId $acc -NodeId $node
         }
     } catch {
-        Write-DuneError -Response $res -Status 500 -Message "Apply Aql trial failed: $($_.Exception.Message)"
+        Write-DuneError -Response $res -Status 500 -Message "Complete journey failed: $($_.Exception.Message)"
     }
 }
 
