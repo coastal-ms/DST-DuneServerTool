@@ -25,20 +25,20 @@ import {
   resetAllKeystones, resetAllSpecs, resetJourney, resetProgressionLive, resetSpec,
   restoreDestroyed,
   setFactionTier, setPlayerTags, setSkillPoints,
-  setStarterClass, teleportToPlayer, updatePlayerTags, wipeCodex, wipeJourney,
+  setStarterClass, teleportToPlayer, teleportToLocation, setRespawn, getTeleportDestinations, getPlayers, updatePlayerTags, wipeCodex, wipeJourney,
   chatWhisper, isValidTemplateId, getItemCatalog,
   parseTcnoPackageText,
   giveItems, getItemPackages, saveItemPackage, deleteItemPackage,
   getLandsraadOverview, getLandsraadPlayerContributions, setLandsraadContribution,
   getPlayerJourneyNodes, completeJourneyNode, resetJourneyNode,
   getTrainerCatalog, getTrainerStatus, unlockTrainer, resetTrainerSkills,
-  getMainQuestCatalog, unlockMainQuest, getAqlTrials, applyAqlTrial,
+  getMainQuestCatalog, unlockMainQuest,
   getVehicleKitCatalog,
   type Player, type PlayerEvent, type PlayerStats, type ProgressionPreset, type SpecTrackFull,
   type CatalogItem, type ItemPackage, type GiveItemEntry,
   type LandsraadHouse, type LandsraadIniSetting,
-  type JourneyNode, type TrainerInfo, type TrainerStatus, type MainQuestInfo, type AqlTrialInfo,
-  type PlayerVehicleRow,
+  type JourneyNode, type TrainerInfo, type TrainerStatus, type MainQuestInfo,
+  type PlayerVehicleRow, type TeleportDestination,
   type VehicleTemplate, type VehicleKitCatalog,
 } from '../../../api/gameplay'
 import { fmtNum, fmtSolari } from '../shared'
@@ -511,7 +511,7 @@ interface ActionDef {
   liveOnly?: boolean      // requires player to be online (RMQ path)
   offlineOnly?: boolean   // requires player to be offline (DB write the game caches in memory)
   fields?: ActionField[]
-  custom?: 'give-item' | 'grant-reward' | 'whisper' | 'spawn-vehicle' | 'quick-presets' | 'vehicle-kit' | 'give-package' | 'cheat-scripts' | 'dev-scripts' | 'unlock-trainers' | 'unlock-mainquest' | 'progression-unlock' | 'refuel-vehicle' | 'starter-class' | 'update-tags' | 'aql-trial'
+  custom?: 'give-item' | 'grant-reward' | 'whisper' | 'spawn-vehicle' | 'quick-presets' | 'vehicle-kit' | 'give-package' | 'cheat-scripts' | 'dev-scripts' | 'unlock-trainers' | 'unlock-mainquest' | 'progression-unlock' | 'refuel-vehicle' | 'starter-class' | 'update-tags' | 'teleport-player' | 'teleport-location' | 'set-respawn'
   balance?: 'solari' | 'scrip' | 'intel'  // show the player's current balance read-only above the form
   confirm?: (p: Player) => string  // confirm message; if returns '' no prompt
   doubleConfirm?: boolean // also requires a typed "i acknowledge" prompt inside run()
@@ -559,8 +559,8 @@ const ACTIONS: ActionDef[] = [
       { key: 'tier',    label: 'Tier (0-20)', type: 'number', placeholder: '10', min: 0, max: 20 },
     ],
     run: (p, v) => setFactionTier(p.controller_id, String(v.faction || 'atreides').trim(), Number(v.tier) || 0) },
-  { id: 'apply-progression-preset', group: 'Progression', label: 'Apply Quick Preset', icon: 'Zap', custom: 'quick-presets',
-    rowNote: 'Completes a story/journey chapter instantly',
+  { id: 'apply-progression-preset', group: 'Progression', label: 'Apply Quick Preset', icon: 'Zap', custom: 'quick-presets', offlineOnly: true,
+    rowNote: 'Completes a story/journey chapter instantly — incl. Find the Fremen (3rd ability slot + prescience). Player must be offline.',
     run: () => Promise.resolve({ message: '' }) },
   { id: 'progression-unlock', group: 'Progression', label: 'Progression Unlock', icon: 'Milestone', custom: 'progression-unlock',
     rowNote: 'Completes DA_FQ_ClimbTheRanks journey nodes + writes faction tier tags',
@@ -570,9 +570,6 @@ const ACTIONS: ActionDef[] = [
     run: () => Promise.resolve({ message: '' }) },
   { id: 'unlock-main-quest', group: 'Progression', label: 'Unlock Main Quest', icon: 'Flag', custom: 'unlock-mainquest',
     rowNote: 'Complete an entire main-quest story line',
-    run: () => Promise.resolve({ message: '' }) },
-  { id: 'apply-aql-trial', group: 'Progression', label: 'Apply Aql Trial', icon: 'Sparkles', custom: 'aql-trial',
-    rowNote: 'Reproduces an Aql trial completion — journey + tags + the recipe award that unlocks the ability slot',
     run: () => Promise.resolve({ message: '' }) },
   { id: 'reset-progression', group: 'Progression', label: 'Reset Progression (live)', icon: 'RotateCcw', liveOnly: true,
     rowNote: 'Single confirmation required',
@@ -634,9 +631,15 @@ const ACTIONS: ActionDef[] = [
   // ----- Live (RMQ) -----
   { id: 'kick', group: 'Live', label: 'Kick Player', icon: 'LogOut', liveOnly: true,
     run: p => kickPlayer({ actor_id: p.id }) },
-  { id: 'teleport', group: 'Live', label: 'Teleport To Player', icon: 'Move',
-    fields: [{ key: 'target', label: 'Target pawn id', type: 'number', placeholder: '67890' }],
-    run: (p, v) => teleportToPlayer(p.id, Number(v.target) || 0) },
+  { id: 'teleport', group: 'Live', label: 'Teleport To Player', icon: 'Move', custom: 'teleport-player',
+    rowNote: 'Move this player to another player (pick by name)',
+    run: () => Promise.resolve({ message: '' }) },
+  { id: 'teleport-location', group: 'Live', label: 'Teleport To Location', icon: 'MapPin', offlineOnly: true, custom: 'teleport-location',
+    rowNote: 'Move this player to a map or hub (Hagga Basin, Deep Desert, Arrakeen…). Player must be offline.',
+    run: () => Promise.resolve({ message: '' }) },
+  { id: 'set-respawn', group: 'Live', label: 'Set Respawn Location', icon: 'Tent', offlineOnly: true, custom: 'set-respawn',
+    rowNote: 'Add a respawn point at a map or hub (keeps existing ones). Player must be offline.',
+    run: () => Promise.resolve({ message: '' }) },
   { id: 'whisper', group: 'Live', label: 'Whisper', icon: 'MessageCircle', liveOnly: true, custom: 'whisper',
     run: () => Promise.resolve({ message: '' }) },
   { id: 'cheat-script', group: 'Live', label: 'Cheat Scripts', icon: 'Terminal', liveOnly: true, custom: 'cheat-scripts',
@@ -922,12 +925,6 @@ function ActionRow({ def, player, busy, stats, open, danger, onToggle, runAction
                 const r = await unlockMainQuest(player.account_id, quest)
                 return { message: r.message || `Unlocked main quest "${name}" for ${player.name}.` }
               })} />
-          ) : def.custom === 'aql-trial' ? (
-            <AqlTrialForm busy={busy}
-              onSubmit={(trial, label) => runAction(def, async () => {
-                const r = await applyAqlTrial(player.account_id, trial)
-                return { message: r.message || `Applied ${label} for ${player.name}.` }
-              })} />
           ) : def.custom === 'progression-unlock' ? (
             <ProgressionUnlockForm busy={busy}
               onUnlock={(faction, preset, presetName) => runAction(def, async () => {
@@ -964,12 +961,127 @@ function ActionRow({ def, player, busy, stats, open, danger, onToggle, runAction
           ) : def.custom === 'update-tags' ? (
             <UpdateTagsForm busy={busy} accountId={player.account_id} demo={false}
               onSubmit={(add, remove) => runAction(def, () => updatePlayerTags(player.account_id, add, remove))} />
+          ) : def.custom === 'teleport-player' ? (
+            <TeleportPlayerForm busy={busy} self={player}
+              onSubmit={(targetPawnId, targetName) => runAction(def, async () => {
+                const r = await teleportToPlayer(player.id, targetPawnId)
+                return { message: r.message || `Teleported ${player.name} to ${targetName}.` }
+              })} />
+          ) : def.custom === 'teleport-location' ? (
+            <DestinationForm busy={busy} submitLabel="Teleport To Location" icon="MapPin"
+              note="Moves the player to the chosen map/hub. Player must be offline; takes effect on next login."
+              onSubmit={(destId, destLabel) => runAction(def, async () => {
+                const r = await teleportToLocation(player.account_id, destId)
+                return { message: r.message || `Teleported ${player.name} to ${destLabel}.` }
+              })} />
+          ) : def.custom === 'set-respawn' ? (
+            <DestinationForm busy={busy} submitLabel="Set Respawn Location" icon="Tent"
+              note="Adds a respawn point at the chosen map/hub (existing respawn points are kept). Player must be offline; takes effect on next login."
+              onSubmit={(destId, destLabel) => runAction(def, async () => {
+                const r = await setRespawn(player.account_id, destId)
+                return { message: r.message || `Set ${player.name}'s respawn to ${destLabel}.` }
+              })} />
           ) : (
             <InlineForm busy={busy} submitLabel={def.label} fields={def.fields || []} note={balanceNote}
               onSubmit={v => runAction(def, () => def.run(player, v))} />
           )}
         </div>
       )}
+    </div>
+  )
+}
+
+// Teleport To Player — fetches the roster and picks the target by NAME (resolving
+// to the target's pawn id behind the scenes), so admins never type a raw pawn id.
+function TeleportPlayerForm({ busy, self, onSubmit }: {
+  busy: boolean; self: Player; onSubmit: (targetPawnId: number, targetName: string) => void
+}) {
+  const [players, setPlayers] = useState<Player[]>([])
+  const [sel, setSel] = useState('')
+  const [loading, setLoading] = useState(true)
+  const [err, setErr] = useState('')
+  useEffect(() => {
+    let alive = true
+    setLoading(true)
+    getPlayers()
+      .then(r => {
+        if (!alive) return
+        const list = (r.players || []).filter(p => p.id !== self.id)
+        setPlayers(list)
+        setSel(list[0] ? String(list[0].id) : '')
+      })
+      .catch(e => { if (alive) setErr(e instanceof Error ? e.message : String(e)) })
+      .finally(() => { if (alive) setLoading(false) })
+    return () => { alive = false }
+  }, [self.id])
+  const selectCls = 'w-full px-3 py-2 rounded-lg bg-surface-2 border border-border text-text text-sm focus:outline-none focus:ring-2 focus:ring-ibad focus:border-ibad/50'
+  if (loading) return <div className="text-sm text-text-dim flex items-center gap-2"><Icon name="Loader2" size={13} className="animate-spin" /> Loading players…</div>
+  if (err) return <div className="text-sm text-danger">{err}</div>
+  if (players.length === 0) return <div className="text-sm text-text-dim">No other players to teleport to.</div>
+  const chosen = players.find(p => String(p.id) === sel)
+  return (
+    <div className="space-y-3">
+      <div>
+        <label className="block text-[11px] uppercase tracking-wider text-text-dim mb-1">Teleport to player</label>
+        <select value={sel} disabled={busy} className={selectCls} onChange={e => setSel(e.target.value)}>
+          {players.map(p => (
+            <option key={p.id} value={String(p.id)}>
+              {(p.name && p.name.trim()) ? p.name : `Player ${p.id}`}{p.map ? ` — ${p.map}` : ''}{p.online_status && /online/i.test(p.online_status) ? ' (online)' : ''}
+            </option>
+          ))}
+        </select>
+      </div>
+      <button className="btn-primary w-full" disabled={busy || !sel}
+        onClick={() => onSubmit(Number(sel) || 0, (chosen?.name && chosen.name.trim()) ? chosen.name : `Player ${sel}`)}>
+        {busy ? <Icon name="Loader2" size={13} className="animate-spin" /> : <Icon name="Move" size={13} />} Teleport To Player
+      </button>
+    </div>
+  )
+}
+
+// Destination picker shared by Teleport To Location + Set Respawn — fetches the
+// named map/hub catalog and resolves to the destination id behind the scenes.
+function DestinationForm({ busy, submitLabel, icon, note, onSubmit }: {
+  busy: boolean; submitLabel: string; icon: string; note: string
+  onSubmit: (destId: string, destLabel: string) => void
+}) {
+  const [dests, setDests] = useState<TeleportDestination[]>([])
+  const [sel, setSel] = useState('')
+  const [loading, setLoading] = useState(true)
+  const [err, setErr] = useState('')
+  useEffect(() => {
+    let alive = true
+    setLoading(true)
+    getTeleportDestinations()
+      .then(r => {
+        if (!alive) return
+        const raw = r.destinations as TeleportDestination[] | TeleportDestination | undefined
+        const list = Array.isArray(raw) ? raw : raw ? [raw] : []
+        setDests(list)
+        setSel(list[0]?.id || '')
+      })
+      .catch(e => { if (alive) setErr(e instanceof Error ? e.message : String(e)) })
+      .finally(() => { if (alive) setLoading(false) })
+    return () => { alive = false }
+  }, [])
+  const selectCls = 'w-full px-3 py-2 rounded-lg bg-surface-2 border border-border text-text text-sm focus:outline-none focus:ring-2 focus:ring-ibad focus:border-ibad/50'
+  if (loading) return <div className="text-sm text-text-dim flex items-center gap-2"><Icon name="Loader2" size={13} className="animate-spin" /> Loading destinations…</div>
+  if (err) return <div className="text-sm text-danger">{err}</div>
+  if (dests.length === 0) return <div className="text-sm text-text-dim">No destinations available.</div>
+  const chosen = dests.find(d => d.id === sel)
+  return (
+    <div className="space-y-3">
+      <div>
+        <label className="block text-[11px] uppercase tracking-wider text-text-dim mb-1">Destination</label>
+        <select value={sel} disabled={busy} className={selectCls} onChange={e => setSel(e.target.value)}>
+          {dests.map(d => (<option key={d.id} value={d.id}>{d.label}</option>))}
+        </select>
+      </div>
+      <div className="text-[11px] text-text-muted">{note}</div>
+      <button className="btn-primary w-full" disabled={busy || !sel}
+        onClick={() => onSubmit(sel, chosen?.label || sel)}>
+        {busy ? <Icon name="Loader2" size={13} className="animate-spin" /> : <Icon name={icon} size={13} />} {submitLabel}
+      </button>
     </div>
   )
 }
@@ -1777,61 +1889,6 @@ function UnlockMainQuestForm({ busy, onSubmit }: { busy: boolean; onSubmit: (que
       <button className="btn-primary w-full" disabled={busy || !sel}
         onClick={() => onSubmit(sel, chosen?.name || sel)}>
         {busy ? <Icon name="Loader2" size={13} className="animate-spin" /> : <Icon name="Flag" size={13} />} Unlock Main Quest
-      </button>
-    </div>
-  )
-}
-
-// Apply Aql Trial — reproduces the full before/after snapshot diff of completing
-// an Aql trial: completes the journey subtree, applies the tags that flip, and
-// grants the recipe award that unlocks the ability slot. The recipe lives on the
-// pawn (RAM-authoritative while online), so this is offline-only and takes
-// effect on next login. Use it for a character a tag-only edit left stuck.
-function AqlTrialForm({ busy, onSubmit }: { busy: boolean; onSubmit: (trial: string, label: string) => void }) {
-  const [trials, setTrials] = useState<AqlTrialInfo[]>([])
-  const [sel, setSel] = useState('')
-  const [loading, setLoading] = useState(true)
-  const [err, setErr] = useState('')
-
-  useEffect(() => {
-    let alive = true
-    setLoading(true)
-    getAqlTrials()
-      .then(r => {
-        if (!alive) return
-        // ConvertTo-Json -Compress unwraps a single-element array into an object,
-        // so a one-trial catalog arrives as an object, not an array. Coerce.
-        const raw = r.trials as AqlTrialInfo[] | AqlTrialInfo | undefined
-        const list = Array.isArray(raw) ? raw : raw ? [raw] : []
-        setTrials(list)
-        setSel(list[0]?.id || '')
-      })
-      .catch(e => { if (alive) setErr(e instanceof Error ? e.message : String(e)) })
-      .finally(() => { if (alive) setLoading(false) })
-    return () => { alive = false }
-  }, [])
-
-  const chosen = trials.find(t => t.id === sel)
-  const selectCls = 'w-full px-3 py-2 rounded-lg bg-surface-2 border border-border text-text text-sm focus:outline-none focus:ring-2 focus:ring-ibad focus:border-ibad/50'
-
-  if (loading) return <div className="text-sm text-text-dim flex items-center gap-2"><Icon name="Loader2" size={13} className="animate-spin" /> Loading Aql trials…</div>
-  if (err) return <div className="text-sm text-danger">{err}</div>
-  if (trials.length === 0) return <div className="text-sm text-text-dim">No Aql trials available.</div>
-
-  return (
-    <div className="space-y-3">
-      <div>
-        <label className="block text-[11px] uppercase tracking-wider text-text-dim mb-1">Aql trial</label>
-        <select value={sel} disabled={busy} className={selectCls} onChange={e => setSel(e.target.value)}>
-          {trials.map(t => (<option key={t.id} value={t.id}>{t.label}</option>))}
-        </select>
-      </div>
-      <div className="text-[11px] text-text-muted">
-        Completes the trial's journey subtree, applies its tags, and grants the recipe award that unlocks the ability slot. Player must be offline; takes effect on next login. Later trials are untouched.
-      </div>
-      <button className="btn-primary w-full" disabled={busy || !sel}
-        onClick={() => onSubmit(sel, chosen?.label || sel)}>
-        {busy ? <Icon name="Loader2" size={13} className="animate-spin" /> : <Icon name="Sparkles" size={13} />} Apply Aql Trial
       </button>
     </div>
   )
