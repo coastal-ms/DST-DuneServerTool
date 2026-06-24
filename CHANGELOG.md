@@ -13,6 +13,12 @@ here cover everything those tags shipped.
 
 ## [Unreleased]
 
+## [12.11.2] - 2026-06-24
+
+### Fixed
+
+- **Console windows (server `update`, Funcom `battlegroup.bat`, `edit`) now appear when the "Keep serving while DST is closed" service is active.** That service runs the backend in Windows **Session 0**, where a normal `Start-Process` opened the console on the invisible Session 0 desktop — so clicking update / edit / Open battlegroup.bat looked like it did nothing (no window, no UAC). DST now detects Session 0 and relays these elevated launches into the signed-in user's interactive session via a one-shot Interactive/Highest scheduled task, so the window is visible. Interactive (non-service) launches are unchanged. Regression introduced with service mode in 12.11.0.
+
 ## [12.11.0] - 2026-06-23
 
 ### Added
