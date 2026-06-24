@@ -992,10 +992,10 @@ function Invoke-DuneDnatWatchdogInstall {
 
 $vmCommands = @(
     [pscustomobject]@{ Key = "a"; Name = "initial-setup";      Desc = "Run the initial VM setup" }
-    [pscustomobject]@{ Key = "c"; Name = "start-vm";           Label = "Start VM Only";    Desc = "Power on the VM only (no battlegroup) - useful for maintenance" }
-    [pscustomobject]@{ Key = "d"; Name = "startup";            Label = "Start Full Stack"; Desc = "Power on VM -> start battlegroup -> wait for overmap + survival maps" }
-    [pscustomobject]@{ Key = "e"; Name = "shutdown";           Label = "Stop Full Stack";  Desc = "Stop battlegroup -> power off VM (e.g. shut down for the night)" }
-    [pscustomobject]@{ Key = "f"; Name = "reboot";             Label = "Reboot Full Stack"; Desc = "Stop battlegroup -> restart VM -> start battlegroup (clean cycle)" }
+    [pscustomobject]@{ Key = "c"; Name = "start-vm";           Label = "Start VM Only";    Desc = "Power on the VM only (no battlegroup) - useful for maintenance or running an update" }
+    [pscustomobject]@{ Key = "d"; Name = "startup";            Label = "Start All";        Desc = "Power on VM -> start battlegroup -> wait for overmap + survival maps" }
+    [pscustomobject]@{ Key = "e"; Name = "shutdown";           Label = "Stop All";         Desc = "Stop battlegroup (if running) -> power off VM (e.g. shut down for the night)" }
+    [pscustomobject]@{ Key = "f"; Name = "reboot";             Label = "Reboot All";       Desc = "Stop battlegroup -> restart VM -> start battlegroup (clean cycle)" }
     [pscustomobject]@{ Key = "g"; Name = "rotate-ssh-key";     Desc = "Generate a new SSH key and replace the one authorized on the VM" }
     [pscustomobject]@{ Key = "h"; Name = "change-password";    Desc = "Change the password of the 'dune' user on the VM" }
     [pscustomobject]@{ Key = "i"; Name = "change-vm-ip";       Desc = "Change the VM's IP address or how it gets one (DHCP/static)" }
@@ -1307,9 +1307,29 @@ while ($true) {
     }
 
     if ($cmdName -eq "stop-vm") {
-        Write-Host "Stopping VM '$vmName'..." -ForegroundColor Cyan
-        Stop-VM -Name $vmName -Force | Out-Null
-        Write-Host "VM stopped." -ForegroundColor Green
+        $vmNow = Get-VM -Name $vmName -ErrorAction SilentlyContinue
+        if (-not $vmNow) {
+            Write-Warning "VM '$vmName' not found - nothing to stop."
+            continue
+        }
+        if ($vmNow.State -eq 'Off') {
+            Write-Host "VM '$vmName' is already off." -ForegroundColor Green
+            continue
+        }
+        # Use the same graceful-then-hard-power-off escalation as Stop All
+        # instead of a bare Stop-VM -Force: the Alpine guest does not always honor
+        # the Hyper-V integration shutdown request, and a plain Stop-VM then writes
+        # an error (and on an already-off VM throws outright), flashing the InApp
+        # window shut before it can be read.
+        $estVmStop = Format-PhaseEstimate 'vm-stop'
+        try {
+            $vmStopSec = Stop-VmWithEscalation -Name $vmName -Label "Stopping VM" -EstimateText $estVmStop
+            Save-PhaseTiming 'vm-stop' $vmStopSec
+            Complete-WaitCounter -Message "VM stopped in $(Format-Duration $vmStopSec)." -Color Green
+        } catch {
+            Complete-WaitCounter -Message $_.Exception.Message -Color Red
+            Write-Warning "Could not stop VM '$vmName': $($_.Exception.Message) Check Hyper-V Manager."
+        }
         continue
     }
 
