@@ -1244,9 +1244,29 @@ while ($true) {
     }
 
     if ($cmdName -eq "stop-vm") {
-        Write-Host "Stopping VM '$vmName'..." -ForegroundColor Cyan
-        Stop-VM -Name $vmName -Force | Out-Null
-        Write-Host "VM stopped." -ForegroundColor Green
+        $vmNow = Get-VM -Name $vmName -ErrorAction SilentlyContinue
+        if (-not $vmNow) {
+            Write-Warning "VM '$vmName' not found - nothing to stop."
+            continue
+        }
+        if ($vmNow.State -eq 'Off') {
+            Write-Host "VM '$vmName' is already off." -ForegroundColor Green
+            continue
+        }
+        # Use the same graceful-then-hard-power-off escalation as Stop Full Stack
+        # instead of a bare Stop-VM -Force: the Alpine guest does not always honor
+        # the Hyper-V integration shutdown request, and a plain Stop-VM then writes
+        # an error (and on an already-off VM throws outright), flashing the InApp
+        # window shut before it can be read.
+        $estVmStop = Format-PhaseEstimate 'vm-stop'
+        try {
+            $vmStopSec = Stop-VmWithEscalation -Name $vmName -Label "Stopping VM" -EstimateText $estVmStop
+            Save-PhaseTiming 'vm-stop' $vmStopSec
+            Complete-WaitCounter -Message "VM stopped in $(Format-Duration $vmStopSec)." -Color Green
+        } catch {
+            Complete-WaitCounter -Message $_.Exception.Message -Color Red
+            Write-Warning "Could not stop VM '$vmName': $($_.Exception.Message) Check Hyper-V Manager."
+        }
         continue
     }
 
