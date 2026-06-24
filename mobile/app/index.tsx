@@ -711,7 +711,7 @@ export default function App() {
           <DstButton title="Restart Battlegroup" type="warning" onPress={restartServer} />
         </View>
         <View style={{ marginTop: 15 }}>
-          <DstButton title="Reboot Full Stack" type="danger" onPress={rebootStack} />
+          <DstButton title="Reboot All" type="danger" onPress={rebootStack} />
         </View>
       </View>
 
