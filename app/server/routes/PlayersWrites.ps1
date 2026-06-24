@@ -100,6 +100,63 @@ Register-DuneRoute -Method POST -Path '/api/gameplay/players/teleport-to-player'
     }
 }
 
+# GET /api/gameplay/players/teleport-destinations  (named maps/hubs for the UI)
+Register-DuneRoute -Method GET -Path '/api/gameplay/players/teleport-destinations' -Handler {
+    param($req, $res, $routeParams, $body)
+    try {
+        $dests = Get-DuneTeleportDestinations
+        Write-DuneJson -Response $res -Body @{ destinations = @($dests); total = @($dests).Count; source = 'catalog' }
+    } catch {
+        Write-DuneError -Response $res -Status 500 -Message "Teleport destinations failed: $($_.Exception.Message)"
+    }
+}
+
+# POST /api/gameplay/players/teleport-to-location  { account_id, destination }
+# Offline-only: writes the player's partition + location (RAM-authoritative while
+# connected). Moves the player to a named map/hub from the destination catalog.
+Register-DuneRoute -Method POST -Path '/api/gameplay/players/teleport-to-location' -Handler {
+    param($req, $res, $routeParams, $body)
+    try {
+        $acc = Get-DuneBodyInt -Body $body -Name 'account_id'
+        $dest = [string](Get-DuneBodyValue -Body $body -Name 'destination')
+        if ($null -eq $acc -or $acc -le 0) { Write-DuneError -Response $res -Status 400 -Message 'account_id is required.'; return }
+        if (-not $dest) { Write-DuneError -Response $res -Status 400 -Message 'destination is required.'; return }
+        Invoke-DunePlayerWriteRoute -Response $res -Action {
+            param($ip)
+            $off = Test-DunePlayerOfflineByAccount -Ip $ip -AccountId $acc
+            if (-not $off.ok) {
+                return @{ ok = $false; error = "Player must be offline to teleport to a location. $($off.reason)" }
+            }
+            Invoke-DunePlayerTeleportToLocation -Ip $ip -AccountId $acc -Destination $dest
+        }
+    } catch {
+        Write-DuneError -Response $res -Status 500 -Message "Teleport to location failed: $($_.Exception.Message)"
+    }
+}
+
+# POST /api/gameplay/players/set-respawn  { account_id, destination }
+# Offline-only: adds a respawn point at a named destination (non-destructive -
+# the player's existing respawn points are preserved).
+Register-DuneRoute -Method POST -Path '/api/gameplay/players/set-respawn' -Handler {
+    param($req, $res, $routeParams, $body)
+    try {
+        $acc = Get-DuneBodyInt -Body $body -Name 'account_id'
+        $dest = [string](Get-DuneBodyValue -Body $body -Name 'destination')
+        if ($null -eq $acc -or $acc -le 0) { Write-DuneError -Response $res -Status 400 -Message 'account_id is required.'; return }
+        if (-not $dest) { Write-DuneError -Response $res -Status 400 -Message 'destination is required.'; return }
+        Invoke-DunePlayerWriteRoute -Response $res -Action {
+            param($ip)
+            $off = Test-DunePlayerOfflineByAccount -Ip $ip -AccountId $acc
+            if (-not $off.ok) {
+                return @{ ok = $false; error = "Player must be offline to set a respawn point. $($off.reason)" }
+            }
+            Invoke-DunePlayerSetRespawn -Ip $ip -AccountId $acc -Destination $dest
+        }
+    } catch {
+        Write-DuneError -Response $res -Status 500 -Message "Set respawn failed: $($_.Exception.Message)"
+    }
+}
+
 # ---------------------------------------------------------------------------
 # §6 — Progression / journey / contracts / jobs / codex / tutorials
 # ---------------------------------------------------------------------------

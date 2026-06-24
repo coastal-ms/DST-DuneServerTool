@@ -15,7 +15,12 @@ here cover everything those tags shipped.
 
 ### Added
 
+- **Teleport players to maps & hubs, and set their respawn — by name, no IDs.** Gameplay Admin → Players → Live now has **Teleport To Location** (move an offline player to Hagga Basin, Deep Desert, Arrakeen, Harko Village, or the Ruins of Tsimpo) and **Set Respawn Location** (add a respawn point at any of those hubs, keeping the player's existing ones). Both pick the destination from a friendly dropdown. **Teleport To Player** was also fixed to choose the target from a player-name dropdown instead of asking for a raw pawn id. All three are offline-only (these writes are RAM-authoritative while the player is connected) and take effect on next login.
 - **DNAT self-heal watchdog — fixes remote "Connecting" after a pod restart.** Every battlegroup Start/Restart now installs (and refreshes) a tiny watchdog on the VM that reconciles the host NAT rules — RabbitMQ login (`public:31982` → mq-game pod) and the game ports (`7777-7810`) — from the live cluster state every minute. Previously a pod-only restart (no host reboot) could leave the RabbitMQ rule pointing at a dead pod IP, so remote players hung on **"Connecting"** until the next reboot. The watchdog derives the public IP from the node's ExternalIP (never hardcoded) and retires the old hardcoded-IP sync script. All persistence runs in a staged Linux script, so the packaged installer stays free of the persistence pattern that previously tripped a Defender false positive.
+
+### Fixed
+
+- **Teleport To Player coordinate lookup.** It read a player's position from a `location` column that no longer exists on the current game build (coordinates moved into the `transform` composite), so the teleport silently failed; it now reads `transform.location`.
 
 ### Changed
 
