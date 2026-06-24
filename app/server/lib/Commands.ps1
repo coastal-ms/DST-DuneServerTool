@@ -321,6 +321,104 @@ function Get-DuneCommandByName {
     return $null
 }
 
+# ---------------------------------------------------------------------------
+# Visible-window launch that survives Session 0 (service mode).
+#
+# When DST runs as the "Keep serving while DST is closed" service, the backend
+# lives in Windows' non-interactive Session 0. A plain Start-Process there opens
+# its window on the invisible Session 0 desktop, so the operator never sees the
+# update / battlegroup / edit console (a regression introduced with service
+# mode in the 12.11 line). The interactive autostart path is unaffected.
+#
+# Test-DuneCanShowWindowDirectly is true only when this process is in an
+# interactive session (SessionId != 0); there we keep the original
+# Start-Process -Verb RunAs behaviour. Otherwise we relay the launch into the
+# signed-in user's interactive session via a one-shot Interactive/Highest
+# scheduled task (the same principal type the autostart task uses), so the
+# window appears on the user's desktop. The task is removed once it has fired;
+# the spawned window keeps running independently.
+# ---------------------------------------------------------------------------
+function Test-DuneCanShowWindowDirectly {
+    try {
+        return ([System.Diagnostics.Process]::GetCurrentProcess().SessionId -ne 0)
+    } catch {
+        return $true
+    }
+}
+
+function Start-DuneVisibleElevated {
+    param(
+        [Parameter(Mandatory)][string]$FilePath,
+        [string[]]$ArgumentList = @(),
+        [string]$WorkingDirectory
+    )
+
+    # Interactive backend (normal launch / autostart): show the window directly.
+    if (Test-DuneCanShowWindowDirectly) {
+        $sp = @{
+            FilePath    = $FilePath
+            WindowStyle = 'Normal'
+            Verb        = 'RunAs'
+            PassThru    = $true
+            ErrorAction = 'Stop'
+        }
+        if ($ArgumentList.Count -gt 0) { $sp.ArgumentList = $ArgumentList }
+        if ($WorkingDirectory)         { $sp.WorkingDirectory = $WorkingDirectory }
+        $proc = Start-Process @sp
+        return @{ ok = $true; pid = $(if ($proc) { $proc.Id } else { $null }); via = 'direct' }
+    }
+
+    # Session 0 (service mode): relay into the interactive session so the window
+    # is visible. Requires the ScheduledTasks module and a signed-in user.
+    if (-not (Get-Command Register-ScheduledTask -ErrorAction SilentlyContinue) -or
+        -not (Get-Command New-ScheduledTaskAction -ErrorAction SilentlyContinue)) {
+        throw "Running in Session 0 (service mode) and the ScheduledTasks module is unavailable, so the console window cannot be shown in your session. Turn off 'Keep serving while DST is closed' (Help menu) and relaunch DST, or run the command from an elevated PowerShell."
+    }
+
+    $user = if (Get-Command Get-DuneAutostartUserName -ErrorAction SilentlyContinue) {
+        Get-DuneAutostartUserName
+    } else {
+        if ($env:USERDOMAIN -and $env:USERNAME) { "$env:USERDOMAIN\$env:USERNAME" } else { $env:USERNAME }
+    }
+    $folder = if (Get-Command Get-DuneAutostartTaskFolder -ErrorAction SilentlyContinue) {
+        Get-DuneAutostartTaskFolder
+    } else {
+        '\Dune Server\'
+    }
+    $taskName = "DuneVisibleLaunch-$([guid]::NewGuid().ToString('N').Substring(0,8))"
+
+    # Quote only args that contain whitespace and are not already quoted; the
+    # caller may pre-quote paths (e.g. the -File argument).
+    $argString = (@($ArgumentList) | ForEach-Object {
+        $s = [string]$_
+        if ($s -match '\s' -and -not ($s.StartsWith('"') -and $s.EndsWith('"'))) { '"' + $s + '"' } else { $s }
+    }) -join ' '
+
+    $actionParams = @{ Execute = $FilePath }
+    if ($argString)        { $actionParams.Argument = $argString }
+    if ($WorkingDirectory) { $actionParams.WorkingDirectory = $WorkingDirectory }
+
+    $action    = New-ScheduledTaskAction @actionParams
+    $principal = New-ScheduledTaskPrincipal -UserId $user -LogonType Interactive -RunLevel Highest
+    $settings  = New-ScheduledTaskSettingsSet -AllowStartIfOnBatteries -DontStopIfGoingOnBatteries -ExecutionTimeLimit ([TimeSpan]::Zero) -MultipleInstances Parallel
+
+    # Purge any spent relay tasks from earlier launches BEFORE creating this one,
+    # rather than self-deleting right after Start (which races a cold Task
+    # Scheduler that may not have spawned the action process yet). Each relay
+    # task has no trigger, so a leftover is inert until the next purge.
+    try {
+        Get-ScheduledTask -TaskPath $folder -ErrorAction SilentlyContinue |
+            Where-Object { $_.TaskName -like 'DuneVisibleLaunch-*' } |
+            ForEach-Object {
+                try { Unregister-ScheduledTask -TaskPath $folder -TaskName $_.TaskName -Confirm:$false -ErrorAction SilentlyContinue | Out-Null } catch {}
+            }
+    } catch {}
+
+    Register-ScheduledTask -TaskPath $folder -TaskName $taskName -Action $action -Principal $principal -Settings $settings -Force | Out-Null
+    Start-ScheduledTask -TaskPath $folder -TaskName $taskName -ErrorAction Stop
+    return @{ ok = $true; pid = $null; via = 'scheduled-task' }
+}
+
 # Launch a command in a new visible console window (elevated).
 # Uses pwsh -File <dune-server.ps1> -Cmd <name>, the same entry point the WPF
 # UI used for external commands. Phase 4 will route InApp commands through the
@@ -346,20 +444,21 @@ function Invoke-DuneCommandExternal {
     # or error) stays readable instead of the window closing instantly. InApp
     # commands capture stdout and must never pause, so they don't get the flag.
     if ($cmd.Mode -eq 'Console') { $argList += '-PauseOnExit' }
-    $startArgs = @{
-        FilePath         = $script:PwshExe
-        ArgumentList     = $argList
-        WorkingDirectory = (Split-Path -Parent $script:MainScript)
-        WindowStyle      = 'Normal'
-        Verb             = 'RunAs'   # dune-server.ps1 requires admin
-        PassThru         = $true
-    }
-    $proc = Start-Process @startArgs
+    # Launch so the window is VISIBLE to the signed-in user even when this
+    # backend runs in Session 0 ("Keep serving while DST is closed" service
+    # mode). A plain Start-Process there opens the console on the invisible
+    # Session 0 desktop; Start-DuneVisibleElevated relays it into the
+    # interactive session when needed. dune-server.ps1 requires admin.
+    $launch = Start-DuneVisibleElevated `
+        -FilePath $script:PwshExe `
+        -ArgumentList $argList `
+        -WorkingDirectory (Split-Path -Parent $script:MainScript)
     return @{
         ok      = $true
         name    = $cmd.Name
         mode    = $cmd.Mode
-        pid     = if ($proc) { $proc.Id } else { $null }
+        pid     = $launch.pid
+        via     = $launch.via
         started = (Get-Date).ToString('o')
     }
 }
