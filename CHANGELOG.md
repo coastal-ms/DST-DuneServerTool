@@ -13,6 +13,15 @@ here cover everything those tags shipped.
 
 ## [Unreleased]
 
+### Changed
+
+- **Renamed the VM lifecycle commands to "Start All" / "Stop All" / "Reboot All"** (was "… Full Stack") across the Commands page, the CLI menu, and the mobile app — they bring up or take down the whole stack (VM + battlegroup), so "All" reads clearer.
+- **Removed the "Stop VM Only" command.** It was only ever enabled while the battlegroup was already stopped, which is exactly when **Stop All** also just powers off the VM — so it was redundant. **Stop All** now handles every case (it skips the battlegroup-stop step when nothing is running, then powers off the VM). "Start VM Only" stays, since bringing the VM up without the battlegroup is still useful for running an update.
+
+### Fixed
+
+- **`stop-vm` (now a CLI-only escape hatch) escalates to a hard power-off and no longer errors on an already-off VM.** It previously ran a bare `Stop-VM -Force` with no error handling: on an already-off VM it threw, and when the guest didn't honor the Hyper-V graceful shutdown it wrote an error — either way the in-app window flashed shut. It now reuses the same graceful→hard-`TurnOff` escalation as Stop All.
+
 ## [12.11.2] - 2026-06-24
 
 ### Fixed
