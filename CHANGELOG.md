@@ -13,6 +13,15 @@ here cover everything those tags shipped.
 
 ## [Unreleased]
 
+### Fixed
+
+- **Harmless `namespaces "f" not found` noise during Start/Reboot.** An
+  early-boot `kubectl get pods` race could emit a partial line right after the
+  VM IP comes up; the DB-wait step treated that fragment as the namespace and
+  logged `DB wait failed … namespaces "f" not found` (non-fatal — it proceeded
+  anyway). The DB-pod parse now keeps only well-formed `funcom-seabass-* <pod>`
+  lines, so the bogus message no longer appears.
+
 ## [12.13.1] - 2026-06-24
 
 ### Changed

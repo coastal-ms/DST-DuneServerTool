@@ -1445,8 +1445,17 @@ while ($true) {
         $dbPodList = ssh -o BatchMode=yes -o StrictHostKeyChecking=no -o LogLevel=QUIET -i "$sshKey" "$sshUser@$ip" `
             "sudo k3s kubectl get pods -A --no-headers 2>/dev/null | awk '`$2 ~ /(-db-|postgres|^pg-|-pg-)/ && `$2 !~ /(dump|backup|fb-|migration|util|mon|pghero)/ && `$4 !~ /(Completed|Succeeded)/ {print `$1, `$2}'"
         $dbPodList = ($dbPodList | Out-String).Trim()
-        if ($dbPodList) {
-            $dbPods = $dbPodList -split "`r?`n" | Where-Object { $_.Trim() }
+        # Keep only well-formed "namespace podname" lines. An early-boot kubectl
+        # race can emit a partial/garbage line (seen in the field as a bare "f"),
+        # which previously became the namespace and produced
+        # "namespaces \"f\" not found". Require a real battlegroup namespace
+        # (funcom-seabass-*) and a non-empty pod name; if none survive, fall
+        # through to the no-DB-pods branch.
+        $dbPods = @($dbPodList -split "`r?`n" | Where-Object {
+            $_p = $_.Trim() -split '\s+', 2
+            $_p.Count -eq 2 -and $_p[0] -like 'funcom-seabass-*' -and $_p[1]
+        })
+        if ($dbPods.Count -gt 0) {
             $dbNs = ($dbPods[0] -split '\s+', 2)[0]
             $podArgs = ($dbPods | ForEach-Object { "pod/$(($_ -split '\s+', 2)[1])" }) -join ' '
             $dbResult = Invoke-WithLiveCounter -Label "Waiting for DB pod(s) Ready..." -EstimateText $estDb `
@@ -1731,8 +1740,17 @@ while ($true) {
         $dbPodList = ssh -o BatchMode=yes -o StrictHostKeyChecking=no -o LogLevel=QUIET -i "$sshKey" "$sshUser@$ip" `
             "sudo k3s kubectl get pods -A --no-headers 2>/dev/null | awk '`$2 ~ /(-db-|postgres|^pg-|-pg-)/ && `$2 !~ /(dump|backup|fb-|migration|util|mon|pghero)/ && `$4 !~ /(Completed|Succeeded)/ {print `$1, `$2}'"
         $dbPodList = ($dbPodList | Out-String).Trim()
-        if ($dbPodList) {
-            $dbPods = $dbPodList -split "`r?`n" | Where-Object { $_.Trim() }
+        # Keep only well-formed "namespace podname" lines. An early-boot kubectl
+        # race can emit a partial/garbage line (seen in the field as a bare "f"),
+        # which previously became the namespace and produced
+        # "namespaces \"f\" not found". Require a real battlegroup namespace
+        # (funcom-seabass-*) and a non-empty pod name; if none survive, fall
+        # through to the no-DB-pods branch.
+        $dbPods = @($dbPodList -split "`r?`n" | Where-Object {
+            $_p = $_.Trim() -split '\s+', 2
+            $_p.Count -eq 2 -and $_p[0] -like 'funcom-seabass-*' -and $_p[1]
+        })
+        if ($dbPods.Count -gt 0) {
             $dbNs = ($dbPods[0] -split '\s+', 2)[0]
             $podArgs = ($dbPods | ForEach-Object { "pod/$(($_ -split '\s+', 2)[1])" }) -join ' '
             $dbResult = Invoke-WithLiveCounter -Label "Waiting for DB pod(s) Ready..." -EstimateText $estDb `
