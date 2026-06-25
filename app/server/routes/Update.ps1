@@ -144,7 +144,14 @@ function Get-DuneReleases {
             assetSize    = if ($asset) { [int64]$asset.size } else { 0 }
         }
     }
-    $script:DuneReleasesCache = [pscustomobject]@{ fetchedAt = $now; releases = @($mapped) }
+    # GitHub's /releases endpoint does not reliably return newest-first (a
+    # recently-edited older release can resurface at the top), so sort
+    # explicitly by published date, newest-first. Null/unparseable dates sink.
+    $sorted = @($mapped | Sort-Object -Property @{ Expression = {
+        $dt = [datetime]::MinValue
+        if ($_.publishedAt -and [datetime]::TryParse($_.publishedAt, [ref]$dt)) { $dt.ToUniversalTime() } else { [datetime]::MinValue }
+    } } -Descending)
+    $script:DuneReleasesCache = [pscustomobject]@{ fetchedAt = $now; releases = $sorted }
     return $script:DuneReleasesCache.releases
 }
 
@@ -424,7 +431,7 @@ Register-DuneRoute -Method POST -Path '/api/update/migration-notice/ack' -Handle
     }
 }
 
-# POST /api/update/install — download installer asset and run it silently
+# POST /api/update/install — download installer asset and run it interactively
 Register-DuneRoute -Method POST -Path '/api/update/install' -Handler {
     param($req, $res, $routeParams, $body)
     # Serialize installs: never let two update flows download + relaunch at once.
@@ -463,8 +470,19 @@ Register-DuneRoute -Method POST -Path '/api/update/install' -Handler {
         $runningIsPrerelease = Get-DuneUpdateInstalledPrerelease
         $diff = Compare-DuneSemver -A $rel.tag -B ([string]$script:DuneToolVersion)
         $hasAsset = -not [string]::IsNullOrEmpty($rel.assetUrl)
+        # Explicit reinstall: the user asked to re-download and re-run the
+        # current version's installer (Settings "Reinstall" button) even though
+        # it isn't newer. Skip the up-to-date gate; an asset is still required.
+        $reinstall = $false
+        if ($req.QueryString['reinstall']) {
+            $reinstall = ($req.QueryString['reinstall'] -eq '1' -or $req.QueryString['reinstall'] -eq 'true')
+        }
         $blocked = (Get-DuneInstallDecision -Diff $diff -Channel $channel -HasAsset $hasAsset -RunningIsPrerelease $runningIsPrerelease).blocked
-        if ($blocked) {
+        if ($reinstall -and -not $hasAsset) {
+            Write-DuneError -Response $res -Status 503 -Message 'No installer asset available to reinstall.'
+            return
+        }
+        if ($blocked -and -not $reinstall) {
             Write-DuneJson -Response $res -Body @{
                 launched = $false
                 reason   = 'Already up to date.'
@@ -520,7 +538,7 @@ Register-DuneRoute -Method POST -Path '/api/update/install' -Handler {
             installerPath   = $dest
             fromVersion     = $script:DuneToolVersion
             toVersion       = ($rel.tag -replace '^v','')
-            note            = 'Updater launched. The Dune Server app and console will close in 3 seconds, then a silent update runs in the background. The app relaunches automatically when it finishes (usually under a minute).'
+            note            = 'Updater launched. The Dune Server app and console will close, then the installer wizard opens for you to click through. The updated app opens automatically when the install finishes.'
         }
 
         # Build a relauncher script that:
@@ -532,17 +550,23 @@ Register-DuneRoute -Method POST -Path '/api/update/install' -Handler {
         #      the relauncher (a child of DuneServer.exe). Killing the
         #      specific PID with Stop-Process leaves the relauncher orphaned
         #      but alive.
-        #   3. Launches the installer SILENTLY (/VERYSILENT). The installer's
-        #      [Run] WizardSilent entry (DuneServer.iss) then relaunches
-        #      DuneServer.exe with `runminimized`, which in turn brings up
-        #      DuneShell.exe. The whole update is invisible apart from the
-        #      3-second portal-close pause.
+        #   3. Launches the installer INTERACTIVELY (the Inno wizard is shown
+        #      so the user clicks through it every time - no silent/background
+        #      install). The installer's [Run] postinstall entry (DuneServer.iss,
+        #      shown because the install is not silent) relaunches DuneServer.exe
+        #      via the "Launch Dune Server" finish-page action, which brings up
+        #      DuneShell.exe. The user sees the full wizard plus the new window.
         #   4. WaitForExit on the installer PID, then on non-zero exit /
         #      timeout shows a topmost WinForms MessageBox so the user has
         #      a real signal when something fails (the hidden powershell
         #      host has no other UI to surface errors).
         $parentPid       = $PID
-        $installArgs     = '/SP- /VERYSILENT /SUPPRESSMSGBOXES /NORESTART /NOCANCEL'
+        # Interactive install: show the Inno wizard every time (no /VERYSILENT).
+        # /SP- skips the redundant "This will install..." start prompt; the
+        # Welcome/Ready/Progress/Finish pages and the "Launch Dune Server"
+        # finish action are all shown so the user clicks through and sees the app
+        # relaunch. /NORESTART blocks any auto-reboot request.
+        $installArgs     = '/SP- /NORESTART'
         $logPath         = Join-Path $tmpDir ("relaunch-$safeTag.log")
         # Defensive escapes: %TEMP% / install path can contain an apostrophe
         # (e.g. C:\Users\O'Brien\AppData\...) which would break the single-
@@ -585,9 +609,9 @@ try {
 public static extern bool AllowSetForegroundWindow(int dwProcessId);
 '@ -ErrorAction SilentlyContinue
 
-    # 1-second grace between user clicking Update and the silent install
-    # kicking off. Lets the HTTP response finish flushing so the "Updater
-    # launched" toast renders in the portal before the app closes.
+    # 1-second grace between user clicking Update and the install kicking off.
+    # Lets the HTTP response finish flushing so the "Updater launched" takeover
+    # renders in the portal before the app closes.
     # (v11.4.4: cut from 3s to 1s; v11.4.3 and earlier wasted ~2s here.)
     Start-Sleep -Seconds 1
 
@@ -603,8 +627,8 @@ public static extern bool AllowSetForegroundWindow(int dwProcessId);
     }
     # Brief settle so WebView2 children and file handles in
     # C:\Program Files\Dune Server are released before Inno tries to
-    # overwrite them under /VERYSILENT (no in-use retry prompt in silent
-    # mode -- file-in-use just fails the install).
+    # overwrite them. With the app already killed above, files are free; the
+    # interactive wizard would also surface an in-use retry prompt if needed.
     # (v11.4.4: cut from 1s to 250ms. Stop-Process -Force is synchronous
     # on the kill signal; the remaining wait is for WebView2 helper
     # processes to drop their MPK handles, which is sub-100ms in
@@ -612,35 +636,37 @@ public static extern bool AllowSetForegroundWindow(int dwProcessId);
     Start-Sleep -Milliseconds 250
 
     # Grant foreground rights to whatever we launch next (ASFW_ANY = -1)
-    # so the post-install DuneServer.exe -> DuneShell.exe chain can take
-    # focus when the new app window comes up.
+    # so the installer wizard and the post-install DuneServer.exe -> DuneShell.exe
+    # chain can take focus.
     try { [DuneUpd.Win]::AllowSetForegroundWindow(-1) | Out-Null } catch {}
 
-    Write-Host "[`$(Get-Date -Format o)] Launching installer silently: $destEsc"
+    Write-Host "[`$(Get-Date -Format o)] Launching installer interactively: $destEsc"
     `$proc = Start-Process -FilePath '$destEsc' -ArgumentList '$installArgsEsc' -PassThru
 
-    # Wait up to 5 minutes for the silent install to finish. Under
-    # /VERYSILENT Inno runs the entire install + the [Run] WizardSilent
-    # entry (which launches the new DuneServer.exe runminimized) and
-    # then exits. We were spawned from an already-elevated DuneServer.exe,
-    # so Inno runs in-place rather than re-elevating -- WaitForExit on
-    # the spawned PID is meaningful end-to-end.
-    if (-not `$proc.WaitForExit(300000)) {
-        Write-Host "[`$(Get-Date -Format o)] Installer timed out after 5 minutes"
+    # Wait up to 30 minutes for the interactive install to finish (the user
+    # paces the wizard, so this is a generous safety net rather than a tight
+    # bound). Inno runs the install + the [Run] postinstall "Launch Dune Server"
+    # action, then exits. We were spawned from an already-elevated DuneServer.exe,
+    # so Inno runs in-place rather than re-elevating -- WaitForExit on the
+    # spawned PID is meaningful end-to-end. Inno returns exit code 0 on success
+    # AND when the user cancels the wizard (a deliberate no-op), so only a
+    # genuine non-zero failure surfaces the error dialog.
+    if (-not `$proc.WaitForExit(1800000)) {
+        Write-Host "[`$(Get-Date -Format o)] Installer still open after 30 minutes"
         try { Stop-Process -Id `$proc.Id -Force -ErrorAction SilentlyContinue } catch {}
         Show-DuneUpdateFailure -Title 'Dune Server Update Timed Out' -Message (
-            "The silent installer did not finish within 5 minutes. The Dune Server app has been closed.``r``n``r``n" +
+            "The installer was still open after 30 minutes, so it was closed. The Dune Server app has been shut down.``r``n``r``n" +
             "Log file:``r``n  $logPathEsc``r``n``r``n" +
             "You can reinstall manually by running:``r``n  $destEsc")
     } elseif (`$proc.ExitCode -ne 0) {
         `$code = `$proc.ExitCode
         Write-Host "[`$(Get-Date -Format o)] Installer exited with code `$code"
         Show-DuneUpdateFailure -Title 'Dune Server Update Failed' -Message (
-            "The silent installer exited with code `$code. The Dune Server app has been closed.``r``n``r``n" +
+            "The installer exited with code `$code. The Dune Server app has been closed.``r``n``r``n" +
             "Log file:``r``n  $logPathEsc``r``n``r``n" +
             "You can reinstall manually by running:``r``n  $destEsc")
     } else {
-        Write-Host "[`$(Get-Date -Format o)] Silent install completed successfully (exit 0)"
+        Write-Host "[`$(Get-Date -Format o)] Install completed (exit 0)"
     }
 } catch {
     `$errMsg = `$_.Exception.Message
@@ -658,11 +684,11 @@ public static extern bool AllowSetForegroundWindow(int dwProcessId);
         $scriptPath = Join-Path $tmpDir ("DuneRelaunch-$safeTag.ps1")
         Set-Content -LiteralPath $scriptPath -Value $relaunchScript -Encoding UTF8
 
-        # Spawn the relauncher in a HIDDEN window. No visible UI during the
-        # silent update: the 3-second sleep, kill chain, /VERYSILENT install,
-        # and post-install DuneServer.exe relaunch all happen in the
-        # background. The only visible artifacts are the toast in the portal
-        # before it closes and (on failure) the topmost MessageBox.
+        # Spawn the relauncher in a HIDDEN window. The relauncher itself is
+        # invisible (the grace sleep + app kill chain), but it then launches the
+        # installer INTERACTIVELY so the user sees and clicks through the Inno
+        # wizard, and the post-install "Launch Dune Server" action brings the
+        # new app window up. On failure the relauncher shows a topmost MessageBox.
         Start-Process -FilePath 'powershell.exe' `
             -ArgumentList @('-NoProfile','-ExecutionPolicy','Bypass','-File',$scriptPath) `
             -WindowStyle Hidden | Out-Null

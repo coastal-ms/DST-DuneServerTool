@@ -2,7 +2,7 @@ import { useCallback, useSyncExternalStore } from 'react'
 import type { UpdateCheck } from '../api/update'
 import { checkForUpdate } from '../api/update'
 
-const POLL_MS = 6 * 60 * 60 * 1000 // 6 hours
+const POLL_MS = 60 * 60 * 1000 // 1 hour
 
 export interface UpdateState {
   data: UpdateCheck | null

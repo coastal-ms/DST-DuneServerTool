@@ -321,6 +321,22 @@ function New-DstDiagnosticBundle {
         $warnings.Add("Restart-schedule state read failed: $($_.Exception.Message)")
     }
 
+    # 6c-2) FLS token rotation state (403002 recovery) ----------------------
+    # The rotate-state file records the last token-rotation attempt's steps and
+    # outcome. It never stores the token itself, but redact as a safety net.
+    try {
+        $flsState = Join-Path $env:APPDATA 'DuneServer\fls-token-rotate-state.json'
+        if (Test-Path -LiteralPath $flsState) {
+            $flsRaw = Get-Content -LiteralPath $flsState -Raw -ErrorAction Stop
+            $flsRaw = Invoke-DstRedaction -Text $flsRaw @redactArgs
+            $out = Join-Path $stageDir 'fls-token-rotate-state.json'
+            Set-Content -LiteralPath $out -Value $flsRaw -Encoding UTF8
+            $included.Add(@{ name = 'fls-token-rotate-state.json'; bytes = (Get-Item -LiteralPath $out).Length })
+        }
+    } catch {
+        $warnings.Add("FLS token-rotation state read failed: $($_.Exception.Message)")
+    }
+
     # 6d) Gameplay Admin read-path probe ------------------------------------
     # The "Players/Bases show top-level rows but blank names / unaligned
     # factions / 0 pieces" class of bug (e.g. after a character transfer)
