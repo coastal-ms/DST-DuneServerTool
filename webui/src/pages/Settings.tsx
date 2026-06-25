@@ -43,7 +43,7 @@ const FIELDS: {
   { key: 'ShowUdpPortStatus', label: 'Show UDP port status', placeholder: '',
     type: 'checkbox',
     help: 'Show the game-port (UDP 7777–7810) indicators on the dashboard and status bar. UDP can\'t be verified by the built-in/free TCP checkers, so these are hidden by default to avoid confusion — they only appear when Port-check mode is "custom" with a UDP-capable service AND this box is checked.',
-    showWhen: v => (v.PortCheckMode ?? '') === 'custom' },
+    showWhen: v => (v.PortCheckMode ?? '') === 'custom' && !!(v.PortCheckUrlTemplate ?? '').trim() },
   { key: 'DbPort', label: 'Database port',
     placeholder: '15432',
     help: 'In-pod PostgreSQL port DST queries for Players / Bases / Storage. Funcom\'s default is 15432 — change it only if your server\'s database listens elsewhere (e.g. 15433). Use "Test connection" below after changing it.' },
@@ -446,13 +446,6 @@ export function Settings() {
 
   async function onSubmit(e: FormEvent) {
     e.preventDefault()
-    // Custom port-check mode is non-functional without a URL template (the
-    // port check can't run, and it silently disables the working TCP check).
-    // Block the save with a clear message instead of persisting a broken state.
-    if ((values.PortCheckMode ?? '') === 'custom' && !(values.PortCheckUrlTemplate ?? '').trim()) {
-      setError('A Port-check URL template is required when mode is "custom". Enter a UDP-capable check URL, or switch Port-check mode back to a built-in option.')
-      return
-    }
     // Confirm gate (issue #295): changing the database port silently breaks
     // Players/Bases/Storage if it's wrong, so make the user acknowledge it and
     // — importantly — show the OLD value so they can write it down before
