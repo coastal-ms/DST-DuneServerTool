@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { Icon } from '../../components/Icon'
 import {
   getRemoteMaps,
@@ -42,24 +42,44 @@ export function RemoteMaps() {
   const [refreshing, setRefreshing] = useState(false)
   const [actions, setActions] = useState<Record<string, ActionState>>({})
   const [globalAction, setGlobalAction] = useState<ActionState>({ busy: null, message: null, isError: false })
+  // Grace for the transient load error (see load()): only surface the banner
+  // after more than 2 consecutive failures.
+  const failRef = useRef(0)
+  const retryRef = useRef<number | null>(null)
 
   const load = useCallback(async (showSpinner: boolean) => {
     if (showSpinner) setLoading(true); else setRefreshing(true)
-    setError(null)
+    let scheduledRetry = false
+    const scheduleRetry = () => {
+      scheduledRetry = true
+      if (retryRef.current !== null) window.clearTimeout(retryRef.current)
+      retryRef.current = window.setTimeout(() => { void load(showSpinner) }, 1800)
+    }
     try {
       const r = await getRemoteMaps()
       setData(r)
+      failRef.current = 0
+      setError(null)
     } catch (e) {
       if (e instanceof RemoteApiError && e.status === 401) {
         window.location.href = '/remote/login-required'; return
       }
-      setError(e instanceof Error ? e.message : String(e))
+      // Suppress the transient error banner on load: over a remote tunnel the
+      // first request often fails while the connection warms up. Retry quietly
+      // and only surface the banner after more than 2 consecutive failures.
+      failRef.current += 1
+      if (failRef.current > 2) setError(e instanceof Error ? e.message : String(e))
+      else scheduleRetry()
     } finally {
-      setLoading(false); setRefreshing(false)
+      setRefreshing(false)
+      if (!scheduledRetry) setLoading(false)
     }
   }, [])
 
   useEffect(() => { void load(true) }, [load])
+
+  // Clear any pending grace-retry timer on unmount.
+  useEffect(() => () => { if (retryRef.current !== null) window.clearTimeout(retryRef.current) }, [])
 
   // Refresh after every successful write so the user sees the new state.
   const refreshSilently = useCallback(() => { void load(false) }, [load])
