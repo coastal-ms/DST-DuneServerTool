@@ -77,8 +77,9 @@ export function checkForUpdate(opts: { force?: boolean } = {}) {
   return api<UpdateCheck>(`/api/update/check${qs}`)
 }
 
-export function installUpdate() {
-  return api<UpdateInstallResult>(`/api/update/install`, { method: 'POST', body: '{}' })
+export function installUpdate(opts: { reinstall?: boolean } = {}) {
+  const qs = opts.reinstall ? '?reinstall=1' : ''
+  return api<UpdateInstallResult>(`/api/update/install${qs}`, { method: 'POST', body: '{}' })
 }
 
 /**

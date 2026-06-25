@@ -10,6 +10,7 @@ import { AppearanceCard } from './settings/AppearanceCard'
 import { PublicIpCard } from './settings/PublicIpCard'
 import { RemoteAccessCard } from './settings/RemoteAccessCard'
 import { MobileAppCard } from './settings/MobileAppCard'
+import { FlsTokenCard } from './settings/FlsTokenCard'
 import { SectionErrorBoundary } from '../components/SectionErrorBoundary'
 
 const FIELDS: {
@@ -322,6 +323,29 @@ export function Settings() {
       setUpdErr(e instanceof Error ? e.message : String(e))
     } finally {
       setUpdChecking(false)
+    }
+  }
+
+  // Reinstall the current version: re-download and re-run the installer for the
+  // build that's already running (stable channel, up to date). Uses the same
+  // interactive installer flow; the backend reinstall flag bypasses the
+  // up-to-date gate. Useful for repairing a broken install or re-applying the
+  // current release.
+  async function onReinstall() {
+    setUpdInstalling(true)
+    setUpdErr(null)
+    setUpdMsg(null)
+    try {
+      const r = await installUpdate({ reinstall: true })
+      if (r.launched) {
+        setUpdMsg(`Installer launched — reinstalling ${fmtToolVersion(r.toVersion)}. The portal will go offline briefly, then the app will relaunch.`)
+      } else {
+        setUpdErr(r.reason ?? 'Installer did not launch.')
+      }
+    } catch (e) {
+      setUpdErr(e instanceof Error ? e.message : String(e))
+    } finally {
+      setUpdInstalling(false)
     }
   }
 
@@ -659,10 +683,22 @@ export function Settings() {
                   </span>
                 )}
                 {!(updCheck.installable ?? updCheck.available) && !updCheck.assetMissing && !updCheck.error && (
-                  <span className="text-xs text-text-dim ml-auto">
+                  <span className="text-xs text-text-dim ml-auto flex items-center gap-2">
                     {updCheck.channel === 'test'
                       ? "You're on this test build."
                       : "You're on the latest version."}
+                    {updCheck.channel !== 'test' && !!updCheck.assetName && (
+                      <button
+                        type="button"
+                        onClick={onReinstall}
+                        disabled={updInstalling}
+                        className="btn-secondary"
+                        title="Re-download and re-run the installer for the current version"
+                      >
+                        <Icon name={updInstalling ? 'Loader2' : 'RefreshCw'} size={14} className={updInstalling ? 'animate-spin' : ''} />
+                        {updInstalling ? 'Reinstalling…' : 'Reinstall'}
+                      </button>
+                    )}
                   </span>
                 )}
                 {updCheck.error && (
@@ -691,6 +727,8 @@ export function Settings() {
       <SectionErrorBoundary name="Remote Access"><RemoteAccessCard /></SectionErrorBoundary>
 
       <SectionErrorBoundary name="Public IP"><PublicIpCard /></SectionErrorBoundary>
+
+      <SectionErrorBoundary name="Server Authorization Token"><FlsTokenCard /></SectionErrorBoundary>
 
       {/* --- Database connection (issue #295) --- */}
       <div className="card mb-4 p-6">
