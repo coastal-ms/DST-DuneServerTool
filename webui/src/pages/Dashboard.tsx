@@ -108,7 +108,8 @@ export function Dashboard() {
   const gameServers = status?.bg?.gameServers ?? []
   const survivalPhase = findSurvivalServer(gameServers)?.phase?.trim() || ''
   const ports = status?.ports
-  const tcp = ports?.results.filter(r => r.protocol === 'TCP') ?? []
+  const portResults = Array.isArray(ports?.results) ? ports.results : []
+  const tcp = portResults.filter(r => r.protocol === 'TCP')
   const openTcp = tcp.filter(r => r.status === 'open').length
 
   // Deep Desert / Arakeen / Harko Village — on-demand map pods.
