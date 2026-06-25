@@ -13,6 +13,8 @@ here cover everything those tags shipped.
 
 ## [Unreleased]
 
+## [12.13.2] - 2026-06-25
+
 ### Added
 
 - **Connection check (P34 / can't join) in Settings → Public IP / DDNS.** A new
@@ -34,6 +36,9 @@ here cover everything those tags shipped.
   notes that IPv6 can cause P34 even when the IPv4 check is green — disabling
   IPv6 on the server's NIC, rebooting, and re-applying the public IP has
   resolved it for some hosts.
+
+- **Two new supporters in the "Thanks for the Coffee" menu.** Added Brandon M
+  and Daddy STATZY (@spiderstatz). Thank you both.
 
 - **Diagnostic bundle now captures game-server pod logs.** The bundle
   (Help → Create GitHub Issue + Save Logs) previously only collected DST-side
