@@ -471,6 +471,12 @@ export function PublicIpCard() {
                   hairpin poorly. If this check is green but you still get P34, have someone <span className="font-medium">outside
                   your network</span> try to join before assuming the server is broken.
                 </p>
+                <p className="text-xs text-text-dim">
+                  <span className="text-warning font-medium">IPv6 note:</span> if the check is green but players still
+                  get P34, IPv6 can interfere — the server can advertise or route over an IPv6 path that isn’t reachable
+                  while your IPv4 port-forward works. Disabling IPv6 <span className="font-medium">on the server’s network
+                  adapter (NIC)</span> and then re-applying your public IP (below) has fixed P34 for some hosts.
+                </p>
               </div>
             )}
 
