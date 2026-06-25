@@ -448,6 +448,38 @@ export function PublicIpCard() {
               </div>
             )}
 
+            {p34.maps && p34.maps.length > 0 && (
+              <div className="rounded-lg border border-border bg-surface-2/40 p-3 text-sm space-y-2">
+                <div className="flex items-center gap-2 font-medium">
+                  <Icon name="Network" size={14} className="text-text-muted" />
+                  Port forwarding (UDP)
+                </div>
+                <p className="text-xs text-text-dim">
+                  Each map uses its own UDP port. Forward the whole <span className="font-medium">UDP 7777–7810</span>
+                  range to this server — maps can also start on demand on other ports in that range, and forwarding only
+                  7777 lets players reach one map but P34 on the rest. Currently active maps:
+                </p>
+                <div className="flex flex-wrap gap-1.5">
+                  {p34.maps.map(m => (
+                    <span key={`port-${m.map}-${m.serverId}`} className="pill-muted font-mono">{m.map} → UDP {m.port}</span>
+                  ))}
+                </div>
+                <p className="text-xs text-text-dim">
+                  <span className="text-warning font-medium">NAT loopback note:</span> testing your own server by its
+                  public IP from a device on the <span className="font-medium">same network</span> exercises your
+                  router’s NAT loopback (hairpin), not the real outside path — many routers (Asus among them) handle UDP
+                  hairpin poorly. If this check is green but you still get P34, have someone <span className="font-medium">outside
+                  your network</span> try to join before assuming the server is broken.
+                </p>
+                <p className="text-xs text-text-dim">
+                  <span className="text-warning font-medium">IPv6 note:</span> if the check is green but players still
+                  get P34, IPv6 can interfere — the server can advertise or route over an IPv6 path that isn’t reachable
+                  while your IPv4 port-forward works. Disabling IPv6 <span className="font-medium">on the server’s network
+                  adapter (NIC)</span>, rebooting, then re-applying your public IP (below) has fixed P34 for some hosts.
+                </p>
+              </div>
+            )}
+
             {p34.verdict === 'stale-ip' && (
               <div className="space-y-2">
                 <button

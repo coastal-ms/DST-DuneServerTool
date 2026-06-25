@@ -32,6 +32,43 @@ function Invoke-DstRedaction {
     # 1b) Discord webhook URL token -> <redacted> (secret: grants channel posts)
     $out = [regex]::Replace($out, '(/api/webhooks/\d+/)[A-Za-z0-9_-]+', '${1}<redacted>')
 
+    # 1c) Bare JWTs (header.payload.signature, base64url) — the Funcom FLS
+    #     ServiceAuthToken is printed verbatim in server-gateway pod logs and
+    #     carries the HostId + ServiceAuthKey. It MUST never leave the machine,
+    #     so scrub any JWT-shaped token regardless of surrounding text.
+    $out = [regex]::Replace($out, '\beyJ[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+', '<jwt-redacted>')
+
+    # 1d) Known FLS secret fields in "<Name>: value" / "<Name>=value" /
+    #     JSON "<Name>": "value" form, as a safety net for any non-JWT token.
+    $out = [regex]::Replace($out, '(?i)\b(ServiceAuthToken|ServiceAuthKey|ServiceAuthSecret|ServiceAuthKeyId)\b(["'']?\s*[:=]\s*["'']?)[A-Za-z0-9._/+\-]{6,}', '${1}${2}<redacted>')
+
+    # 1e) Credentials embedded in connection-string URIs, e.g. the Postgres
+    #     connection string the battlegroup director / gateway print:
+    #       db=postgresql://dune:<password>@host:5432/...
+    #     Also covers amqp:// (RabbitMQ), redis://, mongodb://, etc. Capture the
+    #     password FIRST so we can also scrub standalone copies of it (the
+    #     battlegroup CR JSON repeats it as "password":"<value>"), then redact
+    #     the URI form. Keep the scheme + username for readability.
+    $capturedSecrets = New-Object System.Collections.Generic.List[string]
+    foreach ($m in [regex]::Matches($out, '(?i)[a-z][a-z0-9+.\-]*://[^:/?#\s@]+:([^@/?#\s]+)@')) {
+        $pw = $m.Groups[1].Value
+        if ($pw -and $pw -ne '<redacted>' -and $pw.Length -ge 4) { [void]$capturedSecrets.Add($pw) }
+    }
+    $out = [regex]::Replace($out, '(?i)([a-z][a-z0-9+.\-]*://[^:/?#\s@]+:)[^@/?#\s]+(@)', '${1}<redacted>${2}')
+
+    # 1f) Generic password / secret fields in JSON ("password":"x") or
+    #     key=value (PGPASSWORD=x) form, as a safety net for credentials that
+    #     never appear in a URI — e.g. the battlegroup CR's "password" field.
+    $out = [regex]::Replace($out, '(?i)("(?:password|passwd|pwd|pgpassword|dbpassword|secret)"\s*:\s*")[^"]+(")', '${1}<redacted>${2}')
+    $out = [regex]::Replace($out, '(?im)^(\s*(?:PGPASSWORD|PASSWORD|DB_PASSWORD|DATABASE_PASSWORD)\s*=\s*).+$', '${1}<redacted>')
+
+    # 1g) Global scrub of every captured connection-string password, so a copy
+    #     of the same secret elsewhere in the bundle (with different surrounding
+    #     syntax) can never slip through.
+    foreach ($secret in ($capturedSecrets | Select-Object -Unique)) {
+        $out = $out.Replace($secret, '<redacted>')
+    }
+
     # 2) IPv4 addresses (but leave 127.0.0.1 / 0.0.0.0 / 255.255.255.255 alone —
     #    those carry no identifying info and matter for log readability).
     $out = [regex]::Replace($out, '\b(?!(?:127\.0\.0\.1|0\.0\.0\.0|255\.255\.255\.255)\b)(?:\d{1,3}\.){3}\d{1,3}\b', '<ip>')
@@ -337,6 +374,77 @@ function New-DstDiagnosticBundle {
         $warnings.Add("FLS token-rotation state read failed: $($_.Exception.Message)")
     }
 
+    # 6c-3) Game-server pod status + logs (P34 / "can't connect" diagnosis) ---
+    # The most common P34 reports - server visible in the in-game browser, no
+    # 403002, but players get "Connection Request Timed Out" - are decided at
+    # the Funcom game-server pod layer, which nothing else in this bundle sees.
+    # Pull a pod snapshot plus the recent logs of the connection-path pods
+    # (game servers, server gateway, battlegroup director, text router, the
+    # game message queue) so the actual join-rejection reason is captured.
+    # Best-effort over SSH; never fatal. Dump/backup pods are excluded - they
+    # are terminal and pure noise.
+    if (Get-Command Invoke-V6Ssh -ErrorAction SilentlyContinue) {
+        $podCtxIp = $null
+        foreach ($getter in 'Get-DuneGameConfigContext', 'Get-DuneDbContext') {
+            if (Get-Command $getter -ErrorAction SilentlyContinue) {
+                try { $c = & $getter; if ($c.ok -and $c.ip) { $podCtxIp = $c.ip; break } } catch {}
+            }
+        }
+        if (-not $podCtxIp -and (Get-Command Get-DuneVmStatus -ErrorAction SilentlyContinue)) {
+            try { $vm = Get-DuneVmStatus; if ($vm.running -and $vm.ip) { $podCtxIp = $vm.ip } } catch {}
+        }
+        if ($podCtxIp) {
+            try {
+                $podBash = @'
+NS=$(sudo kubectl get ns --no-headers -o custom-columns=N:.metadata.name 2>/dev/null | grep -E '^funcom-seabass-sh-' | head -1)
+if [ -z "$NS" ]; then echo "__NO_NS"; exit 0; fi
+echo "=== namespace: $NS ==="
+echo ""
+echo "=== kubectl get pods -o wide (dump/backup excluded) ==="
+sudo kubectl get pods -n "$NS" -o wide 2>&1 | grep -Ev 'dump|backup'
+echo ""
+echo "=== kubectl get serverset ==="
+sudo kubectl get serverset -n "$NS" 2>&1
+echo ""
+echo "=== kubectl get battlegroup ==="
+sudo kubectl get battlegroup -n "$NS" 2>&1
+echo "__PODS_END__"
+for p in $(sudo kubectl get pods -n "$NS" --no-headers -o custom-columns=N:.metadata.name 2>/dev/null | grep -Ev 'dump|backup' | grep -E 'sg-|sgw|gateway|bgd|director|textrouter|tr-|mq-'); do
+  echo ""
+  echo "########## $p (tail 200) ##########"
+  sudo kubectl logs -n "$NS" "$p" --tail=200 --all-containers=true 2>&1 | tail -220
+done
+'@ -replace "`r", ''
+                $podRaw = (Invoke-V6Ssh -Ip $podCtxIp -Cmd $podBash -TimeoutSec 90) -join "`n"
+                if ($podRaw -match '__NO_NS') {
+                    $warnings.Add('Game-server pod logs skipped: no self-hosted battlegroup namespace found on the VM.')
+                } elseif ([string]::IsNullOrWhiteSpace($podRaw)) {
+                    $warnings.Add('Game-server pod logs: the VM returned no output.')
+                } else {
+                    $parts = $podRaw -split '__PODS_END__', 2
+                    $statusTxt = Invoke-DstRedaction -Text ($parts[0].Trim()) @redactArgs
+                    $outS = Join-Path $stageDir 'game-pods.txt'
+                    Set-Content -LiteralPath $outS -Value $statusTxt -Encoding UTF8
+                    $included.Add(@{ name = 'game-pods.txt'; bytes = (Get-Item -LiteralPath $outS).Length })
+                    if ($parts.Count -gt 1 -and -not [string]::IsNullOrWhiteSpace($parts[1])) {
+                        $logHeader = "# Game-server pod logs (sanitized; tail 200 per pod; connection-path pods only)." + "`r`n" +
+                                     "# Used to diagnose P34 / 'can't connect' when the server is visible but players time out." + "`r`n`r`n"
+                        $logTxt = $logHeader + (Invoke-DstRedaction -Text ($parts[1].Trim()) @redactArgs)
+                        $outL = Join-Path $stageDir 'game-server-logs.txt'
+                        Set-Content -LiteralPath $outL -Value $logTxt -Encoding UTF8
+                        $included.Add(@{ name = 'game-server-logs.txt'; bytes = (Get-Item -LiteralPath $outL).Length })
+                    }
+                }
+            } catch {
+                $warnings.Add("Game-server pod logs failed: $($_.Exception.Message)")
+            }
+        } else {
+            $warnings.Add('Game-server pod logs skipped: VM not reachable.')
+        }
+    } else {
+        $warnings.Add('Game-server pod logs skipped: SSH helper not loaded.')
+    }
+
     # 6d) Gameplay Admin read-path probe ------------------------------------
     # The "Players/Bases show top-level rows but blank names / unaligned
     # factions / 0 pieces" class of bug (e.g. after a character transfer)
@@ -430,6 +538,13 @@ function New-DstDiagnosticBundle {
     $manLines.Add('gameplay-read-probe.txt re-runs the Players/Bases list queries and records')
     $manLines.Add('COUNTS ONLY (no player names or ids) so "rows but blank detail" bugs are')
     $manLines.Add('triageable; absent when the DB is unreachable (see Warnings).')
+    $manLines.Add('')
+    $manLines.Add('game-pods.txt + game-server-logs.txt are pulled live over SSH: a pod/serverset')
+    $manLines.Add('snapshot plus the recent logs of the connection-path pods (game servers, server')
+    $manLines.Add('gateway, battlegroup director, text router, game message queue). These capture')
+    $manLines.Add('the actual join-rejection reason for "P34 / can''t connect" reports where the')
+    $manLines.Add('server is visible but players time out. Dump/backup pods are excluded. All IPs')
+    $manLines.Add('are sanitized; absent when the VM is unreachable (see Warnings).')
     $manLines.Add('')
     $manLines.Add('Files included:')
     foreach ($f in $included) {

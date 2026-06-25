@@ -27,7 +27,26 @@ here cover everything those tags shipped.
   restarts the battlegroup so the servers re-advertise the correct address (the
   same repair as setting the IP manually and clicking Apply, filled in for you).
   After the fix it re-runs the check to confirm. Also surfaces servers that
-  aren't ready/alive and reminds you to forward UDP 7777–7810.
+  aren't ready/alive, lists the exact per-map UDP port each running map needs
+  forwarded (forwarding only 7777 lets players reach one map but P34 on the
+  rest), and warns that testing your own public IP from the same network only
+  exercises router NAT loopback (hairpin), not the real external path. It also
+  notes that IPv6 can cause P34 even when the IPv4 check is green — disabling
+  IPv6 on the server's NIC, rebooting, and re-applying the public IP has
+  resolved it for some hosts.
+
+- **Diagnostic bundle now captures game-server pod logs.** The bundle
+  (Help → Create GitHub Issue + Save Logs) previously only collected DST-side
+  logs, which can't show *why* a connection is rejected for the "server is
+  visible but players get P34" reports. It now pulls a live pod/serverset
+  snapshot plus the recent logs of the connection-path pods (game servers,
+  server gateway, battlegroup director, text router, game message queue) into
+  `game-pods.txt` and `game-server-logs.txt`, so the actual join-rejection
+  reason is captured. Dump/backup pods are excluded. The sanitizer now also
+  scrubs JWTs (e.g. the FLS `ServiceAuthToken` printed in gateway logs), known
+  FLS secret fields, and passwords embedded in connection-string URIs (e.g. the
+  `postgresql://user:<password>@…` string the director/gateway print), so no
+  token or credential can leave the machine.
 
 ### Fixed
 
