@@ -32,8 +32,8 @@ here cover everything those tags shipped.
   rest), and warns that testing your own public IP from the same network only
   exercises router NAT loopback (hairpin), not the real external path. It also
   notes that IPv6 can cause P34 even when the IPv4 check is green — disabling
-  IPv6 on the server's NIC and re-applying the public IP has resolved it for
-  some hosts.
+  IPv6 on the server's NIC, rebooting, and re-applying the public IP has
+  resolved it for some hosts.
 
 - **Diagnostic bundle now captures game-server pod logs.** The bundle
   (Help → Create GitHub Issue + Save Logs) previously only collected DST-side

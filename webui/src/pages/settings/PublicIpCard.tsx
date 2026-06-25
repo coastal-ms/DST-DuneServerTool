@@ -475,7 +475,7 @@ export function PublicIpCard() {
                   <span className="text-warning font-medium">IPv6 note:</span> if the check is green but players still
                   get P34, IPv6 can interfere — the server can advertise or route over an IPv6 path that isn’t reachable
                   while your IPv4 port-forward works. Disabling IPv6 <span className="font-medium">on the server’s network
-                  adapter (NIC)</span> and then re-applying your public IP (below) has fixed P34 for some hosts.
+                  adapter (NIC)</span>, rebooting, then re-applying your public IP (below) has fixed P34 for some hosts.
                 </p>
               </div>
             )}
