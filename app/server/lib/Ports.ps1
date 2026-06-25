@@ -103,15 +103,16 @@ function Get-DunePortStatus {
     param([switch]$Force)
     $cfg  = Read-DuneConfig
     $mode = if ($cfg.PortCheckMode) { $cfg.PortCheckMode } else { 'builtin' }
+    $hasCustomUrl = -not [string]::IsNullOrWhiteSpace("$($cfg.PortCheckUrlTemplate)")
 
     # UDP game ports (7777-7810) cannot be verified by the built-in/free TCP
     # checkers, so their indicators are HIDDEN by default to avoid confusion
     # ("not green" was being read as a fault). They only appear when the user
-    # has BOTH set a custom (UDP-capable) checker AND opted in via the
-    # ShowUdpPortStatus flag. Otherwise we strip UDP from the results so every
-    # render site (status bar, dashboards) naturally hides them.
+    # has BOTH configured a custom UDP-capable checker (custom mode + a URL
+    # template) AND opted in via the ShowUdpPortStatus flag. Otherwise we strip
+    # UDP from the results so every render site naturally hides them.
     $showUdp = $false
-    if ($mode -eq 'custom') {
+    if ($mode -eq 'custom' -and $hasCustomUrl) {
         $v = "$($cfg.ShowUdpPortStatus)".Trim().ToLowerInvariant()
         $showUdp = $v -in @('1','true','yes','on')
     }
@@ -119,9 +120,12 @@ function Get-DunePortStatus {
     if ($mode -eq 'disabled') {
         return @{ mode = 'disabled'; publicIp = $null; results = @(); showUdp = $false }
     }
-    if ($mode -eq 'custom' -and -not $cfg.PortCheckUrlTemplate) {
-        return @{ mode = $mode; publicIp = $null; results = @(); showUdp = $showUdp }
-    }
+
+    # Custom mode selected but no URL template entered yet: don't break the
+    # check (and don't strand the user). Fall back to the builtin checker so the
+    # TCP port still gets verified; UDP simply stays hidden (no real checker).
+    $effectiveMode = $mode
+    if ($mode -eq 'custom' -and -not $hasCustomUrl) { $effectiveMode = 'builtin' }
 
     $now   = Get-Date
     if (-not $Force.IsPresent -and
@@ -140,7 +144,7 @@ function Get-DunePortStatus {
     $pubIp = Get-DunePublicIp
     $results = @()
     foreach ($p in $script:DuneRequiredPorts) {
-        $status = switch ($mode) {
+        $status = switch ($effectiveMode) {
             'canyouseeme' {
                 if ($p.Protocol -ne 'TCP') { 'udp-skip' }
                 else { Test-DunePortCanYouSeeMe -PublicIp $pubIp -Port $p.Port }
