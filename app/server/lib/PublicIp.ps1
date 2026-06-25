@@ -1,4 +1,4 @@
-# PublicIp - Settings-driven public IP / DDNS switch.
+﻿# PublicIp - Settings-driven public IP / DDNS switch.
 
 # Server dir captured at lib load time so the async apply runspace (and the API
 # pool runspaces) don't depend on $script:DuneServerDir being set in their
@@ -317,6 +317,150 @@ function Get-DunePublicIpStatus {
         } catch {}
     }
     return $status
+}
+
+# ----------------------------------------------------------------------------
+# P34 connectivity diagnostic.
+#
+# "P34 / Connection Request Timed Out" AFTER the server is visible in the
+# in-game browser (FLS auth fine, no 403002) is, on self-hosted servers, almost
+# always a STALE PUBLIC IP: the game servers advertise an old external IPv4 to
+# clients in dune.farm_state.game_addr, so clients dial the wrong address and
+# time out. This compares the VM's real current public IP (ipify, from inside
+# the VM) against what the maps actually advertise (farm_state) and the K3s
+# ExternalIP, and names the mismatch. The fix is the Public IP apply flow in
+# this same Settings card, which rewrites the battlegroup CR + K3s ExternalIP
+# and restarts the servers so they re-register farm_state with the right IP.
+# ----------------------------------------------------------------------------
+function Get-DuneP34Diagnostic {
+    $result = [ordered]@{
+        ok             = $false
+        reachable      = $false
+        vmIp           = $null
+        vmPublicIp     = $null
+        k3sExternalIp  = $null
+        maps           = @()
+        advertisedIps  = @()
+        staleFarmIp    = $false
+        staleK3sIp     = $false
+        serversReady   = $true
+        verdict        = 'unknown'
+        summary        = $null
+        error          = $null
+    }
+
+    if (-not (Get-Command Get-DuneDbContext -ErrorAction SilentlyContinue) -or
+        -not (Get-Command Invoke-DuneSqlRaw -ErrorAction SilentlyContinue) -or
+        -not (Get-Command Invoke-V6Ssh -ErrorAction SilentlyContinue)) {
+        $result.error = 'Server/DB helpers unavailable.'
+        $result.summary = $result.error
+        return $result
+    }
+
+    $ctx = $null
+    try { $ctx = Get-DuneDbContext } catch { $result.error = $_.Exception.Message; $result.summary = $result.error; return $result }
+    if (-not $ctx.ok) {
+        $result.error = $ctx.message
+        $result.summary = $ctx.message
+        return $result
+    }
+    $result.reachable = $true
+    $result.vmIp = [string]$ctx.ip
+
+    # 1) VM-side real public IP (what clients must reach) + K3s ExternalIP, one
+    #    SSH round trip. ipify is queried from INSIDE the VM so it reflects the
+    #    server's actual egress/WAN IP, which is what port-forwarding maps to.
+    $probe = @'
+PUB=$(curl -fsS --max-time 8 https://api.ipify.org 2>/dev/null)
+[ -z "$PUB" ] && PUB=$(wget -qO- --timeout=8 https://api.ipify.org 2>/dev/null)
+EXT=$(sudo kubectl get node -o jsonpath='{range .items[0].status.addresses[?(@.type=="ExternalIP")]}{.address}{end}' 2>/dev/null)
+echo "PUB=$PUB"
+echo "EXT=$EXT"
+'@ -replace "`r", ''
+    try {
+        $raw = Invoke-V6Ssh -Ip $ctx.ip -Cmd $probe -TimeoutSec 25
+        $rawText = ($raw -join "`n")
+        $mp = [regex]::Match($rawText, 'PUB=([0-9.]+)')
+        if ($mp.Success) { $result.vmPublicIp = $mp.Groups[1].Value.Trim() }
+        $me = [regex]::Match($rawText, 'EXT=([0-9.]+)')
+        if ($me.Success) { $result.k3sExternalIp = $me.Groups[1].Value.Trim() }
+    } catch {
+        $result.error = "Public IP probe failed: $($_.Exception.Message)"
+        $result.summary = $result.error
+        return $result
+    }
+
+    # 2) farm_state — the address/port each map advertises to clients, plus its
+    #    readiness. game_addr is stored as "1.2.3.4/0"; strip the suffix.
+    $sql = "SELECT map, server_id, split_part(game_addr::text,'/',1) AS ip, game_port, ready, alive FROM dune.farm_state ORDER BY map;"
+    $maps = @()
+    try {
+        $csv = Invoke-DuneSqlRaw -Ip $ctx.ip -Sql $sql -Csv -TimeoutSec 30
+        if (Test-DunePsqlError -Output $csv) {
+            $result.error = "farm_state query failed: $(Get-DunePsqlErrorMessage -Output $csv)"
+            $result.summary = $result.error
+            return $result
+        }
+        $lines = @(($csv -split "`r?`n") | Where-Object { $_ -ne '' })
+        if ($lines.Count -ge 2) {
+            $rows = $lines | ConvertFrom-Csv
+            foreach ($r in $rows) {
+                $maps += [ordered]@{
+                    map      = [string]$r.map
+                    serverId = [string]$r.server_id
+                    ip       = ([string]$r.ip).Trim()
+                    port     = [string]$r.game_port
+                    ready    = ([string]$r.ready -eq 't')
+                    alive    = ([string]$r.alive -eq 't')
+                }
+            }
+        }
+    } catch {
+        $result.error = "farm_state query failed: $($_.Exception.Message)"
+        $result.summary = $result.error
+        return $result
+    }
+
+    $result.maps = @($maps)
+    $advertised = @($maps | ForEach-Object { $_.ip } | Where-Object { $_ } | Select-Object -Unique)
+    $result.advertisedIps = @($advertised)
+    $result.serversReady = -not [bool](@($maps | Where-Object { -not $_.ready -or -not $_.alive }).Count)
+
+    $pub = [string]$result.vmPublicIp
+    $looksPublic = ($pub -match '^\d{1,3}(\.\d{1,3}){3}$') -and ($pub -notmatch '^(10\.|192\.168\.|172\.(1[6-9]|2\d|3[01])\.|127\.|0\.)')
+    if ($looksPublic) {
+        $result.staleFarmIp = [bool](@($advertised | Where-Object { $_ -ne $pub }).Count)
+        if ($result.k3sExternalIp) { $result.staleK3sIp = ($result.k3sExternalIp -ne $pub) }
+    }
+
+    # Verdict, most-actionable first.
+    if (@($maps).Count -eq 0) {
+        $result.verdict = 'servers-down'
+        $result.summary = 'No map servers are registered yet. Start or restart the battlegroup, then re-check.'
+    }
+    elseif ($result.staleFarmIp -or $result.staleK3sIp) {
+        $result.verdict = 'stale-ip'
+        $advTxt = (@($advertised) -join ', ')
+        $parts = @()
+        if ($result.staleFarmIp) { $parts += "your maps advertise $advTxt to players" }
+        if ($result.staleK3sIp)  { $parts += "the K3s ExternalIP is $($result.k3sExternalIp)" }
+        $result.summary = "Stale public IP detected: $($parts -join ' and '), but this server's real public IP is $pub. Players are being sent to the wrong address, which causes P34 / connection timeouts. Apply your current public IP below to fix it."
+    }
+    elseif (-not $result.serversReady) {
+        $result.verdict = 'servers-not-ready'
+        $result.summary = 'Public IP looks correct, but one or more map servers are not ready/alive yet. Wait for them to finish booting, or restart the battlegroup.'
+    }
+    elseif (-not $looksPublic) {
+        $result.verdict = 'unknown'
+        $result.summary = if ($pub) { "Could not classify the detected public IP ($pub). Verify your port forwarding (UDP 7777-7810) manually." } else { 'Could not determine the server''s public IP from inside the VM. Check the VM''s internet access.' }
+    }
+    else {
+        $result.verdict = 'healthy'
+        $result.summary = "All $(@($maps).Count) map server(s) advertise the correct public IP ($pub) and are ready. If players still get P34, check that UDP 7777-7810 is port-forwarded to this server."
+    }
+
+    $result.ok = $true
+    return $result
 }
 
 function Invoke-DunePublicIpHostRoute {

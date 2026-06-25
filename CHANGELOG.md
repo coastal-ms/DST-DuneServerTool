@@ -13,6 +13,21 @@ here cover everything those tags shipped.
 
 ## [Unreleased]
 
+### Added
+
+- **Connection check (P34 / can't join) in Settings → Public IP / DDNS.** A new
+  one-click diagnostic for the most common "server is visible in the in-game
+  browser but players get *P34 / Connection Request Timed Out*" failure. It
+  compares the server's real current public IP (queried from inside the VM)
+  against the address each map actually advertises to clients
+  (`dune.farm_state`) and the K3s ExternalIP, and flags a **stale public IP** —
+  the usual root cause after an ISP IP change or a game patch/reboot. When a
+  mismatch is found it names the wrong address per map and points to the
+  existing **Apply public IP** action right below, which rewrites the
+  battlegroup + K3s ExternalIP + NAT and restarts the servers so they
+  re-advertise the correct address. Also surfaces servers that aren't
+  ready/alive and reminds you to forward UDP 7777–7810.
+
 ### Fixed
 
 - **Harmless `namespaces "f" not found` noise during Start/Reboot.** An

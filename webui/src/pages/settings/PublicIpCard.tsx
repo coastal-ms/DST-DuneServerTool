@@ -56,6 +56,31 @@ type ApplyStatus = {
   error?: string
 }
 
+type P34Map = {
+  map?: string
+  serverId?: string
+  ip?: string
+  port?: string
+  ready?: boolean
+  alive?: boolean
+}
+
+type P34Diagnostic = {
+  ok?: boolean
+  reachable?: boolean
+  vmIp?: string | null
+  vmPublicIp?: string | null
+  k3sExternalIp?: string | null
+  maps?: P34Map[]
+  advertisedIps?: string[]
+  staleFarmIp?: boolean
+  staleK3sIp?: boolean
+  serversReady?: boolean
+  verdict?: 'healthy' | 'stale-ip' | 'servers-down' | 'servers-not-ready' | 'unknown'
+  summary?: string
+  error?: string
+}
+
 function stepClass(status: PublicIpStep['status']): string {
   if (status === 'done') return 'text-success'
   if (status === 'failed') return 'text-danger'
@@ -78,6 +103,9 @@ export function PublicIpCard() {
   const [applyStarted, setApplyStarted] = useState<number | null>(null)
   const [now, setNow] = useState(Date.now())
   const pollRef = useRef<number | null>(null)
+  const [p34, setP34] = useState<P34Diagnostic | null>(null)
+  const [p34Loading, setP34Loading] = useState(false)
+  const [p34Error, setP34Error] = useState<string | null>(null)
 
   function stopPolling() {
     if (pollRef.current !== null) { window.clearInterval(pollRef.current); pollRef.current = null }
@@ -117,6 +145,19 @@ export function PublicIpCard() {
         if (!stillRunning) stopPolling()
       })()
     }, 2000)
+  }
+
+  async function runP34Check() {
+    setP34Loading(true)
+    setP34Error(null)
+    try {
+      const r = await api<P34Diagnostic>('/api/public-ip/p34')
+      setP34(r)
+    } catch (e) {
+      setP34Error(e instanceof Error ? e.message : String(e))
+    } finally {
+      setP34Loading(false)
+    }
   }
 
   async function loadStatus() {
@@ -300,6 +341,92 @@ export function PublicIpCard() {
           <Icon name={loading ? 'Loader2' : 'RefreshCw'} size={15} className={loading ? 'animate-spin' : ''} />
           Refresh
         </button>
+      </div>
+
+      <div className="mb-5 rounded-lg border border-border bg-surface-2/40 p-3">
+        <div className="flex items-center justify-between gap-3">
+          <div className="flex items-center gap-2 min-w-0">
+            <Icon name="Activity" size={16} className="text-text-muted shrink-0" />
+            <span className="font-medium text-sm">Connection check (P34 / can't join)</span>
+          </div>
+          <button type="button" onClick={() => void runP34Check()} disabled={p34Loading} className="btn-secondary shrink-0">
+            <Icon name={p34Loading ? 'Loader2' : 'Stethoscope'} size={15} className={p34Loading ? 'animate-spin' : ''} />
+            {p34Loading ? 'Checking…' : 'Run check'}
+          </button>
+        </div>
+        <p className="text-xs text-text-dim mt-1.5">
+          Checks whether your map servers advertise your current public IP. A mismatch is the usual cause of
+          “P34 / Connection Request Timed Out” when the server is visible in the browser but players can’t join.
+        </p>
+
+        {p34Error && (
+          <p className="mt-3 text-sm text-danger flex items-center gap-1.5">
+            <Icon name="AlertCircle" size={14} /> {p34Error}
+          </p>
+        )}
+
+        {p34 && (
+          <div className="mt-3 space-y-3">
+            <div className={
+              p34.verdict === 'healthy'
+                ? 'rounded-lg border border-success/40 bg-success/10 p-3 text-sm text-success flex items-start gap-2'
+                : p34.verdict === 'stale-ip'
+                  ? 'rounded-lg border border-danger/40 bg-danger/10 p-3 text-sm text-danger flex items-start gap-2'
+                  : 'rounded-lg border border-warning/40 bg-warning/10 p-3 text-sm text-warning flex items-start gap-2'
+            }>
+              <Icon
+                name={p34.verdict === 'healthy' ? 'CheckCircle2' : p34.verdict === 'stale-ip' ? 'AlertTriangle' : 'AlertCircle'}
+                size={15}
+                className="mt-0.5 shrink-0"
+              />
+              <span>{p34.summary}</span>
+            </div>
+
+            {p34.reachable && (
+              <div className="flex flex-wrap gap-2 text-xs">
+                {p34.vmPublicIp && <span className="pill-muted">this server’s public IP · {p34.vmPublicIp}</span>}
+                {p34.k3sExternalIp && (
+                  <span className={p34.staleK3sIp ? 'pill-danger' : 'pill-muted'}>K3s ExternalIP · {p34.k3sExternalIp}</span>
+                )}
+              </div>
+            )}
+
+            {p34.maps && p34.maps.length > 0 && (
+              <div className="border border-border rounded-lg overflow-hidden text-sm">
+                <div className="grid grid-cols-[1fr_auto_auto] gap-x-3 px-3 py-1.5 bg-surface-2 text-xs uppercase tracking-wide text-text-dim">
+                  <span>Map</span>
+                  <span>Advertised address</span>
+                  <span>State</span>
+                </div>
+                {p34.maps.map(m => {
+                  const mismatch = Boolean(p34.vmPublicIp && m.ip && m.ip !== p34.vmPublicIp)
+                  return (
+                    <div key={`${m.map}-${m.serverId}`} className="grid grid-cols-[1fr_auto_auto] gap-x-3 px-3 py-1.5 border-t border-border items-center">
+                      <span className="font-medium truncate">{m.map}</span>
+                      <span className={`font-mono ${mismatch ? 'text-danger' : 'text-text'}`}>{m.ip}:{m.port}</span>
+                      <span className="flex items-center gap-1 text-xs">
+                        <Icon
+                          name={m.ready && m.alive ? 'CheckCircle2' : 'AlertCircle'}
+                          size={13}
+                          className={m.ready && m.alive ? 'text-success' : 'text-warning'}
+                        />
+                        {m.ready && m.alive ? 'ready' : 'not ready'}
+                      </span>
+                    </div>
+                  )
+                })}
+              </div>
+            )}
+
+            {p34.verdict === 'stale-ip' && (
+              <p className="text-xs text-text-dim">
+                Fix: set your current public IP below (Resolve a DDNS hostname or enter it manually), then click
+                <span className="font-medium"> Apply public IP</span>. That rewrites the battlegroup, K3s ExternalIP and NAT, and
+                restarts the servers so they re-advertise the correct address.
+              </p>
+            )}
+          </div>
+        )}
       </div>
 
       <div className="flex flex-wrap gap-2 mb-4">
