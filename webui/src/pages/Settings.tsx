@@ -10,6 +10,7 @@ import { AppearanceCard } from './settings/AppearanceCard'
 import { PublicIpCard } from './settings/PublicIpCard'
 import { RemoteAccessCard } from './settings/RemoteAccessCard'
 import { MobileAppCard } from './settings/MobileAppCard'
+import { FlsTokenCard } from './settings/FlsTokenCard'
 import { SectionErrorBoundary } from '../components/SectionErrorBoundary'
 
 const FIELDS: {
@@ -691,6 +692,8 @@ export function Settings() {
       <SectionErrorBoundary name="Remote Access"><RemoteAccessCard /></SectionErrorBoundary>
 
       <SectionErrorBoundary name="Public IP"><PublicIpCard /></SectionErrorBoundary>
+
+      <SectionErrorBoundary name="Server Authorization Token"><FlsTokenCard /></SectionErrorBoundary>
 
       {/* --- Database connection (issue #295) --- */}
       <div className="card mb-4 p-6">
