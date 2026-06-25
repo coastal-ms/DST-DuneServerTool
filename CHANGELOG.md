@@ -23,7 +23,9 @@ here cover everything those tags shipped.
   perfectly healthy server. They're now hidden from the status bar and
   dashboards unless you opt in: set **Settings → Port-check mode** to **custom**
   with a UDP-capable service **and** tick the new **Show UDP port status** box.
-  The TCP (RabbitMQ) indicator is unchanged.
+  Selecting custom without a URL falls back to the builtin TCP check (so the TCP
+  indicator keeps working) and the URL/Show-UDP fields only appear when relevant,
+  so there's no dead-end. The TCP (RabbitMQ) indicator is unchanged.
 
 ### Fixed
 
@@ -33,6 +35,13 @@ here cover everything those tags shipped.
   (`results.find is not a function`). The backend now always emits an array and
   the UI defends against a non-array port list so a malformed payload can never
   blank the app.
+- **No more transient red error banner when opening the mobile apps / remote
+  portal.** The remote Dashboard and Maps views fired their first data request
+  the instant they mounted; over a remote tunnel that first request often fails
+  while the connection is still warming up, flashing a red error banner that
+  cleared a couple seconds later on the next poll. They now retry quietly and
+  only surface the banner after **more than 2 consecutive failures**, so a real
+  outage still shows within a couple seconds but a warmup blip never flashes.
 
 ## [12.13.0] - 2026-06-24
 
