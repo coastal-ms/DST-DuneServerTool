@@ -13,6 +13,16 @@ here cover everything those tags shipped.
 
 ## [Unreleased]
 
+### Fixed
+
+- **No more transient red error banner when opening the mobile apps / remote
+  portal.** The remote Dashboard and Maps views fired their first data request
+  the instant they mounted; over a remote tunnel that first request often fails
+  while the connection is still warming up, flashing a red error banner that
+  cleared a couple seconds later on the next poll. They now retry quietly and
+  only surface the banner after **more than 2 consecutive failures**, so a real
+  outage still shows within a couple seconds but a warmup blip never flashes.
+
 ## [12.13.0] - 2026-06-24
 
 ### Added
