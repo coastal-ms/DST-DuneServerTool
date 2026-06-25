@@ -22,11 +22,12 @@ here cover everything those tags shipped.
   against the address each map actually advertises to clients
   (`dune.farm_state`) and the K3s ExternalIP, and flags a **stale public IP** —
   the usual root cause after an ISP IP change or a game patch/reboot. When a
-  mismatch is found it names the wrong address per map and points to the
-  existing **Apply public IP** action right below, which rewrites the
-  battlegroup + K3s ExternalIP + NAT and restarts the servers so they
-  re-advertise the correct address. Also surfaces servers that aren't
-  ready/alive and reminds you to forward UDP 7777–7810.
+  mismatch is found it names the wrong address per map and offers a **Fix it
+  automatically** button that re-applies the server's current public IP and
+  restarts the battlegroup so the servers re-advertise the correct address (the
+  same repair as setting the IP manually and clicking Apply, filled in for you).
+  After the fix it re-runs the check to confirm. Also surfaces servers that
+  aren't ready/alive and reminds you to forward UDP 7777–7810.
 
 ### Fixed
 

@@ -103,6 +103,7 @@ export function PublicIpCard() {
   const [applyStarted, setApplyStarted] = useState<number | null>(null)
   const [now, setNow] = useState(Date.now())
   const pollRef = useRef<number | null>(null)
+  const fixingP34 = useRef(false)
   const [p34, setP34] = useState<P34Diagnostic | null>(null)
   const [p34Loading, setP34Loading] = useState(false)
   const [p34Error, setP34Error] = useState<string | null>(null)
@@ -122,10 +123,12 @@ export function PublicIpCard() {
         setError(null)
         setMessage(`Applied public IP ${s.publicIp ?? targetIp}.`)
         void loadStatus()
+        if (fixingP34.current) { fixingP34.current = false; void runP34Check() }
         return false
       }
       if (s.phase === 'error') {
         setApplyRunning(false); setWorking(null)
+        fixingP34.current = false
         setError(s.error || 'Public IP change failed.')
         return false
       }
@@ -280,15 +283,7 @@ export function PublicIpCard() {
     }
   }
 
-  async function applyPublicIp() {
-    if (!targetIp) return
-    const label = mode === 'ddns' ? `${hostname.trim()} -> ${targetIp}` : targetIp
-    if (!window.confirm(
-      `Apply public IP change?\n\nTarget: ${label}\n\n`
-      + 'This updates the Windows route, VM public IP alias, Dune settings.conf, K3s ExternalIP, the battlegroup (change-battlegroup-ip), NAT, and restarts the battlegroup. '
-      + 'It can take several minutes and will briefly disconnect connected players. You can safely leave this page — it keeps running on the server.',
-    )) return
-
+  async function startApply(body: Record<string, unknown>) {
     setWorking('apply')
     setApplyRunning(true)
     setError(null)
@@ -296,9 +291,6 @@ export function PublicIpCard() {
     setApplyStarted(Date.now())
     setSteps([{ id: 'client', label: 'Apply request sent', status: 'running', detail: 'Starting the public IP change on the server.' }])
     try {
-      const body = mode === 'ddns'
-        ? { mode, hostname, resolvedIp: targetIp, confirmed: true }
-        : { mode, publicIp: targetIp, confirmed: true }
       await api<ApplyResponse>('/api/public-ip/apply', {
         method: 'POST',
         body: JSON.stringify(body),
@@ -308,6 +300,7 @@ export function PublicIpCard() {
     } catch (e) {
       setApplyRunning(false)
       setWorking(null)
+      fixingP34.current = false
       if (e instanceof ApiError) {
         const eb = e.body as Partial<ApplyResponse> | undefined
         setSteps(eb?.steps ?? [])
@@ -317,6 +310,43 @@ export function PublicIpCard() {
         setError(e instanceof Error ? e.message : String(e))
       }
     }
+  }
+
+  async function applyPublicIp() {
+    if (!targetIp) return
+    const label = mode === 'ddns' ? `${hostname.trim()} -> ${targetIp}` : targetIp
+    if (!window.confirm(
+      `Apply public IP change?\n\nTarget: ${label}\n\n`
+      + 'This updates the Windows route, VM public IP alias, Dune settings.conf, K3s ExternalIP, the battlegroup (change-battlegroup-ip), NAT, and restarts the battlegroup. '
+      + 'It can take several minutes and will briefly disconnect connected players. You can safely leave this page — it keeps running on the server.',
+    )) return
+
+    const body = mode === 'ddns'
+      ? { mode, hostname, resolvedIp: targetIp, confirmed: true }
+      : { mode, publicIp: targetIp, confirmed: true }
+    await startApply(body)
+  }
+
+  // One-click fix for the P34 "stale public IP" verdict: re-apply the server's
+  // real current public IP (detected by the connection check) through the same
+  // apply pipeline. This rewrites the battlegroup + K3s ExternalIP + NAT and
+  // restarts the servers so they re-register farm_state with the correct
+  // address — no need for the user to understand DDNS/manual/resolve/validate.
+  async function fixP34Now() {
+    const ip = p34?.vmPublicIp
+    if (!ip || applyRunning) return
+    if (!window.confirm(
+      `Fix the connection (P34) problem?\n\nDST will set your servers' public IP to ${ip} (this server's real current public IP) and restart the battlegroup so players are routed to the right address.\n\n`
+      + 'It can take several minutes and will briefly disconnect anyone currently connected. You can safely leave this page — it keeps running on the server.',
+    )) return
+
+    // Reflect the target in the manual-mode inputs so the card stays consistent.
+    setMode('manual')
+    setManualIp(ip)
+    setTargetIp(ip)
+    setValidatedInput(ip)
+    fixingP34.current = true
+    await startApply({ mode: 'manual', publicIp: ip, confirmed: true })
   }
 
   return (
@@ -419,11 +449,21 @@ export function PublicIpCard() {
             )}
 
             {p34.verdict === 'stale-ip' && (
-              <p className="text-xs text-text-dim">
-                Fix: set your current public IP below (Resolve a DDNS hostname or enter it manually), then click
-                <span className="font-medium"> Apply public IP</span>. That rewrites the battlegroup, K3s ExternalIP and NAT, and
-                restarts the servers so they re-advertise the correct address.
-              </p>
+              <div className="space-y-2">
+                <button
+                  type="button"
+                  onClick={() => void fixP34Now()}
+                  disabled={!p34.vmPublicIp || applyRunning || working === 'apply'}
+                  className="btn-primary w-full justify-center"
+                >
+                  <Icon name={applyRunning && fixingP34.current ? 'Loader2' : 'Wrench'} size={15} className={applyRunning && fixingP34.current ? 'animate-spin' : ''} />
+                  {applyRunning && fixingP34.current ? 'Fixing…' : `Fix it automatically (set public IP to ${p34.vmPublicIp})`}
+                </button>
+                <p className="text-xs text-text-dim">
+                  This re-applies your current public IP and restarts the servers so they re-advertise the correct
+                  address. Same as setting the IP manually below and clicking Apply — it just fills it in for you.
+                </p>
+              </div>
             )}
           </div>
         )}
