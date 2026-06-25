@@ -446,6 +446,13 @@ export function Settings() {
 
   async function onSubmit(e: FormEvent) {
     e.preventDefault()
+    // Custom port-check mode is non-functional without a URL template (the
+    // port check can't run, and it silently disables the working TCP check).
+    // Block the save with a clear message instead of persisting a broken state.
+    if ((values.PortCheckMode ?? '') === 'custom' && !(values.PortCheckUrlTemplate ?? '').trim()) {
+      setError('A Port-check URL template is required when mode is "custom". Enter a UDP-capable check URL, or switch Port-check mode back to a built-in option.')
+      return
+    }
     // Confirm gate (issue #295): changing the database port silently breaks
     // Players/Bases/Storage if it's wrong, so make the user acknowledge it and
     // — importantly — show the OLD value so they can write it down before
