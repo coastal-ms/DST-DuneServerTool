@@ -201,12 +201,21 @@ export default function App() {
     setLoadingMaps(true);
     try {
       const res = await apiFetch(serverInfo, '/api/map-spinup');
-      const data = await res.json();
-      if (data.ok && data.maps) {
+      // When the server is mid-restart / briefly unreachable the body can be
+      // empty or truncated; res.json() would then throw "Unexpected end of
+      // input" and pop an alarming alert. Parse defensively and just skip on an
+      // empty/non-OK response — the Server State card already tells the user the
+      // server can't be reached, so a maps alert is pure noise.
+      const text = await res.text();
+      if (!res.ok || !text) return;
+      let data: any;
+      try { data = JSON.parse(text); } catch { return; }
+      if (data && data.ok && data.maps) {
         setMaps(data.maps);
       }
     } catch (e) {
-      alert(`Failed to fetch maps: ${e}`);
+      // Network-level failure (server unreachable) — stay quiet; the Server
+      // State banner covers it. Don't alert.
     } finally {
       setLoadingMaps(false);
     }
