@@ -51,6 +51,7 @@ export type PortStatus = {
   mode: 'builtin' | 'custom' | 'disabled'
   publicIp: string | null
   results: PortResult[]
+  showUdp?: boolean
   cached?: boolean
   ageSecs?: number
 }

@@ -18,7 +18,7 @@ const FIELDS: {
   label: string
   placeholder: string
   help?: string
-  type?: 'text' | 'select'
+  type?: 'text' | 'select' | 'checkbox'
   browse?: { mode: 'folder' | 'file'; filter?: string }
 }[] = [
   { key: 'SteamPath',    label: 'Steam install path',
@@ -38,6 +38,9 @@ const FIELDS: {
   { key: 'PortCheckUrlTemplate', label: 'Port-check URL template',
     placeholder: 'https://example.com/check?ip={ip}&port={port}&protocol={protocol}',
     help: 'Used when mode is "custom". Tokens: {ip} {port} {protocol}' },
+  { key: 'ShowUdpPortStatus', label: 'Show UDP port status', placeholder: '',
+    type: 'checkbox',
+    help: 'Show the game-port (UDP 7777–7810) indicators on the dashboard and status bar. UDP can\'t be verified by the built-in/free TCP checkers, so these are hidden by default to avoid confusion — they only appear when Port-check mode is "custom" with a UDP-capable service AND this box is checked.' },
   { key: 'DbPort', label: 'Database port',
     placeholder: '15432',
     help: 'In-pod PostgreSQL port DST queries for Players / Bases / Storage. Funcom\'s default is 15432 — change it only if your server\'s database listens elsewhere (e.g. 15433). Use "Test connection" below after changing it.' },
@@ -846,7 +849,17 @@ export function Settings() {
               {f.label}
               <span className="ml-2 text-[10px] font-mono text-text-dim uppercase tracking-wider">{f.key}</span>
             </label>
-            {f.type === 'select' ? (
+            {f.type === 'checkbox' ? (
+              <label className="flex items-center gap-2 cursor-pointer select-none">
+                <input
+                  type="checkbox"
+                  checked={['1','true','yes','on'].includes((values[f.key] ?? '').trim().toLowerCase())}
+                  onChange={e => setValues(v => ({ ...v, [f.key]: e.target.checked ? 'true' : 'false' }))}
+                  className="h-4 w-4"
+                />
+                <span className="text-sm text-text-muted">Enabled</span>
+              </label>
+            ) : f.type === 'select' ? (
               <select
                 value={values[f.key] ?? ''}
                 onChange={e => setValues(v => ({ ...v, [f.key]: e.target.value }))}

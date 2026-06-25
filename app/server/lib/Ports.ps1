@@ -93,11 +93,24 @@ function Get-DunePortStatus {
     param([switch]$Force)
     $cfg  = Read-DuneConfig
     $mode = if ($cfg.PortCheckMode) { $cfg.PortCheckMode } else { 'builtin' }
+
+    # UDP game ports (7777-7810) cannot be verified by the built-in/free TCP
+    # checkers, so their indicators are HIDDEN by default to avoid confusion
+    # ("not green" was being read as a fault). They only appear when the user
+    # has BOTH set a custom (UDP-capable) checker AND opted in via the
+    # ShowUdpPortStatus flag. Otherwise we strip UDP from the results so every
+    # render site (status bar, dashboards) naturally hides them.
+    $showUdp = $false
+    if ($mode -eq 'custom') {
+        $v = "$($cfg.ShowUdpPortStatus)".Trim().ToLowerInvariant()
+        $showUdp = $v -in @('1','true','yes','on')
+    }
+
     if ($mode -eq 'disabled') {
-        return @{ mode = 'disabled'; publicIp = $null; results = @() }
+        return @{ mode = 'disabled'; publicIp = $null; results = @(); showUdp = $false }
     }
     if ($mode -eq 'custom' -and -not $cfg.PortCheckUrlTemplate) {
-        return @{ mode = $mode; publicIp = $null; results = @() }
+        return @{ mode = $mode; publicIp = $null; results = @(); showUdp = $showUdp }
     }
 
     $now   = Get-Date
@@ -107,7 +120,8 @@ function Get-DunePortStatus {
         return @{
             mode      = $mode
             publicIp  = $script:DunePortCheckPubIp
-            results   = $script:DunePortCheckCache
+            results   = (Select-DuneVisiblePortResults -Results $script:DunePortCheckCache -ShowUdp $showUdp)
+            showUdp   = $showUdp
             cached    = $true
             ageSecs   = [int]($now - $script:DunePortCheckFetched).TotalSeconds
         }
@@ -140,5 +154,21 @@ function Get-DunePortStatus {
     $script:DunePortCheckCache   = $results
     $script:DunePortCheckPubIp   = $pubIp
     $script:DunePortCheckFetched = $now
-    return @{ mode = $mode; publicIp = $pubIp; results = $results; cached = $false; ageSecs = 0 }
+    return @{
+        mode     = $mode
+        publicIp = $pubIp
+        results  = (Select-DuneVisiblePortResults -Results $results -ShowUdp $showUdp)
+        showUdp  = $showUdp
+        cached   = $false
+        ageSecs  = 0
+    }
+}
+
+# Drop UDP entries unless the user opted into showing them (custom UDP-capable
+# checker + ShowUdpPortStatus). The full result set is still what gets cached;
+# this only filters what is returned to the UI.
+function Select-DuneVisiblePortResults {
+    param($Results, [bool]$ShowUdp)
+    if ($ShowUdp) { return @($Results) }
+    return @(@($Results) | Where-Object { $_.protocol -eq 'TCP' })
 }
