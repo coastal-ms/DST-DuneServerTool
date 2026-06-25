@@ -31,6 +31,28 @@ here cover everything those tags shipped.
   change, the token is streamed to the VM over stdin (never on a command line)
   and scrubbed afterward, and the whole rotation runs in the background with
   live progress. Loopback-only. Validated end-to-end on a live server.
+- **Reinstall button on the Stable channel.** When you're already on the latest
+  version, Settings → Dune Server Tool updates now shows a **Reinstall** button
+  that re-downloads and re-runs the current version's installer — handy for
+  repairing a broken install or re-applying the current release without waiting
+  for a newer one.
+
+### Changed
+
+- **In-app updates now show the installer wizard instead of installing silently.**
+  Clicking Update (or Reinstall) launches the installer interactively so you
+  click through it every time — no silent/background installs. This also matches
+  what the on-screen update prompt already described.
+- **Update checks now poll hourly** (was every 6 hours), so a new release shows
+  up in the banner sooner.
+
+### Fixed
+
+- **Settings update list could show an older release at the top.** GitHub's
+  releases API doesn't reliably return newest-first (a recently-edited older
+  release can resurface), which left a stale build at the top of the pre-release
+  picker. The list is now sorted by publish date, newest first.
+
 
 
 
