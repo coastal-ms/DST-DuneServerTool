@@ -9,6 +9,7 @@ $script:DuneConfigKeys = @(
     'WindowsUser',
     'PortCheckMode',
     'PortCheckUrlTemplate',
+    'ShowUdpPortStatus',
     'PublicIpMode',
     'DdnsHostname',
     'ManualPublicIp',
