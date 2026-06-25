@@ -17,6 +17,15 @@ Register-DuneRoute -Method GET -Path '/api/public-ip/status' -Handler {
     }
 }
 
+Register-DuneRoute -Method GET -Path '/api/public-ip/p34' -Handler {
+    param($req, $res, $routeParams, $body)
+    try {
+        Write-DuneJson -Response $res -Body (Get-DuneP34Diagnostic)
+    } catch {
+        Write-DuneError -Response $res -Status 500 -Message $_.Exception.Message
+    }
+}
+
 Register-DuneRoute -Method POST -Path '/api/public-ip/resolve' -Handler {
     param($req, $res, $routeParams, $body)
     $hostname = [string](Get-DunePublicIpBodyValue -Body $body -Name 'hostname' -Default '')
