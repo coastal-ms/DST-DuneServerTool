@@ -13,7 +13,26 @@ here cover everything those tags shipped.
 
 ## [Unreleased]
 
-## [12.12.0] - 2026-06-24
+## [12.13.0] - 2026-06-24
+
+### Added
+
+- **Server authorization token recovery (Funcom error 403002).** A new
+  Settings card recovers a self-hosted server that Funcom's FLS service has
+  started rejecting with `403002 ACCESS_DENIED` ("Could not find service
+  authorization information for Battlegroup") — the server stays healthy locally
+  but vanishes from the in-game browser. You regenerate your self-hosting token
+  on the Dune account page and paste it in; DST replaces it everywhere it lives
+  (the `server-gateway-secret` Secret and the BattleGroup custom resource the
+  Funcom operators render every workload from) and restarts the battlegroup so
+  the pods re-register with the new token. Safeguards: the token's `HostId` must
+  match the existing battlegroup (a token from a different account is refused so
+  characters can't be orphaned), a full namespace snapshot is taken before any
+  change, the token is streamed to the VM over stdin (never on a command line)
+  and scrubbed afterward, and the whole rotation runs in the background with
+  live progress. Loopback-only. Validated end-to-end on a live server.
+
+
 
 Consolidated stable baseline: rolls the 12.11.1 test line (teleport/respawn, DNAT
 self-heal, Find-the-Fremen rewards) and the service-mode console + VM-command
