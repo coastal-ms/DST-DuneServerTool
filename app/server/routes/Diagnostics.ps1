@@ -45,9 +45,29 @@ function Invoke-DstRedaction {
     # 1e) Credentials embedded in connection-string URIs, e.g. the Postgres
     #     connection string the battlegroup director / gateway print:
     #       db=postgresql://dune:<password>@host:5432/...
-    #     Also covers amqp:// (RabbitMQ), redis://, mongodb://, etc. Keep the
-    #     scheme + username for readability; scrub only the password.
+    #     Also covers amqp:// (RabbitMQ), redis://, mongodb://, etc. Capture the
+    #     password FIRST so we can also scrub standalone copies of it (the
+    #     battlegroup CR JSON repeats it as "password":"<value>"), then redact
+    #     the URI form. Keep the scheme + username for readability.
+    $capturedSecrets = New-Object System.Collections.Generic.List[string]
+    foreach ($m in [regex]::Matches($out, '(?i)[a-z][a-z0-9+.\-]*://[^:/?#\s@]+:([^@/?#\s]+)@')) {
+        $pw = $m.Groups[1].Value
+        if ($pw -and $pw -ne '<redacted>' -and $pw.Length -ge 4) { [void]$capturedSecrets.Add($pw) }
+    }
     $out = [regex]::Replace($out, '(?i)([a-z][a-z0-9+.\-]*://[^:/?#\s@]+:)[^@/?#\s]+(@)', '${1}<redacted>${2}')
+
+    # 1f) Generic password / secret fields in JSON ("password":"x") or
+    #     key=value (PGPASSWORD=x) form, as a safety net for credentials that
+    #     never appear in a URI — e.g. the battlegroup CR's "password" field.
+    $out = [regex]::Replace($out, '(?i)("(?:password|passwd|pwd|pgpassword|dbpassword|secret)"\s*:\s*")[^"]+(")', '${1}<redacted>${2}')
+    $out = [regex]::Replace($out, '(?im)^(\s*(?:PGPASSWORD|PASSWORD|DB_PASSWORD|DATABASE_PASSWORD)\s*=\s*).+$', '${1}<redacted>')
+
+    # 1g) Global scrub of every captured connection-string password, so a copy
+    #     of the same secret elsewhere in the bundle (with different surrounding
+    #     syntax) can never slip through.
+    foreach ($secret in ($capturedSecrets | Select-Object -Unique)) {
+        $out = $out.Replace($secret, '<redacted>')
+    }
 
     # 2) IPv4 addresses (but leave 127.0.0.1 / 0.0.0.0 / 255.255.255.255 alone —
     #    those carry no identifying info and matter for log readability).
