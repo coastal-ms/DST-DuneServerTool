@@ -13,8 +13,28 @@ here cover everything those tags shipped.
 
 ## [Unreleased]
 
+## [12.13.1] - 2026-06-24
+
+### Changed
+
+- **UDP game-port indicators are now hidden by default.** The game ports
+  (UDP 7777–7810) can't be verified by the built-in/free TCP port checkers, so
+  they always showed as "skipped"/not-green — which read as a fault even on a
+  perfectly healthy server. They're now hidden from the status bar and
+  dashboards unless you opt in: set **Settings → Port-check mode** to **custom**
+  with a UDP-capable service **and** tick the new **Show UDP port status** box.
+  Selecting custom without a URL falls back to the builtin TCP check (so the TCP
+  indicator keeps working) and the URL/Show-UDP fields only appear when relevant,
+  so there's no dead-end. The TCP (RabbitMQ) indicator is unchanged.
+
 ### Fixed
 
+- **Port-status payload always serializes as an array.** With UDP hidden, the
+  port list can contain a single (TCP) entry; a PowerShell single-element-array
+  unwrap turned it into an object, which crashed the web UI on load
+  (`results.find is not a function`). The backend now always emits an array and
+  the UI defends against a non-array port list so a malformed payload can never
+  blank the app.
 - **No more transient red error banner when opening the mobile apps / remote
   portal.** The remote Dashboard and Maps views fired their first data request
   the instant they mounted; over a remote tunnel that first request often fails

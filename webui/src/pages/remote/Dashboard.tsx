@@ -155,7 +155,7 @@ export function RemoteDashboard() {
             <h2 className="font-semibold">Ports</h2>
           </div>
         </div>
-        {status?.ports?.results?.length
+        {Array.isArray(status?.ports?.results) && status.ports.results.length
           ? (
             <ul className="space-y-1.5 text-sm">
               {status.ports.results.map(p => (

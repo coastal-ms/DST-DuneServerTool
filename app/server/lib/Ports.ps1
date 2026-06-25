@@ -7,6 +7,16 @@ $script:DunePortCheckPubIp    = $null
 $script:DunePortCheckFetched  = [datetime]::MinValue
 $script:DunePortCheckTtlSecs  = 300
 
+# Invalidate the cached port-check results so the next status call re-evaluates
+# from scratch. Called after a config save changes the port-check settings
+# (mode / URL template / UDP visibility) so the change takes effect immediately
+# instead of after the 5-minute TTL.
+function Reset-DunePortCheckCache {
+    $script:DunePortCheckCache   = $null
+    $script:DunePortCheckPubIp   = $null
+    $script:DunePortCheckFetched = [datetime]::MinValue
+}
+
 $script:DuneRequiredPorts = @(
     [pscustomobject]@{ Port = 7777;  Protocol = 'UDP'; Label = 'Game (first)' }
     [pscustomobject]@{ Port = 7810;  Protocol = 'UDP'; Label = 'Game (last)' }
@@ -93,12 +103,29 @@ function Get-DunePortStatus {
     param([switch]$Force)
     $cfg  = Read-DuneConfig
     $mode = if ($cfg.PortCheckMode) { $cfg.PortCheckMode } else { 'builtin' }
+    $hasCustomUrl = -not [string]::IsNullOrWhiteSpace("$($cfg.PortCheckUrlTemplate)")
+
+    # UDP game ports (7777-7810) cannot be verified by the built-in/free TCP
+    # checkers, so their indicators are HIDDEN by default to avoid confusion
+    # ("not green" was being read as a fault). They only appear when the user
+    # has BOTH configured a custom UDP-capable checker (custom mode + a URL
+    # template) AND opted in via the ShowUdpPortStatus flag. Otherwise we strip
+    # UDP from the results so every render site naturally hides them.
+    $showUdp = $false
+    if ($mode -eq 'custom' -and $hasCustomUrl) {
+        $v = "$($cfg.ShowUdpPortStatus)".Trim().ToLowerInvariant()
+        $showUdp = $v -in @('1','true','yes','on')
+    }
+
     if ($mode -eq 'disabled') {
-        return @{ mode = 'disabled'; publicIp = $null; results = @() }
+        return @{ mode = 'disabled'; publicIp = $null; results = @(); showUdp = $false }
     }
-    if ($mode -eq 'custom' -and -not $cfg.PortCheckUrlTemplate) {
-        return @{ mode = $mode; publicIp = $null; results = @() }
-    }
+
+    # Custom mode selected but no URL template entered yet: don't break the
+    # check (and don't strand the user). Fall back to the builtin checker so the
+    # TCP port still gets verified; UDP simply stays hidden (no real checker).
+    $effectiveMode = $mode
+    if ($mode -eq 'custom' -and -not $hasCustomUrl) { $effectiveMode = 'builtin' }
 
     $now   = Get-Date
     if (-not $Force.IsPresent -and
@@ -107,7 +134,8 @@ function Get-DunePortStatus {
         return @{
             mode      = $mode
             publicIp  = $script:DunePortCheckPubIp
-            results   = $script:DunePortCheckCache
+            results   = @(Select-DuneVisiblePortResults -Results $script:DunePortCheckCache -ShowUdp $showUdp)
+            showUdp   = $showUdp
             cached    = $true
             ageSecs   = [int]($now - $script:DunePortCheckFetched).TotalSeconds
         }
@@ -116,7 +144,7 @@ function Get-DunePortStatus {
     $pubIp = Get-DunePublicIp
     $results = @()
     foreach ($p in $script:DuneRequiredPorts) {
-        $status = switch ($mode) {
+        $status = switch ($effectiveMode) {
             'canyouseeme' {
                 if ($p.Protocol -ne 'TCP') { 'udp-skip' }
                 else { Test-DunePortCanYouSeeMe -PublicIp $pubIp -Port $p.Port }
@@ -140,5 +168,21 @@ function Get-DunePortStatus {
     $script:DunePortCheckCache   = $results
     $script:DunePortCheckPubIp   = $pubIp
     $script:DunePortCheckFetched = $now
-    return @{ mode = $mode; publicIp = $pubIp; results = $results; cached = $false; ageSecs = 0 }
+    return @{
+        mode     = $mode
+        publicIp = $pubIp
+        results  = @(Select-DuneVisiblePortResults -Results $results -ShowUdp $showUdp)
+        showUdp  = $showUdp
+        cached   = $false
+        ageSecs  = 0
+    }
+}
+
+# Drop UDP entries unless the user opted into showing them (custom UDP-capable
+# checker + ShowUdpPortStatus). The full result set is still what gets cached;
+# this only filters what is returned to the UI.
+function Select-DuneVisiblePortResults {
+    param($Results, [bool]$ShowUdp)
+    if ($ShowUdp) { return @($Results) }
+    return @(@($Results) | Where-Object { $_.protocol -eq 'TCP' })
 }

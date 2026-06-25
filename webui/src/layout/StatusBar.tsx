@@ -11,7 +11,8 @@ function vmPillClass(vm: VmStatus | undefined | null): string {
 }
 
 function portPillClass(ports: PortStatus | null | undefined, port: number, protocol: 'TCP' | 'UDP'): string {
-  const r = ports?.results?.find(x => x.port === port && x.protocol === protocol)
+  const results = Array.isArray(ports?.results) ? ports.results : []
+  const r = results.find(x => x.port === port && x.protocol === protocol)
   return r?.status === 'open' ? 'pill-success' : 'pill-muted'
 }
 
@@ -70,9 +71,11 @@ export function StatusBar() {
             <Icon name="FlaskConical" size={11} /> TEST BUILD
           </Link>
         )}
-        <span className={portPillClass(ports, 7777, 'UDP')} title="Game server ports (forward on your router/firewall)">
-          <Icon name="Plug" size={11} /> 7777–7810 UDP
-        </span>
+        {ports?.showUdp && (
+          <span className={portPillClass(ports, 7777, 'UDP')} title="Game server ports (forward on your router/firewall). Shown because you enabled a custom UDP port check.">
+            <Icon name="Plug" size={11} /> 7777–7810 UDP
+          </span>
+        )}
         <span className={portPillClass(ports, 31982, 'TCP')} title="RabbitMQ port (forward on your router/firewall)">
           <Icon name="Plug" size={11} /> 31982 TCP
         </span>
