@@ -29,6 +29,17 @@ here cover everything those tags shipped.
   After the fix it re-runs the check to confirm. Also surfaces servers that
   aren't ready/alive and reminds you to forward UDP 7777–7810.
 
+- **Diagnostic bundle now captures game-server pod logs.** The bundle
+  (Help → Create GitHub Issue + Save Logs) previously only collected DST-side
+  logs, which can't show *why* a connection is rejected for the "server is
+  visible but players get P34" reports. It now pulls a live pod/serverset
+  snapshot plus the recent logs of the connection-path pods (game servers,
+  server gateway, battlegroup director, text router, game message queue) into
+  `game-pods.txt` and `game-server-logs.txt`, so the actual join-rejection
+  reason is captured. Dump/backup pods are excluded. The sanitizer now also
+  scrubs JWTs (e.g. the FLS `ServiceAuthToken` printed in gateway logs) and
+  known FLS secret fields, so the token can never leave the machine.
+
 ### Fixed
 
 - **Harmless `namespaces "f" not found` noise during Start/Reboot.** An
