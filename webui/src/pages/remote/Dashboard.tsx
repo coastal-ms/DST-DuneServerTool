@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { Icon } from '../../components/Icon'
 import {
   getRemoteStatus,
@@ -40,26 +40,50 @@ export function RemoteDashboard() {
   const [error, setError] = useState<string | null>(null)
   const [loading, setLoading] = useState(true)
   const [refreshing, setRefreshing] = useState(false)
+  // Suppress the transient error banner on load: over a remote tunnel the first
+  // request often fails while the connection warms up. Retry quietly and only
+  // surface the red banner after more than 2 consecutive failures, so a genuine
+  // outage still shows (within a couple seconds) but a warmup blip never flashes.
+  const failRef = useRef(0)
+  const retryRef = useRef<number | null>(null)
 
   const load = useCallback(async (showSpinner: boolean) => {
     if (showSpinner) setLoading(true); else setRefreshing(true)
-    setError(null)
+    let scheduledRetry = false
+    const scheduleRetry = () => {
+      scheduledRetry = true
+      if (retryRef.current !== null) window.clearTimeout(retryRef.current)
+      retryRef.current = window.setTimeout(() => { void load(showSpinner) }, 1800)
+    }
     try {
       const [s, b] = await Promise.allSettled([getRemoteStatus(), getRemoteBackups()])
-      if (s.status === 'fulfilled') setStatus(s.value)
-      else if (s.reason instanceof RemoteApiError && s.reason.status === 401) {
+      if (s.status === 'fulfilled') {
+        setStatus(s.value)
+        failRef.current = 0
+        setError(null)
+      } else if (s.reason instanceof RemoteApiError && s.reason.status === 401) {
         window.location.href = '/remote/login-required'; return
-      } else setError(s.reason instanceof Error ? s.reason.message : String(s.reason))
+      } else {
+        failRef.current += 1
+        if (failRef.current > 2) setError(s.reason instanceof Error ? s.reason.message : String(s.reason))
+        else scheduleRetry()
+      }
       if (b.status === 'fulfilled') setBackups(b.value)
       // Backups failing is non-fatal — VM may be down. Show what we have.
     } catch (e) {
-      setError(e instanceof Error ? e.message : String(e))
+      failRef.current += 1
+      if (failRef.current > 2) setError(e instanceof Error ? e.message : String(e))
+      else scheduleRetry()
     } finally {
-      setLoading(false); setRefreshing(false)
+      setRefreshing(false)
+      if (!scheduledRetry) setLoading(false)
     }
   }, [])
 
   useEffect(() => { void load(true) }, [load])
+
+  // Clear any pending grace-retry timer on unmount.
+  useEffect(() => () => { if (retryRef.current !== null) window.clearTimeout(retryRef.current) }, [])
 
   // Auto-refresh every 30 s while the page is visible. Cheap because the
   // backend caches port-status results for 5 minutes.
