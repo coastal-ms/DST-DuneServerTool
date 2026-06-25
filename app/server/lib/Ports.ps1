@@ -7,6 +7,16 @@ $script:DunePortCheckPubIp    = $null
 $script:DunePortCheckFetched  = [datetime]::MinValue
 $script:DunePortCheckTtlSecs  = 300
 
+# Invalidate the cached port-check results so the next status call re-evaluates
+# from scratch. Called after a config save changes the port-check settings
+# (mode / URL template / UDP visibility) so the change takes effect immediately
+# instead of after the 5-minute TTL.
+function Reset-DunePortCheckCache {
+    $script:DunePortCheckCache   = $null
+    $script:DunePortCheckPubIp   = $null
+    $script:DunePortCheckFetched = [datetime]::MinValue
+}
+
 $script:DuneRequiredPorts = @(
     [pscustomobject]@{ Port = 7777;  Protocol = 'UDP'; Label = 'Game (first)' }
     [pscustomobject]@{ Port = 7810;  Protocol = 'UDP'; Label = 'Game (last)' }

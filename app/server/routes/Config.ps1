@@ -41,6 +41,13 @@ Register-DuneRoute -Method PUT -Path '/api/config' -Handler {
         return
     }
     $saved = Invoke-WithDuneLock -Name 'config' -Script { Save-DuneConfig -Config $patch }
+    # If any port-check setting changed, drop the cached results so the new
+    # mode / URL template / UDP visibility takes effect on the next status poll
+    # instead of after the 5-minute cache TTL.
+    if (($patch.Keys | Where-Object { $_ -in @('PortCheckMode','PortCheckUrlTemplate','ShowUdpPortStatus') }) -and
+        (Get-Command Reset-DunePortCheckCache -ErrorAction SilentlyContinue)) {
+        Reset-DunePortCheckCache
+    }
     $obj = @{}
     foreach ($k in $saved.Keys) { $obj[$k] = $saved[$k] }
     Write-DuneJson -Response $res -Body @{
