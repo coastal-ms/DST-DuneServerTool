@@ -27,7 +27,10 @@ here cover everything those tags shipped.
   restarts the battlegroup so the servers re-advertise the correct address (the
   same repair as setting the IP manually and clicking Apply, filled in for you).
   After the fix it re-runs the check to confirm. Also surfaces servers that
-  aren't ready/alive and reminds you to forward UDP 7777–7810.
+  aren't ready/alive, lists the exact per-map UDP port each running map needs
+  forwarded (forwarding only 7777 lets players reach one map but P34 on the
+  rest), and warns that testing your own public IP from the same network only
+  exercises router NAT loopback (hairpin), not the real external path.
 
 - **Diagnostic bundle now captures game-server pod logs.** The bundle
   (Help → Create GitHub Issue + Save Logs) previously only collected DST-side
