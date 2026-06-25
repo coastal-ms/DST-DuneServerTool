@@ -37,8 +37,10 @@ here cover everything those tags shipped.
   server gateway, battlegroup director, text router, game message queue) into
   `game-pods.txt` and `game-server-logs.txt`, so the actual join-rejection
   reason is captured. Dump/backup pods are excluded. The sanitizer now also
-  scrubs JWTs (e.g. the FLS `ServiceAuthToken` printed in gateway logs) and
-  known FLS secret fields, so the token can never leave the machine.
+  scrubs JWTs (e.g. the FLS `ServiceAuthToken` printed in gateway logs), known
+  FLS secret fields, and passwords embedded in connection-string URIs (e.g. the
+  `postgresql://user:<password>@…` string the director/gateway print), so no
+  token or credential can leave the machine.
 
 ### Fixed
 

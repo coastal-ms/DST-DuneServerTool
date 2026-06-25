@@ -42,6 +42,13 @@ function Invoke-DstRedaction {
     #     JSON "<Name>": "value" form, as a safety net for any non-JWT token.
     $out = [regex]::Replace($out, '(?i)\b(ServiceAuthToken|ServiceAuthKey|ServiceAuthSecret|ServiceAuthKeyId)\b(["'']?\s*[:=]\s*["'']?)[A-Za-z0-9._/+\-]{6,}', '${1}${2}<redacted>')
 
+    # 1e) Credentials embedded in connection-string URIs, e.g. the Postgres
+    #     connection string the battlegroup director / gateway print:
+    #       db=postgresql://dune:<password>@host:5432/...
+    #     Also covers amqp:// (RabbitMQ), redis://, mongodb://, etc. Keep the
+    #     scheme + username for readability; scrub only the password.
+    $out = [regex]::Replace($out, '(?i)([a-z][a-z0-9+.\-]*://[^:/?#\s@]+:)[^@/?#\s]+(@)', '${1}<redacted>${2}')
+
     # 2) IPv4 addresses (but leave 127.0.0.1 / 0.0.0.0 / 255.255.255.255 alone —
     #    those carry no identifying info and matter for log readability).
     $out = [regex]::Replace($out, '\b(?!(?:127\.0\.0\.1|0\.0\.0\.0|255\.255\.255\.255)\b)(?:\d{1,3}\.){3}\d{1,3}\b', '<ip>')
