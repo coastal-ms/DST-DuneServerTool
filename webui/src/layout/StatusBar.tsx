@@ -11,7 +11,8 @@ function vmPillClass(vm: VmStatus | undefined | null): string {
 }
 
 function portPillClass(ports: PortStatus | null | undefined, port: number, protocol: 'TCP' | 'UDP'): string {
-  const r = ports?.results?.find(x => x.port === port && x.protocol === protocol)
+  const results = Array.isArray(ports?.results) ? ports.results : []
+  const r = results.find(x => x.port === port && x.protocol === protocol)
   return r?.status === 'open' ? 'pill-success' : 'pill-muted'
 }
 

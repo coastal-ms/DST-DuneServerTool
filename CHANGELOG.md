@@ -25,6 +25,15 @@ here cover everything those tags shipped.
   with a UDP-capable service **and** tick the new **Show UDP port status** box.
   The TCP (RabbitMQ) indicator is unchanged.
 
+### Fixed
+
+- **Port-status payload always serializes as an array.** With UDP hidden, the
+  port list can contain a single (TCP) entry; a PowerShell single-element-array
+  unwrap turned it into an object, which crashed the web UI on load
+  (`results.find is not a function`). The backend now always emits an array and
+  the UI defends against a non-array port list so a malformed payload can never
+  blank the app.
+
 ## [12.13.0] - 2026-06-24
 
 ### Added

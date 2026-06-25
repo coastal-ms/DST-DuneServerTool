@@ -120,7 +120,7 @@ function Get-DunePortStatus {
         return @{
             mode      = $mode
             publicIp  = $script:DunePortCheckPubIp
-            results   = (Select-DuneVisiblePortResults -Results $script:DunePortCheckCache -ShowUdp $showUdp)
+            results   = @(Select-DuneVisiblePortResults -Results $script:DunePortCheckCache -ShowUdp $showUdp)
             showUdp   = $showUdp
             cached    = $true
             ageSecs   = [int]($now - $script:DunePortCheckFetched).TotalSeconds
@@ -157,7 +157,7 @@ function Get-DunePortStatus {
     return @{
         mode     = $mode
         publicIp = $pubIp
-        results  = (Select-DuneVisiblePortResults -Results $results -ShowUdp $showUdp)
+        results  = @(Select-DuneVisiblePortResults -Results $results -ShowUdp $showUdp)
         showUdp  = $showUdp
         cached   = $false
         ageSecs  = 0
