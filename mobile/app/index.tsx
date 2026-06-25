@@ -703,12 +703,16 @@ export default function App() {
             </View>
           </>
         ) : (
-          <View style={[styles.alertBox, { backgroundColor: '#7f1d1d', borderColor: '#991b1b' }]}>
-            <Text style={[styles.alertText, { color: '#fca5a5' }]}>
-              Can&apos;t reach your server right now. It may be starting up or briefly offline — the app will keep retrying and reconnect automatically. You do not need to re-scan.
+          <View style={[styles.alertBox, { backgroundColor: '#1e293b', borderColor: '#f59e0b' }]}>
+            <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 6 }}>
+              <ActivityIndicator size="small" color="#f59e0b" style={{ marginRight: 8 }} />
+              <Text style={{ color: '#fcd34d', fontSize: 15, fontWeight: '700' }}>Connecting…</Text>
+            </View>
+            <Text style={[styles.alertText, { color: '#cbd5e1' }]}>
+              Waiting for your server — it may be starting up or briefly offline. The app keeps retrying and reconnects automatically, so there&apos;s nothing to do and no need to re-scan.
             </Text>
             {connDiag ? (
-              <Text selectable style={{ color: '#fecaca', fontSize: 11, fontFamily: 'Courier', marginTop: 8 }}>{connDiag}</Text>
+              <Text selectable style={{ color: '#94a3b8', fontSize: 11, fontFamily: 'Courier', marginTop: 8 }}>{connDiag}</Text>
             ) : null}
           </View>
         )}
