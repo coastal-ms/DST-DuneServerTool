@@ -342,6 +342,8 @@ function Get-DuneP34Diagnostic {
         k3sExternalIp  = $null
         maps           = @()
         advertisedIps  = @()
+        igwAddrs       = @()
+        igwSuspect     = $false
         staleFarmIp    = $false
         staleK3sIp     = $false
         serversReady   = $true
@@ -430,8 +432,10 @@ echo "EXT=$EXT"
     }
 
     # 2) farm_state — the address/port each map advertises to clients, plus its
-    #    readiness. game_addr is stored as "1.2.3.4/0"; strip the suffix.
-    $sql = "SELECT map, server_id, split_part(game_addr::text,'/',1) AS ip, game_port, ready, alive FROM dune.farm_state ORDER BY map;"
+    #    readiness. game_addr is the client-facing game port; igw_addr is the
+    #    inter-game-world gateway used during sector handover / map travel. Both
+    #    are stored as "1.2.3.4/0"; strip the suffix.
+    $sql = "SELECT map, server_id, split_part(game_addr::text,'/',1) AS ip, game_port, split_part(igw_addr::text,'/',1) AS igw_ip, igw_port, ready, alive FROM dune.farm_state ORDER BY map;"
     $maps = @()
     try {
         $csv = Invoke-DuneSqlRaw -Ip $ctx.ip -Sql $sql -Csv -TimeoutSec 30
@@ -449,6 +453,8 @@ echo "EXT=$EXT"
                     serverId = [string]$r.server_id
                     ip       = ([string]$r.ip).Trim()
                     port     = [string]$r.game_port
+                    igwIp    = ([string]$r.igw_ip).Trim()
+                    igwPort  = [string]$r.igw_port
                     ready    = ([string]$r.ready -eq 't')
                     alive    = ([string]$r.alive -eq 't')
                 }
@@ -463,6 +469,7 @@ echo "EXT=$EXT"
     $result.maps = @($maps)
     $advertised = @($maps | ForEach-Object { $_.ip } | Where-Object { $_ } | Select-Object -Unique)
     $result.advertisedIps = @($advertised)
+    $result.igwAddrs = @($maps | ForEach-Object { $_.igwIp } | Where-Object { $_ } | Select-Object -Unique)
     $result.serversReady = -not [bool](@($maps | Where-Object { -not $_.ready -or -not $_.alive }).Count)
 
     $pub = [string]$result.vmPublicIp
@@ -471,6 +478,27 @@ echo "EXT=$EXT"
         $result.staleFarmIp = [bool](@($advertised | Where-Object { $_ -ne $pub }).Count)
         if ($result.k3sExternalIp) { $result.staleK3sIp = ($result.k3sExternalIp -ne $pub) }
     }
+
+    # IGW (inter-game-world) gateway sanity. During sector handover / map travel
+    # clients are pointed at igw_addr. A LAN address there is normal for DST hosts
+    # (the public path reaches it via the node's DNAT/ExternalIP), so we do NOT
+    # treat "igw != public IP" as wrong. The genuinely broken case is an igw_addr
+    # that is a POD/CONTAINER-private address (e.g. the k3s pod CIDR 10.42.x.x or a
+    # docker bridge 172.16-31.x) which is unreachable even on the LAN — that
+    # advertises an address no client can dial, so travel stalls on an infinite
+    # loading screen. Flag only when igw is RFC1918-private AND is neither the VM's
+    # own LAN IP nor this server's public IP, which keeps healthy LAN-IGW hosts
+    # (the common case) from false-positiving.
+    $vmLan = [string]$result.vmIp
+    $suspectIgw = @($result.igwAddrs | Where-Object {
+        ($_ -match '^(10\.|192\.168\.|172\.(1[6-9]|2\d|3[01])\.)') -and
+        ($_ -ne $vmLan) -and ($_ -ne $pub)
+    } | Select-Object -Unique)
+    $result.igwSuspect = [bool]$suspectIgw.Count
+    $suspectIgwIp = if ($result.igwSuspect) { @($suspectIgw)[0] } else { $null }
+    $igwNote = if ($result.igwSuspect) {
+        " Also, the inter-world gateway is advertising a private container address ($suspectIgwIp) that players can't reach, so map travel / sector handover will stall on an infinite loading screen. Restart the battlegroup so the maps re-register the gateway with the node's address."
+    } else { '' }
 
     # Where the public IP came from, for an honest summary. The host-detected IP
     # is behind the same router/WAN as the VM so it's a reliable stand-in, but we
@@ -492,11 +520,15 @@ echo "EXT=$EXT"
         $parts = @()
         if ($result.staleFarmIp) { $parts += "your maps advertise $advTxt to players" }
         if ($result.staleK3sIp)  { $parts += "the K3s ExternalIP is $($result.k3sExternalIp)" }
-        $result.summary = "Stale public IP detected: $($parts -join ' and '), but this server's public IP is $pub$srcNote. Players are being sent to the wrong address, which causes P34 / connection timeouts. Apply your current public IP below to fix it."
+        $result.summary = "Stale public IP detected: $($parts -join ' and '), but this server's public IP is $pub$srcNote. Players are being sent to the wrong address, which causes P34 / connection timeouts. Apply your current public IP below to fix it.$igwNote"
     }
     elseif (-not $result.serversReady) {
         $result.verdict = 'servers-not-ready'
-        $result.summary = 'Public IP looks correct, but one or more map servers are not ready/alive yet. Wait for them to finish booting, or restart the battlegroup.'
+        $result.summary = "Public IP looks correct, but one or more map servers are not ready/alive yet. Wait for them to finish booting, or restart the battlegroup.$igwNote"
+    }
+    elseif ($result.igwSuspect) {
+        $result.verdict = 'igw-private'
+        $result.summary = "Your map servers advertise the correct public game address, but the inter-world gateway is advertising a private container address ($suspectIgwIp) that players can't reach. Joining the world works, but travelling between maps (sector handover) will stall on an infinite loading screen. Restart the battlegroup so the maps re-register the gateway with the node's address; if it persists, the IGW is binding to a pod IP instead of the node."
     }
     elseif (-not $looksPublic) {
         # No usable public IP from the VM, the DST host, or config. We can still
