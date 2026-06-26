@@ -13,6 +13,19 @@ here cover everything those tags shipped.
 
 ## [Unreleased]
 
+## [12.13.6] - 2026-06-26
+
+### Added
+
+- **Connection check (P34) now also inspects the inter-world gateway address.**
+  In addition to the client-facing game address, the check reads each map's
+  `igw_addr` (the gateway used for map travel / sector handover) and flags it
+  only when it is a pod/container-private address that players can't reach —
+  the failure mode where joining the world works but travelling between maps
+  hangs on an infinite loading screen. A normal LAN gateway address (reached via
+  the node's port forwarding) is treated as healthy and won't false-positive.
+  The per-map table now shows the gateway address alongside the game address.
+
 ## [12.13.5] - 2026-06-26
 
 ### Fixed

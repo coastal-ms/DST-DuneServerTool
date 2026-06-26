@@ -61,6 +61,8 @@ type P34Map = {
   serverId?: string
   ip?: string
   port?: string
+  igwIp?: string
+  igwPort?: string
   ready?: boolean
   alive?: boolean
 }
@@ -73,12 +75,22 @@ type P34Diagnostic = {
   k3sExternalIp?: string | null
   maps?: P34Map[]
   advertisedIps?: string[]
+  igwAddrs?: string[]
+  igwSuspect?: boolean
   staleFarmIp?: boolean
   staleK3sIp?: boolean
   serversReady?: boolean
-  verdict?: 'healthy' | 'stale-ip' | 'servers-down' | 'servers-not-ready' | 'unknown'
+  verdict?: 'healthy' | 'stale-ip' | 'servers-down' | 'servers-not-ready' | 'igw-private' | 'unknown'
   summary?: string
   error?: string
+}
+
+// A LAN igw_addr is normal (the node's DNAT reaches it); only a pod/container
+// address (RFC1918 but neither the VM's LAN IP nor the public IP) is broken.
+function isSuspectIgw(ip?: string, vmIp?: string | null, publicIp?: string | null): boolean {
+  if (!ip) return false
+  if (ip === vmIp || ip === publicIp) return false
+  return /^(10\.|192\.168\.|172\.(1[6-9]|2\d|3[01])\.)/.test(ip)
 }
 
 function stepClass(status: PublicIpStep['status']): string {
@@ -430,10 +442,18 @@ export function PublicIpCard() {
                 </div>
                 {p34.maps.map(m => {
                   const mismatch = Boolean(p34.vmPublicIp && m.ip && m.ip !== p34.vmPublicIp)
+                  const igwBad = isSuspectIgw(m.igwIp, p34.vmIp, p34.vmPublicIp)
                   return (
                     <div key={`${m.map}-${m.serverId}`} className="grid grid-cols-[1fr_auto_auto] gap-x-3 px-3 py-1.5 border-t border-border items-center">
                       <span className="font-medium truncate">{m.map}</span>
-                      <span className={`font-mono ${mismatch ? 'text-danger' : 'text-text'}`}>{m.ip}:{m.port}</span>
+                      <span className="flex flex-col items-end leading-tight">
+                        <span className={`font-mono ${mismatch ? 'text-danger' : 'text-text'}`}>{m.ip}:{m.port}</span>
+                        {m.igwIp && (
+                          <span className={`font-mono text-[11px] ${igwBad ? 'text-danger' : 'text-text-dim'}`}>
+                            gateway {m.igwIp}:{m.igwPort}
+                          </span>
+                        )}
+                      </span>
                       <span className="flex items-center gap-1 text-xs">
                         <Icon
                           name={m.ready && m.alive ? 'CheckCircle2' : 'AlertCircle'}
