@@ -234,13 +234,16 @@ ORDER BY player_id, track_type;
 function Get-DunePlayerJourneyLive {
     param([string]$Ip, [long]$AccountId)
     if ($AccountId -le 0) { return @{ ok = $false; error = 'account_id is required.' } }
+    # journey_story_node was rekeyed account_id -> character_id in Funcom 1.4.10.0
+    # (character_id = dune.player_state.id). The write paths were updated in
+    # v12.13.5; this read must resolve the account to its character the same way.
     $sql = @"
 SELECT story_node_id AS node_id,
        (complete_condition_state = 'true'::jsonb) AS is_complete,
        (reveal_condition_state   = 'true'::jsonb) AS is_revealed,
        has_pending_reward
 FROM dune.journey_story_node
-WHERE account_id = $AccountId::bigint
+WHERE character_id IN (SELECT id FROM dune.player_state WHERE account_id = $AccountId::bigint)
 ORDER BY story_node_id;
 "@
     $r = Invoke-DuneSqlQuery -Ip $Ip -Sql $sql -ReadOnly $true -MaxRows 5000 -TimeoutSec 30
