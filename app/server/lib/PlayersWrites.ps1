@@ -817,9 +817,9 @@ function Invoke-DunePlayerSetRespawn {
 
     $sql = @"
 INSERT INTO dune.player_respawn_locations
-    (id, account_id, "group", locator_transform, locator_actor_id, locator_name, locator_name_index, map, dimension, last_used_timestamp)
+    (id, character_id, "group", locator_transform, locator_actor_id, locator_name, locator_name_index, map, dimension, last_used_timestamp)
 VALUES (
-    gen_random_uuid(), $AccountId::bigint, '$safeGroup',
+    gen_random_uuid(), (SELECT id FROM dune.player_state WHERE account_id = $AccountId::bigint LIMIT 1), '$safeGroup',
     ROW(ROW($x::float8, $y::float8, $z::float8)::dune.vector, ROW(0,0,0,1)::dune.quaternion)::dune.transform,
     NULL, NULL, 0, '$safeMap', 0,
     (extract(epoch from now()) * 1000)::bigint
