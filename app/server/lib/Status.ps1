@@ -283,12 +283,11 @@ function ConvertFrom-BgStatusText {
             continue
         }
         if ($line -match '^\s*Game Servers\s*$' -and $i + 2 -lt $lines.Length) {
-            $cols = Get-BgColumnSpans -Header $lines[$i + 1] -Dashes $lines[$i + 2]
             $servers = @()
             for ($j = $i + 3; $j -lt $lines.Length; $j++) {
                 $rowLine = $lines[$j]
                 if (-not $rowLine.Trim()) { continue }
-                $values = Get-BgRowValues -Line $rowLine -Cols $cols
+                $values = Get-BgGameServerValues -Line $rowLine
                 if ($values.Count -ge 5 -and $values[0]) {
                     $servers += ,@{
                         map     = $values[0]
@@ -345,9 +344,34 @@ function Get-BgRowValues {
     return $values
 }
 
-# Inspect a `battlegroup status` text blob and return one of:
-#   'running' | 'stopped' | 'starting' | 'stopping' | 'updating' | 'unknown'
-#
+# Parse a Game Servers table row by tokens from BOTH ends, NOT by fixed column
+# offsets. The `battlegroup status` CLI colorizes phase/ready values with ANSI
+# codes; Go's text/tabwriter pads those cells by byte width (counting the
+# invisible escape bytes), so once the ANSI is stripped the visible values no
+# longer line up under the header's dashes and fixed-width slicing cuts a long
+# map name mid-word (e.g. "Hephaestus" -> "Hepha" | "estus Running"). Every
+# column here is a single whitespace-free token EXCEPT Phase, which may contain
+# spaces (e.g. "Reconciling Ready"). So pin map=first, age/players/ready=last
+# three, and treat everything between as the phase. Position-independent, so it
+# is immune to any column-alignment drift.
+function Get-BgGameServerValues {
+    param([string]$Line)
+    if (-not $Line) { return @() }
+    # Strip any residual ANSI just in case, then tokenize on runs of whitespace.
+    $clean = ($Line -replace "`e\[[0-9;]*[A-Za-z]", '').Trim()
+    $tokens = @($clean -split '\s+' | Where-Object { $_ -ne '' })
+    if ($tokens.Count -lt 4) { return @() }
+    $n       = $tokens.Count
+    $map     = $tokens[0]
+    $age     = $tokens[$n - 1]
+    $players = $tokens[$n - 2]
+    $ready   = $tokens[$n - 3]
+    # Phase is whatever remains between the map and the trailing ready/players/age.
+    # When there's no middle token (a 4-token row), phase is empty rather than
+    # accidentally reversing a range.
+    $phase = if ($n -gt 4) { ($tokens[1..($n - 4)] -join ' ') } else { '' }
+    return @($map, $phase, $ready, $players, $age)
+}
 # `battlegroup status` renders a wide kubectl-style table. Relevant signals:
 #
 #   Stopped (any of):
