@@ -986,7 +986,7 @@ function Invoke-DunePlayerProgressionReverse {
     $nodeUpdates = ''
     foreach ($n in $nodes) {
         $safe = ConvertTo-DuneSqlString $n
-        $nodeUpdates += "UPDATE dune.journey_story_node SET complete_condition_state='false'::jsonb, has_pending_reward=false WHERE account_id=$accountID::bigint AND (story_node_id='$safe' OR story_node_id LIKE '$safe.%');`n"
+        $nodeUpdates += "UPDATE dune.journey_story_node SET complete_condition_state='false'::jsonb, has_pending_reward=false WHERE character_id IN (SELECT id FROM dune.player_state WHERE account_id=$accountID::bigint) AND (story_node_id='$safe' OR story_node_id LIKE '$safe.%');`n"
     }
 
     $tx = @"
@@ -1037,11 +1037,17 @@ function Invoke-DunePlayerCompleteJourneyNode {
     if (-not $NodeId) { return @{ ok = $false; error = 'node_id is required.' } }
     $safeNode = ConvertTo-DuneSqlString $NodeId
 
+    # NOTE: the Funcom 1.4.10.0 patch rekeyed dune.journey_story_node from
+    # account_id to character_id (= dune.player_state.id), so writes here resolve
+    # the account to its character via a subquery, exactly as Funcom's own
+    # save_journey_story_node()/delete_journey_story_node() stored functions do
+    # internally. This keeps the existing subtree (story_node_id LIKE 'x.%') and
+    # partial-field semantics that a single-node stored-function upsert can't.
     $upd = @"
 UPDATE dune.journey_story_node
 SET complete_condition_state = 'true'::jsonb,
     reveal_condition_state   = 'true'::jsonb
-WHERE account_id = $AccountId::bigint
+WHERE character_id IN (SELECT id FROM dune.player_state WHERE account_id = $AccountId::bigint)
   AND (story_node_id = '$safeNode' OR story_node_id LIKE '$safeNode.%');
 "@
     $r = Invoke-DuneSqlQuery -Ip $Ip -Sql $upd -ReadOnly $false -MaxRows 1 -TimeoutSec 30
@@ -1050,10 +1056,10 @@ WHERE account_id = $AccountId::bigint
     if ($updated -eq 0) {
         $ins = @"
 INSERT INTO dune.journey_story_node
-    (account_id, story_node_id, has_pending_reward,
+    (character_id, story_node_id, has_pending_reward,
      complete_condition_state, reveal_condition_state,
      fail_condition_state, metadata_state, reset_group)
-VALUES ($AccountId::bigint, '$safeNode', false,
+VALUES ((SELECT id FROM dune.player_state WHERE account_id = $AccountId::bigint LIMIT 1), '$safeNode', false,
     'true'::jsonb, 'true'::jsonb,
     '{}'::jsonb, '{}'::jsonb,
     'Default'::dune.JourneyStoryResetGroup);
@@ -1103,7 +1109,7 @@ function Invoke-DunePlayerResetJourneyNode {
 UPDATE dune.journey_story_node
 SET complete_condition_state = 'false'::jsonb,
     has_pending_reward       = false
-WHERE account_id = $AccountId::bigint
+WHERE character_id IN (SELECT id FROM dune.player_state WHERE account_id = $AccountId::bigint)
   AND (story_node_id = '$safeNode' OR story_node_id LIKE '$safeNode.%');
 "@
     $r = Invoke-DuneSqlQuery -Ip $Ip -Sql $upd -ReadOnly $false -MaxRows 1 -TimeoutSec 30
@@ -1129,7 +1135,7 @@ function Invoke-DunePlayerResetJourneyNodes {
 UPDATE dune.journey_story_node
 SET complete_condition_state = 'false'::jsonb,
     has_pending_reward       = false
-WHERE account_id = $AccountId::bigint;
+WHERE character_id IN (SELECT id FROM dune.player_state WHERE account_id = $AccountId::bigint);
 "@
     $r = Invoke-DuneSqlQuery -Ip $Ip -Sql $upd -ReadOnly $false -MaxRows 1 -TimeoutSec 60
     if (-not $r.ok) { return @{ ok = $false; error = "reset journey nodes: $($r.error)" } }

@@ -13,6 +13,20 @@ here cover everything those tags shipped.
 
 ## [Unreleased]
 
+## [12.13.5] - 2026-06-26
+
+### Fixed
+
+- **Gameplay Admin journey writes (Apply Preset, Complete/Reset/Wipe Journey,
+  faction progression) failed after the Funcom 1.4.10.0 patch.** That patch
+  rekeyed the `dune.journey_story_node` table from `account_id` to
+  `character_id`, so DST's writes threw "column account_id does not exist" — the
+  red error box on **Apply Preset** and the other journey actions. DST now
+  resolves the account to its character (`dune.player_state.id`) inline, the same
+  mapping Funcom's own stored functions use, preserving the existing subtree
+  completion and partial-field reset behavior. Verified end-to-end against a
+  live post-patch database.
+
 ## [12.13.4] - 2026-06-25
 
 ### Fixed
