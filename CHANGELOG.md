@@ -13,6 +13,8 @@ here cover everything those tags shipped.
 
 ## [Unreleased]
 
+## [12.13.3] - 2026-06-25
+
 ### Fixed
 
 - **Game Servers table mangled long map names (e.g. dungeon/story maps).** On
