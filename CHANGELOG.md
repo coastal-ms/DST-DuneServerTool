@@ -13,6 +13,8 @@ here cover everything those tags shipped.
 
 ## [Unreleased]
 
+## [12.13.6] - 2026-06-26
+
 ### Added
 
 - **Connection check (P34) now also inspects the inter-world gateway address.**
