@@ -13,6 +13,22 @@ here cover everything those tags shipped.
 
 ## [Unreleased]
 
+## [12.13.4] - 2026-06-25
+
+### Fixed
+
+- **P34 connection check no longer dead-ends when the VM can't reach an IP
+  service.** The check read the server's public IP by calling a single endpoint
+  (`api.ipify.org`) from inside the VM. The VMs are BusyBox with no `curl`, so it
+  relied on one `wget` call to one host — if that was blocked, slow, or down, the
+  whole check reported "Could not determine the server's public IP" and gave no
+  verdict. It now (1) tries several IP-echo services (ipify, AWS checkip,
+  ifconfig.me, icanhazip) via both `wget` and `curl`, (2) falls back to the DST
+  host's own detected internet IP (same router/WAN as the VM) and then the
+  last-applied IP from config, and (3) if no live IP can be read at all, still
+  compares what the maps advertise against the K3s ExternalIP to flag a likely
+  stale IP. The summary says where the IP came from so the result stays honest.
+
 ## [12.13.3] - 2026-06-25
 
 ### Fixed

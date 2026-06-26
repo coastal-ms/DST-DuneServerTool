@@ -338,6 +338,7 @@ function Get-DuneP34Diagnostic {
         reachable      = $false
         vmIp           = $null
         vmPublicIp     = $null
+        publicIpSource = $null
         k3sExternalIp  = $null
         maps           = @()
         advertisedIps  = @()
@@ -367,27 +368,65 @@ function Get-DuneP34Diagnostic {
     $result.reachable = $true
     $result.vmIp = [string]$ctx.ip
 
+    $cfg = $null
+    try { $cfg = Read-DuneConfig } catch {}
+
     # 1) VM-side real public IP (what clients must reach) + K3s ExternalIP, one
-    #    SSH round trip. ipify is queried from INSIDE the VM so it reflects the
-    #    server's actual egress/WAN IP, which is what port-forwarding maps to.
+    #    SSH round trip. Query the public IP from INSIDE the VM so it reflects
+    #    the server's actual egress/WAN IP, which is what port-forwarding maps
+    #    to. The VM is BusyBox and often has no curl, so try several IP-echo
+    #    endpoints via both wget and curl and take the first that answers — a
+    #    single endpoint being down/blocked must not blank the whole diagnostic.
     $probe = @'
-PUB=$(curl -fsS --max-time 8 https://api.ipify.org 2>/dev/null)
-[ -z "$PUB" ] && PUB=$(wget -qO- --timeout=8 https://api.ipify.org 2>/dev/null)
+get_ip() {
+  for url in https://api.ipify.org https://checkip.amazonaws.com https://ifconfig.me https://icanhazip.com; do
+    ip=$(wget -qO- --timeout=6 "$url" 2>/dev/null | tr -d "[:space:]")
+    [ -z "$ip" ] && ip=$(curl -fsS --max-time 6 "$url" 2>/dev/null | tr -d "[:space:]")
+    case "$ip" in
+      [0-9]*.[0-9]*.[0-9]*.[0-9]*) echo "$ip"; return 0 ;;
+    esac
+  done
+}
+PUB=$(get_ip)
 EXT=$(sudo kubectl get node -o jsonpath='{range .items[0].status.addresses[?(@.type=="ExternalIP")]}{.address}{end}' 2>/dev/null)
 echo "PUB=$PUB"
 echo "EXT=$EXT"
 '@ -replace "`r", ''
     try {
-        $raw = Invoke-V6Ssh -Ip $ctx.ip -Cmd $probe -TimeoutSec 25
+        $raw = Invoke-V6Ssh -Ip $ctx.ip -Cmd $probe -TimeoutSec 35
         $rawText = ($raw -join "`n")
         $mp = [regex]::Match($rawText, 'PUB=([0-9.]+)')
         if ($mp.Success) { $result.vmPublicIp = $mp.Groups[1].Value.Trim() }
         $me = [regex]::Match($rawText, 'EXT=([0-9.]+)')
         if ($me.Success) { $result.k3sExternalIp = $me.Groups[1].Value.Trim() }
     } catch {
-        $result.error = "Public IP probe failed: $($_.Exception.Message)"
-        $result.summary = $result.error
-        return $result
+        # Non-fatal: a failed probe just means we lean on the host-side fallback
+        # below. Only the farm_state query (next) is essential.
+    }
+
+    # Fallback chain for the public IP: the VM-side egress IP is best, but if the
+    # VM can't reach any IP-echo service (no curl, blocked egress, flaky DNS), use
+    # the DST host's own detected internet IP — it sits behind the same router/WAN
+    # so it resolves to the same public address — then the last-applied IP from
+    # config. Record where it came from so the summary can be honest.
+    if ($result.vmPublicIp) {
+        $result.publicIpSource = 'vm'
+    } else {
+        $hostIp = $null
+        if (Get-Command Get-DunePublicIp -ErrorAction SilentlyContinue) {
+            try { $hostIp = Get-DunePublicIp } catch {}
+        }
+        if ($hostIp) {
+            $result.vmPublicIp = [string]$hostIp
+            $result.publicIpSource = 'host'
+        } else {
+            $lastApplied = $null
+            try { $lastApplied = [string]$cfg.LastAppliedPublicIp } catch {}
+            if ($lastApplied) {
+                $result.vmPublicIp = $lastApplied
+                $result.publicIpSource = 'last-applied'
+            }
+        }
     }
 
     # 2) farm_state — the address/port each map advertises to clients, plus its
@@ -433,6 +472,15 @@ echo "EXT=$EXT"
         if ($result.k3sExternalIp) { $result.staleK3sIp = ($result.k3sExternalIp -ne $pub) }
     }
 
+    # Where the public IP came from, for an honest summary. The host-detected IP
+    # is behind the same router/WAN as the VM so it's a reliable stand-in, but we
+    # say so rather than implying we read it from the server itself.
+    $srcNote = switch ($result.publicIpSource) {
+        'host'         { ' (detected from the DST host, since the VM could not reach an IP-check service)' }
+        'last-applied' { ' (your last-applied public IP, since neither the VM nor the DST host could detect a current one)' }
+        default        { '' }
+    }
+
     # Verdict, most-actionable first.
     if (@($maps).Count -eq 0) {
         $result.verdict = 'servers-down'
@@ -444,19 +492,30 @@ echo "EXT=$EXT"
         $parts = @()
         if ($result.staleFarmIp) { $parts += "your maps advertise $advTxt to players" }
         if ($result.staleK3sIp)  { $parts += "the K3s ExternalIP is $($result.k3sExternalIp)" }
-        $result.summary = "Stale public IP detected: $($parts -join ' and '), but this server's real public IP is $pub. Players are being sent to the wrong address, which causes P34 / connection timeouts. Apply your current public IP below to fix it."
+        $result.summary = "Stale public IP detected: $($parts -join ' and '), but this server's public IP is $pub$srcNote. Players are being sent to the wrong address, which causes P34 / connection timeouts. Apply your current public IP below to fix it."
     }
     elseif (-not $result.serversReady) {
         $result.verdict = 'servers-not-ready'
         $result.summary = 'Public IP looks correct, but one or more map servers are not ready/alive yet. Wait for them to finish booting, or restart the battlegroup.'
     }
     elseif (-not $looksPublic) {
-        $result.verdict = 'unknown'
-        $result.summary = if ($pub) { "Could not classify the detected public IP ($pub). Verify your port forwarding (UDP 7777-7810) manually." } else { 'Could not determine the server''s public IP from inside the VM. Check the VM''s internet access.' }
+        # No usable public IP from the VM, the DST host, or config. We can still
+        # compare what the maps advertise against the K3s ExternalIP — if those
+        # two disagree, the IP is almost certainly stale even without an egress
+        # reading; if they agree, fall back to honest guidance.
+        if ($result.k3sExternalIp -and @($advertised | Where-Object { $_ -ne $result.k3sExternalIp }).Count) {
+            $result.verdict = 'stale-ip'
+            $result.staleFarmIp = $true
+            $advTxt = (@($advertised) -join ', ')
+            $result.summary = "Your maps advertise $advTxt to players, but the K3s ExternalIP is $($result.k3sExternalIp) — they don't match, which causes P34 / connection timeouts. (Couldn't read this server's live public IP to confirm which is current.) Apply your current public IP below to reconcile them."
+        } else {
+            $result.verdict = 'unknown'
+            $result.summary = 'Could not determine this server''s public IP from the VM or the DST host, and your maps/K3s agree on one address, so nothing looks stale. If players still get P34, verify the VM has internet access and that UDP 7777-7810 is port-forwarded to this server.'
+        }
     }
     else {
         $result.verdict = 'healthy'
-        $result.summary = "All $(@($maps).Count) map server(s) advertise the correct public IP ($pub) and are ready. If players still get P34, check that UDP 7777-7810 is port-forwarded to this server."
+        $result.summary = "All $(@($maps).Count) map server(s) advertise the correct public IP ($pub$srcNote) and are ready. If players still get P34, check that UDP 7777-7810 is port-forwarded to this server."
     }
 
     $result.ok = $true
