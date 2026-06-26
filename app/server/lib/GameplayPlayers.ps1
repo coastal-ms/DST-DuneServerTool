@@ -861,13 +861,17 @@ function Invoke-DunePlayerResetAllKeystones {
 }
 
 # ---------------------------------------------------------------------------
-# Player tags (labels like VIP / Verified / Probation). Stored in
-# dune.player_tags(account_id, tag). Read returns string[]; write replaces
-# the full set for an account.
+# Player tags (gameplay tags like Journey.*, Contract.*, Faction.*, plus admin
+# labels). Stored in dune.player_tags(character_id, tag). Funcom rekeyed this
+# table from account_id to character_id in patch 1.4.10.0, so every access
+# resolves the account to its character via dune.player_state.id. Read returns
+# string[]; the overwrite write replaces the full set for the account's
+# character. (Delta writes go through dune.update_player_tags, whose proc
+# signature Funcom kept account_id-based, so those are unaffected.)
 # ---------------------------------------------------------------------------
 function Get-DunePlayerTagsLive {
     param([string]$Ip, [long]$AccountId)
-    $sql = "SELECT tag FROM dune.player_tags WHERE account_id = $AccountId::bigint ORDER BY tag;"
+    $sql = "SELECT tag FROM dune.player_tags WHERE character_id IN (SELECT id FROM dune.player_state WHERE account_id = $AccountId::bigint) ORDER BY tag;"
     $soft = Invoke-DuneSqlSoft -Ip $Ip -Sql $sql -MaxRows 200 -TimeoutSec 30
     if (-not $soft.ok) { return @{ ok = $false; error = $soft.error } }
     if ($soft.unsupported) { return @{ ok = $true; tags = @(); unsupported = $true } }
@@ -887,10 +891,12 @@ function Invoke-DunePlayerSetTags {
         if ($s -and $s.Length -le 64) { $clean += $s }
     }
     $values = if ($clean.Count -gt 0) {
-        ($clean | ForEach-Object { "($AccountId::bigint, '" + (ConvertTo-DuneSqlString $_) + "')" }) -join ', '
+        ($clean | ForEach-Object { "('" + (ConvertTo-DuneSqlString $_) + "')" }) -join ', '
     } else { $null }
-    $sqlParts = @("DELETE FROM dune.player_tags WHERE account_id = $AccountId::bigint;")
-    if ($values) { $sqlParts += "INSERT INTO dune.player_tags (account_id, tag) VALUES $values ON CONFLICT DO NOTHING;" }
+    # player_tags is keyed by character_id (Funcom 1.4.10.0 rekey). Resolve the
+    # account to its character inline so the overwrite stays a single round trip.
+    $sqlParts = @("DELETE FROM dune.player_tags WHERE character_id IN (SELECT id FROM dune.player_state WHERE account_id = $AccountId::bigint);")
+    if ($values) { $sqlParts += "INSERT INTO dune.player_tags (character_id, tag) SELECT ps.id, v.tag FROM dune.player_state ps CROSS JOIN (VALUES $values) AS v(tag) WHERE ps.account_id = $AccountId::bigint ON CONFLICT DO NOTHING;" }
     $sql = $sqlParts -join "`n"
     $res = Invoke-DuneSqlQuery -Ip $Ip -Sql $sql -ReadOnly $false -MaxRows 1 -TimeoutSec 30
     if (-not $res.ok) { return @{ ok = $false; error = $res.error } }

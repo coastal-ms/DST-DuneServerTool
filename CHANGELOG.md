@@ -13,6 +13,21 @@ here cover everything those tags shipped.
 
 ## [Unreleased]
 
+## [12.13.7] - 2026-06-26
+
+### Fixed
+
+- **Player Tags panel, the player vehicle list, and Set Respawn broke after the
+  Funcom 1.4.10.0 patch.** That patch rekeyed several per-player tables from
+  `account_id` to `character_id`. The Tags panel reported "the live game database
+  has no `dune.player_tags` table — feature unavailable" and showed no tags (even
+  though all of a character's tags were still there), the Inventory vehicle list
+  could error out, and **Set Respawn** failed. DST now resolves the account to
+  its character (`dune.player_state.id`) when reading/writing `dune.player_tags`,
+  `recovered_vehicles`, `backup_vehicles`, and `player_respawn_locations` — the
+  same approach as the earlier journey-write fix. Tag writes that already go
+  through the game's `update_player_tags` stored procedure were unaffected.
+
 ## [12.13.6] - 2026-06-26
 
 ### Added

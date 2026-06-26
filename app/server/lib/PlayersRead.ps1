@@ -299,12 +299,18 @@ function Get-DunePlayerKeystonesLive {
 function Get-DunePlayerVehiclesLive {
     param([string]$Ip, [long]$ControllerId)
     if ($ControllerId -le 0) { return @{ ok = $false; error = 'controller_id is required.' } }
-    $accSql = "SELECT account_id::text AS aid FROM dune.player_state WHERE player_controller_id = $ControllerId::bigint LIMIT 1;"
+    # Resolve both the account_id and the character_id (player_state.id). Funcom's
+    # 1.4.10.0 rekey moved recovered_vehicles/backup_vehicles to character_id.
+    $accSql = "SELECT account_id::text AS aid, id::text AS cid FROM dune.player_state WHERE player_controller_id = $ControllerId::bigint LIMIT 1;"
     $acc = Invoke-DuneSqlQuery -Ip $Ip -Sql $accSql -ReadOnly $true -MaxRows 1 -TimeoutSec 10
     $accountId = 0L
+    $characterId = 0L
     if ($acc.ok) {
         $maps = ConvertTo-DuneRowMaps -Result $acc
-        if ($maps.Count -ge 1) { $accountId = [int64](ConvertTo-DuneInt $maps[0]['aid']) }
+        if ($maps.Count -ge 1) {
+            $accountId = [int64](ConvertTo-DuneInt $maps[0]['aid'])
+            $characterId = [int64](ConvertTo-DuneInt $maps[0]['cid'])
+        }
     }
     $sql = @"
 SELECT pa.actor_id::text AS vid, a.class AS class, COALESCE(a.map, '') AS map,
@@ -315,14 +321,14 @@ SELECT pa.actor_id::text AS vid, a.class AS class, COALESCE(a.map, '') AS map,
 FROM dune.permission_actor pa
 JOIN dune.permission_actor_rank par ON par.permission_actor_id = pa.actor_id
 JOIN dune.actors a ON a.id = pa.actor_id
-LEFT JOIN dune.recovered_vehicles rv ON rv.vehicle_id = pa.actor_id AND rv.account_id = $accountId::bigint
+LEFT JOIN dune.recovered_vehicles rv ON rv.vehicle_id = pa.actor_id AND rv.character_id = $characterId::bigint
 WHERE par.player_id = $ControllerId::bigint AND pa.actor_type = 2
 UNION ALL
 SELECT a.id::text AS vid, a.class AS class, '' AS map,
        1.0 AS dur, '' AS vname, false AS recovered, true AS backup
 FROM dune.backup_vehicles bv
 JOIN dune.actors a ON a.id = bv.vehicle_id
-WHERE bv.account_id = $accountId::bigint
+WHERE bv.character_id = $characterId::bigint
 ORDER BY class;
 "@
     $r = Invoke-DuneSqlQuery -Ip $Ip -Sql $sql -ReadOnly $true -MaxRows 1000 -TimeoutSec 20
