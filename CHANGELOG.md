@@ -13,6 +13,19 @@ here cover everything those tags shipped.
 
 ## [Unreleased]
 
+## [12.13.8] - 2026-06-26
+
+### Fixed
+
+- **The Journey panel showed "No journey nodes recorded for this player yet"
+  even for fully-progressed characters.** The v12.13.5 journey fix updated the
+  journey *write* paths for Funcom's 1.4.10.0 `account_id`→`character_id` rekey
+  but missed the *read*, so the Journey list still queried the old column and
+  came back empty (the nodes were all still there — 2052 on the test character).
+  The read now resolves the account to its character like the write paths do. A
+  full sweep of every per-player table Funcom rekeyed confirms this was the last
+  remaining account_id reference.
+
 ## [12.13.7] - 2026-06-26
 
 ### Fixed
