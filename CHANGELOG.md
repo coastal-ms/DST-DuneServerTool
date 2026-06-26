@@ -13,6 +13,19 @@ here cover everything those tags shipped.
 
 ## [Unreleased]
 
+### Fixed
+
+- **Game Servers table mangled long map names (e.g. dungeon/story maps).** On
+  Server Health, an on-demand map with a long technical name like
+  `CB_Dungeon_Hephaestus` rendered as garbled, column-shifted text
+  ("Hepha | estus Running | t | rue 0"). The `battlegroup status` parser sliced
+  rows by fixed character columns taken from the header's dashes, but the CLI
+  colorizes values with ANSI codes and pads colored cells by byte width, so a
+  long map name overflowed its column and every cell shifted. The Game Servers
+  rows are now parsed by tokens from both ends (map = first token; ready /
+  players / age = last three; phase = everything between), which is immune to
+  column-alignment drift and keeps long map names intact.
+
 ## [12.13.2] - 2026-06-25
 
 ### Added
