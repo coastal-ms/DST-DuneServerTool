@@ -598,7 +598,14 @@ function Invoke-DunePublicIpApply {
             $target = ([string]$PublicIp).Trim()
             $steps.Add((New-DunePublicIpStepResult 'validate' 'Validate target IP' 'running' "Checking $target.")) | Out-Null
             & $pub 'running'
-            $valid = Assert-DuneManualPublicIp -PublicIp $target
+            # Re-assert WITH -AllowUnchanged: by the time we're inside the apply
+            # pipeline the user has explicitly confirmed they want to (re)apply,
+            # and a deliberate re-apply of the *same* IP is the whole point of the
+            # repair flow (e.g. rewriting host NAT / K3s ExternalIP after an
+            # unclean shutdown). Without this the internal step rejected an
+            # unchanged IP with "Target IP is unchanged" and aborted the apply,
+            # leaving no way to re-apply the current IP from the UI.
+            $valid = Assert-DuneManualPublicIp -PublicIp $target -AllowUnchanged
             if (-not $valid.ok) { throw $valid.message }
             $steps[$steps.Count - 1] = New-DunePublicIpStepResult 'validate' 'Validate target IP' 'done' "Target $target accepted."
             & $pub
