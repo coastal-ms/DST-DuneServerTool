@@ -1092,11 +1092,23 @@ VALUES ((SELECT id FROM dune.player_state WHERE account_id = $AccountId::bigint 
     }
     $recipeMsg = if ($recipeCount -gt 0) { ", +$recipeCount recipe(s)" } else { '' }
 
-    if ($SkipMsg) { return @{ ok = $true; recipes = $recipeCount } }
+    # Enable SpiceVision (Prescience / 3rd active-ability slot) for the Find the
+    # Fremen questline. Gated by an FGL component flag the game's 4th-Trial quest
+    # script sets in-game - not the journey nodes, the tag, or the recipe - so it
+    # must be applied explicitly here or the slot stays locked. Best-effort: a
+    # failure (or a pawn with no spice component) never fails the completion.
+    $spiceApplied = $false
+    if (Test-DuneNodeTriggersSpiceVision -NodeId $NodeId) {
+        $sv = Invoke-DuneGrantSpiceVision -Ip $Ip -AccountId $AccountId
+        if ($sv.ok -and $sv.applied) { $spiceApplied = $true }
+    }
+    $spiceMsg = if ($spiceApplied) { ', enabled Prescience (3rd ability slot)' } else { '' }
+
+    if ($SkipMsg) { return @{ ok = $true; recipes = $recipeCount; spiceVision = $spiceApplied } }
     return @{
         ok = $true
-        message = "Completed $NodeId + $updated node(s)$($bumpRes.extra)$recipeMsg - takes effect on next login"
-        nodes = $updated; tags = $tags.Count; recipes = $recipeCount
+        message = "Completed $NodeId + $updated node(s)$($bumpRes.extra)$recipeMsg$spiceMsg - takes effect on next login"
+        nodes = $updated; tags = $tags.Count; recipes = $recipeCount; spiceVision = $spiceApplied
     }
 }
 
@@ -1490,6 +1502,66 @@ WHERE a.id = $pawnID::bigint;
 }
 
 # ---------------------------------------------------------------------------
+# Enable SpiceVision (Prescience) on a character's pawn. The 3rd active-ability
+# slot + spice-vision buff are gated by FSpiceAddictionComponent.SpiceVisionEnabledStatus
+# = "FullyEnabled" on the pawn's DuneCharacter FGL entity. In-game this flag is
+# written by the 4th Trial of Aql quest script - NOT by journey-node completion,
+# a journey tag, or the awarded recipe - so admin-completing Find the Fremen
+# through the tool must set it explicitly or the slot stays locked.
+#
+# The component is stored as a JSON array [ <int>, { ...statuses... } ]; the
+# statuses live at index 1 (verified live: working pawns read
+# {"SystemStatus":"FullyEnabled","SpiceVisionEnabledStatus":"FullyEnabled"}).
+# We set only SpiceVisionEnabledStatus and leave SystemStatus untouched. The
+# WHERE clause makes it idempotent (skips pawns already FullyEnabled) and safe
+# (only writes when the FSpiceAddictionComponent[1] object exists). Offline-safe:
+# FGL components are RAM-authoritative while connected, so it takes effect on
+# next login - same caveat as the recipe grant.
+# ---------------------------------------------------------------------------
+function Invoke-DuneGrantSpiceVision {
+    param([string]$Ip, [long]$AccountId)
+    if ($AccountId -le 0) { return @{ ok = $false; error = 'account_id is required.' } }
+
+    $pawnID = Get-DunePlayerPawnFromAccount -Ip $Ip -AccountId $AccountId
+    if ($pawnID -le 0) {
+        $err = "no pawn for account $AccountId."
+        if (Get-Command Write-DuneLog -ErrorAction SilentlyContinue) { Write-DuneLog "GrantSpiceVision FAIL: $err" 'WARN' }
+        return @{ ok = $false; error = $err }
+    }
+
+    $sql = @"
+UPDATE dune.fgl_entities fe
+SET components = jsonb_set(
+    fe.components,
+    '{FSpiceAddictionComponent,1,SpiceVisionEnabledStatus}',
+    '"FullyEnabled"'::jsonb,
+    true)
+WHERE fe.entity_id = (
+    SELECT entity_id FROM dune.actor_fgl_entities
+    WHERE actor_id = $pawnID::bigint AND slot_name = 'DuneCharacter'
+  )
+  AND fe.components #> '{FSpiceAddictionComponent,1}' IS NOT NULL
+  AND COALESCE(fe.components #>> '{FSpiceAddictionComponent,1,SpiceVisionEnabledStatus}', '') <> 'FullyEnabled';
+"@
+    $r = Invoke-DuneSqlQuery -Ip $Ip -Sql $sql -ReadOnly $false -MaxRows 1 -TimeoutSec 30
+    if (-not $r.ok) {
+        if (Get-Command Write-DuneLog -ErrorAction SilentlyContinue) { Write-DuneLog "GrantSpiceVision FAIL: SQL error (pawn=$pawnID): $($r.error)" 'ERROR' }
+        return @{ ok = $false; error = "grant spice vision: $($r.error)" }
+    }
+    $updated = (Get-DuneSqlAffected $r)
+    if ($updated -gt 0) {
+        if (Get-Command Write-DuneLog -ErrorAction SilentlyContinue) { Write-DuneLog "GrantSpiceVision OK: enabled (pawn=$pawnID, account=$AccountId)" }
+        return @{ ok = $true; applied = $true; message = "Enabled Prescience / 3rd ability slot - takes effect on next login" }
+    }
+    # affected = 0: either already FullyEnabled, or the pawn has no
+    # FSpiceAddictionComponent[1] object (a character that has never engaged the
+    # spice/addiction system). Nothing to do; treat as success so a missing
+    # component never fails the surrounding journey completion.
+    if (Get-Command Write-DuneLog -ErrorAction SilentlyContinue) { Write-DuneLog "GrantSpiceVision: no change (pawn=$pawnID) - already enabled or no spice component" }
+    return @{ ok = $true; applied = $false; message = "SpiceVision already enabled or not applicable" }
+}
+
+# ---------------------------------------------------------------------------
 # Journey node -> awarded recipe map. Completing a journey node in-game grants a
 # crafting recipe into the pawn's TechKnowledge, and that award (not a tag) is
 # what unlocks the related ability slot / gear. This is the single source of
@@ -1549,6 +1621,23 @@ function Get-DuneRewardUnblockTagsForJourneyNode {
         }
     }
     return @($out)
+}
+
+# True when completing $NodeId should also enable SpiceVision (Prescience / 3rd
+# active-ability slot). Tied to the same Find the Fremen root(s) as the
+# reward-unblock tag - it is the questline that contains the 4th Trial of Aql.
+# Matches the root, a descendant, or an ancestor that contains a root (completing
+# the whole questline).
+function Test-DuneNodeTriggersSpiceVision {
+    param([string]$NodeId)
+    foreach ($root in $script:DuneJourneyRewardUnblockRoots) {
+        if ($NodeId -eq $root -or
+            $NodeId.StartsWith($root + '.') -or
+            $root.StartsWith($NodeId + '.')) {
+            return $true
+        }
+    }
+    return $false
 }
 
 function Invoke-DunePlayerSetStarterClass {

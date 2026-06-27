@@ -198,6 +198,21 @@ Describe 'Get-DuneRewardUnblockTagsForJourneyNode' -Tag 'Pure' {    It 'returns 
     }
 }
 
+Describe 'Test-DuneNodeTriggersSpiceVision' -Tag 'Pure' {
+    It 'is true for the Find the Fremen root (contains the 4th Trial of Aql)' {
+        Test-DuneNodeTriggersSpiceVision -NodeId 'DA_MQ_FindTheFremen' | Should -BeTrue
+    }
+    It 'is true for a descendant node (the 4th trial subtree)' {
+        Test-DuneNodeTriggersSpiceVision -NodeId 'DA_MQ_FindTheFremen.FourthTest.FourthQuestion.CompleteFourthTest' | Should -BeTrue
+    }
+    It 'is false for an unrelated questline' {
+        Test-DuneNodeTriggersSpiceVision -NodeId 'DA_MQ_ANewBeginning' | Should -BeFalse
+    }
+    It 'does not partial-match a node that merely shares a prefix string' {
+        Test-DuneNodeTriggersSpiceVision -NodeId 'DA_MQ_FindTheFremenExtra' | Should -BeFalse
+    }
+}
+
 Describe 'Get-DuneRecipesForJourneyNodeSubtree' -Tag 'Pure' {
     It 'returns the Cryss Knife recipe for the Trial 4 subtree' {
         $r = Get-DuneRecipesForJourneyNodeSubtree -NodeId 'DA_MQ_FindTheFremen.FourthTest'
