@@ -692,6 +692,28 @@ function Invoke-DuneRestartScheduleTick {
             if (Get-Command Write-DuneLog -ErrorAction SilentlyContinue) {
                 Write-DuneLog "scheduled restart result: $($state.lastResult)"
             }
+
+            # Clear on-demand map partition pins after restart. The restart leaves
+            # stale partitions that prevent DeepDesert/Arrakeen/HarkoVillage from
+            # launching on demand. Wait briefly for pods to initialize, then run
+            # the cleanup (idempotent — skips maps with a running pod).
+            if ($r.ok) {
+                try {
+                    Start-Sleep -Seconds 30
+                    if (Get-Command Invoke-DuneFixOnDemandPartitions -ErrorAction SilentlyContinue) {
+                        $cpResult = Invoke-DuneFixOnDemandPartitions
+                        if (Get-Command Write-DuneLog -ErrorAction SilentlyContinue) {
+                            if ($cpResult.ok) { Write-DuneLog "post-restart partition clear: done" }
+                            else { Write-DuneLog "post-restart partition clear failed: $($cpResult.message)" 'WARN' }
+                        }
+                    }
+                } catch {
+                    if (Get-Command Write-DuneLog -ErrorAction SilentlyContinue) {
+                        Write-DuneLog "post-restart partition clear error: $($_.Exception.Message)" 'WARN'
+                    }
+                }
+            }
+
             if (-not $asyncCheck) {
                 try { [void](Get-DuneFuncomServerUpdateStatus -Persist) } catch {
                     if (Get-Command Write-DuneLog -ErrorAction SilentlyContinue) {
