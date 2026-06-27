@@ -1503,20 +1503,24 @@ WHERE a.id = $pawnID::bigint;
 
 # ---------------------------------------------------------------------------
 # Enable SpiceVision (Prescience) on a character's pawn. The 3rd active-ability
-# slot + spice-vision buff are gated by FSpiceAddictionComponent.SpiceVisionEnabledStatus
-# = "FullyEnabled" on the pawn's DuneCharacter FGL entity. In-game this flag is
-# written by the 4th Trial of Aql quest script - NOT by journey-node completion,
-# a journey tag, or the awarded recipe - so admin-completing Find the Fremen
-# through the tool must set it explicitly or the slot stays locked.
+# slot + spice-vision buff are gated by the FSpiceAddictionComponent on the
+# pawn's DuneCharacter FGL entity. In-game these flags are written by the 4th
+# Trial of Aql quest script - NOT by journey-node completion, a journey tag, or
+# the awarded recipe - so admin-completing Find the Fremen through the tool must
+# set them explicitly or the slot stays locked.
 #
-# The component is stored as a JSON array [ <int>, { ...statuses... } ]; the
-# statuses live at index 1 (verified live: working pawns read
-# {"SystemStatus":"FullyEnabled","SpiceVisionEnabledStatus":"FullyEnabled"}).
-# We set only SpiceVisionEnabledStatus and leave SystemStatus untouched. The
-# WHERE clause makes it idempotent (skips pawns already FullyEnabled) and safe
-# (only writes when the FSpiceAddictionComponent[1] object exists). Offline-safe:
-# FGL components are RAM-authoritative while connected, so it takes effect on
-# next login - same caveat as the recipe grant.
+# The component is a JSON array [ <int>, { ...statuses... } ]; the statuses live
+# at index 1. BOTH flags must be FullyEnabled - verified by comparing a working
+# vs a locked character on live DBs:
+#   working (slot unlocked): {"SystemStatus":"FullyEnabled","SpiceVisionEnabledStatus":"FullyEnabled"}
+#   locked  (slot locked):   {"SystemStatus":"AddictionDisabled","SpiceVisionEnabledStatus":"FullyEnabled"}
+# i.e. SpiceVisionEnabledStatus alone is NOT enough - SystemStatus must also be
+# FullyEnabled (the spice-addiction system being active, which is exactly what
+# completing the 4th Trial turns on). We set both. The WHERE clause is idempotent
+# (writes only if EITHER flag is not yet FullyEnabled) and safe (only when the
+# FSpiceAddictionComponent[1] object exists). Offline-safe: FGL components are
+# RAM-authoritative while connected, so it takes effect on next login - same
+# caveat as the recipe grant.
 # ---------------------------------------------------------------------------
 function Invoke-DuneGrantSpiceVision {
     param([string]$Ip, [long]$AccountId)
@@ -1532,7 +1536,11 @@ function Invoke-DuneGrantSpiceVision {
     $sql = @"
 UPDATE dune.fgl_entities fe
 SET components = jsonb_set(
-    fe.components,
+    jsonb_set(
+        fe.components,
+        '{FSpiceAddictionComponent,1,SystemStatus}',
+        '"FullyEnabled"'::jsonb,
+        true),
     '{FSpiceAddictionComponent,1,SpiceVisionEnabledStatus}',
     '"FullyEnabled"'::jsonb,
     true)
@@ -1541,7 +1549,10 @@ WHERE fe.entity_id = (
     WHERE actor_id = $pawnID::bigint AND slot_name = 'DuneCharacter'
   )
   AND fe.components #> '{FSpiceAddictionComponent,1}' IS NOT NULL
-  AND COALESCE(fe.components #>> '{FSpiceAddictionComponent,1,SpiceVisionEnabledStatus}', '') <> 'FullyEnabled';
+  AND (
+        COALESCE(fe.components #>> '{FSpiceAddictionComponent,1,SystemStatus}', '') <> 'FullyEnabled'
+     OR COALESCE(fe.components #>> '{FSpiceAddictionComponent,1,SpiceVisionEnabledStatus}', '') <> 'FullyEnabled'
+  );
 "@
     $r = Invoke-DuneSqlQuery -Ip $Ip -Sql $sql -ReadOnly $false -MaxRows 1 -TimeoutSec 30
     if (-not $r.ok) {

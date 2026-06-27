@@ -24,8 +24,9 @@ here cover everything those tags shipped.
   component flag (`FSpiceAddictionComponent.SpiceVisionEnabledStatus = "FullyEnabled"`)
   that the game's 4th-Trial-of-Aql quest script writes in-game — not by a journey tag
   or recipe. Every journey-completion path (Apply Quick Preset, Unlock Main Quest,
-  single Complete) now sets that flag explicitly for the Find the Fremen questline.
-  Takes effect on the character's next login.
+  single Complete) now sets that flag (and the companion `SystemStatus` flag, which
+  must also be `FullyEnabled` for the slot to unlock) explicitly for the Find the
+  Fremen questline. Takes effect on the character's next login.
 
 ## [12.13.10] - 2026-06-26
 
