@@ -13,6 +13,19 @@ here cover everything those tags shipped.
 
 ## [Unreleased]
 
+## [12.13.13] - 2026-06-27
+
+### Fixed
+
+- **Re-applying the same (unchanged) public IP now works.** Settings → Public IP /
+  DDNS → Apply was a dead end when the target IP matched the last-applied one: the
+  apply pipeline's internal "Validate target IP" step rejected the unchanged IP
+  ("Target IP is unchanged") and aborted. That blocked the documented repair flow
+  of re-applying your current IP to rewrite the host NAT / K3s ExternalIP after an
+  unclean shutdown or network change. The internal step now allows an unchanged IP
+  (the route-level validation already did), so a deliberate re-apply runs end to
+  end.
+
 ## [12.13.12] - 2026-06-27
 
 ### Fixed
