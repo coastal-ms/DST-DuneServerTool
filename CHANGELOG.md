@@ -32,7 +32,9 @@ here cover everything those tags shipped.
   never disconnected. The boot pass is aggressive (no players exist right after
   boot); the cron pass is conservative (only acts on a pod-less or clearly stuck
   map) so it never races a legitimate spin-up. The manual **Fix Partitions**
-  button now (re)installs this automation in addition to running it once.
+  button now (re)installs this automation in addition to running it once; the
+  automatic refresh that runs when DST launches uses the conservative pass, so
+  starting the app during live play never disturbs a map that is mid-spin-up.
 
 ## [12.13.11] - 2026-06-27
 

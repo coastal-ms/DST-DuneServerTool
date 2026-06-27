@@ -347,16 +347,23 @@ function _Invoke-DunePartitionAutomationInstaller {
     # VM and run it with sudo. The installer (re)writes the heal script
     # (/usr/local/bin/dune-clear-partitions.sh), the OpenRC boot hook
     # (/etc/local.d/dune-clear-partitions.start), and a */15 cron entry, then
-    # runs the heal once in boot mode. All persistence logic lives in the POSIX
-    # sh installer (Defender-safe); DST only stages-and-runs it.
+    # runs the heal once in the mode given by $RunMode. All persistence logic
+    # lives in the POSIX sh installer (Defender-safe); DST only stages-and-runs
+    # it.
     #
     # The heal cycles a map ({replicas:0, partitions:[]}) ONLY when its
     # partitions are pinned AND no pod is Ready, so a stuck post-shutdown zombie
     # on a warm/spin-up map is cleared without ever kicking a live player. The
     # director then restores the warm floor.
     #
+    # $RunMode picks the mode for the immediate run-once: 'cron' (conservative,
+    # the default for the automatic app-start sync) or 'manual' (aggressive, the
+    # explicit Fix Partitions button). The OpenRC boot hook always runs 'boot'.
+    #
     # Returns @{ ok; output; logTail } on a completed run, or @{ ok=$false;
     # status; message } on a context/staging error (no 'output' key).
+    param([ValidateSet('cron','manual','boot')][string]$RunMode = 'cron')
+
     $ctx = Get-DuneMapsContext
     if (-not $ctx.ok) { return @{ ok=$false; status=$ctx.status; message=$ctx.message } }
 
@@ -389,7 +396,9 @@ function _Invoke-DunePartitionAutomationInstaller {
         return @{ ok=$false; status=500; message="Staging partition-heal installer over ssh failed: $($staged.Trim())" }
     }
 
-    $runRaw = Invoke-V6Ssh -Ip $ip -Cmd "sudo -n sh $remoteTmp; rc=`$?; rm -f $remoteTmp; exit `$rc" -TimeoutSec 180
+    # $RunMode is restricted by ValidateSet to a known literal, so it is safe to
+    # interpolate as the installer's first argument (chooses the run-once mode).
+    $runRaw = Invoke-V6Ssh -Ip $ip -Cmd "sudo -n sh $remoteTmp $RunMode; rc=`$?; rm -f $remoteTmp; exit `$rc" -TimeoutSec 180
     $output = (($runRaw -join "`n")).Trim()
 
     $tailRaw = Invoke-V6Ssh -Ip $ip -Cmd 'tail -n 12 /var/log/dune-clear-partitions.log' -TimeoutSec 30
@@ -404,15 +413,16 @@ function _Invoke-DunePartitionAutomationInstaller {
 
 function Invoke-DuneFixOnDemandPartitions {
     # Manual "Fix Partitions" action. (Re)installs the autonomous partition
-    # self-heal (boot hook + */15 cron) on the VM and runs it once now in boot
-    # mode, clearing any stuck DeepDesert / SH_Arrakeen / SH_HarkoVillage pin —
-    # even on a warm/spin-up map — without disturbing a live player session.
+    # self-heal (boot hook + */15 cron) on the VM and runs it once now in the
+    # aggressive 'manual' mode (explicit user intent), clearing any stuck
+    # DeepDesert / SH_Arrakeen / SH_HarkoVillage pin — even on a warm/spin-up
+    # map — as long as no pod is Ready (a live session is never disturbed).
     #
     # v12.13.12: replaced the one-shot clear with the install-and-run installer
     # so the heal also keeps running autonomously (at VM boot and on a cron
     # tick) with DST closed — the previous one-shot only fired while the app was
     # open and could not clear a warm map (it skipped any set with a pod).
-    $r = _Invoke-DunePartitionAutomationInstaller
+    $r = _Invoke-DunePartitionAutomationInstaller -RunMode 'manual'
     if (-not $r.ContainsKey('output')) { return $r }   # context / staging error
     return @{
         ok      = $r.ok
@@ -431,7 +441,13 @@ function Sync-DunePartitionAutomation {
     # cron) is installed/refreshed on the VM. Called at server startup so the
     # heal works even with DST closed — e.g. after a host crash + VM reboot,
     # where the boot hook clears a warm map's stuck post-shutdown pin on its own.
-    $r = _Invoke-DunePartitionAutomationInstaller
+    #
+    # The immediate run-once uses the CONSERVATIVE 'cron' mode (not aggressive
+    # 'boot'): DST can be launched in the middle of live play, so the app-start
+    # pass must never cycle a map that is merely mid-spin-up. Only the OpenRC
+    # boot hook (real VM boot, no players) and the manual Fix button run
+    # aggressively.
+    $r = _Invoke-DunePartitionAutomationInstaller -RunMode 'cron'
     if (-not $r.ContainsKey('output')) { return $r }
     return @{
         ok      = $r.ok

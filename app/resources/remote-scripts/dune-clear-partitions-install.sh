@@ -24,7 +24,12 @@
 #      (mode=boot: aggressive, since no players can exist right after boot).
 #   3. Installs a */15 cron entry (mode=cron: conservative, only cycles a clearly
 #      stuck/zombie or pod-less map so it never races a legitimate spin-up).
-#   4. Runs the heal once now in boot mode.
+#   4. Runs the heal once now in the mode given by $1 (default: cron). DST passes
+#      'cron' for the automatic app-start sync (conservative -- never disturbs a
+#      map that is only mid-spin-up while the app is launched during live play)
+#      and 'manual' for the explicit Fix Partitions button (aggressive -- the
+#      user is deliberately fixing a stuck map). Only the OpenRC boot hook above
+#      uses the aggressive 'boot' mode, where no players can exist.
 #
 # DEFENDER-SAFE DESIGN
 #   All persistence logic (writing the heal + boot hook + cron) lives here in
@@ -208,9 +213,14 @@ rc-update add local default >/dev/null 2>&1 || true
 ( crontab -l 2>/dev/null | grep -v -e dune-clear-partitions ; echo "*/15 * * * * DUNE_CLEAR_MODE=cron $HEAL" ) | crontab -
 
 # ---------------------------------------------------------------------------
-# 4. Run once now (boot mode) so any current drift is fixed immediately.
+# 4. Run the heal once now. The caller ($1) chooses the mode: 'cron' for the
+#    automatic app-start sync (conservative), 'manual' for the explicit Fix
+#    Partitions button (aggressive, user intent). Defaults to conservative
+#    'cron' so an unspecified/automatic run never disturbs a live map.
 # ---------------------------------------------------------------------------
-DUNE_CLEAR_MODE=boot "$HEAL" 2>/dev/null
+RUNMODE="${1:-cron}"
+case "$RUNMODE" in boot|cron|manual) ;; *) RUNMODE=cron ;; esac
+DUNE_CLEAR_MODE="$RUNMODE" "$HEAL" 2>/dev/null
 
 log "dune-clear-partitions install/refresh done"
 echo DUNE_CLEAR_PARTITIONS_OK
