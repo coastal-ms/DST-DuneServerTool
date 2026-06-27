@@ -342,73 +342,121 @@ function Start-DuneOnDemandMap {
     }
 }
 
-function Invoke-DuneFixOnDemandPartitions {
-    # Re-runs the partition-cleanup script that clears the drifted
-    # igwsss.spec.partitions pin which stops DeepDesert / SH_Arrakeen /
-    # SH_HarkoVillage from launching on demand, then returns the last lines
-    # of its log. The script is idempotent and skips any map that already
-    # has a running pod, so it's safe to invoke repeatedly.
+function _Invoke-DunePartitionAutomationInstaller {
+    # Stage app/resources/remote-scripts/dune-clear-partitions-install.sh to the
+    # VM and run it with sudo. The installer (re)writes the heal script
+    # (/usr/local/bin/dune-clear-partitions.sh), the OpenRC boot hook
+    # (/etc/local.d/dune-clear-partitions.start), and a */15 cron entry, then
+    # runs the heal once in the mode given by $RunMode. All persistence logic
+    # lives in the POSIX sh installer (Defender-safe); DST only stages-and-runs
+    # it.
     #
-    # v11.0.3: stages the bundled script to /tmp on the VM, runs it
-    # once with sudo, removes the staged copy. No persistent install on the
-    # VM. (Previously called /etc/local.d/dune-clear-partitions.start
-    # installed by Sync-DunePartitionAutomation — that path may not exist
-    # on fresh installs, but is still honored when present.)
-    # v12.0.14: staging switched from scp to an ssh exec + base64 stream so
-    # it no longer depends on the remote sftp-server subsystem.
+    # The heal cycles a map ({replicas:0, partitions:[]}) ONLY when its
+    # partitions are pinned AND no pod is Ready, so a stuck post-shutdown zombie
+    # on a warm/spin-up map is cleared without ever kicking a live player. The
+    # director then restores the warm floor.
+    #
+    # $RunMode picks the mode for the immediate run-once: 'cron' (conservative,
+    # the default for the automatic app-start sync) or 'manual' (aggressive, the
+    # explicit Fix Partitions button). The OpenRC boot hook always runs 'boot'.
+    #
+    # Returns @{ ok; output; logTail } on a completed run, or @{ ok=$false;
+    # status; message } on a context/staging error (no 'output' key).
+    param([ValidateSet('cron','manual','boot')][string]$RunMode = 'cron')
+
     $ctx = Get-DuneMapsContext
     if (-not $ctx.ok) { return @{ ok=$false; status=$ctx.status; message=$ctx.message } }
 
     $ip = $ctx.vm.ip
 
     $candidates = @(
-        (Join-Path $PSScriptRoot '..\..\resources\remote-scripts\dune-clear-partitions.start')                  # installed layout
-        (Join-Path (Split-Path -Parent $PSScriptRoot) '..\resources\remote-scripts\dune-clear-partitions.start') # dev layout fallback
+        (Join-Path $PSScriptRoot '..\..\resources\remote-scripts\dune-clear-partitions-install.sh')                  # installed layout
+        (Join-Path (Split-Path -Parent $PSScriptRoot) '..\resources\remote-scripts\dune-clear-partitions-install.sh') # dev layout fallback
     )
     $local = $null
     foreach ($p in $candidates) { if (Test-Path -LiteralPath $p) { $local = $p; break } }
     if (-not $local) {
-        return @{ ok=$false; status=500; message='Bundled dune-clear-partitions.start not found in install dir.' }
-    }
-
-    $key = Get-V6SshKeyPath
-    if (-not $key) {
-        return @{ ok=$false; status=500; message='SSH key path not configured.' }
+        return @{ ok=$false; status=500; message='Bundled dune-clear-partitions-install.sh not found in install dir.' }
     }
 
     $stamp     = [Guid]::NewGuid().ToString('N').Substring(0, 12)
-    $remoteTmp = "/tmp/dune-cp-$stamp.sh"
+    $remoteTmp = "/tmp/dune-cp-install-$stamp.sh"
 
     # Force LF — Alpine /bin/sh chokes on CRLF.
     $raw = [System.IO.File]::ReadAllText($local)
     $lf  = $raw -replace "`r`n", "`n" -replace "`r", "`n"
 
-    # Stage the script over an ssh exec channel (base64 piped on stdin) rather
-    # than scp. Modern OpenSSH scp (9.0+) speaks the SFTP protocol, which needs
-    # sftp-server on the remote; some VM images don't ship it where sshd_config
-    # expects (e.g. /usr/lib/ssh/sftp-server missing), so scp fails with
-    # "bash: line 1: /usr/lib/ssh/sftp-server: No such file or directory" and
-    # on-demand maps never get their partition pin cleared. ssh exec + base64
-    # needs only a shell and busybox base64, which every supported image has.
+    # Stage over an ssh exec channel (base64 piped on stdin) rather than scp:
+    # modern OpenSSH scp needs sftp-server, which some VM images don't ship.
     $b64 = [Convert]::ToBase64String([Text.Encoding]::UTF8.GetBytes($lf))
 
     $stageRaw = Invoke-V6Ssh -Ip $ip -Cmd "base64 -d > $remoteTmp && echo DUNE_STAGED_OK" -StdinData $b64 -TimeoutSec 60
     $staged   = (($stageRaw -join "`n"))
     if ($staged -notmatch 'DUNE_STAGED_OK') {
-        return @{ ok=$false; status=500; message="Staging partition-clear script over ssh failed: $($staged.Trim())" }
+        return @{ ok=$false; status=500; message="Staging partition-heal installer over ssh failed: $($staged.Trim())" }
     }
 
-    $runRaw = Invoke-V6Ssh -Ip $ip -Cmd "sudo -n sh $remoteTmp; rc=`$?; rm -f $remoteTmp; exit `$rc" -TimeoutSec 120
+    # $RunMode is restricted by ValidateSet to a known literal, so it is safe to
+    # interpolate as the installer's first argument (chooses the run-once mode).
+    $runRaw = Invoke-V6Ssh -Ip $ip -Cmd "sudo -n sh $remoteTmp $RunMode; rc=`$?; rm -f $remoteTmp; exit `$rc" -TimeoutSec 180
     $output = (($runRaw -join "`n")).Trim()
 
-    $tailRaw = Invoke-V6Ssh -Ip $ip -Cmd 'tail -n 10 /var/log/dune-clear-partitions.log' -TimeoutSec 30
+    $tailRaw = Invoke-V6Ssh -Ip $ip -Cmd 'tail -n 12 /var/log/dune-clear-partitions.log' -TimeoutSec 30
     $logTail = (($tailRaw -join "`n")).Trim()
 
     return @{
-        ok      = $true
+        ok      = ($output -match 'DUNE_CLEAR_PARTITIONS_OK')
         output  = $output
         logTail = $logTail
-        message = 'Partition cleanup ran. The script is idempotent and skips any map with a running pod, so it is safe to run again whenever a map refuses to launch.'
+    }
+}
+
+function Invoke-DuneFixOnDemandPartitions {
+    # Manual "Fix Partitions" action. (Re)installs the autonomous partition
+    # self-heal (boot hook + */15 cron) on the VM and runs it once now in the
+    # aggressive 'manual' mode (explicit user intent), clearing any stuck
+    # DeepDesert / SH_Arrakeen / SH_HarkoVillage pin — even on a warm/spin-up
+    # map — as long as no pod is Ready (a live session is never disturbed).
+    #
+    # v12.13.12: replaced the one-shot clear with the install-and-run installer
+    # so the heal also keeps running autonomously (at VM boot and on a cron
+    # tick) with DST closed — the previous one-shot only fired while the app was
+    # open and could not clear a warm map (it skipped any set with a pod).
+    $r = _Invoke-DunePartitionAutomationInstaller -RunMode 'manual'
+    if (-not $r.ContainsKey('output')) { return $r }   # context / staging error
+    return @{
+        ok      = $r.ok
+        output  = $r.output
+        logTail = $r.logTail
+        message = if ($r.ok) {
+            'Partition self-heal ran and is now installed to run automatically (at VM boot and every 15 minutes). It clears a stuck map pin without disturbing a live session, so it is safe to run again any time a map refuses to launch.'
+        } else {
+            "Partition heal installer did not confirm success. Last log lines: $($r.logTail)"
+        }
+    }
+}
+
+function Sync-DunePartitionAutomation {
+    # Idempotently ensure the autonomous partition self-heal (boot hook + */15
+    # cron) is installed/refreshed on the VM. Called at server startup so the
+    # heal works even with DST closed — e.g. after a host crash + VM reboot,
+    # where the boot hook clears a warm map's stuck post-shutdown pin on its own.
+    #
+    # The immediate run-once uses the CONSERVATIVE 'cron' mode (not aggressive
+    # 'boot'): DST can be launched in the middle of live play, so the app-start
+    # pass must never cycle a map that is merely mid-spin-up. Only the OpenRC
+    # boot hook (real VM boot, no players) and the manual Fix button run
+    # aggressively.
+    $r = _Invoke-DunePartitionAutomationInstaller -RunMode 'cron'
+    if (-not $r.ContainsKey('output')) { return $r }
+    return @{
+        ok      = $r.ok
+        logTail = $r.logTail
+        message = if ($r.ok) {
+            'Partition self-heal automation ensured on VM (boot hook + 15-min cron).'
+        } else {
+            "Partition self-heal automation install unconfirmed: $($r.logTail)"
+        }
     }
 }
 
@@ -523,7 +571,7 @@ function Stop-DuneOnDemandMap {
 # Pod restart — delete the Kubernetes pod(s) backing a map's ServerSet so the
 # operator recreates them fresh. Used by the Map SpinUp page's "Restart" buttons.
 # Pod names follow <bg-id>-sg<map-suffix>-pod-<n> (see
-# app/resources/remote-scripts/dune-clear-partitions.start), so we match on the
+# app/resources/remote-scripts/dune-clear-partitions-install.sh), so we match on the
 # fixed "-sg-<map>-pod-" infix from the allow-list below — never on user input.
 # This disconnects anyone currently on the map; the operator brings the pod(s)
 # back in ~60-120 s. Survival_1 hosts the persistent Hagga overworld.
