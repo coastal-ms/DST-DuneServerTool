@@ -298,16 +298,16 @@ function SpecRow({ name, track, canWrite, busy, onGrantMax, onReset, onSetLevel 
 // Tags — chip list with add/remove + Save button. Writes the full set in
 // one POST (matches backend's replace semantics).
 // ---------------------------------------------------------------------------
-const TAGS_PAGE_SIZE = 25
 export function TagsSection({ player, canWrite, demo, refreshKey, flash, onChanged }: SectionProps) {
   const [tags, setTags] = useState<string[]>([])
   const [draft, setDraft] = useState('')
+  const [filter, setFilter] = useState('')
   const [dirty, setDirty] = useState(false)
   const [unsupported, setUnsupported] = useState(false)
   const [loading, setLoading] = useState(true)
   const [busy, setBusy] = useState(false)
   const [err, setErr] = useState<string | null>(null)
-  const [tagPage, setTagPage] = useState(0)
+  const [collapsed, setCollapsed] = useState<Set<string>>(new Set())
 
   useEffect(() => {
     let alive = true
@@ -351,11 +351,33 @@ export function TagsSection({ player, canWrite, demo, refreshKey, flash, onChang
     }
   }
 
-  const filteredTags = tags
+  // Group tags by first dot-segment prefix.
+  const groupedTags = useMemo(() => {
+    const lc = filter.toLowerCase()
+    const filtered = lc ? tags.filter(t => t.toLowerCase().includes(lc)) : tags
+    const groups = new Map<string, string[]>()
+    for (const t of filtered) {
+      const dot = t.indexOf('.')
+      const prefix = dot > 0 ? t.slice(0, dot) : '(Other)'
+      const arr = groups.get(prefix)
+      if (arr) arr.push(t)
+      else groups.set(prefix, [t])
+    }
+    return Array.from(groups.entries())
+      .sort(([a], [b]) => a.localeCompare(b))
+      .map(([prefix, items]) => ({ prefix, items: items.sort() }))
+  }, [tags, filter])
 
-  const tagPageCount = Math.max(1, Math.ceil(filteredTags.length / TAGS_PAGE_SIZE))
-  const tagPageClamped = Math.min(tagPage, tagPageCount - 1)
-  const tagRows = filteredTags.slice(tagPageClamped * TAGS_PAGE_SIZE, (tagPageClamped + 1) * TAGS_PAGE_SIZE)
+  const toggleCollapse = (prefix: string) => {
+    setCollapsed(prev => {
+      const next = new Set(prev)
+      if (next.has(prefix)) next.delete(prefix)
+      else next.add(prefix)
+      return next
+    })
+  }
+
+  const totalFiltered = groupedTags.reduce((n, g) => n + g.items.length, 0)
 
   if (loading) return <Loading label="Loading tags…" />
 
@@ -386,35 +408,65 @@ export function TagsSection({ player, canWrite, demo, refreshKey, flash, onChang
         <EmptyBox msg="No tags. Add one above." />
       ) : (
         <>
-          <div className="space-y-1">
-            {tagRows.map(t => (
-              <div key={t} className="card px-3 py-2 flex items-center gap-2">
-                <span className="flex-1 min-w-0 font-mono text-xs text-text truncate" title={t}>{t}</span>
-                {canWrite && !unsupported && (
-                  <button type="button" className="btn-secondary text-[11px] px-2 py-1 text-error shrink-0"
-                    onClick={() => remove(t)} title="Remove tag">
-                    <Icon name="X" size={11} /> Remove
-                  </button>
-                )}
-              </div>
-            ))}
+          {/* Filter existing tags */}
+          <div className="relative">
+            <input
+              type="text"
+              value={filter}
+              onChange={e => setFilter(e.target.value)}
+              placeholder="Filter tags…"
+              className="w-full pl-9 pr-3 py-1.5 rounded-lg bg-surface-2 border border-border text-text text-xs focus:outline-none focus:ring-1 focus:ring-ibad"
+            />
+            <Icon name="Filter" size={13} className="absolute left-3 top-1/2 -translate-y-1/2 text-text-dim pointer-events-none" />
+            {filter && (
+              <button type="button" className="absolute right-2 top-1/2 -translate-y-1/2 text-text-dim hover:text-text"
+                onClick={() => setFilter('')}><Icon name="X" size={13} /></button>
+            )}
           </div>
 
-          {tagPageCount > 1 && (
-            <div className="flex items-center justify-between text-xs text-text-dim">
-              <span>{fmtNum(filteredTags.length)} tag(s) · page {tagPageClamped + 1} of {tagPageCount}</span>
-              <div className="flex gap-1">
-                <button type="button" className="btn-secondary px-2 py-1" disabled={tagPageClamped <= 0}
-                  onClick={() => setTagPage(p => Math.max(0, p - 1))}>
-                  <Icon name="ChevronLeft" size={13} />
-                </button>
-                <button type="button" className="btn-secondary px-2 py-1" disabled={tagPageClamped >= tagPageCount - 1}
-                  onClick={() => setTagPage(p => Math.min(tagPageCount - 1, p + 1))}>
-                  <Icon name="ChevronRight" size={13} />
-                </button>
-              </div>
-            </div>
-          )}
+          <div className="text-[11px] text-text-dim">
+            {fmtNum(totalFiltered)} tag{totalFiltered === 1 ? '' : 's'} in {groupedTags.length} group{groupedTags.length === 1 ? '' : 's'}
+            {filter && ` (filtered from ${fmtNum(tags.length)})`}
+          </div>
+
+          <div className="space-y-1">
+            {groupedTags.map(g => {
+              const isCollapsed = collapsed.has(g.prefix)
+              return (
+                <div key={g.prefix} className="rounded-lg border border-border/60 overflow-hidden">
+                  <button
+                    type="button"
+                    onClick={() => toggleCollapse(g.prefix)}
+                    className="w-full flex items-center gap-2 px-3 py-2 bg-surface-2/60 hover:bg-surface-2 text-left"
+                  >
+                    <Icon name={isCollapsed ? 'ChevronRight' : 'ChevronDown'} size={13} className="text-text-dim shrink-0" />
+                    <span className="text-xs font-medium text-text">{g.prefix}</span>
+                    <span className="text-[11px] text-text-dim">({g.items.length})</span>
+                  </button>
+                  {!isCollapsed && (
+                    <div className="divide-y divide-border/40">
+                      {g.items.map(t => {
+                        const suffix = t.indexOf('.') > 0 ? t.slice(t.indexOf('.') + 1) : t
+                        return (
+                          <div key={t} className="px-3 py-1.5 flex items-center gap-2 hover:bg-surface-2/30">
+                            <span className="flex-1 min-w-0">
+                              <span className="block text-xs text-text truncate" title={t}>{suffix}</span>
+                            </span>
+                            {canWrite && !unsupported && (
+                              <button type="button" className="btn-secondary text-[11px] px-2 py-0.5 text-error shrink-0"
+                                onClick={() => remove(t)} title={`Remove ${t}`}>
+                                <Icon name="X" size={11} /> Remove
+                              </button>
+                            )}
+                          </div>
+                        )
+                      })}
+                    </div>
+                  )}
+                </div>
+              )
+            })}
+          </div>
         </>
       )}
     </div>

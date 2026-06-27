@@ -1018,17 +1018,18 @@ function Invoke-DunePlayerApplyProgressionPreset {
     if (-not $preset) { return @{ ok = $false; error = "unknown preset_id '$PresetId'." } }
 
     $completed = 0
+    $totalRecipes = 0
     $errs = @()
     foreach ($node in $preset.nodes) {
         $r = Invoke-DunePlayerCompleteJourneyNode -Ip $Ip -AccountId $AccountId -NodeId $node -SkipMsg
-        if ($r.ok) { $completed++ }
+        if ($r.ok) { $completed++; $totalRecipes += [int]$r.recipes }
         else { $errs += "$node : $($r.error)" }
     }
     $total = @($preset.nodes).Count
     $ok = $errs.Count -eq 0
-    $msg = "Applied preset '$PresetId' ($($preset.name)): completed $completed/$total journey node(s)."
+    $msg = "Applied preset '$PresetId' ($($preset.name)): completed $completed/$total journey node(s), granted $totalRecipes recipe(s)."
     if ($errs.Count -gt 0) { $msg += " Failures: $($errs -join '; ')" }
-    return @{ ok = $ok; message = $msg; completed = $completed; total = $total }
+    return @{ ok = $ok; message = $msg; completed = $completed; total = $total; recipes = $totalRecipes }
 }
 
 function Invoke-DunePlayerCompleteJourneyNode {
@@ -1406,18 +1407,24 @@ function Invoke-DunePlayerUnlockMainQuest {
 # ---------------------------------------------------------------------------
 
 # Flip a recipe to "Purchased" (or append it when absent) in a character's pawn
-# TechKnowledge. Offline-only at the route layer (pawn JSON is RAM-authoritative
-# while connected); takes effect on next login.
+# TechKnowledge. Creates the TechKnowledge path if missing (e.g. fresh character
+# that hasn't crafted yet). Offline-only at the route layer (pawn JSON is
+# RAM-authoritative while connected); takes effect on next login.
 function Invoke-DuneGrantRecipe {
     param([string]$Ip, [long]$AccountId, [string]$RecipeKey)
     if ($AccountId -le 0) { return @{ ok = $false; error = 'account_id is required.' } }
     if (-not $RecipeKey) { return @{ ok = $false; error = 'recipe key is required.' } }
 
     $pawnID = Get-DunePlayerPawnFromAccount -Ip $Ip -AccountId $AccountId
-    if ($pawnID -le 0) { return @{ ok = $false; error = "no pawn for account $AccountId." } }
+    if ($pawnID -le 0) {
+        $err = "no pawn for account $AccountId."
+        if (Get-Command Write-DuneLog -ErrorAction SilentlyContinue) { Write-DuneLog "GrantRecipe FAIL: $err (recipe=$RecipeKey)" 'WARN' }
+        return @{ ok = $false; error = $err }
+    }
 
     $rk = ConvertTo-DuneSqlString $RecipeKey
     $path = "'{TechKnowledgePlayerComponent,m_TechKnowledge,m_TechKnowledgeData}'"
+    # Attempt 1: path exists — flip existing recipe or append to array.
     $sql = @"
 UPDATE dune.actors a
 SET properties = jsonb_set(a.properties, $path,
@@ -1436,12 +1443,50 @@ WHERE a.id = $pawnID::bigint
   AND a.properties #> $path IS NOT NULL;
 "@
     $r = Invoke-DuneSqlQuery -Ip $Ip -Sql $sql -ReadOnly $false -MaxRows 1 -TimeoutSec 30
-    if (-not $r.ok) { return @{ ok = $false; error = "grant recipe: $($r.error)" } }
-    $updated = (Get-DuneSqlAffected $r)
-    if ($updated -eq 0) {
-        return @{ ok = $false; error = "pawn $pawnID has no TechKnowledge component yet (character may not have started)." }
+    if (-not $r.ok) {
+        if (Get-Command Write-DuneLog -ErrorAction SilentlyContinue) { Write-DuneLog "GrantRecipe FAIL: SQL error (recipe=$RecipeKey, pawn=$pawnID): $($r.error)" 'ERROR' }
+        return @{ ok = $false; error = "grant recipe: $($r.error)" }
     }
-    return @{ ok = $true; message = "Granted recipe $RecipeKey - takes effect on next login"; recipe = $RecipeKey }
+    $updated = (Get-DuneSqlAffected $r)
+    if ($updated -gt 0) {
+        if (Get-Command Write-DuneLog -ErrorAction SilentlyContinue) { Write-DuneLog "GrantRecipe OK: $RecipeKey (pawn=$pawnID, account=$AccountId)" }
+        return @{ ok = $true; message = "Granted recipe $RecipeKey - takes effect on next login"; recipe = $RecipeKey }
+    }
+
+    # Attempt 2: TechKnowledge path missing — create it with this recipe as the
+    # sole entry. Uses nested jsonb_set + COALESCE to preserve any existing
+    # intermediate keys while filling in missing levels.
+    if (Get-Command Write-DuneLog -ErrorAction SilentlyContinue) { Write-DuneLog "GrantRecipe: TechKnowledge path missing on pawn $pawnID — creating (recipe=$RecipeKey)" 'WARN' }
+    $initSql = @"
+UPDATE dune.actors a
+SET properties = jsonb_set(
+    jsonb_set(
+        jsonb_set(
+            COALESCE(a.properties, '{}'::jsonb),
+            '{TechKnowledgePlayerComponent}',
+            COALESCE(a.properties -> 'TechKnowledgePlayerComponent', '{}'::jsonb),
+            true),
+        '{TechKnowledgePlayerComponent,m_TechKnowledge}',
+        COALESCE(a.properties #> '{TechKnowledgePlayerComponent,m_TechKnowledge}', '{}'::jsonb),
+        true),
+    $path,
+    jsonb_build_array(jsonb_build_object('ItemKey', '$rk', 'bIsNewEntry', false, 'UnlockedState', 'Purchased')),
+    true)
+WHERE a.id = $pawnID::bigint;
+"@
+    $r2 = Invoke-DuneSqlQuery -Ip $Ip -Sql $initSql -ReadOnly $false -MaxRows 1 -TimeoutSec 30
+    if (-not $r2.ok) {
+        if (Get-Command Write-DuneLog -ErrorAction SilentlyContinue) { Write-DuneLog "GrantRecipe FAIL: init TechKnowledge SQL error (pawn=$pawnID): $($r2.error)" 'ERROR' }
+        return @{ ok = $false; error = "init TechKnowledge: $($r2.error)" }
+    }
+    $updated2 = (Get-DuneSqlAffected $r2)
+    if ($updated2 -eq 0) {
+        $err = "pawn $pawnID not found in dune.actors."
+        if (Get-Command Write-DuneLog -ErrorAction SilentlyContinue) { Write-DuneLog "GrantRecipe FAIL: $err (recipe=$RecipeKey)" 'ERROR' }
+        return @{ ok = $false; error = $err }
+    }
+    if (Get-Command Write-DuneLog -ErrorAction SilentlyContinue) { Write-DuneLog "GrantRecipe OK: $RecipeKey (pawn=$pawnID, account=$AccountId, created TechKnowledge path)" }
+    return @{ ok = $true; message = "Granted recipe $RecipeKey (created TechKnowledge) - takes effect on next login"; recipe = $RecipeKey; created = $true }
 }
 
 # ---------------------------------------------------------------------------
