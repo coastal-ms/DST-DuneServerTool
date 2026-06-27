@@ -13,6 +13,35 @@ here cover everything those tags shipped.
 
 ## [Unreleased]
 
+## [12.13.9] - 2026-06-26
+
+### Fixed
+
+- **Apply Quick Preset silently failed to grant recipes when the pawn had no
+  TechKnowledge path.** `Invoke-DuneGrantRecipe` guarded on the JSONB path
+  existing (`IS NOT NULL`) and returned a "no TechKnowledge" error, but
+  `Invoke-DunePlayerCompleteJourneyNode` swallowed recipe failures as
+  best-effort. The preset reported success ("completed 1/1") while the recipe
+  never landed — so the 3rd ability slot stayed locked. The fix creates the full
+  TechKnowledge structure if missing (nested `jsonb_set`/`COALESCE`), and logs at
+  WARN/ERROR for every failure path. Preset result messages now report how many
+  recipes were granted.
+
+### Added
+
+- **Backup download/upload** — the Backup Schedule card now has a download icon
+  on each backup in the history list (SCP from VM → native Save As dialog → your
+  PC) and an "Import backup" button (native file picker → SCP to the VM's dump
+  directory so the existing Restore command picks it up). No file-size limit;
+  transfers go through SCP, not HTTP.
+
+### Changed
+
+- **Tags panel redesigned** — replaced the flat paginated list with a
+  grouped/collapsible view. Tags are bucketed by their first dot-segment prefix
+  (BigMoments, Contract, Faction, Journey, etc.) with per-group counts, collapse
+  toggles, and an inline filter input.
+
 ## [12.13.8] - 2026-06-26
 
 ### Fixed
