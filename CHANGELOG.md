@@ -13,6 +13,21 @@ here cover everything those tags shipped.
 
 ## [Unreleased]
 
+## [12.13.11] - 2026-06-27
+
+### Fixed
+
+- **Apply Quick Preset / Complete "Find the Fremen (Trials of Aql)" now unlocks the
+  3rd active-ability slot offline.** Completing the questline through the tool set the
+  journey nodes, the `Journey.RewardsUnblocked` tag, and the Fremkit recipes, but the
+  3rd ability slot + Prescience stayed locked. The slot is actually gated by an FGL
+  component flag (`FSpiceAddictionComponent.SpiceVisionEnabledStatus = "FullyEnabled"`)
+  that the game's 4th-Trial-of-Aql quest script writes in-game — not by a journey tag
+  or recipe. Every journey-completion path (Apply Quick Preset, Unlock Main Quest,
+  single Complete) now sets that flag (and the companion `SystemStatus` flag, which
+  must also be `FullyEnabled` for the slot to unlock) explicitly for the Find the
+  Fremen questline. Takes effect on the character's next login.
+
 ## [12.13.10] - 2026-06-26
 
 ### Fixed
