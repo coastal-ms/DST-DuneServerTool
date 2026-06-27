@@ -13,6 +13,16 @@ here cover everything those tags shipped.
 
 ## [Unreleased]
 
+## [12.13.10] - 2026-06-26
+
+### Fixed
+
+- **Scheduled restart now auto-clears on-demand map partitions.** Previously the
+  daily restart left stale partition pins, so DeepDesert/Arrakeen/HarkoVillage
+  wouldn't launch on demand until you manually clicked "Fix partitions." The
+  restart routine now waits 30s for pods to init, then runs the same partition
+  cleanup automatically.
+
 ## [12.13.9] - 2026-06-26
 
 ### Fixed
