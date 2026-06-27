@@ -696,7 +696,8 @@ function Invoke-DuneRestartScheduleTick {
             # Clear on-demand map partition pins after restart. The restart leaves
             # stale partitions that prevent DeepDesert/Arrakeen/HarkoVillage from
             # launching on demand. Wait briefly for pods to initialize, then run
-            # the cleanup (idempotent — skips maps with a running pod).
+            # the heal (clears a pinned map only when no pod is Ready, so a live
+            # session is never kicked; also refreshes the VM boot hook + cron).
             if ($r.ok) {
                 try {
                     Start-Sleep -Seconds 30
@@ -977,6 +978,24 @@ function Start-DuneRestartScheduler {
         [void]$ps.AddScript({
             if ($DuneSchedulerLogPath -and (Get-Command Set-DuneLogPath -ErrorAction SilentlyContinue)) {
                 try { Set-DuneLogPath -Path $DuneSchedulerLogPath } catch {}
+            }
+            # One-time on scheduler start: ensure the autonomous partition
+            # self-heal (VM boot hook + */15 cron) is installed/refreshed, so a
+            # stuck on-demand/warm map pin self-heals even with DST closed (e.g.
+            # after a host crash + VM reboot). VM-gated + best-effort inside the
+            # function; must never block the scheduler loop.
+            try {
+                if (Get-Command Sync-DunePartitionAutomation -ErrorAction SilentlyContinue) {
+                    $cpSync = Sync-DunePartitionAutomation
+                    if (Get-Command Write-DuneLog -ErrorAction SilentlyContinue) {
+                        if ($cpSync.ok) { Write-DuneLog 'partition self-heal automation ensured on VM' }
+                        else { Write-DuneLog "partition self-heal automation install unconfirmed: $($cpSync.message)" 'WARN' }
+                    }
+                }
+            } catch {
+                if (Get-Command Write-DuneLog -ErrorAction SilentlyContinue) {
+                    try { Write-DuneLog "partition self-heal automation install error: $($_.Exception.Message)" 'WARN' } catch {}
+                }
             }
             while ($true) {
                 try { Invoke-DuneRestartScheduleTick } catch {
