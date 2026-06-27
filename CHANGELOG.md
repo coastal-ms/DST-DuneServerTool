@@ -13,6 +13,27 @@ here cover everything those tags shipped.
 
 ## [Unreleased]
 
+## [12.13.12] - 2026-06-27
+
+### Fixed
+
+- **On-demand / warm (spin-up) maps now self-heal a stuck partition pin on their
+  own — even with DST closed.** After an unclean host crash + VM reboot, a warm
+  map (DeepDesert / Arrakeen / Harko Village kept warm via spin-up) could come
+  back with its `igwsss.spec.partitions` still pinned while its pod was a stuck
+  post-shutdown zombie, so the map refused to load. The old clear pass skipped
+  any ServerSet that had a pod present, and a warm map always has one — so the
+  pin was never cleared and the only fix was the manual sequence (force-close
+  the map, clear partitions, let spin-up restore it). The partition heal is now
+  installed on the VM as an OpenRC **boot hook + a 15-minute cron**, so it runs
+  autonomously without the app open. It cycles a map (which evicts the zombie
+  pod and clears the pin; the director then restores the warm floor) **only when
+  the partitions are pinned and no pod is `Ready`**, so a live player session is
+  never disconnected. The boot pass is aggressive (no players exist right after
+  boot); the cron pass is conservative (only acts on a pod-less or clearly stuck
+  map) so it never races a legitimate spin-up. The manual **Fix Partitions**
+  button now (re)installs this automation in addition to running it once.
+
 ## [12.13.11] - 2026-06-27
 
 ### Fixed
