@@ -468,6 +468,84 @@ internal sealed class MainForm : Form
             // Browser confirmed it reached the server — safe to close now.
             BeginInvoke(new Action(() => { try { Close(); } catch { } }));
         }
+        else if (string.Equals(action, "pick-save-file", StringComparison.OrdinalIgnoreCase))
+        {
+            // Show a native Save As dialog and return the chosen path to the frontend.
+            string? id = null;
+            string? defaultName = null;
+            try
+            {
+                string? json = e.WebMessageAsJson;
+                if (!string.IsNullOrWhiteSpace(json))
+                {
+                    using var doc2 = System.Text.Json.JsonDocument.Parse(json);
+                    var r2 = doc2.RootElement.ValueKind == System.Text.Json.JsonValueKind.String
+                        ? System.Text.Json.JsonDocument.Parse(doc2.RootElement.GetString()!).RootElement
+                        : doc2.RootElement;
+                    if (r2.TryGetProperty("id", out var idProp)) id = idProp.GetString();
+                    if (r2.TryGetProperty("defaultName", out var dnProp)) defaultName = dnProp.GetString();
+                }
+            }
+            catch { /* best-effort parse */ }
+            BeginInvoke(new Action(() => ShowSaveDialog(id, defaultName)));
+        }
+        else if (string.Equals(action, "pick-open-file", StringComparison.OrdinalIgnoreCase))
+        {
+            // Show a native Open File dialog and return the chosen path to the frontend.
+            string? id = null;
+            string? filter = null;
+            try
+            {
+                string? json = e.WebMessageAsJson;
+                if (!string.IsNullOrWhiteSpace(json))
+                {
+                    using var doc2 = System.Text.Json.JsonDocument.Parse(json);
+                    var r2 = doc2.RootElement.ValueKind == System.Text.Json.JsonValueKind.String
+                        ? System.Text.Json.JsonDocument.Parse(doc2.RootElement.GetString()!).RootElement
+                        : doc2.RootElement;
+                    if (r2.TryGetProperty("id", out var idProp)) id = idProp.GetString();
+                    if (r2.TryGetProperty("filter", out var fProp)) filter = fProp.GetString();
+                }
+            }
+            catch { /* best-effort parse */ }
+            BeginInvoke(new Action(() => ShowOpenDialog(id, filter)));
+        }
+    }
+
+    // ----- Native file dialog bridge ------------------------------------------
+    // The frontend posts "pick-save-file" / "pick-open-file" with an id and
+    // optional filter/defaultName. We show the native WinForms dialog and post
+    // the result back so the React app can call the backend with a local path.
+
+    private void ShowSaveDialog(string? id, string? defaultName)
+    {
+        using var dlg = new SaveFileDialog();
+        dlg.Title = "Save backup as…";
+        dlg.Filter = "Database backups (*.backup)|*.backup|All files (*.*)|*.*";
+        if (!string.IsNullOrWhiteSpace(defaultName)) dlg.FileName = defaultName;
+        string? chosen = dlg.ShowDialog(this) == DialogResult.OK ? dlg.FileName : null;
+        PostFilePickResult(id, chosen);
+    }
+
+    private void ShowOpenDialog(string? id, string? filter)
+    {
+        using var dlg = new OpenFileDialog();
+        dlg.Title = "Select backup to upload";
+        dlg.Filter = filter ?? "Database backups (*.backup)|*.backup|All files (*.*)|*.*";
+        string? chosen = dlg.ShowDialog(this) == DialogResult.OK ? dlg.FileName : null;
+        PostFilePickResult(id, chosen);
+    }
+
+    private void PostFilePickResult(string? id, string? path)
+    {
+        if (_web.CoreWebView2 == null) return;
+        var payload = new System.Text.Json.Nodes.JsonObject
+        {
+            ["action"] = "file-picked",
+            ["id"] = id,
+            ["path"] = path  // null when cancelled
+        };
+        _web.CoreWebView2.PostWebMessageAsJson(payload.ToJsonString());
     }
 
     private static void OpenExternal(string url)

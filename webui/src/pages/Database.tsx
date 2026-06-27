@@ -9,6 +9,8 @@ import {
   getBackupSchedule,
   putBackupSchedule,
   getBackupHistory,
+  downloadBackup,
+  uploadBackup,
 } from '../api/database'
 import type {
   DbInfo,
@@ -21,6 +23,31 @@ import Editor, { type OnMount } from '@monaco-editor/react'
 
 type CmdLaunch = { ok: boolean; name: string; pid?: number; mode: string }
 type FixMapsResult = { ok: boolean; output?: string; logTail?: string; message?: string }
+
+// WebView2 shell bridge: request a native file dialog and get the chosen path back.
+// Posts a message to the shell (MainForm.cs) which shows the dialog and responds
+// via window.chrome.webview.addEventListener('message', ...).
+function pickFileFromShell(action: 'pick-save-file' | 'pick-open-file', opts: { id: string; defaultName?: string; filter?: string }): Promise<string | null> {
+  return new Promise(resolve => {
+    const wv = (window as any).chrome?.webview
+    if (!wv) {
+      // Not running in WebView2 (e.g. browser portal) — fall through gracefully
+      resolve(null)
+      return
+    }
+    function handler(e: MessageEvent) {
+      const data = typeof e.data === 'string' ? JSON.parse(e.data) : e.data
+      if (data?.action === 'file-picked' && data?.id === opts.id) {
+        wv.removeEventListener('message', handler)
+        resolve(data.path ?? null)
+      }
+    }
+    wv.addEventListener('message', handler)
+    wv.postMessage({ action, ...opts })
+    // Timeout: if the dialog is cancelled or shell doesn't respond within 5 min
+    setTimeout(() => { wv.removeEventListener('message', handler); resolve(null) }, 300_000)
+  })
+}
 
 const DEFAULT_SQL = `-- Read-only by default. Toggle the switch to allow writes.
 SELECT current_database(), current_user, version();`
@@ -612,6 +639,7 @@ function BackupScheduleCard({ vmRunning, showToast }: BackupScheduleCardProps) {
   const [saving, setSaving]     = useState(false)
   const [err, setErr]           = useState<string | null>(null)
   const [showLog, setShowLog]   = useState(false)
+  const [transferring, setTransferring] = useState<string | null>(null)  // vmPath or 'upload'
 
   // Draft state — initialised from `schedule` when it loads, then locally
   // editable so the user can preview their choice before clicking Save.
@@ -668,6 +696,37 @@ function BackupScheduleCard({ vmRunning, showToast }: BackupScheduleCardProps) {
       showToast('err', `Save failed: ${e instanceof Error ? e.message : String(e)}`)
     } finally {
       setSaving(false)
+    }
+  }
+
+  async function handleDownload(vmPath: string) {
+    const fileName = vmPath.split('/').pop() ?? 'backup.backup'
+    const localPath = await pickFileFromShell('pick-save-file', { id: 'backup-download', defaultName: fileName })
+    if (!localPath) return  // cancelled
+    setTransferring(vmPath)
+    try {
+      const r = await downloadBackup({ vmPath, localPath })
+      showToast('ok', r.message ?? 'Download complete.')
+    } catch (e) {
+      showToast('err', `Download failed: ${e instanceof Error ? e.message : String(e)}`)
+    } finally {
+      setTransferring(null)
+    }
+  }
+
+  async function handleUpload() {
+    const localPath = await pickFileFromShell('pick-open-file', { id: 'backup-upload' })
+    if (!localPath) return  // cancelled
+    setTransferring('upload')
+    try {
+      const r = await uploadBackup({ localPath })
+      showToast('ok', r.message ?? 'Upload complete.')
+      // Refresh history so the new file appears
+      void getBackupHistory({ recent: 5, logLines: 50 }).then(setHistory).catch(() => {})
+    } catch (e) {
+      showToast('err', `Upload failed: ${e instanceof Error ? e.message : String(e)}`)
+    } finally {
+      setTransferring(null)
     }
   }
 
@@ -826,8 +885,20 @@ function BackupScheduleCard({ vmRunning, showToast }: BackupScheduleCardProps) {
       <div className="border-t border-border pt-3 mt-1">
         <div className="flex items-center justify-between gap-3 mb-2">
           <div className="text-xs font-semibold text-text-muted">Recent backups</div>
-          <div className="text-xs text-text-dim">
-            {history?.dumpDirSize ? <>Dump dir: <span className="font-mono">{history.dumpDirSize}</span></> : null}
+          <div className="flex items-center gap-3">
+            <button
+              type="button"
+              onClick={() => void handleUpload()}
+              disabled={!vmRunning || !!transferring}
+              className="btn-secondary text-xs py-1 px-2"
+              title="Upload a .backup file from your PC to the VM's dump directory"
+            >
+              <Icon name={transferring === 'upload' ? 'Loader2' : 'Upload'} size={12} className={transferring === 'upload' ? 'animate-spin' : ''} />
+              {transferring === 'upload' ? 'Uploading…' : 'Import backup'}
+            </button>
+            <span className="text-xs text-text-dim">
+              {history?.dumpDirSize ? <>Dump dir: <span className="font-mono">{history.dumpDirSize}</span></> : null}
+            </span>
           </div>
         </div>
         {!history || history.recent.length === 0 ? (
@@ -837,7 +908,16 @@ function BackupScheduleCard({ vmRunning, showToast }: BackupScheduleCardProps) {
         ) : (
           <ul className="text-xs font-mono space-y-1">
             {history.recent.map(f => (
-              <li key={f.path} className="flex items-baseline gap-2">
+              <li key={f.path} className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => void handleDownload(f.path)}
+                  disabled={!!transferring}
+                  className="text-info hover:text-info-bright disabled:opacity-40 shrink-0"
+                  title="Download to your PC"
+                >
+                  <Icon name={transferring === f.path ? 'Loader2' : 'Download'} size={12} className={transferring === f.path ? 'animate-spin' : ''} />
+                </button>
                 <span className="text-text">{f.mtimeIso}</span>
                 <span className="text-text-muted">{(f.sizeBytes / (1024 * 1024)).toFixed(1)} MB</span>
                 <span className="text-text-dim truncate" title={f.path}>{f.path.replace(/^\/funcom\/artifacts\/database-dumps\//, '')}</span>

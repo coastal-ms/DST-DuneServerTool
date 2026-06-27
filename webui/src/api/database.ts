@@ -46,3 +46,26 @@ export function getBackupHistory(opts: { recent?: number; logLines?: number } = 
   const qs = params.toString()
   return api<BackupHistory>(`/api/db/backup-history${qs ? `?${qs}` : ''}`)
 }
+
+export type BackupTransferResult = {
+  ok: boolean
+  path?: string
+  remotePath?: string
+  sizeBytes?: number
+  message?: string
+  error?: string
+}
+
+export function downloadBackup(opts: { vmPath: string; localPath: string }) {
+  return api<BackupTransferResult>('/api/db/backup-download', {
+    method: 'POST',
+    body: JSON.stringify({ vmPath: opts.vmPath, localPath: opts.localPath }),
+  })
+}
+
+export function uploadBackup(opts: { localPath: string }) {
+  return api<BackupTransferResult>('/api/db/backup-upload', {
+    method: 'POST',
+    body: JSON.stringify({ localPath: opts.localPath }),
+  })
+}
