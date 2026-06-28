@@ -340,12 +340,16 @@ function Get-DuneP34Diagnostic {
         vmPublicIp     = $null
         publicIpSource = $null
         k3sExternalIp  = $null
+        datacenterIps      = @()
+        datacenterPrivate  = $false
+        datacenterStale    = $false
         maps           = @()
         advertisedIps  = @()
         igwAddrs       = @()
         igwSuspect     = $false
         staleFarmIp    = $false
         staleK3sIp     = $false
+        vmPublicIpUsable = $false
         serversReady   = $true
         verdict        = 'unknown'
         summary        = $null
@@ -393,6 +397,18 @@ PUB=$(get_ip)
 EXT=$(sudo kubectl get node -o jsonpath='{range .items[0].status.addresses[?(@.type=="ExternalIP")]}{.address}{end}' 2>/dev/null)
 echo "PUB=$PUB"
 echo "EXT=$EXT"
+# HOST_DATACENTER_IP_ADDRESS = the address the director advertises to clients on
+# every boot. It is pinned into the battlegroup CR at setup ("Private" vs
+# "External"); if it is a private/LAN address, outside players are handed an
+# unreachable address and time out into P34. Read every distinct value from the
+# CR so we can flag a pinned-private / stale datacenter IP independently of the
+# game DB (works even when the servers are down or farm_state is empty).
+BG=$(sudo kubectl get battlegroup -A --no-headers -o custom-columns=:metadata.name 2>/dev/null | head -1)
+NS=$(sudo kubectl get battlegroup -A --no-headers -o custom-columns=:metadata.namespace 2>/dev/null | head -1)
+if [ -n "$BG" ] && [ -n "$NS" ] && command -v jq >/dev/null 2>&1; then
+  DC=$(sudo kubectl get battlegroup "$BG" -n "$NS" -o json 2>/dev/null | jq -r '[.. | objects | select(.name=="HOST_DATACENTER_IP_ADDRESS") | .value] | map(select(. != null and . != "")) | unique | join(",")' 2>/dev/null)
+  echo "DC=$DC"
+fi
 '@ -replace "`r", ''
     try {
         $raw = Invoke-V6Ssh -Ip $ctx.ip -Cmd $probe -TimeoutSec 35
@@ -401,6 +417,15 @@ echo "EXT=$EXT"
         if ($mp.Success) { $result.vmPublicIp = $mp.Groups[1].Value.Trim() }
         $me = [regex]::Match($rawText, 'EXT=([0-9.]+)')
         if ($me.Success) { $result.k3sExternalIp = $me.Groups[1].Value.Trim() }
+        $md = [regex]::Match($rawText, 'DC=([0-9.,]+)')
+        if ($md.Success) {
+            $result.datacenterIps = @(
+                $md.Groups[1].Value.Trim() -split ',' |
+                    ForEach-Object { $_.Trim() } |
+                    Where-Object { $_ -match '^\d{1,3}(\.\d{1,3}){3}$' } |
+                    Select-Object -Unique
+            )
+        }
     } catch {
         # Non-fatal: a failed probe just means we lean on the host-side fallback
         # below. Only the farm_state query (next) is essential.
@@ -474,9 +499,28 @@ echo "EXT=$EXT"
 
     $pub = [string]$result.vmPublicIp
     $looksPublic = ($pub -match '^\d{1,3}(\.\d{1,3}){3}$') -and ($pub -notmatch '^(10\.|192\.168\.|172\.(1[6-9]|2\d|3[01])\.|127\.|0\.)')
+    $result.vmPublicIpUsable = [bool]$looksPublic
     if ($looksPublic) {
         $result.staleFarmIp = [bool](@($advertised | Where-Object { $_ -ne $pub }).Count)
         if ($result.k3sExternalIp) { $result.staleK3sIp = ($result.k3sExternalIp -ne $pub) }
+    }
+
+    # HOST_DATACENTER_IP_ADDRESS sanity (the persistent address the director
+    # advertises to clients on every boot, pinned into the BG CR at setup).
+    # This is read straight from the CR, so it works even when the servers are
+    # down / farm_state is empty — unlike the advertised-IP checks above.
+    #   * datacenterPrivate: a value is an RFC1918 private/LAN address. That is
+    #     the signature of choosing "Private" (not "External") at VM setup — the
+    #     director then hands every outside player an unreachable private address
+    #     and they time out into P34, on every boot.
+    #   * datacenterStale: a value is a real public IP but NOT this server's
+    #     current public IP (a pinned old IP after a network change).
+    $privateRe = '^(10\.|192\.168\.|172\.(1[6-9]|2\d|3[01])\.|127\.|0\.|169\.254\.)'
+    $result.datacenterPrivate = [bool](@($result.datacenterIps | Where-Object { $_ -match $privateRe }).Count)
+    if ($looksPublic) {
+        $result.datacenterStale = [bool](@($result.datacenterIps | Where-Object {
+            ($_ -notmatch $privateRe) -and ($_ -ne $pub)
+        }).Count)
     }
 
     # IGW (inter-game-world) gateway sanity. During sector handover / map travel
@@ -510,7 +554,24 @@ echo "EXT=$EXT"
     }
 
     # Verdict, most-actionable first.
-    if (@($maps).Count -eq 0) {
+    if ($result.datacenterPrivate) {
+        # The persistent root: the director is pinned to advertise a private/LAN
+        # address to every client. Ranked first because it's actionable even when
+        # the servers look "down" from outside, and it's the explanation behind a
+        # server that's healthy internally but unreachable for outside players.
+        $dcTxt = (@($result.datacenterIps) -join ', ')
+        $result.verdict = 'datacenter-private'
+        $result.summary = "Your server is pinned to advertise a private address ($dcTxt) to players (HOST_DATACENTER_IP_ADDRESS). This is what happens when ""Private"" is chosen instead of ""External"" during VM setup: the server re-announces that private address on every boot, so players on your own network can connect but anyone outside times out into P34. Apply your current public IP ($pub)$srcNote below — that rewrites the advertised address to your public IP and restarts the battlegroup.$igwNote"
+    }
+    elseif ($result.datacenterStale -and -not ($result.staleFarmIp -or $result.staleK3sIp)) {
+        # Public-but-wrong datacenter IP (pinned to an old public IP) that the
+        # farm_state checks didn't already surface (e.g. servers not yet up).
+        $dcTxt = (@($result.datacenterIps) -join ', ')
+        $result.verdict = 'stale-ip'
+        $result.staleFarmIp = $true
+        $result.summary = "Your server advertises $dcTxt to players (HOST_DATACENTER_IP_ADDRESS), but this server's public IP is $pub$srcNote. Players are being sent to the wrong address, which causes P34 / connection timeouts. Apply your current public IP below to fix it.$igwNote"
+    }
+    elseif (@($maps).Count -eq 0) {
         $result.verdict = 'servers-down'
         $result.summary = 'No map servers are registered yet. Start or restart the battlegroup, then re-check.'
     }
@@ -598,7 +659,14 @@ function Invoke-DunePublicIpApply {
             $target = ([string]$PublicIp).Trim()
             $steps.Add((New-DunePublicIpStepResult 'validate' 'Validate target IP' 'running' "Checking $target.")) | Out-Null
             & $pub 'running'
-            $valid = Assert-DuneManualPublicIp -PublicIp $target
+            # Re-assert WITH -AllowUnchanged: by the time we're inside the apply
+            # pipeline the user has explicitly confirmed they want to (re)apply,
+            # and a deliberate re-apply of the *same* IP is the whole point of the
+            # repair flow (e.g. rewriting host NAT / K3s ExternalIP after an
+            # unclean shutdown). Without this the internal step rejected an
+            # unchanged IP with "Target IP is unchanged" and aborted the apply,
+            # leaving no way to re-apply the current IP from the UI.
+            $valid = Assert-DuneManualPublicIp -PublicIp $target -AllowUnchanged
             if (-not $valid.ok) { throw $valid.message }
             $steps[$steps.Count - 1] = New-DunePublicIpStepResult 'validate' 'Validate target IP' 'done' "Target $target accepted."
             & $pub
@@ -624,8 +692,19 @@ function Invoke-DunePublicIpApply {
 
             $steps.Add((New-DunePublicIpStepResult 'host-route' 'Update Windows host route' 'running' "Adding route for $target.")) | Out-Null
             & $pub
-            $routeMsg = Invoke-DunePublicIpHostRoute -PublicIp $target -VmIp $vm.ip
-            $steps[$steps.Count - 1] = New-DunePublicIpStepResult 'host-route' 'Update Windows host route' 'done' $routeMsg
+            # The host route is ONLY a NAT-loopback convenience so this Windows host
+            # can reach the server by its public IP; outside players never use it. A
+            # failure here (e.g. a stale conflicting /32 route from a previous IP, or
+            # DST not elevated) must NOT abort the apply -- otherwise the critical step
+            # below (rewriting HOST_DATACENTER_IP_ADDRESS off a private/127.0.0.1 value
+            # and restarting the battlegroup) never runs and the user's P34 stays
+            # broken. So we degrade a host-route failure to a non-blocking warning.
+            try {
+                $routeMsg = Invoke-DunePublicIpHostRoute -PublicIp $target -VmIp $vm.ip
+                $steps[$steps.Count - 1] = New-DunePublicIpStepResult 'host-route' 'Update Windows host route' 'done' $routeMsg
+            } catch {
+                $steps[$steps.Count - 1] = New-DunePublicIpStepResult 'host-route' 'Update Windows host route' 'warning' "Skipped (non-blocking): $($_.Exception.Message) This route only lets this PC reach the server by its own public IP (NAT-loopback testing); outside players are unaffected and the IP change still applied. To enable host-side self-testing, clear the conflicting route and re-apply."
+            }
             & $pub
 
             # --- Phase 1: VM network + persistent files + K3s --------------------
@@ -664,8 +743,30 @@ fi
 /sbin/ip -4 -o addr show dev eth0
 
 step interfaces
-GW=$(awk '/^[[:space:]]*gateway[[:space:]]+/ {print $2; exit}' /etc/network/interfaces 2>/dev/null || true)
-if [ -z "$GW" ]; then GW="192.168.23.1"; fi
+# Determine the default gateway WITHOUT ever hardcoding a foreign subnet.
+# A wrong gateway (e.g. one on a different /24 than the VM) leaves the VM with
+# no working default route, which silently kills ALL outbound traffic -- the
+# game server can no longer reach Funcom's matchmaker to register, so it drops
+# off the server browser even though it is otherwise healthy. Preference order:
+#   1. the live default route (the gateway that is actually working right now)
+#   2. the existing interfaces 'gateway' line
+#   3. derive .1 of the VM's own /24 as a last resort
+# Then HARD-VALIDATE that the chosen gateway is on the same /24 as the VM; if it
+# is not (e.g. a stale foreign value from a previous run), fall back to the
+# same-subnet .1 rather than write an unreachable gateway.
+GW=$(/sbin/ip route show default 2>/dev/null | awk '/^default/ {print $3; exit}')
+if [ -z "$GW" ]; then
+  GW=$(awk '/^[[:space:]]*gateway[[:space:]]+/ {print $2; exit}' /etc/network/interfaces 2>/dev/null || true)
+fi
+if [ -z "$GW" ]; then
+  GW=$(echo "$VM_IP" | awk -F. '{print $1"."$2"."$3".1"}')
+fi
+GW_PREFIX=$(echo "$GW" | awk -F. '{print $1"."$2"."$3}')
+VM_PREFIX=$(echo "$VM_IP" | awk -F. '{print $1"."$2"."$3}')
+if [ "$GW_PREFIX" != "$VM_PREFIX" ]; then
+  GW=$(echo "$VM_IP" | awk -F. '{print $1"."$2"."$3".1"}')
+fi
+echo "interfaces gateway -> $GW (VM $VM_IP)"
 sudo cp /etc/network/interfaces "/etc/network/interfaces.bak.$(date -u +%Y%m%d%H%M%S)" 2>/dev/null || true
 cat > /tmp/dst-interfaces <<EOF
 auto lo

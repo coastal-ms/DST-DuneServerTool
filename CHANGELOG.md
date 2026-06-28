@@ -13,6 +13,49 @@ here cover everything those tags shipped.
 
 ## [Unreleased]
 
+## [12.13.13] - 2026-06-28
+
+### Added
+
+- **P34 check now detects a server pinned to advertise a private address.** Choosing
+  "Private" instead of "External" during VM setup pins a private/LAN IP into the
+  server's `HOST_DATACENTER_IP_ADDRESS`, which the director re-advertises to every
+  client on each boot — so players on your own network connect, but anyone outside
+  times out into P34. The Connection check (Settings → Public IP / DDNS → Run check)
+  now reads this value straight from the battlegroup config (so it works even when
+  the servers are down or the game DB is empty) and flags a private — or stale
+  public — datacenter IP with a one-click "Fix it automatically" that re-applies your
+  public IP and restarts the battlegroup.
+
+### Fixed
+
+- **Re-applying the same (unchanged) public IP now works.** Settings → Public IP /
+  DDNS → Apply was a dead end when the target IP matched the last-applied one: the
+  apply pipeline's internal "Validate target IP" step rejected the unchanged IP
+  ("Target IP is unchanged") and aborted. That blocked the documented repair flow
+  of re-applying your current IP to rewrite the host NAT / K3s ExternalIP after an
+  unclean shutdown or network change. The internal step now allows an unchanged IP
+  (the route-level validation already did), so a deliberate re-apply runs end to
+  end.
+- **A stale Windows host route no longer blocks the public-IP fix.** The Apply flow
+  adds a host-side `/32` route purely as a NAT-loopback convenience (so the host PC
+  can reach the server by its own public IP); outside players never use it. If a
+  conflicting leftover route from a previous IP already existed, that step threw and
+  aborted the *entire* apply — so the critical step it gates (rewriting
+  `HOST_DATACENTER_IP_ADDRESS` off a private/`127.0.0.1` value and restarting the
+  battlegroup) never ran, and the server stayed in P34. The host-route step is now
+  non-blocking: on conflict it records a warning and the apply continues to fix the
+  advertised address.
+- **The apply no longer writes a wrong default gateway (which could knock the VM
+  offline).** When rewriting `/etc/network/interfaces`, the apply previously fell back
+  to a hardcoded gateway if it couldn't find one in the existing file. On any VM whose
+  LAN subnet differed from that hardcoded value, the result was an unreachable gateway
+  and a dead default route — the game server could no longer reach Funcom's matchmaker
+  to register, so it silently dropped off the server browser despite being otherwise
+  healthy. The apply now derives the gateway from the VM's *live default route* (falling
+  back to the existing interfaces line, then the VM subnet's `.1`) and hard-validates
+  that it sits on the VM's own subnet, so a foreign-subnet gateway can never be written.
+
 ## [12.13.12] - 2026-06-27
 
 ### Fixed
