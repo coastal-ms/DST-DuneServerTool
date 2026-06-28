@@ -743,8 +743,30 @@ fi
 /sbin/ip -4 -o addr show dev eth0
 
 step interfaces
-GW=$(awk '/^[[:space:]]*gateway[[:space:]]+/ {print $2; exit}' /etc/network/interfaces 2>/dev/null || true)
-if [ -z "$GW" ]; then GW="192.168.23.1"; fi
+# Determine the default gateway WITHOUT ever hardcoding a foreign subnet.
+# A wrong gateway (e.g. one on a different /24 than the VM) leaves the VM with
+# no working default route, which silently kills ALL outbound traffic -- the
+# game server can no longer reach Funcom's matchmaker to register, so it drops
+# off the server browser even though it is otherwise healthy. Preference order:
+#   1. the live default route (the gateway that is actually working right now)
+#   2. the existing interfaces 'gateway' line
+#   3. derive .1 of the VM's own /24 as a last resort
+# Then HARD-VALIDATE that the chosen gateway is on the same /24 as the VM; if it
+# is not (e.g. a stale foreign value from a previous run), fall back to the
+# same-subnet .1 rather than write an unreachable gateway.
+GW=$(/sbin/ip route show default 2>/dev/null | awk '/^default/ {print $3; exit}')
+if [ -z "$GW" ]; then
+  GW=$(awk '/^[[:space:]]*gateway[[:space:]]+/ {print $2; exit}' /etc/network/interfaces 2>/dev/null || true)
+fi
+if [ -z "$GW" ]; then
+  GW=$(echo "$VM_IP" | awk -F. '{print $1"."$2"."$3".1"}')
+fi
+GW_PREFIX=$(echo "$GW" | awk -F. '{print $1"."$2"."$3}')
+VM_PREFIX=$(echo "$VM_IP" | awk -F. '{print $1"."$2"."$3}')
+if [ "$GW_PREFIX" != "$VM_PREFIX" ]; then
+  GW=$(echo "$VM_IP" | awk -F. '{print $1"."$2"."$3".1"}')
+fi
+echo "interfaces gateway -> $GW (VM $VM_IP)"
 sudo cp /etc/network/interfaces "/etc/network/interfaces.bak.$(date -u +%Y%m%d%H%M%S)" 2>/dev/null || true
 cat > /tmp/dst-interfaces <<EOF
 auto lo

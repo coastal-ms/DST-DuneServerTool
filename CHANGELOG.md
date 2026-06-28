@@ -46,6 +46,15 @@ here cover everything those tags shipped.
   battlegroup) never ran, and the server stayed in P34. The host-route step is now
   non-blocking: on conflict it records a warning and the apply continues to fix the
   advertised address.
+- **The apply no longer writes a wrong default gateway (which could knock the VM
+  offline).** When rewriting `/etc/network/interfaces`, the apply previously fell back
+  to a hardcoded gateway if it couldn't find one in the existing file. On any VM whose
+  LAN subnet differed from that hardcoded value, the result was an unreachable gateway
+  and a dead default route — the game server could no longer reach Funcom's matchmaker
+  to register, so it silently dropped off the server browser despite being otherwise
+  healthy. The apply now derives the gateway from the VM's *live default route* (falling
+  back to the existing interfaces line, then the VM subnet's `.1`) and hard-validates
+  that it sits on the VM's own subnet, so a foreign-subnet gateway can never be written.
 
 ## [12.13.12] - 2026-06-27
 
