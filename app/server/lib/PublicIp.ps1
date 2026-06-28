@@ -743,27 +743,39 @@ fi
 /sbin/ip -4 -o addr show dev eth0
 
 step interfaces
-# Determine the default gateway WITHOUT ever hardcoding a foreign subnet.
-# A wrong gateway (e.g. one on a different /24 than the VM) leaves the VM with
-# no working default route, which silently kills ALL outbound traffic -- the
-# game server can no longer reach Funcom's matchmaker to register, so it drops
-# off the server browser even though it is otherwise healthy. Preference order:
-#   1. the live default route (the gateway that is actually working right now)
-#   2. the existing interfaces 'gateway' line
-#   3. derive .1 of the VM's own /24 as a last resort
-# Then HARD-VALIDATE that the chosen gateway is on the same /24 as the VM; if it
-# is not (e.g. a stale foreign value from a previous run), fall back to the
-# same-subnet .1 rather than write an unreachable gateway.
-GW=$(/sbin/ip route show default 2>/dev/null | awk '/^default/ {print $3; exit}')
-if [ -z "$GW" ]; then
-  GW=$(awk '/^[[:space:]]*gateway[[:space:]]+/ {print $2; exit}' /etc/network/interfaces 2>/dev/null || true)
-fi
-if [ -z "$GW" ]; then
-  GW=$(echo "$VM_IP" | awk -F. '{print $1"."$2"."$3".1"}')
-fi
-GW_PREFIX=$(echo "$GW" | awk -F. '{print $1"."$2"."$3}')
+# Determine the default gateway WITHOUT ever hardcoding a foreign subnet, and
+# recover the user's REAL gateway even if a previous (buggy) run already wrote a
+# wrong one. A gateway on a different /24 than the VM leaves it with no working
+# default route, which silently kills ALL outbound traffic -- the game server
+# can no longer reach Funcom's matchmaker to register, so it drops off the
+# server browser even though it is otherwise healthy.
+#
+# We gather candidate gateways in priority order and pick the FIRST one that
+# sits on the VM's own /24:
+#   1. the live default route (the gateway actually working right now)
+#   2. the current interfaces 'gateway' line
+#   3. the gateway from each interfaces.bak.* we've made -- the oldest backup
+#      holds the pristine ORIGINAL gateway from before any DST rewrite, so this
+#      recovers a network whose real gateway is not .1 (e.g. .254) even after a
+#      prior run wrote a wrong value into the live route and current file.
+# Only if NO candidate is on the VM's subnet do we fall back to the subnet's .1.
+# This lets a re-run self-heal a VM previously broken by a wrong gateway.
 VM_PREFIX=$(echo "$VM_IP" | awk -F. '{print $1"."$2"."$3}')
-if [ "$GW_PREFIX" != "$VM_PREFIX" ]; then
+GW=""
+add_gw_candidate() {
+  cand="$1"
+  if [ -n "$GW" ]; then return 0; fi
+  if [ -z "$cand" ]; then return 0; fi
+  cpfx=$(echo "$cand" | awk -F. '{print $1"."$2"."$3}')
+  if [ "$cpfx" = "$VM_PREFIX" ]; then GW="$cand"; fi
+  return 0
+}
+add_gw_candidate "$(/sbin/ip route show default 2>/dev/null | awk '/^default/ {print $3; exit}')"
+add_gw_candidate "$(awk '/^[[:space:]]*gateway[[:space:]]+/ {print $2; exit}' /etc/network/interfaces 2>/dev/null)"
+for bak in $(ls -1tr /etc/network/interfaces.bak.* 2>/dev/null); do
+  add_gw_candidate "$(awk '/^[[:space:]]*gateway[[:space:]]+/ {print $2; exit}' "$bak" 2>/dev/null)"
+done
+if [ -z "$GW" ]; then
   GW=$(echo "$VM_IP" | awk -F. '{print $1"."$2"."$3".1"}')
 fi
 echo "interfaces gateway -> $GW (VM $VM_IP)"

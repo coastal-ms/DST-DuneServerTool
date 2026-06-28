@@ -13,6 +13,19 @@ here cover everything those tags shipped.
 
 ## [Unreleased]
 
+## [12.13.14] - 2026-06-28
+
+### Fixed
+
+- **Public-IP apply now recovers a network's real gateway instead of guessing.**
+  Building on the wrong-subnet-gateway fix in 12.13.13, when the live default
+  route and current `/etc/network/interfaces` don't yield a gateway on the VM's
+  own subnet (e.g. a VM left with a wrong gateway by an earlier build), the apply
+  now reads the gateway from the `interfaces.bak.*` backups it makes before each
+  rewrite — the oldest backup holds the pristine original — before falling back
+  to the subnet's `.1`. This lets a re-run self-heal a VM previously knocked
+  offline by the bug even when its real gateway isn't `.1` (e.g. `.254`).
+
 ## [12.13.13] - 2026-06-28
 
 ### Added
