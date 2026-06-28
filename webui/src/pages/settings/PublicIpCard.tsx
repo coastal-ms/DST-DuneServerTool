@@ -18,7 +18,7 @@ type PublicIpStatus = {
 type PublicIpStep = {
   id: string
   label: string
-  status: 'running' | 'done' | 'failed'
+  status: 'running' | 'done' | 'failed' | 'warning'
   detail?: string
   raw?: string
 }
