@@ -692,8 +692,19 @@ function Invoke-DunePublicIpApply {
 
             $steps.Add((New-DunePublicIpStepResult 'host-route' 'Update Windows host route' 'running' "Adding route for $target.")) | Out-Null
             & $pub
-            $routeMsg = Invoke-DunePublicIpHostRoute -PublicIp $target -VmIp $vm.ip
-            $steps[$steps.Count - 1] = New-DunePublicIpStepResult 'host-route' 'Update Windows host route' 'done' $routeMsg
+            # The host route is ONLY a NAT-loopback convenience so this Windows host
+            # can reach the server by its public IP; outside players never use it. A
+            # failure here (e.g. a stale conflicting /32 route from a previous IP, or
+            # DST not elevated) must NOT abort the apply -- otherwise the critical step
+            # below (rewriting HOST_DATACENTER_IP_ADDRESS off a private/127.0.0.1 value
+            # and restarting the battlegroup) never runs and the user's P34 stays
+            # broken. So we degrade a host-route failure to a non-blocking warning.
+            try {
+                $routeMsg = Invoke-DunePublicIpHostRoute -PublicIp $target -VmIp $vm.ip
+                $steps[$steps.Count - 1] = New-DunePublicIpStepResult 'host-route' 'Update Windows host route' 'done' $routeMsg
+            } catch {
+                $steps[$steps.Count - 1] = New-DunePublicIpStepResult 'host-route' 'Update Windows host route' 'warning' "Skipped (non-blocking): $($_.Exception.Message) This route only lets this PC reach the server by its own public IP (NAT-loopback testing); outside players are unaffected and the IP change still applied. To enable host-side self-testing, clear the conflicting route and re-apply."
+            }
             & $pub
 
             # --- Phase 1: VM network + persistent files + K3s --------------------
