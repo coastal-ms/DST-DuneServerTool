@@ -15,6 +15,18 @@ here cover everything those tags shipped.
 
 ## [12.13.13] - 2026-06-27
 
+### Added
+
+- **P34 check now detects a server pinned to advertise a private address.** Choosing
+  "Private" instead of "External" during VM setup pins a private/LAN IP into the
+  server's `HOST_DATACENTER_IP_ADDRESS`, which the director re-advertises to every
+  client on each boot — so players on your own network connect, but anyone outside
+  times out into P34. The Connection check (Settings → Public IP / DDNS → Run check)
+  now reads this value straight from the battlegroup config (so it works even when
+  the servers are down or the game DB is empty) and flags a private — or stale
+  public — datacenter IP with a one-click "Fix it automatically" that re-applies your
+  public IP and restarts the battlegroup.
+
 ### Fixed
 
 - **Re-applying the same (unchanged) public IP now works.** Settings → Public IP /

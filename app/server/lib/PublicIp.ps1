@@ -340,12 +340,16 @@ function Get-DuneP34Diagnostic {
         vmPublicIp     = $null
         publicIpSource = $null
         k3sExternalIp  = $null
+        datacenterIps      = @()
+        datacenterPrivate  = $false
+        datacenterStale    = $false
         maps           = @()
         advertisedIps  = @()
         igwAddrs       = @()
         igwSuspect     = $false
         staleFarmIp    = $false
         staleK3sIp     = $false
+        vmPublicIpUsable = $false
         serversReady   = $true
         verdict        = 'unknown'
         summary        = $null
@@ -393,6 +397,18 @@ PUB=$(get_ip)
 EXT=$(sudo kubectl get node -o jsonpath='{range .items[0].status.addresses[?(@.type=="ExternalIP")]}{.address}{end}' 2>/dev/null)
 echo "PUB=$PUB"
 echo "EXT=$EXT"
+# HOST_DATACENTER_IP_ADDRESS = the address the director advertises to clients on
+# every boot. It is pinned into the battlegroup CR at setup ("Private" vs
+# "External"); if it is a private/LAN address, outside players are handed an
+# unreachable address and time out into P34. Read every distinct value from the
+# CR so we can flag a pinned-private / stale datacenter IP independently of the
+# game DB (works even when the servers are down or farm_state is empty).
+BG=$(sudo kubectl get battlegroup -A --no-headers -o custom-columns=:metadata.name 2>/dev/null | head -1)
+NS=$(sudo kubectl get battlegroup -A --no-headers -o custom-columns=:metadata.namespace 2>/dev/null | head -1)
+if [ -n "$BG" ] && [ -n "$NS" ] && command -v jq >/dev/null 2>&1; then
+  DC=$(sudo kubectl get battlegroup "$BG" -n "$NS" -o json 2>/dev/null | jq -r '[.. | objects | select(.name=="HOST_DATACENTER_IP_ADDRESS") | .value] | map(select(. != null and . != "")) | unique | join(",")' 2>/dev/null)
+  echo "DC=$DC"
+fi
 '@ -replace "`r", ''
     try {
         $raw = Invoke-V6Ssh -Ip $ctx.ip -Cmd $probe -TimeoutSec 35
@@ -401,6 +417,15 @@ echo "EXT=$EXT"
         if ($mp.Success) { $result.vmPublicIp = $mp.Groups[1].Value.Trim() }
         $me = [regex]::Match($rawText, 'EXT=([0-9.]+)')
         if ($me.Success) { $result.k3sExternalIp = $me.Groups[1].Value.Trim() }
+        $md = [regex]::Match($rawText, 'DC=([0-9.,]+)')
+        if ($md.Success) {
+            $result.datacenterIps = @(
+                $md.Groups[1].Value.Trim() -split ',' |
+                    ForEach-Object { $_.Trim() } |
+                    Where-Object { $_ -match '^\d{1,3}(\.\d{1,3}){3}$' } |
+                    Select-Object -Unique
+            )
+        }
     } catch {
         # Non-fatal: a failed probe just means we lean on the host-side fallback
         # below. Only the farm_state query (next) is essential.
@@ -474,9 +499,28 @@ echo "EXT=$EXT"
 
     $pub = [string]$result.vmPublicIp
     $looksPublic = ($pub -match '^\d{1,3}(\.\d{1,3}){3}$') -and ($pub -notmatch '^(10\.|192\.168\.|172\.(1[6-9]|2\d|3[01])\.|127\.|0\.)')
+    $result.vmPublicIpUsable = [bool]$looksPublic
     if ($looksPublic) {
         $result.staleFarmIp = [bool](@($advertised | Where-Object { $_ -ne $pub }).Count)
         if ($result.k3sExternalIp) { $result.staleK3sIp = ($result.k3sExternalIp -ne $pub) }
+    }
+
+    # HOST_DATACENTER_IP_ADDRESS sanity (the persistent address the director
+    # advertises to clients on every boot, pinned into the BG CR at setup).
+    # This is read straight from the CR, so it works even when the servers are
+    # down / farm_state is empty — unlike the advertised-IP checks above.
+    #   * datacenterPrivate: a value is an RFC1918 private/LAN address. That is
+    #     the signature of choosing "Private" (not "External") at VM setup — the
+    #     director then hands every outside player an unreachable private address
+    #     and they time out into P34, on every boot.
+    #   * datacenterStale: a value is a real public IP but NOT this server's
+    #     current public IP (a pinned old IP after a network change).
+    $privateRe = '^(10\.|192\.168\.|172\.(1[6-9]|2\d|3[01])\.|127\.|0\.|169\.254\.)'
+    $result.datacenterPrivate = [bool](@($result.datacenterIps | Where-Object { $_ -match $privateRe }).Count)
+    if ($looksPublic) {
+        $result.datacenterStale = [bool](@($result.datacenterIps | Where-Object {
+            ($_ -notmatch $privateRe) -and ($_ -ne $pub)
+        }).Count)
     }
 
     # IGW (inter-game-world) gateway sanity. During sector handover / map travel
@@ -510,7 +554,24 @@ echo "EXT=$EXT"
     }
 
     # Verdict, most-actionable first.
-    if (@($maps).Count -eq 0) {
+    if ($result.datacenterPrivate) {
+        # The persistent root: the director is pinned to advertise a private/LAN
+        # address to every client. Ranked first because it's actionable even when
+        # the servers look "down" from outside, and it's the explanation behind a
+        # server that's healthy internally but unreachable for outside players.
+        $dcTxt = (@($result.datacenterIps) -join ', ')
+        $result.verdict = 'datacenter-private'
+        $result.summary = "Your server is pinned to advertise a private address ($dcTxt) to players (HOST_DATACENTER_IP_ADDRESS). This is what happens when ""Private"" is chosen instead of ""External"" during VM setup: the server re-announces that private address on every boot, so players on your own network can connect but anyone outside times out into P34. Apply your current public IP ($pub)$srcNote below — that rewrites the advertised address to your public IP and restarts the battlegroup.$igwNote"
+    }
+    elseif ($result.datacenterStale -and -not ($result.staleFarmIp -or $result.staleK3sIp)) {
+        # Public-but-wrong datacenter IP (pinned to an old public IP) that the
+        # farm_state checks didn't already surface (e.g. servers not yet up).
+        $dcTxt = (@($result.datacenterIps) -join ', ')
+        $result.verdict = 'stale-ip'
+        $result.staleFarmIp = $true
+        $result.summary = "Your server advertises $dcTxt to players (HOST_DATACENTER_IP_ADDRESS), but this server's public IP is $pub$srcNote. Players are being sent to the wrong address, which causes P34 / connection timeouts. Apply your current public IP below to fix it.$igwNote"
+    }
+    elseif (@($maps).Count -eq 0) {
         $result.verdict = 'servers-down'
         $result.summary = 'No map servers are registered yet. Start or restart the battlegroup, then re-check.'
     }
