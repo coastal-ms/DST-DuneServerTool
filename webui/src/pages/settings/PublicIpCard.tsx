@@ -18,7 +18,7 @@ type PublicIpStatus = {
 type PublicIpStep = {
   id: string
   label: string
-  status: 'running' | 'done' | 'failed'
+  status: 'running' | 'done' | 'failed' | 'warning'
   detail?: string
   raw?: string
 }
@@ -73,6 +73,10 @@ type P34Diagnostic = {
   vmIp?: string | null
   vmPublicIp?: string | null
   k3sExternalIp?: string | null
+  datacenterIps?: string[]
+  datacenterPrivate?: boolean
+  datacenterStale?: boolean
+  vmPublicIpUsable?: boolean
   maps?: P34Map[]
   advertisedIps?: string[]
   igwAddrs?: string[]
@@ -80,7 +84,7 @@ type P34Diagnostic = {
   staleFarmIp?: boolean
   staleK3sIp?: boolean
   serversReady?: boolean
-  verdict?: 'healthy' | 'stale-ip' | 'servers-down' | 'servers-not-ready' | 'igw-private' | 'unknown'
+  verdict?: 'healthy' | 'stale-ip' | 'servers-down' | 'servers-not-ready' | 'igw-private' | 'datacenter-private' | 'unknown'
   summary?: string
   error?: string
 }
@@ -412,12 +416,12 @@ export function PublicIpCard() {
             <div className={
               p34.verdict === 'healthy'
                 ? 'rounded-lg border border-success/40 bg-success/10 p-3 text-sm text-success flex items-start gap-2'
-                : p34.verdict === 'stale-ip'
+                : (p34.verdict === 'stale-ip' || p34.verdict === 'datacenter-private')
                   ? 'rounded-lg border border-danger/40 bg-danger/10 p-3 text-sm text-danger flex items-start gap-2'
                   : 'rounded-lg border border-warning/40 bg-warning/10 p-3 text-sm text-warning flex items-start gap-2'
             }>
               <Icon
-                name={p34.verdict === 'healthy' ? 'CheckCircle2' : p34.verdict === 'stale-ip' ? 'AlertTriangle' : 'AlertCircle'}
+                name={p34.verdict === 'healthy' ? 'CheckCircle2' : (p34.verdict === 'stale-ip' || p34.verdict === 'datacenter-private') ? 'AlertTriangle' : 'AlertCircle'}
                 size={15}
                 className="mt-0.5 shrink-0"
               />
@@ -500,7 +504,7 @@ export function PublicIpCard() {
               </div>
             )}
 
-            {p34.verdict === 'stale-ip' && (
+            {(p34.verdict === 'stale-ip' || (p34.verdict === 'datacenter-private' && p34.vmPublicIpUsable)) && (
               <div className="space-y-2">
                 <button
                   type="button"
@@ -512,10 +516,17 @@ export function PublicIpCard() {
                   {applyRunning && fixingP34.current ? 'Fixing…' : `Fix it automatically (set public IP to ${p34.vmPublicIp})`}
                 </button>
                 <p className="text-xs text-text-dim">
-                  This re-applies your current public IP and restarts the servers so they re-advertise the correct
-                  address. Same as setting the IP manually below and clicking Apply — it just fills it in for you.
+                  {p34.verdict === 'datacenter-private'
+                    ? 'This rewrites the address your server advertises (HOST_DATACENTER_IP_ADDRESS) from the private/LAN value to your public IP and restarts the battlegroup, so outside players are routed correctly. Same as setting the IP manually below and clicking Apply.'
+                    : 'This re-applies your current public IP and restarts the servers so they re-advertise the correct address. Same as setting the IP manually below and clicking Apply — it just fills it in for you.'}
                 </p>
               </div>
+            )}
+            {p34.verdict === 'datacenter-private' && !p34.vmPublicIpUsable && (
+              <p className="text-xs text-warning">
+                Your server is advertising a private address to players, but DST couldn’t auto-detect your public IP.
+                Enter your public IPv4 in the field below and click Apply to fix it.
+              </p>
             )}
           </div>
         )}
