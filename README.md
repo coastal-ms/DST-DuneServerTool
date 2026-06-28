@@ -835,6 +835,15 @@ find the same answer.
 
 ## Troubleshooting
 
+### Players get P34 / "Connection Request Timed Out"
+Your server is visible but players can't connect (or it dropped off the
+browser). This is almost always in the network path, not the game server.
+Start with **Settings → Public IP / DDNS → Connection check (P34)**, then see
+the full guide: **[Troubleshooting P34](docs/troubleshooting-p34.md)** — it
+covers private‑datacenter setups, port forwarding, NAT loopback (same‑network)
+play, IPv6, double‑NAT/CGNAT, the "delisted but check green" case, and what's
+Funcom‑side.
+
 ### "pwsh is not recognized"
 PowerShell 7 isn't installed. Download it from
 [github.com/PowerShell/PowerShell/releases](https://github.com/PowerShell/PowerShell/releases)
