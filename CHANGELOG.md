@@ -13,6 +13,12 @@ here cover everything those tags shipped.
 
 ## [Unreleased]
 
+## [12.14.2] - 2026-06-29
+
+### Fixed
+
+- **Reset Faction now clears the in-game reputation too.** Faction reputation is stored in two places — the `player_faction_reputation` table *and* the pawn's `FactionPlayerComponent` (which the game reads at runtime). Reset Faction was only zeroing the table, so a maxed reputation reappeared on login. It now zeroes both for Atreides and Harkonnen (matching Give Faction Rep / Progression Unlock).
+
 ## [12.14.1] - 2026-06-29
 
 ### Added
