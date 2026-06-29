@@ -13,6 +13,15 @@ here cover everything those tags shipped.
 
 ## [Unreleased]
 
+## [12.13.16] - 2026-06-28
+
+### Fixed
+
+- **Renaming the server works again.** Game Config → Server name rejected a valid
+  name with "A non-empty name is required" because the route read the request body
+  with a PSObject-only accessor that returned null for hashtable-parsed bodies. It
+  now uses the shared body reader, so the rename + restart applies as expected.
+
 ## [12.13.15] - 2026-06-28
 
 ### Fixed
