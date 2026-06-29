@@ -13,6 +13,12 @@ here cover everything those tags shipped.
 
 ## [Unreleased]
 
+## [12.14.3] - 2026-06-29
+
+### Fixed
+
+- **Set Faction Tier / Give Faction Rep now actually establish faction membership for unaligned players.** On a character that hadn't joined a faction, these actions only wrote a reputation row the game ignores — the `FactionPlayerComponent` patch silently no-op'd (no array entry to update) and nothing joined the faction or ran recruitment, so in-game the trader stayed locked, standing read 0, and the recruiter kept offering the initial quest. For an **offline, unaligned** character they now establish full membership in one transaction: join the faction, complete the `DA_FQ_ClimbTheRanks` recruitment journey nodes, apply the faction/dialogue/contract tags, create the `FactionPlayerComponent` entry, and set the tier/reputation. An **already-aligned** character is blocked with a clear prompt to use **Reset Faction** first, then re-run. (Builds on the 12.14.2 Reset-Faction component fix.)
+
 ## [12.14.2] - 2026-06-29
 
 ### Fixed
