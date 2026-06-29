@@ -118,28 +118,53 @@ function Get-DuneTagsData {
     return $script:DuneTagsData
 }
 
+# Full gameplay-tag universe extracted from the live server's
+# DuneSandbox/Config/DefaultGameplayTags.ini (~4000 tags). Bundled so the Tags
+# editor typeahead can search every real tag, not just the curated subset.
+function _Load-DuneGameplayTagCatalog {
+    if ($null -ne $script:DuneGameplayTagCatalog) { return }
+    $script:DuneGameplayTagCatalog = @()
+    $p = _Resolve-DuneCatalog 'dune-gameplay-tags.json'
+    if (-not $p) { return }
+    try {
+        $json = Get-Content -LiteralPath $p -Raw | ConvertFrom-Json
+        if ($json.PSObject.Properties['tags']) {
+            $script:DuneGameplayTagCatalog = @($json.tags | ForEach-Object { [string]$_ } | Where-Object { $_ })
+        }
+    } catch {}
+}
+
+function Get-DuneGameplayTagCatalog {
+    _Load-DuneGameplayTagCatalog
+    return $script:DuneGameplayTagCatalog
+}
+
 # ----- §1.0b GET /tags/catalog --------------------------------------------
-# The universe of known gameplay tags that can be written to a player, drawn
-# from the static catalog (journey_node_tags values + contract_tags values).
-# Used by the player Tags editor to power a typeahead. The frontend derives a
-# friendly label + category from each raw tag string.
+# The full player-relevant gameplay-tag universe, from the bundled catalog
+# (dune-gameplay-tags.json, ~3600 tags extracted from the live image's
+# DefaultGameplayTags.ini, engine-internal namespaces dropped). Falls back to
+# the curated journey_node_tags + contract_tags subset if the file is absent.
+# Used by the player Tags editor typeahead; the frontend derives a friendly
+# label + category from each raw tag. `completable` flags the DA_* journey
+# nodes that can actually be completed via the journey API.
 function Get-DuneTagCatalog {
-    $tags = Get-DuneTagsData
-    $set = @{}
-    foreach ($k in $tags.journeyNodeTags.Keys) {
-        foreach ($t in @($tags.journeyNodeTags[$k])) {
-            $s = [string]$t
-            if ($s) { $set[$s] = $true }
+    $full = Get-DuneGameplayTagCatalog
+    if ($full -and $full.Count -gt 0) {
+        $list = @($full | Sort-Object)
+    } else {
+        $tags = Get-DuneTagsData
+        $set = @{}
+        foreach ($k in $tags.journeyNodeTags.Keys) {
+            foreach ($t in @($tags.journeyNodeTags[$k])) { $s = [string]$t; if ($s) { $set[$s] = $true } }
         }
-    }
-    foreach ($k in $tags.contractTags.Keys) {
-        foreach ($t in @($tags.contractTags[$k])) {
-            $s = [string]$t
-            if ($s) { $set[$s] = $true }
+        foreach ($k in $tags.contractTags.Keys) {
+            foreach ($t in @($tags.contractTags[$k])) { $s = [string]$t; if ($s) { $set[$s] = $true } }
         }
+        $list = @($set.Keys | Sort-Object)
     }
-    $list = @($set.Keys | Sort-Object)
-    return @{ ok = $true; tags = $list; total = $list.Count }
+    $tagsData = Get-DuneTagsData
+    $completable = @($tagsData.journeyNodeTags.Keys | Sort-Object)
+    return @{ ok = $true; tags = $list; total = $list.Count; completable = $completable }
 }
 
 # ----- §1.1 GET /players/online -------------------------------------------
