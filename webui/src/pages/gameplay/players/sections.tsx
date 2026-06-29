@@ -26,7 +26,7 @@ import {
   restoreDestroyed,
   setFactionTier, setPlayerTags, setSkillPoints,
   setStarterClass, teleportToPlayer, teleportToLocation, setRespawn, getTeleportDestinations, getPlayers, updatePlayerTags, wipeCodex, wipeJourney,
-  chatWhisper, isValidTemplateId, getItemCatalog,
+  chatWhisper, isValidTemplateId, getItemCatalog, getCosmeticsCatalog, type CosmeticEntry,
   parseTcnoPackageText,
   giveItems, getItemPackages, saveItemPackage, deleteItemPackage,
   getLandsraadOverview, getLandsraadPlayerContributions, setLandsraadContribution,
@@ -563,7 +563,7 @@ interface ActionDef {
   liveOnly?: boolean      // requires player to be online (RMQ path)
   offlineOnly?: boolean   // requires player to be offline (DB write the game caches in memory)
   fields?: ActionField[]
-  custom?: 'give-item' | 'grant-reward' | 'whisper' | 'spawn-vehicle' | 'quick-presets' | 'vehicle-kit' | 'give-package' | 'cheat-scripts' | 'dev-scripts' | 'unlock-trainers' | 'unlock-mainquest' | 'progression-unlock' | 'refuel-vehicle' | 'starter-class' | 'update-tags' | 'teleport-player' | 'teleport-location' | 'set-respawn'
+  custom?: 'give-item' | 'grant-reward' | 'whisper' | 'spawn-vehicle' | 'quick-presets' | 'vehicle-kit' | 'give-package' | 'cheat-scripts' | 'dev-scripts' | 'unlock-trainers' | 'unlock-mainquest' | 'progression-unlock' | 'refuel-vehicle' | 'starter-class' | 'update-tags' | 'teleport-player' | 'teleport-location' | 'set-respawn' | 'grant-cosmetic'
   balance?: 'solari' | 'scrip' | 'intel'  // show the player's current balance read-only above the form
   confirm?: (p: Player) => string  // confirm message; if returns '' no prompt
   doubleConfirm?: boolean // also requires a typed "i acknowledge" prompt inside run()
@@ -660,6 +660,9 @@ const ACTIONS: ActionDef[] = [
     run: () => Promise.resolve({ message: '' }) },
   { id: 'give-package', group: 'Items', label: 'Give Package', icon: 'PackageCheck', custom: 'give-package',
     rowNote: 'Hand a saved item package to this player — build & reuse your own bundles. Works online or offline',
+    run: () => Promise.resolve({ message: '' }) },
+  { id: 'grant-cosmetic', group: 'Items', label: 'Grant Cosmetic / Variant', icon: 'Shirt', custom: 'grant-cosmetic',
+    rowNote: 'Unlock an appearance set variant, swatch (dye), or vehicle skin — delivered to inventory, works online or offline',
     run: () => Promise.resolve({ message: '' }) },
   { id: 'repair-gear', group: 'Items', label: 'Repair All Items', icon: 'Wrench',
     run: p => repairGear(p.id) },
@@ -994,6 +997,12 @@ function ActionRow({ def, player, busy, stats, open, danger, onToggle, runAction
                 const n = items.length
                 return { message: `Gave package "${pkgName}" — ${n} item${n === 1 ? '' : 's'} to ${player.name}.` }
               })} />
+          ) : def.custom === 'grant-cosmetic' ? (
+            <GrantCosmeticForm busy={busy} playerName={player.name}
+              onGrant={(tpl, label) => runAction(def, async () => {
+                const r = await giveItem(player.id, tpl, 1, 0, true)
+                return { message: r.message || `Granted "${label}" to ${player.name}.` }
+              })} />
           ) : def.custom === 'refuel-vehicle' ? (
             <RefuelVehicleForm busy={busy} controllerId={player.controller_id} playerName={player.name}
               onSubmit={vid => runAction(def, () => refuelVehicle(vid))} />
@@ -1167,6 +1176,64 @@ function GrantRewardForm({ busy, submitLabel, onSubmit }: {
       <button className="btn-primary w-full" disabled={busy || !isValidTemplateId(tpl)}
         onClick={() => onSubmit(tpl.trim(), Number(amount) || 1)}>
         {busy ? <Icon name="Loader2" size={13} className="animate-spin" /> : <Icon name="Check" size={13} />} {submitLabel}
+      </button>
+    </div>
+  )
+}
+
+// Grant Cosmetic / Variant — picks from the cosmetics catalog (set variants,
+// swatches, vehicle skins) and delivers the chosen template via the normal
+// give-item path so the player unlocks the appearance. Loads the catalog on
+// mount; filters by name/template; groups results by type.
+function GrantCosmeticForm({ busy, playerName, onGrant }: {
+  busy: boolean
+  playerName: string
+  onGrant: (template: string, label: string) => void
+}) {
+  const [catalog, setCatalog] = useState<CosmeticEntry[] | null>(null)
+  const [err, setErr] = useState<string | null>(null)
+  const [filter, setFilter] = useState('')
+  const [sel, setSel] = useState('')
+  useEffect(() => {
+    let alive = true
+    getCosmeticsCatalog()
+      .then(c => { if (alive) setCatalog(c) })
+      .catch(e => { if (alive) setErr(e instanceof Error ? e.message : String(e)) })
+    return () => { alive = false }
+  }, [])
+  const matches = useMemo(() => {
+    const q = filter.trim().toLowerCase()
+    const list = catalog || []
+    return q ? list.filter(e => e.name.toLowerCase().includes(q) || e.template.toLowerCase().includes(q)) : list
+  }, [catalog, filter])
+  const groups = useMemo(() => {
+    const m = new Map<string, CosmeticEntry[]>()
+    for (const e of matches) { const a = m.get(e.group); if (a) a.push(e); else m.set(e.group, [e]) }
+    return Array.from(m.entries()).sort(([a], [b]) => a.localeCompare(b))
+  }, [matches])
+  const chosen = (catalog || []).find(e => e.template === sel)
+  const selectCls = 'w-full px-3 py-2 rounded-lg bg-surface-2 border border-border text-text text-sm focus:outline-none focus:ring-2 focus:ring-ibad focus:border-ibad/50'
+
+  if (err) return <ErrorBox msg={err} />
+  if (!catalog) return <div className="text-sm text-text-dim flex items-center gap-2"><Icon name="Loader2" size={13} className="animate-spin" /> Loading cosmetics…</div>
+
+  return (
+    <div className="space-y-3">
+      <p className="text-[11px] text-text-dim">Delivers the unlock item to {playerName}'s inventory (online: instant; offline: next login). The appearance unlocks when acquired in-game.</p>
+      <input type="text" value={filter} disabled={busy} placeholder="Filter cosmetics by name or id…"
+        onChange={e => setFilter(e.target.value)} className={selectCls} />
+      <select value={sel} disabled={busy} className={selectCls} onChange={e => setSel(e.target.value)} size={1}>
+        <option value="">Select a cosmetic… ({matches.length})</option>
+        {groups.map(([g, items]) => (
+          <optgroup key={g} label={`${g} (${items.length})`}>
+            {items.map(e => <option key={e.template} value={e.template}>{e.name}</option>)}
+          </optgroup>
+        ))}
+      </select>
+      {chosen && <p className="text-[11px] font-mono text-text-dim truncate">{chosen.template}</p>}
+      <button className="btn-primary w-full" disabled={busy || !sel}
+        onClick={() => chosen && onGrant(chosen.template, chosen.name)}>
+        {busy ? <Icon name="Loader2" size={13} className="animate-spin" /> : <Icon name="Shirt" size={13} />} Grant Cosmetic
       </button>
     </div>
   )
