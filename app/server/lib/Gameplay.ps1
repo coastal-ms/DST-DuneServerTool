@@ -103,24 +103,54 @@ function Get-DuneGameplayItemName {
 # give-item path (a plain dune.items insert), so the player unlocks the
 # appearance when it lands. Dev placeholders (D_Test*, PH_* display names) are
 # excluded. Returns @{ templates = @(@{template;name;group}); total }.
-# Readable group label for an MTX building-set "Patent" (Observer Twitch set,
-# collab murals/reliefs, statues/decor, furniture, movie sets, etc.). These are
-# building recipes the game stores per-character in
-# dune.building_progression.learned_building_sets and are delivered as items via
-# the normal give-item path (the Patent auto-applies on receipt) — same mechanism
-# as the appearance cosmetics, just absent from the give-item catalog.
+# Authoritative grantable building-set / building-recipe item ids
+# (app/data/building-sets.json): the union of dune.building_progression.learned_building_sets
+# (live cross-check) and every building Patent/Placeable item form in gameplay-item-data.json.
+# Loaded once into a case-insensitive set; friendly names come from gameplay-item-data.json.
+$script:DuneBuildingSetIds = $null
+function Get-DuneBuildingSetsPath {
+    foreach ($candidate in @(
+        (Join-Path $PSScriptRoot '..\..\data\building-sets.json'),
+        (Join-Path (Split-Path -Parent $PSScriptRoot) '..\data\building-sets.json')
+    )) {
+        try { return (Resolve-Path -LiteralPath $candidate -ErrorAction Stop).Path } catch {}
+    }
+    return $null
+}
+function Initialize-DuneBuildingSets {
+    if ($null -ne $script:DuneBuildingSetIds) { return }
+    $set = [System.Collections.Generic.HashSet[string]]::new([System.StringComparer]::OrdinalIgnoreCase)
+    $path = Get-DuneBuildingSetsPath
+    if ($path) {
+        try {
+            $json = Get-Content -LiteralPath $path -Raw | ConvertFrom-Json
+            foreach ($id in @($json.ids)) { if ($id) { [void]$set.Add([string]$id) } }
+        } catch {}
+    }
+    $script:DuneBuildingSetIds = $set
+}
+
+# Readable group label for a grantable building set / building recipe (Observer Twitch
+# set, collab murals/reliefs, statues/decor, themed furniture, movie sets, faction/house
+# sets, and base-game crafting stations). These are recipes the game stores per-character
+# in dune.building_progression.learned_building_sets and delivers as items via the normal
+# give-item path (the Patent/Placeable item auto-applies on receipt) — same mechanism as
+# the appearance cosmetics, just absent from the give-item catalog.
 function Get-DuneBuildingSetGroup {
     param([string]$Id)
     if ($Id -match 'TwitchReward')                                              { return 'Building Sets - Observer (Twitch)' }
     if ($Id -match 'Mural')                                                     { return 'Building Sets - Murals & Wall Art' }
-    if ($Id -match 'Statue|Miniature|Cage|Hologram|Flagpole|Flagship|ChristmasTree|Glowglobe|Plaque|Seal|Raider|Gunner') { return 'Building Sets - Statues & Decor' }
-    if ($Id -match 'BedroomSet|DiningRoomSet|OfficeSet|BreakfastRoomSet|TeaHouse|TeaSet|Lighting|Strategy|Carpet|Kaitan|RoomSet') { return 'Building Sets - Furniture & Themed Rooms' }
     if ($Id -match 'Movie')                                                     { return 'Building Sets - Movie Collab' }
+    if ($Id -match 'Fabricator|Refinery|Station|Container|Extraction|Augment|Compactor|Printer|Workbench|Generator|Pentashield') { return 'Building Sets - Crafting Stations & Utilities' }
+    if ($Id -match 'Statue|Miniature|Cage|Hologram|Flagpole|Flagship|ChristmasTree|Glowglobe|Plaque|Seal|Raider|Gunner|Placeable|Carpet|Banner|Trophy') { return 'Building Sets - Statues & Decor' }
+    if ($Id -match 'BedroomSet|DiningRoomSet|OfficeSet|BreakfastRoomSet|TeaHouse|TeaSet|Lighting|Strategy|Kaitan|RoomSet|Furniture|Chair|Table') { return 'Building Sets - Furniture & Themed Rooms' }
+    if ($Id -match 'Atre|Harko|Choam|Smug|WaterShipper|Watershipper|Frem|AtreidesSet|HarkonnenSet') { return 'Building Sets - Faction & House Sets' }
     return 'Building Sets - Structures & Other'
 }
 
 function Get-DuneCosmeticsCatalog {
     Initialize-DuneGameplayItemData
+    Initialize-DuneBuildingSets
     $out = @()
     foreach ($k in $script:DuneGameplayItemNames.Keys) {
         $name = [string]$script:DuneGameplayItemNames[$k]
@@ -131,7 +161,7 @@ function Get-DuneCosmeticsCatalog {
         elseif ($k -match 'Swatch')            { $group = 'Swatches (Dyes)' }
         elseif ($k -match 'MeshCustomization') { $group = 'Vehicle Skins' }
         elseif ($k -match 'Customization')     { $group = 'Other Customization' }
-        elseif ($k -match '^MTX_.+_Patent$')   { $group = Get-DuneBuildingSetGroup -Id $k }
+        elseif ($script:DuneBuildingSetIds.Contains($k)) { $group = Get-DuneBuildingSetGroup -Id $k }
         if ($group) {
             $out += @{ template = [string]$k; name = $name; group = $group }
         }

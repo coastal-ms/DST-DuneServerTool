@@ -13,6 +13,17 @@ here cover everything those tags shipped.
 
 ## [Unreleased]
 
+## [12.14.5] - 2026-06-29
+
+### Changed
+
+- **Grant Building Sets now covers ALL learnable building sets (225 total, 223 grantable), not just the MTX/Twitch/collab sets** — adds base-game Atreides/Harkonnen/Choam sets, crafting stations & utilities, faction/house sets, statues/decor, themed furniture. (6 sets have no grantable item form and are intentionally excluded.) The grantable set is authoritative (`app/data/building-sets.json`): the union of every building-recipe item form in the game data and the distinct sets actually learned on a live server.
+
+### Fixed
+
+- **Gameplay Admin → Players no longer resets your place after every grant/add.** Granting an item, building set, cosmetic, currency, tag, etc. used to trigger a full list/summary/section reload that collapsed the open form and bounced you out of your spot. Now a successful action just shows the green confirmation and keeps the form open so you can grant several in a row; the actual refresh is deferred and only runs when you collapse the action, switch player/section, or hit a Refresh button. Your selected player and scroll position are preserved. (Per-item Repair/Delete still re-read the inventory immediately, since they change the list you're looking at.)
+- **Grant Cosmetic / Building Set row title no longer pushed out of view.** The action's description was long enough to starve the (truncating) title to zero width; shortened it so the title renders.
+
 ## [12.14.4] - 2026-06-29
 
 ### Added
