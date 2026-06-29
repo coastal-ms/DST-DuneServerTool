@@ -664,8 +664,8 @@ const ACTIONS: ActionDef[] = [
   { id: 'give-package', group: 'Items', label: 'Give Package', icon: 'PackageCheck', custom: 'give-package',
     rowNote: 'Hand a saved item package to this player — build & reuse your own bundles. Works online or offline',
     run: () => Promise.resolve({ message: '' }) },
-  { id: 'grant-cosmetic', group: 'Items', label: 'Grant Cosmetic / Variant', icon: 'Shirt', custom: 'grant-cosmetic',
-    rowNote: 'Unlock an appearance set variant, swatch (dye), or vehicle skin — delivered to inventory, works online or offline',
+  { id: 'grant-cosmetic', group: 'Items', label: 'Grant Cosmetic / Building Set', icon: 'Shirt', custom: 'grant-cosmetic',
+    rowNote: 'Unlock an appearance set variant, swatch (dye), vehicle skin, or building set (Observer Twitch set, collab murals/decor) — delivered to inventory, works online or offline',
     run: () => Promise.resolve({ message: '' }) },
   { id: 'repair-gear', group: 'Items', label: 'Repair All Items', icon: 'Wrench',
     run: p => repairGear(p.id) },
@@ -1224,15 +1224,15 @@ function GrantCosmeticForm({ busy, playerName, onGrant }: {
   const selectCls = 'w-full px-3 py-2 rounded-lg bg-surface-2 border border-border text-text text-sm focus:outline-none focus:ring-2 focus:ring-ibad focus:border-ibad/50'
 
   if (err) return <ErrorBox msg={err} />
-  if (!catalog) return <div className="text-sm text-text-dim flex items-center gap-2"><Icon name="Loader2" size={13} className="animate-spin" /> Loading cosmetics…</div>
+  if (!catalog) return <div className="text-sm text-text-dim flex items-center gap-2"><Icon name="Loader2" size={13} className="animate-spin" /> Loading catalog…</div>
 
   return (
     <div className="space-y-3">
-      <p className="text-[11px] text-text-dim">Delivers the unlock item to {playerName}'s inventory (online: instant; offline: next login). The appearance unlocks when acquired in-game.</p>
-      <input type="text" value={filter} disabled={busy} placeholder="Filter cosmetics by name or id…"
+      <p className="text-[11px] text-text-dim">Delivers the unlock item to {playerName}'s inventory (online: instant; offline: next login). The unlock applies when acquired in-game.</p>
+      <input type="text" value={filter} disabled={busy} placeholder="Filter cosmetics & building sets by name or id…"
         onChange={e => setFilter(e.target.value)} className={selectCls} />
       <select value={sel} disabled={busy} className={selectCls} onChange={e => setSel(e.target.value)} size={1}>
-        <option value="">Select a cosmetic… ({matches.length})</option>
+        <option value="">Select a cosmetic or building set… ({matches.length})</option>
         {groups.map(([g, items]) => (
           <optgroup key={g} label={`${g} (${items.length})`}>
             {items.map(e => <option key={e.template} value={e.template}>{e.name}</option>)}
@@ -1242,7 +1242,7 @@ function GrantCosmeticForm({ busy, playerName, onGrant }: {
       {chosen && <p className="text-[11px] font-mono text-text-dim truncate">{chosen.template}</p>}
       <button className="btn-primary w-full" disabled={busy || !sel}
         onClick={() => chosen && onGrant(chosen.template, chosen.name)}>
-        {busy ? <Icon name="Loader2" size={13} className="animate-spin" /> : <Icon name="Shirt" size={13} />} Grant Cosmetic
+        {busy ? <Icon name="Loader2" size={13} className="animate-spin" /> : <Icon name="Shirt" size={13} />} Grant
       </button>
     </div>
   )
