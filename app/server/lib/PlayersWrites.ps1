@@ -1028,9 +1028,15 @@ function Invoke-DunePlayerResetFaction {
 
     $sb = [System.Text.StringBuilder]::new()
     [void]$sb.AppendLine('BEGIN;')
-    # zero rep + reset alignment to None (3) so the recruiter funnel re-triggers
+    # zero rep + reset alignment to None (3) so the recruiter funnel re-triggers.
+    # Faction reputation is dual-written: the player_faction_reputation TABLE *and*
+    # the pawn's FactionPlayerComponent (actors.properties). The game reads the
+    # component at runtime, so zeroing only the table leaves a stale maxed value
+    # that reappears on login — we must zero BOTH (mirrors give-rep / progression).
     [void]$sb.AppendLine("SELECT dune.set_player_faction_reputation($controllerID::bigint, 1::smallint, 0::integer);")
     [void]$sb.AppendLine("SELECT dune.set_player_faction_reputation($controllerID::bigint, 2::smallint, 0::integer);")
+    [void]$sb.AppendLine([string]::Format($script:DuneFactionComponentRepSqlTpl, $controllerID, 'Atreides', 0))
+    [void]$sb.AppendLine([string]::Format($script:DuneFactionComponentRepSqlTpl, $controllerID, 'Harkonnen', 0))
     [void]$sb.AppendLine("SELECT dune.change_player_faction($controllerID::bigint, 3::smallint, 3::smallint, NOW()::timestamp);")
     # remove every faction-related tag (full + abbreviated names, recruitment, alignment)
     $likes = @(
@@ -1053,7 +1059,7 @@ function Invoke-DunePlayerResetFaction {
         Invoke-DuneSqlQuery -Ip $Ip -Sql 'ROLLBACK;' -ReadOnly $false -MaxRows 1 -TimeoutSec 5 | Out-Null
         return @{ ok = $false; error = "reset-faction tx: $($r.error)" }
     }
-    return @{ ok = $true; message = "Reset faction for account $AccountId - rep zeroed, alignment cleared, faction tags removed, ClimbTheRanks reset to incomplete. Takes effect on next login."; faction = $fl }
+    return @{ ok = $true; message = "Reset faction for account $AccountId - rep zeroed (table + FactionPlayerComponent), alignment cleared, faction tags removed, ClimbTheRanks reset to incomplete. Takes effect on next login."; faction = $fl }
 }
 
 function Invoke-DunePlayerApplyProgressionPreset {
