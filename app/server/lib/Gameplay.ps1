@@ -96,6 +96,33 @@ function Get-DuneGameplayItemName {
     return $TemplateId
 }
 
+# Cosmetic-unlockable catalog: appearance set variants, colour swatches, and
+# vehicle mesh customizations drawn from the bundled gameplay-item-data names.
+# These are NOT in the standard Give Item picker (item-catalog.json), which is
+# why operators can't find them — but they ARE deliverable via the normal
+# give-item path (a plain dune.items insert), so the player unlocks the
+# appearance when it lands. Dev placeholders (D_Test*, PH_* display names) are
+# excluded. Returns @{ templates = @(@{template;name;group}); total }.
+function Get-DuneCosmeticsCatalog {
+    Initialize-DuneGameplayItemData
+    $out = @()
+    foreach ($k in $script:DuneGameplayItemNames.Keys) {
+        $name = [string]$script:DuneGameplayItemNames[$k]
+        if (-not $name) { continue }
+        if ($k -match '^D_Test' -or $name -match '^(PH_|Test )') { continue }
+        $group = $null
+        if     ($k -match 'SetVariant')        { $group = 'Armor & Suit Sets' }
+        elseif ($k -match 'Swatch')            { $group = 'Swatches (Dyes)' }
+        elseif ($k -match 'MeshCustomization') { $group = 'Vehicle Skins' }
+        elseif ($k -match 'Customization')     { $group = 'Other Customization' }
+        if ($group) {
+            $out += @{ template = [string]$k; name = $name; group = $group }
+        }
+    }
+    $out = @($out | Sort-Object { $_.group }, { $_.name })
+    return @{ ok = $true; templates = $out; total = $out.Count }
+}
+
 # Stats blob for a freshly-inserted give-item row. The game cannot deserialize an
 # item with empty stats ('{}') and silently drops it on zone/login load, so the
 # row exists in the DB but never materializes in-game. It also needs the SHAPE

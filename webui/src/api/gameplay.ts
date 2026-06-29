@@ -1132,6 +1132,29 @@ export function getItemCatalog(): Promise<CatalogItem[]> {
   return _catalogPromise
 }
 
+// Cosmetics catalog — appearance set variants, swatches, vehicle skins. Served
+// by GET /api/catalog/cosmetics (from gameplay-item-data names). These aren't in
+// the standard item catalog; granting one delivers it via the normal give-item
+// path so the player unlocks the appearance.
+export interface CosmeticEntry { template: string; name: string; group: string }
+interface CosmeticsResponse { templates?: CosmeticEntry[]; total?: number }
+let _cosmeticsCache: CosmeticEntry[] | null = null
+let _cosmeticsPromise: Promise<CosmeticEntry[]> | null = null
+export function getCosmeticsCatalog(): Promise<CosmeticEntry[]> {
+  if (_cosmeticsCache) return Promise.resolve(_cosmeticsCache)
+  if (_cosmeticsPromise) return _cosmeticsPromise
+  _cosmeticsPromise = api<CosmeticsResponse>('/api/catalog/cosmetics').then(r => {
+    const flat = (r.templates || []).filter(e => e && e.template)
+    _cosmeticsCache = flat
+    _cosmeticsPromise = null
+    return flat
+  }).catch(e => {
+    _cosmeticsPromise = null
+    throw e
+  })
+  return _cosmeticsPromise
+}
+
 // ===========================================================================
 // Vehicle-kit catalog — single source of truth for the Give Vehicle Kit action,
 // served by GET /api/catalog/vehicle-kits (app/data/vehicle-kits.json). Shared by
