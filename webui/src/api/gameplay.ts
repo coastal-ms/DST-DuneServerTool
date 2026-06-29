@@ -1250,6 +1250,7 @@ export interface TagCatalogEntry {
   tag: string       // raw tag string written to the player
   label: string     // friendly, humanized breadcrumb label
   category: string  // first dotted segment (Contract, DialogueFlags, Journey, …)
+  completable?: boolean // true for DA_* journey nodes that can be completed via the journey API
 }
 
 /** First dotted segment of a tag, e.g. "Contract" — used as a coarse category. */
@@ -1279,17 +1280,18 @@ export function tagFriendlyLabel(tag: string): string {
 let _tagCatalogCache: TagCatalogEntry[] | null = null
 let _tagCatalogPromise: Promise<TagCatalogEntry[]> | null = null
 
-interface TagCatalogResponse { tags?: string[]; total?: number; source?: string }
+interface TagCatalogResponse { tags?: string[]; total?: number; source?: string; completable?: string[] }
 
-/** Load + cache the known-tag catalog (~400 entries). Fetched once per session. */
+/** Load + cache the full player-relevant tag catalog (~3600 entries). Fetched once per session. */
 export function getTagCatalog(): Promise<TagCatalogEntry[]> {
   if (_tagCatalogCache) return Promise.resolve(_tagCatalogCache)
   if (_tagCatalogPromise) return _tagCatalogPromise
   _tagCatalogPromise = api<TagCatalogResponse>('/api/gameplay/tags/catalog').then(r => {
+    const completable = new Set((r.completable || []).map(t => String(t).trim()))
     const flat = (r.tags || [])
       .map(t => String(t).trim())
       .filter(Boolean)
-      .map(tag => ({ tag, label: tagFriendlyLabel(tag), category: tagCategory(tag) }))
+      .map(tag => ({ tag, label: tagFriendlyLabel(tag), category: tagCategory(tag), completable: completable.has(tag) }))
       .sort((a, b) => a.label.localeCompare(b.label))
     _tagCatalogCache = flat
     _tagCatalogPromise = null

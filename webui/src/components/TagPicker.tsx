@@ -203,6 +203,9 @@ export function TagPicker({
                       <span className="block text-sm text-text">{g.leafLabel(e.tag)}</span>
                       <span className="block text-[11px] font-mono text-text-dim truncate">{e.tag}</span>
                     </span>
+                    {e.completable && (
+                      <span className="shrink-0 text-[10px] px-1.5 py-0.5 rounded bg-ibad/15 text-ibad" title="Completable journey node">node</span>
+                    )}
                     <span className="shrink-0 inline-flex items-center gap-1 text-[11px] text-text-dim group-hover:text-text">
                       <Icon name="Plus" size={12} /> Add
                     </span>

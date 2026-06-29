@@ -13,6 +13,16 @@ here cover everything those tags shipped.
 
 ## [Unreleased]
 
+## [12.14.0] - 2026-06-28
+
+### Added
+
+- **Full player-relevant gameplay-tag catalog in the Tags editor.** The tag typeahead now searches ~3,600 real tags extracted from the live server image (engine-internal cues/combat/camera dropped) instead of a curated ~400 subset. Completable journey nodes are flagged with a "node" badge.
+
+### Changed
+
+- **Item names refreshed for patch 1.4.10.0.** Labelled in-use templates that were missing from the catalog (T6 light ornithopter modules, Cutter, ContractItem).
+
 ## [12.13.17] - 2026-06-28
 
 ### Changed
