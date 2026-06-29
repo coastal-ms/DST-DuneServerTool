@@ -25,7 +25,7 @@ import {
   resetAllKeystones, resetAllSpecs, resetJourney, resetProgressionLive, resetSpec,
   restoreDestroyed,
   setFactionTier, setPlayerTags, setSkillPoints,
-  setStarterClass, teleportToPlayer, teleportToLocation, setRespawn, getTeleportDestinations, getPlayers, updatePlayerTags, wipeCodex, wipeJourney,
+  setStarterClass, teleportToPlayer, teleportToLocation, setRespawn, getTeleportDestinations, getPlayers, updatePlayerTags, wipeCodex, wipeJourney, resetFaction,
   chatWhisper, isValidTemplateId, getItemCatalog,
   parseTcnoPackageText,
   giveItems, getItemPackages, saveItemPackage, deleteItemPackage,
@@ -563,7 +563,7 @@ interface ActionDef {
   liveOnly?: boolean      // requires player to be online (RMQ path)
   offlineOnly?: boolean   // requires player to be offline (DB write the game caches in memory)
   fields?: ActionField[]
-  custom?: 'give-item' | 'grant-reward' | 'whisper' | 'spawn-vehicle' | 'quick-presets' | 'vehicle-kit' | 'give-package' | 'cheat-scripts' | 'dev-scripts' | 'unlock-trainers' | 'unlock-mainquest' | 'progression-unlock' | 'refuel-vehicle' | 'starter-class' | 'update-tags' | 'teleport-player' | 'teleport-location' | 'set-respawn'
+  custom?: 'give-item' | 'grant-reward' | 'whisper' | 'spawn-vehicle' | 'quick-presets' | 'vehicle-kit' | 'give-package' | 'cheat-scripts' | 'dev-scripts' | 'unlock-trainers' | 'unlock-mainquest' | 'progression-unlock' | 'refuel-vehicle' | 'starter-class' | 'update-tags' | 'teleport-player' | 'teleport-location' | 'set-respawn' | 'reset-faction'
   balance?: 'solari' | 'scrip' | 'intel'  // show the player's current balance read-only above the form
   confirm?: (p: Player) => string  // confirm message; if returns '' no prompt
   doubleConfirm?: boolean // also requires a typed "i acknowledge" prompt inside run()
@@ -649,6 +649,9 @@ const ACTIONS: ActionDef[] = [
       }
       return wipeJourney(p.account_id)
     } },
+  { id: 'reset-faction', group: 'Progression', label: 'Reset Faction', icon: 'Swords', custom: 'reset-faction', offlineOnly: true,
+    rowNote: 'Wipe faction rep + tags + ClimbTheRanks nodes to start fresh. Player must be offline.',
+    run: () => Promise.resolve({ message: '' }) },
 
   // ----- Items -----
   { id: 'give-item',      group: 'Items', label: 'Give Item', icon: 'PackagePlus', custom: 'give-item',
@@ -986,6 +989,12 @@ function ActionRow({ def, player, busy, stats, open, danger, onToggle, runAction
               onReverse={(faction, preset, presetName) => runAction(def, async () => {
                 const r = await progressionReverse(player.id, faction, preset)
                 return { message: r.message || `Progression unlock (${presetName}) reversed for ${player.name}.` }
+              })} />
+          ) : def.custom === 'reset-faction' ? (
+            <ResetFactionForm busy={busy} playerName={player.name}
+              onReset={faction => runAction(def, async () => {
+                const r = await resetFaction(player.account_id, faction)
+                return { message: r.message || `Reset ${faction} faction for ${player.name}.` }
               })} />
           ) : def.custom === 'give-package' ? (
             <GivePackageForm busy={busy} playerName={player.name}
@@ -1946,8 +1955,41 @@ function UnlockMainQuestForm({ busy, onSubmit }: { busy: boolean; onSubmit: (que
   )
 }
 
-// Progression Unlock — faction + stage picker that drives the existing
-// progression-unlock / progression-reverse routes. Completes the
+// Reset Faction — wipe a player's faction progression (rep, tags, ClimbTheRanks
+// nodes) so they can start fresh. Offline-only; double-acknowledged. 'Both'
+// clears all faction state + alignment.
+function ResetFactionForm({ busy, playerName, onReset }: {
+  busy: boolean
+  playerName: string
+  onReset: (faction: 'atreides' | 'harkonnen' | 'both') => void
+}) {
+  const [faction, setFaction] = useState<'atreides' | 'harkonnen' | 'both'>('atreides')
+  const selectCls = 'w-full px-3 py-2 rounded-lg bg-surface-2 border border-border text-text text-sm focus:outline-none focus:ring-2 focus:ring-ibad focus:border-ibad/50'
+  const go = () => {
+    const typed = window.prompt(
+      `Reset ${faction} faction for ${playerName} — zeroes rep, removes faction tags, and resets ClimbTheRanks journey nodes. Cannot be undone.\n\nType  reset faction  to proceed:`
+    ) || ''
+    if (typed.trim().toLowerCase() !== 'reset faction') return
+    onReset(faction)
+  }
+  return (
+    <div className="space-y-3">
+      <div>
+        <label className="block text-[11px] uppercase tracking-wider text-text-dim mb-1">Faction</label>
+        <select value={faction} disabled={busy} className={selectCls} onChange={e => setFaction(e.target.value as 'atreides' | 'harkonnen' | 'both')}>
+          <option value="atreides">Atreides</option>
+          <option value="harkonnen">Harkonnen</option>
+          <option value="both">Both (full reset)</option>
+        </select>
+      </div>
+      <button className="btn-danger w-full" disabled={busy} onClick={go}>
+        <Icon name="Swords" size={13} /> Reset Faction
+      </button>
+    </div>
+  )
+}
+
+// Progression Unlock — faction + stage picker that drives the existing// progression-unlock / progression-reverse routes. Completes the
 // DA_FQ_ClimbTheRanks journey nodes for the chosen faction and writes the
 // faction tier tags + reputation. 'Ch3 Start' = tier 5 (start of chapter 3);
 // 'Rank 19 Eligible' = tier 19 + the Landsraad onboarding nodes. Works for both

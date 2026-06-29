@@ -1008,6 +1008,64 @@ COMMIT;
     }
 }
 
+# Completely wipe a player's faction progression so they can start fresh.
+# Removes ALL Atreides/Harkonnen journey nodes (DA_FQ_ClimbTheRanks*), zeroes
+# faction reputation + alignment, and deletes every faction/rank/recruitment tag
+# for the chosen faction (or both). Offline-only — the game holds this state in
+# RAM while connected. $Faction = 'atreides' | 'harkonnen' | 'both'.
+function Invoke-DunePlayerResetFaction {
+    param([string]$Ip, [long]$AccountId, [string]$Faction)
+    if ($AccountId -le 0) { return @{ ok = $false; error = 'account_id is required.' } }
+    $fl = ([string]$Faction).ToLowerInvariant()
+    if ($fl -ne 'atreides' -and $fl -ne 'harkonnen' -and $fl -ne 'both') {
+        return @{ ok = $false; error = 'faction must be atreides, harkonnen, or both' }
+    }
+    $controllerID = Get-DunePlayerControllerFromAccount -Ip $Ip -AccountId $AccountId
+    if ($controllerID -le 0) { return @{ ok = $false; error = "no player_controller for account $AccountId." } }
+
+    $factions = if ($fl -eq 'both') { @('Atreides','Harkonnen') } else { @((Get-Culture).TextInfo.ToTitleCase($fl)) }
+    $charScope = "character_id IN (SELECT id FROM dune.player_state WHERE account_id=$AccountId::bigint)"
+
+    $sb = [System.Text.StringBuilder]::new()
+    [void]$sb.AppendLine('BEGIN;')
+    foreach ($fn in $factions) {
+        $fid = if ($fn -eq 'Atreides') { 1 } else { 2 }
+        # zero rep + clear alignment for this faction
+        [void]$sb.AppendLine("SELECT dune.set_player_faction_reputation($controllerID::bigint, $fid::smallint, 0::integer);")
+        # remove every faction tag (Faction.<name>.*, contract/storyline/rank tags, recruitment)
+        $likes = @(
+            "tag LIKE 'Faction.$fn.%'",
+            "tag LIKE 'FactionStoryline.$fn%'",
+            "tag LIKE '%Fac_$($fn.Substring(0,4))_Rank%'",
+            "tag LIKE '%$fn%'"
+        ) -join ' OR '
+        [void]$sb.AppendLine("DELETE FROM dune.player_tags WHERE $charScope AND ($likes);")
+        # faction journey subtree (ClimbTheRanks nodes carry the faction in a sub-segment)
+        [void]$sb.AppendLine("DELETE FROM dune.journey_story_node WHERE $charScope AND story_node_id LIKE 'DA_FQ_ClimbTheRanks%' AND story_node_id ILIKE '%$fn%';")
+    }
+    # shared faction tags + climb-the-ranks core only wiped on full 'both' reset
+    if ($fl -eq 'both') {
+        $shared = @(
+            "tag LIKE 'DialogueFlags.Factions.%'",
+            "tag LIKE 'Contract.Faction.%'",
+            "tag = 'Journey.LandsraadContractsUnlocked'",
+            "tag LIKE 'Contract.Tracking.%FactionUnlocked'",
+            "tag LIKE 'Contract.Tracking.%RecruitmentCompleted'"
+        ) -join ' OR '
+        [void]$sb.AppendLine("DELETE FROM dune.player_tags WHERE $charScope AND ($shared);")
+        [void]$sb.AppendLine("DELETE FROM dune.journey_story_node WHERE $charScope AND story_node_id LIKE 'DA_FQ_ClimbTheRanks%';")
+        [void]$sb.AppendLine("SELECT dune.change_player_faction($controllerID::bigint, 3::smallint, 0::smallint, NOW()::timestamp);")
+    }
+    [void]$sb.AppendLine('COMMIT;')
+
+    $r = Invoke-DuneSqlQuery -Ip $Ip -Sql $sb.ToString() -ReadOnly $false -MaxRows 1 -TimeoutSec 120
+    if (-not $r.ok) {
+        Invoke-DuneSqlQuery -Ip $Ip -Sql 'ROLLBACK;' -ReadOnly $false -MaxRows 1 -TimeoutSec 5 | Out-Null
+        return @{ ok = $false; error = "reset-faction tx: $($r.error)" }
+    }
+    return @{ ok = $true; message = "Reset faction ($fl) for account $AccountId - rep zeroed, faction tags + ClimbTheRanks nodes cleared. Takes effect on next login."; faction = $fl }
+}
+
 function Invoke-DunePlayerApplyProgressionPreset {
     param([string]$Ip, [long]$AccountId, [string]$PresetId)
     if ($AccountId -le 0) { return @{ ok = $false; error = 'account_id is required.' } }
