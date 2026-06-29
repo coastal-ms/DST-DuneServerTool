@@ -1755,6 +1755,12 @@ export function wipeJourney(accountId: number) {
   })
 }
 
+export function resetFaction(accountId: number, faction: 'atreides' | 'harkonnen' | 'both') {
+  return api<WriteResult>('/api/gameplay/players/faction/reset', {
+    method: 'POST', body: JSON.stringify({ account_id: accountId, faction }),
+  })
+}
+
 // Journey Nodes browser — reads every journey_story_node row for the account.
 export interface JourneyNode {
   node_id: string
