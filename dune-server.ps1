@@ -21,7 +21,7 @@ param(
 # Wraps the original battlegroup.ps1 menu and adds extra tools
 # ============================================================
 
-$script:ToolVersion = "12.13.14"
+$script:ToolVersion = "12.13.15"
 
 # Cold-boot readiness budgets (seconds). A fresh battlegroup's FIRST boot can
 # take 10-30 min: k3s + funcom-operators initialize, metrics-server restarts a
@@ -825,8 +825,8 @@ function Wait-MapPodReady {
 
 function Get-DuneRemotePartitionScriptPath {
     $candidates = @(
-        (Join-Path $scriptDir 'resources\remote-scripts\dune-clear-partitions.start')
-        (Join-Path $scriptDir 'app\resources\remote-scripts\dune-clear-partitions.start')
+        (Join-Path $scriptDir 'resources\remote-scripts\dune-clear-partitions-install.sh')
+        (Join-Path $scriptDir 'app\resources\remote-scripts\dune-clear-partitions-install.sh')
     )
     foreach ($p in $candidates) {
         if (Test-Path -LiteralPath $p) { return $p }
@@ -845,7 +845,7 @@ function Invoke-DuneRemotePartitionScript {
     )
     $local = Get-DuneRemotePartitionScriptPath
     if (-not $local) {
-        return @{ ok = $false; rc = -1; output = @('Bundled dune-clear-partitions.start not found in install dir.') }
+        return @{ ok = $false; rc = -1; output = @('Bundled dune-clear-partitions-install.sh not found in install dir.') }
     }
 
     $stamp     = [Guid]::NewGuid().ToString('N').Substring(0, 12)
