@@ -193,6 +193,25 @@ Register-DuneRoute -Method POST -Path '/api/gameplay/players/progression-reverse
     }
 }
 
+# POST /api/gameplay/players/faction/reset  { account_id, faction }
+Register-DuneRoute -Method POST -Path '/api/gameplay/players/faction/reset' -Handler {
+    param($req, $res, $routeParams, $body)
+    try {
+        $acc = Get-DuneBodyInt -Body $body -Name 'account_id'
+        $fac = [string](Get-DuneBodyValue -Body $body -Name 'faction')
+        if ($null -eq $acc -or $acc -le 0) { Write-DuneError -Response $res -Status 400 -Message 'account_id is required.'; return }
+        if (-not $fac) { Write-DuneError -Response $res -Status 400 -Message 'faction is required (atreides|harkonnen|both).'; return }
+        Invoke-DunePlayerWriteRoute -Response $res -Action {
+            param($ip)
+            $off = Test-DunePlayerOfflineByAccount -Ip $ip -AccountId $acc
+            if (-not $off.ok) { return @{ ok = $false; error = "Player must be offline to reset faction. $($off.reason)" } }
+            Invoke-DunePlayerResetFaction -Ip $ip -AccountId $acc -Faction $fac
+        }
+    } catch {
+        Write-DuneError -Response $res -Status 500 -Message "Reset faction failed: $($_.Exception.Message)"
+    }
+}
+
 # POST /api/gameplay/players/progression/apply-preset  { account_id, preset_id }
 Register-DuneRoute -Method POST -Path '/api/gameplay/players/progression/apply-preset' -Handler {
     param($req, $res, $routeParams, $body)
