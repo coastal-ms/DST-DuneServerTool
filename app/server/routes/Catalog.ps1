@@ -13,6 +13,18 @@ Register-DuneRoute -Method GET -Path '/api/catalog/items' -Handler {
     }
 }
 
+# GET /api/catalog/cosmetics — appearance set variants, swatches, vehicle skins.
+# Not in /api/catalog/items (the standard give picker); surfaced separately so
+# operators can grant cosmetic unlockables.
+Register-DuneRoute -Method GET -Path '/api/catalog/cosmetics' -Handler {
+    param($req, $res, $routeParams, $body)
+    try {
+        Write-DuneJson -Response $res -Body (Get-DuneCosmeticsCatalog)
+    } catch {
+        Write-DuneError -Response $res -Status 500 -Message "Cosmetics catalog load failed: $($_.Exception.Message)"
+    }
+}
+
 # GET /api/catalog/vehicle-kits — single source of truth for the Give Vehicle
 # Kit action (kit/unique parts, qty, fuel + torch). Shared by web UI + mobile.
 Register-DuneRoute -Method GET -Path '/api/catalog/vehicle-kits' -Handler {
