@@ -146,37 +146,30 @@ WHERE a.id = {0}::bigint;
 function Invoke-DunePlayerGiveFactionRep {
     param([string]$Ip, [long]$ActorId, [int]$FactionId, [int]$Delta)
     if ($ActorId -le 0) { return @{ ok = $false; error = 'actor_id is required.' } }
-    $readSql = "SELECT COALESCE(reputation_amount, 0) AS rep FROM dune.player_faction_reputation WHERE actor_id = $ActorId::bigint AND faction_id = $FactionId::smallint;"
-    $cur = Invoke-DuneSqlQuery -Ip $Ip -Sql $readSql -ReadOnly $true -MaxRows 1 -TimeoutSec 15
-    $currentRep = 0
-    if ($cur.ok) {
-        $maps = ConvertTo-DuneRowMaps -Result $cur
-        if ($maps.Count -ge 1) { $currentRep = [int](ConvertTo-DuneInt $maps[0]['rep']) }
+    if ($FactionId -ne 1 -and $FactionId -ne 2) {
+        return @{ ok = $false; error = 'Faction standing can only be set for Atreides or Harkonnen.' }
     }
-    $newRep = $currentRep + $Delta
+    # actor_id here is the player_controller_id (webui sends p.controller_id).
+    $accSql = "SELECT COALESCE(account_id, 0)::text AS aid FROM dune.player_state WHERE player_controller_id = $ActorId::bigint LIMIT 1;"
+    $ar = Invoke-DuneSqlQuery -Ip $Ip -Sql $accSql -ReadOnly $true -MaxRows 1 -TimeoutSec 10
+    if (-not $ar.ok) { return @{ ok = $false; error = "lookup account: $($ar.error)" } }
+    $amaps = ConvertTo-DuneRowMaps -Result $ar
+    $accountID = if ($amaps.Count -ge 1) { [int64](ConvertTo-DuneInt $amaps[0]['aid']) } else { 0 }
+    if ($accountID -le 0) { return @{ ok = $false; error = "no account for controller $ActorId." } }
+
+    # An already-aligned member must be reset before re-applying standing — otherwise
+    # we would stack a fresh recruitment on top of an existing membership.
+    $aligned = Get-DunePlayerAlignedFaction -Ip $Ip -ControllerId $ActorId
+    if ($aligned -ne 0) {
+        $an = Get-DuneFactionDisplayName $aligned
+        return @{ ok = $false; error = "This character is already a member of $an. Use Players -> Progression -> Reset Faction first, then set the standing again." }
+    }
+
+    # Unaligned: establish full membership at the requested standing (Delta from 0).
+    $newRep = $Delta
     if ($newRep -lt 0) { $newRep = 0 }
     if ($newRep -gt $script:DuneFactionRepCap) { $newRep = $script:DuneFactionRepCap }
-
-    $sql1 = "SELECT dune.set_player_faction_reputation($ActorId::bigint, $FactionId::smallint, $newRep::integer);"
-    $r1 = Invoke-DuneSqlQuery -Ip $Ip -Sql $sql1 -ReadOnly $false -MaxRows 1 -TimeoutSec 30
-    if (-not $r1.ok) { return @{ ok = $false; error = "set_player_faction_reputation: $($r1.error)" } }
-
-    $fName = Get-DuneFactionDisplayName $FactionId
-    $safeName = ConvertTo-DuneSqlString $fName
-    $sql2 = [string]::Format($script:DuneFactionComponentRepSqlTpl, $ActorId, $safeName, $newRep)
-    $r2 = Invoke-DuneSqlQuery -Ip $Ip -Sql $sql2 -ReadOnly $false -MaxRows 1 -TimeoutSec 30
-    if (-not $r2.ok) { return @{ ok = $false; error = "update FactionPlayerComponent rep: $($r2.error)" } }
-
-    $tier = Convert-DuneRepToTier $newRep
-    $tierName = Get-DuneFactionTierName $FactionId $tier
-    return @{
-        ok = $true
-        message = "Set $fName rep to $newRep -> tier $tier ($tierName) for actor $ActorId."
-        rep = $newRep
-        tier = $tier
-        tier_name = $tierName
-        faction = $fName
-    }
+    return Invoke-DuneEstablishFactionMembership -Ip $Ip -ControllerId $ActorId -AccountId $accountID -FactionId $FactionId -Rep $newRep
 }
 
 # ----- Set Faction Tier ----------------------------------------------------
@@ -184,25 +177,25 @@ function Invoke-DunePlayerSetFactionTier {
     param([string]$Ip, [long]$ActorId, [int]$FactionId, [int]$Tier)
     if ($ActorId -le 0) { return @{ ok = $false; error = 'actor_id is required.' } }
     if ($Tier -lt 0 -or $Tier -gt 20) { return @{ ok = $false; error = 'tier must be 0..20.' } }
+    if ($FactionId -ne 1 -and $FactionId -ne 2) {
+        return @{ ok = $false; error = 'Faction standing can only be set for Atreides or Harkonnen.' }
+    }
+    $accSql = "SELECT COALESCE(account_id, 0)::text AS aid FROM dune.player_state WHERE player_controller_id = $ActorId::bigint LIMIT 1;"
+    $ar = Invoke-DuneSqlQuery -Ip $Ip -Sql $accSql -ReadOnly $true -MaxRows 1 -TimeoutSec 10
+    if (-not $ar.ok) { return @{ ok = $false; error = "lookup account: $($ar.error)" } }
+    $amaps = ConvertTo-DuneRowMaps -Result $ar
+    $accountID = if ($amaps.Count -ge 1) { [int64](ConvertTo-DuneInt $amaps[0]['aid']) } else { 0 }
+    if ($accountID -le 0) { return @{ ok = $false; error = "no account for controller $ActorId." } }
+
+    $aligned = Get-DunePlayerAlignedFaction -Ip $Ip -ControllerId $ActorId
+    if ($aligned -ne 0) {
+        $an = Get-DuneFactionDisplayName $aligned
+        return @{ ok = $false; error = "This character is already a member of $an. Use Players -> Progression -> Reset Faction first, then set the tier again." }
+    }
+
     $rep = $script:DuneFactionTierThresholds[$Tier]
     if ($Tier -gt 0) { $rep = $rep + 1 }
-
-    $sql1 = "SELECT dune.set_player_faction_reputation($ActorId::bigint, $FactionId::smallint, $rep::integer);"
-    $r1 = Invoke-DuneSqlQuery -Ip $Ip -Sql $sql1 -ReadOnly $false -MaxRows 1 -TimeoutSec 30
-    if (-not $r1.ok) { return @{ ok = $false; error = "set_player_faction_reputation: $($r1.error)" } }
-
-    $fName = Get-DuneFactionDisplayName $FactionId
-    $safeName = ConvertTo-DuneSqlString $fName
-    $sql2 = [string]::Format($script:DuneFactionComponentRepSqlTpl, $ActorId, $safeName, $rep)
-    $r2 = Invoke-DuneSqlQuery -Ip $Ip -Sql $sql2 -ReadOnly $false -MaxRows 1 -TimeoutSec 30
-    if (-not $r2.ok) { return @{ ok = $false; error = "update FactionPlayerComponent rep: $($r2.error)" } }
-
-    $tierName = Get-DuneFactionTierName $FactionId $Tier
-    return @{
-        ok = $true
-        message = "Set $fName to tier $Tier ($tierName) - rep $rep for actor $ActorId."
-        rep = $rep; tier = $Tier; tier_name = $tierName; faction = $fName
-    }
+    return Invoke-DuneEstablishFactionMembership -Ip $Ip -ControllerId $ActorId -AccountId $accountID -FactionId $FactionId -Rep $rep
 }
 
 # ----- Landsraad scrip (auto-resolve non-Solari currency) ------------------

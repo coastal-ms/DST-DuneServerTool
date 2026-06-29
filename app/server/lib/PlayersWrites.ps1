@@ -838,30 +838,133 @@ VALUES (
 # §6 — Progression / journey / contracts / jobs / codex / tutorials
 # ---------------------------------------------------------------------------
 
+# Recruitment dialogue / contract-tracking tags per faction (Atreides=1, Harkonnen=2).
+# Returns $null for unsupported factions (only houses have a recruitment questline).
+function Get-DuneFactionRecruitTags {
+    param([int]$FactionId)
+    switch ($FactionId) {
+        1 { @{ dialogue='DialogueFlags.Factions.SentToMeetHawat';      aligned='DialogueFlags.Factions.AlignedAtreides';  metRec='DialogueFlags.Factions.MetHawat';        factionUnlocked='Contract.Tracking.AtreidesFactionUnlocked';  recruitmentDone='Contract.Tracking.AtreidesRecruitmentCompleted' } }
+        2 { @{ dialogue='DialogueFlags.Factions.SentToPiterDeVries';   aligned='DialogueFlags.Factions.AlignedHarkonnen'; metRec='DialogueFlags.Factions.MetPiterDeVries';  factionUnlocked='Contract.Tracking.HarkonnenFactionUnlocked'; recruitmentDone='Contract.Tracking.HarkonnenRecruitmentCompleted' } }
+        default { $null }
+    }
+}
+
+# UPSERT for the controller actor's FactionPlayerComponent.m_FactionDataArray entry.
+# Unlike $script:DuneFactionComponentRepSqlTpl (which only UPDATEs an existing entry
+# and silently no-ops when the array entry is missing), this creates the
+# FactionPlayerComponent / appends the faction entry / updates it in place, matching
+# the exact shape the game writes for a recruited member:
+#   { "Faction": { "Name": <name> }, "timestamp": <epoch>, "ReputationAmount": <int> }
+# Validated live (BEGIN/ROLLBACK) for create-from-nothing, append, and update.
+function Get-DuneFactionComponentUpsertSql {
+    param([long]$ActorId, [string]$FactionName, [int]$Rep)
+    $safe = ($FactionName -replace "'", "''")
+    return @"
+UPDATE dune.actors a SET properties = jsonb_set(
+    COALESCE(a.properties, '{}'::jsonb), '{FactionPlayerComponent}',
+    COALESCE(a.properties->'FactionPlayerComponent', '{}'::jsonb) || jsonb_build_object('m_FactionDataArray',
+      COALESCE((SELECT jsonb_agg(e) FROM jsonb_array_elements(
+                  COALESCE(a.properties->'FactionPlayerComponent'->'m_FactionDataArray', '[]'::jsonb)) e
+                WHERE e->'Faction'->>'Name' <> '$safe'), '[]'::jsonb)
+      || jsonb_build_array(jsonb_build_object('Faction', jsonb_build_object('Name', '$safe'),
+           'timestamp', to_jsonb(extract(epoch from now())), 'ReputationAmount', to_jsonb($($Rep)::int)))), true)
+  WHERE a.id = $($ActorId)::bigint;
+"@
+}
+
+# Returns the faction_id the controller is currently aligned to, or 0 if unaligned.
+# (change_player_faction(->neutral) deletes the player_faction row, so a present row
+# means the character is currently a faction member.)
+function Get-DunePlayerAlignedFaction {
+    param([string]$Ip, [long]$ControllerId)
+    $sql = "SELECT faction_id::text AS fid FROM dune.player_faction WHERE actor_id = $ControllerId::bigint LIMIT 1;"
+    $r = Invoke-DuneSqlQuery -Ip $Ip -Sql $sql -ReadOnly $true -MaxRows 1 -TimeoutSec 10
+    if (-not $r.ok) { return 0 }
+    $maps = ConvertTo-DuneRowMaps -Result $r
+    if ($maps.Count -eq 0) { return 0 }
+    return [int](ConvertTo-DuneInt $maps[0]['fid'])
+}
+
+# Establishes FULL faction membership for an OFFLINE, currently-UNALIGNED player so
+# the game honours it after a battlegroup restart: alignment + the recruitment /
+# ClimbTheRanks journey nodes + faction tags + the FactionPlayerComponent entry +
+# reputation. This mirrors a real recruited member (the trader unlocks and the
+# recruiter quest stops re-offering), closing the gap where rep-only writes landed
+# on rows the game ignores. Atreides/Harkonnen only.
+function Invoke-DuneEstablishFactionMembership {
+    param([string]$Ip, [long]$ControllerId, [long]$AccountId, [int]$FactionId, [int]$Rep)
+    if ($ControllerId -le 0) { return @{ ok = $false; error = 'controller id is required.' } }
+    if ($AccountId   -le 0) { return @{ ok = $false; error = 'account id is required.' } }
+    $recruit = Get-DuneFactionRecruitTags $FactionId
+    if (-not $recruit) { return @{ ok = $false; error = 'establish-membership supports Atreides or Harkonnen only.' } }
+    if ($Rep -lt 0) { $Rep = 0 }
+    if ($Rep -gt $script:DuneFactionRepCap) { $Rep = $script:DuneFactionRepCap }
+
+    $factionName  = Get-DuneFactionDisplayName $FactionId
+    $factionLower = $factionName.ToLowerInvariant()
+    $tier   = Convert-DuneRepToTier $Rep
+    $preset = if ($tier -ge 19) { 'rank19_eligible' } else { 'ch3_start' }
+
+    $fls = Get-DuneRawFuncomId -Ip $Ip -AccountId $AccountId
+    if (-not $fls.ok) { return @{ ok = $false; error = $fls.error } }
+    $safeFls = ConvertTo-DuneSqlString $fls.funcom_id
+
+    $nodes = Get-DuneNodesForPreset -Faction $factionLower -Preset $preset
+    if ($nodes.Count -eq 0) { return @{ ok = $false; error = 'progression-nodes catalog empty (data file missing?).' } }
+    $nodesArr = ConvertTo-DunePgTextArray $nodes
+
+    $allTags = @(
+        $recruit.dialogue, $recruit.aligned, $recruit.metRec,
+        $recruit.factionUnlocked, $recruit.recruitmentDone,
+        'DialogueFlags.Factions.FactionIntro',
+        'DialogueFlags.Factions.FactionRank1',
+        'DialogueFlags.Factions.FactionRank3',
+        'DialogueFlags.Factions.MetARecruiter',
+        'DialogueFlags.Factions.PlayedAllegianceCinematic',
+        'DialogueFlags.Factions.SeenAnvilCinematic'
+    )
+    if ($tier -ge 19) { $allTags += 'Journey.LandsraadContractsUnlocked' }
+    for ($t = 0; $t -le 5; $t++) { $allTags += "Faction.$factionName.Tier$t" }
+    $tagsArr = ConvertTo-DunePgTextArray $allTags
+
+    $compSql = Get-DuneFactionComponentUpsertSql -ActorId $ControllerId -FactionName $factionName -Rep $Rep
+
+    # Single transaction: complete recruitment nodes, align, write tags, set rep on
+    # the table, and upsert the FactionPlayerComponent entry the game reads at login.
+    $tx = @"
+BEGIN;
+SELECT dune.complete_journey_story_nodes_for_player('$safeFls'::text, $nodesArr);
+SELECT dune.change_player_faction($ControllerId::bigint, $FactionId::smallint, 3::smallint, NOW()::timestamp);
+SELECT dune.update_player_tags($AccountId::bigint, $tagsArr, ARRAY[]::text[]);
+SELECT dune.set_player_faction_reputation($ControllerId::bigint, $FactionId::smallint, $Rep::integer);
+$compSql
+COMMIT;
+"@
+    $r = Invoke-DuneSqlQuery -Ip $Ip -Sql $tx -ReadOnly $false -MaxRows 1 -TimeoutSec 90
+    if (-not $r.ok) {
+        Invoke-DuneSqlQuery -Ip $Ip -Sql 'ROLLBACK;' -ReadOnly $false -MaxRows 1 -TimeoutSec 5 | Out-Null
+        return @{ ok = $false; error = "establish-membership tx: $($r.error)" }
+    }
+
+    $tierName = Get-DuneFactionTierName $FactionId $tier
+    return @{
+        ok = $true
+        faction = $factionName; faction_id = $FactionId; rep = $Rep; tier = $tier; tier_name = $tierName
+        nodes = $nodes.Count; controller_id = $ControllerId
+        message = "Established $factionName membership at tier $tier ($tierName), rep $Rep - $($nodes.Count) recruitment nodes completed + faction tags + standing. Takes effect on next login."
+    }
+}
+
 function Invoke-DunePlayerProgressionUnlock {
     param([string]$Ip, [long]$ActorId, [string]$Faction, [string]$Preset)
     if ($ActorId -le 0) { return @{ ok = $false; error = 'actor_id is required.' } }
     $factionLower = $Faction.ToLowerInvariant()
-    $factionID = 0; $dialogue=''; $aligned=''; $metRec=''; $factionUnlocked=''; $recruitmentDone=''
-    switch ($factionLower) {
-        'atreides' {
-            $factionID = 1
-            $dialogue = 'DialogueFlags.Factions.SentToMeetHawat'
-            $aligned = 'DialogueFlags.Factions.AlignedAtreides'
-            $metRec = 'DialogueFlags.Factions.MetHawat'
-            $factionUnlocked = 'Contract.Tracking.AtreidesFactionUnlocked'
-            $recruitmentDone = 'Contract.Tracking.AtreidesRecruitmentCompleted'
-        }
-        'harkonnen' {
-            $factionID = 2
-            $dialogue = 'DialogueFlags.Factions.SentToPiterDeVries'
-            $aligned = 'DialogueFlags.Factions.AlignedHarkonnen'
-            $metRec = 'DialogueFlags.Factions.MetPiterDeVries'
-            $factionUnlocked = 'Contract.Tracking.HarkonnenFactionUnlocked'
-            $recruitmentDone = 'Contract.Tracking.HarkonnenRecruitmentCompleted'
-        }
-        default { return @{ ok = $false; error = 'faction must be atreides or harkonnen' } }
+    $factionID = switch ($factionLower) {
+        'atreides'  { 1 }
+        'harkonnen' { 2 }
+        default     { 0 }
     }
+    if ($factionID -eq 0) { return @{ ok = $false; error = 'faction must be atreides or harkonnen' } }
     $presetLower = $Preset.ToLowerInvariant()
     $targetTier = 0
     switch ($presetLower) {
@@ -888,61 +991,16 @@ LIMIT 1;
     if ($accountID -le 0) { return @{ ok = $false; error = "actor $ActorId has no owner_account_id." } }
     if ($controllerID -le 0) { return @{ ok = $false; error = "actor $ActorId has no controller (player_state row missing)." } }
 
-    $fls = Get-DuneRawFuncomId -Ip $Ip -AccountId $accountID
-    if (-not $fls.ok) { return @{ ok = $false; error = $fls.error } }
-    $safeFls = ConvertTo-DuneSqlString $fls.funcom_id
-
-    $nodes = Get-DuneNodesForPreset -Faction $factionLower -Preset $presetLower
-    if ($nodes.Count -eq 0) { return @{ ok = $false; error = 'progression-nodes catalog empty (data file missing?).' } }
-    $nodesArr = ConvertTo-DunePgTextArray $nodes
-
     $factionName = Get-DuneFactionDisplayName $factionID
-    $safeFactionName = ConvertTo-DuneSqlString $factionName
-
-    $allTags = @(
-        $dialogue, $aligned, $metRec,
-        $factionUnlocked, $recruitmentDone,
-        'DialogueFlags.Factions.FactionIntro',
-        'DialogueFlags.Factions.FactionRank1',
-        'DialogueFlags.Factions.FactionRank3',
-        'DialogueFlags.Factions.MetARecruiter',
-        'DialogueFlags.Factions.PlayedAllegianceCinematic',
-        'DialogueFlags.Factions.SeenAnvilCinematic'
-    )
-    if ($targetTier -ge 19) { $allTags += 'Journey.LandsraadContractsUnlocked' }
-    for ($t = 0; $t -le 5; $t++) {
-        $allTags += "Faction.$factionName.Tier$t"
-    }
-    $tagsArr = ConvertTo-DunePgTextArray $allTags
-
     $targetRep = $script:DuneFactionTierThresholds[$targetTier]
     if ($targetTier -gt 0) { $targetRep++ }
 
-    # Single transactional script — each statement uses literal values (we
-    # already sanitised). Pg "BEGIN ... COMMIT" works in one Invoke-DuneSqlQuery
-    # so long as the helper passes the whole string through pgx.
-    $tx = @"
-BEGIN;
-SELECT dune.complete_journey_story_nodes_for_player('$safeFls'::text, $nodesArr);
-SELECT dune.change_player_faction($controllerID::bigint, $factionID::smallint, 3::smallint, NOW()::timestamp);
-SELECT dune.update_player_tags($accountID::bigint, $tagsArr, ARRAY[]::text[]);
-SELECT dune.set_player_faction_reputation($controllerID::bigint, $factionID::smallint, $targetRep::integer);
-$([string]::Format($script:DuneFactionComponentRepSqlTpl, $controllerID, $safeFactionName, $targetRep))
-COMMIT;
-"@
-    $r = Invoke-DuneSqlQuery -Ip $Ip -Sql $tx -ReadOnly $false -MaxRows 1 -TimeoutSec 90
-    if (-not $r.ok) {
-        # Best-effort rollback (no-op if tx already aborted)
-        Invoke-DuneSqlQuery -Ip $Ip -Sql 'ROLLBACK;' -ReadOnly $false -MaxRows 1 -TimeoutSec 5 | Out-Null
-        return @{ ok = $false; error = "progression-unlock tx: $($r.error)" }
+    $res = Invoke-DuneEstablishFactionMembership -Ip $Ip -ControllerId $controllerID -AccountId $accountID -FactionId $factionID -Rep $targetRep
+    if ($res.ok) {
+        $res.message = ("Progression unlock ($presetLower/$factionLower): $($res.nodes) journey nodes completed + " +
+                        "$factionName tier tags 0-5 + rep tier $($res.tier) on controller $controllerID - takes effect on next login.")
     }
-
-    return @{
-        ok = $true
-        message = ("Progression unlock ($presetLower/$factionLower): $($nodes.Count) journey nodes completed + " +
-                   "$factionName tier tags 0-5 + rep tier $targetTier on controller $controllerID - takes effect on next login.")
-        nodes = $nodes.Count; faction = $factionName; tier = $targetTier; controller_id = $controllerID
-    }
+    return $res
 }
 
 function Invoke-DunePlayerProgressionReverse {
