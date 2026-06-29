@@ -17,7 +17,7 @@ here cover everything those tags shipped.
 
 ### Added
 
-- **Grant Building Sets** (Players → Items → Grant Cosmetic / Building Set). The MTX building-set "Patent" recipes — the Observer Twitch-drop set (39 pieces), collab murals & wall reliefs, statues/decor, themed furniture rooms, and movie-collab sets (137 in total) — are now in the grant picker, grouped by set. They were already deliverable via the give-item path (the Patent item auto-applies and the game records it per-character in `building_progression.learned_building_sets`) but were missing from the catalog. No new write path — same mechanism as the appearance cosmetics.
+- **Grant Building Sets** (Players → Items → Grant Cosmetic / Building Set). Any learnable building set is now grantable from the picker, grouped by set: the Observer Twitch-drop set, collab murals & wall reliefs, statues/decor, themed furniture rooms, movie-collab sets, faction/house building sets, and base-game crafting stations — **225** building-set/recipe ids in total. They were already deliverable via the give-item path (the building "Patent"/"Placeable" item auto-applies and the game records it per-character in `building_progression.learned_building_sets`) but were missing from the catalog. The grantable set is authoritative — `app/data/building-sets.json`, the union of every building-recipe item form in the game data and the distinct sets actually learned on a live server. No new write path — same mechanism as the appearance cosmetics.
 
 ## [12.14.3] - 2026-06-29
 
