@@ -13,6 +13,16 @@ here cover everything those tags shipped.
 
 ## [Unreleased]
 
+## [12.13.17] - 2026-06-28
+
+### Changed
+
+- **Restore now warns that cross-server restores don't reliably restore characters.**
+  Characters are bound to Funcom accounts in the cloud, so restoring a backup onto a
+  different VM/battlegroup recovers the world and bases but may not restore character
+  logins (they can fail to load or get cleared on boot). The Restore card and its
+  confirmation prompt now say so — restore is intended for the same server.
+
 ## [12.13.16] - 2026-06-28
 
 ### Fixed

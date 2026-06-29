@@ -87,6 +87,7 @@ export function Database() {
         'ALL players, bases, inventories, storage, blueprints, and the market will be rolled back to that snapshot. ' +
         'Everything created since the backup is permanently lost. This cannot be undone.\n\n' +
         'Take a fresh backup first if you have not. The battlegroup must be stopped.\n\n' +
+        'NOTE: restoring a backup onto a DIFFERENT server/battlegroup than it was taken on does NOT reliably restore characters — they are bound to your Funcom account in the cloud, so they may fail to load or get cleared on boot. Cross-server restores recover the world/bases, not character logins. Restore is intended for the SAME server.\n\n' +
         'Type RESTORE to continue:',
       )
       if (typed == null) return
@@ -287,7 +288,7 @@ export function Database() {
           title="Restore Backup"
           icon="Upload"
           tone="ibad"
-          description="Full destructive restore — REPLACES the entire BG database with a previously taken backup. All players, bases, inventories, storage, blueprints, and the market roll back to that snapshot; everything since is permanently lost. The battlegroup must be stopped, and this cannot be undone."
+          description="Full destructive restore — REPLACES the entire BG database with a previously taken backup. All players, bases, inventories, storage, blueprints, and the market roll back to that snapshot; everything since is permanently lost. The battlegroup must be stopped, and this cannot be undone. Restoring onto a different server/BG than it came from won't reliably restore characters (they're cloud-bound to Funcom accounts) — world/bases come back, character logins may not."
           hint={
             !vmRunning ? 'VM must be running to restore a backup.'
             : bgState === 'running' ? 'Stop the battlegroup first to avoid database corruption.'
