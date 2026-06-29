@@ -650,7 +650,7 @@ const ACTIONS: ActionDef[] = [
       return wipeJourney(p.account_id)
     } },
   { id: 'reset-faction', group: 'Progression', label: 'Reset Faction', icon: 'Swords', custom: 'reset-faction', offlineOnly: true,
-    rowNote: 'Wipe faction rep + tags + ClimbTheRanks nodes to start fresh. Player must be offline.',
+    rowNote: 'Wipe ALL faction rep + tags + ClimbTheRanks nodes to start fresh. Player must be offline.',
     run: () => Promise.resolve({ message: '' }) },
 
   // ----- Items -----
@@ -992,9 +992,9 @@ function ActionRow({ def, player, busy, stats, open, danger, onToggle, runAction
               })} />
           ) : def.custom === 'reset-faction' ? (
             <ResetFactionForm busy={busy} playerName={player.name}
-              onReset={faction => runAction(def, async () => {
-                const r = await resetFaction(player.account_id, faction)
-                return { message: r.message || `Reset ${faction} faction for ${player.name}.` }
+              onReset={() => runAction(def, async () => {
+                const r = await resetFaction(player.account_id, 'both')
+                return { message: r.message || `Reset faction for ${player.name}.` }
               })} />
           ) : def.custom === 'give-package' ? (
             <GivePackageForm busy={busy} playerName={player.name}
@@ -1955,33 +1955,24 @@ function UnlockMainQuestForm({ busy, onSubmit }: { busy: boolean; onSubmit: (que
   )
 }
 
-// Reset Faction — wipe a player's faction progression (rep, tags, ClimbTheRanks
-// nodes) so they can start fresh. Offline-only; double-acknowledged. 'Both'
-// clears all faction state + alignment.
+// Reset Faction — one button that wipes ALL faction progression (rep, tags,
+// ClimbTheRanks nodes, alignment) so a player starts fresh. Offline-only;
+// double-acknowledged.
 function ResetFactionForm({ busy, playerName, onReset }: {
   busy: boolean
   playerName: string
-  onReset: (faction: 'atreides' | 'harkonnen' | 'both') => void
+  onReset: () => void
 }) {
-  const [faction, setFaction] = useState<'atreides' | 'harkonnen' | 'both'>('atreides')
-  const selectCls = 'w-full px-3 py-2 rounded-lg bg-surface-2 border border-border text-text text-sm focus:outline-none focus:ring-2 focus:ring-ibad focus:border-ibad/50'
   const go = () => {
     const typed = window.prompt(
-      `Reset ${faction} faction for ${playerName} — zeroes rep, removes faction tags, and resets ClimbTheRanks journey nodes. Cannot be undone.\n\nType  reset faction  to proceed:`
+      `Reset ALL faction progression for ${playerName} — zeroes rep, removes every faction tag, and resets ClimbTheRanks journey nodes for both factions. Cannot be undone.\n\nType  reset faction  to proceed:`
     ) || ''
     if (typed.trim().toLowerCase() !== 'reset faction') return
-    onReset(faction)
+    onReset()
   }
   return (
-    <div className="space-y-3">
-      <div>
-        <label className="block text-[11px] uppercase tracking-wider text-text-dim mb-1">Faction</label>
-        <select value={faction} disabled={busy} className={selectCls} onChange={e => setFaction(e.target.value as 'atreides' | 'harkonnen' | 'both')}>
-          <option value="atreides">Atreides</option>
-          <option value="harkonnen">Harkonnen</option>
-          <option value="both">Both (full reset)</option>
-        </select>
-      </div>
+    <div className="space-y-2">
+      <p className="text-[11px] text-text-dim">Removes Atreides + Harkonnen rep, tags, and faction journey nodes. Player must be offline; takes effect on next login.</p>
       <button className="btn-danger w-full" disabled={busy} onClick={go}>
         <Icon name="Swords" size={13} /> Reset Faction
       </button>

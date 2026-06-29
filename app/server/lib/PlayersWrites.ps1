@@ -1048,6 +1048,8 @@ function Invoke-DunePlayerResetFaction {
         $shared = @(
             "tag LIKE 'DialogueFlags.Factions.%'",
             "tag LIKE 'Contract.Faction.%'",
+            "tag LIKE '%Atreides%'", "tag LIKE '%Harkonnen%'",
+            "tag LIKE '%Atre%'", "tag LIKE '%Hark%'",
             "tag = 'Journey.LandsraadContractsUnlocked'",
             "tag LIKE 'Contract.Tracking.%FactionUnlocked'",
             "tag LIKE 'Contract.Tracking.%RecruitmentCompleted'"
