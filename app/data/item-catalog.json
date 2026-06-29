@@ -6619,6 +6619,34 @@
       "name": "Treadwheel Chassis Mk6",
       "category": "Vehicle Modules"
     },
+    "TreadwheelHull_0": {
+      "name": "Scrap Treadwheel Hull",
+      "category": "Vehicle Modules"
+    },
+    "TreadwheelHull_1": {
+      "name": "Treadwheel Hull Mk1",
+      "category": "Vehicle Modules"
+    },
+    "TreadwheelHull_2": {
+      "name": "Treadwheel Hull Mk2",
+      "category": "Vehicle Modules"
+    },
+    "TreadwheelHull_3": {
+      "name": "Treadwheel Hull Mk3",
+      "category": "Vehicle Modules"
+    },
+    "TreadwheelHull_4": {
+      "name": "Treadwheel Hull Mk4",
+      "category": "Vehicle Modules"
+    },
+    "TreadwheelHull_5": {
+      "name": "Treadwheel Hull Mk5",
+      "category": "Vehicle Modules"
+    },
+    "TreadwheelHull_6": {
+      "name": "Treadwheel Hull Mk6",
+      "category": "Vehicle Modules"
+    },
     "TreadwheelEngine_0": {
       "name": "Scrap Treadwheel Engine",
       "category": "Vehicle Modules"

@@ -20,6 +20,10 @@ here cover everything those tags shipped.
 - **Reset Faction** (Players → Progression). One offline action wipes a player's faction so they can start fresh: zeroes Atreides + Harkonnen reputation, clears faction alignment, removes all faction tags, and resets the `DA_FQ_ClimbTheRanks` journey nodes to incomplete (so faction quests — including meeting the recruiters — can be replayed). Double-acknowledged.
 - **Grant Cosmetic / Variant** (Players → Items). Browsable, searchable picker for ~269 cosmetic unlockables — appearance set variants, colour swatches, and vehicle skins — that aren't in the standard Give Item catalog. Delivers the unlock via the existing give-item path.
 
+### Fixed
+
+- **Treadwheel Hull is now giveable**, and the **Treadwheel vehicle kit is populated.** The Treadwheel Hull modules (Mk1–Mk6) were missing from the Give Item catalog, and the Give Vehicle Kit entry for the Treadwheel had no parts. The kit now grants all nine modules at Mk6 (Swift Engine + Steady Boost uniques, plus standard Chassis, Generator, Hull, Inventory, Tread, Passenger, Scanner).
+
 ## [12.14.0] - 2026-06-28
 
 ### Added
