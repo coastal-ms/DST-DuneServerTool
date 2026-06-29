@@ -665,7 +665,7 @@ const ACTIONS: ActionDef[] = [
     rowNote: 'Hand a saved item package to this player — build & reuse your own bundles. Works online or offline',
     run: () => Promise.resolve({ message: '' }) },
   { id: 'grant-cosmetic', group: 'Items', label: 'Grant Cosmetic / Building Set', icon: 'Shirt', custom: 'grant-cosmetic',
-    rowNote: 'Unlock an appearance set variant, swatch (dye), vehicle skin, or building set (Observer Twitch set, collab murals/decor) — delivered to inventory, works online or offline',
+    rowNote: 'Unlock appearance variants, swatches, vehicle skins & building sets — works online or offline',
     run: () => Promise.resolve({ message: '' }) },
   { id: 'repair-gear', group: 'Items', label: 'Repair All Items', icon: 'Wrench',
     run: p => repairGear(p.id) },
