@@ -49,7 +49,7 @@
       "templates": ["T4_Passenger", "T5_Inventory", "T6_Boost"],
       "kit": ["TreadwheelChassis_6", "TreadwheelGenerator_6", "TreadwheelHull_6", "TreadwheelInventory_6", "TreadwheelLocomotion_6", "TreadwheelPassenger_6", "TreadwheelScanner_6"],
       "unique": ["TreadwheelEngine_Unique_Speed_6", "TreadwheelBoost_Unique_LessHeat_6"],
-      "qty": {"TreadwheelLocomotion_6": 3}
+      "qty": {"TreadwheelLocomotion_6": 2}
     },
     {
       "id": "ContainerVehicle",
