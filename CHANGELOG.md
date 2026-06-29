@@ -13,6 +13,12 @@ here cover everything those tags shipped.
 
 ## [Unreleased]
 
+## [12.14.5] - 2026-06-29
+
+### Changed
+
+- **Grant Building Sets now covers ALL learnable building sets (225 total, 223 grantable), not just the MTX/Twitch/collab sets** — adds base-game Atreides/Harkonnen/Choam sets, crafting stations & utilities, faction/house sets, statues/decor, themed furniture. (6 sets have no grantable item form and are intentionally excluded.) The grantable set is authoritative (`app/data/building-sets.json`): the union of every building-recipe item form in the game data and the distinct sets actually learned on a live server.
+
 ## [12.14.4] - 2026-06-29
 
 ### Added
