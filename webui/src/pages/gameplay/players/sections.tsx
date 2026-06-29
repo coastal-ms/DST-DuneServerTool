@@ -51,7 +51,13 @@ interface SectionProps {
   demo: boolean
   refreshKey: number
   flash: Flash
+  // Mark that data changed but DON'T trigger a disruptive full refresh — keeps
+  // the user's place (open form, selection, scroll) so they can grant several
+  // things in a row. The deferred refresh is flushed via onFlush.
   onChanged: () => void
+  // Flush any deferred refresh now (full reload). Called when the user collapses
+  // the open action, switches player/section, or hits a Refresh control.
+  onFlush?: () => void
 }
 
 // ---------------------------------------------------------------------------
@@ -665,7 +671,7 @@ const ACTIONS: ActionDef[] = [
     rowNote: 'Hand a saved item package to this player — build & reuse your own bundles. Works online or offline',
     run: () => Promise.resolve({ message: '' }) },
   { id: 'grant-cosmetic', group: 'Items', label: 'Grant Cosmetic / Building Set', icon: 'Shirt', custom: 'grant-cosmetic',
-    rowNote: 'Unlock an appearance set variant, swatch (dye), vehicle skin, or building set (Observer Twitch set, collab murals/decor) — delivered to inventory, works online or offline',
+    rowNote: 'Unlock appearance variants, swatches, vehicle skins & building sets — works online or offline',
     run: () => Promise.resolve({ message: '' }) },
   { id: 'repair-gear', group: 'Items', label: 'Repair All Items', icon: 'Wrench',
     run: p => repairGear(p.id) },
@@ -768,7 +774,7 @@ const ACTIONS: ActionDef[] = [
 const GROUP_ORDER: ActionGroup[] = ['Live', 'Currency', 'Progression', 'Vehicle', 'Identity', 'Danger']
 const ITEMS_GROUP: ActionGroup = 'Items'
 
-export function ActionsSection({ player, canWrite, demo, flash, onChanged }: SectionProps) {
+export function ActionsSection({ player, canWrite, demo, flash, onChanged, onFlush }: SectionProps) {
   const [openId, setOpenId] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
   // Current balances for read-only context on the Give Solari/Scrip/Intel rows,
@@ -786,7 +792,12 @@ export function ActionsSection({ player, canWrite, demo, flash, onChanged }: Sec
   // actions run via RMQ to that session, so they're valid in both states -
   // kick during LoggingOut force-flushes instead of waiting out the timer.
   const hasLiveSession = ['online', 'loggingout'].includes((player.online_status || '').toLowerCase())
-  const openAction = (id: string) => setOpenId(o => (o === id ? null : id))
+  // Toggling an action: opening one leaves the user's place alone; closing or
+  // switching away from the currently-open action flushes any deferred refresh.
+  const openAction = (id: string) => {
+    if (openId) onFlush?.()
+    setOpenId(o => (o === id ? null : id))
+  }
 
   const runAction = async (def: ActionDef, exec: () => Promise<{ message: string }>) => {
     if (def.confirm) {
@@ -797,7 +808,7 @@ export function ActionsSection({ player, canWrite, demo, flash, onChanged }: Sec
     try {
       const r = await exec()
       flash(r.message || `${def.label} done.`, 'ok')
-      setOpenId(null)
+      // Keep the form OPEN (grant several in a row) + mark deferred refresh only.
       onChanged()
     } catch (e) {
       flash(e instanceof Error ? e.message : String(e), 'err')
@@ -2106,8 +2117,8 @@ function ProgressionUnlockForm({ busy, onUnlock, onReverse }: {
 // Mirrors ActionsSection's per-group rendering, scoped to one group, with
 // its own openId/busy/give-item form state.
 // ---------------------------------------------------------------------------
-function ItemsActionBlock({ player, canWrite, flash, onChanged }: {
-  player: Player; canWrite: boolean; flash: Flash; onChanged: () => void
+function ItemsActionBlock({ player, canWrite, flash, onChanged, onFlush }: {
+  player: Player; canWrite: boolean; flash: Flash; onChanged: () => void; onFlush?: () => void
 }) {
   const [openId, setOpenId] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
@@ -2116,7 +2127,10 @@ function ItemsActionBlock({ player, canWrite, flash, onChanged }: {
 
   if (!canWrite || acts.length === 0) return null
 
-  const openAction = (id: string) => setOpenId(o => (o === id ? null : id))
+  const openAction = (id: string) => {
+    if (openId) onFlush?.()
+    setOpenId(o => (o === id ? null : id))
+  }
 
   const runAction = async (def: ActionDef, exec: () => Promise<{ message: string }>) => {
     if (def.confirm) {
@@ -2127,7 +2141,7 @@ function ItemsActionBlock({ player, canWrite, flash, onChanged }: {
     try {
       const r = await exec()
       flash(r.message || `${def.label} done.`, 'ok')
-      setOpenId(null)
+      // Keep the form OPEN (grant several in a row) + mark deferred refresh only.
       onChanged()
     } catch (e) {
       flash(e instanceof Error ? e.message : String(e), 'err')
@@ -2153,7 +2167,7 @@ function ItemsActionBlock({ player, canWrite, flash, onChanged }: {
 import { getPlayerDetail, type InventoryItem, type PlayerDetailResponse } from '../../../api/gameplay'
 import { qualityClass } from '../shared'
 
-export function InventorySection({ player, canWrite, demo, refreshKey, flash, onChanged }: SectionProps) {
+export function InventorySection({ player, canWrite, demo, refreshKey, flash, onChanged, onFlush }: SectionProps) {
   const [detail, setDetail] = useState<PlayerDetailResponse | null>(null)
   const [loading, setLoading] = useState(true)
   const [err, setErr] = useState<string | null>(null)
@@ -2200,13 +2214,13 @@ export function InventorySection({ player, canWrite, demo, refreshKey, flash, on
   return (
     <div className="space-y-4">
       <div className="flex items-center justify-end">
-        <button className="btn-secondary" disabled={loading || busy} onClick={() => setTick(t => t + 1)}>
+        <button className="btn-secondary" disabled={loading || busy} onClick={() => { onFlush?.(); setTick(t => t + 1) }}>
           <Icon name="RefreshCw" size={13} className={loading ? 'animate-spin' : ''} /> Refresh inventory
         </button>
       </div>
       <ItemList title={`Inventory (${fmtNum(groups.gear.length)})`} icon="Backpack" items={groups.gear}
         canWrite={canWrite} busy={busy} run={run} isOnline={isOnline}
-        extra={<ItemsActionBlock player={player} canWrite={canWrite} flash={flash} onChanged={() => { onChanged(); setTick(t => t + 1) }} />} />
+        extra={<ItemsActionBlock player={player} canWrite={canWrite} flash={flash} onChanged={onChanged} onFlush={onFlush} />} />
       <ItemList title={`Emotes (${fmtNum(groups.emotes.length)})`} icon="Smile" items={groups.emotes} collapsed
         canWrite={canWrite} busy={busy} run={run} isOnline={isOnline} />
       <ItemList title={`Contract items (${fmtNum(groups.contracts.length)})`} icon="FileText" items={groups.contracts} collapsed

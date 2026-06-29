@@ -3,7 +3,7 @@
 //
 // Reads /api/gameplay/players for the list + /api/gameplay/players/summary
 // for the server overview. Each section component owns its own data fetch.
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Icon } from '../../components/Icon'
 import {
   getPlayers, getPlayerSummary,
@@ -148,6 +148,20 @@ export function PlayersTab() {
     void loadSummary()
   }, [loadList, loadSummary])
 
+  // Deferred-refresh model: grants/adds call onChanged (markChanged) which only
+  // FLAGS a pending change + the green flash fires — it does NOT run the
+  // disruptive full reload, so the admin's open form, selected player, and
+  // scroll are preserved and they can grant several things in a row. The real
+  // refresh is flushed when they collapse the open action, switch player or
+  // section, or hit a Refresh button. selectedId is kept across refreshes, so
+  // the selection/highlight never resets.
+  const pendingRefresh = useRef(false)
+  const markChanged = useCallback(() => { pendingRefresh.current = true }, [])
+  const flushRefresh = useCallback(() => {
+    if (pendingRefresh.current) { pendingRefresh.current = false; refresh() }
+  }, [refresh])
+  const forceRefresh = useCallback(() => { pendingRefresh.current = false; refresh() }, [refresh])
+
   const SectionComponent = SECTION_COMPONENTS[section]
 
   return (
@@ -184,7 +198,7 @@ export function PlayersTab() {
           className={`px-3 py-1.5 text-xs rounded-lg border flex items-center gap-1.5 ${hideGm ? 'bg-accent/20 text-accent-bright border-accent/40' : 'bg-surface-2 text-text-muted hover:text-text border-border'}`}>
           <Icon name={hideGm ? 'EyeOff' : 'Eye'} size={13} /> {hideGm ? 'GM hidden' : 'Hide GM'}
         </button>
-        <button className="btn-secondary" onClick={refresh} disabled={loading}>
+        <button className="btn-secondary" onClick={forceRefresh} disabled={loading}>
           <Icon name="RefreshCw" size={14} className={loading ? 'animate-spin' : ''} /> Refresh
         </button>
         <SourceBadge source={source} />
@@ -250,7 +264,7 @@ export function PlayersTab() {
                 <div className="px-3 py-6 text-center text-text-dim text-sm">No players match.</div>
               ) : (
                 filtered.map(p => (
-                  <button key={p.id} type="button" onClick={() => setSel(cur => cur === p.id ? null : p.id)}
+                  <button key={p.id} type="button" onClick={() => { flushRefresh(); setSel(cur => cur === p.id ? null : p.id) }}
                     title={selectedId === p.id ? 'Click again to close and return to Server Overview' : undefined}
                     className={`w-full flex items-center justify-between gap-2 px-3 py-2 text-left border-b border-border/30 hover:bg-surface-2 ${selectedId === p.id ? 'bg-surface-2 border-l-2 border-l-accent' : ''}`}>
                     <span className="min-w-0 flex-1">
@@ -274,7 +288,7 @@ export function PlayersTab() {
                 Sections
               </div>
               {SECTIONS.map(s => (
-                <button key={s.id} type="button" onClick={() => setSection(s.id)}
+                <button key={s.id} type="button" onClick={() => { flushRefresh(); setSection(s.id) }}
                   className={`w-full flex items-center gap-2 px-3 py-2 text-sm text-left border-b border-border/30 last:border-b-0 hover:bg-surface-2 ${section === s.id ? 'bg-surface-2 text-accent-bright border-l-2 border-l-accent' : 'text-text'}`}>
                   <Icon name={s.icon} size={14} className="text-text-dim" />
                   <span>{s.label}</span>
@@ -297,14 +311,15 @@ export function PlayersTab() {
           )}
           {selected ? (
             <div className="space-y-3">
-              <PlayerHeader player={selected} onClose={() => setSel(null)} />
+              <PlayerHeader player={selected} onClose={() => { flushRefresh(); setSel(null) }} />
               <SectionComponent
                 player={selected}
                 canWrite={source === 'live'}
                 demo={source === 'demo'}
                 refreshKey={refreshKey}
                 flash={(msg, kind = 'ok') => setFlash({ msg, kind })}
-                onChanged={refresh}
+                onChanged={markChanged}
+                onFlush={flushRefresh}
               />
             </div>
           ) : (
