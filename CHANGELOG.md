@@ -13,6 +13,19 @@ here cover everything those tags shipped.
 
 ## [Unreleased]
 
+## [12.13.15] - 2026-06-28
+
+### Fixed
+
+- **Auto-clear of on-demand map partitions at battlegroup start works again.** The
+  launcher's post-restart hook looked for a bundled script named
+  `dune-clear-partitions.start`, which no longer exists (it was consolidated into
+  `dune-clear-partitions-install.sh`), so it logged "exited -1 / not found" and
+  skipped the clear — on-demand maps (DeepDesert/Arrakeen/Harko) could be slow to
+  spawn after a restart. The hook now points at the bundled installer, which also
+  (re)installs the boot hook + cron, so the partition heal runs and self-repairs.
+  Manual **fix-on-demand-maps** / Map SpinUp "Fix partitions" were unaffected.
+
 ## [12.13.14] - 2026-06-28
 
 ### Fixed
