@@ -67,8 +67,7 @@ Register-DuneRoute -Method POST -Path '/api/status/refresh' -Handler {
 Register-DuneRoute -Method POST -Path '/api/server/name' -Handler {
     param($req, $res, $routeParams, $body)
     try {
-        $name = $null
-        if ($body -and $body.PSObject.Properties['name']) { $name = [string]$body.name }
+        $name = [string](Get-DuneBodyValue -Body $body -Name 'name')
         if ([string]::IsNullOrWhiteSpace($name)) {
             Write-DuneError -Response $res -Status 400 -Message 'A non-empty "name" is required.'
             return
