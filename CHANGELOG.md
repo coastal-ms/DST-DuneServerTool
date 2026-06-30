@@ -13,6 +13,12 @@ here cover everything those tags shipped.
 
 ## [Unreleased]
 
+## [12.14.6] - 2026-06-29
+
+### Fixed
+
+- **Mobile companion app: Players Online count now matches Player Admin in the desktop app.** The mobile filter was strict-case (`=== 'Online'`) while the desktop helper is case-insensitive substring (`s.toLowerCase().includes('online')`); both surfaces hit the same `/api/gameplay/players` endpoint, so any incidental casing variation made the mobile show "Players Online (0)" while the desktop correctly listed the connected player. Mobile now mirrors the desktop helper verbatim. Reported in `#android-testing`.
+
 ## [12.14.5] - 2026-06-29
 
 ### Changed
