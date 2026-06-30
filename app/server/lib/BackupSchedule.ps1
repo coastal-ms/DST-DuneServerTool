@@ -755,13 +755,25 @@ function Remove-DuneBackupDumpPods {
             output    = ''
         }
     }
-    $shellScript = ($cmds -join "`n")
-    $r = Invoke-DuneBackupShell -Ip $Ip -Script $shellScript -TimeoutSec 60
+    # Run deletes then settle briefly inside the same SSH session so the API
+    # server has propagated the deletes to etcd before our re-read. Without
+    # the settle, `kubectl delete pod` returns as soon as the API accepts the
+    # request — a follow-up `kubectl get pods` over a fresh SSH connection
+    # can still see the about-to-be-deleted pods, and we end up returning a
+    # stale `remaining` count that matches the pre-delete state.
+    $shellScript = ($cmds -join "`n") + "`nsleep 1`n"
+    $r = Invoke-DuneBackupShell -Ip $Ip -Script $shellScript -TimeoutSec 90
     if ($r.rc -lt 0) {
         return @{ ok=$false; status=502; message='SSH to VM failed (no exit code).' }
     }
-    # Refresh from authoritative source after delete.
+    # Refresh from authoritative source after delete. Retry once if it
+    # comes back with the same count — handles the case where the deletes
+    # raced ahead of the API server's index update.
     $remaining = Get-DuneBackupDumpPods -Ip $Ip
+    if (@($remaining).Count -ge $total) {
+        Start-Sleep -Milliseconds 1500
+        $remaining = Get-DuneBackupDumpPods -Ip $Ip
+    }
     return @{
         ok        = $true
         deleted   = @($toDelete)
