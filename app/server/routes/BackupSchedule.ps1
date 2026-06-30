@@ -96,8 +96,10 @@ Register-DuneRoute -Method GET -Path '/api/db/backup-dump-pods' -Handler {
     }
 }
 
-# Prune Completed/Succeeded dump-* pods, keeping the most recent N.
-# Body: { keepLast: int } - defaults to 5.
+# Prune Completed/Succeeded dump-* pods. Two independent thresholds:
+#   keepLast: keep at most N most-recent pods (0 = no count cap, default 5)
+#   keepDays: delete anything older than D days (0 = no age cap, default 0)
+# A pod is pruned if EITHER threshold is exceeded.
 Register-DuneRoute -Method POST -Path '/api/db/prune-backup-dump-pods' -Handler {
     param($req, $res, $routeParams, $body)
     $ctx = Get-DuneBackupContext
@@ -106,16 +108,21 @@ Register-DuneRoute -Method POST -Path '/api/db/prune-backup-dump-pods' -Handler 
         return
     }
     $keepLast = 5
+    $keepDays = 0
     if ($body -is [hashtable]) {
         if ($body.ContainsKey('keepLast')) { try { $keepLast = [int]$body.keepLast } catch {} }
+        if ($body.ContainsKey('keepDays')) { try { $keepDays = [int]$body.keepDays } catch {} }
     } elseif ($body) {
         if ($null -ne $body.keepLast) { try { $keepLast = [int]$body.keepLast } catch {} }
+        if ($null -ne $body.keepDays) { try { $keepDays = [int]$body.keepDays } catch {} }
     }
     if ($keepLast -lt 0)   { $keepLast = 0 }
     if ($keepLast -gt 100) { $keepLast = 100 }
+    if ($keepDays -lt 0)   { $keepDays = 0 }
+    if ($keepDays -gt 365) { $keepDays = 365 }
     try {
         $result = Invoke-WithDuneLock -Name 'prune-backup-dump-pods' -Script {
-            Remove-DuneBackupDumpPods -Ip $ctx.ip -KeepLast $keepLast
+            Remove-DuneBackupDumpPods -Ip $ctx.ip -KeepLast $keepLast -KeepDays $keepDays
         }
         if (-not $result.ok) {
             $status = 502

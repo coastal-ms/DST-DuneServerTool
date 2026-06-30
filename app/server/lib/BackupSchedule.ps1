@@ -564,34 +564,88 @@ function Get-DuneBackupDumpPods {
 }
 
 # -----------------------------------------------------------------------------
-# Public: prune Succeeded/Completed dump-* pods, keeping the most recent
-# $KeepLast. Returns @{ ok; deleted; kept; remaining; output }. Never touches
-# the live DB StatefulSet, util/mon/pghero, file-browser pods, or any pod
-# whose name doesn't match the canonical dump-* shape — the name regex check
-# is authoritative and double-checked before each kubectl delete.
+# Parse the YYYYMMDD-HHMMSS that's baked into every Funcom dump-pod name. Used
+# as the authoritative age signal — the pod name is the only timestamp that
+# survives even when k8s status.startTime is missing/cleared (which happens
+# on some terminal pods). Returns $null if the regex doesn't match.
+# -----------------------------------------------------------------------------
+function Get-DuneBackupDumpPodTimestamp {
+    param([string]$Name)
+    if (-not $Name) { return $null }
+    if ($Name -notmatch '-dump-([0-9]{8})-([0-9]{6})-pod$') { return $null }
+    $date = $Matches[1]; $time = $Matches[2]
+    try {
+        return [datetime]::ParseExact("$date$time", 'yyyyMMddHHmmss', [System.Globalization.CultureInfo]::InvariantCulture, [System.Globalization.DateTimeStyles]::AssumeUniversal -bor [System.Globalization.DateTimeStyles]::AdjustToUniversal)
+    } catch {
+        return $null
+    }
+}
+
+# -----------------------------------------------------------------------------
+# Public: prune Succeeded/Completed dump-* pods. Two independent thresholds:
+#   -KeepLast N   : keep at most the N most-recent pods (0 = no count cap)
+#   -KeepDays D   : also delete anything older than D days (0 = no age cap)
+# A pod survives only if it passes BOTH filters — exceeding either threshold
+# makes it a prune candidate. 0 on a threshold disables that axis (matches
+# the keep-forever convention used by the file-retention setting above).
+#
+# Returns @{ ok; deleted; kept; remaining; output }. Never touches the live
+# DB StatefulSet, util/mon/pghero, file-browser pods, or any pod whose name
+# doesn't match the canonical dump-* shape — the name regex check is
+# authoritative and re-checked before each kubectl delete.
 # -----------------------------------------------------------------------------
 function Remove-DuneBackupDumpPods {
     param(
         [Parameter(Mandatory)][string]$Ip,
-        [int]$KeepLast = 5
+        [int]$KeepLast = 5,
+        [int]$KeepDays = 0
     )
     if ($KeepLast -lt 0)   { $KeepLast = 0 }
     if ($KeepLast -gt 100) { $KeepLast = 100 }
+    if ($KeepDays -lt 0)   { $KeepDays = 0 }
+    if ($KeepDays -gt 365) { $KeepDays = 365 }
 
     $pods = Get-DuneBackupDumpPods -Ip $Ip
     $total = @($pods).Count
-    if ($total -le $KeepLast) {
+
+    # Age-filter cutoff. If KeepDays=0 we don't compute a cutoff; nothing is
+    # age-eligible for prune.
+    $ageCutoff = if ($KeepDays -gt 0) { [datetime]::UtcNow.AddDays(-$KeepDays) } else { $null }
+
+    # Walk the list (already sorted newest-first by name) and mark each pod
+    # as kept or to-delete based on both filters.
+    $kept     = New-Object System.Collections.Generic.List[object]
+    $toDelete = New-Object System.Collections.Generic.List[object]
+    $idx = 0
+    foreach ($p in $pods) {
+        $idx++
+        $exceededCount = ($KeepLast -gt 0 -and $idx -gt $KeepLast)
+        $exceededAge = $false
+        if ($ageCutoff) {
+            $ts = Get-DuneBackupDumpPodTimestamp -Name $p.name
+            if ($ts -and $ts -lt $ageCutoff) { $exceededAge = $true }
+        }
+        if ($exceededCount -or $exceededAge) {
+            $toDelete.Add($p) | Out-Null
+        } else {
+            $kept.Add($p) | Out-Null
+        }
+    }
+
+    if ($toDelete.Count -eq 0) {
+        $why = if ($KeepLast -eq 0 -and $KeepDays -eq 0) { 'no limits set' }
+               elseif ($KeepLast -gt 0 -and $KeepDays -gt 0) { "keep last $KeepLast, max age $KeepDays day(s)" }
+               elseif ($KeepLast -gt 0) { "keep last $KeepLast" }
+               else { "max age $KeepDays day(s)" }
         return @{
             ok        = $true
             deleted   = @()
-            kept      = @($pods)
-            remaining = @($pods)
-            message   = "Found $total dump pod(s); nothing to prune (keep last $KeepLast)."
+            kept      = @($kept)
+            remaining = @($kept)
+            message   = "Found $total dump pod(s); nothing to prune ($why)."
             output    = ''
         }
     }
-    $kept     = @($pods | Select-Object -First $KeepLast)
-    $toDelete = @($pods | Select-Object -Skip  $KeepLast)
 
     # Re-validate every namespace/name we're about to interpolate. Defence in
     # depth — the jsonpath output should already be clean, but a stale CRD or
@@ -611,7 +665,7 @@ function Remove-DuneBackupDumpPods {
             deleted   = @()
             kept      = @($pods)
             remaining = @($pods)
-            message   = "Found $total dump pod(s); $KeepLast retained, $(($toDelete | Measure-Object).Count) skipped after name validation."
+            message   = "Found $total dump pod(s); $($kept.Count) retained, $($toDelete.Count) skipped after name validation."
             output    = ''
         }
     }
@@ -627,7 +681,7 @@ function Remove-DuneBackupDumpPods {
         deleted   = @($toDelete)
         kept      = @($kept)
         remaining = @($remaining)
-        message   = "Deleted $(@($toDelete).Count) dump pod(s); kept $(@($kept).Count)."
+        message   = "Deleted $($toDelete.Count) dump pod(s); kept $($kept.Count)."
         output    = $r.out
     }
 }

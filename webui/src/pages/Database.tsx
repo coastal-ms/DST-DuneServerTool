@@ -652,6 +652,7 @@ function BackupScheduleCard({ vmRunning, showToast }: BackupScheduleCardProps) {
   const [draftPreset, setDraftPreset]       = useState<string>('Off')
   const [draftKeepLast, setDraftKeepLast]   = useState<number>(8)
   const [draftKeepDumpPods, setDraftKeepDumpPods] = useState<number>(5)
+  const [draftKeepDumpDays, setDraftKeepDumpDays] = useState<number>(0)
 
   const loadAll = useCallback(async () => {
     if (!vmRunning) {
@@ -745,7 +746,7 @@ function BackupScheduleCard({ vmRunning, showToast }: BackupScheduleCardProps) {
   async function handlePruneDumpPods() {
     setPruning(true)
     try {
-      const r = await pruneBackupDumpPods({ keepLast: draftKeepDumpPods })
+      const r = await pruneBackupDumpPods({ keepLast: draftKeepDumpPods, keepDays: draftKeepDumpDays })
       const delCount = r.deleted?.length ?? 0
       const keepCount = r.kept?.length ?? 0
       showToast('ok', delCount > 0
@@ -758,6 +759,29 @@ function BackupScheduleCard({ vmRunning, showToast }: BackupScheduleCardProps) {
       setPruning(false)
     }
   }
+
+  // Pods eligible for prune: name-rank > keepLast (when keepLast>0) OR age > keepDays (when keepDays>0).
+  // Pod age is read from the YYYYMMDD-HHMMSS embedded in the pod name (more
+  // reliable than k8s status.startTime, which can clear on terminal pods).
+  const dumpPodPruneCandidateCount = useMemo(() => {
+    if (!dumpPods || !dumpPods.pods?.length) return 0
+    if (draftKeepDumpPods === 0 && draftKeepDumpDays === 0) return 0
+    const ageCutoffMs = draftKeepDumpDays > 0 ? Date.now() - draftKeepDumpDays * 86400 * 1000 : null
+    let count = 0
+    dumpPods.pods.forEach((p, idx) => {
+      const exceededCount = draftKeepDumpPods > 0 && idx >= draftKeepDumpPods
+      let exceededAge = false
+      if (ageCutoffMs !== null) {
+        const m = p.name.match(/-dump-(\d{4})(\d{2})(\d{2})-(\d{2})(\d{2})(\d{2})-pod$/)
+        if (m) {
+          const ts = Date.UTC(+m[1], +m[2] - 1, +m[3], +m[4], +m[5], +m[6])
+          if (ts < ageCutoffMs) exceededAge = true
+        }
+      }
+      if (exceededCount || exceededAge) count++
+    })
+    return count
+  }, [dumpPods, draftKeepDumpPods, draftKeepDumpDays])
 
   const presetChoices = schedule?.presets ?? [
     { id: 'Off',            label: 'Disabled' },
@@ -981,9 +1005,11 @@ function BackupScheduleCard({ vmRunning, showToast }: BackupScheduleCardProps) {
           Succeeded and is never cleaned up. Pruning here only deletes terminal <span className="font-mono">*-dump-*-pod</span>{' '}
           objects — the live DB StatefulSet, util/mon/pghero, and the actual <span className="font-mono">.backup</span> files are not touched.
         </p>
-        <div className="flex items-end gap-3">
+        <div className="flex flex-wrap items-end gap-3">
           <label className="flex flex-col gap-1 text-xs">
-            <span className="text-text-muted font-medium">Keep last (count)</span>
+            <span className="text-text-muted font-medium">
+              Keep last (count){draftKeepDumpPods === 0 ? ' — no cap' : ''}
+            </span>
             <input
               type="number"
               min={0}
@@ -998,19 +1024,40 @@ function BackupScheduleCard({ vmRunning, showToast }: BackupScheduleCardProps) {
               className="px-2 py-1.5 rounded bg-surface-2 border border-border text-text text-sm font-mono w-24"
             />
           </label>
+          <label className="flex flex-col gap-1 text-xs">
+            <span className="text-text-muted font-medium">
+              Keep last (days){draftKeepDumpDays === 0 ? ' — no age cap' : ''}
+            </span>
+            <input
+              type="number"
+              min={0}
+              max={365}
+              step={1}
+              value={draftKeepDumpDays}
+              onChange={e => {
+                const n = parseInt(e.target.value || '0', 10)
+                setDraftKeepDumpDays(Number.isFinite(n) ? Math.max(0, Math.min(365, n)) : 0)
+              }}
+              disabled={!vmRunning || pruning}
+              className="px-2 py-1.5 rounded bg-surface-2 border border-border text-text text-sm font-mono w-24"
+            />
+          </label>
           <button
             type="button"
             onClick={() => void handlePruneDumpPods()}
-            disabled={!vmRunning || pruning || !dumpPods || dumpPods.count <= draftKeepDumpPods}
+            disabled={!vmRunning || pruning || dumpPodPruneCandidateCount === 0}
             className="btn-secondary"
-            title={dumpPods && dumpPods.count > draftKeepDumpPods
-              ? `Delete ${dumpPods.count - draftKeepDumpPods} pod(s); keep the most recent ${draftKeepDumpPods}.`
-              : 'Nothing to prune.'}
+            title={dumpPodPruneCandidateCount > 0
+              ? `Delete ${dumpPodPruneCandidateCount} pod(s); keep ${(dumpPods?.count ?? 0) - dumpPodPruneCandidateCount}.`
+              : 'Nothing to prune at these thresholds.'}
           >
             <Icon name={pruning ? 'Loader2' : 'Trash2'} size={14} className={pruning ? 'animate-spin' : ''} />
             {pruning ? 'Pruning…' : 'Prune old backup pods'}
           </button>
         </div>
+        <p className="text-xs text-text-dim mt-2 italic">
+          A pod is kept only if it's both within the count cap and younger than the age cap. Set either to <span className="font-mono">0</span> to disable that axis.
+        </p>
       </div>
 
       {history?.logTail && (

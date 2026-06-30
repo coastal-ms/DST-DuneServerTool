@@ -76,9 +76,9 @@ export function getBackupDumpPods() {
   return api<BackupDumpPodList>('/api/db/backup-dump-pods')
 }
 
-export function pruneBackupDumpPods(opts: { keepLast: number }) {
+export function pruneBackupDumpPods(opts: { keepLast: number; keepDays: number }) {
   return api<BackupDumpPodPruneResult>('/api/db/prune-backup-dump-pods', {
     method: 'POST',
-    body: JSON.stringify({ keepLast: opts.keepLast }),
+    body: JSON.stringify({ keepLast: opts.keepLast, keepDays: opts.keepDays }),
   })
 }
