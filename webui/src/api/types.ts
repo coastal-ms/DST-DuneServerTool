@@ -418,8 +418,10 @@ export type BackupDumpPodList = {
 export type BackupDumpPodPruneResult = {
   ok: boolean
   deleted: BackupDumpPod[]
+  attempted?: BackupDumpPod[]
   kept: BackupDumpPod[]
   remaining: BackupDumpPod[]
+  survivors?: BackupDumpPod[]
   message?: string
   output?: string
 }

@@ -763,10 +763,20 @@ function BackupScheduleCard({ vmRunning, showToast }: BackupScheduleCardProps) {
     try {
       const r = await pruneBackupDumpPods({ keepLast: draftKeepDumpPods, keepDays: draftKeepDumpDays })
       const delCount = r.deleted?.length ?? 0
-      const keepCount = r.kept?.length ?? 0
-      showToast('ok', delCount > 0
-        ? `Deleted ${delCount} dump pod(s); kept ${keepCount}.`
-        : (r.message ?? 'Nothing to prune.'))
+      const survCount = r.survivors?.length ?? 0
+      // Survivors went through both a graceful AND a force-delete pass and
+      // still came back in the kubectl re-read. They're either owner-
+      // recreated (a controller spawning them again with the same name) or
+      // RBAC-denied. Either way the user needs to know.
+      if (survCount > 0) {
+        const names = (r.survivors ?? []).map(p => p.name).join(', ')
+        showToast('err',
+          delCount > 0
+            ? `Deleted ${delCount}; ${survCount} survived both delete passes (${names}). Check kubectl describe.`
+            : `0 deleted; ${survCount} survived both delete passes (${names}). Check kubectl describe.`)
+      } else {
+        showToast('ok', r.message ?? (delCount > 0 ? `Deleted ${delCount} dump pod(s).` : 'Nothing to prune.'))
+      }
       // Same code path as the Refresh button — proven to give a clean,
       // authoritative re-read of schedule + history + dump pods.
       await loadAll()

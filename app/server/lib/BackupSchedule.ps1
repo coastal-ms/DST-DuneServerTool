@@ -737,13 +737,17 @@ function Remove-DuneBackupDumpPods {
     # depth — the jsonpath output should already be clean, but a stale CRD or
     # webhook could in principle return surprises and we're about to embed
     # these values into a shell command.
+    #
+    # Each delete prints a status marker so we can tell which actually ran
+    # (and which kubectl rejected, which was a no-op due to --ignore-not-found,
+    # etc.). Markers are easy to parse without changing the existing rc model.
     $cmds = New-Object System.Collections.Generic.List[string]
     foreach ($p in $toDelete) {
         $ns = [string]$p.namespace
         $nm = [string]$p.name
         if ($ns -notmatch '^[a-z0-9][a-z0-9.-]{0,253}$') { continue }
         if ($nm -notmatch $script:DuneBackupDumpPodNameRegex) { continue }
-        $cmds.Add("sudo kubectl delete pod -n '$ns' '$nm' --ignore-not-found 2>&1 || true") | Out-Null
+        $cmds.Add("out=`$(sudo kubectl delete pod -n '${ns}' '${nm}' --ignore-not-found 2>&1); rc=`$?; echo __DST_POD_DEL__:`${rc}:${ns}/${nm}:`${out}") | Out-Null
     }
     if ($cmds.Count -eq 0) {
         return @{
@@ -755,31 +759,79 @@ function Remove-DuneBackupDumpPods {
             output    = ''
         }
     }
-    # Run deletes then settle briefly inside the same SSH session so the API
-    # server has propagated the deletes to etcd before our re-read. Without
-    # the settle, `kubectl delete pod` returns as soon as the API accepts the
-    # request — a follow-up `kubectl get pods` over a fresh SSH connection
-    # can still see the about-to-be-deleted pods, and we end up returning a
-    # stale `remaining` count that matches the pre-delete state.
+    # First pass: graceful delete. Then settle briefly inside the same SSH
+    # session so the API server has propagated the deletes to etcd. Then re-
+    # read to find any that survived (owner-controller recreated, RBAC denied,
+    # stuck-terminating, etc.) and force-delete those.
     $shellScript = ($cmds -join "`n") + "`nsleep 1`n"
     $r = Invoke-DuneBackupShell -Ip $Ip -Script $shellScript -TimeoutSec 90
     if ($r.rc -lt 0) {
         return @{ ok=$false; status=502; message='SSH to VM failed (no exit code).' }
     }
-    # Refresh from authoritative source after delete. Retry once if it
-    # comes back with the same count — handles the case where the deletes
-    # raced ahead of the API server's index update.
+    $firstPassOutput = $r.out
+
+    # Refresh from authoritative source. Retry once if the API hasn't indexed
+    # the deletes yet (count didn't drop at all).
     $remaining = Get-DuneBackupDumpPods -Ip $Ip
     if (@($remaining).Count -ge $total) {
         Start-Sleep -Milliseconds 1500
         $remaining = Get-DuneBackupDumpPods -Ip $Ip
     }
+
+    # If pods we tried to delete are STILL in the remaining list, the first
+    # pass failed for those (owner-recreated / stuck terminating / RBAC). Try
+    # a force delete (--force --grace-period=0) which bypasses graceful drain
+    # and finalizers — the only thing that won't bypass is a still-running
+    # controller that re-creates the pod with the same name, which is rare.
+    $remainingNames = @{}
+    foreach ($p in $remaining) { $remainingNames[$p.name] = $true }
+    $survivors = New-Object System.Collections.Generic.List[object]
+    foreach ($p in $toDelete) {
+        if ($remainingNames.ContainsKey($p.name)) { $survivors.Add($p) | Out-Null }
+    }
+    $forceOutput = ''
+    if ($survivors.Count -gt 0) {
+        $forceCmds = New-Object System.Collections.Generic.List[string]
+        foreach ($p in $survivors) {
+            $ns = [string]$p.namespace
+            $nm = [string]$p.name
+            if ($ns -notmatch '^[a-z0-9][a-z0-9.-]{0,253}$') { continue }
+            if ($nm -notmatch $script:DuneBackupDumpPodNameRegex) { continue }
+            $forceCmds.Add("out=`$(sudo kubectl delete pod -n '${ns}' '${nm}' --ignore-not-found --force --grace-period=0 2>&1); rc=`$?; echo __DST_POD_FORCE__:`${rc}:${ns}/${nm}:`${out}") | Out-Null
+        }
+        if ($forceCmds.Count -gt 0) {
+            $forceScript = ($forceCmds -join "`n") + "`nsleep 1`n"
+            $rf = Invoke-DuneBackupShell -Ip $Ip -Script $forceScript -TimeoutSec 90
+            if ($rf.rc -ge 0) {
+                $forceOutput = $rf.out
+                $remaining = Get-DuneBackupDumpPods -Ip $Ip
+            }
+        }
+    }
+
+    # Compare intent vs reality: which intended deletes actually disappeared.
+    $remainingNames = @{}
+    foreach ($p in $remaining) { $remainingNames[$p.name] = $true }
+    $actuallyDeleted = New-Object System.Collections.Generic.List[object]
+    $stillPresent    = New-Object System.Collections.Generic.List[object]
+    foreach ($p in $toDelete) {
+        if ($remainingNames.ContainsKey($p.name)) { $stillPresent.Add($p) | Out-Null }
+        else                                      { $actuallyDeleted.Add($p) | Out-Null }
+    }
+
+    $msg = "Deleted $($actuallyDeleted.Count) of $($toDelete.Count) dump pod(s); $($kept.Count) kept."
+    if ($stillPresent.Count -gt 0) {
+        $names = ($stillPresent | ForEach-Object { $_.name }) -join ', '
+        $msg += " $($stillPresent.Count) survived both delete passes (likely owner-recreated or RBAC-denied): $names. Check kubectl describe."
+    }
     return @{
-        ok        = $true
-        deleted   = @($toDelete)
-        kept      = @($kept)
-        remaining = @($remaining)
-        message   = "Deleted $($toDelete.Count) dump pod(s); kept $($kept.Count)."
-        output    = $r.out
+        ok              = $true
+        deleted         = @($actuallyDeleted)
+        attempted       = @($toDelete)
+        kept            = @($kept)
+        remaining       = @($remaining)
+        survivors       = @($stillPresent)
+        message         = $msg
+        output          = ($firstPassOutput + "`n" + $forceOutput).Trim()
     }
 }
