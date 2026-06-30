@@ -187,7 +187,10 @@ export default function App() {
     try {
       const res = await apiFetch(serverInfo, '/api/gameplay/players');
       const data = await res.json();
-      const online = (data.players || []).filter((p: any) => p.online_status === 'Online');
+      // Mirror webui/src/pages/gameplay/PlayersTab.tsx isOnline helper exactly,
+      // so the mobile Players Online count matches Player Admin in the desktop app.
+      const isOnline = (s: any) => typeof s === 'string' && s.toLowerCase().includes('online');
+      const online = (data.players || []).filter((p: any) => isOnline(p.online_status));
       setPlayers(online);
     } catch (e) {
       alert(`Failed to fetch players: ${e}`);
