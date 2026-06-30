@@ -767,15 +767,9 @@ function BackupScheduleCard({ vmRunning, showToast }: BackupScheduleCardProps) {
       showToast('ok', delCount > 0
         ? `Deleted ${delCount} dump pod(s); kept ${keepCount}.`
         : (r.message ?? 'Nothing to prune.'))
-      // Trust the server response: `r.remaining` is from a fresh kubectl
-      // read on the SAME SSH session as the deletes (with a 1s settle so
-      // the API server has indexed them). A second background fetch over
-      // a new SSH connection raced this and clobbered the correct count
-      // with stale data — that's gone now. We still refetch history in
-      // the background so the log tail picks up the new prune lines.
-      // Scroll position is preserved — these are data-only updates.
-      setDumpPods({ ok: true, pods: r.remaining ?? [], count: (r.remaining ?? []).length })
-      void getBackupHistory({ recent: 5, logLines: 50 }).then(setHistory).catch(() => {})
+      // Same code path as the Refresh button — proven to give a clean,
+      // authoritative re-read of schedule + history + dump pods.
+      await loadAll()
     } catch (e) {
       showToast('err', `Prune failed: ${e instanceof Error ? e.message : String(e)}`)
     } finally {
