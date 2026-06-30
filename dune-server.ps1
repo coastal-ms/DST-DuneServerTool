@@ -986,6 +986,36 @@ function Invoke-DuneDnatWatchdogInstall {
     }
 }
 
+function Invoke-DuneBackupDumpPodPrune {
+    # Prune Funcom's leftover `*-dump-YYYYMMDD-HHMMSS-pod` objects (issue #363).
+    # Keeps the most recent $KeepLast pods; deletes the rest in terminal phase.
+    # Best-effort + never throws — a prune hiccup must not fail a good
+    # start/reboot. Also runs at backup-schedule cadence via BackupSchedule.ps1's
+    # cron block; this hook is the belt-and-suspenders for servers that have no
+    # backup schedule installed (issue #363 listed start/reboot integration as
+    # "cheap, already SSH'd in").
+    param(
+        [Parameter(Mandatory)][string]$Ip,
+        [int]$KeepLast = 10,
+        [string]$Phase = 'post-start'
+    )
+    if ($KeepLast -lt 0)   { $KeepLast = 0 }
+    if ($KeepLast -gt 100) { $KeepLast = 100 }
+    $skip = $KeepLast + 1
+
+    # Single-line BusyBox-safe pipeline; same logic as the cron-embedded
+    # snippet so behavior is identical at both call sites.
+    $cmd = "sudo kubectl get pods --all-namespaces -o jsonpath='{range .items[*]}{.metadata.namespace}|{.metadata.name}|{.status.phase}{`"\n`"}{end}' 2>/dev/null | awk -F'|' '`$3==`"Succeeded`" && `$2 ~ /-dump-[0-9]{8}-[0-9]{6}-pod`$/' | sort -t'|' -k2 -r | tail -n +$skip | while IFS='|' read ns nm phase; do sudo kubectl delete pod -n `"`$ns`" `"`$nm`" --ignore-not-found 2>&1 && echo DUNE_DUMP_POD_DELETED; done"
+    $out = & ssh -o BatchMode=yes -o StrictHostKeyChecking=no -o LogLevel=QUIET `
+                 -i "$sshKey" "$sshUser@$Ip" "$cmd" 2>&1
+    $deleted = @($out | Where-Object { $_ -match 'DUNE_DUMP_POD_DELETED' }).Count
+    if ($deleted -gt 0) {
+        Write-Host "  [$Phase] Pruned $deleted leftover dump pod(s) (keeping last $KeepLast)." -ForegroundColor DarkGray
+    } else {
+        Write-Host "  [$Phase] No leftover dump pods to prune (keep last $KeepLast)." -ForegroundColor DarkGray
+    }
+}
+
 # ============================================================
 #  MENU DEFINITIONS
 # ============================================================
@@ -1571,6 +1601,7 @@ while ($true) {
         if ($bgStartExit -eq 0) {
             Invoke-OnDemandPartitionClear -Ip $ip -DelaySec 0 -Phase 'post-startup' -Fast
             Invoke-DuneDnatWatchdogInstall -Ip $ip -Phase 'post-startup'
+            Invoke-DuneBackupDumpPodPrune -Ip $ip -Phase 'post-startup'
         } else {
             Write-Host "  Skipped on-demand partition auto-clear because battlegroup start exited $bgStartExit." -ForegroundColor DarkYellow
         }
@@ -1843,6 +1874,7 @@ while ($true) {
         if ($bgStartExit -eq 0) {
             Invoke-OnDemandPartitionClear -Ip $ip -DelaySec 45 -Phase 'post-reboot'
             Invoke-DuneDnatWatchdogInstall -Ip $ip -Phase 'post-reboot'
+            Invoke-DuneBackupDumpPodPrune -Ip $ip -Phase 'post-reboot'
         } else {
             Write-Host "  Skipped on-demand partition auto-clear because battlegroup start exited $bgStartExit." -ForegroundColor DarkYellow
         }

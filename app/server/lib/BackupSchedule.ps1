@@ -49,13 +49,29 @@ $script:DuneBackupPresets = @{
     'WeeklyMonUtc04'  = @{ label='Weekly, Monday 04:00';           crons=@('0 4 * * 1') }
 }
 
+# Auto-prune the `*-dump-YYYYMMDD-HHMMSS-pod` objects Funcom's backup job
+# leaves behind on every run. Keep the most recent N pods; delete older ones.
+# Runs right after every backup invocation so accumulation can't outpace the
+# cron cadence (issue #363). One-line BusyBox-safe pipeline so the whole
+# backup command stays a single crontab entry:
+#   - kubectl jsonpath -> "ns|name|phase" per pod
+#   - awk filter to Succeeded dump-* pods
+#   - sort by name (timestamp embedded, newest first), keep first N, delete rest
+$script:DuneBackupPodPruneKeepLast = 10
+$script:DuneBackupPodPruneSnippet  = "sudo kubectl get pods --all-namespaces -o jsonpath='{range .items[*]}{.metadata.namespace}|{.metadata.name}|{.status.phase}{`"\n`"}{end}' 2>/dev/null | awk -F'|' '`$3==`"Succeeded`" && `$2 ~ /-dump-[0-9]{8}-[0-9]{6}-pod`$/' | sort -t'|' -k2 -r | tail -n +$($script:DuneBackupPodPruneKeepLast + 1) | while IFS='|' read ns nm phase; do echo `"`$(date) dst: prune dump pod `$ns/`$nm`" >> /var/log/dune-backup.log; sudo kubectl delete pod -n `"`$ns`" `"`$nm`" --ignore-not-found >> /var/log/dune-backup.log 2>&1; done"
+
 # The scheduled backup is wrapped in a guard that skips it when a DST-driven
 # battlegroup restart is in progress: RestartSchedule.ps1 touches
 # /tmp/dst-restart-active just before (and during) the restart, and `find -mmin
 # -30` here treats a marker touched within the last 30 minutes as "active". The
 # guard fails safe - any error in the check falls through to running the backup
 # normally - and contains no literal '%' so it is crontab-safe.
-$script:DuneBackupCmd = 'if find /tmp/dst-restart-active -mmin -30 2>/dev/null | grep -q .; then echo "$(date) dst: backup skipped - BG restart window active" >> /var/log/dune-backup.log; else /home/dune/.dune/bin/battlegroup backup >> /var/log/dune-backup.log 2>&1; fi'
+#
+# After a successful backup we also run the dump-pod pruner above — same
+# cadence as backups, so the pod count stays bounded automatically (issue
+# #363). The pruner is skipped during the restart window too: a kubectl-delete
+# storm while k3s is restarting would just compete for the API server.
+$script:DuneBackupCmd = "if find /tmp/dst-restart-active -mmin -30 2>/dev/null | grep -q .; then echo `"`$(date) dst: backup skipped - BG restart window active`" >> /var/log/dune-backup.log; else /home/dune/.dune/bin/battlegroup backup >> /var/log/dune-backup.log 2>&1; $script:DuneBackupPodPruneSnippet; fi"
 $script:DuneBackupBeginMarker = '# DST-BACKUP BEGIN'
 $script:DuneBackupEndMarker   = '# DST-BACKUP END'
 $script:DuneBackupDumpDir     = '/funcom/artifacts/database-dumps'
