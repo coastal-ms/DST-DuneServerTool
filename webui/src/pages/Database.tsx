@@ -775,6 +775,18 @@ function BackupScheduleCard({ vmRunning, showToast }: BackupScheduleCardProps) {
     }
   }
 
+  // Dump-pod retention inputs differ from what's saved on the VM. Mirrors
+  // the schedule-wide `dirty` memo but scoped to just this row so we can
+  // show a focused "Save" affordance right next to the inputs the user is
+  // actually editing.
+  const dumpPodsDirty = useMemo(() => {
+    if (!schedule) return false
+    return (
+      draftKeepDumpPods !== (schedule.keepLastPods ?? 10) ||
+      draftKeepDumpDays !== (schedule.keepDaysPods ?? 0)
+    )
+  }, [schedule, draftKeepDumpPods, draftKeepDumpDays])
+
   // Pods eligible for prune: name-rank > keepLast (when keepLast>0) OR age > keepDays (when keepDays>0).
   // Pod age is read from the YYYYMMDD-HHMMSS embedded in the pod name (more
   // reliable than k8s status.startTime, which can clear on terminal pods).
@@ -1062,11 +1074,23 @@ function BackupScheduleCard({ vmRunning, showToast }: BackupScheduleCardProps) {
           </label>
           <button
             type="button"
+            onClick={() => void save()}
+            disabled={!vmRunning || saving || pruning || !dumpPodsDirty}
+            className="btn-primary"
+            title={dumpPodsDirty
+              ? 'Persist these retention values into the schedule so they survive reload and drive the auto-prune.'
+              : 'No unsaved changes.'}
+          >
+            <Icon name={saving ? 'Loader2' : 'Save'} size={14} className={saving ? 'animate-spin' : ''} />
+            {saving ? 'Saving…' : 'Save retention'}
+          </button>
+          <button
+            type="button"
             onClick={() => void handlePruneDumpPods()}
-            disabled={!vmRunning || pruning || dumpPodPruneCandidateCount === 0}
+            disabled={!vmRunning || pruning || saving || dumpPodPruneCandidateCount === 0}
             className="btn-secondary"
             title={dumpPodPruneCandidateCount > 0
-              ? `Delete ${dumpPodPruneCandidateCount} pod(s); keep ${(dumpPods?.count ?? 0) - dumpPodPruneCandidateCount}.`
+              ? `Delete ${dumpPodPruneCandidateCount} pod(s) now; keep ${(dumpPods?.count ?? 0) - dumpPodPruneCandidateCount}.`
               : 'Nothing to prune at these thresholds.'}
           >
             <Icon name={pruning ? 'Loader2' : 'Trash2'} size={14} className={pruning ? 'animate-spin' : ''} />
@@ -1074,7 +1098,8 @@ function BackupScheduleCard({ vmRunning, showToast }: BackupScheduleCardProps) {
           </button>
         </div>
         <p className="text-xs text-text-dim mt-2 italic">
-          A pod is kept only if it's both within the count cap and younger than the age cap. Set either to <span className="font-mono">0</span> to disable that axis. Click <strong>Save schedule</strong> above to persist these values.
+          A pod is kept only if it's both within the count cap and younger than the age cap. Set either to <span className="font-mono">0</span> to disable that axis. <strong>Save retention</strong> persists the values; <strong>Prune now</strong> applies them this instant.
+          {dumpPodsDirty && <span className="text-warning ml-1">• Unsaved changes.</span>}
         </p>
 
         {/* Enumerated pod list — shows what the server actually saw, with the
