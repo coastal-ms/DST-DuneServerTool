@@ -34,10 +34,20 @@ export function getBackupSchedule() {
   return api<BackupSchedule>('/api/db/backup-schedule')
 }
 
-export function putBackupSchedule(opts: { preset: string; keepLast: number }) {
+export function putBackupSchedule(opts: {
+  preset: string
+  keepLast: number
+  keepLastPods?: number
+  keepDaysPods?: number
+}) {
   return api<BackupSchedule>('/api/db/backup-schedule', {
     method: 'PUT',
-    body: JSON.stringify({ preset: opts.preset, keepLast: opts.keepLast }),
+    body: JSON.stringify({
+      preset:       opts.preset,
+      keepLast:     opts.keepLast,
+      keepLastPods: opts.keepLastPods,
+      keepDaysPods: opts.keepDaysPods,
+    }),
   })
 }
 

@@ -31,19 +31,25 @@ Register-DuneRoute -Method PUT -Path '/api/db/backup-schedule' -Handler {
     }
     $preset = $null
     $keepLast = 0
+    $keepLastPods = $null
+    $keepDaysPods = $null
     if ($body -is [hashtable]) {
-        if ($body.ContainsKey('preset'))        { $preset    = [string]$body.preset }
-        if ($body.ContainsKey('keepLast')) { try { $keepLast = [int]$body.keepLast } catch { $keepLast = -1 } }
+        if ($body.ContainsKey('preset'))            { $preset       = [string]$body.preset }
+        if ($body.ContainsKey('keepLast'))     { try { $keepLast     = [int]$body.keepLast } catch { $keepLast = -1 } }
+        if ($body.ContainsKey('keepLastPods')) { try { $keepLastPods = [int]$body.keepLastPods } catch {} }
+        if ($body.ContainsKey('keepDaysPods')) { try { $keepDaysPods = [int]$body.keepDaysPods } catch {} }
     } elseif ($body) {
-        if ($body.preset)                       { $preset    = [string]$body.preset }
-        if ($null -ne $body.keepLast)      { try { $keepLast = [int]$body.keepLast } catch { $keepLast = -1 } }
+        if ($body.preset)                            { $preset       = [string]$body.preset }
+        if ($null -ne $body.keepLast)            { try { $keepLast   = [int]$body.keepLast } catch { $keepLast = -1 } }
+        if ($null -ne $body.keepLastPods)    { try { $keepLastPods   = [int]$body.keepLastPods } catch {} }
+        if ($null -ne $body.keepDaysPods)    { try { $keepDaysPods   = [int]$body.keepDaysPods } catch {} }
     }
     if (-not $preset) {
         Write-DuneError -Response $res -Status 400 -Message 'Body must include "preset" (string).'
         return
     }
     try {
-        $result = Invoke-WithDuneLock -Name 'backup-schedule' -Script { Set-DuneBackupSchedule -Ip $ctx.ip -Preset $preset -KeepLast $keepLast }
+        $result = Invoke-WithDuneLock -Name 'backup-schedule' -Script { Set-DuneBackupSchedule -Ip $ctx.ip -Preset $preset -KeepLast $keepLast -KeepLastPods $keepLastPods -KeepDaysPods $keepDaysPods }
         if (-not $result.ok) {
             Write-DuneError -Response $res -Status ([int]$result.status) -Message $result.message
             return

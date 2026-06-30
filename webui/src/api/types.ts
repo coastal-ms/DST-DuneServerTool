@@ -373,6 +373,8 @@ export type BackupSchedule = {
   enabled: boolean
   preset: string
   keepLast: number
+  keepLastPods: number
+  keepDaysPods: number
   vmTimezone: string
   vmNowUtc: string
   crondRunning: boolean
@@ -403,6 +405,8 @@ export type BackupDumpPod = {
   name: string
   startTime: string
   phase: string
+  nameTimestamp: string | null
+  ageMinutes: number | null
 }
 
 export type BackupDumpPodList = {

@@ -49,17 +49,34 @@ $script:DuneBackupPresets = @{
     'WeeklyMonUtc04'  = @{ label='Weekly, Monday 04:00';           crons=@('0 4 * * 1') }
 }
 
+# Default retention for the auto-prune. The user-configurable value lives in
+# the BackupSchedule and is rendered into the cron command at Save time so the
+# tick honors whatever was last saved. Used when no override is supplied.
+$script:DuneBackupPodPruneKeepLastDefault = 10
+$script:DuneBackupPodPruneKeepDaysDefault = 0
+
+# Build the cron-embedded pod-prune snippet for a given keepLast value.
 # Auto-prune the `*-dump-YYYYMMDD-HHMMSS-pod` objects Funcom's backup job
-# leaves behind on every run. Keep the most recent N pods; delete older ones.
-# Runs right after every backup invocation so accumulation can't outpace the
-# cron cadence (issue #363). One-line BusyBox-safe pipeline so the whole
-# backup command stays a single crontab entry:
+# leaves behind on every run. Keeps the most recent N pods; deletes older
+# ones. Runs right after every backup invocation so accumulation can't
+# outpace the cron cadence (issue #363). One-line BusyBox-safe pipeline so
+# the whole backup command stays a single crontab entry:
 #   - kubectl jsonpath -> "ns|name|phase" per pod
 #   - awk filter to Succeeded dump-* pods
 #   - sort by name (timestamp embedded, newest first), keep first N, delete rest
-$script:DuneBackupPodPruneKeepLast = 10
-$script:DuneBackupPodPruneSnippet  = "sudo kubectl get pods --all-namespaces -o jsonpath='{range .items[*]}{.metadata.namespace}|{.metadata.name}|{.status.phase}{`"\n`"}{end}' 2>/dev/null | awk -F'|' '`$3==`"Succeeded`" && `$2 ~ /-dump-[0-9]{8}-[0-9]{6}-pod`$/' | sort -t'|' -k2 -r | tail -n +$($script:DuneBackupPodPruneKeepLast + 1) | while IFS='|' read ns nm phase; do echo `"`$(date) dst: prune dump pod `$ns/`$nm`" >> /var/log/dune-backup.log; sudo kubectl delete pod -n `"`$ns`" `"`$nm`" --ignore-not-found >> /var/log/dune-backup.log 2>&1; done"
+# keepDays is intentionally NOT folded into the cron snippet — keeping the
+# crontab one-line + BusyBox-safe rules out the age math here. The cron tick
+# uses count-only; the manual Prune button on the Database card honors both
+# thresholds via Remove-DuneBackupDumpPods (PowerShell-side filtering).
+function New-DuneBackupPodPruneSnippet {
+    param([int]$KeepLast = 10)
+    if ($KeepLast -lt 0)   { $KeepLast = 0 }
+    if ($KeepLast -gt 100) { $KeepLast = 100 }
+    $skip = $KeepLast + 1
+    return "sudo kubectl get pods --all-namespaces -o jsonpath='{range .items[*]}{.metadata.namespace}|{.metadata.name}|{.status.phase}{`"\n`"}{end}' 2>/dev/null | awk -F'|' '`$3==`"Succeeded`" && `$2 ~ /-dump-[0-9]{8}-[0-9]{6}-pod`$/' | sort -t'|' -k2 -r | tail -n +$skip | while IFS='|' read ns nm phase; do echo `"`$(date) dst: prune dump pod `$ns/`$nm`" >> /var/log/dune-backup.log; sudo kubectl delete pod -n `"`$ns`" `"`$nm`" --ignore-not-found >> /var/log/dune-backup.log 2>&1; done"
+}
 
+# Build the full backup cron command for a given keepLast value.
 # The scheduled backup is wrapped in a guard that skips it when a DST-driven
 # battlegroup restart is in progress: RestartSchedule.ps1 touches
 # /tmp/dst-restart-active just before (and during) the restart, and `find -mmin
@@ -67,11 +84,15 @@ $script:DuneBackupPodPruneSnippet  = "sudo kubectl get pods --all-namespaces -o 
 # guard fails safe - any error in the check falls through to running the backup
 # normally - and contains no literal '%' so it is crontab-safe.
 #
-# After a successful backup we also run the dump-pod pruner above — same
-# cadence as backups, so the pod count stays bounded automatically (issue
-# #363). The pruner is skipped during the restart window too: a kubectl-delete
-# storm while k3s is restarting would just compete for the API server.
-$script:DuneBackupCmd = "if find /tmp/dst-restart-active -mmin -30 2>/dev/null | grep -q .; then echo `"`$(date) dst: backup skipped - BG restart window active`" >> /var/log/dune-backup.log; else /home/dune/.dune/bin/battlegroup backup >> /var/log/dune-backup.log 2>&1; $script:DuneBackupPodPruneSnippet; fi"
+# After a successful backup we also run the dump-pod pruner — same cadence as
+# backups, so the pod count stays bounded automatically (issue #363). The
+# pruner is skipped during the restart window too: a kubectl-delete storm
+# while k3s is restarting would just compete for the API server.
+function New-DuneBackupCmd {
+    param([int]$KeepLastPods = 10)
+    $snippet = New-DuneBackupPodPruneSnippet -KeepLast $KeepLastPods
+    return "if find /tmp/dst-restart-active -mmin -30 2>/dev/null | grep -q .; then echo `"`$(date) dst: backup skipped - BG restart window active`" >> /var/log/dune-backup.log; else /home/dune/.dune/bin/battlegroup backup >> /var/log/dune-backup.log 2>&1; $snippet; fi"
+}
 $script:DuneBackupBeginMarker = '# DST-BACKUP BEGIN'
 $script:DuneBackupEndMarker   = '# DST-BACKUP END'
 $script:DuneBackupDumpDir     = '/funcom/artifacts/database-dumps'
@@ -167,19 +188,29 @@ function Invoke-DuneBackupShell {
 function New-DuneBackupBlock {
     param(
         [Parameter(Mandatory)][string]$Preset,
-        [int]$KeepLast = 0
+        [int]$KeepLast = 0,
+        [Nullable[int]]$KeepLastPods = $null,
+        [Nullable[int]]$KeepDaysPods = $null
     )
     if (-not $script:DuneBackupPresets.ContainsKey($Preset)) {
         throw "Unknown preset: $Preset"
     }
     if ($Preset -eq 'Off') { return $null }
+    if ($null -eq $KeepLastPods -or $KeepLastPods -lt 0) { $KeepLastPods = $script:DuneBackupPodPruneKeepLastDefault }
+    if ($KeepLastPods -gt 100) { $KeepLastPods = 100 }
+    if ($null -eq $KeepDaysPods -or $KeepDaysPods -lt 0) { $KeepDaysPods = $script:DuneBackupPodPruneKeepDaysDefault }
+    if ($KeepDaysPods -gt 365) { $KeepDaysPods = 365 }
+
+    $cmd = New-DuneBackupCmd -KeepLastPods $KeepLastPods
 
     $lines = @()
     $lines += $script:DuneBackupBeginMarker
     $lines += "# DST-BACKUP-PRESET: $Preset"
     $lines += "# DST-BACKUP-KEEP-LAST: $KeepLast"
+    $lines += "# DST-BACKUP-KEEP-LAST-PODS: $KeepLastPods"
+    $lines += "# DST-BACKUP-KEEP-DAYS-PODS: $KeepDaysPods"
     foreach ($cronExpr in $script:DuneBackupPresets[$Preset].crons) {
-        $lines += "$cronExpr $script:DuneBackupCmd"
+        $lines += "$cronExpr $cmd"
     }
     if ($KeepLast -gt 0) {
         # Narrow the retention pattern to filenames that match Funcom's own
@@ -224,15 +255,21 @@ function ConvertFrom-DuneBackupCrontab {
     if ($blockLines.Count -gt 0 -or $CrontabText -match [regex]::Escape($script:DuneBackupBeginMarker)) {
         $preset = $null
         $keepLast = 0
+        $keepLastPods = $script:DuneBackupPodPruneKeepLastDefault
+        $keepDaysPods = $script:DuneBackupPodPruneKeepDaysDefault
         foreach ($bl in $blockLines) {
             if ($bl -match '^# DST-BACKUP-PRESET:\s*(\S+)') { $preset = $Matches[1] }
+            elseif ($bl -match '^# DST-BACKUP-KEEP-LAST-PODS:\s*(\d+)') { $keepLastPods = [int]$Matches[1] }
+            elseif ($bl -match '^# DST-BACKUP-KEEP-DAYS-PODS:\s*(\d+)') { $keepDaysPods = [int]$Matches[1] }
             elseif ($bl -match '^# DST-BACKUP-(?:KEEP-LAST|RETENTION):\s*(\d+)') { $keepLast = [int]$Matches[1] }
         }
         if (-not $preset) { $preset = 'Custom' }
         $blockInfo = @{
-            preset   = $preset
-            keepLast = $keepLast
-            raw      = ($blockLines -join "`n")
+            preset       = $preset
+            keepLast     = $keepLast
+            keepLastPods = $keepLastPods
+            keepDaysPods = $keepDaysPods
+            raw          = ($blockLines -join "`n")
         }
     }
 
@@ -303,15 +340,19 @@ sudo crontab -l 2>&1 || true
     $enabled = $false
     $preset = 'Off'
     $keepLast = 0
+    $keepLastPods = $script:DuneBackupPodPruneKeepLastDefault
+    $keepDaysPods = $script:DuneBackupPodPruneKeepDaysDefault
     $looksTampered = $false
     $inferredFromUnmanaged = $false
     if ($parsed.block) {
-        $preset   = $parsed.block.preset
-        $keepLast = $parsed.block.keepLast
-        $enabled  = ($preset -ne 'Off')
-        # If the rendered block doesn't match the stored preset+keepLast any
-        # more, the operator likely edited it by hand. Surface that to the UI.
-        $expected = (New-DuneBackupBlock -Preset $preset -KeepLast $keepLast)
+        $preset       = $parsed.block.preset
+        $keepLast     = $parsed.block.keepLast
+        $keepLastPods = $parsed.block.keepLastPods
+        $keepDaysPods = $parsed.block.keepDaysPods
+        $enabled      = ($preset -ne 'Off')
+        # If the rendered block doesn't match the stored knobs any more, the
+        # operator likely edited it by hand. Surface that to the UI.
+        $expected = (New-DuneBackupBlock -Preset $preset -KeepLast $keepLast -KeepLastPods $keepLastPods -KeepDaysPods $keepDaysPods)
         if ($expected) {
             $expectedInner = ($expected.TrimEnd("`n") -split "`n" | Select-Object -Skip 1 | Select-Object -SkipLast 1) -join "`n"
             if ($expectedInner -ne $parsed.block.raw) { $looksTampered = $true }
@@ -334,6 +375,8 @@ sudo crontab -l 2>&1 || true
         enabled                   = $enabled
         preset                    = $preset
         keepLast                  = $keepLast
+        keepLastPods              = $keepLastPods
+        keepDaysPods              = $keepDaysPods
         vmTimezone                = $tz
         vmNowUtc                  = $vmNowUtc
         crondRunning              = [bool]$crondRunning
@@ -355,7 +398,9 @@ function Set-DuneBackupSchedule {
     param(
         [Parameter(Mandatory)][string]$Ip,
         [Parameter(Mandatory)][string]$Preset,
-        [int]$KeepLast = 0
+        [int]$KeepLast = 0,
+        [Nullable[int]]$KeepLastPods = $null,
+        [Nullable[int]]$KeepDaysPods = $null
     )
     if (-not $script:DuneBackupPresets.ContainsKey($Preset)) {
         return @{ ok=$false; status=400; message="Unknown preset: $Preset" }
@@ -363,8 +408,14 @@ function Set-DuneBackupSchedule {
     if ($KeepLast -lt 0 -or $KeepLast -gt 1000) {
         return @{ ok=$false; status=400; message="keepLast must be 0..1000 (got $KeepLast)." }
     }
+    if ($null -ne $KeepLastPods -and ($KeepLastPods -lt 0 -or $KeepLastPods -gt 100)) {
+        return @{ ok=$false; status=400; message="keepLastPods must be 0..100 (got $KeepLastPods)." }
+    }
+    if ($null -ne $KeepDaysPods -and ($KeepDaysPods -lt 0 -or $KeepDaysPods -gt 365)) {
+        return @{ ok=$false; status=400; message="keepDaysPods must be 0..365 (got $KeepDaysPods)." }
+    }
 
-    $newBlock = New-DuneBackupBlock -Preset $Preset -KeepLast $KeepLast
+    $newBlock = New-DuneBackupBlock -Preset $Preset -KeepLast $KeepLast -KeepLastPods $KeepLastPods -KeepDaysPods $KeepDaysPods
     $newBlockB64 = if ($newBlock) { [Convert]::ToBase64String([Text.Encoding]::UTF8.GetBytes($newBlock)) } else { '' }
 
     # Whole RMW (read existing crontab, strip our block, append new block,
@@ -459,6 +510,11 @@ sudo crontab -l 2>&1 || true
         if ($parsed.block.preset -ne $Preset -or $parsed.block.keepLast -ne $KeepLast) {
             return @{ ok=$false; status=502; message="Verification mismatch: got preset=$($parsed.block.preset), keepLast=$($parsed.block.keepLast)." }
         }
+        $expectedKeepLastPods = if ($null -ne $KeepLastPods) { [int]$KeepLastPods } else { $script:DuneBackupPodPruneKeepLastDefault }
+        $expectedKeepDaysPods = if ($null -ne $KeepDaysPods) { [int]$KeepDaysPods } else { $script:DuneBackupPodPruneKeepDaysDefault }
+        if ($parsed.block.keepLastPods -ne $expectedKeepLastPods -or $parsed.block.keepDaysPods -ne $expectedKeepDaysPods) {
+            return @{ ok=$false; status=502; message="Verification mismatch: got keepLastPods=$($parsed.block.keepLastPods), keepDaysPods=$($parsed.block.keepDaysPods)." }
+        }
     }
 
     return @{ ok=$true }
@@ -546,6 +602,11 @@ function Get-DuneBackupDumpPods {
     # Stream namespace|name|startTime|phase via jsonpath. Avoids needing jq on
     # the VM. We filter by phase + name regex here so callers always get a
     # canonical list (Completed/Succeeded dump-* pods only).
+    #
+    # NOTE: in Kubernetes the actual `.status.phase` value for a finished pod
+    # is "Succeeded" — what kubectl displays as "Completed" in the STATUS
+    # column is a container reason, not the pod phase. We keep the
+    # ==="Completed" check defensively in case Funcom's CRD ever sets it.
     $jp = '{range .items[*]}{.metadata.namespace}|{.metadata.name}|{.status.startTime}|{.status.phase}{"\n"}{end}'
     $cmd = "sudo kubectl get pods --all-namespaces -o jsonpath='$jp' 2>/dev/null"
     $raw = $null
@@ -555,6 +616,7 @@ function Get-DuneBackupDumpPods {
         throw "kubectl get pods failed: $($_.Exception.Message)"
     }
     $rows = if ($raw) { (($raw -join "`n") -replace "`r",'') -split "`n" } else { @() }
+    $nowUtc = [datetime]::UtcNow
     $out = New-Object System.Collections.Generic.List[object]
     foreach ($r in $rows) {
         if (-not $r) { continue }
@@ -566,11 +628,19 @@ function Get-DuneBackupDumpPods {
         $phase = $parts[3]
         if ($name -notmatch $script:DuneBackupDumpPodNameRegex) { continue }
         if ($phase -ne 'Succeeded' -and $phase -ne 'Completed') { continue }
+
+        # Parse the timestamp baked into the name (authoritative — survives
+        # status.startTime being cleared on terminal pods) and compute age.
+        $nameTs = Get-DuneBackupDumpPodTimestamp -Name $name
+        $ageMin = if ($nameTs) { [int]($nowUtc - $nameTs).TotalMinutes } else { $null }
+
         $out.Add([pscustomobject]@{
-            namespace = $ns
-            name      = $name
-            startTime = $start
-            phase     = $phase
+            namespace      = $ns
+            name           = $name
+            startTime      = $start
+            phase          = $phase
+            nameTimestamp  = if ($nameTs) { $nameTs.ToString('yyyy-MM-ddTHH:mm:ssZ') } else { $null }
+            ageMinutes     = $ageMin
         }) | Out-Null
     }
     # Sort by the embedded YYYYMMDD-HHMMSS in the name (newest first). Falls

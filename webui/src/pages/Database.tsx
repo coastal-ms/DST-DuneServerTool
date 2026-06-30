@@ -671,6 +671,8 @@ function BackupScheduleCard({ vmRunning, showToast }: BackupScheduleCardProps) {
       setDumpPods(pods)
       setDraftPreset(sched.preset === 'Custom' ? 'Off' : sched.preset)
       setDraftKeepLast(sched.keepLast > 0 ? sched.keepLast : (sched.preset === 'Off' ? 8 : 0))
+      setDraftKeepDumpPods(sched.keepLastPods ?? 10)
+      setDraftKeepDumpDays(sched.keepDaysPods ?? 0)
     } catch (e) {
       setErr(e instanceof Error ? e.message : String(e))
       setSchedule(null); setHistory(null); setDumpPods(null)
@@ -690,21 +692,34 @@ function BackupScheduleCard({ vmRunning, showToast }: BackupScheduleCardProps) {
     // Likewise, if there are still unmanaged lines outside our block, allow
     // saving so the user can clean them up by re-installing.
     if (schedule.hasUnmanagedBackupLines) return true
-    return draftPreset !== schedule.preset || draftKeepLast !== schedule.keepLast
-  }, [schedule, draftPreset, draftKeepLast])
+    return (
+      draftPreset !== schedule.preset ||
+      draftKeepLast !== schedule.keepLast ||
+      draftKeepDumpPods !== (schedule.keepLastPods ?? 10) ||
+      draftKeepDumpDays !== (schedule.keepDaysPods ?? 0)
+    )
+  }, [schedule, draftPreset, draftKeepLast, draftKeepDumpPods, draftKeepDumpDays])
 
   async function save() {
     if (!schedule) return
     setSaving(true)
     try {
-      const updated = await putBackupSchedule({ preset: draftPreset, keepLast: draftKeepLast })
+      const updated = await putBackupSchedule({
+        preset: draftPreset,
+        keepLast: draftKeepLast,
+        keepLastPods: draftKeepDumpPods,
+        keepDaysPods: draftKeepDumpDays,
+      })
       setSchedule(updated)
       setDraftPreset(updated.preset === 'Custom' ? 'Off' : updated.preset)
       setDraftKeepLast(updated.keepLast > 0 ? updated.keepLast : (updated.preset === 'Off' ? 8 : 0))
-      showToast('ok', draftPreset === 'Off' ? 'Schedule disabled.' : `Schedule saved (${draftPreset}, keep last ${draftKeepLast}).`)
-      // Refresh history in the background so the user sees the new schedule
-      // reflected immediately when the next cron run lands.
+      setDraftKeepDumpPods(updated.keepLastPods ?? 10)
+      setDraftKeepDumpDays(updated.keepDaysPods ?? 0)
+      showToast('ok', draftPreset === 'Off' ? 'Schedule disabled.' : `Schedule saved.`)
+      // Refresh history + pod list in the background so the user sees the new
+      // schedule reflected immediately when the next cron run lands.
       void getBackupHistory({ recent: 5, logLines: 50 }).then(setHistory).catch(() => {})
+      void getBackupDumpPods().then(setDumpPods).catch(() => {})
     } catch (e) {
       showToast('err', `Save failed: ${e instanceof Error ? e.message : String(e)}`)
     } finally {
@@ -988,22 +1003,25 @@ function BackupScheduleCard({ vmRunning, showToast }: BackupScheduleCardProps) {
       {/* Completed backup pods — Funcom's database-backup job leaves a
           `*-dump-YYYYMMDD-HHMMSS-pod` behind on every run. They terminate
           Succeeded and are never garbage-collected, so they pile up on the
-          Pods page and in the VM's shell-pod picker. This action prunes the
-          old ones; the .backup files on the PVC are handled by Keep last
-          above (separate retention). */}
+          Pods page and in the VM's shell-pod picker. Retention is persisted
+          as part of the schedule (Save schedule above writes both); the
+          cron tick honors keepLast, the manual button honors both. The
+          .backup files on the PVC are handled by Keep last (count) above
+          (separate retention). */}
       <div className="border-t border-border pt-3 mt-3">
         <div className="flex items-center justify-between gap-3 mb-2">
           <div className="text-xs font-semibold text-text-muted">Completed backup pods</div>
           <div className="text-xs text-text-dim">
             {dumpPods
-              ? <>Found <strong className="text-text">{dumpPods.count}</strong> Completed dump pod{dumpPods.count === 1 ? '' : 's'} on the cluster.</>
+              ? <>Found <strong className="text-text">{dumpPods.count}</strong> Succeeded dump pod{dumpPods.count === 1 ? '' : 's'} on the cluster.</>
               : <span className="italic">{vmRunning ? 'Loading…' : 'VM not running.'}</span>}
           </div>
         </div>
         <p className="text-xs text-text-dim mb-2">
           Funcom's <span className="font-mono">battlegroup backup</span> job creates a one-shot pod per run that finishes
-          Succeeded and is never cleaned up. Pruning here only deletes terminal <span className="font-mono">*-dump-*-pod</span>{' '}
-          objects — the live DB StatefulSet, util/mon/pghero, and the actual <span className="font-mono">.backup</span> files are not touched.
+          Succeeded and is never cleaned up. The scheduled cleanup runs after every backup tick using <strong>Keep last (count)</strong> below;
+          the manual button honors both thresholds. Only terminal <span className="font-mono">*-dump-*-pod</span> objects are touched —
+          live DB, util/mon/pghero, file-browser, and the <span className="font-mono">.backup</span> files are never affected.
         </p>
         <div className="flex flex-wrap items-end gap-3">
           <label className="flex flex-col gap-1 text-xs">
@@ -1020,7 +1038,7 @@ function BackupScheduleCard({ vmRunning, showToast }: BackupScheduleCardProps) {
                 const n = parseInt(e.target.value || '0', 10)
                 setDraftKeepDumpPods(Number.isFinite(n) ? Math.max(0, Math.min(100, n)) : 0)
               }}
-              disabled={!vmRunning || pruning}
+              disabled={!vmRunning || pruning || saving}
               className="px-2 py-1.5 rounded bg-surface-2 border border-border text-text text-sm font-mono w-24"
             />
           </label>
@@ -1038,7 +1056,7 @@ function BackupScheduleCard({ vmRunning, showToast }: BackupScheduleCardProps) {
                 const n = parseInt(e.target.value || '0', 10)
                 setDraftKeepDumpDays(Number.isFinite(n) ? Math.max(0, Math.min(365, n)) : 0)
               }}
-              disabled={!vmRunning || pruning}
+              disabled={!vmRunning || pruning || saving}
               className="px-2 py-1.5 rounded bg-surface-2 border border-border text-text text-sm font-mono w-24"
             />
           </label>
@@ -1052,12 +1070,61 @@ function BackupScheduleCard({ vmRunning, showToast }: BackupScheduleCardProps) {
               : 'Nothing to prune at these thresholds.'}
           >
             <Icon name={pruning ? 'Loader2' : 'Trash2'} size={14} className={pruning ? 'animate-spin' : ''} />
-            {pruning ? 'Pruning…' : 'Prune old backup pods'}
+            {pruning ? 'Pruning…' : `Prune now${dumpPodPruneCandidateCount > 0 ? ` (${dumpPodPruneCandidateCount})` : ''}`}
           </button>
         </div>
         <p className="text-xs text-text-dim mt-2 italic">
-          A pod is kept only if it's both within the count cap and younger than the age cap. Set either to <span className="font-mono">0</span> to disable that axis.
+          A pod is kept only if it's both within the count cap and younger than the age cap. Set either to <span className="font-mono">0</span> to disable that axis. Click <strong>Save schedule</strong> above to persist these values.
         </p>
+
+        {/* Enumerated pod list — shows what the server actually saw, with the
+            timestamp parsed from each pod's name and an age in days. This is
+            the diagnostic surface for "why didn't this pod get pruned?":
+            either it's within keepLast (still in the kept set), or its name
+            didn't match the regex (won't appear at all). */}
+        {dumpPods && dumpPods.count > 0 && (
+          <details className="mt-3">
+            <summary className="text-xs text-info hover:underline cursor-pointer">
+              Show enumerated pods ({dumpPods.count})
+            </summary>
+            <div className="mt-2 max-h-64 overflow-y-auto border border-border rounded bg-surface-2/50">
+              <table className="w-full text-xs font-mono">
+                <thead className="text-text-muted sticky top-0 bg-surface-2">
+                  <tr>
+                    <th className="text-left px-2 py-1 font-medium">#</th>
+                    <th className="text-left px-2 py-1 font-medium">Namespace</th>
+                    <th className="text-left px-2 py-1 font-medium">Name</th>
+                    <th className="text-left px-2 py-1 font-medium">Age</th>
+                    <th className="text-left px-2 py-1 font-medium">Disposition</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {dumpPods.pods.map((p, idx) => {
+                    const exceededCount = draftKeepDumpPods > 0 && idx >= draftKeepDumpPods
+                    const ageDays = p.ageMinutes != null ? Math.floor(p.ageMinutes / (60 * 24)) : null
+                    const exceededAge = draftKeepDumpDays > 0 && ageDays != null && ageDays > draftKeepDumpDays
+                    const wouldDelete = exceededCount || exceededAge
+                    return (
+                      <tr key={`${p.namespace}/${p.name}`} className={wouldDelete ? 'text-danger' : 'text-text'}>
+                        <td className="px-2 py-1">{idx + 1}</td>
+                        <td className="px-2 py-1 truncate max-w-[10rem]" title={p.namespace}>{p.namespace}</td>
+                        <td className="px-2 py-1 truncate" title={p.name}>{p.name}</td>
+                        <td className="px-2 py-1 whitespace-nowrap">
+                          {ageDays != null ? `${ageDays}d` : '—'}
+                        </td>
+                        <td className="px-2 py-1 whitespace-nowrap">
+                          {wouldDelete
+                            ? <span className="text-danger">prune {exceededCount ? '(count)' : ''}{exceededCount && exceededAge ? ' + ' : ''}{exceededAge ? '(age)' : ''}</span>
+                            : <span className="text-text-muted">keep</span>}
+                        </td>
+                      </tr>
+                    )
+                  })}
+                </tbody>
+              </table>
+            </div>
+          </details>
+        )}
       </div>
 
       {history?.logTail && (
