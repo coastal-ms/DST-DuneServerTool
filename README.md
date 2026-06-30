@@ -9,17 +9,16 @@
 
 **🌐 Website & feature tour: [coastal-ms.github.io/DST-DuneServerTool](https://coastal-ms.github.io/DST-DuneServerTool/)** — screenshots, install guide, and the full changelog.
 
-The current release is **v12.0.24**. The in-app version label and the
-website show plain semver tags (e.g. `v12.0.24`) — the previous
+The current release is **v12.14.6**. The in-app version label and the
+website show plain semver tags (e.g. `v12.14.6`) — the previous
 Roman-numeral stylization has been removed.
 
-> ## ✅ Confirmed compatible with Dune: Awakening **1.4.5.0**
-> DST **v12.0.0** is verified working against the **latest Funcom release** —
+> ## ✅ Confirmed compatible with Dune: Awakening **1.4.10.0**
+> DST **v12.14.x** is verified working against the **latest Funcom release** —
 > both the game **client** and the **self-hosted server** software — as of the
-> **1.4.5.0** patch (June 10, 2026). Compatibility was checked live against a
-> running self-hosted server on that build (server image `1988751-0-shipping`),
-> covering battlegroup management, on-demand map spin-up, game-config and
-> database editing, and backups. No update to DST is required for 1.4.5.0.
+> **1.4.10.0** patch. Compatibility was checked live against a running
+> self-hosted server on that build, covering battlegroup management,
+> on-demand map spin-up, game-config and database editing, and backups.
 
 It runs as a single-window Windows app (native WebView2 shell) that hosts a
 local web portal (React + Vite + Tailwind) on `127.0.0.1` with a per-launch
@@ -30,9 +29,75 @@ browser and keeps the server running in the background.
 
 ![Server Health](docs/img/server-health.png)
 
-### New in next release
+### New in v12.14.x
 
-- **Framework Maintenance.**
+- **Establish faction membership for unaligned players** (v12.14.3). **Set
+  Faction Tier** / **Give Faction Rep** now join an unaligned character to
+  the faction in one offline action: complete the `DA_FQ_ClimbTheRanks`
+  recruitment journey, apply faction/dialogue/contract tags, create the
+  `FactionPlayerComponent` entry, and set the tier/reputation. Already-
+  aligned characters are routed to **Reset Faction** first, then re-run.
+- **Reset Faction** (v12.14.1–v12.14.2, Players → Progression). One
+  offline action wipes a player's faction so they can start fresh —
+  zeroes Atreides + Harkonnen rep in **both** the `player_faction_reputation`
+  table *and* the runtime-read `FactionPlayerComponent`, clears alignment,
+  removes faction tags, and resets the recruitment journey nodes so
+  faction quests (including meeting the recruiters) can be replayed.
+  Double-acknowledged.
+- **Grant Cosmetic / Variant** (v12.14.1, Players → Items). Browsable,
+  searchable picker for ~269 cosmetic unlockables — appearance set
+  variants, colour swatches, and vehicle skins — that aren't in the
+  standard Give Item catalog. Delivers the unlock via the existing
+  give-item path.
+- **Grant Building Sets** (v12.14.4–v12.14.5, Players → Items). Picker
+  covers **all 225 learnable building sets** (223 grantable) — base-game
+  Atreides/Harkonnen/Choam, crafting stations & utilities, faction/house
+  sets, statues & decor, themed furniture, plus the original MTX
+  Twitch-drop, collab, and movie-tie-in sets (137 items). The grantable
+  set is authoritative: the union of every building-recipe item form in
+  the game data and the distinct sets actually learned on a live server.
+- **Players page keeps your place after grants** (v12.14.5). Granting an
+  item / cosmetic / set / currency / tag now keeps the form open and
+  preserves the selected player and scroll position; the list refresh is
+  deferred until you collapse the action, switch player/section, or hit
+  Refresh. (Per-item Repair/Delete still re-read inventory immediately.)
+- **Full gameplay-tag catalog in the Tags editor** (v12.14.0). The
+  typeahead searches ~3,600 real tags extracted from the live server
+  image (engine-internal cues/combat/camera dropped) instead of a
+  curated ~400 subset. Completable journey nodes are flagged with a
+  "node" badge.
+- **Item names refreshed for Funcom patch 1.4.10.0** (v12.14.0). Labelled
+  the in-use templates that were missing from the catalog (T6 light
+  ornithopter modules, Cutter, ContractItem).
+- **Mobile companion: Players Online count matches the desktop**
+  (v12.14.6). The mobile filter mirrors the desktop's case-insensitive
+  helper verbatim, so the mobile Server State card no longer shows
+  "Players Online (0)" when the desktop correctly lists connected
+  players. **Server State card sums players across all game servers**
+  per battlegroup so multi-shard hosts see the true total.
+- **Treadwheel vehicle kit + catalog** (v12.14.1). The Treadwheel Hull
+  modules (Mk1–Mk6) are now giveable, and the Give Vehicle Kit entry
+  hands over all nine modules at Mk6 (Swift Engine + Steady Boost
+  uniques, plus standard Chassis, Generator, Hull, Inventory, two Treads
+  matching the vehicle's two wheels, Passenger, Scanner).
+
+### New in v12.13.x
+
+- **Restore warns about cross-server restores** (v12.13.17). Characters
+  are bound to Funcom accounts in the cloud, so restoring a backup onto
+  a *different* VM/battlegroup recovers the world and bases but may not
+  restore character logins (they can fail to load or get cleared on
+  boot). The Restore card and its confirmation prompt now say so —
+  restore is intended for the same server.
+- **Server rename works again** (v12.13.16). Game Config → Server name
+  no longer rejects a valid name with "A non-empty name is required" —
+  the request-body reader now handles hashtable-parsed bodies, so the
+  rename + restart applies as expected.
+- **Auto-clear of on-demand map partitions at battlegroup start works
+  again** (v12.13.15). The post-restart hook now points at the bundled
+  installer that replaced the removed `dune-clear-partitions.start`
+  script, so DeepDesert / Arrakeen / Harko Village spawn promptly after
+  a restart again.
 
 ### New in v12.2.1
 
@@ -812,7 +877,7 @@ so it can be tracked and fixed:
 
 The bug report form asks for:
 
-- **Tool version** — shown in the portal footer (e.g. `v11.4.8 · coastal-ms`).
+- **Tool version** — shown in the portal footer (e.g. `v12.14.6 · coastal-ms`).
 - **Surface** — which portal page (Server Health, Commands, PowerShell,
   Game Config, DD Map, Map SpinUp, Database, Sietches, Settings, Setup
   Wizard) or whether it was the CLI / installer / auto-updater.
