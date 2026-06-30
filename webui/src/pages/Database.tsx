@@ -767,7 +767,20 @@ function BackupScheduleCard({ vmRunning, showToast }: BackupScheduleCardProps) {
       showToast('ok', delCount > 0
         ? `Deleted ${delCount} dump pod(s); kept ${keepCount}.`
         : (r.message ?? 'Nothing to prune.'))
+      // Immediate local update from the server's post-delete re-read so the
+      // count + prune candidate badge update before the background refetch
+      // returns. Then refresh history + log tail + a fresh dump-pod list in
+      // the background so the user sees the prune lines in the log without
+      // having to click Refresh. Scroll position is preserved — these are
+      // data-only updates, no layout reflow.
       setDumpPods({ ok: true, pods: r.remaining ?? [], count: (r.remaining ?? []).length })
+      void Promise.all([
+        getBackupDumpPods().catch(() => null),
+        getBackupHistory({ recent: 5, logLines: 50 }).catch(() => null),
+      ]).then(([pods, hist]) => {
+        if (pods) setDumpPods(pods)
+        if (hist) setHistory(hist)
+      })
     } catch (e) {
       showToast('err', `Prune failed: ${e instanceof Error ? e.message : String(e)}`)
     } finally {
