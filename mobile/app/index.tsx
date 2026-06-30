@@ -702,7 +702,16 @@ export default function App() {
             </View>
             <View style={styles.infoRow}>
               <Text style={styles.infoLabel}>Players:</Text>
-              <Text style={styles.infoValue}>{serverState.bg?.gameServers?.[0]?.players || '0 / 0'}</Text>
+              <Text style={styles.infoValue}>{(() => {
+                // Funcom's `battlegroup status` lists one row per game server
+                // (Overmap = Deep Desert, Survival_1 = Hagga, ...). Sum the
+                // per-row player counts so a connected player is visible
+                // regardless of which map they're on; picking gameServers[0]
+                // alphabetized to Overmap and missed anyone on Survival_1.
+                const rows = serverState.bg?.gameServers || [];
+                const total = rows.reduce((acc: number, r: any) => acc + (parseInt(r?.players, 10) || 0), 0);
+                return String(total);
+              })()}</Text>
             </View>
           </>
         ) : (
