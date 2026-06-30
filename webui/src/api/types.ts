@@ -397,3 +397,25 @@ export type BackupHistory = {
   dumpDirSize: string
   logPath: string
 }
+
+export type BackupDumpPod = {
+  namespace: string
+  name: string
+  startTime: string
+  phase: string
+}
+
+export type BackupDumpPodList = {
+  ok: boolean
+  pods: BackupDumpPod[]
+  count: number
+}
+
+export type BackupDumpPodPruneResult = {
+  ok: boolean
+  deleted: BackupDumpPod[]
+  kept: BackupDumpPod[]
+  remaining: BackupDumpPod[]
+  message?: string
+  output?: string
+}

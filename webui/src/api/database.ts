@@ -5,6 +5,8 @@ import type {
   SqlResult,
   BackupSchedule,
   BackupHistory,
+  BackupDumpPodList,
+  BackupDumpPodPruneResult,
 } from './types'
 
 export function getDbInfo() {
@@ -67,5 +69,16 @@ export function uploadBackup(opts: { localPath: string }) {
   return api<BackupTransferResult>('/api/db/backup-upload', {
     method: 'POST',
     body: JSON.stringify({ localPath: opts.localPath }),
+  })
+}
+
+export function getBackupDumpPods() {
+  return api<BackupDumpPodList>('/api/db/backup-dump-pods')
+}
+
+export function pruneBackupDumpPods(opts: { keepLast: number }) {
+  return api<BackupDumpPodPruneResult>('/api/db/prune-backup-dump-pods', {
+    method: 'POST',
+    body: JSON.stringify({ keepLast: opts.keepLast }),
   })
 }

@@ -11,6 +11,8 @@ import {
   getBackupHistory,
   downloadBackup,
   uploadBackup,
+  getBackupDumpPods,
+  pruneBackupDumpPods,
 } from '../api/database'
 import type {
   DbInfo,
@@ -18,6 +20,7 @@ import type {
   SqlOkResult,
   BackupSchedule,
   BackupHistory,
+  BackupDumpPodList,
 } from '../api/types'
 import Editor, { type OnMount } from '@monaco-editor/react'
 
@@ -636,8 +639,10 @@ type BackupScheduleCardProps = {
 function BackupScheduleCard({ vmRunning, showToast }: BackupScheduleCardProps) {
   const [schedule, setSchedule] = useState<BackupSchedule | null>(null)
   const [history, setHistory]   = useState<BackupHistory  | null>(null)
+  const [dumpPods, setDumpPods] = useState<BackupDumpPodList | null>(null)
   const [loading, setLoading]   = useState(false)
   const [saving, setSaving]     = useState(false)
+  const [pruning, setPruning]   = useState(false)
   const [err, setErr]           = useState<string | null>(null)
   const [showLog, setShowLog]   = useState(false)
   const [transferring, setTransferring] = useState<string | null>(null)  // vmPath or 'upload'
@@ -646,22 +651,28 @@ function BackupScheduleCard({ vmRunning, showToast }: BackupScheduleCardProps) {
   // editable so the user can preview their choice before clicking Save.
   const [draftPreset, setDraftPreset]       = useState<string>('Off')
   const [draftKeepLast, setDraftKeepLast]   = useState<number>(8)
+  const [draftKeepDumpPods, setDraftKeepDumpPods] = useState<number>(5)
 
   const loadAll = useCallback(async () => {
     if (!vmRunning) {
-      setSchedule(null); setHistory(null); setErr('VM is not running.')
+      setSchedule(null); setHistory(null); setDumpPods(null); setErr('VM is not running.')
       return
     }
     setLoading(true); setErr(null)
     try {
-      const [sched, hist] = await Promise.all([getBackupSchedule(), getBackupHistory({ recent: 5, logLines: 50 })])
+      const [sched, hist, pods] = await Promise.all([
+        getBackupSchedule(),
+        getBackupHistory({ recent: 5, logLines: 50 }),
+        getBackupDumpPods().catch(() => null),
+      ])
       setSchedule(sched)
       setHistory(hist)
+      setDumpPods(pods)
       setDraftPreset(sched.preset === 'Custom' ? 'Off' : sched.preset)
       setDraftKeepLast(sched.keepLast > 0 ? sched.keepLast : (sched.preset === 'Off' ? 8 : 0))
     } catch (e) {
       setErr(e instanceof Error ? e.message : String(e))
-      setSchedule(null); setHistory(null)
+      setSchedule(null); setHistory(null); setDumpPods(null)
     } finally {
       setLoading(false)
     }
@@ -728,6 +739,23 @@ function BackupScheduleCard({ vmRunning, showToast }: BackupScheduleCardProps) {
       showToast('err', `Upload failed: ${e instanceof Error ? e.message : String(e)}`)
     } finally {
       setTransferring(null)
+    }
+  }
+
+  async function handlePruneDumpPods() {
+    setPruning(true)
+    try {
+      const r = await pruneBackupDumpPods({ keepLast: draftKeepDumpPods })
+      const delCount = r.deleted?.length ?? 0
+      const keepCount = r.kept?.length ?? 0
+      showToast('ok', delCount > 0
+        ? `Deleted ${delCount} dump pod(s); kept ${keepCount}.`
+        : (r.message ?? 'Nothing to prune.'))
+      setDumpPods({ ok: true, pods: r.remaining ?? [], count: (r.remaining ?? []).length })
+    } catch (e) {
+      showToast('err', `Prune failed: ${e instanceof Error ? e.message : String(e)}`)
+    } finally {
+      setPruning(false)
     }
   }
 
@@ -931,6 +959,58 @@ function BackupScheduleCard({ vmRunning, showToast }: BackupScheduleCardProps) {
             Last backup at <span className="font-mono">{lastBackup.mtimeIso}</span> ({relativeFromNow(lastBackup.mtimeEpoch)}).
           </p>
         )}
+      </div>
+
+      {/* Completed backup pods — Funcom's database-backup job leaves a
+          `*-dump-YYYYMMDD-HHMMSS-pod` behind on every run. They terminate
+          Succeeded and are never garbage-collected, so they pile up on the
+          Pods page and in the VM's shell-pod picker. This action prunes the
+          old ones; the .backup files on the PVC are handled by Keep last
+          above (separate retention). */}
+      <div className="border-t border-border pt-3 mt-3">
+        <div className="flex items-center justify-between gap-3 mb-2">
+          <div className="text-xs font-semibold text-text-muted">Completed backup pods</div>
+          <div className="text-xs text-text-dim">
+            {dumpPods
+              ? <>Found <strong className="text-text">{dumpPods.count}</strong> Completed dump pod{dumpPods.count === 1 ? '' : 's'} on the cluster.</>
+              : <span className="italic">{vmRunning ? 'Loading…' : 'VM not running.'}</span>}
+          </div>
+        </div>
+        <p className="text-xs text-text-dim mb-2">
+          Funcom's <span className="font-mono">battlegroup backup</span> job creates a one-shot pod per run that finishes
+          Succeeded and is never cleaned up. Pruning here only deletes terminal <span className="font-mono">*-dump-*-pod</span>{' '}
+          objects — the live DB StatefulSet, util/mon/pghero, and the actual <span className="font-mono">.backup</span> files are not touched.
+        </p>
+        <div className="flex items-end gap-3">
+          <label className="flex flex-col gap-1 text-xs">
+            <span className="text-text-muted font-medium">Keep last (count)</span>
+            <input
+              type="number"
+              min={0}
+              max={100}
+              step={1}
+              value={draftKeepDumpPods}
+              onChange={e => {
+                const n = parseInt(e.target.value || '0', 10)
+                setDraftKeepDumpPods(Number.isFinite(n) ? Math.max(0, Math.min(100, n)) : 0)
+              }}
+              disabled={!vmRunning || pruning}
+              className="px-2 py-1.5 rounded bg-surface-2 border border-border text-text text-sm font-mono w-24"
+            />
+          </label>
+          <button
+            type="button"
+            onClick={() => void handlePruneDumpPods()}
+            disabled={!vmRunning || pruning || !dumpPods || dumpPods.count <= draftKeepDumpPods}
+            className="btn-secondary"
+            title={dumpPods && dumpPods.count > draftKeepDumpPods
+              ? `Delete ${dumpPods.count - draftKeepDumpPods} pod(s); keep the most recent ${draftKeepDumpPods}.`
+              : 'Nothing to prune.'}
+          >
+            <Icon name={pruning ? 'Loader2' : 'Trash2'} size={14} className={pruning ? 'animate-spin' : ''} />
+            {pruning ? 'Pruning…' : 'Prune old backup pods'}
+          </button>
+        </div>
       </div>
 
       {history?.logTail && (

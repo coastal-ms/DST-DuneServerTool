@@ -78,3 +78,53 @@ Register-DuneRoute -Method GET -Path '/api/db/backup-history' -Handler {
         Write-DuneError -Response $res -Status 502 -Message "History read failed: $($_.Exception.Message)"
     }
 }
+
+# List Completed/Succeeded dump-* pods left behind by Funcom's backup jobs.
+# Read-only — used by the Database page to show how many leftover pods exist.
+Register-DuneRoute -Method GET -Path '/api/db/backup-dump-pods' -Handler {
+    param($req, $res, $routeParams, $body)
+    $ctx = Get-DuneBackupContext
+    if (-not $ctx.ok) {
+        Write-DuneError -Response $res -Status $ctx.status -Message $ctx.message
+        return
+    }
+    try {
+        $pods = Get-DuneBackupDumpPods -Ip $ctx.ip
+        Write-DuneJson -Response $res -Body @{ ok=$true; pods=@($pods); count=@($pods).Count }
+    } catch {
+        Write-DuneError -Response $res -Status 502 -Message "Dump-pod read failed: $($_.Exception.Message)"
+    }
+}
+
+# Prune Completed/Succeeded dump-* pods, keeping the most recent N.
+# Body: { keepLast: int } - defaults to 5.
+Register-DuneRoute -Method POST -Path '/api/db/prune-backup-dump-pods' -Handler {
+    param($req, $res, $routeParams, $body)
+    $ctx = Get-DuneBackupContext
+    if (-not $ctx.ok) {
+        Write-DuneError -Response $res -Status $ctx.status -Message $ctx.message
+        return
+    }
+    $keepLast = 5
+    if ($body -is [hashtable]) {
+        if ($body.ContainsKey('keepLast')) { try { $keepLast = [int]$body.keepLast } catch {} }
+    } elseif ($body) {
+        if ($null -ne $body.keepLast) { try { $keepLast = [int]$body.keepLast } catch {} }
+    }
+    if ($keepLast -lt 0)   { $keepLast = 0 }
+    if ($keepLast -gt 100) { $keepLast = 100 }
+    try {
+        $result = Invoke-WithDuneLock -Name 'prune-backup-dump-pods' -Script {
+            Remove-DuneBackupDumpPods -Ip $ctx.ip -KeepLast $keepLast
+        }
+        if (-not $result.ok) {
+            $status = 502
+            if ($result.ContainsKey('status') -and $result.status) { $status = [int]$result.status }
+            Write-DuneError -Response $res -Status $status -Message $result.message
+            return
+        }
+        Write-DuneJson -Response $res -Body $result
+    } catch {
+        Write-DuneError -Response $res -Status 502 -Message "Prune failed: $($_.Exception.Message)"
+    }
+}

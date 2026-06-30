@@ -515,3 +515,119 @@ sudo du -sh $script:DuneBackupDumpDir 2>/dev/null | awk '{print `$1}' || true
         logPath       = '/var/log/dune-backup.log'
     }
 }
+
+# -----------------------------------------------------------------------------
+# Public: list `*-dump-YYYYMMDD-HHMMSS-pod` pods left behind by Funcom's database-
+# backup jobs. They finish Succeeded but are never garbage-collected, so they
+# pile up over time (issue #363). Returned newest-first by the timestamp baked
+# into the pod name (kubectl creationTimestamp would work too, but the embedded
+# timestamp is naturally sortable as a string and survives clock drift).
+# -----------------------------------------------------------------------------
+$script:DuneBackupDumpPodNameRegex = '^[a-z0-9.-]+-dump-[0-9]{8}-[0-9]{6}-pod$'
+
+function Get-DuneBackupDumpPods {
+    param([Parameter(Mandatory)][string]$Ip)
+    # Stream namespace|name|startTime|phase via jsonpath. Avoids needing jq on
+    # the VM. We filter by phase + name regex here so callers always get a
+    # canonical list (Completed/Succeeded dump-* pods only).
+    $jp = '{range .items[*]}{.metadata.namespace}|{.metadata.name}|{.status.startTime}|{.status.phase}{"\n"}{end}'
+    $cmd = "sudo kubectl get pods --all-namespaces -o jsonpath='$jp' 2>/dev/null"
+    $raw = $null
+    try {
+        $raw = Invoke-V6Ssh -Ip $Ip -Cmd $cmd -TimeoutSec 25
+    } catch {
+        throw "kubectl get pods failed: $($_.Exception.Message)"
+    }
+    $rows = if ($raw) { (($raw -join "`n") -replace "`r",'') -split "`n" } else { @() }
+    $out = New-Object System.Collections.Generic.List[object]
+    foreach ($r in $rows) {
+        if (-not $r) { continue }
+        $parts = $r -split '\|', 4
+        if ($parts.Count -lt 4) { continue }
+        $ns    = $parts[0]
+        $name  = $parts[1]
+        $start = $parts[2]
+        $phase = $parts[3]
+        if ($name -notmatch $script:DuneBackupDumpPodNameRegex) { continue }
+        if ($phase -ne 'Succeeded' -and $phase -ne 'Completed') { continue }
+        $out.Add([pscustomobject]@{
+            namespace = $ns
+            name      = $name
+            startTime = $start
+            phase     = $phase
+        }) | Out-Null
+    }
+    # Sort by the embedded YYYYMMDD-HHMMSS in the name (newest first). Falls
+    # back to name lexically — which for our regex is equivalent because the
+    # suffix is fixed-width.
+    return @($out | Sort-Object name -Descending)
+}
+
+# -----------------------------------------------------------------------------
+# Public: prune Succeeded/Completed dump-* pods, keeping the most recent
+# $KeepLast. Returns @{ ok; deleted; kept; remaining; output }. Never touches
+# the live DB StatefulSet, util/mon/pghero, file-browser pods, or any pod
+# whose name doesn't match the canonical dump-* shape — the name regex check
+# is authoritative and double-checked before each kubectl delete.
+# -----------------------------------------------------------------------------
+function Remove-DuneBackupDumpPods {
+    param(
+        [Parameter(Mandatory)][string]$Ip,
+        [int]$KeepLast = 5
+    )
+    if ($KeepLast -lt 0)   { $KeepLast = 0 }
+    if ($KeepLast -gt 100) { $KeepLast = 100 }
+
+    $pods = Get-DuneBackupDumpPods -Ip $Ip
+    $total = @($pods).Count
+    if ($total -le $KeepLast) {
+        return @{
+            ok        = $true
+            deleted   = @()
+            kept      = @($pods)
+            remaining = @($pods)
+            message   = "Found $total dump pod(s); nothing to prune (keep last $KeepLast)."
+            output    = ''
+        }
+    }
+    $kept     = @($pods | Select-Object -First $KeepLast)
+    $toDelete = @($pods | Select-Object -Skip  $KeepLast)
+
+    # Re-validate every namespace/name we're about to interpolate. Defence in
+    # depth — the jsonpath output should already be clean, but a stale CRD or
+    # webhook could in principle return surprises and we're about to embed
+    # these values into a shell command.
+    $cmds = New-Object System.Collections.Generic.List[string]
+    foreach ($p in $toDelete) {
+        $ns = [string]$p.namespace
+        $nm = [string]$p.name
+        if ($ns -notmatch '^[a-z0-9][a-z0-9.-]{0,253}$') { continue }
+        if ($nm -notmatch $script:DuneBackupDumpPodNameRegex) { continue }
+        $cmds.Add("sudo kubectl delete pod -n '$ns' '$nm' --ignore-not-found 2>&1 || true") | Out-Null
+    }
+    if ($cmds.Count -eq 0) {
+        return @{
+            ok        = $true
+            deleted   = @()
+            kept      = @($pods)
+            remaining = @($pods)
+            message   = "Found $total dump pod(s); $KeepLast retained, $(($toDelete | Measure-Object).Count) skipped after name validation."
+            output    = ''
+        }
+    }
+    $shellScript = ($cmds -join "`n")
+    $r = Invoke-DuneBackupShell -Ip $Ip -Script $shellScript -TimeoutSec 60
+    if ($r.rc -lt 0) {
+        return @{ ok=$false; status=502; message='SSH to VM failed (no exit code).' }
+    }
+    # Refresh from authoritative source after delete.
+    $remaining = Get-DuneBackupDumpPods -Ip $Ip
+    return @{
+        ok        = $true
+        deleted   = @($toDelete)
+        kept      = @($kept)
+        remaining = @($remaining)
+        message   = "Deleted $(@($toDelete).Count) dump pod(s); kept $(@($kept).Count)."
+        output    = $r.out
+    }
+}
