@@ -872,11 +872,14 @@ echo "NETWORK_DONE"
             & $pub
 
             # --- Phase 2: battlegroup IP propagation + restart + readiness ------
-            # Runs the canonical change-battlegroup-ip helper (feeding menu choice
-            # "1" = public IP) so the director / HOST_DATACENTER_IP_ADDRESS update,
-            # then RE-VERIFIES settings.conf integrity (the helper can blank it) and
-            # repairs + restarts if needed, then waits for the serversets to come
-            # ready (graceful: a slow boot is reported, not treated as failure).
+            # Split into TWO halves so the wait-for-servers loop can tick a
+            # heartbeat back to the UI on every iteration. The bash script
+            # used to do change-ip + integrity + utilities + wait + verify in
+            # one SSH call, which stayed silent for 5-7 minutes and made the
+            # step look frozen. Now the bash does the fast "mutation" steps
+            # then exits; the wait loop runs in PowerShell, one short SSH
+            # call per tick, with a $pub heartbeat each time. Verify runs in
+            # a final short SSH call.
             $remoteBgIp = @'
 set -eu
 NEW_IP="$1"
@@ -930,17 +933,58 @@ else
   echo "jq not available; skipping utility HOST_DATACENTER_IP_ADDRESS reconcile"
 fi
 
-step wait
-ready=0
-for i in $(seq 1 60); do
-  surv=$(sudo kubectl -n "$BG_NS" get serverset "$BG_NAME-sg-survival-1" -o jsonpath='{.status.ready}' 2>/dev/null || echo 0)
-  over=$(sudo kubectl -n "$BG_NS" get serverset "$BG_NAME-sg-overmap" -o jsonpath='{.status.ready}' 2>/dev/null || echo 0)
-  if [ "$surv" = "1" ] && [ "$over" = "1" ]; then ready=1; break; fi
-  sleep 5
-done
-sudo kubectl -n "$BG_NS" get serverset 2>/dev/null | awk 'NR==1 || /survival-1|overmap|deepdesert-1/' || true
+# Echo BG namespace so the PowerShell-side wait loop can target it directly
+# without re-discovering on every poll.
+printf 'BG_NS=%s\nBG_NAME=%s\n' "$BG_NS" "$BG_NAME"
+echo "BGIP_MUTATE_DONE"
+'@
+            $steps.Add((New-DunePublicIpStepResult 'bg-ip' 'Propagate IP to battlegroup + restart' 'running' 'Running change-battlegroup-ip, repairing settings.conf if needed.')) | Out-Null
+            & $pub
+            $rawMutate = Invoke-DunePublicIpRemoteScript -Ip $vm.ip -Script $remoteBgIp -Arguments @($target, $vm.ip) -TimeoutSec 300
+            $bgNs   = ''
+            $bgName = ''
+            if ($rawMutate -match '(?m)^BG_NS=(\S+)\s*$')   { $bgNs   = $Matches[1] }
+            if ($rawMutate -match '(?m)^BG_NAME=(\S+)\s*$') { $bgName = $Matches[1] }
+            if (-not $bgNs -or -not $bgName) {
+                throw "Could not determine battlegroup namespace/name from remote output: $rawMutate"
+            }
+            # Wait loop in PowerShell so each iteration can heartbeat the UI.
+            # Same 60×5s budget as the old bash loop (5 min hard cap). Each tick
+            # issues one short SSH command that polls both serversets at once.
+            $waitMax  = 60
+            $waitTick = 5
+            $ready    = $false
+            $lastRaw  = ''
+            for ($i = 1; $i -le $waitMax; $i++) {
+                $detail = "Waiting for servers to report ready... ($i/$waitMax, up to $($waitMax * $waitTick)s)"
+                $steps[$steps.Count - 1] = New-DunePublicIpStepResult 'bg-ip' 'Propagate IP to battlegroup + restart' 'running' $detail $lastRaw
+                & $pub
+                try {
+                    $probe = Invoke-V6Ssh -Ip $vm.ip `
+                        -Cmd "sudo kubectl -n $bgNs get serverset $bgName-sg-survival-1 -o jsonpath='{.status.ready}' 2>/dev/null; echo '|'; sudo kubectl -n $bgNs get serverset $bgName-sg-overmap -o jsonpath='{.status.ready}' 2>/dev/null" `
+                        -TimeoutSec 20
+                    $probeText = if ($probe) { (($probe -join "`n") -replace "`r",'') } else { '' }
+                    $lastRaw = $probeText
+                    $parts = ($probeText -split '\|', 2)
+                    $surv = if ($parts.Count -gt 0) { ($parts[0] -replace "`n",'').Trim() } else { '' }
+                    $over = if ($parts.Count -gt 1) { ($parts[1] -replace "`n",'').Trim() } else { '' }
+                    if ($surv -eq '1' -and $over -eq '1') { $ready = $true; break }
+                } catch {
+                    # Don't treat a transient SSH/kubectl glitch as fatal — just
+                    # try again next tick. Worst case we run the full 5 min and
+                    # report "still coming up".
+                    $lastRaw = "probe error: $($_.Exception.Message)"
+                }
+                if ($i -lt $waitMax) { Start-Sleep -Seconds $waitTick }
+            }
 
-step verify
+            # Verify in a final short SSH call (annotate node, read addresses).
+            $remoteVerify = @'
+set -eu
+NEW_IP="$1"
+VM_IP="$2"
+BG_NS="$3"
+BG_NAME="$4"
 NODE=$(sudo kubectl get nodes --no-headers -o custom-columns=':metadata.name' | head -1 | tr -d ' ')
 sudo kubectl annotate node "$NODE" "k3s.io/external-ip=$NEW_IP" --overwrite >/dev/null 2>&1 || true
 sudo kubectl patch node "$NODE" --subresource=status --type=merge -p "{\"status\":{\"addresses\":[{\"type\":\"InternalIP\",\"address\":\"$VM_IP\"},{\"type\":\"ExternalIP\",\"address\":\"$NEW_IP\"},{\"type\":\"Hostname\",\"address\":\"$NODE\"}]}}" >/dev/null 2>&1 || true
@@ -948,17 +992,19 @@ EXT=$(sudo kubectl get node "$NODE" -o jsonpath='{range .status.addresses[?(@.ty
 ALIAS_OK=no
 /sbin/ip -4 -o addr show dev eth0 | awk '{print $4}' | cut -d/ -f1 | grep -qx "$NEW_IP" && ALIAS_OK=yes
 BGPHASE=$(sudo kubectl -n "$BG_NS" get battlegroup "$BG_NAME" -o jsonpath='{.status.phase}' 2>/dev/null || true)
-printf 'EXTERNALIP=%s\nALIAS_OK=%s\nBG_PHASE=%s\nREADY=%s\n' "$EXT" "$ALIAS_OK" "$BGPHASE" "$ready"
-echo "BGIP_DONE"
+printf 'EXTERNALIP=%s\nALIAS_OK=%s\nBG_PHASE=%s\n' "$EXT" "$ALIAS_OK" "$BGPHASE"
+sudo kubectl -n "$BG_NS" get serverset 2>/dev/null | awk 'NR==1 || /survival-1|overmap|deepdesert-1/' || true
+echo "BGIP_VERIFY_DONE"
 '@
-            $steps.Add((New-DunePublicIpStepResult 'bg-ip' 'Propagate IP to battlegroup + restart' 'running' 'Running change-battlegroup-ip, repairing settings.conf if needed, and waiting for servers.')) | Out-Null
-            & $pub
-            $rawBg = Invoke-DunePublicIpRemoteScript -Ip $vm.ip -Script $remoteBgIp -Arguments @($target, $vm.ip) -TimeoutSec 600
-
-            $ready = ($rawBg -match '(?m)^READY=1\s*$')
+            $rawVerify = Invoke-DunePublicIpRemoteScript -Ip $vm.ip -Script $remoteVerify -Arguments @($target, $vm.ip, $bgNs, $bgName) -TimeoutSec 60
             $extIp = ''
-            if ($rawBg -match '(?m)^EXTERNALIP=([0-9.]+)\s*$') { $extIp = $Matches[1] }
-            $bgDetail = if ($ready) { 'Battlegroup IP propagated; servers reported ready.' } else { 'Battlegroup IP propagated; servers still coming up (this can take a few more minutes - check Server Health).' }
+            if ($rawVerify -match '(?m)^EXTERNALIP=([0-9.]+)\s*$') { $extIp = $Matches[1] }
+            $rawBg = ($rawMutate + "`n" + $lastRaw + "`n" + $rawVerify).Trim()
+            $bgDetail = if ($ready) {
+                "Battlegroup IP propagated; servers reported ready after $((($i - 1) * $waitTick))s."
+            } else {
+                'Battlegroup IP propagated; servers still coming up after 5 minutes (this can take a few more minutes - check Server Health).'
+            }
             $steps[$steps.Count - 1] = New-DunePublicIpStepResult 'bg-ip' 'Propagate IP to battlegroup + restart' 'done' $bgDetail $rawBg
             & $pub
 
