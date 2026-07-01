@@ -933,6 +933,76 @@ else
   echo "jq not available; skipping utility HOST_DATACENTER_IP_ADDRESS reconcile"
 fi
 
+step refresh-status-pods
+# status.database.address, status.database.pgHeroAddress, status.utilities.*.address,
+# and status.utilities.messageQueues.statuses.*.amqp/managementAddress are only
+# populated at POD-OBJECT CREATION (not on container restart). Container-only
+# restarts driven by the operator, `battlegroup change-battlegroup-ip`, or the
+# `step utilities-ip` CR-env patch above will NOT refresh these fields — they
+# stay at whichever IP was current at last pod-object creation. Force-delete
+# the pods that own external-address status fields so the StatefulSet /
+# Deployment controllers recreate them and the operator repopulates status
+# with the CURRENT HOST_DATACENTER_IP_ADDRESS. Discovered 2026-07-01 after an
+# ISP IP change left status.database.address pointing at the pre-change IP
+# forever until the pods were manually kicked. Non-blocking; kube waits are
+# on the PowerShell side.
+STALE_STATUS_PATTERN="^${BG_NAME}-(db-dbdepl|db-util-|fb-deploy|mq-admin|mq-game)"
+for POD in $(sudo kubectl get pods -n "$BG_NS" --no-headers -o custom-columns=':metadata.name' 2>/dev/null | grep -E "$STALE_STATUS_PATTERN"); do
+  sudo kubectl delete pod -n "$BG_NS" "$POD" --wait=false 2>&1 | sed 's/^/  /'
+done
+
+step audit-ip-surfaces
+# Cross-place IP audit: verify every surface that should hold NEW_IP actually
+# does. Adds an authoritative check after the operator has had a chance to
+# reconcile (~10s post pod-delete). Reports AUDIT_OK or per-surface mismatches
+# so the PowerShell side can surface them to the user. Also flags CGNAT
+# (100.64.0.0/10) and private amqpAddress values — the amqpAddress must be a
+# publicly routable IP so clients can queue to join. Requires jq.
+if command -v jq >/dev/null 2>&1; then
+  sleep 10  # give the operator a moment to repopulate status after pod deletes
+  AUDIT_MISMATCHES=0
+  AUDIT_REPORT=""
+
+  # Utility envs — every HOST_DATACENTER_IP_ADDRESS should equal NEW_IP.
+  for u in director serverGateway textRouter; do
+    val=$(sudo kubectl get battlegroup "$BG_NAME" -n "$BG_NS" -o json 2>/dev/null | jq -r ".spec.utilities.$u.spec.envVars // [] | map(select(.name==\"HOST_DATACENTER_IP_ADDRESS\")) | .[0].value // \"MISSING\"")
+    if [ "$val" != "$NEW_IP" ]; then
+      AUDIT_REPORT="$AUDIT_REPORT  MISMATCH utilities.$u HOST_DATACENTER_IP_ADDRESS: got '$val' expected '$NEW_IP'\n"
+      AUDIT_MISMATCHES=$((AUDIT_MISMATCHES + 1))
+    fi
+  done
+
+  # amqpAddress (game + admin). host portion must equal NEW_IP.
+  for mq in game admin; do
+    val=$(sudo kubectl get battlegroup "$BG_NAME" -n "$BG_NS" -o json 2>/dev/null | jq -r ".status.utilities.messageQueues.statuses.$mq.amqpAddress // \"MISSING\"")
+    host=$(printf '%s' "$val" | cut -d: -f1)
+    if [ "$host" != "$NEW_IP" ]; then
+      AUDIT_REPORT="$AUDIT_REPORT  MISMATCH status.utilities.messageQueues.statuses.$mq.amqpAddress: got '$val' expected '$NEW_IP:*'\n"
+      AUDIT_MISMATCHES=$((AUDIT_MISMATCHES + 1))
+    fi
+    # Sora's rule: amqpAddress must be publicly routable (not private, not CGNAT).
+    case "$host" in
+      10.*|172.1[6-9].*|172.2[0-9].*|172.3[0-1].*|192.168.*)
+        AUDIT_REPORT="$AUDIT_REPORT  PRIVATE-AMQP-ADDR $mq.amqpAddress='$val' — LAN address, players cannot join.\n"
+        AUDIT_MISMATCHES=$((AUDIT_MISMATCHES + 1))
+        ;;
+      100.6[4-9].*|100.[7-9][0-9].*|100.1[0-1][0-9].*|100.12[0-7].*)
+        AUDIT_REPORT="$AUDIT_REPORT  CGNAT-AMQP-ADDR $mq.amqpAddress='$val' — behind Carrier-Grade NAT (100.64.0.0/10); contact ISP.\n"
+        AUDIT_MISMATCHES=$((AUDIT_MISMATCHES + 1))
+        ;;
+    esac
+  done
+
+  if [ "$AUDIT_MISMATCHES" -eq 0 ]; then
+    echo "AUDIT_OK all IP surfaces match $NEW_IP"
+  else
+    printf 'AUDIT_MISMATCH count=%d\n' "$AUDIT_MISMATCHES"
+    printf '%b' "$AUDIT_REPORT"
+  fi
+else
+  echo "AUDIT_SKIP jq not available"
+fi
+
 # Echo BG namespace so the PowerShell-side wait loop can target it directly
 # without re-discovering on every poll.
 printf 'BG_NS=%s\nBG_NAME=%s\n' "$BG_NS" "$BG_NAME"
@@ -1005,8 +1075,33 @@ echo "BGIP_VERIFY_DONE"
             } else {
                 'Battlegroup IP propagated; servers still coming up after 5 minutes (this can take a few more minutes - check Server Health).'
             }
-            $steps[$steps.Count - 1] = New-DunePublicIpStepResult 'bg-ip' 'Propagate IP to battlegroup + restart' 'done' $bgDetail $rawBg
+            # Surface audit-ip-surfaces result inline so users see when an
+            # HOST_DATACENTER_IP_ADDRESS env, amqpAddress, or private/CGNAT
+            # value didn't reconcile cleanly. Non-fatal — reported but the
+            # step still completes so the rest of the apply flow finishes.
+            $bgStatus = 'done'
+            if ($rawMutate -match '(?m)^AUDIT_MISMATCH count=(\d+)') {
+                $bgDetail = "$bgDetail`nAudit found $($Matches[1]) IP-surface mismatch(es) — see raw output."
+                $bgStatus = 'warning'
+            }
+            $steps[$steps.Count - 1] = New-DunePublicIpStepResult 'bg-ip' 'Propagate IP to battlegroup + restart' $bgStatus $bgDetail $rawBg
             & $pub
+
+            # Persist LastApplied/LastResolved as soon as the CR mutate + servers-ready
+            # wait complete, BEFORE the verify step. Verify's TCP 31982 external check
+            # can transiently fail after an ISP IP change (router forwards may not have
+            # reconciled to the new WAN IP yet). Persisting here means the UI shows the
+            # correct "last applied" value even if verify throws — otherwise the user
+            # sees stale LastAppliedPublicIp in dune-server.config until they run Apply
+            # a second time. Discovered 2026-07-01 during an ISP IP flap: CR + pods
+            # were reconciled but LastAppliedPublicIp stayed at the pre-flap IP.
+            Save-DuneConfig -Config @{
+                PublicIpMode = $Mode
+                DdnsHostname = if ($Mode -eq 'ddns') { $Hostname } else { '' }
+                ManualPublicIp = if ($Mode -eq 'manual') { $target } else { '' }
+                LastResolvedPublicIp = $target
+                LastAppliedPublicIp = $target
+            } | Out-Null
 
             # --- Verify --------------------------------------------------------
             $steps.Add((New-DunePublicIpStepResult 'verify' 'Verify external IP + RabbitMQ port' 'running' "Checking node ExternalIP and TCP $target:31982.")) | Out-Null
