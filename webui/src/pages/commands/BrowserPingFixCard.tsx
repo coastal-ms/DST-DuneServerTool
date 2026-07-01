@@ -6,7 +6,7 @@
 // utility pods' HOST_DATACENTER_ID to "duneawakening" (the Alpine VM
 // hostname) + BG restart flipped Ping 0 -> 72 on Coastal's server.
 
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import { Icon } from '../../components/Icon'
 import { api } from '../../api/client'
 
@@ -84,13 +84,6 @@ export function BrowserPingFixCard({ vmRunning, showToast }: {
   }, [vmRunning])
 
   useEffect(() => { void load() }, [load])
-
-  const dirty = useMemo(() => {
-    if (!status) return false
-    if (draftDatacenterId !== status.currentDatacenterId) return true
-    if (draftPublicIp && status.currentDatacenterIp && draftPublicIp !== status.currentDatacenterIp) return true
-    return false
-  }, [status, draftDatacenterId, draftPublicIp])
 
   async function save() {
     if (!draftDatacenterId) {
@@ -188,11 +181,9 @@ export function BrowserPingFixCard({ vmRunning, showToast }: {
           <button
             type="button"
             onClick={() => void save()}
-            disabled={!vmRunning || loading || saving || !dirty}
+            disabled={!vmRunning || loading || saving || !draftDatacenterId}
             className="btn-primary"
-            title={dirty
-              ? 'Patch HOST_DATACENTER_ID on the 3 utility pods and restart the battlegroup.'
-              : 'No changes to save.'}
+            title="Patch HOST_DATACENTER_ID on the 3 utility pods and restart the battlegroup. Runs even when the values are unchanged so a re-apply can repair a bad state."
           >
             <Icon name={saving ? 'Loader2' : 'Save'} size={14} className={saving ? 'animate-spin' : ''} />
             {saving ? 'Saving…' : 'Save & restart BG'}
