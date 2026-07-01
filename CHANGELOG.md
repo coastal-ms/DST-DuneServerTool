@@ -13,6 +13,12 @@ here cover everything those tags shipped.
 
 ## [Unreleased]
 
+## [12.14.7] - 2026-06-30
+
+### Added
+
+- **Server Browser Ping: new card at the top of the Commands page to reconcile `HOST_DATACENTER_ID` with the VM hostname.** The in-game server browser only populates the **Ping** column when the battlegroup CR's `HOST_DATACENTER_ID` env (on all three utility pods: director, serverGateway, textRouter) matches the VM's Linux hostname. Vendor default is `dune-testing`, which doesn't match, so Ping shows `0` with empty bars. Live-verified fix: patching to `duneawakening` (the DST-shipped Alpine VM hostname) + BG restart flipped a live server's Ping from `0` to `72` with full bars. The new card pre-populates the datacenter-ID input with the detected VM hostname and the IP input with DST's current public IP, then a single Save patches the CR (`POST /api/public-ip/datacenter-id`) and runs `battlegroup restart` so FLS re-registers on the next matchmaker cycle. Distinct from the P34 / connection-joining diagnostics in Settings — this is only about the Ping value shown in the server browser.
+
 ## [12.14.6] - 2026-06-29
 
 ### Fixed
