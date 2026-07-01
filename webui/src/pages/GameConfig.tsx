@@ -1,6 +1,7 @@
 import { useState, useEffect, useMemo, useCallback, type FormEvent, type KeyboardEvent, type ReactElement } from 'react'
 import { PageHeader } from '../components/PageHeader'
 import { Icon } from '../components/Icon'
+import { IniShareModal } from '../components/IniShareModal'
 import { useStatus } from '../hooks/useStatus'
 import { api } from '../api/client'
 import { ServerNameCard } from './gameconfig/ServerNameCard'
@@ -34,6 +35,7 @@ import type {
   GameConfigRawUpdate,
 } from '../api/types'
 import { SpicefieldsCard } from './gameconfig/SpicefieldsCard'
+import { LandclaimTimerCard } from './gameconfig/LandclaimTimerCard'
 
 type LoadState = 'idle' | 'loading' | 'ready' | 'error' | 'unavailable'
 
@@ -92,6 +94,36 @@ function liveValue(data: GameConfigResponse | null, field: GameConfigField): str
 function isCustomized(data: GameConfigResponse | null, field: GameConfigField): boolean {
   const lv = liveValue(data, field)
   return lv !== '' && lv !== fieldDefault(field)
+}
+
+// Build the client-side Game.ini block for a category: its customised (non-default)
+// ClientApply scalar fields, grouped by INI section. Struct-member fields (e.g. the
+// Landsraad Data=(...) blob) are excluded — they aren't simple key=value lines.
+// Returns hasClientFields so the UI can flag sections that CAN take client settings
+// but currently have none customised. CRLF-joined for pasting into a Windows Game.ini.
+function buildCategoryClientBlock(
+  cat: GameConfigCategory,
+  cfg: GameConfigResponse | null,
+): { block: string; count: number; hasClientFields: boolean } {
+  const clientFields = (cat.fields ?? []).filter(f => f && f.key && f.clientApply && !f.structKey)
+  const hasClientFields = clientFields.length > 0
+  const bySection = new Map<string, string[]>()
+  let count = 0
+  for (const f of clientFields) {
+    if (!isCustomized(cfg, f)) continue
+    const v = liveValue(cfg, f)
+    if (v === '') continue
+    const arr = bySection.get(f.section) ?? []
+    arr.push(`${f.key}=${v}`)
+    bySection.set(f.section, arr)
+    count++
+  }
+  if (count === 0) return { block: '', count: 0, hasClientFields }
+  const parts: string[] = []
+  for (const [section, lines] of bySection) {
+    parts.push(`[${section}]`, ...lines, '')
+  }
+  return { block: parts.join('\r\n').replace(/\s+$/, '') + '\r\n', count, hasClientFields }
 }
 
 // The value an input should hold: the live override when present, otherwise the default.
@@ -171,6 +203,8 @@ export function GameConfig() {
   const [clientApply, setClientApply] = useState<GameConfigClientApply | null>(null)
   const [sandwormModalOpen, setSandwormModalOpen] = useState(false)
   const [search, setSearch] = useState('')
+  // "Give players this" section share popup (client-side Game.ini block).
+  const [shareBlock, setShareBlock] = useState<{ title: string; block: string } | null>(null)
   const [backing, setBacking] = useState(false)
   const [backupMsg, setBackupMsg] = useState<string | null>(null)
   const [backupError, setBackupError] = useState<string | null>(null)
@@ -1236,8 +1270,18 @@ export function GameConfig() {
           </div>
 
           <div className="space-y-5">
-            {(filteredSchema ?? []).map(cat => (
-              <CategoryCard key={cat.category} category={cat.category} count={(cat.fields ?? []).length}>
+            {(filteredSchema ?? []).map(cat => {
+              const fullCat = schema?.find(c => c.category === cat.category) ?? cat
+              const share = buildCategoryClientBlock(fullCat, cfg)
+              return (
+              <CategoryCard
+                key={cat.category}
+                category={cat.category}
+                count={(cat.fields ?? []).length}
+                clientBlock={share.block}
+                hasClientFields={share.hasClientFields}
+                onShare={() => setShareBlock({ title: `${cat.category} — give players this`, block: share.block })}
+              >
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-x-6 gap-y-4">
                   {(cat.fields ?? []).map(f => (
                     f && f.key ? (
@@ -1257,12 +1301,15 @@ export function GameConfig() {
                   ))}
                 </div>
               </CategoryCard>
-            ))}
+              )
+            })}
             {filteredSchema && filteredSchema.length === 0 && (
               <div className="card p-6 text-text-muted text-sm">No settings match “{search}”.</div>
             )}
 
             <SpicefieldsCard vmRunning={vmRunning} />
+
+            <LandclaimTimerCard vmRunning={vmRunning} />
 
             <DefaultsCatalogBrowser vmRunning={vmRunning} onSaved={() => void loadAll()} />
 
@@ -1308,6 +1355,15 @@ export function GameConfig() {
         onCancel={() => setSandwormModalOpen(false)}
         onConfirm={confirmSandwormEnable}
       />
+
+      {shareBlock && (
+        <IniShareModal
+          title={shareBlock.title}
+          block={shareBlock.block}
+          subtitle="These are client-side settings. Players connecting to your server must add this block to their own Game.ini for it to take effect on their end."
+          onClose={() => setShareBlock(null)}
+        />
+      )}
 
       {backupsOpen && (
         <div
@@ -1493,13 +1549,39 @@ function formatBytes(n: number): string {
 // Category card + field row
 // -----------------------------------------------------------------------------
 
-function CategoryCard({ category, count, children }: { category: string; count: number; children: React.ReactNode }) {
+function CategoryCard({ category, count, clientBlock, hasClientFields, onShare, children }: {
+  category: string
+  count: number
+  clientBlock?: string
+  hasClientFields?: boolean
+  onShare?: () => void
+  children: React.ReactNode
+}) {
   return (
     <div className="card p-5">
-      <h2 className="text-sm font-semibold uppercase tracking-wider text-accent-bright mb-4 flex items-center gap-2">
-        <Icon name="ChevronRight" size={14} /> {category}
-        <span className="text-[10px] font-normal text-text-dim normal-case tracking-normal">({count})</span>
-      </h2>
+      <div className="mb-4 flex items-center justify-between gap-2">
+        <h2 className="text-sm font-semibold uppercase tracking-wider text-accent-bright flex items-center gap-2">
+          <Icon name="ChevronRight" size={14} /> {category}
+          <span className="text-[10px] font-normal text-text-dim normal-case tracking-normal">({count})</span>
+        </h2>
+        {clientBlock ? (
+          <button
+            type="button"
+            className="btn-secondary text-xs py-1 shrink-0"
+            onClick={onShare}
+            title="Copy this section's client-side Game.ini block to hand to players"
+          >
+            <Icon name="Share2" size={13} /> Give players this
+          </button>
+        ) : hasClientFields ? (
+          <span
+            className="text-[10px] text-text-dim flex items-center gap-1 shrink-0 normal-case"
+            title="This section has client-side settings, but none are customised yet — nothing to hand out"
+          >
+            <Icon name="Minus" size={12} /> No custom client settings
+          </span>
+        ) : null}
+      </div>
       {children}
     </div>
   )

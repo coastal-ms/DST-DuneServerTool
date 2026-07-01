@@ -13,6 +13,11 @@ here cover everything those tags shipped.
 
 ## [Unreleased]
 
+### Added
+
+- **Land Claim Timer (Game Config).** A new card lets you override how long a land-claim staking-unit extension takes: enter a duration in seconds and DST collapses the game's built-in doubling schedule (60–30720s) down to that single value. It writes `m_StakingUnitExtensionDefaultTimes` and `m_StakingUnitVerticalExtensionDefaultTimes` (plus the array-remove lines that strip the defaults) into both the server `UserGame.ini` and this PC's client `Game.ini`. The card reads your current values on load, and disabling it restores the game's default schedule. Connecting players need the same client-side value for the change to take effect on their end.
+- **"Give players this" client-config sharing (Game Config).** Any section with client-side settings you've actually customised now has a **Give players this** button that pops up the exact `Game.ini` block to hand to connecting players, with a one-click copy and the client `Game.ini` file location. Sections that support client settings but have none customised show a "No custom client settings" flag so it's clear there's nothing to share. The Land Claim Timer shows its block automatically right after you apply.
+
 ## [12.14.9] - 2026-06-30
 
 ### Changed
