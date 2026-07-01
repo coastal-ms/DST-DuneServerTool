@@ -31,19 +31,25 @@ Register-DuneRoute -Method PUT -Path '/api/db/backup-schedule' -Handler {
     }
     $preset = $null
     $keepLast = 0
+    $keepLastPods = $null
+    $keepDaysPods = $null
     if ($body -is [hashtable]) {
-        if ($body.ContainsKey('preset'))        { $preset    = [string]$body.preset }
-        if ($body.ContainsKey('keepLast')) { try { $keepLast = [int]$body.keepLast } catch { $keepLast = -1 } }
+        if ($body.ContainsKey('preset'))            { $preset       = [string]$body.preset }
+        if ($body.ContainsKey('keepLast'))     { try { $keepLast     = [int]$body.keepLast } catch { $keepLast = -1 } }
+        if ($body.ContainsKey('keepLastPods')) { try { $keepLastPods = [int]$body.keepLastPods } catch {} }
+        if ($body.ContainsKey('keepDaysPods')) { try { $keepDaysPods = [int]$body.keepDaysPods } catch {} }
     } elseif ($body) {
-        if ($body.preset)                       { $preset    = [string]$body.preset }
-        if ($null -ne $body.keepLast)      { try { $keepLast = [int]$body.keepLast } catch { $keepLast = -1 } }
+        if ($body.preset)                            { $preset       = [string]$body.preset }
+        if ($null -ne $body.keepLast)            { try { $keepLast   = [int]$body.keepLast } catch { $keepLast = -1 } }
+        if ($null -ne $body.keepLastPods)    { try { $keepLastPods   = [int]$body.keepLastPods } catch {} }
+        if ($null -ne $body.keepDaysPods)    { try { $keepDaysPods   = [int]$body.keepDaysPods } catch {} }
     }
     if (-not $preset) {
         Write-DuneError -Response $res -Status 400 -Message 'Body must include "preset" (string).'
         return
     }
     try {
-        $result = Invoke-WithDuneLock -Name 'backup-schedule' -Script { Set-DuneBackupSchedule -Ip $ctx.ip -Preset $preset -KeepLast $keepLast }
+        $result = Invoke-WithDuneLock -Name 'backup-schedule' -Script { Set-DuneBackupSchedule -Ip $ctx.ip -Preset $preset -KeepLast $keepLast -KeepLastPods $keepLastPods -KeepDaysPods $keepDaysPods }
         if (-not $result.ok) {
             Write-DuneError -Response $res -Status ([int]$result.status) -Message $result.message
             return
@@ -76,5 +82,62 @@ Register-DuneRoute -Method GET -Path '/api/db/backup-history' -Handler {
         Write-DuneJson -Response $res -Body $history
     } catch {
         Write-DuneError -Response $res -Status 502 -Message "History read failed: $($_.Exception.Message)"
+    }
+}
+
+# List Completed/Succeeded dump-* pods left behind by Funcom's backup jobs.
+# Read-only — used by the Database page to show how many leftover pods exist.
+Register-DuneRoute -Method GET -Path '/api/db/backup-dump-pods' -Handler {
+    param($req, $res, $routeParams, $body)
+    $ctx = Get-DuneBackupContext
+    if (-not $ctx.ok) {
+        Write-DuneError -Response $res -Status $ctx.status -Message $ctx.message
+        return
+    }
+    try {
+        $pods = Get-DuneBackupDumpPods -Ip $ctx.ip
+        Write-DuneJson -Response $res -Body @{ ok=$true; pods=@($pods); count=@($pods).Count }
+    } catch {
+        Write-DuneError -Response $res -Status 502 -Message "Dump-pod read failed: $($_.Exception.Message)"
+    }
+}
+
+# Prune Completed/Succeeded dump-* pods. Two independent thresholds:
+#   keepLast: keep at most N most-recent pods (0 = no count cap, default 5)
+#   keepDays: delete anything older than D days (0 = no age cap, default 0)
+# A pod is pruned if EITHER threshold is exceeded.
+Register-DuneRoute -Method POST -Path '/api/db/prune-backup-dump-pods' -Handler {
+    param($req, $res, $routeParams, $body)
+    $ctx = Get-DuneBackupContext
+    if (-not $ctx.ok) {
+        Write-DuneError -Response $res -Status $ctx.status -Message $ctx.message
+        return
+    }
+    $keepLast = 5
+    $keepDays = 0
+    if ($body -is [hashtable]) {
+        if ($body.ContainsKey('keepLast')) { try { $keepLast = [int]$body.keepLast } catch {} }
+        if ($body.ContainsKey('keepDays')) { try { $keepDays = [int]$body.keepDays } catch {} }
+    } elseif ($body) {
+        if ($null -ne $body.keepLast) { try { $keepLast = [int]$body.keepLast } catch {} }
+        if ($null -ne $body.keepDays) { try { $keepDays = [int]$body.keepDays } catch {} }
+    }
+    if ($keepLast -lt 0)   { $keepLast = 0 }
+    if ($keepLast -gt 100) { $keepLast = 100 }
+    if ($keepDays -lt 0)   { $keepDays = 0 }
+    if ($keepDays -gt 365) { $keepDays = 365 }
+    try {
+        $result = Invoke-WithDuneLock -Name 'prune-backup-dump-pods' -Script {
+            Remove-DuneBackupDumpPods -Ip $ctx.ip -KeepLast $keepLast -KeepDays $keepDays
+        }
+        if (-not $result.ok) {
+            $status = 502
+            if ($result.ContainsKey('status') -and $result.status) { $status = [int]$result.status }
+            Write-DuneError -Response $res -Status $status -Message $result.message
+            return
+        }
+        Write-DuneJson -Response $res -Body $result
+    } catch {
+        Write-DuneError -Response $res -Status 502 -Message "Prune failed: $($_.Exception.Message)"
     }
 }

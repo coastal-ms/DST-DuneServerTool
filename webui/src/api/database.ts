@@ -5,6 +5,8 @@ import type {
   SqlResult,
   BackupSchedule,
   BackupHistory,
+  BackupDumpPodList,
+  BackupDumpPodPruneResult,
 } from './types'
 
 export function getDbInfo() {
@@ -32,10 +34,20 @@ export function getBackupSchedule() {
   return api<BackupSchedule>('/api/db/backup-schedule')
 }
 
-export function putBackupSchedule(opts: { preset: string; keepLast: number }) {
+export function putBackupSchedule(opts: {
+  preset: string
+  keepLast: number
+  keepLastPods?: number
+  keepDaysPods?: number
+}) {
   return api<BackupSchedule>('/api/db/backup-schedule', {
     method: 'PUT',
-    body: JSON.stringify({ preset: opts.preset, keepLast: opts.keepLast }),
+    body: JSON.stringify({
+      preset:       opts.preset,
+      keepLast:     opts.keepLast,
+      keepLastPods: opts.keepLastPods,
+      keepDaysPods: opts.keepDaysPods,
+    }),
   })
 }
 
@@ -67,5 +79,16 @@ export function uploadBackup(opts: { localPath: string }) {
   return api<BackupTransferResult>('/api/db/backup-upload', {
     method: 'POST',
     body: JSON.stringify({ localPath: opts.localPath }),
+  })
+}
+
+export function getBackupDumpPods() {
+  return api<BackupDumpPodList>('/api/db/backup-dump-pods')
+}
+
+export function pruneBackupDumpPods(opts: { keepLast: number; keepDays: number }) {
+  return api<BackupDumpPodPruneResult>('/api/db/prune-backup-dump-pods', {
+    method: 'POST',
+    body: JSON.stringify({ keepLast: opts.keepLast, keepDays: opts.keepDays }),
   })
 }

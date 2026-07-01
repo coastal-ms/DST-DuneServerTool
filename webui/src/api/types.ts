@@ -373,6 +373,8 @@ export type BackupSchedule = {
   enabled: boolean
   preset: string
   keepLast: number
+  keepLastPods: number
+  keepDaysPods: number
   vmTimezone: string
   vmNowUtc: string
   crondRunning: boolean
@@ -396,4 +398,33 @@ export type BackupHistory = {
   dumpDirPath: string
   dumpDirSize: string
   logPath: string
+}
+
+export type BackupDumpPod = {
+  namespace: string
+  name: string
+  startTime: string
+  phase: string
+  nameTimestamp: string | null
+  ageMinutes: number | null
+  ownerKind?: string
+  ownerName?: string
+  ownerIsController?: boolean
+}
+
+export type BackupDumpPodList = {
+  ok: boolean
+  pods: BackupDumpPod[]
+  count: number
+}
+
+export type BackupDumpPodPruneResult = {
+  ok: boolean
+  deleted: BackupDumpPod[]
+  attempted?: BackupDumpPod[]
+  kept: BackupDumpPod[]
+  remaining: BackupDumpPod[]
+  survivors?: BackupDumpPod[]
+  message?: string
+  output?: string
 }
