@@ -13,6 +13,17 @@ here cover everything those tags shipped.
 
 ## [Unreleased]
 
+## [12.14.8] - 2026-07-01
+
+### Fixed
+
+- **Public IP Apply now force-refreshes the utility-pod status fields.** `status.database.address`, `status.database.pgHeroAddress`, `status.utilities.*.address`, and `status.utilities.messageQueues.statuses.*.amqpAddress` / `.managementAddress` only populate at pod-**object** creation, not on container restart. The pre-existing `step utilities-ip` patched `HOST_DATACENTER_IP_ADDRESS` env vars, which the operator picked up as a container restart — that was never enough to refresh status. New `step refresh-status-pods` force-deletes `db-dbdepl`, `db-util-*`, `fb-deploy`, `mq-admin`, and `mq-game` pods so the StatefulSet / Deployment controllers recreate them and the operator repopulates status with the current public IP. Discovered when an ISP IP change left `status.database.address` stuck at the pre-change IP forever until the pods were manually kicked.
+- **`LastAppliedPublicIp` now persists even when the final TCP verify transiently fails.** Previously `Save-DuneConfig` ran after the verify step, so a transient TCP 31982 external-reachability failure (common right after an ISP IP change while router forwards are still catching up) skipped the save and left DST's UI showing the pre-change "last applied" value until the user ran Apply a second time. Now saved as soon as the CR mutate + servers-ready wait complete, independent of verify.
+
+### Added
+
+- **`step audit-ip-surfaces` cross-checks every IP-holding surface at end of Apply.** Verifies all three utility envs (`director`, `serverGateway`, `textRouter`) and `status.utilities.messageQueues.statuses.{game,admin}.amqpAddress` match the target public IP. Flags private `amqpAddress` values (`10.`, `172.16-31.`, `192.168.`) and CGNAT (`100.64.0.0/10`) per Sora's Discord tip 2026-05-27: *"amqpAddress must be publicly routable, not a LAN address."* Mismatches are surfaced in the bg-ip step detail as a warning; the Apply still completes so the rest of the flow finishes.
+
 ## [12.14.7] - 2026-06-30
 
 ### Added
