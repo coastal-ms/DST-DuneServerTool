@@ -22,7 +22,7 @@ here cover everything those tags shipped.
 
 ### Added
 
-- **`step audit-ip-surfaces` cross-checks every IP-holding surface at end of Apply.** Verifies all three utility envs (`director`, `serverGateway`, `textRouter`) and `status.utilities.messageQueues.statuses.{game,admin}.amqpAddress` match the target public IP. Flags private `amqpAddress` values (`10.`, `172.16-31.`, `192.168.`) and CGNAT (`100.64.0.0/10`) per Sora's Discord tip 2026-05-27: *"amqpAddress must be publicly routable, not a LAN address."* Mismatches are surfaced in the bg-ip step detail as a warning; the Apply still completes so the rest of the flow finishes.
+- **`step audit-ip-surfaces` cross-checks every IP-holding surface at end of Apply.** Verifies all three utility envs (`director`, `serverGateway`, `textRouter`) and `status.utilities.messageQueues.statuses.{game,admin}.amqpAddress` match the target public IP. Flags private `amqpAddress` values (`10.`, `172.16-31.`, `192.168.`) and CGNAT (`100.64.0.0/10`) — `amqpAddress` must be a publicly routable IP so clients can queue to join. Mismatches are surfaced in the bg-ip step detail as a warning; the Apply still completes so the rest of the flow finishes.
 
 ## [12.14.7] - 2026-06-30
 

@@ -956,9 +956,8 @@ step audit-ip-surfaces
 # does. Adds an authoritative check after the operator has had a chance to
 # reconcile (~10s post pod-delete). Reports AUDIT_OK or per-surface mismatches
 # so the PowerShell side can surface them to the user. Also flags CGNAT
-# (100.64.0.0/10) and private amqpAddress values (per Sora's Discord tip
-# 2026-05-27: "check the IP the VM is reporting to Funcom's server browser;
-# amqpAddress must be publicly routable, not a LAN address"). Requires jq.
+# (100.64.0.0/10) and private amqpAddress values — the amqpAddress must be a
+# publicly routable IP so clients can queue to join. Requires jq.
 if command -v jq >/dev/null 2>&1; then
   sleep 10  # give the operator a moment to repopulate status after pod deletes
   AUDIT_MISMATCHES=0
