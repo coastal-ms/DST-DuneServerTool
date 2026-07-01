@@ -13,6 +13,10 @@ here cover everything those tags shipped.
 
 ## [Unreleased]
 
+### Fixed
+
+- **Market Bot no longer overpays sellers 10× on purchase.** When Duke's Market Bot bought a player's sell order, it paid out (and debited its own balance) at 10× the listed price — e.g. an item listed for 83,000 Solari paid the seller 830,000. The game's exchange stores `item_price` 1:1 with the listed Solari and "Take Solari" credits it unscaled, but the payout path multiplied by 10 (a compensation added in an earlier release that a later Funcom patch made incorrect). Duke now pays the exact listed price, matching a normal player-to-player sale.
+
 ## [12.14.9] - 2026-06-30
 
 ### Changed
