@@ -491,7 +491,8 @@
     ],
     "DA_CT_Fac_Atre_Rank04_05_Skorda": [
       "Contract.Tracking.FactionStory.R4C5Completed",
-      "Contract.Tracking.Completed.Fac_Atre_Rank04_05_Skorda"
+      "Contract.Tracking.Completed.Fac_Atre_Rank04_05_Skorda",
+      "Contract.Tracking.Completed.FactionStoryline.FindSkorda"
     ],
     "DA_CT_Fac_Atre_Rank04_06_TaintedSpice": [
       "Contract.Tracking.Completed.FactionStoryline.Atreides.Rank4.Contract6",
@@ -601,7 +602,8 @@
     ],
     "DA_CT_Fac_Hark_Rank04_05_Skorda": [
       "Contract.Tracking.FactionStory.R4C5Completed",
-      "Contract.Tracking.Completed.Fac_Hark_Rank04_05_Skorda"
+      "Contract.Tracking.Completed.Fac_Hark_Rank04_05_Skorda",
+      "Contract.Tracking.Completed.FactionStoryline.FindSkorda"
     ],
     "DA_CT_Fac_Hark_Rank04_06_TaintedSpice": [
       "Contract.Tracking.Completed.FactionStoryline.Harkonnen.Rank4.Contract6",

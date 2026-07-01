@@ -17,6 +17,10 @@ here cover everything those tags shipped.
 
 - **Complete Contract player action.** A new offline-only **Complete Contract** action (Players → Progression) force-completes a single stuck or in-flight contract: it writes the contract's completion tags and dismisses the active contract item. The picker is searchable, so you can type e.g. `Skorda`, `Atre`, or `Hawat` to find the right contract. This clears faction-storyline contracts (such as the Atreides *Skorda's Last Stand: Report back to Thufir Hawat*) that could be left stuck after using an establish-membership / faction one-click, where the journey and tags completed but the contract's completion tag was never written.
 
+### Fixed
+
+- **Skorda contract completion now writes the storyline-moment tag.** The tag catalog entry for the Rank 4 *Skorda's Last Stand* contract (both Atreides and Harkonnen) was missing `Contract.Tracking.Completed.FactionStoryline.FindSkorda` — the storyline-moment tag that gates Thufir Hawat's turn-in dialogue. Completing the contract wrote the per-contract tags but not this shared moment tag, so Hawat stayed gated and the contract could remain stuck even after the Complete Contract action reported success. Added the missing tag to both faction entries.
+
 ## [12.14.9] - 2026-06-30
 
 ### Changed
