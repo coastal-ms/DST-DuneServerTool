@@ -19,7 +19,7 @@ here cover everything those tags shipped.
 
 ### Fixed
 
-- **Skorda contract completion now writes the storyline-moment tag.** The tag catalog entry for the Rank 4 *Skorda's Last Stand* contract (both Atreides and Harkonnen) was missing `Contract.Tracking.Completed.FactionStoryline.FindSkorda` — the storyline-moment tag that gates Thufir Hawat's turn-in dialogue. Completing the contract wrote the per-contract tags but not this shared moment tag, so Hawat stayed gated and the contract could remain stuck even after the Complete Contract action reported success. Added the missing tag to both faction entries.
+- **Skorda contract completion now fully mirrors a natural turn-in.** Two problems left the Rank 4 *Skorda's Last Stand* contract (both Atreides and Harkonnen) stuck even after the Complete Contract action reported success: (1) the tag catalog was missing `Contract.Tracking.Completed.FactionStoryline.FindSkorda` — the storyline-moment tag that gates Thufir Hawat's turn-in dialogue — and (2) the completion path only *added* tags, so the stale `Contract.Tracking.FactionStory.ShowSkorda` "reveal/active" flag was left behind, keeping the contract visible in the Arrakeen Contract tab. Added the missing moment tag to both faction entries, and the Complete Contract action now also *removes* per-contract active/reveal flags (new `contract_remove_tags` catalog map) so the player's tag state matches a normally-completed character exactly.
 
 ## [12.14.9] - 2026-06-30
 
