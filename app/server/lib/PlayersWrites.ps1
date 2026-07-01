@@ -1308,34 +1308,43 @@ function Invoke-DunePlayerWipeJourneyNodes {
 # via this Complete Contract action, or via establish-membership completing the
 # ClimbTheRanks tree through Invoke-DunePlayerCompleteJourneyNode - the node named
 #   ...Complete "<contract>" Contract
-# is left at complete_condition_state='true'. The game renders THAT as an active,
-# condition-met contract card in the Arrakeen Contract tab (and keeps Hawat gated
-# on the "occupational hazard" line), so the contract never clears. A NATURALLY
-# completed character instead has that node CONSUMED to '{}' - verified on a
-# reference DB where tags and reveal_condition_state matched one-for-one and the
-# ONLY difference was complete_condition_state ('true' = card shown, '{}' = gone).
-# DST's CompleteJourneyNode / Reset ops only ever write 'true' / 'false' / delete,
-# none of which reach the consumed '{}' state, so we set it explicitly here.
+# is left with reveal_condition_state='true' (and complete_condition_state='true'
+# when freshly stuck). The game renders a node whose REVEAL condition is met as an
+# active contract card in the Arrakeen Contract tab (and keeps Hawat gated on the
+# "occupational hazard" line), so the contract never clears. reveal - not complete -
+# is the render source: a reference character that had complete='{}' but reveal='true'
+# STILL showed the card, whereas a fully clean, naturally-completed character has that
+# node CONSUMED on BOTH fields (complete='{}', reveal='{}', fail='{}'). DST's
+# CompleteJourneyNode / Reset ops only ever write 'true' / 'false' / delete, none of
+# which reach the consumed '{}' state, so we set both complete and reveal to '{}' here.
 #
 # Interaction with Reset Faction (Invoke-DunePlayerResetFaction, Player Admin ->
 # Progression): that command blanket-resets every 'DA_FQ_ClimbTheRanks%' node's
-# complete_condition_state to 'false' (leaving reveal_condition_state untouched),
-# so a later faction wipe overwrites this '{}' to 'false' exactly as it would have
-# overwritten the old stuck 'true' - the storyline replays identically either way.
-# No stranded state. The WHERE also matches only nodes currently at 'true', so
-# running Complete Contract on a fresh/in-progress contract, or after a wipe (nodes
-# at 'false'), is a safe no-op.
+# complete_condition_state to 'false' (leaving reveal_condition_state untouched). This
+# stays safe because '{}' is the game's OWN natural post-completion state - a normal
+# character carries many ClimbTheRanks nodes at reveal='{}', and a later faction wipe +
+# storyline replay handles those exactly as it always has. We are matching that native
+# clean state, not inventing a new one, so no stranded state is introduced.
+#
+# The WHERE matches Complete Contract nodes at reveal='true' whose objective is done or
+# already partly-consumed (complete IN 'true','{}'). That catches a freshly stuck node
+# AND one left half-cleared by an earlier build (complete='{}', reveal='true'), while
+# never touching a genuinely in-progress contract (complete='false' = still being
+# worked). Running this on a fresh contract, or after a wipe (nodes at 'false'), is a
+# safe no-op.
 function Invoke-DuneConsumeStuckContractNodes {
     param([string]$Ip, [long]$AccountId)
     if ($AccountId -le 0) { return @{ ok = $true; consumed = 0 } }
     $sql = @"
 UPDATE dune.journey_story_node
 SET complete_condition_state = '{}'::jsonb,
+    reveal_condition_state   = '{}'::jsonb,
     has_pending_reward       = false
 WHERE character_id IN (SELECT id FROM dune.player_state WHERE account_id = $AccountId::bigint)
   AND story_node_id LIKE 'DA_FQ_ClimbTheRanks%'
   AND story_node_id LIKE '%Complete "%" Contract'
-  AND complete_condition_state = 'true'::jsonb;
+  AND reveal_condition_state = 'true'::jsonb
+  AND complete_condition_state IN ('true'::jsonb, '{}'::jsonb);
 "@
     $r = Invoke-DuneSqlQuery -Ip $Ip -Sql $sql -ReadOnly $false -MaxRows 1 -TimeoutSec 30
     if (-not $r.ok) { return @{ ok = $false; error = "consume contract nodes: $($r.error)" } }
