@@ -297,6 +297,44 @@ Describe 'DuneGameConfigSchema: CraftingSettings fields' -Tag 'GameConfig' {
         (Get-EffectiveValue -Raw $raw -Section $script:SecCrafting -Key 'm_RepairCostWeight') | Should -Be '0.25'
         (Get-EffectiveValue -Raw $raw -Section $script:SecCrafting -Key 'm_RecyclerOutputWeight') | Should -Be '1.75'
     }
+
+    It 'parks client-touched sections inside the DST managed block at the bottom' {
+        # Users want to copy the DST section to share with players connecting to
+        # their server, so every DST-touched key must live below the BEGIN marker
+        # and unrelated sections (audio/video) must stay where they were.
+        $dir = (Get-PSDrive TestDrive).Root
+        $path = Join-Path $dir 'Game.ini'
+        [IO.File]::WriteAllText($path, @"
+[Audio]
+MasterVolume=0.8
+
+[$script:SecCrafting]
+m_RepairCostWeight=1.0
+
+[Video]
+ResolutionScale=100
+"@)
+        $result = Save-DuneGameConfigClient -Dir $dir -Updates @(
+            @{ key='m_RepairCostWeight'; value='0.25' }
+        )
+        $result.ok | Should -BeTrue
+        $raw = [IO.File]::ReadAllText($path)
+
+        # DST markers present
+        $raw | Should -Match ([regex]::Escape($script:DstManagedBegin))
+        $raw | Should -Match ([regex]::Escape($script:DstManagedEnd))
+
+        # Touched section lives below the BEGIN marker
+        $beginIdx     = $raw.IndexOf($script:DstManagedBegin)
+        $craftingIdx  = $raw.IndexOf('[' + $script:SecCrafting + ']')
+        $craftingIdx | Should -BeGreaterThan $beginIdx
+
+        # Untouched sections stay above the BEGIN marker
+        $raw.IndexOf('[Audio]') | Should -BeLessThan $beginIdx
+        $raw.IndexOf('[Video]') | Should -BeLessThan $beginIdx
+        $raw.IndexOf('[Audio]') | Should -BeGreaterOrEqual 0
+        $raw.IndexOf('[Video]') | Should -BeGreaterOrEqual 0
+    }
 }
 
 Describe 'GameConfig: reset-to-default removes the key from the INI' -Tag 'GameConfig' {

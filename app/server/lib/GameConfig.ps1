@@ -463,9 +463,13 @@ function Set-DuneIniValuesInPlace {
 }
 
 # Apply client-apply updates to the LOCAL client Game.ini. Validates that every
-# key is schema-flagged ClientApply (blocks arbitrary local writes) and upserts
-# in place. Does NOT auto-backup (manual backups only). Also scrubs the
-# deprecated no-op multiplier keys so the client file stays clean.
+# key is schema-flagged ClientApply (blocks arbitrary local writes) and routes
+# the write through the same managed-block writer the server-side files use.
+# That way every DST-touched key sits in a clearly marked block at the bottom
+# of the file (issue #YYY — users want to copy-paste the DST section to share
+# with friends connecting to their server, without hand-picking edits scattered
+# through the file). Also scrubs the deprecated no-op multiplier keys so the
+# client file stays clean. Does NOT auto-backup (manual backups only).
 # Returns @{ ok; path; backup; created; applied; items } (backup always '').
 function Save-DuneGameConfigClient {
     param([object[]]$Updates, [string]$Dir = '', [string]$DefaultsRaw = '')
@@ -510,7 +514,10 @@ function Save-DuneGameConfigClient {
     # Game.ini has no prior struct, seed the full DefaultGame.ini struct so the
     # other members are preserved (the route supplies $DefaultsRaw).
     $folded = Convert-DuneStructUpdates -Raw $existing -Updates $clean.ToArray() -DefaultsRaw $DefaultsRaw
-    $new    = Set-DuneIniValuesInPlace -Raw $existing -Updates $folded -QuotedKeys $quoted
+    # Route through the managed-block writer (same as the server files). Every
+    # DST-touched section lands in a marker-delimited block at the bottom; the
+    # user's unrelated sections (audio, video, etc.) stay where they were.
+    $new    = ConvertTo-DuneIniManaged -Raw $existing -Updates $folded -QuotedKeys $quoted
     $new    = $new -replace "`r?`n", "`r`n"   # local file is Windows CRLF
 
     # No auto-backup: client backups are manual to avoid piling up .dstbak files.
