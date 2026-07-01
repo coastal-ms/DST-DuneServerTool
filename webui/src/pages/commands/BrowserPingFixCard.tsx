@@ -48,6 +48,11 @@ export function BrowserPingFixCard({ vmRunning, showToast }: {
   const [loading, setLoading]   = useState(false)
   const [saving, setSaving]     = useState(false)
   const [err, setErr]           = useState<string | null>(null)
+  // Wall-clock elapsed while the save is in flight. Ticks once a second
+  // so the button label + progress banner surface real progress instead
+  // of a spinner that looks dead for the ~1-3 minutes the BG restart
+  // takes. Reset every time saving flips on.
+  const [savingElapsed, setSavingElapsed] = useState(0)
 
   const [draftDatacenterId, setDraftDatacenterId] = useState<string>('duneawakening')
   const [draftPublicIp, setDraftPublicIp]         = useState<string>('')
@@ -84,6 +89,24 @@ export function BrowserPingFixCard({ vmRunning, showToast }: {
   }, [vmRunning])
 
   useEffect(() => { void load() }, [load])
+
+  // Tick a 1s counter while saving. `saving` flips off in the `save()`
+  // finally block; the effect's cleanup + reset handles the display.
+  useEffect(() => {
+    if (!saving) { setSavingElapsed(0); return }
+    const start = Date.now()
+    setSavingElapsed(0)
+    const iv = window.setInterval(() => {
+      setSavingElapsed(Math.floor((Date.now() - start) / 1000))
+    }, 1000)
+    return () => window.clearInterval(iv)
+  }, [saving])
+
+  function fmtElapsed(sec: number): string {
+    const m = Math.floor(sec / 60)
+    const s = sec % 60
+    return m > 0 ? `${m}m ${s.toString().padStart(2, '0')}s` : `${s}s`
+  }
 
   async function save() {
     if (!draftDatacenterId) {
@@ -186,10 +209,29 @@ export function BrowserPingFixCard({ vmRunning, showToast }: {
             title="Patch HOST_DATACENTER_ID on the 3 utility pods and restart the battlegroup. Runs even when the values are unchanged so a re-apply can repair a bad state."
           >
             <Icon name={saving ? 'Loader2' : 'Save'} size={14} className={saving ? 'animate-spin' : ''} />
-            {saving ? 'Saving…' : 'Save & restart BG'}
+            {saving ? `Saving… ${fmtElapsed(savingElapsed)}` : 'Save & restart BG'}
           </button>
         </div>
       </div>
+
+      {/* In-progress banner. The BG restart alone typically takes 1-3
+          minutes; without a visible progress cue the spinning button looks
+          stuck to anyone who doesn't already know what's happening. */}
+      {saving && (
+        <div className="rounded border border-info/40 bg-info/5 text-info px-3 py-2 mb-3 flex items-start gap-2">
+          <Icon name="Loader2" size={14} className="animate-spin mt-0.5 shrink-0" />
+          <div className="text-xs leading-relaxed">
+            <div>
+              <strong>Reconciling HOST_DATACENTER_ID and restarting the battlegroup…</strong>{' '}
+              <span className="font-mono">{fmtElapsed(savingElapsed)}</span> elapsed
+            </div>
+            <div className="text-text-muted mt-0.5">
+              Expected: a few seconds for the CR patch, then <strong>1–3 minutes</strong> for the battlegroup to stop and come back up cleanly. FLS re-registers on the next matchmaker cycle after that.
+              Safe to leave this page open — the action runs on the server and finishes on its own.
+            </div>
+          </div>
+        </div>
+      )}
 
       {status && (
         <div className="text-xs text-text-dim border-t border-border pt-2 mt-1">
