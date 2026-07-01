@@ -13,6 +13,12 @@ here cover everything those tags shipped.
 
 ## [Unreleased]
 
+## [12.14.9] - 2026-06-30
+
+### Changed
+
+- **Server Browser Ping tooling pulled for a rework.** The Commands-page card that adjusted `HOST_DATACENTER_ID` has been removed while the server-browser Ping integration is redesigned. In-game **Ping** for a self-hosted server is reported by Funcom's matchmaker backend rather than measured from the host, so the previous card couldn't reliably influence it — a Ping of `0` in the browser does not indicate a problem as long as players can connect and play. A revised approach will return in a future release.
+
 ## [12.14.8] - 2026-07-01
 
 ### Fixed
