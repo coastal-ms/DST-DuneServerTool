@@ -1,0 +1,13 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(ls \"C:/Users/Coastal/.claude/\" 2>&1 | head -30)",
+      "Bash(ls \"X:/ClaudeApp Projects/\" 2>&1 | head -40)",
+      "Bash(ls -la \"X:/ClaudeApp Projects/\" 2>&1; echo \"---\"; ls -la \"X:/\" 2>&1 | head -20)",
+      "Bash(find \"X:/GH Projects/local-only\" -maxdepth 2 -name \"persistent-notes*\" 2>&1 | head; echo \"---\"; find \"X:/\" -maxdepth 3 -name \"persistent-notes*\" 2>&1 | head)",
+      "Bash(ls /c/Users/Coastal/.claude/projects/X--GH-Projects-DST-DuneServerTool/memory/ 2>/dev/null)",
+      "Bash(ls /c/Users/Coastal/.claude/ 2>/dev/null | head -30)",
+      "Bash(cat /c/Users/Coastal/.claude.json 2>/dev/null | head -100; ls /c/Users/Coastal/.claude/projects/X--GH-Projects-DST-DuneServerTool/ 2>/dev/null)"
+    ]
+  }
+}
