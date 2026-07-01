@@ -764,11 +764,6 @@ function BackupScheduleCard({ vmRunning, showToast }: BackupScheduleCardProps) {
       const r = await pruneBackupDumpPods({ keepLast: draftKeepDumpPods, keepDays: draftKeepDumpDays })
       const delCount = r.deleted?.length ?? 0
       const survCount = r.survivors?.length ?? 0
-      // Survivors went through both a graceful AND a force-delete pass and
-      // still came back in the kubectl re-read. They're either owner-
-      // recreated (a controller spawning them again with the same name) or
-      // RBAC-denied. Either way the user needs to know — and if an owner
-      // is named we surface it so they know what to delete instead.
       if (survCount > 0) {
         const detail = (r.survivors ?? []).map(p => {
           if (p.ownerKind && p.ownerName && p.ownerIsController) {
@@ -783,8 +778,13 @@ function BackupScheduleCard({ vmRunning, showToast }: BackupScheduleCardProps) {
       } else {
         showToast('ok', r.message ?? (delCount > 0 ? `Deleted ${delCount} dump pod(s).` : 'Nothing to prune.'))
       }
-      // Same code path as the Refresh button — proven to give a clean,
-      // authoritative re-read of schedule + history + dump pods.
+      // DIAGNOSTIC: null the state first so 'Loading...' flashes, then
+      // reload. If the flash is visible, React IS re-rendering and the
+      // fresh fetch returned stale data. If not, the component is not
+      // picking up state changes at all.
+      setDumpPods(null)
+      // Yield to React so the null render commits before we kick loadAll.
+      await new Promise<void>(resolve => setTimeout(resolve, 50))
       await loadAll()
     } catch (e) {
       showToast('err', `Prune failed: ${e instanceof Error ? e.message : String(e)}`)
