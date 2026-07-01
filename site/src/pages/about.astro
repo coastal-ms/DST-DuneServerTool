@@ -66,6 +66,30 @@ import PageHeader from "../components/PageHeader.astro";
       the in-app updater pulls the next release straight from the Releases API.
     </p>
 
+    <ul class="flex flex-wrap gap-2 not-prose list-none p-0" aria-label="Technologies used">
+      {[
+        ".NET 10",
+        "WebView2",
+        "React",
+        "TypeScript",
+        "Tailwind CSS",
+        "Vite",
+        "PowerShell 7",
+        "Hyper-V",
+        "Kubernetes (K3s)",
+        "PostgreSQL",
+        "RabbitMQ",
+        "SSH",
+        "Inno Setup",
+        "GitHub Actions",
+      ].map((tech) => (
+        <li class="font-mono text-xs text-dune-accent-soft bg-dune-surface border border-dune-border rounded-full px-3 py-1">
+          {tech}
+        </li>
+      ))}
+    </ul>
+
+
     <p class="text-sm pt-8 border-t border-dune-border">
       Coastal is occasionally open to small consulting projects involving
       Windows tooling, server automation, or game-server operations — reach
