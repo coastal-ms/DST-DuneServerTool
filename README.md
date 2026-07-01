@@ -9,8 +9,8 @@
 
 **🌐 Website & feature tour: [coastal-ms.github.io/DST-DuneServerTool](https://coastal-ms.github.io/DST-DuneServerTool/)** — screenshots, install guide, and the full changelog.
 
-The current release is **v12.14.6**. The in-app version label and the
-website show plain semver tags (e.g. `v12.14.6`) — the previous
+The current release is **v12.14.7**. The in-app version label and the
+website show plain semver tags (e.g. `v12.14.7`) — the previous
 Roman-numeral stylization has been removed.
 
 > ## ✅ Confirmed compatible with Dune: Awakening **1.4.10.0**
@@ -31,6 +31,51 @@ browser and keeps the server running in the background.
 
 ### New in v12.14.x
 
+- **Server browser Ping fix** (v12.14.7, Commands page). New card at the
+  top of Commands reconciles `HOST_DATACENTER_ID` on all three utility
+  pods (director / serverGateway / textRouter) with the VM's Linux
+  hostname. Vendor default is `dune-testing`, which doesn't match, so
+  the in-game **Ping** column shows `0` with empty bars. Live-verified
+  fix: patching to `duneawakening` (the DST-shipped Alpine VM hostname)
+  and restarting the battlegroup flips Ping from `0` to a real value
+  with full bars. The card pre-populates the datacenter-ID input with
+  the detected VM hostname and the IP input with DST's current public
+  IP; one Save patches the CR and issues a clean BG restart so FLS
+  re-registers on the next matchmaker cycle. Save runs even when values
+  are unchanged (repair use case). Live elapsed timer + expected-
+  duration banner so operators can see progress during the ~1–3 minute
+  restart. Distinct from the P34 / connection-joining diagnostics in
+  Settings — this is only about the Ping value shown in the server
+  browser.
+- **Prune accumulated Completed database-backup dump pods** (v12.14.7,
+  Database → Backup Schedule). Funcom's `battlegroup backup` job creates
+  a one-shot `*-dump-YYYYMMDD-HHMMSS-pod` per run that terminates
+  Succeeded and is never garbage-collected — they pile up on the Pods
+  page and in the shell-pod picker. New section on the Backup Schedule
+  card with **Keep last (count)** and **Keep last (days)** thresholds
+  persisted into the managed crontab block, a **Save retention** button,
+  and a **Prune now (N)** action with an enumerated-pod table showing
+  owner references. Auto-prune also runs on every backup-schedule cron
+  tick and as a post-action hook on Start All / Reboot All, so
+  accumulation stays bounded on its own. Two-pass delete (graceful →
+  force with `--grace-period=0`) surfaces any survivors with their
+  owner controller.
+- **Client `Game.ini` changes now park in a DST managed block**
+  (v12.14.7, Game Config → Apply to client). The server-side files
+  (`UserGame.ini`, `UserEngine.ini`) have always relocated DST-touched
+  sections into a marker-delimited block at the bottom so operators can
+  copy-paste the DST section to share with players connecting to their
+  server. The local client `Game.ini` now uses the same writer path —
+  every DST-touched section moves below the `; ===== Dune Server Tool
+  (DST) managed section BEGIN =====` marker; unrelated user sections
+  (audio, video, etc.) stay where they were.
+- **Public IP apply now streams live progress during BG restart**
+  (v12.14.7, Settings → Public IP / DDNS). The "Propagate IP to
+  battlegroup + restart" step used to run one silent SSH script for
+  5–7 minutes. Now split into three phases with a PowerShell-side wait
+  loop that heartbeats the UI every 5 seconds — the step detail ticks
+  `Waiting for servers to report ready… (3/60, up to 300s)` instead of
+  sitting on a static label.
 - **Establish faction membership for unaligned players** (v12.14.3). **Set
   Faction Tier** / **Give Faction Rep** now join an unaligned character to
   the faction in one offline action: complete the `DA_FQ_ClimbTheRanks`
@@ -877,7 +922,7 @@ so it can be tracked and fixed:
 
 The bug report form asks for:
 
-- **Tool version** — shown in the portal footer (e.g. `v12.14.6 · coastal-ms`).
+- **Tool version** — shown in the portal footer (e.g. `v12.14.7 · coastal-ms`).
 - **Surface** — which portal page (Server Health, Commands, PowerShell,
   Game Config, DD Map, Map SpinUp, Database, Sietches, Settings, Setup
   Wizard) or whether it was the CLI / installer / auto-updater.
