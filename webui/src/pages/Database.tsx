@@ -778,19 +778,17 @@ function BackupScheduleCard({ vmRunning, showToast }: BackupScheduleCardProps) {
       } else {
         showToast('ok', r.message ?? (delCount > 0 ? `Deleted ${delCount} dump pod(s).` : 'Nothing to prune.'))
       }
-      // DIAGNOSTIC: null the state first so 'Loading...' flashes, then
-      // reload. If the flash is visible, React IS re-rendering and the
-      // fresh fetch returned stale data. If not, the component is not
-      // picking up state changes at all.
-      setDumpPods(null)
-      // Yield to React so the null render commits before we kick loadAll.
-      await new Promise<void>(resolve => setTimeout(resolve, 50))
-      await loadAll()
     } catch (e) {
       showToast('err', `Prune failed: ${e instanceof Error ? e.message : String(e)}`)
     } finally {
       setPruning(false)
     }
+    // Fire loadAll AFTER the try/finally has fully unwound — matches the
+    // Refresh button's exact pattern (`onClick={() => void loadAll()}`,
+    // no await, no chain, top-level microtask). Awaiting it inside the
+    // handler chain evidently prevented the state updates from reaching
+    // the DOM in the DST WebView2 host.
+    void loadAll()
   }
 
   // Dump-pod retention inputs differ from what's saved on the VM. Mirrors
