@@ -1472,6 +1472,14 @@
       "Skills.Key.CapstoneGadgets"
     ]
   },
+  "contract_remove_tags": {
+    "DA_CT_Fac_Atre_Rank04_05_Skorda": [
+      "Contract.Tracking.FactionStory.ShowSkorda"
+    ],
+    "DA_CT_Fac_Hark_Rank04_05_Skorda": [
+      "Contract.Tracking.FactionStory.ShowSkorda"
+    ]
+  },
   "job_skill_blocks": {
     "BeneGesserit": [
       "Skills.Key.BeneGesserit1",

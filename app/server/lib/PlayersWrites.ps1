@@ -240,15 +240,20 @@ function Get-DuneTierBumpFromTags {
 # Writes tags via dune.update_player_tags + tier-bump cascade. Returns
 # @{ ok=$true; extra="<message fragment>" }.
 function Invoke-DuneApplyTagsWithTierBump {
-    param([string]$Ip, [long]$AccountId, [string[]]$Tags)
-    if (-not $Tags -or $Tags.Count -eq 0) { return @{ ok = $true; extra = '' } }
+    param([string]$Ip, [long]$AccountId, [string[]]$Tags, [string[]]$RemoveTags)
+    $addCount = if ($Tags) { @($Tags).Count } else { 0 }
+    $remCount = if ($RemoveTags) { @($RemoveTags).Count } else { 0 }
+    if ($addCount -eq 0 -and $remCount -eq 0) { return @{ ok = $true; extra = '' } }
 
-    $tagsArr = ConvertTo-DunePgTextArray $Tags
-    $sql = "SELECT dune.update_player_tags($AccountId::bigint, $tagsArr, ARRAY[]::text[]);"
+    $tagsArr = if ($addCount -gt 0) { ConvertTo-DunePgTextArray $Tags } else { 'ARRAY[]::text[]' }
+    $remArr  = if ($remCount -gt 0) { ConvertTo-DunePgTextArray $RemoveTags } else { 'ARRAY[]::text[]' }
+    $sql = "SELECT dune.update_player_tags($AccountId::bigint, $tagsArr, $remArr);"
     $r = Invoke-DuneSqlQuery -Ip $Ip -Sql $sql -ReadOnly $false -MaxRows 1 -TimeoutSec 30
     if (-not $r.ok) { return @{ ok = $false; error = "apply tags: $($r.error)" } }
 
-    $extra = ", +$($Tags.Count) tag(s)"
+    $extra = ''
+    if ($addCount -gt 0) { $extra += ", +$addCount tag(s)" }
+    if ($remCount -gt 0) { $extra += ", -$remCount tag(s)" }
 
     $bumps = Get-DuneTierBumpFromTags -Tags $Tags
     if ($bumps.Count -eq 0) { return @{ ok = $true; extra = $extra } }
@@ -1308,6 +1313,7 @@ function Invoke-DunePlayerCompleteContracts {
     _Load-DuneTagsData
     $seenTag = @{}; $allTags = New-Object System.Collections.Generic.List[string]
     $seenSkill = @{}; $allSkills = New-Object System.Collections.Generic.List[string]
+    $seenRem = @{}; $allRemove = New-Object System.Collections.Generic.List[string]
     $resolved = New-Object System.Collections.Generic.List[string]
 
     foreach ($id in $ContractIds) {
@@ -1322,9 +1328,15 @@ function Invoke-DunePlayerCompleteContracts {
                 if (-not $seenSkill.ContainsKey($sk)) { $seenSkill[$sk] = $true; [void]$allSkills.Add($sk) }
             }
         }
+        if ($script:DuneTagsData.contractRemoveTags.ContainsKey($r.name)) {
+            foreach ($rt in $script:DuneTagsData.contractRemoveTags[$r.name]) {
+                $rs = [string]$rt
+                if ($rs -and -not $seenRem.ContainsKey($rs)) { $seenRem[$rs] = $true; [void]$allRemove.Add($rs) }
+            }
+        }
     }
 
-    $bumpRes = Invoke-DuneApplyTagsWithTierBump -Ip $Ip -AccountId $AccountId -Tags @($allTags)
+    $bumpRes = Invoke-DuneApplyTagsWithTierBump -Ip $Ip -AccountId $AccountId -Tags @($allTags) -RemoveTags @($allRemove)
     if (-not $bumpRes.ok) { return @{ ok = $false; error = $bumpRes.error } }
     $extra = $bumpRes.extra
 
