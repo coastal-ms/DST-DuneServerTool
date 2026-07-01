@@ -767,13 +767,19 @@ function BackupScheduleCard({ vmRunning, showToast }: BackupScheduleCardProps) {
       // Survivors went through both a graceful AND a force-delete pass and
       // still came back in the kubectl re-read. They're either owner-
       // recreated (a controller spawning them again with the same name) or
-      // RBAC-denied. Either way the user needs to know.
+      // RBAC-denied. Either way the user needs to know — and if an owner
+      // is named we surface it so they know what to delete instead.
       if (survCount > 0) {
-        const names = (r.survivors ?? []).map(p => p.name).join(', ')
+        const detail = (r.survivors ?? []).map(p => {
+          if (p.ownerKind && p.ownerName && p.ownerIsController) {
+            return `${p.name} (owned by ${p.ownerKind}/${p.ownerName})`
+          }
+          return p.name
+        }).join('; ')
         showToast('err',
           delCount > 0
-            ? `Deleted ${delCount}; ${survCount} survived both delete passes (${names}). Check kubectl describe.`
-            : `0 deleted; ${survCount} survived both delete passes (${names}). Check kubectl describe.`)
+            ? `Deleted ${delCount}; ${survCount} survived both passes: ${detail}`
+            : `0 deleted; ${survCount} survived both passes: ${detail}`)
       } else {
         showToast('ok', r.message ?? (delCount > 0 ? `Deleted ${delCount} dump pod(s).` : 'Nothing to prune.'))
       }
@@ -1132,6 +1138,7 @@ function BackupScheduleCard({ vmRunning, showToast }: BackupScheduleCardProps) {
                     <th className="text-left px-2 py-1 font-medium">Namespace</th>
                     <th className="text-left px-2 py-1 font-medium">Name</th>
                     <th className="text-left px-2 py-1 font-medium">Age</th>
+                    <th className="text-left px-2 py-1 font-medium">Owner</th>
                     <th className="text-left px-2 py-1 font-medium">Disposition</th>
                   </tr>
                 </thead>
@@ -1141,6 +1148,9 @@ function BackupScheduleCard({ vmRunning, showToast }: BackupScheduleCardProps) {
                     const ageDays = p.ageMinutes != null ? Math.floor(p.ageMinutes / (60 * 24)) : null
                     const exceededAge = draftKeepDumpDays > 0 && ageDays != null && ageDays > draftKeepDumpDays
                     const wouldDelete = exceededCount || exceededAge
+                    const ownerText = (p.ownerKind && p.ownerName)
+                      ? `${p.ownerKind}/${p.ownerName}${p.ownerIsController ? ' *' : ''}`
+                      : '—'
                     return (
                       <tr key={`${p.namespace}/${p.name}`} className={wouldDelete ? 'text-danger' : 'text-text'}>
                         <td className="px-2 py-1">{idx + 1}</td>
@@ -1148,6 +1158,9 @@ function BackupScheduleCard({ vmRunning, showToast }: BackupScheduleCardProps) {
                         <td className="px-2 py-1 truncate" title={p.name}>{p.name}</td>
                         <td className="px-2 py-1 whitespace-nowrap">
                           {ageDays != null ? `${ageDays}d` : '—'}
+                        </td>
+                        <td className="px-2 py-1 truncate max-w-[12rem]" title={p.ownerIsController ? `Controller: ${ownerText}` : ownerText}>
+                          {ownerText}
                         </td>
                         <td className="px-2 py-1 whitespace-nowrap">
                           {wouldDelete

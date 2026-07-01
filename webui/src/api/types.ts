@@ -407,6 +407,9 @@ export type BackupDumpPod = {
   phase: string
   nameTimestamp: string | null
   ageMinutes: number | null
+  ownerKind?: string
+  ownerName?: string
+  ownerIsController?: boolean
 }
 
 export type BackupDumpPodList = {

@@ -599,15 +599,22 @@ $script:DuneBackupDumpPodNameRegex = '^[a-z0-9.-]+-dump-[0-9]{8}-[0-9]{6}-pod$'
 
 function Get-DuneBackupDumpPods {
     param([Parameter(Mandatory)][string]$Ip)
-    # Stream namespace|name|startTime|phase via jsonpath. Avoids needing jq on
-    # the VM. We filter by phase + name regex here so callers always get a
-    # canonical list (Completed/Succeeded dump-* pods only).
+    # Stream namespace|name|startTime|phase|ownerKind|ownerName|controller via
+    # jsonpath. Avoids needing jq on the VM. We filter by phase + name regex
+    # here so callers always get a canonical list (Completed/Succeeded dump-*
+    # pods only).
+    #
+    # Owner reference info is included because "pod survives a force-delete"
+    # means an owner controller is re-creating it with the same name — we
+    # need to surface WHICH owner so the user can decide whether to delete
+    # that instead. Only the first ownerReference is captured (Kubernetes
+    # allows multiple but a controller-owner is typically singular).
     #
     # NOTE: in Kubernetes the actual `.status.phase` value for a finished pod
     # is "Succeeded" — what kubectl displays as "Completed" in the STATUS
     # column is a container reason, not the pod phase. We keep the
     # ==="Completed" check defensively in case Funcom's CRD ever sets it.
-    $jp = '{range .items[*]}{.metadata.namespace}|{.metadata.name}|{.status.startTime}|{.status.phase}{"\n"}{end}'
+    $jp = '{range .items[*]}{.metadata.namespace}|{.metadata.name}|{.status.startTime}|{.status.phase}|{.metadata.ownerReferences[0].kind}|{.metadata.ownerReferences[0].name}|{.metadata.ownerReferences[0].controller}{"\n"}{end}'
     $cmd = "sudo kubectl get pods --all-namespaces -o jsonpath='$jp' 2>/dev/null"
     $raw = $null
     try {
@@ -620,12 +627,15 @@ function Get-DuneBackupDumpPods {
     $out = New-Object System.Collections.Generic.List[object]
     foreach ($r in $rows) {
         if (-not $r) { continue }
-        $parts = $r -split '\|', 4
+        $parts = $r -split '\|', 7
         if ($parts.Count -lt 4) { continue }
         $ns    = $parts[0]
         $name  = $parts[1]
         $start = $parts[2]
         $phase = $parts[3]
+        $ownerKind = if ($parts.Count -gt 4) { [string]$parts[4] } else { '' }
+        $ownerName = if ($parts.Count -gt 5) { [string]$parts[5] } else { '' }
+        $ownerCtrl = if ($parts.Count -gt 6) { [string]$parts[6] } else { '' }
         if ($name -notmatch $script:DuneBackupDumpPodNameRegex) { continue }
         if ($phase -ne 'Succeeded' -and $phase -ne 'Completed') { continue }
 
@@ -635,12 +645,15 @@ function Get-DuneBackupDumpPods {
         $ageMin = if ($nameTs) { [int]($nowUtc - $nameTs).TotalMinutes } else { $null }
 
         $out.Add([pscustomobject]@{
-            namespace      = $ns
-            name           = $name
-            startTime      = $start
-            phase          = $phase
-            nameTimestamp  = if ($nameTs) { $nameTs.ToString('yyyy-MM-ddTHH:mm:ssZ') } else { $null }
-            ageMinutes     = $ageMin
+            namespace          = $ns
+            name               = $name
+            startTime          = $start
+            phase              = $phase
+            nameTimestamp      = if ($nameTs) { $nameTs.ToString('yyyy-MM-ddTHH:mm:ssZ') } else { $null }
+            ageMinutes         = $ageMin
+            ownerKind          = $ownerKind
+            ownerName          = $ownerName
+            ownerIsController  = ($ownerCtrl -eq 'true')
         }) | Out-Null
     }
     # Sort by the embedded YYYYMMDD-HHMMSS in the name (newest first). Falls
