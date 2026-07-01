@@ -15,7 +15,7 @@ here cover everything those tags shipped.
 
 ### Changed
 
-- **"Server Browser Ping" card reframed as a diagnostic (`HOST_DATACENTER_ID`), not a Ping fix** (issue #425). A deep live investigation showed the in-game server-browser **Ping** column is computed by Funcom's matchmaker **backend-side**, not by a client→server probe: with `HOST_DATACENTER_ID` already matching the VM hostname, `HOST_DATACENTER_IP_ADDRESS` correct, the game bound on the public IP, FLS registered, and the server fully playable externally, Ping still showed `0` — and neither patching the ID, recreating the utility pods, nor a full battlegroup restart restored it. The card (now **"Server Browser Datacenter ID"**) keeps the ability to set `HOST_DATACENTER_ID` on the three utility pods, but is clearly labelled **cosmetic/diagnostic only** and no longer claims to fix the Ping value. Added an explainer that browser Ping `0` for a self-host is normal Funcom backend behavior and does **not** indicate a broken server if players can connect and play.
+- **Server Browser Ping tooling pulled for a rework.** The Commands-page card that adjusted `HOST_DATACENTER_ID` has been removed while the server-browser Ping integration is redesigned. In-game **Ping** for a self-hosted server is reported by Funcom's matchmaker backend rather than measured from the host, so the previous card couldn't reliably influence it — a Ping of `0` in the browser does not indicate a problem as long as players can connect and play. A revised approach will return in a future release.
 
 ## [12.14.8] - 2026-07-01
 

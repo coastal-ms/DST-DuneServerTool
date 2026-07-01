@@ -27,7 +27,6 @@ import { useApi } from '../hooks/useApi'
 import { api } from '../api/client'
 import { isLocalViewer } from '../util/viewer'
 import type { Command, CommandsResponse } from '../api/types'
-import { BrowserPingFixCard } from './commands/BrowserPingFixCard'
 
 // Commands that remote (Cloudflare-tunnel) viewers are allowed to see and run.
 // Everything else is hidden remotely and refused server-side. Keep in sync with
@@ -266,9 +265,8 @@ function SectionTitle({
 // ---------- Page -----------------------------------------------------------
 
 export function Commands() {
-  const { status, forceRefresh } = useStatus()
+  const { forceRefresh } = useStatus()
   const cmdsState = useApi<CommandsResponse>('/api/commands', { intervalMs: 30_000 })
-  const vmRunning = status?.vm?.running === true
 
   const [running, setRunning] = useState<Set<string>>(new Set())
   const [toast, setToast] = useState<{ kind: 'ok' | 'err'; msg: string } | null>(null)
@@ -533,11 +531,6 @@ export function Commands() {
           {toast.msg}
         </div>
       )}
-
-      {/* HOST_DATACENTER_ID = VM hostname reconcile — fixes the in-game server
-          browser Ping column showing 0. Distinct from Settings > Public IP
-          (which is about the IP the server advertises). */}
-      {!readOnly && <BrowserPingFixCard vmRunning={vmRunning} showToast={showToast} />}
 
       {cmdsState.error && (
         <div className="card p-3 mb-4 border-danger/40 bg-danger/10 text-danger text-sm flex items-center gap-2">
