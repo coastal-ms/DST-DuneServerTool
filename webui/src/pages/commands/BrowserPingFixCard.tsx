@@ -1,10 +1,19 @@
-// Card for setting HOST_DATACENTER_ID = VM hostname on the BG CR so the
-// in-game server browser Ping column actually populates. Not related to P34
-// / connection joining — this is *only* about the Ping value shown in the
-// server browser bin. Vendor default is "dune-testing" which doesn't match
-// the VM hostname, so Ping stays 0. Live-verified fix: patching all 3
-// utility pods' HOST_DATACENTER_ID to "duneawakening" (the Alpine VM
-// hostname) + BG restart flipped Ping 0 -> 72 on Coastal's server.
+// Card for setting HOST_DATACENTER_ID on the BG CR's three utility pods.
+//
+// IMPORTANT (see issue #425): HOST_DATACENTER_ID is a DIAGNOSTIC-ONLY
+// identifier. It does NOT durably control the in-game server-browser Ping
+// column. A deep live investigation (captures from both LAN and external
+// vantage) proved the browser Ping is computed FLS/matchmaker BACKEND-SIDE,
+// not by any client->server probe: with HOST_DATACENTER_ID already matching
+// the VM hostname, HOST_DATACENTER_IP_ADDRESS correct, the game bound on the
+// public IP, FLS registered, and the server fully playable externally, Ping
+// still showed 0 — and neither patching the ID, recreating the utility pods,
+// nor a full battlegroup restart restored it. Browser Ping=0 for a self-host
+// is a Funcom backend behavior; if players can connect and play, the server
+// is healthy. This card is kept only as a diagnostic: it surfaces the current
+// datacenter ID/IP vs the VM hostname and lets you set the ID (cosmetic — it
+// makes the FLS-side "<id> -> <ip>" label read your hostname instead of the
+// vendor default "dune-testing"). Do not present it as a Ping fix.
 
 import { useCallback, useEffect, useState } from 'react'
 import { Icon } from '../../components/Icon'
@@ -132,24 +141,36 @@ export function BrowserPingFixCard({ vmRunning, showToast }: {
 
   const matchIndicator = status && status.currentDatacenterId
     ? (status.hostnameMatches
-        ? <span className="text-xs text-success flex items-center gap-1"><Icon name="CheckCircle2" size={12} /> matches VM hostname — Ping should populate</span>
-        : <span className="text-xs text-warning flex items-center gap-1"><Icon name="AlertTriangle" size={12} /> does not match VM hostname (<span className="font-mono">{status.vmHostname || '?'}</span>) — Ping will show 0</span>)
+        ? <span className="text-xs text-success flex items-center gap-1"><Icon name="CheckCircle2" size={12} /> matches VM hostname</span>
+        : <span className="text-xs text-text-muted flex items-center gap-1"><Icon name="Info" size={12} /> differs from VM hostname (<span className="font-mono">{status.vmHostname || '?'}</span>) — cosmetic only</span>)
     : null
 
   return (
     <div className="card p-5 flex flex-col mb-6">
       <div className="flex items-center gap-3 mb-3">
         <Icon name="Radar" size={22} className="text-info" />
-        <h2 className="text-base font-semibold tracking-tight text-info">Server Browser Ping</h2>
+        <h2 className="text-base font-semibold tracking-tight text-info">Server Browser Datacenter ID</h2>
         <span className="ml-auto text-xs text-text-muted">
-          Patches <span className="font-mono">HOST_DATACENTER_ID</span> on the BG CR + restarts the battlegroup.
+          Diagnostic: sets <span className="font-mono">HOST_DATACENTER_ID</span> on the BG CR (cosmetic).
         </span>
       </div>
+      <div className="rounded border border-info/40 bg-info/5 text-info px-3 py-2 mb-3 flex items-start gap-2">
+        <Icon name="Info" size={14} className="mt-0.5 shrink-0" />
+        <p className="text-xs leading-relaxed">
+          <strong>Ping <span className="font-mono">0</span> in the server browser does not mean your server is broken.</strong>{' '}
+          The Ping column is computed by Funcom's matchmaker backend, not by a probe from the player's client —
+          so a self-hosted server can show <span className="font-mono">0</span> with empty bars while players still
+          connect and play normally (verified: correct advertised IP, FLS registered, server fully playable, Ping still 0).
+          Setting <span className="font-mono">HOST_DATACENTER_ID</span> below is <strong>cosmetic/diagnostic only</strong> —
+          it makes the FLS-side <span className="font-mono">&lt;id&gt; → &lt;ip&gt;</span> label read your VM hostname instead of the
+          vendor default <span className="font-mono">dune-testing</span>. It is <strong>not</strong> a reliable fix for the Ping value.
+          See issue #425.
+        </p>
+      </div>
       <p className="text-sm text-text-muted mb-3">
-        The in-game server browser only fills the <strong>Ping</strong> column when the battlegroup's{' '}
-        <span className="font-mono">HOST_DATACENTER_ID</span> equals the VM's Linux hostname (DST-shipped VMs: <span className="font-mono">duneawakening</span>).
-        The vendor default is <span className="font-mono">dune-testing</span>, which does not match, so Ping shows 0 with empty bars.
-        Set the ID to your hostname below and save — DST patches the three utility pods' env vars and restarts the battlegroup cleanly so FLS re-registers on the next matchmaker cycle.
+        This sets <span className="font-mono">HOST_DATACENTER_ID</span> on the three utility pods (director / serverGateway / textRouter)
+        to your VM's Linux hostname (DST-shipped VMs: <span className="font-mono">duneawakening</span>) and restarts the battlegroup so
+        the change takes effect. Use it to make diagnostics read a meaningful identifier; do not expect it to change the browser Ping.
       </p>
 
       {!vmRunning && (
@@ -222,11 +243,11 @@ export function BrowserPingFixCard({ vmRunning, showToast }: {
           <Icon name="Loader2" size={14} className="animate-spin mt-0.5 shrink-0" />
           <div className="text-xs leading-relaxed">
             <div>
-              <strong>Reconciling HOST_DATACENTER_ID and restarting the battlegroup…</strong>{' '}
+              <strong>Setting HOST_DATACENTER_ID and restarting the battlegroup…</strong>{' '}
               <span className="font-mono">{fmtElapsed(savingElapsed)}</span> elapsed
             </div>
             <div className="text-text-muted mt-0.5">
-              Expected: a few seconds for the CR patch, then <strong>1–3 minutes</strong> for the battlegroup to stop and come back up cleanly. FLS re-registers on the next matchmaker cycle after that.
+              Expected: a few seconds for the CR patch, then <strong>1–3 minutes</strong> for the battlegroup to stop and come back up cleanly.
               Safe to leave this page open — the action runs on the server and finishes on its own.
             </div>
           </div>
@@ -250,8 +271,8 @@ export function BrowserPingFixCard({ vmRunning, showToast }: {
       )}
 
       <p className="text-xs text-text-dim mt-3 italic">
-        Save restarts the battlegroup so the game-server pods pick up the change and FLS re-registers.
-        Players connected during the restart will get bounced. This is separate from the Public IP / DDNS apply in Settings.
+        Save restarts the battlegroup so the utility pods pick up the change. Players connected during the restart will get bounced.
+        This is a diagnostic label change only — it is separate from the Public IP / DDNS apply in Settings and does not affect connectivity or the browser Ping value.
       </p>
     </div>
   )

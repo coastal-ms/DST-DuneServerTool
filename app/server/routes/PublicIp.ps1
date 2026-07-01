@@ -105,9 +105,10 @@ Register-DuneRoute -Method POST -Path '/api/public-ip/apply' -Handler {
     Write-DuneJson -Response $res -Status 202 -Body @{ ok=$true; running=$true; publicIp=$target }
 }
 
-# HOST_DATACENTER_ID / server browser Ping column reconcile. Reads the VM
-# hostname + current CR values so the UI can pre-populate the inputs and
-# show whether the hostname already matches.
+# HOST_DATACENTER_ID diagnostic reconcile. Reads the VM hostname + current CR
+# values so the UI can pre-populate the inputs and show whether the hostname
+# already matches. NOTE: HOST_DATACENTER_ID does NOT control the server-browser
+# Ping column (FLS-backend-side); this is a diagnostic label only. See #425.
 Register-DuneRoute -Method GET -Path '/api/public-ip/datacenter-id' -Handler {
     param($req, $res, $routeParams, $body)
     $vm = $null
@@ -125,9 +126,10 @@ Register-DuneRoute -Method GET -Path '/api/public-ip/datacenter-id' -Handler {
 }
 
 # Patch the 3 utility pods' HOST_DATACENTER_ID (and, if publicIp is supplied
-# and differs, HOST_DATACENTER_IP_ADDRESS) then restart the battlegroup so
-# FLS re-registers. This is the browser-ping fix; see PublicIp.ps1 lib for
-# the backstory.
+# and differs, HOST_DATACENTER_IP_ADDRESS) then restart the battlegroup so the
+# utility pods pick up the change. NOTE: this is a DIAGNOSTIC label change only
+# — it does NOT reliably control the server-browser Ping value, which is
+# computed FLS-backend-side (see issue #425 + the PublicIp.ps1 lib backstory).
 Register-DuneRoute -Method POST -Path '/api/public-ip/datacenter-id' -Handler {
     param($req, $res, $routeParams, $body)
     $vm = $null

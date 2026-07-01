@@ -1236,16 +1236,21 @@ function Start-DunePublicIpApplyAsync {
 }
 
 # =============================================================================
-# HOST_DATACENTER_ID (server browser Ping column) reconcile
+# HOST_DATACENTER_ID (diagnostic identifier) reconcile
 # =============================================================================
-# Funcom's server-browser Ping column only populates when the BG CR's
-# HOST_DATACENTER_ID env var matches the VM's Linux hostname. Vendor default is
-# "dune-testing" (not derived from hostname), so out of the box the browser
-# shows 0 with empty bars. Live-verified 2026-07-01 on Coastal's Reapers
-# battlegroup: patching to "duneawakening" (the DST-shipped Alpine VM hostname)
-# + BG restart flipped Ping 0 -> 72 with full bars. Source: seb851/AntonivkA on
-# an external Discord thread, not documented in any GitHub repo. See
-# [[project-dst-host-datacenter-id-default]] memory for the full backstory.
+# NOTE (issue #425): HOST_DATACENTER_ID is a DIAGNOSTIC-ONLY identifier. It
+# does NOT durably control the in-game server-browser Ping column. A deep live
+# investigation (2026-06-30, packet captures from both LAN and external
+# vantage) proved the browser Ping is computed FLS/matchmaker BACKEND-SIDE, not
+# by a client->server probe: with the ID already matching the VM hostname,
+# HOST_DATACENTER_IP_ADDRESS correct, the game bound on the public IP, FLS
+# registered, and the server fully playable externally, Ping still showed 0 —
+# and neither patching the ID, recreating the utility pods, nor a full
+# battlegroup restart restored it. Browser Ping=0 for a self-host is a Funcom
+# backend behavior; if players can connect and play, the server is healthy.
+# The vendor default is "dune-testing"; setting this to the VM hostname is
+# cosmetic (it makes the FLS-side "<id> -> <ip>" label read the hostname). Do
+# NOT present this as a Ping fix.
 
 # Read the VM's Linux hostname over SSH. On DST-shipped Alpine VMs this is
 # "duneawakening"; on custom installs it's whatever `hostnamectl` was set to.
@@ -1384,7 +1389,7 @@ echo "DONE"
     $patched = @(($raw -split "`n") | Where-Object { $_ -match '^PATCHED_' }).Count
     return @{
         ok           = $true
-        message      = if ($patched -gt 0) { "Reconciled $patched env(s) on the BG CR and issued a battlegroup restart. FLS will re-register on the next matchmaker cycle." } else { 'Nothing to patch (values already match); battlegroup restart issued anyway to force FLS re-registration.' }
+        message      = if ($patched -gt 0) { "Set HOST_DATACENTER_ID on $patched env(s) and restarted the battlegroup. Note: this is a diagnostic label only and does not control the server-browser Ping value (see issue #425)." } else { 'Values already match; battlegroup restarted anyway. Note: HOST_DATACENTER_ID is a diagnostic label only and does not control the server-browser Ping value (see issue #425).' }
         datacenterId = $DatacenterId
         publicIp     = $PublicIp
         output       = $raw
