@@ -1303,6 +1303,45 @@ function Invoke-DunePlayerWipeJourneyNodes {
     return @{ ok = $true; message = "Wiped all journey nodes for account $AccountId$extra"; tags_removed = $allTags.Count }
 }
 
+# Consume stuck faction-storyline contract-completion journey nodes to the game's
+# natural "turned-in" state. When a faction contract is completed out-of-band -
+# via this Complete Contract action, or via establish-membership completing the
+# ClimbTheRanks tree through Invoke-DunePlayerCompleteJourneyNode - the node named
+#   ...Complete "<contract>" Contract
+# is left at complete_condition_state='true'. The game renders THAT as an active,
+# condition-met contract card in the Arrakeen Contract tab (and keeps Hawat gated
+# on the "occupational hazard" line), so the contract never clears. A NATURALLY
+# completed character instead has that node CONSUMED to '{}' - verified on a
+# reference DB where tags and reveal_condition_state matched one-for-one and the
+# ONLY difference was complete_condition_state ('true' = card shown, '{}' = gone).
+# DST's CompleteJourneyNode / Reset ops only ever write 'true' / 'false' / delete,
+# none of which reach the consumed '{}' state, so we set it explicitly here.
+#
+# Interaction with Reset Faction (Invoke-DunePlayerResetFaction, Player Admin ->
+# Progression): that command blanket-resets every 'DA_FQ_ClimbTheRanks%' node's
+# complete_condition_state to 'false' (leaving reveal_condition_state untouched),
+# so a later faction wipe overwrites this '{}' to 'false' exactly as it would have
+# overwritten the old stuck 'true' - the storyline replays identically either way.
+# No stranded state. The WHERE also matches only nodes currently at 'true', so
+# running Complete Contract on a fresh/in-progress contract, or after a wipe (nodes
+# at 'false'), is a safe no-op.
+function Invoke-DuneConsumeStuckContractNodes {
+    param([string]$Ip, [long]$AccountId)
+    if ($AccountId -le 0) { return @{ ok = $true; consumed = 0 } }
+    $sql = @"
+UPDATE dune.journey_story_node
+SET complete_condition_state = '{}'::jsonb,
+    has_pending_reward       = false
+WHERE character_id IN (SELECT id FROM dune.player_state WHERE account_id = $AccountId::bigint)
+  AND story_node_id LIKE 'DA_FQ_ClimbTheRanks%'
+  AND story_node_id LIKE '%Complete "%" Contract'
+  AND complete_condition_state = 'true'::jsonb;
+"@
+    $r = Invoke-DuneSqlQuery -Ip $Ip -Sql $sql -ReadOnly $false -MaxRows 1 -TimeoutSec 30
+    if (-not $r.ok) { return @{ ok = $false; error = "consume contract nodes: $($r.error)" } }
+    return @{ ok = $true; consumed = (Get-DuneSqlAffected $r) }
+}
+
 function Invoke-DunePlayerCompleteContracts {
     param([string]$Ip, [long]$AccountId, [string[]]$ContractIds)
     if ($AccountId -le 0) { return @{ ok = $false; error = 'account_id is required.' } }
@@ -1350,6 +1389,13 @@ function Invoke-DunePlayerCompleteContracts {
     $dr = Invoke-DuneDismissActiveContracts -Ip $Ip -AccountId $AccountId -ShortNames $shortNames
     if (-not $dr.ok) { return @{ ok = $false; error = $dr.error } }
     $extra += $dr.extra
+
+    # Drop any stuck Arrakeen contract card left behind by an out-of-band completion
+    # (see Invoke-DuneConsumeStuckContractNodes). No-op unless a ClimbTheRanks
+    # 'Complete "..." Contract' node is currently forced to 'true'.
+    $cn = Invoke-DuneConsumeStuckContractNodes -Ip $Ip -AccountId $AccountId
+    if (-not $cn.ok) { return @{ ok = $false; error = $cn.error } }
+    if ($cn.consumed -gt 0) { $extra += ", cleared $($cn.consumed) stuck contract card(s)" }
 
     $summary = if ($resolved.Count -eq 1) { $resolved[0] } else { "$($resolved.Count) contracts" }
     return @{
