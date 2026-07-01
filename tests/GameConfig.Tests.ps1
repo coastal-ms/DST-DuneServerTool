@@ -639,3 +639,65 @@ Describe 'GameConfig: Landsraad struct fields integrate with read + save' -Tag '
         $folded[0].value | Should -Match 'm_VotingPeriodDurationInSec=118500\.0'
     }
 }
+
+Describe 'Land-claim (staking unit) extension timer' -Tag 'GameConfig' {
+
+    It 'enable writes both scalars + full removal schedule into the managed BuildingSettings block' {
+        $ups = Build-DuneLandclaimUpdates -Enabled $true -Seconds '1' -File 'game'
+        $out = ConvertTo-DuneIniManaged -Raw '' -Updates $ups -QuotedKeys @{}
+        $out | Should -Match 'm_StakingUnitExtensionDefaultTimes=1'
+        $out | Should -Match 'm_StakingUnitVerticalExtensionDefaultTimes=1'
+        ([regex]::Matches($out, '-m_StakingUnitExtensionDefaultTimes=')).Count | Should -Be 10
+        ([regex]::Matches($out, '-m_StakingUnitVerticalExtensionDefaultTimes=')).Count | Should -Be 10
+        $out | Should -Match '-m_StakingUnitExtensionDefaultTimes=30720\.000000'
+    }
+
+    It 'state parser reports enabled + seconds + formattedOk on a well-formed block' {
+        $ups = Build-DuneLandclaimUpdates -Enabled $true -Seconds '5' -File 'game'
+        $out = ConvertTo-DuneIniManaged -Raw '' -Updates $ups -QuotedKeys @{}
+        $st  = Get-DuneLandclaimTimerState -Raw $out
+        $st.enabled     | Should -BeTrue
+        $st.seconds     | Should -Be '5'
+        $st.formattedOk | Should -BeTrue
+    }
+
+    It 're-applying a new value is idempotent (no duplicate removal lines) and updates the scalar' {
+        $first  = ConvertTo-DuneIniManaged -Raw '' -Updates (Build-DuneLandclaimUpdates -Enabled $true -Seconds '1' -File 'game') -QuotedKeys @{}
+        $second = ConvertTo-DuneIniManaged -Raw $first -Updates (Build-DuneLandclaimUpdates -Enabled $true -Seconds '7' -File 'game') -QuotedKeys @{}
+        ([regex]::Matches($second, '-m_StakingUnitExtensionDefaultTimes=')).Count | Should -Be 10
+        $st = Get-DuneLandclaimTimerState -Raw $second
+        $st.seconds | Should -Be '7'
+    }
+
+    It 'disable removes all staking lines but preserves sibling Building keys' {
+        $seed = @"
+[/Script/DuneSandbox.BuildingSettings]
+m_MaxNumLandclaimSegments=10
+"@
+        $on  = ConvertTo-DuneIniManaged -Raw $seed -Updates (Build-DuneLandclaimUpdates -Enabled $true -Seconds '2' -File 'game') -QuotedKeys @{}
+        $off = ConvertTo-DuneIniManaged -Raw $on  -Updates (Build-DuneLandclaimUpdates -Enabled $false -Seconds '' -File 'game') -QuotedKeys @{}
+        $off | Should -Not -Match 'StakingUnit'
+        $off | Should -Match 'm_MaxNumLandclaimSegments=10'
+        (Get-DuneLandclaimTimerState -Raw $off).enabled | Should -BeFalse
+    }
+
+    It 'state parser reports disabled on empty input' {
+        $st = Get-DuneLandclaimTimerState -Raw ''
+        $st.enabled | Should -BeFalse
+        $st.seconds | Should -Be ''
+    }
+
+    It 'client block generator emits header + both scalars + full removal schedule (shareable snippet)' {
+        $blk = Get-DuneLandclaimClientBlock -Seconds '3'
+        $blk | Should -Match '\[/Script/DuneSandbox\.BuildingSettings\]'
+        $blk | Should -Match 'm_StakingUnitExtensionDefaultTimes=3'
+        $blk | Should -Match 'm_StakingUnitVerticalExtensionDefaultTimes=3'
+        ([regex]::Matches($blk, '-m_StakingUnitExtensionDefaultTimes=')).Count | Should -Be 10
+        ([regex]::Matches($blk, '-m_StakingUnitVerticalExtensionDefaultTimes=')).Count | Should -Be 10
+        $blk | Should -Match "`r`n"   # CRLF for pasting into a Windows client Game.ini
+    }
+
+    It 'client block generator returns empty string when no seconds (disabled)' {
+        Get-DuneLandclaimClientBlock -Seconds '' | Should -Be ''
+    }
+}
