@@ -1093,3 +1093,159 @@ function Start-DunePublicIpApplyAsync {
         return @{ ok = $false; running = $false; error = "Failed to spawn apply runspace: $($_.Exception.Message)" }
     }
 }
+
+# =============================================================================
+# HOST_DATACENTER_ID (server browser Ping column) reconcile
+# =============================================================================
+# Funcom's server-browser Ping column only populates when the BG CR's
+# HOST_DATACENTER_ID env var matches the VM's Linux hostname. Vendor default is
+# "dune-testing" (not derived from hostname), so out of the box the browser
+# shows 0 with empty bars. Live-verified 2026-07-01 on Coastal's Reapers
+# battlegroup: patching to "duneawakening" (the DST-shipped Alpine VM hostname)
+# + BG restart flipped Ping 0 -> 72 with full bars. Source: seb851/AntonivkA on
+# an external Discord thread, not documented in any GitHub repo. See
+# [[project-dst-host-datacenter-id-default]] memory for the full backstory.
+
+# Read the VM's Linux hostname over SSH. On DST-shipped Alpine VMs this is
+# "duneawakening"; on custom installs it's whatever `hostnamectl` was set to.
+# Returns empty string on SSH failure so callers can fall back to a default.
+function Get-DuneVmHostname {
+    param([Parameter(Mandatory)][string]$Ip)
+    try {
+        $raw = Invoke-V6Ssh -Ip $Ip -Cmd 'hostname' -TimeoutSec 15
+        return ((($raw -join '') -replace "`r",'').Trim())
+    } catch {
+        return ''
+    }
+}
+
+# Read every utility pod's HOST_DATACENTER_ID + HOST_DATACENTER_IP_ADDRESS
+# values from the BG CR and pair them with the VM hostname so the UI can
+# pre-populate inputs and show whether the CR already matches the hostname.
+function Get-DuneBrowserPingStatus {
+    param([Parameter(Mandatory)][string]$Ip)
+    $vmHost = Get-DuneVmHostname -Ip $Ip
+    $script = @'
+set -eu
+NS=$(sudo kubectl get battlegroups -A --no-headers -o custom-columns=':metadata.namespace' 2>/dev/null | head -1 | tr -d ' ')
+BG=$(sudo kubectl get battlegroups -A --no-headers -o custom-columns=':metadata.name' 2>/dev/null | head -1 | tr -d ' ')
+[ -n "$NS" ] && [ -n "$BG" ] || { echo "DISCOVER_FAIL"; exit 0; }
+if ! command -v jq >/dev/null 2>&1; then echo "NO_JQ"; exit 0; fi
+DC_IDS=$(sudo kubectl get battlegroup "$BG" -n "$NS" -o json | jq -r '[.spec.utilities.director.spec.envVars, .spec.utilities.serverGateway.spec.envVars, .spec.utilities.textRouter.spec.envVars] | map(map(select(.name=="HOST_DATACENTER_ID")) | .[0].value // "") | unique | join("|")')
+DC_IPS=$(sudo kubectl get battlegroup "$BG" -n "$NS" -o json | jq -r '[.spec.utilities.director.spec.envVars, .spec.utilities.serverGateway.spec.envVars, .spec.utilities.textRouter.spec.envVars] | map(map(select(.name=="HOST_DATACENTER_IP_ADDRESS")) | .[0].value // "") | unique | join("|")')
+printf 'NS=%s\nBG=%s\nDC_IDS=%s\nDC_IPS=%s\n' "$NS" "$BG" "$DC_IDS" "$DC_IPS"
+'@
+    $text = ''
+    try {
+        $text = Invoke-DunePublicIpRemoteScript -Ip $Ip -Script $script -TimeoutSec 25
+    } catch {
+        $text = ''
+    }
+    $ns = ''; $bg = ''
+    $dcIds = @(); $dcIps = @()
+    foreach ($ln in ($text -split "`n")) {
+        if     ($ln -match '^NS=(.*)$')     { $ns = $Matches[1].Trim() }
+        elseif ($ln -match '^BG=(.*)$')     { $bg = $Matches[1].Trim() }
+        elseif ($ln -match '^DC_IDS=(.*)$') { $dcIds = @(($Matches[1] -split '\|') | Where-Object { $_ }) }
+        elseif ($ln -match '^DC_IPS=(.*)$') { $dcIps = @(($Matches[1] -split '\|') | Where-Object { $_ }) }
+    }
+    # Consolidated single values when all three utilities agree (typical).
+    # "(mixed)" surfaces the rare case where they don't — the user then sees
+    # the disagreement before overwriting.
+    $currentDatacenterId = if ($dcIds.Count -eq 1) { $dcIds[0] } elseif ($dcIds.Count -gt 1) { '(mixed)' } else { '' }
+    $currentDatacenterIp = if ($dcIps.Count -eq 1) { $dcIps[0] } elseif ($dcIps.Count -gt 1) { '(mixed)' } else { '' }
+    $matches = ($vmHost -ne '' -and $currentDatacenterId -eq $vmHost)
+    return @{
+        vmHostname          = $vmHost
+        currentDatacenterId = $currentDatacenterId
+        currentDatacenterIp = $currentDatacenterIp
+        hostnameMatches     = [bool]$matches
+        bgNamespace         = $ns
+        bgName              = $bg
+    }
+}
+
+# Patch every utility pod's HOST_DATACENTER_ID to $DatacenterId (and, when
+# $PublicIp is supplied and differs from the current CR value,
+# HOST_DATACENTER_IP_ADDRESS too), then restart the battlegroup cleanly so
+# FLS re-registers on the next matchmaker cycle. The operator rolls the
+# utility pods on its own from the CR patch; the BG restart handles the
+# game-server pod side.
+function Invoke-DuneBrowserPingReconcile {
+    param(
+        [Parameter(Mandatory)][string]$Ip,
+        [Parameter(Mandatory)][string]$DatacenterId,
+        [string]$PublicIp = ''
+    )
+    if ($DatacenterId -notmatch '^[A-Za-z0-9._-]{1,64}$') {
+        return @{ ok=$false; status=400; message='Invalid datacenter ID (1-64 chars: letters, digits, . _ -).' }
+    }
+    if ($PublicIp -and -not (Test-DuneIPv4Literal -Ip $PublicIp)) {
+        return @{ ok=$false; status=400; message='Invalid IPv4 for datacenter IP.' }
+    }
+    $script = @'
+set -eu
+DC_ID="$1"
+NEW_IP="$2"
+
+NS=$(sudo kubectl get battlegroups -A --no-headers -o custom-columns=':metadata.namespace' 2>/dev/null | head -1 | tr -d ' ')
+BG=$(sudo kubectl get battlegroups -A --no-headers -o custom-columns=':metadata.name' 2>/dev/null | head -1 | tr -d ' ')
+[ -n "$NS" ] && [ -n "$BG" ] || { echo "DISCOVER_FAIL"; exit 2; }
+if ! command -v jq >/dev/null 2>&1; then echo "NO_JQ"; exit 3; fi
+
+for u in director serverGateway textRouter; do
+  # HOST_DATACENTER_ID
+  idx=$(sudo kubectl get battlegroup "$BG" -n "$NS" -o json | jq -r --arg u "$u" '((.spec.utilities[$u].spec.envVars // []) | map(.name) | index("HOST_DATACENTER_ID")) // -1')
+  if [ "$idx" != "-1" ] && [ "$idx" != "null" ]; then
+    cur=$(sudo kubectl get battlegroup "$BG" -n "$NS" -o jsonpath="{.spec.utilities.$u.spec.envVars[$idx].value}" 2>/dev/null)
+    if [ "$cur" != "$DC_ID" ]; then
+      sudo kubectl patch battlegroup "$BG" -n "$NS" --type=json -p "[{\"op\":\"replace\",\"path\":\"/spec/utilities/$u/spec/envVars/$idx/value\",\"value\":\"$DC_ID\"}]" >/dev/null 2>&1 && echo "PATCHED_ID:$u:$cur->$DC_ID"
+    else
+      echo "UNCHANGED_ID:$u:$cur"
+    fi
+  else
+    echo "MISSING_ID_ENV:$u"
+  fi
+  # HOST_DATACENTER_IP_ADDRESS (only when caller supplied a new IP)
+  if [ -n "$NEW_IP" ]; then
+    ipx=$(sudo kubectl get battlegroup "$BG" -n "$NS" -o json | jq -r --arg u "$u" '((.spec.utilities[$u].spec.envVars // []) | map(.name) | index("HOST_DATACENTER_IP_ADDRESS")) // -1')
+    if [ "$ipx" != "-1" ] && [ "$ipx" != "null" ]; then
+      curip=$(sudo kubectl get battlegroup "$BG" -n "$NS" -o jsonpath="{.spec.utilities.$u.spec.envVars[$ipx].value}" 2>/dev/null)
+      if [ "$curip" != "$NEW_IP" ]; then
+        sudo kubectl patch battlegroup "$BG" -n "$NS" --type=json -p "[{\"op\":\"replace\",\"path\":\"/spec/utilities/$u/spec/envVars/$ipx/value\",\"value\":\"$NEW_IP\"}]" >/dev/null 2>&1 && echo "PATCHED_IP:$u:$curip->$NEW_IP"
+      else
+        echo "UNCHANGED_IP:$u:$curip"
+      fi
+    fi
+  fi
+done
+
+# Restart the battlegroup cleanly so FLS re-registers on the next matchmaker
+# cycle. Utility pods roll on their own from the CR patch above; this handles
+# the game-server side.
+BGBIN=/home/dune/.dune/bin/battlegroup
+if [ -x "$BGBIN" ]; then
+  "$BGBIN" restart 2>&1 | tail -30 || true
+  echo "BG_RESTART_ISSUED"
+else
+  echo "NO_BGBIN"
+fi
+echo "DONE"
+'@
+    $raw = ''
+    try {
+        $raw = Invoke-DunePublicIpRemoteScript -Ip $Ip -Script $script -Arguments @($DatacenterId, $PublicIp) -TimeoutSec 300
+    } catch {
+        return @{ ok=$false; status=502; message="Reconcile script failed: $($_.Exception.Message)" }
+    }
+    if ($raw -match 'DISCOVER_FAIL') { return @{ ok=$false; status=502; message='Could not discover battlegroup on VM.' } }
+    if ($raw -match 'NO_JQ')         { return @{ ok=$false; status=502; message='jq is not installed on the VM (required to patch the BG CR).' } }
+    $patched = @(($raw -split "`n") | Where-Object { $_ -match '^PATCHED_' }).Count
+    return @{
+        ok           = $true
+        message      = if ($patched -gt 0) { "Reconciled $patched env(s) on the BG CR and issued a battlegroup restart. FLS will re-register on the next matchmaker cycle." } else { 'Nothing to patch (values already match); battlegroup restart issued anyway to force FLS re-registration.' }
+        datacenterId = $DatacenterId
+        publicIp     = $PublicIp
+        output       = $raw
+    }
+}
