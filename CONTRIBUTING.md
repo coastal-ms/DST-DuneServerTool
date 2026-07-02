@@ -34,7 +34,7 @@ a release. Tag with `v<version>` and push the tag.
 ## Local development
 
 ```powershell
-# Parse-validate the script (fastest feedback loop):
+# Parse-validate a script (fastest feedback loop):
 $tokens=$null; $errs=$null
 [System.Management.Automation.Language.Parser]::ParseFile(
     "$PWD\dune-server.ps1", [ref]$tokens, [ref]$errs) | Out-Null
@@ -44,6 +44,9 @@ $errs
 Install-Module PSScriptAnalyzer -Scope CurrentUser -Force
 Invoke-ScriptAnalyzer -Path .\dune-server.ps1
 ```
+
+To build the full installer (`DuneServerSetup.exe`) from source, see the
+**Build from source** section in the [README](README.md#build-from-source).
 
 ## Coding standards
 
@@ -58,6 +61,6 @@ Invoke-ScriptAnalyzer -Path .\dune-server.ps1
 
 ## Security
 
-If you find a security issue (e.g. credential disclosure, command injection),
-please **do not** open a public issue. Email the maintainer or open a
-GitHub Security Advisory instead.
+Found a security issue (e.g. credential disclosure, command injection)?
+**Please don't open a public issue.** Report it privately — see
+[`SECURITY.md`](SECURITY.md) for how.
