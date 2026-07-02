@@ -1,3 +1,8 @@
+instructions: |-
+  read instructions to catch up
+  review the discord integrations
+  review recent releases to catch up
+  always popup a clickable box when requesting a response from the user
 automation:
   auto_issue_session: true
   remote_control: true
