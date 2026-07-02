@@ -18,6 +18,10 @@ here cover everything those tags shipped.
 - **Land Claim Timer (Game Config).** A new card lets you override how long a land-claim staking-unit extension takes: enter a duration in seconds and DST collapses the game's built-in doubling schedule (60–30720s) down to that single value. It writes `m_StakingUnitExtensionDefaultTimes` and `m_StakingUnitVerticalExtensionDefaultTimes` (plus the array-remove lines that strip the defaults) into both the server `UserGame.ini` and this PC's client `Game.ini`. The card reads your current values on load, and disabling it restores the game's default schedule. Connecting players need the same client-side value for the change to take effect on their end.
 - **"Give players this" client-config sharing (Game Config).** Any section with client-side settings you've actually customised now has a **Give players this** button that pops up the exact `Game.ini` block to hand to connecting players, with a one-click copy and the client `Game.ini` file location. Sections that support client settings but have none customised show a "No custom client settings" flag so it's clear there's nothing to share. The Land Claim Timer shows its block automatically right after you apply.
 
+### Fixed
+
+- **Market Bot no longer overpays sellers 10× on purchase.** When Duke's Market Bot bought a player's sell order, it paid out (and debited its own balance) at 10× the listed price — e.g. an item listed for 83,000 Solari paid the seller 830,000. The game's exchange stores `item_price` 1:1 with the listed Solari and "Take Solari" credits it unscaled, but the payout path multiplied by 10 (a compensation added in an earlier release that a later Funcom patch made incorrect). Duke now pays the exact listed price, matching a normal player-to-player sale.
+
 ## [12.14.9] - 2026-06-30
 
 ### Changed
