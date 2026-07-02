@@ -1085,6 +1085,7 @@ function Invoke-DunePlayerResetFaction {
     }
     $controllerID = Get-DunePlayerControllerFromAccount -Ip $Ip -AccountId $AccountId
     if ($controllerID -le 0) { return @{ ok = $false; error = "no player_controller for account $AccountId." } }
+    $pawnID = Get-DunePlayerPawnFromAccount -Ip $Ip -AccountId $AccountId
 
     $factions = if ($fl -eq 'both') { @('Atreides','Harkonnen') } else { @((Get-Culture).TextInfo.ToTitleCase($fl)) }
     $charScope = "character_id IN (SELECT id FROM dune.player_state WHERE account_id=$AccountId::bigint)"
@@ -1115,6 +1116,17 @@ function Invoke-DunePlayerResetFaction {
     # reset ClimbTheRanks journey nodes to incomplete (NOT delete — deleting stops
     # the game re-offering them, so the recruiter quest can't be replayed)
     [void]$sb.AppendLine("UPDATE dune.journey_story_node SET complete_condition_state='false'::jsonb, has_pending_reward=false WHERE $charScope AND story_node_id LIKE 'DA_FQ_ClimbTheRanks%';")
+    # Remove lingering faction-storyline contract ITEMS (Fac_Atre_* / Fac_Hark_*) from
+    # the pawn's contract inventory (inventory_type 29). The rep/tag/journey reset above
+    # does NOT touch these item rows, so without this the completed-but-uncleared faction
+    # contract cards keep showing in the Arrakeen Contract tab after a wipe (e.g. a stuck
+    # "Skorda's Last Stand: Report to Hawat" or "The Last Beacon"). Then clear the pawn's
+    # tracked-contract pointer if it now dangles (points at a row we just deleted).
+    # Non-faction contracts (Survival/Trainer/Landsraad) are intentionally left alone.
+    if ($pawnID -gt 0) {
+        [void]$sb.AppendLine("DELETE FROM dune.items WHERE template_id='ContractItem' AND inventory_id IN (SELECT id FROM dune.inventories WHERE actor_id=$pawnID::bigint AND inventory_type=29) AND (stats->'FContractItemStats'->1->'ContractName'->>'Name' LIKE 'Fac_Atre_%' OR stats->'FContractItemStats'->1->'ContractName'->>'Name' LIKE 'Fac_Hark_%');")
+        [void]$sb.AppendLine("UPDATE dune.actors a SET properties = jsonb_set(a.properties, '{ContractsCoordinatorComponent,m_TrackedContractItemUid}', to_jsonb('!!itm#0'::text)) WHERE a.id=$pawnID::bigint AND a.properties ? 'ContractsCoordinatorComponent' AND COALESCE(a.properties->'ContractsCoordinatorComponent'->>'m_TrackedContractItemUid','!!itm#0') <> '!!itm#0' AND NOT EXISTS (SELECT 1 FROM dune.items it WHERE ('!!itm#'||it.id::text) = a.properties->'ContractsCoordinatorComponent'->>'m_TrackedContractItemUid');")
+    }
     [void]$sb.AppendLine('COMMIT;')
 
     $r = Invoke-DuneSqlQuery -Ip $Ip -Sql $sb.ToString() -ReadOnly $false -MaxRows 1 -TimeoutSec 120
@@ -1122,7 +1134,7 @@ function Invoke-DunePlayerResetFaction {
         Invoke-DuneSqlQuery -Ip $Ip -Sql 'ROLLBACK;' -ReadOnly $false -MaxRows 1 -TimeoutSec 5 | Out-Null
         return @{ ok = $false; error = "reset-faction tx: $($r.error)" }
     }
-    return @{ ok = $true; message = "Reset faction for account $AccountId - rep zeroed (table + FactionPlayerComponent), alignment cleared, faction tags removed, ClimbTheRanks reset to incomplete. Takes effect on next login."; faction = $fl }
+    return @{ ok = $true; message = "Reset faction for account $AccountId - rep zeroed (table + FactionPlayerComponent), alignment cleared, faction tags removed, faction contract items + tracked card cleared, ClimbTheRanks reset to incomplete. Takes effect on next login."; faction = $fl }
 }
 
 function Invoke-DunePlayerApplyProgressionPreset {
@@ -1303,52 +1315,41 @@ function Invoke-DunePlayerWipeJourneyNodes {
     return @{ ok = $true; message = "Wiped all journey nodes for account $AccountId$extra"; tags_removed = $allTags.Count }
 }
 
-# Consume stuck faction-storyline contract-completion journey nodes to the game's
-# natural "turned-in" state. When a faction contract is completed out-of-band -
-# via this Complete Contract action, or via establish-membership completing the
-# ClimbTheRanks tree through Invoke-DunePlayerCompleteJourneyNode - the node named
-#   ...Complete "<contract>" Contract
-# is left with reveal_condition_state='true' (and complete_condition_state='true'
-# when freshly stuck). The game renders a node whose REVEAL condition is met as an
-# active contract card in the Arrakeen Contract tab (and keeps Hawat gated on the
-# "occupational hazard" line), so the contract never clears. reveal - not complete -
-# is the render source: a reference character that had complete='{}' but reveal='true'
-# STILL showed the card, whereas a fully clean, naturally-completed character has that
-# node CONSUMED on BOTH fields (complete='{}', reveal='{}', fail='{}'). DST's
-# CompleteJourneyNode / Reset ops only ever write 'true' / 'false' / delete, none of
-# which reach the consumed '{}' state, so we set both complete and reveal to '{}' here.
+# Clear a dangling "tracked contract" pointer on the player's pawn. An Arrakeen
+# Contract-tab card is a `ContractItem` row in the pawn's contract inventory
+# (inventory_type 29); the *active/tracked* one is whichever item the pawn's
+# ContractsCoordinatorComponent.m_TrackedContractItemUid points at (format
+# '!!itm#<items.id>', '!!itm#0' = nothing tracked). When a contract item is
+# dismissed/deleted out-of-band (Complete Contract's dismiss-by-name, or the
+# faction-item purge in Reset Faction) the pointer can be left referencing the
+# now-deleted row, which the game still renders as a ghost card (and keeps Hawat
+# gated on the "occupational hazard" line). Reset the pointer to '!!itm#0' ONLY
+# when it points at an items.id that no longer exists - a valid, still-owned tracked
+# contract is never touched, so this is a safe no-op on a healthy character.
 #
-# Interaction with Reset Faction (Invoke-DunePlayerResetFaction, Player Admin ->
-# Progression): that command blanket-resets every 'DA_FQ_ClimbTheRanks%' node's
-# complete_condition_state to 'false' (leaving reveal_condition_state untouched). This
-# stays safe because '{}' is the game's OWN natural post-completion state - a normal
-# character carries many ClimbTheRanks nodes at reveal='{}', and a later faction wipe +
-# storyline replay handles those exactly as it always has. We are matching that native
-# clean state, not inventing a new one, so no stranded state is introduced.
-#
-# The WHERE matches Complete Contract nodes at reveal='true' whose objective is done or
-# already partly-consumed (complete IN 'true','{}'). That catches a freshly stuck node
-# AND one left half-cleared by an earlier build (complete='{}', reveal='true'), while
-# never touching a genuinely in-progress contract (complete='false' = still being
-# worked). Running this on a fresh contract, or after a wipe (nodes at 'false'), is a
-# safe no-op.
-function Invoke-DuneConsumeStuckContractNodes {
+# This (plus the item removal itself) - NOT any journey_story_node edit - is what
+# actually clears the card: verified live on a reference server where a completed
+# faction contract item + its tracked pointer kept a card visible even though the
+# matching journey node was already fully consumed to '{}'.
+function Invoke-DuneClearDanglingTrackedContract {
     param([string]$Ip, [long]$AccountId)
-    if ($AccountId -le 0) { return @{ ok = $true; consumed = 0 } }
+    if ($AccountId -le 0) { return @{ ok = $true; cleared = 0 } }
+    $pawnID = Get-DunePlayerPawnFromAccount -Ip $Ip -AccountId $AccountId
+    if ($pawnID -le 0) { return @{ ok = $true; cleared = 0 } }
     $sql = @"
-UPDATE dune.journey_story_node
-SET complete_condition_state = '{}'::jsonb,
-    reveal_condition_state   = '{}'::jsonb,
-    has_pending_reward       = false
-WHERE character_id IN (SELECT id FROM dune.player_state WHERE account_id = $AccountId::bigint)
-  AND story_node_id LIKE 'DA_FQ_ClimbTheRanks%'
-  AND story_node_id LIKE '%Complete "%" Contract'
-  AND reveal_condition_state = 'true'::jsonb
-  AND complete_condition_state IN ('true'::jsonb, '{}'::jsonb);
+UPDATE dune.actors a
+SET properties = jsonb_set(a.properties, '{ContractsCoordinatorComponent,m_TrackedContractItemUid}', to_jsonb('!!itm#0'::text))
+WHERE a.id = $pawnID::bigint
+  AND a.properties ? 'ContractsCoordinatorComponent'
+  AND COALESCE(a.properties->'ContractsCoordinatorComponent'->>'m_TrackedContractItemUid', '!!itm#0') <> '!!itm#0'
+  AND NOT EXISTS (
+      SELECT 1 FROM dune.items it
+      WHERE ('!!itm#' || it.id::text) = a.properties->'ContractsCoordinatorComponent'->>'m_TrackedContractItemUid'
+  );
 "@
     $r = Invoke-DuneSqlQuery -Ip $Ip -Sql $sql -ReadOnly $false -MaxRows 1 -TimeoutSec 30
-    if (-not $r.ok) { return @{ ok = $false; error = "consume contract nodes: $($r.error)" } }
-    return @{ ok = $true; consumed = (Get-DuneSqlAffected $r) }
+    if (-not $r.ok) { return @{ ok = $false; error = "clear tracked contract: $($r.error)" } }
+    return @{ ok = $true; cleared = (Get-DuneSqlAffected $r) }
 }
 
 function Invoke-DunePlayerCompleteContracts {
@@ -1399,12 +1400,15 @@ function Invoke-DunePlayerCompleteContracts {
     if (-not $dr.ok) { return @{ ok = $false; error = $dr.error } }
     $extra += $dr.extra
 
-    # Drop any stuck Arrakeen contract card left behind by an out-of-band completion
-    # (see Invoke-DuneConsumeStuckContractNodes). No-op unless a ClimbTheRanks
-    # 'Complete "..." Contract' node is currently forced to 'true'.
-    $cn = Invoke-DuneConsumeStuckContractNodes -Ip $Ip -AccountId $AccountId
-    if (-not $cn.ok) { return @{ ok = $false; error = $cn.error } }
-    if ($cn.consumed -gt 0) { $extra += ", cleared $($cn.consumed) stuck contract card(s)" }
+    # A dismissed contract item may still be referenced by the pawn's tracked-contract
+    # pointer (ContractsCoordinatorComponent.m_TrackedContractItemUid), which the game
+    # renders as a ghost card in the Arrakeen Contract tab even after the item row is
+    # gone. Clear the pointer when it now dangles (no-op if it still points at a live
+    # contract). This is the actual card-clearing step - see
+    # Invoke-DuneClearDanglingTrackedContract.
+    $tc = Invoke-DuneClearDanglingTrackedContract -Ip $Ip -AccountId $AccountId
+    if (-not $tc.ok) { return @{ ok = $false; error = $tc.error } }
+    if ($tc.cleared -gt 0) { $extra += ', cleared tracked contract card' }
 
     $summary = if ($resolved.Count -eq 1) { $resolved[0] } else { "$($resolved.Count) contracts" }
     return @{
