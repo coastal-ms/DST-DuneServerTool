@@ -240,15 +240,20 @@ function Get-DuneTierBumpFromTags {
 # Writes tags via dune.update_player_tags + tier-bump cascade. Returns
 # @{ ok=$true; extra="<message fragment>" }.
 function Invoke-DuneApplyTagsWithTierBump {
-    param([string]$Ip, [long]$AccountId, [string[]]$Tags)
-    if (-not $Tags -or $Tags.Count -eq 0) { return @{ ok = $true; extra = '' } }
+    param([string]$Ip, [long]$AccountId, [string[]]$Tags, [string[]]$RemoveTags)
+    $addCount = if ($Tags) { @($Tags).Count } else { 0 }
+    $remCount = if ($RemoveTags) { @($RemoveTags).Count } else { 0 }
+    if ($addCount -eq 0 -and $remCount -eq 0) { return @{ ok = $true; extra = '' } }
 
-    $tagsArr = ConvertTo-DunePgTextArray $Tags
-    $sql = "SELECT dune.update_player_tags($AccountId::bigint, $tagsArr, ARRAY[]::text[]);"
+    $tagsArr = if ($addCount -gt 0) { ConvertTo-DunePgTextArray $Tags } else { 'ARRAY[]::text[]' }
+    $remArr  = if ($remCount -gt 0) { ConvertTo-DunePgTextArray $RemoveTags } else { 'ARRAY[]::text[]' }
+    $sql = "SELECT dune.update_player_tags($AccountId::bigint, $tagsArr, $remArr);"
     $r = Invoke-DuneSqlQuery -Ip $Ip -Sql $sql -ReadOnly $false -MaxRows 1 -TimeoutSec 30
     if (-not $r.ok) { return @{ ok = $false; error = "apply tags: $($r.error)" } }
 
-    $extra = ", +$($Tags.Count) tag(s)"
+    $extra = ''
+    if ($addCount -gt 0) { $extra += ", +$addCount tag(s)" }
+    if ($remCount -gt 0) { $extra += ", -$remCount tag(s)" }
 
     $bumps = Get-DuneTierBumpFromTags -Tags $Tags
     if ($bumps.Count -eq 0) { return @{ ok = $true; extra = $extra } }
@@ -1080,6 +1085,7 @@ function Invoke-DunePlayerResetFaction {
     }
     $controllerID = Get-DunePlayerControllerFromAccount -Ip $Ip -AccountId $AccountId
     if ($controllerID -le 0) { return @{ ok = $false; error = "no player_controller for account $AccountId." } }
+    $pawnID = Get-DunePlayerPawnFromAccount -Ip $Ip -AccountId $AccountId
 
     $factions = if ($fl -eq 'both') { @('Atreides','Harkonnen') } else { @((Get-Culture).TextInfo.ToTitleCase($fl)) }
     $charScope = "character_id IN (SELECT id FROM dune.player_state WHERE account_id=$AccountId::bigint)"
@@ -1110,6 +1116,17 @@ function Invoke-DunePlayerResetFaction {
     # reset ClimbTheRanks journey nodes to incomplete (NOT delete — deleting stops
     # the game re-offering them, so the recruiter quest can't be replayed)
     [void]$sb.AppendLine("UPDATE dune.journey_story_node SET complete_condition_state='false'::jsonb, has_pending_reward=false WHERE $charScope AND story_node_id LIKE 'DA_FQ_ClimbTheRanks%';")
+    # Remove lingering faction-storyline contract ITEMS (Fac_Atre_* / Fac_Hark_*) from
+    # the pawn's contract inventory (inventory_type 29). The rep/tag/journey reset above
+    # does NOT touch these item rows, so without this the completed-but-uncleared faction
+    # contract cards keep showing in the Arrakeen Contract tab after a wipe (e.g. a stuck
+    # "Skorda's Last Stand: Report to Hawat" or "The Last Beacon"). Then clear the pawn's
+    # tracked-contract pointer if it now dangles (points at a row we just deleted).
+    # Non-faction contracts (Survival/Trainer/Landsraad) are intentionally left alone.
+    if ($pawnID -gt 0) {
+        [void]$sb.AppendLine("DELETE FROM dune.items WHERE template_id='ContractItem' AND inventory_id IN (SELECT id FROM dune.inventories WHERE actor_id=$pawnID::bigint AND inventory_type=29) AND (stats->'FContractItemStats'->1->'ContractName'->>'Name' LIKE 'Fac_Atre_%' OR stats->'FContractItemStats'->1->'ContractName'->>'Name' LIKE 'Fac_Hark_%');")
+        [void]$sb.AppendLine("UPDATE dune.actors a SET properties = jsonb_set(a.properties, '{ContractsCoordinatorComponent,m_TrackedContractItemUid}', to_jsonb('!!itm#0'::text)) WHERE a.id=$pawnID::bigint AND a.properties ? 'ContractsCoordinatorComponent' AND COALESCE(a.properties->'ContractsCoordinatorComponent'->>'m_TrackedContractItemUid','!!itm#0') <> '!!itm#0' AND NOT EXISTS (SELECT 1 FROM dune.items it WHERE ('!!itm#'||it.id::text) = a.properties->'ContractsCoordinatorComponent'->>'m_TrackedContractItemUid');")
+    }
     [void]$sb.AppendLine('COMMIT;')
 
     $r = Invoke-DuneSqlQuery -Ip $Ip -Sql $sb.ToString() -ReadOnly $false -MaxRows 1 -TimeoutSec 120
@@ -1117,7 +1134,7 @@ function Invoke-DunePlayerResetFaction {
         Invoke-DuneSqlQuery -Ip $Ip -Sql 'ROLLBACK;' -ReadOnly $false -MaxRows 1 -TimeoutSec 5 | Out-Null
         return @{ ok = $false; error = "reset-faction tx: $($r.error)" }
     }
-    return @{ ok = $true; message = "Reset faction for account $AccountId - rep zeroed (table + FactionPlayerComponent), alignment cleared, faction tags removed, ClimbTheRanks reset to incomplete. Takes effect on next login."; faction = $fl }
+    return @{ ok = $true; message = "Reset faction for account $AccountId - rep zeroed (table + FactionPlayerComponent), alignment cleared, faction tags removed, faction contract items + tracked card cleared, ClimbTheRanks reset to incomplete. Takes effect on next login."; faction = $fl }
 }
 
 function Invoke-DunePlayerApplyProgressionPreset {
@@ -1298,6 +1315,43 @@ function Invoke-DunePlayerWipeJourneyNodes {
     return @{ ok = $true; message = "Wiped all journey nodes for account $AccountId$extra"; tags_removed = $allTags.Count }
 }
 
+# Clear a dangling "tracked contract" pointer on the player's pawn. An Arrakeen
+# Contract-tab card is a `ContractItem` row in the pawn's contract inventory
+# (inventory_type 29); the *active/tracked* one is whichever item the pawn's
+# ContractsCoordinatorComponent.m_TrackedContractItemUid points at (format
+# '!!itm#<items.id>', '!!itm#0' = nothing tracked). When a contract item is
+# dismissed/deleted out-of-band (Complete Contract's dismiss-by-name, or the
+# faction-item purge in Reset Faction) the pointer can be left referencing the
+# now-deleted row, which the game still renders as a ghost card (and keeps Hawat
+# gated on the "occupational hazard" line). Reset the pointer to '!!itm#0' ONLY
+# when it points at an items.id that no longer exists - a valid, still-owned tracked
+# contract is never touched, so this is a safe no-op on a healthy character.
+#
+# This (plus the item removal itself) - NOT any journey_story_node edit - is what
+# actually clears the card: verified live on a reference server where a completed
+# faction contract item + its tracked pointer kept a card visible even though the
+# matching journey node was already fully consumed to '{}'.
+function Invoke-DuneClearDanglingTrackedContract {
+    param([string]$Ip, [long]$AccountId)
+    if ($AccountId -le 0) { return @{ ok = $true; cleared = 0 } }
+    $pawnID = Get-DunePlayerPawnFromAccount -Ip $Ip -AccountId $AccountId
+    if ($pawnID -le 0) { return @{ ok = $true; cleared = 0 } }
+    $sql = @"
+UPDATE dune.actors a
+SET properties = jsonb_set(a.properties, '{ContractsCoordinatorComponent,m_TrackedContractItemUid}', to_jsonb('!!itm#0'::text))
+WHERE a.id = $pawnID::bigint
+  AND a.properties ? 'ContractsCoordinatorComponent'
+  AND COALESCE(a.properties->'ContractsCoordinatorComponent'->>'m_TrackedContractItemUid', '!!itm#0') <> '!!itm#0'
+  AND NOT EXISTS (
+      SELECT 1 FROM dune.items it
+      WHERE ('!!itm#' || it.id::text) = a.properties->'ContractsCoordinatorComponent'->>'m_TrackedContractItemUid'
+  );
+"@
+    $r = Invoke-DuneSqlQuery -Ip $Ip -Sql $sql -ReadOnly $false -MaxRows 1 -TimeoutSec 30
+    if (-not $r.ok) { return @{ ok = $false; error = "clear tracked contract: $($r.error)" } }
+    return @{ ok = $true; cleared = (Get-DuneSqlAffected $r) }
+}
+
 function Invoke-DunePlayerCompleteContracts {
     param([string]$Ip, [long]$AccountId, [string[]]$ContractIds)
     if ($AccountId -le 0) { return @{ ok = $false; error = 'account_id is required.' } }
@@ -1308,6 +1362,7 @@ function Invoke-DunePlayerCompleteContracts {
     _Load-DuneTagsData
     $seenTag = @{}; $allTags = New-Object System.Collections.Generic.List[string]
     $seenSkill = @{}; $allSkills = New-Object System.Collections.Generic.List[string]
+    $seenRem = @{}; $allRemove = New-Object System.Collections.Generic.List[string]
     $resolved = New-Object System.Collections.Generic.List[string]
 
     foreach ($id in $ContractIds) {
@@ -1322,9 +1377,15 @@ function Invoke-DunePlayerCompleteContracts {
                 if (-not $seenSkill.ContainsKey($sk)) { $seenSkill[$sk] = $true; [void]$allSkills.Add($sk) }
             }
         }
+        if ($script:DuneTagsData.contractRemoveTags.ContainsKey($r.name)) {
+            foreach ($rt in $script:DuneTagsData.contractRemoveTags[$r.name]) {
+                $rs = [string]$rt
+                if ($rs -and -not $seenRem.ContainsKey($rs)) { $seenRem[$rs] = $true; [void]$allRemove.Add($rs) }
+            }
+        }
     }
 
-    $bumpRes = Invoke-DuneApplyTagsWithTierBump -Ip $Ip -AccountId $AccountId -Tags @($allTags)
+    $bumpRes = Invoke-DuneApplyTagsWithTierBump -Ip $Ip -AccountId $AccountId -Tags @($allTags) -RemoveTags @($allRemove)
     if (-not $bumpRes.ok) { return @{ ok = $false; error = $bumpRes.error } }
     $extra = $bumpRes.extra
 
@@ -1338,6 +1399,16 @@ function Invoke-DunePlayerCompleteContracts {
     $dr = Invoke-DuneDismissActiveContracts -Ip $Ip -AccountId $AccountId -ShortNames $shortNames
     if (-not $dr.ok) { return @{ ok = $false; error = $dr.error } }
     $extra += $dr.extra
+
+    # A dismissed contract item may still be referenced by the pawn's tracked-contract
+    # pointer (ContractsCoordinatorComponent.m_TrackedContractItemUid), which the game
+    # renders as a ghost card in the Arrakeen Contract tab even after the item row is
+    # gone. Clear the pointer when it now dangles (no-op if it still points at a live
+    # contract). This is the actual card-clearing step - see
+    # Invoke-DuneClearDanglingTrackedContract.
+    $tc = Invoke-DuneClearDanglingTrackedContract -Ip $Ip -AccountId $AccountId
+    if (-not $tc.ok) { return @{ ok = $false; error = $tc.error } }
+    if ($tc.cleared -gt 0) { $extra += ', cleared tracked contract card' }
 
     $summary = if ($resolved.Count -eq 1) { $resolved[0] } else { "$($resolved.Count) contracts" }
     return @{

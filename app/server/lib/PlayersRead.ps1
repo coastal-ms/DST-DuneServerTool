@@ -50,6 +50,7 @@ function _Load-DuneTagsData {
         contractTags         = @{}
         contractAliases      = @{}
         contractSkillGrants  = @{}
+        contractRemoveTags   = @{}
         jobSkillBlocks       = @{}
         jobAllModules        = @{}
         journeyNodeTags      = @{}
@@ -62,6 +63,7 @@ function _Load-DuneTagsData {
             'contract_tags'         = 'contractTags'
             'contract_aliases'      = 'contractAliases'
             'contract_skill_grants' = 'contractSkillGrants'
+            'contract_remove_tags'  = 'contractRemoveTags'
             'job_skill_blocks'      = 'jobSkillBlocks'
             'job_all_modules'       = 'jobAllModules'
             'journey_node_tags'     = 'journeyNodeTags'
