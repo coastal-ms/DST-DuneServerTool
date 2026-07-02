@@ -1003,6 +1003,58 @@ Wizard from a clean slate. Your `button-order.json` and logs are kept.
 
 ---
 
+## Build from source
+
+You don't need to build DST to use it — grab the signed
+[`DuneServerSetup.exe`](https://github.com/coastal-ms/DST-DuneServerTool/releases/latest)
+from Releases. This section is for contributors and anyone who wants to verify
+what the release binary is built from.
+
+**Prerequisites**
+
+- **PowerShell 7+** (`pwsh`)
+- **Node.js 20+** (for the React web UI in `webui/`)
+- **.NET 10 SDK** (`dotnet`, for the WebView2 desktop shell)
+- **Inno Setup 6** — `winget install --id JRSoftware.InnoSetup`
+
+**One command builds everything:**
+
+```powershell
+pwsh app/installer/Build-Installer.ps1
+```
+
+This runs the whole pipeline and writes the installer to
+`app/installer/output/DuneServerSetup.exe`:
+
+1. Verifies the five version stamps agree (see below) and BOM-checks the
+   bundled `.ps1` files.
+2. Builds the web UI (`npm run build` in `webui/` → `webui/dist/`).
+3. Compiles the PowerShell backend to `DuneServer.exe` via
+   [PS2EXE](https://github.com/MScholtes/PS2EXE) (`app/build/Build-Exe.ps1`).
+4. Publishes the WebView2 desktop shell `DuneShell.exe`
+   (`dotnet publish` of `app/desktop/DuneShell`).
+5. Packages it all into `DuneServerSetup.exe` with Inno Setup.
+
+Useful flags: `-SkipWebBuild`, `-SkipExeBuild`, `-SkipShellBuild` reuse existing
+artifacts; `-SkipInstaller` builds the raw exes and stops before packaging (used
+by the signing CI); `-SkipVersionCheck` allows a deliberate intermediate build.
+
+**Version stamps.** The release version lives in five files that must match, or
+the build aborts (`-SkipVersionCheck` to override):
+`dune-server.ps1`, `app/DuneServer.ps1`, `app/build/Build-Exe.ps1`,
+`app/installer/DuneServer.iss`, and `app/desktop/DuneShell/DuneShell.csproj`.
+
+**Signed releases.** The GitHub Actions workflow
+[`.github/workflows/release-signed.yml`](.github/workflows/release-signed.yml)
+runs this same build in CI and Authenticode-signs the binaries via
+[SignPath Foundation](https://signpath.org/) (free code signing for open
+source), so published installers carry a verifiable publisher signature.
+
+See [`CONTRIBUTING.md`](CONTRIBUTING.md) for the change-control workflow and
+[`SECURITY.md`](SECURITY.md) for reporting vulnerabilities.
+
+---
+
 ## Notes
 
 - The VM name is always `dune-awakening` and the SSH user is always `dune`
