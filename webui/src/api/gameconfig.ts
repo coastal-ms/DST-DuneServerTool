@@ -11,6 +11,8 @@ import type {
   GameConfigClientApplyItem,
   GameConfigDefaultsResponse,
   GameConfigRawUpdate,
+  LandclaimTimerState,
+  LandclaimTimerSaveResponse,
   SpicefieldsResponse,
   SpicefieldSaveResponse,
   SpicefieldType,
@@ -98,6 +100,21 @@ export function openGameConfigClientFile(dir?: string) {
     method: 'POST',
     body: JSON.stringify(dir ? { dir } : {}),
   })
+}
+
+// --- Land-claim (staking unit) extension timer ------------------------------
+
+export function getLandclaimTimer() {
+  return api<LandclaimTimerState>('/api/gameconfig/landclaim-timer')
+}
+
+export function saveLandclaimTimer(enabled: boolean, seconds: string) {
+  return withOnlinePlayerGuard(force =>
+    api<LandclaimTimerSaveResponse>(`/api/gameconfig/landclaim-timer${fq(force)}`, {
+      method: 'PUT',
+      body: JSON.stringify({ enabled, seconds }),
+    }),
+  )
 }
 
 export function getSpicefields() {

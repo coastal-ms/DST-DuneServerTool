@@ -267,6 +267,47 @@ export type GameConfigSaveResponse = {
   clientApply?: GameConfigClientApply
 }
 
+// Land-claim (staking unit) extension timer — dedicated card/endpoint.
+export type LandclaimTimerServerState = {
+  available: boolean
+  enabled: boolean
+  seconds: string
+  formattedOk: boolean
+  path?: string
+  reason?: string
+  error?: string
+}
+
+export type LandclaimTimerClientState = {
+  exists: boolean
+  dirExists: boolean
+  path: string
+  dir: string
+  enabled: boolean
+  seconds: string
+  formattedOk: boolean
+}
+
+export type LandclaimTimerState = {
+  server: LandclaimTimerServerState
+  client: LandclaimTimerClientState
+  clientBlock: string
+}
+
+export type LandclaimTimerSaveResponse = {
+  ok: boolean
+  enabled: boolean
+  seconds: string
+  result: {
+    ok: boolean
+    server: { ok: boolean; path?: string; applied?: boolean; reason?: string }
+    client: { ok: boolean; path?: string; applied?: boolean; reason?: string }
+  }
+  server: LandclaimTimerServerState
+  client: LandclaimTimerClientState
+  clientBlock: string
+}
+
 export type GameConfigBackupFile = {
   file: 'game' | 'engine'
   path: string
