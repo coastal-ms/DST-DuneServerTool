@@ -1,0 +1,223 @@
+name: Build & sign installer
+
+# ---------------------------------------------------------------------------
+# Builds DuneServerSetup.exe in CI and Authenticode-signs it (plus the two
+# inner exes) via SignPath.io Foundation (free OSS code signing).
+#
+# WHY: DST's binaries are unsigned, so Avast / AVG / TotalAV flag every release
+# as a low-reputation false positive (a fresh hash each release re-trips the
+# heuristic). Signing gives the artifacts a trusted publisher identity and stops
+# the flags. SignPath never exposes the private key, so signing must happen by
+# uploading the artifact to SignPath from CI — hence this workflow.
+#
+# WORKS TODAY WITHOUT SIGNPATH: if the SignPath secret/vars below are not set,
+# the signing steps are skipped and the workflow still produces a (unsigned)
+# installer, so you can validate the CI build immediately. A warning is emitted.
+#
+# ── ONE-TIME SETUP (do this once SignPath Foundation approves DST) ────────────
+#   1. In SignPath, connect the GitHub App to coastal-ms/DST-DuneServerTool and
+#      create a project + signing policy + artifact configuration(s).
+#   2. Repo secret (Settings > Secrets and variables > Actions > Secrets):
+#        SIGNPATH_API_TOKEN            — SignPath REST API token
+#   3. Repo variables (… > Variables):
+#        SIGNPATH_ORGANIZATION_ID      — SignPath organization GUID
+#        SIGNPATH_PROJECT_SLUG         — e.g. dst-duneservertool
+#        SIGNPATH_SIGNING_POLICY_SLUG  — e.g. release-signing  (or test-signing)
+#        SIGNPATH_ARTIFACT_CONFIG_EXE       — artifact config slug for a single .exe
+#        SIGNPATH_ARTIFACT_CONFIG_INSTALLER — artifact config slug for the installer
+#      (If your project uses one artifact configuration for all PE files, set both
+#       *_EXE and *_INSTALLER to the same slug. Leaving a var blank falls back to
+#       the SignPath project's default artifact configuration.)
+#
+# After that, run this workflow (Actions tab > "Build & sign installer" > Run),
+# optionally passing attach_to_release_tag to replace the asset on an existing
+# GitHub release — which keeps the "DuneServerSetup.exe is the sole asset" rule.
+#
+# NOTE: SignPath's action is pinned to the v1 major tag below. For a hardened
+# supply chain, pin it to a full commit SHA instead.
+# ---------------------------------------------------------------------------
+
+on:
+  workflow_dispatch:
+    inputs:
+      attach_to_release_tag:
+        description: 'Existing release tag to upload the (signed) installer to, e.g. v12.15.1 (blank = just build + upload as a workflow artifact)'
+        required: false
+        default: ''
+      skip_version_check:
+        description: 'Skip the 5-file version-stamp sync check (for deliberate intermediate builds)'
+        type: boolean
+        required: false
+        default: false
+
+permissions:
+  contents: write   # needed to upload the asset to an existing release
+
+jobs:
+  build:
+    runs-on: windows-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+          cache-dependency-path: webui/package-lock.json
+
+      - name: Setup .NET 10 SDK
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '10.0.x'
+
+      - name: Install Inno Setup
+        shell: pwsh
+        run: choco install innosetup -y --no-progress
+
+      - name: Install webui dependencies
+        shell: pwsh
+        working-directory: webui
+        run: npm ci
+
+      - name: Detect SignPath configuration
+        id: cfg
+        shell: bash
+        env:
+          TOKEN: ${{ secrets.SIGNPATH_API_TOKEN }}
+          ORG: ${{ vars.SIGNPATH_ORGANIZATION_ID }}
+        run: |
+          if [ -n "${TOKEN}" ] && [ -n "${ORG}" ]; then
+            echo "sign=true" >> "$GITHUB_OUTPUT"
+            echo "SignPath is configured — artifacts will be signed."
+          else
+            echo "sign=false" >> "$GITHUB_OUTPUT"
+            echo "::warning::SignPath is not configured (SIGNPATH_API_TOKEN secret / SIGNPATH_ORGANIZATION_ID var missing). Producing an UNSIGNED build. Set the SignPath secret + vars after Foundation approval to enable signing."
+          fi
+
+      # ── Phase A: build the raw artifacts (webui + DuneServer.exe + DuneShell.exe),
+      #    stopping before the installer so the inner exes can be signed first. ──
+      - name: Build raw artifacts (phase A)
+        shell: pwsh
+        run: |
+          $biArgs = @('-SkipInstaller')
+          if ('${{ inputs.skip_version_check }}' -eq 'true') { $biArgs += '-SkipVersionCheck' }
+          & '${{ github.workspace }}\app\installer\Build-Installer.ps1' @biArgs
+
+      # ── Sign the two inner exes IN PLACE (only if SignPath is configured). ──
+      - name: Upload DuneServer.exe (unsigned) for signing
+        if: steps.cfg.outputs.sign == 'true'
+        id: up_server
+        uses: actions/upload-artifact@v4
+        with:
+          name: unsigned-duneserver-exe
+          path: app/build/output/DuneServer.exe
+          if-no-files-found: error
+
+      - name: Sign DuneServer.exe
+        if: steps.cfg.outputs.sign == 'true'
+        uses: SignPath/github-action-submit-signing-request@v1
+        with:
+          api-token: ${{ secrets.SIGNPATH_API_TOKEN }}
+          organization-id: ${{ vars.SIGNPATH_ORGANIZATION_ID }}
+          project-slug: ${{ vars.SIGNPATH_PROJECT_SLUG }}
+          signing-policy-slug: ${{ vars.SIGNPATH_SIGNING_POLICY_SLUG }}
+          artifact-configuration-slug: ${{ vars.SIGNPATH_ARTIFACT_CONFIG_EXE }}
+          github-artifact-id: ${{ steps.up_server.outputs.artifact-id }}
+          wait-for-completion: true
+          output-artifact-directory: app/build/output
+
+      - name: Upload DuneShell.exe (unsigned) for signing
+        if: steps.cfg.outputs.sign == 'true'
+        id: up_shell
+        uses: actions/upload-artifact@v4
+        with:
+          name: unsigned-duneshell-exe
+          path: app/desktop/DuneShell/bin/Release/net10.0-windows/win-x64/publish/DuneShell.exe
+          if-no-files-found: error
+
+      - name: Sign DuneShell.exe
+        if: steps.cfg.outputs.sign == 'true'
+        uses: SignPath/github-action-submit-signing-request@v1
+        with:
+          api-token: ${{ secrets.SIGNPATH_API_TOKEN }}
+          organization-id: ${{ vars.SIGNPATH_ORGANIZATION_ID }}
+          project-slug: ${{ vars.SIGNPATH_PROJECT_SLUG }}
+          signing-policy-slug: ${{ vars.SIGNPATH_SIGNING_POLICY_SLUG }}
+          artifact-configuration-slug: ${{ vars.SIGNPATH_ARTIFACT_CONFIG_EXE }}
+          github-artifact-id: ${{ steps.up_shell.outputs.artifact-id }}
+          wait-for-completion: true
+          output-artifact-directory: app/desktop/DuneShell/bin/Release/net10.0-windows/win-x64/publish
+
+      # ── Phase B: package the (now-signed) exes into the installer via ISCC. ──
+      - name: Build installer (phase B)
+        shell: pwsh
+        run: |
+          $biArgs = @('-SkipWebBuild','-SkipExeBuild','-SkipShellBuild')
+          if ('${{ inputs.skip_version_check }}' -eq 'true') { $biArgs += '-SkipVersionCheck' }
+          & '${{ github.workspace }}\app\installer\Build-Installer.ps1' @biArgs
+
+      # ── Sign the installer itself. ──
+      - name: Upload DuneServerSetup.exe (unsigned) for signing
+        if: steps.cfg.outputs.sign == 'true'
+        id: up_installer
+        uses: actions/upload-artifact@v4
+        with:
+          name: unsigned-installer
+          path: app/installer/output/DuneServerSetup.exe
+          if-no-files-found: error
+
+      - name: Sign DuneServerSetup.exe
+        if: steps.cfg.outputs.sign == 'true'
+        uses: SignPath/github-action-submit-signing-request@v1
+        with:
+          api-token: ${{ secrets.SIGNPATH_API_TOKEN }}
+          organization-id: ${{ vars.SIGNPATH_ORGANIZATION_ID }}
+          project-slug: ${{ vars.SIGNPATH_PROJECT_SLUG }}
+          signing-policy-slug: ${{ vars.SIGNPATH_SIGNING_POLICY_SLUG }}
+          artifact-configuration-slug: ${{ vars.SIGNPATH_ARTIFACT_CONFIG_INSTALLER }}
+          github-artifact-id: ${{ steps.up_installer.outputs.artifact-id }}
+          wait-for-completion: true
+          output-artifact-directory: app/installer/output
+
+      - name: Verify Authenticode signature
+        shell: pwsh
+        run: |
+          $installer = '${{ github.workspace }}\app\installer\output\DuneServerSetup.exe'
+          if (-not (Test-Path $installer)) { throw "Installer not found: $installer" }
+          $sig = Get-AuthenticodeSignature $installer
+          Write-Host "DuneServerSetup.exe signature status: $($sig.Status)"
+          if ($sig.SignerCertificate) {
+            Write-Host "  Signer : $($sig.SignerCertificate.Subject)"
+            Write-Host "  Issuer : $($sig.SignerCertificate.Issuer)"
+          }
+          if ('${{ steps.cfg.outputs.sign }}' -eq 'true') {
+            if ($sig.Status -ne 'Valid') {
+              throw "Signing was enabled but the installer is not validly signed (status: $($sig.Status))."
+            }
+            Write-Host "Signed installer verified." -ForegroundColor Green
+          } else {
+            Write-Host "::warning::Installer is UNSIGNED (SignPath not configured)."
+          }
+
+      - name: Upload installer as workflow artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: DuneServerSetup.exe
+          path: app/installer/output/DuneServerSetup.exe
+          if-no-files-found: error
+
+      - name: Attach installer to release
+        if: inputs.attach_to_release_tag != ''
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          tag='${{ inputs.attach_to_release_tag }}'
+          echo "Uploading signed installer to release $tag (replacing any existing asset)…"
+          gh release upload "$tag" \
+            "app/installer/output/DuneServerSetup.exe" \
+            --repo "${{ github.repository }}" --clobber
+          echo "Done. Verify the release has DuneServerSetup.exe as its sole asset."
