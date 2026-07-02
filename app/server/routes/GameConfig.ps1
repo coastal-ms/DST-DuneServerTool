@@ -518,3 +518,75 @@ Register-DuneRoute -Method PUT -Path '/api/gameconfig/spicefields/{id}/spawning'
         Write-DuneError -Response $res -Status 500 -Message "Spicefield spawning toggle failed: $($_.Exception.Message)"
     }
 }
+
+# -----------------------------------------------------------------------------
+# Land-claim (staking unit) extension timer.
+# GET /api/gameconfig/landclaim-timer  — current server + client state.
+#   { server:{available,enabled,seconds,formattedOk,...}, client:{exists,enabled,seconds,...} }
+# PUT /api/gameconfig/landclaim-timer  — { enabled: bool, seconds: number }
+#   Writes both the server UserGame.ini and the local client Game.ini.
+# -----------------------------------------------------------------------------
+Register-DuneRoute -Method GET -Path '/api/gameconfig/landclaim-timer' -Handler {
+    param($req, $res, $routeParams, $body)
+    try {
+        $ctx = Get-DuneGameConfigContext
+        if ($ctx.ok) {
+            Write-DuneJson -Response $res -Body (Get-DuneLandclaimTimer -Ip $ctx.ip)
+        } else {
+            # VM unavailable: still surface the local client Game.ini state.
+            $client = Get-DuneGameConfigClient
+            $cst    = Get-DuneLandclaimTimerState -Raw $client.raw
+            Write-DuneJson -Response $res -Body @{
+                server = @{ available = $false; enabled = $false; seconds = ''; formattedOk = $false; reason = $ctx.message }
+                client = @{ exists = [bool]$client.exists; dirExists = [bool]$client.dirExists; path = $client.path; dir = $client.dir; enabled = $cst.enabled; seconds = $cst.seconds; formattedOk = $cst.formattedOk }
+                clientBlock = (Get-DuneLandclaimClientBlock -Seconds ($(if ($cst.enabled) { $cst.seconds } else { '' })))
+            }
+        }
+    } catch {
+        Write-DuneError -Response $res -Status 500 -Message "Land-claim timer read failed: $($_.Exception.Message)"
+    }
+}
+
+Register-DuneRoute -Method PUT -Path '/api/gameconfig/landclaim-timer' -Handler {
+    param($req, $res, $routeParams, $body)
+    $ctx = Get-DuneGameConfigContext
+    if (-not $ctx.ok) {
+        Write-DuneError -Response $res -Status $ctx.status -Message $ctx.message
+        return
+    }
+    if (-not (Test-DunePlayerGuard -Req $req -Res $res -Ip $ctx.ip)) { return }
+    if (-not $body -or -not ($body -is [hashtable])) {
+        Write-DuneError -Response $res -Status 400 -Message 'Missing JSON body.'
+        return
+    }
+
+    $enabled = $false
+    if ($body.Contains('enabled')) { $enabled = [bool]$body['enabled'] }
+
+    $seconds = ''
+    if ($enabled) {
+        $secRaw = if ($body.Contains('seconds')) { "$($body['seconds'])".Trim() } else { '' }
+        $parsed = 0.0
+        if (-not [double]::TryParse($secRaw, [ref]$parsed) -or $parsed -le 0) {
+            Write-DuneError -Response $res -Status 400 -Message 'Enter a positive number of seconds for the land-claim timer.'
+            return
+        }
+        $seconds = $secRaw
+    }
+
+    try {
+        $r      = Set-DuneLandclaimTimer -Ip $ctx.ip -Enabled $enabled -Seconds $seconds
+        $state  = Get-DuneLandclaimTimer -Ip $ctx.ip
+        Write-DuneJson -Response $res -Body @{
+            ok          = $true
+            enabled     = $enabled
+            seconds     = $seconds
+            result      = $r
+            server      = $state.server
+            client      = $state.client
+            clientBlock = $state.clientBlock
+        }
+    } catch {
+        Write-DuneError -Response $res -Status 500 -Message "Land-claim timer save failed: $($_.Exception.Message)"
+    }
+}

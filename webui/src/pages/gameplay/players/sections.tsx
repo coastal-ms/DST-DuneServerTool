@@ -33,6 +33,7 @@ import {
   getPlayerJourneyNodes, completeJourneyNode, resetJourneyNode,
   getTrainerCatalog, getTrainerStatus, unlockTrainer, resetTrainerSkills,
   getMainQuestCatalog, unlockMainQuest,
+  getContracts, completeContract,
   getVehicleKitCatalog,
   type Player, type PlayerEvent, type PlayerStats, type ProgressionPreset, type SpecTrackFull,
   type CatalogItem, type ItemPackage, type GiveItemEntry,
@@ -40,6 +41,7 @@ import {
   type JourneyNode, type TrainerInfo, type TrainerStatus, type MainQuestInfo,
   type PlayerVehicleRow, type TeleportDestination,
   type VehicleTemplate, type VehicleKitCatalog,
+  type ContractRow,
 } from '../../../api/gameplay'
 import { fmtNum, fmtSolari } from '../shared'
 
@@ -569,7 +571,7 @@ interface ActionDef {
   liveOnly?: boolean      // requires player to be online (RMQ path)
   offlineOnly?: boolean   // requires player to be offline (DB write the game caches in memory)
   fields?: ActionField[]
-  custom?: 'give-item' | 'grant-reward' | 'whisper' | 'spawn-vehicle' | 'quick-presets' | 'vehicle-kit' | 'give-package' | 'cheat-scripts' | 'dev-scripts' | 'unlock-trainers' | 'unlock-mainquest' | 'progression-unlock' | 'refuel-vehicle' | 'starter-class' | 'update-tags' | 'teleport-player' | 'teleport-location' | 'set-respawn' | 'reset-faction' | 'grant-cosmetic'
+  custom?: 'give-item' | 'grant-reward' | 'whisper' | 'spawn-vehicle' | 'quick-presets' | 'vehicle-kit' | 'give-package' | 'cheat-scripts' | 'dev-scripts' | 'unlock-trainers' | 'unlock-mainquest' | 'complete-contract' | 'progression-unlock' | 'refuel-vehicle' | 'starter-class' | 'update-tags' | 'teleport-player' | 'teleport-location' | 'set-respawn' | 'reset-faction' | 'grant-cosmetic'
   balance?: 'solari' | 'scrip' | 'intel'  // show the player's current balance read-only above the form
   confirm?: (p: Player) => string  // confirm message; if returns '' no prompt
   doubleConfirm?: boolean // also requires a typed "i acknowledge" prompt inside run()
@@ -628,6 +630,9 @@ const ACTIONS: ActionDef[] = [
     run: () => Promise.resolve({ message: '' }) },
   { id: 'unlock-main-quest', group: 'Progression', label: 'Unlock Main Quest', icon: 'Flag', custom: 'unlock-mainquest',
     rowNote: 'Complete an entire main-quest story line',
+    run: () => Promise.resolve({ message: '' }) },
+  { id: 'complete-contract', group: 'Progression', label: 'Complete Contract', icon: 'Check', custom: 'complete-contract', offlineOnly: true,
+    rowNote: 'Force-complete a stuck / in-flight contract — writes its completion tags and dismisses the active contract item',
     run: () => Promise.resolve({ message: '' }) },
   { id: 'reset-progression', group: 'Progression', label: 'Reset Progression (live)', icon: 'RotateCcw', liveOnly: true,
     rowNote: 'Single confirmation required',
@@ -993,6 +998,12 @@ function ActionRow({ def, player, busy, stats, open, danger, onToggle, runAction
               onSubmit={(quest, name) => runAction(def, async () => {
                 const r = await unlockMainQuest(player.account_id, quest)
                 return { message: r.message || `Unlocked main quest "${name}" for ${player.name}.` }
+              })} />
+          ) : def.custom === 'complete-contract' ? (
+            <CompleteContractForm busy={busy}
+              onSubmit={(contractId, label) => runAction(def, async () => {
+                const r = await completeContract(player.account_id, contractId)
+                return { message: r.message || `Completed contract "${label}" for ${player.name}.` }
               })} />
           ) : def.custom === 'progression-unlock' ? (
             <ProgressionUnlockForm busy={busy}
@@ -2033,9 +2044,85 @@ function UnlockMainQuestForm({ busy, onSubmit }: { busy: boolean; onSubmit: (que
   )
 }
 
-// Reset Faction — one button that wipes ALL faction progression (rep, tags,
-// ClimbTheRanks nodes, alignment) so a player starts fresh. Offline-only;
-// double-acknowledged.
+// Complete Contract — force-complete a single stuck / in-flight contract.
+// Writes the contract's completion tags AND dismisses the active ContractItem
+// via the existing completeContract API. Offline-only (tags are RAM-authoritative
+// while the player is connected). Catalog is large, so the picker is searchable —
+// e.g. type "Skorda" or "Atre" to narrow it down.
+function CompleteContractForm({ busy, onSubmit }: { busy: boolean; onSubmit: (contractId: string, label: string) => void }) {
+  const [contracts, setContracts] = useState<ContractRow[]>([])
+  const [search, setSearch] = useState('')
+  const [sel, setSel] = useState('')
+  const [loading, setLoading] = useState(true)
+  const [err, setErr] = useState('')
+
+  useEffect(() => {
+    let alive = true
+    setLoading(true)
+    getContracts()
+      .then(r => { if (alive) setContracts(r.contracts || []) })
+      .catch(e => { if (alive) setErr(e instanceof Error ? e.message : String(e)) })
+      .finally(() => { if (alive) setLoading(false) })
+    return () => { alive = false }
+  }, [])
+
+  const q = search.trim().toLowerCase()
+  const filtered = useMemo(() => {
+    const list = q
+      ? contracts.filter(c => c.id.toLowerCase().includes(q) || (c.alias || '').toLowerCase().includes(q))
+      : contracts
+    return list.slice(0, 300)
+  }, [contracts, q])
+
+  // Keep the selection valid as the filter changes.
+  useEffect(() => {
+    if (filtered.length === 0) { setSel(''); return }
+    if (!filtered.some(c => c.id === sel)) setSel(filtered[0].id)
+  }, [filtered, sel])
+
+  const chosen = contracts.find(c => c.id === sel)
+  const label = (c: ContractRow) => (c.alias && c.alias !== c.id) ? `${c.alias} — ${c.id}` : c.id
+  const selectCls = 'w-full px-3 py-2 rounded-lg bg-surface-2 border border-border text-text text-sm focus:outline-none focus:ring-2 focus:ring-ibad focus:border-ibad/50'
+  const inputCls = selectCls
+
+  if (loading) return <div className="text-sm text-text-dim flex items-center gap-2"><Icon name="Loader2" size={13} className="animate-spin" /> Loading contracts…</div>
+  if (err) return <div className="text-sm text-danger">{err}</div>
+  if (contracts.length === 0) return <div className="text-sm text-text-dim">No contracts available.</div>
+
+  const total = q
+    ? contracts.filter(c => c.id.toLowerCase().includes(q) || (c.alias || '').toLowerCase().includes(q)).length
+    : contracts.length
+
+  return (
+    <div className="space-y-3">
+      <div>
+        <label className="block text-[11px] uppercase tracking-wider text-text-dim mb-1">Search</label>
+        <input type="text" value={search} disabled={busy} className={inputCls}
+          placeholder="e.g. Skorda, Atre, Hawat…" onChange={e => setSearch(e.target.value)} />
+      </div>
+      <div>
+        <label className="block text-[11px] uppercase tracking-wider text-text-dim mb-1">
+          Contract{total > 0 ? ` (${total} match${total === 1 ? '' : 'es'}${total > filtered.length ? `, showing ${filtered.length}` : ''})` : ''}
+        </label>
+        <select value={sel} disabled={busy} size={8} className={`${selectCls} font-mono`} onChange={e => setSel(e.target.value)}>
+          {filtered.map(c => (
+            <option key={c.id} value={c.id}>{label(c)}</option>
+          ))}
+        </select>
+        {filtered.length === 0 && <div className="text-[11px] text-text-muted mt-1">No contracts match “{search}”.</div>}
+      </div>
+      <div className="text-[11px] text-text-muted">
+        Force-completes the selected contract: writes its completion tags and dismisses the active
+        contract item. Use this to clear a contract left stuck after a faction one-click. Takes effect on next login.
+      </div>
+      <button className="btn-primary w-full" disabled={busy || !sel}
+        onClick={() => onSubmit(sel, chosen ? label(chosen) : sel)}>
+        {busy ? <Icon name="Loader2" size={13} className="animate-spin" /> : <Icon name="Check" size={13} />} Complete Contract
+      </button>
+    </div>
+  )
+}
+
 function ResetFactionForm({ busy, playerName, onReset }: {
   busy: boolean
   playerName: string

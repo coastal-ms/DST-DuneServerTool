@@ -68,6 +68,18 @@ $script:DuneGcSecCrafting  = '/Script/DuneSandbox.CraftingSettings'
 # member in place and leave the nested members (messages/curves/widgets) intact.
 $script:DuneGcLandsraadStructKey = 'Data'
 
+# -----------------------------------------------------------------------------
+# Land-claim (staking unit) extension timer. A single admin-entered seconds value
+# is written as the two BuildingSettings scalar defaults, and the game's built-in
+# doubling schedule (60..30720s) is stripped via array-remove (-) lines so only the
+# custom value remains. Applied to BOTH the server 'game' file (UserGame.ini) and
+# the local client Game.ini. These keys are NOT in the visual schema — they are
+# managed through a dedicated card/endpoint because they mix a scalar with array
+# (-) lines, which the scalar-only schema editor does not model.
+# -----------------------------------------------------------------------------
+$script:DuneLandclaimKeys            = @('m_StakingUnitExtensionDefaultTimes','m_StakingUnitVerticalExtensionDefaultTimes')
+$script:DuneLandclaimDefaultRemovals = @(60,120,240,480,960,1920,3840,7680,15360,30720)
+
 # Category display order (UI renders in this order; unknown categories appended).
 # NOTE: 'Progression' and 'Harvesting' categories were removed 2026-06-15 along
 # with their m_Global* multiplier keys (XP / Progression Speed / Fame / Harvest
@@ -737,6 +749,33 @@ function Remove-DuneTrailingBlankLines {
     }
 }
 
+# Ensure each literal array line ("-Key=Value" / "+Key=Value") exists in a section
+# body exactly once, appended in order after existing content. Match is exact on
+# the trimmed line so re-applies de-dupe rather than piling duplicates. Used to
+# inject the land-claim timer removal lines.
+function Set-DuneArrayLinesInBody {
+    param([System.Collections.Generic.List[string]]$Body, [string[]]$Lines)
+    if (-not $Lines) { return }
+    foreach ($line in $Lines) {
+        $want = "$line".Trim()
+        if (-not $want) { continue }
+        $present = $false
+        foreach ($b in $Body) { if ($b.Trim() -eq $want) { $present = $true; break } }
+        if (-not $present) { $Body.Add($want) }
+    }
+}
+
+# Remove every array (+/-) line for a given key from a section body, leaving that
+# key's scalar line and all other keys untouched. Pairs with Remove-DuneScalarFromBody
+# so a full land-claim disable clears both the scalar and its removal lines.
+function Remove-DuneArrayLinesForKey {
+    param([System.Collections.Generic.List[string]]$Body, [string]$Key)
+    for ($i = $Body.Count - 1; $i -ge 0; $i--) {
+        $info = Get-DuneIniLineKey $Body[$i]
+        if ($info -and $info.isArray -and $info.key -eq $Key) { $Body.RemoveAt($i) }
+    }
+}
+
 # Core writer: take raw + a list of @{section;key;value} updates, return new raw.
 # Throws on a malformed managed block (BEGIN without END).
 function ConvertTo-DuneIniManaged {
@@ -849,6 +888,16 @@ function ConvertTo-DuneIniManaged {
         } else {
             $fmt = Format-DuneIniValue -Key $key -Value $u.value -QuotedKeys $QuotedKeys
             Set-DuneScalarInBody -Body $entry.body -Key $key -Formatted $fmt
+        }
+        # Optional array (+/-) line management for keys that carry them (the
+        # land-claim staking timer). Only engaged when the update explicitly
+        # supplies 'arrayLines' or 'arrayRemove', so every existing scalar update
+        # is unaffected. On remove/arrayRemove, strip every +/- line for the key;
+        # otherwise ensure the supplied literal lines are present (de-duped).
+        if ($u['remove'] -or $u['arrayRemove']) {
+            Remove-DuneArrayLinesForKey -Body $entry.body -Key $key
+        } elseif ($u['arrayLines']) {
+            Set-DuneArrayLinesInBody -Body $entry.body -Lines ([string[]]$u['arrayLines'])
         }
     }
 
@@ -1377,7 +1426,178 @@ function Save-DuneGameConfig {
 }
 
 # =============================================================================
-# DEFAULTS CATALOG — full DefaultGame.ini + DefaultEngine.ini from a sg-* pod
+# LAND-CLAIM (STAKING UNIT) EXTENSION TIMER
+# =============================================================================
+# A single admin-entered "seconds" value collapses the game's default staking-unit
+# extension schedule (a doubling 60..30720s array) down to one custom duration.
+# Written into [/Script/DuneSandbox.BuildingSettings] of BOTH the server 'game'
+# file and the local client Game.ini as: the two scalar *DefaultTimes keys set to
+# the value, plus array-remove (-) lines that strip each built-in schedule entry.
+
+# Build the literal array-remove lines for one staking key from the default schedule.
+function Get-DuneLandclaimRemovalLines {
+    param([string]$Key)
+    $out = New-Object 'System.Collections.Generic.List[string]'
+    foreach ($n in $script:DuneLandclaimDefaultRemovals) {
+        $out.Add(('-{0}={1:F6}' -f $Key, [double]$n))
+    }
+    return ,$out.ToArray()
+}
+
+# Build the exact, shareable client Game.ini block for a given seconds value, so
+# the admin can hand it to connecting players (this setting is client-side too and
+# only takes effect for a player if THEIR Game.ini carries the same block). Uses
+# the same keys + removal schedule as the writer, so the snippet always matches
+# what DST writes. CRLF-joined for pasting into a Windows client Game.ini.
+function Get-DuneLandclaimClientBlock {
+    param([string]$Seconds)
+    if ("$Seconds".Trim() -eq '') { return '' }
+    $lines = New-Object 'System.Collections.Generic.List[string]'
+    $lines.Add('[' + $script:DuneGcSecBuilding + ']')
+    foreach ($key in $script:DuneLandclaimKeys) { $lines.Add("$key=$Seconds") }
+    foreach ($key in $script:DuneLandclaimKeys) {
+        foreach ($line in (Get-DuneLandclaimRemovalLines -Key $key)) { $lines.Add($line) }
+    }
+    return ($lines -join "`r`n")
+}
+
+# Build the managed-writer update objects for the land-claim timer.
+#   Enabled  -> set both scalars to $Seconds and inject the removal (-) lines.
+#   Disabled -> remove both scalars and strip their removal lines (game default).
+# $File is 'game' (server UserGame.ini) or 'client' (local Game.ini).
+function Build-DuneLandclaimUpdates {
+    param([bool]$Enabled, [string]$Seconds, [string]$File = 'game')
+    $ups = New-Object 'System.Collections.Generic.List[object]'
+    foreach ($key in $script:DuneLandclaimKeys) {
+        if ($Enabled) {
+            $ups.Add(@{
+                file       = $File
+                section    = $script:DuneGcSecBuilding
+                key        = $key
+                value      = "$Seconds"
+                remove     = $false
+                arrayLines = (Get-DuneLandclaimRemovalLines -Key $key)
+            })
+        } else {
+            $ups.Add(@{
+                file        = $File
+                section     = $script:DuneGcSecBuilding
+                key         = $key
+                value       = ''
+                remove      = $true
+                arrayRemove = $true
+            })
+        }
+    }
+    return ,$ups.ToArray()
+}
+
+# Parse land-claim timer state from raw INI text (pure / unit-testable).
+# enabled     = both staking scalar keys have an effective value.
+# seconds     = that shared value (empty when disabled).
+# formattedOk = enabled AND both keys carry the full set of removal (-) lines AND
+#               the two scalar values agree — i.e. DST's own well-formed block.
+function Get-DuneLandclaimTimerState {
+    param([string]$Raw)
+    $doc = ConvertFrom-DuneIniDoc -Raw $Raw
+    $scalar     = @{}
+    $arrayCount = @{}
+    foreach ($k in $script:DuneLandclaimKeys) { $arrayCount[$k] = 0 }
+    foreach ($s in $doc.sections) {
+        if ($s.name -ne $script:DuneGcSecBuilding) { continue }
+        foreach ($line in $s.body) {
+            $info = Get-DuneIniLineKey $line
+            if (-not $info) { continue }
+            if ($script:DuneLandclaimKeys -notcontains $info.key) { continue }
+            if ($info.isArray) {
+                if ("$line".Trim().StartsWith('-')) { $arrayCount[$info.key] = $arrayCount[$info.key] + 1 }
+            } else {
+                $scalar[$info.key] = (Get-DuneIniLineValue $line).Trim()
+            }
+        }
+    }
+    $k1 = $script:DuneLandclaimKeys[0]; $k2 = $script:DuneLandclaimKeys[1]
+    $has1 = $scalar.ContainsKey($k1); $has2 = $scalar.ContainsKey($k2)
+    $enabled = [bool]($has1 -and $has2)
+    $seconds = if ($has1) { $scalar[$k1] } elseif ($has2) { $scalar[$k2] } else { '' }
+    $expected = $script:DuneLandclaimDefaultRemovals.Count
+    $formattedOk = [bool]($enabled -and ($arrayCount[$k1] -ge $expected) -and ($arrayCount[$k2] -ge $expected) -and ($scalar[$k1] -eq $scalar[$k2]))
+    return @{ enabled = $enabled; seconds = "$seconds"; formattedOk = $formattedOk }
+}
+
+# Read the current land-claim timer state from the server game file + the local
+# client Game.ini. Server read failure (no running VM) returns available=$false.
+function Get-DuneLandclaimTimer {
+    param([string]$Ip)
+    $server = @{ available = $false; enabled = $false; seconds = ''; formattedOk = $false }
+    try {
+        $paths = Resolve-DuneGameConfigPaths -Ip $Ip
+        $raw   = (Invoke-V6Ssh -Ip $Ip -Cmd "sudo cat '$($paths.game)' 2>/dev/null") -join "`n"
+        $st    = Get-DuneLandclaimTimerState -Raw $raw
+        $server = @{ available = $true; enabled = $st.enabled; seconds = $st.seconds; formattedOk = $st.formattedOk; path = $paths.game }
+    } catch {
+        $server = @{ available = $false; enabled = $false; seconds = ''; formattedOk = $false; error = "$($_.Exception.Message)" }
+    }
+
+    $client = Get-DuneGameConfigClient
+    $cst    = Get-DuneLandclaimTimerState -Raw $client.raw
+    # The seconds that actually govern play right now (server wins; fall back to
+    # the local client file when the VM is down). Used to render the shareable block.
+    $activeSeconds = ''
+    if ($server.available -and $server.enabled) { $activeSeconds = $server.seconds }
+    elseif ($cst.enabled) { $activeSeconds = $cst.seconds }
+    return @{
+        server = $server
+        client = @{
+            exists      = [bool]$client.exists
+            dirExists   = [bool]$client.dirExists
+            path        = $client.path
+            dir         = $client.dir
+            enabled     = $cst.enabled
+            seconds     = $cst.seconds
+            formattedOk = $cst.formattedOk
+        }
+        clientBlock = (Get-DuneLandclaimClientBlock -Seconds $activeSeconds)
+    }
+}
+
+# Apply (enable) or clear (disable) the land-claim timer. Always writes the server
+# 'game' file over SSH; also writes the local client Game.ini best-effort when the
+# configured client folder exists. Returns per-target outcomes.
+function Set-DuneLandclaimTimer {
+    param([string]$Ip, [bool]$Enabled, [string]$Seconds)
+    $quoted = Get-DuneGameConfigQuotedKeys
+    $result = @{ ok = $true; server = @{}; client = @{} }
+
+    # --- server 'game' file (UserGame.ini) ---
+    $paths = Resolve-DuneGameConfigPaths -Ip $Ip
+    $raw   = (Invoke-V6Ssh -Ip $Ip -Cmd "sudo cat '$($paths.game)' 2>/dev/null") -join "`n"
+    $ups   = Build-DuneLandclaimUpdates -Enabled $Enabled -Seconds $Seconds -File 'game'
+    $new   = ConvertTo-DuneIniManaged -Raw $raw -Updates $ups -QuotedKeys $quoted
+    $b64   = [Convert]::ToBase64String([Text.Encoding]::UTF8.GetBytes($new))
+    Invoke-V6Ssh -Ip $Ip -Cmd "base64 -d | sudo tee '$($paths.game)' > /dev/null" -StdinData $b64 -TimeoutSec 30 | Out-Null
+    $result.server = @{ ok = $true; path = $paths.game; applied = $true }
+
+    # --- local client Game.ini (best-effort) ---
+    try {
+        $dirResolved = Resolve-DuneGameConfigClientDir
+        if (Test-Path -LiteralPath $dirResolved) {
+            $path     = Get-DuneGameConfigClientFilePath
+            $existing = ''
+            if (Test-Path -LiteralPath $path -PathType Leaf) { $existing = [IO.File]::ReadAllText($path) }
+            $cups = Build-DuneLandclaimUpdates -Enabled $Enabled -Seconds $Seconds -File 'client'
+            $cnew = ConvertTo-DuneIniManaged -Raw $existing -Updates $cups -QuotedKeys $quoted
+            $cnew = $cnew -replace "`r?`n", "`r`n"   # client file is Windows CRLF
+            [IO.File]::WriteAllText($path, $cnew, (New-Object System.Text.UTF8Encoding($false)))
+            $result.client = @{ ok = $true; path = $path; applied = $true }
+        } else {
+            $result.client = @{ ok = $false; applied = $false; reason = "Client config folder not found: $dirResolved" }
+        }
+    } catch {
+        $result.client = @{ ok = $false; applied = $false; reason = "$($_.Exception.Message)" }
+    }
+    return $result
+}
 # =============================================================================
 #
 # These ship inside the actual UE server image, so the only reliable way to

@@ -491,7 +491,8 @@
     ],
     "DA_CT_Fac_Atre_Rank04_05_Skorda": [
       "Contract.Tracking.FactionStory.R4C5Completed",
-      "Contract.Tracking.Completed.Fac_Atre_Rank04_05_Skorda"
+      "Contract.Tracking.Completed.Fac_Atre_Rank04_05_Skorda",
+      "Contract.Tracking.Completed.FactionStoryline.FindSkorda"
     ],
     "DA_CT_Fac_Atre_Rank04_06_TaintedSpice": [
       "Contract.Tracking.Completed.FactionStoryline.Atreides.Rank4.Contract6",
@@ -601,7 +602,8 @@
     ],
     "DA_CT_Fac_Hark_Rank04_05_Skorda": [
       "Contract.Tracking.FactionStory.R4C5Completed",
-      "Contract.Tracking.Completed.Fac_Hark_Rank04_05_Skorda"
+      "Contract.Tracking.Completed.Fac_Hark_Rank04_05_Skorda",
+      "Contract.Tracking.Completed.FactionStoryline.FindSkorda"
     ],
     "DA_CT_Fac_Hark_Rank04_06_TaintedSpice": [
       "Contract.Tracking.Completed.FactionStoryline.Harkonnen.Rank4.Contract6",
@@ -1468,6 +1470,14 @@
     ],
     "DA_CT_Trainer_Trooper2_05": [
       "Skills.Key.CapstoneGadgets"
+    ]
+  },
+  "contract_remove_tags": {
+    "DA_CT_Fac_Atre_Rank04_05_Skorda": [
+      "Contract.Tracking.FactionStory.ShowSkorda"
+    ],
+    "DA_CT_Fac_Hark_Rank04_05_Skorda": [
+      "Contract.Tracking.FactionStory.ShowSkorda"
     ]
   },
   "job_skill_blocks": {

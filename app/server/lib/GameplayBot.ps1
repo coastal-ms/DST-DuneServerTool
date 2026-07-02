@@ -1125,13 +1125,18 @@ LIMIT $limit
         $stack     = ConvertTo-DuneInt $row['actual_stack']
         if ($stack -le 0) { $stack = 1 }
         $totalCost = $price * $stack
-        # Player-facing Solari = stored item_price * 10 (the same convention the
-        # sell side uses, and the listing price the seller chose in-game). The
-        # seller payout order + Duke's balance debit are denominated in literal
-        # Solari, so they must use the *display* value, not the raw item_price.
-        # Writing the raw value here underpaid sellers 10x (issue #274).
-        $payoutUnit  = $price * 10
-        $payoutTotal = $totalCost * 10
+        # Player-facing Solari == the raw item_price column, 1:1 (verified against
+        # the live game DB): dune.dune_exchange_add_sell_order stores item_price
+        # exactly as the price the seller chose in-game, and
+        # dune.dune_exchange_retrieve_solaris_from_item ("Take Solari") credits
+        # SUM(item_price * stack_size) to the seller's balance with NO scaling.
+        # PR #275 (issue #274) multiplied by 10 to compensate for an older payout
+        # scaling, but the ~2026-06 Funcom patch removed that scaling, so the *10
+        # now OVERPAYS sellers 10x (e.g. an 83,000 listing paid out 830,000, as
+        # reported on Discord). Pay the raw listed price so Duke's payout and balance
+        # debit match a normal player-to-player sale exactly.
+        $payoutUnit  = $price
+        $payoutTotal = $totalCost
 
         # Over-market guard: dice hit, but bail if the price is above the window.
         if ($guardOn) {
