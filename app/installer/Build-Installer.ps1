@@ -13,6 +13,13 @@ param(
     [switch]$SkipWebBuild,
     [switch]$SkipShellBuild,
     [switch]$SkipVersionCheck,
+    # Build the raw artifacts (webui + DuneServer.exe + DuneShell.exe) but STOP
+    # before compiling the Inno Setup installer. Used by the signed-release CI
+    # (release-signed.yml) as "phase A": it builds the inner exes, hands them to
+    # SignPath to Authenticode-sign them IN PLACE, then re-invokes this script
+    # with -SkipExeBuild -SkipShellBuild -SkipWebBuild ("phase B") so ISCC bundles
+    # the now-signed exes into the installer.
+    [switch]$SkipInstaller,
     [switch]$Open
 )
 
@@ -217,6 +224,17 @@ if (-not $SkipShellBuild) {
 }
 if (-not (Test-Path $shellExe)) {
     throw "DuneShell.exe not found at $shellExe - run 'dotnet publish' for DuneShell (or omit -SkipShellBuild)"
+}
+
+# -SkipInstaller: raw artifacts are built (webui + DuneServer.exe + DuneShell.exe);
+# stop here without compiling the installer. The signed-release CI signs the two
+# inner exes at this point, then re-runs with the -Skip*Build flags to package them.
+if ($SkipInstaller) {
+    Write-Host ""
+    Write-Host "  Raw artifacts built; skipping installer compile (-SkipInstaller)." -ForegroundColor Yellow
+    Write-Host "    DuneServer.exe : $exePath" -ForegroundColor DarkGray
+    Write-Host "    DuneShell.exe  : $shellExe" -ForegroundColor DarkGray
+    return
 }
 
 # Ensure output dir
