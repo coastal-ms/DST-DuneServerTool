@@ -212,6 +212,27 @@ Register-DuneRoute -Method POST -Path '/api/gameplay/players/faction/reset' -Han
     }
 }
 
+# POST /api/gameplay/players/fresh-start  { account_id }
+# Hardest-possible progression reset: wipes journey/quests, progression tags,
+# faction, contracts, crafting recipes, tech-knowledge data, specializations +
+# keystones; KEEPS cosmetics, building sets, Steam achievements, inventory, bases,
+# Intel and class skill-tree modules. Offline-only (RAM-authoritative writes).
+Register-DuneRoute -Method POST -Path '/api/gameplay/players/fresh-start' -Handler {
+    param($req, $res, $routeParams, $body)
+    try {
+        $acc = Get-DuneBodyInt -Body $body -Name 'account_id'
+        if ($null -eq $acc -or $acc -le 0) { Write-DuneError -Response $res -Status 400 -Message 'account_id is required.'; return }
+        Invoke-DunePlayerWriteRoute -Response $res -Action {
+            param($ip)
+            $off = Test-DunePlayerOfflineByAccount -Ip $ip -AccountId $acc
+            if (-not $off.ok) { return @{ ok = $false; error = "Player must be offline to run a Fresh Start. $($off.reason)" } }
+            Invoke-DunePlayerFreshStart -Ip $ip -AccountId $acc
+        }
+    } catch {
+        Write-DuneError -Response $res -Status 500 -Message "Fresh Start failed: $($_.Exception.Message)"
+    }
+}
+
 # POST /api/gameplay/players/progression/apply-preset  { account_id, preset_id }
 Register-DuneRoute -Method POST -Path '/api/gameplay/players/progression/apply-preset' -Handler {
     param($req, $res, $routeParams, $body)

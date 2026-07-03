@@ -1352,6 +1352,99 @@ WHERE a.id = $pawnID::bigint
     return @{ ok = $true; cleared = (Get-DuneSqlAffected $r) }
 }
 
+# ---------------------------------------------------------------------------
+# Fresh Start (keep unlocks) -- hardest-possible progression reset. Wipes a
+# character's story/quest/faction/contract progression AND character power
+# (crafting recipes, tech-knowledge data, specializations + keystones) so the
+# player can replay ALL content, while KEEPING only: cosmetics
+# (CustomizationLibraryActorComponent), building sets (dune.building_progression),
+# and Steam achievements (journey nodes 'DA_ACH%'). Inventory, bases, Intel
+# (m_TechKnowledgePoints) and class skill-tree modules are left untouched
+# (Coastal's locked scope, 2026-07-03).
+#
+# Offline-only (route-gated): journey rows, player_tags, and the pawn component
+# blobs are RAM-authoritative while the player is connected, so an online edit is
+# overwritten on logout -- same guard as Reset Faction / Wipe Journey.
+#
+# Composition: a single transaction for the DML-only wipes (journey / tags /
+# contract items+pointer / recipe + tech-knowledge blobs) then the two existing
+# helpers that run their own transactions -- Invoke-DunePlayerResetFaction (rep,
+# alignment, faction tags, ClimbTheRanks, faction contract items) and
+# Invoke-DunePlayerResetAllSpecs (specialization_tracks + keystones). Every step
+# is idempotent, so a partial failure is safe to re-run.
+#
+# WARNING - FRAGILE keep/wipe boundaries: Funcom renames tag prefixes and
+# journey node-id patterns every patch (they already rekeyed player_tags and
+# journey account_id -> character_id). Re-verify 'DA_ACH%', the tag allow-list,
+# and the component JSON paths against a reference character each server update;
+# never hardcode blindly. Chroma:
+# dst-fresh-start-feature-spec-and-fragile-keep-wipe-classification-2026-07-03.
+function Invoke-DunePlayerFreshStart {
+    param([string]$Ip, [long]$AccountId)
+    if ($AccountId -le 0) { return @{ ok = $false; error = 'account_id is required.' } }
+
+    $controllerID = Get-DunePlayerControllerFromAccount -Ip $Ip -AccountId $AccountId
+    if ($controllerID -le 0) { return @{ ok = $false; error = "no player_controller for account $AccountId." } }
+    $pawnID = Get-DunePlayerPawnFromAccount -Ip $Ip -AccountId $AccountId
+    if ($pawnID -le 0) { return @{ ok = $false; error = "no pawn for account $AccountId." } }
+
+    $charScope = "character_id IN (SELECT id FROM dune.player_state WHERE account_id=$AccountId::bigint)"
+
+    # --- Step 1: DML-only wipes in one transaction ------------------------------
+    $sb = [System.Text.StringBuilder]::new()
+    [void]$sb.AppendLine('BEGIN;')
+    # Journey: reset every node EXCEPT Steam achievements (DA_ACH%) to incomplete
+    # (complete + reveal -> false), NOT delete -- deleting can stop the game
+    # re-offering quests, so the player could not actually replay them.
+    [void]$sb.AppendLine("UPDATE dune.journey_story_node SET complete_condition_state='false'::jsonb, reveal_condition_state='false'::jsonb, has_pending_reward=false WHERE $charScope AND story_node_id NOT LIKE 'DA_ACH%';")
+    # Progression tags: explicit prefix ALLOW-LIST (NOT delete-all). Cosmetic /
+    # building-set / achievement state does not live under these prefixes and so
+    # survives. Contract.Tracking.*Kill* kill-counter tags match Contract.% and
+    # are removed here (kills have no dedicated table).
+    $tagLikes = @(
+        "tag LIKE 'Contract.%'", "tag LIKE 'Journey.%'", "tag LIKE 'JourneySets.%'",
+        "tag LIKE 'DialogueFlags.%'", "tag LIKE 'Exploration.%'", "tag LIKE 'DunipediaFlags.%'",
+        "tag LIKE 'BigMoments.%'", "tag LIKE 'NPE.%'", "tag LIKE 'Faction.%'",
+        "tag LIKE 'Character.Keystone.%'"
+    ) -join ' OR '
+    [void]$sb.AppendLine("DELETE FROM dune.player_tags WHERE $charScope AND ($tagLikes);")
+    # Contract items: remove ALL contract cards in the pawn's contract inventory
+    # (inventory_type 29), then reset the tracked-contract pointer -- every item is
+    # gone so any non-'!!itm#0' value now dangles.
+    [void]$sb.AppendLine("DELETE FROM dune.items WHERE template_id='ContractItem' AND inventory_id IN (SELECT id FROM dune.inventories WHERE actor_id=$pawnID::bigint AND inventory_type=29);")
+    [void]$sb.AppendLine("UPDATE dune.actors a SET properties = jsonb_set(a.properties, '{ContractsCoordinatorComponent,m_TrackedContractItemUid}', to_jsonb('!!itm#0'::text)) WHERE a.id=$pawnID::bigint AND a.properties ? 'ContractsCoordinatorComponent' AND COALESCE(a.properties->'ContractsCoordinatorComponent'->>'m_TrackedContractItemUid','!!itm#0') <> '!!itm#0';")
+    # Crafting recipes: empty the known-recipe list (verified shape: single
+    # m_KnownItemRecipes array of recipe objects, ~496 entries on a maxed char).
+    [void]$sb.AppendLine("UPDATE dune.actors SET properties = jsonb_set(properties, '{CraftingRecipesLibraryActorComponent,m_KnownItemRecipes}', '[]'::jsonb) WHERE id=$pawnID::bigint AND properties #> '{CraftingRecipesLibraryActorComponent,m_KnownItemRecipes}' IS NOT NULL;")
+    # Tech knowledge: empty the learned-tech list ONLY. Intel currency
+    # (m_TechKnowledgePoints) and m_NextTechTreeUpgradeIndex are intentionally KEPT
+    # per the locked scope -- do not blind-null the whole component.
+    [void]$sb.AppendLine("UPDATE dune.actors SET properties = jsonb_set(properties, '{TechKnowledgePlayerComponent,m_TechKnowledge,m_TechKnowledgeData}', '[]'::jsonb) WHERE id=$pawnID::bigint AND properties #> '{TechKnowledgePlayerComponent,m_TechKnowledge,m_TechKnowledgeData}' IS NOT NULL;")
+    [void]$sb.AppendLine('COMMIT;')
+
+    $r = Invoke-DuneSqlQuery -Ip $Ip -Sql $sb.ToString() -ReadOnly $false -MaxRows 1 -TimeoutSec 120
+    if (-not $r.ok) {
+        Invoke-DuneSqlQuery -Ip $Ip -Sql 'ROLLBACK;' -ReadOnly $false -MaxRows 1 -TimeoutSec 5 | Out-Null
+        return @{ ok = $false; error = "fresh-start core tx: $($r.error)" }
+    }
+
+    # --- Step 2: faction (rep + alignment + faction tags + ClimbTheRanks +
+    # faction contract items/pointer). Own transaction; idempotent.
+    $fr = Invoke-DunePlayerResetFaction -Ip $Ip -AccountId $AccountId -Faction 'both'
+    if (-not $fr.ok) { return @{ ok = $false; error = "fresh-start faction: $($fr.error)"; partial = $true } }
+
+    # --- Step 3: specializations + keystones (keyed by controller id).
+    $sr = Invoke-DunePlayerResetAllSpecs -Ip $Ip -ControllerId $controllerID
+    if (-not $sr.ok) { return @{ ok = $false; error = "fresh-start specs: $($sr.error)"; partial = $true } }
+
+    return @{
+        ok = $true
+        message = "Fresh Start complete for account $AccountId - journey reset (Steam achievements kept), progression tags removed, faction + contracts cleared, crafting recipes + tech knowledge wiped, specializations + keystones reset. KEPT: cosmetics, building sets, Steam achievements, inventory, bases, Intel, class skill trees. Takes effect on next login."
+        kept  = @('cosmetics','building sets','Steam achievements','inventory','bases','Intel','class skill trees')
+        wiped = @('journey','progression tags','faction','contracts','crafting recipes','tech knowledge','specializations','keystones')
+    }
+}
+
 function Invoke-DunePlayerCompleteContracts {
     param([string]$Ip, [long]$AccountId, [string[]]$ContractIds)
     if ($AccountId -le 0) { return @{ ok = $false; error = 'account_id is required.' } }
