@@ -11,6 +11,20 @@ Patch releases within a major series are rolled up under the major's entry
 on GitHub still exist for each individual release; the consolidated entries
 here cover everything those tags shipped.
 
+## [12.15.2] - 2026-07-03
+
+### Added
+
+- **Apply server update (Restart Schedule).** New button next to *Check for server update*. When Funcom publishes a new self-host image, one click downloads it and restarts the battlegroup — no console window, no SSH. The update runs on the VM as a detached job (so the update keeps running even if you close DST) and DST polls progress with a live tail. The v12.15.1 db-util autoheal silently clears the util-pod race that reliably fires right after `battlegroup update` finishes, so the battlegroup comes back Healthy on its own.
+
+### Changed
+
+- **Scheduled backups now include a stable prefix in the filename.** The daily backup cron now runs `battlegroup backup "dst-scheduled-YYYYMMDD-HHMMSS"` instead of the unnamed form, so DST-scheduled snapshots are self-labeling in `/funcom/artifacts/database-dumps/` and easy to tell apart from manual backups in the file browser.
+
+### Removed
+
+- **Redundant "update" entry on the Commands page.** The interactive-console `battlegroup update` launcher was DST's only way to apply a Funcom update, but the console window was confusing (looked like it hung during long steamcmd steps) and there was no visible progress. The new *Apply server update* button on Restart Schedule replaces it end-to-end. Use that instead.
+
 ## [12.15.1] - 2026-07-03
 
 ### Fixed

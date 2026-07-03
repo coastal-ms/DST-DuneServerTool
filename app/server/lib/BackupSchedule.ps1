@@ -91,7 +91,13 @@ function New-DuneBackupPodPruneSnippet {
 function New-DuneBackupCmd {
     param([int]$KeepLastPods = 10)
     $snippet = New-DuneBackupPodPruneSnippet -KeepLast $KeepLastPods
-    return "if find /tmp/dst-restart-active -mmin -30 2>/dev/null | grep -q .; then echo `"`$(date) dst: backup skipped - BG restart window active`" >> /var/log/dune-backup.log; else /home/dune/.dune/bin/battlegroup backup >> /var/log/dune-backup.log 2>&1; $snippet; fi"
+    # Pass a stable name to `battlegroup backup` so scheduled backups are
+    # self-labeling in /funcom/artifacts/database-dumps/. A named backup makes
+    # it obvious which snapshots were taken automatically by DST vs a manual
+    # `battlegroup backup` on the command line — and it makes the pre-Funcom-
+    # update-restore rollback path in the patch-compat routine easier to pick
+    # out. Timestamp is UTC to match the rest of DST's log format.
+    return "if find /tmp/dst-restart-active -mmin -30 2>/dev/null | grep -q .; then echo `"`$(date) dst: backup skipped - BG restart window active`" >> /var/log/dune-backup.log; else /home/dune/.dune/bin/battlegroup backup `"dst-scheduled-`$(date -u +%Y%m%d-%H%M%S)`" >> /var/log/dune-backup.log 2>&1; $snippet; fi"
 }
 $script:DuneBackupBeginMarker = '# DST-BACKUP BEGIN'
 $script:DuneBackupEndMarker   = '# DST-BACKUP END'
