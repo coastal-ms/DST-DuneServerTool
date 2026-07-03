@@ -529,6 +529,342 @@ echo "SRC=$SRC"
     return $result
 }
 
+# =============================================================================
+# APPLY FUNCOM SERVER UPDATE
+#
+# One-click replacement for the legacy "Commands page -> update" launcher.
+#
+# The update process itself (`/home/dune/.dune/bin/battlegroup update` — checks
+# steamcmd, downloads the new server image, patches the battlegroup CR to the
+# new image tag, and re-rolls the pods) is long-running: 5-20 minutes for a
+# fresh image download + kube pull. We fire it on the VM as a background job
+# (nohup + tee to a remote log file + $? written to a marker) so:
+#
+#   1. The DST-side runspace only has to POLL for status, never keep an SSH
+#      pipe open for 20 minutes.
+#   2. If the user closes DST mid-update the update keeps running on the VM.
+#      Next DST launch will observe the marker files and pick up where it
+#      left off, reporting Done/Failed/Running correctly.
+#   3. The v12.15.1 db-util autoheal tick keeps running in the same 30s
+#      scheduler loop and silently recovers the util-pod wedge that reliably
+#      fires right after `battlegroup update` finishes swapping the image
+#      tag (fresh util pod races the newly-restarted Postgres).
+#
+# Remote files (all under /tmp so they clear on reboot):
+#   /tmp/dst-funcom-update.log   - full stdout+stderr of the update job
+#   /tmp/dst-funcom-update.rc    - written AFTER the update exits, contents = rc
+#   /tmp/dst-funcom-update.started - timestamp when the job was launched
+#
+# Host-side state file:
+#   %APPDATA%\DuneServer\funcom-update-state.json
+# =============================================================================
+
+$script:DuneFuncomUpdateLockName    = 'funcom-update-state'
+$script:DuneFuncomUpdateRemoteLog   = '/tmp/dst-funcom-update.log'
+$script:DuneFuncomUpdateRemoteRc    = '/tmp/dst-funcom-update.rc'
+$script:DuneFuncomUpdateRemoteStart = '/tmp/dst-funcom-update.started'
+$script:DuneFuncomUpdateMaxMinutes  = 35   # generous — steamcmd download + pull
+
+function Get-DuneFuncomUpdateStatePath {
+    Join-Path $env:APPDATA 'DuneServer\funcom-update-state.json'
+}
+
+function New-DuneFuncomUpdateIdleState {
+    return @{
+        phase           = 'idle'
+        running         = $false
+        started         = $null
+        updated         = (Get-Date).ToUniversalTime().ToString('o')
+        finished        = $null
+        ok              = $false
+        rc              = $null
+        installedBefore = ''
+        installedAfter  = ''
+        tail            = @()
+        error           = ''
+    }
+}
+
+function Read-DuneFuncomUpdateState {
+    $path = Get-DuneFuncomUpdateStatePath
+    if (-not (Test-Path -LiteralPath $path)) { return (New-DuneFuncomUpdateIdleState) }
+    try {
+        $raw = Get-Content -LiteralPath $path -Raw -ErrorAction Stop
+        if ([string]::IsNullOrWhiteSpace($raw)) { return (New-DuneFuncomUpdateIdleState) }
+        return ($raw | ConvertFrom-Json)
+    } catch {
+        return (New-DuneFuncomUpdateIdleState)
+    }
+}
+
+function Save-DuneFuncomUpdateState {
+    param([Parameter(Mandatory)]$State)
+    $path = Get-DuneFuncomUpdateStatePath
+    $dir  = Split-Path -Parent $path
+    try { if (-not (Test-Path -LiteralPath $dir)) { New-Item -ItemType Directory -Path $dir -Force | Out-Null } } catch {}
+    $json = $State | ConvertTo-Json -Depth 8
+    $tmp  = "$path.tmp"
+    $write = {
+        Set-Content -LiteralPath $tmp -Value $json -Encoding UTF8 -Force
+        Move-Item -LiteralPath $tmp -Destination $path -Force
+    }
+    if (Get-Command Invoke-WithDuneLock -ErrorAction SilentlyContinue) {
+        try { Invoke-WithDuneLock -Name $script:DuneFuncomUpdateLockName -TimeoutSec 5 -Script $write } catch { & $write }
+    } else { & $write }
+}
+
+# -----------------------------------------------------------------------------
+# Probe the VM for the current update-job state. Returns a hashtable shaped
+# like the state file. Does NOT persist — the caller decides.
+#
+# The VM is authoritative. We treat the presence of $RemoteRc as "done" and
+# its absence combined with a fresh $RemoteStart as "running". If both files
+# are missing, no job has been launched (or the VM was rebooted since).
+# -----------------------------------------------------------------------------
+function Get-DuneFuncomUpdateRemoteState {
+    $ctx = Get-DuneBackupContext
+    if (-not $ctx.ok) { return @{ ok = $false; message = $ctx.message } }
+
+    # Single SSH round-trip: probe all three markers + tail last 40 lines.
+    $script = @"
+set +e
+STARTED=""
+[ -f $script:DuneFuncomUpdateRemoteStart ] && STARTED=`$(cat $script:DuneFuncomUpdateRemoteStart 2>/dev/null)
+RC=""
+[ -f $script:DuneFuncomUpdateRemoteRc ] && RC=`$(cat $script:DuneFuncomUpdateRemoteRc 2>/dev/null)
+TAIL=""
+[ -f $script:DuneFuncomUpdateRemoteLog ] && TAIL=`$(tail -40 $script:DuneFuncomUpdateRemoteLog 2>/dev/null)
+echo "__DST_STARTED_BEGIN__`$STARTED"
+echo "__DST_STARTED_END__"
+echo "__DST_RC_BEGIN__`$RC"
+echo "__DST_RC_END__"
+echo "__DST_TAIL_BEGIN__"
+printf '%s\n' "`$TAIL"
+echo "__DST_TAIL_END__"
+"@
+    try {
+        $r = Invoke-DuneBackupShell -Ip $ctx.ip -Script $script -TimeoutSec 15
+    } catch {
+        return @{ ok = $false; message = "SSH probe failed: $($_.Exception.Message)" }
+    }
+    $body = if ($r) { [string]$r.out } else { '' }
+
+    $started = ''
+    $rcRaw   = ''
+    $tail    = @()
+    if ($body -match '(?ms)__DST_STARTED_BEGIN__(.*?)__DST_STARTED_END__') { $started = $Matches[1].Trim() }
+    if ($body -match '(?ms)__DST_RC_BEGIN__(.*?)__DST_RC_END__')             { $rcRaw   = $Matches[1].Trim() }
+    if ($body -match '(?ms)__DST_TAIL_BEGIN__\r?\n(.*?)__DST_TAIL_END__')    {
+        $tail = @(($Matches[1] -split "`n") | ForEach-Object { $_.TrimEnd() } | Where-Object { $_ -ne '' })
+    }
+
+    $out = @{ ok = $true; started = $started; rc = $rcRaw; tail = $tail }
+    return $out
+}
+
+# -----------------------------------------------------------------------------
+# Fire the update job on the VM (fire-and-forget). Returns immediately.
+# Cleans out previous marker files first so a stale rc from a prior run does
+# not immediately mark this run "done".
+# -----------------------------------------------------------------------------
+function Invoke-DuneStartFuncomUpdateJob {
+    $ctx = Get-DuneBackupContext
+    if (-not $ctx.ok) { return @{ ok = $false; status = $ctx.status; message = $ctx.message } }
+
+    # Reset markers + write the started stamp + launch battlegroup update
+    # detached (setsid + nohup) so it survives our SSH disconnect. Redirect
+    # stderr into stdout so a warning/error still lands in the tail.
+    $script = @"
+rm -f $script:DuneFuncomUpdateRemoteLog $script:DuneFuncomUpdateRemoteRc 2>/dev/null
+date -u +%Y-%m-%dT%H:%M:%SZ > $script:DuneFuncomUpdateRemoteStart
+setsid bash -c '/home/dune/.dune/bin/battlegroup update > $script:DuneFuncomUpdateRemoteLog 2>&1; echo `$? > $script:DuneFuncomUpdateRemoteRc' </dev/null >/dev/null 2>&1 &
+disown 2>/dev/null || true
+echo launched
+"@
+    try {
+        $r = Invoke-DuneBackupShell -Ip $ctx.ip -Script $script -TimeoutSec 15
+    } catch {
+        return @{ ok = $false; status = 502; message = "Failed to launch update job: $($_.Exception.Message)" }
+    }
+    $body = if ($r) { [string]$r.out } else { '' }
+    if ($body -notmatch 'launched') {
+        return @{ ok = $false; status = 502; message = "Update job did not confirm launch. Raw: $body" }
+    }
+    return @{ ok = $true; message = 'Update job launched on the VM.' }
+}
+
+# -----------------------------------------------------------------------------
+# Get-DuneFuncomUpdateStatus : the "one-shot reconcile" entry point.
+# Reads the local state file, reconciles against the VM's remote markers
+# (VM is authoritative for phase transitions), and returns the merged state
+# for the UI. Also flips 'running' -> 'error' if the job appears to be gone
+# without an rc file (VM reboot mid-run).
+#
+# Safe to call from a route handler on every poll. Persists to disk.
+# -----------------------------------------------------------------------------
+function Get-DuneFuncomUpdateStatus {
+    $local = Read-DuneFuncomUpdateState
+    $remote = Get-DuneFuncomUpdateRemoteState
+    if (-not $remote.ok) {
+        # VM unreachable. Return whatever we last saved, don't blow away state.
+        return $local
+    }
+
+    $started = [string]$remote.started
+    $rc      = [string]$remote.rc
+    $tail    = @($remote.tail)
+
+    # No markers at all -> idle
+    if (-not $started -and -not $rc) {
+        # If we previously thought we were running but the markers are gone,
+        # the VM rebooted or someone rm'd the files. Fail-safe.
+        try {
+            $wasRunning = if ($local -is [hashtable]) { [bool]$local['running'] } else { [bool]$local.running }
+        } catch { $wasRunning = $false }
+        if ($wasRunning) {
+            $st = New-DuneFuncomUpdateIdleState
+            $st.phase   = 'error'
+            $st.error   = 'Update job disappeared from the VM (rebooted mid-run, or markers deleted). Please retry.'
+            $st.updated = (Get-Date).ToUniversalTime().ToString('o')
+            Save-DuneFuncomUpdateState -State $st
+            return $st
+        }
+        return $local
+    }
+
+    # Both started AND rc present -> job finished
+    if ($started -and $rc) {
+        $rcInt = -1
+        if ($rc -match '^\d+$') { $rcInt = [int]$rc }
+        $ok = ($rcInt -eq 0)
+
+        # Read installed-after now so the UI can render the before/after pair.
+        $before = if ($local.installedBefore) { [string]$local.installedBefore } else { '' }
+        $after  = ''
+        try {
+            $chk = Get-DuneFuncomServerUpdateStatus
+            if ($chk.ok) { $after = [string]$chk.installedBuild }
+        } catch {}
+
+        $st = @{
+            phase           = if ($ok) { 'done' } else { 'error' }
+            running         = $false
+            started         = $started
+            updated         = (Get-Date).ToUniversalTime().ToString('o')
+            finished        = (Get-Date).ToUniversalTime().ToString('o')
+            ok              = $ok
+            rc              = $rcInt
+            installedBefore = $before
+            installedAfter  = $after
+            tail            = $tail
+            error           = if ($ok) { '' } else { "battlegroup update exited $rcInt. See tail for details." }
+        }
+        # Only persist if this represents a transition (not on every poll after done)
+        try {
+            $wasRunning = if ($local -is [hashtable]) { [bool]$local['running'] } else { [bool]$local.running }
+        } catch { $wasRunning = $true }
+        $wasPhase = if ($local -is [hashtable]) { [string]$local['phase'] } else { [string]$local.phase }
+        if ($wasRunning -or $wasPhase -ne $st.phase) {
+            Save-DuneFuncomUpdateState -State $st
+        } else {
+            # keep local, just refresh tail
+            $local.tail = $tail
+            $local.updated = (Get-Date).ToUniversalTime().ToString('o')
+            Save-DuneFuncomUpdateState -State $local
+            return $local
+        }
+        return $st
+    }
+
+    # Started but no rc yet -> running
+    $startedAt = $null
+    try { $startedAt = [datetime]::Parse($started, $null, [System.Globalization.DateTimeStyles]::RoundtripKind) } catch {}
+    $stale = $false
+    if ($startedAt) {
+        $ageMin = ((Get-Date).ToUniversalTime() - $startedAt.ToUniversalTime()).TotalMinutes
+        if ($ageMin -gt $script:DuneFuncomUpdateMaxMinutes) { $stale = $true }
+    }
+    if ($stale) {
+        $st = @{
+            phase           = 'error'
+            running         = $false
+            started         = $started
+            updated         = (Get-Date).ToUniversalTime().ToString('o')
+            finished        = (Get-Date).ToUniversalTime().ToString('o')
+            ok              = $false
+            rc              = $null
+            installedBefore = [string]$local.installedBefore
+            installedAfter  = ''
+            tail            = $tail
+            error           = "Update did not finish within $($script:DuneFuncomUpdateMaxMinutes) minutes; treating as failed. Check the VM."
+        }
+        Save-DuneFuncomUpdateState -State $st
+        return $st
+    }
+
+    $before = if ($local.installedBefore) { [string]$local.installedBefore } else { '' }
+    $st = @{
+        phase           = 'running'
+        running         = $true
+        started         = $started
+        updated         = (Get-Date).ToUniversalTime().ToString('o')
+        finished        = $null
+        ok              = $false
+        rc              = $null
+        installedBefore = $before
+        installedAfter  = ''
+        tail            = $tail
+        error           = ''
+    }
+    Save-DuneFuncomUpdateState -State $st
+    return $st
+}
+
+# -----------------------------------------------------------------------------
+# Kick off an update. Returns immediately with @{ ok; running; message }.
+# The caller polls Get-DuneFuncomUpdateStatus.
+# -----------------------------------------------------------------------------
+function Start-DuneApplyFuncomUpdate {
+    # Reconcile first — if VM already shows an in-flight job, refuse.
+    $cur = Get-DuneFuncomUpdateStatus
+    $isRunning = $false
+    try { $isRunning = if ($cur -is [hashtable]) { [bool]$cur['running'] } else { [bool]$cur.running } } catch {}
+    if ($isRunning) {
+        return @{ ok = $false; running = $true; error = 'A server update is already in progress.' }
+    }
+
+    # Snapshot the installed build BEFORE launching so the UI can show
+    # before/after when the job finishes.
+    $before = ''
+    try {
+        $chk = Get-DuneFuncomServerUpdateStatus
+        if ($chk.ok) { $before = [string]$chk.installedBuild }
+    } catch {}
+
+    $launch = Invoke-DuneStartFuncomUpdateJob
+    if (-not $launch.ok) {
+        $st = New-DuneFuncomUpdateIdleState
+        $st.phase = 'error'
+        $st.error = $launch.message
+        $st.updated = (Get-Date).ToUniversalTime().ToString('o')
+        Save-DuneFuncomUpdateState -State $st
+        return @{ ok = $false; running = $false; error = $launch.message }
+    }
+
+    $st = New-DuneFuncomUpdateIdleState
+    $st.phase           = 'running'
+    $st.running         = $true
+    $st.started         = (Get-Date).ToUniversalTime().ToString('o')
+    $st.installedBefore = $before
+    $st.tail            = @()
+    Save-DuneFuncomUpdateState -State $st
+
+    if (Get-Command Write-DuneLog -ErrorAction SilentlyContinue) {
+        Write-DuneLog "Funcom server update launched on VM (installed=$before)" 'INFO'
+    }
+    return @{ ok = $true; running = $true; message = 'Update launched. Poll status for progress.' }
+}
+
 # Touch the VM-side backup-guard marker so an overlapping scheduled backup skips
 # itself. Best-effort; returns $true on success.
 function Set-DuneRestartGuardMarker {
