@@ -11,6 +11,12 @@ Patch releases within a major series are rolled up under the major's entry
 on GitHub still exist for each individual release; the consolidated entries
 here cover everything those tags shipped.
 
+## [12.15.1] - 2026-07-03
+
+### Fixed
+
+- **Battlegroup won't start after a Funcom self-host update or a Public IP change — DST now auto-heals.** After a `battlegroup start`, `battlegroup restart`, an FLS token rotation, a scheduled daily restart, a Public IP Apply, or a Funcom self-host update, the DatabaseDeployment could get stuck on `Pending` forever with the battlegroup showing `SERVERGROUP=Starting`/`DATABASE=Pending`. Root cause is Funcom's DB operator: the `db-dbdepl-util` migration pod is a bare pod with `restartPolicy=Never`, so if it OOMs or races Postgres (tries to psql before WAL recovery finishes and gets Connection refused), nothing restarts it and the operator holds the deployment on Pending forever. The manual recovery is `kubectl delete pod <util>` — the operator then recreates it and the second attempt connects fine. DST now runs a lightweight background probe every 30 seconds that detects this exact wedge signature (DB not Ready + util pod terminated non-zero) and deletes the stuck util pod, letting the operator recreate it — no user intervention. Cool-down debounce prevents delete ping-pong. Two real-world incidents behind this: 2026-07-01 (util OOMKilled with swap disabled) and 2026-07-03 (Funcom operator drop `2019354` → `2025705-0-shipping` where the util raced Postgres recovery by ~3 seconds and exited 53). Same fix transitively hardens the v12.14.8 Public IP Apply flow, whose `refresh-status-pods` step deliberately force-deletes the DB pod and could previously leave a fresh util pod in the same race.
+
 ## [12.15.0] - 2026-07-01
 
 ### Added
