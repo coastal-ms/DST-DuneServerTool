@@ -1008,6 +1008,18 @@ function Start-DuneRestartScheduler {
                         try { Write-DuneLog "discord state monitor tick error: $($_.Exception.Message)" 'WARN' } catch {}
                     }
                 }
+                # Self-heals the db-dbdepl-util bare-pod wedge (see
+                # lib/DbUtilAutoheal.ps1). Silent no-op unless the util pod
+                # terminated non-zero with the DB deployment stuck on Pending.
+                # Runs unconditionally so it catches wedges from any trigger:
+                # user-issued `battlegroup start`/`restart`, our scheduled
+                # restart, FLS token rotation, the Public IP Apply
+                # refresh-status-pods step, or a Funcom self-host update.
+                try { [void](Invoke-DuneDbUtilAutohealTick) } catch {
+                    if (Get-Command Write-DuneLog -ErrorAction SilentlyContinue) {
+                        try { Write-DuneLog "db-util autoheal tick error (outer): $($_.Exception.Message)" 'WARN' } catch {}
+                    }
+                }
                 Start-Sleep -Seconds 30
             }
         })
