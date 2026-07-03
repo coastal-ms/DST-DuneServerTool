@@ -13,25 +13,27 @@ install Expo Go and open our published project.
 
 ## For testers (end users)
 
-You need two apps on your phone: **Expo Go** (runs the DST app) and **Tailscale**
-(secure connection to the server). You never expose the server to the internet.
+You need **one** app on your phone: **Expo Go** (runs the DST app). You do
+**not** need Tailscale on the phone — the server owner runs Tailscale Funnel
+on their host PC, which exposes DST to the internet on a stable public HTTPS
+URL. Your phone talks to that URL directly, authenticated by a per-device
+pairing token.
 
 1. **Install Expo Go**
    - iOS: App Store → "Expo Go"
    - Android: Play Store → "Expo Go"
-2. **Install Tailscale** and sign in to the **same** account the server owner added
-   you to. Confirm it says **Connected**.
-3. **Open the DST app in Expo Go** using the link/QR the server owner (or our
+2. **Open the DST app in Expo Go** using the link/QR the server owner (or our
    testing channel) shares:
    - Tap the link on your phone, or
    - Open Expo Go → scan the QR we provide.
-4. **Pair with the server**
+3. **Pair with the server**
    - On the host PC: DST Desktop → **Settings → Mobile App** → a QR pairing code.
    - In the DST app: **Scan** that QR. No camera? Tap **Enter Code Manually** and
-     type the IP, Port, and Token shown on the Settings card.
+     type the URL, Port, and Token shown on the Settings card.
 
-If "Can't reach server": Tailscale isn't Connected (on the phone or the PC), or
-DST isn't running on the host.
+If "Can't reach server": the host hasn't finished setting up Tailscale Funnel
+(check DST Desktop → Settings → Mobile App on the host for the remote-access
+status indicator), or DST isn't running on the host.
 
 ---
 
