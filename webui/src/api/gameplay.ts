@@ -1784,6 +1784,16 @@ export function resetFaction(accountId: number, faction: 'atreides' | 'harkonnen
   })
 }
 
+// Fresh Start (keep unlocks) — hardest-possible progression reset. Wipes
+// journey/quests, progression tags, faction, contracts, crafting recipes,
+// tech-knowledge data, specializations + keystones; keeps cosmetics, building
+// sets, Steam achievements, inventory, bases, Intel and class skill trees.
+export function freshStart(accountId: number) {
+  return api<WriteResult>('/api/gameplay/players/fresh-start', {
+    method: 'POST', body: JSON.stringify({ account_id: accountId }),
+  })
+}
+
 // Journey Nodes browser — reads every journey_story_node row for the account.
 export interface JourneyNode {
   node_id: string

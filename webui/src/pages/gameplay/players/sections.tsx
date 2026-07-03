@@ -25,7 +25,7 @@ import {
   resetAllKeystones, resetAllSpecs, resetJourney, resetProgressionLive, resetSpec,
   restoreDestroyed,
   setFactionTier, setPlayerTags, setSkillPoints,
-  setStarterClass, teleportToPlayer, teleportToLocation, setRespawn, getTeleportDestinations, getPlayers, updatePlayerTags, wipeCodex, wipeJourney, resetFaction,
+  setStarterClass, teleportToPlayer, teleportToLocation, setRespawn, getTeleportDestinations, getPlayers, updatePlayerTags, wipeCodex, wipeJourney, resetFaction, freshStart,
   chatWhisper, isValidTemplateId, getItemCatalog, getCosmeticsCatalog, type CosmeticEntry,
   parseTcnoPackageText,
   giveItems, getItemPackages, saveItemPackage, deleteItemPackage,
@@ -663,6 +663,26 @@ const ACTIONS: ActionDef[] = [
   { id: 'reset-faction', group: 'Progression', label: 'Reset Faction', icon: 'Swords', custom: 'reset-faction', offlineOnly: true,
     rowNote: 'Wipe ALL faction rep + tags + ClimbTheRanks nodes to start fresh. Player must be offline.',
     run: () => Promise.resolve({ message: '' }) },
+  { id: 'fresh-start', group: 'Progression', label: 'Fresh Start (keep unlocks)', icon: 'Sunrise',
+    offlineOnly: true, doubleConfirm: true,
+    rowNote: 'Double confirmation required',
+    confirm: p => `FRESH START for ${p.name} — restart all content from the beginning.\n\n` +
+      `KEEPS: cosmetics, building sets, Steam achievements, inventory + bases, Intel, class skill trees.\n` +
+      `WIPES: journey / quests, all progression tags, faction, contracts, crafting recipes, tech knowledge, specializations + keystones.\n\n` +
+      `Player must be OFFLINE. Take a battlegroup backup first — this cannot be undone.\n\n` +
+      `This is the FIRST of two confirmations. If you continue, the next step asks you to type an acknowledgement before anything is wiped.`,
+    run: p => {
+      const typed = window.prompt(
+        `SECOND confirmation — FRESH START for ${p.name}.\n` +
+        `Wipes progression + power; keeps cosmetics / building sets / Steam achievements / inventory / bases / Intel / skill trees.\n` +
+        `This cannot be undone.\n\n` +
+        `Type  fresh start  to proceed:`
+      ) || ''
+      if (typed.trim().toLowerCase() !== 'fresh start') {
+        throw new Error('Did not type "fresh start" — Fresh Start aborted.')
+      }
+      return freshStart(p.account_id)
+    } },
 
   // ----- Items -----
   { id: 'give-item',      group: 'Items', label: 'Give Item', icon: 'PackagePlus', custom: 'give-item',
