@@ -555,74 +555,54 @@ function Invoke-DunePlayerAwardIntel {
     }
 }
 
-# ----- Detach Account (SAFE for live server) -------------------------------
-# Non-destructive variant of Delete Account. Runs the world-ownership 3-rule
-# cleanup (strip the account's rank rows) and RENAMES the account.user (Funcom
-# ID) + player_state.character_name so:
-#   - The game's next login for the real Funcom ID finds no matching row and
-#     creates a fresh account + character.
-#   - The old character rows stay intact so a game pod actively holding them
-#     doesn't crash on a missing FK when it flushes state.
-#   - Vehicles/bases the account owned become truly ownerless (Rule 1 wipes
-#     the whole ACL) and any co-owner rows the account held on others' stuff
-#     are stripped (Rule 2).
-# The orphaned old rows are cleaned up later, either manually via Delete
-# Account (when the server is quiet) or automatically by a boot-time sweep
-# that runs when pods are cold and nothing can be holding the rows.
-function Invoke-DunePlayerDetachAccount {
+# ----- Delete Account (DESTRUCTIVE) --------------------------------------
+# ----- Delete Account (matches Funcom's in-game delete + purge) -------------
+# After live-comparing against a real Funcom character-delete-and-purge
+# (2026-07-04), we know the game itself only does two things at purge time:
+#   1. UPDATE the old encrypted_player_state row's character_state = 'Deleted'.
+#      (Keeps the row so the pod doesn't crash on missing FKs; the view
+#      dune.player_state filters WHERE character_state = 'Active' so this
+#      hides the character from every game query that uses the view.)
+#   2. DELETE every permission_actor_rank row where player_id is one of the
+#      old character's controllers AND rank = 1. This strips ownership on
+#      the character's solo-owned vehicles/bases/fiefs (they become abandoned
+#      and claimable by anyone). Co-owner rows (rank >= 2) that the character
+#      held on OTHER players' stuff are LEFT INTACT - Hawk keeps his own
+#      grants on Coastal's shared stuff, etc.
+# The game does NOT delete physical totems, actors, buildings, encrypted_
+# accounts, or any per-player state tables. Those persist. This matches
+# behavior verified live against a fresh backup restore + real delete.
+function Invoke-DunePlayerDeleteAccount {
     param([string]$Ip, [long]$AccountId)
     if ($AccountId -le 0) { return @{ ok = $false; error = 'account_id is required.' } }
-    $resolve = Get-DuneRawFuncomId -Ip $Ip -AccountId $AccountId
-    if (-not $resolve.ok) { return @{ ok = $false; error = $resolve.error } }
-    $stamp = [DateTimeOffset]::UtcNow.ToUnixTimeSeconds()
-    $newUser = ConvertTo-DuneSqlString ("$($resolve.funcom_id)_retired_$stamp")
-
     $sql = @"
 DO `$`$
 DECLARE
     v_account_id bigint := $AccountId;
+    v_wiped int := 0;
 BEGIN
-    -- Same 3-rule ownership cleanup as Delete Account. Docs there.
-    CREATE TEMP TABLE _deleted_ranks ON COMMIT DROP AS
-    SELECT par.permission_actor_id AS aid, par.player_id AS pid, par.rank AS r
-    FROM dune.permission_actor_rank par
-    JOIN dune.actors owner_actor ON owner_actor.id = par.player_id
-    WHERE owner_actor.owner_account_id = v_account_id;
+    -- Step 1: strip owner grants (rank = 1) held by any actor belonging to
+    -- the account's ACTIVE character(s). Vehicles/bases the character solely
+    -- owned become abandoned and claimable. Co-owner rows survive.
+    WITH deleted AS (
+        DELETE FROM dune.permission_actor_rank par
+        USING dune.actors a, dune.encrypted_player_state eps
+        WHERE a.id = par.player_id
+          AND eps.account_id = v_account_id
+          AND eps.character_state = 'Active'::dune.characterstate
+          AND a.id IN (eps.player_controller_id, eps.player_pawn_id, eps.player_state_id)
+          AND par.rank = 1
+        RETURNING 1
+    )
+    SELECT COUNT(*) INTO v_wiped FROM deleted;
 
-    CREATE TEMP TABLE _owned_actors ON COMMIT DROP AS
-    SELECT DISTINCT dr.aid
-    FROM _deleted_ranks dr
-    WHERE dr.r = (
-        SELECT MIN(rank) FROM dune.permission_actor_rank
-        WHERE permission_actor_id = dr.aid
-    );
-
-    -- Rule 1: nuke ACL on owned actors; blank the custom name.
-    DELETE FROM dune.permission_actor_rank
-    WHERE permission_actor_id IN (SELECT aid FROM _owned_actors);
-    DELETE FROM dune.permission_actor
-    WHERE actor_id IN (SELECT aid FROM _owned_actors);
-
-    -- Rule 2: strip only the account's rank rows on OTHER actors.
-    DELETE FROM dune.permission_actor_rank par
-    USING dune.actors owner_actor
-    WHERE par.player_id = owner_actor.id
-      AND owner_actor.owner_account_id = v_account_id;
-
-    -- Soft-delete the character(s) via the game's own characterstate enum
-    -- ('Active' | 'Deleted'). The dune.player_state VIEW filters on Active
-    -- so this hides the character from every game query without deleting
-    -- rows the pod might be holding. dune.accounts + dune.player_state are
-    -- views over encrypted_accounts + encrypted_player_state, so we UPDATE
-    -- the real tables directly.
+    -- Step 2: soft-delete the character via the game's own characterstate
+    -- enum. The dune.player_state view filters on Active so this hides the
+    -- character from every game query without deleting any rows.
     UPDATE dune.encrypted_player_state
        SET character_state = 'Deleted'::dune.characterstate
-     WHERE account_id = v_account_id;
-
-    -- Detach: rename the funcom-id column on the real table so the game's
-    -- next login for the real ID finds no matching account and creates a
-    -- fresh one. Old rows survive so live pods flushing state don't crash.
-    UPDATE dune.encrypted_accounts SET "user" = '$newUser' WHERE id = v_account_id;
+     WHERE account_id = v_account_id
+       AND character_state = 'Active'::dune.characterstate;
 END
 `$`$;
 "@
@@ -630,166 +610,7 @@ END
     if (-not $r.ok) { return @{ ok = $false; error = $r.error } }
     return @{
         ok = $true
-        message = "Detached account $AccountId (funcom $($resolve.funcom_id)). Character soft-deleted (character_state=Deleted, hidden from game views), account renamed so a fresh character will spawn on next login, ownership on vehicles/bases stripped. Old rows remain until the next scheduled sweep."
-        renamed_to = "$($resolve.funcom_id)_retired_$stamp"
+        message = "Deleted account $AccountId's character - matches the game's own delete+purge: character marked Deleted, owner rank rows on their solo-owned vehicles/bases stripped (now claimable). Co-owner grants on other players' stuff left intact. Physical bases/totems/actors persist in the world."
     }
 }
-
-# ----- Delete Account (DESTRUCTIVE) --------------------------------------
-# Mirrors db.go cmdDeleteAccount: nukes characters, actors, fgl entities,
-# RMQ traces, and the accounts row in dependency order.
-function Invoke-DunePlayerDeleteAccount {
-    param([string]$Ip, [long]$AccountId)
-    if ($AccountId -le 0) { return @{ ok = $false; error = 'account_id is required.' } }
-    $resolve = Get-DuneRawFuncomId -Ip $Ip -AccountId $AccountId
-    if (-not $resolve.ok) { return @{ ok = $false; error = $resolve.error } }
-    $funcom = ConvertTo-DuneSqlString $resolve.funcom_id
-
-    $sql = @"
-DO `$`$
-DECLARE
-    v_account_id bigint := $AccountId;
-    v_funcom text := '$funcom';
-BEGIN
-    -- Ownership cleanup. Three-rule split (runs BEFORE the actor cascade so
-    -- permission_actor_id FKs still resolve to the deleted account's rows):
-    --
-    -- Rule 1: identify every world actor where the deleted account is the
-    -- HIGHEST-ranked player (i.e. the owner). Wipe the ENTIRE ACL on those
-    -- actors (owner + co-owners + associates), and blank the custom name.
-    -- Net effect: those actors are truly ownerless and anyone can Claim
-    -- Ownership normally. Old co-owners lose access - the new claimant will
-    -- have to re-grant if they want them back.
-    --
-    -- Rule 2: for every OTHER actor where the deleted account had a rank row
-    -- (i.e. deleted account was a co-owner, not owner), remove ONLY the
-    -- deleted account's rank row. The real owner + other co-owners keep their
-    -- access untouched.
-    --
-    -- "Highest rank" = the numeric MIN(rank) on the actor. DB ranks are
-    -- INVERTED from the game UI: DB rank 1 = game Owner (UI rank 5), DB
-    -- rank 2 = game Co-Owner (UI rank 4), higher DB numbers = lesser roles.
-    -- If two players tie at the lowest DB rank, both are treated as owners
-    -- and the actor's ACL is wiped.
-
-    -- Enumerate rank rows the deleted account owns via any of its actors
-    -- (usually the character's controller_id, but this covers any owner-linked
-    -- actor id belonging to the account).
-    CREATE TEMP TABLE _deleted_ranks ON COMMIT DROP AS
-    SELECT par.permission_actor_id AS aid, par.player_id AS pid, par.rank AS r
-    FROM dune.permission_actor_rank par
-    JOIN dune.actors owner_actor ON owner_actor.id = par.player_id
-    WHERE owner_actor.owner_account_id = v_account_id;
-
-    -- Actors where deleted account was the highest-ranked holder.
-    CREATE TEMP TABLE _owned_actors ON COMMIT DROP AS
-    SELECT DISTINCT dr.aid
-    FROM _deleted_ranks dr
-    WHERE dr.r = (
-        SELECT MIN(rank) FROM dune.permission_actor_rank
-        WHERE permission_actor_id = dr.aid
-    );
-
-    -- Rule 1: wipe the entire ACL on those owned actors.
-    DELETE FROM dune.permission_actor_rank
-    WHERE permission_actor_id IN (SELECT aid FROM _owned_actors);
-
-    -- Rule 1 (cont): blank the custom name so the actor renders under its
-    -- default class name (##LightOrnithopterChoam etc.) once someone else
-    -- claims it.
-    DELETE FROM dune.permission_actor
-    WHERE actor_id IN (SELECT aid FROM _owned_actors);
-
-    -- Rule 2: on every OTHER actor the deleted account had a rank row for,
-    -- remove ONLY the deleted account's row. (The _owned_actors already had
-    -- their entire ACL wiped above, so this DELETE only affects co-owner rows
-    -- on actors owned by SOMEONE ELSE.)
-    DELETE FROM dune.permission_actor_rank par
-    USING dune.actors owner_actor
-    WHERE par.player_id = owner_actor.id
-      AND owner_actor.owner_account_id = v_account_id;
-
-    -- ------------------------------------------------------------------
-    -- Per-player state wipes. Every FK that points at either
-    -- (a) an actor (usually a controller_id) owned by this account, OR
-    -- (b) an encrypted_player_state.id row for a character on this account.
-    -- Comprehensive - net effect is the account leaves NO trace behind.
-    -- ------------------------------------------------------------------
-
-    -- (a) FKs keyed by actor id (player_id, sender_player_id, player_controller_id, etc.)
-    DELETE FROM dune.player_markers                          WHERE player_id            IN (SELECT id FROM dune.actors WHERE owner_account_id = v_account_id);
-    DELETE FROM dune.journey_tracked_cards                    WHERE player_id            IN (SELECT id FROM dune.actors WHERE owner_account_id = v_account_id);
-    DELETE FROM dune.dialogue_met_npcs                        WHERE player_id            IN (SELECT id FROM dune.actors WHERE owner_account_id = v_account_id);
-    DELETE FROM dune.dialogue_taken_nodes                     WHERE player_id            IN (SELECT id FROM dune.actors WHERE owner_account_id = v_account_id);
-    DELETE FROM dune.consumed_per_player_lore                 WHERE actor_id             IN (SELECT id FROM dune.actors WHERE owner_account_id = v_account_id);
-    DELETE FROM dune.consumed_temporary_per_player_lore       WHERE actor_id             IN (SELECT id FROM dune.actors WHERE owner_account_id = v_account_id);
-    DELETE FROM dune.base_backups                             WHERE player_id            IN (SELECT id FROM dune.actors WHERE owner_account_id = v_account_id);
-    DELETE FROM dune.building_blueprints                      WHERE player_id            IN (SELECT id FROM dune.actors WHERE owner_account_id = v_account_id);
-    DELETE FROM dune.dungeon_completion_players               WHERE player_id            IN (SELECT id FROM dune.actors WHERE owner_account_id = v_account_id);
-    DELETE FROM dune.dune_exchange_orders                     WHERE owner_id             IN (SELECT id FROM dune.actors WHERE owner_account_id = v_account_id);
-    DELETE FROM dune.dune_exchange_users                      WHERE owner_id             IN (SELECT id FROM dune.actors WHERE owner_account_id = v_account_id);
-    DELETE FROM dune.landsraad_decree_votes                   WHERE player_id            IN (SELECT id FROM dune.actors WHERE owner_account_id = v_account_id);
-    DELETE FROM dune.landsraad_house_rewards                  WHERE player_id            IN (SELECT id FROM dune.actors WHERE owner_account_id = v_account_id);
-    DELETE FROM dune.landsraad_task_player_contributions      WHERE player_id            IN (SELECT id FROM dune.actors WHERE owner_account_id = v_account_id);
-    DELETE FROM dune.landsraad_task_progress_player           WHERE player_id            IN (SELECT id FROM dune.actors WHERE owner_account_id = v_account_id);
-    DELETE FROM dune.overmap_players                          WHERE player_id            IN (SELECT id FROM dune.actors WHERE owner_account_id = v_account_id);
-    DELETE FROM dune.purchased_specialization_keystones       WHERE player_id            IN (SELECT id FROM dune.actors WHERE owner_account_id = v_account_id);
-    DELETE FROM dune.specialization_refund_id                 WHERE player_id            IN (SELECT id FROM dune.actors WHERE owner_account_id = v_account_id);
-    DELETE FROM dune.specialization_tracks                    WHERE player_id            IN (SELECT id FROM dune.actors WHERE owner_account_id = v_account_id);
-    DELETE FROM dune.travel_return_info                       WHERE player_controller_id IN (SELECT id FROM dune.actors WHERE owner_account_id = v_account_id);
-    DELETE FROM dune.tutorial_per_player                      WHERE player_id            IN (SELECT id FROM dune.actors WHERE owner_account_id = v_account_id);
-    DELETE FROM dune.vendor_stock_cycle                       WHERE player_id            IN (SELECT id FROM dune.actors WHERE owner_account_id = v_account_id);
-    DELETE FROM dune.vendor_stock_state                       WHERE player_id            IN (SELECT id FROM dune.actors WHERE owner_account_id = v_account_id);
-    DELETE FROM dune.player_faction                           WHERE actor_id             IN (SELECT id FROM dune.actors WHERE owner_account_id = v_account_id);
-    DELETE FROM dune.player_faction_reputation                WHERE actor_id             IN (SELECT id FROM dune.actors WHERE owner_account_id = v_account_id);
-    DELETE FROM dune.player_virtual_currency_balances         WHERE player_controller_id IN (SELECT id FROM dune.actors WHERE owner_account_id = v_account_id);
-    -- guild / party membership: the deleted account leaves, remaining members are unaffected.
-    DELETE FROM dune.guild_invites                            WHERE player_id            IN (SELECT id FROM dune.actors WHERE owner_account_id = v_account_id)
-                                                                 OR sender_player_id     IN (SELECT id FROM dune.actors WHERE owner_account_id = v_account_id);
-    DELETE FROM dune.guild_members                            WHERE player_id            IN (SELECT id FROM dune.actors WHERE owner_account_id = v_account_id);
-    DELETE FROM dune.party_invites                            WHERE player_id            IN (SELECT id FROM dune.actors WHERE owner_account_id = v_account_id)
-                                                                 OR sender_player_id     IN (SELECT id FROM dune.actors WHERE owner_account_id = v_account_id);
-    DELETE FROM dune.party_members                            WHERE player_id            IN (SELECT id FROM dune.actors WHERE owner_account_id = v_account_id);
-    DELETE FROM dune.parties                                  WHERE party_leader_id      IN (SELECT id FROM dune.actors WHERE owner_account_id = v_account_id);
-
-    -- (b) FKs keyed by encrypted_player_state.id (character rows)
-    DELETE FROM dune.map_areas                                WHERE character_id         IN (SELECT id FROM dune.encrypted_player_state WHERE account_id = v_account_id);
-    DELETE FROM dune.mnemonic_recall                          WHERE character_id         IN (SELECT id FROM dune.encrypted_player_state WHERE account_id = v_account_id);
-    DELETE FROM dune.player_access_codes                      WHERE character_id         IN (SELECT id FROM dune.encrypted_player_state WHERE account_id = v_account_id);
-    DELETE FROM dune.player_respawn_locations                 WHERE character_id         IN (SELECT id FROM dune.encrypted_player_state WHERE account_id = v_account_id);
-    DELETE FROM dune.player_tags                              WHERE character_id         IN (SELECT id FROM dune.encrypted_player_state WHERE account_id = v_account_id);
-    DELETE FROM dune.journey_story_node                       WHERE character_id         IN (SELECT id FROM dune.encrypted_player_state WHERE account_id = v_account_id);
-    DELETE FROM dune.journey_story_node_cooldown              WHERE character_id         IN (SELECT id FROM dune.encrypted_player_state WHERE account_id = v_account_id);
-    DELETE FROM dune.building_favorites                       WHERE character_id         IN (SELECT id FROM dune.encrypted_player_state WHERE account_id = v_account_id);
-    DELETE FROM dune.building_progression                     WHERE character_id         IN (SELECT id FROM dune.encrypted_player_state WHERE account_id = v_account_id);
-    DELETE FROM dune.communinet_player                        WHERE character_id         IN (SELECT id FROM dune.encrypted_player_state WHERE account_id = v_account_id);
-    DELETE FROM dune.communinet_player_channels               WHERE character_id         IN (SELECT id FROM dune.encrypted_player_state WHERE account_id = v_account_id);
-    DELETE FROM dune.recovered_vehicles                       WHERE character_id         IN (SELECT id FROM dune.encrypted_player_state WHERE account_id = v_account_id);
-    DELETE FROM dune.backup_vehicles                          WHERE character_id         IN (SELECT id FROM dune.encrypted_player_state WHERE account_id = v_account_id);
-
-    -- character actors (must run AFTER the per-player wipes above since some
-    -- of them join through actors.owner_account_id)
-    DELETE FROM dune.actor_fgl_entities afe
-    USING dune.actors a
-    WHERE afe.actor_id = a.id AND a.owner_account_id = v_account_id;
-
-    DELETE FROM dune.fgl_entities fge
-    WHERE fge.entity_id IN (
-        SELECT afe.entity_id FROM dune.actor_fgl_entities afe
-        JOIN dune.actors a ON a.id = afe.actor_id
-        WHERE a.owner_account_id = v_account_id
-    );
-
-    DELETE FROM dune.player_state
-    WHERE player_pawn_id IN (SELECT id FROM dune.actors WHERE owner_account_id = v_account_id);
-
-    DELETE FROM dune.actors WHERE owner_account_id = v_account_id;
-
-    DELETE FROM dune.accounts WHERE id = v_account_id OR "user" = v_funcom;
-END
-`$`$;
-"@
-    $r = Invoke-DuneSqlQuery -Ip $Ip -Sql $sql -ReadOnly $false -MaxRows 1 -TimeoutSec 120
-    if (-not $r.ok) { return @{ ok = $false; error = $r.error } }
-    return @{ ok = $true; message = "Deleted account $AccountId (funcom $($resolve.funcom_id)) and every trace on the server: characters, world actor ownership (owned actors are now claimable, co-ownership on others' actors is stripped), fog of war, tags, journey, respawn locations, keystones, tracks, guild/party membership, vendor state, exchange orders, and account row itself." }
 }

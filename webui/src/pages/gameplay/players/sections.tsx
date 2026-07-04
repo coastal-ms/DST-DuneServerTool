@@ -25,7 +25,7 @@ import {
   resetAllKeystones, resetAllSpecs, resetJourney, resetProgressionLive, resetSpec,
   restoreDestroyed,
   setFactionTier, setPlayerTags, setSkillPoints,
-  setStarterClass, teleportToPlayer, teleportToLocation, setRespawn, getTeleportDestinations, getPlayers, updatePlayerTags, wipeCodex, wipeJourney, resetFaction, getFreshStartSnapshots, restoreBuilds, freshStartWipe, grantAllSkills, grantAllTech,
+  setStarterClass, teleportToPlayer, teleportToLocation, setRespawn, getTeleportDestinations, getPlayers, updatePlayerTags, wipeCodex, wipeJourney, resetFaction, snapshotBuilds, getFreshStartSnapshots, restoreBuilds, grantAllSkills, grantAllTech,
   chatWhisper, isValidTemplateId, getItemCatalog, getCosmeticsCatalog, type CosmeticEntry,
   parseTcnoPackageText,
   giveItems, getItemPackages, saveItemPackage, deleteItemPackage,
@@ -1091,11 +1091,19 @@ function ActionRow({ def, player, busy, stats, open, danger, onToggle, runAction
   )
 }
 
-// Fresh Start (keep purchases) — DST-owned end-to-end:
-// Step 1 (single button): snapshot purchases/cosmetics to disk AND delete the
-//   whole account (world-ownership 3-rule cleanup baked in). Offline required.
-// Step 2 (user): recreate the character in-game with the SAME name and spawn in.
-// Step 3 (Restore): reapply the saved snapshot onto the new character.
+// Fresh Start (keep purchases) - after live-comparing what the game's own
+// Funcom in-game delete flow does vs what DST was doing, we ripped out the
+// "detach" / "wipe" middleware entirely. The game's purge (fired when a
+// player creates a new character on a world that has their deleted one)
+// correctly handles ownership cleanup: it wipes every rank=1 row the old
+// character's controllers held, keeps rank=2+ co-owner rows, and marks
+// the old encrypted_player_state.character_state='Deleted'. Physical
+// totems/actors/buildings stay in the world. So DST no longer touches
+// any of that - the game does it right.
+//
+// DST's only role is bracketing the delete: snapshot purchases BEFORE the
+// player deletes in-game (so we can put them back), and restore AFTER the
+// player has recreated the character with the same name.
 function FreshStartForm({ busy, player, runAction }: {
   busy: boolean
   player: Player
@@ -1116,46 +1124,35 @@ function FreshStartForm({ busy, player, runAction }: {
   return (
     <div className="space-y-3 text-sm">
       <div className="rounded-lg bg-surface-2 border border-border/50 p-3 text-text-dim text-xs leading-relaxed">
-        DST owns the whole flow: <b className="text-text">1)</b> Snapshot + Detach below saves {player.name}'s purchased CHOAM/MTX sets/pieces and cosmetics to disk, strips world ownership (co-owners on your vehicles/bases go with you), and renames the account so the game creates a fresh character on your next login. Old data stays parked and gets swept on the next stack reboot. <b className="text-text">2)</b> Log in again — the game will start you at character creation. Use the <b className="text-text">same name</b> to reclaim purchases. <b className="text-text">3)</b> Restore reapplies purchases. Faction-earned sets and tech unlocks re-populate as the fresh character progresses.
-      </div>
-
-      <div className="rounded-lg bg-warning/10 border border-warning/40 p-3 text-warning text-xs leading-relaxed">
-        <b>Battlegroup restart required for detached vehicles/bases to become claimable.</b> The DB cleanup happens instantly, but the game pod keeps the old ACL cached in memory until it re-reads state. A BG restart (or waiting for the pod to release actors naturally) makes the previously-owned actors show as claimable to anyone.
+        DST brackets the game's built-in character-delete + character-recreate flow so purchases carry over. The game handles the actual delete correctly on its own: it wipes ownership on your solo-owned vehicles/bases and leaves your co-owner grants on others' stuff intact.
       </div>
 
       <div className="card p-3 space-y-2">
-        <div className="font-medium text-text flex items-center gap-2"><Icon name="AlertTriangle" size={14} className="text-warning" /> Step 1 — Snapshot &amp; Detach</div>
-        <div className="text-text-dim text-xs">Saves purchases + cosmetics to <code className="text-text">%APPDATA%\DuneServer\fresh-start-snapshots.json</code>, strips ownership on {player.name}'s vehicles/bases, then renames account {player.account_id} so the game creates a fresh character on next login. Non-destructive — no pod crashes. Old rows swept on next stack reboot.</div>
+        <div className="font-medium text-text flex items-center gap-2"><Icon name="Save" size={14} /> Step 1 - Snapshot purchases</div>
+        <div className="text-text-dim text-xs">Saves {player.name}'s purchased CHOAM/MTX sets, pieces, and cosmetics to <code className="text-text">%APPDATA%\DuneServer\fresh-start-snapshots.json</code>. Do this <b className="text-text">before</b> deleting in-game (the data goes with the character).</div>
         <button type="button" disabled={busy}
-          className="px-3 py-2 rounded-lg bg-danger/20 border border-danger/50 text-text hover:bg-danger/30 disabled:opacity-50 text-sm font-medium"
+          className="px-3 py-2 rounded-lg bg-ibad/20 border border-ibad/50 text-text hover:bg-ibad/30 disabled:opacity-50 text-sm font-medium"
           onClick={() => runAction(localDef, async () => {
-            const first = window.confirm(
-              `Snapshot ${player.name}'s purchases and detach account ${player.account_id} (${player.name})?\n\n` +
-              `The saved snapshot lets you restore purchases onto your fresh character. Ownership on your vehicles/bases is stripped now; old character data is kept until the next stack reboot then cleaned up automatically.`
-            )
-            if (!first) throw new Error('cancelled')
-            const typed = window.prompt(
-              `SECOND confirmation — snapshot + detach account ${player.account_id} (${player.name}).\n\n` +
-              `Type  i acknowledge  to proceed:`
-            ) || ''
-            if (typed.trim().toLowerCase() !== 'i acknowledge') {
-              throw new Error('Did not type "i acknowledge" — Fresh Start aborted.')
-            }
-            const r = await freshStartWipe(player.account_id)
+            const r = await snapshotBuilds(player.account_id)
             refresh()
-            return { message: r.message || `Snapshot + detach complete for ${player.name}.` }
+            return { message: r.message || `Snapshot saved for ${player.name}.` }
           })}>
-          Snapshot + Detach {player.name}
+          Snapshot {player.name}'s purchases
         </button>
       </div>
 
       <div className="card p-3 space-y-2">
-        <div className="font-medium text-text flex items-center gap-2"><Icon name="Sunrise" size={14} /> Step 2 — Restore purchases by name</div>
+        <div className="font-medium text-text flex items-center gap-2"><Icon name="Gamepad2" size={14} /> Step 2 - Delete in-game</div>
+        <div className="text-text-dim text-xs leading-relaxed">Once the snapshot is saved, exit to the main menu, open <b className="text-text">Server Browser</b>, right-click your world, and delete {player.name}. Then create a new character with the <b className="text-text">same name</b>. The game will prompt "<i>Character data detected... this will purge the deleted character</i>" - confirm it. The game will strip ownership on your solo-owned stuff, keep your co-owner grants on others' stuff, and leave your physical bases in the world for you (or anyone else) to claim on the new character.</div>
+      </div>
+
+      <div className="card p-3 space-y-2">
+        <div className="font-medium text-text flex items-center gap-2"><Icon name="Sunrise" size={14} /> Step 3 - Restore purchases by name</div>
         {loading ? (
-          <div className="text-text-dim text-xs flex items-center gap-2"><Icon name="Loader2" size={13} className="animate-spin" /> Checking snapshots…</div>
+          <div className="text-text-dim text-xs flex items-center gap-2"><Icon name="Loader2" size={13} className="animate-spin" /> Checking snapshots...</div>
         ) : snap ? (
           <>
-            <div className="text-text-dim text-xs">Saved snapshot for <b className="text-text">{snap.name}</b> — {snap.sets} set{snap.sets === 1 ? '' : 's'}, {snap.pieces} piece{snap.pieces === 1 ? '' : 's'}{snap.cosmetics ? ' + cosmetics' : ''} ({new Date(snap.saved_at).toLocaleString()}). Restore filters to purchased-only (CHOAM + MTX).</div>
+            <div className="text-text-dim text-xs">Saved snapshot for <b className="text-text">{snap.name}</b> - {snap.sets} set{snap.sets === 1 ? '' : 's'}, {snap.pieces} piece{snap.pieces === 1 ? '' : 's'}{snap.cosmetics ? ' + cosmetics' : ''} ({new Date(snap.saved_at).toLocaleString()}). Restore filters to purchased-only (CHOAM + MTX).</div>
             <div className="text-warning text-xs">Only after you've recreated the character (same name) and spawned in. Player must be offline.</div>
             <button type="button" disabled={busy}
               className="px-3 py-2 rounded-lg bg-info/20 border border-info/50 text-text hover:bg-info/30 disabled:opacity-50 text-sm font-medium"
