@@ -894,6 +894,28 @@ function Invoke-OnDemandPartitionClear {
     Write-Host ""
     Write-Host "[$Phase] Clearing on-demand map partition pins (auto-fix so DeepDesert / Arrakeen / Harko spawn on demand)..." -ForegroundColor Cyan
 
+    # Fast pre-probe: if no on-demand map igwsss has a non-empty partitions pin
+    # (the common case for a clean cold-boot), skip the whole 45s settle + heal
+    # step. Saves ~50s on every reboot when no on-demand maps are loaded.
+    $probe = ssh -o BatchMode=yes -o StrictHostKeyChecking=no -o LogLevel=QUIET -o ConnectTimeout=8 -i "$sshKey" "$sshUser@$Ip" `
+        "sudo /usr/local/bin/k3s kubectl get igwsss --all-namespaces --no-headers -o custom-columns=NAME:.metadata.name,PARTITIONS:.spec.partitions 2>/dev/null" 2>$null
+    if ($LASTEXITCODE -eq 0 -and $probe) {
+        $pinned = @()
+        foreach ($line in ($probe -split "`n")) {
+            $trim = $line.Trim()
+            if (-not $trim) { continue }
+            # Match only on-demand + spin-up maps (DeepDesert / Arrakeen / HarkoVillage).
+            if ($trim -notmatch 'deepdesert|arrakeen|harkovillage') { continue }
+            # Partitions column is either '[]', '<none>', empty, or e.g. '[0]'.
+            if ($trim -match '\[(\d+.*)\]') { $pinned += ($trim -split '\s+')[0] }
+        }
+        if ($pinned.Count -eq 0) {
+            Write-Host "  No on-demand maps pinned - skipping settle + heal (saves ~50s)." -ForegroundColor Green
+            return
+        }
+        Write-Host "  Pinned on-demand maps: $($pinned -join ', ') - running heal." -ForegroundColor DarkGray
+    }
+
     if ($DelaySec -gt 0) {
         Write-Host "  Settling ${DelaySec}s so the server operator finishes reconciling on-demand ServerSets..." -ForegroundColor DarkGray
         Start-Sleep -Seconds $DelaySec
