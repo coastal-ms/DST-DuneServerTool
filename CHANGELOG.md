@@ -15,19 +15,19 @@ here cover everything those tags shipped.
 
 ### Added
 
-- **Fresh Start + No NPE** — new *Players → Progression* action. Same snapshot/restore flow as regular Fresh Start (only purchased CHOAM/MTX sets + pieces + cosmetics are carried across), except the restore step also marks the tutorial as completed so Advanced buildables (Fabricator, etc.) unlock immediately. For admins who want the character to skip New Player content on the way back in.
 - **Grant All Skills** — one-click that marks every skill in the game as unlocked (`SkillPointsSpent = 1` per skill) on the character. 145 skills, captured live from a fully-unlocked character. Existing skills preserved. Does not touch the skill-point pool. Offline-only.
 - **Grant All Tech Recipes** — one-click that marks every buildable patent + crafting recipe + starter group as Purchased on the character's Intel terminal. 449 entries (42 BLD_*, 44 DA_GRP_*, 363 RCP_*), captured live. Existing entries preserved. Does not touch the Intel balance. Offline-only.
+- **Full backup manager on the Database page.** The *Backup Schedule* card's "Recent backups" list (previously capped at the last 5) is now a complete backup manager. It lists **all** `.backup` files in the VM's dump directory in a scrollable table, with a **filename search box**, a **sort** control (Newest / Oldest / Largest / Smallest / Name A→Z), and a "showing N of M" count. Each row keeps the existing **Download** action and adds a **Delete** action; **multi-select checkboxes** plus a bulk **Delete (N)** button allow removing several backups at once. Deletes are confirmed (`window.confirm`), remove both the `.backup` file and its `.yaml` sidecar on the VM, and are validated server-side (path must be under the dump dir, end in `.backup`, no traversal) and gated behind the VM lock. Import (upload) and dump-dir size readout are unchanged.
 
 ### Changed
 
-- **Delete Account (permanent)** now also cleans up ownership on world actors (vehicles, totems, bases). Three-rule split: (a) actors the deleted account **owned** (highest rank on the ACL) → the whole ACL is wiped and the custom name is reset, so the actor becomes truly ownerless and anyone can Claim Ownership normally; old co-owners lose access and the new claimant re-grants perms if they want them back. (b) actors the deleted account was only a **co-owner** on → only the deleted account's rank row is removed; the real owner + other co-owners keep their access. (c) if the deleted account had no rank rows at all, nothing changes. Previously, stale rank rows kept the old character on the ACL and blocked "Claim Ownership" for the new character.
-- **Fresh Start** (existing) no longer marks the tutorial as completed automatically. The regular Fresh Start restore is now cosmetics + purchases only; use the new *Fresh Start + No NPE* variant to also skip the tutorial.
-- **Progression action row layout** now pins the label at its natural width and lets the inline description occupy the remaining space with ellipsis-truncation. Long descriptions no longer squeeze labels out of the row.
+- **Delete Account (permanent)** now matches the game's own in-game delete + purge exactly: the character is marked `character_state='Deleted'` and every owner (rank 1) grant its controllers held is stripped, so solo-owned vehicles/bases become abandoned and claimable. Co-owner grants the character held on other players' stuff are left intact. No destructive cascade, no offline gate, no pod-crash risk.
+- **Fresh Start** is now a Snapshot → in-game delete → Restore flow: DST captures the character's purchased CHOAM/MTX sets/pieces + cosmetics, the operator deletes + recreates the character in-game (the game handles all ownership cleanup correctly on its own), then DST restores the purchases onto the recreated character.
+- **Give Vehicle Kit** loadouts cleaned up: redundant base parts removed where a unique module already fills the slot (Sandbike, Buggy, Sandcrawler, all three Ornithopters), fuel-cell counts tuned per vehicle, and the kit preview now shows the fuel quantity suffix.
 
-### Removed
+### Fixed
 
-- Standalone **Skip Tutorial** action. The NPE-completion capability lives on the *Fresh Start + No NPE* variant instead.
+- **Duplicate / ghost players in the Gameplay Admin roster** after a character delete + recreate. The list is now driven from the `dune.player_state` view (Active-only) instead of `dune.actors`, so each account shows exactly one active character.
 
 ## [12.16.7] - 2026-07-04
 
@@ -6885,7 +6885,7 @@ at the time. Also folds in the v3.0.1 / v3.1.2 patches.
   (`ssh`, `Gameplay Admin`, `setup-guide`, `report-issue`). _(originally
   3.1.2)_
 
-[Unreleased]: https://github.com/coastal-ms/DST-DuneServerTool/compare/v6.1.2...HEAD
+[Unreleased]: https://github.com/coastal-ms/DST-DuneServerTool/compare/v12.16.6...HEAD
 [6.1.0]: https://github.com/coastal-ms/DST-DuneServerTool/compare/v6.0.1...v6.1.2
 [6.0.0]: https://github.com/coastal-ms/DST-DuneServerTool/compare/v5.0.2...v6.0.1
 [5.0.0]: https://github.com/coastal-ms/DST-DuneServerTool/compare/v4.5.2...v5.0.2

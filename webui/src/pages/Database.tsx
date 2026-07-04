@@ -11,6 +11,7 @@ import {
   getBackupHistory,
   downloadBackup,
   uploadBackup,
+  deleteBackups,
   getBackupDumpPods,
   pruneBackupDumpPods,
 } from '../api/database'
@@ -647,6 +648,12 @@ function BackupScheduleCard({ vmRunning, showToast }: BackupScheduleCardProps) {
   const [showLog, setShowLog]   = useState(false)
   const [transferring, setTransferring] = useState<string | null>(null)  // vmPath or 'upload'
 
+  // Backup manager: search / sort / multi-select / delete.
+  const [search, setSearch]     = useState('')
+  const [sortBy, setSortBy]     = useState<'date-desc' | 'date-asc' | 'size-desc' | 'size-asc' | 'name'>('date-desc')
+  const [selected, setSelected] = useState<Set<string>>(new Set())
+  const [deleting, setDeleting] = useState(false)
+
   // Draft state — initialised from `schedule` when it loads, then locally
   // editable so the user can preview their choice before clicking Save.
   const [draftPreset, setDraftPreset]       = useState<string>('Off')
@@ -663,7 +670,7 @@ function BackupScheduleCard({ vmRunning, showToast }: BackupScheduleCardProps) {
     try {
       const [sched, hist, pods] = await Promise.all([
         getBackupSchedule(),
-        getBackupHistory({ recent: 5, logLines: 50 }),
+        getBackupHistory({ recent: 200, logLines: 50 }),
         getBackupDumpPods().catch(() => null),
       ])
       setSchedule(sched)
@@ -718,7 +725,7 @@ function BackupScheduleCard({ vmRunning, showToast }: BackupScheduleCardProps) {
       showToast('ok', draftPreset === 'Off' ? 'Schedule disabled.' : `Schedule saved.`)
       // Refresh history + pod list in the background so the user sees the new
       // schedule reflected immediately when the next cron run lands.
-      void getBackupHistory({ recent: 5, logLines: 50 }).then(setHistory).catch(() => {})
+      void getBackupHistory({ recent: 200, logLines: 50 }).then(setHistory).catch(() => {})
       void getBackupDumpPods().then(setDumpPods).catch(() => {})
     } catch (e) {
       showToast('err', `Save failed: ${e instanceof Error ? e.message : String(e)}`)
@@ -750,12 +757,110 @@ function BackupScheduleCard({ vmRunning, showToast }: BackupScheduleCardProps) {
       const r = await uploadBackup({ localPath })
       showToast('ok', r.message ?? 'Upload complete.')
       // Refresh history so the new file appears
-      void getBackupHistory({ recent: 5, logLines: 50 }).then(setHistory).catch(() => {})
+      void getBackupHistory({ recent: 200, logLines: 50 }).then(setHistory).catch(() => {})
     } catch (e) {
       showToast('err', `Upload failed: ${e instanceof Error ? e.message : String(e)}`)
     } finally {
       setTransferring(null)
     }
+  }
+
+  // Filename relative to the dump dir, for display + search.
+  function backupRelName(path: string): string {
+    return path.replace(/^\/funcom\/artifacts\/database-dumps\//, '')
+  }
+
+  // Filtered + sorted view of the full backup list.
+  const visibleBackups = useMemo(() => {
+    const all = history?.recent ?? []
+    const q = search.trim().toLowerCase()
+    const filtered = q
+      ? all.filter(f => backupRelName(f.path).toLowerCase().includes(q))
+      : all.slice()
+    filtered.sort((a, b) => {
+      switch (sortBy) {
+        case 'date-asc':  return a.mtimeEpoch - b.mtimeEpoch
+        case 'size-desc': return b.sizeBytes - a.sizeBytes
+        case 'size-asc':  return a.sizeBytes - b.sizeBytes
+        case 'name':      return backupRelName(a.path).localeCompare(backupRelName(b.path))
+        case 'date-desc':
+        default:          return b.mtimeEpoch - a.mtimeEpoch
+      }
+    })
+    return filtered
+  }, [history, search, sortBy])
+
+  // Drop selections that no longer exist after a refresh/delete.
+  useEffect(() => {
+    const present = new Set((history?.recent ?? []).map(f => f.path))
+    setSelected(prev => {
+      const next = new Set([...prev].filter(p => present.has(p)))
+      return next.size === prev.size ? prev : next
+    })
+  }, [history])
+
+  function toggleSelect(path: string) {
+    setSelected(prev => {
+      const next = new Set(prev)
+      if (next.has(path)) next.delete(path); else next.add(path)
+      return next
+    })
+  }
+
+  function toggleSelectAllVisible() {
+    setSelected(prev => {
+      const allVisibleSelected = visibleBackups.length > 0 && visibleBackups.every(f => prev.has(f.path))
+      if (allVisibleSelected) {
+        const next = new Set(prev)
+        for (const f of visibleBackups) next.delete(f.path)
+        return next
+      }
+      const next = new Set(prev)
+      for (const f of visibleBackups) next.add(f.path)
+      return next
+    })
+  }
+
+  async function runDelete(paths: string[]) {
+    if (paths.length === 0) return
+    setDeleting(true)
+    try {
+      const r = await deleteBackups({ paths })
+      const del = r.deleted?.length ?? 0
+      const fail = r.failed?.length ?? 0
+      if (fail > 0) {
+        const detail = (r.failed ?? []).map(f => `${backupRelName(f.path)} (${f.reason})`).join('; ')
+        showToast('err', del > 0 ? `Deleted ${del}; ${fail} failed: ${detail}` : `Delete failed: ${detail}`)
+      } else {
+        showToast('ok', r.message ?? `Deleted ${del} backup${del === 1 ? '' : 's'}.`)
+      }
+      setSelected(new Set())
+      void getBackupHistory({ recent: 200, logLines: 50 }).then(setHistory).catch(() => {})
+    } catch (e) {
+      showToast('err', `Delete failed: ${e instanceof Error ? e.message : String(e)}`)
+    } finally {
+      setDeleting(false)
+    }
+  }
+
+  function handleDeleteOne(path: string) {
+    const ok = window.confirm(
+      `Permanently delete this backup from the server?\n\n${backupRelName(path)}\n\n` +
+      'This removes the .backup file (and its .yaml sidecar) from the VM. It cannot be undone.'
+    )
+    if (!ok) return
+    void runDelete([path])
+  }
+
+  function handleDeleteSelected() {
+    const paths = [...selected]
+    if (paths.length === 0) return
+    const ok = window.confirm(
+      `Permanently delete ${paths.length} selected backup${paths.length === 1 ? '' : 's'} from the server?\n\n` +
+      'This removes the .backup files (and their .yaml sidecars) from the VM. It cannot be undone.'
+    )
+    if (!ok) return
+    void runDelete(paths)
   }
 
   async function handlePruneDumpPods() {
@@ -980,7 +1085,14 @@ function BackupScheduleCard({ vmRunning, showToast }: BackupScheduleCardProps) {
 
       <div className="border-t border-border pt-3 mt-1">
         <div className="flex items-center justify-between gap-3 mb-2">
-          <div className="text-xs font-semibold text-text-muted">Recent backups</div>
+          <div className="text-xs font-semibold text-text-muted">
+            All backups
+            {history ? (
+              <span className="text-text-dim font-normal ml-1">
+                (showing {visibleBackups.length} of {history.total ?? history.recent.length})
+              </span>
+            ) : null}
+          </div>
           <div className="flex items-center gap-3">
             <button
               type="button"
@@ -997,29 +1109,109 @@ function BackupScheduleCard({ vmRunning, showToast }: BackupScheduleCardProps) {
             </span>
           </div>
         </div>
+
+        {history && history.recent.length > 0 && (
+          <div className="flex items-center gap-2 mb-2">
+            <div className="relative flex-1 min-w-0">
+              <Icon name="Search" size={12} className="absolute left-2 top-1/2 -translate-y-1/2 text-text-dim pointer-events-none" />
+              <input
+                type="text"
+                value={search}
+                onChange={e => setSearch(e.target.value)}
+                placeholder="Search by filename…"
+                className="w-full pl-7 pr-2 py-1 text-xs rounded bg-surface-2 border border-border text-text placeholder:text-text-dim"
+              />
+            </div>
+            <select
+              value={sortBy}
+              onChange={e => setSortBy(e.target.value as typeof sortBy)}
+              className="px-2 py-1 text-xs rounded bg-surface-2 border border-border text-text shrink-0"
+              title="Sort backups"
+            >
+              <option value="date-desc">Newest first</option>
+              <option value="date-asc">Oldest first</option>
+              <option value="size-desc">Largest first</option>
+              <option value="size-asc">Smallest first</option>
+              <option value="name">Name (A→Z)</option>
+            </select>
+            <button
+              type="button"
+              onClick={handleDeleteSelected}
+              disabled={selected.size === 0 || deleting || !!transferring}
+              className="btn-danger text-xs py-1 px-2 shrink-0"
+              title="Delete selected backups"
+            >
+              <Icon name={deleting ? 'Loader2' : 'Trash2'} size={12} className={deleting ? 'animate-spin' : ''} />
+              Delete{selected.size > 0 ? ` (${selected.size})` : ''}
+            </button>
+          </div>
+        )}
+
         {!history || history.recent.length === 0 ? (
           <p className="text-xs text-text-dim italic">
             {vmRunning ? 'No backup files found yet.' : 'VM not running.'}
           </p>
+        ) : visibleBackups.length === 0 ? (
+          <p className="text-xs text-text-dim italic">No backups match “{search}”.</p>
         ) : (
-          <ul className="text-xs font-mono space-y-1">
-            {history.recent.map(f => (
-              <li key={f.path} className="flex items-center gap-2">
-                <button
-                  type="button"
-                  onClick={() => void handleDownload(f.path)}
-                  disabled={!!transferring}
-                  className="text-info hover:text-info-bright disabled:opacity-40 shrink-0"
-                  title="Download to your PC"
-                >
-                  <Icon name={transferring === f.path ? 'Loader2' : 'Download'} size={12} className={transferring === f.path ? 'animate-spin' : ''} />
-                </button>
-                <span className="text-text">{f.mtimeIso}</span>
-                <span className="text-text-muted">{(f.sizeBytes / (1024 * 1024)).toFixed(1)} MB</span>
-                <span className="text-text-dim truncate" title={f.path}>{f.path.replace(/^\/funcom\/artifacts\/database-dumps\//, '')}</span>
-              </li>
-            ))}
-          </ul>
+          <div className="border border-border rounded max-h-72 overflow-y-auto">
+            <table className="w-full text-xs font-mono">
+              <thead className="sticky top-0 bg-surface-2 text-text-muted">
+                <tr>
+                  <th className="w-8 py-1 px-2 text-left">
+                    <input
+                      type="checkbox"
+                      checked={visibleBackups.length > 0 && visibleBackups.every(f => selected.has(f.path))}
+                      onChange={toggleSelectAllVisible}
+                      title="Select all shown"
+                    />
+                  </th>
+                  <th className="py-1 px-2 text-left font-semibold">Date</th>
+                  <th className="py-1 px-2 text-right font-semibold">Size</th>
+                  <th className="py-1 px-2 text-left font-semibold">File</th>
+                  <th className="w-16 py-1 px-2 text-right font-semibold">Actions</th>
+                </tr>
+              </thead>
+              <tbody>
+                {visibleBackups.map(f => (
+                  <tr key={f.path} className="border-t border-border hover:bg-surface-2/50">
+                    <td className="py-1 px-2">
+                      <input
+                        type="checkbox"
+                        checked={selected.has(f.path)}
+                        onChange={() => toggleSelect(f.path)}
+                      />
+                    </td>
+                    <td className="py-1 px-2 text-text whitespace-nowrap">{f.mtimeIso}</td>
+                    <td className="py-1 px-2 text-text-muted text-right whitespace-nowrap">{(f.sizeBytes / (1024 * 1024)).toFixed(1)} MB</td>
+                    <td className="py-1 px-2 text-text-dim truncate max-w-[16rem]" title={f.path}>{backupRelName(f.path)}</td>
+                    <td className="py-1 px-2">
+                      <div className="flex items-center gap-2 justify-end">
+                        <button
+                          type="button"
+                          onClick={() => void handleDownload(f.path)}
+                          disabled={!!transferring || deleting}
+                          className="text-info hover:text-info-bright disabled:opacity-40 shrink-0"
+                          title="Download to your PC"
+                        >
+                          <Icon name={transferring === f.path ? 'Loader2' : 'Download'} size={12} className={transferring === f.path ? 'animate-spin' : ''} />
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => handleDeleteOne(f.path)}
+                          disabled={!!transferring || deleting}
+                          className="text-danger hover:text-danger-bright disabled:opacity-40 shrink-0"
+                          title="Delete from server"
+                        >
+                          <Icon name="Trash2" size={12} />
+                        </button>
+                      </div>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
         )}
         {lastBackup && (
           <p className="text-xs text-text-dim mt-2">

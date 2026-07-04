@@ -7,6 +7,10 @@
 # POST /api/db/backup-upload    body: { localPath }
 #   SCP a local .backup file to the VM's dump directory so it appears in
 #   backup history and can be picked by the existing Restore command.
+#
+# POST /api/db/backup-delete    body: { paths: string[] }  (or { vmPath })
+#   Delete one or more .backup files (+ their .yaml sidecars) from the VM's
+#   dump directory. Every path is validated in Remove-DuneBackupFiles.
 
 Register-DuneRoute -Method POST -Path '/api/db/backup-download' -Handler {
     param($req, $res, $routeParams, $body)
@@ -183,5 +187,46 @@ Register-DuneRoute -Method POST -Path '/api/db/backup-upload' -Handler {
         remotePath = $remotePath
         sizeBytes  = $size
         message    = "Uploaded $('{0:N1}' -f ($size / 1MB)) MB to VM — it will appear in backup history."
+    }
+}
+
+Register-DuneRoute -Method POST -Path '/api/db/backup-delete' -Handler {
+    param($req, $res, $routeParams, $body)
+    $ctx = Get-DuneBackupContext
+    if (-not $ctx.ok) {
+        Write-DuneError -Response $res -Status $ctx.status -Message $ctx.message
+        return
+    }
+
+    # Accept either { paths: [...] } (bulk) or { vmPath: '...' } (single).
+    $paths = @()
+    if ($body -is [hashtable] -or $body -is [System.Collections.IDictionary]) {
+        if ($body.ContainsKey('paths')  -and $body['paths'])  { $paths = @($body['paths']) }
+        elseif ($body.ContainsKey('vmPath') -and $body['vmPath']) { $paths = @([string]$body['vmPath']) }
+    } elseif ($body) {
+        if ($body.paths)      { $paths = @($body.paths) }
+        elseif ($body.vmPath) { $paths = @([string]$body.vmPath) }
+    }
+    $paths = @($paths | Where-Object { $_ } | ForEach-Object { [string]$_ })
+    if ($paths.Count -eq 0) {
+        Write-DuneError -Response $res -Status 400 -Message 'Body must include paths (array) or vmPath (string).'
+        return
+    }
+    if ($paths.Count -gt 500) {
+        Write-DuneError -Response $res -Status 400 -Message 'Too many paths (max 500 per request).'
+        return
+    }
+
+    try {
+        $result = Invoke-WithDuneLock -Name 'backup-delete' -Script {
+            Remove-DuneBackupFiles -Ip $ctx.ip -Paths $paths
+        }
+        if (-not $result.ok -and $result.ContainsKey('status') -and $result.status) {
+            Write-DuneError -Response $res -Status ([int]$result.status) -Message $result.message
+            return
+        }
+        Write-DuneJson -Response $res -Body $result
+    } catch {
+        Write-DuneError -Response $res -Status 502 -Message "Delete failed: $($_.Exception.Message)"
     }
 }
