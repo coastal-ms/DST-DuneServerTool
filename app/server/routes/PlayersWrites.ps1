@@ -228,6 +228,35 @@ Register-DuneRoute -Method POST -Path '/api/gameplay/players/fresh-start/snapsho
     }
 }
 
+# POST /api/gameplay/players/fresh-start/wipe  { account_id }
+# Combined Step 1: snapshot the account's purchases + cosmetics, then delete the
+# whole account (world ownership 3-rule cleanup, character rows, per-player state,
+# etc.). Offline-only (delete-account gate). Snapshot survives on disk even if
+# the delete step fails.
+Register-DuneRoute -Method POST -Path '/api/gameplay/players/fresh-start/wipe' -Handler {
+    param($req, $res, $routeParams, $body)
+    try {
+        $acc = Get-DuneBodyInt -Body $body -Name 'account_id'
+        if ($null -eq $acc -or $acc -le 0) { Write-DuneError -Response $res -Status 400 -Message 'account_id is required.'; return }
+        Invoke-DunePlayerWriteRoute -Response $res -Action { param($ip) Invoke-DunePlayerFreshStartWipe -Ip $ip -AccountId $acc }
+    } catch {
+        Write-DuneError -Response $res -Status 500 -Message "Fresh Start wipe failed: $($_.Exception.Message)"
+    }
+}
+
+# GET /api/gameplay/players/fresh-start/snapshots-path  -> disk path of the
+# snapshots JSON, so Settings can render it + open the folder in Explorer.
+Register-DuneRoute -Method GET -Path '/api/gameplay/players/fresh-start/snapshots-path' -Handler {
+    param($req, $res, $routeParams, $body)
+    try {
+        $path = Get-DuneFreshStartSnapshotPath
+        $folder = Split-Path -Parent $path
+        Write-DuneJson -Response $res -Body @{ ok = $true; file = $path; folder = $folder; exists = (Test-Path -LiteralPath $path) }
+    } catch {
+        Write-DuneError -Response $res -Status 500 -Message "Snapshot path failed: $($_.Exception.Message)"
+    }
+}
+
 # GET /api/gameplay/players/fresh-start/snapshots  -> saved snapshot metadata
 Register-DuneRoute -Method GET -Path '/api/gameplay/players/fresh-start/snapshots' -Handler {
     param($req, $res, $routeParams, $body)
