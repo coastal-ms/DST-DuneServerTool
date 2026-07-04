@@ -1581,47 +1581,16 @@ function Invoke-DunePlayerFreshStartWipe {
     $snap = Invoke-DunePlayerSnapshotBuilds -Ip $Ip -AccountId $AccountId
     if (-not $snap.ok) { return @{ ok = $false; error = "snapshot failed - delete not attempted: $($snap.error)" } }
 
-    # Pod-eviction pass. When a character has been client-side offline but the
-    # game pod is still holding them in memory (`server_id` set + activity being
-    # flushed every few seconds), a plain DELETE races the pod's next flush and
-    # the character resurrects. To break that race, terminate the pod's
-    # postgres backend session so its subsequent flush attempts fail before
-    # they can write anything. Kubernetes will recycle the connection on the
-    # next attempt, but by then our DELETE will have committed and there'll be
-    # nothing left to flush against (UPDATEs affect 0 rows).
-    # Safety: we ONLY terminate backends whose application_name / usename
-    # matches the game DB user and whose most recent query touched this
-    # account's rows. Postgres won't let us terminate the connection we're
-    # running on.
-    $evictSql = @"
-SELECT pg_terminate_backend(pid) AS killed, pid, application_name, usename, state
-FROM pg_stat_activity
-WHERE datname = current_database()
-  AND pid <> pg_backend_pid()
-  AND state IS NOT NULL
-  AND (
-        application_name ILIKE '%serverpod%'
-     OR application_name ILIKE '%dune%'
-     OR application_name ILIKE '%funcom%'
-     OR application_name ILIKE '%bgd%'
-  );
-"@
-    $evict = Invoke-DuneSqlQuery -Ip $Ip -Sql $evictSql -ReadOnly $false -MaxRows 100 -TimeoutSec 15
-    $evictedCount = if ($evict.ok) { [int]$evict.rowCount } else { 0 }
-    # Small pause so the pod notices its connection died and doesn't race us.
-    Start-Sleep -Milliseconds 750
-
-    $del = Invoke-DunePlayerDeleteAccount -Ip $Ip -AccountId $AccountId -Force
+    $del = Invoke-DunePlayerDeleteAccount -Ip $Ip -AccountId $AccountId
     if (-not $del.ok) {
         return @{ ok = $false; error = "snapshot saved for '$($snap.name)', but delete failed: $($del.error)" ; snapshot_saved = $true; name = $snap.name }
     }
 
     $cosMsg = if ($snap.cosmetics) { ' + cosmetics' } else { '' }
-    $evictMsg = if ($evictedCount -gt 0) { " (evicted $evictedCount pod DB session(s) first)" } else { '' }
     return @{
         ok = $true
-        message = "Fresh Start: snapshotted '$($snap.name)' ($($snap.sets) set(s), $($snap.pieces) piece(s)$cosMsg) and wiped account $AccountId$evictMsg. Recreate the character in-game with the SAME name, spawn in, then click Restore."
-        name = $snap.name; sets = $snap.sets; pieces = $snap.pieces; cosmetics = $snap.cosmetics; pod_sessions_evicted = $evictedCount
+        message = "Fresh Start: snapshotted '$($snap.name)' ($($snap.sets) set(s), $($snap.pieces) piece(s)$cosMsg) and wiped account $AccountId. Recreate the character in-game with the SAME name, spawn in, then click Restore."
+        name = $snap.name; sets = $snap.sets; pieces = $snap.pieces; cosmetics = $snap.cosmetics
     }
 }
 
