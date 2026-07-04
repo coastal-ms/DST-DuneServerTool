@@ -1630,11 +1630,62 @@ function Invoke-DunePlayerRestoreBuilds {
         Invoke-DuneSqlQuery -Ip $Ip -Sql 'ROLLBACK;' -ReadOnly $false -MaxRows 1 -TimeoutSec 5 | Out-Null
         return @{ ok = $false; error = "restore builds tx: $($r.error)" }
     }
+    # Fresh Start's whole premise is "you already played once and are starting
+    # over" - there's no reason a restored character should get bounced back
+    # into the tutorial with Advanced buildables gated. Apply the same 3-state
+    # transition as the standalone Skip Tutorial action. Best-effort: a failure
+    # here shouldn't roll back the successful build restore.
+    $npeRes = Invoke-DunePlayerMarkNpeCompleted -Ip $Ip -CharacterId $charID
+    $npeMsg = if ($npeRes.ok) { ' Also marked NPE as completed so Advanced buildables (Fabricator, etc.) unlock immediately.' } else { " (NPE mark skipped: $($npeRes.error))" }
     $cosMsg = if ($cosmetics) { ' + cosmetics' } else { '' }
     return @{
         ok = $true
-        message = "Restored $($filteredSets.Count) purchased set(s) + $($filteredPieces.Count) purchased piece(s)$cosMsg onto '$Name'. Faction sets, tutorial patents, and tech-tree unlocks will re-populate as the character progresses. Takes effect on next login."
-        sets = $filteredSets.Count; pieces = $filteredPieces.Count
+        message = "Restored $($filteredSets.Count) purchased set(s) + $($filteredPieces.Count) purchased piece(s)$cosMsg onto '$Name'. Faction sets, tutorial patents, and tech-tree unlocks will re-populate as the character progresses. Takes effect on next login.$npeMsg"
+        sets = $filteredSets.Count; pieces = $filteredPieces.Count; npe_marked = [bool]$npeRes.ok
+    }
+}
+
+# Marks the New Player Experience (tutorial) as completed on the given character:
+# sets the NPE.HasCompletedNPE tag and marks every node in the DA_MQ_ANewBeginning
+# + DA_MQ_NPEAutocompleted subtrees complete + revealed. Matches the state a
+# character has when the player picks "Skip Tutorial" at character creation, which
+# unlocks Advanced_*_Fabricator patents and the rest of the tutorial-gated
+# buildables. Node list is captured live from a completed character (data file
+# app/data/dune-npe-completion-nodes.json) so we insert the exact IDs the game
+# expects — a fresh character's journey_story_node rows for these subtrees
+# don't exist yet (game creates them lazily), so UPDATE alone is insufficient.
+# Offline-only. The pawn TechKnowledge / tag state is RAM-authoritative while
+# connected, same reason as other tag/journey writes.
+function Invoke-DunePlayerMarkNpeCompleted {
+    param([string]$Ip, [long]$CharacterId)
+    if ($CharacterId -le 0) { return @{ ok = $false; error = 'character_id is required.' } }
+
+    $nodes = @(Get-DuneNpeCompletionNodes)
+    if ($nodes.Count -eq 0) { return @{ ok = $false; error = 'NPE completion node catalog is empty (app/data/dune-npe-completion-nodes.json missing?).' } }
+    $nodeArr = ConvertTo-DunePgTextArray $nodes
+
+    $sb = [System.Text.StringBuilder]::new()
+    [void]$sb.AppendLine('BEGIN;')
+    # Tag: NPE.HasCompletedNPE. player_tags is keyed by (character_id, tag);
+    # guard with NOT EXISTS so re-running is a no-op.
+    [void]$sb.AppendLine("INSERT INTO dune.player_tags (character_id, tag) SELECT $CharacterId::bigint, 'NPE.HasCompletedNPE' WHERE NOT EXISTS (SELECT 1 FROM dune.player_tags WHERE character_id=$CharacterId::bigint AND tag='NPE.HasCompletedNPE');")
+    # Journey nodes: UPDATE any that already exist.
+    [void]$sb.AppendLine("UPDATE dune.journey_story_node SET complete_condition_state='true'::jsonb, reveal_condition_state='true'::jsonb, has_pending_reward=false WHERE character_id=$CharacterId::bigint AND story_node_id = ANY($nodeArr);")
+    # Journey nodes: INSERT any missing. PK is (character_id, story_node_id) so
+    # ON CONFLICT DO NOTHING skips ones the UPDATE already touched.
+    [void]$sb.AppendLine("INSERT INTO dune.journey_story_node (character_id, story_node_id, has_pending_reward, complete_condition_state, reveal_condition_state, fail_condition_state, metadata_state, reset_group) SELECT $CharacterId::bigint, unnest($nodeArr), false, 'true'::jsonb, 'true'::jsonb, '{}'::jsonb, '{}'::jsonb, 'Default'::dune.JourneyStoryResetGroup ON CONFLICT (character_id, story_node_id) DO NOTHING;")
+    [void]$sb.AppendLine('COMMIT;')
+
+    $r = Invoke-DuneSqlQuery -Ip $Ip -Sql $sb.ToString() -ReadOnly $false -MaxRows 1 -TimeoutSec 60
+    if (-not $r.ok) {
+        Invoke-DuneSqlQuery -Ip $Ip -Sql 'ROLLBACK;' -ReadOnly $false -MaxRows 1 -TimeoutSec 5 | Out-Null
+        return @{ ok = $false; error = "mark NPE completed tx: $($r.error)" }
+    }
+    return @{
+        ok = $true
+        message = "Marked NPE completed on character $CharacterId - applied NPE.HasCompletedNPE tag and $($nodes.Count) tutorial journey node(s). Advanced buildable patents unlock on next login."
+        tag_added = $true
+        nodes_touched = $nodes.Count
     }
 }
 

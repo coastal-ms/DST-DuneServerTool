@@ -1812,6 +1812,17 @@ export function restoreBuilds(name: string) {
   })
 }
 
+// Marks the New Player Experience (tutorial) as completed on the character:
+// sets NPE.HasCompletedNPE tag + marks the DA_MQ_ANewBeginning* /
+// DA_MQ_NPEAutocompleted* journey subtrees complete + revealed. Matches the
+// state the game writes when a player picks "Skip Tutorial" at character
+// creation, which unlocks Advanced_*_Fabricator patents. Offline-only.
+export function skipTutorial(accountId: number) {
+  return api<WriteResult>('/api/gameplay/players/skip-tutorial', {
+    method: 'POST', body: JSON.stringify({ account_id: accountId }),
+  })
+}
+
 // Journey Nodes browser — reads every journey_story_node row for the account.
 export interface JourneyNode {
   node_id: string
