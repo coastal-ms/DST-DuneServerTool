@@ -570,6 +570,7 @@ interface ActionDef {
   icon: string
   liveOnly?: boolean      // requires player to be online (RMQ path)
   offlineOnly?: boolean   // requires player to be offline (DB write the game caches in memory)
+  experimental?: boolean  // unverified — may not take effect in-game; shown with an EXPERIMENTAL badge
   fields?: ActionField[]
   custom?: 'give-item' | 'grant-reward' | 'whisper' | 'spawn-vehicle' | 'quick-presets' | 'vehicle-kit' | 'give-package' | 'cheat-scripts' | 'dev-scripts' | 'unlock-trainers' | 'unlock-mainquest' | 'complete-contract' | 'progression-unlock' | 'refuel-vehicle' | 'starter-class' | 'update-tags' | 'teleport-player' | 'teleport-location' | 'set-respawn' | 'reset-faction' | 'grant-cosmetic' | 'fresh-start'
   balance?: 'solari' | 'scrip' | 'intel'  // show the player's current balance read-only above the form
@@ -666,11 +667,11 @@ const ACTIONS: ActionDef[] = [
   { id: 'fresh-start', group: 'Progression', label: 'Fresh Start (keep purchases)', icon: 'Sunrise', custom: 'fresh-start',
     rowNote: 'Snapshot cosmetics, delete + recreate character in-game (same name), then restore. Offline to restore.',
     run: () => Promise.resolve({ message: '' }) },
-  { id: 'grant-all-skills', group: 'Progression', label: 'Grant All Skills', icon: 'Sparkles', offlineOnly: true,
+  { id: 'grant-all-skills', group: 'Progression', label: 'Grant All Skills', icon: 'Sparkles', offlineOnly: true, experimental: true,
     rowNote: 'Unlock every skill (1 point each). Existing preserved. Does not add skill points. Offline.',
     confirm: p => `Grant every skill to ${p.name}?\n\nMarks every skill (145 total) as unlocked (SkillPointsSpent=1). Existing entries preserved. Skill-point pool untouched. Player must be offline.`,
     run: p => grantAllSkills(p.account_id) },
-  { id: 'grant-all-tech', group: 'Progression', label: 'Grant All Tech Recipes', icon: 'BookOpenCheck', offlineOnly: true,
+  { id: 'grant-all-tech', group: 'Progression', label: 'Grant All Tech Recipes', icon: 'BookOpenCheck', offlineOnly: true, experimental: true,
     rowNote: 'Purchase every buildable + recipe + starter group. Existing preserved. Does not add Intel. Offline.',
     confirm: p => `Grant every tech recipe to ${p.name}?\n\nMarks every buildable patent, crafting recipe, and starter group (449 total) as Purchased in the Intel terminal. Existing entries preserved. Intel points untouched. Player must be offline.`,
     run: p => grantAllTech(p.account_id) },
@@ -928,6 +929,9 @@ function ActionRow({ def, player, busy, stats, open, danger, onToggle, runAction
         title={def.liveOnly ? 'Requires player to be online' : def.offlineOnly ? 'Requires player to be offline — the game caches this value in memory while online and overwrites it on logout' : undefined}>
         <Icon name={def.icon} size={14} className={`shrink-0 ${danger ? 'text-error' : 'text-text-dim'}`} />
         <span className="flex-1 min-w-0 font-medium">{def.label}</span>
+        {def.experimental && (
+          <span className="text-[10px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded bg-accent/20 text-accent border border-accent/50 shrink-0" title="Experimental — may not take effect in-game">EXPERIMENTAL</span>
+        )}
         {def.liveOnly && (
           <span className="text-[10px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded bg-warning/20 text-warning border border-warning/50 shrink-0">LIVE REQ'D</span>
         )}
