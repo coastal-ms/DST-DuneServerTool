@@ -62,21 +62,48 @@ function Test-DunePlayerOfflineByController {
 # Same offline check as Test-DunePlayerOffline but resolved from the account id.
 # Lets writes that only know the account (e.g. unlock-trainer) still reject an
 # online player. A missing player_state row is treated as offline.
+#
+# `online_status` alone LIES: the pod keeps flushing 'Online' for tens of seconds
+# after a client disconnects, and Server Health shows the same ghost. We
+# therefore treat the player as offline only when EITHER:
+#   * `last_avatar_activity` is older than 30 seconds (true ground truth,
+#     matches the game's logoff grace timer on Hagga / Arrakeen / Harkonnen),
+#     OR
+#   * `online_status = 'Offline'` AND `encrypted_player_state.server_id` is NULL
+#     (no pod owns them in memory).
+# 'LoggingOut' always blocks — that's the grace-flush window.
 function Test-DunePlayerOfflineByAccount {
     param([string]$Ip, [long]$AccountId)
-    $sql = "SELECT online_status::text AS status FROM dune.player_state WHERE account_id = $AccountId::bigint LIMIT 1;"
+    $sql = @"
+SELECT ps.online_status::text                        AS status,
+       COALESCE(eps.server_id::text, '')             AS server_id,
+       COALESCE(
+         EXTRACT(EPOCH FROM (now() - ps.last_avatar_activity))::bigint,
+         999999
+       )                                             AS idle_secs
+FROM dune.player_state ps
+LEFT JOIN dune.encrypted_player_state eps ON eps.id = ps.character_id
+WHERE ps.account_id = $AccountId::bigint
+ORDER BY ps.last_avatar_activity DESC NULLS LAST
+LIMIT 1;
+"@
     $r = Invoke-DuneSqlQuery -Ip $Ip -Sql $sql -ReadOnly $true -MaxRows 1 -TimeoutSec 10
     if (-not $r.ok) { return @{ ok = $true; reason = $null } }
     $maps = ConvertTo-DuneRowMaps -Result $r
     if ($maps.Count -eq 0) { return @{ ok = $true; reason = $null } }
-    $status = [string]$maps[0]['status']
+    $status   = [string]$maps[0]['status']
+    $server   = [string]$maps[0]['server_id']
+    $idle     = [long]([string]$maps[0]['idle_secs'])
     if ($status -eq 'LoggingOut') {
-        return @{ ok = $false; reason = "player is mid-logout — the pod still owns their character in memory and will flush on logout, overwriting skill grants. Grace timer is ~30s on Hagga / Arrakeen / Harkonnen / etc., ~5 min in Deep Desert. Wait until status shows Offline, then retry." }
+        return @{ ok = $false; reason = "player is mid-logout — the pod still owns their character in memory and will flush on logout, overwriting any DB write. Grace timer is ~30s on Hagga / Arrakeen / Harkonnen / etc., ~5 min in Deep Desert. Wait until status shows Offline, then retry." }
     }
-    if ($status -ne 'Offline') {
-        return @{ ok = $false; reason = "player is currently $status — skill grants write to the character's FLevelComponent, which the pod will overwrite when they log out. Have them log out first, then apply." }
+    if ($idle -ge 30) {
+        return @{ ok = $true; reason = $null }  # true idle >= 30s (game logoff grace), trust it
     }
-    return @{ ok = $true; reason = $null }
+    if ($status -eq 'Offline' -and [string]::IsNullOrEmpty($server)) {
+        return @{ ok = $true; reason = $null }
+    }
+    return @{ ok = $false; reason = "player still active — last avatar activity was ${idle}s ago (need >= 30s or Offline + no pod). online_status='$status', server_id='$server'. Log out and wait ~30 seconds." }
 }
 
 # ----- Faction reputation tables (verbatim from db.go) ---------------------
@@ -560,6 +587,12 @@ function Invoke-DunePlayerDeleteAccount {
     $resolve = Get-DuneRawFuncomId -Ip $Ip -AccountId $AccountId
     if (-not $resolve.ok) { return @{ ok = $false; error = $resolve.error } }
     $funcom = ConvertTo-DuneSqlString $resolve.funcom_id
+
+    # Hard gate: the pod keeps flushing state for minutes after logoff and will
+    # rewrite anything we delete unless the character is truly evicted from
+    # memory. Trust last_avatar_activity over the online_status column.
+    $off = Test-DunePlayerOfflineByAccount -Ip $Ip -AccountId $AccountId
+    if (-not $off.ok) { return @{ ok = $false; error = "delete-account blocked: $($off.reason)" } }
 
     $sql = @"
 DO `$`$

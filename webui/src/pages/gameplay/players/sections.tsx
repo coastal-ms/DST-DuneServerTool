@@ -25,7 +25,7 @@ import {
   resetAllKeystones, resetAllSpecs, resetJourney, resetProgressionLive, resetSpec,
   restoreDestroyed,
   setFactionTier, setPlayerTags, setSkillPoints,
-  setStarterClass, teleportToPlayer, teleportToLocation, setRespawn, getTeleportDestinations, getPlayers, updatePlayerTags, wipeCodex, wipeJourney, resetFaction, snapshotBuilds, getFreshStartSnapshots, restoreBuilds, grantAllSkills, grantAllTech,
+  setStarterClass, teleportToPlayer, teleportToLocation, setRespawn, getTeleportDestinations, getPlayers, updatePlayerTags, wipeCodex, wipeJourney, resetFaction, getFreshStartSnapshots, restoreBuilds, freshStartWipe, grantAllSkills, grantAllTech,
   chatWhisper, isValidTemplateId, getItemCatalog, getCosmeticsCatalog, type CosmeticEntry,
   parseTcnoPackageText,
   giveItems, getItemPackages, saveItemPackage, deleteItemPackage,
@@ -769,7 +769,8 @@ const ACTIONS: ActionDef[] = [
   // ----- Danger Zone -----
   { id: 'delete-account', group: 'Danger', label: 'Delete Account (permanent)', icon: 'AlertTriangle',
     doubleConfirm: true,
-    rowNote: 'Double confirmation required',
+    offlineOnly: true,
+    rowNote: 'Double confirmation required — character must be offline',
     confirm: p => `Permanently delete account ${p.account_id} (${p.name})?\n\n` +
       `This is the FIRST of two confirmations. If you continue, the next step asks you to type an acknowledgement before the account is deleted. This cannot be undone.`,
     run: p => {
@@ -1090,12 +1091,11 @@ function ActionRow({ def, player, busy, stats, open, danger, onToggle, runAction
   )
 }
 
-// Fresh Start (keep purchases) — two-step snapshot/restore flow. A truly
-// fresh character can only be produced by deleting + recreating it in-game; DST
-// snapshots the player's purchased sets/pieces (CHOAM + MTX) + cosmetic unlocks
-// beforehand and restores them by NAME onto the recreated character (name is the
-// stable key across delete). Faction-earned sets and tech-tree unlocks are NOT
-// restored — they re-populate naturally as the character re-progresses.
+// Fresh Start (keep purchases) — DST-owned end-to-end:
+// Step 1 (single button): snapshot purchases/cosmetics to disk AND delete the
+//   whole account (world-ownership 3-rule cleanup baked in). Offline required.
+// Step 2 (user): recreate the character in-game with the SAME name and spawn in.
+// Step 3 (Restore): reapply the saved snapshot onto the new character.
 function FreshStartForm({ busy, player, runAction }: {
   busy: boolean
   player: Player
@@ -1116,20 +1116,32 @@ function FreshStartForm({ busy, player, runAction }: {
   return (
     <div className="space-y-3 text-sm">
       <div className="rounded-lg bg-surface-2 border border-border/50 p-3 text-text-dim text-xs leading-relaxed">
-        A real fresh start is done in-game: <b className="text-text">1)</b> snapshot below, <b className="text-text">2)</b> delete + recreate the character with the <b className="text-text">same name</b> (delete via the in-game Funcom browser so the name can be reused) and spawn in, <b className="text-text">3)</b> restore. Only your <b className="text-text">purchased</b> CHOAM/MTX sets + pieces and unlocked cosmetics are carried over — faction-earned sets and tech unlocks re-populate naturally as you re-progress, and everything else (quests, skills, faction rank) starts genuinely fresh from the game.
+        DST owns the whole flow: <b className="text-text">1)</b> Snapshot + Wipe below saves {player.name}'s purchased CHOAM/MTX sets/pieces and cosmetics to disk, then deletes the account (world ownership on their vehicles/bases is stripped, co-owner rows they hold on others' stuff are stripped, per-player state cleared). <b className="text-text">2)</b> Recreate the character in-game with the <b className="text-text">same name</b> and spawn in. <b className="text-text">3)</b> Restore reapplies purchases. Faction-earned sets and tech unlocks re-populate as the fresh character progresses.
       </div>
 
       <div className="card p-3 space-y-2">
-        <div className="font-medium text-text flex items-center gap-2"><Icon name="Save" size={14} /> Step 1 — Snapshot purchases &amp; cosmetics</div>
-        <div className="text-text-dim text-xs">Captures {player.name}'s purchased CHOAM/MTX sets + pieces + unlocked cosmetics. Do this <b>before</b> deleting the character (the data is destroyed with the character). Faction-earned sets and tech-tree unlocks are NOT snapshotted — they re-populate as the fresh character progresses.</div>
+        <div className="font-medium text-text flex items-center gap-2"><Icon name="AlertTriangle" size={14} className="text-warning" /> Step 1 — Snapshot &amp; Wipe</div>
+        <div className="text-text-dim text-xs">Saves purchases + cosmetics to <code className="text-text">%APPDATA%\DuneServer\fresh-start-snapshots.json</code>, then permanently deletes account {player.account_id}. Offline required. Snapshot survives on disk even if delete fails.</div>
         <button type="button" disabled={busy}
-          className="px-3 py-2 rounded-lg bg-ibad/20 border border-ibad/50 text-text hover:bg-ibad/30 disabled:opacity-50 text-sm font-medium"
+          className="px-3 py-2 rounded-lg bg-danger/20 border border-danger/50 text-text hover:bg-danger/30 disabled:opacity-50 text-sm font-medium"
           onClick={() => runAction(localDef, async () => {
-            const r = await snapshotBuilds(player.account_id)
+            const first = window.confirm(
+              `Snapshot ${player.name}'s purchases and PERMANENTLY delete account ${player.account_id} (${player.name})?\n\n` +
+              `The saved snapshot lets you restore purchases onto the recreated character. Everything else about this account is destroyed. This cannot be undone.`
+            )
+            if (!first) throw new Error('cancelled')
+            const typed = window.prompt(
+              `SECOND confirmation — snapshot + PERMANENTLY delete account ${player.account_id} (${player.name}).\n\n` +
+              `Type  i acknowledge  to proceed:`
+            ) || ''
+            if (typed.trim().toLowerCase() !== 'i acknowledge') {
+              throw new Error('Did not type "i acknowledge" — Fresh Start aborted.')
+            }
+            const r = await freshStartWipe(player.account_id)
             refresh()
-            return { message: r.message || `Snapshot saved for ${player.name}.` }
+            return { message: r.message || `Snapshot + wipe complete for ${player.name}.` }
           })}>
-          Snapshot {player.name}'s purchases
+          Snapshot + Wipe {player.name}
         </button>
       </div>
 
@@ -1151,7 +1163,7 @@ function FreshStartForm({ busy, player, runAction }: {
             </button>
           </>
         ) : (
-          <div className="text-text-dim text-xs">No saved snapshot for {player.name}. Snapshot first (Step 1).</div>
+          <div className="text-text-dim text-xs">No saved snapshot for {player.name}. Run Step 1 first.</div>
         )}
       </div>
     </div>

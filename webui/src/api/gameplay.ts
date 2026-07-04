@@ -1802,6 +1802,20 @@ export function snapshotBuilds(accountId: number) {
   })
 }
 
+// Combined Step 1: snapshot the account's purchases + cosmetics AND wipe the
+// account (delete-account cleanup with world-ownership 3-rule strip). Offline
+// required. On snapshot success + delete failure, the snapshot survives on disk
+// so Restore can still be used after the operator resolves the delete blocker.
+export function freshStartWipe(accountId: number) {
+  return api<WriteResult>('/api/gameplay/players/fresh-start/wipe', {
+    method: 'POST', body: JSON.stringify({ account_id: accountId }),
+  })
+}
+
+export function getFreshStartSnapshotsPath() {
+  return api<{ ok: boolean; file: string; folder: string; exists: boolean }>('/api/gameplay/players/fresh-start/snapshots-path')
+}
+
 export function getFreshStartSnapshots() {
   return api<{ ok: boolean; snapshots: FreshStartSnapshot[] }>('/api/gameplay/players/fresh-start/snapshots')
 }
