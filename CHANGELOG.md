@@ -11,6 +11,13 @@ Patch releases within a major series are rolled up under the major's entry
 on GitHub still exist for each individual release; the consolidated entries
 here cover everything those tags shipped.
 
+## [12.16.7] - 2026-07-04
+
+### Added
+
+- **Skip Tutorial** action under *Players → Progression*. One-click write that matches what the game applies when a player picks "Skip Tutorial" at character creation: sets the `NPE.HasCompletedNPE` tag and marks the `DA_MQ_ANewBeginning*` + `DA_MQ_NPEAutocompleted*` journey subtrees complete + revealed. That's the state that unlocks Advanced buildable patents (Fabricator, etc.) and bypasses the tutorial gating on other tech. Offline-only. **Caveat:** this sets the STATE (`NPE.HasCompletedNPE` tag + NPE journey nodes complete) but has not been end-to-end confirmed to retroactively grant `Advanced_*_Fabricator_Patent` + tutorial-gated buildables to a character who was already past character creation. The game may only fire those grants during the live tutorial-completion event. On a genuinely fresh (in-game re-created) character it should mirror the in-game Skip Tutorial choice exactly. If Advanced buildables don't appear after this, use *Progression Unlock* (Ch3 Start / Rank 19 Eligible) as before to advance normally.
+- **Fresh Start restore now also marks the NPE completed** on the fresh character. Fresh Start's whole premise is "you already played once and are starting over" — there's no reason a restored character should get bounced back into the tutorial with Advanced buildables gated. The same 3-state transition as *Skip Tutorial* is applied automatically as part of restore. Same caveat applies: whether the game retroactively grants the tutorial-gated patents from a post-hoc NPE-complete flip is UNCONFIRMED. If Advanced buildables don't appear after restore, use *Progression Unlock* to advance normally.
+
 ## [12.16.6] - 2026-07-04
 
 ### Fixed

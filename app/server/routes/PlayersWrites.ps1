@@ -513,6 +513,37 @@ Register-DuneRoute -Method POST -Path '/api/gameplay/players/wipe-codex' -Handle
     }
 }
 
+# POST /api/gameplay/players/skip-tutorial  { account_id }
+# Matches what the game applies when a player picks "Skip Tutorial" at
+# character creation: NPE.HasCompletedNPE tag + the DA_MQ_ANewBeginning* /
+# DA_MQ_NPEAutocompleted* journey subtrees marked complete + revealed.
+# Unlocks Advanced_*_Fabricator patents and other tutorial-gated tech.
+# Offline-only (tag + journey state are RAM-authoritative while connected).
+Register-DuneRoute -Method POST -Path '/api/gameplay/players/skip-tutorial' -Handler {
+    param($req, $res, $routeParams, $body)
+    try {
+        $acc = Get-DuneBodyInt -Body $body -Name 'account_id'
+        if ($null -eq $acc -or $acc -le 0) { Write-DuneError -Response $res -Status 400 -Message 'account_id is required.'; return }
+        Invoke-DunePlayerWriteRoute -Response $res -Action {
+            param($ip)
+            $off = Test-DunePlayerOfflineByAccount -Ip $ip -AccountId $acc
+            if (-not $off.ok) { return @{ ok = $false; error = "Player must be offline to skip tutorial. $($off.reason)" } }
+            # Resolve character_id from account_id (dune.journey_story_node is
+            # keyed by character_id since the 1.4.10.0 patch).
+            $idSql = "SELECT id::text AS cid FROM dune.player_state WHERE account_id=$acc::bigint LIMIT 1;"
+            $ir = Invoke-DuneSqlQuery -Ip $ip -Sql $idSql -ReadOnly $true -MaxRows 1 -TimeoutSec 15
+            if (-not $ir.ok) { return @{ ok = $false; error = "resolve character: $($ir.error)" } }
+            $imaps = ConvertTo-DuneRowMaps -Result $ir
+            if ($imaps.Count -eq 0) { return @{ ok = $false; error = "no character for account $acc." } }
+            $charID = [int64](ConvertTo-DuneInt $imaps[0]['cid'])
+            if ($charID -le 0) { return @{ ok = $false; error = "no character for account $acc." } }
+            Invoke-DunePlayerMarkNpeCompleted -Ip $ip -CharacterId $charID
+        }
+    } catch {
+        Write-DuneError -Response $res -Status 500 -Message "Skip tutorial failed: $($_.Exception.Message)"
+    }
+}
+
 # ---------------------------------------------------------------------------
 # §10 — Storage owner debug (read-only)
 # ---------------------------------------------------------------------------
