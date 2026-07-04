@@ -11,6 +11,12 @@ Patch releases within a major series are rolled up under the major's entry
 on GitHub still exist for each individual release; the consolidated entries
 here cover everything those tags shipped.
 
+## [12.16.4] - 2026-07-04
+
+### Changed
+
+- **Backup Schedule Save buttons stay clickable when there are no pending changes.** Both the top-level *Save schedule* button and the *Completed backup pods* *Save* button previously disabled themselves once the UI values matched what's on disk, which prevented force-re-writing the crontab. That was painful when a DST release changes the shape of the emitted cron (e.g. v12.16.3's prune-line fix) — the on-disk cron stays as the old version's version until Save re-runs, but Save was disabled. Now Save stays clickable as long as the VM is up; the tooltip still tells you whether there are unsaved changes.
+
 ## [12.16.3] - 2026-07-04
 
 ### Fixed
