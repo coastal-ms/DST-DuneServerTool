@@ -1053,7 +1053,7 @@ function ActionRow({ def, player, busy, stats, open, danger, onToggle, runAction
                 if (typed.trim().toLowerCase() !== 'i acknowledge') {
                   return Promise.reject(new Error('Did not type "i acknowledge" — change aborted.'))
                 }
-                return setStarterClass(player.id, job)
+                return setStarterClass(player.account_id, job)
               })} />
           ) : def.custom === 'update-tags' ? (
             <UpdateTagsForm busy={busy} accountId={player.account_id} demo={false}

@@ -11,6 +11,12 @@ Patch releases within a major series are rolled up under the major's entry
 on GitHub still exist for each individual release; the consolidated entries
 here cover everything those tags shipped.
 
+## [12.16.2] - 2026-07-04
+
+### Fixed
+
+- **Gameplay Admin → Players → Set Starter Class** no longer fails with a red `account_id is required` toast. The frontend was posting `{pawn_id, class_id}` (using the character/pawn id) while the backend expected `{account_id, job}` — a straight contract mismatch. Corrected the `setStarterClass` API call to send `account_id` + `job` and to use `player.account_id` at the call site, matching the pattern of every other write in this section (rename, update tags, delete tutorials, etc.). Backend contract unchanged.
+
 ## [12.16.1] - 2026-07-03
 
 ### Fixed

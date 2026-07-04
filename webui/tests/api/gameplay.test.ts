@@ -169,7 +169,7 @@ describe('Phase C/D/E/F — items, vehicles, teleport, progression, jobs', () =>
     expect(last().url).toBe('/api/gameplay/players/reset-job-skills')
 
     await gp.setStarterClass(11, 'fremen')
-    expect(last().body).toEqual({ pawn_id: 11, class_id: 'fremen' })
+    expect(last().body).toEqual({ account_id: 11, job: 'fremen' })
 
     await gp.deleteTutorials(5)
     expect(last().url).toBe('/api/gameplay/players/delete-tutorials')
