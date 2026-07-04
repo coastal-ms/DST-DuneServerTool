@@ -11,6 +11,22 @@ Patch releases within a major series are rolled up under the major's entry
 on GitHub still exist for each individual release; the consolidated entries
 here cover everything those tags shipped.
 
+## [12.16.8] - 2026-07-04
+
+### Added
+
+- **Grant All Skills** action under *Players → Progression*. Marks every skill in Dune Awakening's static skill catalog (145 skills, bundled) as unlocked on the character (`SkillPointsSpent = 1` per skill in `FLevelComponent[1].ModuleData`). Existing skill entries are preserved verbatim. Does NOT touch the character's skill-point pool. Offline-only.
+
+- **Grant All Tech Recipes** action under *Players → Progression*. Marks every buildable patent + crafting recipe + starter group in Dune Awakening's static tech catalog (449 entries: 42 BLD_*, 44 DA_GRP_*, 363 RCP_*, bundled) as `Purchased` on the character's Intel terminal (`TechKnowledgePlayerComponent.m_TechKnowledge.m_TechKnowledgeData`). Existing entries are preserved verbatim (their `UnlockedState` is NOT downgraded). Does NOT touch the Intel-points balance (`m_TechKnowledgePoints`). Offline-only.
+
+Catalogs were captured live from a fully-unlocked character; since skill and tech IDs are static game content (identical for every character), the same bundled catalog covers every self-hosted server. When Funcom adds new skills/recipes in a game patch, DST will need a catalog refresh (re-capture from a maxed character on the updated game version).
+
+### Fixed
+
+- **Progression action labels no longer collapse to zero width when the row's inline note is long.** The row layout gave the note `shrink-0` while the label had `flex-1 truncate`, so a long `rowNote` (Reset Faction / Fresh Start / Skip Tutorial / Grant All Skills / Grant All Tech Recipes all grew paragraph-length notes in v12.16.6–v12.16.8) pushed the label out of the row entirely. Layout now pins the label at its natural width and lets the note occupy the remaining space with ellipsis-truncation when it doesn't fit. All existing action labels are visible again.
+
+- **Grant All Skills / Grant All Tech Recipes** no longer fail with `The filename or extension is too long`. Both actions build large SQL blobs (145 skill UPDATEs / a CTE with all 449 tech ItemKeys inline) that exceed Windows' ~32 KB command-line limit when passed via `Start-Process`. Both calls now route through `Invoke-DuneSqlQuery -Bulk`, which streams SQL via ssh stdin instead of a command-line argument (same path DST already uses for Seed Market chunked writes).
+
 ## [12.16.7] - 2026-07-04
 
 ### Added

@@ -2345,3 +2345,185 @@ LIMIT 1;
 
     return @{ ok = $true; result = $out }
 }
+
+
+# ---------------------------------------------------------------------------
+# Grant All Skills — insert every skill in the bundled catalog as unlocked
+# (SkillPointsSpent=1) on the character's FLevelComponent[1].ModuleData.
+# Reference catalog (145 skill tag keys, static game content) lives at
+# app/data/dune-skills-catalog.json. Existing skill entries with
+# SkillPointsSpent >= 1 are preserved verbatim; only missing keys are added.
+# Does NOT touch the character's skill-point pool. Offline-only at the route
+# layer (FLevelComponent is RAM-authoritative while connected).
+# All inserts are wrapped in a single transaction for atomicity.
+# ---------------------------------------------------------------------------
+function Invoke-DunePlayerGrantAllSkills {
+    param([string]$Ip, [long]$AccountId)
+    if ($AccountId -le 0) { return @{ ok = $false; error = 'account_id is required.' } }
+
+    $pawnID = Get-DunePlayerPawnFromAccount -Ip $Ip -AccountId $AccountId
+    if ($pawnID -le 0) { return @{ ok = $false; error = "no pawn for account $AccountId." } }
+
+    $keys = @(Get-DuneSkillsCatalog)
+    if ($keys.Count -eq 0) {
+        return @{ ok = $false; error = 'skills catalog is empty (app/data/dune-skills-catalog.json missing?).' }
+    }
+
+    # Build one transaction that jsonb_set each catalog key onto
+    # FLevelComponent[1].ModuleData. The guard COALESCE(...->'SkillPointsSpent')::int < 1
+    # makes each statement idempotent — already-unlocked keys are skipped.
+    $sb = [System.Text.StringBuilder]::new()
+    [void]$sb.AppendLine('BEGIN;')
+    foreach ($sk in $keys) {
+        $key = "(TagName=`"$sk`")"
+        $safeKey = ConvertTo-DuneSqlString $key
+        [void]$sb.AppendLine(@"
+UPDATE dune.fgl_entities fe
+SET components = jsonb_set(
+    fe.components,
+    ARRAY['FLevelComponent','1','ModuleData','$safeKey'],
+    '{"SkillPointsSpent": 1}'::jsonb,
+    true)
+WHERE fe.entity_id = (
+    SELECT entity_id FROM dune.actor_fgl_entities
+    WHERE actor_id = $pawnID::bigint AND slot_name = 'DuneCharacter'
+)
+AND COALESCE(
+    (fe.components->'FLevelComponent'->1->'ModuleData'->'$safeKey'->>'SkillPointsSpent')::int,
+    0
+) < 1;
+"@)
+    }
+    # Count how many keys are now present (all catalog keys should be) — used
+    # only for the response message. Runs inside the same transaction so it
+    # reads the post-UPDATE state.
+    $arr = ConvertTo-DunePgTextArray $keys
+    [void]$sb.AppendLine(@"
+SELECT COUNT(*)::int AS present FROM (
+    SELECT jsonb_object_keys(fe.components->'FLevelComponent'->1->'ModuleData') AS k
+    FROM dune.fgl_entities fe
+    WHERE fe.entity_id = (
+        SELECT entity_id FROM dune.actor_fgl_entities
+        WHERE actor_id = $pawnID::bigint AND slot_name = 'DuneCharacter'
+    )
+) sub
+WHERE sub.k = ANY($arr);
+"@)
+    [void]$sb.AppendLine('COMMIT;')
+
+    # -Bulk routes SQL through ssh stdin (Invoke-DuneSqlRawStdin) so payloads
+    # larger than the Windows ~32 KB command-line limit (~145 UPDATE stmts here,
+    # each ~400 chars post-encoding = ~58 KB) don't fail with
+    # "The filename or extension is too long" on Start-Process.
+    $r = Invoke-DuneSqlQuery -Ip $Ip -Sql $sb.ToString() -ReadOnly $false -MaxRows 4 -TimeoutSec 60 -Bulk
+    if (-not $r.ok) {
+        Invoke-DuneSqlQuery -Ip $Ip -Sql 'ROLLBACK;' -ReadOnly $false -MaxRows 1 -TimeoutSec 5 | Out-Null
+        return @{ ok = $false; error = "grant all skills tx: $($r.error)" }
+    }
+    $present = $keys.Count
+    try {
+        $maps = ConvertTo-DuneRowMaps -Result $r
+        if ($maps.Count -ge 1 -and $maps[0].ContainsKey('present')) {
+            $present = [int](ConvertTo-DuneInt $maps[0]['present'])
+        }
+    } catch {}
+    return @{
+        ok = $true
+        message = "Granted all skills on pawn $pawnID - $present/$($keys.Count) skill key(s) present after write. Takes effect on next login."
+        catalog_size = $keys.Count
+        present = $present
+    }
+}
+
+# ---------------------------------------------------------------------------
+# Grant All Tech Recipes — mark every ItemKey in the bundled catalog as
+# Purchased in the character's TechKnowledgePlayerComponent.m_TechKnowledge.
+# m_TechKnowledgeData array. Reference catalog (449 keys: 42 BLD_* buildable
+# patents, 44 DA_GRP_* starter groups, 363 RCP_* crafting recipes, static
+# game content) lives at app/data/dune-tech-catalog.json. Existing entries
+# are preserved verbatim — their UnlockedState is NOT downgraded and their
+# original bIsNewEntry flag is kept. Missing keys are appended as
+# {ItemKey, bIsNewEntry:true, UnlockedState:"Purchased"}. Does NOT touch
+# m_TechKnowledgePoints (Intel balance). Offline-only at the route layer.
+# Wrapped in a single transaction for atomicity.
+# ---------------------------------------------------------------------------
+function Invoke-DunePlayerGrantAllTech {
+    param([string]$Ip, [long]$AccountId)
+    if ($AccountId -le 0) { return @{ ok = $false; error = 'account_id is required.' } }
+
+    $pawnID = Get-DunePlayerPawnFromAccount -Ip $Ip -AccountId $AccountId
+    if ($pawnID -le 0) { return @{ ok = $false; error = "no pawn for account $AccountId." } }
+
+    $itemKeys = @(Get-DuneTechCatalog)
+    if ($itemKeys.Count -eq 0) {
+        return @{ ok = $false; error = 'tech catalog is empty (app/data/dune-tech-catalog.json missing?).' }
+    }
+
+    $catalogArr = ConvertTo-DunePgTextArray $itemKeys
+    $path = "'{TechKnowledgePlayerComponent,m_TechKnowledge,m_TechKnowledgeData}'"
+
+    # Single UPDATE in a transaction: append every catalog ItemKey that is NOT
+    # already present in the existing array as a new Purchased entry, leaving
+    # existing entries untouched. Uses nested jsonb_set + COALESCE so it works
+    # whether or not TechKnowledgePlayerComponent / m_TechKnowledge / the array
+    # already exist (same defensive pattern as Invoke-DuneGrantRecipe's init path).
+    $sb = [System.Text.StringBuilder]::new()
+    [void]$sb.AppendLine('BEGIN;')
+    [void]$sb.AppendLine(@"
+UPDATE dune.actors a
+SET properties = jsonb_set(
+    jsonb_set(
+        jsonb_set(
+            COALESCE(a.properties, '{}'::jsonb),
+            '{TechKnowledgePlayerComponent}',
+            COALESCE(a.properties -> 'TechKnowledgePlayerComponent', '{}'::jsonb),
+            true),
+        '{TechKnowledgePlayerComponent,m_TechKnowledge}',
+        COALESCE(a.properties #> '{TechKnowledgePlayerComponent,m_TechKnowledge}', '{}'::jsonb),
+        true),
+    $path,
+    COALESCE(a.properties #> $path, '[]'::jsonb) || COALESCE((
+        SELECT jsonb_agg(jsonb_build_object('ItemKey', k, 'bIsNewEntry', true, 'UnlockedState', 'Purchased'))
+        FROM unnest($catalogArr) AS k
+        WHERE k NOT IN (
+            SELECT e->>'ItemKey'
+            FROM jsonb_array_elements(COALESCE(a.properties #> $path, '[]'::jsonb)) e
+        )
+    ), '[]'::jsonb),
+    true)
+WHERE a.id = $pawnID::bigint;
+"@)
+    # Count how many catalog keys are now Purchased on the pawn (for message).
+    [void]$sb.AppendLine(@"
+SELECT COUNT(*)::int AS purchased FROM (
+    SELECT e->>'ItemKey' AS k, e->>'UnlockedState' AS s
+    FROM dune.actors a, jsonb_array_elements(COALESCE(a.properties #> $path, '[]'::jsonb)) e
+    WHERE a.id = $pawnID::bigint
+) sub
+WHERE sub.k = ANY($catalogArr) AND sub.s = 'Purchased';
+"@)
+    [void]$sb.AppendLine('COMMIT;')
+
+    # -Bulk routes SQL through ssh stdin (Invoke-DuneSqlRawStdin) so payloads
+    # larger than the Windows ~32 KB command-line limit (the tech catalog SQL
+    # with all 449 ItemKeys inline is ~40 KB) don't fail with
+    # "The filename or extension is too long" on Start-Process.
+    $r = Invoke-DuneSqlQuery -Ip $Ip -Sql $sb.ToString() -ReadOnly $false -MaxRows 4 -TimeoutSec 60 -Bulk
+    if (-not $r.ok) {
+        Invoke-DuneSqlQuery -Ip $Ip -Sql 'ROLLBACK;' -ReadOnly $false -MaxRows 1 -TimeoutSec 5 | Out-Null
+        return @{ ok = $false; error = "grant all tech tx: $($r.error)" }
+    }
+    $purchased = $itemKeys.Count
+    try {
+        $maps = ConvertTo-DuneRowMaps -Result $r
+        if ($maps.Count -ge 1 -and $maps[0].ContainsKey('purchased')) {
+            $purchased = [int](ConvertTo-DuneInt $maps[0]['purchased'])
+        }
+    } catch {}
+    return @{
+        ok = $true
+        message = "Granted all tech recipes on pawn $pawnID - $purchased/$($itemKeys.Count) tech key(s) Purchased after write. Takes effect on next login."
+        catalog_size = $itemKeys.Count
+        purchased = $purchased
+    }
+}

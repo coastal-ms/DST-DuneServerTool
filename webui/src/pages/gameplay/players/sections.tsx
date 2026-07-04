@@ -25,7 +25,7 @@ import {
   resetAllKeystones, resetAllSpecs, resetJourney, resetProgressionLive, resetSpec,
   restoreDestroyed,
   setFactionTier, setPlayerTags, setSkillPoints,
-  setStarterClass, teleportToPlayer, teleportToLocation, setRespawn, getTeleportDestinations, getPlayers, updatePlayerTags, wipeCodex, wipeJourney, resetFaction, snapshotBuilds, getFreshStartSnapshots, restoreBuilds, skipTutorial,
+  setStarterClass, teleportToPlayer, teleportToLocation, setRespawn, getTeleportDestinations, getPlayers, updatePlayerTags, wipeCodex, wipeJourney, resetFaction, snapshotBuilds, getFreshStartSnapshots, restoreBuilds, skipTutorial, grantAllSkills, grantAllTech,
   chatWhisper, isValidTemplateId, getItemCatalog, getCosmeticsCatalog, type CosmeticEntry,
   parseTcnoPackageText,
   giveItems, getItemPackages, saveItemPackage, deleteItemPackage,
@@ -670,6 +670,14 @@ const ACTIONS: ActionDef[] = [
     rowNote: 'Marks the New Player Experience as completed so Advanced buildable patents (Fabricator, etc.) unlock immediately. Same effect as picking Skip Tutorial at character creation. Offline-only. If Advanced buildables don\u2019t unlock immediately, use Progression Unlock (Ch3 Start / Rank 19 Eligible) instead.',
     confirm: p => `Mark ${p.name}'s tutorial as completed?\n\nThis matches what happens when a player picks 'Skip Tutorial' at character creation. Advanced_*_Fabricator + related tutorial-gated patents will unlock immediately.\n\nNote: this sets the STATE (NPE.HasCompletedNPE tag + NPE journey nodes complete) but has not been end-to-end confirmed to retroactively grant the tutorial-gated patents to a character who was already past character creation. On a genuinely fresh (in-game re-created) character it should mirror the in-game Skip Tutorial choice exactly. If Advanced buildables don't appear after this, use Progression Unlock (Ch3 Start / Rank 19 Eligible) instead.`,
     run: p => skipTutorial(p.account_id) },
+  { id: 'grant-all-skills', group: 'Progression', label: 'Grant All Skills', icon: 'Sparkles', offlineOnly: true,
+    rowNote: 'Marks every skill in the game as unlocked (SkillPointsSpent=1 per skill) on the character. Existing skills preserved. Does not add unspent skill points.',
+    confirm: p => `Grant all skills to ${p.name}?\n\nInserts every skill in the bundled catalog (145 skills, captured from a fully-unlocked character) as {SkillPointsSpent: 1} in ${p.name}'s FLevelComponent.ModuleData. Existing skill entries are preserved. Does not touch the skill-point pool. Offline-only.`,
+    run: p => grantAllSkills(p.account_id) },
+  { id: 'grant-all-tech', group: 'Progression', label: 'Grant All Tech Recipes', icon: 'BookOpenCheck', offlineOnly: true,
+    rowNote: 'Marks every buildable patent + crafting recipe + starter group as Purchased on the character\u2019s Intel terminal. Existing entries preserved. Does not add Intel points.',
+    confirm: p => `Grant all tech recipes to ${p.name}?\n\nInserts every ItemKey in the bundled catalog (449 tech entries: 42 BLD_*, 44 DA_GRP_*, 363 RCP_*, captured from a fully-unlocked character) as {UnlockedState: "Purchased"} in ${p.name}'s m_TechKnowledgeData. Existing entries are preserved. Does not touch the Intel-points balance. Offline-only.`,
+    run: p => grantAllTech(p.account_id) },
 
   // ----- Items -----
   { id: 'give-item',      group: 'Items', label: 'Give Item', icon: 'PackagePlus', custom: 'give-item',
@@ -922,11 +930,11 @@ function ActionRow({ def, player, busy, stats, open, danger, onToggle, runAction
         onClick={onToggle}
         title={def.liveOnly ? 'Requires player to be online' : def.offlineOnly ? 'Requires player to be offline — the game caches this value in memory while online and overwrites it on logout' : undefined}>
         <Icon name={def.icon} size={14} className={`shrink-0 ${danger ? 'text-error' : 'text-text-dim'}`} />
-        <span className="flex-1 min-w-0 truncate font-medium">{def.label}</span>
+        <span className="shrink-0 font-medium">{def.label}</span>
         {def.rowNote && (
-          <span className="shrink-0 hidden sm:flex items-center gap-1.5 text-xs">
-            <span className="text-text-dim">---</span>
-            <span className="italic text-white">{def.rowNote}</span>
+          <span className="flex-1 min-w-0 hidden sm:flex items-center gap-1.5 text-xs">
+            <span className="shrink-0 text-text-dim">---</span>
+            <span className="min-w-0 truncate italic text-white">{def.rowNote}</span>
           </span>
         )}
         {def.liveOnly && (

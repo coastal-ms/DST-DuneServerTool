@@ -1823,6 +1823,27 @@ export function skipTutorial(accountId: number) {
   })
 }
 
+// Marks every skill in Dune Awakening's static skill catalog (145 tag keys,
+// bundled at app/data/dune-skills-catalog.json) as unlocked (SkillPointsSpent=1)
+// on the character. Existing skill entries are preserved verbatim. Does NOT
+// touch the skill-point pool. Offline-only.
+export function grantAllSkills(accountId: number) {
+  return api<WriteResult>('/api/gameplay/players/grant-all-skills', {
+    method: 'POST', body: JSON.stringify({ account_id: accountId }),
+  })
+}
+
+// Marks every ItemKey in Dune Awakening's static tech catalog (449 keys:
+// BLD_* buildable patents, DA_GRP_* starter groups, RCP_* crafting recipes,
+// bundled at app/data/dune-tech-catalog.json) as Purchased on the character's
+// TechKnowledge. Existing entries preserved. Does NOT touch Intel points.
+// Offline-only.
+export function grantAllTech(accountId: number) {
+  return api<WriteResult>('/api/gameplay/players/grant-all-tech', {
+    method: 'POST', body: JSON.stringify({ account_id: accountId }),
+  })
+}
+
 // Journey Nodes browser — reads every journey_story_node row for the account.
 export interface JourneyNode {
   node_id: string

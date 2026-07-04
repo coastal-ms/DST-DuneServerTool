@@ -467,6 +467,47 @@ Register-DuneRoute -Method POST -Path '/api/gameplay/players/reset-job-skills' -
     }
 }
 
+# POST /api/gameplay/players/grant-all-skills  { account_id }
+# Marks every skill in the bundled catalog (145 static keys) as unlocked
+# (SkillPointsSpent=1) on the character. Existing entries preserved. Does
+# NOT touch the character's skill-point pool. Offline-only.
+Register-DuneRoute -Method POST -Path '/api/gameplay/players/grant-all-skills' -Handler {
+    param($req, $res, $routeParams, $body)
+    try {
+        $acc = Get-DuneBodyInt -Body $body -Name 'account_id'
+        if ($null -eq $acc -or $acc -le 0) { Write-DuneError -Response $res -Status 400 -Message 'account_id is required.'; return }
+        Invoke-DunePlayerWriteRoute -Response $res -Action {
+            param($ip)
+            $off = Test-DunePlayerOfflineByAccount -Ip $ip -AccountId $acc
+            if (-not $off.ok) { return @{ ok = $false; error = "Player must be offline to grant all skills. $($off.reason)" } }
+            Invoke-DunePlayerGrantAllSkills -Ip $ip -AccountId $acc
+        }
+    } catch {
+        Write-DuneError -Response $res -Status 500 -Message "Grant all skills failed: $($_.Exception.Message)"
+    }
+}
+
+# POST /api/gameplay/players/grant-all-tech  { account_id }
+# Marks every ItemKey in the bundled catalog (449 static keys: BLD_* patents,
+# DA_GRP_* starter groups, RCP_* recipes) as Purchased on the character's
+# TechKnowledge. Existing entries preserved. Does NOT touch Intel points.
+# Offline-only.
+Register-DuneRoute -Method POST -Path '/api/gameplay/players/grant-all-tech' -Handler {
+    param($req, $res, $routeParams, $body)
+    try {
+        $acc = Get-DuneBodyInt -Body $body -Name 'account_id'
+        if ($null -eq $acc -or $acc -le 0) { Write-DuneError -Response $res -Status 400 -Message 'account_id is required.'; return }
+        Invoke-DunePlayerWriteRoute -Response $res -Action {
+            param($ip)
+            $off = Test-DunePlayerOfflineByAccount -Ip $ip -AccountId $acc
+            if (-not $off.ok) { return @{ ok = $false; error = "Player must be offline to grant all tech recipes. $($off.reason)" } }
+            Invoke-DunePlayerGrantAllTech -Ip $ip -AccountId $acc
+        }
+    } catch {
+        Write-DuneError -Response $res -Status 500 -Message "Grant all tech recipes failed: $($_.Exception.Message)"
+    }
+}
+
 # POST /api/gameplay/players/set-starter-class  { account_id, job }
 # Offline-only: same FLevelComponent RAM-authority issue as unlock-trainer.
 Register-DuneRoute -Method POST -Path '/api/gameplay/players/set-starter-class' -Handler {

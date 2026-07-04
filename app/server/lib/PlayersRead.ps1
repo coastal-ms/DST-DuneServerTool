@@ -141,6 +141,56 @@ function Get-DuneNpeCompletionNodes {
     return $script:DuneNpeCompletionNodes
 }
 
+# Skills catalog — every skill tag key on a fully-unlocked character (145 keys,
+# format "(TagName=\"Skills.Path.Name\")"). Bundled because skill IDs are static
+# game content: same catalog for every character in every self-hosted server.
+# Used by Grant All Skills to insert {SkillPointsSpent:1} for each missing key.
+$script:DuneSkillsCatalog = $null
+
+function _Load-DuneSkillsCatalog {
+    if ($null -ne $script:DuneSkillsCatalog) { return }
+    $script:DuneSkillsCatalog = @()
+    $p = _Resolve-DuneCatalog 'dune-skills-catalog.json'
+    if (-not $p) { return }
+    try {
+        $json = Get-Content -LiteralPath $p -Raw | ConvertFrom-Json
+        if ($json.PSObject.Properties['keys']) {
+            $script:DuneSkillsCatalog = @($json.keys | ForEach-Object { [string]$_ } | Where-Object { $_ })
+        }
+    } catch {}
+}
+
+function Get-DuneSkillsCatalog {
+    _Load-DuneSkillsCatalog
+    return $script:DuneSkillsCatalog
+}
+
+# Tech catalog — every ItemKey a fully-unlocked character has Purchased in
+# TechKnowledgePlayerComponent.m_TechKnowledgeData (449 keys: BLD_* buildable
+# patents, DA_GRP_* starter groups, RCP_* crafting recipes). Bundled because
+# tech IDs are static game content: same catalog for every character in every
+# self-hosted server. Used by Grant All Tech Recipes to append missing keys as
+# {ItemKey, bIsNewEntry:true, UnlockedState:"Purchased"}.
+$script:DuneTechCatalog = $null
+
+function _Load-DuneTechCatalog {
+    if ($null -ne $script:DuneTechCatalog) { return }
+    $script:DuneTechCatalog = @()
+    $p = _Resolve-DuneCatalog 'dune-tech-catalog.json'
+    if (-not $p) { return }
+    try {
+        $json = Get-Content -LiteralPath $p -Raw | ConvertFrom-Json
+        if ($json.PSObject.Properties['item_keys']) {
+            $script:DuneTechCatalog = @($json.item_keys | ForEach-Object { [string]$_ } | Where-Object { $_ })
+        }
+    } catch {}
+}
+
+function Get-DuneTechCatalog {
+    _Load-DuneTechCatalog
+    return $script:DuneTechCatalog
+}
+
 function Get-DuneTagsData {
     _Load-DuneTagsData
     return $script:DuneTagsData
