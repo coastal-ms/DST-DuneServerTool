@@ -1077,7 +1077,7 @@ COMMIT;
 # for the chosen faction (or both). Offline-only — the game holds this state in
 # RAM while connected. $Faction = 'atreides' | 'harkonnen' | 'both'.
 function Invoke-DunePlayerResetFaction {
-    param([string]$Ip, [long]$AccountId, [string]$Faction)
+    param([string]$Ip, [long]$AccountId, [string]$Faction, [bool]$Deep = $false)
     if ($AccountId -le 0) { return @{ ok = $false; error = 'account_id is required.' } }
     $fl = ([string]$Faction).ToLowerInvariant()
     if ($fl -ne 'atreides' -and $fl -ne 'harkonnen' -and $fl -ne 'both') {
@@ -1089,6 +1089,113 @@ function Invoke-DunePlayerResetFaction {
 
     $factions = if ($fl -eq 'both') { @('Atreides','Harkonnen') } else { @((Get-Culture).TextInfo.ToTitleCase($fl)) }
     $charScope = "character_id IN (SELECT id FROM dune.player_state WHERE account_id=$AccountId::bigint)"
+    $isBoth = ($fl -eq 'both')
+
+    # Build the tag LIKE patterns for the wipe. The wildcard %Atreides%/%Harkonnen%/
+    # %Atre%/%Hark% patterns handle per-faction suffixed tags (e.g.
+    # R*C*Completed_Atreides, Fac_Atre_*, DialogueFlags.*Atre*).
+    # Single-faction scope: only wipe tags that clearly belong to that faction.
+    # 'both' scope: also wipe the shared / neutral faction-storyline markers below.
+    $likes = [System.Collections.Generic.List[string]]::new()
+    [void]$likes.Add("tag LIKE 'Faction.%'")
+    [void]$likes.Add("tag LIKE 'FactionStoryline%'")
+    [void]$likes.Add("tag LIKE 'DialogueFlags.Factions.%'")
+    [void]$likes.Add("tag LIKE 'Contract.Faction.%'")
+    [void]$likes.Add("tag = 'Journey.LandsraadContractsUnlocked'")
+    [void]$likes.Add("tag LIKE 'Contract.Tracking.%FactionUnlocked'")
+    [void]$likes.Add("tag LIKE 'Contract.Tracking.%RecruitmentCompleted'")
+    if ($isBoth) {
+        [void]$likes.Add("tag LIKE '%Atreides%'")
+        [void]$likes.Add("tag LIKE '%Harkonnen%'")
+        [void]$likes.Add("tag LIKE '%Atre%'")
+        [void]$likes.Add("tag LIKE '%Hark%'")
+    } else {
+        # single-faction: match the specific faction's tag variants
+        if ($fl -eq 'atreides') {
+            [void]$likes.Add("tag LIKE '%Atreides%'")
+            [void]$likes.Add("tag LIKE '%Atre%'")
+        } else {
+            [void]$likes.Add("tag LIKE '%Harkonnen%'")
+            [void]$likes.Add("tag LIKE '%Hark%'")
+        }
+    }
+    # --- FactionStory rank grid + milestones (R*C*Completed, SentToMeetAndreaGanan,
+    #     TalkedToDeserter, TestOfLoyaltyCompleted, etc.). Per-faction rows are
+    #     suffixed (R*C*Completed_Atreides / _Harkonnen) and already covered above;
+    #     the un-suffixed neutral shared markers here are only safe on 'both'.
+    [void]$likes.Add("tag LIKE 'Contract.Tracking.FactionStory.%'")
+    # --- Named faction storyline beats (FindSkorda, RecoverSpyReport). A player is on
+    #     only one faction path at a time, so these are safe to wipe on any scope.
+    [void]$likes.Add("tag LIKE 'Contract.Tracking.Completed.FactionStoryline.%'")
+    # --- MaasKharet faction-agent contracts + dialogue + locations + lore.
+    [void]$likes.Add("tag LIKE 'Contract.Tracking.Completed.MaasKharet%'")
+    [void]$likes.Add("tag LIKE 'Contract.Target.Dialogue.FactionRank%'")
+    [void]$likes.Add("tag LIKE 'Contract.Target.Location.MaasKharet%'")
+    [void]$likes.Add("tag LIKE 'Contract.Target.Lore.MaasKharet%'")
+    # --- Rank 4 Arrakeen Social Hub banquet sub-state (BlackMarketVendorInterrogated,
+    #     WarehouseInvestigated). Shared faction-milestone dialogue.
+    [void]$likes.Add("tag LIKE 'Contract.Target.Dialogue.Arrakeen_Social_Hub.Banquet.%'")
+    # --- Faction-recruiter introduction flags. Atreides = ThufirHawat; Harkonnen =
+    #     PiterDeVries. MaasKharet is the shared cross-faction agent. Match by name
+    #     so single-faction scope only clears the matching recruiter.
+    if ($isBoth -or $fl -eq 'atreides') {
+        [void]$likes.Add("tag = 'DialogueFlags.IntroductionDone.ThufirHawat'")
+    }
+    if ($isBoth -or $fl -eq 'harkonnen') {
+        [void]$likes.Add("tag = 'DialogueFlags.IntroductionDone.PiterDeVries'")
+    }
+    [void]$likes.Add("tag = 'DialogueFlags.IntroductionDone.MaasKharet'")
+    [void]$likes.Add("tag = 'Contract.Tracking.FactionsKytheriaInvestigationCompleted'")
+    $likesJoined = ($likes -join ' OR ')
+    # Reset ClimbTheRanks journey nodes to incomplete (NOT delete — deleting stops
+    # the game re-offering them, so the recruiter quest can't be replayed). Also
+    # clear reveal_condition_state — otherwise the STORY tab still renders every
+    # previously-revealed chapter as an active quest card (root cause of the stuck
+    # "Hunting Skorda" and similar cards observed on live characters).
+    # Deep reset — optional. Wipe faction-related Dunipedia lore fragments so the
+    # character reads as if the faction storyline was never encountered. Neutral
+    # world lore (ManualOfTheFriendlyDesert, WarForArrakis.Bandits) is preserved.
+    $deepPatterns = [System.Collections.Generic.List[string]]::new()
+    if ($Deep) {
+        if ($isBoth -or $fl -eq 'atreides') {
+            [void]$deepPatterns.Add("story_node_id LIKE 'DA_Dunipedia_KnownUniverse.TheRiseOfHouseAtreides%'")
+            [void]$deepPatterns.Add("story_node_id LIKE 'DA_Dunipedia_WarForArrakis.Ariste Atreides%'")
+            [void]$deepPatterns.Add("story_node_id LIKE 'DA_Dunipedia_WarForArrakis.House Atreides%'")
+            [void]$deepPatterns.Add("story_node_id LIKE 'DA_Dunipedia_WarForArrakis.Leto Atreides%'")
+            [void]$deepPatterns.Add("story_node_id LIKE 'DA_Dunipedia_WarForArrakis.Paul Atreides%'")
+            [void]$deepPatterns.Add("story_node_id LIKE 'DA_Dunipedia_WarForArrakis.Jessica%'")
+        }
+        if ($isBoth -or $fl -eq 'harkonnen') {
+            [void]$deepPatterns.Add("story_node_id LIKE 'DA_Dunipedia_WarForArrakis.Baron Vladimir Harkonnen%'")
+            [void]$deepPatterns.Add("story_node_id LIKE 'DA_Dunipedia_WarForArrakis.Feyd Rautha Harkonnen%'")
+            [void]$deepPatterns.Add("story_node_id LIKE 'DA_Dunipedia_WarForArrakis.Glossu Rabban Harkonnen%'")
+            [void]$deepPatterns.Add("story_node_id LIKE 'DA_Dunipedia_WarForArrakis.House Harkonnen%'")
+        }
+    }
+    $hasDeep = ($Deep -and $deepPatterns.Count -gt 0)
+    $deepJoined = if ($hasDeep) { ($deepPatterns -join ' OR ') } else { '' }
+
+    # --- Pre-count what will change, for a useful success message. Character
+    #     name too, so the toast reads naturally.
+    $loreCountSql = if ($hasDeep) {
+        "(SELECT COUNT(*) FROM dune.journey_story_node WHERE $charScope AND ($deepJoined))"
+    } else { '0::bigint' }
+    $countSql = @"
+SELECT
+  (SELECT COALESCE(properties->'CharacterProfileComponent'->>'m_CharacterName','account '||$AccountId::text) FROM dune.actors WHERE id=$controllerID::bigint) AS name,
+  (SELECT COUNT(*) FROM dune.player_tags WHERE $charScope AND ($likesJoined)) AS tag_n,
+  (SELECT COUNT(*) FROM dune.journey_story_node WHERE $charScope AND story_node_id LIKE 'DA_FQ_ClimbTheRanks%') AS node_n,
+  $loreCountSql AS lore_n
+"@
+    $cr = Invoke-DuneSqlQuery -Ip $Ip -Sql $countSql -ReadOnly $true -MaxRows 1 -TimeoutSec 30
+    $tagN = 0; $nodeN = 0; $loreN = 0; $playerName = "account $AccountId"
+    if ($cr.ok -and $cr.rows -and $cr.rows.Count -gt 0) {
+        $row0 = $cr.rows[0]
+        if ($row0.name) { $playerName = [string]$row0.name }
+        $tagN  = [int]$row0.tag_n
+        $nodeN = [int]$row0.node_n
+        $loreN = [int]$row0.lore_n
+    }
 
     $sb = [System.Text.StringBuilder]::new()
     [void]$sb.AppendLine('BEGIN;')
@@ -1102,20 +1209,11 @@ function Invoke-DunePlayerResetFaction {
     [void]$sb.AppendLine([string]::Format($script:DuneFactionComponentRepSqlTpl, $controllerID, 'Atreides', 0))
     [void]$sb.AppendLine([string]::Format($script:DuneFactionComponentRepSqlTpl, $controllerID, 'Harkonnen', 0))
     [void]$sb.AppendLine("SELECT dune.change_player_faction($controllerID::bigint, 3::smallint, 3::smallint, NOW()::timestamp);")
-    # remove every faction-related tag (full + abbreviated names, recruitment, alignment)
-    $likes = @(
-        "tag LIKE 'Faction.%'", "tag LIKE 'FactionStoryline%'",
-        "tag LIKE 'DialogueFlags.Factions.%'", "tag LIKE 'Contract.Faction.%'",
-        "tag LIKE '%Atreides%'", "tag LIKE '%Harkonnen%'",
-        "tag LIKE '%Atre%'", "tag LIKE '%Hark%'",
-        "tag = 'Journey.LandsraadContractsUnlocked'",
-        "tag LIKE 'Contract.Tracking.%FactionUnlocked'",
-        "tag LIKE 'Contract.Tracking.%RecruitmentCompleted'"
-    ) -join ' OR '
-    [void]$sb.AppendLine("DELETE FROM dune.player_tags WHERE $charScope AND ($likes);")
-    # reset ClimbTheRanks journey nodes to incomplete (NOT delete — deleting stops
-    # the game re-offering them, so the recruiter quest can't be replayed)
-    [void]$sb.AppendLine("UPDATE dune.journey_story_node SET complete_condition_state='false'::jsonb, has_pending_reward=false WHERE $charScope AND story_node_id LIKE 'DA_FQ_ClimbTheRanks%';")
+    [void]$sb.AppendLine("DELETE FROM dune.player_tags WHERE $charScope AND ($likesJoined);")
+    [void]$sb.AppendLine("UPDATE dune.journey_story_node SET complete_condition_state='false'::jsonb, reveal_condition_state='false'::jsonb, has_pending_reward=false WHERE $charScope AND story_node_id LIKE 'DA_FQ_ClimbTheRanks%';")
+    if ($hasDeep) {
+        [void]$sb.AppendLine("UPDATE dune.journey_story_node SET complete_condition_state='false'::jsonb, reveal_condition_state='false'::jsonb, has_pending_reward=false WHERE $charScope AND ($deepJoined);")
+    }
     # Remove lingering faction-storyline contract ITEMS (Fac_Atre_* / Fac_Hark_*) from
     # the pawn's contract inventory (inventory_type 29). The rep/tag/journey reset above
     # does NOT touch these item rows, so without this the completed-but-uncleared faction
@@ -1134,7 +1232,9 @@ function Invoke-DunePlayerResetFaction {
         Invoke-DuneSqlQuery -Ip $Ip -Sql 'ROLLBACK;' -ReadOnly $false -MaxRows 1 -TimeoutSec 5 | Out-Null
         return @{ ok = $false; error = "reset-faction tx: $($r.error)" }
     }
-    return @{ ok = $true; message = "Reset faction for account $AccountId - rep zeroed (table + FactionPlayerComponent), alignment cleared, faction tags removed, faction contract items + tracked card cleared, ClimbTheRanks reset to incomplete. Takes effect on next login."; faction = $fl }
+    $lorePart = if ($hasDeep) { ", cleared $loreN Dunipedia lore node(s)" } else { '' }
+    $msg = "Reset faction for '$playerName' ($fl): removed $tagN tag(s), reset $nodeN ClimbTheRanks node(s)$lorePart. Takes effect on next login."
+    return @{ ok = $true; message = $msg; faction = $fl; deep = [bool]$Deep; tags = $tagN; nodes = $nodeN; lore = $loreN }
 }
 
 function Invoke-DunePlayerApplyProgressionPreset {

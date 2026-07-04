@@ -11,6 +11,16 @@ Patch releases within a major series are rolled up under the major's entry
 on GitHub still exist for each individual release; the consolidated entries
 here cover everything those tags shipped.
 
+## [12.16.6] - 2026-07-04
+
+### Fixed
+
+- **Reset Faction now actually resets faction state.** It was only clearing a small subset of what "reset faction" implies — leaving hundreds of faction-related tags and 80+ revealed ClimbTheRanks journey nodes on the character. Concretely, it now also (a) sets `reveal_condition_state = false` on all `DA_FQ_ClimbTheRanks%` journey nodes (previously only `complete_condition_state` was cleared, so the STORY tab still rendered every previously-revealed chapter as an active quest card — this was the root cause of a multi-day stuck "Hunting Skorda" contract card observed live), and (b) deletes six additional tag families that are all faction storyline state: `Contract.Tracking.FactionStory.*` (rank grid + milestones), `Contract.Tracking.Completed.FactionStoryline.*`, `Contract.Tracking.Completed.MaasKharet*`, `Contract.Target.Dialogue.FactionRank*`, `Contract.Target.Location/Lore.MaasKharet*`, and `DialogueFlags.Factions.*` / `DialogueFlags.IntroductionDone.ThufirHawat`+`PiterDeVries`+`MaasKharet`. Verified live against a stuck faction storyline. Faction scope (`atreides` / `harkonnen` / `both`) is preserved — single-faction reset is conservative and only wipes obvious per-faction tags; `both` wipes the shared markers as well. Success toast now reports counts (tags removed, journey nodes reset, lore cleared).
+
+### Added
+
+- **Reset Faction → Deep reset checkbox.** New optional flag on the Reset Faction action. When enabled, ALSO wipes faction-related Dunipedia lore fragments the character unlocked (House Atreides / House Harkonnen / TheRiseOfHouseAtreides / Ariste / Baron / Feyd / Glossu / Leto / Paul / Jessica sub-trees). Neutral world lore (`ManualOfTheFriendlyDesert`, `WarForArrakis.Bandits`) is preserved. Default OFF — opt-in for users who want a truly "never played this faction" state including codex.
+
 ## [12.16.5] - 2026-07-04
 
 ### Fixed
