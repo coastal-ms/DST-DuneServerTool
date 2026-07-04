@@ -1574,7 +1574,7 @@ SELECT
 # while connected. Unions with whatever the fresh character already has so its
 # starter unlocks are never lost.
 function Invoke-DunePlayerRestoreBuilds {
-    param([string]$Ip, [string]$Name)
+    param([string]$Ip, [string]$Name, [bool]$SkipNpe = $false)
     if (-not $Name) { return @{ ok = $false; error = 'name is required.' } }
     $snap = @(Get-DuneFreshStartSnapshots | Where-Object { [string]$_.name -eq $Name })
     if ($snap.Count -eq 0) { return @{ ok = $false; error = "no saved snapshot for '$Name' - snapshot the character before deleting it." } }
@@ -1630,18 +1630,21 @@ function Invoke-DunePlayerRestoreBuilds {
         Invoke-DuneSqlQuery -Ip $Ip -Sql 'ROLLBACK;' -ReadOnly $false -MaxRows 1 -TimeoutSec 5 | Out-Null
         return @{ ok = $false; error = "restore builds tx: $($r.error)" }
     }
-    # Fresh Start's whole premise is "you already played once and are starting
-    # over" - there's no reason a restored character should get bounced back
-    # into the tutorial with Advanced buildables gated. Apply the same 3-state
-    # transition as the standalone Skip Tutorial action. Best-effort: a failure
-    # here shouldn't roll back the successful build restore.
-    $npeRes = Invoke-DunePlayerMarkNpeCompleted -Ip $Ip -CharacterId $charID
-    $npeMsg = if ($npeRes.ok) { ' Also marked NPE as completed so Advanced buildables (Fabricator, etc.) unlock immediately.' } else { " (NPE mark skipped: $($npeRes.error))" }
+    # Optional: also mark the tutorial as complete on restore. Used by the
+    # "Fresh Start + No NPE" variant. Best-effort: a failure here doesn't roll
+    # back the successful build restore.
+    $npeMsg = ''
+    $npeMarked = $false
+    if ($SkipNpe) {
+        $npeRes = Invoke-DunePlayerMarkNpeCompleted -Ip $Ip -CharacterId $charID
+        $npeMarked = [bool]$npeRes.ok
+        $npeMsg = if ($npeRes.ok) { ' Also marked NPE as completed so Advanced buildables (Fabricator, etc.) unlock immediately.' } else { " (NPE mark skipped: $($npeRes.error))" }
+    }
     $cosMsg = if ($cosmetics) { ' + cosmetics' } else { '' }
     return @{
         ok = $true
         message = "Restored $($filteredSets.Count) purchased set(s) + $($filteredPieces.Count) purchased piece(s)$cosMsg onto '$Name'. Faction sets, tutorial patents, and tech-tree unlocks will re-populate as the character progresses. Takes effect on next login.$npeMsg"
-        sets = $filteredSets.Count; pieces = $filteredPieces.Count; npe_marked = [bool]$npeRes.ok
+        sets = $filteredSets.Count; pieces = $filteredPieces.Count; npe_marked = $npeMarked
     }
 }
 
@@ -1686,6 +1689,129 @@ function Invoke-DunePlayerMarkNpeCompleted {
         message = "Marked NPE completed on character $CharacterId - applied NPE.HasCompletedNPE tag and $($nodes.Count) tutorial journey node(s). Advanced buildable patents unlock on next login."
         tag_added = $true
         nodes_touched = $nodes.Count
+    }
+}
+
+# Grant every skill in the bundled catalog on the target character. Writes
+# jsonb_set for each catalog key with {"SkillPointsSpent":1} onto the pawn's
+# FLevelComponent[1].ModuleData (keyed via actor_fgl_entities.slot_name='DuneCharacter').
+# Existing entries with SkillPointsSpent>=1 are skipped (idempotent). Does NOT
+# touch the character's skill-point pool. Offline-only. Same catalog for every
+# character (static game content, bundled).
+function Invoke-DunePlayerGrantAllSkills {
+    param([string]$Ip, [long]$AccountId)
+    if ($AccountId -le 0) { return @{ ok = $false; error = 'account_id is required.' } }
+    $pawnID = Get-DunePlayerPawnFromAccount -Ip $Ip -AccountId $AccountId
+    if ($pawnID -le 0) { return @{ ok = $false; error = "no pawn for account $AccountId." } }
+
+    $keys = @(Get-DuneSkillsCatalog)
+    if ($keys.Count -eq 0) {
+        return @{ ok = $false; error = 'skills catalog is empty (app/data/dune-skills-catalog.json missing?).' }
+    }
+
+    # Build one transaction that jsonb_set each catalog key onto the character's
+    # ModuleData. The guard `COALESCE(...->'SkillPointsSpent')::int < 1` makes
+    # each UPDATE idempotent - already-unlocked keys are skipped.
+    $sb = [System.Text.StringBuilder]::new()
+    [void]$sb.AppendLine('BEGIN;')
+    foreach ($sk in $keys) {
+        # Skill key on-disk shape is a full tag like `(TagName="Skills.Ability.X")`.
+        # Catalog stores these verbatim, so no wrapping needed - just SQL-escape.
+        $safeKey = ConvertTo-DuneSqlString $sk
+        [void]$sb.AppendLine(@"
+UPDATE dune.fgl_entities fe
+SET components = jsonb_set(
+    fe.components,
+    ARRAY['FLevelComponent','1','ModuleData','$safeKey'],
+    '{"SkillPointsSpent": 1}'::jsonb,
+    true)
+WHERE fe.entity_id = (
+    SELECT entity_id FROM dune.actor_fgl_entities
+    WHERE actor_id = $pawnID::bigint AND slot_name = 'DuneCharacter'
+)
+AND COALESCE(
+    (fe.components->'FLevelComponent'->1->'ModuleData'->'$safeKey'->>'SkillPointsSpent')::int,
+    0
+) < 1;
+"@)
+    }
+    [void]$sb.AppendLine('COMMIT;')
+
+    # -Bulk streams SQL through ssh stdin so the ~60 KB payload (145 UPDATEs)
+    # doesn't hit the Windows ~32 KB command-line limit that Start-Process
+    # enforces ("The filename or extension is too long").
+    $r = Invoke-DuneSqlQuery -Ip $Ip -Sql $sb.ToString() -ReadOnly $false -MaxRows 1 -TimeoutSec 120 -Bulk
+    if (-not $r.ok) {
+        Invoke-DuneSqlQuery -Ip $Ip -Sql 'ROLLBACK;' -ReadOnly $false -MaxRows 1 -TimeoutSec 5 | Out-Null
+        return @{ ok = $false; error = "grant all skills tx: $($r.error)" }
+    }
+    return @{
+        ok = $true
+        message = "Granted every skill ($($keys.Count) total) on the character (existing entries preserved). Takes effect on next login."
+        catalog_size = $keys.Count
+    }
+}
+
+# Grant every tech ItemKey in the bundled catalog as Purchased on the target
+# character's Intel terminal (TechKnowledgePlayerComponent.m_TechKnowledge.m_TechKnowledgeData).
+# Existing entries are preserved verbatim (their UnlockedState is NOT downgraded).
+# Missing keys are appended as {ItemKey, bIsNewEntry:true, UnlockedState:"Purchased"}.
+# Does NOT touch m_TechKnowledgePoints. Offline-only. Same catalog for every character.
+function Invoke-DunePlayerGrantAllTech {
+    param([string]$Ip, [long]$AccountId)
+    if ($AccountId -le 0) { return @{ ok = $false; error = 'account_id is required.' } }
+    $pawnID = Get-DunePlayerPawnFromAccount -Ip $Ip -AccountId $AccountId
+    if ($pawnID -le 0) { return @{ ok = $false; error = "no pawn for account $AccountId." } }
+
+    $itemKeys = @(Get-DuneTechCatalog)
+    if ($itemKeys.Count -eq 0) {
+        return @{ ok = $false; error = 'tech catalog is empty (app/data/dune-tech-catalog.json missing?).' }
+    }
+    $catalogArr = ConvertTo-DunePgTextArray $itemKeys
+    $path = "'{TechKnowledgePlayerComponent,m_TechKnowledge,m_TechKnowledgeData}'"
+
+    # Single UPDATE in a transaction: append every catalog ItemKey that is NOT
+    # already present in the existing array as a Purchased entry. Nested
+    # jsonb_set + COALESCE seeds any missing intermediate paths so this works
+    # on a brand-new character too.
+    $sb = [System.Text.StringBuilder]::new()
+    [void]$sb.AppendLine('BEGIN;')
+    [void]$sb.AppendLine(@"
+UPDATE dune.actors a
+SET properties = jsonb_set(
+    jsonb_set(
+        jsonb_set(
+            COALESCE(a.properties, '{}'::jsonb),
+            '{TechKnowledgePlayerComponent}',
+            COALESCE(a.properties -> 'TechKnowledgePlayerComponent', '{}'::jsonb),
+            true),
+        '{TechKnowledgePlayerComponent,m_TechKnowledge}',
+        COALESCE(a.properties #> '{TechKnowledgePlayerComponent,m_TechKnowledge}', '{}'::jsonb),
+        true),
+    $path,
+    COALESCE(a.properties #> $path, '[]'::jsonb) || COALESCE((
+        SELECT jsonb_agg(jsonb_build_object('ItemKey', k, 'bIsNewEntry', true, 'UnlockedState', 'Purchased'))
+        FROM unnest($catalogArr) AS k
+        WHERE k NOT IN (
+            SELECT e->>'ItemKey'
+            FROM jsonb_array_elements(COALESCE(a.properties #> $path, '[]'::jsonb)) e
+        )
+    ), '[]'::jsonb),
+    true)
+WHERE a.id = $pawnID::bigint;
+"@)
+    [void]$sb.AppendLine('COMMIT;')
+
+    # -Bulk for the ~40 KB payload (449 ItemKeys inline) - see grant-all-skills.
+    $r = Invoke-DuneSqlQuery -Ip $Ip -Sql $sb.ToString() -ReadOnly $false -MaxRows 1 -TimeoutSec 120 -Bulk
+    if (-not $r.ok) {
+        Invoke-DuneSqlQuery -Ip $Ip -Sql 'ROLLBACK;' -ReadOnly $false -MaxRows 1 -TimeoutSec 5 | Out-Null
+        return @{ ok = $false; error = "grant all tech tx: $($r.error)" }
+    }
+    return @{
+        ok = $true
+        message = "Granted every tech recipe ($($itemKeys.Count) total) on the character (existing entries preserved, Intel points untouched). Takes effect on next login."
+        catalog_size = $itemKeys.Count
     }
 }
 

@@ -11,6 +11,24 @@ Patch releases within a major series are rolled up under the major's entry
 on GitHub still exist for each individual release; the consolidated entries
 here cover everything those tags shipped.
 
+## [12.16.8] - 2026-07-04
+
+### Added
+
+- **Fresh Start + No NPE** — new *Players → Progression* action. Same snapshot/restore flow as regular Fresh Start (only purchased CHOAM/MTX sets + pieces + cosmetics are carried across), except the restore step also marks the tutorial as completed so Advanced buildables (Fabricator, etc.) unlock immediately. For admins who want the character to skip New Player content on the way back in.
+- **Grant All Skills** — one-click that marks every skill in the game as unlocked (`SkillPointsSpent = 1` per skill) on the character. 145 skills, captured live from a fully-unlocked character. Existing skills preserved. Does not touch the skill-point pool. Offline-only.
+- **Grant All Tech Recipes** — one-click that marks every buildable patent + crafting recipe + starter group as Purchased on the character's Intel terminal. 449 entries (42 BLD_*, 44 DA_GRP_*, 363 RCP_*), captured live. Existing entries preserved. Does not touch the Intel balance. Offline-only.
+
+### Changed
+
+- **Delete Account (permanent)** now also cleans up ownership on world actors (vehicles, totems, bases). Three-rule split: (a) actors the deleted account **owned** (highest rank on the ACL) → the whole ACL is wiped and the custom name is reset, so the actor becomes truly ownerless and anyone can Claim Ownership normally; old co-owners lose access and the new claimant re-grants perms if they want them back. (b) actors the deleted account was only a **co-owner** on → only the deleted account's rank row is removed; the real owner + other co-owners keep their access. (c) if the deleted account had no rank rows at all, nothing changes. Previously, stale rank rows kept the old character on the ACL and blocked "Claim Ownership" for the new character.
+- **Fresh Start** (existing) no longer marks the tutorial as completed automatically. The regular Fresh Start restore is now cosmetics + purchases only; use the new *Fresh Start + No NPE* variant to also skip the tutorial.
+- **Progression action row layout** now pins the label at its natural width and lets the inline description occupy the remaining space with ellipsis-truncation. Long descriptions no longer squeeze labels out of the row.
+
+### Removed
+
+- Standalone **Skip Tutorial** action. The NPE-completion capability lives on the *Fresh Start + No NPE* variant instead.
+
 ## [12.16.7] - 2026-07-04
 
 ### Added
