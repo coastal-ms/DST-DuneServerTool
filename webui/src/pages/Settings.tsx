@@ -11,6 +11,7 @@ import { PublicIpCard } from './settings/PublicIpCard'
 import { RemoteAccessCard } from './settings/RemoteAccessCard'
 import { MobileAppCard } from './settings/MobileAppCard'
 import { FlsTokenCard } from './settings/FlsTokenCard'
+import { FreshStartSnapshotsCard } from './settings/FreshStartSnapshotsCard'
 import { SectionErrorBoundary } from '../components/SectionErrorBoundary'
 
 const FIELDS: {
@@ -735,6 +736,8 @@ export function Settings() {
       <SectionErrorBoundary name="Public IP"><PublicIpCard /></SectionErrorBoundary>
 
       <SectionErrorBoundary name="Server Authorization Token"><FlsTokenCard /></SectionErrorBoundary>
+
+      <SectionErrorBoundary name="Fresh Start snapshots"><FreshStartSnapshotsCard /></SectionErrorBoundary>
 
       {/* --- Database connection (issue #295) --- */}
       <div className="card mb-4 p-6">

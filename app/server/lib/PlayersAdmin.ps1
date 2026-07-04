@@ -62,6 +62,10 @@ function Test-DunePlayerOfflineByController {
 # Same offline check as Test-DunePlayerOffline but resolved from the account id.
 # Lets writes that only know the account (e.g. unlock-trainer) still reject an
 # online player. A missing player_state row is treated as offline.
+#
+# Same offline check as Test-DunePlayerOffline but resolved from the account id.
+# Lets writes that only know the account (e.g. unlock-trainer) still reject an
+# online player. A missing player_state row is treated as offline.
 function Test-DunePlayerOfflineByAccount {
     param([string]$Ip, [long]$AccountId)
     $sql = "SELECT online_status::text AS status FROM dune.player_state WHERE account_id = $AccountId::bigint LIMIT 1;"
@@ -552,49 +556,60 @@ function Invoke-DunePlayerAwardIntel {
 }
 
 # ----- Delete Account (DESTRUCTIVE) --------------------------------------
-# Mirrors db.go cmdDeleteAccount: nukes characters, actors, fgl entities,
-# RMQ traces, and the accounts row in dependency order.
+# ----- Delete Account (matches Funcom's in-game delete + purge) -------------
+# After live-comparing against a real Funcom character-delete-and-purge
+# (2026-07-04), we know the game itself only does two things at purge time:
+#   1. UPDATE the old encrypted_player_state row's character_state = 'Deleted'.
+#      (Keeps the row so the pod doesn't crash on missing FKs; the view
+#      dune.player_state filters WHERE character_state = 'Active' so this
+#      hides the character from every game query that uses the view.)
+#   2. DELETE every permission_actor_rank row where player_id is one of the
+#      old character's controllers AND rank = 1. This strips ownership on
+#      the character's solo-owned vehicles/bases/fiefs (they become abandoned
+#      and claimable by anyone). Co-owner rows (rank >= 2) that the character
+#      held on OTHER players' stuff are LEFT INTACT - Hawk keeps his own
+#      grants on Coastal's shared stuff, etc.
+# The game does NOT delete physical totems, actors, buildings, encrypted_
+# accounts, or any per-player state tables. Those persist. This matches
+# behavior verified live against a fresh backup restore + real delete.
 function Invoke-DunePlayerDeleteAccount {
     param([string]$Ip, [long]$AccountId)
     if ($AccountId -le 0) { return @{ ok = $false; error = 'account_id is required.' } }
-    $resolve = Get-DuneRawFuncomId -Ip $Ip -AccountId $AccountId
-    if (-not $resolve.ok) { return @{ ok = $false; error = $resolve.error } }
-    $funcom = ConvertTo-DuneSqlString $resolve.funcom_id
-
     $sql = @"
 DO `$`$
 DECLARE
     v_account_id bigint := $AccountId;
-    v_funcom text := '$funcom';
+    v_wiped int := 0;
 BEGIN
-    -- character actors
-    DELETE FROM dune.actor_fgl_entities afe
-    USING dune.actors a
-    WHERE afe.actor_id = a.id AND a.owner_account_id = v_account_id;
+    -- Step 1: strip owner grants (rank = 1) held by any actor belonging to
+    -- the account's ACTIVE character(s). Vehicles/bases the character solely
+    -- owned become abandoned and claimable. Co-owner rows survive.
+    WITH deleted AS (
+        DELETE FROM dune.permission_actor_rank par
+        USING dune.actors a, dune.encrypted_player_state eps
+        WHERE a.id = par.player_id
+          AND eps.account_id = v_account_id
+          AND eps.character_state = 'Active'::dune.characterstate
+          AND a.id IN (eps.player_controller_id, eps.player_pawn_id, eps.player_state_id)
+          AND par.rank = 1
+        RETURNING 1
+    )
+    SELECT COUNT(*) INTO v_wiped FROM deleted;
 
-    DELETE FROM dune.fgl_entities fge
-    WHERE fge.entity_id IN (
-        SELECT afe.entity_id FROM dune.actor_fgl_entities afe
-        JOIN dune.actors a ON a.id = afe.actor_id
-        WHERE a.owner_account_id = v_account_id
-    );
-
-    DELETE FROM dune.player_virtual_currency_balances
-    WHERE player_controller_id IN (SELECT id FROM dune.actors WHERE owner_account_id = v_account_id);
-
-    DELETE FROM dune.player_faction_reputation
-    WHERE actor_id IN (SELECT id FROM dune.actors WHERE owner_account_id = v_account_id);
-
-    DELETE FROM dune.player_state
-    WHERE player_pawn_id IN (SELECT id FROM dune.actors WHERE owner_account_id = v_account_id);
-
-    DELETE FROM dune.actors WHERE owner_account_id = v_account_id;
-
-    DELETE FROM dune.accounts WHERE id = v_account_id OR "user" = v_funcom;
+    -- Step 2: soft-delete the character via the game's own characterstate
+    -- enum. The dune.player_state view filters on Active so this hides the
+    -- character from every game query without deleting any rows.
+    UPDATE dune.encrypted_player_state
+       SET character_state = 'Deleted'::dune.characterstate
+     WHERE account_id = v_account_id
+       AND character_state = 'Active'::dune.characterstate;
 END
 `$`$;
 "@
     $r = Invoke-DuneSqlQuery -Ip $Ip -Sql $sql -ReadOnly $false -MaxRows 1 -TimeoutSec 60
     if (-not $r.ok) { return @{ ok = $false; error = $r.error } }
-    return @{ ok = $true; message = "Deleted account $AccountId (funcom $($resolve.funcom_id)) and all associated characters." }
+    return @{
+        ok = $true
+        message = "Deleted account $AccountId's character - matches the game's own delete+purge: character marked Deleted, owner rank rows on their solo-owned vehicles/bases stripped (now claimable). Co-owner grants on other players' stuff left intact. Physical bases/totems/actors persist in the world."
+    }
 }

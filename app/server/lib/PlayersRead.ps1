@@ -141,6 +141,54 @@ function Get-DuneNpeCompletionNodes {
     return $script:DuneNpeCompletionNodes
 }
 
+# Skills catalog — every skill ModuleData key (Skills.Ability.* / Skills.Key.* /
+# Skills.Passive.* etc.) captured live from a fully-unlocked reference character.
+# Applied by Grant All Skills as {"SkillPointsSpent": 1} onto
+# FLevelComponent[1].ModuleData. Static content — same set for every character
+# in Dune Awakening.
+$script:DuneSkillsCatalog = $null
+
+function _Load-DuneSkillsCatalog {
+    if ($null -ne $script:DuneSkillsCatalog) { return }
+    $script:DuneSkillsCatalog = @()
+    $p = _Resolve-DuneCatalog 'dune-skills-catalog.json'
+    if (-not $p) { return }
+    try {
+        $json = Get-Content -LiteralPath $p -Raw | ConvertFrom-Json
+        if ($json.keys) {
+            $script:DuneSkillsCatalog = @($json.keys | ForEach-Object { [string]$_ } | Where-Object { $_ })
+        }
+    } catch {}
+}
+
+function Get-DuneSkillsCatalog {
+    _Load-DuneSkillsCatalog
+    return $script:DuneSkillsCatalog
+}
+
+# Tech catalog — every ItemKey (BLD_* / RCP_* / DA_GRP_*) that appears in
+# m_TechKnowledgeData on a fully-unlocked reference character. Applied by
+# Grant All Tech Recipes as UnlockedState=Purchased entries. Static content.
+$script:DuneTechCatalog = $null
+
+function _Load-DuneTechCatalog {
+    if ($null -ne $script:DuneTechCatalog) { return }
+    $script:DuneTechCatalog = @()
+    $p = _Resolve-DuneCatalog 'dune-tech-catalog.json'
+    if (-not $p) { return }
+    try {
+        $json = Get-Content -LiteralPath $p -Raw | ConvertFrom-Json
+        if ($json.item_keys) {
+            $script:DuneTechCatalog = @($json.item_keys | ForEach-Object { [string]$_ } | Where-Object { $_ })
+        }
+    } catch {}
+}
+
+function Get-DuneTechCatalog {
+    _Load-DuneTechCatalog
+    return $script:DuneTechCatalog
+}
+
 function Get-DuneTagsData {
     _Load-DuneTagsData
     return $script:DuneTagsData
