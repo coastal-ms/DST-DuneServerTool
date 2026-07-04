@@ -11,6 +11,12 @@ Patch releases within a major series are rolled up under the major's entry
 on GitHub still exist for each individual release; the consolidated entries
 here cover everything those tags shipped.
 
+## [12.16.1] - 2026-07-03
+
+### Fixed
+
+- **Dashboard → Battlegroup info** now reads its five fields (Status / Database / Gateway / Director / Uptime) directly from the Battlegroup CRD JSON via `kubectl`, so a server title that contains spaces (e.g. `Reapers - DST`) no longer shifts every column. Root cause: Funcom's `battlegroup status` script parses `kubectl get battlegroups --no-headers` with positional `awk` tokens, so a multi-word TITLE was making the panel show garbage like *Database: 2, Gateway: Ready, Director: 2/2, Uptime: Healthy*. The raw-output pane (HIDE RAW OUTPUT toggle) still shows Funcom's script output unchanged for debugging.
+
 ## [12.16.0] - 2026-07-03
 
 ### Added
