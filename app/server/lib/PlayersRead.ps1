@@ -115,6 +115,32 @@ function Get-DuneProgressionPresetCatalog {
     return $script:DuneProgressionPresetCatalog
 }
 
+# NPE (tutorial) completion nodes — the full DA_MQ_ANewBeginning* +
+# DA_MQ_NPEAutocompleted* subtree captured live from a completed character.
+# Setting complete_condition_state + reveal_condition_state to true on every
+# node in this list, PLUS applying the NPE.HasCompletedNPE tag, matches the
+# state the game writes when a player picks "Skip Tutorial" at character
+# creation (unlocks Advanced_*_Fabricator patents + tutorial-gated tech).
+$script:DuneNpeCompletionNodes = $null
+
+function _Load-DuneNpeCompletionNodes {
+    if ($null -ne $script:DuneNpeCompletionNodes) { return }
+    $script:DuneNpeCompletionNodes = @()
+    $p = _Resolve-DuneCatalog 'dune-npe-completion-nodes.json'
+    if (-not $p) { return }
+    try {
+        $json = Get-Content -LiteralPath $p -Raw | ConvertFrom-Json
+        if ($json.nodes) {
+            $script:DuneNpeCompletionNodes = @($json.nodes | ForEach-Object { [string]$_ } | Where-Object { $_ })
+        }
+    } catch {}
+}
+
+function Get-DuneNpeCompletionNodes {
+    _Load-DuneNpeCompletionNodes
+    return $script:DuneNpeCompletionNodes
+}
+
 function Get-DuneTagsData {
     _Load-DuneTagsData
     return $script:DuneTagsData
