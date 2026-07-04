@@ -1905,9 +1905,9 @@ export function resetJobSkills(pawnId: number, jobId: string) {
   })
 }
 
-export function setStarterClass(pawnId: number, classId: string) {
+export function setStarterClass(accountId: number, job: string) {
   return api<WriteResult>('/api/gameplay/players/set-starter-class', {
-    method: 'POST', body: JSON.stringify({ pawn_id: pawnId, class_id: classId }),
+    method: 'POST', body: JSON.stringify({ account_id: accountId, job }),
   })
 }
 
