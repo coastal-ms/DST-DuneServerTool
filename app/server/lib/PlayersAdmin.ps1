@@ -582,17 +582,21 @@ function Invoke-DunePlayerAwardIntel {
 # Mirrors db.go cmdDeleteAccount: nukes characters, actors, fgl entities,
 # RMQ traces, and the accounts row in dependency order.
 function Invoke-DunePlayerDeleteAccount {
-    param([string]$Ip, [long]$AccountId)
+    param([string]$Ip, [long]$AccountId, [switch]$Force)
     if ($AccountId -le 0) { return @{ ok = $false; error = 'account_id is required.' } }
     $resolve = Get-DuneRawFuncomId -Ip $Ip -AccountId $AccountId
     if (-not $resolve.ok) { return @{ ok = $false; error = $resolve.error } }
     $funcom = ConvertTo-DuneSqlString $resolve.funcom_id
 
-    # Hard gate: the pod keeps flushing state for minutes after logoff and will
-    # rewrite anything we delete unless the character is truly evicted from
+    # Hard gate: the pod keeps flushing state for tens of seconds after logoff and
+    # will rewrite anything we delete unless the character is truly evicted from
     # memory. Trust last_avatar_activity over the online_status column.
-    $off = Test-DunePlayerOfflineByAccount -Ip $Ip -AccountId $AccountId
-    if (-not $off.ok) { return @{ ok = $false; error = "delete-account blocked: $($off.reason)" } }
+    # Skipped when -Force is passed (Fresh Start wraps this after evicting the
+    # pod's DB session, so the pod can no longer race us).
+    if (-not $Force) {
+        $off = Test-DunePlayerOfflineByAccount -Ip $Ip -AccountId $AccountId
+        if (-not $off.ok) { return @{ ok = $false; error = "delete-account blocked: $($off.reason)" } }
+    }
 
     $sql = @"
 DO `$`$
