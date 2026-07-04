@@ -25,7 +25,7 @@ import {
   resetAllKeystones, resetAllSpecs, resetJourney, resetProgressionLive, resetSpec,
   restoreDestroyed,
   setFactionTier, setPlayerTags, setSkillPoints,
-  setStarterClass, teleportToPlayer, teleportToLocation, setRespawn, getTeleportDestinations, getPlayers, updatePlayerTags, wipeCodex, wipeJourney, resetFaction, snapshotBuilds, getFreshStartSnapshots, restoreBuilds, skipTutorial,
+  setStarterClass, teleportToPlayer, teleportToLocation, setRespawn, getTeleportDestinations, getPlayers, updatePlayerTags, wipeCodex, wipeJourney, resetFaction, snapshotBuilds, getFreshStartSnapshots, restoreBuilds, grantAllSkills, grantAllTech,
   chatWhisper, isValidTemplateId, getItemCatalog, getCosmeticsCatalog, type CosmeticEntry,
   parseTcnoPackageText,
   giveItems, getItemPackages, saveItemPackage, deleteItemPackage,
@@ -661,15 +661,19 @@ const ACTIONS: ActionDef[] = [
       return wipeJourney(p.account_id)
     } },
   { id: 'reset-faction', group: 'Progression', label: 'Reset Faction', icon: 'Swords', custom: 'reset-faction', offlineOnly: true,
-    rowNote: 'Wipe faction rep + tags + ClimbTheRanks nodes (revealed AND completed) so the character reads as pre-faction. Optional Deep also clears Dunipedia lore. Player must be offline.',
+    rowNote: 'Wipe faction rep + tags + ClimbTheRanks nodes. Optional Deep also clears codex. Offline.',
     run: () => Promise.resolve({ message: '' }) },
   { id: 'fresh-start', group: 'Progression', label: 'Fresh Start (keep purchases)', icon: 'Sunrise', custom: 'fresh-start',
-    rowNote: 'Snapshot purchased sets/pieces (CHOAM shop + MTX) + cosmetic unlocks, delete + recreate the character (same name) in-game, then restore. Restore also marks the tutorial as completed so Advanced buildables unlock immediately. Offline to restore. Faction sets and tech unlocks re-earn naturally.',
+    rowNote: 'Snapshot cosmetics, delete + recreate character in-game (same name), then restore. Offline to restore.',
     run: () => Promise.resolve({ message: '' }) },
-  { id: 'skip-tutorial', group: 'Progression', label: 'Skip Tutorial (unlock Advanced buildables)', icon: 'FastForward', offlineOnly: true,
-    rowNote: 'Marks the New Player Experience as completed so Advanced buildable patents (Fabricator, etc.) unlock immediately. Same effect as picking Skip Tutorial at character creation. Offline-only. If Advanced buildables don\u2019t unlock immediately, use Progression Unlock (Ch3 Start / Rank 19 Eligible) instead.',
-    confirm: p => `Mark ${p.name}'s tutorial as completed?\n\nThis matches what happens when a player picks 'Skip Tutorial' at character creation. Advanced_*_Fabricator + related tutorial-gated patents will unlock immediately.\n\nNote: this sets the STATE (NPE.HasCompletedNPE tag + NPE journey nodes complete) but has not been end-to-end confirmed to retroactively grant the tutorial-gated patents to a character who was already past character creation. On a genuinely fresh (in-game re-created) character it should mirror the in-game Skip Tutorial choice exactly. If Advanced buildables don't appear after this, use Progression Unlock (Ch3 Start / Rank 19 Eligible) instead.`,
-    run: p => skipTutorial(p.account_id) },
+  { id: 'grant-all-skills', group: 'Progression', label: 'Grant All Skills', icon: 'Sparkles', offlineOnly: true,
+    rowNote: 'Unlock every skill (1 point each). Existing preserved. Does not add skill points. Offline.',
+    confirm: p => `Grant every skill to ${p.name}?\n\nMarks every skill (145 total) as unlocked (SkillPointsSpent=1). Existing entries preserved. Skill-point pool untouched. Player must be offline.`,
+    run: p => grantAllSkills(p.account_id) },
+  { id: 'grant-all-tech', group: 'Progression', label: 'Grant All Tech Recipes', icon: 'BookOpenCheck', offlineOnly: true,
+    rowNote: 'Purchase every buildable + recipe + starter group. Existing preserved. Does not add Intel. Offline.',
+    confirm: p => `Grant every tech recipe to ${p.name}?\n\nMarks every buildable patent, crafting recipe, and starter group (449 total) as Purchased in the Intel terminal. Existing entries preserved. Intel points untouched. Player must be offline.`,
+    run: p => grantAllTech(p.account_id) },
 
   // ----- Items -----
   { id: 'give-item',      group: 'Items', label: 'Give Item', icon: 'PackagePlus', custom: 'give-item',
@@ -922,13 +926,7 @@ function ActionRow({ def, player, busy, stats, open, danger, onToggle, runAction
         onClick={onToggle}
         title={def.liveOnly ? 'Requires player to be online' : def.offlineOnly ? 'Requires player to be offline — the game caches this value in memory while online and overwrites it on logout' : undefined}>
         <Icon name={def.icon} size={14} className={`shrink-0 ${danger ? 'text-error' : 'text-text-dim'}`} />
-        <span className="flex-1 min-w-0 truncate font-medium">{def.label}</span>
-        {def.rowNote && (
-          <span className="shrink-0 hidden sm:flex items-center gap-1.5 text-xs">
-            <span className="text-text-dim">---</span>
-            <span className="italic text-white">{def.rowNote}</span>
-          </span>
-        )}
+        <span className="flex-1 min-w-0 font-medium">{def.label}</span>
         {def.liveOnly && (
           <span className="text-[10px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded bg-warning/20 text-warning border border-warning/50 shrink-0">LIVE REQ'D</span>
         )}
@@ -1141,7 +1139,7 @@ function FreshStartForm({ busy, player, runAction }: {
           <div className="text-text-dim text-xs flex items-center gap-2"><Icon name="Loader2" size={13} className="animate-spin" /> Checking snapshots…</div>
         ) : snap ? (
           <>
-            <div className="text-text-dim text-xs">Saved snapshot for <b className="text-text">{snap.name}</b> — {snap.sets} set{snap.sets === 1 ? '' : 's'}, {snap.pieces} piece{snap.pieces === 1 ? '' : 's'}{snap.cosmetics ? ' + cosmetics' : ''} ({new Date(snap.saved_at).toLocaleString()}). Restore filters to purchased-only (CHOAM + MTX) and <b className="text-text">also marks the New Player Experience as completed</b> so Advanced buildables (Fabricator, etc.) unlock immediately — Fresh Start assumes you've already played once.</div>
+            <div className="text-text-dim text-xs">Saved snapshot for <b className="text-text">{snap.name}</b> — {snap.sets} set{snap.sets === 1 ? '' : 's'}, {snap.pieces} piece{snap.pieces === 1 ? '' : 's'}{snap.cosmetics ? ' + cosmetics' : ''} ({new Date(snap.saved_at).toLocaleString()}). Restore filters to purchased-only (CHOAM + MTX).</div>
             <div className="text-warning text-xs">Only after you've recreated the character (same name) and spawned in. Player must be offline.</div>
             <button type="button" disabled={busy}
               className="px-3 py-2 rounded-lg bg-info/20 border border-info/50 text-text hover:bg-info/30 disabled:opacity-50 text-sm font-medium"

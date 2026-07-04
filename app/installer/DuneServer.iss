@@ -1,4 +1,4 @@
-; ============================================================
+﻿; ============================================================
 ;  Dune Server - Inno Setup installer script
 ;  Output: app/installer/output/DuneServerSetup.exe
 ; ============================================================
@@ -16,7 +16,7 @@
 ;                 -> NOT touched by install or uninstall (preserves user config)
 
 #define MyAppName        "Dune Server Tool"
-#define MyAppVersion "12.16.7"
+#define MyAppVersion "12.16.8"
 #define MyAppPublisher   "Dune Awakening Self-Hosted Tool"
 #define MyAppURL         "https://github.com/coastal-ms/DST-DuneServerTool"
 #define MyAppExeName     "DuneServer.exe"
