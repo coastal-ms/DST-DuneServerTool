@@ -1794,7 +1794,7 @@ function VehicleKitForm({ busy, onSubmit }: {
             </li>
           ))}
           <li className="flex items-center gap-1.5 text-amber-200/90">
-            <Icon name="Fuel" size={12} className="shrink-0" /> {label(catalog.fuelTemplate)}
+            <Icon name="Fuel" size={12} className="shrink-0" /> {label(catalog.fuelTemplate)}{qtySuffix(catalog.fuelTemplate)}
           </li>
           <li className="flex items-center gap-1.5 text-amber-200/90">
             <Icon name="Wrench" size={12} className="shrink-0" /> {label(catalog.torchTemplate)}
