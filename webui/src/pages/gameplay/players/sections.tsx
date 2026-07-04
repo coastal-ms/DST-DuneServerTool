@@ -663,8 +663,8 @@ const ACTIONS: ActionDef[] = [
   { id: 'reset-faction', group: 'Progression', label: 'Reset Faction', icon: 'Swords', custom: 'reset-faction', offlineOnly: true,
     rowNote: 'Wipe ALL faction rep + tags + ClimbTheRanks nodes to start fresh. Player must be offline.',
     run: () => Promise.resolve({ message: '' }) },
-  { id: 'fresh-start', group: 'Progression', label: 'Fresh Start (keep builds)', icon: 'Sunrise', custom: 'fresh-start',
-    rowNote: 'Snapshot builds + cosmetics, delete + recreate the character (same name) in-game, then restore. Offline to restore.',
+  { id: 'fresh-start', group: 'Progression', label: 'Fresh Start (keep purchases)', icon: 'Sunrise', custom: 'fresh-start',
+    rowNote: 'Snapshot purchased sets/pieces (CHOAM shop + MTX) + cosmetic unlocks, delete + recreate the character (same name) in-game, then restore. Offline to restore. Faction sets and tech unlocks re-earn naturally.',
     run: () => Promise.resolve({ message: '' }) },
 
   // ----- Items -----
@@ -1088,10 +1088,12 @@ function ActionRow({ def, player, busy, stats, open, danger, onToggle, runAction
   )
 }
 
-// Fresh Start (keep builds & cosmetics) — two-step snapshot/restore flow. A truly
+// Fresh Start (keep purchases) — two-step snapshot/restore flow. A truly
 // fresh character can only be produced by deleting + recreating it in-game; DST
-// snapshots the player's unlocked building sets + cosmetics beforehand and restores
-// them by NAME onto the recreated character (name is the stable key across delete).
+// snapshots the player's purchased sets/pieces (CHOAM + MTX) + cosmetic unlocks
+// beforehand and restores them by NAME onto the recreated character (name is the
+// stable key across delete). Faction-earned sets and tech-tree unlocks are NOT
+// restored — they re-populate naturally as the character re-progresses.
 function FreshStartForm({ busy, player, runAction }: {
   busy: boolean
   player: Player
@@ -1112,12 +1114,12 @@ function FreshStartForm({ busy, player, runAction }: {
   return (
     <div className="space-y-3 text-sm">
       <div className="rounded-lg bg-surface-2 border border-border/50 p-3 text-text-dim text-xs leading-relaxed">
-        A real fresh start is done in-game: <b className="text-text">1)</b> snapshot below, <b className="text-text">2)</b> delete + recreate the character with the <b className="text-text">same name</b> (delete via the in-game Funcom browser so the name can be reused) and spawn in, <b className="text-text">3)</b> restore. Only the building sets + cosmetics you already unlocked are carried over — everything else (quests, skills, faction, tech) starts genuinely fresh from the game.
+        A real fresh start is done in-game: <b className="text-text">1)</b> snapshot below, <b className="text-text">2)</b> delete + recreate the character with the <b className="text-text">same name</b> (delete via the in-game Funcom browser so the name can be reused) and spawn in, <b className="text-text">3)</b> restore. Only your <b className="text-text">purchased</b> CHOAM/MTX sets + pieces and unlocked cosmetics are carried over — faction-earned sets and tech unlocks re-populate naturally as you re-progress, and everything else (quests, skills, faction rank) starts genuinely fresh from the game.
       </div>
 
       <div className="card p-3 space-y-2">
-        <div className="font-medium text-text flex items-center gap-2"><Icon name="Save" size={14} /> Step 1 — Snapshot builds &amp; cosmetics</div>
-        <div className="text-text-dim text-xs">Captures {player.name}'s unlocked building sets + cosmetics. Do this <b>before</b> deleting the character (the data is destroyed with the character).</div>
+        <div className="font-medium text-text flex items-center gap-2"><Icon name="Save" size={14} /> Step 1 — Snapshot purchases &amp; cosmetics</div>
+        <div className="text-text-dim text-xs">Captures {player.name}'s purchased CHOAM/MTX sets + pieces + unlocked cosmetics. Do this <b>before</b> deleting the character (the data is destroyed with the character). Faction-earned sets and tech-tree unlocks are NOT snapshotted — they re-populate as the fresh character progresses.</div>
         <button type="button" disabled={busy}
           className="px-3 py-2 rounded-lg bg-ibad/20 border border-ibad/50 text-text hover:bg-ibad/30 disabled:opacity-50 text-sm font-medium"
           onClick={() => runAction(localDef, async () => {
@@ -1125,25 +1127,25 @@ function FreshStartForm({ busy, player, runAction }: {
             refresh()
             return { message: r.message || `Snapshot saved for ${player.name}.` }
           })}>
-          Snapshot {player.name}'s builds
+          Snapshot {player.name}'s purchases
         </button>
       </div>
 
       <div className="card p-3 space-y-2">
-        <div className="font-medium text-text flex items-center gap-2"><Icon name="Sunrise" size={14} /> Step 2 — Restore builds by name</div>
+        <div className="font-medium text-text flex items-center gap-2"><Icon name="Sunrise" size={14} /> Step 2 — Restore purchases by name</div>
         {loading ? (
           <div className="text-text-dim text-xs flex items-center gap-2"><Icon name="Loader2" size={13} className="animate-spin" /> Checking snapshots…</div>
         ) : snap ? (
           <>
-            <div className="text-text-dim text-xs">Saved snapshot for <b className="text-text">{snap.name}</b> — {snap.sets} building set{snap.sets === 1 ? '' : 's'}, {snap.pieces} piece{snap.pieces === 1 ? '' : 's'}{snap.cosmetics ? ' + cosmetics' : ''} ({new Date(snap.saved_at).toLocaleString()}).</div>
+            <div className="text-text-dim text-xs">Saved snapshot for <b className="text-text">{snap.name}</b> — {snap.sets} set{snap.sets === 1 ? '' : 's'}, {snap.pieces} piece{snap.pieces === 1 ? '' : 's'}{snap.cosmetics ? ' + cosmetics' : ''} ({new Date(snap.saved_at).toLocaleString()}). Restore filters to purchased-only (CHOAM + MTX).</div>
             <div className="text-warning text-xs">Only after you've recreated the character (same name) and spawned in. Player must be offline.</div>
             <button type="button" disabled={busy}
               className="px-3 py-2 rounded-lg bg-info/20 border border-info/50 text-text hover:bg-info/30 disabled:opacity-50 text-sm font-medium"
               onClick={() => runAction(localDef, async () => {
                 const r = await restoreBuilds(player.name)
-                return { message: r.message || `Restored builds for ${player.name}.` }
+                return { message: r.message || `Restored purchases for ${player.name}.` }
               })}>
-              Restore {player.name}'s builds
+              Restore {player.name}'s purchases
             </button>
           </>
         ) : (

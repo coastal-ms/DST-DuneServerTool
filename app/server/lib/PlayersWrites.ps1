@@ -1495,8 +1495,19 @@ function Invoke-DunePlayerRestoreBuilds {
     $off = Test-DunePlayerOffline -Ip $Ip -PawnId $pawnID
     if (-not $off.ok) { return @{ ok = $false; error = "Player must be offline to restore builds. $($off.reason)" } }
 
-    $setsArr   = ConvertTo-DunePgTextArray (@($s.building_sets)    | ForEach-Object { [string]$_ })
-    $piecesArr = ConvertTo-DunePgTextArray (@($s.buildable_pieces) | ForEach-Object { [string]$_ })
+    # Only restore what the player *paid for*: real-money MTX items (MTX_*) and
+    # CHOAM-shop purchases (Choam_*). Faction-earned sets (Atre_*/Hark_*/Fremen_*/
+    # AtreidesSet/HarkonnenSet) get re-earned by re-progressing faction rank, and
+    # tutorial/base patents (Basic*/Advanced*/Large*/Deathstill/etc.) get re-granted
+    # by the fresh character's starter tech tree. Verified live on 2026-07-04 - the
+    # building_progression columns are a mixed bag of purchased + earned + tutorial
+    # unlocks, so restoring the whole array over-grants faction perks to a Rank-0
+    # character.
+    $purchasedRx = '^(MTX_|Choam)'
+    $filteredSets   = @($s.building_sets    | Where-Object { [string]$_ -match $purchasedRx })
+    $filteredPieces = @($s.buildable_pieces | Where-Object { [string]$_ -match $purchasedRx })
+    $setsArr   = ConvertTo-DunePgTextArray ($filteredSets   | ForEach-Object { [string]$_ })
+    $piecesArr = ConvertTo-DunePgTextArray ($filteredPieces | ForEach-Object { [string]$_ })
     $cosmetics = [string]$s.cosmetics
 
     $sb = [System.Text.StringBuilder]::new()
@@ -1522,8 +1533,8 @@ function Invoke-DunePlayerRestoreBuilds {
     $cosMsg = if ($cosmetics) { ' + cosmetics' } else { '' }
     return @{
         ok = $true
-        message = "Restored builds for '$Name' - $(@($s.building_sets).Count) building set(s), $(@($s.buildable_pieces).Count) piece(s)$cosMsg. Takes effect on next login."
-        sets = @($s.building_sets).Count; pieces = @($s.buildable_pieces).Count
+        message = "Restored $($filteredSets.Count) purchased set(s) + $($filteredPieces.Count) purchased piece(s)$cosMsg onto '$Name'. Faction sets, tutorial patents, and tech-tree unlocks will re-populate as the character progresses. Takes effect on next login."
+        sets = $filteredSets.Count; pieces = $filteredPieces.Count
     }
 }
 

@@ -11,6 +11,12 @@ Patch releases within a major series are rolled up under the major's entry
 on GitHub still exist for each individual release; the consolidated entries
 here cover everything those tags shipped.
 
+## [12.16.5] - 2026-07-04
+
+### Fixed
+
+- **Fresh Start over-restored faction-earned building sets.** The restore path unioned the ENTIRE `learned_building_sets` + `new_buildable_pieces` snapshot back onto the fresh character, which included faction-earned sets (Atre_*/Hark_*/Fremen_*/AtreidesSet/HarkonnenSet) and base/advanced tech patents — unlocks a Rank-0 fresh character shouldn't yet have. Restore now filters to purchased-only (`^(MTX_|Choam)`) so faction sets and tech-tree unlocks re-populate naturally as the character re-progresses. Snapshots taken with earlier versions still work — the filter runs at restore time. UI + CHANGELOG labels also updated from "builds" to "purchases" to accurately describe the scope.
+
 ## [12.16.4] - 2026-07-04
 
 ### Changed
@@ -41,7 +47,7 @@ here cover everything those tags shipped.
 
 ### Added
 
-- **Fresh Start (keep builds & cosmetics).** New action under *Players → Progression*. A genuinely fresh character can only be made in-game (the game engine rebuilds the entire quest journal, skill trees and starter content from the character on every login, so an in-place database reset can't produce one). Fresh Start instead preserves the two things you're entitled to keep across a restart — your unlocked **building sets/pieces** and **cosmetics**. Flow: **1)** *Snapshot* the character's builds + cosmetics (saved locally, keyed by character name); **2)** delete and recreate the character in-game with the **same name** (delete via the in-game Funcom browser so the name is kept) and spawn in; **3)** *Restore* — DST grants those builds + cosmetics back onto the fresh character by name. Everything else (quests, skills, faction, tech) starts genuinely fresh. Restore requires the player to be offline.
+- **Fresh Start (keep purchases).** New action under *Players → Progression*. A genuinely fresh character can only be made in-game (the engine rebuilds journal / skills / abilities / starter content from the character on every login), so an in-place DB reset can't produce one. Fresh Start instead preserves the things a player **paid for** — real-money MTX sets/pieces, CHOAM-shop purchases (patents + deco placeables), and the unlocked cosmetics list. Flow: **1)** *Snapshot* (saved locally on the DST host, keyed by character name); **2)** delete and recreate the character in-game with the **same name**; **3)** *Restore* — grants the paid unlocks back onto the fresh character by name. Faction-earned sets (Atre_*/Hark_*/Fremen_*/AtreidesSet/HarkonnenSet) and base/advanced tech patents intentionally are NOT restored — they re-populate as the fresh character re-progresses faction rank and tech tree. Restore requires the player to be offline.
 
 ## [12.15.2] - 2026-07-03
 
