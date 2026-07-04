@@ -25,7 +25,7 @@ import {
   resetAllKeystones, resetAllSpecs, resetJourney, resetProgressionLive, resetSpec,
   restoreDestroyed,
   setFactionTier, setPlayerTags, setSkillPoints,
-  setStarterClass, teleportToPlayer, teleportToLocation, setRespawn, getTeleportDestinations, getPlayers, updatePlayerTags, wipeCodex, wipeJourney, resetFaction, freshStart,
+  setStarterClass, teleportToPlayer, teleportToLocation, setRespawn, getTeleportDestinations, getPlayers, updatePlayerTags, wipeCodex, wipeJourney, resetFaction, snapshotBuilds, getFreshStartSnapshots, restoreBuilds,
   chatWhisper, isValidTemplateId, getItemCatalog, getCosmeticsCatalog, type CosmeticEntry,
   parseTcnoPackageText,
   giveItems, getItemPackages, saveItemPackage, deleteItemPackage,
@@ -36,7 +36,7 @@ import {
   getContracts, completeContract,
   getVehicleKitCatalog,
   type Player, type PlayerEvent, type PlayerStats, type ProgressionPreset, type SpecTrackFull,
-  type CatalogItem, type ItemPackage, type GiveItemEntry,
+  type CatalogItem, type ItemPackage, type GiveItemEntry, type FreshStartSnapshot,
   type LandsraadHouse, type LandsraadIniSetting,
   type JourneyNode, type TrainerInfo, type TrainerStatus, type MainQuestInfo,
   type PlayerVehicleRow, type TeleportDestination,
@@ -571,7 +571,7 @@ interface ActionDef {
   liveOnly?: boolean      // requires player to be online (RMQ path)
   offlineOnly?: boolean   // requires player to be offline (DB write the game caches in memory)
   fields?: ActionField[]
-  custom?: 'give-item' | 'grant-reward' | 'whisper' | 'spawn-vehicle' | 'quick-presets' | 'vehicle-kit' | 'give-package' | 'cheat-scripts' | 'dev-scripts' | 'unlock-trainers' | 'unlock-mainquest' | 'complete-contract' | 'progression-unlock' | 'refuel-vehicle' | 'starter-class' | 'update-tags' | 'teleport-player' | 'teleport-location' | 'set-respawn' | 'reset-faction' | 'grant-cosmetic'
+  custom?: 'give-item' | 'grant-reward' | 'whisper' | 'spawn-vehicle' | 'quick-presets' | 'vehicle-kit' | 'give-package' | 'cheat-scripts' | 'dev-scripts' | 'unlock-trainers' | 'unlock-mainquest' | 'complete-contract' | 'progression-unlock' | 'refuel-vehicle' | 'starter-class' | 'update-tags' | 'teleport-player' | 'teleport-location' | 'set-respawn' | 'reset-faction' | 'grant-cosmetic' | 'fresh-start'
   balance?: 'solari' | 'scrip' | 'intel'  // show the player's current balance read-only above the form
   confirm?: (p: Player) => string  // confirm message; if returns '' no prompt
   doubleConfirm?: boolean // also requires a typed "i acknowledge" prompt inside run()
@@ -663,26 +663,9 @@ const ACTIONS: ActionDef[] = [
   { id: 'reset-faction', group: 'Progression', label: 'Reset Faction', icon: 'Swords', custom: 'reset-faction', offlineOnly: true,
     rowNote: 'Wipe ALL faction rep + tags + ClimbTheRanks nodes to start fresh. Player must be offline.',
     run: () => Promise.resolve({ message: '' }) },
-  { id: 'fresh-start', group: 'Progression', label: 'Fresh Start (keep unlocks)', icon: 'Sunrise',
-    offlineOnly: true, doubleConfirm: true,
-    rowNote: 'Double confirmation required',
-    confirm: p => `FRESH START for ${p.name} — restart all content from the beginning.\n\n` +
-      `KEEPS: cosmetics, building sets, Steam achievements, inventory + bases, Intel, class skill trees.\n` +
-      `WIPES: journey / quests, all progression tags, faction, contracts, crafting recipes, tech knowledge, specializations + keystones.\n\n` +
-      `Player must be OFFLINE. Take a battlegroup backup first — this cannot be undone.\n\n` +
-      `This is the FIRST of two confirmations. If you continue, the next step asks you to type an acknowledgement before anything is wiped.`,
-    run: p => {
-      const typed = window.prompt(
-        `SECOND confirmation — FRESH START for ${p.name}.\n` +
-        `Wipes progression + power; keeps cosmetics / building sets / Steam achievements / inventory / bases / Intel / skill trees.\n` +
-        `This cannot be undone.\n\n` +
-        `Type  fresh start  to proceed:`
-      ) || ''
-      if (typed.trim().toLowerCase() !== 'fresh start') {
-        throw new Error('Did not type "fresh start" — Fresh Start aborted.')
-      }
-      return freshStart(p.account_id)
-    } },
+  { id: 'fresh-start', group: 'Progression', label: 'Fresh Start (keep builds)', icon: 'Sunrise', custom: 'fresh-start',
+    rowNote: 'Snapshot builds + cosmetics, delete + recreate the character (same name) in-game, then restore. Offline to restore.',
+    run: () => Promise.resolve({ message: '' }) },
 
   // ----- Items -----
   { id: 'give-item',      group: 'Items', label: 'Give Item', icon: 'PackagePlus', custom: 'give-item',
@@ -1041,6 +1024,8 @@ function ActionRow({ def, player, busy, stats, open, danger, onToggle, runAction
                 const r = await resetFaction(player.account_id, 'both')
                 return { message: r.message || `Reset faction for ${player.name}.` }
               })} />
+          ) : def.custom === 'fresh-start' ? (
+            <FreshStartForm busy={busy} player={player} runAction={runAction} />
           ) : def.custom === 'give-package' ? (
             <GivePackageForm busy={busy} playerName={player.name}
               onGive={(items, pkgName, overflow) => runAction(def, async () => {
@@ -1099,6 +1084,72 @@ function ActionRow({ def, player, busy, stats, open, danger, onToggle, runAction
           )}
         </div>
       )}
+    </div>
+  )
+}
+
+// Fresh Start (keep builds & cosmetics) — two-step snapshot/restore flow. A truly
+// fresh character can only be produced by deleting + recreating it in-game; DST
+// snapshots the player's unlocked building sets + cosmetics beforehand and restores
+// them by NAME onto the recreated character (name is the stable key across delete).
+function FreshStartForm({ busy, player, runAction }: {
+  busy: boolean
+  player: Player
+  runAction: (def: ActionDef, exec: () => Promise<{ message: string }>) => void
+}) {
+  const [snap, setSnap] = useState<FreshStartSnapshot | null>(null)
+  const [loading, setLoading] = useState(true)
+  const refresh = () => {
+    setLoading(true)
+    getFreshStartSnapshots()
+      .then(r => setSnap((r.snapshots || []).find(s => s.name.toLowerCase() === player.name.toLowerCase()) || null))
+      .catch(() => setSnap(null))
+      .finally(() => setLoading(false))
+  }
+  useEffect(() => { refresh() }, [player.name])
+  const localDef: ActionDef = { id: 'fresh-start', group: 'Progression', label: 'Fresh Start', icon: 'Sunrise', run: () => Promise.resolve({ message: '' }) }
+
+  return (
+    <div className="space-y-3 text-sm">
+      <div className="rounded-lg bg-surface-2 border border-border/50 p-3 text-text-dim text-xs leading-relaxed">
+        A real fresh start is done in-game: <b className="text-text">1)</b> snapshot below, <b className="text-text">2)</b> delete + recreate the character with the <b className="text-text">same name</b> (delete via the in-game Funcom browser so the name can be reused) and spawn in, <b className="text-text">3)</b> restore. Only the building sets + cosmetics you already unlocked are carried over — everything else (quests, skills, faction, tech) starts genuinely fresh from the game.
+      </div>
+
+      <div className="card p-3 space-y-2">
+        <div className="font-medium text-text flex items-center gap-2"><Icon name="Save" size={14} /> Step 1 — Snapshot builds &amp; cosmetics</div>
+        <div className="text-text-dim text-xs">Captures {player.name}'s unlocked building sets + cosmetics. Do this <b>before</b> deleting the character (the data is destroyed with the character).</div>
+        <button type="button" disabled={busy}
+          className="px-3 py-2 rounded-lg bg-ibad/20 border border-ibad/50 text-text hover:bg-ibad/30 disabled:opacity-50 text-sm font-medium"
+          onClick={() => runAction(localDef, async () => {
+            const r = await snapshotBuilds(player.account_id)
+            refresh()
+            return { message: r.message || `Snapshot saved for ${player.name}.` }
+          })}>
+          Snapshot {player.name}'s builds
+        </button>
+      </div>
+
+      <div className="card p-3 space-y-2">
+        <div className="font-medium text-text flex items-center gap-2"><Icon name="Sunrise" size={14} /> Step 2 — Restore builds by name</div>
+        {loading ? (
+          <div className="text-text-dim text-xs flex items-center gap-2"><Icon name="Loader2" size={13} className="animate-spin" /> Checking snapshots…</div>
+        ) : snap ? (
+          <>
+            <div className="text-text-dim text-xs">Saved snapshot for <b className="text-text">{snap.name}</b> — {snap.sets} building set{snap.sets === 1 ? '' : 's'}, {snap.pieces} piece{snap.pieces === 1 ? '' : 's'}{snap.cosmetics ? ' + cosmetics' : ''} ({new Date(snap.saved_at).toLocaleString()}).</div>
+            <div className="text-warning text-xs">Only after you've recreated the character (same name) and spawned in. Player must be offline.</div>
+            <button type="button" disabled={busy}
+              className="px-3 py-2 rounded-lg bg-info/20 border border-info/50 text-text hover:bg-info/30 disabled:opacity-50 text-sm font-medium"
+              onClick={() => runAction(localDef, async () => {
+                const r = await restoreBuilds(player.name)
+                return { message: r.message || `Restored builds for ${player.name}.` }
+              })}>
+              Restore {player.name}'s builds
+            </button>
+          </>
+        ) : (
+          <div className="text-text-dim text-xs">No saved snapshot for {player.name}. Snapshot first (Step 1).</div>
+        )}
+      </div>
     </div>
   )
 }

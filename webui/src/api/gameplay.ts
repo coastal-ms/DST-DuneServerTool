@@ -1784,13 +1784,31 @@ export function resetFaction(accountId: number, faction: 'atreides' | 'harkonnen
   })
 }
 
-// Fresh Start (keep unlocks) — hardest-possible progression reset. Wipes
-// journey/quests, progression tags, faction, contracts, crafting recipes,
-// tech-knowledge data, specializations + keystones; keeps cosmetics, building
-// sets, Steam achievements, inventory, bases, Intel and class skill trees.
-export function freshStart(accountId: number) {
-  return api<WriteResult>('/api/gameplay/players/fresh-start', {
+// Fresh Start (keep builds & cosmetics) — snapshot + restore-by-name.
+// A truly-fresh character can only be made by the engine (delete + recreate
+// in-game). DST preserves the player's unlocked building sets + cosmetics: snapshot
+// them BEFORE the delete, then restore them by name onto the recreated character.
+export interface FreshStartSnapshot {
+  name: string
+  saved_at: string
+  sets: number
+  pieces: number
+  cosmetics: boolean
+}
+
+export function snapshotBuilds(accountId: number) {
+  return api<WriteResult>('/api/gameplay/players/fresh-start/snapshot', {
     method: 'POST', body: JSON.stringify({ account_id: accountId }),
+  })
+}
+
+export function getFreshStartSnapshots() {
+  return api<{ ok: boolean; snapshots: FreshStartSnapshot[] }>('/api/gameplay/players/fresh-start/snapshots')
+}
+
+export function restoreBuilds(name: string) {
+  return api<WriteResult>('/api/gameplay/players/fresh-start/restore', {
+    method: 'POST', body: JSON.stringify({ name }),
   })
 }
 

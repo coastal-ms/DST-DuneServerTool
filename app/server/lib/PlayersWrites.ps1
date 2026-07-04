@@ -1353,95 +1353,177 @@ WHERE a.id = $pawnID::bigint
 }
 
 # ---------------------------------------------------------------------------
-# Fresh Start (keep unlocks) -- hardest-possible progression reset. Wipes a
-# character's story/quest/faction/contract progression AND character power
-# (crafting recipes, tech-knowledge data, specializations + keystones) so the
-# player can replay ALL content, while KEEPING only: cosmetics
-# (CustomizationLibraryActorComponent), building sets (dune.building_progression),
-# and Steam achievements (journey nodes 'DA_ACH%'). Inventory, bases, Intel
-# (m_TechKnowledgePoints) and class skill-tree modules are left untouched
-# (Coastal's locked scope, 2026-07-03).
+# Fresh Start (keep builds & cosmetics) -- snapshot + restore-by-name.
 #
-# Offline-only (route-gated): journey rows, player_tags, and the pawn component
-# blobs are RAM-authoritative while the player is connected, so an online edit is
-# overwritten on logout -- same guard as Reset Faction / Wipe Journey.
+# A genuinely-fresh character can ONLY be produced by the game engine: the player
+# deletes the character in-game, recreates it, and spawns. An in-place DB wipe
+# does NOT work -- the engine rebuilds the journey journal, skill-tree scaffold
+# and ability slots from the character's footprint on every login (verified live
+# 2026-07-03: deleting all 1979 non-achievement journey rows just made the engine
+# recreate them and reveal 1195). So Fresh Start does not wipe anything.
 #
-# Composition: a single transaction for the DML-only wipes (journey / tags /
-# contract items+pointer / recipe + tech-knowledge blobs) then the two existing
-# helpers that run their own transactions -- Invoke-DunePlayerResetFaction (rep,
-# alignment, faction tags, ClimbTheRanks, faction contract items) and
-# Invoke-DunePlayerResetAllSpecs (specialization_tracks + keystones). Every step
-# is idempotent, so a partial failure is safe to re-run.
-#
-# WARNING - FRAGILE keep/wipe boundaries: Funcom renames tag prefixes and
-# journey node-id patterns every patch (they already rekeyed player_tags and
-# journey account_id -> character_id). Re-verify 'DA_ACH%', the tag allow-list,
-# and the component JSON paths against a reference character each server update;
-# never hardcode blindly. Chroma:
-# dst-fresh-start-feature-spec-and-fragile-keep-wipe-classification-2026-07-03.
-function Invoke-DunePlayerFreshStart {
+# Instead it preserves the two things a player is entitled to keep across a fresh
+# restart -- their unlocked BUILDING SETS/pieces (dune.building_progression) and
+# COSMETICS (actors.properties->CustomizationLibraryActorComponent). Character
+# NAME is the stable key across delete+recreate (account_id / character_id change;
+# the name does not). Flow:
+#   1) Snapshot builds + cosmetics BEFORE the delete -> saved to
+#      %APPDATA%\DuneServer\fresh-start-snapshots.json keyed by name.
+#   2) Player deletes + recreates the character in-game with the SAME name, spawns.
+#   3) Restore-by-name grants the snapshot's building sets + cosmetics onto the
+#      new character (offline-only; unioned with the fresh character's starter set
+#      so nothing is lost).
+# ---------------------------------------------------------------------------
+
+function Get-DuneFreshStartSnapshotPath {
+    $dir = Join-Path $env:APPDATA 'DuneServer'
+    if (-not (Test-Path -LiteralPath $dir)) { New-Item -ItemType Directory -Force -Path $dir | Out-Null }
+    return (Join-Path $dir 'fresh-start-snapshots.json')
+}
+
+function Get-DuneFreshStartSnapshots {
+    $path = Get-DuneFreshStartSnapshotPath
+    if (-not (Test-Path -LiteralPath $path)) { return @() }
+    try {
+        $raw = Get-Content -LiteralPath $path -Raw -ErrorAction Stop
+        if (-not $raw) { return @() }
+        $obj = $raw | ConvertFrom-Json -ErrorAction Stop
+        $list = if ($obj -is [System.Array]) { $obj } elseif ($obj.snapshots) { $obj.snapshots } else { @() }
+        return @($list)
+    } catch { return @() }
+}
+
+function Save-DuneFreshStartSnapshots {
+    param($Snapshots)
+    $path = Get-DuneFreshStartSnapshotPath
+    $json = @{ snapshots = @($Snapshots) } | ConvertTo-Json -Depth 60
+    $tmp = "$path.tmp"
+    Set-Content -LiteralPath $tmp -Value $json -Encoding UTF8 -Force
+    Move-Item -LiteralPath $tmp -Destination $path -Force
+}
+
+# Metadata-only list of saved snapshots for the UI (no bulky cosmetics blob).
+function Get-DuneFreshStartSnapshotList {
+    $out = @()
+    foreach ($s in (Get-DuneFreshStartSnapshots)) {
+        $out += [ordered]@{
+            name      = [string]$s.name
+            saved_at  = [string]$s.saved_at
+            sets      = @($s.building_sets).Count
+            pieces    = @($s.buildable_pieces).Count
+            cosmetics = [bool]([string]$s.cosmetics)
+        }
+    }
+    return @($out)
+}
+
+# Capture a character's unlocked building sets/pieces + cosmetics to the snapshot
+# store, keyed by character name. Run this BEFORE the player deletes the character
+# (the data is character-bound and is destroyed with the character).
+function Invoke-DunePlayerSnapshotBuilds {
     param([string]$Ip, [long]$AccountId)
     if ($AccountId -le 0) { return @{ ok = $false; error = 'account_id is required.' } }
-
-    $controllerID = Get-DunePlayerControllerFromAccount -Ip $Ip -AccountId $AccountId
-    if ($controllerID -le 0) { return @{ ok = $false; error = "no player_controller for account $AccountId." } }
     $pawnID = Get-DunePlayerPawnFromAccount -Ip $Ip -AccountId $AccountId
     if ($pawnID -le 0) { return @{ ok = $false; error = "no pawn for account $AccountId." } }
 
-    $charScope = "character_id IN (SELECT id FROM dune.player_state WHERE account_id=$AccountId::bigint)"
+    $sql = @"
+SELECT
+  (SELECT character_name FROM dune.player_state WHERE account_id=$AccountId::bigint LIMIT 1) AS name,
+  (SELECT id::text FROM dune.player_state WHERE account_id=$AccountId::bigint LIMIT 1) AS character_id,
+  (SELECT to_json(learned_building_sets)::text FROM dune.building_progression WHERE character_id=(SELECT id FROM dune.player_state WHERE account_id=$AccountId::bigint LIMIT 1)) AS sets,
+  (SELECT to_json(new_buildable_pieces)::text FROM dune.building_progression WHERE character_id=(SELECT id FROM dune.player_state WHERE account_id=$AccountId::bigint LIMIT 1)) AS pieces,
+  (SELECT (properties #> '{CustomizationLibraryActorComponent,m_UnlockedCustomizationSerializableList}')::text FROM dune.actors WHERE id=$pawnID::bigint) AS cosmetics;
+"@
+    $r = Invoke-DuneSqlQuery -Ip $Ip -Sql $sql -ReadOnly $true -MaxRows 1 -TimeoutSec 30
+    if (-not $r.ok) { return @{ ok = $false; error = "snapshot read: $($r.error)" } }
+    $maps = ConvertTo-DuneRowMaps -Result $r
+    if ($maps.Count -eq 0) { return @{ ok = $false; error = "no character for account $AccountId." } }
+    $row = $maps[0]
+    $name = [string]$row['name']
+    if (-not $name) { return @{ ok = $false; error = 'character has no name.' } }
 
-    # --- Step 1: DML-only wipes in one transaction ------------------------------
-    $sb = [System.Text.StringBuilder]::new()
-    [void]$sb.AppendLine('BEGIN;')
-    # Journey: reset every node EXCEPT Steam achievements (DA_ACH%) to incomplete
-    # (complete + reveal -> false), NOT delete -- deleting can stop the game
-    # re-offering quests, so the player could not actually replay them.
-    [void]$sb.AppendLine("UPDATE dune.journey_story_node SET complete_condition_state='false'::jsonb, reveal_condition_state='false'::jsonb, has_pending_reward=false WHERE $charScope AND story_node_id NOT LIKE 'DA_ACH%';")
-    # Progression tags: explicit prefix ALLOW-LIST (NOT delete-all). Cosmetic /
-    # building-set / achievement state does not live under these prefixes and so
-    # survives. Contract.Tracking.*Kill* kill-counter tags match Contract.% and
-    # are removed here (kills have no dedicated table).
-    $tagLikes = @(
-        "tag LIKE 'Contract.%'", "tag LIKE 'Journey.%'", "tag LIKE 'JourneySets.%'",
-        "tag LIKE 'DialogueFlags.%'", "tag LIKE 'Exploration.%'", "tag LIKE 'DunipediaFlags.%'",
-        "tag LIKE 'BigMoments.%'", "tag LIKE 'NPE.%'", "tag LIKE 'Faction.%'",
-        "tag LIKE 'Character.Keystone.%'"
-    ) -join ' OR '
-    [void]$sb.AppendLine("DELETE FROM dune.player_tags WHERE $charScope AND ($tagLikes);")
-    # Contract items: remove ALL contract cards in the pawn's contract inventory
-    # (inventory_type 29), then reset the tracked-contract pointer -- every item is
-    # gone so any non-'!!itm#0' value now dangles.
-    [void]$sb.AppendLine("DELETE FROM dune.items WHERE template_id='ContractItem' AND inventory_id IN (SELECT id FROM dune.inventories WHERE actor_id=$pawnID::bigint AND inventory_type=29);")
-    [void]$sb.AppendLine("UPDATE dune.actors a SET properties = jsonb_set(a.properties, '{ContractsCoordinatorComponent,m_TrackedContractItemUid}', to_jsonb('!!itm#0'::text)) WHERE a.id=$pawnID::bigint AND a.properties ? 'ContractsCoordinatorComponent' AND COALESCE(a.properties->'ContractsCoordinatorComponent'->>'m_TrackedContractItemUid','!!itm#0') <> '!!itm#0';")
-    # Crafting recipes: empty the known-recipe list (verified shape: single
-    # m_KnownItemRecipes array of recipe objects, ~496 entries on a maxed char).
-    [void]$sb.AppendLine("UPDATE dune.actors SET properties = jsonb_set(properties, '{CraftingRecipesLibraryActorComponent,m_KnownItemRecipes}', '[]'::jsonb) WHERE id=$pawnID::bigint AND properties #> '{CraftingRecipesLibraryActorComponent,m_KnownItemRecipes}' IS NOT NULL;")
-    # Tech knowledge: empty the learned-tech list ONLY. Intel currency
-    # (m_TechKnowledgePoints) and m_NextTechTreeUpgradeIndex are intentionally KEPT
-    # per the locked scope -- do not blind-null the whole component.
-    [void]$sb.AppendLine("UPDATE dune.actors SET properties = jsonb_set(properties, '{TechKnowledgePlayerComponent,m_TechKnowledge,m_TechKnowledgeData}', '[]'::jsonb) WHERE id=$pawnID::bigint AND properties #> '{TechKnowledgePlayerComponent,m_TechKnowledge,m_TechKnowledgeData}' IS NOT NULL;")
-    [void]$sb.AppendLine('COMMIT;')
+    $sets = @(); $pieces = @()
+    try { if ([string]$row['sets'])   { $sets   = @([string]$row['sets']   | ConvertFrom-Json) } } catch {}
+    try { if ([string]$row['pieces']) { $pieces = @([string]$row['pieces'] | ConvertFrom-Json) } } catch {}
+    $cosmeticsJson = [string]$row['cosmetics']
 
-    $r = Invoke-DuneSqlQuery -Ip $Ip -Sql $sb.ToString() -ReadOnly $false -MaxRows 1 -TimeoutSec 120
-    if (-not $r.ok) {
-        Invoke-DuneSqlQuery -Ip $Ip -Sql 'ROLLBACK;' -ReadOnly $false -MaxRows 1 -TimeoutSec 5 | Out-Null
-        return @{ ok = $false; error = "fresh-start core tx: $($r.error)" }
+    $snap = [ordered]@{
+        name             = $name
+        saved_at         = (Get-Date).ToUniversalTime().ToString('o')
+        account_id       = $AccountId
+        character_id     = [int64](ConvertTo-DuneInt $row['character_id'])
+        building_sets    = @($sets)
+        buildable_pieces = @($pieces)
+        cosmetics        = $cosmeticsJson   # raw JSON string, reapplied verbatim
     }
+    # Replace any existing snapshot for the same name (case-insensitive -ne).
+    $others = @(Get-DuneFreshStartSnapshots | Where-Object { [string]$_.name -ne $name })
+    Save-DuneFreshStartSnapshots -Snapshots (@($snap) + $others)
 
-    # --- Step 2: faction (rep + alignment + faction tags + ClimbTheRanks +
-    # faction contract items/pointer). Own transaction; idempotent.
-    $fr = Invoke-DunePlayerResetFaction -Ip $Ip -AccountId $AccountId -Faction 'both'
-    if (-not $fr.ok) { return @{ ok = $false; error = "fresh-start faction: $($fr.error)"; partial = $true } }
-
-    # --- Step 3: specializations + keystones (keyed by controller id).
-    $sr = Invoke-DunePlayerResetAllSpecs -Ip $Ip -ControllerId $controllerID
-    if (-not $sr.ok) { return @{ ok = $false; error = "fresh-start specs: $($sr.error)"; partial = $true } }
-
+    $cosMsg = if ($cosmeticsJson) { 'cosmetics captured' } else { 'no cosmetics found' }
     return @{
         ok = $true
-        message = "Fresh Start complete for account $AccountId - journey reset (Steam achievements kept), progression tags removed, faction + contracts cleared, crafting recipes + tech knowledge wiped, specializations + keystones reset. KEPT: cosmetics, building sets, Steam achievements, inventory, bases, Intel, class skill trees. Takes effect on next login."
-        kept  = @('cosmetics','building sets','Steam achievements','inventory','bases','Intel','class skill trees')
-        wiped = @('journey','progression tags','faction','contracts','crafting recipes','tech knowledge','specializations','keystones')
+        message = "Snapshot saved for '$name' - $($sets.Count) building set(s), $($pieces.Count) piece(s), $cosMsg. Now delete + recreate the character with the SAME name in-game, spawn, then use Restore."
+        name = $name; sets = $sets.Count; pieces = $pieces.Count; cosmetics = [bool]$cosmeticsJson
+    }
+}
+
+# Restore a saved snapshot's building sets/pieces + cosmetics onto the CURRENT
+# live character with the given name (the freshly recreated one). Offline-only:
+# building_progression and the pawn cosmetics component are RAM-authoritative
+# while connected. Unions with whatever the fresh character already has so its
+# starter unlocks are never lost.
+function Invoke-DunePlayerRestoreBuilds {
+    param([string]$Ip, [string]$Name)
+    if (-not $Name) { return @{ ok = $false; error = 'name is required.' } }
+    $snap = @(Get-DuneFreshStartSnapshots | Where-Object { [string]$_.name -eq $Name })
+    if ($snap.Count -eq 0) { return @{ ok = $false; error = "no saved snapshot for '$Name' - snapshot the character before deleting it." } }
+    $s = $snap[0]
+
+    $safeName = ConvertTo-DuneSqlString $Name
+    $idSql = "SELECT id::text AS cid, player_pawn_id::text AS pawn FROM dune.player_state WHERE character_name = '$safeName' ORDER BY last_login_time DESC NULLS LAST LIMIT 1;"
+    $ir = Invoke-DuneSqlQuery -Ip $Ip -Sql $idSql -ReadOnly $true -MaxRows 1 -TimeoutSec 15
+    if (-not $ir.ok) { return @{ ok = $false; error = "resolve character: $($ir.error)" } }
+    $imaps = ConvertTo-DuneRowMaps -Result $ir
+    if ($imaps.Count -eq 0) { return @{ ok = $false; error = "no live character named '$Name' - recreate it (same name) and spawn in first, then restore." } }
+    $charID = [int64](ConvertTo-DuneInt $imaps[0]['cid'])
+    $pawnID = [int64](ConvertTo-DuneInt $imaps[0]['pawn'])
+    if ($charID -le 0 -or $pawnID -le 0) { return @{ ok = $false; error = "character '$Name' has no pawn yet - spawn in first." } }
+
+    # Offline-only guard (pawn cosmetics + building_progression are overwritten on
+    # logout otherwise).
+    $off = Test-DunePlayerOffline -Ip $Ip -PawnId $pawnID
+    if (-not $off.ok) { return @{ ok = $false; error = "Player must be offline to restore builds. $($off.reason)" } }
+
+    $setsArr   = ConvertTo-DunePgTextArray (@($s.building_sets)    | ForEach-Object { [string]$_ })
+    $piecesArr = ConvertTo-DunePgTextArray (@($s.buildable_pieces) | ForEach-Object { [string]$_ })
+    $cosmetics = [string]$s.cosmetics
+
+    $sb = [System.Text.StringBuilder]::new()
+    [void]$sb.AppendLine('BEGIN;')
+    # Building sets/pieces: union the snapshot into the current row (a fresh char
+    # always has a building_progression row with its starter sets).
+    [void]$sb.AppendLine("UPDATE dune.building_progression SET learned_building_sets = ARRAY(SELECT DISTINCT unnest(COALESCE(learned_building_sets,'{}'::text[]) || $setsArr)), new_buildable_pieces = ARRAY(SELECT DISTINCT unnest(COALESCE(new_buildable_pieces,'{}'::text[]) || $piecesArr)) WHERE character_id=$charID::bigint;")
+    # If the fresh char somehow has no row yet, insert one.
+    [void]$sb.AppendLine("INSERT INTO dune.building_progression (character_id, learned_building_sets, new_buildable_pieces) SELECT $charID::bigint, $setsArr, $piecesArr WHERE NOT EXISTS (SELECT 1 FROM dune.building_progression WHERE character_id=$charID::bigint);")
+    # Cosmetics: shallow-merge the snapshot's unlock object into the pawn's
+    # (snapshot is a superset, so its keys win).
+    if ($cosmetics) {
+        $safeCos = ConvertTo-DuneSqlString $cosmetics
+        [void]$sb.AppendLine("UPDATE dune.actors SET properties = jsonb_set(COALESCE(properties,'{}'::jsonb), '{CustomizationLibraryActorComponent,m_UnlockedCustomizationSerializableList}', COALESCE(properties #> '{CustomizationLibraryActorComponent,m_UnlockedCustomizationSerializableList}','{}'::jsonb) || '$safeCos'::jsonb, true) WHERE id=$pawnID::bigint;")
+    }
+    [void]$sb.AppendLine('COMMIT;')
+
+    $r = Invoke-DuneSqlQuery -Ip $Ip -Sql $sb.ToString() -ReadOnly $false -MaxRows 1 -TimeoutSec 60
+    if (-not $r.ok) {
+        Invoke-DuneSqlQuery -Ip $Ip -Sql 'ROLLBACK;' -ReadOnly $false -MaxRows 1 -TimeoutSec 5 | Out-Null
+        return @{ ok = $false; error = "restore builds tx: $($r.error)" }
+    }
+    $cosMsg = if ($cosmetics) { ' + cosmetics' } else { '' }
+    return @{
+        ok = $true
+        message = "Restored builds for '$Name' - $(@($s.building_sets).Count) building set(s), $(@($s.buildable_pieces).Count) piece(s)$cosMsg. Takes effect on next login."
+        sets = @($s.building_sets).Count; pieces = @($s.buildable_pieces).Count
     }
 }
 
