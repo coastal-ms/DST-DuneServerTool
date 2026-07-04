@@ -613,4 +613,3 @@ END
         message = "Deleted account $AccountId's character - matches the game's own delete+purge: character marked Deleted, owner rank rows on their solo-owned vehicles/bases stripped (now claimable). Co-owner grants on other players' stuff left intact. Physical bases/totems/actors persist in the world."
     }
 }
-}
