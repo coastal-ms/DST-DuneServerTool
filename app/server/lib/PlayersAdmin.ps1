@@ -582,9 +582,11 @@ BEGIN
     -- deleted account's rank row. The real owner + other co-owners keep their
     -- access untouched.
     --
-    -- "Highest rank" = the numeric MAX(rank) on the actor. Game ranks are
-    -- 1..5 (5=Owner, 4=Co-Owner, 3/2/1=associates). If two players tie at the
-    -- highest rank, both are treated as owners and the actor's ACL is wiped.
+    -- "Highest rank" = the numeric MIN(rank) on the actor. DB ranks are
+    -- INVERTED from the game UI: DB rank 1 = game Owner (UI rank 5), DB
+    -- rank 2 = game Co-Owner (UI rank 4), higher DB numbers = lesser roles.
+    -- If two players tie at the lowest DB rank, both are treated as owners
+    -- and the actor's ACL is wiped.
 
     -- Enumerate rank rows the deleted account owns via any of its actors
     -- (usually the character's controller_id, but this covers any owner-linked
@@ -600,7 +602,7 @@ BEGIN
     SELECT DISTINCT dr.aid
     FROM _deleted_ranks dr
     WHERE dr.r = (
-        SELECT MAX(rank) FROM dune.permission_actor_rank
+        SELECT MIN(rank) FROM dune.permission_actor_rank
         WHERE permission_actor_id = dr.aid
     );
 
