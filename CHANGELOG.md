@@ -11,6 +11,14 @@ Patch releases within a major series are rolled up under the major's entry
 on GitHub still exist for each individual release; the consolidated entries
 here cover everything those tags shipped.
 
+## [12.16.3] - 2026-07-04
+
+### Fixed
+
+- **Backup Schedule → retention prune now actually deletes old backups.** Two stacked bugs meant the scheduled prune has never removed a single file since the feature shipped, so `keep-last = 6` was effectively `keep-last = infinity`. **(1)** The prune glob was one directory level too shallow — `battlegroup backup` writes to `/funcom/artifacts/database-dumps/<sh-hash-name>/<file>.backup`, but DST globbed `/funcom/artifacts/database-dumps/*.backup*`, which matched zero files. Fixed by descending one level (`/*/`). **(2)** Each backup produces two files on disk (`.backup` + `.backup.yaml` sidecar), and the old pattern `*.backup*` matched both, so `keep-last = N` really kept N/2 real backups. Now we count only `.backup` files and delete the `.yaml` sidecar alongside each pruned entry. Manually named snapshots (e.g. `pre-patch-1_4_10_1.backup`) are still preserved by the `-YYYYMMDD-HHMMSS` shape gate.
+
+> ⚠️ **Existing installs must click *Save* once on the Backup Schedule card after upgrading** to rewrite the crontab with the fixed prune line. Upgrading the tool alone does not touch the on-disk cron block — it was written by the previous version and stays as-is until the schedule is saved again.
+
 ## [12.16.2] - 2026-07-04
 
 ### Fixed
