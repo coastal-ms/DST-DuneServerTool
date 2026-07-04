@@ -576,7 +576,7 @@ interface ActionDef {
   balance?: 'solari' | 'scrip' | 'intel'  // show the player's current balance read-only above the form
   confirm?: (p: Player) => string  // confirm message; if returns '' no prompt
   doubleConfirm?: boolean // also requires a typed "i acknowledge" prompt inside run()
-  rowNote?: string        // short italic note shown inline on the row heading
+  rowNote?: string        // description shown inside the expanded row (revealed on click)
   run: (p: Player, v: Record<string, string>) => Promise<{ message: string }>
 }
 
@@ -936,12 +936,6 @@ function ActionRow({ def, player, busy, stats, open, danger, onToggle, runAction
         title={def.liveOnly ? 'Requires player to be online' : def.offlineOnly ? 'Requires player to be offline — the game caches this value in memory while online and overwrites it on logout' : undefined}>
         <Icon name={def.icon} size={14} className={`shrink-0 ${danger ? 'text-error' : 'text-text-dim'}`} />
         <span className="flex-1 min-w-0 truncate font-medium">{def.label}</span>
-        {def.rowNote && (
-          <span className="shrink-0 hidden sm:flex items-center gap-1.5 text-xs">
-            <span className="text-text-dim">---</span>
-            <span className="italic text-white">{def.rowNote}</span>
-          </span>
-        )}
         {def.liveOnly && (
           <span className="text-[10px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded bg-warning/20 text-warning border border-warning/50 shrink-0">LIVE REQ'D</span>
         )}
@@ -952,6 +946,9 @@ function ActionRow({ def, player, busy, stats, open, danger, onToggle, runAction
       </button>
       {open && (
         <div className="border-t border-border p-3">
+          {def.rowNote && (
+            <div className="mb-3 text-xs italic text-text-dim leading-relaxed">{def.rowNote}</div>
+          )}
           {def.custom === 'give-item' ? (
             <GiveItemForm busy={busy} submitLabel={def.label}
               onSubmit={(tpl, qty, qual, overflow) => runAction(def, () => giveItem(player.id, tpl, qty, qual, overflow))}
