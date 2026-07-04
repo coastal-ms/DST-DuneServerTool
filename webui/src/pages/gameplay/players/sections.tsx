@@ -1116,22 +1116,22 @@ function FreshStartForm({ busy, player, runAction }: {
   return (
     <div className="space-y-3 text-sm">
       <div className="rounded-lg bg-surface-2 border border-border/50 p-3 text-text-dim text-xs leading-relaxed">
-        DST owns the whole flow: <b className="text-text">1)</b> Snapshot + Wipe below saves {player.name}'s purchased CHOAM/MTX sets/pieces and cosmetics to disk, then deletes the account (world ownership on their vehicles/bases is stripped, co-owner rows they hold on others' stuff are stripped, per-player state cleared). <b className="text-text">2)</b> Recreate the character in-game with the <b className="text-text">same name</b> and spawn in. <b className="text-text">3)</b> Restore reapplies purchases. Faction-earned sets and tech unlocks re-populate as the fresh character progresses.
+        DST owns the whole flow: <b className="text-text">1)</b> Snapshot + Detach below saves {player.name}'s purchased CHOAM/MTX sets/pieces and cosmetics to disk, strips world ownership (co-owners on your vehicles/bases go with you), and renames the account so the game creates a fresh character on your next login. Old data stays parked and gets swept on the next stack reboot. <b className="text-text">2)</b> Log in again — the game will start you at character creation. Use the <b className="text-text">same name</b> to reclaim purchases. <b className="text-text">3)</b> Restore reapplies purchases. Faction-earned sets and tech unlocks re-populate as the fresh character progresses.
       </div>
 
       <div className="card p-3 space-y-2">
-        <div className="font-medium text-text flex items-center gap-2"><Icon name="AlertTriangle" size={14} className="text-warning" /> Step 1 — Snapshot &amp; Wipe</div>
-        <div className="text-text-dim text-xs">Saves purchases + cosmetics to <code className="text-text">%APPDATA%\DuneServer\fresh-start-snapshots.json</code>, then permanently deletes account {player.account_id}. Offline required. Snapshot survives on disk even if delete fails.</div>
+        <div className="font-medium text-text flex items-center gap-2"><Icon name="AlertTriangle" size={14} className="text-warning" /> Step 1 — Snapshot &amp; Detach</div>
+        <div className="text-text-dim text-xs">Saves purchases + cosmetics to <code className="text-text">%APPDATA%\DuneServer\fresh-start-snapshots.json</code>, strips ownership on {player.name}'s vehicles/bases, then renames account {player.account_id} so the game creates a fresh character on next login. Non-destructive — no pod crashes. Old rows swept on next stack reboot.</div>
         <button type="button" disabled={busy}
           className="px-3 py-2 rounded-lg bg-danger/20 border border-danger/50 text-text hover:bg-danger/30 disabled:opacity-50 text-sm font-medium"
           onClick={() => runAction(localDef, async () => {
             const first = window.confirm(
-              `Snapshot ${player.name}'s purchases and PERMANENTLY delete account ${player.account_id} (${player.name})?\n\n` +
-              `The saved snapshot lets you restore purchases onto the recreated character. Everything else about this account is destroyed. This cannot be undone.`
+              `Snapshot ${player.name}'s purchases and detach account ${player.account_id} (${player.name})?\n\n` +
+              `The saved snapshot lets you restore purchases onto your fresh character. Ownership on your vehicles/bases is stripped now; old character data is kept until the next stack reboot then cleaned up automatically.`
             )
             if (!first) throw new Error('cancelled')
             const typed = window.prompt(
-              `SECOND confirmation — snapshot + PERMANENTLY delete account ${player.account_id} (${player.name}).\n\n` +
+              `SECOND confirmation — snapshot + detach account ${player.account_id} (${player.name}).\n\n` +
               `Type  i acknowledge  to proceed:`
             ) || ''
             if (typed.trim().toLowerCase() !== 'i acknowledge') {
@@ -1139,9 +1139,9 @@ function FreshStartForm({ busy, player, runAction }: {
             }
             const r = await freshStartWipe(player.account_id)
             refresh()
-            return { message: r.message || `Snapshot + wipe complete for ${player.name}.` }
+            return { message: r.message || `Snapshot + detach complete for ${player.name}.` }
           })}>
-          Snapshot + Wipe {player.name}
+          Snapshot + Detach {player.name}
         </button>
       </div>
 

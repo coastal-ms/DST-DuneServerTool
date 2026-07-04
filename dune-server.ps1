@@ -945,6 +945,51 @@ function Invoke-OnDemandPartitionClear {
     Write-Host "  Done — on-demand maps will spawn for the next player." -ForegroundColor Green
 }
 
+# Sweep accounts whose funcom-id was renamed to '<id>_retired_<ts>' by DST's
+# Fresh Start / Detach flow. Safe to run only when game pods are cold (during
+# reboot startup, before battlegroup start) so we're not deleting rows any pod
+# is holding. Deletes the account row (cascades to encrypted_player_state +
+# player_state) plus the orphan actors that don't cascade.
+function Invoke-DuneRetiredAccountsSweep {
+    param([Parameter(Mandatory)][string]$Ip)
+    $sql = @'
+DO $$
+DECLARE
+    r record;
+    n int := 0;
+BEGIN
+    FOR r IN
+        SELECT id FROM dune.accounts WHERE "user" LIKE '%_retired_%'
+    LOOP
+        BEGIN
+            -- Orphan actors first (they don't cascade off accounts)
+            DELETE FROM dune.actor_fgl_entities WHERE actor_id IN (SELECT id FROM dune.actors WHERE owner_account_id = r.id);
+            DELETE FROM dune.actors WHERE owner_account_id = r.id;
+            -- Then the account row (encrypted_player_state + player_state cascade)
+            DELETE FROM dune.accounts WHERE id = r.id;
+            n := n + 1;
+        EXCEPTION WHEN OTHERS THEN
+            RAISE NOTICE 'sweep skip: account % - %', r.id, SQLERRM;
+        END;
+    END LOOP;
+    IF n > 0 THEN RAISE NOTICE 'retired-sweep: reclaimed % account(s)', n; END IF;
+END $$;
+'@
+    $b64 = [Convert]::ToBase64String([Text.Encoding]::UTF8.GetBytes($sql))
+    # Find the DB pod (name pattern varies per install)
+    $podLine = ssh -o BatchMode=yes -o StrictHostKeyChecking=no -o LogLevel=QUIET -o ConnectTimeout=8 -i "$sshKey" "$sshUser@$Ip" `
+        "sudo /usr/local/bin/k3s kubectl get pods -A -o custom-columns=NS:.metadata.namespace,NAME:.metadata.name --no-headers 2>/dev/null | grep -E 'db-dbdepl-sts' | head -1" 2>$null
+    if (-not $podLine) { return }
+    $parts = ($podLine -split '\s+') | Where-Object { $_ }
+    if ($parts.Count -lt 2) { return }
+    $dbNs = $parts[0]; $dbPod = $parts[1]
+    $out = ssh -o BatchMode=yes -o StrictHostKeyChecking=no -o LogLevel=QUIET -o ConnectTimeout=15 -i "$sshKey" "$sshUser@$Ip" `
+        "echo $b64 | base64 -d | sudo /usr/local/bin/k3s kubectl exec -i -n $dbNs $dbPod -- psql -U dune -d dune -p 15432 -A 2>&1" 2>$null
+    if ($out -match 'retired-sweep:\s+reclaimed\s+(\d+)') {
+        Write-Host "  Retired accounts sweep: reclaimed $($Matches[1]) account(s) from Fresh Start detaches." -ForegroundColor Green
+    }
+}
+
 function Get-DuneDnatWatchScriptPath {
     $candidates = @(
         (Join-Path $scriptDir 'resources\remote-scripts\dune-dnat-watch-install.sh')
@@ -1523,6 +1568,9 @@ while ($true) {
             if ($dbResult.Output.ExitCode -eq 0) {
                 Save-PhaseTiming 'db-pods' $dbResult.Elapsed
                 Complete-WaitCounter -Message "DB ready in $(Format-Duration $dbResult.Elapsed) ($podLabel in $dbNs)."
+                # Sweep any accounts detached by Fresh Start on a prior session
+                # (safe now: DB is up but game pods aren't started yet).
+                Invoke-DuneRetiredAccountsSweep -Ip $ip
             } else {
                 Complete-WaitCounter -Message "DB wait failed after $(Format-Duration $dbResult.Elapsed) ($podLabel in $dbNs) - proceeding anyway." -Color Yellow
                 if ($dbResult.Output.Output) { $dbResult.Output.Output | Select-Object -Last 5 | ForEach-Object { Write-Host "    $_" -ForegroundColor DarkGray } }
@@ -1819,6 +1867,9 @@ while ($true) {
             if ($dbResult.Output.ExitCode -eq 0) {
                 Save-PhaseTiming 'db-pods' $dbResult.Elapsed
                 Complete-WaitCounter -Message "DB ready in $(Format-Duration $dbResult.Elapsed) ($podLabel in $dbNs)."
+                # Sweep any accounts detached by Fresh Start on a prior session
+                # (safe now: DB is up but game pods aren't started yet).
+                Invoke-DuneRetiredAccountsSweep -Ip $ip
             } else {
                 Complete-WaitCounter -Message "DB wait failed after $(Format-Duration $dbResult.Elapsed) ($podLabel in $dbNs) - proceeding anyway." -Color Yellow
                 if ($dbResult.Output.Output) { $dbResult.Output.Output | Select-Object -Last 5 | ForEach-Object { Write-Host "    $_" -ForegroundColor DarkGray } }
