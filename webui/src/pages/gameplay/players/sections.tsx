@@ -661,7 +661,7 @@ const ACTIONS: ActionDef[] = [
       return wipeJourney(p.account_id)
     } },
   { id: 'reset-faction', group: 'Progression', label: 'Reset Faction', icon: 'Swords', custom: 'reset-faction', offlineOnly: true,
-    rowNote: 'Wipe ALL faction rep + tags + ClimbTheRanks nodes to start fresh. Player must be offline.',
+    rowNote: 'Wipe faction rep + tags + ClimbTheRanks nodes (revealed AND completed) so the character reads as pre-faction. Optional Deep also clears Dunipedia lore. Player must be offline.',
     run: () => Promise.resolve({ message: '' }) },
   { id: 'fresh-start', group: 'Progression', label: 'Fresh Start (keep purchases)', icon: 'Sunrise', custom: 'fresh-start',
     rowNote: 'Snapshot purchased sets/pieces (CHOAM shop + MTX) + cosmetic unlocks, delete + recreate the character (same name) in-game, then restore. Offline to restore. Faction sets and tech unlocks re-earn naturally.',
@@ -1020,8 +1020,8 @@ function ActionRow({ def, player, busy, stats, open, danger, onToggle, runAction
               })} />
           ) : def.custom === 'reset-faction' ? (
             <ResetFactionForm busy={busy} playerName={player.name}
-              onReset={() => runAction(def, async () => {
-                const r = await resetFaction(player.account_id, 'both')
+              onReset={(deep) => runAction(def, async () => {
+                const r = await resetFaction(player.account_id, 'both', deep)
                 return { message: r.message || `Reset faction for ${player.name}.` }
               })} />
           ) : def.custom === 'fresh-start' ? (
@@ -2199,20 +2199,31 @@ function CompleteContractForm({ busy, onSubmit }: { busy: boolean; onSubmit: (co
 function ResetFactionForm({ busy, playerName, onReset }: {
   busy: boolean
   playerName: string
-  onReset: () => void
+  onReset: (deep: boolean) => void
 }) {
+  const [deep, setDeep] = useState(false)
   const go = () => {
+    const extra = deep ? '\nDEEP RESET: also wipes faction-related Dunipedia lore fragments (House Atreides/Harkonnen/Leto/Paul/Baron/Feyd/etc.).' : ''
     const typed = window.prompt(
-      `Reset ALL faction progression for ${playerName} — zeroes rep, removes every faction tag, and resets ClimbTheRanks journey nodes for both factions. Cannot be undone.\n\nType  reset faction  to proceed:`
+      `Reset ALL faction progression for ${playerName} — zeroes rep, removes every faction tag (rank grid, MaasKharet, storyline milestones), and resets ClimbTheRanks journey nodes (revealed AND completed) for both factions. Cannot be undone.${extra}\n\nType  reset faction  to proceed:`
     ) || ''
     if (typed.trim().toLowerCase() !== 'reset faction') return
-    onReset()
+    onReset(deep)
   }
   return (
     <div className="space-y-2">
-      <p className="text-[11px] text-text-dim">Removes Atreides + Harkonnen rep, tags, and faction journey nodes. Player must be offline; takes effect on next login.</p>
+      <p className="text-[11px] text-text-dim">Removes Atreides + Harkonnen rep, tags, and faction journey nodes (both revealed &amp; completed state). Player must be offline; takes effect on next login.</p>
+      <label className="flex items-start gap-2 text-[12px] text-text cursor-pointer select-none">
+        <input type="checkbox" checked={deep} disabled={busy}
+          onChange={e => setDeep(e.target.checked)}
+          className="mt-0.5 h-3.5 w-3.5 rounded border-border bg-surface-2 accent-ibad" />
+        <span>
+          <span className="font-medium">Deep reset</span>
+          <span className="text-text-dim"> — also wipe faction lore + Dunipedia entries for this faction (House Atreides / Harkonnen character codex).</span>
+        </span>
+      </label>
       <button className="btn-danger w-full" disabled={busy} onClick={go}>
-        <Icon name="Swords" size={13} /> Reset Faction
+        <Icon name="Swords" size={13} /> Reset Faction{deep ? ' (Deep)' : ''}
       </button>
     </div>
   )
