@@ -588,3 +588,45 @@ Register-DuneRoute -Method POST -Path '/api/gameplay/players/update-tags' -Handl
         Write-DuneError -Response $res -Status 500 -Message "Update tags failed: $($_.Exception.Message)"
     }
 }
+
+# ---------------------------------------------------------------------------
+# Discover tech-knowledge (self-seeding catalog). Two prefix-scoped variants:
+#   /discover-buildables -> BLD_* only (matches "unlock all placeable buildables")
+#   /discover-all-tech   -> BLD_* + RCP_* + DA_GRP_* (blanket)
+# Both insert missing entries as NotPurchased; existing unlocks are preserved.
+# Offline-only (pawn JSON is RAM-authoritative while connected).
+# ---------------------------------------------------------------------------
+
+# POST /api/gameplay/players/discover-buildables  { account_id }
+Register-DuneRoute -Method POST -Path '/api/gameplay/players/discover-buildables' -Handler {
+    param($req, $res, $routeParams, $body)
+    try {
+        $acc = Get-DuneBodyInt -Body $body -Name 'account_id'
+        if ($null -eq $acc -or $acc -le 0) { Write-DuneError -Response $res -Status 400 -Message 'account_id is required.'; return }
+        Invoke-DunePlayerWriteRoute -Response $res -Action {
+            param($ip)
+            $off = Test-DunePlayerOfflineByAccount -Ip $ip -AccountId $acc
+            if (-not $off.ok) { return @{ ok = $false; error = "Player must be offline to discover tech entries. $($off.reason)" } }
+            Invoke-DunePlayerDiscoverTechEntries -Ip $ip -AccountId $acc -Prefixes @('^BLD_')
+        }
+    } catch {
+        Write-DuneError -Response $res -Status 500 -Message "Discover buildables failed: $($_.Exception.Message)"
+    }
+}
+
+# POST /api/gameplay/players/discover-all-tech  { account_id }
+Register-DuneRoute -Method POST -Path '/api/gameplay/players/discover-all-tech' -Handler {
+    param($req, $res, $routeParams, $body)
+    try {
+        $acc = Get-DuneBodyInt -Body $body -Name 'account_id'
+        if ($null -eq $acc -or $acc -le 0) { Write-DuneError -Response $res -Status 400 -Message 'account_id is required.'; return }
+        Invoke-DunePlayerWriteRoute -Response $res -Action {
+            param($ip)
+            $off = Test-DunePlayerOfflineByAccount -Ip $ip -AccountId $acc
+            if (-not $off.ok) { return @{ ok = $false; error = "Player must be offline to discover tech entries. $($off.reason)" } }
+            Invoke-DunePlayerDiscoverTechEntries -Ip $ip -AccountId $acc -Prefixes @('^BLD_','^RCP_','^DA_GRP_')
+        }
+    } catch {
+        Write-DuneError -Response $res -Status 500 -Message "Discover all tech failed: $($_.Exception.Message)"
+    }
+}

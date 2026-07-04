@@ -11,6 +11,12 @@ Patch releases within a major series are rolled up under the major's entry
 on GitHub still exist for each individual release; the consolidated entries
 here cover everything those tags shipped.
 
+## [12.16.8] - 2026-07-04
+
+### Added
+
+- **Discover All Placeable Buildables** and **Discover All Tech (Buildables + Recipes + Groups)** one-click actions under *Players → Progression*. Both insert missing tech-knowledge entries into the character's Intel terminal with `UnlockedState = NotPurchased` — the entries appear in the terminal, but Intel points still need to be spent to fully unlock (matches the in-game `UnlockAllSkills` cheat behavior, scoped to buildable patents in the first action, and blanket to buildables + recipes + starter-pack groups in the second). Existing unlocks on the target character are preserved verbatim; only missing keys are added. The catalog of ItemKeys is derived at click time from the union across all characters on your own server (self-seeding — no DST update needed as Funcom adds content, and the catalog is only as complete as your most-discovered player). Offline-only (pawn JSON is RAM-authoritative while a player is connected). Takes effect on next login.
+
 ## [12.16.7] - 2026-07-04
 
 ### Added

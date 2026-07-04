@@ -1784,6 +1784,22 @@ export function resetFaction(accountId: number, faction: 'atreides' | 'harkonnen
   })
 }
 
+// Discover tech-knowledge entries (self-seeding catalog).
+// - discoverAllBuildables: BLD_* only (matches "unlock all placeable buildables")
+// - discoverAllTech: BLD_* + RCP_* + DA_GRP_* (blanket)
+// Both insert missing entries as NotPurchased; existing unlocks are preserved.
+// Offline-only.
+export function discoverAllBuildables(accountId: number) {
+  return api<WriteResult>('/api/gameplay/players/discover-buildables', {
+    method: 'POST', body: JSON.stringify({ account_id: accountId }),
+  })
+}
+export function discoverAllTech(accountId: number) {
+  return api<WriteResult>('/api/gameplay/players/discover-all-tech', {
+    method: 'POST', body: JSON.stringify({ account_id: accountId }),
+  })
+}
+
 // Fresh Start (keep builds & cosmetics) — snapshot + restore-by-name.
 // A truly-fresh character can only be made by the engine (delete + recreate
 // in-game). DST preserves the player's unlocked building sets + cosmetics: snapshot

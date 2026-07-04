@@ -2345,3 +2345,128 @@ LIMIT 1;
 
     return @{ ok = $true; result = $out }
 }
+
+# ---------------------------------------------------------------------------
+# Discover tech-knowledge entries (self-seeding catalog).
+# Inserts missing entries into the pawn's
+#   TechKnowledgePlayerComponent.m_TechKnowledge.m_TechKnowledgeData[]
+# with UnlockedState = 'NotPurchased' for every ItemKey whose prefix matches
+# one of $Prefixes. Matches the in-game UnlockAllSkills / UnlockAllAbilities
+# cheat behavior (entries appear discovered in the Intel terminal, but Intel
+# points still need to be spent to fully unlock). Existing entries on the
+# target character are preserved verbatim; only missing keys are added.
+#
+# Catalog is derived at CALL TIME from the union of all characters on the
+# server that already have entries in the requested prefix set - no static
+# catalog to maintain, and the set grows organically as players play. This
+# means "discover all" is only as complete as the server's most-discovered
+# character (documented in the UI copy).
+#
+# $Prefixes is an array of Postgres-regex fragments (e.g. '^BLD_'). Case
+# sensitive - matches Funcom's ItemKey convention.
+#
+# Offline-only at the route layer (pawn JSON is RAM-authoritative while the
+# player is connected; a live edit is overwritten on logout).
+# ---------------------------------------------------------------------------
+function Invoke-DunePlayerDiscoverTechEntries {
+    param([string]$Ip, [long]$AccountId, [string[]]$Prefixes)
+    if ($AccountId -le 0) { return @{ ok = $false; error = 'account_id is required.' } }
+    if (-not $Prefixes -or $Prefixes.Count -eq 0) { return @{ ok = $false; error = 'no prefixes specified.' } }
+
+    $pawnID = Get-DunePlayerPawnFromAccount -Ip $Ip -AccountId $AccountId
+    if ($pawnID -le 0) {
+        $err = "no pawn for account $AccountId."
+        if (Get-Command Write-DuneLog -ErrorAction SilentlyContinue) { Write-DuneLog "DiscoverTech FAIL: $err" 'WARN' }
+        return @{ ok = $false; error = $err }
+    }
+
+    $prefixArr = ConvertTo-DunePgTextArray $Prefixes
+    $path = "'{TechKnowledgePlayerComponent,m_TechKnowledge,m_TechKnowledgeData}'"
+
+    # Single-statement CTE + UPDATE, wrapped in a transaction for atomicity.
+    # Uses COALESCE to seed an empty array when the tech path is missing on a
+    # fresh character (jsonb_set is then applied with create_missing=true).
+    $sql = @"
+BEGIN;
+WITH existing AS (
+    SELECT e AS entry
+    FROM dune.actors a, jsonb_array_elements(COALESCE(a.properties #> $path, '[]'::jsonb)) e
+    WHERE a.id = $pawnID::bigint
+),
+existing_keys AS (
+    SELECT entry->>'ItemKey' AS k FROM existing
+),
+catalog AS (
+    SELECT DISTINCT entry->>'ItemKey' AS k
+    FROM dune.actors a2,
+         jsonb_array_elements(a2.properties #> '{TechKnowledgePlayerComponent,m_TechKnowledge,m_TechKnowledgeData}') AS entry
+    WHERE a2.properties ? 'TechKnowledgePlayerComponent'
+      AND entry->>'ItemKey' ~ ANY($prefixArr)
+),
+missing AS (
+    SELECT k FROM catalog EXCEPT SELECT k FROM existing_keys
+),
+added_entries AS (
+    SELECT jsonb_build_object('ItemKey', k, 'bIsNewEntry', true, 'UnlockedState', 'NotPurchased') AS obj
+    FROM missing
+),
+merged AS (
+    SELECT
+        COALESCE((SELECT jsonb_agg(entry) FROM existing), '[]'::jsonb)
+        || COALESCE((SELECT jsonb_agg(obj) FROM added_entries), '[]'::jsonb) AS new_arr,
+        (SELECT COUNT(*) FROM added_entries)::int AS added_count,
+        (SELECT COUNT(*) FROM existing)::int      AS existing_count,
+        (SELECT COUNT(*) FROM catalog)::int       AS catalog_count
+)
+UPDATE dune.actors a
+SET properties = jsonb_set(
+    jsonb_set(
+        jsonb_set(
+            COALESCE(a.properties, '{}'::jsonb),
+            '{TechKnowledgePlayerComponent}',
+            COALESCE(a.properties -> 'TechKnowledgePlayerComponent', '{}'::jsonb),
+            true),
+        '{TechKnowledgePlayerComponent,m_TechKnowledge}',
+        COALESCE(a.properties #> '{TechKnowledgePlayerComponent,m_TechKnowledge}', '{}'::jsonb),
+        true),
+    $path,
+    (SELECT new_arr FROM merged),
+    true)
+WHERE a.id = $pawnID::bigint
+RETURNING (SELECT added_count FROM merged) AS added,
+          (SELECT existing_count FROM merged) AS already,
+          (SELECT catalog_count FROM merged) AS catalog;
+COMMIT;
+"@
+
+    $r = Invoke-DuneSqlQuery -Ip $Ip -Sql $sql -ReadOnly $false -MaxRows 5 -TimeoutSec 60
+    if (-not $r.ok) {
+        if (Get-Command Write-DuneLog -ErrorAction SilentlyContinue) { Write-DuneLog "DiscoverTech FAIL: SQL error (pawn=$pawnID, prefixes=$($Prefixes -join ',')): $($r.error)" 'ERROR' }
+        return @{ ok = $false; error = "discover tech: $($r.error)" }
+    }
+
+    # Parse the RETURNING row (added / already / catalog) from the query output.
+    $added = 0; $already = 0; $catalog = 0
+    try {
+        $maps = ConvertTo-DuneRowMaps -Result $r
+        if ($maps -and $maps.Count -ge 1) {
+            $added   = [int](ConvertTo-DuneInt $maps[0]['added'])
+            $already = [int](ConvertTo-DuneInt $maps[0]['already'])
+            $catalog = [int](ConvertTo-DuneInt $maps[0]['catalog'])
+        }
+    } catch { }
+
+    if (Get-Command Write-DuneLog -ErrorAction SilentlyContinue) {
+        Write-DuneLog "DiscoverTech OK: added=$added already=$already catalog=$catalog (pawn=$pawnID, account=$AccountId, prefixes=$($Prefixes -join ','))"
+    }
+
+    $msg = "Discovered $added new tech entries ($already already present, $catalog in server catalog). Intel points still need to be spent normally. Takes effect on next login."
+    if ($added -eq 0 -and $catalog -eq 0) {
+        $msg = "No entries in the server catalog yet for those prefixes - the catalog is derived from what any character on this server has already discovered. Have someone discover a few entries in-game first."
+    } elseif ($added -eq 0) {
+        $msg = "Nothing new to discover - this character already has all $catalog entries the server catalog knows about."
+    }
+
+    return @{ ok = $true; message = $msg; added = $added; already_present = $already; catalog_size = $catalog }
+}
+

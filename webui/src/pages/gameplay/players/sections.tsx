@@ -26,6 +26,7 @@ import {
   restoreDestroyed,
   setFactionTier, setPlayerTags, setSkillPoints,
   setStarterClass, teleportToPlayer, teleportToLocation, setRespawn, getTeleportDestinations, getPlayers, updatePlayerTags, wipeCodex, wipeJourney, resetFaction, snapshotBuilds, getFreshStartSnapshots, restoreBuilds, skipTutorial,
+  discoverAllBuildables, discoverAllTech,
   chatWhisper, isValidTemplateId, getItemCatalog, getCosmeticsCatalog, type CosmeticEntry,
   parseTcnoPackageText,
   giveItems, getItemPackages, saveItemPackage, deleteItemPackage,
@@ -622,6 +623,18 @@ const ACTIONS: ActionDef[] = [
   { id: 'apply-progression-preset', group: 'Progression', label: 'Apply Quick Preset', icon: 'Zap', custom: 'quick-presets', offlineOnly: true,
     rowNote: 'Completes a story/journey chapter instantly — incl. Find the Fremen (3rd ability slot + prescience). Player must be offline.',
     run: () => Promise.resolve({ message: '' }) },
+  { id: 'discover-buildables', group: 'Progression', label: 'Discover All Placeable Buildables', icon: 'Hammer', offlineOnly: true,
+    rowNote: 'Marks every BLD_* patent your server has ever seen as DISCOVERED (NotPurchased) so it appears in the Intel terminal. Points still need to be spent normally. Catalog is self-seeding from your own players.',
+    confirm: p => `Discover all placeable buildable patents on ${p.name}?\n\n` +
+      `Inserts every BLD_* ItemKey your server has ever discovered as NotPurchased on ${p.name}'s Intel terminal — same behavior as the in-game UnlockAll cheat scoped to buildables. Existing unlocks are preserved; only missing entries are added. Intel points still need to be spent normally.\n\n` +
+      `Catalog is derived at click time from the union across all characters on this server, so it's only as complete as your most-discovered player. Takes effect on next login.`,
+    run: p => discoverAllBuildables(p.account_id) },
+  { id: 'discover-all-tech', group: 'Progression', label: 'Discover All Tech (Buildables + Recipes + Groups)', icon: 'BookOpenCheck', offlineOnly: true,
+    rowNote: 'Blanket version: BLD_*, RCP_*, DA_GRP_* — every tech entry your server has seen as NotPurchased. Points still spent normally. Self-seeding catalog.',
+    confirm: p => `Discover ALL tech entries on ${p.name}?\n\n` +
+      `Blanket version — inserts every BLD_*, RCP_*, and DA_GRP_* ItemKey your server has ever discovered as NotPurchased. Same self-seeding catalog as the buildables-only version. Existing unlocks are preserved; Intel points still need to be spent normally.\n\n` +
+      `Catalog is only as complete as your server's most-discovered character. Takes effect on next login.`,
+    run: p => discoverAllTech(p.account_id) },
   { id: 'progression-unlock', group: 'Progression', label: 'Progression Unlock', icon: 'Milestone', custom: 'progression-unlock',
     rowNote: 'Completes DA_FQ_ClimbTheRanks journey nodes + writes faction tier tags',
     run: () => Promise.resolve({ message: '' }) },
