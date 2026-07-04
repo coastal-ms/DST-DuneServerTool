@@ -11,6 +11,12 @@ Patch releases within a major series are rolled up under the major's entry
 on GitHub still exist for each individual release; the consolidated entries
 here cover everything those tags shipped.
 
+## [12.16.0] - 2026-07-03
+
+### Added
+
+- **Fresh Start (keep builds & cosmetics).** New action under *Players → Progression*. A genuinely fresh character can only be made in-game (the game engine rebuilds the entire quest journal, skill trees and starter content from the character on every login, so an in-place database reset can't produce one). Fresh Start instead preserves the two things you're entitled to keep across a restart — your unlocked **building sets/pieces** and **cosmetics**. Flow: **1)** *Snapshot* the character's builds + cosmetics (saved locally, keyed by character name); **2)** delete and recreate the character in-game with the **same name** (delete via the in-game Funcom browser so the name is kept) and spawn in; **3)** *Restore* — DST grants those builds + cosmetics back onto the fresh character by name. Everything else (quests, skills, faction, tech) starts genuinely fresh. Restore requires the player to be offline.
+
 ## [12.15.2] - 2026-07-03
 
 ### Added
