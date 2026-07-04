@@ -228,6 +228,19 @@ Register-DuneRoute -Method POST -Path '/api/gameplay/players/fresh-start/snapsho
     }
 }
 
+# GET /api/gameplay/players/fresh-start/snapshots-path  -> disk path of the
+# snapshots JSON, so Settings can render it + open the folder in Explorer.
+Register-DuneRoute -Method GET -Path '/api/gameplay/players/fresh-start/snapshots-path' -Handler {
+    param($req, $res, $routeParams, $body)
+    try {
+        $path = Get-DuneFreshStartSnapshotPath
+        $folder = Split-Path -Parent $path
+        Write-DuneJson -Response $res -Body @{ ok = $true; file = $path; folder = $folder; exists = (Test-Path -LiteralPath $path) }
+    } catch {
+        Write-DuneError -Response $res -Status 500 -Message "Snapshot path failed: $($_.Exception.Message)"
+    }
+}
+
 # GET /api/gameplay/players/fresh-start/snapshots  -> saved snapshot metadata
 Register-DuneRoute -Method GET -Path '/api/gameplay/players/fresh-start/snapshots' -Handler {
     param($req, $res, $routeParams, $body)
@@ -247,9 +260,23 @@ Register-DuneRoute -Method POST -Path '/api/gameplay/players/fresh-start/restore
     try {
         $name = [string](Get-DuneBodyValue -Body $body -Name 'name')
         if (-not $name) { Write-DuneError -Response $res -Status 400 -Message 'name is required.'; return }
-        Invoke-DunePlayerWriteRoute -Response $res -Action { param($ip) Invoke-DunePlayerRestoreBuilds -Ip $ip -Name $name }
+        Invoke-DunePlayerWriteRoute -Response $res -Action { param($ip) Invoke-DunePlayerRestoreBuilds -Ip $ip -Name $name -SkipNpe $false }
     } catch {
         Write-DuneError -Response $res -Status 500 -Message "Restore builds failed: $($_.Exception.Message)"
+    }
+}
+
+# POST /api/gameplay/players/fresh-start/restore-skip-npe  { name }
+# Same as /fresh-start/restore but ALSO marks the tutorial as completed on the
+# restored character (Fresh Start + No NPE variant). Offline-only.
+Register-DuneRoute -Method POST -Path '/api/gameplay/players/fresh-start/restore-skip-npe' -Handler {
+    param($req, $res, $routeParams, $body)
+    try {
+        $name = [string](Get-DuneBodyValue -Body $body -Name 'name')
+        if (-not $name) { Write-DuneError -Response $res -Status 400 -Message 'name is required.'; return }
+        Invoke-DunePlayerWriteRoute -Response $res -Action { param($ip) Invoke-DunePlayerRestoreBuilds -Ip $ip -Name $name -SkipNpe $true }
+    } catch {
+        Write-DuneError -Response $res -Status 500 -Message "Restore builds (+ skip NPE) failed: $($_.Exception.Message)"
     }
 }
 
@@ -513,13 +540,9 @@ Register-DuneRoute -Method POST -Path '/api/gameplay/players/wipe-codex' -Handle
     }
 }
 
-# POST /api/gameplay/players/skip-tutorial  { account_id }
-# Matches what the game applies when a player picks "Skip Tutorial" at
-# character creation: NPE.HasCompletedNPE tag + the DA_MQ_ANewBeginning* /
-# DA_MQ_NPEAutocompleted* journey subtrees marked complete + revealed.
-# Unlocks Advanced_*_Fabricator patents and other tutorial-gated tech.
-# Offline-only (tag + journey state are RAM-authoritative while connected).
-Register-DuneRoute -Method POST -Path '/api/gameplay/players/skip-tutorial' -Handler {
+# POST /api/gameplay/players/grant-all-skills  { account_id }
+# Grants every skill in the bundled catalog on the character. Offline-only.
+Register-DuneRoute -Method POST -Path '/api/gameplay/players/grant-all-skills' -Handler {
     param($req, $res, $routeParams, $body)
     try {
         $acc = Get-DuneBodyInt -Body $body -Name 'account_id'
@@ -527,20 +550,30 @@ Register-DuneRoute -Method POST -Path '/api/gameplay/players/skip-tutorial' -Han
         Invoke-DunePlayerWriteRoute -Response $res -Action {
             param($ip)
             $off = Test-DunePlayerOfflineByAccount -Ip $ip -AccountId $acc
-            if (-not $off.ok) { return @{ ok = $false; error = "Player must be offline to skip tutorial. $($off.reason)" } }
-            # Resolve character_id from account_id (dune.journey_story_node is
-            # keyed by character_id since the 1.4.10.0 patch).
-            $idSql = "SELECT id::text AS cid FROM dune.player_state WHERE account_id=$acc::bigint LIMIT 1;"
-            $ir = Invoke-DuneSqlQuery -Ip $ip -Sql $idSql -ReadOnly $true -MaxRows 1 -TimeoutSec 15
-            if (-not $ir.ok) { return @{ ok = $false; error = "resolve character: $($ir.error)" } }
-            $imaps = ConvertTo-DuneRowMaps -Result $ir
-            if ($imaps.Count -eq 0) { return @{ ok = $false; error = "no character for account $acc." } }
-            $charID = [int64](ConvertTo-DuneInt $imaps[0]['cid'])
-            if ($charID -le 0) { return @{ ok = $false; error = "no character for account $acc." } }
-            Invoke-DunePlayerMarkNpeCompleted -Ip $ip -CharacterId $charID
+            if (-not $off.ok) { return @{ ok = $false; error = "Player must be offline to grant skills. $($off.reason)" } }
+            Invoke-DunePlayerGrantAllSkills -Ip $ip -AccountId $acc
         }
     } catch {
-        Write-DuneError -Response $res -Status 500 -Message "Skip tutorial failed: $($_.Exception.Message)"
+        Write-DuneError -Response $res -Status 500 -Message "Grant all skills failed: $($_.Exception.Message)"
+    }
+}
+
+# POST /api/gameplay/players/grant-all-tech  { account_id }
+# Marks every buildable patent + crafting recipe + starter group in the bundled
+# catalog as Purchased on the character's Intel terminal. Offline-only.
+Register-DuneRoute -Method POST -Path '/api/gameplay/players/grant-all-tech' -Handler {
+    param($req, $res, $routeParams, $body)
+    try {
+        $acc = Get-DuneBodyInt -Body $body -Name 'account_id'
+        if ($null -eq $acc -or $acc -le 0) { Write-DuneError -Response $res -Status 400 -Message 'account_id is required.'; return }
+        Invoke-DunePlayerWriteRoute -Response $res -Action {
+            param($ip)
+            $off = Test-DunePlayerOfflineByAccount -Ip $ip -AccountId $acc
+            if (-not $off.ok) { return @{ ok = $false; error = "Player must be offline to grant tech recipes. $($off.reason)" } }
+            Invoke-DunePlayerGrantAllTech -Ip $ip -AccountId $acc
+        }
+    } catch {
+        Write-DuneError -Response $res -Status 500 -Message "Grant all tech recipes failed: $($_.Exception.Message)"
     }
 }
 

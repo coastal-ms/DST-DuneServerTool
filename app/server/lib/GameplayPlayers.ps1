@@ -32,21 +32,20 @@ function Get-DuneShortClass {
 # SQL — Players (ported from the reference implementation db.go). All read-only.
 # ----------------------------------------------------------------------------
 $script:DunePlayersListSql = @'
-SELECT a.id,
-       COALESCE(a.owner_account_id, 0)                  AS account_id,
+SELECT ps.player_pawn_id                                AS id,
+       COALESCE(ps.account_id, 0)                       AS account_id,
        COALESCE(ps.player_controller_id, 0)             AS controller_id,
        COALESCE(ps.character_name, '')                  AS name,
-       a.class                                          AS class,
+       COALESCE(a.class, '')                            AS class,
        COALESCE(a.map, '')                              AS map,
        COALESCE(pf.faction_id, 0)                       AS faction_id,
        COALESCE(f.name, '')                             AS faction_name,
        COALESCE(ps.online_status::text, 'Offline')      AS online_status
-FROM dune.actors a
-LEFT JOIN dune.player_state ps  ON ps.account_id = a.owner_account_id
-LEFT JOIN dune.player_faction pf ON pf.actor_id = ps.player_controller_id
-LEFT JOIN dune.factions f        ON f.id = pf.faction_id
-WHERE a.class ILIKE '%PlayerCharacter%'
-ORDER BY a.id
+FROM dune.player_state ps
+LEFT JOIN dune.actors a           ON a.id = ps.player_pawn_id
+LEFT JOIN dune.player_faction pf  ON pf.actor_id = ps.player_controller_id
+LEFT JOIN dune.factions f         ON f.id = pf.faction_id
+ORDER BY ps.account_id
 '@
 
 # Inventory for one pawn actor id ($1).

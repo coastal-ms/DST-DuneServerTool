@@ -1802,6 +1802,10 @@ export function snapshotBuilds(accountId: number) {
   })
 }
 
+export function getFreshStartSnapshotsPath() {
+  return api<{ ok: boolean; file: string; folder: string; exists: boolean }>('/api/gameplay/players/fresh-start/snapshots-path')
+}
+
 export function getFreshStartSnapshots() {
   return api<{ ok: boolean; snapshots: FreshStartSnapshot[] }>('/api/gameplay/players/fresh-start/snapshots')
 }
@@ -1812,13 +1816,28 @@ export function restoreBuilds(name: string) {
   })
 }
 
-// Marks the New Player Experience (tutorial) as completed on the character:
-// sets NPE.HasCompletedNPE tag + marks the DA_MQ_ANewBeginning* /
-// DA_MQ_NPEAutocompleted* journey subtrees complete + revealed. Matches the
-// state the game writes when a player picks "Skip Tutorial" at character
-// creation, which unlocks Advanced_*_Fabricator patents. Offline-only.
-export function skipTutorial(accountId: number) {
-  return api<WriteResult>('/api/gameplay/players/skip-tutorial', {
+// Same as restoreBuilds but also marks the tutorial as completed on the
+// restored character (Fresh Start + No NPE variant). Offline-only.
+export function restoreBuildsSkipNpe(name: string) {
+  return api<WriteResult>('/api/gameplay/players/fresh-start/restore-skip-npe', {
+    method: 'POST', body: JSON.stringify({ name }),
+  })
+}
+
+// Grants every skill in the bundled catalog on the character (SkillPointsSpent=1
+// per skill in FLevelComponent.ModuleData). Existing entries preserved.
+// Does not add unspent skill points. Offline-only.
+export function grantAllSkills(accountId: number) {
+  return api<WriteResult>('/api/gameplay/players/grant-all-skills', {
+    method: 'POST', body: JSON.stringify({ account_id: accountId }),
+  })
+}
+
+// Marks every buildable patent + crafting recipe + starter group in the bundled
+// catalog as Purchased on the character's Intel terminal. Existing entries
+// preserved. Does not add Intel points. Offline-only.
+export function grantAllTech(accountId: number) {
+  return api<WriteResult>('/api/gameplay/players/grant-all-tech', {
     method: 'POST', body: JSON.stringify({ account_id: accountId }),
   })
 }

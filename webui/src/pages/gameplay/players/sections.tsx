@@ -25,7 +25,7 @@ import {
   resetAllKeystones, resetAllSpecs, resetJourney, resetProgressionLive, resetSpec,
   restoreDestroyed,
   setFactionTier, setPlayerTags, setSkillPoints,
-  setStarterClass, teleportToPlayer, teleportToLocation, setRespawn, getTeleportDestinations, getPlayers, updatePlayerTags, wipeCodex, wipeJourney, resetFaction, snapshotBuilds, getFreshStartSnapshots, restoreBuilds, skipTutorial,
+  setStarterClass, teleportToPlayer, teleportToLocation, setRespawn, getTeleportDestinations, getPlayers, updatePlayerTags, wipeCodex, wipeJourney, resetFaction, snapshotBuilds, getFreshStartSnapshots, restoreBuilds, grantAllSkills, grantAllTech,
   chatWhisper, isValidTemplateId, getItemCatalog, getCosmeticsCatalog, type CosmeticEntry,
   parseTcnoPackageText,
   giveItems, getItemPackages, saveItemPackage, deleteItemPackage,
@@ -570,6 +570,7 @@ interface ActionDef {
   icon: string
   liveOnly?: boolean      // requires player to be online (RMQ path)
   offlineOnly?: boolean   // requires player to be offline (DB write the game caches in memory)
+  experimental?: boolean  // unverified — may not take effect in-game; shown with an EXPERIMENTAL badge
   fields?: ActionField[]
   custom?: 'give-item' | 'grant-reward' | 'whisper' | 'spawn-vehicle' | 'quick-presets' | 'vehicle-kit' | 'give-package' | 'cheat-scripts' | 'dev-scripts' | 'unlock-trainers' | 'unlock-mainquest' | 'complete-contract' | 'progression-unlock' | 'refuel-vehicle' | 'starter-class' | 'update-tags' | 'teleport-player' | 'teleport-location' | 'set-respawn' | 'reset-faction' | 'grant-cosmetic' | 'fresh-start'
   balance?: 'solari' | 'scrip' | 'intel'  // show the player's current balance read-only above the form
@@ -661,15 +662,19 @@ const ACTIONS: ActionDef[] = [
       return wipeJourney(p.account_id)
     } },
   { id: 'reset-faction', group: 'Progression', label: 'Reset Faction', icon: 'Swords', custom: 'reset-faction', offlineOnly: true,
-    rowNote: 'Wipe faction rep + tags + ClimbTheRanks nodes (revealed AND completed) so the character reads as pre-faction. Optional Deep also clears Dunipedia lore. Player must be offline.',
+    rowNote: 'Wipe faction rep + tags + ClimbTheRanks nodes. Optional Deep also clears codex. Offline.',
     run: () => Promise.resolve({ message: '' }) },
   { id: 'fresh-start', group: 'Progression', label: 'Fresh Start (keep purchases)', icon: 'Sunrise', custom: 'fresh-start',
-    rowNote: 'Snapshot purchased sets/pieces (CHOAM shop + MTX) + cosmetic unlocks, delete + recreate the character (same name) in-game, then restore. Restore also marks the tutorial as completed so Advanced buildables unlock immediately. Offline to restore. Faction sets and tech unlocks re-earn naturally.',
+    rowNote: 'Snapshot cosmetics, delete + recreate character in-game (same name), then restore. Offline to restore.',
     run: () => Promise.resolve({ message: '' }) },
-  { id: 'skip-tutorial', group: 'Progression', label: 'Skip Tutorial (unlock Advanced buildables)', icon: 'FastForward', offlineOnly: true,
-    rowNote: 'Marks the New Player Experience as completed so Advanced buildable patents (Fabricator, etc.) unlock immediately. Same effect as picking Skip Tutorial at character creation. Offline-only. If Advanced buildables don\u2019t unlock immediately, use Progression Unlock (Ch3 Start / Rank 19 Eligible) instead.',
-    confirm: p => `Mark ${p.name}'s tutorial as completed?\n\nThis matches what happens when a player picks 'Skip Tutorial' at character creation. Advanced_*_Fabricator + related tutorial-gated patents will unlock immediately.\n\nNote: this sets the STATE (NPE.HasCompletedNPE tag + NPE journey nodes complete) but has not been end-to-end confirmed to retroactively grant the tutorial-gated patents to a character who was already past character creation. On a genuinely fresh (in-game re-created) character it should mirror the in-game Skip Tutorial choice exactly. If Advanced buildables don't appear after this, use Progression Unlock (Ch3 Start / Rank 19 Eligible) instead.`,
-    run: p => skipTutorial(p.account_id) },
+  { id: 'grant-all-skills', group: 'Progression', label: 'Grant All Skills', icon: 'Sparkles', offlineOnly: true, experimental: true,
+    rowNote: 'Unlock every skill (1 point each). Existing preserved. Does not add skill points. Offline.',
+    confirm: p => `Grant every skill to ${p.name}?\n\nMarks every skill (145 total) as unlocked (SkillPointsSpent=1). Existing entries preserved. Skill-point pool untouched. Player must be offline.`,
+    run: p => grantAllSkills(p.account_id) },
+  { id: 'grant-all-tech', group: 'Progression', label: 'Grant All Tech Recipes', icon: 'BookOpenCheck', offlineOnly: true, experimental: true,
+    rowNote: 'Purchase every buildable + recipe + starter group. Existing preserved. Does not add Intel. Offline.',
+    confirm: p => `Grant every tech recipe to ${p.name}?\n\nMarks every buildable patent, crafting recipe, and starter group (449 total) as Purchased in the Intel terminal. Existing entries preserved. Intel points untouched. Player must be offline.`,
+    run: p => grantAllTech(p.account_id) },
 
   // ----- Items -----
   { id: 'give-item',      group: 'Items', label: 'Give Item', icon: 'PackagePlus', custom: 'give-item',
@@ -765,7 +770,8 @@ const ACTIONS: ActionDef[] = [
   // ----- Danger Zone -----
   { id: 'delete-account', group: 'Danger', label: 'Delete Account (permanent)', icon: 'AlertTriangle',
     doubleConfirm: true,
-    rowNote: 'Double confirmation required',
+    offlineOnly: true,
+    rowNote: 'Double confirmation required — character must be offline',
     confirm: p => `Permanently delete account ${p.account_id} (${p.name})?\n\n` +
       `This is the FIRST of two confirmations. If you continue, the next step asks you to type an acknowledgement before the account is deleted. This cannot be undone.`,
     run: p => {
@@ -922,12 +928,9 @@ function ActionRow({ def, player, busy, stats, open, danger, onToggle, runAction
         onClick={onToggle}
         title={def.liveOnly ? 'Requires player to be online' : def.offlineOnly ? 'Requires player to be offline — the game caches this value in memory while online and overwrites it on logout' : undefined}>
         <Icon name={def.icon} size={14} className={`shrink-0 ${danger ? 'text-error' : 'text-text-dim'}`} />
-        <span className="flex-1 min-w-0 truncate font-medium">{def.label}</span>
-        {def.rowNote && (
-          <span className="shrink-0 hidden sm:flex items-center gap-1.5 text-xs">
-            <span className="text-text-dim">---</span>
-            <span className="italic text-white">{def.rowNote}</span>
-          </span>
+        <span className="flex-1 min-w-0 font-medium">{def.label}</span>
+        {def.experimental && (
+          <span className="text-[10px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded bg-accent/20 text-accent border border-accent/50 shrink-0" title="Experimental — may not take effect in-game">EXPERIMENTAL</span>
         )}
         {def.liveOnly && (
           <span className="text-[10px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded bg-warning/20 text-warning border border-warning/50 shrink-0">LIVE REQ'D</span>
@@ -1092,12 +1095,19 @@ function ActionRow({ def, player, busy, stats, open, danger, onToggle, runAction
   )
 }
 
-// Fresh Start (keep purchases) — two-step snapshot/restore flow. A truly
-// fresh character can only be produced by deleting + recreating it in-game; DST
-// snapshots the player's purchased sets/pieces (CHOAM + MTX) + cosmetic unlocks
-// beforehand and restores them by NAME onto the recreated character (name is the
-// stable key across delete). Faction-earned sets and tech-tree unlocks are NOT
-// restored — they re-populate naturally as the character re-progresses.
+// Fresh Start (keep purchases) - after live-comparing what the game's own
+// Funcom in-game delete flow does vs what DST was doing, we ripped out the
+// "detach" / "wipe" middleware entirely. The game's purge (fired when a
+// player creates a new character on a world that has their deleted one)
+// correctly handles ownership cleanup: it wipes every rank=1 row the old
+// character's controllers held, keeps rank=2+ co-owner rows, and marks
+// the old encrypted_player_state.character_state='Deleted'. Physical
+// totems/actors/buildings stay in the world. So DST no longer touches
+// any of that - the game does it right.
+//
+// DST's only role is bracketing the delete: snapshot purchases BEFORE the
+// player deletes in-game (so we can put them back), and restore AFTER the
+// player has recreated the character with the same name.
 function FreshStartForm({ busy, player, runAction }: {
   busy: boolean
   player: Player
@@ -1118,12 +1128,16 @@ function FreshStartForm({ busy, player, runAction }: {
   return (
     <div className="space-y-3 text-sm">
       <div className="rounded-lg bg-surface-2 border border-border/50 p-3 text-text-dim text-xs leading-relaxed">
-        A real fresh start is done in-game: <b className="text-text">1)</b> snapshot below, <b className="text-text">2)</b> delete + recreate the character with the <b className="text-text">same name</b> (delete via the in-game Funcom browser so the name can be reused) and spawn in, <b className="text-text">3)</b> restore. Only your <b className="text-text">purchased</b> CHOAM/MTX sets + pieces and unlocked cosmetics are carried over — faction-earned sets and tech unlocks re-populate naturally as you re-progress, and everything else (quests, skills, faction rank) starts genuinely fresh from the game.
+        DST brackets the game's built-in character-delete + character-recreate flow so purchases carry over. The game handles the actual delete correctly on its own: it wipes ownership on your solo-owned vehicles/bases and leaves your co-owner grants on others' stuff intact.
+      </div>
+
+      <div className="rounded-lg bg-info/10 border border-info/40 p-3 text-info text-xs leading-relaxed">
+        <b>Pro tip - clean up before you delete:</b> pick up your fiefs and disassemble your vehicles first. That way the game has nothing abandoned to "gift" to co-owners or leave sitting for other players to claim, and your new character starts on truly empty ground.
       </div>
 
       <div className="card p-3 space-y-2">
-        <div className="font-medium text-text flex items-center gap-2"><Icon name="Save" size={14} /> Step 1 — Snapshot purchases &amp; cosmetics</div>
-        <div className="text-text-dim text-xs">Captures {player.name}'s purchased CHOAM/MTX sets + pieces + unlocked cosmetics. Do this <b>before</b> deleting the character (the data is destroyed with the character). Faction-earned sets and tech-tree unlocks are NOT snapshotted — they re-populate as the fresh character progresses.</div>
+        <div className="font-medium text-text flex items-center gap-2"><Icon name="Save" size={14} /> Step 1 - Snapshot purchases</div>
+        <div className="text-text-dim text-xs">Saves {player.name}'s purchased CHOAM/MTX sets, pieces, and cosmetics to <code className="text-text">%APPDATA%\DuneServer\fresh-start-snapshots.json</code>. Do this <b className="text-text">before</b> deleting in-game (the data goes with the character).</div>
         <button type="button" disabled={busy}
           className="px-3 py-2 rounded-lg bg-ibad/20 border border-ibad/50 text-text hover:bg-ibad/30 disabled:opacity-50 text-sm font-medium"
           onClick={() => runAction(localDef, async () => {
@@ -1136,12 +1150,17 @@ function FreshStartForm({ busy, player, runAction }: {
       </div>
 
       <div className="card p-3 space-y-2">
-        <div className="font-medium text-text flex items-center gap-2"><Icon name="Sunrise" size={14} /> Step 2 — Restore purchases by name</div>
+        <div className="font-medium text-text flex items-center gap-2"><Icon name="Gamepad2" size={14} /> Step 2 - Delete in-game</div>
+        <div className="text-text-dim text-xs leading-relaxed">Once the snapshot is saved, exit to the main menu, open <b className="text-text">Server Browser</b>, right-click your world, and delete {player.name}. Then create a new character with the <b className="text-text">same name</b>. The game will prompt "<i>Character data detected... this will purge the deleted character</i>" - confirm it. The game will strip ownership on your solo-owned stuff, keep your co-owner grants on others' stuff, and leave your physical bases in the world for you (or anyone else) to claim on the new character.</div>
+      </div>
+
+      <div className="card p-3 space-y-2">
+        <div className="font-medium text-text flex items-center gap-2"><Icon name="Sunrise" size={14} /> Step 3 - Restore purchases by name</div>
         {loading ? (
-          <div className="text-text-dim text-xs flex items-center gap-2"><Icon name="Loader2" size={13} className="animate-spin" /> Checking snapshots…</div>
+          <div className="text-text-dim text-xs flex items-center gap-2"><Icon name="Loader2" size={13} className="animate-spin" /> Checking snapshots...</div>
         ) : snap ? (
           <>
-            <div className="text-text-dim text-xs">Saved snapshot for <b className="text-text">{snap.name}</b> — {snap.sets} set{snap.sets === 1 ? '' : 's'}, {snap.pieces} piece{snap.pieces === 1 ? '' : 's'}{snap.cosmetics ? ' + cosmetics' : ''} ({new Date(snap.saved_at).toLocaleString()}). Restore filters to purchased-only (CHOAM + MTX) and <b className="text-text">also marks the New Player Experience as completed</b> so Advanced buildables (Fabricator, etc.) unlock immediately — Fresh Start assumes you've already played once.</div>
+            <div className="text-text-dim text-xs">Saved snapshot for <b className="text-text">{snap.name}</b> - {snap.sets} set{snap.sets === 1 ? '' : 's'}, {snap.pieces} piece{snap.pieces === 1 ? '' : 's'}{snap.cosmetics ? ' + cosmetics' : ''} ({new Date(snap.saved_at).toLocaleString()}). Restore filters to purchased-only (CHOAM + MTX).</div>
             <div className="text-warning text-xs">Only after you've recreated the character (same name) and spawned in. Player must be offline.</div>
             <button type="button" disabled={busy}
               className="px-3 py-2 rounded-lg bg-info/20 border border-info/50 text-text hover:bg-info/30 disabled:opacity-50 text-sm font-medium"
@@ -1153,7 +1172,7 @@ function FreshStartForm({ busy, player, runAction }: {
             </button>
           </>
         ) : (
-          <div className="text-text-dim text-xs">No saved snapshot for {player.name}. Snapshot first (Step 1).</div>
+          <div className="text-text-dim text-xs">No saved snapshot for {player.name}. Run Step 1 first.</div>
         )}
       </div>
     </div>
@@ -1779,7 +1798,7 @@ function VehicleKitForm({ busy, onSubmit }: {
             </li>
           ))}
           <li className="flex items-center gap-1.5 text-amber-200/90">
-            <Icon name="Fuel" size={12} className="shrink-0" /> {label(catalog.fuelTemplate)}
+            <Icon name="Fuel" size={12} className="shrink-0" /> {label(catalog.fuelTemplate)}{qtySuffix(catalog.fuelTemplate)}
           </li>
           <li className="flex items-center gap-1.5 text-amber-200/90">
             <Icon name="Wrench" size={12} className="shrink-0" /> {label(catalog.torchTemplate)}

@@ -546,14 +546,21 @@ function Get-DuneBackupHistory {
         [int]$LogLines = 50
     )
     if ($Recent -lt 1)   { $Recent = 1 }
-    if ($Recent -gt 100) { $Recent = 100 }
+    if ($Recent -gt 1000) { $Recent = 1000 }
     if ($LogLines -lt 1)    { $LogLines = 1 }
     if ($LogLines -gt 500)  { $LogLines = 500 }
 
+    # Stat every backup file (bounded to 5000 so xargs stays sane), sort newest-
+    # first, THEN cap to $Recent. The old code capped BEFORE stat/sort, so a
+    # dump dir with more files than the cap returned an arbitrary slice instead
+    # of the newest N. The manager UI requests a high $Recent to list them all;
+    # emit the true total so the UI can show "showing N of M".
     $script = @"
+echo '__DST_SECTION:COUNT'
+sudo find $script:DuneBackupDumpDir -maxdepth 3 -type f -name '*.backup' 2>/dev/null | wc -l
 echo '__DST_SECTION:FILES'
 sudo find $script:DuneBackupDumpDir -maxdepth 3 -type f -name '*.backup' 2>/dev/null \
-  | head -200 \
+  | head -5000 \
   | xargs -r -I{} sudo stat -c '%Y|%s|%n' '{}' 2>/dev/null \
   | sort -rn \
   | head -$Recent
@@ -595,13 +602,109 @@ sudo du -sh $script:DuneBackupDumpDir 2>/dev/null | awk '{print `$1}' || true
     $logTail = if ($sections.ContainsKey('LOG'))  { ($sections['LOG']  -join "`n").TrimEnd("`n") } else { '' }
     $diskUse = if ($sections.ContainsKey('DISK')) { ($sections['DISK'] -join '').Trim() } else { '' }
 
+    $total = $files.Count
+    if ($sections.ContainsKey('COUNT')) {
+        $countStr = ($sections['COUNT'] -join '').Trim()
+        $parsed = 0
+        if ([int]::TryParse($countStr, [ref]$parsed)) { $total = $parsed }
+    }
+
     return @{
         recent        = $files
+        total         = $total
         logTail       = $logTail
         dumpDirPath   = $script:DuneBackupDumpDir
         dumpDirSize   = $diskUse
         logPath       = '/var/log/dune-backup.log'
     }
+}
+
+# -----------------------------------------------------------------------------
+# Public: delete one or more `.backup` files from the VM's dump directory (plus
+# each file's `.yaml` sidecar, which Funcom writes alongside every dump). Every
+# path is validated HARD before any rm runs so this can only ever touch a
+# genuine backup file inside the dump dir:
+#   - must be an absolute path under $script:DuneBackupDumpDir
+#   - must end in `.backup`
+#   - must not contain `..` (no path traversal)
+# Returns @{ ok; deleted=@(); failed=@(@{path;reason}); message }.
+# -----------------------------------------------------------------------------
+function Remove-DuneBackupFiles {
+    param(
+        [Parameter(Mandatory)][string]$Ip,
+        [Parameter(Mandatory)][string[]]$Paths
+    )
+    $deleted = New-Object System.Collections.Generic.List[string]
+    $failed  = New-Object System.Collections.Generic.List[object]
+    $valid   = New-Object System.Collections.Generic.List[string]
+
+    $root = $script:DuneBackupDumpDir
+    foreach ($p in $Paths) {
+        $path = if ($null -eq $p) { '' } else { ([string]$p).Trim() }
+        if (-not $path) {
+            $failed.Add(@{ path = $p; reason = 'Empty path.' }); continue
+        }
+        if ($path -match '\.\.') {
+            $failed.Add(@{ path = $path; reason = 'Path traversal not allowed.' }); continue
+        }
+        if ($path -notlike "$root/*") {
+            $failed.Add(@{ path = $path; reason = "Path must be inside $root." }); continue
+        }
+        if ($path -notmatch '\.backup$') {
+            $failed.Add(@{ path = $path; reason = 'Path must end in .backup.' }); continue
+        }
+        $valid.Add($path) | Out-Null
+    }
+
+    if ($valid.Count -eq 0) {
+        return @{ ok = $false; status = 400; deleted = @(); failed = @($failed); message = 'No valid backup paths to delete.' }
+    }
+
+    # Build a shell script that removes each validated file + its sidecar and
+    # prints a per-path result marker we can parse back. Single-quote each path
+    # for the shell (backups never contain single quotes; guard anyway).
+    $sb = New-Object System.Text.StringBuilder
+    foreach ($path in $valid) {
+        if ($path.Contains("'")) {
+            $failed.Add(@{ path = $path; reason = 'Path contains a single quote.' }); continue
+        }
+        $q = "'" + $path + "'"
+        # Only report OK when the .backup itself is gone after rm. The .yaml
+        # sidecar is best-effort (may not exist for manually-uploaded files).
+        [void]$sb.AppendLine("if sudo rm -f $q && sudo rm -f ${q}.yaml 2>/dev/null; then if [ ! -e $q ]; then echo `"__DEL_OK:$path`"; else echo `"__DEL_FAIL:$path|still present`"; fi; else echo `"__DEL_FAIL:$path|rm failed`"; fi")
+    }
+
+    if ($sb.Length -eq 0) {
+        return @{ ok = $false; status = 400; deleted = @(); failed = @($failed); message = 'No valid backup paths to delete.' }
+    }
+
+    $r = Invoke-DuneBackupShell -Ip $Ip -Script $sb.ToString() -TimeoutSec 60
+    if ($r.rc -lt 0) { throw 'SSH to VM failed (no exit code returned).' }
+
+    foreach ($ln in ($r.out -split "`n")) {
+        $line = $ln.Trim()
+        if ($line -like '__DEL_OK:*') {
+            $deleted.Add($line.Substring(9)) | Out-Null
+        } elseif ($line -like '__DEL_FAIL:*') {
+            $rest = $line.Substring(11)
+            $bar = $rest.IndexOf('|')
+            if ($bar -ge 0) {
+                $failed.Add(@{ path = $rest.Substring(0, $bar); reason = $rest.Substring($bar + 1) })
+            } else {
+                $failed.Add(@{ path = $rest; reason = 'Delete failed.' })
+            }
+        }
+    }
+
+    $ok = ($deleted.Count -gt 0) -and ($failed.Count -eq 0)
+    $msg = if ($failed.Count -eq 0) {
+        "Deleted $($deleted.Count) backup file(s)."
+    } elseif ($deleted.Count -gt 0) {
+        "Deleted $($deleted.Count); $($failed.Count) failed."
+    } else {
+        "Delete failed for all $($failed.Count) file(s)."
+    }
+    return @{ ok = $ok; deleted = @($deleted); failed = @($failed); message = $msg }
 }
 
 # -----------------------------------------------------------------------------
