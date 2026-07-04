@@ -1119,6 +1119,10 @@ function FreshStartForm({ busy, player, runAction }: {
         DST owns the whole flow: <b className="text-text">1)</b> Snapshot + Detach below saves {player.name}'s purchased CHOAM/MTX sets/pieces and cosmetics to disk, strips world ownership (co-owners on your vehicles/bases go with you), and renames the account so the game creates a fresh character on your next login. Old data stays parked and gets swept on the next stack reboot. <b className="text-text">2)</b> Log in again — the game will start you at character creation. Use the <b className="text-text">same name</b> to reclaim purchases. <b className="text-text">3)</b> Restore reapplies purchases. Faction-earned sets and tech unlocks re-populate as the fresh character progresses.
       </div>
 
+      <div className="rounded-lg bg-warning/10 border border-warning/40 p-3 text-warning text-xs leading-relaxed">
+        <b>Battlegroup restart required for detached vehicles/bases to become claimable.</b> The DB cleanup happens instantly, but the game pod keeps the old ACL cached in memory until it re-reads state. A BG restart (or waiting for the pod to release actors naturally) makes the previously-owned actors show as claimable to anyone.
+      </div>
+
       <div className="card p-3 space-y-2">
         <div className="font-medium text-text flex items-center gap-2"><Icon name="AlertTriangle" size={14} className="text-warning" /> Step 1 — Snapshot &amp; Detach</div>
         <div className="text-text-dim text-xs">Saves purchases + cosmetics to <code className="text-text">%APPDATA%\DuneServer\fresh-start-snapshots.json</code>, strips ownership on {player.name}'s vehicles/bases, then renames account {player.account_id} so the game creates a fresh character on next login. Non-destructive — no pod crashes. Old rows swept on next stack reboot.</div>
