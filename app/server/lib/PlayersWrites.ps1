@@ -1581,15 +1581,15 @@ function Invoke-DunePlayerFreshStartWipe {
     $snap = Invoke-DunePlayerSnapshotBuilds -Ip $Ip -AccountId $AccountId
     if (-not $snap.ok) { return @{ ok = $false; error = "snapshot failed - delete not attempted: $($snap.error)" } }
 
-    $del = Invoke-DunePlayerDeleteAccount -Ip $Ip -AccountId $AccountId
+    $del = Invoke-DunePlayerDetachAccount -Ip $Ip -AccountId $AccountId
     if (-not $del.ok) {
-        return @{ ok = $false; error = "snapshot saved for '$($snap.name)', but delete failed: $($del.error)" ; snapshot_saved = $true; name = $snap.name }
+        return @{ ok = $false; error = "snapshot saved for '$($snap.name)', but detach failed: $($del.error)" ; snapshot_saved = $true; name = $snap.name }
     }
 
     $cosMsg = if ($snap.cosmetics) { ' + cosmetics' } else { '' }
     return @{
         ok = $true
-        message = "Fresh Start: snapshotted '$($snap.name)' ($($snap.sets) set(s), $($snap.pieces) piece(s)$cosMsg) and wiped account $AccountId. Recreate the character in-game with the SAME name, spawn in, then click Restore."
+        message = "Fresh Start: snapshotted '$($snap.name)' ($($snap.sets) set(s), $($snap.pieces) piece(s)$cosMsg) and detached account $AccountId. World ownership on your vehicles/bases has been stripped. Log in again to create your fresh character with the SAME name, then click Restore to reapply purchases."
         name = $snap.name; sets = $snap.sets; pieces = $snap.pieces; cosmetics = $snap.cosmetics
     }
 }

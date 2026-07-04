@@ -555,6 +555,84 @@ function Invoke-DunePlayerAwardIntel {
     }
 }
 
+# ----- Detach Account (SAFE for live server) -------------------------------
+# Non-destructive variant of Delete Account. Runs the world-ownership 3-rule
+# cleanup (strip the account's rank rows) and RENAMES the account.user (Funcom
+# ID) + player_state.character_name so:
+#   - The game's next login for the real Funcom ID finds no matching row and
+#     creates a fresh account + character.
+#   - The old character rows stay intact so a game pod actively holding them
+#     doesn't crash on a missing FK when it flushes state.
+#   - Vehicles/bases the account owned become truly ownerless (Rule 1 wipes
+#     the whole ACL) and any co-owner rows the account held on others' stuff
+#     are stripped (Rule 2).
+# The orphaned old rows are cleaned up later, either manually via Delete
+# Account (when the server is quiet) or automatically by a boot-time sweep
+# that runs when pods are cold and nothing can be holding the rows.
+function Invoke-DunePlayerDetachAccount {
+    param([string]$Ip, [long]$AccountId)
+    if ($AccountId -le 0) { return @{ ok = $false; error = 'account_id is required.' } }
+    $resolve = Get-DuneRawFuncomId -Ip $Ip -AccountId $AccountId
+    if (-not $resolve.ok) { return @{ ok = $false; error = $resolve.error } }
+    $funcom = ConvertTo-DuneSqlString $resolve.funcom_id
+    $stamp = [DateTimeOffset]::UtcNow.ToUnixTimeSeconds()
+
+    $sql = @"
+DO `$`$
+DECLARE
+    v_account_id bigint := $AccountId;
+    v_funcom text := '$funcom';
+    v_stamp bigint := $stamp;
+    v_new_user text := '$($resolve.funcom_id)_retired_$stamp';
+BEGIN
+    -- Same 3-rule ownership cleanup as Delete Account. Docs there.
+    CREATE TEMP TABLE _deleted_ranks ON COMMIT DROP AS
+    SELECT par.permission_actor_id AS aid, par.player_id AS pid, par.rank AS r
+    FROM dune.permission_actor_rank par
+    JOIN dune.actors owner_actor ON owner_actor.id = par.player_id
+    WHERE owner_actor.owner_account_id = v_account_id;
+
+    CREATE TEMP TABLE _owned_actors ON COMMIT DROP AS
+    SELECT DISTINCT dr.aid
+    FROM _deleted_ranks dr
+    WHERE dr.r = (
+        SELECT MIN(rank) FROM dune.permission_actor_rank
+        WHERE permission_actor_id = dr.aid
+    );
+
+    -- Rule 1: nuke ACL on owned actors (owner + all co-owners); blank the
+    -- custom name so the actor renders under its default class name.
+    DELETE FROM dune.permission_actor_rank
+    WHERE permission_actor_id IN (SELECT aid FROM _owned_actors);
+    DELETE FROM dune.permission_actor
+    WHERE actor_id IN (SELECT aid FROM _owned_actors);
+
+    -- Rule 2: on every OTHER actor the account had a rank row for, remove
+    -- ONLY the account's row (the deleted account was a co-owner, not owner).
+    DELETE FROM dune.permission_actor_rank par
+    USING dune.actors owner_actor
+    WHERE par.player_id = owner_actor.id
+      AND owner_actor.owner_account_id = v_account_id;
+
+    -- Detach: rename the funcom-id + character name so the game creates a
+    -- fresh account/character on next login. The rows survive so live pods
+    -- flushing state don't crash on missing FKs.
+    UPDATE dune.accounts SET "user" = v_new_user WHERE id = v_account_id;
+    UPDATE dune.player_state
+       SET character_name = character_name || '_retired_' || v_stamp
+     WHERE account_id = v_account_id;
+END
+`$`$;
+"@
+    $r = Invoke-DuneSqlQuery -Ip $Ip -Sql $sql -ReadOnly $false -MaxRows 1 -TimeoutSec 60
+    if (-not $r.ok) { return @{ ok = $false; error = $r.error } }
+    return @{
+        ok = $true
+        message = "Detached account $AccountId (funcom $($resolve.funcom_id)). Ownership on vehicles/bases stripped, account renamed so a fresh character will spawn on next login. Old rows remain until the next scheduled sweep (or Delete Account when the server is quiet)."
+        renamed_to = "$($resolve.funcom_id)_retired_$stamp"
+    }
+}
+
 # ----- Delete Account (DESTRUCTIVE) --------------------------------------
 # Mirrors db.go cmdDeleteAccount: nukes characters, actors, fgl entities,
 # RMQ traces, and the accounts row in dependency order.
