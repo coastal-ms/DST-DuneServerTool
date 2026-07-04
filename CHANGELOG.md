@@ -11,6 +11,12 @@ Patch releases within a major series are rolled up under the major's entry
 on GitHub still exist for each individual release; the consolidated entries
 here cover everything those tags shipped.
 
+## [Unreleased]
+
+### Added
+
+- **Full backup manager on the Database page.** The *Backup Schedule* card's "Recent backups" list (previously capped at the last 5) is now a complete backup manager. It lists **all** `.backup` files in the VM's dump directory in a scrollable table, with a **filename search box**, a **sort** control (Newest / Oldest / Largest / Smallest / Name A→Z), and a "showing N of M" count. Each row keeps the existing **Download** action and adds a **Delete** action; **multi-select checkboxes** plus a bulk **Delete (N)** button allow removing several backups at once. Deletes are confirmed (`window.confirm`), remove both the `.backup` file and its `.yaml` sidecar on the VM, and are validated server-side (path must be under the dump dir, end in `.backup`, no traversal) and gated behind the VM lock. Import (upload) and dump-dir size readout are unchanged.
+
 ## [12.16.7] - 2026-07-04
 
 ### Added
@@ -6867,7 +6873,7 @@ at the time. Also folds in the v3.0.1 / v3.1.2 patches.
   (`ssh`, `Gameplay Admin`, `setup-guide`, `report-issue`). _(originally
   3.1.2)_
 
-[Unreleased]: https://github.com/coastal-ms/DST-DuneServerTool/compare/v6.1.2...HEAD
+[Unreleased]: https://github.com/coastal-ms/DST-DuneServerTool/compare/v12.16.6...HEAD
 [6.1.0]: https://github.com/coastal-ms/DST-DuneServerTool/compare/v6.0.1...v6.1.2
 [6.0.0]: https://github.com/coastal-ms/DST-DuneServerTool/compare/v5.0.2...v6.0.1
 [5.0.0]: https://github.com/coastal-ms/DST-DuneServerTool/compare/v4.5.2...v5.0.2

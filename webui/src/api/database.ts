@@ -82,6 +82,21 @@ export function uploadBackup(opts: { localPath: string }) {
   })
 }
 
+export type BackupDeleteResult = {
+  ok: boolean
+  deleted: string[]
+  failed: { path: string; reason: string }[]
+  message?: string
+  error?: string
+}
+
+export function deleteBackups(opts: { paths: string[] }) {
+  return api<BackupDeleteResult>('/api/db/backup-delete', {
+    method: 'POST',
+    body: JSON.stringify({ paths: opts.paths }),
+  })
+}
+
 export function getBackupDumpPods() {
   return api<BackupDumpPodList>('/api/db/backup-dump-pods')
 }
