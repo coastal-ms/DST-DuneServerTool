@@ -574,16 +574,13 @@ function Invoke-DunePlayerDetachAccount {
     if ($AccountId -le 0) { return @{ ok = $false; error = 'account_id is required.' } }
     $resolve = Get-DuneRawFuncomId -Ip $Ip -AccountId $AccountId
     if (-not $resolve.ok) { return @{ ok = $false; error = $resolve.error } }
-    $funcom = ConvertTo-DuneSqlString $resolve.funcom_id
     $stamp = [DateTimeOffset]::UtcNow.ToUnixTimeSeconds()
+    $newUser = ConvertTo-DuneSqlString ("$($resolve.funcom_id)_retired_$stamp")
 
     $sql = @"
 DO `$`$
 DECLARE
     v_account_id bigint := $AccountId;
-    v_funcom text := '$funcom';
-    v_stamp bigint := $stamp;
-    v_new_user text := '$($resolve.funcom_id)_retired_$stamp';
 BEGIN
     -- Same 3-rule ownership cleanup as Delete Account. Docs there.
     CREATE TEMP TABLE _deleted_ranks ON COMMIT DROP AS
@@ -600,27 +597,32 @@ BEGIN
         WHERE permission_actor_id = dr.aid
     );
 
-    -- Rule 1: nuke ACL on owned actors (owner + all co-owners); blank the
-    -- custom name so the actor renders under its default class name.
+    -- Rule 1: nuke ACL on owned actors; blank the custom name.
     DELETE FROM dune.permission_actor_rank
     WHERE permission_actor_id IN (SELECT aid FROM _owned_actors);
     DELETE FROM dune.permission_actor
     WHERE actor_id IN (SELECT aid FROM _owned_actors);
 
-    -- Rule 2: on every OTHER actor the account had a rank row for, remove
-    -- ONLY the account's row (the deleted account was a co-owner, not owner).
+    -- Rule 2: strip only the account's rank rows on OTHER actors.
     DELETE FROM dune.permission_actor_rank par
     USING dune.actors owner_actor
     WHERE par.player_id = owner_actor.id
       AND owner_actor.owner_account_id = v_account_id;
 
-    -- Detach: rename the funcom-id + character name so the game creates a
-    -- fresh account/character on next login. The rows survive so live pods
-    -- flushing state don't crash on missing FKs.
-    UPDATE dune.accounts SET "user" = v_new_user WHERE id = v_account_id;
-    UPDATE dune.player_state
-       SET character_name = character_name || '_retired_' || v_stamp
+    -- Soft-delete the character(s) via the game's own characterstate enum
+    -- ('Active' | 'Deleted'). The dune.player_state VIEW filters on Active
+    -- so this hides the character from every game query without deleting
+    -- rows the pod might be holding. dune.accounts + dune.player_state are
+    -- views over encrypted_accounts + encrypted_player_state, so we UPDATE
+    -- the real tables directly.
+    UPDATE dune.encrypted_player_state
+       SET character_state = 'Deleted'::dune.characterstate
      WHERE account_id = v_account_id;
+
+    -- Detach: rename the funcom-id column on the real table so the game's
+    -- next login for the real ID finds no matching account and creates a
+    -- fresh one. Old rows survive so live pods flushing state don't crash.
+    UPDATE dune.encrypted_accounts SET "user" = $newUser WHERE id = v_account_id;
 END
 `$`$;
 "@
@@ -628,7 +630,7 @@ END
     if (-not $r.ok) { return @{ ok = $false; error = $r.error } }
     return @{
         ok = $true
-        message = "Detached account $AccountId (funcom $($resolve.funcom_id)). Ownership on vehicles/bases stripped, account renamed so a fresh character will spawn on next login. Old rows remain until the next scheduled sweep (or Delete Account when the server is quiet)."
+        message = "Detached account $AccountId (funcom $($resolve.funcom_id)). Character soft-deleted (character_state=Deleted, hidden from game views), account renamed so a fresh character will spawn on next login, ownership on vehicles/bases stripped. Old rows remain until the next scheduled sweep."
         renamed_to = "$($resolve.funcom_id)_retired_$stamp"
     }
 }
