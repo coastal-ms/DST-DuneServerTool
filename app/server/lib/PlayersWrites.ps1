@@ -1352,6 +1352,181 @@ WHERE a.id = $pawnID::bigint
     return @{ ok = $true; cleared = (Get-DuneSqlAffected $r) }
 }
 
+# ---------------------------------------------------------------------------
+# Fresh Start (keep builds & cosmetics) -- snapshot + restore-by-name.
+#
+# A genuinely-fresh character can ONLY be produced by the game engine: the player
+# deletes the character in-game, recreates it, and spawns. An in-place DB wipe
+# does NOT work -- the engine rebuilds the journey journal, skill-tree scaffold
+# and ability slots from the character's footprint on every login (verified live
+# 2026-07-03: deleting all 1979 non-achievement journey rows just made the engine
+# recreate them and reveal 1195). So Fresh Start does not wipe anything.
+#
+# Instead it preserves the two things a player is entitled to keep across a fresh
+# restart -- their unlocked BUILDING SETS/pieces (dune.building_progression) and
+# COSMETICS (actors.properties->CustomizationLibraryActorComponent). Character
+# NAME is the stable key across delete+recreate (account_id / character_id change;
+# the name does not). Flow:
+#   1) Snapshot builds + cosmetics BEFORE the delete -> saved to
+#      %APPDATA%\DuneServer\fresh-start-snapshots.json keyed by name.
+#   2) Player deletes + recreates the character in-game with the SAME name, spawns.
+#   3) Restore-by-name grants the snapshot's building sets + cosmetics onto the
+#      new character (offline-only; unioned with the fresh character's starter set
+#      so nothing is lost).
+# ---------------------------------------------------------------------------
+
+function Get-DuneFreshStartSnapshotPath {
+    $dir = Join-Path $env:APPDATA 'DuneServer'
+    if (-not (Test-Path -LiteralPath $dir)) { New-Item -ItemType Directory -Force -Path $dir | Out-Null }
+    return (Join-Path $dir 'fresh-start-snapshots.json')
+}
+
+function Get-DuneFreshStartSnapshots {
+    $path = Get-DuneFreshStartSnapshotPath
+    if (-not (Test-Path -LiteralPath $path)) { return @() }
+    try {
+        $raw = Get-Content -LiteralPath $path -Raw -ErrorAction Stop
+        if (-not $raw) { return @() }
+        $obj = $raw | ConvertFrom-Json -ErrorAction Stop
+        $list = if ($obj -is [System.Array]) { $obj } elseif ($obj.snapshots) { $obj.snapshots } else { @() }
+        return @($list)
+    } catch { return @() }
+}
+
+function Save-DuneFreshStartSnapshots {
+    param($Snapshots)
+    $path = Get-DuneFreshStartSnapshotPath
+    $json = @{ snapshots = @($Snapshots) } | ConvertTo-Json -Depth 60
+    $tmp = "$path.tmp"
+    Set-Content -LiteralPath $tmp -Value $json -Encoding UTF8 -Force
+    Move-Item -LiteralPath $tmp -Destination $path -Force
+}
+
+# Metadata-only list of saved snapshots for the UI (no bulky cosmetics blob).
+function Get-DuneFreshStartSnapshotList {
+    $out = @()
+    foreach ($s in (Get-DuneFreshStartSnapshots)) {
+        $out += [ordered]@{
+            name      = [string]$s.name
+            saved_at  = [string]$s.saved_at
+            sets      = @($s.building_sets).Count
+            pieces    = @($s.buildable_pieces).Count
+            cosmetics = [bool]([string]$s.cosmetics)
+        }
+    }
+    return @($out)
+}
+
+# Capture a character's unlocked building sets/pieces + cosmetics to the snapshot
+# store, keyed by character name. Run this BEFORE the player deletes the character
+# (the data is character-bound and is destroyed with the character).
+function Invoke-DunePlayerSnapshotBuilds {
+    param([string]$Ip, [long]$AccountId)
+    if ($AccountId -le 0) { return @{ ok = $false; error = 'account_id is required.' } }
+    $pawnID = Get-DunePlayerPawnFromAccount -Ip $Ip -AccountId $AccountId
+    if ($pawnID -le 0) { return @{ ok = $false; error = "no pawn for account $AccountId." } }
+
+    $sql = @"
+SELECT
+  (SELECT character_name FROM dune.player_state WHERE account_id=$AccountId::bigint LIMIT 1) AS name,
+  (SELECT id::text FROM dune.player_state WHERE account_id=$AccountId::bigint LIMIT 1) AS character_id,
+  (SELECT to_json(learned_building_sets)::text FROM dune.building_progression WHERE character_id=(SELECT id FROM dune.player_state WHERE account_id=$AccountId::bigint LIMIT 1)) AS sets,
+  (SELECT to_json(new_buildable_pieces)::text FROM dune.building_progression WHERE character_id=(SELECT id FROM dune.player_state WHERE account_id=$AccountId::bigint LIMIT 1)) AS pieces,
+  (SELECT (properties #> '{CustomizationLibraryActorComponent,m_UnlockedCustomizationSerializableList}')::text FROM dune.actors WHERE id=$pawnID::bigint) AS cosmetics;
+"@
+    $r = Invoke-DuneSqlQuery -Ip $Ip -Sql $sql -ReadOnly $true -MaxRows 1 -TimeoutSec 30
+    if (-not $r.ok) { return @{ ok = $false; error = "snapshot read: $($r.error)" } }
+    $maps = ConvertTo-DuneRowMaps -Result $r
+    if ($maps.Count -eq 0) { return @{ ok = $false; error = "no character for account $AccountId." } }
+    $row = $maps[0]
+    $name = [string]$row['name']
+    if (-not $name) { return @{ ok = $false; error = 'character has no name.' } }
+
+    $sets = @(); $pieces = @()
+    try { if ([string]$row['sets'])   { $sets   = @([string]$row['sets']   | ConvertFrom-Json) } } catch {}
+    try { if ([string]$row['pieces']) { $pieces = @([string]$row['pieces'] | ConvertFrom-Json) } } catch {}
+    $cosmeticsJson = [string]$row['cosmetics']
+
+    $snap = [ordered]@{
+        name             = $name
+        saved_at         = (Get-Date).ToUniversalTime().ToString('o')
+        account_id       = $AccountId
+        character_id     = [int64](ConvertTo-DuneInt $row['character_id'])
+        building_sets    = @($sets)
+        buildable_pieces = @($pieces)
+        cosmetics        = $cosmeticsJson   # raw JSON string, reapplied verbatim
+    }
+    # Replace any existing snapshot for the same name (case-insensitive -ne).
+    $others = @(Get-DuneFreshStartSnapshots | Where-Object { [string]$_.name -ne $name })
+    Save-DuneFreshStartSnapshots -Snapshots (@($snap) + $others)
+
+    $cosMsg = if ($cosmeticsJson) { 'cosmetics captured' } else { 'no cosmetics found' }
+    return @{
+        ok = $true
+        message = "Snapshot saved for '$name' - $($sets.Count) building set(s), $($pieces.Count) piece(s), $cosMsg. Now delete + recreate the character with the SAME name in-game, spawn, then use Restore."
+        name = $name; sets = $sets.Count; pieces = $pieces.Count; cosmetics = [bool]$cosmeticsJson
+    }
+}
+
+# Restore a saved snapshot's building sets/pieces + cosmetics onto the CURRENT
+# live character with the given name (the freshly recreated one). Offline-only:
+# building_progression and the pawn cosmetics component are RAM-authoritative
+# while connected. Unions with whatever the fresh character already has so its
+# starter unlocks are never lost.
+function Invoke-DunePlayerRestoreBuilds {
+    param([string]$Ip, [string]$Name)
+    if (-not $Name) { return @{ ok = $false; error = 'name is required.' } }
+    $snap = @(Get-DuneFreshStartSnapshots | Where-Object { [string]$_.name -eq $Name })
+    if ($snap.Count -eq 0) { return @{ ok = $false; error = "no saved snapshot for '$Name' - snapshot the character before deleting it." } }
+    $s = $snap[0]
+
+    $safeName = ConvertTo-DuneSqlString $Name
+    $idSql = "SELECT id::text AS cid, player_pawn_id::text AS pawn FROM dune.player_state WHERE character_name = '$safeName' ORDER BY last_login_time DESC NULLS LAST LIMIT 1;"
+    $ir = Invoke-DuneSqlQuery -Ip $Ip -Sql $idSql -ReadOnly $true -MaxRows 1 -TimeoutSec 15
+    if (-not $ir.ok) { return @{ ok = $false; error = "resolve character: $($ir.error)" } }
+    $imaps = ConvertTo-DuneRowMaps -Result $ir
+    if ($imaps.Count -eq 0) { return @{ ok = $false; error = "no live character named '$Name' - recreate it (same name) and spawn in first, then restore." } }
+    $charID = [int64](ConvertTo-DuneInt $imaps[0]['cid'])
+    $pawnID = [int64](ConvertTo-DuneInt $imaps[0]['pawn'])
+    if ($charID -le 0 -or $pawnID -le 0) { return @{ ok = $false; error = "character '$Name' has no pawn yet - spawn in first." } }
+
+    # Offline-only guard (pawn cosmetics + building_progression are overwritten on
+    # logout otherwise).
+    $off = Test-DunePlayerOffline -Ip $Ip -PawnId $pawnID
+    if (-not $off.ok) { return @{ ok = $false; error = "Player must be offline to restore builds. $($off.reason)" } }
+
+    $setsArr   = ConvertTo-DunePgTextArray (@($s.building_sets)    | ForEach-Object { [string]$_ })
+    $piecesArr = ConvertTo-DunePgTextArray (@($s.buildable_pieces) | ForEach-Object { [string]$_ })
+    $cosmetics = [string]$s.cosmetics
+
+    $sb = [System.Text.StringBuilder]::new()
+    [void]$sb.AppendLine('BEGIN;')
+    # Building sets/pieces: union the snapshot into the current row (a fresh char
+    # always has a building_progression row with its starter sets).
+    [void]$sb.AppendLine("UPDATE dune.building_progression SET learned_building_sets = ARRAY(SELECT DISTINCT unnest(COALESCE(learned_building_sets,'{}'::text[]) || $setsArr)), new_buildable_pieces = ARRAY(SELECT DISTINCT unnest(COALESCE(new_buildable_pieces,'{}'::text[]) || $piecesArr)) WHERE character_id=$charID::bigint;")
+    # If the fresh char somehow has no row yet, insert one.
+    [void]$sb.AppendLine("INSERT INTO dune.building_progression (character_id, learned_building_sets, new_buildable_pieces) SELECT $charID::bigint, $setsArr, $piecesArr WHERE NOT EXISTS (SELECT 1 FROM dune.building_progression WHERE character_id=$charID::bigint);")
+    # Cosmetics: shallow-merge the snapshot's unlock object into the pawn's
+    # (snapshot is a superset, so its keys win).
+    if ($cosmetics) {
+        $safeCos = ConvertTo-DuneSqlString $cosmetics
+        [void]$sb.AppendLine("UPDATE dune.actors SET properties = jsonb_set(COALESCE(properties,'{}'::jsonb), '{CustomizationLibraryActorComponent,m_UnlockedCustomizationSerializableList}', COALESCE(properties #> '{CustomizationLibraryActorComponent,m_UnlockedCustomizationSerializableList}','{}'::jsonb) || '$safeCos'::jsonb, true) WHERE id=$pawnID::bigint;")
+    }
+    [void]$sb.AppendLine('COMMIT;')
+
+    $r = Invoke-DuneSqlQuery -Ip $Ip -Sql $sb.ToString() -ReadOnly $false -MaxRows 1 -TimeoutSec 60
+    if (-not $r.ok) {
+        Invoke-DuneSqlQuery -Ip $Ip -Sql 'ROLLBACK;' -ReadOnly $false -MaxRows 1 -TimeoutSec 5 | Out-Null
+        return @{ ok = $false; error = "restore builds tx: $($r.error)" }
+    }
+    $cosMsg = if ($cosmetics) { ' + cosmetics' } else { '' }
+    return @{
+        ok = $true
+        message = "Restored builds for '$Name' - $(@($s.building_sets).Count) building set(s), $(@($s.buildable_pieces).Count) piece(s)$cosMsg. Takes effect on next login."
+        sets = @($s.building_sets).Count; pieces = @($s.buildable_pieces).Count
+    }
+}
+
 function Invoke-DunePlayerCompleteContracts {
     param([string]$Ip, [long]$AccountId, [string[]]$ContractIds)
     if ($AccountId -le 0) { return @{ ok = $false; error = 'account_id is required.' } }

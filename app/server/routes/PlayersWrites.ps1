@@ -212,6 +212,45 @@ Register-DuneRoute -Method POST -Path '/api/gameplay/players/faction/reset' -Han
     }
 }
 
+# POST /api/gameplay/players/fresh-start/snapshot  { account_id }
+# Capture the character's building sets/pieces + cosmetics to the snapshot store
+# (keyed by name). Run BEFORE the player deletes their character in-game.
+Register-DuneRoute -Method POST -Path '/api/gameplay/players/fresh-start/snapshot' -Handler {
+    param($req, $res, $routeParams, $body)
+    try {
+        $acc = Get-DuneBodyInt -Body $body -Name 'account_id'
+        if ($null -eq $acc -or $acc -le 0) { Write-DuneError -Response $res -Status 400 -Message 'account_id is required.'; return }
+        Invoke-DunePlayerWriteRoute -Response $res -Action { param($ip) Invoke-DunePlayerSnapshotBuilds -Ip $ip -AccountId $acc }
+    } catch {
+        Write-DuneError -Response $res -Status 500 -Message "Snapshot builds failed: $($_.Exception.Message)"
+    }
+}
+
+# GET /api/gameplay/players/fresh-start/snapshots  -> saved snapshot metadata
+Register-DuneRoute -Method GET -Path '/api/gameplay/players/fresh-start/snapshots' -Handler {
+    param($req, $res, $routeParams, $body)
+    try {
+        $list = Get-DuneFreshStartSnapshotList
+        Write-DuneJson -Response $res -Body @{ ok = $true; snapshots = @($list) }
+    } catch {
+        Write-DuneError -Response $res -Status 500 -Message "List snapshots failed: $($_.Exception.Message)"
+    }
+}
+
+# POST /api/gameplay/players/fresh-start/restore  { name }
+# Grant a saved snapshot's building sets + cosmetics onto the current live
+# character with that name (the recreated one). Offline-only (checked in-helper).
+Register-DuneRoute -Method POST -Path '/api/gameplay/players/fresh-start/restore' -Handler {
+    param($req, $res, $routeParams, $body)
+    try {
+        $name = [string](Get-DuneBodyValue -Body $body -Name 'name')
+        if (-not $name) { Write-DuneError -Response $res -Status 400 -Message 'name is required.'; return }
+        Invoke-DunePlayerWriteRoute -Response $res -Action { param($ip) Invoke-DunePlayerRestoreBuilds -Ip $ip -Name $name }
+    } catch {
+        Write-DuneError -Response $res -Status 500 -Message "Restore builds failed: $($_.Exception.Message)"
+    }
+}
+
 # POST /api/gameplay/players/progression/apply-preset  { account_id, preset_id }
 Register-DuneRoute -Method POST -Path '/api/gameplay/players/progression/apply-preset' -Handler {
     param($req, $res, $routeParams, $body)
