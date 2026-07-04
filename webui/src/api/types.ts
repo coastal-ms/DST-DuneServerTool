@@ -435,6 +435,7 @@ export type BackupFile = {
 
 export type BackupHistory = {
   recent: BackupFile[]
+  total?: number
   logTail: string
   dumpDirPath: string
   dumpDirSize: string
