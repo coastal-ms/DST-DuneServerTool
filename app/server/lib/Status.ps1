@@ -187,15 +187,30 @@ function Get-DuneBattlegroupSnapshotFresh {
         # doesn't pop a transient conhost window for each spawn (the original
         # `& ssh ... 2>$errFile` allocates a fresh console when the runspace
         # parent's hidden console handle isn't inherited).
+        # Compound remote command: run Funcom's `battlegroup status` for the raw
+        # text pane + game-server table (kept as-is), THEN dump the Battlegroup
+        # CRD as JSON so we can rebuild the Battlegroup Info panel from
+        # canonical field values instead of the awk-parsed row Funcom's script
+        # emits. Reason: `battlegroup status` ultimately shells out to
+        # `sudo kubectl get battlegroups --no-headers | awk '{print $3, $6, ...}'`
+        # (fixed positional tokens), so a server TITLE with spaces
+        # (e.g. `Reapers - DST`) shifts every column and the Info panel shows
+        # `Database: 2, Gateway: Ready, …` instead of the real values. Reading
+        # from JSON (`.status.phase`, `.status.database.phase`,
+        # `.status.utilities.serverGateway.phase`, etc.) is immune to that.
+        # Sentinels split the two payloads inside a single SSH round-trip.
+        $remoteCmd = 'echo __DST_BG_STATUS_BEGIN__; /home/dune/.dune/bin/battlegroup status 2>&1; echo __DST_BG_STATUS_END__; echo __DST_BG_JSON_BEGIN__; NS=$(sudo /usr/local/bin/kubectl get ns --no-headers -o custom-columns=N:.metadata.name 2>/dev/null | grep -m1 ^funcom-seabass-); if [ -n "$NS" ]; then sudo /usr/local/bin/kubectl get battlegroups -n $NS -o json 2>/dev/null; fi; echo __DST_BG_JSON_END__'
         $r = Invoke-DuneSshHidden -Ip $vm.ip -KeyPath $sshKey -TimeoutSec 15 -SshOptions @(
             '-o','StrictHostKeyChecking=no'
             '-o','LogLevel=ERROR'
             '-o','ConnectTimeout=10'
             '-o','BatchMode=yes'
-        ) -RemoteCommand '/home/dune/.dune/bin/battlegroup status'
-        $raw    = $r.Stdout
+        ) -RemoteCommand $remoteCmd
+        $split  = Split-DuneBgCompoundOutput -Lines $r.Stdout
+        $raw    = $split.StatusLines
         $exit   = $r.Exit
         $sshErr = $r.Stderr
+        $bgJsonInfo = ConvertFrom-DuneBgJsonStatus -JsonText $split.JsonText
 
         # `battlegroup status` (a kubectl wrapper) can write status-shaped text —
         # notably the empty-namespace "No resources found" stopped signal — to
@@ -231,6 +246,17 @@ function Get-DuneBattlegroupSnapshotFresh {
         $result.name        = $parsed.name
         $result.info        = $parsed.info
         $result.gameServers = $parsed.gameServers
+        # Prefer the JSON-derived Info block when available: Funcom's
+        # `battlegroup status` script mangles this row when the server TITLE
+        # contains spaces (see the compound remote-command comment above), and
+        # JSON is the single source of truth for the five fields the Info
+        # panel shows. Falls back to the parsed text when JSON is missing
+        # (e.g. transient kubectl error or namespace lookup failure) so
+        # display doesn't get worse than before.
+        if ($bgJsonInfo) {
+            $result.info = $bgJsonInfo.info
+            if ($bgJsonInfo.name -and -not $result.name) { $result.name = $bgJsonInfo.name }
+        }
         return $result
     } catch {
         $msg = $_.Exception.Message
@@ -241,6 +267,125 @@ function Get-DuneBattlegroupSnapshotFresh {
         }
         return $result
     }
+}
+
+# Split the sentinel-delimited compound remote output into the raw
+# `battlegroup status` text (still used for the raw-output pane + the game
+# server table) and the raw `kubectl get battlegroups -o json` body. Any
+# stray shell lines outside both regions are discarded so a login MOTD or
+# `sudo` password prompt (shouldn't happen — sudoers is passwordless — but
+# would otherwise leak into the parsed text) can't slip into either payload.
+# Returns @{ StatusLines = string[]; JsonText = string }.
+function Split-DuneBgCompoundOutput {
+    param([string[]]$Lines)
+    $out = @{ StatusLines = @(); JsonText = '' }
+    if (-not $Lines) { return $out }
+    $statusBuf = New-Object System.Collections.Generic.List[string]
+    $jsonBuf   = New-Object System.Collections.Generic.List[string]
+    $mode = 'none'
+    foreach ($line in $Lines) {
+        switch -Regex ($line) {
+            '^__DST_BG_STATUS_BEGIN__\s*$' { $mode = 'status'; continue }
+            '^__DST_BG_STATUS_END__\s*$'   { $mode = 'none';   continue }
+            '^__DST_BG_JSON_BEGIN__\s*$'   { $mode = 'json';   continue }
+            '^__DST_BG_JSON_END__\s*$'     { $mode = 'none';   continue }
+            default {
+                if ($mode -eq 'status') { $statusBuf.Add($line) | Out-Null }
+                elseif ($mode -eq 'json') { $jsonBuf.Add($line) | Out-Null }
+            }
+        }
+    }
+    # No sentinels at all → treat every line as raw status text so callers on
+    # older VMs (or a partial SSH read) still see something usable.
+    if ($statusBuf.Count -eq 0 -and $jsonBuf.Count -eq 0) {
+        $out.StatusLines = @($Lines)
+        return $out
+    }
+    $out.StatusLines = @($statusBuf.ToArray())
+    $out.JsonText    = ($jsonBuf.ToArray() -join "`n").Trim()
+    return $out
+}
+
+# Parse `kubectl get battlegroups -n <ns> -o json` and return the Battlegroup
+# Info fields shown in the dashboard panel. Field paths were confirmed live
+# against the Funcom `igw.funcom.com/v1 BattleGroup` CRD:
+#   .status.phase                                → BG Status
+#   .status.database.phase                       → Database
+#   .status.utilities.serverGateway.phase        → Gateway
+#   .status.utilities.director.phase             → Director
+#   humanize(now − .status.startTimestamp)       → Uptime
+# Returns $null when JSON is missing or lacks a usable `.status` — the
+# caller then keeps the (pre-existing) text-parsed values so behaviour never
+# regresses below the current baseline.
+function ConvertFrom-DuneBgJsonStatus {
+    param([string]$JsonText)
+    if (-not $JsonText) { return $null }
+    try { $obj = $JsonText | ConvertFrom-Json -ErrorAction Stop } catch { return $null }
+    if (-not $obj) { return $null }
+    # `kubectl get battlegroups` returns a List; a single BG is expected but
+    # tolerate either shape defensively.
+    $item = $null
+    if ($obj.PSObject.Properties['items'] -and $obj.items) { $item = $obj.items[0] }
+    elseif ($obj.PSObject.Properties['status'])            { $item = $obj }
+    if (-not $item -or -not $item.status) { return $null }
+    $status = $item.status
+    $utilities = if ($status.PSObject.Properties['utilities']) { $status.utilities } else { $null }
+    $dbPhase  = if ($status.PSObject.Properties['database'] -and $status.database)  { $status.database.phase }  else { '' }
+    $gwPhase  = if ($utilities -and $utilities.PSObject.Properties['serverGateway'] -and $utilities.serverGateway) { $utilities.serverGateway.phase } else { '' }
+    $dirPhase = if ($utilities -and $utilities.PSObject.Properties['director']      -and $utilities.director)      { $utilities.director.phase }      else { '' }
+    $uptime = ''
+    if ($status.PSObject.Properties['startTimestamp'] -and $status.startTimestamp) {
+        try {
+            $raw = $status.startTimestamp
+            $dt = if ($raw -is [datetime]) {
+                $raw
+            } else {
+                [datetime]::Parse([string]$raw, [System.Globalization.CultureInfo]::InvariantCulture, [System.Globalization.DateTimeStyles]::RoundtripKind)
+            }
+            $uptime = Format-DuneKubeAge -Start $dt
+        } catch {}
+    }
+    $name = ''
+    if ($item.PSObject.Properties['metadata'] -and $item.metadata -and $item.metadata.name) { $name = [string]$item.metadata.name }
+    return @{
+        info = @{
+            status   = if ($status.phase) { [string]$status.phase } else { '' }
+            database = if ($dbPhase)  { [string]$dbPhase }  else { '' }
+            gateway  = if ($gwPhase)  { [string]$gwPhase }  else { '' }
+            director = if ($dirPhase) { [string]$dirPhase } else { '' }
+            uptime   = [string]$uptime
+        }
+        name = $name
+    }
+}
+
+# Kubernetes-style humanized duration (matches `kubectl`'s AGE column via
+# k8s.io/apimachinery/pkg/util/duration.HumanDuration) so the Uptime cell
+# still reads "12m", "3h5m", "2d4h", "45d" like the original text row did.
+function Format-DuneKubeAge {
+    param([datetime]$Start)
+    $span = [datetime]::UtcNow - $Start.ToUniversalTime()
+    $s = [int64]$span.TotalSeconds
+    if ($s -lt 0) { return '0s' }
+    if ($s -lt 60)          { return "${s}s" }
+    $m = [int64]([math]::Floor($s / 60))
+    if ($m -lt 60)          { return "${m}m" }
+    $h = [int64]([math]::Floor($m / 60))
+    if ($h -lt 10) {
+        $mm = $m - $h * 60
+        if ($mm -gt 0) { return "${h}h${mm}m" }
+        return "${h}h"
+    }
+    if ($h -lt 48)          { return "${h}h" }
+    $d = [int64]([math]::Floor($h / 24))
+    if ($d -lt 8) {
+        $hh = $h - $d * 24
+        if ($hh -gt 0) { return "${d}d${hh}h" }
+        return "${d}d"
+    }
+    if ($d -lt 365 * 2)     { return "${d}d" }
+    $y = [int64]([math]::Floor($d / 365))
+    return "${y}y"
 }
 
 # Parse `battlegroup status` output into structured shape:
