@@ -1127,6 +1127,10 @@ function FreshStartForm({ busy, player, runAction }: {
         DST brackets the game's built-in character-delete + character-recreate flow so purchases carry over. The game handles the actual delete correctly on its own: it wipes ownership on your solo-owned vehicles/bases and leaves your co-owner grants on others' stuff intact.
       </div>
 
+      <div className="rounded-lg bg-info/10 border border-info/40 p-3 text-info text-xs leading-relaxed">
+        <b>Pro tip - clean up before you delete:</b> pick up your fiefs and disassemble your vehicles first. That way the game has nothing abandoned to "gift" to co-owners or leave sitting for other players to claim, and your new character starts on truly empty ground.
+      </div>
+
       <div className="card p-3 space-y-2">
         <div className="font-medium text-text flex items-center gap-2"><Icon name="Save" size={14} /> Step 1 - Snapshot purchases</div>
         <div className="text-text-dim text-xs">Saves {player.name}'s purchased CHOAM/MTX sets, pieces, and cosmetics to <code className="text-text">%APPDATA%\DuneServer\fresh-start-snapshots.json</code>. Do this <b className="text-text">before</b> deleting in-game (the data goes with the character).</div>
