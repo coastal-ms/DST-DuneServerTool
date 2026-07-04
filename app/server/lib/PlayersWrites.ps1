@@ -1568,31 +1568,17 @@ SELECT
     }
 }
 
-# Fresh Start Step 1 (combined): snapshot the account's purchases + cosmetics to
-# disk, then run the full Delete Account cleanup (character rows, actors, world
-# ownership 3-rule cleanup, per-player state, guild/party membership, etc.).
-# On snapshot failure, the delete is skipped and the caller retries. On delete
-# failure, the snapshot is still on disk so Restore can pick it up after the
-# operator resolves whatever blocked the delete (usually the offline gate).
-function Invoke-DunePlayerFreshStartWipe {
-    param([string]$Ip, [long]$AccountId)
-    if ($AccountId -le 0) { return @{ ok = $false; error = 'account_id is required.' } }
-
-    $snap = Invoke-DunePlayerSnapshotBuilds -Ip $Ip -AccountId $AccountId
-    if (-not $snap.ok) { return @{ ok = $false; error = "snapshot failed - delete not attempted: $($snap.error)" } }
-
-    $del = Invoke-DunePlayerDetachAccount -Ip $Ip -AccountId $AccountId
-    if (-not $del.ok) {
-        return @{ ok = $false; error = "snapshot saved for '$($snap.name)', but detach failed: $($del.error)" ; snapshot_saved = $true; name = $snap.name }
-    }
-
-    $cosMsg = if ($snap.cosmetics) { ' + cosmetics' } else { '' }
-    return @{
-        ok = $true
-        message = "Fresh Start: snapshotted '$($snap.name)' ($($snap.sets) set(s), $($snap.pieces) piece(s)$cosMsg) and detached account $AccountId. World ownership on your vehicles/bases has been stripped. Log in again to create your fresh character with the SAME name, then click Restore to reapply purchases."
-        name = $snap.name; sets = $snap.sets; pieces = $snap.pieces; cosmetics = $snap.cosmetics
-    }
-}
+# FreshStartWipe removed: after live comparison with the game's own delete
+# flow (Funcom in-game delete -> confirm-purge on new character creation), we
+# learned the game does only two things at purge time: sets the old
+# encrypted_player_state row's character_state='Deleted' and wipes every
+# rank=1 permission_actor_rank row the old character's controllers held.
+# It doesn't rename accounts, doesn't touch physical totems/actors, doesn't
+# strip co-owner rows. Everything DST used to do (detach, rename, Rule 1
+# ACL wipes, sweeps) was fighting the pod cache and getting overwritten.
+# So Fresh Start is now purely Snapshot + Restore: DST captures purchases,
+# the operator does the delete in-game (which handles ownership correctly),
+# then DST restores purchases onto the recreated character.
 
 # Restore a saved snapshot's building sets/pieces + cosmetics onto the CURRENT
 # live character with the given name (the freshly recreated one). Offline-only:
