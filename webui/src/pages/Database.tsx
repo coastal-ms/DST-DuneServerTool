@@ -953,9 +953,9 @@ function BackupScheduleCard({ vmRunning, showToast }: BackupScheduleCardProps) {
           <button
             type="button"
             onClick={() => void save()}
-            disabled={!vmRunning || loading || saving || !dirty}
+            disabled={!vmRunning || loading || saving}
             className="btn-primary"
-            title={dirty ? 'Install the new schedule on the VM' : 'No changes to save'}
+            title={dirty ? 'Install the new schedule on the VM' : 'Re-write the schedule on the VM (no unsaved changes)'}
           >
             <Icon name={saving ? 'Loader2' : 'Save'} size={14} className={saving ? 'animate-spin' : ''} />
             {saving ? 'Saving…' : 'Save schedule'}
@@ -1091,11 +1091,11 @@ function BackupScheduleCard({ vmRunning, showToast }: BackupScheduleCardProps) {
           <button
             type="button"
             onClick={() => void save()}
-            disabled={!vmRunning || saving || pruning || !dumpPodsDirty}
+            disabled={!vmRunning || saving || pruning}
             className="btn-primary"
             title={dumpPodsDirty
               ? 'Persist these retention values into the schedule so they survive reload and drive the auto-prune.'
-              : 'No unsaved changes.'}
+              : 'Re-write the schedule on the VM (no unsaved changes).'}
           >
             <Icon name={saving ? 'Loader2' : 'Save'} size={14} className={saving ? 'animate-spin' : ''} />
             {saving ? 'Saving…' : 'Save retention'}
