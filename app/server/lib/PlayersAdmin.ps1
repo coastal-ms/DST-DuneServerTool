@@ -622,7 +622,7 @@ BEGIN
     -- Detach: rename the funcom-id column on the real table so the game's
     -- next login for the real ID finds no matching account and creates a
     -- fresh one. Old rows survive so live pods flushing state don't crash.
-    UPDATE dune.encrypted_accounts SET "user" = $newUser WHERE id = v_account_id;
+    UPDATE dune.encrypted_accounts SET "user" = '$newUser' WHERE id = v_account_id;
 END
 `$`$;
 "@
