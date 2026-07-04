@@ -219,11 +219,21 @@ function New-DuneBackupBlock {
         $lines += "$cronExpr $cmd"
     }
     if ($KeepLast -gt 0) {
-        # Narrow the retention pattern to filenames that match Funcom's own
-        # battlegroup-dump naming (<bg>-YYYYMMDD-HHMMSS.backup[.yaml]) so we
-        # never delete a manually-named snapshot like 'pre-patch-X.backup'.
-        $namePat = '*-[0-9][0-9][0-9][0-9][0-9][0-9][0-9][0-9]-[0-9][0-9][0-9][0-9][0-9][0-9].backup*'
-        $find = "ls -t $script:DuneBackupDumpDir/$namePat 2>/dev/null | tail -n +$($KeepLast + 1) | xargs -r rm"
+        # Retention prune. Notes on the shape of this glob:
+        #   (i)  `battlegroup backup` writes to
+        #        /funcom/artifacts/database-dumps/<sh-hash-name>/<file>.backup,
+        #        so we need `/*/` to descend one level into the per-battlegroup
+        #        subdir. A shallow `$DumpDir/*.backup` matches nothing.
+        #   (ii) Each backup produces TWO files on disk: `<name>.backup` and
+        #        its `<name>.backup.yaml` sidecar. We match only `.backup` for
+        #        counting so keep-last=N means N real backups (not N/2), and
+        #        delete the `.yaml` sidecar alongside each pruned entry.
+        #   (iii)The `-YYYYMMDD-HHMMSS.backup` shape gate preserves manually
+        #        named snapshots like 'pre-patch-1_4_10_1.backup' -- they
+        #        never match this pattern, so we can't prune them by accident.
+        $namePat = '*-[0-9][0-9][0-9][0-9][0-9][0-9][0-9][0-9]-[0-9][0-9][0-9][0-9][0-9][0-9].backup'
+        $skip = $KeepLast + 1
+        $find = "ls -t $script:DuneBackupDumpDir/*/$namePat 2>/dev/null | tail -n +$skip | while IFS= read -r f; do rm -f `"`$f`" `"`$f.yaml`"; done"
         $lines += "15 5 * * * $find"
     }
     $lines += $script:DuneBackupEndMarker
