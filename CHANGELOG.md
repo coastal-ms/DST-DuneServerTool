@@ -13,6 +13,10 @@ here cover everything those tags shipped.
 
 ## [Unreleased]
 
+### Changed
+
+- **Grant All Skills no longer soft-locks the tutorial.** It previously maxed every skill, which left nothing to learn and made the New Player Experience step *"Learn a new Ability from the Skills menu"* impossible to complete. It now unlocks every skill but deliberately leaves **multi-level skills below max**, and grants a small **~20 skill-point buffer**, so the player can still spend a point to complete that step and finish leveling skills themselves.
+
 ### Fixed
 
 - **Reboot / Stop All no longer looks like it failed to stop the battlegroup.** Funcom's own `battlegroup stop` script waits for the battlegroup to report the "Stopped" phase by positionally parsing its status output, and mis-reads the phase when the server title contains spaces (e.g. "Dune Reapers - DST") — so it prints a cosmetic `WARNING: battlegroup … did not report Stopped within 90s` even though the stop succeeded. DST already verifies the real stop via its own pod-termination check; it now prints a short note after that confirmation explaining the Funcom warning is cosmetic when the server title has spaces. (Same root cause as the v12.16.1 Dashboard Battlegroup Info fix, but inside Funcom's script, which DST calls and does not modify.)

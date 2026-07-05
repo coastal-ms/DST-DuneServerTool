@@ -1783,17 +1783,20 @@ function Invoke-DunePlayerMarkNpeCompleted {
     }
 }
 
-# Grant every skill in the bundled catalog on the target character, at MAX level.
-# Writes jsonb_set for each catalog key with {"SkillPointsSpent":<max>} onto the
-# pawn's FLevelComponent[1].ModuleData (keyed via actor_fgl_entities.slot_name=
-# 'DuneCharacter'). The game reconciles SkillPointsSpent -> skill level on login
-# and CLAMPS an over-max value down to each skill's real cap, so writing a single
-# comfortably-high value (10) maxes every skill regardless of how many levels it
-# has (live-verified: 10 -> 3/3 on multi-level perks/abilities/keystones/capstones
-# and the single-rank attributes cap cleanly, no breakage, pool not overdrawn).
-# Entries already at >= the max value are skipped (idempotent). Does NOT touch the
-# character's skill-point pool. Offline-only. Same catalog for every character.
-$script:DuneGrantAllSkillsMaxValue = 10
+# Grant every skill in the bundled catalog on the target character, PARTIALLY.
+# Writes {"SkillPointsSpent":<val>} onto the pawn's FLevelComponent[1].ModuleData
+# for each catalog key. IMPORTANT: this uses a LOW value (2) on purpose, not a
+# max value. The game reconciles SkillPointsSpent -> skill level on login and
+# clamps it to each skill's real cap, so a low value maxes single-rank skills but
+# leaves MULTI-LEVEL skills BELOW max. That headroom is required: if every skill
+# is maxed, the New Player Experience journey step "Learn a new Ability from the
+# Skills menu" can never complete (nothing left to learn/upgrade) and the player
+# is soft-stuck. Leaving multi-level skills unmaxed keeps that step completable.
+# The action also grants a small spendable skill-point buffer (UnspentSkillPoints)
+# so the player can actually spend points to finish the step and level skills up.
+# Offline-only. Same catalog for every character.
+$script:DuneGrantAllSkillsLevelValue = 2
+$script:DuneGrantAllSkillsPointBuffer = 20
 function Invoke-DunePlayerGrantAllSkills {
     param([string]$Ip, [long]$AccountId)
     if ($AccountId -le 0) { return @{ ok = $false; error = 'account_id is required.' } }
@@ -1804,13 +1807,16 @@ function Invoke-DunePlayerGrantAllSkills {
     if ($keys.Count -eq 0) {
         return @{ ok = $false; error = 'skills catalog is empty (app/data/dune-skills-catalog.json missing?).' }
     }
-    $maxVal = [int]$script:DuneGrantAllSkillsMaxValue
+    $levelVal = [int]$script:DuneGrantAllSkillsLevelValue
+    $buffer   = [int]$script:DuneGrantAllSkillsPointBuffer
+    # Target TotalSkillPoints so the grant's spend leaves ~$buffer unspent
+    # regardless of whether the game trusts the stored UnspentSkillPoints or
+    # recomputes it as Total - spent.
+    $totalTarget = ($keys.Count * $levelVal) + $buffer
 
     # Build one transaction that jsonb_set each catalog key onto the character's
-    # ModuleData at the max value. The guard `SkillPointsSpent < $maxVal` makes
-    # each UPDATE idempotent and also UPGRADES any prior level-1 grants to max,
-    # without lowering a skill a player legitimately leveled (the game clamps
-    # anyway, so an already-max skill is untouched).
+    # ModuleData at the low value. The guard `SkillPointsSpent < $levelVal` makes
+    # each UPDATE idempotent and does not lower a skill already at/above it.
     $sb = [System.Text.StringBuilder]::new()
     [void]$sb.AppendLine('BEGIN;')
     foreach ($sk in $keys) {
@@ -1822,7 +1828,7 @@ UPDATE dune.fgl_entities fe
 SET components = jsonb_set(
     fe.components,
     ARRAY['FLevelComponent','1','ModuleData','$safeKey'],
-    '{"SkillPointsSpent": $maxVal}'::jsonb,
+    '{"SkillPointsSpent": $levelVal}'::jsonb,
     true)
 WHERE fe.entity_id = (
     SELECT entity_id FROM dune.actor_fgl_entities
@@ -1831,9 +1837,28 @@ WHERE fe.entity_id = (
 AND COALESCE(
     (fe.components->'FLevelComponent'->1->'ModuleData'->'$safeKey'->>'SkillPointsSpent')::int,
     0
-) < $maxVal;
+) < $levelVal;
 "@)
     }
+    # Grant a spendable skill-point buffer: set UnspentSkillPoints to the buffer,
+    # and raise TotalSkillPoints (never lower it) so the pool stays positive even
+    # if the game recomputes unspent = total - spent on login.
+    [void]$sb.AppendLine(@"
+UPDATE dune.fgl_entities fe
+SET components = jsonb_set(
+    jsonb_set(
+        fe.components,
+        ARRAY['FLevelComponent','1','UnspentSkillPoints'],
+        to_jsonb($buffer::int), true),
+    ARRAY['FLevelComponent','1','TotalSkillPoints'],
+    to_jsonb(GREATEST(
+        COALESCE((fe.components #>> '{FLevelComponent,1,TotalSkillPoints}')::int, 0),
+        $totalTarget::int)), true)
+WHERE fe.entity_id = (
+    SELECT entity_id FROM dune.actor_fgl_entities
+    WHERE actor_id = $pawnID::bigint AND slot_name = 'DuneCharacter'
+);
+"@)
     [void]$sb.AppendLine('COMMIT;')
 
     # -Bulk streams SQL through ssh stdin so the ~60 KB payload (145 UPDATEs)
@@ -1846,8 +1871,9 @@ AND COALESCE(
     }
     return @{
         ok = $true
-        message = "Granted every skill ($($keys.Count) total) at max level on the character. The game caps each skill at its real max on next login. Takes effect on next login."
+        message = "Granted every skill ($($keys.Count) total) plus a $buffer skill-point buffer. Multi-level skills are left below max on purpose so the 'Learn a new Ability' step stays completable; spend the granted points to finish leveling. Takes effect on next login."
         catalog_size = $keys.Count
+        point_buffer = $buffer
     }
 }
 
