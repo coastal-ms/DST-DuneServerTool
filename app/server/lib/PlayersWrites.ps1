@@ -1668,7 +1668,12 @@ function Invoke-DunePlayerRestoreBuilds {
     }
     [void]$sb.AppendLine('COMMIT;')
 
-    $r = Invoke-DuneSqlQuery -Ip $Ip -Sql $sb.ToString() -ReadOnly $false -MaxRows 1 -TimeoutSec 60
+    # -Bulk: the restore payload carries the full building-set/piece arrays plus
+    # the entire cosmetics unlock object inline, which for an established
+    # character easily exceeds the Windows ~32 KB command-line limit that the
+    # non-streaming path hits ("The filename or extension is too long"). Stream
+    # it through ssh stdin instead, same as Grant All Skills/Tech.
+    $r = Invoke-DuneSqlQuery -Ip $Ip -Sql $sb.ToString() -ReadOnly $false -MaxRows 1 -TimeoutSec 60 -Bulk
     if (-not $r.ok) {
         Invoke-DuneSqlQuery -Ip $Ip -Sql 'ROLLBACK;' -ReadOnly $false -MaxRows 1 -TimeoutSec 5 | Out-Null
         return @{ ok = $false; error = "restore builds tx: $($r.error)" }
