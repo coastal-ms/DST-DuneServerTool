@@ -961,11 +961,12 @@ function Invoke-DuneDnatWatchdogInstall {
     # the VM (base64 over an ssh exec channel — no scp/sftp dependency), run it
     # once with sudo, remove it. The installer writes /usr/local/bin/dune-dnat-watch.sh
     # plus a 1-minute root cron entry so the RabbitMQ (public:31982 -> mq-game pod)
-    # and game-port DNAT rules self-heal after a pod-only battlegroup restart —
-    # which the boot script /etc/local.d/dune-iptables.start misses because it
-    # only re-derives the pod IP at boot. Without this, a pod restart leaves the
-    # RabbitMQ rule pointing at a dead pod IP and remote players hang on
-    # "Connecting" until the next reboot (observed 2026-06-23).
+    # DNAT rule self-heals after a pod-only battlegroup restart -- which the boot
+    # script /etc/local.d/dune-iptables.start misses because it only re-derives the
+    # pod IP at boot. Without this, a pod restart leaves the RabbitMQ rule pointing
+    # at a dead pod IP and remote players hang on "Connecting" until the next
+    # reboot (observed 2026-06-23). The installer also retires a former game-port
+    # UDP rule (VM_IP:7777-7810 -> public) that could hairpin a same-LAN join.
     #
     # ALL persistence (the watchdog file + cron line) lives in the staged POSIX-sh
     # script, never in this app — so the packaged installer carries no
@@ -1002,7 +1003,7 @@ function Invoke-DuneDnatWatchdogInstall {
                     -i "$sshKey" "$sshUser@$Ip" `
                     "sudo -n sh $remoteTmp; rc=`$?; rm -f $remoteTmp; exit `$rc" 2>&1
     if (($runOut -join "`n") -match 'DUNE_DNAT_WATCH_OK') {
-        Write-Host "  [$Phase] DNAT self-heal watchdog installed/refreshed — RabbitMQ + game ports auto-recover after pod restarts." -ForegroundColor DarkGray
+        Write-Host "  [$Phase] DNAT self-heal watchdog installed/refreshed — RabbitMQ login port auto-recovers after pod restarts." -ForegroundColor DarkGray
     } else {
         Write-Host "  [$Phase] DNAT watchdog install reported a problem (non-fatal): $runOut" -ForegroundColor DarkYellow
     }
