@@ -948,6 +948,9 @@ function ActionRow({ def, player, busy, stats, open, danger, onToggle, runAction
       </button>
       {open && (
         <div className="border-t border-border p-3">
+          {def.rowNote && (
+            <div className="text-xs text-text-dim italic mb-3 leading-relaxed">{def.rowNote}</div>
+          )}
           {def.custom === 'give-item' ? (
             <GiveItemForm busy={busy} submitLabel={def.label}
               onSubmit={(tpl, qty, qual, overflow) => runAction(def, () => giveItem(player.id, tpl, qty, qual, overflow))}
