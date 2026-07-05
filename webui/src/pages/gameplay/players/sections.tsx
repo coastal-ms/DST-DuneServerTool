@@ -668,8 +668,8 @@ const ACTIONS: ActionDef[] = [
     rowNote: 'Snapshot cosmetics, delete + recreate character in-game (same name), then restore. Offline to restore.',
     run: () => Promise.resolve({ message: '' }) },
   { id: 'grant-all-skills', group: 'Progression', label: 'Grant All Skills', icon: 'Sparkles', offlineOnly: true,
-    rowNote: 'Unlock every skill at max level. The game caps each skill at its real max on login. Offline.',
-    confirm: p => `Grant every skill to ${p.name} at max level?\n\nUnlocks all 145 skills and sets each to its maximum level (the game caps each skill at its real max on next login). Existing progress preserved. Player must be offline.`,
+    rowNote: 'Unlock every skill (multi-level ones left below max) + a ~20 skill-point buffer to finish. Keeps the tutorial "Learn a new Ability" step completable. Offline.',
+    confirm: p => `Grant all skills to ${p.name}?\n\nUnlocks all 145 skills, but leaves multi-level skills BELOW max on purpose so the tutorial step "Learn a new Ability from the Skills menu" stays completable (maxing everything soft-locks it). Also grants a small (~20) spendable skill-point buffer so ${p.name} can finish leveling. Existing progress preserved. Player must be offline.`,
     run: p => grantAllSkills(p.account_id) },
   // Grant All Tech Recipes — DISABLED pending rework. The DB write marks every
   // recipe UnlockedState="Purchased", but in-game the items stay unclaimed/0-cost
