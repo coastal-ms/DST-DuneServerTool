@@ -11,6 +11,12 @@ Patch releases within a major series are rolled up under the major's entry
 on GitHub still exist for each individual release; the consolidated entries
 here cover everything those tags shipped.
 
+## [Unreleased]
+
+### Fixed
+
+- **Reboot / Stop All no longer looks like it failed to stop the battlegroup.** Funcom's own `battlegroup stop` script waits for the battlegroup to report the "Stopped" phase by positionally parsing its status output, and mis-reads the phase when the server title contains spaces (e.g. "Dune Reapers - DST") — so it prints a cosmetic `WARNING: battlegroup … did not report Stopped within 90s` even though the stop succeeded. DST already verifies the real stop via its own pod-termination check; it now prints a short note after that confirmation explaining the Funcom warning is cosmetic when the server title has spaces. (Same root cause as the v12.16.1 Dashboard Battlegroup Info fix, but inside Funcom's script, which DST calls and does not modify.)
+
 ## [12.16.9] - 2026-07-05
 
 ### Changed
