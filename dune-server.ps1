@@ -754,6 +754,30 @@ function Confirm-NoPlayersOnline {
     return ($proceed -eq "YES")
 }
 
+# Funcom's `battlegroup stop` waits for the BG CRD to report phase "Stopped" by
+# positionally parsing `kubectl get battlegroup --no-headers` (awk '{print $3}').
+# When the server title (spec.title) contains spaces, the title spans multiple
+# whitespace tokens and shifts the real PHASE column right, so Funcom reads a
+# title token as the phase, never matches "Stopped", and prints a cosmetic
+# "did not report Stopped within 90s" WARNING after its 90s timeout. The stop
+# still succeeds -- DST verifies that separately via the pod-termination check.
+# This note reassures the operator when their title would trigger the warning.
+# (Same root cause as the v12.16.1 Dashboard BG-Info fix, but inside Funcom's
+# stop script, which DST calls and must not modify.)
+function Show-DuneFuncomStopWarningNote {
+    param([string]$Ip, [string]$SshUser, [string]$SshKey)
+    try {
+        $title = ssh -o BatchMode=yes -o StrictHostKeyChecking=no -o LogLevel=QUIET -i "$SshKey" "$SshUser@$Ip" `
+            "sudo k3s kubectl get battlegroups -A --no-headers -o custom-columns=T:.spec.title 2>/dev/null | head -1"
+        $title = ($title | Out-String).Trim()
+        if ($title -and ($title -match '\s')) {
+            Write-Host "  Note: any Funcom 'battlegroup ... did not report Stopped within 90s' warning above is" -ForegroundColor DarkGray
+            Write-Host "        cosmetic -- Funcom's stop script mis-reads the phase because your server title" -ForegroundColor DarkGray
+            Write-Host "        ('$title') contains spaces. DST confirmed the actual stop above (pods terminated)." -ForegroundColor DarkGray
+        }
+    } catch {}
+}
+
 # Returns $true if any battlegroup pod (sg/mq/sgw/tr/bgd) is currently
 # present on the VM. Used to short-circuit `battlegroup stop` calls when
 # nothing is running -- otherwise the VM-side helper script runs its own
@@ -1688,6 +1712,7 @@ while ($true) {
         if ($finalCount -eq 0) {
             Save-PhaseTiming 'pods-terminate' $elapsed
             Complete-WaitCounter -Message "All game/infra pods terminated after $(Format-Duration $elapsed)."
+            Show-DuneFuncomStopWarningNote -Ip $ip -SshUser $sshUser -SshKey $sshKey
         } else {
             Complete-WaitCounter -Message "$finalCount pod(s) still present after $(Format-Duration $elapsed). Proceeding with VM restart anyway." -Color Yellow
         }
@@ -1955,6 +1980,7 @@ while ($true) {
         if ($finalCount -eq 0) {
             Save-PhaseTiming 'pods-terminate' $elapsed
             Complete-WaitCounter -Message "All game/infra pods terminated after $(Format-Duration $elapsed)."
+            Show-DuneFuncomStopWarningNote -Ip $ip -SshUser $sshUser -SshKey $sshKey
         } else {
             Complete-WaitCounter -Message "$finalCount pod(s) still present after $(Format-Duration $elapsed). Proceeding with VM shutdown anyway." -Color Yellow
         }
