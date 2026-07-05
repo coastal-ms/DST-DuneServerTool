@@ -1506,11 +1506,15 @@ function Save-DuneFreshStartSnapshots {
 function Get-DuneFreshStartSnapshotList {
     $out = @()
     foreach ($s in (Get-DuneFreshStartSnapshots)) {
+        # Unwrap the pre-fix {value=[...]; Count=N} wrapper so the displayed
+        # counts are accurate for both old and new snapshots.
+        $setsList   = @($s.building_sets    | ForEach-Object { if ($_ -and ($_.PSObject.Properties.Name -contains 'value')) { $_.value } else { $_ } })
+        $piecesList = @($s.buildable_pieces | ForEach-Object { if ($_ -and ($_.PSObject.Properties.Name -contains 'value')) { $_.value } else { $_ } })
         $out += [ordered]@{
             name      = [string]$s.name
             saved_at  = [string]$s.saved_at
-            sets      = @($s.building_sets).Count
-            pieces    = @($s.buildable_pieces).Count
+            sets      = $setsList.Count
+            pieces    = $piecesList.Count
             cosmetics = [bool]([string]$s.cosmetics)
         }
     }
@@ -1542,9 +1546,16 @@ SELECT
     $name = [string]$row['name']
     if (-not $name) { return @{ ok = $false; error = 'character has no name.' } }
 
+    # Parse the to_json arrays into FLAT string arrays. NOTE (Windows PowerShell
+    # 5.1, the runtime DuneServer.exe compiles to): the form
+    # `@([string]$x | ConvertFrom-Json)` collapses a multi-element JSON array into
+    # a SINGLE {value=[...]; Count=N} wrapper object instead of N strings, so the
+    # snapshot stored 1 "set" (the wrapper) and Restore's `-match` filter then saw
+    # 1 non-matching object and restored 0. Parse WITHOUT the [string] cast prefix
+    # and expand each element to a plain string so it serializes as a flat array.
     $sets = @(); $pieces = @()
-    try { if ([string]$row['sets'])   { $sets   = @([string]$row['sets']   | ConvertFrom-Json) } } catch {}
-    try { if ([string]$row['pieces']) { $pieces = @([string]$row['pieces'] | ConvertFrom-Json) } } catch {}
+    try { if ($row['sets']   -and [string]$row['sets'])   { $sets   = @(($row['sets']   | ConvertFrom-Json) | ForEach-Object { [string]$_ }) } } catch {}
+    try { if ($row['pieces'] -and [string]$row['pieces']) { $pieces = @(($row['pieces'] | ConvertFrom-Json) | ForEach-Object { [string]$_ }) } } catch {}
     $cosmeticsJson = [string]$row['cosmetics']
 
     $snap = [ordered]@{
@@ -1631,8 +1642,13 @@ function Invoke-DunePlayerRestoreBuilds {
     # unlocks, so restoring the whole array over-grants faction perks to a Rank-0
     # character.
     $purchasedRx = '^(MTX_|Choam)'
-    $filteredSets   = @($s.building_sets    | Where-Object { [string]$_ -match $purchasedRx })
-    $filteredPieces = @($s.buildable_pieces | Where-Object { [string]$_ -match $purchasedRx })
+    # Defensive unwrap: snapshots saved before the array-wrapping fix stored
+    # sets/pieces as a single {value=[...]; Count=N} object (PS 5.1 quirk). If we
+    # see that shape, pull the inner .value so those old snapshots still restore.
+    $rawSets   = @($s.building_sets    | ForEach-Object { if ($_ -and ($_.PSObject.Properties.Name -contains 'value')) { $_.value } else { $_ } } | ForEach-Object { [string]$_ })
+    $rawPieces = @($s.buildable_pieces | ForEach-Object { if ($_ -and ($_.PSObject.Properties.Name -contains 'value')) { $_.value } else { $_ } } | ForEach-Object { [string]$_ })
+    $filteredSets   = @($rawSets   | Where-Object { $_ -match $purchasedRx })
+    $filteredPieces = @($rawPieces | Where-Object { $_ -match $purchasedRx })
     $setsArr   = ConvertTo-DunePgTextArray ($filteredSets   | ForEach-Object { [string]$_ })
     $piecesArr = ConvertTo-DunePgTextArray ($filteredPieces | ForEach-Object { [string]$_ })
     $cosmetics = [string]$s.cosmetics
