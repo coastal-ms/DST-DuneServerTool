@@ -1768,7 +1768,18 @@ AND COALESCE(
 # character's Intel terminal (TechKnowledgePlayerComponent.m_TechKnowledge.m_TechKnowledgeData).
 # Existing entries are preserved verbatim (their UnlockedState is NOT downgraded).
 # Missing keys are appended as {ItemKey, bIsNewEntry:true, UnlockedState:"Purchased"}.
-# Does NOT touch m_TechKnowledgePoints. Offline-only. Same catalog for every character.
+# Offline-only. Same catalog for every character.
+#
+# Intel floor: the granted recipes are marked "Purchased" but the game charges
+# Intel per recipe when the character redeems them on next login - with a 0
+# Intel balance nothing actually unlocks (this is why the action used to look
+# unverified/experimental). Live-verified that ~5000 Intel covers the full
+# 449-recipe set with headroom. So this action now also tops the character's
+# Intel up to a 5000 floor (raise-only; a higher existing balance is left
+# untouched), written directly to m_TechKnowledgePoints in the same transaction.
+# This bypasses the manual Award Intel feature's conservative 2779 clamp on
+# purpose - 5000 is a live-verified working value.
+$script:DuneGrantAllTechIntelFloor = 5000
 function Invoke-DunePlayerGrantAllTech {
     param([string]$Ip, [long]$AccountId)
     if ($AccountId -le 0) { return @{ ok = $false; error = 'account_id is required.' } }
@@ -1812,6 +1823,23 @@ SET properties = jsonb_set(
     true)
 WHERE a.id = $pawnID::bigint;
 "@)
+    # Intel floor: raise m_TechKnowledgePoints to at least the floor so the
+    # character can actually redeem the just-granted recipes on login. GREATEST
+    # keeps any higher existing balance untouched. Same component, different
+    # subkey than the recipe grant above, so this doesn't clobber it.
+    $intelFloor = [int]$script:DuneGrantAllTechIntelFloor
+    [void]$sb.AppendLine(@"
+UPDATE dune.actors
+SET properties = jsonb_set(
+    COALESCE(properties, '{}'::jsonb),
+    '{TechKnowledgePlayerComponent}',
+    COALESCE(properties -> 'TechKnowledgePlayerComponent', '{}'::jsonb)
+        || jsonb_build_object('m_TechKnowledgePoints',
+            to_jsonb(GREATEST(
+                COALESCE((properties #>> '{TechKnowledgePlayerComponent,m_TechKnowledgePoints}')::int, 0),
+                $intelFloor))))
+WHERE id = $pawnID::bigint;
+"@)
     [void]$sb.AppendLine('COMMIT;')
 
     # -Bulk for the ~40 KB payload (449 ItemKeys inline) - see grant-all-skills.
@@ -1822,8 +1850,9 @@ WHERE a.id = $pawnID::bigint;
     }
     return @{
         ok = $true
-        message = "Granted every tech recipe ($($itemKeys.Count) total) on the character (existing entries preserved, Intel points untouched). Takes effect on next login."
+        message = "Granted every tech recipe ($($itemKeys.Count) total) on the character (existing entries preserved) and topped Intel up to at least $intelFloor so the recipes can be redeemed. Takes effect on next login."
         catalog_size = $itemKeys.Count
+        intel_floor = $intelFloor
     }
 }
 
