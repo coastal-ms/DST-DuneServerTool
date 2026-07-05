@@ -15,7 +15,8 @@ here cover everything those tags shipped.
 
 ### Changed
 
-- **Grant All Tech Recipes** now tops the character's Intel up to a **5000** floor as part of the action (raise-only — a higher existing balance is left untouched), and its **EXPERIMENTAL** badge is removed. The recipes are marked Purchased, but the game charges Intel per recipe when the character redeems them on next login, so with a 0 Intel balance nothing actually unlocked (which is why it looked unverified). 5000 Intel is a live-verified amount that covers the full 449-recipe set with headroom. The Intel write is applied in the same transaction as the recipe grant. (Grant All Skills remains flagged EXPERIMENTAL — unchanged.)
+- **Grant All Tech Recipes** now tops the character's Intel up to a **5000** floor as part of the action (raise-only — a higher existing balance is left untouched), and its **EXPERIMENTAL** badge is removed. The recipes are marked Purchased, but the game charges Intel per recipe when the character redeems them on next login, so with a 0 Intel balance nothing actually unlocked (which is why it looked unverified). 5000 Intel is a live-verified amount that covers the full 449-recipe set with headroom. The Intel write is applied in the same transaction as the recipe grant.
+- **Grant All Skills** now grants every skill at **max level** (previously each skill was only granted level 1) and its **EXPERIMENTAL** badge is removed. It writes a comfortably-high `SkillPointsSpent` value; the game reconciles that to a skill level on login and **caps each skill at its real maximum**, so multi-level perks/abilities/keystones/capstones reach full level and single-rank skills cap cleanly. Live-verified across every skill category (no overshoot or breakage, skill-point pool not overdrawn).
 
 ### Fixed
 
