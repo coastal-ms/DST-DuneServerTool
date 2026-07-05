@@ -17,6 +17,10 @@ here cover everything those tags shipped.
 
 - **Grant All Tech Recipes** now tops the character's Intel up to a **5000** floor as part of the action (raise-only — a higher existing balance is left untouched), and its **EXPERIMENTAL** badge is removed. The recipes are marked Purchased, but the game charges Intel per recipe when the character redeems them on next login, so with a 0 Intel balance nothing actually unlocked (which is why it looked unverified). 5000 Intel is a live-verified amount that covers the full 449-recipe set with headroom. The Intel write is applied in the same transaction as the recipe grant. (Grant All Skills remains flagged EXPERIMENTAL — unchanged.)
 
+### Fixed
+
+- **Fresh Start restore now reliably targets the recreated character, and verifies the result.** The restore step resolved the live character **by name**, which could land on a stale/duplicate row (or silently no-op) so purchases and cosmetics didn't actually appear in-game even though the tool reported success. It now resolves the live pawn by the snapshot's **account id** (stable across the in-game delete + recreate; falls back to name for older snapshots), and after the write it **reads back the actual cosmetics / building-set / piece counts** and reports them — warning explicitly if cosmetics were expected but didn't land, instead of the old blind "+ cosmetics" success message.
+
 ## [12.16.8] - 2026-07-04
 
 ### Added

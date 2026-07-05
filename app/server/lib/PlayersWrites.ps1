@@ -1592,15 +1592,30 @@ function Invoke-DunePlayerRestoreBuilds {
     if ($snap.Count -eq 0) { return @{ ok = $false; error = "no saved snapshot for '$Name' - snapshot the character before deleting it." } }
     $s = $snap[0]
 
-    $safeName = ConvertTo-DuneSqlString $Name
-    $idSql = "SELECT id::text AS cid, player_pawn_id::text AS pawn FROM dune.player_state WHERE character_name = '$safeName' ORDER BY last_login_time DESC NULLS LAST LIMIT 1;"
+    # Resolve the LIVE recreated character. Prefer the snapshot's account_id -
+    # the account is stable across the delete + recreate, whereas name matching
+    # is fragile (a slightly different name, or a stale/duplicate row ordered
+    # ahead by last_login_time, resolves the wrong pawn and the restore lands on
+    # a character that no longer exists = silent no-op, which is exactly the
+    # "restored, but nothing showed up" failure). dune.player_state is the
+    # Active-only view, so there is one row per active account. Fall back to
+    # name resolution for older snapshots that predate account_id capture.
+    $acctId = [int64](ConvertTo-DuneInt $s.account_id)
+    if ($acctId -gt 0) {
+        $idSql = "SELECT id::text AS cid, player_pawn_id::text AS pawn FROM dune.player_state WHERE account_id = $acctId::bigint ORDER BY last_login_time DESC NULLS LAST LIMIT 1;"
+        $resolvedBy = "account $acctId"
+    } else {
+        $safeName = ConvertTo-DuneSqlString $Name
+        $idSql = "SELECT id::text AS cid, player_pawn_id::text AS pawn FROM dune.player_state WHERE character_name = '$safeName' ORDER BY last_login_time DESC NULLS LAST LIMIT 1;"
+        $resolvedBy = "name '$Name'"
+    }
     $ir = Invoke-DuneSqlQuery -Ip $Ip -Sql $idSql -ReadOnly $true -MaxRows 1 -TimeoutSec 15
     if (-not $ir.ok) { return @{ ok = $false; error = "resolve character: $($ir.error)" } }
     $imaps = ConvertTo-DuneRowMaps -Result $ir
-    if ($imaps.Count -eq 0) { return @{ ok = $false; error = "no live character named '$Name' - recreate it (same name) and spawn in first, then restore." } }
+    if ($imaps.Count -eq 0) { return @{ ok = $false; error = "no live character for $resolvedBy - recreate it (same name) and spawn in first, then restore." } }
     $charID = [int64](ConvertTo-DuneInt $imaps[0]['cid'])
     $pawnID = [int64](ConvertTo-DuneInt $imaps[0]['pawn'])
-    if ($charID -le 0 -or $pawnID -le 0) { return @{ ok = $false; error = "character '$Name' has no pawn yet - spawn in first." } }
+    if ($charID -le 0 -or $pawnID -le 0) { return @{ ok = $false; error = "character ($resolvedBy) has no pawn yet - spawn in first." } }
 
     # Offline-only guard (pawn cosmetics + building_progression are overwritten on
     # logout otherwise).
@@ -1642,6 +1657,32 @@ function Invoke-DunePlayerRestoreBuilds {
         Invoke-DuneSqlQuery -Ip $Ip -Sql 'ROLLBACK;' -ReadOnly $false -MaxRows 1 -TimeoutSec 5 | Out-Null
         return @{ ok = $false; error = "restore builds tx: $($r.error)" }
     }
+    # Verification read-back: the write committed, but confirm it actually landed
+    # on the resolved pawn/character instead of blindly reporting success (the old
+    # "+ cosmetics" message fired even when the write hit the wrong/stale pawn and
+    # nothing showed up in-game). Read the live counts and report them; warn if the
+    # snapshot had cosmetics but they aren't present afterward.
+    $expectedCos = 0
+    if ($cosmetics) {
+        try { $expectedCos = @(($cosmetics | ConvertFrom-Json).m_UnlockedCustomizationIds).Count } catch { $expectedCos = 0 }
+    }
+    $verifySql = @"
+SELECT
+  (SELECT jsonb_array_length(COALESCE(a.properties #> '{CustomizationLibraryActorComponent,m_UnlockedCustomizationSerializableList,m_UnlockedCustomizationIds}','[]'::jsonb)) FROM dune.actors a WHERE a.id=$pawnID::bigint) AS cos,
+  (SELECT COALESCE(array_length(learned_building_sets,1),0) FROM dune.building_progression WHERE character_id=$charID::bigint) AS sets,
+  (SELECT COALESCE(array_length(new_buildable_pieces,1),0) FROM dune.building_progression WHERE character_id=$charID::bigint) AS pieces;
+"@
+    $actualCos = $null; $actualSets = $null; $actualPieces = $null
+    $vr = Invoke-DuneSqlQuery -Ip $Ip -Sql $verifySql -ReadOnly $true -MaxRows 1 -TimeoutSec 15
+    if ($vr.ok) {
+        $vmaps = ConvertTo-DuneRowMaps -Result $vr
+        if ($vmaps.Count -ge 1) {
+            $actualCos    = [int](ConvertTo-DuneInt $vmaps[0]['cos'])
+            $actualSets   = [int](ConvertTo-DuneInt $vmaps[0]['sets'])
+            $actualPieces = [int](ConvertTo-DuneInt $vmaps[0]['pieces'])
+        }
+    }
+
     # Optional: also mark the tutorial as complete on restore. Used by the
     # "Fresh Start + No NPE" variant. Best-effort: a failure here doesn't roll
     # back the successful build restore.
@@ -1652,11 +1693,28 @@ function Invoke-DunePlayerRestoreBuilds {
         $npeMarked = [bool]$npeRes.ok
         $npeMsg = if ($npeRes.ok) { ' Also marked NPE as completed so Advanced buildables (Fabricator, etc.) unlock immediately.' } else { " (NPE mark skipped: $($npeRes.error))" }
     }
-    $cosMsg = if ($cosmetics) { ' + cosmetics' } else { '' }
+
+    # Cosmetics landed if the pawn now carries at least the snapshot's count
+    # (the write REPLACES the list with the snapshot superset, so equality is
+    # the expected outcome). A shortfall means the write missed - surface it.
+    $cosLanded = ($expectedCos -le 0) -or ($null -ne $actualCos -and $actualCos -ge $expectedCos)
+    $cosMsg = ''
+    if ($expectedCos -gt 0) {
+        if ($null -eq $actualCos) {
+            $cosMsg = " Cosmetics: wrote $expectedCos (post-write verify unavailable)."
+        } elseif ($cosLanded) {
+            $cosMsg = " Cosmetics restored: $actualCos now on the character."
+        } else {
+            $cosMsg = " WARNING: cosmetics did NOT land - snapshot had $expectedCos but the character shows $actualCos. The restore targeted pawn $pawnID (resolved by $resolvedBy). Make sure the recreated character has spawned in at least once and is fully logged out, then retry."
+        }
+    }
+    $verifyMsg = if ($null -ne $actualSets) { " Character now has $actualSets building set(s) / $actualPieces piece(s)." } else { '' }
     return @{
         ok = $true
-        message = "Restored $($filteredSets.Count) purchased set(s) + $($filteredPieces.Count) purchased piece(s)$cosMsg onto '$Name'. Faction sets, tutorial patents, and tech-tree unlocks will re-populate as the character progresses. Takes effect on next login.$npeMsg"
-        sets = $filteredSets.Count; pieces = $filteredPieces.Count; npe_marked = $npeMarked
+        message = "Restored $($filteredSets.Count) purchased set(s) + $($filteredPieces.Count) purchased piece(s) onto '$Name' (pawn $pawnID, resolved by $resolvedBy).$cosMsg$verifyMsg Faction sets, tutorial patents, and tech-tree unlocks re-populate as the character progresses. Takes effect on next login.$npeMsg"
+        sets = $filteredSets.Count; pieces = $filteredPieces.Count
+        cosmetics_expected = $expectedCos; cosmetics_actual = $actualCos; cosmetics_landed = [bool]$cosLanded
+        npe_marked = $npeMarked
     }
 }
 
