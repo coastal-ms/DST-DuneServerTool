@@ -25,7 +25,7 @@ import {
   resetAllKeystones, resetAllSpecs, resetJourney, resetProgressionLive, resetSpec,
   restoreDestroyed,
   setFactionTier, setPlayerTags, setSkillPoints,
-  setStarterClass, teleportToPlayer, teleportToLocation, setRespawn, getTeleportDestinations, getPlayers, updatePlayerTags, wipeCodex, wipeJourney, resetFaction, snapshotBuilds, getFreshStartSnapshots, restoreBuilds, grantAllSkills, grantAllTech,
+  setStarterClass, teleportToPlayer, teleportToLocation, setRespawn, getTeleportDestinations, getPlayers, updatePlayerTags, wipeCodex, wipeJourney, resetFaction, snapshotBuilds, getFreshStartSnapshots, restoreBuilds, grantAllSkills,
   chatWhisper, isValidTemplateId, getItemCatalog, getCosmeticsCatalog, type CosmeticEntry,
   parseTcnoPackageText,
   giveItems, getItemPackages, saveItemPackage, deleteItemPackage,
@@ -671,10 +671,16 @@ const ACTIONS: ActionDef[] = [
     rowNote: 'Unlock every skill at max level. The game caps each skill at its real max on login. Offline.',
     confirm: p => `Grant every skill to ${p.name} at max level?\n\nUnlocks all 145 skills and sets each to its maximum level (the game caps each skill at its real max on next login). Existing progress preserved. Player must be offline.`,
     run: p => grantAllSkills(p.account_id) },
-  { id: 'grant-all-tech', group: 'Progression', label: 'Grant All Tech Recipes', icon: 'BookOpenCheck', offlineOnly: true,
-    rowNote: 'Purchase every buildable + recipe + starter group. Existing preserved. Tops Intel up to 5000 so recipes can be redeemed. Offline.',
-    confirm: p => `Grant every tech recipe to ${p.name}?\n\nMarks every buildable patent, crafting recipe, and starter group (449 total) as Purchased in the Intel terminal, and tops the character's Intel up to at least 5000 (a higher balance is left untouched) so the recipes can actually be redeemed on next login. Existing entries preserved. Player must be offline.`,
-    run: p => grantAllTech(p.account_id) },
+  // Grant All Tech Recipes — DISABLED pending rework. The DB write marks every
+  // recipe UnlockedState="Purchased", but in-game the items stay unclaimed/0-cost
+  // and Intel isn't consumed, so buildables are not actually usable. Backend
+  // (Invoke-DunePlayerGrantAllTech, the /grant-all-tech route, grantAllTech() in
+  // the API, and dune-tech-catalog.json) is intentionally left in place so this
+  // can be revisited once the correct "researched/usable" state is worked out.
+  // { id: 'grant-all-tech', group: 'Progression', label: 'Grant All Tech Recipes', icon: 'BookOpenCheck', offlineOnly: true,
+  //   rowNote: 'Purchase every buildable + recipe + starter group. Existing preserved. Tops Intel up to 5000 so recipes can be redeemed. Offline.',
+  //   confirm: p => `Grant every tech recipe to ${p.name}?\n\nMarks every buildable patent, crafting recipe, and starter group (449 total) as Purchased in the Intel terminal, and tops the character's Intel up to at least 5000 (a higher balance is left untouched) so the recipes can actually be redeemed on next login. Existing entries preserved. Player must be offline.`,
+  //   run: p => grantAllTech(p.account_id) },
 
   // ----- Items -----
   { id: 'give-item',      group: 'Items', label: 'Give Item', icon: 'PackagePlus', custom: 'give-item',
