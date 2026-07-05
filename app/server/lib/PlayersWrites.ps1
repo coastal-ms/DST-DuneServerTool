@@ -1785,18 +1785,19 @@ function Invoke-DunePlayerMarkNpeCompleted {
 
 # Grant every skill in the bundled catalog on the target character, PARTIALLY.
 # Writes {"SkillPointsSpent":<val>} onto the pawn's FLevelComponent[1].ModuleData
-# for each catalog key. IMPORTANT: this uses a LOW value (2) on purpose, not a
-# max value. The game reconciles SkillPointsSpent -> skill level on login and
-# clamps it to each skill's real cap, so a low value maxes single-rank skills but
-# leaves MULTI-LEVEL skills BELOW max. That headroom is required: if every skill
-# is maxed, the New Player Experience journey step "Learn a new Ability from the
-# Skills menu" can never complete (nothing left to learn/upgrade) and the player
-# is soft-stuck. Leaving multi-level skills unmaxed keeps that step completable.
-# The action also grants a small spendable skill-point buffer (UnspentSkillPoints)
-# so the player can actually spend points to finish the step and level skills up.
-# Offline-only. Same catalog for every character.
-$script:DuneGrantAllSkillsLevelValue = 2
+# for each catalog key. IMPORTANT: this uses an INTERMEDIATE value (7) on purpose,
+# not a max value. The game reconciles SkillPointsSpent -> skill level on login and
+# clamps it to each skill's real cap, so this value fills single-rank skills and
+# brings multi-level skills up several levels but leaves MULTI-LEVEL skills BELOW
+# max. That headroom is required: if every skill is maxed, the New Player Experience
+# journey step "Learn a new Ability from the Skills menu" can never complete
+# (nothing left to learn/upgrade) and the player is soft-stuck. Leaving multi-level
+# skills unmaxed keeps that step completable. The action also grants a small
+# spendable skill-point buffer (UnspentSkillPoints) plus an Intel floor so the
+# player can finish the step and nothing gates on Intel. Offline-only.
+$script:DuneGrantAllSkillsLevelValue = 7
 $script:DuneGrantAllSkillsPointBuffer = 20
+$script:DuneGrantAllSkillsIntelFloor = 100
 function Invoke-DunePlayerGrantAllSkills {
     param([string]$Ip, [long]$AccountId)
     if ($AccountId -le 0) { return @{ ok = $false; error = 'account_id is required.' } }
@@ -1809,6 +1810,7 @@ function Invoke-DunePlayerGrantAllSkills {
     }
     $levelVal = [int]$script:DuneGrantAllSkillsLevelValue
     $buffer   = [int]$script:DuneGrantAllSkillsPointBuffer
+    $intelFloor = [int]$script:DuneGrantAllSkillsIntelFloor
     # Target TotalSkillPoints so the grant's spend leaves ~$buffer unspent
     # regardless of whether the game trusts the stored UnspentSkillPoints or
     # recomputes it as Total - spent.
@@ -1859,6 +1861,21 @@ WHERE fe.entity_id = (
     WHERE actor_id = $pawnID::bigint AND slot_name = 'DuneCharacter'
 );
 "@)
+    # Intel floor: raise the Intel balance (m_TechKnowledgePoints on the pawn
+    # actor) to at least $intelFloor so nothing that gates on Intel blocks the
+    # player. GREATEST never lowers a higher balance.
+    [void]$sb.AppendLine(@"
+UPDATE dune.actors
+SET properties = jsonb_set(
+    COALESCE(properties, '{}'::jsonb),
+    '{TechKnowledgePlayerComponent}',
+    COALESCE(properties -> 'TechKnowledgePlayerComponent', '{}'::jsonb)
+        || jsonb_build_object('m_TechKnowledgePoints',
+            to_jsonb(GREATEST(
+                COALESCE((properties #>> '{TechKnowledgePlayerComponent,m_TechKnowledgePoints}')::int, 0),
+                $intelFloor))))
+WHERE id = $pawnID::bigint;
+"@)
     [void]$sb.AppendLine('COMMIT;')
 
     # -Bulk streams SQL through ssh stdin so the ~60 KB payload (145 UPDATEs)
@@ -1871,9 +1888,10 @@ WHERE fe.entity_id = (
     }
     return @{
         ok = $true
-        message = "Granted every skill ($($keys.Count) total) plus a $buffer skill-point buffer. Multi-level skills are left below max on purpose so the 'Learn a new Ability' step stays completable; spend the granted points to finish leveling. Takes effect on next login."
+        message = "Granted every skill ($($keys.Count) total) plus a $buffer skill-point buffer and topped Intel to at least $intelFloor. Multi-level skills are left below max on purpose so the 'Learn a new Ability' step stays completable; spend the granted points to finish leveling. Takes effect on next login."
         catalog_size = $keys.Count
         point_buffer = $buffer
+        intel_floor = $intelFloor
     }
 }
 
