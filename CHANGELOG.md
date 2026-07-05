@@ -11,6 +11,12 @@ Patch releases within a major series are rolled up under the major's entry
 on GitHub still exist for each individual release; the consolidated entries
 here cover everything those tags shipped.
 
+## [Unreleased]
+
+### Changed
+
+- **Grant All Tech Recipes** now tops the character's Intel up to a **5000** floor as part of the action (raise-only — a higher existing balance is left untouched), and its **EXPERIMENTAL** badge is removed. The recipes are marked Purchased, but the game charges Intel per recipe when the character redeems them on next login, so with a 0 Intel balance nothing actually unlocked (which is why it looked unverified). 5000 Intel is a live-verified amount that covers the full 449-recipe set with headroom. The Intel write is applied in the same transaction as the recipe grant. (Grant All Skills remains flagged EXPERIMENTAL — unchanged.)
+
 ## [12.16.8] - 2026-07-04
 
 ### Added

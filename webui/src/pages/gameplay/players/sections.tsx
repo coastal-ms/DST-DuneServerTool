@@ -671,9 +671,9 @@ const ACTIONS: ActionDef[] = [
     rowNote: 'Unlock every skill (1 point each). Existing preserved. Does not add skill points. Offline.',
     confirm: p => `Grant every skill to ${p.name}?\n\nMarks every skill (145 total) as unlocked (SkillPointsSpent=1). Existing entries preserved. Skill-point pool untouched. Player must be offline.`,
     run: p => grantAllSkills(p.account_id) },
-  { id: 'grant-all-tech', group: 'Progression', label: 'Grant All Tech Recipes', icon: 'BookOpenCheck', offlineOnly: true, experimental: true,
-    rowNote: 'Purchase every buildable + recipe + starter group. Existing preserved. Does not add Intel. Offline.',
-    confirm: p => `Grant every tech recipe to ${p.name}?\n\nMarks every buildable patent, crafting recipe, and starter group (449 total) as Purchased in the Intel terminal. Existing entries preserved. Intel points untouched. Player must be offline.`,
+  { id: 'grant-all-tech', group: 'Progression', label: 'Grant All Tech Recipes', icon: 'BookOpenCheck', offlineOnly: true,
+    rowNote: 'Purchase every buildable + recipe + starter group. Existing preserved. Tops Intel up to 5000 so recipes can be redeemed. Offline.',
+    confirm: p => `Grant every tech recipe to ${p.name}?\n\nMarks every buildable patent, crafting recipe, and starter group (449 total) as Purchased in the Intel terminal, and tops the character's Intel up to at least 5000 (a higher balance is left untouched) so the recipes can actually be redeemed on next login. Existing entries preserved. Player must be offline.`,
     run: p => grantAllTech(p.account_id) },
 
   // ----- Items -----
