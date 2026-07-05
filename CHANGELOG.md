@@ -15,7 +15,7 @@ here cover everything those tags shipped.
 
 ### Changed
 
-- **Grant All Skills no longer soft-locks the tutorial.** It previously maxed every skill, which left nothing to learn and made the New Player Experience step *"Learn a new Ability from the Skills menu"* impossible to complete. It now unlocks every skill but deliberately leaves **multi-level skills below max**, and grants a small **~20 skill-point buffer**, so the player can still spend a point to complete that step and finish leveling skills themselves.
+- **Grant All Skills no longer soft-locks the tutorial.** It previously maxed every skill, which left nothing to learn and made the New Player Experience step *"Learn a new Ability from the Skills menu"* impossible to complete. It now unlocks every skill but deliberately leaves **multi-level skills below max**, and grants a small **~20 skill-point buffer** plus a **100 Intel floor**, so the player can still spend a point to complete that step, finish leveling skills, and isn't blocked by anything that gates on Intel.
 
 ### Fixed
 
