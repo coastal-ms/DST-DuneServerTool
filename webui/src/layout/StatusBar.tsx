@@ -19,7 +19,14 @@ function portPillClass(ports: PortStatus | null | undefined, port: number, proto
 function vmPillText(vm: VmStatus | undefined | null): string {
   if (!vm) return '—'
   if (!vm.exists) return 'Not found'
-  if (vm.running) return vm.ip ? `Running · ${vm.ip}` : 'Running'
+  // Defensive stringification: if the backend hands back a non-string ip
+  // (seen 2026-07-05 when Get-DuneVmStatus returned a wrapping PSObject on a
+  // multi-adapter VM), rendering `${ip}` in the pill text yields
+  // `[object Object]`. Coerce to string and reject anything that isn't a
+  // proper dotted IPv4.
+  const rawIp = (vm as unknown as { ip?: unknown }).ip
+  const ip = typeof rawIp === 'string' && /^\d{1,3}(\.\d{1,3}){3}$/.test(rawIp) ? rawIp : ''
+  if (vm.running) return ip ? `Running · ${ip}` : 'Running'
   return vm.state || 'Stopped'
 }
 
