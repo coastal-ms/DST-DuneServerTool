@@ -263,6 +263,14 @@ function Get-DuneBattlegroupSnapshotFresh {
         if ($bgJsonInfo) {
             $result.info = $bgJsonInfo.info
             if ($bgJsonInfo.name -and -not $result.name) { $result.name = $bgJsonInfo.name }
+            # Funcom's `battlegroup status` script awk-parses a positional row,
+            # so a multi-word / comma'd server TITLE shifts the Status cell (and
+            # every column after it) in the raw-output pane. The Info panel is
+            # already rebuilt from JSON above; also rewrite the drifted row in
+            # the raw text from the same canonical values so the debug pane
+            # reads correctly. Only fires when the text row actually disagrees
+            # with JSON, and tags the repaired row so it's clear DST corrected it.
+            $result.output = Repair-DuneBgInfoRawOutput -Text $result.output -Info $bgJsonInfo.info
         }
         return $result
     } catch {
@@ -494,6 +502,61 @@ function Get-BgRowValues {
         }
     }
     return $values
+}
+
+# Lay out a table row so each value begins at its column's start offset (from
+# the dashes-row spans), reproducing the kubectl-style fixed-width alignment.
+# If a value overflows its column, the next value is separated by a single
+# space rather than being merged into it.
+function Format-BgRowFromSpans {
+    param([array]$Spans, [string[]]$Values)
+    $sb = New-Object System.Text.StringBuilder
+    for ($c = 0; $c -lt $Spans.Count -and $c -lt $Values.Count; $c++) {
+        $start = [int]$Spans[$c].start
+        if ($sb.Length -lt $start) {
+            [void]$sb.Append(' ', $start - $sb.Length)
+        } elseif ($c -gt 0) {
+            [void]$sb.Append(' ')
+        }
+        [void]$sb.Append([string]$Values[$c])
+    }
+    return $sb.ToString()
+}
+
+# Rewrite the single "Battlegroup Info" data row inside the raw `battlegroup
+# status` text using the canonical JSON-derived values, so the raw-output pane
+# no longer shows Funcom's positionally-drifted row for multi-word / comma'd
+# server names. Conservative: only rewrites when the text row's control-plane
+# fields (Status/Database/Gateway/Director) actually disagree with JSON, leaves
+# a correctly-columned name verbatim, and marks the repaired row "(DST-corrected)".
+# Returns the text unchanged when JSON is absent or the table isn't found.
+function Repair-DuneBgInfoRawOutput {
+    param([string]$Text, $Info)
+    if (-not $Text -or -not $Info) { return $Text }
+    $lines = $Text -split "`r?`n"
+    for ($i = 0; $i -lt $lines.Length; $i++) {
+        if ($lines[$i] -match '^\s*Battlegroup Info\s*$' -and $i + 3 -lt $lines.Length) {
+            $dashes = $lines[$i + 2]
+            if ($dashes -notmatch '-{3,}') { break }
+            $spans = Get-BgColumnSpans -Header $lines[$i + 1] -Dashes $dashes
+            if ($spans.Count -lt 5) { break }
+            $cur = @(Get-BgRowValues -Line $lines[$i + 3] -Cols $spans)
+            $jsonFour = @([string]$Info.status, [string]$Info.database, [string]$Info.gateway, [string]$Info.director)
+            $drift = $false
+            for ($c = 0; $c -lt 4; $c++) {
+                $have = if ($c -lt $cur.Count) { [string]$cur[$c] } else { '' }
+                if ($have -ne $jsonFour[$c]) { $drift = $true; break }
+            }
+            if (-not $drift) { break }
+            $row = Format-BgRowFromSpans -Spans $spans -Values @(
+                [string]$Info.status, [string]$Info.database, [string]$Info.gateway,
+                [string]$Info.director, [string]$Info.uptime
+            )
+            $lines[$i + 3] = "$row   (DST-corrected)"
+            break
+        }
+    }
+    return ($lines -join "`n")
 }
 
 # Parse a Game Servers table row by tokens from BOTH ends, NOT by fixed column
