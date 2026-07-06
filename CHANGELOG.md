@@ -13,6 +13,8 @@ here cover everything those tags shipped.
 
 ## [Unreleased]
 
+## [12.17.0] - 2026-07-05
+
 ### Fixed
 
 - **Battlegroup Info "raw output" pane no longer shows a drifted Status column for multi-word / comma'd server names.** Funcom's `battlegroup status` script builds its Battlegroup Info table by awk-parsing a positional `kubectl get battlegroups --no-headers` row, so a server TITLE containing spaces or a comma (e.g. `Dune, my Arrakis`) shifts the Status cell — and every column after it — by one field per extra word, printing the second word of the name where the status belongs. The Info *panel* has read from the Battlegroup CRD JSON since v12.16.1 and was already correct; the raw-output pane still showed Funcom's drifted row verbatim. DST now rewrites just that one data row in the raw text from the same JSON-canonical values (Status / Database / Gateway / Director / Uptime) and tags it `(DST-corrected)`. Conservative: it only fires when the text row actually disagrees with the CRD (a correctly-columned single-word name is left untouched), and it no-ops when the CRD JSON is unavailable so the pane never renders worse than before. Reported by gd.py in `#hosting-help`.
