@@ -23,9 +23,17 @@ Describe 'Schema: dune.actors column names' -Tag 'Schema' {
         $content = Get-LibContent 'PlayersWrites.ps1'
         $content | Should -Not -Match 'actors\.account_id\b'
     }
-    It 'PlayersAdmin.ps1 actually uses owner_account_id (the canonical column)' {
+    It 'PlayersAdmin.ps1 resolves accounts via accounts.id / player_state.account_id (never actors.account_id)' {
+        # Post-2235d00 (match Funcom's own delete flow, rip out DST's homegrown
+        # cleanup) PlayersAdmin no longer keys a homegrown delete cascade on
+        # actors.owner_account_id. It still must resolve accounts through the
+        # real columns: dune.accounts.id (raw funcom-id lookup) and
+        # dune.player_state.account_id (offline/account check). actors.account_id
+        # does not exist (see the negative guard above); owner_account_id lives
+        # on the read/roster path (PlayersRead.ps1), not here.
         $content = Get-LibContent 'PlayersAdmin.ps1'
-        $content | Should -Match '\bowner_account_id\b'
+        $content | Should -Match 'dune\.accounts WHERE id'
+        $content | Should -Match 'dune\.player_state WHERE account_id'
     }
 }
 
