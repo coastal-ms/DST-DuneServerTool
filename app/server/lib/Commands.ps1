@@ -25,12 +25,13 @@ $script:DuneCommands = @(
     @{ Section='Battlegroup'; Key='2';  Name='start';                    Label='Start BG Only';   Mode='Console'; Requires='running'; DisabledWhen='bg-running';  Desc='Start the selected battlegroup' }
     @{ Section='Battlegroup'; Key='3';  Name='restart';                  Label='Restart BG Only'; Mode='Console'; Requires='running'; DisabledWhen='bg-stopped';  Desc='Restart the selected battlegroup' }
     @{ Section='Battlegroup'; Key='4';  Name='stop';                     Label='Stop BG Only';    Mode='Console'; Requires='running'; DisabledWhen='bg-stopped';  Desc='Stop the selected battlegroup' }
+    @{ Section='Battlegroup'; Key='5';  Name='update';                   Mode='Console'; Requires='running'; Desc='Check for new versions and apply them' }
     @{ Section='Battlegroup'; Key='6';  Name='edit';                     Mode='Console'; Requires='running'; External=$true; Desc='Edit battlegroup via utilities interface' }
     @{ Section='Battlegroup'; Key='7';  Name='edit-advanced';            Label='Edit Director';   Mode='Console'; Requires='running'; External=$true; Desc='(Advanced) Edit battlegroup YAML directly' }
     @{ Section='Battlegroup'; Key='21'; Name='change-battlegroup-ip';    Label='Change Player IP'; Mode='Console'; Requires='running'; Desc='Change the IP that players connect to' }
     @{ Section='Battlegroup'; Key='8';  Name='enable-experimental-swap'; Mode='Console'; Requires='running'; Desc='(Experimental) Enable experimental swap memory' }
     @{ Section='Battlegroup'; Key='9';  Name='backup';                   Mode='Console'; Requires='running'; DisabledWhen='bg-stopped';  Desc="Back up the battlegroup's database" }
-    @{ Section='Battlegroup'; Key='10'; Name='import';                   Mode='Console'; Requires='running'; DisabledWhen='bg-running';  Desc='Import a database backup' }
+    @{ Section='Battlegroup'; Key='10'; Name='import';                   Mode='Console'; Requires='running'; Desc='Import a database backup (Funcom handles the BG lifecycle)' }
     @{ Section='Battlegroup'; Key='11'; Name='logs-export';              Mode='Console'; Requires='running'; DisabledWhen='bg-stopped';  Desc='Retrieve logs from all battlegroup pods' }
     @{ Section='Battlegroup'; Key='12'; Name='operator-logs-export';     Mode='Console'; Requires='running'; DisabledWhen='bg-stopped';  Desc='Retrieve logs from all operator pods' }
     @{ Section='Battlegroup'; Key='13'; Name='open-file-browser';        Mode='InApp';   Requires='running'; DisabledWhen='bg-stopped';  Desc='Open battlegroup file browser in your browser' }

@@ -58,34 +58,6 @@ export function checkFuncomUpdate() {
   })
 }
 
-// Fire-and-return: launches `battlegroup update` on the VM as a detached job
-// and returns immediately. Poll getApplyServerUpdateStatus for progress.
-// Returns 409 when a job is already running.
-export function applyServerUpdate() {
-  return api<{ ok: boolean; running: boolean; message: string }>(
-    '/api/restart-schedule/apply-server-update',
-    { method: 'POST' },
-  )
-}
-
-export interface ApplyServerUpdateStatus {
-  phase: 'idle' | 'running' | 'done' | 'error'
-  running: boolean
-  started: string | null
-  updated: string
-  finished: string | null
-  ok: boolean
-  rc: number | null
-  installedBefore: string
-  installedAfter: string
-  tail: string[]
-  error: string
-}
-
-export function getApplyServerUpdateStatus() {
-  return api<ApplyServerUpdateStatus>('/api/restart-schedule/apply-server-update-status')
-}
-
 export function testDiscordWebhook() {
   return api<{ ok: boolean; message: string }>('/api/restart-schedule/test-discord', {
     method: 'POST',

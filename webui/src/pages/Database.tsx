@@ -70,7 +70,7 @@ export function Database() {
   // The server re-checks availability on POST /api/commands/run, so deriving
   // client-side here is safe.
   const backupAvailable  = vmRunning && bgState !== 'stopped'   // backup dumps the live DB
-  const restoreAvailable = vmRunning && bgState !== 'running'   // restore needs BG stopped
+  const restoreAvailable = vmRunning                             // `battlegroup import` stops the BG on its own; no state gate needed.
   const [launching, setLaunching] = useState<string | null>(null)
   const [toast, setToast] = useState<{ kind: 'ok' | 'err'; msg: string } | null>(null)
 
@@ -232,7 +232,7 @@ export function Database() {
   }
 
   // ---------- Render -------------------------------------------------------
-  const showStopBanner = vmRunning && bgState === 'running'
+  const showStopBanner = false
 
   return (
     <>
@@ -292,11 +292,10 @@ export function Database() {
           title="Restore Backup"
           icon="Upload"
           tone="ibad"
-          description="Full destructive restore — REPLACES the entire BG database with a previously taken backup. All players, bases, inventories, storage, blueprints, and the market roll back to that snapshot; everything since is permanently lost. The battlegroup must be stopped, and this cannot be undone. Restoring onto a different server/BG than it came from won't reliably restore characters (they're cloud-bound to Funcom accounts) — world/bases come back, character logins may not."
+          description="Full destructive restore — REPLACES the entire BG database with a previously taken backup. All players, bases, inventories, storage, blueprints, and the market roll back to that snapshot; everything since is permanently lost. Funcom's `battlegroup import` handles the whole lifecycle: it stops the BG on its own, swaps the snapshot into the DB, and the game containers recover automatically. No need to pre-stop; runs from any state. This cannot be undone. Restoring onto a different server/BG than it came from won't reliably restore characters (they're cloud-bound to Funcom accounts) — world/bases come back, character logins may not."
           hint={
             !vmRunning ? 'VM must be running to restore a backup.'
-            : bgState === 'running' ? 'Stop the battlegroup first to avoid database corruption.'
-            : 'Battlegroup is stopped — choose the backup file in the console window.'
+            : 'Choose the backup file in the console window. Funcom will print a "should be stopped" advisory; type `yes` to proceed — the import stops the BG on its own, swaps the DB, and the game recovers automatically.'
           }
           buttonLabel="Restore Backup"
           available={restoreAvailable}
