@@ -331,18 +331,45 @@ function ConvertFrom-V6PsqlJson {
 # while anyone is connected. Returns [] when the DB is unreachable so the guard
 # fails open (we don't want a transient SSH/psql blip to block all edits).
 # -----------------------------------------------------------------------------
-function Get-V6OnlinePlayers {
-    param([string]$Ip)
-    $sql = @"
+# Builds the online-players SQL used by the save-guard. Kept as its own pure
+# function so the query shape is unit-testable without a live DB.
+#
+# A row counts as online only when it is NOT 'Offline' AND still attached to a
+# currently-running server — mirroring Funcom's own dune.is_player_offline()
+# (offline when online_status='Offline' OR server_id IS NULL OR
+# server_id NOT IN active_server_ids). Without the server_id gate, a stale/ghost
+# row left in a non-'Offline' state — e.g. the 1.4.10.0 'LoggingOut' grace state,
+# or a row whose server_id points at a battlegroup that no longer exists after a
+# restart — was counted as "online" and tripped the guard with no real player
+# connected (the tell: blank character name -> the id=N fallback).
+#
+# dune.active_server_ids only exists on 1.4.10.0+, so to_regclass() gates the
+# extra filter: on an older DB the relation is absent and the query falls back to
+# the prior online_status-only behaviour instead of erroring (an error would make
+# Get-V6OnlinePlayers fail open and the guard stop warning entirely). Same
+# `server_id IN (<active servers>)` shape already used by Maps.ps1's on-demand
+# map player-count query.
+function Get-DuneOnlinePlayersSql {
+    return @"
 SELECT json_agg(row_to_json(t)) FROM (
   SELECT eps.player_pawn_id::text  AS id,
          decrypt_user_data(eps.encrypted_character_name) AS name,
          eps.online_status::text   AS status
   FROM encrypted_player_state eps
   WHERE eps.online_status::text <> 'Offline'
+    AND (
+      to_regclass('dune.active_server_ids') IS NULL
+      OR (eps.server_id IS NOT NULL
+          AND eps.server_id IN (SELECT * FROM dune.active_server_ids))
+    )
   ORDER BY eps.player_pawn_id
 ) t
 "@
+}
+
+function Get-V6OnlinePlayers {
+    param([string]$Ip)
+    $sql = Get-DuneOnlinePlayersSql
     try {
         $raw = Invoke-V6Psql -Ip $Ip -Sql $sql
     } catch {
