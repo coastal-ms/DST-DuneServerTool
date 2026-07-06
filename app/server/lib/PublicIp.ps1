@@ -890,29 +890,15 @@ BG_NAME=$(sudo kubectl get battlegroups -A --no-headers -o custom-columns=':meta
 [ -n "$BG_NS" ] && [ -n "$BG_NAME" ] || { echo "DISCOVER_FAIL: battlegroup not found"; exit 2; }
 BGBIN=/home/dune/.dune/bin/battlegroup
 
-step change-ip
-if [ -x "$BGBIN" ]; then
-  printf '1\n' | "$BGBIN" change-battlegroup-ip "$NEW_IP" || echo "change-battlegroup-ip returned non-zero (continuing; integrity check + restart will recover)"
-else
-  echo "battlegroup helper not found; falling back to restart"
-  "$BGBIN" restart 2>/dev/null || true
-fi
-
-step settings-integrity
-need_fix=0
-for n in 1 2 3 4; do v=$(sed -n "${n}p" /home/dune/.dune/settings.conf 2>/dev/null); [ -z "$v" ] && need_fix=1; done
-L2=$(sed -n '2p' /home/dune/.dune/settings.conf 2>/dev/null | tr -d ' \r')
-case "$L2" in registry.funcom.com/funcom/self-hosting/seabass-server:*) ;; *) need_fix=1;; esac
-if [ "$need_fix" = "1" ]; then
-  echo "settings.conf was corrupted (blank/bad line) -- repairing from discovered values"
-  IMAGE=$(sudo kubectl get battlegroup "$BG_NAME" -n "$BG_NS" -o jsonpath='{.spec.serverGroup.template.spec.sets[0].image}' 2>/dev/null || true)
-  case "$IMAGE" in registry.funcom.com/funcom/self-hosting/seabass-server:*) ;; *) echo "REPAIR_FAIL: no valid image available to rewrite settings.conf"; exit 3;; esac
-  sudo cp /home/dune/.dune/settings.conf "/home/dune/.dune/settings.conf.bak.$(date -u +%Y%m%d%H%M%S)" 2>/dev/null || true
-  printf '%s\n%s\n%s\n%s\n' "$BG_NAME" "$IMAGE" "$VM_IP" "$NEW_IP" | sudo tee /home/dune/.dune/settings.conf >/dev/null
-  sudo chown dune:dune /home/dune/.dune/settings.conf
-  "$BGBIN" restart 2>/dev/null || true
-fi
-sed -n '1,4p' /home/dune/.dune/settings.conf
+# ORDER MATTERS: everything that does NOT restart the battlegroup runs first,
+# so if the change-ip step at the bottom hangs (or Invoke-V6Ssh's async stdout
+# drain blocks on grand-child fds after the BG restart cycles pods), all the
+# CR-level patches / status-refresh / audit are already durably done on the
+# VM before we ever kick the BG. Historical root cause of the v12.16.11
+# propagate-hang partial-completion bug: change-ip ran FIRST, restarted the
+# BG mid-SSH, SSH hung, utilities-ip / refresh-status-pods / audit never
+# fired -> UI stuck 'Applying' + director/serverGateway/textRouter left on
+# the OLD HOST_DATACENTER_IP_ADDRESS.
 
 step utilities-ip
 # change-battlegroup-ip updates the game servers but NOT the utility pods'
@@ -933,12 +919,30 @@ else
   echo "jq not available; skipping utility HOST_DATACENTER_IP_ADDRESS reconcile"
 fi
 
+step settings-integrity
+need_fix=0
+for n in 1 2 3 4; do v=$(sed -n "${n}p" /home/dune/.dune/settings.conf 2>/dev/null); [ -z "$v" ] && need_fix=1; done
+L2=$(sed -n '2p' /home/dune/.dune/settings.conf 2>/dev/null | tr -d ' \r')
+case "$L2" in registry.funcom.com/funcom/self-hosting/seabass-server:*) ;; *) need_fix=1;; esac
+if [ "$need_fix" = "1" ]; then
+  echo "settings.conf was corrupted (blank/bad line) -- repairing from discovered values"
+  IMAGE=$(sudo kubectl get battlegroup "$BG_NAME" -n "$BG_NS" -o jsonpath='{.spec.serverGroup.template.spec.sets[0].image}' 2>/dev/null || true)
+  case "$IMAGE" in registry.funcom.com/funcom/self-hosting/seabass-server:*) ;; *) echo "REPAIR_FAIL: no valid image available to rewrite settings.conf"; exit 3;; esac
+  sudo cp /home/dune/.dune/settings.conf "/home/dune/.dune/settings.conf.bak.$(date -u +%Y%m%d%H%M%S)" 2>/dev/null || true
+  printf '%s\n%s\n%s\n%s\n' "$BG_NAME" "$IMAGE" "$VM_IP" "$NEW_IP" | sudo tee /home/dune/.dune/settings.conf >/dev/null
+  sudo chown dune:dune /home/dune/.dune/settings.conf
+  # NOTE: no `battlegroup restart` here -- change-ip below will restart. If the
+  # local settings.conf was really corrupt AND change-ip fails, the user's
+  # next explicit action will clear it.
+fi
+sed -n '1,4p' /home/dune/.dune/settings.conf
+
 step refresh-status-pods
 # status.database.address, status.database.pgHeroAddress, status.utilities.*.address,
 # and status.utilities.messageQueues.statuses.*.amqp/managementAddress are only
 # populated at POD-OBJECT CREATION (not on container restart). Container-only
 # restarts driven by the operator, `battlegroup change-battlegroup-ip`, or the
-# `step utilities-ip` CR-env patch above will NOT refresh these fields — they
+# `step utilities-ip` CR-env patch above will NOT refresh these fields -- they
 # stay at whichever IP was current at last pod-object creation. Force-delete
 # the pods that own external-address status fields so the StatefulSet /
 # Deployment controllers recreate them and the operator repopulates status
@@ -956,14 +960,14 @@ step audit-ip-surfaces
 # does. Adds an authoritative check after the operator has had a chance to
 # reconcile (~10s post pod-delete). Reports AUDIT_OK or per-surface mismatches
 # so the PowerShell side can surface them to the user. Also flags CGNAT
-# (100.64.0.0/10) and private amqpAddress values — the amqpAddress must be a
+# (100.64.0.0/10) and private amqpAddress values -- the amqpAddress must be a
 # publicly routable IP so clients can queue to join. Requires jq.
 if command -v jq >/dev/null 2>&1; then
   sleep 10  # give the operator a moment to repopulate status after pod deletes
   AUDIT_MISMATCHES=0
   AUDIT_REPORT=""
 
-  # Utility envs — every HOST_DATACENTER_IP_ADDRESS should equal NEW_IP.
+  # Utility envs -- every HOST_DATACENTER_IP_ADDRESS should equal NEW_IP.
   for u in director serverGateway textRouter; do
     val=$(sudo kubectl get battlegroup "$BG_NAME" -n "$BG_NS" -o json 2>/dev/null | jq -r ".spec.utilities.$u.spec.envVars // [] | map(select(.name==\"HOST_DATACENTER_IP_ADDRESS\")) | .[0].value // \"MISSING\"")
     if [ "$val" != "$NEW_IP" ]; then
@@ -983,11 +987,11 @@ if command -v jq >/dev/null 2>&1; then
     # Sora's rule: amqpAddress must be publicly routable (not private, not CGNAT).
     case "$host" in
       10.*|172.1[6-9].*|172.2[0-9].*|172.3[0-1].*|192.168.*)
-        AUDIT_REPORT="$AUDIT_REPORT  PRIVATE-AMQP-ADDR $mq.amqpAddress='$val' — LAN address, players cannot join.\n"
+        AUDIT_REPORT="$AUDIT_REPORT  PRIVATE-AMQP-ADDR $mq.amqpAddress='$val' -- LAN address, players cannot join.\n"
         AUDIT_MISMATCHES=$((AUDIT_MISMATCHES + 1))
         ;;
       100.6[4-9].*|100.[7-9][0-9].*|100.1[0-1][0-9].*|100.12[0-7].*)
-        AUDIT_REPORT="$AUDIT_REPORT  CGNAT-AMQP-ADDR $mq.amqpAddress='$val' — behind Carrier-Grade NAT (100.64.0.0/10); contact ISP.\n"
+        AUDIT_REPORT="$AUDIT_REPORT  CGNAT-AMQP-ADDR $mq.amqpAddress='$val' -- behind Carrier-Grade NAT (100.64.0.0/10); contact ISP.\n"
         AUDIT_MISMATCHES=$((AUDIT_MISMATCHES + 1))
         ;;
     esac
@@ -1003,6 +1007,28 @@ else
   echo "AUDIT_SKIP jq not available"
 fi
 
+step change-ip
+# LAST because this restarts the battlegroup, which cycles every game/gateway/
+# director/rmq pod and typically severs any stdio inherited from SSH. Firing
+# it as a fully-detached job (setsid + all fds closed) with an rc marker
+# means the SSH parent shell can exit cleanly the moment the job is launched;
+# the PowerShell wait loop then polls for the marker + BG phase separately.
+# Historical: pre-fix, running this synchronously caused Invoke-V6Ssh's async
+# stdout drain to block indefinitely on grand-child fds after the parent ssh
+# exited, wedging the UI on 'Applying' even though the work was done on the VM.
+rm -f /tmp/dst-cip.rc /tmp/dst-cip.log 2>/dev/null
+if [ -x "$BGBIN" ]; then
+  date -u +%Y-%m-%dT%H:%M:%SZ > /tmp/dst-cip.started
+  setsid sh -c "printf '1\n' | '$BGBIN' change-battlegroup-ip '$NEW_IP' >/tmp/dst-cip.log 2>&1; echo \$? >/tmp/dst-cip.rc" </dev/null >/dev/null 2>&1 &
+  disown 2>/dev/null || true
+  echo "change-battlegroup-ip launched detached (marker /tmp/dst-cip.rc); PowerShell will poll for completion."
+else
+  echo "battlegroup helper not found; falling back to detached restart"
+  date -u +%Y-%m-%dT%H:%M:%SZ > /tmp/dst-cip.started
+  setsid sh -c "'$BGBIN' restart >/tmp/dst-cip.log 2>&1; echo \$? >/tmp/dst-cip.rc" </dev/null >/dev/null 2>&1 &
+  disown 2>/dev/null || true
+fi
+
 # Echo BG namespace so the PowerShell-side wait loop can target it directly
 # without re-discovering on every poll.
 printf 'BG_NS=%s\nBG_NAME=%s\n' "$BG_NS" "$BG_NAME"
@@ -1010,7 +1036,11 @@ echo "BGIP_MUTATE_DONE"
 '@
             $steps.Add((New-DunePublicIpStepResult 'bg-ip' 'Propagate IP to battlegroup + restart' 'running' 'Running change-battlegroup-ip, repairing settings.conf if needed.')) | Out-Null
             & $pub
-            $rawMutate = Invoke-DunePublicIpRemoteScript -Ip $vm.ip -Script $remoteBgIp -Arguments @($target, $vm.ip) -TimeoutSec 300
+            # 90s is plenty now that the shell script fires change-battlegroup-ip
+            # detached (setsid) at the end -- no synchronous BG restart inside
+            # the SSH call. The old 300s was needed because change-ip ran
+            # inline and blocked the whole script; that's what caused the hang.
+            $rawMutate = Invoke-DunePublicIpRemoteScript -Ip $vm.ip -Script $remoteBgIp -Arguments @($target, $vm.ip) -TimeoutSec 90
             $bgNs   = ''
             $bgName = ''
             if ($rawMutate -match '(?m)^BG_NS=(\S+)\s*$')   { $bgNs   = $Matches[1] }
@@ -1019,26 +1049,36 @@ echo "BGIP_MUTATE_DONE"
                 throw "Could not determine battlegroup namespace/name from remote output: $rawMutate"
             }
             # Wait loop in PowerShell so each iteration can heartbeat the UI.
-            # Same 60×5s budget as the old bash loop (5 min hard cap). Each tick
-            # issues one short SSH command that polls both serversets at once.
+            # Poll TWO things now (both are fast, one short SSH per tick):
+            #   1. /tmp/dst-cip.rc — written when the detached
+            #      change-battlegroup-ip job completes on the VM.
+            #   2. `.status.phase` on the battlegroup CR — "Healthy" once the
+            #      operator finishes reconciling all pods on the new IP.
+            # Used to poll `serverset .status.ready` via jsonpath, but that
+            # field returns EMPTY on healthy CRs (jsonpath doesn't render the
+            # int in some kubectl versions); use the BG phase directly instead
+            # — matches what the DST UI's Server Health card shows. Budget
+            # 60 x 5s = 5 min hard cap. See dst-public-ip-apply-propagate-
+            # step-hang-2-bugs-2026-07-05 for history.
             $waitMax  = 60
             $waitTick = 5
             $ready    = $false
             $lastRaw  = ''
             for ($i = 1; $i -le $waitMax; $i++) {
-                $detail = "Waiting for servers to report ready... ($i/$waitMax, up to $($waitMax * $waitTick)s)"
+                $detail = "Waiting for change-battlegroup-ip + BG Healthy... ($i/$waitMax, up to $($waitMax * $waitTick)s)"
                 $steps[$steps.Count - 1] = New-DunePublicIpStepResult 'bg-ip' 'Propagate IP to battlegroup + restart' 'running' $detail $lastRaw
                 & $pub
                 try {
                     $probe = Invoke-V6Ssh -Ip $vm.ip `
-                        -Cmd "sudo kubectl -n $bgNs get serverset $bgName-sg-survival-1 -o jsonpath='{.status.ready}' 2>/dev/null; echo '|'; sudo kubectl -n $bgNs get serverset $bgName-sg-overmap -o jsonpath='{.status.ready}' 2>/dev/null" `
+                        -Cmd "cat /tmp/dst-cip.rc 2>/dev/null; echo '|'; sudo kubectl -n $bgNs get battlegroup $bgName -o jsonpath='{.status.phase}' 2>/dev/null" `
                         -TimeoutSec 20
                     $probeText = if ($probe) { (($probe -join "`n") -replace "`r",'') } else { '' }
                     $lastRaw = $probeText
                     $parts = ($probeText -split '\|', 2)
-                    $surv = if ($parts.Count -gt 0) { ($parts[0] -replace "`n",'').Trim() } else { '' }
-                    $over = if ($parts.Count -gt 1) { ($parts[1] -replace "`n",'').Trim() } else { '' }
-                    if ($surv -eq '1' -and $over -eq '1') { $ready = $true; break }
+                    $rcRaw = if ($parts.Count -gt 0) { ($parts[0] -replace "`n",'').Trim() } else { '' }
+                    $bgPhase = if ($parts.Count -gt 1) { ($parts[1] -replace "`n",'').Trim() } else { '' }
+                    # change-ip finished (rc present) AND BG operator settled
+                    if ($rcRaw -match '^\d+$' -and $bgPhase -eq 'Healthy') { $ready = $true; break }
                 } catch {
                     # Don't treat a transient SSH/kubectl glitch as fatal — just
                     # try again next tick. Worst case we run the full 5 min and

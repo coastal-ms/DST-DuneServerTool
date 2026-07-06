@@ -21,7 +21,7 @@ param(
 # Wraps the original battlegroup.ps1 menu and adds extra tools
 # ============================================================
 
-$script:ToolVersion = "12.16.10"
+$script:ToolVersion = "12.16.11"
 
 # Cold-boot readiness budgets (seconds). A fresh battlegroup's FIRST boot can
 # take 10-30 min: k3s + funcom-operators initialize, metrics-server restarts a
@@ -2323,6 +2323,29 @@ while ($true) {
     }
 
     # --- Fallback: delegate to battlegroup CLI on VM ---
+
+    # SteamCMD orphan-workdir pre-flight (only for `update`).
+    # Any interrupted `battlegroup update` (network blip, killed shell, VM
+    # reboot mid-download) leaves a root-owned empty
+    # /home/dune/.dune/download/steamapps/downloading/$SteamCmdAppId directory
+    # (plus workdir under .../temp/) that SteamCMD refuses to overwrite,
+    # producing `Error! App '<id>' state is 0x206 after update job.` and
+    # `Steam download failed. Auto-retrying once` on every subsequent attempt.
+    # Funcom's script doesn't clean these up. Wipe them before invoking
+    # `battlegroup update` so the fetch always starts from a clean slate.
+    # Confirmed cause of failed updates on gd.py (2026-07-04) and Coastal's
+    # UAT (2026-07-05); manual `rm -rf` clears it in both cases.
+    if ($cmdName -eq 'update') {
+        $SteamCmdAppId = '4754530'  # Dune: Awakening Dedicated Server
+        $preflight = @"
+if [ -d /home/dune/.dune/download/steamapps/downloading/$SteamCmdAppId ] || [ -d /home/dune/.dune/download/steamapps/temp ]; then
+  echo '[dst] Cleaning SteamCMD orphan workdir before update (prevents state=0x206)...'
+  rm -rf /home/dune/.dune/download/steamapps/downloading/$SteamCmdAppId /home/dune/.dune/download/steamapps/temp
+fi
+"@
+        ssh -o BatchMode=yes -o StrictHostKeyChecking=no -o LogLevel=QUIET -i "$sshKey" "$sshUser@$ip" $preflight
+    }
+
     ssh -t -o StrictHostKeyChecking=no -o LogLevel=QUIET -i "$sshKey" "$sshUser@$ip" "$bgBinPath $cmdName"
     $bgFallbackExit = $LASTEXITCODE
 

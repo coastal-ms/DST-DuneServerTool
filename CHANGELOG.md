@@ -13,9 +13,23 @@ here cover everything those tags shipped.
 
 ## [Unreleased]
 
+## [12.16.11] - 2026-07-05
+
+### Changed
+
+- **Reverted the native "Apply server update" button.** The dashboard *Restart Schedule* card no longer has its own Apply-update button (added in v12.15.2). The Funcom self-host update flow is again driven from the classic **Commands page → Battlegroup → `update`** entry, which opens a console window and runs `battlegroup update` directly. The **Check for server update** button on the card stays.
+
+### Added
+
+- **SteamCMD orphan-workdir pre-flight before `update`.** When you run the *Commands → Battlegroup → `update`* command, DST first cleans out any leftover `/home/dune/.dune/download/steamapps/downloading/<appid>` and `.../temp` directories on the VM. SteamCMD leaves these behind after any interrupted update (network blip, killed shell, VM reboot mid-download), and once present they cause every subsequent attempt to fail with `Error! App '4754530' state is 0x206 after update job` / `Steam download failed. Auto-retrying once`. Funcom's own script doesn't clean them up. The pre-flight prints `[dst] Cleaning SteamCMD orphan workdir…` in the console so it's visible when it fires.
+
 ### Fixed
 
 - **Player action descriptions now show.** Each action under *Players → Progression / Items / etc.* has a short description (`rowNote`), but it was never rendered — so expanding an action (e.g. **Enable All Skills**) showed only the button with no explanation. The description now appears at the top of the expanded action.
+- **Public IP Apply no longer wedges the UI on the "Propagate IP to battlegroup + restart" step, and no longer leaves utilities on the old IP.** Two related fixes:
+  - **Reordered the propagate shell script** so the safe, fast CR patches (`utilities-ip` → HOST_DATACENTER_IP_ADDRESS on director/serverGateway/textRouter, `settings-integrity`, `refresh-status-pods`, `audit-ip-surfaces`) all run *before* the `change-ip` step. Previously if `change-ip` hung the SSH (the BG restart cycles pods and grand-child processes can hold ssh's stdout pipe open, blocking `Invoke-V6Ssh`'s async stdout drain past its timeout), the utility patches never fired and the UI got stuck — while director/serverGateway/textRouter kept advertising the OLD `HOST_DATACENTER_IP_ADDRESS`. Now the utility reconcile is durable regardless of what happens after.
+  - **`change-battlegroup-ip` is now fired detached** (setsid, all fds redirected, rc written to `/tmp/dst-cip.rc`) so the outer SSH call returns cleanly the instant the job is launched. The PowerShell wait loop polls the rc marker AND `battlegroup .status.phase == "Healthy"` (the previous poll used `serverset .status.ready` via `jsonpath`, which returns empty on healthy CRs in some kubectl versions and burned the full 5-minute timeout every apply).
+- **Restore Backup no longer requires the battlegroup to be stopped.** Funcom's `battlegroup import` handles everything itself — it stops the BG, swaps the DB, and the game containers recover automatically. DST was gating the action on `bg-stopped` (both the *Database* page's Restore card and the *Commands* page's `import` entry), forcing users through an unnecessary Stop-All → Import → Start-All cycle. Both surfaces now require only that the VM is running.
 
 ## [12.16.10] - 2026-07-05
 
