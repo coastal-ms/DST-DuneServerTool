@@ -306,7 +306,7 @@ function Get-DunePublicIpStatus {
         lastResolvedPublicIp= [string]$cfg.LastResolvedPublicIp
         lastAppliedPublicIp = [string]$cfg.LastAppliedPublicIp
         currentPublicIp     = $null
-        vmIp                = if ($vm) { $vm.ip } else { $null }
+        vmIp                = if ($vm) { [string]$vm.ip } else { '' }
         k3sExternalIp       = ''
     }
     try { $status.currentPublicIp = Get-DunePublicIp } catch {}

@@ -13,6 +13,12 @@ here cover everything those tags shipped.
 
 ## [Unreleased]
 
+## [12.16.12] - 2026-07-05
+
+### Fixed
+
+- **VM header no longer shows `[object Object]`, and the Public IP card no longer crashes on VMs with multiple network adapters.** `Get-DuneVmStatus` now coerces the discovered VM IP to a string before returning it. Previously, on VMs where `Get-VMNetworkAdapter` yields multiple adapters, the pipeline chain could return a wrapping PSObject that JSON-serialized as `{}`; the webui then rendered `VM · [object Object]` in the header, and the *Settings → Public IP / DDNS* card threw React error #31 (`Objects are not valid as a React child`) and displayed "Public IP couldn't be displayed". Also added defensive `typeof === 'string'` guards on both surfaces so a future backend regression can't crash the app.
+
 ## [12.16.11] - 2026-07-05
 
 ### Changed

@@ -56,6 +56,13 @@ function Get-DuneVmStatus {
         $vm = Get-VM -Name $script:DuneVmName -ErrorAction Stop
         $ip = ($vm | Get-VMNetworkAdapter).IPAddresses |
               Where-Object { $_ -match '^\d+\.\d+\.\d+\.\d+$' } | Select-Object -First 1
+        # Coerce to string. On VMs with multiple network adapters the pipeline
+        # can hand back a PSObject wrapping the IP; without the cast, ConvertTo-Json
+        # serializes it as `{}` and the webui renders `VM · [object Object]` +
+        # crashes the Public IP card with React error #31 (`Objects are not valid
+        # as a React child`). See dst-vm-ip-object-render-bug on Infinate Scaled
+        # host, 2026-07-05.
+        $ip = if ($null -ne $ip) { [string]$ip } else { '' }
         return @{
             exists  = $true
             name    = $script:DuneVmName
@@ -70,7 +77,7 @@ function Get-DuneVmStatus {
             name    = $script:DuneVmName
             state   = 'NotFound'
             running = $false
-            ip      = $null
+            ip      = ''
             uptime  = 0
             error   = $_.Exception.Message
         }
