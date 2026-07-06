@@ -26,6 +26,10 @@ here cover everything those tags shipped.
 ### Fixed
 
 - **Player action descriptions now show.** Each action under *Players → Progression / Items / etc.* has a short description (`rowNote`), but it was never rendered — so expanding an action (e.g. **Enable All Skills**) showed only the button with no explanation. The description now appears at the top of the expanded action.
+- **Public IP Apply no longer wedges the UI on the "Propagate IP to battlegroup + restart" step, and no longer leaves utilities on the old IP.** Two related fixes:
+  - **Reordered the propagate shell script** so the safe, fast CR patches (`utilities-ip` → HOST_DATACENTER_IP_ADDRESS on director/serverGateway/textRouter, `settings-integrity`, `refresh-status-pods`, `audit-ip-surfaces`) all run *before* the `change-ip` step. Previously if `change-ip` hung the SSH (the BG restart cycles pods and grand-child processes can hold ssh's stdout pipe open, blocking `Invoke-V6Ssh`'s async stdout drain past its timeout), the utility patches never fired and the UI got stuck — while director/serverGateway/textRouter kept advertising the OLD `HOST_DATACENTER_IP_ADDRESS`. Now the utility reconcile is durable regardless of what happens after.
+  - **`change-battlegroup-ip` is now fired detached** (setsid, all fds redirected, rc written to `/tmp/dst-cip.rc`) so the outer SSH call returns cleanly the instant the job is launched. The PowerShell wait loop polls the rc marker AND `battlegroup .status.phase == "Healthy"` (the previous poll used `serverset .status.ready` via `jsonpath`, which returns empty on healthy CRs in some kubectl versions and burned the full 5-minute timeout every apply).
+- **Restore Backup no longer requires the battlegroup to be stopped.** Funcom's `battlegroup import` handles everything itself — it stops the BG, swaps the DB, and the game containers recover automatically. DST was gating the action on `bg-stopped` (both the *Database* page's Restore card and the *Commands* page's `import` entry), forcing users through an unnecessary Stop-All → Import → Start-All cycle. Both surfaces now require only that the VM is running.
 
 ## [12.16.10] - 2026-07-05
 
