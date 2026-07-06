@@ -190,34 +190,3 @@ Register-DuneRoute -Method POST -Path '/api/restart-schedule/check-update' -Hand
     }
 }
 
-# POST /api/restart-schedule/apply-server-update
-# Fires the Funcom server update on the VM (runs battlegroup update in the
-# background) and returns 202. Poll GET /apply-server-update-status.
-# Refuses with 409 if an update is already running.
-Register-DuneRoute -Method POST -Path '/api/restart-schedule/apply-server-update' -Handler {
-    param($req, $res, $routeParams, $body)
-    try {
-        $r = Start-DuneApplyFuncomUpdate
-        if (-not $r.ok) {
-            $status = if ($r.running) { 409 } else { 502 }
-            Write-DuneError -Response $res -Status $status -Message $r.error
-            return
-        }
-        Write-DuneJson -Response $res -Body @{ ok = $true; running = $true; message = $r.message }
-    } catch {
-        Write-DuneError -Response $res -Status 502 -Message "Apply update failed: $($_.Exception.Message)"
-    }
-}
-
-# GET /api/restart-schedule/apply-server-update-status
-# Returns the reconciled state of the last / current Funcom update job.
-# Safe to poll every few seconds. VM is authoritative — DST reconciles from
-# the remote marker files each call.
-Register-DuneRoute -Method GET -Path '/api/restart-schedule/apply-server-update-status' -Handler {
-    param($req, $res, $routeParams, $body)
-    try {
-        Write-DuneJson -Response $res -Body (Get-DuneFuncomUpdateStatus)
-    } catch {
-        Write-DuneError -Response $res -Status 500 -Message $_.Exception.Message
-    }
-}
