@@ -84,8 +84,14 @@ function Get-DuneLinks {
             $snap = Get-DuneBattlegroupSnapshot
         }
         if ($snap -and $snap.available) {
-            $state = $null
-            if (Get-Command Get-BgStateFromStatusText -ErrorAction SilentlyContinue) {
+            # Use the snapshot's authoritative state, computed once from the raw
+            # `battlegroup status` text when the snapshot is built. Do NOT re-parse
+            # $snap.output here: that field is post-processed for display (the
+            # Battlegroup Info row is rewritten from the CRD JSON so multi-word /
+            # comma'd server names don't drift the Status column), so re-parsing it
+            # would couple director-link resolution to a display transform.
+            $state = $snap.state
+            if (-not $state -and (Get-Command Get-BgStateFromStatusText -ErrorAction SilentlyContinue)) {
                 $state = Get-BgStateFromStatusText $snap.output
             }
             if ($state -eq 'Running') { $bgRunning = $true }
