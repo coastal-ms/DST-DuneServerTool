@@ -13,6 +13,10 @@ here cover everything those tags shipped.
 
 ## [Unreleased]
 
+### Fixed
+
+- **Save-guard no longer warns "N player(s) currently online" for a stale ghost row when nobody is connected.** The online-player check (`Get-V6OnlinePlayers`) counted any `encrypted_player_state` row whose `online_status` wasn't `Offline` — which since Funcom 1.4.10.0 also includes the new `LoggingOut` grace state, plus any stale/ghost row whose `server_id` points at a battlegroup that no longer exists after a restart. Such a row (its character name decrypts to blank, so it appears as a bare `id=N`) tripped the Game Config / Gameplay Admin save confirmation with no real player in-game. The query now mirrors Funcom's own `dune.is_player_offline()`: a row counts as online only when it isn't `Offline` **and** its `server_id` is in `dune.active_server_ids` (the currently-running servers). Guarded with `to_regclass()` so a DB predating that relation falls back to the previous behaviour instead of erroring. Reported by fargenbasteg in `#bug-reports` (confirmed: no player connected, and the phantom `id=3` persisted across a battlegroup restart).
+
 ## [12.17.0] - 2026-07-05
 
 ### Fixed
