@@ -378,7 +378,7 @@ export function PublicIpCard() {
           </p>
           <div className="mt-2 flex flex-wrap gap-2 text-xs">
             {status?.currentPublicIp && <span className="pill-muted">internet · {status.currentPublicIp}</span>}
-            {status?.vmIp && <span className="pill-muted">VM · {status.vmIp}</span>}
+            {status?.vmIp && typeof status.vmIp === 'string' && <span className="pill-muted">VM · {status.vmIp}</span>}
             {status?.k3sExternalIp && <span className="pill-muted">K3s ExternalIP · {status.k3sExternalIp}</span>}
             {status?.lastAppliedPublicIp && <span className="pill-success">last applied · {status.lastAppliedPublicIp}</span>}
           </div>
