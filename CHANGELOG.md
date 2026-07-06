@@ -13,12 +13,15 @@ here cover everything those tags shipped.
 
 ## [Unreleased]
 
+### Fixed
+
+- **Save-guard no longer warns "N player(s) currently online" for a stale ghost row when nobody is connected.** The online-player check (`Get-V6OnlinePlayers`) counted any `encrypted_player_state` row whose `online_status` wasn't `Offline` — which since Funcom 1.4.10.0 also includes the new `LoggingOut` grace state, plus any stale/ghost row whose `server_id` points at a battlegroup that no longer exists after a restart. Such a row (its character name decrypts to blank, so it appears as a bare `id=N`) tripped the Game Config / Gameplay Admin save confirmation with no real player in-game. The query now mirrors Funcom's own `dune.is_player_offline()`: a row counts as online only when it isn't `Offline` **and** its `server_id` is in `dune.active_server_ids` (the currently-running servers). Guarded with `to_regclass()` so a DB predating that relation falls back to the previous behaviour instead of erroring. Reported by fargenbasteg in `#bug-reports` (confirmed: no player connected, and the phantom `id=3` persisted across a battlegroup restart).
+
 ## [12.17.0] - 2026-07-05
 
 ### Fixed
 
 - **Battlegroup Info "raw output" pane no longer shows a drifted Status column for multi-word / comma'd server names.** Funcom's `battlegroup status` script builds its Battlegroup Info table by awk-parsing a positional `kubectl get battlegroups --no-headers` row, so a server TITLE containing spaces or a comma (e.g. `Dune, my Arrakis`) shifts the Status cell — and every column after it — by one field per extra word, printing the second word of the name where the status belongs. The Info *panel* has read from the Battlegroup CRD JSON since v12.16.1 and was already correct; the raw-output pane still showed Funcom's drifted row verbatim. DST now rewrites just that one data row in the raw text from the same JSON-canonical values (Status / Database / Gateway / Director / Uptime) and tags it `(DST-corrected)`. Conservative: it only fires when the text row actually disagrees with the CRD (a correctly-columned single-word name is left untouched), and it no-ops when the CRD JSON is unavailable so the pane never renders worse than before. Reported by gd.py in `#hosting-help`.
-- **Save-guard no longer warns "N player(s) currently online" for a stale ghost row when nobody is connected.** The online-player check (`Get-V6OnlinePlayers`) counted any `encrypted_player_state` row whose `online_status` wasn't `Offline` — which since Funcom 1.4.10.0 also includes the new `LoggingOut` grace state, plus any stale/ghost row whose `server_id` points at a battlegroup that no longer exists after a restart. Such a row (its character name decrypts to blank, so it appears as a bare `id=N`) tripped the Game Config / Gameplay Admin save confirmation with no real player in-game. The query now mirrors Funcom's own `dune.is_player_offline()`: a row counts as online only when it isn't `Offline` **and** its `server_id` is in `dune.active_server_ids` (the currently-running servers). Guarded with `to_regclass()` so a DB predating that relation falls back to the previous behaviour instead of erroring. Reported by fargenbasteg in `#bug-reports` (confirmed: no player connected, and the phantom `id=3` persisted across a battlegroup restart).
 
 ## [12.16.12] - 2026-07-05
 
