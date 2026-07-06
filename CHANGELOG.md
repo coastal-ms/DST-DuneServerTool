@@ -13,6 +13,16 @@ here cover everything those tags shipped.
 
 ## [Unreleased]
 
+## [12.16.11] - 2026-07-05
+
+### Changed
+
+- **Reverted the native "Apply server update" button.** The dashboard *Restart Schedule* card no longer has its own Apply-update button (added in v12.15.2). The Funcom self-host update flow is again driven from the classic **Commands page → Battlegroup → `update`** entry, which opens a console window and runs `battlegroup update` directly. The **Check for server update** button on the card stays.
+
+### Added
+
+- **SteamCMD orphan-workdir pre-flight before `update`.** When you run the *Commands → Battlegroup → `update`* command, DST first cleans out any leftover `/home/dune/.dune/download/steamapps/downloading/<appid>` and `.../temp` directories on the VM. SteamCMD leaves these behind after any interrupted update (network blip, killed shell, VM reboot mid-download), and once present they cause every subsequent attempt to fail with `Error! App '4754530' state is 0x206 after update job` / `Steam download failed. Auto-retrying once`. Funcom's own script doesn't clean them up. The pre-flight prints `[dst] Cleaning SteamCMD orphan workdir…` in the console so it's visible when it fires.
+
 ### Fixed
 
 - **Player action descriptions now show.** Each action under *Players → Progression / Items / etc.* has a short description (`rowNote`), but it was never rendered — so expanding an action (e.g. **Enable All Skills**) showed only the button with no explanation. The description now appears at the top of the expanded action.

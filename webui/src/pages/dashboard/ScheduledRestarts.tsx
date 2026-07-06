@@ -6,10 +6,7 @@ import {
   saveRestartSchedule,
   checkFuncomUpdate,
   testDiscordWebhook,
-  applyServerUpdate,
-  getApplyServerUpdateStatus,
   type RestartSchedule,
-  type ApplyServerUpdateStatus,
 } from '../../api/restartSchedule'
 
 // Client-side sanity check for a Discord incoming-webhook URL. The server
@@ -62,10 +59,6 @@ export function ScheduledRestarts() {
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
   const [checking, setChecking] = useState(false)
-  // Apply-server-update state — reconciled from the VM every 5s while running.
-  const [applyStatus, setApplyStatus] = useState<ApplyServerUpdateStatus | null>(null)
-  const [applying, setApplying] = useState(false)
-  const [tailOpen, setTailOpen] = useState(false)
   const [testing, setTesting] = useState(false)
   const [msg, setMsg] = useState<{ kind: 'ok' | 'err'; text: string } | null>(null)
   const [expanded, setExpanded] = useState<boolean>(() => {
@@ -149,63 +142,6 @@ export function ScheduledRestarts() {
       setChecking(false)
     }
   }, [load])
-
-  // Reconcile the Apply-server-update state from the server. Called on mount
-  // (to pick up a job that started in a previous DST session), on demand after
-  // the user clicks Apply, and on an interval while running so the tail keeps
-  // ticking without the user reloading.
-  const refreshApplyStatus = useCallback(async () => {
-    try {
-      const s = await getApplyServerUpdateStatus()
-      setApplyStatus(s)
-      // If the job just finished, refresh the main schedule (installed build changed)
-      if (s.phase === 'done' || s.phase === 'error') {
-        void load()
-      }
-      return s
-    } catch (e) {
-      // A single failure to fetch shouldn't crash the whole card — just log.
-      console.warn('apply-server-update-status failed', e)
-      return null
-    }
-  }, [load])
-
-  // Fire the update. The VM keeps running even if DST closes, and the
-  // 30 s db-util autoheal tick (v12.15.1) will silently clear the util-pod
-  // wedge that reliably fires right after `battlegroup update` finishes.
-  const runApply = useCallback(async () => {
-    if (!window.confirm(
-      'Apply the Funcom server update?\n\n' +
-      'This downloads the new server image and restarts the battlegroup. '
-      + 'It typically takes 5-20 minutes and will disconnect connected players. '
-      + 'DST will monitor progress here; you can safely close this window — '
-      + 'the update keeps running on the server.',
-    )) return
-    setApplying(true)
-    setMsg(null)
-    try {
-      const r = await applyServerUpdate()
-      setMsg({ kind: 'ok', text: r.message })
-      // Immediately reflect the running state instead of waiting for the poll.
-      await refreshApplyStatus()
-    } catch (e) {
-      setMsg({ kind: 'err', text: e instanceof ApiError ? e.message : 'Apply update failed.' })
-    } finally {
-      setApplying(false)
-    }
-  }, [refreshApplyStatus])
-
-  // Poll while running; also fetch once on mount so a job started in a
-  // previous DST session is reflected immediately.
-  useEffect(() => {
-    void refreshApplyStatus()
-  }, [refreshApplyStatus])
-
-  useEffect(() => {
-    if (!applyStatus?.running) return
-    const id = window.setInterval(() => { void refreshApplyStatus() }, 5000)
-    return () => window.clearInterval(id)
-  }, [applyStatus?.running, refreshApplyStatus])
 
   const runTest = useCallback(async () => {
     setTesting(true)
@@ -508,22 +444,6 @@ export function ScheduledRestarts() {
               >
                 <Icon name="RefreshCw" size={14} className={checking ? 'animate-spin' : ''} /> Check for server update
               </button>
-              <button
-                type="button"
-                onClick={() => { void runApply() }}
-                disabled={applying || Boolean(applyStatus?.running) || !sched?.updateAvailable}
-                className="btn-secondary"
-                title={
-                  !sched?.updateAvailable
-                    ? 'No Funcom update available. Click "Check for server update" first, or wait for the next scheduled check.'
-                    : applyStatus?.running
-                    ? 'A server update is already in progress.'
-                    : 'Download the new Funcom server image and restart the battlegroup. Takes 5-20 minutes. Players will be disconnected. DST auto-heals common startup wedges after the restart.'
-                }
-              >
-                <Icon name="Download" size={14} className={applying || applyStatus?.running ? 'animate-pulse' : ''} />
-                {applyStatus?.running ? 'Applying update…' : 'Apply server update'}
-              </button>
             </div>
             <button
               type="button"
@@ -543,70 +463,6 @@ export function ScheduledRestarts() {
             </p>
           )}
 
-          {applyStatus && applyStatus.phase !== 'idle' && (
-            <div
-              className={
-                'mt-3 p-3 rounded-lg border text-xs '
-                + (applyStatus.phase === 'running'
-                  ? 'border-accent/40 bg-accent/5 text-text'
-                  : applyStatus.phase === 'done'
-                  ? 'border-success/40 bg-success/5 text-text'
-                  : 'border-danger/40 bg-danger/5 text-text')
-              }
-            >
-              <div className="flex items-center justify-between gap-2 flex-wrap">
-                <div className="flex items-center gap-2 font-semibold">
-                  {applyStatus.phase === 'running' && <Icon name="Download" size={14} className="animate-pulse" />}
-                  {applyStatus.phase === 'done' && <Icon name="Check" size={14} className="text-success" />}
-                  {applyStatus.phase === 'error' && <Icon name="AlertTriangle" size={14} className="text-danger" />}
-                  <span>
-                    {applyStatus.phase === 'running' && 'Applying Funcom server update…'}
-                    {applyStatus.phase === 'done' && 'Server update applied.'}
-                    {applyStatus.phase === 'error' && 'Server update failed.'}
-                  </span>
-                </div>
-                {applyStatus.started && (
-                  <span className="text-text-dim">
-                    Started {new Date(applyStatus.started).toLocaleTimeString()}
-                    {applyStatus.finished && ` · finished ${new Date(applyStatus.finished).toLocaleTimeString()}`}
-                  </span>
-                )}
-              </div>
-              {(applyStatus.installedBefore || applyStatus.installedAfter) && (
-                <p className="mt-1 text-text-dim">
-                  Build{' '}
-                  <span className="text-text">{applyStatus.installedBefore || '?'}</span>
-                  {' → '}
-                  <span className="text-text">{applyStatus.installedAfter || (applyStatus.running ? '…' : '?')}</span>
-                </p>
-              )}
-              {applyStatus.error && (
-                <p className="mt-1 text-danger break-words">{applyStatus.error}</p>
-              )}
-              {applyStatus.phase === 'running' && (
-                <p className="mt-1 text-text-dim">
-                  This normally takes 5-20 minutes. You can close DST — the update keeps running on the server.
-                  If the battlegroup gets stuck on Starting afterwards, DST auto-heals the util-pod wedge within ~30s.
-                </p>
-              )}
-              {applyStatus.tail && applyStatus.tail.length > 0 && (
-                <div className="mt-2">
-                  <button
-                    type="button"
-                    className="text-[11px] text-text-dim hover:text-text underline underline-offset-2"
-                    onClick={() => setTailOpen(v => !v)}
-                  >
-                    {tailOpen ? 'Hide' : 'Show'} last {applyStatus.tail.length} log line{applyStatus.tail.length === 1 ? '' : 's'}
-                  </button>
-                  {tailOpen && (
-                    <pre className="mt-1 p-2 rounded bg-surface-2 border border-border text-[10px] overflow-auto max-h-64 whitespace-pre-wrap break-words">
-                      {applyStatus.tail.join('\n')}
-                    </pre>
-                  )}
-                </div>
-              )}
-            </div>
-          )}
         </>
           )}
         </div>
