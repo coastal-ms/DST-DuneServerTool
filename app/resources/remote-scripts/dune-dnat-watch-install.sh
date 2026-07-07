@@ -2,25 +2,37 @@
 # Install / refresh the Dune Awakening DNAT self-heal watchdog on the VM.
 #
 # WHY THIS EXISTS
-#   The host RabbitMQ DNAT rule that forwards external player-login traffic to
-#   the in-cluster mq-game pod goes stale whenever the mq-game pod IP (or the
-#   public IP) changes WITHOUT a host reboot -- e.g. a pod-only battlegroup
-#   restart:
-#     * RabbitMQ login:  public:31982/tcp -> <mq-game pod>:5672
-#   The boot script /etc/local.d/dune-iptables.start only re-derives this at
-#   BOOT, so a pod restart leaves the rule pointing at a dead pod IP and remote
-#   players hang forever on "Connecting" (observed 2026-06-23: a ~19h stale rule
-#   because a prior hardcoded-IP sync script only watched the OLD public IP).
-#   This watchdog reconciles the rule from the live cluster state every minute,
-#   so a pod restart self-heals in <=60s.
+#   Two host iptables DNAT rules keep remote players connectable. Both go stale
+#   whenever the mq-game pod IP, the public IP, or the game's bind changes
+#   WITHOUT a host reboot -- e.g. a pod-only battlegroup restart:
+#     * RabbitMQ login:  public:31982/tcp          -> <mq-game pod>:5672
+#     * Game-UDP bridge: <vm-lan-ip>:7777-7810/udp  -> public IP
+#   The boot script /etc/local.d/dune-iptables.start only re-derives these at
+#   BOOT, so a pod restart leaves a rule pointing at a dead pod IP (RabbitMQ) or
+#   drops the game bridge, and remote players hang forever on "Connecting" /
+#   time out with P34 (observed 2026-06-23: a ~19h stale RabbitMQ rule because a
+#   prior hardcoded-IP sync script only watched the OLD public IP). This watchdog
+#   reconciles both rules from the live cluster + socket state every minute, so a
+#   pod restart self-heals in <=60s.
 #
-#   It only ever touches the RabbitMQ rule and only when it can resolve VALID
-#   IPv4 addresses -- a missing/`<none>` endpoint must never cause it to tear
-#   down a working rule. (A former game-port UDP rule that rewrote
-#   VM_IP:7777-7810 -> public was removed: it never matched real internet
-#   players and could hairpin a same-LAN / self-hosted admin's own join out to
-#   the WAN IP and black-hole it. This installer also retires that rule on VMs
-#   where a prior version left it behind -- see step 2b.)
+#   THE GAME-UDP BRIDGE IS BIND-DETECTED, NOT UNCONDITIONAL.
+#   A remote player's game traffic is forwarded by their home router to the VM's
+#   LAN IP (e.g. 192.168.23.219:7778). When the Funcom game pods run hostNetwork
+#   and bind their UDP ports to the PUBLIC IP only (verified 2026-07-07 by
+#   tcpdump: packets to <lan-ip>:7778 drew "ICMP udp port unreachable" -> P34),
+#   nothing listens on the LAN IP, so the packet is black-holed. The bridge
+#   rewrites its destination to the public IP (a local eth0 alias where the pod
+#   listens), which fixes the join AND cannot black-hole a same-LAN / self join
+#   because the rewrite lands on a live LOCAL listener, never a WAN hairpin.
+#   BUT on a host whose game binds 0.0.0.0 or the LAN IP instead ("I can connect
+#   on the LOCAL IP"), traffic to the LAN IP ALREADY works, and rewriting it to
+#   the public IP would send it to a port nothing listens on -> black hole. That
+#   is exactly the regression removed in v12.16.9. So the watchdog installs the
+#   bridge ONLY when it positively detects public-only binding, actively REMOVES
+#   it when it detects LAN/wildcard binding, and leaves the rules untouched when
+#   binding is indeterminate (pods not up yet) -- never tearing down a working
+#   rule on a guess. Detection is IPv4-only (a dual-stack IPv6 `::` bind must not
+#   masquerade as a LAN bind and suppress a legitimately-needed bridge).
 #
 # DEFENDER-SAFE DESIGN
 #   All persistence logic (writing the watchdog + the cron entry) lives here in
@@ -46,45 +58,115 @@ log() { echo "[$(ts)] $*" >> "$LOG" 2>/dev/null; }
 # ---------------------------------------------------------------------------
 cat > "$WATCH" <<'WATCHEOF'
 #!/bin/sh
-# Dune DNAT self-heal watchdog. Reconciles the RabbitMQ DNAT rule from the live
-# k3s cluster state. Idempotent; safe to run every minute.
-# Installed + scheduled by dune-dnat-watch-install.sh (shipped with DST).
+# Dune DNAT self-heal watchdog. Reconciles the RabbitMQ DNAT rule and the
+# bind-detected game-UDP bridge from the live k3s + socket state. Idempotent;
+# safe to run every minute. Installed + scheduled by dune-dnat-watch-install.sh.
 export PATH=/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin
 
 KUBE="/usr/local/bin/k3s kubectl"
 LOG=/var/log/dune-dnat-watch.log
 RABBIT_PORT=31982
+GAME_PORTS=7777:7810
+GAME_LO=7777
+GAME_HI=7810
 
 ts() { date "+%Y-%m-%d %H:%M:%S"; }
 log() { echo "[$(ts)] $*" >> "$LOG" 2>/dev/null; }
 is_ipv4() { echo "$1" | grep -Eq '^([0-9]{1,3}\.){3}[0-9]{1,3}$'; }
+
+# IPv4-only UDP listener addresses ("addr:port" per line). Funcom game pods run
+# hostNetwork so their binds are visible in the host net namespace. -4 / udp-only
+# filtering keeps a dual-stack IPv6 `::` bind from looking like a LAN bind.
+udp_listeners() {
+    _out=""
+    if command -v ss >/dev/null 2>&1; then
+        _out=$(ss -H -u -l -n -4 2>/dev/null | awk '{print $4}')
+    fi
+    # Fall back to netstat if ss is absent or rejected `-H` on this image.
+    [ -n "$_out" ] || _out=$(netstat -uln 2>/dev/null | awk '$1=="udp"{print $4}')
+    printf '%s\n' "$_out"
+}
+
+# Classify the game's UDP bind across ports 7777-7810:
+#   0 = public IP bound, LAN/wildcard NOT bound   -> bridge needed AND safe
+#   1 = LAN IP / 0.0.0.0 bound                     -> bridge would black-hole
+#   2 = indeterminate (no game listeners visible)  -> leave rules unchanged
+game_bind_state() {
+    _pub=0; _lanwild=0
+    for _e in $(udp_listeners); do
+        _port=${_e##*:}
+        _addr=${_e%:*}
+        case "$_port" in ''|*[!0-9]*) continue ;; esac
+        { [ "$_port" -ge "$GAME_LO" ] && [ "$_port" -le "$GAME_HI" ]; } 2>/dev/null || continue
+        case "$_addr" in
+            "$PUB")                  _pub=1 ;;
+            "$VM_IP"|0.0.0.0|'*'|'') _lanwild=1 ;;
+        esac
+    done
+    [ "$_lanwild" = 1 ] && return 1
+    [ "$_pub" = 1 ] && return 0
+    return 2
+}
+
+# Delete every game-UDP DNAT rule currently in PREROUTING (any --to-destination).
+purge_game_bridge() {
+    iptables -t nat -S PREROUTING 2>/dev/null | grep -- "--dport ${GAME_PORTS}" | grep -- '-j DNAT' | sed 's/^-A/-D/' | while read -r _spec; do
+        iptables -t nat $_spec 2>/dev/null && log "removed game-UDP DNAT rule: $_spec"
+    done
+}
 
 NODE=$($KUBE get nodes --no-headers -o custom-columns=:metadata.name 2>/dev/null | head -1 | tr -d ' ')
 [ -z "$NODE" ] && exit 0
 
 # Public IP = authoritative node ExternalIP (tracks IP changes, never hardcoded).
 PUB=$($KUBE get node "$NODE" -o jsonpath='{.status.addresses[?(@.type=="ExternalIP")].address}' 2>/dev/null)
+# VM LAN IP = node InternalIP (the -d match for router-forwarded remote traffic).
+VM_IP=$($KUBE get node "$NODE" -o jsonpath='{.status.addresses[?(@.type=="InternalIP")].address}' 2>/dev/null)
 # Current mq-game pod IP from the service endpoints.
 POD=$($KUBE get endpoints --all-namespaces 2>/dev/null | grep mq-game | awk '{print $3}' | cut -d, -f1 | cut -d: -f1 | head -1)
 
-# Only reconcile when BOTH addresses are valid IPv4. A missing/`<none>` endpoint
-# (e.g. mq-game momentarily without ready addresses) previously slipped past a
-# bare [ -z ] check as the literal string "<none>", which then deleted the good
-# rule and failed to insert a replacement -- leaving players with no RabbitMQ
-# path. Never tear down a working rule unless a valid replacement is in hand.
+# PUB is the shared rewrite target for both rules -- without a valid one, never
+# touch anything. A missing/`<none>` value must never delete a good rule.
 if ! is_ipv4 "$PUB"; then log "node ExternalIP not a valid IPv4 ('$PUB'); leaving rules intact"; exit 0; fi
-if ! is_ipv4 "$POD"; then log "mq-game endpoint not a valid IPv4 ('$POD'); leaving rules intact"; exit 0; fi
 
-# --- RabbitMQ login: public:31982/tcp -> POD:5672 ---
-if iptables -t nat -C PREROUTING -d "${PUB}/32" -p tcp --dport "$RABBIT_PORT" -j DNAT --to-destination "${POD}:5672" 2>/dev/null; then
-    : # already correct
+# --- RabbitMQ login: public:31982/tcp -> POD:5672 (needs a valid pod IP) ---
+if is_ipv4 "$POD"; then
+    if iptables -t nat -C PREROUTING -d "${PUB}/32" -p tcp --dport "$RABBIT_PORT" -j DNAT --to-destination "${POD}:5672" 2>/dev/null; then
+        : # already correct
+    else
+        # Replacement IP validated above, so swapping the rule now is safe.
+        iptables -t nat -S PREROUTING | grep -- "--dport ${RABBIT_PORT}" | grep -- "-j DNAT" | sed "s/^-A/-D/" | while read -r spec; do
+            iptables -t nat $spec 2>/dev/null
+        done
+        iptables -t nat -I PREROUTING 1 -d "${PUB}/32" -p tcp --dport "$RABBIT_PORT" -j DNAT --to-destination "${POD}:5672"
+        log "reconciled rabbitmq DNAT: ${PUB}:${RABBIT_PORT} -> ${POD}:5672"
+    fi
 else
-    # Replacement IP validated above, so swapping the rule now is safe.
-    iptables -t nat -S PREROUTING | grep -- "--dport ${RABBIT_PORT}" | grep -- "-j DNAT" | sed "s/^-A/-D/" | while read -r spec; do
-        iptables -t nat $spec 2>/dev/null
-    done
-    iptables -t nat -I PREROUTING 1 -d "${PUB}/32" -p tcp --dport "$RABBIT_PORT" -j DNAT --to-destination "${POD}:5672"
-    log "reconciled rabbitmq DNAT: ${PUB}:${RABBIT_PORT} -> ${POD}:5672"
+    log "mq-game endpoint not a valid IPv4 ('$POD'); leaving rabbitmq rule intact"
+fi
+
+# --- Game-UDP bridge: <VM_IP>:7777-7810/udp -> PUB (needs a valid VM LAN IP) ---
+if is_ipv4 "$VM_IP"; then
+    game_bind_state; _st=$?
+    if [ "$_st" = 0 ]; then
+        if iptables -t nat -C PREROUTING -d "$VM_IP" -p udp --dport "$GAME_PORTS" -j DNAT --to-destination "$PUB" 2>/dev/null; then
+            : # already correct
+        else
+            purge_game_bridge   # drop any stale rule (e.g. an old public IP) first
+            iptables -t nat -I PREROUTING 1 -d "$VM_IP" -p udp --dport "$GAME_PORTS" -j DNAT --to-destination "$PUB"
+            log "installed game-UDP bridge: ${VM_IP}:${GAME_PORTS} -> ${PUB} (game binds public IP only)"
+        fi
+    elif [ "$_st" = 1 ]; then
+        # Game reachable on the LAN IP/wildcard already; a bridge would black-hole it.
+        if iptables -t nat -C PREROUTING -d "$VM_IP" -p udp --dport "$GAME_PORTS" -j DNAT --to-destination "$PUB" 2>/dev/null; then
+            purge_game_bridge
+            log "removed game-UDP bridge (game binds LAN/wildcard; bridge would black-hole)"
+        fi
+    else
+        : # indeterminate (pods not up?) -> leave whatever is there intact
+    fi
+else
+    log "node InternalIP not a valid IPv4 ('$VM_IP'); leaving game-UDP bridge intact"
 fi
 
 exit 0
@@ -100,18 +182,6 @@ if [ -f /usr/local/sbin/dune-mq-dnat-sync.sh ]; then
     mv -f /usr/local/sbin/dune-mq-dnat-sync.sh "/usr/local/sbin/dune-mq-dnat-sync.sh.disabled.$(date +%Y%m%d%H%M%S)" 2>/dev/null
     log "retired legacy /usr/local/sbin/dune-mq-dnat-sync.sh"
 fi
-
-# ---------------------------------------------------------------------------
-# 2b. Retire the game-port UDP DNAT rule a prior watchdog may have installed.
-#     It rewrote VM_IP:7777-7810/udp -> public, which never matched real
-#     internet players (they arrive on the public IP) and could hairpin a
-#     same-LAN / self-hosted admin's own join out to the WAN IP and black-hole
-#     it. Removing it here means updating DST fixes an affected VM immediately,
-#     without waiting for a host reboot to flush the stale rule.
-# ---------------------------------------------------------------------------
-iptables -t nat -S PREROUTING 2>/dev/null | grep -- '--dport 7777:7810' | grep -- '-j DNAT' | sed 's/^-A/-D/' | while read -r spec; do
-    if iptables -t nat $spec 2>/dev/null; then log "removed retired game-UDP DNAT rule: $spec"; fi
-done
 
 # ---------------------------------------------------------------------------
 # 3. Reconcile the root crontab: drop any prior DNAT watchdog/sync lines
