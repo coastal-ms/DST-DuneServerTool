@@ -858,6 +858,126 @@ function Get-DuneRemotePartitionScriptPath {
     return $null
 }
 
+function Get-DuneMemPressureProbePath {
+    $candidates = @(
+        (Join-Path $scriptDir 'resources\remote-scripts\dune-mem-pressure-probe.sh')
+        (Join-Path $scriptDir 'app\resources\remote-scripts\dune-mem-pressure-probe.sh')
+    )
+    foreach ($p in $candidates) {
+        if (Test-Path -LiteralPath $p) { return $p }
+    }
+    return $null
+}
+
+function Show-DuneVmMemoryPressureWarning {
+    # Run the read-only VM memory-pressure probe over SSH and print a red
+    # warning if the node is thrashing for memory: Funcom operators OOM-killed
+    # (exit 137 / OOMKilled, high restart counts), Postgres evicted, or a tiny
+    # MemAvailable with Swap: 0. This is the root cause of the "battlegroup
+    # restarted outside its schedule" / "ping surge under load" reports and is
+    # otherwise invisible without hand-reading exported logs.
+    #
+    # Uses the SAME bundled probe the web backend uses
+    # (app/server/lib/VmMemoryPressure.ps1 + dune-mem-pressure-probe.sh) so the
+    # CLI Start-All and the Server Health banner never disagree. Read-only and
+    # best-effort - never throws, never blocks a good start on a probe hiccup.
+    param(
+        [Parameter(Mandatory)][string]$Ip,
+        [string]$SshUser = $sshUser,
+        [string]$SshKey  = $sshKey
+    )
+    try {
+        $local = Get-DuneMemPressureProbePath
+        if (-not $local) { return }
+        $raw = [System.IO.File]::ReadAllText($local)
+        $lf  = $raw -replace "`r`n", "`n" -replace "`r", "`n"
+        $b64 = [Convert]::ToBase64String([Text.Encoding]::UTF8.GetBytes($lf))
+
+        # Stream the base64 payload over stdin, decode, run as root. Mirrors the
+        # partition-clear staging path (no scp/sftp dependency).
+        $out = $b64 | & ssh -o BatchMode=yes -o StrictHostKeyChecking=no -o LogLevel=QUIET -o ConnectTimeout=8 `
+                    -i "$SshKey" "${SshUser}@${Ip}" 'base64 -d | sudo -n bash' 2>$null
+        if (-not $out) { return }
+        $lines = @($out)
+
+        # --- lightweight parse (mirrors ConvertFrom-DuneMemPressureProbe) -----
+        $memTotalK = $null; $memAvailK = $null; $swapTotalK = $null
+        $records = New-Object System.Collections.Generic.List[object]
+        foreach ($line in $lines) {
+            $t = ([string]$line).Trim()
+            if (-not $t) { continue }
+            if ($t -like 'mem_total_k=*')  { $memTotalK  = [long]($t.Substring(12)); continue }
+            if ($t -like 'mem_avail_k=*')  { $memAvailK  = [long]($t.Substring(12)); continue }
+            if ($t -like 'swap_total_k=*') { $swapTotalK = [long]($t.Substring(13)); continue }
+            if ($t -like 'op=*' -or $t -like 'db=*') {
+                $kind = $t.Substring(0, 2)
+                $rec  = $t.Substring(3)
+                $parts = $rec -split '~'
+                $name = $parts[0]
+                $restarts = 0; $exits = @(); $reasons = @(); $podReason = ''
+                foreach ($seg in ($parts | Select-Object -Skip 1)) {
+                    $c = $seg.IndexOf(':'); if ($c -lt 1) { continue }
+                    $tag = $seg.Substring(0, $c); $val = $seg.Substring($c + 1)
+                    switch ($tag) {
+                        'PR' { $podReason = $val.Trim() }
+                        'R'  { $nums = @($val -split '\s+' | Where-Object { $_ -match '^\d+$' } | ForEach-Object { [int]$_ }); if ($nums.Count) { $restarts = ($nums | Measure-Object -Maximum).Maximum } }
+                        'E'  { $exits   = @($val -split '\s+' | Where-Object { $_ -ne '' }) }
+                        'X'  { $reasons = @($val -split '\s+' | Where-Object { $_ -ne '' }) }
+                    }
+                }
+                $oom = ($exits -contains '137') -or ($reasons -contains 'OOMKilled') -or ($podReason -match '(?i)Evicted|OOMKilled')
+                $short = $name -replace '^sh-[a-z0-9]+-[a-z0-9]+-', ''
+                $records.Add([pscustomobject]@{ kind=$kind; name=$short; restarts=$restarts; oom=$oom })
+            }
+        }
+
+        $lowMem = $false; $swapZero = ($null -ne $swapTotalK -and $swapTotalK -eq 0)
+        $availPct = $null
+        if ($null -ne $memTotalK -and $memTotalK -gt 0 -and $null -ne $memAvailK) {
+            $availPct = [math]::Round(($memAvailK * 100.0 / $memTotalK), 1)
+            $lowMem = ($memAvailK -lt 1048576 -or $availPct -lt 8)
+        }
+        $oomPods = @($records | Where-Object { $_.oom })
+        $churn   = @($records | Where-Object { -not $_.oom -and $_.restarts -gt 5 })
+        $memPressure = ($oomPods.Count -gt 0) -or ($lowMem -and $swapZero) -or ($churn.Count -gt 0)
+        if (-not $memPressure) { return }
+
+        function _fmtKiB($k) {
+            if ($null -eq $k) { return '?' }
+            $u = @('KiB','MiB','GiB','TiB'); $v = [double]$k; $i = 0
+            while ($v -ge 1024 -and $i -lt 3) { $v /= 1024; $i++ }
+            if ($i -eq 0) { return ('{0:0} {1}' -f $v, $u[$i]) }
+            return ('{0:0.0} {1}' -f $v, $u[$i])
+        }
+
+        $maxRestarts = 0
+        if ($records.Count -gt 0) { $maxRestarts = ($records | Measure-Object -Property restarts -Maximum).Maximum }
+        $headline = if ($oomPods.Count -gt 0 -and $maxRestarts -gt 0) {
+            "VM low on memory - Funcom operators killed ${maxRestarts}x; consider raising the VM's RAM"
+        } elseif ($lowMem -and $swapZero) {
+            "VM low on memory (Swap: 0) - consider raising the VM's RAM or lowering per-map memory limits"
+        } else {
+            "Possible VM memory pressure - operators/DB have elevated restarts"
+        }
+
+        Write-Host ""
+        Write-Host "  WARNING: $headline" -ForegroundColor Red
+        if ($lowMem) {
+            Write-Host ("    MemAvailable {0} ({1}%) with Swap: {2}." -f (_fmtKiB $memAvailK), $availPct, $(if ($swapZero) { '0 (no cushion)' } else { (_fmtKiB $swapTotalK) })) -ForegroundColor Yellow
+        }
+        foreach ($p in $oomPods) {
+            $label = if ($p.kind -eq 'db') { 'database' } else { 'operator' }
+            Write-Host ("    {0} '{1}' OOM-killed x{2} (exit 137 / OOMKilled)." -f $label, $p.name, $p.restarts) -ForegroundColor Yellow
+        }
+        foreach ($p in $churn) {
+            Write-Host ("    pod '{0}' restarted x{1} (elevated)." -f $p.name, $p.restarts) -ForegroundColor Yellow
+        }
+        Write-Host "    Fix: raise the VM's RAM in Hyper-V, or lower per-map memory limits. Full detail: Help > Create GitHub Issue + Save Logs (vm-memory-pressure.txt)." -ForegroundColor DarkGray
+    } catch {
+        # Best-effort only - a probe hiccup must never fail a good start.
+    }
+}
+
 function Invoke-DuneRemotePartitionScript {
     # Stages the bundled dune-clear-partitions.start to /tmp on the VM via an
     # ssh exec + base64 stream (no scp/sftp dependency), runs it once with sudo,
@@ -1653,6 +1773,10 @@ while ($true) {
             Write-Host "  Skipped on-demand partition auto-clear because battlegroup start exited $bgStartExit." -ForegroundColor DarkYellow
         }
 
+        # Surface VM memory-pressure (OOMKilled operators / low RAM+Swap:0) as a
+        # red warning after the summary - the root cause of off-schedule restarts.
+        Show-DuneVmMemoryPressureWarning -Ip $ip
+
         $directorPort = $null
         continue
     }
@@ -1926,6 +2050,10 @@ while ($true) {
         } else {
             Write-Host "  Skipped on-demand partition auto-clear because battlegroup start exited $bgStartExit." -ForegroundColor DarkYellow
         }
+
+        # Same memory-pressure surfacing as startup (a reboot ends by starting
+        # the battlegroup, so the OOM signature is just as relevant here).
+        Show-DuneVmMemoryPressureWarning -Ip $ip
         continue
     }
 
