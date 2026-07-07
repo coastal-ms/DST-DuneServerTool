@@ -13,6 +13,14 @@ here cover everything those tags shipped.
 
 ## [Unreleased]
 
+### Added
+
+- **VM memory-pressure diagnostics — DST now surfaces the "node is out of RAM" signature itself.** When a home-hosted VM runs low on memory the kubelet SIGKILLs whatever is using the most: the four Funcom operator controller-managers get exit-137 / OOMKilled with restart counts climbing into the 30s, the Postgres pod is evicted, and the nightly DB backup hangs for minutes while the node pages. The tell-tale is a tiny `MemAvailable` with `Swap: 0`. This has now bitten three times (murm ping-surge, Hagga per-map sizing, and a battlegroup restarting outside its 02:00 schedule) and could previously only be found by exporting logs and hand-reading them. A new read-only probe (`app/resources/remote-scripts/dune-mem-pressure-probe.sh`, run over the existing SSH path) reads operator/DB pod restart counts + last-terminated state and the VM's `free -h` / `/proc/meminfo`, and DST now:
+  - shows a red **"VM low on memory — Funcom operators killed N times; consider raising the VM's RAM"** banner at the top of **Server Health** (`GET /api/diagnostics/vm-memory`, cached 60s);
+  - prints the same warning after a **Start** / **Reboot** in the console (CLI `startup` / `reboot`); and
+  - adds a **`vm-memory-pressure.txt`** file to the diagnostics bundle (Help → Create GitHub Issue + Save Logs) and leads the bundle's `manifest.txt` with the finding when detected.
+  The probe never mutates the VM; an unreachable VM simply hides the banner. Prompted by Pat's report (v12.17.0) of his battlegroup restarting at ~06:09 / ~07:11 local — traced to node memory pressure on his `duneawakening` VM, not DST's scheduled restart.
+
 ### Fixed
 
 - **Save-guard no longer warns "N player(s) currently online" for a stale ghost row when nobody is connected.** The online-player check (`Get-V6OnlinePlayers`) counted any `encrypted_player_state` row whose `online_status` wasn't `Offline` — which since Funcom 1.4.10.0 also includes the new `LoggingOut` grace state, plus any stale/ghost row whose `server_id` points at a battlegroup that no longer exists after a restart. Such a row (its character name decrypts to blank, so it appears as a bare `id=N`) tripped the Game Config / Gameplay Admin save confirmation with no real player in-game. The query now mirrors Funcom's own `dune.is_player_offline()`: a row counts as online only when it isn't `Offline` **and** its `server_id` is in `dune.active_server_ids` (the currently-running servers). Guarded with `to_regclass()` so a DB predating that relation falls back to the previous behaviour instead of erroring. Reported by fargenbasteg in `#bug-reports` (confirmed: no player connected, and the phantom `id=3` persisted across a battlegroup restart).

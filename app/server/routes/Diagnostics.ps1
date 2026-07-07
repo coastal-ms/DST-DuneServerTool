@@ -445,6 +445,84 @@ done
         $warnings.Add('Game-server pod logs skipped: SSH helper not loaded.')
     }
 
+    # 6c-4) VM memory-pressure probe (OOMKilled operators / DB, free -h) -----
+    # The "battlegroup restarted outside its schedule" / "ping surges under
+    # load" class of report is decided at the VM memory layer: when the
+    # home-hosted node runs low on memory the kubelet SIGKILLs the Funcom
+    # operators (exit 137 / OOMKilled, restart counts in the 30s) and evicts
+    # Postgres, and the nightly DB backup hangs. Nothing else in this bundle
+    # sees it. Pull the read-only probe (operator/DB restart + lastState, plus
+    # `free -h`) so a future log export leads with the memory finding instead
+    # of burying it. Best-effort over SSH; never fatal.
+    $memFinding = $null
+    if (Get-Command Get-DuneVmMemoryPressure -ErrorAction SilentlyContinue) {
+        try {
+            $memFinding = Get-DuneVmMemoryPressure -Force
+            $memLines = [System.Collections.Generic.List[string]]::new()
+            $memLines.Add('# VM memory-pressure probe')
+            $memLines.Add("# Generated $(Get-Date -Format 'o')")
+            $memLines.Add('# Detects OOMKilled/exit-137 Funcom operators + Postgres and low MemAvailable with Swap:0.')
+            $memLines.Add('')
+            if (-not $memFinding.ok) {
+                $memLines.Add("Probe unavailable: $($memFinding.message)")
+                $warnings.Add("VM memory-pressure probe skipped: $($memFinding.message)")
+            } else {
+                if ($memFinding.pressure) {
+                    $memLines.Add("RESULT: MEMORY PRESSURE DETECTED (severity: $($memFinding.severity))")
+                    $memLines.Add(">> $($memFinding.headline)")
+                } else {
+                    $memLines.Add('RESULT: no memory-pressure signals (operators healthy, memory has headroom).')
+                }
+                $memLines.Add('')
+                $m = $memFinding.mem
+                $memLines.Add('Node memory:')
+                $memLines.Add(("  MemTotal     : {0}" -f (Format-DuneMemKiB $m.totalK)))
+                $memLines.Add(("  MemAvailable : {0}{1}" -f (Format-DuneMemKiB $m.availK), $(if ($null -ne $m.availPct) { " ($($m.availPct)%)" } else { '' })))
+                $memLines.Add(("  Swap total   : {0}{1}" -f (Format-DuneMemKiB $m.swapTotalK), $(if ($m.swapZero) { '  << no swap cushion' } else { '' })))
+                $memLines.Add('')
+                if ($m.freeH) {
+                    $memLines.Add('free -h:')
+                    foreach ($fl in ($m.freeH -split "`n")) { $memLines.Add("  $fl") }
+                    $memLines.Add('')
+                }
+                $memLines.Add('Funcom operator pods (controller-managers) - RestartCount should be 0:')
+                if (@($memFinding.operators).Count -eq 0) {
+                    $memLines.Add('  (none found)')
+                } else {
+                    foreach ($p in $memFinding.operators) {
+                        $flag = if ($p.oom) { '  << OOMKilled/137' } elseif ($p.restarts -gt 5) { '  << elevated' } else { '' }
+                        $memLines.Add(("  {0,-46} restarts={1} phase={2} lastExit={3} reason={4}{5}" -f `
+                            $p.shortName, $p.restarts, $p.phase, ((@($p.exitCodes) -join ',')), ((@($p.termReasons) -join ',')), $flag))
+                    }
+                }
+                $memLines.Add('')
+                $memLines.Add('Database (Postgres) pod:')
+                if (@($memFinding.db).Count -eq 0) {
+                    $memLines.Add('  (none found)')
+                } else {
+                    foreach ($p in $memFinding.db) {
+                        $flag = if ($p.oom) { '  << OOMKilled/137/evicted' } elseif ($p.restarts -gt 5) { '  << elevated' } else { '' }
+                        $memLines.Add(("  {0,-46} restarts={1} phase={2} lastExit={3} reason={4}{5}" -f `
+                            $p.shortName, $p.restarts, $p.phase, ((@($p.exitCodes) -join ',')), ((@($p.termReasons) -join ',')), $flag))
+                    }
+                }
+                if (@($memFinding.warnings).Count -gt 0) {
+                    $memLines.Add('')
+                    $memLines.Add('Findings:')
+                    foreach ($w in $memFinding.warnings) { $memLines.Add("  - $w") }
+                }
+            }
+            $memText = Invoke-DstRedaction -Text ($memLines -join "`r`n") @redactArgs
+            $memOut  = Join-Path $stageDir 'vm-memory-pressure.txt'
+            Set-Content -LiteralPath $memOut -Value $memText -Encoding UTF8
+            $included.Add(@{ name = 'vm-memory-pressure.txt'; bytes = (Get-Item -LiteralPath $memOut).Length })
+        } catch {
+            $warnings.Add("VM memory-pressure probe failed: $($_.Exception.Message)")
+        }
+    } else {
+        $warnings.Add('VM memory-pressure helper not loaded - probe skipped.')
+    }
+
     # 6d) Gameplay Admin read-path probe ------------------------------------
     # The "Players/Bases show top-level rows but blank names / unaligned
     # factions / 0 pieces" class of bug (e.g. after a character transfer)
@@ -524,6 +602,16 @@ done
     $manLines.Add("Dune Server Tool diagnostic bundle")
     $manLines.Add("Generated $(Get-Date -Format 'o') by v$script:DuneToolVersion")
     $manLines.Add('')
+    # Lead with the memory-pressure finding so a triager sees it first - it is
+    # the root cause of the "battlegroup restarted off-schedule" / "ping surge"
+    # class of report and is otherwise buried in per-pod logs.
+    if ($memFinding -and $memFinding.ok -and $memFinding.pressure) {
+        $manLines.Add('*** VM MEMORY PRESSURE DETECTED ***')
+        $manLines.Add("  $($memFinding.headline)")
+        foreach ($w in @($memFinding.warnings)) { $manLines.Add("  - $w") }
+        $manLines.Add('  (full detail: vm-memory-pressure.txt)')
+        $manLines.Add('')
+    }
     $manLines.Add('Sanitization applied to every text file in this bundle:')
     $manLines.Add('  - IPv4 / IPv6 addresses (except loopback) -> <ip> / <ipv6>')
     $manLines.Add('  - C:\Users\<anyone>\... paths              -> C:\Users\<user>\...')
@@ -538,6 +626,12 @@ done
     $manLines.Add('gameplay-read-probe.txt re-runs the Players/Bases list queries and records')
     $manLines.Add('COUNTS ONLY (no player names or ids) so "rows but blank detail" bugs are')
     $manLines.Add('triageable; absent when the DB is unreachable (see Warnings).')
+    $manLines.Add('')
+    $manLines.Add('vm-memory-pressure.txt probes the VM for the OOMKilled-operators / low-memory')
+    $manLines.Add('signature (Funcom controller-manager restart counts + lastState, Postgres pod')
+    $manLines.Add('state, and free -h / MemAvailable vs Swap). It is the root cause of the')
+    $manLines.Add('"battlegroup restarted outside its schedule" and "ping surges under load"')
+    $manLines.Add('reports; when detected it is also called out at the top of this manifest.')
     $manLines.Add('')
     $manLines.Add('game-pods.txt + game-server-logs.txt are pulled live over SSH: a pod/serverset')
     $manLines.Add('snapshot plus the recent logs of the connection-path pods (game servers, server')
@@ -599,6 +693,44 @@ Register-DuneRoute -Method POST -Path '/api/diagnostics/bundle' -Handler {
     try {
         $result = New-DstDiagnosticBundle
         Write-DuneJson -Response $res -Body $result
+    } catch {
+        Write-DuneError -Response $res -Status 500 -Message $_.Exception.Message
+    }
+}
+
+# GET /api/diagnostics/vm-memory — the VM memory-pressure finding, for the
+# Server Health red banner. Read-only + cached (60s) in the lib, so the
+# Dashboard can poll it cheaply. Returns a compact JSON-friendly view; the
+# full per-pod detail lives in the diagnostics bundle. Never 500s on an
+# unreachable VM — it reports ok=false so the banner just stays hidden.
+Register-DuneRoute -Method GET -Path '/api/diagnostics/vm-memory' -Handler {
+    param($req, $res, $routeParams, $body)
+    try {
+        if (-not (Get-Command Get-DuneVmMemoryPressure -ErrorAction SilentlyContinue)) {
+            Write-DuneJson -Response $res -Body @{ ok=$false; pressure=$false; message='memory-pressure helper not loaded' }
+            return
+        }
+        $f = Get-DuneVmMemoryPressure
+        $body = @{
+            ok       = [bool]$f.ok
+            pressure = [bool]$f.pressure
+            severity = [string]($f.severity)
+            headline = [string]($f.headline)
+            warnings = @($f.warnings)
+            message  = [string]($f.message)
+        }
+        if ($f.ok -and $f.mem) {
+            $body.mem = @{
+                availK       = $f.mem.availK
+                totalK       = $f.mem.totalK
+                availPct     = $f.mem.availPct
+                swapZero     = [bool]$f.mem.swapZero
+                lowAvailable = [bool]$f.mem.lowAvailable
+            }
+            $body.maxRestarts = [int]$f.signals.maxRestarts
+            $body.oomKills    = [int]$f.signals.oomKills
+        }
+        Write-DuneJson -Response $res -Body $body
     } catch {
         Write-DuneError -Response $res -Status 500 -Message $_.Exception.Message
     }
