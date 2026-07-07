@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
-import { StyleSheet, Text, View, ScrollView, ActivityIndicator, TextInput, TouchableOpacity, StatusBar } from 'react-native';
+import { StyleSheet, Text, View, ScrollView, ActivityIndicator, TextInput, TouchableOpacity, StatusBar, Alert } from 'react-native';
 import { CameraView, useCameraPermissions } from 'expo-camera';
 import * as SecureStore from 'expo-secure-store';
 
@@ -14,21 +14,22 @@ const clearServer = () => SecureStore.deleteItemAsync(STORE_KEY);
 // --- Custom UI Components ---
 const DstButton = ({ title, onPress, type = 'primary', disabled = false, loading = false }: { title: string, onPress: () => void, type?: 'primary'|'danger'|'warning'|'secondary', disabled?: boolean, loading?: boolean }) => {
   const bgStyles = {
-    primary: { backgroundColor: '#0ea5e9', borderColor: '#0284c7' },
-    danger: { backgroundColor: '#ef4444', borderColor: '#b91c1c' },
-    warning: { backgroundColor: '#f59e0b', borderColor: '#d97706' },
-    secondary: { backgroundColor: '#334155', borderColor: '#1e293b' }
+    primary: { backgroundColor: '#e8a417', borderColor: '#b5790f' },
+    danger: { backgroundColor: '#dc4a45', borderColor: '#a5302c' },
+    warning: { backgroundColor: '#cf6414', borderColor: '#9c4a0e' },
+    secondary: { backgroundColor: '#2a2317', borderColor: '#3a3120' }
   };
+  const fg = type === 'primary' ? '#2a1c02' : '#fff';
   return (
-    <TouchableOpacity 
-      style={[styles.button, bgStyles[type], (disabled || loading) && { opacity: 0.6 }]} 
+    <TouchableOpacity
+      style={[styles.button, bgStyles[type], (disabled || loading) && { opacity: 0.6 }]}
       onPress={onPress}
       disabled={disabled || loading}
       activeOpacity={0.7}
     >
       {loading
-        ? <ActivityIndicator color="#fff" />
-        : <Text style={styles.buttonText}>{title}</Text>}
+        ? <ActivityIndicator color={fg} />
+        : <Text style={[styles.buttonText, { color: fg }]}>{title}</Text>}
     </TouchableOpacity>
   );
 };
@@ -39,6 +40,17 @@ const DstButton = ({ title, onPress, type = 'primary', disabled = false, loading
 // the catalog response omits the consumable template ids.
 const DEFAULT_KIT_FUEL_TEMPLATE = 'FuelCanister_Large';
 const DEFAULT_KIT_TORCH_TEMPLATE = 'RepairTool5';
+
+// Friendly map names — mirrors webui/src/util/mapLabel.ts so the mobile toggles
+// read the same as the desktop Map Spin-Up page.
+const MAP_LABELS: Record<string, string> = {
+  Survival_1: 'Hagga Basin',
+  Overmap: 'Overmap',
+  SH_Arrakeen: 'Arrakeen',
+  SH_HarkoVillage: 'Harko Village',
+  DeepDesert_1: 'Deep Desert',
+};
+const mapLabel = (m: string) => MAP_LABELS[m] || (m || '').replace(/^SH_/, '').replace(/_/g, ' ');
 
 export default function App() {
   const [permission, requestPermission] = useCameraPermissions();
@@ -480,10 +492,21 @@ export default function App() {
     clearServer();
   };
 
-  if (loading) return <View style={styles.container}><ActivityIndicator size="large" color="#0ea5e9" /></View>;
+  const confirmDisconnect = () => {
+    Alert.alert(
+      'Disconnect from server?',
+      'You\'ll need to re-scan the pairing code to reconnect.',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        { text: 'Disconnect', style: 'destructive', onPress: disconnect },
+      ]
+    );
+  };
+
+  if (loading) return <View style={styles.container}><ActivityIndicator size="large" color="#e8a417" /></View>;
 
   if (!serverInfo) {
-    if (!permission) return <View style={styles.container}><ActivityIndicator size="large" color="#0ea5e9" /></View>;
+    if (!permission) return <View style={styles.container}><ActivityIndicator size="large" color="#e8a417" /></View>;
     if (!permission.granted) {
       return (
         <View style={styles.container}>
@@ -539,7 +562,7 @@ export default function App() {
           <View style={styles.cardHeaderRow}>
             <Text style={styles.cardTitle}>Give: {selectedItemTemplate.name}</Text>
             <TouchableOpacity onPress={() => setSelectedItemTemplate(null)}>
-              <Text style={{ color: '#0ea5e9', fontWeight: 'bold' }}>Back</Text>
+              <Text style={{ color: '#e8a417', fontWeight: 'bold' }}>Back</Text>
             </TouchableOpacity>
           </View>
           
@@ -569,7 +592,7 @@ export default function App() {
         <View style={styles.cardHeaderRow}>
           <Text style={styles.cardTitle}>Give Item</Text>
           <TouchableOpacity onPress={() => { setCurrentView('player_detail'); setSearchQuery(''); }}>
-            <Text style={{ color: '#0ea5e9', fontWeight: 'bold' }}>Back</Text>
+            <Text style={{ color: '#e8a417', fontWeight: 'bold' }}>Back</Text>
           </TouchableOpacity>
         </View>
         <TextInput
@@ -603,12 +626,12 @@ export default function App() {
         <View style={styles.cardHeaderRow}>
           <Text style={styles.cardTitle}>Give Vehicle Kit</Text>
           <TouchableOpacity onPress={() => setCurrentView('player_detail')}>
-            <Text style={{ color: '#0ea5e9', fontWeight: 'bold' }}>Back</Text>
+            <Text style={{ color: '#e8a417', fontWeight: 'bold' }}>Back</Text>
           </TouchableOpacity>
         </View>
         <ScrollView style={{ flex: 1 }}>
           {!vehicleCatalog ? (
-            <ActivityIndicator size="small" color="#0ea5e9" style={{ marginTop: 20 }} />
+            <ActivityIndicator size="small" color="#e8a417" style={{ marginTop: 20 }} />
           ) : kitVehicles.length === 0 ? (
             <Text style={[styles.infoValue, { marginTop: 10 }]}>No vehicle kits available.</Text>
           ) : kitVehicles.map((v: any, idx: number) => {
@@ -626,7 +649,7 @@ export default function App() {
                     <Text style={styles.playerName}>{v.label}</Text>
                     <Text style={styles.playerSub}>{`${v.kit.length + v.unique.length} parts + fuel + torch`}</Text>
                   </View>
-                  {kitBusy && <ActivityIndicator size="small" color="#0ea5e9" />}
+                  {kitBusy && <ActivityIndicator size="small" color="#e8a417" />}
                 </View>
               </TouchableOpacity>
             );
@@ -643,7 +666,7 @@ export default function App() {
         <View style={styles.cardHeaderRow}>
           <Text style={styles.cardTitle}>Player: {selectedPlayer.name}</Text>
           <TouchableOpacity onPress={() => { setCurrentView('home'); setSelectedPlayer(null); }}>
-            <Text style={{ color: '#0ea5e9', fontWeight: 'bold' }}>Back to Home</Text>
+            <Text style={{ color: '#e8a417', fontWeight: 'bold' }}>Back to Home</Text>
           </TouchableOpacity>
         </View>
         
@@ -683,95 +706,90 @@ export default function App() {
   return (
     <ScrollView style={styles.container} contentContainerStyle={{ paddingBottom: 40 }} keyboardShouldPersistTaps="handled">
       <StatusBar barStyle="light-content" />
-      <Text style={styles.title}>DST Dashboard</Text>
-      <Text style={styles.subtitle}>Connected to {liveHost || (serverInfo.rendezvousBase ? 'your server' : apiHost(serverInfo))}</Text>
+      <View style={styles.topBar}>
+        <View style={{ flex: 1 }}>
+          <Text style={styles.brandTitle}>DST Dashboard</Text>
+          <Text style={styles.brandSubtitle} numberOfLines={1}>Connected to {liveHost || (serverInfo.rendezvousBase ? 'your server' : apiHost(serverInfo))}</Text>
+        </View>
+      </View>
       
       <View style={styles.card}>
-        <Text style={styles.cardTitle}>Server State</Text>
+        <View style={styles.heroHeader}>
+          <Text style={styles.heroLabel}>Server state</Text>
+          {serverState ? (
+            <View style={[styles.statusChip, { backgroundColor: serverState.bg?.state === 'running' ? '#123324' : '#3a2c0d', borderColor: serverState.bg?.state === 'running' ? '#1f6b4a' : '#6a5210' }]}>
+              <View style={[styles.statusDot, { backgroundColor: serverState.bg?.state === 'running' ? '#34d399' : '#e8a417' }]} />
+              <Text style={[styles.statusChipText, { color: serverState.bg?.state === 'running' ? '#34d399' : '#e8a417' }]}>{serverState.bg?.state ? (serverState.bg.state.charAt(0).toUpperCase() + serverState.bg.state.slice(1)) : 'Unknown'}</Text>
+            </View>
+          ) : (
+            <View style={[styles.statusChip, { backgroundColor: '#2a2008', borderColor: '#6a5210' }]}>
+              <ActivityIndicator size="small" color="#e8a417" />
+              <Text style={[styles.statusChipText, { color: '#e8a417', marginLeft: 6 }]}>Connecting…</Text>
+            </View>
+          )}
+        </View>
         {serverState ? (
           <>
-            <View style={styles.infoRow}>
-              <Text style={styles.infoLabel}>Status:</Text>
-              <View style={[styles.badge, { backgroundColor: serverState.bg?.state === 'running' ? '#10b981' : '#f59e0b' }]}>
-                <Text style={styles.badgeText}>{serverState.bg?.state?.toUpperCase() || 'UNKNOWN'}</Text>
-              </View>
-            </View>
-            <View style={styles.infoRow}>
-              <Text style={styles.infoLabel}>Uptime:</Text>
-              <Text style={styles.infoValue}>{serverState.bg?.info?.uptime || 'N/A'}</Text>
-            </View>
-            <View style={styles.infoRow}>
-              <Text style={styles.infoLabel}>Players:</Text>
-              <Text style={styles.infoValue}>{(() => {
+            <View style={styles.heroRow}>
+              <Text style={styles.heroNumber}>{(() => {
                 // Funcom's `battlegroup status` lists one row per game server
                 // (Overmap = Deep Desert, Survival_1 = Hagga, ...). Sum the
                 // per-row player counts so a connected player is visible
                 // regardless of which map they're on; picking gameServers[0]
                 // alphabetized to Overmap and missed anyone on Survival_1.
                 const rows = serverState.bg?.gameServers || [];
-                const total = rows.reduce((acc: number, r: any) => acc + (parseInt(r?.players, 10) || 0), 0);
-                return String(total);
+                return String(rows.reduce((acc: number, r: any) => acc + (parseInt(r?.players, 10) || 0), 0));
               })()}</Text>
+              <Text style={styles.heroUnit}>players online</Text>
+            </View>
+            <View style={styles.heroStrip}>
+              <View style={styles.heroStat}>
+                <Text style={styles.heroStatLabel}>Uptime</Text>
+                <Text style={styles.heroStatValue}>{serverState.bg?.info?.uptime || 'N/A'}</Text>
+              </View>
+              <View style={styles.heroStat}>
+                <Text style={styles.heroStatLabel}>Maps up</Text>
+                <Text style={styles.heroStatValue}>{`${maps.filter((m: any) => m.enabled).length} of ${maps.length}`}</Text>
+              </View>
             </View>
           </>
         ) : (
-          <View style={[styles.alertBox, { backgroundColor: '#1e293b', borderColor: '#f59e0b' }]}>
-            <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 6 }}>
-              <ActivityIndicator size="small" color="#f59e0b" style={{ marginRight: 8 }} />
-              <Text style={{ color: '#fcd34d', fontSize: 15, fontWeight: '700' }}>Connecting…</Text>
-            </View>
-            <Text style={[styles.alertText, { color: '#cbd5e1' }]}>
+          <View style={[styles.alertBox, { backgroundColor: '#1f1a11', borderColor: '#6a5210', marginTop: 14, marginBottom: 0 }]}>
+            <Text style={[styles.alertText, { color: '#d8cfbb' }]}>
               Waiting for your server — it may be starting up or briefly offline. The app keeps retrying and reconnects automatically, so there&apos;s nothing to do and no need to re-scan.
             </Text>
             {connDiag ? (
-              <Text selectable style={{ color: '#94a3b8', fontSize: 11, fontFamily: 'Courier', marginTop: 8 }}>{connDiag}</Text>
+              <Text selectable style={{ color: '#8f8570', fontSize: 11, fontFamily: 'Courier', marginTop: 8 }}>{connDiag}</Text>
             ) : null}
           </View>
         )}
         
-        <View style={{ marginTop: 20 }}>
-          <DstButton title="Refresh Status" onPress={fetchStatus} />
-        </View>
-        <View style={{ marginTop: 15 }}>
-          <DstButton title="Restart Battlegroup" type="warning" onPress={restartServer} />
-        </View>
-        <View style={{ marginTop: 15 }}>
-          <DstButton title="Reboot All" type="danger" onPress={rebootStack} />
+        <View style={styles.quickRow}>
+          <TouchableOpacity style={[styles.quickBtn, { backgroundColor: '#2a2008', borderColor: '#6a5210' }]} onPress={fetchStatus} activeOpacity={0.7}>
+            <Text style={[styles.quickBtnText, { color: '#e8a417' }]}>Refresh</Text>
+          </TouchableOpacity>
+          <TouchableOpacity style={[styles.quickBtn, { backgroundColor: '#2c1e08', borderColor: '#9c4a0e' }]} onPress={restartServer} activeOpacity={0.7}>
+            <Text style={[styles.quickBtnText, { color: '#f0913f' }]}>Restart</Text>
+          </TouchableOpacity>
+          <TouchableOpacity style={[styles.quickBtn, { backgroundColor: '#2c1414', borderColor: '#6e2020' }]} onPress={rebootStack} activeOpacity={0.7}>
+            <Text style={[styles.quickBtnText, { color: '#f0736f' }]}>Reboot</Text>
+          </TouchableOpacity>
         </View>
       </View>
 
-      <View style={[styles.card, { marginTop: 20 }]}>
-        <View style={styles.cardHeaderRow}>
-          <Text style={[styles.cardTitle, {marginBottom: 0}]}>Players Online ({players.length})</Text>
-          <TouchableOpacity onPress={fetchPlayers}>
-            <Text style={{ color: '#0ea5e9', fontWeight: 'bold' }}>Refresh</Text>
-          </TouchableOpacity>
-        </View>
-        {loadingPlayers ? (
-          <ActivityIndicator size="small" color="#0ea5e9" style={{marginTop: 15}} />
-        ) : players.length === 0 ? (
-          <Text style={[styles.infoValue, {marginTop: 10}]}>No players online.</Text>
-        ) : (
-          <View style={{marginTop: 10}}>
-            {players.map((p, idx) => (
-              <TouchableOpacity key={idx} style={styles.playerRow} onPress={() => { setSelectedPlayer(p); setCurrentView('player_detail'); }}>
-                <Text style={styles.playerName}>{p.name || 'Unknown'}</Text>
-                <Text style={styles.playerSub}>{p.faction_name || 'No Faction'}</Text>
-              </TouchableOpacity>
-            ))}
-          </View>
-        )}
-      </View>
+      <TouchableOpacity onPress={confirmDisconnect} style={styles.disconnectBtn} activeOpacity={0.7}>
+        <Text style={styles.disconnectBtnText}>Disconnect</Text>
+      </TouchableOpacity>
 
       <View style={[styles.card, { marginTop: 20 }]}>
         <View style={styles.cardHeaderRow}>
           <Text style={[styles.cardTitle, {marginBottom: 0}]}>Map Spin-Up</Text>
           <TouchableOpacity onPress={fetchMaps}>
-            <Text style={{ color: '#0ea5e9', fontWeight: 'bold' }}>Refresh</Text>
+            <Text style={{ color: '#e8a417', fontWeight: 'bold' }}>Refresh</Text>
           </TouchableOpacity>
         </View>
         {loadingMaps ? (
-          <ActivityIndicator size="small" color="#0ea5e9" style={{marginTop: 15}} />
+          <ActivityIndicator size="small" color="#e8a417" style={{marginTop: 15}} />
         ) : filteredMaps.length === 0 ? (
           <Text style={[styles.infoValue, {marginTop: 10}]}>Maps not available.</Text>
         ) : (
@@ -779,7 +797,7 @@ export default function App() {
             {filteredMaps.map((m, idx) => (
               <DstButton 
                 key={idx} 
-                title={`${m.map.replace('SH_', '')} (${m.enabled ? 'ON' : 'OFF'})`} 
+                title={`${mapLabel(m.map)} (${m.enabled ? 'ON' : 'OFF'})`} 
                 type={m.enabled ? 'primary' : 'secondary'} 
                 onPress={() => toggleMap(m.map, m.enabled)} 
                 disabled={mapCooldowns[m.map]}
@@ -803,34 +821,75 @@ export default function App() {
         </View>
       )}
 
-      <View style={{ marginTop: 40, marginBottom: 40 }}>
-        <DstButton title="Disconnect" type="secondary" onPress={disconnect} />
+      <View style={[styles.card, { marginTop: 20 }]}>
+        <View style={styles.cardHeaderRow}>
+          <Text style={[styles.cardTitle, {marginBottom: 0}]}>Players Online ({players.length})</Text>
+          <TouchableOpacity onPress={fetchPlayers}>
+            <Text style={{ color: '#e8a417', fontWeight: 'bold' }}>Refresh</Text>
+          </TouchableOpacity>
+        </View>
+        {loadingPlayers ? (
+          <ActivityIndicator size="small" color="#e8a417" style={{marginTop: 15}} />
+        ) : players.length === 0 ? (
+          <Text style={[styles.infoValue, {marginTop: 10}]}>No players online.</Text>
+        ) : (
+          <View style={{marginTop: 10}}>
+            {players.map((p, idx) => (
+              <TouchableOpacity key={idx} style={styles.playerRow} onPress={() => { setSelectedPlayer(p); setCurrentView('player_detail'); }}>
+                <Text style={styles.playerName}>{p.name || 'Unknown'}</Text>
+                <Text style={styles.playerSub}>{p.faction_name || 'No Faction'}</Text>
+              </TouchableOpacity>
+            ))}
+          </View>
+        )}
       </View>
+
+      <View style={{ height: 8 }} />
     </ScrollView>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, padding: 20, paddingTop: 60, backgroundColor: '#0f172a' },
-  cameraContainer: { width: '100%', aspectRatio: 1, borderRadius: 16, overflow: 'hidden', borderWidth: 2, borderColor: '#334155', backgroundColor: '#000' },
+  container: { flex: 1, padding: 20, paddingTop: 60, backgroundColor: '#15110b' },
+  cameraContainer: { width: '100%', aspectRatio: 1, borderRadius: 16, overflow: 'hidden', borderWidth: 2, borderColor: '#3a3120', backgroundColor: '#000' },
   camera: { flex: 1 },
-  title: { fontSize: 28, fontWeight: '800', textAlign: 'center', marginBottom: 6, color: '#f8fafc', letterSpacing: -0.5 },
-  subtitle: { fontSize: 15, color: '#94a3b8', textAlign: 'center', marginBottom: 24 },
-  card: { backgroundColor: '#1e293b', padding: 24, borderRadius: 16, borderWidth: 1, borderColor: '#334155', shadowColor: '#000', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.3, shadowRadius: 8, elevation: 5 },
+  title: { fontSize: 28, fontWeight: '800', textAlign: 'center', marginBottom: 6, color: '#f7f1e6', letterSpacing: -0.5 },
+  subtitle: { fontSize: 15, color: '#b3a892', textAlign: 'center', marginBottom: 24 },
+  card: { backgroundColor: '#211a0f', padding: 24, borderRadius: 16, borderWidth: 1, borderColor: '#332b1c', shadowColor: '#000', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.3, shadowRadius: 8, elevation: 5 },
   cardHeaderRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 15 },
-  cardTitle: { fontSize: 20, fontWeight: '700', color: '#f8fafc' },
+  cardTitle: { fontSize: 20, fontWeight: '700', color: '#f7f1e6' },
   infoRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16 },
-  infoLabel: { fontSize: 16, color: '#cbd5e1', fontWeight: '500' },
-  infoValue: { fontSize: 16, color: '#f8fafc', fontWeight: '600' },
-  playerRow: { paddingVertical: 12, borderBottomWidth: 1, borderBottomColor: '#334155' },
-  playerName: { fontSize: 16, color: '#f8fafc', fontWeight: 'bold' },
-  playerSub: { fontSize: 13, color: '#94a3b8', marginTop: 2 },
-  catalogRow: { paddingVertical: 16, borderBottomWidth: 1, borderBottomColor: '#334155', backgroundColor: '#1e293b', paddingHorizontal: 16, borderRadius: 8, marginBottom: 8 },
+  infoLabel: { fontSize: 16, color: '#d8cfbb', fontWeight: '500' },
+  infoValue: { fontSize: 16, color: '#f7f1e6', fontWeight: '600' },
+  playerRow: { paddingVertical: 12, borderBottomWidth: 1, borderBottomColor: '#2c2416' },
+  playerName: { fontSize: 16, color: '#f7f1e6', fontWeight: 'bold' },
+  playerSub: { fontSize: 13, color: '#8f8570', marginTop: 2 },
+  catalogRow: { paddingVertical: 16, borderBottomWidth: 1, borderBottomColor: '#2c2416', backgroundColor: '#211a0f', paddingHorizontal: 16, borderRadius: 8, marginBottom: 8 },
   badge: { paddingHorizontal: 10, paddingVertical: 4, borderRadius: 6 },
   badgeText: { color: '#fff', fontSize: 12, fontWeight: 'bold' },
-  input: { borderWidth: 1, borderColor: '#334155', padding: 14, borderRadius: 8, marginBottom: 12, backgroundColor: '#0f172a', color: '#f8fafc', fontSize: 16 },
+  input: { borderWidth: 1, borderColor: '#332b1c', padding: 14, borderRadius: 8, marginBottom: 12, backgroundColor: '#15110b', color: '#f7f1e6', fontSize: 16 },
   button: { paddingVertical: 14, borderRadius: 10, alignItems: 'center', justifyContent: 'center', borderWidth: 1, shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.2, shadowRadius: 4, elevation: 3 },
   buttonText: { color: '#fff', fontSize: 16, fontWeight: '700', letterSpacing: 0.5 },
-  alertBox: { backgroundColor: '#1e293b', padding: 16, borderRadius: 8, borderWidth: 1, borderColor: '#3b82f6', marginBottom: 20 },
-  alertText: { color: '#cbd5e1', fontSize: 14, lineHeight: 20 }
+  alertBox: { backgroundColor: '#1f1a11', padding: 16, borderRadius: 8, borderWidth: 1, borderColor: '#6a5210', marginBottom: 20 },
+  alertText: { color: '#d8cfbb', fontSize: 14, lineHeight: 20 },
+  heroHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
+  heroLabel: { fontSize: 13, color: '#e8a417', fontWeight: '600', letterSpacing: 0.3 },
+  statusChip: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 10, paddingVertical: 4, borderRadius: 20, borderWidth: 1 },
+  statusDot: { width: 7, height: 7, borderRadius: 4, marginRight: 6 },
+  statusChipText: { fontSize: 12, fontWeight: '700' },
+  heroRow: { flexDirection: 'row', alignItems: 'flex-end', marginTop: 14 },
+  heroNumber: { fontSize: 46, fontWeight: '800', color: '#f7f1e6', lineHeight: 46, letterSpacing: -1 },
+  heroUnit: { fontSize: 14, color: '#b3a892', marginLeft: 10, marginBottom: 7 },
+  heroStrip: { flexDirection: 'row', marginTop: 16, paddingTop: 14, borderTopWidth: 1, borderTopColor: '#2c2416', gap: 28 },
+  heroStat: {},
+  heroStatLabel: { fontSize: 12, color: '#8f8570', marginBottom: 3 },
+  heroStatValue: { fontSize: 16, color: '#f7f1e6', fontWeight: '600' },
+  quickRow: { flexDirection: 'row', gap: 10, marginTop: 20 },
+  quickBtn: { flex: 1, paddingVertical: 14, borderRadius: 12, borderWidth: 1, alignItems: 'center' },
+  quickBtnText: { fontSize: 14, fontWeight: '700', letterSpacing: 0.3 },
+  topBar: { flexDirection: 'row', alignItems: 'center', marginBottom: 20 },
+  brandTitle: { fontSize: 24, fontWeight: '800', color: '#f7f1e6', letterSpacing: -0.5 },
+  brandSubtitle: { fontSize: 13, color: '#b3a892', marginTop: 3 },
+  disconnectBtn: { marginTop: 20, paddingVertical: 13, borderRadius: 10, borderWidth: 1, borderColor: '#6e2020', backgroundColor: '#2c1414', alignItems: 'center' },
+  disconnectBtnText: { color: '#f0736f', fontSize: 15, fontWeight: '600' },
 });
