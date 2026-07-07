@@ -22,8 +22,11 @@ body:
         > SSH paths, Windows usernames, and config secrets are redacted before
         > the ZIP is written. The bundle includes a redacted **UserGame.ini /
         > UserEngine.ini snapshot** (with an automatic duplicate-section-header
-        > check) when the VM is reachable, and its `manifest.txt` lists what's
-        > inside and any sanitization warnings.
+        > check) and a **`vm-memory-pressure.txt`** probe (Funcom operator /
+        > Postgres restart counts + OOMKilled/exit-137 state and the VM's
+        > `free -h`) when the VM is reachable, and its `manifest.txt` lists
+        > what's inside, leads with any memory-pressure finding, and records any
+        > sanitization warnings.
 
         **✅ Do open an issue here** when the tool shows you a problem, e.g.:
         - The **Server Health** page shows the battlegroup as **Unknown** with
@@ -373,6 +376,32 @@ body:
         Gameplay Admin > Players: 5 rows, all names blank, all Unaligned
         Started after: character transfer to a separate game DB
         (Attached dst-diagnostics-*.zip — see gameplay-read-probe.txt)
+      render: shell
+    validations:
+      required: false
+
+  - type: textarea
+    id: mempressure_diag
+    attributes:
+      label: Battlegroup restarted off-schedule / ping surges under load (VM memory pressure)
+      description: |
+        If your battlegroup **restarted outside its scheduled time**, pods
+        cycle on their own, or you see **ping/lag spikes under load** even when
+        the host looks idle, this is usually the **VM running low on memory**:
+        the kubelet OOM-kills the Funcom operators (exit 137) and evicts
+        Postgres. DST now flags this itself — attach the diagnostic ZIP from
+        **Help → Create GitHub Issue + Save Logs** and see **`vm-memory-pressure.txt`**
+        (and the red banner at the top of **Server Health**).
+
+        In text, note: how much **RAM the VM has** (Hyper-V), whether Server
+        Health showed the red **"VM low on memory"** banner, and whether swap is
+        on (`free -h` in the bundle — `Swap: 0` is the pressure signature).
+
+        Leave blank if your bug isn't about off-schedule restarts / memory.
+      placeholder: |
+        Symptom: battlegroup restarted at ~06:09 and ~07:11 (schedule is 02:00)
+        Server Health banner: "VM low on memory — Funcom operators killed 34x"
+        VM RAM (Hyper-V): 24 GB. free -h in bundle showed Swap: 0
       render: shell
     validations:
       required: false

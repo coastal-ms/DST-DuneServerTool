@@ -17,3 +17,28 @@ export function buildDiagnosticBundle() {
     body: '{}',
   })
 }
+
+// VM memory-pressure finding for the Server Health red banner. Read-only,
+// cached 60s server-side. `ok=false` (VM unreachable / probe failed) or
+// `pressure=false` (healthy) => the banner stays hidden.
+export interface VmMemoryPressure {
+  ok: boolean
+  pressure: boolean
+  severity: 'none' | 'warn' | 'critical'
+  headline: string
+  warnings: string[]
+  message?: string
+  maxRestarts?: number
+  oomKills?: number
+  mem?: {
+    availK: number | null
+    totalK: number | null
+    availPct: number | null
+    swapZero: boolean
+    lowAvailable: boolean
+  }
+}
+
+export function getVmMemoryPressure() {
+  return api<VmMemoryPressure>('/api/diagnostics/vm-memory')
+}
