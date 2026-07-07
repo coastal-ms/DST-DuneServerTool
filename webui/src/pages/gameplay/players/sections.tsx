@@ -2940,8 +2940,10 @@ function StarterClassForm({ busy, onSubmit }: {
 }
 
 // Update Tags — Remove is a dropdown of the player's CURRENT tags (you can't
-// remove one they don't have); Add accepts a new tag, suggesting existing tags
-// via a datalist. Avoids the comma-separated raw-text boxes.
+// remove one they don't have); Add uses the catalog-backed TagPicker typeahead
+// (same as the main Tags panel) so real tags like Journey.LandsraadContractsUnlocked
+// surface as you type. Submit stays on the DELTA path (add[]/remove[]) so the
+// game's server-side unlock triggers fire. Avoids the comma-separated raw-text boxes.
 function UpdateTagsForm({ busy, accountId, demo, onSubmit }: {
   busy: boolean; accountId: number; demo: boolean; onSubmit: (add: string[], remove: string[]) => void
 }) {
@@ -2974,11 +2976,9 @@ function UpdateTagsForm({ busy, accountId, demo, onSubmit }: {
       </div>
       <div>
         <label className="block text-[11px] uppercase tracking-wider text-text-dim mb-1">Add tag</label>
-        <input list="known-tags" value={addTag} placeholder="vip" disabled={busy}
-          onChange={e => setAddTag(e.target.value)} className={formSelectCls} />
-        <datalist id="known-tags">
-          {['vip', 'tester', 'banned', 'verified', 'staff'].map(t => <option key={t} value={t} />)}
-        </datalist>
+        <TagPicker value={addTag} onChange={setAddTag} onPick={t => setAddTag(t)}
+          onEnterRaw={() => setAddTag(addTag.trim())} exclude={current} disabled={busy}
+          placeholder="Search tags to add by name or id…" />
       </div>
       <div>
         <label className="block text-[11px] uppercase tracking-wider text-text-dim mb-1">Remove tag</label>
