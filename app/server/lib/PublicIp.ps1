@@ -837,32 +837,108 @@ sudo kubectl patch node "$NODE" --subresource=status --type=merge -p "{\"status\
 sudo kubectl get node "$NODE" -o wide
 
 step nat
-cat > /tmp/dune-iptables.start <<EOF
-#!/bin/sh
-# Restore DNAT rules for Dune Awakening server on boot.
-
-NEW_IP="$NEW_IP"
-VM_IP="$VM_IP"
-GAME_PORTS="7777:7810"
-RABBIT_PORT="31982"
+# Write the boot script. Bake NEW_IP (public) + VM_IP (LAN) at the top via a
+# tiny prelude, then a QUOTED heredoc for the body so nothing needs \$ escaping
+# and the bind-detection logic stays readable. The game-UDP bridge here is
+# bind-detected (mirrors dune-dnat-watch.sh) -- NEVER add it unconditionally:
+# on a host whose game binds 0.0.0.0/the LAN IP a VM_IP->public rewrite
+# black-holes remote AND same-LAN joins (the v12.16.9 regression).
+{
+  printf '#!/bin/sh\n'
+  printf '# Restore DNAT rules for Dune Awakening server on boot.\n'
+  printf '# NEW_IP (public) and VM_IP (LAN) are baked in by the Public IP apply.\n'
+  printf 'NEW_IP=%s\n' "$NEW_IP"
+  printf 'VM_IP=%s\n' "$VM_IP"
+  cat <<'DUNEBOOT'
+RABBIT_PORT=31982
+GAME_PORTS=7777:7810
+GAME_LO=7777
+GAME_HI=7810
+LOG=/var/log/dune-dnat-watch.log
+ts() { date "+%Y-%m-%d %H:%M:%S"; }
+log() { echo "[$(ts)] boot: $*" >> "$LOG" 2>/dev/null; }
 
 sleep 30
 
-iptables -t nat -I PREROUTING 1 -d "\$VM_IP" -p udp --dport "\$GAME_PORTS" -j DNAT --to-destination "\$NEW_IP"
-
-POD_IP=\$(k3s kubectl get endpoints --all-namespaces -o wide 2>/dev/null | grep mq-game | awk '{print \$3}' | cut -d, -f1 | cut -d: -f1)
-if [ -n "\$POD_IP" ]; then
-    iptables -t nat -I PREROUTING 1 -d "\$NEW_IP" -p tcp --dport "\$RABBIT_PORT" -j DNAT --to-destination "\${POD_IP}:5672"
+# RabbitMQ login: public:31982/tcp -> mq-game pod:5672 (idempotent).
+POD_IP=$(k3s kubectl get endpoints --all-namespaces -o wide 2>/dev/null | grep mq-game | awk '{print $3}' | cut -d, -f1 | cut -d: -f1 | head -1)
+if [ -n "$POD_IP" ]; then
+    iptables -t nat -C PREROUTING -d "$NEW_IP" -p tcp --dport "$RABBIT_PORT" -j DNAT --to-destination "${POD_IP}:5672" 2>/dev/null || \
+      iptables -t nat -I PREROUTING 1 -d "$NEW_IP" -p tcp --dport "$RABBIT_PORT" -j DNAT --to-destination "${POD_IP}:5672"
 fi
-EOF
+
+# Game-UDP bridge: <VM_IP>:7777-7810/udp -> NEW_IP, ONLY when the game binds the
+# public IP and NOT the LAN IP/wildcard (IPv4-only detection). Mirrors
+# dune-dnat-watch.sh; see that file for the full rationale.
+udp_listeners() {
+    _o=""
+    if command -v ss >/dev/null 2>&1; then _o=$(ss -H -u -l -n -4 2>/dev/null | awk '{print $4}'); fi
+    [ -n "$_o" ] || _o=$(netstat -uln 2>/dev/null | awk '$1=="udp"{print $4}')
+    printf '%s\n' "$_o"
+}
+_pub=0; _lanwild=0
+for _e in $(udp_listeners); do
+    _port=${_e##*:}; _addr=${_e%:*}
+    case "$_port" in ''|*[!0-9]*) continue ;; esac
+    { [ "$_port" -ge "$GAME_LO" ] && [ "$_port" -le "$GAME_HI" ]; } 2>/dev/null || continue
+    case "$_addr" in
+        "$NEW_IP")               _pub=1 ;;
+        "$VM_IP"|0.0.0.0|'*'|'') _lanwild=1 ;;
+    esac
+done
+if [ "$_lanwild" = 1 ]; then
+    iptables -t nat -S PREROUTING 2>/dev/null | grep -- "--dport ${GAME_PORTS}" | grep -- '-j DNAT' | sed 's/^-A/-D/' | while read -r _s; do iptables -t nat $_s 2>/dev/null && log "removed game-UDP bridge (game binds LAN/wildcard): $_s"; done
+elif [ "$_pub" = 1 ]; then
+    if ! iptables -t nat -C PREROUTING -d "$VM_IP" -p udp --dport "$GAME_PORTS" -j DNAT --to-destination "$NEW_IP" 2>/dev/null; then
+        iptables -t nat -S PREROUTING 2>/dev/null | grep -- "--dport ${GAME_PORTS}" | grep -- '-j DNAT' | sed 's/^-A/-D/' | while read -r _s; do iptables -t nat $_s 2>/dev/null; done
+        iptables -t nat -I PREROUTING 1 -d "$VM_IP" -p udp --dport "$GAME_PORTS" -j DNAT --to-destination "$NEW_IP"
+        log "installed game-UDP bridge: ${VM_IP}:${GAME_PORTS} -> ${NEW_IP}"
+    fi
+fi
+DUNEBOOT
+} > /tmp/dune-iptables.start
 sudo install -m 0755 /tmp/dune-iptables.start /etc/local.d/dune-iptables.start
 rm -f /tmp/dune-iptables.start
 sh -n /etc/local.d/dune-iptables.start
-# Strip stale game-port DNAT rules that point at an OLD public IP (not NEW_IP).
-sudo iptables -t nat -S PREROUTING 2>/dev/null | grep -- '--dport 7777:7810' | grep -v -- "--to-destination $NEW_IP" | sed 's/^-A /-D /' | while read -r r; do sudo iptables -t nat $r 2>/dev/null || true; done
 MQ_IP=$(sudo kubectl get endpoints --all-namespaces -o wide 2>/dev/null | grep mq-game | awk '{print $3}' | cut -d, -f1 | cut -d: -f1 | head -1)
-sudo iptables -t nat -C PREROUTING -d "$VM_IP" -p udp --dport 7777:7810 -j DNAT --to-destination "$NEW_IP" 2>/dev/null || sudo iptables -t nat -I PREROUTING 1 -d "$VM_IP" -p udp --dport 7777:7810 -j DNAT --to-destination "$NEW_IP"
 if [ -n "$MQ_IP" ]; then sudo iptables -t nat -C PREROUTING -d "$NEW_IP" -p tcp --dport 31982 -j DNAT --to-destination "${MQ_IP}:5672" 2>/dev/null || sudo iptables -t nat -I PREROUTING 1 -d "$NEW_IP" -p tcp --dport 31982 -j DNAT --to-destination "${MQ_IP}:5672"; fi
+# Game-UDP bridge (bind-detected; mirrors /etc/local.d/dune-iptables.start &
+# dune-dnat-watch.sh). Install <VM_IP>:7777-7810/udp -> NEW_IP ONLY when the game
+# binds the PUBLIC IP and NOT the LAN IP/wildcard, so a same-LAN / self join is
+# never black-holed (the v12.16.9 regression). On a re-apply/repair the game is
+# already bound to the current public IP, so this fixes an affected box at once;
+# otherwise the cron watchdog installs it within 60s once the game rebinds.
+GBLO=7777; GBHI=7810; GBPORTS=7777:7810
+gb_listeners() {
+  _o=""
+  if command -v ss >/dev/null 2>&1; then _o=$(ss -H -u -l -n -4 2>/dev/null | awk '{print $4}'); fi
+  [ -n "$_o" ] || _o=$(netstat -uln 2>/dev/null | awk '$1=="udp"{print $4}')
+  printf '%s\n' "$_o"
+}
+gb_pub=0; gb_lanwild=0
+for gb_e in $(gb_listeners); do
+  gb_port=${gb_e##*:}; gb_addr=${gb_e%:*}
+  case "$gb_port" in ''|*[!0-9]*) continue;; esac
+  { [ "$gb_port" -ge "$GBLO" ] && [ "$gb_port" -le "$GBHI" ]; } 2>/dev/null || continue
+  case "$gb_addr" in
+    "$NEW_IP")               gb_pub=1;;
+    "$VM_IP"|0.0.0.0|'*'|'') gb_lanwild=1;;
+  esac
+done
+if [ "$gb_lanwild" = 1 ]; then
+  echo "game-UDP bridge: game binds LAN/wildcard -> ensuring absent (bridge would black-hole)"
+  sudo iptables -t nat -S PREROUTING 2>/dev/null | grep -- "--dport ${GBPORTS}" | grep -- '-j DNAT' | sed 's/^-A/-D/' | while read -r gb_s; do sudo iptables -t nat $gb_s 2>/dev/null || true; done
+elif [ "$gb_pub" = 1 ]; then
+  if sudo iptables -t nat -C PREROUTING -d "$VM_IP" -p udp --dport "$GBPORTS" -j DNAT --to-destination "$NEW_IP" 2>/dev/null; then
+    echo "game-UDP bridge: already correct (${VM_IP}:${GBPORTS} -> ${NEW_IP})"
+  else
+    sudo iptables -t nat -S PREROUTING 2>/dev/null | grep -- "--dport ${GBPORTS}" | grep -- '-j DNAT' | sed 's/^-A/-D/' | while read -r gb_s; do sudo iptables -t nat $gb_s 2>/dev/null || true; done
+    sudo iptables -t nat -I PREROUTING 1 -d "$VM_IP" -p udp --dport "$GBPORTS" -j DNAT --to-destination "$NEW_IP" || echo "game-UDP bridge: insert failed (non-fatal)"
+    echo "game-UDP bridge: installed ${VM_IP}:${GBPORTS} -> ${NEW_IP} (game binds public IP only)"
+  fi
+else
+  echo "game-UDP bridge: bind indeterminate (pods not up?); leaving rules unchanged"
+fi
 echo "NETWORK_DONE"
 '@
             $steps.Add((New-DunePublicIpStepResult 'vm-network' 'Update VM network, settings.conf, K3s, NAT' 'running' 'Applying network + persistent-config changes over SSH.')) | Out-Null
