@@ -1105,12 +1105,15 @@ function Invoke-DuneDnatWatchdogInstall {
     # the VM (base64 over an ssh exec channel — no scp/sftp dependency), run it
     # once with sudo, remove it. The installer writes /usr/local/bin/dune-dnat-watch.sh
     # plus a 1-minute root cron entry so the RabbitMQ (public:31982 -> mq-game pod)
-    # DNAT rule self-heals after a pod-only battlegroup restart -- which the boot
-    # script /etc/local.d/dune-iptables.start misses because it only re-derives the
-    # pod IP at boot. Without this, a pod restart leaves the RabbitMQ rule pointing
-    # at a dead pod IP and remote players hang on "Connecting" until the next
-    # reboot (observed 2026-06-23). The installer also retires a former game-port
-    # UDP rule (VM_IP:7777-7810 -> public) that could hairpin a same-LAN join.
+    # DNAT rule AND the game-UDP bridge (VM-LAN-IP:7777-7810 -> public IP) self-heal
+    # after a pod-only battlegroup restart -- which the boot script
+    # /etc/local.d/dune-iptables.start misses because it only re-derives at boot.
+    # Without this, a pod restart leaves the RabbitMQ rule pointing at a dead pod IP
+    # (players hang on "Connecting") or drops the game bridge (remote players P34)
+    # until the next reboot (observed 2026-06-23). The game bridge is BIND-DETECTED:
+    # the watchdog installs it only when the game binds the public IP and NOT the
+    # LAN IP/wildcard, and removes it otherwise, so it never black-holes a same-LAN
+    # / self join the way the unconditional rule removed in v12.16.9 did.
     #
     # ALL persistence (the watchdog file + cron line) lives in the staged POSIX-sh
     # script, never in this app — so the packaged installer carries no
@@ -1147,7 +1150,7 @@ function Invoke-DuneDnatWatchdogInstall {
                     -i "$sshKey" "$sshUser@$Ip" `
                     "sudo -n sh $remoteTmp; rc=`$?; rm -f $remoteTmp; exit `$rc" 2>&1
     if (($runOut -join "`n") -match 'DUNE_DNAT_WATCH_OK') {
-        Write-Host "  [$Phase] DNAT self-heal watchdog installed/refreshed — RabbitMQ login port auto-recovers after pod restarts." -ForegroundColor DarkGray
+        Write-Host "  [$Phase] DNAT self-heal watchdog installed/refreshed — RabbitMQ login + game-UDP bridge auto-recover after pod restarts." -ForegroundColor DarkGray
     } else {
         Write-Host "  [$Phase] DNAT watchdog install reported a problem (non-fatal): $runOut" -ForegroundColor DarkYellow
     }
