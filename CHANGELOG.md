@@ -15,6 +15,8 @@ here cover everything those tags shipped.
 
 ### Fixed
 
+- **The tag editor's "Add" button now works for custom tags not in the built-in catalog.** When you typed a tag the catalog didn't recognise, the picker said *"No known tags match … Press Add to use it anyway"* — but "Add" was just static text with nothing to click, so the only way to actually add a custom tag was to press Enter (undiscoverable). The picker now shows a real, clickable **Add "&lt;your tag&gt;"** row whenever your text matches no catalog entry, so off-catalog tags (e.g. a one-off `Cosmetic.*` marker) can be added the same way as catalogued ones.
+
 - **The mobile/remote "Friend Helper" bridge no longer flashes a console window on the desktop every couple of minutes.** The bridge's background service is kept alive by a self-healing supervisor loop plus an at-sign-in task trigger, but the installer *also* registered a **2-minute keepalive** trigger as a backstop in case the supervisor process itself was killed. In an interactive Windows session, each keepalive fire relaunched the hidden `wscript -> pwsh` helper, and even the window-hidden shim briefly allocates a console host that could momentarily flash on screen. That keepalive trigger has been removed: the supervisor still relaunches the bridge daemon within a few seconds if it crashes, and the at-sign-in trigger re-establishes the supervisor after every reboot / re-login, so the bridge stays just as reliable — without the periodic flash. Existing installs pick up the fix on their next update; the live scheduled task can also be corrected in place.
 
 ## [12.18.1] - 2026-07-07
