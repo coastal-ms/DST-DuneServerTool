@@ -24,7 +24,7 @@ import {
   setItemDurability, setItemStack, setItemWater,
   resetAllKeystones, resetAllSpecs, resetJourney, resetProgressionLive, resetSpec,
   restoreDestroyed,
-  setFactionTier, setPlayerTags, setSkillPoints,
+  setFactionTier, setSkillPoints,
   setStarterClass, teleportToPlayer, teleportToLocation, setRespawn, getTeleportDestinations, getPlayers, updatePlayerTags, wipeCodex, wipeJourney, resetFaction, snapshotBuilds, getFreshStartSnapshots, restoreBuilds, grantAllSkills,
   chatWhisper, isValidTemplateId, getItemCatalog, getCosmeticsCatalog, type CosmeticEntry,
   parseTcnoPackageText,
@@ -303,11 +303,15 @@ function SpecRow({ name, track, canWrite, busy, onGrantMax, onReset, onSetLevel 
 }
 
 // ---------------------------------------------------------------------------
-// Tags — chip list with add/remove + Save button. Writes the full set in
-// one POST (matches backend's replace semantics).
+// Tags — chip list with add/remove + Save button. Save computes the add/remove
+// delta versus the loaded set and calls update_player_tags (the stored-proc
+// path) so the game's server-side triggers fire (faction rep cascades, journey
+// hooks) — the same path the old "Update Tags" action used. Editing tags here
+// is now the single surface for tag changes.
 // ---------------------------------------------------------------------------
 export function TagsSection({ player, canWrite, demo, refreshKey, flash, onChanged }: SectionProps) {
   const [tags, setTags] = useState<string[]>([])
+  const [baseline, setBaseline] = useState<string[]>([])
   const [draft, setDraft] = useState('')
   const [filter, setFilter] = useState('')
   const [dirty, setDirty] = useState(false)
@@ -321,7 +325,7 @@ export function TagsSection({ player, canWrite, demo, refreshKey, flash, onChang
     let alive = true
     setLoading(true); setErr(null); setDirty(false)
     getPlayerTags(player.account_id, demo)
-      .then(r => { if (alive) { setTags(r.tags); setUnsupported(Boolean(r.unsupported)) } })
+      .then(r => { if (alive) { setTags(r.tags); setBaseline(r.tags); setUnsupported(Boolean(r.unsupported)) } })
       .catch(e => { if (alive) setErr(e instanceof Error ? e.message : String(e)) })
       .finally(() => { if (alive) setLoading(false) })
     return () => { alive = false }
@@ -346,10 +350,16 @@ export function TagsSection({ player, canWrite, demo, refreshKey, flash, onChang
   const remove = (t: string) => { setTags(tags.filter(x => x !== t)); setDirty(true) }
 
   const save = async () => {
+    const added = tags.filter(t => !baseline.includes(t))
+    const removed = baseline.filter(t => !tags.includes(t))
+    if (added.length === 0 && removed.length === 0) { setDirty(false); return }
     setBusy(true); setErr(null)
     try {
-      const r = await setPlayerTags(player.account_id, tags)
+      // Delta via update_player_tags stored proc so the game's server-side
+      // triggers fire (faction rep cascades, journey/landsraad unlock hooks).
+      const r = await updatePlayerTags(player.account_id, added, removed)
       flash(r.message, 'ok')
+      setBaseline(tags)
       setDirty(false)
       onChanged()
     } catch (e) {
@@ -572,7 +582,7 @@ interface ActionDef {
   offlineOnly?: boolean   // requires player to be offline (DB write the game caches in memory)
   experimental?: boolean  // unverified — may not take effect in-game; shown with an EXPERIMENTAL badge
   fields?: ActionField[]
-  custom?: 'give-item' | 'grant-reward' | 'whisper' | 'spawn-vehicle' | 'quick-presets' | 'vehicle-kit' | 'give-package' | 'cheat-scripts' | 'dev-scripts' | 'unlock-trainers' | 'unlock-mainquest' | 'complete-contract' | 'progression-unlock' | 'refuel-vehicle' | 'starter-class' | 'update-tags' | 'teleport-player' | 'teleport-location' | 'set-respawn' | 'reset-faction' | 'grant-cosmetic' | 'fresh-start'
+  custom?: 'give-item' | 'grant-reward' | 'whisper' | 'spawn-vehicle' | 'quick-presets' | 'vehicle-kit' | 'give-package' | 'cheat-scripts' | 'dev-scripts' | 'unlock-trainers' | 'unlock-mainquest' | 'complete-contract' | 'progression-unlock' | 'refuel-vehicle' | 'starter-class' | 'teleport-player' | 'teleport-location' | 'set-respawn' | 'reset-faction' | 'grant-cosmetic' | 'fresh-start'
   balance?: 'solari' | 'scrip' | 'intel'  // show the player's current balance read-only above the form
   confirm?: (p: Player) => string  // confirm message; if returns '' no prompt
   doubleConfirm?: boolean // also requires a typed "i acknowledge" prompt inside run()
@@ -751,8 +761,6 @@ const ACTIONS: ActionDef[] = [
     rowNote: 'Double confirmation required',
     confirm: p => `Set ${p.name}'s starter class?\n\n` +
       `This is the FIRST of two confirmations. If you continue, the next step asks you to type an acknowledgement before the change is applied. This cannot be undone.`,
-    run: () => Promise.resolve({ message: '' }) },
-  { id: 'tags-add-remove', group: 'Identity', label: 'Update Tags (add / remove)', icon: 'Tag', custom: 'update-tags',
     run: () => Promise.resolve({ message: '' }) },
   { id: 'delete-tutorials', group: 'Identity', label: 'Clear Tutorial Flags', icon: 'Eraser',
     run: p => deleteTutorials(p.account_id) },
@@ -1071,9 +1079,6 @@ function ActionRow({ def, player, busy, stats, open, danger, onToggle, runAction
                 }
                 return setStarterClass(player.account_id, job)
               })} />
-          ) : def.custom === 'update-tags' ? (
-            <UpdateTagsForm busy={busy} accountId={player.account_id} demo={false}
-              onSubmit={(add, remove) => runAction(def, () => updatePlayerTags(player.account_id, add, remove))} />
           ) : def.custom === 'teleport-player' ? (
             <TeleportPlayerForm busy={busy} self={player}
               onSubmit={(targetPawnId, targetName) => runAction(def, async () => {
@@ -2934,63 +2939,6 @@ function StarterClassForm({ busy, onSubmit }: {
       </select>
       <button className="btn-primary w-full" disabled={busy || !job} onClick={() => onSubmit(job, name)}>
         {busy ? <Icon name="Loader2" size={13} className="animate-spin" /> : <Icon name="Compass" size={13} />} Set Starter Class
-      </button>
-    </div>
-  )
-}
-
-// Update Tags — Remove is a dropdown of the player's CURRENT tags (you can't
-// remove one they don't have); Add uses the catalog-backed TagPicker typeahead
-// (same as the main Tags panel) so real tags like Journey.LandsraadContractsUnlocked
-// surface as you type. Submit stays on the DELTA path (add[]/remove[]) so the
-// game's server-side unlock triggers fire. Avoids the comma-separated raw-text boxes.
-function UpdateTagsForm({ busy, accountId, demo, onSubmit }: {
-  busy: boolean; accountId: number; demo: boolean; onSubmit: (add: string[], remove: string[]) => void
-}) {
-  const [current, setCurrent] = useState<string[]>([])
-  const [loading, setLoading] = useState(true)
-  const [err, setErr] = useState('')
-  const [addTag, setAddTag] = useState('')
-  const [removeTag, setRemoveTag] = useState('')
-  useEffect(() => {
-    let alive = true
-    setLoading(true); setErr('')
-    getPlayerTags(accountId, demo)
-      .then(r => { if (alive) setCurrent(r.tags || []) })
-      .catch(e => { if (alive) setErr(e instanceof Error ? e.message : String(e)) })
-      .finally(() => { if (alive) setLoading(false) })
-    return () => { alive = false }
-  }, [accountId, demo])
-  if (loading) return <Loading label="Loading tags…" />
-  if (err) return <ErrorBox msg={err} />
-  const add = addTag.trim()
-  const remove = removeTag.trim()
-  const canSubmit = !!add || !!remove
-  return (
-    <div className="space-y-2">
-      <div>
-        <label className="block text-[11px] uppercase tracking-wider text-text-dim mb-1">Current tags</label>
-        {current.length === 0
-          ? <div className="text-xs text-text-dim">None.</div>
-          : <div className="flex flex-wrap gap-1">{current.map(t => <span key={t} className="text-[11px] px-2 py-0.5 rounded-full bg-surface-3 text-text-muted">{t}</span>)}</div>}
-      </div>
-      <div>
-        <label className="block text-[11px] uppercase tracking-wider text-text-dim mb-1">Add tag</label>
-        <TagPicker value={addTag} onChange={setAddTag} onPick={t => setAddTag(t)}
-          onEnterRaw={() => setAddTag(addTag.trim())} exclude={current} disabled={busy}
-          placeholder="Search tags to add by name or id…" />
-      </div>
-      <div>
-        <label className="block text-[11px] uppercase tracking-wider text-text-dim mb-1">Remove tag</label>
-        <select value={removeTag} disabled={busy || current.length === 0} className={formSelectCls}
-          onChange={e => setRemoveTag(e.target.value)}>
-          <option value="">{current.length === 0 ? 'No tags to remove' : '— select —'}</option>
-          {current.map(t => <option key={t} value={t}>{t}</option>)}
-        </select>
-      </div>
-      <button className="btn-primary w-full" disabled={busy || !canSubmit}
-        onClick={() => onSubmit(add ? [add] : [], remove ? [remove] : [])}>
-        {busy ? <Icon name="Loader2" size={13} className="animate-spin" /> : <Icon name="Check" size={13} />} Update Tags
       </button>
     </div>
   )

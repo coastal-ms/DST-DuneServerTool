@@ -13,6 +13,10 @@ here cover everything those tags shipped.
 
 ## [Unreleased]
 
+### Changed
+
+- **Editing a player's tags now fires the game's server-side unlock triggers.** The **Tags** panel's **Save** previously overwrote the tag set with a raw delete-then-insert that bypassed the game's database triggers, so tag changes that are supposed to cascade (faction reputation, Journey / Landsraad unlock hooks) didn't take effect until something else re-ran them. Save now computes what you actually added and removed and applies that **delta** through the same trigger-firing path the server uses itself, so adding e.g. `Journey.LandsraadContractsUnlocked` unlocks it for real. The now-redundant standalone **Update Tags (add / remove)** action row has been removed — the Tags panel does everything it did, correctly.
+
 ### Fixed
 
 - **The mobile/remote "Friend Helper" bridge no longer flashes a console window on the desktop every couple of minutes.** The bridge's background service is kept alive by a self-healing supervisor loop plus an at-sign-in task trigger, but the installer *also* registered a **2-minute keepalive** trigger as a backstop in case the supervisor process itself was killed. In an interactive Windows session, each keepalive fire relaunched the hidden `wscript -> pwsh` helper, and even the window-hidden shim briefly allocates a console host that could momentarily flash on screen. That keepalive trigger has been removed: the supervisor still relaunches the bridge daemon within a few seconds if it crashes, and the at-sign-in trigger re-establishes the supervisor after every reboot / re-login, so the bridge stays just as reliable — without the periodic flash. Existing installs pick up the fix on their next update; the live scheduled task can also be corrected in place.
