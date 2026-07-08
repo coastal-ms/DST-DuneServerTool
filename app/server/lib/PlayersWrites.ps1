@@ -1798,6 +1798,13 @@ function Invoke-DunePlayerMarkNpeCompleted {
 $script:DuneGrantAllSkillsLevelValue = 7
 $script:DuneGrantAllSkillsPointBuffer = 20
 $script:DuneGrantAllSkillsIntelFloor = 100
+# Ability tags Enable All Skills must NOT grant. "Ignore" — the Bene Gesserit
+# Voice ability that forces a target to act as if you are completely invisible —
+# is stored internally as Skills.Ability.VoiceStop (its in-game display name is
+# "Ignore"; identified by Coastal against the live skill tree). Per Coastal: keep
+# every other grant identical, just never grant this one. Exact-match against the
+# catalog key string so nothing else is affected.
+$script:DuneGrantAllSkillsExcludeKeys = @('(TagName="Skills.Ability.VoiceStop")')
 function Invoke-DunePlayerGrantAllSkills {
     param([string]$Ip, [long]$AccountId)
     if ($AccountId -le 0) { return @{ ok = $false; error = 'account_id is required.' } }
@@ -1807,6 +1814,9 @@ function Invoke-DunePlayerGrantAllSkills {
     $keys = @(Get-DuneSkillsCatalog)
     if ($keys.Count -eq 0) {
         return @{ ok = $false; error = 'skills catalog is empty (app/data/dune-skills-catalog.json missing?).' }
+    }
+    if ($script:DuneGrantAllSkillsExcludeKeys.Count -gt 0) {
+        $keys = @($keys | Where-Object { $script:DuneGrantAllSkillsExcludeKeys -notcontains $_ })
     }
     $levelVal = [int]$script:DuneGrantAllSkillsLevelValue
     $buffer   = [int]$script:DuneGrantAllSkillsPointBuffer
