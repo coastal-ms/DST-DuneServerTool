@@ -7,6 +7,7 @@ import { checkForUpdate, installUpdate, listPreReleases, setUpdateChannel, setPr
 import { publishUpdateCheck } from '../hooks/useUpdateCheck'
 import { fmtToolVersion } from '../format'
 import { AppearanceCard } from './settings/AppearanceCard'
+import { DashboardAlertsCard } from './settings/DashboardAlertsCard'
 import { PublicIpCard } from './settings/PublicIpCard'
 import { RemoteAccessCard } from './settings/RemoteAccessCard'
 import { MobileAppCard } from './settings/MobileAppCard'
@@ -730,6 +731,8 @@ export function Settings() {
       </SectionErrorBoundary>
 
       <SectionErrorBoundary name="Appearance"><AppearanceCard /></SectionErrorBoundary>
+
+      <SectionErrorBoundary name="Dashboard warnings"><DashboardAlertsCard /></SectionErrorBoundary>
 
       <SectionErrorBoundary name="Remote Access"><RemoteAccessCard /></SectionErrorBoundary>
 

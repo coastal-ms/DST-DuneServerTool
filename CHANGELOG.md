@@ -13,6 +13,10 @@ here cover everything those tags shipped.
 
 ## [Unreleased]
 
+### Changed
+
+- **The VM memory-pressure warning banner can now be dismissed permanently.** Operators who understand the risk (and don't want the loud red Server Health banner reappearing every session) can now click the **X** on the banner to hide it for good. It can be turned back on any time under **Settings → Dashboard warnings → "Show VM memory-pressure warning."** The preference is stored locally in the browser/desktop shell; the underlying probe is unchanged and still cheap, so re-enabling brings the banner straight back if pressure is still detected. Prompted by operator feedback that the v12.18.0 banner was more intrusive than intended.
+
 ## [12.18.1] - 2026-07-07
 
 ### Fixed
