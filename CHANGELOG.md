@@ -15,6 +15,8 @@ here cover everything those tags shipped.
 
 ### Changed
 
+- **The VM memory-pressure warning banner can now be dismissed permanently.** Operators who understand the risk (and don't want the loud red Server Health banner reappearing every session) can now click the **X** on the banner to hide it for good. It can be turned back on any time under **Settings → Dashboard warnings → "Show VM memory-pressure warning."** The preference is stored locally in the browser/desktop shell; the underlying probe is unchanged and still cheap, so re-enabling brings the banner straight back if pressure is still detected. Prompted by operator feedback that the v12.18.0 banner was more intrusive than intended.
+
 - **Editing a player's tags now fires the game's server-side unlock triggers.** The **Tags** panel's **Save** previously overwrote the tag set with a raw delete-then-insert that bypassed the game's database triggers, so tag changes that are supposed to cascade (faction reputation, Journey / Landsraad unlock hooks) didn't take effect until something else re-ran them. Save now computes what you actually added and removed and applies that **delta** through the same trigger-firing path the server uses itself, so adding e.g. `Journey.LandsraadContractsUnlocked` unlocks it for real. The now-redundant standalone **Update Tags (add / remove)** action row has been removed — the Tags panel does everything it did, correctly.
 
 ### Fixed

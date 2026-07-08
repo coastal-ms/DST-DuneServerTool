@@ -11,6 +11,7 @@
 import { useCallback, useEffect, useState } from 'react'
 import { Icon } from '../../components/Icon'
 import { getVmMemoryPressure, type VmMemoryPressure } from '../../api/diagnostics'
+import { useVmMemPressureHidden } from './vmMemoryPref'
 
 type Props = {
   enabled: boolean   // gate on VM running — no point probing a stopped VM
@@ -18,6 +19,7 @@ type Props = {
 
 export function VmMemoryPressureBanner({ enabled }: Props) {
   const [finding, setFinding] = useState<VmMemoryPressure | null>(null)
+  const [hidden, setHidden] = useVmMemPressureHidden()
 
   const load = useCallback(async () => {
     if (!enabled) return
@@ -38,7 +40,7 @@ export function VmMemoryPressureBanner({ enabled }: Props) {
     return () => window.clearInterval(id)
   }, [enabled, load])
 
-  if (!enabled || !finding || !finding.ok || !finding.pressure) return null
+  if (!enabled || hidden || !finding || !finding.ok || !finding.pressure) return null
 
   const critical = finding.severity === 'critical'
   const tone = critical
@@ -49,7 +51,7 @@ export function VmMemoryPressureBanner({ enabled }: Props) {
     <section className={`card p-4 mb-6 ${tone}`} role="alert">
       <div className="flex items-start gap-3">
         <Icon name="AlertTriangle" size={20} className="shrink-0 mt-0.5" />
-        <div className="min-w-0">
+        <div className="min-w-0 flex-1">
           <h2 className="text-sm font-semibold">
             {finding.headline || 'VM memory pressure detected'}
           </h2>
@@ -61,6 +63,15 @@ export function VmMemoryPressureBanner({ enabled }: Props) {
             </ul>
           )}
         </div>
+        <button
+          type="button"
+          onClick={() => setHidden(true)}
+          className="shrink-0 -mt-0.5 -mr-1 p-1 rounded hover:bg-current/10 text-current/70 hover:text-current transition-colors"
+          title="Dismiss this warning permanently. Re-enable it under Settings → Dashboard warnings."
+          aria-label="Dismiss VM memory-pressure warning permanently"
+        >
+          <Icon name="X" size={16} />
+        </button>
       </div>
     </section>
   )
