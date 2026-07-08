@@ -10,7 +10,7 @@ const sections = [
     id: "health",
     title: "Server Health",
     img: "server-health.png",
-    body: "Default landing page. Combined battlegroup + VM state, live TCP port verdicts, per-pod game-server status, active spice-field counts pulled live from Postgres, and Map SpinUp loading diagnostics with restart actions and clear failure reasons when a map will not come up.",
+    body: "Default landing page. Combined battlegroup + VM state, live TCP port verdicts, per-pod game-server status, active spice-field counts pulled live from Postgres, and Map SpinUp loading diagnostics with restart actions and clear failure reasons when a map will not come up. A read-only probe also surfaces a VM low-on-memory banner when a home-hosted VM starts OOM-killing Funcom's operator pods, so the 'node is out of RAM' signature is caught without a log export.",
   },
   {
     id: "commands",
@@ -28,13 +28,13 @@ const sections = [
     id: "gameplay",
     title: "Gameplay Admin",
     img: "gameplay-admin.png",
-    body: "The Gameplay Admin portal is a full in-tree port with 54 player-management endpoints and a bucketed Actions panel. Recent additions include a Landsraad Houses tab for editing house reward milestones, inline stack-quantity editing in Storage and player inventory, and Duke's market-bot pricing modes — formula, market-follow, and over-market buy guard — plus the built-in Cheat Scripts and Landsraad contribution controls.",
+    body: "The Gameplay Admin portal is a full in-tree port with 54 player-management endpoints and a bucketed Actions panel. It covers a Landsraad Houses tab for editing house reward milestones, inline stack-quantity editing in Storage and player inventory, Grant Cosmetics with the full skin-variant catalog (vehicle and weapon skins, not just sandbikes), an Update Tags box with catalog typeahead that fires the game's server-side unlock triggers, and Duke's market-bot pricing modes — formula, market-follow, and over-market buy guard — plus the built-in Cheat Scripts and Landsraad contribution controls. Save actions are guarded by a real online-player check so they don't false-warn on stale ghost rows after a restart.",
   },
   {
     id: "give-package",
     title: "Give Package",
     img: "give-package.png",
-    body: "New in v12.0.19 — build and reuse your own item packages. Create named bundles of any items (each with a quantity and tier Mk1–Mk6), then hand a whole package to any player in one click from their Inventory section. Packages are created, edited, and deleted right from the form and saved server-side (item-packages.json), so they persist across restarts and are shared between the desktop app and the remote portal. Delivery uses the normal give-items path, so it works online or offline as long as there's inventory space.",
+    body: "Build and reuse your own item packages. Create named bundles of any items (each with a quantity and tier Mk1–Mk6), then hand a whole package to any player in one click from their Inventory section. Packages are created, edited, and deleted right from the form and saved server-side (item-packages.json), so they persist across restarts and are shared between the desktop app and the remote portal. Delivery uses the normal give-items path, so it works online or offline as long as there's inventory space.",
   },
   {
     id: "give-vehicle-kit",
@@ -46,7 +46,7 @@ const sections = [
     id: "cheat-scripts",
     title: "Cheat Scripts (Players → Live)",
     img: "gameplay-cheat-scripts.png",
-    body: "New in v12.2.1 — one-click buttons fire the named server cheat scripts for an online player: Playtest Setup, Award Player XP, Unlock All Skills / Abilities, and Leave Me Alone, plus a freeform box for any other script name. Developer performance harnesses (Start / Stop Hitch Test) sit on a separate Dev / Perf Scripts row. Both carry a disclaimer that the scripts originate from the Playtest server and may have no effect on a retail server.",
+    body: "One-click buttons fire the named server cheat scripts for an online player: Playtest Setup, Award Player XP, Unlock All Skills / Abilities, and Leave Me Alone, plus a freeform box for any other script name. Developer performance harnesses (Start / Stop Hitch Test) sit on a separate Dev / Perf Scripts row. Both carry a disclaimer that the scripts originate from the Playtest server and may have no effect on a retail server.",
   },
   {
     id: "landsraad",
@@ -64,7 +64,7 @@ const sections = [
     id: "settings",
     title: "Settings",
     img: "settings.png",
-    body: "The Settings page reflects the same choices the Setup Wizard makes, plus the newer remote-access and appearance controls. It covers the two-path installer experience, Steam path and SSH-key selection, Windows username, port-check provider, themes, remote-access policy, and auto-updater preferences.",
+    body: "The Settings page reflects the same choices the Setup Wizard makes, plus the newer remote-access and appearance controls. It covers the two-path installer experience, Steam path and SSH-key selection, Windows username, port-check provider, themes, remote-access policy, and auto-updater preferences. The Public IP / DDNS card applies your public IP across the battlegroup and installs a persistent game-UDP DNAT bridge so remote players don't hit P34 on a server whose game pods bind the public IP only.",
   },
 ];
 ---
