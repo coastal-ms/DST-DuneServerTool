@@ -9,14 +9,14 @@
 
 **🌐 Website & feature tour: [coastal-ms.github.io/DST-DuneServerTool](https://coastal-ms.github.io/DST-DuneServerTool/)** — screenshots, install guide, and the full changelog.
 
-The current release is **v12.14.7**. The in-app version label and the
-website show plain semver tags (e.g. `v12.14.7`) — the previous
+The current release is **v12.18.1**. The in-app version label and the
+website show plain semver tags (e.g. `v12.18.1`) — the previous
 Roman-numeral stylization has been removed.
 
-> ## ✅ Confirmed compatible with Dune: Awakening **1.4.10.0**
-> DST **v12.14.x** is verified working against the **latest Funcom release** —
+> ## ✅ Confirmed compatible with Dune: Awakening **1.4.10.1**
+> DST **v12.18.x** is verified working against the **latest Funcom release** —
 > both the game **client** and the **self-hosted server** software — as of the
-> **1.4.10.0** patch. Compatibility was checked live against a running
+> **1.4.10.1** patch. Compatibility was checked live against a running
 > self-hosted server on that build, covering battlegroup management,
 > on-demand map spin-up, game-config and database editing, and backups.
 
@@ -28,6 +28,71 @@ the sidebar's **Web Portal** button hands the portal off to your default
 browser and keeps the server running in the background.
 
 ![Server Health](docs/img/server-health.png)
+
+### New in v12.15–v12.18
+
+- **VM memory-pressure diagnostics** (v12.18.0, Server Health). When a
+  home-hosted VM runs low on RAM the kubelet OOM-kills Funcom's operator
+  pods and Postgres, and the nightly backup stalls — a signature that
+  previously took a log export to spot. A read-only probe now reads
+  operator/DB pod restart counts and the VM's `free -h` / `/proc/meminfo`,
+  and DST surfaces a red **"VM low on memory"** banner on Server Health,
+  prints the same warning after Start / Reboot, and adds
+  `vm-memory-pressure.txt` to the diagnostics bundle.
+- **Remote-player game-UDP bridge — no more P34 on public-IP-only servers**
+  (v12.18.0, Settings → Public IP / DDNS). Funcom's game pods bind the
+  **public IP only**, so a router forwarding game UDP (7777–7810) to the
+  VM's LAN IP hits no listener and remote players time out with P34. DST
+  now installs and *persists* an iptables DNAT bridge
+  (`LAN-IP:7777-7810/udp → public IP`) across the Public IP apply, the boot
+  script, and the every-minute self-heal watchdog. It is **bind-detected**
+  so it can't reintroduce the same-LAN black-hole removed in v12.16.9 —
+  installed only when the game binds public-only, removed when it binds the
+  LAN IP/wildcard. Live-verified by `tcpdump`.
+- **Grant Cosmetics surfaces the full skin-variant catalog** (v12.18.0,
+  Players → Items). The picker now buckets the entire `*_Variant` cosmetic
+  family — **22 vehicle skins**, **37 weapon skins** (previously zero), and
+  armor/suit variants — not just the three sandbike meshes it used to match.
+- **Save-guard no longer false-fires on stale ghost rows** (v12.18.0). The
+  online-player check now mirrors Funcom's own `dune.is_player_offline()`
+  (online only when the row isn't `Offline` **and** its `server_id` is in
+  `dune.active_server_ids`), so the new `LoggingOut` grace state and orphan
+  rows after a restart no longer warn "N player(s) online" with nobody
+  connected.
+- **Update Tags gets the real catalog typeahead** (v12.18.0, Players →
+  Update Tags). The add-tag box now uses the catalog-backed picker instead
+  of a hardcoded 5-item list, so real gameplay tags (e.g.
+  `Journey.LandsraadContractsUnlocked`) autocomplete. The write path still
+  posts the add/remove **delta** so the game's server-side unlock triggers
+  fire.
+- **On-demand map partition self-heal — spin-up race fixed** (v12.18.1).
+  The autonomous `*/15` partition healer no longer resets an in-progress
+  manual map spin-up: a pinned-but-pod-less map is recorded on first
+  sighting and only cycled if it is *still* pod-less on a later tick. Dead
+  pods are still healed immediately; live sessions are always skipped. A new
+  `install-only` mode lets the on-VM automation refresh without touching any
+  map, so a live server can update mid-session.
+- **Battlegroup Info raw pane: no more drifted Status column** (v12.17.0).
+  A server title with spaces or a comma (e.g. `Dune, my Arrakis`) used to
+  shift the Status cell in Funcom's positionally-parsed raw output. DST now
+  rewrites just that row from the Battlegroup CRD JSON, tagged
+  `(DST-corrected)`, only when the text actually disagrees.
+- **VM header + Public IP card no longer crash on multi-adapter VMs**
+  (v12.16.12). `Get-DuneVmStatus` coerces the VM IP to a string, so a
+  wrapping PSObject on multi-adapter hosts no longer renders `[object
+  Object]` or throws React error #31.
+- **SteamCMD orphan-workdir pre-flight** (v12.16.11, Commands →
+  Battlegroup → `update`). An interrupted SteamCMD update leaves a
+  root-owned download workdir that fails every retry with `state is 0x206`;
+  DST now cleans it before invoking `battlegroup update`.
+- **Restore Backup no longer needs the battlegroup stopped** (v12.16.11).
+  Funcom's `battlegroup import` handles the full stop/swap/recover cycle
+  itself, so both the Database page and the Commands `import` entry now
+  require only that the VM is running.
+- **Grant All Skills reworked** (v12.16.9–v12.16.10). Now grants every
+  skill at its real max level (EXPERIMENTAL badge removed), while leaving a
+  small skill-point buffer and a 100 Intel floor so the tutorial's "learn
+  an ability" step isn't soft-locked.
 
 ### New in v12.14.x
 
@@ -922,7 +987,7 @@ so it can be tracked and fixed:
 
 The bug report form asks for:
 
-- **Tool version** — shown in the portal footer (e.g. `v12.14.7 · coastal-ms`).
+- **Tool version** — shown in the portal footer (e.g. `v12.18.1 · coastal-ms`).
 - **Surface** — which portal page (Server Health, Commands, PowerShell,
   Game Config, DD Map, Map SpinUp, Database, Sietches, Settings, Setup
   Wizard) or whether it was the CLI / installer / auto-updater.
