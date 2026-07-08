@@ -3,8 +3,10 @@
 // on every keystroke against the friendly label OR the raw tag, then GROUPS the
 // matches by their parent breadcrumb (everything except the final segment) so
 // related tags read as a set. Each group shows an "Add all (N)" button; each
-// leaf tag is an explicit "+ Add" row. Results render inline (not a floating
-// popup) and paginate by group. Tags the player already has are excluded.
+// leaf tag is an explicit "+ Add" row. When the typed text matches no catalog
+// tag, an "Add "<text>"" row lets you commit it as a custom (off-catalog) tag.
+// Results render inline (not a floating popup) and paginate by group. Tags the
+// player already has are excluded.
 
 import { useCallback, useEffect, useId, useMemo, useRef, useState } from 'react'
 import { Icon } from './Icon'
@@ -109,6 +111,14 @@ export function TagPicker({
   const goPage = (p: number) => setPage(Math.max(0, Math.min(p, pageCount - 1)))
 
   const addOne = (tag: string) => onPick(tag)
+  // Commit the raw typed text as a custom (off-catalog) tag. Mirrors the Enter
+  // key: prefer the consumer's onEnterRaw handler, fall back to onPick.
+  const addRaw = () => {
+    const t = value.trim()
+    if (!t) return
+    if (onEnterRaw) onEnterRaw()
+    else onPick(t)
+  }
   const addGroup = (g: TagGroup) => {
     const tags = g.entries.map(e => e.tag)
     if (onPickMany) onPickMany(tags)
@@ -172,11 +182,23 @@ export function TagPicker({
               <div className="px-3 py-2 text-xs text-danger">{catalogError}</div>
             )}
             {!catalogLoading && !catalogError && matches.length === 0 && (
-              <div className="px-3 py-2 text-xs text-text-dim">
-                {value.trim().length > 0
-                  ? <>No known tags match "{value}". Press <span className="text-text">Add</span> to use it anyway.</>
-                  : 'No more tags to add.'}
-              </div>
+              value.trim().length > 0 ? (
+                <button
+                  type="button"
+                  onMouseDown={ev => { ev.preventDefault(); addRaw() }}
+                  className="w-full text-left px-3 py-2 flex items-center gap-2 hover:bg-surface-2 group"
+                >
+                  <span className="flex-1 min-w-0">
+                    <span className="block text-sm text-text">Add "{value.trim()}"</span>
+                    <span className="block text-[11px] text-text-dim">No catalog match — add it as a custom tag.</span>
+                  </span>
+                  <span className="shrink-0 inline-flex items-center gap-1 text-[11px] text-text-dim group-hover:text-text">
+                    <Icon name="Plus" size={12} /> Add
+                  </span>
+                </button>
+              ) : (
+                <div className="px-3 py-2 text-xs text-text-dim">No more tags to add.</div>
+              )
             )}
             {visibleGroups.map(g => (
               <div key={g.key || '__ungrouped__'} className="border-b border-border/60 last:border-b-0">
