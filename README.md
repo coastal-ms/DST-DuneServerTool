@@ -29,339 +29,63 @@ browser and keeps the server running in the background.
 
 ![Server Health](docs/img/server-health.png)
 
-### New in v12.14.x
+## Architecture & tech stack
 
-- **Server browser Ping fix** (v12.14.7, Commands page). New card at the
-  top of Commands reconciles `HOST_DATACENTER_ID` on all three utility
-  pods (director / serverGateway / textRouter) with the VM's Linux
-  hostname. Vendor default is `dune-testing`, which doesn't match, so
-  the in-game **Ping** column shows `0` with empty bars. Live-verified
-  fix: patching to `duneawakening` (the DST-shipped Alpine VM hostname)
-  and restarting the battlegroup flips Ping from `0` to a real value
-  with full bars. The card pre-populates the datacenter-ID input with
-  the detected VM hostname and the IP input with DST's current public
-  IP; one Save patches the CR and issues a clean BG restart so FLS
-  re-registers on the next matchmaker cycle. Save runs even when values
-  are unchanged (repair use case). Live elapsed timer + expected-
-  duration banner so operators can see progress during the ~1–3 minute
-  restart. Distinct from the P34 / connection-joining diagnostics in
-  Settings — this is only about the Ping value shown in the server
-  browser.
-- **Prune accumulated Completed database-backup dump pods** (v12.14.7,
-  Database → Backup Schedule). Funcom's `battlegroup backup` job creates
-  a one-shot `*-dump-YYYYMMDD-HHMMSS-pod` per run that terminates
-  Succeeded and is never garbage-collected — they pile up on the Pods
-  page and in the shell-pod picker. New section on the Backup Schedule
-  card with **Keep last (count)** and **Keep last (days)** thresholds
-  persisted into the managed crontab block, a **Save retention** button,
-  and a **Prune now (N)** action with an enumerated-pod table showing
-  owner references. Auto-prune also runs on every backup-schedule cron
-  tick and as a post-action hook on Start All / Reboot All, so
-  accumulation stays bounded on its own. Two-pass delete (graceful →
-  force with `--grace-period=0`) surfaces any survivors with their
-  owner controller.
-- **Client `Game.ini` changes now park in a DST managed block**
-  (v12.14.7, Game Config → Apply to client). The server-side files
-  (`UserGame.ini`, `UserEngine.ini`) have always relocated DST-touched
-  sections into a marker-delimited block at the bottom so operators can
-  copy-paste the DST section to share with players connecting to their
-  server. The local client `Game.ini` now uses the same writer path —
-  every DST-touched section moves below the `; ===== Dune Server Tool
-  (DST) managed section BEGIN =====` marker; unrelated user sections
-  (audio, video, etc.) stay where they were.
-- **Public IP apply now streams live progress during BG restart**
-  (v12.14.7, Settings → Public IP / DDNS). The "Propagate IP to
-  battlegroup + restart" step used to run one silent SSH script for
-  5–7 minutes. Now split into three phases with a PowerShell-side wait
-  loop that heartbeats the UI every 5 seconds — the step detail ticks
-  `Waiting for servers to report ready… (3/60, up to 300s)` instead of
-  sitting on a static label.
-- **Establish faction membership for unaligned players** (v12.14.3). **Set
-  Faction Tier** / **Give Faction Rep** now join an unaligned character to
-  the faction in one offline action: complete the `DA_FQ_ClimbTheRanks`
-  recruitment journey, apply faction/dialogue/contract tags, create the
-  `FactionPlayerComponent` entry, and set the tier/reputation. Already-
-  aligned characters are routed to **Reset Faction** first, then re-run.
-- **Reset Faction** (v12.14.1–v12.14.2, Players → Progression). One
-  offline action wipes a player's faction so they can start fresh —
-  zeroes Atreides + Harkonnen rep in **both** the `player_faction_reputation`
-  table *and* the runtime-read `FactionPlayerComponent`, clears alignment,
-  removes faction tags, and resets the recruitment journey nodes so
-  faction quests (including meeting the recruiters) can be replayed.
-  Double-acknowledged.
-- **Grant Cosmetic / Variant** (v12.14.1, Players → Items). Browsable,
-  searchable picker for ~269 cosmetic unlockables — appearance set
-  variants, colour swatches, and vehicle skins — that aren't in the
-  standard Give Item catalog. Delivers the unlock via the existing
-  give-item path.
-- **Grant Building Sets** (v12.14.4–v12.14.5, Players → Items). Picker
-  covers **all 225 learnable building sets** (223 grantable) — base-game
-  Atreides/Harkonnen/Choam, crafting stations & utilities, faction/house
-  sets, statues & decor, themed furniture, plus the original MTX
-  Twitch-drop, collab, and movie-tie-in sets (137 items). The grantable
-  set is authoritative: the union of every building-recipe item form in
-  the game data and the distinct sets actually learned on a live server.
-- **Players page keeps your place after grants** (v12.14.5). Granting an
-  item / cosmetic / set / currency / tag now keeps the form open and
-  preserves the selected player and scroll position; the list refresh is
-  deferred until you collapse the action, switch player/section, or hit
-  Refresh. (Per-item Repair/Delete still re-read inventory immediately.)
-- **Full gameplay-tag catalog in the Tags editor** (v12.14.0). The
-  typeahead searches ~3,600 real tags extracted from the live server
-  image (engine-internal cues/combat/camera dropped) instead of a
-  curated ~400 subset. Completable journey nodes are flagged with a
-  "node" badge.
-- **Item names refreshed for Funcom patch 1.4.10.0** (v12.14.0). Labelled
-  the in-use templates that were missing from the catalog (T6 light
-  ornithopter modules, Cutter, ContractItem).
-- **Mobile companion: Players Online count matches the desktop**
-  (v12.14.6). The mobile filter mirrors the desktop's case-insensitive
-  helper verbatim, so the mobile Server State card no longer shows
-  "Players Online (0)" when the desktop correctly lists connected
-  players. **Server State card sums players across all game servers**
-  per battlegroup so multi-shard hosts see the true total.
-- **Treadwheel vehicle kit + catalog** (v12.14.1). The Treadwheel Hull
-  modules (Mk1–Mk6) are now giveable, and the Give Vehicle Kit entry
-  hands over all nine modules at Mk6 (Swift Engine + Steady Boost
-  uniques, plus standard Chassis, Generator, Hull, Inventory, two Treads
-  matching the vehicle's two wheels, Passenger, Scanner).
+DST ships as one installer that bundles three cooperating parts, plus the game
+server stack it drives:
 
-### New in v12.13.x
+| Layer | Tech | Role |
+| --- | --- | --- |
+| Desktop shell | **.NET 10 · WinForms · WebView2** | Native single-window host; JS↔native bridge for file dialogs |
+| Web portal | **React · TypeScript · Vite · Tailwind** | The admin UI, served on `127.0.0.1` with a per-launch tokenized URL |
+| Backend | **PowerShell 7**, compiled to `DuneServer.exe` (PS2EXE) | A localhost HTTP API that drives everything below |
+| Game server | **Hyper-V VM · Kubernetes · PostgreSQL · RabbitMQ** | Funcom's dedicated-server stack, orchestrated over SSH |
 
-- **Restore warns about cross-server restores** (v12.13.17). Characters
-  are bound to Funcom accounts in the cloud, so restoring a backup onto
-  a *different* VM/battlegroup recovers the world and bases but may not
-  restore character logins (they can fail to load or get cleared on
-  boot). The Restore card and its confirmation prompt now say so —
-  restore is intended for the same server.
-- **Server rename works again** (v12.13.16). Game Config → Server name
-  no longer rejects a valid name with "A non-empty name is required" —
-  the request-body reader now handles hashtable-parsed bodies, so the
-  rename + restart applies as expected.
-- **Auto-clear of on-demand map partitions at battlegroup start works
-  again** (v12.13.15). The post-restart hook now points at the bundled
-  installer that replaced the removed `dune-clear-partitions.start`
-  script, so DeepDesert / Arrakeen / Harko Village spawn promptly after
-  a restart again.
+```mermaid
+flowchart TB
+  user["Admin"] --> shell["DuneShell — .NET WebView2 host"]
+  shell <--> portal["Web portal — React + TS + Vite"]
+  portal <--> api["DuneServer.exe — PowerShell HTTP API on 127.0.0.1"]
+  api -- "SSH / kubectl" --> vm
+  subgraph vm["Game server VM (Hyper-V)"]
+    k8s["Kubernetes pods (battlegroup + map servers)"]
+    pg[("PostgreSQL game DB")]
+    rmq["RabbitMQ"]
+  end
+  api -. "SQL / JSONB edits" .-> pg
+  api -. "live admin messages" .-> rmq
+```
 
-### New in v12.2.1
+### Engineering highlights
 
-- **Give Vehicle Kit now hands over the correct parts.** The kit contents were
-  fixed so each vehicle actually assembles: **Sandbike** Tread ×3; **Buggy**
-  Tread ×4 plus the Focused Buggy Cutteray Mk6; **Sandcrawler** swaps the base
-  Tread for Dampened Sandcrawler Treads ×2; the **Scout / Assault / Carrier
-  Ornithopters** swap their generic Wing for the named Albatross ×4 / Hummingbird
-  ×6 / Roc ×8 wing modules (Carrier also gains Tail Hull ×2 and Side Hull ×2).
-  The form preview now shows per-part quantities.
+- **A full HTTP API written in pure PowerShell**, compiled to a single `.exe`
+  with PS2EXE — routing, JSON, and per-launch token auth bound to `127.0.0.1`.
+- **A native ↔ web bridge**: the WebView2 shell answers `postMessage` calls from
+  React to show native Windows file dialogs (backup upload/download over SCP)
+  and to hand the portal off to the user's default browser.
+- **Live orchestration of a Kubernetes + PostgreSQL + RabbitMQ game stack over
+  SSH** — battlegroup start/stop, on-demand map spin-up, pod self-heal, DB
+  backup/restore, and direct JSONB edits to live game state.
+- **Reverse-engineered game data** — item / cosmetic / building-set catalogs,
+  ~3,600 gameplay tags, journey nodes, and Unreal Engine config structs parsed
+  from the live server image.
+- **A signed installer and in-app auto-updater** shipped through GitHub Actions,
+  gated by a version-stamp consistency check across five source files.
+- **Built AI-first** — the whole project is developed through an AI CLI with a
+  disciplined memory / handoff workflow (MCP + a vector store).
 
-  ![Give Vehicle Kit](docs/img/give-vehicle-kit.png)
+## Recent highlights
 
-- **"Allow overflow (drop to ground)" toggle on item & kit gives.** A new
-  checkbox on the Give Item and Give Vehicle Kit forms skips DST's
-  inventory-capacity guard, so a full backpack no longer blocks the give — the
-  game's native command drops whatever doesn't fit on the ground next to the
-  player. Online players only (offline SQL gives can't drop to ground, so the
-  flag is ignored there).
+The current release line is **v12.14.x**, verified against Dune: Awakening
+**1.4.10.0**. Recent work spans the Server Browser Ping fix, native backup
+transfer (SCP over the WebView2 bridge), faction-membership tooling,
+cosmetic / building-set grant pickers, and a full gameplay-tag catalog.
 
-- **Cheat Scripts panel (Players → Live).** One-click buttons fire the named
-  server cheat scripts for an online player — Playtest Setup, Award Player XP,
-  Unlock All Skills / Abilities, Leave Me Alone — plus a freeform box for any
-  other script name. Developer performance harnesses (Start / Stop Hitch Test)
-  sit on a separate **Dev / Perf Scripts** row. Both carry a disclaimer that the
-  scripts originate from the Playtest server and may have no effect on a retail
-  server.
-
-  ![Cheat Scripts panel](docs/img/gameplay-cheat-scripts.png)
-
-- **Landsraad Game Config edits keep the whole settings struct.** Editing a
-  Landsraad value used to seed a minimal `Data=(...)` that dropped the board
-  layouts, messages, and contract settings the game needs. DST now seeds the
-  full default struct first and edits members in place — and *heals* legacy stub
-  boxes written by older builds, restoring the ~35 missing members. Game Config
-  also now **warns when your client's settings block is incomplete** (some
-  members present, some missing) and "Fix my client config" rewrites the whole
-  block.
-
-### New in v12.2.0
-
-- **Game Config now reads & writes every setting in the right INI section.** A
-  value that lived in a different section than DST expected used to show as the
-  Funcom default and edits could silently fail to apply. DST now reflects the
-  real INI value and guarantees each setting lives in exactly one section — so
-  toggles actually take effect and resets are consistent.
-- **New Game Config sections:** **Landsraad**, **Hydration**, **Loot & Death**,
-  and **Encounters** — plus many more real toggles in Storm Cycle, Spice,
-  Sandworm, and Survival. The Landsraad settings live inside Funcom's single
-  nested config struct; DST edits each one in place and preserves everything
-  else, and mirrors them to the client too.
-- **Players → Landsraad section** — set any player's contribution to any Great
-  House (e.g. House Ecaz) to an arbitrary amount; faction + guild totals are
-  recomputed automatically.
-
-  ![Players → Landsraad](docs/img/gameplay-landsraad.png)
-- **Per-item water editor** on Players → Inventory for water containers
-  (literjons / canteens).
-- **Per-field "Default" button** on every Game Config setting — resetting
-  *removes* the key from the INI instead of writing the default, keeping files
-  clean. The "apply to my client" flow shows an **Add / Update / Remove** badge
-  per setting.
-- **Manual-only backups** (no more a-backup-on-every-save pile-up) plus
-  **multi-select delete** in the View-backups dialog.
-- **Removed the 8 global multiplier options** (Health, Damage to NPCs/Players,
-  XP, Progression Speed, Fame, Harvest Amount/Health) after **live in-game
-  testing proved they do nothing** on self-hosted — the engine accepts the keys
-  but no gameplay system reads them, and they aren't in Funcom's stock config.
-  Building Damage and Inventory Weight multipliers are kept.
-
-### New in v12.0.20–v12.0.24
-
-- **Help → Show / Hide backend console** (v12.0.24) — the first UI path that
-  un-minimizes and restores the backend PowerShell console window once tray
-  mode has hidden it. Backed by a new loopback-only `/api/console` route that
-  calls `ShowWindow(SW_RESTORE)` + `SetForegroundWindow`. The menu label
-  tracks the real window state (refreshed when the Help menu opens), so it
-  correctly reads "Show backend console" whenever the window is hidden *or*
-  minimized to the taskbar.
-- **Add Item search** (v12.0.20) — the picker's results popup now scrolls
-  correctly to the last match (was clipped behind the next section before, so
-  later catalog rows were unreachable) and the catalog gained **552 missing
-  templates** (1294 → 1846 entries). Raw resources like **Spice Sand**,
-  **Water**, and **Plant Fiber**, plus many garments, vehicle modules,
-  weapons, and components, are now searchable and giveable.
-- **Website link** in the menu bar (v12.0.22) — a right-aligned "Website"
-  item opens the project's marketing site in your default browser.
-
-#### Fixes
-
-- **Console window no longer flashes during dashboard polling** (v12.0.23).
-  The battlegroup-status probe (`Get-DuneBattlegroupSnapshot`) and the setup
-  preflight SSH-key check both used to shell out via `& ssh ... 2>$errFile`,
-  which silently allocated a fresh conhost window for every spawn when the
-  caller was a background runspace whose parent's hidden console handle
-  wasn't inherited. With multiple dashboard panels polling at 10–15 s, that
-  produced a steady stream of brief console flashes on top of every other
-  window. Both call sites now route through a new `Invoke-DuneSshHidden`
-  helper (sibling of `Invoke-V6Ssh`) using `ProcessStartInfo` with
-  `CreateNoWindow = $true`.
-- **Market Bot** (v12.0.20–v12.0.21) — fixed `dune_exchange_orders_access_point_id_fkey`
-  foreign-key violation when enabling the bot or clicking **Seed Market** on
-  servers with no bot orders yet (fresh battlegroups, or upgrades from
-  pre-`dune-admin`-removal builds). Access-point resolution now cascades
-  through the authoritative `dune_exchange_accesspoints` table at every
-  tier. Stackable raw resources (e.g. **Plastone**, **Plastanium Ingot**)
-  now list in their full catalog stack instead of single-item listings, and
-  a new opt-in **displayed-Solari-price cap** lets you clamp listing prices
-  below the implicit `item_price × 10` ceiling.
-
-### New in v12.0.19
-
-- **Give Package — build your own item bundles.** Create named **item
-  packages** (any mix of items, each with a quantity and tier Mk1–Mk6), then
-  hand a whole package to any player in one click from the player's Inventory
-  section. Packages are created, edited, and deleted right from the form and
-  saved server-side (`item-packages.json`), so they persist across restarts and
-  are shared between the desktop app and the remote portal. Delivery uses the
-  normal give-items path, so it works **online or offline** as long as there's
-  inventory space.
-
-  ![Give Package](docs/img/give-package.png)
-
-- **Give Vehicle Kit — a whole vehicle, no live spawn required.** Pick one of
-  the six CHOAM vehicles that have craftable part items (Sandbike, Buggy,
-  Sandcrawler, and Light/Medium/Transport Ornithopters) and DST drops its full
-  **Mk6 part set** — chassis, engine, PSU, hull, locomotion, boost — **plus 1
-  Large Vehicle Fuel Cell and 1 Welding Torch Mk5** straight into the player's
-  inventory. Each kit also includes the vehicle's **named/unique top-tier
-  modules** (e.g. Mohandis engine, Night Rider boost, Albatross/Hummingbird/Roc
-  wings) and the **Scout Ornithopter Storage Mk4** (Light) / **Assault
-  Ornithopter Storage Mk5** (Medium). The form previews the exact parts before
-  you hand them over, and it works **online or offline** as long as there's
-  inventory space — no live RMQ spawn. (Tank / Treadwheel / Container have no
-  discrete part items in the game, so they stay on the live **Spawn Vehicle**
-  action.)
-
-  ![Give Vehicle Kit](docs/img/give-vehicle-kit.png)
-
-- **Spawn Vehicle** action — spawns any of the nine CHOAM vehicles on the
-  selected online player, with an optional tier-template loadout (e.g.
-  *T6_Combat*, *T5_Inventory*) and a *Persistent* toggle.
-- **Give whole tier set (Mk1–Mk6).** When the selected item is gradeable gear
-  (weapon, armor, stillsuit, augment), one click hands it over at every grade
-  Mk1 through Mk6 — online (instant) or offline (on next login).
-- **Full gradeable-gear catalog (~1.3k entries).** Every gradeable weapon,
-  garment, augment, and schematic is now searchable and tier-set-giveable from
-  the Add Item / Give Item picker, each tagged with its `gradeable` flag and
-  base `tier`.
-- **Apply Quick Preset** action — completes a whole story/journey chapter in one
-  click from a dropdown (Skip NPE, A New Beginning, Find the Fremen, All of Act 1,
-  Unlock All Lore, and the Vermillius/Deep Desert/Taxation/Overland skips).
-  Applies by account id, so it works online or offline.
-- **Stop VM Only** command — powers off just the VM for maintenance; while a
-  battlegroup is live it steers you to **Stop Full Stack** for a graceful
-  shutdown instead.
-- **Fixes:** bulk give (incl. Give Package) now lands on **online** players, not
-  just offline ones; the give-items handler no longer crashes with "Argument
-  types do not match"; Server Health no longer goes stale while the app is left
-  open (polling now refreshes on tab visibility / window focus); and Apply Quick
-  Preset now actually completes its nodes.
-
-### New in v12.0.0
-
-- **full Gameplay Admin build-out.** the Gameplay Admin portal lives
-  natively inside DST as the **Gameplay Admin** tab — 54 player-management
-  endpoints (currency, faction rep, char XP, items, vehicles, teleport,
-  progression, contracts, jobs, codex, storage), an RMQ-backed
-  `ServerCommand` channel with 11 live online-player handlers, a typed
-  TypeScript client for every endpoint, and a bucketed **Actions** panel
-  grouping all 28 player actions by intent (Lifecycle / Communication /
-  Inventory / Progression / Punishment / Diagnostics).
-- **Players tab polish.** A **Hide GM** toggle (Eye / EyeOff,
-  localStorage-persisted) filters the GM player out of the list, the
-  Online / Faction StatCards, and the Server Overview bucket counts in one
-  click. Three new ways to deselect a player and return to Server Overview:
-  click the selected row again, press Escape, or hit the new X Close
-  button on the player card header. The **Items** actions (Give Item,
-  Repair Equipped Gear, Fill Water, Clean Inventory) moved into the
-  Inventory section so they sit between the player's name and inventory
-  list rather than buried in a separate group.
-- **Market + Market Bot.** **Seed market** bulk-lists every catalogued
-  template across all 6 quality grades in one shot, with live progress
-  bar, abort button, and bulk INSERT chunking that survives huge catalogs
-  on the Windows argv limit. A 15s TTL cache on enriched listings kills
-  sort lag, **Clear Duke listings** wipes orphan inventory rather than
-  just the referenced ones, and a configurable per-template `price_floor`
-  (default 50) keeps the bot from listing trivially-priced items.
-- **Installer migration.** Upgrading from pre-12.0.0 wipes the legacy
-  per-user autostart scheduled tasks (`\Dune Server\DuneServer-Autostart-<sid>`),
-  but later v12.0.x → v12.0.y in-app updates preserve your autostart
-  preference.
-
-### Carried forward from v11
-
-- **All default settings browser (Game Config).** A collapsible *All
-  default settings* card reads the battlegroup's live `DefaultGame.ini` and
-  `DefaultEngine.ini` from a running game-server pod and merges them with
-  your `UserGame.ini` / `UserEngine.ini` overrides — every section is
-  expandable, every key gets a type-aware editor, overrides are badged, and
-  changes are saved through the existing managed-block writer (with a
-  `.dstbak-<ts>` backup).
-- **Risk-acknowledgement modal on Game Config.** A *"Use at your own
-  risk"* modal greets first-time visitors to Game Config (and re-prompts
-  once after every DST update) so a bad edit isn't a silent footgun.
-- **Theming engine.** A Settings → **Appearance** card with six built-in
-  presets — Eyes of Ibad, Sietch Tabr, Caladan, Giedi Prime, House Harkonnen,
-  and Atreides — plus per-token color customization, JSON import/export, and
-  live recoloring of the in-app terminal. Your choice is persisted locally and
-  applied before React mounts (no flash of the default theme on launch).
-- **PowerShell page is loopback-only.** The free-form terminal is hidden, and
-  refused server-side, for any viewer that isn't on the host machine itself.
-- **Run at Windows startup.** An opt-in **Help → Run at Windows startup**
-  toggle keeps the server alive in the tray across sign-ins.
-
-See [`CHANGELOG.md`](CHANGELOG.md) for the full release history and
+See the **[latest release notes](https://github.com/coastal-ms/DST-DuneServerTool/releases)**
+and [`CHANGELOG.md`](CHANGELOG.md) for the complete, versioned history, and
 [`CONTRIBUTING.md`](CONTRIBUTING.md) for the change-control workflow.
 
-### License & attribution
+## License & attribution
 
 DST is released under the **Apache License 2.0** (see [`LICENSE`](LICENSE)
 and [`NOTICE`](NOTICE)). You're welcome to use it, fork it, modify it, and
