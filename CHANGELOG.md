@@ -13,6 +13,10 @@ here cover everything those tags shipped.
 
 ## [Unreleased]
 
+### Changed
+
+- **Editing a player's tags now fires the game's server-side unlock triggers.** The **Tags** panel's **Save** previously overwrote the tag set with a raw delete-then-insert that bypassed the game's database triggers, so tag changes that are supposed to cascade (faction reputation, Journey / Landsraad unlock hooks) didn't take effect until something else re-ran them. Save now computes what you actually added and removed and applies that **delta** through the same trigger-firing path the server uses itself, so adding e.g. `Journey.LandsraadContractsUnlocked` unlocks it for real. The now-redundant standalone **Update Tags (add / remove)** action row has been removed — the Tags panel does everything it did, correctly.
+
 ### Fixed
 
 - **The tag editor's "Add" button now works for custom tags not in the built-in catalog.** When you typed a tag the catalog didn't recognise, the picker said *"No known tags match … Press Add to use it anyway"* — but "Add" was just static text with nothing to click, so the only way to actually add a custom tag was to press Enter (undiscoverable). The picker now shows a real, clickable **Add "&lt;your tag&gt;"** row whenever your text matches no catalog entry, so off-catalog tags (e.g. a one-off `Cosmetic.*` marker) can be added the same way as catalogued ones.
