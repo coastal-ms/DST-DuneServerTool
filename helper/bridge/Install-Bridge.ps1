@@ -7,9 +7,10 @@
     (pwsh.exe) at user logon. The supervisor relaunches DstHelperBridge.ps1
     within seconds whenever it exits (crash, error, or external kill), so the
     bridge self-heals without depending on a restart/keepalive trigger firing. A
-    2-minute keepalive trigger plus the logon trigger are kept as a backstop for
-    the rarer case of the supervisor process itself being killed (IgnoreNew
-    avoids duplicates while it is healthy).
+    single logon trigger (re)establishes the supervisor after every sign-in; there
+    is deliberately NO periodic keepalive trigger, because relaunching the hidden
+    helper on a timer in an interactive session can briefly flash a console window
+    on the desktop (IgnoreNew still avoids duplicates while it is healthy).
 
     The bridge binds LOOPBACK (127.0.0.1) only and is reached remotely via a
     Cloudflare quick tunnel (cloudflared connects out from this PC). Because
@@ -91,19 +92,15 @@ sh.Run """$pwshForVbs"" -NoLogo -NoProfile -ExecutionPolicy Bypass -WindowStyle 
 
     $action = New-ScheduledTaskAction -Execute 'wscript.exe' -Argument "`"$launcherVbs`""
 
-    # Two triggers cover the cases the supervisor loop cannot heal by itself
-    # (i.e. the supervisor process itself ending):
-    #   1. AtLogOn      — start when the host user signs in (reboot / re-login).
-    #   2. Keepalive    — re-fire every 2 minutes, indefinitely. Combined with
-    #                     MultipleInstances=IgnoreNew below this is a no-op while
-    #                     the supervisor is healthy, but relaunches it within
-    #                     ~2 min if the supervisor process itself was killed.
-    # A large finite RepetitionDuration is used because [TimeSpan]::MaxValue
-    # trips a known Register-ScheduledTask bug.
+    # A single AtLogOn trigger starts the supervisor when the host user signs in
+    # (reboot / re-login). We deliberately do NOT register a periodic keepalive
+    # trigger: in an interactive session Task Scheduler relaunches the VBS -> pwsh
+    # action every time such a trigger fires, and even the window-hidden shim
+    # briefly allocates a console host that can FLASH on the desktop. The
+    # supervisor's own loop already relaunches the daemon within ~5s if it crashes,
+    # and AtLogOn re-establishes the supervisor after every sign-in, so a periodic
+    # relaunch is not worth the visible flash it costs.
     $logonTrigger = New-ScheduledTaskTrigger -AtLogOn -User "$env:USERDOMAIN\$env:USERNAME"
-    $keepAlive    = New-ScheduledTaskTrigger -Once -At (Get-Date).AddMinutes(1) `
-        -RepetitionInterval (New-TimeSpan -Minutes 2) `
-        -RepetitionDuration (New-TimeSpan -Days 3650)
 
     $settings = New-ScheduledTaskSettingsSet `
         -AllowStartIfOnBatteries `
@@ -122,10 +119,10 @@ sh.Run """$pwshForVbs"" -NoLogo -NoProfile -ExecutionPolicy Bypass -WindowStyle 
     Register-ScheduledTask `
         -TaskName $TaskName `
         -Action $action `
-        -Trigger @($logonTrigger, $keepAlive) `
+        -Trigger $logonTrigger `
         -Settings $settings `
         -Principal $principal `
-        -Description 'Reverse-proxies mobile/remote requests on loopback to the locally running DST instance (reached externally via a Cloudflare quick tunnel). Self-healing: a supervisor loop relaunches the daemon within seconds if it crashes or is killed; a 2-minute keepalive trigger restarts the supervisor itself if it dies; IgnoreNew prevents duplicates while it is healthy.' | Out-Null
+        -Description 'Reverse-proxies mobile/remote requests on loopback to the locally running DST instance (reached externally via a Cloudflare quick tunnel). Self-healing: a supervisor loop relaunches the daemon within seconds if it crashes or is killed, and an AtLogOn trigger re-establishes the supervisor after each sign-in; IgnoreNew prevents duplicates while it is healthy.' | Out-Null
 }
 
 $bridgeScript = Join-Path $PSScriptRoot 'DstHelperBridge.ps1'
