@@ -73,6 +73,15 @@ MODE="${DUNE_CLEAR_MODE:-manual}"
 LOG=/var/log/dune-clear-partitions.log
 MAP_SUFFIXES="-deepdesert-1 -sh-arrakeen -sh-harkovillage"
 KUBE="/usr/local/bin/k3s kubectl"
+# Per-map marker dir: records a map first seen pinned-but-pod-less in cron mode,
+# so we only cycle it if it is STILL pod-less on a LATER tick (spin-up guard). A
+# legitimate on-demand spin-up gets its pod within seconds -- long before the
+# next 15-min cron tick -- so it clears its marker below and is never cycled.
+# Boot/manual modes ignore markers (aggressive by design); a demonstrably dead
+# pod (Terminating / CrashLoop / image error) is still cycled immediately.
+MARKER_DIR=/var/lib/dune-clear-partitions
+mkdir -p "$MARKER_DIR" 2>/dev/null
+marker_for() { echo "$MARKER_DIR/$(echo "$1" | tr -c 'A-Za-z0-9._-' '_').podless"; }
 # Only do the long boot races in boot mode; cron/manual probe briefly.
 if [ "$MODE" = "boot" ]; then WAIT_ATTEMPTS="${DUNE_CLEAR_ATTEMPTS:-60}"; else WAIT_ATTEMPTS=1; fi
 
@@ -130,6 +139,7 @@ echo "$matches" | while IFS="$(printf '\t')" read -r ns name; do
       *"$suffix")
         cur=$($KUBE -n "$ns" get igwsss "$name" -o jsonpath="{.spec.partitions}" 2>/dev/null)
         if [ "$cur" = "[]" ] || [ -z "$cur" ]; then
+          rm -f "$(marker_for "$name")" 2>/dev/null
           log "$ns/$name: partitions already empty ($cur), no change"
           break
         fi
@@ -157,6 +167,7 @@ echo "$matches" | while IFS="$(printf '\t')" read -r ns name; do
 
         # Never disturb a live session.
         if [ "$any_ready" = "1" ]; then
+          rm -f "$(marker_for "$name")" 2>/dev/null
           log "$ns/$name: pinned ($cur) but a Ready pod is serving players, skipping"
           break
         fi
@@ -166,8 +177,25 @@ echo "$matches" | while IFS="$(printf '\t')" read -r ns name; do
         if [ "$MODE" = "boot" ] || [ "$MODE" = "manual" ]; then
           do_cycle=1
         else
-          # cron: only the clearly-safe cases (no pod, or a demonstrably stuck pod).
-          if [ "$pod_n" = "0" ] || [ "$any_stuck" = "1" ]; then do_cycle=1; fi
+          # cron: only the clearly-safe cases.
+          if [ "$any_stuck" = "1" ]; then
+            # Demonstrably dead pod (Terminating / CrashLoop / image error): cycle now.
+            do_cycle=1
+          elif [ "$pod_n" = "0" ]; then
+            # Pinned but pod-less is AMBIGUOUS: either a genuinely stuck pin, or a
+            # spin-up whose pod has not been scheduled yet. Spin-up guard: only
+            # cycle if it was ALSO pod-less on a previous tick. A real spin-up
+            # resolves in seconds and clears its marker (via the empty/ready/pod
+            # branches) long before the next tick, so it is never cycled.
+            mk="$(marker_for "$name")"
+            if [ -f "$mk" ]; then
+              do_cycle=1
+            else
+              : > "$mk" 2>/dev/null
+              log "$ns/$name: pinned ($cur), pod-less first sighting -- waiting one tick before cycling (spin-up guard)"
+              break
+            fi
+          fi
         fi
 
         if [ "$do_cycle" != "1" ]; then
@@ -176,6 +204,7 @@ echo "$matches" | while IFS="$(printf '\t')" read -r ns name; do
         fi
 
         if $KUBE -n "$ns" patch igwsss "$name" --type=merge -p '{"spec":{"replicas":0,"partitions":[]}}' >>"$LOG" 2>&1; then
+          rm -f "$(marker_for "$name")" 2>/dev/null
           log "$ns/$name: cycled (was partitions=$cur, pods=$pod_n, stuck=$any_stuck, mode=$MODE) -> director will restore the floor"
         else
           log "$ns/$name: ERROR patching"
@@ -217,10 +246,16 @@ rc-update add local default >/dev/null 2>&1 || true
 #    automatic app-start sync (conservative), 'manual' for the explicit Fix
 #    Partitions button (aggressive, user intent). Defaults to conservative
 #    'cron' so an unspecified/automatic run never disturbs a live map.
+#    'none' / 'install-only' installs+refreshes the heal/hook/cron but does
+#    NOT run it (used to update the automation on a live server without
+#    touching any map this instant).
 # ---------------------------------------------------------------------------
 RUNMODE="${1:-cron}"
-case "$RUNMODE" in boot|cron|manual) ;; *) RUNMODE=cron ;; esac
-DUNE_CLEAR_MODE="$RUNMODE" "$HEAL" 2>/dev/null
+case "$RUNMODE" in
+  boot|cron|manual)   DUNE_CLEAR_MODE="$RUNMODE" "$HEAL" 2>/dev/null ;;
+  none|install-only)  log "install-only: heal + boot hook + cron refreshed, NOT run now ($RUNMODE)" ;;
+  *)                  DUNE_CLEAR_MODE=cron "$HEAL" 2>/dev/null ;;
+esac
 
 log "dune-clear-partitions install/refresh done"
 echo DUNE_CLEAR_PARTITIONS_OK
