@@ -13,6 +13,12 @@ here cover everything those tags shipped.
 
 ## [Unreleased]
 
+## [12.18.1] - 2026-07-07
+
+### Fixed
+
+- **On-demand map partition self-heal no longer has a spin-up race.** The autonomous partition healer runs a conservative `*/15` cron pass that clears a drifted `igwsss.spec.partitions` pin so Deep Desert / Arrakeen / Harko Village can launch after an unclean host crash + VM reboot. It previously cycled **any** pinned on-demand map with no pod immediately — which left a ~1–3 second window during a manual spin-up (partition pinned and `replicas=1`, but k3s hasn't scheduled the pod yet) where a cron tick landing in that window could reset the in-progress spin-up. The cron pass now applies a **spin-up guard**: a pinned-but-pod-less map is recorded on first sighting and only cycled if it is *still* pod-less on a later tick. A legitimate spin-up gets its pod within seconds and clears the marker long before the next tick, so it is never disturbed. Unchanged: live sessions (Ready pods) are always skipped, demonstrably dead pods (`Terminating` / `CrashLoopBackOff` / image error) are still healed immediately, and the boot-time hook + the manual **Fix Partitions** button remain aggressive by design. A new `install-only` mode also lets DST refresh the on-VM automation without running the heal, so the update can be applied to a live server without touching any map.
+
 ## [12.18.0] - 2026-07-07
 
 ### Added
