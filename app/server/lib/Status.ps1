@@ -9,14 +9,22 @@ $script:DuneBattlegroupSnapshotCacheKey = '__cache:status-bg-snapshot'
 
 # Detect whether an SSH private key file is passphrase-protected (encrypted).
 # Returns $true / $false, or $null when it can't be determined (file missing,
-# ssh-keygen unavailable). `ssh-keygen -y -P ''` prints the public key for an
+# ssh-keygen unavailable). `ssh-keygen -y -P '""'` prints the public key for an
 # unencrypted key (exit 0) and fails with an "incorrect passphrase" error for an
 # encrypted one — this works for both PEM and modern OpenSSH key formats.
+#
+# The empty passphrase MUST be spelled `'""'` (single-quoted double-quotes), not
+# `''`. Under Windows PowerShell 5.1 — the runtime DuneServer.exe uses — a bare
+# empty-string argument is dropped when invoking a native exe, so ssh-keygen would
+# see `-P -f <path>`, swallow `-f` as the passphrase, and fail every key with
+# "Too many arguments" — making this helper return $null (undetermined) for BOTH
+# encrypted and plain keys. `'""'` survives as a literal empty string. Verified
+# on PS 5.1.
 function Test-DuneSshKeyEncrypted {
     param([string]$KeyPath)
     if (-not $KeyPath -or -not (Test-Path -LiteralPath $KeyPath)) { return $null }
     try {
-        $out  = & ssh-keygen -y -P '' -f $KeyPath 2>&1
+        $out  = & ssh-keygen -y -P '""' -f $KeyPath 2>&1
         $code = $LASTEXITCODE
         if ($code -eq 0) { return $false }
         $text = ($out | Out-String)
