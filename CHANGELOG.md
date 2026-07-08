@@ -13,6 +13,8 @@ here cover everything those tags shipped.
 
 ## [Unreleased]
 
+## [12.18.0] - 2026-07-07
+
 ### Added
 
 - **VM memory-pressure diagnostics — DST now surfaces the "node is out of RAM" signature itself.** When a home-hosted VM runs low on memory the kubelet SIGKILLs whatever is using the most: the four Funcom operator controller-managers get exit-137 / OOMKilled with restart counts climbing into the 30s, the Postgres pod is evicted, and the nightly DB backup hangs for minutes while the node pages. The tell-tale is a tiny `MemAvailable` with `Swap: 0`. This has now bitten three times (murm ping-surge, Hagga per-map sizing, and a battlegroup restarting outside its 02:00 schedule) and could previously only be found by exporting logs and hand-reading them. A new read-only probe (`app/resources/remote-scripts/dune-mem-pressure-probe.sh`, run over the existing SSH path) reads operator/DB pod restart counts + last-terminated state and the VM's `free -h` / `/proc/meminfo`, and DST now:
