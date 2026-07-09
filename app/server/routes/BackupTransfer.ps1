@@ -227,6 +227,9 @@ Register-DuneRoute -Method POST -Path '/api/db/backup-delete' -Handler {
         }
         Write-DuneJson -Response $res -Body $result
     } catch {
-        Write-DuneError -Response $res -Status 502 -Message "Delete failed: $($_.Exception.Message)"
+        # Return the bare reason — the web UI prepends its own "Delete failed:"
+        # action label, so prefixing here produced "Delete failed: Delete failed:
+        # …" in the toast (slowdesolation, v12.18.5).
+        Write-DuneError -Response $res -Status 502 -Message "$($_.Exception.Message)"
     }
 }
