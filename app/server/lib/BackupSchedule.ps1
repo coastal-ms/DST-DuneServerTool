@@ -179,7 +179,15 @@ function Invoke-DuneBackupShell {
     $clean = $Script -replace "`r",''
     $wrapped = "( $clean`n)`n__dst_rc=`$?`nprintf '\n__DST_RC:%s\n' `"`$__dst_rc`""
     $b64 = [Convert]::ToBase64String([Text.Encoding]::UTF8.GetBytes($wrapped))
-    $cmd = "echo $b64 | base64 -d | sudo bash 2>&1"
+    # Feed the base64 payload over ssh STDIN, not the command line. Embedding a
+    # large script as an ssh command-line argument hits a length ceiling — the
+    # remote rejects it with "Connection closed by remote host" once the batch
+    # grows (slowdesolation, v12.18.5: a multi-file delete failed on select-all
+    # but worked in batches up to ~8). Keeping the remote command tiny
+    # (`base64 -d | sudo bash`) and streaming the payload through stdin removes
+    # that ceiling entirely, so a delete/prune of any size runs in one round-trip.
+    $cmd = 'base64 -d | sudo bash 2>&1'
+    $stdin = $b64 + "`n"
     # A missing __DST_RC sentinel (rc stays -1) means the SSH channel dropped or
     # timed out before the wrapped script finished — usually a transient hiccup
     # (a cold connection, or a collision with the ~60s background health poller
@@ -189,7 +197,7 @@ function Invoke-DuneBackupShell {
     $rc = -1
     $body = ''
     for ($attempt = 1; $attempt -le 2; $attempt++) {
-        $out = Invoke-V6Ssh -Ip $Ip -Cmd $cmd -TimeoutSec $TimeoutSec
+        $out = Invoke-V6Ssh -Ip $Ip -Cmd $cmd -TimeoutSec $TimeoutSec -StdinData $stdin
         $joined = if ($null -eq $out) { '' } else { ($out -join "`n") }
         $body = $joined
         $m = [regex]::Match($joined, '(?ms)\r?\n?__DST_RC:(\d+)\r?\n?\s*$')
@@ -695,7 +703,12 @@ function Remove-DuneBackupFiles {
         $q = "'" + $path + "'"
         # Only report OK when the .backup itself is gone after rm. The .yaml
         # sidecar is best-effort (may not exist for manually-uploaded files).
-        [void]$sb.AppendLine("if sudo rm -f $q && sudo rm -f ${q}.yaml 2>/dev/null; then if [ ! -e $q ]; then echo `"__DEL_OK:$path`"; else echo `"__DEL_FAIL:$path|still present`"; fi; else echo `"__DEL_FAIL:$path|rm failed`"; fi")
+        # No inner `sudo`: the whole script already runs under `sudo bash` (root),
+        # so per-file `sudo` was a redundant fork per file — on a large select-all
+        # delete against a memory-pressured VM those extra forks add up and could
+        # push the batch past the SSH timeout. Plain `rm` under the root shell is
+        # equivalent and much cheaper.
+        [void]$sb.AppendLine("if rm -f $q && rm -f ${q}.yaml 2>/dev/null; then if [ ! -e $q ]; then echo `"__DEL_OK:$path`"; else echo `"__DEL_FAIL:$path|still present`"; fi; else echo `"__DEL_FAIL:$path|rm failed`"; fi")
     }
 
     if ($sb.Length -eq 0) {

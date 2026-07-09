@@ -21,6 +21,7 @@ here cover everything those tags shipped.
 
 - **Backup delete errors no longer show a doubled "Delete failed:" prefix.** A failed backup delete could surface as `Delete failed: Delete failed: …` because both the server and the web UI added the label. The server now returns just the reason and the UI adds the single "Delete failed:" prefix.
 - **A transient SSH hiccup during a multi-file backup delete or dump-pod prune no longer reports a false failure.** If the SSH connection to the VM dropped mid-command (e.g. a brief collision with the background health check), the action could report `SSH to VM failed (no exit code returned)` even though a second click worked immediately. DST now automatically retries the command once before surfacing that error, so the momentary drop recovers on its own.
+- **Deleting many backup files at once no longer fails on "select all".** A large multi-file delete used to fail (`SSH to VM failed (no exit code returned)`) while smaller batches went through, because the whole delete script was passed as one over-long SSH command-line argument that the VM rejected once the batch grew. DST now streams the script to the VM over stdin (so there's no length ceiling) and drops a redundant per-file privilege escalation, so a delete of any size completes in a single pass — including on memory-pressured VMs where the old approach could also time out.
 
 ## [12.18.5] - 2026-07-09
 

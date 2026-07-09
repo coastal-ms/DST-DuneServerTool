@@ -184,3 +184,34 @@ Describe 'Invoke-DuneBackupShell transient retry' -Tag 'Pure' {
         $r.rc | Should -Be -1
     }
 }
+
+# Batch-size ceiling fix: the script is streamed over ssh STDIN instead of being
+# embedded in the ssh command line, so a large multi-file delete no longer hits
+# the remote command-length limit that made select-all fail while batches of ~8
+# worked (slowdesolation, v12.18.5).
+Describe 'Invoke-DuneBackupShell payload delivery' -Tag 'Pure' {
+
+    It 'streams the script over stdin and keeps the remote command tiny' {
+        Mock -CommandName Invoke-V6Ssh -MockWith { @('ok', '__DST_RC:0') }
+        $r = Invoke-DuneBackupShell -Ip '10.0.0.1' -Script 'echo hi'
+        $r.rc | Should -Be 0
+        Should -Invoke Invoke-V6Ssh -Times 1 -Exactly -ParameterFilter {
+            $Cmd -eq 'base64 -d | sudo bash 2>&1' -and -not [string]::IsNullOrWhiteSpace($StdinData)
+        }
+    }
+}
+
+Describe 'Remove-DuneBackupFiles delete script' -Tag 'Pure' {
+
+    It 'uses plain rm (no redundant inner sudo — the outer shell is already root)' {
+        $script:capturedScript = $null
+        Mock -CommandName Invoke-DuneBackupShell -MockWith {
+            $script:capturedScript = $Script
+            @{ rc = 0; out = '__DEL_OK:/funcom/artifacts/database-dumps/x/a-20260101-000000.backup' }
+        }
+        $p = '/funcom/artifacts/database-dumps/x/a-20260101-000000.backup'
+        Remove-DuneBackupFiles -Ip '10.0.0.1' -Paths @($p) | Out-Null
+        $script:capturedScript | Should -Not -Match 'sudo rm'
+        $script:capturedScript | Should -Match 'rm -f'
+    }
+}
