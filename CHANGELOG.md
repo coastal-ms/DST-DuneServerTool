@@ -13,6 +13,8 @@ here cover everything those tags shipped.
 
 ## [Unreleased]
 
+## [12.18.3] - 2026-07-09
+
 ### Changed
 
 - **The VM memory-pressure warning banner is now opt-in (off by default).** Introduced in v12.18.0 and made dismissible in v12.18.2, the red Server Health banner still proved too intrusive shown-by-default. It no longer appears unless you turn it on under **Settings → Dashboard warnings → "Show VM memory-pressure warning."** When it's off (the default) the dashboard doesn't even poll the probe. Nothing else changed: the read-only `GET /api/diagnostics/vm-memory` probe still runs on demand, the Start/Reboot console still prints the warning, and `vm-memory-pressure.txt` is still included in the diagnostics bundle — so the signal is preserved for support without nagging every operator. Existing installs that had dismissed or shown the banner both land on the new off-by-default state.

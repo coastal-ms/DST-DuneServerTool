@@ -148,7 +148,7 @@ public static extern bool IsIconic(System.IntPtr hWnd);
 }
 
 # Version (one of the 5 sync'd constants; see persistent-notes.md)
-$script:DuneToolVersion = '12.18.2'
+$script:DuneToolVersion = '12.18.3'
 
 # ---------- Restart-on-detach handoff -----------------------------------------
 # When a prior "Web Portal" detach left the server running headless, the
