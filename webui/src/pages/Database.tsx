@@ -76,7 +76,13 @@ export function Database() {
 
   const showToast = useCallback((kind: 'ok' | 'err', msg: string) => {
     setToast({ kind, msg })
-    window.setTimeout(() => setToast(t => (t?.msg === msg ? null : t)), 4000)
+    // Success messages self-dismiss; errors stay pinned until the user closes
+    // them (or the next action replaces them). A delete/prune failure that
+    // vanished after 4s while the list re-rendered was exactly the "errors
+    // don't bubble to the final state" complaint (slowdesolation, 2026-07-09).
+    if (kind === 'ok') {
+      window.setTimeout(() => setToast(t => (t?.msg === msg ? null : t)), 4000)
+    }
   }, [])
 
   async function runMaint(name: 'backup' | 'import') {
@@ -254,11 +260,19 @@ export function Database() {
       />
 
       {toast && (
-        <div className={`card p-3 mb-4 text-sm flex items-center gap-2 ${toast.kind === 'ok'
+        <div role="alert" className={`card p-3 mb-4 text-sm flex items-start gap-2 ${toast.kind === 'ok'
           ? 'border-success/40 bg-success/10 text-success'
           : 'border-danger/40 bg-danger/10 text-danger'}`}>
-          <Icon name={toast.kind === 'ok' ? 'CheckCircle2' : 'AlertCircle'} size={14} />
-          {toast.msg}
+          <Icon name={toast.kind === 'ok' ? 'CheckCircle2' : 'AlertCircle'} size={14} className="mt-0.5 shrink-0" />
+          <span className="flex-1 whitespace-pre-wrap break-words">{toast.msg}</span>
+          <button
+            type="button"
+            onClick={() => setToast(null)}
+            title="Dismiss"
+            className="shrink-0 opacity-70 hover:opacity-100"
+          >
+            <Icon name="X" size={14} />
+          </button>
         </div>
       )}
 
@@ -652,6 +666,9 @@ function BackupScheduleCard({ vmRunning, showToast }: BackupScheduleCardProps) {
   const [sortBy, setSortBy]     = useState<'date-desc' | 'date-asc' | 'size-desc' | 'size-asc' | 'name'>('date-desc')
   const [selected, setSelected] = useState<Set<string>>(new Set())
   const [deleting, setDeleting] = useState(false)
+  // Paths currently being deleted — drives the per-row spinner so a single-file
+  // delete shows visible progress on its own row (not just the header button).
+  const [deletingPaths, setDeletingPaths] = useState<Set<string>>(new Set())
 
   // Draft state — initialised from `schedule` when it loads, then locally
   // editable so the user can preview their choice before clicking Save.
@@ -823,6 +840,7 @@ function BackupScheduleCard({ vmRunning, showToast }: BackupScheduleCardProps) {
   async function runDelete(paths: string[]) {
     if (paths.length === 0) return
     setDeleting(true)
+    setDeletingPaths(new Set(paths))
     try {
       const r = await deleteBackups({ paths })
       const del = r.deleted?.length ?? 0
@@ -834,12 +852,16 @@ function BackupScheduleCard({ vmRunning, showToast }: BackupScheduleCardProps) {
         showToast('ok', r.message ?? `Deleted ${del} backup${del === 1 ? '' : 's'}.`)
       }
       setSelected(new Set())
-      void getBackupHistory({ recent: 200, logLines: 50 }).then(setHistory).catch(() => {})
     } catch (e) {
       showToast('err', `Delete failed: ${e instanceof Error ? e.message : String(e)}`)
     } finally {
       setDeleting(false)
+      setDeletingPaths(new Set())
     }
+    // Reload OUTSIDE the try/finally — awaiting a state-reload inside the handler
+    // chain doesn't flush the render in the DST WebView2 host; a top-level
+    // fire-and-forget does (mirrors handlePruneDumpPods + the Refresh button).
+    void loadAll()
   }
 
   function handleDeleteOne(path: string) {
@@ -1141,7 +1163,7 @@ function BackupScheduleCard({ vmRunning, showToast }: BackupScheduleCardProps) {
               title="Delete selected backups"
             >
               <Icon name={deleting ? 'Loader2' : 'Trash2'} size={12} className={deleting ? 'animate-spin' : ''} />
-              Delete{selected.size > 0 ? ` (${selected.size})` : ''}
+              {deleting ? 'Deleting…' : `Delete${selected.size > 0 ? ` (${selected.size})` : ''}`}
             </button>
           </div>
         )}
@@ -1200,9 +1222,9 @@ function BackupScheduleCard({ vmRunning, showToast }: BackupScheduleCardProps) {
                           onClick={() => handleDeleteOne(f.path)}
                           disabled={!!transferring || deleting}
                           className="text-danger hover:text-danger-bright disabled:opacity-40 shrink-0"
-                          title="Delete from server"
+                          title={deletingPaths.has(f.path) ? 'Deleting…' : 'Delete from server'}
                         >
-                          <Icon name="Trash2" size={12} />
+                          <Icon name={deletingPaths.has(f.path) ? 'Loader2' : 'Trash2'} size={12} className={deletingPaths.has(f.path) ? 'animate-spin' : ''} />
                         </button>
                       </div>
                     </td>
