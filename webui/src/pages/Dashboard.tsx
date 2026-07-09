@@ -188,7 +188,7 @@ export function Dashboard() {
         description="Live VM, battlegroup, and port status."
       />
 
-      <VmMemoryPressureBanner enabled={Boolean(vm?.running)} />
+      <VmMemoryPressureBanner vmRunning={Boolean(vm?.running)} />
 
       <section className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
         <div className="card card-hover p-4">
