@@ -13,6 +13,10 @@ here cover everything those tags shipped.
 
 ## [Unreleased]
 
+### Fixed
+
+- **The backup dump-pod cleanup now also clears Evicted/Failed dump pods.** DST already auto-prunes the `*-dump-*` pods Funcom's database-backup jobs leave behind (Database page → Backup schedule "keep last N pods", plus the manual **Prune** button), but it only removed **Succeeded** ones — so dump pods that were **Evicted** (e.g. OOM-killed during a VM memory-pressure event) were left behind, piled up in the Pods view, and survived every battlegroup/VM restart (they live in the k3s datastore, not as live processes, so a reboot just reloads them). Both the post-backup cron pruner and the manual Prune button now treat **all terminal dump pods** (Succeeded/Completed + Failed/Evicted) as prune candidates under the same keep-last / keep-days retention. In-progress dumps (Running/Pending) are still never touched.
+
 ## [12.18.3] - 2026-07-09
 
 ### Changed
