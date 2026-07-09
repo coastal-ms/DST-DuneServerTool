@@ -13,6 +13,10 @@ here cover everything those tags shipped.
 
 ## [Unreleased]
 
+### Changed
+
+- **The VM memory-pressure warning banner is now opt-in (off by default).** Introduced in v12.18.0 and made dismissible in v12.18.2, the red Server Health banner still proved too intrusive shown-by-default. It no longer appears unless you turn it on under **Settings → Dashboard warnings → "Show VM memory-pressure warning."** When it's off (the default) the dashboard doesn't even poll the probe. Nothing else changed: the read-only `GET /api/diagnostics/vm-memory` probe still runs on demand, the Start/Reboot console still prints the warning, and `vm-memory-pressure.txt` is still included in the diagnostics bundle — so the signal is preserved for support without nagging every operator. Existing installs that had dismissed or shown the banner both land on the new off-by-default state.
+
 ### Fixed
 
 - **The Players → Tags panel no longer hides tags for heavily-tagged characters.** For a character with a large number of tags (200+), the Tags panel silently dropped whole alphabetically-later tag groups — most visibly the entire `Journey.*` group, which would "disappear on refresh" even though every tag was still present in the database. The cause was a read cap: the tag list was fetched with a 200-row limit and ordered alphabetically, so anything past ~row 200 (Contract.* alone can be 150+ rows) was truncated before it ever reached the UI. The cap is now high enough to return a mature character's full tag set, so all groups (Journey, and anything after it) show up correctly. This was a display-only bug — no tags were lost from the database, and the trigger-firing delta Save added in 12.18.2 already protected the hidden tags from being deleted.
