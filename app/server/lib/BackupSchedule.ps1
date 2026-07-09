@@ -62,7 +62,7 @@ $script:DuneBackupPodPruneKeepDaysDefault = 0
 # outpace the cron cadence (issue #363). One-line BusyBox-safe pipeline so
 # the whole backup command stays a single crontab entry:
 #   - kubectl jsonpath -> "ns|name|phase" per pod
-#   - awk filter to Succeeded dump-* pods
+#   - awk filter to terminal (Succeeded or Failed/Evicted) dump-* pods
 #   - sort by name (timestamp embedded, newest first), keep first N, delete rest
 # keepDays is intentionally NOT folded into the cron snippet — keeping the
 # crontab one-line + BusyBox-safe rules out the age math here. The cron tick
@@ -73,7 +73,7 @@ function New-DuneBackupPodPruneSnippet {
     if ($KeepLast -lt 0)   { $KeepLast = 0 }
     if ($KeepLast -gt 100) { $KeepLast = 100 }
     $skip = $KeepLast + 1
-    return "sudo kubectl get pods --all-namespaces -o jsonpath='{range .items[*]}{.metadata.namespace}|{.metadata.name}|{.status.phase}{`"\n`"}{end}' 2>/dev/null | awk -F'|' '`$3==`"Succeeded`" && `$2 ~ /-dump-[0-9]{8}-[0-9]{6}-pod`$/' | sort -t'|' -k2 -r | tail -n +$skip | while IFS='|' read ns nm phase; do echo `"`$(date) dst: prune dump pod `$ns/`$nm`" >> /var/log/dune-backup.log; sudo kubectl delete pod -n `"`$ns`" `"`$nm`" --ignore-not-found >> /var/log/dune-backup.log 2>&1; done"
+    return "sudo kubectl get pods --all-namespaces -o jsonpath='{range .items[*]}{.metadata.namespace}|{.metadata.name}|{.status.phase}{`"\n`"}{end}' 2>/dev/null | awk -F'|' '(`$3==`"Succeeded`" || `$3==`"Failed`") && `$2 ~ /-dump-[0-9]{8}-[0-9]{6}-pod`$/' | sort -t'|' -k2 -r | tail -n +$skip | while IFS='|' read ns nm phase; do echo `"`$(date) dst: prune dump pod `$ns/`$nm`" >> /var/log/dune-backup.log; sudo kubectl delete pod -n `"`$ns`" `"`$nm`" --ignore-not-found >> /var/log/dune-backup.log 2>&1; done"
 }
 
 # Build the full backup cron command for a given keepLast value.
@@ -709,8 +709,10 @@ function Remove-DuneBackupFiles {
 
 # -----------------------------------------------------------------------------
 # Public: list `*-dump-YYYYMMDD-HHMMSS-pod` pods left behind by Funcom's database-
-# backup jobs. They finish Succeeded but are never garbage-collected, so they
-# pile up over time (issue #363). Returned newest-first by the timestamp baked
+# backup jobs. They finish Succeeded (or Failed/Evicted when the node was low on
+# memory) but are never garbage-collected by k8s, so they pile up over time
+# (issue #363) — and survive restarts/reboots because they live in the k3s
+# datastore, not as live processes. Returned newest-first by the timestamp baked
 # into the pod name (kubectl creationTimestamp would work too, but the embedded
 # timestamp is naturally sortable as a string and survives clock drift).
 # -----------------------------------------------------------------------------
@@ -720,8 +722,8 @@ function Get-DuneBackupDumpPods {
     param([Parameter(Mandatory)][string]$Ip)
     # Stream namespace|name|startTime|phase|ownerKind|ownerName|controller via
     # jsonpath. Avoids needing jq on the VM. We filter by phase + name regex
-    # here so callers always get a canonical list (Completed/Succeeded dump-*
-    # pods only).
+    # here so callers always get a canonical list (terminal dump-* pods only:
+    # Completed/Succeeded plus Failed/Evicted).
     #
     # Owner reference info is included because "pod survives a force-delete"
     # means an owner controller is re-creating it with the same name — we
@@ -756,7 +758,13 @@ function Get-DuneBackupDumpPods {
         $ownerName = if ($parts.Count -gt 5) { [string]$parts[5] } else { '' }
         $ownerCtrl = if ($parts.Count -gt 6) { [string]$parts[6] } else { '' }
         if ($name -notmatch $script:DuneBackupDumpPodNameRegex) { continue }
-        if ($phase -ne 'Succeeded' -and $phase -ne 'Completed') { continue }
+        # Terminal dump-job pods only. "Succeeded"/"Completed" = the dump ran
+        # cleanly; "Failed" = the dump pod was Evicted or errored (e.g. OOM-killed
+        # during a VM memory-pressure event) — those are the leftovers that pile
+        # up worst and were previously left behind by this pruner. Running/Pending
+        # (an in-progress backup) are deliberately excluded so we never delete a
+        # live dump.
+        if ($phase -ne 'Succeeded' -and $phase -ne 'Completed' -and $phase -ne 'Failed') { continue }
 
         # Parse the timestamp baked into the name (authoritative — survives
         # status.startTime being cleared on terminal pods) and compute age.
@@ -800,7 +808,8 @@ function Get-DuneBackupDumpPodTimestamp {
 }
 
 # -----------------------------------------------------------------------------
-# Public: prune Succeeded/Completed dump-* pods. Two independent thresholds:
+# Public: prune terminal dump-* pods (Succeeded/Completed + Failed/Evicted).
+# Two independent thresholds:
 #   -KeepLast N   : keep at most the N most-recent pods (0 = no count cap)
 #   -KeepDays D   : also delete anything older than D days (0 = no age cap)
 # A pod survives only if it passes BOTH filters — exceeding either threshold
