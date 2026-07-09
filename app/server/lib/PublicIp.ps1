@@ -1222,18 +1222,52 @@ echo "BGIP_VERIFY_DONE"
             # --- Verify --------------------------------------------------------
             $steps.Add((New-DunePublicIpStepResult 'verify' 'Verify external IP + RabbitMQ port' 'running' "Checking node ExternalIP and TCP $target:31982.")) | Out-Null
             & $pub
+            # The battlegroup restart above brings the mq-game pod (which serves
+            # RabbitMQ on the DNAT'd port 31982) back cold; its endpoint isn't
+            # ready for ~30-90s after the restart. A single TCP probe fires
+            # during that boot gap and false-FAILs even though the server is
+            # fine moments later (the header "31982 TCP" pill goes green on its
+            # own). So poll with backoff up to ~90s and exit early on the first
+            # success. Discovered live 2026-07-07: verify printed FAILED while
+            # node ExternalIP, eth0 alias, DNAT -d, and 31982 were all correct
+            # ~1 min later.
             $tcp = $false
-            try { $tcp = Test-NetConnection -ComputerName $target -Port 31982 -InformationLevel Quiet -WarningAction SilentlyContinue } catch { $tcp = $false }
+            $verifyAttempts = 10
+            $verifyTick     = 9
+            for ($vi = 1; $vi -le $verifyAttempts; $vi++) {
+                $vwait = New-DunePublicIpStepResult 'verify' 'Verify external IP + RabbitMQ port' 'running' "Checking TCP $target:31982 (attempt $vi/$verifyAttempts, up to $($verifyAttempts * $verifyTick)s)..."
+                $steps[$steps.Count - 1] = $vwait
+                & $pub
+                try { $tcp = Test-NetConnection -ComputerName $target -Port 31982 -InformationLevel Quiet -WarningAction SilentlyContinue } catch { $tcp = $false }
+                if ($tcp) { break }
+                if ($vi -lt $verifyAttempts) { Start-Sleep -Seconds $verifyTick }
+            }
             $extOk = ($extIp -eq $target)
             if (-not $tcp) {
-                $detail = "TCP $target:31982 not reachable yet"
+                $detail = "TCP $target:31982 not reachable after $verifyAttempts attempts (~$($verifyAttempts * $verifyTick)s)"
                 if (-not $ready) { $detail += ' (servers still starting)' }
-                throw "$detail. Node ExternalIP=$extIp. If servers are still booting, retry the check from Server Health shortly."
+                # If the external probe never succeeded BUT every internal signal
+                # is healthy — node ExternalIP == target, the eth0 alias is up,
+                # and the battlegroup reached Healthy — the server is actually
+                # reconciled. A TCP probe from the host itself can false-negative
+                # on routers without NAT loopback (hairpin), so don't scream
+                # FAILED: downgrade to a warning that says to confirm 31982 from
+                # an outside network.
+                $aliasOk   = ($rawVerify -match '(?m)^ALIAS_OK=yes\s*$')
+                $bgHealthy = $ready -or ($rawVerify -match '(?m)^BG_PHASE=Healthy\s*$')
+                if ($extOk -and $aliasOk -and $bgHealthy) {
+                    $wdetail = "$detail, but internal signals are healthy (node ExternalIP=$target, eth0 alias present, battlegroup Healthy). This host's external TCP probe can false-negative on routers without NAT loopback (hairpin) - confirm port 31982 from an outside network. Watch the header's '31982 TCP' status pill, which reflects the live port."
+                    $steps[$steps.Count - 1] = New-DunePublicIpStepResult 'verify' 'Verify external IP + RabbitMQ port' 'warning' $wdetail $rawVerify
+                    & $pub
+                } else {
+                    throw "$detail. Node ExternalIP=$extIp. If servers are still booting, retry the check from Server Health shortly."
+                }
+            } else {
+                $vdetail = "TCP $target:31982 reachable."
+                if ($extOk) { $vdetail += " Node ExternalIP=$target." } else { $vdetail += " WARNING: node ExternalIP reported '$extIp'." }
+                $steps[$steps.Count - 1] = New-DunePublicIpStepResult 'verify' 'Verify external IP + RabbitMQ port' 'done' $vdetail
+                & $pub
             }
-            $vdetail = "TCP $target:31982 reachable."
-            if ($extOk) { $vdetail += " Node ExternalIP=$target." } else { $vdetail += " WARNING: node ExternalIP reported '$extIp'." }
-            $steps[$steps.Count - 1] = New-DunePublicIpStepResult 'verify' 'Verify external IP + RabbitMQ port' 'done' $vdetail
-            & $pub
 
             Save-DuneConfig -Config @{
                 PublicIpMode = $Mode
