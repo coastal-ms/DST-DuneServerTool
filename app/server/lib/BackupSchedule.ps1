@@ -634,6 +634,13 @@ function Remove-DuneBackupFiles {
         [Parameter(Mandatory)][string]$Ip,
         [Parameter(Mandatory)][string[]]$Paths
     )
+    # NOTE: $failed is List[object] (holds @{path;reason} hashtables). Do NOT
+    # wrap a List[object] variable with @(...) — the array-subexpression operator
+    # throws `ArgumentException: Argument types do not match` on a bare
+    # List[object] (both Windows PowerShell 5.1 and PS7). `rm`/`kubectl delete`
+    # would already have run, so the caller sees a 502 while the file/pod was in
+    # fact deleted. Always normalize via .ToArray() before returning. Same rule
+    # applies to every List[object] in Remove-DuneBackupDumpPods below.
     $deleted = New-Object System.Collections.Generic.List[string]
     $failed  = New-Object System.Collections.Generic.List[object]
     $valid   = New-Object System.Collections.Generic.List[string]
@@ -657,7 +664,7 @@ function Remove-DuneBackupFiles {
     }
 
     if ($valid.Count -eq 0) {
-        return @{ ok = $false; status = 400; deleted = @(); failed = @($failed); message = 'No valid backup paths to delete.' }
+        return @{ ok = $false; status = 400; deleted = @(); failed = @($failed.ToArray()); message = 'No valid backup paths to delete.' }
     }
 
     # Build a shell script that removes each validated file + its sidecar and
@@ -675,7 +682,7 @@ function Remove-DuneBackupFiles {
     }
 
     if ($sb.Length -eq 0) {
-        return @{ ok = $false; status = 400; deleted = @(); failed = @($failed); message = 'No valid backup paths to delete.' }
+        return @{ ok = $false; status = 400; deleted = @(); failed = @($failed.ToArray()); message = 'No valid backup paths to delete.' }
     }
 
     $r = Invoke-DuneBackupShell -Ip $Ip -Script $sb.ToString() -TimeoutSec 60
@@ -704,7 +711,7 @@ function Remove-DuneBackupFiles {
     } else {
         "Delete failed for all $($failed.Count) file(s)."
     }
-    return @{ ok = $ok; deleted = @($deleted); failed = @($failed); message = $msg }
+    return @{ ok = $ok; deleted = @($deleted.ToArray()); failed = @($failed.ToArray()); message = $msg }
 }
 
 # -----------------------------------------------------------------------------
@@ -867,8 +874,8 @@ function Remove-DuneBackupDumpPods {
         return @{
             ok        = $true
             deleted   = @()
-            kept      = @($kept)
-            remaining = @($kept)
+            kept      = @($kept.ToArray())
+            remaining = @($kept.ToArray())
             message   = "Found $total dump pod(s); nothing to prune ($why)."
             output    = ''
         }
@@ -967,11 +974,11 @@ function Remove-DuneBackupDumpPods {
     }
     return @{
         ok              = $true
-        deleted         = @($actuallyDeleted)
-        attempted       = @($toDelete)
-        kept            = @($kept)
+        deleted         = @($actuallyDeleted.ToArray())
+        attempted       = @($toDelete.ToArray())
+        kept            = @($kept.ToArray())
         remaining       = @($remaining)
-        survivors       = @($stillPresent)
+        survivors       = @($stillPresent.ToArray())
         message         = $msg
         output          = ($firstPassOutput + "`n" + $forceOutput).Trim()
     }
