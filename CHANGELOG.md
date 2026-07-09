@@ -13,6 +13,8 @@ here cover everything those tags shipped.
 
 ## [Unreleased]
 
+## [12.18.6] - 2026-07-09
+
 ### Added
 
 - **Backup cleanup now also sweeps restore (`import`) pods, not just backup (`dump`) pods.** Funcom's restore jobs leave a terminal `*-import-*-pod` behind on every restore, and — like the backup `*-dump-*` pods — Kubernetes never garbage-collects them, so they accumulated on the Pods page forever with no way to clear them from DST. The Database page's "keep last N pods" retention and the manual **Prune** button now manage the **combined** set of backup and restore job pods, keeping the most recent N by timestamp (regardless of which kind) and clearing the older ones. Live DB, util/mon/pghero, file-browser pods, and the `.backup` files are never touched.
