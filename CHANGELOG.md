@@ -11,6 +11,12 @@ Patch releases within a major series are rolled up under the major's entry
 on GitHub still exist for each individual release; the consolidated entries
 here cover everything those tags shipped.
 
+## [Unreleased]
+
+### Fixed
+
+- **The Players → Tags panel no longer hides tags for heavily-tagged characters.** For a character with a large number of tags (200+), the Tags panel silently dropped whole alphabetically-later tag groups — most visibly the entire `Journey.*` group, which would "disappear on refresh" even though every tag was still present in the database. The cause was a read cap: the tag list was fetched with a 200-row limit and ordered alphabetically, so anything past ~row 200 (Contract.* alone can be 150+ rows) was truncated before it ever reached the UI. The cap is now high enough to return a mature character's full tag set, so all groups (Journey, and anything after it) show up correctly. This was a display-only bug — no tags were lost from the database, and the trigger-firing delta Save added in 12.18.2 already protected the hidden tags from being deleted.
+
 ## [12.18.2] - 2026-07-08
 
 ### Changed

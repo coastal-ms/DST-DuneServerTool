@@ -871,7 +871,15 @@ function Invoke-DunePlayerResetAllKeystones {
 function Get-DunePlayerTagsLive {
     param([string]$Ip, [long]$AccountId)
     $sql = "SELECT tag FROM dune.player_tags WHERE character_id IN (SELECT id FROM dune.player_state WHERE account_id = $AccountId::bigint) ORDER BY tag;"
-    $soft = Invoke-DuneSqlSoft -Ip $Ip -Sql $sql -MaxRows 200 -TimeoutSec 30
+    # MaxRows 5000: player_tags is an unbounded per-character list — a mature
+    # character legitimately holds 200+ tags (Contract.* alone can be 150+, plus
+    # the 26-tag Journey.* group, BigMoments, Faction, etc.). The old MaxRows 200
+    # cap combined with ORDER BY tag truncated everything past ~position 200,
+    # silently hiding whole alphabetically-later groups (Journey and beyond) from
+    # the UI even though the tags exist in the DB. Rows are tiny text values, so a
+    # high cap is cheap. (Contrast Get-DunePlayerSpecsFullLive's MaxRows 200 read,
+    # which is safe because it returns a fixed small enum of spec track types.)
+    $soft = Invoke-DuneSqlSoft -Ip $Ip -Sql $sql -MaxRows 5000 -TimeoutSec 30
     if (-not $soft.ok) { return @{ ok = $false; error = $soft.error } }
     if ($soft.unsupported) { return @{ ok = $true; tags = @(); unsupported = $true } }
     $tags = @()
