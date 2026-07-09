@@ -13,6 +13,16 @@ here cover everything those tags shipped.
 
 ## [Unreleased]
 
+## [12.18.5] - 2026-07-09
+
+### Fixed
+
+- **Backup delete and dump-pod Prune no longer report a false failure ("Argument types do not match").** On the Database page, deleting a backup file or clicking **Prune** would flash a red error — `Delete failed: Argument types do not match` / `Prune failed: …` — even though the file (or pods) had in fact been removed, which is why the item vanished on the next refresh but the error still appeared. The cause was a PowerShell quirk on the server: wrapping an internal result list with the array operator `@(…)` throws `Argument types do not match` for that particular collection type, and the throw happened *after* the delete/prune had already run on the VM — so the action succeeded but the response came back as an error. Both `Remove-DuneBackupFiles` and `Remove-DuneBackupDumpPods` now normalize their result lists safely, so a successful delete/prune reports success and a real failure reports the real reason. Added a regression test covering every return path.
+
+### Changed
+
+- **Clearer feedback when deleting backups or pruning dump pods.** A single-file delete now shows a spinner on that row's trash button while it runs (not just the bulk "Delete" button), and error messages from a delete or prune now stay pinned on screen with a dismiss (✕) button instead of auto-clearing after a few seconds — so a failure can't scroll past or vanish before you read it. Successful actions still self-dismiss.
+
 ## [12.18.4] - 2026-07-09
 
 ### Fixed
