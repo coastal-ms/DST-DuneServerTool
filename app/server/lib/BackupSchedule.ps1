@@ -73,7 +73,12 @@ function New-DuneBackupPodPruneSnippet {
     if ($KeepLast -lt 0)   { $KeepLast = 0 }
     if ($KeepLast -gt 100) { $KeepLast = 100 }
     $skip = $KeepLast + 1
-    return "sudo kubectl get pods --all-namespaces -o jsonpath='{range .items[*]}{.metadata.namespace}|{.metadata.name}|{.status.phase}{`"\n`"}{end}' 2>/dev/null | awk -F'|' '(`$3==`"Succeeded`" || `$3==`"Failed`") && `$2 ~ /-dump-[0-9]{8}-[0-9]{6}-pod`$/' | sort -t'|' -k2 -r | tail -n +$skip | while IFS='|' read ns nm phase; do echo `"`$(date) dst: prune dump pod `$ns/`$nm`" >> /var/log/dune-backup.log; sudo kubectl delete pod -n `"`$ns`" `"`$nm`" --ignore-not-found >> /var/log/dune-backup.log 2>&1; done"
+    # Emit "<embedded-timestamp>|ns|name|phase" so we can sort the COMBINED
+    # dump+import pool by real time (the pod-name prefix differs — 'dump' vs
+    # 'import' — so a plain name sort would group by type, not chronology and
+    # keep-last would cut the wrong ones). Sort by the extracted key desc, drop
+    # it, then keep the newest N.
+    return "sudo kubectl get pods --all-namespaces -o jsonpath='{range .items[*]}{.metadata.namespace}|{.metadata.name}|{.status.phase}{`"\n`"}{end}' 2>/dev/null | awk -F'|' '(`$3==`"Succeeded`" || `$3==`"Failed`") && `$2 ~ /-(dump|import)-[0-9]{8}-[0-9]{6}-pod`$/ { k=`$2; sub(/.*-(dump|import)-/,`"`",k); sub(/-pod`$/,`"`",k); print k`"|`"`$0 }' | sort -t'|' -k1 -r | cut -d'|' -f2- | tail -n +$skip | while IFS='|' read ns nm phase; do echo `"`$(date) dst: prune backup/restore pod `$ns/`$nm`" >> /var/log/dune-backup.log; sudo kubectl delete pod -n `"`$ns`" `"`$nm`" --ignore-not-found >> /var/log/dune-backup.log 2>&1; done"
 }
 
 # Build the full backup cron command for a given keepLast value.
@@ -175,14 +180,26 @@ function Invoke-DuneBackupShell {
     $wrapped = "( $clean`n)`n__dst_rc=`$?`nprintf '\n__DST_RC:%s\n' `"`$__dst_rc`""
     $b64 = [Convert]::ToBase64String([Text.Encoding]::UTF8.GetBytes($wrapped))
     $cmd = "echo $b64 | base64 -d | sudo bash 2>&1"
-    $out = Invoke-V6Ssh -Ip $Ip -Cmd $cmd -TimeoutSec $TimeoutSec
-    $joined = if ($null -eq $out) { '' } else { ($out -join "`n") }
+    # A missing __DST_RC sentinel (rc stays -1) means the SSH channel dropped or
+    # timed out before the wrapped script finished — usually a transient hiccup
+    # (a cold connection, or a collision with the ~60s background health poller
+    # that also SSHes to the VM). slowdesolation hit exactly this on a multi-file
+    # delete that then succeeded on the very next click. Retry once before giving
+    # up so callers don't surface a false failure for an action that would work.
     $rc = -1
-    $body = $joined
-    $m = [regex]::Match($joined, '(?ms)\r?\n?__DST_RC:(\d+)\r?\n?\s*$')
-    if ($m.Success) {
-        $rc = [int]$m.Groups[1].Value
-        $body = $joined.Substring(0, $m.Index)
+    $body = ''
+    for ($attempt = 1; $attempt -le 2; $attempt++) {
+        $out = Invoke-V6Ssh -Ip $Ip -Cmd $cmd -TimeoutSec $TimeoutSec
+        $joined = if ($null -eq $out) { '' } else { ($out -join "`n") }
+        $body = $joined
+        $m = [regex]::Match($joined, '(?ms)\r?\n?__DST_RC:(\d+)\r?\n?\s*$')
+        if ($m.Success) {
+            $rc = [int]$m.Groups[1].Value
+            $body = $joined.Substring(0, $m.Index)
+            break
+        }
+        $rc = -1
+        if ($attempt -lt 2) { Start-Sleep -Milliseconds 750 }
     }
     return @{ rc = $rc; out = $body }
 }
@@ -723,7 +740,7 @@ function Remove-DuneBackupFiles {
 # into the pod name (kubectl creationTimestamp would work too, but the embedded
 # timestamp is naturally sortable as a string and survives clock drift).
 # -----------------------------------------------------------------------------
-$script:DuneBackupDumpPodNameRegex = '^[a-z0-9.-]+-dump-[0-9]{8}-[0-9]{6}-pod$'
+$script:DuneBackupDumpPodNameRegex = '^[a-z0-9.-]+-(dump|import)-[0-9]{8}-[0-9]{6}-pod$'
 
 function Get-DuneBackupDumpPods {
     param([Parameter(Mandatory)][string]$Ip)
@@ -790,10 +807,12 @@ function Get-DuneBackupDumpPods {
             ownerIsController  = ($ownerCtrl -eq 'true')
         }) | Out-Null
     }
-    # Sort by the embedded YYYYMMDD-HHMMSS in the name (newest first). Falls
-    # back to name lexically — which for our regex is equivalent because the
-    # suffix is fixed-width.
-    return @($out | Sort-Object name -Descending)
+    # Sort by the embedded YYYYMMDD-HHMMSS timestamp (newest first). The pool
+    # mixes 'dump' and 'import' pods whose name PREFIX differs, so a plain name
+    # sort would order by type before time — sort on the parsed timestamp so
+    # keep-last-N is chronological across both. Pods with an unparseable name
+    # (shouldn't happen — the regex guarantees the suffix) sort last.
+    return @($out | Sort-Object -Property @{ Expression = { $_.nameTimestamp }; Descending = $true })
 }
 
 # -----------------------------------------------------------------------------
@@ -805,7 +824,7 @@ function Get-DuneBackupDumpPods {
 function Get-DuneBackupDumpPodTimestamp {
     param([string]$Name)
     if (-not $Name) { return $null }
-    if ($Name -notmatch '-dump-([0-9]{8})-([0-9]{6})-pod$') { return $null }
+    if ($Name -notmatch '-(?:dump|import)-([0-9]{8})-([0-9]{6})-pod$') { return $null }
     $date = $Matches[1]; $time = $Matches[2]
     try {
         return [datetime]::ParseExact("$date$time", 'yyyyMMddHHmmss', [System.Globalization.CultureInfo]::InvariantCulture, [System.Globalization.DateTimeStyles]::AssumeUniversal -bor [System.Globalization.DateTimeStyles]::AdjustToUniversal)
@@ -876,7 +895,7 @@ function Remove-DuneBackupDumpPods {
             deleted   = @()
             kept      = @($kept.ToArray())
             remaining = @($kept.ToArray())
-            message   = "Found $total dump pod(s); nothing to prune ($why)."
+            message   = "Found $total backup/restore pod(s); nothing to prune ($why)."
             output    = ''
         }
     }
@@ -903,7 +922,7 @@ function Remove-DuneBackupDumpPods {
             deleted   = @()
             kept      = @($pods)
             remaining = @($pods)
-            message   = "Found $total dump pod(s); $($kept.Count) retained, $($toDelete.Count) skipped after name validation."
+            message   = "Found $total backup/restore pod(s); $($kept.Count) retained, $($toDelete.Count) skipped after name validation."
             output    = ''
         }
     }
@@ -967,7 +986,7 @@ function Remove-DuneBackupDumpPods {
         else                                      { $actuallyDeleted.Add($p) | Out-Null }
     }
 
-    $msg = "Deleted $($actuallyDeleted.Count) of $($toDelete.Count) dump pod(s); $($kept.Count) kept."
+    $msg = "Deleted $($actuallyDeleted.Count) of $($toDelete.Count) backup/restore pod(s); $($kept.Count) kept."
     if ($stillPresent.Count -gt 0) {
         $names = ($stillPresent | ForEach-Object { $_.name }) -join ', '
         $msg += " $($stillPresent.Count) survived both delete passes (likely owner-recreated or RBAC-denied): $names. Check kubectl describe."

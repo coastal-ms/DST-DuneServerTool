@@ -13,6 +13,15 @@ here cover everything those tags shipped.
 
 ## [Unreleased]
 
+### Added
+
+- **Backup cleanup now also sweeps restore (`import`) pods, not just backup (`dump`) pods.** Funcom's restore jobs leave a terminal `*-import-*-pod` behind on every restore, and — like the backup `*-dump-*` pods — Kubernetes never garbage-collects them, so they accumulated on the Pods page forever with no way to clear them from DST. The Database page's "keep last N pods" retention and the manual **Prune** button now manage the **combined** set of backup and restore job pods, keeping the most recent N by timestamp (regardless of which kind) and clearing the older ones. Live DB, util/mon/pghero, file-browser pods, and the `.backup` files are never touched.
+
+### Fixed
+
+- **Backup delete errors no longer show a doubled "Delete failed:" prefix.** A failed backup delete could surface as `Delete failed: Delete failed: …` because both the server and the web UI added the label. The server now returns just the reason and the UI adds the single "Delete failed:" prefix.
+- **A transient SSH hiccup during a multi-file backup delete or dump-pod prune no longer reports a false failure.** If the SSH connection to the VM dropped mid-command (e.g. a brief collision with the background health check), the action could report `SSH to VM failed (no exit code returned)` even though a second click worked immediately. DST now automatically retries the command once before surfacing that error, so the momentary drop recovers on its own.
+
 ## [12.18.5] - 2026-07-09
 
 ### Fixed

@@ -902,7 +902,7 @@ function BackupScheduleCard({ vmRunning, showToast }: BackupScheduleCardProps) {
             ? `Deleted ${delCount}; ${survCount} survived both passes: ${detail}`
             : `0 deleted; ${survCount} survived both passes: ${detail}`)
       } else {
-        showToast('ok', r.message ?? (delCount > 0 ? `Deleted ${delCount} dump pod(s).` : 'Nothing to prune.'))
+        showToast('ok', r.message ?? (delCount > 0 ? `Deleted ${delCount} backup/restore pod(s).` : 'Nothing to prune.'))
       }
     } catch (e) {
       showToast('err', `Prune failed: ${e instanceof Error ? e.message : String(e)}`)
@@ -941,7 +941,7 @@ function BackupScheduleCard({ vmRunning, showToast }: BackupScheduleCardProps) {
       const exceededCount = draftKeepDumpPods > 0 && idx >= draftKeepDumpPods
       let exceededAge = false
       if (ageCutoffMs !== null) {
-        const m = p.name.match(/-dump-(\d{4})(\d{2})(\d{2})-(\d{2})(\d{2})(\d{2})-pod$/)
+        const m = p.name.match(/-(?:dump|import)-(\d{4})(\d{2})(\d{2})-(\d{2})(\d{2})(\d{2})-pod$/)
         if (m) {
           const ts = Date.UTC(+m[1], +m[2] - 1, +m[3], +m[4], +m[5], +m[6])
           if (ts < ageCutoffMs) exceededAge = true
@@ -1241,27 +1241,27 @@ function BackupScheduleCard({ vmRunning, showToast }: BackupScheduleCardProps) {
         )}
       </div>
 
-      {/* Completed backup pods — Funcom's database-backup job leaves a
-          `*-dump-YYYYMMDD-HHMMSS-pod` behind on every run. They terminate
-          Succeeded and are never garbage-collected, so they pile up on the
-          Pods page and in the VM's shell-pod picker. Retention is persisted
-          as part of the schedule (Save schedule above writes both); the
-          cron tick honors keepLast, the manual button honors both. The
-          .backup files on the PVC are handled by Keep last (count) above
-          (separate retention). */}
+      {/* Completed backup & restore pods — Funcom's database-backup and
+          restore jobs each leave a `*-dump-…-pod` / `*-import-…-pod` behind on
+          every run. They terminate Succeeded (or Failed after an OOM/eviction)
+          and are never garbage-collected, so they pile up on the Pods page and
+          in the VM's shell-pod picker. Retention is persisted as part of the
+          schedule (Save schedule above writes both); the cron tick honors
+          keepLast, the manual button honors both. The .backup files on the PVC
+          are handled by Keep last (count) above (separate retention). */}
       <div className="border-t border-border pt-3 mt-3">
         <div className="flex items-center justify-between gap-3 mb-2">
-          <div className="text-xs font-semibold text-text-muted">Completed backup pods</div>
+          <div className="text-xs font-semibold text-text-muted">Completed backup &amp; restore pods</div>
           <div className="text-xs text-text-dim">
             {dumpPods
-              ? <>Found <strong className="text-text">{dumpPods.count}</strong> Succeeded dump pod{dumpPods.count === 1 ? '' : 's'} on the cluster.</>
+              ? <>Found <strong className="text-text">{dumpPods.count}</strong> terminal backup/restore pod{dumpPods.count === 1 ? '' : 's'} on the cluster.</>
               : <span className="italic">{vmRunning ? 'Loading…' : 'VM not running.'}</span>}
           </div>
         </div>
         <p className="text-xs text-text-dim mb-2">
-          Funcom's <span className="font-mono">battlegroup backup</span> job creates a one-shot pod per run that finishes
+          Funcom's <span className="font-mono">battlegroup backup</span> and restore (<span className="font-mono">import</span>) jobs each create a one-shot pod per run that finishes
           Succeeded and is never cleaned up. The scheduled cleanup runs after every backup tick using <strong>Keep last (count)</strong> below;
-          the manual button honors both thresholds. Only terminal <span className="font-mono">*-dump-*-pod</span> objects are touched —
+          the manual button honors both thresholds. Only terminal <span className="font-mono">*-dump-*-pod</span> / <span className="font-mono">*-import-*-pod</span> objects are touched —
           live DB, util/mon/pghero, file-browser, and the <span className="font-mono">.backup</span> files are never affected.
         </p>
         <div className="flex flex-wrap items-end gap-3">
