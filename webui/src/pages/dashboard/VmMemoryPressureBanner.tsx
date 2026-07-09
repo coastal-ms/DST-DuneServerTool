@@ -6,41 +6,46 @@
 // could only be found by exporting logs and hand-reading them.
 //
 // Backed by GET /api/diagnostics/vm-memory, which is read-only and cached 60s
-// server-side, so polling here is cheap. Renders nothing unless the probe
+// server-side, so polling here is cheap. OPT-IN: hidden by default, shown only
+// when the operator enables it under Settings → Dashboard warnings. When off we
+// don't even poll the probe. Renders nothing unless enabled AND the probe
 // succeeded AND detected pressure.
 import { useCallback, useEffect, useState } from 'react'
 import { Icon } from '../../components/Icon'
 import { getVmMemoryPressure, type VmMemoryPressure } from '../../api/diagnostics'
-import { useVmMemPressureHidden } from './vmMemoryPref'
+import { useVmMemPressureEnabled } from './vmMemoryPref'
 
 type Props = {
-  enabled: boolean   // gate on VM running — no point probing a stopped VM
+  vmRunning: boolean   // gate on VM running — no point probing a stopped VM
 }
 
-export function VmMemoryPressureBanner({ enabled }: Props) {
+export function VmMemoryPressureBanner({ vmRunning }: Props) {
   const [finding, setFinding] = useState<VmMemoryPressure | null>(null)
-  const [hidden, setHidden] = useVmMemPressureHidden()
+  const [show, setShow] = useVmMemPressureEnabled()
+
+  // Only active when the operator opted in AND the VM is running.
+  const active = show && vmRunning
 
   const load = useCallback(async () => {
-    if (!enabled) return
+    if (!active) return
     try {
       setFinding(await getVmMemoryPressure())
     } catch {
       // Best-effort — a probe hiccup must never break the dashboard. Leave the
       // last good finding in place.
     }
-  }, [enabled])
+  }, [active])
 
   useEffect(() => { void load() }, [load])
 
   // Poll on the same 60s cadence as the server-side cache TTL.
   useEffect(() => {
-    if (!enabled) return
+    if (!active) return
     const id = window.setInterval(() => { void load() }, 60_000)
     return () => window.clearInterval(id)
-  }, [enabled, load])
+  }, [active, load])
 
-  if (!enabled || hidden || !finding || !finding.ok || !finding.pressure) return null
+  if (!active || !finding || !finding.ok || !finding.pressure) return null
 
   const critical = finding.severity === 'critical'
   const tone = critical
@@ -65,10 +70,10 @@ export function VmMemoryPressureBanner({ enabled }: Props) {
         </div>
         <button
           type="button"
-          onClick={() => setHidden(true)}
+          onClick={() => setShow(false)}
           className="shrink-0 -mt-0.5 -mr-1 p-1 rounded hover:bg-current/10 text-current/70 hover:text-current transition-colors"
-          title="Dismiss this warning permanently. Re-enable it under Settings → Dashboard warnings."
-          aria-label="Dismiss VM memory-pressure warning permanently"
+          title="Hide this warning. Turn it back on under Settings → Dashboard warnings."
+          aria-label="Hide VM memory-pressure warning"
         >
           <Icon name="X" size={16} />
         </button>
