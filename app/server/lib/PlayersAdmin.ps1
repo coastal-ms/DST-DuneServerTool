@@ -161,12 +161,55 @@ function Invoke-DunePlayerGiveFactionRep {
     $accountID = if ($amaps.Count -ge 1) { [int64](ConvertTo-DuneInt $amaps[0]['aid']) } else { 0 }
     if ($accountID -le 0) { return @{ ok = $false; error = "no account for controller $ActorId." } }
 
-    # An already-aligned member must be reset before re-applying standing — otherwise
-    # we would stack a fresh recruitment on top of an existing membership.
     $aligned = Get-DunePlayerAlignedFaction -Ip $Ip -ControllerId $ActorId
-    if ($aligned -ne 0) {
+
+    # Cross-faction case is the only real problem: switching factions mid-stream
+    # would leave the old faction's tags / journey-node state behind. Force a
+    # Reset Faction first so the switch goes through the recruitment ceremony
+    # cleanly on the next Give Faction Rep call.
+    if ($aligned -ne 0 -and $aligned -ne $FactionId) {
         $an = Get-DuneFactionDisplayName $aligned
         return @{ ok = $false; error = "This character is already a member of $an. Use Players -> Progression -> Reset Faction first, then set the standing again." }
+    }
+
+    if ($aligned -eq $FactionId) {
+        # Already in the target faction — this is a delta bump on an existing
+        # membership. Read current rep, add Delta (allowing negative for a
+        # tactical drop), clamp to [0..cap], then write BOTH the reputation
+        # table and the runtime-read FactionPlayerComponent so the change is
+        # visible on next login (matches Reset Faction's dual-write pattern).
+        # No journey-node / tag ceremony — those are already applied.
+        $factionName = Get-DuneFactionDisplayName $FactionId
+        $curSql = "SELECT COALESCE(reputation_amount, 0)::text AS rep FROM dune.player_faction_reputation WHERE actor_id = $ActorId::bigint AND faction_id = $FactionId::smallint LIMIT 1;"
+        $cr = Invoke-DuneSqlQuery -Ip $Ip -Sql $curSql -ReadOnly $true -MaxRows 1 -TimeoutSec 10
+        if (-not $cr.ok) { return @{ ok = $false; error = "lookup current rep: $($cr.error)" } }
+        $cmaps = ConvertTo-DuneRowMaps -Result $cr
+        $current = if ($cmaps.Count -ge 1) { [int](ConvertTo-DuneInt $cmaps[0]['rep']) } else { 0 }
+        $newRep = $current + $Delta
+        if ($newRep -lt 0) { $newRep = 0 }
+        if ($newRep -gt $script:DuneFactionRepCap) { $newRep = $script:DuneFactionRepCap }
+        $compSql = Get-DuneFactionComponentUpsertSql -ActorId $ActorId -FactionName $factionName -Rep $newRep
+        $tx = @"
+BEGIN;
+SELECT dune.set_player_faction_reputation($ActorId::bigint, $FactionId::smallint, $newRep::integer);
+$compSql
+COMMIT;
+"@
+        $r = Invoke-DuneSqlQuery -Ip $Ip -Sql $tx -ReadOnly $false -MaxRows 1 -TimeoutSec 30
+        if (-not $r.ok) {
+            Invoke-DuneSqlQuery -Ip $Ip -Sql 'ROLLBACK;' -ReadOnly $false -MaxRows 1 -TimeoutSec 5 | Out-Null
+            return @{ ok = $false; error = "give-faction-rep tx: $($r.error)" }
+        }
+        $tier = Convert-DuneRepToTier $newRep
+        $tierName = Get-DuneFactionTierName $FactionId $tier
+        return @{
+            ok = $true
+            faction = $factionName; faction_id = $FactionId
+            rep = $newRep; previous_rep = $current; delta = ($newRep - $current)
+            tier = $tier; tier_name = $tierName
+            controller_id = $ActorId
+            message = "Adjusted $factionName rep by $($newRep - $current) ($current -> $newRep, tier $tier / $tierName) - takes effect on next login."
+        }
     }
 
     # Unaligned: establish full membership at the requested standing (Delta from 0).
@@ -192,13 +235,43 @@ function Invoke-DunePlayerSetFactionTier {
     if ($accountID -le 0) { return @{ ok = $false; error = "no account for controller $ActorId." } }
 
     $aligned = Get-DunePlayerAlignedFaction -Ip $Ip -ControllerId $ActorId
-    if ($aligned -ne 0) {
+
+    if ($aligned -ne 0 -and $aligned -ne $FactionId) {
         $an = Get-DuneFactionDisplayName $aligned
         return @{ ok = $false; error = "This character is already a member of $an. Use Players -> Progression -> Reset Faction first, then set the tier again." }
     }
 
     $rep = $script:DuneFactionTierThresholds[$Tier]
     if ($Tier -gt 0) { $rep = $rep + 1 }
+
+    if ($aligned -eq $FactionId) {
+        # Already in the target faction — Set Faction Tier is an absolute
+        # write, so just update the rep table + FactionPlayerComponent to the
+        # tier threshold. No recruitment ceremony (nodes / tags / alignment
+        # are already applied).
+        $factionName = Get-DuneFactionDisplayName $FactionId
+        $compSql = Get-DuneFactionComponentUpsertSql -ActorId $ActorId -FactionName $factionName -Rep $rep
+        $tx = @"
+BEGIN;
+SELECT dune.set_player_faction_reputation($ActorId::bigint, $FactionId::smallint, $rep::integer);
+$compSql
+COMMIT;
+"@
+        $r = Invoke-DuneSqlQuery -Ip $Ip -Sql $tx -ReadOnly $false -MaxRows 1 -TimeoutSec 30
+        if (-not $r.ok) {
+            Invoke-DuneSqlQuery -Ip $Ip -Sql 'ROLLBACK;' -ReadOnly $false -MaxRows 1 -TimeoutSec 5 | Out-Null
+            return @{ ok = $false; error = "set-faction-tier tx: $($r.error)" }
+        }
+        $tierName = Get-DuneFactionTierName $FactionId $Tier
+        return @{
+            ok = $true
+            faction = $factionName; faction_id = $FactionId
+            rep = $rep; tier = $Tier; tier_name = $tierName
+            controller_id = $ActorId
+            message = "Set $factionName tier to $Tier ($tierName), rep $rep - takes effect on next login."
+        }
+    }
+
     return Invoke-DuneEstablishFactionMembership -Ip $Ip -ControllerId $ActorId -AccountId $accountID -FactionId $FactionId -Rep $rep
 }
 

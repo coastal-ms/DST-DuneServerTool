@@ -13,6 +13,10 @@ here cover everything those tags shipped.
 
 ## [Unreleased]
 
+### Fixed
+
+- **Give Faction Rep and Set Faction Tier no longer refuse when the character is already in the target faction.** Both actions were checking whether the character was aligned to _any_ faction, and errored out (`"already a member of X. Use Reset Faction first..."`) even when the target faction _was_ that same faction — making it impossible to bump or set a Harkonnen player's Harkonnen rep without first Reset-ing them and re-recruiting through the ceremony. The guard now fires only when the character is aligned to the _other_ faction (where a reset is genuinely required to avoid stacking two memberships). Same-faction calls take a minimal rep-only path: **Give Faction Rep** reads the current rep, adds the Delta, and writes it back (allowing negative Deltas to drop rep, clamped to 0..cap); **Set Faction Tier** writes the tier-threshold rep directly. Both dual-write the `player_faction_reputation` table and the pawn's `FactionPlayerComponent`, matching how Reset Faction / Progression Unlock persist rep. Changes take effect on the character's next login.
+
 ### Changed
 
 - **Backup file-retention prune now fires on every scheduled backup**, not on a separate daily line. Previously the crontab wrote the per-preset backup line PLUS a hard-coded `15 5 * * *` file-retention line, so an "Every hour" preset could accumulate up to 24 dump files before the daily sweep ran once — and if the VM was down at 05:15 UTC, the sweep was skipped entirely and files piled up until the next successful daily tick. The prune is now inline in each backup command, so "backup every hour" also prunes to keep-last-N every hour. `Keep last = 0` (keep forever) still emits no prune. No schedule change is required — but the new shape only lands when you next Save the schedule on the Database card, because DST only rewrites the DST-BACKUP crontab block on Save.

@@ -101,11 +101,15 @@ Describe 'Invoke-DuneEstablishFactionMembership' -Tag 'Establish' {
 Describe 'Invoke-DunePlayerSetFactionTier / GiveFactionRep alignment guard' -Tag 'Establish' {
     BeforeEach {
         $script:aligned = @()          # ConvertTo-DuneRowMaps-style maps for player_faction
+        $script:currentRep = @()       # ConvertTo-DuneRowMaps-style maps for player_faction_reputation
         $script:establishArgs = $null
+        $script:capturedTx = $null
         function global:Invoke-DuneSqlQuery {
             param([string]$Ip, [string]$Sql, [bool]$ReadOnly, [int]$MaxRows, [int]$TimeoutSec)
-            if ($Sql -match 'AS aid')        { return @{ ok = $true; maps = @(@{ aid = 19 }) } }
-            if ($Sql -match 'player_faction') { return @{ ok = $true; maps = $script:aligned } }
+            if ($Sql -match '^\s*BEGIN;')                              { $script:capturedTx = $Sql; return @{ ok = $true } }
+            if ($Sql -match 'AS aid')                                  { return @{ ok = $true; maps = @(@{ aid = 19 }) } }
+            if ($Sql -match 'FROM dune\.player_faction_reputation')    { return @{ ok = $true; maps = $script:currentRep } }
+            if ($Sql -match 'FROM dune\.player_faction\b')             { return @{ ok = $true; maps = $script:aligned } }
             return @{ ok = $true; maps = @(); message = 'SELECT 1' }
         }
         function global:Invoke-DuneEstablishFactionMembership {
@@ -119,32 +123,69 @@ Describe 'Invoke-DunePlayerSetFactionTier / GiveFactionRep alignment guard' -Tag
         Remove-Item function:global:Invoke-DuneEstablishFactionMembership -ErrorAction SilentlyContinue
     }
 
-    It 'blocks Set Faction Tier on an already-aligned character' {
-        $script:aligned = @(@{ fid = 2 })
+    # -- Set Faction Tier ---------------------------------------------------
+
+    It 'Set Faction Tier: blocks when aligned to a DIFFERENT faction' {
+        $script:aligned = @(@{ fid = 2 })  # Harkonnen, but target is Atreides
         $r = Invoke-DunePlayerSetFactionTier -Ip '1.2.3.4' -ActorId 227 -FactionId 1 -Tier 5
         $r.ok    | Should -BeFalse
         $r.error | Should -Match 'already a member'
         $script:establishArgs | Should -BeNullOrEmpty
     }
-    It 'establishes membership for an unaligned character at the tier reputation' {
+    It 'Set Faction Tier: establishes membership for an unaligned character at the tier reputation' {
         $script:aligned = @()
         $r = Invoke-DunePlayerSetFactionTier -Ip '1.2.3.4' -ActorId 227 -FactionId 1 -Tier 5
         $r.ok | Should -BeTrue
         $script:establishArgs.FactionId | Should -Be 1
         $script:establishArgs.Rep       | Should -Be 2000   # tier 5 threshold 1999 + 1
     }
-    It 'blocks Give Faction Rep on an aligned character' {
-        $script:aligned = @(@{ fid = 1 })
+    It 'Set Faction Tier: same-faction bypasses Establish and does a rep-only tx' {
+        $script:aligned = @(@{ fid = 1 })  # already Atreides
+        $r = Invoke-DunePlayerSetFactionTier -Ip '1.2.3.4' -ActorId 227 -FactionId 1 -Tier 10
+        $r.ok            | Should -BeTrue
+        $r.rep           | Should -Be 3875   # tier 10 threshold 3874 + 1
+        $r.tier          | Should -Be 10
+        $script:establishArgs | Should -BeNullOrEmpty      # NO recruitment ceremony
+        $script:capturedTx    | Should -Match 'set_player_faction_reputation\(227::bigint, 1::smallint, 3875::integer\)'
+        $script:capturedTx    | Should -Match "jsonb_build_object\('Name', 'Atreides'\)"
+    }
+
+    # -- Give Faction Rep ---------------------------------------------------
+
+    It 'Give Faction Rep: blocks when aligned to a DIFFERENT faction' {
+        $script:aligned = @(@{ fid = 2 })  # Harkonnen, but target is Atreides
         $r = Invoke-DunePlayerGiveFactionRep -Ip '1.2.3.4' -ActorId 227 -FactionId 1 -Delta 500
         $r.ok    | Should -BeFalse
         $r.error | Should -Match 'already a member'
+        $script:establishArgs | Should -BeNullOrEmpty
     }
-    It 'establishes membership for unaligned Give Faction Rep at the delta standing' {
+    It 'Give Faction Rep: establishes membership for unaligned at the delta standing' {
         $script:aligned = @()
         $r = Invoke-DunePlayerGiveFactionRep -Ip '1.2.3.4' -ActorId 227 -FactionId 1 -Delta 500
         $r.ok | Should -BeTrue
         $script:establishArgs.Rep | Should -Be 500
     }
+    It 'Give Faction Rep: same-faction adds Delta to CURRENT rep (not a fresh recruitment)' {
+        $script:aligned    = @(@{ fid = 2 })
+        $script:currentRep = @(@{ rep = 3000 })   # tier ~9
+        $r = Invoke-DunePlayerGiveFactionRep -Ip '1.2.3.4' -ActorId 227 -FactionId 2 -Delta 15000
+        $r.ok           | Should -BeTrue
+        $r.previous_rep | Should -Be 3000
+        $r.rep          | Should -Be 12474        # clamped to cap
+        $r.delta        | Should -Be 9474
+        $script:establishArgs | Should -BeNullOrEmpty
+        $script:capturedTx    | Should -Match 'set_player_faction_reputation\(227::bigint, 2::smallint, 12474::integer\)'
+        $script:capturedTx    | Should -Match "jsonb_build_object\('Name', 'Harkonnen'\)"
+    }
+    It 'Give Faction Rep: same-faction with negative Delta drops rep, clamped to 0' {
+        $script:aligned    = @(@{ fid = 1 })
+        $script:currentRep = @(@{ rep = 100 })
+        $r = Invoke-DunePlayerGiveFactionRep -Ip '1.2.3.4' -ActorId 227 -FactionId 1 -Delta -500
+        $r.ok  | Should -BeTrue
+        $r.rep | Should -Be 0
+        $script:capturedTx | Should -Match 'set_player_faction_reputation\(227::bigint, 1::smallint, 0::integer\)'
+    }
+
     It 'rejects non-house factions' {
         Invoke-DunePlayerSetFactionTier -Ip '1.2.3.4' -ActorId 227 -FactionId 4 -Tier 5 | Select-Object -ExpandProperty ok | Should -BeFalse
         Invoke-DunePlayerGiveFactionRep -Ip '1.2.3.4' -ActorId 227 -FactionId 3 -Delta 500 | Select-Object -ExpandProperty ok | Should -BeFalse
