@@ -13,6 +13,12 @@ here cover everything those tags shipped.
 
 ## [Unreleased]
 
+## [12.18.7] - 2026-07-09
+
+### Fixed
+
+- **Scheduled backups now appear in the Database page history (and get pruned by retention).** DST's scheduled backups run `battlegroup backup "dst-scheduled-<utc-ts>"`, and Funcom writes that name verbatim — with **no `.backup` extension**. The history listing, the retention prune, and the download/delete validators all matched only a trailing `.backup`, so every scheduled backup was silently skipped: only the manual/Funcom-default `*.backup` snapshots showed, and the scheduled files were never aged out. All of those paths now also recognize the extension-less `dst-scheduled-<ts>` shape (existing scheduled backups appear immediately after updating — no rename needed; `.yaml` sidecars stay excluded). The Save-As default when downloading a scheduled backup now adds `.backup`. *Re-save your backup schedule once after updating so the widened retention prune takes effect on the VM crontab.*
+
 ### Added
 
 - **New supporter in the "Thanks for the Coffee" menu.** Added gd.py (@gd.py).
