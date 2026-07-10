@@ -861,8 +861,10 @@ log() { echo "[$(ts)] boot: $*" >> "$LOG" 2>/dev/null; }
 sleep 30
 
 # RabbitMQ login: public:31982/tcp -> mq-game pod:5672 (idempotent).
+# kubectl prints the literal string "<none>" (not empty) when the service has no
+# endpoint yet -- that string must NOT be fed to iptables ("Bad IP address").
 POD_IP=$(k3s kubectl get endpoints --all-namespaces -o wide 2>/dev/null | grep mq-game | awk '{print $3}' | cut -d, -f1 | cut -d: -f1 | head -1)
-if [ -n "$POD_IP" ]; then
+if [ -n "$POD_IP" ] && [ "$POD_IP" != "<none>" ]; then
     iptables -t nat -C PREROUTING -d "$NEW_IP" -p tcp --dport "$RABBIT_PORT" -j DNAT --to-destination "${POD_IP}:5672" 2>/dev/null || \
       iptables -t nat -I PREROUTING 1 -d "$NEW_IP" -p tcp --dport "$RABBIT_PORT" -j DNAT --to-destination "${POD_IP}:5672"
 fi
@@ -900,8 +902,17 @@ DUNEBOOT
 sudo install -m 0755 /tmp/dune-iptables.start /etc/local.d/dune-iptables.start
 rm -f /tmp/dune-iptables.start
 sh -n /etc/local.d/dune-iptables.start
+# mq-game endpoint may be the literal string "<none>" when the BG is Stopped /
+# the pod hasn't come up yet -- skip the immediate install in that case, the
+# per-minute dune-dnat-watch cron installs it once the pod is Ready. Feeding
+# "<none>" to iptables errors "Bad IP address" and fails the whole Apply step.
 MQ_IP=$(sudo kubectl get endpoints --all-namespaces -o wide 2>/dev/null | grep mq-game | awk '{print $3}' | cut -d, -f1 | cut -d: -f1 | head -1)
-if [ -n "$MQ_IP" ]; then sudo iptables -t nat -C PREROUTING -d "$NEW_IP" -p tcp --dport 31982 -j DNAT --to-destination "${MQ_IP}:5672" 2>/dev/null || sudo iptables -t nat -I PREROUTING 1 -d "$NEW_IP" -p tcp --dport 31982 -j DNAT --to-destination "${MQ_IP}:5672"; fi
+if [ -n "$MQ_IP" ] && [ "$MQ_IP" != "<none>" ]; then
+  sudo iptables -t nat -C PREROUTING -d "$NEW_IP" -p tcp --dport 31982 -j DNAT --to-destination "${MQ_IP}:5672" 2>/dev/null || \
+    sudo iptables -t nat -I PREROUTING 1 -d "$NEW_IP" -p tcp --dport 31982 -j DNAT --to-destination "${MQ_IP}:5672"
+else
+  echo "mq-game endpoint not ready (got '${MQ_IP:-<empty>}'); rabbitmq DNAT deferred to dune-dnat-watch cron"
+fi
 # Game-UDP bridge (bind-detected; mirrors /etc/local.d/dune-iptables.start &
 # dune-dnat-watch.sh). Install <VM_IP>:7777-7810/udp -> NEW_IP ONLY when the game
 # binds the PUBLIC IP and NOT the LAN IP/wildcard, so a same-LAN / self join is
