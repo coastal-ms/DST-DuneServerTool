@@ -215,3 +215,48 @@ Describe 'Remove-DuneBackupFiles delete script' -Tag 'Pure' {
         $script:capturedScript | Should -Match 'rm -f'
     }
 }
+
+# Scheduled backups land as `dst-scheduled-<utc-ts>` with NO `.backup` extension
+# (Funcom writes the name verbatim), so the history listing, retention prune, and
+# download/delete validators — all of which keyed on a trailing `.backup` — used
+# to skip every scheduled backup. Only the manual one showed (Coastal, 2026-07-10:
+# "all my db backups dont appear to be showing"). These tests lock in the widened
+# matchers so both file shapes are first-class while `.yaml` sidecars stay excluded.
+Describe 'Scheduled backup (extension-less) recognition' -Tag 'Pure' {
+
+    It 'path regex accepts both .backup and dst-scheduled-<ts>, rejects sidecars/others' {
+        '/funcom/artifacts/database-dumps/x/sh-x-20260709-193817.backup' | Should -Match $script:DuneBackupPathRegex
+        '/funcom/artifacts/database-dumps/x/dst-scheduled-20260710-050000' | Should -Match $script:DuneBackupPathRegex
+        # sidecars and non-backups must NOT validate
+        '/funcom/artifacts/database-dumps/x/dst-scheduled-20260710-050000.yaml' | Should -Not -Match $script:DuneBackupPathRegex
+        '/funcom/artifacts/database-dumps/x/sh-x-20260709-193817.backup.yaml'   | Should -Not -Match $script:DuneBackupPathRegex
+        '/etc/passwd' | Should -Not -Match $script:DuneBackupPathRegex
+    }
+
+    It 'Remove-DuneBackupFiles now accepts an extension-less dst-scheduled path' {
+        Mock -CommandName Invoke-DuneBackupShell -MockWith {
+            @{ rc = 0; out = '__DEL_OK:/funcom/artifacts/database-dumps/x/dst-scheduled-20260710-050000' }
+        }
+        $p = '/funcom/artifacts/database-dumps/x/dst-scheduled-20260710-050000'
+        $r = Remove-DuneBackupFiles -Ip '10.0.0.1' -Paths @($p)
+        $r.ok               | Should -BeTrue
+        @($r.deleted).Count | Should -Be 1
+        @($r.failed).Count  | Should -Be 0   # not rejected by the extension gate
+    }
+
+    It 'Get-DuneBackupHistory find matches both .backup and the scheduled glob' {
+        $script:capturedHistScript = $null
+        Mock -CommandName Invoke-DuneBackupShell -MockWith {
+            $script:capturedHistScript = $Script
+            @{ rc = 0; out = "__DST_SECTION:COUNT`n0`n__DST_SECTION:FILES`n__DST_SECTION:LOG`n__DST_SECTION:DISK`n0" }
+        }
+        Get-DuneBackupHistory -Ip '10.0.0.1' | Out-Null
+        $script:capturedHistScript | Should -Match "-name '\*\.backup' -o -name 'dst-scheduled-\?{8}-\?{6}'"
+    }
+
+    It 'retention prune globs BOTH the .backup timestamp shape and the scheduled shape' {
+        $block = New-DuneBackupBlock -Preset 'Hourly' -KeepLast 10
+        $block | Should -Match 'dst-scheduled-\?{8}-\?{6}'                                   # scheduled files pruned
+        $block | Should -Match '\*-\[0-9\]\[0-9\]\[0-9\]\[0-9\]\[0-9\]\[0-9\]\[0-9\]\[0-9\]' # .backup timestamp files still pruned
+    }
+}

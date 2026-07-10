@@ -751,7 +751,11 @@ function BackupScheduleCard({ vmRunning, showToast }: BackupScheduleCardProps) {
   }
 
   async function handleDownload(vmPath: string) {
-    const fileName = vmPath.split('/').pop() ?? 'backup.backup'
+    const baseName = vmPath.split('/').pop() ?? 'backup.backup'
+    // Scheduled backups land on the VM without a `.backup` extension
+    // (dst-scheduled-<ts>); give the Save-As dialog a `.backup` default so the
+    // downloaded copy is named like every other backup on the user's PC.
+    const fileName = baseName.includes('.') ? baseName : `${baseName}.backup`
     const localPath = await pickFileFromShell('pick-save-file', { id: 'backup-download', defaultName: fileName })
     if (!localPath) return  // cancelled
     setTransferring(vmPath)
