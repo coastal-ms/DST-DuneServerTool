@@ -13,6 +13,10 @@ here cover everything those tags shipped.
 
 ## [Unreleased]
 
+### Added
+
+- **New supporter in the "Thanks for the Coffee" menu.** Added gd.py (@gd.py).
+
 ## [12.18.6] - 2026-07-09
 
 ### Added
