@@ -108,6 +108,24 @@ $script:DuneBackupBeginMarker = '# DST-BACKUP BEGIN'
 $script:DuneBackupEndMarker   = '# DST-BACKUP END'
 $script:DuneBackupDumpDir     = '/funcom/artifacts/database-dumps'
 
+# Scheduled backups are written by `battlegroup backup "dst-scheduled-<utc-ts>"`
+# (see New-DuneBackupCmd). Funcom writes that name VERBATIM, with NO trailing
+# `.backup` extension, so a scheduled snapshot lands on disk as e.g.
+# `dst-scheduled-20260710-050000`. Every path that keyed on a trailing
+# `.backup` — the history listing, the retention prune, and the download/delete
+# validators — therefore silently skipped every scheduled backup, so only
+# manual / Funcom-default `*.backup` files ever showed in the Database page.
+# These two shared matchers widen those paths to ALSO recognize the extension-
+# less scheduled name, without pulling in each backup's `.yaml` sidecar:
+#   * a find(1) -name glob for listing + pruning. The `dst-scheduled-` prefix is
+#     followed by a FIXED 8-digit date, a dash, and 6 digits of time; the
+#     `<name>.yaml` sidecar is longer than the glob so it can never match.
+#   * a PowerShell regex for path validation on download/delete. `$` anchors to
+#     the bare scheduled name so the `.yaml` sidecar (and a `.backup.yaml`
+#     sidecar) are both rejected.
+$script:DuneBackupScheduledFindGlob = 'dst-scheduled-????????-??????'
+$script:DuneBackupPathRegex         = '(?:\.backup|/dst-scheduled-[0-9]{8}-[0-9]{6})$'
+
 function Get-DuneBackupPresetNames {
     return @($script:DuneBackupPresets.Keys | Sort-Object)
 }
@@ -249,16 +267,20 @@ function New-DuneBackupBlock {
         #        /funcom/artifacts/database-dumps/<sh-hash-name>/<file>.backup,
         #        so we need `/*/` to descend one level into the per-battlegroup
         #        subdir. A shallow `$DumpDir/*.backup` matches nothing.
-        #   (ii) Each backup produces TWO files on disk: `<name>.backup` and
-        #        its `<name>.backup.yaml` sidecar. We match only `.backup` for
-        #        counting so keep-last=N means N real backups (not N/2), and
-        #        delete the `.yaml` sidecar alongside each pruned entry.
-        #   (iii)The `-YYYYMMDD-HHMMSS.backup` shape gate preserves manually
-        #        named snapshots like 'pre-patch-1_4_10_1.backup' -- they
-        #        never match this pattern, so we can't prune them by accident.
-        $namePat = '*-[0-9][0-9][0-9][0-9][0-9][0-9][0-9][0-9]-[0-9][0-9][0-9][0-9][0-9][0-9].backup'
+        #   (ii) Each backup produces TWO files on disk: the dump itself and its
+        #        `<name>.yaml` sidecar. We count only the dump (never the
+        #        `*.yaml`) so keep-last=N means N real backups (not N/2), and
+        #        delete the matching `.yaml` sidecar alongside each pruned entry.
+        #   (iii)Two dump shapes are pruned: Funcom/manual `-YYYYMMDD-HHMMSS.backup`
+        #        files AND DST's own extension-less `dst-scheduled-<ts>` files
+        #        (Funcom writes the scheduled name verbatim, no `.backup`). Both
+        #        globs are fixed-shape, so a `.yaml` sidecar (longer) can't match
+        #        and manually named snapshots like 'pre-patch-1_4_10_1.backup'
+        #        (no timestamp tail) are never pruned by accident.
+        $namePat  = '*-[0-9][0-9][0-9][0-9][0-9][0-9][0-9][0-9]-[0-9][0-9][0-9][0-9][0-9][0-9].backup'
+        $schedPat = $script:DuneBackupScheduledFindGlob
         $skip = $KeepLast + 1
-        $find = "ls -t $script:DuneBackupDumpDir/*/$namePat 2>/dev/null | tail -n +$skip | while IFS= read -r f; do rm -f `"`$f`" `"`$f.yaml`"; done"
+        $find = "ls -t $script:DuneBackupDumpDir/*/$namePat $script:DuneBackupDumpDir/*/$schedPat 2>/dev/null | tail -n +$skip | while IFS= read -r f; do rm -f `"`$f`" `"`$f.yaml`"; done"
         $lines += "15 5 * * * $find"
     }
     $lines += $script:DuneBackupEndMarker
@@ -582,9 +604,9 @@ function Get-DuneBackupHistory {
     # emit the true total so the UI can show "showing N of M".
     $script = @"
 echo '__DST_SECTION:COUNT'
-sudo find $script:DuneBackupDumpDir -maxdepth 3 -type f -name '*.backup' 2>/dev/null | wc -l
+sudo find $script:DuneBackupDumpDir -maxdepth 3 -type f \( -name '*.backup' -o -name '$script:DuneBackupScheduledFindGlob' \) 2>/dev/null | wc -l
 echo '__DST_SECTION:FILES'
-sudo find $script:DuneBackupDumpDir -maxdepth 3 -type f -name '*.backup' 2>/dev/null \
+sudo find $script:DuneBackupDumpDir -maxdepth 3 -type f \( -name '*.backup' -o -name '$script:DuneBackupScheduledFindGlob' \) 2>/dev/null \
   | head -5000 \
   | xargs -r -I{} sudo stat -c '%Y|%s|%n' '{}' 2>/dev/null \
   | sort -rn \
@@ -682,8 +704,8 @@ function Remove-DuneBackupFiles {
         if ($path -notlike "$root/*") {
             $failed.Add(@{ path = $path; reason = "Path must be inside $root." }); continue
         }
-        if ($path -notmatch '\.backup$') {
-            $failed.Add(@{ path = $path; reason = 'Path must end in .backup.' }); continue
+        if ($path -notmatch $script:DuneBackupPathRegex) {
+            $failed.Add(@{ path = $path; reason = 'Path must be a .backup file or a dst-scheduled-<ts> backup.' }); continue
         }
         $valid.Add($path) | Out-Null
     }

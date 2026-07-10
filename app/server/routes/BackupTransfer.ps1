@@ -33,9 +33,12 @@ Register-DuneRoute -Method POST -Path '/api/db/backup-download' -Handler {
         Write-DuneError -Response $res -Status 400 -Message 'Body must include vmPath and localPath.'
         return
     }
-    # Validate the VM path looks like a backup file (safety)
-    if ($vmPath -notmatch '\.backup$') {
-        Write-DuneError -Response $res -Status 400 -Message 'vmPath must end in .backup'
+    # Validate the VM path looks like a backup file (safety). Accept both a
+    # trailing `.backup` (manual / Funcom-default / uploaded) and DST's own
+    # extension-less `dst-scheduled-<ts>` scheduled backups — see the shared
+    # matcher in BackupSchedule.ps1.
+    if ($vmPath -notmatch $script:DuneBackupPathRegex) {
+        Write-DuneError -Response $res -Status 400 -Message 'vmPath must be a .backup file or a dst-scheduled-<ts> backup.'
         return
     }
 
