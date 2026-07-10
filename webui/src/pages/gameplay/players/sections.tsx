@@ -1393,7 +1393,7 @@ function GiveItemForm({ busy, submitLabel, onSubmit, onSubmitTierSet }: {
   const [giveQty, setGiveQty]   = useState('1')
   const [giveQual, setGiveQual] = useState('0')
   const [gradeable, setGradeable] = useState(false)
-  const [overflow, setOverflow] = useState(false)
+  const [overflow, setOverflow] = useState(true)
   return (
     <div className="space-y-3">
       <ItemPicker label="Item — type to search by name or template id"
@@ -1475,7 +1475,7 @@ export function GivePackageForm({ busy, playerName, targetLabel, showOverflow = 
   const [draftName, setDraftName] = useState('')
   const [draftRows, setDraftRows] = useState<PkgDraftRow[]>([])
   const [importText, setImportText] = useState('')
-  const [overflow, setOverflow] = useState(false)
+  const [overflow, setOverflow] = useState(true)
   const [saving, setSaving]     = useState(false)
 
   const load = useCallback(async (preferId?: string) => {
@@ -1742,7 +1742,7 @@ function VehicleKitForm({ busy, onSubmit }: {
   const [catErr, setCatErr] = useState(false)
   const [vid, setVid] = useState('')
   const [names, setNames] = useState<Record<string, string>>({})
-  const [overflow, setOverflow] = useState(false)
+  const [overflow, setOverflow] = useState(true)
   const selectCls = 'w-full px-3 py-2 rounded-lg bg-surface-2 border border-border text-text text-sm focus:outline-none focus:ring-2 focus:ring-ibad focus:border-ibad/50'
 
   // Fetch the shared vehicle-kit catalog once (single source of truth, served by
