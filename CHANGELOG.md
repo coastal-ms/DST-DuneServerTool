@@ -13,6 +13,10 @@ here cover everything those tags shipped.
 
 ## [Unreleased]
 
+### Changed
+
+- **Backup file-retention prune now fires on every scheduled backup**, not on a separate daily line. Previously the crontab wrote the per-preset backup line PLUS a hard-coded `15 5 * * *` file-retention line, so an "Every hour" preset could accumulate up to 24 dump files before the daily sweep ran once — and if the VM was down at 05:15 UTC, the sweep was skipped entirely and files piled up until the next successful daily tick. The prune is now inline in each backup command, so "backup every hour" also prunes to keep-last-N every hour. `Keep last = 0` (keep forever) still emits no prune. No schedule change is required — but the new shape only lands when you next Save the schedule on the Database card, because DST only rewrites the DST-BACKUP crontab block on Save.
+
 ## [12.18.8] - 2026-07-10
 
 ### Changed
