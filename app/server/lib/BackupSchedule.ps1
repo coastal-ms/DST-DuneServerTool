@@ -81,6 +81,32 @@ function New-DuneBackupPodPruneSnippet {
     return "sudo kubectl get pods --all-namespaces -o jsonpath='{range .items[*]}{.metadata.namespace}|{.metadata.name}|{.status.phase}{`"\n`"}{end}' 2>/dev/null | awk -F'|' '(`$3==`"Succeeded`" || `$3==`"Failed`") && `$2 ~ /-(dump|import)-[0-9]{8}-[0-9]{6}-pod`$/ { k=`$2; sub(/.*-(dump|import)-/,`"`",k); sub(/-pod`$/,`"`",k); print k`"|`"`$0 }' | sort -t'|' -k1 -r | cut -d'|' -f2- | tail -n +$skip | while IFS='|' read ns nm phase; do echo `"`$(date) dst: prune backup/restore pod `$ns/`$nm`" >> /var/log/dune-backup.log; sudo kubectl delete pod -n `"`$ns`" `"`$nm`" --ignore-not-found >> /var/log/dune-backup.log 2>&1; done"
 }
 
+# Build the cron-embedded file-retention prune snippet for a given keepLast.
+# Deletes /funcom/artifacts/database-dumps/*/ dump files beyond the newest N,
+# keying on filename (embedded UTC timestamp = newest-first). Two globs:
+#   (i)  Funcom/manual `-YYYYMMDD-HHMMSS.backup` files
+#   (ii) DST scheduled files (extension-less `dst-scheduled-<ts>`)
+# Both dump + its `.yaml` sidecar are deleted together. Manually named
+# snapshots like 'pre-patch-1_4_10_1.backup' (no timestamp tail) never match
+# either glob, so they're never pruned by accident.
+#
+# KeepLast=0 returns an empty string — the "keep forever" opt-out — so callers
+# can splice the result unconditionally.
+#
+# This snippet is spliced into New-DuneBackupCmd so file-retention fires on the
+# SAME tick as every backup (a bare `; find | rm` chain, sharing the parent's
+# restart-window guard). Historically DST wrote a separate `15 5 * * *` daily
+# line for this, which let an hourly preset accumulate up to 24 files between
+# sweeps and skipped the sweep entirely if the VM was off at 05:15 UTC.
+function New-DuneBackupFilePruneSnippet {
+    param([int]$KeepLast = 0)
+    if ($KeepLast -le 0) { return '' }
+    $namePat  = '*-[0-9][0-9][0-9][0-9][0-9][0-9][0-9][0-9]-[0-9][0-9][0-9][0-9][0-9][0-9].backup'
+    $schedPat = $script:DuneBackupScheduledFindGlob
+    $skip = $KeepLast + 1
+    return "ls -t $script:DuneBackupDumpDir/*/$namePat $script:DuneBackupDumpDir/*/$schedPat 2>/dev/null | tail -n +$skip | while IFS= read -r f; do rm -f `"`$f`" `"`$f.yaml`"; done"
+}
+
 # Build the full backup cron command for a given keepLast value.
 # The scheduled backup is wrapped in a guard that skips it when a DST-driven
 # battlegroup restart is in progress: RestartSchedule.ps1 touches
@@ -94,15 +120,28 @@ function New-DuneBackupPodPruneSnippet {
 # pruner is skipped during the restart window too: a kubectl-delete storm
 # while k3s is restarting would just compete for the API server.
 function New-DuneBackupCmd {
-    param([int]$KeepLastPods = 10)
-    $snippet = New-DuneBackupPodPruneSnippet -KeepLast $KeepLastPods
+    param(
+        [int]$KeepLastPods = 10,
+        [int]$KeepLast = 0
+    )
+    $podSnippet  = New-DuneBackupPodPruneSnippet -KeepLast $KeepLastPods
+    $fileSnippet = New-DuneBackupFilePruneSnippet -KeepLast $KeepLast
+    # File-retention prune (issue: hourly backups accumulated up to 24 files
+    # before the old daily `15 5 * * *` line ran once). Fire the prune on the
+    # SAME tick as the backup that just wrote the file, so keep-last-N is
+    # enforced continuously instead of once a day. KeepLast=0 emits an empty
+    # snippet, preserving the "keep forever" opt-out. The prune runs AFTER the
+    # backup + pod-prune succeed and shares the same restart-window guard, so
+    # a mid-restart tick still skips everything.
+    $tail = $podSnippet
+    if ($fileSnippet) { $tail = "$podSnippet; $fileSnippet" }
     # Pass a stable name to `battlegroup backup` so scheduled backups are
     # self-labeling in /funcom/artifacts/database-dumps/. A named backup makes
     # it obvious which snapshots were taken automatically by DST vs a manual
     # `battlegroup backup` on the command line — and it makes the pre-Funcom-
     # update-restore rollback path in the patch-compat routine easier to pick
     # out. Timestamp is UTC to match the rest of DST's log format.
-    return "if find /tmp/dst-restart-active -mmin -30 2>/dev/null | grep -q .; then echo `"`$(date) dst: backup skipped - BG restart window active`" >> /var/log/dune-backup.log; else /home/dune/.dune/bin/battlegroup backup `"dst-scheduled-`$(date -u +%Y%m%d-%H%M%S)`" >> /var/log/dune-backup.log 2>&1; $snippet; fi"
+    return "if find /tmp/dst-restart-active -mmin -30 2>/dev/null | grep -q .; then echo `"`$(date) dst: backup skipped - BG restart window active`" >> /var/log/dune-backup.log; else /home/dune/.dune/bin/battlegroup backup `"dst-scheduled-`$(date -u +%Y%m%d-%H%M%S)`" >> /var/log/dune-backup.log 2>&1; $tail; fi"
 }
 $script:DuneBackupBeginMarker = '# DST-BACKUP BEGIN'
 $script:DuneBackupEndMarker   = '# DST-BACKUP END'
@@ -250,7 +289,7 @@ function New-DuneBackupBlock {
     if ($null -eq $KeepDaysPods -or $KeepDaysPods -lt 0) { $KeepDaysPods = $script:DuneBackupPodPruneKeepDaysDefault }
     if ($KeepDaysPods -gt 365) { $KeepDaysPods = 365 }
 
-    $cmd = New-DuneBackupCmd -KeepLastPods $KeepLastPods
+    $cmd = New-DuneBackupCmd -KeepLastPods $KeepLastPods -KeepLast $KeepLast
 
     $lines = @()
     $lines += $script:DuneBackupBeginMarker
@@ -261,28 +300,8 @@ function New-DuneBackupBlock {
     foreach ($cronExpr in $script:DuneBackupPresets[$Preset].crons) {
         $lines += "$cronExpr $cmd"
     }
-    if ($KeepLast -gt 0) {
-        # Retention prune. Notes on the shape of this glob:
-        #   (i)  `battlegroup backup` writes to
-        #        /funcom/artifacts/database-dumps/<sh-hash-name>/<file>.backup,
-        #        so we need `/*/` to descend one level into the per-battlegroup
-        #        subdir. A shallow `$DumpDir/*.backup` matches nothing.
-        #   (ii) Each backup produces TWO files on disk: the dump itself and its
-        #        `<name>.yaml` sidecar. We count only the dump (never the
-        #        `*.yaml`) so keep-last=N means N real backups (not N/2), and
-        #        delete the matching `.yaml` sidecar alongside each pruned entry.
-        #   (iii)Two dump shapes are pruned: Funcom/manual `-YYYYMMDD-HHMMSS.backup`
-        #        files AND DST's own extension-less `dst-scheduled-<ts>` files
-        #        (Funcom writes the scheduled name verbatim, no `.backup`). Both
-        #        globs are fixed-shape, so a `.yaml` sidecar (longer) can't match
-        #        and manually named snapshots like 'pre-patch-1_4_10_1.backup'
-        #        (no timestamp tail) are never pruned by accident.
-        $namePat  = '*-[0-9][0-9][0-9][0-9][0-9][0-9][0-9][0-9]-[0-9][0-9][0-9][0-9][0-9][0-9].backup'
-        $schedPat = $script:DuneBackupScheduledFindGlob
-        $skip = $KeepLast + 1
-        $find = "ls -t $script:DuneBackupDumpDir/*/$namePat $script:DuneBackupDumpDir/*/$schedPat 2>/dev/null | tail -n +$skip | while IFS= read -r f; do rm -f `"`$f`" `"`$f.yaml`"; done"
-        $lines += "15 5 * * * $find"
-    }
+    # File-retention prune is spliced INTO $cmd (see New-DuneBackupCmd), so it
+    # fires on the same tick as each backup. No separate daily line is written.
     $lines += $script:DuneBackupEndMarker
     return (($lines -join "`n") + "`n")
 }

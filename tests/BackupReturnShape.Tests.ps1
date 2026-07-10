@@ -259,4 +259,21 @@ Describe 'Scheduled backup (extension-less) recognition' -Tag 'Pure' {
         $block | Should -Match 'dst-scheduled-\?{8}-\?{6}'                                   # scheduled files pruned
         $block | Should -Match '\*-\[0-9\]\[0-9\]\[0-9\]\[0-9\]\[0-9\]\[0-9\]\[0-9\]\[0-9\]' # .backup timestamp files still pruned
     }
+
+    It 'file-retention prune fires on every backup tick, not a separate daily line' {
+        $block = New-DuneBackupBlock -Preset 'Hourly' -KeepLast 10
+        # No standalone `15 5 * * *` file-retention entry any more — it's
+        # spliced INTO each backup cron line so an hourly preset prunes hourly.
+        $block | Should -Not -Match '(?m)^15 5 \* \* \*'
+        # And every backup cron line ("0 * * * *" for Hourly) must contain the
+        # prune snippet body, so a schedule set to every hour prunes every hour.
+        $block | Should -Match '(?m)^0 \* \* \* \*.*rm -f'
+    }
+
+    It 'KeepLast=0 emits no file-retention prune anywhere in the block' {
+        $block = New-DuneBackupBlock -Preset 'Hourly' -KeepLast 0
+        # "Keep forever" opt-out: no ls|tail|rm chain, no 15 5 line.
+        $block | Should -Not -Match 'dst-scheduled-\?{8}-\?{6}'
+        $block | Should -Not -Match '(?m)^15 5 \* \* \*'
+    }
 }
