@@ -13,6 +13,8 @@ here cover everything those tags shipped.
 
 ## [Unreleased]
 
+## [12.18.9] - 2026-07-10
+
 ### Fixed
 
 - **Give Faction Rep and Set Faction Tier no longer refuse when the character is already in the target faction.** Both actions were checking whether the character was aligned to _any_ faction, and errored out (`"already a member of X. Use Reset Faction first..."`) even when the target faction _was_ that same faction — making it impossible to bump or set a Harkonnen player's Harkonnen rep without first Reset-ing them and re-recruiting through the ceremony. The guard now fires only when the character is aligned to the _other_ faction (where a reset is genuinely required to avoid stacking two memberships). Same-faction calls take a minimal rep-only path: **Give Faction Rep** reads the current rep, adds the Delta, and writes it back (allowing negative Deltas to drop rep, clamped to 0..cap); **Set Faction Tier** writes the tier-threshold rep directly. Both dual-write the `player_faction_reputation` table and the pawn's `FactionPlayerComponent`, matching how Reset Faction / Progression Unlock persist rep. Changes take effect on the character's next login.
