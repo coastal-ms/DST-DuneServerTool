@@ -13,6 +13,12 @@ here cover everything those tags shipped.
 
 ## [Unreleased]
 
+## [12.18.8] - 2026-07-10
+
+### Fixed
+
+- **Public IP / DDNS Apply no longer fails at the "Update VM network, settings.conf, K3s, NAT" step when the battlegroup is stopped.** The NAT sub-step queried the current `mq-game` service endpoint to install the RabbitMQ DNAT rule (`public:31982/tcp -> mq-game pod:5672`). When the battlegroup is stopped (or the MQ pod isn't Ready yet), `kubectl get endpoints` returns the literal string `<none>`, which was passed through the non-empty check and fed straight to `iptables` — producing `iptables v1.8.11 (nf_tables): Bad IP address "<none>"` and failing the whole Apply. The immediate rule install now skips gracefully in that case (logging a defer message) and the per-minute `dune-dnat-watch` cron installs the rule as soon as the MQ pod becomes Ready. The `/etc/local.d/dune-iptables.start` boot script that DST writes as part of the same step got the same `<none>` guard on its RabbitMQ DNAT install. No behaviour change on a running battlegroup — this only fixes the crash path when Apply is run while the BG is stopped.
+
 ## [12.18.7] - 2026-07-09
 
 ### Fixed
