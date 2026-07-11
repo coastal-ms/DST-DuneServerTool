@@ -134,7 +134,29 @@ Register-DuneRoute -Method PUT -Path '/api/gameconfig' -Handler {
         Save-DuneGameConfig -Ip $ctx.ip -Updates $structured.ToArray()
         $cfg = Get-DuneGameConfig -Ip $ctx.ip
         $clientApply = Get-DuneGameConfigClientApplyNotice -Updates $structured.ToArray()
-        Write-DuneJson -Response $res -Body @{
+
+        # If m_TaskGoalAmount was in this save, ALSO update the current Landsraad
+        # term's live task rows so the change takes effect immediately (Funcom's
+        # own path only reads the INI at term creation, so the running term would
+        # otherwise keep its original goal). Best-effort: any failure attaches a
+        # note to the response instead of failing the whole INI save.
+        $landsraadApply = $null
+        $goalUpdate = $structured | Where-Object { $_.key -eq 'm_TaskGoalAmount' } | Select-Object -Last 1
+        if ($goalUpdate) {
+            try {
+                $goalVal = 0L
+                if (-not [long]::TryParse((("$($goalUpdate.value)" -replace '[^\d\-]', '')), [ref]$goalVal)) {
+                    $dbl = 0.0
+                    if ([double]::TryParse("$($goalUpdate.value)", [ref]$dbl)) { $goalVal = [long][math]::Floor($dbl) }
+                }
+                if ($goalVal -lt 0) { $goalVal = 0 }
+                $landsraadApply = Set-DuneLandsraadCurrentTermGoal -Ip $ctx.ip -Goal $goalVal
+            } catch {
+                $landsraadApply = @{ ok = $false; error = "landsraad apply: $($_.Exception.Message)" }
+            }
+        }
+
+        $body = @{
             ok          = $true
             applied     = $structured.Count
             source      = $cfg.source
@@ -142,6 +164,8 @@ Register-DuneRoute -Method PUT -Path '/api/gameconfig' -Handler {
             engine      = $cfg.engine
             clientApply = $clientApply
         }
+        if ($landsraadApply) { $body.landsraadGoalApply = $landsraadApply }
+        Write-DuneJson -Response $res -Body $body
     } catch {
         Write-DuneError -Response $res -Status 500 -Message "Game config save failed: $($_.Exception.Message)"
     }
