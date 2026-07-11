@@ -1021,6 +1021,19 @@ function Start-DuneRestartScheduler {
                         try { Write-DuneLog "db-util autoheal tick error (outer): $($_.Exception.Message)" 'WARN' } catch {}
                     }
                 }
+                # v12.18.13: local backup mirror auto-copy. The restart
+                # scheduler loop sleeps 30s per iteration; this tick internally
+                # gates to every 20th call (~10 minutes) which is plenty for
+                # hourly backups. Runs whether or not the Database page is open
+                # in the webui, so a scheduled backup landing at 00:00 gets
+                # copied within ~10 min without the user touching DST. Silent
+                # no-op unless the user has turned the mirror on (Database →
+                # Local Backup Mirror card).
+                try { Invoke-DuneBackupMirrorSchedulerTick } catch {
+                    if (Get-Command Write-DuneLog -ErrorAction SilentlyContinue) {
+                        try { Write-DuneLog "backup mirror tick error (outer): $($_.Exception.Message)" 'WARN' } catch {}
+                    }
+                }
                 Start-Sleep -Seconds 30
             }
         })
