@@ -107,3 +107,50 @@ export function pruneBackupDumpPods(opts: { keepLast: number; keepDays: number }
     body: JSON.stringify({ keepLast: opts.keepLast, keepDays: opts.keepDays }),
   })
 }
+
+// Local backup mirror — copies each new VM backup into a user-chosen folder.
+// Copy-only: the mirror never deletes local files (VM auto-purge is scoped
+// to the VM only).
+export type BackupMirrorState = {
+  enabled: boolean
+  folder: string
+  lastMirroredAt: string
+  lastError: string
+  lastCopiedCount: number
+}
+
+export type BackupMirrorSyncResult = BackupMirrorState & {
+  ok: boolean
+  skipped?: boolean
+  reason?: string
+  vmFileCount?: number
+  copied?: string[]
+  copiedCount?: number
+  failed?: { name: string; error: string }[]
+  error?: string
+}
+
+export function getBackupMirror() {
+  return api<BackupMirrorState>('/api/db/backup-mirror')
+}
+
+export function setBackupMirror(opts: { enabled?: boolean; folder?: string }) {
+  return api<BackupMirrorState & { ok: boolean }>('/api/db/backup-mirror', {
+    method: 'POST',
+    body: JSON.stringify(opts),
+  })
+}
+
+export function openBackupMirrorFolder(opts: { folder?: string } = {}) {
+  return api<{ ok: boolean; folder: string }>('/api/db/backup-mirror/open', {
+    method: 'POST',
+    body: JSON.stringify(opts),
+  })
+}
+
+export function syncBackupMirror() {
+  return api<BackupMirrorSyncResult>('/api/db/backup-mirror/sync', {
+    method: 'POST',
+    body: JSON.stringify({}),
+  })
+}

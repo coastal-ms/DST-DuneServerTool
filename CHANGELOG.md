@@ -13,6 +13,10 @@ here cover everything those tags shipped.
 
 ## [Unreleased]
 
+### Added
+
+- **Local backup mirror (Database → Backups).** New card lets you copy every VM database backup into a folder on this PC. Turn on the checkbox, pick a folder, and DST will SCP each new backup from the VM into that folder automatically (polled every ~30s, or click **Sync Now**). Filenames are preserved verbatim so mirrored files are drop-in compatible with the existing Restore / upload paths. **Copy-only by design** — DST never deletes files from your local mirror folder. The VM's auto-purge retention only trims the server side, so the mirror is a permanent local archive you can prune yourself when needed. Warning label on the card makes the "no local deletes" behaviour explicit.
+
 ## [12.18.9] - 2026-07-10
 
 ### Fixed
