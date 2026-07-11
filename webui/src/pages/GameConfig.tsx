@@ -760,7 +760,20 @@ export function GameConfig() {
       setValues(seeded)
       setOriginals(seeded)
       const n = out.applied ?? dirtyKeys.length
-      setSavedMsg(`Saved ${n} change${n === 1 ? '' : 's'} into the DST-managed block. Tip: use “Backup settings” to snapshot before big changes — DST no longer auto-backs-up on every save.`)
+      let msg = `Saved ${n} change${n === 1 ? '' : 's'} into the DST-managed block. Tip: use “Backup settings” to snapshot before big changes — DST no longer auto-backs-up on every save.`
+      // If m_TaskGoalAmount was in this save, DST also rewrote the current
+      // Landsraad term's goal_amount for every House row — surface the result.
+      const lg = out.landsraadGoalApply
+      if (lg) {
+        if (lg.ok && !lg.skipped && lg.message) {
+          msg += ` Landsraad: ${lg.message}`
+        } else if (lg.ok && lg.skipped && lg.message) {
+          msg += ` Landsraad: ${lg.message}`
+        } else if (!lg.ok && lg.error) {
+          msg += ` (Landsraad live-goal apply failed: ${lg.error}; INI saved OK, next term will pick it up.)`
+        }
+      }
+      setSavedMsg(msg)
       window.setTimeout(() => setSavedMsg(null), 8000)
       // Some settings (e.g. landclaim limits, building restrictions) are read by
       // BOTH server and client — remind the admin to mirror them on each client.
