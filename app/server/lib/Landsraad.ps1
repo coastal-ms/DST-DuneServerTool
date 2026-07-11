@@ -391,3 +391,36 @@ RETURNING task_id;
         house   = $house
     }
 }
+
+
+# Set landsraad_tasks.goal_amount for every house in the CURRENT term. Called
+# whenever Game Config's m_TaskGoalAmount is saved so the change takes effect on
+# the running term instead of only future terms (which is what Funcom's own INI
+# read does at term-creation time). Best-effort: skips silently and returns a
+# helpful message when there's no active term or no DB.
+function Set-DuneLandsraadCurrentTermGoal {
+    param([string]$Ip, [long]$Goal)
+    if ($Goal -lt 0) { return @{ ok = $false; error = 'goal must be >= 0.' } }
+    $term = Get-DuneLandsraadCurrentTermId -Ip $Ip
+    if (-not $term.ok) { return @{ ok = $false; skipped = $true; error = $term.error } }
+    if ($term.term_id -le 0) {
+        return @{ ok = $true; skipped = $true; message = 'No active Landsraad term — goal will apply to the next term.' }
+    }
+
+    $sql = @"
+UPDATE dune.landsraad_tasks
+SET goal_amount = $Goal::int
+WHERE term_id = $($term.term_id)::bigint;
+"@
+    $r = Invoke-DuneSqlQuery -Ip $Ip -Sql $sql -ReadOnly $false -MaxRows 1 -TimeoutSec 30
+    if (-not $r.ok) { return @{ ok = $false; error = "set goal_amount: $($r.error)" } }
+
+    return @{
+        ok           = $true
+        skipped      = $false
+        term_id      = [long]$term.term_id
+        goal_amount  = [long]$Goal
+        updated      = [int]$r.rowCount
+        message      = "Set goal_amount = $Goal for $([int]$r.rowCount) house(s) in term $($term.term_id)."
+    }
+}

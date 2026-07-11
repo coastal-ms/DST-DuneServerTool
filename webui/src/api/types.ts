@@ -265,6 +265,15 @@ export type GameConfigSaveResponse = {
   game: GameConfigFileBundle
   engine: GameConfigFileBundle
   clientApply?: GameConfigClientApply
+  landsraadGoalApply?: {
+    ok: boolean
+    skipped?: boolean
+    term_id?: number
+    goal_amount?: number
+    updated?: number
+    message?: string
+    error?: string
+  }
 }
 
 // Land-claim (staking unit) extension timer — dedicated card/endpoint.

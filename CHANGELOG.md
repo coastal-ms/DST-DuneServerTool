@@ -13,6 +13,12 @@ here cover everything those tags shipped.
 
 ## [Unreleased]
 
+## [12.18.11] - 2026-07-10
+
+### Fixed
+
+- **Landsraad Task Goal Amount now applies to the running term.** Previously, changing **Game Config → Landsraad → Task Goal Amount** only wrote `m_TaskGoalAmount` to `ServerSettings.ini`, which Funcom's own code reads once at term creation — so the currently-running term kept its original 70,000/house goal until it rolled over, and every House in the Player → Landsraad admin still showed `0/70,000`. DST now also writes the new goal into `dune.landsraad_tasks.goal_amount` for every House row in the current term, so the change takes effect immediately. The save toast reports how many House rows were updated. If there's no active term (or the DB is unreachable), the INI still saves and DST notes that the goal will apply to the next term.
+
 ## [12.18.10] - 2026-07-10
 
 ### Added
