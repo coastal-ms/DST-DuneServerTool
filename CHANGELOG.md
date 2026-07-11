@@ -13,6 +13,13 @@ here cover everything those tags shipped.
 
 ## [Unreleased]
 
+## [12.18.12] - 2026-07-10
+
+### Fixed
+
+- **Local backup mirror (v12.18.10) actually copies files now.** Every mirror tick was silently failing: it enumerated the VM's backups correctly but every `scp` pull died with `bash: line 1: /usr/lib/ssh/sftp-server: No such file or directory` (rc=255). Since OpenSSH 9.0 the Windows `scp` client defaults to the SFTP subsystem for transfers, and the DST VM is Alpine minimal with no `sftp-server` and no `scp` binary at all. Adding `-O` (legacy SCP protocol) doesn't help either — there is nothing on the VM to receive it. DST no longer uses `scp`; all VM ↔ PC file transfers now stream over the existing `ssh` connection via `sudo cat` (VM → PC) or `sudo tee` (PC → VM), which uses the same key and toolset every other DST ↔ VM interaction already depends on. Same fix repairs the **Download** button on each backup row and the **Upload** button on the Database page, both of which were broken by the identical bug.
+- **Local backup mirror surfaces per-file copy failures.** The sidecar state only recorded top-level errors ("VM listing failed", "folder not writable"), so a run where every per-file copy failed reported `copied 0 file(s)` with no error banner — which is exactly how the scp bug above hid for a full release cycle. When any file fails, the mirror card now shows `Last error: N file(s) failed to copy - first: <first error>`.
+
 ## [12.18.11] - 2026-07-10
 
 ### Fixed
