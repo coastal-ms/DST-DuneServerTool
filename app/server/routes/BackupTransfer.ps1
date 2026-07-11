@@ -57,34 +57,13 @@ Register-DuneRoute -Method POST -Path '/api/db/backup-download' -Handler {
         }
     }
 
-    # SCP from VM to local path
-    $psi = [System.Diagnostics.ProcessStartInfo]::new()
-    $psi.FileName               = 'scp'
-    $psi.RedirectStandardOutput = $true
-    $psi.RedirectStandardError  = $true
-    $psi.UseShellExecute        = $false
-    $psi.CreateNoWindow         = $true
-    $psi.Arguments = "-o BatchMode=yes -o StrictHostKeyChecking=no -o LogLevel=QUIET -i `"$key`" `"dune@$($ctx.ip):$vmPath`" `"$localPath`""
-
-    $proc = [System.Diagnostics.Process]::new()
-    $proc.StartInfo = $psi
-    try {
-        [void]$proc.Start()
-        $errTask = $proc.StandardError.ReadToEndAsync()
-        $exited = $proc.WaitForExit(120000)  # 2 min timeout for large files
-        if (-not $exited) {
-            try { $proc.Kill() } catch {}
-            Write-DuneError -Response $res -Status 504 -Message 'SCP timed out after 120s.'
-            return
-        }
-        [void]$proc.WaitForExit()
-        $stderr = $errTask.GetAwaiter().GetResult()
-        if ($proc.ExitCode -ne 0) {
-            Write-DuneError -Response $res -Status 502 -Message "SCP failed (rc=$($proc.ExitCode)): $($stderr.Trim())"
-            return
-        }
-    } finally {
-        try { $proc.Dispose() } catch {}
+    # Stream from VM to local via `ssh + sudo cat` (see lib/VmFileTransfer.ps1
+    # for why not scp). Copy-DuneVmFileToLocal handles binary safely and
+    # cleans up a partial file on failure.
+    $r = Copy-DuneVmFileToLocal -Ip $ctx.ip -KeyPath $key -VmPath $vmPath -LocalPath $localPath -TimeoutSec 300
+    if (-not $r.ok) {
+        Write-DuneError -Response $res -Status 502 -Message $r.error
+        return
     }
 
     # Verify file landed
@@ -146,41 +125,12 @@ Register-DuneRoute -Method POST -Path '/api/db/backup-upload' -Handler {
     $fileName = Split-Path -Leaf $localPath
     $remotePath = "$dumpSubdir/$fileName"
 
-    # SCP local file to VM (upload to a temp path, then sudo mv to dump dir)
-    $tmpRemote = "/tmp/dst-upload-$fileName"
-    $psi = [System.Diagnostics.ProcessStartInfo]::new()
-    $psi.FileName               = 'scp'
-    $psi.RedirectStandardOutput = $true
-    $psi.RedirectStandardError  = $true
-    $psi.UseShellExecute        = $false
-    $psi.CreateNoWindow         = $true
-    $psi.Arguments = "-o BatchMode=yes -o StrictHostKeyChecking=no -o LogLevel=QUIET -i `"$key`" `"$localPath`" `"dune@$($ctx.ip):$tmpRemote`""
-
-    $proc = [System.Diagnostics.Process]::new()
-    $proc.StartInfo = $psi
-    try {
-        [void]$proc.Start()
-        $errTask = $proc.StandardError.ReadToEndAsync()
-        $exited = $proc.WaitForExit(120000)
-        if (-not $exited) {
-            try { $proc.Kill() } catch {}
-            Write-DuneError -Response $res -Status 504 -Message 'SCP upload timed out after 120s.'
-            return
-        }
-        [void]$proc.WaitForExit()
-        $stderr = $errTask.GetAwaiter().GetResult()
-        if ($proc.ExitCode -ne 0) {
-            Write-DuneError -Response $res -Status 502 -Message "SCP upload failed (rc=$($proc.ExitCode)): $($stderr.Trim())"
-            return
-        }
-    } finally {
-        try { $proc.Dispose() } catch {}
-    }
-
-    # Move the uploaded file from /tmp to the dump directory (needs sudo)
-    $mvResult = Invoke-DuneBackupShell -Ip $ctx.ip -Script "sudo mv `"$tmpRemote`" `"$remotePath`" && sudo chmod 644 `"$remotePath`"" -TimeoutSec 10
-    if ($mvResult.rc -ne 0) {
-        Write-DuneError -Response $res -Status 502 -Message "File uploaded but move to dump dir failed: $($mvResult.out)"
+    # Stream local file to VM via `ssh + sudo tee` (see lib/VmFileTransfer.ps1
+    # for why not scp). Copy-DuneLocalFileToVm writes with root ownership
+    # + 644 directly at $remotePath — no intermediate /tmp step needed.
+    $r = Copy-DuneLocalFileToVm -Ip $ctx.ip -KeyPath $key -LocalPath $localPath -VmPath $remotePath -TimeoutSec 600
+    if (-not $r.ok) {
+        Write-DuneError -Response $res -Status 502 -Message $r.error
         return
     }
 
