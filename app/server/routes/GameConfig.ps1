@@ -103,7 +103,8 @@ Register-DuneRoute -Method PUT -Path '/api/gameconfig' -Handler {
 
     $structured = New-Object 'System.Collections.Generic.List[object]'
     if ($updates -is [System.Collections.IEnumerable] -and -not ($updates -is [hashtable]) -and -not ($updates -is [string])) {
-        # Explicit array form: each item already carries file/section/key/value.
+        # Explicit array form: each item already carries file/section/key/value
+        # OR file/section/key/arrayLines (for +/-key= array entries).
         foreach ($u in $updates) {
             $sec = "$($u.section)"; $file = "$($u.file)"; $key = "$($u.key)"
             if (-not $key) { continue }
@@ -111,6 +112,31 @@ Register-DuneRoute -Method PUT -Path '/api/gameconfig' -Handler {
                 if ($schemaMap.ContainsKey($key)) { if (-not $sec) { $sec = $schemaMap[$key].section }; if (-not $file) { $file = $schemaMap[$key].file } }
             }
             if (-not $sec -or -not $file) { continue }
+            # Array-entry payload: rebuild the full set of +/-key= lines for
+            # this section+key. Save-DuneGameConfigUpdates knows to strip every
+            # +/- line for the key first and then write the supplied set. An
+            # empty arrayLines array is treated as arrayRemove (delete all).
+            $arrLines = $null
+            if ($u -is [hashtable]) {
+                if ($u.ContainsKey('arrayLines')) { $arrLines = $u['arrayLines'] }
+            } elseif ($u.PSObject.Properties['arrayLines']) {
+                $arrLines = $u.arrayLines
+            }
+            if ($null -ne $arrLines) {
+                $lines = New-Object 'System.Collections.Generic.List[string]'
+                if ($arrLines -is [System.Collections.IEnumerable] -and -not ($arrLines -is [string])) {
+                    foreach ($ln in $arrLines) {
+                        $s = "$ln".Trim()
+                        if ($s) { $lines.Add($s) }
+                    }
+                }
+                if ($lines.Count -eq 0) {
+                    $structured.Add(@{ file = $file; section = $sec; key = $key; arrayRemove = $true })
+                } else {
+                    $structured.Add(@{ file = $file; section = $sec; key = $key; arrayLines = $lines.ToArray() })
+                }
+                continue
+            }
             $rm = (Test-DuneGameConfigValueIsDefault -Key $key -Value "$($u.value)")
             $structured.Add(@{ file = $file; section = $sec; key = $key; value = "$($u.value)"; remove = $rm })
         }

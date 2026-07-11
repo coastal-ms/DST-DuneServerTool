@@ -13,6 +13,12 @@ here cover everything those tags shipped.
 
 ## [Unreleased]
 
+## [12.18.14] - 2026-07-11
+
+### Added
+
+- **Advanced Settings now edits INI array entries in-app.** Rows tagged `[+]` or `[-]` (Unreal `+key=`/`-key=` array-append/-remove entries — every `m_CraftingOutputMultiplierPerRecipeList`, spawn list, etc.) used to say `[array — edit in INI]` with no way to change them from DST. They're now editable: click **Edit** on the row to open a monospace textarea prefilled with the struct value, tweak it, and Save writes the full set of `+/-key=` lines back to `UserGame.ini` / `UserEngine.ini` in one pass. **Delete entry** drops the row from the file on save. Bracket count is validated client-side before saving so a stray `(` doesn't silently break the whole key at game load. A short explainer at the top of the section describes the model. Scalar rows are unchanged.
+
 ## [12.18.13] - 2026-07-11
 
 ### Fixed

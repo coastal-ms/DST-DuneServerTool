@@ -882,21 +882,40 @@ function ConvertTo-DuneIniManaged {
         foreach ($other in $remaining) {
             Remove-DuneScalarFromBody -Body $other.body -Key $key
         }
-        if ($u['remove']) {
-            # Reset-to-default: strip the key so the default is implied, not written.
-            Remove-DuneScalarFromBody -Body $entry.body -Key $key
-        } else {
-            $fmt = Format-DuneIniValue -Key $key -Value $u.value -QuotedKeys $QuotedKeys
-            Set-DuneScalarInBody -Body $entry.body -Key $key -Formatted $fmt
+        # An arrayLines-only update targets the +/-key= lines of an INI array
+        # (e.g. one of the m_CraftingOutputMultiplierPerRecipeList entries) and
+        # must NOT write a scalar `key=...` line. Detect it by the presence of
+        # arrayLines / arrayRemove without a scalar 'value' payload.
+        $hasArrayLines = $u.Contains('arrayLines')
+        $hasArrayRemove = ($u['arrayRemove'] -eq $true)
+        $hasScalarValue = $u.Contains('value')
+        $isArrayOnly = (($hasArrayLines -or $hasArrayRemove) -and -not $hasScalarValue)
+        if (-not $isArrayOnly) {
+            if ($u['remove']) {
+                # Reset-to-default: strip the key so the default is implied, not written.
+                Remove-DuneScalarFromBody -Body $entry.body -Key $key
+            } else {
+                $fmt = Format-DuneIniValue -Key $key -Value $u.value -QuotedKeys $QuotedKeys
+                Set-DuneScalarInBody -Body $entry.body -Key $key -Formatted $fmt
+            }
         }
         # Optional array (+/-) line management for keys that carry them (the
-        # land-claim staking timer). Only engaged when the update explicitly
-        # supplies 'arrayLines' or 'arrayRemove', so every existing scalar update
-        # is unaffected. On remove/arrayRemove, strip every +/- line for the key;
-        # otherwise ensure the supplied literal lines are present (de-duped).
-        if ($u['remove'] -or $u['arrayRemove']) {
+        # land-claim staking timer and every array row surfaced in the
+        # Advanced Settings editor as of v12.18.14). Only engaged when the
+        # update explicitly supplies 'arrayLines' or 'arrayRemove', so every
+        # existing scalar update is unaffected. On remove/arrayRemove, strip
+        # every +/- line for the key; otherwise ensure the supplied literal
+        # lines are present (de-duped).
+        if ($u['remove'] -or $hasArrayRemove) {
             Remove-DuneArrayLinesForKey -Body $entry.body -Key $key
-        } elseif ($u['arrayLines']) {
+        } elseif ($hasArrayLines) {
+            # Strip existing +/- lines first when this is an array-only edit
+            # so the new set is authoritative (matches the UI's "edit these
+            # entries" model). The land-claim path already supplies the full
+            # replacement set inline, so this is safe there too.
+            if ($isArrayOnly) {
+                Remove-DuneArrayLinesForKey -Body $entry.body -Key $key
+            }
             Set-DuneArrayLinesInBody -Body $entry.body -Lines ([string[]]$u['arrayLines'])
         }
     }
@@ -971,10 +990,20 @@ function ConvertTo-DuneIniSectionsApi {
         foreach ($l in $s.body) {
             $info = Get-DuneIniLineKey $l
             if ($info) {
+                # Preserve the original line's array prefix ('+' array-append,
+                # '-' array-remove, '' scalar) so the catalog can pass it up to
+                # the UI. Without this the array editor can't rebuild the
+                # correct +/-key= lines when saving edits, and would silently
+                # convert '-'-remove entries into '+'-append entries.
+                $prefix = ''
+                $t = ([string]$l).TrimStart()
+                if ($t.StartsWith('+')) { $prefix = '+' }
+                elseif ($t.StartsWith('-')) { $prefix = '-' }
                 $keys.Add(@{
                     key     = $info.key
                     value   = (Get-DuneIniLineValue $l).Trim()
                     isArray = [bool]$info.isArray
+                    prefix  = $prefix
                     raw     = $l
                 })
             }
@@ -1749,6 +1778,7 @@ function Get-DuneGameConfigCatalog {
                 current    = $current
                 overridden = [bool]$isOverridden
                 isArray    = [bool]$k.isArray
+                prefix     = "$($k.prefix)"
                 type       = (Get-DuneGameConfigInferType -Value $defVal)
             })
         }
@@ -1777,6 +1807,7 @@ function Get-DuneGameConfigCatalog {
                 current    = $current
                 overridden = [bool]$isOverridden
                 isArray    = [bool]$k.isArray
+                prefix     = "$($k.prefix)"
                 type       = (Get-DuneGameConfigInferType -Value $defVal)
             })
         }

@@ -193,12 +193,16 @@ export type GameConfigClientApply = {
 // Per-key entry inside a default INI section. `default` = value shipped in
 // DefaultGame.ini / DefaultEngine.ini; `current` = effective value after any
 // User*.ini override; `overridden` flags whether the user changed it.
+// For array rows (isArray=true), `prefix` carries the original line's INI
+// prefix ('+' array-append, '-' array-remove) so the array editor can
+// rebuild the correct +/-key= lines on save.
 export type GameConfigDefaultKey = {
   key: string
   default: string
   current: string
   overridden: boolean
   isArray: boolean
+  prefix?: '+' | '-' | ''
   type: GameConfigFieldType
 }
 
@@ -224,12 +228,16 @@ export type GameConfigDefaultsResponse = {
 }
 
 // Raw, explicit-form save item: bypasses the static schema so we can write
-// any section/key the defaults browser surfaces.
+// any section/key the defaults browser surfaces. Either `value` (scalar
+// update) or `arrayLines` (rewrite the full +/-key= entry set for an array
+// row) is supplied — not both. An empty `arrayLines` array means "remove
+// every +/-key= line for this key" (equivalent to arrayRemove on the wire).
 export type GameConfigRawUpdate = {
   file: 'game' | 'engine'
   section: string
   key: string
-  value: string
+  value?: string
+  arrayLines?: string[]
 }
 
 // Local client config (admin's own machine). `bundle`-style fields mirror
