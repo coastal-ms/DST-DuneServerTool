@@ -105,3 +105,58 @@ Register-DuneRoute -Method POST -Path '/api/public-ip/apply' -Handler {
     Write-DuneJson -Response $res -Status 202 -Body @{ ok=$true; running=$true; publicIp=$target }
 }
 
+# ---- Server-browser Ping fix (HOST_DATACENTER_ID) ---------------------------
+# Reads the BG CR's HOST_DATACENTER_ID / HOST_DATACENTER_IP_ADDRESS from the 3
+# utility pods so the Settings card can pre-populate its inputs and show whether
+# the CR already carries the recommended "dune-awakening" id. Read-only.
+Register-DuneRoute -Method GET -Path '/api/public-ip/datacenter-id' -Handler {
+    param($req, $res, $routeParams, $body)
+    $vm = $null
+    try { $vm = Get-DuneVmStatus } catch {}
+    if (-not $vm -or -not $vm.running -or -not $vm.ip) {
+        Write-DuneError -Response $res -Status 503 -Message 'VM is not running.'
+        return
+    }
+    try {
+        $status = Get-DuneBrowserPingStatus -Ip $vm.ip
+        Write-DuneJson -Response $res -Body $status
+    } catch {
+        Write-DuneError -Response $res -Status 502 -Message "Datacenter ID status read failed: $($_.Exception.Message)"
+    }
+}
+
+# Patches HOST_DATACENTER_ID (and, if publicIp is supplied and differs,
+# HOST_DATACENTER_IP_ADDRESS) on the 3 utility pods of the battlegroup CR, then
+# restarts the battlegroup so FLS re-registers. Patching the CR is the
+# persistent lever (it is the operator's desired state), so the value survives
+# pod/BG restarts. Only runs on an explicit user request from the Settings card
+# -- never auto-applied. Setting the id to "dune-awakening" is the live-verified
+# fix that makes the in-game server-browser Ping column populate.
+Register-DuneRoute -Method POST -Path '/api/public-ip/datacenter-id' -Handler {
+    param($req, $res, $routeParams, $body)
+    $vm = $null
+    try { $vm = Get-DuneVmStatus } catch {}
+    if (-not $vm -or -not $vm.running -or -not $vm.ip) {
+        Write-DuneError -Response $res -Status 503 -Message 'VM is not running.'
+        return
+    }
+    $dcId  = [string](Get-DunePublicIpBodyValue -Body $body -Name 'datacenterId' -Default '')
+    $pubIp = [string](Get-DunePublicIpBodyValue -Body $body -Name 'publicIp'     -Default '')
+    if (-not $dcId) {
+        Write-DuneError -Response $res -Status 400 -Message 'Body must include "datacenterId".'
+        return
+    }
+    try {
+        $result = Invoke-DuneBrowserPingReconcile -Ip $vm.ip -DatacenterId $dcId -PublicIp $pubIp
+        if (-not $result.ok) {
+            $status = 502
+            if ($result.ContainsKey('status') -and $result.status) { $status = [int]$result.status }
+            Write-DuneError -Response $res -Status $status -Message $result.message
+            return
+        }
+        Write-DuneJson -Response $res -Body $result
+    } catch {
+        Write-DuneError -Response $res -Status 502 -Message "Reconcile failed: $($_.Exception.Message)"
+    }
+}
+
