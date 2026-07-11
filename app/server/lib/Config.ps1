@@ -26,7 +26,9 @@ $script:DuneConfigKeys = @(
     'UpdateChannel',
     'UpdatePreReleaseTag',
     'UpdateInstalledPrerelease',
-    'UpdateInstalledTag'
+    'UpdateInstalledTag',
+    'LocalBackupMirrorEnabled',
+    'LocalBackupMirrorFolder'
 )
 
 # Default in-pod PostgreSQL port. All DST DB access runs as
@@ -151,6 +153,22 @@ function Get-DuneUpdateInstalledPrerelease {
         return ($v -match '^(?i:true|1|yes)$')
     } catch {}
     return $false
+}
+
+# Local backup mirror — resolved settings for the "copy each new backup to a
+# local folder" feature (see BackupMirror.ps1 route + lib). Enabled is boolean-
+# ish (falsy unless explicitly '1'/'true'/'yes'/'on'); folder is a plain path
+# or empty.
+function Get-DuneLocalBackupMirrorEnabled {
+    $raw = Read-DuneConfigRaw
+    $v = if ($raw.Contains('LocalBackupMirrorEnabled')) { [string]$raw['LocalBackupMirrorEnabled'] } else { '' }
+    return ($v -match '^(?i:true|1|yes|on)$')
+}
+
+function Get-DuneLocalBackupMirrorFolder {
+    $raw = Read-DuneConfigRaw
+    $v = if ($raw.Contains('LocalBackupMirrorFolder')) { [string]$raw['LocalBackupMirrorFolder'] } else { '' }
+    return $v.Trim()
 }
 
 function Save-DuneConfig {

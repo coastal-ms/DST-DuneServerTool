@@ -1,5 +1,6 @@
 using System.Diagnostics;
 using System.Drawing;
+using System.IO;
 using System.Net.Http;
 using System.Text;
 using System.Windows.Forms;
@@ -510,6 +511,31 @@ internal sealed class MainForm : Form
             catch { /* best-effort parse */ }
             BeginInvoke(new Action(() => ShowOpenDialog(id, filter)));
         }
+        else if (string.Equals(action, "pick-folder", StringComparison.OrdinalIgnoreCase))
+        {
+            // Show a native Folder Browser dialog and return the chosen path to
+            // the frontend. Used by the "Local Backup Mirror" card on the
+            // Database page.
+            string? id = null;
+            string? initialPath = null;
+            string? description = null;
+            try
+            {
+                string? json = e.WebMessageAsJson;
+                if (!string.IsNullOrWhiteSpace(json))
+                {
+                    using var doc2 = System.Text.Json.JsonDocument.Parse(json);
+                    var r2 = doc2.RootElement.ValueKind == System.Text.Json.JsonValueKind.String
+                        ? System.Text.Json.JsonDocument.Parse(doc2.RootElement.GetString()!).RootElement
+                        : doc2.RootElement;
+                    if (r2.TryGetProperty("id", out var idProp)) id = idProp.GetString();
+                    if (r2.TryGetProperty("initialPath", out var ipProp)) initialPath = ipProp.GetString();
+                    if (r2.TryGetProperty("description", out var dProp)) description = dProp.GetString();
+                }
+            }
+            catch { /* best-effort parse */ }
+            BeginInvoke(new Action(() => ShowFolderDialog(id, initialPath, description)));
+        }
     }
 
     // ----- Native file dialog bridge ------------------------------------------
@@ -533,6 +559,22 @@ internal sealed class MainForm : Form
         dlg.Title = "Select backup to upload";
         dlg.Filter = filter ?? "Database backups (*.backup)|*.backup|All files (*.*)|*.*";
         string? chosen = dlg.ShowDialog(this) == DialogResult.OK ? dlg.FileName : null;
+        PostFilePickResult(id, chosen);
+    }
+
+    private void ShowFolderDialog(string? id, string? initialPath, string? description)
+    {
+        using var dlg = new FolderBrowserDialog();
+        dlg.Description = string.IsNullOrWhiteSpace(description)
+            ? "Select a folder for local backup copies"
+            : description;
+        dlg.UseDescriptionForTitle = true;
+        dlg.ShowNewFolderButton = true;
+        if (!string.IsNullOrWhiteSpace(initialPath) && Directory.Exists(initialPath))
+        {
+            dlg.SelectedPath = initialPath;
+        }
+        string? chosen = dlg.ShowDialog(this) == DialogResult.OK ? dlg.SelectedPath : null;
         PostFilePickResult(id, chosen);
     }
 
