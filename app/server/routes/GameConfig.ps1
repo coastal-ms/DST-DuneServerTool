@@ -145,9 +145,9 @@ Register-DuneRoute -Method PUT -Path '/api/gameconfig' -Handler {
         if ($goalUpdate) {
             try {
                 $goalVal = 0L
-                if (-not [long]::TryParse((("$($goalUpdate.value)" -replace '[^\d\-]', '')), [ref]$goalVal)) {
-                    $dbl = 0.0
-                    if ([double]::TryParse("$($goalUpdate.value)", [ref]$dbl)) { $goalVal = [long][math]::Floor($dbl) }
+                $dbl = 0.0
+                if ([double]::TryParse("$($goalUpdate.value)", [ref]$dbl)) {
+                    $goalVal = [long][math]::Floor($dbl)
                 }
                 if ($goalVal -lt 0) { $goalVal = 0 }
                 $landsraadApply = Set-DuneLandsraadCurrentTermGoal -Ip $ctx.ip -Goal $goalVal
