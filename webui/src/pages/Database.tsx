@@ -1469,7 +1469,6 @@ function BackupMirrorCard({ vmRunning, showToast }: BackupMirrorCardProps) {
   const [state, setState] = useState<BackupMirrorState | null>(null)
   const [loading, setLoading] = useState(false)
   const [saving, setSaving] = useState(false)
-  const [syncing, setSyncing] = useState(false)
   const [folderDraft, setFolderDraft] = useState('')
   const [err, setErr] = useState<string | null>(null)
 
@@ -1515,13 +1514,9 @@ function BackupMirrorCard({ vmRunning, showToast }: BackupMirrorCardProps) {
   }, [enabled, vmRunning])
 
   const toggleEnabled = useCallback(async (next: boolean) => {
-    if (next && !folderDraft.trim()) {
-      showToast('err', 'Pick a folder before enabling the mirror.')
-      return
-    }
     setSaving(true)
     try {
-      const r = await setBackupMirror({ enabled: next, folder: folderDraft.trim() })
+      const r = await setBackupMirror({ enabled: next })
       setState({
         enabled: r.enabled,
         folder: r.folder,
@@ -1529,13 +1524,17 @@ function BackupMirrorCard({ vmRunning, showToast }: BackupMirrorCardProps) {
         lastError: r.lastError,
         lastCopiedCount: r.lastCopiedCount,
       })
-      showToast('ok', next ? 'Local backup mirror enabled.' : 'Local backup mirror disabled.')
+      if (next && !r.folder) {
+        showToast('ok', 'Mirror enabled — pick a folder to start copying backups.')
+      } else {
+        showToast('ok', next ? 'Local backup mirror enabled.' : 'Local backup mirror disabled.')
+      }
     } catch (e) {
       showToast('err', e instanceof Error ? e.message : String(e))
     } finally {
       setSaving(false)
     }
-  }, [folderDraft, showToast])
+  }, [showToast])
 
   const saveFolder = useCallback(async (folder: string) => {
     setSaving(true)
@@ -1564,8 +1563,7 @@ function BackupMirrorCard({ vmRunning, showToast }: BackupMirrorCardProps) {
     })
     if (!chosen) return
     setFolderDraft(chosen)
-    void saveFolder(chosen)
-  }, [folderDraft, saveFolder])
+  }, [folderDraft])
 
   const openFolder = useCallback(async () => {
     if (!folderDraft.trim()) {
@@ -1579,27 +1577,7 @@ function BackupMirrorCard({ vmRunning, showToast }: BackupMirrorCardProps) {
     }
   }, [folderDraft, showToast])
 
-  const syncNow = useCallback(async () => {
-    setSyncing(true)
-    try {
-      const r = await syncBackupMirror()
-      setState(prev => prev ? {
-        ...prev,
-        lastMirroredAt: r.lastMirroredAt,
-        lastError: r.lastError,
-        lastCopiedCount: r.lastCopiedCount,
-      } : prev)
-      if (r.ok) {
-        showToast('ok', r.copiedCount ? `Mirrored ${r.copiedCount} new file(s).` : 'Mirror up to date.')
-      } else if (r.error) {
-        showToast('err', r.error)
-      }
-    } catch (e) {
-      showToast('err', e instanceof Error ? e.message : String(e))
-    } finally {
-      setSyncing(false)
-    }
-  }, [showToast])
+  const folderDirty = (folderDraft.trim() !== (state?.folder ?? ''))
 
   const lastError = state?.lastError ?? ''
   const lastMirroredAt = state?.lastMirroredAt ?? ''
@@ -1607,8 +1585,8 @@ function BackupMirrorCard({ vmRunning, showToast }: BackupMirrorCardProps) {
   return (
     <div className="card p-5 flex flex-col mb-6">
       <div className="flex items-center gap-3 mb-3">
-        <Icon name="FolderSync" size={22} className="text-primary" />
-        <h2 className="text-base font-semibold tracking-tight">Local backup mirror</h2>
+        <Icon name="FolderSync" size={22} className="text-info" />
+        <h2 className="text-base font-semibold tracking-tight text-info">Local backup mirror</h2>
       </div>
       <p className="text-sm text-text-muted mb-3">
         Automatically copy every DST-taken database backup into a folder on this PC.
@@ -1640,11 +1618,6 @@ function BackupMirrorCard({ vmRunning, showToast }: BackupMirrorCardProps) {
               placeholder="C:\Path\To\Backup\Folder"
               value={folderDraft}
               onChange={e => setFolderDraft(e.target.value)}
-              onBlur={() => {
-                if (folderDraft.trim() !== (state?.folder ?? '')) {
-                  void saveFolder(folderDraft.trim())
-                }
-              }}
               disabled={saving}
             />
             <button
@@ -1657,21 +1630,20 @@ function BackupMirrorCard({ vmRunning, showToast }: BackupMirrorCardProps) {
             </button>
             <button
               type="button"
+              className="btn btn-primary"
+              onClick={() => void saveFolder(folderDraft.trim())}
+              disabled={saving || !folderDirty}
+            >
+              {saving ? 'Saving…' : 'Save'}
+            </button>
+            <button
+              type="button"
               className="btn btn-secondary"
               onClick={() => void openFolder()}
               disabled={!folderDraft.trim()}
               title="Open folder in Explorer"
             >
               Open Folder
-            </button>
-            <button
-              type="button"
-              className="btn btn-secondary"
-              onClick={() => void syncNow()}
-              disabled={syncing || !folderDraft.trim() || !vmRunning}
-              title="Copy any missing backups now"
-            >
-              {syncing ? 'Syncing…' : 'Sync Now'}
             </button>
           </div>
 
