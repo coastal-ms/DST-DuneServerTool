@@ -13,6 +13,12 @@ here cover everything those tags shipped.
 
 ## [Unreleased]
 
+## [12.18.13] - 2026-07-11
+
+### Fixed
+
+- **Local backup mirror actually runs on schedule now.** In v12.18.10-v12.18.12 the auto-copy only ticked while the **Database** page was open in the DST window — the 30-second poll lived in the React component's `useEffect`, so navigating away or minimizing to tray stopped it. A backup that landed on the VM at 00:00 sat there until the next time the user opened the Database page (e.g., copied at 00:11 when the user checked). DST now runs the mirror sync inside the same background scheduler runspace that fires scheduled restarts, gated to every ~10 minutes so a hourly backup shows up in the mirror folder within one tick without pinging the VM every 30 seconds. The mirror runs whether or not any page is open, as long as DST is running — same "only while DST is running" caveat as scheduled restarts. The Database page's in-page poll stays as a fast catch-up when the page is opened, and the **Sync now** button still forces an immediate tick.
+
 ## [12.18.12] - 2026-07-10
 
 ### Fixed
