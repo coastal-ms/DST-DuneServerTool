@@ -14,6 +14,11 @@ import {
   deleteBackups,
   getBackupDumpPods,
   pruneBackupDumpPods,
+  getBackupMirror,
+  setBackupMirror,
+  openBackupMirrorFolder,
+  syncBackupMirror,
+  type BackupMirrorState,
 } from '../api/database'
 import type {
   DbInfo,
@@ -49,6 +54,26 @@ function pickFileFromShell(action: 'pick-save-file' | 'pick-open-file', opts: { 
     wv.addEventListener('message', handler)
     wv.postMessage({ action, ...opts })
     // Timeout: if the dialog is cancelled or shell doesn't respond within 5 min
+    setTimeout(() => { wv.removeEventListener('message', handler); resolve(null) }, 300_000)
+  })
+}
+
+// Sibling of pickFileFromShell for the native folder-browser dialog. The shell
+// posts back with the same "file-picked" action so the id-scoped listener can
+// stay in sync with the file variants.
+function pickFolderFromShell(opts: { id: string; initialPath?: string; description?: string }): Promise<string | null> {
+  return new Promise(resolve => {
+    const wv = (window as any).chrome?.webview
+    if (!wv) { resolve(null); return }
+    function handler(e: MessageEvent) {
+      const data = typeof e.data === 'string' ? JSON.parse(e.data) : e.data
+      if (data?.action === 'file-picked' && data?.id === opts.id) {
+        wv.removeEventListener('message', handler)
+        resolve(data.path ?? null)
+      }
+    }
+    wv.addEventListener('message', handler)
+    wv.postMessage({ action: 'pick-folder', ...opts })
     setTimeout(() => { wv.removeEventListener('message', handler); resolve(null) }, 300_000)
   })
 }
@@ -320,6 +345,9 @@ export function Database() {
 
       {/* Configurable backup schedule (writes the VM's root crontab) */}
       <BackupScheduleCard vmRunning={vmRunning} showToast={showToast} />
+
+      {/* Local backup mirror — copies each new VM backup into a user-chosen folder. */}
+      <BackupMirrorCard vmRunning={vmRunning} showToast={showToast} />
 
       {/* Fix on-demand maps — captured output */}
       <div className="card p-5 flex flex-col mb-6">
@@ -1425,4 +1453,213 @@ function relativeFromNow(epochSeconds: number): string {
   if (deltaSec < 86400)     return `${Math.floor(deltaSec / 3600)}h ago`
   if (deltaSec < 86400 * 7) return `${Math.floor(deltaSec / 86400)}d ago`
   return `${Math.floor(deltaSec / 86400)}d ago`
+}
+
+// ---------- Local Backup Mirror card ----------------------------------------
+// Copy-only mirror of the VM's DST-recognized backup files into a folder the
+// user picks. Every history refresh also fires a mirror /sync so any new
+// backup gets copied down within a poll cycle. Never deletes local files.
+
+type BackupMirrorCardProps = {
+  vmRunning: boolean
+  showToast: (kind: 'ok' | 'err', msg: string) => void
+}
+
+function BackupMirrorCard({ vmRunning, showToast }: BackupMirrorCardProps) {
+  const [state, setState] = useState<BackupMirrorState | null>(null)
+  const [loading, setLoading] = useState(false)
+  const [saving, setSaving] = useState(false)
+  const [folderDraft, setFolderDraft] = useState('')
+  const [err, setErr] = useState<string | null>(null)
+
+  const load = useCallback(async () => {
+    setLoading(true)
+    try {
+      const s = await getBackupMirror()
+      setState(s)
+      setFolderDraft(s.folder ?? '')
+      setErr(null)
+    } catch (e) {
+      setErr(e instanceof Error ? e.message : String(e))
+    } finally {
+      setLoading(false)
+    }
+  }, [])
+
+  useEffect(() => { void load() }, [load])
+
+  // Poll a mirror sync on the same cadence as backup history (~30s) when
+  // enabled and the VM is running. This is how new backups get pulled down
+  // without any user action.
+  const enabled = state?.enabled === true
+  useEffect(() => {
+    if (!enabled || !vmRunning) return
+    let cancelled = false
+    const tick = async () => {
+      try {
+        const r = await syncBackupMirror()
+        if (!cancelled) {
+          setState(prev => prev ? {
+            ...prev,
+            lastMirroredAt: r.lastMirroredAt,
+            lastError: r.lastError,
+            lastCopiedCount: r.lastCopiedCount,
+          } : prev)
+        }
+      } catch { /* silent — status line in card shows any surfaced error */ }
+    }
+    void tick()
+    const h = window.setInterval(() => { void tick() }, 30_000)
+    return () => { cancelled = true; window.clearInterval(h) }
+  }, [enabled, vmRunning])
+
+  const toggleEnabled = useCallback(async (next: boolean) => {
+    setSaving(true)
+    try {
+      const r = await setBackupMirror({ enabled: next })
+      setState({
+        enabled: r.enabled,
+        folder: r.folder,
+        lastMirroredAt: r.lastMirroredAt,
+        lastError: r.lastError,
+        lastCopiedCount: r.lastCopiedCount,
+      })
+      if (next && !r.folder) {
+        showToast('ok', 'Mirror enabled — pick a folder to start copying backups.')
+      } else {
+        showToast('ok', next ? 'Local backup mirror enabled.' : 'Local backup mirror disabled.')
+      }
+    } catch (e) {
+      showToast('err', e instanceof Error ? e.message : String(e))
+    } finally {
+      setSaving(false)
+    }
+  }, [showToast])
+
+  const saveFolder = useCallback(async (folder: string) => {
+    setSaving(true)
+    try {
+      const r = await setBackupMirror({ folder })
+      setState({
+        enabled: r.enabled,
+        folder: r.folder,
+        lastMirroredAt: r.lastMirroredAt,
+        lastError: r.lastError,
+        lastCopiedCount: r.lastCopiedCount,
+      })
+      showToast('ok', 'Mirror folder saved.')
+    } catch (e) {
+      showToast('err', e instanceof Error ? e.message : String(e))
+    } finally {
+      setSaving(false)
+    }
+  }, [showToast])
+
+  const browse = useCallback(async () => {
+    const chosen = await pickFolderFromShell({
+      id: 'backup-mirror-folder',
+      initialPath: folderDraft || undefined,
+      description: 'Select a folder for local backup copies',
+    })
+    if (!chosen) return
+    setFolderDraft(chosen)
+  }, [folderDraft])
+
+  const openFolder = useCallback(async () => {
+    if (!folderDraft.trim()) {
+      showToast('err', 'No folder set.')
+      return
+    }
+    try {
+      await openBackupMirrorFolder({ folder: folderDraft.trim() })
+    } catch (e) {
+      showToast('err', e instanceof Error ? e.message : String(e))
+    }
+  }, [folderDraft, showToast])
+
+  const folderDirty = (folderDraft.trim() !== (state?.folder ?? ''))
+
+  const lastError = state?.lastError ?? ''
+  const lastMirroredAt = state?.lastMirroredAt ?? ''
+
+  return (
+    <div className="card p-5 flex flex-col mb-6">
+      <div className="flex items-center gap-3 mb-3">
+        <Icon name="FolderSync" size={22} className="text-info" />
+        <h2 className="text-base font-semibold tracking-tight text-info">Local backup mirror</h2>
+      </div>
+      <p className="text-sm text-text-muted mb-3">
+        Automatically copy every DST-taken database backup into a folder on this PC.
+        Copies are added as new backups appear on the VM — files in the mirror folder are never
+        deleted by DST, even if the VM's auto-purge trims older backups on the server side.
+      </p>
+
+      <label className="flex items-center gap-3 mb-3 select-none cursor-pointer">
+        <input
+          type="checkbox"
+          checked={enabled}
+          disabled={loading || saving}
+          onChange={e => void toggleEnabled(e.target.checked)}
+        />
+        <span className="text-sm">Mirror new backups to a local folder</span>
+      </label>
+
+      {enabled && (
+        <div className="flex flex-col gap-3">
+          <div className="text-xs text-warning">
+            ⚠ Copies every backup that appears in backup history (scheduled, manual, and Funcom's auto-backups).
+            Files are never deleted from your local folder — VM auto-purge only trims the server side.
+          </div>
+
+          <div className="flex items-center gap-2">
+            <input
+              type="text"
+              className="input flex-1 font-mono text-xs"
+              placeholder="C:\Path\To\Backup\Folder"
+              value={folderDraft}
+              onChange={e => setFolderDraft(e.target.value)}
+              disabled={saving}
+            />
+            <button
+              type="button"
+              className="btn btn-secondary"
+              onClick={() => void browse()}
+              disabled={saving}
+            >
+              Browse…
+            </button>
+            <button
+              type="button"
+              className="btn btn-primary"
+              onClick={() => void saveFolder(folderDraft.trim())}
+              disabled={saving || !folderDirty}
+            >
+              {saving ? 'Saving…' : 'Save'}
+            </button>
+            <button
+              type="button"
+              className="btn btn-secondary"
+              onClick={() => void openFolder()}
+              disabled={!folderDraft.trim()}
+              title="Open folder in Explorer"
+            >
+              Open Folder
+            </button>
+          </div>
+
+          <div className="text-xs text-text-dim">
+            {lastError ? (
+              <span className="text-danger">Last error: {lastError}</span>
+            ) : lastMirroredAt ? (
+              <span>Last sync: {lastMirroredAt} · copied {state?.lastCopiedCount ?? 0} file(s).</span>
+            ) : (
+              <span>Not yet synced.</span>
+            )}
+          </div>
+        </div>
+      )}
+
+      {err && <div className="text-xs text-danger mt-2">{err}</div>}
+    </div>
+  )
 }
