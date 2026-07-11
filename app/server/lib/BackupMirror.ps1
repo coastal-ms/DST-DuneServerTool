@@ -205,3 +205,90 @@ function Invoke-DuneBackupMirrorTick {
     $result.ok = ($result.failed.Count -eq 0)
     return $result
 }
+
+# Scheduler tick: called every ~30s by the restart-scheduler loop in
+# lib/RestartSchedule.ps1 so the mirror keeps copying even when the Database
+# page isn't open in the webui. This is the ONLY auto-copy path — the webui's
+# in-page /sync poll (`syncBackupMirror` in Database.tsx) only ticks while the
+# component is mounted, so before v12.18.13 a scheduled backup that landed at
+# 00:00 sat on the VM until the next time the user opened the Database page.
+#
+# Gated to every 20th iteration of the 30s scheduler loop = ~10 minute
+# effective cadence. Plenty for hourly backups and avoids pinging the VM every
+# 30 seconds solely for the mirror. The scheduler-runspace-scoped counter
+# advances even when the tick returns early (mirror disabled etc.), so a user
+# who flips the checkbox on doesn't wait an extra ~9 minutes for the first
+# tick after enabling — they wait at most ~10 minutes, and the /sync route
+# still lets them force one immediately from the UI.
+#
+# Silent no-op when the feature is disabled or no folder is set, so a user who
+# hasn't turned the mirror on doesn't get any VM traffic. Writes the same
+# sidecar state ($env:APPDATA\DuneServer\backup-mirror-state.json) the /sync
+# route writes, so the UI's Last sync / Last error labels stay accurate no
+# matter which path did the tick.
+$script:DuneBackupMirrorTickCounter = 0
+$script:DuneBackupMirrorTickEvery = 20
+
+function Invoke-DuneBackupMirrorSchedulerTick {
+    $script:DuneBackupMirrorTickCounter++
+    if (($script:DuneBackupMirrorTickCounter % $script:DuneBackupMirrorTickEvery) -ne 0) {
+        return
+    }
+
+    $enabled = $false
+    $folder  = ''
+    try { $enabled = Get-DuneLocalBackupMirrorEnabled } catch { return }
+    if (-not $enabled) { return }
+    try { $folder = Get-DuneLocalBackupMirrorFolder } catch { return }
+    if (-not $folder) { return }
+
+    # VM context — silently skip when VM is down / paused / SSH not ready.
+    # The user will see stale lastMirroredAt in the UI and (if the last error
+    # was VM-unavailable) that message; nothing else surfaces.
+    $ctx = $null
+    try { $ctx = Get-DuneBackupContext } catch { return }
+    if (-not $ctx -or -not $ctx.ok) { return }
+
+    $keyPath = $null
+    try { $keyPath = Get-V6SshKeyPath } catch { return }
+    if (-not $keyPath -or -not (Test-Path -LiteralPath $keyPath)) { return }
+
+    $tick = $null
+    try {
+        $tick = Invoke-DuneBackupMirrorTick -Ip $ctx.ip -KeyPath $keyPath -LocalFolder $folder
+    } catch {
+        # Persist the failure so the UI can surface it next time the page
+        # renders, even without the user forcing a /sync.
+        $prev = Read-DuneBackupMirrorState
+        $prev.lastError = "scheduler tick error: $($_.Exception.Message)"
+        Save-DuneBackupMirrorState -State $prev
+        return
+    }
+
+    # Same lastError-shape rule as the /sync route: prefer $tick.error, else
+    # count $tick.failed so a silent per-file-scp-fails-across-the-board bug
+    # can't hide again.
+    $errMsg = ''
+    if ($tick.error) {
+        $errMsg = [string]$tick.error
+    } elseif ($tick.failed -and @($tick.failed).Count -gt 0) {
+        $failed = @($tick.failed)
+        $first  = if ($failed[0] -and $failed[0].error) { [string]$failed[0].error } else { 'unknown error' }
+        $errMsg = "$($failed.Count) file(s) failed to copy - first: $first"
+    }
+    $now = (Get-Date).ToUniversalTime().ToString('yyyy-MM-ddTHH:mm:ssZ')
+    Save-DuneBackupMirrorState -State @{
+        lastMirroredAt  = $now
+        lastError       = $errMsg
+        lastCopiedCount = @($tick.copied).Count
+    }
+    if (Get-Command Write-DuneLog -ErrorAction SilentlyContinue) {
+        $copiedCount = @($tick.copied).Count
+        $failedCount = @($tick.failed).Count
+        if ($copiedCount -gt 0 -or $failedCount -gt 0) {
+            try {
+                Write-DuneLog "backup mirror tick: copied=$copiedCount failed=$failedCount vmFiles=$($tick.vmFileCount)"
+            } catch {}
+        }
+    }
+}
