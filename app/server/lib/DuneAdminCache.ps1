@@ -28,7 +28,8 @@
 # accidentally clearing, walk them through:
 #   1. zip the timestamped folder under the path above,
 #   2. send it back,
-#   3. scp the wanted yaml(s) back into ~/.dune/ on the VM,
+#   3. stream the wanted yaml(s) back into ~/.dune/ on the VM (Copy-DuneLocalFileToVm
+#      in lib/VmFileTransfer.ps1 already handles this shape),
 #   4. chown dune:dune them.
 # Pruning is not automatic; files are ~70 KB each and clears are rare.
 # ----------------------------------------------------------------------

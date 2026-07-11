@@ -168,10 +168,24 @@ Register-DuneRoute -Method POST -Path '/api/db/backup-mirror/sync' -Handler {
 
     $tick = Invoke-DuneBackupMirrorTick -Ip $ctx.ip -KeyPath $keyPath -LocalFolder $folder
 
+    # Surface per-file failures in lastError so the UI can flag them. Without
+    # this the sidecar only ever recorded $tick.error (top-level "VM listing
+    # failed" / "folder not writable" errors), so a run where every single
+    # SCP/ssh-cat died would silently report "copied 0 file(s)" with a green
+    # banner — how the pre-v12.18.12 scp bug hid for a full release cycle.
+    $errMsg = ''
+    if ($tick.error) {
+        $errMsg = [string]$tick.error
+    } elseif ($tick.failed -and @($tick.failed).Count -gt 0) {
+        $failed = @($tick.failed)
+        $first  = if ($failed[0] -and $failed[0].error) { [string]$failed[0].error } else { 'unknown error' }
+        $errMsg = "$($failed.Count) file(s) failed to copy - first: $first"
+    }
+
     $now = (Get-Date).ToUniversalTime().ToString('yyyy-MM-ddTHH:mm:ssZ')
     $newState = @{
         lastMirroredAt  = $now
-        lastError       = if ($tick.error) { [string]$tick.error } else { '' }
+        lastError       = $errMsg
         lastCopiedCount = @($tick.copied).Count
     }
     Save-DuneBackupMirrorState -State $newState

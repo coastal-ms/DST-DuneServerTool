@@ -95,9 +95,11 @@ sudo find $script:DuneBackupDumpDir -maxdepth 3 -type f \( -name '*.backup' -o -
     return ,$out
 }
 
-# SCP a single file from the VM to the local mirror folder. Preserves the
-# source filename. Returns @{ ok; localPath?; error? }.
-function Invoke-DuneBackupMirrorScpPull {
+# Pull a single file from the VM to the local mirror folder. Preserves the
+# source filename. Wraps the shared Copy-DuneVmFileToLocal helper (which
+# streams via `ssh + sudo cat` because Alpine minimal has no scp/sftp — see
+# lib/VmFileTransfer.ps1). Returns @{ ok; localPath?; error? }.
+function Invoke-DuneBackupMirrorFilePull {
     param(
         [Parameter(Mandatory)][string]$Ip,
         [Parameter(Mandatory)][string]$KeyPath,
@@ -105,37 +107,11 @@ function Invoke-DuneBackupMirrorScpPull {
         [Parameter(Mandatory)][string]$LocalFolder,
         [int]$TimeoutSec = 300
     )
-    $fileName = Split-Path -Leaf $VmPath
+    $fileName  = Split-Path -Leaf $VmPath
     $localPath = Join-Path $LocalFolder $fileName
-
-    $psi = [System.Diagnostics.ProcessStartInfo]::new()
-    $psi.FileName               = 'scp'
-    $psi.RedirectStandardOutput = $true
-    $psi.RedirectStandardError  = $true
-    $psi.UseShellExecute        = $false
-    $psi.CreateNoWindow         = $true
-    $psi.Arguments = "-o BatchMode=yes -o StrictHostKeyChecking=no -o LogLevel=QUIET -i `"$KeyPath`" `"dune@$($Ip):$VmPath`" `"$localPath`""
-
-    $proc = [System.Diagnostics.Process]::new()
-    $proc.StartInfo = $psi
-    try {
-        [void]$proc.Start()
-        $errTask = $proc.StandardError.ReadToEndAsync()
-        $exited = $proc.WaitForExit($TimeoutSec * 1000)
-        if (-not $exited) {
-            try { $proc.Kill() } catch {}
-            return @{ ok = $false; error = "SCP timed out after ${TimeoutSec}s ($fileName)" }
-        }
-        [void]$proc.WaitForExit()
-        $stderr = $errTask.GetAwaiter().GetResult()
-        if ($proc.ExitCode -ne 0) {
-            return @{ ok = $false; error = "SCP failed rc=$($proc.ExitCode): $($stderr.Trim())" }
-        }
-    } finally {
-        try { $proc.Dispose() } catch {}
-    }
-    if (-not (Test-Path -LiteralPath $localPath)) {
-        return @{ ok = $false; error = "SCP reported success but $fileName not present locally." }
+    $r = Copy-DuneVmFileToLocal -Ip $Ip -KeyPath $KeyPath -VmPath $VmPath -LocalPath $localPath -TimeoutSec $TimeoutSec
+    if (-not $r.ok) {
+        return @{ ok = $false; error = "$($r.error) ($fileName)" }
     }
     return @{ ok = $true; localPath = $localPath }
 }
@@ -217,7 +193,7 @@ function Invoke-DuneBackupMirrorTick {
             $result.skipped++
             continue
         }
-        $r = Invoke-DuneBackupMirrorScpPull -Ip $Ip -KeyPath $KeyPath -VmPath $vm.path -LocalFolder $LocalFolder
+        $r = Invoke-DuneBackupMirrorFilePull -Ip $Ip -KeyPath $KeyPath -VmPath $vm.path -LocalFolder $LocalFolder
         if ($r.ok) {
             $result.copied += $name
             $copied++
