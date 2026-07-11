@@ -1779,6 +1779,15 @@ function DefaultsCatalogBrowser({
   const [expanded, setExpanded] = useState<Set<string>>(() => new Set())
   // sectionName||key  ->  edited value (string). Empty when nothing pending.
   const [edits, setEdits] = useState<Map<string, string>>(() => new Map())
+  // sectionName||key||indexInSection  ->  edited value (string) for array (+/-)
+  // rows. Array rows can appear multiple times per key (one per struct entry),
+  // so we key by the row's fixed position in section.keys. Empty means "delete
+  // this entry" — the save path drops empty-effective rows before writing.
+  const [arrayEdits, setArrayEdits] = useState<Map<string, string>>(() => new Map())
+  // sectionName||key||indexInSection  ->  true when the row's textarea is
+  // expanded. Kept separate from the edits map so collapsing a row doesn't
+  // discard a pending edit.
+  const [arrayExpanded, setArrayExpanded] = useState<Set<string>>(() => new Set())
   const [saving, setSaving] = useState(false)
   const [saveErr, setSaveErr] = useState<string | null>(null)
   const [savedMsg, setSavedMsg] = useState<string | null>(null)
@@ -1800,10 +1809,11 @@ function DefaultsCatalogBrowser({
     if (open && !data && !loading && vmRunning) void load(false)
   }, [open, data, loading, vmRunning, load])
 
-  const dirtyCount = edits.size
+  const dirtyCount = edits.size + arrayEdits.size
   const sectionEditCount = (sectionName: string): number => {
     let n = 0
     edits.forEach((_v, k) => { if (k.startsWith(sectionName + '||')) n++ })
+    arrayEdits.forEach((_v, k) => { if (k.startsWith(sectionName + '||')) n++ })
     return n
   }
 
@@ -1836,29 +1846,116 @@ function DefaultsCatalogBrowser({
     })
   }
 
-  const resetEdits = () => { setEdits(new Map()); setSavedMsg(null); setSaveErr(null) }
+  // Array-row edits (isArray=true entries): keyed by section||key||idx so
+  // multiple struct-array rows with the same key don't collide. Passing ''
+  // (empty) marks the row for deletion — the save path drops it from the
+  // arrayLines set. Comparing to `original` keeps the map clean when the user
+  // edits and then reverts.
+  const setArrayEdit = (sectionName: string, key: string, idx: number, value: string, original: string) => {
+    setArrayEdits(prev => {
+      const next = new Map(prev)
+      const id = `${sectionName}||${key}||${idx}`
+      if (value === original) next.delete(id)
+      else next.set(id, value)
+      return next
+    })
+  }
+  const getArrayEdit = (sectionName: string, key: string, idx: number): string | undefined =>
+    arrayEdits.get(`${sectionName}||${key}||${idx}`)
+
+  const toggleArrayRow = (sectionName: string, key: string, idx: number) => {
+    setArrayExpanded(prev => {
+      const next = new Set(prev)
+      const id = `${sectionName}||${key}||${idx}`
+      if (next.has(id)) next.delete(id); else next.add(id)
+      return next
+    })
+  }
+  const isArrayRowExpanded = (sectionName: string, key: string, idx: number): boolean =>
+    arrayExpanded.has(`${sectionName}||${key}||${idx}`)
+
+  const resetEdits = () => {
+    setEdits(new Map())
+    setArrayEdits(new Map())
+    setSavedMsg(null)
+    setSaveErr(null)
+  }
 
   const onSave = async () => {
-    if (!data || edits.size === 0) return
+    if (!data || (edits.size === 0 && arrayEdits.size === 0)) return
     setSaving(true); setSaveErr(null); setSavedMsg(null)
     try {
-      // Map each pending edit back to its section.file via the loaded catalog.
-      const sectionFile = new Map<string, 'game' | 'engine'>()
-      for (const s of data.sections) sectionFile.set(s.name, s.file)
+      // Map each section name -> its file + full row list. Used both for
+      // scalar-edit dispatch and for rebuilding arrayLines from the union of
+      // catalog rows + pending arrayEdits.
+      const sectionMeta = new Map<string, { file: 'game' | 'engine'; keys: GameConfigDefaultKey[] }>()
+      for (const s of data.sections) sectionMeta.set(s.name, { file: s.file, keys: s.keys })
+
       const updates: GameConfigRawUpdate[] = []
+
+      // 1) Scalar edits — same shape as before.
       edits.forEach((value, id) => {
         const ix = id.indexOf('||')
         if (ix < 0) return
         const section = id.slice(0, ix)
         const key = id.slice(ix + 2)
-        const file = sectionFile.get(section)
-        if (!file) return
-        updates.push({ file, section, key, value })
+        const meta = sectionMeta.get(section)
+        if (!meta) return
+        updates.push({ file: meta.file, section, key, value })
       })
+
+      // 2) Array edits — group per (section, key), then rebuild the full set
+      // of +/-key= lines using the catalog rows for that key (in section
+      // order), applying the per-row edit override where present. Empty
+      // effective values drop the row from the set (delete). Basic bracket
+      // balance check rejects malformed struct values before they hit the
+      // server — Unreal INI is picky about paren counts and a missing ')'
+      // silently breaks the whole key at load time.
+      const arrayGroups = new Map<string, { section: string; key: string; file: 'game' | 'engine' }>()
+      arrayEdits.forEach((_v, id) => {
+        const parts = id.split('||')
+        if (parts.length !== 3) return
+        const [section, key] = parts
+        const meta = sectionMeta.get(section)
+        if (!meta) return
+        const gkey = `${section}||${key}`
+        if (!arrayGroups.has(gkey)) arrayGroups.set(gkey, { section, key, file: meta.file })
+      })
+
+      for (const { section, key, file } of arrayGroups.values()) {
+        const meta = sectionMeta.get(section)
+        if (!meta) continue
+        const lines: string[] = []
+        meta.keys.forEach((k, idx) => {
+          if (!k.isArray || k.key !== key) return
+          const override = getArrayEdit(section, key, idx)
+          const raw = override !== undefined ? override : k.current
+          // Strip stray CR/LF a paste may have injected; INI stores each
+          // entry on a single physical line.
+          const value = raw.replace(/[\r\n]+/g, '').trim()
+          if (!value) return
+          // Bracket balance check — must count paren pairs. Anything else the
+          // server would happily write, but the game would drop.
+          let depth = 0
+          let bad = false
+          for (const ch of value) {
+            if (ch === '(') depth++
+            else if (ch === ')') { depth--; if (depth < 0) { bad = true; break } }
+          }
+          if (bad || depth !== 0) {
+            throw new Error(`Unbalanced parens in ${key} entry #${idx + 1}. Fix the ( ) count before saving.`)
+          }
+          const prefix = (k.prefix === '-' || k.prefix === '+') ? k.prefix : '+'
+          lines.push(`${prefix}${key}=${value}`)
+        })
+        updates.push({ file, section, key, arrayLines: lines })
+      }
+
       if (updates.length === 0) return
       await saveGameConfigRaw(updates)
       setSavedMsg(`Saved ${updates.length} change${updates.length === 1 ? '' : 's'}.`)
       setEdits(new Map())
+      setArrayEdits(new Map())
       await load(false)
       onSaved()
     } catch (e) {
@@ -1888,6 +1985,17 @@ function DefaultsCatalogBrowser({
         <div className="mt-4 space-y-3">
           {!vmRunning && (
             <div className="text-xs text-text-muted">Start the VM to load the defaults catalog.</div>
+          )}
+
+          {vmRunning && (
+            <div className="rounded-lg border border-border/60 bg-surface-2/50 px-3 py-2 text-[11px] text-text-muted leading-relaxed">
+              <span className="text-text-dim font-semibold">Advanced settings.</span> Each row here is one line
+              in <span className="font-mono text-text-dim">DefaultGame.ini</span> or <span className="font-mono text-text-dim">DefaultEngine.ini</span>.
+              Rows tagged <span className="font-mono text-warning">[+]</span> or <span className="font-mono text-warning">[-]</span> are
+              array entries — one struct value per row. Click <span className="font-semibold text-text-dim">Edit</span> to open a textarea;
+              your edit rewrites just that entry when you Save. <span className="font-semibold text-text-dim">Delete entry</span> drops the row from the
+              INI file on save. Empty rows are skipped. Bracket count is validated before saving — DST won't ship a malformed struct to Unreal.
+            </div>
           )}
 
           {vmRunning && (
@@ -1956,6 +2064,10 @@ function DefaultsCatalogBrowser({
                     editsCount={sectionEditCount(s.name)}
                     getEdit={(key) => edits.get(`${s.name}||${key}`)}
                     onEdit={(key, value, original) => setEdit(s.name, key, value, original)}
+                    getArrayEdit={(key, idx) => getArrayEdit(s.name, key, idx)}
+                    onArrayEdit={(key, idx, value, original) => setArrayEdit(s.name, key, idx, value, original)}
+                    isArrayRowExpanded={(key, idx) => isArrayRowExpanded(s.name, key, idx)}
+                    onToggleArrayRow={(key, idx) => toggleArrayRow(s.name, key, idx)}
                     searchTerm={search.trim().toLowerCase()}
                   />
                 ))}
@@ -1999,7 +2111,8 @@ function DefaultsCatalogBrowser({
 }
 
 function DefaultsSectionCard({
-  section, expanded, onToggle, editsCount, getEdit, onEdit, searchTerm,
+  section, expanded, onToggle, editsCount, getEdit, onEdit,
+  getArrayEdit, onArrayEdit, isArrayRowExpanded, onToggleArrayRow, searchTerm,
 }: {
   section: GameConfigDefaultSection
   expanded: boolean
@@ -2007,14 +2120,20 @@ function DefaultsSectionCard({
   editsCount: number
   getEdit: (key: string) => string | undefined
   onEdit: (key: string, value: string, original: string) => void
+  getArrayEdit: (key: string, idx: number) => string | undefined
+  onArrayEdit: (key: string, idx: number, value: string, original: string) => void
+  isArrayRowExpanded: (key: string, idx: number) => boolean
+  onToggleArrayRow: (key: string, idx: number) => void
   searchTerm: string
 }) {
-  // If the user is searching for a key, filter the section's visible keys too
-  // so deep sections aren't a wall of noise.
+  // Preserve each row's index in the FULL section.keys array — that stable
+  // index is the arrayEdits map key and identifies the specific struct entry
+  // this row represents when multiple isArray rows share a key.
   const visibleKeys = useMemo(() => {
-    if (!searchTerm) return section.keys
-    if (section.name.toLowerCase().includes(searchTerm)) return section.keys
-    return section.keys.filter(k => k.key.toLowerCase().includes(searchTerm))
+    const withIdx = section.keys.map((k, idx) => ({ k, idx }))
+    if (!searchTerm) return withIdx
+    if (section.name.toLowerCase().includes(searchTerm)) return withIdx
+    return withIdx.filter(({ k }) => k.key.toLowerCase().includes(searchTerm))
   }, [section, searchTerm])
 
   return (
@@ -2054,12 +2173,17 @@ function DefaultsSectionCard({
           {visibleKeys.length === 0 && (
             <div className="px-3 py-2 text-[11px] text-text-dim">(no keys match)</div>
           )}
-          {visibleKeys.map((k, i) => (
+          {visibleKeys.map(({ k, idx }) => (
             <DefaultsKeyRow
-              key={`${k.key}-${i}`}
+              key={`${k.key}-${idx}`}
               k={k}
+              rowIdx={idx}
               pending={getEdit(k.key)}
               onChange={(v) => onEdit(k.key, v, k.current)}
+              arrayPending={getArrayEdit(k.key, idx)}
+              onArrayChange={(v) => onArrayEdit(k.key, idx, v, k.current)}
+              expanded={isArrayRowExpanded(k.key, idx)}
+              onToggleExpand={() => onToggleArrayRow(k.key, idx)}
             />
           ))}
         </div>
@@ -2069,17 +2193,26 @@ function DefaultsSectionCard({
 }
 
 function DefaultsKeyRow({
-  k, pending, onChange,
+  k, rowIdx, pending, onChange,
+  arrayPending, onArrayChange, expanded, onToggleExpand,
 }: {
   k: GameConfigDefaultKey
+  rowIdx: number
   pending: string | undefined
   onChange: (v: string) => void
+  arrayPending: string | undefined
+  onArrayChange: (v: string) => void
+  expanded: boolean
+  onToggleExpand: () => void
 }) {
   const displayed = pending ?? k.current
   const isDirty = pending !== undefined
-  // Array keys (+/-) need multi-line edits that the explicit-array save path
-  // doesn't model; surface them read-only with a hint for now.
   const isArray = k.isArray
+  // For array rows the effective value tracks arrayPending, and dirty state
+  // includes cleared entries (delete-a-row).
+  const arrayDisplayed = arrayPending !== undefined ? arrayPending : k.current
+  const arrayIsDirty = arrayPending !== undefined
+  const arrayIsDeleted = arrayIsDirty && arrayPending!.trim() === ''
 
   const inputCls =
     'w-full px-2 py-1 rounded bg-surface border border-border text-text text-xs font-mono ' +
@@ -2087,11 +2220,74 @@ function DefaultsKeyRow({
 
   let control: ReactElement
   if (isArray) {
-    control = (
-      <span className="text-[11px] font-mono text-text-dim break-all">
-        {displayed} <span className="text-warning">[array — edit in INI]</span>
-      </span>
-    )
+    // Array (+/-) rows: single-line preview with an expand toggle. Expanded
+    // view shows a multi-line textarea (Unreal struct syntax can be long)
+    // plus Reset-this-entry and Delete-this-entry actions. On save, the
+    // parent walks all array rows for this key in section order and rewrites
+    // the entire +/-key= line set — deleted rows drop out.
+    if (expanded) {
+      control = (
+        <div className="space-y-1.5">
+          <textarea
+            value={arrayDisplayed}
+            onChange={e => onArrayChange(e.target.value)}
+            spellCheck={false}
+            rows={Math.min(10, Math.max(3, Math.ceil(arrayDisplayed.length / 80)))}
+            className={inputCls + ' resize-y min-h-[4rem] leading-snug'}
+            placeholder="(Field=Value,Field=Value)"
+          />
+          <div className="flex items-center justify-between gap-2 text-[10px]">
+            <span className="text-text-dim">
+              entry #{rowIdx + 1}{k.prefix === '-' ? ' (array-remove)' : ''}
+              {arrayIsDeleted && <span className="ml-2 px-1 rounded bg-danger/15 text-danger font-semibold uppercase">will delete</span>}
+            </span>
+            <div className="flex items-center gap-1">
+              <button
+                type="button"
+                onClick={() => onArrayChange(k.current)}
+                disabled={!arrayIsDirty}
+                className="btn-ghost px-2 py-0.5 text-[10px] disabled:opacity-40"
+                title="Revert this entry to what's currently in the INI"
+              >
+                Reset
+              </button>
+              <button
+                type="button"
+                onClick={() => onArrayChange('')}
+                disabled={arrayIsDeleted}
+                className="btn-ghost px-2 py-0.5 text-[10px] text-danger disabled:opacity-40"
+                title="Drop this entry from the +key=... line set on save"
+              >
+                Delete entry
+              </button>
+              <button
+                type="button"
+                onClick={onToggleExpand}
+                className="btn-ghost px-2 py-0.5 text-[10px]"
+              >
+                Collapse
+              </button>
+            </div>
+          </div>
+        </div>
+      )
+    } else {
+      control = (
+        <div className="flex items-center gap-2 min-w-0">
+          <span className="text-[11px] font-mono text-text-dim truncate flex-1" title={arrayDisplayed}>
+            {arrayIsDeleted ? <span className="italic text-danger/80">(will delete)</span> : arrayDisplayed}
+          </span>
+          <button
+            type="button"
+            onClick={onToggleExpand}
+            className="btn-ghost px-2 py-0.5 text-[10px] shrink-0"
+            title="Edit this array entry"
+          >
+            Edit
+          </button>
+        </div>
+      )
+    }
   } else {
     const pair = boolPair(k.type)
     if (pair) {
@@ -2132,15 +2328,24 @@ function DefaultsKeyRow({
   }
 
   return (
-    <div className="px-3 py-2 grid grid-cols-[minmax(0,2fr)_minmax(0,3fr)_minmax(0,2fr)] gap-3 items-center">
+    <div className={
+      'px-3 py-2 grid grid-cols-[minmax(0,2fr)_minmax(0,3fr)_minmax(0,2fr)] gap-3 ' +
+      (isArray && expanded ? 'items-start' : 'items-center')
+    }>
       <span className="font-mono text-[11px] text-text truncate" title={k.key}>
-        {isArray && <span className="text-warning mr-1" title="Array entry">[]</span>}
+        {isArray && (
+          <span className="text-warning mr-1" title={`Array entry ${k.prefix === '-' ? '(array-remove)' : '(array-append)'}`}>
+            {k.prefix === '-' ? '[-]' : '[+]'}
+          </span>
+        )}
         {k.key}
       </span>
       <div>{control}</div>
       <div className="text-[10px] font-mono text-text-dim truncate flex items-center gap-2" title={`default: ${k.default}`}>
         {isDirty && <span className="px-1 rounded bg-success/15 text-success font-semibold uppercase">edited</span>}
-        {!isDirty && k.overridden && <span className="px-1 rounded bg-accent/15 text-accent-bright font-semibold uppercase">overridden</span>}
+        {arrayIsDeleted && <span className="px-1 rounded bg-danger/15 text-danger font-semibold uppercase">delete</span>}
+        {arrayIsDirty && !arrayIsDeleted && <span className="px-1 rounded bg-success/15 text-success font-semibold uppercase">edited</span>}
+        {!isDirty && !arrayIsDirty && k.overridden && <span className="px-1 rounded bg-accent/15 text-accent-bright font-semibold uppercase">overridden</span>}
         <span className="truncate">default: {k.default || <span className="text-text-dim/60">∅</span>}</span>
       </div>
     </div>
