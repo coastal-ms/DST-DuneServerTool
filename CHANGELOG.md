@@ -13,6 +13,11 @@ here cover everything those tags shipped.
 
 ## [Unreleased]
 
+## [12.18.15] - 2026-07-11
+
+### Added
+
+- **New Settings card: Server Browser Ping fix.** Self-hosted servers commonly showed **Ping = 0 with empty bars in the in-game server browser** because the battlegroup ships with the vendor-default datacenter id (`dune-testing`), which never registers with the ping backend. The correct value is the literal `dune-awakening`. DST now surfaces a collapsible **Server Browser Ping** card under Settings that reads the live datacenter id + IP off the battlegroup, shows whether they match the recommended values, and — only when you click **Apply** — patches `HOST_DATACENTER_ID` (default `dune-awakening`) and `HOST_DATACENTER_IP_ADDRESS` (default your detected public IP) onto the battlegroup CR's three utility pods and restarts the battlegroup. The change is written to the CR (durable desired-state), so it persists across pod and battlegroup restarts, not just the running pods. Nothing is applied automatically — the card only reads status until you choose to save.
 ## [12.18.14] - 2026-07-11
 
 ### Added

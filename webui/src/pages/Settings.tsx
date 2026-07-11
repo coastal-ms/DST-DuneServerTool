@@ -9,6 +9,7 @@ import { fmtToolVersion } from '../format'
 import { AppearanceCard } from './settings/AppearanceCard'
 import { DashboardAlertsCard } from './settings/DashboardAlertsCard'
 import { PublicIpCard } from './settings/PublicIpCard'
+import { ServerBrowserPingCard } from './settings/ServerBrowserPingCard'
 import { RemoteAccessCard } from './settings/RemoteAccessCard'
 import { MobileAppCard } from './settings/MobileAppCard'
 import { FlsTokenCard } from './settings/FlsTokenCard'
@@ -737,6 +738,8 @@ export function Settings() {
       <SectionErrorBoundary name="Remote Access"><RemoteAccessCard /></SectionErrorBoundary>
 
       <SectionErrorBoundary name="Public IP"><PublicIpCard /></SectionErrorBoundary>
+
+      <SectionErrorBoundary name="Server Browser Ping"><ServerBrowserPingCard /></SectionErrorBoundary>
 
       <SectionErrorBoundary name="Server Authorization Token"><FlsTokenCard /></SectionErrorBoundary>
 
