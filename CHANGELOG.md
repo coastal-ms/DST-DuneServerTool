@@ -13,6 +13,12 @@ here cover everything those tags shipped.
 
 ## [Unreleased]
 
+## [12.18.16] - 2026-07-12
+
+### Fixed
+
+- **Core maps now auto-recover faster after a hard VM crash / power loss.** When the host is hard-reset while the battlegroup was still running, a core map (Overmap, Survival_1/Hagga) could come back up but sit unavailable for a while — players saw it stuck in a "preshutdown" state. The cause is the server operator draining the stale pre-crash server pod through its full 120s grace window before recreating a fresh one. The VM-side self-heal now includes a **boot-only stuck-server force-clear** pass: for any map that should be up (serverset replicas ≥ 1) whose backing pod is demonstrably stuck — terminating, or in the draining `Stopping` phase — it force-deletes that pod so the operator recreates it immediately, skipping the drain. It runs at boot only (no players are online), never during live play, so it can't interrupt a legitimate scheduled-restart drain. Ready pods and normally-starting pods are left untouched, and cleanly shut-down maps (replicas = 0) are never restarted. This complements the existing on-demand-map partition self-heal (which is unchanged and still only touches on-demand map partitions).
+
 ## [12.18.15] - 2026-07-11
 
 ### Added

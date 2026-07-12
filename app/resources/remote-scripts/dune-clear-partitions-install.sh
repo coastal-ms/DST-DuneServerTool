@@ -14,16 +14,30 @@
 #   force-close the map -> clear partitions -> let spin-up restore it. This
 #   installs that fix as an autonomous VM-side heal so it works WITH DST CLOSED.
 #
+#   The SAME crash class also strands the CORE maps (Overmap / Survival_1 Hagga):
+#   their pre-crash pod comes back as a stale server the operator DRAINS through
+#   terminationGracePeriodSeconds (120s) before recreating it -- game phase
+#   "Stopping" (players see "preshutdown"), or the k8s pod stuck Terminating --
+#   so the map is unavailable for the whole grace window. A BOOT-only pass here
+#   force-clears such a stale pod so the operator recreates it immediately. Core
+#   maps keep a legitimate partition pin, so that pass evicts the POD only and
+#   never touches partitions (that stays the on-demand pass's job).
+#
 # WHAT IT DOES
-#   1. Writes the heal script to /usr/local/bin/dune-clear-partitions.sh. The
-#      heal cycles a map (patch {replicas:0, partitions:[]}, which evicts the
-#      zombie pod AND clears the pin; the director then restores a warm floor)
-#      ONLY when the partition is pinned AND no pod is Ready -- so a live player
-#      session (Ready pod) is never kicked.
+#   1. Writes the heal script to /usr/local/bin/dune-clear-partitions.sh. It has
+#      two passes: (a) BOOT-only stuck-server force-clear for any map that should
+#      be up (replicas>=1) whose pod is stuck Terminating or draining "Stopping",
+#      force-deleting that pod so the operator recreates it without the 120s
+#      drain -- a Ready pod is never touched; and (b) the on-demand/warm map
+#      partition heal that cycles a map (patch {replicas:0, partitions:[]}, which
+#      evicts the zombie pod AND clears the pin; the director then restores a warm
+#      floor) ONLY when the partition is pinned AND no pod is Ready.
 #   2. Installs it as the OpenRC boot hook /etc/local.d/dune-clear-partitions.start
 #      (mode=boot: aggressive, since no players can exist right after boot).
 #   3. Installs a */15 cron entry (mode=cron: conservative, only cycles a clearly
-#      stuck/zombie or pod-less map so it never races a legitimate spin-up).
+#      stuck/zombie or pod-less map so it never races a legitimate spin-up; the
+#      stuck-server force-clear runs in BOOT mode ONLY, never cron/manual, so it
+#      cannot interrupt a legitimate scheduled-restart drain during live play).
 #   4. Runs the heal once now in the mode given by $1 (default: cron). DST passes
 #      'cron' for the automatic app-start sync (conservative -- never disturbs a
 #      map that is only mid-spin-up while the app is launched during live play)
@@ -100,6 +114,83 @@ done
 if ! $KUBE get igwsss --all-namespaces >/dev/null 2>&1; then
   log "k3s API / igwsss CRD not reachable, nothing to do (mode=$MODE)"
   exit 0
+fi
+
+# ---------------------------------------------------------------------------
+# BOOT-ONLY: stuck-server pod force-clear (core maps Overmap/Hagga + any map
+# that is supposed to be up). After a hard host crash + VM reboot, the
+# pre-crash server pod comes back as a stale server that the Funcom
+# server-operator DRAINS through terminationGracePeriodSeconds (120s on the
+# serverset) before it recreates a fresh pod -- the game phase shows "Stopping"
+# (what players see as "preshutdown"), or the k8s pod is stuck Terminating
+# (deletionTimestamp set because the node was NotReady). Either way the map is
+# unavailable for the whole grace window. This does NOT overlap the partition
+# pass below: core maps keep a legitimate partition pin that must never be
+# cleared -- the fix here is to evict the STALE POD, not touch partitions.
+#
+# At BOOT no players can be online, so force-deleting a demonstrably-stuck pod
+# (--force --grace-period=0) is safe and lets the operator recreate immediately,
+# skipping the drain. A normally-starting pod (Initializing / Starting, no
+# deletion mark) is LEFT ALONE so a legitimate world-load is never interrupted.
+# Boot mode ONLY -- never cron/manual, because during live play a "Stopping" pod
+# may be a legitimate scheduled-restart drain we must not kill.
+force_clear_stuck_pods() {
+  $KUBE get serverset --all-namespaces --no-headers 2>/dev/null | awk '{print $1"\t"$2}' \
+    | while IFS="$(printf '\t')" read -r ns ss; do
+    { [ -z "$ns" ] || [ -z "$ss" ]; } && continue
+    # Only maps that are SUPPOSED to be up (replicas>=1). A cleanly shut-down
+    # BG has every serverset at replicas=0 -> skipped -> we never start a map
+    # the operator intends to keep down.
+    rep=$($KUBE -n "$ns" get serverset "$ss" -o jsonpath='{.spec.replicas}' 2>/dev/null)
+    case "$rep" in ''|*[!0-9]*) continue ;; esac
+    [ "$rep" -ge 1 ] || continue
+    rdyN=$($KUBE -n "$ns" get serverset "$ss" -o jsonpath='{.status.readyReplicas}' 2>/dev/null)
+    case "$rdyN" in ''|*[!0-9]*) rdyN=0 ;; esac
+    # Fully ready -> healthy, nothing to do.
+    [ "$rdyN" -ge "$rep" ] && continue
+
+    pods=$($KUBE -n "$ns" get pods --no-headers -o custom-columns=':metadata.name' 2>/dev/null | grep "^${ss}-pod-" || true)
+    for p in $pods; do
+      [ -z "$p" ] && continue
+      # Never disturb a live/Ready pod (belt-and-braces; no players at boot).
+      rdy=$($KUBE -n "$ns" get pod "$p" -o jsonpath='{.status.conditions[?(@.type=="Ready")].status}' 2>/dev/null)
+      [ "$rdy" = "True" ] && continue
+      del=$($KUBE -n "$ns" get pod "$p" -o jsonpath='{.metadata.deletionTimestamp}' 2>/dev/null)
+      idx="${p##*-pod-}"
+      gphase=""
+      case "$idx" in
+        ''|*[!0-9]*) : ;;
+        *) gphase=$($KUBE -n "$ns" get serverset "$ss" -o jsonpath="{.status.pods[?(@.ordinalIndex==$idx)].phase}" 2>/dev/null) ;;
+      esac
+
+      # Only force a DEMONSTRABLY-stuck pod: stuck Terminating (deletionTimestamp)
+      # or draining (game phase "Stopping"). Initializing / Starting / not-yet-
+      # Ready-but-healthy pods are left to load normally.
+      if [ -n "$del" ] || [ "$gphase" = "Stopping" ]; then
+        reason="phase=${gphase:-?}${del:+,terminating}"
+        if $KUBE -n "$ns" delete pod "$p" --force --grace-period=0 >>"$LOG" 2>&1; then
+          log "$ns/$ss: force-cleared stuck pod $p ($reason) -> operator will recreate a fresh pod (skipped drain)"
+        else
+          log "$ns/$ss: ERROR force-deleting stuck pod $p ($reason)"
+        fi
+      else
+        log "$ns/$ss: pod $p not Ready (phase=${gphase:-?}) but not stuck (likely starting) -- leaving to load"
+      fi
+    done
+  done
+  return 0
+}
+
+if [ "$MODE" = "boot" ]; then
+  # The operator can take a short while after boot to surface a stale pod as
+  # Terminating/Stopping, so probe a few times over ~2 min. Idempotent: each
+  # pass is a cheap no-op when nothing is stuck.
+  fc=1
+  while [ "$fc" -le 6 ]; do
+    force_clear_stuck_pods
+    [ "$fc" -lt 6 ] && sleep 20
+    fc=$((fc + 1))
+  done
 fi
 
 # Return non-empty if at least one igwsss matches one of our map suffixes.
