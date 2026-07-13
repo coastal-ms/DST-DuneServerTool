@@ -1,9 +1,9 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { Icon } from '../../components/Icon'
-import { getBases, exportBase, downloadBlueprintFile, type BaseRow, type DataSource } from '../../api/gameplay'
+import { getBases, exportBase, destroyClaim, downloadBlueprintFile, type BaseRow, type DataSource } from '../../api/gameplay'
 import { fmtNum, SourceBadge, StatCard, DemoNotice } from './shared'
 
-type SortKey = 'id' | 'name' | 'pieces' | 'placeables'
+type SortKey = 'id' | 'name' | 'owner' | 'pieces' | 'placeables'
 
 export function BasesTab() {
   const [bases, setBases] = useState<BaseRow[]>([])
@@ -16,6 +16,9 @@ export function BasesTab() {
   const [dir, setDir] = useState<'asc' | 'desc'>('desc')
   const [busyId, setBusyId] = useState<number | null>(null)
   const [flash, setFlash] = useState<string | null>(null)
+  const [confirmBase, setConfirmBase] = useState<BaseRow | null>(null)
+  const [ackBackup, setAckBackup] = useState(false)
+  const [destroying, setDestroying] = useState(false)
 
   const load = useCallback(async () => {
     setLoading(true); setError(null)
@@ -40,6 +43,21 @@ export function BasesTab() {
       setError(e instanceof Error ? e.message : String(e))
     } finally {
       setBusyId(null)
+    }
+  }
+
+  const handleDestroy = async () => {
+    if (!confirmBase || !confirmBase.totemId) return
+    setDestroying(true); setError(null); setFlash(null)
+    try {
+      const r = await destroyClaim(confirmBase.totemId)
+      setFlash(r.message || `Released claim (totem ${confirmBase.totemId}).`)
+      setConfirmBase(null); setAckBackup(false)
+      await load()
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e))
+    } finally {
+      setDestroying(false)
     }
   }
 
@@ -92,6 +110,7 @@ export function BasesTab() {
           <thead>
             <tr className="text-left text-xs uppercase tracking-wider text-text-dim border-b border-border">
               <Th label="Base" col="name" sort={sort} dir={dir} onSort={toggleSort} />
+              <Th label="Owner" col="owner" sort={sort} dir={dir} onSort={toggleSort} />
               <Th label="ID" col="id" sort={sort} dir={dir} onSort={toggleSort} align="right" className="hidden sm:table-cell" />
               <Th label="Pieces" col="pieces" sort={sort} dir={dir} onSort={toggleSort} align="right" />
               <Th label="Placeables" col="placeables" sort={sort} dir={dir} onSort={toggleSort} align="right" />
@@ -100,25 +119,31 @@ export function BasesTab() {
           </thead>
           <tbody>
             {loading && bases.length === 0 && (
-              <tr><td colSpan={5} className="px-3 py-8 text-center text-text-dim">
+              <tr><td colSpan={6} className="px-3 py-8 text-center text-text-dim">
                 <Icon name="Loader2" size={18} className="animate-spin inline" /> Loading bases…
               </td></tr>
             )}
             {!loading && rows.length === 0 && (
-              <tr><td colSpan={5} className="px-3 py-8 text-center text-text-dim">No bases match.</td></tr>
+              <tr><td colSpan={6} className="px-3 py-8 text-center text-text-dim">No bases match.</td></tr>
             )}
             {rows.map(b => (
               <tr key={b.id} className="border-b border-border/50 hover:bg-surface-2">
                 <td className="px-3 py-2">
                   <div className="font-medium text-text truncate max-w-[280px]">{b.name || <span className="text-text-dim italic">Unnamed base</span>}</div>
                 </td>
+                <td className="px-3 py-2 text-text-muted truncate max-w-[160px]">{b.owner || <span className="text-text-dim">—</span>}</td>
                 <td className="px-3 py-2 text-right hidden sm:table-cell font-mono text-text-dim">{b.id}</td>
                 <td className="px-3 py-2 text-right font-mono">{fmtNum(b.pieces)}</td>
                 <td className="px-3 py-2 text-right font-mono text-text-muted">{fmtNum(b.placeables)}</td>
-                <td className="px-3 py-2 text-right">
+                <td className="px-3 py-2 text-right whitespace-nowrap">
                   <button className="btn-secondary py-1 px-2 text-xs" disabled={busyId === b.id}
                     onClick={() => { void handleExport(b) }} title="Download this base as a portable blueprint JSON file">
                     {busyId === b.id ? <Icon name="Loader2" size={13} className="animate-spin" /> : <Icon name="Download" size={13} />} Export
+                  </button>
+                  <button className="btn-secondary py-1 px-2 text-xs text-danger ml-2" disabled={!b.totemId || source === 'demo'}
+                    onClick={() => { setConfirmBase(b); setAckBackup(false) }}
+                    title={b.totemId ? "Release this base's land claim (removes ownership)" : 'No land claim on this base'}>
+                    <Icon name="Trash2" size={13} /> Release claim
                   </button>
                 </td>
               </tr>
@@ -126,6 +151,46 @@ export function BasesTab() {
           </tbody>
         </table>
       </div>
+
+      {confirmBase && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4" onClick={() => { if (!destroying) setConfirmBase(null) }}>
+          <div className="absolute inset-0 bg-black/50" />
+          <div className="relative w-full max-w-md bg-surface border border-border rounded-xl p-5" onClick={e => e.stopPropagation()}>
+            <div className="flex items-start justify-between mb-3">
+              <h3 className="text-lg font-semibold text-text flex items-center gap-2"><Icon name="AlertTriangle" size={18} className="text-danger" /> Release base claim</h3>
+              <button onClick={() => setConfirmBase(null)} disabled={destroying} className="text-text-dim hover:text-text"><Icon name="X" size={20} /></button>
+            </div>
+
+            <p className="text-sm text-text-muted mb-3">
+              This deletes the land claim (totem <span className="font-mono text-text">#{confirmBase.totemId}</span>) for{' '}
+              <span className="text-text font-medium">{confirmBase.name || 'this unnamed base'}</span>
+              {confirmBase.owner && <> owned by <span className="text-text font-medium">{confirmBase.owner}</span></>}.
+              {' '}Ownership and all permission grants are removed. Building pieces stay in the world as unclaimed
+              structures and take effect after the next <span className="text-warning">battlegroup restart</span>.
+            </p>
+
+            <div className="card p-3 mb-3 border-l-2 border-danger bg-danger/5 text-xs text-text-muted flex items-start gap-2">
+              <Icon name="AlertTriangle" size={15} className="text-danger mt-0.5 shrink-0" />
+              <span>
+                <span className="text-danger font-semibold">Make sure you have a recent backup before deleting.</span>{' '}
+                This edits the live game database directly and cannot be undone from the tool. Take a database backup first.
+              </span>
+            </div>
+
+            <label className="flex items-center gap-2 text-sm text-text mb-4 cursor-pointer select-none">
+              <input type="checkbox" checked={ackBackup} onChange={e => setAckBackup(e.target.checked)} className="accent-danger" />
+              I have a backup and understand this removes the claim.
+            </label>
+
+            <div className="flex justify-end gap-2">
+              <button className="btn-secondary" onClick={() => setConfirmBase(null)} disabled={destroying}>Cancel</button>
+              <button className="btn-primary bg-danger hover:bg-danger/90 border-danger" onClick={() => { void handleDestroy() }} disabled={destroying || !ackBackup}>
+                {destroying ? <Icon name="Loader2" size={14} className="animate-spin" /> : <Icon name="Trash2" size={14} />} Release claim
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }

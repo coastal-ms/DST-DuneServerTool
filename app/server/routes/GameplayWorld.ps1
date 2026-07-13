@@ -244,3 +244,22 @@ Register-DuneRoute -Method POST -Path '/api/gameplay/storage/set-item-stack' -Ha
         Write-DuneError -Response $res -Status 500 -Message "Storage set item stack failed: $($_.Exception.Message)"
     }
 }
+
+# ---------------------------------------------------------------------------
+# POST /api/gameplay/bases/destroy-claim  { totem_id }
+#   — release/destroy a base land claim by deleting the totem actor. The
+#   ON DELETE CASCADE FK graph removes the claim + its ownership grants in one
+#   transaction; building pieces remain as unclaimed structures. Live DB only
+#   (no demo write); effect appears after a battlegroup restart. Destructive —
+#   the UI requires an explicit confirm + backup warning before calling this.
+# ---------------------------------------------------------------------------
+Register-DuneRoute -Method POST -Path '/api/gameplay/bases/destroy-claim' -Handler {
+    param($req, $res, $routeParams, $body)
+    try {
+        $tid = Get-DuneBodyInt -Body $body -Name 'totem_id'
+        if ($null -eq $tid -or $tid -le 0) { Write-DuneError -Response $res -Status 400 -Message 'totem_id is required.'; return }
+        Invoke-DunePlayerWriteRoute -Response $res -Action { param($ip) Invoke-DuneDestroyClaim -Ip $ip -TotemId $tid }
+    } catch {
+        Write-DuneError -Response $res -Status 500 -Message "Destroy claim failed: $($_.Exception.Message)"
+    }
+}
