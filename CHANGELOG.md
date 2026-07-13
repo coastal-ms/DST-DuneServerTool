@@ -13,6 +13,10 @@ here cover everything those tags shipped.
 
 ## [Unreleased]
 
+### Added
+
+- **Bases: Release/Destroy claim.** The Gameplay → Bases page now shows each base's **Owner** and adds a **Release claim** action that removes a base's land claim by deleting its totem actor. The database's `ON DELETE CASCADE` graph removes the totem, its land-claim segments, and every ownership/permission grant in one transaction (proven live with `BEGIN`/`ROLLBACK`); the building pieces themselves remain in the world as unclaimed structures. The action is guarded (only deletes a real totem actor), requires an explicit confirm with a **"make sure you have a backup" warning + acknowledgement checkbox**, is disabled for bases with no claim and in demo mode, and — like every world write — only takes effect in-game after a battlegroup restart.
+
 ## [12.18.18] - 2026-07-13
 
 ### Changed
