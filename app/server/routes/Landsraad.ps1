@@ -42,8 +42,11 @@ Register-DuneRoute -Method GET -Path '/api/gameplay/landsraad/player-contributio
 }
 
 # POST /api/gameplay/landsraad/set-contribution  { controller_id, task_id, amount }
-# Sets a player's contribution to one House (task) to an arbitrary amount and
-# recomputes the faction + guild aggregates for that task.
+# Sets a player's contribution to one House (task) to an arbitrary amount by
+# driving the game's own contribution cascade (insert_task_progress +
+# process_task_progress), so the player's points flow to THEIR guild's total and
+# the guild_vote_changed notify fires - refreshing voting power exactly like
+# retail. Guildless players fall back to a direct write.
 Register-DuneRoute -Method POST -Path '/api/gameplay/landsraad/set-contribution' -Handler {
     param($req, $res, $routeParams, $body)
     try {
