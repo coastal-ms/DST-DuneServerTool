@@ -17,7 +17,7 @@ here cover everything those tags shipped.
 
 ### Changed
 
-- **Added Chumdizzle (@chumdizzle) to the "Thanks for the Coffee" supporter credits.**
+- **Supporter added to list.**
 
 ## [12.18.17] - 2026-07-12
 
