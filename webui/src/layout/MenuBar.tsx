@@ -501,6 +501,10 @@ export function MenuBar({ sidebarCollapsed, onToggleSidebar }: Props) {
               <Icon name="Heart" size={14} className="text-ibad shrink-0" />
               <span className="flex-1">gd.py (@gd.py)</span>
             </div>
+            <div className="flex items-center gap-2 px-2.5 py-1.5 rounded text-sm text-text-muted">
+              <Icon name="Heart" size={14} className="text-ibad shrink-0" />
+              <span className="flex-1">Chumdizzle (@chumdizzle)</span>
+            </div>
           </div>
         )}
       </div>
