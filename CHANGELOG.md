@@ -13,6 +13,12 @@ here cover everything those tags shipped.
 
 ## [Unreleased]
 
+## [12.18.17] - 2026-07-12
+
+### Removed
+
+- **Removed the "Legacy Admin Cache" card from Settings.** The standalone Legacy Admin Tool (dune-admin) was sunset months ago, and the card that offered to "clear its VM cache" was mis-targeted: it globbed `~/.dune/sh-*.yaml`, which on a live server only ever matches Funcom's own database backup/restore operation manifests (`sh-<bg>-dump-<timestamp>.yaml`, one written per scheduled backup) — never dune-admin's actual cache (which was always the client-side `~/.dune-admin/config.yaml`). So the card could never do its stated job and only surfaced Funcom's backup bookkeeping as if it were tool cache. It has been removed from the UI. No data was ever at risk: every clear snapshotted the files locally first, and the manifests it listed were spent, already-applied Kubernetes operation specs, not live backups (those live in `/funcom/artifacts/database-dumps/`).
+
 ## [12.18.16] - 2026-07-12
 
 ### Fixed
