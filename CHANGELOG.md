@@ -13,6 +13,12 @@ here cover everything those tags shipped.
 
 ## [Unreleased]
 
+## [12.18.18] - 2026-07-13
+
+### Changed
+
+- **Added Chumdizzle (@chumdizzle) to the "Thanks for the Coffee" supporter credits.**
+
 ## [12.18.17] - 2026-07-12
 
 ### Removed
