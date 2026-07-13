@@ -81,48 +81,6 @@ export function Settings() {
   const [dbTestMsg, setDbTestMsg] = useState<string | null>(null)
   const [dbTestOk, setDbTestOk] = useState<boolean | null>(null)
   const [dbSuggestedPort, setDbSuggestedPort] = useState<number | null>(null)
-  // dune-admin VM cache: companion admin tool caches a stale BG snapshot
-  // on the VM at ~/.dune/sh-<bg-id>*.yaml; clearing it forces its setup
-  // wizard to re-discover the live DB password etc.
-  const [daCache, setDaCache] = useState<{ count: number; totalBytes: number; files: { path: string; size: number }[] } | null>(null)
-  const [daLoading, setDaLoading] = useState(false)
-  const [daClearing, setDaClearing] = useState(false)
-  const [daMsg, setDaMsg] = useState<string | null>(null)
-  const [daErr, setDaErr] = useState<string | null>(null)
-  async function loadDaCache() {
-    setDaLoading(true)
-    setDaErr(null)
-    try {
-      const r = await api<{ ok: boolean; count: number; totalBytes: number; files: { path: string; size: number }[]; message?: string }>(
-        '/api/dune-admin-cache',
-      )
-      setDaCache({ count: r.count, totalBytes: r.totalBytes, files: r.files ?? [] })
-    } catch (e) {
-      setDaErr(e instanceof Error ? e.message : String(e))
-      setDaCache(null)
-    } finally {
-      setDaLoading(false)
-    }
-  }
-  async function onClearDaCache() {
-    if (!window.confirm('Delete the Legacy Admin Tool cache on the VM?\n\nThis removes ~/.dune/sh-*.yaml on the VM. Nothing else is touched. The Legacy Admin Tool will re-run its setup discovery (and pick up the current DB password) the next time you launch it with -setup.')) return
-    setDaClearing(true)
-    setDaMsg(null)
-    setDaErr(null)
-    try {
-      const r = await api<{ ok: boolean; cleared: number; message?: string }>(
-        '/api/dune-admin-cache/clear',
-        { method: 'POST' },
-      )
-      setDaMsg(r.message ?? (r.ok ? `Cleared ${r.cleared}.` : 'Clear did not complete.'))
-      await loadDaCache()
-    } catch (e) {
-      setDaErr(e instanceof Error ? e.message : String(e))
-    } finally {
-      setDaClearing(false)
-    }
-  }
-  useEffect(() => { void loadDaCache() }, [])
 
   async function onOpenBattlegroupBat() {
     if (!window.confirm('Open Funcom\'s original battlegroup.bat?\n\nThis launches the battlegroup.bat in the root of your Steam install folder in an ELEVATED (administrator) window. Approve the Windows UAC prompt if it appears.')) return
@@ -791,68 +749,10 @@ export function Settings() {
         </div>
       </div>
 
-      {/* --- dune-admin VM cache (companion admin tool, decoupled in 12.x) --- */}
-      <div className="card mb-4 p-6">
-        <div className="flex items-start justify-between gap-3">
-          <div className="min-w-0">
-            <div className="flex items-center gap-2 mb-1">
-              <Icon name="Trash2" size={18} className="text-text-muted" />
-              <h2 className="text-lg font-semibold">Legacy Admin Cache</h2>
-            </div>
-            <p className="text-sm text-text-dim">
-              The Legacy Admin Tool caches a per-battlegroup snapshot on the VM
-              at <span className="font-mono">~/.dune/sh-&lt;bg-id&gt;*.yaml</span> and reads the DB password from it. After
-              Funcom rotates the DB password on a reconcile, that cache goes stale and the tool keeps
-              presenting the old password on its next <span className="font-mono">-setup</span> run. Clearing the cache forces
-              a fresh discovery from the live cluster.
-            </p>
-            {daCache && (
-              <p className="mt-2 text-xs text-text-dim">
-                {daCache.count === 0 ? (
-                  <span>No Legacy Admin Tool cache files present on the VM.</span>
-                ) : (
-                  <span>
-                    {daCache.count} file{daCache.count === 1 ? '' : 's'} on the VM
-                    {daCache.totalBytes > 0 && ` · ${(daCache.totalBytes / 1024).toFixed(0)} KB`}
-                  </span>
-                )}
-              </p>
-            )}
-            {daMsg && (
-              <p className="mt-2 text-xs text-success flex items-center gap-1.5">
-                <Icon name="CheckCircle2" size={13} /> {daMsg}
-              </p>
-            )}
-            {daErr && (
-              <p className="mt-2 text-xs text-danger flex items-center gap-1.5">
-                <Icon name="AlertCircle" size={13} /> {daErr}
-              </p>
-            )}
-          </div>
-          <div className="flex items-center gap-2 shrink-0">
-            <button
-              type="button"
-              onClick={() => void loadDaCache()}
-              disabled={daLoading || daClearing}
-              title="Re-check the VM"
-              className="btn-secondary"
-            >
-              <Icon name={daLoading ? 'Loader2' : 'RefreshCw'} size={15} className={daLoading ? 'animate-spin' : ''} />
-              {daLoading ? 'Checking…' : 'Refresh'}
-            </button>
-            <button
-              type="button"
-              onClick={() => void onClearDaCache()}
-              disabled={daClearing || daLoading || (daCache?.count ?? 0) === 0}
-              title="Delete ~/.dune/sh-*.yaml on the VM"
-              className="btn-danger"
-            >
-              <Icon name={daClearing ? 'Loader2' : 'Trash2'} size={15} className={daClearing ? 'animate-spin' : ''} />
-              {daClearing ? 'Clearing…' : 'Clear cache'}
-            </button>
-          </div>
-        </div>
-      </div>
+      {/* --- dune-admin VM cache card removed (12.18.17): companion tool was
+           sunset months ago; the card globbed ~/.dune/sh-*.yaml which only
+           ever matched Funcom's own backup/restore operation manifests, never
+           dune-admin's real client-side cache. Backend route + lib retained. --- */}
 
       <form onSubmit={onSubmit} className="card p-6 space-y-5">
         {FIELDS.filter(f => !f.showWhen || f.showWhen(values)).map(f => (
