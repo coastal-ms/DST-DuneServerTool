@@ -9,12 +9,12 @@
 
 **🌐 Website & feature tour: [coastal-ms.github.io/DST-DuneServerTool](https://coastal-ms.github.io/DST-DuneServerTool/)** — screenshots, install guide, and the full changelog.
 
-The current release is **v12.18.1**. The in-app version label and the
-website show plain semver tags (e.g. `v12.18.1`) — the previous
+The current release is **v12.19.1**. The in-app version label and the
+website show plain semver tags (e.g. `v12.19.1`) — the previous
 Roman-numeral stylization has been removed.
 
 > ## ✅ Confirmed compatible with Dune: Awakening **1.4.10.1**
-> DST **v12.18.x** is verified working against the **latest Funcom release** —
+> DST **v12.19.x** is verified working against the **latest Funcom release** —
 > both the game **client** and the **self-hosted server** software — as of the
 > **1.4.10.1** patch. Compatibility was checked live against a running
 > self-hosted server on that build, covering battlegroup management,
@@ -28,6 +28,24 @@ the sidebar's **Web Portal** button hands the portal off to your default
 browser and keeps the server running in the background.
 
 ![Server Health](docs/img/server-health.png)
+
+### New in v12.19
+
+- **Landsraad contributions now grant guild Voting Power** (v12.19.1, Players →
+  Landsraad). Setting a player's House contribution now drives the game's own
+  contribution pipeline instead of writing the totals directly, so the points
+  cascade to the player's guild, refresh **Voting Power** live, and attribute
+  to the guild's real faction — exactly like retail. This fixes guilds that led
+  a House but stayed at 0 Voting Power and couldn't place a decree vote. (Once a
+  guild casts its decree vote the game locks its Voting Power in — later
+  contributions still complete Houses on the board but won't change a vote
+  already cast; that's Funcom's own rule.)
+- **Bases: Release / Destroy claim** (v12.19.0, Gameplay Admin → Bases). A new
+  **Owner** column plus a guarded **Release claim** action (with a backup
+  warning) frees a base's land claim by removing the totem; Funcom's cascade
+  strips the claim, land segments, and every ownership grant in one
+  transaction, and the building pieces remain as unclaimed structures. Restart
+  the battlegroup for it to take effect in-game.
 
 ### New in v12.15–v12.18
 
