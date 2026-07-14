@@ -13,10 +13,10 @@ The current release is **v12.19.1**. The in-app version label and the
 website show plain semver tags (e.g. `v12.19.1`) — the previous
 Roman-numeral stylization has been removed.
 
-> ## ✅ Confirmed compatible with Dune: Awakening **1.4.10.1**
+> ## ✅ Confirmed compatible with Dune: Awakening **1.4.10.3**
 > DST **v12.19.x** is verified working against the **latest Funcom release** —
 > both the game **client** and the **self-hosted server** software — as of the
-> **1.4.10.1** patch. Compatibility was checked live against a running
+> **1.4.10.3** patch. Compatibility was checked live against a running
 > self-hosted server on that build, covering battlegroup management,
 > on-demand map spin-up, game-config and database editing, and backups.
 
