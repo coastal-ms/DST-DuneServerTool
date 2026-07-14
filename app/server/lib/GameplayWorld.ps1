@@ -11,7 +11,9 @@ $script:DuneBasesListSql = @'
 SELECT b.id,
        COALESCE(pa.actor_name, '') AS name,
        COALESCE(inst.cnt, 0)       AS pieces,
-       COALESCE(plac.cnt, 0)       AS placeables
+       COALESCE(plac.cnt, 0)       AS placeables,
+       t.id                        AS totem_id,
+       COALESCE(ps.character_name, '') AS owner
 FROM dune.buildings b
 LEFT JOIN (
     SELECT building_id, MIN(owner_entity_id) AS owner_entity_id, COUNT(*) AS cnt
@@ -21,6 +23,12 @@ LEFT JOIN (
 LEFT JOIN dune.actor_fgl_entities afe ON afe.entity_id = inst.owner_entity_id
 LEFT JOIN dune.actors t ON t.id = afe.actor_id AND t.class ILIKE '%Totem%'
 LEFT JOIN dune.permission_actor pa ON pa.actor_id = t.id
+LEFT JOIN LATERAL (
+    SELECT player_id FROM dune.permission_actor_rank
+    WHERE permission_actor_id = t.id AND rank = 1 LIMIT 1
+) own ON true
+LEFT JOIN dune.actors powner ON powner.id = own.player_id
+LEFT JOIN dune.player_state ps ON ps.account_id = powner.owner_account_id
 LEFT JOIN (
     SELECT bi.building_id, COUNT(*) AS cnt
     FROM dune.building_instances bi
@@ -41,6 +49,8 @@ function Get-DuneBasesLive {
             name       = [string]$r['name']
             pieces     = (ConvertTo-DuneInt $r['pieces'])
             placeables = (ConvertTo-DuneInt $r['placeables'])
+            totemId    = (ConvertTo-DuneInt $r['totem_id'])
+            owner      = [string]$r['owner']
         }
     }
     return @{ ok = $true; bases = $bases }
@@ -48,9 +58,9 @@ function Get-DuneBasesLive {
 
 function Get-DuneBasesDemo {
     return @(
-        [ordered]@{ id=40001; name="Arrakeen Keep"; pieces=842; placeables=131 }
-        [ordered]@{ id=40002; name="Sietch Tabr"; pieces=512; placeables=88 }
-        [ordered]@{ id=40003; name=""; pieces=64; placeables=9 }
+        [ordered]@{ id=40001; name="Arrakeen Keep"; pieces=842; placeables=131; totemId=50001; owner="DemoOwner" }
+        [ordered]@{ id=40002; name="Sietch Tabr"; pieces=512; placeables=88; totemId=50002; owner="Muad'Dib" }
+        [ordered]@{ id=40003; name=""; pieces=64; placeables=9; totemId=0; owner="" }
     )
 }
 
@@ -699,6 +709,35 @@ RETURNING id::text AS item_id;
         return @{ ok = $false; error = "Item $ItemId not found." }
     }
     return @{ ok = $true; message = "Set item $ItemId stack to $StackSize. Restart the server zone for it to appear in-game." }
+}
+
+# ----------------------------------------------------------------------------
+# RELEASE / DESTROY CLAIM — delete a base's land claim by removing the totem's
+# actor row. The FK graph is ON DELETE CASCADE from dune.actors, so deleting the
+# totem actor removes, in one transaction: the totems row, its
+# landclaim_segments, the permission_actor, and every permission_actor_rank
+# ownership grant (owner + co-owners). Proven on the live DB with BEGIN/ROLLBACK.
+# Building pieces and placeables are SEPARATE actors and remain in the world as
+# unclaimed structures. The `id IN (SELECT id FROM dune.totems)` guard makes it
+# impossible to delete a non-totem actor if a bad id is passed. Like every world
+# write, the map pod caches placed objects in RAM, so the claim only disappears
+# in-game after a battlegroup restart.
+function Invoke-DuneDestroyClaim {
+    param([string]$Ip, [long]$TotemId)
+    if ($TotemId -le 0) { return @{ ok = $false; error = 'totem_id is required.' } }
+    $sql = @"
+DELETE FROM dune.actors
+WHERE id = $TotemId::bigint
+  AND id IN (SELECT id FROM dune.totems)
+RETURNING id::text AS totem_id;
+"@
+    $res = Invoke-DuneSqlQuery -Ip $Ip -Sql $sql -ReadOnly $false -MaxRows 1 -TimeoutSec 30
+    if (-not $res.ok) { return @{ ok = $false; error = $res.error } }
+    $affected = @(ConvertTo-DuneRowMaps -Result $res).Count
+    if ($affected -eq 0) {
+        return @{ ok = $false; error = "Claim (totem $TotemId) not found - it may have already been released." }
+    }
+    return @{ ok = $true; message = "Released claim (totem $TotemId). Ownership grants removed; building pieces remain as unclaimed structures. Restart the battlegroup for it to take effect in-game." }
 }
 
 # ----------------------------------------------------------------------------

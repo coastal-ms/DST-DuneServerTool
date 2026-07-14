@@ -871,6 +871,8 @@ export interface BaseRow {
   name: string
   pieces: number
   placeables: number
+  totemId: number
+  owner: string
 }
 
 export interface BasesResponse {
@@ -994,6 +996,15 @@ export function importBlueprint(playerId: number, blueprint: BlueprintFile) {
 
 export function exportBase(id: number, demo?: boolean) {
   return api<ExportResponse>(`/api/gameplay/bases/export${qs({ id, demo: demo ? 1 : undefined })}`)
+}
+
+// Release/destroy a base land claim by deleting its totem actor (cascades the
+// ownership grants). Destructive + live-DB only; takes effect after a
+// battlegroup restart. Callers must confirm + warn about backups first.
+export function destroyClaim(totemId: number) {
+  return api<WriteResult>('/api/gameplay/bases/destroy-claim', {
+    method: 'POST', body: JSON.stringify({ totem_id: totemId }),
+  })
 }
 
 export interface StorageGiveItemInput {

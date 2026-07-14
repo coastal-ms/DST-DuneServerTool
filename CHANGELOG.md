@@ -13,6 +13,16 @@ here cover everything those tags shipped.
 
 ## [Unreleased]
 
+## [12.19.1] - 2026-07-13
+
+### Added
+
+- **Bases: Release/Destroy claim.** The Gameplay → Bases page now shows each base's **Owner** and adds a **Release claim** action that removes a base's land claim by deleting its totem actor. The database's `ON DELETE CASCADE` graph removes the totem, its land-claim segments, and every ownership/permission grant in one transaction (proven live with `BEGIN`/`ROLLBACK`); the building pieces themselves remain in the world as unclaimed structures. The action is guarded (only deletes a real totem actor), requires an explicit confirm with a **"make sure you have a backup" warning + acknowledgement checkbox**, is disabled for bases with no claim and in demo mode, and — like every world write — only takes effect in-game after a battlegroup restart.
+
+### Fixed
+
+- **Landsraad contributions now grant guild voting power.** Setting a player's House contribution from Gameplay → Landsraad now drives the game's own contribution pipeline instead of writing the totals directly. Previously the leaderboard updated but the affected guild's **Voting Power stayed 0** — the map server was never told to recalculate it — so a guild that clearly led a House still couldn't place a decree vote. Contributions now **cascade to the contributing player's guild** (the way retail works), fire the server's `guild_vote_changed` refresh so voting power updates live, and attribute to the guild's real faction (fixing an earlier case where points could be stamped to the wrong faction). Players not in a faction-aligned guild fall back to a direct write, since they have no guild voting power regardless.
+
 ## [12.18.18] - 2026-07-13
 
 ### Changed
