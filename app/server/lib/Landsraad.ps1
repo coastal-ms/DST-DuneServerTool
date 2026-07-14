@@ -167,10 +167,21 @@ function Get-DuneLandsraadPlayerFactionId {
     return @{ ok = $true; faction_id = [int](ConvertTo-DuneInt $maps[0]['faction_id']) }
 }
 
-# Set a player's contribution to one House (task) to an arbitrary amount, then
-# RECOMPUTE the faction + guild aggregates for that task from the player rows so
-# everything stays consistent. Admin-grade: works for any player regardless of
-# guild membership (guild aggregate simply omits players not in a guild).
+# Set a player's contribution to one House (task) to an arbitrary amount.
+#
+# Routes through the GAME's own contribution cascade so the live board updates
+# exactly like real gameplay: landsraad_insert_task_progress (resolves the
+# player's guild + guild_faction and links the player/guild) then
+# landsraad_process_task_progress (upserts the player/guild/faction contribution
+# totals AND fires the guild_vote_changed pg_notify the map pod listens for to
+# refresh VOTING POWER). Writing the contribution tables directly - as this
+# used to - fills the leaderboard but never fires that notify, so guild voting
+# power stays 0; it can also stamp the wrong faction. The cascade is ADDITIVE,
+# so we feed it the DELTA (target - current) to land on the requested amount.
+#
+# Players NOT in a faction-aligned guild cannot go through the cascade (it
+# raises, and they have no guild voting power to refresh anyway), so those fall
+# back to a direct player-row write + faction/guild aggregate rebuild.
 function Set-DuneLandsraadPlayerContribution {
     param([string]$Ip, [long]$ControllerId, [long]$TaskId, [double]$Amount)
     if ($ControllerId -le 0) { return @{ ok = $false; error = 'controller_id is required.' } }
@@ -178,22 +189,78 @@ function Set-DuneLandsraadPlayerContribution {
     if ([double]::IsNaN($Amount) -or [double]::IsInfinity($Amount)) { return @{ ok = $false; error = 'amount must be a finite number.' } }
     if ($Amount -lt 0) { return @{ ok = $false; error = 'amount must be >= 0.' } }
 
-    # Validate the task exists + grab its house + term for the message.
+    # Validate the task exists + grab its term + (full) house name.
     $tsql = "SELECT term_id, house_name FROM dune.landsraad_tasks WHERE id = $TaskId::bigint;"
     $tr = Invoke-DuneSqlQuery -Ip $Ip -Sql $tsql -ReadOnly $true -MaxRows 1 -TimeoutSec 10
     if (-not $tr.ok) { return @{ ok = $false; error = "task lookup: $($tr.error)" } }
     $tmaps = ConvertTo-DuneRowMaps -Result $tr
     if ($tmaps.Count -eq 0) { return @{ ok = $false; error = "No Landsraad task with id $TaskId." } }
-    $house = Get-DuneLandsraadHouseDisplay ([string]$tmaps[0]['house_name'])
+    $termId    = [long](ConvertTo-DuneInt $tmaps[0]['term_id'])
+    $houseFull = [string]$tmaps[0]['house_name']
+    $house     = Get-DuneLandsraadHouseDisplay $houseFull
 
+    # The player's CURRENT contribution to this task (for the additive delta).
+    $csql = "SELECT COALESCE(SUM(amount), 0) AS amt FROM dune.landsraad_task_player_contributions WHERE player_id = $ControllerId::bigint AND task_id = $TaskId::bigint;"
+    $cr = Invoke-DuneSqlQuery -Ip $Ip -Sql $csql -ReadOnly $true -MaxRows 1 -TimeoutSec 10
+    if (-not $cr.ok) { return @{ ok = $false; error = "current contribution: $($cr.error)" } }
+    $cmaps = ConvertTo-DuneRowMaps -Result $cr
+    $current = if ($cmaps.Count -gt 0 -and $null -ne $cmaps[0]['amt']) { [double]([string]$cmaps[0]['amt']) } else { 0.0 }
+    $delta = $Amount - $current
+
+    # Is the player in a guild aligned to a real faction? (faction id 3 = None.)
+    $gsql = @"
+SELECT g.guild_id, COALESCE(g.guild_faction, 0) AS fac
+FROM dune.guild_members gm
+JOIN dune.guilds g ON g.guild_id = gm.guild_id
+WHERE gm.player_id = $ControllerId::bigint
+LIMIT 1;
+"@
+    $gr = Invoke-DuneSqlQuery -Ip $Ip -Sql $gsql -ReadOnly $true -MaxRows 1 -TimeoutSec 10
+    if (-not $gr.ok) { return @{ ok = $false; error = "guild lookup: $($gr.error)" } }
+    $gmaps = ConvertTo-DuneRowMaps -Result $gr
+    $guildId = [long]0; $guildFac = 0
+    if ($gmaps.Count -gt 0) {
+        $guildId  = [long](ConvertTo-DuneInt $gmaps[0]['guild_id'])
+        $guildFac = [int](ConvertTo-DuneInt $gmaps[0]['fac'])
+    }
+    $aligned = ($guildId -gt 0 -and $guildFac -ne 0 -and $guildFac -ne 3)
+
+    if ($aligned) {
+        if ([math]::Abs($delta) -lt 0.0000001) {
+            $fName = Get-DuneFactionDisplayName $guildFac
+            return @{ ok = $true; message = "House $house already at $Amount for player $ControllerId; no change."; task_id = $TaskId; amount = $Amount; faction = $fName; house = $house }
+        }
+        $deltaReal = Format-DuneFloatForSql -Value $delta
+        $facDelta  = [int][math]::Round($delta, [System.MidpointRounding]::AwayFromZero)
+        # Drive the game's real cascade: insert the progress row (resolves guild +
+        # guild_faction, links player + guild) then process it (upserts the
+        # player/guild/faction totals + fires guild_vote_changed so the pod
+        # refreshes voting power).
+        $sql = @"
+SET search_path = dune;
+SELECT landsraad_insert_task_progress($termId::bigint, $ControllerId::bigint, $guildId::bigint, '$houseFull', $facDelta::int, $deltaReal::real, $deltaReal::real, (now() AT TIME ZONE 'UTC'));
+SELECT landsraad_process_task_progress(1000);
+"@
+        $r = Invoke-DuneSqlQuery -Ip $Ip -Sql $sql -ReadOnly $false -MaxRows 1 -TimeoutSec 30
+        if (-not $r.ok) { return @{ ok = $false; error = "set contribution (cascade): $($r.error)" } }
+        $fName = Get-DuneFactionDisplayName $guildFac
+        return @{
+            ok = $true
+            message = "Set $($fName) contribution to House $house = $Amount for player $ControllerId via the game cascade (voting power refreshed)."
+            task_id = $TaskId
+            amount  = $Amount
+            faction = $fName
+            house   = $house
+        }
+    }
+
+    # Fallback: player not in a faction-aligned guild. No guild voting power to
+    # refresh, so write the player row directly and rebuild faction + guild
+    # aggregates for the task from the (now updated) player rows.
     $fac = Get-DuneLandsraadPlayerFactionId -Ip $Ip -ControllerId $ControllerId
     if (-not $fac.ok) { return @{ ok = $false; error = $fac.error } }
     $fid = $fac.faction_id
-
     $amtSql = Format-DuneFloatForSql -Value $Amount
-
-    # One batch: replace the player's row for this task, then rebuild faction +
-    # guild aggregates for the task from the (now updated) player rows.
     $sql = @"
 DELETE FROM dune.landsraad_task_player_contributions WHERE player_id = $ControllerId::bigint AND task_id = $TaskId::bigint;
 INSERT INTO dune.landsraad_task_player_contributions (player_id, faction_id, task_id, amount)
@@ -219,7 +286,7 @@ GROUP BY gm.guild_id, pc.faction_id;
     $fName = Get-DuneFactionDisplayName $fid
     return @{
         ok = $true
-        message = "Set $($fName) contribution to House $house = $amtSql for player $ControllerId; faction + guild totals recomputed."
+        message = "Set $($fName) contribution to House $house = $amtSql for player $ControllerId; faction + guild totals recomputed (player not in an aligned guild - no voting power)."
         task_id = $TaskId
         amount  = $Amount
         faction = $fName
