@@ -6,7 +6,7 @@
 
 function Get-DuneSetupPreflight {
     param(
-        [ValidateSet('fresh','existing')][string]$Mode = 'fresh'
+        [ValidateSet('fresh','existing','lan')][string]$Mode = 'fresh'
     )
     $checks = [System.Collections.Generic.List[object]]::new()
 
@@ -25,14 +25,20 @@ function Get-DuneSetupPreflight {
         fix      = if ($isAdmin) { $null } else { "Close the tool, then relaunch it elevated:`nStart-Process 'C:\Program Files\Dune Server\DuneServer.exe' -Verb RunAs" }
     }) | Out-Null
 
-    # 2. Hyper-V module
+    # 2. Hyper-V module. Required in every mode — including 'lan', where DST needs
+    #    the Hyper-V PowerShell module locally to manage the REMOTE host over
+    #    -ComputerName. (The remote host's own reachability is checked separately
+    #    on the Connect step via /api/setup/hyperv-lan/test, once the user has
+    #    entered its IP.)
     $hvOk = [bool](Get-Command Get-VM -ErrorAction SilentlyContinue)
+    $hvDetailOk = if ($Mode -eq 'lan') { 'Get-VM is available — DST can drive a remote Hyper-V host over the LAN.' } else { 'Get-VM cmdlet is available.' }
+    $hvDetailNo = if ($Mode -eq 'lan') { 'Hyper-V PowerShell module not installed. It is required on THIS PC to manage a remote Hyper-V host. Enable it (or the Hyper-V Management Tools) via Windows Features.' } else { 'Hyper-V module not installed. Enable Hyper-V via Windows Features.' }
     $checks.Add(@{
         key      = 'hyperv'
         label    = 'Hyper-V PowerShell module'
         ok       = $hvOk
         severity = if ($hvOk) { 'ok' } else { 'error' }
-        detail   = if ($hvOk) { 'Get-VM cmdlet is available.' } else { 'Hyper-V module not installed. Enable Hyper-V via Windows Features.' }
+        detail   = if ($hvOk) { $hvDetailOk } else { $hvDetailNo }
         fix      = if ($hvOk) { $null } else { "Run in an elevated PowerShell, then reboot when prompted:`nEnable-WindowsOptionalFeature -Online -FeatureName Microsoft-Hyper-V -All" }
     }) | Out-Null
 

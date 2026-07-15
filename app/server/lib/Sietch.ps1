@@ -41,7 +41,8 @@ function Get-DuneSietchContext {
 
 function _Get-DuneVmAssignedRamGB {
     try {
-        $vm = Get-VM -Name 'dune-awakening' -ErrorAction Stop
+        $hv = Get-DuneHyperVSplat
+        $vm = Get-VM -Name 'dune-awakening' @hv -ErrorAction Stop
         return [math]::Round($vm.MemoryAssigned / 1GB, 1)
     } catch { return 0 }
 }

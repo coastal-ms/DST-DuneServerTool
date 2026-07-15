@@ -61,7 +61,13 @@ function Get-DuneSshFailureReason {
 
 function Get-DuneVmStatus {
     try {
-        $vm = Get-VM -Name $script:DuneVmName -ErrorAction Stop
+        # Local by default; targets a LAN Hyper-V host when VmHostMode='lan'.
+        # The guest IP resolved below is what the entire SSH layer talks to, so
+        # this discovery must succeed against whichever host owns the VM.
+        $hv = Get-DuneHyperVSplat
+        $vm = Get-VM -Name $script:DuneVmName @hv -ErrorAction Stop
+        # $vm already carries its host context when remote — pipe it (don't also
+        # pass -ComputerName, which would be a parameter-set conflict).
         $ip = ($vm | Get-VMNetworkAdapter).IPAddresses |
               Where-Object { $_ -match '^\d+\.\d+\.\d+\.\d+$' } | Select-Object -First 1
         # Coerce to string. On VMs with multiple network adapters the pipeline
