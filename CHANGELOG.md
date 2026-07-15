@@ -13,6 +13,10 @@ here cover everything those tags shipped.
 
 ## [Unreleased]
 
+### Added
+
+- **Hyper-V over LAN — a third Setup Wizard option.** DST can now run on one PC and manage the Dune VM on a **separate Hyper-V host on the local network** (e.g. a headless server). The wizard's new **Hyper-V over LAN** path asks for the host's IP, tests the connection (it uses the same remote-management channel Hyper-V Manager needs — DST doesn't configure WinRM/permissions for you), and offers a **routing toggle** that points DST's Hyper-V calls (VM status, start/stop, RAM) at that host. Unchecking the toggle returns to the local VM and fully bypasses the LAN path, so existing local installs are unaffected. This first build manages a VM that is **already installed** on the remote host; automated remote install is a later build.
+
 ## [12.19.1] - 2026-07-13
 
 ### Added

@@ -3,7 +3,7 @@ import { Link } from 'react-router-dom'
 import { PageHeader } from '../components/PageHeader'
 import { Icon } from '../components/Icon'
 import { api, ApiError } from '../api/client'
-import { getPreflight, getSetupConfig, type PreflightResult, type SetupConfigSummary } from '../api/setup'
+import { getPreflight, getSetupConfig, getHyperVLan, saveHyperVLan, testHyperVLan, type PreflightResult, type SetupConfigSummary, type HyperVLanTest } from '../api/setup'
 
 // The wizard branches on a single up-front question: does the operator already
 // have a Dune Awakening battlegroup running (their own VM, or one a previous
@@ -11,7 +11,9 @@ import { getPreflight, getSetupConfig, type PreflightResult, type SetupConfigSum
 //   - 'existing' → skip the VM import entirely; just make sure DST can reach the
 //                  server (locate or generate+authorize the SSH key).
 //   - 'fresh'    → the original flow that runs Funcom's initial-setup.
-type SetupMode = 'existing' | 'fresh'
+//   - 'lan'      → the VM lives on a SEPARATE Hyper-V host on the LAN; point DST
+//                  at that host, then connect to the guest over SSH as usual.
+type SetupMode = 'existing' | 'fresh' | 'lan'
 
 interface Step {
   title: string
@@ -32,6 +34,14 @@ const EXISTING_STEPS: Step[] = [
   { title: 'Pre-flight',  subtitle: 'Environment checks',       render: () => <Step1Preflight existing /> },
   { title: 'Connect',     subtitle: 'Point DST at your server', render: () => <StepConnectExisting /> },
   { title: 'Security',    subtitle: 'SSH + firewall',            render: () => <Step4Security /> },
+  { title: 'Networking',  subtitle: 'Ports + DNS',               render: () => <Step5Networking /> },
+  { title: 'Finalize',    subtitle: 'Wrap-up',                   render: () => <Step6Finalize /> },
+]
+
+const LAN_STEPS: Step[] = [
+  { title: 'Pre-flight',  subtitle: 'Environment checks',       render: () => <Step1Preflight mode="lan" /> },
+  { title: 'Hyper-V host',subtitle: 'Point DST at the LAN host',render: () => <StepConnectLan /> },
+  { title: 'Connect',     subtitle: 'SSH to the VM',            render: () => <StepConnectExisting /> },
   { title: 'Networking',  subtitle: 'Ports + DNS',               render: () => <Step5Networking /> },
   { title: 'Finalize',    subtitle: 'Wrap-up',                   render: () => <Step6Finalize /> },
 ]
@@ -70,7 +80,7 @@ export function SetupWizard() {
   const [current, setCurrent] = useState(1)
   const [done, setDone]       = useState<Set<number>>(new Set())
 
-  const steps = mode === 'existing' ? EXISTING_STEPS : FRESH_STEPS
+  const steps = mode === 'existing' ? EXISTING_STEPS : mode === 'lan' ? LAN_STEPS : FRESH_STEPS
 
   const pick = useCallback((m: SetupMode) => { setMode(m); setCurrent(1); setDone(new Set()) }, [])
   const restart = useCallback(() => { setMode(null); setCurrent(1); setDone(new Set()) }, [])
@@ -128,7 +138,7 @@ function BranchChooser({ onPick }: { onPick: (m: SetupMode) => void }) {
         title="Do you already have a Dune Awakening server?"
         subtitle="This picks the right path through setup."
       />
-      <div className="grid gap-4 md:grid-cols-2 mt-2">
+      <div className="grid gap-4 md:grid-cols-3 mt-2">
         <button
           type="button"
           onClick={() => onPick('existing')}
@@ -139,8 +149,8 @@ function BranchChooser({ onPick }: { onPick: (m: SetupMode) => void }) {
             <span className="font-semibold text-accent">Yes — I already have a server</span>
           </div>
           <p className="text-sm text-text-dim">
-            DST connects to your existing battlegroup VM. Nothing is re-installed — we just make sure the tool
-            can reach it by locating or generating the SSH key.
+            DST connects to your existing battlegroup VM on this PC. Nothing is re-installed — we just make sure
+            the tool can reach it by locating or generating the SSH key.
           </p>
         </button>
         <button
@@ -155,6 +165,20 @@ function BranchChooser({ onPick }: { onPick: (m: SetupMode) => void }) {
           <p className="text-sm text-text-dim">
             Runs Funcom's <span className="font-mono">initial-setup</span> to download and import the Hyper-V VM,
             then brings the battlegroup online. Needs ~60&nbsp;GB free and 10–30&nbsp;min.
+          </p>
+        </button>
+        <button
+          type="button"
+          onClick={() => onPick('lan')}
+          className="text-left p-5 rounded-lg border border-border bg-surface-2 hover:border-accent hover:bg-surface transition"
+        >
+          <div className="flex items-center gap-2 mb-2">
+            <Icon name="Network" size={20} className="text-accent shrink-0" />
+            <span className="font-semibold text-accent">Hyper-V over LAN</span>
+          </div>
+          <p className="text-sm text-text-dim">
+            The VM runs on a <strong>separate Hyper-V host</strong> on your network (e.g. a headless server).
+            DST runs on this PC and manages that host over the LAN. The VM must already be installed there.
           </p>
         </button>
       </div>
@@ -210,27 +234,40 @@ function SectionHeader({ title, subtitle }: { title: string; subtitle: string })
   )
 }
 
-function Step1Preflight({ existing = false }: { existing?: boolean }) {
+function Step1Preflight({ existing = false, mode }: { existing?: boolean; mode?: 'existing' | 'fresh' | 'lan' }) {
+  // `existing` is kept for the existing-VM flow's call sites; `mode` is the
+  // explicit selector used by the LAN flow. Resolve one effective mode.
+  const effMode: 'existing' | 'fresh' | 'lan' = mode ?? (existing ? 'existing' : 'fresh')
+  const isLan = effMode === 'lan'
   const [data, setData] = useState<PreflightResult | null>(null)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const refresh = useCallback(async () => {
     setLoading(true); setError(null)
-    try { setData(await getPreflight(existing ? 'existing' : 'fresh')) }
+    try { setData(await getPreflight(effMode)) }
     catch (e) { setError(e instanceof ApiError ? e.message : String(e)) }
     finally { setLoading(false) }
-  }, [existing])
+  }, [effMode])
   useEffect(() => { void refresh() }, [refresh])
 
   return (
     <>
       <SectionHeader
         title="Pre-flight checks"
-        subtitle={existing
-          ? 'Confirm DST is elevated and can see Hyper-V before connecting.'
-          : 'Verify your machine can host the battlegroup.'}
+        subtitle={isLan
+          ? 'Confirm DST is elevated and has the Hyper-V tools to manage a host over the LAN.'
+          : existing
+            ? 'Confirm DST is elevated and can see Hyper-V before connecting.'
+            : 'Verify your machine can host the battlegroup.'}
       />
-      {existing && (
+      {isLan && (
+        <p className="text-sm text-text-dim mb-3">
+          The VM will live on a <strong>separate Hyper-V host</strong> on your network. This PC still needs the
+          Hyper-V PowerShell module (to drive that host remotely) and the OpenSSH client (to reach the VM). The
+          next step points DST at the host's IP and tests the connection.
+        </p>
+      )}
+      {existing && !isLan && (
         <p className="text-sm text-text-dim mb-3">
           You already have a server, so the disk check only covers what DST itself needs (app + local
           backups) — it won't import a new VM. The next step locates or generates the SSH key it needs to
@@ -471,6 +508,150 @@ function StepConnectExisting() {
             client-config helpers — set it later on the{' '}
             <Link to="/settings" className="text-accent hover:underline">Settings</Link> page if you want those.
           </p>
+        </>
+      )}
+    </>
+  )
+}
+
+// LAN flow — point DST at a Hyper-V host on the network and flip the routing
+// toggle so every VM command targets that host instead of local Hyper-V.
+function StepConnectLan() {
+  const [hostIp, setHostIp]   = useState('')
+  const [enabled, setEnabled] = useState(false) // routing toggle == VmHostMode 'lan'
+  const [loading, setLoading] = useState(true)
+  const [testing, setTesting] = useState(false)
+  const [saving, setSaving]   = useState(false)
+  const [test, setTest]       = useState<HyperVLanTest | null>(null)
+  const [msg, setMsg]         = useState<string | null>(null)
+  const [error, setError]     = useState<string | null>(null)
+
+  useEffect(() => {
+    void (async () => {
+      setLoading(true)
+      try {
+        const s = await getHyperVLan()
+        setHostIp(s.hostIp ?? '')
+        setEnabled(s.mode === 'lan')
+      } catch (e) {
+        setError(e instanceof ApiError ? e.message : String(e))
+      } finally {
+        setLoading(false)
+      }
+    })()
+  }, [])
+
+  // A candidate host must pass a live connectivity test before it can be enabled.
+  const canEnable = !!test?.ok
+
+  const runTest = useCallback(async () => {
+    const ip = hostIp.trim()
+    if (!ip) { setError('Enter the Hyper-V host IP first.'); return }
+    setTesting(true); setError(null); setMsg(null); setTest(null)
+    try {
+      setTest(await testHyperVLan(ip))
+    } catch (e) {
+      setError(e instanceof ApiError ? e.message : String(e))
+    } finally {
+      setTesting(false)
+    }
+  }, [hostIp])
+
+  const save = useCallback(async () => {
+    const ip = hostIp.trim()
+    if (enabled && !ip) { setError('Enter the Hyper-V host IP first.'); return }
+    if (enabled && !canEnable) { setError('Test the connection successfully before enabling Hyper-V over LAN.'); return }
+    setSaving(true); setError(null); setMsg(null)
+    try {
+      const r = await saveHyperVLan(enabled ? 'lan' : 'local', ip)
+      setMsg(r.mode === 'lan'
+        ? `Saved. DST will manage the VM on ${r.hostIp} over the LAN.`
+        : 'Saved. DST is using the local Hyper-V VM (LAN routing off).')
+    } catch (e) {
+      setError(e instanceof ApiError ? e.message : String(e))
+    } finally {
+      setSaving(false)
+    }
+  }, [hostIp, enabled, canEnable])
+
+  const tone = test == null ? 'text-text-dim' : test.ok ? 'text-success' : 'text-danger'
+  const tIcon = test == null ? 'Info' : test.ok ? 'CheckCircle2' : 'AlertTriangle'
+
+  return (
+    <>
+      <SectionHeader title="Point DST at the Hyper-V host" subtitle="The VM lives on another machine on your LAN." />
+
+      <div className="flex items-start gap-3 p-3 rounded border border-warning/40 bg-warning/10 mb-4">
+        <Icon name="AlertTriangle" size={18} className="text-warning shrink-0 mt-0.5" />
+        <div className="text-xs text-text-dim">
+          <span className="font-medium text-warning">Prerequisite:</span> remote Hyper-V management from this PC must
+          already work — i.e. you can connect to that host in <strong>Hyper-V Manager</strong>. DST uses the same
+          channel; it does not configure WinRM/permissions for you. The VM must already be installed on that host and
+          named <span className="font-mono">dune-awakening</span>.
+        </div>
+      </div>
+
+      {loading ? (
+        <p className="text-sm text-text-dim italic">Loading…</p>
+      ) : (
+        <>
+          <label className="block text-sm font-medium text-text mb-1">Hyper-V host IP (or name)</label>
+          <div className="flex items-stretch gap-2 mb-2">
+            <input
+              type="text"
+              value={hostIp}
+              onChange={e => { setHostIp(e.target.value); setTest(null) }}
+              placeholder="192.168.1.50"
+              className="flex-1 min-w-0 text-sm font-mono bg-surface border border-border rounded px-2 py-1.5"
+            />
+            <button type="button" className="btn-secondary shrink-0" onClick={() => { void runTest() }} disabled={testing}>
+              <Icon name={testing ? 'Loader2' : 'Plug'} size={14} className={testing ? 'animate-spin' : ''} />
+              {testing ? 'Testing…' : 'Test connection'}
+            </button>
+          </div>
+          <p className="text-xs text-text-dim mb-3">
+            This is the <strong>host</strong> address, not the VM's. DST discovers the VM's own IP through the host
+            once connected.
+          </p>
+
+          {test && (
+            <div className="flex items-start gap-3 p-3 rounded border border-border bg-surface-2 mb-3">
+              <Icon name={tIcon} size={18} className={`${tone} shrink-0 mt-0.5`} />
+              <div className="min-w-0 flex-1">
+                <div className={`text-sm font-medium ${tone}`}>
+                  {test.ok ? (test.vmFound ? 'Connected — VM found' : 'Connected — VM not installed yet') : 'Could not connect'}
+                </div>
+                <div className="text-xs text-text-dim mt-0.5 break-words">{test.reason}</div>
+              </div>
+            </div>
+          )}
+
+          <label className={`flex items-start gap-2 p-3 rounded border mb-4 ${canEnable ? 'border-border bg-surface-2 cursor-pointer' : 'border-border/60 bg-surface-2/50 opacity-60 cursor-not-allowed'}`}>
+            <input
+              type="checkbox"
+              className="mt-0.5"
+              checked={enabled}
+              disabled={!canEnable && !enabled}
+              onChange={e => setEnabled(e.target.checked)}
+            />
+            <span className="text-sm text-text">
+              Route all VM commands to this LAN host
+              <span className="block text-xs text-text-dim mt-0.5">
+                When on, DST manages the remote VM (status, start/stop, RAM) over the LAN. Turn it off to go back to a
+                local VM on this PC — this fully bypasses the LAN path. {!canEnable && !enabled && 'Run a successful test first.'}
+              </span>
+            </span>
+          </label>
+
+          <div className="flex flex-wrap gap-2">
+            <button type="button" className="btn-primary" onClick={() => { void save() }} disabled={saving}>
+              <Icon name={saving ? 'Loader2' : 'Save'} size={14} className={saving ? 'animate-spin' : ''} />
+              {saving ? 'Saving…' : 'Save'}
+            </button>
+          </div>
+
+          {msg   && <p className="mt-2 text-xs text-text-muted border-l-2 border-accent pl-2 break-words">{msg}</p>}
+          {error && <p className="mt-2 text-xs text-danger break-words">{error}</p>}
         </>
       )}
     </>
