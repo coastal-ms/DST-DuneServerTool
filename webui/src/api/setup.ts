@@ -53,3 +53,50 @@ export function testHyperVLan(hostIp: string) {
     body: JSON.stringify({ hostIp }),
   })
 }
+
+// Remote install (VM lives on a headless Hyper-V host). Needs a WinRM admin
+// credential for the host; it's used per-call and never persisted.
+export interface HyperVLanDrive { drive: string; freeGB: number }
+export interface HyperVLanHostResources {
+  ok: boolean
+  error?: string
+  drives?: HyperVLanDrive[]
+  allDrives?: HyperVLanDrive[]
+  switches?: string[]
+  vmExists?: boolean
+  hostRamGB?: number
+}
+export interface HyperVLanInstallStep { id: string; label: string; status: string; detail: string }
+export interface HyperVLanInstallStatus {
+  running: boolean
+  phase: string
+  steps: HyperVLanInstallStep[]
+  ip: string
+  error: string
+}
+export interface HyperVLanInstallRequest {
+  hostIp: string
+  user: string
+  password: string
+  destDrive: string
+  memoryGB: number
+  switchName: string
+  vmPassword: string
+  replaceExisting: boolean
+}
+
+export function getHyperVLanHostResources(hostIp: string, user: string, password: string) {
+  return api<HyperVLanHostResources>('/api/setup/hyperv-lan/host-resources', {
+    method: 'POST',
+    body: JSON.stringify({ hostIp, user, password }),
+  })
+}
+export function startHyperVLanInstall(req: HyperVLanInstallRequest) {
+  return api<{ ok: boolean; running: boolean; error?: string }>('/api/setup/hyperv-lan/install', {
+    method: 'POST',
+    body: JSON.stringify(req),
+  })
+}
+export function getHyperVLanInstallStatus() {
+  return api<HyperVLanInstallStatus>('/api/setup/hyperv-lan/install/status')
+}
