@@ -10,6 +10,7 @@ import { AppearanceCard } from './settings/AppearanceCard'
 import { DashboardAlertsCard } from './settings/DashboardAlertsCard'
 import { PublicIpCard } from './settings/PublicIpCard'
 import { ServerBrowserPingCard } from './settings/ServerBrowserPingCard'
+import { HyperVLanCard } from './settings/HyperVLanCard'
 import { RemoteAccessCard } from './settings/RemoteAccessCard'
 import { MobileAppCard } from './settings/MobileAppCard'
 import { FlsTokenCard } from './settings/FlsTokenCard'
@@ -694,6 +695,8 @@ export function Settings() {
       <SectionErrorBoundary name="Dashboard warnings"><DashboardAlertsCard /></SectionErrorBoundary>
 
       <SectionErrorBoundary name="Remote Access"><RemoteAccessCard /></SectionErrorBoundary>
+
+      <SectionErrorBoundary name="Hyper-V over LAN"><HyperVLanCard /></SectionErrorBoundary>
 
       <SectionErrorBoundary name="Public IP"><PublicIpCard /></SectionErrorBoundary>
 
