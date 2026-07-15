@@ -3,7 +3,7 @@ import { Link } from 'react-router-dom'
 import { PageHeader } from '../components/PageHeader'
 import { Icon } from '../components/Icon'
 import { api, ApiError } from '../api/client'
-import { getPreflight, getSetupConfig, getHyperVLan, saveHyperVLan, testHyperVLan, type PreflightResult, type SetupConfigSummary, type HyperVLanTest } from '../api/setup'
+import { getPreflight, getSetupConfig, getHyperVLan, saveHyperVLan, testHyperVLan, getHyperVLanHostResources, startHyperVLanInstall, getHyperVLanInstallStatus, type PreflightResult, type SetupConfigSummary, type HyperVLanTest, type HyperVLanHostResources, type HyperVLanInstallStatus } from '../api/setup'
 
 // The wizard branches on a single up-front question: does the operator already
 // have a Dune Awakening battlegroup running (their own VM, or one a previous
@@ -41,6 +41,7 @@ const EXISTING_STEPS: Step[] = [
 const LAN_STEPS: Step[] = [
   { title: 'Pre-flight',  subtitle: 'Environment checks',       render: () => <Step1Preflight mode="lan" /> },
   { title: 'Hyper-V host',subtitle: 'Point DST at the LAN host',render: () => <StepConnectLan /> },
+  { title: 'Install VM',  subtitle: 'Provision on the host',    render: () => <StepInstallLan /> },
   { title: 'Connect',     subtitle: 'SSH to the VM',            render: () => <StepConnectExisting /> },
   { title: 'Networking',  subtitle: 'Ports + DNS',               render: () => <Step5Networking /> },
   { title: 'Finalize',    subtitle: 'Wrap-up',                   render: () => <Step6Finalize /> },
@@ -653,6 +654,221 @@ function StepConnectLan() {
           {msg   && <p className="mt-2 text-xs text-text-muted border-l-2 border-accent pl-2 break-words">{msg}</p>}
           {error && <p className="mt-2 text-xs text-danger break-words">{error}</p>}
         </>
+      )}
+    </>
+  )
+}
+
+// LAN install — provision the VM onto the remote headless host. Reads the host
+// IP saved in the previous step, collects a WinRM admin credential, probes the
+// host, and (if the VM isn't there) runs the streamed remote install.
+function StepInstallLan() {
+  const [hostIp, setHostIp] = useState('')
+  const [user, setUser] = useState('')
+  const [password, setPassword] = useState('')
+  const [res, setRes] = useState<HyperVLanHostResources | null>(null)
+  const [checking, setChecking] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+
+  // Install form
+  const [destDrive, setDestDrive] = useState('')
+  const [memoryGB, setMemoryGB] = useState(20)
+  const [switchName, setSwitchName] = useState('')
+  const [vmPassword, setVmPassword] = useState('')
+
+  const [status, setStatus] = useState<HyperVLanInstallStatus | null>(null)
+  const [installing, setInstalling] = useState(false)
+  const [elapsed, setElapsed] = useState(0)
+
+  useEffect(() => {
+    void (async () => {
+      try { const s = await getHyperVLan(); setHostIp(s.hostIp ?? '') } catch { /* set in prior step */ }
+      // If an install is already running (e.g. page reopened), resume polling.
+      try {
+        const st = await getHyperVLanInstallStatus()
+        if (st && st.running) { setStatus(st); setInstalling(true) }
+      } catch { /* none */ }
+    })()
+  }, [])
+
+  // Elapsed timer while installing.
+  useEffect(() => {
+    if (!installing) { setElapsed(0); return }
+    const start = Date.now()
+    const iv = window.setInterval(() => setElapsed(Math.floor((Date.now() - start) / 1000)), 1000)
+    return () => window.clearInterval(iv)
+  }, [installing])
+
+  // Poll install status while running.
+  useEffect(() => {
+    if (!installing) return
+    let alive = true
+    const tick = async () => {
+      try {
+        const st = await getHyperVLanInstallStatus()
+        if (!alive) return
+        setStatus(st)
+        if (!st.running) { setInstalling(false) }
+      } catch { /* keep polling */ }
+    }
+    const iv = window.setInterval(() => { void tick() }, 3000)
+    void tick()
+    return () => { alive = false; window.clearInterval(iv) }
+  }, [installing])
+
+  const check = useCallback(async () => {
+    if (!hostIp.trim()) { setError('Set the Hyper-V host IP in the previous step first.'); return }
+    if (!user.trim() || !password) { setError('Enter an administrator username and password for the host.'); return }
+    setChecking(true); setError(null); setRes(null)
+    try {
+      const r = await getHyperVLanHostResources(hostIp.trim(), user.trim(), password)
+      setRes(r)
+      if (r.ok) {
+        if (r.drives && r.drives[0]) setDestDrive(r.drives[0].drive)
+        if (r.switches && r.switches[0]) setSwitchName(r.switches[0])
+      } else {
+        setError(r.error ?? 'Could not read the host.')
+      }
+    } catch (e) {
+      setError(e instanceof ApiError ? e.message : String(e))
+    } finally {
+      setChecking(false)
+    }
+  }, [hostIp, user, password])
+
+  const install = useCallback(async () => {
+    if (!destDrive) { setError('Pick a destination drive.'); return }
+    if (!switchName) { setError('Pick an external switch (create one on the host if the list is empty).'); return }
+    if (memoryGB < 1) { setError('Enter a memory size in GB.'); return }
+    setError(null)
+    try {
+      const r = await startHyperVLanInstall({
+        hostIp: hostIp.trim(), user: user.trim(), password,
+        destDrive, memoryGB, switchName, vmPassword, replaceExisting: false,
+      })
+      if (!r.ok) { setError(r.error ?? 'Could not start the install.'); return }
+      setInstalling(true)
+      setStatus({ running: true, phase: 'starting', steps: [], ip: '', error: '' })
+    } catch (e) {
+      setError(e instanceof ApiError ? e.message : String(e))
+    }
+  }, [hostIp, user, password, destDrive, switchName, memoryGB, vmPassword])
+
+  const done = status && !status.running && status.phase === 'done'
+  const failed = status && !status.running && status.phase === 'error'
+  const noSwitches = res?.ok && (res.switches?.length ?? 0) === 0
+
+  return (
+    <>
+      <SectionHeader title="Install the VM on the host" subtitle="DST provisions the Dune VM onto the remote Hyper-V host." />
+
+      <div className="rounded-lg border border-info/40 bg-info/10 p-3 text-sm text-text-dim mb-4">
+        DST connects to <span className="font-mono">{hostIp || '(host set in previous step)'}</span> over PowerShell Remoting,
+        downloads the server image there with SteamCMD (anonymous — no Steam login), imports and starts the VM, then sets up the
+        battlegroup over the LAN. If the VM already exists on the host, you can skip this step.
+      </div>
+
+      {/* Credentials + probe */}
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-3 mb-3">
+        <label className="flex flex-col gap-1 text-sm">
+          <span className="font-medium">Host administrator username</span>
+          <input type="text" value={user} onChange={e => setUser(e.target.value)} disabled={installing} spellCheck={false}
+            placeholder="Administrator" className="px-3 py-2 rounded-lg bg-surface-2 border border-border text-text text-sm" />
+        </label>
+        <label className="flex flex-col gap-1 text-sm">
+          <span className="font-medium">Host administrator password</span>
+          <input type="password" value={password} onChange={e => setPassword(e.target.value)} disabled={installing}
+            className="px-3 py-2 rounded-lg bg-surface-2 border border-border text-text text-sm" />
+        </label>
+      </div>
+      <div className="flex flex-wrap gap-2 mb-3">
+        <button type="button" className="btn-secondary" onClick={() => void check()} disabled={checking || installing}>
+          <Icon name={checking ? 'Loader2' : 'Search'} size={14} className={checking ? 'animate-spin' : ''} />
+          {checking ? 'Checking host…' : 'Check host'}
+        </button>
+      </div>
+
+      {error && <p className="text-xs text-danger break-words mb-3">{error}</p>}
+
+      {res?.ok && res.vmExists && !installing && (
+        <div className="rounded-lg border border-success/40 bg-success/10 p-3 text-sm text-success flex items-start gap-2">
+          <Icon name="CircleCheck" size={16} className="mt-0.5 shrink-0" />
+          <span>A <span className="font-mono">dune-awakening</span> VM already exists on this host — nothing to install. Continue to the next step; it's managed over the LAN.</span>
+        </div>
+      )}
+
+      {res?.ok && !res.vmExists && !done && (
+        <div className="space-y-3">
+          {noSwitches && (
+            <div className="rounded-lg border border-warning/40 bg-warning/10 p-3 text-xs text-text-dim">
+              No external virtual switch found on the host. Create one once on the host, then re-check:
+              <code className="block mt-1 font-mono text-text">New-VMSwitch -Name DuneExternal -NetAdapterName &lt;nic&gt; -AllowManagementOS $true</code>
+            </div>
+          )}
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+            <label className="flex flex-col gap-1 text-sm">
+              <span className="font-medium">Install drive (host)</span>
+              <select value={destDrive} onChange={e => setDestDrive(e.target.value)} disabled={installing}
+                className="px-3 py-2 rounded-lg bg-surface-2 border border-border text-text text-sm">
+                {(res.drives ?? []).map(d => <option key={d.drive} value={d.drive}>{d.drive} ({d.freeGB} GB free)</option>)}
+              </select>
+              <span className="text-xs text-text-dim">Needs 100 GB+ free.</span>
+            </label>
+            <label className="flex flex-col gap-1 text-sm">
+              <span className="font-medium">External switch (host)</span>
+              <select value={switchName} onChange={e => setSwitchName(e.target.value)} disabled={installing || noSwitches}
+                className="px-3 py-2 rounded-lg bg-surface-2 border border-border text-text text-sm">
+                {(res.switches ?? []).map(s => <option key={s} value={s}>{s}</option>)}
+              </select>
+            </label>
+            <label className="flex flex-col gap-1 text-sm">
+              <span className="font-medium">VM memory (GB)</span>
+              <input type="number" min={8} value={memoryGB} onChange={e => setMemoryGB(parseInt(e.target.value || '0', 10))}
+                disabled={installing} className="px-3 py-2 rounded-lg bg-surface-2 border border-border text-text text-sm" />
+              <span className="text-xs text-text-dim">Host RAM: {res.hostRamGB ?? '?'} GB. 20 GB recommended for one Hagga Basin.</span>
+            </label>
+            <label className="flex flex-col gap-1 text-sm">
+              <span className="font-medium">New VM password <span className="text-text-dim font-normal">(optional)</span></span>
+              <input type="password" value={vmPassword} onChange={e => setVmPassword(e.target.value)} disabled={installing}
+                placeholder="leave blank to keep default" className="px-3 py-2 rounded-lg bg-surface-2 border border-border text-text text-sm" />
+            </label>
+          </div>
+          <button type="button" className="btn-primary" onClick={() => void install()} disabled={installing || noSwitches}>
+            <Icon name={installing ? 'Loader2' : 'HardDriveDownload'} size={14} className={installing ? 'animate-spin' : ''} />
+            {installing ? 'Installing…' : 'Install VM on host'}
+          </button>
+        </div>
+      )}
+
+      {/* Progress */}
+      {status && (installing || done || failed) && (
+        <div className="mt-4 rounded-lg border border-border bg-surface-2 p-3 space-y-2">
+          <div className="flex items-center gap-2 text-sm font-medium">
+            {done ? <Icon name="CircleCheck" size={16} className="text-success" />
+              : failed ? <Icon name="CircleX" size={16} className="text-danger" />
+              : <Icon name="Loader2" size={16} className="animate-spin text-info" />}
+            {done ? 'Install complete' : failed ? 'Install failed' : `Installing… ${Math.floor(elapsed / 60)}m ${(elapsed % 60).toString().padStart(2, '0')}s`}
+          </div>
+          {installing && (
+            <div className="text-xs text-text-dim">
+              The image download and battlegroup setup can take <strong>several minutes</strong>. Safe to leave this open — it runs on the server.
+            </div>
+          )}
+          <ul className="space-y-1">
+            {(status.steps ?? []).map(s => (
+              <li key={s.id} className="flex items-start gap-2 text-xs">
+                <Icon
+                  name={s.status === 'done' ? 'CheckCircle2' : s.status === 'failed' ? 'CircleX' : s.status === 'running' ? 'Loader2' : 'Circle'}
+                  size={13}
+                  className={`mt-0.5 shrink-0 ${s.status === 'done' ? 'text-success' : s.status === 'failed' ? 'text-danger' : s.status === 'running' ? 'text-info animate-spin' : 'text-text-dim'}`}
+                />
+                <span className="min-w-0"><span className="text-text">{s.label}</span>{s.detail ? <span className="text-text-dim"> — {s.detail}</span> : null}</span>
+              </li>
+            ))}
+          </ul>
+          {done && <p className="text-xs text-success">VM installed at {status.ip} and DST is now managing it over the LAN. Continue to finish setup.</p>}
+          {failed && <p className="text-xs text-danger break-words">{status.error}</p>}
+        </div>
       )}
     </>
   )
