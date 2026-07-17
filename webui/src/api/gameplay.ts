@@ -1007,6 +1007,35 @@ export function destroyClaim(totemId: number) {
   })
 }
 
+// Force-remove an abandoned base: fully deletes its building pieces + placeables
+// (doors/storage, contents included) and the totem/claim in one cascading
+// transaction, so no locked doors are left behind. Distinct from destroyClaim
+// (which only releases ownership). Scope is the claim's owner entity, resolved
+// from the base id. Destructive + live-DB only; takes effect after a battlegroup
+// restart. Callers must confirm + warn about backups first.
+export interface RemoveBasePreview extends WriteResult {
+  result?: {
+    ok: boolean
+    entityId: string
+    pieces: number
+    placeables: number
+    buildingGroups: number
+    totems: number
+  }
+}
+
+export function removeBasePreview(baseId: number) {
+  return api<RemoveBasePreview>('/api/gameplay/bases/remove-base/preview', {
+    method: 'POST', body: JSON.stringify({ base_id: baseId }),
+  })
+}
+
+export function removeBase(baseId: number) {
+  return api<WriteResult>('/api/gameplay/bases/remove-base', {
+    method: 'POST', body: JSON.stringify({ base_id: baseId }),
+  })
+}
+
 export interface StorageGiveItemInput {
   template: string
   qty: number
