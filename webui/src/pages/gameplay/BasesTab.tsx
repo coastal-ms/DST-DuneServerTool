@@ -155,10 +155,13 @@ export function BasesTab() {
                     onClick={() => { void handleExport(b) }} title="Download this base as a portable blueprint JSON file">
                     {busyId === b.id ? <Icon name="Loader2" size={13} className="animate-spin" /> : <Icon name="Download" size={13} />} Export
                   </button>
-                  <button className="btn-secondary py-1 px-2 text-xs text-danger ml-2" disabled={!b.totemId || source === 'demo' || !bgOff}
-                    onClick={() => { setConfirmBase(b); setAckBackup(false) }}
-                    title={!b.totemId ? 'No land claim on this base'
-                      : !bgOff ? 'Release claim requires the battlegroup to be OFF — stop the battlegroup first, or a running map server will restore the claim'
+                  <button className="btn-secondary py-1 px-2 text-xs text-danger ml-2" disabled={source === 'demo' || !bgOff}
+                    onClick={() => {
+                      if (!b.totemId) { setError(null); setFlash(`${b.name || 'This base'} has no active land claim — nothing to release.`); return }
+                      setConfirmBase(b); setAckBackup(false)
+                    }}
+                    title={!bgOff ? 'Release claim requires the battlegroup to be OFF — stop the battlegroup first, or a running map server will restore the claim'
+                      : !b.totemId ? 'No active land claim on this base (already released)'
                       : "Release this base's land claim (removes ownership)"}>
                     <Icon name="Trash2" size={13} /> Release claim
                   </button>
