@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { Icon } from '../../components/Icon'
-import { getBases, exportBase, destroyClaim, downloadBlueprintFile, type BaseRow, type DataSource } from '../../api/gameplay'
+import { getBases, exportBase, destroyClaim, removeBase, removeBasePreview, downloadBlueprintFile, type BaseRow, type RemoveBasePreview, type DataSource } from '../../api/gameplay'
 import { fmtNum, SourceBadge, StatCard, DemoNotice } from './shared'
 
 type SortKey = 'id' | 'name' | 'owner' | 'pieces' | 'placeables'
@@ -19,6 +19,12 @@ export function BasesTab() {
   const [confirmBase, setConfirmBase] = useState<BaseRow | null>(null)
   const [ackBackup, setAckBackup] = useState(false)
   const [destroying, setDestroying] = useState(false)
+  const [removeBaseRow, setRemoveBaseRow] = useState<BaseRow | null>(null)
+  const [removePreview, setRemovePreview] = useState<RemoveBasePreview['result'] | null>(null)
+  const [removePreviewLoading, setRemovePreviewLoading] = useState(false)
+  const [removeAck, setRemoveAck] = useState(false)
+  const [removeConfirmText, setRemoveConfirmText] = useState('')
+  const [removing, setRemoving] = useState(false)
 
   const load = useCallback(async () => {
     setLoading(true); setError(null)
@@ -58,6 +64,35 @@ export function BasesTab() {
       setError(e instanceof Error ? e.message : String(e))
     } finally {
       setDestroying(false)
+    }
+  }
+
+  const openRemove = async (b: BaseRow) => {
+    setRemoveBaseRow(b); setRemovePreview(null); setRemoveAck(false); setRemoveConfirmText('')
+    setRemovePreviewLoading(true); setError(null)
+    try {
+      const r = await removeBasePreview(b.id)
+      setRemovePreview(r.result ?? null)
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e))
+      setRemoveBaseRow(null)
+    } finally {
+      setRemovePreviewLoading(false)
+    }
+  }
+
+  const handleRemoveBase = async () => {
+    if (!removeBaseRow) return
+    setRemoving(true); setError(null); setFlash(null)
+    try {
+      const r = await removeBase(removeBaseRow.id)
+      setFlash(r.message || `Removed base ${removeBaseRow.id}.`)
+      setRemoveBaseRow(null); setRemovePreview(null); setRemoveAck(false); setRemoveConfirmText('')
+      await load()
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e))
+    } finally {
+      setRemoving(false)
     }
   }
 
@@ -145,6 +180,11 @@ export function BasesTab() {
                     title={b.totemId ? "Release this base's land claim (removes ownership)" : 'No land claim on this base'}>
                     <Icon name="Trash2" size={13} /> Release claim
                   </button>
+                  <button className="btn-secondary py-1 px-2 text-xs text-danger ml-2" disabled={b.pieces === 0 || source === 'demo'}
+                    onClick={() => { void openRemove(b) }}
+                    title={b.pieces === 0 ? 'No structures on this base' : 'Permanently delete this entire base (walls, doors, storage) - for abandoned bases'}>
+                    <Icon name="Bomb" size={13} /> Remove base
+                  </button>
                 </td>
               </tr>
             ))}
@@ -186,6 +226,74 @@ export function BasesTab() {
               <button className="btn-secondary" onClick={() => setConfirmBase(null)} disabled={destroying}>Cancel</button>
               <button className="btn-primary bg-danger hover:bg-danger/90 border-danger" onClick={() => { void handleDestroy() }} disabled={destroying || !ackBackup}>
                 {destroying ? <Icon name="Loader2" size={14} className="animate-spin" /> : <Icon name="Trash2" size={14} />} Release claim
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {removeBaseRow && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4" onClick={() => { if (!removing) { setRemoveBaseRow(null); setRemovePreview(null) } }}>
+          <div className="absolute inset-0 bg-black/50" />
+          <div className="relative w-full max-w-md bg-surface border border-border rounded-xl p-5" onClick={e => e.stopPropagation()}>
+            <div className="flex items-start justify-between mb-3">
+              <h3 className="text-lg font-semibold text-text flex items-center gap-2"><Icon name="Bomb" size={18} className="text-danger" /> Remove entire base</h3>
+              <button onClick={() => { setRemoveBaseRow(null); setRemovePreview(null) }} disabled={removing} className="text-text-dim hover:text-text"><Icon name="X" size={20} /></button>
+            </div>
+
+            <p className="text-sm text-text-muted mb-3">
+              This <span className="text-danger font-semibold">permanently deletes every structure</span> of{' '}
+              <span className="text-text font-medium">{removeBaseRow.name || 'this unnamed base'}</span>
+              {removeBaseRow.owner && <> (owner <span className="text-text font-medium">{removeBaseRow.owner}</span>)</>}
+              {' '}— walls, floors, and all placeables (doors, storage, decorations) including their contents — plus the land
+              claim. Use this to clear an <span className="text-text">abandoned base</span> whose locked doors block the area.
+            </p>
+
+            <div className="card p-3 mb-3 text-sm">
+              {removePreviewLoading ? (
+                <div className="flex items-center gap-2 text-text-dim"><Icon name="Loader2" size={15} className="animate-spin" /> Calculating what will be removed…</div>
+              ) : removePreview ? (
+                <div className="space-y-1">
+                  <div className="flex justify-between"><span className="text-text-dim">Building pieces</span><span className="font-mono text-text">{fmtNum(removePreview.pieces)}</span></div>
+                  <div className="flex justify-between"><span className="text-text-dim">Placeables (doors/storage)</span><span className="font-mono text-text">{fmtNum(removePreview.placeables)}</span></div>
+                  {removePreview.buildingGroups > 1 && (
+                    <div className="text-xs text-warning pt-1 flex items-start gap-1.5">
+                      <Icon name="AlertTriangle" size={13} className="mt-0.5 shrink-0" />
+                      This claim spans {removePreview.buildingGroups} building groups — all of them will be removed together.
+                    </div>
+                  )}
+                </div>
+              ) : (
+                <div className="text-text-dim">No structures found for this base.</div>
+              )}
+            </div>
+
+            <div className="card p-3 mb-3 border-l-2 border-danger bg-danger/5 text-xs text-text-muted flex items-start gap-2">
+              <Icon name="AlertTriangle" size={15} className="text-danger mt-0.5 shrink-0" />
+              <span>
+                <span className="text-danger font-semibold">This cannot be undone from the tool.</span>{' '}
+                It edits the live game database directly. Take a database backup first. Takes effect in-game after the next{' '}
+                <span className="text-warning">battlegroup restart</span>.
+              </span>
+            </div>
+
+            <label className="flex items-center gap-2 text-sm text-text mb-3 cursor-pointer select-none">
+              <input type="checkbox" checked={removeAck} onChange={e => setRemoveAck(e.target.checked)} className="accent-danger" />
+              I have a backup and understand this permanently deletes the whole base.
+            </label>
+
+            <label className="block text-sm text-text-muted mb-4">
+              Type <span className="font-mono text-danger font-semibold">REMOVE</span> to confirm:
+              <input type="text" value={removeConfirmText} onChange={e => setRemoveConfirmText(e.target.value)} disabled={removing}
+                className="mt-1 w-full px-3 py-2 rounded-lg bg-surface-2 border border-border text-text text-sm focus:outline-none focus:ring-2 focus:ring-danger focus:border-danger/50" placeholder="REMOVE" />
+            </label>
+
+            <div className="flex justify-end gap-2">
+              <button className="btn-secondary" onClick={() => { setRemoveBaseRow(null); setRemovePreview(null) }} disabled={removing}>Cancel</button>
+              <button className="btn-primary bg-danger hover:bg-danger/90 border-danger"
+                onClick={() => { void handleRemoveBase() }}
+                disabled={removing || removePreviewLoading || !removeAck || removeConfirmText.trim().toUpperCase() !== 'REMOVE' || !removePreview || removePreview.pieces === 0}>
+                {removing ? <Icon name="Loader2" size={14} className="animate-spin" /> : <Icon name="Bomb" size={14} />} Remove base
               </button>
             </div>
           </div>
