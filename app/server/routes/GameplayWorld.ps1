@@ -263,3 +263,41 @@ Register-DuneRoute -Method POST -Path '/api/gameplay/bases/destroy-claim' -Handl
         Write-DuneError -Response $res -Status 500 -Message "Destroy claim failed: $($_.Exception.Message)"
     }
 }
+
+# ---------------------------------------------------------------------------
+# POST /api/gameplay/bases/remove-base/preview  { base_id }
+#   - dry-run count of what Force-Remove would delete: building pieces,
+#   placeables, building groups under the claim, and totem presence. Read-only;
+#   used to populate the destructive confirm dialog with real numbers.
+# ---------------------------------------------------------------------------
+Register-DuneRoute -Method POST -Path '/api/gameplay/bases/remove-base/preview' -Handler {
+    param($req, $res, $routeParams, $body)
+    try {
+        $bid = Get-DuneBodyInt -Body $body -Name 'base_id'
+        if ($null -eq $bid -or $bid -le 0) { Write-DuneError -Response $res -Status 400 -Message 'base_id is required.'; return }
+        Invoke-DunePlayerWriteRoute -Response $res -Action { param($ip) Get-DuneRemoveBasePreview -Ip $ip -BaseId $bid }
+    } catch {
+        Write-DuneError -Response $res -Status 500 -Message "Remove base preview failed: $($_.Exception.Message)"
+    }
+}
+
+# ---------------------------------------------------------------------------
+# POST /api/gameplay/bases/remove-base  { base_id }
+#   - FULLY remove an abandoned base: delete its building pieces + placeables
+#   (doors/storage, contents included) AND the totem/claim in one cascading
+#   transaction, so no locked doors or structures are left behind. Distinct from
+#   destroy-claim (which only releases ownership). Scope is the claim's owner
+#   entity, resolved from base_id. Live DB only; effect appears after a
+#   battlegroup restart. Destructive - the UI requires an explicit type-to-confirm
+#   + backup warning before calling this.
+# ---------------------------------------------------------------------------
+Register-DuneRoute -Method POST -Path '/api/gameplay/bases/remove-base' -Handler {
+    param($req, $res, $routeParams, $body)
+    try {
+        $bid = Get-DuneBodyInt -Body $body -Name 'base_id'
+        if ($null -eq $bid -or $bid -le 0) { Write-DuneError -Response $res -Status 400 -Message 'base_id is required.'; return }
+        Invoke-DunePlayerWriteRoute -Response $res -Action { param($ip) Invoke-DuneRemoveBase -Ip $ip -BaseId $bid }
+    } catch {
+        Write-DuneError -Response $res -Status 500 -Message "Remove base failed: $($_.Exception.Message)"
+    }
+}

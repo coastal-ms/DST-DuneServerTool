@@ -741,6 +741,125 @@ RETURNING id::text AS totem_id;
 }
 
 # ----------------------------------------------------------------------------
+# FORCE-REMOVE ABANDONED BASE - unlike Release claim (which deletes only the
+# totem actor), this fully removes the base's physical structures so no locked
+# doors or walls are left behind. Real case: a deleted player's abandoned base
+# whose active doors stay locked, walling off the area with no way to reach the
+# totem to re-claim it.
+#
+# Scope = the CLAIM's owner entity, resolved from the selected base. Every base
+# piece and placeable is keyed by a 64-bit engine entity GUID (owner_entity_id),
+# a SEPARATE id space from actor ids, which is exactly why the totem cascade
+# leaves them behind. There is no per-building key on placeables, and one claim
+# (one totem, 1:1 with its owner entity - verified live) can span several
+# building groups, so the owner entity is the only complete, coherent boundary.
+#
+# The removal is a single DELETE FROM dune.actors over three actor sets, all of
+# which cascade ON DELETE from dune.actors (verified live via pg_constraint):
+#   * building-base actors  (buildings.id / building_instances.building_id FKs)
+#       -> cascades dune.buildings + every dune.building_instances wall/floor
+#   * placeable actors      (placeables.id FK)
+#       -> cascades dune.placeables + their dune.inventories + dune.items
+#   * the totem actor        (totems.id FK, if the claim is not already released)
+#       -> cascades totems, landclaim_segments, permission_actor(+_rank), tax_invoice
+# Proven on the live DB with BEGIN/ROLLBACK against a real abandoned base:
+# removed exactly its 583 pieces + 149 placeables + 139 contained items + totem,
+# and left every other base untouched.
+#
+# GUARDS: the owner entity is resolved with LIMIT 1 from the target base, so it
+# is always a single claim. If the base has no building_instances the entity
+# resolves to NULL and the IN(...) matches nothing (zero deletes) - a bad/empty
+# id can never mass-delete. Invoke-DuneRemoveBase refuses up front when the base
+# has zero pieces. Like every world write, the map pod caches placed objects in
+# RAM, so the base only disappears in-game after a battlegroup restart.
+# ----------------------------------------------------------------------------
+function Get-DuneRemoveBasePreview {
+    param([string]$Ip, [long]$BaseId)
+    if ($BaseId -le 0) { return @{ ok = $false; error = 'base_id is required.' } }
+    $sql = @"
+WITH e AS (
+    SELECT owner_entity_id AS eid
+    FROM dune.building_instances
+    WHERE building_id = $BaseId::bigint
+    LIMIT 1
+)
+SELECT
+    (SELECT eid FROM e)::text AS entity_id,
+    COALESCE((SELECT COUNT(*) FROM dune.building_instances WHERE owner_entity_id = (SELECT eid FROM e)), 0)                      AS pieces,
+    COALESCE((SELECT COUNT(*) FROM dune.placeables        WHERE owner_entity_id = (SELECT eid FROM e)), 0)                      AS placeables,
+    COALESCE((SELECT COUNT(DISTINCT building_id) FROM dune.building_instances WHERE owner_entity_id = (SELECT eid FROM e)), 0)  AS building_groups,
+    COALESCE((SELECT COUNT(*) FROM dune.actor_fgl_entities afe
+                JOIN dune.actors t ON t.id = afe.actor_id AND t.class ILIKE '%Totem%'
+              WHERE afe.entity_id = (SELECT eid FROM e)), 0)                                                                    AS totems;
+"@
+    $res = Invoke-DuneSqlQuery -Ip $Ip -Sql $sql -ReadOnly $true -MaxRows 1 -TimeoutSec 45
+    if (-not $res.ok) { return @{ ok = $false; error = $res.error } }
+    $rows = @(ConvertTo-DuneRowMaps -Result $res)
+    if ($rows.Count -eq 0) { return @{ ok = $false; error = "Base $BaseId not found." } }
+    $r = $rows[0]
+    $entity = [string]$r['entity_id']
+    if (-not $entity) {
+        return @{ ok = $false; error = "Base $BaseId has no building pieces - nothing to remove (it may already be gone)." }
+    }
+    return @{
+        ok             = $true
+        entityId       = $entity
+        pieces         = (ConvertTo-DuneInt $r['pieces'])
+        placeables     = (ConvertTo-DuneInt $r['placeables'])
+        buildingGroups = (ConvertTo-DuneInt $r['building_groups'])
+        totems         = (ConvertTo-DuneInt $r['totems'])
+    }
+}
+
+function Invoke-DuneRemoveBase {
+    param([string]$Ip, [long]$BaseId)
+    if ($BaseId -le 0) { return @{ ok = $false; error = 'base_id is required.' } }
+
+    # Preflight: resolve the claim and refuse if there is nothing to remove.
+    $preview = Get-DuneRemoveBasePreview -Ip $Ip -BaseId $BaseId
+    if (-not $preview.ok) { return $preview }
+    if ($preview.pieces -le 0) {
+        return @{ ok = $false; error = "Base $BaseId has no building pieces - nothing to remove (it may already be gone)." }
+    }
+
+    # Single-transaction cascade delete keyed off the base's owner entity.
+    $sql = @"
+WITH e AS (
+    SELECT owner_entity_id AS eid
+    FROM dune.building_instances
+    WHERE building_id = $BaseId::bigint
+    LIMIT 1
+),
+targets AS (
+    SELECT DISTINCT building_id AS id FROM dune.building_instances WHERE owner_entity_id = (SELECT eid FROM e)
+    UNION
+    SELECT id FROM dune.placeables WHERE owner_entity_id = (SELECT eid FROM e)
+    UNION
+    SELECT afe.actor_id FROM dune.actor_fgl_entities afe
+        JOIN dune.actors t ON t.id = afe.actor_id AND t.class ILIKE '%Totem%'
+        WHERE afe.entity_id = (SELECT eid FROM e)
+)
+DELETE FROM dune.actors
+WHERE id IN (SELECT id FROM targets)
+RETURNING id::text AS actor_id;
+"@
+    $res = Invoke-DuneSqlQuery -Ip $Ip -Sql $sql -ReadOnly $false -MaxRows 500000 -TimeoutSec 120
+    if (-not $res.ok) { return @{ ok = $false; error = $res.error } }
+    $deleted = @(ConvertTo-DuneRowMaps -Result $res).Count
+    if ($deleted -eq 0) {
+        return @{ ok = $false; error = "Base $BaseId not found - it may have already been removed." }
+    }
+
+    $groupNote = if ($preview.buildingGroups -gt 1) { " ($($preview.buildingGroups) building groups under this claim)" } else { '' }
+    return @{
+        ok         = $true
+        pieces     = $preview.pieces
+        placeables = $preview.placeables
+        message    = "Removed base $BaseId${groupNote}: $($preview.pieces) building pieces and $($preview.placeables) placeables (doors/storage) deleted. Restart the battlegroup for it to take effect in-game."
+    }
+}
+
+# ----------------------------------------------------------------------------
 # BASE EXPORT — native port of the reference implementation handlers_bases.go. Reads a base's
 # building_instances (7-element transform: x,y,z + quaternion) and its
 # placeables, recenters everything on the base centroid, converts quaternions
