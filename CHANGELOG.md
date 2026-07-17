@@ -13,6 +13,30 @@ here cover everything those tags shipped.
 
 ## [Unreleased]
 
+## [12.20.0] - 2026-07-17
+
+### Added
+
+- **Bases: Free abandoned base (experimental).** The Gameplay → Bases page adds a separate,
+  experimental **Free base** action that makes a deleted-owner's abandoned base accessible and
+  re-claimable again **without destroying anything** — every wall, door, and placeable stays in
+  the world. When a character is deleted, Funcom only strips the ownership grant and does **not**
+  delete the fief totem, so the totem lingers and the base's doors/storage keep a stale per-object
+  access lock that no longer resolves to any living player — the base shows owner "no one" yet the
+  doors stay locked and the totem can't be reached to re-claim. Free base fixes this in one
+  transaction: it clears the leftover per-placeable access locks (`dune.permission_actor` rows) for
+  the base's owner entity so the doors/storage become openable, then deletes the lingering totem
+  actor (guarded, cascading its claim/land-claim/grants and auto-nulling ownership on the pieces).
+  The mechanism was validated live on a test server (bases 1207/1444/1825, verified across
+  battlegroup restarts). The action is scoped strictly to the selected base's owner entity, shows a
+  **preview of what will be freed** (access locks / doors to clear + whether a totem will be
+  removed, plus the structure counts that stay), and is gated behind an **experimental-feature
+  acknowledgement + backup acknowledgement + type-`FREE`-to-confirm**. It is a distinct button from
+  **Release claim** (which is unchanged), is disabled in demo mode and for bases with no structures,
+  returns an admin reversibility record (affected placeable ids + prior totem grants), and — like
+  every world write — only takes effect in-game after a battlegroup restart (restart twice if the
+  map pod re-materialises the totem as an ownerless husk on its first flush).
+
 ## [12.19.1] - 2026-07-13
 
 ### Added

@@ -741,6 +741,165 @@ RETURNING id::text AS totem_id;
 }
 
 # ----------------------------------------------------------------------------
+# FREE ABANDONED BASE (experimental) - make a deleted-owner's abandoned base
+# accessible + re-claimable again WITHOUT destroying any structure.
+#
+# THE PROBLEM: when a character is deleted, Funcom only strips the ownership
+# grant and flips the character to Deleted - it does NOT delete the fief totem.
+# So the totem lingers and the base's access-controlled placeables (doors,
+# storage, refineries, generators, etc.) keep a per-placeable dune.permission_actor
+# row that no longer resolves to any living player, leaving them permanently
+# locked. The base shows owner "no one" yet nobody can open the doors or reach
+# the totem to re-claim it.
+#
+# THE FIX (validated live on UAT bases 1207/1444/1825 with real restarts): two
+# statements in one transaction, deleting NO structure rows:
+#   1. DELETE the per-placeable permission_actor rows for the base's owner entity
+#      -> the placeables become unrestricted (like decorations) and openable.
+#      This is the actual unlock, and it PERSISTS across a battlegroup restart.
+#   2. DELETE the totem actor (guarded by `id IN (SELECT id FROM dune.totems)`)
+#      -> its ON DELETE CASCADE removes the totems row, landclaim_segments, and
+#      any grants, and a DB trigger auto-nulls owner_entity_id on every piece, so
+#      the base becomes unclaimed/re-claimable. (Because the live map pod caches
+#      the totem in RAM, the totem row can re-materialise once as an OWNERLESS
+#      husk on the first flush; a second restart - or editing with the pod down -
+#      converges. The placeable unlock is unaffected either way.)
+#
+# SCOPE: strictly the selected base's owner entity E, resolved from base_id. E is
+# unique to one claim; `WHERE owner_entity_id = E` cannot touch another base. A
+# bad/empty base_id resolves E to NULL and matches nothing (zero changes). If E
+# genuinely spans multiple separate building_ids, the caller is warned (our tested
+# cases were 1:1). NOTHING is destroyed - every wall, door, and placeable stays.
+#
+# Both return an admin reversibility record (affected placeable ids + prior totem
+# grants) so a mistaken free can be reconstructed / re-claimed.
+# ----------------------------------------------------------------------------
+function Get-DuneFreeAbandonedBaseInfo {
+    # Internal helper: resolve E, totem, counts, and reversibility data for a base.
+    param([string]$Ip, [long]$BaseId)
+    $sql = @"
+WITH e AS (
+    SELECT owner_entity_id AS eid
+    FROM dune.building_instances
+    WHERE building_id = $BaseId::bigint
+    LIMIT 1
+)
+SELECT
+    (SELECT eid FROM e)::text AS entity_id,
+    COALESCE((SELECT COUNT(DISTINCT building_id) FROM dune.building_instances WHERE owner_entity_id = (SELECT eid FROM e)), 0) AS building_groups,
+    COALESCE((SELECT COUNT(*) FROM dune.building_instances WHERE owner_entity_id = (SELECT eid FROM e)), 0)                    AS pieces,
+    COALESCE((SELECT COUNT(*) FROM dune.placeables WHERE owner_entity_id = (SELECT eid FROM e)), 0)                            AS placeables,
+    COALESCE((SELECT COUNT(*) FROM dune.permission_actor pa
+                JOIN dune.placeables p ON p.id = pa.actor_id
+              WHERE p.owner_entity_id = (SELECT eid FROM e)), 0)                                                              AS locks,
+    COALESCE((SELECT COUNT(*) FROM dune.permission_actor pa
+                JOIN dune.placeables p ON p.id = pa.actor_id
+              WHERE p.owner_entity_id = (SELECT eid FROM e) AND p.building_type ILIKE '%door%'), 0)                           AS door_locks,
+    (SELECT afe.actor_id FROM dune.actor_fgl_entities afe
+        JOIN dune.totems t ON t.id = afe.actor_id
+      WHERE afe.entity_id = (SELECT eid FROM e) LIMIT 1)::text                                                               AS totem_id;
+"@
+    $res = Invoke-DuneSqlQuery -Ip $Ip -Sql $sql -ReadOnly $true -MaxRows 1 -TimeoutSec 45
+    if (-not $res.ok) { return @{ ok = $false; error = $res.error } }
+    $rows = @(ConvertTo-DuneRowMaps -Result $res)
+    if ($rows.Count -eq 0) { return @{ ok = $false; error = "Base $BaseId not found." } }
+    $r = $rows[0]
+    $entity = [string]$r['entity_id']
+    if (-not $entity) {
+        return @{ ok = $false; error = "Base $BaseId has no building pieces - nothing to free (it may already be gone)." }
+    }
+    return @{
+        ok             = $true
+        entityId       = $entity
+        buildingGroups = (ConvertTo-DuneInt $r['building_groups'])
+        pieces         = (ConvertTo-DuneInt $r['pieces'])
+        placeables     = (ConvertTo-DuneInt $r['placeables'])
+        locks          = (ConvertTo-DuneInt $r['locks'])
+        doorLocks      = (ConvertTo-DuneInt $r['door_locks'])
+        totemId        = [string]$r['totem_id']
+    }
+}
+
+function Get-DuneFreeAbandonedBasePreview {
+    param([string]$Ip, [long]$BaseId)
+    if ($BaseId -le 0) { return @{ ok = $false; error = 'base_id is required.' } }
+    $info = Get-DuneFreeAbandonedBaseInfo -Ip $Ip -BaseId $BaseId
+    if (-not $info.ok) { return $info }
+    return @{
+        ok             = $true
+        entityId       = $info.entityId
+        pieces         = $info.pieces
+        placeables     = $info.placeables
+        locks          = $info.locks
+        doorLocks      = $info.doorLocks
+        buildingGroups = $info.buildingGroups
+        hasTotem       = [bool]$info.totemId
+    }
+}
+
+function Invoke-DuneFreeAbandonedBase {
+    param([string]$Ip, [long]$BaseId)
+    if ($BaseId -le 0) { return @{ ok = $false; error = 'base_id is required.' } }
+
+    $info = Get-DuneFreeAbandonedBaseInfo -Ip $Ip -BaseId $BaseId
+    if (-not $info.ok) { return $info }
+    if ($info.pieces -le 0) {
+        return @{ ok = $false; error = "Base $BaseId has no building pieces - nothing to free (it may already be gone)." }
+    }
+
+    $entity = $info.entityId
+
+    # Reversibility record: capture the placeable ids we will unlock and the
+    # totem's current grants BEFORE the delete, so an admin can reconstruct or
+    # re-claim. (Read-only; safe if it returns nothing.)
+    $recSql = @"
+SELECT
+    (SELECT COALESCE(string_agg(p.id::text, ',' ORDER BY p.id), '')
+       FROM dune.permission_actor pa JOIN dune.placeables p ON p.id = pa.actor_id
+      WHERE p.owner_entity_id = $entity::bigint) AS locked_placeable_ids,
+    (SELECT COALESCE(string_agg(par.rank::text || ':' || par.player_id::text, ',' ORDER BY par.rank), '')
+       FROM dune.permission_actor_rank par
+      WHERE par.permission_actor_id = $($info.totemId)::bigint) AS prior_totem_grants;
+"@
+    $recRows = @()
+    if ($info.totemId) {
+        $recRes = Invoke-DuneSqlQuery -Ip $Ip -Sql $recSql -ReadOnly $true -MaxRows 1 -TimeoutSec 30
+        if ($recRes.ok) { $recRows = @(ConvertTo-DuneRowMaps -Result $recRes) }
+    }
+    $lockedIds    = if ($recRows.Count -gt 0) { [string]$recRows[0]['locked_placeable_ids'] } else { '' }
+    $priorGrants  = if ($recRows.Count -gt 0) { [string]$recRows[0]['prior_totem_grants'] } else { '' }
+
+    # The free operation - two statements, one implicit transaction (psql runs the
+    # whole batch atomically here). Clears the placeable access locks, then deletes
+    # the totem actor (guarded). No structure rows are deleted.
+    $totemClause = if ($info.totemId) {
+        "DELETE FROM dune.actors WHERE id = $($info.totemId)::bigint AND id IN (SELECT id FROM dune.totems);"
+    } else { '-- no totem to delete (claim already released)' }
+
+    $sql = @"
+BEGIN;
+DELETE FROM dune.permission_actor
+WHERE actor_id IN (SELECT id FROM dune.placeables WHERE owner_entity_id = $entity::bigint);
+$totemClause
+COMMIT;
+"@
+    $res = Invoke-DuneSqlQuery -Ip $Ip -Sql $sql -ReadOnly $false -MaxRows 1 -TimeoutSec 120
+    if (-not $res.ok) { return @{ ok = $false; error = $res.error } }
+
+    $groupNote = if ($info.buildingGroups -gt 1) { " ($($info.buildingGroups) building groups share this owner)" } else { '' }
+    return @{
+        ok               = $true
+        entityId         = $entity
+        locksCleared     = $info.locks
+        doorLocksCleared = $info.doorLocks
+        totemDeleted     = [bool]$info.totemId
+        lockedPlaceableIds = $lockedIds
+        priorTotemGrants   = $priorGrants
+        message          = "Freed base ${BaseId}${groupNote}: cleared $($info.locks) placeable access locks ($($info.doorLocks) doors)$(if ($info.totemId) { ' and deleted the lingering totem' }). All structures kept. Restart the battlegroup (twice if needed) for it to take effect in-game."
+    }
+}
+
+# ----------------------------------------------------------------------------
 # BASE EXPORT — native port of the reference implementation handlers_bases.go. Reads a base's
 # building_instances (7-element transform: x,y,z + quaternion) and its
 # placeables, recenters everything on the base centroid, converts quaternions

@@ -1007,6 +1007,36 @@ export function destroyClaim(totemId: number) {
   })
 }
 
+// Free abandoned base (EXPERIMENTAL): make a deleted-owner's abandoned base
+// accessible + re-claimable WITHOUT destroying any structure. Clears the
+// per-placeable access locks (doors/storage) for the base's owner entity and
+// deletes the lingering totem. No structure rows are removed. Live-DB only;
+// takes effect after a battlegroup restart. Mechanism validated live on UAT.
+export interface FreeBasePreview extends WriteResult {
+  result?: {
+    ok: boolean
+    entityId: string
+    pieces: number
+    placeables: number
+    locks: number
+    doorLocks: number
+    buildingGroups: number
+    hasTotem: boolean
+  }
+}
+
+export function freeBasePreview(baseId: number) {
+  return api<FreeBasePreview>('/api/gameplay/bases/free-base/preview', {
+    method: 'POST', body: JSON.stringify({ base_id: baseId }),
+  })
+}
+
+export function freeBase(baseId: number) {
+  return api<WriteResult>('/api/gameplay/bases/free-base', {
+    method: 'POST', body: JSON.stringify({ base_id: baseId }),
+  })
+}
+
 export interface StorageGiveItemInput {
   template: string
   qty: number

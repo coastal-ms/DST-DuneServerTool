@@ -263,3 +263,41 @@ Register-DuneRoute -Method POST -Path '/api/gameplay/bases/destroy-claim' -Handl
         Write-DuneError -Response $res -Status 500 -Message "Destroy claim failed: $($_.Exception.Message)"
     }
 }
+
+# ---------------------------------------------------------------------------
+# POST /api/gameplay/bases/free-base/preview  { base_id }
+#   — dry-run for Free abandoned base (experimental): reports how many placeable
+#   access locks (and how many are doors) would be cleared and whether a lingering
+#   totem would be deleted. Read-only. NOT deleted-structure counts.
+# ---------------------------------------------------------------------------
+Register-DuneRoute -Method POST -Path '/api/gameplay/bases/free-base/preview' -Handler {
+    param($req, $res, $routeParams, $body)
+    try {
+        $bid = Get-DuneBodyInt -Body $body -Name 'base_id'
+        if ($null -eq $bid -or $bid -le 0) { Write-DuneError -Response $res -Status 400 -Message 'base_id is required.'; return }
+        Invoke-DunePlayerWriteRoute -Response $res -Action { param($ip) Get-DuneFreeAbandonedBasePreview -Ip $ip -BaseId $bid }
+    } catch {
+        Write-DuneError -Response $res -Status 500 -Message "Free base preview failed: $($_.Exception.Message)"
+    }
+}
+
+# ---------------------------------------------------------------------------
+# POST /api/gameplay/bases/free-base  { base_id }
+#   — EXPERIMENTAL. Make a deleted-owner's abandoned base accessible + re-claimable
+#   WITHOUT destroying any structure: clear the per-placeable permission_actor
+#   access locks (doors/storage/etc.) for the base's owner entity, then delete the
+#   lingering totem actor (guarded). No building_instances/placeables rows are
+#   deleted. Mechanism validated live on UAT (bases 1207/1444/1825). Live DB only;
+#   effect appears after a battlegroup restart (twice if the pod re-flushes the
+#   totem). The UI gates this behind an experimental warning + backup ack + confirm.
+# ---------------------------------------------------------------------------
+Register-DuneRoute -Method POST -Path '/api/gameplay/bases/free-base' -Handler {
+    param($req, $res, $routeParams, $body)
+    try {
+        $bid = Get-DuneBodyInt -Body $body -Name 'base_id'
+        if ($null -eq $bid -or $bid -le 0) { Write-DuneError -Response $res -Status 400 -Message 'base_id is required.'; return }
+        Invoke-DunePlayerWriteRoute -Response $res -Action { param($ip) Invoke-DuneFreeAbandonedBase -Ip $ip -BaseId $bid }
+    } catch {
+        Write-DuneError -Response $res -Status 500 -Message "Free base failed: $($_.Exception.Message)"
+    }
+}

@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { Icon } from '../../components/Icon'
-import { getBases, exportBase, destroyClaim, downloadBlueprintFile, type BaseRow, type DataSource } from '../../api/gameplay'
+import { getBases, exportBase, destroyClaim, freeBase, freeBasePreview, downloadBlueprintFile, type BaseRow, type FreeBasePreview, type DataSource } from '../../api/gameplay'
 import { fmtNum, SourceBadge, StatCard, DemoNotice } from './shared'
 
 type SortKey = 'id' | 'name' | 'owner' | 'pieces' | 'placeables'
@@ -19,6 +19,13 @@ export function BasesTab() {
   const [confirmBase, setConfirmBase] = useState<BaseRow | null>(null)
   const [ackBackup, setAckBackup] = useState(false)
   const [destroying, setDestroying] = useState(false)
+  const [freeBaseRow, setFreeBaseRow] = useState<BaseRow | null>(null)
+  const [freePreview, setFreePreview] = useState<FreeBasePreview['result'] | null>(null)
+  const [freePreviewLoading, setFreePreviewLoading] = useState(false)
+  const [freeAckBackup, setFreeAckBackup] = useState(false)
+  const [freeAckExperimental, setFreeAckExperimental] = useState(false)
+  const [freeConfirmText, setFreeConfirmText] = useState('')
+  const [freeing, setFreeing] = useState(false)
 
   const load = useCallback(async () => {
     setLoading(true); setError(null)
@@ -58,6 +65,37 @@ export function BasesTab() {
       setError(e instanceof Error ? e.message : String(e))
     } finally {
       setDestroying(false)
+    }
+  }
+
+  const openFree = async (b: BaseRow) => {
+    setFreeBaseRow(b); setFreePreview(null)
+    setFreeAckBackup(false); setFreeAckExperimental(false); setFreeConfirmText('')
+    setFreePreviewLoading(true); setError(null)
+    try {
+      const r = await freeBasePreview(b.id)
+      setFreePreview(r.result ?? null)
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e))
+      setFreeBaseRow(null)
+    } finally {
+      setFreePreviewLoading(false)
+    }
+  }
+
+  const handleFree = async () => {
+    if (!freeBaseRow) return
+    setFreeing(true); setError(null); setFlash(null)
+    try {
+      const r = await freeBase(freeBaseRow.id)
+      setFlash(r.message || `Freed base ${freeBaseRow.id}.`)
+      setFreeBaseRow(null); setFreePreview(null)
+      setFreeAckBackup(false); setFreeAckExperimental(false); setFreeConfirmText('')
+      await load()
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e))
+    } finally {
+      setFreeing(false)
     }
   }
 
@@ -145,6 +183,12 @@ export function BasesTab() {
                     title={b.totemId ? "Release this base's land claim (removes ownership)" : 'No land claim on this base'}>
                     <Icon name="Trash2" size={13} /> Release claim
                   </button>
+                  <button className="btn-secondary py-1 px-2 text-xs text-warning ml-2" disabled={b.pieces === 0 || source === 'demo'}
+                    onClick={() => { void openFree(b) }}
+                    title="Experimental: unlock an abandoned base (clear stuck door/storage locks + remove the lingering totem) so it's accessible & re-claimable. Keeps all structures.">
+                    <Icon name="KeyRound" size={13} /> Free base
+                    <span className="ml-1 px-1 rounded bg-warning/20 text-warning text-[9px] uppercase tracking-wide font-semibold">exp</span>
+                  </button>
                 </td>
               </tr>
             ))}
@@ -186,6 +230,86 @@ export function BasesTab() {
               <button className="btn-secondary" onClick={() => setConfirmBase(null)} disabled={destroying}>Cancel</button>
               <button className="btn-primary bg-danger hover:bg-danger/90 border-danger" onClick={() => { void handleDestroy() }} disabled={destroying || !ackBackup}>
                 {destroying ? <Icon name="Loader2" size={14} className="animate-spin" /> : <Icon name="Trash2" size={14} />} Release claim
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {freeBaseRow && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4" onClick={() => { if (!freeing) { setFreeBaseRow(null); setFreePreview(null) } }}>
+          <div className="absolute inset-0 bg-black/50" />
+          <div className="relative w-full max-w-md bg-surface border border-border rounded-xl p-5" onClick={e => e.stopPropagation()}>
+            <div className="flex items-start justify-between mb-3">
+              <h3 className="text-lg font-semibold text-text flex items-center gap-2">
+                <Icon name="KeyRound" size={18} className="text-warning" /> Free abandoned base
+                <span className="px-1.5 py-0.5 rounded bg-warning/20 text-warning text-[10px] uppercase tracking-wide font-semibold">Experimental</span>
+              </h3>
+              <button onClick={() => { setFreeBaseRow(null); setFreePreview(null) }} disabled={freeing} className="text-text-dim hover:text-text"><Icon name="X" size={20} /></button>
+            </div>
+
+            <p className="text-sm text-text-muted mb-3">
+              Makes <span className="text-text font-medium">{freeBaseRow.name || 'this unnamed base'}</span>
+              {freeBaseRow.owner && <> (owner <span className="text-text font-medium">{freeBaseRow.owner}</span>)</>}
+              {' '}accessible and re-claimable again. It clears the stuck access locks on the base's doors and
+              storage, and deletes the lingering land-claim totem. <span className="text-text">Every wall, door, and
+              placeable stays in the world</span> — nothing is destroyed. Takes effect after the next{' '}
+              <span className="text-warning">battlegroup restart</span> (restart twice if the totem reappears).
+            </p>
+
+            <div className="card p-3 mb-3 text-sm">
+              {freePreviewLoading ? (
+                <div className="flex items-center gap-2 text-text-dim"><Icon name="Loader2" size={15} className="animate-spin" /> Checking what will be freed…</div>
+              ) : freePreview ? (
+                <div className="space-y-1">
+                  <div className="flex justify-between"><span className="text-text-dim">Access locks to clear</span><span className="font-mono text-text">{fmtNum(freePreview.locks)}{freePreview.doorLocks > 0 && <span className="text-text-dim"> ({fmtNum(freePreview.doorLocks)} doors)</span>}</span></div>
+                  <div className="flex justify-between"><span className="text-text-dim">Lingering totem</span><span className="font-mono text-text">{freePreview.hasTotem ? 'yes — will delete' : 'none'}</span></div>
+                  <div className="flex justify-between"><span className="text-text-dim">Structures kept</span><span className="font-mono text-success">{fmtNum(freePreview.pieces)} pieces · {fmtNum(freePreview.placeables)} placeables</span></div>
+                  {freePreview.buildingGroups > 1 && (
+                    <div className="text-xs text-warning pt-1 flex items-start gap-1.5">
+                      <Icon name="AlertTriangle" size={13} className="mt-0.5 shrink-0" />
+                      This owner spans {freePreview.buildingGroups} building groups — all will be freed together.
+                    </div>
+                  )}
+                  {freePreview.locks === 0 && (
+                    <div className="text-xs text-text-dim pt-1">No stuck locks found — only the totem (if any) will be removed.</div>
+                  )}
+                </div>
+              ) : (
+                <div className="text-text-dim">Nothing to free on this base.</div>
+              )}
+            </div>
+
+            <div className="card p-3 mb-3 border-l-2 border-warning bg-warning/5 text-xs text-text-muted flex items-start gap-2">
+              <Icon name="FlaskConical" size={15} className="text-warning mt-0.5 shrink-0" />
+              <span>
+                <span className="text-warning font-semibold">Experimental feature.</span>{' '}
+                The unlock mechanism was validated on a test server but game behaviour can vary. It edits the live
+                game database directly and can't be undone from the tool. Take a database backup first.
+              </span>
+            </div>
+
+            <label className="flex items-center gap-2 text-sm text-text mb-2 cursor-pointer select-none">
+              <input type="checkbox" checked={freeAckExperimental} onChange={e => setFreeAckExperimental(e.target.checked)} className="accent-warning" />
+              I understand this is an experimental feature.
+            </label>
+            <label className="flex items-center gap-2 text-sm text-text mb-3 cursor-pointer select-none">
+              <input type="checkbox" checked={freeAckBackup} onChange={e => setFreeAckBackup(e.target.checked)} className="accent-warning" />
+              I have a recent database backup.
+            </label>
+
+            <label className="block text-sm text-text-muted mb-4">
+              Type <span className="font-mono text-warning font-semibold">FREE</span> to confirm:
+              <input type="text" value={freeConfirmText} onChange={e => setFreeConfirmText(e.target.value)} disabled={freeing}
+                className="mt-1 w-full px-3 py-2 rounded-lg bg-surface-2 border border-border text-text text-sm focus:outline-none focus:ring-2 focus:ring-warning focus:border-warning/50" placeholder="FREE" />
+            </label>
+
+            <div className="flex justify-end gap-2">
+              <button className="btn-secondary" onClick={() => { setFreeBaseRow(null); setFreePreview(null) }} disabled={freeing}>Cancel</button>
+              <button className="btn-primary bg-warning hover:bg-warning/90 border-warning text-black"
+                onClick={() => { void handleFree() }}
+                disabled={freeing || freePreviewLoading || !freeAckBackup || !freeAckExperimental || freeConfirmText.trim().toUpperCase() !== 'FREE'}>
+                {freeing ? <Icon name="Loader2" size={14} className="animate-spin" /> : <Icon name="KeyRound" size={14} />} Free base
               </button>
             </div>
           </div>
