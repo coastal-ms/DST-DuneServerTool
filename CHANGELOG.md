@@ -13,12 +13,6 @@ here cover everything those tags shipped.
 
 ## [Unreleased]
 
-## [12.20.0] - 2026-07-16
-
-### Added
-
-- **Bases: Force-Remove Abandoned Base.** The Gameplay → Bases page adds a **Remove base** action that *fully* deletes an abandoned base — every wall, floor, and placeable (doors, storage, decorations, including their contents) plus the land claim — in one cascading transaction. This closes the gap left by **Release claim**, which only removes the totem/ownership and leaves the physical structures (notably **locked doors** on a deleted player's base) walling off the area with no way to reach the totem to re-claim. Removal is scoped to the claim's owner entity (resolved from the selected base), so it also covers claims that span multiple building groups; a bad/empty id can never mass-delete (the entity resolves to nothing and zero rows are touched). Proven live with `BEGIN`/`ROLLBACK` against a real abandoned base — removed exactly its pieces, placeables, contained items, and totem while leaving every other base untouched. The action shows a **preview of what will be removed**, requires a **backup acknowledgement + a type-`REMOVE`-to-confirm** gate, is disabled for bases with no structures and in demo mode, and — like every world write — only takes effect in-game after a battlegroup restart.
-
 ## [12.19.1] - 2026-07-13
 
 ### Added
