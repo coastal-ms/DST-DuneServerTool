@@ -13,6 +13,22 @@ here cover everything those tags shipped.
 
 ## [Unreleased]
 
+## [12.20.0] - 2026-07-17
+
+### Changed
+
+- **Bases: Release claim is now available whenever the battlegroup is off, with a clear
+  indicator.** Deleting a base's land claim only *persists* when the battlegroup is fully stopped —
+  while the map server is running it re-hydrates the deleted totem from its in-memory cache on the
+  next save, so the release silently reverts. DST previously gave no signal about this. Now the
+  **Release claim** button is enabled whenever the battlegroup is **off** (reusing the same
+  battlegroup status shown in the header) and disabled while it is running/starting/stopping, with
+  an explicit reason. The Bases panel shows a banner: when the battlegroup is off, that Release
+  claim is available and will persist; when it is on, that Release claim requires the battlegroup to
+  be off because the running map server would restore the claim. Applies to **all** bases (an admin
+  can release any claim while the battlegroup is off), not just abandoned ones. The Release claim
+  operation itself is unchanged.
+
 ## [12.19.1] - 2026-07-13
 
 ### Added

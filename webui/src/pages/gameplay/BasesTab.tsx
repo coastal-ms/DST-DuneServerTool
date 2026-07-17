@@ -1,11 +1,19 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { Icon } from '../../components/Icon'
+import { useStatus } from '../../hooks/useStatus'
 import { getBases, exportBase, destroyClaim, downloadBlueprintFile, type BaseRow, type DataSource } from '../../api/gameplay'
 import { fmtNum, SourceBadge, StatCard, DemoNotice } from './shared'
 
 type SortKey = 'id' | 'name' | 'owner' | 'pieces' | 'placeables'
 
 export function BasesTab() {
+  const { status } = useStatus()
+  const bgState = status?.bg?.state
+  // Deleting a totem only STICKS when the battlegroup is fully off: while the
+  // map pod runs it re-hydrates the deleted totem from its RAM cache on the next
+  // flush. So Release claim is only enabled when the BG is stopped. Treat an
+  // unknown/missing BG state as "not off" (safer to keep disabled).
+  const bgOff = bgState === 'stopped'
   const [bases, setBases] = useState<BaseRow[]>([])
   const [source, setSource] = useState<DataSource>('demo')
   const [liveError, setLiveError] = useState<string | undefined>()
@@ -102,6 +110,28 @@ export function BasesTab() {
       </div>
 
       {source === 'demo' && <DemoNotice liveError={liveError} what="base data" />}
+      {source !== 'demo' && (
+        bgOff ? (
+          <div className="card p-3 mb-4 text-sm text-success flex items-start gap-2 border-l-2 border-success bg-success/5">
+            <Icon name="Unlock" size={15} className="mt-0.5 shrink-0" />
+            <span>
+              <span className="font-semibold">Battlegroup is off — Release claim is available.</span>{' '}
+              Deleting a claim now will persist. (While the battlegroup is running the map server
+              restores deleted claims from its memory cache, so releases don't stick.)
+            </span>
+          </div>
+        ) : (
+          <div className="card p-3 mb-4 text-sm text-warning flex items-start gap-2 border-l-2 border-warning bg-warning/5">
+            <Icon name="Lock" size={15} className="mt-0.5 shrink-0" />
+            <span>
+              <span className="font-semibold">Release claim requires the battlegroup to be off.</span>{' '}
+              The battlegroup is currently <span className="font-mono">{bgState ?? 'unknown'}</span> — the running
+              map server would restore the claim on its next save. Stop the battlegroup (Server Health), then
+              release claims here.
+            </span>
+          </div>
+        )
+      )}
       {flash && <div className="card p-3 mb-4 text-sm text-success break-words flex items-center gap-2"><Icon name="CheckCircle2" size={15} /> {flash}</div>}
       {error && <div className="card p-3 mb-4 text-sm text-danger break-words">{error}</div>}
 
@@ -140,10 +170,14 @@ export function BasesTab() {
                     onClick={() => { void handleExport(b) }} title="Download this base as a portable blueprint JSON file">
                     {busyId === b.id ? <Icon name="Loader2" size={13} className="animate-spin" /> : <Icon name="Download" size={13} />} Export
                   </button>
-                  <button className="btn-secondary py-1 px-2 text-xs text-danger ml-2" disabled={!b.totemId || source === 'demo'}
+                  <button className="btn-secondary py-1 px-2 text-xs text-danger ml-2" disabled={!b.totemId || source === 'demo' || !bgOff}
                     onClick={() => { setConfirmBase(b); setAckBackup(false) }}
-                    title={b.totemId ? "Release this base's land claim (removes ownership)" : 'No land claim on this base'}>
-                    <Icon name="Trash2" size={13} /> Release claim
+                    title={
+                      !b.totemId ? 'No land claim on this base'
+                      : !bgOff ? `Release claim requires the battlegroup to be off (currently ${bgState ?? 'unknown'}) — the running map server would restore the claim.`
+                      : "Release this base's land claim (removes ownership)"
+                    }>
+                    <Icon name={bgOff || !b.totemId ? 'Trash2' : 'Lock'} size={13} /> Release claim
                   </button>
                 </td>
               </tr>
@@ -165,8 +199,9 @@ export function BasesTab() {
               This deletes the land claim (totem <span className="font-mono text-text">#{confirmBase.totemId}</span>) for{' '}
               <span className="text-text font-medium">{confirmBase.name || 'this unnamed base'}</span>
               {confirmBase.owner && <> owned by <span className="text-text font-medium">{confirmBase.owner}</span></>}.
-              {' '}Ownership and all permission grants are removed. Building pieces stay in the world as unclaimed
-              structures and take effect after the next <span className="text-warning">battlegroup restart</span>.
+              {' '}Ownership and all permission grants are removed; building pieces stay in the world as unclaimed
+              structures. Because the <span className="text-success">battlegroup is off</span>, this deletion will
+              persist — a running battlegroup would restore the claim from its memory cache.
             </p>
 
             <div className="card p-3 mb-3 border-l-2 border-danger bg-danger/5 text-xs text-text-muted flex items-start gap-2">
