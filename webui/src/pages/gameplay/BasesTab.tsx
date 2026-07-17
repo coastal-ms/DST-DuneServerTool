@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react'
 import { Icon } from '../../components/Icon'
 import { getBases, exportBase, destroyClaim, downloadBlueprintFile, type BaseRow, type DataSource } from '../../api/gameplay'
 import { fmtNum, SourceBadge, StatCard, DemoNotice } from './shared'
+import { useStatus } from '../../hooks/useStatus'
 
 type SortKey = 'id' | 'name' | 'owner' | 'pieces' | 'placeables'
 
@@ -19,6 +20,10 @@ export function BasesTab() {
   const [confirmBase, setConfirmBase] = useState<BaseRow | null>(null)
   const [ackBackup, setAckBackup] = useState(false)
   const [destroying, setDestroying] = useState(false)
+
+  const { status } = useStatus()
+  const bgState = status?.bg?.state ?? 'unknown'
+  const bgOff = bgState === 'stopped'
 
   const load = useCallback(async () => {
     setLoading(true); setError(null)
@@ -104,6 +109,16 @@ export function BasesTab() {
       {source === 'demo' && <DemoNotice liveError={liveError} what="base data" />}
       {flash && <div className="card p-3 mb-4 text-sm text-success break-words flex items-center gap-2"><Icon name="CheckCircle2" size={15} /> {flash}</div>}
       {error && <div className="card p-3 mb-4 text-sm text-danger break-words">{error}</div>}
+      {source !== 'demo' && !bgOff && (
+        <div className="card p-3 mb-4 text-sm text-warning break-words flex items-start gap-2">
+          <Icon name="AlertTriangle" size={15} className="mt-0.5 shrink-0" />
+          <span>
+            <span className="font-semibold">Release claim is available only while the battlegroup is off.</span>{' '}
+            The running map server keeps land claims in memory and restores any claim released while it is up, so Release claim
+            stays disabled until you stop the battlegroup{bgState !== 'unknown' ? <> (currently <span className="font-mono">{bgState}</span>)</> : null}.
+          </span>
+        </div>
+      )}
 
       <div className="card overflow-hidden">
         <table className="w-full text-sm">
@@ -140,9 +155,11 @@ export function BasesTab() {
                     onClick={() => { void handleExport(b) }} title="Download this base as a portable blueprint JSON file">
                     {busyId === b.id ? <Icon name="Loader2" size={13} className="animate-spin" /> : <Icon name="Download" size={13} />} Export
                   </button>
-                  <button className="btn-secondary py-1 px-2 text-xs text-danger ml-2" disabled={!b.totemId || source === 'demo'}
+                  <button className="btn-secondary py-1 px-2 text-xs text-danger ml-2" disabled={!b.totemId || source === 'demo' || !bgOff}
                     onClick={() => { setConfirmBase(b); setAckBackup(false) }}
-                    title={b.totemId ? "Release this base's land claim (removes ownership)" : 'No land claim on this base'}>
+                    title={!b.totemId ? 'No land claim on this base'
+                      : !bgOff ? 'Release claim requires the battlegroup to be OFF — stop the battlegroup first, or a running map server will restore the claim'
+                      : "Release this base's land claim (removes ownership)"}>
                     <Icon name="Trash2" size={13} /> Release claim
                   </button>
                 </td>
@@ -166,7 +183,8 @@ export function BasesTab() {
               <span className="text-text font-medium">{confirmBase.name || 'this unnamed base'}</span>
               {confirmBase.owner && <> owned by <span className="text-text font-medium">{confirmBase.owner}</span></>}.
               {' '}Ownership and all permission grants are removed. Building pieces stay in the world as unclaimed
-              structures and take effect after the next <span className="text-warning">battlegroup restart</span>.
+              structures. Because the battlegroup is off, the release will persist and takes effect the next time you
+              <span className="text-warning"> start the battlegroup</span>.
             </p>
 
             <div className="card p-3 mb-3 border-l-2 border-danger bg-danger/5 text-xs text-text-muted flex items-start gap-2">

@@ -13,6 +13,12 @@ here cover everything those tags shipped.
 
 ## [Unreleased]
 
+## [12.19.2] - 2026-07-17
+
+### Changed
+
+- **Bases: Release claim now requires the battlegroup to be off, and is enabled whenever it is.** Releasing a claim deletes the base's totem actor, but a *running* map server keeps that claim in memory and rewrites it back to the database on its next flush — so a release done while the battlegroup is up silently gets restored (rebooting afterward does not help). The **Release claim** action is now gated on battlegroup state: it is **enabled whenever the battlegroup is stopped** and disabled while it is running/starting/stopping, with a clear indicator explaining that the battlegroup must be off for the release to persist. Once the battlegroup is off, release the claim and start it back up — the claim stays gone. No change to the underlying delete.
+
 ## [12.19.1] - 2026-07-13
 
 ### Added
