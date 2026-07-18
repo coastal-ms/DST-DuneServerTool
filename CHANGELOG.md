@@ -13,6 +13,15 @@ here cover everything those tags shipped.
 
 ## [Unreleased]
 
+### Changed
+- **Scheduled backups now use Funcom's native filename convention.** DST's
+  automatic backups are now named `sh-<hostid>-<suffix>-<timestamp>.backup`
+  (self-labeled by battlegroup, matching manual/Funcom backups) instead of the
+  old `dst-scheduled-<timestamp>` name that stripped the battlegroup identity.
+  This makes backups distinguishable when a host runs multiple VMs/battlegroups
+  and keeps a flattened local mirror unambiguous. Existing `dst-scheduled-*`
+  files remain fully listed, prunable, downloadable, and deletable.
+
 ## [12.19.4] - 2026-07-17
 
 ### Changed
