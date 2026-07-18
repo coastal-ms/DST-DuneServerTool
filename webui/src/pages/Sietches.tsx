@@ -90,7 +90,7 @@ export function Sietches() {
     }
   }, [])
 
-  useEffect(() => { if (unlocked) void refresh() }, [unlocked, refresh])
+  useEffect(() => { void refresh() }, [refresh])
 
   // Keep the names array length synced to the requested sietch count.
   useEffect(() => {
@@ -133,10 +133,25 @@ export function Sietches() {
     }
   }, [data, count, rename, names, exceedsHost, estTotalGB, refresh])
 
-  if (!unlocked) {
+  // Already running >1 sietch? Skip the experimental gate — the user has clearly
+  // been here before, and re-typing "I UNDERSTAND" every visit is just noise.
+  const multiSietch = Boolean(data && data.sietchCount > 1)
+  const gated = !unlocked && !multiSietch
+
+  if (gated) {
+    // Don't flash the gate while the first load is still resolving whether this
+    // server is already multi-sietch.
+    if (loading && data === null && error === null) {
+      return (
+        <>
+          <PageHeader title="Sietches" icon="Network" description="Run multiple Hagga Basin (Survival_1) shards (experimental)." />
+          <div className="card p-6"><p className="text-sm text-text-dim italic">Checking sietch state…</p></div>
+        </>
+      )
+    }
     return (
       <>
-        <PageHeader title="Sietches" icon="Network" description="Manage additional Survival_1 shards (experimental)." />
+        <PageHeader title="Sietches" icon="Network" description="Run multiple Hagga Basin (Survival_1) shards (experimental)." />
         <Gate onUnlock={unlock} />
       </>
     )
@@ -207,15 +222,15 @@ export function Sietches() {
 
             <label className="block text-xs uppercase tracking-wider text-text-dim mb-1">Number of Hagga sietches (1–6)</label>
             <input
-              type="number" min={1} max={6} value={count}
+              type="number" min={1} max={6} value={count} disabled={applying || loading}
               onChange={e => setCount(Math.max(1, Math.min(6, Math.floor(Number(e.target.value) || 1))))}
-              className="w-28 px-3 py-2 rounded-lg bg-surface-2 border border-border text-text font-mono focus:outline-none focus:ring-2 focus:ring-ibad focus:border-ibad/50 mb-1"
+              className="w-28 px-3 py-2 rounded-lg bg-surface-2 border border-border text-text font-mono focus:outline-none focus:ring-2 focus:ring-ibad focus:border-ibad/50 mb-1 disabled:opacity-50"
             />
             <p className="text-xs text-text-dim mb-4">Sets both the active and max Hagga servers. Each shard is a separate Hagga Basin world (~{data.ramPerSietchGB} GB RAM).</p>
 
             {count >= 2 && (
               <label className="flex items-start gap-2 text-sm text-text mb-3 cursor-pointer select-none">
-                <input type="checkbox" checked={rename} onChange={e => setRename(e.target.checked)} className="accent-accent mt-0.5" />
+                <input type="checkbox" checked={rename} disabled={applying || loading} onChange={e => setRename(e.target.checked)} className="accent-accent mt-0.5 disabled:opacity-50" />
                 <span>
                   Give each sietch its own name.
                   <span className="block text-xs text-text-dim mt-0.5">
@@ -231,10 +246,10 @@ export function Sietches() {
                   <div key={i} className="flex items-center gap-2">
                     <span className="text-xs text-text-dim w-20 shrink-0">{i === 0 ? 'Main' : `Sietch ${i + 1}`}</span>
                     <input
-                      type="text" value={names[i] ?? ''} maxLength={40}
+                      type="text" value={names[i] ?? ''} maxLength={40} disabled={applying || loading}
                       onChange={e => setName(i, e.target.value)}
                       placeholder={i === 0 ? 'e.g. Hagga Basin' : `e.g. Sietch ${i + 1}`}
-                      className="flex-1 px-3 py-2 rounded-lg bg-surface-2 border border-border text-text focus:outline-none focus:ring-2 focus:ring-ibad focus:border-ibad/50"
+                      className="flex-1 px-3 py-2 rounded-lg bg-surface-2 border border-border text-text focus:outline-none focus:ring-2 focus:ring-ibad focus:border-ibad/50 disabled:opacity-50"
                     />
                   </div>
                 ))}
