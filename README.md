@@ -9,8 +9,8 @@
 
 **🌐 Website & feature tour: [coastal-ms.github.io/DST-DuneServerTool](https://coastal-ms.github.io/DST-DuneServerTool/)** — screenshots, install guide, and the full changelog.
 
-The current release is **v12.19.1**. The in-app version label and the
-website show plain semver tags (e.g. `v12.19.1`) — the previous
+The current release is **v12.19.4**. The in-app version label and the
+website show plain semver tags (e.g. `v12.19.4`) — the previous
 Roman-numeral stylization has been removed.
 
 > ## ✅ Confirmed compatible with Dune: Awakening **1.4.10.3**
@@ -31,6 +31,15 @@ browser and keeps the server running in the background.
 
 ### New in v12.19
 
+- **Multi-Hagga sietches** (v12.19.4, Sietches). Configure how many Hagga Basin
+  shards to run (up to 6), optionally name each one, and hit **Apply** — DST
+  reconciles the battlegroup and restarts cleanly. **Server Health** labels each
+  Game Servers row with its sietch name whenever you run more than one.
+- **Release claim now reliable when the battlegroup is off** (v12.19.2, Gameplay
+  Admin → Bases). Releasing a claim only persists while the battlegroup is
+  stopped — a running map server re-hydrates the deleted totem from memory — so
+  the **Release claim** action is gated on the battlegroup being off, and stays
+  clickable for every base while it is.
 - **Landsraad contributions now grant guild Voting Power** (v12.19.1, Players →
   Landsraad). Setting a player's House contribution now drives the game's own
   contribution pipeline instead of writing the totals directly, so the points
