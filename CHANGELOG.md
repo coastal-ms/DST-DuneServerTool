@@ -13,11 +13,16 @@ here cover everything those tags shipped.
 
 ## [Unreleased]
 
-## [12.19.3] - 2026-07-17
+## [12.19.4] - 2026-07-17
+
+### Changed
+
+- **Sietches page rebuilt as a "configure N Hagga shards + name them" flow.** Behind the existing "I UNDERSTAND" gate, you now type how many Hagga (Survival_1) sietches you want (1–6) and DST sets both the active and max servers to that number in one clean battlegroup restart. This replaces the old one-at-a-time Add/Remove buttons.
+- **Per-sietch names.** When running 2+ sietches you can tick a box to give each shard its own name (the main one included). DST writes each name into the battlegroup as a per-partition `Bgd.ServerDisplayName` launch arg and **comments out the global `Bgd.ServerDisplayName` line in `UserEngine.ini`** so the per-shard names take effect (otherwise the game shows every shard with the same name). Unticking the box, or dropping back to a single sietch, **removes the per-shard names and re-enables the global line** (Funcom's default single-name cascade).
 
 ### Fixed
 
-- **Sietches: Add sietch no longer silently fails on current Funcom builds.** Funcom tightened the battlegroup schema so a server set's `map` must be unique across sets — which rejects the old "add a second Survival_1 set" method the Add Sietch button used. Worse, the tool reported success anyway (it never checked the `kubectl patch` result), so the Sietches count stayed the same with no error. Add/Remove sietch now (a) add or remove the shard as an extra **partition on the existing Survival_1 set** (bumping replicas to match) — the method the current schema accepts — and (b) surface the real error if the battlegroup rejects the change instead of falsely reporting success. As before, the change takes effect after a battlegroup restart, and the new shard's pod is covered by DST's existing partition self-heal.
+- **Multi-sietch shards now actually start.** Each additional Hagga world partition is created with a **unique `dimension`** — the earlier approach reused dimension `0`, which left the second shard stuck in "Startup" and never joinable. DST now assigns dimensions `0, 1, 2 …` the way Funcom's own battlegroup editor does, and the Sietches count reflects the number of shards (not server sets).
 
 ## [12.19.2] - 2026-07-17
 

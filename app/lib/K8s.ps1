@@ -246,6 +246,150 @@ function Remove-V6Sietch {
     }
 }
 
+# Sanitize a per-sietch display name for the -execcmds arg. The name is wrapped
+# in single quotes inside "-execcmds=\"Bgd.ServerDisplayName '<name>'\"", and
+# Funcom disallows ' and | in the value; strip control chars too. Empty -> $null.
+function Format-V6SietchName {
+    param([string]$Name)
+    $n = (([string]$Name) -replace "[\x00-\x1F\x7F'|]", '').Trim()
+    if ($n.Length -gt 40) { $n = $n.Substring(0, 40) }
+    if ([string]::IsNullOrWhiteSpace($n)) { return $null }
+    return $n
+}
+
+# Read the current per-partition display names from the Survival_1 set's podSpecs.
+# Returns @{ <partitionId:int> = <name:string> }.
+function Get-V6SietchNames {
+    [CmdletBinding()]
+    param([Parameter(Mandatory)][string]$Ip)
+    $info = Get-V6Battlegroup -Ip $Ip
+    $names = @{}
+    foreach ($s in $info.Bg.spec.serverGroup.template.spec.sets) {
+        $isDedicated = $false
+        if ($s.PSObject.Properties['dedicatedScaling']) { $isDedicated = [bool]$s.dedicatedScaling }
+        if ($s.map -eq 'Survival_1' -and -not $isDedicated -and $s.PSObject.Properties['podSpecs'] -and $s.podSpecs) {
+            foreach ($ps in @($s.podSpecs)) {
+                if (-not $ps.PSObject.Properties['arguments']) { continue }
+                foreach ($a in @($ps.arguments)) {
+                    if ("$a" -match "Bgd\.ServerDisplayName\s+'(.*)'") { $names[[int]$ps.index] = $Matches[1]; break }
+                }
+            }
+        }
+    }
+    return $names
+}
+
+# Reconfigure the Survival_1 map to run exactly $Count sietches (Hagga shards),
+# optionally naming each. Single source of truth for the multi-sietch feature -
+# it replicates Funcom's own bg-util editor:
+#   * worldPartitions[Survival_1].partitions = N entries, each a UNIQUE dimension
+#     (0..N-1) with a globally-unique id. The UNIQUE DIMENSION IS REQUIRED - two
+#     partitions sharing dimension 0 leaves the 2nd Hagga pod stuck in Startup
+#     (proven live 2026-07-17; this is what an earlier naive add-partition patch
+#     got wrong).
+#   * the Survival_1 set's `partitions` = those ids, `replicas` = N.
+#   * per-partition display name -> set.podSpecs[] = { index:<id>,
+#     arguments:["-execcmds=\"Bgd.ServerDisplayName '<name>'\""] }. $Names = $null
+#     removes podSpecs entirely (revert to the Funcom global-name cascade), so no
+#     stale per-partition name lingers on the primary shard.
+# Idempotent: computes the full desired arrays and REPLACES them in one patch.
+function Set-V6SietchConfig {
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory)][string]$Ip,
+        [Parameter(Mandatory)][int]$Count,
+        [string[]]$Names   # $null = clear names; else one per sietch (index 0 = primary)
+    )
+    if ($Count -lt 1) { throw "Sietch count must be at least 1." }
+    if ($Count -gt 6) { throw "Sietch count must be 6 or fewer." }
+
+    $info = Get-V6Battlegroup -Ip $Ip
+    $bg   = $info.Bg
+    $sets = $bg.spec.serverGroup.template.spec.sets
+    $worldPartitions = $bg.spec.database.template.spec.deployment.spec.worldPartitions
+
+    $setIdx = -1; $set = $null; $i = 0
+    foreach ($s in $sets) {
+        $isDedicated = $false
+        if ($s.PSObject.Properties['dedicatedScaling']) { $isDedicated = [bool]$s.dedicatedScaling }
+        if ($s.map -eq 'Survival_1' -and -not $isDedicated) { $setIdx = $i; $set = $s; break }
+        $i++
+    }
+    if ($setIdx -lt 0) { throw "No Survival_1 set found." }
+    $wpIdx = -1; $j = 0
+    foreach ($wp in $worldPartitions) {
+        if ($wp.map -eq 'Survival_1') { $wpIdx = $j; break }
+        $j++
+    }
+    if ($wpIdx -lt 0) { throw "No Survival_1 worldPartitions entry found." }
+
+    # Primary id = the current Survival_1 partition with dimension 0 (keep it
+    # stable so the main world never moves). Fall back to the set's first id, or 1.
+    $primaryId = 0
+    foreach ($p in @($worldPartitions[$wpIdx].partitions)) {
+        if ([int]$p.dimension -eq 0) { $primaryId = [int]$p.id; break }
+    }
+    if ($primaryId -le 0) {
+        $curParts = @($set.partitions)
+        $primaryId = if ($curParts.Count -gt 0) { [int]$curParts[0] } else { 1 }
+    }
+
+    # Existing additional Survival_1 ids (preserved in order so a shrink+grow reuses them).
+    $existingAdditional = @()
+    foreach ($p in @($worldPartitions[$wpIdx].partitions)) {
+        if ([int]$p.id -ne $primaryId) { $existingAdditional += [int]$p.id }
+    }
+    # Max id across ALL maps (new ids allocate above this to stay globally unique).
+    $maxGlobalId = 0
+    foreach ($wp in $worldPartitions) {
+        foreach ($p in $wp.partitions) { if ([int]$p.id -gt $maxGlobalId) { $maxGlobalId = [int]$p.id } }
+    }
+
+    $ids = @($primaryId); $k = 0
+    while ($ids.Count -lt $Count -and $k -lt $existingAdditional.Count) { $ids += $existingAdditional[$k]; $k++ }
+    while ($ids.Count -lt $Count) { $maxGlobalId++; $ids += $maxGlobalId }
+    $ids = @($ids | Select-Object -First $Count)
+
+    $wpParts = @()
+    for ($d = 0; $d -lt $Count; $d++) {
+        $wpParts += @{ dimension = $d; disable = $false; id = $ids[$d]; maxX = 1; maxY = 1; minX = 0; minY = 0 }
+    }
+
+    $podSpecs = $null
+    if ($null -ne $Names) {
+        $podSpecs = @()
+        for ($d = 0; $d -lt $Count; $d++) {
+            $raw = if ($d -lt $Names.Count) { $Names[$d] } else { '' }
+            $nm  = Format-V6SietchName $raw
+            if ($nm) { $podSpecs += @{ index = $ids[$d]; arguments = @("-execcmds=`"Bgd.ServerDisplayName '$nm'`"") } }
+        }
+        if ($podSpecs.Count -eq 0) { $podSpecs = $null }
+    }
+
+    $setPath = "/spec/serverGroup/template/spec/sets/$setIdx"
+    $wpPath  = "/spec/database/template/spec/deployment/spec/worldPartitions/$wpIdx"
+    $patches = @()
+    $patches += @{ op=(if ($set.PSObject.Properties['partitions']) {'replace'} else {'add'}); path="$setPath/partitions"; value = $ids }
+    $patches += @{ op=(if ($set.PSObject.Properties['replicas'])   {'replace'} else {'add'}); path="$setPath/replicas";   value = $Count }
+    $hasPodSpecs = ($set.PSObject.Properties['podSpecs'] -and $null -ne $set.podSpecs)
+    if ($null -ne $podSpecs) {
+        $patches += @{ op=(if ($hasPodSpecs) {'replace'} else {'add'}); path="$setPath/podSpecs"; value = $podSpecs }
+    } elseif ($hasPodSpecs) {
+        $patches += @{ op='remove'; path="$setPath/podSpecs" }
+    }
+    $patches += @{ op=(if ($worldPartitions[$wpIdx].PSObject.Properties['partitions']) {'replace'} else {'add'}); path="$wpPath/partitions"; value = $wpParts }
+
+    $res = _Invoke-V6BgJsonPatch -Ip $Ip -Info $info -Patches $patches
+    if (-not $res.Success) { return @{ Success = $false; Error = $res.Error; Raw = $res.Raw } }
+
+    $applied = @()
+    for ($d = 0; $d -lt $Count; $d++) {
+        $nm = if ($null -ne $Names -and $d -lt $Names.Count) { Format-V6SietchName $Names[$d] } else { $null }
+        $applied += @{ dimension = $d; partitionId = $ids[$d]; name = $nm }
+    }
+    return @{ Success = $true; Count = $Count; Sietches = $applied; Raw = $res.Raw }
+}
+
 function Set-V6BattlegroupTitle {
     [CmdletBinding()]
     param(
