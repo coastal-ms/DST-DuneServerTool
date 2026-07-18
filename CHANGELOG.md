@@ -13,6 +13,12 @@ here cover everything those tags shipped.
 
 ## [Unreleased]
 
+## [12.19.3] - 2026-07-17
+
+### Fixed
+
+- **Sietches: Add sietch no longer silently fails on current Funcom builds.** Funcom tightened the battlegroup schema so a server set's `map` must be unique across sets — which rejects the old "add a second Survival_1 set" method the Add Sietch button used. Worse, the tool reported success anyway (it never checked the `kubectl patch` result), so the Sietches count stayed the same with no error. Add/Remove sietch now (a) add or remove the shard as an extra **partition on the existing Survival_1 set** (bumping replicas to match) — the method the current schema accepts — and (b) surface the real error if the battlegroup rejects the change instead of falsely reporting success. As before, the change takes effect after a battlegroup restart, and the new shard's pod is covered by DST's existing partition self-heal.
+
 ## [12.19.2] - 2026-07-17
 
 ### Changed

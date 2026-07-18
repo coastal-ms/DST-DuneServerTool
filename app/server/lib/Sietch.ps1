@@ -99,8 +99,12 @@ function Add-DuneSietch {
 
     try {
         $res = Add-V6Sietch -Ip $ctx.vm.ip
+        if (-not $res.Success) {
+            $why = if ($res.Error) { $res.Error } else { 'the battlegroup rejected the change.' }
+            return @{ ok=$false; status=502; message="Add sietch failed: $why"; raw=$res.Raw }
+        }
         return @{
-            ok           = [bool]$res.Success
+            ok           = $true
             partitionId  = $res.PartitionId
             sietchNumber = $res.SietchNumber
             raw          = $res.Raw
@@ -117,8 +121,12 @@ function Remove-DuneLastSietch {
 
     try {
         $res = Remove-V6Sietch -Ip $ctx.vm.ip
+        if (-not $res.Success) {
+            $why = if ($res.Error) { $res.Error } else { 'the battlegroup rejected the change.' }
+            return @{ ok=$false; status=502; message="Remove sietch failed: $why"; raw=$res.Raw }
+        }
         return @{
-            ok               = [bool]$res.Success
+            ok               = $true
             removedPartition = $res.RemovedPartition
             raw              = $res.Raw
             message          = "Removed sietch (partition $($res.RemovedPartition)). Restart the battlegroup to apply."
