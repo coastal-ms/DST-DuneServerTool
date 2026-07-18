@@ -8,7 +8,7 @@
 #   spec.database.template.spec.deployment.spec.worldPartitions[*]
 #     .partitions[*].disable = false
 #
-# Pattern cribbed from app/lib/K8s.ps1 (Add-V6Sietch).
+# Pattern cribbed from app/lib/K8s.ps1 (Set-V6SietchConfig).
 #
 # K8s.ps1 is dot-sourced via Bootstrap.ps1 (which loads Db-Postgres.ps1, which
 # Db-Postgres.ps1 (Invoke-V6Ssh, Get-V6Battlegroup). If those haven't loaded
