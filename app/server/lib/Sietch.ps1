@@ -149,14 +149,21 @@ function Remove-DuneLastSietch {
 # name so per-sietch names win; $false re-enables it (Funcom global-name cascade).
 function Set-DuneSietchGlobalNameOverride {
     param([Parameter(Mandatory)][string]$Ip, [Parameter(Mandatory)][bool]$CommentOut)
-    $glob = '/var/lib/rancher/k3s/storage/*/Saved/UserSettings'
     if ($CommentOut) {
         $sed = 's/^\([[:space:]]*\)\(Bgd\.ServerDisplayName[[:space:]]*=\)/\1;\2/'
     } else {
         $sed = 's/^\([[:space:]]*\);\+[[:space:]]*\(Bgd\.ServerDisplayName[[:space:]]*=\)/\1\2/'
     }
-    $sh = "dir=`$(ls -t $glob/UserGame.ini 2>/dev/null | head -1 | xargs -r dirname); f=`"`$dir/UserEngine.ini`"; if [ -f `"`$f`" ]; then sudo sed -i '$sed' `"`$f`" && echo ok || echo sed_failed; else echo no_ini; fi"
-    return ((Invoke-V6Ssh -Ip $Ip -Cmd $sh -TimeoutSec 30) -join ' ').Trim()
+    # The PVC path is root-only, so resolve the dir AND run sed as root (the whole
+    # script under `sudo bash`) - an unsudo'd `ls` returns nothing and the edit
+    # silently no-ops.
+    $remote = @"
+dir=`$(ls -t /var/lib/rancher/k3s/storage/*/Saved/UserSettings/UserGame.ini 2>/dev/null | head -1 | xargs -r dirname)
+f="`$dir/UserEngine.ini"
+if [ -f "`$f" ]; then sed -i '$sed' "`$f" && echo ok || echo sed_failed; else echo no_ini; fi
+"@
+    $b64 = [Convert]::ToBase64String([Text.Encoding]::UTF8.GetBytes($remote))
+    return ((Invoke-V6Ssh -Ip $Ip -Cmd "echo $b64 | base64 -d | sudo bash" -TimeoutSec 30) -join ' ').Trim()
 }
 
 # Kick off a clean battlegroup restart detached so the HTTP request returns
