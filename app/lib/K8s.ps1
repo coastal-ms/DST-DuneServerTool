@@ -58,14 +58,14 @@ function Get-V6SietchList {
             if ($s.PSObject.Properties['resources'] -and $s.resources.PSObject.Properties['limits']) {
                 $mem = $s.resources.limits.memory
             }
-            foreach ($pid in @($s.partitions)) {
+            foreach ($partId in @($s.partitions)) {
                 $sietchNum++
                 $list += @{
                     SetIndex     = $idx
                     SietchNumber = $sietchNum
                     Map          = $s.map
-                    PartitionId  = [int]$pid
-                    Partitions   = @([int]$pid)
+                    PartitionId  = [int]$partId
+                    Partitions   = @([int]$partId)
                     Replicas     = $s.replicas
                     Memory       = $mem
                 }

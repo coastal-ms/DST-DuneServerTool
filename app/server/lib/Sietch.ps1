@@ -78,16 +78,16 @@ function Get-DuneSietchOverview {
         sietchCount      = $count
         named            = [bool]($names.Keys.Count -gt 0)
         sietches         = @($info.Sietches | ForEach-Object {
-            $pid = [int]$_.PartitionId
+            $partId = [int]$_.PartitionId
             @{
                 setIndex     = $_.SetIndex
                 sietchNumber = $_.SietchNumber
                 map          = $_.Map
-                partitionId  = $pid
+                partitionId  = $partId
                 partitions   = @($_.Partitions)
                 replicas     = $_.Replicas
                 memoryLimit  = $_.Memory
-                name         = if ($names.ContainsKey($pid)) { [string]$names[$pid] } else { $null }
+                name         = if ($names.ContainsKey($partId)) { [string]$names[$partId] } else { $null }
             }
         })
         vmRamGB              = $vmRam
@@ -155,8 +155,8 @@ function Set-DuneSietchGlobalNameOverride {
     } else {
         $sed = 's/^\([[:space:]]*\);\+[[:space:]]*\(Bgd\.ServerDisplayName[[:space:]]*=\)/\1\2/'
     }
-    $script = "dir=`$(ls -t $glob/UserGame.ini 2>/dev/null | head -1 | xargs -r dirname); f=`"`$dir/UserEngine.ini`"; if [ -f `"`$f`" ]; then sudo sed -i '$sed' `"`$f`" && echo ok || echo sed_failed; else echo no_ini; fi"
-    return ((Invoke-V6Ssh -Ip $Ip -Cmd $script -TimeoutSec 30) -join ' ').Trim()
+    $sh = "dir=`$(ls -t $glob/UserGame.ini 2>/dev/null | head -1 | xargs -r dirname); f=`"`$dir/UserEngine.ini`"; if [ -f `"`$f`" ]; then sudo sed -i '$sed' `"`$f`" && echo ok || echo sed_failed; else echo no_ini; fi"
+    return ((Invoke-V6Ssh -Ip $Ip -Cmd $sh -TimeoutSec 30) -join ' ').Trim()
 }
 
 # Kick off a clean battlegroup restart detached so the HTTP request returns
