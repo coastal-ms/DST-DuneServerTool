@@ -2,7 +2,7 @@ import { useCallback, useEffect, useState } from 'react'
 import { PageHeader } from '../components/PageHeader'
 import { Icon } from '../components/Icon'
 import { ApiError } from '../api/client'
-import { addSietch, getSietches, removeLastSietch, type SietchOverview } from '../api/sietches'
+import { getSietches, setSietchConfig, type SietchOverview } from '../api/sietches'
 
 const GATE_PHRASE = 'I UNDERSTAND'
 const SESSION_KEY = 'dune.sietches.unlocked'
@@ -66,14 +66,22 @@ export function Sietches() {
   const [data, setData] = useState<SietchOverview | null>(null)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
-  const [busy, setBusy] = useState<'add' | 'remove' | null>(null)
+  const [applying, setApplying] = useState(false)
   const [message, setMessage] = useState<string | null>(null)
+
+  const [count, setCount] = useState(1)
+  const [rename, setRename] = useState(false)
+  const [names, setNames] = useState<string[]>([])
 
   const refresh = useCallback(async () => {
     setLoading(true); setError(null)
     try {
       const r = await getSietches()
       setData(r)
+      const c = Math.max(1, Math.min(6, r.sietchCount || 1))
+      setCount(c)
+      setNames(r.sietches.map(s => s.name ?? ''))
+      setRename(Boolean(r.named))
     } catch (e) {
       setData(null)
       setError(e instanceof ApiError ? e.message : String(e))
@@ -82,48 +90,68 @@ export function Sietches() {
     }
   }, [])
 
-  useEffect(() => { if (unlocked) void refresh() }, [unlocked, refresh])
+  useEffect(() => { void refresh() }, [refresh])
 
-  const onAdd = useCallback(async () => {
+  // Keep the names array length synced to the requested sietch count.
+  useEffect(() => {
+    setNames(prev => {
+      const next = prev.slice(0, count)
+      while (next.length < count) next.push('')
+      return next
+    })
+  }, [count])
+
+  const estTotalGB = data ? data.baseInfraGB + data.ramPerSietchGB * count : 0
+  const exceedsHost = Boolean(data && data.hostRamGB > 0 && estTotalGB > data.hostRamGB)
+  const showNames = count >= 2 && rename
+
+  const setName = (i: number, v: string) => setNames(prev => prev.map((n, idx) => (idx === i ? v : n)))
+
+  const onApply = useCallback(async () => {
     if (!data) return
-    const next = data.sietchCount + 1
-    const ram = data.estimatedAfterAddGB
-    const host = data.hostRamGB
-    const warn = data.willExceedHostRam
-      ? `\n\nWARNING: ${ram} GB estimated > ${host} GB host RAM. The VM may swap or fail to start the new shard.`
+    const applyNames = count >= 2 && rename
+    if (applyNames && names.slice(0, count).some(n => !n.trim())) {
+      setError('Give every sietch a name, or uncheck renaming to use the default Funcom name.')
+      return
+    }
+    const warn = exceedsHost
+      ? `\n\nWARNING: ~${estTotalGB} GB estimated exceeds ${data.hostRamGB} GB host RAM — the VM may swap or fail to start a shard.`
       : ''
-    if (!confirm(`Add sietch #${next}? Estimated total RAM after add: ${ram} GB.${warn}\n\nA battlegroup restart is required to apply.`)) return
-    setBusy('add'); setMessage(null); setError(null)
+    const nameNote = applyNames
+      ? '\n\nThe MAIN sietch will also be renamed, and DST will disable the global server-name line in UserEngine.ini.'
+      : (count >= 2 ? '\n\nAll shards will use the default Funcom name.' : '')
+    if (!confirm(`Configure ${count} Hagga sietch${count === 1 ? '' : 'es'} and clean-restart the battlegroup?${nameNote}${warn}`)) return
+    setApplying(true); setMessage(null); setError(null)
     try {
-      const r = await addSietch()
-      setMessage(r.message ?? 'Sietch added.')
-      await refresh()
+      const r = await setSietchConfig(count, applyNames ? names.slice(0, count) : [], applyNames)
+      setMessage(r.message ?? 'Applied. Battlegroup restarting — watch Server Health.')
+      setTimeout(() => { void refresh() }, 4000)
     } catch (e) {
       setError(e instanceof ApiError ? e.message : String(e))
     } finally {
-      setBusy(null)
+      setApplying(false)
     }
-  }, [data, refresh])
+  }, [data, count, rename, names, exceedsHost, estTotalGB, refresh])
 
-  const onRemove = useCallback(async () => {
-    if (!data || data.sietchCount <= 1) return
-    if (!confirm(`Remove sietch #${data.sietchCount}? Its world partition and any data inside it will be destroyed.\n\nA battlegroup restart is required to apply.`)) return
-    setBusy('remove'); setMessage(null); setError(null)
-    try {
-      const r = await removeLastSietch()
-      setMessage(r.message ?? 'Sietch removed.')
-      await refresh()
-    } catch (e) {
-      setError(e instanceof ApiError ? e.message : String(e))
-    } finally {
-      setBusy(null)
+  // Already running >1 sietch? Skip the experimental gate — the user has clearly
+  // been here before, and re-typing "I UNDERSTAND" every visit is just noise.
+  const multiSietch = Boolean(data && data.sietchCount > 1)
+  const gated = !unlocked && !multiSietch
+
+  if (gated) {
+    // Don't flash the gate while the first load is still resolving whether this
+    // server is already multi-sietch.
+    if (loading && data === null && error === null) {
+      return (
+        <>
+          <PageHeader title="Sietches" icon="Network" description="Run multiple Hagga Basin (Survival_1) shards (experimental)." />
+          <div className="card p-6"><p className="text-sm text-text-dim italic">Checking sietch state…</p></div>
+        </>
+      )
     }
-  }, [data, refresh])
-
-  if (!unlocked) {
     return (
       <>
-        <PageHeader title="Sietches" icon="Network" description="Manage additional Survival_1 shards (experimental)." />
+        <PageHeader title="Sietches" icon="Network" description="Run multiple Hagga Basin (Survival_1) shards (experimental)." />
         <Gate onUnlock={unlock} />
       </>
     )
@@ -134,47 +162,38 @@ export function Sietches() {
       <PageHeader
         title="Sietches"
         icon="Network"
-        description="Manage additional Survival_1 shards (experimental)."
+        description="Run multiple Hagga Basin (Survival_1) shards (experimental)."
         actions={
-          <button className="btn-secondary" onClick={() => { void refresh() }} disabled={loading || busy !== null}>
+          <button className="btn-secondary" onClick={() => { void refresh() }} disabled={loading || applying}>
             <Icon name="RefreshCw" size={15} className={loading ? 'animate-spin' : ''} /> Refresh
           </button>
         }
       />
 
-      {error && (
-        <div className="card p-4 mb-4 border-danger/40">
-          <p className="text-sm text-danger break-words">{error}</p>
-        </div>
-      )}
-      {message && (
-        <div className="card p-4 mb-4 border-accent/40">
-          <p className="text-sm text-text">{message}</p>
-        </div>
-      )}
+      {error && <div className="card p-4 mb-4 border-danger/40"><p className="text-sm text-danger break-words">{error}</p></div>}
+      {message && <div className="card p-4 mb-4 border-accent/40"><p className="text-sm text-text break-words">{message}</p></div>}
 
       {!data ? (
-        <div className="card p-6">
-          <p className="text-sm text-text-dim italic">{loading ? 'Loading…' : 'No data yet.'}</p>
-        </div>
+        <div className="card p-6"><p className="text-sm text-text-dim italic">{loading ? 'Loading…' : 'No data yet.'}</p></div>
       ) : (
         <>
           <section className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
-            <SummaryTile label="Sietches" value={String(data.sietchCount)} icon="Network" />
+            <SummaryTile label="Current sietches" value={String(data.sietchCount)} icon="Network" />
             <SummaryTile label="VM RAM" value={data.vmRamGB > 0 ? `${data.vmRamGB} GB` : '—'} icon="Cpu" />
             <SummaryTile label="Host RAM" value={data.hostRamGB > 0 ? `${data.hostRamGB} GB` : '—'} icon="Server" />
             <SummaryTile
-              label="After add"
-              value={`${data.estimatedAfterAddGB} GB`}
+              label={`RAM for ${count}`}
+              value={`~${estTotalGB} GB`}
               icon="TrendingUp"
-              tone={data.willExceedHostRam ? 'text-danger' : 'text-text'}
-              sub={data.willExceedHostRam ? `exceeds host (${data.hostRamGB} GB)` : `base ${data.baseInfraGB} + ${data.ramPerSietchGB} × (${data.sietchCount} + 1)`}
+              tone={exceedsHost ? 'text-danger' : 'text-text'}
+              sub={exceedsHost ? `exceeds host (${data.hostRamGB} GB)` : `base ${data.baseInfraGB} + ${data.ramPerSietchGB} × ${count}`}
             />
           </section>
 
-          <section className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
+          {/* Current shards */}
+          <section className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4 mb-6">
             {data.sietches.map((s, i) => (
-              <div key={s.setIndex} className="card p-5">
+              <div key={s.partitionId ?? s.setIndex} className="card p-5">
                 <div className="flex items-center justify-between mb-2">
                   <span className="text-xs uppercase tracking-wider text-text-dim">Sietch #{i + 1}</span>
                   <span className={s.replicas && s.replicas >= 1 ? 'pill-success' : 'pill-muted'}>
@@ -182,55 +201,75 @@ export function Sietches() {
                     {s.replicas ?? '?'} replica{s.replicas === 1 ? '' : 's'}
                   </span>
                 </div>
-                <div className="text-lg font-semibold mb-2">{s.map}</div>
+                <div className="text-lg font-semibold mb-2">{s.name || s.map}</div>
                 <dl className="grid grid-cols-[110px_1fr] gap-y-1 text-xs">
-                  <dt className="text-text-dim">Set index</dt>
-                  <dd className="font-mono">{s.setIndex}</dd>
-                  <dt className="text-text-dim">Partitions</dt>
-                  <dd className="font-mono">{s.partitions.join(', ') || '—'}</dd>
+                  <dt className="text-text-dim">Map</dt>
+                  <dd className="font-mono">{s.map}</dd>
+                  <dt className="text-text-dim">Partition</dt>
+                  <dd className="font-mono">{s.partitionId ?? (s.partitions.join(', ') || '—')}</dd>
                   <dt className="text-text-dim">Memory limit</dt>
                   <dd className="font-mono">{s.memoryLimit ?? '?'}</dd>
                 </dl>
               </div>
             ))}
-
-            <div className="card p-5 border-dashed border-2 border-border/60 flex flex-col items-center justify-center text-center min-h-[180px]">
-              <Icon name="Plus" size={28} className="text-accent mb-2" />
-              <p className="text-sm text-text-dim mb-3">
-                Adds a new Survival_1 set with partition #{data.maxPartitionId + 1}.
-              </p>
-              <button
-                className="btn-primary"
-                onClick={() => { void onAdd() }}
-                disabled={busy !== null || loading}
-              >
-                <Icon name={busy === 'add' ? 'Loader2' : 'Plus'} size={14} className={busy === 'add' ? 'animate-spin' : ''} />
-                {busy === 'add' ? 'Adding…' : 'Add sietch'}
-              </button>
-            </div>
           </section>
 
-          {data.sietchCount > 1 && (
-            <section className="mt-6">
-              <div className="card p-5">
-                <h2 className="text-sm font-semibold uppercase tracking-wider text-text-muted mb-3 flex items-center gap-2">
-                  <Icon name="Trash2" size={14} className="text-danger" /> Danger zone
-                </h2>
-                <p className="text-sm text-text-dim mb-3">
-                  Removes the last sietch (#{data.sietchCount}) and its world partition. Data in that
-                  partition is destroyed.
-                </p>
-                <button
-                  className="btn-danger"
-                  onClick={() => { void onRemove() }}
-                  disabled={busy !== null || loading}
-                >
-                  <Icon name={busy === 'remove' ? 'Loader2' : 'Trash2'} size={14} className={busy === 'remove' ? 'animate-spin' : ''} />
-                  {busy === 'remove' ? 'Removing…' : `Remove sietch #${data.sietchCount}`}
-                </button>
+          {/* Configure */}
+          <section className="card p-5 max-w-2xl">
+            <h2 className="text-sm font-semibold uppercase tracking-wider text-text-muted mb-4 flex items-center gap-2">
+              <Icon name="Settings2" size={14} className="text-accent" /> Configure Hagga sietches
+            </h2>
+
+            <label className="block text-xs uppercase tracking-wider text-text-dim mb-1">Number of Hagga sietches (1–6)</label>
+            <input
+              type="number" min={1} max={6} value={count} disabled={applying || loading}
+              onChange={e => setCount(Math.max(1, Math.min(6, Math.floor(Number(e.target.value) || 1))))}
+              className="w-28 px-3 py-2 rounded-lg bg-surface-2 border border-border text-text font-mono focus:outline-none focus:ring-2 focus:ring-ibad focus:border-ibad/50 mb-1 disabled:opacity-50"
+            />
+            <p className="text-xs text-text-dim mb-4">Sets both the active and max Hagga servers. Each shard is a separate Hagga Basin world (~{data.ramPerSietchGB} GB RAM).</p>
+
+            {count >= 2 && (
+              <label className="flex items-start gap-2 text-sm text-text mb-3 cursor-pointer select-none">
+                <input type="checkbox" checked={rename} disabled={applying || loading} onChange={e => setRename(e.target.checked)} className="accent-accent mt-0.5 disabled:opacity-50" />
+                <span>
+                  Give each sietch its own name.
+                  <span className="block text-xs text-text-dim mt-0.5">
+                    Renames the MAIN sietch too and disables the global server-name line in <span className="font-mono">UserEngine.ini</span>. Leave unchecked to use Funcom's single global name for all shards.
+                  </span>
+                </span>
+              </label>
+            )}
+
+            {showNames && (
+              <div className="space-y-2 mb-4">
+                {Array.from({ length: count }).map((_, i) => (
+                  <div key={i} className="flex items-center gap-2">
+                    <span className="text-xs text-text-dim w-20 shrink-0">{i === 0 ? 'Main' : `Sietch ${i + 1}`}</span>
+                    <input
+                      type="text" value={names[i] ?? ''} maxLength={40} disabled={applying || loading}
+                      onChange={e => setName(i, e.target.value)}
+                      placeholder={i === 0 ? 'e.g. Hagga Basin' : `e.g. Sietch ${i + 1}`}
+                      className="flex-1 px-3 py-2 rounded-lg bg-surface-2 border border-border text-text focus:outline-none focus:ring-2 focus:ring-ibad focus:border-ibad/50 disabled:opacity-50"
+                    />
+                  </div>
+                ))}
+                <p className="text-xs text-text-dim">Apostrophes ( ' ) and pipes ( | ) aren't allowed in names.</p>
               </div>
-            </section>
-          )}
+            )}
+
+            {exceedsHost && (
+              <div className="card p-3 mb-3 border-l-2 border-danger bg-danger/5 text-xs text-text-muted">
+                <Icon name="AlertTriangle" size={13} className="text-danger inline mr-1" />
+                ~{estTotalGB} GB estimated exceeds {data.hostRamGB} GB host RAM. The VM may swap or a shard may fail to start.
+              </div>
+            )}
+
+            <button className="btn-primary" onClick={() => { void onApply() }} disabled={applying || loading}>
+              <Icon name={applying ? 'Loader2' : 'Check'} size={14} className={applying ? 'animate-spin' : ''} />
+              {applying ? 'Applying…' : 'Apply & clean-restart'}
+            </button>
+            <p className="text-xs text-text-dim mt-2">DST applies the change and performs a clean battlegroup restart (~2–3 min). Watch Server Health for the shards to come back.</p>
+          </section>
         </>
       )}
     </>
