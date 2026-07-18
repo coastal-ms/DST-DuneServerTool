@@ -1,0 +1,72 @@
+version: 2
+
+# Dependency update automation. Weekly cadence to keep PR volume low; minor +
+# patch bumps are grouped into a single PR per ecosystem/directory so routine
+# updates don't fan out into dozens of separate PRs. Major bumps stay
+# individual so they can be reviewed on their own.
+updates:
+  # --- npm: web portal (React + Vite) ---
+  - package-ecosystem: npm
+    directory: /webui
+    schedule:
+      interval: weekly
+      day: monday
+    open-pull-requests-limit: 5
+    groups:
+      webui-minor-patch:
+        update-types: [minor, patch]
+
+  # --- npm: marketing site (Astro) ---
+  - package-ecosystem: npm
+    directory: /site
+    schedule:
+      interval: weekly
+      day: monday
+    open-pull-requests-limit: 5
+    groups:
+      site-minor-patch:
+        update-types: [minor, patch]
+
+  # --- npm: mobile app ---
+  - package-ecosystem: npm
+    directory: /mobile
+    schedule:
+      interval: weekly
+      day: monday
+    open-pull-requests-limit: 5
+    groups:
+      mobile-minor-patch:
+        update-types: [minor, patch]
+
+  # --- NuGet: WebView2 desktop shell ---
+  - package-ecosystem: nuget
+    directory: /app/desktop/DuneShell
+    schedule:
+      interval: weekly
+      day: monday
+    open-pull-requests-limit: 5
+    groups:
+      duneshell-minor-patch:
+        update-types: [minor, patch]
+
+  # --- NuGet: Friend Helper console ---
+  - package-ecosystem: nuget
+    directory: /helper/friend
+    schedule:
+      interval: weekly
+      day: monday
+    open-pull-requests-limit: 5
+    groups:
+      friend-helper-minor-patch:
+        update-types: [minor, patch]
+
+  # --- GitHub Actions used by the workflows ---
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+      day: monday
+    open-pull-requests-limit: 5
+    groups:
+      actions-minor-patch:
+        update-types: [minor, patch]
