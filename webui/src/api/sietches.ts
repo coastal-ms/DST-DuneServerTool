@@ -44,14 +44,6 @@ export function getSietches() {
   return api<SietchOverview>('/api/sietches')
 }
 
-export function addSietch() {
-  return api<SietchMutation>('/api/sietches', { method: 'POST' })
-}
-
-export function removeLastSietch() {
-  return api<SietchMutation>('/api/sietches/last', { method: 'DELETE' })
-}
-
 // Bulk configure: set the number of Hagga sietches (1-6), optionally naming each,
 // then clean-restart the battlegroup.
 export function setSietchConfig(count: number, names: string[], applyNames: boolean) {
