@@ -1,6 +1,6 @@
 ﻿# Sietches — list / add / remove additional Survival_1 shards.
 #
-# Wraps app/lib/K8s.ps1 (Get-V6SietchList, Add-V6Sietch, Remove-V6Sietch).
+# Wraps app/lib/K8s.ps1 (Get-V6SietchList, Set-V6SietchConfig, Get-V6SietchNames).
 # K8s.ps1 in turn needs Db-Postgres.ps1 (Invoke-V6Ssh + Get-V6SshKeyPath).
 # Both are loaded lazily via the dot-source block below — same pattern as
 # Maps.ps1.
@@ -97,49 +97,6 @@ function Get-DuneSietchOverview {
         estimatedAfterAddGB  = $estimatedAfterAddGB
         willExceedHostRam    = [bool]$willExceedHost
         maxPartitionId       = [int]$info.MaxPartitionId
-    }
-}
-
-function Add-DuneSietch {
-    $ctx = Get-DuneSietchContext
-    if (-not $ctx.ok) { return @{ ok=$false; status=$ctx.status; message=$ctx.message } }
-
-    try {
-        $res = Add-V6Sietch -Ip $ctx.vm.ip
-        if (-not $res.Success) {
-            $why = if ($res.Error) { $res.Error } else { 'the battlegroup rejected the change.' }
-            return @{ ok=$false; status=502; message="Add sietch failed: $why"; raw=$res.Raw }
-        }
-        return @{
-            ok           = $true
-            partitionId  = $res.PartitionId
-            sietchNumber = $res.SietchNumber
-            raw          = $res.Raw
-            message      = "Added sietch #$($res.SietchNumber) (partition $($res.PartitionId)). Restart the battlegroup to apply."
-        }
-    } catch {
-        return @{ ok=$false; status=500; message="Add failed: $($_.Exception.Message)" }
-    }
-}
-
-function Remove-DuneLastSietch {
-    $ctx = Get-DuneSietchContext
-    if (-not $ctx.ok) { return @{ ok=$false; status=$ctx.status; message=$ctx.message } }
-
-    try {
-        $res = Remove-V6Sietch -Ip $ctx.vm.ip
-        if (-not $res.Success) {
-            $why = if ($res.Error) { $res.Error } else { 'the battlegroup rejected the change.' }
-            return @{ ok=$false; status=502; message="Remove sietch failed: $why"; raw=$res.Raw }
-        }
-        return @{
-            ok               = $true
-            removedPartition = $res.RemovedPartition
-            raw              = $res.Raw
-            message          = "Removed sietch (partition $($res.RemovedPartition)). Restart the battlegroup to apply."
-        }
-    } catch {
-        return @{ ok=$false; status=500; message="Remove failed: $($_.Exception.Message)" }
     }
 }
 
