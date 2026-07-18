@@ -48,12 +48,15 @@ Register-DuneRoute -Method DELETE -Path '/api/sietches/last' -Handler {
 Register-DuneRoute -Method POST -Path '/api/sietches/config' -Handler {
     param($req, $res, $routeParams, $body)
     try {
+        # $body is a [hashtable] (see ConvertFrom-DuneRequestJson) - use ContainsKey,
+        # NOT $body.PSObject.Properties[...] which reads the hashtable's own .NET
+        # members (Count/Keys/...) and silently misses JSON keys like applyNames.
         $count = 0
-        if ($null -ne $body -and $body.PSObject.Properties['count']) { $count = [int]$body.count }
+        if ($body -is [hashtable] -and $body.ContainsKey('count')) { $count = [int]$body['count'] }
         $applyNames = $false
-        if ($null -ne $body -and $body.PSObject.Properties['applyNames']) { $applyNames = [bool]$body.applyNames }
+        if ($body -is [hashtable] -and $body.ContainsKey('applyNames')) { $applyNames = [bool]$body['applyNames'] }
         $names = @()
-        if ($null -ne $body -and $body.PSObject.Properties['names'] -and $body.names) { $names = @($body.names | ForEach-Object { [string]$_ }) }
+        if ($body -is [hashtable] -and $body.ContainsKey('names') -and $body['names']) { $names = @($body['names'] | ForEach-Object { [string]$_ }) }
         $r = Set-DuneSietchConfig -Count $count -Names $names -ApplyNames $applyNames
         if (-not $r.ok -and $r.status) {
             Write-DuneError -Response $res -Status $r.status -Message $r.message
