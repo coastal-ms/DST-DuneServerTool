@@ -62,6 +62,8 @@ function Get-DuneSietchOverview {
     } catch {
         return @{ ok=$false; status=502; message="kubectl query failed: $($_.Exception.Message)" }
     }
+    $names = @{}
+    try { $names = Get-V6SietchNames -Ip $ctx.vm.ip } catch { $names = @{} }
 
     $vmRam   = _Get-DuneVmAssignedRamGB
     $hostRam = _Get-DuneHostRamGB
@@ -74,13 +76,18 @@ function Get-DuneSietchOverview {
         ns               = $info.Ns
         name             = $info.Name
         sietchCount      = $count
+        named            = [bool]($names.Keys.Count -gt 0)
         sietches         = @($info.Sietches | ForEach-Object {
+            $partId = [int]$_.PartitionId
             @{
-                setIndex    = $_.SetIndex
-                map         = $_.Map
-                partitions  = @($_.Partitions)
-                replicas    = $_.Replicas
-                memoryLimit = $_.Memory
+                setIndex     = $_.SetIndex
+                sietchNumber = $_.SietchNumber
+                map          = $_.Map
+                partitionId  = $partId
+                partitions   = @($_.Partitions)
+                replicas     = $_.Replicas
+                memoryLimit  = $_.Memory
+                name         = if ($names.ContainsKey($partId)) { [string]$names[$partId] } else { $null }
             }
         })
         vmRamGB              = $vmRam
@@ -133,5 +140,83 @@ function Remove-DuneLastSietch {
         }
     } catch {
         return @{ ok=$false; status=500; message="Remove failed: $($_.Exception.Message)" }
+    }
+}
+
+# Toggle the GLOBAL Bgd.ServerDisplayName line in the live UserEngine.ini (the
+# same file DST's Game Config > Server Display Name manages, at
+# .../Saved/UserSettings/UserEngine.ini). CommentOut=$true disables the global
+# name so per-sietch names win; $false re-enables it (Funcom global-name cascade).
+function Set-DuneSietchGlobalNameOverride {
+    param([Parameter(Mandatory)][string]$Ip, [Parameter(Mandatory)][bool]$CommentOut)
+    if ($CommentOut) {
+        $sed = 's/^\([[:space:]]*\)\(Bgd\.ServerDisplayName[[:space:]]*=\)/\1;\2/'
+    } else {
+        $sed = 's/^\([[:space:]]*\);\+[[:space:]]*\(Bgd\.ServerDisplayName[[:space:]]*=\)/\1\2/'
+    }
+    # The PVC path is root-only, so resolve the dir AND run sed as root (the whole
+    # script under `sudo bash`) - an unsudo'd `ls` returns nothing and the edit
+    # silently no-ops.
+    $remote = @"
+dir=`$(ls -t /var/lib/rancher/k3s/storage/*/Saved/UserSettings/UserGame.ini 2>/dev/null | head -1 | xargs -r dirname)
+f="`$dir/UserEngine.ini"
+if [ -f "`$f" ]; then sed -i '$sed' "`$f" && echo ok || echo sed_failed; else echo no_ini; fi
+"@
+    $b64 = [Convert]::ToBase64String([Text.Encoding]::UTF8.GetBytes($remote))
+    return ((Invoke-V6Ssh -Ip $Ip -Cmd "echo $b64 | base64 -d | sudo bash" -TimeoutSec 30) -join ' ').Trim()
+}
+
+# Kick off a clean battlegroup restart detached so the HTTP request returns
+# promptly; the UI polls Server Health for the result (~2-3 min to converge).
+function _Invoke-DuneSietchRestart {
+    param([Parameter(Mandatory)][string]$Ip)
+    $cmd = 'nohup /home/dune/.dune/bin/battlegroup restart >/tmp/dst-sietch-restart.log 2>&1 & echo started'
+    return ((Invoke-V6Ssh -Ip $Ip -Cmd $cmd -TimeoutSec 30) -join ' ').Trim()
+}
+
+# Reconfigure Hagga (Survival_1) to run exactly $Count sietches, optionally naming
+# each, then clean-restart the battlegroup. Single entry point for the Sietches
+# config page. Names apply only when $ApplyNames AND $Count>=2; reverting to 1 (or
+# unchecking) clears per-partition names and re-enables the global INI name.
+function Set-DuneSietchConfig {
+    param(
+        [Parameter(Mandatory)][int]$Count,
+        [string[]]$Names,
+        [bool]$ApplyNames = $false
+    )
+    $ctx = Get-DuneSietchContext
+    if (-not $ctx.ok) { return @{ ok=$false; status=$ctx.status; message=$ctx.message } }
+    if ($Count -lt 1 -or $Count -gt 6) { return @{ ok=$false; status=400; message='Sietch count must be between 1 and 6.' } }
+
+    $useNames = ($ApplyNames -and $Count -ge 2)
+    $crdNames = if ($useNames) { $Names } else { $null }
+
+    try {
+        # 1. INI: checked -> comment out global name (per-sietch names win);
+        #    unchecked/revert -> re-enable it (Funcom global-name cascade).
+        $iniState = Set-DuneSietchGlobalNameOverride -Ip $ctx.vm.ip -CommentOut $useNames
+
+        # 2. CRD: set active+max servers to N (+ per-partition names or clear).
+        $res = Set-V6SietchConfig -Ip $ctx.vm.ip -Count $Count -Names $crdNames
+        if (-not $res.Success) {
+            $why = if ($res.Error) { $res.Error } else { 'the battlegroup rejected the change.' }
+            return @{ ok=$false; status=502; message="Apply sietch config failed: $why"; raw=$res.Raw }
+        }
+
+        # 3. Clean battlegroup restart (detached; UI polls Server Health).
+        $restart = _Invoke-DuneSietchRestart -Ip $ctx.vm.ip
+
+        $noun = if ($Count -ne 1) { "$Count Hagga sietches" } else { '1 Hagga sietch' }
+        return @{
+            ok       = $true
+            count    = $res.Count
+            sietches = $res.Sietches
+            named    = $useNames
+            iniState = $iniState
+            restart  = $restart
+            message  = "Configured $noun. A clean battlegroup restart is underway - watch Server Health; it takes a couple of minutes to come back."
+        }
+    } catch {
+        return @{ ok=$false; status=500; message="Apply sietch config failed: $($_.Exception.Message)" }
     }
 }

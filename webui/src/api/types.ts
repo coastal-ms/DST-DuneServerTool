@@ -21,11 +21,12 @@ export type BgInfo = {
 }
 
 export type BgGameServer = {
-  map:     string
-  phase:   string
-  ready:   string
-  players: string
-  age:     string
+  map:        string
+  phase:      string
+  ready:      string
+  players:    string
+  age:        string
+  sietchName?: string
 }
 
 export type BattlegroupSnapshot = {
