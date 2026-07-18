@@ -13,6 +13,8 @@ here cover everything those tags shipped.
 
 ## [Unreleased]
 
+## [12.19.5] - 2026-07-18
+
 ### Changed
 - **Local Backup Mirror now organizes files into per-battlegroup subfolders.**
   Mirrored backups land in `<mirror folder>\<battlegroup>\<file>` (mirroring the
@@ -27,6 +29,12 @@ here cover everything those tags shipped.
   old `dst-scheduled-<timestamp>` name that stripped the battlegroup identity.
   Existing `dst-scheduled-*` files remain fully listed, prunable, downloadable,
   and deletable.
+
+### Fixed
+- **Backend no longer risks hanging on a stalled SSH command.** The SSH helpers
+  that talk to the VM (status checks, backup transfers) now bound the wait when
+  draining a finished command's output, so a remote process that leaves an
+  output pipe open can't freeze the backend's request handling.
 
 ## [12.19.4] - 2026-07-17
 
