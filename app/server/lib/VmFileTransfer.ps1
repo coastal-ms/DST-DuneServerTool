@@ -49,7 +49,7 @@ function Copy-DuneVmFileToLocal {
     # and Alpine's find never emits characters that need escaping (posix
     # dump-dir paths only). Wrapping in single quotes stops the local
     # shell + remote shell from re-interpreting whitespace or globs.
-    $psi.Arguments = "-o BatchMode=yes -o StrictHostKeyChecking=no -o LogLevel=QUIET -i `"$KeyPath`" `"dune@$Ip`" sudo cat '$VmPath'"
+    $psi.Arguments = "-o BatchMode=yes -o StrictHostKeyChecking=no -o LogLevel=QUIET -o ServerAliveInterval=10 -o ServerAliveCountMax=3 -i `"$KeyPath`" `"dune@$Ip`" sudo cat '$VmPath'"
     $psi.RedirectStandardOutput = $true
     $psi.RedirectStandardError  = $true
     $psi.UseShellExecute        = $false
@@ -79,7 +79,10 @@ function Copy-DuneVmFileToLocal {
             return @{ ok = $false; error = "ssh cat timed out after ${TimeoutSec}s" }
         }
         [void]$proc.WaitForExit()
-        $stderr = $errTask.GetAwaiter().GetResult()
+        # Bound the stderr drain: a grandchild holding the pipe open past exit
+        # would otherwise make a bare .GetResult() block forever.
+        $stderr = $null
+        try { if ($errTask.Wait(5000)) { $stderr = $errTask.Result } } catch {}
         if ($proc.ExitCode -ne 0) {
             # Clean up the partial file — a 0-byte or half-written backup
             # would poison the local mirror folder / the local target.
@@ -121,7 +124,7 @@ function Copy-DuneLocalFileToVm {
     # `sudo tee` writes stdin to the target; `> /dev/null` suppresses tee's
     # stdout copy so the ssh stdout stays quiet. `sudo chmod 644` follows so
     # the file is world-readable (matches how `battlegroup backup` writes it).
-    $psi.Arguments = "-o BatchMode=yes -o StrictHostKeyChecking=no -o LogLevel=QUIET -i `"$KeyPath`" `"dune@$Ip`" `"sudo tee '$VmPath' > /dev/null && sudo chmod 644 '$VmPath'`""
+    $psi.Arguments = "-o BatchMode=yes -o StrictHostKeyChecking=no -o LogLevel=QUIET -o ServerAliveInterval=10 -o ServerAliveCountMax=3 -i `"$KeyPath`" `"dune@$Ip`" `"sudo tee '$VmPath' > /dev/null && sudo chmod 644 '$VmPath'`""
     $psi.RedirectStandardInput  = $true
     $psi.RedirectStandardOutput = $true
     $psi.RedirectStandardError  = $true
@@ -154,7 +157,11 @@ function Copy-DuneLocalFileToVm {
             return @{ ok = $false; error = "ssh tee timed out after ${TimeoutSec}s" }
         }
         [void]$proc.WaitForExit()
-        $stderr = $errTask.GetAwaiter().GetResult()
+        # Drain stdout (redirected but otherwise unused here) + stderr with a
+        # bounded grace so a grandchild holding either pipe can't hang us post-exit.
+        try { [void]$outTask.Wait(5000) } catch {}
+        $stderr = $null
+        try { if ($errTask.Wait(5000)) { $stderr = $errTask.Result } } catch {}
         if ($proc.ExitCode -ne 0) {
             $tail = if ($stderr) { ": $($stderr.Trim())" } else { '' }
             return @{ ok = $false; error = "ssh tee failed rc=$($proc.ExitCode)$tail" }

@@ -164,12 +164,28 @@ function Invoke-V6Ssh {
             # toast in the v10.1.13 incident).
             return "ERROR: ssh timed out after ${TimeoutSec}s"
         }
-        # Per Microsoft docs, an unbounded WaitForExit() after a bounded
-        # one ensures the async stream readers fully drain before we
-        # consume the tasks.
+        # The process exited within the deadline, but that is NOT enough to
+        # guarantee the async readers finish: if the remote command forked a
+        # grandchild that inherited ssh's stdout/stderr pipe write handle, the
+        # pipe never reaches EOF even though ssh.exe is gone, so ReadToEndAsync()
+        # stays pending. A bare .GetResult() would then block FOREVER — the
+        # "async stdout drain has no bounded wait" hang this function was
+        # documented to have. Bound the drain with a short grace window and
+        # abandon the readers if they don't complete, surfacing the same ERROR
+        # marker callers already string-match on the timeout path above.
         [void]$proc.WaitForExit()
-        [void]$errTask.GetAwaiter().GetResult()  # discarded — mirrors prior `2>$null`
-        $text = $outTask.GetAwaiter().GetResult()
+        $drainMs = 5000
+        $outDone = $false
+        try { $outDone = $outTask.Wait($drainMs) } catch { $outDone = $true }  # faulted reader = no more output
+        try { [void]$errTask.Wait($drainMs) } catch {}                          # discarded — mirrors prior `2>$null`
+        if (-not $outDone) {
+            if (Get-Command Write-DuneLog -ErrorAction SilentlyContinue) {
+                Write-DuneLog "Invoke-V6Ssh: stdout drain to $Ip did not finish within ${drainMs}ms after exit (pipe held open by a grandchild?); abandoning reader" 'WARN'
+            }
+            return "ERROR: ssh output drain timed out"
+        }
+        $text = $null
+        try { $text = $outTask.Result } catch { $text = $null }
         if ([string]::IsNullOrEmpty($text)) { return }
         # Emit one pipeline item per stdout line — matches the original
         # `& ssh ...` capture semantics so existing callers keep working.
@@ -243,9 +259,28 @@ function Invoke-DuneSshHidden {
                 Exit   = -1
             }
         }
+        # Bound the post-exit stream drain: a grandchild that inherited ssh's
+        # stdout/stderr pipe handle can keep the pipe open past ssh.exe's own
+        # exit, leaving ReadToEndAsync() pending and a bare .GetResult()
+        # blocking forever. Give it a short grace window, then abandon.
         [void]$proc.WaitForExit()
-        $stdoutText = $outTask.GetAwaiter().GetResult()
-        $stderrText = $errTask.GetAwaiter().GetResult()
+        $drainMs = 5000
+        $outDone = $false; $errDone = $false
+        try { $outDone = $outTask.Wait($drainMs) } catch { $outDone = $true }
+        try { $errDone = $errTask.Wait($drainMs) } catch { $errDone = $true }
+        if (-not ($outDone -and $errDone)) {
+            if (Get-Command Write-DuneLog -ErrorAction SilentlyContinue) {
+                Write-DuneLog "Invoke-DuneSshHidden: stream drain to $Ip did not finish within ${drainMs}ms after exit (pipe held open?); abandoning readers" 'WARN'
+            }
+            return @{
+                Stdout = @()
+                Stderr = "ssh output drain timed out after ${drainMs}ms"
+                Exit   = -1
+            }
+        }
+        $stdoutText = $null; $stderrText = $null
+        try { $stdoutText = $outTask.Result } catch { $stdoutText = $null }
+        try { $stderrText = $errTask.Result } catch { $stderrText = $null }
         return @{
             Stdout = if ([string]::IsNullOrEmpty($stdoutText)) { @() } else { @($stdoutText -split "`r?`n") }
             Stderr = $stderrText
