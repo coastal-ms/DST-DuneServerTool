@@ -112,7 +112,8 @@ function _Invoke-V6BgJsonPatch {
     $clean = ($text -replace '__DST_RC=\d+\s*$', '').Trim()
     # Definitive signal is the remote exit code; fall back to text if unparsed.
     $ok = if ($null -ne $rc) { $rc -eq 0 } else { $clean -match '(?im)\bpatched\b' -and $clean -notmatch '(?im)\b(error|invalid|Duplicate value)\b' }
-    return @{ Success = [bool]$ok; Error = (if ($ok) { $null } else { $clean }); Raw = $clean; Rc = $rc }
+    $errText = if ($ok) { $null } else { $clean }
+    return @{ Success = [bool]$ok; Error = $errText; Raw = $clean; Rc = $rc }
 }
 
 # Add a sietch = add ONE more Survival_1 partition to the EXISTING non-dedicated
@@ -369,15 +370,19 @@ function Set-V6SietchConfig {
     $setPath = "/spec/serverGroup/template/spec/sets/$setIdx"
     $wpPath  = "/spec/database/template/spec/deployment/spec/worldPartitions/$wpIdx"
     $patches = @()
-    $patches += @{ op=(if ($set.PSObject.Properties['partitions']) {'replace'} else {'add'}); path="$setPath/partitions"; value = $ids }
-    $patches += @{ op=(if ($set.PSObject.Properties['replicas'])   {'replace'} else {'add'}); path="$setPath/replicas";   value = $Count }
+    $opParts = if ($set.PSObject.Properties['partitions']) { 'replace' } else { 'add' }
+    $patches += @{ op = $opParts; path = "$setPath/partitions"; value = $ids }
+    $opReps = if ($set.PSObject.Properties['replicas']) { 'replace' } else { 'add' }
+    $patches += @{ op = $opReps; path = "$setPath/replicas"; value = $Count }
     $hasPodSpecs = ($set.PSObject.Properties['podSpecs'] -and $null -ne $set.podSpecs)
     if ($null -ne $podSpecs) {
-        $patches += @{ op=(if ($hasPodSpecs) {'replace'} else {'add'}); path="$setPath/podSpecs"; value = $podSpecs }
+        $opPod = if ($hasPodSpecs) { 'replace' } else { 'add' }
+        $patches += @{ op = $opPod; path = "$setPath/podSpecs"; value = $podSpecs }
     } elseif ($hasPodSpecs) {
-        $patches += @{ op='remove'; path="$setPath/podSpecs" }
+        $patches += @{ op = 'remove'; path = "$setPath/podSpecs" }
     }
-    $patches += @{ op=(if ($worldPartitions[$wpIdx].PSObject.Properties['partitions']) {'replace'} else {'add'}); path="$wpPath/partitions"; value = $wpParts }
+    $opWp = if ($worldPartitions[$wpIdx].PSObject.Properties['partitions']) { 'replace' } else { 'add' }
+    $patches += @{ op = $opWp; path = "$wpPath/partitions"; value = $wpParts }
 
     $res = _Invoke-V6BgJsonPatch -Ip $Ip -Info $info -Patches $patches
     if (-not $res.Success) { return @{ Success = $false; Error = $res.Error; Raw = $res.Raw } }
