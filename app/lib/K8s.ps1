@@ -42,8 +42,13 @@ function Get-V6SietchList {
     $sets = $bg.spec.serverGroup.template.spec.sets
     $worldPartitions = $bg.spec.database.template.spec.deployment.spec.worldPartitions
 
+    # A sietch is a PARTITION on the (single) non-dedicated Survival_1 set, NOT a
+    # separate set. Funcom's CRD enforces a unique `map` across server sets, so
+    # multiple Hagga shards live as multiple partition ids on the one Survival_1
+    # set (replicas == partition count). Enumerate one entry per partition.
     $list = @()
     $idx = 0
+    $sietchNum = 0
     foreach ($s in $sets) {
         $isSurvival = ($s.map -eq 'Survival_1')
         $isDedicated = $false
@@ -53,12 +58,17 @@ function Get-V6SietchList {
             if ($s.PSObject.Properties['resources'] -and $s.resources.PSObject.Properties['limits']) {
                 $mem = $s.resources.limits.memory
             }
-            $list += @{
-                SetIndex    = $idx
-                Map         = $s.map
-                Partitions  = @($s.partitions)
-                Replicas    = $s.replicas
-                Memory      = $mem
+            foreach ($pid in @($s.partitions)) {
+                $sietchNum++
+                $list += @{
+                    SetIndex     = $idx
+                    SietchNumber = $sietchNum
+                    Map          = $s.map
+                    PartitionId  = [int]$pid
+                    Partitions   = @([int]$pid)
+                    Replicas     = $s.replicas
+                    Memory       = $mem
+                }
             }
         }
         $idx++
@@ -82,6 +92,36 @@ function Get-V6SietchList {
     }
 }
 
+# Apply a JSON-patch to the battlegroup CR over SSH and REPORT whether it
+# actually applied. The old sietch add/remove returned Success=$true regardless
+# of the kubectl result, so a rejected patch (e.g. Funcom's newer CRD refusing a
+# duplicate map across sets) looked like a success while nothing changed. This
+# captures the remote exit code so callers surface the real error.
+function _Invoke-V6BgJsonPatch {
+    [CmdletBinding()]
+    param([Parameter(Mandatory)][string]$Ip, [Parameter(Mandatory)]$Info, [Parameter(Mandatory)][array]$Patches)
+
+    $patchJson = $Patches | ConvertTo-Json -Depth 30 -Compress
+    if ($patchJson -notmatch '^\s*\[') { $patchJson = "[$patchJson]" }
+    $b64 = [Convert]::ToBase64String([Text.Encoding]::UTF8.GetBytes($patchJson))
+    $cmd = "sudo kubectl patch battlegroup $($Info.Name) -n $($Info.Ns) --type=json -p `"`$(echo $b64 | base64 -d)`" 2>&1; echo __DST_RC=`$?"
+    $out  = Invoke-V6Ssh -Ip $Ip -Cmd $cmd -TimeoutSec 60
+    $text = (($out -join "`n")).Trim()
+    $rc   = $null
+    if ($text -match '__DST_RC=(\d+)') { $rc = [int]$Matches[1] }
+    $clean = ($text -replace '__DST_RC=\d+\s*$', '').Trim()
+    # Definitive signal is the remote exit code; fall back to text if unparsed.
+    $ok = if ($null -ne $rc) { $rc -eq 0 } else { $clean -match '(?im)\bpatched\b' -and $clean -notmatch '(?im)\b(error|invalid|Duplicate value)\b' }
+    return @{ Success = [bool]$ok; Error = (if ($ok) { $null } else { $clean }); Raw = $clean; Rc = $rc }
+}
+
+# Add a sietch = add ONE more Survival_1 partition to the EXISTING non-dedicated
+# Survival_1 set (bump its replicas to match) plus the matching worldPartitions
+# entry. The previous approach cloned the whole set as a SECOND Survival_1 set,
+# which Funcom's CRD now rejects with "Map needs to be unique across server
+# sets" (validated live). The new shard's pod is an ordinal on the same core set,
+# so DST's partition self-heal already covers a stuck pod (core-map pass evicts a
+# stuck pod without touching the pin). Takes effect after a battlegroup restart.
 function Add-V6Sietch {
     [CmdletBinding()]
     param([Parameter(Mandatory)][string]$Ip)
@@ -91,52 +131,62 @@ function Add-V6Sietch {
     $sets = $bg.spec.serverGroup.template.spec.sets
     $worldPartitions = $bg.spec.database.template.spec.deployment.spec.worldPartitions
 
-    # Clone first non-dedicated Survival_1 set as the template
-    $template = $null
+    # Locate the (single) non-dedicated Survival_1 set + its worldPartitions entry.
+    $setIdx = -1; $set = $null; $i = 0
     foreach ($s in $sets) {
         $isDedicated = $false
         if ($s.PSObject.Properties['dedicatedScaling']) { $isDedicated = [bool]$s.dedicatedScaling }
-        if ($s.map -eq 'Survival_1' -and -not $isDedicated) {
-            $template = ($s | ConvertTo-Json -Depth 30 -Compress | ConvertFrom-Json)
-            break
-        }
+        if ($s.map -eq 'Survival_1' -and -not $isDedicated) { $setIdx = $i; $set = $s; break }
+        $i++
     }
-    if (-not $template) { throw "No Survival_1 set found to clone." }
+    if ($setIdx -lt 0) { throw "No Survival_1 set found to add a sietch to." }
 
+    $wpIdx = -1; $j = 0
+    foreach ($wp in $worldPartitions) {
+        if ($wp.map -eq 'Survival_1') { $wpIdx = $j; break }
+        $j++
+    }
+    if ($wpIdx -lt 0) { throw "No Survival_1 worldPartitions entry found." }
+
+    # New partition id must be globally unique across ALL worldPartitions.
     $maxPartitionId = 0
     foreach ($wp in $worldPartitions) {
         foreach ($p in $wp.partitions) { if ($p.id -gt $maxPartitionId) { $maxPartitionId = [int]$p.id } }
     }
     $newPartitionId = $maxPartitionId + 1
-    $template.partitions = @($newPartitionId)
+    $curParts    = @($set.partitions)
+    $newReplicas = $curParts.Count + 1
 
-    $grid = @()
-    if ($bg.metadata.annotations -and $bg.metadata.annotations.PSObject.Properties['grid']) {
-        $grid = ($bg.metadata.annotations.grid -split ',') | Where-Object { $_ }
+    $patches = @()
+    if ($set.PSObject.Properties['partitions'] -and $curParts.Count -gt 0) {
+        $patches += @{ op='add'; path="/spec/serverGroup/template/spec/sets/$setIdx/partitions/-"; value = $newPartitionId }
+    } else {
+        $patches += @{ op='add'; path="/spec/serverGroup/template/spec/sets/$setIdx/partitions"; value = @($newPartitionId) }
     }
-    $newGrid = @($grid) + '1x1'
+    if ($set.PSObject.Properties['replicas']) {
+        $patches += @{ op='replace'; path="/spec/serverGroup/template/spec/sets/$setIdx/replicas"; value = $newReplicas }
+    } else {
+        $patches += @{ op='add';     path="/spec/serverGroup/template/spec/sets/$setIdx/replicas"; value = $newReplicas }
+    }
+    $patches += @{ op='add'; path="/spec/database/template/spec/deployment/spec/worldPartitions/$wpIdx/partitions/-"; value = @{
+            dimension=0; disable=$false; id=$newPartitionId; maxX=1; maxY=1; minX=0; minY=0
+        } }
 
-    $patches = @(
-        @{ op='add';     path='/spec/serverGroup/template/spec/sets/-'; value = $template }
-        @{ op='add';     path='/spec/database/template/spec/deployment/spec/worldPartitions/-'; value = @{
-                map='Survival_1'
-                partitions = @(@{ dimension=0; disable=$false; id=$newPartitionId; maxX=1; maxY=1; minX=0; minY=0 })
-            } }
-        @{ op='replace'; path='/metadata/annotations/grid'; value = ($newGrid -join ',') }
-    )
-
-    $patchJson = $patches | ConvertTo-Json -Depth 30 -Compress
-    $b64 = [Convert]::ToBase64String([Text.Encoding]::UTF8.GetBytes($patchJson))
-    $cmd = "sudo kubectl patch battlegroup $($info.Name) -n $($info.Ns) --type=json -p `"`$(echo $b64 | base64 -d)`" 2>&1"
-    $out = Invoke-V6Ssh -Ip $Ip -Cmd $cmd -TimeoutSec 60
+    $res = _Invoke-V6BgJsonPatch -Ip $Ip -Info $info -Patches $patches
+    if (-not $res.Success) {
+        return @{ Success = $false; PartitionId = $newPartitionId; Error = $res.Error; Raw = $res.Raw }
+    }
     return @{
         Success      = $true
         PartitionId  = $newPartitionId
-        SietchNumber = ($info.Bg.spec.serverGroup.template.spec.sets.Count) + 1
-        Raw          = (($out -join "`n")).Trim()
+        SietchNumber = $newReplicas
+        Raw          = $res.Raw
     }
 }
 
+# Remove the LAST Survival_1 sietch = drop the highest partition id from the
+# existing Survival_1 set (decrement replicas) plus its worldPartitions entry.
+# Mirror of Add-V6Sietch; refuses to remove the final sietch.
 function Remove-V6Sietch {
     [CmdletBinding()]
     param([Parameter(Mandatory)][string]$Ip)
@@ -146,60 +196,53 @@ function Remove-V6Sietch {
     $sets = $bg.spec.serverGroup.template.spec.sets
     $worldPartitions = $bg.spec.database.template.spec.deployment.spec.worldPartitions
 
-    $survival = @()
-    $i = 0
+    $setIdx = -1; $set = $null; $i = 0
     foreach ($s in $sets) {
         $isDedicated = $false
         if ($s.PSObject.Properties['dedicatedScaling']) { $isDedicated = [bool]$s.dedicatedScaling }
-        if ($s.map -eq 'Survival_1' -and -not $isDedicated) {
-            $survival += @{ Idx = $i; Partitions = @($s.partitions) }
-        }
+        if ($s.map -eq 'Survival_1' -and -not $isDedicated) { $setIdx = $i; $set = $s; break }
         $i++
     }
-    if ($survival.Count -le 1) { throw "Cannot remove the last sietch." }
+    if ($setIdx -lt 0) { throw "No Survival_1 set found." }
 
-    $last = $survival[-1]
-    $lastPartitionId = [int]$last.Partitions[0]
+    $curParts = @($set.partitions)
+    if ($curParts.Count -le 1) { throw "Cannot remove the last sietch." }
+    $lastPartIdx     = $curParts.Count - 1
+    $lastPartitionId = [int]$curParts[$lastPartIdx]
+    $newReplicas     = $curParts.Count - 1
 
-    $wpIdx = -1
-    for ($k = 0; $k -lt $worldPartitions.Count; $k++) {
-        $wp = $worldPartitions[$k]
-        if ($wp.map -ne 'Survival_1') { continue }
-        foreach ($p in $wp.partitions) {
-            if ([int]$p.id -eq $lastPartitionId) { $wpIdx = $k; break }
+    # Locate that partition id within the Survival_1 worldPartitions entry.
+    $wpIdx = -1; $partIdxInWp = -1; $j = 0
+    foreach ($wp in $worldPartitions) {
+        if ($wp.map -eq 'Survival_1') {
+            $k = 0
+            foreach ($p in $wp.partitions) {
+                if ([int]$p.id -eq $lastPartitionId) { $wpIdx = $j; $partIdxInWp = $k; break }
+                $k++
+            }
         }
         if ($wpIdx -ge 0) { break }
-    }
-
-    $grid = @()
-    if ($bg.metadata.annotations -and $bg.metadata.annotations.PSObject.Properties['grid']) {
-        $grid = ($bg.metadata.annotations.grid -split ',') | Where-Object { $_ }
+        $j++
     }
 
     $patches = @()
-    $patches += @{ op='remove'; path="/spec/serverGroup/template/spec/sets/$($last.Idx)" }
-    if ($wpIdx -ge 0) {
-        $patches += @{ op='remove'; path="/spec/database/template/spec/deployment/spec/worldPartitions/$wpIdx" }
+    $patches += @{ op='remove'; path="/spec/serverGroup/template/spec/sets/$setIdx/partitions/$lastPartIdx" }
+    if ($set.PSObject.Properties['replicas']) {
+        $patches += @{ op='replace'; path="/spec/serverGroup/template/spec/sets/$setIdx/replicas"; value = $newReplicas }
     }
-    if ($grid.Count -gt 1) {
-        $newGrid = $grid[0..($grid.Count - 2)]
-        $patches += @{ op='replace'; path='/metadata/annotations/grid'; value = ($newGrid -join ',') }
+    if ($wpIdx -ge 0 -and $partIdxInWp -ge 0) {
+        $patches += @{ op='remove'; path="/spec/database/template/spec/deployment/spec/worldPartitions/$wpIdx/partitions/$partIdxInWp" }
     }
 
-    # Remove higher indices first to avoid renumbering
-    $patches = $patches | Sort-Object { $_.path } -Descending
-
-    $patchJson = $patches | ConvertTo-Json -Depth 30 -Compress
-    # ConvertTo-Json on a single object emits an object not array - wrap if needed
-    if ($patchJson -notmatch '^\s*\[') { $patchJson = "[$patchJson]" }
-    $b64 = [Convert]::ToBase64String([Text.Encoding]::UTF8.GetBytes($patchJson))
-    $cmd = "sudo kubectl patch battlegroup $($info.Name) -n $($info.Ns) --type=json -p `"`$(echo $b64 | base64 -d)`" 2>&1"
-    $out = Invoke-V6Ssh -Ip $Ip -Cmd $cmd -TimeoutSec 60
+    $res = _Invoke-V6BgJsonPatch -Ip $Ip -Info $info -Patches $patches
+    if (-not $res.Success) {
+        return @{ Success = $false; RemovedPartition = $lastPartitionId; Error = $res.Error; Raw = $res.Raw }
+    }
     return @{
-        Success            = $true
-        RemovedPartition   = $lastPartitionId
-        RemainingSietches  = $survival.Count - 1
-        Raw                = (($out -join "`n")).Trim()
+        Success           = $true
+        RemovedPartition  = $lastPartitionId
+        RemainingSietches = $newReplicas
+        Raw               = $res.Raw
     }
 }
 
