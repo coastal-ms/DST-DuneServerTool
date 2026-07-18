@@ -7,8 +7,13 @@
 # files AND `dst-scheduled-<utc-ts>` extension-less files), diff against
 # what's already in the local folder, and SCP any missing files down.
 #
-# Filenames are preserved verbatim (no rename) so downloaded files are drop-in
-# compatible with the existing Restore / upload paths.
+# Files are mirrored into a per-battlegroup subfolder (`<LocalFolder>\<bg>\`)
+# that mirrors the VM's own /funcom/artifacts/database-dumps/<bg>/ layout, so a
+# host that runs multiple VMs/battlegroups can always tell which battlegroup a
+# mirrored file belongs to — including legacy `dst-scheduled-<ts>` files whose
+# own name carries no battlegroup identity. Filenames are preserved verbatim
+# (no rename) so downloaded files are drop-in compatible with the existing
+# Restore / upload paths.
 #
 # COPY-ONLY BY DESIGN. This mirror NEVER deletes from the local folder. The
 # VM's auto-retention prune (BackupSchedule.ps1 / New-DuneBackupFilePruneSnippet)
@@ -62,6 +67,22 @@ function Save-DuneBackupMirrorState {
 # Enumerate DST-recognized backup files on the VM's dump dir (mirrors the same
 # selection Get-DuneBackupHistory uses: `*.backup` OR `dst-scheduled-<ts>`).
 # Returns an array of hashtables { path; sizeBytes; mtimeEpoch }.
+
+# Derive the per-battlegroup subfolder for a VM backup path. The VM stores every
+# dump under /funcom/artifacts/database-dumps/<bg>/<file>, so <bg> is the file's
+# parent directory name. Returns '' when the file sits directly in the dump dir
+# (no bg subdir) so it mirrors flat in that unusual case. Parsed with manual
+# string ops because these are POSIX (forward-slash) paths, not Windows paths.
+function Get-DuneBackupMirrorSubdir {
+    param([Parameter(Mandatory)][string]$VmPath)
+    $segs = ($VmPath -replace '\\','/') -split '/' | Where-Object { $_ -ne '' }
+    if ($segs.Count -lt 2) { return '' }
+    $parentLeaf = $segs[$segs.Count - 2]
+    $dumpLeaf = ($script:DuneBackupDumpDir -split '/' | Where-Object { $_ -ne '' })[-1]
+    if (-not $parentLeaf -or $parentLeaf -eq $dumpLeaf) { return '' }
+    return $parentLeaf
+}
+
 function Get-DuneBackupMirrorVmFiles {
     param(
         [Parameter(Mandatory)][string]$Ip,
@@ -95,10 +116,16 @@ sudo find $script:DuneBackupDumpDir -maxdepth 3 -type f \( -name '*.backup' -o -
     return ,$out
 }
 
-# Pull a single file from the VM to the local mirror folder. Preserves the
-# source filename. Wraps the shared Copy-DuneVmFileToLocal helper (which
-# streams via `ssh + sudo cat` because Alpine minimal has no scp/sftp — see
-# lib/VmFileTransfer.ps1). Returns @{ ok; localPath?; error? }.
+# Pull a single file from the VM to the local mirror folder. Files are placed in
+# a per-battlegroup subfolder (`<LocalFolder>\<bg>\<file>`) that mirrors the VM's
+# own /funcom/artifacts/database-dumps/<bg>/ layout, so a host running multiple
+# VMs/battlegroups can always tell which battlegroup a mirrored file belongs to
+# — even legacy `dst-scheduled-<ts>` files whose own name carries no bg identity.
+# The filename itself is preserved verbatim so mirrored files stay drop-in
+# compatible with the Restore / upload paths. Wraps the shared
+# Copy-DuneVmFileToLocal helper (streams via `ssh + sudo cat` because Alpine
+# minimal has no scp/sftp — see lib/VmFileTransfer.ps1; it creates the parent
+# subfolder). Returns @{ ok; localPath?; error? }.
 function Invoke-DuneBackupMirrorFilePull {
     param(
         [Parameter(Mandatory)][string]$Ip,
@@ -108,7 +135,9 @@ function Invoke-DuneBackupMirrorFilePull {
         [int]$TimeoutSec = 300
     )
     $fileName  = Split-Path -Leaf $VmPath
-    $localPath = Join-Path $LocalFolder $fileName
+    $subdir    = Get-DuneBackupMirrorSubdir -VmPath $VmPath
+    $targetDir = if ($subdir) { Join-Path $LocalFolder $subdir } else { $LocalFolder }
+    $localPath = Join-Path $targetDir $fileName
     $r = Copy-DuneVmFileToLocal -Ip $Ip -KeyPath $KeyPath -VmPath $VmPath -LocalPath $localPath -TimeoutSec $TimeoutSec
     if (-not $r.ok) {
         return @{ ok = $false; error = "$($r.error) ($fileName)" }
@@ -171,11 +200,18 @@ function Invoke-DuneBackupMirrorTick {
     }
     $result.vmFileCount = $vmFiles.Count
 
-    # Build local index by filename
-    $localNames = @{}
+    # Build local index by filename. Recurse so files already mirrored into a
+    # per-battlegroup subfolder (`<bg>\<file>`) are recognized, and ALSO index
+    # bare filenames so legacy files that were mirrored FLAT (before per-bg
+    # subfolders existed) aren't needlessly re-copied into a subfolder.
+    $localRel   = @{}   # "<bg>/<file>" (and "<file>") relative keys that exist
+    $localFlat  = @{}   # bare filenames present anywhere in the tree
     try {
-        Get-ChildItem -LiteralPath $LocalFolder -File -ErrorAction SilentlyContinue | ForEach-Object {
-            $localNames[$_.Name] = $true
+        $rootFull = (Resolve-Path -LiteralPath $LocalFolder).Path.TrimEnd('\')
+        Get-ChildItem -LiteralPath $LocalFolder -File -Recurse -ErrorAction SilentlyContinue | ForEach-Object {
+            $rel = $_.FullName.Substring($rootFull.Length).TrimStart('\') -replace '\\','/'
+            $localRel[$rel]   = $true
+            $localFlat[$_.Name] = $true
         }
     } catch {}
 
@@ -184,8 +220,20 @@ function Invoke-DuneBackupMirrorTick {
     # subsequent ticks will pick up the rest.
     $copied = 0
     foreach ($vm in $vmFiles) {
-        $name = Split-Path -Leaf $vm.path
-        if ($localNames.ContainsKey($name)) {
+        $name   = Split-Path -Leaf $vm.path
+        $subdir = Get-DuneBackupMirrorSubdir -VmPath $vm.path
+        $relKey = if ($subdir) { "$subdir/$name" } else { $name }
+        # Present if the exact <bg>/<file> is already mirrored. Additionally, a
+        # bare flat copy counts ONLY when the filename itself embeds the bg
+        # (Funcom's `sh-<hostid>-<suffix>-<ts>.backup`), so a pre-per-bg flat
+        # copy of that file isn't needlessly duplicated. A legacy
+        # `dst-scheduled-<ts>` name does NOT embed the bg, so it must match the
+        # exact <bg>/<file> — otherwise a second battlegroup's identically-named
+        # scheduled file would be wrongly skipped (the very multi-VM ambiguity
+        # this per-bg layout fixes).
+        $nameEmbedsBg = $subdir -and $name.StartsWith("$subdir-")
+        $present = $localRel.ContainsKey($relKey) -or ($nameEmbedsBg -and $localFlat.ContainsKey($name))
+        if ($present) {
             $result.skipped++
             continue
         }
