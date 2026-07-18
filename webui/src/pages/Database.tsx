@@ -780,9 +780,10 @@ function BackupScheduleCard({ vmRunning, showToast }: BackupScheduleCardProps) {
 
   async function handleDownload(vmPath: string) {
     const baseName = vmPath.split('/').pop() ?? 'backup.backup'
-    // Scheduled backups land on the VM without a `.backup` extension
-    // (dst-scheduled-<ts>); give the Save-As dialog a `.backup` default so the
-    // downloaded copy is named like every other backup on the user's PC.
+    // DST's scheduled backups now use Funcom's native `sh-<bg>-<ts>.backup`
+    // name, so they already carry an extension. LEGACY scheduled files from
+    // older builds land without one (`dst-scheduled-<ts>`); append `.backup`
+    // for those so the downloaded copy is named like every other backup.
     const fileName = baseName.includes('.') ? baseName : `${baseName}.backup`
     const localPath = await pickFileFromShell('pick-save-file', { id: 'backup-download', defaultName: fileName })
     if (!localPath) return  // cancelled
