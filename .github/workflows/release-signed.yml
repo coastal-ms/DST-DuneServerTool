@@ -109,7 +109,7 @@ jobs:
       - name: Upload DuneServer.exe (unsigned) for signing
         if: steps.cfg.outputs.sign == 'true'
         id: up_server
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: unsigned-duneserver-exe
           path: app/build/output/DuneServer.exe
@@ -131,7 +131,7 @@ jobs:
       - name: Upload DuneShell.exe (unsigned) for signing
         if: steps.cfg.outputs.sign == 'true'
         id: up_shell
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: unsigned-duneshell-exe
           path: app/desktop/DuneShell/bin/Release/net10.0-windows/win-x64/publish/DuneShell.exe
@@ -162,7 +162,7 @@ jobs:
       - name: Upload DuneServerSetup.exe (unsigned) for signing
         if: steps.cfg.outputs.sign == 'true'
         id: up_installer
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: unsigned-installer
           path: app/installer/output/DuneServerSetup.exe
@@ -202,7 +202,7 @@ jobs:
           }
 
       - name: Upload installer as workflow artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: DuneServerSetup.exe
           path: app/installer/output/DuneServerSetup.exe
