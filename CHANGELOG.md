@@ -13,6 +13,17 @@ here cover everything those tags shipped.
 
 ## [Unreleased]
 
+## [12.19.6] - 2026-07-19
+
+### Changed
+- **Database restore guidance now covers live-proven cross-VM and
+  cross-battlegroup migrations.** Full database backups can carry characters,
+  inventories, progression, bases, and world state to a different VM or
+  battlegroup; the previous same-server-only warning was incorrect. The Database
+  page now provides the exact migration sequence, including both intentional
+  full restarts used to clear stale pods and reconcile operators after any
+  public-IP change. Destructive-restore safeguards remain unchanged.
+
 ## [12.19.5] - 2026-07-18
 
 ### Changed

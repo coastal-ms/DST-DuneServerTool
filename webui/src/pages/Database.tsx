@@ -122,7 +122,7 @@ export function Database() {
         'ALL players, bases, inventories, storage, blueprints, and the market will be rolled back to that snapshot. ' +
         'Everything created since the backup is permanently lost. This cannot be undone.\n\n' +
         'Take a fresh backup first if you have not. The battlegroup must be stopped.\n\n' +
-        'NOTE: restoring a backup onto a DIFFERENT server/battlegroup than it was taken on does NOT reliably restore characters — they are bound to your Funcom account in the cloud, so they may fail to load or get cleared on boot. Cross-server restores recover the world/bases, not character logins. Restore is intended for the SAME server.\n\n' +
+        'CROSS-VM / CROSS-BATTLEGROUP MIGRATION: a full backup can carry characters, inventories, progression, and bases to a different VM or battlegroup. Follow the migration guide on the Database page exactly, keep the old VM and original backup, and verify every character before decommissioning either one.\n\n' +
         'Type RESTORE to continue:',
       )
       if (typed == null) return
@@ -331,7 +331,7 @@ export function Database() {
           title="Restore Backup"
           icon="Upload"
           tone="ibad"
-          description="Full destructive restore — REPLACES the entire BG database with a previously taken backup. All players, bases, inventories, storage, blueprints, and the market roll back to that snapshot; everything since is permanently lost. Funcom's `battlegroup import` handles the whole lifecycle: it stops the BG on its own, swaps the snapshot into the DB, and the game containers recover automatically. No need to pre-stop; runs from any state. This cannot be undone. Restoring onto a different server/BG than it came from won't reliably restore characters (they're cloud-bound to Funcom accounts) — world/bases come back, character logins may not."
+          description="Full destructive restore — REPLACES the entire BG database with a previously taken backup. All players, bases, inventories, storage, blueprints, and the market roll back to that snapshot; everything since is permanently lost. Funcom's `battlegroup import` handles the restore lifecycle for ordinary rollbacks. Full backups can also migrate characters, inventories, progression, and bases to a different VM or battlegroup when the migration guide below is followed. This cannot be undone."
           hint={
             !vmRunning ? 'VM must be running to restore a backup.'
             : 'Choose the backup file in the console window. Funcom will print a "should be stopped" advisory; type `yes` to proceed — the import stops the BG on its own, swaps the DB, and the game recovers automatically.'
@@ -341,6 +341,33 @@ export function Database() {
           busy={launching === 'import'}
           onClick={() => void runMaint('import')}
         />
+      </div>
+
+      <div className="card p-5 mb-6 border border-accent/40">
+        <div className="flex items-start gap-3 mb-4">
+          <Icon name="ServerCog" size={22} className="text-accent mt-0.5 shrink-0" />
+          <div>
+            <h2 className="text-sm font-semibold text-text">Cross-VM / Cross-Battlegroup Migration</h2>
+            <p className="text-xs text-text-dim mt-1">
+              Live-verified procedure for moving a complete database backup to a different VM or battlegroup. Characters can carry over with their inventory, progression, and bases; account-specific data problems can still prevent an individual character from loading.
+            </p>
+          </div>
+        </div>
+
+        <ol className="list-decimal pl-5 space-y-2 text-xs text-text-muted">
+          <li>Copy the old <code className="font-mono text-text">.backup</code> file from the old VM to your PC. Keep the old VM and original backup intact.</li>
+          <li>Set up and start the new server VM and battlegroup.</li>
+          <li>Stop the target battlegroup.</li>
+          <li>On this page, open <strong className="text-text">Backups</strong>, click <strong className="text-text">Import backup</strong>, and select the old <code className="font-mono text-text">.backup</code> file to upload it to the new VM.</li>
+          <li>Click <strong className="text-text">Restore Backup</strong>, select the uploaded file in the console window, and complete the restore.</li>
+          <li>Run <strong className="text-text">Commands → Reboot All</strong>.</li>
+          <li>If the old VM used different addressing, open <strong className="text-text">Settings → Public IP / DDNS</strong>, apply the correct public IP settings, and wait for the address to settle.</li>
+          <li>Run <strong className="text-text">Commands → Reboot All</strong> again, then log in and verify characters, inventories, progression, and bases.</li>
+        </ol>
+
+        <div className="mt-4 rounded border border-warning/30 bg-warning/5 px-3 py-2 text-xs text-text-muted">
+          <strong className="text-warning">Do not skip the two full restarts.</strong> The first clears stale pods after the database replacement. The second forces a clean operator reconciliation after the IP change settles. Do not delete the old VM or backup until every character has been verified.
+        </div>
       </div>
 
       {/* Configurable backup schedule (writes the VM's root crontab) */}
