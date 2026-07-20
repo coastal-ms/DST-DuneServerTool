@@ -157,3 +157,82 @@ Describe 'Public IP apply state file' {
         $st.running | Should -BeTrue
     }
 }
+
+Describe 'Mixed-bind game UDP bridge' {
+    BeforeAll {
+        $script:dnatWatchPath = Join-Path $PSScriptRoot '..\app\resources\remote-scripts\dune-dnat-watch-install.sh'
+        $script:dnatWatchSource = Get-Content -LiteralPath $script:dnatWatchPath -Raw
+        $script:publicIpSource = Get-Content -LiteralPath (Join-Path $PSScriptRoot '..\app\server\lib\PublicIp.ps1') -Raw
+
+        $script:posixShell = Get-Command sh -ErrorAction SilentlyContinue
+        if (-not $script:posixShell) {
+            $gitShell = Join-Path $env:ProgramFiles 'Git\bin\sh.exe'
+            if (Test-Path -LiteralPath $gitShell) {
+                $script:posixShell = Get-Item -LiteralPath $gitShell
+            }
+        }
+    }
+
+    It 'classifies each active port independently from one listener snapshot' {
+        if (-not $script:posixShell) {
+            Set-ItResult -Skipped -Because 'A POSIX shell is not installed.'
+            return
+        }
+
+        $functionMatch = [regex]::Match(
+            $script:dnatWatchSource,
+            '(?ms)^game_port_state\(\) \{\r?\n.*?^\}'
+        )
+        $functionMatch.Success | Should -BeTrue
+
+        $harness = @'
+PUB=203.0.113.10
+VM_IP=192.168.1.20
+_udp_snapshot='203.0.113.10:7777
+203.0.113.10:7779
+0.0.0.0:7779
+192.168.1.20:7780'
+'@ + "`n" + $functionMatch.Value + "`n" + @'
+game_port_state 7777
+game_port_state 7779
+game_port_state 7780
+game_port_state 7781
+'@
+
+        $tempScript = Join-Path ([System.IO.Path]::GetTempPath()) ("dst-dnat-state-{0}.sh" -f [guid]::NewGuid())
+        try {
+            [System.IO.File]::WriteAllText(
+                $tempScript,
+                $harness,
+                [System.Text.UTF8Encoding]::new($false)
+            )
+            $actual = @(& $script:posixShell.FullName $tempScript)
+            $LASTEXITCODE | Should -Be 0
+            $actual | Should -Be @('pub', 'lan', 'lan', 'none')
+        } finally {
+            Remove-Item -LiteralPath $tempScript -Force -ErrorAction SilentlyContinue
+        }
+    }
+
+    It 'scopes watchdog cleanup to UDP DNAT rules for the Dune VM' {
+        $script:dnatWatchSource | Should -Match 'game_bridge_rules\(\)'
+        $script:dnatWatchSource | Should -Match 'grep -F -- "-d \$\{VM_IP\}/32"'
+        $script:dnatWatchSource | Should -Match "grep -F -- '-p udp'"
+        $script:dnatWatchSource | Should -Not -Match '(?m)iptables .* -I PREROUTING .*--dport "\$GAME_PORTS"'
+    }
+
+    It 'preserves the legacy bridge while listener state is fully indeterminate' {
+        $script:dnatWatchSource | Should -Match '\[ "\$_state" != none \] && \[ "\$_legacy_reconciled" = 0 \]'
+        $script:publicIpSource | Should -Match '\[ "\$_state" != none \] && \[ "\$_legacy_reconciled" = 0 \]'
+        $script:publicIpSource | Should -Match '\[ "\$gb_state" != none \] && \[ "\$gb_legacy_reconciled" = 0 \]'
+    }
+
+    It 'uses per-port reconciliation in both embedded Public IP apply paths' {
+        $script:publicIpSource | Should -Match 'game_port_state\(\)'
+        $script:publicIpSource | Should -Match 'gb_port_state\(\)'
+        $script:publicIpSource | Should -Match '_udp_snapshot=\$\(udp_listeners\)'
+        $script:publicIpSource | Should -Match 'gb_udp_snapshot=\$\(gb_listeners\)'
+        $script:publicIpSource | Should -Not -Match '(?m)iptables .* -I PREROUTING .*--dport "\$GAME_PORTS"'
+        $script:publicIpSource | Should -Not -Match '(?m)iptables .* -I PREROUTING .*--dport "\$GBPORTS"'
+    }
+}

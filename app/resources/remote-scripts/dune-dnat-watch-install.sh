@@ -87,32 +87,78 @@ udp_listeners() {
     printf '%s\n' "$_out"
 }
 
-# Classify the game's UDP bind across ports 7777-7810:
-#   0 = public IP bound, LAN/wildcard NOT bound   -> bridge needed AND safe
-#   1 = LAN IP / 0.0.0.0 bound                     -> bridge would black-hole
-#   2 = indeterminate (no game listeners visible)  -> leave rules unchanged
-game_bind_state() {
-    _pub=0; _lanwild=0
-    for _e in $(udp_listeners); do
+# Classify one game UDP port:
+#   pub  = public IP bound, LAN/wildcard NOT bound -> bridge needed AND safe
+#   lan  = LAN IP / 0.0.0.0 bound                  -> bridge would black-hole
+#   none = no relevant listener visible            -> leave its rule unchanged
+#
+# Listener state is intentionally evaluated per port. Funcom can mix public-only
+# and LAN-bound map ports within the dynamic range.
+game_port_state() {
+    _want_port="$1"
+    _pub=0
+    _lanwild=0
+    for _e in $_udp_snapshot; do
         _port=${_e##*:}
         _addr=${_e%:*}
-        case "$_port" in ''|*[!0-9]*) continue ;; esac
-        { [ "$_port" -ge "$GAME_LO" ] && [ "$_port" -le "$GAME_HI" ]; } 2>/dev/null || continue
+        [ "$_port" = "$_want_port" ] || continue
         case "$_addr" in
             "$PUB")                  _pub=1 ;;
             "$VM_IP"|0.0.0.0|'*'|'') _lanwild=1 ;;
         esac
     done
-    [ "$_lanwild" = 1 ] && return 1
-    [ "$_pub" = 1 ] && return 0
-    return 2
+
+    if [ "$_lanwild" = 1 ]; then
+        echo lan
+    elif [ "$_pub" = 1 ]; then
+        echo pub
+    else
+        echo none
+    fi
 }
 
-# Delete every game-UDP DNAT rule currently in PREROUTING (any --to-destination).
-purge_game_bridge() {
-    iptables -t nat -S PREROUTING 2>/dev/null | grep -- "--dport ${GAME_PORTS}" | grep -- '-j DNAT' | sed 's/^-A/-D/' | while read -r _spec; do
-        iptables -t nat $_spec 2>/dev/null && log "removed game-UDP DNAT rule: $_spec"
-    done
+# Restrict cleanup to UDP DNAT rules whose destination is this Dune VM. Do not
+# touch unrelated DNAT rules that happen to use a game-range port.
+game_bridge_rules() {
+    iptables -t nat -S PREROUTING 2>/dev/null |
+        grep -F -- "-d ${VM_IP}/32" |
+        grep -F -- '-p udp' |
+        grep -F -- '-j DNAT'
+}
+
+purge_legacy_game_bridge() {
+    game_bridge_rules |
+        grep -E -- "--dport[[:space:]]+${GAME_PORTS}([[:space:]]|$)" |
+        sed 's/^-A/-D/' |
+        while read -r _spec; do
+            iptables -t nat $_spec 2>/dev/null &&
+                log "removed legacy broad game-UDP DNAT rule: $_spec"
+        done
+}
+
+purge_game_bridge_port() {
+    _port="$1"
+    game_bridge_rules |
+        grep -E -- "--dport[[:space:]]+${_port}([[:space:]]|$)" |
+        sed 's/^-A/-D/' |
+        while read -r _spec; do
+            iptables -t nat $_spec 2>/dev/null &&
+                log "removed game-UDP DNAT rule for port ${_port}: $_spec"
+        done
+}
+
+ensure_game_bridge_port() {
+    _port="$1"
+    if iptables -t nat -C PREROUTING -d "$VM_IP" -p udp --dport "$_port" -j DNAT --to-destination "$PUB" 2>/dev/null; then
+        return 0
+    fi
+
+    purge_game_bridge_port "$_port"
+    if iptables -t nat -I PREROUTING 1 -d "$VM_IP" -p udp --dport "$_port" -j DNAT --to-destination "$PUB" 2>/dev/null; then
+        log "installed game-UDP bridge: ${VM_IP}:${_port} -> ${PUB}:${_port} (game binds public IP only)"
+    else
+        log "failed to install game-UDP bridge for port ${_port}"
+    fi
 }
 
 NODE=$($KUBE get nodes --no-headers -o custom-columns=:metadata.name 2>/dev/null | head -1 | tr -d ' ')
@@ -147,24 +193,22 @@ fi
 
 # --- Game-UDP bridge: <VM_IP>:7777-7810/udp -> PUB (needs a valid VM LAN IP) ---
 if is_ipv4 "$VM_IP"; then
-    game_bind_state; _st=$?
-    if [ "$_st" = 0 ]; then
-        if iptables -t nat -C PREROUTING -d "$VM_IP" -p udp --dport "$GAME_PORTS" -j DNAT --to-destination "$PUB" 2>/dev/null; then
-            : # already correct
-        else
-            purge_game_bridge   # drop any stale rule (e.g. an old public IP) first
-            iptables -t nat -I PREROUTING 1 -d "$VM_IP" -p udp --dport "$GAME_PORTS" -j DNAT --to-destination "$PUB"
-            log "installed game-UDP bridge: ${VM_IP}:${GAME_PORTS} -> ${PUB} (game binds public IP only)"
+    _udp_snapshot=$(udp_listeners)
+    _legacy_reconciled=0
+    _p="$GAME_LO"
+    while [ "$_p" -le "$GAME_HI" ]; do
+        _state=$(game_port_state "$_p")
+        if [ "$_state" != none ] && [ "$_legacy_reconciled" = 0 ]; then
+            purge_legacy_game_bridge
+            _legacy_reconciled=1
         fi
-    elif [ "$_st" = 1 ]; then
-        # Game reachable on the LAN IP/wildcard already; a bridge would black-hole it.
-        if iptables -t nat -C PREROUTING -d "$VM_IP" -p udp --dport "$GAME_PORTS" -j DNAT --to-destination "$PUB" 2>/dev/null; then
-            purge_game_bridge
-            log "removed game-UDP bridge (game binds LAN/wildcard; bridge would black-hole)"
-        fi
-    else
-        : # indeterminate (pods not up?) -> leave whatever is there intact
-    fi
+        case "$_state" in
+            pub)  ensure_game_bridge_port "$_p" ;;
+            lan)  purge_game_bridge_port "$_p" ;;
+            none) : ;; # inactive/indeterminate -> preserve any exact-port rule
+        esac
+        _p=$((_p + 1))
+    done
 else
     log "node InternalIP not a valid IPv4 ('$VM_IP'); leaving game-UDP bridge intact"
 fi

@@ -13,6 +13,12 @@ here cover everything those tags shipped.
 
 ## [Unreleased]
 
+### Fixed
+- **Public IP / DDNS now handles mixed game-port bind states.** The UDP bridge
+  reconciles each active port independently, so a LAN-bound map port no longer
+  suppresses DNAT for different ports bound only to the public IP. Cleanup is
+  limited to Dune game-port UDP rules for the VM.
+
 ## [12.19.8] - 2026-07-20
 
 ### Added

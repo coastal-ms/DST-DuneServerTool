@@ -869,34 +869,69 @@ if [ -n "$POD_IP" ] && [ "$POD_IP" != "<none>" ]; then
       iptables -t nat -I PREROUTING 1 -d "$NEW_IP" -p tcp --dport "$RABBIT_PORT" -j DNAT --to-destination "${POD_IP}:5672"
 fi
 
-# Game-UDP bridge: <VM_IP>:7777-7810/udp -> NEW_IP, ONLY when the game binds the
-# public IP and NOT the LAN IP/wildcard (IPv4-only detection). Mirrors
-# dune-dnat-watch.sh; see that file for the full rationale.
+# Game-UDP bridge: <VM_IP>:7777-7810/udp -> NEW_IP, bind-detected per port.
+# Funcom can mix public-only and LAN-bound listeners within the dynamic range.
 udp_listeners() {
     _o=""
     if command -v ss >/dev/null 2>&1; then _o=$(ss -H -u -l -n -4 2>/dev/null | awk '{print $4}'); fi
     [ -n "$_o" ] || _o=$(netstat -uln 2>/dev/null | awk '$1=="udp"{print $4}')
     printf '%s\n' "$_o"
 }
-_pub=0; _lanwild=0
-for _e in $(udp_listeners); do
-    _port=${_e##*:}; _addr=${_e%:*}
-    case "$_port" in ''|*[!0-9]*) continue ;; esac
-    { [ "$_port" -ge "$GAME_LO" ] && [ "$_port" -le "$GAME_HI" ]; } 2>/dev/null || continue
-    case "$_addr" in
-        "$NEW_IP")               _pub=1 ;;
-        "$VM_IP"|0.0.0.0|'*'|'') _lanwild=1 ;;
-    esac
-done
-if [ "$_lanwild" = 1 ]; then
-    iptables -t nat -S PREROUTING 2>/dev/null | grep -- "--dport ${GAME_PORTS}" | grep -- '-j DNAT' | sed 's/^-A/-D/' | while read -r _s; do iptables -t nat $_s 2>/dev/null && log "removed game-UDP bridge (game binds LAN/wildcard): $_s"; done
-elif [ "$_pub" = 1 ]; then
-    if ! iptables -t nat -C PREROUTING -d "$VM_IP" -p udp --dport "$GAME_PORTS" -j DNAT --to-destination "$NEW_IP" 2>/dev/null; then
-        iptables -t nat -S PREROUTING 2>/dev/null | grep -- "--dport ${GAME_PORTS}" | grep -- '-j DNAT' | sed 's/^-A/-D/' | while read -r _s; do iptables -t nat $_s 2>/dev/null; done
-        iptables -t nat -I PREROUTING 1 -d "$VM_IP" -p udp --dport "$GAME_PORTS" -j DNAT --to-destination "$NEW_IP"
-        log "installed game-UDP bridge: ${VM_IP}:${GAME_PORTS} -> ${NEW_IP}"
+game_port_state() {
+    _want_port="$1"; _pub=0; _lanwild=0
+    for _e in $_udp_snapshot; do
+        _port=${_e##*:}; _addr=${_e%:*}
+        [ "$_port" = "$_want_port" ] || continue
+        case "$_addr" in
+            "$NEW_IP")               _pub=1 ;;
+            "$VM_IP"|0.0.0.0|'*'|'') _lanwild=1 ;;
+        esac
+    done
+    if [ "$_lanwild" = 1 ]; then echo lan; elif [ "$_pub" = 1 ]; then echo pub; else echo none; fi
+}
+game_bridge_rules() {
+    iptables -t nat -S PREROUTING 2>/dev/null |
+        grep -F -- "-d ${VM_IP}/32" |
+        grep -F -- '-p udp' |
+        grep -F -- '-j DNAT'
+}
+purge_legacy_game_bridge() {
+    game_bridge_rules | grep -E -- "--dport[[:space:]]+${GAME_PORTS}([[:space:]]|$)" | sed 's/^-A/-D/' | while read -r _s; do
+        iptables -t nat $_s 2>/dev/null && log "removed legacy broad game-UDP bridge: $_s"
+    done
+}
+purge_game_bridge_port() {
+    _port="$1"
+    game_bridge_rules | grep -E -- "--dport[[:space:]]+${_port}([[:space:]]|$)" | sed 's/^-A/-D/' | while read -r _s; do
+        iptables -t nat $_s 2>/dev/null && log "removed game-UDP bridge for port ${_port}: $_s"
+    done
+}
+ensure_game_bridge_port() {
+    _port="$1"
+    if iptables -t nat -C PREROUTING -d "$VM_IP" -p udp --dport "$_port" -j DNAT --to-destination "$NEW_IP" 2>/dev/null; then return 0; fi
+    purge_game_bridge_port "$_port"
+    if iptables -t nat -I PREROUTING 1 -d "$VM_IP" -p udp --dport "$_port" -j DNAT --to-destination "$NEW_IP" 2>/dev/null; then
+        log "installed game-UDP bridge: ${VM_IP}:${_port} -> ${NEW_IP}:${_port}"
+    else
+        log "failed to install game-UDP bridge for port ${_port}"
     fi
-fi
+}
+_udp_snapshot=$(udp_listeners)
+_legacy_reconciled=0
+_p="$GAME_LO"
+while [ "$_p" -le "$GAME_HI" ]; do
+    _state=$(game_port_state "$_p")
+    if [ "$_state" != none ] && [ "$_legacy_reconciled" = 0 ]; then
+        purge_legacy_game_bridge
+        _legacy_reconciled=1
+    fi
+    case "$_state" in
+        pub)  ensure_game_bridge_port "$_p" ;;
+        lan)  purge_game_bridge_port "$_p" ;;
+        none) : ;;
+    esac
+    _p=$((_p + 1))
+done
 DUNEBOOT
 } > /tmp/dune-iptables.start
 sudo install -m 0755 /tmp/dune-iptables.start /etc/local.d/dune-iptables.start
@@ -913,12 +948,9 @@ if [ -n "$MQ_IP" ] && [ "$MQ_IP" != "<none>" ]; then
 else
   echo "mq-game endpoint not ready (got '${MQ_IP:-<empty>}'); rabbitmq DNAT deferred to dune-dnat-watch cron"
 fi
-# Game-UDP bridge (bind-detected; mirrors /etc/local.d/dune-iptables.start &
-# dune-dnat-watch.sh). Install <VM_IP>:7777-7810/udp -> NEW_IP ONLY when the game
-# binds the PUBLIC IP and NOT the LAN IP/wildcard, so a same-LAN / self join is
-# never black-holed (the v12.16.9 regression). On a re-apply/repair the game is
-# already bound to the current public IP, so this fixes an affected box at once;
-# otherwise the cron watchdog installs it within 60s once the game rebinds.
+# Game-UDP bridge (bind-detected per port; mirrors the boot script and watchdog).
+# Monitor the full dynamic range, but do not let one LAN-bound port suppress a
+# different public-only port.
 GBLO=7777; GBHI=7810; GBPORTS=7777:7810
 gb_listeners() {
   _o=""
@@ -926,30 +958,60 @@ gb_listeners() {
   [ -n "$_o" ] || _o=$(netstat -uln 2>/dev/null | awk '$1=="udp"{print $4}')
   printf '%s\n' "$_o"
 }
-gb_pub=0; gb_lanwild=0
-for gb_e in $(gb_listeners); do
-  gb_port=${gb_e##*:}; gb_addr=${gb_e%:*}
-  case "$gb_port" in ''|*[!0-9]*) continue;; esac
-  { [ "$gb_port" -ge "$GBLO" ] && [ "$gb_port" -le "$GBHI" ]; } 2>/dev/null || continue
-  case "$gb_addr" in
-    "$NEW_IP")               gb_pub=1;;
-    "$VM_IP"|0.0.0.0|'*'|'') gb_lanwild=1;;
-  esac
-done
-if [ "$gb_lanwild" = 1 ]; then
-  echo "game-UDP bridge: game binds LAN/wildcard -> ensuring absent (bridge would black-hole)"
-  sudo iptables -t nat -S PREROUTING 2>/dev/null | grep -- "--dport ${GBPORTS}" | grep -- '-j DNAT' | sed 's/^-A/-D/' | while read -r gb_s; do sudo iptables -t nat $gb_s 2>/dev/null || true; done
-elif [ "$gb_pub" = 1 ]; then
-  if sudo iptables -t nat -C PREROUTING -d "$VM_IP" -p udp --dport "$GBPORTS" -j DNAT --to-destination "$NEW_IP" 2>/dev/null; then
-    echo "game-UDP bridge: already correct (${VM_IP}:${GBPORTS} -> ${NEW_IP})"
-  else
-    sudo iptables -t nat -S PREROUTING 2>/dev/null | grep -- "--dport ${GBPORTS}" | grep -- '-j DNAT' | sed 's/^-A/-D/' | while read -r gb_s; do sudo iptables -t nat $gb_s 2>/dev/null || true; done
-    sudo iptables -t nat -I PREROUTING 1 -d "$VM_IP" -p udp --dport "$GBPORTS" -j DNAT --to-destination "$NEW_IP" || echo "game-UDP bridge: insert failed (non-fatal)"
-    echo "game-UDP bridge: installed ${VM_IP}:${GBPORTS} -> ${NEW_IP} (game binds public IP only)"
+gb_port_state() {
+  gb_want_port="$1"; gb_pub=0; gb_lanwild=0
+  for gb_e in $gb_udp_snapshot; do
+    gb_port=${gb_e##*:}; gb_addr=${gb_e%:*}
+    [ "$gb_port" = "$gb_want_port" ] || continue
+    case "$gb_addr" in
+      "$NEW_IP")               gb_pub=1;;
+      "$VM_IP"|0.0.0.0|'*'|'') gb_lanwild=1;;
+    esac
+  done
+  if [ "$gb_lanwild" = 1 ]; then echo lan; elif [ "$gb_pub" = 1 ]; then echo pub; else echo none; fi
+}
+gb_bridge_rules() {
+  sudo iptables -t nat -S PREROUTING 2>/dev/null |
+    grep -F -- "-d ${VM_IP}/32" |
+    grep -F -- '-p udp' |
+    grep -F -- '-j DNAT'
+}
+gb_purge_legacy_bridge() {
+  gb_bridge_rules | grep -E -- "--dport[[:space:]]+${GBPORTS}([[:space:]]|$)" | sed 's/^-A/-D/' | while read -r gb_s; do sudo iptables -t nat $gb_s 2>/dev/null || true; done
+}
+gb_purge_port() {
+  gb_port="$1"
+  gb_bridge_rules | grep -E -- "--dport[[:space:]]+${gb_port}([[:space:]]|$)" | sed 's/^-A/-D/' | while read -r gb_s; do sudo iptables -t nat $gb_s 2>/dev/null || true; done
+}
+gb_ensure_port() {
+  gb_port="$1"
+  if sudo iptables -t nat -C PREROUTING -d "$VM_IP" -p udp --dport "$gb_port" -j DNAT --to-destination "$NEW_IP" 2>/dev/null; then
+    echo "game-UDP bridge: already correct (${VM_IP}:${gb_port} -> ${NEW_IP}:${gb_port})"
+    return 0
   fi
-else
-  echo "game-UDP bridge: bind indeterminate (pods not up?); leaving rules unchanged"
-fi
+  gb_purge_port "$gb_port"
+  if sudo iptables -t nat -I PREROUTING 1 -d "$VM_IP" -p udp --dport "$gb_port" -j DNAT --to-destination "$NEW_IP" 2>/dev/null; then
+    echo "game-UDP bridge: installed ${VM_IP}:${gb_port} -> ${NEW_IP}:${gb_port} (game binds public IP only)"
+  else
+    echo "game-UDP bridge: insert failed for port ${gb_port} (non-fatal)"
+  fi
+}
+gb_udp_snapshot=$(gb_listeners)
+gb_legacy_reconciled=0
+gb_p="$GBLO"
+while [ "$gb_p" -le "$GBHI" ]; do
+  gb_state=$(gb_port_state "$gb_p")
+  if [ "$gb_state" != none ] && [ "$gb_legacy_reconciled" = 0 ]; then
+    gb_purge_legacy_bridge
+    gb_legacy_reconciled=1
+  fi
+  case "$gb_state" in
+    pub)  gb_ensure_port "$gb_p";;
+    lan)  gb_purge_port "$gb_p";;
+    none) :;;
+  esac
+  gb_p=$((gb_p + 1))
+done
 echo "NETWORK_DONE"
 '@
             $steps.Add((New-DunePublicIpStepResult 'vm-network' 'Update VM network, settings.conf, K3s, NAT' 'running' 'Applying network + persistent-config changes over SSH.')) | Out-Null
