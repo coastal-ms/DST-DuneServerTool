@@ -88,9 +88,9 @@ udp_listeners() {
 }
 
 # Classify one game UDP port:
-#   pub  = public IP bound, LAN/wildcard NOT bound -> bridge needed AND safe
-#   lan  = LAN IP / 0.0.0.0 bound                  -> bridge would black-hole
-#   none = no relevant listener visible            -> leave its rule unchanged
+#   pub  = public IP bound (including a dual bind) -> bridge needed
+#   lan  = LAN IP / 0.0.0.0 bound without public  -> bridge not needed
+#   none = no relevant listener visible           -> leave its rule unchanged
 #
 # Listener state is intentionally evaluated per port. Funcom can mix public-only
 # and LAN-bound map ports within the dynamic range.
@@ -108,10 +108,14 @@ game_port_state() {
         esac
     done
 
-    if [ "$_lanwild" = 1 ]; then
-        echo lan
-    elif [ "$_pub" = 1 ]; then
+    # A public listener wins when separate game processes also bind the LAN IP.
+    # Router-forwarded traffic otherwise reaches the wrong process and the map
+    # handshake stalls. A LAN bind suppresses DNAT only when no public listener
+    # exists for this exact port.
+    if [ "$_pub" = 1 ]; then
         echo pub
+    elif [ "$_lanwild" = 1 ]; then
+        echo lan
     else
         echo none
     fi

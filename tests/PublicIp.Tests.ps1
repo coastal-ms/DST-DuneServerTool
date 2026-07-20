@@ -208,10 +208,16 @@ game_port_state 7781
             )
             $actual = @(& $script:posixShell.FullName $tempScript)
             $LASTEXITCODE | Should -Be 0
-            $actual | Should -Be @('pub', 'lan', 'lan', 'none')
+            $actual | Should -Be @('pub', 'pub', 'lan', 'none')
         } finally {
             Remove-Item -LiteralPath $tempScript -Force -ErrorAction SilentlyContinue
         }
+    }
+
+    It 'prefers the public listener when different processes dual-bind one port' {
+        $script:dnatWatchSource | Should -Match 'if \[ "\$_pub" = 1 \]; then'
+        $script:publicIpSource | Should -Match 'if \[ "\$_pub" = 1 \]; then echo pub; elif \[ "\$_lanwild" = 1 \]'
+        $script:publicIpSource | Should -Match 'if \[ "\$gb_pub" = 1 \]; then echo pub; elif \[ "\$gb_lanwild" = 1 \]'
     }
 
     It 'scopes watchdog cleanup to UDP DNAT rules for the Dune VM' {

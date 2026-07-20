@@ -887,7 +887,7 @@ game_port_state() {
             "$VM_IP"|0.0.0.0|'*'|'') _lanwild=1 ;;
         esac
     done
-    if [ "$_lanwild" = 1 ]; then echo lan; elif [ "$_pub" = 1 ]; then echo pub; else echo none; fi
+    if [ "$_pub" = 1 ]; then echo pub; elif [ "$_lanwild" = 1 ]; then echo lan; else echo none; fi
 }
 game_bridge_rules() {
     iptables -t nat -S PREROUTING 2>/dev/null |
@@ -968,7 +968,7 @@ gb_port_state() {
       "$VM_IP"|0.0.0.0|'*'|'') gb_lanwild=1;;
     esac
   done
-  if [ "$gb_lanwild" = 1 ]; then echo lan; elif [ "$gb_pub" = 1 ]; then echo pub; else echo none; fi
+  if [ "$gb_pub" = 1 ]; then echo pub; elif [ "$gb_lanwild" = 1 ]; then echo lan; else echo none; fi
 }
 gb_bridge_rules() {
   sudo iptables -t nat -S PREROUTING 2>/dev/null |
