@@ -939,14 +939,14 @@ rm -f /tmp/dune-iptables.start
 sh -n /etc/local.d/dune-iptables.start
 # mq-game endpoint may be the literal string "<none>" when the BG is Stopped /
 # the pod hasn't come up yet -- skip the immediate install in that case, the
-# per-minute dune-dnat-watch cron installs it once the pod is Ready. Feeding
+# supervised dune-dnat-watch service installs it once the pod is Ready. Feeding
 # "<none>" to iptables errors "Bad IP address" and fails the whole Apply step.
 MQ_IP=$(sudo kubectl get endpoints --all-namespaces -o wide 2>/dev/null | grep mq-game | awk '{print $3}' | cut -d, -f1 | cut -d: -f1 | head -1)
 if [ -n "$MQ_IP" ] && [ "$MQ_IP" != "<none>" ]; then
   sudo iptables -t nat -C PREROUTING -d "$NEW_IP" -p tcp --dport 31982 -j DNAT --to-destination "${MQ_IP}:5672" 2>/dev/null || \
     sudo iptables -t nat -I PREROUTING 1 -d "$NEW_IP" -p tcp --dport 31982 -j DNAT --to-destination "${MQ_IP}:5672"
 else
-  echo "mq-game endpoint not ready (got '${MQ_IP:-<empty>}'); rabbitmq DNAT deferred to dune-dnat-watch cron"
+  echo "mq-game endpoint not ready (got '${MQ_IP:-<empty>}'); rabbitmq DNAT deferred to dune-dnat-watch service"
 fi
 # Game-UDP bridge (bind-detected per port; mirrors the boot script and watchdog).
 # Monitor the full dynamic range, but do not let one LAN-bound port suppress a
