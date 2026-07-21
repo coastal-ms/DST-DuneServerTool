@@ -177,6 +177,35 @@ export type GameConfigResponse = {
   engine: GameConfigFileBundle
 }
 
+export type DeepDesertPvpInstance = {
+  map: 'DeepDesert_1'
+  partitionId: number
+  dimension: number
+  phase: string
+  ready: boolean
+  gamePort: number
+  serverDisplayName: string
+  pvpEnabled: boolean
+}
+
+export type DeepDesertPvpState = {
+  ok: boolean
+  enabled: boolean
+  forceAll: boolean
+  selectedPartitionIds: number[]
+  inactiveSelectedPartitionIds: number[]
+  staleSelectedPartitionIds: number[]
+  instances: DeepDesertPvpInstance[]
+  message?: string
+  restart?: {
+    ok: boolean
+    noop?: boolean
+    podsFound?: number
+    podsDeleted?: number
+    message?: string
+  }
+}
+
 export type GameConfigClientApplyItem = {
   key: string
   label: string

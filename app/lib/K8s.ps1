@@ -149,6 +149,82 @@ function Get-V6SietchNames {
     return $names
 }
 
+# Return only live DeepDesert_1 instances reported by battlegroup status.servers.
+# Static worldPartitions and set replicas are intentionally ignored: Director-
+# driven Deep Desert can be running while its template set still says replicas=0.
+function Get-V6DeepDesertInstancesFromBg {
+    param([Parameter(Mandatory)]$Bg)
+
+    $configured = @{}
+    foreach ($wp in @($Bg.spec.database.template.spec.deployment.spec.worldPartitions)) {
+        if ("$($wp.map)" -ne 'DeepDesert_1') { continue }
+        foreach ($p in @($wp.partitions)) {
+            if ($p.PSObject.Properties['id'] -and [int]$p.id -gt 0) { $configured[[int]$p.id] = $true }
+        }
+    }
+
+    $names = @{}
+    foreach ($set in @($Bg.spec.serverGroup.template.spec.sets)) {
+        if ("$($set.map)" -ne 'DeepDesert_1') { continue }
+        if ($set.PSObject.Properties['podSpecs'] -and $set.podSpecs) {
+            foreach ($ps in @($set.podSpecs)) {
+                if (-not $ps.PSObject.Properties['index'] -or -not $ps.PSObject.Properties['arguments']) { continue }
+                foreach ($arg in @($ps.arguments)) {
+                    if ("$arg" -match "Bgd\.ServerDisplayName\s+'(.*)'") {
+                        $names[[int]$ps.index] = $Matches[1]
+                        break
+                    }
+                }
+            }
+        }
+    }
+
+    $servers = @()
+    try { $servers = @($Bg.status.servers) } catch {}
+    if (-not $servers -or $servers.Count -eq 0) {
+        try { $servers = @($Bg.status.serverGroupStatus.pods) } catch {}
+    }
+
+    $instances = New-Object 'System.Collections.Generic.List[object]'
+    $seen = New-Object 'System.Collections.Generic.HashSet[int]'
+    foreach ($server in $servers) {
+        $map = if ($server.PSObject.Properties['partitionMap']) { "$($server.partitionMap)" } else { '' }
+        if ($map -ne 'DeepDesert_1' -or -not $server.PSObject.Properties['partitionIndex']) { continue }
+        $id = [int]$server.partitionIndex
+        if ($id -le 0 -or -not $configured.ContainsKey($id) -or -not $seen.Add($id)) { continue }
+        $instances.Add([pscustomobject]@{
+            Map               = $map
+            PartitionId       = $id
+            Dimension         = if ($server.PSObject.Properties['dimensionIndex']) { [int]$server.dimensionIndex } else { 0 }
+            Phase             = if ($server.PSObject.Properties['phase']) { "$($server.phase)" } else { 'Unknown' }
+            Ready             = if ($server.PSObject.Properties['ready']) { [bool]$server.ready } else { $false }
+            GamePort          = if ($server.PSObject.Properties['gamePort']) { [int]$server.gamePort } else { 0 }
+            ServerDisplayName = if ($names.ContainsKey($id)) { [string]$names[$id] } else { $null }
+        })
+    }
+    return @($instances.ToArray() | Sort-Object PartitionId -Unique)
+}
+
+function Get-V6DeepDesertInstances {
+    [CmdletBinding()]
+    param([Parameter(Mandatory)][string]$Ip)
+    $info = Get-V6Battlegroup -Ip $Ip
+    $configured = @{}
+    foreach ($wp in @($info.Bg.spec.database.template.spec.deployment.spec.worldPartitions)) {
+        if ("$($wp.map)" -ne 'DeepDesert_1') { continue }
+        foreach ($p in @($wp.partitions)) {
+            if ($p.PSObject.Properties['id'] -and [int]$p.id -gt 0) { $configured[[int]$p.id] = $true }
+        }
+    }
+    return @{
+        Ns        = $info.Ns
+        Name      = $info.Name
+        Title     = if ($info.Bg.spec.PSObject.Properties['title']) { [string]$info.Bg.spec.title } else { '' }
+        ConfiguredPartitionIds = @($configured.Keys | Sort-Object)
+        Instances = @(Get-V6DeepDesertInstancesFromBg -Bg $info.Bg)
+    }
+}
+
 # Reconfigure the Survival_1 map to run exactly $Count sietches (Hagga shards),
 # optionally naming each. Single source of truth for the multi-sietch feature -
 # it replicates Funcom's own bg-util editor:

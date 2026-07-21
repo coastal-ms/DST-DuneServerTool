@@ -194,7 +194,6 @@ $script:DuneGameConfigSchema = @(
     @{ Section=$script:DuneGcSecLandsraad; Key='bIsLandsraadEnabled'; File='game'; Type='bool'; Default='True'; Label='Landsraad Enabled'; Help='Master toggle for the entire Landsraad system. Also needs client-side apply.'; ClientApply=$true; Category='Landsraad' }
 
     # --- PvP & Security ---
-    @{ Section=$script:DuneGcSecPvP; Key='m_bShouldForceEnablePvpOnAllPartitions'; File='game'; Type='bool'; Default='False'; Label='Force PvP on All Partitions'; Help='Override per-partition PvP settings (PvP everywhere).'; Category='PvP & Security' }
     @{ Section=$script:DuneGcSecSecurity; Key='m_bAreSecurityZonesEnabled'; File='game'; Type='bool'; Default='True'; Label='Security Zones Enabled'; Help='Off = PvP and ability usage allowed everywhere.'; Category='PvP & Security' }
 
     # --- Spice ---
@@ -1452,6 +1451,140 @@ function Save-DuneGameConfig {
         $b64 = [Convert]::ToBase64String([Text.Encoding]::UTF8.GetBytes($new))
         Invoke-V6Ssh -Ip $Ip -Cmd "base64 -d | sudo tee '$path' > /dev/null" -StdinData $b64 -TimeoutSec 30 | Out-Null
     }
+}
+
+# =============================================================================
+# DEEP DESERT PER-PARTITION PVP
+# =============================================================================
+
+function Get-DuneDeepDesertPvpIniState {
+    param([string]$Raw)
+    $forceAll = $false
+    $selected = @{}
+    $doc = ConvertFrom-DuneIniDoc -Raw $Raw
+    foreach ($section in $doc.sections) {
+        if ("$($section.name)" -ne $script:DuneGcSecPvP) { continue }
+        foreach ($line in $section.body) {
+            $trim = "$line".Trim()
+            if ($trim -match '^m_bShouldForceEnablePvpOnAllPartitions\s*=\s*(True|False)\s*$') {
+                $forceAll = ($Matches[1] -eq 'True')
+            } elseif ($trim -match '^\+?m_PvpEnabledPartitions\s*=\s*(\d+)\s*$') {
+                $selected[[int]$Matches[1]] = $true
+            }
+        }
+    }
+    return @{
+        forceAll            = [bool]$forceAll
+        selectedPartitionIds = @($selected.Keys | Sort-Object)
+    }
+}
+
+function New-DuneDeepDesertPvpUpdates {
+    param([int[]]$PartitionIds)
+    $ids = @($PartitionIds | Where-Object { $_ -gt 0 } | Sort-Object -Unique)
+    $updates = New-Object 'System.Collections.Generic.List[object]'
+    $updates.Add(@{
+        file='game'; section=$script:DuneGcSecPvP
+        key='m_bShouldForceEnablePvpOnAllPartitions'; value='False'; remove=$false
+    })
+    if ($ids.Count -gt 0) {
+        $updates.Add(@{
+            file='game'; section=$script:DuneGcSecPvP; key='m_PvpEnabledPartitions'
+            arrayLines=@($ids | ForEach-Object { "+m_PvpEnabledPartitions=$_" })
+        })
+    } else {
+        $updates.Add(@{
+            file='game'; section=$script:DuneGcSecPvP; key='m_PvpEnabledPartitions'
+            arrayRemove=$true
+        })
+    }
+    return ,$updates.ToArray()
+}
+
+function Get-DuneDeepDesertPvp {
+    $ctx = Get-DuneGameConfigContext
+    if (-not $ctx.ok) { return @{ ok=$false; status=$ctx.status; message=$ctx.message } }
+
+    $live = Get-DuneGameConfig -Ip $ctx.ip
+    $iniState = Get-DuneDeepDesertPvpIniState -Raw "$($live.game.raw)"
+    $dd = Get-V6DeepDesertInstances -Ip $ctx.ip
+    $globalName = ''
+    try { $globalName = "$($live.engine.effective["$script:DuneGcSecConsole||Bgd.ServerDisplayName"])" } catch {}
+    if (-not $globalName) { $globalName = "$($dd.Title)" }
+
+    $selectedLookup = @{}
+    foreach ($id in @($iniState.selectedPartitionIds)) { $selectedLookup[[int]$id] = $true }
+    $instances = @($dd.Instances | ForEach-Object {
+        $id = [int]$_.PartitionId
+        @{
+            map               = "$($_.Map)"
+            partitionId       = $id
+            dimension         = [int]$_.Dimension
+            phase             = "$($_.Phase)"
+            ready             = [bool]$_.Ready
+            gamePort          = [int]$_.GamePort
+            serverDisplayName = if ($_.ServerDisplayName) { "$($_.ServerDisplayName)" } elseif ($globalName) { $globalName } else { "Deep Desert partition $id" }
+            pvpEnabled        = $selectedLookup.ContainsKey($id) -or [bool]$iniState.forceAll
+        }
+    })
+    $activeLookup = @{}
+    foreach ($row in $instances) { $activeLookup[[int]$row.partitionId] = $true }
+    $configuredLookup = @{}
+    foreach ($id in @($dd.ConfiguredPartitionIds)) { $configuredLookup[[int]$id] = $true }
+    $inactiveSelected = @($iniState.selectedPartitionIds | Where-Object {
+        $configuredLookup.ContainsKey([int]$_) -and -not $activeLookup.ContainsKey([int]$_)
+    })
+    $staleSelected = @($iniState.selectedPartitionIds | Where-Object {
+        -not $configuredLookup.ContainsKey([int]$_)
+    })
+
+    return @{
+        ok                           = $true
+        enabled                      = ([bool]$iniState.forceAll -or @($iniState.selectedPartitionIds).Count -gt 0)
+        forceAll                     = [bool]$iniState.forceAll
+        selectedPartitionIds         = @($iniState.selectedPartitionIds)
+        inactiveSelectedPartitionIds = $inactiveSelected
+        staleSelectedPartitionIds    = $staleSelected
+        instances                    = $instances
+    }
+}
+
+function Set-DuneDeepDesertPvp {
+    param([Parameter(Mandatory)][bool]$Enabled, [int[]]$PartitionIds)
+    $ctx = Get-DuneGameConfigContext
+    if (-not $ctx.ok) { return @{ ok=$false; status=$ctx.status; message=$ctx.message } }
+
+    $current = Get-DuneDeepDesertPvp
+    if (-not $current.ok) { return $current }
+    $activeLookup = @{}
+    foreach ($row in @($current.instances)) { $activeLookup[[int]$row.partitionId] = $true }
+
+    $requested = @($PartitionIds | Where-Object { $_ -gt 0 } | Sort-Object -Unique)
+    if ($Enabled -and $requested.Count -eq 0) {
+        return @{ ok=$false; status=400; message='Select at least one running Deep Desert partition for PvP.' }
+    }
+    foreach ($id in $requested) {
+        if (-not $activeLookup.ContainsKey([int]$id)) {
+            return @{ ok=$false; status=400; message="Partition $id is not a currently running DeepDesert_1 instance. Refresh and try again." }
+        }
+    }
+
+    $desired = @()
+    if ($Enabled) {
+        # Preserve selected partitions that are currently spun down and hidden.
+        $desired = @($requested + @($current.inactiveSelectedPartitionIds) | Sort-Object -Unique)
+    }
+    Save-DuneGameConfig -Ip $ctx.ip -Updates (New-DuneDeepDesertPvpUpdates -PartitionIds $desired)
+    $restart = Restart-DuneMapPods -Key 'deepdesert'
+    $state = Get-DuneDeepDesertPvp
+    $state.ok = $true
+    $state.restart = $restart
+    $state.message = if ($Enabled) {
+        "Saved Deep Desert PvP for partition(s) $($requested -join ', '). Running Deep Desert instances are restarting to apply it."
+    } else {
+        'Disabled Deep Desert partition PvP. Running Deep Desert instances are restarting to apply it.'
+    }
+    return $state
 }
 
 # =============================================================================
