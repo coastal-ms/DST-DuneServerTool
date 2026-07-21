@@ -13,6 +13,8 @@ here cover everything those tags shipped.
 
 ## [Unreleased]
 
+## [12.19.8] - 2026-07-20
+
 ### Added
 - **Game Config can enable PvP per running Deep Desert partition.** A dedicated
   card loads live `DeepDesert_1` instances, shows their partition IDs,
