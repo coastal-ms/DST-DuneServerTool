@@ -13,6 +13,20 @@ here cover everything those tags shipped.
 
 ## [Unreleased]
 
+### Fixed
+- **Public IP / DDNS now handles mixed game-port bind states.** The UDP bridge
+  reconciles each active port independently, so a LAN-bound map port no longer
+  suppresses DNAT for different ports bound only to the public IP. When separate
+  game processes bind the same port on both addresses, the public listener wins
+  so router-forwarded players reach the advertised map process. LAN-only ports
+  remain untouched. A supervised VM-side loop now targets detection within one
+  second and installs exact-port DNAT continuously instead of waiting for the
+  old once-per-minute pass. Cluster lookups run independently with hard
+  timeouts, so a stalled K3s API cannot stop listener polling. Cleanup is limited
+  to Dune game-port UDP rules for the VM. Marcus's field test confirmed DNAT
+  appeared before DST showed the map green and the first external handoff
+  succeeded without P34.
+
 ## [12.19.8] - 2026-07-20
 
 ### Added
