@@ -46,6 +46,9 @@ function diagnoseStuck(s: MapState): string {
   if (!s.present) {
     return 'this map set is not in the battlegroup CRD. Add it via the Battlegroup editor first.'
   }
+  if ((s.activeInstances ?? 0) > 0 && (s.readyInstances ?? 0) < (s.targetInstances ?? 1)) {
+    return `${s.readyInstances ?? 0} of ${s.targetInstances ?? 1} configured instances are ready.`
+  }
   if (s.totalReplicas < 1) {
     return 'the director never scheduled a pod — usually the Hyper-V VM has no free RAM to start another map. Free memory (spin a map down) and retry.'
   }
@@ -148,7 +151,9 @@ export function MapSpinUp() {
     setBusy(m.map); setMessage(null); setError(null)
     if (!next) { stopTracking(m.map); dismissLoadError(m.map) }
     // optimistic
-    setMaps(prev => prev?.map(x => x.map === m.map ? { ...x, enabled: next, minServers: next ? 1 : 0 } : x) ?? prev)
+    setMaps(prev => prev?.map(x => x.map === m.map
+      ? { ...x, enabled: next, minServers: next ? (x.availablePartitions ?? 1) : 0 }
+      : x) ?? prev)
     try {
       const r = await setMapSpinUp(m.map, next)
       setMessage(r.message ?? (next ? `${m.label} spin-up enabled.` : `${m.label} spin-up disabled.`))
@@ -307,7 +312,7 @@ export function MapSpinUp() {
       <PageHeader
         title="Map SpinUp"
         icon="Power"
-        description="Keep at least one server warm for a map (MinServers = 1). Hot-swappable — no restart needed. Drag the grip on any card to reorder; your layout is saved in this browser."
+        description="Keep map servers warm. Deep Desert starts every configured partition; other maps keep one warm. Hot-swappable — no restart needed. Drag cards to reorder."
         actions={
           <>
             {isCustomOrder && (
@@ -397,7 +402,7 @@ export function MapSpinUp() {
         <>
           <MapGroup
             title="Maps"
-            hint="These keep at least one server warm (MinServers = 1). Some maps don't ship MinServers natively — enabling those may be ignored by the director, or may keep an instance warm and consume RAM. Use with care."
+            hint="Deep Desert keeps all configured partitions warm; other maps keep one server warm. Some maps don't ship MinServers natively — enabling those may be ignored or consume additional RAM."
             maps={orderedMaps}
             busy={busy}
             onToggle={onToggle}
@@ -492,6 +497,11 @@ function SortableMapCard({ map: m, busy, onToggle, elapsed, loadError, onDismiss
           <div className="min-w-0">
             <div className="text-sm font-semibold truncate">{m.label}</div>
             <div className="text-xs text-text-dim font-mono truncate">{m.map}</div>
+            {m.map === 'DeepDesert_1' && (m.availablePartitions ?? 1) > 1 && (
+              <div className="text-[10px] text-warning mt-0.5">
+                {m.availablePartitions} configured partitions
+              </div>
+            )}
           </div>
           <div className="flex items-center gap-2 shrink-0">
             {loading ? (
