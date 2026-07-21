@@ -13,6 +13,8 @@ here cover everything those tags shipped.
 
 ## [Unreleased]
 
+## [12.19.9] - 2026-07-21
+
 ### Fixed
 - **Public IP / DDNS now handles mixed game-port bind states.** The UDP bridge
   reconciles each active port independently, so a LAN-bound map port no longer
