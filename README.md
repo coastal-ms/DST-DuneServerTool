@@ -9,8 +9,8 @@
 
 **🌐 Website & feature tour: [coastal-ms.github.io/DST-DuneServerTool](https://coastal-ms.github.io/DST-DuneServerTool/)** — screenshots, install guide, and the full changelog.
 
-The current release is **v12.19.4**. The in-app version label and the
-website show plain semver tags (e.g. `v12.19.4`) — the previous
+The current release is **v12.19.8**. The in-app version label and the
+website show plain semver tags (e.g. `v12.19.8`) — the previous
 Roman-numeral stylization has been removed.
 
 > ## ✅ Confirmed compatible with Dune: Awakening **1.4.10.3**
@@ -31,6 +31,11 @@ browser and keeps the server running in the background.
 
 ### New in v12.19
 
+- **Per-partition Deep Desert PvP** (v12.19.8, Game Config). Load the
+  currently-running `DeepDesert_1` instances, choose which partition IDs should
+  allow PvP, and apply; DST writes the partition list and restarts only Deep
+  Desert. Map SpinUp now warms every configured Deep Desert partition instead
+  of only one, and partition self-heal preserves healthy sibling instances.
 - **Cross-VM / cross-battlegroup database migration** (v12.19.6, Database).
   Live testing confirmed that a full `.backup` can move characters, inventories,
   progression, bases, and world state to a different VM or battlegroup. The
