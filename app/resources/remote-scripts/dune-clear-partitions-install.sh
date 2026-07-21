@@ -9,7 +9,7 @@
 #   director then refuses to (re)spawn the map and players can't enter.
 #
 #   The old clear pass skipped ANY ServerSet that had a pod present ("don't kick
-#   a player at boot"). A WARM map (MinServers=1) ALWAYS has a pod, so the skip
+#   a player at boot"). A WARM map (MinServers>0) normally has pod(s), so the skip
 #   meant the pin was never cleared and the only fix was the manual UI sequence:
 #   force-close the map -> clear partitions -> let spin-up restore it. This
 #   installs that fix as an autonomous VM-side heal so it works WITH DST CLOSED.
@@ -243,23 +243,59 @@ echo "$matches" | while IFS="$(printf '\t')" read -r ns name; do
         pod_n=0
         any_ready=0
         any_stuck=0
+        hard_stuck_pods=""
+        draining_pods=""
         for p in $pods; do
           [ -z "$p" ] && continue
           pod_n=$((pod_n + 1))
           rdy=$($KUBE -n "$ns" get pod "$p" -o jsonpath='{.status.conditions[?(@.type=="Ready")].status}' 2>/dev/null)
           [ "$rdy" = "True" ] && any_ready=1
           del=$($KUBE -n "$ns" get pod "$p" -o jsonpath='{.metadata.deletionTimestamp}' 2>/dev/null)
-          [ -n "$del" ] && any_stuck=1
+          idx="${p##*-pod-}"
+          gphase=""
+          case "$idx" in
+            ''|*[!0-9]*) : ;;
+            *) gphase=$($KUBE -n "$ns" get serverset "$ss_name" -o jsonpath="{.status.pods[?(@.ordinalIndex==$idx)].phase}" 2>/dev/null) ;;
+          esac
+          if [ -n "$del" ] || [ "$gphase" = "Stopping" ]; then
+            any_stuck=1
+            draining_pods="$draining_pods $p"
+          fi
           wr=$($KUBE -n "$ns" get pod "$p" -o jsonpath='{.status.containerStatuses[*].state.waiting.reason}' 2>/dev/null)
           case "$wr" in
-            *CrashLoopBackOff*|*Error*|*ImagePull*|*CreateContainerError*|*RunContainerError*) any_stuck=1 ;;
+            *CrashLoopBackOff*|*Error*|*ImagePull*|*CreateContainerError*|*RunContainerError*)
+              any_stuck=1
+              case " $hard_stuck_pods " in *" $p "*) : ;; *) hard_stuck_pods="$hard_stuck_pods $p" ;; esac
+              ;;
           esac
         done
 
-        # Never disturb a live session.
+        # A multi-partition ServerSet can have one healthy pod and one stuck pod.
+        # Recover only the demonstrably-stuck pod; never clear the whole
+        # partitions array while another partition is serving players.
         if [ "$any_ready" = "1" ]; then
           rm -f "$(marker_for "$name")" 2>/dev/null
-          log "$ns/$name: pinned ($cur) but a Ready pod is serving players, skipping"
+          cleared=0
+          recover_pods="$hard_stuck_pods"
+          # A deletionTimestamp / Stopping phase is normal during live restarts.
+          # Only boot mode may treat a lingering drain as stale; cron/manual
+          # preserve graceful shutdown and only clear hard waiting failures.
+          if [ "$MODE" = "boot" ]; then recover_pods="$recover_pods $draining_pods"; fi
+          seen_recover_pods=""
+          for p in $recover_pods; do
+            [ -z "$p" ] && continue
+            case " $seen_recover_pods " in *" $p "*) continue ;; esac
+            seen_recover_pods="$seen_recover_pods $p"
+            if $KUBE -n "$ns" delete pod "$p" --force --grace-period=0 >>"$LOG" 2>&1; then
+              cleared=$((cleared + 1))
+              log "$ns/$name: force-cleared stuck partition pod $p while preserving Ready sibling partition(s)"
+            else
+              log "$ns/$name: ERROR force-deleting stuck partition pod $p"
+            fi
+          done
+          if [ "$cleared" = "0" ]; then
+            log "$ns/$name: Ready pod(s) serving; no hard-stuck sibling eligible in mode=$MODE (draining pods are preserved outside boot)"
+          fi
           break
         fi
 

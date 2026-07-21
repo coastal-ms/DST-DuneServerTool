@@ -116,10 +116,9 @@ function _Get-DuneMapServerGuids {
     try { $status = $Bg.status } catch {}
     if (-not $status) { return ,$guids }
     $pods = @()
-    try { $pods = @($status.serverGroupStatus.pods) } catch {}
-    if (-not $pods -or $pods.Count -eq 0) {
-        try { $pods = @($status.pods) } catch {}
-    }
+    try { $pods = @($status.servers) } catch {}
+    if (-not $pods -or $pods.Count -eq 0) { try { $pods = @($status.serverGroupStatus.pods) } catch {} }
+    if (-not $pods -or $pods.Count -eq 0) { try { $pods = @($status.pods) } catch {} }
     foreach ($p in $pods) {
         if (-not $p) { continue }
         $map = $null; $guid = $null
@@ -127,7 +126,19 @@ function _Get-DuneMapServerGuids {
         if ($p.PSObject.Properties['serverGuid'])   { $guid = [string]$p.serverGuid }
         if ($map -and $guid -and ($map -match $Pattern)) { $guids += $guid }
     }
-    return ,$guids
+
+    return $guids
+}
+
+function _Get-DuneMapLiveServers {
+    param([Parameter(Mandatory)]$Bg, [Parameter(Mandatory)][string]$Pattern)
+    $servers = @()
+    try { $servers = @($Bg.status.servers) } catch {}
+    if (-not $servers -or $servers.Count -eq 0) { try { $servers = @($Bg.status.serverGroupStatus.pods) } catch {} }
+    if (-not $servers -or $servers.Count -eq 0) { try { $servers = @($Bg.status.pods) } catch {} }
+    return @($servers | Where-Object {
+        $_ -and $_.PSObject.Properties['partitionMap'] -and "$($_.partitionMap)" -match $Pattern
+    })
 }
 
 function _Find-DuneMapWorldPartitions {
@@ -164,6 +175,7 @@ function Get-DuneOnDemandMapState {
     $info = Get-V6Battlegroup -Ip $ctx.vm.ip
     $sets = _Find-DuneMapSets         -Bg $info.Bg -Pattern $def.Pattern
     $wps  = _Find-DuneMapWorldPartitions -Bg $info.Bg -Pattern $def.Pattern
+    $liveServers = @(_Get-DuneMapLiveServers -Bg $info.Bg -Pattern $def.Pattern)
 
     $totalReplicas = 0
     $hasDisabledPartition = $false
@@ -181,7 +193,22 @@ function Get-DuneOnDemandMapState {
     }
 
     $present = ($sets.Count -gt 0)
-    $running = ($present -and $totalReplicas -ge 1 -and -not $hasDisabledPartition -and -not $missingPartitionBinding -and -not $stuckDedicatedScaling)
+    $targetInstances = 1
+    if ($Key -eq 'deepdesert') {
+        $ids = @{}
+        foreach ($wp in $wps) {
+            foreach ($p in @($wp.Partitions)) {
+                if ($p.PSObject.Properties['id'] -and [int]$p.id -gt 0) { $ids[[int]$p.id] = $true }
+            }
+        }
+        $targetInstances = [math]::Max(1, $ids.Count)
+    }
+    $readyInstances = @($liveServers | Where-Object {
+        -not $_.PSObject.Properties['ready'] -or [bool]$_.ready
+    }).Count
+    # Director-driven sets legitimately keep template replicas=0 and
+    # dedicatedScaling=true while status.servers reports live instances.
+    $running = ($present -and $readyInstances -ge $targetInstances)
 
     # Player count comes from the DB and is only meaningful when at least
     # one matching pod is running (otherwise nobody can be connected).
@@ -213,6 +240,9 @@ function Get-DuneOnDemandMapState {
         missingPartitionBinding  = $missingPartitionBinding
         stuckDedicatedScaling    = $stuckDedicatedScaling
         running                  = $running
+        activeInstances          = $liveServers.Count
+        readyInstances           = $readyInstances
+        targetInstances          = $targetInstances
         playersOnline            = $playersOnline
         playerIds                = $playerIds
         playersError             = $playersError

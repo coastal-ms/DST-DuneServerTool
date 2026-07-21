@@ -13,6 +13,18 @@ here cover everything those tags shipped.
 
 ## [Unreleased]
 
+### Added
+- **Game Config can enable PvP per running Deep Desert partition.** A dedicated
+  card loads live `DeepDesert_1` instances, shows their partition IDs,
+  dimensions, ports, and display names, writes only the selected partition IDs
+  to `UserGame.ini`, and restarts the running Deep Desert pods to apply them.
+
+### Changed
+- **Map SpinUp now starts every configured Deep Desert partition.** Its warm
+  floor follows the durable Deep Desert world-partition count instead of always
+  starting one instance; readiness and player checks now use live battlegroup
+  `status.servers` for Director-driven maps.
+
 ## [12.19.6] - 2026-07-19
 
 ### Changed

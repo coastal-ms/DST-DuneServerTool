@@ -12,6 +12,9 @@ export interface MapState {
   missingPartitionBinding?: boolean
   stuckDedicatedScaling?: boolean
   running: boolean
+  activeInstances?: number
+  readyInstances?: number
+  targetInstances?: number
   playersOnline?: number | null
   playerIds?: string[]
   playersError?: string | null

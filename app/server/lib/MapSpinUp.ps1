@@ -5,9 +5,9 @@
 #
 # Each playable map is an INI section ([ MapName ]). Some maps carry a
 #   MinServers=1
-# key — when set to 1 the director keeps one instance of the map warm
-# at all times (a "spin-up floor"). The key is binary: 0 (off) or 1 (on).
-# Other values are not supported by the director. The format is strict:
+# key — when positive the director keeps that many instances of the map warm
+# at all times (a "spin-up floor"). Most maps use 1; Deep Desert uses the
+# number of configured world partitions so every available DD starts. The format is strict:
 # no spaces around the '=', no quoting.
 #
 # Funcom ships MinServers on a handful of persistent/instanced maps; the
@@ -114,6 +114,19 @@ function _Get-DuneDirectorIni {
     return @{ ok = $true; ctx = $ctx; info = $info; ini = [string]$files.'director.ini' }
 }
 
+function _Get-DuneSpinUpTargetCount {
+    param([Parameter(Mandatory)][string]$Map, [Parameter(Mandatory)]$Bg)
+    if ($Map -ne 'DeepDesert_1') { return 1 }
+    $ids = @{}
+    foreach ($wp in @($Bg.spec.database.template.spec.deployment.spec.worldPartitions)) {
+        if ("$($wp.map)" -ne 'DeepDesert_1') { continue }
+        foreach ($p in @($wp.partitions)) {
+            if ($p.PSObject.Properties['id'] -and [int]$p.id -gt 0) { $ids[[int]$p.id] = $true }
+        }
+    }
+    return [math]::Max(1, $ids.Count)
+}
+
 function _Parse-DuneDirectorIni {
     # Parses INI text into ordered section objects:
     #   @{ Name; IsMap; HasMinServers; MinServers; HasEnableAutoScaling; }
@@ -132,6 +145,7 @@ function _Parse-DuneDirectorIni {
                 MinServers           = 0
                 HasEnableAutoScaling = $false
             }
+
             continue
         }
         if (-not $current) { continue }
@@ -159,12 +173,14 @@ function Get-DuneSpinUpMaps {
     foreach ($s in $sections) {
         if (-not $s.IsMap) { continue }
         $native = $script:DuneSpinUpNativeMaps -contains $s.Name
+        $targetCount = _Get-DuneSpinUpTargetCount -Map $s.Name -Bg $r.info.Bg
         $maps += [pscustomobject]@{
             map        = $s.Name
             label      = _Get-DuneSpinUpLabel -Map $s.Name
             group      = if ($native) { 'supported' } else { 'experimental' }
             minServers = [int]$s.MinServers
             enabled    = ([int]$s.MinServers -ge 1)
+            availablePartitions = $targetCount
         }
     }
     return @{
@@ -177,18 +193,18 @@ function Get-DuneSpinUpMaps {
 
 function _Set-DuneIniMinServers {
     # Returns a new INI string with $Map's MinServers line set to $Value.
-    # $Value must be 0 or 1 (the only values the director accepts). The
+    # $Value must be zero or a positive warm-instance floor. The
     # emitted line uses Funcom's strict format: "MinServers=1" — no spaces,
     # no quoting. Spaces around '=' have been observed to be silently
     # ignored by the director.
     #   - replaces an existing MinServers line in the section, or
     #   - inserts one (after NumExtraServers, or after the header) when
-    #     missing and $Value -eq 1. When $Value -eq 0 and no line exists,
+    #     missing and $Value is positive. When $Value -eq 0 and no line exists,
     #     leaves the section untouched (absent == 0) to keep the file minimal.
     param(
         [Parameter(Mandatory)][string]$Ini,
         [Parameter(Mandatory)][string]$Map,
-        [Parameter(Mandatory)][ValidateRange(0,1)][int]$Value
+        [Parameter(Mandatory)][ValidateRange(0,64)][int]$Value
     )
     $lines = [System.Collections.Generic.List[string]]::new()
     foreach ($l in ($Ini -split "`n")) { $lines.Add(($l -replace "`r", '')) }
@@ -216,7 +232,7 @@ function _Set-DuneIniMinServers {
 
     if ($msIdx -ge 0) {
         $lines[$msIdx] = "MinServers=$Value"
-    } elseif ($Value -eq 1) {
+    } elseif ($Value -ge 1) {
         $insertAt = if ($numExtraIdx -ge 0) { $numExtraIdx + 1 } else { $secStart + 1 }
         $lines.Insert($insertAt, "MinServers=$Value")
     }
@@ -271,7 +287,7 @@ function Set-DuneSpinUpMap {
         return @{ ok = $false; status = 404; message = "Map '$Map' is not a controllable map section in director.ini." }
     }
 
-    $value   = if ($Enabled) { 1 } else { 0 }
+    $value   = if ($Enabled) { _Get-DuneSpinUpTargetCount -Map $Map -Bg $r.info.Bg } else { 0 }
     $current = [int]$target.MinServers
 
     # Spin-up requires BOTH MinServers >= 1 AND EnableAutomaticInstanceScaling = true
@@ -288,6 +304,7 @@ function Set-DuneSpinUpMap {
             label      = (_Get-DuneSpinUpLabel -Map $Map)
             minServers = $value
             enabled    = ($value -ge 1)
+            availablePartitions = (_Get-DuneSpinUpTargetCount -Map $Map -Bg $r.info.Bg)
             noop       = $true
             message    = "$(_Get-DuneSpinUpLabel -Map $Map) is already set to MinServers = $value."
         }
@@ -327,9 +344,10 @@ function Set-DuneSpinUpMap {
         label      = $label
         minServers = $value
         enabled    = ($value -ge 1)
+        availablePartitions = (_Get-DuneSpinUpTargetCount -Map $Map -Bg $r.info.Bg)
         raw        = $outText
         message    = if ($success) {
-            if ($value -ge 1) { "$label will now keep at least 1 server warm (MinServers = 1)." }
+            if ($value -ge 1) { "$label will now keep $value server(s) warm (MinServers = $value)." }
             else              { "$label spin-up floor disabled (MinServers = 0)." }
         } else {
             "kubectl patch may have failed: $outText"
