@@ -13,6 +13,10 @@ here cover everything those tags shipped.
 
 ## [Unreleased]
 
+### Changed
+
+- Supporter added to list.
+
 ## [12.19.9] - 2026-07-21
 
 ### Fixed
