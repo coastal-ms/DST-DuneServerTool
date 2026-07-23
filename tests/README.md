@@ -53,12 +53,15 @@ cd webui ; npm install
 - `Rmq.Tests.ps1` — `Send-DuneRmqServerCommand` + `Send-DuneRmqCourierMessage` envelope construction: Version=2 wrapper, AuthToken, exchange/routing-key embedding, base64 body, MsgId prefix, escape handling.
 - `Schema.Tests.ps1` — regression-locks the Phase A schema fixes (no `actors.account_id`, no `fge.id`, no `fge.properties`, `FLevelComponent` indexed as `->1`, `player_state` has no `account_id`, etc.).
 - `ServerLoad.Tests.ps1` — smoke: every lib + route file parses and dot-sources cleanly.
+- `HyperVLanCredential.Tests.ps1` — Windows Credential Manager round-trip (save/get/remove) under an isolated test TargetName, stale-host detection (never silently reused or auto-deleted across a host IP change), and the non-secret `Get-DuneHyperVLanCredentialInfo` shape (asserts the password never appears in it).
+- `HyperVSplat.Tests.ps1` — `Get-DuneHyperVComputerName`/`Get-DuneHyperVSplat` routing (local stays credential-free; LAN attaches `-Credential` only for a matching saved credential) and the "never silently fall back to the current Windows identity" guarantee: `Get-DuneHyperVSplat` throws an actionable error instead when LAN mode is on but no matching credential is saved.
 - `_TestHelpers.ps1` — shared `Import-DstLib` (promotes lib functions to global so Pester `It` blocks see them) + `Register-DstStubs` (HTTP server shims).
 - `Run-Tests.ps1` — Pester runner wrapper.
 
 **Webui side** (`webui/tests/`):
 
 - `api/gameplay.test.ts` — every wrapper in `src/api/gameplay.ts` is fenced against URL drift + body-shape drift by stubbing `fetch` globally and asserting request URL, method, JSON body, and headers (Accept / Content-Type / X-Dune-Token).
+- `api/hyperVLan.test.ts` — Hyper-V over LAN credential endpoints (`test`/`credential` GET+POST+DELETE/`host-resources`/`install`) fenced the same way: asserts the credential GET never carries a body or puts the password in the URL, and that install/host-resources work with `user`/`password` omitted (saved-credential fallback).
 - `setup.ts` — registers `@testing-library/jest-dom` matchers and clears `sessionStorage` between tests.
 
 ## Adding tests

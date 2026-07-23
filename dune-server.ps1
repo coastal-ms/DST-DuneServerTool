@@ -433,13 +433,48 @@ $sshKey        = $cfg.SshKey
 $sshUser       = 'dune'
 # Hyper-V target for the CLI power ops. Mirrors app/server/lib/HyperV.ps1:
 # 'local' (default) runs Get-VM/Start-VM/Stop-VM against this PC; 'lan' targets a
-# remote Hyper-V host at HyperVHostIp via -ComputerName. Unset/blank/unknown =>
-# local, so existing installs and an unchecked LAN option behave exactly as before.
+# remote Hyper-V host at HyperVHostIp via -ComputerName + a saved host admin
+# credential. Unset/blank/unknown => local, so existing installs and an
+# unchecked LAN option behave exactly as before.
 $vmHostMode    = if ($cfg.ContainsKey('VmHostMode') -and "$($cfg['VmHostMode'])".Trim() -match '^(?i:lan)$') { 'lan' } else { 'local' }
 $hvComputer    = if ($cfg.ContainsKey('HyperVHostIp')) { "$($cfg['HyperVHostIp'])".Trim() } else { '' }
 if ($vmHostMode -ne 'lan') { $hvComputer = '' }
-$hvSplat       = @{}
-if ($hvComputer) { $hvSplat = @{ ComputerName = $hvComputer } }
+
+# HyperVLanCredential.ps1 is self-contained (only needs advapi32 P/Invoke, no
+# dependency on this script's own $cfg/$configFile handling), so it's safe to
+# dot-source directly. Same dev/installed dual-path fallback used for the
+# remote-scripts helpers below (Get-DuneRemotePartitionScriptPath etc.).
+$script:DuneHyperVLanCredLibPath = $null
+foreach ($candidate in @(
+    (Join-Path $scriptDir 'server\lib\HyperVLanCredential.ps1')
+    (Join-Path $scriptDir 'app\server\lib\HyperVLanCredential.ps1')
+)) {
+    if (Test-Path -LiteralPath $candidate) { $script:DuneHyperVLanCredLibPath = $candidate; break }
+}
+if ($script:DuneHyperVLanCredLibPath) { . $script:DuneHyperVLanCredLibPath }
+
+$hvSplat = @{}
+if ($hvComputer) {
+    $hvCredOk = $false
+    if (-not $script:DuneHyperVLanCredLibPath) {
+        Write-Host "WARNING: Hyper-V over LAN is enabled but the credential helper (server\lib\HyperVLanCredential.ps1) is missing - VM commands against $hvComputer will use this process's own Windows identity and likely fail. Reinstall DST." -ForegroundColor Yellow
+    } else {
+        $hvCredResult = Get-DuneHyperVLanCredential -HostIp $hvComputer
+        if (-not $hvCredResult.ok) {
+            Write-Host "WARNING: Could not read the saved Hyper-V over LAN credential: $($hvCredResult.error)" -ForegroundColor Yellow
+        } elseif (-not $hvCredResult.exists -or -not $hvCredResult.matchesHost) {
+            Write-Host "WARNING: Hyper-V over LAN is enabled for $hvComputer, but no saved host administrator credential matches it. VM commands will fail until one is saved in Settings - Hyper-V over LAN." -ForegroundColor Yellow
+        } else {
+            $hvSplat = @{ ComputerName = $hvComputer; Credential = $hvCredResult.credential }
+            $hvCredOk = $true
+        }
+    }
+    # No matching saved credential: keep -ComputerName only (today's behavior)
+    # rather than skipping the LAN target entirely - the resulting Get-VM call
+    # will fail with an access-denied error the user can act on, instead of
+    # this script silently pretending LAN mode is off.
+    if (-not $hvCredOk) { $hvSplat = @{ ComputerName = $hvComputer } }
+}
 $bgSetupPath   = "$($cfg.SteamPath)\battlegroup-management"
 # Default existing installs (no PortCheckMode in config) to built-in.
 $portCheckMode = if ($cfg.PortCheckMode) { $cfg.PortCheckMode } else { 'builtin' }
@@ -672,13 +707,22 @@ function Stop-VmWithEscalation {
     )
     $start = Get-Date
     $jobs = @()
-    # Background jobs run in isolated runspaces and can't see $hvSplat — pass the
-    # Hyper-V host (empty for local) in and rebuild the splat inside the job.
+    # Background jobs run in isolated processes and can't see $hvSplat - pass the
+    # Hyper-V host (empty for local) and the credential lib path in, and rebuild
+    # the splat (including -Credential for a LAN host) inside the job.
     $jobs += Start-Job -ScriptBlock {
-        param($n, $cn)
-        $sp = @{}; if ($cn) { $sp = @{ ComputerName = $cn } }
+        param($n, $cn, $credLibPath)
+        $sp = @{}
+        if ($cn) {
+            $sp = @{ ComputerName = $cn }
+            if ($credLibPath -and (Test-Path -LiteralPath $credLibPath)) {
+                . $credLibPath
+                $c = Get-DuneHyperVLanCredential -HostIp $cn
+                if ($c.ok -and $c.exists -and $c.matchesHost) { $sp['Credential'] = $c.credential }
+            }
+        }
         Stop-VM -Name $n -Force -ErrorAction SilentlyContinue @sp
-    } -ArgumentList $Name, $hvComputer
+    } -ArgumentList $Name, $hvComputer, $script:DuneHyperVLanCredLibPath
     $escalated = $false
     try {
         while ($true) {
@@ -688,10 +732,18 @@ function Stop-VmWithEscalation {
             if (-not $escalated -and $elapsed -ge $GracefulSec) {
                 Complete-WaitCounter -Message "Graceful shutdown still running after $(Format-Duration $elapsed) (state: $($vm.State)) - escalating to hard power-off." -Color Yellow
                 $jobs += Start-Job -ScriptBlock {
-                    param($n, $cn)
-                    $sp = @{}; if ($cn) { $sp = @{ ComputerName = $cn } }
+                    param($n, $cn, $credLibPath)
+                    $sp = @{}
+                    if ($cn) {
+                        $sp = @{ ComputerName = $cn }
+                        if ($credLibPath -and (Test-Path -LiteralPath $credLibPath)) {
+                            . $credLibPath
+                            $c = Get-DuneHyperVLanCredential -HostIp $cn
+                            if ($c.ok -and $c.exists -and $c.matchesHost) { $sp['Credential'] = $c.credential }
+                        }
+                    }
                     Stop-VM -Name $n -TurnOff -Force -ErrorAction SilentlyContinue @sp
-                } -ArgumentList $Name, $hvComputer
+                } -ArgumentList $Name, $hvComputer, $script:DuneHyperVLanCredLibPath
                 $escalated = $true
             }
             if ($elapsed -ge $TotalSec) {

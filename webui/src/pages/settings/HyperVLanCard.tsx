@@ -9,7 +9,7 @@
 import { useCallback, useEffect, useState } from 'react'
 import { Icon } from '../../components/Icon'
 import { ApiError } from '../../api/client'
-import { getHyperVLan, saveHyperVLan, testHyperVLan, type HyperVLanTest } from '../../api/setup'
+import { getHyperVLan, saveHyperVLan, testHyperVLan, getHyperVLanCredential, saveHyperVLanCredential, deleteHyperVLanCredential, type HyperVLanTest } from '../../api/setup'
 
 export function HyperVLanCard() {
   const [open, setOpen] = useState(false)
@@ -23,6 +23,28 @@ export function HyperVLanCard() {
   const [msg, setMsg] = useState<string | null>(null)
   const [err, setErr] = useState<string | null>(null)
 
+  // Credential: hidden behind "using saved credential for X" once one exists
+  // and matches hostIp. "Change" reveals fields to replace it; "Remove"
+  // deletes it outright (never done implicitly by disabling LAN mode).
+  const [credUser, setCredUser] = useState('')
+  const [credPassword, setCredPassword] = useState('')
+  const [savedCredUser, setSavedCredUser] = useState<string | null>(null)
+  const [editingCred, setEditingCred] = useState(false)
+  const [removing, setRemoving] = useState(false)
+  const [confirmRemove, setConfirmRemove] = useState(false)
+
+  const loadCredInfo = useCallback(async (ip: string) => {
+    if (!ip) { setSavedCredUser(null); setEditingCred(true); return }
+    try {
+      const info = await getHyperVLanCredential(ip)
+      const matches = info.exists && info.matchesHost
+      setSavedCredUser(matches ? info.user : null)
+      setEditingCred(!matches)
+    } catch {
+      setSavedCredUser(null)
+    }
+  }, [])
+
   const load = useCallback(async () => {
     setLoading(true); setErr(null)
     try {
@@ -30,12 +52,13 @@ export function HyperVLanCard() {
       setHostIp(s.hostIp ?? '')
       setEnabled(s.mode === 'lan')
       setSavedMode(s.mode)
+      await loadCredInfo(s.hostIp ?? '')
     } catch (e) {
       setErr(e instanceof ApiError ? e.message : String(e))
     } finally {
       setLoading(false)
     }
-  }, [])
+  }, [loadCredInfo])
 
   useEffect(() => { if (open) void load() }, [open, load])
 
@@ -46,11 +69,22 @@ export function HyperVLanCard() {
   const runTest = useCallback(async () => {
     const ip = hostIp.trim()
     if (!ip) { setErr('Enter the Hyper-V host IP first.'); return }
+    const usingNewCred = editingCred && credUser.trim() && credPassword
+    if (editingCred && !usingNewCred) { setErr("Enter the host's administrator username and password first."); return }
     setTesting(true); setErr(null); setMsg(null); setTest(null)
-    try { setTest(await testHyperVLan(ip)) }
-    catch (e) { setErr(e instanceof ApiError ? e.message : String(e)) }
+    try {
+      const result = usingNewCred
+        ? await testHyperVLan(ip, credUser.trim(), credPassword)
+        : await testHyperVLan(ip)
+      setTest(result)
+      if (result.ok && usingNewCred) {
+        await saveHyperVLanCredential(ip, credUser.trim(), credPassword)
+        setCredPassword('')
+        await loadCredInfo(ip)
+      }
+    } catch (e) { setErr(e instanceof ApiError ? e.message : String(e)) }
     finally { setTesting(false) }
-  }, [hostIp])
+  }, [hostIp, editingCred, credUser, credPassword, loadCredInfo])
 
   const save = useCallback(async () => {
     const ip = hostIp.trim()
@@ -62,13 +96,28 @@ export function HyperVLanCard() {
       setSavedMode(r.mode === 'lan' ? 'lan' : 'local')
       setMsg(r.mode === 'lan'
         ? `Saved. DST will manage the VM on ${r.hostIp} over the LAN.`
-        : 'Saved. DST is using the local Hyper-V VM (LAN routing off).')
+        : 'Saved. DST is using the local Hyper-V VM (LAN routing off). The saved credential is kept in case you re-enable it.')
     } catch (e) {
       setErr(e instanceof ApiError ? e.message : String(e))
     } finally {
       setSaving(false)
     }
   }, [hostIp, enabled, canEnable])
+
+  const removeCredential = useCallback(async () => {
+    setRemoving(true); setErr(null); setMsg(null)
+    try {
+      await deleteHyperVLanCredential()
+      setSavedCredUser(null)
+      setEditingCred(true)
+      setConfirmRemove(false)
+      setMsg('Saved Hyper-V host credential removed.')
+    } catch (e) {
+      setErr(e instanceof ApiError ? e.message : String(e))
+    } finally {
+      setRemoving(false)
+    }
+  }, [])
 
   const tone = test == null ? 'text-text-dim' : test.ok ? 'text-success' : 'text-danger'
   const tIcon = test == null ? 'Info' : test.ok ? 'CheckCircle2' : 'AlertTriangle'
@@ -99,10 +148,10 @@ export function HyperVLanCard() {
           <div className="rounded-lg border border-warning/40 bg-warning/10 p-3 text-sm text-text-dim flex items-start gap-2">
             <Icon name="AlertTriangle" size={16} className="text-warning mt-0.5 shrink-0" />
             <span>
-              <span className="font-medium text-warning">Prerequisite:</span> remote Hyper-V management from this PC
-              must already work (you can reach the host in <strong>Hyper-V Manager</strong>). DST uses the same
-              channel; it does not set up WinRM/permissions for you. The VM must already be installed on that host
-              and named <span className="font-mono">dune-awakening</span>.
+              <span className="font-medium text-warning">Prerequisite:</span> the host's Hyper-V PowerShell Remoting
+              (WinRM) must be reachable from this PC. DST uses an explicit administrator credential for that host
+              below — it does not need to match the Windows account DST itself runs as. The VM must already be
+              installed on that host and named <span className="font-mono">dune-awakening</span>.
             </span>
           </div>
 
@@ -119,25 +168,72 @@ export function HyperVLanCard() {
             <>
               <label className="flex flex-col gap-1 text-sm">
                 <span className="font-medium">Hyper-V host IP (or name)</span>
-                <div className="flex items-stretch gap-2">
-                  <input
-                    type="text"
-                    value={hostIp}
-                    onChange={e => { setHostIp(e.target.value); setTest(null) }}
-                    disabled={saving}
-                    spellCheck={false}
-                    placeholder="192.168.1.50"
-                    className="flex-1 min-w-0 px-3 py-2 rounded-lg bg-surface-2 border border-border text-text font-mono text-sm focus:outline-none focus:ring-2 focus:ring-ibad focus:border-ibad/50"
-                  />
-                  <button type="button" className="btn-secondary shrink-0" onClick={() => void runTest()} disabled={testing || saving}>
-                    <Icon name={testing ? 'Loader2' : 'Plug'} size={14} className={testing ? 'animate-spin' : ''} />
-                    {testing ? 'Testing…' : 'Test'}
-                  </button>
-                </div>
+                <input
+                  type="text"
+                  value={hostIp}
+                  onChange={e => { setHostIp(e.target.value); setTest(null); void loadCredInfo(e.target.value.trim()) }}
+                  disabled={saving}
+                  spellCheck={false}
+                  placeholder="192.168.1.50"
+                  className="px-3 py-2 rounded-lg bg-surface-2 border border-border text-text font-mono text-sm focus:outline-none focus:ring-2 focus:ring-ibad focus:border-ibad/50"
+                />
                 <span className="text-xs text-text-dim">
                   The <strong>host</strong> address, not the VM's — DST finds the VM's own IP through the host.
                 </span>
               </label>
+
+              <div>
+                <span className="font-medium text-sm">Host administrator credential</span>
+                {!editingCred && savedCredUser ? (
+                  <div className="mt-1 flex items-center justify-between gap-2 rounded-lg border border-border bg-surface-2 p-3">
+                    <span className="text-sm text-text-dim">
+                      Using saved credential for <span className="font-mono text-text">{savedCredUser}</span>
+                    </span>
+                    <div className="flex gap-2 shrink-0">
+                      <button type="button" className="btn-secondary" onClick={() => { setEditingCred(true); setTest(null) }}>Change</button>
+                      {!confirmRemove ? (
+                        <button type="button" className="btn-secondary" onClick={() => setConfirmRemove(true)}>Remove</button>
+                      ) : (
+                        <>
+                          <button type="button" className="btn-secondary text-danger" onClick={() => void removeCredential()} disabled={removing}>
+                            {removing ? 'Removing…' : 'Confirm remove'}
+                          </button>
+                          <button type="button" className="btn-secondary" onClick={() => setConfirmRemove(false)}>Cancel</button>
+                        </>
+                      )}
+                    </div>
+                  </div>
+                ) : (
+                  <div className="mt-1 grid grid-cols-1 md:grid-cols-2 gap-2">
+                    <input
+                      type="text"
+                      value={credUser}
+                      onChange={e => { setCredUser(e.target.value); setTest(null) }}
+                      spellCheck={false}
+                      placeholder="HOST\Administrator"
+                      className="px-3 py-2 rounded-lg bg-surface-2 border border-border text-text font-mono text-sm"
+                    />
+                    <input
+                      type="password"
+                      value={credPassword}
+                      onChange={e => { setCredPassword(e.target.value); setTest(null) }}
+                      placeholder="Password"
+                      className="px-3 py-2 rounded-lg bg-surface-2 border border-border text-text text-sm"
+                    />
+                    <p className="md:col-span-2 text-xs text-text-dim">
+                      The host's own administrator account — in a workgroup this is routinely a <strong>different</strong>{' '}
+                      account than the one DST itself runs as. Use <span className="font-mono">HOST\username</span>.
+                    </p>
+                  </div>
+                )}
+              </div>
+
+              <div className="flex flex-wrap gap-2">
+                <button type="button" className="btn-secondary" onClick={() => void runTest()} disabled={testing || saving}>
+                  <Icon name={testing ? 'Loader2' : 'Plug'} size={14} className={testing ? 'animate-spin' : ''} />
+                  {testing ? 'Testing…' : 'Test'}
+                </button>
+              </div>
 
               {test && (
                 <div className="rounded-lg border border-border bg-surface-2 p-3 text-sm flex items-start gap-2">
@@ -162,8 +258,9 @@ export function HyperVLanCard() {
                 <span className="text-sm text-text">
                   Route all VM commands to this LAN host
                   <span className="block text-xs text-text-dim mt-0.5">
-                    On: DST manages the remote VM (status, start/stop, RAM) over the LAN. Off: back to the local VM on
-                    this PC — fully bypasses the LAN path. {!canEnable && !enabled && 'Run a successful test first.'}
+                    On: DST manages the remote VM (status, start/stop, RAM) over the LAN using the credential above.
+                    Off: back to the local VM on this PC — fully bypasses the LAN path, but keeps the saved credential
+                    for next time. {!canEnable && !enabled && 'Run a successful test first.'}
                   </span>
                 </span>
               </label>

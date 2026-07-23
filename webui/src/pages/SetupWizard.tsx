@@ -3,7 +3,7 @@ import { Link } from 'react-router-dom'
 import { PageHeader } from '../components/PageHeader'
 import { Icon } from '../components/Icon'
 import { api, ApiError } from '../api/client'
-import { getPreflight, getSetupConfig, getHyperVLan, saveHyperVLan, testHyperVLan, getHyperVLanHostResources, startHyperVLanInstall, getHyperVLanInstallStatus, type PreflightResult, type SetupConfigSummary, type HyperVLanTest, type HyperVLanHostResources, type HyperVLanInstallStatus } from '../api/setup'
+import { getPreflight, getSetupConfig, getHyperVLan, saveHyperVLan, testHyperVLan, getHyperVLanCredential, saveHyperVLanCredential, getHyperVLanHostResources, startHyperVLanInstall, getHyperVLanInstallStatus, type PreflightResult, type SetupConfigSummary, type HyperVLanTest, type HyperVLanHostResources, type HyperVLanInstallStatus } from '../api/setup'
 
 // The wizard branches on a single up-front question: does the operator already
 // have a Dune Awakening battlegroup running (their own VM, or one a previous
@@ -515,8 +515,9 @@ function StepConnectExisting() {
   )
 }
 
-// LAN flow — point DST at a Hyper-V host on the network and flip the routing
-// toggle so every VM command targets that host instead of local Hyper-V.
+// LAN flow — point DST at a Hyper-V host on the network, collect + persist the
+// host administrator credential, and flip the routing toggle so every VM
+// command targets that host (with that credential) instead of local Hyper-V.
 function StepConnectLan() {
   const [hostIp, setHostIp]   = useState('')
   const [enabled, setEnabled] = useState(false) // routing toggle == VmHostMode 'lan'
@@ -527,6 +528,25 @@ function StepConnectLan() {
   const [msg, setMsg]         = useState<string | null>(null)
   const [error, setError]     = useState<string | null>(null)
 
+  // Credential: hidden behind "using saved credential for X" once one exists
+  // and matches hostIp, so re-opening this step never re-prompts. "Change
+  // credential" reveals the fields to replace it.
+  const [credUser, setCredUser] = useState('')
+  const [credPassword, setCredPassword] = useState('')
+  const [savedUser, setSavedUser] = useState<string | null>(null)
+  const [editingCred, setEditingCred] = useState(false)
+
+  const loadCredInfo = useCallback(async (ip: string) => {
+    if (!ip) { setSavedUser(null); return }
+    try {
+      const info = await getHyperVLanCredential(ip)
+      setSavedUser(info.exists && info.matchesHost ? info.user : null)
+      setEditingCred(!(info.exists && info.matchesHost))
+    } catch {
+      setSavedUser(null)
+    }
+  }, [])
+
   useEffect(() => {
     void (async () => {
       setLoading(true)
@@ -534,13 +554,14 @@ function StepConnectLan() {
         const s = await getHyperVLan()
         setHostIp(s.hostIp ?? '')
         setEnabled(s.mode === 'lan')
+        await loadCredInfo(s.hostIp ?? '')
       } catch (e) {
         setError(e instanceof ApiError ? e.message : String(e))
       } finally {
         setLoading(false)
       }
     })()
-  }, [])
+  }, [loadCredInfo])
 
   // A candidate host must pass a live connectivity test before it can be enabled.
   const canEnable = !!test?.ok
@@ -548,15 +569,27 @@ function StepConnectLan() {
   const runTest = useCallback(async () => {
     const ip = hostIp.trim()
     if (!ip) { setError('Enter the Hyper-V host IP first.'); return }
+    const usingNewCred = editingCred && credUser.trim() && credPassword
+    if (editingCred && !usingNewCred) { setError("Enter the host's administrator username and password first."); return }
     setTesting(true); setError(null); setMsg(null); setTest(null)
     try {
-      setTest(await testHyperVLan(ip))
+      const result = usingNewCred
+        ? await testHyperVLan(ip, credUser.trim(), credPassword)
+        : await testHyperVLan(ip)
+      setTest(result)
+      if (result.ok && usingNewCred) {
+        // Persist the credential that just proved it works, then collapse
+        // back to the "using saved credential" view.
+        await saveHyperVLanCredential(ip, credUser.trim(), credPassword)
+        setCredPassword('')
+        await loadCredInfo(ip)
+      }
     } catch (e) {
       setError(e instanceof ApiError ? e.message : String(e))
     } finally {
       setTesting(false)
     }
-  }, [hostIp])
+  }, [hostIp, editingCred, credUser, credPassword, loadCredInfo])
 
   const save = useCallback(async () => {
     const ip = hostIp.trim()
@@ -585,10 +618,11 @@ function StepConnectLan() {
       <div className="flex items-start gap-3 p-3 rounded border border-warning/40 bg-warning/10 mb-4">
         <Icon name="AlertTriangle" size={18} className="text-warning shrink-0 mt-0.5" />
         <div className="text-xs text-text-dim">
-          <span className="font-medium text-warning">Prerequisite:</span> remote Hyper-V management from this PC must
-          already work — i.e. you can connect to that host in <strong>Hyper-V Manager</strong>. DST uses the same
-          channel; it does not configure WinRM/permissions for you. The VM must already be installed on that host and
-          named <span className="font-mono">dune-awakening</span>.
+          <span className="font-medium text-warning">Prerequisite:</span> the host's Hyper-V PowerShell Remoting
+          (WinRM) must be reachable from this PC (in a workgroup: the host trusted from this PC via
+          <span className="font-mono"> TrustedHosts</span>). DST uses an explicit administrator credential for that
+          host below — it does not need to match the Windows account DST itself runs as. The VM must already be
+          installed on that host and named <span className="font-mono">dune-awakening</span>.
         </div>
       </div>
 
@@ -601,19 +635,51 @@ function StepConnectLan() {
             <input
               type="text"
               value={hostIp}
-              onChange={e => { setHostIp(e.target.value); setTest(null) }}
+              onChange={e => { setHostIp(e.target.value); setTest(null); void loadCredInfo(e.target.value.trim()) }}
               placeholder="192.168.1.50"
               className="flex-1 min-w-0 text-sm font-mono bg-surface border border-border rounded px-2 py-1.5"
             />
-            <button type="button" className="btn-secondary shrink-0" onClick={() => { void runTest() }} disabled={testing}>
-              <Icon name={testing ? 'Loader2' : 'Plug'} size={14} className={testing ? 'animate-spin' : ''} />
-              {testing ? 'Testing…' : 'Test connection'}
-            </button>
           </div>
           <p className="text-xs text-text-dim mb-3">
             This is the <strong>host</strong> address, not the VM's. DST discovers the VM's own IP through the host
             once connected.
           </p>
+
+          <label className="block text-sm font-medium text-text mb-1">Host administrator credential</label>
+          {!editingCred && savedUser ? (
+            <div className="flex items-center justify-between gap-2 p-3 rounded border border-border bg-surface-2 mb-3">
+              <span className="text-sm text-text-dim">
+                Using saved credential for <span className="font-mono text-text">{savedUser}</span>
+              </span>
+              <button type="button" className="btn-secondary shrink-0" onClick={() => { setEditingCred(true); setTest(null) }}>
+                Change
+              </button>
+            </div>
+          ) : (
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-3 mb-3">
+              <label className="flex flex-col gap-1 text-sm">
+                <span className="text-text-dim">Administrator username</span>
+                <input type="text" value={credUser} onChange={e => { setCredUser(e.target.value); setTest(null) }} spellCheck={false}
+                  placeholder="HOST\Administrator" className="px-3 py-2 rounded-lg bg-surface-2 border border-border text-text text-sm font-mono" />
+              </label>
+              <label className="flex flex-col gap-1 text-sm">
+                <span className="text-text-dim">Password</span>
+                <input type="password" value={credPassword} onChange={e => { setCredPassword(e.target.value); setTest(null) }}
+                  className="px-3 py-2 rounded-lg bg-surface-2 border border-border text-text text-sm" />
+              </label>
+              <p className="md:col-span-2 text-xs text-text-dim -mt-1">
+                The host's own administrator account. In a workgroup this is routinely a <strong>different</strong>{' '}
+                account than the one DST itself runs as on this PC — use <span className="font-mono">HOST\username</span>.
+              </p>
+            </div>
+          )}
+
+          <div className="mb-3">
+            <button type="button" className="btn-secondary" onClick={() => { void runTest() }} disabled={testing}>
+              <Icon name={testing ? 'Loader2' : 'Plug'} size={14} className={testing ? 'animate-spin' : ''} />
+              {testing ? 'Testing…' : 'Test connection'}
+            </button>
+          </div>
 
           {test && (
             <div className="flex items-start gap-3 p-3 rounded border border-border bg-surface-2 mb-3">
@@ -638,8 +704,9 @@ function StepConnectLan() {
             <span className="text-sm text-text">
               Route all VM commands to this LAN host
               <span className="block text-xs text-text-dim mt-0.5">
-                When on, DST manages the remote VM (status, start/stop, RAM) over the LAN. Turn it off to go back to a
-                local VM on this PC — this fully bypasses the LAN path. {!canEnable && !enabled && 'Run a successful test first.'}
+                When on, DST manages the remote VM (status, start/stop, RAM) over the LAN using the credential above.
+                Turn it off to go back to a local VM on this PC — this fully bypasses the LAN path, but keeps the
+                saved credential for next time. {!canEnable && !enabled && 'Run a successful test first.'}
               </span>
             </span>
           </label>
@@ -666,6 +733,7 @@ function StepInstallLan() {
   const [hostIp, setHostIp] = useState('')
   const [user, setUser] = useState('')
   const [password, setPassword] = useState('')
+  const [savedCredUser, setSavedCredUser] = useState<string | null>(null)
   const [res, setRes] = useState<HyperVLanHostResources | null>(null)
   const [checking, setChecking] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -682,7 +750,16 @@ function StepInstallLan() {
 
   useEffect(() => {
     void (async () => {
-      try { const s = await getHyperVLan(); setHostIp(s.hostIp ?? '') } catch { /* set in prior step */ }
+      let ip = ''
+      try { const s = await getHyperVLan(); ip = s.hostIp ?? ''; setHostIp(ip) } catch { /* set in prior step */ }
+      // The Hyper-V host step already collected + saved a credential for this
+      // host; reuse it here instead of asking again. The fields below stay
+      // available in case a different (e.g. install-only) credential is
+      // needed for this one-off WinRM session.
+      try {
+        const info = await getHyperVLanCredential(ip)
+        if (info.exists && info.matchesHost) setSavedCredUser(info.user)
+      } catch { /* fields stay editable */ }
       // If an install is already running (e.g. page reopened), resume polling.
       try {
         const st = await getHyperVLanInstallStatus()
@@ -718,10 +795,10 @@ function StepInstallLan() {
 
   const check = useCallback(async () => {
     if (!hostIp.trim()) { setError('Set the Hyper-V host IP in the previous step first.'); return }
-    if (!user.trim() || !password) { setError('Enter an administrator username and password for the host.'); return }
+    if (!savedCredUser && (!user.trim() || !password)) { setError("Enter the host's administrator username and password."); return }
     setChecking(true); setError(null); setRes(null)
     try {
-      const r = await getHyperVLanHostResources(hostIp.trim(), user.trim(), password)
+      const r = await getHyperVLanHostResources(hostIp.trim(), user.trim() || undefined, password || undefined)
       setRes(r)
       if (r.ok) {
         if (r.drives && r.drives[0]) setDestDrive(r.drives[0].drive)
@@ -734,7 +811,7 @@ function StepInstallLan() {
     } finally {
       setChecking(false)
     }
-  }, [hostIp, user, password])
+  }, [hostIp, user, password, savedCredUser])
 
   const install = useCallback(async () => {
     if (!destDrive) { setError('Pick a destination drive.'); return }
@@ -743,7 +820,7 @@ function StepInstallLan() {
     setError(null)
     try {
       const r = await startHyperVLanInstall({
-        hostIp: hostIp.trim(), user: user.trim(), password,
+        hostIp: hostIp.trim(), user: user.trim() || undefined, password: password || undefined,
         destDrive, memoryGB, switchName, vmPassword, replaceExisting: false,
       })
       if (!r.ok) { setError(r.error ?? 'Could not start the install.'); return }
@@ -769,14 +846,20 @@ function StepInstallLan() {
       </div>
 
       {/* Credentials + probe */}
+      {savedCredUser && (
+        <p className="text-xs text-text-dim mb-2">
+          Using the saved credential for <span className="font-mono text-text">{savedCredUser}</span> from the previous
+          step unless you enter a different one below.
+        </p>
+      )}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-3 mb-3">
         <label className="flex flex-col gap-1 text-sm">
-          <span className="font-medium">Host administrator username</span>
+          <span className="font-medium">Host administrator username {savedCredUser && <span className="text-text-dim font-normal">(optional)</span>}</span>
           <input type="text" value={user} onChange={e => setUser(e.target.value)} disabled={installing} spellCheck={false}
-            placeholder="Administrator" className="px-3 py-2 rounded-lg bg-surface-2 border border-border text-text text-sm" />
+            placeholder={savedCredUser ?? 'HOST\\Administrator'} className="px-3 py-2 rounded-lg bg-surface-2 border border-border text-text text-sm" />
         </label>
         <label className="flex flex-col gap-1 text-sm">
-          <span className="font-medium">Host administrator password</span>
+          <span className="font-medium">Host administrator password {savedCredUser && <span className="text-text-dim font-normal">(optional)</span>}</span>
           <input type="password" value={password} onChange={e => setPassword(e.target.value)} disabled={installing}
             className="px-3 py-2 rounded-lg bg-surface-2 border border-border text-text text-sm" />
         </label>

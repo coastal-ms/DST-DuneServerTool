@@ -65,17 +65,37 @@ function New-DuneHyperVLanCredential {
     return [System.Management.Automation.PSCredential]::new($User, $sec)
 }
 
+# Resolve the credential to use for a remote Hyper-V host call: an explicit
+# User/Password takes priority (the Connect step testing a credential before
+# it's saved, or the install form's one-off WinRM session); otherwise falls
+# back to the saved credential for that host so a caller with one already
+# configured is never re-prompted. Returns @{ ok; credential; error }.
+function Resolve-DuneHyperVLanCredential {
+    param([string]$HostIp, [string]$User, [string]$Password)
+    if ($User -and $Password) {
+        return @{ ok = $true; credential = (New-DuneHyperVLanCredential -User $User -Password $Password); error = $null }
+    }
+    $saved = Get-DuneHyperVLanCredential -HostIp $HostIp
+    if (-not $saved.ok) { return @{ ok = $false; credential = $null; error = $saved.error } }
+    if (-not $saved.exists -or -not $saved.matchesHost) {
+        return @{ ok = $false; credential = $null; error = "No host administrator credential saved for $HostIp. Enter a username and password, or save one first in the Hyper-V host step." }
+    }
+    return @{ ok = $true; credential = $saved.credential; error = $null }
+}
+
 # Probe the remote host for what the install wizard needs to offer: drives with
 # room, existing external switches, whether the VM already exists, host RAM.
 function Get-DuneHyperVLanHostResources {
     param(
         [Parameter(Mandatory)][string]$HostIp,
-        [Parameter(Mandatory)][string]$User,
-        [Parameter(Mandatory)][string]$Password
+        [string]$User = '',
+        [string]$Password = ''
     )
     $sess = $null
     try {
-        $cred = New-DuneHyperVLanCredential -User $User -Password $Password
+        $resolved = Resolve-DuneHyperVLanCredential -HostIp $HostIp -User $User -Password $Password
+        if (-not $resolved.ok) { return @{ ok = $false; error = $resolved.error } }
+        $cred = $resolved.credential
         $sess = New-PSSession -ComputerName $HostIp -Credential $cred -ErrorAction Stop
     } catch {
         $m = $_.Exception.Message
@@ -150,7 +170,9 @@ function Invoke-DuneHyperVLanInstall {
         Step 'connect' 'Connect to Hyper-V host' 'running' "Opening a remote session to $HostIp."
         Publish 'connect' $true '' ''
         try {
-            $cred = New-DuneHyperVLanCredential -User $User -Password $Password
+            $resolved = Resolve-DuneHyperVLanCredential -HostIp $HostIp -User $User -Password $Password
+            if (-not $resolved.ok) { throw $resolved.error }
+            $cred = $resolved.credential
             $sess = New-PSSession -ComputerName $HostIp -Credential $cred -ErrorAction Stop
         } catch {
             Step 'connect' 'Connect to Hyper-V host' 'failed' "WinRM session to $HostIp failed: $($_.Exception.Message)"
