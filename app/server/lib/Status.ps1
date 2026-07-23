@@ -267,6 +267,22 @@ function Get-DuneBattlegroupSnapshotFresh {
         $result.name        = $parsed.name
         $result.info        = $parsed.info
         $result.gameServers = $parsed.gameServers
+        # When multiple Hagga (Survival_1) sietches run with per-shard display
+        # names, label the duplicate "Hagga Basin" Game Servers rows with those
+        # names (display only - `map` is left intact for readiness logic). Names
+        # come from the CRD JSON already fetched in this same poll, ordered by
+        # partition id; applied to the Survival_1 rows in listed order.
+        $sietchNames = Get-DuneSietchNamesFromBgJson -JsonText $split.JsonText
+        if ($sietchNames.Count -ge 2 -and $result.gameServers.Count -gt 0) {
+            $ni = 0
+            foreach ($gs in $result.gameServers) {
+                if ($ni -ge $sietchNames.Count) { break }
+                if ("$($gs.map)" -match '(?i)survival[_-]?1|hagga') {
+                    $gs.sietchName = [string]$sietchNames[$ni]
+                    $ni++
+                }
+            }
+        }
         # Prefer the JSON-derived Info block when available: Funcom's
         # `battlegroup status` script mangles this row when the server TITLE
         # contains spaces (see the compound remote-command comment above), and
@@ -346,6 +362,39 @@ function Split-DuneBgCompoundOutput {
 # Returns $null when JSON is missing or lacks a usable `.status` — the
 # caller then keeps the (pre-existing) text-parsed values so behaviour never
 # regresses below the current baseline.
+# Extract ordered per-sietch display names from the battlegroup CRD JSON. Names
+# live on the (single) non-dedicated Survival_1 set's podSpecs[] as
+# -execcmds="Bgd.ServerDisplayName '<name>'" keyed by partition index. Returns an
+# array ORDERED BY PARTITION ID ASCENDING (matching how the director lists the
+# Game Servers rows), so the caller can label multiple Hagga rows in order.
+# Returns @() when there are fewer than two names (single sietch = nothing to do).
+function Get-DuneSietchNamesFromBgJson {
+    param([string]$JsonText)
+    if (-not $JsonText) { return @() }
+    try { $obj = $JsonText | ConvertFrom-Json -ErrorAction Stop } catch { return @() }
+    if (-not $obj) { return @() }
+    $item = $null
+    if ($obj.PSObject.Properties['items'] -and $obj.items) { $item = $obj.items[0] } else { $item = $obj }
+    if (-not $item -or -not $item.spec) { return @() }
+    try { $sets = $item.spec.serverGroup.template.spec.sets } catch { return @() }
+    $pairs = @()
+    foreach ($s in $sets) {
+        $isDedicated = $false
+        if ($s.PSObject.Properties['dedicatedScaling']) { $isDedicated = [bool]$s.dedicatedScaling }
+        if ($s.map -eq 'Survival_1' -and -not $isDedicated -and $s.PSObject.Properties['podSpecs'] -and $s.podSpecs) {
+            foreach ($ps in @($s.podSpecs)) {
+                if (-not $ps.PSObject.Properties['arguments']) { continue }
+                foreach ($a in @($ps.arguments)) {
+                    if ("$a" -match "Bgd\.ServerDisplayName\s+'(.*)'") { $pairs += @{ id = [int]$ps.index; name = $Matches[1] }; break }
+                }
+            }
+            break
+        }
+    }
+    if ($pairs.Count -lt 2) { return @() }
+    return @($pairs | Sort-Object { $_.id } | ForEach-Object { $_.name })
+}
+
 function ConvertFrom-DuneBgJsonStatus {
     param([string]$JsonText)
     if (-not $JsonText) { return $null }

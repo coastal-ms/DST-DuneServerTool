@@ -9,8 +9,8 @@
 
 **🌐 Website & feature tour: [coastal-ms.github.io/DST-DuneServerTool](https://coastal-ms.github.io/DST-DuneServerTool/)** — screenshots, install guide, and the full changelog.
 
-The current release is **v12.19.1**. The in-app version label and the
-website show plain semver tags (e.g. `v12.19.1`) — the previous
+The current release is **v12.19.8**. The in-app version label and the
+website show plain semver tags (e.g. `v12.19.8`) — the previous
 Roman-numeral stylization has been removed.
 
 > ## ✅ Confirmed compatible with Dune: Awakening **1.4.10.3**
@@ -31,6 +31,33 @@ browser and keeps the server running in the background.
 
 ### New in v12.19
 
+- **Per-partition Deep Desert PvP** (v12.19.8, Game Config). Load the
+  currently-running `DeepDesert_1` instances, choose which partition IDs should
+  allow PvP, and apply; DST writes the partition list and restarts only Deep
+  Desert. Map SpinUp now warms every configured Deep Desert partition instead
+  of only one, and partition self-heal preserves healthy sibling instances.
+- **Cross-VM / cross-battlegroup database migration** (v12.19.6, Database).
+  Live testing confirmed that a full `.backup` can move characters, inventories,
+  progression, bases, and world state to a different VM or battlegroup. The
+  earlier same-server-only warning was too broad. Database now includes the
+  proven sequence: start the new server, stop its battlegroup, use **Backups →
+  Import backup**, run **Restore Backup**, run **Commands → Reboot All**, apply
+  any changed **Settings → Public IP / DDNS** value after it settles, then run
+  **Reboot All** again before logging in. The two restarts are intentional: one
+  clears stale pods after the database swap and one forces clean operator
+  reconciliation after the IP change. Keep the old VM and original backup until
+  every character, inventory, progression state, and base has been verified;
+  account-specific data problems can still prevent an individual character from
+  loading.
+- **Multi-Hagga sietches** (v12.19.4, Sietches). Configure how many Hagga Basin
+  shards to run (up to 6), optionally name each one, and hit **Apply** — DST
+  reconciles the battlegroup and restarts cleanly. **Server Health** labels each
+  Game Servers row with its sietch name whenever you run more than one.
+- **Release claim now reliable when the battlegroup is off** (v12.19.2, Gameplay
+  Admin → Bases). Releasing a claim only persists while the battlegroup is
+  stopped — a running map server re-hydrates the deleted totem from memory — so
+  the **Release claim** action is gated on the battlegroup being off, and stays
+  clickable for every base while it is.
 - **Landsraad contributions now grant guild Voting Power** (v12.19.1, Players →
   Landsraad). Setting a player's House contribution now drives the game's own
   contribution pipeline instead of writing the totals directly, so the points
@@ -211,12 +238,12 @@ browser and keeps the server running in the background.
 
 ### New in v12.13.x
 
-- **Restore warns about cross-server restores** (v12.13.17). Characters
-  are bound to Funcom accounts in the cloud, so restoring a backup onto
-  a *different* VM/battlegroup recovers the world and bases but may not
-  restore character logins (they can fail to load or get cleared on
-  boot). The Restore card and its confirmation prompt now say so —
-  restore is intended for the same server.
+- **Restore warning strengthened** (v12.13.17). The Restore card and typed
+  confirmation make clear that a restore replaces the entire battlegroup
+  database and permanently discards everything created after the selected
+  snapshot. Cross-VM / cross-battlegroup migration guidance was corrected in
+  v12.19.6 after a live migration proved that complete character data can carry
+  over.
 - **Server rename works again** (v12.13.16). Game Config → Server name
   no longer rejects a valid name with "A non-empty name is required" —
   the request-body reader now handles hashtable-parsed bodies, so the

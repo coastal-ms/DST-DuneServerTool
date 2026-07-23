@@ -16,6 +16,7 @@ import type {
   SpicefieldsResponse,
   SpicefieldSaveResponse,
   SpicefieldType,
+  DeepDesertPvpState,
 } from './types'
 
 const fq = (force: boolean) => (force ? '?force=true' : '')
@@ -140,6 +141,19 @@ export function setSpicefieldSpawning(id: number, active: boolean) {
     api<SpicefieldSaveResponse>(`/api/gameconfig/spicefields/${id}/spawning${fq(force)}`, {
       method: 'PUT',
       body: JSON.stringify({ active: active === true }),
+    }),
+  )
+}
+
+export function getDeepDesertPvp() {
+  return api<DeepDesertPvpState>('/api/gameconfig/deep-desert-pvp')
+}
+
+export function saveDeepDesertPvp(enabled: boolean, partitionIds: number[]) {
+  return withOnlinePlayerGuard(force =>
+    api<DeepDesertPvpState>(`/api/gameconfig/deep-desert-pvp${fq(force)}`, {
+      method: 'PUT',
+      body: JSON.stringify({ enabled, partitionIds }),
     }),
   )
 }

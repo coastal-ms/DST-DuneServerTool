@@ -1,4 +1,4 @@
-#Requires -RunAsAdministrator
+﻿#Requires -RunAsAdministrator
 
 [CmdletBinding()]
 param(
@@ -21,7 +21,7 @@ param(
 # Wraps the original battlegroup.ps1 menu and adds extra tools
 # ============================================================
 
-$script:ToolVersion = "12.20.0"
+$script:ToolVersion = "12.19.9"
 
 # Cold-boot readiness budgets (seconds). A fresh battlegroup's FIRST boot can
 # take 10-30 min: k3s + funcom-operators initialize, metrics-server restarts a
@@ -1119,19 +1119,20 @@ function Invoke-DuneDnatWatchdogInstall {
     # Best-effort: stage the bundled DNAT self-heal watchdog installer to /tmp on
     # the VM (base64 over an ssh exec channel — no scp/sftp dependency), run it
     # once with sudo, remove it. The installer writes /usr/local/bin/dune-dnat-watch.sh
-    # plus a 1-minute root cron entry so the RabbitMQ (public:31982 -> mq-game pod)
-    # DNAT rule AND the game-UDP bridge (VM-LAN-IP:7777-7810 -> public IP) self-heal
-    # after a pod-only battlegroup restart -- which the boot script
+    # plus an OpenRC-supervised loop. It targets one-second game-listener checks
+    # while cluster-derived addresses refresh in an independent bounded worker.
+    # The RabbitMQ (public:31982 -> mq-game pod) DNAT rule and game-UDP bridge
+    # (VM-LAN-IP:7777-7810 -> public IP) self-heal after a pod-only battlegroup
+    # restart -- which the boot script
     # /etc/local.d/dune-iptables.start misses because it only re-derives at boot.
     # Without this, a pod restart leaves the RabbitMQ rule pointing at a dead pod IP
     # (players hang on "Connecting") or drops the game bridge (remote players P34)
     # until the next reboot (observed 2026-06-23). The game bridge is BIND-DETECTED:
-    # the watchdog installs it only when the game binds the public IP and NOT the
-    # LAN IP/wildcard, and removes it otherwise, so it never black-holes a same-LAN
-    # / self join the way the unconditional rule removed in v12.16.9 did.
+    # the watchdog installs it for each port with a public listener, even if a
+    # separate process also binds LAN, while LAN-only ports remain untouched.
     #
-    # ALL persistence (the watchdog file + cron line) lives in the staged POSIX-sh
-    # script, never in this app — so the packaged installer carries no
+    # ALL persistence (watchdog, OpenRC service, and health-check cron) lives in
+    # the staged POSIX-sh script, never in this app -- so the packaged installer carries no
     # persistence-establishment pattern (that PowerShell pattern is what tripped
     # the Defender ML false positive Trojan:Script/Wacatac.H!ml in v11.0.1).
     #
@@ -1165,7 +1166,7 @@ function Invoke-DuneDnatWatchdogInstall {
                     -i "$sshKey" "$sshUser@$Ip" `
                     "sudo -n sh $remoteTmp; rc=`$?; rm -f $remoteTmp; exit `$rc" 2>&1
     if (($runOut -join "`n") -match 'DUNE_DNAT_WATCH_OK') {
-        Write-Host "  [$Phase] DNAT self-heal watchdog installed/refreshed — RabbitMQ login + game-UDP bridge auto-recover after pod restarts." -ForegroundColor DarkGray
+        Write-Host "  [$Phase] DNAT self-heal watchdog installed/refreshed — supervised rapid game-listener + RabbitMQ reconciliation active." -ForegroundColor DarkGray
     } else {
         Write-Host "  [$Phase] DNAT watchdog install reported a problem (non-fatal): $runOut" -ForegroundColor DarkYellow
     }
@@ -1735,6 +1736,10 @@ while ($true) {
         Write-Host "  Settling 10s before starting battlegroup..." -ForegroundColor DarkGray
         Start-Sleep -Seconds 10
 
+        # Refresh monitoring before issuing battlegroup start; reconciliation is
+        # continuous and does not depend on a later readiness/green transition.
+        Invoke-DuneDnatWatchdogInstall -Ip $ip -Phase 'pre-startup'
+
         # ---- Step 3: battlegroup start ----
         Write-Host ""
         $estBg = Format-PhaseEstimate 'battlegroup-start'
@@ -1785,7 +1790,6 @@ while ($true) {
         # itself failed (no point waiting on operator that never reconciled).
         if ($bgStartExit -eq 0) {
             Invoke-OnDemandPartitionClear -Ip $ip -DelaySec 0 -Phase 'post-startup' -Fast
-            Invoke-DuneDnatWatchdogInstall -Ip $ip -Phase 'post-startup'
             Invoke-DuneBackupDumpPodPrune -Ip $ip -Phase 'post-startup'
         } else {
             Write-Host "  Skipped on-demand partition auto-clear because battlegroup start exited $bgStartExit." -ForegroundColor DarkYellow
@@ -2036,6 +2040,10 @@ while ($true) {
         Write-Host "  Settling 10s before starting battlegroup..." -ForegroundColor DarkGray
         Start-Sleep -Seconds 10
 
+        # The VM reboot restarted OpenRC already; refresh the service definition
+        # before battlegroup start so first-listener DNAT is readiness-independent.
+        Invoke-DuneDnatWatchdogInstall -Ip $ip -Phase 'pre-reboot-start'
+
         # ---- Step 3: start battlegroup ----
         Write-Host ""
         $estBg = Format-PhaseEstimate 'battlegroup-start'
@@ -2063,7 +2071,6 @@ while ($true) {
         # still be reconciling on-demand ServerSets.
         if ($bgStartExit -eq 0) {
             Invoke-OnDemandPartitionClear -Ip $ip -DelaySec 45 -Phase 'post-reboot'
-            Invoke-DuneDnatWatchdogInstall -Ip $ip -Phase 'post-reboot'
             Invoke-DuneBackupDumpPodPrune -Ip $ip -Phase 'post-reboot'
         } else {
             Write-Host "  Skipped on-demand partition auto-clear because battlegroup start exited $bgStartExit." -ForegroundColor DarkYellow
@@ -2492,6 +2499,11 @@ fi
         ssh -o BatchMode=yes -o StrictHostKeyChecking=no -o LogLevel=QUIET -i "$sshKey" "$sshUser@$ip" $preflight
     }
 
+    if ($cmdName -eq 'start' -or $cmdName -eq 'restart') {
+        # Refresh monitoring before issuing start/restart, not after readiness.
+        Invoke-DuneDnatWatchdogInstall -Ip $ip -Phase "pre-$cmdName"
+    }
+
     ssh -t -o StrictHostKeyChecking=no -o LogLevel=QUIET -i "$sshKey" "$sshUser@$ip" "$bgBinPath $cmdName"
     $bgFallbackExit = $LASTEXITCODE
 
@@ -2508,9 +2520,6 @@ fi
         # The persistent VM watchdog / manual Fix Partitions command covers
         # slower post-reconcile drift without making every start feel hung.
         Invoke-OnDemandPartitionClear -Ip $ip -DelaySec 0 -Phase "post-$cmdName" -Fast
-        # Install/refresh the DNAT self-heal watchdog so the RabbitMQ + game-port
-        # rules recover automatically after a pod-only restart (no host reboot).
-        Invoke-DuneDnatWatchdogInstall -Ip $ip -Phase "post-$cmdName"
     }
 
     # After start/restart, resolve director port

@@ -17,6 +17,87 @@ here cover everything those tags shipped.
 
 - **Hyper-V over LAN — a third Setup Wizard option.** DST can now run on one PC and manage the Dune VM on a **separate Hyper-V host on the local network** (e.g. a headless server). The wizard's new **Hyper-V over LAN** path asks for the host's IP, tests the connection (it uses the same remote-management channel Hyper-V Manager needs — DST doesn't configure WinRM/permissions for you), and offers a **routing toggle** (also on the Settings page) that points DST's Hyper-V calls (VM status, start/stop, RAM) at that host. Unchecking the toggle returns to the local VM and fully bypasses the LAN path, so existing local installs are unaffected. The VM itself is created with DST's normal install flow; LAN mode is for managing a VM that already exists on the remote host.
 
+## [12.19.9] - 2026-07-21
+
+### Fixed
+- **Public IP / DDNS now handles mixed game-port bind states.** The UDP bridge
+  reconciles each active port independently, so a LAN-bound map port no longer
+  suppresses DNAT for different ports bound only to the public IP. When separate
+  game processes bind the same port on both addresses, the public listener wins
+  so router-forwarded players reach the advertised map process. LAN-only ports
+  remain untouched. A supervised VM-side loop now targets detection within one
+  second and installs exact-port DNAT continuously instead of waiting for the
+  old once-per-minute pass. Cluster lookups run independently with hard
+  timeouts, so a stalled K3s API cannot stop listener polling. Cleanup is limited
+  to Dune game-port UDP rules for the VM. Field testing confirmed DNAT appeared
+  before DST showed the map green and the first external handoff succeeded
+  without P34.
+
+## [12.19.8] - 2026-07-20
+
+### Added
+- **Game Config can enable PvP per running Deep Desert partition.** A dedicated
+  card loads live `DeepDesert_1` instances, shows their partition IDs,
+  dimensions, ports, and display names, writes only the selected partition IDs
+  to `UserGame.ini`, and restarts the running Deep Desert pods to apply them.
+
+### Changed
+- **Map SpinUp now starts every configured Deep Desert partition.** Its warm
+  floor follows the durable Deep Desert world-partition count instead of always
+  starting one instance; readiness and player checks now use live battlegroup
+  `status.servers` for Director-driven maps.
+
+## [12.19.6] - 2026-07-19
+
+### Changed
+- **Database restore guidance now covers live-proven cross-VM and
+  cross-battlegroup migrations.** Full database backups can carry characters,
+  inventories, progression, bases, and world state to a different VM or
+  battlegroup; the previous same-server-only warning was incorrect. The Database
+  page now provides the exact migration sequence, including both intentional
+  full restarts used to clear stale pods and reconcile operators after any
+  public-IP change. Destructive-restore safeguards remain unchanged.
+
+## [12.19.5] - 2026-07-18
+
+### Changed
+- **Local Backup Mirror now organizes files into per-battlegroup subfolders.**
+  Mirrored backups land in `<mirror folder>\<battlegroup>\<file>` (mirroring the
+  VM's own layout) instead of a flat folder, so a host running multiple
+  VMs/battlegroups can always tell which battlegroup a backup belongs to — even
+  legacy `dst-scheduled-<ts>` files whose name carries no battlegroup identity.
+  Existing flat copies are left untouched (the mirror never deletes); new files
+  are placed in subfolders.
+- **Scheduled backups now use Funcom's native filename convention.** DST's
+  automatic backups are now named `sh-<hostid>-<suffix>-<timestamp>.backup`
+  (self-labeled by battlegroup, matching manual/Funcom backups) instead of the
+  old `dst-scheduled-<timestamp>` name that stripped the battlegroup identity.
+  Existing `dst-scheduled-*` files remain fully listed, prunable, downloadable,
+  and deletable.
+
+### Fixed
+- **Backend no longer risks hanging on a stalled SSH command.** The SSH helpers
+  that talk to the VM (status checks, backup transfers) now bound the wait when
+  draining a finished command's output, so a remote process that leaves an
+  output pipe open can't freeze the backend's request handling.
+
+## [12.19.4] - 2026-07-17
+
+### Changed
+
+- **Sietches page rebuilt as a "configure N Hagga shards + name them" flow.** Behind the existing "I UNDERSTAND" gate, you now type how many Hagga (Survival_1) sietches you want (1–6) and DST sets both the active and max servers to that number in one clean battlegroup restart. This replaces the old one-at-a-time Add/Remove buttons.
+- **Per-sietch names.** When running 2+ sietches you can tick a box to give each shard its own name (the main one included). DST writes each name into the battlegroup as a per-partition `Bgd.ServerDisplayName` launch arg and **comments out the global `Bgd.ServerDisplayName` line in `UserEngine.ini`** so the per-shard names take effect (otherwise the game shows every shard with the same name). Unticking the box, or dropping back to a single sietch, **removes the per-shard names and re-enables the global line** (Funcom's default single-name cascade).
+
+### Fixed
+
+- **Multi-sietch shards now actually start.** Each additional Hagga world partition is created with a **unique `dimension`** — the earlier approach reused dimension `0`, which left the second shard stuck in "Startup" and never joinable. DST now assigns dimensions `0, 1, 2 …` the way Funcom's own battlegroup editor does, and the Sietches count reflects the number of shards (not server sets).
+
+## [12.19.2] - 2026-07-17
+
+### Changed
+
+- **Bases: Release claim now requires the battlegroup to be off, and is enabled whenever it is.** Releasing a claim deletes the base's totem actor, but a *running* map server keeps that claim in memory and rewrites it back to the database on its next flush — so a release done while the battlegroup is up silently gets restored (rebooting afterward does not help). The **Release claim** action is now gated on battlegroup state: it is **enabled whenever the battlegroup is stopped** and disabled while it is running/starting/stopping, with a clear indicator explaining that the battlegroup must be off for the release to persist. Once the battlegroup is off, release the claim and start it back up — the claim stays gone. While the battlegroup is off the button stays clickable for every base (it no longer greys out after a release; clicking a base with no active claim simply reports there is nothing to release), so an admin can re-confirm without the row going disabled. No change to the underlying delete.
+
 ## [12.19.1] - 2026-07-13
 
 ### Added

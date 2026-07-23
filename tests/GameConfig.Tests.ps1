@@ -7,6 +7,7 @@
 BeforeAll {
     . (Join-Path $PSScriptRoot '_TestHelpers.ps1')
     Import-DstLib 'GameConfig.ps1'
+    . (Join-Path $PSScriptRoot '..\app\lib\K8s.ps1')
 
     $script:SecBuilding  = '/Script/DuneSandbox.BuildingSettings'
     $script:SecInventory = '/Script/DuneSandbox.InventorySystemSettings'
@@ -20,6 +21,7 @@ BeforeAll {
         foreach ($line in ($Raw -replace "`r", '' -split "`n")) {
             if ($line.Trim() -eq $needle) { $n++ }
         }
+
         return $n
     }
 
@@ -39,6 +41,77 @@ BeforeAll {
             }
         }
         return $val
+    }
+}
+
+Describe 'Deep Desert per-partition PvP' -Tag 'GameConfig' {
+    It 'parses global and repeated partition settings' {
+        $raw = @"
+[/Script/DuneSandbox.PvpPveSettings]
+m_bShouldForceEnablePvpOnAllPartitions=False
++m_PvpEnabledPartitions=8
++m_PvpEnabledPartitions=12
++m_PvpEnabledPartitions=8
+"@
+        $state = Get-DuneDeepDesertPvpIniState -Raw $raw
+        $state.forceAll | Should -BeFalse
+        $state.selectedPartitionIds | Should -Be @(8, 12)
+    }
+
+    It 'writes selected partitions while forcing the global override off' {
+        $updates = New-DuneDeepDesertPvpUpdates -PartitionIds @(12, 8, 12)
+        $out = ConvertTo-DuneIniManaged -Raw '' -Updates $updates -QuotedKeys @{}
+        $out | Should -Match 'm_bShouldForceEnablePvpOnAllPartitions=False'
+        ([regex]::Matches($out, '\+m_PvpEnabledPartitions=8')).Count | Should -Be 1
+        ([regex]::Matches($out, '\+m_PvpEnabledPartitions=12')).Count | Should -Be 1
+    }
+
+    It 'disable removes partition array entries but keeps global PvP off' {
+        $raw = @"
+[/Script/DuneSandbox.PvpPveSettings]
+m_bShouldForceEnablePvpOnAllPartitions=True
++m_PvpEnabledPartitions=8
+"@
+        $out = ConvertTo-DuneIniManaged -Raw $raw `
+            -Updates (New-DuneDeepDesertPvpUpdates -PartitionIds @()) `
+            -QuotedKeys @{}
+        $out | Should -Match 'm_bShouldForceEnablePvpOnAllPartitions=False'
+        $out | Should -Not -Match 'm_PvpEnabledPartitions'
+    }
+
+    It 'lists only partitions bound to running Deep Desert sets' {
+        $bg = [pscustomobject]@{
+            spec = [pscustomobject]@{
+                serverGroup = [pscustomobject]@{ template = [pscustomobject]@{ spec = [pscustomobject]@{
+                    sets = @(
+                        [pscustomobject]@{ map='DeepDesert_1'; replicas=0; podSpecs=@(
+                            [pscustomobject]@{ index=12; arguments=@('-execcmds="Bgd.ServerDisplayName ''PvP DD''"') }
+                        ) },
+                        [pscustomobject]@{ map='Survival_1'; replicas=1; partitions=@(1) }
+                    )
+                } } }
+                database = [pscustomobject]@{ template = [pscustomobject]@{ spec = [pscustomobject]@{
+                    deployment = [pscustomobject]@{ spec = [pscustomobject]@{ worldPartitions=@(
+                        [pscustomobject]@{ map='DeepDesert_1'; partitions=@(
+                            [pscustomobject]@{ id=8; dimension=0 },
+                            [pscustomobject]@{ id=12; dimension=1 },
+                            [pscustomobject]@{ id=14; dimension=2 }
+                        ) }
+                    ) } }
+                } } }
+            }
+            status = [pscustomobject]@{ servers=@(
+                [pscustomobject]@{ partitionMap='DeepDesert_1'; partitionIndex=8; dimensionIndex=0; phase='Running'; ready=$true; gamePort=7779 },
+                [pscustomobject]@{ partitionMap='DeepDesert_1'; partitionIndex=12; dimensionIndex=1; phase='Starting'; ready=$false; gamePort=7780 },
+                [pscustomobject]@{ partitionMap='DeepDesert_1'; partitionIndex=99; dimensionIndex=2; phase='Terminating'; ready=$true; gamePort=7781 },
+                [pscustomobject]@{ partitionMap='Survival_1'; partitionIndex=1; dimensionIndex=0; phase='Running'; ready=$true; gamePort=7778 }
+            ) }
+        }
+        $rows = @(Get-V6DeepDesertInstancesFromBg -Bg $bg)
+        @($rows.PartitionId) | Should -Be @(8, 12)
+        $rows[1].Dimension | Should -Be 1
+        $rows[1].ServerDisplayName | Should -Be 'PvP DD'
+        $rows[1].Phase | Should -Be 'Starting'
     }
 }
 

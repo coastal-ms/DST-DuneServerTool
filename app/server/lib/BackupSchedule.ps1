@@ -84,8 +84,10 @@ function New-DuneBackupPodPruneSnippet {
 # Build the cron-embedded file-retention prune snippet for a given keepLast.
 # Deletes /funcom/artifacts/database-dumps/*/ dump files beyond the newest N,
 # keying on filename (embedded UTC timestamp = newest-first). Two globs:
-#   (i)  Funcom/manual `-YYYYMMDD-HHMMSS.backup` files
-#   (ii) DST scheduled files (extension-less `dst-scheduled-<ts>`)
+#   (i)  Funcom-native `-YYYYMMDD-HHMMSS.backup` files (DST's scheduled backups
+#        now use this same shape — see New-DuneBackupCmd)
+#   (ii) LEGACY DST scheduled files (extension-less `dst-scheduled-<ts>`) still
+#        pruned so pre-existing ones from older DST builds aren't orphaned
 # Both dump + its `.yaml` sidecar are deleted together. Manually named
 # snapshots like 'pre-patch-1_4_10_1.backup' (no timestamp tail) never match
 # either glob, so they're never pruned by accident.
@@ -135,27 +137,33 @@ function New-DuneBackupCmd {
     # a mid-restart tick still skips everything.
     $tail = $podSnippet
     if ($fileSnippet) { $tail = "$podSnippet; $fileSnippet" }
-    # Pass a stable name to `battlegroup backup` so scheduled backups are
-    # self-labeling in /funcom/artifacts/database-dumps/. A named backup makes
-    # it obvious which snapshots were taken automatically by DST vs a manual
-    # `battlegroup backup` on the command line — and it makes the pre-Funcom-
-    # update-restore rollback path in the patch-compat routine easier to pick
-    # out. Timestamp is UTC to match the rest of DST's log format.
-    return "if find /tmp/dst-restart-active -mmin -30 2>/dev/null | grep -q .; then echo `"`$(date) dst: backup skipped - BG restart window active`" >> /var/log/dune-backup.log; else /home/dune/.dune/bin/battlegroup backup `"dst-scheduled-`$(date -u +%Y%m%d-%H%M%S)`" >> /var/log/dune-backup.log 2>&1; $tail; fi"
+    # Let `battlegroup backup` name the file itself (no name argument). Funcom
+    # then auto-generates the SAME convention as a manual/default backup —
+    # `sh-<hostid>-<suffix>-<utc-ts>.backup` in the per-battlegroup subdir
+    # /funcom/artifacts/database-dumps/<bg>/ — so every scheduled snapshot is
+    # self-labeling by battlegroup (critical when a host runs multiple VMs/BGs:
+    # the suffix rotates per Funcom redeploy, e.g. ttbsdg -> cffjby) and matches
+    # Funcom's own files byte-for-byte in naming. Previously DST passed an
+    # explicit `dst-scheduled-<ts>` name, which Funcom wrote verbatim WITHOUT the
+    # battlegroup identity or a `.backup` extension — so a flattened local mirror
+    # couldn't tell which server a file came from (Coastal, 2026-07-18). The
+    # listing/prune/delete matchers still recognize the legacy `dst-scheduled-*`
+    # shape so pre-existing scheduled files aren't orphaned.
+    return "if find /tmp/dst-restart-active -mmin -30 2>/dev/null | grep -q .; then echo `"`$(date) dst: backup skipped - BG restart window active`" >> /var/log/dune-backup.log; else /home/dune/.dune/bin/battlegroup backup >> /var/log/dune-backup.log 2>&1; $tail; fi"
 }
 $script:DuneBackupBeginMarker = '# DST-BACKUP BEGIN'
 $script:DuneBackupEndMarker   = '# DST-BACKUP END'
 $script:DuneBackupDumpDir     = '/funcom/artifacts/database-dumps'
 
-# Scheduled backups are written by `battlegroup backup "dst-scheduled-<utc-ts>"`
-# (see New-DuneBackupCmd). Funcom writes that name VERBATIM, with NO trailing
-# `.backup` extension, so a scheduled snapshot lands on disk as e.g.
-# `dst-scheduled-20260710-050000`. Every path that keyed on a trailing
-# `.backup` — the history listing, the retention prune, and the download/delete
-# validators — therefore silently skipped every scheduled backup, so only
-# manual / Funcom-default `*.backup` files ever showed in the Database page.
-# These two shared matchers widen those paths to ALSO recognize the extension-
-# less scheduled name, without pulling in each backup's `.yaml` sidecar:
+# DST's scheduled backups are now written by a bare `battlegroup backup` (no
+# name argument — see New-DuneBackupCmd), so Funcom names them with its own
+# convention `sh-<hostid>-<suffix>-<utc-ts>.backup`, exactly like a manual or
+# default backup, self-labeled by battlegroup. OLDER DST builds passed an
+# explicit `dst-scheduled-<utc-ts>` name, which Funcom wrote VERBATIM with NO
+# trailing `.backup` extension (e.g. `dst-scheduled-20260710-050000`). To keep
+# those pre-existing files first-class (listed, prunable, downloadable,
+# deletable) these two shared matchers recognize BOTH shapes while excluding the
+# `.yaml` sidecars:
 #   * a find(1) -name glob for listing + pruning. The `dst-scheduled-` prefix is
 #     followed by a FIXED 8-digit date, a dash, and 6 digits of time; the
 #     `<name>.yaml` sidecar is longer than the glob so it can never match.
