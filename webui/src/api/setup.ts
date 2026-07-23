@@ -47,15 +47,44 @@ export function saveHyperVLan(mode: 'local' | 'lan', hostIp: string) {
     body: JSON.stringify({ mode, hostIp }),
   })
 }
-export function testHyperVLan(hostIp: string) {
+// user/password test a NEW credential without saving it (the Connect step,
+// before anything is saved). Omit both to test using the already-saved
+// credential for hostIp instead.
+export function testHyperVLan(hostIp: string, user?: string, password?: string) {
   return api<HyperVLanTest>('/api/setup/hyperv-lan/test', {
     method: 'POST',
-    body: JSON.stringify({ hostIp }),
+    body: JSON.stringify({ hostIp, user, password }),
   })
 }
 
-// Remote install (VM lives on a headless Hyper-V host). Needs a WinRM admin
-// credential for the host; it's used per-call and never persisted.
+// The saved Hyper-V LAN host credential — never carries the password. Lets the
+// UI show "using saved credential for <user>" instead of re-prompting.
+export interface HyperVLanCredentialInfo {
+  ok: boolean
+  exists: boolean
+  matchesHost: boolean
+  user: string
+  savedHostIp: string
+  error: string | null
+}
+export function getHyperVLanCredential(hostIp?: string) {
+  const q = hostIp ? `?hostIp=${encodeURIComponent(hostIp)}` : ''
+  return api<HyperVLanCredentialInfo>(`/api/setup/hyperv-lan/credential${q}`)
+}
+export function saveHyperVLanCredential(hostIp: string, user: string, password: string) {
+  return api<{ ok: boolean }>('/api/setup/hyperv-lan/credential', {
+    method: 'POST',
+    body: JSON.stringify({ hostIp, user, password }),
+  })
+}
+export function deleteHyperVLanCredential() {
+  return api<{ ok: boolean }>('/api/setup/hyperv-lan/credential', { method: 'DELETE' })
+}
+
+// Remote install (VM lives on a headless Hyper-V host). user/password are
+// optional — omit them to use the saved Hyper-V LAN credential for hostIp
+// (set in the Connect step) instead of re-entering it; an explicit value here
+// is used only for this call and is never persisted by this route.
 export interface HyperVLanDrive { drive: string; freeGB: number }
 export interface HyperVLanHostResources {
   ok: boolean
@@ -76,8 +105,8 @@ export interface HyperVLanInstallStatus {
 }
 export interface HyperVLanInstallRequest {
   hostIp: string
-  user: string
-  password: string
+  user?: string
+  password?: string
   destDrive: string
   memoryGB: number
   switchName: string
@@ -85,7 +114,7 @@ export interface HyperVLanInstallRequest {
   replaceExisting: boolean
 }
 
-export function getHyperVLanHostResources(hostIp: string, user: string, password: string) {
+export function getHyperVLanHostResources(hostIp: string, user?: string, password?: string) {
   return api<HyperVLanHostResources>('/api/setup/hyperv-lan/host-resources', {
     method: 'POST',
     body: JSON.stringify({ hostIp, user, password }),
