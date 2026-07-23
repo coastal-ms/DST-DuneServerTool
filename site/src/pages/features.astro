@@ -22,7 +22,7 @@ const sections = [
     id: "gameconfig",
     title: "Game Config",
     img: "game-config.png",
-    body: "Grouped editor for UserGame.ini and UserEngine.ini with every setting labelled and typed. It reads the live INIs on load, writes changes into DST-managed blocks, and now covers Landsraad / Coriolis seed controls, per-setting reset-to-default behavior, and the newer backup restore points. The same workflow also powers DST's two-path Setup Wizard for existing servers or fresh installs.",
+    body: "Grouped editor for UserGame.ini and UserEngine.ini with every setting labelled and typed. It reads the live INIs on load, writes changes into DST-managed blocks, and now covers Landsraad / Coriolis seed controls, per-setting reset-to-default behavior, and the newer backup restore points. The same workflow also powers DST's Setup Wizard, which now has three paths: existing servers, fresh installs, or Hyper-V over LAN for a VM on a separate host.",
   },
   {
     id: "gameplay",
@@ -64,7 +64,7 @@ const sections = [
     id: "settings",
     title: "Settings",
     img: "settings.png",
-    body: "The Settings page reflects the same choices the Setup Wizard makes, plus the newer remote-access and appearance controls. It covers the two-path installer experience, Steam path and SSH-key selection, Windows username, port-check provider, themes, remote-access policy, and auto-updater preferences. The Public IP / DDNS card applies your public IP across the battlegroup and installs a persistent game-UDP DNAT bridge so remote players don't hit P34 on a server whose game pods bind the public IP only.",
+    body: "The Settings page reflects the same choices the Setup Wizard makes, plus the newer remote-access and appearance controls. It covers the three-path installer experience (existing server, fresh install, or Hyper-V over LAN), Steam path and SSH-key selection, Windows username, port-check provider, themes, remote-access policy, and auto-updater preferences. The Hyper-V over LAN card lets you point DST at a Dune VM on a separate Hyper-V host over your network — enter the host's IP and an administrator credential, test the connection, then toggle routing; the credential is saved in Windows Credential Manager and reused automatically. The Public IP / DDNS card applies your public IP across the battlegroup and installs a persistent game-UDP DNAT bridge so remote players don't hit P34 on a server whose game pods bind the public IP only.",
   },
 ];
 ---

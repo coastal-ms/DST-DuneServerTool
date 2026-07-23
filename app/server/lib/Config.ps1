@@ -28,7 +28,9 @@ $script:DuneConfigKeys = @(
     'UpdateInstalledPrerelease',
     'UpdateInstalledTag',
     'LocalBackupMirrorEnabled',
-    'LocalBackupMirrorFolder'
+    'LocalBackupMirrorFolder',
+    'VmHostMode',
+    'HyperVHostIp'
 )
 
 # Default in-pod PostgreSQL port. All DST DB access runs as
@@ -169,6 +171,34 @@ function Get-DuneLocalBackupMirrorFolder {
     $raw = Read-DuneConfigRaw
     $v = if ($raw.Contains('LocalBackupMirrorFolder')) { [string]$raw['LocalBackupMirrorFolder'] } else { '' }
     return $v.Trim()
+}
+
+# Hyper-V VM host location. 'local' (default) = the VM runs in Hyper-V on THIS
+# PC, today's behavior. 'lan' = the VM runs on a separate Hyper-V host reachable
+# on the local network at HyperVHostIp, and DST targets it remotely (Get-VM /
+# Start-VM / etc. get -ComputerName <HyperVHostIp>). A missing/blank/unknown
+# value resolves to 'local', so every existing install is unaffected and
+# unchecking the LAN option fully bypasses the remote path.
+function Get-DuneVmHostMode {
+    try {
+        $raw = Read-DuneConfigRaw
+        $v = if ($raw.Contains('VmHostMode')) { [string]$raw['VmHostMode'] } else { '' }
+        if ($v.Trim() -match '^(?i:lan)$') { return 'lan' }
+    } catch {}
+    return 'local'
+}
+
+# The LAN Hyper-V HOST's IP (or resolvable name) that DST manages remotely when
+# VmHostMode='lan'. This is the hypervisor host address the user enters in the
+# wizard — NOT the guest VM's IP (DST discovers that THROUGH this host via
+# Get-VMNetworkAdapter). Empty string when unset.
+function Get-DuneHyperVHostIp {
+    try {
+        $raw = Read-DuneConfigRaw
+        $v = if ($raw.Contains('HyperVHostIp')) { [string]$raw['HyperVHostIp'] } else { '' }
+        return $v.Trim()
+    } catch {}
+    return ''
 }
 
 function Save-DuneConfig {

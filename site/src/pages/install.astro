@@ -51,8 +51,11 @@ import DownloadButton from "../components/DownloadButton.astro";
           <div>
             Launch from <strong>Start Menu → Dune Server</strong>. The first
             launch opens the Setup Wizard, which asks whether you already have
-            a Dune server and then walks you through either a fresh install or
-            a connection to an existing VM / SSH key. Answers are saved to
+            a Dune server, then walks you through a fresh install, a
+            connection to an existing VM / SSH key, or
+            <strong>Hyper-V over LAN</strong> to manage (and optionally
+            remotely install) a VM on a separate Hyper-V host on your
+            network. Answers are saved to
             <span class="font-mono text-dune-muted">%APPDATA%\DuneServer\</span
             >
             and survive reinstalls.
@@ -102,6 +105,50 @@ import DownloadButton from "../components/DownloadButton.astro";
         — phone-friendly view of status + map spin-up/down. Recommended
         setup is a free Tailscale Funnel (no domain); a bring-your-own
         Cloudflare domain is supported as an advanced option.
+      </li>
+    </ul>
+
+    <h2 class="text-2xl font-semibold mb-4">Hyper-V over LAN <span class="text-dune-muted text-base font-normal">— optional, for a separate host</span></h2>
+    <p class="text-dune-muted leading-relaxed mb-4">
+      Don't want the VM on this PC? The Setup Wizard's third option manages
+      (and can remotely install) the Dune VM on a <strong class="text-dune-text">separate
+      Hyper-V host</strong> on your local network — e.g. a headless server in
+      another room. It's also reachable later from <strong class="text-dune-text">Settings
+      → Hyper-V over LAN</strong>.
+    </p>
+    <ul class="space-y-3 text-dune-muted leading-relaxed mb-4">
+      <li>
+        <strong class="text-dune-text">Remote-host prerequisites</strong> —
+        the host's <strong class="text-dune-text">PowerShell Remoting (WinRM)</strong>
+        must be reachable from this PC. In a workgroup (no Active Directory
+        domain), add the host to this PC's <span class="font-mono">TrustedHosts</span>
+        first. The host also needs an <strong class="text-dune-text">external
+        virtual switch</strong> for the VM's network adapter (the wizard shows
+        the exact <span class="font-mono">New-VMSwitch</span> command to run
+        on the host if none exists).
+      </li>
+      <li>
+        <strong class="text-dune-text">Existing VM or remote install</strong> —
+        point DST at a host that already has a <span class="font-mono">dune-awakening</span>
+        VM, or let DST provision one: it connects over PowerShell Remoting,
+        downloads the server image on the host with SteamCMD (anonymous, no
+        Steam login), and imports/starts the VM on a drive and switch you
+        choose.
+      </li>
+      <li>
+        <strong class="text-dune-text">Saved credential &amp; security</strong> —
+        the host administrator credential (which doesn't need to match the
+        Windows account DST runs as on this PC) is saved in
+        <strong class="text-dune-text">Windows Credential Manager</strong>,
+        scoped to your signed-in Windows user. It's never written to
+        <span class="font-mono">dune-server.config</span>, logs, diagnostics,
+        or any API response, and is reused automatically for every LAN call.
+      </li>
+      <li>
+        <strong class="text-dune-text">Local-mode fallback</strong> — turning
+        the routing toggle off returns to managing a local VM on this PC and
+        fully bypasses the LAN path; the saved credential is kept for next
+        time until you explicitly remove it.
       </li>
     </ul>
 
