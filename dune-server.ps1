@@ -21,7 +21,7 @@ param(
 # Wraps the original battlegroup.ps1 menu and adds extra tools
 # ============================================================
 
-$script:ToolVersion = "12.19.9"
+$script:ToolVersion = "12.20.0"
 
 # Cold-boot readiness budgets (seconds). A fresh battlegroup's FIRST boot can
 # take 10-30 min: k3s + funcom-operators initialize, metrics-server restarts a
@@ -431,6 +431,50 @@ if (-not $cfg) {
 $vmName        = 'dune-awakening'
 $sshKey        = $cfg.SshKey
 $sshUser       = 'dune'
+# Hyper-V target for the CLI power ops. Mirrors app/server/lib/HyperV.ps1:
+# 'local' (default) runs Get-VM/Start-VM/Stop-VM against this PC; 'lan' targets a
+# remote Hyper-V host at HyperVHostIp via -ComputerName + a saved host admin
+# credential. Unset/blank/unknown => local, so existing installs and an
+# unchecked LAN option behave exactly as before.
+$vmHostMode    = if ($cfg.ContainsKey('VmHostMode') -and "$($cfg['VmHostMode'])".Trim() -match '^(?i:lan)$') { 'lan' } else { 'local' }
+$hvComputer    = if ($cfg.ContainsKey('HyperVHostIp')) { "$($cfg['HyperVHostIp'])".Trim() } else { '' }
+if ($vmHostMode -ne 'lan') { $hvComputer = '' }
+
+# HyperVLanCredential.ps1 is self-contained (only needs advapi32 P/Invoke, no
+# dependency on this script's own $cfg/$configFile handling), so it's safe to
+# dot-source directly. Same dev/installed dual-path fallback used for the
+# remote-scripts helpers below (Get-DuneRemotePartitionScriptPath etc.).
+$script:DuneHyperVLanCredLibPath = $null
+foreach ($candidate in @(
+    (Join-Path $scriptDir 'server\lib\HyperVLanCredential.ps1')
+    (Join-Path $scriptDir 'app\server\lib\HyperVLanCredential.ps1')
+)) {
+    if (Test-Path -LiteralPath $candidate) { $script:DuneHyperVLanCredLibPath = $candidate; break }
+}
+if ($script:DuneHyperVLanCredLibPath) { . $script:DuneHyperVLanCredLibPath }
+
+$hvSplat = @{}
+if ($hvComputer) {
+    $hvCredOk = $false
+    if (-not $script:DuneHyperVLanCredLibPath) {
+        Write-Host "WARNING: Hyper-V over LAN is enabled but the credential helper (server\lib\HyperVLanCredential.ps1) is missing - VM commands against $hvComputer will use this process's own Windows identity and likely fail. Reinstall DST." -ForegroundColor Yellow
+    } else {
+        $hvCredResult = Get-DuneHyperVLanCredential -HostIp $hvComputer
+        if (-not $hvCredResult.ok) {
+            Write-Host "WARNING: Could not read the saved Hyper-V over LAN credential: $($hvCredResult.error)" -ForegroundColor Yellow
+        } elseif (-not $hvCredResult.exists -or -not $hvCredResult.matchesHost) {
+            Write-Host "WARNING: Hyper-V over LAN is enabled for $hvComputer, but no saved host administrator credential matches it. VM commands will fail until one is saved in Settings - Hyper-V over LAN." -ForegroundColor Yellow
+        } else {
+            $hvSplat = @{ ComputerName = $hvComputer; Credential = $hvCredResult.credential }
+            $hvCredOk = $true
+        }
+    }
+    # No matching saved credential: keep -ComputerName only (today's behavior)
+    # rather than skipping the LAN target entirely - the resulting Get-VM call
+    # will fail with an access-denied error the user can act on, instead of
+    # this script silently pretending LAN mode is off.
+    if (-not $hvCredOk) { $hvSplat = @{ ComputerName = $hvComputer } }
+}
 $bgSetupPath   = "$($cfg.SteamPath)\battlegroup-management"
 # Default existing installs (no PortCheckMode in config) to built-in.
 $portCheckMode = if ($cfg.PortCheckMode) { $cfg.PortCheckMode } else { 'builtin' }
@@ -636,13 +680,13 @@ function Invoke-WithLiveCounter {
 
 # --- Detect VM state ---
 function Get-VmInfo {
-    $vm = Get-VM -Name $vmName -ErrorAction SilentlyContinue
+    $vm = Get-VM -Name $vmName @hvSplat -ErrorAction SilentlyContinue
     $exists  = [bool]$vm
     $state   = if ($exists) { $vm.State } else { 'Missing' }
     $running = $exists -and $vm.State -eq 'Running'
     $ip      = $null
     if ($running) {
-        $ip = (Get-VMNetworkAdapter -VMName $vmName).IPAddresses |
+        $ip = (Get-VMNetworkAdapter -VMName $vmName @hvSplat).IPAddresses |
               Where-Object { $_ -match '^\d+\.\d+\.\d+\.\d+$' } |
               Select-Object -First 1
     }
@@ -663,20 +707,43 @@ function Stop-VmWithEscalation {
     )
     $start = Get-Date
     $jobs = @()
+    # Background jobs run in isolated processes and can't see $hvSplat - pass the
+    # Hyper-V host (empty for local) and the credential lib path in, and rebuild
+    # the splat (including -Credential for a LAN host) inside the job.
     $jobs += Start-Job -ScriptBlock {
-        param($n) Stop-VM -Name $n -Force -ErrorAction SilentlyContinue
-    } -ArgumentList $Name
+        param($n, $cn, $credLibPath)
+        $sp = @{}
+        if ($cn) {
+            $sp = @{ ComputerName = $cn }
+            if ($credLibPath -and (Test-Path -LiteralPath $credLibPath)) {
+                . $credLibPath
+                $c = Get-DuneHyperVLanCredential -HostIp $cn
+                if ($c.ok -and $c.exists -and $c.matchesHost) { $sp['Credential'] = $c.credential }
+            }
+        }
+        Stop-VM -Name $n -Force -ErrorAction SilentlyContinue @sp
+    } -ArgumentList $Name, $hvComputer, $script:DuneHyperVLanCredLibPath
     $escalated = $false
     try {
         while ($true) {
-            $vm = Get-VM -Name $Name -ErrorAction SilentlyContinue
+            $vm = Get-VM -Name $Name @hvSplat -ErrorAction SilentlyContinue
             if (-not $vm -or $vm.State -eq 'Off') { break }
             $elapsed = [int]((Get-Date) - $start).TotalSeconds
             if (-not $escalated -and $elapsed -ge $GracefulSec) {
                 Complete-WaitCounter -Message "Graceful shutdown still running after $(Format-Duration $elapsed) (state: $($vm.State)) - escalating to hard power-off." -Color Yellow
                 $jobs += Start-Job -ScriptBlock {
-                    param($n) Stop-VM -Name $n -TurnOff -Force -ErrorAction SilentlyContinue
-                } -ArgumentList $Name
+                    param($n, $cn, $credLibPath)
+                    $sp = @{}
+                    if ($cn) {
+                        $sp = @{ ComputerName = $cn }
+                        if ($credLibPath -and (Test-Path -LiteralPath $credLibPath)) {
+                            . $credLibPath
+                            $c = Get-DuneHyperVLanCredential -HostIp $cn
+                            if ($c.ok -and $c.exists -and $c.matchesHost) { $sp['Credential'] = $c.credential }
+                        }
+                    }
+                    Stop-VM -Name $n -TurnOff -Force -ErrorAction SilentlyContinue @sp
+                } -ArgumentList $Name, $hvComputer, $script:DuneHyperVLanCredLibPath
                 $escalated = $true
             }
             if ($elapsed -ge $TotalSec) {
@@ -1489,8 +1556,8 @@ while ($true) {
 
     if ($cmdName -eq "start-vm") {
         Write-Host "Starting VM '$vmName'..." -ForegroundColor Cyan
-        Start-VM -Name $vmName | Out-Null
-        do { Start-Sleep -Seconds 2; $vm = Get-VM -Name $vmName } while ($vm.State -ne 'Running')
+        Start-VM -Name $vmName @hvSplat | Out-Null
+        do { Start-Sleep -Seconds 2; $vm = Get-VM -Name $vmName @hvSplat } while ($vm.State -ne 'Running')
         Write-Host "VM started." -ForegroundColor Green
 
         $ip = $null; $timeout = 120; $elapsed = 0; $dots = 0
@@ -1498,7 +1565,7 @@ while ($true) {
             $dots = ($dots % 3) + 1
             Write-Host -NoNewline "`rWaiting for VM to acquire an IP address$('.' * $dots)   "
             Start-Sleep -Seconds 1; $elapsed += 1
-            $ip = (Get-VMNetworkAdapter -VMName $vmName).IPAddresses |
+            $ip = (Get-VMNetworkAdapter -VMName $vmName @hvSplat).IPAddresses |
                   Where-Object { $_ -match '^\d+\.\d+\.\d+\.\d+$' } | Select-Object -First 1
         }
         Write-Host ""
@@ -1508,7 +1575,7 @@ while ($true) {
     }
 
     if ($cmdName -eq "stop-vm") {
-        $vmNow = Get-VM -Name $vmName -ErrorAction SilentlyContinue
+        $vmNow = Get-VM -Name $vmName @hvSplat -ErrorAction SilentlyContinue
         if (-not $vmNow) {
             Write-Warning "VM '$vmName' not found - nothing to stop."
             continue
@@ -1555,8 +1622,8 @@ while ($true) {
             $estVm = Format-PhaseEstimate 'vm-start'
             if ($estVm) { Write-Host "  $estVm" -ForegroundColor DarkGray }
             $t_vm = Get-Date
-            Start-VM -Name $vmName | Out-Null
-            do { Start-Sleep -Seconds 2; $vm = Get-VM -Name $vmName } while ($vm.State -ne 'Running')
+            Start-VM -Name $vmName @hvSplat | Out-Null
+            do { Start-Sleep -Seconds 2; $vm = Get-VM -Name $vmName @hvSplat } while ($vm.State -ne 'Running')
             Save-PhaseTiming 'vm-start' ([int]((Get-Date) - $t_vm).TotalSeconds)
             $estIp = Format-PhaseEstimate 'vm-ip'
             $ipHint = if ($estIp) { " $estIp" } else { "" }
@@ -1568,7 +1635,7 @@ while ($true) {
                 $dots = ($dots % 3) + 1
                 Write-Host -NoNewline ("`r  Waiting for IP$('.' * $dots)   ")
                 Start-Sleep -Seconds 1; $elapsed += 1
-                $newIp = (Get-VMNetworkAdapter -VMName $vmName).IPAddresses |
+                $newIp = (Get-VMNetworkAdapter -VMName $vmName @hvSplat).IPAddresses |
                           Where-Object { $_ -match '^\d+\.\d+\.\d+\.\d+$' } | Select-Object -First 1
             }
             Write-Host ""
@@ -1864,8 +1931,8 @@ while ($true) {
             continue
         }
         $t_vm = Get-Date
-        Start-VM -Name $vmName | Out-Null
-        do { Start-Sleep -Seconds 2; $vm = Get-VM -Name $vmName } while ($vm.State -ne 'Running')
+        Start-VM -Name $vmName @hvSplat | Out-Null
+        do { Start-Sleep -Seconds 2; $vm = Get-VM -Name $vmName @hvSplat } while ($vm.State -ne 'Running')
         Save-PhaseTiming 'vm-start' ([int]((Get-Date) - $t_vm).TotalSeconds)
         $estIp = Format-PhaseEstimate 'vm-ip'
         $ipHint = if ($estIp) { " $estIp" } else { "" }
@@ -1877,7 +1944,7 @@ while ($true) {
             $dots = ($dots % 3) + 1
             Write-Host -NoNewline ("`r  Waiting for IP$('.' * $dots)   ")
             Start-Sleep -Seconds 1; $elapsed += 1
-            $newIp = (Get-VMNetworkAdapter -VMName $vmName).IPAddresses |
+            $newIp = (Get-VMNetworkAdapter -VMName $vmName @hvSplat).IPAddresses |
                       Where-Object { $_ -match '^\d+\.\d+\.\d+\.\d+$' } | Select-Object -First 1
         }
         Write-Host ""

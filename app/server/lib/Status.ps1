@@ -61,8 +61,20 @@ function Get-DuneSshFailureReason {
 
 function Get-DuneVmStatus {
     try {
-        $vm = Get-VM -Name $script:DuneVmName -ErrorAction Stop
-        $ip = ($vm | Get-VMNetworkAdapter).IPAddresses |
+        # Local by default; targets a LAN Hyper-V host when VmHostMode='lan'.
+        # The guest IP resolved below is what the entire SSH layer talks to, so
+        # this discovery must succeed against whichever host owns the VM.
+        $hv = Get-DuneHyperVSplat
+        $vm = Get-VM -Name $script:DuneVmName @hv -ErrorAction Stop
+        # Re-apply @hv (ComputerName + Credential) explicitly rather than
+        # piping $vm - confirmed by Get-Command that Get-VMNetworkAdapter's
+        # piped "-VM <VirtualMachine[]>" parameter set carries NO
+        # ComputerName/Credential/CimSession parameters at all, unlike its
+        # "-VMName <string[]>" set. Piping a remotely-fetched $vm silently
+        # drops the LAN host's credential (field-confirmed: VM running and its
+        # IP visible in Hyper-V Manager, but DST's own discovery came back
+        # empty/failed, leaving ServerHealth stuck on "Unknown").
+        $ip = (Get-VMNetworkAdapter -VMName $script:DuneVmName @hv).IPAddresses |
               Where-Object { $_ -match '^\d+\.\d+\.\d+\.\d+$' } | Select-Object -First 1
         # Coerce to string. On VMs with multiple network adapters the pipeline
         # can hand back a PSObject wrapping the IP; without the cast, ConvertTo-Json

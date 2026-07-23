@@ -3,7 +3,7 @@ import { Link } from 'react-router-dom'
 import { PageHeader } from '../components/PageHeader'
 import { Icon } from '../components/Icon'
 import { api, ApiError } from '../api/client'
-import { getPreflight, getSetupConfig, type PreflightResult, type SetupConfigSummary } from '../api/setup'
+import { getPreflight, getSetupConfig, getHyperVLan, saveHyperVLan, testHyperVLan, getHyperVLanCredential, saveHyperVLanCredential, getHyperVLanHostResources, startHyperVLanInstall, getHyperVLanInstallStatus, type PreflightResult, type SetupConfigSummary, type HyperVLanTest, type HyperVLanHostResources, type HyperVLanInstallStatus } from '../api/setup'
 
 // The wizard branches on a single up-front question: does the operator already
 // have a Dune Awakening battlegroup running (their own VM, or one a previous
@@ -11,7 +11,9 @@ import { getPreflight, getSetupConfig, type PreflightResult, type SetupConfigSum
 //   - 'existing' → skip the VM import entirely; just make sure DST can reach the
 //                  server (locate or generate+authorize the SSH key).
 //   - 'fresh'    → the original flow that runs Funcom's initial-setup.
-type SetupMode = 'existing' | 'fresh'
+//   - 'lan'      → the VM lives on a SEPARATE Hyper-V host on the LAN; point DST
+//                  at that host, then connect to the guest over SSH as usual.
+type SetupMode = 'existing' | 'fresh' | 'lan'
 
 interface Step {
   title: string
@@ -32,6 +34,15 @@ const EXISTING_STEPS: Step[] = [
   { title: 'Pre-flight',  subtitle: 'Environment checks',       render: () => <Step1Preflight existing /> },
   { title: 'Connect',     subtitle: 'Point DST at your server', render: () => <StepConnectExisting /> },
   { title: 'Security',    subtitle: 'SSH + firewall',            render: () => <Step4Security /> },
+  { title: 'Networking',  subtitle: 'Ports + DNS',               render: () => <Step5Networking /> },
+  { title: 'Finalize',    subtitle: 'Wrap-up',                   render: () => <Step6Finalize /> },
+]
+
+const LAN_STEPS: Step[] = [
+  { title: 'Pre-flight',  subtitle: 'Environment checks',       render: () => <Step1Preflight mode="lan" /> },
+  { title: 'Hyper-V host',subtitle: 'Point DST at the LAN host',render: () => <StepConnectLan /> },
+  { title: 'Install VM',  subtitle: 'Provision on the host',    render: () => <StepInstallLan /> },
+  { title: 'Connect',     subtitle: 'SSH to the VM',            render: () => <StepConnectExisting /> },
   { title: 'Networking',  subtitle: 'Ports + DNS',               render: () => <Step5Networking /> },
   { title: 'Finalize',    subtitle: 'Wrap-up',                   render: () => <Step6Finalize /> },
 ]
@@ -70,7 +81,7 @@ export function SetupWizard() {
   const [current, setCurrent] = useState(1)
   const [done, setDone]       = useState<Set<number>>(new Set())
 
-  const steps = mode === 'existing' ? EXISTING_STEPS : FRESH_STEPS
+  const steps = mode === 'existing' ? EXISTING_STEPS : mode === 'lan' ? LAN_STEPS : FRESH_STEPS
 
   const pick = useCallback((m: SetupMode) => { setMode(m); setCurrent(1); setDone(new Set()) }, [])
   const restart = useCallback(() => { setMode(null); setCurrent(1); setDone(new Set()) }, [])
@@ -128,7 +139,7 @@ function BranchChooser({ onPick }: { onPick: (m: SetupMode) => void }) {
         title="Do you already have a Dune Awakening server?"
         subtitle="This picks the right path through setup."
       />
-      <div className="grid gap-4 md:grid-cols-2 mt-2">
+      <div className="grid gap-4 md:grid-cols-3 mt-2">
         <button
           type="button"
           onClick={() => onPick('existing')}
@@ -139,8 +150,8 @@ function BranchChooser({ onPick }: { onPick: (m: SetupMode) => void }) {
             <span className="font-semibold text-accent">Yes — I already have a server</span>
           </div>
           <p className="text-sm text-text-dim">
-            DST connects to your existing battlegroup VM. Nothing is re-installed — we just make sure the tool
-            can reach it by locating or generating the SSH key.
+            DST connects to your existing battlegroup VM on this PC. Nothing is re-installed — we just make sure
+            the tool can reach it by locating or generating the SSH key.
           </p>
         </button>
         <button
@@ -155,6 +166,20 @@ function BranchChooser({ onPick }: { onPick: (m: SetupMode) => void }) {
           <p className="text-sm text-text-dim">
             Runs Funcom's <span className="font-mono">initial-setup</span> to download and import the Hyper-V VM,
             then brings the battlegroup online. Needs ~60&nbsp;GB free and 10–30&nbsp;min.
+          </p>
+        </button>
+        <button
+          type="button"
+          onClick={() => onPick('lan')}
+          className="text-left p-5 rounded-lg border border-border bg-surface-2 hover:border-accent hover:bg-surface transition"
+        >
+          <div className="flex items-center gap-2 mb-2">
+            <Icon name="Network" size={20} className="text-accent shrink-0" />
+            <span className="font-semibold text-accent">Hyper-V over LAN</span>
+          </div>
+          <p className="text-sm text-text-dim">
+            The VM runs on a <strong>separate Hyper-V host</strong> on your network (e.g. a headless server).
+            DST runs on this PC and manages that host over the LAN. The VM must already be installed there.
           </p>
         </button>
       </div>
@@ -210,27 +235,40 @@ function SectionHeader({ title, subtitle }: { title: string; subtitle: string })
   )
 }
 
-function Step1Preflight({ existing = false }: { existing?: boolean }) {
+function Step1Preflight({ existing = false, mode }: { existing?: boolean; mode?: 'existing' | 'fresh' | 'lan' }) {
+  // `existing` is kept for the existing-VM flow's call sites; `mode` is the
+  // explicit selector used by the LAN flow. Resolve one effective mode.
+  const effMode: 'existing' | 'fresh' | 'lan' = mode ?? (existing ? 'existing' : 'fresh')
+  const isLan = effMode === 'lan'
   const [data, setData] = useState<PreflightResult | null>(null)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const refresh = useCallback(async () => {
     setLoading(true); setError(null)
-    try { setData(await getPreflight(existing ? 'existing' : 'fresh')) }
+    try { setData(await getPreflight(effMode)) }
     catch (e) { setError(e instanceof ApiError ? e.message : String(e)) }
     finally { setLoading(false) }
-  }, [existing])
+  }, [effMode])
   useEffect(() => { void refresh() }, [refresh])
 
   return (
     <>
       <SectionHeader
         title="Pre-flight checks"
-        subtitle={existing
-          ? 'Confirm DST is elevated and can see Hyper-V before connecting.'
-          : 'Verify your machine can host the battlegroup.'}
+        subtitle={isLan
+          ? 'Confirm DST is elevated and has the Hyper-V tools to manage a host over the LAN.'
+          : existing
+            ? 'Confirm DST is elevated and can see Hyper-V before connecting.'
+            : 'Verify your machine can host the battlegroup.'}
       />
-      {existing && (
+      {isLan && (
+        <p className="text-sm text-text-dim mb-3">
+          The VM will live on a <strong>separate Hyper-V host</strong> on your network. This PC still needs the
+          Hyper-V PowerShell module (to drive that host remotely) and the OpenSSH client (to reach the VM). The
+          next step points DST at the host's IP and tests the connection.
+        </p>
+      )}
+      {existing && !isLan && (
         <p className="text-sm text-text-dim mb-3">
           You already have a server, so the disk check only covers what DST itself needs (app + local
           backups) — it won't import a new VM. The next step locates or generates the SSH key it needs to
@@ -472,6 +510,448 @@ function StepConnectExisting() {
             <Link to="/settings" className="text-accent hover:underline">Settings</Link> page if you want those.
           </p>
         </>
+      )}
+    </>
+  )
+}
+
+// LAN flow — point DST at a Hyper-V host on the network, collect + persist the
+// host administrator credential, and flip the routing toggle so every VM
+// command targets that host (with that credential) instead of local Hyper-V.
+function StepConnectLan() {
+  const [hostIp, setHostIp]   = useState('')
+  const [enabled, setEnabled] = useState(false) // routing toggle == VmHostMode 'lan'
+  const [loading, setLoading] = useState(true)
+  const [testing, setTesting] = useState(false)
+  const [saving, setSaving]   = useState(false)
+  const [test, setTest]       = useState<HyperVLanTest | null>(null)
+  const [msg, setMsg]         = useState<string | null>(null)
+  const [error, setError]     = useState<string | null>(null)
+
+  // Credential: hidden behind "using saved credential for X" once one exists
+  // and matches hostIp, so re-opening this step never re-prompts. "Change
+  // credential" reveals the fields to replace it.
+  const [credUser, setCredUser] = useState('')
+  const [credPassword, setCredPassword] = useState('')
+  const [savedUser, setSavedUser] = useState<string | null>(null)
+  const [editingCred, setEditingCred] = useState(false)
+
+  const loadCredInfo = useCallback(async (ip: string) => {
+    if (!ip) { setSavedUser(null); return }
+    try {
+      const info = await getHyperVLanCredential(ip)
+      setSavedUser(info.exists && info.matchesHost ? info.user : null)
+      setEditingCred(!(info.exists && info.matchesHost))
+    } catch {
+      setSavedUser(null)
+    }
+  }, [])
+
+  useEffect(() => {
+    void (async () => {
+      setLoading(true)
+      try {
+        const s = await getHyperVLan()
+        setHostIp(s.hostIp ?? '')
+        setEnabled(s.mode === 'lan')
+        await loadCredInfo(s.hostIp ?? '')
+      } catch (e) {
+        setError(e instanceof ApiError ? e.message : String(e))
+      } finally {
+        setLoading(false)
+      }
+    })()
+  }, [loadCredInfo])
+
+  // A candidate host must pass a live connectivity test before it can be enabled.
+  const canEnable = !!test?.ok
+
+  const runTest = useCallback(async () => {
+    const ip = hostIp.trim()
+    if (!ip) { setError('Enter the Hyper-V host IP first.'); return }
+    const usingNewCred = editingCred && credUser.trim() && credPassword
+    if (editingCred && !usingNewCred) { setError("Enter the host's administrator username and password first."); return }
+    setTesting(true); setError(null); setMsg(null); setTest(null)
+    try {
+      const result = usingNewCred
+        ? await testHyperVLan(ip, credUser.trim(), credPassword)
+        : await testHyperVLan(ip)
+      setTest(result)
+      if (result.ok && usingNewCred) {
+        // Persist the credential that just proved it works, then collapse
+        // back to the "using saved credential" view.
+        await saveHyperVLanCredential(ip, credUser.trim(), credPassword)
+        setCredPassword('')
+        await loadCredInfo(ip)
+      }
+    } catch (e) {
+      setError(e instanceof ApiError ? e.message : String(e))
+    } finally {
+      setTesting(false)
+    }
+  }, [hostIp, editingCred, credUser, credPassword, loadCredInfo])
+
+  const save = useCallback(async () => {
+    const ip = hostIp.trim()
+    if (enabled && !ip) { setError('Enter the Hyper-V host IP first.'); return }
+    if (enabled && !canEnable) { setError('Test the connection successfully before enabling Hyper-V over LAN.'); return }
+    setSaving(true); setError(null); setMsg(null)
+    try {
+      const r = await saveHyperVLan(enabled ? 'lan' : 'local', ip)
+      setMsg(r.mode === 'lan'
+        ? `Saved. DST will manage the VM on ${r.hostIp} over the LAN.`
+        : 'Saved. DST is using the local Hyper-V VM (LAN routing off).')
+    } catch (e) {
+      setError(e instanceof ApiError ? e.message : String(e))
+    } finally {
+      setSaving(false)
+    }
+  }, [hostIp, enabled, canEnable])
+
+  const tone = test == null ? 'text-text-dim' : test.ok ? 'text-success' : 'text-danger'
+  const tIcon = test == null ? 'Info' : test.ok ? 'CheckCircle2' : 'AlertTriangle'
+
+  return (
+    <>
+      <SectionHeader title="Point DST at the Hyper-V host" subtitle="The VM lives on another machine on your LAN." />
+
+      <div className="flex items-start gap-3 p-3 rounded border border-warning/40 bg-warning/10 mb-4">
+        <Icon name="AlertTriangle" size={18} className="text-warning shrink-0 mt-0.5" />
+        <div className="text-xs text-text-dim">
+          <span className="font-medium text-warning">Prerequisite:</span> the host's Hyper-V PowerShell Remoting
+          (WinRM) must be reachable from this PC (in a workgroup: the host trusted from this PC via
+          <span className="font-mono"> TrustedHosts</span>). DST uses an explicit administrator credential for that
+          host below — it does not need to match the Windows account DST itself runs as. The VM must already be
+          installed on that host and named <span className="font-mono">dune-awakening</span>.
+        </div>
+      </div>
+
+      {loading ? (
+        <p className="text-sm text-text-dim italic">Loading…</p>
+      ) : (
+        <>
+          <label className="block text-sm font-medium text-text mb-1">Hyper-V host IP (or name)</label>
+          <div className="flex items-stretch gap-2 mb-2">
+            <input
+              type="text"
+              value={hostIp}
+              onChange={e => { setHostIp(e.target.value); setTest(null); void loadCredInfo(e.target.value.trim()) }}
+              placeholder="192.168.1.50"
+              className="flex-1 min-w-0 text-sm font-mono bg-surface border border-border rounded px-2 py-1.5"
+            />
+          </div>
+          <p className="text-xs text-text-dim mb-3">
+            This is the <strong>host</strong> address, not the VM's. DST discovers the VM's own IP through the host
+            once connected.
+          </p>
+
+          <label className="block text-sm font-medium text-text mb-1">Host administrator credential</label>
+          {!editingCred && savedUser ? (
+            <div className="flex items-center justify-between gap-2 p-3 rounded border border-border bg-surface-2 mb-3">
+              <span className="text-sm text-text-dim">
+                Using saved credential for <span className="font-mono text-text">{savedUser}</span>
+              </span>
+              <button type="button" className="btn-secondary shrink-0" onClick={() => { setEditingCred(true); setTest(null) }}>
+                Change
+              </button>
+            </div>
+          ) : (
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-3 mb-3">
+              <label className="flex flex-col gap-1 text-sm">
+                <span className="text-text-dim">Administrator username</span>
+                <input type="text" value={credUser} onChange={e => { setCredUser(e.target.value); setTest(null) }} spellCheck={false}
+                  placeholder="HOST\Administrator" className="px-3 py-2 rounded-lg bg-surface-2 border border-border text-text text-sm font-mono" />
+              </label>
+              <label className="flex flex-col gap-1 text-sm">
+                <span className="text-text-dim">Password</span>
+                <input type="password" value={credPassword} onChange={e => { setCredPassword(e.target.value); setTest(null) }}
+                  className="px-3 py-2 rounded-lg bg-surface-2 border border-border text-text text-sm" />
+              </label>
+              <p className="md:col-span-2 text-xs text-text-dim -mt-1">
+                The host's own administrator account. In a workgroup this is routinely a <strong>different</strong>{' '}
+                account than the one DST itself runs as on this PC — use <span className="font-mono">HOST\username</span>.
+              </p>
+            </div>
+          )}
+
+          <div className="mb-3">
+            <button type="button" className="btn-secondary" onClick={() => { void runTest() }} disabled={testing}>
+              <Icon name={testing ? 'Loader2' : 'Plug'} size={14} className={testing ? 'animate-spin' : ''} />
+              {testing ? 'Testing…' : 'Test connection'}
+            </button>
+          </div>
+
+          {test && (
+            <div className="flex items-start gap-3 p-3 rounded border border-border bg-surface-2 mb-3">
+              <Icon name={tIcon} size={18} className={`${tone} shrink-0 mt-0.5`} />
+              <div className="min-w-0 flex-1">
+                <div className={`text-sm font-medium ${tone}`}>
+                  {test.ok ? (test.vmFound ? 'Connected — VM found' : 'Connected — VM not installed yet') : 'Could not connect'}
+                </div>
+                <div className="text-xs text-text-dim mt-0.5 break-words">{test.reason}</div>
+              </div>
+            </div>
+          )}
+
+          <label className={`flex items-start gap-2 p-3 rounded border mb-4 ${canEnable ? 'border-border bg-surface-2 cursor-pointer' : 'border-border/60 bg-surface-2/50 opacity-60 cursor-not-allowed'}`}>
+            <input
+              type="checkbox"
+              className="mt-0.5"
+              checked={enabled}
+              disabled={!canEnable && !enabled}
+              onChange={e => setEnabled(e.target.checked)}
+            />
+            <span className="text-sm text-text">
+              Route all VM commands to this LAN host
+              <span className="block text-xs text-text-dim mt-0.5">
+                When on, DST manages the remote VM (status, start/stop, RAM) over the LAN using the credential above.
+                Turn it off to go back to a local VM on this PC — this fully bypasses the LAN path, but keeps the
+                saved credential for next time. {!canEnable && !enabled && 'Run a successful test first.'}
+              </span>
+            </span>
+          </label>
+
+          <div className="flex flex-wrap gap-2">
+            <button type="button" className="btn-primary" onClick={() => { void save() }} disabled={saving}>
+              <Icon name={saving ? 'Loader2' : 'Save'} size={14} className={saving ? 'animate-spin' : ''} />
+              {saving ? 'Saving…' : 'Save'}
+            </button>
+          </div>
+
+          {msg   && <p className="mt-2 text-xs text-text-muted border-l-2 border-accent pl-2 break-words">{msg}</p>}
+          {error && <p className="mt-2 text-xs text-danger break-words">{error}</p>}
+        </>
+      )}
+    </>
+  )
+}
+
+// LAN install — provision the VM onto the remote headless host. Reads the host
+// IP saved in the previous step, collects a WinRM admin credential, probes the
+// host, and (if the VM isn't there) runs the streamed remote install.
+function StepInstallLan() {
+  const [hostIp, setHostIp] = useState('')
+  const [user, setUser] = useState('')
+  const [password, setPassword] = useState('')
+  const [savedCredUser, setSavedCredUser] = useState<string | null>(null)
+  const [res, setRes] = useState<HyperVLanHostResources | null>(null)
+  const [checking, setChecking] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+
+  // Install form
+  const [destDrive, setDestDrive] = useState('')
+  const [memoryGB, setMemoryGB] = useState(20)
+  const [switchName, setSwitchName] = useState('')
+  const [vmPassword, setVmPassword] = useState('')
+
+  const [status, setStatus] = useState<HyperVLanInstallStatus | null>(null)
+  const [installing, setInstalling] = useState(false)
+  const [elapsed, setElapsed] = useState(0)
+
+  useEffect(() => {
+    void (async () => {
+      let ip = ''
+      try { const s = await getHyperVLan(); ip = s.hostIp ?? ''; setHostIp(ip) } catch { /* set in prior step */ }
+      // The Hyper-V host step already collected + saved a credential for this
+      // host; reuse it here instead of asking again. The fields below stay
+      // available in case a different (e.g. install-only) credential is
+      // needed for this one-off WinRM session.
+      try {
+        const info = await getHyperVLanCredential(ip)
+        if (info.exists && info.matchesHost) setSavedCredUser(info.user)
+      } catch { /* fields stay editable */ }
+      // If an install is already running (e.g. page reopened), resume polling.
+      try {
+        const st = await getHyperVLanInstallStatus()
+        if (st && st.running) { setStatus(st); setInstalling(true) }
+      } catch { /* none */ }
+    })()
+  }, [])
+
+  // Elapsed timer while installing.
+  useEffect(() => {
+    if (!installing) { setElapsed(0); return }
+    const start = Date.now()
+    const iv = window.setInterval(() => setElapsed(Math.floor((Date.now() - start) / 1000)), 1000)
+    return () => window.clearInterval(iv)
+  }, [installing])
+
+  // Poll install status while running.
+  useEffect(() => {
+    if (!installing) return
+    let alive = true
+    const tick = async () => {
+      try {
+        const st = await getHyperVLanInstallStatus()
+        if (!alive) return
+        setStatus(st)
+        if (!st.running) { setInstalling(false) }
+      } catch { /* keep polling */ }
+    }
+    const iv = window.setInterval(() => { void tick() }, 3000)
+    void tick()
+    return () => { alive = false; window.clearInterval(iv) }
+  }, [installing])
+
+  const check = useCallback(async () => {
+    if (!hostIp.trim()) { setError('Set the Hyper-V host IP in the previous step first.'); return }
+    if (!savedCredUser && (!user.trim() || !password)) { setError("Enter the host's administrator username and password."); return }
+    setChecking(true); setError(null); setRes(null)
+    try {
+      const r = await getHyperVLanHostResources(hostIp.trim(), user.trim() || undefined, password || undefined)
+      setRes(r)
+      if (r.ok) {
+        if (r.drives && r.drives[0]) setDestDrive(r.drives[0].drive)
+        if (r.switches && r.switches[0]) setSwitchName(r.switches[0])
+      } else {
+        setError(r.error ?? 'Could not read the host.')
+      }
+    } catch (e) {
+      setError(e instanceof ApiError ? e.message : String(e))
+    } finally {
+      setChecking(false)
+    }
+  }, [hostIp, user, password, savedCredUser])
+
+  const install = useCallback(async () => {
+    if (!destDrive) { setError('Pick a destination drive.'); return }
+    if (!switchName) { setError('Pick an external switch (create one on the host if the list is empty).'); return }
+    if (memoryGB < 1) { setError('Enter a memory size in GB.'); return }
+    setError(null)
+    try {
+      const r = await startHyperVLanInstall({
+        hostIp: hostIp.trim(), user: user.trim() || undefined, password: password || undefined,
+        destDrive, memoryGB, switchName, vmPassword, replaceExisting: false,
+      })
+      if (!r.ok) { setError(r.error ?? 'Could not start the install.'); return }
+      setInstalling(true)
+      setStatus({ running: true, phase: 'starting', steps: [], ip: '', error: '' })
+    } catch (e) {
+      setError(e instanceof ApiError ? e.message : String(e))
+    }
+  }, [hostIp, user, password, destDrive, switchName, memoryGB, vmPassword])
+
+  const done = status && !status.running && status.phase === 'done'
+  const failed = status && !status.running && status.phase === 'error'
+  const noSwitches = res?.ok && (res.switches?.length ?? 0) === 0
+
+  return (
+    <>
+      <SectionHeader title="Install the VM on the host" subtitle="DST provisions the Dune VM onto the remote Hyper-V host." />
+
+      <div className="rounded-lg border border-info/40 bg-info/10 p-3 text-sm text-text-dim mb-4">
+        DST connects to <span className="font-mono">{hostIp || '(host set in previous step)'}</span> over PowerShell Remoting,
+        downloads the server image there with SteamCMD (anonymous — no Steam login), imports and starts the VM, then sets up the
+        battlegroup over the LAN. If the VM already exists on the host, you can skip this step.
+      </div>
+
+      {/* Credentials + probe */}
+      {savedCredUser && (
+        <p className="text-xs text-text-dim mb-2">
+          Using the saved credential for <span className="font-mono text-text">{savedCredUser}</span> from the previous
+          step unless you enter a different one below.
+        </p>
+      )}
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-3 mb-3">
+        <label className="flex flex-col gap-1 text-sm">
+          <span className="font-medium">Host administrator username {savedCredUser && <span className="text-text-dim font-normal">(optional)</span>}</span>
+          <input type="text" value={user} onChange={e => setUser(e.target.value)} disabled={installing} spellCheck={false}
+            placeholder={savedCredUser ?? 'HOST\\Administrator'} className="px-3 py-2 rounded-lg bg-surface-2 border border-border text-text text-sm" />
+        </label>
+        <label className="flex flex-col gap-1 text-sm">
+          <span className="font-medium">Host administrator password {savedCredUser && <span className="text-text-dim font-normal">(optional)</span>}</span>
+          <input type="password" value={password} onChange={e => setPassword(e.target.value)} disabled={installing}
+            className="px-3 py-2 rounded-lg bg-surface-2 border border-border text-text text-sm" />
+        </label>
+      </div>
+      <div className="flex flex-wrap gap-2 mb-3">
+        <button type="button" className="btn-secondary" onClick={() => void check()} disabled={checking || installing}>
+          <Icon name={checking ? 'Loader2' : 'Search'} size={14} className={checking ? 'animate-spin' : ''} />
+          {checking ? 'Checking host…' : 'Check host'}
+        </button>
+      </div>
+
+      {error && <p className="text-xs text-danger break-words mb-3">{error}</p>}
+
+      {res?.ok && res.vmExists && !installing && (
+        <div className="rounded-lg border border-success/40 bg-success/10 p-3 text-sm text-success flex items-start gap-2">
+          <Icon name="CircleCheck" size={16} className="mt-0.5 shrink-0" />
+          <span>A <span className="font-mono">dune-awakening</span> VM already exists on this host — nothing to install. Continue to the next step; it's managed over the LAN.</span>
+        </div>
+      )}
+
+      {res?.ok && !res.vmExists && !done && (
+        <div className="space-y-3">
+          {noSwitches && (
+            <div className="rounded-lg border border-warning/40 bg-warning/10 p-3 text-xs text-text-dim">
+              No external virtual switch found on the host. Create one once on the host, then re-check:
+              <code className="block mt-1 font-mono text-text">New-VMSwitch -Name DuneExternal -NetAdapterName &lt;nic&gt; -AllowManagementOS $true</code>
+            </div>
+          )}
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+            <label className="flex flex-col gap-1 text-sm">
+              <span className="font-medium">Install drive (host)</span>
+              <select value={destDrive} onChange={e => setDestDrive(e.target.value)} disabled={installing}
+                className="px-3 py-2 rounded-lg bg-surface-2 border border-border text-text text-sm">
+                {(res.drives ?? []).map(d => <option key={d.drive} value={d.drive}>{d.drive} ({d.freeGB} GB free)</option>)}
+              </select>
+              <span className="text-xs text-text-dim">Needs 100 GB+ free.</span>
+            </label>
+            <label className="flex flex-col gap-1 text-sm">
+              <span className="font-medium">External switch (host)</span>
+              <select value={switchName} onChange={e => setSwitchName(e.target.value)} disabled={installing || noSwitches}
+                className="px-3 py-2 rounded-lg bg-surface-2 border border-border text-text text-sm">
+                {(res.switches ?? []).map(s => <option key={s} value={s}>{s}</option>)}
+              </select>
+            </label>
+            <label className="flex flex-col gap-1 text-sm">
+              <span className="font-medium">VM memory (GB)</span>
+              <input type="number" min={8} value={memoryGB} onChange={e => setMemoryGB(parseInt(e.target.value || '0', 10))}
+                disabled={installing} className="px-3 py-2 rounded-lg bg-surface-2 border border-border text-text text-sm" />
+              <span className="text-xs text-text-dim">Host RAM: {res.hostRamGB ?? '?'} GB. 20 GB recommended for one Hagga Basin.</span>
+            </label>
+            <label className="flex flex-col gap-1 text-sm">
+              <span className="font-medium">New VM password <span className="text-text-dim font-normal">(optional)</span></span>
+              <input type="password" value={vmPassword} onChange={e => setVmPassword(e.target.value)} disabled={installing}
+                placeholder="leave blank to keep default" className="px-3 py-2 rounded-lg bg-surface-2 border border-border text-text text-sm" />
+            </label>
+          </div>
+          <button type="button" className="btn-primary" onClick={() => void install()} disabled={installing || noSwitches}>
+            <Icon name={installing ? 'Loader2' : 'HardDriveDownload'} size={14} className={installing ? 'animate-spin' : ''} />
+            {installing ? 'Installing…' : 'Install VM on host'}
+          </button>
+        </div>
+      )}
+
+      {/* Progress */}
+      {status && (installing || done || failed) && (
+        <div className="mt-4 rounded-lg border border-border bg-surface-2 p-3 space-y-2">
+          <div className="flex items-center gap-2 text-sm font-medium">
+            {done ? <Icon name="CircleCheck" size={16} className="text-success" />
+              : failed ? <Icon name="CircleX" size={16} className="text-danger" />
+              : <Icon name="Loader2" size={16} className="animate-spin text-info" />}
+            {done ? 'Install complete' : failed ? 'Install failed' : `Installing… ${Math.floor(elapsed / 60)}m ${(elapsed % 60).toString().padStart(2, '0')}s`}
+          </div>
+          {installing && (
+            <div className="text-xs text-text-dim">
+              The image download and battlegroup setup can take <strong>several minutes</strong>. Safe to leave this open — it runs on the server.
+            </div>
+          )}
+          <ul className="space-y-1">
+            {(status.steps ?? []).map(s => (
+              <li key={s.id} className="flex items-start gap-2 text-xs">
+                <Icon
+                  name={s.status === 'done' ? 'CheckCircle2' : s.status === 'failed' ? 'CircleX' : s.status === 'running' ? 'Loader2' : 'Circle'}
+                  size={13}
+                  className={`mt-0.5 shrink-0 ${s.status === 'done' ? 'text-success' : s.status === 'failed' ? 'text-danger' : s.status === 'running' ? 'text-info animate-spin' : 'text-text-dim'}`}
+                />
+                <span className="min-w-0"><span className="text-text">{s.label}</span>{s.detail ? <span className="text-text-dim"> — {s.detail}</span> : null}</span>
+              </li>
+            ))}
+          </ul>
+          {done && <p className="text-xs text-success">VM installed at {status.ip} and DST is now managing it over the LAN. Continue to finish setup.</p>}
+          {failed && <p className="text-xs text-danger break-words">{status.error}</p>}
+        </div>
       )}
     </>
   )

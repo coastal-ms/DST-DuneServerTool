@@ -9,8 +9,8 @@
 
 **🌐 Website & feature tour: [coastal-ms.github.io/DST-DuneServerTool](https://coastal-ms.github.io/DST-DuneServerTool/)** — screenshots, install guide, and the full changelog.
 
-The current release is **v12.19.8**. The in-app version label and the
-website show plain semver tags (e.g. `v12.19.8`) — the previous
+The current release is **v12.20.0**. The in-app version label and the
+website show plain semver tags (e.g. `v12.20.0`) — the previous
 Roman-numeral stylization has been removed.
 
 > ## ✅ Confirmed compatible with Dune: Awakening **1.4.10.3**
@@ -28,6 +28,41 @@ the sidebar's **Web Portal** button hands the portal off to your default
 browser and keeps the server running in the background.
 
 ![Server Health](docs/img/server-health.png)
+
+### New in v12.20
+
+- **Hyper-V over LAN — a third Setup Wizard option** (Setup Wizard / Settings).
+  Alongside "I already have a server" and "set one up for me", the wizard now
+  offers **Hyper-V over LAN**: DST runs on this PC and manages the Dune VM on a
+  **separate Hyper-V host on your network** (e.g. a headless server). You give
+  it the host's IP and an explicit **host administrator credential** (which
+  does **not** need to match the Windows account DST itself runs as), test the
+  connection, and — if the VM isn't there yet — DST can **install it remotely**:
+  it connects over PowerShell Remoting, downloads the server image on the host
+  with SteamCMD (anonymous, no Steam login), imports and starts the VM on a
+  drive/external-switch you pick, and brings the battlegroup up over the LAN.
+  Once connected, a **routing toggle** (repeated on the Settings page as the
+  **Hyper-V over LAN** card) points every ongoing Hyper-V call — VM status,
+  start/stop, RAM — at that host using the saved credential. The credential is
+  saved in **Windows Credential Manager**, scoped to the signed-in Windows user
+  running DST, and **never** written to `dune-server.config`, logs,
+  diagnostics, or any API response; it's reused automatically so you're never
+  re-prompted once one is saved. Turning the toggle off returns to the local VM
+  and fully bypasses the LAN path — the saved credential is kept for next time
+  and only removed by an explicit **Remove** action.
+  - **Workgroup prerequisite:** the host's Hyper-V PowerShell Remoting (WinRM)
+    must be reachable from this PC — in a workgroup (no domain), add the host
+    to this PC's `TrustedHosts` first. The host also needs an **external
+    virtual switch** for the VM's network adapter (DST prompts you with the
+    exact `New-VMSwitch` command if none exists).
+  - **Fixed during field validation:** every ongoing Hyper-V call now
+    consistently uses the saved host credential instead of silently falling
+    back to DST's own Windows identity, and guest-IP discovery (so SSH and
+    **Server Health**) now correctly reuses that same credential instead of
+    losing it when piping the VM object into `Get-VMNetworkAdapter`. Field
+    testing passed with disabling LAN mode fully restoring local behavior
+    while keeping the saved credential until it's explicitly removed.
+- Supporter added to list.
 
 ### New in v12.19
 
@@ -743,6 +778,14 @@ All the things the Setup Wizard asked you, but editable any time:
   `yougetsignal` only, `canyouseeme` only, `custom` (your own URL), or
   `disabled`
 - Port-check URL template (when mode is `custom`)
+- **Hyper-V over LAN** card — point DST at a Dune VM on a **separate Hyper-V
+  host** on your network instead of the local one. Enter the host's IP (or
+  name) and a **host administrator credential**, **Test** the connection, then
+  toggle **Route all VM commands to this LAN host** to switch VM status,
+  start/stop, and RAM calls over to it. The credential is saved to **Windows
+  Credential Manager** and reused automatically; use **Change** to update it or
+  **Remove** to delete it. Turning the toggle off goes back to the local VM
+  without losing the saved credential.
 
 Changes save on-click — no restart needed. The Steam path and SSH key fields
 each have a **Browse** button that opens a native Windows folder/file picker.
@@ -758,16 +801,70 @@ auto-checks on mount):
   the relaunch).
 ### 🧙 Setup Wizard
 
+The first screen asks how you want to set up: **I already have a server**
+(connect to an existing VM on this PC), **set one up for me** (fresh local
+install via Funcom's `initial-setup`), or **Hyper-V over LAN** — manage (and
+optionally remotely install) a VM on a **separate Hyper-V host** on your
+network. See [Hyper-V over LAN](#hyper-v-over-lan-remote-host) below for the
+prerequisites and how the remote credential is handled.
+
 Six-step linear flow that runs automatically on first launch:
 
 1. **Pre-flight** — admin check, Hyper-V module, disk space, OS, config
 2. **Configuration** — confirm tool settings
-3. **Installing** — import the Hyper-V VM
+3. **Installing** — import the Hyper-V VM (or point/install at a LAN host)
 4. **Security** — SSH + firewall
 5. **Networking** — ports + DNS
 6. **Finalize** — wrap-up
 
 Re-runnable any time from the nav rail for a clean reset.
+
+---
+
+## Hyper-V over LAN (remote host)
+
+DST can manage — and, if needed, remotely install — the Dune VM on a
+**separate Hyper-V host on your local network** (e.g. a headless server in
+another room) instead of the local PC. This is the Setup Wizard's third option
+and is also managed later from **Settings → Hyper-V over LAN**.
+
+**Prerequisites on the remote host:**
+
+- **PowerShell Remoting (WinRM)** enabled and reachable from this PC.
+- In a **workgroup** (no Active Directory domain), add the host to this PC's
+  `TrustedHosts` list, since WinRM's default NTLM auth won't trust an
+  unauthenticated host otherwise.
+- An **external virtual switch** for the VM's network adapter — DST will show
+  the exact `New-VMSwitch -Name DuneExternal -NetAdapterName <nic>
+  -AllowManagementOS $true` command to run on the host if none exists.
+- A **host administrator credential** — this is the remote machine's own
+  admin account and does **not** need to match the Windows account DST runs as
+  on this PC (common in a workgroup, where each machine has its own local
+  admin).
+
+**Connecting or installing:**
+
+1. Enter the host's IP (or name) and the host administrator credential, then
+   **Test connection**.
+2. If a `dune-awakening` VM already exists on the host, you're done — continue
+   and it's managed over the LAN.
+3. If it doesn't exist yet, DST can **install it remotely**: it connects over
+   PowerShell Remoting, downloads the server image on the host with SteamCMD
+   (anonymous — no Steam login needed), and imports/starts the VM on a
+   destination drive (100 GB+ free) and external switch you choose.
+4. A **routing toggle** (Setup Wizard and Settings → Hyper-V over LAN) then
+   points every ongoing Hyper-V call — VM status, start/stop, RAM — at the
+   remote host using that credential.
+
+**Credential storage & security:** the host administrator credential is saved
+in **Windows Credential Manager**, scoped to the signed-in Windows user
+running DST. It is **never** written to `dune-server.config`, log files,
+diagnostics bundles, or any API response, and is reused automatically for
+every LAN call so you're never re-prompted. Turning the LAN routing toggle
+**off** returns to managing the local VM and fully bypasses the LAN path —
+your local setup is unaffected either way — while the saved credential is kept
+for next time; removing it from Credential Manager is a separate, explicit
+action (**Remove** button on the Settings card).
 
 ---
 

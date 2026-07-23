@@ -165,8 +165,14 @@ Describe 'Mixed-bind game UDP bridge' {
         $script:publicIpSource = Get-Content -LiteralPath (Join-Path $PSScriptRoot '..\app\server\lib\PublicIp.ps1') -Raw
         $script:launcherSource = Get-Content -LiteralPath (Join-Path $PSScriptRoot '..\dune-server.ps1') -Raw
 
-        $script:posixShell = Get-Command sh -ErrorAction SilentlyContinue
-        if (-not $script:posixShell) {
+        # Get-Command sh can resolve to a non-Application command (alias/function)
+        # or multiple matches (array) on windows-latest runners, which makes
+        # `.FullName` invalid below. Resolve a single Application explicitly and
+        # re-wrap it with Get-Item so `.FullName` is always a real file path.
+        $shCommand = Get-Command sh -CommandType Application -ErrorAction SilentlyContinue | Select-Object -First 1
+        if ($shCommand) {
+            $script:posixShell = Get-Item -LiteralPath $shCommand.Source
+        } else {
             $gitShell = Join-Path $env:ProgramFiles 'Git\bin\sh.exe'
             if (Test-Path -LiteralPath $gitShell) {
                 $script:posixShell = Get-Item -LiteralPath $gitShell
