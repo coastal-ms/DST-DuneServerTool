@@ -36,6 +36,7 @@ import type {
 } from '../api/types'
 import { SpicefieldsCard } from './gameconfig/SpicefieldsCard'
 import { LandclaimTimerCard } from './gameconfig/LandclaimTimerCard'
+import { DeepDesertPvpCard } from './gameconfig/DeepDesertPvpCard'
 
 type LoadState = 'idle' | 'loading' | 'ready' | 'error' | 'unavailable'
 
@@ -1321,6 +1322,8 @@ export function GameConfig() {
             )}
 
             <SpicefieldsCard vmRunning={vmRunning} />
+
+            <DeepDesertPvpCard vmRunning={vmRunning} />
 
             <LandclaimTimerCard vmRunning={vmRunning} />
 

@@ -1,0 +1,156 @@
+---
+import Base from "../layouts/Base.astro";
+import PageHeader from "../components/PageHeader.astro";
+---
+
+<Base
+  title="Active Tests — DST"
+  description="Current DST pre-release builds, what they change, and how to test them."
+>
+  <PageHeader
+    eyebrow="Pre-release"
+    title="Active test builds"
+    intro="Targeted builds awaiting real-world validation. These are experimental, may restart services, and are not the stable release."
+  />
+
+  <section class="mx-auto max-w-5xl px-6 pb-20">
+    <div
+      class="mb-8 rounded-xl border border-amber-500/40 bg-amber-500/10 px-5 py-4 text-sm text-amber-200"
+    >
+      <strong>Use test builds only when their notes match what you are testing.</strong>
+      Back up first, follow the listed steps, and report results in the
+      <a
+        href="https://discord.gg/tj2x7cywSC"
+        class="font-medium underline decoration-dotted hover:text-white"
+        rel="noopener"
+        target="_blank">DST Discord</a
+      >. Stable mirror builds are intentionally hidden from this page.
+    </div>
+
+    <div id="active-tests" class="space-y-6" aria-live="polite">
+      <div class="rounded-xl border border-dune-border bg-dune-surface p-6 text-dune-muted">
+        Loading active test builds from GitHub…
+      </div>
+    </div>
+
+    <noscript>
+      <div class="mt-6 rounded-xl border border-dune-border bg-dune-surface p-6 text-dune-muted">
+        JavaScript is required to load the current test-build list. View
+        <a
+          href="https://github.com/coastal-ms/DST-DuneServerTool/releases"
+          class="text-dune-accent hover:text-dune-accent-soft"
+          rel="noopener"
+          >GitHub Releases</a
+        > instead.
+      </div>
+    </noscript>
+  </section>
+</Base>
+
+<script>
+  import {
+    getActiveTestReleases,
+    type GitHubTestRelease,
+  } from "../lib/testing";
+
+  const root = document.querySelector<HTMLDivElement>("#active-tests");
+  const releasesUrl =
+    "https://api.github.com/repos/coastal-ms/DST-DuneServerTool/releases?per_page=30";
+
+  function link(
+    label: string,
+    href: string,
+    primary = false,
+  ): HTMLAnchorElement {
+    const a = document.createElement("a");
+    a.textContent = label;
+    a.href = href;
+    a.target = "_blank";
+    a.rel = "noopener";
+    a.className = primary
+      ? "inline-flex items-center rounded-lg bg-dune-accent hover:bg-dune-accent-soft text-dune-bg font-medium px-4 py-2 transition-colors"
+      : "inline-flex items-center rounded-lg border border-dune-border hover:border-dune-accent text-dune-text px-4 py-2 transition-colors";
+    return a;
+  }
+
+  function showMessage(title: string, body: string): void {
+    if (!root) return;
+    const box = document.createElement("div");
+    box.className =
+      "rounded-xl border border-dune-border bg-dune-surface p-7";
+    const h = document.createElement("h2");
+    h.className = "text-xl font-semibold text-dune-text mb-2";
+    h.textContent = title;
+    const p = document.createElement("p");
+    p.className = "text-dune-muted";
+    p.textContent = body;
+    box.append(h, p);
+    root.replaceChildren(box);
+  }
+
+  async function loadTests(): Promise<void> {
+    if (!root) return;
+    try {
+      const response = await fetch(releasesUrl, {
+        headers: {
+          Accept: "application/vnd.github+json",
+        },
+      });
+      if (!response.ok) {
+        throw new Error(`GitHub returned HTTP ${response.status}`);
+      }
+      const releases = getActiveTestReleases(
+        (await response.json()) as GitHubTestRelease[],
+      );
+      if (releases.length === 0) {
+        showMessage(
+          "No active tests",
+          "Use the Stable update channel. A stable test-channel mirror may still exist, but there is nothing test-specific awaiting validation.",
+        );
+        return;
+      }
+
+      const cards = releases.map((release) => {
+        const article = document.createElement("article");
+        article.className =
+          "rounded-xl border border-dune-border bg-dune-surface p-6 sm:p-8";
+
+        const meta = document.createElement("div");
+        meta.className =
+          "font-mono text-xs uppercase tracking-wider text-dune-accent mb-2";
+        const date = release.publishedAt
+          ? new Date(release.publishedAt).toLocaleDateString()
+          : "Date unavailable";
+        meta.textContent = `${release.tag} · ${date}`;
+
+        const heading = document.createElement("h2");
+        heading.className = "text-2xl font-semibold text-dune-text";
+        heading.textContent = release.name;
+
+        const notes = document.createElement("pre");
+        notes.className =
+          "mt-5 whitespace-pre-wrap break-words font-sans text-sm leading-relaxed text-dune-muted";
+        notes.textContent = release.notes;
+
+        const actions = document.createElement("div");
+        actions.className = "mt-6 flex flex-wrap gap-3";
+        actions.append(
+          link("Download test installer", release.installerUrl, true),
+          link("Open release notes", release.htmlUrl),
+          link("Report test result", "https://discord.gg/tj2x7cywSC"),
+        );
+
+        article.append(meta, heading, notes, actions);
+        return article;
+      });
+      root.replaceChildren(...cards);
+    } catch (error) {
+      showMessage(
+        "Could not load active tests",
+        `${error instanceof Error ? error.message : String(error)}. Open GitHub Releases or try again shortly.`,
+      );
+    }
+  }
+
+  void loadTests();
+</script>

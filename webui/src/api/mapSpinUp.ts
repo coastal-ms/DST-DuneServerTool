@@ -1,4 +1,4 @@
-// Map SpinUp API — toggle each map's MinServers floor (0/1) in director.ini.
+// Map SpinUp API — toggle each map's MinServers floor in director.ini.
 import { api } from './client'
 
 export interface SpinUpMap {
@@ -7,6 +7,7 @@ export interface SpinUpMap {
   group: 'supported' | 'experimental'
   minServers: number
   enabled: boolean
+  availablePartitions?: number
 }
 
 export interface SpinUpMapsResult {
@@ -22,6 +23,7 @@ export interface SpinUpSetResult {
   label?: string
   minServers?: number
   enabled?: boolean
+  availablePartitions?: number
   noop?: boolean
   raw?: string
   message?: string

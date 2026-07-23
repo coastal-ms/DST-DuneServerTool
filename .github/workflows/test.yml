@@ -1,0 +1,117 @@
+name: Tests
+
+# Runs the existing test suites that `Run-AllTests.ps1` already orchestrates
+# locally, but which nothing in CI was executing (only `lint.yml` ran, and it
+# only parse-checks + PSScriptAnalyzes dune-server.ps1). This wires up:
+#   * the Pester 5 backend suite under tests/ (24 files)  -> job `pester`
+#   * the Vitest webui suite under webui/tests/           -> job `vitest`
+#
+# Triggered on:
+#   - pull_request to main: ALWAYS (no path filter). Same rationale as
+#     lint.yml -- if these ever become required status checks, a path filter
+#     would make PRs that don't touch the filtered paths wait forever on a
+#     check that never runs. The jobs are cheap when there's nothing to test.
+#   - push to main: filtered to the paths that actually affect test outcomes,
+#     to keep CI minutes low on doc / site-only pushes.
+on:
+  push:
+    branches: [main]
+    paths:
+      - '**/*.ps1'
+      - '**/*.psm1'
+      - 'tests/**'
+      - 'app/**'
+      - 'webui/**'
+      - '.github/workflows/test.yml'
+  pull_request:
+    branches: [main]
+
+jobs:
+  pester:
+    name: PowerShell (Pester)
+    runs-on: windows-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Ensure Pester 5
+        shell: pwsh
+        # windows-latest usually ships Pester 5.x, but don't rely on it. If a
+        # 5+ module isn't already available, install it with the same
+        # resilience pattern lint.yml uses for PSScriptAnalyzer (PSResource v3
+        # first, legacy Install-Module fallback, tolerate transient PSGallery
+        # 403/429 + nuget.exe noise; success == the module imports).
+        run: |
+          $ErrorActionPreference = 'Continue'
+
+          $have = Get-Module -ListAvailable -Name Pester |
+              Where-Object { $_.Version -ge [version]'5.0.0' }
+          if ($have) {
+              Write-Host "Pester $($have[0].Version) already available."
+              return
+          }
+
+          $installed = $false
+          if (Get-Command Install-PSResource -ErrorAction SilentlyContinue) {
+              for ($i = 1; $i -le 3 -and -not $installed; $i++) {
+                  try {
+                      Install-PSResource -Name Pester -Version '[5.5.0,)' -Scope CurrentUser `
+                          -TrustRepository -ErrorAction Stop
+                      $installed = $true
+                  } catch {
+                      Write-Host "::warning::Install-PSResource attempt $i failed: $($_.Exception.Message)"
+                      if ($i -lt 3) { Start-Sleep -Seconds ([Math]::Pow(2, $i)) }
+                  }
+              }
+          }
+
+          if (-not $installed) {
+              try {
+                  if (-not (Get-PSRepository -Name PSGallery -ErrorAction SilentlyContinue)) {
+                      Register-PSRepository -Default -ErrorAction Stop
+                  }
+                  Set-PSRepository -Name PSGallery -InstallationPolicy Trusted -ErrorAction SilentlyContinue
+                  Install-Module Pester -MinimumVersion 5.5.0 -Scope CurrentUser -Force -SkipPublisherCheck -ErrorAction Stop
+              } catch {
+                  Write-Host "::warning::Install-Module fallback failed: $($_.Exception.Message)"
+              }
+          }
+
+          $ok = Get-Module -ListAvailable -Name Pester |
+              Where-Object { $_.Version -ge [version]'5.0.0' }
+          if (-not $ok) { throw "Pester 5+ could not be made available." }
+          Write-Host "Pester $($ok[0].Version) ready."
+
+      - name: Run Pester suite
+        shell: pwsh
+        run: pwsh -NoProfile -ExecutionPolicy Bypass -File tests/Run-Tests.ps1 -CI
+
+      - name: Upload test results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: pester-results
+          path: tests/TestResults.xml
+          if-no-files-found: ignore
+
+  vitest:
+    name: WebUI (Vitest)
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: webui/package-lock.json
+
+      - name: Install deps
+        working-directory: webui
+        run: npm ci
+
+      - name: Run Vitest
+        working-directory: webui
+        run: npm test

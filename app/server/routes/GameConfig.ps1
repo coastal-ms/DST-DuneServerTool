@@ -198,6 +198,70 @@ Register-DuneRoute -Method PUT -Path '/api/gameconfig' -Handler {
 }
 
 # -----------------------------------------------------------------------------
+# Deep Desert per-partition PvP.
+# GET lists only currently running DeepDesert_1 partitions.
+# PUT { enabled:bool, partitionIds:int[] } writes UserGame.ini and restarts all
+# running Deep Desert pods so the startup-loaded setting takes effect.
+# -----------------------------------------------------------------------------
+Register-DuneRoute -Method GET -Path '/api/gameconfig/deep-desert-pvp' -Handler {
+    param($req, $res, $routeParams, $body)
+    try {
+        $state = Get-DuneDeepDesertPvp
+        if (-not $state.ok -and $state.status) {
+            Write-DuneError -Response $res -Status $state.status -Message $state.message
+            return
+        }
+        Write-DuneJson -Response $res -Body $state
+    } catch {
+        Write-DuneError -Response $res -Status 500 -Message "Deep Desert PvP load failed: $($_.Exception.Message)"
+    }
+}
+
+Register-DuneRoute -Method PUT -Path '/api/gameconfig/deep-desert-pvp' -Handler {
+    param($req, $res, $routeParams, $body)
+    $ctx = Get-DuneGameConfigContext
+    if (-not $ctx.ok) {
+        Write-DuneError -Response $res -Status $ctx.status -Message $ctx.message
+        return
+    }
+    if (-not (Test-DunePlayerGuard -Req $req -Res $res -Ip $ctx.ip)) { return }
+    if (-not ($body -is [hashtable]) -or -not $body.ContainsKey('enabled')) {
+        Write-DuneError -Response $res -Status 400 -Message 'Body must include enabled and partitionIds.'
+        return
+    }
+    $enabledRaw = $body['enabled']
+    if (-not ($enabledRaw -is [bool])) {
+        Write-DuneError -Response $res -Status 400 -Message 'enabled must be a JSON boolean.'
+        return
+    }
+    $ids = New-Object 'System.Collections.Generic.List[int]'
+    if ($body.ContainsKey('partitionIds') -and $null -ne $body['partitionIds']) {
+        if (-not ($body['partitionIds'] -is [System.Collections.IEnumerable]) -or $body['partitionIds'] -is [string]) {
+            Write-DuneError -Response $res -Status 400 -Message 'partitionIds must be an array of positive integers.'
+            return
+        }
+        foreach ($rawId in @($body['partitionIds'])) {
+            $id = 0
+            if (-not [int]::TryParse("$rawId", [ref]$id) -or $id -le 0) {
+                Write-DuneError -Response $res -Status 400 -Message 'partitionIds must contain only positive integers.'
+                return
+            }
+            $ids.Add($id)
+        }
+    }
+    try {
+        $state = Set-DuneDeepDesertPvp -Enabled ([bool]$enabledRaw) -PartitionIds $ids.ToArray()
+        if (-not $state.ok -and $state.status) {
+            Write-DuneError -Response $res -Status $state.status -Message $state.message
+            return
+        }
+        Write-DuneJson -Response $res -Body $state
+    } catch {
+        Write-DuneError -Response $res -Status 500 -Message "Deep Desert PvP save failed: $($_.Exception.Message)"
+    }
+}
+
+# -----------------------------------------------------------------------------
 # POST /api/gameconfig/backup — snapshot the live INI files before editing.
 # Copies each live file to "<path>.dstbak-<timestamp>" on the BG VM (read-only
 # copy; no settings are changed). Returns the backup paths so the user has a
