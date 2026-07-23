@@ -69,7 +69,7 @@ body:
     attributes:
       label: Tool version
       description: Shown in the bottom-left of the web portal sidebar (status bar) and in the CLI menu header. Auto-filled when launched from **Help → Create GitHub Issue** in the top menu bar, or from the CLI `report-issue` command.
-      placeholder: "v12.19.9"
+      placeholder: "v12.20.0"
     validations:
       required: true
 
@@ -115,8 +115,10 @@ body:
         - Web portal — Settings — Database connection (Database port / Test connection — empty Players/Bases/Storage)
         - Web portal — Settings (Dune Server Tool self-updater — incl. Stable/Test channel toggle + pre-release picker)
         - Web portal — Settings — Mobile App / remote access (Tailscale Funnel pairing, or optional Cloudflare custom domain)
+        - Web portal — Settings — Hyper-V over LAN (host IP / credential / Test / Route toggle / Remove credential)
         - Web portal — Settings — Server authorization token / 403002 recovery (regenerate + apply self-hosting token)
         - Web portal — Setup Wizard / first-run
+        - Web portal — Setup Wizard — Hyper-V over LAN (host connect / Test connection / remote VM install onto the host)
         - Web portal — Top menu bar / Help dropdown
         - Web portal — Sidebar / top status bar (server name, port/VM/BG pills, refresh) / window chrome
         - Web portal — "Web Portal" button / open in default browser hand-off ("page is unavailable")
@@ -133,7 +135,7 @@ body:
     attributes:
       label: Specific page / button / command
       description: Which button, tab, menu letter/number, or `-Cmd <name>` triggered the bug? For a database migration, name the failing step (Import backup, Restore Backup, first Reboot All, Apply public IP, or second Reboot All).
-      placeholder: "e.g. Server Health 'Restart battlegroup' button, Server Health > Scheduled restarts > Save schedule, Server Health > Scheduled restarts > Send test message (Discord), Server Health > Scheduled restarts > Check for server update, Pods > select pod > events, Settings > Dune Server Tool updates > Test channel toggle, Settings > Dune Server Tool updates > pre-release dropdown, Settings > Public IP / DDNS > Save hostname, Settings > Public IP / DDNS > Resolve hostname, Settings > Public IP / DDNS > Apply public IP, Settings > Server Browser Ping > Apply (datacenter id fix), Settings > Public IP / DDNS > Connection check (P34) > Run check, Settings > Database connection > Test connection, Settings > Database port (empty Players/Bases/Storage), Settings > SSH key > Remove passphrase, Settings > SSH key > Generate new, Settings > Server authorization token > Apply new token & restart (403002 recovery), Sidebar > Web Portal > Open in browser ('page is unavailable'), Game Config > Server name > Rename & restart, Game Config > Deep Desert PvP > Refresh / Apply & restart, Game Config > Spicefields > Save, Game Config > Landsraad > Save, Game Config > Crafting > Repair Cost Weight, Game Config > All Default Settings > Ctrl+C section header, Game Config > client INI 'Fix my client config', Gameplay Admin > Market Bot > toggle, Gameplay Admin > Market Bot > Reset to defaults, Gameplay Admin > Market Bot > Pricing rules > Market-follow pricing toggle, Gameplay Admin > Market Bot > Pricing rules > Market markup %, Gameplay Admin > Market Bot > Buy side > Over-market guard, Gameplay Admin > Players > Give Item (Allow overflow), Gameplay Admin > Players > Give Package > Import tcno.co list, Gameplay Admin > Players > Give Package (Allow overflow), Gameplay Admin > Players > Give Vehicle Kit > Sandbike (Allow overflow), Gameplay Admin > Players > inventory item > Repair, Gameplay Admin > Players > inventory item > Stack quantity, Gameplay Admin > Storage > container item > Stack quantity, Gameplay Admin > Bases > Release claim > confirm (backup ack), Gameplay Admin > Players > Cheat Scripts > Award Player XP, Gameplay Admin > Players > Specs > Set Level (per-track slider), Gameplay Admin > Players > Specs > Max / Reset (per track), Gameplay Admin > Players > Journey > Complete node, Gameplay Admin > Players > Progression > Progression Unlock > Apply Unlock (Atreides Ch3 Start), Gameplay Admin > Players > Progression > Complete Contract > search 'Skorda' > Complete Contract, Gameplay Admin > Players > Tags > search/add tag, Gameplay Admin > Players > Grant Cosmetic / Building Set > grant variant/swatch/skin or building set (Observer/murals/decor), Gameplay Admin > Players > Reset Faction > confirm wipe, Gameplay Admin > Players > Actions > Unlock Trainers > Swordmaster, Gameplay Admin > Players > Actions > Unlock Main Quest > A New Beginning, Gameplay Admin > Players > Progression > Apply Quick Preset > Complete: Find the Fremen (3rd ability slot + prescience), Gameplay Admin > Players > Landsraad > set House Ecaz, Gameplay Admin > Players > Actions > Punishment > Ban, Gameplay Admin > Players > Hide GM toggle, Settings > Mobile App > Generate QR Code, Settings > Mobile App > Repair Mobile Bridge, Gameplay Admin > Players (blank names / 0 pieces), Help > Keep serving while DST is closed, Database > Backup Schedule presets > Hourly, Database > backup file > Delete (single / select-all), Database > Completed backup & restore pods > Prune, Map SpinUp > DeepDesert_1 (all configured partitions), Map SpinUp > Survival_2, Map SpinUp > Arrakeen loading counter, Map SpinUp > Restart Hagga, Help > Create GitHub Issue, CLI option 'e. reboot', or -Cmd startup"
+      placeholder: "e.g. Server Health 'Restart battlegroup' button, Server Health > Scheduled restarts > Save schedule, Server Health > Scheduled restarts > Send test message (Discord), Server Health > Scheduled restarts > Check for server update, Pods > select pod > events, Settings > Dune Server Tool updates > Test channel toggle, Settings > Dune Server Tool updates > pre-release dropdown, Settings > Public IP / DDNS > Save hostname, Settings > Public IP / DDNS > Resolve hostname, Settings > Public IP / DDNS > Apply public IP, Settings > Server Browser Ping > Apply (datacenter id fix), Settings > Public IP / DDNS > Connection check (P34) > Run check, Settings > Database connection > Test connection, Settings > Database port (empty Players/Bases/Storage), Settings > SSH key > Remove passphrase, Settings > SSH key > Generate new, Settings > Server authorization token > Apply new token & restart (403002 recovery), Sidebar > Web Portal > Open in browser ('page is unavailable'), Game Config > Server name > Rename & restart, Game Config > Deep Desert PvP > Refresh / Apply & restart, Game Config > Spicefields > Save, Game Config > Landsraad > Save, Game Config > Crafting > Repair Cost Weight, Game Config > All Default Settings > Ctrl+C section header, Game Config > client INI 'Fix my client config', Gameplay Admin > Market Bot > toggle, Gameplay Admin > Market Bot > Reset to defaults, Gameplay Admin > Market Bot > Pricing rules > Market-follow pricing toggle, Gameplay Admin > Market Bot > Pricing rules > Market markup %, Gameplay Admin > Market Bot > Buy side > Over-market guard, Gameplay Admin > Players > Give Item (Allow overflow), Gameplay Admin > Players > Give Package > Import tcno.co list, Gameplay Admin > Players > Give Package (Allow overflow), Gameplay Admin > Players > Give Vehicle Kit > Sandbike (Allow overflow), Gameplay Admin > Players > inventory item > Repair, Gameplay Admin > Players > inventory item > Stack quantity, Gameplay Admin > Storage > container item > Stack quantity, Gameplay Admin > Bases > Release claim > confirm (backup ack), Gameplay Admin > Players > Cheat Scripts > Award Player XP, Gameplay Admin > Players > Specs > Set Level (per-track slider), Gameplay Admin > Players > Specs > Max / Reset (per track), Gameplay Admin > Players > Journey > Complete node, Gameplay Admin > Players > Progression > Progression Unlock > Apply Unlock (Atreides Ch3 Start), Gameplay Admin > Players > Progression > Complete Contract > search 'Skorda' > Complete Contract, Gameplay Admin > Players > Tags > search/add tag, Gameplay Admin > Players > Grant Cosmetic / Building Set > grant variant/swatch/skin or building set (Observer/murals/decor), Gameplay Admin > Players > Reset Faction > confirm wipe, Gameplay Admin > Players > Actions > Unlock Trainers > Swordmaster, Gameplay Admin > Players > Actions > Unlock Main Quest > A New Beginning, Gameplay Admin > Players > Progression > Apply Quick Preset > Complete: Find the Fremen (3rd ability slot + prescience), Gameplay Admin > Players > Landsraad > set House Ecaz, Gameplay Admin > Players > Actions > Punishment > Ban, Gameplay Admin > Players > Hide GM toggle, Settings > Mobile App > Generate QR Code, Settings > Mobile App > Repair Mobile Bridge, Settings > Hyper-V over LAN > Test, Settings > Hyper-V over LAN > Route all VM commands to this LAN host toggle, Settings > Hyper-V over LAN > Remove credential, Setup Wizard > Hyper-V over LAN > Test connection, Setup Wizard > Hyper-V over LAN > Install the VM on the host > Check host, Setup Wizard > Hyper-V over LAN > Install the VM on the host > Install, Gameplay Admin > Players (blank names / 0 pieces), Help > Keep serving while DST is closed, Database > Backup Schedule presets > Hourly, Database > backup file > Delete (single / select-all), Database > Completed backup & restore pods > Prune, Map SpinUp > DeepDesert_1 (all configured partitions), Map SpinUp > Survival_2, Map SpinUp > Arrakeen loading counter, Map SpinUp > Restart Hagga, Help > Create GitHub Issue, CLI option 'e. reboot', or -Cmd startup"
     validations:
       required: true
 
@@ -303,6 +305,41 @@ body:
         Dashboard message: "SSH key is passphrase-protected, so background checks can't use it…"
         Setup "SSH key authorized on VM": "The VM rejected this key…"
         SSH Key path (Settings): C:\Users\me\.ssh\dune_key
+      render: shell
+    validations:
+      required: false
+
+  - type: textarea
+    id: hypervlan_diag
+    attributes:
+      label: Hyper-V over LAN (only if your bug involves a remote/separate Hyper-V host)
+      description: |
+        Only fill this in if your bug is about **Hyper-V over LAN** (Setup Wizard's
+        third option, or **Settings → Hyper-V over LAN**) — connecting to, installing
+        onto, or routing VM commands to a **separate Hyper-V host**. Please include:
+
+        - The **exact step** where it went wrong (e.g. "Test connection", "Install
+          the VM on the host → Install", "Route all VM commands to this LAN host"
+          toggle, "Remove credential").
+        - The **remote host's OS** (e.g. Windows Server 2022, Windows 11 Pro) and
+          whether it's in a **workgroup or a domain**.
+        - Whether you connected by the host's **IP address or a DNS/hostname**.
+        - The exact message shown (connection-test result, VM-install error, guest-IP
+          discovery, SSH, or Server Health message). **Do not paste the host
+          administrator password** — it's never needed for a bug report.
+        - Whether the problem **persists after a DST restart**, or only happens once
+          per session.
+        - If possible, attach a **fresh diagnostics ZIP** captured right after
+          reproducing (see the **Diagnostics ZIP** field below) — it includes the
+          sanitized `VmHostMode` / redacted `HyperVHostIp` config and backend logs.
+
+        Leave blank if your bug has nothing to do with a remote Hyper-V host.
+      placeholder: |
+        Step: Setup Wizard > Hyper-V over LAN > Test connection
+        Remote host OS: Windows Server 2022, workgroup (no domain)
+        Connected by: IP address (192.168.1.50)
+        Message shown: "Could not connect — WinRM: Access is denied"
+        Persists after DST restart: yes
       render: shell
     validations:
       required: false
