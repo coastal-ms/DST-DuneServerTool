@@ -18,6 +18,31 @@ Landsraad, market bot). The repo `coastal-ms/DST-DuneServerTool` is public and
 forkable. Day-to-day work is: reproduce a reported bug, fix it across the
 PS backend + webui, build the installer, ship a release.
 
+## Work orchestration — planner / builder default
+
+Apply this workflow in **every session** for any multi-step or multi-file task,
+unless the maintainer explicitly chooses another approach:
+
+- **Planner / thinker stays in the coordinating session.** Decompose the goal
+  into independent, ordered tasks in the session `todos` table and record
+  dependencies in `todo_deps`. Make design decisions, review executor results,
+  reconcile conflicts, retry failures, and dispatch later waves only when their
+  dependencies are complete. The planner does **not** write the implementation.
+- **Builders / executors do the implementation.** Delegate each independent
+  chunk to an isolated project session/worktree or a background sub-agent. Run
+  independent chunks in parallel; keep dependent chunks blocked until their
+  prerequisites finish. Builders must receive complete task context and own
+  their assigned scope through implementation and validation.
+- **Default models:** planner = GPT-5.6 Sol with long context and high reasoning;
+  builder = Claude Sonnet 5. These are defaults, not locks. The maintainer may
+  change either role's model at any time.
+- **Model-change gate:** whenever either role's model changes, confirm the
+  resulting planner model, builder model, and reasoning effort through a
+  clickable `ask_user` confirmation before proceeding. Not needed on every
+  sync — only when a model actually changes.
+- **Trivial exception:** a genuinely straightforward, single-file task with no
+  branching work may be completed directly without the split.
+
 ## Repository layout
 
 - `app/server/` — PowerShell backend: `lib/` (business logic) + `routes/` (HTTP API).
