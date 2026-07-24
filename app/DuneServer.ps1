@@ -72,25 +72,40 @@ Write-DuneStartupLog 'Bootstrap entered'
 # always has SOME visible handle on the running server.
 #
 # Detection: scan the full process command line for --headless / -headless /
-# /headless (case-insensitive). PS2EXE-compiled binaries expose CLI args via
-# [Environment]::GetCommandLineArgs() reliably, including double-dash options.
+# /headless and --reattach / -reattach / /reattach (case-insensitive). PS2EXE-
+# compiled binaries expose CLI args via [Environment]::GetCommandLineArgs()
+# reliably, including double-dash options.
+#
+# --reattach: passed by DuneShell.exe when IT self-started us because a
+# taskbar-pinned/standalone launch found no backend running at all (see
+# MainForm.TryStartBackendAsync). That DuneShell process is the one the user
+# is looking at and is already polling last-url.txt for the fresh URL we're
+# about to write, so this launch must NOT kill it or open a second app window
+# (see the app-window block below) — both would fight the very shell that
+# asked us to start.
 $script:DuneHeadlessMode = $false
+$script:DuneReattachMode = $false
 try {
     $rawArgs = @([Environment]::GetCommandLineArgs())
     foreach ($a in $rawArgs) {
         if (-not $a) { continue }
-        if ($a -match '^(?:--|-|/)headless$') { $script:DuneHeadlessMode = $true; break }
+        if ($a -match '^(?:--|-|/)headless$') { $script:DuneHeadlessMode = $true }
+        if ($a -match '^(?:--|-|/)reattach$') { $script:DuneReattachMode = $true }
     }
 } catch {}
 if ($script:DuneHeadlessMode) {
     Write-DuneStartupLog 'Headless mode requested (--headless): no DuneShell window will be opened by this process'
 }
+if ($script:DuneReattachMode) {
+    Write-DuneStartupLog 'Reattach mode requested (--reattach): an existing DuneShell window is already up and polling for the portal URL - it will not be killed or replaced'
+}
 
 # Build the arg-list we need to forward through any in-script self-elevation
 # (the "we need admin, relaunch ourselves with -Verb RunAs" branch) so that
-# the elevated child stays in headless mode. Used in two places below.
+# the elevated child preserves these launch-time modes. Used in two places below.
 $script:DuneRelaunchArgs = @()
 if ($script:DuneHeadlessMode) { $script:DuneRelaunchArgs += '--headless' }
+if ($script:DuneReattachMode) { $script:DuneRelaunchArgs += '--reattach' }
 
 # ---------- Minimize own console window IMMEDIATELY ----------------------------
 # v6.1.7+: the EXE is built console-subsystem (NoConsole=$false in Build-Exe.ps1)
@@ -148,7 +163,7 @@ public static extern bool IsIconic(System.IntPtr hWnd);
 }
 
 # Version (one of the 5 sync'd constants; see persistent-notes.md)
-$script:DuneToolVersion = '12.20.0'
+$script:DuneToolVersion = '12.20.1'
 
 # ---------- Restart-on-detach handoff -----------------------------------------
 # When a prior "Web Portal" detach left the server running headless, the
@@ -731,16 +746,9 @@ if ($script:DuneHeadlessMode) {
 
 $browserJob = $null
 if ((-not $script:DuneHeadlessMode) -and $openInAppWindow -and $script:DuneShellExe) {
-    # Close any stale app window from a previous run (e.g. left over by an
-    # in-app update, where the relauncher restarts DuneServer.exe but the old
-    # WebView2 window keeps pointing at the now-dead server). Killing it here
-    # means a fresh launch always ends with exactly ONE app window.
-    Get-Process -Name DuneShell -ErrorAction SilentlyContinue | ForEach-Object {
-        try { Stop-Process -Id $_.Id -Force -ErrorAction SilentlyContinue } catch {}
-    }
-
     # Decide how the console should present itself while the app window is open
-    # (prompts once per version). Resolve an icon for the optional tray.
+    # (prompts once per version). Resolve an icon for the optional tray. Needed
+    # in both the reattach and normal branches below.
     try { $script:DuneIconPath = Find-DuneSubpath 'assets\icon.ico' } catch {}
     if (-not $script:DuneIconPath) {
         try {
@@ -752,22 +760,48 @@ if ((-not $script:DuneHeadlessMode) -and $openInAppWindow -and $script:DuneShell
         try { $script:DuneConsoleMode = Resolve-DuneConsoleMode } catch { $script:DuneConsoleMode = 'console' }
     }
 
-    Write-DuneLog "Opening portal in app window: $script:DuneShellExe (console mode: $script:DuneConsoleMode)"
-    try {
-        # Capture the app-window process so the lifecycle watcher can stop the
-        # server when it closes. DuneShell is single-instance: if one somehow
-        # already exists, the process we spawn focuses it and exits at once, so
-        # adopt the real long-lived window process in that case.
-        $script:DuneAppProc = Start-Process -FilePath $script:DuneShellExe -PassThru
-        Start-Sleep -Milliseconds 700
-        if ($script:DuneAppProc -and $script:DuneAppProc.HasExited) {
-            $script:DuneAppProc = Get-Process -Name DuneShell -ErrorAction SilentlyContinue |
-                                  Sort-Object StartTime -Descending | Select-Object -First 1
+    if ($script:DuneReattachMode) {
+        # --reattach: DuneShell.exe itself spawned us (its own last-url.txt
+        # poll found nothing reachable and no DuneServer.exe was running at
+        # all). That DuneShell process is still alive, still polling, and is
+        # what the user is actually looking at, so adopt it for the lifecycle
+        # watcher instead of killing it and launching a replacement — do NOT
+        # touch the normal kill-stale-window/launch-new-window path below.
+        $script:DuneAppProc = Get-Process -Name DuneShell -ErrorAction SilentlyContinue |
+                              Sort-Object StartTime -Descending | Select-Object -First 1
+        if ($script:DuneAppProc) {
+            Write-DuneLog "Reattach mode: adopting existing DuneShell window (pid=$($script:DuneAppProc.Id)) for the lifecycle watcher; it will pick up the portal URL on its own"
+        } else {
+            Write-DuneLog "Reattach mode requested but no DuneShell process was found to adopt; falling back to the normal launch path" 'WARN'
         }
-    } catch {
-        Write-DuneLog "App window failed to launch ($($_.Exception.Message)); falling back to browser" 'WARN'
-        $script:DuneShellExe = $null
-        $script:DuneAppProc = $null
+    }
+
+    if (-not $script:DuneReattachMode -or -not $script:DuneAppProc) {
+        # Close any stale app window from a previous run (e.g. left over by an
+        # in-app update, where the relauncher restarts DuneServer.exe but the old
+        # WebView2 window keeps pointing at the now-dead server). Killing it here
+        # means a fresh launch always ends with exactly ONE app window.
+        Get-Process -Name DuneShell -ErrorAction SilentlyContinue | ForEach-Object {
+            try { Stop-Process -Id $_.Id -Force -ErrorAction SilentlyContinue } catch {}
+        }
+
+        Write-DuneLog "Opening portal in app window: $script:DuneShellExe (console mode: $script:DuneConsoleMode)"
+        try {
+            # Capture the app-window process so the lifecycle watcher can stop the
+            # server when it closes. DuneShell is single-instance: if one somehow
+            # already exists, the process we spawn focuses it and exits at once, so
+            # adopt the real long-lived window process in that case.
+            $script:DuneAppProc = Start-Process -FilePath $script:DuneShellExe -PassThru
+            Start-Sleep -Milliseconds 700
+            if ($script:DuneAppProc -and $script:DuneAppProc.HasExited) {
+                $script:DuneAppProc = Get-Process -Name DuneShell -ErrorAction SilentlyContinue |
+                                      Sort-Object StartTime -Descending | Select-Object -First 1
+            }
+        } catch {
+            Write-DuneLog "App window failed to launch ($($_.Exception.Message)); falling back to browser" 'WARN'
+            $script:DuneShellExe = $null
+            $script:DuneAppProc = $null
+        }
     }
 }
 

@@ -602,6 +602,35 @@ internal sealed class MainForm : Form
         }
     }
 
+    // Every real launch of this exe passes NO arguments — DuneServer.ps1 always
+    // starts us as `DuneShell.exe` with no --url, relying on last-url.txt polling
+    // (see Start-DuneHttpServer's Start-Process call). That means the "normal"
+    // path (DuneServer.exe just spawned us, moments ahead of its listener
+    // binding) and a taskbar-pinned/Start Menu launch of DuneShell.exe directly
+    // (Windows pins the running window's own exe, not the DuneServer.exe
+    // shortcut that originally launched it) look IDENTICAL from our launch
+    // arguments: _initialUrl is null and _useWaitFile is true in both cases.
+    //
+    // We tell them apart at runtime instead of via arguments:
+    //   * Normal path: a DuneServer.exe process is already alive (it's the one
+    //     that spawned us); we just wait for it to finish binding.
+    //   * Standalone/pinned path: DST was closed cleanly last time, which stops
+    //     the backend but leaves the STALE last-url.txt on disk (only the next
+    //     DuneServer.exe *startup* deletes it, right before writing a fresh
+    //     one). No DuneServer.exe process exists. Trusting the file's mere
+    //     existence here is the ERR_FAILED bug: we'd load a dead URL from a
+    //     backend that was never started.
+    //
+    // The fix: never trust last-url.txt without probing it for an actual HTTP
+    // response first (mirrors DuneServer.ps1's own Test-DuneExistingServerHealthy
+    // zombie-listener probe), and — only when no DuneServer.exe was running to
+    // begin with — start the sibling DuneServer.exe ourselves so a pinned
+    // DuneShell "just works" the same way the Start Menu/Desktop shortcut does.
+    private const int MaxWaitFilePollAttempts = 40;     // 40 * 500ms = 20s
+    private const int MaxBackendStartPollAttempts = 90; // 90 * 500ms = 45s (UAC prompt + startup)
+
+    private static readonly HttpClient _probeHttp = new() { Timeout = TimeSpan.FromMilliseconds(800) };
+
     private async Task<string?> ResolveUrlAsync()
     {
         if (!string.IsNullOrWhiteSpace(_initialUrl))
@@ -614,25 +643,131 @@ internal sealed class MainForm : Form
             Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
             "DuneServer", "last-url.txt");
 
-        // The launcher writes last-url.txt right before opening the window; poll
-        // briefly in case the shell starts a moment ahead of the server.
-        for (int i = 0; i < 40; i++)
+        bool backendWasRunning = Process.GetProcessesByName("DuneServer").Length > 0;
+
+        string? candidate = await PollForReachableUrlAsync(file, MaxWaitFilePollAttempts);
+        if (candidate != null) return candidate;
+
+        if (backendWasRunning)
         {
-            try
-            {
-                if (File.Exists(file))
-                {
-                    string text = (await File.ReadAllTextAsync(file)).Trim();
-                    if (!string.IsNullOrWhiteSpace(text))
-                        return text;
-                }
-            }
-            catch
-            {
-                // file may be mid-write; retry
-            }
+            // A DuneServer.exe is already alive but never came up within the
+            // wait window (hung listener, very slow host, etc). Don't pile a
+            // second backend on top of it — hand back whatever is on disk
+            // (possibly stale/absent) and let the existing NavigationCompleted
+            // retry loop / error page take over instead of looping forever.
+            return await TryReadUrlFileAsync(file);
+        }
+
+        candidate = await TryStartBackendAsync(file);
+        return candidate ?? await TryReadUrlFileAsync(file);
+    }
+
+    private static async Task<string?> TryReadUrlFileAsync(string file)
+    {
+        try
+        {
+            if (!File.Exists(file)) return null;
+            string text = (await File.ReadAllTextAsync(file)).Trim();
+            return string.IsNullOrWhiteSpace(text) ? null : text;
+        }
+        catch
+        {
+            // file may be mid-write; caller retries on the next poll.
+            return null;
+        }
+    }
+
+    /// <summary>
+    /// Any HTTP-level response — including an error status — proves the
+    /// listener is actually accepting connections, mirroring the backend's own
+    /// Test-DuneExistingServerHealthy zombie-listener probe. A connection
+    /// failure/timeout means nothing is listening at that URL yet.
+    /// </summary>
+    private static async Task<bool> IsUrlReachableAsync(string url)
+    {
+        if (!Uri.TryCreate(url, UriKind.Absolute, out var u)) return false;
+        try
+        {
+            using var resp = await _probeHttp.GetAsync(new Uri(u, "/"), HttpCompletionOption.ResponseHeadersRead);
+            return true;
+        }
+        catch
+        {
+            return false;
+        }
+    }
+
+    private static async Task<string?> PollForReachableUrlAsync(string file, int attempts)
+    {
+        for (int i = 0; i < attempts; i++)
+        {
+            string? candidate = await TryReadUrlFileAsync(file);
+            if (candidate != null && await IsUrlReachableAsync(candidate))
+                return candidate;
             await Task.Delay(500);
         }
+        return null;
+    }
+
+    /// <summary>
+    /// Starts the sibling DuneServer.exe (the installed layout ships it beside
+    /// DuneShell.exe) so a taskbar-pinned launch can bring the backend up on
+    /// its own instead of showing a dead portal page. DuneServer.exe owns all
+    /// the single-instance / self-elevation / zombie-listener logic already
+    /// (see DuneServer.ps1) — we just launch it once, non-elevated, and poll
+    /// for the fresh, reachable URL it writes. We never attempt to elevate or
+    /// manage it ourselves, and this is only ever called once per ResolveUrlAsync
+    /// (itself called once per window), so a slow/failed start can't loop.
+    ///
+    /// Passes --reattach so DuneServer.ps1 knows a DuneShell window (us) is
+    /// already up and polling for the URL it's about to write: without that
+    /// flag its startup unconditionally kills every running DuneShell process
+    /// before opening a fresh one (to clean up stale windows left over by an
+    /// in-app update), which would tear down the very window that asked it to
+    /// start. --reattach tells it to adopt us for its lifecycle watcher instead
+    /// of killing/replacing us.
+    /// </summary>
+    private async Task<string?> TryStartBackendAsync(string file)
+    {
+        string serverExe = Path.Combine(AppContext.BaseDirectory, "DuneServer.exe");
+        if (!File.Exists(serverExe))
+        {
+            _status.Text = "Could not find DuneServer.exe next to this app.\r\n" +
+                           "Reinstall Dune Server Tool, or start it from its Start Menu shortcut.";
+            return null;
+        }
+
+        _status.Text = "Starting the Dune Server Tool backend…";
+        try
+        {
+            Process.Start(new ProcessStartInfo
+            {
+                FileName = serverExe,
+                Arguments = "--reattach",
+                UseShellExecute = true,
+                WorkingDirectory = AppContext.BaseDirectory
+            });
+        }
+        catch (Exception ex)
+        {
+            _status.Text = "Failed to start the Dune Server Tool backend.\r\n" + ex.Message;
+            return null;
+        }
+
+        // DuneServer.exe self-elevates via a UAC prompt (see DuneServer.ps1) and
+        // only writes last-url.txt once its listener is bound, so give this a
+        // generously longer window than the initial wait above.
+        for (int i = 0; i < MaxBackendStartPollAttempts; i++)
+        {
+            _status.Text = $"Starting the Dune Server Tool backend… ({i + 1})";
+            string? candidate = await TryReadUrlFileAsync(file);
+            if (candidate != null && await IsUrlReachableAsync(candidate))
+                return candidate;
+            await Task.Delay(500);
+        }
+
+        _status.Text = "The Dune Server Tool backend did not start in time.\r\n" +
+                       "Reopen this window to try again, or launch it from the Start Menu shortcut.";
         return null;
     }
 
