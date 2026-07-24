@@ -13,6 +13,12 @@ here cover everything those tags shipped.
 
 ## [Unreleased]
 
+## [12.20.3] - 2026-07-24
+
+### Fixed
+
+- **SSH key fallback (LAN mode) now handles directory-as-key-path and uses base64 for pubkey authorization.** The v12.20.2 fallback had two issues: if the configured SSH key path pointed to the `DuneAwakeningServer` directory instead of the `sshKey` file inside it, `Remove-Item` prompted for confirmation to delete children; and the pubkey was passed via shell single-quotes which can break on key content characters. The path now auto-appends `sshKey` when it resolves to a directory, and the authorization uses base64 encoding (matching the proven `Initialize-DuneLanGuest` bootstrap path) to avoid shell-quoting issues.
+
 ## [12.20.2] - 2026-07-24
 
 ### Fixed
