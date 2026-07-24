@@ -22,12 +22,20 @@
 #   A BOOT-only pass here force-clears such a stale pod so the operator
 #   recreates it immediately. Core maps keep a legitimate partition pin, so
 #   that pass evicts the POD only and never touches partitions (that stays the
-#   on-demand pass's job). CONFIRMED IN THE FIELD (2026-07-24): a stale core
-#   map can sit in game phase "PreShutdown" for HOURS while Kubernetes still
-#   reports the serverset/pod Ready (readyReplicas satisfied) -- the game-level
-#   drain lags/decouples from k8s-level pod readiness. The boot pass therefore
-#   inspects every candidate pod's game phase directly instead of trusting a
-#   serverset-level or pod-level Ready shortcut to mean "nothing to do".
+#   on-demand pass's job). CONFIRMED IN THE FIELD (2026-07-24): after a hard
+#   host crash + VM reboot, 15-hour-old pre-crash core-map pods (pod AGE, i.e.
+#   time since the pod was originally created -- NOT how long it sat stuck)
+#   remained in game phase "PreShutdown" throughout the boot recovery pass and
+#   through a subsequent 90s battlegroup-stop timeout, while Kubernetes still
+#   reported the serverset/pod Ready (readyReplicas satisfied) -- the
+#   game-level drain lags/decouples from k8s-level pod readiness. The boot log
+#   for that run showed the pass executing without taking any core-map action,
+#   consistent with the source only matching game phase "Stopping" and having
+#   readyReplicas/Ready early-skips that never reached the phase check. A
+#   manual battlegroup restart eventually recreated the pods. The boot pass
+#   therefore inspects every candidate pod's game phase directly instead of
+#   trusting a serverset-level or pod-level Ready shortcut to mean "nothing to
+#   do".
 #
 # WHAT IT DOES
 #   1. Writes the heal script to /usr/local/bin/dune-clear-partitions.sh. It has
@@ -130,13 +138,16 @@ fi
 # serverset) before it recreates a fresh pod -- the game phase shows "Stopping"
 # or "PreShutdown" (what players see as "preshutdown"), or the k8s pod is stuck
 # Terminating (deletionTimestamp set because the node was NotReady). Either way
-# the map is unavailable for the whole grace window -- field-confirmed for
-# HOURS (2026-07-24) because Kubernetes-level pod/serverset readiness can stay
-# satisfied the whole time the game-level phase is "PreShutdown"; the drain is
-# a Funcom-operator-level state, not a k8s-level one. This does NOT overlap the
-# partition pass below: core maps keep a legitimate partition pin that must
-# never be cleared -- the fix here is to evict the STALE POD, not touch
-# partitions.
+# the map is unavailable for the whole grace window. Field-confirmed
+# (2026-07-24): after a hard crash + reboot, 15-hour-old pre-crash core-map
+# pods (pod AGE, not stuck duration) remained in game phase "PreShutdown"
+# throughout the boot recovery pass and through a subsequent 90s
+# battlegroup-stop timeout, while Kubernetes-level pod/serverset readiness
+# stayed satisfied the whole time -- the drain is a Funcom-operator-level
+# state, not a k8s-level one. A manual battlegroup restart eventually
+# recreated the pods. This does NOT overlap the partition pass below: core
+# maps keep a legitimate partition pin that must never be cleared -- the fix
+# here is to evict the STALE POD, not touch partitions.
 #
 # At BOOT no players can be online, so force-deleting a demonstrably-stuck pod
 # (--force --grace-period=0) is safe and lets the operator recreate immediately,
@@ -148,8 +159,8 @@ fi
 #
 # IMPORTANT: unlike the partition pass below, this pass does NOT treat k8s
 # Ready (pod- or serverset-level) as proof the pod is healthy. A stale
-# pre-crash pod can be reported Ready by Kubernetes for its entire ~15h+ drain
-# while the GAME phase says "Stopping"/"PreShutdown" -- so an early skip on
+# pre-crash pod can be reported Ready by Kubernetes throughout its drain while
+# the GAME phase says "Stopping"/"PreShutdown" -- so an early skip on
 # readyReplicas>=replicas, or on the individual pod's Ready condition, would
 # hide exactly the case this pass exists to catch. Every candidate pod's game
 # phase / deletionTimestamp is inspected directly; Ready is only consulted

@@ -45,9 +45,9 @@ Describe 'Director-driven map status' {
         }
 
         It 'no longer skips a whole serverset just because Kubernetes readyReplicas is satisfied' {
-            # This was the root cause: a serverset-level early "continue" on
-            # readyReplicas>=replicas hid a core map stuck in game phase
-            # PreShutdown for hours because k8s still reported it Ready.
+            # This was (part of) the root cause: a serverset-level early
+            # "continue" on readyReplicas>=replicas hid a core map sitting in
+            # game phase PreShutdown, because k8s still reported it Ready.
             $script:fnBody | Should -Not -Match 'readyReplicas'
             $script:fnBody | Should -Not -Match 'rdyN'
         }
