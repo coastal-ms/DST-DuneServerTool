@@ -13,6 +13,12 @@ here cover everything those tags shipped.
 
 ## [Unreleased]
 
+## [12.20.2] - 2026-07-24
+
+### Fixed
+
+- **"Generate & authorize new key" (SSH) no longer crashes in Hyper-V over LAN mode.** The rotate-ssh-key command unconditionally dot-sourced Funcom's `vm-utilities.ps1` from the local Steam install path — which doesn't exist on a gaming PC managing a remote host. DST now detects the missing script and falls back to its own `ssh-keygen` + interactive password-based authorization, matching the bootstrap path used during initial LAN setup. The "Change VM password" command gets the same guard, falling back to `chpasswd` over SSH with the existing key.
+
 ## [12.20.1] - 2026-07-23
 
 ### Added

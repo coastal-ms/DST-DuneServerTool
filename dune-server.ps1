@@ -21,7 +21,7 @@ param(
 # Wraps the original battlegroup.ps1 menu and adds extra tools
 # ============================================================
 
-$script:ToolVersion = "12.20.1"
+$script:ToolVersion = "12.20.2"
 
 # Cold-boot readiness budgets (seconds). A fresh battlegroup's FIRST boot can
 # take 10-30 min: k3s + funcom-operators initialize, metrics-server restarts a
@@ -2219,8 +2219,33 @@ while ($true) {
     }
 
     if ($cmdName -eq "rotate-ssh-key") {
-        . "$bgSetupPath\vm-utilities.ps1"
-        Update-SshKey -Ip $ip | Out-Null
+        $vmUtilsPath = "$bgSetupPath\vm-utilities.ps1"
+        if (Test-Path -LiteralPath $vmUtilsPath) {
+            . $vmUtilsPath
+            Update-SshKey -Ip $ip | Out-Null
+        } else {
+            # LAN mode or missing local Funcom install — generate + authorize
+            # without Funcom's vm-utilities.ps1. Mirrors the bootstrap logic in
+            # HyperVLanInstall.ps1 Initialize-DuneLanGuest.
+            $keyPath = $sshKey
+            if (-not $keyPath) { $keyPath = Join-Path $env:LOCALAPPDATA 'DuneAwakeningServer\sshKey' }
+            $keyDir = Split-Path -Parent $keyPath
+            if ($keyDir -and -not (Test-Path $keyDir)) { New-Item -ItemType Directory -Force -Path $keyDir | Out-Null }
+            if (Test-Path -LiteralPath $keyPath)       { Remove-Item -LiteralPath $keyPath -Force }
+            if (Test-Path -LiteralPath "$keyPath.pub") { Remove-Item -LiteralPath "$keyPath.pub" -Force }
+            Write-Host "  Generating new SSH key at $keyPath ..." -ForegroundColor Yellow
+            & ssh-keygen -t ed25519 -f $keyPath -N '""' -q -C "dst@$($env:COMPUTERNAME)" 2>&1 | Out-Null
+            if (-not (Test-Path -LiteralPath $keyPath)) {
+                Write-Host "  FATAL: Could not generate SSH key." -ForegroundColor Red
+                Write-Host ""; continue
+            }
+            Write-Host "  Key generated." -ForegroundColor Green
+            $pub = (Get-Content -Raw -LiteralPath "$keyPath.pub").Trim()
+            Write-Host ""
+            Write-Host "  Authorizing on $sshUser@$ip ..." -ForegroundColor Yellow
+            Write-Host "  Enter the '$sshUser' password when prompted:" -ForegroundColor Cyan
+            & ssh -o StrictHostKeyChecking=no "$sshUser@$ip" "mkdir -p `$HOME/.ssh && chmod 700 `$HOME/.ssh && echo '$pub' >> `$HOME/.ssh/authorized_keys && chmod 600 `$HOME/.ssh/authorized_keys"
+        }
 
         # --- Guard: confirm the freshly-rotated key actually authenticates -----
         # Update-SshKey regenerates the local key, then authorizes it on the VM
@@ -2260,14 +2285,34 @@ while ($true) {
     }
 
     if ($cmdName -eq "change-password") {
-        . "$bgSetupPath\vm-utilities.ps1"
         $pw1Sec = Read-Host "Enter new password for 'dune'" -AsSecureString
         $pw2Sec = Read-Host "Confirm new password" -AsSecureString
         $pw1 = [System.Net.NetworkCredential]::new('', $pw1Sec).Password
         $pw2 = [System.Net.NetworkCredential]::new('', $pw2Sec).Password
         if ([string]::IsNullOrEmpty($pw1)) { Write-Warning "Password cannot be empty"; continue }
         if ($pw1 -ne $pw2) { Write-Warning "Passwords do not match"; continue }
-        if (Set-VmPassword -Ip $ip -NewPassword $pw1Sec) { Write-Host "Password changed successfully" -ForegroundColor Green }
+
+        $vmUtilsPath = "$bgSetupPath\vm-utilities.ps1"
+        if (Test-Path -LiteralPath $vmUtilsPath) {
+            . $vmUtilsPath
+            if (Set-VmPassword -Ip $ip -NewPassword $pw1Sec) { Write-Host "Password changed successfully" -ForegroundColor Green }
+        } else {
+            # LAN mode — change password over SSH with the existing key
+            $keyPath = Resolve-FreshSshKey -ConfiguredPath $sshKey
+            if (-not $keyPath) { $keyPath = $sshKey }
+            if (-not $keyPath -or -not (Test-Path -LiteralPath $keyPath)) {
+                Write-Host "  Cannot change password: no SSH key available. Generate or locate a key first." -ForegroundColor Red
+                continue
+            }
+            $payload = "${sshUser}:${pw1}`n"
+            $b64 = [Convert]::ToBase64String([Text.Encoding]::UTF8.GetBytes($payload))
+            $out = & ssh -o StrictHostKeyChecking=no -o BatchMode=yes -o IdentitiesOnly=yes -i "$keyPath" "$sshUser@$ip" "echo $b64 | base64 -d | sudo -n chpasswd" 2>&1
+            if ($LASTEXITCODE -eq 0) {
+                Write-Host "Password changed successfully" -ForegroundColor Green
+            } else {
+                Write-Host "  Failed to change password: $($out | Out-String)" -ForegroundColor Red
+            }
+        }
         continue
     }
 
