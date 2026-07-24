@@ -13,6 +13,10 @@ here cover everything those tags shipped.
 
 ## [Unreleased]
 
+### Fixed
+
+- **A stale core map (Overmap / Hagga) could stay unavailable for HOURS after a hard VM crash, not just through one 120s drain.** Field-confirmed 2026-07-24: after an unclean reboot, both core maps sat in game phase `PreShutdown` (UI Ready=false) for ~15 hours until a manual battlegroup restart recreated the pods. Root cause was two related short-circuits in the boot-only stuck-pod force-clear pass: (1) it skipped a whole serverset outright whenever `readyReplicas >= replicas`, and (2) even when it inspected pods, it skipped any pod Kubernetes reported `Ready`, before ever checking phase. Neither shortcut holds for this crash class — Kubernetes pod/serverset readiness can stay satisfied for the entire game-level drain, since the "Stopping"/`PreShutdown` state lives in the Funcom server-operator, not in k8s. The boot pass now inspects every up-supposed-to-be serverset's pods directly and force-clears one whose game phase is `Stopping` **or** `PreShutdown`, or that carries a `deletionTimestamp`, regardless of what Kubernetes reports for readiness — still boot-only, still leaves cleanly-stopped maps (replicas=0) and genuinely healthy/starting pods untouched, and never runs during cron/manual (live play) paths. The on-demand/warm map partition pass now recognizes `PreShutdown` alongside `Stopping` too, for consistency.
+
 ## [12.20.0] - 2026-07-23
 
 ### Added
