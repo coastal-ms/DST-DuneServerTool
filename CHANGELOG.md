@@ -13,9 +13,20 @@ here cover everything those tags shipped.
 
 ## [Unreleased]
 
+## [12.20.1] - 2026-07-23
+
+### Added
+
+- **Pinned/standalone DuneShell shortcuts now recover from a stale saved backend URL.** If the shortcut's saved `last-url.txt` no longer points at a reachable DuneServer backend, the desktop shell now self-starts the sibling `DuneServer.exe` instead of failing to connect, and reattaches the newly-elevated backend to the DuneShell window that triggered it rather than closing/replacing that window.
+
+### Changed
+
+- **Pods page now identifies canonical terminal dump/import pods as historical one-shot backup/restore operations**, instead of reading their terminal state as a failure — genuine failures are still shown and colored as failures, unchanged. Cleanup guidance for these pods now points to the Database page's retention settings.
+- Supporter added to list.
+
 ### Fixed
 
-- **Stale core map (Overmap / Hagga) pods stuck in game phase `PreShutdown` were invisible to boot recovery.** Field-observed 2026-07-24: after a hard host crash + VM reboot, 15-hour-old pre-crash core-map pods (pod age, not time spent stuck) remained in game phase `PreShutdown` (UI Ready=false) throughout the boot recovery pass and through a subsequent 90-second battlegroup-stop timeout; a manual battlegroup restart eventually recreated them. The boot log for that run showed the recovery pass executing without taking any core-map action. Kubernetes readiness at the moment of failure wasn't directly captured, but code inspection found the boot-only stuck-pod force-clear pass had two gaps that each independently explain the miss: (1) it skipped a whole serverset outright whenever `readyReplicas >= replicas`, and (2) even when it inspected pods, it skipped any pod Kubernetes reported `Ready`, before ever checking phase — and the phase check itself only matched `Stopping`, not `PreShutdown`. A mocked-kubectl reproduction confirmed that a pod reporting Ready=true with game phase PreShutdown hits both gaps and is left untouched by the old code. The boot pass now inspects every up-supposed-to-be serverset's pods directly and force-clears one whose game phase is `Stopping` **or** `PreShutdown`, or that carries a `deletionTimestamp`, regardless of what Kubernetes reports for readiness — still boot-only, still leaves cleanly-stopped maps (replicas=0) and genuinely healthy/starting pods untouched, and never runs during cron/manual (live play) paths. The on-demand/warm map partition pass now recognizes `PreShutdown` alongside `Stopping` too, for consistency.
+- **Boot recovery now recognizes core-map (Overmap / Hagga) pods stuck in game phase `PreShutdown`, not just `Stopping`.** The boot-only stuck-pod force-clear pass previously skipped a whole serverset whenever Kubernetes reported `readyReplicas >= replicas`, and separately skipped any pod Kubernetes reported `Ready` before ever checking its game phase — so a pod that Kubernetes considered "Ready" but whose game phase was actually `PreShutdown` was left untouched. Field-observed: a pre-crash core-map pod (roughly 15 hours old) remained stuck in `PreShutdown` through a boot recovery pass and a subsequent 90-second stop timeout, with the boot log showing no core-map action taken; a manual restart eventually recreated it. The boot pass now inspects every eligible serverset's pods directly and force-clears any whose game phase is `Stopping` **or** `PreShutdown` (or that carries a `deletionTimestamp`), regardless of Kubernetes-reported readiness — still boot-only, still leaves cleanly-stopped and genuinely healthy/starting pods untouched. The on-demand/warm-map partition recovery path now recognizes `PreShutdown` alongside `Stopping` too, for consistency. (The specific Kubernetes-Ready-plus-PreShutdown combination was confirmed via code inspection and a mocked reproduction, not captured live.)
 
 ## [12.20.0] - 2026-07-23
 
