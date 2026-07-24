@@ -21,7 +21,7 @@ param(
 # Wraps the original battlegroup.ps1 menu and adds extra tools
 # ============================================================
 
-$script:ToolVersion = "12.20.2"
+$script:ToolVersion = "12.20.3"
 
 # Cold-boot readiness budgets (seconds). A fresh battlegroup's FIRST boot can
 # take 10-30 min: k3s + funcom-operators initialize, metrics-server restarts a
@@ -2229,9 +2229,16 @@ while ($true) {
             # HyperVLanInstall.ps1 Initialize-DuneLanGuest.
             $keyPath = $sshKey
             if (-not $keyPath) { $keyPath = Join-Path $env:LOCALAPPDATA 'DuneAwakeningServer\sshKey' }
+            # Guard: if $keyPath is a directory (e.g. config stored the parent
+            # folder instead of the file), append the expected filename.
+            if ((Test-Path -LiteralPath $keyPath) -and (Get-Item -LiteralPath $keyPath).PSIsContainer) {
+                $keyPath = Join-Path $keyPath 'sshKey'
+            }
             $keyDir = Split-Path -Parent $keyPath
             if ($keyDir -and -not (Test-Path $keyDir)) { New-Item -ItemType Directory -Force -Path $keyDir | Out-Null }
-            if (Test-Path -LiteralPath $keyPath)       { Remove-Item -LiteralPath $keyPath -Force }
+            if ((Test-Path -LiteralPath $keyPath) -and -not (Get-Item -LiteralPath $keyPath).PSIsContainer) {
+                Remove-Item -LiteralPath $keyPath -Force
+            }
             if (Test-Path -LiteralPath "$keyPath.pub") { Remove-Item -LiteralPath "$keyPath.pub" -Force }
             Write-Host "  Generating new SSH key at $keyPath ..." -ForegroundColor Yellow
             & ssh-keygen -t ed25519 -f $keyPath -N '""' -q -C "dst@$($env:COMPUTERNAME)" 2>&1 | Out-Null
@@ -2240,11 +2247,15 @@ while ($true) {
                 Write-Host ""; continue
             }
             Write-Host "  Key generated." -ForegroundColor Green
+            # Base64-encode the public key to avoid shell-quoting issues with
+            # the key content (spaces, +, = chars) — same approach as
+            # Initialize-DuneLanGuest.
             $pub = (Get-Content -Raw -LiteralPath "$keyPath.pub").Trim()
+            $b64Pub = [Convert]::ToBase64String([Text.Encoding]::UTF8.GetBytes("$pub`n"))
             Write-Host ""
             Write-Host "  Authorizing on $sshUser@$ip ..." -ForegroundColor Yellow
             Write-Host "  Enter the '$sshUser' password when prompted:" -ForegroundColor Cyan
-            & ssh -o StrictHostKeyChecking=no "$sshUser@$ip" "mkdir -p `$HOME/.ssh && chmod 700 `$HOME/.ssh && echo '$pub' >> `$HOME/.ssh/authorized_keys && chmod 600 `$HOME/.ssh/authorized_keys"
+            & ssh -o StrictHostKeyChecking=no "$sshUser@$ip" "mkdir -p `$HOME/.ssh && chmod 700 `$HOME/.ssh && echo $b64Pub | base64 -d >> `$HOME/.ssh/authorized_keys && chmod 600 `$HOME/.ssh/authorized_keys"
         }
 
         # --- Guard: confirm the freshly-rotated key actually authenticates -----
