@@ -22,20 +22,21 @@
 #   A BOOT-only pass here force-clears such a stale pod so the operator
 #   recreates it immediately. Core maps keep a legitimate partition pin, so
 #   that pass evicts the POD only and never touches partitions (that stays the
-#   on-demand pass's job). CONFIRMED IN THE FIELD (2026-07-24): after a hard
-#   host crash + VM reboot, 15-hour-old pre-crash core-map pods (pod AGE, i.e.
-#   time since the pod was originally created -- NOT how long it sat stuck)
+#   on-demand pass's job). FIELD-OBSERVED (2026-07-24): after a hard host
+#   crash + VM reboot, 15-hour-old pre-crash core-map pods (pod AGE, i.e. time
+#   since the pod was originally created -- NOT how long it sat stuck)
 #   remained in game phase "PreShutdown" throughout the boot recovery pass and
-#   through a subsequent 90s battlegroup-stop timeout, while Kubernetes still
-#   reported the serverset/pod Ready (readyReplicas satisfied) -- the
-#   game-level drain lags/decouples from k8s-level pod readiness. The boot log
-#   for that run showed the pass executing without taking any core-map action,
-#   consistent with the source only matching game phase "Stopping" and having
-#   readyReplicas/Ready early-skips that never reached the phase check. A
-#   manual battlegroup restart eventually recreated the pods. The boot pass
-#   therefore inspects every candidate pod's game phase directly instead of
-#   trusting a serverset-level or pod-level Ready shortcut to mean "nothing to
-#   do".
+#   through a subsequent 90s battlegroup-stop timeout; a manual battlegroup
+#   restart eventually recreated them. The boot log for that run showed the
+#   pass executing without taking any core-map action. Kubernetes readiness at
+#   the moment of failure was not directly captured, but code inspection found
+#   the pass had a readyReplicas/pod-Ready short-circuit and only matched game
+#   phase "Stopping" (not "PreShutdown") -- either gap alone explains the
+#   miss, and a mocked-kubectl reproduction with pod Ready=true + phase
+#   PreShutdown confirmed that exact combination hits both gaps at once. The
+#   boot pass therefore inspects every candidate pod's game phase directly
+#   instead of trusting a serverset-level or pod-level Ready shortcut to mean
+#   "nothing to do".
 #
 # WHAT IT DOES
 #   1. Writes the heal script to /usr/local/bin/dune-clear-partitions.sh. It has
@@ -132,22 +133,15 @@ fi
 
 # ---------------------------------------------------------------------------
 # BOOT-ONLY: stuck-server pod force-clear (core maps Overmap/Hagga + any map
-# that is supposed to be up). After a hard host crash + VM reboot, the
-# pre-crash server pod comes back as a stale server that the Funcom
-# server-operator DRAINS through terminationGracePeriodSeconds (120s on the
-# serverset) before it recreates a fresh pod -- the game phase shows "Stopping"
-# or "PreShutdown" (what players see as "preshutdown"), or the k8s pod is stuck
-# Terminating (deletionTimestamp set because the node was NotReady). Either way
-# the map is unavailable for the whole grace window. Field-confirmed
-# (2026-07-24): after a hard crash + reboot, 15-hour-old pre-crash core-map
-# pods (pod AGE, not stuck duration) remained in game phase "PreShutdown"
-# throughout the boot recovery pass and through a subsequent 90s
-# battlegroup-stop timeout, while Kubernetes-level pod/serverset readiness
-# stayed satisfied the whole time -- the drain is a Funcom-operator-level
-# state, not a k8s-level one. A manual battlegroup restart eventually
-# recreated the pods. This does NOT overlap the partition pass below: core
-# maps keep a legitimate partition pin that must never be cleared -- the fix
-# here is to evict the STALE POD, not touch partitions.
+# that is supposed to be up). See "WHY THIS EXISTS" above for the incident
+# this addresses. Summary: the pre-crash server pod comes back as a stale
+# server the Funcom server-operator DRAINS through terminationGracePeriodSeconds
+# (120s on the serverset) before recreating a fresh pod -- game phase
+# "Stopping" or "PreShutdown" (what players see as "preshutdown"), or the k8s
+# pod stuck Terminating (deletionTimestamp set because the node was
+# NotReady). This does NOT overlap the partition pass below: core maps keep a
+# legitimate partition pin that must never be cleared -- the fix here is to
+# evict the STALE POD, not touch partitions.
 #
 # At BOOT no players can be online, so force-deleting a demonstrably-stuck pod
 # (--force --grace-period=0) is safe and lets the operator recreate immediately,
@@ -158,13 +152,14 @@ fi
 # drain we must not kill.
 #
 # IMPORTANT: unlike the partition pass below, this pass does NOT treat k8s
-# Ready (pod- or serverset-level) as proof the pod is healthy. A stale
-# pre-crash pod can be reported Ready by Kubernetes throughout its drain while
-# the GAME phase says "Stopping"/"PreShutdown" -- so an early skip on
-# readyReplicas>=replicas, or on the individual pod's Ready condition, would
-# hide exactly the case this pass exists to catch. Every candidate pod's game
-# phase / deletionTimestamp is inspected directly; Ready is only consulted
-# afterward, purely for a "not stuck, still starting" log line.
+# Ready (pod- or serverset-level) as proof the pod is healthy. A pod's k8s
+# Ready condition and its GAME phase are reported by two different layers
+# (kubelet vs. the Funcom server-operator) and can disagree -- so an early
+# skip on readyReplicas>=replicas, or on the individual pod's Ready condition,
+# could hide a pod whose game phase is "Stopping"/"PreShutdown". Every
+# candidate pod's game phase / deletionTimestamp is inspected directly; Ready
+# is only consulted afterward, purely for a "not stuck, still starting" log
+# line.
 force_clear_stuck_pods() {
   $KUBE get serverset --all-namespaces --no-headers 2>/dev/null | awk '{print $1"\t"$2}' \
     | while IFS="$(printf '\t')" read -r ns ss; do
