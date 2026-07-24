@@ -22,6 +22,14 @@ internal static class Program
     /// Hyper-V elevation. This shell only renders the portal in a standalone
     /// WebView2 window with a slim native menu; external links and console
     /// commands continue to open outside the window.
+    ///
+    /// A launch with no arguments (the common case: DuneServer.ps1 never
+    /// passes --url) validates last-url.txt is actually reachable before
+    /// trusting it, and starts the sibling DuneServer.exe itself if no backend
+    /// is running at all — see MainForm.ResolveUrlAsync. That makes a
+    /// taskbar-pinned DuneShell.exe (Windows pins the running window's own
+    /// exe, not the DuneServer.exe shortcut that launched it) safe to reopen
+    /// even after the backend has fully shut down.
     /// </summary>
     [STAThread]
     private static void Main(string[] args)
