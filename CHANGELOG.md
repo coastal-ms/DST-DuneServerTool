@@ -13,6 +13,21 @@ here cover everything those tags shipped.
 
 ## [Unreleased]
 
+## [12.20.1] - 2026-07-23
+
+### Added
+
+- **Pinned/standalone DuneShell shortcuts now recover from a stale saved backend URL.** If the shortcut's saved `last-url.txt` no longer points at a reachable DuneServer backend, the desktop shell now self-starts the sibling `DuneServer.exe` instead of failing to connect, and reattaches the newly-elevated backend to the DuneShell window that triggered it rather than closing/replacing that window.
+
+### Changed
+
+- **Pods page now identifies canonical terminal dump/import pods as historical one-shot backup/restore operations**, instead of reading their terminal state as a failure — genuine failures are still shown and colored as failures, unchanged. Cleanup guidance for these pods now points to the Database page's retention settings.
+- Supporter added to list.
+
+### Fixed
+
+- **Boot recovery now recognizes core-map (Overmap / Hagga) pods stuck in game phase `PreShutdown`, not just `Stopping`.** The boot-only stuck-pod force-clear pass previously skipped a whole serverset whenever Kubernetes reported `readyReplicas >= replicas`, and separately skipped any pod Kubernetes reported `Ready` before ever checking its game phase — so a pod that Kubernetes considered "Ready" but whose game phase was actually `PreShutdown` was left untouched. Field-observed: a pre-crash core-map pod (roughly 15 hours old) remained stuck in `PreShutdown` through a boot recovery pass and a subsequent 90-second stop timeout, with the boot log showing no core-map action taken; a manual restart eventually recreated it. The boot pass now inspects every eligible serverset's pods directly and force-clears any whose game phase is `Stopping` **or** `PreShutdown` (or that carries a `deletionTimestamp`), regardless of Kubernetes-reported readiness — still boot-only, still leaves cleanly-stopped and genuinely healthy/starting pods untouched. The on-demand/warm-map partition recovery path now recognizes `PreShutdown` alongside `Stopping` too, for consistency. (The specific Kubernetes-Ready-plus-PreShutdown combination was confirmed via code inspection and a mocked reproduction, not captured live.)
+
 ## [12.20.0] - 2026-07-23
 
 ### Added

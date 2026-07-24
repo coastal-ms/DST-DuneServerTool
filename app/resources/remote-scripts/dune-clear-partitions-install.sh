@@ -17,11 +17,26 @@
 #   The SAME crash class also strands the CORE maps (Overmap / Survival_1 Hagga):
 #   their pre-crash pod comes back as a stale server the operator DRAINS through
 #   terminationGracePeriodSeconds (120s) before recreating it -- game phase
-#   "Stopping" (players see "preshutdown"), or the k8s pod stuck Terminating --
-#   so the map is unavailable for the whole grace window. A BOOT-only pass here
-#   force-clears such a stale pod so the operator recreates it immediately. Core
-#   maps keep a legitimate partition pin, so that pass evicts the POD only and
-#   never touches partitions (that stays the on-demand pass's job).
+#   "Stopping" or "PreShutdown" (players see "preshutdown"), or the k8s pod
+#   stuck Terminating -- so the map is unavailable for the whole grace window.
+#   A BOOT-only pass here force-clears such a stale pod so the operator
+#   recreates it immediately. Core maps keep a legitimate partition pin, so
+#   that pass evicts the POD only and never touches partitions (that stays the
+#   on-demand pass's job). FIELD-OBSERVED (2026-07-24): after a hard host
+#   crash + VM reboot, 15-hour-old pre-crash core-map pods (pod AGE, i.e. time
+#   since the pod was originally created -- NOT how long it sat stuck)
+#   remained in game phase "PreShutdown" throughout the boot recovery pass and
+#   through a subsequent 90s battlegroup-stop timeout; a manual battlegroup
+#   restart eventually recreated them. The boot log for that run showed the
+#   pass executing without taking any core-map action. Kubernetes readiness at
+#   the moment of failure was not directly captured, but code inspection found
+#   the pass had a readyReplicas/pod-Ready short-circuit and only matched game
+#   phase "Stopping" (not "PreShutdown") -- either gap alone explains the
+#   miss, and a mocked-kubectl reproduction with pod Ready=true + phase
+#   PreShutdown confirmed that exact combination hits both gaps at once. The
+#   boot pass therefore inspects every candidate pod's game phase directly
+#   instead of trusting a serverset-level or pod-level Ready shortcut to mean
+#   "nothing to do".
 #
 # WHAT IT DOES
 #   1. Writes the heal script to /usr/local/bin/dune-clear-partitions.sh. It has
@@ -118,22 +133,33 @@ fi
 
 # ---------------------------------------------------------------------------
 # BOOT-ONLY: stuck-server pod force-clear (core maps Overmap/Hagga + any map
-# that is supposed to be up). After a hard host crash + VM reboot, the
-# pre-crash server pod comes back as a stale server that the Funcom
-# server-operator DRAINS through terminationGracePeriodSeconds (120s on the
-# serverset) before it recreates a fresh pod -- the game phase shows "Stopping"
-# (what players see as "preshutdown"), or the k8s pod is stuck Terminating
-# (deletionTimestamp set because the node was NotReady). Either way the map is
-# unavailable for the whole grace window. This does NOT overlap the partition
-# pass below: core maps keep a legitimate partition pin that must never be
-# cleared -- the fix here is to evict the STALE POD, not touch partitions.
+# that is supposed to be up). See "WHY THIS EXISTS" above for the incident
+# this addresses. Summary: the pre-crash server pod comes back as a stale
+# server the Funcom server-operator DRAINS through terminationGracePeriodSeconds
+# (120s on the serverset) before recreating a fresh pod -- game phase
+# "Stopping" or "PreShutdown" (what players see as "preshutdown"), or the k8s
+# pod stuck Terminating (deletionTimestamp set because the node was
+# NotReady). This does NOT overlap the partition pass below: core maps keep a
+# legitimate partition pin that must never be cleared -- the fix here is to
+# evict the STALE POD, not touch partitions.
 #
 # At BOOT no players can be online, so force-deleting a demonstrably-stuck pod
 # (--force --grace-period=0) is safe and lets the operator recreate immediately,
 # skipping the drain. A normally-starting pod (Initializing / Starting, no
-# deletion mark) is LEFT ALONE so a legitimate world-load is never interrupted.
-# Boot mode ONLY -- never cron/manual, because during live play a "Stopping" pod
-# may be a legitimate scheduled-restart drain we must not kill.
+# deletion mark, no drain phase) is LEFT ALONE so a legitimate world-load is
+# never interrupted. Boot mode ONLY -- never cron/manual, because during live
+# play a "Stopping"/"PreShutdown" pod may be a legitimate scheduled-restart
+# drain we must not kill.
+#
+# IMPORTANT: unlike the partition pass below, this pass does NOT treat k8s
+# Ready (pod- or serverset-level) as proof the pod is healthy. A pod's k8s
+# Ready condition and its GAME phase are reported by two different layers
+# (kubelet vs. the Funcom server-operator) and can disagree -- so an early
+# skip on readyReplicas>=replicas, or on the individual pod's Ready condition,
+# could hide a pod whose game phase is "Stopping"/"PreShutdown". Every
+# candidate pod's game phase / deletionTimestamp is inspected directly; Ready
+# is only consulted afterward, purely for a "not stuck, still starting" log
+# line.
 force_clear_stuck_pods() {
   $KUBE get serverset --all-namespaces --no-headers 2>/dev/null | awk '{print $1"\t"$2}' \
     | while IFS="$(printf '\t')" read -r ns ss; do
@@ -144,17 +170,10 @@ force_clear_stuck_pods() {
     rep=$($KUBE -n "$ns" get serverset "$ss" -o jsonpath='{.spec.replicas}' 2>/dev/null)
     case "$rep" in ''|*[!0-9]*) continue ;; esac
     [ "$rep" -ge 1 ] || continue
-    rdyN=$($KUBE -n "$ns" get serverset "$ss" -o jsonpath='{.status.readyReplicas}' 2>/dev/null)
-    case "$rdyN" in ''|*[!0-9]*) rdyN=0 ;; esac
-    # Fully ready -> healthy, nothing to do.
-    [ "$rdyN" -ge "$rep" ] && continue
 
     pods=$($KUBE -n "$ns" get pods --no-headers -o custom-columns=':metadata.name' 2>/dev/null | grep "^${ss}-pod-" || true)
     for p in $pods; do
       [ -z "$p" ] && continue
-      # Never disturb a live/Ready pod (belt-and-braces; no players at boot).
-      rdy=$($KUBE -n "$ns" get pod "$p" -o jsonpath='{.status.conditions[?(@.type=="Ready")].status}' 2>/dev/null)
-      [ "$rdy" = "True" ] && continue
       del=$($KUBE -n "$ns" get pod "$p" -o jsonpath='{.metadata.deletionTimestamp}' 2>/dev/null)
       idx="${p##*-pod-}"
       gphase=""
@@ -163,17 +182,24 @@ force_clear_stuck_pods() {
         *) gphase=$($KUBE -n "$ns" get serverset "$ss" -o jsonpath="{.status.pods[?(@.ordinalIndex==$idx)].phase}" 2>/dev/null) ;;
       esac
 
-      # Only force a DEMONSTRABLY-stuck pod: stuck Terminating (deletionTimestamp)
-      # or draining (game phase "Stopping"). Initializing / Starting / not-yet-
-      # Ready-but-healthy pods are left to load normally.
-      if [ -n "$del" ] || [ "$gphase" = "Stopping" ]; then
+      # Force a DEMONSTRABLY-stuck pod: stuck Terminating (deletionTimestamp)
+      # or draining (game phase "Stopping"/"PreShutdown") -- checked BEFORE any
+      # Ready lookup, since k8s Ready can stay true throughout the drain.
+      if [ -n "$del" ] || [ "$gphase" = "Stopping" ] || [ "$gphase" = "PreShutdown" ]; then
         reason="phase=${gphase:-?}${del:+,terminating}"
         if $KUBE -n "$ns" delete pod "$p" --force --grace-period=0 >>"$LOG" 2>&1; then
           log "$ns/$ss: force-cleared stuck pod $p ($reason) -> operator will recreate a fresh pod (skipped drain)"
         else
           log "$ns/$ss: ERROR force-deleting stuck pod $p ($reason)"
         fi
-      else
+        continue
+      fi
+
+      # Not demonstrably stale. Only now does Ready matter: a genuinely Ready
+      # pod is healthy (nothing to do); a not-yet-Ready pod is likely still
+      # starting and is left to load normally.
+      rdy=$($KUBE -n "$ns" get pod "$p" -o jsonpath='{.status.conditions[?(@.type=="Ready")].status}' 2>/dev/null)
+      if [ "$rdy" != "True" ]; then
         log "$ns/$ss: pod $p not Ready (phase=${gphase:-?}) but not stuck (likely starting) -- leaving to load"
       fi
     done
@@ -257,7 +283,7 @@ echo "$matches" | while IFS="$(printf '\t')" read -r ns name; do
             ''|*[!0-9]*) : ;;
             *) gphase=$($KUBE -n "$ns" get serverset "$ss_name" -o jsonpath="{.status.pods[?(@.ordinalIndex==$idx)].phase}" 2>/dev/null) ;;
           esac
-          if [ -n "$del" ] || [ "$gphase" = "Stopping" ]; then
+          if [ -n "$del" ] || [ "$gphase" = "Stopping" ] || [ "$gphase" = "PreShutdown" ]; then
             any_stuck=1
             draining_pods="$draining_pods $p"
           fi
@@ -277,9 +303,10 @@ echo "$matches" | while IFS="$(printf '\t')" read -r ns name; do
           rm -f "$(marker_for "$name")" 2>/dev/null
           cleared=0
           recover_pods="$hard_stuck_pods"
-          # A deletionTimestamp / Stopping phase is normal during live restarts.
-          # Only boot mode may treat a lingering drain as stale; cron/manual
-          # preserve graceful shutdown and only clear hard waiting failures.
+          # A deletionTimestamp / Stopping / PreShutdown phase is normal during
+          # live restarts. Only boot mode may treat a lingering drain as
+          # stale; cron/manual preserve graceful shutdown and only clear hard
+          # waiting failures.
           if [ "$MODE" = "boot" ]; then recover_pods="$recover_pods $draining_pods"; fi
           seen_recover_pods=""
           for p in $recover_pods; do
