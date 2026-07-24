@@ -718,6 +718,14 @@ internal sealed class MainForm : Form
     /// for the fresh, reachable URL it writes. We never attempt to elevate or
     /// manage it ourselves, and this is only ever called once per ResolveUrlAsync
     /// (itself called once per window), so a slow/failed start can't loop.
+    ///
+    /// Passes --reattach so DuneServer.ps1 knows a DuneShell window (us) is
+    /// already up and polling for the URL it's about to write: without that
+    /// flag its startup unconditionally kills every running DuneShell process
+    /// before opening a fresh one (to clean up stale windows left over by an
+    /// in-app update), which would tear down the very window that asked it to
+    /// start. --reattach tells it to adopt us for its lifecycle watcher instead
+    /// of killing/replacing us.
     /// </summary>
     private async Task<string?> TryStartBackendAsync(string file)
     {
@@ -735,6 +743,7 @@ internal sealed class MainForm : Form
             Process.Start(new ProcessStartInfo
             {
                 FileName = serverExe,
+                Arguments = "--reattach",
                 UseShellExecute = true,
                 WorkingDirectory = AppContext.BaseDirectory
             });
