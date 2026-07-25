@@ -694,7 +694,7 @@ const ACTIONS: ActionDef[] = [
 
   // ----- Items -----
   { id: 'give-item',      group: 'Items', label: 'Give Item', icon: 'PackagePlus', custom: 'give-item',
-    rowNote: 'Works online or offline — delivered instantly when online, on next login when offline',
+    rowNote: 'Works online or offline — delivered instantly when online, on next login when offline. Grade above 0 requires the player to be offline',
     run: () => Promise.resolve({ message: '' }) },
   { id: 'give-vehicle-kit', group: 'Items', label: 'Give Vehicle Kit', icon: 'Truck', custom: 'vehicle-kit',
     rowNote: 'Parts + fuel cell + welding torch Mk5 — works online or offline, needs inventory space',
@@ -963,6 +963,11 @@ function ActionRow({ def, player, busy, stats, open, danger, onToggle, runAction
             <GiveItemForm busy={busy} submitLabel={def.label}
               onSubmit={(tpl, qty, qual, overflow) => runAction(def, () => giveItem(player.id, tpl, qty, qual, overflow))}
               onSubmitTierSet={(tpl, qty, overflow) => runAction(def, async () => {
+                // Grades above 0 are SQL-only writes the game overwrites from RAM while a
+                // live session exists — refuse up front so the set isn't partially delivered.
+                if (['online', 'loggingout'].includes((player.online_status || '').toLowerCase())) {
+                  throw new Error(`Changing the Grade requires the player to be offline — ask ${player.name} to log out, then retry.`)
+                }
                 for (let q = 0; q <= 5; q++) await giveItem(player.id, tpl, qty, q, overflow)
                 return { message: `Gave ${tpl} Mk1–Mk6 (x${qty} each) to ${player.name}.` }
               })} />
@@ -1408,10 +1413,14 @@ function GiveItemForm({ busy, submitLabel, onSubmit, onSubmitTierSet }: {
             className="w-full px-3 py-2 rounded-lg bg-surface-2 border border-border text-text text-sm focus:outline-none focus:ring-2 focus:ring-ibad focus:border-ibad/50" />
         </div>
         <div>
-          <label className="block text-[11px] uppercase tracking-wider text-text-dim mb-1">Tier — Mk1-Mk6 (0-5)</label>
-          <input type="number" min={0} max={5} value={giveQual} disabled={busy}
+          <label className="block text-[11px] uppercase tracking-wider text-text-dim mb-1">Grade</label>
+          <select value={giveQual} disabled={busy}
             onChange={e => setGiveQual(e.target.value)}
-            className="w-full px-3 py-2 rounded-lg bg-surface-2 border border-border text-text text-sm focus:outline-none focus:ring-2 focus:ring-ibad focus:border-ibad/50" />
+            className="w-full px-3 py-2 rounded-lg bg-surface-2 border border-border text-text text-sm focus:outline-none focus:ring-2 focus:ring-ibad focus:border-ibad/50">
+            {[0, 1, 2, 3, 4, 5].map(g => (
+              <option key={g} value={g}>{g === 0 ? '0 — Mk1 (default)' : `${g} — Mk${g + 1}`}</option>
+            ))}
+          </select>
         </div>
       </div>
       <OverflowToggle checked={overflow} disabled={busy} onChange={setOverflow} />

@@ -114,9 +114,9 @@ Register-DuneRoute -Method POST -Path '/api/gameplay/players/give-solari' -Handl
 
 # POST /api/gameplay/players/give-item  { pawn_id, template, qty, quality, fls_id? }
 # v12.0.3 — Auto-routes between online (RMQ ServerCommand, instant) and offline
-# (SQL backpack insert, requires relog for online) based on player state.
+# (SQL backpack insert) based on player state.
 # - Online + quality<=0     → RMQ live (instant in-game)
-# - Online + quality>0      → SQL (preserves quality; player must relog)
+# - Online + quality>0      → ERROR — a Grade write is SQL-only and requires the player offline
 # - Offline                 → SQL (will appear on next login)
 # Response includes 'path' = 'rmq' | 'sql'. Use /give-item-live for explicit RMQ override.
 Register-DuneRoute -Method POST -Path '/api/gameplay/players/give-item' -Handler {
@@ -149,14 +149,15 @@ Register-DuneRoute -Method POST -Path '/api/gameplay/players/give-item' -Handler
                 if ($r.ok -and -not $r.path) { $r['path'] = 'rmq' }
                 return $r
             }
-            # Otherwise SQL (offline, OR online with custom quality)
-            $r = Invoke-DunePlayerGiveItem -Ip $ip -PawnId $pawn -Template $tmpl -Qty $qty -Quality $qual
-            if ($r.ok) {
-                $r['path'] = 'sql'
-                if ($isOnline) {
-                    $r['message'] = "$($r.message) Player is online — they must relog to see the item (quality $qual cannot be delivered live)."
-                }
+            # A Grade (quality) write only goes through SQL, and the game overwrites
+            # it from RAM while a live session exists — refuse instead of writing a
+            # value that silently won't stick.
+            if ($isOnline -and $qual -gt 0) {
+                return @{ ok = $false; error = 'Changing the Grade requires the player to be offline. Ask the player to log out, then retry.' }
             }
+            # Offline → SQL (appears on next login)
+            $r = Invoke-DunePlayerGiveItem -Ip $ip -PawnId $pawn -Template $tmpl -Qty $qty -Quality $qual
+            if ($r.ok) { $r['path'] = 'sql' }
             return $r
         }
     } catch {
