@@ -18,30 +18,18 @@ Landsraad, market bot). The repo `coastal-ms/DST-DuneServerTool` is public and
 forkable. Day-to-day work is: reproduce a reported bug, fix it across the
 PS backend + webui, build the installer, ship a release.
 
-## Work orchestration — planner / builder default
+## Work orchestration — do the work in-session
 
-Apply this workflow in **every session** for any multi-step or multi-file task,
-unless the maintainer explicitly chooses another approach:
+Apply this in **every session**, unless the maintainer explicitly asks otherwise:
 
-- **Planner / thinker stays in the coordinating session.** Decompose the goal
-  into independent, ordered tasks in the session `todos` table and record
-  dependencies in `todo_deps`. Make design decisions, review executor results,
-  reconcile conflicts, retry failures, and dispatch later waves only when their
-  dependencies are complete. The planner does **not** write the implementation.
-- **Builders / executors do the implementation.** Delegate each independent
-  chunk to an isolated project session/worktree or a background sub-agent. Run
-  independent chunks in parallel; keep dependent chunks blocked until their
-  prerequisites finish. Builders must receive complete task context and own
-  their assigned scope through implementation and validation.
-- **Default models:** planner = GPT-5.6 Sol with long context and high reasoning;
-  builder = Claude Sonnet 5. These are defaults, not locks. The maintainer may
-  change either role's model at any time.
-- **Model-change gate:** whenever either role's model changes, confirm the
-  resulting planner model, builder model, and reasoning effort through a
-  clickable `ask_user` confirmation before proceeding. Not needed on every
-  sync — only when a model actually changes.
-- **Trivial exception:** a genuinely straightforward, single-file task with no
-  branching work may be completed directly without the split.
+- **Do the work in the session you are in.** Decompose the goal into the session
+  `todos` table (and `todo_deps` for ordering) when that helps you keep track,
+  but write the implementation yourself. There is no planner/builder split and
+  no separate "executor" role — do not narrate one.
+- **Never spawn child sessions, worktrees, or sub-agents on your own
+  initiative.** The maintainer will ask when he wants one. When he does, it
+  inherits the current session's active model; never select a different model
+  for it.
 
 ## Repository layout
 
