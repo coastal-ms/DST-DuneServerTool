@@ -969,7 +969,7 @@ function ActionRow({ def, player, busy, stats, open, danger, onToggle, runAction
                   throw new Error(`Changing the Grade requires the player to be offline — ask ${player.name} to log out, then retry.`)
                 }
                 for (let q = 0; q <= 5; q++) await giveItem(player.id, tpl, qty, q, overflow)
-                return { message: `Gave ${tpl} Grade 1–6 (x${qty} each) to ${player.name}.` }
+                return { message: `Gave ${tpl} Grade 0–5 (x${qty} each) to ${player.name}.` }
               })} />
           ) : def.custom === 'grant-reward' ? (
             <GrantRewardForm busy={busy} submitLabel={def.label}
@@ -1418,7 +1418,7 @@ function GiveItemForm({ busy, submitLabel, onSubmit, onSubmitTierSet }: {
             onChange={e => setGiveQual(e.target.value)}
             className="w-full px-3 py-2 rounded-lg bg-surface-2 border border-border text-text text-sm focus:outline-none focus:ring-2 focus:ring-ibad focus:border-ibad/50">
             {[0, 1, 2, 3, 4, 5].map(g => (
-              <option key={g} value={g}>{g === 0 ? 'Grade 1 (default)' : `Grade ${g + 1}`}</option>
+              <option key={g} value={g}>{g === 0 ? 'Grade 0 (default)' : `Grade ${g}`}</option>
             ))}
           </select>
         </div>
@@ -1430,9 +1430,9 @@ function GiveItemForm({ busy, submitLabel, onSubmit, onSubmitTierSet }: {
       </button>
       {gradeable && (
         <button className="btn-secondary w-full" disabled={busy || !isValidTemplateId(giveTpl)}
-          title="Gives one of this item at every grade, Grade 1 through Grade 6"
+          title="Gives one of this item at every grade, Grade 0 through Grade 5"
           onClick={() => onSubmitTierSet(giveTpl.trim(), Number(giveQty) || 1, overflow)}>
-          {busy ? <Icon name="Loader2" size={13} className="animate-spin" /> : <Icon name="Layers" size={13} />} Give all grades (1-6)
+          {busy ? <Icon name="Loader2" size={13} className="animate-spin" /> : <Icon name="Layers" size={13} />} Give all grades (0-5)
         </button>
       )}
     </div>

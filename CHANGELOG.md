@@ -15,7 +15,7 @@ here cover everything those tags shipped.
 
 ### Changed
 
-- **Give Item "Tier" field renamed to "Grade" and is now a dropdown (Grade 1-6, default Grade 1).** Grades above the default are SQL-only writes that require the player to be offline — Give Item now refuses with a clear error when the target player is online and a higher Grade is selected (previously it wrote anyway with a "must relog" note). The "Give all grades" button applies the same offline requirement up front so the set is never partially delivered.
+- **Give Item "Tier" field renamed to "Grade" and is now a dropdown (Grade 0-5, default Grade 0).** Grades above 0 are SQL-only writes that require the player to be offline — Give Item now refuses with a clear error when the target player is online and a Grade above 0 is selected (previously it wrote anyway with a "must relog" note). The "Give all grades" button applies the same offline requirement up front so the set is never partially delivered.
 
 ## [12.20.3] - 2026-07-24
 
