@@ -13,6 +13,10 @@ here cover everything those tags shipped.
 
 ## [Unreleased]
 
+### Added
+
+- Maggie Malone (@magiemalone) added to the Thanks for the Coffee supporter credits.
+
 ## [12.20.4] - 2026-07-24
 
 ### Changed
