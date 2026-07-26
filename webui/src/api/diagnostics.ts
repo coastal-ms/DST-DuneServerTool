@@ -42,3 +42,39 @@ export interface VmMemoryPressure {
 export function getVmMemoryPressure() {
   return api<VmMemoryPressure>('/api/diagnostics/vm-memory')
 }
+
+// VM health blockers for the always-on Server Health banner. Each one is a
+// specific fault the operator can act on, and every one of them used to be
+// invisible while DST's own board stayed fully green: a stuck DatabaseOperation
+// (no map pods are ever created), DiskPressure / a filling root volume, a
+// missing game-UDP DNAT bridge after a Hyper-V host migration, per-map memory
+// limits crushed by Funcom's experimental swap preset, and retained historical
+// build images. Backed by the same read-only 60s-cached probe as vm-memory.
+export interface VmHealthBlocker {
+  id: string
+  severity: 'warn' | 'critical'
+  headline: string
+  detail: string
+  action: string
+}
+
+export interface VmHealth {
+  ok: boolean
+  blockers: VmHealthBlocker[]
+  message?: string
+  disk?: { usePct: number | null; availK: number | null; sizeK: number | null; known: boolean }
+  database?: {
+    phase: string
+    total: number
+    open: number
+    stuck: { name: string; phase: string; ageMinutes: number | null }[]
+  }
+  mapLimits?: { swapMode: boolean; driftCount: number }
+  images?: { buildCount: number; totalBytes: number }
+  dnat?: { udpRules: number | null; missing: boolean }
+  node?: { diskPressure: boolean; memoryPressure: boolean; ready: boolean }
+}
+
+export function getVmHealth() {
+  return api<VmHealth>('/api/diagnostics/vm-health')
+}

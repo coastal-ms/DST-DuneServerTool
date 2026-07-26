@@ -15,6 +15,18 @@ here cover everything those tags shipped.
 
 ### Added
 
+- **Server Health now surfaces VM faults DST used to be completely blind to.** A new always-on Dashboard banner reports, with a specific fix for each: a **stuck database operation** (while one is registered the Funcom operator creates no map pods at all, so maps sit at "Starting" with no pod *and* restores fail — one cause, both symptoms), **DiskPressure or a filling root volume** (past ~85% the kubelet garbage-collects images and starts evicting pods, which looks like "maps won't start" with nothing pointing at disk), a **missing game UDP bridge** (the per-port DNAT rules live on the VM and do not survive moving it to a different Hyper-V host — players get P34 while every other check stays green), **per-map memory limits crushed by Funcom's experimental swap preset** (those values survive a VM resize, so giving the VM more RAM never undoes them), and **retained historical Funcom build images** (roughly 4.8 GB per build, nothing prunes them).
+- **Maps: one-click "Restore per-map memory limits".** Puts every map whose limit has drifted below its Funcom world-template default back to that default. Limits raised deliberately above the default are left alone, and it only touches memory limits — never swap, kubelet or k3s.
+- **Startup now names a database block instead of blaming the pod.** When a map pod is never created, DST checks whether a database operation is holding the battlegroup and says so — with the operation name — instead of reporting "map pod was never found", which reads like a scheduling problem.
+
+### Changed
+
+- **The diagnostics bundle can now diagnose database-layer outages.** It no longer hides dump/backup pods from the pod snapshot (the pods involved in a hung database operation), and it adds database operation state with a describe of anything unfinished, the battlegroup's per-map memory limits, node conditions, disk usage, swap, retained build images, and logs from the database pods. A confirmed 24-hour outage produced a bundle that was complete, correct, and did not contain its own root cause; that class of failure is now answerable from the ZIP.
+- **Hyper-V over LAN credential fields explain themselves.** The username hint now uses your actual host name (e.g. `MYHOST\Administrator`) instead of the literal word `HOST`, which two users read as "keep `HOST\`, replace the rest". Typing the placeholder verbatim, or leaving the password blank, is now caught before the connection is attempted — a blank password can never work because Windows blocks blank-password accounts from signing in over the network, and the old error just said the username or password was incorrect.
+
+### Fixed
+
+- **The "possible VM memory pressure" warning no longer fires on healthy servers.** It was triggered by container restart counts alone, and Funcom's operators restart in lockstep by design (exit 255), so it was close to permanently on — including during a real outage with **94% of RAM free**, where it advised raising RAM that could not have helped. Elevated restarts now only count when corroborated by an actual memory signal (low available memory, an OOM kill, or the node's own MemoryPressure condition), ordinary operator churn is identified as such, and the "raise the VM's RAM" advice is suppressed when memory is plentiful.
 - Maggie Malone (@magiemalone) added to the Thanks for the Coffee supporter credits.
 
 ## [12.20.4] - 2026-07-24
