@@ -13,6 +13,8 @@ here cover everything those tags shipped.
 
 ## [Unreleased]
 
+## [12.21.0] - 2026-07-26
+
 ### Added
 
 - **A read-only "VM info" card on the Database page.** Collapsed by default and purely informational: root-disk usage, swap, the battlegroup's database phase and any unfinished database operations, retained Funcom build images, the game UDP rule count, node conditions, and every map's current memory limit alongside a reference value. No thresholds, no colour-coding, no recommendations — DST cannot know the intent behind a number and does not pretend to. The numbers are there when you want them and silent when you don't.
@@ -25,6 +27,7 @@ here cover everything those tags shipped.
 
 ### Fixed
 
+- **The "Restore Backup" heading was unreadable.** It was coloured from the same accent as its icon, which left dark amber text on the dark card — legible on the green "Take Backup" card and effectively invisible on the destructive one. Both maintenance headings now use the same readable colour; Restore keeps its amber icon and primary button, so the destructive action still reads as destructive.
 - **The "possible VM memory pressure" warning no longer fires on healthy servers.** It was triggered by container restart counts alone, and Funcom's operators restart in lockstep by design (exit 255), so it was close to permanently on — including during a real outage with **94% of RAM free**, where it advised raising RAM that could not have helped. Elevated restarts now only count when corroborated by an actual memory signal (low available memory, an OOM kill, or the node's own MemoryPressure condition), ordinary operator churn is identified as such, and the "raise the VM's RAM" advice is suppressed when memory is plentiful.
 - Maggie Malone (@magiemalone) added to the Thanks for the Coffee supporter credits.
 
