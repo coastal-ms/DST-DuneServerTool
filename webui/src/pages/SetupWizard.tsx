@@ -569,18 +569,31 @@ function StepConnectLan() {
   const runTest = useCallback(async () => {
     const ip = hostIp.trim()
     if (!ip) { setError('Enter the Hyper-V host IP first.'); return }
-    const usingNewCred = editingCred && credUser.trim() && credPassword
-    if (editingCred && !usingNewCred) { setError("Enter the host's administrator username and password first."); return }
+    const account = credUser.trim()
+    if (editingCred) {
+      if (!account) { setError("Enter the host's administrator username first."); return }
+      // Two real onboarding failures, both of which used to surface as Windows'
+      // generic "the username or password is incorrect".
+      if (/^(HOST|COMPUTERNAME|COMPUTER-NAME|MACHINE|SERVERNAME)\\/i.test(account)) {
+        setError(`"${account}" looks like the example text. The part before the backslash is a placeholder for your host's own computer name — replace both parts, e.g. ${ip}\\Administrator.`)
+        return
+      }
+      if (!credPassword) {
+        setError('Windows does not allow accounts with a blank password to sign in over the network, so this can never connect. Set a password on the host account and enter it here.')
+        return
+      }
+    }
+    const usingNewCred = editingCred && !!account && !!credPassword
     setTesting(true); setError(null); setMsg(null); setTest(null)
     try {
       const result = usingNewCred
-        ? await testHyperVLan(ip, credUser.trim(), credPassword)
+        ? await testHyperVLan(ip, account, credPassword)
         : await testHyperVLan(ip)
       setTest(result)
       if (result.ok && usingNewCred) {
         // Persist the credential that just proved it works, then collapse
         // back to the "using saved credential" view.
-        await saveHyperVLanCredential(ip, credUser.trim(), credPassword)
+        await saveHyperVLanCredential(ip, account, credPassword)
         setCredPassword('')
         await loadCredInfo(ip)
       }
@@ -660,16 +673,19 @@ function StepConnectLan() {
               <label className="flex flex-col gap-1 text-sm">
                 <span className="text-text-dim">Administrator username</span>
                 <input type="text" value={credUser} onChange={e => { setCredUser(e.target.value); setTest(null) }} spellCheck={false}
-                  placeholder="HOST\Administrator" className="px-3 py-2 rounded-lg bg-surface-2 border border-border text-text text-sm font-mono" />
+                  placeholder={hostIp.trim() ? `${hostIp.trim()}\\Administrator` : 'e.g. MYHOST\\Administrator'} className="px-3 py-2 rounded-lg bg-surface-2 border border-border text-text text-sm font-mono" />
               </label>
               <label className="flex flex-col gap-1 text-sm">
                 <span className="text-text-dim">Password</span>
                 <input type="password" value={credPassword} onChange={e => { setCredPassword(e.target.value); setTest(null) }}
+                  placeholder="Cannot be blank"
                   className="px-3 py-2 rounded-lg bg-surface-2 border border-border text-text text-sm" />
               </label>
               <p className="md:col-span-2 text-xs text-text-dim -mt-1">
                 The host's own administrator account. In a workgroup this is routinely a <strong>different</strong>{' '}
-                account than the one DST itself runs as on this PC — use <span className="font-mono">HOST\username</span>.
+                account than the one DST itself runs as on this PC — use the host's <strong>computer name</strong>, a
+                backslash, then the account: <span className="font-mono">{hostIp.trim() ? `${hostIp.trim()}\\Administrator` : 'MYHOST\\Administrator'}</span>.
+                It must have a password; Windows blocks blank-password accounts from signing in over the network.
               </p>
             </div>
           )}
@@ -795,7 +811,15 @@ function StepInstallLan() {
 
   const check = useCallback(async () => {
     if (!hostIp.trim()) { setError('Set the Hyper-V host IP in the previous step first.'); return }
-    if (!savedCredUser && (!user.trim() || !password)) { setError("Enter the host's administrator username and password."); return }
+    if (!savedCredUser && !user.trim()) { setError("Enter the host's administrator username."); return }
+    if (/^(HOST|COMPUTERNAME|COMPUTER-NAME|MACHINE|SERVERNAME)\\/i.test(user.trim())) {
+      setError(`"${user.trim()}" looks like the example text. The part before the backslash is a placeholder for your host's own computer name — replace both parts, e.g. ${hostIp.trim()}\\Administrator.`)
+      return
+    }
+    if (!savedCredUser && !password) {
+      setError('Windows does not allow accounts with a blank password to sign in over the network. Set a password on the host account and enter it here.')
+      return
+    }
     setChecking(true); setError(null); setRes(null)
     try {
       const r = await getHyperVLanHostResources(hostIp.trim(), user.trim() || undefined, password || undefined)
@@ -856,7 +880,7 @@ function StepInstallLan() {
         <label className="flex flex-col gap-1 text-sm">
           <span className="font-medium">Host administrator username {savedCredUser && <span className="text-text-dim font-normal">(optional)</span>}</span>
           <input type="text" value={user} onChange={e => setUser(e.target.value)} disabled={installing} spellCheck={false}
-            placeholder={savedCredUser ?? 'HOST\\Administrator'} className="px-3 py-2 rounded-lg bg-surface-2 border border-border text-text text-sm" />
+            placeholder={savedCredUser ?? (hostIp.trim() ? `${hostIp.trim()}\\Administrator` : 'e.g. MYHOST\\Administrator')} className="px-3 py-2 rounded-lg bg-surface-2 border border-border text-text text-sm" />
         </label>
         <label className="flex flex-col gap-1 text-sm">
           <span className="font-medium">Host administrator password {savedCredUser && <span className="text-text-dim font-normal">(optional)</span>}</span>

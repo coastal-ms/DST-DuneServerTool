@@ -2,6 +2,7 @@ import { useState, useEffect, useMemo, useCallback, useRef } from 'react'
 import { PageHeader } from '../components/PageHeader'
 import { Icon } from '../components/Icon'
 import { useStatus } from '../hooks/useStatus'
+import { VmInfoCard } from './database/VmInfoCard'
 import { api } from '../api/client'
 import {
   getDbInfo,
@@ -309,6 +310,9 @@ export function Database() {
           </div>
         </div>
       )}
+
+      {/* Read-only VM facts. Collapsed by default — nothing here interrupts. */}
+      <VmInfoCard />
 
       {/* Maintenance cards: Backup + Restore */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">

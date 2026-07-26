@@ -42,3 +42,43 @@ export interface VmMemoryPressure {
 export function getVmMemoryPressure() {
   return api<VmMemoryPressure>('/api/diagnostics/vm-memory')
 }
+
+// VM facts for the Database page's info card. This is deliberately an
+// OBSERVATION feed, not a health score: disk usage, retained Funcom build
+// images, per-map memory limits and the UDP rule count are reported as plain
+// numbers with no verdict attached, because deployments differ and Funcom
+// changes its own defaults between patches.
+//
+// `faults` is the short exception: states the system ITSELF reports as broken
+// (an unfinished database operation while the battlegroup says DATABASE is not
+// Ready, Kubernetes' own DiskPressure condition, or a public IP configured with
+// zero game UDP rules while pods are running). None of those can be true on a
+// healthy server.
+export interface VmFault {
+  id: string
+  headline: string
+  detail: string
+  action: string
+}
+
+export interface VmHealth {
+  ok: boolean
+  faults: VmFault[]
+  message?: string
+  disk?: { usePct: number | null; availK: number | null; sizeK: number | null; known: boolean }
+  database?: {
+    phase: string
+    total: number
+    open: number
+    stuck: { name: string; phase: string; ageMinutes: number | null }[]
+  }
+  mapLimits?: { entries: { map: string; limit: string; reference: string }[]; known: boolean }
+  images?: { buildCount: number; totalBytes: number }
+  dnat?: { udpRules: number | null; missing: boolean }
+  node?: { diskPressure: boolean; memoryPressure: boolean; ready: boolean }
+  swap?: { totalK: number | null; active: boolean }
+}
+
+export function getVmHealth() {
+  return api<VmHealth>('/api/diagnostics/vm-health')
+}

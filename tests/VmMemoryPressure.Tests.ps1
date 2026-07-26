@@ -97,7 +97,11 @@ probe_done=1
         $r.pressure            | Should -BeFalse
     }
 
-    It 'treats a bare Error exit (no 137) as a crash, not an OOM' {
+    It 'does NOT declare memory pressure from restart counts alone' {
+        # Regression for the field case: a server that was DOWN because of a
+        # stuck DatabaseOperation printed "Possible VM memory pressure" with
+        # 94.2% of RAM free, sending the operator off to buy more RAM. Elevated
+        # restarts now need corroboration from an actual memory signal.
         $churn = @'
 mem_total_k=24671232
 mem_avail_k=9000000
@@ -106,9 +110,61 @@ op=x-controller-manager-a~P:Running~PR:~R:9 0 ~E:1  ~X:Error  ~W:
 probe_done=1
 '@
         $r = ConvertFrom-DuneMemPressureProbe -Raw $churn
-        $r.signals.oomKills       | Should -Be 0
-        $r.signals.highRestartPods | Should -Be 1
-        $r.severity               | Should -Be 'warn'
+        $r.signals.oomKills        | Should -Be 0
+        $r.signals.highRestartPods | Should -Be 1     # still reported...
+        $r.pressure                | Should -BeFalse  # ...but not pressure
+        $r.severity                | Should -Be 'none'
+        # And no "raise the VM's RAM" advice when memory is plentiful.
+        (@($r.warnings) -join ' ') | Should -Not -Match "raise the VM's RAM"
+    }
+
+    It 'treats operator exit-255 / Unknown restarts as ordinary churn, not a memory signal' {
+        # Measured on a HEALTHY reference server: all four operators at 58
+        # restarts with lastExit=255 / reason=Unknown, and db-util pods at
+        # exactly 6 (one over the old threshold of 5).
+        $healthyChurn = @'
+mem_total_k=49392000
+mem_avail_k=46500000
+swap_total_k=31457280
+op=battlegroup-operator-controller-manager-a~P:Running~PR:~R:58 0 ~E:255  ~X:Unknown  ~W:
+op=database-operator-controller-manager-b~P:Running~PR:~R:58 0 ~E:255  ~X:Unknown  ~W:
+db=sh-a-b-db-util-mon~P:Running~PR:~R:6 ~E:255  ~X:Unknown  ~W:
+probe_done=1
+'@
+        $r = ConvertFrom-DuneMemPressureProbe -Raw $healthyChurn
+        $r.signals.churnPods       | Should -Be 3
+        $r.signals.highRestartPods | Should -Be 0
+        $r.pressure                | Should -BeFalse
+        @($r.faults).Count         | Should -Be 0
+    }
+
+    It 'still flags real memory pressure when restarts are corroborated by low memory' {
+        $corroborated = @'
+mem_total_k=24671232
+mem_avail_k=200000
+swap_total_k=0
+op=x-controller-manager-a~P:Running~PR:~R:9 0 ~E:1  ~X:Error  ~W:
+probe_done=1
+'@
+        $r = ConvertFrom-DuneMemPressureProbe -Raw $corroborated
+        $r.signals.lowMemory | Should -BeTrue
+        $r.pressure          | Should -BeTrue
+        (@($r.warnings) -join ' ') | Should -Match "raise the VM's RAM"
+    }
+
+    It 'flags a MemoryPressure node condition even without restarts' {
+        $nodeCond = @'
+mem_total_k=24671232
+mem_avail_k=9000000
+swap_total_k=0
+node_cond=MemoryPressure=True
+node_cond=Ready=True
+probe_done=1
+'@
+        $r = ConvertFrom-DuneMemPressureProbe -Raw $nodeCond
+        $r.node.memoryPressure | Should -BeTrue
+        $r.pressure            | Should -BeTrue
+        $r.headline            | Should -Match 'MemoryPressure'
     }
 
     It 'flags an Evicted pod-level reason as OOM' {

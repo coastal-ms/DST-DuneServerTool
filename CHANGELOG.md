@@ -15,6 +15,17 @@ here cover everything those tags shipped.
 
 ### Added
 
+- **A read-only "VM info" card on the Database page.** Collapsed by default and purely informational: root-disk usage, swap, the battlegroup's database phase and any unfinished database operations, retained Funcom build images, the game UDP rule count, node conditions, and every map's current memory limit alongside a reference value. No thresholds, no colour-coding, no recommendations — DST cannot know the intent behind a number and does not pretend to. The numbers are there when you want them and silent when you don't.
+- **Startup now names a database block instead of blaming the pod.** When a map pod is never created, DST checks whether an unfinished database operation is holding the battlegroup and says so — with the operation name — instead of reporting "map pod was never found", which reads like a scheduling problem.
+
+### Changed
+
+- **The diagnostics bundle can now diagnose database-layer outages.** It no longer hides dump/backup pods from the pod snapshot (the pods involved in a hung database operation), and it adds database operation state with a describe of anything unfinished, the battlegroup's per-map memory limits, node conditions, disk usage, swap, retained build images, and logs from the database pods. A confirmed 24-hour outage produced a bundle that was complete, correct, and did not contain its own root cause; that class of failure is now answerable from the ZIP without a support round-trip. The breadth lives here, in the log dump you only send when you actually have a problem — not in warnings pushed at everyone else.
+- **Hyper-V over LAN credential fields explain themselves.** The username hint now uses your actual host name (e.g. `MYHOST\Administrator`) instead of the literal word `HOST`, which two users read as "keep `HOST\`, replace the rest". Typing the placeholder verbatim, or leaving the password blank, is now caught before the connection is attempted — a blank password can never work because Windows blocks blank-password accounts from signing in over the network, and the old error just said the username or password was incorrect.
+
+### Fixed
+
+- **The "possible VM memory pressure" warning no longer fires on healthy servers.** It was triggered by container restart counts alone, and Funcom's operators restart in lockstep by design (exit 255), so it was close to permanently on — including during a real outage with **94% of RAM free**, where it advised raising RAM that could not have helped. Elevated restarts now only count when corroborated by an actual memory signal (low available memory, an OOM kill, or the node's own MemoryPressure condition), ordinary operator churn is identified as such, and the "raise the VM's RAM" advice is suppressed when memory is plentiful.
 - Maggie Malone (@magiemalone) added to the Thanks for the Coffee supporter credits.
 
 ## [12.20.4] - 2026-07-24
