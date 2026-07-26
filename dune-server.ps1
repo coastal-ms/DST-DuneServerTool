@@ -1038,13 +1038,6 @@ function Show-DuneVmMemoryPressureWarning {
         $finding = ConvertFrom-DuneMemPressureProbe -Raw (($out | Out-String)) -PublicIpConfigured $publicIpConfigured
         if (-not $finding.ok) { return }
 
-        foreach ($b in @($finding.blockers)) {
-            Write-Host ""
-            Write-Host ("  {0}: {1}" -f $(if ($b.severity -eq 'critical') { 'PROBLEM' } else { 'WARNING' }), $b.headline) -ForegroundColor Red
-            Write-Host ("    {0}" -f $b.detail) -ForegroundColor Yellow
-            Write-Host ("    Fix: {0}" -f $b.action) -ForegroundColor DarkGray
-        }
-
         if ($finding.pressure) {
             Write-Host ""
             Write-Host "  WARNING: $($finding.headline)" -ForegroundColor Red

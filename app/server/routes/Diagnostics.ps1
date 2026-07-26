@@ -1,4 +1,4 @@
-﻿# /api/diagnostics — build a redacted ZIP of logs the user can attach to a
+# /api/diagnostics — build a redacted ZIP of logs the user can attach to a
 # GitHub bug report. Triggered from the React "Help → Create GitHub Issue +
 # Save Logs" menu item and from the CLI `report-issue` command.
 #
@@ -505,21 +505,16 @@ done
                 $memLines.Add("Probe unavailable: $($memFinding.message)")
                 $warnings.Add("VM memory-pressure probe skipped: $($memFinding.message)")
             } else {
-                if (@($memFinding.blockers).Count -gt 0) {
-                    $memLines.Add('RESULT: VM HEALTH BLOCKERS DETECTED')
-                    foreach ($b in $memFinding.blockers) {
-                        $memLines.Add((">> [{0}] {1}" -f $b.severity.ToUpperInvariant(), $b.headline))
-                        $memLines.Add(("     {0}" -f $b.detail))
-                        $memLines.Add(("     Fix: {0}" -f $b.action))
-                    }
-                    $memLines.Add('')
-                }
                 if ($memFinding.pressure) {
                     $memLines.Add("RESULT: MEMORY PRESSURE DETECTED (severity: $($memFinding.severity))")
                     $memLines.Add(">> $($memFinding.headline)")
                 } else {
                     $memLines.Add('RESULT: no memory-pressure signals (memory has headroom; elevated operator restarts alone are not treated as memory pressure).')
                 }
+                $memLines.Add('')
+                $memLines.Add('The sections below are OBSERVATIONS, not verdicts. Values that differ from a')
+                $memLines.Add('reference are not by themselves evidence of a problem - deployments differ, and')
+                $memLines.Add('Funcom changes its own defaults between patches.')
                 $memLines.Add('')
                 $m = $memFinding.mem
                 $memLines.Add('Node memory:')
@@ -555,10 +550,11 @@ done
                     $memLines.Add('')
                 }
                 if ($memFinding.mapLimits -and $memFinding.mapLimits.known) {
-                    $memLines.Add('Per-map memory limits (vs Funcom world-template defaults):')
+                    $memLines.Add('Per-map memory limits (reference column = Funcom world-template snapshot, 2026-05;')
+                    $memLines.Add('Funcom changes these between patches and operators legitimately tune them, so a')
+                    $memLines.Add('difference here is information, not a fault):')
                     foreach ($e in @($memFinding.mapLimits.entries)) {
-                        $flag = if ($e.drifted) { if ($e.swapModeValue) { '  << SWAP-MODE value' } else { '  << below default' } } else { '' }
-                        $memLines.Add(("  {0,-40} {1,-8} default {2,-8}{3}" -f $e.map, $e.limit, $(if ($e.expected) { $e.expected } else { '?' }), $flag))
+                        $memLines.Add(("  {0,-40} {1,-8} reference {2}" -f $e.map, $e.limit, $(if ($e.reference) { $e.reference } else { '(not in snapshot)' })))
                     }
                     $memLines.Add('')
                 }
@@ -815,7 +811,7 @@ Register-DuneRoute -Method GET -Path '/api/diagnostics/vm-memory' -Handler {
             severity = [string]($f.severity)
             headline = [string]($f.headline)
             warnings = @($f.warnings)
-            blockers = @($f.blockers)
+            faults   = @($f.faults)
             message  = [string]($f.message)
         }
         if ($f.ok -and $f.mem) {
@@ -835,12 +831,14 @@ Register-DuneRoute -Method GET -Path '/api/diagnostics/vm-memory' -Handler {
     }
 }
 
-# GET /api/diagnostics/vm-health - the actionable VM-side blockers behind the
-# always-on Server Health banner: a stuck DatabaseOperation (no map pods will
-# ever be created), DiskPressure / a filling root volume, a missing game-UDP
-# DNAT bridge, per-map memory limits crushed by Funcom's experimental swap
-# preset, and retained historical build images. Every one of these was
-# invisible to DST while its own board stayed fully green.
+# GET /api/diagnostics/vm-health - VM facts for the Database page's info card:
+# root-disk usage, node conditions, database-operation state, per-map memory
+# limits, retained Funcom build images, swap, and the game UDP rule count.
+#
+# These are OBSERVATIONS. DST reports them and stops there - the operator knows
+# the intent behind their own configuration and DST does not. `faults` carries
+# the short exception: states the system itself reports as broken, which cannot
+# be true on a healthy server.
 #
 # Backed by the same read-only, 60s-cached probe as /vm-memory, so polling both
 # costs one SSH round-trip. Never 500s on an unreachable VM.
@@ -848,13 +846,13 @@ Register-DuneRoute -Method GET -Path '/api/diagnostics/vm-health' -Handler {
     param($req, $res, $routeParams, $body)
     try {
         if (-not (Get-Command Get-DuneVmMemoryPressure -ErrorAction SilentlyContinue)) {
-            Write-DuneJson -Response $res -Body @{ ok=$false; blockers=@(); message='VM health helper not loaded' }
+            Write-DuneJson -Response $res -Body @{ ok=$false; faults=@(); message='VM health helper not loaded' }
             return
         }
         $f = Get-DuneVmMemoryPressure
         $out = @{
             ok       = [bool]$f.ok
-            blockers = @($f.blockers)
+            faults   = @($f.faults)
             message  = [string]($f.message)
         }
         if ($f.ok) {
@@ -871,8 +869,8 @@ Register-DuneRoute -Method GET -Path '/api/diagnostics/vm-health' -Handler {
                 stuck     = @($f.dbOps.stuck | ForEach-Object { @{ name=$_.name; phase=$_.phase; ageMinutes=$_.ageMinutes } })
             }
             $out.mapLimits = @{
-                swapMode    = [bool]$f.mapLimits.swapMode
-                driftCount  = @($f.mapLimits.drifted).Count
+                known   = [bool]$f.mapLimits.known
+                entries = @($f.mapLimits.entries | ForEach-Object { @{ map=$_.map; limit=$_.limit; reference=$_.reference } })
             }
             $out.images = @{
                 buildCount = [int]$f.images.buildCount
@@ -886,6 +884,10 @@ Register-DuneRoute -Method GET -Path '/api/diagnostics/vm-health' -Handler {
                 diskPressure   = [bool]$f.node.diskPressure
                 memoryPressure = [bool]$f.node.memoryPressure
                 ready          = [bool]$f.node.ready
+            }
+            $out.swap = @{
+                totalK = $f.mem.swapTotalK
+                active = [bool]$f.mem.swapActive
             }
         }
         Write-DuneJson -Response $res -Body $out

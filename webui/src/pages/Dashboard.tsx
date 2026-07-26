@@ -6,7 +6,6 @@ import { useStatus } from '../hooks/useStatus'
 import { BgSpiceSummary } from './dashboard/BgSpiceSummary'
 import { ScheduledRestarts } from './dashboard/ScheduledRestarts'
 import { VmMemoryPressureBanner } from './dashboard/VmMemoryPressureBanner'
-import { VmHealthBanner } from './dashboard/VmHealthBanner'
 import type { BgState, BgGameServer } from '../api/types'
 import { getLinks, type LinksResponse } from '../api/links'
 import { api, ApiError } from '../api/client'
@@ -191,7 +190,6 @@ export function Dashboard() {
         description="Live VM, battlegroup, and port status."
       />
 
-      <VmHealthBanner vmRunning={Boolean(vm?.running)} />
       <VmMemoryPressureBanner vmRunning={Boolean(vm?.running)} />
 
       <section className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">

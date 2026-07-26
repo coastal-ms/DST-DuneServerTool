@@ -135,7 +135,7 @@ probe_done=1
         $r.signals.churnPods       | Should -Be 3
         $r.signals.highRestartPods | Should -Be 0
         $r.pressure                | Should -BeFalse
-        @($r.blockers).Count       | Should -Be 0
+        @($r.faults).Count         | Should -Be 0
     }
 
     It 'still flags real memory pressure when restarts are corroborated by low memory' {

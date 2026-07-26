@@ -64,9 +64,19 @@ $script:DuneImageDiskWarnPct    = 70
 # is_swap_mode_value in scripts/dune-swap-doctor.sh).
 $script:DuneSwapModeMemoryValues = @('1Gi', '200Mi', '10Gi')
 
-# Funcom world-template.yaml per-map memory defaults (2026-05 snapshot), ported
-# from scripts/dune-swap-doctor.sh so DST can detect drift without shipping a
-# shell script to the user. A map absent from this table is not evaluated.
+# Funcom world-template per-map memory defaults (2026-05 snapshot), ported from
+# scripts/dune-swap-doctor.sh.
+#
+# ⚠ THIS TABLE GOES STALE. Funcom changes these between patches - verified
+# 2026-07-26 against a healthy live server whose small story/DLC maps sit BELOW
+# this snapshot (Story_ProcesVerbal 2Gi vs 6Gi here, LostHarvest_ForgottenLab
+# 2Gi vs 5Gi) while Hagga/Deep Desert were deliberately raised ABOVE it. So it
+# is NOT evidence of damage, and nothing automatic may raise a warning from it.
+# It is used for two things only:
+#   1. the restore TARGET when a map is found on an experimental-swap value
+#   2. informational "current vs reference" output in the diagnostics bundle
+# The automatic verdict keys off $script:DuneSwapModeMemoryValues plus swap
+# actually being active - see New-DuneMapLimitEntry.
 $script:DuneMapMemoryDefaults = @{
     'Survival_1'                          = '12Gi'
     'Overmap'                             = '2Gi'
@@ -100,7 +110,7 @@ $script:DuneMapMemoryDefaults = @{
     'CB_Overland_S_08'                    = '2Gi'
 }
 
-# Public accessor so MapMemoryLimits.ps1 (and tests) share one source of truth.
+# Public accessor so the diagnostics bundle and tests share one source of truth.
 function Get-DuneMapMemoryDefaults { return $script:DuneMapMemoryDefaults }
 
 # Short-lived cache so a Dashboard mount + its 60s poll (and a concurrent
@@ -188,8 +198,11 @@ function ConvertFrom-DuneImageSize {
 # finding. PURE - no SSH, no I/O - so the wiring is unit-testable from a fixture.
 #
 # Returns @{ ok; mem; operators; db; node; disk; bg; dbOps; mapLimits; images;
-#            dnat; signals; pressure; severity; headline; warnings; blockers;
-#            raw }.
+#            dnat; signals; pressure; severity; headline; warnings; raw }.
+#
+# NOTE: this returns OBSERVATIONS, not verdicts. Everything except the memory
+# signals is reported as-is for the operator to read and act on (or not) - see
+# the header note on why.
 #
 # -PublicIpConfigured lets the caller supply the one piece of context the VM
 # cannot know: whether DST is configured to publish a public IP. Without a
@@ -212,16 +225,16 @@ function ConvertFrom-DuneMemPressureProbe {
         disk      = @{ sizeK=$null; usedK=$null; availK=$null; usePct=$null; high=$false; critical=$false; known=$false }
         bg        = @{ name=''; databasePhase='' }
         dbOps     = @{ total=0; open=0; stuck=@(); known=$false }
-        mapLimits = @{ entries=@(); drifted=@(); swapMode=$false; known=$false }
+        mapLimits = @{ entries=@(); known=$false }
         images    = @{ entries=@(); builds=@(); buildCount=0; totalBytes=0; known=$false }
         dnat      = @{ udpRules=$null; ports=@(); missing=$false }
+        faults    = @()
         gamePodsRunning = $null
         signals   = @{ oomKills=0; highRestartPods=0; maxRestarts=0; lowMemory=$false; churnPods=0; memoryCorroborated=$false }
         pressure  = $false
         severity  = 'none'
         headline  = ''
         warnings  = @()
-        blockers  = @()
         raw       = $Raw
     }
     if ([string]::IsNullOrWhiteSpace($Raw)) {
@@ -336,8 +349,6 @@ function ConvertFrom-DuneMemPressureProbe {
 
     # --- per-map memory limits --------------------------------------------
     $result.mapLimits.entries = @(foreach ($r in $mapLimRecords) { _ConvertFrom-DuneMapLimitRecord -Record $r })
-    $result.mapLimits.drifted = @($result.mapLimits.entries | Where-Object { $_.drifted })
-    $result.mapLimits.swapMode = (@($result.mapLimits.entries | Where-Object { $_.swapModeValue }).Count -gt 0)
 
     # --- retained container images ----------------------------------------
     $builds = New-Object System.Collections.Generic.List[string]
@@ -433,98 +444,71 @@ function ConvertFrom-DuneMemPressureProbe {
     }
 
     $result.warnings = @($warn)
-    $result.blockers = @(_Get-DuneVmHealthBlockers -Finding $result)
+    $result.faults   = @(_Get-DuneVmFaults -Finding $result)
     return $result
 }
 
 # -----------------------------------------------------------------------------
-# _Get-DuneVmHealthBlockers : turn the parsed probe into the short, actionable
-# list the Server Health banner and the CLI print. These are deliberately
-# separate from memory "warnings" - each one names a specific fault the user
-# can act on, and every one of them was invisible to DST before 2026-07-26.
+# _Get-DuneVmFaults : the SHORT list of states the system itself reports as
+# broken. Deliberately not a health score, not a tuning opinion, and not a
+# threshold I picked.
+#
+# The bar for anything in this list:
+#   1. It is a STATE, not a measurement. "A database operation is registered and
+#      the battlegroup says DATABASE is not Ready" is a state; "the disk is 80%
+#      full" is a measurement I decided to have a feeling about.
+#   2. It CANNOT be true on a healthy server. Each one below was verified silent
+#      against a live, correctly-running server on 2026-07-26.
+#   3. The operator can do something specific about it.
+#
+# Everything else the probe reads - disk usage, retained build images, per-map
+# memory limits - is reported as information only. Those were thresholds
+# generalised from TWO support cases, and support cases are the most biased
+# sample available: servers that work never file one. A warning that fires on a
+# healthy server manufactures the support load it was built to prevent.
 # -----------------------------------------------------------------------------
-function _Get-DuneVmHealthBlockers {
+function _Get-DuneVmFaults {
     param([Parameter(Mandatory)]$Finding)
     $out = New-Object System.Collections.Generic.List[object]
 
-    # 1) Stuck DatabaseOperation - blocks map pods from ever being CREATED.
-    $stuck = @($Finding.dbOps.stuck)
+    # 1) A registered DatabaseOperation while the battlegroup reports DATABASE
+    #    != Ready. Both halves required: a lone unfinished record can be an
+    #    operation legitimately in flight, and DST must not call that a fault.
+    $stuck   = @($Finding.dbOps.stuck)
     $dbPhase = [string]$Finding.bg.databasePhase
-    $dbPhaseBad = ($dbPhase -and $dbPhase -ne 'Ready')
-    if ($stuck.Count -gt 0 -or $dbPhaseBad) {
+    if ($stuck.Count -gt 0 -and $dbPhase -and $dbPhase -ne 'Ready') {
         $names = ($stuck | ForEach-Object {
             if ($null -ne $_.ageMinutes) { "$($_.name) ($($_.phase), $([int]$_.ageMinutes)m)" } else { "$($_.name) ($($_.phase))" }
         }) -join ', '
-        $detail = if ($stuck.Count -gt 0) {
-            "Unfinished database operation(s): $names."
-        } else {
-            "The battlegroup reports DATABASE = '$dbPhase' instead of Ready."
-        }
         $out.Add(@{
-            id       = 'db-operation-stuck'
-            severity = 'critical'
-            headline = 'A database operation is holding the server - no map pods will be created'
-            detail   = "$detail While one is registered the Funcom operator creates no map pods at all, so maps sit at Starting with no pod, and any restore also fails."
-            action   = 'Delete every DatabaseOperation that is not Succeeded (not just the one named in the log), then start the battlegroup again. Deleting the record does not touch the database, PVC or backups.'
+            id      = 'db-operation-stuck'
+            headline= "The battlegroup reports DATABASE = '$dbPhase' with an unfinished database operation"
+            detail  = "$names. While one is registered the Funcom operator creates no map pods at all, so maps sit at Starting with no pod and a restore cannot start either."
+            action  = 'Deleting every DatabaseOperation that is not Succeeded clears it. That removes only the operation records - not the database, its PVC, or any backup.'
         })
     }
 
-    # 2) Disk / DiskPressure - kubelet stops admitting pods and evicts.
+    # 2) Kubernetes' own DiskPressure condition - the kubelet has already
+    #    started refusing pods. Not a percentage threshold of mine.
     if ($Finding.node.diskPressure) {
         $out.Add(@{
-            id       = 'disk-pressure'
-            severity = 'critical'
-            headline = 'Kubernetes reports DiskPressure on the VM node'
-            detail   = ('Root filesystem {0}% used ({1} free). While DiskPressure is set the kubelet stops admitting new pods and evicts running ones - maps will not start.' -f `
-                        $(if ($null -ne $Finding.disk.usePct) { $Finding.disk.usePct } else { '?' }), (Format-DuneMemKiB $Finding.disk.availK))
-            action   = 'Free space on the VM: prune old database backups (Database -> retention) and old Funcom build images.'
-        })
-    } elseif ($Finding.disk.known -and $Finding.disk.high) {
-        $sev = if ($Finding.disk.critical) { 'critical' } else { 'warn' }
-        $out.Add(@{
-            id       = 'disk-filling'
-            severity = $sev
-            headline = ('VM disk {0}% full' -f $Finding.disk.usePct)
-            detail   = ('Root filesystem is {0}% used ({1} free of {2}). At 85% the kubelet starts garbage-collecting images, and past that it evicts pods - which shows up as "maps will not start" with nothing pointing at disk.' -f `
-                        $Finding.disk.usePct, (Format-DuneMemKiB $Finding.disk.availK), (Format-DuneMemKiB $Finding.disk.sizeK))
-            action   = 'Prune old database backups and retained Funcom build images, or grow the VM disk.'
+            id      = 'disk-pressure'
+            headline= 'Kubernetes reports DiskPressure on the VM node'
+            detail  = ('The kubelet has set DiskPressure, so it stops admitting new pods and evicts running ones. Root filesystem {0}% used, {1} free.' -f `
+                       $(if ($null -ne $Finding.disk.usePct) { $Finding.disk.usePct } else { '?' }), (Format-DuneMemKiB $Finding.disk.availK))
+            action  = 'Free space on the VM - old database backups and retained Funcom build images are usually the bulk of it.'
         })
     }
 
-    # 3) Retained Funcom build images - unbounded, ~4.8 GB per build.
-    if ($Finding.images.known -and $Finding.images.buildCount -ge $script:DuneImageBuildWarnCount -and
-        $null -ne $Finding.disk.usePct -and $Finding.disk.usePct -ge $script:DuneImageDiskWarnPct) {
-        $out.Add(@{
-            id       = 'stale-build-images'
-            severity = 'warn'
-            headline = ('{0} Funcom build images retained ({1})' -f $Finding.images.buildCount, (Format-DuneByteSize $Finding.images.totalBytes))
-            detail   = ('containerd keeps every historical Funcom build (about 4.8 GB each) and nothing prunes them. Retained builds: {0}.' -f (@($Finding.images.builds) -join ', '))
-            action   = 'Only the current build is in use. Reclaim the rest on the VM with: sudo k3s crictl rmi --prune'
-        })
-    }
-
-    # 4) Missing game-UDP DNAT bridge - green board, unjoinable server.
+    # 3) Public IP configured, game pods running, and zero game-UDP DNAT rules.
+    #    That combination is the confirmed post-host-migration P34 signature and
+    #    nothing else; a LAN-only or stopped server never reaches it.
     if ($Finding.dnat.missing) {
         $out.Add(@{
-            id       = 'udp-bridge-missing'
-            severity = 'critical'
-            headline = 'The game UDP bridge is missing - players will get P34'
-            detail   = 'A public IP is configured but the VM has no UDP DNAT rules for the game ports. The rules and their maintaining cron live on the VM, so they do not survive moving it to a different Hyper-V host. Every other health check stays green because "TCP ports open" only tests the management port.'
-            action   = 'Settings -> Public IP / DDNS -> Apply reinstalls the rules.'
-        })
-    }
-
-    # 5) Per-map memory limits crushed by Funcom's experimental swap preset.
-    $drift = @($Finding.mapLimits.drifted)
-    if ($drift.Count -gt 0) {
-        $sample = ($drift | Select-Object -First 4 | ForEach-Object { "$($_.map) $($_.limit) (default $($_.expected))" }) -join ', '
-        $more = if ($drift.Count -gt 4) { " and $($drift.Count - 4) more" } else { '' }
-        $out.Add(@{
-            id       = 'map-limits-crushed'
-            severity = 'warn'
-            headline = ('{0} map memory limit(s) below Funcom defaults' -f $drift.Count)
-            detail   = ("$sample$more." + $(if ($Finding.mapLimits.swapMode) { " These are the values Funcom's experimental swap preset writes; they survive a VM resize, so giving the VM more RAM does not undo them." } else { '' }))
-            action   = 'Use Maps -> Restore per-map memory limits to put every map back on its Funcom template default.'
+            id      = 'udp-bridge-missing'
+            headline= 'A public IP is configured but the VM has no game UDP forwarding rules'
+            detail  = 'The per-port UDP DNAT rules and their maintaining cron live on the VM, so they do not survive moving it to a different Hyper-V host. Players get P34 while every other check stays green, because the TCP port check only tests the management port.'
+            action  = 'Settings -> Public IP / DDNS -> Apply reinstalls the rules.'
         })
     }
 
@@ -558,29 +542,25 @@ function _ConvertFrom-DuneDbOperationRecord {
     return $op
 }
 
-# Evaluate ONE map's memory limit against the Funcom template default. Public
-# so MapMemoryLimits.ps1 (the restore action) and the probe parser can never
-# disagree about what counts as drift.
+# Record ONE map's memory limit alongside the reference value, if the map is in
+# the 2026-05 snapshot table. NO verdict is attached: a limit that differs from
+# the snapshot is NOT evidence of anything. Verified 2026-07-26 on a healthy
+# live server - Funcom has since lowered several small story/DLC maps below the
+# snapshot, and the operator had deliberately raised Hagga and Deep Desert
+# above it. Both would have been flagged by a "below default" rule, on a server
+# with no swap and no experimental-swap values anywhere.
+#
+# DST reports the numbers; the person running the server decides what they mean.
 function New-DuneMapLimitEntry {
     param(
         [Parameter(Mandatory)][string]$Map,
         [string]$Limit = ''
     )
-    $entry = @{ map=$Map.Trim(); limit=$Limit.Trim(); expected=''; limitMiB=$null; expectedMiB=$null; swapModeValue=$false; drifted=$false }
-    $entry.swapModeValue = ($script:DuneSwapModeMemoryValues -contains $entry.limit)
+    $entry = @{ map = $Map.Trim(); limit = $Limit.Trim(); reference = ''; limitMiB = $null; referenceMiB = $null }
     if ($script:DuneMapMemoryDefaults.ContainsKey($entry.map)) {
-        $entry.expected    = [string]$script:DuneMapMemoryDefaults[$entry.map]
-        $entry.expectedMiB = ConvertTo-DuneMemMiB $entry.expected
-        $entry.limitMiB    = ConvertTo-DuneMemMiB $entry.limit
-        if ($entry.limit -and $entry.limit -ne $entry.expected) {
-            # A value ABOVE the default is a deliberate operator bump - leave it
-            # alone. Only a value below the template default is drift.
-            if ($entry.swapModeValue) {
-                $entry.drifted = $true
-            } elseif ($null -ne $entry.limitMiB -and $null -ne $entry.expectedMiB -and $entry.limitMiB -lt $entry.expectedMiB) {
-                $entry.drifted = $true
-            }
-        }
+        $entry.reference    = [string]$script:DuneMapMemoryDefaults[$entry.map]
+        $entry.referenceMiB = ConvertTo-DuneMemMiB $entry.reference
+        $entry.limitMiB     = ConvertTo-DuneMemMiB $entry.limit
     }
     return $entry
 }
@@ -726,12 +706,12 @@ function Get-DuneVmMemoryPressure {
             try { $vm = Get-DuneVmStatus; if ($vm.running -and $vm.ip) { $ip = $vm.ip } } catch {}
         }
         if (-not $ip) {
-            return @{ ok=$false; pressure=$false; severity='none'; warnings=@(); blockers=@(); message='VM not reachable.' }
+            return @{ ok=$false; pressure=$false; severity='none'; warnings=@(); faults=@(); message='VM not reachable.' }
         }
 
         $probe = _Invoke-DuneMemPressureProbe -Ip $ip
         if (-not $probe.ok -or [string]::IsNullOrWhiteSpace($probe.raw)) {
-            return @{ ok=$false; pressure=$false; severity='none'; warnings=@(); blockers=@(); message=($probe.message -or 'Probe returned no output.') }
+            return @{ ok=$false; pressure=$false; severity='none'; warnings=@(); faults=@(); message=($probe.message -or 'Probe returned no output.') }
         }
 
         # The VM cannot know whether DST publishes a public IP, and that is the
@@ -755,6 +735,6 @@ function Get-DuneVmMemoryPressure {
         $script:DuneMemPressureCacheAt = Get-Date
         return $parsed
     } catch {
-        return @{ ok=$false; pressure=$false; severity='none'; warnings=@(); blockers=@(); message=$_.Exception.Message }
+        return @{ ok=$false; pressure=$false; severity='none'; warnings=@(); faults=@(); message=$_.Exception.Message }
     }
 }

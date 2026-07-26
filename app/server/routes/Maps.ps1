@@ -1,4 +1,4 @@
-﻿# Routes for on-demand map control (currently DeepDesert).
+# Routes for on-demand map control (currently DeepDesert).
 
 # Static route — clears drifted partitions so on-demand maps launch again.
 # Registered separately from /api/maps/{key} (it's a POST so there's no
@@ -29,43 +29,6 @@ Register-DuneRoute -Method POST -Path '/api/maps/restart-pods' -Handler {
             return
         }
         $result = Invoke-WithDuneLock -Name 'ondemand-maps' -Script { Restart-DuneMapPods -Key $key }
-        if (-not $result.ok -and $result.status) {
-            Write-DuneError -Response $res -Status $result.status -Message $result.message
-            return
-        }
-        Write-DuneJson -Response $res -Body $result
-    } catch {
-        Write-DuneError -Response $res -Status 500 -Message $_.Exception.Message
-    }
-}
-
-# Static routes — per-map memory limits vs Funcom's world-template defaults.
-# Funcom's experimental swap preset crushes these (Hagga 12Gi -> 1Gi, Overmap
-# 2Gi -> 200Mi, DD 15Gi -> 10Gi) and the values survive a VM resize, so an
-# operator who "gave the VM more RAM" is still running crushed limits with no
-# feedback. Registered BEFORE /api/maps/{key} so 'memory-limits' can never be
-# read as a map key.
-Register-DuneRoute -Method GET -Path '/api/maps/memory-limits' -Handler {
-    param($req, $res, $routeParams, $body)
-    try {
-        $result = Get-DuneMapMemoryLimitReport
-        if (-not $result.ok -and $result.status) {
-            Write-DuneError -Response $res -Status $result.status -Message $result.message
-            return
-        }
-        Write-DuneJson -Response $res -Body $result
-    } catch {
-        Write-DuneError -Response $res -Status 500 -Message $_.Exception.Message
-    }
-}
-
-# Patch every map whose limit is BELOW its template default back to that
-# default. Values above the default are a deliberate operator choice and are
-# left alone. Only touches memory limits — never swap, kubelet or k3s.
-Register-DuneRoute -Method POST -Path '/api/maps/memory-limits/restore' -Handler {
-    param($req, $res, $routeParams, $body)
-    try {
-        $result = Invoke-WithDuneLock -Name 'ondemand-maps' -Script { Restore-DuneMapMemoryLimits }
         if (-not $result.ok -and $result.status) {
             Write-DuneError -Response $res -Status $result.status -Message $result.message
             return
