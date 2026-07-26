@@ -1,4 +1,4 @@
-# /api/diagnostics — build a redacted ZIP of logs the user can attach to a
+﻿# /api/diagnostics — build a redacted ZIP of logs the user can attach to a
 # GitHub bug report. Triggered from the React "Help → Create GitHub Issue +
 # Save Logs" menu item and from the CLI `report-issue` command.
 #

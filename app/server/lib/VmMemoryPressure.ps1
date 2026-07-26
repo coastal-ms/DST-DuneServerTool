@@ -67,7 +67,7 @@ $script:DuneSwapModeMemoryValues = @('1Gi', '200Mi', '10Gi')
 # Funcom world-template per-map memory defaults (2026-05 snapshot), ported from
 # scripts/dune-swap-doctor.sh.
 #
-# ⚠ THIS TABLE GOES STALE. Funcom changes these between patches - verified
+# NOTE: THIS TABLE GOES STALE. Funcom changes these between patches - verified
 # 2026-07-26 against a healthy live server whose small story/DLC maps sit BELOW
 # this snapshot (Story_ProcesVerbal 2Gi vs 6Gi here, LostHarvest_ForgottenLab
 # 2Gi vs 5Gi) while Hagga/Deep Desert were deliberately raised ABOVE it. So it

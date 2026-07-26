@@ -532,7 +532,10 @@ function MaintCard(p: MaintCardProps) {
     <div className="card p-5 flex flex-col">
       <div className="flex items-center gap-3 mb-3">
         <Icon name={p.icon} size={22} className={accent} />
-        <h2 className={'text-base font-semibold tracking-tight ' + accent}>{p.title}</h2>
+        {/* Heading is always text-success so both maintenance cards read the
+            same and stay legible on the dark card; the destructive signal for
+            Restore lives on its icon and its primary button, not the title. */}
+        <h2 className="text-base font-semibold tracking-tight text-success">{p.title}</h2>
       </div>
       <p className="text-sm text-text-muted mb-3 flex-1">{p.description}</p>
       <p className="text-xs text-text-dim mb-4">{p.hint}</p>
