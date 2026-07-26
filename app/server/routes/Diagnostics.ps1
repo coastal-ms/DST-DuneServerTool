@@ -1,4 +1,4 @@
-﻿# /api/diagnostics — build a redacted ZIP of logs the user can attach to a
+# /api/diagnostics — build a redacted ZIP of logs the user can attach to a
 # GitHub bug report. Triggered from the React "Help → Create GitHub Issue +
 # Save Logs" menu item and from the CLI `report-issue` command.
 #
@@ -381,8 +381,16 @@ function New-DstDiagnosticBundle {
     # Pull a pod snapshot plus the recent logs of the connection-path pods
     # (game servers, server gateway, battlegroup director, text router, the
     # game message queue) so the actual join-rejection reason is captured.
-    # Best-effort over SSH; never fatal. Dump/backup pods are excluded - they
-    # are terminal and pure noise.
+    #
+    # 2026-07-26: this section used to `grep -Ev 'dump|backup'` the pod snapshot
+    # itself, which hid exactly the pods involved in a hung database operation -
+    # a bundle from a 24h total outage was complete and correct and still did
+    # not contain its own root cause. The snapshot now shows every pod, adds
+    # DatabaseOperation state (the resource that blocks map pods from ever being
+    # created), the battlegroup's per-map memory limits, node conditions, disk,
+    # swap and retained build images, and collects db-layer pod logs. Log
+    # capture still skips the transient dump/backup pods.
+    # Best-effort over SSH; never fatal.
     if (Get-Command Invoke-V6Ssh -ErrorAction SilentlyContinue) {
         $podCtxIp = $null
         foreach ($getter in 'Get-DuneGameConfigContext', 'Get-DuneDbContext') {
@@ -400,22 +408,51 @@ NS=$(sudo kubectl get ns --no-headers -o custom-columns=N:.metadata.name 2>/dev/
 if [ -z "$NS" ]; then echo "__NO_NS"; exit 0; fi
 echo "=== namespace: $NS ==="
 echo ""
-echo "=== kubectl get pods -o wide (dump/backup excluded) ==="
-sudo kubectl get pods -n "$NS" -o wide 2>&1 | grep -Ev 'dump|backup'
+echo "=== kubectl get pods -o wide (all pods, including dump/backup) ==="
+sudo kubectl get pods -n "$NS" -o wide 2>&1
 echo ""
 echo "=== kubectl get serverset ==="
 sudo kubectl get serverset -n "$NS" 2>&1
 echo ""
 echo "=== kubectl get battlegroup ==="
 sudo kubectl get battlegroup -n "$NS" 2>&1
+echo ""
+echo "=== kubectl get databaseoperations ==="
+sudo kubectl get databaseoperations -n "$NS" 2>&1 | awk 'NR==1 || $0 !~ /Succeeded/'
+echo ""
+echo "=== non-Succeeded database operations (describe) ==="
+STUCK=$(sudo kubectl get databaseoperations -n "$NS" --no-headers 2>/dev/null | awk '$0 !~ /Succeeded/ {print $1}')
+if [ -z "$STUCK" ]; then
+  echo "(none - every DatabaseOperation is Succeeded)"
+else
+  for op in $STUCK; do
+    echo "---------- $op ----------"
+    sudo kubectl describe databaseoperation -n "$NS" "$op" 2>&1
+  done
+fi
+echo ""
+echo "=== per-map memory limits (battlegroup spec) ==="
+sudo kubectl get battlegroup -n "$NS" -o jsonpath='{range .items[0].spec.serverGroup.template.spec.sets[*]}{.map}{"  "}{.resources.limits.memory}{"\n"}{end}' 2>&1
+echo ""
+echo "=== node conditions ==="
+sudo kubectl get node -o jsonpath='{range .items[0].status.conditions[*]}{.type}{"="}{.status}{"  "}{.reason}{"\n"}{end}' 2>&1
+echo ""
+echo "=== disk (df) ==="
+sudo df -h 2>&1 || sudo df 2>&1
+echo ""
+echo "=== swap (free -h) ==="
+free -h 2>&1 || free 2>&1
+echo ""
+echo "=== retained container images ==="
+(sudo k3s crictl images 2>/dev/null || sudo crictl images 2>/dev/null) | awk 'NR==1 || tolower($0) ~ /seabass/'
 echo "__PODS_END__"
-for p in $(sudo kubectl get pods -n "$NS" --no-headers -o custom-columns=N:.metadata.name 2>/dev/null | grep -Ev 'dump|backup' | grep -E 'sg-|sgw|gateway|bgd|director|textrouter|tr-|mq-'); do
+for p in $(sudo kubectl get pods -n "$NS" --no-headers -o custom-columns=N:.metadata.name 2>/dev/null | grep -Ev 'dump|backup' | grep -E 'sg-|sgw|gateway|bgd|director|textrouter|tr-|mq-|db-dbdepl|db-util'); do
   echo ""
   echo "########## $p (tail 200) ##########"
   sudo kubectl logs -n "$NS" "$p" --tail=200 --all-containers=true 2>&1 | tail -220
 done
 '@ -replace "`r", ''
-                $podRaw = (Invoke-V6Ssh -Ip $podCtxIp -Cmd $podBash -TimeoutSec 90) -join "`n"
+                $podRaw = (Invoke-V6Ssh -Ip $podCtxIp -Cmd $podBash -TimeoutSec 150) -join "`n"
                 if ($podRaw -match '__NO_NS') {
                     $warnings.Add('Game-server pod logs skipped: no self-hosted battlegroup namespace found on the VM.')
                 } elseif ([string]::IsNullOrWhiteSpace($podRaw)) {
@@ -427,8 +464,9 @@ done
                     Set-Content -LiteralPath $outS -Value $statusTxt -Encoding UTF8
                     $included.Add(@{ name = 'game-pods.txt'; bytes = (Get-Item -LiteralPath $outS).Length })
                     if ($parts.Count -gt 1 -and -not [string]::IsNullOrWhiteSpace($parts[1])) {
-                        $logHeader = "# Game-server pod logs (sanitized; tail 200 per pod; connection-path pods only)." + "`r`n" +
-                                     "# Used to diagnose P34 / 'can't connect' when the server is visible but players time out." + "`r`n`r`n"
+                        $logHeader = "# Game-server pod logs (sanitized; tail 200 per pod; connection-path + database pods)." + "`r`n" +
+                                     "# Used to diagnose P34 / 'can't connect' when the server is visible but players time out," + "`r`n" +
+                                     "# and database-layer outages (db-dbdepl / db-util) that stop map pods being created at all." + "`r`n`r`n"
                         $logTxt = $logHeader + (Invoke-DstRedaction -Text ($parts[1].Trim()) @redactArgs)
                         $outL = Join-Path $stageDir 'game-server-logs.txt'
                         Set-Content -LiteralPath $outL -Value $logTxt -Encoding UTF8
@@ -471,26 +509,82 @@ done
                     $memLines.Add("RESULT: MEMORY PRESSURE DETECTED (severity: $($memFinding.severity))")
                     $memLines.Add(">> $($memFinding.headline)")
                 } else {
-                    $memLines.Add('RESULT: no memory-pressure signals (operators healthy, memory has headroom).')
+                    $memLines.Add('RESULT: no memory-pressure signals (memory has headroom; elevated operator restarts alone are not treated as memory pressure).')
                 }
+                $memLines.Add('')
+                $memLines.Add('The sections below are OBSERVATIONS, not verdicts. Values that differ from a')
+                $memLines.Add('reference are not by themselves evidence of a problem - deployments differ, and')
+                $memLines.Add('Funcom changes its own defaults between patches.')
                 $memLines.Add('')
                 $m = $memFinding.mem
                 $memLines.Add('Node memory:')
                 $memLines.Add(("  MemTotal     : {0}" -f (Format-DuneMemKiB $m.totalK)))
                 $memLines.Add(("  MemAvailable : {0}{1}" -f (Format-DuneMemKiB $m.availK), $(if ($null -ne $m.availPct) { " ($($m.availPct)%)" } else { '' })))
-                $memLines.Add(("  Swap total   : {0}{1}" -f (Format-DuneMemKiB $m.swapTotalK), $(if ($m.swapZero) { '  << no swap cushion' } else { '' })))
+                $memLines.Add(("  Swap total   : {0}{1}" -f (Format-DuneMemKiB $m.swapTotalK), $(if ($m.swapZero) { '  << no swap cushion' } else { '  << swap ACTIVE (Funcom experimental preset crushes per-map limits when swap is on)' })))
                 $memLines.Add('')
+                if ($memFinding.node -and $memFinding.node.known) {
+                    $memLines.Add('Node conditions:')
+                    foreach ($ck in ($memFinding.node.conditions.Keys | Sort-Object)) {
+                        $flag = if (($ck -ne 'Ready' -and $memFinding.node.conditions[$ck] -eq 'True') -or ($ck -eq 'Ready' -and $memFinding.node.conditions[$ck] -ne 'True')) { '  << ' } else { '' }
+                        $memLines.Add(("  {0,-16} {1}{2}" -f $ck, $memFinding.node.conditions[$ck], $flag))
+                    }
+                    $memLines.Add('')
+                }
+                if ($memFinding.disk -and $memFinding.disk.known) {
+                    $memLines.Add('Root filesystem:')
+                    $memLines.Add(("  Size / Used / Available : {0} / {1} / {2}" -f `
+                        (Format-DuneMemKiB $memFinding.disk.sizeK), (Format-DuneMemKiB $memFinding.disk.usedK), (Format-DuneMemKiB $memFinding.disk.availK)))
+                    $memLines.Add(("  Used                    : {0}%{1}" -f $memFinding.disk.usePct,
+                        $(if ($memFinding.disk.critical) { '  << critical' } elseif ($memFinding.disk.high) { '  << high (kubelet image GC starts at 85%)' } else { '' })))
+                    $memLines.Add('')
+                }
+                if ($memFinding.bg -and ($memFinding.bg.name -or $memFinding.bg.databasePhase)) {
+                    $memLines.Add('Battlegroup database:')
+                    $memLines.Add(("  Battlegroup    : {0}" -f $memFinding.bg.name))
+                    $memLines.Add(("  DATABASE phase : {0}{1}" -f $memFinding.bg.databasePhase,
+                        $(if ($memFinding.bg.databasePhase -and $memFinding.bg.databasePhase -ne 'Ready') { '  << not Ready - no map pods will be created' } else { '' })))
+                    $memLines.Add(("  DatabaseOperations : {0} total, {1} not Succeeded" -f $memFinding.dbOps.total, $memFinding.dbOps.open))
+                    foreach ($op in @($memFinding.dbOps.stuck)) {
+                        $memLines.Add(("    {0,-52} phase={1} age={2}m" -f $op.name, $op.phase, $(if ($null -ne $op.ageMinutes) { [int]$op.ageMinutes } else { '?' })))
+                    }
+                    $memLines.Add('')
+                }
+                if ($memFinding.mapLimits -and $memFinding.mapLimits.known) {
+                    $memLines.Add('Per-map memory limits (reference column = Funcom world-template snapshot, 2026-05;')
+                    $memLines.Add('Funcom changes these between patches and operators legitimately tune them, so a')
+                    $memLines.Add('difference here is information, not a fault):')
+                    foreach ($e in @($memFinding.mapLimits.entries)) {
+                        $memLines.Add(("  {0,-40} {1,-8} reference {2}" -f $e.map, $e.limit, $(if ($e.reference) { $e.reference } else { '(not in snapshot)' })))
+                    }
+                    $memLines.Add('')
+                }
+                if ($memFinding.images -and $memFinding.images.known) {
+                    $memLines.Add(('Retained Funcom build images: {0} build(s), {1} total' -f $memFinding.images.buildCount, (Format-DuneByteSize $memFinding.images.totalBytes)))
+                    foreach ($img in @($memFinding.images.entries)) {
+                        $memLines.Add(("  {0,-52} {1,-10} {2}" -f $img.repo, $img.tag, $img.size))
+                    }
+                    $memLines.Add('')
+                }
+                if ($null -ne $memFinding.dnat.udpRules) {
+                    $memLines.Add(('Game UDP DNAT bridge: {0} rule(s){1}' -f $memFinding.dnat.udpRules,
+                        $(if ($memFinding.dnat.missing) { '  << MISSING while a public IP is configured - players will get P34' } else { '' })))
+                    if (@($memFinding.dnat.ports).Count -gt 0) {
+                        $memLines.Add(('  ports: {0}' -f ((@($memFinding.dnat.ports) | Sort-Object -Unique) -join ' ')))
+                    }
+                    $memLines.Add('')
+                }
                 if ($m.freeH) {
                     $memLines.Add('free -h:')
                     foreach ($fl in ($m.freeH -split "`n")) { $memLines.Add("  $fl") }
                     $memLines.Add('')
                 }
-                $memLines.Add('Funcom operator pods (controller-managers) - RestartCount should be 0:')
+                $memLines.Add('Funcom operator pods (controller-managers). NOTE: all four restarting in lockstep')
+                $memLines.Add('with lastExit=255 / reason=Unknown is NORMAL Funcom behaviour, not memory pressure:')
                 if (@($memFinding.operators).Count -eq 0) {
                     $memLines.Add('  (none found)')
                 } else {
                     foreach ($p in $memFinding.operators) {
-                        $flag = if ($p.oom) { '  << OOMKilled/137' } elseif ($p.restarts -gt 5) { '  << elevated' } else { '' }
+                        $flag = if ($p.oom) { '  << OOMKilled/137' } elseif ($p.churnOnly) { '  (ordinary operator churn)' } elseif ($p.restarts -gt 5) { '  << elevated' } else { '' }
                         $memLines.Add(("  {0,-46} restarts={1} phase={2} lastExit={3} reason={4}{5}" -f `
                             $p.shortName, $p.restarts, $p.phase, ((@($p.exitCodes) -join ',')), ((@($p.termReasons) -join ',')), $flag))
                     }
@@ -501,7 +595,7 @@ done
                     $memLines.Add('  (none found)')
                 } else {
                     foreach ($p in $memFinding.db) {
-                        $flag = if ($p.oom) { '  << OOMKilled/137/evicted' } elseif ($p.restarts -gt 5) { '  << elevated' } else { '' }
+                        $flag = if ($p.oom) { '  << OOMKilled/137/evicted' } elseif ($p.churnOnly) { '  (ordinary churn)' } elseif ($p.restarts -gt 5) { '  << elevated' } else { '' }
                         $memLines.Add(("  {0,-46} restarts={1} phase={2} lastExit={3} reason={4}{5}" -f `
                             $p.shortName, $p.restarts, $p.phase, ((@($p.exitCodes) -join ',')), ((@($p.termReasons) -join ',')), $flag))
                     }
@@ -717,6 +811,7 @@ Register-DuneRoute -Method GET -Path '/api/diagnostics/vm-memory' -Handler {
             severity = [string]($f.severity)
             headline = [string]($f.headline)
             warnings = @($f.warnings)
+            faults   = @($f.faults)
             message  = [string]($f.message)
         }
         if ($f.ok -and $f.mem) {
@@ -731,6 +826,71 @@ Register-DuneRoute -Method GET -Path '/api/diagnostics/vm-memory' -Handler {
             $body.oomKills    = [int]$f.signals.oomKills
         }
         Write-DuneJson -Response $res -Body $body
+    } catch {
+        Write-DuneError -Response $res -Status 500 -Message $_.Exception.Message
+    }
+}
+
+# GET /api/diagnostics/vm-health - VM facts for the Database page's info card:
+# root-disk usage, node conditions, database-operation state, per-map memory
+# limits, retained Funcom build images, swap, and the game UDP rule count.
+#
+# These are OBSERVATIONS. DST reports them and stops there - the operator knows
+# the intent behind their own configuration and DST does not. `faults` carries
+# the short exception: states the system itself reports as broken, which cannot
+# be true on a healthy server.
+#
+# Backed by the same read-only, 60s-cached probe as /vm-memory, so polling both
+# costs one SSH round-trip. Never 500s on an unreachable VM.
+Register-DuneRoute -Method GET -Path '/api/diagnostics/vm-health' -Handler {
+    param($req, $res, $routeParams, $body)
+    try {
+        if (-not (Get-Command Get-DuneVmMemoryPressure -ErrorAction SilentlyContinue)) {
+            Write-DuneJson -Response $res -Body @{ ok=$false; faults=@(); message='VM health helper not loaded' }
+            return
+        }
+        $f = Get-DuneVmMemoryPressure
+        $out = @{
+            ok       = [bool]$f.ok
+            faults   = @($f.faults)
+            message  = [string]($f.message)
+        }
+        if ($f.ok) {
+            $out.disk = @{
+                usePct = $f.disk.usePct
+                availK = $f.disk.availK
+                sizeK  = $f.disk.sizeK
+                known  = [bool]$f.disk.known
+            }
+            $out.database = @{
+                phase     = [string]$f.bg.databasePhase
+                total     = [int]$f.dbOps.total
+                open      = [int]$f.dbOps.open
+                stuck     = @($f.dbOps.stuck | ForEach-Object { @{ name=$_.name; phase=$_.phase; ageMinutes=$_.ageMinutes } })
+            }
+            $out.mapLimits = @{
+                known   = [bool]$f.mapLimits.known
+                entries = @($f.mapLimits.entries | ForEach-Object { @{ map=$_.map; limit=$_.limit; reference=$_.reference } })
+            }
+            $out.images = @{
+                buildCount = [int]$f.images.buildCount
+                totalBytes = [double]$f.images.totalBytes
+            }
+            $out.dnat = @{
+                udpRules = $f.dnat.udpRules
+                missing  = [bool]$f.dnat.missing
+            }
+            $out.node = @{
+                diskPressure   = [bool]$f.node.diskPressure
+                memoryPressure = [bool]$f.node.memoryPressure
+                ready          = [bool]$f.node.ready
+            }
+            $out.swap = @{
+                totalK = $f.mem.swapTotalK
+                active = [bool]$f.mem.swapActive
+            }
+        }
+        Write-DuneJson -Response $res -Body $out
     } catch {
         Write-DuneError -Response $res -Status 500 -Message $_.Exception.Message
     }

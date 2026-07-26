@@ -105,7 +105,11 @@ Register-DuneRoute -Method POST -Path '/api/setup/hyperv-lan/credential' -Handle
         $hostIp = ([string]$body['hostIp']).Trim(); if (-not $hostIp) { $hostIp = (Get-DuneHyperVHostIp) }
         $user   = ([string]$body['user']).Trim()
         $pass   = [string]$body['password']
-        if (-not $hostIp -or -not $user -or -not $pass) { Write-DuneError -Response $res -Status 400 -Message 'Host IP, administrator username, and password are required.'; return }
+        if (-not $hostIp -or -not $user -or -not $pass) { Write-DuneError -Response $res -Status 400 -Message 'Host IP, administrator username, and password are required. Windows blocks accounts with a blank password from signing in over the network, so a password is mandatory here.'; return }
+        # Same local validation the Test path runs, so a placeholder username or
+        # a blank password can never be persisted as "the saved credential".
+        $credCheck = Test-DuneHyperVLanCredentialInput -HostIp $hostIp -User $user -Password $pass
+        if (-not $credCheck.ok) { Write-DuneError -Response $res -Status 400 -Message $credCheck.reason; return }
         $r = Save-DuneHyperVLanCredential -HostIp $hostIp -User $user -Password $pass
         if (-not $r.ok) { Write-DuneError -Response $res -Status 500 -Message $r.error; return }
         Write-DuneJson -Response $res -Body @{ ok = $true }

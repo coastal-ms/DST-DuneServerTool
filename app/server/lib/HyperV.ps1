@@ -68,6 +68,53 @@ function Get-DuneHyperVSplat {
 #   3. Neither - fails fast with an actionable "enter a credential" reason
 #      instead of silently trying the current Windows identity (the original
 #      bug: that identity is routinely wrong for a separate LAN host).
+function Test-DuneHyperVLanCredentialInput {
+    # Pure, local validation of what the user typed into the Hyper-V over LAN
+    # credential fields, run BEFORE any WinRM round-trip. Returns
+    # @{ ok; reason }.
+    #
+    # Two real onboarding failures this catches (both from #hosting-help, one
+    # week apart, on a field that shipped in v12.20.0):
+    #
+    #  1. The hint "Use HOST\username" was read as "keep HOST\, replace
+    #     username" - a user whose host is named HELL entered "HOST\HELL". The
+    #     Test button then failed with a generic credential error that gave him
+    #     nothing to correct.
+    #  2. A host account with NO password can never connect: Windows blocks
+    #     local accounts with blank passwords from network logon by default
+    #     ("Accounts: Limit local account use of blank passwords to console
+    #     logon only", on out of the box). DST surfaced Windows' generic "the
+    #     username or password is incorrect", so the obvious next step -
+    #     retyping the username - never helped.
+    param(
+        [string]$HostIp = '',
+        [string]$User = '',
+        [string]$Password = ''
+    )
+    $u = ([string]$User).Trim()
+    if (-not $u) { return @{ ok = $true; reason = '' } }
+
+    # Literal placeholder text typed verbatim.
+    if ($u -match '^(?i)(HOST|COMPUTERNAME|COMPUTER-NAME|MACHINE|SERVERNAME)\\') {
+        $prefix = ($u -split '\\')[0]
+        $account = ($u -split '\\', 2)[1]
+        $suggest = if ($HostIp) { "$HostIp\$(if ($account) { $account } else { 'Administrator' })" } else { "<host name>\$(if ($account) { $account } else { 'Administrator' })" }
+        return @{
+            ok     = $false
+            reason = "'$u' looks like the example text rather than a real account. '$prefix\' is a placeholder for your host's own computer name - replace BOTH parts, e.g. $suggest."
+        }
+    }
+
+    if ([string]::IsNullOrEmpty($Password)) {
+        return @{
+            ok     = $false
+            reason = "That account has no password, and Windows does not allow accounts with a blank password to sign in over the network (it is blocked by default: 'Accounts: Limit local account use of blank passwords to console logon only'). Set a password on the host account and use it here."
+        }
+    }
+
+    return @{ ok = $true; reason = '' }
+}
+
 function Test-DuneHyperVLan {
     param(
         # AllowEmptyString: Mandatory string parameters otherwise reject an
@@ -84,6 +131,12 @@ function Test-DuneHyperVLan {
     $HostIp = ($HostIp | Out-String).Trim()
     if (-not $HostIp) {
         return @{ ok = $false; vmFound = $false; reason = 'No Hyper-V host IP provided.' }
+    }
+    # Fail fast on locally-detectable credential mistakes so the user gets the
+    # actual reason instead of Windows' generic logon failure.
+    $credCheck = Test-DuneHyperVLanCredentialInput -HostIp $HostIp -User $User -Password $Password
+    if (-not $credCheck.ok) {
+        return @{ ok = $false; vmFound = $false; reason = $credCheck.reason }
     }
     if (-not (Get-Command Get-VM -ErrorAction SilentlyContinue)) {
         return @{ ok = $false; vmFound = $false; reason = 'The Hyper-V PowerShell module is not installed on this PC. It is required to manage a remote Hyper-V host. Enable Hyper-V (or the Hyper-V Management Tools) via Windows Features.' }
@@ -102,7 +155,8 @@ function Test-DuneHyperVLan {
         }
     }
     if (-not $cred) {
-        return @{ ok = $false; vmFound = $false; reason = "No Hyper-V host administrator credential provided for $HostIp. Enter the host's administrator username and password (e.g. HOST\Administrator in a workgroup) below, then test again." }
+        $example = "$HostIp\Administrator"
+        return @{ ok = $false; vmFound = $false; reason = "No Hyper-V host administrator credential provided for $HostIp. Enter the host's administrator username and password - in a workgroup that is the host's own computer name followed by the account, e.g. $example - then test again." }
     }
 
     try {
@@ -117,7 +171,7 @@ function Test-DuneHyperVLan {
         $credHint = if ($usingSaved) { 'the saved credential' } else { 'the credential entered' }
         $reason =
             if ($msg -match '(?i)access is denied|access denied|logon failure|credentials|0x80070005') {
-                "Reached $HostIp but access was denied using $credHint. That account must be an administrator (Hyper-V Administrators) on the remote host, and remote Hyper-V management must be allowed there. In a workgroup, use HOST\username for the host's own local account - it is often not the same account DST itself runs as."
+                "Reached $HostIp but access was denied using $credHint. That account must be an administrator (Hyper-V Administrators) on the remote host, and remote Hyper-V management must be allowed there. In a workgroup, use the host's OWN computer name followed by its local account (e.g. $HostIp\Administrator) - it is often not the same account DST itself runs as. If that account has no password, set one: Windows blocks blank-password accounts from signing in over the network."
             } elseif ($msg -match '(?i)RPC server is unavailable|cannot be found|cannot connect|unable to connect|no such host|actively refused|timed out|0x800706ba') {
                 "Could not reach Hyper-V on $HostIp. Confirm the host is on, its IP is correct, and that Hyper-V remote management is allowed through its firewall."
             } else {

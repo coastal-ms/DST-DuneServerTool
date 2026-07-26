@@ -1,4 +1,4 @@
-﻿# Routes for on-demand map control (currently DeepDesert).
+# Routes for on-demand map control (currently DeepDesert).
 
 # Static route — clears drifted partitions so on-demand maps launch again.
 # Registered separately from /api/maps/{key} (it's a POST so there's no

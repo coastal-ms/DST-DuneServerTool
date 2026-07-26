@@ -69,16 +69,29 @@ export function HyperVLanCard() {
   const runTest = useCallback(async () => {
     const ip = hostIp.trim()
     if (!ip) { setErr('Enter the Hyper-V host IP first.'); return }
-    const usingNewCred = editingCred && credUser.trim() && credPassword
-    if (editingCred && !usingNewCred) { setErr("Enter the host's administrator username and password first."); return }
+    const user = credUser.trim()
+    if (editingCred) {
+      if (!user) { setErr("Enter the host's administrator username first."); return }
+      // Both of these were real field failures, and both used to surface as
+      // Windows' generic "the username or password is incorrect".
+      if (/^(HOST|COMPUTERNAME|COMPUTER-NAME|MACHINE|SERVERNAME)\\/i.test(user)) {
+        setErr(`"${user}" looks like the example text. The part before the backslash is a placeholder for your host's own computer name — replace both parts, e.g. ${ip}\\Administrator.`)
+        return
+      }
+      if (!credPassword) {
+        setErr('Windows does not allow accounts with a blank password to sign in over the network, so this can never connect. Set a password on the host account and enter it here.')
+        return
+      }
+    }
+    const usingNewCred = editingCred && !!user && !!credPassword
     setTesting(true); setErr(null); setMsg(null); setTest(null)
     try {
       const result = usingNewCred
-        ? await testHyperVLan(ip, credUser.trim(), credPassword)
+        ? await testHyperVLan(ip, user, credPassword)
         : await testHyperVLan(ip)
       setTest(result)
       if (result.ok && usingNewCred) {
-        await saveHyperVLanCredential(ip, credUser.trim(), credPassword)
+        await saveHyperVLanCredential(ip, user, credPassword)
         setCredPassword('')
         await loadCredInfo(ip)
       }
@@ -210,19 +223,21 @@ export function HyperVLanCard() {
                       value={credUser}
                       onChange={e => { setCredUser(e.target.value); setTest(null) }}
                       spellCheck={false}
-                      placeholder="HOST\Administrator"
+                      placeholder={hostIp.trim() ? `${hostIp.trim()}\\Administrator` : 'e.g. MYHOST\\Administrator'}
                       className="px-3 py-2 rounded-lg bg-surface-2 border border-border text-text font-mono text-sm"
                     />
                     <input
                       type="password"
                       value={credPassword}
                       onChange={e => { setCredPassword(e.target.value); setTest(null) }}
-                      placeholder="Password"
+                      placeholder="Password (cannot be blank)"
                       className="px-3 py-2 rounded-lg bg-surface-2 border border-border text-text text-sm"
                     />
                     <p className="md:col-span-2 text-xs text-text-dim">
                       The host's own administrator account — in a workgroup this is routinely a <strong>different</strong>{' '}
-                      account than the one DST itself runs as. Use <span className="font-mono">HOST\username</span>.
+                      account than the one DST itself runs as. Use the host's <strong>computer name</strong>, a backslash,
+                      then the account: <span className="font-mono">{hostIp.trim() ? `${hostIp.trim()}\\Administrator` : 'MYHOST\\Administrator'}</span>.
+                      The account must have a password — Windows blocks blank-password accounts from signing in over the network.
                     </p>
                   </div>
                 )}

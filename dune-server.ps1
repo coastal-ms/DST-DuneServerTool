@@ -862,6 +862,42 @@ function Test-DuneBattlegroupHasPods {
     return ([int]$n -gt 0)
 }
 
+function Get-DuneDatabaseBlockState {
+    # Ask the VM whether a DatabaseOperation is holding the database open.
+    #
+    # Why: while any DatabaseOperation is registered the Funcom operator creates
+    # NO map pods at all - the battlegroup reports DATABASE=Operation, every map
+    # sits at Starting with REQUEST 1 / TARGET 1 / READY 0, and any restore also
+    # fails. A field case ran ~24h on this. DST used to report only "<map> pod
+    # was never found within 05:00", which reads like a scheduling or image-pull
+    # problem and points nowhere near the database.
+    #
+    # Read-only, best-effort. Returns @{ blocked; phase; ops=@(name/phase) }.
+    param(
+        [Parameter(Mandatory)] [string] $Ip,
+        [string] $SshUser = $sshUser,
+        [string] $SshKey  = $sshKey
+    )
+    $state = @{ blocked = $false; phase = ''; ops = @() }
+    try {
+        $cmd = @'
+NS=$(sudo k3s kubectl get ns --no-headers -o custom-columns=N:.metadata.name 2>/dev/null | grep -m1 '^funcom-seabass-')
+[ -n "$NS" ] || exit 0
+echo "phase=$(sudo k3s kubectl -n "$NS" get battlegroup -o jsonpath='{.items[0].status.database.phase}' 2>/dev/null)"
+sudo k3s kubectl -n "$NS" get databaseoperations --no-headers 2>/dev/null | awk '$0 !~ /Succeeded/ {print "op=" $1 " " $2}'
+'@ -replace "`r", ''
+        $out = ssh -o BatchMode=yes -o StrictHostKeyChecking=no -o LogLevel=QUIET -o ConnectTimeout=8 `
+                   -i "$SshKey" "$SshUser@$Ip" $cmd 2>$null
+        foreach ($line in @($out)) {
+            $t = ([string]$line).Trim()
+            if ($t -like 'phase=*') { $state.phase = $t.Substring(6).Trim(); continue }
+            if ($t -like 'op=*')    { $state.ops += $t.Substring(3).Trim() }
+        }
+        $state.blocked = (($state.phase -and $state.phase -ne 'Ready') -or $state.ops.Count -gt 0)
+    } catch {}
+    return $state
+}
+
 function Wait-MapPodReady {
     param(
         [Parameter(Mandatory)] [string] $Ip,
@@ -936,16 +972,35 @@ function Get-DuneMemPressureProbePath {
     return $null
 }
 
+function Get-DuneVmHealthLibPath {
+    # The web backend's probe parser (app/server/lib/VmMemoryPressure.ps1) is
+    # pure PowerShell, so the CLI dot-sources it *inside* the warning function
+    # (function scope only, no global overrides) instead of maintaining a second
+    # copy of the parsing + verdict rules that would inevitably drift.
+    $candidates = @(
+        (Join-Path $scriptDir 'server\lib\VmMemoryPressure.ps1')
+        (Join-Path $scriptDir 'app\server\lib\VmMemoryPressure.ps1')
+    )
+    foreach ($p in $candidates) {
+        if (Test-Path -LiteralPath $p) { return $p }
+    }
+    return $null
+}
+
 function Show-DuneVmMemoryPressureWarning {
-    # Run the read-only VM memory-pressure probe over SSH and print a red
-    # warning if the node is thrashing for memory: Funcom operators OOM-killed
-    # (exit 137 / OOMKilled, high restart counts), Postgres evicted, or a tiny
-    # MemAvailable with Swap: 0. This is the root cause of the "battlegroup
-    # restarted outside its schedule" / "ping surge under load" reports and is
-    # otherwise invisible without hand-reading exported logs.
+    # Run the read-only VM health probe over SSH and print red warnings for
+    # anything the operator has to act on: a stuck DatabaseOperation holding the
+    # server down, DiskPressure / a filling root volume, a missing game-UDP
+    # bridge, per-map memory limits crushed by Funcom's experimental swap
+    # preset, and genuine memory pressure (OOM-killed operators, evicted
+    # Postgres, or a tiny MemAvailable with Swap: 0).
     #
-    # Uses the SAME bundled probe the web backend uses
-    # (app/server/lib/VmMemoryPressure.ps1 + dune-mem-pressure-probe.sh) so the
+    # 2026-07-26: elevated restart counts NO LONGER declare memory pressure on
+    # their own. Funcom's operators restart in lockstep by design (exit 255 /
+    # reason Unknown), so the old rule fired on healthy servers and told a user
+    # whose server was down with 94% free RAM to buy more RAM.
+    #
+    # Uses the SAME bundled probe AND the same parser as the web backend so the
     # CLI Start-All and the Server Health banner never disagree. Read-only and
     # best-effort - never throws, never blocks a good start on a probe hiccup.
     param(
@@ -965,81 +1020,32 @@ function Show-DuneVmMemoryPressureWarning {
         $out = $b64 | & ssh -o BatchMode=yes -o StrictHostKeyChecking=no -o LogLevel=QUIET -o ConnectTimeout=8 `
                     -i "$SshKey" "${SshUser}@${Ip}" 'base64 -d | sudo -n bash' 2>$null
         if (-not $out) { return }
-        $lines = @($out)
 
-        # --- lightweight parse (mirrors ConvertFrom-DuneMemPressureProbe) -----
-        $memTotalK = $null; $memAvailK = $null; $swapTotalK = $null
-        $records = New-Object System.Collections.Generic.List[object]
-        foreach ($line in $lines) {
-            $t = ([string]$line).Trim()
-            if (-not $t) { continue }
-            if ($t -like 'mem_total_k=*')  { $memTotalK  = [long]($t.Substring(12)); continue }
-            if ($t -like 'mem_avail_k=*')  { $memAvailK  = [long]($t.Substring(12)); continue }
-            if ($t -like 'swap_total_k=*') { $swapTotalK = [long]($t.Substring(13)); continue }
-            if ($t -like 'op=*' -or $t -like 'db=*') {
-                $kind = $t.Substring(0, 2)
-                $rec  = $t.Substring(3)
-                $parts = $rec -split '~'
-                $name = $parts[0]
-                $restarts = 0; $exits = @(); $reasons = @(); $podReason = ''
-                foreach ($seg in ($parts | Select-Object -Skip 1)) {
-                    $c = $seg.IndexOf(':'); if ($c -lt 1) { continue }
-                    $tag = $seg.Substring(0, $c); $val = $seg.Substring($c + 1)
-                    switch ($tag) {
-                        'PR' { $podReason = $val.Trim() }
-                        'R'  { $nums = @($val -split '\s+' | Where-Object { $_ -match '^\d+$' } | ForEach-Object { [int]$_ }); if ($nums.Count) { $restarts = ($nums | Measure-Object -Maximum).Maximum } }
-                        'E'  { $exits   = @($val -split '\s+' | Where-Object { $_ -ne '' }) }
-                        'X'  { $reasons = @($val -split '\s+' | Where-Object { $_ -ne '' }) }
-                    }
-                }
-                $oom = ($exits -contains '137') -or ($reasons -contains 'OOMKilled') -or ($podReason -match '(?i)Evicted|OOMKilled')
-                $short = $name -replace '^sh-[a-z0-9]+-[a-z0-9]+-', ''
-                $records.Add([pscustomobject]@{ kind=$kind; name=$short; restarts=$restarts; oom=$oom })
+        $libPath = Get-DuneVmHealthLibPath
+        if (-not $libPath) { return }
+        . $libPath   # function-scoped import of the shared parser
+
+        # The CLI knows whether a public IP is configured from the same config
+        # the web backend reads; without one, zero UDP DNAT rules is normal.
+        $publicIpConfigured = $false
+        try {
+            if ($configFile -and (Test-Path -LiteralPath $configFile)) {
+                $cfgText = Get-Content -LiteralPath $configFile -Raw
+                $publicIpConfigured = ($cfgText -match '(?m)^\s*(ManualPublicIp|DdnsHostname|LastAppliedPublicIp)\s*=\s*\S+')
             }
-        }
+        } catch {}
 
-        $lowMem = $false; $swapZero = ($null -ne $swapTotalK -and $swapTotalK -eq 0)
-        $availPct = $null
-        if ($null -ne $memTotalK -and $memTotalK -gt 0 -and $null -ne $memAvailK) {
-            $availPct = [math]::Round(($memAvailK * 100.0 / $memTotalK), 1)
-            $lowMem = ($memAvailK -lt 1048576 -or $availPct -lt 8)
-        }
-        $oomPods = @($records | Where-Object { $_.oom })
-        $churn   = @($records | Where-Object { -not $_.oom -and $_.restarts -gt 5 })
-        $memPressure = ($oomPods.Count -gt 0) -or ($lowMem -and $swapZero) -or ($churn.Count -gt 0)
-        if (-not $memPressure) { return }
+        $finding = ConvertFrom-DuneMemPressureProbe -Raw (($out | Out-String)) -PublicIpConfigured $publicIpConfigured
+        if (-not $finding.ok) { return }
 
-        function _fmtKiB($k) {
-            if ($null -eq $k) { return '?' }
-            $u = @('KiB','MiB','GiB','TiB'); $v = [double]$k; $i = 0
-            while ($v -ge 1024 -and $i -lt 3) { $v /= 1024; $i++ }
-            if ($i -eq 0) { return ('{0:0} {1}' -f $v, $u[$i]) }
-            return ('{0:0.0} {1}' -f $v, $u[$i])
+        if ($finding.pressure) {
+            Write-Host ""
+            Write-Host "  WARNING: $($finding.headline)" -ForegroundColor Red
+            foreach ($w in @($finding.warnings)) {
+                Write-Host "    $w" -ForegroundColor Yellow
+            }
+            Write-Host "    Full detail: Help > Create GitHub Issue + Save Logs (vm-memory-pressure.txt)." -ForegroundColor DarkGray
         }
-
-        $maxRestarts = 0
-        if ($records.Count -gt 0) { $maxRestarts = ($records | Measure-Object -Property restarts -Maximum).Maximum }
-        $headline = if ($oomPods.Count -gt 0 -and $maxRestarts -gt 0) {
-            "VM low on memory - Funcom operators killed ${maxRestarts}x; consider raising the VM's RAM"
-        } elseif ($lowMem -and $swapZero) {
-            "VM low on memory (Swap: 0) - consider raising the VM's RAM or lowering per-map memory limits"
-        } else {
-            "Possible VM memory pressure - operators/DB have elevated restarts"
-        }
-
-        Write-Host ""
-        Write-Host "  WARNING: $headline" -ForegroundColor Red
-        if ($lowMem) {
-            Write-Host ("    MemAvailable {0} ({1}%) with Swap: {2}." -f (_fmtKiB $memAvailK), $availPct, $(if ($swapZero) { '0 (no cushion)' } else { (_fmtKiB $swapTotalK) })) -ForegroundColor Yellow
-        }
-        foreach ($p in $oomPods) {
-            $label = if ($p.kind -eq 'db') { 'database' } else { 'operator' }
-            Write-Host ("    {0} '{1}' OOM-killed x{2} (exit 137 / OOMKilled)." -f $label, $p.name, $p.restarts) -ForegroundColor Yellow
-        }
-        foreach ($p in $churn) {
-            Write-Host ("    pod '{0}' restarted x{1} (elevated)." -f $p.name, $p.restarts) -ForegroundColor Yellow
-        }
-        Write-Host "    Fix: raise the VM's RAM in Hyper-V, or lower per-map memory limits. Full detail: Help > Create GitHub Issue + Save Logs (vm-memory-pressure.txt)." -ForegroundColor DarkGray
     } catch {
         # Best-effort only - a probe hiccup must never fail a good start.
     }
@@ -1819,7 +1825,24 @@ while ($true) {
                 if ($r.Pod) {
                     Write-Warning "  $map ($($r.Pod)) did not become Ready within $(Format-Duration $r.Elapsed) (last seen: $($r.LastStatus))"
                 } else {
-                    Write-Warning "  $map pod was never found within $(Format-Duration $r.Elapsed)"
+                    # No pod object at all is a DIFFERENT failure class from a pod
+                    # that won't go Ready: the operator never created one. The
+                    # usual cause is a DatabaseOperation still holding the
+                    # database, which nothing else here would mention.
+                    $dbBlock = Get-DuneDatabaseBlockState -Ip $ip
+                    if ($dbBlock.blocked) {
+                        Write-Warning "  $map pod was never CREATED within $(Format-Duration $r.Elapsed) - a database operation is blocking the server"
+                        if ($dbBlock.phase) {
+                            Write-Host ("    Battlegroup DATABASE phase is '{0}' instead of Ready, so the operator creates no map pods." -f $dbBlock.phase) -ForegroundColor Yellow
+                        }
+                        foreach ($op in $dbBlock.ops) {
+                            Write-Host ("    unfinished database operation: {0}" -f $op) -ForegroundColor Yellow
+                        }
+                        Write-Host "    Fix: delete EVERY DatabaseOperation that is not Succeeded (not just the one named in the log), then start again." -ForegroundColor DarkGray
+                        Write-Host "         Deleting those records does not touch the database, its PVC, or any backup." -ForegroundColor DarkGray
+                    } else {
+                        Write-Warning "  $map pod was never found within $(Format-Duration $r.Elapsed)"
+                    }
                 }
             }
         }
