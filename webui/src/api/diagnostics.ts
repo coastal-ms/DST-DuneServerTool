@@ -43,7 +43,7 @@ export function getVmMemoryPressure() {
   return api<VmMemoryPressure>('/api/diagnostics/vm-memory')
 }
 
-// VM facts for the Database page's info card. This is deliberately an
+// VM facts for the Database page's info card. This GET is deliberately an
 // OBSERVATION feed, not a health score: disk usage, retained Funcom build
 // images, per-map memory limits and the UDP rule count are reported as plain
 // numbers with no verdict attached, because deployments differ and Funcom
@@ -81,4 +81,25 @@ export interface VmHealth {
 
 export function getVmHealth() {
   return api<VmHealth>('/api/diagnostics/vm-health')
+}
+
+export interface ImageCleanupResult {
+  ok: boolean
+  complete: boolean
+  message: string
+  removedCount: number
+  removedIds: string[]
+  failedIds: string[]
+  estimatedBytes: number
+  reclaimedK: number
+  activeBuilds: number[]
+  preservedBuilds: number[]
+  disk?: { usePct: number | null; availK: number | null; sizeK: number | null; known: boolean }
+}
+
+export function cleanupOldFuncomImages() {
+  return api<ImageCleanupResult>('/api/diagnostics/cleanup-old-images', {
+    method: 'POST',
+    body: '{}',
+  })
 }

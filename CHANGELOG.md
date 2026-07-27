@@ -13,6 +13,12 @@ here cover everything those tags shipped.
 
 ## [Unreleased]
 
+## [12.21.1] - 2026-07-26
+
+### Added
+
+- **VM info can selectively remove unused old Funcom build images.** Cleanup runs only after explicit confirmation, keeps the active and immediate prior build, preserves every image referenced by a running or exited container, and never targets Funcom operators, Postgres, Kubernetes, or third-party images. Nothing runs automatically and disk usage remains a factual display rather than a warning threshold.
+
 ## [12.21.0] - 2026-07-26
 
 ### Added
