@@ -1,5 +1,5 @@
 import type { ReactNode } from 'react'
-import { useLocation } from 'react-router-dom'
+import { useLocation } from '../router'
 import { MenuBar } from './MenuBar'
 import { Sidebar } from './Sidebar'
 import { StatusBar } from './StatusBar'

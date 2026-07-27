@@ -1,5 +1,5 @@
 import { type ReactNode } from 'react'
-import { NavLink, useLocation } from 'react-router-dom'
+import { NavLink, useLocation } from '../../router'
 import { Icon } from '../../components/Icon'
 
 // Mobile-first remote-portal layout (issue #74).

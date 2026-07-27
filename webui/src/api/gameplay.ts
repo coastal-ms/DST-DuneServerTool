@@ -1208,7 +1208,7 @@ export function getVehicleKitCatalog(): Promise<VehicleKitCatalog> {
     const cat: VehicleKitCatalog = {
       fuelTemplate: r?.fuelTemplate || 'FuelCanister_Large',
       torchTemplate: r?.torchTemplate || 'RepairTool5',
-      vehicles: rawVehicles.map((v: any) => ({
+      vehicles: rawVehicles.map(v => ({
         id: String(v?.id ?? ''),
         label: String(v?.label ?? v?.id ?? ''),
         className: String(v?.className ?? ''),

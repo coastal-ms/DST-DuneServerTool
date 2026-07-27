@@ -1,4 +1,4 @@
-import { NavLink } from 'react-router-dom'
+import { NavLink } from '../router'
 import { useState, useRef } from 'react'
 import { createPortal } from 'react-dom'
 import { Icon } from '../components/Icon'

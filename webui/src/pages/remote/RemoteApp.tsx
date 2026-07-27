@@ -1,4 +1,4 @@
-import { Routes, Route, Navigate } from 'react-router-dom'
+import { Routes, Route, Navigate } from '../../router'
 import { RemoteShell } from './RemoteShell'
 import { RemoteDashboard } from './Dashboard'
 import { RemoteMaps } from './Maps'
