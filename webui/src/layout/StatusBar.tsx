@@ -1,4 +1,4 @@
-import { Link } from 'react-router-dom'
+import { Link } from '../router'
 import { Icon } from '../components/Icon'
 import { useStatus } from '../hooks/useStatus'
 import { useUpdateCheck } from '../hooks/useUpdateCheck'

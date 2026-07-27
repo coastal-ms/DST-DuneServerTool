@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState, type ReactNode } from 'react'
-import { Link } from 'react-router-dom'
+import { Link } from '../router'
 import { PageHeader } from '../components/PageHeader'
 import { Icon } from '../components/Icon'
 import { api, ApiError } from '../api/client'

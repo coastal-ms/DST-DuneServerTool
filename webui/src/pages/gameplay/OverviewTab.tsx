@@ -1,4 +1,4 @@
-import { useNavigate } from 'react-router-dom'
+import { useNavigate } from '../../router'
 import { Icon } from '../../components/Icon'
 import { useApi } from '../../hooks/useApi'
 import type { GameplayStatus } from '../../api/gameplay'

@@ -33,29 +33,40 @@ import Editor, { type OnMount } from '@monaco-editor/react'
 
 type CmdLaunch = { ok: boolean; name: string; pid?: number; mode: string }
 type FixMapsResult = { ok: boolean; output?: string; logTail?: string; message?: string }
+type WebView2Host = {
+  addEventListener: (type: 'message', listener: (event: MessageEvent) => void) => void
+  removeEventListener: (type: 'message', listener: (event: MessageEvent) => void) => void
+  postMessage: (data: unknown) => void
+}
+
+function getWebView2(): WebView2Host | null {
+  const host = window as unknown as { chrome?: { webview?: WebView2Host } }
+  return host.chrome?.webview ?? null
+}
 
 // WebView2 shell bridge: request a native file dialog and get the chosen path back.
 // Posts a message to the shell (MainForm.cs) which shows the dialog and responds
 // via window.chrome.webview.addEventListener('message', ...).
 function pickFileFromShell(action: 'pick-save-file' | 'pick-open-file', opts: { id: string; defaultName?: string; filter?: string }): Promise<string | null> {
   return new Promise(resolve => {
-    const wv = (window as any).chrome?.webview
+    const wv = getWebView2()
     if (!wv) {
       // Not running in WebView2 (e.g. browser portal) — fall through gracefully
       resolve(null)
       return
     }
+    const webview = wv
     function handler(e: MessageEvent) {
       const data = typeof e.data === 'string' ? JSON.parse(e.data) : e.data
       if (data?.action === 'file-picked' && data?.id === opts.id) {
-        wv.removeEventListener('message', handler)
+        webview.removeEventListener('message', handler)
         resolve(data.path ?? null)
       }
     }
-    wv.addEventListener('message', handler)
-    wv.postMessage({ action, ...opts })
+    webview.addEventListener('message', handler)
+    webview.postMessage({ action, ...opts })
     // Timeout: if the dialog is cancelled or shell doesn't respond within 5 min
-    setTimeout(() => { wv.removeEventListener('message', handler); resolve(null) }, 300_000)
+    setTimeout(() => { webview.removeEventListener('message', handler); resolve(null) }, 300_000)
   })
 }
 
@@ -64,18 +75,19 @@ function pickFileFromShell(action: 'pick-save-file' | 'pick-open-file', opts: { 
 // stay in sync with the file variants.
 function pickFolderFromShell(opts: { id: string; initialPath?: string; description?: string }): Promise<string | null> {
   return new Promise(resolve => {
-    const wv = (window as any).chrome?.webview
+    const wv = getWebView2()
     if (!wv) { resolve(null); return }
+    const webview = wv
     function handler(e: MessageEvent) {
       const data = typeof e.data === 'string' ? JSON.parse(e.data) : e.data
       if (data?.action === 'file-picked' && data?.id === opts.id) {
-        wv.removeEventListener('message', handler)
+        webview.removeEventListener('message', handler)
         resolve(data.path ?? null)
       }
     }
-    wv.addEventListener('message', handler)
-    wv.postMessage({ action: 'pick-folder', ...opts })
-    setTimeout(() => { wv.removeEventListener('message', handler); resolve(null) }, 300_000)
+    webview.addEventListener('message', handler)
+    webview.postMessage({ action: 'pick-folder', ...opts })
+    setTimeout(() => { webview.removeEventListener('message', handler); resolve(null) }, 300_000)
   })
 }
 

@@ -1,4 +1,4 @@
-import { Routes, Route, Navigate } from 'react-router-dom'
+import { Routes, Route, Navigate } from './router'
 import { useEffect } from 'react'
 import { AppShell } from './layout/AppShell'
 import { Dashboard } from './pages/Dashboard'
