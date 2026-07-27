@@ -2,11 +2,9 @@
 // Rendered on /changelog via Astro's built-in markdown.
 
 import { readFile } from "node:fs/promises";
-import { fileURLToPath } from "node:url";
-import { dirname, join } from "node:path";
+import { join } from "node:path";
 
-const __dirname = dirname(fileURLToPath(import.meta.url));
-const CHANGELOG_PATH = join(__dirname, "..", "..", "..", "CHANGELOG.md");
+const CHANGELOG_PATH = join(process.cwd(), "..", "CHANGELOG.md");
 
 export async function getChangelog(): Promise<string> {
   try {
