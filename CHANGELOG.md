@@ -13,6 +13,12 @@ here cover everything those tags shipped.
 
 ## [Unreleased]
 
+## [12.21.2] - 2026-07-27
+
+### Security
+
+- **Resolved every Trivy dependency finding in tracked source and bundled .NET runtime manifests.** Mobile, website, and web UI dependencies now use patched releases; affected React Router packages were replaced with a tested Wouter compatibility layer; self-contained desktop executables pin patched .NET runtimes; and a permanent pull-request, main-branch, and weekly Trivy gate now fails on any known vulnerability across production and development dependencies.
+
 ## [12.21.1] - 2026-07-26
 
 ### Added
