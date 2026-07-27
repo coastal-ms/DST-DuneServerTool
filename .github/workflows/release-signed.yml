@@ -117,7 +117,7 @@ jobs:
 
       - name: Sign DuneServer.exe
         if: steps.cfg.outputs.sign == 'true'
-        uses: SignPath/github-action-submit-signing-request@v1
+        uses: SignPath/github-action-submit-signing-request@v2
         with:
           api-token: ${{ secrets.SIGNPATH_API_TOKEN }}
           organization-id: ${{ vars.SIGNPATH_ORGANIZATION_ID }}
@@ -139,7 +139,7 @@ jobs:
 
       - name: Sign DuneShell.exe
         if: steps.cfg.outputs.sign == 'true'
-        uses: SignPath/github-action-submit-signing-request@v1
+        uses: SignPath/github-action-submit-signing-request@v2
         with:
           api-token: ${{ secrets.SIGNPATH_API_TOKEN }}
           organization-id: ${{ vars.SIGNPATH_ORGANIZATION_ID }}
@@ -170,7 +170,7 @@ jobs:
 
       - name: Sign DuneServerSetup.exe
         if: steps.cfg.outputs.sign == 'true'
-        uses: SignPath/github-action-submit-signing-request@v1
+        uses: SignPath/github-action-submit-signing-request@v2
         with:
           api-token: ${{ secrets.SIGNPATH_API_TOKEN }}
           organization-id: ${{ vars.SIGNPATH_ORGANIZATION_ID }}
