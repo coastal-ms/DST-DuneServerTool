@@ -41,7 +41,7 @@
   <ItemGroup>
     <!-- Same WebView2 pin as DuneShell so behavior matches across the two
          WPF/WinForms entry points. -->
-    <PackageReference Include="Microsoft.Web.WebView2" Version="1.0.2792.45" />
+    <PackageReference Include="Microsoft.Web.WebView2" Version="1.0.4078.44" />
   </ItemGroup>
 
   <!-- Ship a sample config.json next to the published .exe so the friend
