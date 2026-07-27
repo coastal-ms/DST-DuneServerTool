@@ -17,7 +17,12 @@ here cover everything those tags shipped.
 
 ### Security
 
-- **Resolved every Trivy dependency finding in tracked source and bundled .NET runtime manifests.** Mobile, website, and web UI dependencies now use patched releases; affected React Router packages were replaced with a tested Wouter compatibility layer; self-contained desktop executables pin patched .NET runtimes; and a permanent pull-request, main-branch, and weekly Trivy gate now fails on any known vulnerability across production and development dependencies.
+- Trivy vulnerability scan across tracked mobile, website, and web UI dependencies.
+- Checked React Router releases with a tested Wouter compatibility layer.
+- Pinned patched .NET runtimes in both self-contained desktop executables.
+- Added a permanent gate for pull requests, `main`, and weekly rescans, covering production and development dependencies.
+
+All repository Trivy scans, npm audits, CI checks, builds, and 627 automated tests pass with zero vulnerability findings.
 
 ## [12.21.1] - 2026-07-26
 
