@@ -10,7 +10,7 @@
     "expo-camera": "~17.0.10",
     "expo-constants": "~18.0.13",
     "expo-linking": "~8.0.12",
-    "expo-router": "~6.0.24",
+    "expo-router": "~57.0.8",
     "expo-secure-store": "~15.0.8",
     "expo-status-bar": "~3.0.9",
     "react": "19.1.0",
