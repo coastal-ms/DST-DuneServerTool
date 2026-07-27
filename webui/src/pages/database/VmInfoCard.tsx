@@ -1,15 +1,18 @@
-// VmInfoCard — read-only VM facts on the Database page.
+// VmInfoCard — VM facts and explicit lifecycle maintenance.
 //
 // Design rule for this card: it REPORTS, it does not judge. Disk usage,
 // retained Funcom build images, swap, per-map memory limits and the game UDP
 // rule count are shown as plain numbers with no colour-coding, no thresholds,
-// no "recommended" values and no fix-it buttons. DST cannot know the intent
+// no "recommended" values. DST cannot know the intent
 // behind a number — a limit deliberately raised for a busy shard and one
 // crushed by Funcom's experimental swap preset look identical to code, and
 // Funcom changes its own template defaults between patches. The operator has
 // the context; this card just hands them the numbers.
 //
-// The one exception is `faults`: states the system ITSELF reports as broken
+// Image cleanup is a separate, operator-requested action. It derives a safe
+// plan from live CRI state and does not run from any displayed threshold.
+//
+// The other exception is `faults`: states the system ITSELF reports as broken
 // (an unfinished database operation while the battlegroup says DATABASE is not
 // Ready, Kubernetes' own DiskPressure condition, or a public IP configured with
 // zero game UDP rules while pods are running). None of those can be true on a
@@ -18,7 +21,7 @@
 // Collapsed by default: nothing here interrupts anyone who has not asked.
 import { useCallback, useEffect, useState } from 'react'
 import { Icon } from '../../components/Icon'
-import { getVmHealth, type VmHealth } from '../../api/diagnostics'
+import { cleanupOldFuncomImages, getVmHealth, type VmHealth } from '../../api/diagnostics'
 
 function fmtKiB(k: number | null | undefined): string {
   if (k == null || k < 0) return '—'
@@ -42,6 +45,9 @@ export function VmInfoCard() {
   const [open, setOpen] = useState(false)
   const [info, setInfo] = useState<VmHealth | null>(null)
   const [loading, setLoading] = useState(false)
+  const [cleaning, setCleaning] = useState(false)
+  const [cleanupMessage, setCleanupMessage] = useState('')
+  const [cleanupError, setCleanupError] = useState('')
 
   const load = useCallback(async () => {
     setLoading(true)
@@ -58,6 +64,29 @@ export function VmInfoCard() {
 
   const faults = info?.faults ?? []
 
+  const cleanOldImages = useCallback(async () => {
+    const confirmed = window.confirm(
+      'Clean unused old Funcom build images?\n\n'
+      + 'DST keeps the active build, the immediate prior build, and every image referenced by a running or exited container. '
+      + 'Operator, database, Kubernetes, and third-party images are never targeted.',
+    )
+    if (!confirmed) return
+
+    setCleaning(true)
+    setCleanupMessage('')
+    setCleanupError('')
+    try {
+      const result = await cleanupOldFuncomImages()
+      const reclaimed = result.reclaimedK > 0 ? ` ${fmtKiB(result.reclaimedK)} reclaimed.` : ''
+      setCleanupMessage(`${result.message}${reclaimed}`)
+      await load()
+    } catch (error) {
+      setCleanupError(error instanceof Error ? error.message : String(error))
+    } finally {
+      setCleaning(false)
+    }
+  }, [load])
+
   return (
     <div className="card mb-6">
       <button
@@ -70,7 +99,7 @@ export function VmInfoCard() {
           <div className="min-w-0">
             <div className="font-medium">VM info</div>
             <div className="text-sm text-text-muted truncate">
-              Disk, swap, database operations, retained builds and per-map memory limits — read-only.
+              Disk, swap, database operations, retained builds and per-map memory limits.
             </div>
           </div>
         </div>
@@ -182,10 +211,22 @@ export function VmInfoCard() {
                 </div>
               )}
 
-              <button type="button" className="btn-secondary" onClick={() => void load()} disabled={loading}>
-                <Icon name={loading ? 'Loader2' : 'RefreshCw'} size={14} className={loading ? 'animate-spin' : ''} />
-                Refresh
-              </button>
+              {(cleanupMessage || cleanupError) && (
+                <p role="status" className="text-xs text-text-dim">
+                  {cleanupError || cleanupMessage}
+                </p>
+              )}
+
+              <div className="flex flex-wrap gap-2">
+                <button type="button" className="btn-secondary" onClick={() => void cleanOldImages()} disabled={loading || cleaning}>
+                  <Icon name={cleaning ? 'Loader2' : 'Trash2'} size={14} className={cleaning ? 'animate-spin' : ''} />
+                  {cleaning ? 'Cleaning…' : 'Clean old build images'}
+                </button>
+                <button type="button" className="btn-secondary" onClick={() => void load()} disabled={loading || cleaning}>
+                  <Icon name={loading ? 'Loader2' : 'RefreshCw'} size={14} className={loading ? 'animate-spin' : ''} />
+                  Refresh
+                </button>
+              </div>
             </>
           )}
         </div>

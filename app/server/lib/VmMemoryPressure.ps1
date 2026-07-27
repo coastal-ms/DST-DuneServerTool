@@ -13,15 +13,16 @@
 # tell-tale is a tiny MemAvailable with `Swap: 0` (no cushion). Until now this
 # could only be found by exporting logs and hand-reading them.
 #
-# This module surfaces it in DST itself. It NEVER mutates the VM - it stages
-# the read-only probe (app/resources/remote-scripts/dune-mem-pressure-probe.sh)
-# over SSH, runs it as root, and parses its stable key=value output into a
-# structured finding with red-banner-ready warning strings.
+# This module surfaces it in DST itself. The normal probe is read-only. The
+# separate cleanup entry point mutates only old, unreferenced Funcom game
+# images after deriving a fresh, fail-closed plan from CRI state.
 #
 # Public entry points:
 #   - Get-DuneVmMemoryPressure     -> context + probe + parse (+ 60s cache).
 #   - ConvertFrom-DuneMemPressureProbe -> PURE parser (unit-testable, no SSH).
 #   - Format-DuneMemKiB            -> KiB -> "12.3 GiB" for display.
+#   - Get-DuneFuncomImageCleanupPlan -> PURE selective image plan.
+#   - Remove-DuneOldFuncomImages   -> explicitly requested cleanup over SSH.
 # -----------------------------------------------------------------------------
 
 # A container restart count above this is "elevated". NOTE (2026-07-26): an
@@ -600,6 +601,233 @@ function _ConvertFrom-DuneImageRecord {
     return $img
 }
 
+function _Get-DuneFuncomImageBuild {
+            param([string]$Reference)
+            if ([string]::IsNullOrWhiteSpace($Reference)) { return $null }
+            $match = [regex]::Match(
+                $Reference.Trim(),
+                '^registry\.funcom\.com/funcom/self-hosting/seabass-server(?:-[^/:]+)?:(\d+)(?:-|$)',
+                [System.Text.RegularExpressions.RegexOptions]::IgnoreCase
+            )
+            if (-not $match.Success) { return $null }
+            return [long]$match.Groups[1].Value
+        }
+
+        function _Normalize-DuneImageId {
+            param([string]$Id)
+            if ([string]::IsNullOrWhiteSpace($Id)) { return '' }
+            return ($Id.Trim().ToLowerInvariant() -replace '^sha256:', '')
+        }
+
+        # Build a conservative deletion plan from authoritative CRI JSON. Images are
+        # eligible only when every real tag is a Funcom seabass-server tag for one
+        # numeric build, the build predates the running build, and no current or exited
+        # container references the image. The newest prior build is retained in full.
+        function Get-DuneFuncomImageCleanupPlan {
+            param(
+                [Parameter(Mandatory)][string]$ImagesJson,
+                [Parameter(Mandatory)][string]$ContainersJson
+            )
+
+            try {
+                $imageState = $ImagesJson | ConvertFrom-Json -ErrorAction Stop
+                $containerState = $ContainersJson | ConvertFrom-Json -ErrorAction Stop
+            } catch {
+                return @{ ok=$false; message="CRI state could not be parsed: $($_.Exception.Message)"; candidates=@(); activeBuilds=@(); preservedBuilds=@() }
+            }
+
+            $activeBuilds = New-Object System.Collections.Generic.HashSet[long]
+            $referencedIds = New-Object System.Collections.Generic.HashSet[string]
+            foreach ($container in @($containerState.containers)) {
+                $imageId = _Normalize-DuneImageId ([string]$container.image.image)
+                if ($imageId) { $null = $referencedIds.Add($imageId) }
+                $imageRefId = _Normalize-DuneImageId ([string]$container.imageRef)
+                if ($imageRefId) { $null = $referencedIds.Add($imageRefId) }
+
+                if ([string]$container.state -eq 'CONTAINER_RUNNING') {
+                    $build = _Get-DuneFuncomImageBuild ([string]$container.image.userSpecifiedImage)
+                    if ($null -ne $build) { $null = $activeBuilds.Add($build) }
+                }
+            }
+            if ($activeBuilds.Count -eq 0) {
+                return @{ ok=$false; message='No active Funcom server build could be identified. Nothing was removed.'; candidates=@(); activeBuilds=@(); preservedBuilds=@() }
+            }
+
+            $records = New-Object System.Collections.Generic.List[object]
+            $knownBuilds = New-Object System.Collections.Generic.HashSet[long]
+            foreach ($image in @($imageState.images)) {
+                $tags = @($image.repoTags | Where-Object { $_ -and $_ -ne '<none>:<none>' })
+                $tagBuilds = @($tags | ForEach-Object { _Get-DuneFuncomImageBuild ([string]$_) })
+                $recognized = @($tagBuilds | Where-Object { $null -ne $_ } | Select-Object -Unique)
+                if ($recognized.Count -ne 1 -or $recognized.Count -ne $tags.Count) { continue }
+
+                $build = [long]$recognized[0]
+                $null = $knownBuilds.Add($build)
+                $records.Add(@{
+                    id       = [string]$image.id
+                    normalId = _Normalize-DuneImageId ([string]$image.id)
+                    build    = $build
+                    repoTags = $tags
+                    size     = if ($null -ne $image.size) { [long]$image.size } else { [long]0 }
+                    pinned   = [bool]$image.pinned
+                })
+            }
+
+            $oldestActive = ($activeBuilds | Measure-Object -Minimum).Minimum
+            $previousBuild = @($knownBuilds | Where-Object { $_ -lt $oldestActive } | Sort-Object -Descending | Select-Object -First 1)
+            $preservedBuilds = New-Object System.Collections.Generic.HashSet[long]
+            foreach ($build in $activeBuilds) { $null = $preservedBuilds.Add($build) }
+            if ($previousBuild.Count -gt 0) { $null = $preservedBuilds.Add([long]$previousBuild[0]) }
+
+            $candidates = New-Object System.Collections.Generic.List[object]
+            foreach ($record in $records) {
+                if ($record.build -ge $oldestActive) { continue }
+                if ($preservedBuilds.Contains([long]$record.build)) { continue }
+                if ($referencedIds.Contains([string]$record.normalId)) { continue }
+                if ($record.pinned) { continue }
+                $candidates.Add(@{
+                    id       = $record.id
+                    build    = $record.build
+                    repoTags = $record.repoTags
+                    size     = $record.size
+                })
+            }
+
+            return @{
+                ok              = $true
+                message         = ''
+                candidates      = $candidates.ToArray()
+                activeBuilds     = @($activeBuilds | Sort-Object)
+                preservedBuilds  = @($preservedBuilds | Sort-Object)
+                candidateBuilds  = @($candidates | ForEach-Object { $_.build } | Sort-Object -Unique)
+                estimatedBytes   = [long](($candidates | Measure-Object -Property size -Sum).Sum)
+            }
+        }
+
+        function _Get-DuneVmProbeIp {
+            foreach ($getter in 'Get-DuneBackupContext', 'Get-DuneGameConfigContext', 'Get-DuneDbContext') {
+                if (Get-Command $getter -ErrorAction SilentlyContinue) {
+                    try {
+                        $context = & $getter
+                        if ($context.ok -and $context.ip) { return [string]$context.ip }
+                    } catch {}
+                }
+            }
+            if (Get-Command Get-DuneVmStatus -ErrorAction SilentlyContinue) {
+                try {
+                    $vm = Get-DuneVmStatus
+                    if ($vm.running -and $vm.ip) { return [string]$vm.ip }
+                } catch {}
+            }
+            return ''
+        }
+
+        function _Get-DuneCriState {
+            param([Parameter(Mandatory)][string]$Ip)
+            if (-not (Get-Command Invoke-DuneBackupShell -ErrorAction SilentlyContinue)) {
+                return @{ ok=$false; message='VM shell helper is unavailable.' }
+            }
+            $script = @'
+set -u
+printf '__DST_IMAGES_BEGIN__\n'
+k3s crictl images -o json
+printf '\n__DST_IMAGES_END__\n__DST_CONTAINERS_BEGIN__\n'
+k3s crictl ps -a -o json
+printf '\n__DST_CONTAINERS_END__\n'
+'@
+            $result = Invoke-DuneBackupShell -Ip $Ip -Script $script -TimeoutSec 60
+            if ($result.rc -ne 0) {
+                return @{ ok=$false; message="CRI state read failed (exit $($result.rc)): $($result.out)" }
+            }
+            $match = [regex]::Match(
+                [string]$result.out,
+                '(?s)__DST_IMAGES_BEGIN__\r?\n(.*?)\r?\n__DST_IMAGES_END__\r?\n__DST_CONTAINERS_BEGIN__\r?\n(.*?)\r?\n__DST_CONTAINERS_END__'
+            )
+            if (-not $match.Success) { return @{ ok=$false; message='CRI state response was incomplete.' } }
+            return @{ ok=$true; imagesJson=$match.Groups[1].Value; containersJson=$match.Groups[2].Value }
+        }
+
+        function Remove-DuneOldFuncomImages {
+            $ip = _Get-DuneVmProbeIp
+            if (-not $ip) { return @{ ok=$false; status=503; message='VM not reachable.' } }
+
+            $state = _Get-DuneCriState -Ip $ip
+            if (-not $state.ok) { return @{ ok=$false; status=502; message=$state.message } }
+            $plan = Get-DuneFuncomImageCleanupPlan -ImagesJson $state.imagesJson -ContainersJson $state.containersJson
+            if (-not $plan.ok) { return @{ ok=$false; status=409; message=$plan.message } }
+
+            if (@($plan.candidates).Count -eq 0) {
+                $facts = Get-DuneVmMemoryPressure -Force
+                return @{
+                    ok=$true; complete=$true; message='No unused old Funcom build images were found.'
+                    removedCount=0; removedIds=@(); failedIds=@(); estimatedBytes=[long]0; reclaimedK=[long]0
+                    activeBuilds=@($plan.activeBuilds); preservedBuilds=@($plan.preservedBuilds); disk=$facts.disk
+                }
+            }
+
+            # Re-read immediately before deletion so a build transition or newly
+            # created container cannot make the earlier plan stale.
+            $freshState = _Get-DuneCriState -Ip $ip
+            if (-not $freshState.ok) { return @{ ok=$false; status=502; message=$freshState.message } }
+            $freshPlan = Get-DuneFuncomImageCleanupPlan -ImagesJson $freshState.imagesJson -ContainersJson $freshState.containersJson
+            if (-not $freshPlan.ok) { return @{ ok=$false; status=409; message=$freshPlan.message } }
+            if (@($freshPlan.candidates).Count -eq 0) {
+                return @{ ok=$true; complete=$true; message='No unused old Funcom build images were found.'; removedCount=0; removedIds=@(); failedIds=@(); estimatedBytes=[long]0; reclaimedK=[long]0; activeBuilds=@($freshPlan.activeBuilds); preservedBuilds=@($freshPlan.preservedBuilds) }
+            }
+
+            $before = Get-DuneVmMemoryPressure -Force
+            $ids = @($freshPlan.candidates | ForEach-Object { [string]$_.id })
+            foreach ($id in $ids) {
+                if ($id -notmatch '^sha256:[0-9a-fA-F]{64}$') {
+                    return @{ ok=$false; status=500; message="CRI returned an invalid image ID: $id" }
+                }
+            }
+            $quotedIds = ($ids | ForEach-Object { "'" + $_ + "'" }) -join ' '
+            $removeScript = @"
+set +e
+for id in $quotedIds; do
+  if k3s crictl rmi "`$id"; then
+    printf '\n__DST_REMOVED:%s\n' "`$id"
+  else
+    printf '\n__DST_FAILED:%s\n' "`$id"
+  fi
+done
+exit 0
+"@
+            $remove = Invoke-DuneBackupShell -Ip $ip -Script $removeScript -TimeoutSec 180
+            if ($remove.rc -ne 0) {
+                return @{ ok=$false; status=502; message="Image cleanup did not complete (exit $($remove.rc)): $($remove.out)" }
+            }
+
+            $removedIds = @([regex]::Matches([string]$remove.out, '(?m)^__DST_REMOVED:(sha256:[0-9a-fA-F]{64})$') | ForEach-Object { $_.Groups[1].Value })
+            $failedIds = @([regex]::Matches([string]$remove.out, '(?m)^__DST_FAILED:(sha256:[0-9a-fA-F]{64})$') | ForEach-Object { $_.Groups[1].Value })
+            $script:DuneMemPressureCache = $null
+            $after = Get-DuneVmMemoryPressure -Force
+            $reclaimedK = [long]0
+            if ($before.ok -and $after.ok -and $null -ne $before.disk.availK -and $null -ne $after.disk.availK) {
+                $reclaimedK = [math]::Max([long]0, [long]$after.disk.availK - [long]$before.disk.availK)
+            }
+
+            $message = if ($failedIds.Count -gt 0) {
+                "Removed $($removedIds.Count) old image(s); $($failedIds.Count) could not be removed."
+            } else {
+                "Removed $($removedIds.Count) unused old Funcom build image(s)."
+            }
+            return @{
+                ok             = $true
+                complete       = ($failedIds.Count -eq 0)
+                message        = $message
+                removedCount   = $removedIds.Count
+                removedIds     = $removedIds
+                failedIds      = $failedIds
+                estimatedBytes = [long]$freshPlan.estimatedBytes
+                reclaimedK     = $reclaimedK
+                activeBuilds   = @($freshPlan.activeBuilds)
+                preservedBuilds = @($freshPlan.preservedBuilds)
+                disk           = if ($after.ok) { $after.disk } else { $null }
+            }
+        }
+
 # Parse ONE pod record:
 #   <name>~P:<phase>~PR:<podReason>~R:<restarts >~E:<exits >~X:<termReasons >~W:<waits >
 function _ConvertFrom-DuneMemPodRecord {
@@ -695,16 +923,7 @@ function Get-DuneVmMemoryPressure {
             if ($age -lt $script:DuneMemPressureCacheTtlS) { return $script:DuneMemPressureCache }
         }
 
-        # Resolve a reachable VM IP the same way the diagnostics bundle does.
-        $ip = $null
-        foreach ($getter in 'Get-DuneBackupContext', 'Get-DuneGameConfigContext', 'Get-DuneDbContext') {
-            if (Get-Command $getter -ErrorAction SilentlyContinue) {
-                try { $c = & $getter; if ($c.ok -and $c.ip) { $ip = $c.ip; break } } catch {}
-            }
-        }
-        if (-not $ip -and (Get-Command Get-DuneVmStatus -ErrorAction SilentlyContinue)) {
-            try { $vm = Get-DuneVmStatus; if ($vm.running -and $vm.ip) { $ip = $vm.ip } } catch {}
-        }
+        $ip = _Get-DuneVmProbeIp
         if (-not $ip) {
             return @{ ok=$false; pressure=$false; severity='none'; warnings=@(); faults=@(); message='VM not reachable.' }
         }
