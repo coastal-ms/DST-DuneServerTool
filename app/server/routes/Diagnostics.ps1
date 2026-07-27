@@ -890,8 +890,33 @@ Register-DuneRoute -Method GET -Path '/api/diagnostics/vm-health' -Handler {
                 active = [bool]$f.mem.swapActive
             }
         }
+
         Write-DuneJson -Response $res -Body $out
     } catch {
         Write-DuneError -Response $res -Status 500 -Message $_.Exception.Message
+    }
+}
+
+# POST /api/diagnostics/cleanup-old-images - explicit, selective cleanup for
+# unused historical Funcom server images. The helper derives candidates from
+# fresh CRI image/container state and retains the active and prior builds.
+Register-DuneRoute -Method POST -Path '/api/diagnostics/cleanup-old-images' -Handler {
+    param($req, $res, $routeParams, $body)
+    try {
+        if (-not (Get-Command Remove-DuneOldFuncomImages -ErrorAction SilentlyContinue)) {
+            Write-DuneError -Response $res -Status 503 -Message 'Image cleanup helper not loaded.'
+            return
+        }
+        $result = Invoke-WithDuneLock -Name 'funcom-image-cleanup' -Script {
+            Remove-DuneOldFuncomImages
+        }
+        if (-not $result.ok) {
+            $status = if ($result.status) { [int]$result.status } else { 502 }
+            Write-DuneError -Response $res -Status $status -Message $result.message
+            return
+        }
+        Write-DuneJson -Response $res -Body $result
+    } catch {
+        Write-DuneError -Response $res -Status 502 -Message "Image cleanup failed: $($_.Exception.Message)"
     }
 }

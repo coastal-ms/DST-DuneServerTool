@@ -261,3 +261,80 @@ Describe 'New-DuneMapLimitEntry' -Tag 'Pure' {
         (New-DuneMapLimitEntry -Map 'Some_Future_Map' -Limit '1Gi').reference | Should -Be ''
     }
 }
+
+Describe 'Get-DuneFuncomImageCleanupPlan' -Tag 'Pure' {
+    BeforeAll {
+        function New-TestImage {
+            param([char]$IdChar, [string[]]$Tags, [long]$Size = 1000, [bool]$Pinned = $false)
+            return @{ id=('sha256:' + ([string]$IdChar * 64)); repoTags=$Tags; size=$Size; pinned=$Pinned }
+        }
+
+        function New-TestContainer {
+            param([char]$IdChar, [string]$Tag, [string]$State = 'CONTAINER_EXITED')
+            $id = 'sha256:' + ([string]$IdChar * 64)
+            return @{ state=$State; image=@{ image=$id; userSpecifiedImage=$Tag }; imageRef=$id }
+        }
+
+        $script:funcom = 'registry.funcom.com/funcom/self-hosting'
+    }
+
+    It 'selects only older unreferenced images and preserves the previous build' {
+        $images = @{ images=@(
+            (New-TestImage 'a' @("$funcom/seabass-server:2030000-0-shipping") 3000)
+            (New-TestImage 'b' @("$funcom/seabass-server:2040000-0-shipping") 4000)
+            (New-TestImage 'c' @("$funcom/seabass-server:2050000-0-shipping") 5000)
+            (New-TestImage 'd' @("$funcom/seabass-server-db-utils:2020000-0-shipping") 2000)
+            (New-TestImage 'e' @("$funcom/igw-k8s-battlegroup-operator:1.2.3") 9000)
+        ) } | ConvertTo-Json -Depth 8
+        $containers = @{ containers=@(
+            (New-TestContainer 'c' "$funcom/seabass-server:2050000-0-shipping" 'CONTAINER_RUNNING')
+            (New-TestContainer 'd' "$funcom/seabass-server-db-utils:2020000-0-shipping")
+        ) } | ConvertTo-Json -Depth 8
+
+        $plan = Get-DuneFuncomImageCleanupPlan -ImagesJson $images -ContainersJson $containers
+
+        $plan.ok | Should -BeTrue
+        @($plan.activeBuilds) | Should -Be @(2050000)
+        @($plan.preservedBuilds) | Should -Be @(2040000, 2050000)
+        @($plan.candidateBuilds) | Should -Be @(2030000)
+        @($plan.candidates).Count | Should -Be 1
+        $plan.candidates[0].id | Should -Be ('sha256:' + ('a' * 64))
+        $plan.estimatedBytes | Should -Be 3000
+    }
+
+    It 'never selects referenced, future, operator, or ambiguously tagged images' {
+        $images = @{ images=@(
+            (New-TestImage 'a' @("$funcom/seabass-server:2030000-0-shipping"))
+            (New-TestImage 'b' @("$funcom/seabass-server:2040000-0-shipping"))
+            (New-TestImage 'c' @("$funcom/seabass-server:2050000-0-shipping"))
+            (New-TestImage 'd' @("$funcom/seabass-server:2060000-0-shipping"))
+            (New-TestImage 'e' @("$funcom/igw-k8s-database-operator:1.2.3"))
+            (New-TestImage 'f' @("$funcom/seabass-server:2020000-0-shipping", 'other.example/image:latest'))
+            (New-TestImage '1' @("$funcom/seabass-server:2010000-0-shipping") 1000 $true)
+        ) } | ConvertTo-Json -Depth 8
+        $containers = @{ containers=@(
+            (New-TestContainer 'c' "$funcom/seabass-server:2050000-0-shipping" 'CONTAINER_RUNNING')
+            (New-TestContainer 'a' "$funcom/seabass-server:2030000-0-shipping")
+        ) } | ConvertTo-Json -Depth 8
+
+        $plan = Get-DuneFuncomImageCleanupPlan -ImagesJson $images -ContainersJson $containers
+
+        $plan.ok | Should -BeTrue
+        @($plan.candidates).Count | Should -Be 0
+    }
+
+    It 'fails closed when no running Funcom build can be identified' {
+        $images = @{ images=@(
+            (New-TestImage 'a' @("$funcom/seabass-server:2030000-0-shipping"))
+        ) } | ConvertTo-Json -Depth 8
+        $containers = @{ containers=@(
+            (New-TestContainer 'a' "$funcom/seabass-server:2030000-0-shipping")
+        ) } | ConvertTo-Json -Depth 8
+
+        $plan = Get-DuneFuncomImageCleanupPlan -ImagesJson $images -ContainersJson $containers
+
+        $plan.ok | Should -BeFalse
+        @($plan.candidates).Count | Should -Be 0
+        $plan.message | Should -Match 'No active Funcom server build'
+    }
+}
