@@ -21,7 +21,12 @@
 // Collapsed by default: nothing here interrupts anyone who has not asked.
 import { useCallback, useEffect, useState } from 'react'
 import { Icon } from '../../components/Icon'
-import { cleanupOldFuncomImages, getVmHealth, type VmHealth } from '../../api/diagnostics'
+import {
+  cleanupFailedDatabaseOperations,
+  cleanupOldFuncomImages,
+  getVmHealth,
+  type VmHealth,
+} from '../../api/diagnostics'
 
 function fmtKiB(k: number | null | undefined): string {
   if (k == null || k < 0) return '—'
@@ -48,6 +53,9 @@ export function VmInfoCard() {
   const [cleaning, setCleaning] = useState(false)
   const [cleanupMessage, setCleanupMessage] = useState('')
   const [cleanupError, setCleanupError] = useState('')
+  const [cleaningOperations, setCleaningOperations] = useState(false)
+  const [operationMessage, setOperationMessage] = useState('')
+  const [operationError, setOperationError] = useState('')
 
   const load = useCallback(async () => {
     setLoading(true)
@@ -86,6 +94,30 @@ export function VmInfoCard() {
       setCleaning(false)
     }
   }, [load])
+
+  const cleanFailedOperations = useCallback(async () => {
+    const count = info?.database?.failedCount ?? 0
+    if (count < 1) return
+    const confirmed = window.confirm(
+      `Delete ${count} failed database operation record${count === 1 ? '' : 's'}?\n\n`
+      + 'This removes only Kubernetes records whose current phase is exactly Failed. '
+      + 'It does not delete database backups, the database, or active operations.',
+    )
+    if (!confirmed) return
+
+    setCleaningOperations(true)
+    setOperationMessage('')
+    setOperationError('')
+    try {
+      const result = await cleanupFailedDatabaseOperations()
+      setOperationMessage(result.message)
+      await load()
+    } catch (error) {
+      setOperationError(error instanceof Error ? error.message : String(error))
+    } finally {
+      setCleaningOperations(false)
+    }
+  }, [info?.database?.failedCount, load])
 
   return (
     <div className="card mb-6">
@@ -144,7 +176,10 @@ export function VmInfoCard() {
                 <div className="flex justify-between gap-3">
                   <dt className="text-text-dim">Database operations</dt>
                   <dd className="font-mono">
-                    {info.database ? `${info.database.total} total · ${info.database.open} unfinished` : '—'}
+                    {info.database
+                      ? `${info.database.total} total · ${info.database.failedCount} failed`
+                        + (info.database.activeCount > 0 ? ` · ${info.database.activeCount} active` : '')
+                      : '—'}
                   </dd>
                 </div>
                 <div className="flex justify-between gap-3">
@@ -167,11 +202,27 @@ export function VmInfoCard() {
                 </div>
               </dl>
 
-              {info.database && info.database.stuck.length > 0 && (
+              {info.database && info.database.active.length > 0 && (
                 <div>
-                  <h3 className="text-sm font-medium mb-1">Unfinished database operations</h3>
+                  <h3 className="text-sm font-medium mb-1">Active database operations</h3>
                   <ul className="text-xs font-mono text-text-muted space-y-0.5">
-                    {info.database.stuck.map(op => (
+                    {info.database.active.map(op => (
+                      <li key={op.name}>
+                        {op.name} — {op.phase}{op.ageMinutes != null ? ` · ${Math.round(op.ageMinutes)}m` : ''}
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+
+              {info.database && info.database.failed.length > 0 && (
+                <div>
+                  <h3 className="text-sm font-medium mb-1">Failed database operations</h3>
+                  <p className="text-xs text-text-dim mb-2">
+                    These are operation records, not backup files. Backup retention does not remove them.
+                  </p>
+                  <ul className="text-xs font-mono text-text-muted space-y-0.5">
+                    {info.database.failed.map(op => (
                       <li key={op.name}>
                         {op.name} — {op.phase}{op.ageMinutes != null ? ` · ${Math.round(op.ageMinutes)}m` : ''}
                       </li>
@@ -217,12 +268,29 @@ export function VmInfoCard() {
                 </p>
               )}
 
+              {(operationMessage || operationError) && (
+                <p role="status" className="text-xs text-text-dim">
+                  {operationError || operationMessage}
+                </p>
+              )}
+
               <div className="flex flex-wrap gap-2">
-                <button type="button" className="btn-secondary" onClick={() => void cleanOldImages()} disabled={loading || cleaning}>
+                {(info.database?.failedCount ?? 0) > 0 && (
+                  <button
+                    type="button"
+                    className="btn-secondary"
+                    onClick={() => void cleanFailedOperations()}
+                    disabled={loading || cleaning || cleaningOperations}
+                  >
+                    <Icon name={cleaningOperations ? 'Loader2' : 'Trash2'} size={14} className={cleaningOperations ? 'animate-spin' : ''} />
+                    {cleaningOperations ? 'Cleaning…' : 'Clean failed operations'}
+                  </button>
+                )}
+                <button type="button" className="btn-secondary" onClick={() => void cleanOldImages()} disabled={loading || cleaning || cleaningOperations}>
                   <Icon name={cleaning ? 'Loader2' : 'Trash2'} size={14} className={cleaning ? 'animate-spin' : ''} />
                   {cleaning ? 'Cleaning…' : 'Clean old build images'}
                 </button>
-                <button type="button" className="btn-secondary" onClick={() => void load()} disabled={loading || cleaning}>
+                <button type="button" className="btn-secondary" onClick={() => void load()} disabled={loading || cleaning || cleaningOperations}>
                   <Icon name={loading ? 'Loader2' : 'RefreshCw'} size={14} className={loading ? 'animate-spin' : ''} />
                   Refresh
                 </button>

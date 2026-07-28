@@ -23,6 +23,7 @@
 #   - Format-DuneMemKiB            -> KiB -> "12.3 GiB" for display.
 #   - Get-DuneFuncomImageCleanupPlan -> PURE selective image plan.
 #   - Remove-DuneOldFuncomImages   -> explicitly requested cleanup over SSH.
+#   - Remove-DuneFailedDatabaseOperations -> deletes exact Failed records only.
 # -----------------------------------------------------------------------------
 
 # A container restart count above this is "elevated". NOTE (2026-07-26): an
@@ -225,7 +226,7 @@ function ConvertFrom-DuneMemPressureProbe {
         node      = @{ conditions=@{}; diskPressure=$false; memoryPressure=$false; pidPressure=$false; ready=$true; known=$false }
         disk      = @{ sizeK=$null; usedK=$null; availK=$null; usePct=$null; high=$false; critical=$false; known=$false }
         bg        = @{ name=''; databasePhase='' }
-        dbOps     = @{ total=0; open=0; stuck=@(); known=$false }
+        dbOps     = @{ total=0; open=0; stuck=@(); active=@(); failed=@(); activeCount=0; failedCount=0; known=$false }
         mapLimits = @{ entries=@(); known=$false }
         images    = @{ entries=@(); builds=@(); buildCount=0; totalBytes=0; known=$false }
         dnat      = @{ udpRules=$null; ports=@(); missing=$false }
@@ -346,6 +347,10 @@ function ConvertFrom-DuneMemPressureProbe {
 
     # --- database operations ----------------------------------------------
     $result.dbOps.stuck = @(foreach ($r in $dbOpRecords) { _ConvertFrom-DuneDbOperationRecord -Record $r })
+    $result.dbOps.failed = @($result.dbOps.stuck | Where-Object { $_.phase -eq 'Failed' })
+    $result.dbOps.active = @($result.dbOps.stuck | Where-Object { $_.phase -ne 'Failed' })
+    $result.dbOps.failedCount = @($result.dbOps.failed).Count
+    $result.dbOps.activeCount = @($result.dbOps.active).Count
     if ($result.dbOps.open -lt @($result.dbOps.stuck).Count) { $result.dbOps.open = @($result.dbOps.stuck).Count }
 
     # --- per-map memory limits --------------------------------------------
@@ -782,6 +787,7 @@ printf '\n__DST_CONTAINERS_END__\n'
                     return @{ ok=$false; status=500; message="CRI returned an invalid image ID: $id" }
                 }
             }
+
             $quotedIds = ($ids | ForEach-Object { "'" + $_ + "'" }) -join ' '
             $removeScript = @"
 set +e
@@ -827,6 +833,65 @@ exit 0
                 disk           = if ($after.ok) { $after.disk } else { $null }
             }
         }
+
+function Remove-DuneFailedDatabaseOperations {
+    $ip = _Get-DuneVmProbeIp
+    if (-not $ip) { return @{ ok=$false; status=503; message='VM not reachable.' } }
+    if (-not (Get-Command Invoke-DuneBackupShell -ErrorAction SilentlyContinue)) {
+        return @{ ok=$false; status=503; message='VM shell helper is unavailable.' }
+    }
+
+    $script = @'
+set +e
+K="sudo k3s kubectl"
+NS=$($K get battlegroup -A --no-headers 2>/dev/null | awk 'NR==1 {print $1}')
+if [ -z "$NS" ]; then
+  echo "__DST_ERROR:no-battlegroup-namespace"
+  exit 0
+fi
+
+$K -n "$NS" get databaseoperations -o jsonpath='{range .items[*]}{.metadata.name}{"~"}{.status.phase}{"\n"}{end}' 2>/dev/null |
+while IFS='~' read -r name phase; do
+  [ "$phase" = "Failed" ] || continue
+  current=$($K -n "$NS" get databaseoperation "$name" -o jsonpath='{.status.phase}' 2>/dev/null)
+  [ "$current" = "Failed" ] || continue
+  if $K -n "$NS" delete databaseoperation "$name" >/dev/null 2>&1; then
+    printf '__DST_REMOVED:%s\n' "$name"
+  else
+    printf '__DST_FAILED:%s\n' "$name"
+  fi
+done
+exit 0
+'@
+    $remove = Invoke-DuneBackupShell -Ip $ip -Script $script -TimeoutSec 90
+    if ($remove.rc -ne 0) {
+        return @{ ok=$false; status=502; message="Database operation cleanup did not complete (exit $($remove.rc)): $($remove.out)" }
+    }
+    if ([string]$remove.out -match '(?m)^__DST_ERROR:no-battlegroup-namespace$') {
+        return @{ ok=$false; status=404; message='No battlegroup namespace was found.' }
+    }
+
+    $namePattern = '([a-z0-9](?:[-a-z0-9.]*[a-z0-9])?)'
+    $removedNames = @([regex]::Matches([string]$remove.out, "(?m)^__DST_REMOVED:$namePattern`$") | ForEach-Object { $_.Groups[1].Value })
+    $failedNames = @([regex]::Matches([string]$remove.out, "(?m)^__DST_FAILED:$namePattern`$") | ForEach-Object { $_.Groups[1].Value })
+    $script:DuneMemPressureCache = $null
+
+    $message = if ($failedNames.Count -gt 0) {
+        "Removed $($removedNames.Count) failed database operation record(s); $($failedNames.Count) could not be removed."
+    } elseif ($removedNames.Count -eq 0) {
+        'No failed database operation records were found.'
+    } else {
+        "Removed $($removedNames.Count) failed database operation record(s)."
+    }
+    return @{
+        ok           = $true
+        complete     = ($failedNames.Count -eq 0)
+        message      = $message
+        removedCount = $removedNames.Count
+        removedNames = $removedNames
+        failedNames  = $failedNames
+    }
+}
 
 # Parse ONE pod record:
 #   <name>~P:<phase>~PR:<podReason>~R:<restarts >~E:<exits >~X:<termReasons >~W:<waits >
