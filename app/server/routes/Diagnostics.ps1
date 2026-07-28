@@ -863,10 +863,14 @@ Register-DuneRoute -Method GET -Path '/api/diagnostics/vm-health' -Handler {
                 known  = [bool]$f.disk.known
             }
             $out.database = @{
-                phase     = [string]$f.bg.databasePhase
-                total     = [int]$f.dbOps.total
-                open      = [int]$f.dbOps.open
-                stuck     = @($f.dbOps.stuck | ForEach-Object { @{ name=$_.name; phase=$_.phase; ageMinutes=$_.ageMinutes } })
+                phase       = [string]$f.bg.databasePhase
+                total       = [int]$f.dbOps.total
+                open        = [int]$f.dbOps.open
+                activeCount = [int]$f.dbOps.activeCount
+                failedCount = [int]$f.dbOps.failedCount
+                active      = @($f.dbOps.active | ForEach-Object { @{ name=$_.name; phase=$_.phase; ageMinutes=$_.ageMinutes } })
+                failed      = @($f.dbOps.failed | ForEach-Object { @{ name=$_.name; phase=$_.phase; ageMinutes=$_.ageMinutes } })
+                stuck       = @($f.dbOps.stuck | ForEach-Object { @{ name=$_.name; phase=$_.phase; ageMinutes=$_.ageMinutes } })
             }
             $out.mapLimits = @{
                 known   = [bool]$f.mapLimits.known
@@ -907,6 +911,7 @@ Register-DuneRoute -Method POST -Path '/api/diagnostics/cleanup-old-images' -Han
             Write-DuneError -Response $res -Status 503 -Message 'Image cleanup helper not loaded.'
             return
         }
+
         $result = Invoke-WithDuneLock -Name 'funcom-image-cleanup' -Script {
             Remove-DuneOldFuncomImages
         }
@@ -918,5 +923,29 @@ Register-DuneRoute -Method POST -Path '/api/diagnostics/cleanup-old-images' -Han
         Write-DuneJson -Response $res -Body $result
     } catch {
         Write-DuneError -Response $res -Status 502 -Message "Image cleanup failed: $($_.Exception.Message)"
+    }
+}
+
+# POST /api/diagnostics/cleanup-failed-database-operations - explicitly remove
+# historical DatabaseOperation records whose current phase is exactly Failed.
+# Backup files, PVCs, Succeeded records, and active operations are untouched.
+Register-DuneRoute -Method POST -Path '/api/diagnostics/cleanup-failed-database-operations' -Handler {
+    param($req, $res, $routeParams, $body)
+    try {
+        if (-not (Get-Command Remove-DuneFailedDatabaseOperations -ErrorAction SilentlyContinue)) {
+            Write-DuneError -Response $res -Status 503 -Message 'Database operation cleanup helper not loaded.'
+            return
+        }
+        $result = Invoke-WithDuneLock -Name 'failed-database-operation-cleanup' -Script {
+            Remove-DuneFailedDatabaseOperations
+        }
+        if (-not $result.ok) {
+            $status = if ($result.status) { [int]$result.status } else { 502 }
+            Write-DuneError -Response $res -Status $status -Message $result.message
+            return
+        }
+        Write-DuneJson -Response $res -Body $result
+    } catch {
+        Write-DuneError -Response $res -Status 502 -Message "Database operation cleanup failed: $($_.Exception.Message)"
     }
 }
