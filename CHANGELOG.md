@@ -13,6 +13,12 @@ here cover everything those tags shipped.
 
 ## [Unreleased]
 
+## [12.21.3] - 2026-07-27
+
+### Fixed
+
+- **VM info now separates active database work from failed operation history.** Failed records are no longer described as unfinished work, backup retention is clearly distinguished from operation records, and an explicit cleanup action removes only records whose current phase is exactly `Failed` while preserving active, successful, and unknown states.
+
 ## [12.21.2] - 2026-07-27
 
 ### Security
