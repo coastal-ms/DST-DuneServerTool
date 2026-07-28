@@ -137,6 +137,22 @@ probe_done=1
         @($r.dbOps.stuck).Count | Should -Be 1   # still reported as a fact
     }
 
+    It 'separates Failed history from active database operations' {
+        $mixed = @'
+bg_database_phase=Ready
+dbop=sh-abc-dump-old~PH:Failed~CT:2026-07-01T12:00:00Z
+dbop=sh-abc-import-now~PH:Running~CT:2026-07-28T12:00:00Z
+dbop_total=62
+dbop_open=2
+probe_done=1
+'@
+        $r = ConvertFrom-DuneMemPressureProbe -Raw $mixed
+        $r.dbOps.failedCount | Should -Be 1
+        $r.dbOps.activeCount | Should -Be 1
+        $r.dbOps.failed[0].name | Should -Be 'sh-abc-dump-old'
+        $r.dbOps.active[0].name | Should -Be 'sh-abc-import-now'
+    }
+
     It 'reports DiskPressure from the node condition, not from a percentage' {
         $pressured = @'
 disk_root_use_pct=96
@@ -145,6 +161,46 @@ probe_done=1
 '@
         $r = ConvertFrom-DuneMemPressureProbe -Raw $pressured
         @($r.faults | Where-Object { $_.id -eq 'disk-pressure' }).Count | Should -Be 1
+    }
+
+    Describe 'Remove-DuneFailedDatabaseOperations' {
+        BeforeAll {
+            function global:Invoke-DuneBackupShell {
+                param($Ip, $Script, $TimeoutSec)
+                throw 'Test must mock Invoke-DuneBackupShell.'
+            }
+        }
+
+        BeforeEach {
+            Mock _Get-DuneVmProbeIp { '192.0.2.10' }
+        }
+
+        It 'uses an exact Failed phase guard and reports removed records' {
+            Mock Invoke-DuneBackupShell {
+                param($Ip, $Script, $TimeoutSec)
+                $Script | Should -Match '\[ "\$phase" = "Failed" \]'
+                $Script | Should -Match '\[ "\$current" = "Failed" \]'
+                $Script | Should -Not -Match 'phase.*-ne.*Succeeded'
+                return @{ rc=0; out="__DST_REMOVED:sh-abc-dump-old`n" }
+            }
+
+            $result = Remove-DuneFailedDatabaseOperations
+
+            $result.ok | Should -BeTrue
+            $result.removedCount | Should -Be 1
+            $result.removedNames | Should -Contain 'sh-abc-dump-old'
+            Assert-MockCalled Invoke-DuneBackupShell -Times 1 -Exactly
+        }
+
+        It 'returns a no-op when no Failed records exist' {
+            Mock Invoke-DuneBackupShell { return @{ rc=0; out='' } }
+
+            $result = Remove-DuneFailedDatabaseOperations
+
+            $result.ok | Should -BeTrue
+            $result.removedCount | Should -Be 0
+            $result.message | Should -Be 'No failed database operation records were found.'
+        }
     }
 
     It 'says nothing about a filling disk while Kubernetes is happy' {

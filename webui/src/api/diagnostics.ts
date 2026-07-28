@@ -70,6 +70,10 @@ export interface VmHealth {
     phase: string
     total: number
     open: number
+    activeCount: number
+    failedCount: number
+    active: { name: string; phase: string; ageMinutes: number | null }[]
+    failed: { name: string; phase: string; ageMinutes: number | null }[]
     stuck: { name: string; phase: string; ageMinutes: number | null }[]
   }
   mapLimits?: { entries: { map: string; limit: string; reference: string }[]; known: boolean }
@@ -99,6 +103,22 @@ export interface ImageCleanupResult {
 
 export function cleanupOldFuncomImages() {
   return api<ImageCleanupResult>('/api/diagnostics/cleanup-old-images', {
+    method: 'POST',
+    body: '{}',
+  })
+}
+
+export interface DatabaseOperationCleanupResult {
+  ok: boolean
+  complete: boolean
+  message: string
+  removedCount: number
+  removedNames: string[]
+  failedNames: string[]
+}
+
+export function cleanupFailedDatabaseOperations() {
+  return api<DatabaseOperationCleanupResult>('/api/diagnostics/cleanup-failed-database-operations', {
     method: 'POST',
     body: '{}',
   })

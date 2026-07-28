@@ -61,3 +61,31 @@ Describe 'Invoke-DstRedaction' -Tag 'Pure' {
         Invoke-DstRedaction -Text '' | Should -Be ''
     }
 }
+
+Describe 'Diagnostics route registration' -Tag 'Pure' {
+    It 'registers failed database operation cleanup at script scope' {
+        $routeFile = Join-Path (Get-DstRepoRoot) 'app\server\routes\Diagnostics.ps1'
+        $tokens = $null
+        $errors = $null
+        $ast = [System.Management.Automation.Language.Parser]::ParseFile(
+            $routeFile,
+            [ref]$tokens,
+            [ref]$errors
+        )
+        $errors | Should -BeNullOrEmpty
+
+        $route = @($ast.FindAll({
+            param($node)
+            $node -is [System.Management.Automation.Language.CommandAst] -and
+                $node.GetCommandName() -eq 'Register-DuneRoute' -and
+                $node.Extent.Text -match '/api/diagnostics/cleanup-failed-database-operations'
+        }, $true))
+        $route.Count | Should -Be 1
+
+        $ancestor = $route[0].Parent
+        while ($ancestor -and $ancestor -isnot [System.Management.Automation.Language.ScriptBlockAst]) {
+            $ancestor = $ancestor.Parent
+        }
+        $ancestor.Parent | Should -BeNullOrEmpty
+    }
+}
