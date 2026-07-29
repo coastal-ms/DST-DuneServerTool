@@ -312,20 +312,57 @@ Describe 'DuneGameConfigSchema: experimental binary CVars' -Tag 'GameConfig' {
     BeforeAll {
         $script:ExperimentalKeys = @(
             'Dune.GiveDoubleDifficultyLoot'
+            'dw.FuelBurningMultiplier'
             'Abilities.RespecCooldownTotalDurationSeconds'
             'dw.LandsraadMissionRewardMultiplierFactionXP'
             'dw.LandsraadMissionRewardMultiplierHouseCredit'
             'dw.LandsraadMissionRewardMultiplierSpecializationXP'
             'dw.VehicleHeatMultiplier'
+            'dw.VehicleHeatInterpolationSpeed'
             'dw.VehiclePowerConsumptionMultiplier'
             'dw.VehicleCanOverHeat'
+            'dw.VehicleAbandonedDecayAllowed'
+            'dw.VehicleAbandonedDecayTimeMultiplier'
+            'Vehicle.DisassemblySpeedMultiplier'
+            'Vehicle.RecoveryChassisDurabilityReductionFraction'
+            'Vehicle.RecoveryCurrencyBaseCost'
+            'Vehicle.RecoveryTimeLimit'
+            'Vehicle.MaxActiveVehicles'
+            'Vehicle.MaxVehicles'
+            'Vehicle.MaxVehiclesForSpawner'
+            'Vehicle.MaxVehiclesPerPlayer'
+            'Vehicle.MaxVehiclesWarning'
+            'Vehicle.CharacterHitDamageModifier'
+            'Vehicle.DamagePlayerOnVehicleCollision'
+            'Player.IsThrowOffPlayerFromVehicleActive'
+            'Player.ThrowOffPlayerFromVehicleVelocityMultiplier'
+            'Player.ThrowOffPlayerFromVehicleVelocityThreshold'
+            'Vehicle.SandwormInvulnerabilityOnExitInAir'
+            'Vehicle.SandwormInvulnerabilityOnLeavingGame'
+            'Sandworm.SandwormAttackDifficultyGroup'
+            'SandwormSubsystem.DelayedRestartSeconds'
+            'SpiceHarvesting.dune.SpawnCraterRocksAfterBloom'
+            'dw.MitigateAllDamageToBuildables'
+            'dw.EnableOutsideBuildablesToAffectShelter'
+            'dw.BuildingShelterThresholdOverride'
+            'dw.SandBuildUpPlaceableShelteredTargetValueOverride'
+            'dw.SandBuildUpPlaceableUnShelteredTargetValueOverride'
+            'Dac.FriendlyPvPDamageMultiplier'
+            'Dac.HealingDurationReductionByDamageMultiplier'
+            'NPC.AttackLimitOverride'
+            'JourneyStory.Instance.Cap'
+            'SafeZone.EnableScale'
+            'SafeZone.Scale'
         )
     }
 
-    It 'isolates the curated binary-discovered controls in the Experimental category' {
+    It 'isolates all 42 testable binary-discovered controls in the Experimental category' {
         $fields = @{}
         foreach ($f in $script:DuneGameConfigSchema) { $fields[$f.Key] = $f }
+        $experimental = @($script:DuneGameConfigSchema | Where-Object Category -eq 'Experimental')
 
+        $experimental.Count | Should -Be 42
+        @($experimental.Key | Sort-Object) | Should -Be @($script:ExperimentalKeys | Sort-Object)
         foreach ($key in $script:ExperimentalKeys) {
             $fields.ContainsKey($key) | Should -BeTrue
             $fields[$key].Section | Should -Be $script:DuneGcSecConsole
@@ -335,13 +372,26 @@ Describe 'DuneGameConfigSchema: experimental binary CVars' -Tag 'GameConfig' {
         }
     }
 
-    It 'uses the binary catalogue types and defaults without inventing ranges' {
+    It 'excludes the Funcom-documented client-crash control' {
+        @($script:DuneGameConfigSchema.Key) | Should -Not -Contain 'Hazard.DehydrationZonesEnabled'
+    }
+
+    It 'uses binary catalogue types and recovered defaults without inventing unknown defaults' {
         $fields = @{}
         foreach ($f in $script:DuneGameConfigSchema) { $fields[$f.Key] = $f }
 
         foreach ($key in @(
             'Dune.GiveDoubleDifficultyLoot',
-            'dw.VehicleCanOverHeat'
+            'dw.VehicleCanOverHeat',
+            'dw.VehicleAbandonedDecayAllowed',
+            'Vehicle.DamagePlayerOnVehicleCollision',
+            'Player.IsThrowOffPlayerFromVehicleActive',
+            'Vehicle.SandwormInvulnerabilityOnExitInAir',
+            'Vehicle.SandwormInvulnerabilityOnLeavingGame',
+            'SpiceHarvesting.dune.SpawnCraterRocksAfterBloom',
+            'dw.MitigateAllDamageToBuildables',
+            'dw.EnableOutsideBuildablesToAffectShelter',
+            'SafeZone.EnableScale'
         )) {
             $fields[$key].Type | Should -Be 'bool01'
         }
@@ -350,7 +400,13 @@ Describe 'DuneGameConfigSchema: experimental binary CVars' -Tag 'GameConfig' {
             'dw.LandsraadMissionRewardMultiplierHouseCredit',
             'dw.LandsraadMissionRewardMultiplierSpecializationXP',
             'dw.VehicleHeatMultiplier',
-            'dw.VehiclePowerConsumptionMultiplier'
+            'dw.VehiclePowerConsumptionMultiplier',
+            'dw.FuelBurningMultiplier',
+            'dw.VehicleHeatInterpolationSpeed',
+            'dw.VehicleAbandonedDecayTimeMultiplier',
+            'Vehicle.DisassemblySpeedMultiplier',
+            'Vehicle.CharacterHitDamageModifier',
+            'SafeZone.Scale'
         )) {
             $fields[$key].Type | Should -Be 'float'
             $fields[$key].Default | Should -Be '1.0'
@@ -359,6 +415,23 @@ Describe 'DuneGameConfigSchema: experimental binary CVars' -Tag 'GameConfig' {
         $fields['Abilities.RespecCooldownTotalDurationSeconds'].Type | Should -Be 'int'
         $fields['Abilities.RespecCooldownTotalDurationSeconds'].Default | Should -Be '172800'
         $fields['Abilities.RespecCooldownTotalDurationSeconds'].Min | Should -Be 0
+        $fields['Sandworm.SandwormAttackDifficultyGroup'].Type | Should -Be 'select'
+        @($fields['Sandworm.SandwormAttackDifficultyGroup'].Options.V) | Should -Be @('-1','0','1','2','3')
+        foreach ($key in @(
+            'dw.VehicleAbandonedDecayAllowed',
+            'Vehicle.RecoveryTimeLimit',
+            'Vehicle.MaxVehiclesWarning',
+            'Vehicle.DamagePlayerOnVehicleCollision',
+            'Vehicle.SandwormInvulnerabilityOnExitInAir',
+            'Vehicle.SandwormInvulnerabilityOnLeavingGame',
+            'dw.MitigateAllDamageToBuildables',
+            'dw.EnableOutsideBuildablesToAffectShelter',
+            'Dac.FriendlyPvPDamageMultiplier',
+            'Dac.HealingDurationReductionByDamageMultiplier',
+            'SafeZone.EnableScale'
+        )) {
+            $fields[$key].ContainsKey('Default') | Should -BeFalse -Because "$key has no reliably recovered compiled default"
+        }
     }
 
     It 'does not include server-only experimental CVars in local client changes' {

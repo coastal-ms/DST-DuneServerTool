@@ -9,6 +9,7 @@ import {
   getGameConfigSchema,
   getGameConfig,
   saveGameConfig,
+  reloadGameConfigPods,
   backupGameConfig,
   listGameConfigBackups,
   deleteGameConfigBackups,
@@ -201,6 +202,7 @@ export function GameConfig() {
   const [saving, setSaving] = useState(false)
   const [saveError, setSaveError] = useState<string | null>(null)
   const [savedMsg, setSavedMsg] = useState<string | null>(null)
+  const [reloadingPods, setReloadingPods] = useState(false)
   const [clientApply, setClientApply] = useState<GameConfigClientApply | null>(null)
   const [sandwormModalOpen, setSandwormModalOpen] = useState(false)
   const [search, setSearch] = useState('')
@@ -774,6 +776,7 @@ export function GameConfig() {
         } else if (!lg.ok && lg.error) {
           msg += ` (Landsraad live-goal apply failed: ${lg.error}; INI saved OK, next term will pick it up.)`
         }
+
       }
       setSavedMsg(msg)
       window.setTimeout(() => setSavedMsg(null), 8000)
@@ -785,6 +788,28 @@ export function GameConfig() {
       setSaveError(err instanceof Error ? err.message : String(err))
     } finally {
       setSaving(false)
+    }
+  }
+
+  async function onReloadPods() {
+    if (dirtyKeys.length > 0 || reloadingPods) return
+    const ok = window.confirm(
+      'Apply the saved INI files by restarting every running game-server pod one at a time?\n\n'
+      + 'Players on each map will disconnect when that map restarts. Database, director, operator, and other infrastructure pods are not touched. Each replacement must become Ready before the next map restarts.',
+    )
+    if (!ok) return
+    setReloadingPods(true)
+    setSaveError(null)
+    setSavedMsg(null)
+    try {
+      const out = await reloadGameConfigPods()
+      setSavedMsg(out.message)
+      window.setTimeout(() => setSavedMsg(null), 12000)
+      await forceRefresh()
+    } catch (err) {
+      setSaveError(err instanceof Error ? err.message : String(err))
+    } finally {
+      setReloadingPods(false)
     }
   }
 
@@ -823,6 +848,18 @@ export function GameConfig() {
         actions={
           <div className="flex items-center gap-2">
             {sourcePill}
+            <button
+              type="button"
+              onClick={() => void onReloadPods()}
+              disabled={!vmRunning || reloadingPods || saving || dirtyKeys.length > 0 || loadState !== 'ready'}
+              className="btn-secondary"
+              title={dirtyKeys.length > 0
+                ? 'Save or discard pending changes first'
+                : 'Restart only running game-server pods, one at a time, and wait for each replacement to become Ready'}
+            >
+              <Icon name={reloadingPods ? 'Loader2' : 'RefreshCw'} size={14} className={reloadingPods ? 'animate-spin' : ''} />
+              {reloadingPods ? 'Applying to pods…' : 'Apply INIs to pods'}
+            </button>
             <button
               type="button"
               onClick={() => void onBackup()}
@@ -868,7 +905,7 @@ export function GameConfig() {
             you have a restore point — backups are saved on the server next to each file and can be restored via the File Browser.
           </p>
           <p className="text-xs text-warning/90 leading-relaxed mt-1.5">
-            Some of these settings may require a battlegroup restart to take effect.
+            Some settings are read only when a game pod starts. Use “Apply INIs to pods” after saving to reload game pods sequentially without restarting the database or full battlegroup.
           </p>
           <button
             type="button"
@@ -1643,7 +1680,7 @@ function CategoryCard({
                 These server CVars are written only to the battlegroup&apos;s <span className="font-mono text-text">UserEngine.ini</span> under <span className="font-mono text-text">[ConsoleVariables]</span>. They are not copied to this PC&apos;s local client <span className="font-mono text-text">Game.ini</span>.
               </p>
               <p className="mt-1.5">
-                Double Difficulty Loot and the three Landsraad reward multipliers have community field confirmation. Other controls may have no effect or unintended gameplay consequences. Back up first, change one setting at a time, and restart the battlegroup before testing.
+                This catalogue contains all 42 testable controls decoded from server build 1.4.10.4. Double Difficulty Loot and the three Landsraad reward multipliers have community field confirmation; other controls may have no effect or unintended gameplay consequences. The dehydration-zone control is omitted because Funcom warns that enabling it crashes clients. Back up first, change one setting at a time, then use Apply INIs to pods before testing.
               </p>
               <label className="mt-3 flex cursor-pointer items-start gap-2 text-text">
                 <input
