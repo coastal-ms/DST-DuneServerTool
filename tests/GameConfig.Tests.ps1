@@ -308,6 +308,85 @@ Describe 'DuneGameConfigSchema: only proven m_Global*Multiplier keys remain' -Ta
     }
 }
 
+Describe 'DuneGameConfigSchema: experimental binary CVars' -Tag 'GameConfig' {
+    BeforeAll {
+        $script:ExperimentalKeys = @(
+            'Dune.GiveDoubleDifficultyLoot'
+            'Abilities.RespecCooldownTotalDurationSeconds'
+            'dw.LandsraadMissionRewardMultiplierFactionXP'
+            'dw.LandsraadMissionRewardMultiplierHouseCredit'
+            'dw.LandsraadMissionRewardMultiplierSpecializationXP'
+            'dw.VehicleHeatMultiplier'
+            'dw.VehiclePowerConsumptionMultiplier'
+            'dw.VehicleCanOverHeat'
+        )
+    }
+
+    It 'isolates the curated binary-discovered controls in the Experimental category' {
+        $fields = @{}
+        foreach ($f in $script:DuneGameConfigSchema) { $fields[$f.Key] = $f }
+
+        foreach ($key in $script:ExperimentalKeys) {
+            $fields.ContainsKey($key) | Should -BeTrue
+            $fields[$key].Section | Should -Be $script:DuneGcSecConsole
+            $fields[$key].File | Should -Be 'engine'
+            $fields[$key].Category | Should -Be 'Experimental'
+            $fields[$key].ContainsKey('ClientApply') | Should -BeFalse
+        }
+    }
+
+    It 'uses the binary catalogue types and defaults without inventing ranges' {
+        $fields = @{}
+        foreach ($f in $script:DuneGameConfigSchema) { $fields[$f.Key] = $f }
+
+        foreach ($key in @(
+            'Dune.GiveDoubleDifficultyLoot',
+            'dw.VehicleCanOverHeat'
+        )) {
+            $fields[$key].Type | Should -Be 'bool01'
+        }
+        foreach ($key in @(
+            'dw.LandsraadMissionRewardMultiplierFactionXP',
+            'dw.LandsraadMissionRewardMultiplierHouseCredit',
+            'dw.LandsraadMissionRewardMultiplierSpecializationXP',
+            'dw.VehicleHeatMultiplier',
+            'dw.VehiclePowerConsumptionMultiplier'
+        )) {
+            $fields[$key].Type | Should -Be 'float'
+            $fields[$key].Default | Should -Be '1.0'
+            $fields[$key].ContainsKey('Max') | Should -BeFalse
+        }
+        $fields['Abilities.RespecCooldownTotalDurationSeconds'].Type | Should -Be 'int'
+        $fields['Abilities.RespecCooldownTotalDurationSeconds'].Default | Should -Be '172800'
+        $fields['Abilities.RespecCooldownTotalDurationSeconds'].Min | Should -Be 0
+    }
+
+    It 'does not include server-only experimental CVars in local client changes' {
+        $notice = Get-DuneGameConfigClientApplyNotice -Updates @(
+            @{ file='engine'; section=$script:DuneGcSecConsole; key='Dune.GiveDoubleDifficultyLoot'; value='1' },
+            @{ file='engine'; section=$script:DuneGcSecConsole; key='Abilities.RespecCooldownTotalDurationSeconds'; value='0' }
+        )
+
+        @($notice.items).Count | Should -Be 0
+    }
+
+    It 'places Experimental last in the curated schema API' {
+        $cats = @((Get-DuneGameConfigSchemaApi) | ForEach-Object { $_.category })
+        $cats[-1] | Should -Be 'Experimental'
+    }
+
+    It 'persists experimental controls in the UserEngine ConsoleVariables section' {
+        $out = ConvertTo-DuneIniManaged -Raw '' -Updates @(
+            @{ section=$script:DuneGcSecConsole; key='Dune.GiveDoubleDifficultyLoot'; value='1' },
+            @{ section=$script:DuneGcSecConsole; key='dw.VehicleHeatMultiplier'; value='0.5' }
+        ) -QuotedKeys @{}
+
+        (Get-HeaderCount -Raw $out -Name $script:DuneGcSecConsole) | Should -Be 1
+        (Get-EffectiveValue -Raw $out -Section $script:DuneGcSecConsole -Key 'Dune.GiveDoubleDifficultyLoot') | Should -Be '1'
+        (Get-EffectiveValue -Raw $out -Section $script:DuneGcSecConsole -Key 'dw.VehicleHeatMultiplier') | Should -Be '0.5'
+    }
+}
+
 Describe 'DuneGameConfigSchema: CraftingSettings fields' -Tag 'GameConfig' {
 
     It 'exposes repair and recycler weights as server-and-client game settings' {

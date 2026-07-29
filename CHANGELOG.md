@@ -13,6 +13,10 @@ here cover everything those tags shipped.
 
 ## [Unreleased]
 
+### Added
+
+- **Experimental Game Config controls.** New collapsed-by-default card exposes eight server-side `UserEngine.ini` CVars for double difficulty loot, ability-respec cooldown, Landsraad mission rewards, and vehicle heat/power behavior. Controls require explicit acknowledgement, show their exact keys, and remain separate from local client `Game.ini` changes.
+
 ## [12.21.3] - 2026-07-27
 
 ### Fixed

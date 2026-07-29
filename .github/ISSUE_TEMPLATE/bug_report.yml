@@ -93,6 +93,7 @@ body:
         - Web portal — Commands
         - Web portal — PowerShell (embedded xterm.js terminal)
         - Web portal — Game Config — VM INI (UserGame.ini / UserEngine.ini / Spicefield Types / Crafting / Land Claim Timer)
+        - Web portal — Game Config — Experimental server CVars (double loot / respec cooldown / Landsraad rewards / vehicle heat and power)
         - Web portal — Game Config — Server name (rename / battlegroup title shown in the in-game server browser)
         - Web portal — Game Config — Deep Desert PvP (live partitions / Apply & restart)
         - Web portal — Game Config — client-side INI (preview / Open in Notepad / client-apply reminder)
