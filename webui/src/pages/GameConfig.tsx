@@ -204,6 +204,7 @@ export function GameConfig() {
   const [clientApply, setClientApply] = useState<GameConfigClientApply | null>(null)
   const [sandwormModalOpen, setSandwormModalOpen] = useState(false)
   const [search, setSearch] = useState('')
+  const [experimentalAcknowledged, setExperimentalAcknowledged] = useState(false)
   // "Give players this" section share popup (client-side Game.ini block).
   const [shareBlock, setShareBlock] = useState<{ title: string; block: string } | null>(null)
   const [backing, setBacking] = useState(false)
@@ -1295,6 +1296,9 @@ export function GameConfig() {
                 clientBlock={share.block}
                 hasClientFields={share.hasClientFields}
                 onShare={() => setShareBlock({ title: `${cat.category} — give players this`, block: share.block })}
+                forceOpen={search.trim() !== ''}
+                experimentalAcknowledged={experimentalAcknowledged}
+                onExperimentalAcknowledged={setExperimentalAcknowledged}
               >
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-x-6 gap-y-4">
                   {(cat.fields ?? []).map(f => (
@@ -1304,7 +1308,7 @@ export function GameConfig() {
                         field={f}
                         value={values[f.key] ?? ''}
                         onChange={v => handleFieldChange(f.key, v)}
-                        disabled={loadState !== 'ready' || saving}
+                        disabled={loadState !== 'ready' || saving || (cat.category === 'Experimental' && !experimentalAcknowledged)}
                         isDirty={(values[f.key] ?? '') !== (originals[f.key] ?? '')}
                         isSet={liveValue(cfg, f) !== ''}
                         isCustom={isCustomized(cfg, f)}
@@ -1565,21 +1569,51 @@ function formatBytes(n: number): string {
 // Category card + field row
 // -----------------------------------------------------------------------------
 
-function CategoryCard({ category, count, clientBlock, hasClientFields, onShare, children }: {
+function CategoryCard({
+  category,
+  count,
+  clientBlock,
+  hasClientFields,
+  onShare,
+  forceOpen = false,
+  experimentalAcknowledged = false,
+  onExperimentalAcknowledged,
+  children,
+}: {
   category: string
   count: number
   clientBlock?: string
   hasClientFields?: boolean
   onShare?: () => void
+  forceOpen?: boolean
+  experimentalAcknowledged?: boolean
+  onExperimentalAcknowledged?: (acknowledged: boolean) => void
   children: React.ReactNode
 }) {
+  const experimental = category === 'Experimental'
+  const [experimentalOpen, setExperimentalOpen] = useState(false)
+  const expanded = !experimental || forceOpen || experimentalOpen
+
   return (
-    <div className="card p-5">
-      <div className="mb-4 flex items-center justify-between gap-2">
-        <h2 className="text-sm font-semibold uppercase tracking-wider text-accent-bright flex items-center gap-2">
-          <Icon name="ChevronRight" size={14} /> {category}
-          <span className="text-[10px] font-normal text-text-dim normal-case tracking-normal">({count})</span>
-        </h2>
+    <div className={'card p-5 ' + (experimental ? 'border-warning/40' : '')}>
+      <div className={(expanded ? 'mb-4 ' : '') + 'flex items-center justify-between gap-2'}>
+        {experimental ? (
+          <button
+            type="button"
+            className="flex items-center gap-2 text-left"
+            onClick={() => setExperimentalOpen(open => !open)}
+            aria-expanded={expanded}
+          >
+            <Icon name={expanded ? 'ChevronDown' : 'ChevronRight'} size={14} className="text-warning" />
+            <span className="text-sm font-semibold uppercase tracking-wider text-warning">{category}</span>
+            <span className="text-[10px] font-normal text-text-dim normal-case tracking-normal">({count})</span>
+          </button>
+        ) : (
+          <h2 className="text-sm font-semibold uppercase tracking-wider text-accent-bright flex items-center gap-2">
+            <Icon name="ChevronRight" size={14} /> {category}
+            <span className="text-[10px] font-normal text-text-dim normal-case tracking-normal">({count})</span>
+          </h2>
+        )}
         {clientBlock ? (
           <button
             type="button"
@@ -1598,7 +1632,33 @@ function CategoryCard({ category, count, clientBlock, hasClientFields, onShare, 
           </span>
         ) : null}
       </div>
-      {children}
+      {expanded && (
+        <>
+          {experimental && (
+            <div className="mb-4 rounded-lg border border-warning/35 bg-warning/10 p-3 text-xs text-text-muted">
+              <div className="mb-1 flex items-center gap-2 font-semibold text-warning">
+                <Icon name="FlaskConical" size={14} /> Test settings
+              </div>
+              <p>
+                These server CVars are written only to the battlegroup&apos;s <span className="font-mono text-text">UserEngine.ini</span> under <span className="font-mono text-text">[ConsoleVariables]</span>. They are not copied to this PC&apos;s local client <span className="font-mono text-text">Game.ini</span>.
+              </p>
+              <p className="mt-1.5">
+                Double Difficulty Loot and the three Landsraad reward multipliers have community field confirmation. Other controls may have no effect or unintended gameplay consequences. Back up first, change one setting at a time, and restart the battlegroup before testing.
+              </p>
+              <label className="mt-3 flex cursor-pointer items-start gap-2 text-text">
+                <input
+                  type="checkbox"
+                  checked={experimentalAcknowledged}
+                  onChange={e => onExperimentalAcknowledged?.(e.target.checked)}
+                  className="mt-0.5 shrink-0 accent-warning"
+                />
+                <span>I understand these settings are experimental and server-side only.</span>
+              </label>
+            </div>
+          )}
+          {children}
+        </>
+      )}
     </div>
   )
 }
