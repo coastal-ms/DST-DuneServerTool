@@ -684,3 +684,108 @@ echo "===END==="
         }
     }
 }
+
+# Game-server pods use <bg-id>-sg-<map>-pod-<n>. Restrict the rolling INI reload
+# to that exact operator-owned shape so database, RabbitMQ, director, and other
+# cluster services can never enter the restart set.
+$script:DuneGameServerPodNameRegex = '-sg-[a-z0-9-]+-pod-[0-9]+$'
+
+function Test-DuneGameServerPodName {
+    param([string]$Name)
+    return [bool]("$Name" -match $script:DuneGameServerPodNameRegex)
+}
+
+function Restart-DuneGameServerPodsRolling {
+    param([Parameter(Mandatory)][string]$Ip)
+
+    # One remote script performs an all-pods health preflight before deleting
+    # anything, then restarts game pods sequentially. The next pod is not touched
+    # until the operator has recreated the prior pod and Kubernetes reports Ready.
+    $bash = @'
+    set -u
+    KUBE="sudo kubectl"
+    ROWS=$($KUBE get pods -A -o jsonpath='{range .items[*]}{.metadata.namespace}{"|"}{.metadata.name}{"|"}{.status.phase}{"|"}{.metadata.deletionTimestamp}{"|"}{range .status.conditions[?(@.type=="Ready")]}{.status}{end}{"\n"}{end}' 2>/dev/null)
+    TARGETS=$(printf '%s\n' "$ROWS" | awk -F'|' '$2 ~ /__DUNE_GAME_SERVER_POD_REGEX__/ {print}' | sort -t'|' -k1,1 -k2,2)
+    COUNT=$(printf '%s\n' "$TARGETS" | awk 'NF {n++} END {print n+0}')
+    echo "===COUNT===$COUNT"
+    if [ "$COUNT" -eq 0 ]; then
+      echo "===NO_PODS==="
+      exit 0
+    fi
+    BAD=$(printf '%s\n' "$TARGETS" | awk -F'|' '$3 != "Running" || $4 != "" || $5 != "True" {print $1"|"$2"|"$3"|"$4"|"$5}')
+    if [ -n "$BAD" ]; then
+      echo "===UNHEALTHY==="
+      printf '%s\n' "$BAD"
+      exit 0
+    fi
+    printf '%s\n' "$TARGETS" | while IFS='|' read -r ns pod phase deleting ready; do
+      [ -n "$ns" ] && [ -n "$pod" ] || continue
+      echo "===RESTARTING===$ns|$pod"
+      if ! $KUBE -n "$ns" delete pod "$pod" --wait=true --timeout=90s 2>&1; then
+        echo "===FAILED===$ns|$pod|delete"
+        exit 21
+      fi
+      DEADLINE=$((SECONDS + 300))
+      REPLACEMENT_READY=false
+      while [ "$SECONDS" -lt "$DEADLINE" ]; do
+        STATE=$($KUBE -n "$ns" get pod "$pod" -o jsonpath='{.status.phase}{"|"}{range .status.conditions[?(@.type=="Ready")]}{.status}{end}' 2>/dev/null || true)
+        if [ "$STATE" = "Running|True" ]; then
+          REPLACEMENT_READY=true
+          break
+        fi
+        sleep 5
+      done
+      if [ "$REPLACEMENT_READY" != "true" ]; then
+        echo "===FAILED===$ns|$pod|ready-timeout"
+        exit 22
+      fi
+      echo "===READY===$ns|$pod"
+    done
+    PIPE_STATUS=$?
+    if [ "$PIPE_STATUS" -ne 0 ]; then exit "$PIPE_STATUS"; fi
+    echo "===COMPLETE===$COUNT"
+'@
+    $bash = $bash.Replace('__DUNE_GAME_SERVER_POD_REGEX__', $script:DuneGameServerPodNameRegex)
+
+    try {
+        $out = Invoke-V6Ssh -Ip $Ip -Cmd $bash -TimeoutSec 3600
+    } catch {
+        return @{ ok=$false; status=502; restarted=0; message="Rolling game-pod reload failed: $($_.Exception.Message)" }
+    }
+    $raw = (($out -join "`n")).Trim()
+    $count = 0
+    if ($raw -match '===COUNT===(\d+)') { $count = [int]$Matches[1] }
+    if ($raw -match '===NO_PODS===') {
+        return @{ ok=$true; noop=$true; found=0; restarted=0; pods=@(); raw=$raw; message='No running game-server pods were found.' }
+    }
+    if ($raw -match '===UNHEALTHY===') {
+        $bad = @($raw -split "`n" | Where-Object { $_ -match '^[a-z0-9.-]+\|[a-z0-9.-]+\|' })
+        return @{
+            ok=$false; status=409; found=$count; restarted=0; pods=@(); unhealthy=$bad; raw=$raw
+            message='Rolling reload was not started because one or more game-server pods are not healthy and Ready.'
+        }
+    }
+    $ready = @(
+        $raw -split "`n" |
+            Where-Object { $_ -match '^===READY===([^|]+)\|(.+)$' } |
+            ForEach-Object {
+                if ($_ -match '^===READY===([^|]+)\|(.+)$') { "$($Matches[1])/$($Matches[2])" }
+            }
+    )
+    if ($raw -match '===FAILED===([^|]+)\|([^|]+)\|([^\r\n]+)') {
+        return @{
+            ok=$false; status=502; found=$count; restarted=$ready.Count; pods=$ready; raw=$raw
+            message="Rolling reload stopped at $($Matches[1])/$($Matches[2]) during $($Matches[3]). Already-restarted pods are Ready."
+        }
+    }
+    if ($raw -notmatch '===COMPLETE===(\d+)' -or $ready.Count -ne $count) {
+        return @{
+            ok=$false; status=502; found=$count; restarted=$ready.Count; pods=$ready; raw=$raw
+            message="Rolling reload returned incomplete output (expected $count Ready pod(s), saw $($ready.Count))."
+        }
+    }
+    return @{
+        ok=$true; found=$count; restarted=$ready.Count; pods=$ready; raw=$raw
+        message="Reloaded $($ready.Count) game-server pod(s) one at a time. Every replacement reached Ready."
+    }
+}

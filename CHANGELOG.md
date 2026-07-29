@@ -15,7 +15,8 @@ here cover everything those tags shipped.
 
 ### Added
 
-- **Experimental Game Config controls.** New collapsed-by-default card exposes eight server-side `UserEngine.ini` CVars for double difficulty loot, ability-respec cooldown, Landsraad mission rewards, and vehicle heat/power behavior. Controls require explicit acknowledgement, show their exact keys, and remain separate from local client `Game.ini` changes.
+- **Experimental Game Config controls.** New collapsed-by-default card exposes all 42 testable server-side `UserEngine.ini` CVars decoded from server build 1.4.10.4, covering rewards, fuel, vehicles, sandworms, spice, buildings, combat, NPCs, journey instances, and safe zones. Controls require explicit acknowledgement, show their exact keys, and remain separate from local client `Game.ini` changes. The dehydration-zone control is intentionally omitted because Funcom warns that enabling it crashes clients.
+- **Faster Game Config apply.** A new **Apply INIs to pods** action reloads only running game-server pods, one at a time, waiting for each replacement to become Ready before continuing. Database, director, operator, and other infrastructure pods remain untouched, avoiding a full battlegroup restart while still applying startup-read INI settings.
 
 ## [12.21.3] - 2026-07-27
 

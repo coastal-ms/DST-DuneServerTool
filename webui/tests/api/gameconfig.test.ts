@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { getDeepDesertPvp, saveDeepDesertPvp } from '../../src/api/gameconfig'
+import { getDeepDesertPvp, reloadGameConfigPods, saveDeepDesertPvp } from '../../src/api/gameconfig'
 
 interface FetchCall {
   url: string
@@ -52,6 +52,17 @@ describe('Deep Desert PvP API', () => {
       url: '/api/gameconfig/deep-desert-pvp',
       method: 'PUT',
       body: { enabled: true, partitionIds: [8, 12] },
+    })
+  })
+})
+
+describe('Game Config pod reload API', () => {
+  it('requests a rolling game-pod reload', async () => {
+    await reloadGameConfigPods()
+    expect(calls.at(-1)).toEqual({
+      url: '/api/gameconfig/reload-pods',
+      method: 'POST',
+      body: undefined,
     })
   })
 })

@@ -7,6 +7,27 @@ BeforeAll {
     }
 }
 
+Describe 'Rolling INI game-pod reload safety' {
+    It 'matches only operator game-server pod names' {
+        Test-DuneGameServerPodName 'my-bg-sg-survival-1-pod-0' | Should -BeTrue
+        Test-DuneGameServerPodName 'my-bg-sg-deepdesert-1-pod-12' | Should -BeTrue
+        Test-DuneGameServerPodName 'my-bg-sg-arrakeen-pod-2' | Should -BeTrue
+    }
+
+    It 'rejects database, director, operator, jobs, and malformed names' {
+        foreach ($name in @(
+            'my-bg-postgresql-0',
+            'my-bg-director-7c9f',
+            'dune-operator-controller-manager-abc',
+            'my-bg-dump-20260729',
+            'my-bg-sg-survival-1',
+            'sg-survival-1-pod-admin'
+        )) {
+            Test-DuneGameServerPodName $name | Should -BeFalse -Because "$name must never be part of an INI rolling reload"
+        }
+    }
+}
+
 Describe 'Director-driven map status' {
     BeforeAll {
         $script:bg = [pscustomobject]@{ status=[pscustomobject]@{ servers=@(
