@@ -1680,7 +1680,7 @@ function CategoryCard({
                 These server CVars are written only to the battlegroup&apos;s <span className="font-mono text-text">UserEngine.ini</span> under <span className="font-mono text-text">[ConsoleVariables]</span>. They are not copied to this PC&apos;s local client <span className="font-mono text-text">Game.ini</span>.
               </p>
               <p className="mt-1.5">
-                This catalogue contains all 42 testable controls decoded from server build 1.4.10.4. Double Difficulty Loot and the three Landsraad reward multipliers have community field confirmation; other controls may have no effect or unintended gameplay consequences. The dehydration-zone control is omitted because Funcom warns that enabling it crashes clients. Back up first, change one setting at a time, then use Apply INIs to pods before testing.
+                This catalogue contains 32 testable controls decoded from server build 1.4.10.4. Double Difficulty Loot and the three Landsraad reward multipliers have community field confirmation; vehicle fuel, heat, power, overheat, and limit controls proven ineffective were removed. Other controls may have no effect or unintended gameplay consequences. The dehydration-zone control is omitted because Funcom warns that enabling it crashes clients. Back up first, change one setting at a time, then use Apply INIs to pods before testing.
               </p>
               <label className="mt-3 flex cursor-pointer items-start gap-2 text-text">
                 <input

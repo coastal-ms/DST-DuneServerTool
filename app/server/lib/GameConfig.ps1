@@ -95,10 +95,9 @@ $script:DuneGameConfigCategoryOrder = @(
     'Experimental'
 )
 
-# Keys DST USED to expose but removed after proving them no-ops via UserGame.ini
-# (2026-06-15 live test, issue #225). The managed-block writer actively scrubs
-# these from the DST-owned managed block on every save, so they don't linger
-# orphaned in existing users' files now that the schema no longer carries them.
+# Keys DST USED to expose but later removed after field testing. The managed-block
+# writer actively scrubs these from the DST-owned managed block on every save, so
+# they don't linger orphaned in existing users' files after the schema drops them.
 # Only touches the managed block — never the user's own (body) sections.
 $script:DuneGameConfigDeprecatedManagedKeys = @(
     'm_GlobalHealthMultiplier'
@@ -109,6 +108,16 @@ $script:DuneGameConfigDeprecatedManagedKeys = @(
     'm_GlobalFameMultiplier'
     'm_GlobalHarvestAmountMultiplier'
     'm_GlobalHarvestHealthMultiplier'
+    'dw.FuelBurningMultiplier'
+    'dw.VehicleHeatMultiplier'
+    'dw.VehicleHeatInterpolationSpeed'
+    'dw.VehiclePowerConsumptionMultiplier'
+    'dw.VehicleCanOverHeat'
+    'Vehicle.MaxActiveVehicles'
+    'Vehicle.MaxVehicles'
+    'Vehicle.MaxVehiclesForSpawner'
+    'Vehicle.MaxVehiclesPerPlayer'
+    'Vehicle.MaxVehiclesWarning'
 )
 
 $script:DuneGameConfigSchema = @(
@@ -235,26 +244,16 @@ $script:DuneGameConfigSchema = @(
     # Hazard.DehydrationZonesEnabled is intentionally excluded because its
     # compiled Funcom help explicitly warns that enabling it crashes clients.
     @{ Section=$script:DuneGcSecConsole; Key='Dune.GiveDoubleDifficultyLoot'; File='engine'; Type='bool01'; Default='0'; Label='Double Difficulty Loot'; Help='Give double loot when encounter difficulty is above 0. Field-confirmed with dungeon loot; still experimental.'; Category='Experimental' }
-    @{ Section=$script:DuneGcSecConsole; Key='dw.FuelBurningMultiplier'; File='engine'; Type='float'; Default='1.0'; Label='Fuel Burning Duration'; Help='Scales how long all fuel burns. Larger values should make fuel last longer. Not yet field-verified.'; Category='Experimental' }
     @{ Section=$script:DuneGcSecConsole; Key='Abilities.RespecCooldownTotalDurationSeconds'; File='engine'; Type='int'; Min=0; Unit='sec'; Default='172800'; Label='Ability Respec Cooldown'; Help='Total ability-respec cooldown in seconds. Compiled default is 172800 (2 days); 0 may remove the cooldown but has not been field-verified.'; Category='Experimental' }
     @{ Section=$script:DuneGcSecConsole; Key='dw.LandsraadMissionRewardMultiplierFactionXP'; File='engine'; Type='float'; Min=0; Default='1.0'; Label='Landsraad Faction XP'; Help='Scales Faction XP from Landsraad missions. Field-confirmed at 10; mission preview may still show the base reward.'; Category='Experimental' }
     @{ Section=$script:DuneGcSecConsole; Key='dw.LandsraadMissionRewardMultiplierHouseCredit'; File='engine'; Type='float'; Min=0; Default='1.0'; Label='Landsraad House Credit'; Help='Scales House Credit from Landsraad missions. Field-confirmed at 10; mission preview may still show the base reward.'; Category='Experimental' }
     @{ Section=$script:DuneGcSecConsole; Key='dw.LandsraadMissionRewardMultiplierSpecializationXP'; File='engine'; Type='float'; Min=0; Default='1.0'; Label='Landsraad Specialization XP'; Help='Scales Specialization XP from Landsraad missions. Field-confirmed at 10; mission preview may still show the base reward.'; Category='Experimental' }
-    @{ Section=$script:DuneGcSecConsole; Key='dw.VehicleHeatMultiplier'; File='engine'; Type='float'; Min=0; Default='1.0'; Label='Vehicle Heat Multiplier'; Help='Scales vehicle heat generation. 0 = no heat, 1 = normal, 2 = double. Not yet field-verified.'; Category='Experimental' }
-    @{ Section=$script:DuneGcSecConsole; Key='dw.VehicleHeatInterpolationSpeed'; File='engine'; Type='float'; Default='1.0'; Label='Vehicle Heat Interpolation Speed'; Help='Speeds up or slows down vehicle heat interpolation. 0 may stop interpolation; not yet field-verified.'; Category='Experimental' }
-    @{ Section=$script:DuneGcSecConsole; Key='dw.VehiclePowerConsumptionMultiplier'; File='engine'; Type='float'; Min=0; Default='1.0'; Label='Vehicle Power Consumption'; Help='Scales vehicle power use. 0 = no consumption, 1 = normal, 2 = double. Not yet field-verified.'; Category='Experimental' }
-    @{ Section=$script:DuneGcSecConsole; Key='dw.VehicleCanOverHeat'; File='engine'; Type='bool01'; Default='1'; Label='Vehicles Can Overheat'; Help='Whether vehicles can overheat. 0 = disabled, 1 = enabled. Registered as a number; not yet field-verified.'; Category='Experimental' }
     @{ Section=$script:DuneGcSecConsole; Key='dw.VehicleAbandonedDecayAllowed'; File='engine'; Type='bool01'; Label='Abandoned Vehicle Decay'; Help='Allows abandoned vehicles to decay over time. 0 disables decay. Compiled default was not recovered.'; Category='Experimental' }
     @{ Section=$script:DuneGcSecConsole; Key='dw.VehicleAbandonedDecayTimeMultiplier'; File='engine'; Type='float'; Default='1.0'; Label='Abandoned Vehicle Decay Speed'; Help='Scales abandoned-vehicle decay speed. Values above 1 should decay faster; 1 is shipping behavior.'; Category='Experimental' }
     @{ Section=$script:DuneGcSecConsole; Key='Vehicle.DisassemblySpeedMultiplier'; File='engine'; Type='float'; Default='1.0'; Label='Vehicle Disassembly Speed'; Help='Scales vehicle disassembly speed. Not yet field-verified.'; Category='Experimental' }
     @{ Section=$script:DuneGcSecConsole; Key='Vehicle.RecoveryChassisDurabilityReductionFraction'; File='engine'; Type='float'; Default='0.150000006'; Label='Recovery Chassis Durability Reduction'; Help='Reduces maximum decayed chassis durability during recovery. Units are unclear; test as a fraction such as 0.15, not 15.'; Category='Experimental' }
     @{ Section=$script:DuneGcSecConsole; Key='Vehicle.RecoveryCurrencyBaseCost'; File='engine'; Type='int'; Min=0; Default='2500'; Label='Vehicle Recovery Base Cost'; Help='Base currency cost to recover a vehicle before vehicle-specific multipliers.'; Category='Experimental' }
     @{ Section=$script:DuneGcSecConsole; Key='Vehicle.RecoveryTimeLimit'; File='engine'; Type='int'; Min=0; Unit='sec'; Label='Vehicle Recovery Time Limit'; Help='Seconds a destroyed vehicle remains available for recovery. Compiled default was not recovered.'; Category='Experimental' }
-    @{ Section=$script:DuneGcSecConsole; Key='Vehicle.MaxActiveVehicles'; File='engine'; Type='int'; Min=-1; Default='-1'; Label='Maximum Active Vehicles'; Help='Rejects attempts to enter vehicle seats after this active-vehicle limit. -1 = unlimited.'; Category='Experimental' }
-    @{ Section=$script:DuneGcSecConsole; Key='Vehicle.MaxVehicles'; File='engine'; Type='int'; Min=-1; Default='-1'; Label='Maximum Vehicles'; Help='Rejects vehicle assembly or recovery after this total-vehicle limit. -1 = unlimited.'; Category='Experimental' }
-    @{ Section=$script:DuneGcSecConsole; Key='Vehicle.MaxVehiclesForSpawner'; File='engine'; Type='int'; Min=0; Default='400'; Label='Maximum Spawned Vehicles'; Help='Stops vehicle spawners after this many vehicles exist.'; Category='Experimental' }
-    @{ Section=$script:DuneGcSecConsole; Key='Vehicle.MaxVehiclesPerPlayer'; File='engine'; Type='int'; Min=0; Default='10'; Label='Maximum Vehicles Per Player'; Help='Limits vehicles each player may spawn or claim. 0 = unlimited.'; Category='Experimental' }
-    @{ Section=$script:DuneGcSecConsole; Key='Vehicle.MaxVehiclesWarning'; File='engine'; Type='int'; Min=0; Label='Vehicle Count Warning Threshold'; Help='Vehicle count at which the amount notification becomes a warning. Compiled default was not recovered.'; Category='Experimental' }
     @{ Section=$script:DuneGcSecConsole; Key='Vehicle.CharacterHitDamageModifier'; File='engine'; Type='float'; Min=0; Default='1.0'; Label='Vehicle Impact Character Damage'; Help='Scales damage dealt to characters by vehicle impacts. 0 should disable impact damage.'; Category='Experimental' }
     @{ Section=$script:DuneGcSecConsole; Key='Vehicle.DamagePlayerOnVehicleCollision'; File='engine'; Type='bool01'; Label='Vehicle Collision Damages Players'; Help='Whether vehicle collisions damage players. Compiled default was not recovered.'; Category='Experimental' }
     @{ Section=$script:DuneGcSecConsole; Key='Player.IsThrowOffPlayerFromVehicleActive'; File='engine'; Type='bool01'; Default='1'; Label='Throw Players Off Moving Vehicles'; Help='Whether players standing on moving vehicles are thrown off. Funcom help states 1 is the default.'; Category='Experimental' }
@@ -971,7 +970,7 @@ function ConvertTo-DuneIniManaged {
     }
 
     # Scrub deprecated keys from DST-owned managed sections. These keys were once
-    # in the schema but were removed after being proven no-ops (see issue #225).
+    # in the schema but were removed after field testing proved them ineffective.
     # Because the managed block otherwise PRESERVES keys DST no longer recognises,
     # without this they would be orphaned in every existing user's file forever.
     # DST owns the managed block ("do not hand-edit"), so scrubbing known-dead keys

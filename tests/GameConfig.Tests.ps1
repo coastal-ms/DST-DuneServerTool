@@ -312,26 +312,16 @@ Describe 'DuneGameConfigSchema: experimental binary CVars' -Tag 'GameConfig' {
     BeforeAll {
         $script:ExperimentalKeys = @(
             'Dune.GiveDoubleDifficultyLoot'
-            'dw.FuelBurningMultiplier'
             'Abilities.RespecCooldownTotalDurationSeconds'
             'dw.LandsraadMissionRewardMultiplierFactionXP'
             'dw.LandsraadMissionRewardMultiplierHouseCredit'
             'dw.LandsraadMissionRewardMultiplierSpecializationXP'
-            'dw.VehicleHeatMultiplier'
-            'dw.VehicleHeatInterpolationSpeed'
-            'dw.VehiclePowerConsumptionMultiplier'
-            'dw.VehicleCanOverHeat'
             'dw.VehicleAbandonedDecayAllowed'
             'dw.VehicleAbandonedDecayTimeMultiplier'
             'Vehicle.DisassemblySpeedMultiplier'
             'Vehicle.RecoveryChassisDurabilityReductionFraction'
             'Vehicle.RecoveryCurrencyBaseCost'
             'Vehicle.RecoveryTimeLimit'
-            'Vehicle.MaxActiveVehicles'
-            'Vehicle.MaxVehicles'
-            'Vehicle.MaxVehiclesForSpawner'
-            'Vehicle.MaxVehiclesPerPlayer'
-            'Vehicle.MaxVehiclesWarning'
             'Vehicle.CharacterHitDamageModifier'
             'Vehicle.DamagePlayerOnVehicleCollision'
             'Player.IsThrowOffPlayerFromVehicleActive'
@@ -356,12 +346,12 @@ Describe 'DuneGameConfigSchema: experimental binary CVars' -Tag 'GameConfig' {
         )
     }
 
-    It 'isolates all 42 testable binary-discovered controls in the Experimental category' {
+    It 'isolates all 32 testable binary-discovered controls in the Experimental category' {
         $fields = @{}
         foreach ($f in $script:DuneGameConfigSchema) { $fields[$f.Key] = $f }
         $experimental = @($script:DuneGameConfigSchema | Where-Object Category -eq 'Experimental')
 
-        $experimental.Count | Should -Be 42
+        $experimental.Count | Should -Be 32
         @($experimental.Key | Sort-Object) | Should -Be @($script:ExperimentalKeys | Sort-Object)
         foreach ($key in $script:ExperimentalKeys) {
             $fields.ContainsKey($key) | Should -BeTrue
@@ -376,13 +366,74 @@ Describe 'DuneGameConfigSchema: experimental binary CVars' -Tag 'GameConfig' {
         @($script:DuneGameConfigSchema.Key) | Should -Not -Contain 'Hazard.DehydrationZonesEnabled'
     }
 
+    It 'excludes vehicle controls proven ineffective in prerelease testing' {
+        $removed = @(
+            'dw.VehicleHeatMultiplier'
+            'dw.VehicleHeatInterpolationSpeed'
+            'dw.VehiclePowerConsumptionMultiplier'
+            'dw.VehicleCanOverHeat'
+            'dw.FuelBurningMultiplier'
+            'Vehicle.MaxActiveVehicles'
+            'Vehicle.MaxVehicles'
+            'Vehicle.MaxVehiclesForSpawner'
+            'Vehicle.MaxVehiclesPerPlayer'
+            'Vehicle.MaxVehiclesWarning'
+        )
+
+        foreach ($key in $removed) {
+            @($script:DuneGameConfigSchema.Key) | Should -Not -Contain $key
+        }
+    }
+
+    It 'scrubs retired vehicle controls from the managed INI block on the next save' {
+        $raw = @"
+; user-owned content remains untouched
+[ConsoleVariables]
+User.HandEditedSetting=1
+
+$script:DstManagedBegin
+[ConsoleVariables]
+dw.FuelBurningMultiplier=10
+dw.VehicleHeatMultiplier=0
+dw.VehicleHeatInterpolationSpeed=0
+dw.VehiclePowerConsumptionMultiplier=0
+dw.VehicleCanOverHeat=0
+Vehicle.MaxActiveVehicles=15
+Vehicle.MaxVehicles=15
+Vehicle.MaxVehiclesForSpawner=15
+Vehicle.MaxVehiclesPerPlayer=15
+Vehicle.MaxVehiclesWarning=12
+Dune.GiveDoubleDifficultyLoot=1
+$script:DstManagedEnd
+"@
+        $out = ConvertTo-DuneIniManaged -Raw $raw -Updates @(
+            @{ section=$script:DuneGcSecConsole; key='Dune.GiveDoubleDifficultyLoot'; value='1' }
+        ) -QuotedKeys @{}
+
+        foreach ($key in @(
+            'dw.FuelBurningMultiplier',
+            'dw.VehicleHeatMultiplier',
+            'dw.VehicleHeatInterpolationSpeed',
+            'dw.VehiclePowerConsumptionMultiplier',
+            'dw.VehicleCanOverHeat',
+            'Vehicle.MaxActiveVehicles',
+            'Vehicle.MaxVehicles',
+            'Vehicle.MaxVehiclesForSpawner',
+            'Vehicle.MaxVehiclesPerPlayer',
+            'Vehicle.MaxVehiclesWarning'
+        )) {
+            $out | Should -Not -Match ('(?m)^' + [regex]::Escape($key) + '=')
+        }
+        $out | Should -Match '(?m)^User\.HandEditedSetting=1$'
+        $out | Should -Match '(?m)^Dune\.GiveDoubleDifficultyLoot=1$'
+    }
+
     It 'uses binary catalogue types and recovered defaults without inventing unknown defaults' {
         $fields = @{}
         foreach ($f in $script:DuneGameConfigSchema) { $fields[$f.Key] = $f }
 
         foreach ($key in @(
             'Dune.GiveDoubleDifficultyLoot',
-            'dw.VehicleCanOverHeat',
             'dw.VehicleAbandonedDecayAllowed',
             'Vehicle.DamagePlayerOnVehicleCollision',
             'Player.IsThrowOffPlayerFromVehicleActive',
@@ -399,10 +450,6 @@ Describe 'DuneGameConfigSchema: experimental binary CVars' -Tag 'GameConfig' {
             'dw.LandsraadMissionRewardMultiplierFactionXP',
             'dw.LandsraadMissionRewardMultiplierHouseCredit',
             'dw.LandsraadMissionRewardMultiplierSpecializationXP',
-            'dw.VehicleHeatMultiplier',
-            'dw.VehiclePowerConsumptionMultiplier',
-            'dw.FuelBurningMultiplier',
-            'dw.VehicleHeatInterpolationSpeed',
             'dw.VehicleAbandonedDecayTimeMultiplier',
             'Vehicle.DisassemblySpeedMultiplier',
             'Vehicle.CharacterHitDamageModifier',
@@ -420,7 +467,6 @@ Describe 'DuneGameConfigSchema: experimental binary CVars' -Tag 'GameConfig' {
         foreach ($key in @(
             'dw.VehicleAbandonedDecayAllowed',
             'Vehicle.RecoveryTimeLimit',
-            'Vehicle.MaxVehiclesWarning',
             'Vehicle.DamagePlayerOnVehicleCollision',
             'Vehicle.SandwormInvulnerabilityOnExitInAir',
             'Vehicle.SandwormInvulnerabilityOnLeavingGame',
@@ -451,12 +497,12 @@ Describe 'DuneGameConfigSchema: experimental binary CVars' -Tag 'GameConfig' {
     It 'persists experimental controls in the UserEngine ConsoleVariables section' {
         $out = ConvertTo-DuneIniManaged -Raw '' -Updates @(
             @{ section=$script:DuneGcSecConsole; key='Dune.GiveDoubleDifficultyLoot'; value='1' },
-            @{ section=$script:DuneGcSecConsole; key='dw.VehicleHeatMultiplier'; value='0.5' }
+            @{ section=$script:DuneGcSecConsole; key='dw.VehicleAbandonedDecayTimeMultiplier'; value='0.5' }
         ) -QuotedKeys @{}
 
         (Get-HeaderCount -Raw $out -Name $script:DuneGcSecConsole) | Should -Be 1
         (Get-EffectiveValue -Raw $out -Section $script:DuneGcSecConsole -Key 'Dune.GiveDoubleDifficultyLoot') | Should -Be '1'
-        (Get-EffectiveValue -Raw $out -Section $script:DuneGcSecConsole -Key 'dw.VehicleHeatMultiplier') | Should -Be '0.5'
+        (Get-EffectiveValue -Raw $out -Section $script:DuneGcSecConsole -Key 'dw.VehicleAbandonedDecayTimeMultiplier') | Should -Be '0.5'
     }
 }
 
