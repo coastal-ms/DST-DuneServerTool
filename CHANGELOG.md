@@ -17,6 +17,7 @@ here cover everything those tags shipped.
 
 - **Experimental Game Config controls.** New collapsed-by-default card exposes 32 testable server-side `UserEngine.ini` CVars decoded from server build 1.4.10.4, covering rewards, vehicles, sandworms, spice, buildings, combat, NPCs, journey instances, and safe zones. Controls require explicit acknowledgement, show their exact keys, and remain separate from local client `Game.ini` changes. Prerelease testing removed ten ineffective vehicle fuel, heat, power, overheat, and limit controls; their stale DST-managed INI entries are deleted on the next Game Config save. The dehydration-zone control remains omitted because Funcom warns that enabling it crashes clients.
 - **Faster Game Config apply.** A new **Apply INIs to pods** action reloads only running game-server pods, one at a time, waiting for each replacement to become Ready before continuing. Database, director, operator, and other infrastructure pods remain untouched, avoiding a full battlegroup restart while still applying startup-read INI settings.
+- Supporter added to list.
 
 ## [12.21.3] - 2026-07-27
 
