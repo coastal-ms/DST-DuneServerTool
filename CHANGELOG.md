@@ -13,6 +13,10 @@ here cover everything those tags shipped.
 
 ## [Unreleased]
 
+### Changed
+
+- **Active Spice now only lists partitions that are live or pinned.** `dune.spicefield_types` keeps a row for every (map, size, instance) combination forever, so a battlegroup that has ever run a second instance of a map keeps those rows permanently. The card grouped only by map, so each size appeared twice with nothing to tell the rows apart — running a second Deep Desert also created duplicate-looking rows for Hagga Basin. Rows are now shown when their instance is currently running or is kept warm by a Map Spin-Up pin, and a map with more than one live instance labels them **Hagga Basin #1**, **#2** and so on. If the battlegroup can't be read, every row is shown rather than hiding real data. Map names also come from the same table the Game Servers list uses, so both read identically.
+
 ## [13.0.1] - 2026-07-30
 
 ### Added

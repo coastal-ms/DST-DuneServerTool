@@ -11,6 +11,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { getSpicefields, setSpicefieldSpawning } from '../../api/gameconfig'
 import type { SpicefieldType } from '../../api/types'
+import { mapLabel } from '../../util/mapLabel'
 
 type Props = {
   enabled: boolean   // gate on BG ready
@@ -32,14 +33,10 @@ const SIZE_CLASS: Record<string, string> = {
 }
 
 // Map labels mirror the colors from the original bg-status terminal output.
+// Keyed on the normalised map id so it matches the Game Servers table.
 const MAP_LABEL_CLASS: Record<string, string> = {
-  HaggaBasin: 'text-success',
-  DeepDesert: 'text-accent-bright',
-}
-
-const MAP_DISPLAY: Record<string, string> = {
-  HaggaBasin: 'Hagga Basin',
-  DeepDesert: 'Deep Desert',
+  Survival_1: 'text-success',
+  DeepDesert_1: 'text-accent-bright',
 }
 
 // Color the Active count by fill ratio so the eye is drawn to busy fields.
@@ -63,6 +60,9 @@ function formatTime(d: Date) {
 
 export function BgSpiceSummary({ enabled }: Props) {
   const [rows, setRows] = useState<SpicefieldType[] | null>(null)
+  // False only when the backend could read the battlegroup; a failed read
+  // leaves this true so nothing is hidden on a transient error.
+  const [gateOk, setGateOk] = useState(false)
   const [err, setErr]   = useState<string | null>(null)
   const [updatedAt, setUpdatedAt] = useState<Date | null>(null)
   const [togglingId, setTogglingId] = useState<number | null>(null)
@@ -86,6 +86,7 @@ export function BgSpiceSummary({ enabled }: Props) {
     try {
       const data = await getSpicefields()
       setRows(data.rows)
+      setGateOk(data.partitionGate === true)
       setUpdatedAt(new Date())
       setErr(null)
     } catch (e) {
@@ -142,21 +143,57 @@ export function BgSpiceSummary({ enabled }: Props) {
     }
   }, [bumpCooldown, cooldownRemaining, togglingId])
 
-  const sorted = useMemo(() => {
+  // Only partitions that are live or pinned. dune.spicefield_types keeps a row
+  // per (map, size, dimension) forever, so a battlegroup that once ran two
+  // instances of a map still carries rows for the second one — which rendered as
+  // every size listed twice with nothing to distinguish them. When the backend
+  // could not read the battlegroup (partitionGate false) nothing is hidden, so a
+  // transient failure never silently drops real data.
+  const visible = useMemo(() => {
     if (!rows) return []
-    return [...rows].sort((a, b) => {
-      if (a.mapName !== b.mapName) return a.mapName.localeCompare(b.mapName)
+    if (!gateOk) return rows
+    return rows.filter(r => r.partitionActive !== false)
+  }, [rows, gateOk])
+
+  // Group key is map + dimension so two instances of the same map stay apart.
+  const groupKey = useCallback(
+    (r: SpicefieldType) => `${r.mapId ?? r.mapName}|${r.dimensionIndex ?? 0}`,
+    [],
+  )
+
+  const sorted = useMemo(() => {
+    return [...visible].sort((a, b) => {
+      const am = a.mapId ?? a.mapName
+      const bm = b.mapId ?? b.mapName
+      if (am !== bm) return am.localeCompare(bm)
+      const ad = a.dimensionIndex ?? 0
+      const bd = b.dimensionIndex ?? 0
+      if (ad !== bd) return ad - bd
       const ar = SIZE_RANK[a.fieldType] ?? 99
       const br = SIZE_RANK[b.fieldType] ?? 99
       return ar - br
     })
-  }, [rows])
+  }, [visible])
 
-  // Row span data so the Map column collapses repeats.
+  // Row span data so the Map column collapses repeats, per map+dimension.
   const mapSpan = useMemo(() => {
     const counts: Record<string, number> = {}
-    for (const r of sorted) counts[r.mapName] = (counts[r.mapName] ?? 0) + 1
+    for (const r of sorted) {
+      const k = groupKey(r)
+      counts[k] = (counts[k] ?? 0) + 1
+    }
     return counts
+  }, [sorted, groupKey])
+
+  // Only label instances when a map genuinely has more than one, so the common
+  // single-instance case stays uncluttered.
+  const multiInstanceMaps = useMemo(() => {
+    const dims: Record<string, Set<number>> = {}
+    for (const r of sorted) {
+      const m = r.mapId ?? r.mapName
+      ;(dims[m] ??= new Set()).add(r.dimensionIndex ?? 0)
+    }
+    return new Set(Object.keys(dims).filter(m => dims[m].size > 1))
   }, [sorted])
 
   if (!enabled) return null
@@ -198,9 +235,14 @@ export function BgSpiceSummary({ enabled }: Props) {
           <tbody>
             {sorted.map((r, idx) => {
               const prev      = idx > 0 ? sorted[idx - 1] : null
-              const newMap    = !prev || prev.mapName !== r.mapName
-              const labelCls  = MAP_LABEL_CLASS[r.mapName] ?? 'text-text'
-              const display   = MAP_DISPLAY[r.mapName] ?? r.mapName
+              const key       = groupKey(r)
+              const newMap    = !prev || groupKey(prev) !== key
+              const mapId     = r.mapId ?? r.mapName
+              const labelCls  = MAP_LABEL_CLASS[mapId] ?? 'text-text'
+              const dim       = r.dimensionIndex ?? 0
+              const display   = multiInstanceMaps.has(mapId)
+                ? `${mapLabel(mapId)} #${dim + 1}`
+                : mapLabel(mapId)
               const sizeCls   = SIZE_CLASS[r.fieldType] ?? 'text-text-muted'
               const activeCls = activeFillClass(r.currentActive, r.maxActive)
               const primCls   = primedClass(r.currentPrimed)
@@ -218,7 +260,7 @@ export function BgSpiceSummary({ enabled }: Props) {
                     className={newMap && idx > 0 ? 'border-t border-border/40' : ''}>
                   {newMap ? (
                     <td className={`align-top font-semibold ${labelCls} pr-3 py-0.5`}
-                        rowSpan={mapSpan[r.mapName]}>
+                        rowSpan={mapSpan[key]}>
                       {display}
                     </td>
                   ) : null}

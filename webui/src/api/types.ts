@@ -399,20 +399,30 @@ export type GameConfigBackupListResponse = {
 
 export type SpicefieldType = {
   spicefieldTypeId: number
-  mapName: string         // e.g. "HaggaBasin", "DeepDesert"
+  mapName: string         // raw DB name, e.g. "HaggaBasin", "DeepDesert"
+  mapId?: string          // normalised to the battlegroup's id, e.g. "Survival_1"
   fieldType: string       // e.g. "Small", "Medium", "Large"
-  dimensionIndex: number
+  dimensionIndex: number  // instance index — a map can have more than one
   maxActive: number
   maxPrimed: number
   currentActive: number   // read-only — maintained by the game
   currentPrimed: number   // read-only — maintained by the game
   isSpawningActive: boolean
   spawnWeight: number     // float
+  // Whether this (map, dimension) is currently running or kept warm by a pin.
+  // Rows survive in the DB long after an instance stops existing, so these
+  // drive what the dashboard shows.
+  partitionLive?: boolean
+  partitionPinned?: boolean
+  partitionActive?: boolean
 }
 
 export type SpicefieldsResponse = {
   available: boolean
   rows: SpicefieldType[]
+  // False when the battlegroup could not be read, in which case callers should
+  // show every row rather than hide real data on a transient failure.
+  partitionGate?: boolean
 }
 
 export type SpicefieldSaveResponse = {
