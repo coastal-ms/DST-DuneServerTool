@@ -9,6 +9,7 @@
 // removes DST's lines so the game defaults return.
 import { useCallback, useEffect, useState } from 'react'
 import { Icon } from '../../components/Icon'
+import { CollapsibleCard } from '../../components/CollapsibleCard'
 import { IniShareModal } from '../../components/IniShareModal'
 import { ApiError } from '../../api/client'
 import { getLandclaimTimer, saveLandclaimTimer } from '../../api/gameconfig'
@@ -87,17 +88,21 @@ export function LandclaimTimerCard({ vmRunning }: Props) {
   }
 
   return (
-    <div className="card p-4 mb-4 border-border">
-      <div className="flex items-center justify-between gap-2">
-        <div className="flex items-center gap-2 min-w-0">
-          <Icon name="Timer" size={16} className="shrink-0 text-accent" />
-          <div className="min-w-0">
-            <div className="text-sm font-semibold text-text">Land Claim Timer</div>
-            <div className="text-xs text-text-muted">
-              Override how long a land-claim staking-unit extension takes (seconds).
-            </div>
-          </div>
-        </div>
+    <CollapsibleCard
+      id="gameconfig.landclaimTimer"
+      icon="Timer"
+      iconClassName="shrink-0 text-accent"
+      title="Land Claim Timer"
+      titleClassName="text-sm font-semibold text-text"
+      subtitle={
+        <span className="text-xs text-text-muted">
+          Override how long a land-claim staking-unit extension takes (seconds).
+        </span>
+      }
+      className="mb-4 border-border"
+      headerClassName="px-4 pt-4 pb-2"
+      bodyClassName="px-4 pb-4"
+      headerRight={
         <button
           type="button"
           className="btn-secondary shrink-0"
@@ -107,7 +112,8 @@ export function LandclaimTimerCard({ vmRunning }: Props) {
         >
           <Icon name={loading ? 'Loader2' : 'RotateCcw'} size={14} className={loading ? 'animate-spin' : ''} /> Refresh
         </button>
-      </div>
+      }
+    >
 
       <label className="mt-3 flex items-center gap-2 cursor-pointer select-none">
         <input
@@ -203,6 +209,6 @@ export function LandclaimTimerCard({ vmRunning }: Props) {
           onClose={() => setShowBlock(false)}
         />
       )}
-    </div>
+    </CollapsibleCard>
   )
 }

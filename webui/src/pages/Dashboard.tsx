@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from 'react'
 import { useNavigate } from '../router'
 import { PageHeader } from '../components/PageHeader'
 import { Icon } from '../components/Icon'
+import { CollapsibleCard } from '../components/CollapsibleCard'
 import { useStatus } from '../hooks/useStatus'
 import { BgSpiceSummary } from './dashboard/BgSpiceSummary'
 import { ScheduledRestarts } from './dashboard/ScheduledRestarts'
@@ -227,11 +228,16 @@ export function Dashboard() {
       </section>
 
       <section className="grid grid-cols-1 lg:grid-cols-2 gap-4 mb-4">
-        <div className="card p-4">
-          <div className="flex items-center justify-between mb-2">
-            <h2 className="text-sm font-semibold uppercase tracking-wider text-text-muted flex items-center gap-2">
-              <Icon name="Activity" size={14} className="text-accent" /> Battlegroup info
-            </h2>
+        <CollapsibleCard
+          id="dashboard.bgInfo"
+          icon="Activity"
+          iconClassName="text-accent shrink-0"
+          title="Battlegroup info"
+          titleClassName="text-sm font-semibold uppercase tracking-wider text-text-muted"
+          className=""
+          headerClassName="px-4 pt-4 pb-1"
+          bodyClassName="px-4 pb-4"
+          headerRight={
             <div className="flex items-center gap-2 min-w-0">
               {status?.funcomUpdate?.available && (
                 <span
@@ -247,7 +253,8 @@ export function Dashboard() {
                 </span>
               )}
             </div>
-          </div>
+          }
+        >
           {!bgReady ? (
             <p className="text-sm text-text-dim italic">
               {status?.bg?.reason || 'Battlegroup is not running.'}
@@ -286,13 +293,18 @@ export function Dashboard() {
             <pre className="mt-2 text-[10px] font-mono bg-bg-dim border border-border rounded p-2 max-h-64 overflow-auto whitespace-pre-wrap break-words text-text-dim">{status.bg.output}</pre>
           )}
           <BgSpiceSummary enabled={bgReady} />
-        </div>
+        </CollapsibleCard>
 
-        <div className="card p-4 flex flex-col">
-          <div className="flex items-center justify-between mb-2">
-            <h2 className="text-sm font-semibold uppercase tracking-wider text-text-muted flex items-center gap-2">
-              <Icon name="ServerCog" size={14} className="text-accent" /> Game servers
-            </h2>
+        <CollapsibleCard
+          id="dashboard.gameServers"
+          icon="ServerCog"
+          iconClassName="text-accent shrink-0"
+          title="Game servers"
+          titleClassName="text-sm font-semibold uppercase tracking-wider text-text-muted"
+          className=""
+          headerClassName="px-4 pt-4 pb-1"
+          bodyClassName="px-4 pb-4 flex flex-col"
+          headerRight={
             <div className="flex items-center gap-2">
               {gameServers.length > 0 && (
                 <span className="text-[10px] text-text-dim">{gameServers.length} pod{gameServers.length === 1 ? '' : 's'}</span>
@@ -307,7 +319,8 @@ export function Dashboard() {
                 <Icon name="RefreshCw" size={18} className={loading ? 'animate-spin' : ''} />
               </button>
             </div>
-          </div>
+          }
+        >
           {!bgReady ? (
             <p className="text-sm text-text-dim italic">Battlegroup must be running.</p>
           ) : gameServers.length === 0 ? (
@@ -329,15 +342,20 @@ export function Dashboard() {
             </table>
           )}
           <HeartbeatSensor servers={gameServers} loading={loading} />
-        </div>
+        </CollapsibleCard>
       </section>
 
       <section className="mb-4">
-        <div className="card p-5">
-          <div className="flex items-center justify-between mb-3 gap-3 flex-wrap">
-            <h2 className="text-sm font-semibold uppercase tracking-wider text-text-muted flex items-center gap-2">
-              <Icon name="Link2" size={14} className="text-accent" /> Web interfaces
-            </h2>
+        <CollapsibleCard
+          id="dashboard.webInterfaces"
+          icon="Link2"
+          iconClassName="text-accent shrink-0"
+          title="Web interfaces"
+          titleClassName="text-sm font-semibold uppercase tracking-wider text-text-muted"
+          className=""
+          headerClassName="px-5 pt-5 pb-2"
+          bodyClassName="px-5 pb-5"
+          headerRight={
             <button
               className="btn-secondary"
               onClick={() => { void refreshLinks(true) }}
@@ -346,7 +364,8 @@ export function Dashboard() {
             >
               <Icon name="RefreshCw" size={14} className={linksLoading ? 'animate-spin' : ''} />
             </button>
-          </div>
+          }
+        >
           {linksError ? (
             <p className="text-sm text-danger break-words">{linksError}</p>
           ) : !links ? (
@@ -398,7 +417,7 @@ export function Dashboard() {
               ))}
             </ul>
           )}
-        </div>
+        </CollapsibleCard>
       </section>
 
       <section className="mb-4">
@@ -406,12 +425,16 @@ export function Dashboard() {
       </section>
 
       <section className="grid grid-cols-1 lg:grid-cols-2 gap-4 mb-4">
-        <div className="card p-5">
-          <div className="flex items-center justify-between mb-3">
-            <h2 className="text-sm font-semibold uppercase tracking-wider text-text-muted flex items-center gap-2">
-              <Icon name="FileText" size={14} className="text-accent" /> Log exports
-            </h2>
-          </div>
+        <CollapsibleCard
+          id="dashboard.logExports"
+          icon="FileText"
+          iconClassName="text-accent shrink-0"
+          title="Log exports"
+          titleClassName="text-sm font-semibold uppercase tracking-wider text-text-muted"
+          className=""
+          headerClassName="px-5 pt-5 pb-2"
+          bodyClassName="px-5 pb-5"
+        >
           <p className="text-xs text-text-dim mb-3">
             Collects logs from every pod and writes them to your desktop. Each export opens a console window.
           </p>
@@ -437,7 +460,7 @@ export function Dashboard() {
           </div>
           {exportMsg && <p className="mt-3 text-xs text-text-muted border-l-2 border-accent pl-2">{exportMsg}</p>}
           {exportErr && <p className="mt-3 text-xs text-danger break-words">{exportErr}</p>}
-        </div>
+        </CollapsibleCard>
       </section>
 
       {vm?.error && (

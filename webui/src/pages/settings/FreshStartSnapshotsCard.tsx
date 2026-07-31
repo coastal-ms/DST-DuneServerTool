@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import { Icon } from '../../components/Icon'
+import { CollapsibleCard } from '../../components/CollapsibleCard'
 import { getFreshStartSnapshotsPath } from '../../api/gameplay'
 
 // Read-only Settings card that exposes where Fresh Start snapshots live on disk,
@@ -23,11 +24,15 @@ export function FreshStartSnapshotsCard() {
   const copy = (s: string) => { if (s) navigator.clipboard?.writeText(s) }
 
   return (
-    <section className="card p-4 md:p-6 space-y-3">
-      <div className="flex items-center gap-2">
-        <Icon name="Save" size={18} />
-        <h2 className="text-lg font-semibold">Fresh Start snapshots</h2>
-      </div>
+    <CollapsibleCard
+      id="settings.freshStartSnapshots"
+      icon="Save"
+      title="Fresh Start snapshots"
+      titleClassName="text-lg font-semibold"
+      className=""
+      headerClassName="px-4 md:px-6 pt-4 md:pt-6 pb-2"
+      bodyClassName="px-4 md:px-6 pb-4 md:pb-6 space-y-3"
+    >
       <p className="text-sm text-text-dim">
         Fresh Start saves each character's purchased CHOAM/MTX sets, pieces, and cosmetics to a single JSON file before wiping the account, so purchases can be restored onto the recreated character. Back this folder up if you want durable copies outside the app data dir.
       </p>
@@ -56,6 +61,6 @@ export function FreshStartSnapshotsCard() {
           </div>
         </div>
       )}
-    </section>
+    </CollapsibleCard>
   )
 }

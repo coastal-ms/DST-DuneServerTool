@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from 'react'
 import { Icon } from '../../components/Icon'
+import { useCardCollapse } from '../../components/CollapsibleCard'
 import {
   getAcl,
   saveAcl,
@@ -24,7 +25,7 @@ import {
 // restores the owner from a buffer.
 
 export function RemoteAccessCard() {
-  const [expanded, setExpanded] = useState(false)
+  const { open: expanded, setOpen: setExpanded } = useCardCollapse('settings.remoteAccess', false)
   const [acl, setAcl] = useState<RemoteAcl | null>(null)
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)

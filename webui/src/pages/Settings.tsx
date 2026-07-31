@@ -16,6 +16,7 @@ import { MobileAppCard } from './settings/MobileAppCard'
 import { FlsTokenCard } from './settings/FlsTokenCard'
 import { FreshStartSnapshotsCard } from './settings/FreshStartSnapshotsCard'
 import { SectionErrorBoundary } from '../components/SectionErrorBoundary'
+import { CollapsibleCard, useCardCollapse } from '../components/CollapsibleCard'
 
 const FIELDS: {
   key: string
@@ -214,7 +215,7 @@ export function Settings() {
   const [updErr, setUpdErr] = useState<string | null>(null)
 
   // Collapsible-card state — both update cards start minimized.
-  const [updExpanded, setUpdExpanded] = useState(false)
+  const { open: updExpanded, setOpen: setUpdExpanded } = useCardCollapse('settings.updates', false)
 
   // Update channel + selectable pre-release (test channel). 'stable' follows
   // the newest non-prerelease release; 'test' opts into targeted pre-release
@@ -707,13 +708,16 @@ export function Settings() {
       <SectionErrorBoundary name="Fresh Start snapshots"><FreshStartSnapshotsCard /></SectionErrorBoundary>
 
       {/* --- Database connection (issue #295) --- */}
-      <div className="card mb-4 p-6">
+      <CollapsibleCard
+        id="settings.dbConnection"
+        icon="Database"
+        title="Database connection"
+        titleClassName="text-lg font-semibold"
+        headerClassName="px-6 pt-6 pb-2"
+        bodyClassName="px-6 pb-6"
+      >
         <div className="flex items-start justify-between gap-3">
           <div className="min-w-0">
-            <div className="flex items-center gap-2 mb-1">
-              <Icon name="Database" size={18} className="text-text-muted" />
-              <h2 className="text-lg font-semibold">Database connection</h2>
-            </div>
             <p className="text-sm text-text-dim">
               DST reads Players, Bases and Storage from the server's PostgreSQL
               database on port <span className="font-mono">{(values['DbPort'] ?? '').trim() || '15432'}</span>.
@@ -750,7 +754,7 @@ export function Settings() {
             </button>
           </div>
         </div>
-      </div>
+      </CollapsibleCard>
 
       {/* --- dune-admin VM cache card removed (12.18.17): companion tool was
            sunset months ago; the card globbed ~/.dune/sh-*.yaml which only

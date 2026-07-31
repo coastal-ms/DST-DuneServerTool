@@ -15,6 +15,7 @@
 
 import { useCallback, useEffect, useState } from 'react'
 import { Icon } from '../../components/Icon'
+import { useCardCollapse } from '../../components/CollapsibleCard'
 import { api, ApiError } from '../../api/client'
 
 const RECOMMENDED_ID = 'dune-awakening'
@@ -54,7 +55,7 @@ function fmtElapsed(sec: number): string {
 }
 
 export function ServerBrowserPingCard() {
-  const [open, setOpen] = useState(false)
+  const { open, setOpen } = useCardCollapse('settings.serverBrowserPing', false)
   const [status, setStatus] = useState<BrowserPingStatus | null>(null)
   const [loading, setLoading] = useState(false)
   const [saving, setSaving] = useState(false)

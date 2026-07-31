@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react'
 import { QRCodeSVG } from 'qrcode.react'
 import { Icon } from '../../components/Icon'
+import { CollapsibleCard } from '../../components/CollapsibleCard'
 import { api } from '../../api/client'
 import { isLocalViewer } from '../../util/viewer'
 
@@ -102,11 +103,15 @@ export function MobileAppCard() {
       })
 
   return (
-    <div className="card">
-      <div className="card-header">
-        <h2 className="card-title">Mobile App Pairing</h2>
-      </div>
-      <div className="card-body">
+    <CollapsibleCard
+      id="settings.mobileApp"
+      icon="Smartphone"
+      title="Mobile App Pairing"
+      titleClassName="card-title"
+      className=""
+      headerClassName="card-header"
+      bodyClassName="card-body"
+    >
 
         {/* Secure remote access via Tailscale Funnel — the recommended, no-domain
             path for the mobile app + browser portal. (A Cloudflare custom domain
@@ -254,7 +259,6 @@ export function MobileAppCard() {
             </div>
           </div>
         )}
-      </div>
-    </div>
+    </CollapsibleCard>
   )
 }
