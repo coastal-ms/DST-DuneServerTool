@@ -13,6 +13,12 @@ here cover everything those tags shipped.
 
 ## [Unreleased]
 
+## [13.0.1] - 2026-07-30
+
+### Added
+
+- **Sun exposure toggle.** Game Config → Hydration gains **Sun Exposure Enabled**, which turns off the sun-exposure water drain when set to 0. Unlike the surrounding hydration settings it is a server-side console variable, so it applies on the server alone and needs no client-side apply. Reported working by a community tester.
+
 ## [13.0.0] - 2026-07-30
 
 ### Added
@@ -7295,7 +7301,8 @@ at the time. Also folds in the v3.0.1 / v3.1.2 patches.
   (`ssh`, `Gameplay Admin`, `setup-guide`, `report-issue`). _(originally
   3.1.2)_
 
-[Unreleased]: https://github.com/coastal-ms/DST-DuneServerTool/compare/v13.0.0...HEAD
+[Unreleased]: https://github.com/coastal-ms/DST-DuneServerTool/compare/v13.0.1...HEAD
+[13.0.1]: https://github.com/coastal-ms/DST-DuneServerTool/compare/v13.0.0...v13.0.1
 [13.0.0]: https://github.com/coastal-ms/DST-DuneServerTool/compare/v12.16.6...v13.0.0
 [6.1.0]: https://github.com/coastal-ms/DST-DuneServerTool/compare/v6.0.1...v6.1.2
 [6.0.0]: https://github.com/coastal-ms/DST-DuneServerTool/compare/v5.0.2...v6.0.1
