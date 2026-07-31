@@ -18,6 +18,7 @@ here cover everything those tags shipped.
 ### Added
 
 - **Sun exposure toggle.** Game Config → Hydration gains **Sun Exposure Enabled**, which turns off the sun-exposure water drain when set to 0. Unlike the surrounding hydration settings it is a server-side console variable, so it applies on the server alone and needs no client-side apply. Reported working by a community tester.
+- **Fuel Burning Duration returns to Experimental.** This control was withdrawn in prerelease testing after showing no effect, and is restored for another round of field testing — it remains unconfirmed. A scan of the shipped server binary found no enable-gate for it, but did show that each burning fuel entry stores its own duration when it ignites, which suggests the multiplier applies at ignition rather than continuously. Fuel already burning in a generator would therefore be unaffected, so the control now tells testers to insert fresh fuel after restarting.
 
 ## [13.0.0] - 2026-07-30
 

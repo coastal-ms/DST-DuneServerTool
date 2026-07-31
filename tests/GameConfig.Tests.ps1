@@ -312,6 +312,7 @@ Describe 'DuneGameConfigSchema: experimental binary CVars' -Tag 'GameConfig' {
     BeforeAll {
         $script:ExperimentalKeys = @(
             'Dune.GiveDoubleDifficultyLoot'
+            'dw.FuelBurningMultiplier'
             'Abilities.RespecCooldownTotalDurationSeconds'
             'dw.LandsraadMissionRewardMultiplierFactionXP'
             'dw.LandsraadMissionRewardMultiplierHouseCredit'
@@ -346,12 +347,12 @@ Describe 'DuneGameConfigSchema: experimental binary CVars' -Tag 'GameConfig' {
         )
     }
 
-    It 'isolates all 32 testable binary-discovered controls in the Experimental category' {
+    It 'isolates all 33 testable binary-discovered controls in the Experimental category' {
         $fields = @{}
         foreach ($f in $script:DuneGameConfigSchema) { $fields[$f.Key] = $f }
         $experimental = @($script:DuneGameConfigSchema | Where-Object Category -eq 'Experimental')
 
-        $experimental.Count | Should -Be 32
+        $experimental.Count | Should -Be 33
         @($experimental.Key | Sort-Object) | Should -Be @($script:ExperimentalKeys | Sort-Object)
         foreach ($key in $script:ExperimentalKeys) {
             $fields.ContainsKey($key) | Should -BeTrue
@@ -367,12 +368,14 @@ Describe 'DuneGameConfigSchema: experimental binary CVars' -Tag 'GameConfig' {
     }
 
     It 'excludes vehicle controls proven ineffective in prerelease testing' {
+        # dw.FuelBurningMultiplier was withdrawn alongside these but has been
+        # restored for another round of field testing, so it is deliberately
+        # absent from this list and from the deprecated-scrub list.
         $removed = @(
             'dw.VehicleHeatMultiplier'
             'dw.VehicleHeatInterpolationSpeed'
             'dw.VehiclePowerConsumptionMultiplier'
             'dw.VehicleCanOverHeat'
-            'dw.FuelBurningMultiplier'
             'Vehicle.MaxActiveVehicles'
             'Vehicle.MaxVehicles'
             'Vehicle.MaxVehiclesForSpawner'
@@ -381,6 +384,19 @@ Describe 'DuneGameConfigSchema: experimental binary CVars' -Tag 'GameConfig' {
         )
 
         foreach ($key in $removed) {
+            @($script:DuneGameConfigSchema.Key) | Should -Not -Contain $key
+        }
+    }
+
+    It 'keeps fuel burning available and out of the deprecated-scrub list' {
+        # A schema key that is also in the deprecated list would be written and
+        # then scrubbed on the same save, so the setting could never persist.
+        @($script:DuneGameConfigSchema.Key) | Should -Contain 'dw.FuelBurningMultiplier'
+        @($script:DuneGameConfigDeprecatedManagedKeys) | Should -Not -Contain 'dw.FuelBurningMultiplier'
+    }
+
+    It 'never lists a live schema key in the deprecated-scrub list' {
+        foreach ($key in @($script:DuneGameConfigDeprecatedManagedKeys)) {
             @($script:DuneGameConfigSchema.Key) | Should -Not -Contain $key
         }
     }
@@ -411,7 +427,6 @@ $script:DstManagedEnd
         ) -QuotedKeys @{}
 
         foreach ($key in @(
-            'dw.FuelBurningMultiplier',
             'dw.VehicleHeatMultiplier',
             'dw.VehicleHeatInterpolationSpeed',
             'dw.VehiclePowerConsumptionMultiplier',
