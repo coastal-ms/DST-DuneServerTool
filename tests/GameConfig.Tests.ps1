@@ -623,6 +623,42 @@ ResolutionScale=100
     }
 }
 
+Describe 'GameConfig: client-apply flag covers every game-file setting' -Tag 'GameConfig' {
+
+    # Settings written to the server's Game.ini are also read by the client, so
+    # each one has to be offered for client-side apply. Console variables live in
+    # UserEngine.ini and are server-only, so they must never be.
+    #
+    # A false positive here is harmless - the client write path strips any value
+    # that equals its default, and server config wins regardless - whereas a
+    # missing flag silently denies the operator a client apply they needed.
+
+    It 'flags every game-file setting for client apply' {
+        $missing = @($script:DuneGameConfigSchema |
+            Where-Object { $_.File -eq 'game' -and -not ($_.ContainsKey('ClientApply') -and $_.ClientApply) } |
+            ForEach-Object { $_.Key })
+        $missing -join ', ' | Should -Be ''
+    }
+
+    It 'never flags an engine-file console variable for client apply' {
+        $wrong = @($script:DuneGameConfigSchema |
+            Where-Object { $_.File -eq 'engine' -and $_.ContainsKey('ClientApply') -and $_.ClientApply } |
+            ForEach-Object { $_.Key })
+        $wrong -join ', ' | Should -Be ''
+    }
+
+    It 'treats a value equal to its default as a removal, not a write' {
+        # Covers the three cases: unchanged default is never written, a changed
+        # value is written, and changing back to the default strips the key.
+        Test-DuneGameConfigValueIsDefault -Key 'm_StormDuration' -Value '900'  | Should -BeTrue
+        Test-DuneGameConfigValueIsDefault -Key 'm_StormDuration' -Value '1200' | Should -BeFalse
+        # Numeric compare, so formatting differences still count as default.
+        Test-DuneGameConfigValueIsDefault -Key 'm_WaterConsumptionRate' -Value '1'   | Should -BeTrue
+        Test-DuneGameConfigValueIsDefault -Key 'm_WaterConsumptionRate' -Value '1.0' | Should -BeTrue
+        Test-DuneGameConfigValueIsDefault -Key 'm_WaterConsumptionRate' -Value '2.0' | Should -BeFalse
+    }
+}
+
 Describe 'GameConfig: reset-to-default removes the key from the INI' -Tag 'GameConfig' {
 
     It 'ConvertTo-DuneIniManaged drops a managed scalar when remove=$true' {

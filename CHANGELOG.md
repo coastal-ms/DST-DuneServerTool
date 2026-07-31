@@ -23,6 +23,7 @@ here cover everything those tags shipped.
 ### Changed
 
 - **Experimental Game Config no longer requires an acknowledgement.** The card kept its warning about these being server-only test settings, but the tick-box that gated editing has been removed — the controls are editable as soon as the card is expanded.
+- **Every server `Game.ini` setting can now be applied client-side.** Seventeen settings across Storm Cycle, Building, Guilds & Economy, PvP & Security, Taxation and Sandworm were written to the server's `Game.ini` — which the client also reads — but were not offered for client-side apply, while their neighbours in the same sections were. All game-file settings now carry the flag; console variables in `UserEngine.ini` remain server-only, as they should. Defaults are still never written to a player's `Game.ini`: a value equal to its default is stripped from the file, so only settings actually changed from default are handed out.
 
 ## [13.0.0] - 2026-07-30
 
