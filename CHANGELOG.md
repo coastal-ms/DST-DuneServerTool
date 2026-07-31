@@ -13,6 +13,15 @@ here cover everything those tags shipped.
 
 ## [Unreleased]
 
+## [13.0.0] - 2026-07-30
+
+### Added
+
+- **Experimental Game Config controls.** New collapsed-by-default card exposes 32 testable server-side `UserEngine.ini` CVars decoded from server build 1.4.10.4, covering rewards, vehicles, sandworms, spice, buildings, combat, NPCs, journey instances, and safe zones. Controls require explicit acknowledgement, show their exact keys, and remain separate from local client `Game.ini` changes. Prerelease testing removed ten ineffective vehicle fuel, heat, power, overheat, and limit controls; their stale DST-managed INI entries are deleted on the next Game Config save. The dehydration-zone control remains omitted because Funcom warns that enabling it crashes clients.
+- **Faster Game Config apply.** A new **Apply INIs to pods** action reloads only running game-server pods, one at a time, waiting for each replacement to become Ready before continuing. Database, director, operator, and other infrastructure pods remain untouched, avoiding a full battlegroup restart while still applying startup-read INI settings.
+- **Landsraad control.** A new card at the top of **Gameplay Admin → Landsraad** shows which House currently holds the Landsraad and which decree is in force, lists every decree the server knows about with the active one marked, and lets an operator seat the other House or a different decree for the running term. Previously the holder and decree could only be decided by end-of-term voting, so a term that nobody voted in left the in-game board with no holder and no decree at all — the normal state on a solo or small server, where the Landsraad reward decrees were effectively unreachable. The House and decree are always written together because a decree only appears in-game when a House holds it, and the card offers a clean battlegroup restart afterwards since the game reads the term when a map pod starts rather than live.
+- Supporter added to list.
+
 ## [12.21.3] - 2026-07-27
 
 ### Fixed
@@ -7286,7 +7295,8 @@ at the time. Also folds in the v3.0.1 / v3.1.2 patches.
   (`ssh`, `Gameplay Admin`, `setup-guide`, `report-issue`). _(originally
   3.1.2)_
 
-[Unreleased]: https://github.com/coastal-ms/DST-DuneServerTool/compare/v12.16.6...HEAD
+[Unreleased]: https://github.com/coastal-ms/DST-DuneServerTool/compare/v13.0.0...HEAD
+[13.0.0]: https://github.com/coastal-ms/DST-DuneServerTool/compare/v12.16.6...v13.0.0
 [6.1.0]: https://github.com/coastal-ms/DST-DuneServerTool/compare/v6.0.1...v6.1.2
 [6.0.0]: https://github.com/coastal-ms/DST-DuneServerTool/compare/v5.0.2...v6.0.1
 [5.0.0]: https://github.com/coastal-ms/DST-DuneServerTool/compare/v4.5.2...v5.0.2

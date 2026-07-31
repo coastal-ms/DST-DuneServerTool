@@ -11,6 +11,7 @@ import type {
   GameConfigClientApplyItem,
   GameConfigDefaultsResponse,
   GameConfigRawUpdate,
+  GameConfigPodReloadResponse,
   LandclaimTimerState,
   LandclaimTimerSaveResponse,
   SpicefieldsResponse,
@@ -34,6 +35,14 @@ export function saveGameConfig(updates: Record<string, string>) {
     api<GameConfigSaveResponse>(`/api/gameconfig${fq(force)}`, {
       method: 'PUT',
       body: JSON.stringify({ updates }),
+    }),
+  )
+}
+
+export function reloadGameConfigPods() {
+  return withOnlinePlayerGuard(force =>
+    api<GameConfigPodReloadResponse>(`/api/gameconfig/reload-pods${fq(force)}`, {
+      method: 'POST',
     }),
   )
 }

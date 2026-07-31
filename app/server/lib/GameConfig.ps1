@@ -91,13 +91,13 @@ $script:DuneLandclaimDefaultRemovals = @(60,120,240,480,960,1920,3840,7680,15360
 $script:DuneGameConfigCategoryOrder = @(
     'Server Identity','Network','Survival','Hydration','Loot & Death',
     'Resources & Economy','Crafting','Building','Inventory','Guilds & Economy',
-    'Storm Cycle','Landsraad','PvP & Security','Spice','Taxation','Encounters','Sandworm','Vehicles'
+    'Storm Cycle','Landsraad','PvP & Security','Spice','Taxation','Encounters','Sandworm','Vehicles',
+    'Experimental'
 )
 
-# Keys DST USED to expose but removed after proving them no-ops via UserGame.ini
-# (2026-06-15 live test, issue #225). The managed-block writer actively scrubs
-# these from the DST-owned managed block on every save, so they don't linger
-# orphaned in existing users' files now that the schema no longer carries them.
+# Keys DST USED to expose but later removed after field testing. The managed-block
+# writer actively scrubs these from the DST-owned managed block on every save, so
+# they don't linger orphaned in existing users' files after the schema drops them.
 # Only touches the managed block — never the user's own (body) sections.
 $script:DuneGameConfigDeprecatedManagedKeys = @(
     'm_GlobalHealthMultiplier'
@@ -108,6 +108,16 @@ $script:DuneGameConfigDeprecatedManagedKeys = @(
     'm_GlobalFameMultiplier'
     'm_GlobalHarvestAmountMultiplier'
     'm_GlobalHarvestHealthMultiplier'
+    'dw.FuelBurningMultiplier'
+    'dw.VehicleHeatMultiplier'
+    'dw.VehicleHeatInterpolationSpeed'
+    'dw.VehiclePowerConsumptionMultiplier'
+    'dw.VehicleCanOverHeat'
+    'Vehicle.MaxActiveVehicles'
+    'Vehicle.MaxVehicles'
+    'Vehicle.MaxVehiclesForSpawner'
+    'Vehicle.MaxVehiclesPerPlayer'
+    'Vehicle.MaxVehiclesWarning'
 )
 
 $script:DuneGameConfigSchema = @(
@@ -225,6 +235,46 @@ $script:DuneGameConfigSchema = @(
 
     # --- Vehicles (engine cvars) ---
     @{ Section=$script:DuneGcSecConsole; Key='dw.VehicleDurabilityDamageMultiplier'; File='engine'; Type='float'; Min=0; Max=10; Default='1.0'; Label='Vehicle Durability Damage'; Help='Durability damage multiplier for vehicles. 0 = off.'; Category='Vehicles' }
+
+    # --- Experimental binary-discovered engine cvars ---
+    # These registered controls and their compiled help/defaults were decoded
+    # from DuneSandboxServer-Linux-Shipping 1.4.10.4. Keep them isolated until
+    # broader field testing establishes their gameplay behavior. Unknown
+    # compiled defaults stay unset rather than presenting an invented default.
+    # Hazard.DehydrationZonesEnabled is intentionally excluded because its
+    # compiled Funcom help explicitly warns that enabling it crashes clients.
+    @{ Section=$script:DuneGcSecConsole; Key='Dune.GiveDoubleDifficultyLoot'; File='engine'; Type='bool01'; Default='0'; Label='Double Difficulty Loot'; Help='Give double loot when encounter difficulty is above 0. Field-confirmed with dungeon loot; still experimental.'; Category='Experimental' }
+    @{ Section=$script:DuneGcSecConsole; Key='Abilities.RespecCooldownTotalDurationSeconds'; File='engine'; Type='int'; Min=0; Unit='sec'; Default='172800'; Label='Ability Respec Cooldown'; Help='Total ability-respec cooldown in seconds. Compiled default is 172800 (2 days); 0 may remove the cooldown but has not been field-verified.'; Category='Experimental' }
+    @{ Section=$script:DuneGcSecConsole; Key='dw.LandsraadMissionRewardMultiplierFactionXP'; File='engine'; Type='float'; Min=0; Default='1.0'; Label='Landsraad Faction XP'; Help='Scales Faction XP from Landsraad missions. Field-confirmed at 10; mission preview may still show the base reward.'; Category='Experimental' }
+    @{ Section=$script:DuneGcSecConsole; Key='dw.LandsraadMissionRewardMultiplierHouseCredit'; File='engine'; Type='float'; Min=0; Default='1.0'; Label='Landsraad House Credit'; Help='Scales House Credit from Landsraad missions. Field-confirmed at 10; mission preview may still show the base reward.'; Category='Experimental' }
+    @{ Section=$script:DuneGcSecConsole; Key='dw.LandsraadMissionRewardMultiplierSpecializationXP'; File='engine'; Type='float'; Min=0; Default='1.0'; Label='Landsraad Specialization XP'; Help='Scales Specialization XP from Landsraad missions. Field-confirmed at 10; mission preview may still show the base reward.'; Category='Experimental' }
+    @{ Section=$script:DuneGcSecConsole; Key='dw.VehicleAbandonedDecayAllowed'; File='engine'; Type='bool01'; Label='Abandoned Vehicle Decay'; Help='Allows abandoned vehicles to decay over time. 0 disables decay. Compiled default was not recovered.'; Category='Experimental' }
+    @{ Section=$script:DuneGcSecConsole; Key='dw.VehicleAbandonedDecayTimeMultiplier'; File='engine'; Type='float'; Default='1.0'; Label='Abandoned Vehicle Decay Speed'; Help='Scales abandoned-vehicle decay speed. Values above 1 should decay faster; 1 is shipping behavior.'; Category='Experimental' }
+    @{ Section=$script:DuneGcSecConsole; Key='Vehicle.DisassemblySpeedMultiplier'; File='engine'; Type='float'; Default='1.0'; Label='Vehicle Disassembly Speed'; Help='Scales vehicle disassembly speed. Not yet field-verified.'; Category='Experimental' }
+    @{ Section=$script:DuneGcSecConsole; Key='Vehicle.RecoveryChassisDurabilityReductionFraction'; File='engine'; Type='float'; Default='0.150000006'; Label='Recovery Chassis Durability Reduction'; Help='Reduces maximum decayed chassis durability during recovery. Units are unclear; test as a fraction such as 0.15, not 15.'; Category='Experimental' }
+    @{ Section=$script:DuneGcSecConsole; Key='Vehicle.RecoveryCurrencyBaseCost'; File='engine'; Type='int'; Min=0; Default='2500'; Label='Vehicle Recovery Base Cost'; Help='Base currency cost to recover a vehicle before vehicle-specific multipliers.'; Category='Experimental' }
+    @{ Section=$script:DuneGcSecConsole; Key='Vehicle.RecoveryTimeLimit'; File='engine'; Type='int'; Min=0; Unit='sec'; Label='Vehicle Recovery Time Limit'; Help='Seconds a destroyed vehicle remains available for recovery. Compiled default was not recovered.'; Category='Experimental' }
+    @{ Section=$script:DuneGcSecConsole; Key='Vehicle.CharacterHitDamageModifier'; File='engine'; Type='float'; Min=0; Default='1.0'; Label='Vehicle Impact Character Damage'; Help='Scales damage dealt to characters by vehicle impacts. 0 should disable impact damage.'; Category='Experimental' }
+    @{ Section=$script:DuneGcSecConsole; Key='Vehicle.DamagePlayerOnVehicleCollision'; File='engine'; Type='bool01'; Label='Vehicle Collision Damages Players'; Help='Whether vehicle collisions damage players. Compiled default was not recovered.'; Category='Experimental' }
+    @{ Section=$script:DuneGcSecConsole; Key='Player.IsThrowOffPlayerFromVehicleActive'; File='engine'; Type='bool01'; Default='1'; Label='Throw Players Off Moving Vehicles'; Help='Whether players standing on moving vehicles are thrown off. Funcom help states 1 is the default.'; Category='Experimental' }
+    @{ Section=$script:DuneGcSecConsole; Key='Player.ThrowOffPlayerFromVehicleVelocityMultiplier'; File='engine'; Type='float'; Min=0; Default='3'; Label='Vehicle Throw-Off Force'; Help='Velocity multiplier used to calculate force when throwing a player off a moving vehicle.'; Category='Experimental' }
+    @{ Section=$script:DuneGcSecConsole; Key='Player.ThrowOffPlayerFromVehicleVelocityThreshold'; File='engine'; Type='float'; Min=0; Default='2000'; Label='Vehicle Throw-Off Speed Threshold'; Help='Vehicle velocity that starts throwing off standing players. Binary value is 2000 although compiled help mentions 500.'; Category='Experimental' }
+    @{ Section=$script:DuneGcSecConsole; Key='Vehicle.SandwormInvulnerabilityOnExitInAir'; File='engine'; Type='bool01'; Label='Worm Protection on Mid-Air Exit'; Help='Grants short sandworm invulnerability when the pilot exits a vehicle in mid-air. Compiled default was not recovered.'; Category='Experimental' }
+    @{ Section=$script:DuneGcSecConsole; Key='Vehicle.SandwormInvulnerabilityOnLeavingGame'; File='engine'; Type='bool01'; Label='Worm Protection on Disconnect'; Help='Grants short sandworm invulnerability when the pilot disconnects. Compiled default was not recovered.'; Category='Experimental' }
+    @{ Section=$script:DuneGcSecConsole; Key='Sandworm.SandwormAttackDifficultyGroup'; File='engine'; Type='select'; Default='-1'; Options=@(@{V='-1';L='Default / unspecified'},@{V='0';L='Easy'},@{V='1';L='Medium'},@{V='2';L='Hard'},@{V='3';L='Death'}); Label='Sandworm Attack Difficulty'; Help='Forces the difficulty group used when selecting a sandworm attack.'; Category='Experimental' }
+    @{ Section=$script:DuneGcSecConsole; Key='SandwormSubsystem.DelayedRestartSeconds'; File='engine'; Type='float'; Min=0; Unit='sec'; Default='600'; Label='Sandworm Delayed Restart'; Help='Delays sandworm spawning after restart. Funcom help states a default of 600 seconds; binary default was not recovered.'; Category='Experimental' }
+    @{ Section=$script:DuneGcSecConsole; Key='SpiceHarvesting.dune.SpawnCraterRocksAfterBloom'; File='engine'; Type='bool01'; Default='0'; Label='Spawn Crater Rocks After Bloom'; Help='Spawns and distributes crater rocks after a spice bloom. Binary default is 0 although compiled help labels 1 as default.'; Category='Experimental' }
+    @{ Section=$script:DuneGcSecConsole; Key='dw.MitigateAllDamageToBuildables'; File='engine'; Type='bool01'; Label='Mitigate All Buildable Damage'; Help='Enables mitigation for all damage to buildables. Exact mitigation behavior and compiled default are unknown.'; Category='Experimental' }
+    @{ Section=$script:DuneGcSecConsole; Key='dw.EnableOutsideBuildablesToAffectShelter'; File='engine'; Type='bool01'; Label='Outside Buildables Affect Shelter'; Help='Allows buildables outside a structure to affect its shelter calculation. Compiled default was not recovered.'; Category='Experimental' }
+    @{ Section=$script:DuneGcSecConsole; Key='dw.BuildingShelterThresholdOverride'; File='engine'; Type='float'; Min=-1; Max=1; Default='-1'; Label='Building Shelter Threshold Override'; Help='Overrides the building shelter threshold from 0 to 1. Any negative value disables the override.'; Category='Experimental' }
+    @{ Section=$script:DuneGcSecConsole; Key='dw.SandBuildUpPlaceableShelteredTargetValueOverride'; File='engine'; Type='float'; Default='-1'; Label='Sheltered Sand Buildup Target'; Help='Overrides target sand buildup for sheltered placeables. Valid range and disable behavior are undocumented.'; Category='Experimental' }
+    @{ Section=$script:DuneGcSecConsole; Key='dw.SandBuildUpPlaceableUnShelteredTargetValueOverride'; File='engine'; Type='float'; Default='-1'; Label='Unsheltered Sand Buildup Target'; Help='Overrides target sand buildup for unsheltered placeables. Valid range and disable behavior are undocumented.'; Category='Experimental' }
+    @{ Section=$script:DuneGcSecConsole; Key='Dac.FriendlyPvPDamageMultiplier'; File='engine'; Type='float'; Label='Friendly PvP Damage Multiplier'; Help='Overrides the security-zone friendly PvP damage multiplier when positive. Negative values disable the override; compiled default is unknown.'; Category='Experimental' }
+    @{ Section=$script:DuneGcSecConsole; Key='Dac.HealingDurationReductionByDamageMultiplier'; File='engine'; Type='float'; Min=-1; Max=1; Label='Damage Healing-Duration Reduction'; Help='Reduces healing-over-time after taking damage: -1 = no override, 0 to 1 = partial through complete removal. Compiled default is unknown.'; Category='Experimental' }
+    @{ Section=$script:DuneGcSecConsole; Key='NPC.AttackLimitOverride'; File='engine'; Type='int'; Default='0'; Label='NPC Attack Limit Override'; Help='When above 0, limits NPCs attacking the same target. Also requires NPC.EnableNpcAttackLimits, which is not exposed here.'; Category='Experimental' }
+    @{ Section=$script:DuneGcSecConsole; Key='JourneyStory.Instance.Cap'; File='engine'; Type='int'; Min=-1; Default='-1'; Label='Journey Story Instance Cap'; Help='Maximum instances players may occupy per instance type. -1 = unlimited.'; Category='Experimental' }
+    @{ Section=$script:DuneGcSecConsole; Key='SafeZone.EnableScale'; File='engine'; Type='bool01'; Label='Enable Safe-Zone Scaling'; Help='Enables the safe-zone scale override. Compiled default was not recovered.'; Category='Experimental' }
+    @{ Section=$script:DuneGcSecConsole; Key='SafeZone.Scale'; File='engine'; Type='float'; Default='1.0'; Label='Safe-Zone Scale'; Help='Scales safe-zone geometry. May alter PvP boundaries and world behavior; test cautiously.'; Category='Experimental' }
 
     # --- Parity additions (the reference implementation serverSettingsSchema) ---
     # ACCURACY NOTE (pending validation against the live UserGame.ini): the keys
@@ -920,7 +970,7 @@ function ConvertTo-DuneIniManaged {
     }
 
     # Scrub deprecated keys from DST-owned managed sections. These keys were once
-    # in the schema but were removed after being proven no-ops (see issue #225).
+    # in the schema but were removed after field testing proved them ineffective.
     # Because the managed block otherwise PRESERVES keys DST no longer recognises,
     # without this they would be orphaned in every existing user's file forever.
     # DST owns the managed block ("do not hand-edit"), so scrubbing known-dead keys

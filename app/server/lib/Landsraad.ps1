@@ -491,3 +491,191 @@ WHERE term_id = $($term.term_id)::bigint;
         message      = "Set goal_amount = $Goal for $([int]$r.rowCount) house(s) in term $($term.term_id)."
     }
 }
+
+
+# ---------------------------------------------------------------------------
+# Landsraad term control - which House holds the Landsraad and which decree is
+# in force for the running term.
+#
+# KEY FACTS (verified on the live DB + in-game 2026-07-30):
+#   landsraad_decree_term(term_id, reigning_faction_id, active_decree_id,
+#                         winning_faction_id, elected_decree_id, start/end_time)
+#   Voting only ever writes elected_decree_id; landsraad_initialize_term then
+#   promotes the PREVIOUS term's elected_decree_id into the new term's
+#   active_decree_id. So a term nobody voted in has BOTH columns NULL and the
+#   board shows no holder at all.
+#   BOTH reigning_faction_id AND active_decree_id must be set for the decree to
+#   appear in-game - a decree is held BY a House, so the decree alone renders
+#   nothing. Confirmed in-game after a game-pod restart; it does NOT apply live.
+#   Do NOT try to steer this via landsraad_decrees.disabled/weight: the server
+#   calls landsraad_update_decrees on every boot and rewrites both columns.
+#   The term row is not touched by that proc, which is why it persists.
+# ---------------------------------------------------------------------------
+
+# Only the two Great Houses ever hold the Landsraad. dune.factions also carries
+# None(3) and Smuggler(4), which are not valid holders.
+$script:DuneLandsraadHoldingFactionIds = @(1, 2)
+
+# CamelCase decree keys -> readable labels: RepairAndRefiningTimes ->
+# "Repair And Refining Times", SpecialVendorActive_Armor -> "Special Vendor Active - Armor".
+function Get-DuneLandsraadDecreeDisplay {
+    param([string]$Name)
+    if ([string]::IsNullOrWhiteSpace($Name)) { return '' }
+    $parts = $Name -split '_', 2
+    $label = ($parts[0] -creplace '(?<=[a-z0-9])(?=[A-Z])', ' ')
+    if ($parts.Count -gt 1) { $label = "$label - $($parts[1])" }
+    return $label
+}
+
+# Current term + every decree + the valid holding Houses, for the Landsraad
+# control card. Read-only.
+function Get-DuneLandsraadTermControl {
+    param([string]$Ip)
+
+    $term = Get-DuneLandsraadCurrentTermId -Ip $Ip
+    if (-not $term.ok) { return @{ ok = $false; error = $term.error } }
+
+    $factions = New-Object 'System.Collections.Generic.List[object]'
+    $fr = Invoke-DuneSqlQuery -Ip $Ip -Sql 'SELECT id, name FROM dune.factions ORDER BY id;' -ReadOnly $true -MaxRows 50 -TimeoutSec 20
+    if (-not $fr.ok) { return @{ ok = $false; error = "factions: $($fr.error)" } }
+    foreach ($row in (ConvertTo-DuneRowMaps -Result $fr)) {
+        $fid = [int](ConvertTo-DuneInt $row['id'])
+        $factions.Add([ordered]@{
+            id       = $fid
+            name     = [string]$row['name']
+            can_hold = ($script:DuneLandsraadHoldingFactionIds -contains $fid)
+        })
+    }
+
+    $decrees = New-Object 'System.Collections.Generic.List[object]'
+    $dr = Invoke-DuneSqlQuery -Ip $Ip -Sql 'SELECT id, decree_name, disabled, weight FROM dune.landsraad_decrees ORDER BY id;' -ReadOnly $true -MaxRows 200 -TimeoutSec 20
+    if (-not $dr.ok) { return @{ ok = $false; error = "decrees: $($dr.error)" } }
+    foreach ($row in (ConvertTo-DuneRowMaps -Result $dr)) {
+        $dn = [string]$row['decree_name']
+        $decrees.Add([ordered]@{
+            id           = [long](ConvertTo-DuneInt $row['id'])
+            decree_name  = $dn
+            display_name = (Get-DuneLandsraadDecreeDisplay $dn)
+            disabled     = ([string]$row['disabled'] -match '^(t|true|1)$')
+            weight       = [string]$row['weight']
+        })
+    }
+
+    $result = [ordered]@{
+        ok                  = $true
+        term_id             = [long]$term.term_id
+        reigning_faction_id = 0
+        active_decree_id    = 0
+        elected_decree_id   = 0
+        end_time            = $null
+        factions            = $factions.ToArray()
+        decrees             = $decrees.ToArray()
+    }
+    if ($term.term_id -le 0) { return $result }
+
+    $sql = @"
+SELECT COALESCE(reigning_faction_id, 0) AS reigning_faction_id,
+       COALESCE(active_decree_id, 0)    AS active_decree_id,
+       COALESCE(elected_decree_id, 0)   AS elected_decree_id,
+       (end_time AT TIME ZONE 'UTC')::text AS end_time
+FROM dune.landsraad_decree_term
+WHERE term_id = $($term.term_id)::bigint;
+"@
+    $tr = Invoke-DuneSqlQuery -Ip $Ip -Sql $sql -ReadOnly $true -MaxRows 1 -TimeoutSec 20
+    if (-not $tr.ok) { return @{ ok = $false; error = "term: $($tr.error)" } }
+    $maps = ConvertTo-DuneRowMaps -Result $tr
+    if ($maps.Count -gt 0) {
+        $result.reigning_faction_id = [int](ConvertTo-DuneInt $maps[0]['reigning_faction_id'])
+        $result.active_decree_id    = [long](ConvertTo-DuneInt $maps[0]['active_decree_id'])
+        $result.elected_decree_id   = [long](ConvertTo-DuneInt $maps[0]['elected_decree_id'])
+        $result.end_time            = [string]$maps[0]['end_time']
+    }
+    return $result
+}
+
+# Set the holding House and/or the in-force decree on the CURRENT term. Both
+# parameters are optional but at least one must be supplied; 0 means "leave as
+# is". Writes exactly one row, always scoped to the term id resolved from
+# landsraad_load_current_term() rather than a caller-supplied id.
+function Set-DuneLandsraadTermControl {
+    param(
+        [string]$Ip,
+        [int]$FactionId = 0,
+        [long]$DecreeId = 0
+    )
+
+    if ($FactionId -le 0 -and $DecreeId -le 0) {
+        return @{ ok = $false; error = 'Nothing to change - supply a faction_id, a decree_id, or both.' }
+    }
+    if ($FactionId -gt 0 -and ($script:DuneLandsraadHoldingFactionIds -notcontains $FactionId)) {
+        return @{ ok = $false; error = "faction_id $FactionId cannot hold the Landsraad (expected 1 = Atreides or 2 = Harkonnen)." }
+    }
+
+    $term = Get-DuneLandsraadCurrentTermId -Ip $Ip
+    if (-not $term.ok) { return @{ ok = $false; error = $term.error } }
+    if ($term.term_id -le 0) {
+        return @{ ok = $false; error = 'No active Landsraad term to change.' }
+    }
+
+    $decreeName = $null
+    if ($DecreeId -gt 0) {
+        $dr = Invoke-DuneSqlQuery -Ip $Ip -Sql "SELECT decree_name, disabled FROM dune.landsraad_decrees WHERE id = $DecreeId::bigint;" -ReadOnly $true -MaxRows 1 -TimeoutSec 20
+        if (-not $dr.ok) { return @{ ok = $false; error = "decree lookup: $($dr.error)" } }
+        $dmaps = ConvertTo-DuneRowMaps -Result $dr
+        if ($dmaps.Count -eq 0) { return @{ ok = $false; error = "No decree with id $DecreeId." } }
+        if ([string]$dmaps[0]['disabled'] -match '^(t|true|1)$') {
+            return @{ ok = $false; error = "Decree '$([string]$dmaps[0]['decree_name'])' is disabled by the server and cannot be made active." }
+        }
+        $decreeName = [string]$dmaps[0]['decree_name']
+    }
+
+    $factionName = $null
+    if ($FactionId -gt 0) {
+        $fr = Invoke-DuneSqlQuery -Ip $Ip -Sql "SELECT name FROM dune.factions WHERE id = $FactionId::smallint;" -ReadOnly $true -MaxRows 1 -TimeoutSec 20
+        if (-not $fr.ok) { return @{ ok = $false; error = "faction lookup: $($fr.error)" } }
+        $fmaps = ConvertTo-DuneRowMaps -Result $fr
+        if ($fmaps.Count -eq 0) { return @{ ok = $false; error = "No faction with id $FactionId." } }
+        $factionName = [string]$fmaps[0]['name']
+    }
+
+    $sets = New-Object 'System.Collections.Generic.List[string]'
+    if ($FactionId -gt 0) { $sets.Add("reigning_faction_id = $FactionId::smallint") }
+    if ($DecreeId  -gt 0) { $sets.Add("active_decree_id = $DecreeId::bigint") }
+
+    $sql = @"
+UPDATE dune.landsraad_decree_term
+SET $($sets -join ', ')
+WHERE term_id = $($term.term_id)::bigint;
+"@
+    $r = Invoke-DuneSqlQuery -Ip $Ip -Sql $sql -ReadOnly $false -MaxRows 1 -TimeoutSec 30
+    if (-not $r.ok) { return @{ ok = $false; error = "set term control: $($r.error)" } }
+
+    $bits = New-Object 'System.Collections.Generic.List[string]'
+    if ($factionName) { $bits.Add("House $factionName now holds the Landsraad") }
+    if ($decreeName)  { $bits.Add("decree set to $(Get-DuneLandsraadDecreeDisplay $decreeName)") }
+
+    return @{
+        ok           = $true
+        term_id      = [long]$term.term_id
+        faction_id   = [int]$FactionId
+        faction_name = $factionName
+        decree_id    = [long]$DecreeId
+        decree_name  = $decreeName
+        updated      = [int]$r.rowCount
+        message      = "$(($bits -join '; ')). Restart the battlegroup to apply - the game reads this at map-pod start, not live."
+    }
+}
+
+# Clean battlegroup restart, detached so the HTTP request returns promptly; the
+# UI polls Server Health while it converges (~2-3 min). Mirrors the Sietches
+# config flow, which uses the same appliance command.
+function Invoke-DuneLandsraadBgRestart {
+    param([Parameter(Mandatory)][string]$Ip)
+    $cmd = 'nohup /home/dune/.dune/bin/battlegroup restart >/tmp/dst-landsraad-restart.log 2>&1 & echo started'
+    $out = ((Invoke-V6Ssh -Ip $Ip -Cmd $cmd -TimeoutSec 30) -join ' ').Trim()
+    return @{
+        ok      = $true
+        started = $out
+        message = 'Clean battlegroup restart underway - watch Server Health; it takes a couple of minutes to come back.'
+    }
+}

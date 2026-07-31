@@ -9,6 +9,7 @@ import {
   getGameConfigSchema,
   getGameConfig,
   saveGameConfig,
+  reloadGameConfigPods,
   backupGameConfig,
   listGameConfigBackups,
   deleteGameConfigBackups,
@@ -201,9 +202,11 @@ export function GameConfig() {
   const [saving, setSaving] = useState(false)
   const [saveError, setSaveError] = useState<string | null>(null)
   const [savedMsg, setSavedMsg] = useState<string | null>(null)
+  const [reloadingPods, setReloadingPods] = useState(false)
   const [clientApply, setClientApply] = useState<GameConfigClientApply | null>(null)
   const [sandwormModalOpen, setSandwormModalOpen] = useState(false)
   const [search, setSearch] = useState('')
+  const [experimentalAcknowledged, setExperimentalAcknowledged] = useState(false)
   // "Give players this" section share popup (client-side Game.ini block).
   const [shareBlock, setShareBlock] = useState<{ title: string; block: string } | null>(null)
   const [backing, setBacking] = useState(false)
@@ -773,6 +776,7 @@ export function GameConfig() {
         } else if (!lg.ok && lg.error) {
           msg += ` (Landsraad live-goal apply failed: ${lg.error}; INI saved OK, next term will pick it up.)`
         }
+
       }
       setSavedMsg(msg)
       window.setTimeout(() => setSavedMsg(null), 8000)
@@ -784,6 +788,28 @@ export function GameConfig() {
       setSaveError(err instanceof Error ? err.message : String(err))
     } finally {
       setSaving(false)
+    }
+  }
+
+  async function onReloadPods() {
+    if (dirtyKeys.length > 0 || reloadingPods) return
+    const ok = window.confirm(
+      'Apply the saved INI files by restarting every running game-server pod one at a time?\n\n'
+      + 'Players on each map will disconnect when that map restarts. Database, director, operator, and other infrastructure pods are not touched. Each replacement must become Ready before the next map restarts.',
+    )
+    if (!ok) return
+    setReloadingPods(true)
+    setSaveError(null)
+    setSavedMsg(null)
+    try {
+      const out = await reloadGameConfigPods()
+      setSavedMsg(out.message)
+      window.setTimeout(() => setSavedMsg(null), 12000)
+      await forceRefresh()
+    } catch (err) {
+      setSaveError(err instanceof Error ? err.message : String(err))
+    } finally {
+      setReloadingPods(false)
     }
   }
 
@@ -822,6 +848,18 @@ export function GameConfig() {
         actions={
           <div className="flex items-center gap-2">
             {sourcePill}
+            <button
+              type="button"
+              onClick={() => void onReloadPods()}
+              disabled={!vmRunning || reloadingPods || saving || dirtyKeys.length > 0 || loadState !== 'ready'}
+              className="btn-secondary"
+              title={dirtyKeys.length > 0
+                ? 'Save or discard pending changes first'
+                : 'Restart only running game-server pods, one at a time, and wait for each replacement to become Ready'}
+            >
+              <Icon name={reloadingPods ? 'Loader2' : 'RefreshCw'} size={14} className={reloadingPods ? 'animate-spin' : ''} />
+              {reloadingPods ? 'Applying to pods…' : 'Apply INIs to pods'}
+            </button>
             <button
               type="button"
               onClick={() => void onBackup()}
@@ -867,7 +905,7 @@ export function GameConfig() {
             you have a restore point — backups are saved on the server next to each file and can be restored via the File Browser.
           </p>
           <p className="text-xs text-warning/90 leading-relaxed mt-1.5">
-            Some of these settings may require a battlegroup restart to take effect.
+            Some settings are read only when a game pod starts. Use “Apply INIs to pods” after saving to reload game pods sequentially without restarting the database or full battlegroup.
           </p>
           <button
             type="button"
@@ -1295,6 +1333,9 @@ export function GameConfig() {
                 clientBlock={share.block}
                 hasClientFields={share.hasClientFields}
                 onShare={() => setShareBlock({ title: `${cat.category} — give players this`, block: share.block })}
+                forceOpen={search.trim() !== ''}
+                experimentalAcknowledged={experimentalAcknowledged}
+                onExperimentalAcknowledged={setExperimentalAcknowledged}
               >
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-x-6 gap-y-4">
                   {(cat.fields ?? []).map(f => (
@@ -1304,7 +1345,7 @@ export function GameConfig() {
                         field={f}
                         value={values[f.key] ?? ''}
                         onChange={v => handleFieldChange(f.key, v)}
-                        disabled={loadState !== 'ready' || saving}
+                        disabled={loadState !== 'ready' || saving || (cat.category === 'Experimental' && !experimentalAcknowledged)}
                         isDirty={(values[f.key] ?? '') !== (originals[f.key] ?? '')}
                         isSet={liveValue(cfg, f) !== ''}
                         isCustom={isCustomized(cfg, f)}
@@ -1565,21 +1606,51 @@ function formatBytes(n: number): string {
 // Category card + field row
 // -----------------------------------------------------------------------------
 
-function CategoryCard({ category, count, clientBlock, hasClientFields, onShare, children }: {
+function CategoryCard({
+  category,
+  count,
+  clientBlock,
+  hasClientFields,
+  onShare,
+  forceOpen = false,
+  experimentalAcknowledged = false,
+  onExperimentalAcknowledged,
+  children,
+}: {
   category: string
   count: number
   clientBlock?: string
   hasClientFields?: boolean
   onShare?: () => void
+  forceOpen?: boolean
+  experimentalAcknowledged?: boolean
+  onExperimentalAcknowledged?: (acknowledged: boolean) => void
   children: React.ReactNode
 }) {
+  const experimental = category === 'Experimental'
+  const [experimentalOpen, setExperimentalOpen] = useState(false)
+  const expanded = !experimental || forceOpen || experimentalOpen
+
   return (
-    <div className="card p-5">
-      <div className="mb-4 flex items-center justify-between gap-2">
-        <h2 className="text-sm font-semibold uppercase tracking-wider text-accent-bright flex items-center gap-2">
-          <Icon name="ChevronRight" size={14} /> {category}
-          <span className="text-[10px] font-normal text-text-dim normal-case tracking-normal">({count})</span>
-        </h2>
+    <div className={'card p-5 ' + (experimental ? 'border-warning/40' : '')}>
+      <div className={(expanded ? 'mb-4 ' : '') + 'flex items-center justify-between gap-2'}>
+        {experimental ? (
+          <button
+            type="button"
+            className="flex items-center gap-2 text-left"
+            onClick={() => setExperimentalOpen(open => !open)}
+            aria-expanded={expanded}
+          >
+            <Icon name={expanded ? 'ChevronDown' : 'ChevronRight'} size={14} className="text-warning" />
+            <span className="text-sm font-semibold uppercase tracking-wider text-warning">{category}</span>
+            <span className="text-[10px] font-normal text-text-dim normal-case tracking-normal">({count})</span>
+          </button>
+        ) : (
+          <h2 className="text-sm font-semibold uppercase tracking-wider text-accent-bright flex items-center gap-2">
+            <Icon name="ChevronRight" size={14} /> {category}
+            <span className="text-[10px] font-normal text-text-dim normal-case tracking-normal">({count})</span>
+          </h2>
+        )}
         {clientBlock ? (
           <button
             type="button"
@@ -1598,7 +1669,33 @@ function CategoryCard({ category, count, clientBlock, hasClientFields, onShare, 
           </span>
         ) : null}
       </div>
-      {children}
+      {expanded && (
+        <>
+          {experimental && (
+            <div className="mb-4 rounded-lg border border-warning/35 bg-warning/10 p-3 text-xs text-text-muted">
+              <div className="mb-1 flex items-center gap-2 font-semibold text-warning">
+                <Icon name="FlaskConical" size={14} /> Test settings
+              </div>
+              <p>
+                These server CVars are written only to the battlegroup&apos;s <span className="font-mono text-text">UserEngine.ini</span> under <span className="font-mono text-text">[ConsoleVariables]</span>. They are not copied to this PC&apos;s local client <span className="font-mono text-text">Game.ini</span>.
+              </p>
+              <p className="mt-1.5">
+                This catalogue contains 32 testable controls decoded from server build 1.4.10.4. Double Difficulty Loot and the three Landsraad reward multipliers have community field confirmation; vehicle fuel, heat, power, overheat, and limit controls proven ineffective were removed. Other controls may have no effect or unintended gameplay consequences. The dehydration-zone control is omitted because Funcom warns that enabling it crashes clients. Back up first, change one setting at a time, then use Apply INIs to pods before testing.
+              </p>
+              <label className="mt-3 flex cursor-pointer items-start gap-2 text-text">
+                <input
+                  type="checkbox"
+                  checked={experimentalAcknowledged}
+                  onChange={e => onExperimentalAcknowledged?.(e.target.checked)}
+                  className="mt-0.5 shrink-0 accent-warning"
+                />
+                <span>I understand these settings are experimental and server-side only.</span>
+              </label>
+            </div>
+          )}
+          {children}
+        </>
+      )}
     </div>
   )
 }
