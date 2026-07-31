@@ -702,6 +702,104 @@ function Test-DuneGameServerPodName {
 # detached and the UI polls Server Health while it converges (~2-3 min).
 #
 # Shared by Game Config's "Apply INIs & restart" and the Landsraad control card.
+# -----------------------------------------------------------------------------
+# Active map partitions — which (map, dimension) pairs actually matter right now.
+#
+# dune.spicefield_types carries one row per (map, field-size, dimension), so a
+# battlegroup that has ever run two instances of a map keeps rows for both
+# dimensions forever. Displaying them ungated shows every size twice with
+# nothing to tell the rows apart, which reads as duplicate data.
+#
+# A pair is considered active when it is LIVE (present in the battlegroup CR's
+# status.servers) or PINNED (the director keeps it warm via MinServers). Live
+# alone is not enough: on-demand maps like Deep Desert are legitimately down most
+# of the time, and gating on live only would hide them right when an operator
+# wants to tune them. Pinned alone is not enough either: always-on maps such as
+# Survival_1 never appear in director.ini and so can never be pinned.
+#
+# ASSUMPTION: dimensionIndex is the instance index, so MinServers = N pins
+# dimensions 0..N-1. That matches a multi-sietch Hagga producing dimension 1,
+# but it is inferred from observed data rather than documented by Funcom.
+# -----------------------------------------------------------------------------
+
+# Spicefield rows key maps as HaggaBasin / DeepDesert; the battlegroup CR and
+# director.ini use Survival_1 / DeepDesert_1. Normalise onto the CR's ids so one
+# naming scheme drives Game Servers, Map Spin-Up and the spice readout.
+$script:DuneSpiceMapToServerMap = @{
+    'HaggaBasin' = 'Survival_1'
+    'DeepDesert' = 'DeepDesert_1'
+}
+
+function ConvertTo-DuneServerMapId {
+    param([string]$Name)
+    if ([string]::IsNullOrWhiteSpace($Name)) { return '' }
+    if ($script:DuneSpiceMapToServerMap.ContainsKey($Name)) {
+        return $script:DuneSpiceMapToServerMap[$Name]
+    }
+    return $Name
+}
+
+function Get-DuneActiveMapPartitions {
+    # Returns @{ ok; partitions = @( @{ mapId; dimensionIndex; live; pinned } ) }
+    # Best-effort: a failure to read either source degrades to "unknown", and the
+    # caller is expected to show everything rather than hide real data.
+    param([string]$Ip)
+
+    $live = @()
+    $bg = $null
+    try { $bg = (Get-V6Battlegroup -Ip $Ip).Bg } catch {}
+    if ($bg) {
+        $servers = @()
+        try { $servers = @($bg.status.servers) } catch {}
+        foreach ($s in $servers) {
+            if (-not $s) { continue }
+            $mapId = ''
+            if ($s.PSObject.Properties['partitionMap']) { $mapId = [string]$s.partitionMap }
+            if (-not $mapId) { continue }
+            $dim = 0
+            if ($s.PSObject.Properties['dimensionIndex']) { $dim = [int]$s.dimensionIndex }
+            $live += @{ mapId = $mapId; dimensionIndex = $dim }
+        }
+    }
+
+    $pins = @{}
+    try {
+        $spin = Get-DuneSpinUpMaps
+        if ($spin.ok) {
+            foreach ($m in @($spin.maps)) {
+                if ([int]$m.minServers -ge 1) { $pins["$($m.map)"] = [int]$m.minServers }
+            }
+        }
+    } catch {}
+
+    $out = New-Object 'System.Collections.Generic.List[object]'
+    foreach ($l in $live) {
+        $out.Add([ordered]@{
+            mapId          = $l.mapId
+            dimensionIndex = $l.dimensionIndex
+            live           = $true
+            pinned         = $pins.ContainsKey($l.mapId)
+        })
+    }
+    foreach ($mapId in $pins.Keys) {
+        for ($d = 0; $d -lt $pins[$mapId]; $d++) {
+            $already = $out | Where-Object { $_.mapId -eq $mapId -and [int]$_.dimensionIndex -eq $d }
+            if ($already) { continue }
+            $out.Add([ordered]@{
+                mapId          = $mapId
+                dimensionIndex = $d
+                live           = $false
+                pinned         = $true
+            })
+        }
+    }
+
+    return @{
+        ok         = ($null -ne $bg)
+        partitions = $out.ToArray()
+    }
+}
+
 function Invoke-DuneBattlegroupRestart {
     param([string]$Ip)
 

@@ -506,10 +506,29 @@ Register-DuneRoute -Method GET -Path '/api/gameconfig/spicefields' -Handler {
     }
     try {
         $raw = Get-V6SpicefieldTypes -Ip $ctx.ip
+
+        # Which (map, dimension) pairs are live or pinned. Annotating rather than
+        # filtering here keeps the endpoint honest: the client decides what to
+        # show, and a failure to read the battlegroup degrades to "show all"
+        # instead of silently hiding real spicefield data.
+        $active = @{}
+        $gateOk = $false
+        try {
+            $ap = Get-DuneActiveMapPartitions -Ip $ctx.ip
+            $gateOk = [bool]$ap.ok
+            foreach ($p in @($ap.partitions)) {
+                $active["$($p.mapId)|$([int]$p.dimensionIndex)"] = $p
+            }
+        } catch {}
+
         $rows = @($raw | ForEach-Object {
+            $mapId = ConvertTo-DuneServerMapId -Name "$($_.map_name)"
+            $key   = "$mapId|$([int]$_.dimension_index)"
+            $hit   = $active[$key]
             @{
                 spicefieldTypeId = [int]$_.spicefield_type_id
                 mapName          = "$($_.map_name)"
+                mapId            = $mapId
                 fieldType        = "$($_.field_type)"
                 dimensionIndex   = [int]$_.dimension_index
                 maxActive        = [int]$_.max_globally_active
@@ -518,9 +537,12 @@ Register-DuneRoute -Method GET -Path '/api/gameconfig/spicefields' -Handler {
                 currentPrimed    = [int]$_.current_globally_primed
                 isSpawningActive = [bool]$_.is_spawning_active
                 spawnWeight      = [double]$_.global_spawn_weight
+                partitionLive    = [bool]($hit -and $hit.live)
+                partitionPinned  = [bool]($hit -and $hit.pinned)
+                partitionActive  = [bool]($null -ne $hit)
             }
         })
-        Write-DuneJson -Response $res -Body @{ available = $true; rows = $rows }
+        Write-DuneJson -Response $res -Body @{ available = $true; rows = $rows; partitionGate = $gateOk }
     } catch {
         Write-DuneError -Response $res -Status 500 -Message "Spicefield types load failed: $($_.Exception.Message)"
     }
