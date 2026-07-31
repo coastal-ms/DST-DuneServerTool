@@ -308,6 +308,204 @@ Describe 'DuneGameConfigSchema: only proven m_Global*Multiplier keys remain' -Ta
     }
 }
 
+Describe 'DuneGameConfigSchema: experimental binary CVars' -Tag 'GameConfig' {
+    BeforeAll {
+        $script:ExperimentalKeys = @(
+            'Dune.GiveDoubleDifficultyLoot'
+            'Abilities.RespecCooldownTotalDurationSeconds'
+            'dw.LandsraadMissionRewardMultiplierFactionXP'
+            'dw.LandsraadMissionRewardMultiplierHouseCredit'
+            'dw.LandsraadMissionRewardMultiplierSpecializationXP'
+            'dw.VehicleAbandonedDecayAllowed'
+            'dw.VehicleAbandonedDecayTimeMultiplier'
+            'Vehicle.DisassemblySpeedMultiplier'
+            'Vehicle.RecoveryChassisDurabilityReductionFraction'
+            'Vehicle.RecoveryCurrencyBaseCost'
+            'Vehicle.RecoveryTimeLimit'
+            'Vehicle.CharacterHitDamageModifier'
+            'Vehicle.DamagePlayerOnVehicleCollision'
+            'Player.IsThrowOffPlayerFromVehicleActive'
+            'Player.ThrowOffPlayerFromVehicleVelocityMultiplier'
+            'Player.ThrowOffPlayerFromVehicleVelocityThreshold'
+            'Vehicle.SandwormInvulnerabilityOnExitInAir'
+            'Vehicle.SandwormInvulnerabilityOnLeavingGame'
+            'Sandworm.SandwormAttackDifficultyGroup'
+            'SandwormSubsystem.DelayedRestartSeconds'
+            'SpiceHarvesting.dune.SpawnCraterRocksAfterBloom'
+            'dw.MitigateAllDamageToBuildables'
+            'dw.EnableOutsideBuildablesToAffectShelter'
+            'dw.BuildingShelterThresholdOverride'
+            'dw.SandBuildUpPlaceableShelteredTargetValueOverride'
+            'dw.SandBuildUpPlaceableUnShelteredTargetValueOverride'
+            'Dac.FriendlyPvPDamageMultiplier'
+            'Dac.HealingDurationReductionByDamageMultiplier'
+            'NPC.AttackLimitOverride'
+            'JourneyStory.Instance.Cap'
+            'SafeZone.EnableScale'
+            'SafeZone.Scale'
+        )
+    }
+
+    It 'isolates all 32 testable binary-discovered controls in the Experimental category' {
+        $fields = @{}
+        foreach ($f in $script:DuneGameConfigSchema) { $fields[$f.Key] = $f }
+        $experimental = @($script:DuneGameConfigSchema | Where-Object Category -eq 'Experimental')
+
+        $experimental.Count | Should -Be 32
+        @($experimental.Key | Sort-Object) | Should -Be @($script:ExperimentalKeys | Sort-Object)
+        foreach ($key in $script:ExperimentalKeys) {
+            $fields.ContainsKey($key) | Should -BeTrue
+            $fields[$key].Section | Should -Be $script:DuneGcSecConsole
+            $fields[$key].File | Should -Be 'engine'
+            $fields[$key].Category | Should -Be 'Experimental'
+            $fields[$key].ContainsKey('ClientApply') | Should -BeFalse
+        }
+    }
+
+    It 'excludes the Funcom-documented client-crash control' {
+        @($script:DuneGameConfigSchema.Key) | Should -Not -Contain 'Hazard.DehydrationZonesEnabled'
+    }
+
+    It 'excludes vehicle controls proven ineffective in prerelease testing' {
+        $removed = @(
+            'dw.VehicleHeatMultiplier'
+            'dw.VehicleHeatInterpolationSpeed'
+            'dw.VehiclePowerConsumptionMultiplier'
+            'dw.VehicleCanOverHeat'
+            'dw.FuelBurningMultiplier'
+            'Vehicle.MaxActiveVehicles'
+            'Vehicle.MaxVehicles'
+            'Vehicle.MaxVehiclesForSpawner'
+            'Vehicle.MaxVehiclesPerPlayer'
+            'Vehicle.MaxVehiclesWarning'
+        )
+
+        foreach ($key in $removed) {
+            @($script:DuneGameConfigSchema.Key) | Should -Not -Contain $key
+        }
+    }
+
+    It 'scrubs retired vehicle controls from the managed INI block on the next save' {
+        $raw = @"
+; user-owned content remains untouched
+[ConsoleVariables]
+User.HandEditedSetting=1
+
+$script:DstManagedBegin
+[ConsoleVariables]
+dw.FuelBurningMultiplier=10
+dw.VehicleHeatMultiplier=0
+dw.VehicleHeatInterpolationSpeed=0
+dw.VehiclePowerConsumptionMultiplier=0
+dw.VehicleCanOverHeat=0
+Vehicle.MaxActiveVehicles=15
+Vehicle.MaxVehicles=15
+Vehicle.MaxVehiclesForSpawner=15
+Vehicle.MaxVehiclesPerPlayer=15
+Vehicle.MaxVehiclesWarning=12
+Dune.GiveDoubleDifficultyLoot=1
+$script:DstManagedEnd
+"@
+        $out = ConvertTo-DuneIniManaged -Raw $raw -Updates @(
+            @{ section=$script:DuneGcSecConsole; key='Dune.GiveDoubleDifficultyLoot'; value='1' }
+        ) -QuotedKeys @{}
+
+        foreach ($key in @(
+            'dw.FuelBurningMultiplier',
+            'dw.VehicleHeatMultiplier',
+            'dw.VehicleHeatInterpolationSpeed',
+            'dw.VehiclePowerConsumptionMultiplier',
+            'dw.VehicleCanOverHeat',
+            'Vehicle.MaxActiveVehicles',
+            'Vehicle.MaxVehicles',
+            'Vehicle.MaxVehiclesForSpawner',
+            'Vehicle.MaxVehiclesPerPlayer',
+            'Vehicle.MaxVehiclesWarning'
+        )) {
+            $out | Should -Not -Match ('(?m)^' + [regex]::Escape($key) + '=')
+        }
+        $out | Should -Match '(?m)^User\.HandEditedSetting=1$'
+        $out | Should -Match '(?m)^Dune\.GiveDoubleDifficultyLoot=1$'
+    }
+
+    It 'uses binary catalogue types and recovered defaults without inventing unknown defaults' {
+        $fields = @{}
+        foreach ($f in $script:DuneGameConfigSchema) { $fields[$f.Key] = $f }
+
+        foreach ($key in @(
+            'Dune.GiveDoubleDifficultyLoot',
+            'dw.VehicleAbandonedDecayAllowed',
+            'Vehicle.DamagePlayerOnVehicleCollision',
+            'Player.IsThrowOffPlayerFromVehicleActive',
+            'Vehicle.SandwormInvulnerabilityOnExitInAir',
+            'Vehicle.SandwormInvulnerabilityOnLeavingGame',
+            'SpiceHarvesting.dune.SpawnCraterRocksAfterBloom',
+            'dw.MitigateAllDamageToBuildables',
+            'dw.EnableOutsideBuildablesToAffectShelter',
+            'SafeZone.EnableScale'
+        )) {
+            $fields[$key].Type | Should -Be 'bool01'
+        }
+        foreach ($key in @(
+            'dw.LandsraadMissionRewardMultiplierFactionXP',
+            'dw.LandsraadMissionRewardMultiplierHouseCredit',
+            'dw.LandsraadMissionRewardMultiplierSpecializationXP',
+            'dw.VehicleAbandonedDecayTimeMultiplier',
+            'Vehicle.DisassemblySpeedMultiplier',
+            'Vehicle.CharacterHitDamageModifier',
+            'SafeZone.Scale'
+        )) {
+            $fields[$key].Type | Should -Be 'float'
+            $fields[$key].Default | Should -Be '1.0'
+            $fields[$key].ContainsKey('Max') | Should -BeFalse
+        }
+        $fields['Abilities.RespecCooldownTotalDurationSeconds'].Type | Should -Be 'int'
+        $fields['Abilities.RespecCooldownTotalDurationSeconds'].Default | Should -Be '172800'
+        $fields['Abilities.RespecCooldownTotalDurationSeconds'].Min | Should -Be 0
+        $fields['Sandworm.SandwormAttackDifficultyGroup'].Type | Should -Be 'select'
+        @($fields['Sandworm.SandwormAttackDifficultyGroup'].Options.V) | Should -Be @('-1','0','1','2','3')
+        foreach ($key in @(
+            'dw.VehicleAbandonedDecayAllowed',
+            'Vehicle.RecoveryTimeLimit',
+            'Vehicle.DamagePlayerOnVehicleCollision',
+            'Vehicle.SandwormInvulnerabilityOnExitInAir',
+            'Vehicle.SandwormInvulnerabilityOnLeavingGame',
+            'dw.MitigateAllDamageToBuildables',
+            'dw.EnableOutsideBuildablesToAffectShelter',
+            'Dac.FriendlyPvPDamageMultiplier',
+            'Dac.HealingDurationReductionByDamageMultiplier',
+            'SafeZone.EnableScale'
+        )) {
+            $fields[$key].ContainsKey('Default') | Should -BeFalse -Because "$key has no reliably recovered compiled default"
+        }
+    }
+
+    It 'does not include server-only experimental CVars in local client changes' {
+        $notice = Get-DuneGameConfigClientApplyNotice -Updates @(
+            @{ file='engine'; section=$script:DuneGcSecConsole; key='Dune.GiveDoubleDifficultyLoot'; value='1' },
+            @{ file='engine'; section=$script:DuneGcSecConsole; key='Abilities.RespecCooldownTotalDurationSeconds'; value='0' }
+        )
+
+        @($notice.items).Count | Should -Be 0
+    }
+
+    It 'places Experimental last in the curated schema API' {
+        $cats = @((Get-DuneGameConfigSchemaApi) | ForEach-Object { $_.category })
+        $cats[-1] | Should -Be 'Experimental'
+    }
+
+    It 'persists experimental controls in the UserEngine ConsoleVariables section' {
+        $out = ConvertTo-DuneIniManaged -Raw '' -Updates @(
+            @{ section=$script:DuneGcSecConsole; key='Dune.GiveDoubleDifficultyLoot'; value='1' },
+            @{ section=$script:DuneGcSecConsole; key='dw.VehicleAbandonedDecayTimeMultiplier'; value='0.5' }
+        ) -QuotedKeys @{}
+
+        (Get-HeaderCount -Raw $out -Name $script:DuneGcSecConsole) | Should -Be 1
+        (Get-EffectiveValue -Raw $out -Section $script:DuneGcSecConsole -Key 'Dune.GiveDoubleDifficultyLoot') | Should -Be '1'
+        (Get-EffectiveValue -Raw $out -Section $script:DuneGcSecConsole -Key 'dw.VehicleAbandonedDecayTimeMultiplier') | Should -Be '0.5'
+    }
+}
+
 Describe 'DuneGameConfigSchema: CraftingSettings fields' -Tag 'GameConfig' {
 
     It 'exposes repair and recycler weights as server-and-client game settings' {

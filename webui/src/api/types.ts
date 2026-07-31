@@ -177,6 +177,15 @@ export type GameConfigResponse = {
   engine: GameConfigFileBundle
 }
 
+export type GameConfigPodReloadResponse = {
+  ok: boolean
+  noop?: boolean
+  found: number
+  restarted: number
+  pods: string[]
+  message: string
+}
+
 export type DeepDesertPvpInstance = {
   map: 'DeepDesert_1'
   partitionId: number
