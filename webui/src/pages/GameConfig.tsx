@@ -206,7 +206,6 @@ export function GameConfig() {
   const [clientApply, setClientApply] = useState<GameConfigClientApply | null>(null)
   const [sandwormModalOpen, setSandwormModalOpen] = useState(false)
   const [search, setSearch] = useState('')
-  const [experimentalAcknowledged, setExperimentalAcknowledged] = useState(false)
   // "Give players this" section share popup (client-side Game.ini block).
   const [shareBlock, setShareBlock] = useState<{ title: string; block: string } | null>(null)
   const [backing, setBacking] = useState(false)
@@ -1334,8 +1333,6 @@ export function GameConfig() {
                 hasClientFields={share.hasClientFields}
                 onShare={() => setShareBlock({ title: `${cat.category} — give players this`, block: share.block })}
                 forceOpen={search.trim() !== ''}
-                experimentalAcknowledged={experimentalAcknowledged}
-                onExperimentalAcknowledged={setExperimentalAcknowledged}
               >
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-x-6 gap-y-4">
                   {(cat.fields ?? []).map(f => (
@@ -1345,7 +1342,7 @@ export function GameConfig() {
                         field={f}
                         value={values[f.key] ?? ''}
                         onChange={v => handleFieldChange(f.key, v)}
-                        disabled={loadState !== 'ready' || saving || (cat.category === 'Experimental' && !experimentalAcknowledged)}
+                        disabled={loadState !== 'ready' || saving}
                         isDirty={(values[f.key] ?? '') !== (originals[f.key] ?? '')}
                         isSet={liveValue(cfg, f) !== ''}
                         isCustom={isCustomized(cfg, f)}
@@ -1613,8 +1610,6 @@ function CategoryCard({
   hasClientFields,
   onShare,
   forceOpen = false,
-  experimentalAcknowledged = false,
-  onExperimentalAcknowledged,
   children,
 }: {
   category: string
@@ -1623,8 +1618,6 @@ function CategoryCard({
   hasClientFields?: boolean
   onShare?: () => void
   forceOpen?: boolean
-  experimentalAcknowledged?: boolean
-  onExperimentalAcknowledged?: (acknowledged: boolean) => void
   children: React.ReactNode
 }) {
   const experimental = category === 'Experimental'
@@ -1680,17 +1673,8 @@ function CategoryCard({
                 These server CVars are written only to the battlegroup&apos;s <span className="font-mono text-text">UserEngine.ini</span> under <span className="font-mono text-text">[ConsoleVariables]</span>. They are not copied to this PC&apos;s local client <span className="font-mono text-text">Game.ini</span>.
               </p>
               <p className="mt-1.5">
-                This catalogue contains 32 testable controls decoded from server build 1.4.10.4. Double Difficulty Loot and the three Landsraad reward multipliers have community field confirmation; vehicle fuel, heat, power, overheat, and limit controls proven ineffective were removed. Other controls may have no effect or unintended gameplay consequences. The dehydration-zone control is omitted because Funcom warns that enabling it crashes clients. Back up first, change one setting at a time, then use Apply INIs to pods before testing.
+                This catalogue contains 33 testable controls decoded from server build 1.4.10.4. Double Difficulty Loot and the three Landsraad reward multipliers have community field confirmation; vehicle heat, power, overheat, and limit controls proven ineffective were removed. Other controls may have no effect or unintended gameplay consequences. The dehydration-zone control is omitted because Funcom warns that enabling it crashes clients. Back up first, change one setting at a time, then use Apply INIs to pods before testing.
               </p>
-              <label className="mt-3 flex cursor-pointer items-start gap-2 text-text">
-                <input
-                  type="checkbox"
-                  checked={experimentalAcknowledged}
-                  onChange={e => onExperimentalAcknowledged?.(e.target.checked)}
-                  className="mt-0.5 shrink-0 accent-warning"
-                />
-                <span>I understand these settings are experimental and server-side only.</span>
-              </label>
             </div>
           )}
           {children}
