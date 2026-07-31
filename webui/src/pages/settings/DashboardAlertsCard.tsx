@@ -1,4 +1,5 @@
 import { Icon } from '../../components/Icon'
+import { CollapsibleCard } from '../../components/CollapsibleCard'
 import { useVmMemPressureEnabled } from '../dashboard/vmMemoryPref'
 
 // Settings → Dashboard warnings. Currently just the VM memory-pressure banner
@@ -8,12 +9,14 @@ export function DashboardAlertsCard() {
   const [show, setShow] = useVmMemPressureEnabled()
 
   return (
-    <div className="card mb-4 p-6">
-      <div className="flex items-center gap-3 mb-3">
-        <Icon name="BellRing" size={18} className="text-text-muted" />
-        <h2 className="text-lg font-semibold">Dashboard warnings</h2>
-      </div>
-
+    <CollapsibleCard
+      id="settings.dashboardAlerts"
+      icon="BellRing"
+      title="Dashboard warnings"
+      titleClassName="text-lg font-semibold"
+      headerClassName="px-6 pt-6 pb-3"
+      bodyClassName="px-6 pb-6"
+    >
       <label className="flex items-start gap-3 cursor-pointer select-none">
         <input
           type="checkbox"
@@ -31,6 +34,6 @@ export function DashboardAlertsCard() {
           </span>
         </span>
       </label>
-    </div>
+    </CollapsibleCard>
   )
 }

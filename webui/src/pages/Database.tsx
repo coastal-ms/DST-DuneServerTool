@@ -1,6 +1,7 @@
 import { useState, useEffect, useMemo, useCallback, useRef } from 'react'
 import { PageHeader } from '../components/PageHeader'
 import { Icon } from '../components/Icon'
+import { CollapsibleCard } from '../components/CollapsibleCard'
 import { useStatus } from '../hooks/useStatus'
 import { VmInfoCard } from './database/VmInfoCard'
 import { api } from '../api/client'
@@ -359,16 +360,19 @@ export function Database() {
         />
       </div>
 
-      <div className="card p-5 mb-6 border border-accent/40">
-        <div className="flex items-start gap-3 mb-4">
-          <Icon name="ServerCog" size={22} className="text-accent mt-0.5 shrink-0" />
-          <div>
-            <h2 className="text-sm font-semibold text-text">Cross-VM / Cross-Battlegroup Migration</h2>
-            <p className="text-xs text-text-dim mt-1">
-              Live-verified procedure for moving a complete database backup to a different VM or battlegroup. Characters can carry over with their inventory, progression, and bases; account-specific data problems can still prevent an individual character from loading.
-            </p>
-          </div>
-        </div>
+      <CollapsibleCard
+        id="database.migration"
+        icon="ServerCog"
+        iconClassName="text-accent shrink-0"
+        title="Cross-VM / Cross-Battlegroup Migration"
+        titleClassName="text-sm font-semibold text-text"
+        className="mb-6 border border-accent/40"
+        headerClassName="px-5 pt-5 pb-2"
+        bodyClassName="px-5 pb-5"
+      >
+        <p className="text-xs text-text-dim mb-4">
+          Live-verified procedure for moving a complete database backup to a different VM or battlegroup. Characters can carry over with their inventory, progression, and bases; account-specific data problems can still prevent an individual character from loading.
+        </p>
 
         <ol className="list-decimal pl-5 space-y-2 text-xs text-text-muted">
           <li>Copy the old <code className="font-mono text-text">.backup</code> file from the old VM to your PC. Keep the old VM and original backup intact.</li>
@@ -384,7 +388,7 @@ export function Database() {
         <div className="mt-4 rounded border border-warning/30 bg-warning/5 px-3 py-2 text-xs text-text-muted">
           <strong className="text-warning">Do not skip the two full restarts.</strong> The first clears stale pods after the database replacement. The second forces a clean operator reconciliation after the IP change settles. Do not delete the old VM or backup until every character has been verified.
         </div>
-      </div>
+      </CollapsibleCard>
 
       {/* Configurable backup schedule (writes the VM's root crontab) */}
       <BackupScheduleCard vmRunning={vmRunning} showToast={showToast} />
@@ -393,11 +397,16 @@ export function Database() {
       <BackupMirrorCard vmRunning={vmRunning} showToast={showToast} />
 
       {/* Fix on-demand maps — captured output */}
-      <div className="card p-5 flex flex-col mb-6">
-        <div className="flex items-center gap-3 mb-3">
-          <Icon name="Wrench" size={22} className="text-warning" />
-          <h2 className="text-base font-semibold tracking-tight text-warning">Fix on-demand maps</h2>
-        </div>
+      <CollapsibleCard
+        id="database.fixOnDemandMaps"
+        icon="Wrench"
+        iconClassName="text-warning shrink-0"
+        title="Fix on-demand maps"
+        titleClassName="text-base font-semibold tracking-tight text-warning"
+        className="mb-6"
+        headerClassName="px-5 pt-5 pb-2"
+        bodyClassName="px-5 pb-5 flex flex-col"
+      >
         <p className="text-sm text-text-muted mb-3">
           Clears the drifted partition pin that stops DeepDesert, Arrakeen and Harko Village from launching on demand.
           Runs on the VM, then shows the last 10 lines of the cleanup log below. Idempotent — it skips any map that already
@@ -438,7 +447,7 @@ export function Database() {
             )}
           </div>
         )}
-      </div>
+      </CollapsibleCard>
 
       {/* SQL editor card */}
       <div className="card overflow-hidden mb-4">
@@ -541,14 +550,19 @@ type MaintCardProps = {
 function MaintCard(p: MaintCardProps) {
   const accent = p.tone === 'success' ? 'text-success' : 'text-accent-bright'
   return (
-    <div className="card p-5 flex flex-col">
-      <div className="flex items-center gap-3 mb-3">
-        <Icon name={p.icon} size={22} className={accent} />
-        {/* Heading is always text-success so both maintenance cards read the
-            same and stay legible on the dark card; the destructive signal for
-            Restore lives on its icon and its primary button, not the title. */}
-        <h2 className="text-base font-semibold tracking-tight text-success">{p.title}</h2>
-      </div>
+    <CollapsibleCard
+      id={`database.maint.${p.title}`}
+      icon={p.icon}
+      iconClassName={`${accent} shrink-0`}
+      title={p.title}
+      /* Heading is always text-success so both maintenance cards read the
+         same and stay legible on the dark card; the destructive signal for
+         Restore lives on its icon and its primary button, not the title. */
+      titleClassName="text-base font-semibold tracking-tight text-success"
+      className=""
+      headerClassName="px-5 pt-5 pb-2"
+      bodyClassName="px-5 pb-5 flex flex-col"
+    >
       <p className="text-sm text-text-muted mb-3 flex-1">{p.description}</p>
       <p className="text-xs text-text-dim mb-4">{p.hint}</p>
       <div>
@@ -562,7 +576,7 @@ function MaintCard(p: MaintCardProps) {
           {p.busy ? 'Launching…' : p.buttonLabel}
         </button>
       </div>
-    </div>
+    </CollapsibleCard>
   )
 }
 
@@ -1044,14 +1058,21 @@ function BackupScheduleCard({ vmRunning, showToast }: BackupScheduleCardProps) {
   const lastBackup = history?.recent?.[0]
 
   return (
-    <div className="card p-5 flex flex-col mb-6">
-      <div className="flex items-center gap-3 mb-3">
-        <Icon name="Clock" size={22} className="text-info" />
-        <h2 className="text-base font-semibold tracking-tight text-info">Backup Schedule</h2>
-        <span className="ml-auto text-xs text-text-muted">
+    <CollapsibleCard
+      id="database.backupSchedule"
+      icon="Clock"
+      iconClassName="text-info shrink-0"
+      title="Backup Schedule"
+      titleClassName="text-base font-semibold tracking-tight text-info"
+      className="mb-6"
+      headerClassName="px-5 pt-5 pb-2"
+      bodyClassName="px-5 pb-5 flex flex-col"
+      headerRight={
+        <span className="text-xs text-text-muted hidden md:block">
           Runs on the VM via root crontab. Edits write to <span className="font-mono">/etc/crontabs/root</span>.
         </span>
-      </div>
+      }
+    >
       <p className="text-sm text-text-muted mb-3">
         Run <span className="font-mono">battlegroup backup</span> on a recurring schedule. Times are in the VM's
         timezone (<span className="font-mono">{tzLabel}</span>). Backups land in{' '}
@@ -1489,7 +1510,7 @@ function BackupScheduleCard({ vmRunning, showToast }: BackupScheduleCardProps) {
         Note: this schedule lives in the VM's root crontab. If the VM is reprovisioned the schedule is lost
         and must be re-installed from here.
       </p>
-    </div>
+    </CollapsibleCard>
   )
 }
 
@@ -1630,11 +1651,16 @@ function BackupMirrorCard({ vmRunning, showToast }: BackupMirrorCardProps) {
   const lastMirroredAt = state?.lastMirroredAt ?? ''
 
   return (
-    <div className="card p-5 flex flex-col mb-6">
-      <div className="flex items-center gap-3 mb-3">
-        <Icon name="FolderSync" size={22} className="text-info" />
-        <h2 className="text-base font-semibold tracking-tight text-info">Local backup mirror</h2>
-      </div>
+    <CollapsibleCard
+      id="database.backupMirror"
+      icon="FolderSync"
+      iconClassName="text-info shrink-0"
+      title="Local backup mirror"
+      titleClassName="text-base font-semibold tracking-tight text-info"
+      className="mb-6"
+      headerClassName="px-5 pt-5 pb-2"
+      bodyClassName="px-5 pb-5 flex flex-col"
+    >
       <p className="text-sm text-text-muted mb-3">
         Automatically copy every DST-taken database backup into a folder on this PC.
         Copies are added as new backups appear on the VM — files in the mirror folder are never
@@ -1707,6 +1733,6 @@ function BackupMirrorCard({ vmRunning, showToast }: BackupMirrorCardProps) {
       )}
 
       {err && <div className="text-xs text-danger mt-2">{err}</div>}
-    </div>
+    </CollapsibleCard>
   )
 }
