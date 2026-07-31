@@ -564,13 +564,6 @@ function Save-DuneGameConfigClient {
     }
     if ($clean.Count -eq 0) { throw 'No client-applicable keys in the supplied updates.' }
 
-    # Also scrub the deprecated no-op multiplier keys from the client file so a
-    # user's local Game.ini doesn't keep orphaned values DST no longer manages.
-    # (Same server-wins / keep-it-clean intent as the server managed block.)
-    foreach ($dk in $script:DuneGameConfigDeprecatedManagedKeys) {
-        $clean.Add(@{ section = $script:DuneGcSecGame; key = $dk; value = ''; remove = $true })
-    }
-
     $dirResolved = Resolve-DuneGameConfigClientDir -Dir $Dir
     if (-not (Test-Path -LiteralPath $dirResolved)) { throw "Client config folder not found: $dirResolved" }
     $path = Get-DuneGameConfigClientFilePath -Dir $Dir
@@ -580,6 +573,20 @@ function Save-DuneGameConfigClient {
     if (Test-Path -LiteralPath $path -PathType Leaf) {
         $existing = [IO.File]::ReadAllText($path)
         $created  = $false
+    }
+
+    # Also scrub the deprecated no-op multiplier keys from the client file so a
+    # user's local Game.ini doesn't keep orphaned values DST no longer manages.
+    # (Same server-wins / keep-it-clean intent as the server managed block.)
+    #
+    # Only queue the ones actually PRESENT in the file. Queueing all of them
+    # unconditionally made the result count every deprecated key as "removed",
+    # so saving a single setting reported "removed 18 keys" when the user's file
+    # contained none of them - alarming, and untrue.
+    foreach ($dk in $script:DuneGameConfigDeprecatedManagedKeys) {
+        if ($existing -match ('(?m)^\s*' + [regex]::Escape($dk) + '\s*=')) {
+            $clean.Add(@{ section = $script:DuneGcSecGame; key = $dk; value = ''; remove = $true })
+        }
     }
 
     $quoted = Get-DuneGameConfigQuotedKeys

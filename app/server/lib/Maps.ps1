@@ -695,12 +695,45 @@ function Test-DuneGameServerPodName {
     return [bool]("$Name" -match $script:DuneGameServerPodNameRegex)
 }
 
+# Clean battlegroup restart. Delegates to the SAME command the Commands screen
+# runs ('restart') rather than issuing its own SSH, so every caller gets the
+# identical, already-proven path - including the stale bot run-flag clear that a
+# battlegroup restart requires. Returns immediately; the launched command runs
+# detached and the UI polls Server Health while it converges (~2-3 min).
+#
+# Shared by Game Config's "Apply INIs & restart" and the Landsraad control card.
+function Invoke-DuneBattlegroupRestart {
+    param([string]$Ip)
+
+    # Restarting the BG cycles game state, so an in-flight seed or list-tick from
+    # a prior run is moot; leaving the flag set would block fresh runs afterwards.
+    if (Get-Command Clear-DuneBotStaleRunFlags -ErrorAction SilentlyContinue) {
+        try { Clear-DuneBotStaleRunFlags } catch {}
+    }
+
+    $result = Invoke-DuneCommandExternal -Name 'restart'
+    return @{
+        ok      = $true
+        result  = $result
+        message = 'Battlegroup restart launched - watch Server Health; it takes a couple of minutes to come back.'
+    }
+}
+
 function Restart-DuneGameServerPodsRolling {
     param([Parameter(Mandatory)][string]$Ip)
 
     # One remote script performs an all-pods health preflight before deleting
     # anything, then restarts game pods sequentially. The next pod is not touched
-    # until the operator has recreated the prior pod and Kubernetes reports Ready.
+    # until the prior map is genuinely back.
+    #
+    # "Back" means the BATTLEGROUP CR reports that map ready, not just that the
+    # pod passed its Kubernetes readiness probe. The pod goes Running/Ready as
+    # soon as the container is up, but the game server then loads the world and
+    # only later moves Startup -> Running with ready=true in the CR. Gating on
+    # the pod condition alone reported success while both maps were still in
+    # Startup, and let the next pod be deleted while the previous map was still
+    # loading - which defeats the point of rolling one at a time and puts two
+    # concurrent world loads on the host at once.
     $bash = @'
     set -u
     KUBE="sudo kubectl"
@@ -718,8 +751,20 @@ function Restart-DuneGameServerPodsRolling {
       printf '%s\n' "$BAD"
       exit 0
     fi
+    # Map slug carried by the pod name, e.g. ...-sg-survival-1-pod-1 -> survival-1.
+    # The CR's partitionMap for that map is Survival_1, so compare lowercased
+    # with underscores folded to hyphens.
+    map_ready() {
+      _ns="$1"; _slug="$2"
+      $KUBE -n "$_ns" get battlegroups -o jsonpath='{range .items[*].status.servers[*]}{.partitionMap}{"|"}{.ready}{"\n"}{end}' 2>/dev/null |
+        awk -F'|' -v want="$_slug" '
+          { m = tolower($1); gsub(/_/, "-", m); if (m == want && $2 == "true") { found = 1 } }
+          END { exit found ? 0 : 1 }
+        '
+    }
     printf '%s\n' "$TARGETS" | while IFS='|' read -r ns pod phase deleting ready; do
       [ -n "$ns" ] && [ -n "$pod" ] || continue
+      SLUG=$(printf '%s' "$pod" | sed -n 's/.*-sg-\(.*\)-pod-[0-9][0-9]*$/\1/p')
       echo "===RESTARTING===$ns|$pod"
       if ! $KUBE -n "$ns" delete pod "$pod" --wait=true --timeout=90s 2>&1; then
         echo "===FAILED===$ns|$pod|delete"
@@ -738,6 +783,24 @@ function Restart-DuneGameServerPodsRolling {
       if [ "$REPLACEMENT_READY" != "true" ]; then
         echo "===FAILED===$ns|$pod|ready-timeout"
         exit 22
+      fi
+      # Container is up; now wait for the game server to finish loading the world
+      # and for the battlegroup to report this map ready. Loading a large map can
+      # take minutes, so this gets its own, longer deadline.
+      if [ -n "$SLUG" ]; then
+        MAP_DEADLINE=$((SECONDS + 900))
+        MAP_READY=false
+        while [ "$SECONDS" -lt "$MAP_DEADLINE" ]; do
+          if map_ready "$ns" "$SLUG"; then
+            MAP_READY=true
+            break
+          fi
+          sleep 5
+        done
+        if [ "$MAP_READY" != "true" ]; then
+          echo "===FAILED===$ns|$pod|map-ready-timeout"
+          exit 23
+        fi
       fi
       echo "===READY===$ns|$pod"
     done
@@ -775,7 +838,7 @@ function Restart-DuneGameServerPodsRolling {
     if ($raw -match '===FAILED===([^|]+)\|([^|]+)\|([^\r\n]+)') {
         return @{
             ok=$false; status=502; found=$count; restarted=$ready.Count; pods=$ready; raw=$raw
-            message="Rolling reload stopped at $($Matches[1])/$($Matches[2]) during $($Matches[3]). Already-restarted pods are Ready."
+            message="Rolling reload stopped at $($Matches[1])/$($Matches[2]) during $($Matches[3]). Already-restarted pods finished loading."
         }
     }
     if ($raw -notmatch '===COMPLETE===(\d+)' -or $ready.Count -ne $count) {
@@ -786,6 +849,6 @@ function Restart-DuneGameServerPodsRolling {
     }
     return @{
         ok=$true; found=$count; restarted=$ready.Count; pods=$ready; raw=$raw
-        message="Reloaded $($ready.Count) game-server pod(s) one at a time. Every replacement reached Ready."
+        message="Reloaded $($ready.Count) game-server pod(s) one at a time. Every map finished loading and reported ready."
     }
 }
