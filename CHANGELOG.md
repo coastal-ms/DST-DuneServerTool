@@ -20,6 +20,11 @@ here cover everything those tags shipped.
 - **Sun exposure toggle.** Game Config → Hydration gains **Sun Exposure Enabled**, which turns off the sun-exposure water drain when set to 0. Unlike the surrounding hydration settings it is a server-side console variable, so it applies on the server alone and needs no client-side apply. Reported working by a community tester.
 - **Fuel Burning Duration returns to Experimental.** This control was withdrawn in prerelease testing after showing no effect, and is restored for another round of field testing — it remains unconfirmed. A scan of the shipped server binary found no enable-gate for it, but did show that each burning fuel entry stores its own duration when it ignites, which suggests the multiplier applies at ignition rather than continuously. Fuel already burning in a generator would therefore be unaffected, so the control now tells testers to insert fresh fuel after restarting.
 
+### Changed
+
+- **Experimental Game Config no longer requires an acknowledgement.** The card kept its warning about these being server-only test settings, but the tick-box that gated editing has been removed — the controls are editable as soon as the card is expanded.
+- **Every server `Game.ini` setting can now be applied client-side.** Seventeen settings across Storm Cycle, Building, Guilds & Economy, PvP & Security, Taxation and Sandworm were written to the server's `Game.ini` — which the client also reads — but were not offered for client-side apply, while their neighbours in the same sections were. All game-file settings now carry the flag; console variables in `UserEngine.ini` remain server-only, as they should. Defaults are still never written to a player's `Game.ini`: a value equal to its default is stripped from the file, so only settings actually changed from default are handed out.
+
 ## [13.0.0] - 2026-07-30
 
 ### Added
