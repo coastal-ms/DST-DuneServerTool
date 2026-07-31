@@ -13,6 +13,8 @@ here cover everything those tags shipped.
 
 ## [Unreleased]
 
+## [13.0.2] - 2026-07-30
+
 ### Changed
 
 - **Active Spice now only lists partitions that are live or pinned.** `dune.spicefield_types` keeps a row for every (map, size, instance) combination forever, so a battlegroup that has ever run a second instance of a map keeps those rows permanently. The card grouped only by map, so each size appeared twice with nothing to tell the rows apart — running a second Deep Desert also created duplicate-looking rows for Hagga Basin. Rows are now shown when their instance is currently running or is kept warm by a Map Spin-Up pin, and a map with more than one live instance labels them **Hagga Basin #1**, **#2** and so on. If the battlegroup can't be read, every row is shown rather than hiding real data. Map names also come from the same table the Game Servers list uses, so both read identically.
@@ -7316,7 +7318,8 @@ at the time. Also folds in the v3.0.1 / v3.1.2 patches.
   (`ssh`, `Gameplay Admin`, `setup-guide`, `report-issue`). _(originally
   3.1.2)_
 
-[Unreleased]: https://github.com/coastal-ms/DST-DuneServerTool/compare/v13.0.1...HEAD
+[Unreleased]: https://github.com/coastal-ms/DST-DuneServerTool/compare/v13.0.2...HEAD
+[13.0.2]: https://github.com/coastal-ms/DST-DuneServerTool/compare/v13.0.1...v13.0.2
 [13.0.1]: https://github.com/coastal-ms/DST-DuneServerTool/compare/v13.0.0...v13.0.1
 [13.0.0]: https://github.com/coastal-ms/DST-DuneServerTool/compare/v12.16.6...v13.0.0
 [6.1.0]: https://github.com/coastal-ms/DST-DuneServerTool/compare/v6.0.1...v6.1.2
