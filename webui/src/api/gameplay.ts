@@ -721,6 +721,46 @@ export function setLandsraadRewardTier(taskId: number, threshold: number, templa
   })
 }
 
+// Landsraad term control — which House holds the Landsraad and which decree is
+// in force. Both live on the current landsraad_decree_term row; a decree only
+// renders in-game when the term also has a reigning faction, and the game reads
+// them at map-pod start, so changes need a battlegroup restart.
+export interface LandsraadFaction {
+  id: number
+  name: string
+  can_hold: boolean
+}
+export interface LandsraadDecree {
+  id: number
+  decree_name: string
+  display_name: string
+  disabled: boolean
+  weight: string
+}
+export interface LandsraadTermControlResponse {
+  term_id: number
+  reigning_faction_id: number
+  active_decree_id: number
+  elected_decree_id: number
+  end_time?: string
+  factions: LandsraadFaction[]
+  decrees: LandsraadDecree[]
+  source: DataSource
+  liveError?: string
+}
+export function getLandsraadTermControl(demo?: boolean) {
+  return api<LandsraadTermControlResponse>(`/api/gameplay/landsraad/term-control${qs({ demo: demo ? 1 : undefined })}`)
+}
+export function setLandsraadTermControl(factionId?: number, decreeId?: number) {
+  return api<WriteResult>('/api/gameplay/landsraad/set-term-control', {
+    method: 'POST',
+    body: JSON.stringify({ faction_id: factionId, decree_id: decreeId }),
+  })
+}
+export function restartLandsraadBattlegroup() {
+  return api<WriteResult>('/api/gameplay/landsraad/restart-bg', { method: 'POST' })
+}
+
 // ---------------------------------------------------------------------------
 // v11.5.6 — extended player surface (port of the reference implementation's player tooling).
 // ---------------------------------------------------------------------------

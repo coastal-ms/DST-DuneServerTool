@@ -9,6 +9,7 @@ import {
   type LandsraadRewardHouse, type LandsraadRewardTier, type DataSource,
 } from '../../api/gameplay'
 import { SourceBadge, DemoNotice, fmtNum } from './shared'
+import { LandsraadControlCard } from './LandsraadControlCard'
 
 // Default Funcom thresholds and example "5k goal" replacements.
 const DEFAULT_THRESHOLDS = [700, 3500, 7000, 10500, 14000]
@@ -127,6 +128,9 @@ export function LandsraadTab() {
 
   return (
     <div>
+      {/* Landsraad holder + decree control, above the house/reward editor. */}
+      <LandsraadControlCard />
+
       {/* Header info */}
       <div className="card p-4 mb-4">
         <div className="flex items-center justify-between flex-wrap gap-2 mb-2">

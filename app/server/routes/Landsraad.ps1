@@ -163,3 +163,84 @@ Register-DuneRoute -Method POST -Path '/api/gameplay/landsraad/set-reward-tier' 
         Write-DuneError -Response $res -Status 500 -Message "Set Landsraad reward tier failed: $($_.Exception.Message)"
     }
 }
+
+# ---------------------------------------------------------------------------
+# Landsraad term control — which House holds the Landsraad and which decree is
+# in force for the running term. See lib/Landsraad.ps1 for the DB model; the
+# short version is that a decree only shows in-game when the term ALSO has a
+# reigning faction, and the game reads both at map-pod start, not live.
+# ---------------------------------------------------------------------------
+
+# GET /api/gameplay/landsraad/term-control — current term, holding House, active
+# decree, and every decree the server knows about.
+Register-DuneRoute -Method GET -Path '/api/gameplay/landsraad/term-control' -Handler {
+    param($req, $res, $routeParams, $body)
+    try {
+        Invoke-DunePlayerReadRoute -Response $res -Request $req `
+            -LiveBlock { param($ip) Get-DuneLandsraadTermControl -Ip $ip } `
+            -DemoBlock {
+                @{
+                    ok = $true; term_id = 4
+                    reigning_faction_id = 1; active_decree_id = 6; elected_decree_id = 0
+                    end_time = '2026-08-04 04:55:00'
+                    factions = @(
+                        [ordered]@{ id=1; name='Atreides';  can_hold=$true }
+                        [ordered]@{ id=2; name='Harkonnen'; can_hold=$true }
+                        [ordered]@{ id=3; name='None';      can_hold=$false }
+                        [ordered]@{ id=4; name='Smuggler';  can_hold=$false }
+                    )
+                    decrees = @(
+                        [ordered]@{ id=1; decree_name='ExperienceRateIncrease';        display_name='Experience Rate Increase';         disabled=$false; weight='1.5' }
+                        [ordered]@{ id=2; decree_name='RangedDamageIncreased';         display_name='Ranged Damage Increased';          disabled=$false; weight='1.5' }
+                        [ordered]@{ id=3; decree_name='MeleeDamageIncreased';          display_name='Melee Damage Increased';           disabled=$false; weight='1.5' }
+                        [ordered]@{ id=4; decree_name='CraftingCostReduced';           display_name='Crafting Cost Reduced';            disabled=$false; weight='1.5' }
+                        [ordered]@{ id=5; decree_name='DropInventoryOnDefeatActive';   display_name='Drop Inventory On Defeat Active';  disabled=$false; weight='1' }
+                        [ordered]@{ id=6; decree_name='RepairAndRefiningTimes';        display_name='Repair And Refining Times';        disabled=$false; weight='1.5' }
+                        [ordered]@{ id=7; decree_name='SpecialVendorActive';           display_name='Special Vendor Active';            disabled=$true;  weight='1.5' }
+                        [ordered]@{ id=8; decree_name='SpecialVendorActive_Vehicles';  display_name='Special Vendor Active - Vehicles'; disabled=$false; weight='1.5' }
+                        [ordered]@{ id=9; decree_name='SpecialVendorActive_Weapons';   display_name='Special Vendor Active - Weapons';  disabled=$false; weight='1.5' }
+                        [ordered]@{ id=10; decree_name='SpecialVendorActive_Armor';    display_name='Special Vendor Active - Armor';    disabled=$false; weight='1.5' }
+                        [ordered]@{ id=11; decree_name='SpecialVendorActive_Utilities';display_name='Special Vendor Active - Utilities';disabled=$false; weight='1.5' }
+                    )
+                }
+            } `
+            -PayloadKey 'termControl'
+    } catch {
+        Write-DuneError -Response $res -Status 500 -Message "Landsraad term control failed: $($_.Exception.Message)"
+    }
+}
+
+# POST /api/gameplay/landsraad/set-term-control  { faction_id?, decree_id? }
+# Sets the holding House and/or the in-force decree on the CURRENT term. At
+# least one is required; the lib validates both and scopes the write to the term
+# resolved server-side.
+Register-DuneRoute -Method POST -Path '/api/gameplay/landsraad/set-term-control' -Handler {
+    param($req, $res, $routeParams, $body)
+    try {
+        $fid = Get-DuneBodyInt -Body $body -Name 'faction_id'
+        $did = Get-DuneBodyInt -Body $body -Name 'decree_id'
+        if (($null -eq $fid -or $fid -le 0) -and ($null -eq $did -or $did -le 0)) {
+            Write-DuneError -Response $res -Status 400 -Message 'At least one of faction_id or decree_id is required.'; return
+        }
+        Invoke-DunePlayerWriteRoute -Response $res -Action { param($ip)
+            Set-DuneLandsraadTermControl -Ip $ip -FactionId ([int]$fid) -DecreeId ([long]$did)
+        }
+    } catch {
+        Write-DuneError -Response $res -Status 500 -Message "Set Landsraad term control failed: $($_.Exception.Message)"
+    }
+}
+
+# POST /api/gameplay/landsraad/restart-bg — clean battlegroup restart so the
+# game re-reads the term row. Separate from set-term-control on purpose: the
+# operator confirms the restart as its own step, and a restart failure can't
+# mask a successful write.
+Register-DuneRoute -Method POST -Path '/api/gameplay/landsraad/restart-bg' -Handler {
+    param($req, $res, $routeParams, $body)
+    try {
+        Invoke-DunePlayerWriteRoute -Response $res -Action { param($ip)
+            Invoke-DuneLandsraadBgRestart -Ip $ip
+        }
+    } catch {
+        Write-DuneError -Response $res -Status 500 -Message "Landsraad battlegroup restart failed: $($_.Exception.Message)"
+    }
+}
