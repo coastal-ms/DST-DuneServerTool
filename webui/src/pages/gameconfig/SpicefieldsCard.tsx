@@ -3,6 +3,7 @@
 // Disabled when the VM is not running.
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Icon } from '../../components/Icon'
+import { CollapsibleCard } from '../../components/CollapsibleCard'
 import { getSpicefields, saveSpicefield, setSpicefieldSpawning } from '../../api/gameconfig'
 import type { SpicefieldType } from '../../api/types'
 
@@ -216,14 +217,23 @@ export function SpicefieldsCard({ vmRunning }: Props) {
   }
 
   return (
-    <div className="card p-5">
-      <div className="flex items-center justify-between mb-4">
-        <h2 className="text-sm font-semibold uppercase tracking-wider text-accent-bright flex items-center gap-2">
-          <Icon name="Sparkles" size={14} /> Spice Fields
-          <span className="ml-2 text-[10px] font-mono normal-case text-text-dim tracking-normal">
+    <CollapsibleCard
+      id="gameconfig.spicefields"
+      icon="Sparkles"
+      iconClassName="text-accent-bright shrink-0"
+      title={
+        <span className="flex items-center gap-2">
+          Spice Fields
+          <span className="text-[10px] font-mono normal-case text-text-dim tracking-normal">
             dune.spicefield_types
           </span>
-        </h2>
+        </span>
+      }
+      titleClassName="text-sm font-semibold uppercase tracking-wider text-accent-bright"
+      className=""
+      headerClassName="px-5 pt-5 pb-2"
+      bodyClassName="px-5 pb-5"
+      headerRight={
         <button
           type="button"
           onClick={() => void load()}
@@ -235,7 +245,8 @@ export function SpicefieldsCard({ vmRunning }: Props) {
                 className={loading ? 'animate-spin' : ''} />
           Refresh
         </button>
-      </div>
+      }
+    >
 
       <p className="text-xs text-text-muted mb-3">
         How many spice fields can be active &amp; primed per map/size, the per-type
@@ -423,7 +434,7 @@ export function SpicefieldsCard({ vmRunning }: Props) {
           })}
         </div>
       )}
-    </div>
+    </CollapsibleCard>
   )
 }
 

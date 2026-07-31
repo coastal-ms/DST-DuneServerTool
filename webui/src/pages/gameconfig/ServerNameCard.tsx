@@ -8,6 +8,7 @@
 // typed "RESTART" confirmation and the prominent warning below.
 import { useEffect, useState } from 'react'
 import { Icon } from '../../components/Icon'
+import { CollapsibleCard } from '../../components/CollapsibleCard'
 import { ApiError } from '../../api/client'
 import { renameServer } from '../../api/server'
 
@@ -71,18 +72,22 @@ export function ServerNameCard({ vmRunning, currentName, onRenamed }: Props) {
   }
 
   return (
-    <div className="card p-4 mb-4 border-border">
-      <div className="flex items-center justify-between gap-2">
-        <div className="flex items-center gap-2 min-w-0">
-          <Icon name="Server" size={16} className="shrink-0 text-accent" />
-          <div className="min-w-0">
-            <div className="text-sm font-semibold text-text">Server name</div>
-            <div className="text-xs text-text-muted">
-              Shown in the in-game server browser and on status pages.
-            </div>
-          </div>
-        </div>
-        {!editing && (
+    <CollapsibleCard
+      id="gameconfig.serverName"
+      icon="Server"
+      iconClassName="shrink-0 text-accent"
+      title="Server name"
+      titleClassName="text-sm font-semibold text-text"
+      subtitle={
+        <span className="text-xs text-text-muted">
+          Shown in the in-game server browser and on status pages.
+        </span>
+      }
+      className="mb-4 border-border"
+      headerClassName="px-4 pt-4 pb-2"
+      bodyClassName="px-4 pb-4"
+      headerRight={
+        !editing ? (
           <button
             type="button"
             className="btn-secondary shrink-0"
@@ -92,8 +97,9 @@ export function ServerNameCard({ vmRunning, currentName, onRenamed }: Props) {
           >
             <Icon name="Pencil" size={14} /> Rename
           </button>
-        )}
-      </div>
+        ) : undefined
+      }
+    >
 
       {!editing && (
         <div className="mt-3 flex items-center gap-2">
@@ -167,6 +173,6 @@ export function ServerNameCard({ vmRunning, currentName, onRenamed }: Props) {
           <Icon name="ShieldCheck" size={14} /> {ok}
         </div>
       )}
-    </div>
+    </CollapsibleCard>
   )
 }

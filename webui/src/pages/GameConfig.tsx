@@ -1,6 +1,7 @@
 import { useState, useEffect, useMemo, useCallback, type FormEvent, type KeyboardEvent, type ReactElement } from 'react'
 import { PageHeader } from '../components/PageHeader'
 import { Icon } from '../components/Icon'
+import { CollapsibleCard, useCardCollapse } from '../components/CollapsibleCard'
 import { IniShareModal } from '../components/IniShareModal'
 import { useStatus } from '../hooks/useStatus'
 import { api } from '../api/client'
@@ -958,13 +959,17 @@ export function GameConfig() {
       </div>
 
       {/* Local client config (this PC) */}
-      <div className="card p-4 mb-4 border-border">
-        <div className="flex items-center justify-between gap-2 mb-2">
-          <div className="flex items-center gap-2 text-sm font-semibold text-text">
-            <Icon name="MonitorSmartphone" size={15} className="text-accent-bright" />
-            Your client config (this PC)
-          </div>
-          <div className="flex items-center gap-2">
+      <CollapsibleCard
+        id="gameconfig.clientConfig"
+        icon="MonitorSmartphone"
+        iconClassName="text-accent-bright shrink-0"
+        title="Your client config (this PC)"
+        titleClassName="text-sm font-semibold text-text"
+        className="mb-4 border-border"
+        headerClassName="px-4 pt-4 pb-2"
+        bodyClassName="px-4 pb-4"
+        headerRight={
+          <>
             <button
               type="button"
               onClick={() => void onOpenInEditor()}
@@ -982,8 +987,9 @@ export function GameConfig() {
             >
               <Icon name="FileSearch" size={14} /> View client config
             </button>
-          </div>
-        </div>
+          </>
+        }
+      >
         <p className="text-xs text-text-muted mb-3">
           A few settings (landclaim limits, building restrictions) are read by the game client too. DST can mirror
           those into your own client&apos;s <span className="font-mono">Game.ini</span> on this machine when you save —
@@ -1020,7 +1026,7 @@ export function GameConfig() {
                 : <span className="text-danger">• folder not found</span>}
           </div>
         )}
-      </div>
+      </CollapsibleCard>
       {clientMsg && (
         <div className="card p-3 mb-4 border-success/40 bg-success/10 text-success text-sm flex items-center gap-2">
           <Icon name="CheckCircle2" size={14} /> {clientMsg}
@@ -1621,29 +1627,36 @@ function CategoryCard({
   children: React.ReactNode
 }) {
   const experimental = category === 'Experimental'
-  const [experimentalOpen, setExperimentalOpen] = useState(false)
-  const expanded = !experimental || forceOpen || experimentalOpen
+  // Every category can be rolled up for aesthetics; the choice persists per
+  // category. Experimental stays closed by default, the rest start open.
+  const { open: userOpen, toggle } = useCardCollapse(`gameconfig.category.${category}`, !experimental)
+  const expanded = forceOpen || userOpen
 
   return (
     <div className={'card p-5 ' + (experimental ? 'border-warning/40' : '')}>
       <div className={(expanded ? 'mb-4 ' : '') + 'flex items-center justify-between gap-2'}>
-        {experimental ? (
-          <button
-            type="button"
-            className="flex items-center gap-2 text-left"
-            onClick={() => setExperimentalOpen(open => !open)}
-            aria-expanded={expanded}
+        <button
+          type="button"
+          className="flex items-center gap-2 text-left min-w-0"
+          onClick={toggle}
+          aria-expanded={expanded}
+        >
+          <Icon
+            name={expanded ? 'ChevronDown' : 'ChevronRight'}
+            size={14}
+            className={experimental ? 'text-warning' : 'text-accent-bright'}
+          />
+          <span
+            className={
+              'text-sm font-semibold uppercase tracking-wider ' +
+              (experimental ? 'text-warning' : 'text-accent-bright')
+            }
           >
-            <Icon name={expanded ? 'ChevronDown' : 'ChevronRight'} size={14} className="text-warning" />
-            <span className="text-sm font-semibold uppercase tracking-wider text-warning">{category}</span>
-            <span className="text-[10px] font-normal text-text-dim normal-case tracking-normal">({count})</span>
-          </button>
-        ) : (
-          <h2 className="text-sm font-semibold uppercase tracking-wider text-accent-bright flex items-center gap-2">
-            <Icon name="ChevronRight" size={14} /> {category}
-            <span className="text-[10px] font-normal text-text-dim normal-case tracking-normal">({count})</span>
-          </h2>
-        )}
+            {category}
+          </span>
+          <span className="text-[10px] font-normal text-text-dim normal-case tracking-normal">({count})</span>
+        </button>
+
         {clientBlock ? (
           <button
             type="button"
@@ -1854,7 +1867,7 @@ function DefaultsCatalogBrowser({
   vmRunning: boolean
   onSaved: () => void
 }) {
-  const [open, setOpen] = useState(false)
+  const { open, setOpen } = useCardCollapse('gameconfig.defaultsCatalog', false)
   const [data, setData] = useState<GameConfigDefaultsResponse | null>(null)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -2442,7 +2455,7 @@ function DefaultsKeyRow({
 // -----------------------------------------------------------------------------
 
 function AdvancedIniBrowser({ cfg }: { cfg: GameConfigResponse }) {
-  const [open, setOpen] = useState(false)
+  const { open, setOpen } = useCardCollapse('gameconfig.advancedIni', false)
   const [file, setFile] = useState<'game' | 'engine'>('game')
   const [showRaw, setShowRaw] = useState(false)
 

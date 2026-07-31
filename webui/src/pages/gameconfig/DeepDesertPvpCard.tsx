@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Icon } from '../../components/Icon'
+import { CollapsibleCard } from '../../components/CollapsibleCard'
 import { getDeepDesertPvp, saveDeepDesertPvp } from '../../api/gameconfig'
 import type { DeepDesertPvpState } from '../../api/types'
 
@@ -91,23 +92,29 @@ export function DeepDesertPvpCard({ vmRunning }: Props) {
   }
 
   return (
-    <div className="card p-5">
-      <div className="flex items-center justify-between gap-3 mb-3">
-        <div>
-          <h2 className="text-sm font-semibold uppercase tracking-wider text-danger flex items-center gap-2">
-            <Icon name="Swords" size={14} /> Deep Desert PvP
-          </h2>
-          <p className="text-xs text-text-muted mt-1">
-            Enable PvP only for currently running <code>DeepDesert_1</code> partitions.
-          </p>
-        </div>
+    <CollapsibleCard
+      id="gameconfig.deepDesertPvp"
+      icon="Swords"
+      iconClassName="text-danger shrink-0"
+      title="Deep Desert PvP"
+      titleClassName="text-sm font-semibold uppercase tracking-wider text-danger"
+      subtitle={
+        <span className="text-xs text-text-muted">
+          Enable PvP only for currently running <code>DeepDesert_1</code> partitions.
+        </span>
+      }
+      className=""
+      headerClassName="px-5 pt-5 pb-2"
+      bodyClassName="px-5 pb-5"
+      headerRight={
         <button type="button" className="btn-secondary" disabled={!vmRunning || loading || saving}
                 onClick={() => void load()}>
           <Icon name={loading ? 'Loader2' : 'RefreshCw'} size={14}
                 className={loading ? 'animate-spin' : ''} />
           Refresh
         </button>
-      </div>
+      }
+    >
 
       {err && <div className="mb-3 px-3 py-2 rounded border border-danger/40 bg-danger/10 text-danger text-xs">{err}</div>}
       {ok && <div className="mb-3 px-3 py-2 rounded border border-success/40 bg-success/10 text-success text-xs">{ok}</div>}
@@ -179,6 +186,6 @@ export function DeepDesertPvpCard({ vmRunning }: Props) {
           </div>
         </>
       )}
-    </div>
+    </CollapsibleCard>
   )
 }

@@ -21,6 +21,7 @@
 // Collapsed by default: nothing here interrupts anyone who has not asked.
 import { useCallback, useEffect, useState } from 'react'
 import { Icon } from '../../components/Icon'
+import { useCardCollapse } from '../../components/CollapsibleCard'
 import {
   cleanupFailedDatabaseOperations,
   cleanupOldFuncomImages,
@@ -47,7 +48,7 @@ function fmtBytes(b: number | null | undefined): string {
 }
 
 export function VmInfoCard() {
-  const [open, setOpen] = useState(false)
+  const { open, setOpen } = useCardCollapse('database.vmInfo', false)
   const [info, setInfo] = useState<VmHealth | null>(null)
   const [loading, setLoading] = useState(false)
   const [cleaning, setCleaning] = useState(false)

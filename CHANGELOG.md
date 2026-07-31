@@ -13,6 +13,12 @@ here cover everything those tags shipped.
 
 ## [Unreleased]
 
+## [13.0.3] - 2026-07-31
+
+### Changed
+
+- **Every section card can now be rolled up.** Cards on the Dashboard, Game Config, Database and Settings pages gained a chevron in their header: click the title to fold the card away, click again to bring it back. It is purely cosmetic — nothing is disabled or hidden from the tool, it just lets a long page be trimmed down to the sections actually being used. Each card starts open and remembers its own state, so a layout stays put across restarts. On Game Config this now applies to every settings category, not just Experimental. Cards that already folded — Appearance, Remote Access, Server Browser Ping, Server Authorization Token, Hyper-V over LAN, VM info, updates, the defaults catalogue and the full INI browser — keep starting closed as before, but now remember the choice instead of reopening on every visit. Header buttons such as Refresh and Rename continue to work without folding the card.
+
 ## [13.0.2] - 2026-07-30
 
 ### Changed

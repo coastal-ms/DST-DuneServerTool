@@ -1,5 +1,6 @@
 import { useRef, useState } from 'react'
 import { Icon } from '../../components/Icon'
+import { useCardCollapse } from '../../components/CollapsibleCard'
 import {
   PRESETS,
   useTheme,
@@ -17,7 +18,7 @@ for (const t of TOKENS) TOKENS_BY_CATEGORY[t.category].push(t)
 
 export function AppearanceCard() {
   const t = useTheme()
-  const [expanded, setExpanded] = useState(false)
+  const { open: expanded, setOpen: setExpanded } = useCardCollapse('settings.appearance', false)
   const [customizeOpen, setCustomizeOpen] = useState(false)
   const [importMsg, setImportMsg] = useState<{ ok: boolean; text: string } | null>(null)
   const fileInputRef = useRef<HTMLInputElement | null>(null)

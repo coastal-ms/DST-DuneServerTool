@@ -38,6 +38,9 @@ const vmHealth = {
 }
 
 beforeEach(() => {
+  // The card's open/closed choice now persists in localStorage, so each test
+  // must start from a clean slate or it inherits the previous test's toggle.
+  localStorage.clear()
   vi.mocked(getVmHealth).mockResolvedValue(vmHealth)
   vi.mocked(cleanupFailedDatabaseOperations).mockResolvedValue({
     ok: true,
