@@ -28,6 +28,49 @@ Describe 'Rolling INI game-pod reload safety' {
     }
 }
 
+Describe 'Rolling INI reload waits for the map, not just the pod' {
+
+    # The pod goes Running/Ready as soon as the container starts, but the game
+    # server then loads the world and only later reports ready in the battlegroup
+    # CR. Gating on the pod condition alone claimed success while both maps were
+    # still in Startup, and let the next pod be deleted mid-load. These lock the
+    # remote script's shape so that regression can't return silently.
+
+    BeforeAll {
+        $script:rollingScript = (Get-Command Restart-DuneGameServerPodsRolling).ScriptBlock.ToString()
+    }
+
+    It 'queries the battlegroup CR readiness, not only the pod condition' {
+        $script:rollingScript | Should -Match 'get battlegroups'
+        $script:rollingScript | Should -Match 'partitionMap'
+    }
+
+    It 'derives the map slug from the pod name' {
+        # ...-sg-survival-1-pod-1 -> survival-1
+        $script:rollingScript | Should -Match '\-sg\-'
+        $script:rollingScript | Should -Match 'SLUG'
+    }
+
+    It 'folds underscores so Survival_1 matches the survival-1 pod slug' {
+        $script:rollingScript | Should -Match 'gsub\(/_/'
+    }
+
+    It 'fails the roll when a map never reports ready' {
+        $script:rollingScript | Should -Match 'map-ready-timeout'
+    }
+
+    It 'gives world loading a longer deadline than container startup' {
+        $script:rollingScript | Should -Match 'MAP_DEADLINE'
+    }
+
+    It 'no longer claims readiness on the pod condition alone' {
+        # The success message must not promise more than was verified.
+        $libText = Get-Content (Join-Path $PSScriptRoot '..\app\server\lib\Maps.ps1') -Raw
+        $libText | Should -Not -Match 'Every replacement reached Ready'
+        $libText | Should -Match 'Every map finished loading and reported ready'
+    }
+}
+
 Describe 'Director-driven map status' {
     BeforeAll {
         $script:bg = [pscustomobject]@{ status=[pscustomobject]@{ servers=@(

@@ -657,6 +657,19 @@ Describe 'GameConfig: client-apply flag covers every game-file setting' -Tag 'Ga
         Test-DuneGameConfigValueIsDefault -Key 'm_WaterConsumptionRate' -Value '1.0' | Should -BeTrue
         Test-DuneGameConfigValueIsDefault -Key 'm_WaterConsumptionRate' -Value '2.0' | Should -BeFalse
     }
+
+    It 'only queues a deprecated key for removal when the file actually contains it' {
+        # Regression: every deprecated key used to be queued unconditionally, so
+        # saving one setting reported "removed 18 keys" against a file that held
+        # none of them. The scrub must be driven by the file's real contents.
+        $src = (Get-Command Save-DuneGameConfigClient).ScriptBlock.ToString()
+        $deprecatedLoop = [regex]::Match(
+            $src,
+            '(?s)foreach \(\$dk in \$script:DuneGameConfigDeprecatedManagedKeys\).*?\n\s*\}'
+        ).Value
+        $deprecatedLoop | Should -Not -BeNullOrEmpty
+        $deprecatedLoop | Should -Match '\$existing -match'
+    }
 }
 
 Describe 'GameConfig: reset-to-default removes the key from the INI' -Tag 'GameConfig' {

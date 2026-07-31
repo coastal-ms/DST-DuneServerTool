@@ -857,7 +857,7 @@ export function GameConfig() {
                 : 'Restart only running game-server pods, one at a time, and wait for each replacement to become Ready'}
             >
               <Icon name={reloadingPods ? 'Loader2' : 'RefreshCw'} size={14} className={reloadingPods ? 'animate-spin' : ''} />
-              {reloadingPods ? 'Applying to pods…' : 'Apply INIs to pods'}
+              {reloadingPods ? 'Restarting battlegroup…' : 'Apply INIs & restart'}
             </button>
             <button
               type="button"
@@ -904,7 +904,7 @@ export function GameConfig() {
             you have a restore point — backups are saved on the server next to each file and can be restored via the File Browser.
           </p>
           <p className="text-xs text-warning/90 leading-relaxed mt-1.5">
-            Some settings are read only when a game pod starts. Use “Apply INIs to pods” after saving to reload game pods sequentially without restarting the database or full battlegroup.
+            Some settings are read only when a game pod starts. Use “Apply INIs &amp; restart” after saving to do a clean battlegroup restart so every map reloads with the new values.
           </p>
           <button
             type="button"
@@ -1673,7 +1673,7 @@ function CategoryCard({
                 These server CVars are written only to the battlegroup&apos;s <span className="font-mono text-text">UserEngine.ini</span> under <span className="font-mono text-text">[ConsoleVariables]</span>. They are not copied to this PC&apos;s local client <span className="font-mono text-text">Game.ini</span>.
               </p>
               <p className="mt-1.5">
-                This catalogue contains 33 testable controls decoded from server build 1.4.10.4. Double Difficulty Loot and the three Landsraad reward multipliers have community field confirmation; vehicle heat, power, overheat, and limit controls proven ineffective were removed. Other controls may have no effect or unintended gameplay consequences. The dehydration-zone control is omitted because Funcom warns that enabling it crashes clients. Back up first, change one setting at a time, then use Apply INIs to pods before testing.
+                This catalogue contains 33 testable controls decoded from server build 1.4.10.4. Double Difficulty Loot and the three Landsraad reward multipliers have community field confirmation; vehicle heat, power, overheat, and limit controls proven ineffective were removed. Other controls may have no effect or unintended gameplay consequences. The dehydration-zone control is omitted because Funcom warns that enabling it crashes clients. Back up first, change one setting at a time, then use Apply INIs &amp; restart before testing.
               </p>
             </div>
           )}
