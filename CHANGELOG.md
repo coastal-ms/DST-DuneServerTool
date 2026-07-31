@@ -24,6 +24,11 @@ here cover everything those tags shipped.
 
 - **Experimental Game Config no longer requires an acknowledgement.** The card kept its warning about these being server-only test settings, but the tick-box that gated editing has been removed — the controls are editable as soon as the card is expanded.
 - **Every server `Game.ini` setting can now be applied client-side.** Seventeen settings across Storm Cycle, Building, Guilds & Economy, PvP & Security, Taxation and Sandworm were written to the server's `Game.ini` — which the client also reads — but were not offered for client-side apply, while their neighbours in the same sections were. All game-file settings now carry the flag; console variables in `UserEngine.ini` remain server-only, as they should. Defaults are still never written to a player's `Game.ini`: a value equal to its default is stripped from the file, so only settings actually changed from default are handed out.
+- **Apply INIs now restarts the battlegroup.** The button previously rolled the game-server pods one at a time to keep other maps up. It reported success as soon as each container passed its readiness probe, while the game server was still loading the world — so it claimed the maps were back when they were not. Waiting for each map to genuinely report ready showed the real cost: roughly two minutes per map, sequentially. A battlegroup restart reloads every map in parallel and is simply faster, and the availability it was trading for never existed — restarting the Overmap disconnects players regardless of which map they are on. Both this button and the Landsraad card now run the same `restart` command as the Commands screen, so every path behaves identically and clears the stale bot run-flags a restart requires.
+
+### Fixed
+
+- **Client apply no longer reports keys it did not remove.** Every deprecated key was queued for removal on every save, whether or not the file contained it, and the result counted the queue. Saving a single setting could report "removed 18 keys" against a file that held none of them. The cleanup now reads the file first and only removes keys actually present, so the count reflects what changed.
 
 ## [13.0.0] - 2026-07-30
 

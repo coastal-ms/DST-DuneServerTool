@@ -198,9 +198,16 @@ Register-DuneRoute -Method PUT -Path '/api/gameconfig' -Handler {
 }
 
 # -----------------------------------------------------------------------------
-# POST /api/gameconfig/reload-pods — apply startup-read INI changes without a
-# full battlegroup restart. Restarts only operator-owned game-server pods,
-# sequentially, waiting for each replacement to become Ready.
+# POST /api/gameconfig/reload-pods — apply startup-read INI changes by doing a
+# clean battlegroup restart.
+#
+# This used to roll the game-server pods one at a time to keep the other maps up.
+# That looked faster than it was: it returned as soon as each container passed
+# its Kubernetes readiness probe, while the game server was still loading the
+# world. Waiting for the maps to genuinely report ready made the honest cost
+# visible - roughly two minutes per map, sequentially - which is slower than a
+# battlegroup restart that reloads every map in parallel. The rolling path is
+# retained in lib/Maps.ps1 for callers that need per-map restarts.
 # -----------------------------------------------------------------------------
 Register-DuneRoute -Method POST -Path '/api/gameconfig/reload-pods' -Handler {
     param($req, $res, $routeParams, $body)
@@ -211,14 +218,17 @@ Register-DuneRoute -Method POST -Path '/api/gameconfig/reload-pods' -Handler {
     }
     if (-not (Test-DunePlayerGuard -Req $req -Res $res -Ip $ctx.ip)) { return }
     try {
-        $r = Restart-DuneGameServerPodsRolling -Ip $ctx.ip
+        $r = Invoke-DuneBattlegroupRestart -Ip $ctx.ip
         if (-not $r.ok) {
-            Write-DuneError -Response $res -Status ([int]$r.status) -Message $r.message
+            Write-DuneError -Response $res -Status 502 -Message $r.message
             return
         }
-        Write-DuneJson -Response $res -Body $r
+        Write-DuneJson -Response $res -Body @{
+            ok      = $true
+            message = 'Battlegroup restart underway - every map reloads together. Watch Server Health; it takes a couple of minutes to come back.'
+        }
     } catch {
-        Write-DuneError -Response $res -Status 502 -Message "Game-server pod reload failed: $($_.Exception.Message)"
+        Write-DuneError -Response $res -Status 502 -Message "Battlegroup restart failed: $($_.Exception.Message)"
     }
 }
 

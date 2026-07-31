@@ -666,16 +666,11 @@ WHERE term_id = $($term.term_id)::bigint;
     }
 }
 
-# Clean battlegroup restart, detached so the HTTP request returns promptly; the
-# UI polls Server Health while it converges (~2-3 min). Mirrors the Sietches
-# config flow, which uses the same appliance command.
+# Clean battlegroup restart so the game re-reads the Landsraad term. Delegates to
+# the shared helper in lib/Maps.ps1, which runs the same 'restart' command as the
+# Commands screen, so Game Config's "Apply INIs & restart" and this card behave
+# identically.
 function Invoke-DuneLandsraadBgRestart {
-    param([Parameter(Mandatory)][string]$Ip)
-    $cmd = 'nohup /home/dune/.dune/bin/battlegroup restart >/tmp/dst-landsraad-restart.log 2>&1 & echo started'
-    $out = ((Invoke-V6Ssh -Ip $Ip -Cmd $cmd -TimeoutSec 30) -join ' ').Trim()
-    return @{
-        ok      = $true
-        started = $out
-        message = 'Clean battlegroup restart underway - watch Server Health; it takes a couple of minutes to come back.'
-    }
+    param([string]$Ip)
+    return Invoke-DuneBattlegroupRestart -Ip $Ip
 }
