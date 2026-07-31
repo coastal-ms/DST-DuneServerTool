@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { Icon } from '../../components/Icon'
+import { useCardCollapse } from '../../components/CollapsibleCard'
 import { ApiError } from '../../api/client'
 import {
   getFlsWorld,
@@ -27,7 +28,7 @@ function stepIcon(status: FlsStep['status']): string {
 }
 
 export function FlsTokenCard() {
-  const [open, setOpen] = useState(false)
+  const { open, setOpen } = useCardCollapse('settings.flsToken', false)
   const [world, setWorld] = useState<FlsWorld | null>(null)
   const [worldLoading, setWorldLoading] = useState(false)
   const [token, setToken] = useState('')

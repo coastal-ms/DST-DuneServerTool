@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { ApiError, api } from '../../api/client'
 import { Icon } from '../../components/Icon'
+import { CollapsibleCard } from '../../components/CollapsibleCard'
 
 type PublicIpMode = 'ddns' | 'manual'
 
@@ -366,13 +367,16 @@ export function PublicIpCard() {
   }
 
   return (
-    <div className="card mb-4 p-6">
+    <CollapsibleCard
+      id="settings.publicIp"
+      icon="Globe2"
+      title="Public IP / DDNS"
+      titleClassName="text-lg font-semibold"
+      headerClassName="px-6 pt-6 pb-2"
+      bodyClassName="px-6 pb-6"
+    >
       <div className="flex items-start justify-between gap-3 mb-4">
         <div className="min-w-0">
-          <div className="flex items-center gap-2 mb-1">
-            <Icon name="Globe2" size={18} className="text-text-muted" />
-            <h2 className="text-lg font-semibold">Public IP / DDNS</h2>
-          </div>
           <p className="text-sm text-text-dim">
             Use this after your ISP changes your public IP. DST still applies a numeric IPv4 address to Dune, but it can resolve a DDNS hostname first.
           </p>
@@ -647,6 +651,6 @@ export function PublicIpCard() {
           {working === 'apply' ? 'Applying…' : 'Apply public IP'}
         </button>
       </div>
-    </div>
+    </CollapsibleCard>
   )
 }

@@ -8,11 +8,12 @@
 
 import { useCallback, useEffect, useState } from 'react'
 import { Icon } from '../../components/Icon'
+import { useCardCollapse } from '../../components/CollapsibleCard'
 import { ApiError } from '../../api/client'
 import { getHyperVLan, saveHyperVLan, testHyperVLan, getHyperVLanCredential, saveHyperVLanCredential, deleteHyperVLanCredential, type HyperVLanTest } from '../../api/setup'
 
 export function HyperVLanCard() {
-  const [open, setOpen] = useState(false)
+  const { open, setOpen } = useCardCollapse('settings.hyperVLan', false)
   const [hostIp, setHostIp] = useState('')
   const [enabled, setEnabled] = useState(false)
   const [savedMode, setSavedMode] = useState<'local' | 'lan'>('local')
