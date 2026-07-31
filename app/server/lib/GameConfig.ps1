@@ -140,6 +140,11 @@ $script:DuneGameConfigSchema = @(
 
     # --- Hydration ---
     @{ Section=$script:DuneGcSecHydration; Key='m_bHydrationEnabled'; File='game'; Type='bool'; Default='True'; Label='Hydration Enabled'; Help='Master toggle for the hydration / thirst system. Off = players never get thirsty. Also needs client-side apply.'; ClientApply=$true; Category='Hydration' }
+    # Server-side console variable rather than a game INI key, so it applies on
+    # the server alone and needs no client-side apply. Reported working by a
+    # community tester; the compiled default was not recovered, but sun exposure
+    # is active in shipping gameplay.
+    @{ Section=$script:DuneGcSecConsole; Key='Hydration.SunExposureEnabled'; File='engine'; Type='bool01'; Default='1'; Label='Sun Exposure Enabled'; Help='Whether players take sun-exposure water drain. 0 disables sun exposure; field-reported working. Server-side only - no client apply needed.'; Category='Hydration' }
     @{ Section=$script:DuneGcSecHydration; Key='m_BiomeTierUpdateRateSeconds'; File='game'; Type='float'; Min=0; Unit='sec'; Default='2.5'; Label='Biome Tier Update Rate'; Help='How often (seconds) the biome hydration tier is re-evaluated. Also needs client-side apply.'; ClientApply=$true; Category='Hydration' }
 
     # --- Loot & Death (DuneSandboxGameModeBase) ---
