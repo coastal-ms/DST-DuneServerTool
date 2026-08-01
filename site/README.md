@@ -90,9 +90,12 @@ site/
 
 ## Deployment
 
-A GitHub Actions workflow will be added once the site content is locked in. The general plan is: on push to `main` or release tag, build → upload `dist/` → publish to GitHub Pages. Until then, deploy manually if needed:
+`.github/workflows/deploy-site.yml` builds and publishes the site to GitHub
+Pages when a site file, `CHANGELOG.md`, or a screenshot changes on `main`.
+It can also be run manually from the Actions tab. The workflow installs locked
+dependencies, builds `site/dist/`, uploads the Pages artifact, and deploys it to
+<https://coastal-ms.github.io/DST-DuneServerTool/>.
 
 ```powershell
 npm run build
-# upload dist/ wherever
 ```

@@ -9,14 +9,14 @@
 
 **🌐 Website & feature tour: [coastal-ms.github.io/DST-DuneServerTool](https://coastal-ms.github.io/DST-DuneServerTool/)** — screenshots, install guide, and the full changelog.
 
-The current release is **v12.20.0**. The in-app version label and the
-website show plain semver tags (e.g. `v12.20.0`) — the previous
+The current release is **v13.0.5**. The in-app version label and the
+website show plain semver tags (e.g. `v13.0.5`) — the previous
 Roman-numeral stylization has been removed.
 
-> ## ✅ Confirmed compatible with Dune: Awakening **1.4.10.3**
-> DST **v12.19.x** is verified working against the **latest Funcom release** —
+> ## ✅ Confirmed compatible with Dune: Awakening **1.4.10.4**
+> DST **v13.0.x** is verified working against the **latest Funcom release** —
 > both the game **client** and the **self-hosted server** software — as of the
-> **1.4.10.3** patch. Compatibility was checked live against a running
+> **1.4.10.4** patch. Compatibility was checked live against a running
 > self-hosted server on that build, covering battlegroup management,
 > on-demand map spin-up, game-config and database editing, and backups.
 
@@ -28,6 +28,24 @@ the sidebar's **Web Portal** button hands the portal off to your default
 browser and keeps the server running in the background.
 
 ![Server Health](docs/img/server-health.png)
+
+### New in v13
+
+- **Experimental Game Config controls** expose testable gameplay CVars for
+  rewards, vehicles, sandworms, spice, buildings, combat, NPCs, journey
+  instances, and safe zones. They are isolated from proven settings, carry
+  explicit warnings, and show their exact keys.
+- **Optional local client `Engine.ini` management** mirrors settings that the
+  Dune client must also evaluate, including vehicle limits. It is disabled by
+  default, requires an explicit opt-in, never overrides public/live servers,
+  and removes only DST-managed values when switched off. Existing local
+  `Game.ini` support remains available independently.
+- **Fuel Burning Duration now applies at server startup** as well as through
+  `UserEngine.ini`, so changes take effect after the battlegroup restart.
+- **Every major page card can be collapsed** and remembers its state, letting
+  long Dashboard, Game Config, Database, and Settings pages stay focused.
+- **Active Spice distinguishes live map instances** and hides stale historical
+  rows unless battlegroup state cannot be read.
 
 ### New in v12.20
 
@@ -651,7 +669,12 @@ up on the server before every write**. A reminder prompts you to
 hit **Backup settings** first — and a **View backups** button lists the recent
 `.dstbak-*` restore points next to each file. Save flushes the files back to
 the VM and invalidates the Server Health port cache so any port change is
-reflected immediately.
+reflected immediately. Changed game-file settings can also be applied to the
+local Dune client. `Game.ini` support is always available; client `Engine.ini`
+management is a separate, disabled-by-default opt-in for settings the client
+must evaluate too. DST identifies which file each value belongs in, warns about
+multiplayer compatibility, blocks Engine.ini writes while the game is running,
+and removes only its own managed Engine.ini values when the opt-in is disabled.
 
 ### 🎮 Gameplay Admin
 
