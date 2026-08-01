@@ -71,6 +71,64 @@ Describe 'Rolling INI reload waits for the map, not just the pod' {
     }
 }
 
+Describe 'Battlegroup restart stages console variables' {
+
+    # Console variables only reach the servers as startup commands, and those are
+    # rebuilt here rather than on save so that saving never replaces a running pod
+    # and no stale command can outrank a hand-edited INI.
+
+    It 'syncs the startup console variables before launching the restart' {
+        $order = New-Object 'System.Collections.Generic.List[string]'
+        Set-Item -Path 'function:global:Sync-DuneStartupConsoleVariableOverrides' -Value {
+            param([string]$Ip)
+            $order.Add("sync:$Ip")
+            @{ Success = $true }
+        }.GetNewClosure()
+        Set-Item -Path 'function:global:Invoke-DuneCommandExternal' -Value {
+            param([string]$Name)
+            $order.Add("cmd:$Name")
+            @{ ok = $true }
+        }.GetNewClosure()
+        try {
+            $r = Invoke-DuneBattlegroupRestart -Ip '192.0.2.1'
+            $r.ok | Should -BeTrue
+            @($order) | Should -Be @('sync:192.0.2.1', 'cmd:restart')
+        } finally {
+            Remove-Item 'function:global:Sync-DuneStartupConsoleVariableOverrides' -ErrorAction SilentlyContinue
+            Remove-Item 'function:global:Invoke-DuneCommandExternal' -ErrorAction SilentlyContinue
+        }
+    }
+
+    It 'still restarts when the console-variable sync fails' {
+        Set-Item -Path 'function:global:Sync-DuneStartupConsoleVariableOverrides' -Value {
+            param([string]$Ip)
+            throw 'battlegroup unreachable'
+        }
+        $script:ranRestart = $false
+        Set-Item -Path 'function:global:Invoke-DuneCommandExternal' -Value {
+            param([string]$Name)
+            $script:ranRestart = $true
+            @{ ok = $true }
+        }
+        try {
+            $r = Invoke-DuneBattlegroupRestart -Ip '192.0.2.1'
+            $r.ok | Should -BeTrue
+            $r.startupApply.ok | Should -BeFalse
+            $script:ranRestart | Should -BeTrue
+        } finally {
+            Remove-Item 'function:global:Sync-DuneStartupConsoleVariableOverrides' -ErrorAction SilentlyContinue
+            Remove-Item 'function:global:Invoke-DuneCommandExternal' -ErrorAction SilentlyContinue
+        }
+    }
+
+    It 'does not apply console variables on a Game Config save' {
+        $routeText = Get-Content (Join-Path $PSScriptRoot '..\app\server\routes\GameConfig.ps1') -Raw
+        $saveSection = $routeText.Substring(0, $routeText.IndexOf('/api/gameconfig/reload-pods'))
+        $saveSection | Should -Not -Match 'Sync-DuneStartupConsoleVariableOverrides'
+        $saveSection | Should -Match 'restartRequired'
+    }
+}
+
 Describe 'Director-driven map status' {
     BeforeAll {
         $script:bg = [pscustomobject]@{ status=[pscustomobject]@{ servers=@(

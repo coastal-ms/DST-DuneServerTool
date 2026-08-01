@@ -158,11 +158,12 @@ Register-DuneRoute -Method PUT -Path '/api/gameconfig' -Handler {
 
     try {
         Save-DuneGameConfig -Ip $ctx.ip -Updates $structured.ToArray()
-        $startupUpdate = $structured | Where-Object { $_.key -in $script:DuneStartupConsoleVariableKeys } | Select-Object -First 1
-        $startupApply = $null
-        if ($startupUpdate) {
-            $startupApply = Sync-DuneStartupConsoleVariableOverrides -Ip $ctx.ip
-        }
+        # Console variables are staged, never applied here. The values live in
+        # UserEngine.ini; the matching startup commands are rebuilt from that file
+        # at the start of every battlegroup restart. Patching pod specs on save
+        # would make the operator replace the Hagga pod and disconnect its players
+        # the moment someone hits Save.
+        $restartRequired = [bool]($structured | Where-Object { $_.key -in $script:DuneStartupConsoleVariableKeys } | Select-Object -First 1)
         $cfg = Get-DuneGameConfig -Ip $ctx.ip
         $clientApply = Get-DuneGameConfigClientApplyNotice -Updates $structured.ToArray()
 
@@ -196,7 +197,7 @@ Register-DuneRoute -Method PUT -Path '/api/gameconfig' -Handler {
             clientApply = $clientApply
         }
         if ($landsraadApply) { $body.landsraadGoalApply = $landsraadApply }
-        if ($startupApply) { $body.startupConsoleApply = $startupApply }
+        if ($restartRequired) { $body.restartRequired = $true }
         Write-DuneJson -Response $res -Body $body
     } catch {
         Write-DuneError -Response $res -Status 500 -Message "Game config save failed: $($_.Exception.Message)"
@@ -224,7 +225,8 @@ Register-DuneRoute -Method POST -Path '/api/gameconfig/reload-pods' -Handler {
     }
     if (-not (Test-DunePlayerGuard -Req $req -Res $res -Ip $ctx.ip)) { return }
     try {
-        Sync-DuneStartupConsoleVariableOverrides -Ip $ctx.ip | Out-Null
+        # Invoke-DuneBattlegroupRestart rebuilds the startup console variables from
+        # the current INI before restarting, so no separate sync is needed here.
         $r = Invoke-DuneBattlegroupRestart -Ip $ctx.ip
         if (-not $r.ok) {
             Write-DuneError -Response $res -Status 502 -Message $r.message
