@@ -13,6 +13,12 @@ here cover everything those tags shipped.
 
 ## [Unreleased]
 
+## [13.0.4] - 2026-07-31
+
+### Fixed
+
+- **Fuel Burning Duration now applies through both config and server startup.** Field testing found that `dw.FuelBurningMultiplier` worked when supplied through both `UserEngine.ini` and `-ExecCmds`, while DST's prior INI-only control had no effect. DST now merges the value into each Hagga server's startup argument, preserving per-sietch names and other pod overrides. Resetting to `1` removes the startup override. Restarting the battlegroup applies the new duration to existing generator fuel too.
+
 ## [13.0.3] - 2026-07-31
 
 ### Changed

@@ -115,6 +115,141 @@ m_bShouldForceEnablePvpOnAllPartitions=True
     }
 }
 
+Describe 'Fuel burning startup override' -Tag 'GameConfig' {
+    It 'merges fuel and a per-sietch name into one ExecCmds argument' {
+        $arguments = @(_Set-V6ExecCommand `
+            -Arguments @('-log', '-execcmds="Bgd.ServerDisplayName ''Hagga, Prime''"') `
+            -CommandName 'dw.FuelBurningMultiplier' `
+            -Command 'dw.FuelBurningMultiplier 10')
+
+        $arguments | Should -Contain '-log'
+        @($arguments | Where-Object { $_ -like '-execcmds=*' }).Count | Should -Be 1
+        $arguments | Should -Contain '-execcmds="Bgd.ServerDisplayName ''Hagga, Prime'',dw.FuelBurningMultiplier 10"'
+    }
+
+    It 'removes only the fuel command when reset to default' {
+        $arguments = @(_Set-V6ExecCommand `
+            -Arguments @('-execcmds="Bgd.ServerDisplayName ''Hagga'',dw.FuelBurningMultiplier 10"') `
+            -CommandName 'dw.FuelBurningMultiplier' `
+            -Command $null)
+
+        $arguments | Should -Be @('-execcmds="Bgd.ServerDisplayName ''Hagga''"')
+    }
+
+    It 'treats default with no existing pod overrides as a successful no-op' {
+        Mock Get-V6Battlegroup {
+            @{
+                Ns = 'dune-ns'
+                Name = 'dune-bg'
+                Bg = [pscustomobject]@{ spec = [pscustomobject]@{
+                    serverGroup = [pscustomobject]@{ template = [pscustomobject]@{ spec = [pscustomobject]@{
+                        sets = @([pscustomobject]@{
+                            map = 'Survival_1'
+                            dedicatedScaling = $false
+                            partitions = @(1)
+                        })
+                    } } }
+                } }
+            }
+        }
+        Mock _Invoke-V6BgJsonPatch { throw 'Patch must not run for a no-op reset.' }
+
+        $result = Set-V6FuelBurningMultiplier -Ip '192.0.2.1' -Value $null
+
+        $result.Success | Should -BeTrue
+        $result.NoChange | Should -BeTrue
+        Should -Invoke _Invoke-V6BgJsonPatch -Times 0
+    }
+
+    It 'patches every Hagga partition while preserving names and other pod overrides' {
+        Mock Get-V6Battlegroup {
+            @{
+                Ns = 'dune-ns'
+                Name = 'dune-bg'
+                Bg = [pscustomobject]@{ spec = [pscustomobject]@{
+                    serverGroup = [pscustomobject]@{ template = [pscustomobject]@{ spec = [pscustomobject]@{
+                        sets = @(
+                            [pscustomobject]@{
+                                map = 'Survival_1'
+                                dedicatedScaling = $false
+                                partitions = @(1, 4)
+                                podSpecs = @(
+                                    [pscustomobject]@{
+                                        index = 1
+                                        arguments = @('-execcmds="Bgd.ServerDisplayName ''Hagga''"')
+                                        nodeSelector = @{ disk = 'fast' }
+                                    }
+                                )
+                            },
+                            [pscustomobject]@{ map = 'Overmap'; dedicatedScaling = $false; partitions = @(2) }
+                        )
+                    } } }
+                } }
+            }
+        }
+        $script:fuelPatches = $null
+        Mock _Invoke-V6BgJsonPatch {
+            param($Ip, $Info, $Patches)
+            $script:fuelPatches = $Patches
+            @{ Success = $true; Raw = 'patched'; Error = $null }
+        }
+
+        $result = Set-V6FuelBurningMultiplier -Ip '192.0.2.1' -Value '10.0'
+
+        $result.Success | Should -BeTrue
+        $result.Value | Should -Be '10'
+        @($script:fuelPatches).Count | Should -Be 1
+        $specs = @($script:fuelPatches[0].value)
+        @($specs.index | Sort-Object) | Should -Be @(1, 4)
+        $specs[0].nodeSelector.disk | Should -Be 'fast'
+        $specs[0].arguments | Should -Contain '-execcmds="Bgd.ServerDisplayName ''Hagga'',dw.FuelBurningMultiplier 10"'
+        $specs[1].arguments | Should -Contain '-execcmds="dw.FuelBurningMultiplier 10"'
+    }
+
+    It 'keeps the fuel command when sietch names are changed' {
+        Mock Get-V6Battlegroup {
+            @{
+                Ns = 'dune-ns'
+                Name = 'dune-bg'
+                Bg = [pscustomobject]@{ spec = [pscustomobject]@{
+                    serverGroup = [pscustomobject]@{ template = [pscustomobject]@{ spec = [pscustomobject]@{
+                        sets = @([pscustomobject]@{
+                            map = 'Survival_1'
+                            dedicatedScaling = $false
+                            replicas = 1
+                            partitions = @(1)
+                            podSpecs = @([pscustomobject]@{
+                                index = 1
+                                arguments = @('-execcmds="dw.FuelBurningMultiplier 10"')
+                            })
+                        })
+                    } } }
+                    database = [pscustomobject]@{ template = [pscustomobject]@{ spec = [pscustomobject]@{
+                        deployment = [pscustomobject]@{ spec = [pscustomobject]@{
+                            worldPartitions = @([pscustomobject]@{
+                                map = 'Survival_1'
+                                partitions = @([pscustomobject]@{ id=1; dimension=0; disable=$false; maxX=1; maxY=1; minX=0; minY=0 })
+                            })
+                        } }
+                    } } }
+                } }
+            }
+        }
+        $script:sietchPatches = $null
+        Mock _Invoke-V6BgJsonPatch {
+            param($Ip, $Info, $Patches)
+            $script:sietchPatches = $Patches
+            @{ Success = $true; Raw = 'patched'; Error = $null }
+        }
+
+        $result = Set-V6SietchConfig -Ip '192.0.2.1' -Count 1 -Names @('Hagga')
+
+        $result.Success | Should -BeTrue
+        $podPatch = $script:sietchPatches | Where-Object { $_.path -like '*/podSpecs' }
+        $podPatch.value[0].arguments | Should -Contain '-execcmds="dw.FuelBurningMultiplier 10,Bgd.ServerDisplayName ''Hagga''"'
+    }
+}
+
 Describe 'ConvertTo-DuneIniManaged: duplicate-section de-dup' -Tag 'GameConfig' {
 
     It 'collapses a pre-existing duplicate NON-target header to exactly one' {
