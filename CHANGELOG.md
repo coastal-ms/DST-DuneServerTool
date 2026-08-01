@@ -15,12 +15,17 @@ here cover everything those tags shipped.
 
 ### Added
 
-- **23 more Experimental server settings.** The catalogue grows from 42 to 65 controls, including a deathstill conversion time, a player death-loot toggle, a server-wide PvP damage switch, base backup tool limits and switches, a Landsraad control-point capture target, sandworm enrage/target-switching thresholds and threat-warning distances, vehicle recovery, backup-tool and wreck-despawn options, and a player hard-cap override. Every description quotes Funcom's own wording, and anything Funcom does not give a default for is left unset rather than guessed. These are unconfirmed: they are what the server exposes, not a promise about what each one does.
+- **95 more Experimental server settings, in two lists.** Game Config gains an **Experimental 2** section alongside the existing one, together holding 137 console variables read out of the server binary — up from 42. New options include a deathstill conversion time, base backup tool limits and switches, a Landsraad control-point capture target, sandworm enrage/target-switching thresholds, threat-warning distances and breach-safety checks, encounter placement and cooldown controls, hazard zones and quicksand behaviour, NPC aiming and door-access rules, returning-player rewards, contract visibility, vehicle disassembly and collision rules, a server-wide PvP damage switch, and a player hard-cap override. Both lists start rolled up, and the second is simply the overflow of the same set — it is applied exactly the same way.
 - **Two settings that were only half-present are now complete.** `dw.FuelsBurningDuration` sets fuel burn time in seconds alongside the existing multiplier, and the placeable shelter threshold joins the building shelter threshold.
 
 ### Fixed
 
 - **NPC Attack Limit Override can now actually take effect.** It depends on a separate switch that was never exposed, so on its own it had nothing to act on. That switch is now available next to it.
+
+### Notes
+
+- Every new description quotes Funcom's own wording, and anything Funcom does not give a default for is left unset rather than guessed. These are unconfirmed: they are what the server exposes, not a promise about what each one does.
+- Console variables that duplicate a setting Game Config already offers are deliberately not listed, so no behaviour ends up with two switches that can disagree.
 
 ## [13.0.6] - 2026-08-01
 
