@@ -545,29 +545,95 @@ Describe 'DuneGameConfigSchema: experimental binary CVars' -Tag 'GameConfig' {
             'JourneyStory.Instance.Cap'
             'SafeZone.EnableScale'
             'SafeZone.Scale'
+            # Second decode pass (build 2051294-0-shipping), UTF-16 aware.
+            'NPC.EnableNpcAttackLimits'
+            'dw.FuelsBurningDuration'
+            'dw.PlaceableShelterThresholdOverride'
+            'Deathstill.ConversionTimeOverride'
+            'Dune.PlayerDeathLootEnabled'
+            'Dac.DisablePvpDamage'
+            'dw.EnableShelterSystem'
+            'dw.BaseBackupMaxNumberOfBackups'
+            'dw.bBaseBackupToolBackupEnabled'
+            'dw.bBaseBackupToolPlacementEnabled'
+            'dw.bBaseBackupToolRecycleEnabled'
+            'dw.OverrideBaseBackupToolTimeRestrictionInSeconds'
+            'Landsraad.ControlPointCaptureProgressTarget'
+            'Sandworm.SandwormEnrageThreshold'
+            'Sandworm.SandwormTargetChangeThreshold'
+            'Sandworm.SandwormTargetDropThreshold'
+            'Sandworm.ThreatWarning.DefaultDistance'
+            'Sandworm.ThreatWarning.DeepDesertDistance'
+            'Vehicle.RecoveryEnabled'
+            'Vehicle.BackupTool.Enabled'
+            'Vehicle.WreckedStateDespawnDuration'
+            'Vehicle.AmmoBlocksBackup'
+            'Bgd.ServerPlayerHardCap'
         )
     }
 
-    It 'isolates all 42 testable binary-discovered controls in the Experimental category' {
+    It 'isolates every binary-discovered control in the Experimental category' {
         $fields = @{}
         foreach ($f in $script:DuneGameConfigSchema) { $fields[$f.Key] = $f }
         $experimental = @($script:DuneGameConfigSchema | Where-Object Category -eq 'Experimental')
 
-        $experimental.Count | Should -Be 42
+        $experimental.Count | Should -Be 65
         @($experimental.Key | Sort-Object) | Should -Be @($script:ExperimentalKeys | Sort-Object)
         foreach ($key in $script:ExperimentalKeys) {
             $fields.ContainsKey($key) | Should -BeTrue
             $fields[$key].Section | Should -Be $script:DuneGcSecConsole
             $fields[$key].File | Should -Be 'engine'
             $fields[$key].Category | Should -Be 'Experimental'
-            $fields[$key].ClientApply | Should -BeTrue
             @($script:DuneStartupConsoleVariableKeys) | Should -Contain $key
+            if ($key -notlike 'Bgd.*') {
+                $fields[$key].ClientApply | Should -BeTrue
+            }
         }
-        @($script:DuneStartupConsoleVariableKeys).Count | Should -Be 42
+        @($script:DuneStartupConsoleVariableKeys).Count | Should -Be 65
     }
 
-    It 'excludes the Funcom-documented client-crash control' {
-        @($script:DuneGameConfigSchema.Key) | Should -Not -Contain 'Hazard.DehydrationZonesEnabled'
+    It 'never offers to mirror a server-instance control into a player client config' {
+        # Bgd.* configures this server instance. Writing it into a player's local
+        # Engine.ini would be meaningless at best and confusing at worst.
+        $bgd = @($script:DuneGameConfigSchema | Where-Object { $_.Key -like 'Bgd.*' })
+        $bgd.Count | Should -BeGreaterThan 0
+        foreach ($f in $bgd) { $f.ClientApply | Should -Not -BeTrue }
+    }
+
+    It 'exposes the gate that the NPC attack-limit override depends on' {
+        # NPC.AttackLimitOverride does nothing unless NPC.EnableNpcAttackLimits is
+        # on, so shipping the override alone promised something it could not do.
+        @($script:DuneGameConfigSchema.Key) | Should -Contain 'NPC.AttackLimitOverride'
+        @($script:DuneGameConfigSchema.Key) | Should -Contain 'NPC.EnableNpcAttackLimits'
+    }
+
+    It 'ships both halves of the fuel and shelter pairs' {
+        foreach ($pair in @(
+            @('dw.FuelBurningMultiplier', 'dw.FuelsBurningDuration'),
+            @('dw.BuildingShelterThresholdOverride', 'dw.PlaceableShelterThresholdOverride')
+        )) {
+            @($script:DuneGameConfigSchema.Key) | Should -Contain $pair[0]
+            @($script:DuneGameConfigSchema.Key) | Should -Contain $pair[1]
+        }
+    }
+
+    It 'excludes controls that crash clients, inject faults, or guard data integrity' {
+        # Recovered from the binary but deliberately not exposed: the dehydration
+        # zones crash clients (DUNE-76437), the igw Auth* switches exist to crash
+        # or disconnect servers on purpose, and the duplicate-item switches guard
+        # against item duplication.
+        foreach ($key in @(
+            'Hazard.DehydrationZonesEnabled'
+            'dw.igw.EnableAuthConfirmGainingCrash'
+            'dw.igw.EnableAuthStartLosingDisconnect'
+            'dw.DisallowDuplicateDatabaseItems'
+            'dw.AllowPotentialDuplicatesOnTransfer'
+            'Abilities.BypassRespecRequirement'
+            'SecurityZones.ForceEnablePvp'
+            'dw.EnableDeveloperMode'
+        )) {
+            @($script:DuneGameConfigSchema.Key) | Should -Not -Contain $key
+        }
     }
 
     It 'restores the vehicle controls for dual INI and startup-command testing' {

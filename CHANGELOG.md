@@ -13,6 +13,15 @@ here cover everything those tags shipped.
 
 ## [Unreleased]
 
+### Added
+
+- **23 more Experimental server settings.** The catalogue grows from 42 to 65 controls, including a deathstill conversion time, a player death-loot toggle, a server-wide PvP damage switch, base backup tool limits and switches, a Landsraad control-point capture target, sandworm enrage/target-switching thresholds and threat-warning distances, vehicle recovery, backup-tool and wreck-despawn options, and a player hard-cap override. Every description quotes Funcom's own wording, and anything Funcom does not give a default for is left unset rather than guessed. These are unconfirmed: they are what the server exposes, not a promise about what each one does.
+- **Two settings that were only half-present are now complete.** `dw.FuelsBurningDuration` sets fuel burn time in seconds alongside the existing multiplier, and the placeable shelter threshold joins the building shelter threshold.
+
+### Fixed
+
+- **NPC Attack Limit Override can now actually take effect.** It depends on a separate switch that was never exposed, so on its own it had nothing to act on. That switch is now available next to it.
+
 ## [13.0.6] - 2026-08-01
 
 ### Changed
