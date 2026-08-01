@@ -391,7 +391,7 @@ function Get-DuneSietchNamesFromBgJson {
             foreach ($ps in @($s.podSpecs)) {
                 if (-not $ps.PSObject.Properties['arguments']) { continue }
                 foreach ($a in @($ps.arguments)) {
-                    if ("$a" -match "Bgd\.ServerDisplayName\s+'(.*)'") { $pairs += @{ id = [int]$ps.index; name = $Matches[1] }; break }
+                    if ("$a" -match "Bgd\.ServerDisplayName\s+'([^']*)'") { $pairs += @{ id = [int]$ps.index; name = $Matches[1] }; break }
                 }
             }
             break
