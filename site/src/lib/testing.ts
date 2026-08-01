@@ -25,7 +25,7 @@ export interface ActiveTestRelease {
 
 export function isStableMirror(release: GitHubTestRelease): boolean {
   const text = `${release.name ?? ""}\n${release.body ?? ""}`;
-  return /\b(?:test|stable)\s+mirror\b/i.test(text);
+  return /\b(?:test|stable)(?:[-\s]+channel)?[-\s]+mirror\b/i.test(text);
 }
 
 export function getActiveTestReleases(
