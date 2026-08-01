@@ -9,7 +9,7 @@ const release = await getLatestRelease();
 const versionLabel = formatDisplayVersion(release.version);
 
 // Latest Funcom Dune: Awakening release this build is verified against.
-const funcomVersion = "1.4.10.3";
+const funcomVersion = "1.4.10.4";
 
 const features = [
   {
@@ -22,7 +22,7 @@ const features = [
   },
   {
     title: "Setup, config & database",
-    body: "A three-path Setup Wizard for fresh installs, existing servers, or a VM on a separate Hyper-V host over your LAN (with remote install support), grouped INI editors, and Postgres-backed backup + SQL workflows — all guarded by DST-managed writes and safe defaults.",
+    body: "A three-path Setup Wizard, grouped server INI editors, optional local client Game.ini and Engine.ini management, and Postgres-backed backup + SQL workflows — all guarded by DST-managed writes, explicit opt-ins, and safe defaults.",
   },
 ];
 ---
@@ -88,7 +88,7 @@ const features = [
         The current release ({versionLabel}) is verified against Funcom's
         latest update — both the game <strong class="text-dune-text">client</strong>
         and the <strong class="text-dune-text">self-hosted server</strong>
-        software — confirmed live on the 1.4.10.3 build (July 14, 2026).
+        software — confirmed live on the 1.4.10.4 build (July 31, 2026).
         No update to DST is required.
       </p>
     </div>
@@ -117,10 +117,10 @@ const features = [
       <div class="grid sm:grid-cols-2 gap-x-12 gap-y-3 text-dune-muted">
         <div>✓ Server health dashboard + map-spin-up diagnostics</div>
         <div>✓ Live spice-field controls + restart actions</div>
-        <div>✓ Game config (UserGame.ini / UserEngine.ini) with Landsraad + Coriolis seed controls</div>
+        <div>✓ Game config with Experimental gameplay controls and client INI support</div>
         <div>✓ Embedded PowerShell terminal</div>
         <div>✓ Monaco SQL editor over Postgres + backup scheduling</div>
-        <div>✓ Two-path Setup Wizard for existing servers or fresh installs, plus Hyper-V over LAN for a remote/headless host</div>
+        <div>✓ Three-path Setup Wizard including Hyper-V over LAN for a remote/headless host</div>
         <div>✓ Remote portal support for phone-friendly monitoring</div>
         <div>✓ Built-in auto-updater</div>
         <div>✓ Optional auto-start at Windows sign-in</div>

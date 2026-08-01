@@ -22,7 +22,7 @@ const sections = [
     id: "gameconfig",
     title: "Game Config",
     img: "game-config.png",
-    body: "Grouped editor for UserGame.ini and UserEngine.ini with every setting labelled and typed. It reads the live INIs on load, writes changes into DST-managed blocks, and now covers Landsraad / Coriolis seed controls, per-setting reset-to-default behavior, and the newer backup restore points. The same workflow also powers DST's Setup Wizard, which now has three paths: existing servers, fresh installs, or Hyper-V over LAN for a VM on a separate host.",
+    body: "Grouped editor for UserGame.ini and UserEngine.ini with every setting labelled and typed. It reads the live server INIs, writes changes into backed-up DST-managed blocks, and covers Landsraad / Coriolis seeds, per-setting defaults, restore points, and isolated Experimental gameplay controls. Changed game-file settings can also be applied to the local Dune client: Game.ini support is always available, while Engine.ini management is disabled by default and requires an explicit opt-in for client-evaluated settings such as vehicle limits. File-aware previews and warnings explain multiplayer compatibility, block Engine.ini writes while the game is running, and remove only DST-managed values when the opt-in is turned off.",
   },
   {
     id: "gameplay",
