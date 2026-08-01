@@ -550,7 +550,6 @@ Describe 'DuneGameConfigSchema: experimental binary CVars' -Tag 'GameConfig' {
             'dw.FuelsBurningDuration'
             'dw.PlaceableShelterThresholdOverride'
             'Deathstill.ConversionTimeOverride'
-            'Dune.PlayerDeathLootEnabled'
             'Dac.DisablePvpDamage'
             'dw.EnableShelterSystem'
             'dw.BaseBackupMaxNumberOfBackups'
@@ -570,26 +569,125 @@ Describe 'DuneGameConfigSchema: experimental binary CVars' -Tag 'GameConfig' {
             'Vehicle.AmmoBlocksBackup'
             'Bgd.ServerPlayerHardCap'
         )
+
+        $script:Experimental2Keys = @(
+            'Combat.DuelingSystem.Enabled'
+            'Combat.CanDamageNonCombatNpc'
+            'Dac.EnableNearDeathDamageMitigation'
+            'Dac.EnableKnockbackDurationDamageScaling'
+            'Dac.ShieldBreakWhileAirborne'
+            'Dune.DisableShieldOnShooting'
+            'Abilities.HoltzmanShield.UsePowerWhenDisabled'
+            'Abilities.AllowRepsecOutsideLandclaim'
+            'Dune.LootNpcDroppedOnCorpseEnabled'
+            'Dune.LootNpcDroppedOnContainerEnabled'
+            'Loot.ShouldAlwaysRegeneratePerPlayerLoot'
+            'Inventory.GiveDefaultInventory.Enabled'
+            'dw.Inventory.Item.Event.Enabled'
+            'dw.Inventory.Item.Quest.Enabled'
+            'dw.Inventory.Item.Slotless.Enabled'
+            'Dune.Exchange.AllowUncategorizedItems'
+            'Contracts.Map.Markers.Enabled'
+            'Contracts.IsHiddingOfContractLootItemsEnabled'
+            'Dune.Contracts.Board.ShowAllContracts'
+            'dw.encounters.Enabled'
+            'dw.encounters.LocationCooldown'
+            'dw.encounters.PrioritizeNew'
+            'dw.encounters.LandscapeLocationsOnly'
+            'dw.encounters.ExcludeCoveredLocations'
+            'dw.encounters.InstigatorArea.Enabled'
+            'dw.encounters.AllowExclusivityRange'
+            'dw.encounters.AreaLimits.Enabled.Override'
+            'Hazard.ZonesEnabled'
+            'Hazard.DestructionTime'
+            'Hazard.OrnithoptersSinkInQuicksandEnabled'
+            'Hazard.EnableQuicksandOnIGWBorders'
+            'Journey.EnableSpiceExposureEvents'
+            'Journey.EnableSimplifiedChallengeCompletion'
+            'Progression.IgnorePrereqs'
+            'Progression.ShowAllPerks'
+            'dw.ReturningPlayer.GiveAward.Enabled'
+            'dw.ReturningPlayer.DaysBeforeEligibleForReward'
+            'dw.ReturningPlayer.GiveAward.TierOverride'
+            'NPC.EnableFacingTargetCheck'
+            'NPC.FacingTargetAngleStartThreshold'
+            'NPC.FacingTargetAngleStopThreshold'
+            'NPC.EnableWeaponRotationRateOverride'
+            'NPC.DummyWeaponRotationRateOverride'
+            'NPC.Respawn.StartCountdownOnEachNPCKilled'
+            'NPC.AllowDoorAutoAccessToAllNPCs'
+            'NPC.AllowDoorAutoAccessToAllNPCsRadius'
+            'NPC.DoorAutoAccessRadius'
+            'Sandworm.SandwormSharkwormRoam'
+            'Sandworm.SandwormDeathVolumeEnabled'
+            'Sandworm.SandwormCheckIfBreachLocationIsFreeOfPlayers'
+            'Sandworm.SandwormCheckIfBreachLocationIsFreeOfVehicles'
+            'Sandworm.SandwormOnTargetedCommuninetMessageEnabled'
+            'Sandworm.SafezoneExpansionOffset'
+            'Sandworm.InflatedSafezoneExpansionOffset'
+            'SecurityZones.UsePvPOverrideTable'
+            'Vehicle.RelocationEnabled'
+            'Vehicle.BackupTool.ChannelingTimer.Enabled'
+            'Vehicle.BlockDisassemblyInvalidLandclaim'
+            'Vehicle.BlockDisassemblyVehicleHarnessed'
+            'Vehicle.BlockDisassemblyVehicleInAir'
+            'Vehicle.DisableWheeledVehicleTransfer'
+            'Vehicle.LaunchCharacterOnVehicleCollision'
+            'Vehicle.CharacterHitVelocityModifier'
+            'Vehicle.CharacterHitVelocityLimit'
+            'Vehicle.TerminalVelocityOverride'
+            'Vehicle.MaxWeldingDistance'
+            'Vehicle.SeatChangeHotkeysEnabled'
+            'Vehicle.SeatChangeCooldown'
+            'Vehicle.VehicleSpawnerCheckVehicleRate'
+            'Vehicle.VehicleDamageSmokeEnabled'
+            'Vehicle.VehicleSmokeTrailEnabled'
+            'dw.BaseBackupShouldDetectNpcs'
+            'dw.EnableShelterInvestigation'
+        )
     }
 
-    It 'isolates every binary-discovered control in the Experimental category' {
+    It 'isolates every binary-discovered control in the Experimental categories' {
         $fields = @{}
         foreach ($f in $script:DuneGameConfigSchema) { $fields[$f.Key] = $f }
         $experimental = @($script:DuneGameConfigSchema | Where-Object Category -eq 'Experimental')
+        $experimental2 = @($script:DuneGameConfigSchema | Where-Object Category -eq 'Experimental 2')
 
-        $experimental.Count | Should -Be 65
+        $experimental.Count | Should -Be 64
+        $experimental2.Count | Should -Be 73
         @($experimental.Key | Sort-Object) | Should -Be @($script:ExperimentalKeys | Sort-Object)
-        foreach ($key in $script:ExperimentalKeys) {
+        @($experimental2.Key | Sort-Object) | Should -Be @($script:Experimental2Keys | Sort-Object)
+        foreach ($key in @($script:ExperimentalKeys) + @($script:Experimental2Keys)) {
             $fields.ContainsKey($key) | Should -BeTrue
             $fields[$key].Section | Should -Be $script:DuneGcSecConsole
             $fields[$key].File | Should -Be 'engine'
-            $fields[$key].Category | Should -Be 'Experimental'
+            $fields[$key].Category | Should -BeLike 'Experimental*'
             @($script:DuneStartupConsoleVariableKeys) | Should -Contain $key
             if ($key -notlike 'Bgd.*') {
                 $fields[$key].ClientApply | Should -BeTrue
             }
         }
-        @($script:DuneStartupConsoleVariableKeys).Count | Should -Be 65
+        # Both lists are applied identically; the split is presentation only.
+        @($script:DuneStartupConsoleVariableKeys).Count | Should -Be 137
+    }
+
+    It 'never lists the same control in both Experimental categories' {
+        $overlap = @($script:ExperimentalKeys | Where-Object { $_ -in $script:Experimental2Keys })
+        $overlap | Should -BeNullOrEmpty
+    }
+
+    It 'does not ship a console variable that duplicates a game setting already on the page' {
+        # Recovered from the binary but deliberately omitted: DST already exposes
+        # the same behaviour as a UserGame.ini setting, and shipping both would
+        # give one behaviour two switches with no known precedence.
+        $twins = @{
+            'Dune.PlayerDeathLootEnabled'        = 'm_bShouldPlayersDropLootOnDeath'
+            'Sandworm.SandwormHibernationActive' = 'm_bEnableHibernation'
+        }
+        foreach ($cvar in $twins.Keys) {
+            @($script:DuneGameConfigSchema.Key) | Should -Not -Contain $cvar
+            @($script:DuneGameConfigSchema.Key) | Should -Contain $twins[$cvar]
+        }
     }
 
     It 'never offers to mirror a server-instance control into a player client config' {
@@ -771,9 +869,10 @@ $script:DstManagedEnd
         $notice.paths.engine | Should -Match 'Engine\.ini$'
     }
 
-    It 'places Experimental last in the curated schema API' {
+    It 'places the Experimental lists last in the curated schema API, in order' {
         $cats = @((Get-DuneGameConfigSchemaApi) | ForEach-Object { $_.category })
-        $cats[-1] | Should -Be 'Experimental'
+        $cats[-2] | Should -Be 'Experimental'
+        $cats[-1] | Should -Be 'Experimental 2'
     }
 
     It 'persists experimental controls in the UserEngine ConsoleVariables section' {
