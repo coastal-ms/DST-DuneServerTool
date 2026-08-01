@@ -13,6 +13,22 @@ here cover everything those tags shipped.
 
 ## [Unreleased]
 
+## [13.0.5] - 2026-07-31
+
+### Added
+
+- **Optional client `Engine.ini` management.** Game Config can now mirror gameplay console variables into the local Dune client `Engine.ini`, alongside existing `Game.ini` support. The feature is disabled by default and requires an explicit opt-in at the top of Game Config. While disabled, DST bypasses Engine.ini mismatch checks, prompts, and writes. Turning it off removes only values DST manages and preserves unrelated client settings.
+
+### Changed
+
+- **Experimental settings now explain their client requirement.** The save confirmation states that some Experimental controls require matching client-side Engine.ini values, that these local edits do not override public/live servers, and whether Engine.ini management is currently enabled.
+- **Client config tools are file-aware.** Mismatch detection, previews, Notepad actions, apply results, and shareable snippets identify whether each setting belongs in `Game.ini` or `Engine.ini`. Engine.ini writes are blocked while Dune: Awakening is running because the game can overwrite that file during shutdown.
+
+### Fixed
+
+- **Vehicle limits can now take effect on the local client.** Field testing confirmed `Vehicle.MaxVehiclesPerPlayer` remained capped at 10 when applied only on the server, but changed to 20 when mirrored into the client Engine.ini. DST now supports that required client-side path while retaining the server startup override.
+- **Engine.ini opt-in now persists correctly.** The first test build saved the permission but read it back through an incompatible ordered-map lookup, leaving the checkbox disabled despite a success message. Backend state, checkbox state, and confirmation messages now agree.
+
 ## [13.0.4] - 2026-07-31
 
 ### Fixed
