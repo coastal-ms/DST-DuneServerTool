@@ -586,13 +586,36 @@ function Get-DuneGameConfigClientApplyNotice {
 }
 
 # -----------------------------------------------------------------------------
-# LOCAL CLIENT CONFIG (admin's own machine; no SSH). DST runs locally, so it can
-# read/write the player's client Game.ini directly. Used by the optional
-# "apply to my client too" flow + the read-only client viewer.
+# CLIENT CONFIG (a player's own machine; no SSH). Normally this is the same PC
+# DST runs on, so it can read/write the client Game.ini directly. The folder is
+# user-settable, so it can also point at a network share when the player games
+# on a different PC than the one hosting the server - see
+# Test-DuneGameConfigClientDirRemote for what that costs.
 # -----------------------------------------------------------------------------
 $script:DuneGameConfigClientDirDefault     = '%LOCALAPPDATA%\DuneSandbox\Saved\Config\WindowsClient'
 $script:DuneGameConfigClientGameFileName   = 'Game.ini'
 $script:DuneGameConfigClientEngineFileName = 'Engine.ini'
+
+# Is the configured client-config folder on ANOTHER machine (a UNC path, or a
+# mapped network drive)? This matters because Test-DuneGameClientRunning can only
+# see processes on the machine DST runs on: when the folder is remote, the game
+# is running on a PC DST cannot inspect, so the "close Dune first" guard silently
+# passes and the game can overwrite Engine.ini on exit. Pure string/drive
+# inspection - never touches the network, so it cannot hang on an offline share.
+function Test-DuneGameConfigClientDirRemote {
+    param([string]$Dir = '')
+    $resolved = Resolve-DuneGameConfigClientDir -Dir $Dir
+    if ([string]::IsNullOrWhiteSpace($resolved)) { return $false }
+    if ($resolved -match '^\\\\[^\\]') { return $true }
+    try {
+        $root = [IO.Path]::GetPathRoot($resolved)
+        if (-not $root -or $root.Length -lt 2 -or $root[1] -ne ':') { return $false }
+        $drive = New-Object System.IO.DriveInfo($root)
+        return ($drive.DriveType -eq [IO.DriveType]::Network)
+    } catch {
+        return $false
+    }
+}
 
 # Engine.ini management is a disabled-by-default opt-in because the game
 # rewrites this file and client-side CVar overrides can materially change play.
@@ -671,6 +694,7 @@ function Get-DuneGameConfigClient {
         path            = $game.path
         exists          = $game.exists
         dirExists       = [bool](Test-Path -LiteralPath $dirResolved)
+        dirRemote       = (Test-DuneGameConfigClientDirRemote -Dir $dirRaw)
         default         = $script:DuneGameConfigClientDirDefault
         engineEnabled   = (Get-DuneGameConfigClientEngineEnabled)
         raw             = $game.raw

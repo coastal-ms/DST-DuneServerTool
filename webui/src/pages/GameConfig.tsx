@@ -1120,7 +1120,9 @@ export function GameConfig() {
         <p className="text-xs text-text-muted mb-3">
           DST can mirror game settings into <span className="font-mono">Game.ini</span>. Managing{' '}
           <span className="font-mono">Engine.ini</span> is a separate opt-in because client console-variable overrides
-          can materially change gameplay.
+          can materially change gameplay. If you play on a different PC than the one running DST, share that PC&apos;s
+          config folder and point this at the share (for example{' '}
+          <span className="font-mono">\\GAMINGPC\DuneConfig</span>) — DST will manage the files over the network.
         </p>
         <label className="mb-3 flex items-start gap-3 rounded-lg border border-warning/30 bg-warning/5 p-3 cursor-pointer select-none">
           <input
@@ -1163,6 +1165,16 @@ export function GameConfig() {
             <Icon name="Save" size={14} /> Save
           </button>
         </div>
+        {clientInfo?.dirRemote && (
+          <div className="mt-2 rounded-lg border border-warning/35 bg-warning/10 p-2.5 text-[11px] text-text-muted">
+            <div className="mb-1 flex items-center gap-1.5 font-semibold text-warning">
+              <Icon name="Network" size={13} /> This folder is on another PC
+            </div>
+            <p>
+              That works — DST reads and writes the files over the network share. But it can only see whether Dune: Awakening is running on <em>this</em> PC, so it cannot warn you when the game is open on the machine that owns these files. <strong className="text-text">Close Dune on that PC before applying</strong>, otherwise the game rewrites <span className="font-mono text-text">Engine.ini</span> when it exits and your change is silently discarded. &ldquo;Open in Notepad&rdquo; also opens on this PC, not the other one.
+            </p>
+          </div>
+        )}
         {clientInfo && (
           <div className="text-[11px] text-text-dim mt-2 font-mono break-all space-y-0.5">
             {(['game', 'engine'] as const).map(file => {

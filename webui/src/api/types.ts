@@ -298,6 +298,8 @@ export type GameConfigClientInfo = GameConfigClientFileInfo & {
   dir: string
   dirResolved: string
   dirExists: boolean
+  /** Folder lives on another machine (UNC path or mapped network drive). */
+  dirRemote: boolean
   default: string
   engineEnabled: boolean
   game: GameConfigClientFileInfo

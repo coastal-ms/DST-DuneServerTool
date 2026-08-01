@@ -1095,6 +1095,35 @@ Describe 'GameConfig: Engine.ini opt-in setting' -Tag 'GameConfig' {
     }
 }
 
+Describe 'GameConfig: client config folder on another PC' -Tag 'GameConfig' {
+
+    # A player whose gaming PC is not the machine running DST can share that PC's
+    # config folder and point DST at the share. That works, but the "close Dune
+    # first" guard only sees processes on the DST host, so the UI has to say so.
+
+    It 'flags a UNC folder as remote' {
+        Test-DuneGameConfigClientDirRemote -Dir '\\GAMINGPC\DuneConfig' | Should -BeTrue
+        Test-DuneGameConfigClientDirRemote -Dir '\\GAMINGPC\Users\Someone\AppData\Local\DuneSandbox' | Should -BeTrue
+    }
+
+    It 'does not flag a local folder' {
+        Test-DuneGameConfigClientDirRemote -Dir (Get-PSDrive TestDrive).Root | Should -BeFalse
+        Test-DuneGameConfigClientDirRemote -Dir 'C:\Users\Someone\AppData\Local\DuneSandbox' | Should -BeFalse
+    }
+
+    It 'does not flag an unresolvable or empty folder' {
+        Test-DuneGameConfigClientDirRemote -Dir '' | Should -BeFalse
+        Test-DuneGameConfigClientDirRemote -Dir 'not-a-rooted-path' | Should -BeFalse
+    }
+
+    It 'surfaces the flag on the client payload so the UI can warn' {
+        Mock Get-DuneGameConfigClientEngineEnabled { $false }
+        $client = Get-DuneGameConfigClient -Dir (Get-PSDrive TestDrive).Root
+        $client.ContainsKey('dirRemote') | Should -BeTrue
+        $client.dirRemote | Should -BeFalse
+    }
+}
+
 Describe 'GameConfig: local client Game.ini and Engine.ini' -Tag 'GameConfig' {
 
     BeforeEach {

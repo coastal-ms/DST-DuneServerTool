@@ -13,6 +13,10 @@ here cover everything those tags shipped.
 
 ## [Unreleased]
 
+### Added
+
+- **Point DST at a client config folder on another PC.** If you play on a different machine than the one running DST, share that PC's Dune config folder and set it as your client config folder (for example `\\GAMINGPC\DuneConfig`) — DST manages `Game.ini` and `Engine.ini` over the network share. Game Config now says so, and warns when the folder is remote: DST can only tell whether Dune is running on the PC it is installed on, so the game must be closed on the other machine before applying, otherwise it rewrites `Engine.ini` on exit and the change is lost.
+
 ## [13.1.0] - 2026-08-01
 
 ### Added
