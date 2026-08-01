@@ -299,8 +299,16 @@ export type GameConfigClientInfo = GameConfigClientFileInfo & {
   dirResolved: string
   dirExists: boolean
   default: string
+  engineEnabled: boolean
   game: GameConfigClientFileInfo
   engine: GameConfigClientFileInfo
+}
+
+export type GameConfigClientEngineGateResult = {
+  ok: boolean
+  enabled: boolean
+  removed: number
+  client: GameConfigClientInfo
 }
 
 export type GameConfigClientApplyResult = {

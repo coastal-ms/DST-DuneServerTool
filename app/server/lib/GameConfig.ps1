@@ -418,9 +418,12 @@ $script:DuneGameConfigClientEnginePath = '%LOCALAPPDATA%\DuneSandbox\Saved\Confi
 # items means nothing client-side to do.
 function Get-DuneGameConfigClientApplyNotice {
     param([object[]]$Updates)
+    $engineEnabled = Get-DuneGameConfigClientEngineEnabled
     $byKey = @{}
     foreach ($f in $script:DuneGameConfigSchema) {
-        if ($f.ContainsKey('ClientApply') -and $f.ClientApply) { $byKey[$f.Key] = $f }
+        if (-not ($f.ContainsKey('ClientApply') -and $f.ClientApply)) { continue }
+        if ($f.File -eq 'engine' -and -not $engineEnabled) { continue }
+        $byKey[$f.Key] = $f
     }
     $items = New-Object 'System.Collections.Generic.List[object]'
     foreach ($u in $Updates) {
@@ -445,6 +448,19 @@ function Get-DuneGameConfigClientApplyNotice {
 $script:DuneGameConfigClientDirDefault     = '%LOCALAPPDATA%\DuneSandbox\Saved\Config\WindowsClient'
 $script:DuneGameConfigClientGameFileName   = 'Game.ini'
 $script:DuneGameConfigClientEngineFileName = 'Engine.ini'
+
+# Engine.ini management is a disabled-by-default opt-in because the game
+# rewrites this file and client-side CVar overrides can materially change play.
+function Get-DuneGameConfigClientEngineEnabled {
+    if (-not (Get-Command Read-DuneConfig -ErrorAction SilentlyContinue)) { return $false }
+    try {
+        $cfg = Read-DuneConfig
+        $value = if ($cfg -and $cfg.ContainsKey('ClientEngineIniEnabled')) { "$($cfg['ClientEngineIniEnabled'])".Trim() } else { '' }
+        return ($value -match '^(?i:true|1|yes|on)$')
+    } catch {
+        return $false
+    }
+}
 
 # The admin's configured client-config FOLDER (persisted as ClientConfigPath in
 # dune-server.config). Falls back to the per-user default. Returned UNEXPANDED so
@@ -511,6 +527,7 @@ function Get-DuneGameConfigClient {
         exists          = $game.exists
         dirExists       = [bool](Test-Path -LiteralPath $dirResolved)
         default         = $script:DuneGameConfigClientDirDefault
+        engineEnabled   = (Get-DuneGameConfigClientEngineEnabled)
         raw             = $game.raw
         sections        = $game.sections
         effective       = $game.effective
@@ -523,6 +540,40 @@ function Get-DuneGameConfigClient {
 
 function Test-DuneGameClientRunning {
     return [bool](Get-Process -Name 'DuneSandbox-Win64-Shipping' -ErrorAction SilentlyContinue | Select-Object -First 1)
+}
+
+# Remove every client-applicable Engine.ini value DST can manage while leaving
+# unrelated sections and keys intact. Used when the explicit opt-in is disabled.
+function Remove-DuneGameConfigClientEngineValues {
+    param([string]$Dir = '')
+    $dirResolved = Resolve-DuneGameConfigClientDir -Dir $Dir
+    $path = Get-DuneGameConfigClientFilePath -Dir $Dir -File 'engine'
+    if (-not (Test-Path -LiteralPath $dirResolved)) {
+        return @{ ok = $true; path = $path; removed = 0; changed = $false }
+    }
+    if (-not (Test-Path -LiteralPath $path -PathType Leaf)) {
+        return @{ ok = $true; path = $path; removed = 0; changed = $false }
+    }
+
+    $raw = [IO.File]::ReadAllText($path)
+    $updates = New-Object 'System.Collections.Generic.List[object]'
+    foreach ($f in $script:DuneGameConfigSchema) {
+        if ($f.File -ne 'engine' -or -not ($f.ContainsKey('ClientApply') -and $f.ClientApply)) { continue }
+        if ($raw -match ('(?m)^\s*' + [regex]::Escape("$($f.Key)") + '\s*=')) {
+            $updates.Add(@{ file = 'engine'; section = $f.Section; key = $f.Key; value = ''; remove = $true })
+        }
+    }
+    if ($updates.Count -eq 0) {
+        return @{ ok = $true; path = $path; removed = 0; changed = $false }
+    }
+    if (Test-DuneGameClientRunning) {
+        throw 'Close Dune: Awakening before disabling client Engine.ini management; the game overwrites Engine.ini when it exits.'
+    }
+
+    $new = ConvertTo-DuneIniManaged -Raw $raw -Updates $updates.ToArray() -QuotedKeys (Get-DuneGameConfigQuotedKeys)
+    $new = $new -replace "`r?`n", "`r`n"
+    [IO.File]::WriteAllText($path, $new, (New-Object System.Text.UTF8Encoding($false)))
+    return @{ ok = $true; path = $path; removed = $updates.Count; changed = $true }
 }
 
 # Surgically upsert scalar keys into raw INI, preserving everything else. Used
@@ -591,8 +642,11 @@ function Save-DuneGameConfigClient {
     if (-not $Updates -or $Updates.Count -eq 0) { throw 'No updates supplied.' }
 
     $allowed = @{}
+    $engineEnabled = Get-DuneGameConfigClientEngineEnabled
     foreach ($f in $script:DuneGameConfigSchema) {
-        if ($f.ContainsKey('ClientApply') -and $f.ClientApply) { $allowed[$f.Key] = $f }
+        if (-not ($f.ContainsKey('ClientApply') -and $f.ClientApply)) { continue }
+        if ($f.File -eq 'engine' -and -not $engineEnabled) { continue }
+        $allowed[$f.Key] = $f
     }
     $clean = New-Object 'System.Collections.Generic.List[object]'
     foreach ($u in $Updates) {

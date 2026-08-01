@@ -393,6 +393,7 @@ Register-DuneRoute -Method POST -Path '/api/gameconfig/backups/delete' -Handler 
 #
 # GET  /api/gameconfig/client      — read the local client config + folder info.
 # PUT  /api/gameconfig/client/dir  — persist the client-config FOLDER. { dir }
+# PUT  /api/gameconfig/client/engine — opt into/out of Engine.ini management.
 # PUT  /api/gameconfig/client/apply— upsert ClientApply keys into their local file.
 #                                     { updates: [ { key, value }, ... ], dir? }
 # -----------------------------------------------------------------------------
@@ -423,6 +424,34 @@ Register-DuneRoute -Method PUT -Path '/api/gameconfig/client/dir' -Handler {
         Write-DuneJson -Response $res -Body (Get-DuneGameConfigClient)
     } catch {
         Write-DuneError -Response $res -Status 500 -Message "Saving client config folder failed: $($_.Exception.Message)"
+    }
+}
+
+Register-DuneRoute -Method PUT -Path '/api/gameconfig/client/engine' -Handler {
+    param($req, $res, $routeParams, $body)
+    if (-not ($body -is [hashtable]) -or -not $body.ContainsKey('enabled')) {
+        Write-DuneError -Response $res -Status 400 -Message 'Missing enabled.'
+        return
+    }
+    $enabled = [bool]$body['enabled']
+    $dir = if ($body.ContainsKey('dir')) { "$($body['dir'])".Trim() } else { '' }
+    try {
+        $cleanup = Invoke-WithDuneLock -Name 'config' -Script {
+            $result = @{ removed = 0; changed = $false }
+            if (-not $enabled) {
+                $result = Remove-DuneGameConfigClientEngineValues -Dir $dir
+            }
+            $null = Save-DuneConfig -Config @{ ClientEngineIniEnabled = $(if ($enabled) { 'true' } else { 'false' }) }
+            return $result
+        }
+        Write-DuneJson -Response $res -Body @{
+            ok      = $true
+            enabled = $enabled
+            removed = [int]$cleanup.removed
+            client  = (Get-DuneGameConfigClient -Dir $dir)
+        }
+    } catch {
+        Write-DuneError -Response $res -Status 500 -Message "Updating client Engine.ini permission failed: $($_.Exception.Message)"
     }
 }
 
