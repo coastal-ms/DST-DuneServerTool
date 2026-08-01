@@ -455,7 +455,7 @@ function Get-DuneGameConfigClientEngineEnabled {
     if (-not (Get-Command Read-DuneConfig -ErrorAction SilentlyContinue)) { return $false }
     try {
         $cfg = Read-DuneConfig
-        $value = if ($cfg -and $cfg.ContainsKey('ClientEngineIniEnabled')) { "$($cfg['ClientEngineIniEnabled'])".Trim() } else { '' }
+        $value = if ($cfg -and $cfg.Contains('ClientEngineIniEnabled')) { "$($cfg['ClientEngineIniEnabled'])".Trim() } else { '' }
         return ($value -match '^(?i:true|1|yes|on)$')
     } catch {
         return $false
@@ -470,7 +470,7 @@ function Get-DuneGameConfigClientDir {
     if (Get-Command Read-DuneConfig -ErrorAction SilentlyContinue) {
         try {
             $cfg = Read-DuneConfig
-            if ($cfg -and $cfg.ContainsKey('ClientConfigPath')) { $configured = "$($cfg['ClientConfigPath'])".Trim() }
+            if ($cfg -and $cfg.Contains('ClientConfigPath')) { $configured = "$($cfg['ClientConfigPath'])".Trim() }
         } catch { }
     }
     if ($configured) { return $configured }

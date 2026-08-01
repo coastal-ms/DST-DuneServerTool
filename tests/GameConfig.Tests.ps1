@@ -880,13 +880,18 @@ Describe 'GameConfig: client-apply flag covers local gameplay settings' -Tag 'Ga
 Describe 'GameConfig: Engine.ini opt-in setting' -Tag 'GameConfig' {
     It 'is persisted by config and defaults to disabled' {
         $script:DuneConfigKeys | Should -Contain 'ClientEngineIniEnabled'
-        Mock Read-DuneConfig { @{ ClientEngineIniEnabled = '' } }
+        Mock Read-DuneConfig { [ordered]@{ ClientEngineIniEnabled = '' } }
         Get-DuneGameConfigClientEngineEnabled | Should -BeFalse
     }
 
     It 'enables only for an explicit truthy config value' {
-        Mock Read-DuneConfig { @{ ClientEngineIniEnabled = 'true' } }
+        Mock Read-DuneConfig { [ordered]@{ ClientEngineIniEnabled = 'true' } }
         Get-DuneGameConfigClientEngineEnabled | Should -BeTrue
+    }
+
+    It 'reads the configured client folder from the ordered config map' {
+        Mock Read-DuneConfig { [ordered]@{ ClientConfigPath = 'C:\DuneClient'; ClientEngineIniEnabled = '' } }
+        Get-DuneGameConfigClientDir | Should -Be 'C:\DuneClient'
     }
 }
 
