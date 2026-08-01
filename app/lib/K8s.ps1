@@ -116,6 +116,94 @@ function _Invoke-V6BgJsonPatch {
     return @{ Success = [bool]$ok; Error = $errText; Raw = $clean; Rc = $rc }
 }
 
+# Split Unreal's comma-delimited ExecCmds payload without splitting commas that
+# appear inside quoted command values.
+function _Split-V6ExecCommands {
+    param([AllowEmptyString()][string]$Payload)
+
+    $commands = New-Object 'System.Collections.Generic.List[string]'
+    $current = New-Object System.Text.StringBuilder
+    $singleQuoted = $false
+    $doubleQuoted = $false
+    foreach ($ch in "$Payload".ToCharArray()) {
+        if ($ch -eq "'" -and -not $doubleQuoted) {
+            $singleQuoted = -not $singleQuoted
+            [void]$current.Append($ch)
+            continue
+        }
+        if ($ch -eq '"' -and -not $singleQuoted) {
+            $doubleQuoted = -not $doubleQuoted
+            [void]$current.Append($ch)
+            continue
+        }
+        if ($ch -eq ',' -and -not $singleQuoted -and -not $doubleQuoted) {
+            $command = $current.ToString().Trim()
+            if ($command) { $commands.Add($command) }
+            [void]$current.Clear()
+            continue
+        }
+        [void]$current.Append($ch)
+    }
+    $last = $current.ToString().Trim()
+    if ($last) { $commands.Add($last) }
+    return $commands.ToArray()
+}
+
+# Merge one command into the single ExecCmds argument Unreal reads. Repeating
+# -execcmds flags is ambiguous, so consolidate existing payloads while preserving
+# unrelated pod arguments and commands such as per-sietch display names.
+function _Set-V6ExecCommand {
+    param(
+        [object[]]$Arguments,
+        [Parameter(Mandatory)][string]$CommandName,
+        [AllowNull()][string]$Command
+    )
+
+    $plain = New-Object 'System.Collections.Generic.List[string]'
+    $commands = New-Object 'System.Collections.Generic.List[string]'
+    $namePattern = '^(?i)' + [regex]::Escape($CommandName) + '(?:\s|$)'
+    foreach ($raw in @($Arguments)) {
+        if ($null -eq $raw -or "$raw" -eq '') { continue }
+        $arg = "$raw"
+        $payload = $null
+        if ($arg -match '^(?i)-execcmds="(.*)"$') { $payload = $Matches[1] }
+        elseif ($arg -match '^(?i)-execcmds=(.*)$') { $payload = $Matches[1] }
+        else {
+            $plain.Add($arg)
+            continue
+        }
+        foreach ($existing in @(_Split-V6ExecCommands -Payload $payload)) {
+            if ($existing -notmatch $namePattern) { $commands.Add($existing) }
+        }
+    }
+    if (-not [string]::IsNullOrWhiteSpace($Command)) { $commands.Add($Command.Trim()) }
+    if ($commands.Count -gt 0) {
+        $plain.Add('-execcmds="' + ($commands.ToArray() -join ',') + '"')
+    }
+    return $plain.ToArray()
+}
+
+function _Copy-V6PodSpec {
+    param([Parameter(Mandatory)]$PodSpec)
+    $copy = @{}
+    if ($PodSpec -is [hashtable]) {
+        foreach ($key in $PodSpec.Keys) { $copy[$key] = $PodSpec[$key] }
+    } else {
+        foreach ($prop in $PodSpec.PSObject.Properties) { $copy[$prop.Name] = $prop.Value }
+    }
+    return $copy
+}
+
+function _Test-V6PodSpecHasOverrides {
+    param([Parameter(Mandatory)][hashtable]$PodSpec)
+    foreach ($key in $PodSpec.Keys) {
+        if ($key -eq 'index') { continue }
+        if ($key -eq 'arguments' -and @($PodSpec[$key]).Count -eq 0) { continue }
+        return $true
+    }
+    return $false
+}
+
 # Sanitize a per-sietch display name for the -execcmds arg. The name is wrapped
 # in single quotes inside "-execcmds=\"Bgd.ServerDisplayName '<name>'\"", and
 # Funcom disallows ' and | in the value; strip control chars too. Empty -> $null.
@@ -141,7 +229,7 @@ function Get-V6SietchNames {
             foreach ($ps in @($s.podSpecs)) {
                 if (-not $ps.PSObject.Properties['arguments']) { continue }
                 foreach ($a in @($ps.arguments)) {
-                    if ("$a" -match "Bgd\.ServerDisplayName\s+'(.*)'") { $names[[int]$ps.index] = $Matches[1]; break }
+                    if ("$a" -match "Bgd\.ServerDisplayName\s+'([^']*)'") { $names[[int]$ps.index] = $Matches[1]; break }
                 }
             }
         }
@@ -170,7 +258,7 @@ function Get-V6DeepDesertInstancesFromBg {
             foreach ($ps in @($set.podSpecs)) {
                 if (-not $ps.PSObject.Properties['index'] -or -not $ps.PSObject.Properties['arguments']) { continue }
                 foreach ($arg in @($ps.arguments)) {
-                    if ("$arg" -match "Bgd\.ServerDisplayName\s+'(.*)'") {
+                    if ("$arg" -match "Bgd\.ServerDisplayName\s+'([^']*)'") {
                         $names[[int]$ps.index] = $Matches[1]
                         break
                     }
@@ -301,16 +389,30 @@ function Set-V6SietchConfig {
         $wpParts += @{ dimension = $d; disable = $false; id = $ids[$d]; maxX = 1; maxY = 1; minX = 0; minY = 0 }
     }
 
-    $podSpecs = $null
-    if ($null -ne $Names) {
-        $podSpecs = @()
-        for ($d = 0; $d -lt $Count; $d++) {
-            $raw = if ($d -lt $Names.Count) { $Names[$d] } else { '' }
-            $nm  = Format-V6SietchName $raw
-            if ($nm) { $podSpecs += @{ index = $ids[$d]; arguments = @("-execcmds=`"Bgd.ServerDisplayName '$nm'`"") } }
+    $existingPodSpecs = @{}
+    if ($set.PSObject.Properties['podSpecs'] -and $set.podSpecs) {
+        foreach ($podSpec in @($set.podSpecs)) {
+            if ($podSpec.PSObject.Properties['index']) {
+                $existingPodSpecs[[int]$podSpec.index] = $podSpec
+            }
         }
-        if ($podSpecs.Count -eq 0) { $podSpecs = $null }
     }
+    $podSpecs = @()
+    for ($d = 0; $d -lt $Count; $d++) {
+        $id = [int]$ids[$d]
+        $podSpec = if ($existingPodSpecs.ContainsKey($id)) {
+            _Copy-V6PodSpec -PodSpec $existingPodSpecs[$id]
+        } else {
+            @{ index = $id }
+        }
+        $raw = if ($null -ne $Names -and $d -lt $Names.Count) { $Names[$d] } else { '' }
+        $nm = Format-V6SietchName $raw
+        $nameCommand = if ($nm) { "Bgd.ServerDisplayName '$nm'" } else { $null }
+        $podSpec.arguments = @(_Set-V6ExecCommand -Arguments @($podSpec.arguments) `
+            -CommandName 'Bgd.ServerDisplayName' -Command $nameCommand)
+        if (_Test-V6PodSpecHasOverrides -PodSpec $podSpec) { $podSpecs += $podSpec }
+    }
+    if ($podSpecs.Count -eq 0) { $podSpecs = $null }
 
     $setPath = "/spec/serverGroup/template/spec/sets/$setIdx"
     $wpPath  = "/spec/database/template/spec/deployment/spec/worldPartitions/$wpIdx"
@@ -338,6 +440,88 @@ function Set-V6SietchConfig {
         $applied += @{ dimension = $d; partitionId = $ids[$d]; name = $nm }
     }
     return @{ Success = $true; Count = $Count; Sietches = $applied; Raw = $res.Raw }
+}
+
+# Keep dw.FuelBurningMultiplier in the Survival server command line as well as
+# UserEngine.ini. Field testing found the dual application effective where the
+# INI value alone was not. One podSpec is required per Hagga partition.
+function Set-V6FuelBurningMultiplier {
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory)][string]$Ip,
+        [AllowNull()][string]$Value
+    )
+
+    $command = $null
+    $normalized = $null
+    if (-not [string]::IsNullOrWhiteSpace($Value)) {
+        $number = 0.0
+        $style = [System.Globalization.NumberStyles]::Float
+        $culture = [System.Globalization.CultureInfo]::InvariantCulture
+        if (-not [double]::TryParse($Value.Trim(), $style, $culture, [ref]$number) -or
+            [double]::IsNaN($number) -or [double]::IsInfinity($number)) {
+            throw "Fuel burning multiplier must be a finite number."
+        }
+        $normalized = $number.ToString('0.################', $culture)
+        $command = "dw.FuelBurningMultiplier $normalized"
+    }
+
+    $info = Get-V6Battlegroup -Ip $Ip
+    $sets = $info.Bg.spec.serverGroup.template.spec.sets
+    $patches = @()
+    $foundSurvival = $false
+    for ($setIndex = 0; $setIndex -lt $sets.Count; $setIndex++) {
+        $set = $sets[$setIndex]
+        $isDedicated = $false
+        if ($set.PSObject.Properties['dedicatedScaling']) { $isDedicated = [bool]$set.dedicatedScaling }
+        if ($set.map -ne 'Survival_1' -or $isDedicated) { continue }
+        $foundSurvival = $true
+
+        $byIndex = @{}
+        foreach ($existing in @($set.podSpecs)) {
+            if ($null -eq $existing) { continue }
+            if ($existing.PSObject.Properties['index']) { $byIndex[[int]$existing.index] = $existing }
+        }
+        $partitionIds = @($set.partitions | ForEach-Object { [int]$_ })
+        $allIds = @(@($byIndex.Keys) + $partitionIds | Sort-Object -Unique)
+        $podSpecs = @()
+        foreach ($id in $allIds) {
+            $podSpec = if ($byIndex.ContainsKey([int]$id)) {
+                _Copy-V6PodSpec -PodSpec $byIndex[[int]$id]
+            } else {
+                @{ index = [int]$id }
+            }
+            $podSpec.arguments = @(_Set-V6ExecCommand -Arguments @($podSpec.arguments) `
+                -CommandName 'dw.FuelBurningMultiplier' -Command $command)
+            if (_Test-V6PodSpecHasOverrides -PodSpec $podSpec) { $podSpecs += $podSpec }
+        }
+
+        $path = "/spec/serverGroup/template/spec/sets/$setIndex/podSpecs"
+        $hasPodSpecs = ($set.PSObject.Properties['podSpecs'] -and $null -ne $set.podSpecs)
+        if ($podSpecs.Count -gt 0) {
+            $patches += @{
+                op = if ($hasPodSpecs) { 'replace' } else { 'add' }
+                path = $path
+                value = $podSpecs
+            }
+        } elseif ($hasPodSpecs) {
+            $patches += @{ op = 'remove'; path = $path }
+        }
+    }
+    if ($patches.Count -eq 0) {
+        if ($foundSurvival) {
+            return @{ Success = $true; NoChange = $true; Raw = ''; Value = $normalized }
+        }
+        return @{ Success = $false; Error = 'No non-dedicated Survival_1 server set found.'; Value = $normalized }
+    }
+
+    $result = _Invoke-V6BgJsonPatch -Ip $Ip -Info $info -Patches $patches
+    return @{
+        Success = [bool]$result.Success
+        Error   = $result.Error
+        Raw     = $result.Raw
+        Value   = $normalized
+    }
 }
 
 function Set-V6BattlegroupTitle {

@@ -248,16 +248,10 @@ $script:DuneGameConfigSchema = @(
     # Hazard.DehydrationZonesEnabled is intentionally excluded because its
     # compiled Funcom help explicitly warns that enabling it crashes clients.
     @{ Section=$script:DuneGcSecConsole; Key='Dune.GiveDoubleDifficultyLoot'; File='engine'; Type='bool01'; Default='0'; Label='Double Difficulty Loot'; Help='Give double loot when encounter difficulty is above 0. Field-confirmed with dungeon loot; still experimental.'; Category='Experimental' }
-    # Removed in v12.21.3-experimental3 as ineffective, restored here for another
-    # round of field testing at the maintainer's request. A binary scan of the
-    # 1.4.10.4 server found no enable-gate CVar for this (unlike SafeZone.Scale,
-    # which is gated by SafeZone.EnableScale), but it did find BurningInitialTime
-    # and BurningFuelEntryStateData - each burning fuel entry stores its own
-    # duration as state at ignition. That suggests the multiplier applies when
-    # fuel STARTS burning rather than continuously, which would make an
-    # already-running generator show no change and could explain the earlier
-    # null result. Unverified.
-    @{ Section=$script:DuneGcSecConsole; Key='dw.FuelBurningMultiplier'; File='engine'; Type='float'; Default='1.0'; Label='Fuel Burning Duration'; Help='Scales how long all fuel burns. Larger values should make fuel last longer. An earlier round of field testing found no effect and this control was withdrawn; it is back under test. When testing, insert FRESH fuel after the restart - burn duration appears to be fixed when a fuel entry starts burning, so fuel already in a generator will not change.'; Category='Experimental' }
+    # Field testing established that INI-only application did not take effect,
+    # while applying the same value through the Survival pod's ExecCmds did.
+    # Existing generator fuel reflected the new duration after restart.
+    @{ Section=$script:DuneGcSecConsole; Key='dw.FuelBurningMultiplier'; File='engine'; Type='float'; Default='1.0'; Label='Fuel Burning Duration'; Help='Scales how long all fuel burns. DST applies the value in UserEngine.ini and the Hagga server startup command because INI-only application did not take effect in field testing. Restart the battlegroup to apply it; existing generator fuel updates after restart.'; Category='Experimental' }
     @{ Section=$script:DuneGcSecConsole; Key='Abilities.RespecCooldownTotalDurationSeconds'; File='engine'; Type='int'; Min=0; Unit='sec'; Default='172800'; Label='Ability Respec Cooldown'; Help='Total ability-respec cooldown in seconds. Compiled default is 172800 (2 days); 0 may remove the cooldown but has not been field-verified.'; Category='Experimental' }
     @{ Section=$script:DuneGcSecConsole; Key='dw.LandsraadMissionRewardMultiplierFactionXP'; File='engine'; Type='float'; Min=0; Default='1.0'; Label='Landsraad Faction XP'; Help='Scales Faction XP from Landsraad missions. Field-confirmed at 10; mission preview may still show the base reward.'; Category='Experimental' }
     @{ Section=$script:DuneGcSecConsole; Key='dw.LandsraadMissionRewardMultiplierHouseCredit'; File='engine'; Type='float'; Min=0; Default='1.0'; Label='Landsraad House Credit'; Help='Scales House Credit from Landsraad missions. Field-confirmed at 10; mission preview may still show the base reward.'; Category='Experimental' }
@@ -1231,6 +1225,35 @@ function Get-DuneGameConfig {
             managedSections = (Get-DuneIniManagedSectionNames -Raw $engineRaw)
         }
     }
+}
+
+function Set-DuneFuelBurningStartupOverride {
+    param(
+        [Parameter(Mandatory)][string]$Ip,
+        [AllowNull()][string]$Value
+    )
+    if (-not (Get-Command Set-V6FuelBurningMultiplier -ErrorAction SilentlyContinue)) {
+        throw 'Battlegroup helper unavailable (K8s.ps1 not loaded).'
+    }
+    $result = Set-V6FuelBurningMultiplier -Ip $Ip -Value $Value
+    if (-not $result.Success) {
+        $why = if ($result.Error) { $result.Error } else { $result.Raw }
+        throw "Fuel startup override failed: $why"
+    }
+    return $result
+}
+
+function Sync-DuneFuelBurningStartupOverride {
+    param([Parameter(Mandatory)][string]$Ip)
+    $config = Get-DuneGameConfig -Ip $Ip
+    $value = $null
+    if ($config.engine.effectiveByKey.ContainsKey('dw.FuelBurningMultiplier')) {
+        $candidate = "$($config.engine.effectiveByKey['dw.FuelBurningMultiplier'])".Trim()
+        if (-not (Test-DuneGameConfigValueIsDefault -Key 'dw.FuelBurningMultiplier' -Value $candidate)) {
+            $value = $candidate
+        }
+    }
+    return Set-DuneFuelBurningStartupOverride -Ip $Ip -Value $value
 }
 
 # Player-facing server name (the battlegroup title shown in the in-game server
