@@ -111,6 +111,14 @@ function isCustomized(data: GameConfigResponse | null, field: GameConfigField): 
   return lv !== '' && lv !== fieldDefault(field)
 }
 
+// The Experimental lists are console variables read out of the server binary.
+// They share a warning banner, start rolled up, and are the ones that need a
+// battlegroup restart before they do anything. "Experimental 2" is simply the
+// overflow of the same set, split so neither list is unmanageably long.
+function isExperimentalCategory(category: string): boolean {
+  return category === 'Experimental' || category === 'Experimental 2'
+}
+
 // Build file-aware client blocks for a category's customised scalar fields.
 function buildCategoryClientBlocks(
   cat: GameConfigCategory,
@@ -790,7 +798,7 @@ export function GameConfig() {
   const experimentalStartupKeys = useMemo(() => {
     const keys = new Set<string>()
     for (const category of schema ?? []) {
-      if (category.category !== 'Experimental') continue
+      if (!isExperimentalCategory(category.category)) continue
       for (const field of category.fields ?? []) {
         if (field.file === 'engine') keys.add(field.key)
       }
@@ -1784,9 +1792,10 @@ function CategoryCard({
   forceOpen?: boolean
   children: React.ReactNode
 }) {
-  const experimental = category === 'Experimental'
+  const experimental = isExperimentalCategory(category)
   // Every category can be rolled up for aesthetics; the choice persists per
-  // category. Experimental stays closed by default, the rest start open.
+  // category. The Experimental lists stay closed by default because they are
+  // long and unconfirmed; the rest start open.
   const { open: userOpen, toggle } = useCardCollapse(`gameconfig.category.${category}`, !experimental)
   const expanded = forceOpen || userOpen
 
@@ -1844,7 +1853,7 @@ function CategoryCard({
                 These CVars are written to the battlegroup&apos;s <span className="font-mono text-text">UserEngine.ini</span> under <span className="font-mono text-text">[ConsoleVariables]</span>. Saving changes nothing on a running server: the values are applied to the game servers when the battlegroup restarts, so use <strong className="text-text">Apply INIs &amp; restart</strong> to put them into effect. After saving, DST offers to mirror the same values into this PC&apos;s client <span className="font-mono text-text">Engine.ini</span>; close the game before applying them.
               </p>
               <p className="mt-1.5">
-                This catalogue contains 42 testable controls decoded from server build 1.4.10.4. Fuel Burning Duration, Double Difficulty Loot, and the three Landsraad reward multipliers have community field confirmation. Restored vehicle controls now receive the same dual INI and startup-command application for testing. Other controls may have no effect or unintended gameplay consequences. The dehydration-zone control is omitted because Funcom warns that enabling it crashes clients. Back up first and change one setting at a time.
+                Experimental and Experimental 2 together hold 137 controls read out of the server binary — the second list is simply the overflow, applied exactly the same way. Fuel Burning Duration, Double Difficulty Loot, and the three Landsraad reward multipliers have community field confirmation; the rest are unconfirmed, and their descriptions quote Funcom&apos;s own wording rather than a promise about what the shipped build does. Some may have no effect or unintended consequences. Controls that Funcom documents as crashing clients, that exist to crash or disconnect servers on purpose, that guard against item duplication, or that duplicate a setting already on this page are deliberately left out. Back up first and change one setting at a time.
               </p>
             </div>
           )}
