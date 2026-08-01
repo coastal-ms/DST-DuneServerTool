@@ -284,6 +284,58 @@ $script:DuneGameConfigSchema = @(
     @{ Section=$script:DuneGcSecConsole; Key='SafeZone.EnableScale'; File='engine'; Type='bool01'; Label='Enable Safe-Zone Scaling'; Help='Enables the safe-zone scale override. Compiled default was not recovered.'; Category='Experimental' }
     @{ Section=$script:DuneGcSecConsole; Key='SafeZone.Scale'; File='engine'; Type='float'; Default='1.0'; Label='Safe-Zone Scale'; Help='Scales safe-zone geometry. May alter PvP boundaries and world behavior; test cautiously.'; Category='Experimental' }
 
+    # --- Second decode pass (build 2051294-0-shipping) ---
+    # The earlier catalogue was incomplete because the scan that produced it read
+    # the server binary as ASCII. Unreal stores console-variable names and their
+    # help text as UTF-16, so those scans reported nothing for controls that are
+    # demonstrably present. Re-reading the binary as UTF-16 and pairing each name
+    # with the help string its registration code references recovers the full set;
+    # the help below is Funcom's own wording, quoted rather than paraphrased.
+    #
+    # None of these are field-confirmed. Funcom's help says what a control was
+    # meant to do, which is not evidence that the shipped build does it - the
+    # m_Global*Multiplier keys parsed cleanly for months and did nothing. Where
+    # Funcom's help does not state a default, the field is left unset instead of
+    # inventing one.
+
+    # Fills gaps in controls DST already exposes.
+    @{ Section=$script:DuneGcSecConsole; Key='NPC.EnableNpcAttackLimits'; File='engine'; Type='bool01'; Label='Enable NPC Attack Limits'; Help='Funcom: "If set to 1, NPCs will utilize the attack limit curve when determining if they can attack a target". NPC Attack Limit Override above has no effect unless this is on. Compiled default was not recovered.'; Category='Experimental' }
+    @{ Section=$script:DuneGcSecConsole; Key='dw.FuelsBurningDuration'; File='engine'; Type='float'; Min=0; Unit='sec'; Label='Fuel Burn Time (seconds)'; Help='Funcom: "Time in seconds that every fuel consumed by the fuel powered generator will take to burn". An absolute time, unlike Fuel Burning Duration which is a multiplier. Setting both is untested. Compiled default was not recovered.'; Category='Experimental' }
+    @{ Section=$script:DuneGcSecConsole; Key='dw.PlaceableShelterThresholdOverride'; File='engine'; Type='float'; Min=-1; Max=1; Default='-1'; Label='Placeable Shelter Threshold Override'; Help='Funcom: "The threshold value override for the placeable shelter, from 0 to 1. Negative value means it is disabled". Counterpart to Building Shelter Threshold Override.'; Category='Experimental' }
+
+    # Survival and server ruleset.
+    @{ Section=$script:DuneGcSecConsole; Key='Deathstill.ConversionTimeOverride'; File='engine'; Type='float'; Min=0; Unit='sec'; Label='Deathstill Conversion Time'; Help='Funcom: "Override Time for deathstill" - how long a deathstill takes to process a body, in seconds. Community-reported as working; not verified by us. Compiled default was not recovered.'; Category='Experimental' }
+    @{ Section=$script:DuneGcSecConsole; Key='Dune.PlayerDeathLootEnabled'; File='engine'; Type='bool01'; Label='Player Death Loot'; Help='Funcom: "Allows enabling or disabling death loot dropped by players". Turning this off means players keep their inventory on death. Compiled default was not recovered.'; Category='Experimental' }
+    @{ Section=$script:DuneGcSecConsole; Key='Dac.DisablePvpDamage'; File='engine'; Type='bool01'; Label='Disable PvP Damage'; Help='Funcom: "If true, pvp damage will be disabled. Pve/Evp damage will always work regardless". Server-wide, unlike the per-partition Deep Desert PvP setting. Compiled default was not recovered.'; Category='Experimental' }
+    @{ Section=$script:DuneGcSecConsole; Key='dw.EnableShelterSystem'; File='engine'; Type='bool01'; Label='Shelter System'; Help='Funcom: "Enable and disable the shelter system". Disabling it removes sandstorm shelter requirements entirely; expect wide-reaching effects. Compiled default was not recovered.'; Category='Experimental' }
+
+    # Base backup tool.
+    @{ Section=$script:DuneGcSecConsole; Key='dw.BaseBackupMaxNumberOfBackups'; File='engine'; Type='int'; Min=0; Label='Max Base Backups Per Player'; Help='Funcom: "The max number of base backups a player can store". Compiled default was not recovered.'; Category='Experimental' }
+    @{ Section=$script:DuneGcSecConsole; Key='dw.bBaseBackupToolBackupEnabled'; File='engine'; Type='bool01'; Label='Base Backup Tool - Backups'; Help='Funcom: "If the base backup tool should be enabled or disabled". Compiled default was not recovered.'; Category='Experimental' }
+    @{ Section=$script:DuneGcSecConsole; Key='dw.bBaseBackupToolPlacementEnabled'; File='engine'; Type='bool01'; Label='Base Backup Tool - Placement'; Help='Funcom: "If the base backup tool should be enabled or disabled" - the placement half, letting you allow backups while blocking blueprint placement. Compiled default was not recovered.'; Category='Experimental' }
+    @{ Section=$script:DuneGcSecConsole; Key='dw.bBaseBackupToolRecycleEnabled'; File='engine'; Type='bool01'; Label='Base Backup Tool - Recycle'; Help='Funcom: "If the base backup tool recycle should be enabled or disabled". Compiled default was not recovered.'; Category='Experimental' }
+    @{ Section=$script:DuneGcSecConsole; Key='dw.OverrideBaseBackupToolTimeRestrictionInSeconds'; File='engine'; Type='int'; Min=0; Unit='sec'; Label='Base Backup Time Restriction Override'; Help='Funcom: "Override the base backup tool time restriction". Console-variable counterpart of the Base Backup Tool Time Restriction game setting; which one wins when both are set is untested. Compiled default was not recovered.'; Category='Experimental' }
+
+    # Landsraad.
+    @{ Section=$script:DuneGcSecConsole; Key='Landsraad.ControlPointCaptureProgressTarget'; File='engine'; Type='float'; Min=0; Default='100'; Label='Control Point Capture Target'; Help='Funcom: "Set a custom ProgressTarget for all Landsraad ControlPoints, 100 being the Default". Lower values make control points quicker to capture, which suits small or solo servers.'; Category='Experimental' }
+
+    # Sandworm behaviour.
+    @{ Section=$script:DuneGcSecConsole; Key='Sandworm.SandwormEnrageThreshold'; File='engine'; Type='int'; Min=-1; Default='-1'; Label='Worm Enrage Threshold'; Help='Funcom: "The amount of attacks that the worm will do before enraging. -1 = not specified."'; Category='Experimental' }
+    @{ Section=$script:DuneGcSecConsole; Key='Sandworm.SandwormTargetChangeThreshold'; File='engine'; Type='int'; Min=0; Default='0'; Label='Worm Target Change Threshold'; Help='Funcom: "The amount of attacks that the worm will do before switching target. 0 = not specified."'; Category='Experimental' }
+    @{ Section=$script:DuneGcSecConsole; Key='Sandworm.SandwormTargetDropThreshold'; File='engine'; Type='int'; Min=0; Default='0'; Label='Worm Target Drop Threshold'; Help='Funcom: "The amount of attacks that the worm will do before dropping its target and adding it to the ignore list. 0 = not specified."'; Category='Experimental' }
+    @{ Section=$script:DuneGcSecConsole; Key='Sandworm.ThreatWarning.DefaultDistance'; File='engine'; Type='float'; Min=0; Label='Worm Threat Warning Distance'; Help='Funcom: "Distance for when the sandworm threat warning will appear on normal maps". Compiled default was not recovered.'; Category='Experimental' }
+    @{ Section=$script:DuneGcSecConsole; Key='Sandworm.ThreatWarning.DeepDesertDistance'; File='engine'; Type='float'; Min=0; Label='Worm Threat Warning Distance (Deep Desert)'; Help='Funcom: "Distance for when the sandworm threat warning will appear on deep desert maps". Compiled default was not recovered.'; Category='Experimental' }
+
+    # Vehicles.
+    @{ Section=$script:DuneGcSecConsole; Key='Vehicle.RecoveryEnabled'; File='engine'; Type='bool01'; Label='Vehicle Recovery'; Help='Funcom: "Enables vehicle recovery. If enabled, vehicles will not be deleted but kept in database for recovery via backup tool". Compiled default was not recovered.'; Category='Experimental' }
+    @{ Section=$script:DuneGcSecConsole; Key='Vehicle.BackupTool.Enabled'; File='engine'; Type='bool01'; Default='1'; Label='Vehicle Backup Tool'; Help='Funcom: "If false player wont be able to backup or restore vehicles and an onscreen notification will be shown if they try."'; Category='Experimental' }
+    @{ Section=$script:DuneGcSecConsole; Key='Vehicle.WreckedStateDespawnDuration'; File='engine'; Type='float'; Min=0; Unit='sec'; Label='Vehicle Wreck Despawn Time'; Help='Funcom: "The duration in seconds until a vehicle is despawned when in wrecked state". Compiled default was not recovered.'; Category='Experimental' }
+    @{ Section=$script:DuneGcSecConsole; Key='Vehicle.AmmoBlocksBackup'; File='engine'; Type='bool01'; Default='0'; Label='Ammo Blocks Vehicle Backup'; Help='Funcom: "Set whether ammo can remain in the vehicle ammo inventory when backing it up". 0 makes players empty ammo first.'; Category='Experimental' }
+
+    # Server instance. Bgd.* is deliberately server-only: it is not mirrored to a
+    # player client config (see the ClientApply pass below).
+    @{ Section=$script:DuneGcSecConsole; Key='Bgd.ServerPlayerHardCap'; File='engine'; Type='int'; Min=-1; Default='-1'; Label='Player Hard Cap'; Help='Funcom: "Override for player CCU hard cap for this server instance. -1 corresponds to using the default value provided by the director." Raising it above what the VM can feed costs RAM and CPU per extra player; watch Server Health after changing it.'; Category='Experimental' }
+
     # --- Parity additions (the reference implementation serverSettingsSchema) ---
     # ACCURACY NOTE (pending validation against the live UserGame.ini): the keys
     # below were NOT found in the stock DefaultGame.ini dump (docs/Dune_Server_INI_Field_Sheet.md,
