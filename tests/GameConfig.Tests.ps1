@@ -117,6 +117,41 @@ m_bShouldForceEnablePvpOnAllPartitions=True
 }
 
 Describe 'Fuel burning startup override' -Tag 'GameConfig' {
+    It 'leaves a server that sets no console variables completely untouched' {
+        # Most servers never open the Experimental lists. A battlegroup restart
+        # still rebuilds startup arguments from the INI, so this must not rewrite
+        # the battlegroup on their behalf - even when the pod carries unrelated
+        # overrides such as per-sietch display names.
+        Mock Get-V6Battlegroup {
+            @{
+                Ns = 'dune-ns'
+                Name = 'dune-bg'
+                Bg = [pscustomobject]@{ spec = [pscustomobject]@{
+                    serverGroup = [pscustomobject]@{ template = [pscustomobject]@{ spec = [pscustomobject]@{
+                        sets = @([pscustomobject]@{
+                            map = 'Survival_1'
+                            dedicatedScaling = $false
+                            partitions = @(1)
+                            podSpecs = @([pscustomobject]@{
+                                index = 1
+                                arguments = @('-execcmds="Bgd.ServerDisplayName ''Hagga''"')
+                            })
+                        })
+                    } } }
+                } }
+            }
+        }
+        Mock _Invoke-V6BgJsonPatch { throw 'Must not patch when the user set no console variables.' }
+
+        $result = Set-V6ConsoleVariableOverrides -Ip '192.0.2.1' `
+            -Names @('dw.FuelBurningMultiplier', 'Deathstill.ConversionTimeOverride') `
+            -Values @{}
+
+        $result.Success | Should -BeTrue
+        $result.NoChange | Should -BeTrue
+        Should -Invoke _Invoke-V6BgJsonPatch -Times 0
+    }
+
     It 'merges fuel and a per-sietch name into one ExecCmds argument' {
         $arguments = @(_Set-V6ExecCommand `
             -Arguments @('-log', '-execcmds="Bgd.ServerDisplayName ''Hagga, Prime''"') `
