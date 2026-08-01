@@ -16,6 +16,7 @@ import {
   deleteGameConfigBackups,
   getGameConfigClient,
   setGameConfigClientDir,
+  setGameConfigClientEngineEnabled,
   applyGameConfigClient,
   openGameConfigClientFile,
   getGameConfigDefaults,
@@ -44,6 +45,7 @@ type LoadState = 'idle' | 'loading' | 'ready' | 'error' | 'unavailable'
 
 // One server-vs-client disagreement for a customised ClientApply setting.
 type ClientMismatch = {
+  file: 'game' | 'engine'
   key: string
   label: string
   section: string
@@ -55,7 +57,17 @@ type ClientMismatch = {
   structural?: boolean
 }
 
+function clientBundleFor(info: GameConfigClientInfo, file: 'game' | 'engine') {
+  return file === 'engine' ? info.engine : (info.game ?? info)
+}
+
 const SANDWORM_ENABLED_KEY = 'sandworm.dune.Enabled'
+const CLIENT_INI_PATHS = {
+  game: '%LOCALAPPDATA%\\DuneSandbox\\Saved\\Config\\WindowsClient\\Game.ini',
+  engine: '%LOCALAPPDATA%\\DuneSandbox\\Saved\\Config\\WindowsClient\\Engine.ini',
+} as const
+
+type ClientShareEntry = { file: 'game' | 'engine'; path: string; block: string }
 
 // Bool literal pairs per type so toggles emit exactly what UE expects.
 function boolPair(type: GameConfigField['type']): { on: string; off: string } | null {
@@ -99,34 +111,37 @@ function isCustomized(data: GameConfigResponse | null, field: GameConfigField): 
   return lv !== '' && lv !== fieldDefault(field)
 }
 
-// Build the client-side Game.ini block for a category: its customised (non-default)
-// ClientApply scalar fields, grouped by INI section. Struct-member fields (e.g. the
-// Landsraad Data=(...) blob) are excluded — they aren't simple key=value lines.
-// Returns hasClientFields so the UI can flag sections that CAN take client settings
-// but currently have none customised. CRLF-joined for pasting into a Windows Game.ini.
-function buildCategoryClientBlock(
+// Build file-aware client blocks for a category's customised scalar fields.
+function buildCategoryClientBlocks(
   cat: GameConfigCategory,
   cfg: GameConfigResponse | null,
-): { block: string; count: number; hasClientFields: boolean } {
+): { entries: ClientShareEntry[]; count: number; hasClientFields: boolean } {
   const clientFields = (cat.fields ?? []).filter(f => f && f.key && f.clientApply && !f.structKey)
   const hasClientFields = clientFields.length > 0
-  const bySection = new Map<string, string[]>()
+  const byFile = new Map<'game' | 'engine', Map<string, string[]>>()
   let count = 0
   for (const f of clientFields) {
     if (!isCustomized(cfg, f)) continue
     const v = liveValue(cfg, f)
     if (v === '') continue
+    const bySection = byFile.get(f.file) ?? new Map<string, string[]>()
     const arr = bySection.get(f.section) ?? []
     arr.push(`${f.key}=${v}`)
     bySection.set(f.section, arr)
+    byFile.set(f.file, bySection)
     count++
   }
-  if (count === 0) return { block: '', count: 0, hasClientFields }
-  const parts: string[] = []
-  for (const [section, lines] of bySection) {
-    parts.push(`[${section}]`, ...lines, '')
+  const entries: ClientShareEntry[] = []
+  for (const [file, bySection] of byFile) {
+    const parts: string[] = []
+    for (const [section, lines] of bySection) parts.push(`[${section}]`, ...lines, '')
+    entries.push({
+      file,
+      path: CLIENT_INI_PATHS[file],
+      block: parts.join('\r\n').replace(/\s+$/, '') + '\r\n',
+    })
   }
-  return { block: parts.join('\r\n').replace(/\s+$/, '') + '\r\n', count, hasClientFields }
+  return { entries, count, hasClientFields }
 }
 
 // The value an input should hold: the live override when present, otherwise the default.
@@ -176,7 +191,9 @@ function describeClientApply(
   if (removed > 0) parts.push(`removed ${removed} key${removed === 1 ? '' : 's'} (reset/cleanup)`)
   const what = parts.length > 0 ? parts.join(' and ') : `applied ${r.applied} change${r.applied === 1 ? '' : 's'}`
   const lead = parts.length > 0 ? '' : `${writeVerb}: `
-  return `${lead}${what.charAt(0).toUpperCase()}${what.slice(1)} in your local client Game.ini (${r.path}).`
+  const names = [...new Set(items.map(i => i.file === 'engine' ? 'Engine.ini' : 'Game.ini'))]
+  const target = names.length > 0 ? names.join(' + ') : 'client config'
+  return `${lead}${what.charAt(0).toUpperCase()}${what.slice(1)} in your local ${target}.`
 }
 
 function sectionIsManaged(data: GameConfigResponse, field: GameConfigField): boolean {  if (!data || !field) return false
@@ -208,7 +225,7 @@ export function GameConfig() {
   const [sandwormModalOpen, setSandwormModalOpen] = useState(false)
   const [search, setSearch] = useState('')
   // "Give players this" section share popup (client-side Game.ini block).
-  const [shareBlock, setShareBlock] = useState<{ title: string; block: string } | null>(null)
+  const [shareBlock, setShareBlock] = useState<{ title: string; entries: ClientShareEntry[] } | null>(null)
   const [backing, setBacking] = useState(false)
   const [backupMsg, setBackupMsg] = useState<string | null>(null)
   const [backupError, setBackupError] = useState<string | null>(null)
@@ -219,14 +236,14 @@ export function GameConfig() {
   const [backupSel, setBackupSel] = useState<Set<string>>(new Set())
   const [backupDeleting, setBackupDeleting] = useState(false)
 
-  // Local client config (this PC). DST runs locally, so it can read/write the
-  // player's own client Game.ini directly — gated behind explicit user action.
+  // Local client config (this PC). Game.ini writes remain per-action; Engine.ini
+  // management requires the persistent, disabled-by-default opt-in.
   const [clientInfo, setClientInfo] = useState<GameConfigClientInfo | null>(null)
   const [clientDirInput, setClientDirInput] = useState('')
   const [clientBusy, setClientBusy] = useState(false)
   const [clientMsg, setClientMsg] = useState<string | null>(null)
   const [clientErr, setClientErr] = useState<string | null>(null)
-  const [clientViewOpen, setClientViewOpen] = useState(false)
+  const [clientViewFile, setClientViewFile] = useState<'game' | 'engine' | null>(null)
   const [applying, setApplying] = useState(false)
   const [clientSnippetCopied, setClientSnippetCopied] = useState(false)
 
@@ -256,27 +273,35 @@ export function GameConfig() {
 
   // INI text the admin can hand to OTHER players (who don't run DST) to paste
   // into their own client Game.ini — grouped by section, last-write-wins order.
-  const clientSnippet = useMemo(() => {
-    if (!clientApply || clientApply.items.length === 0) return ''
-    const bySection = new Map<string, string[]>()
+  const clientSnippetEntries = useMemo<ClientShareEntry[]>(() => {
+    if (!clientApply || clientApply.items.length === 0) return []
+    const byFile = new Map<'game' | 'engine', Map<string, string[]>>()
     for (const it of clientApply.items) {
+      const bySection = byFile.get(it.file) ?? new Map<string, string[]>()
       const lines = bySection.get(it.section) ?? []
       lines.push(`${it.key}=${it.value}`)
       bySection.set(it.section, lines)
+      byFile.set(it.file, bySection)
     }
-    return [...bySection.entries()]
-      .map(([section, lines]) => [`[${section}]`, ...lines].join('\n'))
-      .join('\n\n')
+    return [...byFile.entries()].map(([file, bySection]) => ({
+      file,
+      path: clientApply.paths?.[file] ?? CLIENT_INI_PATHS[file],
+      block: [...bySection.entries()]
+        .map(([section, lines]) => [`[${section}]`, ...lines].join('\n'))
+        .join('\n\n'),
+    }))
   }, [clientApply])
 
   const onCopyClientSnippet = useCallback(async () => {
-    if (!clientSnippet) return
+    if (clientSnippetEntries.length === 0) return
     try {
-      await navigator.clipboard.writeText(clientSnippet)
+      await navigator.clipboard.writeText(clientSnippetEntries
+        .map(entry => `; ${entry.path}\n${entry.block}`)
+        .join('\n\n'))
       setClientSnippetCopied(true)
       setTimeout(() => setClientSnippetCopied(false), 1500)
     } catch { /* clipboard may be unavailable; the snippet is still shown */ }
-  }, [clientSnippet])
+  }, [clientSnippetEntries])
 
   // Schema struct groups (file||section||structKey) -> member field keys. Used to
   // detect a structurally-incomplete client struct box, e.g. a stripped
@@ -311,17 +336,19 @@ export function GameConfig() {
   // stripped LandsraadSettings box that the value-only pass would miss because
   // the missing members sit at default and so never register as customised.
   const clientMismatches = useMemo<ClientMismatch[]>(() => {
-    if (!schema || !cfg || !clientInfo || !clientInfo.exists) return []
+    if (!schema || !cfg || !clientInfo) return []
     // Struct groups that are a PARTIAL stub client-side: at least one member
     // present AND at least one missing. A complete box (all present) is healthy;
     // an entirely-absent box is "not applied yet" (handled by the value path
     // for any customised members), not a stub — only the partial case is drift.
     const stubGroups = new Set<string>()
     for (const [id, g] of structMemberGroups) {
+      if (g.file === 'engine' && !clientInfo.engineEnabled) continue
       let present = 0
       let missing = 0
+      const bundle = clientBundleFor(clientInfo, g.file as 'game' | 'engine')
       for (const mk of g.keys) {
-        const v = clientInfo.effectiveByKey?.[mk]
+        const v = bundle.effectiveByKey?.[mk]
         if (v === undefined || v === null) missing++
         else present++
       }
@@ -331,6 +358,7 @@ export function GameConfig() {
     for (const cat of schema) {
       for (const f of cat?.fields ?? []) {
         if (!f?.clientApply || !f.key) continue
+        if (f.file === 'engine' && !clientInfo.engineEnabled) continue
         const groupId = f.structKey ? `${f.file}||${f.section}||${f.structKey}` : null
         const inStub = groupId ? stubGroups.has(groupId) : false
         const serverValue = currentValue(cfg, f)
@@ -338,19 +366,20 @@ export function GameConfig() {
         // map so struct members (e.g. LandsraadSettings Data=(...) scalars) — which
         // aren't flat keys — are compared by their real client value instead of
         // always reading as missing (which made the mismatch never clear).
-        const flat = clientInfo.effective?.[`${f.section}||${f.key}`]
+        const clientBundle = clientBundleFor(clientInfo, f.file)
+        const flat = clientBundle.effective?.[`${f.section}||${f.key}`]
         const raw = (flat === undefined || flat === null)
-          ? clientInfo.effectiveByKey?.[f.key]
+          ? clientBundle.effectiveByKey?.[f.key]
           : flat
         const clientValue = raw === undefined || raw === null ? null : String(raw)
         if (inStub) {
           if (clientValue !== null && valuesEqual(clientValue, serverValue)) continue
-          out.push({ key: f.key, label: f.label, section: f.section, serverValue, clientValue, structural: true })
+          out.push({ file: f.file, key: f.key, label: f.label, section: f.section, serverValue, clientValue, structural: true })
           continue
         }
         if (!isCustomized(cfg, f)) continue
         if (clientValue !== null && valuesEqual(clientValue, serverValue)) continue
-        out.push({ key: f.key, label: f.label, section: f.section, serverValue, clientValue })
+        out.push({ file: f.file, key: f.key, label: f.label, section: f.section, serverValue, clientValue })
       }
     }
     return out
@@ -361,17 +390,23 @@ export function GameConfig() {
   const hasStructuralDrift = useMemo(() => clientMismatches.some(m => m.structural), [clientMismatches])
 
   // INI snippet of the SERVER values for the mismatched keys (manual-merge / share).
-  const mismatchSnippet = useMemo(() => {
-    if (clientMismatches.length === 0) return ''
-    const bySection = new Map<string, string[]>()
+  const mismatchSnippetEntries = useMemo<ClientShareEntry[]>(() => {
+    if (clientMismatches.length === 0) return []
+    const byFile = new Map<'game' | 'engine', Map<string, string[]>>()
     for (const m of clientMismatches) {
+      const bySection = byFile.get(m.file) ?? new Map<string, string[]>()
       const lines = bySection.get(m.section) ?? []
       lines.push(`${m.key}=${m.serverValue}`)
       bySection.set(m.section, lines)
+      byFile.set(m.file, bySection)
     }
-    return [...bySection.entries()]
-      .map(([section, lines]) => [`[${section}]`, ...lines].join('\n'))
-      .join('\n\n')
+    return [...byFile.entries()].map(([file, bySection]) => ({
+      file,
+      path: clientInfo ? clientBundleFor(clientInfo, file).path : CLIENT_INI_PATHS[file],
+      block: [...bySection.entries()]
+        .map(([section, lines]) => [`[${section}]`, ...lines].join('\n'))
+        .join('\n\n'),
+    }))
   }, [clientMismatches])
 
   // Stable signature of the current mismatch set: changes only when the set of
@@ -379,19 +414,21 @@ export function GameConfig() {
   const mismatchSignature = useMemo(() => {
     if (clientMismatches.length === 0) return ''
     return clientMismatches
-      .map(m => `${m.section}||${m.key}=${m.serverValue}>${m.clientValue ?? ''}`)
+      .map(m => `${m.file}||${m.section}||${m.key}=${m.serverValue}>${m.clientValue ?? ''}`)
       .sort()
       .join('|')
   }, [clientMismatches])
 
   const onCopyMismatchSnippet = useCallback(async () => {
-    if (!mismatchSnippet) return
+    if (mismatchSnippetEntries.length === 0) return
     try {
-      await navigator.clipboard.writeText(mismatchSnippet)
+      await navigator.clipboard.writeText(mismatchSnippetEntries
+        .map(entry => `; ${entry.path}\n${entry.block}`)
+        .join('\n\n'))
       setMismatchCopied(true)
       setTimeout(() => setMismatchCopied(false), 1500)
     } catch { /* clipboard may be unavailable; the snippet is still shown */ }
-  }, [mismatchSnippet])
+  }, [mismatchSnippetEntries])
 
   // Auto-surface the popup once per detected mismatch set, but NOT if the user
   // already dismissed this exact set (persisted across reloads). When the
@@ -419,16 +456,20 @@ export function GameConfig() {
     setMismatchErr(null)
   }, [mismatchSignature, persistMismatchDismissed])
 
-  // Write the server's values into the local client Game.ini. The click itself is
-  // the user's consent to edit that file; DST backs it up first. Falls back to a
-  // copy-box if DST can't write (no folder / permission).
+  // Write the server's values into the matching local client INI files.
   const onFixClientMismatch = useCallback(async () => {
     if (clientMismatches.length === 0) return
     setMismatchErr(null)
     setMismatchMsg(null)
     setMismatchFixing(true)
     try {
-      const items = clientMismatches.map(m => ({ key: m.key, label: m.label, section: m.section, value: m.serverValue }))
+      const items = clientMismatches.map(m => ({
+        file: m.file,
+        key: m.key,
+        label: m.label,
+        section: m.section,
+        value: m.serverValue,
+      }))
       const r = await applyGameConfigClient(items, clientInfo?.dir)
       setClientInfo(r.client)
       setMismatchMsg(describeClientApply(r, 'Synced'))
@@ -498,19 +539,46 @@ export function GameConfig() {
     }
   }, [clientDirInput])
 
-  const onViewClient = useCallback(async () => {
-    setClientErr(null)
-    setClientViewOpen(true)
-    await refreshClient()
-  }, [refreshClient])
-
-  // Open the local client Game.ini in Notepad on this PC (DST runs locally).
-  const onOpenInEditor = useCallback(async () => {
+  const onToggleClientEngine = useCallback(async (enabled: boolean) => {
     setClientErr(null)
     setClientMsg(null)
     setClientBusy(true)
     try {
-      const r = await openGameConfigClientFile(clientInfo?.dir)
+      const result = await setGameConfigClientEngineEnabled(enabled, clientInfo?.dir)
+      setClientInfo(result.client)
+      if (result.client.engineEnabled) {
+        setClientMsg('Engine.ini management enabled. DST can now mirror opted-in gameplay settings.')
+      } else {
+        setClientApply(prev => {
+          if (!prev) return null
+          const items = prev.items.filter(item => item.file !== 'engine')
+          return items.length > 0 ? { ...prev, items } : null
+        })
+        setClientMsg(result.removed > 0
+          ? `Engine.ini management disabled and ${result.removed} DST-managed setting${result.removed === 1 ? '' : 's'} removed.`
+          : 'Engine.ini management disabled. No DST-managed Engine.ini settings were present.')
+      }
+      window.setTimeout(() => setClientMsg(null), 7000)
+    } catch (e) {
+      setClientErr(e instanceof Error ? e.message : String(e))
+    } finally {
+      setClientBusy(false)
+    }
+  }, [clientInfo])
+
+  const onViewClient = useCallback(async (file: 'game' | 'engine') => {
+    setClientErr(null)
+    setClientViewFile(file)
+    await refreshClient()
+  }, [refreshClient])
+
+  // Open either local client INI in Notepad on this PC (DST runs locally).
+  const onOpenInEditor = useCallback(async (file: 'game' | 'engine') => {
+    setClientErr(null)
+    setClientMsg(null)
+    setClientBusy(true)
+    try {
+      const r = await openGameConfigClientFile(file, clientInfo?.dir)
       setClientMsg(`Opened ${r.path} in Notepad.`)
       window.setTimeout(() => setClientMsg(null), 5000)
     } catch (e) {
@@ -719,13 +787,29 @@ export function GameConfig() {
     return m
   }, [schema])
 
+  const experimentalStartupKeys = useMemo(() => {
+    const keys = new Set<string>()
+    for (const category of schema ?? []) {
+      if (category.category !== 'Experimental') continue
+      for (const field of category.fields ?? []) {
+        if (field.file === 'engine') keys.add(field.key)
+      }
+    }
+    return keys
+  }, [schema])
+  const experimentalStartupDirtyKeys = useMemo(
+    () => dirtyKeys.filter(k => experimentalStartupKeys.has(k)),
+    [dirtyKeys, experimentalStartupKeys],
+  )
+
   // For a client-apply item, decide whether mirroring it ADDS, UPDATES, or
-  // REMOVES the key in the client Game.ini, so the modal can show it per-line.
-  const clientApplyAction = useCallback((it: { key: string; section: string; value: string }): { label: 'Add' | 'Update' | 'Remove'; cls: string } => {
+  // REMOVES the key in the matching client INI, so the modal can show it per-line.
+  const clientApplyAction = useCallback((it: { file: 'game' | 'engine'; key: string; section: string; value: string }): { label: 'Add' | 'Update' | 'Remove'; cls: string } => {
     const def = fieldByKey[it.key]?.default ?? ''
     if (def !== '' && valuesEqual(it.value, def)) return { label: 'Remove', cls: 'text-danger' }
-    const flat = clientInfo?.effective?.[`${it.section}||${it.key}`]
-    const cur = (flat === undefined || flat === null) ? clientInfo?.effectiveByKey?.[it.key] : flat
+    const bundle = clientInfo ? clientBundleFor(clientInfo, it.file) : null
+    const flat = bundle?.effective?.[`${it.section}||${it.key}`]
+    const cur = (flat === undefined || flat === null) ? bundle?.effectiveByKey?.[it.key] : flat
     if (cur === undefined || cur === null || String(cur) === '') return { label: 'Add', cls: 'text-success' }
     return { label: 'Update', cls: 'text-warning' }
   }, [fieldByKey, clientInfo])
@@ -751,6 +835,20 @@ export function GameConfig() {
   async function onSubmit(e: FormEvent) {
     e.preventDefault()
     if (dirtyKeys.length === 0) return
+    if (experimentalStartupDirtyKeys.length > 0) {
+      const count = experimentalStartupDirtyKeys.length
+      const engineStatus = clientInfo?.engineEnabled
+        ? 'Client Engine.ini management is currently ON.'
+        : 'Client Engine.ini management is currently OFF.'
+      const ok = window.confirm(
+        `Save ${count} Experimental startup setting${count === 1 ? '' : 's'}?\n\n`
+        + 'Confirmed behavior: some Experimental settings require matching client-side Engine.ini values before they take full effect. '
+        + 'These client edits do not affect public/live servers; those servers remain authoritative.\n\n'
+        + `${engineStatus} Turn it on under “Your client config” at the top of this page to let DST manage those values.\n\n`
+        + 'Saving also changes Hagga server startup commands and replaces the Hagga pod immediately. Players there will disconnect, and PostLandscape physics initialization can keep Hagga unavailable longer than a normal battlegroup restart.',
+      )
+      if (!ok) return
+    }
     setSaving(true)
     setSaveError(null)
     setSavedMsg(null)
@@ -765,6 +863,9 @@ export function GameConfig() {
       setOriginals(seeded)
       const n = out.applied ?? dirtyKeys.length
       let msg = `Saved ${n} change${n === 1 ? '' : 's'} into the DST-managed block. Tip: use “Backup settings” to snapshot before big changes — DST no longer auto-backs-up on every save.`
+      if (experimentalStartupDirtyKeys.length > 0) {
+        msg += ' Hagga startup commands were updated; its pod is being replaced and may remain unavailable during PostLandscape physics initialization.'
+      }
       // If m_TaskGoalAmount was in this save, DST also rewrote the current
       // Landsraad term's goal_amount for every House row — surface the result.
       const lg = out.landsraadGoalApply
@@ -972,29 +1073,62 @@ export function GameConfig() {
           <>
             <button
               type="button"
-              onClick={() => void onOpenInEditor()}
+              onClick={() => void onOpenInEditor('game')}
               disabled={clientBusy}
               className="btn-secondary"
-              title="Open your local client Game.ini in Notepad"
+              title="Open local client Game.ini in Notepad"
             >
-              <Icon name="ExternalLink" size={14} /> Open in Notepad
+              <Icon name="ExternalLink" size={14} /> Game.ini
             </button>
             <button
               type="button"
-              onClick={() => void onViewClient()}
+              onClick={() => void onOpenInEditor('engine')}
+              disabled={clientBusy}
               className="btn-secondary"
-              title="View the contents of your local client Game.ini"
+              title="Open local client Engine.ini in Notepad"
             >
-              <Icon name="FileSearch" size={14} /> View client config
+              <Icon name="ExternalLink" size={14} /> Engine.ini
+            </button>
+            <button
+              type="button"
+              onClick={() => void onViewClient('game')}
+              className="btn-secondary"
+              title="View local client Game.ini"
+            >
+              <Icon name="FileSearch" size={14} /> View Game
+            </button>
+            <button
+              type="button"
+              onClick={() => void onViewClient('engine')}
+              className="btn-secondary"
+              title="View local client Engine.ini"
+            >
+              <Icon name="FileSearch" size={14} /> View Engine
             </button>
           </>
         }
       >
         <p className="text-xs text-text-muted mb-3">
-          A few settings (landclaim limits, building restrictions) are read by the game client too. DST can mirror
-          those into your own client&apos;s <span className="font-mono">Game.ini</span> on this machine when you save —
-          with your permission. Point this at your Dune client config folder.
+          DST can mirror game settings into <span className="font-mono">Game.ini</span>. Managing{' '}
+          <span className="font-mono">Engine.ini</span> is a separate opt-in because client console-variable overrides
+          can materially change gameplay.
         </p>
+        <label className="mb-3 flex items-start gap-3 rounded-lg border border-warning/30 bg-warning/5 p-3 cursor-pointer select-none">
+          <input
+            type="checkbox"
+            checked={clientInfo?.engineEnabled === true}
+            onChange={e => void onToggleClientEngine(e.target.checked)}
+            disabled={clientBusy || !clientInfo || (!clientInfo.dirExists && !clientInfo.engineEnabled)}
+            className="h-4 w-4 mt-0.5 accent-warning shrink-0"
+          />
+          <span>
+            <span className="block text-sm font-medium text-text">Allow DST to manage my client Engine.ini</span>
+            <span className="block text-xs text-text-muted mt-0.5">
+              Off by default. While off, DST bypasses Engine.ini mismatch checks, prompts, and writes. Turning this off
+              removes DST-managed Engine.ini values. Close Dune: Awakening before changing this option.
+            </span>
+          </span>
+        </label>
         <div className="flex items-center gap-2">
           <input
             type="text"
@@ -1017,13 +1151,21 @@ export function GameConfig() {
           </button>
         </div>
         {clientInfo && (
-          <div className="text-[11px] text-text-dim mt-2 font-mono break-all">
-            {clientInfo.path}{' '}
-            {clientInfo.exists
-              ? <span className="text-success">• found</span>
-              : clientInfo.dirExists
-                ? <span className="text-warning">• Game.ini not present yet (will be created on apply)</span>
-                : <span className="text-danger">• folder not found</span>}
+          <div className="text-[11px] text-text-dim mt-2 font-mono break-all space-y-0.5">
+            {(['game', 'engine'] as const).map(file => {
+              const bundle = clientBundleFor(clientInfo, file)
+              return (
+                <div key={file}>
+                  {bundle.path}{' '}
+                  {file === 'engine' && !clientInfo.engineEnabled && <span className="text-text-dim">• management disabled </span>}
+                  {bundle.exists
+                    ? <span className="text-success">• found</span>
+                    : clientInfo.dirExists
+                      ? <span className="text-warning">• not present yet (will be created on apply)</span>
+                      : <span className="text-danger">• folder not found</span>}
+                </div>
+              )
+            })}
           </div>
         )}
       </CollapsibleCard>
@@ -1108,8 +1250,7 @@ export function GameConfig() {
                   <p className="text-warning mb-2 flex items-start gap-1.5">
                     <Icon name="AlertTriangle" size={14} className="mt-0.5 shrink-0" />
                     <span>
-                      Your local client{' '}
-                      <span className="font-mono break-all">{clientInfo?.path ?? 'Game.ini'}</span>{' '}
+                      Your local client config{' '}
                       has an <strong>incomplete</strong> settings block — it carries only some of the
                       entries the game expects, so the rest silently fall back to built-in defaults
                       in-game (a stripped struct from an older write). Fixing rewrites the whole block.
@@ -1119,8 +1260,7 @@ export function GameConfig() {
                 <p className="text-text-muted mb-3">
                   {clientMismatches.length === 1 ? 'This setting is' : 'These settings are'} read by both the
                   server and the game client. Your server uses {clientMismatches.length === 1 ? 'this value' : 'these values'},
-                  but your local client{' '}
-                  <span className="font-mono break-all">{clientInfo?.path ?? 'Game.ini'}</span>{' '}
+                  but your local client config{' '}
                   {hasStructuralDrift
                     ? 'is missing or differs on them'
                     : (clientMismatches.length === 1 ? 'has a different one' : 'has different ones')}. Until they match,
@@ -1141,7 +1281,9 @@ export function GameConfig() {
                         <tr key={m.key} className="border-t border-border">
                           <td className="px-2 py-1">
                             <div className="text-text">{m.label}</div>
-                            <div className="font-mono text-text-dim text-[11px] break-all">[{m.section}] {m.key}</div>
+                            <div className="font-mono text-text-dim text-[11px] break-all">
+                              {m.file === 'engine' ? 'Engine.ini' : 'Game.ini'} · [{m.section}] {m.key}
+                            </div>
                           </td>
                           <td className="px-2 py-1 font-mono text-success whitespace-nowrap">{m.serverValue}</td>
                           <td className="px-2 py-1 font-mono text-danger whitespace-nowrap">{m.clientValue ?? '(not set)'}</td>
@@ -1164,7 +1306,7 @@ export function GameConfig() {
                       onClick={() => void onFixClientMismatch()}
                       disabled={mismatchFixing}
                       className="btn-primary"
-                      title="Let DST write the server's values into your own client's Game.ini on this PC"
+                      title="Write server values into the matching client INI files on this PC"
                     >
                       <Icon name={mismatchFixing ? 'Loader2' : 'MonitorCog'} size={14} className={mismatchFixing ? 'animate-spin' : ''} />
                       {mismatchFixing ? 'Fixing…' : 'Fix my client config'}
@@ -1188,19 +1330,22 @@ export function GameConfig() {
                       </button>
                     </div>
                     <p className="text-text-muted mb-1">
-                      Merge these under the matching section headers in{' '}
-                      <span className="font-mono break-all">{clientInfo?.path ?? 'your client Game.ini'}</span>:
+                      Merge each block into the matching file and section:
                     </p>
-                    <pre className="px-2 py-1.5 rounded bg-surface-2 text-text text-xs whitespace-pre-wrap break-all overflow-x-auto">{mismatchSnippet}</pre>
+                    {mismatchSnippetEntries.map(entry => (
+                      <div key={entry.file} className="mb-2">
+                        <div className="font-mono text-[11px] text-text-dim break-all mb-1">{entry.path}</div>
+                        <pre className="px-2 py-1.5 rounded bg-surface-2 text-text text-xs whitespace-pre-wrap break-all overflow-x-auto">{entry.block}</pre>
+                      </div>
+                    ))}
                     <button type="button" onClick={() => onDismissMismatch()} className="btn-ghost text-xs mt-2">
                       Close
                     </button>
                   </div>
                 )}
                 <p className="text-[11px] text-text-dim mt-2">
-                  “Fix my client config” only changes{' '}
-                  <span className="font-mono break-all">{clientInfo?.path ?? 'your local client Game.ini'}</span>{' '}
-                  on this machine (backed up first). It never touches other players&apos; configs.
+                  “Fix my client config” only changes this machine&apos;s DST-managed client INI blocks. It never
+                  touches other players&apos; configs. Close the game before applying Engine.ini changes.
                 </p>
               </div>
               <button
@@ -1237,10 +1382,10 @@ export function GameConfig() {
                   {clientApply.items.map(it => {
                     const act = clientApplyAction(it)
                     return (
-                      <li key={it.key} className="font-mono text-xs text-text flex items-start gap-1.5">
+                      <li key={`${it.file}:${it.key}`} className="font-mono text-xs text-text flex items-start gap-1.5">
                         <span className={`shrink-0 font-sans font-semibold uppercase text-[10px] px-1.5 py-0.5 rounded bg-surface-2 ${act.cls}`}>{act.label}</span>
                         <span className="min-w-0">
-                          <span className="text-text-muted">[{it.section}]</span>{' '}
+                          <span className="text-text-muted">{it.file === 'engine' ? 'Engine.ini' : 'Game.ini'} · [{it.section}]</span>{' '}
                           {act.label === 'Remove' ? <span className="line-through text-text-dim">{it.key}={it.value}</span> : <>{it.key}={it.value}</>}
                           <span className="text-text-muted"> — {it.label}</span>
                         </span>
@@ -1249,9 +1394,13 @@ export function GameConfig() {
                   })}
                 </ul>
                 <p className="text-text-muted">
-                  Add {clientApply.items.length === 1 ? 'it' : 'them'} under the matching section in each client's:
+                  Add {clientApply.items.length === 1 ? 'it' : 'them'} under the matching section in each client file:
                 </p>
-                <code className="block mt-1 px-2 py-1 rounded bg-surface-2 text-text text-xs break-all">{clientApply.path}</code>
+                <div className="mt-1 space-y-1">
+                  {clientSnippetEntries.map(entry => (
+                    <code key={entry.file} className="block px-2 py-1 rounded bg-surface-2 text-text text-xs break-all">{entry.path}</code>
+                  ))}
+                </div>
 
                 <div className="mt-3 pt-3 border-t border-border">
                   <div className="flex items-center justify-between gap-2 mb-1">
@@ -1267,10 +1416,14 @@ export function GameConfig() {
                     </button>
                   </div>
                   <p className="text-text-muted mb-1">
-                    Players who don&apos;t run DST can paste these exact lines into their own
-                    {' '}<span className="font-mono">{clientApply.path}</span> (merge under the matching section headers):
+                    Players who don&apos;t run DST can paste each block into the matching file:
                   </p>
-                  <pre className="px-2 py-1.5 rounded bg-surface-2 text-text text-xs whitespace-pre-wrap break-all overflow-x-auto">{clientSnippet}</pre>
+                  {clientSnippetEntries.map(entry => (
+                    <div key={entry.file} className="mb-2">
+                      <div className="font-mono text-[11px] text-text-dim break-all mb-1">{entry.path}</div>
+                      <pre className="px-2 py-1.5 rounded bg-surface-2 text-text text-xs whitespace-pre-wrap break-all overflow-x-auto">{entry.block}</pre>
+                    </div>
+                  ))}
                 </div>
 
                 <div className="flex items-center gap-2 mt-3">
@@ -1279,7 +1432,7 @@ export function GameConfig() {
                     onClick={() => void onApplyToClient()}
                     disabled={applying}
                     className="btn-primary"
-                    title="Let DST write these settings into your own client's Game.ini on this PC"
+                    title="Write these settings into the matching client INI files on this PC"
                   >
                     <Icon name={applying ? 'Loader2' : 'MonitorCog'} size={14} className={applying ? 'animate-spin' : ''} />
                     {applying ? 'Applying…' : 'Apply to my client'}
@@ -1289,8 +1442,8 @@ export function GameConfig() {
                   </button>
                 </div>
                 <p className="text-[11px] text-text-dim mt-2">
-                  “Apply to my client” only changes <span className="font-mono break-all">{clientInfo?.path ?? 'your local client Game.ini'}</span> on
-                  this machine (backed up first). Other players still apply manually.
+                  “Apply to my client” only changes DST-managed blocks in this machine&apos;s Game.ini / Engine.ini.
+                  Other players still apply manually. Close the game before Engine.ini writes.
                 </p>
               </div>
               <button
@@ -1329,15 +1482,15 @@ export function GameConfig() {
           <div className="space-y-5">
             {(filteredSchema ?? []).map(cat => {
               const fullCat = schema?.find(c => c.category === cat.category) ?? cat
-              const share = buildCategoryClientBlock(fullCat, cfg)
+              const share = buildCategoryClientBlocks(fullCat, cfg)
               return (
               <CategoryCard
                 key={cat.category}
                 category={cat.category}
                 count={(cat.fields ?? []).length}
-                clientBlock={share.block}
+                clientBlock={share.count > 0 ? 'available' : ''}
                 hasClientFields={share.hasClientFields}
-                onShare={() => setShareBlock({ title: `${cat.category} — give players this`, block: share.block })}
+                onShare={() => setShareBlock({ title: `${cat.category} — give players this`, entries: share.entries })}
                 forceOpen={search.trim() !== ''}
               >
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-x-6 gap-y-4">
@@ -1419,8 +1572,8 @@ export function GameConfig() {
       {shareBlock && (
         <IniShareModal
           title={shareBlock.title}
-          block={shareBlock.block}
-          subtitle="These are client-side settings. Players connecting to your server must add this block to their own Game.ini for it to take effect on their end."
+          entries={shareBlock.entries}
+          subtitle="Players connecting to your server should add each block to the matching local client INI file."
           onClose={() => setShareBlock(null)}
         />
       )}
@@ -1524,10 +1677,10 @@ export function GameConfig() {
         </div>
       )}
 
-      {clientViewOpen && (
+      {clientViewFile && (
         <div
           className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4"
-          onClick={() => setClientViewOpen(false)}
+          onClick={() => setClientViewFile(null)}
         >
           <div
             className="card w-full max-w-3xl max-h-[85vh] flex flex-col p-0 overflow-hidden"
@@ -1536,41 +1689,41 @@ export function GameConfig() {
             <div className="flex items-center justify-between px-5 py-3 border-b border-border">
               <h2 className="text-sm font-semibold text-text flex items-center gap-2">
                 <Icon name="MonitorSmartphone" size={16} className="text-accent-bright" />
-                Your client config
+                Your client {clientViewFile === 'engine' ? 'Engine.ini' : 'Game.ini'}
               </h2>
-              <button type="button" className="btn-icon" title="Close" onClick={() => setClientViewOpen(false)}>
+              <button type="button" className="btn-icon" title="Close" onClick={() => setClientViewFile(null)}>
                 <Icon name="X" size={16} />
               </button>
             </div>
             <div className="px-5 py-4 overflow-y-auto">
               <div className="text-[11px] text-text-dim font-mono break-all mb-3">
-                {clientInfo?.path}{' '}
-                {clientInfo?.exists
+                {clientInfo ? clientBundleFor(clientInfo, clientViewFile).path : CLIENT_INI_PATHS[clientViewFile]}{' '}
+                {clientInfo && clientBundleFor(clientInfo, clientViewFile).exists
                   ? <span className="text-success">• found</span>
                   : <span className="text-warning">• not present yet</span>}
               </div>
-              {!clientInfo?.exists && (
+              {(!clientInfo || !clientBundleFor(clientInfo, clientViewFile).exists) && (
                 <div className="text-sm text-text-muted py-4 text-center">
-                  No client <span className="font-mono">Game.ini</span> at this location yet. It will be created the
+                  No client <span className="font-mono">{clientViewFile === 'engine' ? 'Engine.ini' : 'Game.ini'}</span> at this location yet. It will be created the
                   first time you apply a client-side setting.
                 </div>
               )}
-              {clientInfo?.exists && (
+              {clientInfo && clientBundleFor(clientInfo, clientViewFile).exists && (
                 <pre className="text-xs font-mono text-text bg-[#1e1e1e] border border-border rounded-lg p-3 overflow-x-auto max-h-[60vh] overflow-y-auto whitespace-pre leading-relaxed">
-                  {clientInfo.raw || '(empty file)'}
+                  {clientBundleFor(clientInfo, clientViewFile).raw || '(empty file)'}
                 </pre>
               )}
             </div>
             <div className="px-5 py-3 border-t border-border flex items-center justify-between gap-2">
               <span className="text-[11px] text-text-dim">Read-only preview. “Open in Notepad” edits the real file.</span>
               <div className="flex items-center gap-2">
-                <button type="button" onClick={() => void onOpenInEditor()} disabled={clientBusy} className="btn-secondary" title="Open this file in Notepad">
+                <button type="button" onClick={() => void onOpenInEditor(clientViewFile)} disabled={clientBusy} className="btn-secondary" title="Open this file in Notepad">
                   <Icon name="ExternalLink" size={14} /> Open in Notepad
                 </button>
                 <button type="button" onClick={() => void refreshClient()} className="btn-secondary" title="Reload">
                   <Icon name="RefreshCw" size={14} /> Refresh
                 </button>
-                <button type="button" className="btn-primary" onClick={() => setClientViewOpen(false)}>Close</button>
+                <button type="button" className="btn-primary" onClick={() => setClientViewFile(null)}>Close</button>
               </div>
             </div>
           </div>
@@ -1662,7 +1815,7 @@ function CategoryCard({
             type="button"
             className="btn-secondary text-xs py-1 shrink-0"
             onClick={onShare}
-            title="Copy this section's client-side Game.ini block to hand to players"
+            title="Copy this section's client-side INI blocks to hand to players"
           >
             <Icon name="Share2" size={13} /> Give players this
           </button>
@@ -1683,10 +1836,10 @@ function CategoryCard({
                 <Icon name="FlaskConical" size={14} /> Test settings
               </div>
               <p>
-                These server CVars are written only to the battlegroup&apos;s <span className="font-mono text-text">UserEngine.ini</span> under <span className="font-mono text-text">[ConsoleVariables]</span>. They are not copied to this PC&apos;s local client <span className="font-mono text-text">Game.ini</span>.
+                These CVars are written to the battlegroup&apos;s <span className="font-mono text-text">UserEngine.ini</span> under <span className="font-mono text-text">[ConsoleVariables]</span>. Custom values are also added to Hagga&apos;s startup commands, so saving an Experimental change immediately replaces the Hagga pod and disconnects players there. PostLandscape physics initialization can keep Hagga unavailable longer than a normal battlegroup restart. After saving, DST offers to mirror the same values into this PC&apos;s client <span className="font-mono text-text">Engine.ini</span>; close the game before applying them.
               </p>
               <p className="mt-1.5">
-                This catalogue contains 33 testable controls decoded from server build 1.4.10.4. Double Difficulty Loot and the three Landsraad reward multipliers have community field confirmation; vehicle heat, power, overheat, and limit controls proven ineffective were removed. Other controls may have no effect or unintended gameplay consequences. The dehydration-zone control is omitted because Funcom warns that enabling it crashes clients. Back up first, change one setting at a time, then use Apply INIs &amp; restart before testing.
+                This catalogue contains 42 testable controls decoded from server build 1.4.10.4. Fuel Burning Duration, Double Difficulty Loot, and the three Landsraad reward multipliers have community field confirmation. Restored vehicle controls now receive the same dual INI and startup-command application for testing. Other controls may have no effect or unintended gameplay consequences. The dehydration-zone control is omitted because Funcom warns that enabling it crashes clients. Back up first and change one setting at a time.
               </p>
             </div>
           )}

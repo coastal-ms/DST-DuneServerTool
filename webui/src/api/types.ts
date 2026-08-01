@@ -216,6 +216,7 @@ export type DeepDesertPvpState = {
 }
 
 export type GameConfigClientApplyItem = {
+  file: 'game' | 'engine'
   key: string
   label: string
   section: string
@@ -225,6 +226,7 @@ export type GameConfigClientApplyItem = {
 
 export type GameConfigClientApply = {
   path: string
+  paths?: { game: string; engine: string }
   items: GameConfigClientApplyItem[]
 }
 
@@ -279,15 +281,10 @@ export type GameConfigRawUpdate = {
   arrayLines?: string[]
 }
 
-// Local client config (admin's own machine). `bundle`-style fields mirror
-// GameConfigFileBundle so the read-only viewer can reuse the same components.
-export type GameConfigClientInfo = {
-  dir: string
-  dirResolved: string
+export type GameConfigClientFileInfo = {
+  file: 'game' | 'engine'
   path: string
   exists: boolean
-  dirExists: boolean
-  default: string
   raw: string
   sections: GameConfigIniSection[]
   effective: Record<string, string>
@@ -295,9 +292,35 @@ export type GameConfigClientInfo = {
   managedSections: string[]
 }
 
+// Legacy top-level file fields continue to represent Game.ini. `game` and
+// `engine` expose both client files for file-aware views and comparisons.
+export type GameConfigClientInfo = GameConfigClientFileInfo & {
+  dir: string
+  dirResolved: string
+  dirExists: boolean
+  default: string
+  engineEnabled: boolean
+  game: GameConfigClientFileInfo
+  engine: GameConfigClientFileInfo
+}
+
+export type GameConfigClientEngineGateResult = {
+  ok: boolean
+  enabled: boolean
+  removed: number
+  client: GameConfigClientInfo
+}
+
 export type GameConfigClientApplyResult = {
   ok: boolean
   path: string
+  paths?: { game: string; engine: string }
+  files?: Partial<Record<'game' | 'engine', {
+    file: 'game' | 'engine'
+    path: string
+    created: boolean
+    applied: number
+  }>>
   backup: string
   created: boolean
   applied: number
