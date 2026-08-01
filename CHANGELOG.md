@@ -21,7 +21,7 @@ here cover everything those tags shipped.
 
 ### Changed
 
-- **Experimental settings now explain their client requirement.** The save confirmation states that some Experimental controls require matching client-side Engine.ini values, that these local edits do not override public/live servers, and whether Engine.ini management is currently enabled.
+- **Experimental settings now explain their client requirement.** The save confirmation states that some Experimental controls require compatible client-side Engine.ini values for every player, that client-enforced limits may require an equal or higher local value, that these local edits do not override public/live servers, and whether Engine.ini management is currently enabled.
 - **Client config tools are file-aware.** Mismatch detection, previews, Notepad actions, apply results, and shareable snippets identify whether each setting belongs in `Game.ini` or `Engine.ini`. Engine.ini writes are blocked while Dune: Awakening is running because the game can overwrite that file during shutdown.
 
 ### Fixed
