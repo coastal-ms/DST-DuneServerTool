@@ -7,6 +7,7 @@ import type {
   GameConfigBackupResponse,
   GameConfigBackupListResponse,
   GameConfigClientInfo,
+  GameConfigClientEngineGateResult,
   GameConfigClientApplyResult,
   GameConfigClientApplyItem,
   GameConfigDefaultsResponse,
@@ -92,6 +93,13 @@ export function setGameConfigClientDir(dir: string) {
   return api<GameConfigClientInfo>('/api/gameconfig/client/dir', {
     method: 'PUT',
     body: JSON.stringify({ dir }),
+  })
+}
+
+export function setGameConfigClientEngineEnabled(enabled: boolean, dir?: string) {
+  return api<GameConfigClientEngineGateResult>('/api/gameconfig/client/engine', {
+    method: 'PUT',
+    body: JSON.stringify({ enabled, ...(dir ? { dir } : {}) }),
   })
 }
 

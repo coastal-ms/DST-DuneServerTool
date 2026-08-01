@@ -16,6 +16,7 @@ import {
   deleteGameConfigBackups,
   getGameConfigClient,
   setGameConfigClientDir,
+  setGameConfigClientEngineEnabled,
   applyGameConfigClient,
   openGameConfigClientFile,
   getGameConfigDefaults,
@@ -235,8 +236,8 @@ export function GameConfig() {
   const [backupSel, setBackupSel] = useState<Set<string>>(new Set())
   const [backupDeleting, setBackupDeleting] = useState(false)
 
-  // Local client config (this PC). DST runs locally, so it can read/write the
-  // player's own client Game.ini directly — gated behind explicit user action.
+  // Local client config (this PC). Game.ini writes remain per-action; Engine.ini
+  // management requires the persistent, disabled-by-default opt-in.
   const [clientInfo, setClientInfo] = useState<GameConfigClientInfo | null>(null)
   const [clientDirInput, setClientDirInput] = useState('')
   const [clientBusy, setClientBusy] = useState(false)
@@ -342,6 +343,7 @@ export function GameConfig() {
     // for any customised members), not a stub — only the partial case is drift.
     const stubGroups = new Set<string>()
     for (const [id, g] of structMemberGroups) {
+      if (g.file === 'engine' && !clientInfo.engineEnabled) continue
       let present = 0
       let missing = 0
       const bundle = clientBundleFor(clientInfo, g.file as 'game' | 'engine')
@@ -356,6 +358,7 @@ export function GameConfig() {
     for (const cat of schema) {
       for (const f of cat?.fields ?? []) {
         if (!f?.clientApply || !f.key) continue
+        if (f.file === 'engine' && !clientInfo.engineEnabled) continue
         const groupId = f.structKey ? `${f.file}||${f.section}||${f.structKey}` : null
         const inStub = groupId ? stubGroups.has(groupId) : false
         const serverValue = currentValue(cfg, f)
@@ -535,6 +538,33 @@ export function GameConfig() {
       setClientBusy(false)
     }
   }, [clientDirInput])
+
+  const onToggleClientEngine = useCallback(async (enabled: boolean) => {
+    setClientErr(null)
+    setClientMsg(null)
+    setClientBusy(true)
+    try {
+      const result = await setGameConfigClientEngineEnabled(enabled, clientInfo?.dir)
+      setClientInfo(result.client)
+      if (enabled) {
+        setClientMsg('Engine.ini management enabled. DST can now mirror opted-in gameplay settings.')
+      } else {
+        setClientApply(prev => {
+          if (!prev) return null
+          const items = prev.items.filter(item => item.file !== 'engine')
+          return items.length > 0 ? { ...prev, items } : null
+        })
+        setClientMsg(result.removed > 0
+          ? `Engine.ini management disabled and ${result.removed} DST-managed setting${result.removed === 1 ? '' : 's'} removed.`
+          : 'Engine.ini management disabled. No DST-managed Engine.ini settings were present.')
+      }
+      window.setTimeout(() => setClientMsg(null), 7000)
+    } catch (e) {
+      setClientErr(e instanceof Error ? e.message : String(e))
+    } finally {
+      setClientBusy(false)
+    }
+  }, [clientInfo])
 
   const onViewClient = useCallback(async (file: 'game' | 'engine') => {
     setClientErr(null)
@@ -1073,10 +1103,26 @@ export function GameConfig() {
         }
       >
         <p className="text-xs text-text-muted mb-3">
-          DST can mirror game settings into <span className="font-mono">Game.ini</span> and gameplay console variables
-          into <span className="font-mono">Engine.ini</span> on this machine, with your permission. Close Dune: Awakening
-          before applying Engine.ini changes so the game cannot overwrite them while exiting.
+          DST can mirror game settings into <span className="font-mono">Game.ini</span>. Managing{' '}
+          <span className="font-mono">Engine.ini</span> is a separate opt-in because client console-variable overrides
+          can materially change gameplay.
         </p>
+        <label className="mb-3 flex items-start gap-3 rounded-lg border border-warning/30 bg-warning/5 p-3 cursor-pointer select-none">
+          <input
+            type="checkbox"
+            checked={clientInfo?.engineEnabled === true}
+            onChange={e => void onToggleClientEngine(e.target.checked)}
+            disabled={clientBusy || !clientInfo || (!clientInfo.dirExists && !clientInfo.engineEnabled)}
+            className="h-4 w-4 mt-0.5 accent-warning shrink-0"
+          />
+          <span>
+            <span className="block text-sm font-medium text-text">Allow DST to manage my client Engine.ini</span>
+            <span className="block text-xs text-text-muted mt-0.5">
+              Off by default. While off, DST bypasses Engine.ini mismatch checks, prompts, and writes. Turning this off
+              removes DST-managed Engine.ini values. Close Dune: Awakening before changing this option.
+            </span>
+          </span>
+        </label>
         <div className="flex items-center gap-2">
           <input
             type="text"
@@ -1105,6 +1151,7 @@ export function GameConfig() {
               return (
                 <div key={file}>
                   {bundle.path}{' '}
+                  {file === 'engine' && !clientInfo.engineEnabled && <span className="text-text-dim">• management disabled </span>}
                   {bundle.exists
                     ? <span className="text-success">• found</span>
                     : clientInfo.dirExists

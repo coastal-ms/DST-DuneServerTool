@@ -22,6 +22,7 @@ $script:DuneConfigKeys = @(
     'MarketBotToken',
     'DecoupleNoticeAck',
     'ClientConfigPath',
+    'ClientEngineIniEnabled',
     'DbPort',
     'UpdateChannel',
     'UpdatePreReleaseTag',

@@ -6,6 +6,7 @@
 
 BeforeAll {
     . (Join-Path $PSScriptRoot '_TestHelpers.ps1')
+    Import-DstLib 'Config.ps1'
     Import-DstLib 'GameConfig.ps1'
     . (Join-Path $PSScriptRoot '..\app\lib\K8s.ps1')
 
@@ -693,6 +694,7 @@ $script:DstManagedEnd
     }
 
     It 'includes experimental CVars in file-aware local client changes' {
+        Mock Get-DuneGameConfigClientEngineEnabled { $true }
         $notice = Get-DuneGameConfigClientApplyNotice -Updates @(
             @{ file='engine'; section=$script:DuneGcSecConsole; key='Dune.GiveDoubleDifficultyLoot'; value='1' },
             @{ file='engine'; section=$script:DuneGcSecConsole; key='Abilities.RespecCooldownTotalDurationSeconds'; value='0' }
@@ -875,9 +877,23 @@ Describe 'GameConfig: client-apply flag covers local gameplay settings' -Tag 'Ga
     }
 }
 
+Describe 'GameConfig: Engine.ini opt-in setting' -Tag 'GameConfig' {
+    It 'is persisted by config and defaults to disabled' {
+        $script:DuneConfigKeys | Should -Contain 'ClientEngineIniEnabled'
+        Mock Read-DuneConfig { @{ ClientEngineIniEnabled = '' } }
+        Get-DuneGameConfigClientEngineEnabled | Should -BeFalse
+    }
+
+    It 'enables only for an explicit truthy config value' {
+        Mock Read-DuneConfig { @{ ClientEngineIniEnabled = 'true' } }
+        Get-DuneGameConfigClientEngineEnabled | Should -BeTrue
+    }
+}
+
 Describe 'GameConfig: local client Game.ini and Engine.ini' -Tag 'GameConfig' {
 
     BeforeEach {
+        Mock Get-DuneGameConfigClientEngineEnabled { $true }
         Mock Test-DuneGameClientRunning { $false }
     }
 
@@ -892,6 +908,7 @@ Describe 'GameConfig: local client Game.ini and Engine.ini' -Tag 'GameConfig' {
         $client.raw | Should -Be $client.game.raw
         $client.game.exists | Should -BeTrue
         $client.engine.exists | Should -BeTrue
+        $client.engineEnabled | Should -BeTrue
         $client.engine.effective["$script:DuneGcSecConsole||Vehicle.MaxVehiclesPerPlayer"] | Should -Be '20'
     }
 
@@ -947,6 +964,68 @@ Vehicle.MaxVehiclesPerPlayer=20
 
         Test-Path (Join-Path $dir 'Game.ini') | Should -BeFalse
         Test-Path (Join-Path $dir 'Engine.ini') | Should -BeFalse
+    }
+
+    It 'bypasses Engine.ini notices and writes when the opt-in is disabled' {
+        Mock Get-DuneGameConfigClientEngineEnabled { $false }
+        $dir = (Get-PSDrive TestDrive).Root
+        $notice = Get-DuneGameConfigClientApplyNotice -Updates @(
+            @{ key='Vehicle.MaxVehiclesPerPlayer'; value='20' }
+        )
+
+        @($notice.items).Count | Should -Be 0
+        {
+            Save-DuneGameConfigClient -Dir $dir -Updates @(
+                @{ key='Vehicle.MaxVehiclesPerPlayer'; value='20' }
+            )
+        } | Should -Throw '*No client-applicable keys*'
+    }
+
+    It 'still writes Game.ini while skipping Engine.ini in a mixed disabled request' {
+        Mock Get-DuneGameConfigClientEngineEnabled { $false }
+        $dir = Join-Path (Get-PSDrive TestDrive).Root 'mixed-disabled'
+        [void](New-Item -ItemType Directory -Path $dir)
+
+        $result = Save-DuneGameConfigClient -Dir $dir -Updates @(
+            @{ key='m_RepairCostWeight'; value='0.25' },
+            @{ key='Vehicle.MaxVehiclesPerPlayer'; value='20' }
+        )
+
+        $result.files.ContainsKey('game') | Should -BeTrue
+        $result.files.ContainsKey('engine') | Should -BeFalse
+        Test-Path (Join-Path $dir 'Engine.ini') | Should -BeFalse
+    }
+
+    It 'removes managed Engine.ini values when the opt-in is disabled' {
+        $dir = (Get-PSDrive TestDrive).Root
+        [IO.File]::WriteAllText((Join-Path $dir 'Engine.ini'), @"
+[Renderer]
+r.ScreenPercentage=100
+
+[$script:DuneGcSecConsole]
+Vehicle.MaxVehiclesPerPlayer=20
+Dune.GiveDoubleDifficultyLoot=1
+"@)
+
+        $result = Remove-DuneGameConfigClientEngineValues -Dir $dir
+        $raw = [IO.File]::ReadAllText((Join-Path $dir 'Engine.ini'))
+
+        $result.removed | Should -Be 2
+        $result.changed | Should -BeTrue
+        $raw | Should -Not -Match 'Vehicle\.MaxVehiclesPerPlayer'
+        $raw | Should -Not -Match 'Dune\.GiveDoubleDifficultyLoot'
+        $raw | Should -Match 'r\.ScreenPercentage=100'
+    }
+
+    It 'does not remove Engine.ini values while the game client is running' {
+        Mock Test-DuneGameClientRunning { $true }
+        $dir = (Get-PSDrive TestDrive).Root
+        $path = Join-Path $dir 'Engine.ini'
+        [IO.File]::WriteAllText($path, "[$script:DuneGcSecConsole]`nVehicle.MaxVehiclesPerPlayer=20`n")
+        $before = [IO.File]::ReadAllText($path)
+
+        { Remove-DuneGameConfigClientEngineValues -Dir $dir } | Should -Throw '*Close Dune: Awakening*'
+        [IO.File]::ReadAllText($path) | Should -BeExactly $before
     }
 }
 
