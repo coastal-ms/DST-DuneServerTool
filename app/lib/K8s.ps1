@@ -442,28 +442,31 @@ function Set-V6SietchConfig {
     return @{ Success = $true; Count = $Count; Sietches = $applied; Raw = $res.Raw }
 }
 
-# Keep dw.FuelBurningMultiplier in the Survival server command line as well as
-# UserEngine.ini. Field testing found the dual application effective where the
-# INI value alone was not. One podSpec is required per Hagga partition.
-function Set-V6FuelBurningMultiplier {
+# Apply selected server CVars through the Survival command line as well as
+# UserEngine.ini. One podSpec is required per Hagga partition.
+function Set-V6ConsoleVariableOverrides {
     [CmdletBinding()]
     param(
         [Parameter(Mandatory)][string]$Ip,
-        [AllowNull()][string]$Value
+        [Parameter(Mandatory)][string[]]$Names,
+        [hashtable]$Values = @{}
     )
 
-    $command = $null
-    $normalized = $null
-    if (-not [string]::IsNullOrWhiteSpace($Value)) {
+    $normalized = @{}
+    foreach ($name in $Names) {
+        $raw = if ($Values.ContainsKey($name)) { "$($Values[$name])".Trim() } else { '' }
+        if ([string]::IsNullOrWhiteSpace($raw)) {
+            $normalized[$name] = $null
+            continue
+        }
         $number = 0.0
         $style = [System.Globalization.NumberStyles]::Float
         $culture = [System.Globalization.CultureInfo]::InvariantCulture
-        if (-not [double]::TryParse($Value.Trim(), $style, $culture, [ref]$number) -or
+        if (-not [double]::TryParse($raw, $style, $culture, [ref]$number) -or
             [double]::IsNaN($number) -or [double]::IsInfinity($number)) {
-            throw "Fuel burning multiplier must be a finite number."
+            throw "$name must be a finite number."
         }
-        $normalized = $number.ToString('0.################', $culture)
-        $command = "dw.FuelBurningMultiplier $normalized"
+        $normalized[$name] = $number.ToString('0.################', $culture)
     }
 
     $info = Get-V6Battlegroup -Ip $Ip
@@ -491,8 +494,13 @@ function Set-V6FuelBurningMultiplier {
             } else {
                 @{ index = [int]$id }
             }
-            $podSpec.arguments = @(_Set-V6ExecCommand -Arguments @($podSpec.arguments) `
-                -CommandName 'dw.FuelBurningMultiplier' -Command $command)
+            $arguments = @($podSpec.arguments)
+            foreach ($name in $Names) {
+                $command = if ($null -ne $normalized[$name]) { "$name $($normalized[$name])" } else { $null }
+                $arguments = @(_Set-V6ExecCommand -Arguments $arguments `
+                    -CommandName $name -Command $command)
+            }
+            $podSpec.arguments = $arguments
             if (_Test-V6PodSpecHasOverrides -PodSpec $podSpec) { $podSpecs += $podSpec }
         }
 
@@ -510,9 +518,9 @@ function Set-V6FuelBurningMultiplier {
     }
     if ($patches.Count -eq 0) {
         if ($foundSurvival) {
-            return @{ Success = $true; NoChange = $true; Raw = ''; Value = $normalized }
+            return @{ Success = $true; NoChange = $true; Raw = ''; Values = $normalized }
         }
-        return @{ Success = $false; Error = 'No non-dedicated Survival_1 server set found.'; Value = $normalized }
+        return @{ Success = $false; Error = 'No non-dedicated Survival_1 server set found.'; Values = $normalized }
     }
 
     $result = _Invoke-V6BgJsonPatch -Ip $Ip -Info $info -Patches $patches
@@ -520,8 +528,21 @@ function Set-V6FuelBurningMultiplier {
         Success = [bool]$result.Success
         Error   = $result.Error
         Raw     = $result.Raw
-        Value   = $normalized
+        Values  = $normalized
     }
+}
+
+function Set-V6FuelBurningMultiplier {
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory)][string]$Ip,
+        [AllowNull()][string]$Value
+    )
+    $result = Set-V6ConsoleVariableOverrides -Ip $Ip `
+        -Names @('dw.FuelBurningMultiplier') `
+        -Values @{ 'dw.FuelBurningMultiplier' = $Value }
+    $result.Value = $result.Values['dw.FuelBurningMultiplier']
+    return $result
 }
 
 function Set-V6BattlegroupTitle {

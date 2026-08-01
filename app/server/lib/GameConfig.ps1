@@ -108,15 +108,6 @@ $script:DuneGameConfigDeprecatedManagedKeys = @(
     'm_GlobalFameMultiplier'
     'm_GlobalHarvestAmountMultiplier'
     'm_GlobalHarvestHealthMultiplier'
-    'dw.VehicleHeatMultiplier'
-    'dw.VehicleHeatInterpolationSpeed'
-    'dw.VehiclePowerConsumptionMultiplier'
-    'dw.VehicleCanOverHeat'
-    'Vehicle.MaxActiveVehicles'
-    'Vehicle.MaxVehicles'
-    'Vehicle.MaxVehiclesForSpawner'
-    'Vehicle.MaxVehiclesPerPlayer'
-    'Vehicle.MaxVehiclesWarning'
 )
 
 $script:DuneGameConfigSchema = @(
@@ -256,12 +247,21 @@ $script:DuneGameConfigSchema = @(
     @{ Section=$script:DuneGcSecConsole; Key='dw.LandsraadMissionRewardMultiplierFactionXP'; File='engine'; Type='float'; Min=0; Default='1.0'; Label='Landsraad Faction XP'; Help='Scales Faction XP from Landsraad missions. Field-confirmed at 10; mission preview may still show the base reward.'; Category='Experimental' }
     @{ Section=$script:DuneGcSecConsole; Key='dw.LandsraadMissionRewardMultiplierHouseCredit'; File='engine'; Type='float'; Min=0; Default='1.0'; Label='Landsraad House Credit'; Help='Scales House Credit from Landsraad missions. Field-confirmed at 10; mission preview may still show the base reward.'; Category='Experimental' }
     @{ Section=$script:DuneGcSecConsole; Key='dw.LandsraadMissionRewardMultiplierSpecializationXP'; File='engine'; Type='float'; Min=0; Default='1.0'; Label='Landsraad Specialization XP'; Help='Scales Specialization XP from Landsraad missions. Field-confirmed at 10; mission preview may still show the base reward.'; Category='Experimental' }
+    @{ Section=$script:DuneGcSecConsole; Key='dw.VehicleHeatMultiplier'; File='engine'; Type='float'; Min=0; Default='1.0'; Label='Vehicle Heat Multiplier'; Help='Scales vehicle heat generation. 0 = no heat, 1 = normal, 2 = double. Applied through INI and Hagga startup command for local testing.'; Category='Experimental' }
+    @{ Section=$script:DuneGcSecConsole; Key='dw.VehicleHeatInterpolationSpeed'; File='engine'; Type='float'; Min=0; Default='1.0'; Label='Vehicle Heat Interpolation Speed'; Help='Speeds up or slows down vehicle heat interpolation. Applied through INI and Hagga startup command for local testing.'; Category='Experimental' }
+    @{ Section=$script:DuneGcSecConsole; Key='dw.VehiclePowerConsumptionMultiplier'; File='engine'; Type='float'; Min=0; Default='1.0'; Label='Vehicle Power Consumption'; Help='Scales vehicle power use. 0 = no consumption, 1 = normal, 2 = double. Applied through INI and Hagga startup command for local testing.'; Category='Experimental' }
+    @{ Section=$script:DuneGcSecConsole; Key='dw.VehicleCanOverHeat'; File='engine'; Type='bool01'; Default='1'; Label='Vehicles Can Overheat'; Help='Whether vehicles can overheat. 0 = disabled, 1 = enabled. Applied through INI and Hagga startup command for local testing.'; Category='Experimental' }
     @{ Section=$script:DuneGcSecConsole; Key='dw.VehicleAbandonedDecayAllowed'; File='engine'; Type='bool01'; Label='Abandoned Vehicle Decay'; Help='Allows abandoned vehicles to decay over time. 0 disables decay. Compiled default was not recovered.'; Category='Experimental' }
     @{ Section=$script:DuneGcSecConsole; Key='dw.VehicleAbandonedDecayTimeMultiplier'; File='engine'; Type='float'; Default='1.0'; Label='Abandoned Vehicle Decay Speed'; Help='Scales abandoned-vehicle decay speed. Values above 1 should decay faster; 1 is shipping behavior.'; Category='Experimental' }
     @{ Section=$script:DuneGcSecConsole; Key='Vehicle.DisassemblySpeedMultiplier'; File='engine'; Type='float'; Default='1.0'; Label='Vehicle Disassembly Speed'; Help='Scales vehicle disassembly speed. Not yet field-verified.'; Category='Experimental' }
     @{ Section=$script:DuneGcSecConsole; Key='Vehicle.RecoveryChassisDurabilityReductionFraction'; File='engine'; Type='float'; Default='0.150000006'; Label='Recovery Chassis Durability Reduction'; Help='Reduces maximum decayed chassis durability during recovery. Units are unclear; test as a fraction such as 0.15, not 15.'; Category='Experimental' }
     @{ Section=$script:DuneGcSecConsole; Key='Vehicle.RecoveryCurrencyBaseCost'; File='engine'; Type='int'; Min=0; Default='2500'; Label='Vehicle Recovery Base Cost'; Help='Base currency cost to recover a vehicle before vehicle-specific multipliers.'; Category='Experimental' }
     @{ Section=$script:DuneGcSecConsole; Key='Vehicle.RecoveryTimeLimit'; File='engine'; Type='int'; Min=0; Unit='sec'; Label='Vehicle Recovery Time Limit'; Help='Seconds a destroyed vehicle remains available for recovery. Compiled default was not recovered.'; Category='Experimental' }
+    @{ Section=$script:DuneGcSecConsole; Key='Vehicle.MaxActiveVehicles'; File='engine'; Type='int'; Min=-1; Default='-1'; Label='Maximum Active Vehicles'; Help='Rejects attempts to enter vehicle seats after this active-vehicle limit. -1 = unlimited. Applied through INI and Hagga startup command for local testing.'; Category='Experimental' }
+    @{ Section=$script:DuneGcSecConsole; Key='Vehicle.MaxVehicles'; File='engine'; Type='int'; Min=-1; Default='-1'; Label='Maximum Vehicles'; Help='Rejects vehicle assembly or recovery after this total-vehicle limit. -1 = unlimited. Applied through INI and Hagga startup command for local testing.'; Category='Experimental' }
+    @{ Section=$script:DuneGcSecConsole; Key='Vehicle.MaxVehiclesForSpawner'; File='engine'; Type='int'; Min=0; Default='400'; Label='Maximum Spawned Vehicles'; Help='Stops vehicle spawners after this many vehicles exist. Applied through INI and Hagga startup command for local testing.'; Category='Experimental' }
+    @{ Section=$script:DuneGcSecConsole; Key='Vehicle.MaxVehiclesPerPlayer'; File='engine'; Type='int'; Min=0; Default='10'; Label='Maximum Vehicles Per Player'; Help='Limits vehicles each player may spawn or claim. 0 = unlimited. Applied through INI and Hagga startup command for local testing.'; Category='Experimental' }
+    @{ Section=$script:DuneGcSecConsole; Key='Vehicle.MaxVehiclesWarning'; File='engine'; Type='int'; Min=0; Label='Vehicle Count Warning Threshold'; Help='Vehicle count at which the amount notification becomes a warning. Applied through INI and Hagga startup command for local testing.'; Category='Experimental' }
     @{ Section=$script:DuneGcSecConsole; Key='Vehicle.CharacterHitDamageModifier'; File='engine'; Type='float'; Min=0; Default='1.0'; Label='Vehicle Impact Character Damage'; Help='Scales damage dealt to characters by vehicle impacts. 0 should disable impact damage.'; Category='Experimental' }
     @{ Section=$script:DuneGcSecConsole; Key='Vehicle.DamagePlayerOnVehicleCollision'; File='engine'; Type='bool01'; Label='Vehicle Collision Damages Players'; Help='Whether vehicle collisions damage players. Compiled default was not recovered.'; Category='Experimental' }
     @{ Section=$script:DuneGcSecConsole; Key='Player.IsThrowOffPlayerFromVehicleActive'; File='engine'; Type='bool01'; Default='1'; Label='Throw Players Off Moving Vehicles'; Help='Whether players standing on moving vehicles are thrown off. Funcom help states 1 is the default.'; Category='Experimental' }
@@ -318,6 +318,26 @@ $script:DuneGameConfigSchema = @(
     # Sandworm
     @{ Section=$script:DuneGcSecSandworm; Key='m_MinDistanceBetweenSandworms'; File='game'; Type='float'; Min=0; Unit='UU'; Default='80000.0'; Label='Min Distance Between Sandworms'; Help='Minimum world-unit separation required between two simultaneously active sandworms. Also needs client-side apply.'; ClientApply=$true; Category='Sandworm' }
     @{ Section=$script:DuneGcSecSandworm; Key='m_GiantWormMinimumPlayersOnSpiceField'; File='game'; Type='int'; Min=0; Unit='players'; Default='4'; Label='Giant Worm Min Players on Field'; Help='Minimum number of players on a spice field to trigger a giant sandworm spawn. Also needs client-side apply.'; ClientApply=$true; Category='Sandworm' }
+)
+
+# Gameplay console variables can be evaluated by either side. Mirror them into
+# the local client's Engine.ini when requested, but never copy server identity,
+# password, or URL/port settings to a player config.
+foreach ($field in $script:DuneGameConfigSchema) {
+    if ($field.File -eq 'engine' -and
+        $field.Section -eq $script:DuneGcSecConsole -and
+        "$($field.Key)" -notlike 'Bgd.*') {
+        $field.ClientApply = $true
+    }
+}
+
+# Experimental engine controls are binary-discovered console variables. Apply
+# every explicitly configured non-default value through both UserEngine.ini and
+# the Hagga startup command so late server initialization cannot overwrite it.
+$script:DuneStartupConsoleVariableKeys = @(
+    $script:DuneGameConfigSchema |
+        Where-Object { $_.File -eq 'engine' -and $_.Category -eq 'Experimental' } |
+        ForEach-Object { $_.Key }
 )
 
 # -----------------------------------------------------------------------------
@@ -390,6 +410,7 @@ function Write-DuneServerNameState {
 # DuneSandboxGameModeBase, SpiceAddictionSubsystem, RespawnSettings,
 # EncountersSubsystem, ContractsSubsystem, and SandwormSettings.
 $script:DuneGameConfigClientPath = '%LOCALAPPDATA%\DuneSandbox\Saved\Config\WindowsClient\Game.ini'
+$script:DuneGameConfigClientEnginePath = '%LOCALAPPDATA%\DuneSandbox\Saved\Config\WindowsClient\Engine.ini'
 
 # Build the post-save "apply this on each client too" reminder from a set of
 # structured updates (@{ file; section; key; value }). Returns @{ path; items }
@@ -406,10 +427,14 @@ function Get-DuneGameConfigClientApplyNotice {
         $k = "$($u.key)"
         if ($byKey.ContainsKey($k)) {
             $f = $byKey[$k]
-            $items.Add(@{ key = $k; label = $f.Label; section = $f.Section; value = "$($u.value)" })
+            $items.Add(@{ key = $k; label = $f.Label; section = $f.Section; file = $f.File; value = "$($u.value)" })
         }
     }
-    return @{ path = $script:DuneGameConfigClientPath; items = $items.ToArray() }
+    return @{
+        path  = $script:DuneGameConfigClientPath
+        paths = @{ game = $script:DuneGameConfigClientPath; engine = $script:DuneGameConfigClientEnginePath }
+        items = $items.ToArray()
+    }
 }
 
 # -----------------------------------------------------------------------------
@@ -417,8 +442,9 @@ function Get-DuneGameConfigClientApplyNotice {
 # read/write the player's client Game.ini directly. Used by the optional
 # "apply to my client too" flow + the read-only client viewer.
 # -----------------------------------------------------------------------------
-$script:DuneGameConfigClientDirDefault = '%LOCALAPPDATA%\DuneSandbox\Saved\Config\WindowsClient'
-$script:DuneGameConfigClientFileName   = 'Game.ini'
+$script:DuneGameConfigClientDirDefault     = '%LOCALAPPDATA%\DuneSandbox\Saved\Config\WindowsClient'
+$script:DuneGameConfigClientGameFileName   = 'Game.ini'
+$script:DuneGameConfigClientEngineFileName = 'Engine.ini'
 
 # The admin's configured client-config FOLDER (persisted as ClientConfigPath in
 # dune-server.config). Falls back to the per-user default. Returned UNEXPANDED so
@@ -442,35 +468,61 @@ function Resolve-DuneGameConfigClientDir {
     return [Environment]::ExpandEnvironmentVariables($Dir)
 }
 
-# Full path to the client Game.ini under the configured (or given) folder.
+# Full path to one client INI under the configured (or given) folder.
 function Get-DuneGameConfigClientFilePath {
-    param([string]$Dir = '')
+    param([string]$Dir = '', [ValidateSet('game','engine')][string]$File = 'game')
     $resolved = Resolve-DuneGameConfigClientDir -Dir $Dir
-    return (Join-Path $resolved $script:DuneGameConfigClientFileName)
+    $fileName = if ($File -eq 'engine') { $script:DuneGameConfigClientEngineFileName } else { $script:DuneGameConfigClientGameFileName }
+    return (Join-Path $resolved $fileName)
 }
 
-# Read the LOCAL client Game.ini and project it the same way the VM read does.
-function Get-DuneGameConfigClient {
-    param([string]$Dir = '')
-    $dirRaw      = if ($Dir) { $Dir } else { Get-DuneGameConfigClientDir }
-    $dirResolved = Resolve-DuneGameConfigClientDir -Dir $dirRaw
-    $path        = Get-DuneGameConfigClientFilePath -Dir $dirRaw
-    $exists      = Test-Path -LiteralPath $path -PathType Leaf
-    $raw         = ''
+# Read one LOCAL client INI and project it the same way the VM read does.
+function Get-DuneGameConfigClientFile {
+    param([string]$Dir = '', [ValidateSet('game','engine')][string]$File = 'game')
+    $path   = Get-DuneGameConfigClientFilePath -Dir $Dir -File $File
+    $exists = Test-Path -LiteralPath $path -PathType Leaf
+    $raw    = ''
     if ($exists) { try { $raw = [IO.File]::ReadAllText($path) } catch { $raw = '' } }
     return @{
-        dir             = $dirRaw
-        dirResolved     = $dirResolved
+        file            = $File
         path            = $path
         exists          = [bool]$exists
-        dirExists       = [bool](Test-Path -LiteralPath $dirResolved)
-        default         = $script:DuneGameConfigClientDirDefault
         raw             = $raw
         sections        = (ConvertTo-DuneIniSectionsApi -Raw $raw)
         effective       = (Get-DuneIniEffective -Raw $raw)
         effectiveByKey  = (Get-DuneIniEffectiveByKey -Raw $raw)
         managedSections = (Get-DuneIniManagedSectionNames -Raw $raw)
     }
+}
+
+# Read the LOCAL client Game.ini + Engine.ini. Legacy top-level file fields keep
+# representing Game.ini so existing land-claim callers remain compatible.
+function Get-DuneGameConfigClient {
+    param([string]$Dir = '')
+    $dirRaw      = if ($Dir) { $Dir } else { Get-DuneGameConfigClientDir }
+    $dirResolved = Resolve-DuneGameConfigClientDir -Dir $dirRaw
+    $game        = Get-DuneGameConfigClientFile -Dir $dirRaw -File 'game'
+    $engine      = Get-DuneGameConfigClientFile -Dir $dirRaw -File 'engine'
+    return @{
+        file            = 'game'
+        dir             = $dirRaw
+        dirResolved     = $dirResolved
+        path            = $game.path
+        exists          = $game.exists
+        dirExists       = [bool](Test-Path -LiteralPath $dirResolved)
+        default         = $script:DuneGameConfigClientDirDefault
+        raw             = $game.raw
+        sections        = $game.sections
+        effective       = $game.effective
+        effectiveByKey  = $game.effectiveByKey
+        managedSections = $game.managedSections
+        game            = $game
+        engine          = $engine
+    }
+}
+
+function Test-DuneGameClientRunning {
+    return [bool](Get-Process -Name 'DuneSandbox-Win64-Shipping' -ErrorAction SilentlyContinue | Select-Object -First 1)
 }
 
 # Surgically upsert scalar keys into raw INI, preserving everything else. Used
@@ -531,15 +583,9 @@ function Set-DuneIniValuesInPlace {
     return (($out -join "`n") + "`n")
 }
 
-# Apply client-apply updates to the LOCAL client Game.ini. Validates that every
-# key is schema-flagged ClientApply (blocks arbitrary local writes) and routes
-# the write through the same managed-block writer the server-side files use.
-# That way every DST-touched key sits in a clearly marked block at the bottom
-# of the file (issue #YYY — users want to copy-paste the DST section to share
-# with friends connecting to their server, without hand-picking edits scattered
-# through the file). Also scrubs the deprecated no-op multiplier keys so the
-# client file stays clean. Does NOT auto-backup (manual backups only).
-# Returns @{ ok; path; backup; created; applied; items } (backup always '').
+# Apply client-apply updates to LOCAL Game.ini / Engine.ini. Schema metadata,
+# not caller input, selects the destination file. Both files use the same
+# managed-block writer and preserve unrelated user settings.
 function Save-DuneGameConfigClient {
     param([object[]]$Updates, [string]$Dir = '', [string]$DefaultsRaw = '')
     if (-not $Updates -or $Updates.Count -eq 0) { throw 'No updates supplied.' }
@@ -554,53 +600,68 @@ function Save-DuneGameConfigClient {
         if (-not $allowed.ContainsKey($k)) { continue }
         $f = $allowed[$k]
         $rm = if ($null -ne $u['remove']) { [bool]$u['remove'] } else { (Test-DuneGameConfigValueIsDefault -Key $k -Value "$($u.value)") }
-        $clean.Add(@{ section = $f.Section; key = $k; value = "$($u.value)"; remove = $rm })
+        $clean.Add(@{ file = $f.File; section = $f.Section; key = $k; value = "$($u.value)"; remove = $rm })
     }
     if ($clean.Count -eq 0) { throw 'No client-applicable keys in the supplied updates.' }
 
     $dirResolved = Resolve-DuneGameConfigClientDir -Dir $Dir
     if (-not (Test-Path -LiteralPath $dirResolved)) { throw "Client config folder not found: $dirResolved" }
-    $path = Get-DuneGameConfigClientFilePath -Dir $Dir
-
-    $existing = ''
-    $created  = $true
-    if (Test-Path -LiteralPath $path -PathType Leaf) {
-        $existing = [IO.File]::ReadAllText($path)
-        $created  = $false
+    if (@($clean | Where-Object { $_.file -eq 'engine' }).Count -gt 0 -and (Test-DuneGameClientRunning)) {
+        throw 'Close Dune: Awakening before applying client Engine.ini settings; the game overwrites Engine.ini when it exits.'
     }
 
-    # Also scrub the deprecated no-op multiplier keys from the client file so a
-    # user's local Game.ini doesn't keep orphaned values DST no longer manages.
-    # (Same server-wins / keep-it-clean intent as the server managed block.)
-    #
-    # Only queue the ones actually PRESENT in the file. Queueing all of them
-    # unconditionally made the result count every deprecated key as "removed",
-    # so saving a single setting reported "removed 18 keys" when the user's file
-    # contained none of them - alarming, and untrue.
-    foreach ($dk in $script:DuneGameConfigDeprecatedManagedKeys) {
-        if ($existing -match ('(?m)^\s*' + [regex]::Escape($dk) + '\s*=')) {
-            $clean.Add(@{ section = $script:DuneGcSecGame; key = $dk; value = ''; remove = $true })
-        }
-    }
-
+    $plans = New-Object 'System.Collections.Generic.List[object]'
     $quoted = Get-DuneGameConfigQuotedKeys
-    # Fold any struct-member updates (e.g. LandsraadSettings Data members) into a
-    # single Data write against the CLIENT file's current blob, exactly like the
-    # server path -- the client reads the same Data=(...) struct. When the client
-    # Game.ini has no prior struct, seed the full DefaultGame.ini struct so the
-    # other members are preserved (the route supplies $DefaultsRaw).
-    $folded = Convert-DuneStructUpdates -Raw $existing -Updates $clean.ToArray() -DefaultsRaw $DefaultsRaw
-    # Route through the managed-block writer (same as the server files). Every
-    # DST-touched section lands in a marker-delimited block at the bottom; the
-    # user's unrelated sections (audio, video, etc.) stay where they were.
-    $new    = ConvertTo-DuneIniManaged -Raw $existing -Updates $folded -QuotedKeys $quoted
-    $new    = $new -replace "`r?`n", "`r`n"   # local file is Windows CRLF
+    foreach ($file in @('game','engine')) {
+        $fileUpdates = New-Object 'System.Collections.Generic.List[object]'
+        foreach ($u in $clean) {
+            if ($u.file -eq $file) { $fileUpdates.Add($u) }
+        }
+        if ($fileUpdates.Count -eq 0) { continue }
 
-    # No auto-backup: client backups are manual to avoid piling up .dstbak files.
-    $backup = ''
-    [IO.File]::WriteAllText($path, $new, (New-Object System.Text.UTF8Encoding($false)))
+        $path = Get-DuneGameConfigClientFilePath -Dir $Dir -File $file
+        $existing = ''
+        $created = $true
+        if (Test-Path -LiteralPath $path -PathType Leaf) {
+            $existing = [IO.File]::ReadAllText($path)
+            $created = $false
+        }
 
-    return @{ ok = $true; path = $path; backup = $backup; created = $created; applied = $clean.Count; items = $clean.ToArray() }
+        if ($file -eq 'game') {
+            foreach ($dk in $script:DuneGameConfigDeprecatedManagedKeys) {
+                if ($existing -match ('(?m)^\s*' + [regex]::Escape($dk) + '\s*=')) {
+                    $deprecated = @{ file = 'game'; section = $script:DuneGcSecGame; key = $dk; value = ''; remove = $true }
+                    $fileUpdates.Add($deprecated)
+                    $clean.Add($deprecated)
+                }
+            }
+        }
+
+        $folded = Convert-DuneStructUpdates -Raw $existing -Updates $fileUpdates.ToArray() -DefaultsRaw $(if ($file -eq 'game') { $DefaultsRaw } else { '' })
+        $new = ConvertTo-DuneIniManaged -Raw $existing -Updates $folded -QuotedKeys $quoted
+        $new = $new -replace "`r?`n", "`r`n"
+        $plans.Add(@{ file = $file; path = $path; created = $created; raw = $new; applied = $fileUpdates.Count })
+    }
+
+    $files = @{}
+    foreach ($plan in $plans) {
+        [IO.File]::WriteAllText($plan.path, $plan.raw, (New-Object System.Text.UTF8Encoding($false)))
+        $files[$plan.file] = @{ file = $plan.file; path = $plan.path; created = $plan.created; applied = $plan.applied }
+    }
+    $first = $plans[0]
+    return @{
+        ok      = $true
+        path    = $first.path
+        paths   = @{
+            game   = (Get-DuneGameConfigClientFilePath -Dir $Dir -File 'game')
+            engine = (Get-DuneGameConfigClientFilePath -Dir $Dir -File 'engine')
+        }
+        files   = $files
+        backup  = ''
+        created = [bool](@($plans | Where-Object { $_.created }).Count -gt 0)
+        applied = $clean.Count
+        items   = $clean.ToArray()
+    }
 }
 
 # =============================================================================
@@ -1227,33 +1288,37 @@ function Get-DuneGameConfig {
     }
 }
 
-function Set-DuneFuelBurningStartupOverride {
+function Set-DuneStartupConsoleVariableOverrides {
     param(
         [Parameter(Mandatory)][string]$Ip,
-        [AllowNull()][string]$Value
+        [hashtable]$Values = @{}
     )
-    if (-not (Get-Command Set-V6FuelBurningMultiplier -ErrorAction SilentlyContinue)) {
+    if (-not (Get-Command Set-V6ConsoleVariableOverrides -ErrorAction SilentlyContinue)) {
         throw 'Battlegroup helper unavailable (K8s.ps1 not loaded).'
     }
-    $result = Set-V6FuelBurningMultiplier -Ip $Ip -Value $Value
+    $result = Set-V6ConsoleVariableOverrides -Ip $Ip `
+        -Names $script:DuneStartupConsoleVariableKeys `
+        -Values $Values
     if (-not $result.Success) {
         $why = if ($result.Error) { $result.Error } else { $result.Raw }
-        throw "Fuel startup override failed: $why"
+        throw "Startup CVar override failed: $why"
     }
     return $result
 }
 
-function Sync-DuneFuelBurningStartupOverride {
+function Sync-DuneStartupConsoleVariableOverrides {
     param([Parameter(Mandatory)][string]$Ip)
     $config = Get-DuneGameConfig -Ip $Ip
-    $value = $null
-    if ($config.engine.effectiveByKey.ContainsKey('dw.FuelBurningMultiplier')) {
-        $candidate = "$($config.engine.effectiveByKey['dw.FuelBurningMultiplier'])".Trim()
-        if (-not (Test-DuneGameConfigValueIsDefault -Key 'dw.FuelBurningMultiplier' -Value $candidate)) {
-            $value = $candidate
+    $values = @{}
+    foreach ($key in $script:DuneStartupConsoleVariableKeys) {
+        if ($config.engine.effectiveByKey.ContainsKey($key)) {
+            $candidate = "$($config.engine.effectiveByKey[$key])".Trim()
+            if (-not (Test-DuneGameConfigValueIsDefault -Key $key -Value $candidate)) {
+                $values[$key] = $candidate
+            }
         }
     }
-    return Set-DuneFuelBurningStartupOverride -Ip $Ip -Value $value
+    return Set-DuneStartupConsoleVariableOverrides -Ip $Ip -Values $values
 }
 
 # Player-facing server name (the battlegroup title shown in the in-game server

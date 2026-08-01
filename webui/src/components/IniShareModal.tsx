@@ -10,20 +10,27 @@ const CLIENT_GAME_INI_PATH = '%LOCALAPPDATA%\\DuneSandbox\\Saved\\Config\\Window
 
 type Props = {
   title?: string
-  /** The exact INI text to display + copy. When empty, the modal renders nothing. */
-  block: string
+  /** Backward-compatible single-file block. */
+  block?: string
+  path?: string
+  /** File-aware blocks for settings split across Game.ini and Engine.ini. */
+  entries?: Array<{ path: string; block: string }>
   /** Short line under the title explaining why the player needs this. */
   subtitle?: React.ReactNode
   onClose: () => void
 }
 
-export function IniShareModal({ title = 'Give this to your players', block, subtitle, onClose }: Props) {
+export function IniShareModal({ title = 'Give this to your players', block = '', path = CLIENT_GAME_INI_PATH, entries, subtitle, onClose }: Props) {
   const [copied, setCopied] = useState(false)
-  if (!block) return null
+  const files = (entries?.length ? entries : [{ path, block }]).filter(entry => entry.block)
+  if (files.length === 0) return null
+  const copyText = files.length === 1
+    ? files[0].block
+    : files.map(file => `; ${file.path}\r\n${file.block}`).join('\r\n')
 
   const copy = async () => {
     try {
-      await navigator.clipboard.writeText(block)
+      await navigator.clipboard.writeText(copyText)
       setCopied(true)
       setTimeout(() => setCopied(false), 1500)
     } catch { /* clipboard may be unavailable; the text is still shown */ }
@@ -52,13 +59,17 @@ export function IniShareModal({ title = 'Give this to your players', block, subt
         </div>
 
         <div className="px-6 py-4 space-y-3">
-          <div className="text-xs text-text-muted">
-            File location on each player&apos;s PC:{' '}
-            <span className="font-mono break-all text-text">{CLIENT_GAME_INI_PATH}</span>
-          </div>
-          <pre className="max-h-[45vh] overflow-auto rounded-lg border border-border bg-surface-2 p-3 text-xs font-mono text-text whitespace-pre">
-{block}
-          </pre>
+          {files.map(file => (
+            <div key={file.path} className="space-y-1.5">
+              <div className="text-xs text-text-muted">
+                File location on each player&apos;s PC:{' '}
+                <span className="font-mono break-all text-text">{file.path}</span>
+              </div>
+              <pre className="max-h-[35vh] overflow-auto rounded-lg border border-border bg-surface-2 p-3 text-xs font-mono text-text whitespace-pre">
+{file.block}
+              </pre>
+            </div>
+          ))}
           <div className="flex items-center gap-2">
             <button type="button" className="btn-primary" onClick={() => void copy()}>
               <Icon name={copied ? 'Check' : 'Copy'} size={14} /> {copied ? 'Copied' : 'Copy to clipboard'}
@@ -66,9 +77,8 @@ export function IniShareModal({ title = 'Give this to your players', block, subt
             <button type="button" className="btn-secondary" onClick={onClose}>Close</button>
           </div>
           <div className="text-xs text-text-dim leading-relaxed">
-            Tip: if a player already has one of these <span className="font-mono">[/Script/...]</span> section
-            headers, they should merge these lines into it rather than adding a second copy of the header. This
-            block matches what DST wrote to your own client <span className="font-mono">Game.ini</span>.
+            Tip: if a player already has one of these section headers, they should merge these lines into it
+            rather than adding a second copy. These blocks match what DST wrote to your own client files.
           </div>
         </div>
       </div>
