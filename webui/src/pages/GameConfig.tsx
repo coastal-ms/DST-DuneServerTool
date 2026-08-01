@@ -546,7 +546,7 @@ export function GameConfig() {
     try {
       const result = await setGameConfigClientEngineEnabled(enabled, clientInfo?.dir)
       setClientInfo(result.client)
-      if (enabled) {
+      if (result.client.engineEnabled) {
         setClientMsg('Engine.ini management enabled. DST can now mirror opted-in gameplay settings.')
       } else {
         setClientApply(prev => {
