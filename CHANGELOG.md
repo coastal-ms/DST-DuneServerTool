@@ -13,8 +13,12 @@ here cover everything those tags shipped.
 
 ## [Unreleased]
 
+## [13.0.6] - 2026-08-01
+
 ### Changed
 
+- **Experimental settings no longer disconnect Hagga players when you press Save.** Saving now only writes the server `UserEngine.ini`; the matching server startup values are applied when the battlegroup restarts. Use **Apply INIs & restart** (or any battlegroup restart) to put a change into effect. Previously, saving an Experimental setting immediately replaced the Hagga server and dropped everyone playing on it, before any restart had been requested.
+- **A restart always applies what the config file currently says.** The startup values are rebuilt from `UserEngine.ini` at the start of every battlegroup restart, so a value edited in the INI browser is no longer silently overridden by an older one, and the tool and server can't disagree about what is in force.
 - Framework update.
 
 ## [13.0.5] - 2026-07-31
