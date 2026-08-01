@@ -843,6 +843,7 @@ export function GameConfig() {
       const ok = window.confirm(
         `Save ${count} Experimental startup setting${count === 1 ? '' : 's'}?\n\n`
         + 'Confirmed behavior: some Experimental settings require matching client-side Engine.ini values before they take full effect. '
+        + 'Every player may need compatible local values: normally the same value as the server, or an equal/higher value for client-enforced limits. '
         + 'These client edits do not affect public/live servers; those servers remain authoritative.\n\n'
         + `${engineStatus} Turn it on under “Your client config” at the top of this page to let DST manage those values.\n\n`
         + 'Saving also changes Hagga server startup commands and replaces the Hagga pod immediately. Players there will disconnect, and PostLandscape physics initialization can keep Hagga unavailable longer than a normal battlegroup restart.',
@@ -1127,6 +1128,10 @@ export function GameConfig() {
               Off by default. While off, DST bypasses Engine.ini mismatch checks, prompts, and writes. Turning this off
               removes DST-managed Engine.ini values. Close Dune: Awakening before changing this option.
             </span>
+            <span className="block text-xs text-warning mt-1">
+              Multiplayer warning: every player may need compatible Engine.ini values. Use the same value as the server,
+              or an equal/higher local value for client-enforced limits. One player&apos;s local edit does not update anyone else.
+            </span>
           </span>
         </label>
         <div className="flex items-center gap-2">
@@ -1376,7 +1381,7 @@ export function GameConfig() {
                 <p className="text-text-muted mb-2">
                   The setting{clientApply.items.length === 1 ? '' : 's'} below {clientApply.items.length === 1 ? 'is' : 'are'} read by
                   both the server and the game client. The server is updated, but each player must mirror {clientApply.items.length === 1 ? 'it' : 'them'} in
-                  their local client config for it to take full effect:
+                  their local client config for it to take full effect. Use matching values, or equal/higher local values for client-enforced limits:
                 </p>
                 <ul className="space-y-1 mb-2">
                   {clientApply.items.map(it => {
