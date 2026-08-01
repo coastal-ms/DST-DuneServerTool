@@ -92,7 +92,7 @@ $script:DuneGameConfigCategoryOrder = @(
     'Server Identity','Network','Survival','Hydration','Loot & Death',
     'Resources & Economy','Crafting','Building','Inventory','Guilds & Economy',
     'Storm Cycle','Landsraad','PvP & Security','Spice','Taxation','Encounters','Sandworm','Vehicles',
-    'Experimental'
+    'Experimental','Experimental 2'
 )
 
 # Keys DST USED to expose but later removed after field testing. The managed-block
@@ -284,6 +284,148 @@ $script:DuneGameConfigSchema = @(
     @{ Section=$script:DuneGcSecConsole; Key='SafeZone.EnableScale'; File='engine'; Type='bool01'; Label='Enable Safe-Zone Scaling'; Help='Enables the safe-zone scale override. Compiled default was not recovered.'; Category='Experimental' }
     @{ Section=$script:DuneGcSecConsole; Key='SafeZone.Scale'; File='engine'; Type='float'; Default='1.0'; Label='Safe-Zone Scale'; Help='Scales safe-zone geometry. May alter PvP boundaries and world behavior; test cautiously.'; Category='Experimental' }
 
+    # --- Second decode pass (build 2051294-0-shipping) ---
+    # The earlier catalogue was incomplete because the scan that produced it read
+    # the server binary as ASCII. Unreal stores console-variable names and their
+    # help text as UTF-16, so those scans reported nothing for controls that are
+    # demonstrably present. Re-reading the binary as UTF-16 and pairing each name
+    # with the help string its registration code references recovers the full set;
+    # the help below is Funcom's own wording, quoted rather than paraphrased.
+    #
+    # None of these are field-confirmed. Funcom's help says what a control was
+    # meant to do, which is not evidence that the shipped build does it - the
+    # m_Global*Multiplier keys parsed cleanly for months and did nothing. Where
+    # Funcom's help does not state a default, the field is left unset instead of
+    # inventing one.
+
+    # Fills gaps in controls DST already exposes.
+    @{ Section=$script:DuneGcSecConsole; Key='NPC.EnableNpcAttackLimits'; File='engine'; Type='bool01'; Label='Enable NPC Attack Limits'; Help='Funcom: "If set to 1, NPCs will utilize the attack limit curve when determining if they can attack a target". NPC Attack Limit Override above has no effect unless this is on. Compiled default was not recovered.'; Category='Experimental' }
+    @{ Section=$script:DuneGcSecConsole; Key='dw.FuelsBurningDuration'; File='engine'; Type='float'; Min=0; Unit='sec'; Label='Fuel Burn Time (seconds)'; Help='Funcom: "Time in seconds that every fuel consumed by the fuel powered generator will take to burn". An absolute time, unlike Fuel Burning Duration which is a multiplier. Setting both is untested. Compiled default was not recovered.'; Category='Experimental' }
+    @{ Section=$script:DuneGcSecConsole; Key='dw.PlaceableShelterThresholdOverride'; File='engine'; Type='float'; Min=-1; Max=1; Default='-1'; Label='Placeable Shelter Threshold Override'; Help='Funcom: "The threshold value override for the placeable shelter, from 0 to 1. Negative value means it is disabled". Counterpart to Building Shelter Threshold Override.'; Category='Experimental' }
+
+    # Survival and server ruleset.
+    @{ Section=$script:DuneGcSecConsole; Key='Deathstill.ConversionTimeOverride'; File='engine'; Type='float'; Min=0; Unit='sec'; Label='Deathstill Conversion Time'; Help='Funcom: "Override Time for deathstill" - how long a deathstill takes to process a body, in seconds. Community-reported as working; not verified by us. Compiled default was not recovered.'; Category='Experimental' }
+    @{ Section=$script:DuneGcSecConsole; Key='Dac.DisablePvpDamage'; File='engine'; Type='bool01'; Label='Disable PvP Damage'; Help='Funcom: "If true, pvp damage will be disabled. Pve/Evp damage will always work regardless". Server-wide, unlike the per-partition Deep Desert PvP setting. Compiled default was not recovered.'; Category='Experimental' }
+    @{ Section=$script:DuneGcSecConsole; Key='dw.EnableShelterSystem'; File='engine'; Type='bool01'; Label='Shelter System'; Help='Funcom: "Enable and disable the shelter system". Disabling it removes sandstorm shelter requirements entirely; expect wide-reaching effects. Compiled default was not recovered.'; Category='Experimental' }
+
+    # Base backup tool.
+    @{ Section=$script:DuneGcSecConsole; Key='dw.BaseBackupMaxNumberOfBackups'; File='engine'; Type='int'; Min=0; Label='Max Base Backups Per Player'; Help='Funcom: "The max number of base backups a player can store". This is how many stored backups a player may keep, which is not the same as Base Backup Max Extensions under Building. Compiled default was not recovered.'; Category='Experimental' }
+    @{ Section=$script:DuneGcSecConsole; Key='dw.bBaseBackupToolBackupEnabled'; File='engine'; Type='bool01'; Label='Base Backup Tool - Backups'; Help='Funcom: "If the base backup tool should be enabled or disabled". Compiled default was not recovered.'; Category='Experimental' }
+    @{ Section=$script:DuneGcSecConsole; Key='dw.bBaseBackupToolPlacementEnabled'; File='engine'; Type='bool01'; Label='Base Backup Tool - Placement'; Help='Funcom: "If the base backup tool should be enabled or disabled" - the placement half, letting you allow backups while blocking blueprint placement. Compiled default was not recovered.'; Category='Experimental' }
+    @{ Section=$script:DuneGcSecConsole; Key='dw.bBaseBackupToolRecycleEnabled'; File='engine'; Type='bool01'; Label='Base Backup Tool - Recycle'; Help='Funcom: "If the base backup tool recycle should be enabled or disabled". Compiled default was not recovered.'; Category='Experimental' }
+    @{ Section=$script:DuneGcSecConsole; Key='dw.OverrideBaseBackupToolTimeRestrictionInSeconds'; File='engine'; Type='int'; Min=0; Unit='sec'; Label='Base Backup Time Restriction Override'; Help='Funcom: "Override the base backup tool time restriction". The game also has a UserGame.ini setting for the same restriction that DST does not surface; if both are set, which one wins is untested. Compiled default was not recovered.'; Category='Experimental' }
+
+    # Landsraad.
+    @{ Section=$script:DuneGcSecConsole; Key='Landsraad.ControlPointCaptureProgressTarget'; File='engine'; Type='float'; Min=0; Default='100'; Label='Control Point Capture Target'; Help='Funcom: "Set a custom ProgressTarget for all Landsraad ControlPoints, 100 being the Default". Lower values make control points quicker to capture, which suits small or solo servers.'; Category='Experimental' }
+
+    # Sandworm behaviour.
+    @{ Section=$script:DuneGcSecConsole; Key='Sandworm.SandwormEnrageThreshold'; File='engine'; Type='int'; Min=-1; Default='-1'; Label='Worm Enrage Threshold'; Help='Funcom: "The amount of attacks that the worm will do before enraging. -1 = not specified."'; Category='Experimental' }
+    @{ Section=$script:DuneGcSecConsole; Key='Sandworm.SandwormTargetChangeThreshold'; File='engine'; Type='int'; Min=0; Default='0'; Label='Worm Target Change Threshold'; Help='Funcom: "The amount of attacks that the worm will do before switching target. 0 = not specified."'; Category='Experimental' }
+    @{ Section=$script:DuneGcSecConsole; Key='Sandworm.SandwormTargetDropThreshold'; File='engine'; Type='int'; Min=0; Default='0'; Label='Worm Target Drop Threshold'; Help='Funcom: "The amount of attacks that the worm will do before dropping its target and adding it to the ignore list. 0 = not specified."'; Category='Experimental' }
+    @{ Section=$script:DuneGcSecConsole; Key='Sandworm.ThreatWarning.DefaultDistance'; File='engine'; Type='float'; Min=0; Label='Worm Threat Warning Distance'; Help='Funcom: "Distance for when the sandworm threat warning will appear on normal maps". Compiled default was not recovered.'; Category='Experimental' }
+    @{ Section=$script:DuneGcSecConsole; Key='Sandworm.ThreatWarning.DeepDesertDistance'; File='engine'; Type='float'; Min=0; Label='Worm Threat Warning Distance (Deep Desert)'; Help='Funcom: "Distance for when the sandworm threat warning will appear on deep desert maps". Compiled default was not recovered.'; Category='Experimental' }
+
+    # Vehicles.
+    @{ Section=$script:DuneGcSecConsole; Key='Vehicle.RecoveryEnabled'; File='engine'; Type='bool01'; Label='Vehicle Recovery'; Help='Funcom: "Enables vehicle recovery. If enabled, vehicles will not be deleted but kept in database for recovery via backup tool". Compiled default was not recovered.'; Category='Experimental' }
+    @{ Section=$script:DuneGcSecConsole; Key='Vehicle.BackupTool.Enabled'; File='engine'; Type='bool01'; Default='1'; Label='Vehicle Backup Tool'; Help='Funcom: "If false player wont be able to backup or restore vehicles and an onscreen notification will be shown if they try."'; Category='Experimental' }
+    @{ Section=$script:DuneGcSecConsole; Key='Vehicle.WreckedStateDespawnDuration'; File='engine'; Type='float'; Min=0; Unit='sec'; Label='Vehicle Wreck Despawn Time'; Help='Funcom: "The duration in seconds until a vehicle is despawned when in wrecked state". Compiled default was not recovered.'; Category='Experimental' }
+    @{ Section=$script:DuneGcSecConsole; Key='Vehicle.AmmoBlocksBackup'; File='engine'; Type='bool01'; Default='0'; Label='Ammo Blocks Vehicle Backup'; Help='Funcom: "Set whether ammo can remain in the vehicle ammo inventory when backing it up". 0 makes players empty ammo first.'; Category='Experimental' }
+
+    # Server instance. Bgd.* is deliberately server-only: it is not mirrored to a
+    # player client config (see the ClientApply pass below).
+    @{ Section=$script:DuneGcSecConsole; Key='Bgd.ServerPlayerHardCap'; File='engine'; Type='int'; Min=-1; Default='-1'; Label='Player Hard Cap'; Help='Funcom: "Override for player CCU hard cap for this server instance. -1 corresponds to using the default value provided by the director." Raising it above what the VM can feed costs RAM and CPU per extra player; watch Server Health after changing it.'; Category='Experimental' }
+
+
+    # --- Experimental 2 -------------------------------------------------------
+    # The wider set recovered from the same decode pass. These are separated from
+    # Experimental only so the list stays navigable: they are applied the same
+    # way, are equally unconfirmed, and Funcom's own help is quoted rather than
+    # paraphrased.
+    #
+    # Two recovered controls are DELIBERATELY NOT LISTED because DST already
+    # exposes the same behaviour as a game setting, and shipping both would give
+    # one behaviour two switches that can disagree with no known precedence:
+    #   Dune.PlayerDeathLootEnabled        -> Players Drop Loot on Death (m_bShouldPlayersDropLootOnDeath)
+    #   Sandworm.SandwormHibernationActive -> Worm Hibernation (m_bEnableHibernation)
+    # Also excluded: string-valued CVars (the startup-argument path parses values
+    # as numbers), server ports and telemetry, replication/LOD/streaming
+    # internals, dw.FatalLogOnDupItemDetected ("will purposedly crash the
+    # server"), fault-injection and cheat switches, and the item-duplication
+    # guards. tests/GameConfig.Tests.ps1 enforces the exclusions.
+    @{ Section=$script:DuneGcSecConsole; Key='Combat.DuelingSystem.Enabled'; File='engine'; Type='bool01'; Label='Dueling System'; Help='Funcom: "Whether or not the dueling system is enabled".'; Category='Experimental 2' }
+    @{ Section=$script:DuneGcSecConsole; Key='Combat.CanDamageNonCombatNpc'; File='engine'; Type='bool01'; Label='Damage Non-Combat NPCs'; Help='Funcom: "Whether players can damage and apply effects to non combat NPCs".'; Category='Experimental 2' }
+    @{ Section=$script:DuneGcSecConsole; Key='Dac.EnableNearDeathDamageMitigation'; File='engine'; Type='bool01'; Label='Near-Death Damage Mitigation'; Help='Funcom: "If true, enable damage mitigation based on remaining health". Softens incoming damage as health drops.'; Category='Experimental 2' }
+    @{ Section=$script:DuneGcSecConsole; Key='Dac.EnableKnockbackDurationDamageScaling'; File='engine'; Type='bool01'; Label='Stagger Damage Scaling'; Help='Funcom: "If true, damage can be increased based on how long the target has been in stagger state".'; Category='Experimental 2' }
+    @{ Section=$script:DuneGcSecConsole; Key='Dac.ShieldBreakWhileAirborne'; File='engine'; Type='bool01'; Label='Shield Break While Airborne'; Help='Funcom: "Apply shield break stagger type when character is airborne".'; Category='Experimental 2' }
+    @{ Section=$script:DuneGcSecConsole; Key='Dune.DisableShieldOnShooting'; File='engine'; Type='bool01'; Label='Shield Drops While Shooting'; Help='Funcom: "Toggles if the shield should go down w". Funcom''s help text is truncated in the binary.'; Category='Experimental 2' }
+    @{ Section=$script:DuneGcSecConsole; Key='Abilities.HoltzmanShield.UsePowerWhenDisabled'; File='engine'; Type='bool01'; Default='0'; Label='Shield Uses Power When Disabled'; Help='Funcom: "0 (Default): off, 1 : on - When on shield will use power even if it''s disabled by ADS".'; Category='Experimental 2' }
+    @{ Section=$script:DuneGcSecConsole; Key='Abilities.AllowRepsecOutsideLandclaim'; File='engine'; Type='bool01'; Label='Respec Outside Land Claim'; Help='Funcom: "Allow players to repsec outside landclaim or socialhub". Funcom''s spelling is preserved in the key name.'; Category='Experimental 2' }
+    @{ Section=$script:DuneGcSecConsole; Key='Dune.LootNpcDroppedOnCorpseEnabled'; File='engine'; Type='bool01'; Label='NPC Loot On Corpses'; Help='Funcom: "Allows the client to enable or disable NPC loot dropped on NPC corpses". Controls where NPC loot lands, not whether NPCs drop loot - that is NPCs Drop Loot on Death under Loot & Death.'; Category='Experimental 2' }
+    @{ Section=$script:DuneGcSecConsole; Key='Dune.LootNpcDroppedOnContainerEnabled'; File='engine'; Type='bool01'; Label='NPC Loot In Containers'; Help='Funcom: "Allows the client to enable or disable NPC loot dropped on loot containers". Companion to NPC Loot On Corpses; both describe placement, not whether loot drops.'; Category='Experimental 2' }
+    @{ Section=$script:DuneGcSecConsole; Key='Loot.ShouldAlwaysRegeneratePerPlayerLoot'; File='engine'; Type='bool01'; Label='Regenerate Per-Player Loot'; Help='Funcom: "Should per player loot be regenerated each time player interact with loot container". Enabling this can make a single container farmable indefinitely.'; Category='Experimental 2' }
+    @{ Section=$script:DuneGcSecConsole; Key='Inventory.GiveDefaultInventory.Enabled'; File='engine'; Type='bool01'; Default='1'; Label='Give Default Inventory On Respawn'; Help='Funcom: "If false player wont be given default inventory on respawn. (default=true)".'; Category='Experimental 2' }
+    @{ Section=$script:DuneGcSecConsole; Key='dw.Inventory.Item.Event.Enabled'; File='engine'; Type='bool01'; Default='1'; Label='Event Items Enabled'; Help='Funcom: "Are items which are only available from events enabled: 1 = enabled (default); 0 = disabled".'; Category='Experimental 2' }
+    @{ Section=$script:DuneGcSecConsole; Key='dw.Inventory.Item.Quest.Enabled'; File='engine'; Type='bool01'; Default='1'; Label='Quest Items Enabled'; Help='Funcom: "Are quest items which can be only looted and delivered enabled; 1: enabled (default); 0: disabled;".'; Category='Experimental 2' }
+    @{ Section=$script:DuneGcSecConsole; Key='dw.Inventory.Item.Slotless.Enabled'; File='engine'; Type='bool01'; Default='1'; Label='Slotless Items Enabled'; Help='Funcom: "Are items which don''t take slots and corresponding inventories enabled; 1: enabled (default); 0: disabled;".'; Category='Experimental 2' }
+    @{ Section=$script:DuneGcSecConsole; Key='Dune.Exchange.AllowUncategorizedItems'; File='engine'; Type='bool01'; Default='0'; Label='Exchange Uncategorized Items'; Help='Funcom: "Display uncategorized items in the UI and allow them to be added to orders (default=false)".'; Category='Experimental 2' }
+    @{ Section=$script:DuneGcSecConsole; Key='Contracts.Map.Markers.Enabled'; File='engine'; Type='bool01'; Default='1'; Label='Contract Map Markers'; Help='Funcom: "Toggle contracts map markers; 1: enabled (default); 0: disabled".'; Category='Experimental 2' }
+    @{ Section=$script:DuneGcSecConsole; Key='Contracts.IsHiddingOfContractLootItemsEnabled'; File='engine'; Type='bool01'; Label='Hide Contract Loot Items'; Help='Funcom: "Should contract loot items be hidden from the player". Funcom''s spelling is preserved in the key name.'; Category='Experimental 2' }
+    @{ Section=$script:DuneGcSecConsole; Key='Dune.Contracts.Board.ShowAllContracts'; File='engine'; Type='bool01'; Default='0'; Label='Show Hidden Contracts'; Help='Funcom: "If true will show hidden contracts, like ones which only NPC can give. (default=false)".'; Category='Experimental 2' }
+    @{ Section=$script:DuneGcSecConsole; Key='dw.encounters.Enabled'; File='engine'; Type='bool01'; Default='1'; Label='All Encounters'; Help='Funcom: "Toggles encounters spawning: both random and static; Change to 0 at runtime destroys all existing encounters. Same as EncountersSetEnabled; 1: enabled (default); 0: disabled;". Broader than Random Encounters under Encounters: this covers static encounters too. Setting it to 0 while the server is running destroys existing encounters.'; Category='Experimental 2' }
+    @{ Section=$script:DuneGcSecConsole; Key='dw.encounters.LocationCooldown'; File='engine'; Type='float'; Min=0; Unit='sec'; Label='Encounter Location Cooldown'; Help='Funcom: "Encounter location remains on cooldown after an encounter is removed before it can be used again".'; Category='Experimental 2' }
+    @{ Section=$script:DuneGcSecConsole; Key='dw.encounters.PrioritizeNew'; File='engine'; Type='bool01'; Label='Prefer New Encounters'; Help='Funcom: "Any new encounter is preferred, disregarding encounter probability".'; Category='Experimental 2' }
+    @{ Section=$script:DuneGcSecConsole; Key='dw.encounters.LandscapeLocationsOnly'; File='engine'; Type='bool01'; Label='Landscape-Only Encounters'; Help='Funcom: "Only allows encounter spawns on landscape geometry".'; Category='Experimental 2' }
+    @{ Section=$script:DuneGcSecConsole; Key='dw.encounters.ExcludeCoveredLocations'; File='engine'; Type='bool01'; Label='Exclude Covered Encounter Spots'; Help='Funcom: "Excludes encounter spawn locations which are covered by other levels".'; Category='Experimental 2' }
+    @{ Section=$script:DuneGcSecConsole; Key='dw.encounters.InstigatorArea.Enabled'; File='engine'; Type='bool01'; Label='Encounter Instigator Areas'; Help='Funcom: "Allows encounter instigator areas".'; Category='Experimental 2' }
+    @{ Section=$script:DuneGcSecConsole; Key='dw.encounters.AllowExclusivityRange'; File='engine'; Type='bool01'; Label='Encounter Exclusivity Range'; Help='Funcom: "Allows checking exclusivity range".'; Category='Experimental 2' }
+    @{ Section=$script:DuneGcSecConsole; Key='dw.encounters.AreaLimits.Enabled.Override'; File='engine'; Type='select'; Default='-1'; Options=@(@{V='-1';L='No override'},@{V='0';L='Disabled'},@{V='1';L='Enabled'}); Label='Encounter Area Limits Override'; Help='Funcom: "Overrides area limits settings from ini file. -1 - not override. 0 - disabled. 1 - enabled".'; Category='Experimental 2' }
+    @{ Section=$script:DuneGcSecConsole; Key='Hazard.ZonesEnabled'; File='engine'; Type='bool01'; Label='Hazard Zones'; Help='Funcom: "Enables Hazard Zones". Environmental hazard zones such as quicksand. Sandworm danger zones are a separate setting under Sandworm.'; Category='Experimental 2' }
+    @{ Section=$script:DuneGcSecConsole; Key='Hazard.DestructionTime'; File='engine'; Type='float'; Min=0; Unit='sec'; Label='Hazard Destruction Time'; Help='Funcom: "Time it takes for a hazard to be removed from world after it is flagged for destruction".'; Category='Experimental 2' }
+    @{ Section=$script:DuneGcSecConsole; Key='Hazard.OrnithoptersSinkInQuicksandEnabled'; File='engine'; Type='bool01'; Default='0'; Label='Ornithopters Sink In Quicksand'; Help='Funcom: "[Default 0] If 0, no ornithopter will sink in quicksand".'; Category='Experimental 2' }
+    @{ Section=$script:DuneGcSecConsole; Key='Hazard.EnableQuicksandOnIGWBorders'; File='engine'; Type='bool01'; Default='0'; Label='Quicksand On Map Borders'; Help='Funcom: "[Default 0] If 0, quicksand placed along igw borders will be disabled".'; Category='Experimental 2' }
+    @{ Section=$script:DuneGcSecConsole; Key='Journey.EnableSpiceExposureEvents'; File='engine'; Type='bool01'; Default='1'; Label='Spice Exposure Events'; Help='Funcom: "Toggle to disable/enable spice exposure events. (0) Disabled; (1) Enabled (default)".'; Category='Experimental 2' }
+    @{ Section=$script:DuneGcSecConsole; Key='Journey.EnableSimplifiedChallengeCompletion'; File='engine'; Type='bool01'; Label='Simplified Challenge Completion'; Help='Funcom: "Enable this to complete challenge when interacting with altar. Otherwise, complete on returning from challenge room after succefully completing it. (0) Disabled (default); (1) Enabled".'; Category='Experimental 2' }
+    @{ Section=$script:DuneGcSecConsole; Key='Progression.IgnorePrereqs'; File='engine'; Type='bool01'; Label='Ignore Training Module Prerequisites'; Help='Funcom: "If true, Training Modules can be equipped even if pre-reqs aren''t met".'; Category='Experimental 2' }
+    @{ Section=$script:DuneGcSecConsole; Key='Progression.ShowAllPerks'; File='engine'; Type='bool01'; Label='Show All Perks'; Help='Funcom: "If true, all Perks defined in data will be shown in the player''s Perks menu". May reveal perks that are defined in data but not finished.'; Category='Experimental 2' }
+    @{ Section=$script:DuneGcSecConsole; Key='dw.ReturningPlayer.GiveAward.Enabled'; File='engine'; Type='bool01'; Label='Returning Player Rewards'; Help='Funcom: "Whether to grant award packs for player when eligible".'; Category='Experimental 2' }
+    @{ Section=$script:DuneGcSecConsole; Key='dw.ReturningPlayer.DaysBeforeEligibleForReward'; File='engine'; Type='int'; Min=0; Unit='days'; Label='Days Away Before Reward'; Help='Funcom: "How many days a player must be logged out before being eligible for a returning player reward".'; Category='Experimental 2' }
+    @{ Section=$script:DuneGcSecConsole; Key='dw.ReturningPlayer.GiveAward.TierOverride'; File='engine'; Type='int'; Min=-1; Default='-1'; Label='Returning Player Reward Tier'; Help='Funcom: "Override the tier used when granting reward packs. If set to -1 (default) the character''s tier is used".'; Category='Experimental 2' }
+    @{ Section=$script:DuneGcSecConsole; Key='NPC.EnableFacingTargetCheck'; File='engine'; Type='bool01'; Label='NPCs Must Face Target To Fire'; Help='Funcom: "If set to 1, NPCs will check if facing their target before firing their weapon".'; Category='Experimental 2' }
+    @{ Section=$script:DuneGcSecConsole; Key='NPC.FacingTargetAngleStartThreshold'; File='engine'; Type='float'; Min=0; Label='NPC Facing Angle To Start Firing'; Help='Funcom: "Set yaw angle threshold to prevent NPCs from start shooting their weapon if they aren''t facing their target". Only applies while NPCs Must Face Target To Fire is on.'; Category='Experimental 2' }
+    @{ Section=$script:DuneGcSecConsole; Key='NPC.FacingTargetAngleStopThreshold'; File='engine'; Type='float'; Min=0; Label='NPC Facing Angle To Stop Firing'; Help='Funcom: "Set yaw angle threshold to stop NPCs shooting their weapon if they aren''t facing their target". Only applies while NPCs Must Face Target To Fire is on.'; Category='Experimental 2' }
+    @{ Section=$script:DuneGcSecConsole; Key='NPC.EnableWeaponRotationRateOverride'; File='engine'; Type='bool01'; Label='NPC Weapon Rotation Rate Override'; Help='Funcom: "If set to 1, NPC''s yaw rotation rate is overriden if the rotation rate override firing pattern config has a or dummy weapon rotation rate override is set".'; Category='Experimental 2' }
+    @{ Section=$script:DuneGcSecConsole; Key='NPC.DummyWeaponRotationRateOverride'; File='engine'; Type='float'; Min=0; Label='NPC Dummy Weapon Rotation Rate'; Help='Funcom: "If set value > 0, shooting weapon will use dummy rotation rate override instead of the weapon''s configured one". Only applies while NPC Weapon Rotation Rate Override is on.'; Category='Experimental 2' }
+    @{ Section=$script:DuneGcSecConsole; Key='NPC.Respawn.StartCountdownOnEachNPCKilled'; File='engine'; Type='bool01'; Label='Restart NPC Respawn Timer Per Kill'; Help='Funcom: "If true, the respawn timer for NPC content will be restarted for each NPC killed".'; Category='Experimental 2' }
+    @{ Section=$script:DuneGcSecConsole; Key='NPC.AllowDoorAutoAccessToAllNPCs'; File='engine'; Type='bool01'; Label='NPCs Use Pentashield Doors'; Help='Funcom: "if this option is on, all the NPCs can walk through the pentashield doors. If not, only assigned room descriptors can have a access".'; Category='Experimental 2' }
+    @{ Section=$script:DuneGcSecConsole; Key='NPC.AllowDoorAutoAccessToAllNPCsRadius'; File='engine'; Type='float'; Min=0; Label='All-NPC Door Access Radius'; Help='Funcom: "When a radius is set, all NPCs will be granted access to doors within the radius when they spawn. This is applied when NPCAllowDoorAutoAccessToAllNPCs is on. default: 100000(1km)". Applies while NPCs Use Pentashield Doors is on.'; Category='Experimental 2' }
+    @{ Section=$script:DuneGcSecConsole; Key='NPC.DoorAutoAccessRadius'; File='engine'; Type='float'; Min=0; Default='25000'; Label='NPC Door Access Radius'; Help='Funcom: "When a radius is set, NPCs will be granted access to doors within the radius when they spawn. default: 25000(250m)". 25000 is 250 metres.'; Category='Experimental 2' }
+    @{ Section=$script:DuneGcSecConsole; Key='Sandworm.SandwormSharkwormRoam'; File='engine'; Type='select'; Default='0'; Options=@(@{V='0';L='Always off'},@{V='1';L='Always on'},@{V='2';L='Cooldown based'}); Label='Sharkworm Roaming'; Help='Funcom: "Determines if sharkworm roam is always on, always off or cooldown based. 0 = Always Off. 1 = Always On. 2 = Cooldown based. (default=0)".'; Category='Experimental 2' }
+    @{ Section=$script:DuneGcSecConsole; Key='Sandworm.SandwormDeathVolumeEnabled'; File='engine'; Type='bool01'; Default='1'; Label='Worm Death Volume'; Help='Funcom: "Specifies if the sandworm death volume is enabled. (default=true)".'; Category='Experimental 2' }
+    @{ Section=$script:DuneGcSecConsole; Key='Sandworm.SandwormCheckIfBreachLocationIsFreeOfPlayers'; File='engine'; Type='bool01'; Default='1'; Label='Worm Avoids Breaching On Players'; Help='Funcom: "Specifies if the sandworm should check if breach location is free of players. (default=true)". Turning this off lets a worm surface directly underneath players.'; Category='Experimental 2' }
+    @{ Section=$script:DuneGcSecConsole; Key='Sandworm.SandwormCheckIfBreachLocationIsFreeOfVehicles'; File='engine'; Type='bool01'; Default='1'; Label='Worm Avoids Breaching On Vehicles'; Help='Funcom: "Specifies if the sandworm should check if breach location is free of vehicles. (default=true)".'; Category='Experimental 2' }
+    @{ Section=$script:DuneGcSecConsole; Key='Sandworm.SandwormOnTargetedCommuninetMessageEnabled'; File='engine'; Type='bool01'; Default='0'; Label='Worm Targeting Message'; Help='Funcom: "Specifies if a communinet message will be send to the player once they get targeted by the Sandworm. (default=false)".'; Category='Experimental 2' }
+    @{ Section=$script:DuneGcSecConsole; Key='Sandworm.SafezoneExpansionOffset'; File='engine'; Type='float'; Min=-1; Default='-1'; Label='Worm Safe-Zone Expansion'; Help='Funcom: "Offset that will be used to expand the generated safezone. -1 = default value". Larger values make rock safe zones more forgiving.'; Category='Experimental 2' }
+    @{ Section=$script:DuneGcSecConsole; Key='Sandworm.InflatedSafezoneExpansionOffset'; File='engine'; Type='float'; Min=-1; Default='-1'; Label='Worm Inflated Safe-Zone Expansion'; Help='Funcom: "Offset that will be used to create a inflated safezone around the regular safezone. -1 = default value".'; Category='Experimental 2' }
+    @{ Section=$script:DuneGcSecConsole; Key='SecurityZones.UsePvPOverrideTable'; File='engine'; Type='bool01'; Default='0'; Label='Use PvP Override Security Zones'; Help='Funcom: "0: Using default SecurityZones table; 1: Using PvP Override SecurityZones table". Swaps the whole security-zone table, so it can change PvP rules across every zone at once.'; Category='Experimental 2' }
+    @{ Section=$script:DuneGcSecConsole; Key='Vehicle.RelocationEnabled'; File='engine'; Type='bool01'; Label='Vehicle Relocation'; Help='Funcom: "Enables vehicle relocation". Relocation moves vehicles out of invalid positions.'; Category='Experimental 2' }
+    @{ Section=$script:DuneGcSecConsole; Key='Vehicle.BackupTool.ChannelingTimer.Enabled'; File='engine'; Type='bool01'; Label='Vehicle Backup Channeling Timer'; Help='Funcom: "Enables vehicle BackupTool Channeling Timer. If enabled, backup tool operations will use a timer to delay execution. Timings defined in VehicleBackupToolBase". Adds the channel delay to vehicle backup actions; the tool itself is Vehicle Backup Tool.'; Category='Experimental 2' }
+    @{ Section=$script:DuneGcSecConsole; Key='Vehicle.BlockDisassemblyInvalidLandclaim'; File='engine'; Type='bool01'; Default='1'; Label='Block Disassembly On Foreign Land Claim'; Help='Funcom: "Block vehicle disassembly on landclaim that the player does not have any permission; 0: off; 1: on (default)".'; Category='Experimental 2' }
+    @{ Section=$script:DuneGcSecConsole; Key='Vehicle.BlockDisassemblyVehicleHarnessed'; File='engine'; Type='bool01'; Default='1'; Label='Block Disassembly While Harnessed'; Help='Funcom: "Block vehicle disassembly if the vehicle is being harnessed; 0: off; 1: on (default)".'; Category='Experimental 2' }
+    @{ Section=$script:DuneGcSecConsole; Key='Vehicle.BlockDisassemblyVehicleInAir'; File='engine'; Type='bool01'; Default='1'; Label='Block Disassembly In Air'; Help='Funcom: "Block vehicle disassembly if the vehicle is in air; 0: off; 1: on (default)".'; Category='Experimental 2' }
+    @{ Section=$script:DuneGcSecConsole; Key='Vehicle.DisableWheeledVehicleTransfer'; File='engine'; Type='bool01'; Label='Disable Wheeled Vehicle Transfer'; Help='Funcom: "Defines wether wheeled (without being harnessed) vehicle transfer is allowed". Transfer here means moving a vehicle between map servers.'; Category='Experimental 2' }
+    @{ Section=$script:DuneGcSecConsole; Key='Vehicle.LaunchCharacterOnVehicleCollision'; File='engine'; Type='bool01'; Default='1'; Label='Launch Characters On Collision'; Help='Funcom: "Launch the character on vehicle collision. Default 10: Disable, 1: Enable". Distinct from Vehicle Collision Damages Players, which controls damage rather than the push.'; Category='Experimental 2' }
+    @{ Section=$script:DuneGcSecConsole; Key='Vehicle.CharacterHitVelocityModifier'; File='engine'; Type='float'; Min=0; Label='Vehicle Hit Push Force'; Help='Funcom: "Defines how hard character ragdoll gets pushed after getting hit by vehicle (limited by Vehicle.CharacterHitVelocityLimit)". How hard a struck character is thrown, capped by Vehicle Hit Push Limit.'; Category='Experimental 2' }
+    @{ Section=$script:DuneGcSecConsole; Key='Vehicle.CharacterHitVelocityLimit'; File='engine'; Type='float'; Min=0; Label='Vehicle Hit Push Limit'; Help='Funcom: "Defines a limit (sanity check) to how hard character ragdoll gets pushed after getting hit by vehicle".'; Category='Experimental 2' }
+    @{ Section=$script:DuneGcSecConsole; Key='Vehicle.TerminalVelocityOverride'; File='engine'; Type='float'; Min=0; Default='0'; Label='Vehicle Terminal Velocity Override'; Help='Funcom: "Override value for setting terminal velocity on a vehicle, 0.0f default (disabled)".'; Category='Experimental 2' }
+    @{ Section=$script:DuneGcSecConsole; Key='Vehicle.MaxWeldingDistance'; File='engine'; Type='float'; Min=0; Label='Max Welding Distance'; Help='Funcom: "Maximum distance in centimeters a player can be away from a vehicle to do any welding action". In centimetres.'; Category='Experimental 2' }
+    @{ Section=$script:DuneGcSecConsole; Key='Vehicle.SeatChangeHotkeysEnabled'; File='engine'; Type='bool01'; Label='Seat Change Hotkeys'; Help='Funcom: "If true, F1 - F8 while in a vehicle seat will change seat to the corresponding seat index.0: Disable, 1: Enable".'; Category='Experimental 2' }
+    @{ Section=$script:DuneGcSecConsole; Key='Vehicle.SeatChangeCooldown'; File='engine'; Type='float'; Min=0; Unit='sec'; Label='Seat Change Cooldown'; Help='Funcom: "Client-side cooldown for changing seats using hotkeys.While this cooldown is active, changing seats via hotkeys is blocked".'; Category='Experimental 2' }
+    @{ Section=$script:DuneGcSecConsole; Key='Vehicle.VehicleSpawnerCheckVehicleRate'; File='engine'; Type='float'; Min=0; Unit='sec'; Label='Vehicle Spawner Check Rate'; Help='Funcom: "Time in seconds after which a vehicle spawner checks if the spawned vehicle is valid and still at the spawn area".'; Category='Experimental 2' }
+    @{ Section=$script:DuneGcSecConsole; Key='Vehicle.VehicleDamageSmokeEnabled'; File='engine'; Type='bool01'; Label='Vehicle Damage Smoke'; Help='Funcom: "Enables vehicle damage smoke".'; Category='Experimental 2' }
+    @{ Section=$script:DuneGcSecConsole; Key='Vehicle.VehicleSmokeTrailEnabled'; File='engine'; Type='bool01'; Label='Vehicle Smoke Trails'; Help='Funcom: "Enables vehicle smoke trails".'; Category='Experimental 2' }
+    @{ Section=$script:DuneGcSecConsole; Key='dw.BaseBackupShouldDetectNpcs'; File='engine'; Type='bool01'; Label='Base Backup Detects NPCs'; Help='Funcom: "Should the base backup tool detect NPCs inside the landclaim area".'; Category='Experimental 2' }
+    @{ Section=$script:DuneGcSecConsole; Key='dw.EnableShelterInvestigation'; File='engine'; Type='bool01'; Label='Shelter Investigation'; Help='Funcom: "Enable and disable the shelter Investigation". A sub-system of the shelter system; the master switch is Shelter System.'; Category='Experimental 2' }
+
     # --- Parity additions (the reference implementation serverSettingsSchema) ---
     # ACCURACY NOTE (pending validation against the live UserGame.ini): the keys
     # below were NOT found in the stock DefaultGame.ini dump (docs/Dune_Server_INI_Field_Sheet.md,
@@ -331,12 +473,15 @@ foreach ($field in $script:DuneGameConfigSchema) {
     }
 }
 
-# Experimental engine controls are binary-discovered console variables. Apply
-# every explicitly configured non-default value through both UserEngine.ini and
-# the Hagga startup command so late server initialization cannot overwrite it.
+# Experimental engine controls are binary-discovered console variables. Every
+# explicitly configured non-default value is applied through both UserEngine.ini
+# and the Hagga startup command, because INI-only application was field-tested
+# and had no effect. The commands are rebuilt from the INI at battlegroup restart
+# (see Invoke-DuneBattlegroupRestart), not on save. Both Experimental categories
+# qualify - they differ only in how the UI groups them.
 $script:DuneStartupConsoleVariableKeys = @(
     $script:DuneGameConfigSchema |
-        Where-Object { $_.File -eq 'engine' -and $_.Category -eq 'Experimental' } |
+        Where-Object { $_.File -eq 'engine' -and $_.Category -like 'Experimental*' } |
         ForEach-Object { $_.Key }
 )
 

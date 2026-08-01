@@ -488,6 +488,7 @@ function Set-V6ConsoleVariableOverrides {
         $partitionIds = @($set.partitions | ForEach-Object { [int]$_ })
         $allIds = @(@($byIndex.Keys) + $partitionIds | Sort-Object -Unique)
         $podSpecs = @()
+        $changed = $false
         foreach ($id in $allIds) {
             $podSpec = if ($byIndex.ContainsKey([int]$id)) {
                 _Copy-V6PodSpec -PodSpec $byIndex[[int]$id]
@@ -495,14 +496,22 @@ function Set-V6ConsoleVariableOverrides {
                 @{ index = [int]$id }
             }
             $arguments = @($podSpec.arguments)
+            $before = ($arguments -join "`u{1}")
             foreach ($name in $Names) {
                 $command = if ($null -ne $normalized[$name]) { "$name $($normalized[$name])" } else { $null }
                 $arguments = @(_Set-V6ExecCommand -Arguments $arguments `
                     -CommandName $name -Command $command)
             }
+            if (($arguments -join "`u{1}") -ne $before) { $changed = $true }
             $podSpec.arguments = $arguments
             if (_Test-V6PodSpecHasOverrides -PodSpec $podSpec) { $podSpecs += $podSpec }
         }
+
+        # Patch only when a pod's startup arguments actually differ. Every
+        # battlegroup restart rebuilds these from the INI, and most servers set no
+        # console variables at all - rewriting an identical podSpec list would bump
+        # the battlegroup on their behalf for no reason.
+        if (-not $changed) { continue }
 
         $path = "/spec/serverGroup/template/spec/sets/$setIndex/podSpecs"
         $hasPodSpecs = ($set.PSObject.Properties['podSpecs'] -and $null -ne $set.podSpecs)
