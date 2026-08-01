@@ -837,9 +837,15 @@ export function GameConfig() {
     if (dirtyKeys.length === 0) return
     if (experimentalStartupDirtyKeys.length > 0) {
       const count = experimentalStartupDirtyKeys.length
+      const engineStatus = clientInfo?.engineEnabled
+        ? 'Client Engine.ini management is currently ON.'
+        : 'Client Engine.ini management is currently OFF.'
       const ok = window.confirm(
         `Save ${count} Experimental startup setting${count === 1 ? '' : 's'}?\n\n`
-        + 'This changes Hagga server startup commands and replaces the Hagga pod immediately. Players there will disconnect, and PostLandscape physics initialization can keep Hagga unavailable longer than a normal battlegroup restart.',
+        + 'Confirmed behavior: some Experimental settings require matching client-side Engine.ini values before they take full effect. '
+        + 'These client edits do not affect public/live servers; those servers remain authoritative.\n\n'
+        + `${engineStatus} Turn it on under “Your client config” at the top of this page to let DST manage those values.\n\n`
+        + 'Saving also changes Hagga server startup commands and replaces the Hagga pod immediately. Players there will disconnect, and PostLandscape physics initialization can keep Hagga unavailable longer than a normal battlegroup restart.',
       )
       if (!ok) return
     }
