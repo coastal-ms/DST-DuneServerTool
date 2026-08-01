@@ -13,6 +13,8 @@ here cover everything those tags shipped.
 
 ## [Unreleased]
 
+## [13.1.0] - 2026-08-01
+
 ### Added
 
 - **95 more Experimental server settings, in two lists.** Game Config gains an **Experimental 2** section alongside the existing one, together holding 137 console variables read out of the server binary — up from 42. New options include a deathstill conversion time, base backup tool limits and switches, a Landsraad control-point capture target, sandworm enrage/target-switching thresholds, threat-warning distances and breach-safety checks, encounter placement and cooldown controls, hazard zones and quicksand behaviour, NPC aiming and door-access rules, returning-player rewards, contract visibility, vehicle disassembly and collision rules, a server-wide PvP damage switch, and a player hard-cap override. Both lists start rolled up, and the second is simply the overflow of the same set — it is applied exactly the same way.
@@ -21,11 +23,13 @@ here cover everything those tags shipped.
 ### Fixed
 
 - **NPC Attack Limit Override can now actually take effect.** It depends on a separate switch that was never exposed, so on its own it had nothing to act on. That switch is now available next to it.
+- **Restarting no longer rewrites the battlegroup for servers that use none of these settings.** A restart rebuilds the server startup values from the config file; if the battlegroup carried any other override, such as per-sietch server names, it was rewritten even when nothing had changed.
 
 ### Notes
 
 - Every new description quotes Funcom's own wording, and anything Funcom does not give a default for is left unset rather than guessed. These are unconfirmed: they are what the server exposes, not a promise about what each one does.
 - Console variables that duplicate a setting Game Config already offers are deliberately not listed, so no behaviour ends up with two switches that can disagree.
+- Settings you do not touch change nothing: they are never written to the server config, never offered for client mirroring, and no longer cause any battlegroup write on restart.
 
 ## [13.0.6] - 2026-08-01
 
