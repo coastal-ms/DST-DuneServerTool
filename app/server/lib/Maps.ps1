@@ -809,11 +809,23 @@ function Invoke-DuneBattlegroupRestart {
         try { Clear-DuneBotStaleRunFlags } catch {}
     }
 
+    # Console variables are staged in UserEngine.ini and only reach the servers as
+    # startup commands. Rebuild those commands from whatever the INI says right
+    # now - however it was edited - so the restart applies the user's current
+    # values and no stale command can outrank the file. Best-effort: a failure
+    # here must not block the restart the user asked for.
+    $startupApply = $null
+    if ($Ip -and (Get-Command Sync-DuneStartupConsoleVariableOverrides -ErrorAction SilentlyContinue)) {
+        try { $startupApply = Sync-DuneStartupConsoleVariableOverrides -Ip $Ip }
+        catch { $startupApply = @{ ok = $false; error = $_.Exception.Message } }
+    }
+
     $result = Invoke-DuneCommandExternal -Name 'restart'
     return @{
-        ok      = $true
-        result  = $result
-        message = 'Battlegroup restart launched - watch Server Health; it takes a couple of minutes to come back.'
+        ok           = $true
+        result       = $result
+        startupApply = $startupApply
+        message      = 'Battlegroup restart launched - watch Server Health; it takes a couple of minutes to come back.'
     }
 }
 

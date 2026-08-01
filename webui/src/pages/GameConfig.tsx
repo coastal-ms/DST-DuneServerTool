@@ -841,12 +841,12 @@ export function GameConfig() {
         ? 'Client Engine.ini management is currently ON.'
         : 'Client Engine.ini management is currently OFF.'
       const ok = window.confirm(
-        `Save ${count} Experimental startup setting${count === 1 ? '' : 's'}?\n\n`
+        `Save ${count} Experimental setting${count === 1 ? '' : 's'}?\n\n`
+        + 'These are written to the server UserEngine.ini. Nothing on the server changes until you restart the battlegroup — use “Apply INIs & restart”. Saving on its own does not disconnect anyone.\n\n'
         + 'Confirmed behavior: some Experimental settings require matching client-side Engine.ini values before they take full effect. '
         + 'Every player may need compatible local values: normally the same value as the server, or an equal/higher value for client-enforced limits. '
         + 'These client edits do not affect public/live servers; those servers remain authoritative.\n\n'
-        + `${engineStatus} Turn it on under “Your client config” at the top of this page to let DST manage those values.\n\n`
-        + 'Saving also changes Hagga server startup commands and replaces the Hagga pod immediately. Players there will disconnect, and PostLandscape physics initialization can keep Hagga unavailable longer than a normal battlegroup restart.',
+        + `${engineStatus} Turn it on under “Your client config” at the top of this page to let DST manage those values.`,
       )
       if (!ok) return
     }
@@ -865,7 +865,7 @@ export function GameConfig() {
       const n = out.applied ?? dirtyKeys.length
       let msg = `Saved ${n} change${n === 1 ? '' : 's'} into the DST-managed block. Tip: use “Backup settings” to snapshot before big changes — DST no longer auto-backs-up on every save.`
       if (experimentalStartupDirtyKeys.length > 0) {
-        msg += ' Hagga startup commands were updated; its pod is being replaced and may remain unavailable during PostLandscape physics initialization.'
+        msg += ' Saved to the server INI only — restart the battlegroup with “Apply INIs & restart” to put these into effect.'
       }
       // If m_TaskGoalAmount was in this save, DST also rewrote the current
       // Landsraad term's goal_amount for every House row — surface the result.
@@ -1841,7 +1841,7 @@ function CategoryCard({
                 <Icon name="FlaskConical" size={14} /> Test settings
               </div>
               <p>
-                These CVars are written to the battlegroup&apos;s <span className="font-mono text-text">UserEngine.ini</span> under <span className="font-mono text-text">[ConsoleVariables]</span>. Custom values are also added to Hagga&apos;s startup commands, so saving an Experimental change immediately replaces the Hagga pod and disconnects players there. PostLandscape physics initialization can keep Hagga unavailable longer than a normal battlegroup restart. After saving, DST offers to mirror the same values into this PC&apos;s client <span className="font-mono text-text">Engine.ini</span>; close the game before applying them.
+                These CVars are written to the battlegroup&apos;s <span className="font-mono text-text">UserEngine.ini</span> under <span className="font-mono text-text">[ConsoleVariables]</span>. Saving changes nothing on a running server: the values are applied to the game servers when the battlegroup restarts, so use <strong className="text-text">Apply INIs &amp; restart</strong> to put them into effect. After saving, DST offers to mirror the same values into this PC&apos;s client <span className="font-mono text-text">Engine.ini</span>; close the game before applying them.
               </p>
               <p className="mt-1.5">
                 This catalogue contains 42 testable controls decoded from server build 1.4.10.4. Fuel Burning Duration, Double Difficulty Loot, and the three Landsraad reward multipliers have community field confirmation. Restored vehicle controls now receive the same dual INI and startup-command application for testing. Other controls may have no effect or unintended gameplay consequences. The dehydration-zone control is omitted because Funcom warns that enabling it crashes clients. Back up first and change one setting at a time.
