@@ -136,6 +136,21 @@ Describe 'Fuel burning startup override' -Tag 'GameConfig' {
         $arguments | Should -Be @('-execcmds="Bgd.ServerDisplayName ''Hagga''"')
     }
 
+    It 'merges multiple managed vehicle CVars into the existing ExecCmds argument' {
+        $arguments = @('-execcmds="Bgd.ServerDisplayName ''Hagga'',dw.FuelBurningMultiplier 10"')
+        foreach ($entry in @(
+            @{ Name = 'dw.VehicleHeatMultiplier'; Command = 'dw.VehicleHeatMultiplier 0' },
+            @{ Name = 'dw.VehiclePowerConsumptionMultiplier'; Command = 'dw.VehiclePowerConsumptionMultiplier 0' },
+            @{ Name = 'dw.VehicleCanOverHeat'; Command = 'dw.VehicleCanOverHeat 0' }
+        )) {
+            $arguments = @(_Set-V6ExecCommand -Arguments $arguments `
+                -CommandName $entry.Name -Command $entry.Command)
+        }
+
+        @($arguments | Where-Object { $_ -like '-execcmds=*' }).Count | Should -Be 1
+        $arguments | Should -Contain '-execcmds="Bgd.ServerDisplayName ''Hagga'',dw.FuelBurningMultiplier 10,dw.VehicleHeatMultiplier 0,dw.VehiclePowerConsumptionMultiplier 0,dw.VehicleCanOverHeat 0"'
+    }
+
     It 'treats default with no existing pod overrides as a successful no-op' {
         Mock Get-V6Battlegroup {
             @{
@@ -206,7 +221,48 @@ Describe 'Fuel burning startup override' -Tag 'GameConfig' {
         $specs[1].arguments | Should -Contain '-execcmds="dw.FuelBurningMultiplier 10"'
     }
 
-    It 'keeps the fuel command when sietch names are changed' {
+    It 'applies multiple experimental CVars in one patch operation' {
+        Mock Get-V6Battlegroup {
+            @{
+                Ns = 'dune-ns'
+                Name = 'dune-bg'
+                Bg = [pscustomobject]@{ spec = [pscustomobject]@{
+                    serverGroup = [pscustomobject]@{ template = [pscustomobject]@{ spec = [pscustomobject]@{
+                        sets = @([pscustomobject]@{
+                            map = 'Survival_1'
+                            dedicatedScaling = $false
+                            partitions = @(1)
+                            podSpecs = @([pscustomobject]@{
+                                index = 1
+                                arguments = @('-execcmds="Bgd.ServerDisplayName ''Hagga'',dw.FuelBurningMultiplier 10,dw.VehicleHeatMultiplier 1"')
+                            })
+                        })
+                    } } }
+                } }
+            }
+        }
+        $script:consolePatches = $null
+        Mock _Invoke-V6BgJsonPatch {
+            param($Ip, $Info, $Patches)
+            $script:consolePatches = $Patches
+            @{ Success = $true; Raw = 'patched'; Error = $null }
+        }
+
+        $result = Set-V6ConsoleVariableOverrides -Ip '192.0.2.1' `
+            -Names @('dw.FuelBurningMultiplier', 'dw.VehicleHeatMultiplier', 'Dune.GiveDoubleDifficultyLoot') `
+            -Values @{
+                'dw.FuelBurningMultiplier' = '50'
+                'dw.VehicleHeatMultiplier' = '0'
+                'Dune.GiveDoubleDifficultyLoot' = '1'
+            }
+
+        $result.Success | Should -BeTrue
+        $args = @($script:consolePatches[0].value[0].arguments)
+        @($args | Where-Object { $_ -like '-execcmds=*' }).Count | Should -Be 1
+        $args | Should -Contain '-execcmds="Bgd.ServerDisplayName ''Hagga'',dw.FuelBurningMultiplier 50,dw.VehicleHeatMultiplier 0,Dune.GiveDoubleDifficultyLoot 1"'
+    }
+
+    It 'keeps fuel and vehicle commands when sietch names are changed' {
         Mock Get-V6Battlegroup {
             @{
                 Ns = 'dune-ns'
@@ -220,7 +276,7 @@ Describe 'Fuel burning startup override' -Tag 'GameConfig' {
                             partitions = @(1)
                             podSpecs = @([pscustomobject]@{
                                 index = 1
-                                arguments = @('-execcmds="dw.FuelBurningMultiplier 10"')
+                                arguments = @('-execcmds="dw.FuelBurningMultiplier 10,dw.VehicleHeatMultiplier 0,dw.VehicleCanOverHeat 0"')
                             })
                         })
                     } } }
@@ -246,7 +302,7 @@ Describe 'Fuel burning startup override' -Tag 'GameConfig' {
 
         $result.Success | Should -BeTrue
         $podPatch = $script:sietchPatches | Where-Object { $_.path -like '*/podSpecs' }
-        $podPatch.value[0].arguments | Should -Contain '-execcmds="dw.FuelBurningMultiplier 10,Bgd.ServerDisplayName ''Hagga''"'
+        $podPatch.value[0].arguments | Should -Contain '-execcmds="dw.FuelBurningMultiplier 10,dw.VehicleHeatMultiplier 0,dw.VehicleCanOverHeat 0,Bgd.ServerDisplayName ''Hagga''"'
     }
 }
 
@@ -452,12 +508,21 @@ Describe 'DuneGameConfigSchema: experimental binary CVars' -Tag 'GameConfig' {
             'dw.LandsraadMissionRewardMultiplierFactionXP'
             'dw.LandsraadMissionRewardMultiplierHouseCredit'
             'dw.LandsraadMissionRewardMultiplierSpecializationXP'
+            'dw.VehicleHeatMultiplier'
+            'dw.VehicleHeatInterpolationSpeed'
+            'dw.VehiclePowerConsumptionMultiplier'
+            'dw.VehicleCanOverHeat'
             'dw.VehicleAbandonedDecayAllowed'
             'dw.VehicleAbandonedDecayTimeMultiplier'
             'Vehicle.DisassemblySpeedMultiplier'
             'Vehicle.RecoveryChassisDurabilityReductionFraction'
             'Vehicle.RecoveryCurrencyBaseCost'
             'Vehicle.RecoveryTimeLimit'
+            'Vehicle.MaxActiveVehicles'
+            'Vehicle.MaxVehicles'
+            'Vehicle.MaxVehiclesForSpawner'
+            'Vehicle.MaxVehiclesPerPlayer'
+            'Vehicle.MaxVehiclesWarning'
             'Vehicle.CharacterHitDamageModifier'
             'Vehicle.DamagePlayerOnVehicleCollision'
             'Player.IsThrowOffPlayerFromVehicleActive'
@@ -482,31 +547,30 @@ Describe 'DuneGameConfigSchema: experimental binary CVars' -Tag 'GameConfig' {
         )
     }
 
-    It 'isolates all 33 testable binary-discovered controls in the Experimental category' {
+    It 'isolates all 42 testable binary-discovered controls in the Experimental category' {
         $fields = @{}
         foreach ($f in $script:DuneGameConfigSchema) { $fields[$f.Key] = $f }
         $experimental = @($script:DuneGameConfigSchema | Where-Object Category -eq 'Experimental')
 
-        $experimental.Count | Should -Be 33
+        $experimental.Count | Should -Be 42
         @($experimental.Key | Sort-Object) | Should -Be @($script:ExperimentalKeys | Sort-Object)
         foreach ($key in $script:ExperimentalKeys) {
             $fields.ContainsKey($key) | Should -BeTrue
             $fields[$key].Section | Should -Be $script:DuneGcSecConsole
             $fields[$key].File | Should -Be 'engine'
             $fields[$key].Category | Should -Be 'Experimental'
-            $fields[$key].ContainsKey('ClientApply') | Should -BeFalse
+            $fields[$key].ClientApply | Should -BeTrue
+            @($script:DuneStartupConsoleVariableKeys) | Should -Contain $key
         }
+        @($script:DuneStartupConsoleVariableKeys).Count | Should -Be 42
     }
 
     It 'excludes the Funcom-documented client-crash control' {
         @($script:DuneGameConfigSchema.Key) | Should -Not -Contain 'Hazard.DehydrationZonesEnabled'
     }
 
-    It 'excludes vehicle controls proven ineffective in prerelease testing' {
-        # dw.FuelBurningMultiplier was withdrawn alongside these but has been
-        # restored for another round of field testing, so it is deliberately
-        # absent from this list and from the deprecated-scrub list.
-        $removed = @(
+    It 'restores the vehicle controls for dual INI and startup-command testing' {
+        $restored = @(
             'dw.VehicleHeatMultiplier'
             'dw.VehicleHeatInterpolationSpeed'
             'dw.VehiclePowerConsumptionMultiplier'
@@ -518,8 +582,10 @@ Describe 'DuneGameConfigSchema: experimental binary CVars' -Tag 'GameConfig' {
             'Vehicle.MaxVehiclesWarning'
         )
 
-        foreach ($key in $removed) {
-            @($script:DuneGameConfigSchema.Key) | Should -Not -Contain $key
+        foreach ($key in $restored) {
+            @($script:DuneGameConfigSchema.Key) | Should -Contain $key
+            @($script:DuneGameConfigDeprecatedManagedKeys) | Should -Not -Contain $key
+            @($script:DuneStartupConsoleVariableKeys) | Should -Contain $key
         }
     }
 
@@ -536,7 +602,7 @@ Describe 'DuneGameConfigSchema: experimental binary CVars' -Tag 'GameConfig' {
         }
     }
 
-    It 'scrubs retired vehicle controls from the managed INI block on the next save' {
+    It 'keeps restored vehicle controls in the managed INI block on the next save' {
         $raw = @"
 ; user-owned content remains untouched
 [ConsoleVariables]
@@ -561,19 +627,15 @@ $script:DstManagedEnd
             @{ section=$script:DuneGcSecConsole; key='Dune.GiveDoubleDifficultyLoot'; value='1' }
         ) -QuotedKeys @{}
 
-        foreach ($key in @(
-            'dw.VehicleHeatMultiplier',
-            'dw.VehicleHeatInterpolationSpeed',
-            'dw.VehiclePowerConsumptionMultiplier',
-            'dw.VehicleCanOverHeat',
-            'Vehicle.MaxActiveVehicles',
-            'Vehicle.MaxVehicles',
-            'Vehicle.MaxVehiclesForSpawner',
-            'Vehicle.MaxVehiclesPerPlayer',
-            'Vehicle.MaxVehiclesWarning'
-        )) {
-            $out | Should -Not -Match ('(?m)^' + [regex]::Escape($key) + '=')
-        }
+        $out | Should -Match '(?m)^dw\.VehicleHeatMultiplier=0$'
+        $out | Should -Match '(?m)^dw\.VehicleHeatInterpolationSpeed=0$'
+        $out | Should -Match '(?m)^dw\.VehiclePowerConsumptionMultiplier=0$'
+        $out | Should -Match '(?m)^dw\.VehicleCanOverHeat=0$'
+        $out | Should -Match '(?m)^Vehicle\.MaxActiveVehicles=15$'
+        $out | Should -Match '(?m)^Vehicle\.MaxVehicles=15$'
+        $out | Should -Match '(?m)^Vehicle\.MaxVehiclesForSpawner=15$'
+        $out | Should -Match '(?m)^Vehicle\.MaxVehiclesPerPlayer=15$'
+        $out | Should -Match '(?m)^Vehicle\.MaxVehiclesWarning=12$'
         $out | Should -Match '(?m)^User\.HandEditedSetting=1$'
         $out | Should -Match '(?m)^Dune\.GiveDoubleDifficultyLoot=1$'
     }
@@ -630,13 +692,15 @@ $script:DstManagedEnd
         }
     }
 
-    It 'does not include server-only experimental CVars in local client changes' {
+    It 'includes experimental CVars in file-aware local client changes' {
         $notice = Get-DuneGameConfigClientApplyNotice -Updates @(
             @{ file='engine'; section=$script:DuneGcSecConsole; key='Dune.GiveDoubleDifficultyLoot'; value='1' },
             @{ file='engine'; section=$script:DuneGcSecConsole; key='Abilities.RespecCooldownTotalDurationSeconds'; value='0' }
         )
 
-        @($notice.items).Count | Should -Be 0
+        @($notice.items).Count | Should -Be 2
+        @($notice.items | ForEach-Object { $_.file } | Select-Object -Unique) | Should -Be @('engine')
+        $notice.paths.engine | Should -Match 'Engine\.ini$'
     }
 
     It 'places Experimental last in the curated schema API' {
@@ -758,11 +822,11 @@ ResolutionScale=100
     }
 }
 
-Describe 'GameConfig: client-apply flag covers every game-file setting' -Tag 'GameConfig' {
+Describe 'GameConfig: client-apply flag covers local gameplay settings' -Tag 'GameConfig' {
 
     # Settings written to the server's Game.ini are also read by the client, so
-    # each one has to be offered for client-side apply. Console variables live in
-    # UserEngine.ini and are server-only, so they must never be.
+    # each one has to be offered for client-side apply. Gameplay console variables
+    # are also mirrored to Engine.ini; identity/password/port settings are not.
     #
     # A false positive here is harmless - the client write path strips any value
     # that equals its default, and server config wins regardless - whereas a
@@ -775,11 +839,15 @@ Describe 'GameConfig: client-apply flag covers every game-file setting' -Tag 'Ga
         $missing -join ', ' | Should -Be ''
     }
 
-    It 'never flags an engine-file console variable for client apply' {
-        $wrong = @($script:DuneGameConfigSchema |
-            Where-Object { $_.File -eq 'engine' -and $_.ContainsKey('ClientApply') -and $_.ClientApply } |
-            ForEach-Object { $_.Key })
-        $wrong -join ', ' | Should -Be ''
+    It 'flags gameplay console variables but excludes server identity and ports' {
+        $gameplayEngine = @($script:DuneGameConfigSchema |
+            Where-Object { $_.File -eq 'engine' -and $_.Section -eq $script:DuneGcSecConsole -and $_.Key -notlike 'Bgd.*' })
+        @($gameplayEngine | Where-Object { -not $_.ClientApply }).Count | Should -Be 0
+
+        foreach ($key in @('Bgd.ServerDisplayName','Bgd.ServerLoginPassword','Port','IGWPort')) {
+            $field = @($script:DuneGameConfigSchema | Where-Object Key -eq $key)[0]
+            $field.ContainsKey('ClientApply') | Should -BeFalse
+        }
     }
 
     It 'treats a value equal to its default as a removal, not a write' {
@@ -804,6 +872,81 @@ Describe 'GameConfig: client-apply flag covers every game-file setting' -Tag 'Ga
         ).Value
         $deprecatedLoop | Should -Not -BeNullOrEmpty
         $deprecatedLoop | Should -Match '\$existing -match'
+    }
+}
+
+Describe 'GameConfig: local client Game.ini and Engine.ini' -Tag 'GameConfig' {
+
+    BeforeEach {
+        Mock Test-DuneGameClientRunning { $false }
+    }
+
+    It 'reads both client files while preserving legacy Game.ini fields' {
+        $dir = (Get-PSDrive TestDrive).Root
+        [IO.File]::WriteAllText((Join-Path $dir 'Game.ini'), "[$script:SecCrafting]`nm_RepairCostWeight=0.5`n")
+        [IO.File]::WriteAllText((Join-Path $dir 'Engine.ini'), "[$script:DuneGcSecConsole]`nVehicle.MaxVehiclesPerPlayer=20`n")
+
+        $client = Get-DuneGameConfigClient -Dir $dir
+
+        $client.path | Should -Be (Join-Path $dir 'Game.ini')
+        $client.raw | Should -Be $client.game.raw
+        $client.game.exists | Should -BeTrue
+        $client.engine.exists | Should -BeTrue
+        $client.engine.effective["$script:DuneGcSecConsole||Vehicle.MaxVehiclesPerPlayer"] | Should -Be '20'
+    }
+
+    It 'routes mixed updates into the correct managed client files' {
+        $dir = (Get-PSDrive TestDrive).Root
+        [IO.File]::WriteAllText((Join-Path $dir 'Game.ini'), "[Audio]`nMasterVolume=0.8`n")
+        [IO.File]::WriteAllText((Join-Path $dir 'Engine.ini'), "[Renderer]`nr.ScreenPercentage=100`n")
+
+        $result = Save-DuneGameConfigClient -Dir $dir -Updates @(
+            @{ key='m_RepairCostWeight'; value='0.25' },
+            @{ key='Vehicle.MaxVehiclesPerPlayer'; value='20' }
+        )
+
+        $gameRaw = [IO.File]::ReadAllText((Join-Path $dir 'Game.ini'))
+        $engineRaw = [IO.File]::ReadAllText((Join-Path $dir 'Engine.ini'))
+        $gameRaw | Should -Match 'm_RepairCostWeight=0.25'
+        $gameRaw | Should -Not -Match 'Vehicle\.MaxVehiclesPerPlayer'
+        $gameRaw | Should -Match 'MasterVolume=0.8'
+        $engineRaw | Should -Match 'Vehicle\.MaxVehiclesPerPlayer=20'
+        $engineRaw | Should -Not -Match 'm_RepairCostWeight'
+        $engineRaw | Should -Match 'r\.ScreenPercentage=100'
+        $engineRaw | Should -Match "`r`n"
+        $result.files.game.path | Should -Be (Join-Path $dir 'Game.ini')
+        $result.files.engine.path | Should -Be (Join-Path $dir 'Engine.ini')
+        @($result.items | ForEach-Object file | Sort-Object -Unique) | Should -Be @('engine','game')
+    }
+
+    It 'removes an Engine.ini key when reset to its default' {
+        $dir = (Get-PSDrive TestDrive).Root
+        [IO.File]::WriteAllText((Join-Path $dir 'Engine.ini'), @"
+[$script:DuneGcSecConsole]
+Vehicle.MaxVehiclesPerPlayer=20
+"@)
+
+        Save-DuneGameConfigClient -Dir $dir -Updates @(
+            @{ key='Vehicle.MaxVehiclesPerPlayer'; value='10' }
+        ) | Out-Null
+
+        [IO.File]::ReadAllText((Join-Path $dir 'Engine.ini')) | Should -Not -Match 'Vehicle\.MaxVehiclesPerPlayer'
+    }
+
+    It 'refuses Engine.ini writes while the game client is running before touching either file' {
+        Mock Test-DuneGameClientRunning { $true }
+        $dir = Join-Path (Get-PSDrive TestDrive).Root 'running-guard'
+        [void](New-Item -ItemType Directory -Path $dir)
+
+        {
+            Save-DuneGameConfigClient -Dir $dir -Updates @(
+                @{ key='m_RepairCostWeight'; value='0.25' },
+                @{ key='Vehicle.MaxVehiclesPerPlayer'; value='20' }
+            )
+        } | Should -Throw '*Close Dune: Awakening*'
+
+        Test-Path (Join-Path $dir 'Game.ini') | Should -BeFalse
+        Test-Path (Join-Path $dir 'Engine.ini') | Should -BeFalse
     }
 }
 

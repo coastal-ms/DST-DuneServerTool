@@ -99,16 +99,16 @@ export function applyGameConfigClient(items: GameConfigClientApplyItem[], dir?: 
   return api<GameConfigClientApplyResult>('/api/gameconfig/client/apply', {
     method: 'PUT',
     body: JSON.stringify({
-      updates: items.map(i => ({ key: i.key, value: i.value })),
+      updates: items.map(i => ({ file: i.file, key: i.key, value: i.value })),
       ...(dir ? { dir } : {}),
     }),
   })
 }
 
-export function openGameConfigClientFile(dir?: string) {
+export function openGameConfigClientFile(file: 'game' | 'engine' = 'game', dir?: string) {
   return api<{ ok: boolean; path: string }>('/api/gameconfig/client/open', {
     method: 'POST',
-    body: JSON.stringify(dir ? { dir } : {}),
+    body: JSON.stringify({ file, ...(dir ? { dir } : {}) }),
   })
 }
 
