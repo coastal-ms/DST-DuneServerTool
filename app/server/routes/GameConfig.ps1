@@ -158,6 +158,12 @@ Register-DuneRoute -Method PUT -Path '/api/gameconfig' -Handler {
 
     try {
         Save-DuneGameConfig -Ip $ctx.ip -Updates $structured.ToArray()
+        $fuelUpdate = $structured | Where-Object { $_.key -eq 'dw.FuelBurningMultiplier' } | Select-Object -Last 1
+        $fuelApply = $null
+        if ($fuelUpdate) {
+            $fuelValue = if ($fuelUpdate.remove) { $null } else { "$($fuelUpdate.value)" }
+            $fuelApply = Set-DuneFuelBurningStartupOverride -Ip $ctx.ip -Value $fuelValue
+        }
         $cfg = Get-DuneGameConfig -Ip $ctx.ip
         $clientApply = Get-DuneGameConfigClientApplyNotice -Updates $structured.ToArray()
 
@@ -191,6 +197,7 @@ Register-DuneRoute -Method PUT -Path '/api/gameconfig' -Handler {
             clientApply = $clientApply
         }
         if ($landsraadApply) { $body.landsraadGoalApply = $landsraadApply }
+        if ($fuelApply) { $body.fuelStartupApply = $fuelApply }
         Write-DuneJson -Response $res -Body $body
     } catch {
         Write-DuneError -Response $res -Status 500 -Message "Game config save failed: $($_.Exception.Message)"
@@ -218,6 +225,7 @@ Register-DuneRoute -Method POST -Path '/api/gameconfig/reload-pods' -Handler {
     }
     if (-not (Test-DunePlayerGuard -Req $req -Res $res -Ip $ctx.ip)) { return }
     try {
+        Sync-DuneFuelBurningStartupOverride -Ip $ctx.ip | Out-Null
         $r = Invoke-DuneBattlegroupRestart -Ip $ctx.ip
         if (-not $r.ok) {
             Write-DuneError -Response $res -Status 502 -Message $r.message

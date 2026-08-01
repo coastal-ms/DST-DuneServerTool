@@ -434,6 +434,9 @@ echo ""
 echo "=== per-map memory limits (battlegroup spec) ==="
 sudo kubectl get battlegroup -n "$NS" -o jsonpath='{range .items[0].spec.serverGroup.template.spec.sets[*]}{.map}{"  "}{.resources.limits.memory}{"\n"}{end}' 2>&1
 echo ""
+echo "=== per-map startup arguments (battlegroup podSpecs) ==="
+sudo kubectl get battlegroup -n "$NS" -o jsonpath='{range .items[0].spec.serverGroup.template.spec.sets[*]}{.map}{"\n"}{range .podSpecs[*]}{"  index="}{.index}{" args="}{.arguments}{"\n"}{end}{end}' 2>&1
+echo ""
 echo "=== node conditions ==="
 sudo kubectl get node -o jsonpath='{range .items[0].status.conditions[*]}{.type}{"="}{.status}{"  "}{.reason}{"\n"}{end}' 2>&1
 echo ""
