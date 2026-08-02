@@ -13,6 +13,8 @@ here cover everything those tags shipped.
 
 ## [Unreleased]
 
+## [13.2.2] - 2026-08-02
+
 ### Fixed
 
 - **Twelve server settings were being saved but never applied.** Console-variable settings that shipped before the startup-injection mechanism existed were written to the server's `UserEngine.ini` and nowhere else, so a battlegroup restart never picked them up — affecting Sun Exposure, the two mining multipliers and the PvP resource multiplier, both sandstorm toggles, all five sandworm controls, and Vehicle Durability Damage. They now travel with the server startup command like every other console variable, and a test enforces it so a future setting cannot be added without it.
