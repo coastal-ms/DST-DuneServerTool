@@ -13,6 +13,19 @@ here cover everything those tags shipped.
 
 ## [Unreleased]
 
+## [13.2.1] - 2026-08-02
+
+### Added
+
+- **Nine Experimental settings moved into the main Game Config**, now that field testing has confirmed what they do: Shield Drops While Shooting (PvP & Security), Double Difficulty Loot and Regenerate Per-Player Loot (Loot & Death), Fuel Burning Duration and Fuel Burn Time (Building), the three Landsraad reward multipliers (Landsraad), and Maximum Vehicles Per Player (Vehicles).
+- **Apply INIs & restart is now in the bar at the bottom of Game Config and Experimental**, next to Save, so a saved setting can be applied without scrolling back to the top of the page. A Top button sits beside it.
+- **Console-variable settings are labelled CVar**, as a reminder that saving one changes nothing on a running server until the battlegroup restarts.
+- **The connection check now recognises a port-forwarding rule that sends the whole UDP 7777-7810 range to a single port.** Players reach the server but every login lands on the wrong map and is refused, which shows in game as a 2G2 error. The check names the problem and the fix.
+
+### Fixed
+
+- Promoting a setting out of Experimental no longer removes it from the server startup command, which would have stopped the promoted setting working.
+
 ## [13.2.0] - 2026-08-01
 
 ### Added
