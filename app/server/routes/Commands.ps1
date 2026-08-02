@@ -121,7 +121,7 @@ Register-DuneRoute -Method POST -Path '/api/commands/run/{name}' -Handler {
     # host-local request), so use their presence to decide. Local requests on
     # the host are unrestricted. Keep this list in sync with the Commands page's
     # REMOTE_ALLOWED set (webui/src/pages/Commands.tsx).
-    $remoteAllowedCommands = @('startup', 'start', 'restart', 'start-vm', 'reboot')
+    $remoteAllowedCommands = @('startup', 'start', 'restart', 'start-vm', 'reboot', 'apply-inis')
     $isTunneled = $false
     foreach ($h in @('Cf-Access-Authenticated-User-Email', 'Cf-Ray', 'Cf-Connecting-Ip', 'X-Forwarded-For', 'X-Forwarded-Proto')) {
         try { if ($req.Headers[$h]) { $isTunneled = $true; break } } catch {}
@@ -149,6 +149,31 @@ Register-DuneRoute -Method POST -Path '/api/commands/run/{name}' -Handler {
             if (Get-Command Clear-DuneBotStaleRunFlags -ErrorAction SilentlyContinue) {
                 try { Clear-DuneBotStaleRunFlags } catch {}
             }
+        }
+
+        # Apply INIs runs in-app: it rebuilds each server's startup values from
+        # the current UserEngine.ini and then restarts the battlegroup through the
+        # same shared helper Game Config uses. A plain 'restart' skips the rebuild,
+        # which is why saved console variables need this command specifically.
+        if ($name -eq 'apply-inis') {
+            $ctx = Get-DuneGameConfigContext
+            if (-not $ctx.ok) {
+                Write-DuneError -Response $res -Status $ctx.status -Message $ctx.message
+                return
+            }
+            $r = Invoke-DuneBattlegroupRestart -Ip $ctx.ip
+            if (-not $r.ok) {
+                Write-DuneError -Response $res -Status 502 -Message $r.message
+                return
+            }
+            Write-DuneJson -Response $res -Body @{
+                ok      = $true
+                name    = $name
+                mode    = 'InApp'
+                message = $r.message
+                started = (Get-Date).ToString('o')
+            }
+            return
         }
 
         $result = Invoke-DuneCommandExternal -Name $name
