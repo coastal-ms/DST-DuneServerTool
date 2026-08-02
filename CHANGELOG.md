@@ -17,9 +17,7 @@ here cover everything those tags shipped.
 
 ### Added
 
-- **Experimental features.** Experimental settings now live on their own page in the sidebar, organised into sections. These are unproven controls read out of the game server itself — treat them as untested.
-- **Player config.** A button on Game Config and Experimental shows every setting your players need to add on their own PCs, with the Engine.ini and Game.ini lines side by side and one button to copy both.
-- **Apply INIs & Restart is now a command.** It is on the Commands page under Battlegroup and in the Experimental page header, so settings can be applied without going back to Game Config.
+- Experimental features.
 
 ## [13.1.0] - 2026-08-01
 
