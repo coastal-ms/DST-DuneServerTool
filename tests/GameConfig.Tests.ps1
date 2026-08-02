@@ -706,6 +706,41 @@ Describe 'DuneGameConfigSchema: experimental binary CVars' -Tag 'GameConfig' {
         @($script:DuneStartupConsoleVariableKeys).Count | Should -Be 137
     }
 
+    It 'groups every experimental control for the Experimental page' {
+        # The Experimental page renders one card per group, so every control must
+        # land somewhere. Anything the rules cannot place is reported as
+        # Uncategorized rather than being forced into a neighbouring group.
+        $api = @(Get-DuneGameConfigSchemaApi)
+        $fields = @($api | Where-Object { $_.category -like 'Experimental*' } | ForEach-Object { $_.fields })
+        $fields.Count | Should -Be 137
+        foreach ($f in $fields) {
+            $f.group | Should -Not -BeNullOrEmpty
+            $f.status | Should -BeIn @('Confirmed', 'Unconfirmed')
+        }
+        # Namespace rules must win over keyword ones: a sandworm control that
+        # mentions vehicles is a sandworm control.
+        (Get-DuneExperimentalGroup -Key 'Sandworm.SandwormCheckIfBreachLocationIsFreeOfVehicles') | Should -Be 'Sandworm'
+        (Get-DuneExperimentalGroup -Key 'Vehicle.MaxVehiclesPerPlayer') | Should -Be 'Vehicles'
+        (Get-DuneExperimentalGroup -Key 'Deathstill.ConversionTimeOverride') | Should -Be 'Survival & Shelter'
+        (Get-DuneExperimentalGroup -Key 'dw.FuelsBurningDuration') | Should -Be 'Fuel & Power'
+        (Get-DuneExperimentalGroup -Key 'Bgd.ServerPlayerHardCap') | Should -Be 'Server & Session'
+        (Get-DuneExperimentalGroup -Key 'Totally.MadeUpKey') | Should -Be 'Uncategorized'
+    }
+
+    It 'marks only field-confirmed controls as Confirmed' {
+        $api = @(Get-DuneGameConfigSchemaApi)
+        $fields = @($api | Where-Object { $_.category -like 'Experimental*' } | ForEach-Object { $_.fields })
+        $confirmed = @($fields | Where-Object { $_.status -eq 'Confirmed' } | ForEach-Object { $_.key })
+        @($confirmed | Sort-Object) | Should -Be @(
+            'Dune.GiveDoubleDifficultyLoot'
+            'dw.FuelBurningMultiplier'
+            'dw.LandsraadMissionRewardMultiplierFactionXP'
+            'dw.LandsraadMissionRewardMultiplierHouseCredit'
+            'dw.LandsraadMissionRewardMultiplierSpecializationXP'
+            'Vehicle.MaxVehiclesPerPlayer'
+        | Sort-Object)
+    }
+
     It 'never lists the same control in both Experimental categories' {
         $overlap = @($script:ExperimentalKeys | Where-Object { $_ -in $script:Experimental2Keys })
         $overlap | Should -BeNullOrEmpty
