@@ -85,7 +85,10 @@ type P34Diagnostic = {
   staleFarmIp?: boolean
   staleK3sIp?: boolean
   serversReady?: boolean
-  verdict?: 'healthy' | 'stale-ip' | 'servers-down' | 'servers-not-ready' | 'igw-private' | 'datacenter-private' | 'unknown'
+  loginPods?: string[]
+  loginFailures?: number
+  portsCollapsed?: boolean
+  verdict?: 'healthy' | 'stale-ip' | 'servers-down' | 'servers-not-ready' | 'igw-private' | 'datacenter-private' | 'ports-collapsed' | 'unknown'
   summary?: string
   error?: string
 }
@@ -420,12 +423,12 @@ export function PublicIpCard() {
             <div className={
               p34.verdict === 'healthy'
                 ? 'rounded-lg border border-success/40 bg-success/10 p-3 text-sm text-success flex items-start gap-2'
-                : (p34.verdict === 'stale-ip' || p34.verdict === 'datacenter-private')
+                : (p34.verdict === 'stale-ip' || p34.verdict === 'datacenter-private' || p34.verdict === 'ports-collapsed')
                   ? 'rounded-lg border border-danger/40 bg-danger/10 p-3 text-sm text-danger flex items-start gap-2'
                   : 'rounded-lg border border-warning/40 bg-warning/10 p-3 text-sm text-warning flex items-start gap-2'
             }>
               <Icon
-                name={p34.verdict === 'healthy' ? 'CheckCircle2' : (p34.verdict === 'stale-ip' || p34.verdict === 'datacenter-private') ? 'AlertTriangle' : 'AlertCircle'}
+                name={p34.verdict === 'healthy' ? 'CheckCircle2' : (p34.verdict === 'stale-ip' || p34.verdict === 'datacenter-private' || p34.verdict === 'ports-collapsed') ? 'AlertTriangle' : 'AlertCircle'}
                 size={15}
                 className="mt-0.5 shrink-0"
               />

@@ -238,15 +238,15 @@ $script:DuneGameConfigSchema = @(
     # compiled defaults stay unset rather than presenting an invented default.
     # Hazard.DehydrationZonesEnabled is intentionally excluded because its
     # compiled Funcom help explicitly warns that enabling it crashes clients.
-    @{ Section=$script:DuneGcSecConsole; Key='Dune.GiveDoubleDifficultyLoot'; File='engine'; Type='bool01'; Default='0'; Label='Double Difficulty Loot'; Help='Give double loot when encounter difficulty is above 0. Field-confirmed with dungeon loot; still experimental.'; Status='Confirmed'; Category='Experimental' }
+    @{ Section=$script:DuneGcSecConsole; Key='Dune.GiveDoubleDifficultyLoot'; File='engine'; Type='bool01'; Default='0'; Label='Double Difficulty Loot'; Help='Give double loot when encounter difficulty is above 0. Field-confirmed with dungeon loot.'; Status='Confirmed'; Startup=$true; Category='Loot & Death' }
     # Field testing established that INI-only application did not take effect,
     # while applying the same value through the Survival pod's ExecCmds did.
     # Existing generator fuel reflected the new duration after restart.
-    @{ Section=$script:DuneGcSecConsole; Key='dw.FuelBurningMultiplier'; File='engine'; Type='float'; Default='1.0'; Label='Fuel Burning Duration'; Help='Scales how long all fuel burns. DST applies the value in UserEngine.ini and the Hagga server startup command because INI-only application did not take effect in field testing. Restart the battlegroup to apply it; existing generator fuel updates after restart.'; Status='Confirmed'; Category='Experimental' }
+    @{ Section=$script:DuneGcSecConsole; Key='dw.FuelBurningMultiplier'; File='engine'; Type='float'; Default='1.0'; Label='Fuel Burning Duration'; Help='Scales how long all fuel burns. DST applies the value in UserEngine.ini and the Hagga server startup command because INI-only application did not take effect in field testing. Restart the battlegroup to apply it; existing generator fuel updates after restart.'; Status='Confirmed'; Startup=$true; Category='Building' }
     @{ Section=$script:DuneGcSecConsole; Key='Abilities.RespecCooldownTotalDurationSeconds'; File='engine'; Type='int'; Min=0; Unit='sec'; Default='172800'; Label='Ability Respec Cooldown'; Help='Total ability-respec cooldown in seconds. Compiled default is 172800 (2 days); 0 may remove the cooldown but has not been field-verified.'; Category='Experimental' }
-    @{ Section=$script:DuneGcSecConsole; Key='dw.LandsraadMissionRewardMultiplierFactionXP'; File='engine'; Type='float'; Min=0; Default='1.0'; Label='Landsraad Faction XP'; Help='Scales Faction XP from Landsraad missions. Field-confirmed at 10; mission preview may still show the base reward.'; Status='Confirmed'; Category='Experimental' }
-    @{ Section=$script:DuneGcSecConsole; Key='dw.LandsraadMissionRewardMultiplierHouseCredit'; File='engine'; Type='float'; Min=0; Default='1.0'; Label='Landsraad House Credit'; Help='Scales House Credit from Landsraad missions. Field-confirmed at 10; mission preview may still show the base reward.'; Status='Confirmed'; Category='Experimental' }
-    @{ Section=$script:DuneGcSecConsole; Key='dw.LandsraadMissionRewardMultiplierSpecializationXP'; File='engine'; Type='float'; Min=0; Default='1.0'; Label='Landsraad Specialization XP'; Help='Scales Specialization XP from Landsraad missions. Field-confirmed at 10; mission preview may still show the base reward.'; Status='Confirmed'; Category='Experimental' }
+    @{ Section=$script:DuneGcSecConsole; Key='dw.LandsraadMissionRewardMultiplierFactionXP'; File='engine'; Type='float'; Min=0; Default='1.0'; Label='Landsraad Faction XP'; Help='Scales Faction XP from Landsraad missions. Field-confirmed at 10; mission preview may still show the base reward.'; Status='Confirmed'; Startup=$true; Category='Landsraad' }
+    @{ Section=$script:DuneGcSecConsole; Key='dw.LandsraadMissionRewardMultiplierHouseCredit'; File='engine'; Type='float'; Min=0; Default='1.0'; Label='Landsraad House Credit'; Help='Scales House Credit from Landsraad missions. Field-confirmed at 10; mission preview may still show the base reward.'; Status='Confirmed'; Startup=$true; Category='Landsraad' }
+    @{ Section=$script:DuneGcSecConsole; Key='dw.LandsraadMissionRewardMultiplierSpecializationXP'; File='engine'; Type='float'; Min=0; Default='1.0'; Label='Landsraad Specialization XP'; Help='Scales Specialization XP from Landsraad missions. Field-confirmed at 10; mission preview may still show the base reward.'; Status='Confirmed'; Startup=$true; Category='Landsraad' }
     @{ Section=$script:DuneGcSecConsole; Key='dw.VehicleHeatMultiplier'; File='engine'; Type='float'; Min=0; Default='1.0'; Label='Vehicle Heat Multiplier'; Help='Scales vehicle heat generation. 0 = no heat, 1 = normal, 2 = double. Applied through INI and Hagga startup command for local testing.'; Category='Experimental' }
     @{ Section=$script:DuneGcSecConsole; Key='dw.VehicleHeatInterpolationSpeed'; File='engine'; Type='float'; Min=0; Default='1.0'; Label='Vehicle Heat Interpolation Speed'; Help='Speeds up or slows down vehicle heat interpolation. Applied through INI and Hagga startup command for local testing.'; Category='Experimental' }
     @{ Section=$script:DuneGcSecConsole; Key='dw.VehiclePowerConsumptionMultiplier'; File='engine'; Type='float'; Min=0; Default='1.0'; Label='Vehicle Power Consumption'; Help='Scales vehicle power use. 0 = no consumption, 1 = normal, 2 = double. Applied through INI and Hagga startup command for local testing.'; Category='Experimental' }
@@ -260,7 +260,7 @@ $script:DuneGameConfigSchema = @(
     @{ Section=$script:DuneGcSecConsole; Key='Vehicle.MaxActiveVehicles'; File='engine'; Type='int'; Min=-1; Default='-1'; Label='Maximum Active Vehicles'; Help='Rejects attempts to enter vehicle seats after this active-vehicle limit. -1 = unlimited. Applied through INI and Hagga startup command for local testing.'; Category='Experimental' }
     @{ Section=$script:DuneGcSecConsole; Key='Vehicle.MaxVehicles'; File='engine'; Type='int'; Min=-1; Default='-1'; Label='Maximum Vehicles'; Help='Rejects vehicle assembly or recovery after this total-vehicle limit. -1 = unlimited. Applied through INI and Hagga startup command for local testing.'; Category='Experimental' }
     @{ Section=$script:DuneGcSecConsole; Key='Vehicle.MaxVehiclesForSpawner'; File='engine'; Type='int'; Min=0; Default='400'; Label='Maximum Spawned Vehicles'; Help='Stops vehicle spawners after this many vehicles exist. Applied through INI and Hagga startup command for local testing.'; Category='Experimental' }
-    @{ Section=$script:DuneGcSecConsole; Key='Vehicle.MaxVehiclesPerPlayer'; File='engine'; Type='int'; Min=0; Default='10'; Label='Maximum Vehicles Per Player'; Help='Limits vehicles each player may spawn or claim. 0 = unlimited. Applied through INI and Hagga startup command for local testing.'; Status='Confirmed'; Category='Experimental' }
+    @{ Section=$script:DuneGcSecConsole; Key='Vehicle.MaxVehiclesPerPlayer'; File='engine'; Type='int'; Min=0; Default='10'; Label='Maximum Vehicles Per Player'; Help='Limits vehicles each player may spawn or claim. 0 = unlimited. DST applies it in UserEngine.ini and the Hagga server startup command. Field-confirmed: the limit is client-enforced, so every player also needs an equal or higher value in their own client Engine.ini before the raised cap shows in game.'; Status='Confirmed'; Startup=$true; Category='Vehicles' }
     @{ Section=$script:DuneGcSecConsole; Key='Vehicle.MaxVehiclesWarning'; File='engine'; Type='int'; Min=0; Label='Vehicle Count Warning Threshold'; Help='Vehicle count at which the amount notification becomes a warning. Applied through INI and Hagga startup command for local testing.'; Category='Experimental' }
     @{ Section=$script:DuneGcSecConsole; Key='Vehicle.CharacterHitDamageModifier'; File='engine'; Type='float'; Min=0; Default='1.0'; Label='Vehicle Impact Character Damage'; Help='Scales damage dealt to characters by vehicle impacts. 0 should disable impact damage.'; Category='Experimental' }
     @{ Section=$script:DuneGcSecConsole; Key='Vehicle.DamagePlayerOnVehicleCollision'; File='engine'; Type='bool01'; Label='Vehicle Collision Damages Players'; Help='Whether vehicle collisions damage players. Compiled default was not recovered.'; Category='Experimental' }
@@ -300,7 +300,7 @@ $script:DuneGameConfigSchema = @(
 
     # Fills gaps in controls DST already exposes.
     @{ Section=$script:DuneGcSecConsole; Key='NPC.EnableNpcAttackLimits'; File='engine'; Type='bool01'; Label='Enable NPC Attack Limits'; Help='Funcom: "If set to 1, NPCs will utilize the attack limit curve when determining if they can attack a target". NPC Attack Limit Override above has no effect unless this is on. Compiled default was not recovered.'; Category='Experimental' }
-    @{ Section=$script:DuneGcSecConsole; Key='dw.FuelsBurningDuration'; File='engine'; Type='float'; Min=0; Unit='sec'; Label='Fuel Burn Time (seconds)'; Help='Funcom: "Time in seconds that every fuel consumed by the fuel powered generator will take to burn". An absolute time, unlike Fuel Burning Duration which is a multiplier. Setting both is untested. Compiled default was not recovered.'; Category='Experimental' }
+    @{ Section=$script:DuneGcSecConsole; Key='dw.FuelsBurningDuration'; File='engine'; Type='float'; Min=0; Unit='sec'; Label='Fuel Burn Time (seconds)'; Help='Funcom: "Time in seconds that every fuel consumed by the fuel powered generator will take to burn". An absolute time, unlike Fuel Burning Duration which is a multiplier. Field-confirmed. Setting both at once is still untested — use one or the other. Compiled default was not recovered.'; Status='Confirmed'; Startup=$true; Category='Building' }
     @{ Section=$script:DuneGcSecConsole; Key='dw.PlaceableShelterThresholdOverride'; File='engine'; Type='float'; Min=-1; Max=1; Default='-1'; Label='Placeable Shelter Threshold Override'; Help='Funcom: "The threshold value override for the placeable shelter, from 0 to 1. Negative value means it is disabled". Counterpart to Building Shelter Threshold Override.'; Category='Experimental' }
 
     # Survival and server ruleset.
@@ -357,12 +357,12 @@ $script:DuneGameConfigSchema = @(
     @{ Section=$script:DuneGcSecConsole; Key='Dac.EnableNearDeathDamageMitigation'; File='engine'; Type='bool01'; Label='Near-Death Damage Mitigation'; Help='Funcom: "If true, enable damage mitigation based on remaining health". Softens incoming damage as health drops.'; Category='Experimental 2' }
     @{ Section=$script:DuneGcSecConsole; Key='Dac.EnableKnockbackDurationDamageScaling'; File='engine'; Type='bool01'; Label='Stagger Damage Scaling'; Help='Funcom: "If true, damage can be increased based on how long the target has been in stagger state".'; Category='Experimental 2' }
     @{ Section=$script:DuneGcSecConsole; Key='Dac.ShieldBreakWhileAirborne'; File='engine'; Type='bool01'; Label='Shield Break While Airborne'; Help='Funcom: "Apply shield break stagger type when character is airborne".'; Category='Experimental 2' }
-    @{ Section=$script:DuneGcSecConsole; Key='Dune.DisableShieldOnShooting'; File='engine'; Type='bool01'; Label='Shield Drops While Shooting'; Help='Funcom: "Toggles if the shield should go down w". Funcom''s help text is truncated in the binary.'; Category='Experimental 2' }
+    @{ Section=$script:DuneGcSecConsole; Key='Dune.DisableShieldOnShooting'; File='engine'; Type='bool01'; Label='Shield Drops While Shooting'; Help='Funcom: "Toggles if the shield should go down w". Funcom''s help text is truncated in the binary. Field-confirmed: turning this off keeps a player''s shield up while they fire.'; Status='Confirmed'; Startup=$true; Category='PvP & Security' }
     @{ Section=$script:DuneGcSecConsole; Key='Abilities.HoltzmanShield.UsePowerWhenDisabled'; File='engine'; Type='bool01'; Default='0'; Label='Shield Uses Power When Disabled'; Help='Funcom: "0 (Default): off, 1 : on - When on shield will use power even if it''s disabled by ADS".'; Category='Experimental 2' }
     @{ Section=$script:DuneGcSecConsole; Key='Abilities.AllowRepsecOutsideLandclaim'; File='engine'; Type='bool01'; Label='Respec Outside Land Claim'; Help='Funcom: "Allow players to repsec outside landclaim or socialhub". Funcom''s spelling is preserved in the key name.'; Category='Experimental 2' }
     @{ Section=$script:DuneGcSecConsole; Key='Dune.LootNpcDroppedOnCorpseEnabled'; File='engine'; Type='bool01'; Label='NPC Loot On Corpses'; Help='Funcom: "Allows the client to enable or disable NPC loot dropped on NPC corpses". Controls where NPC loot lands, not whether NPCs drop loot - that is NPCs Drop Loot on Death under Loot & Death.'; Category='Experimental 2' }
     @{ Section=$script:DuneGcSecConsole; Key='Dune.LootNpcDroppedOnContainerEnabled'; File='engine'; Type='bool01'; Label='NPC Loot In Containers'; Help='Funcom: "Allows the client to enable or disable NPC loot dropped on loot containers". Companion to NPC Loot On Corpses; both describe placement, not whether loot drops.'; Category='Experimental 2' }
-    @{ Section=$script:DuneGcSecConsole; Key='Loot.ShouldAlwaysRegeneratePerPlayerLoot'; File='engine'; Type='bool01'; Label='Regenerate Per-Player Loot'; Help='Funcom: "Should per player loot be regenerated each time player interact with loot container". Enabling this can make a single container farmable indefinitely.'; Category='Experimental 2' }
+    @{ Section=$script:DuneGcSecConsole; Key='Loot.ShouldAlwaysRegeneratePerPlayerLoot'; File='engine'; Type='bool01'; Label='Regenerate Per-Player Loot'; Help='Funcom: "Should per player loot be regenerated each time player interact with loot container". Field-confirmed. Enabling this can make a single container farmable indefinitely.'; Status='Confirmed'; Startup=$true; Category='Loot & Death' }
     @{ Section=$script:DuneGcSecConsole; Key='Inventory.GiveDefaultInventory.Enabled'; File='engine'; Type='bool01'; Default='1'; Label='Give Default Inventory On Respawn'; Help='Funcom: "If false player wont be given default inventory on respawn. (default=true)".'; Category='Experimental 2' }
     @{ Section=$script:DuneGcSecConsole; Key='dw.Inventory.Item.Event.Enabled'; File='engine'; Type='bool01'; Default='1'; Label='Event Items Enabled'; Help='Funcom: "Are items which are only available from events enabled: 1 = enabled (default); 0 = disabled".'; Category='Experimental 2' }
     @{ Section=$script:DuneGcSecConsole; Key='dw.Inventory.Item.Quest.Enabled'; File='engine'; Type='bool01'; Default='1'; Label='Quest Items Enabled'; Help='Funcom: "Are quest items which can be only looted and delivered enabled; 1: enabled (default); 0: disabled;".'; Category='Experimental 2' }
@@ -479,9 +479,16 @@ foreach ($field in $script:DuneGameConfigSchema) {
 # and had no effect. The commands are rebuilt from the INI at battlegroup restart
 # (see Invoke-DuneBattlegroupRestart), not on save. Both Experimental categories
 # qualify - they differ only in how the UI groups them.
+#
+# Startup=$true carries that same injection with a control once it is PROMOTED
+# out of Experimental into a real category. Without it, promotion would silently
+# drop the control from the startup command and break the very setting being
+# promoted - INI-only does nothing for these. Never widen this to every
+# [ConsoleVariables] field: Bgd.ServerLoginPassword lives there and must never
+# be written into a process command line.
 $script:DuneStartupConsoleVariableKeys = @(
     $script:DuneGameConfigSchema |
-        Where-Object { $_.File -eq 'engine' -and $_.Category -like 'Experimental*' } |
+        Where-Object { $_.File -eq 'engine' -and ($_.Category -like 'Experimental*' -or $_.Startup -eq $true) } |
         ForEach-Object { $_.Key }
 )
 
@@ -2480,6 +2487,11 @@ function Get-DuneGameConfigSchemaApi {
         if ($f.ContainsKey('Options')) {
             $field.options = @($f.Options | ForEach-Object { @{ value = $_.V; label = $_.L } })
         }
+        # Console variables live in UserEngine.ini [ConsoleVariables] and only take
+        # effect once the battlegroup restarts and rebuilds its startup command -
+        # unlike game INI keys, which apply on save. Flag them so the UI can say so
+        # on the field instead of leaving the user to find out by nothing happening.
+        if ($f.Section -eq $script:DuneGcSecConsole) { $field.consoleVar = $true }
         # Experimental controls are shown on their own page, grouped by what they
         # affect. Everything else keeps its Game Config category as the grouping.
         if ($cat -like 'Experimental*') {

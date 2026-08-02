@@ -538,12 +538,7 @@ Describe 'DuneGameConfigSchema: only proven m_Global*Multiplier keys remain' -Ta
 Describe 'DuneGameConfigSchema: experimental binary CVars' -Tag 'GameConfig' {
     BeforeAll {
         $script:ExperimentalKeys = @(
-            'Dune.GiveDoubleDifficultyLoot'
-            'dw.FuelBurningMultiplier'
             'Abilities.RespecCooldownTotalDurationSeconds'
-            'dw.LandsraadMissionRewardMultiplierFactionXP'
-            'dw.LandsraadMissionRewardMultiplierHouseCredit'
-            'dw.LandsraadMissionRewardMultiplierSpecializationXP'
             'dw.VehicleHeatMultiplier'
             'dw.VehicleHeatInterpolationSpeed'
             'dw.VehiclePowerConsumptionMultiplier'
@@ -557,7 +552,6 @@ Describe 'DuneGameConfigSchema: experimental binary CVars' -Tag 'GameConfig' {
             'Vehicle.MaxActiveVehicles'
             'Vehicle.MaxVehicles'
             'Vehicle.MaxVehiclesForSpawner'
-            'Vehicle.MaxVehiclesPerPlayer'
             'Vehicle.MaxVehiclesWarning'
             'Vehicle.CharacterHitDamageModifier'
             'Vehicle.DamagePlayerOnVehicleCollision'
@@ -582,7 +576,6 @@ Describe 'DuneGameConfigSchema: experimental binary CVars' -Tag 'GameConfig' {
             'SafeZone.Scale'
             # Second decode pass (build 2051294-0-shipping), UTF-16 aware.
             'NPC.EnableNpcAttackLimits'
-            'dw.FuelsBurningDuration'
             'dw.PlaceableShelterThresholdOverride'
             'Deathstill.ConversionTimeOverride'
             'Dac.DisablePvpDamage'
@@ -611,12 +604,10 @@ Describe 'DuneGameConfigSchema: experimental binary CVars' -Tag 'GameConfig' {
             'Dac.EnableNearDeathDamageMitigation'
             'Dac.EnableKnockbackDurationDamageScaling'
             'Dac.ShieldBreakWhileAirborne'
-            'Dune.DisableShieldOnShooting'
             'Abilities.HoltzmanShield.UsePowerWhenDisabled'
             'Abilities.AllowRepsecOutsideLandclaim'
             'Dune.LootNpcDroppedOnCorpseEnabled'
             'Dune.LootNpcDroppedOnContainerEnabled'
-            'Loot.ShouldAlwaysRegeneratePerPlayerLoot'
             'Inventory.GiveDefaultInventory.Enabled'
             'dw.Inventory.Item.Event.Enabled'
             'dw.Inventory.Item.Quest.Enabled'
@@ -688,8 +679,8 @@ Describe 'DuneGameConfigSchema: experimental binary CVars' -Tag 'GameConfig' {
         $experimental = @($script:DuneGameConfigSchema | Where-Object Category -eq 'Experimental')
         $experimental2 = @($script:DuneGameConfigSchema | Where-Object Category -eq 'Experimental 2')
 
-        $experimental.Count | Should -Be 64
-        $experimental2.Count | Should -Be 73
+        $experimental.Count | Should -Be 57
+        $experimental2.Count | Should -Be 71
         @($experimental.Key | Sort-Object) | Should -Be @($script:ExperimentalKeys | Sort-Object)
         @($experimental2.Key | Sort-Object) | Should -Be @($script:Experimental2Keys | Sort-Object)
         foreach ($key in @($script:ExperimentalKeys) + @($script:Experimental2Keys)) {
@@ -703,6 +694,8 @@ Describe 'DuneGameConfigSchema: experimental binary CVars' -Tag 'GameConfig' {
             }
         }
         # Both lists are applied identically; the split is presentation only.
+        # 128 still on the Experimental pages + the 9 promoted controls, which keep
+        # startup injection via Startup=$true.
         @($script:DuneStartupConsoleVariableKeys).Count | Should -Be 137
     }
 
@@ -712,7 +705,7 @@ Describe 'DuneGameConfigSchema: experimental binary CVars' -Tag 'GameConfig' {
         # Uncategorized rather than being forced into a neighbouring group.
         $api = @(Get-DuneGameConfigSchemaApi)
         $fields = @($api | Where-Object { $_.category -like 'Experimental*' } | ForEach-Object { $_.fields })
-        $fields.Count | Should -Be 137
+        $fields.Count | Should -Be 128
         foreach ($f in $fields) {
             $f.group | Should -Not -BeNullOrEmpty
             $f.status | Should -BeIn @('Confirmed', 'Unconfirmed')
@@ -727,18 +720,40 @@ Describe 'DuneGameConfigSchema: experimental binary CVars' -Tag 'GameConfig' {
         (Get-DuneExperimentalGroup -Key 'Totally.MadeUpKey') | Should -Be 'Uncategorized'
     }
 
-    It 'marks only field-confirmed controls as Confirmed' {
-        $api = @(Get-DuneGameConfigSchemaApi)
-        $fields = @($api | Where-Object { $_.category -like 'Experimental*' } | ForEach-Object { $_.fields })
-        $confirmed = @($fields | Where-Object { $_.status -eq 'Confirmed' } | ForEach-Object { $_.key })
-        @($confirmed | Sort-Object) | Should -Be @(
+    It 'promotes field-confirmed controls out of Experimental without losing startup injection' {
+        # Promotion is a metadata flip: a proven control leaves the Experimental
+        # pages for a real category. Startup=$true must travel with it, because
+        # these are console variables and INI-only application does nothing - the
+        # value only lands when the battlegroup restart rebuilds the startup
+        # command. Category alone used to drive that list, so promoting silently
+        # broke the very setting being promoted.
+        $promoted = @(
+            'Dune.DisableShieldOnShooting'
             'Dune.GiveDoubleDifficultyLoot'
             'dw.FuelBurningMultiplier'
+            'dw.FuelsBurningDuration'
             'dw.LandsraadMissionRewardMultiplierFactionXP'
             'dw.LandsraadMissionRewardMultiplierHouseCredit'
             'dw.LandsraadMissionRewardMultiplierSpecializationXP'
+            'Loot.ShouldAlwaysRegeneratePerPlayerLoot'
             'Vehicle.MaxVehiclesPerPlayer'
-        | Sort-Object)
+        )
+        foreach ($key in $promoted) {
+            $f = $script:DuneGameConfigSchema | Where-Object { $_.Key -eq $key }
+            $f | Should -Not -BeNullOrEmpty
+            $f.Category | Should -Not -BeLike 'Experimental*'
+            $f.Status | Should -Be 'Confirmed'
+            $f.Startup | Should -BeTrue
+            @($script:DuneStartupConsoleVariableKeys) | Should -Contain $key
+            # Console variables keep the blanket client-side mirror.
+            $f.ClientApply | Should -BeTrue
+        }
+
+        # Anything still on the Experimental pages is by definition unproven; a
+        # confirmed result is what triggers promotion.
+        $api = @(Get-DuneGameConfigSchemaApi)
+        $fields = @($api | Where-Object { $_.category -like 'Experimental*' } | ForEach-Object { $_.fields })
+        @($fields | Where-Object { $_.status -eq 'Confirmed' }) | Should -BeNullOrEmpty
     }
 
     It 'never lists the same control in both Experimental categories' {
