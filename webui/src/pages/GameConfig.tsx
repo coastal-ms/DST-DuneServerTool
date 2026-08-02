@@ -116,6 +116,48 @@ function isCustomized(data: GameConfigResponse | null, field: GameConfigField): 
 // They share a warning banner, start rolled up, and are the ones that need a
 // battlegroup restart before they do anything. "Experimental 2" is simply the
 // overflow of the same set, split so neither list is unmanageably long.
+// Build one set of client blocks covering EVERY customised client-apply setting
+// across all categories, merged per file and section. This is what an admin hands
+// to their players: the complete list of lines each player must add locally, and
+// nothing else — defaults and server-only settings are left out, because a player
+// copying a value that matches the default just adds noise to their file.
+export function buildAllClientBlocks(
+  cats: GameConfigCategory[] | null,
+  cfg: GameConfigResponse | null,
+): { entries: ClientShareEntry[]; count: number } {
+  const byFile = new Map<'game' | 'engine', Map<string, string[]>>()
+  let count = 0
+  for (const cat of cats ?? []) {
+    for (const f of cat.fields ?? []) {
+      if (!f?.key || !f.clientApply || f.structKey) continue
+      if (!isCustomized(cfg, f)) continue
+      const v = liveValue(cfg, f)
+      if (v === '') continue
+      const bySection = byFile.get(f.file) ?? new Map<string, string[]>()
+      const arr = bySection.get(f.section) ?? []
+      // A key can appear in more than one category card; only list it once.
+      if (arr.some(line => line.startsWith(`${f.key}=`))) continue
+      arr.push(`${f.key}=${v}`)
+      bySection.set(f.section, arr)
+      byFile.set(f.file, bySection)
+      count++
+    }
+  }
+  const entries: ClientShareEntry[] = []
+  for (const file of ['game', 'engine'] as const) {
+    const bySection = byFile.get(file)
+    if (!bySection) continue
+    const parts: string[] = []
+    for (const [section, lines] of bySection) parts.push(`[${section}]`, ...lines, '')
+    entries.push({
+      file,
+      path: CLIENT_INI_PATHS[file],
+      block: parts.join('\r\n').replace(/\s+$/, '') + '\r\n',
+    })
+  }
+  return { entries, count }
+}
+
 function isExperimentalCategory(category: string): boolean {
   return category === 'Experimental' || category === 'Experimental 2'
 }
@@ -276,7 +318,7 @@ export function GameConfig({ mode = 'standard' }: { mode?: 'standard' | 'experim
   const [sandwormModalOpen, setSandwormModalOpen] = useState(false)
   const [search, setSearch] = useState('')
   // "Give players this" section share popup (client-side Game.ini block).
-  const [shareBlock, setShareBlock] = useState<{ title: string; entries: ClientShareEntry[] } | null>(null)
+  const [shareBlock, setShareBlock] = useState<{ title: string; subtitle?: string; entries: ClientShareEntry[] } | null>(null)
   const [backing, setBacking] = useState(false)
   const [backupMsg, setBackupMsg] = useState<string | null>(null)
   const [backupError, setBackupError] = useState<string | null>(null)
@@ -874,8 +916,10 @@ export function GameConfig({ mode = 'standard' }: { mode?: 'standard' | 'experim
     return experimentalPage ? groupExperimental(mine) : mine
   }, [schema, experimentalPage])
 
-  const filteredSchema = useMemo(() => {
-    if (!visibleSchema) return null
+  // Everything a player must add locally for THIS page's settings.
+  const playerConfig = useMemo(() => buildAllClientBlocks(visibleSchema, cfg), [visibleSchema, cfg])
+
+  const filteredSchema = useMemo(() => {    if (!visibleSchema) return null
     const q = search.trim().toLowerCase()
     if (!q) return visibleSchema
     return visibleSchema
@@ -1069,19 +1113,40 @@ export function GameConfig({ mode = 'standard' }: { mode?: 'standard' | 'experim
         }
       />
 
-      {/* Backup reminder */}
-      <div className="card p-4 mb-4 border-ibad/40 bg-ibad/5 text-sm flex items-start gap-3">
-        <Icon name="FlaskConical" size={18} className="mt-0.5 shrink-0 text-ibad" />
+      {/* Backup / risk reminder. On the Experimental page this is also the single
+          page-level warning — the per-card copy is suppressed there, otherwise it
+          would repeat on every themed card. */}
+      <div className={'card p-4 mb-4 text-sm flex items-start gap-3 ' + (experimentalPage ? 'border-warning/40 bg-warning/5' : 'border-ibad/40 bg-ibad/5')}>
+        <Icon name="FlaskConical" size={18} className={'mt-0.5 shrink-0 ' + (experimentalPage ? 'text-warning' : 'text-ibad')} />
         <div className="flex-1 min-w-0">
-          <p className="text-xs text-text-muted leading-relaxed">
-            Game Config writes directly to your live battlegroup&apos;s <span className="font-mono">UserGame.ini</span> /{' '}
-            <span className="font-mono">UserEngine.ini</span>. Values are written into a
-            DST-managed block. <span className="text-text font-medium">Always click “Backup settings” before making changes</span> so
-            you have a restore point — backups are saved on the server next to each file and can be restored via the File Browser.
-          </p>
-          <p className="text-xs text-warning/90 leading-relaxed mt-1.5">
-            Some settings are read only when a game pod starts. Use “Apply INIs &amp; restart” after saving to do a clean battlegroup restart so every map reloads with the new values.
-          </p>
+          {experimentalPage ? (
+            <>
+              <p className="text-xs text-text-muted leading-relaxed">
+                These are server console variables read out of the game binary and written to your battlegroup&apos;s{' '}
+                <span className="font-mono">UserEngine.ini</span>. Their descriptions quote Funcom&apos;s own wording, which says what a
+                control was <em>meant</em> to do — several read perfectly and do nothing at all.{' '}
+                <span className="text-text font-medium">Back up first and change one setting at a time.</span>
+              </p>
+              <p className="text-xs text-warning/90 leading-relaxed mt-1.5">
+                Saving here changes nothing on a running server. Open{' '}
+                <Link to="/gameconfig" className="underline hover:text-warning">Game Config</Link> afterwards and use
+                “Apply INIs &amp; restart”. Many of these also need a matching value on each player&apos;s PC — use
+                “Player config” below to get the exact lines to hand out.
+              </p>
+            </>
+          ) : (
+            <>
+              <p className="text-xs text-text-muted leading-relaxed">
+                Game Config writes directly to your live battlegroup&apos;s <span className="font-mono">UserGame.ini</span> /{' '}
+                <span className="font-mono">UserEngine.ini</span>. Values are written into a
+                DST-managed block. <span className="text-text font-medium">Always click “Backup settings” before making changes</span> so
+                you have a restore point — backups are saved on the server next to each file and can be restored via the File Browser.
+              </p>
+              <p className="text-xs text-warning/90 leading-relaxed mt-1.5">
+                Some settings are read only when a game pod starts. Use “Apply INIs &amp; restart” after saving to do a clean battlegroup restart so every map reloads with the new values.
+              </p>
+            </>
+          )}
           <button
             type="button"
             onClick={() => void onBackup()}
@@ -1101,6 +1166,22 @@ export function GameConfig({ mode = 'standard' }: { mode?: 'standard' | 'experim
           >
             <Icon name="History" size={14} />
             View backups
+          </button>
+          <button
+            type="button"
+            onClick={() => setShareBlock({
+              title: 'Give your players this',
+              subtitle: 'Every setting on this page that a player must also set locally, and nothing else.',
+              entries: playerConfig.entries,
+            })}
+            disabled={playerConfig.count === 0}
+            className="btn-secondary mt-2.5 ml-2"
+            title={playerConfig.count === 0
+              ? 'No settings on this page currently need a matching value on players’ PCs'
+              : 'Show every line your players need to add to their own Game.ini / Engine.ini'}
+          >
+            <Icon name="Users" size={14} />
+            Player config{playerConfig.count > 0 ? ` (${playerConfig.count})` : ''}
           </button>
         </div>
       </div>
@@ -1677,7 +1758,7 @@ export function GameConfig({ mode = 'standard' }: { mode?: 'standard' | 'experim
         <IniShareModal
           title={shareBlock.title}
           entries={shareBlock.entries}
-          subtitle="Players connecting to your server should add each block to the matching local client INI file."
+          subtitle={shareBlock.subtitle ?? 'Players connecting to your server should add each block to the matching local client INI file.'}
           onClose={() => setShareBlock(null)}
         />
       )}
@@ -1938,7 +2019,7 @@ function CategoryCard({
       </div>
       {expanded && (
         <>
-          {experimental && (
+          {experimental && !isExperimental && (
             <div className="mb-4 rounded-lg border border-warning/35 bg-warning/10 p-3 text-xs text-text-muted">
               <div className="mb-1 flex items-center gap-2 font-semibold text-warning">
                 <Icon name="FlaskConical" size={14} /> Test settings
