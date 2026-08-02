@@ -42,7 +42,7 @@ export function IniShareModal({ title = 'Give this to your players', block = '',
       onClick={onClose}
     >
       <div
-        className="w-full max-w-2xl rounded-xl border border-border bg-surface shadow-2xl"
+        className={'w-full rounded-xl border border-border bg-surface shadow-2xl ' + (files.length > 1 ? 'max-w-5xl' : 'max-w-2xl')}
         onClick={e => e.stopPropagation()}
       >
         <div className="flex items-start gap-3 border-b border-border px-6 py-4">
@@ -59,17 +59,21 @@ export function IniShareModal({ title = 'Give this to your players', block = '',
         </div>
 
         <div className="px-6 py-4 space-y-3">
-          {files.map(file => (
-            <div key={file.path} className="space-y-1.5">
-              <div className="text-xs text-text-muted">
-                File location on each player&apos;s PC:{' '}
-                <span className="font-mono break-all text-text">{file.path}</span>
-              </div>
-              <pre className="max-h-[35vh] overflow-auto rounded-lg border border-border bg-surface-2 p-3 text-xs font-mono text-text whitespace-pre">
+          {/* Two files (Game.ini + Engine.ini) sit side by side so it is obvious
+              they are separate destinations, not one block to paste twice. */}
+          <div className={files.length > 1 ? 'grid grid-cols-1 lg:grid-cols-2 gap-4' : 'space-y-3'}>
+            {files.map(file => (
+              <div key={file.path} className="space-y-1.5 min-w-0">
+                <div className="text-xs text-text-muted">
+                  File location on each player&apos;s PC:{' '}
+                  <span className="font-mono break-all text-text">{file.path}</span>
+                </div>
+                <pre className="max-h-[35vh] overflow-auto rounded-lg border border-border bg-surface-2 p-3 text-xs font-mono text-text whitespace-pre">
 {file.block}
-              </pre>
-            </div>
-          ))}
+                </pre>
+              </div>
+            ))}
+          </div>
           <div className="flex items-center gap-2">
             <button type="button" className="btn-primary" onClick={() => void copy()}>
               <Icon name={copied ? 'Check' : 'Copy'} size={14} /> {copied ? 'Copied' : 'Copy to clipboard'}
