@@ -331,6 +331,11 @@ function Get-DunePublicIpStatus {
 # (surfaced to players as 2G2). Both conditions are required — logins funnelled
 # into a single pod AND Funcom actually rejecting them — so a quiet server, or a
 # server where everyone happens to be on one map legitimately, never fires it.
+#
+# `failures` is a presence signal, NOT a count of affected players: Funcom logs
+# that same failure line twice per rejection, so it runs at roughly double the
+# real number of attempts. Never present it to the user as an attempt count and
+# never build a ratio or threshold on it.
 # ----------------------------------------------------------------------------
 function Get-DuneP34LoginDistribution {
     param([string]$ProbeOutput)
@@ -620,7 +625,7 @@ done
     if ($result.portsCollapsed) {
         $onePod = @($result.loginPods)[0]
         $result.verdict = 'ports-collapsed'
-        $result.summary = "Players are reaching this server, but every connection is arriving on a single port. Your maps each listen on their own port ($((@($maps | ForEach-Object { $_.port } | Sort-Object -Unique) -join ', '))), and the server hands each player the port for the map they are joining — but all $($result.loginFailures) login attempt(s) landed on one map server ($onePod), so the server refused them. That refusal is the ""2G2"" error players see. This is a port-forwarding rule that sends the whole external UDP 7777-7810 range to one internal port: set the internal/local port range to 7777-7810 as well (or leave it blank) so each port maps straight through, then try joining again."
+        $result.summary = "Players are reaching this server, but every connection is arriving on a single port. Your maps each listen on their own port ($((@($maps | ForEach-Object { $_.port } | Sort-Object -Unique) -join ', '))), and the server hands each player the port for the map they are joining — but every login attempt landed on one map server ($onePod), so the server refused them. That refusal is the ""2G2"" error players see. This is a port-forwarding rule that sends the whole external UDP 7777-7810 range to one internal port: set the internal/local port range to 7777-7810 as well (or leave it blank) so each port maps straight through, then try joining again."
     }
     elseif ($result.datacenterPrivate) {
         # The persistent root: the director is pinned to advertise a private/LAN
