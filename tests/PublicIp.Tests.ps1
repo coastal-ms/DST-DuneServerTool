@@ -669,3 +669,63 @@ exit 0
         }
     }
 }
+
+Describe 'P34: collapsed port-forward range (2G2 on login)' {
+    # Signature taken verbatim from a real field case (2026-08-02): every
+    # external port forwarded to one internal port, so all logins landed on the
+    # Overmap pod while the director had granted Hagga on 7778.
+    It 'flags a collapse when every login lands on one pod and Funcom rejects them' {
+        $probe = @"
+POD=sh-abc-sg-overmap-pod-2 LOGIN=2 FAIL=2
+POD=sh-abc-sg-survival-1-pod-1 LOGIN=0 FAIL=0
+"@
+        $r = Get-DuneP34LoginDistribution -ProbeOutput $probe
+        $r.collapsed | Should -BeTrue
+        $r.failures  | Should -Be 2
+        @($r.pods).Count | Should -Be 1
+        @($r.pods)[0] | Should -Be 'sh-abc-sg-overmap-pod-2'
+    }
+
+    It 'does not flag a healthy server whose logins spread across maps' {
+        $probe = @"
+POD=sh-abc-sg-overmap-pod-2 LOGIN=5 FAIL=0
+POD=sh-abc-sg-survival-1-pod-1 LOGIN=3 FAIL=0
+"@
+        (Get-DuneP34LoginDistribution -ProbeOutput $probe).collapsed | Should -BeFalse
+    }
+
+    It 'does not flag when everyone is simply on one map and nothing is failing' {
+        # Legitimate: one map is busy, the other is empty. No refusals, no fault.
+        $probe = @"
+POD=sh-abc-sg-overmap-pod-2 LOGIN=7 FAIL=0
+POD=sh-abc-sg-survival-1-pod-1 LOGIN=0 FAIL=0
+"@
+        (Get-DuneP34LoginDistribution -ProbeOutput $probe).collapsed | Should -BeFalse
+    }
+
+    It 'does not flag when failures exist but logins are still reaching several maps' {
+        # Login failures alone are not a collapsed range - they could be the
+        # already-known zone-transfer cause of 2G2.
+        $probe = @"
+POD=sh-abc-sg-overmap-pod-2 LOGIN=4 FAIL=1
+POD=sh-abc-sg-survival-1-pod-1 LOGIN=2 FAIL=1
+"@
+        (Get-DuneP34LoginDistribution -ProbeOutput $probe).collapsed | Should -BeFalse
+    }
+
+    It 'stays silent on an idle server with no logins at all' {
+        $probe = @"
+POD=sh-abc-sg-overmap-pod-2 LOGIN=0 FAIL=0
+POD=sh-abc-sg-survival-1-pod-1 LOGIN=0 FAIL=0
+"@
+        $r = Get-DuneP34LoginDistribution -ProbeOutput $probe
+        $r.collapsed | Should -BeFalse
+        @($r.pods).Count | Should -Be 0
+    }
+
+    It 'returns a safe empty result when the probe produced nothing' {
+        $r = Get-DuneP34LoginDistribution -ProbeOutput ''
+        $r.collapsed | Should -BeFalse
+        $r.failures  | Should -Be 0
+    }
+}
