@@ -13,6 +13,15 @@ here cover everything those tags shipped.
 
 ## [Unreleased]
 
+### Added
+
+- **Experimental settings moved to their own page.** The two Experimental lists have left Game Config and now live under **Experimental** in the sidebar, split into themed cards — Sandworm, Vehicles, Combat & Shields, NPCs & Encounters, Hazards & Storms, Survival & Shelter, Base Building & Backups, Loot & Inventory, Progression & Contracts, Fuel & Power, Spice & Harvesting, Server & Session — so a control can be found by what it affects instead of scrolling one long list. Anything that cannot be placed appears under **Uncategorized**. Game Config keeps the settings we stand behind.
+- **Controls with field confirmation are marked.** Fuel Burning Duration, Double Difficulty Loot, the three Landsraad reward multipliers and Maximum Vehicles Per Player are flagged as confirmed; everything else is explicitly unconfirmed.
+
+### Changed
+
+- Saving on the Experimental page works exactly as before — values go to the server `UserEngine.ini` — and the page points back to Game Config's **Apply INIs & restart** to put them into effect. Your existing values are untouched; only where the controls appear has changed.
+
 ## [13.1.0] - 2026-08-01
 
 ### Added

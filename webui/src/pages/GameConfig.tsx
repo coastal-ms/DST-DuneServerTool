@@ -2,6 +2,7 @@ import { useState, useEffect, useMemo, useCallback, type FormEvent, type Keyboar
 import { PageHeader } from '../components/PageHeader'
 import { Icon } from '../components/Icon'
 import { CollapsibleCard, useCardCollapse } from '../components/CollapsibleCard'
+import { Link } from '../router'
 import { IniShareModal } from '../components/IniShareModal'
 import { useStatus } from '../hooks/useStatus'
 import { api } from '../api/client'
@@ -215,7 +216,49 @@ function sectionIsManaged(data: GameConfigResponse, field: GameConfigField): boo
   return false
 }
 
-export function GameConfig() {
+// Experimental controls get their own page, grouped by what they affect rather
+// than by which decode pass found them. Order is presentation, so it lives here
+// rather than in the schema; anything the backend could not place is reported as
+// "Uncategorized" and is always shown last.
+const EXPERIMENTAL_GROUP_ORDER = [
+  'Survival & Shelter',
+  'Fuel & Power',
+  'Sandworm',
+  'Hazards & Storms',
+  'Base Building & Backups',
+  'Vehicles',
+  'Combat & Shields',
+  'NPCs & Encounters',
+  'Loot & Inventory',
+  'Progression & Contracts',
+  'Spice & Harvesting',
+  'Server & Session',
+]
+
+function experimentalGroupRank(group: string): number {
+  if (group === 'Uncategorized') return EXPERIMENTAL_GROUP_ORDER.length + 1
+  const i = EXPERIMENTAL_GROUP_ORDER.indexOf(group)
+  return i === -1 ? EXPERIMENTAL_GROUP_ORDER.length : i
+}
+
+// Re-shape the experimental categories into one card per group.
+function groupExperimental(cats: GameConfigCategory[]): GameConfigCategory[] {
+  const byGroup = new Map<string, GameConfigField[]>()
+  for (const cat of cats) {
+    for (const f of cat.fields ?? []) {
+      if (!f?.key) continue
+      const g = f.group || 'Uncategorized'
+      if (!byGroup.has(g)) byGroup.set(g, [])
+      byGroup.get(g)!.push(f)
+    }
+  }
+  return [...byGroup.entries()]
+    .sort((a, b) => experimentalGroupRank(a[0]) - experimentalGroupRank(b[0]) || a[0].localeCompare(b[0]))
+    .map(([category, fields]) => ({ category, fields }))
+}
+
+export function GameConfig({ mode = 'standard' }: { mode?: 'standard' | 'experimental' } = {}) {
+  const experimentalPage = mode === 'experimental'
   const { status, forceRefresh } = useStatus()
   const vmRunning = status?.vm?.running === true
 
@@ -822,11 +865,20 @@ export function GameConfig() {
     return { label: 'Update', cls: 'text-warning' }
   }, [fieldByKey, clientInfo])
 
-  const filteredSchema = useMemo(() => {
+  // The two pages share this component and split the same schema between them:
+  // Game Config shows the settings we stand behind, Experimental shows the
+  // recovered console variables regrouped by what they affect.
+  const visibleSchema = useMemo(() => {
     if (!schema) return null
+    const mine = schema.filter(c => isExperimentalCategory(c.category) === experimentalPage)
+    return experimentalPage ? groupExperimental(mine) : mine
+  }, [schema, experimentalPage])
+
+  const filteredSchema = useMemo(() => {
+    if (!visibleSchema) return null
     const q = search.trim().toLowerCase()
-    if (!q) return schema
-    return schema
+    if (!q) return visibleSchema
+    return visibleSchema
       .map(cat => ({
         category: cat.category,
         fields: (cat.fields ?? []).filter(
@@ -838,7 +890,7 @@ export function GameConfig() {
         ),
       }))
       .filter(cat => cat.fields.length > 0)
-  }, [schema, search])
+  }, [visibleSchema, search])
 
   async function onSubmit(e: FormEvent) {
     e.preventDefault()
@@ -850,7 +902,9 @@ export function GameConfig() {
         : 'Client Engine.ini management is currently OFF.'
       const ok = window.confirm(
         `Save ${count} Experimental setting${count === 1 ? '' : 's'}?\n\n`
-        + 'These are written to the server UserEngine.ini. Nothing on the server changes until you restart the battlegroup — use “Apply INIs & restart”. Saving on its own does not disconnect anyone.\n\n'
+        + (experimentalPage
+            ? 'These are written to the server UserEngine.ini. Nothing on the server changes until you restart the battlegroup — open Game Config afterwards and use “Apply INIs & restart”. Saving on its own does not disconnect anyone.\n\n'
+            : 'These are written to the server UserEngine.ini. Nothing on the server changes until you restart the battlegroup — use “Apply INIs & restart”. Saving on its own does not disconnect anyone.\n\n')
         + 'Confirmed behavior: some Experimental settings require matching client-side Engine.ini values before they take full effect. '
         + 'Every player may need compatible local values: normally the same value as the server, or an equal/higher value for client-enforced limits. '
         + 'These client edits do not affect public/live servers; those servers remain authoritative.\n\n'
@@ -873,7 +927,9 @@ export function GameConfig() {
       const n = out.applied ?? dirtyKeys.length
       let msg = `Saved ${n} change${n === 1 ? '' : 's'} into the DST-managed block. Tip: use “Backup settings” to snapshot before big changes — DST no longer auto-backs-up on every save.`
       if (experimentalStartupDirtyKeys.length > 0) {
-        msg += ' Saved to the server INI only — restart the battlegroup with “Apply INIs & restart” to put these into effect.'
+        msg += experimentalPage
+          ? ' Saved to the server INI only — open Game Config and use “Apply INIs & restart” to put these into effect.'
+          : ' Saved to the server INI only — restart the battlegroup with “Apply INIs & restart” to put these into effect.'
       }
       // If m_TaskGoalAmount was in this save, DST also rewrote the current
       // Landsraad term's goal_amount for every House row — surface the result.
@@ -952,12 +1008,15 @@ export function GameConfig() {
   return (
     <>
       <PageHeader
-        title="Game Config"
-        icon="Sliders"
-        description="UserGame.ini + UserEngine.ini editor. Edits are tracked in a DST-managed block written to the live battlegroup."
+        title={experimentalPage ? 'Experimental' : 'Game Config'}
+        icon={experimentalPage ? 'FlaskConical' : 'Sliders'}
+        description={experimentalPage
+          ? 'Server console variables recovered from the game binary, grouped by what they affect. Saving writes them to UserEngine.ini; apply them from Game Config.'
+          : 'UserGame.ini + UserEngine.ini editor. Edits are tracked in a DST-managed block written to the live battlegroup.'}
         actions={
           <div className="flex items-center gap-2">
             {sourcePill}
+            {!experimentalPage && (
             <button
               type="button"
               onClick={() => void onReloadPods()}
@@ -970,6 +1029,12 @@ export function GameConfig() {
               <Icon name={reloadingPods ? 'Loader2' : 'RefreshCw'} size={14} className={reloadingPods ? 'animate-spin' : ''} />
               {reloadingPods ? 'Restarting battlegroup…' : 'Apply INIs & restart'}
             </button>
+            )}
+            {experimentalPage && (
+              <Link to="/gameconfig" className="btn-secondary" title="Apply saved values from Game Config">
+                <Icon name="Sliders" size={14} /> Game Config
+              </Link>
+            )}
             <button
               type="button"
               onClick={() => void onBackup()}
@@ -1052,21 +1117,37 @@ export function GameConfig() {
       )}
 
       {/* Server name (battlegroup title shown in the in-game server browser) */}
+      {!experimentalPage && (
       <ServerNameCard
         vmRunning={vmRunning}
         currentName={(status?.serverName ?? '').trim()}
         onRenamed={() => { void forceRefresh() }}
       />
+      )}
 
-      {/* How-it-works note */}
-      <div className="card p-3 mb-4 border-border bg-surface-2/40 text-xs text-text-muted flex items-start gap-2">
-        <Icon name="Info" size={14} className="mt-0.5 shrink-0 text-accent-bright" />
-        <div>
-          When you change a setting, DST relocates that setting&apos;s entire section into a managed block at the
-          bottom of the file and becomes its owner — keeping one clean copy, preserving structure, and migrating
-          any existing managed block. The original file is backed up on the server before every write.
+      {/* How it works. On the Experimental page this is also where the user is
+          told to go back to Game Config to apply — that path rebuilds the server
+          startup values from the INI, which is what makes these take effect. */}
+      {experimentalPage ? (
+        <div className="card p-3 mb-4 border-border bg-surface-2/40 text-xs text-text-muted flex items-start gap-2">
+          <Icon name="Info" size={14} className="mt-0.5 shrink-0 text-accent-bright" />
+          <div>
+            These are written to the server&apos;s <span className="font-mono text-text">UserEngine.ini</span> when you save.
+            Nothing changes on a running server until the battlegroup restarts — head to{' '}
+            <Link to="/gameconfig" className="text-accent-bright hover:underline">Game Config</Link> and use{' '}
+            <strong className="text-text">Apply INIs &amp; restart</strong> at the top.
+          </div>
         </div>
-      </div>
+      ) : (
+        <div className="card p-3 mb-4 border-border bg-surface-2/40 text-xs text-text-muted flex items-start gap-2">
+          <Icon name="Info" size={14} className="mt-0.5 shrink-0 text-accent-bright" />
+          <div>
+            When you change a setting, DST relocates that setting&apos;s entire section into a managed block at the
+            bottom of the file and becomes its owner — keeping one clean copy, preserving structure, and migrating
+            any existing managed block. The original file is backed up on the server before every write.
+          </div>
+        </div>
+      )}
 
       {/* Local client config (this PC) */}
       <CollapsibleCard
@@ -1494,7 +1575,12 @@ export function GameConfig() {
 
           <div className="space-y-5">
             {(filteredSchema ?? []).map(cat => {
-              const fullCat = schema?.find(c => c.category === cat.category) ?? cat
+              // On the Experimental page a "category" is a theme built from
+              // fields across both schema categories, so share blocks come from
+              // the visible fields rather than a matching schema entry.
+              const fullCat = experimentalPage
+                ? (visibleSchema?.find(c => c.category === cat.category) ?? cat)
+                : (schema?.find(c => c.category === cat.category) ?? cat)
               const share = buildCategoryClientBlocks(fullCat, cfg)
               return (
               <CategoryCard
@@ -1505,6 +1591,7 @@ export function GameConfig() {
                 hasClientFields={share.hasClientFields}
                 onShare={() => setShareBlock({ title: `${cat.category} — give players this`, entries: share.entries })}
                 forceOpen={search.trim() !== ''}
+                isExperimental={experimentalPage}
               >
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-x-6 gap-y-4">
                   {(cat.fields ?? []).map(f => (
@@ -1531,15 +1618,19 @@ export function GameConfig() {
               <div className="card p-6 text-text-muted text-sm">No settings match “{search}”.</div>
             )}
 
-            <SpicefieldsCard vmRunning={vmRunning} />
+            {!experimentalPage && (
+              <>
+                <SpicefieldsCard vmRunning={vmRunning} />
 
-            <DeepDesertPvpCard vmRunning={vmRunning} />
+                <DeepDesertPvpCard vmRunning={vmRunning} />
 
-            <LandclaimTimerCard vmRunning={vmRunning} />
+                <LandclaimTimerCard vmRunning={vmRunning} />
 
-            <DefaultsCatalogBrowser vmRunning={vmRunning} onSaved={() => void loadAll()} />
+                <DefaultsCatalogBrowser vmRunning={vmRunning} onSaved={() => void loadAll()} />
 
-            {cfg && <AdvancedIniBrowser cfg={cfg} />}
+                {cfg && <AdvancedIniBrowser cfg={cfg} />}
+              </>
+            )}
           </div>
 
           <div className="sticky bottom-0 mt-6 -mx-6 px-6 py-3 bg-surface/95 border-t border-border backdrop-blur-sm flex items-center justify-between">
@@ -1782,6 +1873,7 @@ function CategoryCard({
   hasClientFields,
   onShare,
   forceOpen = false,
+  isExperimental,
   children,
 }: {
   category: string
@@ -1790,9 +1882,11 @@ function CategoryCard({
   hasClientFields?: boolean
   onShare?: () => void
   forceOpen?: boolean
+  /** Set on the Experimental page, where card titles are themes rather than schema categories. */
+  isExperimental?: boolean
   children: React.ReactNode
 }) {
-  const experimental = isExperimentalCategory(category)
+  const experimental = isExperimental ?? isExperimentalCategory(category)
   // Every category can be rolled up for aesthetics; the choice persists per
   // category. The Experimental lists stay closed by default because they are
   // long and unconfirmed; the rest start open.
