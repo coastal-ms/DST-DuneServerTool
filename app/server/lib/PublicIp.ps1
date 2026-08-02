@@ -320,8 +320,35 @@ function Get-DunePublicIpStatus {
 }
 
 # ----------------------------------------------------------------------------
-# P34 connectivity diagnostic.
+# Login distribution across game pods, parsed from the per-pod probe output.
+# Split out as a pure function so the collapsed-port-range decision is testable
+# without SSH, a cluster, or a DB.
 #
+# A collapsed forward looks like this: every external port in 7777-7810 is sent
+# to ONE internal port, so all clients arrive on whichever map owns that port.
+# The director granted them a different map/port, finds no matching completion
+# record, and refuses the login with Funcom's own `[Failure] FlowType:"Login"`
+# (surfaced to players as 2G2). Both conditions are required — logins funnelled
+# into a single pod AND Funcom actually rejecting them — so a quiet server, or a
+# server where everyone happens to be on one map legitimately, never fires it.
+# ----------------------------------------------------------------------------
+function Get-DuneP34LoginDistribution {
+    param([string]$ProbeOutput)
+    $pods = New-Object System.Collections.Generic.List[string]
+    $failures = 0
+    foreach ($m in [regex]::Matches([string]$ProbeOutput, 'POD=(\S+)\s+LOGIN=(\d+)\s+FAIL=(\d+)')) {
+        if ([int]$m.Groups[2].Value -gt 0) { $pods.Add($m.Groups[1].Value) | Out-Null }
+        $failures += [int]$m.Groups[3].Value
+    }
+    return [ordered]@{
+        pods      = @($pods)
+        failures  = $failures
+        collapsed = ($failures -gt 0 -and $pods.Count -eq 1)
+    }
+}
+
+# ----------------------------------------------------------------------------
+# P34 connectivity diagnostic.
 # "P34 / Connection Request Timed Out" AFTER the server is visible in the
 # in-game browser (FLS auth fine, no 403002) is, on self-hosted servers, almost
 # always a STALE PUBLIC IP: the game servers advertise an old external IPv4 to
@@ -351,6 +378,14 @@ function Get-DuneP34Diagnostic {
         staleK3sIp     = $false
         vmPublicIpUsable = $false
         serversReady   = $true
+        # Collapsed port-forward range: the router maps the external 7777-7810
+        # range onto ONE internal port, so every client lands on whichever map
+        # owns that port. The director issued a grant for a different map/port,
+        # finds no matching completion record, and refuses the login with 2G2.
+        # Detected from Funcom's own login-stage failure, never from a threshold.
+        loginPods      = @()
+        loginFailures  = 0
+        portsCollapsed = $false
         verdict        = 'unknown'
         summary        = $null
         error          = $null
@@ -553,8 +588,41 @@ fi
         default        { '' }
     }
 
+    # Collapsed port-forward range. When every external port in 7777-7810 is
+    # forwarded to ONE internal port, all clients arrive on whichever map owns
+    # that port. The director granted them a different map/port, so it finds no
+    # completion record and refuses the login with Funcom's own
+    # `[Failure] FlowType:"Login"` / `sb2G2$` error. We read that failure rather
+    # than inferring anything: ports being open is not the same as ports being
+    # forwarded to the right place, so the reachability checks above pass while
+    # nobody can actually join. Requires more than one game pod - on a
+    # single-map server every login landing on one pod is correct, not a fault.
+    if (@($maps).Count -gt 1) {
+        $logProbe = @'
+NS=$(sudo kubectl get battlegroup -A --no-headers -o custom-columns=:metadata.namespace 2>/dev/null | head -1)
+[ -z "$NS" ] && exit 0
+for p in $(sudo kubectl get pods -n "$NS" --no-headers -o custom-columns=:metadata.name 2>/dev/null | grep -- "-sg-"); do
+  L=$(sudo kubectl logs -n "$NS" "$p" --tail=3000 2>/dev/null | grep -c "flowtype=Login")
+  F=$(sudo kubectl logs -n "$NS" "$p" --tail=3000 2>/dev/null | grep -c '\[Failure\] FlowType:"Login"')
+  echo "POD=$p LOGIN=$L FAIL=$F"
+done
+'@ -replace "`r", ''
+        try {
+            $logRaw = (Invoke-V6Ssh -Ip $ctx.ip -Cmd $logProbe -TimeoutSec 45) -join "`n"
+            $collapse = Get-DuneP34LoginDistribution -ProbeOutput $logRaw
+            $result.loginPods = @($collapse.pods)
+            $result.loginFailures = [int]$collapse.failures
+            $result.portsCollapsed = [bool]$collapse.collapsed
+        } catch {}
+    }
+
     # Verdict, most-actionable first.
-    if ($result.datacenterPrivate) {
+    if ($result.portsCollapsed) {
+        $onePod = @($result.loginPods)[0]
+        $result.verdict = 'ports-collapsed'
+        $result.summary = "Players are reaching this server, but every connection is arriving on a single port. Your maps each listen on their own port ($((@($maps | ForEach-Object { $_.port } | Sort-Object -Unique) -join ', '))), and the server hands each player the port for the map they are joining — but all $($result.loginFailures) login attempt(s) landed on one map server ($onePod), so the server refused them. That refusal is the ""2G2"" error players see. This is a port-forwarding rule that sends the whole external UDP 7777-7810 range to one internal port: set the internal/local port range to 7777-7810 as well (or leave it blank) so each port maps straight through, then try joining again."
+    }
+    elseif ($result.datacenterPrivate) {
         # The persistent root: the director is pinned to advertise a private/LAN
         # address to every client. Ranked first because it's actionable even when
         # the servers look "down" from outside, and it's the explanation behind a
