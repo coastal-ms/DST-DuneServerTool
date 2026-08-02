@@ -71,6 +71,56 @@ Describe 'Rolling INI reload waits for the map, not just the pod' {
     }
 }
 
+Describe 'Apply INIs is available as a command' {
+
+    # Saving a console variable is inert until the server startup values are
+    # rebuilt from the INI, and only the Apply INIs path does that - a plain
+    # 'restart' does not. It therefore has to be reachable from the Commands page,
+    # not just from Game Config.
+
+    BeforeAll {
+        $script:cmdLib = Join-Path $PSScriptRoot '..\app\server\lib\Commands.ps1'
+        . $script:cmdLib
+        $script:routeText = Get-Content (Join-Path $PSScriptRoot '..\app\server\routes\Commands.ps1') -Raw
+    }
+
+    It 'is in the command catalogue as an in-app battlegroup command' {
+        $cmd = Get-DuneCommandByName -Name 'apply-inis'
+        $cmd | Should -Not -BeNullOrEmpty
+        $cmd.Section | Should -Be 'Battlegroup'
+        $cmd.Mode | Should -Be 'InApp'
+        $cmd.Requires | Should -Be 'running'
+        $cmd.DisabledWhen | Should -Be 'bg-stopped'
+        $cmd.Label | Should -Be 'Apply INIs & Restart'
+    }
+
+    It 'does not collide with another command key or name' {
+        $all = @($script:DuneCommands | Where-Object { $_.Section -eq 'Battlegroup' })
+        @($all.Key | Group-Object | Where-Object Count -gt 1) | Should -BeNullOrEmpty
+        @($script:DuneCommands.Name | Group-Object | Where-Object Count -gt 1) | Should -BeNullOrEmpty
+    }
+
+    It 'runs through the shared restart helper rather than the external launcher' {
+        # Invoke-DuneBattlegroupRestart is what rebuilds the startup values; going
+        # via Invoke-DuneCommandExternal would silently skip that.
+        $script:routeText | Should -Match "if \(\`$name -eq 'apply-inis'\)"
+        $script:routeText | Should -Match 'Invoke-DuneBattlegroupRestart -Ip \$ctx\.ip'
+    }
+
+    It 'is allowed for remote callers, like the other restart commands' {
+        $script:routeText | Should -Match "remoteAllowedCommands = @\([^)]*'apply-inis'"
+        $ui = Get-Content (Join-Path $PSScriptRoot '..\webui\src\pages\Commands.tsx') -Raw
+        $ui | Should -Match "REMOTE_ALLOWED = new Set\(\[[^\]]*'apply-inis'"
+    }
+
+    It 'appears in the default command layout' {
+        $layout = Get-DuneDefaultCommandLayout
+        $names = @($layout.sections | ForEach-Object { $_ })
+        $names | Should -Contain 'apply-inis'
+    }
+}
+
+
 Describe 'Battlegroup restart stages console variables' {
 
     # Console variables only reach the servers as startup commands, and those are

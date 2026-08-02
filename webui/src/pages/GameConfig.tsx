@@ -952,7 +952,7 @@ export function GameConfig({ mode = 'standard' }: { mode?: 'standard' | 'experim
       const ok = window.confirm(
         `Save ${count} Experimental setting${count === 1 ? '' : 's'}?\n\n`
         + (experimentalPage
-            ? 'These are written to the server UserEngine.ini. Nothing on the server changes until you restart the battlegroup — open Game Config afterwards and use “Apply INIs & restart”. Saving on its own does not disconnect anyone.\n\n'
+            ? 'These are written to the server UserEngine.ini. Nothing on the server changes until you restart the battlegroup — use “Apply INIs & restart” at the top. Saving on its own does not disconnect anyone.\n\n'
             : 'These are written to the server UserEngine.ini. Nothing on the server changes until you restart the battlegroup — use “Apply INIs & restart”. Saving on its own does not disconnect anyone.\n\n')
         + 'Confirmed behavior: some Experimental settings require matching client-side Engine.ini values before they take full effect. '
         + 'Every player may need compatible local values: normally the same value as the server, or an equal/higher value for client-enforced limits. '
@@ -977,7 +977,7 @@ export function GameConfig({ mode = 'standard' }: { mode?: 'standard' | 'experim
       let msg = `Saved ${n} change${n === 1 ? '' : 's'} into the DST-managed block. Tip: use “Backup settings” to snapshot before big changes — DST no longer auto-backs-up on every save.`
       if (experimentalStartupDirtyKeys.length > 0) {
         msg += experimentalPage
-          ? ' Saved to the server INI only — open Game Config and use “Apply INIs & restart” to put these into effect.'
+          ? ' Saved to the server INI only — use “Apply INIs & restart” at the top to put these into effect.'
           : ' Saved to the server INI only — restart the battlegroup with “Apply INIs & restart” to put these into effect.'
       }
       // If m_TaskGoalAmount was in this save, DST also rewrote the current
@@ -1065,7 +1065,6 @@ export function GameConfig({ mode = 'standard' }: { mode?: 'standard' | 'experim
         actions={
           <div className="flex items-center gap-2">
             {sourcePill}
-            {!experimentalPage && (
             <button
               type="button"
               onClick={() => void onReloadPods()}
@@ -1073,14 +1072,13 @@ export function GameConfig({ mode = 'standard' }: { mode?: 'standard' | 'experim
               className="btn-secondary"
               title={dirtyKeys.length > 0
                 ? 'Save or discard pending changes first'
-                : 'Restart only running game-server pods, one at a time, and wait for each replacement to become Ready'}
+                : 'Rebuild the server startup values from the INIs and restart the battlegroup so every map reloads with the current settings'}
             >
               <Icon name={reloadingPods ? 'Loader2' : 'RefreshCw'} size={14} className={reloadingPods ? 'animate-spin' : ''} />
               {reloadingPods ? 'Restarting battlegroup…' : 'Apply INIs & restart'}
             </button>
-            )}
             {experimentalPage && (
-              <Link to="/gameconfig" className="btn-secondary" title="Apply saved values from Game Config">
+              <Link to="/gameconfig" className="btn-secondary" title="Back to the settings we stand behind">
                 <Icon name="Sliders" size={14} /> Game Config
               </Link>
             )}
@@ -1133,9 +1131,8 @@ export function GameConfig({ mode = 'standard' }: { mode?: 'standard' | 'experim
                 <span className="text-text font-medium">Back up first and change one setting at a time.</span>
               </p>
               <p className="text-xs text-warning/90 leading-relaxed mt-1.5">
-                Saving here changes nothing on a running server. Open{' '}
-                <Link to="/gameconfig" className="underline hover:text-warning">Game Config</Link> afterwards and use
-                “Apply INIs &amp; restart”. Many of these also need a matching value on each player&apos;s PC — use
+                Saving here changes nothing on a running server — use “Apply INIs &amp; restart” at the top, or the same
+                command on the Commands page. Many of these also need a matching value on each player&apos;s PC; use
                 “Player config” below to get the exact lines to hand out.
               </p>
             </>
@@ -1219,9 +1216,9 @@ export function GameConfig({ mode = 'standard' }: { mode?: 'standard' | 'experim
           <Icon name="Info" size={14} className="mt-0.5 shrink-0 text-accent-bright" />
           <div>
             These are written to the server&apos;s <span className="font-mono text-text">UserEngine.ini</span> when you save.
-            Nothing changes on a running server until the battlegroup restarts — head to{' '}
-            <Link to="/gameconfig" className="text-accent-bright hover:underline">Game Config</Link> and use{' '}
-            <strong className="text-text">Apply INIs &amp; restart</strong> at the top.
+            Nothing changes on a running server until the battlegroup restarts — use{' '}
+            <strong className="text-text">Apply INIs &amp; restart</strong> at the top of this page, or the same command
+            on the Commands page.
           </div>
         </div>
       ) : (

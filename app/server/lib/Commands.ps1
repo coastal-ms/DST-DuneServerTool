@@ -24,6 +24,12 @@ $script:DuneCommands = @(
 
     @{ Section='Battlegroup'; Key='2';  Name='start';                    Label='Start BG Only';   Mode='Console'; Requires='running'; DisabledWhen='bg-running';  Desc='Start the selected battlegroup' }
     @{ Section='Battlegroup'; Key='3';  Name='restart';                  Label='Restart BG Only'; Mode='Console'; Requires='running'; DisabledWhen='bg-stopped';  Desc='Restart the selected battlegroup' }
+    # Apply INIs is the restart that first rebuilds each server's startup values
+    # from the current UserEngine.ini. Plain 'restart' does not, so a console
+    # variable saved in Game Config or Experimental only takes effect through
+    # this one. Handled in-app (routes/Commands.ps1) rather than launched as an
+    # external console command.
+    @{ Section='Battlegroup'; Key='22'; Name='apply-inis';               Label='Apply INIs & Restart'; Mode='InApp'; Requires='running'; DisabledWhen='bg-stopped'; Desc='Rebuild server startup values from the INIs, then restart the battlegroup so every map reloads with the current settings' }
     @{ Section='Battlegroup'; Key='4';  Name='stop';                     Label='Stop BG Only';    Mode='Console'; Requires='running'; DisabledWhen='bg-stopped';  Desc='Stop the selected battlegroup' }
     @{ Section='Battlegroup'; Key='5';  Name='update';                   Mode='Console'; Requires='running'; Desc='Check for new versions and apply them' }
     @{ Section='Battlegroup'; Key='6';  Name='edit';                     Mode='Console'; Requires='running'; External=$true; Desc='Edit battlegroup via utilities interface' }
