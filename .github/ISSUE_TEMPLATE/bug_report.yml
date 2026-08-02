@@ -93,8 +93,7 @@ body:
         - Web portal — Commands
         - Web portal — PowerShell (embedded xterm.js terminal)
         - Web portal — Game Config — VM INI (UserGame.ini / UserEngine.ini / Apply INIs to pods / Spicefield Types / Crafting / Land Claim Timer)
-        - Web portal — Experimental page (themed cards: sandworm / vehicles / combat / NPCs & encounters / hazards / survival / building / loot / progression / fuel / spice / server — applied on battlegroup restart)
-        - Web portal — Game Config or Experimental — Player config button (the Engine.ini + Game.ini lines to hand to players)
+        - Web portal — Experimental page
         - Web portal — Commands — Apply INIs & Restart
         - Web portal — Game Config — Server name (rename / battlegroup title shown in the in-game server browser)
         - Web portal — Game Config — Deep Desert PvP (live partitions / Apply & restart)
