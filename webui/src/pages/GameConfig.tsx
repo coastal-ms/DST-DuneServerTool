@@ -62,6 +62,24 @@ function clientBundleFor(info: GameConfigClientInfo, file: 'game' | 'engine') {
   return file === 'engine' ? info.engine : (info.game ?? info)
 }
 
+// Scroll back to the top of the page. The app scrolls inside AppShell's <main>
+// element rather than the window, so walk up from the clicked button to the
+// nearest scrollable ancestor and fall back to <main> / the window.
+function scrollPageToTop(from: HTMLElement) {
+  let el: HTMLElement | null = from.parentElement
+  while (el) {
+    const overflowY = getComputedStyle(el).overflowY
+    if ((overflowY === 'auto' || overflowY === 'scroll') && el.scrollHeight > el.clientHeight) {
+      el.scrollTo({ top: 0, behavior: 'smooth' })
+      return
+    }
+    el = el.parentElement
+  }
+  const main = document.querySelector('main')
+  if (main) main.scrollTo({ top: 0, behavior: 'smooth' })
+  else window.scrollTo({ top: 0, behavior: 'smooth' })
+}
+
 const SANDWORM_ENABLED_KEY = 'sandworm.dune.Enabled'
 const CLIENT_INI_PATHS = {
   game: '%LOCALAPPDATA%\\DuneSandbox\\Saved\\Config\\WindowsClient\\Game.ini',
@@ -952,7 +970,7 @@ export function GameConfig({ mode = 'standard' }: { mode?: 'standard' | 'experim
       const ok = window.confirm(
         `Save ${count} Experimental setting${count === 1 ? '' : 's'}?\n\n`
         + (experimentalPage
-            ? 'These are written to the server UserEngine.ini. Nothing on the server changes until you restart the battlegroup — use “Apply INIs & restart” at the top. Saving on its own does not disconnect anyone.\n\n'
+            ? 'These are written to the server UserEngine.ini. Nothing on the server changes until you restart the battlegroup — use “Apply INIs & restart” in the bar at the bottom of this page. Saving on its own does not disconnect anyone.\n\n'
             : 'These are written to the server UserEngine.ini. Nothing on the server changes until you restart the battlegroup — use “Apply INIs & restart”. Saving on its own does not disconnect anyone.\n\n')
         + 'Confirmed behavior: some Experimental settings require matching client-side Engine.ini values before they take full effect. '
         + 'Every player may need compatible local values: normally the same value as the server, or an equal/higher value for client-enforced limits. '
@@ -977,7 +995,7 @@ export function GameConfig({ mode = 'standard' }: { mode?: 'standard' | 'experim
       let msg = `Saved ${n} change${n === 1 ? '' : 's'} into the DST-managed block. Tip: use “Backup settings” to snapshot before big changes — DST no longer auto-backs-up on every save.`
       if (experimentalStartupDirtyKeys.length > 0) {
         msg += experimentalPage
-          ? ' Saved to the server INI only — use “Apply INIs & restart” at the top to put these into effect.'
+          ? ' Saved to the server INI only — use “Apply INIs & restart” in the bar at the bottom of this page to put these into effect.'
           : ' Saved to the server INI only — restart the battlegroup with “Apply INIs & restart” to put these into effect.'
       }
       // If m_TaskGoalAmount was in this save, DST also rewrote the current
@@ -1131,7 +1149,8 @@ export function GameConfig({ mode = 'standard' }: { mode?: 'standard' | 'experim
                 <span className="text-text font-medium">Back up first and change one setting at a time.</span>
               </p>
               <p className="text-xs text-warning/90 leading-relaxed mt-1.5">
-                Saving here changes nothing on a running server — use “Apply INIs &amp; restart” at the top, or the same
+                Saving here changes nothing on a running server — use “Apply INIs &amp; restart” in the bar at the
+                bottom of this page, or the same
                 command on the Commands page. Many of these also need a matching value on each player&apos;s PC; use
                 “Player config” below to get the exact lines to hand out.
               </p>
@@ -1217,7 +1236,7 @@ export function GameConfig({ mode = 'standard' }: { mode?: 'standard' | 'experim
           <div>
             These are written to the server&apos;s <span className="font-mono text-text">UserEngine.ini</span> when you save.
             Nothing changes on a running server until the battlegroup restarts — use{' '}
-            <strong className="text-text">Apply INIs &amp; restart</strong> at the top of this page, or the same command
+            <strong className="text-text">Apply INIs &amp; restart</strong> in the bar at the bottom of this page, or the same command
             on the Commands page.
           </div>
         </div>
@@ -1726,6 +1745,26 @@ export function GameConfig({ mode = 'standard' }: { mode?: 'standard' | 'experim
               )}
             </div>
             <div className="flex items-center gap-2">
+              <button
+                type="button"
+                onClick={e => scrollPageToTop(e.currentTarget)}
+                className="btn-secondary"
+                title="Scroll back to the top of the page"
+              >
+                <Icon name="ArrowUp" size={14} /> Top
+              </button>
+              <button
+                type="button"
+                onClick={() => void onReloadPods()}
+                disabled={!vmRunning || reloadingPods || saving || dirtyKeys.length > 0 || loadState !== 'ready'}
+                className="btn-secondary"
+                title={dirtyKeys.length > 0
+                  ? 'Save or discard pending changes first'
+                  : 'Rebuild the server startup values from the INIs and restart the battlegroup so every map reloads with the current settings'}
+              >
+                <Icon name={reloadingPods ? 'Loader2' : 'RefreshCw'} size={14} className={reloadingPods ? 'animate-spin' : ''} />
+                {reloadingPods ? 'Restarting battlegroup…' : 'Apply INIs & restart'}
+              </button>
               <span className="text-xs text-text-muted">
                 {dirtyKeys.length === 0 ? 'No changes' : `${dirtyKeys.length} change${dirtyKeys.length === 1 ? '' : 's'}`}
               </span>
@@ -2100,6 +2139,16 @@ function FieldRow({ field, value, onChange, disabled, isDirty, isSet, isCustom, 
           {managed && (
             <span className="text-[9px] font-semibold uppercase tracking-wider px-1.5 py-0.5 rounded bg-accent/15 text-accent-bright" title="DST owns this section in the managed block">
               DST
+            </span>
+          )}
+          {field.consoleVar && (
+            <span className="text-[9px] font-semibold uppercase tracking-wider px-1.5 py-0.5 rounded bg-surface-2 text-text-muted" title="Console variable — saving alone changes nothing on a running server. It takes effect when the battlegroup restarts and rebuilds its startup command: use “Apply INIs & restart” in the bar at the bottom of this page. DST also offers to mirror console variables into this PC’s client Engine.ini; some are client-enforced and need every player to carry a matching value.">
+              CVar
+            </span>
+          )}
+          {field.clientApply && !field.consoleVar && (
+            <span className="text-[9px] font-semibold uppercase tracking-wider px-1.5 py-0.5 rounded bg-surface-2 text-text-muted" title="Client-enforced — each player also needs a matching (or equal/higher) value in their own client INI before this takes full effect. Use “Player config” to get the exact lines to hand out.">
+              Client
             </span>
           )}
           {isCustom ? (
