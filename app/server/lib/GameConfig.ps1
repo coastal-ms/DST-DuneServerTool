@@ -134,7 +134,7 @@ $script:DuneGameConfigSchema = @(
     # the server alone and needs no client-side apply. Reported working by a
     # community tester; the compiled default was not recovered, but sun exposure
     # is active in shipping gameplay.
-    @{ Section=$script:DuneGcSecConsole; Key='Hydration.SunExposureEnabled'; File='engine'; Type='bool01'; Default='1'; Label='Sun Exposure Enabled'; Help='Whether players take sun-exposure water drain. 0 disables sun exposure; field-reported working. Server-side only - no client apply needed.'; Category='Hydration' }
+    @{ Section=$script:DuneGcSecConsole; Key='Hydration.SunExposureEnabled'; File='engine'; Type='bool01'; Default='1'; Label='Sun Exposure Enabled'; Help='Whether players take sun-exposure water drain. 0 disables sun exposure; field-reported working. Server-side only - no client apply needed.'; Startup=$true; Category='Hydration' }
     @{ Section=$script:DuneGcSecHydration; Key='m_BiomeTierUpdateRateSeconds'; File='game'; Type='float'; Min=0; Unit='sec'; Default='2.5'; Label='Biome Tier Update Rate'; Help='How often (seconds) the biome hydration tier is re-evaluated. Also needs client-side apply.'; ClientApply=$true; Category='Hydration' }
 
     # --- Loot & Death (DuneSandboxGameModeBase) ---
@@ -144,9 +144,9 @@ $script:DuneGameConfigSchema = @(
     @{ Section=$script:DuneGcSecGameBase; Key='m_bShouldNpcDropLootOnDeath'; File='game'; Type='bool'; Default='True'; Label='NPCs Drop Loot on Death'; Help='Whether NPCs drop loot when killed. Also needs client-side apply.'; ClientApply=$true; Category='Loot & Death' }
 
     # --- Resources & Economy (engine ConsoleVariables) ---
-    @{ Section=$script:DuneGcSecConsole; Key='Dune.GlobalMiningOutputMultiplier'; File='engine'; Type='float'; Min=0; Default='1.0'; Label='Global Mining Multiplier'; Help='Scales hand-mining resource output.'; Category='Resources & Economy' }
-    @{ Section=$script:DuneGcSecConsole; Key='Dune.GlobalVehicleMiningOutputMultiplier'; File='engine'; Type='float'; Min=0; Default='1.0'; Label='Vehicle Mining Multiplier'; Help='Scales vehicle-mining resource output.'; Category='Resources & Economy' }
-    @{ Section=$script:DuneGcSecConsole; Key='SecurityZones.PvpResourceMultiplier'; File='engine'; Type='float'; Min=0; Default='1.0'; Label='PvP Resource Multiplier'; Help='Resource yield multiplier inside PvP zones.'; Category='Resources & Economy' }
+    @{ Section=$script:DuneGcSecConsole; Key='Dune.GlobalMiningOutputMultiplier'; File='engine'; Type='float'; Min=0; Default='1.0'; Label='Global Mining Multiplier'; Help='Scales hand-mining resource output.'; Startup=$true; Category='Resources & Economy' }
+    @{ Section=$script:DuneGcSecConsole; Key='Dune.GlobalVehicleMiningOutputMultiplier'; File='engine'; Type='float'; Min=0; Default='1.0'; Label='Vehicle Mining Multiplier'; Help='Scales vehicle-mining resource output.'; Startup=$true; Category='Resources & Economy' }
+    @{ Section=$script:DuneGcSecConsole; Key='SecurityZones.PvpResourceMultiplier'; File='engine'; Type='float'; Min=0; Default='1.0'; Label='PvP Resource Multiplier'; Help='Resource yield multiplier inside PvP zones.'; Startup=$true; Category='Resources & Economy' }
 
     # --- Crafting ---
     @{ Section=$script:DuneGcSecCrafting; Key='m_RepairCostWeight'; File='game'; Type='float'; Min=0; Default='1.0'; Label='Repair Cost Weight'; Help='Scales repair costs. Also needs client-side apply.'; ClientApply=$true; Category='Crafting' }
@@ -174,8 +174,8 @@ $script:DuneGameConfigSchema = @(
     @{ Section=$script:DuneGcSecStorm; Key='m_bCoriolisAutoSpawnEnabled'; File='game'; Type='bool'; Default='True'; Label='Coriolis Auto-Spawn'; Help='Whether Coriolis storms spawn automatically. Also needs client-side apply.'; ClientApply=$true; Category='Storm Cycle' }
     @{ Section=$script:DuneGcSecCoriolis; Key='m_bIsDbWipeEnabled'; File='game'; Type='bool'; Default='True'; Label='Database Wipe on Season End'; Help='Wipe the database when the season ends. Also needs client-side apply.'; ClientApply=$true; Category='Storm Cycle' }
     @{ Section=$script:DuneGcSecCoriolis; Key='m_bShouldRestartServerOnCycleEnd'; File='game'; Type='bool'; Default='True'; Label='Restart Server on Cycle End'; Help='Whether the dedicated server restarts itself when a Coriolis cycle (season) ends. Also needs client-side apply.'; ClientApply=$true; Category='Storm Cycle' }
-    @{ Section=$script:DuneGcSecConsole; Key='Sandstorm.Enabled'; File='engine'; Type='bool01'; Default='1'; Label='Sandstorm'; Help='Enable rolling sandstorms.'; Category='Storm Cycle' }
-    @{ Section=$script:DuneGcSecConsole; Key='Sandstorm.Treasure.Enabled'; File='engine'; Type='bool01'; Default='1'; Label='Sandstorm Treasure Spawns'; Help='Spawn treasure during sandstorms.'; Category='Storm Cycle' }
+    @{ Section=$script:DuneGcSecConsole; Key='Sandstorm.Enabled'; File='engine'; Type='bool01'; Default='1'; Label='Sandstorm'; Help='Enable rolling sandstorms.'; Startup=$true; Category='Storm Cycle' }
+    @{ Section=$script:DuneGcSecConsole; Key='Sandstorm.Treasure.Enabled'; File='engine'; Type='bool01'; Default='1'; Label='Sandstorm Treasure Spawns'; Help='Spawn treasure during sandstorms.'; Startup=$true; Category='Storm Cycle' }
     @{ Section=$script:DuneGcSecStorm; Key='m_bCoriolisDoesDamage'; File='game'; Type='bool'; Default='False'; Label='Coriolis Storm Does Damage'; Help='Whether being caught in a Coriolis storm damages players. Also needs client-side apply.'; ClientApply=$true; Category='Storm Cycle' }
     @{ Section=$script:DuneGcSecStorm; Key='m_bSandStormDebrisEnabled'; File='game'; Type='bool'; Default='True'; Label='Sandstorm Debris'; Help='Whether sandstorms spawn flying debris. Also needs client-side apply.'; ClientApply=$true; Category='Storm Cycle' }
     @{ Section=$script:DuneGcSecTimeOfDay; Key='m_bTimeOfDayEnabled'; File='game'; Type='bool'; Default='True'; Label='Time of Day Cycle'; Help='Whether the day/night cycle advances. Also needs client-side apply.'; ClientApply=$true; Category='Storm Cycle' }
@@ -212,11 +212,11 @@ $script:DuneGameConfigSchema = @(
     @{ Section=$script:DuneGcSecTaxation; Key='m_TaxationCycleLengthSeconds'; File='game'; Type='int'; Min=0; Unit='sec'; Default='1209600'; Label='Taxation Cycle'; Help='Seconds between taxation collection cycles. Also needs client-side apply.'; ClientApply=$true; Category='Taxation' }
 
     # --- Sandworm (engine cvars + game settings) ---
-    @{ Section=$script:DuneGcSecConsole; Key='sandworm.dune.Enabled'; File='engine'; Type='bool01'; Default='1'; Label='Sandworm Enabled'; Help='Master toggle for the sandworm.'; Category='Sandworm' }
-    @{ Section=$script:DuneGcSecConsole; Key='Sandworm.SandwormDangerZonesEnabled'; File='engine'; Type='boolLower'; Default='true'; Label='Sandworm Danger Zones'; Help='Enable danger zones where the sandworm can attack.'; Category='Sandworm' }
-    @{ Section=$script:DuneGcSecConsole; Key='Vehicle.SandwormCollisionInteraction'; File='engine'; Type='boolLower'; Default='true'; Label='Sandworm Pushes Vehicles'; Help='Sandworm can push / damage vehicles.'; Category='Sandworm' }
-    @{ Section=$script:DuneGcSecConsole; Key='Vehicle.SandwormInvulnerabilitySecondsOnExit'; File='engine'; Type='float'; Min=0; Unit='sec'; Default='5.0'; Label='Invulnerability on Vehicle Exit'; Help='Seconds of sandworm invulnerability after exiting a vehicle.'; Category='Sandworm' }
-    @{ Section=$script:DuneGcSecConsole; Key='Vehicle.SandwormInvulnerabilitySecondsOnServerRestart'; File='engine'; Type='float'; Min=0; Unit='sec'; Default='60.0'; Label='Invulnerability on Server Restart'; Help='Seconds of sandworm invulnerability after a server restart.'; Category='Sandworm' }
+    @{ Section=$script:DuneGcSecConsole; Key='sandworm.dune.Enabled'; File='engine'; Type='bool01'; Default='1'; Label='Sandworm Enabled'; Help='Master toggle for the sandworm.'; Startup=$true; Category='Sandworm' }
+    @{ Section=$script:DuneGcSecConsole; Key='Sandworm.SandwormDangerZonesEnabled'; File='engine'; Type='boolLower'; Default='true'; Label='Sandworm Danger Zones'; Help='Enable danger zones where the sandworm can attack.'; Startup=$true; Category='Sandworm' }
+    @{ Section=$script:DuneGcSecConsole; Key='Vehicle.SandwormCollisionInteraction'; File='engine'; Type='boolLower'; Default='true'; Label='Sandworm Pushes Vehicles'; Help='Sandworm can push / damage vehicles.'; Startup=$true; Category='Sandworm' }
+    @{ Section=$script:DuneGcSecConsole; Key='Vehicle.SandwormInvulnerabilitySecondsOnExit'; File='engine'; Type='float'; Min=0; Unit='sec'; Default='5.0'; Label='Invulnerability on Vehicle Exit'; Help='Seconds of sandworm invulnerability after exiting a vehicle.'; Startup=$true; Category='Sandworm' }
+    @{ Section=$script:DuneGcSecConsole; Key='Vehicle.SandwormInvulnerabilitySecondsOnServerRestart'; File='engine'; Type='float'; Min=0; Unit='sec'; Default='60.0'; Label='Invulnerability on Server Restart'; Help='Seconds of sandworm invulnerability after a server restart.'; Startup=$true; Category='Sandworm' }
     @{ Section=$script:DuneGcSecSandworm; Key='WormDetectionDistance'; File='game'; Type='float'; Min=0; Default='5000.0'; Label='Worm Detection Distance'; Help='Distance at which worms detect players. Also needs client-side apply.'; ClientApply=$true; Category='Sandworm' }
     @{ Section=$script:DuneGcSecSandworm; Key='m_MinWormSpawnInternal'; File='game'; Type='float'; Min=0; Unit='sec'; Default='300.0'; Label='Min Worm Spawn Interval'; Help='Minimum seconds between worm spawns. Also needs client-side apply.'; ClientApply=$true; Category='Sandworm' }
     @{ Section=$script:DuneGcSecHazards; Key='m_SandwormQuicksandSpeedModifier'; File='game'; Type='float'; Min=0; Default='0.25'; Label='Quicksand Speed Modifier'; Help='Movement speed multiplier in quicksand. Also needs client-side apply.'; ClientApply=$true; Category='Sandworm' }
@@ -229,7 +229,7 @@ $script:DuneGameConfigSchema = @(
     @{ Section=$script:DuneGcSecContracts; Key='m_bIsEnabled'; File='game'; Type='bool'; Default='True'; Label='Contracts Enabled'; Help='Master toggle for the contracts subsystem. Also needs client-side apply.'; ClientApply=$true; Category='Encounters' }
 
     # --- Vehicles (engine cvars) ---
-    @{ Section=$script:DuneGcSecConsole; Key='dw.VehicleDurabilityDamageMultiplier'; File='engine'; Type='float'; Min=0; Max=10; Default='1.0'; Label='Vehicle Durability Damage'; Help='Durability damage multiplier for vehicles. 0 = off.'; Category='Vehicles' }
+    @{ Section=$script:DuneGcSecConsole; Key='dw.VehicleDurabilityDamageMultiplier'; File='engine'; Type='float'; Min=0; Max=10; Default='1.0'; Label='Vehicle Durability Damage'; Help='Durability damage multiplier for vehicles. 0 = off.'; Startup=$true; Category='Vehicles' }
 
     # --- Experimental binary-discovered engine cvars ---
     # These registered controls and their compiled help/defaults were decoded
@@ -486,6 +486,14 @@ foreach ($field in $script:DuneGameConfigSchema) {
 # promoted - INI-only does nothing for these. Never widen this to every
 # [ConsoleVariables] field: Bgd.ServerLoginPassword lives there and must never
 # be written into a process command line.
+#
+# The same gap existed for the console variables that shipped in real categories
+# BEFORE the Startup flag was introduced: they were written to UserEngine.ini and
+# nowhere else, so they never reached the startup command either. Those controls
+# now carry Startup=$true as well, and a test requires it of every engine-file
+# console variable outside Experimental except the Bgd.* pair - Bgd.ServerDisplayName
+# is injected per partition by the Sietch code, and Bgd.ServerLoginPassword must
+# never reach a command line.
 $script:DuneStartupConsoleVariableKeys = @(
     $script:DuneGameConfigSchema |
         Where-Object { $_.File -eq 'engine' -and ($_.Category -like 'Experimental*' -or $_.Startup -eq $true) } |
