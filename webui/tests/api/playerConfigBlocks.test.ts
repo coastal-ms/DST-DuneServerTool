@@ -50,15 +50,42 @@ describe('buildAllClientBlocks', () => {
     expect(out.entries[0].block).not.toContain('m_bEnableHibernation')
   })
 
-  it('splits Game.ini and Engine.ini into separate blocks, Game.ini first', () => {
+  it('puts Engine.ini first so it renders on the left, Game.ini second', () => {
     const out = buildAllClientBlocks(cats, cfg(
       { '/Script/DuneSandbox.SandwormSettings||m_bEnableHibernation': 'False' },
       { 'ConsoleVariables||Vehicle.MaxVehiclesPerPlayer': '20' },
     ))
-    expect(out.entries.map(e => e.file)).toEqual(['game', 'engine'])
+    expect(out.entries.map(e => e.file)).toEqual(['engine', 'game'])
     expect(out.count).toBe(2)
-    expect(out.entries[0].block).toContain('[/Script/DuneSandbox.SandwormSettings]')
-    expect(out.entries[1].block).toContain('[ConsoleVariables]')
+    expect(out.entries[0].block).toContain('[ConsoleVariables]')
+    expect(out.entries[1].block).toContain('[/Script/DuneSandbox.SandwormSettings]')
+  })
+
+  it('covers standard and experimental categories together, so both pages show the same list', () => {
+    // The button is shown on Game Config and on Experimental and must be
+    // identical in both places: it is built from the whole schema, never from
+    // whichever page the admin happens to be on.
+    const mixed: GameConfigCategory[] = [
+      ...cats,
+      {
+        category: 'Experimental 2',
+        fields: [
+          { section: 'ConsoleVariables', key: 'Deathstill.ConversionTimeOverride', file: 'engine', type: 'float', label: 'Deathstill time', clientApply: true },
+        ],
+      },
+    ] as unknown as GameConfigCategory[]
+    const out = buildAllClientBlocks(mixed, cfg(
+      { '/Script/DuneSandbox.SandwormSettings||m_bEnableHibernation': 'False' },
+      {
+        'ConsoleVariables||Vehicle.MaxVehiclesPerPlayer': '20',
+        'ConsoleVariables||Deathstill.ConversionTimeOverride': '60',
+      },
+    ))
+    expect(out.count).toBe(3)
+    const engine = out.entries.find(e => e.file === 'engine')!
+    expect(engine.block).toContain('Vehicle.MaxVehiclesPerPlayer=20')
+    expect(engine.block).toContain('Deathstill.ConversionTimeOverride=60')
+    expect(out.entries.find(e => e.file === 'game')!.block).toContain('m_bEnableHibernation=False')
   })
 
   it('never hands out a server-only setting', () => {

@@ -117,10 +117,14 @@ function isCustomized(data: GameConfigResponse | null, field: GameConfigField): 
 // battlegroup restart before they do anything. "Experimental 2" is simply the
 // overflow of the same set, split so neither list is unmanageably long.
 // Build one set of client blocks covering EVERY customised client-apply setting
-// across all categories, merged per file and section. This is what an admin hands
-// to their players: the complete list of lines each player must add locally, and
-// nothing else — defaults and server-only settings are left out, because a player
-// copying a value that matches the default just adds noise to their file.
+// DST manages, across every category on every page. Both Game Config and the
+// Experimental page show this same list — a player needs the complete set, not
+// whichever half the admin happened to be looking at. Engine.ini comes first so
+// it lands on the left of the side-by-side view.
+//
+// Only settings actually changed from their default are included: that is what
+// "DST added" means, and a player copying a value that already matches the
+// default just adds noise to their file.
 export function buildAllClientBlocks(
   cats: GameConfigCategory[] | null,
   cfg: GameConfigResponse | null,
@@ -144,7 +148,7 @@ export function buildAllClientBlocks(
     }
   }
   const entries: ClientShareEntry[] = []
-  for (const file of ['game', 'engine'] as const) {
+  for (const file of ['engine', 'game'] as const) {
     const bySection = byFile.get(file)
     if (!bySection) continue
     const parts: string[] = []
@@ -916,8 +920,9 @@ export function GameConfig({ mode = 'standard' }: { mode?: 'standard' | 'experim
     return experimentalPage ? groupExperimental(mine) : mine
   }, [schema, experimentalPage])
 
-  // Everything a player must add locally for THIS page's settings.
-  const playerConfig = useMemo(() => buildAllClientBlocks(visibleSchema, cfg), [visibleSchema, cfg])
+  // Everything a player must add locally — built from the WHOLE schema, not just
+  // this page, so Game Config and Experimental show the identical list.
+  const playerConfig = useMemo(() => buildAllClientBlocks(schema, cfg), [schema, cfg])
 
   const filteredSchema = useMemo(() => {    if (!visibleSchema) return null
     const q = search.trim().toLowerCase()
@@ -1171,14 +1176,14 @@ export function GameConfig({ mode = 'standard' }: { mode?: 'standard' | 'experim
             type="button"
             onClick={() => setShareBlock({
               title: 'Give your players this',
-              subtitle: 'Every setting on this page that a player must also set locally, and nothing else.',
+              subtitle: 'Every setting DST manages that a player must also set on their own PC — the same list on both pages.',
               entries: playerConfig.entries,
             })}
             disabled={playerConfig.count === 0}
             className="btn-secondary mt-2.5 ml-2"
             title={playerConfig.count === 0
-              ? 'No settings on this page currently need a matching value on players’ PCs'
-              : 'Show every line your players need to add to their own Game.ini / Engine.ini'}
+              ? 'No settings currently need a matching value on players’ PCs'
+              : 'Show every line your players need to add to their own Engine.ini / Game.ini'}
           >
             <Icon name="Users" size={14} />
             Player config{playerConfig.count > 0 ? ` (${playerConfig.count})` : ''}
