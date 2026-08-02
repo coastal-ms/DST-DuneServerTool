@@ -137,6 +137,10 @@ export type GameConfigField = {
   // share a (file, section, structKey) are written into one struct line.
   structKey?: string
   options?: GameConfigFieldOption[]
+  /** Experimental controls only: which themed card they belong on. */
+  group?: string
+  /** Experimental controls only: 'Confirmed' | 'Unconfirmed'. */
+  status?: string
 }
 
 export type GameConfigCategory = {

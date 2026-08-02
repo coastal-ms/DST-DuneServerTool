@@ -238,15 +238,15 @@ $script:DuneGameConfigSchema = @(
     # compiled defaults stay unset rather than presenting an invented default.
     # Hazard.DehydrationZonesEnabled is intentionally excluded because its
     # compiled Funcom help explicitly warns that enabling it crashes clients.
-    @{ Section=$script:DuneGcSecConsole; Key='Dune.GiveDoubleDifficultyLoot'; File='engine'; Type='bool01'; Default='0'; Label='Double Difficulty Loot'; Help='Give double loot when encounter difficulty is above 0. Field-confirmed with dungeon loot; still experimental.'; Category='Experimental' }
+    @{ Section=$script:DuneGcSecConsole; Key='Dune.GiveDoubleDifficultyLoot'; File='engine'; Type='bool01'; Default='0'; Label='Double Difficulty Loot'; Help='Give double loot when encounter difficulty is above 0. Field-confirmed with dungeon loot; still experimental.'; Status='Confirmed'; Category='Experimental' }
     # Field testing established that INI-only application did not take effect,
     # while applying the same value through the Survival pod's ExecCmds did.
     # Existing generator fuel reflected the new duration after restart.
-    @{ Section=$script:DuneGcSecConsole; Key='dw.FuelBurningMultiplier'; File='engine'; Type='float'; Default='1.0'; Label='Fuel Burning Duration'; Help='Scales how long all fuel burns. DST applies the value in UserEngine.ini and the Hagga server startup command because INI-only application did not take effect in field testing. Restart the battlegroup to apply it; existing generator fuel updates after restart.'; Category='Experimental' }
+    @{ Section=$script:DuneGcSecConsole; Key='dw.FuelBurningMultiplier'; File='engine'; Type='float'; Default='1.0'; Label='Fuel Burning Duration'; Help='Scales how long all fuel burns. DST applies the value in UserEngine.ini and the Hagga server startup command because INI-only application did not take effect in field testing. Restart the battlegroup to apply it; existing generator fuel updates after restart.'; Status='Confirmed'; Category='Experimental' }
     @{ Section=$script:DuneGcSecConsole; Key='Abilities.RespecCooldownTotalDurationSeconds'; File='engine'; Type='int'; Min=0; Unit='sec'; Default='172800'; Label='Ability Respec Cooldown'; Help='Total ability-respec cooldown in seconds. Compiled default is 172800 (2 days); 0 may remove the cooldown but has not been field-verified.'; Category='Experimental' }
-    @{ Section=$script:DuneGcSecConsole; Key='dw.LandsraadMissionRewardMultiplierFactionXP'; File='engine'; Type='float'; Min=0; Default='1.0'; Label='Landsraad Faction XP'; Help='Scales Faction XP from Landsraad missions. Field-confirmed at 10; mission preview may still show the base reward.'; Category='Experimental' }
-    @{ Section=$script:DuneGcSecConsole; Key='dw.LandsraadMissionRewardMultiplierHouseCredit'; File='engine'; Type='float'; Min=0; Default='1.0'; Label='Landsraad House Credit'; Help='Scales House Credit from Landsraad missions. Field-confirmed at 10; mission preview may still show the base reward.'; Category='Experimental' }
-    @{ Section=$script:DuneGcSecConsole; Key='dw.LandsraadMissionRewardMultiplierSpecializationXP'; File='engine'; Type='float'; Min=0; Default='1.0'; Label='Landsraad Specialization XP'; Help='Scales Specialization XP from Landsraad missions. Field-confirmed at 10; mission preview may still show the base reward.'; Category='Experimental' }
+    @{ Section=$script:DuneGcSecConsole; Key='dw.LandsraadMissionRewardMultiplierFactionXP'; File='engine'; Type='float'; Min=0; Default='1.0'; Label='Landsraad Faction XP'; Help='Scales Faction XP from Landsraad missions. Field-confirmed at 10; mission preview may still show the base reward.'; Status='Confirmed'; Category='Experimental' }
+    @{ Section=$script:DuneGcSecConsole; Key='dw.LandsraadMissionRewardMultiplierHouseCredit'; File='engine'; Type='float'; Min=0; Default='1.0'; Label='Landsraad House Credit'; Help='Scales House Credit from Landsraad missions. Field-confirmed at 10; mission preview may still show the base reward.'; Status='Confirmed'; Category='Experimental' }
+    @{ Section=$script:DuneGcSecConsole; Key='dw.LandsraadMissionRewardMultiplierSpecializationXP'; File='engine'; Type='float'; Min=0; Default='1.0'; Label='Landsraad Specialization XP'; Help='Scales Specialization XP from Landsraad missions. Field-confirmed at 10; mission preview may still show the base reward.'; Status='Confirmed'; Category='Experimental' }
     @{ Section=$script:DuneGcSecConsole; Key='dw.VehicleHeatMultiplier'; File='engine'; Type='float'; Min=0; Default='1.0'; Label='Vehicle Heat Multiplier'; Help='Scales vehicle heat generation. 0 = no heat, 1 = normal, 2 = double. Applied through INI and Hagga startup command for local testing.'; Category='Experimental' }
     @{ Section=$script:DuneGcSecConsole; Key='dw.VehicleHeatInterpolationSpeed'; File='engine'; Type='float'; Min=0; Default='1.0'; Label='Vehicle Heat Interpolation Speed'; Help='Speeds up or slows down vehicle heat interpolation. Applied through INI and Hagga startup command for local testing.'; Category='Experimental' }
     @{ Section=$script:DuneGcSecConsole; Key='dw.VehiclePowerConsumptionMultiplier'; File='engine'; Type='float'; Min=0; Default='1.0'; Label='Vehicle Power Consumption'; Help='Scales vehicle power use. 0 = no consumption, 1 = normal, 2 = double. Applied through INI and Hagga startup command for local testing.'; Category='Experimental' }
@@ -260,7 +260,7 @@ $script:DuneGameConfigSchema = @(
     @{ Section=$script:DuneGcSecConsole; Key='Vehicle.MaxActiveVehicles'; File='engine'; Type='int'; Min=-1; Default='-1'; Label='Maximum Active Vehicles'; Help='Rejects attempts to enter vehicle seats after this active-vehicle limit. -1 = unlimited. Applied through INI and Hagga startup command for local testing.'; Category='Experimental' }
     @{ Section=$script:DuneGcSecConsole; Key='Vehicle.MaxVehicles'; File='engine'; Type='int'; Min=-1; Default='-1'; Label='Maximum Vehicles'; Help='Rejects vehicle assembly or recovery after this total-vehicle limit. -1 = unlimited. Applied through INI and Hagga startup command for local testing.'; Category='Experimental' }
     @{ Section=$script:DuneGcSecConsole; Key='Vehicle.MaxVehiclesForSpawner'; File='engine'; Type='int'; Min=0; Default='400'; Label='Maximum Spawned Vehicles'; Help='Stops vehicle spawners after this many vehicles exist. Applied through INI and Hagga startup command for local testing.'; Category='Experimental' }
-    @{ Section=$script:DuneGcSecConsole; Key='Vehicle.MaxVehiclesPerPlayer'; File='engine'; Type='int'; Min=0; Default='10'; Label='Maximum Vehicles Per Player'; Help='Limits vehicles each player may spawn or claim. 0 = unlimited. Applied through INI and Hagga startup command for local testing.'; Category='Experimental' }
+    @{ Section=$script:DuneGcSecConsole; Key='Vehicle.MaxVehiclesPerPlayer'; File='engine'; Type='int'; Min=0; Default='10'; Label='Maximum Vehicles Per Player'; Help='Limits vehicles each player may spawn or claim. 0 = unlimited. Applied through INI and Hagga startup command for local testing.'; Status='Confirmed'; Category='Experimental' }
     @{ Section=$script:DuneGcSecConsole; Key='Vehicle.MaxVehiclesWarning'; File='engine'; Type='int'; Min=0; Label='Vehicle Count Warning Threshold'; Help='Vehicle count at which the amount notification becomes a warning. Applied through INI and Hagga startup command for local testing.'; Category='Experimental' }
     @{ Section=$script:DuneGcSecConsole; Key='Vehicle.CharacterHitDamageModifier'; File='engine'; Type='float'; Min=0; Default='1.0'; Label='Vehicle Impact Character Damage'; Help='Scales damage dealt to characters by vehicle impacts. 0 should disable impact damage.'; Category='Experimental' }
     @{ Section=$script:DuneGcSecConsole; Key='Vehicle.DamagePlayerOnVehicleCollision'; File='engine'; Type='bool01'; Label='Vehicle Collision Damages Players'; Help='Whether vehicle collisions damage players. Compiled default was not recovered.'; Category='Experimental' }
@@ -484,6 +484,46 @@ $script:DuneStartupConsoleVariableKeys = @(
         Where-Object { $_.File -eq 'engine' -and $_.Category -like 'Experimental*' } |
         ForEach-Object { $_.Key }
 )
+
+# Experimental controls live on their own page, grouped by what they affect
+# rather than by which decode pass found them. Namespace rules come first
+# because they are exact - Sandworm.SandwormCheckIfBreachLocationIsFreeOfVehicles
+# is a sandworm control, not a vehicle one - and keyword rules only catch the
+# `dw.*` / `Dune.*` grab-bag afterwards. Anything unmatched is reported as
+# Uncategorized rather than being forced into a group it does not belong in.
+$script:DuneExperimentalGroupRules = @(
+    @{ Name = 'Sandworm';               Match = '^(Sandworm|SandwormSubsystem)\.' }
+    @{ Name = 'Vehicles';               Match = '^Vehicle\.' }
+    @{ Name = 'Hazards & Storms';       Match = '^(Hazard|Sandstorm|Coriolis|SafeZone)\.' }
+    @{ Name = 'NPCs & Encounters';      Match = '^(NPC|Ai|AI)\.' }
+    @{ Name = 'Combat & Shields';       Match = '^(Dac|Combat)\.' }
+    @{ Name = 'Progression & Contracts'; Match = '^(Landsraad|Contract|Contracts|Progression|Journey|JourneyStory|Abilities|TechKnowledge)\.' }
+    @{ Name = 'Loot & Inventory';       Match = '^(Loot|Inventory|Exchange|Market)\.' }
+    @{ Name = 'Survival & Shelter';     Match = '^(Deathstill|Hydration)\.' }
+    @{ Name = 'Server & Session';       Match = '^Bgd\.' }
+    @{ Name = 'Spice & Harvesting';     Match = '^SpiceHarvesting\.|spice|harvest|melange|bloom' }
+    @{ Name = 'Survival & Shelter';     Match = 'deathstill|hydrat|water|thirst|blood|corpse|dehydr|shelter|temperature' }
+    @{ Name = 'Fuel & Power';           Match = 'fuel|generator|power|energy|battery' }
+    @{ Name = 'Vehicles';               Match = 'vehicle|ornithopter|harness|welding' }
+    @{ Name = 'NPCs & Encounters';      Match = 'npc|encounter|critter' }
+    @{ Name = 'Base Building & Backups'; Match = 'build|placeable|decay|claim|totem|deterior|repair|recycle|backup' }
+    @{ Name = 'Loot & Inventory';       Match = 'loot|inventory|item|exchange|market|currency|solaris' }
+    @{ Name = 'Combat & Shields';       Match = 'combat|damage|shield|stagger|knockback|duel|melee|weapon|pvp' }
+    @{ Name = 'Progression & Contracts'; Match = 'contract|landsraad|progress|journey|perk|skill|abilit|respec|repsec|returningplayer' }
+    @{ Name = 'Hazards & Storms';       Match = 'hazard|quicksand|storm|coriolis|safezone|sandbuildup' }
+    @{ Name = 'Server & Session';       Match = 'server|session|hardcap|ccu' }
+)
+
+# Display order for these groups lives in the web UI (webui/src/pages/GameConfig.tsx),
+# since ordering is presentation - keeping a second copy here would just drift.
+
+function Get-DuneExperimentalGroup {
+    param([Parameter(Mandatory)][string]$Key)
+    foreach ($rule in $script:DuneExperimentalGroupRules) {
+        if ($Key -match $rule.Match) { return $rule.Name }
+    }
+    return 'Uncategorized'
+}
 
 # -----------------------------------------------------------------------------
 # Live INI paths inside the running battlegroup's PVC. These are resolved LIVE on
@@ -2439,6 +2479,12 @@ function Get-DuneGameConfigSchemaApi {
         if ($f.ContainsKey('StructKey'))   { $field.structKey   = [string]$f.StructKey }
         if ($f.ContainsKey('Options')) {
             $field.options = @($f.Options | ForEach-Object { @{ value = $_.V; label = $_.L } })
+        }
+        # Experimental controls are shown on their own page, grouped by what they
+        # affect. Everything else keeps its Game Config category as the grouping.
+        if ($cat -like 'Experimental*') {
+            $field.group = (Get-DuneExperimentalGroup -Key "$($f.Key)")
+            $field.status = if ($f.ContainsKey('Status')) { [string]$f.Status } else { 'Unconfirmed' }
         }
         $byCat[$cat].Add($field)
     }
