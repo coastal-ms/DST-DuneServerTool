@@ -694,9 +694,10 @@ Describe 'DuneGameConfigSchema: experimental binary CVars' -Tag 'GameConfig' {
             }
         }
         # Both lists are applied identically; the split is presentation only.
-        # 128 still on the Experimental pages + the 9 promoted controls, which keep
+        # 128 still on the Experimental pages + the 9 promoted controls + the 12
+        # pre-existing console variables in real categories, all of which keep
         # startup injection via Startup=$true.
-        @($script:DuneStartupConsoleVariableKeys).Count | Should -Be 137
+        @($script:DuneStartupConsoleVariableKeys).Count | Should -Be 149
     }
 
     It 'groups every experimental control for the Experimental page' {
@@ -754,6 +755,31 @@ Describe 'DuneGameConfigSchema: experimental binary CVars' -Tag 'GameConfig' {
         $api = @(Get-DuneGameConfigSchemaApi)
         $fields = @($api | Where-Object { $_.category -like 'Experimental*' } | ForEach-Object { $_.fields })
         @($fields | Where-Object { $_.status -eq 'Confirmed' }) | Should -BeNullOrEmpty
+    }
+
+    It 'injects every non-Experimental console variable into the startup command' {
+        # Console variables that shipped in real categories before the Startup flag
+        # existed were written to UserEngine.ini and nowhere else, so they never
+        # reached the Hagga startup command - and INI-only application is
+        # field-proven inert for console variables. Every engine-file console
+        # variable outside Experimental must therefore carry Startup=$true. The
+        # Bgd.* pair is the deliberate exception: ServerDisplayName is injected per
+        # partition by the Sietch code and ServerLoginPassword must never reach a
+        # process command line.
+        $consoleFields = @(
+            $script:DuneGameConfigSchema |
+                Where-Object { $_.Section -eq $script:DuneGcSecConsole -and $_.Category -notlike 'Experimental*' }
+        )
+        $consoleFields.Count | Should -BeGreaterThan 0
+        foreach ($f in $consoleFields) {
+            if ($f.Key -like 'Bgd.*') {
+                $f.Startup | Should -Not -BeTrue
+                @($script:DuneStartupConsoleVariableKeys) | Should -Not -Contain $f.Key
+                continue
+            }
+            $f.Startup | Should -BeTrue
+            @($script:DuneStartupConsoleVariableKeys) | Should -Contain $f.Key
+        }
     }
 
     It 'never lists the same control in both Experimental categories' {
