@@ -31,7 +31,7 @@ import type { Command, CommandsResponse } from '../api/types'
 // Commands that remote (Cloudflare-tunnel) viewers are allowed to see and run.
 // Everything else is hidden remotely and refused server-side. Keep in sync with
 // $remoteAllowedCommands in app/server/routes/Commands.ps1.
-const REMOTE_ALLOWED = new Set(['startup', 'start', 'restart', 'start-vm', 'reboot'])
+const REMOTE_ALLOWED = new Set(['startup', 'start', 'restart', 'start-vm', 'reboot', 'apply-inis'])
 
 type LaunchResult = {
   ok: boolean
