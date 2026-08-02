@@ -13,16 +13,13 @@ here cover everything those tags shipped.
 
 ## [Unreleased]
 
+## [13.2.0] - 2026-08-01
+
 ### Added
 
-- **“Apply INIs & Restart” is now a command.** It appears on the Commands page under Battlegroup, and on the Experimental page's header alongside Game Config's. This is the restart that first rebuilds each server's startup values from the current INIs — a plain “Restart BG Only” does not, so a saved console variable only takes effect through this one.
-- **“Player config” button — everything your players need, in one place.** Game Config and the new Experimental page each get a button showing every setting DST manages that a player must also set on their own PC. `Engine.ini` is on the left and `Game.ini` on the right, each with its location on a player's machine, and a single copy button takes both. The list is the complete set from every page, so it is identical wherever you open it, and it includes only settings you have actually changed — defaults and server-only settings are left out, so nobody pastes lines that do nothing.
-- **Experimental settings moved to their own page.** The two Experimental lists have left Game Config and now live under **Experimental** in the sidebar, split into themed cards — Sandworm, Vehicles, Combat & Shields, NPCs & Encounters, Hazards & Storms, Survival & Shelter, Base Building & Backups, Loot & Inventory, Progression & Contracts, Fuel & Power, Spice & Harvesting, Server & Session — so a control can be found by what it affects instead of scrolling one long list. Anything that cannot be placed appears under **Uncategorized**. Game Config keeps the settings we stand behind.
-- **Controls with field confirmation are marked.** Fuel Burning Duration, Double Difficulty Loot, the three Landsraad reward multipliers and Maximum Vehicles Per Player are flagged as confirmed; everything else is explicitly unconfirmed.
-
-### Changed
-
-- Saving on the Experimental page works exactly as before — values go to the server `UserEngine.ini` — and the page points back to Game Config's **Apply INIs & restart** to put them into effect. Your existing values are untouched; only where the controls appear has changed.
+- **Experimental features.** Experimental settings now live on their own page in the sidebar, organised into sections. These are unproven controls read out of the game server itself — treat them as untested.
+- **Player config.** A button on Game Config and Experimental shows every setting your players need to add on their own PCs, with the Engine.ini and Game.ini lines side by side and one button to copy both.
+- **Apply INIs & Restart is now a command.** It is on the Commands page under Battlegroup and in the Experimental page header, so settings can be applied without going back to Game Config.
 
 ## [13.1.0] - 2026-08-01
 
