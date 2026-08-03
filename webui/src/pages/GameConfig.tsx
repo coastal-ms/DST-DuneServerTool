@@ -41,7 +41,7 @@ import type {
 import { SpicefieldsCard } from './gameconfig/SpicefieldsCard'
 import { LandclaimTimerCard } from './gameconfig/LandclaimTimerCard'
 import { DeepDesertPvpCard } from './gameconfig/DeepDesertPvpCard'
-import { BaseBackupGuardCard } from './gameconfig/BaseBackupGuardCard'
+import { BaseBackupGuardPanel } from './gameconfig/BaseBackupGuardPanel'
 
 type LoadState = 'idle' | 'loading' | 'ready' | 'error' | 'unavailable'
 
@@ -1714,6 +1714,12 @@ export function GameConfig({ mode = 'standard' }: { mode?: 'standard' | 'experim
                     ) : null
                   ))}
                 </div>
+                {/* Not an INI field, but it belongs with the base backup
+                    settings: allowing the tool in the Deep Desert without this
+                    means a stored base is recyclable-only after every reset. */}
+                {!experimentalPage && cat.category === 'BaseBackUp' && (
+                  <BaseBackupGuardPanel vmRunning={vmRunning} />
+                )}
               </CategoryCard>
               )
             })}
@@ -1726,8 +1732,6 @@ export function GameConfig({ mode = 'standard' }: { mode?: 'standard' | 'experim
                 <SpicefieldsCard vmRunning={vmRunning} />
 
                 <DeepDesertPvpCard vmRunning={vmRunning} />
-
-                <BaseBackupGuardCard vmRunning={vmRunning} />
 
                 <LandclaimTimerCard vmRunning={vmRunning} />
 
