@@ -90,7 +90,7 @@ $script:DuneLandclaimDefaultRemovals = @(60,120,240,480,960,1920,3840,7680,15360
 # test showing an actual effect through that channel.
 $script:DuneGameConfigCategoryOrder = @(
     'Server Identity','Network','Survival','Hydration','Loot & Death',
-    'Resources & Economy','Crafting','Building','Inventory','Guilds & Economy',
+    'Resources & Economy','Crafting','Building','BaseBackUp','Inventory','Guilds & Economy',
     'Storm Cycle','Landsraad','PvP & Security','Spice','Taxation','Encounters','Sandworm','Vehicles',
     'Experimental','Experimental 2'
 )
@@ -155,9 +155,16 @@ $script:DuneGameConfigSchema = @(
     # --- Building ---
     @{ Section=$script:DuneGcSecBuilding; Key='m_MaxNumLandclaimSegments'; File='game'; Type='int'; Min=1; Default='6'; Label='Max Landclaim Segments'; Help='Maximum territory claim segments. Also needs client-side apply.'; ClientApply=$true; Category='Building' }
     @{ Section=$script:DuneGcSecBuilding; Key='m_BuildingBlueprintMaxExtensions'; File='game'; Type='int'; Min=0; Default='4'; Label='Blueprint Max Extensions'; Help='Maximum blueprint extension slots. Also needs client-side apply.'; ClientApply=$true; Category='Building' }
-    @{ Section=$script:DuneGcSecBuilding; Key='m_BaseBackupMaxExtensions'; File='game'; Type='int'; Min=0; Default='8'; Label='Base Backup Max Extensions'; Help='Backup (reconstruction) extension slots per base. Also needs client-side apply.'; ClientApply=$true; Category='Building' }
     @{ Section=$script:DuneGcSecBuilding; Key='m_bBuildingRestrictionLimitsEnabled'; File='game'; Type='bool'; Default='True'; Label='Building Restriction Limits'; Help='Enforce building restriction limits. Also needs client-side apply.'; ClientApply=$true; Category='Building' }
     @{ Section=$script:DuneGcSecGame; Key='m_GlobalBuildingDamageMultiplier'; File='game'; Type='float'; Min=0; Default='1.0'; Label='Building Damage Multiplier'; Help='Scales damage dealt to player buildings (0.5 = stronger bases). Also needs client-side apply.'; ClientApply=$true; Category='Building' }
+
+    # --- BaseBackUp ---
+    # Every key here is read by the CLIENT as well as the server, so each player
+    # needs the same values in their own Game.ini for the tool to behave.
+    @{ Section=$script:DuneGcSecBuilding; Key='m_BaseBackupToolMapRestriction'; File='game'; Type='string'; Wide=$true; Default='((Name="HaggaBasin"), (Name="Editor_Default"), (Name="IGW_Test_Small"))'; Label='Allowed Maps'; Help='Maps the base backup tool works on. Add (Name="DeepDesert") to allow it in the Deep Desert. Also needs client-side apply.'; ClientApply=$true; Category='BaseBackUp' }
+    @{ Section=$script:DuneGcSecBuilding; Key='m_BaseBackupToolTimeRestrictionInSeconds'; File='game'; Type='int'; Min=0; Unit='sec'; Default='604800'; Label='Cooldown Between Backups'; Help='How long a player waits between base backups. Default 604800 = 7 days. Also needs client-side apply.'; ClientApply=$true; Category='BaseBackUp' }
+    @{ Section=$script:DuneGcSecBuilding; Key='m_BaseBackupMaxExtensions'; File='game'; Type='int'; Min=0; Default='8'; Label='Max Extensions'; Help='Backup (reconstruction) extension slots per base. Also needs client-side apply.'; ClientApply=$true; Category='BaseBackUp' }
+    @{ Section=$script:DuneGcSecBuilding; Key='m_BuildingBlueprintSnapToOriginBaseBackupMaxAllowedDistance'; File='game'; Type='float'; Min=0; Default='5000.0'; Label='Snap-To-Origin Max Distance'; Help='How far from its original location a base backup may still snap back to that origin. Also needs client-side apply.'; ClientApply=$true; Category='BaseBackUp' }
 
     # --- Inventory ---
     @{ Section=$script:DuneGcSecInventory; Key='PlayerInventoryStartingSize'; File='game'; Type='int'; Min=1; Default='35'; Label='Starting Inventory Slots'; Help='Number of inventory slots at spawn. Also needs client-side apply.'; ClientApply=$true; Category='Inventory' }
@@ -442,7 +449,7 @@ $script:DuneGameConfigSchema = @(
     # Building
     @{ Section=$script:DuneGcSecBuilding; Key='m_BuildingDecayRateMultiplier'; File='game'; Type='float'; Min=0; Default='1.0'; Label='Building Decay Rate Multiplier'; Help='Scales how fast player buildings decay over time. Also needs client-side apply.'; ClientApply=$true; Category='Building' }
     @{ Section=$script:DuneGcSecBuilding; Key='bEnableBuildingStability'; File='game'; Type='bool'; Default='True'; Label='Enable Building Stability'; Help='Whether structural / stability rules apply to player constructions. Also needs client-side apply.'; ClientApply=$true; Category='Building' }
-    @{ Section=$script:DuneGcSecBuilding; Key='m_BaseBackupExtensions'; File='game'; Type='int'; Min=0; Unit='slots'; Default='2'; Label='Base Backup Extensions'; Help='Default number of backup extension slots per base. Also needs client-side apply.'; ClientApply=$true; Category='Building' }
+    @{ Section=$script:DuneGcSecBuilding; Key='m_BaseBackupExtensions'; File='game'; Type='int'; Min=0; Unit='slots'; Default='2'; Label='Starting Extensions'; Help='Default number of backup extension slots per base. Also needs client-side apply.'; ClientApply=$true; Category='BaseBackUp' }
     # Guilds & Economy
     @{ Section=$script:DuneGcSecPermission; Key='m_MaxPermissionsPerActor'; File='game'; Type='int'; Min=0; Unit='rules'; Default='32'; Label='Max Permissions per Actor'; Help='Maximum number of permission rules per actor / structure. Also needs client-side apply.'; ClientApply=$true; Category='Guilds & Economy' }
     # Storm Cycle
