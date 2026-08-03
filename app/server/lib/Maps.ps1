@@ -821,11 +821,18 @@ function Invoke-DuneBattlegroupRestart {
     }
 
     $result = Invoke-DuneCommandExternal -Name 'restart'
+    $message = 'Battlegroup restart launched - watch Server Health; it takes a couple of minutes to come back.'
+    if ($startupApply -is [hashtable] -and $startupApply.ContainsKey('ok') -and -not $startupApply['ok']) {
+        # Never report a clean apply when the startup commands were not rebuilt:
+        # the restart still happens, but the user's console variables will not be
+        # in force and silence here reads as "applied successfully".
+        $message = "Battlegroup restart launched, but the console-variable startup commands could NOT be rebuilt: $($startupApply['error']) Your console variables are not in force until this succeeds."
+    }
     return @{
         ok           = $true
         result       = $result
         startupApply = $startupApply
-        message      = 'Battlegroup restart launched - watch Server Health; it takes a couple of minutes to come back.'
+        message      = $message
     }
 }
 
