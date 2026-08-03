@@ -462,13 +462,40 @@ $script:DuneGameConfigSchema = @(
     @{ Section=$script:DuneGcSecSandworm; Key='m_GiantWormMinimumPlayersOnSpiceField'; File='game'; Type='int'; Min=0; Unit='players'; Default='4'; Label='Giant Worm Min Players on Field'; Help='Minimum number of players on a spice field to trigger a giant sandworm spawn. Also needs client-side apply.'; ClientApply=$true; Category='Sandworm' }
 )
 
-# Gameplay console variables can be evaluated by either side. Mirror them into
-# the local client's Engine.ini when requested, but never copy server identity,
-# password, or URL/port settings to a player config.
+# Console variables are applied to the SERVER by the Hagga startup command, not
+# by any INI - field-proven 2026-08-02, in both directions: the injection alone
+# applied a value with both INIs blank, and both INIs set with the injection
+# stripped did nothing. So mirroring a console variable into a player's client
+# Engine.ini is never what makes it work on the server.
+#
+# A client copy only matters for the few console variables the CLIENT evaluates
+# independently for its own UI. That has to be established per control, because
+# mirroring one that the client does not read is not free:
+#
+#   1. It invites players to edit a file the game rewrites, for no effect.
+#   2. It contaminates field testing. Client apply mirrors the whole managed set
+#      onto the admin's own machine, so any result observed on his own server
+#      could be coming from either side - which is exactly how the Maximum
+#      Vehicles Per Player "Confirmed" status ended up resting on client-side
+#      evidence.
+#
+# So this list is EVIDENCE-ONLY: a key earns a place by being field-proven to be
+# read by the client, not by looking like it might be. Everything else stays
+# server-side, where the injection already applies it. Bgd.* could never qualify
+# regardless - those configure this server instance.
+$script:DuneClientEvaluatedConsoleVariables = @(
+    # Proven 2026-08-02: with this set ONLY in the client's Engine.ini, both a
+    # live retail Funcom server and a DST server displayed the client's value,
+    # overriding a server injection of 24. Retail cannot know that value, so the
+    # client is reading its own file. (Display only - whether a server refuses
+    # the extra vehicle is still untested.)
+    'Vehicle.MaxVehiclesPerPlayer'
+)
+
 foreach ($field in $script:DuneGameConfigSchema) {
     if ($field.File -eq 'engine' -and
         $field.Section -eq $script:DuneGcSecConsole -and
-        "$($field.Key)" -notlike 'Bgd.*') {
+        $script:DuneClientEvaluatedConsoleVariables -contains "$($field.Key)") {
         $field.ClientApply = $true
     }
 }
@@ -758,7 +785,14 @@ function Remove-DuneGameConfigClientEngineValues {
     $raw = [IO.File]::ReadAllText($path)
     $updates = New-Object 'System.Collections.Generic.List[object]'
     foreach ($f in $script:DuneGameConfigSchema) {
-        if ($f.File -ne 'engine' -or -not ($f.ContainsKey('ClientApply') -and $f.ClientApply)) { continue }
+        if ($f.File -ne 'engine') { continue }
+        # Removal sweeps everything DST could EVER have written here, not just
+        # what it mirrors today. Earlier versions flagged every non-Bgd console
+        # variable for client apply, so a user who had the opt-in on already has
+        # those keys in their file; narrowing the write set must not orphan them.
+        $wasManaged = ($f.ContainsKey('ClientApply') -and $f.ClientApply) -or
+                      ($f.Section -eq $script:DuneGcSecConsole -and "$($f.Key)" -notlike 'Bgd.*')
+        if (-not $wasManaged) { continue }
         if ($raw -match ('(?m)^\s*' + [regex]::Escape("$($f.Key)") + '\s*=')) {
             $updates.Add(@{ file = 'engine'; section = $f.Section; key = $f.Key; value = ''; remove = $true })
         }

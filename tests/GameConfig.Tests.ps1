@@ -735,9 +735,6 @@ Describe 'DuneGameConfigSchema: experimental binary CVars' -Tag 'GameConfig' {
             $fields[$key].File | Should -Be 'engine'
             $fields[$key].Category | Should -BeLike 'Experimental*'
             @($script:DuneStartupConsoleVariableKeys) | Should -Contain $key
-            if ($key -notlike 'Bgd.*') {
-                $fields[$key].ClientApply | Should -BeTrue
-            }
         }
         # Both lists are applied identically; the split is presentation only.
         # 128 still on the Experimental pages + the 9 promoted controls + the 12
@@ -792,8 +789,18 @@ Describe 'DuneGameConfigSchema: experimental binary CVars' -Tag 'GameConfig' {
             $f.Status | Should -Be 'Confirmed'
             $f.Startup | Should -BeTrue
             @($script:DuneStartupConsoleVariableKeys) | Should -Contain $key
-            # Console variables keep the blanket client-side mirror.
-            $f.ClientApply | Should -BeTrue
+        }
+
+        # Promotion says a control works, not that the client reads it. Only the
+        # one with client-side field evidence is mirrored to a player config;
+        # everything else is applied server-side by the startup command alone.
+        foreach ($key in $promoted) {
+            $f = $script:DuneGameConfigSchema | Where-Object { $_.Key -eq $key }
+            if ($key -eq 'Vehicle.MaxVehiclesPerPlayer') {
+                $f.ClientApply | Should -BeTrue
+            } else {
+                $f.ClientApply | Should -Not -BeTrue
+            }
         }
 
         # Anything still on the Experimental pages is by definition unproven; a
@@ -1014,14 +1021,29 @@ $script:DstManagedEnd
         }
     }
 
-    It 'includes experimental CVars in file-aware local client changes' {
+    It 'keeps experimental CVars out of local client changes' {
+        # Experimental controls are unproven console variables; nothing shows the
+        # client reads them, and the server applies them through the startup
+        # command. Offering them for client apply would tell a player to edit a
+        # file for no effect - and would mirror them onto the admin's own machine,
+        # confounding the very field test that is meant to prove them.
         Mock Get-DuneGameConfigClientEngineEnabled { $true }
         $notice = Get-DuneGameConfigClientApplyNotice -Updates @(
             @{ file='engine'; section=$script:DuneGcSecConsole; key='Dune.GiveDoubleDifficultyLoot'; value='1' },
             @{ file='engine'; section=$script:DuneGcSecConsole; key='Abilities.RespecCooldownTotalDurationSeconds'; value='0' }
         )
 
-        @($notice.items).Count | Should -Be 2
+        @($notice.items).Count | Should -Be 0
+    }
+
+    It 'offers the one client-read console variable for local client changes' {
+        Mock Get-DuneGameConfigClientEngineEnabled { $true }
+        $notice = Get-DuneGameConfigClientApplyNotice -Updates @(
+            @{ file='engine'; section=$script:DuneGcSecConsole; key='Vehicle.MaxVehiclesPerPlayer'; value='20' }
+        )
+
+        @($notice.items).Count | Should -Be 1
+        @($notice.items)[0].key | Should -Be 'Vehicle.MaxVehiclesPerPlayer'
         @($notice.items | ForEach-Object { $_.file } | Select-Object -Unique) | Should -Be @('engine')
         $notice.paths.engine | Should -Match 'Engine\.ini$'
     }
@@ -1163,11 +1185,22 @@ Describe 'GameConfig: client-apply flag covers local gameplay settings' -Tag 'Ga
         $missing -join ', ' | Should -Be ''
     }
 
-    It 'flags gameplay console variables but excludes server identity and ports' {
+    It 'mirrors only console variables the client is proven to read' {
+        # Console variables reach the server through the startup command, not any
+        # INI, so a client copy is only meaningful for the ones the client
+        # evaluates itself. Flagging the rest is not harmless: it tells players to
+        # edit a file for no effect, and it mirrors the whole managed set onto the
+        # admin's own machine, which confounds every result he field-tests.
         $gameplayEngine = @($script:DuneGameConfigSchema |
-            Where-Object { $_.File -eq 'engine' -and $_.Section -eq $script:DuneGcSecConsole -and $_.Key -notlike 'Bgd.*' })
-        @($gameplayEngine | Where-Object { -not $_.ClientApply }).Count | Should -Be 0
+            Where-Object { $_.File -eq 'engine' -and $_.Section -eq $script:DuneGcSecConsole })
 
+        $flagged = @($gameplayEngine | Where-Object { $_.ClientApply } | ForEach-Object { $_.Key })
+        @($flagged | Sort-Object) | Should -Be @($script:DuneClientEvaluatedConsoleVariables | Sort-Object)
+
+        # The one control with client-side field evidence.
+        $flagged | Should -Contain 'Vehicle.MaxVehiclesPerPlayer'
+
+        # Server-instance and connection settings could never qualify.
         foreach ($key in @('Bgd.ServerDisplayName','Bgd.ServerLoginPassword','Port','IGWPort')) {
             $field = @($script:DuneGameConfigSchema | Where-Object Key -eq $key)[0]
             $field.ContainsKey('ClientApply') | Should -BeFalse
@@ -1341,6 +1374,31 @@ Dune.GiveDoubleDifficultyLoot=1
         $result.changed | Should -BeTrue
         $raw | Should -Not -Match 'Vehicle\.MaxVehiclesPerPlayer'
         $raw | Should -Not -Match 'Dune\.GiveDoubleDifficultyLoot'
+        $raw | Should -Match 'r\.ScreenPercentage=100'
+    }
+
+    It 'still removes console variables written by earlier versions on opt-out' {
+        # Before the mirror was narrowed to client-read controls, DST flagged every
+        # non-Bgd console variable for client apply, so an existing user can have
+        # any of them sitting in their Engine.ini. Opting out must clear those too,
+        # or narrowing the write set silently strands them in the player's file.
+        $dir = Join-Path (Get-PSDrive TestDrive).Root 'legacy-cvars'
+        [void](New-Item -ItemType Directory -Path $dir)
+        [IO.File]::WriteAllText((Join-Path $dir 'Engine.ini'), @"
+[Renderer]
+r.ScreenPercentage=100
+
+[$script:DuneGcSecConsole]
+dw.FuelBurningMultiplier=7
+Abilities.RespecCooldownTotalDurationSeconds=0
+"@)
+
+        $result = Remove-DuneGameConfigClientEngineValues -Dir $dir
+        $raw = [IO.File]::ReadAllText((Join-Path $dir 'Engine.ini'))
+
+        $result.removed | Should -Be 2
+        $raw | Should -Not -Match 'dw\.FuelBurningMultiplier'
+        $raw | Should -Not -Match 'Abilities\.RespecCooldownTotalDurationSeconds'
         $raw | Should -Match 'r\.ScreenPercentage=100'
     }
 
