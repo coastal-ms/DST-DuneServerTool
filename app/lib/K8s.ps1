@@ -459,12 +459,21 @@ function Set-V6ConsoleVariableOverrides {
             $normalized[$name] = $null
             continue
         }
+        # Console variables are not all numeric. Boolean-typed ones (Type
+        # 'boolLower') legitimately carry true/false, and passing those through
+        # the numeric parser used to throw, which aborted the WHOLE rebuild and
+        # left the battlegroup with no startup commands at all - every console
+        # variable silently stopped applying. Pass booleans through verbatim.
+        if ($raw -match '^(?i:true|false)$') {
+            $normalized[$name] = $raw.ToLowerInvariant()
+            continue
+        }
         $number = 0.0
         $style = [System.Globalization.NumberStyles]::Float
         $culture = [System.Globalization.CultureInfo]::InvariantCulture
         if (-not [double]::TryParse($raw, $style, $culture, [ref]$number) -or
             [double]::IsNaN($number) -or [double]::IsInfinity($number)) {
-            throw "$name must be a finite number."
+            throw "$name must be a finite number or true/false."
         }
         $normalized[$name] = $number.ToString('0.################', $culture)
     }

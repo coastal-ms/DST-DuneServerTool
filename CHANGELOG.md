@@ -13,6 +13,12 @@ here cover everything those tags shipped.
 
 ## [Unreleased]
 
+## [13.2.3] - 2026-08-02
+
+### Fixed
+
+- **Console variables could stop applying entirely if any of them was set to true or false.** Settings that take a true/false value (the two sandworm collision and danger-zone controls) were run through a number check when the server startup command was rebuilt. That check failed on the word `false`, and the failure was hidden, so the rebuild produced no startup command at all and **every** console-variable setting silently stopped taking effect. Pressing Apply INIs & Restart reported success and changed nothing. Booleans now pass through correctly, and if the rebuild ever does fail the message says so instead of claiming success. Introduced in v13.2.2.
+
 ## [13.2.2] - 2026-08-02
 
 ### Fixed
