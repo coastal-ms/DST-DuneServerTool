@@ -41,6 +41,7 @@ import type {
 import { SpicefieldsCard } from './gameconfig/SpicefieldsCard'
 import { LandclaimTimerCard } from './gameconfig/LandclaimTimerCard'
 import { DeepDesertPvpCard } from './gameconfig/DeepDesertPvpCard'
+import { BaseBackupGuardCard } from './gameconfig/BaseBackupGuardCard'
 
 type LoadState = 'idle' | 'loading' | 'ready' | 'error' | 'unavailable'
 
@@ -1725,6 +1726,8 @@ export function GameConfig({ mode = 'standard' }: { mode?: 'standard' | 'experim
                 <SpicefieldsCard vmRunning={vmRunning} />
 
                 <DeepDesertPvpCard vmRunning={vmRunning} />
+
+                <BaseBackupGuardCard vmRunning={vmRunning} />
 
                 <LandclaimTimerCard vmRunning={vmRunning} />
 
