@@ -15,6 +15,8 @@ here cover everything those tags shipped.
 
 ### Added
 
+- **The base backup tool's settings are now in Game Config.** Where the tool works, how long players wait between backups, and its extension slots all had to be edited by hand before. They now appear under a **BaseBackUp** section — including the allowed-maps list, which is what you change to let the tool work in the Deep Desert.
+
 - **Deep Desert base backups can now survive the weekly reset.** If you have allowed the base backup tool in the Deep Desert, a base you stored there could only be recycled after a reset, never placed again. The game's end-of-season cleanup removes everything left on the Deep Desert apart from things in transit and backed-up vehicles, and stored bases were not on that protected list. A new **Deep Desert base backups** option in Game Config adds them to it, so a base stored before a reset can still be placed afterwards. It is off by default, restores the original behaviour exactly when switched off, and re-applies itself automatically if a game update undoes it.
 
 ## [13.2.4] - 2026-08-03
