@@ -13,6 +13,8 @@ here cover everything those tags shipped.
 
 ## [Unreleased]
 
+## [13.2.4] - 2026-08-03
+
 ### Changed
 
 - **Console variables are no longer offered for players to copy into their own `Engine.ini`.** Every console variable was being listed as something each player should mirror locally, "just in case". These settings reach the server through its startup command, not through any INI, so the copies were asking players to edit a file that changes nothing for all but one setting — Maximum Vehicles Per Player, which the game client genuinely reads for the cap it shows you. Only that one is still offered. Regular Game Config settings are unaffected and are still offered for client apply exactly as before. If client `Engine.ini` management is turned off, any console variables an earlier version wrote to the file are still cleaned up.
