@@ -152,6 +152,52 @@ Describe 'Fuel burning startup override' -Tag 'GameConfig' {
         Should -Invoke _Invoke-V6BgJsonPatch -Times 0
     }
 
+    It 'injects boolean console variables instead of aborting the whole rebuild' {
+        # Regression (v13.2.2): boolLower controls such as
+        # Sandworm.SandwormDangerZonesEnabled carry true/false, but the injector
+        # forced every value through [double]::TryParse and threw on the first
+        # boolean. Invoke-DuneBattlegroupRestart swallows that exception, so the
+        # rebuild silently produced NO startup commands at all and every console
+        # variable stopped applying on servers that had set a boolean one.
+        $script:patched = $null
+        Mock Get-V6Battlegroup {
+            @{ Bg = [pscustomobject]@{ spec = [pscustomobject]@{ serverGroup = [pscustomobject]@{
+                template = [pscustomobject]@{ spec = [pscustomobject]@{ sets = @(
+                    [pscustomobject]@{
+                        map = 'Survival_1'
+                        partitions = @(1)
+                    })
+                } } }
+            } } }
+        }
+        Mock _Invoke-V6BgJsonPatch { $script:patched = $Patches; @{ Success = $true; Raw = '' } }
+
+        $result = Set-V6ConsoleVariableOverrides -Ip '192.0.2.1' `
+            -Names @('Sandworm.SandwormDangerZonesEnabled', 'Vehicle.SandwormCollisionInteraction', 'dw.FuelBurningMultiplier') `
+            -Values @{
+                'Sandworm.SandwormDangerZonesEnabled' = 'false'
+                'Vehicle.SandwormCollisionInteraction' = 'true'
+                'dw.FuelBurningMultiplier'            = '7'
+            }
+
+        $result.Success | Should -BeTrue
+        $args = @($script:patched | ForEach-Object { $_.value } | ForEach-Object { $_.arguments })
+        $exec = @($args | Where-Object { $_ -like '-execcmds=*' })
+        $exec.Count | Should -Be 1
+        # The boolean keeps its literal true/false spelling, and the numeric
+        # neighbours still ride along in the same argument.
+        $exec[0] | Should -BeLike '*Sandworm.SandwormDangerZonesEnabled false*'
+        $exec[0] | Should -BeLike '*Vehicle.SandwormCollisionInteraction true*'
+        $exec[0] | Should -BeLike '*dw.FuelBurningMultiplier 7*'
+    }
+
+    It 'still rejects a value that is neither numeric nor boolean' {
+        { Set-V6ConsoleVariableOverrides -Ip '192.0.2.1' `
+            -Names @('dw.FuelBurningMultiplier') `
+            -Values @{ 'dw.FuelBurningMultiplier' = 'banana' } } |
+            Should -Throw '*finite number or true/false*'
+    }
+
     It 'merges fuel and a per-sietch name into one ExecCmds argument' {
         $arguments = @(_Set-V6ExecCommand `
             -Arguments @('-log', '-execcmds="Bgd.ServerDisplayName ''Hagga, Prime''"') `
