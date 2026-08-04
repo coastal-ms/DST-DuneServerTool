@@ -13,6 +13,8 @@ here cover everything those tags shipped.
 
 ## [Unreleased]
 
+## [13.3.0] - 2026-08-03
+
 ### Added
 
 - **The base backup tool's settings are now in Game Config.** Where the tool works, how long players wait between backups, and its extension slots all had to be edited by hand before. They now appear under a **BaseBackUp** section — including the allowed-maps list, which is what you change to let the tool work in the Deep Desert.
