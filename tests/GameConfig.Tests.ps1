@@ -191,6 +191,60 @@ Describe 'Fuel burning startup override' -Tag 'GameConfig' {
         $exec[0] | Should -BeLike '*dw.FuelBurningMultiplier 7*'
     }
 
+    It 'injects into the Deep Desert as well as Hagga, sourcing its partition from status.servers' {
+        # Until 13.3.0 the injection was filtered to a non-dedicated Survival_1
+        # set, so NO console variable ever reached the Deep Desert - it ran at
+        # Funcom defaults out there while working on Hagga. DeepDesert_1 is
+        # dedicatedScaling with an EMPTY partitions array and replicas=0 even
+        # while its pod is running, so its partition index has to come from the
+        # live status.servers[] list.
+        Mock Get-V6Battlegroup {
+            @{ Bg = [pscustomobject]@{
+                spec = [pscustomobject]@{ serverGroup = [pscustomobject]@{
+                    template = [pscustomobject]@{ spec = [pscustomobject]@{ sets = @(
+                        [pscustomobject]@{ map = 'Survival_1'; partitions = @(1) }
+                        [pscustomobject]@{ map = 'Overmap';    partitions = @(2) }
+                        [pscustomobject]@{ map = 'DeepDesert_1'; dedicatedScaling = $true; partitions = $null; replicas = 0 }
+                    ) } }
+                } }
+                status = [pscustomobject]@{ servers = @(
+                    [pscustomobject]@{ partitionMap = 'Survival_1';   partitionIndex = 1 }
+                    [pscustomobject]@{ partitionMap = 'Overmap';      partitionIndex = 2 }
+                    [pscustomobject]@{ partitionMap = 'DeepDesert_1'; partitionIndex = 8 }
+                ) }
+            } }
+        }
+        $script:ddPatches = $null
+        Mock _Invoke-V6BgJsonPatch {
+            param($Ip, $Info, $Patches)
+            $script:ddPatches = $Patches
+            @{ Success = $true; Raw = ''; Error = $null }
+        }
+
+        $result = Set-V6ConsoleVariableOverrides -Ip '192.0.2.1' `
+            -Names @('dw.FuelBurningMultiplier') `
+            -Values @{ 'dw.FuelBurningMultiplier' = '6' }
+
+        $result.Success | Should -BeTrue
+
+        # One patch per gameplay set: Hagga (set 0) and the Deep Desert (set 2).
+        @($script:ddPatches).Count | Should -Be 2
+        $paths = @($script:ddPatches | ForEach-Object { $_.path })
+        $paths | Should -Contain '/spec/serverGroup/template/spec/sets/0/podSpecs'
+        $paths | Should -Contain '/spec/serverGroup/template/spec/sets/2/podSpecs'
+        # Overmap is the travel/world service and must be left alone.
+        $paths | Should -Not -Contain '/spec/serverGroup/template/spec/sets/1/podSpecs'
+
+        $dd = @($script:ddPatches | Where-Object { $_.path -like '*/sets/2/podSpecs' })[0]
+        # Exactly one podSpec, and the index has to be the LIVE partition. A null
+        # partitions array piped through [int] yields 0, which would invent a
+        # podSpec for a partition that does not exist.
+        @($dd.value).Count | Should -Be 1
+        $dd.value[0].index | Should -Be 8
+        @($dd.value[0].arguments | Where-Object { $_ -like '-execcmds=*' })[0] |
+            Should -BeLike '*dw.FuelBurningMultiplier 6*'
+    }
+
     It 'still rejects a value that is neither numeric nor boolean' {
         { Set-V6ConsoleVariableOverrides -Ip '192.0.2.1' `
             -Names @('dw.FuelBurningMultiplier') `
@@ -791,16 +845,30 @@ Describe 'DuneGameConfigSchema: experimental binary CVars' -Tag 'GameConfig' {
             @($script:DuneStartupConsoleVariableKeys) | Should -Contain $key
         }
 
-        # Promotion says a control works, not that the client reads it. Only the
-        # one with client-side field evidence is mirrored to a player config;
+        # Promotion says a control works, not that the client reads it. Only keys
+        # with client-side field evidence are mirrored to a player config;
         # everything else is applied server-side by the startup command alone.
+        # Driven off the evidence list itself so adding a newly proven key is a
+        # one-line change there, not a test edit.
         foreach ($key in $promoted) {
             $f = $script:DuneGameConfigSchema | Where-Object { $_.Key -eq $key }
-            if ($key -eq 'Vehicle.MaxVehiclesPerPlayer') {
+            if (@($script:DuneClientEvaluatedConsoleVariables) -contains $key) {
                 $f.ClientApply | Should -BeTrue
             } else {
                 $f.ClientApply | Should -Not -BeTrue
             }
+        }
+
+        # The evidence list is deliberately tiny. If it ever grows large someone
+        # has started adding keys that merely look client-read, which is the
+        # blanket-mirror bug v13.2.4 removed.
+        @($script:DuneClientEvaluatedConsoleVariables).Count | Should -BeLessOrEqual 5
+        foreach ($key in @($script:DuneClientEvaluatedConsoleVariables)) {
+            $f = $script:DuneGameConfigSchema | Where-Object { $_.Key -eq $key }
+            $f | Should -Not -BeNullOrEmpty
+            $f.ClientApply | Should -BeTrue
+            # A server-instance control could never be client-read.
+            $key | Should -Not -BeLike 'Bgd.*'
         }
 
         # Anything still on the Experimental pages is by definition unproven; a

@@ -19,6 +19,7 @@ import type {
   SpicefieldSaveResponse,
   SpicefieldType,
   DeepDesertPvpState,
+  BaseBackupGuardState,
 } from './types'
 
 const fq = (force: boolean) => (force ? '?force=true' : '')
@@ -158,6 +159,19 @@ export function setSpicefieldSpawning(id: number, active: boolean) {
     api<SpicefieldSaveResponse>(`/api/gameconfig/spicefields/${id}/spawning${fq(force)}`, {
       method: 'PUT',
       body: JSON.stringify({ active: active === true }),
+    }),
+  )
+}
+
+export function getBaseBackupGuard() {
+  return api<BaseBackupGuardState>('/api/gameconfig/base-backup-guard')
+}
+
+export function saveBaseBackupGuard(enabled: boolean) {
+  return withOnlinePlayerGuard(force =>
+    api<BaseBackupGuardState>(`/api/gameconfig/base-backup-guard${fq(force)}`, {
+      method: 'PUT',
+      body: JSON.stringify({ enabled }),
     }),
   )
 }

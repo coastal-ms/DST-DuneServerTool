@@ -13,6 +13,22 @@ here cover everything those tags shipped.
 
 ## [Unreleased]
 
+## [13.3.0] - 2026-08-03
+
+### Added
+
+- **The base backup tool's settings are now in Game Config.** Where the tool works, how long players wait between backups, and its extension slots all had to be edited by hand before. They now appear under a **BaseBackUp** section — including the allowed-maps list, which is what you change to let the tool work in the Deep Desert.
+
+- **Deep Desert base backups can now survive the weekly reset.** If you have allowed the base backup tool in the Deep Desert, a base you stored there could only be recycled after a reset, never placed again. The game's end-of-season cleanup removes everything left on the Deep Desert apart from things in transit and backed-up vehicles, and stored bases were not on that protected list. A new **Deep Desert base backups** option in Game Config adds them to it, so a base stored before a reset can still be placed afterwards. It is off by default, restores the original behaviour exactly when switched off, and re-applies itself automatically if a game update undoes it.
+
+### Changed
+
+- **"Shield Drops While Shooting" is now offered for players to apply locally.** Field testing showed the game reads this one from each player's own `Engine.ini`, not from the server: two players in the same session on the same server behaved differently depending on which of them had it set. It now appears in the Player config list alongside Maximum Vehicles Per Player, so you can hand it to your players. Every other console variable is still applied by the server alone.
+
+### Fixed
+
+- **Console variables now apply in the Deep Desert.** Settings such as fuel burn rate, mining multipliers, sandworm behaviour and vehicle heat were only ever sent to Hagga Basin's server, so the Deep Desert ran at the game's stock defaults. It went unnoticed because DST used to copy every console variable into your own client config and that copy covered the gap; once that was narrowed to proven settings in 13.2.4, the Deep Desert quietly reverted to defaults. Both maps now receive them.
+
 ## [13.2.4] - 2026-08-03
 
 ### Changed

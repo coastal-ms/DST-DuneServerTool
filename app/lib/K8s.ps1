@@ -442,8 +442,23 @@ function Set-V6SietchConfig {
     return @{ Success = $true; Count = $Count; Sietches = $applied; Raw = $res.Raw }
 }
 
-# Apply selected server CVars through the Survival command line as well as
-# UserEngine.ini. One podSpec is required per Hagga partition.
+# Maps whose startup command line should carry DST's console-variable overrides.
+#
+# Survival_1 is Hagga Basin. DeepDesert_1 was missing until 13.3.0, which meant
+# NO console variable ever applied out there - fuel burn, mining multipliers,
+# sandworm behaviour, vehicle heat, all of it ran at Funcom's defaults in the
+# Deep Desert while working correctly on Hagga. It went unnoticed because DST
+# used to mirror every console variable into the admin's own client Engine.ini,
+# and the client copy covered the gap; when v13.2.4 narrowed that mirror to
+# field-proven keys only, the Deep Desert reverted to stock and looked like a
+# regression.
+#
+# Overmap is deliberately absent: it is the travel/world-map service, not a
+# gameplay map, and patching it would restart it for no behavioural gain.
+$script:V6ConsoleVariableTargetMaps = @('Survival_1', 'DeepDesert_1')
+
+# Apply selected server CVars through each gameplay map's command line as well
+# as UserEngine.ini. One podSpec is required per partition.
 function Set-V6ConsoleVariableOverrides {
     [CmdletBinding()]
     param(
@@ -480,22 +495,42 @@ function Set-V6ConsoleVariableOverrides {
 
     $info = Get-V6Battlegroup -Ip $Ip
     $sets = $info.Bg.spec.serverGroup.template.spec.sets
+
+    # Live instances, used to find partition ids for director-managed sets. A
+    # dedicatedScaling set (the Deep Desert) carries an EMPTY partitions array
+    # and replicas=0 even while its pod is running, so status.servers[] is the
+    # only place its partition index appears.
+    $liveByMap = @{}
+    foreach ($srv in @($info.Bg.status.servers)) {
+        if ($null -eq $srv) { continue }
+        if (-not $srv.PSObject.Properties['partitionMap']) { continue }
+        $m = "$($srv.partitionMap)"
+        if (-not $m) { continue }
+        if (-not $liveByMap.ContainsKey($m)) { $liveByMap[$m] = @() }
+        if ($srv.PSObject.Properties['partitionIndex'] -and $null -ne $srv.partitionIndex) {
+            $liveByMap[$m] += [int]$srv.partitionIndex
+        }
+    }
+
     $patches = @()
-    $foundSurvival = $false
+    $foundTarget = $false
     for ($setIndex = 0; $setIndex -lt $sets.Count; $setIndex++) {
         $set = $sets[$setIndex]
-        $isDedicated = $false
-        if ($set.PSObject.Properties['dedicatedScaling']) { $isDedicated = [bool]$set.dedicatedScaling }
-        if ($set.map -ne 'Survival_1' -or $isDedicated) { continue }
-        $foundSurvival = $true
+        if ($script:V6ConsoleVariableTargetMaps -notcontains "$($set.map)") { continue }
+        $foundTarget = $true
 
         $byIndex = @{}
         foreach ($existing in @($set.podSpecs)) {
             if ($null -eq $existing) { continue }
             if ($existing.PSObject.Properties['index']) { $byIndex[[int]$existing.index] = $existing }
         }
-        $partitionIds = @($set.partitions | ForEach-Object { [int]$_ })
-        $allIds = @(@($byIndex.Keys) + $partitionIds | Sort-Object -Unique)
+        # A dedicated set carries no partitions at all. Guard the cast: piping a
+        # null through [int] yields 0, which would invent a podSpec for a
+        # partition that does not exist.
+        $partitionIds = @(@($set.partitions) | Where-Object { $null -ne $_ -and "$_" -ne '' } | ForEach-Object { [int]$_ })
+        $liveIds = @()
+        if ($liveByMap.ContainsKey("$($set.map)")) { $liveIds = @($liveByMap["$($set.map)"]) }
+        $allIds = @(@($byIndex.Keys) + $partitionIds + $liveIds | Sort-Object -Unique)
         $podSpecs = @()
         $changed = $false
         foreach ($id in $allIds) {
@@ -535,10 +570,10 @@ function Set-V6ConsoleVariableOverrides {
         }
     }
     if ($patches.Count -eq 0) {
-        if ($foundSurvival) {
+        if ($foundTarget) {
             return @{ Success = $true; NoChange = $true; Raw = ''; Values = $normalized }
         }
-        return @{ Success = $false; Error = 'No non-dedicated Survival_1 server set found.'; Values = $normalized }
+        return @{ Success = $false; Error = "No server set found for any of: $($script:V6ConsoleVariableTargetMaps -join ', ')."; Values = $normalized }
     }
 
     $result = _Invoke-V6BgJsonPatch -Ip $Ip -Info $info -Patches $patches
