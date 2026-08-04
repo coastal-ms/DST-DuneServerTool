@@ -27,7 +27,7 @@ here cover everything those tags shipped.
 
 ### Fixed
 
-- **Console variables now apply in the Deep Desert.** Settings such as fuel burn rate, mining multipliers, sandworm behaviour and vehicle heat were only ever sent to Hagga Basin's server, so the Deep Desert ran at the game's stock defaults. It went unnoticed because DST used to copy every console variable into your own client config and that copy covered the gap; once that was narrowed to proven settings in 13.2.4, the Deep Desert quietly reverted to defaults. Both maps now receive them.
+- **Console variables now apply in the Deep Desert.** Settings such as fuel burn rate, mining multipliers and sandworm behaviour were only ever sent to Hagga Basin's server, so the Deep Desert ran at the game's stock defaults. It went unnoticed because DST used to copy every console variable into your own client config and that copy covered the gap; once that was narrowed to proven settings in 13.2.4, the Deep Desert quietly reverted to defaults. Both maps now receive them.
 
 ## [13.2.4] - 2026-08-03
 
