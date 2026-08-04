@@ -205,6 +205,19 @@ export type DeepDesertPvpInstance = {
   pvpEnabled: boolean
 }
 
+// State of the Deep Desert base-backup guard: whether DST keeps stored base
+// backups excluded from Funcom's Coriolis season-end wipe.
+export type BaseBackupGuardState = {
+  ok: boolean
+  // false when the VM/DB can't be reached, so applied/functionFound are unknown
+  available: boolean
+  enabled: boolean
+  functionFound: boolean
+  applied: boolean
+  changed?: boolean
+  message?: string
+}
+
 export type DeepDesertPvpState = {
   ok: boolean
   enabled: boolean

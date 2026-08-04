@@ -31,7 +31,8 @@ $script:DuneConfigKeys = @(
     'LocalBackupMirrorEnabled',
     'LocalBackupMirrorFolder',
     'VmHostMode',
-    'HyperVHostIp'
+    'HyperVHostIp',
+    'DdBaseBackupGuard'
 )
 
 # Default in-pod PostgreSQL port. All DST DB access runs as
@@ -200,6 +201,26 @@ function Get-DuneHyperVHostIp {
         return $v.Trim()
     } catch {}
     return ''
+}
+
+# Deep Desert base-backup guard opt-in (see lib/BaseBackupGuard.ps1). When on,
+# DST keeps the 'BaseBackup' actor state excluded from Funcom's Coriolis wipe so
+# a base backup taken in the Deep Desert can still be PLACED after the weekly
+# reset instead of only recycled. Off unless explicitly turned on, because it
+# edits a Funcom-owned database function.
+function Get-DuneBaseBackupGuardEnabled {
+    try {
+        $raw = Read-DuneConfigRaw
+        $v = if ($raw.Contains('DdBaseBackupGuard')) { [string]$raw['DdBaseBackupGuard'] } else { '' }
+        return ($v -match '^(?i:true|1|yes|on)$')
+    } catch {}
+    return $false
+}
+
+function Set-DuneBaseBackupGuardEnabled {
+    param([bool]$Enabled)
+    [void](Save-DuneConfig -Config @{ DdBaseBackupGuard = $(if ($Enabled) { 'true' } else { 'false' }) })
+    return (Get-DuneBaseBackupGuardEnabled)
 }
 
 function Save-DuneConfig {

@@ -1034,6 +1034,17 @@ function Start-DuneRestartScheduler {
                         try { Write-DuneLog "backup mirror tick error (outer): $($_.Exception.Message)" 'WARN' } catch {}
                     }
                 }
+                # Deep Desert base-backup guard (see lib/BaseBackupGuard.ps1).
+                # Silent no-op unless the user opted in; internally rate-limited
+                # to one DB round-trip every 10 minutes. Its job is to notice
+                # when a Funcom migration has replaced the wipe function and
+                # dropped our 'BaseBackup' exclusion, and put it back before the
+                # next season end deletes someone's stored base.
+                try { [void](Invoke-DuneBaseBackupGuardTick) } catch {
+                    if (Get-Command Write-DuneLog -ErrorAction SilentlyContinue) {
+                        try { Write-DuneLog "base backup guard tick error (outer): $($_.Exception.Message)" 'WARN' } catch {}
+                    }
+                }
                 Start-Sleep -Seconds 30
             }
         })
