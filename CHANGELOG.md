@@ -19,6 +19,10 @@ here cover everything those tags shipped.
 
 - **Deep Desert base backups can now survive the weekly reset.** If you have allowed the base backup tool in the Deep Desert, a base you stored there could only be recycled after a reset, never placed again. The game's end-of-season cleanup removes everything left on the Deep Desert apart from things in transit and backed-up vehicles, and stored bases were not on that protected list. A new **Deep Desert base backups** option in Game Config adds them to it, so a base stored before a reset can still be placed afterwards. It is off by default, restores the original behaviour exactly when switched off, and re-applies itself automatically if a game update undoes it.
 
+### Changed
+
+- **"Shield Drops While Shooting" is now offered for players to apply locally.** Field testing showed the game reads this one from each player's own `Engine.ini`, not from the server: two players in the same session on the same server behaved differently depending on which of them had it set. It now appears in the Player config list alongside Maximum Vehicles Per Player, so you can hand it to your players. Every other console variable is still applied by the server alone.
+
 ## [13.2.4] - 2026-08-03
 
 ### Changed
