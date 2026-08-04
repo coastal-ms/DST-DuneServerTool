@@ -95,11 +95,15 @@ $script:DuneGameConfigCategoryOrder = @(
     'Experimental','Experimental 2'
 )
 
-# Keys DST USED to expose but later removed after field testing. The managed-block
-# writer actively scrubs these from the DST-owned managed block on every save, so
-# they don't linger orphaned in existing users' files after the schema drops them.
-# Only touches the managed block — never the user's own (body) sections.
+# Keys DST USED to expose but later removed once they were shown not to work.
+# The managed-block writer actively scrubs these from the DST-owned managed block
+# on every save, so they don't linger orphaned in existing users' files after the
+# schema drops them. Only touches the managed block — never the user's own (body)
+# sections. Works for BOTH files: the scrub in ConvertTo-DuneIniManaged is
+# section-agnostic, so an engine [ConsoleVariables] key is cleaned the same way a
+# game-file key is.
 $script:DuneGameConfigDeprecatedManagedKeys = @(
+    # Removed after field testing showed no in-game effect.
     'm_GlobalHealthMultiplier'
     'm_GlobalDamageToNpcsMultiplier'
     'm_GlobalDamageToPlayersMultiplier'
@@ -108,6 +112,16 @@ $script:DuneGameConfigDeprecatedManagedKeys = @(
     'm_GlobalFameMultiplier'
     'm_GlobalHarvestAmountMultiplier'
     'm_GlobalHarvestHealthMultiplier'
+
+    # Returning-player reward packs. Removed 2026-08-04 on a FUNCOM DEV's
+    # confirmation that these are not enabled for self-hosted servers: the award
+    # packs are granted by Funcom's own backend, not locally, so a self-host has
+    # nothing to grant from. Corroborated here - the game database carries no
+    # award/reward/entitlement table for them at all. Do not re-expose these
+    # without new evidence that a self-host can source the packs locally.
+    'dw.ReturningPlayer.GiveAward.Enabled'
+    'dw.ReturningPlayer.DaysBeforeEligibleForReward'
+    'dw.ReturningPlayer.GiveAward.TierOverride'
 )
 
 $script:DuneGameConfigSchema = @(
@@ -394,9 +408,6 @@ $script:DuneGameConfigSchema = @(
     @{ Section=$script:DuneGcSecConsole; Key='Journey.EnableSimplifiedChallengeCompletion'; File='engine'; Type='bool01'; Label='Simplified Challenge Completion'; Help='Funcom: "Enable this to complete challenge when interacting with altar. Otherwise, complete on returning from challenge room after succefully completing it. (0) Disabled (default); (1) Enabled".'; Category='Experimental 2' }
     @{ Section=$script:DuneGcSecConsole; Key='Progression.IgnorePrereqs'; File='engine'; Type='bool01'; Label='Ignore Training Module Prerequisites'; Help='Funcom: "If true, Training Modules can be equipped even if pre-reqs aren''t met".'; Category='Experimental 2' }
     @{ Section=$script:DuneGcSecConsole; Key='Progression.ShowAllPerks'; File='engine'; Type='bool01'; Label='Show All Perks'; Help='Funcom: "If true, all Perks defined in data will be shown in the player''s Perks menu". May reveal perks that are defined in data but not finished.'; Category='Experimental 2' }
-    @{ Section=$script:DuneGcSecConsole; Key='dw.ReturningPlayer.GiveAward.Enabled'; File='engine'; Type='bool01'; Label='Returning Player Rewards'; Help='Funcom: "Whether to grant award packs for player when eligible".'; Category='Experimental 2' }
-    @{ Section=$script:DuneGcSecConsole; Key='dw.ReturningPlayer.DaysBeforeEligibleForReward'; File='engine'; Type='int'; Min=0; Unit='days'; Label='Days Away Before Reward'; Help='Funcom: "How many days a player must be logged out before being eligible for a returning player reward".'; Category='Experimental 2' }
-    @{ Section=$script:DuneGcSecConsole; Key='dw.ReturningPlayer.GiveAward.TierOverride'; File='engine'; Type='int'; Min=-1; Default='-1'; Label='Returning Player Reward Tier'; Help='Funcom: "Override the tier used when granting reward packs. If set to -1 (default) the character''s tier is used".'; Category='Experimental 2' }
     @{ Section=$script:DuneGcSecConsole; Key='NPC.EnableFacingTargetCheck'; File='engine'; Type='bool01'; Label='NPCs Must Face Target To Fire'; Help='Funcom: "If set to 1, NPCs will check if facing their target before firing their weapon".'; Category='Experimental 2' }
     @{ Section=$script:DuneGcSecConsole; Key='NPC.FacingTargetAngleStartThreshold'; File='engine'; Type='float'; Min=0; Label='NPC Facing Angle To Start Firing'; Help='Funcom: "Set yaw angle threshold to prevent NPCs from start shooting their weapon if they aren''t facing their target". Only applies while NPCs Must Face Target To Fire is on.'; Category='Experimental 2' }
     @{ Section=$script:DuneGcSecConsole; Key='NPC.FacingTargetAngleStopThreshold'; File='engine'; Type='float'; Min=0; Label='NPC Facing Angle To Stop Firing'; Help='Funcom: "Set yaw angle threshold to stop NPCs shooting their weapon if they aren''t facing their target". Only applies while NPCs Must Face Target To Fire is on.'; Category='Experimental 2' }
