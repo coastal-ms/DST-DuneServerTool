@@ -791,16 +791,30 @@ Describe 'DuneGameConfigSchema: experimental binary CVars' -Tag 'GameConfig' {
             @($script:DuneStartupConsoleVariableKeys) | Should -Contain $key
         }
 
-        # Promotion says a control works, not that the client reads it. Only the
-        # one with client-side field evidence is mirrored to a player config;
+        # Promotion says a control works, not that the client reads it. Only keys
+        # with client-side field evidence are mirrored to a player config;
         # everything else is applied server-side by the startup command alone.
+        # Driven off the evidence list itself so adding a newly proven key is a
+        # one-line change there, not a test edit.
         foreach ($key in $promoted) {
             $f = $script:DuneGameConfigSchema | Where-Object { $_.Key -eq $key }
-            if ($key -eq 'Vehicle.MaxVehiclesPerPlayer') {
+            if (@($script:DuneClientEvaluatedConsoleVariables) -contains $key) {
                 $f.ClientApply | Should -BeTrue
             } else {
                 $f.ClientApply | Should -Not -BeTrue
             }
+        }
+
+        # The evidence list is deliberately tiny. If it ever grows large someone
+        # has started adding keys that merely look client-read, which is the
+        # blanket-mirror bug v13.2.4 removed.
+        @($script:DuneClientEvaluatedConsoleVariables).Count | Should -BeLessOrEqual 5
+        foreach ($key in @($script:DuneClientEvaluatedConsoleVariables)) {
+            $f = $script:DuneGameConfigSchema | Where-Object { $_.Key -eq $key }
+            $f | Should -Not -BeNullOrEmpty
+            $f.ClientApply | Should -BeTrue
+            # A server-instance control could never be client-read.
+            $key | Should -Not -BeLike 'Bgd.*'
         }
 
         # Anything still on the Experimental pages is by definition unproven; a

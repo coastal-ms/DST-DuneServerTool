@@ -490,6 +490,13 @@ $script:DuneClientEvaluatedConsoleVariables = @(
     # client is reading its own file. (Display only - whether a server refuses
     # the extra vehicle is still untested.)
     'Vehicle.MaxVehiclesPerPlayer'
+
+    # Proven 2026-08-03 by two independent tests. (1) Toggled ONLY in the
+    # client's Engine.ini with the server left untouched: on and off each
+    # produced the matching in-game behaviour. (2) Two players in the SAME
+    # session on the SAME server saw different behaviour, decided by which of
+    # them had the key in their own file. The client reads its own value.
+    'Dune.DisableShieldOnShooting'
 )
 
 foreach ($field in $script:DuneGameConfigSchema) {

@@ -13,6 +13,10 @@ here cover everything those tags shipped.
 
 ## [Unreleased]
 
+### Changed
+
+- **"Shield Drops While Shooting" is now offered for players to apply locally.** Field testing showed the game reads this one from each player's own `Engine.ini`, not from the server: two players in the same session on the same server behaved differently depending on which of them had it set. It now appears in the Player config list alongside Maximum Vehicles Per Player, so you can hand it to your players. Every other console variable is still applied by the server alone.
+
 ## [13.2.4] - 2026-08-03
 
 ### Changed
