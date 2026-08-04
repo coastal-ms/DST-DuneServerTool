@@ -25,6 +25,10 @@ here cover everything those tags shipped.
 
 - **"Shield Drops While Shooting" is now offered for players to apply locally.** Field testing showed the game reads this one from each player's own `Engine.ini`, not from the server: two players in the same session on the same server behaved differently depending on which of them had it set. It now appears in the Player config list alongside Maximum Vehicles Per Player, so you can hand it to your players. Every other console variable is still applied by the server alone.
 
+### Fixed
+
+- **Console variables now apply in the Deep Desert.** Settings such as fuel burn rate, mining multipliers, sandworm behaviour and vehicle heat were only ever sent to Hagga Basin's server, so the Deep Desert ran at the game's stock defaults. It went unnoticed because DST used to copy every console variable into your own client config and that copy covered the gap; once that was narrowed to proven settings in 13.2.4, the Deep Desert quietly reverted to defaults. Both maps now receive them.
+
 ## [13.2.4] - 2026-08-03
 
 ### Changed
