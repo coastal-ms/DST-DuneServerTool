@@ -1045,6 +1045,16 @@ function Start-DuneRestartScheduler {
                         try { Write-DuneLog "base backup guard tick error (outer): $($_.Exception.Message)" 'WARN' } catch {}
                     }
                 }
+                # In-game !commands (see lib/ChatCommands.ps1). Silent no-op
+                # unless the admin has enabled the feature AND chosen the
+                # account DST replies from. Note this loop sleeps 30s, so a
+                # player can wait that long for a response - a dedicated faster
+                # loop is the follow-up if this proves too slow in practice.
+                try { [void](Invoke-DuneChatCommandTick) } catch {
+                    if (Get-Command Write-DuneLog -ErrorAction SilentlyContinue) {
+                        try { Write-DuneLog "chat command tick error (outer): $($_.Exception.Message)" 'WARN' } catch {}
+                    }
+                }
                 Start-Sleep -Seconds 30
             }
         })
