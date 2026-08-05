@@ -15,10 +15,13 @@ BeforeAll {
             replyTitle = 'Server'
             channels = @('Proximity', 'Map')
             commands = @{
-                kit    = @{ enabled = $KitOn; cooldownSeconds = $KitCooldown }
-                small  = @{ enabled = $true;  cooldownSeconds = 900 }
-                medium = @{ enabled = $true;  cooldownSeconds = 900 }
-                large  = @{ enabled = $true;  cooldownSeconds = 900 }
+                kit     = @{ enabled = $KitOn; cooldownSeconds = $KitCooldown }
+                item    = @{ enabled = $true;  cooldownSeconds = 3600; maxQty = 1000 }
+                water   = @{ enabled = $true;  cooldownSeconds = 300 }
+                vehicle = @{ enabled = $true;  cooldownSeconds = 604800 }
+                small   = @{ enabled = $true;  cooldownSeconds = 900 }
+                medium  = @{ enabled = $true;  cooldownSeconds = 900 }
+                large   = @{ enabled = $true;  cooldownSeconds = 900 }
             }
             cooldowns = @{}
         }
@@ -231,9 +234,77 @@ Describe 'defaults' {
         foreach ($k in $d.commands.Keys) { $d.commands[$k].enabled | Should -BeFalse }
     }
 
-    It 'registers kit and all three spice field sizes' {
+    It 'registers every command the executor can actually run' {
+        # Kept in lockstep with Invoke-DuneChatCommandExecutor on purpose: a verb
+        # in the defaults with no executor case would be configurable but dead,
+        # and a verb in the executor with no default entry is unreachable because
+        # Resolve-DuneChatCommandAction rejects anything not in `commands`.
         $d = New-DuneChatCommandsDefault
-        @($d.commands.Keys | Sort-Object) | Should -Be @('kit', 'large', 'medium', 'small')
+        @($d.commands.Keys | Sort-Object) |
+            Should -Be @('item', 'kit', 'large', 'medium', 'small', 'vehicle', 'water')
+    }
+
+    It 'caps how much !item can hand out, and only !item carries a cap' {
+        # !item is the one command that can produce anything in the game, so an
+        # uncapped default would turn "enabled" into "players can have anything
+        # in any quantity".
+        $d = New-DuneChatCommandsDefault
+        $d.commands['item'].maxQty | Should -BeGreaterThan 0
+        foreach ($k in @('kit', 'water', 'vehicle', 'small', 'medium', 'large')) {
+            $d.commands[$k].ContainsKey('maxQty') | Should -BeFalse
+        }
+    }
+    It 'defaults to a responsive poll, and clamps anything absurd' {
+        # This value sets a permanent CPU load on someone's game server, so it is
+        # clamped in the reader rather than trusted from the state file.
+        (New-DuneChatCommandsDefault).pollSeconds | Should -Be 3
+        Get-DuneChatCommandPollSeconds -State @{ pollSeconds = 10 }    | Should -Be 10
+        Get-DuneChatCommandPollSeconds -State @{ pollSeconds = 0 }     | Should -Be 3
+        Get-DuneChatCommandPollSeconds -State @{ pollSeconds = -5 }    | Should -Be 1
+        Get-DuneChatCommandPollSeconds -State @{ pollSeconds = 99999 } | Should -Be 60
+        Get-DuneChatCommandPollSeconds -State @{ pollSeconds = 'fast' } | Should -Be 3
+    }
+}
+
+Describe 'self-only commands' {
+    # !kit, !item, !vehicle and !water resolve the target from the chat message's
+    # sender and take no player argument, so a player can never aim them at
+    # someone else. These assert the parse keeps it that way - a future "target"
+    # argument would have to break one of them.
+    It 'treats !kit arguments as a kit name, never a player' {
+        $st = New-DstChatState
+        $m = @{ type = 'TextChat'; channel = 'Proximity'; fromId = 'A#1'; text = '!kit Starter Kit' }
+        $act = Resolve-DuneChatCommandAction -Message $m -State $st
+        $act.action | Should -Be 'run'
+        (@($act.args) -join ' ') | Should -Be 'Starter Kit'
+    }
+
+    It 'accepts !water with no arguments at all' {
+        $st = New-DstChatState
+        $st.commands['water'].enabled = $true
+        $m = @{ type = 'TextChat'; channel = 'Proximity'; fromId = 'A#1'; text = '!water' }
+        $act = Resolve-DuneChatCommandAction -Message $m -State $st
+        $act.action | Should -Be 'run'
+        $act.verb | Should -Be 'water'
+        @($act.args).Count | Should -Be 0
+    }
+
+    It 'parses !item into a name and an amount' {
+        $st = New-DstChatState
+        $st.commands['item'].enabled = $true
+        $m = @{ type = 'TextChat'; channel = 'Proximity'; fromId = 'A#1'; text = '!item plastone 500' }
+        $act = Resolve-DuneChatCommandAction -Message $m -State $st
+        $act.action | Should -Be 'run'
+        $act.verb | Should -Be 'item'
+        (@($act.args) -join ' ') | Should -Be 'plastone 500'
+    }
+
+    It 'parses a multi-word !item name with a trailing amount' {
+        $st = New-DstChatState
+        $st.commands['item'].enabled = $true
+        $m = @{ type = 'TextChat'; channel = 'Proximity'; fromId = 'A#1'; text = '!item Plastanium Ingot 10' }
+        $act = Resolve-DuneChatCommandAction -Message $m -State $st
+        (@($act.args) -join ' ') | Should -Be 'Plastanium Ingot 10'
     }
 }
 
