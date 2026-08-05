@@ -13,9 +13,17 @@ here cover everything those tags shipped.
 
 ## [Unreleased]
 
+## [13.4.0] - 2026-08-04
+
 ### Added
 
-- **In-game chat commands.** Players can type commands directly in game chat and DST acts on them, replying with a server broadcast. `!small`, `!medium` and `!large` activate spice fields of that size, and `!kit <name>` hands over one of your item packages (typing `!kit` on its own asks which one). Every command is off until you turn it on individually, each has its own per-player cooldown, and DST only listens on the chat channels you choose.
+- **In-game chat commands.** Players can type commands directly in game chat and DST acts on them, replying with a server broadcast. `!kit <name>` hands over one of your item packages, `!item <name> [amount]` hands over any single item from the catalog, `!vehicle <name>` hands over a vehicle part kit with fuel and a repair tool, `!water` refills the player's stillsuit and jons, and `!small`, `!medium` and `!large` activate spice fields of that size. `!kit`, `!item`, `!vehicle` and `!water` only ever affect whoever typed them — none of them can be aimed at another player. Every command is off until you turn it on individually, each has its own per-player cooldown, `!item` additionally has a cap on how much can be asked for at once, and DST only listens on the chat channels you choose.
+
+- **Welcome back packages.** DST can give a returning player one of your item packages when they come back after time away, replacing the three returning-player settings that were removed because they do nothing on a self-hosted server. You choose the package and how many days away counts. The gap is measured between a player's previous login and the one that just happened, so each player is given the package once per absence and turning the feature on cannot hand packages to your whole existing player base at once. Setting the days to 0 means every return counts.
+
+- **Spice field limits are editable from the chat command settings.** When `!small`, `!medium` or `!large` is switched on, each running map shows how many fields of that size are active out of its limit, and the limit can be changed there. "!large did nothing" is almost always "the map is already at its cap", so it warns when a map is at its limit — and says so plainly when no running map has fields of that size at all, which is the case for Large on Hagga Basin.
+
+- **You choose how often DST checks for chat commands.** Replies arrive about as fast as the interval you pick, and the picker shows what each one costs: roughly half a processor core at 3 seconds down to a twentieth at 30. The cost is paid per check rather than per message, and only while the feature is switched on.
 
 ### Fixed
 

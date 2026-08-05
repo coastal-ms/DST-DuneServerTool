@@ -441,6 +441,52 @@ export type GameConfigBackupListResponse = {
 
 // ---------- Spicefield types (dune.spicefield_types) ------------------------
 
+// In-game !commands: which are enabled, their cooldowns, and where DST listens.
+export type ChatCommandSetting = {
+  enabled: boolean
+  cooldownSeconds: number
+  maxQty?: number
+}
+
+export type ChatCommandsState = {
+  ok: boolean
+  enabled: boolean
+  replyTitle: string
+  channels: string[]
+  commands: Record<string, ChatCommandSetting>
+  packages?: string[]      // kit names available to !kit, from the package store
+  pollSeconds?: number
+  pollChoices?: number[]
+  ready?: boolean
+  readyMessage?: string
+  lastSeenAt?: string
+}
+
+export type WelcomeBackGrant = {
+  at: string
+  name: string
+  daysAway: number
+  package: string
+  ok: boolean
+  message?: string
+}
+
+export type WelcomeBackState = {
+  ok: boolean
+  enabled: boolean
+  packageId: string
+  daysAway: number
+  announce: boolean
+  packages?: Array<{ id: string; name: string; itemCount: number }>
+  recent?: WelcomeBackGrant[]
+  tracked?: number
+  seeded?: number
+  lastRunAt?: string
+  lastError?: string
+  ready?: boolean
+  readyMessage?: string
+}
+
 export type SpicefieldType = {
   spicefieldTypeId: number
   mapName: string         // raw DB name, e.g. "HaggaBasin", "DeepDesert"
