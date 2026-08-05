@@ -3,6 +3,7 @@ import { Icon } from '../../components/Icon'
 import { useApi } from '../../hooks/useApi'
 import type { GameplayStatus } from '../../api/gameplay'
 import type { GameplaySubTab } from '../GameplayEnvironment'
+import { ChatCommandsCard } from './ChatCommandsCard'
 
 type FeatureStatus = 'live' | 'native' | 'roadmap'
 
@@ -136,6 +137,10 @@ export function OverviewTab({ onOpenTab }: { onOpenTab: (tab: GameplaySubTab) =>
             </div>
           )
         })}
+      </div>
+
+      <div className="mt-4">
+        <ChatCommandsCard />
       </div>
     </div>
   )

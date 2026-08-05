@@ -2,6 +2,7 @@
 // All market responses carry a `source: 'live' | 'demo'` flag so the UI can
 // label whether data came from the live game DB or the bundled demo dataset.
 import { api } from './client'
+import type { ChatCommandsState } from './types'
 
 export type DataSource = 'live' | 'demo'
 
@@ -2108,4 +2109,22 @@ export interface StorageOwnerDebug {
 }
 export function getStorageOwnerDebug(placeableId: number) {
   return api<StorageOwnerDebug>(`/api/gameplay/storage/${placeableId}/owner-debug`)
+}
+// ---------------------------------------------------------------------------
+// In-game !commands
+// ---------------------------------------------------------------------------
+export function getChatCommands() {
+  return api<ChatCommandsState>('/api/gameplay/chat-commands')
+}
+
+export function saveChatCommands(patch: {
+  enabled?: boolean
+  replyTitle?: string
+  channels?: string[]
+  commands?: Record<string, { enabled?: boolean; cooldownSeconds?: number }>
+}) {
+  return api<ChatCommandsState>('/api/gameplay/chat-commands', {
+    method: 'PUT',
+    body: JSON.stringify(patch),
+  })
 }
