@@ -13,6 +13,10 @@ here cover everything those tags shipped.
 
 ## [Unreleased]
 
+### Removed
+
+- **The three returning-player reward settings are gone.** A Funcom developer confirmed they are not enabled for self-hosted servers: the reward packs are granted by Funcom's own service rather than by your server, so there is nothing for a self-host to hand out no matter how the settings are configured. They have been removed rather than left looking functional, and DST clears them from your server config on the next save.
+
 ## [13.3.0] - 2026-08-03
 
 ### Added

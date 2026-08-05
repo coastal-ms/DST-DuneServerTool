@@ -732,9 +732,6 @@ Describe 'DuneGameConfigSchema: experimental binary CVars' -Tag 'GameConfig' {
             'Journey.EnableSimplifiedChallengeCompletion'
             'Progression.IgnorePrereqs'
             'Progression.ShowAllPerks'
-            'dw.ReturningPlayer.GiveAward.Enabled'
-            'dw.ReturningPlayer.DaysBeforeEligibleForReward'
-            'dw.ReturningPlayer.GiveAward.TierOverride'
             'NPC.EnableFacingTargetCheck'
             'NPC.FacingTargetAngleStartThreshold'
             'NPC.FacingTargetAngleStopThreshold'
@@ -780,7 +777,7 @@ Describe 'DuneGameConfigSchema: experimental binary CVars' -Tag 'GameConfig' {
         $experimental2 = @($script:DuneGameConfigSchema | Where-Object Category -eq 'Experimental 2')
 
         $experimental.Count | Should -Be 57
-        $experimental2.Count | Should -Be 71
+        $experimental2.Count | Should -Be 68
         @($experimental.Key | Sort-Object) | Should -Be @($script:ExperimentalKeys | Sort-Object)
         @($experimental2.Key | Sort-Object) | Should -Be @($script:Experimental2Keys | Sort-Object)
         foreach ($key in @($script:ExperimentalKeys) + @($script:Experimental2Keys)) {
@@ -791,10 +788,10 @@ Describe 'DuneGameConfigSchema: experimental binary CVars' -Tag 'GameConfig' {
             @($script:DuneStartupConsoleVariableKeys) | Should -Contain $key
         }
         # Both lists are applied identically; the split is presentation only.
-        # 128 still on the Experimental pages + the 9 promoted controls + the 12
+        # 125 still on the Experimental pages + the 9 promoted controls + the 12
         # pre-existing console variables in real categories, all of which keep
         # startup injection via Startup=$true.
-        @($script:DuneStartupConsoleVariableKeys).Count | Should -Be 149
+        @($script:DuneStartupConsoleVariableKeys).Count | Should -Be 146
     }
 
     It 'groups every experimental control for the Experimental page' {
@@ -803,7 +800,7 @@ Describe 'DuneGameConfigSchema: experimental binary CVars' -Tag 'GameConfig' {
         # Uncategorized rather than being forced into a neighbouring group.
         $api = @(Get-DuneGameConfigSchemaApi)
         $fields = @($api | Where-Object { $_.category -like 'Experimental*' } | ForEach-Object { $_.fields })
-        $fields.Count | Should -Be 128
+        $fields.Count | Should -Be 125
         foreach ($f in $fields) {
             $f.group | Should -Not -BeNullOrEmpty
             $f.status | Should -BeIn @('Confirmed', 'Unconfirmed')
@@ -997,6 +994,53 @@ Describe 'DuneGameConfigSchema: experimental binary CVars' -Tag 'GameConfig' {
         foreach ($key in @($script:DuneGameConfigDeprecatedManagedKeys)) {
             @($script:DuneGameConfigSchema.Key) | Should -Not -Contain $key
         }
+    }
+
+    It 'scrubs the retired returning-player rewards out of an engine managed block' {
+        # A Funcom dev confirmed these are not enabled for self-hosted servers -
+        # the award packs come from Funcom's backend, so a self-host has nothing
+        # to grant from. They are gone from the schema, and existing users have
+        # them sitting in UserEngine.ini from earlier versions.
+        #
+        # This is the case the game-file-only pre-pass in Save-DuneGameConfig
+        # does NOT cover: these are engine [ConsoleVariables] keys, so the only
+        # thing that removes them is the section-agnostic scrub inside
+        # ConvertTo-DuneIniManaged. Assert that path directly, because listing an
+        # engine key in the deprecated array while only the game file was cleaned
+        # would look correct and silently do nothing.
+        $retired = @(
+            'dw.ReturningPlayer.GiveAward.Enabled'
+            'dw.ReturningPlayer.DaysBeforeEligibleForReward'
+            'dw.ReturningPlayer.GiveAward.TierOverride'
+        )
+        foreach ($key in $retired) {
+            @($script:DuneGameConfigSchema.Key) | Should -Not -Contain $key
+            @($script:DuneGameConfigDeprecatedManagedKeys) | Should -Contain $key
+            @($script:DuneStartupConsoleVariableKeys) | Should -Not -Contain $key
+        }
+
+        $raw = @"
+[/Script/DuneSandbox.SomeUserSection]
+dw.ReturningPlayer.GiveAward.Enabled=1
+
+; ===== Dune Server Tool (DST) managed section BEGIN =====
+[ConsoleVariables]
+dw.FuelBurningMultiplier=6
+dw.ReturningPlayer.GiveAward.Enabled=1
+dw.ReturningPlayer.DaysBeforeEligibleForReward=1
+dw.ReturningPlayer.GiveAward.TierOverride=2
+; ===== Dune Server Tool (DST) managed section END =====
+"@
+        $out = ConvertTo-DuneIniManaged -Raw $raw -Updates @() -QuotedKeys @{}
+
+        # Gone from the DST-owned block...
+        $out | Should -Not -Match 'DaysBeforeEligibleForReward'
+        $out | Should -Not -Match 'GiveAward\.TierOverride'
+        # ...and a setting that still works is untouched.
+        $out | Should -Match 'dw\.FuelBurningMultiplier=6'
+        # The user's own section is never touched, even for a dead key.
+        $out | Should -Match '(?m)^\[/Script/DuneSandbox\.SomeUserSection\]'
+        @([regex]::Matches($out, 'ReturningPlayer\.GiveAward\.Enabled')).Count | Should -Be 1
     }
 
     It 'keeps restored vehicle controls in the managed INI block on the next save' {
