@@ -13,6 +13,10 @@ here cover everything those tags shipped.
 
 ## [Unreleased]
 
+### Fixed
+
+- **Spice fields for maps that are no longer running are now marked, instead of sitting alongside live ones.** The game database keeps a row for every map instance that has ever existed, so a Deep Desert spun up for testing months ago still appears in the Spicefields card with no way to tell it apart from a running map. Those groups now sort to the bottom and carry a "not running" label. They are still shown rather than hidden, because a map being temporarily down is not the same as it being gone.
+
 ### Removed
 
 - **The three returning-player reward settings are gone.** A Funcom developer confirmed they are not enabled for self-hosted servers: the reward packs are granted by Funcom's own service rather than by your server, so there is nothing for a self-host to hand out no matter how the settings are configured. They have been removed rather than left looking functional, and DST clears them from your server config on the next save.
