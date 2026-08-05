@@ -411,6 +411,10 @@
       "name": "Basalt Stone",
       "category": "Resources"
     },
+    "BaseBackupTool": {
+      "name": "Base Backup Tool",
+      "category": "Tools"
+    },
     "LMG_Unique_RapidFire_06": {
       "name": "Bashar's Command",
       "category": "Weapons - Ranged",
