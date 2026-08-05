@@ -109,11 +109,29 @@ export function SpicefieldsCard({ vmRunning }: Props) {
     return () => window.clearInterval(id)
   }, [vmRunning, load])
 
+  // Maps whose partition is running or pinned come first; retired instances sink
+  // to the bottom rather than being hidden. The DB keeps spicefield rows long
+  // after an instance stops existing (a Deep Desert used for testing months ago
+  // still has rows), so without this an operator sees dead maps mixed in with
+  // live ones and cannot tell which is which. Hiding them outright would be
+  // worse: partitionActive is undefined when the battlegroup could not be read,
+  // and silently dropping real data is not a trade worth making.
   const grouped = useMemo(() => {
     const out: Record<string, SpicefieldType[]> = {}
     for (const r of rows ?? []) (out[r.mapName] ??= []).push(r)
     return out
   }, [rows])
+
+  const groupOrder = useMemo(() => {
+    const isRetired = (list: SpicefieldType[]) =>
+      list.length > 0 && list.every(r => r.partitionActive === false)
+    return Object.entries(grouped).sort(([an, al], [bn, bl]) => {
+      const ar = isRetired(al) ? 1 : 0
+      const br = isRetired(bl) ? 1 : 0
+      if (ar !== br) return ar - br
+      return an.localeCompare(bn)
+    })
+  }, [grouped])
 
   function isDirty(r: SpicefieldType) {
     const d = drafts[r.spicefieldTypeId]
@@ -294,16 +312,26 @@ export function SpicefieldsCard({ vmRunning }: Props) {
 
       {vmRunning && rows && rows.length > 0 && (
         <div className="space-y-4">
-          {Object.entries(grouped).map(([mapName, list]) => {
+          {groupOrder.map(([mapName, list]) => {
             const totalActive = list.reduce((s, r) => s + r.currentActive, 0)
             const totalMaxActive = list.reduce((s, r) => s + r.maxActive, 0)
             const totalPrimed = list.reduce((s, r) => s + r.currentPrimed, 0)
             const totalMaxPrimed = list.reduce((s, r) => s + r.maxPrimed, 0)
+            // Every row for this map belongs to a partition that is neither
+            // running nor pinned - i.e. leftovers from an instance that no
+            // longer exists.
+            const retired = list.length > 0 && list.every(r => r.partitionActive === false)
             return (
-            <div key={mapName}>
+            <div key={mapName} className={retired ? 'opacity-60' : ''}>
               <div className="flex items-center justify-between mb-2">
-                <div className="text-[11px] font-mono uppercase tracking-wider text-text-dim">
+                <div className="text-[11px] font-mono uppercase tracking-wider text-text-dim flex items-center gap-2">
                   {mapName}
+                  {retired && (
+                    <span className="normal-case font-sans tracking-normal text-text-dim border border-border rounded px-1.5 py-0.5"
+                          title="This map instance is not running and is not pinned. These rows are left over in the database from an instance that no longer exists.">
+                      not running
+                    </span>
+                  )}
                 </div>
                 <div className="text-[11px] text-text-muted flex items-center gap-3">
                   <span title={`Total currently active across all ${mapName} field sizes`}>
