@@ -13,6 +13,12 @@ here cover everything those tags shipped.
 
 ## [Unreleased]
 
+## [13.4.1] - 2026-08-04
+
+### Fixed
+
+- **The Base Backup Tool can now be given to players.** It was missing from DST's item list, so it could not be handed out through Give Item, added to a package, or asked for with `!item` — even though it is a real item players carry. Its cosmetic emotes and swatches are still absent from that list on purpose: those are granted through Grant Cosmetic rather than as inventory items.
+
 ## [13.4.0] - 2026-08-04
 
 ### Added
