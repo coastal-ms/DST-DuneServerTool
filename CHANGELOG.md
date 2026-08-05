@@ -13,6 +13,10 @@ here cover everything those tags shipped.
 
 ## [Unreleased]
 
+### Added
+
+- **In-game chat commands.** Players can type commands directly in game chat and DST acts on them, replying with a server broadcast. `!small`, `!medium` and `!large` activate spice fields of that size, and `!kit <name>` hands over one of your item packages (typing `!kit` on its own asks which one). Every command is off until you turn it on individually, each has its own per-player cooldown, and DST only listens on the chat channels you choose.
+
 ### Fixed
 
 - **Spice fields for maps that are no longer running are now marked, instead of sitting alongside live ones.** The game database keeps a row for every map instance that has ever existed, so a Deep Desert spun up for testing months ago still appears in the Spicefields card with no way to tell it apart from a running map. Those groups now sort to the bottom and carry a "not running" label. They are still shown rather than hidden, because a map being temporarily down is not the same as it being gone.
