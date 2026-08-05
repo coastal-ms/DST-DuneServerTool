@@ -1055,6 +1055,17 @@ function Start-DuneRestartScheduler {
                         try { Write-DuneLog "chat command tick error (outer): $($_.Exception.Message)" 'WARN' } catch {}
                     }
                 }
+                # Welcome back packages (see lib/WelcomeBack.ps1). Silent no-op
+                # unless the admin turned it on AND chose a package. Internally
+                # throttled to one DB pass every 5 minutes - it watches for a
+                # login having happened, which does not need half-minute
+                # resolution and is measured against the previous login rather
+                # than against "now", so arriving late changes nothing.
+                try { [void](Invoke-DuneWelcomeBackTick) } catch {
+                    if (Get-Command Write-DuneLog -ErrorAction SilentlyContinue) {
+                        try { Write-DuneLog "welcome back tick error (outer): $($_.Exception.Message)" 'WARN' } catch {}
+                    }
+                }
                 Start-Sleep -Seconds 30
             }
         })

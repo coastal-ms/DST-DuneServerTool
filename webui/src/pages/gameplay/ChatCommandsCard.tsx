@@ -13,13 +13,21 @@ import type { ChatCommandsState } from '../../api/types'
 const CHANNELS = ['Proximity', 'Map', 'Faction', 'Guild', 'Party']
 
 const DESCRIPTIONS: Record<string, string> = {
-  kit:    'Hands over one of your item packages. Typing !kit on its own asks which.',
-  small:  'Activates Small spice fields, up to the limit you have already set.',
-  medium: 'Activates Medium spice fields, up to the limit you have already set.',
-  large:  'Activates Large spice fields, up to the limit you have already set.',
+  kit:     'Hands over one of your item packages. Typing !kit on its own asks which.',
+  item:    'Hands over any single item from the catalog, e.g. "!item plastone 500".',
+  water:   'Refills the water in that player\u2019s stillsuit, jons and canteens.',
+  vehicle: 'Hands over a vehicle part kit plus fuel and a repair tool, to be assembled at a Vehicle Assembly. Typing !vehicle on its own lists them.',
+  small:   'Activates Small spice fields, up to the limit you have already set.',
+  medium:  'Activates Medium spice fields, up to the limit you have already set.',
+  large:   'Activates Large spice fields, up to the limit you have already set.',
 }
 
-const ORDER = ['kit', 'small', 'medium', 'large']
+const ORDER = ['kit', 'item', 'vehicle', 'water', 'small', 'medium', 'large']
+
+// !kit, !item, !vehicle and !water only ever act on whoever typed them - the
+// actor is taken from the chat message's sender id and none of them accept a
+// player argument. Worth stating in the UI so an admin does not assume otherwise.
+const SELF_ONLY = new Set(['kit', 'item', 'vehicle', 'water'])
 
 function humanCooldown(seconds: number): string {
   if (!Number.isFinite(seconds) || seconds <= 0) return 'no cooldown'
@@ -65,7 +73,7 @@ export function ChatCommandsCard() {
     }
   }
 
-  function setCommand(verb: string, next: Partial<{ enabled: boolean; cooldownSeconds: number }>) {
+  function setCommand(verb: string, next: Partial<{ enabled: boolean; cooldownSeconds: number; maxQty: number }>) {
     setState(prev => {
       if (!prev) return prev
       const cur = prev.commands[verb] ?? { enabled: false, cooldownSeconds: 0 }
@@ -140,6 +148,11 @@ export function ChatCommandsCard() {
                          }}
                          className="accent-ibad" />
                   <code className="text-text font-medium">!{verb}</code>
+                  {SELF_ONLY.has(verb) && (
+                    <span className="text-[10px] px-1.5 py-0.5 rounded-full border border-border text-text-dim">
+                      self only
+                    </span>
+                  )}
                 </label>
                 <div className="flex items-center gap-2 text-xs">
                   <span className="text-text-dim">cooldown</span>
@@ -158,6 +171,25 @@ export function ChatCommandsCard() {
                 </div>
               </div>
               <div className="mt-1 text-[11px] text-text-muted">{DESCRIPTIONS[verb]}</div>
+              {verb === 'item' && c.enabled && (
+                <div className="mt-2 flex items-center gap-2 text-[11px]">
+                  <span className="text-text-dim">Most a player can ask for at once</span>
+                  <input
+                    type="text" inputMode="numeric"
+                    value={String(c.maxQty ?? 1000)}
+                    disabled={saving || loading}
+                    onChange={e => {
+                      const n = Number(e.target.value.replace(/[^\d]/g, ''))
+                      setCommand(verb, { maxQty: Number.isFinite(n) ? n : 0 })
+                    }}
+                    onBlur={() => void patch({ commands: { item: { maxQty: c.maxQty ?? 1000 } } })}
+                    className="w-24 px-2 py-1 rounded bg-surface border border-border text-text font-mono text-[11px]"
+                  />
+                  <span className="text-warning">
+                    This one can produce anything in the game — keep the cap low.
+                  </span>
+                </div>
+              )}
               {verb === 'kit' && kitOn && packages.length === 0 && (
                 <div className="mt-2 text-[11px] text-warning">
                   No item packages exist yet, so !kit has nothing to hand out. Create one

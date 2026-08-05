@@ -23,10 +23,12 @@ Register-DuneRoute -Method GET -Path '/api/gameplay/chat-commands' -Handler {
 
         $commands = @{}
         foreach ($k in @($state.commands.Keys)) {
-            $commands[$k] = @{
+            $entry = @{
                 enabled         = [bool]$state.commands[$k].enabled
                 cooldownSeconds = [int]$state.commands[$k].cooldownSeconds
             }
+            if ($state.commands[$k].maxQty) { $entry['maxQty'] = [int]$state.commands[$k].maxQty }
+            $commands[$k] = $entry
         }
 
         Write-DuneJson -Response $res -Body @{
@@ -88,6 +90,16 @@ Register-DuneRoute -Method PUT -Path '/api/gameplay/chat-commands' -Handler {
                     if ([int]::TryParse("$($incoming['cooldownSeconds'])", [ref]$n) -and $n -ge 0) {
                         if ($n -gt 2592000) { $n = 2592000 }   # 30 days is plenty
                         $state.commands[$name].cooldownSeconds = $n
+                    }
+                }
+                # Only !item carries a quantity cap, and it is the one command that
+                # can produce anything in the game - so the ceiling is enforced here
+                # rather than trusted from the payload.
+                if ($incoming.ContainsKey('maxQty') -and $name -eq 'item') {
+                    $q = 0
+                    if ([int]::TryParse("$($incoming['maxQty'])", [ref]$q) -and $q -ge 1) {
+                        if ($q -gt 100000) { $q = 100000 }
+                        $state.commands[$name].maxQty = $q
                     }
                 }
             }

@@ -69,10 +69,13 @@ function New-DuneChatCommandsDefault {
         # is the meaningful equivalent. ("SERVER" is what the game renders it as.)
         replyTitle = 'Server'
         commands = @{
-            kit    = @{ enabled = $false; cooldownSeconds = 604800 }
-            small  = @{ enabled = $false; cooldownSeconds = 900 }
-            medium = @{ enabled = $false; cooldownSeconds = 900 }
-            large  = @{ enabled = $false; cooldownSeconds = 900 }
+            kit     = @{ enabled = $false; cooldownSeconds = 604800 }
+            item    = @{ enabled = $false; cooldownSeconds = 3600; maxQty = 1000 }
+            water   = @{ enabled = $false; cooldownSeconds = 300 }
+            vehicle = @{ enabled = $false; cooldownSeconds = 604800 }
+            small   = @{ enabled = $false; cooldownSeconds = 900 }
+            medium  = @{ enabled = $false; cooldownSeconds = 900 }
+            large   = @{ enabled = $false; cooldownSeconds = 900 }
         }
         # channels the handler will listen on; anything else is ignored outright
         channels = @('Proximity', 'Map')
@@ -618,14 +621,181 @@ ORDER BY t.spicefield_type_id, a.server_id;
 }
 
 # Dispatch table.
+# !water - refill the sender's water containers (stillsuits, jons, canteens).
+#
+# Reuses the exact RMQ command behind the Player Admin "Fill Water" button
+# (UpdateAllWaterFillables) rather than the SQL refill, because the sender is by
+# definition online: an online player holds their inventory in memory, so a
+# direct SQL write is ignored and overwritten on their next save. Same reasoning
+# as the give-item path in PlayersWrites.ps1.
+function Invoke-DuneChatCommandWater {
+    param([string]$Ip, [string]$FuncomId)
+    $fls = Resolve-DuneChatFlsId -Ip $Ip -FuncomId $FuncomId
+    if (-not $fls.ok) { return @{ ok = $false; reply = 'Could not identify your account.' } }
+    try {
+        $r = Invoke-DuneRmqUpdateAllWaterFillables -FlsId $fls.flsId -WaterAmount 1000000
+        if (-not $r.ok) {
+            return @{ ok = $false; reply = 'Could not refill your water.' }
+        }
+        return @{ ok = $true; reply = 'Water refilled.' }
+    } catch {
+        return @{ ok = $false; reply = 'Could not refill your water.' }
+    }
+}
+
+# !vehicle - deliver a vehicle part kit to the sender.
+#
+# Mirrors the Players page "Give Vehicle Kit" action exactly: it hands over the
+# vehicle's parts plus fuel and a repair tool, into the player's inventory, to be
+# assembled at a Vehicle Assembly. It does NOT spawn a drivable vehicle, and the
+# reply says so - a player told "vehicle delivered" would go looking for one.
+#
+# Vehicles with no part kit (Tank, Container Vehicle) are filtered out for the
+# same reason the UI filters them: there is nothing to give.
+function Invoke-DuneChatCommandVehicle {
+    param([string]$Ip, [string]$FuncomId, [string[]]$CommandArgs)
+    $catalog = Get-DuneVehicleKitCatalog
+    $vehicles = @(@($catalog.vehicles) | Where-Object { @($_.kit).Count -gt 0 })
+    if ($vehicles.Count -eq 0) {
+        return @{ ok = $false; reply = 'No vehicle kits are available on this server.' }
+    }
+
+    $wanted = (@($CommandArgs) -join ' ').Trim()
+    if ([string]::IsNullOrWhiteSpace($wanted)) {
+        $names = (@($vehicles | ForEach-Object { "$($_.label)" }) -join ', ')
+        return @{ ok = $false; reply = "Which vehicle? Available: $names" }
+    }
+
+    # Match on the friendly label first, then the id, so both "!vehicle Ornithopter (Light)"
+    # and "!vehicle OrnithopterLight" work.
+    $veh = $vehicles | Where-Object { "$($_.label)".Trim() -ieq $wanted } | Select-Object -First 1
+    if (-not $veh) {
+        $veh = $vehicles | Where-Object { "$($_.id)".Trim() -ieq $wanted } | Select-Object -First 1
+    }
+    if (-not $veh) {
+        $names = (@($vehicles | ForEach-Object { "$($_.label)" }) -join ', ')
+        return @{ ok = $false; reply = "No vehicle called '$wanted'. Available: $names" }
+    }
+
+    $fls = Resolve-DuneChatFlsId -Ip $Ip -FuncomId $FuncomId
+    if (-not $fls.ok) { return @{ ok = $false; reply = 'Could not identify your account.' } }
+
+    $parts = @()
+    $parts += @($veh.kit)
+    $parts += @($veh.unique)
+    if ($catalog.fuelTemplate)  { $parts += $catalog.fuelTemplate }
+    if ($catalog.torchTemplate) { $parts += $catalog.torchTemplate }
+
+    $given = 0; $failed = 0
+    foreach ($tpl in $parts) {
+        if ([string]::IsNullOrWhiteSpace($tpl)) { continue }
+        $qty = 1
+        if ($veh.qty -and $veh.qty.Contains("$tpl")) { $qty = [int]$veh.qty["$tpl"] }
+        if ($qty -lt 1) { $qty = 1 }
+        try {
+            $r = Invoke-DuneRmqAddItemToInventory -FlsId $fls.flsId -ItemName ([string]$tpl) -Quantity $qty
+            if ($r.ok) { $given++ } else { $failed++ }
+        } catch { $failed++ }
+    }
+    if ($given -eq 0) {
+        return @{ ok = $false; reply = "Could not deliver the $($veh.label) kit - nothing was added." }
+    }
+    $reply = "$($veh.label) kit delivered - assemble it at a Vehicle Assembly."
+    if ($failed -gt 0) { $reply += " ($failed part$(if($failed -ne 1){'s'}) could not be added.)" }
+    return @{ ok = $true; reply = $reply; given = $given; failed = $failed }
+}
+
+# !item <name> [qty] - give the sender an item from the catalog.
+#
+# The broadest of the commands by a distance: every other one is bounded by
+# something the admin defined up front (a package, a vehicle kit, their own
+# water), whereas this one can produce anything in the game. It is off by
+# default like the rest, and additionally capped by maxQty so enabling it cannot
+# be turned into "!item <anything> 999999999". Treat raising that cap as the
+# same decision as handing out admin.
+#
+# Name resolution deliberately refuses to guess: an ambiguous term lists the
+# candidates back rather than picking one, because silently delivering the wrong
+# item is worse than asking again.
+function Invoke-DuneChatCommandItem {
+    param([string]$Ip, [hashtable]$State, [string]$FuncomId, [string[]]$CommandArgs)
+    $argv = @(@($CommandArgs) | Where-Object { "$_".Trim() })
+    if ($argv.Count -eq 0) {
+        return @{ ok = $false; reply = 'Which item? "!item <name> [amount]"' }
+    }
+
+    # A trailing all-digits token is the amount; everything before it is the name,
+    # so multi-word items ("Plastanium Ingot 10") work.
+    $qty = 1
+    if ($argv.Count -gt 1 -and "$($argv[-1])" -match '^\d+$') {
+        $qty = [int]$argv[-1]
+        $argv = @($argv[0..($argv.Count - 2)])
+    }
+    $wanted = (@($argv) -join ' ').Trim()
+    if ([string]::IsNullOrWhiteSpace($wanted)) {
+        return @{ ok = $false; reply = 'Which item? "!item <name> [amount]"' }
+    }
+
+    $cfg = $State.commands['item']
+    $max = 1000
+    if ($cfg -and $cfg.maxQty) { $max = [int]$cfg.maxQty }
+    if ($max -lt 1) { $max = 1 }
+    if ($qty -lt 1) { $qty = 1 }
+    $capped = $false
+    if ($qty -gt $max) { $qty = $max; $capped = $true }
+
+    $items = @((Get-DuneItemCatalog).items)
+    if ($items.Count -eq 0) {
+        return @{ ok = $false; reply = 'The item catalog is not available on this server.' }
+    }
+
+    # Exact template id, then exact name, then a unique substring.
+    $hit = $items | Where-Object { "$($_.templateId)" -ieq $wanted } | Select-Object -First 1
+    if (-not $hit) {
+        $hit = $items | Where-Object { "$($_.name)" -ieq $wanted } | Select-Object -First 1
+    }
+    if (-not $hit) {
+        $partial = @($items | Where-Object { "$($_.name)" -imatch [regex]::Escape($wanted) })
+        if ($partial.Count -eq 1) {
+            $hit = $partial[0]
+        } elseif ($partial.Count -gt 1) {
+            $names = (@($partial | Select-Object -First 6 | ForEach-Object { "$($_.name)" }) -join ', ')
+            $more = if ($partial.Count -gt 6) { " (+$($partial.Count - 6) more)" } else { '' }
+            return @{ ok = $false; reply = "'$wanted' matches several items: $names$more" }
+        }
+    }
+    if (-not $hit) {
+        return @{ ok = $false; reply = "No item called '$wanted'." }
+    }
+
+    $fls = Resolve-DuneChatFlsId -Ip $Ip -FuncomId $FuncomId
+    if (-not $fls.ok) { return @{ ok = $false; reply = 'Could not identify your account.' } }
+
+    try {
+        $r = Invoke-DuneRmqAddItemToInventory -FlsId $fls.flsId -ItemName ([string]$hit.templateId) -Quantity $qty
+        if (-not $r.ok) {
+            return @{ ok = $false; reply = "Could not deliver $($hit.name)." }
+        }
+    } catch {
+        return @{ ok = $false; reply = "Could not deliver $($hit.name)." }
+    }
+
+    $reply = "$($hit.name) x$qty delivered."
+    if ($capped) { $reply += " (capped at $max)" }
+    return @{ ok = $true; reply = $reply; template = [string]$hit.templateId; qty = $qty }
+}
+
 function Invoke-DuneChatCommandExecutor {
     param([string]$Ip, [hashtable]$State, [string]$Verb, [string]$FuncomId, [string[]]$CommandArgs)
     switch ("$Verb".ToLowerInvariant()) {
-        'kit'    { return Invoke-DuneChatCommandKit -Ip $Ip -State $State -FuncomId $FuncomId -CommandArgs @($CommandArgs) }
-        'small'  { return Invoke-DuneChatCommandSpiceField -Ip $Ip -Size 'Small' }
-        'medium' { return Invoke-DuneChatCommandSpiceField -Ip $Ip -Size 'Medium' }
-        'large'  { return Invoke-DuneChatCommandSpiceField -Ip $Ip -Size 'Large' }
-        default  { return @{ ok = $false; reply = 'Unknown command.' } }
+        'kit'     { return Invoke-DuneChatCommandKit -Ip $Ip -State $State -FuncomId $FuncomId -CommandArgs @($CommandArgs) }
+        'item'    { return Invoke-DuneChatCommandItem -Ip $Ip -State $State -FuncomId $FuncomId -CommandArgs @($CommandArgs) }
+        'water'   { return Invoke-DuneChatCommandWater -Ip $Ip -FuncomId $FuncomId }
+        'vehicle' { return Invoke-DuneChatCommandVehicle -Ip $Ip -FuncomId $FuncomId -CommandArgs @($CommandArgs) }
+        'small'   { return Invoke-DuneChatCommandSpiceField -Ip $Ip -Size 'Small' }
+        'medium'  { return Invoke-DuneChatCommandSpiceField -Ip $Ip -Size 'Medium' }
+        'large'   { return Invoke-DuneChatCommandSpiceField -Ip $Ip -Size 'Large' }
+        default   { return @{ ok = $false; reply = 'Unknown command.' } }
     }
 }
 

@@ -445,6 +445,7 @@ export type GameConfigBackupListResponse = {
 export type ChatCommandSetting = {
   enabled: boolean
   cooldownSeconds: number
+  maxQty?: number
 }
 
 export type ChatCommandsState = {
@@ -457,6 +458,31 @@ export type ChatCommandsState = {
   ready?: boolean
   readyMessage?: string
   lastSeenAt?: string
+}
+
+export type WelcomeBackGrant = {
+  at: string
+  name: string
+  daysAway: number
+  package: string
+  ok: boolean
+  message?: string
+}
+
+export type WelcomeBackState = {
+  ok: boolean
+  enabled: boolean
+  packageId: string
+  daysAway: number
+  announce: boolean
+  packages?: Array<{ id: string; name: string; itemCount: number }>
+  recent?: WelcomeBackGrant[]
+  tracked?: number
+  seeded?: number
+  lastRunAt?: string
+  lastError?: string
+  ready?: boolean
+  readyMessage?: string
 }
 
 export type SpicefieldType = {

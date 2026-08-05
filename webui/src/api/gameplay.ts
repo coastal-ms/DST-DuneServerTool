@@ -2,7 +2,7 @@
 // All market responses carry a `source: 'live' | 'demo'` flag so the UI can
 // label whether data came from the live game DB or the bundled demo dataset.
 import { api } from './client'
-import type { ChatCommandsState } from './types'
+import type { ChatCommandsState, WelcomeBackState } from './types'
 
 export type DataSource = 'live' | 'demo'
 
@@ -2121,9 +2121,27 @@ export function saveChatCommands(patch: {
   enabled?: boolean
   replyTitle?: string
   channels?: string[]
-  commands?: Record<string, { enabled?: boolean; cooldownSeconds?: number }>
+  commands?: Record<string, { enabled?: boolean; cooldownSeconds?: number; maxQty?: number }>
 }) {
   return api<ChatCommandsState>('/api/gameplay/chat-commands', {
+    method: 'PUT',
+    body: JSON.stringify(patch),
+  })
+}
+// ---------------------------------------------------------------------------
+// Welcome Back package
+// ---------------------------------------------------------------------------
+export function getWelcomeBack() {
+  return api<WelcomeBackState>('/api/gameplay/welcome-back')
+}
+
+export function saveWelcomeBack(patch: {
+  enabled?: boolean
+  packageId?: string
+  daysAway?: number
+  announce?: boolean
+}) {
+  return api<WelcomeBackState>('/api/gameplay/welcome-back', {
     method: 'PUT',
     body: JSON.stringify(patch),
   })
