@@ -38,6 +38,8 @@ Register-DuneRoute -Method GET -Path '/api/gameplay/chat-commands' -Handler {
             channels   = @($state.channels)
             commands   = $commands
             packages   = $packages
+            pollSeconds = [int](Get-DuneChatCommandPollSeconds -State $state)
+            pollChoices = @($script:DuneChatPollChoices)
             ready      = [bool]$ready.ready
             readyMessage = [string]$ready.message
             lastSeenAt = [string]$state.lastSeenAt
@@ -69,8 +71,20 @@ Register-DuneRoute -Method PUT -Path '/api/gameplay/chat-commands' -Handler {
             if ($t.Length -gt 40) { $t = $t.Substring(0, 40) }
             $state.replyTitle = if ($t) { $t } else { 'Server' }
         }
-        if ($body.ContainsKey('channels') -and $null -ne $body['channels']) {
-            $allowed = @('Proximity', 'Map', 'Faction', 'Guild', 'Party')
+        if ($body.ContainsKey('pollSeconds')) {
+            # Restricted to the offered choices. This sets a permanent CPU load on
+            # the game server, so an arbitrary number from a payload is not
+            # something to honour blindly.
+            $p = 0
+            if ([int]::TryParse("$($body['pollSeconds'])", [ref]$p) -and
+                ($script:DuneChatPollChoices -contains $p)) {
+                $state.pollSeconds = $p
+            } else {
+                Write-DuneError -Response $res -Status 400 -Message ("pollSeconds must be one of: " + (($script:DuneChatPollChoices) -join ', '))
+                return
+            }
+        }
+        if ($body.ContainsKey('channels') -and $null -ne $body['channels']) {            $allowed = @('Proximity', 'Map', 'Faction', 'Guild', 'Party')
             $picked = @(@($body['channels']) | ForEach-Object { "$_" } | Where-Object { $allowed -contains $_ })
             $state.channels = $picked
         }
@@ -133,6 +147,7 @@ Register-DuneRoute -Method PUT -Path '/api/gameplay/chat-commands' -Handler {
             enabled      = [bool]$state.enabled
             replyTitle   = [string]$state.replyTitle
             channels     = @($state.channels)
+            pollSeconds  = [int](Get-DuneChatCommandPollSeconds -State $state)
             ready        = [bool]$ready.ready
             readyMessage = [string]$ready.message
             queue        = $queue

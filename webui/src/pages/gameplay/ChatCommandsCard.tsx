@@ -2,7 +2,8 @@ import { useCallback, useEffect, useState } from 'react'
 import { Icon } from '../../components/Icon'
 import { CollapsibleCard } from '../../components/CollapsibleCard'
 import { getChatCommands, saveChatCommands } from '../../api/gameplay'
-import type { ChatCommandsState } from '../../api/types'
+import { getSpicefields, saveSpicefield } from '../../api/gameconfig'
+import type { ChatCommandsState, SpicefieldType } from '../../api/types'
 
 // In-game !commands. Players type into game chat and DST acts on it.
 //
@@ -29,6 +30,108 @@ const ORDER = ['kit', 'item', 'vehicle', 'water', 'small', 'medium', 'large']
 // player argument. Worth stating in the UI so an admin does not assume otherwise.
 const SELF_ONLY = new Set(['kit', 'item', 'vehicle', 'water'])
 
+const SPICE_VERBS = new Set(['small', 'medium', 'large'])
+
+// Measured cost per poll interval (2026-08-04, 8-core VM): idle 9.14% busy vs
+// 15.41% at a 3s poll, so ~1.5 core-seconds per check. Shown in the picker so
+// the trade is made with the numbers visible rather than blind.
+const POLL_COST: Record<number, string> = {
+  3: '0.50', 5: '0.30', 10: '0.15', 15: '0.10', 30: '0.05',
+}
+
+// The cap a spice command works within is not part of this feature - it is the
+// spicefield type's own max_globally_active, which already has an editor in Game
+// Config. It is surfaced here anyway because "!large did nothing" is almost
+// always "the map is already at its limit", and making an admin leave the page
+// to find that out is the sort of thing that gets reported as a bug.
+//
+// There is one row per map+dimension, so a size can have several limits, and a
+// size with no row at all (Hagga has no Large) means the command genuinely
+// cannot do anything on that map. Both are worth showing plainly.
+function SpiceLimits({
+  size, rows, busy, onSaved,
+}: {
+  size: string
+  rows: SpicefieldType[]
+  busy: boolean
+  onSaved: (row: SpicefieldType) => void
+}) {
+  const [draft, setDraft] = useState<Record<number, string>>({})
+  const [saving, setSaving] = useState<number | null>(null)
+  const [err, setErr] = useState<string | null>(null)
+
+  const mine = rows.filter(r => r.fieldType.toLowerCase() === size)
+  // Only live/pinned partitions can drain a request, which is the same rule the
+  // command itself follows - a limit on a retired map is noise here.
+  const live = mine.filter(r => r.partitionActive !== false)
+
+  if (rows.length === 0) return null
+  if (live.length === 0) {
+    return (
+      <div className="mt-2 text-[11px] text-warning">
+        No running map has {size} spice fields, so !{size} has nothing to activate.
+      </div>
+    )
+  }
+
+  async function commit(row: SpicefieldType) {
+    const raw = draft[row.spicefieldTypeId]
+    if (raw === undefined) return
+    const n = Number(raw)
+    if (!Number.isFinite(n) || n < 0 || n === row.maxActive) {
+      setDraft(d => { const c = { ...d }; delete c[row.spicefieldTypeId]; return c })
+      return
+    }
+    setSaving(row.spicefieldTypeId); setErr(null)
+    try {
+      const res = await saveSpicefield(row.spicefieldTypeId, {
+        maxActive: n,
+        maxPrimed: row.maxPrimed,
+        isSpawningActive: row.isSpawningActive,
+        spawnWeight: row.spawnWeight,
+      })
+      onSaved(res.row)
+      setDraft(d => { const c = { ...d }; delete c[row.spicefieldTypeId]; return c })
+    } catch (e) {
+      setErr(e instanceof Error ? e.message : String(e))
+    } finally {
+      setSaving(null)
+    }
+  }
+
+  return (
+    <div className="mt-2 space-y-1">
+      {err && <div className="text-[11px] text-danger">{err}</div>}
+      {live.map(row => {
+        const id = row.spicefieldTypeId
+        const atCap = row.currentActive >= row.maxActive
+        return (
+          <div key={id} className="flex items-center gap-2 text-[11px]">
+            <span className="text-text-dim w-28 shrink-0">{row.mapName}</span>
+            <span className={atCap ? 'text-warning' : 'text-text-muted'}>
+              {row.currentActive} of {row.maxActive} active
+            </span>
+            <span className="text-text-dim ml-auto">limit</span>
+            <input
+              type="text" inputMode="numeric"
+              value={draft[id] ?? String(row.maxActive)}
+              disabled={busy || saving === id}
+              onChange={e => setDraft(d => ({ ...d, [id]: e.target.value.replace(/[^\d]/g, '') }))}
+              onBlur={() => void commit(row)}
+              onKeyDown={e => { if (e.key === 'Enter') (e.target as HTMLInputElement).blur() }}
+              className="w-16 px-2 py-0.5 rounded bg-surface border border-border text-text font-mono text-[11px]"
+            />
+            {saving === id && <Icon name="Loader2" size={11} className="animate-spin text-text-dim" />}
+            {atCap && saving !== id && (
+              <span className="text-warning">at cap — raise it or !{size} will do nothing</span>
+            )}
+          </div>
+        )
+      })}
+    </div>
+  )
+}
+
 function humanCooldown(seconds: number): string {
   if (!Number.isFinite(seconds) || seconds <= 0) return 'no cooldown'
   if (seconds < 60) return `${seconds}s`
@@ -43,6 +146,7 @@ export function ChatCommandsCard() {
   const [saving, setSaving] = useState(false)
   const [err, setErr] = useState<string | null>(null)
   const [ok, setOk] = useState<string | null>(null)
+  const [spice, setSpice] = useState<SpicefieldType[]>([])
 
   const load = useCallback(async () => {
     setLoading(true); setErr(null)
@@ -53,6 +157,12 @@ export function ChatCommandsCard() {
     } finally {
       setLoading(false)
     }
+    // Spice limits are a nice-to-have on this card, so a failure to read them
+    // must not make the whole card look broken.
+    try {
+      const s = await getSpicefields()
+      setSpice(s.available ? s.rows : [])
+    } catch { setSpice([]) }
   }, [])
 
   useEffect(() => { void load() }, [load])
@@ -201,6 +311,15 @@ export function ChatCommandsCard() {
                   Players type <code>!kit &lt;name&gt;</code>. Available: {packages.join(', ')}
                 </div>
               )}
+              {SPICE_VERBS.has(verb) && c.enabled && (
+                <SpiceLimits
+                  size={verb}
+                  rows={spice}
+                  busy={saving || loading}
+                  onSaved={row => setSpice(prev =>
+                    prev.map(r => (r.spicefieldTypeId === row.spicefieldTypeId ? row : r)))}
+                />
+              )}
             </div>
           )
         })}
@@ -244,8 +363,33 @@ export function ChatCommandsCard() {
       </div>
 
       <p className="mt-4 text-[11px] text-text-dim">
-        A response can take up to 30 seconds — DST checks for new commands on the same
-        background cycle as its other scheduled work.
+        DST checks for new commands on a timer, so a reply takes about as long as
+        the interval below. That check is not free — it costs the same whether or
+        not anyone is chatting, and only while this is switched on.
+      </p>
+
+      <div className="mt-2 flex flex-wrap items-center gap-2">
+        <span className="text-xs text-text-muted">Check for commands every</span>
+        <select
+          value={String(state?.pollSeconds ?? 3)}
+          disabled={saving || loading}
+          onChange={e => {
+            const n = Number(e.target.value)
+            setState(prev => (prev ? { ...prev, pollSeconds: n } : prev))
+            void patch({ pollSeconds: n }, `Now checking every ${n} seconds.`)
+          }}
+          className="px-2 py-1 rounded bg-surface border border-border text-text text-xs"
+        >
+          {(state?.pollChoices ?? [3, 5, 10, 15, 30]).map(n => (
+            <option key={n} value={n}>
+              {n} seconds — about {POLL_COST[n] ?? (1.5 / n).toFixed(2)} of a processor core
+            </option>
+          ))}
+        </select>
+      </div>
+      <p className="mt-1 text-[11px] text-text-dim">
+        Measured on an 8-core server VM. The cost is per check rather than per
+        message, so a longer interval is cheaper in direct proportion.
       </p>
     </CollapsibleCard>
   )

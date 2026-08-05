@@ -254,6 +254,16 @@ Describe 'defaults' {
             $d.commands[$k].ContainsKey('maxQty') | Should -BeFalse
         }
     }
+    It 'defaults to a responsive poll, and clamps anything absurd' {
+        # This value sets a permanent CPU load on someone's game server, so it is
+        # clamped in the reader rather than trusted from the state file.
+        (New-DuneChatCommandsDefault).pollSeconds | Should -Be 3
+        Get-DuneChatCommandPollSeconds -State @{ pollSeconds = 10 }    | Should -Be 10
+        Get-DuneChatCommandPollSeconds -State @{ pollSeconds = 0 }     | Should -Be 3
+        Get-DuneChatCommandPollSeconds -State @{ pollSeconds = -5 }    | Should -Be 1
+        Get-DuneChatCommandPollSeconds -State @{ pollSeconds = 99999 } | Should -Be 60
+        Get-DuneChatCommandPollSeconds -State @{ pollSeconds = 'fast' } | Should -Be 3
+    }
 }
 
 Describe 'self-only commands' {

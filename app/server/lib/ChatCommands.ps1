@@ -79,6 +79,13 @@ function New-DuneChatCommandsDefault {
         }
         # channels the handler will listen on; anything else is ignored outright
         channels = @('Proximity', 'Map')
+        # How often DST drains the queue, in seconds. This is a genuine trade the
+        # admin should own rather than one baked in: the cost is paid per CALL,
+        # not per message, because `rabbitmqctl eval` starts a hidden Erlang node
+        # each time (~1.5 core-seconds, measured 2026-08-04 on an 8-core VM). So
+        # roughly 3s ~ 0.50 of a core sustained, 10s ~ 0.15, 30s ~ 0.05 - against
+        # a reply that lands in about that many seconds. Defaults to responsive.
+        pollSeconds = 3
         cooldowns = @{}
         lastError = ''
         lastSeenAt = ''
@@ -115,6 +122,10 @@ function Read-DuneChatCommandsState {
         if ($obj.channels)   { $out.channels = @($obj.channels) }
         if ($obj.lastError)  { $out.lastError = [string]$obj.lastError }
         if ($obj.lastSeenAt) { $out.lastSeenAt = [string]$obj.lastSeenAt }
+        if ($null -ne $obj.pollSeconds) {
+            $p = 0
+            if ([int]::TryParse("$($obj.pollSeconds)", [ref]$p)) { $out.pollSeconds = $p }
+        }
         if ($obj.commands) {
             foreach ($p in $obj.commands.PSObject.Properties) {
                 $name = "$($p.Name)".ToLowerInvariant()
@@ -135,8 +146,33 @@ function Read-DuneChatCommandsState {
     }
 }
 
-function Save-DuneChatCommandsState {
+# Allowed poll intervals, and the measured cost of each. Kept as a list rather
+# than a free number so the UI and the scheduler agree on what is offerable, and
+# so nobody sets 1s without seeing what it costs.
+#
+# Cost is per CALL, not per message: `rabbitmqctl eval` starts a hidden Erlang
+# node every time (~1.5 core-seconds, measured 2026-08-04 on an 8-core VM). So
+# the sustained cost is roughly 1.5 / interval cores, for as long as the feature
+# is enabled, whether or not anyone is chatting.
+$script:DuneChatPollChoices = @(3, 5, 10, 15, 30)
+$script:DuneChatPollDefault = 3
+
+# What the scheduler actually sleeps between drains. Clamped here rather than
+# trusted from the state file, because this value directly sets a permanent load
+# on someone's game server.
+function Get-DuneChatCommandPollSeconds {
     param([hashtable]$State)
+    $n = $script:DuneChatPollDefault
+    try {
+        if (-not $State) { $State = Read-DuneChatCommandsState }
+        if ($State -and $State.pollSeconds) { $n = [int]$State.pollSeconds }
+    } catch { $n = $script:DuneChatPollDefault }
+    if ($n -lt 1)  { $n = 1 }
+    if ($n -gt 60) { $n = 60 }
+    return $n
+}
+
+function Save-DuneChatCommandsState {    param([hashtable]$State)
     $path = Get-DuneChatCommandsStatePath
     try {
         ($State | ConvertTo-Json -Depth 8) | Set-Content -LiteralPath $path -Encoding UTF8

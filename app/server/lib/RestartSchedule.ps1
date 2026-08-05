@@ -1045,16 +1045,6 @@ function Start-DuneRestartScheduler {
                         try { Write-DuneLog "base backup guard tick error (outer): $($_.Exception.Message)" 'WARN' } catch {}
                     }
                 }
-                # In-game !commands (see lib/ChatCommands.ps1). Silent no-op
-                # unless the admin has enabled the feature AND chosen the
-                # account DST replies from. Note this loop sleeps 30s, so a
-                # player can wait that long for a response - a dedicated faster
-                # loop is the follow-up if this proves too slow in practice.
-                try { [void](Invoke-DuneChatCommandTick) } catch {
-                    if (Get-Command Write-DuneLog -ErrorAction SilentlyContinue) {
-                        try { Write-DuneLog "chat command tick error (outer): $($_.Exception.Message)" 'WARN' } catch {}
-                    }
-                }
                 # Welcome back packages (see lib/WelcomeBack.ps1). Silent no-op
                 # unless the admin turned it on AND chose a package. Internally
                 # throttled to one DB pass every 5 minutes - it watches for a
@@ -1066,7 +1056,52 @@ function Start-DuneRestartScheduler {
                         try { Write-DuneLog "welcome back tick error (outer): $($_.Exception.Message)" 'WARN' } catch {}
                     }
                 }
-                Start-Sleep -Seconds 30
+                # In-game !commands (see lib/ChatCommands.ps1). Silent no-op
+                # unless the admin has enabled the feature.
+                #
+                # LATENCY: chat has to feel like chat. A player who types !water
+                # and waits half a minute assumes it did not work, so this does
+                # NOT ride the 30s cadence with everything else. The loop's sleep
+                # IS this loop: it wakes every 3s to drain chat, and one full pass
+                # still takes 30s, so every heavy tick above keeps its old
+                # cadence.
+                #
+                # COST - measured, not assumed (2026-08-04, 8-core VM):
+                #   idle VM                9.14% busy
+                #   with 3s polling       15.41% busy
+                # ~= half a core, sustained, for as long as the feature is on. It
+                # is paid per CALL and not per message, because `rabbitmqctl eval`
+                # starts a hidden Erlang node every time (~1.5 core-seconds each),
+                # so the poll interval is the whole cost: 3s ~ 0.50 core, 5s ~
+                # 0.30, 10s ~ 0.15, 30s ~ 0.05. That trade belongs to the admin,
+                # so the interval is a setting rather than a constant - see
+                # Get-DuneChatCommandPollSeconds.
+                #
+                # The right long-term fix is a persistent AMQP consumer, which
+                # would be instant AND near-free. It is harder than it looks: the
+                # broker speaks amqp/ssl only and delegates auth to Funcom's HTTP
+                # shim (verified on a live server), so it needs TLS plus
+                # shim-accepted credentials plus reconnect handling. Worth doing
+                # if these commands become something servers rely on.
+                #
+                # The tick returns immediately when the feature is off, so a
+                # server not using it pays nothing.
+                $chatPoll = 3
+                try { $chatPoll = [int](Get-DuneChatCommandPollSeconds) } catch { $chatPoll = 3 }
+                if ($chatPoll -lt 1) { $chatPoll = 1 }
+                # One outer pass stays ~30s so every heavy tick above keeps the
+                # cadence it was written for, regardless of the chat setting.
+                $chatElapsed = 0
+                while ($chatElapsed -lt 30) {
+                    $slice = [Math]::Min($chatPoll, 30 - $chatElapsed)
+                    Start-Sleep -Seconds $slice
+                    $chatElapsed += $slice
+                    try { [void](Invoke-DuneChatCommandTick) } catch {
+                        if (Get-Command Write-DuneLog -ErrorAction SilentlyContinue) {
+                            try { Write-DuneLog "chat command tick error (outer): $($_.Exception.Message)" 'WARN' } catch {}
+                        }
+                    }
+                }
             }
         })
         [void]$ps.BeginInvoke()

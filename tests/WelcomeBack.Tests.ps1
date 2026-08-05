@@ -133,10 +133,36 @@ Describe 'Welcome Back settings' {
 
     It 'clamps the day count into a sane range' {
         $s = New-DuneWelcomeBackDefault
-        (Set-DuneWelcomeBackDaysAway -State $s -Value 0).daysAway    | Should -Be 1
-        (Set-DuneWelcomeBackDaysAway -State $s -Value -5).daysAway   | Should -Be 1
+        # 0 is a real setting - "every login" - so it must survive, and only
+        # genuinely impossible values get pulled back.
+        (Set-DuneWelcomeBackDaysAway -State $s -Value 0).daysAway    | Should -Be 0
+        (Set-DuneWelcomeBackDaysAway -State $s -Value -5).daysAway   | Should -Be 0
         (Set-DuneWelcomeBackDaysAway -State $s -Value 9999).daysAway | Should -Be 365
         (Set-DuneWelcomeBackDaysAway -State $s -Value 30).daysAway   | Should -Be 30
+    }
+
+    It 'grants on any return at all when the threshold is 0' {
+        $players = @(@{ account_id = '1'; name = 'A'; pawn_id = 5; last_login = '2026-08-04T12:00:00Z' })
+        $ledger  = @{ '1' = @{ lastLoginSeen = '2026-08-04T11:00:00Z'; lastGrantedAt = ''; grants = 0; name = 'A' } }
+        # One hour apart - would fail any positive threshold.
+        @((Get-DuneWelcomeBackPlan -Players $players -Ledger $ledger -DaysAway 0).grants).Count | Should -Be 1
+    }
+
+    It 'still does not re-fire at 0 while the player stays logged in' {
+        # The login transition, not the threshold, is what stops repeats - so
+        # even "every login" cannot pay out twice without a new login.
+        $players = @(@{ account_id = '1'; name = 'A'; pawn_id = 5; last_login = '2026-08-04T12:00:00Z' })
+        $ledger  = @{ '1' = @{ lastLoginSeen = '2026-08-04T11:00:00Z'; lastGrantedAt = ''; grants = 0; name = 'A' } }
+        $first = Get-DuneWelcomeBackPlan -Players $players -Ledger $ledger -DaysAway 0
+        @($first.grants).Count | Should -Be 1
+        @((Get-DuneWelcomeBackPlan -Players $players -Ledger $first.ledger -DaysAway 0).grants).Count | Should -Be 0
+    }
+
+    It 'still only seeds on the first pass at 0, rather than granting to everyone' {
+        $players = @(@{ account_id = '1'; name = 'A'; pawn_id = 5; last_login = '2026-08-04T12:00:00Z' })
+        $plan = Get-DuneWelcomeBackPlan -Players $players -Ledger @{} -DaysAway 0
+        @($plan.grants).Count | Should -Be 0
+        @($plan.seeded).Count | Should -Be 1
     }
 
     It 'leaves the day count alone when handed something that is not a number' {

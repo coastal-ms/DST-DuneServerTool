@@ -2121,6 +2121,7 @@ export function saveChatCommands(patch: {
   enabled?: boolean
   replyTitle?: string
   channels?: string[]
+  pollSeconds?: number
   commands?: Record<string, { enabled?: boolean; cooldownSeconds?: number; maxQty?: number }>
 }) {
   return api<ChatCommandsState>('/api/gameplay/chat-commands', {

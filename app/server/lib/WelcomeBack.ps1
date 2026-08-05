@@ -68,7 +68,12 @@ function New-DuneWelcomeBackDefault {
 }
 
 $script:DuneWelcomeBackMaxRecent = 25
-$script:DuneWelcomeBackMinDays   = 1
+# 0 is deliberately allowed and means "every login qualifies" - any gap at all is
+# >= 0. Useful for testing without waiting a week, and a legitimate setting for a
+# server that wants a package on every return. It is still bounded by the login
+# transition, so it cannot re-fire while a player stays online, and the first
+# pass still only seeds, so it cannot mass-grant on enable.
+$script:DuneWelcomeBackMinDays   = 0
 $script:DuneWelcomeBackMaxDays   = 365
 
 # Single place that decides whether the feature may run. "Enabled but no package"

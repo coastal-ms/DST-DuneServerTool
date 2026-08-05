@@ -455,6 +455,8 @@ export type ChatCommandsState = {
   channels: string[]
   commands: Record<string, ChatCommandSetting>
   packages?: string[]      // kit names available to !kit, from the package store
+  pollSeconds?: number
+  pollChoices?: number[]
   ready?: boolean
   readyMessage?: string
   lastSeenAt?: string

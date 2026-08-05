@@ -153,13 +153,20 @@ export function WelcomeBackCard() {
               onChange={e => setDays(e.target.value.replace(/[^\d]/g, ''))}
               onBlur={() => {
                 const n = Number(days)
-                if (Number.isFinite(n) && n > 0 && n !== state?.daysAway) void patch({ daysAway: n })
+                // >= 0: zero is a real setting, not an error. See the note in
+                // lib/WelcomeBack.ps1 - it means every login qualifies.
+                if (days !== '' && Number.isFinite(n) && n >= 0 && n !== state?.daysAway) void patch({ daysAway: n })
                 else setDays(String(state?.daysAway ?? 7))
               }}
               className="w-24 px-2 py-1.5 rounded bg-surface border border-border text-text font-mono text-sm"
             />
             <span className="text-xs text-text-dim">days</span>
           </div>
+          {state?.daysAway === 0 && (
+            <div className="mt-1 text-[11px] text-warning">
+              0 means every login qualifies — they get the package each time they come back.
+            </div>
+          )}
         </div>
       </div>
 

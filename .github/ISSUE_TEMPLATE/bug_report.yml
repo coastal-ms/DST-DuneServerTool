@@ -75,7 +75,7 @@ body:
     attributes:
       label: Tool version
       description: Shown in the bottom-left of the web portal sidebar (status bar) and in the CLI menu header. Auto-filled when launched from **Help → Create GitHub Issue** in the top menu bar, or from the CLI `report-issue` command.
-      placeholder: "v13.3.0"
+      placeholder: "v13.4.0"
     validations:
       required: true
 
@@ -100,6 +100,8 @@ body:
         - Web portal — Game Config — BaseBackUp (allowed maps / cooldown / extensions / keep stored bases through the Deep Desert reset)
         - Web portal — Game Config — client-side INI (Game.ini / Engine.ini opt-in / preview / Open in Notepad / client-apply reminder / Player config hand-out list)
         - Web portal — Gameplay Admin — Overview
+        - Web portal — Gameplay Admin — Overview — In-game commands (!kit / !item / !vehicle / !water / !small / !medium / !large — listening, per-command toggles + cooldowns, !item quantity cap, chat channels, reply heading)
+        - Web portal — Gameplay Admin — Overview — Welcome back (returning-player package / days away / announce)
         - Web portal — Gameplay Admin — Market / Market Bot
         - Web portal — Gameplay Admin — Players
         - Web portal — Gameplay Admin — Players — Give Item / Give Package / Give Vehicle Kit / Grant Cosmetic / Variant (incl. "Allow overflow")
