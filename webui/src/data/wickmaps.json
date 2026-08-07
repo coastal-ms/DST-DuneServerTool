@@ -2633,8 +2633,8 @@
     },
     {
      "sector": "G4",
-     "subx": 3,
-     "suby": 2,
+     "subx": 4,
+     "suby": 0,
      "type": "titanium"
     },
     {
@@ -2645,8 +2645,8 @@
     },
     {
      "sector": "G3",
-     "subx": 3,
-     "suby": 2,
+     "subx": 1,
+     "suby": 0,
      "type": "stravidium"
     },
     {
