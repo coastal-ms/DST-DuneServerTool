@@ -175,24 +175,35 @@ function Get-DuneCoriolisSeedReadback {
 
 # Turn a read-back into an honest sentence. Never says "applied" or "set" in a
 # way that implies the map adopted the seed.
+#
+# -Context carries rows that were read but NOT written (the other naming scheme's
+# rows in world_map_reset_seed). They are reported verbatim, under the key they
+# were read as, and take no part in the comparison — DST does not claim they
+# describe the same map.
 function Format-DuneCoriolisWriteMessage {
-    param([string]$Subject, [int]$Seed, $Readback)
+    param([string]$Subject, [int]$Seed, $Readback, $Context = @())
     $note = $script:DuneCoriolisTransientNote
+    $ctx  = @($Context)
+    $ctxTxt = ''
+    if ($ctx.Count -gt 0) {
+        $list = (($ctx | ForEach-Object { "'$($_.key)' = $($_.seed)" }) -join ', ')
+        $ctxTxt = " For reference, the other rows in world_map_reset_seed currently read $list; DST did not write these and does not assume which map each one describes."
+    }
     if (-not $Readback -or -not $Readback.checked) {
         $why = if ($Readback -and $Readback.reason) { " ($($Readback.reason))" } else { '' }
-        return "Recorded seed $Seed for $Subject. Could not re-read the rows to confirm the write landed$why. $note"
+        return "Recorded seed $Seed for $Subject. Could not re-read the rows to confirm the write landed$why. $note$ctxTxt"
     }
     $rows = @($Readback.rows)
     if ($rows.Count -eq 0) {
-        return "Wrote seed $Seed for $Subject, but a re-read found no matching rows, so the write did not land. $note"
+        return "Wrote seed $Seed for $Subject, but a re-read found no matching rows, so the write did not land. $note$ctxTxt"
     }
-    $read = (($rows | ForEach-Object { "$($_.kind) '$($_.key)'" }) -join ', ')
+    $read = (($rows | ForEach-Object { if ($_.key -and $_.key -ne $_.kind) { "$($_.kind) '$($_.key)'" } else { [string]$_.kind } }) -join ', ')
     $bad  = @($rows | Where-Object { $_.seed -ne $Seed })
     if ($bad.Count -eq 0) {
-        return "Recorded seed $Seed for $Subject. Re-read of $read confirms the write landed. $note"
+        return "Recorded seed $Seed for $Subject. Re-read of $read confirms the write landed. $note$ctxTxt"
     }
-    $badTxt = (($bad | ForEach-Object { "$($_.kind) '$($_.key)' now reads $($_.seed)" }) -join ', ')
-    return "Wrote seed $Seed for $Subject, but a re-read shows $badTxt, so the game has already replaced the value. $note"
+    $badTxt = (($bad | ForEach-Object { if ($_.key -and $_.key -ne $_.kind) { "$($_.kind) '$($_.key)' now reads $($_.seed)" } else { "$($_.kind) now reads $($_.seed)" } }) -join ', ')
+    return "Wrote seed $Seed for $Subject, but a re-read shows $badTxt, so the game has already replaced the value. $note$ctxTxt"
 }
 
 function Invoke-DuneCoriolisSetFarmSeed {
@@ -243,11 +254,12 @@ COMMIT;
     #
     # dune.world_map_reset_seed holds BOTH naming schemes for the same map — the
     # partition name (Survival_1, Overmap, DeepDesert_1) and the friendly name
-    # (HaggaBasin, Overland, DeepDesert) — and the game rewrites the friendly-name
-    # row. There is no reliable join in dune.world_partition that pairs the two,
-    # so DST does not guess: every read-back row is labelled with the key it was
-    # actually read under, and a counterpart row under the other naming scheme is
-    # neither claimed nor implied.
+    # (HaggaBasin, Overland, DeepDesert) — and the friendly-name row is the one
+    # the game rewrites, so it is the more informative of the two. There is no
+    # reliable join in dune.world_partition that pairs the two names, so DST does
+    # not guess: the remaining map rows are read and reported verbatim under the
+    # keys they were read as ('other_map'), they take no part in deciding whether
+    # the write landed, and no claim is made about which map each describes.
     $readback = Get-DuneCoriolisSeedReadback -Ip $Ip -Sql @"
 SELECT 'map'::text AS kind, wm.map::text AS name, wm.world_reset_seed AS seed
 FROM dune.world_map_reset_seed wm
@@ -256,9 +268,15 @@ UNION ALL
 SELECT 'partition'::text, wp.partition_id::text, wr.world_reset_seed
 FROM dune.world_partition wp
 JOIN dune.world_partition_reset_seed wr ON wr.partition_id = wp.partition_id
-WHERE wp.map = '$safeMap'::text;
+WHERE wp.map = '$safeMap'::text
+UNION ALL
+SELECT 'other_map'::text, wm2.map::text, wm2.world_reset_seed
+FROM dune.world_map_reset_seed wm2
+WHERE wm2.map <> '$safeMap'::text;
 "@
-    $msg = Format-DuneCoriolisWriteMessage -Subject "map '$Map' (and its partitions)" -Seed $Seed -Readback $readback
+    $written = @($readback.rows | Where-Object { $_.kind -ne 'other_map' })
+    $context = @($readback.rows | Where-Object { $_.kind -eq 'other_map' })
+    $msg = Format-DuneCoriolisWriteMessage -Subject "map '$Map' (and its partitions)" -Seed $Seed -Readback @{ checked = $readback.checked; reason = $readback.reason; rows = $written } -Context $context
     return @{
         ok        = $true
         scope     = 'map'
@@ -266,8 +284,9 @@ WHERE wp.map = '$safeMap'::text;
         seed      = $Seed
         recorded  = $true
         transient = $true
-        verified  = [bool]($readback.checked -and -not @($readback.rows | Where-Object { $_.seed -ne $Seed }).Count)
-        readback  = @($readback.rows)
+        verified  = [bool]($readback.checked -and $written.Count -and -not @($written | Where-Object { $_.seed -ne $Seed }).Count)
+        readback  = @($written)
+        other_map_rows = @($context)
         message   = $msg
     }
 }

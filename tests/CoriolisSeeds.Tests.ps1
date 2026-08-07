@@ -305,13 +305,37 @@ Describe 'Coriolis seed writes report honestly' -Tag 'Coriolis' {
             (New-FakeSeedRow -Kind 'partition' -Name '1'          -Seed 7)
         )
         $r = Invoke-DuneCoriolisSetMapSeed -Ip '1.2.3.4' -Map 'Survival_1' -Seed 7
-        # The friendly-name counterpart (HaggaBasin) is neither queried nor
-        # implied — DST does not guess the pairing.
+        # No name is ever assumed: the query only ever names the map that was
+        # asked for, and the friendly-name counterpart is not hardcoded anywhere.
         $script:lastReadSql | Should -Match "wm\.map = 'Survival_1'::text"
         $script:lastReadSql | Should -Not -Match 'HaggaBasin'
-        $r.message | Should -Not -Match 'HaggaBasin'
         @($r.readback).Count | Should -Be 2
         @($r.readback)[0].key | Should -Be 'Survival_1'
+    }
+
+    It 'reads the other naming scheme rows too, but only as unclaimed context' {
+        # world_map_reset_seed carries both the partition name (Survival_1) and
+        # the friendly name (HaggaBasin) for the same map, and the friendly-name
+        # row is the one the game rewrites. It is read and reported verbatim, but
+        # DST does not claim the two rows describe the same map, and the context
+        # row must not decide whether the write landed.
+        $script:readbackRows = @(
+            (New-FakeSeedRow -Kind 'map'       -Name 'Survival_1' -Seed 7),
+            (New-FakeSeedRow -Kind 'partition' -Name '1'          -Seed 7),
+            (New-FakeSeedRow -Kind 'other_map' -Name 'HaggaBasin' -Seed 0)
+        )
+        $r = Invoke-DuneCoriolisSetMapSeed -Ip '1.2.3.4' -Map 'Survival_1' -Seed 7
+
+        $script:lastReadSql | Should -Match "wm2\.map <> 'Survival_1'::text"
+        # Context is surfaced...
+        @($r.other_map_rows).Count | Should -Be 1
+        @($r.other_map_rows)[0].key | Should -Be 'HaggaBasin'
+        $r.message | Should -Match "'HaggaBasin' = 0"
+        $r.message | Should -Match '(?i)does not assume which map'
+        # ...but it is not treated as a written row, and does not flip the verdict.
+        @($r.readback).Count | Should -Be 2
+        $r.verified | Should -BeTrue
+        $r.message | Should -Match '(?i)confirms the write landed'
     }
 
     It 'sources the partition read-back through dune.world_partition, not a guessed map column' {
