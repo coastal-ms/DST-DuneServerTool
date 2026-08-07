@@ -1178,8 +1178,77 @@ $script:DstManagedEnd
     }
 }
 
-Describe 'DuneGameConfigSchema: CraftingSettings fields' -Tag 'GameConfig' {
+# ---------------------------------------------------------------------------
+# Forced Coriolis world seed.
+#
+# The world-reset seed rows in the game database are the game's OUTPUT: on map
+# load the game overwrites them with the seed it derived. The real control is
+# this INI key, so it has to be reachable through the normal schema machinery
+# (read / write / default / reset / client apply) rather than a bespoke UI.
+# ---------------------------------------------------------------------------
+Describe 'DuneGameConfigSchema: forced Coriolis world seed' -Tag 'GameConfig' {
 
+    It 'exposes m_ForcedCoriolisWorldSeed as a CoriolisSubsystem game setting' {
+        $fields = @{}
+        foreach ($f in $script:DuneGameConfigSchema) { $fields[$f.Key] = $f }
+
+        $fields.ContainsKey('m_ForcedCoriolisWorldSeed') | Should -BeTrue
+        $f = $fields['m_ForcedCoriolisWorldSeed']
+        $f.Section  | Should -Be '/Script/DuneSandbox.CoriolisSubsystem'
+        $f.File     | Should -Be 'game'
+        $f.Type     | Should -Be 'int'
+        $f.Min      | Should -Be -1
+        $f.Max      | Should -Be 11
+        $f.Default  | Should -Be '-1'
+        $f.Category | Should -Be 'Storm Cycle'
+    }
+
+    It 'matches its CoriolisSubsystem neighbours on client apply' {
+        $fields = @{}
+        foreach ($f in $script:DuneGameConfigSchema) { $fields[$f.Key] = $f }
+
+        $neighbours = @('m_CycleDurationInDays', 'm_bIsDbWipeEnabled', 'm_bShouldRestartServerOnCycleEnd')
+        foreach ($k in $neighbours) { $fields[$k].ClientApply | Should -BeTrue }
+        $fields['m_ForcedCoriolisWorldSeed'].ClientApply | Should -BeTrue
+    }
+
+    It 'documents that the key is server-wide and not immediate' {
+        $fields = @{}
+        foreach ($f in $script:DuneGameConfigSchema) { $fields[$f.Key] = $f }
+        $help = [string]$fields['m_ForcedCoriolisWorldSeed'].Help
+
+        # Farm-scoped: it pins every map, not just the Deep Desert.
+        $help | Should -Match '(?i)EVERY map'
+        $help | Should -Match '(?i)not just the Deep Desert'
+        # -1 = automatic per cycle, 0-11 pin a fixed layout.
+        $help | Should -Match '\-1 = automatic'
+        $help | Should -Match '0-11'
+        # Adoption happens on the next regeneration of each map.
+        $help | Should -Match '(?i)regenerates'
+        $help | Should -Match '(?i)not immediate'
+    }
+
+    It 'surfaces the seed through the curated schema API with its range intact' {
+        $storm = @((Get-DuneGameConfigSchemaApi) | Where-Object { $_.category -eq 'Storm Cycle' })
+        $storm.Count | Should -BeGreaterThan 0
+        $field = @($storm[0].fields | Where-Object { $_.key -eq 'm_ForcedCoriolisWorldSeed' })
+        $field.Count | Should -Be 1
+        $field[0].min | Should -Be -1
+        $field[0].max | Should -Be 11
+    }
+
+    It 'persists the seed into the server-side managed block' {
+        $sec = '/Script/DuneSandbox.CoriolisSubsystem'
+        $out = ConvertTo-DuneIniManaged -Raw '' -Updates @(
+            @{ section=$sec; key='m_ForcedCoriolisWorldSeed'; value='7' }
+        ) -QuotedKeys @{}
+
+        (Get-HeaderCount -Raw $out -Name $sec) | Should -Be 1
+        (Get-EffectiveValue -Raw $out -Section $sec -Key 'm_ForcedCoriolisWorldSeed') | Should -Be '7'
+    }
+}
+
+Describe 'DuneGameConfigSchema: CraftingSettings fields' -Tag 'GameConfig' {
     It 'exposes repair and recycler weights as server-and-client game settings' {
         $fields = @{}
         foreach ($f in $script:DuneGameConfigSchema) { $fields[$f.Key] = $f }
