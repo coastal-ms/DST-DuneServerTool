@@ -88,19 +88,37 @@ export function WickMaps() {
   // two naming schemes: partition names (Survival_1 / DeepDesert_1) are what an
   // admin requested, friendly names (DeepDesert) are what the game wrote back
   // after loading the map. The friendly row is the truth, so prefer it.
+  //
+  // The endpoint answers with sample data when the live database is unreachable,
+  // so the source is checked first - showing a stand-in seed and calling it live
+  // would be worse than admitting the seed is unknown.
   useEffect(() => {
     let alive = true
     getCoriolisSeeds()
       .then(r => {
         if (!alive) return
+        if (r.source !== 'live') {
+          setLiveErr(r.liveError || 'The live database is not reachable.')
+          return
+        }
         const maps = r.maps || []
         const friendly = maps.find(m => m.map === 'DeepDesert')
         const fallback = maps.find(m => m.map.startsWith('DeepDesert'))
         const live = friendly?.seed ?? fallback?.seed ?? null
-        if (live !== null && live >= 0 && live <= 11) {
-          setLiveSeed(live)
-          if (PAYLOAD.availableSeeds.includes(live)) setSeed(live)
+        if (live === null) {
+          setLiveErr('No Deep Desert row in the seed table.')
+          return
         }
+        if (live < 0 || live > 11) {
+          // -1 means no seed is forced; anything else is out of range for the
+          // twelve preset layouts and there is no map to show for it.
+          setLiveErr(live === -1
+            ? 'No seed is forced, so the game picks a layout each cycle.'
+            : `The server reports seed ${live}, which is outside 0-11.`)
+          return
+        }
+        setLiveSeed(live)
+        if (PAYLOAD.availableSeeds.includes(live)) setSeed(live)
       })
       .catch(e => { if (alive) setLiveErr(e instanceof Error ? e.message : String(e)) })
     return () => { alive = false }
@@ -328,8 +346,11 @@ export function WickMaps() {
                   )}
                 </span>
               ) : liveErr ? (
-                <span className="flex items-center gap-1.5 text-warning">
-                  <Icon name="AlertTriangle" size={12} /> Couldn't read the live seed.
+                <span className="flex items-start gap-1.5 text-warning">
+                  <Icon name="AlertTriangle" size={12} className="mt-0.5 shrink-0" />
+                  <span>
+                    Couldn't read the live seed. <span className="text-text-dim">{liveErr}</span>
+                  </span>
                 </span>
               ) : (
                 <span>Reading the live seed…</span>
