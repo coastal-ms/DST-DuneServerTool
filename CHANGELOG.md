@@ -13,6 +13,8 @@ here cover everything those tags shipped.
 
 ## [Unreleased]
 
+## [13.5.0] - 2026-08-07
+
 ### Added
 - **Wick Maps** — the DD Map page is now a per-seed Deep Desert point-of-interest map. Pick any of the 12 Coriolis world seeds (0–11) and the map redraws with that layout's caves, wrecks, testing stations, taxis, titanium and stravidium nodes, and large spice fields. The page opens on whichever seed the server is currently running and marks it in the selector, the legend doubles as a per-type filter, and each seed lists its large spice sectors and total POI count. Layout data is drawn in-app rather than shipped as images, so it adds well under a megabyte. The data was compiled from publicly archived community sources rather than read from your server — a card on the page says so and asks for corrections, and every seed carries a low, medium or high confidence label explaining how well its layout is evidenced.
 
@@ -20,7 +22,6 @@ here cover everything those tags shipped.
 
 ### Fixed
 - Bumped the transitive `js-yaml` dependency in the mobile and marketing-site lockfiles to 4.3.1, clearing a high-severity advisory (quadratic CPU consumption when resolving `!!omap`).
-
 
 - **Coriolis storm seeds can be set for a single map or a single partition again.** Clicking Apply on one map row or one partition row failed with a raw database error; only "Apply to all" worked. The game's own helper routines for the map and partition cases are broken in the shipped database, so DST now writes the seed values directly instead of asking the game to do it. Setting a map's seed still applies that seed to every partition on that map, and "Apply to all" is unchanged.
 
