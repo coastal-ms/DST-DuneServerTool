@@ -1,8 +1,19 @@
 ﻿# Coriolis Admin — v11.5.7
 #
-# Wraps dune.debug_get_coriolis_seeds() + dune.debug_set_farm_seed() /
-# debug_set_map_seed() / debug_set_partition_seed() so admins can inspect and
-# override the world-reset (Coriolis storm) seeds without resetting state.
+# Wraps dune.debug_get_coriolis_seeds() + dune.debug_set_farm_seed() so admins
+# can inspect and override the world-reset (Coriolis storm) seeds without
+# resetting state.
+#
+# Map- and partition-scoped writes go DIRECTLY to dune.world_map_reset_seed /
+# dune.world_partition_reset_seed instead of through the game's
+# dune.debug_set_map_seed() / dune.debug_set_partition_seed(). Those two stored
+# functions are broken in the shipped DB: both reference an undeclared
+# `in_server_info` variable, so every call aborts with
+# `missing FROM-clause entry for table "in_server_info"`. debug_set_map_seed()
+# additionally filters world_partition_reset_seed by a `map` column that table
+# does not have — the map->partition cascade has to join through
+# dune.world_partition. dune.debug_set_farm_seed() is clean, so the farm path
+# still calls it.
 #
 # Background: every map + partition has a "world_reset_seed" that determines
 # the next Coriolis storm layout. The game updates it automatically on storm
@@ -88,8 +99,9 @@ function Get-DuneCoriolisSeedsDemo {
 
 # ----------------------------------------------------------------------------
 # Writes — set seed at farm / map / partition scope.
-# These call dune.debug_set_* functions, which also cascade cleanup (corpses,
-# coriolis-affected partition state) when the seed actually changes.
+# Farm scope calls dune.debug_set_farm_seed, which also cascades cleanup
+# (corpses, coriolis-affected partition state) when the seed actually changes.
+# Map / partition scope write the reset-seed tables directly (see header).
 # ----------------------------------------------------------------------------
 function Invoke-DuneCoriolisSetFarmSeed {
     param([string]$Ip, [int]$Seed)
@@ -105,7 +117,19 @@ function Invoke-DuneCoriolisSetMapSeed {
     if (-not $Map) { return @{ ok = $false; error = 'map name is required.' } }
     if ($Seed -lt -1 -or $Seed -gt 11) { return @{ ok = $false; error = 'Seed must be -1 (auto) or 0-11 (one of the 12 Coriolis world layouts).' } }
     $safeMap = ConvertTo-DuneSqlString $Map
-    $sql = "SELECT dune.debug_set_map_seed('$safeMap'::text, $Seed::int);"
+    # Upsert the map's own seed, then cascade to every partition on that map.
+    # world_partition_reset_seed has no `map` column, so the partition list has
+    # to come from dune.world_partition.
+    $sql = @"
+BEGIN;
+INSERT INTO dune.world_map_reset_seed (map, world_reset_seed)
+VALUES ('$safeMap'::text, $Seed::int)
+ON CONFLICT (map) DO UPDATE SET world_reset_seed = EXCLUDED.world_reset_seed;
+INSERT INTO dune.world_partition_reset_seed (partition_id, world_reset_seed)
+SELECT DISTINCT wp.partition_id, $Seed::int FROM dune.world_partition wp WHERE wp.map = '$safeMap'::text
+ON CONFLICT (partition_id) DO UPDATE SET world_reset_seed = EXCLUDED.world_reset_seed;
+COMMIT;
+"@
     $res = Invoke-DuneSqlQuery -Ip $Ip -Sql $sql -ReadOnly $false -MaxRows 1 -TimeoutSec 15
     if (-not $res.ok) { return @{ ok = $false; error = $res.error } }
     return @{ ok = $true; scope = 'map'; map = $Map; seed = $Seed; message = "Set map '$Map' (+ its partitions) to seed $Seed." }
@@ -115,7 +139,11 @@ function Invoke-DuneCoriolisSetPartitionSeed {
     param([string]$Ip, [long]$PartitionId, [int]$Seed)
     if ($PartitionId -le 0) { return @{ ok = $false; error = 'partition_id is required.' } }
     if ($Seed -lt -1 -or $Seed -gt 11) { return @{ ok = $false; error = 'Seed must be -1 (auto) or 0-11 (one of the 12 Coriolis world layouts).' } }
-    $sql = "SELECT dune.debug_set_partition_seed($PartitionId::bigint, $Seed::int);"
+    $sql = @"
+INSERT INTO dune.world_partition_reset_seed (partition_id, world_reset_seed)
+VALUES ($PartitionId::int, $Seed::int)
+ON CONFLICT (partition_id) DO UPDATE SET world_reset_seed = EXCLUDED.world_reset_seed;
+"@
     $res = Invoke-DuneSqlQuery -Ip $Ip -Sql $sql -ReadOnly $false -MaxRows 1 -TimeoutSec 15
     if (-not $res.ok) { return @{ ok = $false; error = $res.error } }
     return @{ ok = $true; scope = 'partition'; partition_id = $PartitionId; seed = $Seed; message = "Set partition $PartitionId to seed $Seed." }

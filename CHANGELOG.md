@@ -13,6 +13,10 @@ here cover everything those tags shipped.
 
 ## [Unreleased]
 
+### Fixed
+
+- **Coriolis storm seeds can be set for a single map or a single partition again.** Clicking Apply on one map row or one partition row failed with a raw database error; only "Apply to all" worked. The game's own helper routines for the map and partition cases are broken in the shipped database, so DST now writes the seed values directly instead of asking the game to do it. Setting a map's seed still applies that seed to every partition on that map, and "Apply to all" is unchanged.
+
 ## [13.4.1] - 2026-08-04
 
 ### Fixed
