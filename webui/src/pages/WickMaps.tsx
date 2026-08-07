@@ -175,11 +175,14 @@ export function WickMaps() {
             </span>
           </div>
 
-          <div className="relative w-full">
+          <div className="relative w-full flex justify-center">
             <svg
               viewBox={`0 0 ${SIZE} ${SIZE}`}
-              className="w-full h-auto rounded-lg select-none"
-              style={{ background: '#4a3220' }}
+              className="h-auto max-w-full rounded-lg select-none"
+              style={{
+                background: '#4a3220',
+                width: 'min(100%, calc(100dvh - 19rem))',
+              }}
               role="img"
               aria-label={`Deep Desert point-of-interest map for world seed ${entry.seed}`}
               onMouseLeave={() => setHover(null)}
