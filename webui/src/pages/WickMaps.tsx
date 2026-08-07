@@ -24,7 +24,7 @@ type LegendEntry = { type: string; label: string; count: number }
 type SeedEntry = {
   seed: number
   confidence: string
-  reliability: 'good' | 'low'
+  reliability: 'high' | 'medium' | 'low'
   note: string | null
   capturedUtc: string
   largeSpiceSectors: string[]
@@ -72,7 +72,8 @@ function fmtCaptured(ts: string): string {
 }
 
 const RELIABILITY: Record<SeedEntry['reliability'], { label: string; cls: string; icon: string }> = {
-  good: { label: 'Archived', cls: 'text-text-dim border-border', icon: 'Archive' },
+  high: { label: 'High confidence', cls: 'text-ok border-ok/40', icon: 'CheckCircle2' },
+  medium: { label: 'Medium confidence', cls: 'text-text-dim border-border', icon: 'CircleDashed' },
   low: { label: 'Low confidence', cls: 'text-warning border-warning/50', icon: 'AlertTriangle' },
 }
 
@@ -126,7 +127,7 @@ export function WickMaps() {
   const labelFor = (t: string) =>
     entry.legend.find(l => l.type === t)?.label ?? t
 
-  const rel = RELIABILITY[entry.reliability] ?? RELIABILITY.good
+  const rel = RELIABILITY[entry.reliability] ?? RELIABILITY.medium
 
   return (
     <div className="flex flex-col gap-4">
