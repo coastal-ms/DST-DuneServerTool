@@ -4,25 +4,25 @@
   "main": "expo-router/entry",
   "dependencies": {
     "@react-native-async-storage/async-storage": "2.2.0",
-    "expo": "^57.0.0",
+    "expo": "^57.0.9",
     "expo-asset": "~57.0.7",
-    "expo-build-properties": "~57.0.7",
+    "expo-build-properties": "~57.0.8",
     "expo-camera": "~57.0.3",
     "expo-constants": "~57.0.7",
     "expo-linking": "~57.0.4",
-    "expo-router": "~57.0.8",
+    "expo-router": "~57.0.9",
     "expo-secure-store": "~57.0.1",
     "expo-splash-screen": "~57.0.5",
     "expo-status-bar": "~57.0.1",
-    "react": "19.2.3",
-    "react-dom": "19.2.3",
-    "react-native": "0.86.0",
-    "react-native-safe-area-context": "~5.7.0",
+    "react": "19.2.8",
+    "react-dom": "19.2.8",
+    "react-native": "0.86.2",
+    "react-native-safe-area-context": "~5.8.1",
     "react-native-screens": "~4.26.0",
     "react-native-web": "^0.21.2"
   },
   "devDependencies": {
-    "@types/react": "~19.2.10",
+    "@types/react": "~19.2.18",
     "typescript": "~6.0.3"
   },
   "scripts": {
