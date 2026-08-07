@@ -2432,7 +2432,7 @@
    "seed": 7,
    "confidence": "LOW(incomplete transcription)",
    "reliability": "low",
-   "note": "Transcribed from an archived third-party map capture, not from the labelled POI data the other seeds use. Incomplete: no titanium or stravidium mega nodes were recorded, and every other layout has at least one of each. Sub-cell positions are placeholders, so markers sit at a nominal point in their sector rather than where the POI actually is.",
+   "note": "Transcribed from an archived third-party map screenshot rather than the labelled POI data the other seeds use. Mega nodes were identified from that screenshot. Sub-cell positions are placeholders, so markers sit at a nominal point in their sector, and the POI count is lower than every other seed, so treat anything absent as unconfirmed rather than absent.",
    "capturedUtc": "20260807",
    "image": "dd_seed_07.png",
    "imageSha256Short": null,
@@ -2441,7 +2441,7 @@
     "H2",
     "H8"
    ],
-   "poiCount": 26,
+   "poiCount": 30,
    "legend": [
     {
      "type": "wreck",
@@ -2462,6 +2462,16 @@
      "type": "cave",
      "label": "Cave",
      "count": 3
+    },
+    {
+     "type": "titanium",
+     "label": "Titanium",
+     "count": 2
+    },
+    {
+     "type": "stravidium",
+     "label": "Stravidium",
+     "count": 2
     }
    ],
    "pois": [
@@ -2620,6 +2630,30 @@
      "subx": 3,
      "suby": 2,
      "type": "testing-station"
+    },
+    {
+     "sector": "G4",
+     "subx": 3,
+     "suby": 2,
+     "type": "titanium"
+    },
+    {
+     "sector": "H6",
+     "subx": 3,
+     "suby": 2,
+     "type": "titanium"
+    },
+    {
+     "sector": "G3",
+     "subx": 3,
+     "suby": 2,
+     "type": "stravidium"
+    },
+    {
+     "sector": "G7",
+     "subx": 3,
+     "suby": 2,
+     "type": "stravidium"
     }
    ]
   },
