@@ -8,7 +8,7 @@ import { GameConfig } from './pages/GameConfig'
 import { GameplayEnvironment } from './pages/GameplayEnvironment'
 import { Database } from './pages/Database'
 import { Sietches } from './pages/Sietches'
-import { DDMap } from './pages/DDMap'
+import { WickMaps } from './pages/WickMaps'
 import { MapSpinUp } from './pages/MapSpinUp'
 import { SetupWizard } from './pages/SetupWizard'
 import { Settings } from './pages/Settings'
@@ -71,7 +71,8 @@ export default function App() {
           <Route path="/broadcasts" element={<Boundary name="Broadcasts"><Broadcasts /></Boundary>} />
           <Route path="/database"   element={<Boundary name="Database"><Database /></Boundary>} />
           <Route path="/sietches"   element={<Boundary name="Sietches"><Sietches /></Boundary>} />
-          <Route path="/dd-map"     element={<Boundary name="Deep Desert Map"><DDMap /></Boundary>} />
+          <Route path="/dd-map"     element={<Boundary name="Wick Maps"><WickMaps /></Boundary>} />
+          <Route path="/wick-maps"  element={<Boundary name="Wick Maps"><WickMaps /></Boundary>} />
           <Route path="/map-spinup" element={<Boundary name="Map SpinUp"><MapSpinUp /></Boundary>} />
           <Route path="/settings"   element={<Boundary name="Settings"><Settings /></Boundary>} />
           <Route path="/setup"      element={<Boundary name="Setup Wizard"><SetupWizard /></Boundary>} />

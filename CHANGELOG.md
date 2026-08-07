@@ -13,6 +13,9 @@ here cover everything those tags shipped.
 
 ## [Unreleased]
 
+### Added
+- **Wick Maps** — the DD Map page is now a per-seed Deep Desert point-of-interest map. Pick any of the 12 Coriolis world seeds (0–11) and the map redraws with that layout's caves, wrecks, testing stations, taxis, titanium and stravidium nodes, and large spice fields. The page opens on whichever seed the server is currently running and marks it in the selector, the legend doubles as a per-type filter, and each seed lists its large spice sectors and total POI count. Layout data is drawn in-app rather than shipped as images, so it adds well under a megabyte. The data was compiled from publicly archived community sources rather than read from your server — a card on the page says so and asks for corrections, and the two seeds whose data is weakest are flagged in place with an explanation rather than presented as fact.
+
 ### Fixed
 - Bumped the transitive `js-yaml` dependency in the mobile and marketing-site lockfiles to 4.3.1, clearing a high-severity advisory (quadratic CPU consumption when resolving `!!omap`).
 

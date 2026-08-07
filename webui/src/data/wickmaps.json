@@ -1,0 +1,4113 @@
+{
+ "schemaVersion": 2,
+ "generated": "2026-08-07",
+ "disclaimer": "This layout data was compiled from publicly archived community sources, not from your server. It may be incomplete or inaccurate, and the game may have changed since it was captured. Please report anything that looks wrong so it can be corrected.",
+ "note": "Deep Desert POI layouts per Coriolis world seed.",
+ "seeds": [
+  {
+   "seed": 0,
+   "confidence": "CONFIRMED",
+   "reliability": "good",
+   "note": "Mega-node and cave set reconciled against the reference map; the original capture stacked titanium and stravidium on the same sectors and over-reported both.",
+   "capturedUtc": "20250722015553",
+   "image": "dd_seed_00.png",
+   "imageSha256Short": null,
+   "largeSpiceSectors": [
+    "F1",
+    "F5",
+    "H5",
+    "I8"
+   ],
+   "poiCount": 40,
+   "legend": [
+    {
+     "type": "wreck",
+     "label": "Wreck",
+     "count": 14
+    },
+    {
+     "type": "testing-station",
+     "label": "Testing Station",
+     "count": 10
+    },
+    {
+     "type": "cave",
+     "label": "Cave",
+     "count": 5
+    },
+    {
+     "type": "large-spice-field",
+     "label": "Large Spice Field",
+     "count": 4
+    },
+    {
+     "type": "taxi-service",
+     "label": "Taxi",
+     "count": 3
+    },
+    {
+     "type": "stravidium",
+     "label": "Stravidium",
+     "count": 3
+    },
+    {
+     "type": "titanium",
+     "label": "Titanium",
+     "count": 1
+    }
+   ],
+   "pois": [
+    {
+     "sector": "I5",
+     "subx": 3,
+     "suby": 3,
+     "type": "testing-station"
+    },
+    {
+     "sector": "I8",
+     "subx": 2,
+     "suby": 3,
+     "type": "large-spice-field"
+    },
+    {
+     "sector": "H1",
+     "subx": 3,
+     "suby": 0,
+     "type": "wreck"
+    },
+    {
+     "sector": "H5",
+     "subx": 2,
+     "suby": 2,
+     "type": "large-spice-field"
+    },
+    {
+     "sector": "H8",
+     "subx": 3,
+     "suby": 3,
+     "type": "wreck"
+    },
+    {
+     "sector": "G3",
+     "subx": 1,
+     "suby": 1,
+     "type": "testing-station"
+    },
+    {
+     "sector": "F1",
+     "subx": 3,
+     "suby": 2,
+     "type": "large-spice-field"
+    },
+    {
+     "sector": "F5",
+     "subx": 3,
+     "suby": 2,
+     "type": "large-spice-field"
+    },
+    {
+     "sector": "F8",
+     "subx": 2,
+     "suby": 2,
+     "type": "wreck"
+    },
+    {
+     "sector": "E3",
+     "subx": 2,
+     "suby": 1,
+     "type": "cave"
+    },
+    {
+     "sector": "E9",
+     "subx": 1,
+     "suby": 0,
+     "type": "cave"
+    },
+    {
+     "sector": "D1",
+     "subx": 3,
+     "suby": 2,
+     "type": "testing-station"
+    },
+    {
+     "sector": "D6",
+     "subx": 2,
+     "suby": 0,
+     "type": "wreck"
+    },
+    {
+     "sector": "D7",
+     "subx": 4,
+     "suby": 0,
+     "type": "testing-station"
+    },
+    {
+     "sector": "C8",
+     "subx": 3,
+     "suby": 3,
+     "type": "cave"
+    },
+    {
+     "sector": "A1",
+     "subx": 3,
+     "suby": 1,
+     "type": "wreck"
+    },
+    {
+     "sector": "A1",
+     "subx": 2,
+     "suby": 2,
+     "type": "wreck"
+    },
+    {
+     "sector": "A2",
+     "subx": 1,
+     "suby": 1,
+     "type": "taxi-service"
+    },
+    {
+     "sector": "A2",
+     "subx": 2,
+     "suby": 1,
+     "type": "testing-station"
+    },
+    {
+     "sector": "A2",
+     "subx": 3,
+     "suby": 2,
+     "type": "wreck"
+    },
+    {
+     "sector": "A3",
+     "subx": 3,
+     "suby": 1,
+     "type": "wreck"
+    },
+    {
+     "sector": "A3",
+     "subx": 2,
+     "suby": 2,
+     "type": "testing-station"
+    },
+    {
+     "sector": "A3",
+     "subx": 4,
+     "suby": 2,
+     "type": "wreck"
+    },
+    {
+     "sector": "A4",
+     "subx": 4,
+     "suby": 1,
+     "type": "testing-station"
+    },
+    {
+     "sector": "A4",
+     "subx": 3,
+     "suby": 2,
+     "type": "wreck"
+    },
+    {
+     "sector": "A5",
+     "subx": 2,
+     "suby": 0,
+     "type": "taxi-service"
+    },
+    {
+     "sector": "A5",
+     "subx": 2,
+     "suby": 1,
+     "type": "wreck"
+    },
+    {
+     "sector": "A5",
+     "subx": 3,
+     "suby": 2,
+     "type": "testing-station"
+    },
+    {
+     "sector": "A7",
+     "subx": 2,
+     "suby": 0,
+     "type": "wreck"
+    },
+    {
+     "sector": "A8",
+     "subx": 2,
+     "suby": 0,
+     "type": "taxi-service"
+    },
+    {
+     "sector": "A8",
+     "subx": 3,
+     "suby": 0,
+     "type": "testing-station"
+    },
+    {
+     "sector": "A9",
+     "subx": 2,
+     "suby": 1,
+     "type": "wreck"
+    },
+    {
+     "sector": "A9",
+     "subx": 1,
+     "suby": 2,
+     "type": "testing-station"
+    },
+    {
+     "sector": "A9",
+     "subx": 3,
+     "suby": 2,
+     "type": "wreck"
+    },
+    {
+     "sector": "F4",
+     "subx": 3,
+     "suby": 3,
+     "type": "stravidium"
+    },
+    {
+     "sector": "H5",
+     "subx": 4,
+     "suby": 1,
+     "type": "stravidium"
+    },
+    {
+     "sector": "H8",
+     "subx": 3,
+     "suby": 1,
+     "type": "stravidium"
+    },
+    {
+     "sector": "F6",
+     "subx": 2,
+     "suby": 3,
+     "type": "titanium"
+    },
+    {
+     "sector": "E2",
+     "subx": 2,
+     "suby": 1,
+     "type": "cave"
+    },
+    {
+     "sector": "B2",
+     "subx": 2,
+     "suby": 1,
+     "type": "cave"
+    }
+   ]
+  },
+  {
+   "seed": 1,
+   "confidence": "CONFIRMED",
+   "reliability": "good",
+   "note": null,
+   "capturedUtc": "20251206211617",
+   "image": "dd_seed_01.png",
+   "imageSha256Short": null,
+   "largeSpiceSectors": [
+    "F1",
+    "G5",
+    "I1",
+    "I3",
+    "I8"
+   ],
+   "poiCount": 45,
+   "legend": [
+    {
+     "type": "cave",
+     "label": "Cave",
+     "count": 13
+    },
+    {
+     "type": "wreck",
+     "label": "Wreck",
+     "count": 13
+    },
+    {
+     "type": "testing-station",
+     "label": "Testing Station",
+     "count": 9
+    },
+    {
+     "type": "large-spice-field",
+     "label": "Large Spice Field",
+     "count": 5
+    },
+    {
+     "type": "taxi-service",
+     "label": "Taxi",
+     "count": 3
+    },
+    {
+     "type": "stravidium",
+     "label": "Stravidium",
+     "count": 1
+    },
+    {
+     "type": "titanium",
+     "label": "Titanium",
+     "count": 1
+    }
+   ],
+   "pois": [
+    {
+     "sector": "I1",
+     "subx": 3,
+     "suby": 3,
+     "type": "large-spice-field"
+    },
+    {
+     "sector": "I2",
+     "subx": 2,
+     "suby": 1,
+     "type": "cave"
+    },
+    {
+     "sector": "I3",
+     "subx": 2,
+     "suby": 2,
+     "type": "large-spice-field"
+    },
+    {
+     "sector": "I5",
+     "subx": 3,
+     "suby": 3,
+     "type": "wreck"
+    },
+    {
+     "sector": "I8",
+     "subx": 2,
+     "suby": 3,
+     "type": "large-spice-field"
+    },
+    {
+     "sector": "I9",
+     "subx": 3,
+     "suby": 1,
+     "type": "cave"
+    },
+    {
+     "sector": "H2",
+     "subx": 2,
+     "suby": 1,
+     "type": "testing-station"
+    },
+    {
+     "sector": "H2",
+     "subx": 4,
+     "suby": 3,
+     "type": "wreck"
+    },
+    {
+     "sector": "H8",
+     "subx": 3,
+     "suby": 1,
+     "type": "wreck"
+    },
+    {
+     "sector": "G5",
+     "subx": 3,
+     "suby": 0,
+     "type": "large-spice-field"
+    },
+    {
+     "sector": "G5",
+     "subx": 3,
+     "suby": 2,
+     "type": "cave"
+    },
+    {
+     "sector": "G8",
+     "subx": 2,
+     "suby": 0,
+     "type": "stravidium"
+    },
+    {
+     "sector": "F1",
+     "subx": 2,
+     "suby": 2,
+     "type": "large-spice-field"
+    },
+    {
+     "sector": "F1",
+     "subx": 4,
+     "suby": 2,
+     "type": "cave"
+    },
+    {
+     "sector": "F5",
+     "subx": 4,
+     "suby": 3,
+     "type": "titanium"
+    },
+    {
+     "sector": "F6",
+     "subx": 2,
+     "suby": 3,
+     "type": "cave"
+    },
+    {
+     "sector": "F9",
+     "subx": 1,
+     "suby": 3,
+     "type": "testing-station"
+    },
+    {
+     "sector": "F9",
+     "subx": 3,
+     "suby": 3,
+     "type": "cave"
+    },
+    {
+     "sector": "D2",
+     "subx": 2,
+     "suby": 1,
+     "type": "testing-station"
+    },
+    {
+     "sector": "D4",
+     "subx": 3,
+     "suby": 0,
+     "type": "cave"
+    },
+    {
+     "sector": "D6",
+     "subx": 3,
+     "suby": 0,
+     "type": "cave"
+    },
+    {
+     "sector": "D9",
+     "subx": 1,
+     "suby": 0,
+     "type": "cave"
+    },
+    {
+     "sector": "C2",
+     "subx": 3,
+     "suby": 3,
+     "type": "cave"
+    },
+    {
+     "sector": "C7",
+     "subx": 4,
+     "suby": 2,
+     "type": "cave"
+    },
+    {
+     "sector": "B4",
+     "subx": 4,
+     "suby": 0,
+     "type": "cave"
+    },
+    {
+     "sector": "B7",
+     "subx": 3,
+     "suby": 1,
+     "type": "cave"
+    },
+    {
+     "sector": "A1",
+     "subx": 3,
+     "suby": 1,
+     "type": "wreck"
+    },
+    {
+     "sector": "A1",
+     "subx": 2,
+     "suby": 2,
+     "type": "wreck"
+    },
+    {
+     "sector": "A2",
+     "subx": 1,
+     "suby": 1,
+     "type": "taxi-service"
+    },
+    {
+     "sector": "A2",
+     "subx": 2,
+     "suby": 1,
+     "type": "testing-station"
+    },
+    {
+     "sector": "A2",
+     "subx": 3,
+     "suby": 2,
+     "type": "wreck"
+    },
+    {
+     "sector": "A3",
+     "subx": 3,
+     "suby": 1,
+     "type": "wreck"
+    },
+    {
+     "sector": "A3",
+     "subx": 2,
+     "suby": 2,
+     "type": "testing-station"
+    },
+    {
+     "sector": "A3",
+     "subx": 4,
+     "suby": 2,
+     "type": "wreck"
+    },
+    {
+     "sector": "A4",
+     "subx": 4,
+     "suby": 1,
+     "type": "testing-station"
+    },
+    {
+     "sector": "A4",
+     "subx": 3,
+     "suby": 2,
+     "type": "wreck"
+    },
+    {
+     "sector": "A5",
+     "subx": 2,
+     "suby": 0,
+     "type": "taxi-service"
+    },
+    {
+     "sector": "A5",
+     "subx": 2,
+     "suby": 1,
+     "type": "wreck"
+    },
+    {
+     "sector": "A5",
+     "subx": 3,
+     "suby": 2,
+     "type": "testing-station"
+    },
+    {
+     "sector": "A7",
+     "subx": 2,
+     "suby": 0,
+     "type": "wreck"
+    },
+    {
+     "sector": "A8",
+     "subx": 2,
+     "suby": 0,
+     "type": "taxi-service"
+    },
+    {
+     "sector": "A8",
+     "subx": 3,
+     "suby": 0,
+     "type": "testing-station"
+    },
+    {
+     "sector": "A9",
+     "subx": 2,
+     "suby": 1,
+     "type": "wreck"
+    },
+    {
+     "sector": "A9",
+     "subx": 1,
+     "suby": 2,
+     "type": "testing-station"
+    },
+    {
+     "sector": "A9",
+     "subx": 3,
+     "suby": 2,
+     "type": "wreck"
+    }
+   ]
+  },
+  {
+   "seed": 2,
+   "confidence": "CONFIRMED",
+   "reliability": "good",
+   "note": null,
+   "capturedUtc": "20250923015322",
+   "image": "dd_seed_02.png",
+   "imageSha256Short": null,
+   "largeSpiceSectors": [
+    "F4",
+    "G1",
+    "G8",
+    "I2",
+    "I5",
+    "I9"
+   ],
+   "poiCount": 41,
+   "legend": [
+    {
+     "type": "wreck",
+     "label": "Wreck",
+     "count": 14
+    },
+    {
+     "type": "testing-station",
+     "label": "Testing Station",
+     "count": 10
+    },
+    {
+     "type": "large-spice-field",
+     "label": "Large Spice Field",
+     "count": 6
+    },
+    {
+     "type": "cave",
+     "label": "Cave",
+     "count": 4
+    },
+    {
+     "type": "taxi-service",
+     "label": "Taxi",
+     "count": 3
+    },
+    {
+     "type": "titanium",
+     "label": "Titanium",
+     "count": 2
+    },
+    {
+     "type": "stravidium",
+     "label": "Stravidium",
+     "count": 2
+    }
+   ],
+   "pois": [
+    {
+     "sector": "I1",
+     "subx": 3,
+     "suby": 3,
+     "type": "cave"
+    },
+    {
+     "sector": "I1",
+     "subx": 4,
+     "suby": 3,
+     "type": "titanium"
+    },
+    {
+     "sector": "I2",
+     "subx": 3,
+     "suby": 3,
+     "type": "large-spice-field"
+    },
+    {
+     "sector": "I5",
+     "subx": 3,
+     "suby": 2,
+     "type": "large-spice-field"
+    },
+    {
+     "sector": "I9",
+     "subx": 1,
+     "suby": 3,
+     "type": "large-spice-field"
+    },
+    {
+     "sector": "H8",
+     "subx": 3,
+     "suby": 1,
+     "type": "stravidium"
+    },
+    {
+     "sector": "G1",
+     "subx": 4,
+     "suby": 1,
+     "type": "large-spice-field"
+    },
+    {
+     "sector": "G3",
+     "subx": 2,
+     "suby": 0,
+     "type": "titanium"
+    },
+    {
+     "sector": "G6",
+     "subx": 3,
+     "suby": 1,
+     "type": "cave"
+    },
+    {
+     "sector": "G6",
+     "subx": 3,
+     "suby": 2,
+     "type": "cave"
+    },
+    {
+     "sector": "G7",
+     "subx": 3,
+     "suby": 1,
+     "type": "wreck"
+    },
+    {
+     "sector": "G8",
+     "subx": 3,
+     "suby": 1,
+     "type": "large-spice-field"
+    },
+    {
+     "sector": "G9",
+     "subx": 1,
+     "suby": 0,
+     "type": "stravidium"
+    },
+    {
+     "sector": "F4",
+     "subx": 2,
+     "suby": 2,
+     "type": "large-spice-field"
+    },
+    {
+     "sector": "F4",
+     "subx": 4,
+     "suby": 3,
+     "type": "testing-station"
+    },
+    {
+     "sector": "F7",
+     "subx": 4,
+     "suby": 2,
+     "type": "testing-station"
+    },
+    {
+     "sector": "E5",
+     "subx": 3,
+     "suby": 3,
+     "type": "wreck"
+    },
+    {
+     "sector": "E9",
+     "subx": 2,
+     "suby": 1,
+     "type": "cave"
+    },
+    {
+     "sector": "D1",
+     "subx": 3,
+     "suby": 1,
+     "type": "testing-station"
+    },
+    {
+     "sector": "D6",
+     "subx": 1,
+     "suby": 1,
+     "type": "testing-station"
+    },
+    {
+     "sector": "C3",
+     "subx": 2,
+     "suby": 3,
+     "type": "wreck"
+    },
+    {
+     "sector": "B7",
+     "subx": 4,
+     "suby": 1,
+     "type": "wreck"
+    },
+    {
+     "sector": "A1",
+     "subx": 3,
+     "suby": 1,
+     "type": "wreck"
+    },
+    {
+     "sector": "A1",
+     "subx": 2,
+     "suby": 2,
+     "type": "wreck"
+    },
+    {
+     "sector": "A2",
+     "subx": 1,
+     "suby": 1,
+     "type": "taxi-service"
+    },
+    {
+     "sector": "A2",
+     "subx": 2,
+     "suby": 1,
+     "type": "testing-station"
+    },
+    {
+     "sector": "A2",
+     "subx": 3,
+     "suby": 2,
+     "type": "wreck"
+    },
+    {
+     "sector": "A3",
+     "subx": 3,
+     "suby": 1,
+     "type": "wreck"
+    },
+    {
+     "sector": "A3",
+     "subx": 2,
+     "suby": 2,
+     "type": "testing-station"
+    },
+    {
+     "sector": "A3",
+     "subx": 4,
+     "suby": 2,
+     "type": "wreck"
+    },
+    {
+     "sector": "A4",
+     "subx": 4,
+     "suby": 1,
+     "type": "testing-station"
+    },
+    {
+     "sector": "A4",
+     "subx": 3,
+     "suby": 2,
+     "type": "wreck"
+    },
+    {
+     "sector": "A5",
+     "subx": 2,
+     "suby": 0,
+     "type": "taxi-service"
+    },
+    {
+     "sector": "A5",
+     "subx": 2,
+     "suby": 1,
+     "type": "wreck"
+    },
+    {
+     "sector": "A5",
+     "subx": 3,
+     "suby": 2,
+     "type": "testing-station"
+    },
+    {
+     "sector": "A7",
+     "subx": 2,
+     "suby": 0,
+     "type": "wreck"
+    },
+    {
+     "sector": "A8",
+     "subx": 2,
+     "suby": 0,
+     "type": "taxi-service"
+    },
+    {
+     "sector": "A8",
+     "subx": 3,
+     "suby": 0,
+     "type": "testing-station"
+    },
+    {
+     "sector": "A9",
+     "subx": 2,
+     "suby": 1,
+     "type": "wreck"
+    },
+    {
+     "sector": "A9",
+     "subx": 1,
+     "suby": 2,
+     "type": "testing-station"
+    },
+    {
+     "sector": "A9",
+     "subx": 3,
+     "suby": 2,
+     "type": "wreck"
+    }
+   ]
+  },
+  {
+   "seed": 3,
+   "confidence": "CONFIRMED",
+   "reliability": "good",
+   "note": null,
+   "capturedUtc": "20251028050554",
+   "image": "dd_seed_03.png",
+   "imageSha256Short": null,
+   "largeSpiceSectors": [
+    "F3",
+    "F9",
+    "G4",
+    "H2",
+    "H8"
+   ],
+   "poiCount": 54,
+   "legend": [
+    {
+     "type": "cave",
+     "label": "Cave",
+     "count": 18
+    },
+    {
+     "type": "wreck",
+     "label": "Wreck",
+     "count": 13
+    },
+    {
+     "type": "testing-station",
+     "label": "Testing Station",
+     "count": 11
+    },
+    {
+     "type": "large-spice-field",
+     "label": "Large Spice Field",
+     "count": 5
+    },
+    {
+     "type": "taxi-service",
+     "label": "Taxi",
+     "count": 3
+    },
+    {
+     "type": "titanium",
+     "label": "Titanium",
+     "count": 2
+    },
+    {
+     "type": "stravidium",
+     "label": "Stravidium",
+     "count": 2
+    }
+   ],
+   "pois": [
+    {
+     "sector": "I1",
+     "subx": 4,
+     "suby": 3,
+     "type": "wreck"
+    },
+    {
+     "sector": "I4",
+     "subx": 3,
+     "suby": 3,
+     "type": "cave"
+    },
+    {
+     "sector": "H2",
+     "subx": 3,
+     "suby": 2,
+     "type": "large-spice-field"
+    },
+    {
+     "sector": "H6",
+     "subx": 1,
+     "suby": 0,
+     "type": "titanium"
+    },
+    {
+     "sector": "H6",
+     "subx": 2,
+     "suby": 1,
+     "type": "testing-station"
+    },
+    {
+     "sector": "H7",
+     "subx": 2,
+     "suby": 1,
+     "type": "cave"
+    },
+    {
+     "sector": "H8",
+     "subx": 3,
+     "suby": 1,
+     "type": "large-spice-field"
+    },
+    {
+     "sector": "G2",
+     "subx": 3,
+     "suby": 0,
+     "type": "cave"
+    },
+    {
+     "sector": "G3",
+     "subx": 1,
+     "suby": 0,
+     "type": "testing-station"
+    },
+    {
+     "sector": "G3",
+     "subx": 3,
+     "suby": 1,
+     "type": "stravidium"
+    },
+    {
+     "sector": "G3",
+     "subx": 2,
+     "suby": 2,
+     "type": "cave"
+    },
+    {
+     "sector": "G4",
+     "subx": 4,
+     "suby": 2,
+     "type": "large-spice-field"
+    },
+    {
+     "sector": "G8",
+     "subx": 1,
+     "suby": 0,
+     "type": "cave"
+    },
+    {
+     "sector": "F3",
+     "subx": 3,
+     "suby": 1,
+     "type": "cave"
+    },
+    {
+     "sector": "F3",
+     "subx": 1,
+     "suby": 2,
+     "type": "large-spice-field"
+    },
+    {
+     "sector": "F3",
+     "subx": 3,
+     "suby": 3,
+     "type": "titanium"
+    },
+    {
+     "sector": "F5",
+     "subx": 2,
+     "suby": 2,
+     "type": "wreck"
+    },
+    {
+     "sector": "F6",
+     "subx": 1,
+     "suby": 3,
+     "type": "wreck"
+    },
+    {
+     "sector": "F8",
+     "subx": 3,
+     "suby": 2,
+     "type": "testing-station"
+    },
+    {
+     "sector": "F8",
+     "subx": 2,
+     "suby": 3,
+     "type": "stravidium"
+    },
+    {
+     "sector": "F9",
+     "subx": 1,
+     "suby": 2,
+     "type": "large-spice-field"
+    },
+    {
+     "sector": "E7",
+     "subx": 3,
+     "suby": 1,
+     "type": "cave"
+    },
+    {
+     "sector": "E9",
+     "subx": 2,
+     "suby": 1,
+     "type": "cave"
+    },
+    {
+     "sector": "D3",
+     "subx": 2,
+     "suby": 1,
+     "type": "testing-station"
+    },
+    {
+     "sector": "D6",
+     "subx": 3,
+     "suby": 0,
+     "type": "cave"
+    },
+    {
+     "sector": "D7",
+     "subx": 4,
+     "suby": 1,
+     "type": "testing-station"
+    },
+    {
+     "sector": "C2",
+     "subx": 3,
+     "suby": 3,
+     "type": "cave"
+    },
+    {
+     "sector": "C5",
+     "subx": 2,
+     "suby": 1,
+     "type": "cave"
+    },
+    {
+     "sector": "C5",
+     "subx": 3,
+     "suby": 3,
+     "type": "cave"
+    },
+    {
+     "sector": "C7",
+     "subx": 4,
+     "suby": 3,
+     "type": "cave"
+    },
+    {
+     "sector": "C8",
+     "subx": 2,
+     "suby": 1,
+     "type": "cave"
+    },
+    {
+     "sector": "C8",
+     "subx": 3,
+     "suby": 2,
+     "type": "cave"
+    },
+    {
+     "sector": "B2",
+     "subx": 3,
+     "suby": 0,
+     "type": "cave"
+    },
+    {
+     "sector": "B3",
+     "subx": 2,
+     "suby": 0,
+     "type": "cave"
+    },
+    {
+     "sector": "B5",
+     "subx": 3,
+     "suby": 0,
+     "type": "cave"
+    },
+    {
+     "sector": "A1",
+     "subx": 3,
+     "suby": 1,
+     "type": "wreck"
+    },
+    {
+     "sector": "A1",
+     "subx": 2,
+     "suby": 2,
+     "type": "wreck"
+    },
+    {
+     "sector": "A2",
+     "subx": 1,
+     "suby": 1,
+     "type": "taxi-service"
+    },
+    {
+     "sector": "A2",
+     "subx": 2,
+     "suby": 1,
+     "type": "testing-station"
+    },
+    {
+     "sector": "A2",
+     "subx": 3,
+     "suby": 2,
+     "type": "wreck"
+    },
+    {
+     "sector": "A3",
+     "subx": 3,
+     "suby": 1,
+     "type": "wreck"
+    },
+    {
+     "sector": "A3",
+     "subx": 2,
+     "suby": 2,
+     "type": "testing-station"
+    },
+    {
+     "sector": "A3",
+     "subx": 4,
+     "suby": 2,
+     "type": "wreck"
+    },
+    {
+     "sector": "A4",
+     "subx": 4,
+     "suby": 1,
+     "type": "testing-station"
+    },
+    {
+     "sector": "A4",
+     "subx": 3,
+     "suby": 2,
+     "type": "wreck"
+    },
+    {
+     "sector": "A5",
+     "subx": 2,
+     "suby": 0,
+     "type": "taxi-service"
+    },
+    {
+     "sector": "A5",
+     "subx": 2,
+     "suby": 1,
+     "type": "wreck"
+    },
+    {
+     "sector": "A5",
+     "subx": 3,
+     "suby": 2,
+     "type": "testing-station"
+    },
+    {
+     "sector": "A7",
+     "subx": 2,
+     "suby": 0,
+     "type": "wreck"
+    },
+    {
+     "sector": "A8",
+     "subx": 2,
+     "suby": 0,
+     "type": "taxi-service"
+    },
+    {
+     "sector": "A8",
+     "subx": 3,
+     "suby": 0,
+     "type": "testing-station"
+    },
+    {
+     "sector": "A9",
+     "subx": 2,
+     "suby": 1,
+     "type": "wreck"
+    },
+    {
+     "sector": "A9",
+     "subx": 1,
+     "suby": 2,
+     "type": "testing-station"
+    },
+    {
+     "sector": "A9",
+     "subx": 3,
+     "suby": 2,
+     "type": "wreck"
+    }
+   ]
+  },
+  {
+   "seed": 4,
+   "confidence": "CONFIRMED",
+   "reliability": "good",
+   "note": null,
+   "capturedUtc": "20251225052802",
+   "image": "dd_seed_04.png",
+   "imageSha256Short": null,
+   "largeSpiceSectors": [
+    "F1",
+    "F9",
+    "H5",
+    "I3",
+    "I9"
+   ],
+   "poiCount": 52,
+   "legend": [
+    {
+     "type": "cave",
+     "label": "Cave",
+     "count": 17
+    },
+    {
+     "type": "wreck",
+     "label": "Wreck",
+     "count": 15
+    },
+    {
+     "type": "testing-station",
+     "label": "Testing Station",
+     "count": 8
+    },
+    {
+     "type": "large-spice-field",
+     "label": "Large Spice Field",
+     "count": 5
+    },
+    {
+     "type": "taxi-service",
+     "label": "Taxi",
+     "count": 3
+    },
+    {
+     "type": "titanium",
+     "label": "Titanium",
+     "count": 2
+    },
+    {
+     "type": "stravidium",
+     "label": "Stravidium",
+     "count": 2
+    }
+   ],
+   "pois": [
+    {
+     "sector": "I3",
+     "subx": 2,
+     "suby": 3,
+     "type": "large-spice-field"
+    },
+    {
+     "sector": "I5",
+     "subx": 2,
+     "suby": 3,
+     "type": "cave"
+    },
+    {
+     "sector": "I9",
+     "subx": 3,
+     "suby": 1,
+     "type": "large-spice-field"
+    },
+    {
+     "sector": "H3",
+     "subx": 2,
+     "suby": 3,
+     "type": "cave"
+    },
+    {
+     "sector": "H5",
+     "subx": 3,
+     "suby": 1,
+     "type": "large-spice-field"
+    },
+    {
+     "sector": "H5",
+     "subx": 1,
+     "suby": 3,
+     "type": "cave"
+    },
+    {
+     "sector": "H6",
+     "subx": 2,
+     "suby": 3,
+     "type": "titanium"
+    },
+    {
+     "sector": "H8",
+     "subx": 2,
+     "suby": 0,
+     "type": "titanium"
+    },
+    {
+     "sector": "G2",
+     "subx": 2,
+     "suby": 0,
+     "type": "cave"
+    },
+    {
+     "sector": "G3",
+     "subx": 1,
+     "suby": 1,
+     "type": "wreck"
+    },
+    {
+     "sector": "G4",
+     "subx": 3,
+     "suby": 0,
+     "type": "cave"
+    },
+    {
+     "sector": "G5",
+     "subx": 2,
+     "suby": 1,
+     "type": "stravidium"
+    },
+    {
+     "sector": "G6",
+     "subx": 3,
+     "suby": 0,
+     "type": "cave"
+    },
+    {
+     "sector": "G6",
+     "subx": 1,
+     "suby": 1,
+     "type": "wreck"
+    },
+    {
+     "sector": "G7",
+     "subx": 3,
+     "suby": 1,
+     "type": "stravidium"
+    },
+    {
+     "sector": "G7",
+     "subx": 4,
+     "suby": 2,
+     "type": "cave"
+    },
+    {
+     "sector": "G8",
+     "subx": 1,
+     "suby": 0,
+     "type": "wreck"
+    },
+    {
+     "sector": "F1",
+     "subx": 3,
+     "suby": 2,
+     "type": "large-spice-field"
+    },
+    {
+     "sector": "F2",
+     "subx": 4,
+     "suby": 2,
+     "type": "cave"
+    },
+    {
+     "sector": "F3",
+     "subx": 2,
+     "suby": 3,
+     "type": "cave"
+    },
+    {
+     "sector": "F6",
+     "subx": 1,
+     "suby": 2,
+     "type": "testing-station"
+    },
+    {
+     "sector": "F7",
+     "subx": 3,
+     "suby": 3,
+     "type": "cave"
+    },
+    {
+     "sector": "F9",
+     "subx": 2,
+     "suby": 2,
+     "type": "large-spice-field"
+    },
+    {
+     "sector": "D2",
+     "subx": 2,
+     "suby": 0,
+     "type": "wreck"
+    },
+    {
+     "sector": "D4",
+     "subx": 4,
+     "suby": 0,
+     "type": "testing-station"
+    },
+    {
+     "sector": "D7",
+     "subx": 3,
+     "suby": 1,
+     "type": "wreck"
+    },
+    {
+     "sector": "D8",
+     "subx": 2,
+     "suby": 0,
+     "type": "cave"
+    },
+    {
+     "sector": "C2",
+     "subx": 2,
+     "suby": 2,
+     "type": "cave"
+    },
+    {
+     "sector": "C3",
+     "subx": 1,
+     "suby": 2,
+     "type": "cave"
+    },
+    {
+     "sector": "C7",
+     "subx": 4,
+     "suby": 3,
+     "type": "cave"
+    },
+    {
+     "sector": "C8",
+     "subx": 2,
+     "suby": 1,
+     "type": "cave"
+    },
+    {
+     "sector": "C8",
+     "subx": 2,
+     "suby": 2,
+     "type": "cave"
+    },
+    {
+     "sector": "B2",
+     "subx": 3,
+     "suby": 0,
+     "type": "cave"
+    },
+    {
+     "sector": "A1",
+     "subx": 3,
+     "suby": 1,
+     "type": "wreck"
+    },
+    {
+     "sector": "A1",
+     "subx": 2,
+     "suby": 2,
+     "type": "wreck"
+    },
+    {
+     "sector": "A2",
+     "subx": 1,
+     "suby": 1,
+     "type": "taxi-service"
+    },
+    {
+     "sector": "A2",
+     "subx": 2,
+     "suby": 1,
+     "type": "testing-station"
+    },
+    {
+     "sector": "A2",
+     "subx": 3,
+     "suby": 2,
+     "type": "wreck"
+    },
+    {
+     "sector": "A3",
+     "subx": 3,
+     "suby": 1,
+     "type": "wreck"
+    },
+    {
+     "sector": "A3",
+     "subx": 2,
+     "suby": 2,
+     "type": "testing-station"
+    },
+    {
+     "sector": "A3",
+     "subx": 4,
+     "suby": 2,
+     "type": "wreck"
+    },
+    {
+     "sector": "A4",
+     "subx": 4,
+     "suby": 1,
+     "type": "testing-station"
+    },
+    {
+     "sector": "A4",
+     "subx": 3,
+     "suby": 2,
+     "type": "wreck"
+    },
+    {
+     "sector": "A5",
+     "subx": 2,
+     "suby": 0,
+     "type": "taxi-service"
+    },
+    {
+     "sector": "A5",
+     "subx": 2,
+     "suby": 1,
+     "type": "wreck"
+    },
+    {
+     "sector": "A5",
+     "subx": 3,
+     "suby": 2,
+     "type": "testing-station"
+    },
+    {
+     "sector": "A7",
+     "subx": 2,
+     "suby": 0,
+     "type": "wreck"
+    },
+    {
+     "sector": "A8",
+     "subx": 2,
+     "suby": 0,
+     "type": "taxi-service"
+    },
+    {
+     "sector": "A8",
+     "subx": 3,
+     "suby": 0,
+     "type": "testing-station"
+    },
+    {
+     "sector": "A9",
+     "subx": 2,
+     "suby": 1,
+     "type": "wreck"
+    },
+    {
+     "sector": "A9",
+     "subx": 1,
+     "suby": 2,
+     "type": "testing-station"
+    },
+    {
+     "sector": "A9",
+     "subx": 3,
+     "suby": 2,
+     "type": "wreck"
+    }
+   ]
+  },
+  {
+   "seed": 5,
+   "confidence": "CONFIRMED",
+   "reliability": "good",
+   "note": null,
+   "capturedUtc": "20251108083546",
+   "image": "dd_seed_05.png",
+   "imageSha256Short": null,
+   "largeSpiceSectors": [
+    "F5",
+    "F7",
+    "I2",
+    "I5",
+    "I9"
+   ],
+   "poiCount": 60,
+   "legend": [
+    {
+     "type": "cave",
+     "label": "Cave",
+     "count": 25
+    },
+    {
+     "type": "wreck",
+     "label": "Wreck",
+     "count": 13
+    },
+    {
+     "type": "testing-station",
+     "label": "Testing Station",
+     "count": 10
+    },
+    {
+     "type": "large-spice-field",
+     "label": "Large Spice Field",
+     "count": 5
+    },
+    {
+     "type": "taxi-service",
+     "label": "Taxi",
+     "count": 3
+    },
+    {
+     "type": "titanium",
+     "label": "Titanium",
+     "count": 2
+    },
+    {
+     "type": "stravidium",
+     "label": "Stravidium",
+     "count": 2
+    }
+   ],
+   "pois": [
+    {
+     "sector": "I2",
+     "subx": 2,
+     "suby": 1,
+     "type": "large-spice-field"
+    },
+    {
+     "sector": "I2",
+     "subx": 2,
+     "suby": 3,
+     "type": "titanium"
+    },
+    {
+     "sector": "I5",
+     "subx": 2,
+     "suby": 3,
+     "type": "large-spice-field"
+    },
+    {
+     "sector": "I7",
+     "subx": 4,
+     "suby": 3,
+     "type": "cave"
+    },
+    {
+     "sector": "I9",
+     "subx": 2,
+     "suby": 2,
+     "type": "large-spice-field"
+    },
+    {
+     "sector": "H1",
+     "subx": 4,
+     "suby": 1,
+     "type": "cave"
+    },
+    {
+     "sector": "H2",
+     "subx": 4,
+     "suby": 1,
+     "type": "stravidium"
+    },
+    {
+     "sector": "H5",
+     "subx": 3,
+     "suby": 2,
+     "type": "cave"
+    },
+    {
+     "sector": "H6",
+     "subx": 1,
+     "suby": 0,
+     "type": "titanium"
+    },
+    {
+     "sector": "H6",
+     "subx": 2,
+     "suby": 0,
+     "type": "stravidium"
+    },
+    {
+     "sector": "H8",
+     "subx": 3,
+     "suby": 1,
+     "type": "cave"
+    },
+    {
+     "sector": "G2",
+     "subx": 3,
+     "suby": 0,
+     "type": "cave"
+    },
+    {
+     "sector": "G3",
+     "subx": 1,
+     "suby": 1,
+     "type": "testing-station"
+    },
+    {
+     "sector": "G4",
+     "subx": 3,
+     "suby": 0,
+     "type": "testing-station"
+    },
+    {
+     "sector": "G6",
+     "subx": 2,
+     "suby": 0,
+     "type": "cave"
+    },
+    {
+     "sector": "G8",
+     "subx": 3,
+     "suby": 0,
+     "type": "cave"
+    },
+    {
+     "sector": "G9",
+     "subx": 2,
+     "suby": 0,
+     "type": "cave"
+    },
+    {
+     "sector": "F2",
+     "subx": 3,
+     "suby": 3,
+     "type": "cave"
+    },
+    {
+     "sector": "F5",
+     "subx": 3,
+     "suby": 2,
+     "type": "large-spice-field"
+    },
+    {
+     "sector": "F5",
+     "subx": 1,
+     "suby": 3,
+     "type": "cave"
+    },
+    {
+     "sector": "F6",
+     "subx": 1,
+     "suby": 3,
+     "type": "testing-station"
+    },
+    {
+     "sector": "F7",
+     "subx": 4,
+     "suby": 2,
+     "type": "large-spice-field"
+    },
+    {
+     "sector": "E2",
+     "subx": 3,
+     "suby": 0,
+     "type": "cave"
+    },
+    {
+     "sector": "E3",
+     "subx": 1,
+     "suby": 1,
+     "type": "cave"
+    },
+    {
+     "sector": "E4",
+     "subx": 4,
+     "suby": 0,
+     "type": "cave"
+    },
+    {
+     "sector": "E8",
+     "subx": 3,
+     "suby": 2,
+     "type": "cave"
+    },
+    {
+     "sector": "D2",
+     "subx": 2,
+     "suby": 0,
+     "type": "wreck"
+    },
+    {
+     "sector": "D3",
+     "subx": 1,
+     "suby": 1,
+     "type": "testing-station"
+    },
+    {
+     "sector": "D5",
+     "subx": 1,
+     "suby": 0,
+     "type": "cave"
+    },
+    {
+     "sector": "D5",
+     "subx": 3,
+     "suby": 0,
+     "type": "cave"
+    },
+    {
+     "sector": "D6",
+     "subx": 1,
+     "suby": 1,
+     "type": "wreck"
+    },
+    {
+     "sector": "D9",
+     "subx": 3,
+     "suby": 1,
+     "type": "cave"
+    },
+    {
+     "sector": "D9",
+     "subx": 2,
+     "suby": 2,
+     "type": "cave"
+    },
+    {
+     "sector": "C2",
+     "subx": 1,
+     "suby": 1,
+     "type": "cave"
+    },
+    {
+     "sector": "C2",
+     "subx": 2,
+     "suby": 2,
+     "type": "cave"
+    },
+    {
+     "sector": "C3",
+     "subx": 2,
+     "suby": 3,
+     "type": "cave"
+    },
+    {
+     "sector": "C4",
+     "subx": 4,
+     "suby": 3,
+     "type": "wreck"
+    },
+    {
+     "sector": "C7",
+     "subx": 4,
+     "suby": 3,
+     "type": "cave"
+    },
+    {
+     "sector": "C8",
+     "subx": 2,
+     "suby": 2,
+     "type": "cave"
+    },
+    {
+     "sector": "C8",
+     "subx": 4,
+     "suby": 2,
+     "type": "cave"
+    },
+    {
+     "sector": "C8",
+     "subx": 2,
+     "suby": 3,
+     "type": "cave"
+    },
+    {
+     "sector": "A1",
+     "subx": 3,
+     "suby": 1,
+     "type": "wreck"
+    },
+    {
+     "sector": "A1",
+     "subx": 2,
+     "suby": 2,
+     "type": "wreck"
+    },
+    {
+     "sector": "A2",
+     "subx": 1,
+     "suby": 1,
+     "type": "taxi-service"
+    },
+    {
+     "sector": "A2",
+     "subx": 2,
+     "suby": 1,
+     "type": "testing-station"
+    },
+    {
+     "sector": "A2",
+     "subx": 3,
+     "suby": 2,
+     "type": "wreck"
+    },
+    {
+     "sector": "A3",
+     "subx": 3,
+     "suby": 1,
+     "type": "wreck"
+    },
+    {
+     "sector": "A3",
+     "subx": 2,
+     "suby": 2,
+     "type": "testing-station"
+    },
+    {
+     "sector": "A3",
+     "subx": 4,
+     "suby": 2,
+     "type": "wreck"
+    },
+    {
+     "sector": "A4",
+     "subx": 4,
+     "suby": 1,
+     "type": "testing-station"
+    },
+    {
+     "sector": "A4",
+     "subx": 3,
+     "suby": 2,
+     "type": "wreck"
+    },
+    {
+     "sector": "A5",
+     "subx": 2,
+     "suby": 0,
+     "type": "taxi-service"
+    },
+    {
+     "sector": "A5",
+     "subx": 2,
+     "suby": 1,
+     "type": "wreck"
+    },
+    {
+     "sector": "A5",
+     "subx": 3,
+     "suby": 2,
+     "type": "testing-station"
+    },
+    {
+     "sector": "A7",
+     "subx": 2,
+     "suby": 0,
+     "type": "wreck"
+    },
+    {
+     "sector": "A8",
+     "subx": 2,
+     "suby": 0,
+     "type": "taxi-service"
+    },
+    {
+     "sector": "A8",
+     "subx": 3,
+     "suby": 0,
+     "type": "testing-station"
+    },
+    {
+     "sector": "A9",
+     "subx": 2,
+     "suby": 1,
+     "type": "wreck"
+    },
+    {
+     "sector": "A9",
+     "subx": 1,
+     "suby": 2,
+     "type": "testing-station"
+    },
+    {
+     "sector": "A9",
+     "subx": 3,
+     "suby": 2,
+     "type": "wreck"
+    }
+   ]
+  },
+  {
+   "seed": 6,
+   "confidence": "CONFIRMED",
+   "reliability": "good",
+   "note": null,
+   "capturedUtc": "20250930025700",
+   "image": "dd_seed_06.png",
+   "imageSha256Short": null,
+   "largeSpiceSectors": [
+    "H2",
+    "H8",
+    "I5"
+   ],
+   "poiCount": 47,
+   "legend": [
+    {
+     "type": "cave",
+     "label": "Cave",
+     "count": 15
+    },
+    {
+     "type": "wreck",
+     "label": "Wreck",
+     "count": 13
+    },
+    {
+     "type": "testing-station",
+     "label": "Testing Station",
+     "count": 9
+    },
+    {
+     "type": "large-spice-field",
+     "label": "Large Spice Field",
+     "count": 3
+    },
+    {
+     "type": "titanium",
+     "label": "Titanium",
+     "count": 3
+    },
+    {
+     "type": "taxi-service",
+     "label": "Taxi",
+     "count": 3
+    },
+    {
+     "type": "stravidium",
+     "label": "Stravidium",
+     "count": 1
+    }
+   ],
+   "pois": [
+    {
+     "sector": "I2",
+     "subx": 3,
+     "suby": 3,
+     "type": "cave"
+    },
+    {
+     "sector": "I5",
+     "subx": 2,
+     "suby": 2,
+     "type": "large-spice-field"
+    },
+    {
+     "sector": "I9",
+     "subx": 2,
+     "suby": 2,
+     "type": "cave"
+    },
+    {
+     "sector": "H2",
+     "subx": 3,
+     "suby": 0,
+     "type": "cave"
+    },
+    {
+     "sector": "H2",
+     "subx": 3,
+     "suby": 2,
+     "type": "large-spice-field"
+    },
+    {
+     "sector": "H5",
+     "subx": 3,
+     "suby": 0,
+     "type": "titanium"
+    },
+    {
+     "sector": "H8",
+     "subx": 3,
+     "suby": 1,
+     "type": "large-spice-field"
+    },
+    {
+     "sector": "G3",
+     "subx": 2,
+     "suby": 0,
+     "type": "testing-station"
+    },
+    {
+     "sector": "G4",
+     "subx": 4,
+     "suby": 0,
+     "type": "titanium"
+    },
+    {
+     "sector": "G4",
+     "subx": 3,
+     "suby": 2,
+     "type": "wreck"
+    },
+    {
+     "sector": "G6",
+     "subx": 1,
+     "suby": 0,
+     "type": "testing-station"
+    },
+    {
+     "sector": "G6",
+     "subx": 2,
+     "suby": 1,
+     "type": "titanium"
+    },
+    {
+     "sector": "G7",
+     "subx": 4,
+     "suby": 1,
+     "type": "stravidium"
+    },
+    {
+     "sector": "G7",
+     "subx": 4,
+     "suby": 2,
+     "type": "cave"
+    },
+    {
+     "sector": "F2",
+     "subx": 3,
+     "suby": 2,
+     "type": "cave"
+    },
+    {
+     "sector": "F2",
+     "subx": 2,
+     "suby": 3,
+     "type": "cave"
+    },
+    {
+     "sector": "F7",
+     "subx": 3,
+     "suby": 3,
+     "type": "wreck"
+    },
+    {
+     "sector": "F8",
+     "subx": 1,
+     "suby": 1,
+     "type": "cave"
+    },
+    {
+     "sector": "E2",
+     "subx": 3,
+     "suby": 0,
+     "type": "cave"
+    },
+    {
+     "sector": "E2",
+     "subx": 3,
+     "suby": 2,
+     "type": "cave"
+    },
+    {
+     "sector": "D2",
+     "subx": 3,
+     "suby": 0,
+     "type": "cave"
+    },
+    {
+     "sector": "D2",
+     "subx": 2,
+     "suby": 1,
+     "type": "cave"
+    },
+    {
+     "sector": "D2",
+     "subx": 3,
+     "suby": 2,
+     "type": "cave"
+    },
+    {
+     "sector": "D3",
+     "subx": 1,
+     "suby": 1,
+     "type": "wreck"
+    },
+    {
+     "sector": "D6",
+     "subx": 2,
+     "suby": 2,
+     "type": "cave"
+    },
+    {
+     "sector": "C5",
+     "subx": 1,
+     "suby": 1,
+     "type": "cave"
+    },
+    {
+     "sector": "C7",
+     "subx": 4,
+     "suby": 2,
+     "type": "testing-station"
+    },
+    {
+     "sector": "C8",
+     "subx": 1,
+     "suby": 3,
+     "type": "cave"
+    },
+    {
+     "sector": "A1",
+     "subx": 3,
+     "suby": 1,
+     "type": "wreck"
+    },
+    {
+     "sector": "A1",
+     "subx": 2,
+     "suby": 2,
+     "type": "wreck"
+    },
+    {
+     "sector": "A2",
+     "subx": 1,
+     "suby": 1,
+     "type": "taxi-service"
+    },
+    {
+     "sector": "A2",
+     "subx": 2,
+     "suby": 1,
+     "type": "testing-station"
+    },
+    {
+     "sector": "A2",
+     "subx": 3,
+     "suby": 2,
+     "type": "wreck"
+    },
+    {
+     "sector": "A3",
+     "subx": 3,
+     "suby": 1,
+     "type": "wreck"
+    },
+    {
+     "sector": "A3",
+     "subx": 2,
+     "suby": 2,
+     "type": "testing-station"
+    },
+    {
+     "sector": "A3",
+     "subx": 4,
+     "suby": 2,
+     "type": "wreck"
+    },
+    {
+     "sector": "A4",
+     "subx": 4,
+     "suby": 1,
+     "type": "testing-station"
+    },
+    {
+     "sector": "A4",
+     "subx": 3,
+     "suby": 2,
+     "type": "wreck"
+    },
+    {
+     "sector": "A5",
+     "subx": 2,
+     "suby": 0,
+     "type": "taxi-service"
+    },
+    {
+     "sector": "A5",
+     "subx": 2,
+     "suby": 1,
+     "type": "wreck"
+    },
+    {
+     "sector": "A5",
+     "subx": 3,
+     "suby": 2,
+     "type": "testing-station"
+    },
+    {
+     "sector": "A7",
+     "subx": 2,
+     "suby": 0,
+     "type": "wreck"
+    },
+    {
+     "sector": "A8",
+     "subx": 2,
+     "suby": 0,
+     "type": "taxi-service"
+    },
+    {
+     "sector": "A8",
+     "subx": 3,
+     "suby": 0,
+     "type": "testing-station"
+    },
+    {
+     "sector": "A9",
+     "subx": 2,
+     "suby": 1,
+     "type": "wreck"
+    },
+    {
+     "sector": "A9",
+     "subx": 1,
+     "suby": 2,
+     "type": "testing-station"
+    },
+    {
+     "sector": "A9",
+     "subx": 3,
+     "suby": 2,
+     "type": "wreck"
+    }
+   ]
+  },
+  {
+   "seed": 7,
+   "confidence": "LOW(incomplete transcription)",
+   "reliability": "low",
+   "note": "Transcribed from an archived third-party map capture, not from the labelled POI data the other seeds use. Incomplete: no titanium or stravidium mega nodes were recorded, and every other layout has at least one of each. Sub-cell positions are placeholders, so markers sit at a nominal point in their sector rather than where the POI actually is.",
+   "capturedUtc": "20260807",
+   "image": "dd_seed_07.png",
+   "imageSha256Short": null,
+   "largeSpiceSectors": [
+    "E5",
+    "H2",
+    "H8"
+   ],
+   "poiCount": 26,
+   "legend": [
+    {
+     "type": "wreck",
+     "label": "Wreck",
+     "count": 10
+    },
+    {
+     "type": "testing-station",
+     "label": "Testing Station",
+     "count": 10
+    },
+    {
+     "type": "large-spice-field",
+     "label": "Large Spice Field",
+     "count": 3
+    },
+    {
+     "type": "cave",
+     "label": "Cave",
+     "count": 3
+    }
+   ],
+   "pois": [
+    {
+     "sector": "H2",
+     "subx": 2,
+     "suby": 1,
+     "type": "large-spice-field"
+    },
+    {
+     "sector": "H8",
+     "subx": 2,
+     "suby": 1,
+     "type": "large-spice-field"
+    },
+    {
+     "sector": "E5",
+     "subx": 2,
+     "suby": 1,
+     "type": "large-spice-field"
+    },
+    {
+     "sector": "E6",
+     "subx": 2,
+     "suby": 1,
+     "type": "cave"
+    },
+    {
+     "sector": "D4",
+     "subx": 2,
+     "suby": 1,
+     "type": "cave"
+    },
+    {
+     "sector": "C3",
+     "subx": 2,
+     "suby": 1,
+     "type": "cave"
+    },
+    {
+     "sector": "G4",
+     "subx": 2,
+     "suby": 1,
+     "type": "wreck"
+    },
+    {
+     "sector": "F7",
+     "subx": 2,
+     "suby": 1,
+     "type": "wreck"
+    },
+    {
+     "sector": "D3",
+     "subx": 2,
+     "suby": 1,
+     "type": "wreck"
+    },
+    {
+     "sector": "A1",
+     "subx": 2,
+     "suby": 1,
+     "type": "wreck"
+    },
+    {
+     "sector": "A2",
+     "subx": 2,
+     "suby": 1,
+     "type": "wreck"
+    },
+    {
+     "sector": "A3",
+     "subx": 2,
+     "suby": 1,
+     "type": "wreck"
+    },
+    {
+     "sector": "A4",
+     "subx": 2,
+     "suby": 1,
+     "type": "wreck"
+    },
+    {
+     "sector": "A5",
+     "subx": 2,
+     "suby": 1,
+     "type": "wreck"
+    },
+    {
+     "sector": "A7",
+     "subx": 2,
+     "suby": 1,
+     "type": "wreck"
+    },
+    {
+     "sector": "A9",
+     "subx": 2,
+     "suby": 1,
+     "type": "wreck"
+    },
+    {
+     "sector": "G3",
+     "subx": 2,
+     "suby": 1,
+     "type": "testing-station"
+    },
+    {
+     "sector": "G6",
+     "subx": 2,
+     "suby": 1,
+     "type": "testing-station"
+    },
+    {
+     "sector": "E2",
+     "subx": 2,
+     "suby": 1,
+     "type": "testing-station"
+    },
+    {
+     "sector": "C7",
+     "subx": 2,
+     "suby": 1,
+     "type": "testing-station"
+    },
+    {
+     "sector": "A2",
+     "subx": 3,
+     "suby": 2,
+     "type": "testing-station"
+    },
+    {
+     "sector": "A3",
+     "subx": 3,
+     "suby": 2,
+     "type": "testing-station"
+    },
+    {
+     "sector": "A4",
+     "subx": 3,
+     "suby": 2,
+     "type": "testing-station"
+    },
+    {
+     "sector": "A5",
+     "subx": 3,
+     "suby": 2,
+     "type": "testing-station"
+    },
+    {
+     "sector": "A8",
+     "subx": 2,
+     "suby": 1,
+     "type": "testing-station"
+    },
+    {
+     "sector": "A9",
+     "subx": 3,
+     "suby": 2,
+     "type": "testing-station"
+    }
+   ]
+  },
+  {
+   "seed": 8,
+   "confidence": "CONFIRMED",
+   "reliability": "good",
+   "note": null,
+   "capturedUtc": "20260708213956",
+   "image": "dd_seed_08.png",
+   "imageSha256Short": null,
+   "largeSpiceSectors": [
+    "F1",
+    "F4",
+    "F8",
+    "I7"
+   ],
+   "poiCount": 58,
+   "legend": [
+    {
+     "type": "cave",
+     "label": "Cave",
+     "count": 23
+    },
+    {
+     "type": "wreck",
+     "label": "Wreck",
+     "count": 13
+    },
+    {
+     "type": "testing-station",
+     "label": "Testing Station",
+     "count": 11
+    },
+    {
+     "type": "large-spice-field",
+     "label": "Large Spice Field",
+     "count": 4
+    },
+    {
+     "type": "taxi-service",
+     "label": "Taxi",
+     "count": 3
+    },
+    {
+     "type": "stravidium",
+     "label": "Stravidium",
+     "count": 2
+    },
+    {
+     "type": "titanium",
+     "label": "Titanium",
+     "count": 2
+    }
+   ],
+   "pois": [
+    {
+     "sector": "I3",
+     "subx": 2,
+     "suby": 3,
+     "type": "cave"
+    },
+    {
+     "sector": "I4",
+     "subx": 4,
+     "suby": 3,
+     "type": "wreck"
+    },
+    {
+     "sector": "I7",
+     "subx": 4,
+     "suby": 3,
+     "type": "large-spice-field"
+    },
+    {
+     "sector": "H2",
+     "subx": 3,
+     "suby": 2,
+     "type": "testing-station"
+    },
+    {
+     "sector": "H5",
+     "subx": 2,
+     "suby": 1,
+     "type": "stravidium"
+    },
+    {
+     "sector": "H5",
+     "subx": 4,
+     "suby": 1,
+     "type": "titanium"
+    },
+    {
+     "sector": "H5",
+     "subx": 3,
+     "suby": 2,
+     "type": "cave"
+    },
+    {
+     "sector": "H6",
+     "subx": 1,
+     "suby": 2,
+     "type": "cave"
+    },
+    {
+     "sector": "H8",
+     "subx": 3,
+     "suby": 2,
+     "type": "testing-station"
+    },
+    {
+     "sector": "G2",
+     "subx": 2,
+     "suby": 0,
+     "type": "wreck"
+    },
+    {
+     "sector": "G3",
+     "subx": 3,
+     "suby": 1,
+     "type": "cave"
+    },
+    {
+     "sector": "G3",
+     "subx": 2,
+     "suby": 2,
+     "type": "cave"
+    },
+    {
+     "sector": "G5",
+     "subx": 2,
+     "suby": 0,
+     "type": "titanium"
+    },
+    {
+     "sector": "G5",
+     "subx": 3,
+     "suby": 2,
+     "type": "stravidium"
+    },
+    {
+     "sector": "G8",
+     "subx": 2,
+     "suby": 0,
+     "type": "wreck"
+    },
+    {
+     "sector": "F1",
+     "subx": 4,
+     "suby": 3,
+     "type": "large-spice-field"
+    },
+    {
+     "sector": "F3",
+     "subx": 3,
+     "suby": 2,
+     "type": "cave"
+    },
+    {
+     "sector": "F4",
+     "subx": 4,
+     "suby": 2,
+     "type": "large-spice-field"
+    },
+    {
+     "sector": "F5",
+     "subx": 3,
+     "suby": 3,
+     "type": "cave"
+    },
+    {
+     "sector": "F8",
+     "subx": 2,
+     "suby": 2,
+     "type": "large-spice-field"
+    },
+    {
+     "sector": "E5",
+     "subx": 3,
+     "suby": 0,
+     "type": "cave"
+    },
+    {
+     "sector": "E6",
+     "subx": 1,
+     "suby": 2,
+     "type": "testing-station"
+    },
+    {
+     "sector": "E7",
+     "subx": 3,
+     "suby": 0,
+     "type": "cave"
+    },
+    {
+     "sector": "E8",
+     "subx": 3,
+     "suby": 2,
+     "type": "testing-station"
+    },
+    {
+     "sector": "D3",
+     "subx": 1,
+     "suby": 0,
+     "type": "testing-station"
+    },
+    {
+     "sector": "D5",
+     "subx": 2,
+     "suby": 0,
+     "type": "cave"
+    },
+    {
+     "sector": "D5",
+     "subx": 3,
+     "suby": 0,
+     "type": "cave"
+    },
+    {
+     "sector": "D7",
+     "subx": 4,
+     "suby": 1,
+     "type": "cave"
+    },
+    {
+     "sector": "D7",
+     "subx": 3,
+     "suby": 2,
+     "type": "cave"
+    },
+    {
+     "sector": "C2",
+     "subx": 1,
+     "suby": 1,
+     "type": "cave"
+    },
+    {
+     "sector": "C2",
+     "subx": 2,
+     "suby": 3,
+     "type": "cave"
+    },
+    {
+     "sector": "C5",
+     "subx": 4,
+     "suby": 1,
+     "type": "cave"
+    },
+    {
+     "sector": "C5",
+     "subx": 3,
+     "suby": 3,
+     "type": "cave"
+    },
+    {
+     "sector": "C6",
+     "subx": 2,
+     "suby": 3,
+     "type": "cave"
+    },
+    {
+     "sector": "C7",
+     "subx": 4,
+     "suby": 3,
+     "type": "cave"
+    },
+    {
+     "sector": "C8",
+     "subx": 2,
+     "suby": 1,
+     "type": "cave"
+    },
+    {
+     "sector": "B3",
+     "subx": 3,
+     "suby": 0,
+     "type": "cave"
+    },
+    {
+     "sector": "B3",
+     "subx": 1,
+     "suby": 1,
+     "type": "cave"
+    },
+    {
+     "sector": "B5",
+     "subx": 3,
+     "suby": 0,
+     "type": "cave"
+    },
+    {
+     "sector": "A1",
+     "subx": 3,
+     "suby": 1,
+     "type": "wreck"
+    },
+    {
+     "sector": "A1",
+     "subx": 2,
+     "suby": 2,
+     "type": "wreck"
+    },
+    {
+     "sector": "A2",
+     "subx": 1,
+     "suby": 1,
+     "type": "taxi-service"
+    },
+    {
+     "sector": "A2",
+     "subx": 2,
+     "suby": 1,
+     "type": "testing-station"
+    },
+    {
+     "sector": "A2",
+     "subx": 3,
+     "suby": 2,
+     "type": "wreck"
+    },
+    {
+     "sector": "A3",
+     "subx": 3,
+     "suby": 1,
+     "type": "wreck"
+    },
+    {
+     "sector": "A3",
+     "subx": 2,
+     "suby": 2,
+     "type": "testing-station"
+    },
+    {
+     "sector": "A3",
+     "subx": 4,
+     "suby": 2,
+     "type": "wreck"
+    },
+    {
+     "sector": "A4",
+     "subx": 4,
+     "suby": 1,
+     "type": "testing-station"
+    },
+    {
+     "sector": "A4",
+     "subx": 3,
+     "suby": 2,
+     "type": "wreck"
+    },
+    {
+     "sector": "A5",
+     "subx": 2,
+     "suby": 0,
+     "type": "taxi-service"
+    },
+    {
+     "sector": "A5",
+     "subx": 2,
+     "suby": 1,
+     "type": "wreck"
+    },
+    {
+     "sector": "A5",
+     "subx": 3,
+     "suby": 2,
+     "type": "testing-station"
+    },
+    {
+     "sector": "A7",
+     "subx": 2,
+     "suby": 0,
+     "type": "wreck"
+    },
+    {
+     "sector": "A8",
+     "subx": 2,
+     "suby": 0,
+     "type": "taxi-service"
+    },
+    {
+     "sector": "A8",
+     "subx": 3,
+     "suby": 0,
+     "type": "testing-station"
+    },
+    {
+     "sector": "A9",
+     "subx": 2,
+     "suby": 1,
+     "type": "wreck"
+    },
+    {
+     "sector": "A9",
+     "subx": 1,
+     "suby": 2,
+     "type": "testing-station"
+    },
+    {
+     "sector": "A9",
+     "subx": 3,
+     "suby": 2,
+     "type": "wreck"
+    }
+   ]
+  },
+  {
+   "seed": 9,
+   "confidence": "CONFIRMED",
+   "reliability": "good",
+   "note": null,
+   "capturedUtc": "20251114100005",
+   "image": "dd_seed_09.png",
+   "imageSha256Short": null,
+   "largeSpiceSectors": [
+    "F1",
+    "F6",
+    "F8",
+    "I1",
+    "I9"
+   ],
+   "poiCount": 45,
+   "legend": [
+    {
+     "type": "wreck",
+     "label": "Wreck",
+     "count": 13
+    },
+    {
+     "type": "testing-station",
+     "label": "Testing Station",
+     "count": 12
+    },
+    {
+     "type": "cave",
+     "label": "Cave",
+     "count": 8
+    },
+    {
+     "type": "large-spice-field",
+     "label": "Large Spice Field",
+     "count": 5
+    },
+    {
+     "type": "titanium",
+     "label": "Titanium",
+     "count": 3
+    },
+    {
+     "type": "taxi-service",
+     "label": "Taxi",
+     "count": 3
+    },
+    {
+     "type": "stravidium",
+     "label": "Stravidium",
+     "count": 1
+    }
+   ],
+   "pois": [
+    {
+     "sector": "I1",
+     "subx": 4,
+     "suby": 3,
+     "type": "large-spice-field"
+    },
+    {
+     "sector": "I2",
+     "subx": 3,
+     "suby": 3,
+     "type": "testing-station"
+    },
+    {
+     "sector": "I5",
+     "subx": 3,
+     "suby": 3,
+     "type": "titanium"
+    },
+    {
+     "sector": "I9",
+     "subx": 1,
+     "suby": 3,
+     "type": "large-spice-field"
+    },
+    {
+     "sector": "H4",
+     "subx": 4,
+     "suby": 0,
+     "type": "cave"
+    },
+    {
+     "sector": "H4",
+     "subx": 3,
+     "suby": 1,
+     "type": "titanium"
+    },
+    {
+     "sector": "H6",
+     "subx": 1,
+     "suby": 2,
+     "type": "stravidium"
+    },
+    {
+     "sector": "G3",
+     "subx": 1,
+     "suby": 0,
+     "type": "cave"
+    },
+    {
+     "sector": "G4",
+     "subx": 3,
+     "suby": 0,
+     "type": "testing-station"
+    },
+    {
+     "sector": "G5",
+     "subx": 3,
+     "suby": 1,
+     "type": "titanium"
+    },
+    {
+     "sector": "G5",
+     "subx": 2,
+     "suby": 2,
+     "type": "cave"
+    },
+    {
+     "sector": "G8",
+     "subx": 2,
+     "suby": 0,
+     "type": "testing-station"
+    },
+    {
+     "sector": "F1",
+     "subx": 3,
+     "suby": 2,
+     "type": "large-spice-field"
+    },
+    {
+     "sector": "F5",
+     "subx": 2,
+     "suby": 3,
+     "type": "wreck"
+    },
+    {
+     "sector": "F6",
+     "subx": 1,
+     "suby": 2,
+     "type": "large-spice-field"
+    },
+    {
+     "sector": "F8",
+     "subx": 2,
+     "suby": 1,
+     "type": "wreck"
+    },
+    {
+     "sector": "F8",
+     "subx": 3,
+     "suby": 3,
+     "type": "large-spice-field"
+    },
+    {
+     "sector": "E1",
+     "subx": 3,
+     "suby": 1,
+     "type": "cave"
+    },
+    {
+     "sector": "E3",
+     "subx": 2,
+     "suby": 1,
+     "type": "wreck"
+    },
+    {
+     "sector": "D1",
+     "subx": 4,
+     "suby": 0,
+     "type": "testing-station"
+    },
+    {
+     "sector": "D4",
+     "subx": 3,
+     "suby": 0,
+     "type": "testing-station"
+    },
+    {
+     "sector": "D7",
+     "subx": 4,
+     "suby": 0,
+     "type": "testing-station"
+    },
+    {
+     "sector": "C2",
+     "subx": 3,
+     "suby": 3,
+     "type": "cave"
+    },
+    {
+     "sector": "C8",
+     "subx": 2,
+     "suby": 2,
+     "type": "cave"
+    },
+    {
+     "sector": "B4",
+     "subx": 3,
+     "suby": 1,
+     "type": "cave"
+    },
+    {
+     "sector": "B5",
+     "subx": 3,
+     "suby": 1,
+     "type": "cave"
+    },
+    {
+     "sector": "A1",
+     "subx": 3,
+     "suby": 1,
+     "type": "wreck"
+    },
+    {
+     "sector": "A1",
+     "subx": 2,
+     "suby": 2,
+     "type": "wreck"
+    },
+    {
+     "sector": "A2",
+     "subx": 1,
+     "suby": 1,
+     "type": "taxi-service"
+    },
+    {
+     "sector": "A2",
+     "subx": 2,
+     "suby": 1,
+     "type": "testing-station"
+    },
+    {
+     "sector": "A2",
+     "subx": 3,
+     "suby": 2,
+     "type": "wreck"
+    },
+    {
+     "sector": "A3",
+     "subx": 3,
+     "suby": 1,
+     "type": "wreck"
+    },
+    {
+     "sector": "A3",
+     "subx": 2,
+     "suby": 2,
+     "type": "testing-station"
+    },
+    {
+     "sector": "A3",
+     "subx": 4,
+     "suby": 2,
+     "type": "wreck"
+    },
+    {
+     "sector": "A4",
+     "subx": 4,
+     "suby": 1,
+     "type": "testing-station"
+    },
+    {
+     "sector": "A4",
+     "subx": 3,
+     "suby": 2,
+     "type": "wreck"
+    },
+    {
+     "sector": "A5",
+     "subx": 2,
+     "suby": 0,
+     "type": "taxi-service"
+    },
+    {
+     "sector": "A5",
+     "subx": 2,
+     "suby": 1,
+     "type": "wreck"
+    },
+    {
+     "sector": "A5",
+     "subx": 3,
+     "suby": 2,
+     "type": "testing-station"
+    },
+    {
+     "sector": "A7",
+     "subx": 2,
+     "suby": 0,
+     "type": "wreck"
+    },
+    {
+     "sector": "A8",
+     "subx": 2,
+     "suby": 0,
+     "type": "taxi-service"
+    },
+    {
+     "sector": "A8",
+     "subx": 3,
+     "suby": 0,
+     "type": "testing-station"
+    },
+    {
+     "sector": "A9",
+     "subx": 2,
+     "suby": 1,
+     "type": "wreck"
+    },
+    {
+     "sector": "A9",
+     "subx": 1,
+     "suby": 2,
+     "type": "testing-station"
+    },
+    {
+     "sector": "A9",
+     "subx": 3,
+     "suby": 2,
+     "type": "wreck"
+    }
+   ]
+  },
+  {
+   "seed": 10,
+   "confidence": "LOW(2 of 6 shared)",
+   "reliability": "low",
+   "note": "Weakest assignment in the set: matched only 2 of the 6 large-spice sectors on record for this seed, and its POI layout is near-identical to seed 5. The seed NUMBER is unverified; the layout itself is a real capture.",
+   "capturedUtc": "20251105050233",
+   "image": "dd_seed_10.png",
+   "imageSha256Short": null,
+   "largeSpiceSectors": [
+    "F7",
+    "I2",
+    "I5",
+    "I9"
+   ],
+   "poiCount": 59,
+   "legend": [
+    {
+     "type": "cave",
+     "label": "Cave",
+     "count": 25
+    },
+    {
+     "type": "wreck",
+     "label": "Wreck",
+     "count": 13
+    },
+    {
+     "type": "testing-station",
+     "label": "Testing Station",
+     "count": 10
+    },
+    {
+     "type": "large-spice-field",
+     "label": "Large Spice Field",
+     "count": 4
+    },
+    {
+     "type": "taxi-service",
+     "label": "Taxi",
+     "count": 3
+    },
+    {
+     "type": "titanium",
+     "label": "Titanium",
+     "count": 2
+    },
+    {
+     "type": "stravidium",
+     "label": "Stravidium",
+     "count": 2
+    }
+   ],
+   "pois": [
+    {
+     "sector": "I2",
+     "subx": 2,
+     "suby": 1,
+     "type": "large-spice-field"
+    },
+    {
+     "sector": "I2",
+     "subx": 2,
+     "suby": 3,
+     "type": "titanium"
+    },
+    {
+     "sector": "I5",
+     "subx": 2,
+     "suby": 3,
+     "type": "large-spice-field"
+    },
+    {
+     "sector": "I7",
+     "subx": 4,
+     "suby": 3,
+     "type": "cave"
+    },
+    {
+     "sector": "I9",
+     "subx": 2,
+     "suby": 2,
+     "type": "large-spice-field"
+    },
+    {
+     "sector": "H1",
+     "subx": 4,
+     "suby": 1,
+     "type": "cave"
+    },
+    {
+     "sector": "H2",
+     "subx": 4,
+     "suby": 1,
+     "type": "stravidium"
+    },
+    {
+     "sector": "H5",
+     "subx": 3,
+     "suby": 2,
+     "type": "cave"
+    },
+    {
+     "sector": "H6",
+     "subx": 1,
+     "suby": 0,
+     "type": "titanium"
+    },
+    {
+     "sector": "H6",
+     "subx": 2,
+     "suby": 0,
+     "type": "stravidium"
+    },
+    {
+     "sector": "H8",
+     "subx": 3,
+     "suby": 1,
+     "type": "cave"
+    },
+    {
+     "sector": "G2",
+     "subx": 3,
+     "suby": 0,
+     "type": "cave"
+    },
+    {
+     "sector": "G3",
+     "subx": 1,
+     "suby": 1,
+     "type": "testing-station"
+    },
+    {
+     "sector": "G4",
+     "subx": 3,
+     "suby": 0,
+     "type": "testing-station"
+    },
+    {
+     "sector": "G6",
+     "subx": 2,
+     "suby": 0,
+     "type": "cave"
+    },
+    {
+     "sector": "G8",
+     "subx": 3,
+     "suby": 0,
+     "type": "cave"
+    },
+    {
+     "sector": "G9",
+     "subx": 2,
+     "suby": 0,
+     "type": "cave"
+    },
+    {
+     "sector": "F2",
+     "subx": 3,
+     "suby": 3,
+     "type": "cave"
+    },
+    {
+     "sector": "F5",
+     "subx": 1,
+     "suby": 3,
+     "type": "cave"
+    },
+    {
+     "sector": "F6",
+     "subx": 1,
+     "suby": 3,
+     "type": "testing-station"
+    },
+    {
+     "sector": "F7",
+     "subx": 4,
+     "suby": 2,
+     "type": "large-spice-field"
+    },
+    {
+     "sector": "E2",
+     "subx": 3,
+     "suby": 0,
+     "type": "cave"
+    },
+    {
+     "sector": "E3",
+     "subx": 1,
+     "suby": 1,
+     "type": "cave"
+    },
+    {
+     "sector": "E4",
+     "subx": 4,
+     "suby": 0,
+     "type": "cave"
+    },
+    {
+     "sector": "E8",
+     "subx": 3,
+     "suby": 2,
+     "type": "cave"
+    },
+    {
+     "sector": "D2",
+     "subx": 2,
+     "suby": 0,
+     "type": "wreck"
+    },
+    {
+     "sector": "D3",
+     "subx": 1,
+     "suby": 1,
+     "type": "testing-station"
+    },
+    {
+     "sector": "D5",
+     "subx": 1,
+     "suby": 0,
+     "type": "cave"
+    },
+    {
+     "sector": "D5",
+     "subx": 3,
+     "suby": 0,
+     "type": "cave"
+    },
+    {
+     "sector": "D6",
+     "subx": 1,
+     "suby": 1,
+     "type": "wreck"
+    },
+    {
+     "sector": "D9",
+     "subx": 3,
+     "suby": 1,
+     "type": "cave"
+    },
+    {
+     "sector": "D9",
+     "subx": 2,
+     "suby": 2,
+     "type": "cave"
+    },
+    {
+     "sector": "C2",
+     "subx": 1,
+     "suby": 1,
+     "type": "cave"
+    },
+    {
+     "sector": "C2",
+     "subx": 2,
+     "suby": 2,
+     "type": "cave"
+    },
+    {
+     "sector": "C3",
+     "subx": 2,
+     "suby": 3,
+     "type": "cave"
+    },
+    {
+     "sector": "C4",
+     "subx": 4,
+     "suby": 3,
+     "type": "wreck"
+    },
+    {
+     "sector": "C7",
+     "subx": 4,
+     "suby": 3,
+     "type": "cave"
+    },
+    {
+     "sector": "C8",
+     "subx": 2,
+     "suby": 2,
+     "type": "cave"
+    },
+    {
+     "sector": "C8",
+     "subx": 4,
+     "suby": 2,
+     "type": "cave"
+    },
+    {
+     "sector": "C8",
+     "subx": 2,
+     "suby": 3,
+     "type": "cave"
+    },
+    {
+     "sector": "A1",
+     "subx": 3,
+     "suby": 1,
+     "type": "wreck"
+    },
+    {
+     "sector": "A1",
+     "subx": 2,
+     "suby": 2,
+     "type": "wreck"
+    },
+    {
+     "sector": "A2",
+     "subx": 1,
+     "suby": 1,
+     "type": "taxi-service"
+    },
+    {
+     "sector": "A2",
+     "subx": 2,
+     "suby": 1,
+     "type": "testing-station"
+    },
+    {
+     "sector": "A2",
+     "subx": 3,
+     "suby": 2,
+     "type": "wreck"
+    },
+    {
+     "sector": "A3",
+     "subx": 3,
+     "suby": 1,
+     "type": "wreck"
+    },
+    {
+     "sector": "A3",
+     "subx": 2,
+     "suby": 2,
+     "type": "testing-station"
+    },
+    {
+     "sector": "A3",
+     "subx": 4,
+     "suby": 2,
+     "type": "wreck"
+    },
+    {
+     "sector": "A4",
+     "subx": 4,
+     "suby": 1,
+     "type": "testing-station"
+    },
+    {
+     "sector": "A4",
+     "subx": 3,
+     "suby": 2,
+     "type": "wreck"
+    },
+    {
+     "sector": "A5",
+     "subx": 2,
+     "suby": 0,
+     "type": "taxi-service"
+    },
+    {
+     "sector": "A5",
+     "subx": 2,
+     "suby": 1,
+     "type": "wreck"
+    },
+    {
+     "sector": "A5",
+     "subx": 3,
+     "suby": 2,
+     "type": "testing-station"
+    },
+    {
+     "sector": "A7",
+     "subx": 2,
+     "suby": 0,
+     "type": "wreck"
+    },
+    {
+     "sector": "A8",
+     "subx": 2,
+     "suby": 0,
+     "type": "taxi-service"
+    },
+    {
+     "sector": "A8",
+     "subx": 3,
+     "suby": 0,
+     "type": "testing-station"
+    },
+    {
+     "sector": "A9",
+     "subx": 2,
+     "suby": 1,
+     "type": "wreck"
+    },
+    {
+     "sector": "A9",
+     "subx": 1,
+     "suby": 2,
+     "type": "testing-station"
+    },
+    {
+     "sector": "A9",
+     "subx": 3,
+     "suby": 2,
+     "type": "wreck"
+    }
+   ]
+  },
+  {
+   "seed": 11,
+   "confidence": "CONFIRMED",
+   "reliability": "good",
+   "note": null,
+   "capturedUtc": "20251122063147",
+   "image": "dd_seed_11.png",
+   "imageSha256Short": null,
+   "largeSpiceSectors": [
+    "F1",
+    "F5",
+    "H9",
+    "I2",
+    "I4",
+    "I7"
+   ],
+   "poiCount": 46,
+   "legend": [
+    {
+     "type": "wreck",
+     "label": "Wreck",
+     "count": 14
+    },
+    {
+     "type": "testing-station",
+     "label": "Testing Station",
+     "count": 10
+    },
+    {
+     "type": "cave",
+     "label": "Cave",
+     "count": 9
+    },
+    {
+     "type": "large-spice-field",
+     "label": "Large Spice Field",
+     "count": 6
+    },
+    {
+     "type": "taxi-service",
+     "label": "Taxi",
+     "count": 3
+    },
+    {
+     "type": "titanium",
+     "label": "Titanium",
+     "count": 2
+    },
+    {
+     "type": "stravidium",
+     "label": "Stravidium",
+     "count": 2
+    }
+   ],
+   "pois": [
+    {
+     "sector": "I1",
+     "subx": 4,
+     "suby": 3,
+     "type": "testing-station"
+    },
+    {
+     "sector": "I2",
+     "subx": 3,
+     "suby": 2,
+     "type": "large-spice-field"
+    },
+    {
+     "sector": "I4",
+     "subx": 4,
+     "suby": 2,
+     "type": "large-spice-field"
+    },
+    {
+     "sector": "I5",
+     "subx": 3,
+     "suby": 3,
+     "type": "wreck"
+    },
+    {
+     "sector": "I7",
+     "subx": 3,
+     "suby": 2,
+     "type": "large-spice-field"
+    },
+    {
+     "sector": "H4",
+     "subx": 3,
+     "suby": 1,
+     "type": "cave"
+    },
+    {
+     "sector": "H8",
+     "subx": 2,
+     "suby": 2,
+     "type": "testing-station"
+    },
+    {
+     "sector": "H9",
+     "subx": 2,
+     "suby": 1,
+     "type": "large-spice-field"
+    },
+    {
+     "sector": "G3",
+     "subx": 2,
+     "suby": 1,
+     "type": "cave"
+    },
+    {
+     "sector": "G4",
+     "subx": 3,
+     "suby": 1,
+     "type": "titanium"
+    },
+    {
+     "sector": "G6",
+     "subx": 2,
+     "suby": 1,
+     "type": "stravidium"
+    },
+    {
+     "sector": "G7",
+     "subx": 4,
+     "suby": 1,
+     "type": "cave"
+    },
+    {
+     "sector": "F1",
+     "subx": 4,
+     "suby": 1,
+     "type": "cave"
+    },
+    {
+     "sector": "F1",
+     "subx": 3,
+     "suby": 2,
+     "type": "large-spice-field"
+    },
+    {
+     "sector": "F4",
+     "subx": 2,
+     "suby": 3,
+     "type": "stravidium"
+    },
+    {
+     "sector": "F4",
+     "subx": 3,
+     "suby": 3,
+     "type": "testing-station"
+    },
+    {
+     "sector": "F5",
+     "subx": 2,
+     "suby": 2,
+     "type": "large-spice-field"
+    },
+    {
+     "sector": "F6",
+     "subx": 2,
+     "suby": 2,
+     "type": "titanium"
+    },
+    {
+     "sector": "F7",
+     "subx": 3,
+     "suby": 3,
+     "type": "wreck"
+    },
+    {
+     "sector": "E3",
+     "subx": 2,
+     "suby": 2,
+     "type": "wreck"
+    },
+    {
+     "sector": "E8",
+     "subx": 2,
+     "suby": 2,
+     "type": "testing-station"
+    },
+    {
+     "sector": "D6",
+     "subx": 2,
+     "suby": 1,
+     "type": "wreck"
+    },
+    {
+     "sector": "D8",
+     "subx": 3,
+     "suby": 2,
+     "type": "cave"
+    },
+    {
+     "sector": "C2",
+     "subx": 3,
+     "suby": 3,
+     "type": "cave"
+    },
+    {
+     "sector": "C5",
+     "subx": 3,
+     "suby": 3,
+     "type": "cave"
+    },
+    {
+     "sector": "C8",
+     "subx": 1,
+     "suby": 2,
+     "type": "cave"
+    },
+    {
+     "sector": "B5",
+     "subx": 3,
+     "suby": 0,
+     "type": "cave"
+    },
+    {
+     "sector": "A1",
+     "subx": 3,
+     "suby": 1,
+     "type": "wreck"
+    },
+    {
+     "sector": "A1",
+     "subx": 2,
+     "suby": 2,
+     "type": "wreck"
+    },
+    {
+     "sector": "A2",
+     "subx": 1,
+     "suby": 1,
+     "type": "taxi-service"
+    },
+    {
+     "sector": "A2",
+     "subx": 2,
+     "suby": 1,
+     "type": "testing-station"
+    },
+    {
+     "sector": "A2",
+     "subx": 3,
+     "suby": 2,
+     "type": "wreck"
+    },
+    {
+     "sector": "A3",
+     "subx": 3,
+     "suby": 1,
+     "type": "wreck"
+    },
+    {
+     "sector": "A3",
+     "subx": 2,
+     "suby": 2,
+     "type": "testing-station"
+    },
+    {
+     "sector": "A3",
+     "subx": 4,
+     "suby": 2,
+     "type": "wreck"
+    },
+    {
+     "sector": "A4",
+     "subx": 4,
+     "suby": 1,
+     "type": "testing-station"
+    },
+    {
+     "sector": "A4",
+     "subx": 3,
+     "suby": 2,
+     "type": "wreck"
+    },
+    {
+     "sector": "A5",
+     "subx": 2,
+     "suby": 0,
+     "type": "taxi-service"
+    },
+    {
+     "sector": "A5",
+     "subx": 2,
+     "suby": 1,
+     "type": "wreck"
+    },
+    {
+     "sector": "A5",
+     "subx": 3,
+     "suby": 2,
+     "type": "testing-station"
+    },
+    {
+     "sector": "A7",
+     "subx": 2,
+     "suby": 0,
+     "type": "wreck"
+    },
+    {
+     "sector": "A8",
+     "subx": 2,
+     "suby": 0,
+     "type": "taxi-service"
+    },
+    {
+     "sector": "A8",
+     "subx": 3,
+     "suby": 0,
+     "type": "testing-station"
+    },
+    {
+     "sector": "A9",
+     "subx": 2,
+     "suby": 1,
+     "type": "wreck"
+    },
+    {
+     "sector": "A9",
+     "subx": 1,
+     "suby": 2,
+     "type": "testing-station"
+    },
+    {
+     "sector": "A9",
+     "subx": 3,
+     "suby": 2,
+     "type": "wreck"
+    }
+   ]
+  }
+ ],
+ "availableSeeds": [
+  0,
+  1,
+  2,
+  3,
+  4,
+  5,
+  6,
+  7,
+  8,
+  9,
+  10,
+  11
+ ],
+ "missingSeeds": []
+}
