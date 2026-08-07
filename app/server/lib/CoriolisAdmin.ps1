@@ -15,11 +15,21 @@
 # dune.world_partition. dune.debug_set_farm_seed() is clean, so the farm path
 # still calls it.
 #
-# Background: every map + partition has a "world_reset_seed" that determines
-# the next Coriolis storm layout. The game updates it automatically on storm
-# events. Setting it manually lets admins (a) pin a specific layout / spawn
-# pattern across resets, or (b) force-trigger a reset by changing the value
-# (which cleans up old corpses / loose loot via coriolis_cleanup_*).
+# Background: every farm / map / partition has a "world_reset_seed" recording the
+# Coriolis storm layout. These rows are the game's OUTPUT: on map load the game
+# calls dune.coriolis_update_seed(...) and stamps its own derived seed over all
+# three tables, so an admin-written row survives only until that map next loads.
+# The actual control is the INI key m_ForcedCoriolisWorldSeed in
+# [/Script/DuneSandbox.CoriolisSubsystem] (Game Config -> Storm Cycle -> Forced
+# Coriolis World Seed): -1 = automatic, 0-11 pin one of the twelve fixed layouts
+# server-wide. The writes below are kept because they are still useful for a map
+# that is not currently loaded, but they are reported as records, never as
+# applied settings.
+#
+# DST never calls dune.coriolis_update_seed itself — it triggers
+# dune.corilis_cleanup_map / dune.coriolis_cleanup_partition, which destroy
+# player markers, surveyed areas, resource-field state and, outside the
+# shieldwall, actors and survivors.
 #
 # All paths use Invoke-DuneSqlSoft so missing tables / functions on legacy or
 # self-hosted DBs degrade to a clear "unsupported" response instead of 500s.
@@ -98,18 +108,114 @@ function Get-DuneCoriolisSeedsDemo {
 }
 
 # ----------------------------------------------------------------------------
-# Writes — set seed at farm / map / partition scope.
+# Writes — record a seed at farm / map / partition scope.
+#
+# IMPORTANT — what a successful write does and does not mean.
+# The world-reset seed tables are the game's OUTPUT, not its input. When a map
+# loads, the game calls dune.coriolis_update_seed(...) and overwrites
+# world_farm_reset_seed / world_map_reset_seed / world_partition_reset_seed with
+# the seed it derived for itself. With the INI key m_ForcedCoriolisWorldSeed at
+# its default (-1 = automatic) that derived value is the current Coriolis
+# cycle's seed, so an admin-written row is replaced the next time the map loads.
+#
+# DST therefore never claims a write was "applied". It records the value,
+# re-reads the rows to confirm the WRITE LANDED (which is all a read-back can
+# prove — the replacement happens later, on the next map load, not immediately),
+# and says plainly that the value is transient unless the layout is pinned via
+# the Forced Coriolis World Seed setting in Game Config -> Storm Cycle.
+#
+# DST deliberately does NOT call dune.coriolis_update_seed. That function fires
+# dune.corilis_cleanup_map / dune.coriolis_cleanup_partition, which delete
+# player markers, surveyed areas, resource-field state and (outside the
+# shieldwall) actors and survivors. Applying a seed on demand is not worth
+# destroying player data over.
+#
 # Farm scope calls dune.debug_set_farm_seed, which also cascades cleanup
 # (corpses, coriolis-affected partition state) when the seed actually changes.
 # Map / partition scope write the reset-seed tables directly (see header).
 # ----------------------------------------------------------------------------
+
+# Appended to every write response. Keep the wording free of "applied" / "set on
+# the map" — the write is a record, not an application.
+$script:DuneCoriolisTransientNote = 'This is a record only: the game re-asserts its own layout when a map next loads, so the value is transient. To pin a layout for good, use Game Config -> Storm Cycle -> Forced Coriolis World Seed.'
+
+# Re-read the rows a write just touched. Soft by design: a database that cannot
+# answer the read-back is reported as unverified rather than turned into an
+# error, because the write itself already succeeded.
+#
+# The query must project three columns: kind, name, seed.
+function Get-DuneCoriolisSeedReadback {
+    param([string]$Ip, [string]$Sql)
+    $soft = $null
+    try {
+        $soft = Invoke-DuneSqlSoft -Ip $Ip -Sql $Sql -MaxRows 500 -TimeoutSec 15
+    } catch {
+        return @{ checked = $false; reason = $_.Exception.Message; rows = @() }
+    }
+    if (-not $soft -or -not $soft.ok) {
+        $why = if ($soft) { [string]$soft.error } else { 'read-back unavailable' }
+        return @{ checked = $false; reason = $why; rows = @() }
+    }
+    if ($soft.unsupported) {
+        return @{ checked = $false; reason = 'read-back not supported on this database'; rows = @() }
+    }
+    $rows = @()
+    try { $rows = @(ConvertTo-DuneRowMaps -Result $soft.raw) }
+    catch { return @{ checked = $false; reason = $_.Exception.Message; rows = @() } }
+    $out = @()
+    foreach ($r in $rows) {
+        $out += [ordered]@{
+            kind = [string]$r['kind']
+            key  = [string]$r['name']
+            seed = [int](ConvertTo-DuneInt $r['seed'])
+        }
+    }
+    return @{ checked = $true; rows = $out }
+}
+
+# Turn a read-back into an honest sentence. Never says "applied" or "set" in a
+# way that implies the map adopted the seed.
+function Format-DuneCoriolisWriteMessage {
+    param([string]$Subject, [int]$Seed, $Readback)
+    $note = $script:DuneCoriolisTransientNote
+    if (-not $Readback -or -not $Readback.checked) {
+        $why = if ($Readback -and $Readback.reason) { " ($($Readback.reason))" } else { '' }
+        return "Recorded seed $Seed for $Subject. Could not re-read the rows to confirm the write landed$why. $note"
+    }
+    $rows = @($Readback.rows)
+    if ($rows.Count -eq 0) {
+        return "Wrote seed $Seed for $Subject, but a re-read found no matching rows, so the write did not land. $note"
+    }
+    $read = (($rows | ForEach-Object { "$($_.kind) '$($_.key)'" }) -join ', ')
+    $bad  = @($rows | Where-Object { $_.seed -ne $Seed })
+    if ($bad.Count -eq 0) {
+        return "Recorded seed $Seed for $Subject. Re-read of $read confirms the write landed. $note"
+    }
+    $badTxt = (($bad | ForEach-Object { "$($_.kind) '$($_.key)' now reads $($_.seed)" }) -join ', ')
+    return "Wrote seed $Seed for $Subject, but a re-read shows $badTxt, so the game has already replaced the value. $note"
+}
+
 function Invoke-DuneCoriolisSetFarmSeed {
     param([string]$Ip, [int]$Seed)
     if ($Seed -lt -1 -or $Seed -gt 11) { return @{ ok = $false; error = 'Seed must be -1 (auto) or 0-11 (one of the 12 Coriolis world layouts).' } }
     $sql = "SELECT dune.debug_set_farm_seed($Seed::int);"
     $res = Invoke-DuneSqlQuery -Ip $Ip -Sql $sql -ReadOnly $false -MaxRows 1 -TimeoutSec 15
     if (-not $res.ok) { return @{ ok = $false; error = $res.error } }
-    return @{ ok = $true; scope = 'farm'; seed = $Seed; message = "Set farm + all maps + all partitions to seed $Seed (cleanup will cascade if changed)." }
+    $readback = Get-DuneCoriolisSeedReadback -Ip $Ip -Sql @"
+SELECT 'farm'::text AS kind, 'farm'::text AS name, f.world_reset_seed AS seed
+FROM dune.world_farm_reset_seed f;
+"@
+    $msg = Format-DuneCoriolisWriteMessage -Subject 'the farm (every map and partition)' -Seed $Seed -Readback $readback
+    return @{
+        ok        = $true
+        scope     = 'farm'
+        seed      = $Seed
+        recorded  = $true
+        transient = $true
+        verified  = [bool]($readback.checked -and -not @($readback.rows | Where-Object { $_.seed -ne $Seed }).Count)
+        readback  = @($readback.rows)
+        message   = $msg
+    }
 }
 
 function Invoke-DuneCoriolisSetMapSeed {
@@ -132,7 +238,38 @@ COMMIT;
 "@
     $res = Invoke-DuneSqlQuery -Ip $Ip -Sql $sql -ReadOnly $false -MaxRows 1 -TimeoutSec 15
     if (-not $res.ok) { return @{ ok = $false; error = $res.error } }
-    return @{ ok = $true; scope = 'map'; map = $Map; seed = $Seed; message = "Set map '$Map' (+ its partitions) to seed $Seed." }
+    # Read back exactly what was written: the map row under the name that was
+    # asked for, plus the partition rows reached through dune.world_partition.
+    #
+    # dune.world_map_reset_seed holds BOTH naming schemes for the same map — the
+    # partition name (Survival_1, Overmap, DeepDesert_1) and the friendly name
+    # (HaggaBasin, Overland, DeepDesert) — and the game rewrites the friendly-name
+    # row. There is no reliable join in dune.world_partition that pairs the two,
+    # so DST does not guess: every read-back row is labelled with the key it was
+    # actually read under, and a counterpart row under the other naming scheme is
+    # neither claimed nor implied.
+    $readback = Get-DuneCoriolisSeedReadback -Ip $Ip -Sql @"
+SELECT 'map'::text AS kind, wm.map::text AS name, wm.world_reset_seed AS seed
+FROM dune.world_map_reset_seed wm
+WHERE wm.map = '$safeMap'::text
+UNION ALL
+SELECT 'partition'::text, wp.partition_id::text, wr.world_reset_seed
+FROM dune.world_partition wp
+JOIN dune.world_partition_reset_seed wr ON wr.partition_id = wp.partition_id
+WHERE wp.map = '$safeMap'::text;
+"@
+    $msg = Format-DuneCoriolisWriteMessage -Subject "map '$Map' (and its partitions)" -Seed $Seed -Readback $readback
+    return @{
+        ok        = $true
+        scope     = 'map'
+        map       = $Map
+        seed      = $Seed
+        recorded  = $true
+        transient = $true
+        verified  = [bool]($readback.checked -and -not @($readback.rows | Where-Object { $_.seed -ne $Seed }).Count)
+        readback  = @($readback.rows)
+        message   = $msg
+    }
 }
 
 function Invoke-DuneCoriolisSetPartitionSeed {
@@ -146,5 +283,21 @@ ON CONFLICT (partition_id) DO UPDATE SET world_reset_seed = EXCLUDED.world_reset
 "@
     $res = Invoke-DuneSqlQuery -Ip $Ip -Sql $sql -ReadOnly $false -MaxRows 1 -TimeoutSec 15
     if (-not $res.ok) { return @{ ok = $false; error = $res.error } }
-    return @{ ok = $true; scope = 'partition'; partition_id = $PartitionId; seed = $Seed; message = "Set partition $PartitionId to seed $Seed." }
+    $readback = Get-DuneCoriolisSeedReadback -Ip $Ip -Sql @"
+SELECT 'partition'::text AS kind, wr.partition_id::text AS name, wr.world_reset_seed AS seed
+FROM dune.world_partition_reset_seed wr
+WHERE wr.partition_id = $PartitionId::int;
+"@
+    $msg = Format-DuneCoriolisWriteMessage -Subject "partition $PartitionId" -Seed $Seed -Readback $readback
+    return @{
+        ok           = $true
+        scope        = 'partition'
+        partition_id = $PartitionId
+        seed         = $Seed
+        recorded     = $true
+        transient    = $true
+        verified     = [bool]($readback.checked -and -not @($readback.rows | Where-Object { $_.seed -ne $Seed }).Count)
+        readback     = @($readback.rows)
+        message      = $msg
+    }
 }

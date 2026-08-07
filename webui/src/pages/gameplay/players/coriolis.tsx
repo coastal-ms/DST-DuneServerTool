@@ -128,12 +128,13 @@ export function CoriolisAdmin({ flash }: { flash: Flash }) {
       </div>
 
       <p className="text-xs text-text-dim">
-        World-reset seeds drive Coriolis storm layout (spawns, dunes, loot scatter). Valid seeds are
-        <strong>0–11</strong> (the 12 pre-built layouts); enter <strong>-1</strong> to clear a forced
-        seed (auto). Changing a seed triggers cleanup (corpses, loose loot) on next storm tick. Use
-        <em>Stay on current</em> to lock the layout across resets, or <em>Reroll</em> to pick a fresh
-        random one. <strong>Farm</strong> stamps one seed onto every map + partition at once;
-        <strong>Reset all to game default</strong> clears every forced seed back to -1.
+        These rows are the game's <strong>output</strong>, not its input. When a map loads, the game
+        writes its own derived seed over the farm, map and partition rows — so a value recorded here
+        survives only until that map next loads. To pin a layout for good, use{' '}
+        <strong>Game Config → Storm Cycle → Forced Coriolis World Seed</strong> (-1 = automatic, a new
+        layout each Coriolis cycle; 0–11 = pin one of the twelve fixed layouts, server-wide). Values
+        recorded below are still useful for a map that is not currently running. Valid seeds are
+        <strong>0–11</strong>; enter <strong>-1</strong> to clear a recorded seed.
       </p>
 
       {/* Severe-consequences warning + lock gate. These settings rewrite world-reset
@@ -143,10 +144,13 @@ export function CoriolisAdmin({ flash }: { flash: Flash }) {
           <Icon name="AlertTriangle" size={14} /> Advanced — world-altering. Severe consequences if misused.
         </div>
         <p className="text-text-dim">
-          These are <strong className="text-text">world-reset (Coriolis storm) seeds</strong>. Changing one
-          re-rolls the storm layout and <strong className="text-text">wipes corpses and loose loot</strong> on
-          the next tick — farm scope hits every map and partition. There is <strong className="text-text">no
-          undo</strong>. If you don't know exactly what these do, leave them alone.
+          These are <strong className="text-text">world-reset (Coriolis storm) seed records</strong>. A
+          recorded seed is not applied on its own — the game replaces it with its own layout when the
+          map next loads. Where a seed does take effect, the world regenerates and{' '}
+          <strong className="text-text">corpses and loose loot are cleared</strong>; farm scope touches
+          every map and partition. There is <strong className="text-text">no undo</strong>. To pin a
+          layout deliberately, set <strong className="text-text">Forced Coriolis World Seed</strong> in
+          Game Config instead. If you don't know exactly what these do, leave them alone.
         </p>
         {unlocked ? (
           <button className="btn-secondary text-xs" disabled={busy} onClick={() => setUnlocked(false)}>

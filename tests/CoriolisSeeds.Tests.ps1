@@ -19,6 +19,12 @@ BeforeAll {
     $script:lastWriteSql = $null
     $script:writeCount   = 0
     $script:lastReadOnly = $null
+    $script:lastReadSql  = $null
+    $script:readCount    = 0
+    # How the faked read-back behaves: 'ok' returns $script:readbackRows,
+    # 'unsupported' / 'fail' / 'throw' exercise the unverified paths.
+    $script:readbackMode = 'ok'
+    $script:readbackRows = @()
 
     function global:Invoke-DuneSqlQuery {
         param([string] $Ip, [string] $Sql, [bool] $ReadOnly, [int] $MaxRows, [int] $TimeoutSec)
@@ -27,17 +33,46 @@ BeforeAll {
         $script:writeCount   = $script:writeCount + 1
         return @{ ok = $true; maps = @(); message = 'INSERT 0 1' }
     }
+    function global:Invoke-DuneSqlSoft {
+        param([string] $Ip, [string] $Sql, [int] $MaxRows, [int] $TimeoutSec)
+        $script:lastReadSql = $Sql
+        $script:readCount   = $script:readCount + 1
+        switch ($script:readbackMode) {
+            'throw'       { throw 'ssh transport died' }
+            'fail'        { return @{ ok = $false; error = 'connection refused' } }
+            'unsupported' { return @{ ok = $true; unsupported = $true; reason = 'relation does not exist'; rows = @() } }
+            default       { return @{ ok = $true; unsupported = $false; raw = @{ rows = $script:readbackRows } } }
+        }
+    }
+    function global:ConvertTo-DuneRowMaps {
+        param($Result)
+        return @($script:readbackRows)
+    }
+    function global:ConvertTo-DuneInt {
+        param($Value)
+        return [int]$Value
+    }
     function global:ConvertTo-DuneSqlString {
         param($Value)
         return ([string]$Value) -replace "'", "''"
+    }
+
+    # Build the row shape Get-DuneCoriolisSeedReadback consumes.
+    function global:New-FakeSeedRow {
+        param([string] $Kind, [string] $Name, [int] $Seed)
+        return @{ kind = $Kind; name = $Name; seed = $Seed }
     }
 
     Import-DstLib 'CoriolisAdmin.ps1'
 }
 
 AfterAll {
-    Remove-Item function:global:Invoke-DuneSqlQuery    -ErrorAction SilentlyContinue
+    Remove-Item function:global:Invoke-DuneSqlQuery     -ErrorAction SilentlyContinue
+    Remove-Item function:global:Invoke-DuneSqlSoft      -ErrorAction SilentlyContinue
+    Remove-Item function:global:ConvertTo-DuneRowMaps   -ErrorAction SilentlyContinue
+    Remove-Item function:global:ConvertTo-DuneInt       -ErrorAction SilentlyContinue
     Remove-Item function:global:ConvertTo-DuneSqlString -ErrorAction SilentlyContinue
+    Remove-Item function:global:New-FakeSeedRow         -ErrorAction SilentlyContinue
 }
 
 Describe 'Invoke-DuneCoriolisSetMapSeed (per-map seed)' -Tag 'Coriolis' {
@@ -45,6 +80,10 @@ Describe 'Invoke-DuneCoriolisSetMapSeed (per-map seed)' -Tag 'Coriolis' {
         $script:lastWriteSql = $null
         $script:writeCount   = 0
         $script:lastReadOnly = $null
+        $script:lastReadSql  = $null
+        $script:readCount    = 0
+        $script:readbackMode = 'unsupported'
+        $script:readbackRows = @()
     }
 
     It 'never calls the broken dune.debug_set_map_seed function' {
@@ -119,6 +158,10 @@ Describe 'Invoke-DuneCoriolisSetPartitionSeed (per-partition seed)' -Tag 'Coriol
         $script:lastWriteSql = $null
         $script:writeCount   = 0
         $script:lastReadOnly = $null
+        $script:lastReadSql  = $null
+        $script:readCount    = 0
+        $script:readbackMode = 'unsupported'
+        $script:readbackRows = @()
     }
 
     It 'never calls the broken dune.debug_set_partition_seed function' {
@@ -161,6 +204,10 @@ Describe 'Invoke-DuneCoriolisSetFarmSeed (unchanged farm path)' -Tag 'Coriolis' 
     BeforeEach {
         $script:lastWriteSql = $null
         $script:writeCount   = 0
+        $script:lastReadSql  = $null
+        $script:readCount    = 0
+        $script:readbackMode = 'unsupported'
+        $script:readbackRows = @()
     }
 
     It 'still calls dune.debug_set_farm_seed, which is not broken' {
@@ -173,5 +220,125 @@ Describe 'Invoke-DuneCoriolisSetFarmSeed (unchanged farm path)' -Tag 'Coriolis' 
     It 'rejects out-of-range seeds without sending SQL' {
         (Invoke-DuneCoriolisSetFarmSeed -Ip '1.2.3.4' -Seed 12).ok | Should -BeFalse
         $script:writeCount | Should -Be 0
+    }
+}
+
+# ---------------------------------------------------------------------------
+# Honest reporting (issue #655).
+#
+# The reset-seed tables are the game's OUTPUT: on map load the game calls
+# dune.coriolis_update_seed(...) and stamps its own derived seed over them. A
+# read-back straight after the write therefore proves only that the WRITE
+# LANDED — the replacement happens later, on the next map load. These tests pin
+# that distinction so nobody re-introduces "applied" wording, and pin that the
+# real control (the m_ForcedCoriolisWorldSeed setting) is always pointed at.
+# ---------------------------------------------------------------------------
+Describe 'Coriolis seed writes report honestly' -Tag 'Coriolis' {
+    BeforeEach {
+        $script:lastWriteSql = $null
+        $script:writeCount   = 0
+        $script:lastReadSql  = $null
+        $script:readCount    = 0
+        $script:readbackMode = 'ok'
+        $script:readbackRows = @()
+    }
+
+    It 'never claims the seed was applied or set on the map' {
+        $script:readbackRows = @(
+            (New-FakeSeedRow -Kind 'map'       -Name 'Survival_1' -Seed 7),
+            (New-FakeSeedRow -Kind 'partition' -Name '1'          -Seed 7)
+        )
+        $r = Invoke-DuneCoriolisSetMapSeed -Ip '1.2.3.4' -Map 'Survival_1' -Seed 7
+        $r.message | Should -Not -Match '(?i)\bapplied\b'
+        $r.message | Should -Not -Match "(?i)^Set map"
+        $r.message | Should -Match '(?i)Recorded seed 7'
+    }
+
+    It 'always says the value is transient and points at the Forced Coriolis World Seed setting' {
+        $script:readbackRows = @((New-FakeSeedRow -Kind 'partition' -Name '101' -Seed 5))
+        $partition = Invoke-DuneCoriolisSetPartitionSeed -Ip '1.2.3.4' -PartitionId 101 -Seed 5
+        $script:readbackRows = @((New-FakeSeedRow -Kind 'farm' -Name 'farm' -Seed 5))
+        $farm = Invoke-DuneCoriolisSetFarmSeed -Ip '1.2.3.4' -Seed 5
+        $script:readbackRows = @((New-FakeSeedRow -Kind 'map' -Name 'Overmap' -Seed 5))
+        $map = Invoke-DuneCoriolisSetMapSeed -Ip '1.2.3.4' -Map 'Overmap' -Seed 5
+
+        foreach ($r in @($partition, $farm, $map)) {
+            $r.transient | Should -BeTrue
+            $r.message | Should -Match '(?i)transient'
+            $r.message | Should -Match 'Forced Coriolis World Seed'
+        }
+    }
+
+    It 'says the read-back only confirms the write landed, not that the map will use it' {
+        $script:readbackRows = @((New-FakeSeedRow -Kind 'map' -Name 'DeepDesert_1' -Seed 3))
+        $r = Invoke-DuneCoriolisSetMapSeed -Ip '1.2.3.4' -Map 'DeepDesert_1' -Seed 3
+        $r.verified | Should -BeTrue
+        $r.message | Should -Match '(?i)confirms the write landed'
+        $r.message | Should -Match "map 'DeepDesert_1'"
+    }
+
+    It 'reports plainly when a re-read shows the value was already replaced' {
+        $script:readbackRows = @(
+            (New-FakeSeedRow -Kind 'map'       -Name 'Survival_1' -Seed 7),
+            (New-FakeSeedRow -Kind 'partition' -Name '1'          -Seed 0)
+        )
+        $r = Invoke-DuneCoriolisSetMapSeed -Ip '1.2.3.4' -Map 'Survival_1' -Seed 7
+        $r.ok | Should -BeTrue
+        $r.verified | Should -BeFalse
+        $r.message | Should -Match "(?i)partition '1' now reads 0"
+        $r.message | Should -Match '(?i)already replaced'
+    }
+
+    It 'reports an unverified write instead of failing when the read-back is unavailable' {
+        foreach ($mode in @('unsupported', 'fail', 'throw')) {
+            $script:readbackMode = $mode
+            $r = Invoke-DuneCoriolisSetPartitionSeed -Ip '1.2.3.4' -PartitionId 101 -Seed 4
+            $r.ok | Should -BeTrue
+            $r.verified | Should -BeFalse
+            $r.message | Should -Match '(?i)Could not re-read'
+        }
+    }
+
+    It 'reads back only rows it actually queried, labelled with the key it read' {
+        $script:readbackRows = @(
+            (New-FakeSeedRow -Kind 'map'       -Name 'Survival_1' -Seed 7),
+            (New-FakeSeedRow -Kind 'partition' -Name '1'          -Seed 7)
+        )
+        $r = Invoke-DuneCoriolisSetMapSeed -Ip '1.2.3.4' -Map 'Survival_1' -Seed 7
+        # The friendly-name counterpart (HaggaBasin) is neither queried nor
+        # implied — DST does not guess the pairing.
+        $script:lastReadSql | Should -Match "wm\.map = 'Survival_1'::text"
+        $script:lastReadSql | Should -Not -Match 'HaggaBasin'
+        $r.message | Should -Not -Match 'HaggaBasin'
+        @($r.readback).Count | Should -Be 2
+        @($r.readback)[0].key | Should -Be 'Survival_1'
+    }
+
+    It 'sources the partition read-back through dune.world_partition, not a guessed map column' {
+        $script:readbackRows = @()
+        $null = Invoke-DuneCoriolisSetMapSeed -Ip '1.2.3.4' -Map 'Overmap' -Seed 2
+        $script:lastReadSql | Should -Match 'FROM dune\.world_partition wp'
+        $script:lastReadSql | Should -Match 'JOIN dune\.world_partition_reset_seed'
+        $script:lastReadSql | Should -Not -Match 'world_partition_reset_seed\s+\w*\s*WHERE\s+map'
+    }
+
+    It 'never calls the destructive coriolis_update_seed or cleanup functions' {
+        $script:readbackRows = @((New-FakeSeedRow -Kind 'map' -Name 'Overmap' -Seed 1))
+        $null = Invoke-DuneCoriolisSetMapSeed -Ip '1.2.3.4' -Map 'Overmap' -Seed 1
+        $null = Invoke-DuneCoriolisSetPartitionSeed -Ip '1.2.3.4' -PartitionId 2 -Seed 1
+        $null = Invoke-DuneCoriolisSetFarmSeed -Ip '1.2.3.4' -Seed 1
+        foreach ($sql in @($script:lastWriteSql, $script:lastReadSql)) {
+            $sql | Should -Not -Match 'coriolis_update_seed'
+            $sql | Should -Not -Match 'corilis_cleanup_map'
+            $sql | Should -Not -Match 'coriolis_cleanup_partition'
+        }
+    }
+
+    It 'issues the read-back as a soft read that cannot fail the write' {
+        $script:readbackRows = @((New-FakeSeedRow -Kind 'farm' -Name 'farm' -Seed 6))
+        $r = Invoke-DuneCoriolisSetFarmSeed -Ip '1.2.3.4' -Seed 6
+        $r.ok | Should -BeTrue
+        $script:readCount | Should -Be 1
+        $script:lastReadSql | Should -Match 'dune\.world_farm_reset_seed'
     }
 }
