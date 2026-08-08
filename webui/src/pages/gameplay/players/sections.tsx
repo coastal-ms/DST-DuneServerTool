@@ -704,7 +704,7 @@ const ACTIONS: ActionDef[] = [
     rowNote: 'Hand a saved item package to this player — build & reuse your own bundles. Works online or offline',
     run: () => Promise.resolve({ message: '' }) },
   { id: 'grant-cosmetic', group: 'Items', label: 'Grant Cosmetic / Building Set', icon: 'Shirt', custom: 'grant-cosmetic',
-    rowNote: 'Unlock appearance variants, swatches, vehicle skins & building sets — works online or offline',
+    rowNote: 'Private-server unlock only; does not grant account ownership or availability elsewhere.',
     run: () => Promise.resolve({ message: '' }) },
   { id: 'repair-gear', group: 'Items', label: 'Repair All Items', icon: 'Wrench',
     run: p => repairGear(p.id) },
@@ -1370,6 +1370,9 @@ function GrantCosmeticForm({ busy, playerName, onGrant }: {
   return (
     <div className="space-y-3">
       <p className="text-[11px] text-text-dim">Delivers the unlock item to {playerName}'s inventory (online: instant; offline: next login). The unlock applies when acquired in-game.</p>
+      <div className="rounded-lg bg-warning/10 border border-warning/40 p-3 text-warning text-xs leading-relaxed">
+        Some entries may be account-entitlement content. Granting one here only unlocks it for this character on this private server; it does not grant account ownership or make it available on official or other servers.
+      </div>
       <input type="text" value={filter} disabled={busy} placeholder="Filter cosmetics & building sets by name or id…"
         onChange={e => setFilter(e.target.value)} className={selectCls} />
       <select value={sel} disabled={busy} className={selectCls} onChange={e => setSel(e.target.value)} size={1}>
