@@ -13,6 +13,16 @@ here cover everything those tags shipped.
 
 ## [Unreleased]
 
+## [13.5.2] - 2026-08-07
+
+### Added
+
+- **Player inventories can now maximize augmentation attributes.** The new Max Augment Attributes action updates every augmentation owned by the selected player to the confirmed maximum roll while preserving structural zero values and leaving every other player's inventory untouched.
+
+### Fixed
+
+- **Wipe Journey (restart) now performs a complete story reset.** With the player offline, DST removes journey rows, journey, contract, and faction quest tags, contract items, and the tracked-contract pointer in one transaction, then verifies no progress remains before reporting success.
+
 ## [13.5.1] - 2026-08-07
 
 ### Changed
