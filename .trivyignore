@@ -1,0 +1,4 @@
+# Transitive Expo CLI image parser; no fixed image-size release is available.
+# Mobile builds process trusted local project assets, not user-supplied images.
+CVE-2025-71329
+CVE-2025-71330

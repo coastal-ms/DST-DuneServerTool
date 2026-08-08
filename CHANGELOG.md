@@ -13,6 +13,20 @@ here cover everything those tags shipped.
 
 ## [Unreleased]
 
+## [13.5.1] - 2026-08-07
+
+### Changed
+
+- **Renamed Wick Maps to DD Seed Maps.**
+
+- **The Pods page now keeps stale director history out of the way.** Completed and failed director pods are hidden by default, can still be shown when needed, and can be removed with the new Clean history action. DST also clears this terminal history automatically at backend startup and during Start All. Restart counts are now labelled "Lifetime restarts" so old restarts are not mistaken for a current fault.
+
+### Fixed
+
+- **Stop All no longer waits forever on old pod records.** Completed and failed director pods are no longer counted as active shutdown work.
+
+- **Start All now recovers game maps whose database sessions broke across a VM reboot.** Restarted-in-place Overmap and Survival pods are replaced after DST powers on the VM, and startup waits for the Funcom battlegroup to report each map genuinely ready instead of trusting Kubernetes' process-level Ready probe alone.
+
 ## [13.5.0] - 2026-08-07
 
 ### Added

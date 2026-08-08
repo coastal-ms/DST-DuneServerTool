@@ -17,6 +17,7 @@ function Get-DunePodsList {
     if (-not $ctx.ok) {
         return @{ ok = $false; status = $ctx.status; message = $ctx.message }
     }
+
     $cmd = 'sudo kubectl get pods --all-namespaces -o json 2>/dev/null'
     try {
         $raw = Invoke-V6Ssh -Ip $ctx.ip -Cmd $cmd -TimeoutSec 30
@@ -75,6 +76,49 @@ function Get-DunePodsList {
 
     $pods = $pods | Sort-Object namespace, name
     return @{ ok = $true; pods = @($pods); count = @($pods).Count }
+}
+
+# Delete terminal battlegroup-director pod history. These ReplicaSet-owned pod
+# objects are never live services once phase is Succeeded/Failed, but kubelet
+# can leave them behind indefinitely after VM power cycles as Evicted or
+# ContainerStatusUnknown.
+function Remove-DuneTerminalDirectorPods {
+    $ctx = Get-DuneBackupContext
+    if (-not $ctx.ok) {
+        return @{ ok = $false; status = $ctx.status; message = $ctx.message; deleted = @() }
+    }
+    $cmd = @'
+sudo kubectl get pods --all-namespaces -o jsonpath='{range .items[*]}{.metadata.namespace}{"|"}{.metadata.name}{"|"}{.status.phase}{"\n"}{end}' 2>/dev/null |
+awk -F'|' '$2 ~ /-bgd-/ && ($3 == "Succeeded" || $3 == "Failed") { print $1 "|" $2 }' |
+while IFS='|' read -r ns pod; do
+  [ -n "$ns" ] && [ -n "$pod" ] || continue
+  if sudo kubectl delete pod -n "$ns" "$pod" --ignore-not-found >/dev/null; then
+    echo "DELETED|$ns|$pod"
+  else
+    echo "FAILED|$ns|$pod"
+  fi
+done
+'@ -replace "`r", ''
+    try {
+        $raw = Invoke-V6Ssh -Ip $ctx.ip -Cmd $cmd -TimeoutSec 60
+    } catch {
+        return @{ ok = $false; status = 502; message = "Director pod cleanup failed: $($_.Exception.Message)"; deleted = @() }
+    }
+    $deleted = @($raw | ForEach-Object {
+        $parts = ([string]$_).Trim() -split '\|', 3
+        if ($parts.Count -eq 3 -and $parts[0] -eq 'DELETED') { "$($parts[1])/$($parts[2])" }
+    } | Where-Object { $_ })
+    $failed = @($raw | ForEach-Object {
+        $parts = ([string]$_).Trim() -split '\|', 3
+        if ($parts.Count -eq 3 -and $parts[0] -eq 'FAILED') { "$($parts[1])/$($parts[2])" }
+    } | Where-Object { $_ })
+    return @{
+        ok      = ($failed.Count -eq 0)
+        deleted = $deleted
+        failed  = $failed
+        count   = $deleted.Count
+        message = if ($deleted.Count -gt 0) { "Removed $($deleted.Count) stale director pod record(s)." } else { 'No stale director pod records found.' }
+    }
 }
 
 # Events + a describe tail for a single pod. Namespace/name are validated to

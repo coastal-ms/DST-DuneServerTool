@@ -21,7 +21,7 @@ param(
 # Wraps the original battlegroup.ps1 menu and adds extra tools
 # ============================================================
 
-$script:ToolVersion = "13.5.0"
+$script:ToolVersion = "13.5.1"
 
 # Cold-boot readiness budgets (seconds). A fresh battlegroup's FIRST boot can
 # take 10-30 min: k3s + funcom-operators initialize, metrics-server restarts a
@@ -845,21 +845,53 @@ function Show-DuneFuncomStopWarningNote {
     } catch {}
 }
 
-# Returns $true if any battlegroup pod (sg/mq/sgw/tr/bgd) is currently
-# present on the VM. Used to short-circuit `battlegroup stop` calls when
-# nothing is running -- otherwise the VM-side helper script runs its own
-# 90-second polling loop even when the namespace is already empty.
+# Count active battlegroup pods. Terminal pod objects can remain in Kubernetes
+# indefinitely (especially Evicted bgd pods), so presence alone does not mean
+# shutdown work remains.
+function Get-DuneActiveBattlegroupPodCount {
+    param(
+        [Parameter(Mandatory)] [string] $Ip,
+        [Parameter(Mandatory)] [string] $SshUser,
+        [Parameter(Mandatory)] [string] $SshKey
+    )
+    $remote = "sudo k3s kubectl get pods -A --no-headers -o custom-columns=NAME:.metadata.name,PHASE:.status.phase 2>/dev/null | awk '`$1 ~ /(-sg-|-mq-|-sgw-|-tr-|-bgd-)/ && `$2 != `"Succeeded`" && `$2 != `"Failed`" { count++ } END { print count+0 }'"
+    $raw = ssh -o BatchMode=yes -o StrictHostKeyChecking=no -o LogLevel=QUIET -i "$SshKey" "$SshUser@$Ip" `
+        $remote
+    $text = ($raw | Out-String).Trim()
+    $count = 0
+    if (-not [int]::TryParse($text, [ref]$count)) { return $null }
+    return $count
+}
+
+# Returns $true if active battlegroup pods remain. Used to short-circuit
+# `battlegroup stop` when only terminal pod history exists.
 function Test-DuneBattlegroupHasPods {
     param(
         [Parameter(Mandatory)] [string] $Ip,
         [Parameter(Mandatory)] [string] $SshUser,
         [Parameter(Mandatory)] [string] $SshKey
     )
-    $raw = ssh -o BatchMode=yes -o StrictHostKeyChecking=no -o LogLevel=QUIET -i "$SshKey" "$SshUser@$Ip" `
-        "sudo k3s kubectl get pods -A --no-headers 2>/dev/null | grep -E '(-sg-|-mq-|-sgw-|-tr-|-bgd-)' | wc -l"
-    $n = ($raw -replace '\D','')
-    if (-not $n) { return $false }
-    return ([int]$n -gt 0)
+    $count = Get-DuneActiveBattlegroupPodCount -Ip $Ip -SshUser $SshUser -SshKey $SshKey
+    if ($null -eq $count) { return $true }
+    return ($count -gt 0)
+}
+
+function Remove-DuneTerminalDirectorPodHistory {
+    param(
+        [Parameter(Mandatory)] [string] $Ip,
+        [Parameter(Mandatory)] [string] $SshUser,
+        [Parameter(Mandatory)] [string] $SshKey
+    )
+    $remote = @'
+sudo k3s kubectl get pods -A -o jsonpath='{range .items[*]}{.metadata.namespace}{"|"}{.metadata.name}{"|"}{.status.phase}{"\n"}{end}' 2>/dev/null |
+awk -F'|' '$2 ~ /-bgd-/ && ($3 == "Succeeded" || $3 == "Failed") { print $1 "|" $2 }' |
+while IFS='|' read -r ns pod; do
+  [ -n "$ns" ] && [ -n "$pod" ] || continue
+  sudo k3s kubectl delete pod -n "$ns" "$pod" --ignore-not-found >/dev/null && echo "DELETED|$pod"
+done
+'@ -replace "`r", ''
+    $out = ssh -o BatchMode=yes -o StrictHostKeyChecking=no -o LogLevel=QUIET -i "$SshKey" "$SshUser@$Ip" $remote
+    return @($out | Where-Object { ([string]$_).StartsWith('DELETED|') }).Count
 }
 
 function Get-DuneDatabaseBlockState {
@@ -904,6 +936,7 @@ function Wait-MapPodReady {
         [Parameter(Mandatory)] [string] $MapName,
         [int] $TimeoutSec = 300
     )
+    $expectedMap = if ($MapName -eq 'survival') { 'Survival_1' } else { 'Overmap' }
     $elapsed = 0
     $lastPod = $null
     $lastStatus = $null
@@ -919,13 +952,61 @@ function Wait-MapPodReady {
             $lastPod = $podName
             $lastStatus = "$status $ready"
             if ($status -eq 'Running' -and $ready -match '^(\d+)/\1$' -and $Matches[1] -gt 0) {
-                return @{ Success = $true; Elapsed = $elapsed; Pod = $podName; Ready = $ready }
+                # Kubernetes Ready only means the container probe passed. After
+                # a VM restart, a persisted game container can pass that probe
+                # while its PostgreSQL connection is permanently broken. The
+                # Funcom battlegroup CR is the authoritative world-ready signal.
+                $gameRows = ssh -o BatchMode=yes -o StrictHostKeyChecking=no -o LogLevel=QUIET -i "$sshKey" "$sshUser@$Ip" `
+                    "sudo k3s kubectl get battlegroups -A -o jsonpath='{range .items[*].status.servers[*]}{.partitionMap}{`"|`"}{.phase}{`"|`"}{.ready}{`"\n`"}{end}' 2>/dev/null"
+                $game = @($gameRows | ForEach-Object {
+                    $parts = ([string]$_).Trim() -split '\|', 3
+                    if ($parts.Count -eq 3 -and $parts[0] -eq $expectedMap) {
+                        [pscustomobject]@{ Phase = $parts[1]; Ready = $parts[2] }
+                    }
+                } | Select-Object -First 1)
+                if ($game.Count -gt 0) {
+                    $lastStatus = "$status $ready; game=$($game[0].Phase) ready=$($game[0].Ready)"
+                    if ($game[0].Phase -eq 'Running' -and $game[0].Ready -eq 'true') {
+                        return @{ Success = $true; Elapsed = $elapsed; Pod = $podName; Ready = "$ready; game ready" }
+                    }
+                }
             }
         }
         Start-Sleep -Seconds 5
         $elapsed += 5
     }
     return @{ Success = $false; Elapsed = $elapsed; Pod = $lastPod; LastStatus = $lastStatus }
+}
+
+# A hard VM stop preserves pod objects in k3s. On the next boot, containerd
+# restarts those game containers in place, but the game process can retain an
+# invalid PostgreSQL connection forever while Kubernetes still reports Ready.
+# Start All is player-safe here because the VM was off when the command began.
+function Restart-DuneCoreMapPodsAfterVmBoot {
+    param(
+        [Parameter(Mandatory)] [string] $Ip,
+        [Parameter(Mandatory)] [string] $SshUser,
+        [Parameter(Mandatory)] [string] $SshKey
+    )
+    $cmd = @'
+sudo k3s kubectl get pods -A -o jsonpath='{range .items[*]}{.metadata.namespace}{"|"}{.metadata.name}{"|"}{.status.containerStatuses[0].restartCount}{"\n"}{end}' 2>/dev/null |
+while IFS='|' read -r ns pod restarts; do
+  case "$pod" in
+    *-sg-overmap-pod-*|*-sg-survival-1-pod-*) ;;
+    *) continue ;;
+  esac
+  case "$restarts" in ''|*[!0-9]*) continue ;; esac
+  [ "$restarts" -gt 0 ] || continue
+  echo "===RECYCLE===$ns|$pod|$restarts"
+  sudo k3s kubectl delete pod -n "$ns" "$pod" --wait=false
+done
+'@ -replace "`r", ''
+    $out = ssh -o BatchMode=yes -o StrictHostKeyChecking=no -o LogLevel=QUIET -i "$SshKey" "$SshUser@$Ip" $cmd
+    $recycled = @($out | Where-Object { ([string]$_).StartsWith('===RECYCLE===') })
+    return @{
+        Count = $recycled.Count
+        Pods  = @($recycled | ForEach-Object { (([string]$_).Substring(13) -split '\|')[1] })
+    }
 }
 
 # ============================================================
@@ -1617,6 +1698,7 @@ while ($true) {
         Write-Host ""
 
         $t0 = Get-Date
+        $vmStartedThisRun = $false
 
         # ---- Step 1: VM ----
         Write-Host ""
@@ -1624,6 +1706,7 @@ while ($true) {
             Write-Host "[1/4] VM '$vmName' already running ($($info.Ip))." -ForegroundColor Green
             $ip = $info.Ip
         } else {
+            $vmStartedThisRun = $true
             Write-Host "[1/4] Starting VM '$vmName'..." -ForegroundColor Cyan
             $estVm = Format-PhaseEstimate 'vm-start'
             if ($estVm) { Write-Host "  $estVm" -ForegroundColor DarkGray }
@@ -1794,6 +1877,23 @@ while ($true) {
         Write-Host "  Settling 10s before starting battlegroup..." -ForegroundColor DarkGray
         Start-Sleep -Seconds 10
 
+        try {
+            $prunedDirectorPods = Remove-DuneTerminalDirectorPodHistory -Ip $ip -SshUser $sshUser -SshKey $sshKey
+            if ($prunedDirectorPods -gt 0) {
+                Write-Host "  Removed $prunedDirectorPods stale director pod record(s)." -ForegroundColor DarkGray
+            }
+        } catch {
+            Write-Warning "  Could not clean stale director pod history: $($_.Exception.Message)"
+        }
+
+        if ($vmStartedThisRun) {
+            $recycle = Restart-DuneCoreMapPodsAfterVmBoot -Ip $ip -SshUser $sshUser -SshKey $sshKey
+            if ($recycle.Count -gt 0) {
+                Write-Host "  Replacing $($recycle.Count) core-map pod(s) restarted in place after VM boot so game/database sessions are fresh:" -ForegroundColor Yellow
+                foreach ($pod in $recycle.Pods) { Write-Host "    $pod" -ForegroundColor DarkGray }
+            }
+        }
+
         # Refresh monitoring before issuing battlegroup start; reconciliation is
         # continuous and does not depend on a later readiness/green transition.
         Invoke-DuneDnatWatchdogInstall -Ip $ip -Phase 'pre-startup'
@@ -1810,20 +1910,20 @@ while ($true) {
 
         # ---- Step 4: wait for map pods ----
         Write-Host ""
-        Write-Host "[4/4] Waiting for map pods to be Ready..." -ForegroundColor Cyan
+        Write-Host "[4/4] Waiting for maps to finish loading and report game-ready..." -ForegroundColor Cyan
         $mapResults = @{}
         foreach ($map in 'overmap','survival') {
             $estMap = Format-PhaseEstimate "map-$map"
             $mapHint = if ($estMap) { " $estMap" } else { "" }
-            Write-Host "  Waiting for $map pod (timeout 300s)...$mapHint" -ForegroundColor DarkGray
+            Write-Host "  Waiting for $map game readiness (timeout 300s)...$mapHint" -ForegroundColor DarkGray
             $r = Wait-MapPodReady -Ip $ip -MapName $map -TimeoutSec 300
             $mapResults[$map] = $r
             if ($r.Success) {
                 Save-PhaseTiming "map-$map" ([int]$r.Elapsed)
-                Write-Host "  $map -> $($r.Pod) is Ready ($($r.Ready)) in $(Format-Duration $r.Elapsed)" -ForegroundColor Green
+                Write-Host "  $map -> $($r.Pod) is game-ready ($($r.Ready)) in $(Format-Duration $r.Elapsed)" -ForegroundColor Green
             } else {
                 if ($r.Pod) {
-                    Write-Warning "  $map ($($r.Pod)) did not become Ready within $(Format-Duration $r.Elapsed) (last seen: $($r.LastStatus))"
+                    Write-Warning "  $map ($($r.Pod)) did not become game-ready within $(Format-Duration $r.Elapsed) (last seen: $($r.LastStatus))"
                 } else {
                     # No pod object at all is a DIFFERENT failure class from a pod
                     # that won't go Ready: the operator never created one. The
@@ -2191,17 +2291,18 @@ while ($true) {
         $maxWaitSec = 360
         $finalCount = $null
         while ($true) {
-            $remainRaw = ssh -o BatchMode=yes -o StrictHostKeyChecking=no -o LogLevel=QUIET -i "$sshKey" "$sshUser@$ip" `
-                "sudo k3s kubectl get pods -A --no-headers 2>/dev/null | grep -E '(-sg-|-mq-|-sgw-|-tr-|-bgd-)' | wc -l"
-            $remain = ($remainRaw -replace '\D','')
-            if (-not $remain) { $remain = '0' }
+            $remain = Get-DuneActiveBattlegroupPodCount -Ip $ip -SshUser $sshUser -SshKey $sshKey
             $elapsed = [int]((Get-Date) - $waitStart).TotalSeconds
-            if ($remain -eq '0') { $finalCount = 0; break }
-            if ($elapsed -gt $maxWaitSec) { $finalCount = [int]$remain; break }
-            Write-WaitCounter -Start $waitStart -Label "Waiting for pods to terminate ($remain remaining)..." -EstimateText $estTerm
+            if ($null -ne $remain -and $remain -eq 0) { $finalCount = 0; break }
+            if ($elapsed -gt $maxWaitSec) {
+                $finalCount = if ($null -eq $remain) { -1 } else { [int]$remain }
+                break
+            }
+            $remainLabel = if ($null -eq $remain) { 'count unavailable' } else { "$remain remaining" }
+            Write-WaitCounter -Start $waitStart -Label "Waiting for pods to terminate ($remainLabel)..." -EstimateText $estTerm
             for ($i = 0; $i -lt 5 -and ((Get-Date) - $waitStart).TotalSeconds -le $maxWaitSec; $i++) {
                 Start-Sleep -Seconds 1
-                Write-WaitCounter -Start $waitStart -Label "Waiting for pods to terminate ($remain remaining)..." -EstimateText $estTerm
+                Write-WaitCounter -Start $waitStart -Label "Waiting for pods to terminate ($remainLabel)..." -EstimateText $estTerm
             }
         }
         $elapsed = [int]((Get-Date) - $waitStart).TotalSeconds
@@ -2209,6 +2310,8 @@ while ($true) {
             Save-PhaseTiming 'pods-terminate' $elapsed
             Complete-WaitCounter -Message "All game/infra pods terminated after $(Format-Duration $elapsed)."
             Show-DuneFuncomStopWarningNote -Ip $ip -SshUser $sshUser -SshKey $sshKey
+        } elseif ($finalCount -lt 0) {
+            Complete-WaitCounter -Message "Could not determine whether game/infra pods terminated after $(Format-Duration $elapsed). Proceeding with VM shutdown anyway." -Color Yellow
         } else {
             Complete-WaitCounter -Message "$finalCount pod(s) still present after $(Format-Duration $elapsed). Proceeding with VM shutdown anyway." -Color Yellow
         }
