@@ -1,10 +1,10 @@
 {
   "_meta": {
-    "total": 1847,
+    "total": 2725,
     "source": "awakening.wiki",
     "scraped": "2026-05-20",
     "gradeable": 378,
-    "supplemented": "gameplay-item-data.json (DST app-bundled item metadata)"
+    "supplemented": "gameplay-item-data.json (including developer items, blueprints, and schematics)"
   },
   "items": {
     "SMG_Unique_LargeMag_06": {
@@ -101,16 +101,8 @@
       "name": "Adrenal Boots",
       "category": "Garments - Feet"
     },
-    "D_SuspensorBelt_Unique_Slide_03": {
-      "name": "Advanced Kinetic Suspensor Belt",
-      "category": "Tools"
-    },
     "T6Machinery": {
       "name": "Advanced Machinery",
-      "category": "Resources"
-    },
-    "D_GreatHouseComponent12": {
-      "name": "Advanced Mechanical Parts",
       "category": "Resources"
     },
     "WindTrapFilter4": {
@@ -343,45 +335,9 @@
       "name": "Atreides Decrypted Report",
       "category": "Contract Items"
     },
-    "D_Combat_Neut_AtreidesDeserter02_Boots": {
-      "name": "Atreides Deserter Boots",
-      "category": "Garments - Feet"
-    },
-    "D_Combat_Neut_AtreidesDeserter02_Top": {
-      "name": "Atreides Deserter Chestpiece",
-      "category": "Garments - Chest"
-    },
-    "D_Combat_Neut_AtreidesDeserter02_Gloves": {
-      "name": "Atreides Deserter Gauntlets",
-      "category": "Garments - Hands"
-    },
-    "D_Combat_Neut_AtreidesDeserter02_Helmet": {
-      "name": "Atreides Deserter Hood",
-      "category": "Garments - Head"
-    },
-    "D_Combat_Neut_AtreidesDeserter02_Bottom": {
-      "name": "Atreides Deserter Pants",
-      "category": "Garments - Legs"
-    },
     "Atre_DiningRoomSet_Patent": {
       "name": "Atreides Dining Room Furniture Set",
       "category": "Building"
-    },
-    "D_Social_Atre_Formal01_Boots": {
-      "name": "Atreides Dress Uniform Boots",
-      "category": "Garments - Feet"
-    },
-    "D_Social_Atre_Formal01_Top": {
-      "name": "Atreides Dress Uniform Chestpiece",
-      "category": "Garments - Chest"
-    },
-    "D_Social_Atre_Formal01_Gloves": {
-      "name": "Atreides Dress Uniform Gloves",
-      "category": "Garments - Hands"
-    },
-    "D_Social_Atre_Formal01_Bottom": {
-      "name": "Atreides Dress Uniform Pants",
-      "category": "Garments - Legs"
     },
     "ContractFactionSpyEncryptedReport": {
       "name": "Atreides Encrypted Report",
@@ -755,18 +711,6 @@
       "name": "CHOAM Advanced Lights Set",
       "category": "Building"
     },
-    "D_Combat_Choam_Assault03_Shoes": {
-      "name": "CHOAM Assault Boots",
-      "category": "Garments - Feet"
-    },
-    "D_Combat_Choam_Assault03_Top": {
-      "name": "CHOAM Assault Chestpiece",
-      "category": "Garments - Chest"
-    },
-    "D_Combat_Choam_Assault03_Helmet": {
-      "name": "CHOAM Assault Helmet",
-      "category": "Garments - Head"
-    },
     "Choam_BedroomSet_Furniture_Patent": {
       "name": "CHOAM Bedroom Furniture Set",
       "category": "Building"
@@ -882,10 +826,6 @@
     "MiningTool_2h_Unique_01": {
       "name": "Callie's Breaker",
       "category": "Misc"
-    },
-    "D_WoHCaptainClearenceCard": {
-      "name": "Captain's Clearance Card",
-      "category": "Contract Items"
     },
     "T6CarbidePladeParts": {
       "name": "Carbide Blade Parts",
@@ -1103,10 +1043,6 @@
       "name": "Decaliterjon",
       "category": "Consumables"
     },
-    "D_Carpets_Patent": {
-      "name": "Decorative Carpets",
-      "category": "Building"
-    },
     "ContractScorpionDeliveryReport": {
       "name": "Delivery Report",
       "category": "Contract Items"
@@ -1218,10 +1154,6 @@
     "ContractBG2EcologicalLexicon": {
       "name": "Ecological Lexicon of Arrakis",
       "category": "Contract Items"
-    },
-    "D_ContractElaccaAsh": {
-      "name": "Elacca Ash",
-      "category": "Resources"
     },
     "wy1ll": {
       "name": "Electronics Delivery",
@@ -1371,10 +1303,6 @@
       "name": "Focused Reaper Mk5",
       "category": "Tools"
     },
-    "D_ufphz": {
-      "name": "Foreman's Dew Reaper",
-      "category": "Resources"
-    },
     "Combat_Heavy_Unique_StandStillDmgReduction_Top_06": {
       "name": "Fortress Chestpiece",
       "category": "Garments - Chest"
@@ -1485,10 +1413,6 @@
       "name": "Harkonnen Casualty Report",
       "category": "Contract Items"
     },
-    "D_HarkonnenDatapad": {
-      "name": "Harkonnen Datapad",
-      "category": "Contract Items"
-    },
     "Hark_DiningRoomSet_Patent": {
       "name": "Harkonnen Dining Room Furniture Set",
       "category": "Building"
@@ -1496,18 +1420,6 @@
     "Hark_OfficeSet_Patent": {
       "name": "Harkonnen Office Furniture Set",
       "category": "Building"
-    },
-    "D_Social_Hark_MilitaryUniform_Top_L3": {
-      "name": "Harkonnen Officer Jacket",
-      "category": "Garments - Chest"
-    },
-    "D_Social_Hark_MilitaryUniform_Top_L1": {
-      "name": "Harkonnen Recruit Jacket",
-      "category": "Garments - Chest"
-    },
-    "D_bcvvk": {
-      "name": "Harkonnen Spice Shipping Ledger",
-      "category": "Contract Items"
     },
     "HealthPack_Channeled": {
       "name": "Healkit",
@@ -1761,10 +1673,6 @@
     },
     "MiningTool_2h_Heavy": {
       "name": "Industrial Cutteray Mk4",
-      "category": "Resources"
-    },
-    "D_SuspensorBelt_Unique_Slide_04": {
-      "name": "Industrial Kinetic Suspensor Belt",
       "category": "Resources"
     },
     "T4HarkSpiceSiloComponent1": {
@@ -2052,10 +1960,6 @@
     "czbpd": {
       "name": "Maas Kharet Map",
       "category": "Misc"
-    },
-    "D_ArmorPack_Stillsuit_T5_MaasKharet": {
-      "name": "Maas Kharet Stillsuit Set",
-      "category": "Garments"
     },
     "WindTrapFilter1": {
       "name": "Makeshift Filter",
@@ -2447,10 +2351,6 @@
     },
     "LandsraadTreasureComponent1": {
       "name": "Opafire Gem",
-      "category": "Resources"
-    },
-    "D_OldImperialComponent9": {
-      "name": "Optimized Servoks",
       "category": "Resources"
     },
     "MTX_Neut_Miniature_Ornithopter_Patent": {
@@ -3273,10 +3173,6 @@
       "gradeable": true,
       "tier": 6
     },
-    "D_ContractSemutaNotes": {
-      "name": "Semuta Notes",
-      "category": "Contract Items"
-    },
     "ContractFactionMaximSemutaLogs": {
       "name": "Semuta Trade Logs",
       "category": "Contract Items"
@@ -3308,10 +3204,6 @@
     "ContractSeronVarlinFenringChallenge": {
       "name": "Seron's Challenge",
       "category": "Contract Items"
-    },
-    "D_ContractSeronValkinSwordHilt": {
-      "name": "Seron's Sword Hilt",
-      "category": "Weapons - Melee"
     },
     "ContractKaraValkServoControl1": {
       "name": "Servo-Stim Transmitter",
@@ -3375,10 +3267,6 @@
     },
     "JourneyShieldDissembler": {
       "name": "Shield Dissembler",
-      "category": "Misc"
-    },
-    "D_ShigawireGarotte_deprecated": {
-      "name": "Shigawire Garotte",
       "category": "Misc"
     },
     "JourneyShigawireGarrote": {
@@ -3506,10 +3394,6 @@
     "FuelCanister": {
       "name": "Small Vehicle Fuel Cell",
       "category": "Fuel"
-    },
-    "D_ContractSmugglerDocuments": {
-      "name": "Smuggler Documents",
-      "category": "Contract Items"
     },
     "yhxzy": {
       "name": "Smuggler Notes",
@@ -3875,10 +3759,6 @@
       "name": "Tleilaxu Datapad",
       "category": "Contract Items"
     },
-    "D_ContractSeronValkinTleilaxuEyes": {
-      "name": "Tleilaxu Eyes",
-      "category": "Contract Items"
-    },
     "MTX_Neut_DesertMechanicSet_Toolbox_Patent": {
       "name": "Toolbox",
       "category": "Building"
@@ -4002,30 +3882,6 @@
     "WormTooth": {
       "name": "Worm Tooth",
       "category": "Resources"
-    },
-    "D_Combat_Nati_WovenFiber01_Shoes": {
-      "name": "Woven Fiber Boots",
-      "category": "Resources"
-    },
-    "D_Combat_Nati_WovenFiber01_Top": {
-      "name": "Woven Fiber Chestpiece",
-      "category": "Resources"
-    },
-    "D_Combat_Nati_WovenFiber01_Gloves": {
-      "name": "Woven Fiber Gloves",
-      "category": "Resources"
-    },
-    "D_Combat_Nati_WovenFiber01_Helmet": {
-      "name": "Woven Fiber Helmet",
-      "category": "Resources"
-    },
-    "D_Combat_Nati_WovenFiber01_Bottom": {
-      "name": "Woven Fiber Pants",
-      "category": "Resources"
-    },
-    "D_ContractWrappedPackage": {
-      "name": "Wrapped Package",
-      "category": "Contract Items"
     },
     "PowerPack_Unique_Regen_05": {
       "name": "Young Sparky Mk5",
@@ -8182,6 +8038,3630 @@
     "Fireballer_2_Schematic": {
       "name": "Duraluminum Pyrocket",
       "category": "Weapons - Ranged"
+    },
+    "D_Dewpack": {
+      "name": "Dewpack",
+      "category": "Developer - Internal"
+    },
+    "D_MnemonicFilmbook1": {
+      "name": "Mnemonic Filmbook 1",
+      "category": "Developer - Internal"
+    },
+    "D_HarkonnenDatapad": {
+      "name": "Harkonnen Datapad",
+      "category": "Developer - Internal"
+    },
+    "D_HitpointBuff": {
+      "name": "HP Boost",
+      "category": "Developer - Internal"
+    },
+    "D_RepairKit": {
+      "name": "NOTUSED_Repkit",
+      "category": "Developer - Internal"
+    },
+    "D_DesertSurvivalHandbook": {
+      "name": "NOTUSED_Desert Survival Handbook",
+      "category": "Developer - Internal"
+    },
+    "D_HealthPack_HealOverTime": {
+      "name": "OLDDONOTUSE_Medical Kit",
+      "category": "Developer - Internal"
+    },
+    "D_HealthPack_Instant": {
+      "name": "OLDDONOTUSE_Medical Stim",
+      "category": "Developer - Internal"
+    },
+    "D_ArmorPack_Med_T1_Atre": {
+      "name": "Armor Kit: Medium (Atreides)",
+      "category": "Developer - Equipment"
+    },
+    "D_ArmorPack_Med_T1_Hark": {
+      "name": "Armor Kit: Medium (Harkonnen)",
+      "category": "Developer - Equipment"
+    },
+    "D_ArmorPack_Stillsuit_T1_Nati": {
+      "name": "Armor Kit: Stillsuit (Arrakis)",
+      "category": "Developer - Equipment"
+    },
+    "D_AmmoPack_Dart_Light": {
+      "name": "Ammo Pack: Light Darts",
+      "category": "Developer - Resources"
+    },
+    "D_AmmoPack_Dart_Heavy": {
+      "name": "Ammo Pack: Heavy Darts",
+      "category": "Developer - Resources"
+    },
+    "D_AmmoPack_Napalm": {
+      "name": "Ammo Pack: Incendiary Gel",
+      "category": "Developer - Resources"
+    },
+    "D_RepairPack_WeldingMaterial": {
+      "name": "Weld Pack: Welding Material",
+      "category": "Developer - Resources"
+    },
+    "D_MaterialPack_Stone": {
+      "name": "Pack: 200 Stone",
+      "category": "Developer - Resources"
+    },
+    "D_ContractSmugglerDocuments": {
+      "name": "Smuggler Documents",
+      "category": "Developer - Internal"
+    },
+    "D_ContractElaccaAsh": {
+      "name": "Elacca Ash",
+      "category": "Developer - Internal"
+    },
+    "D_ContractSemutaNotes": {
+      "name": "Semuta Notes",
+      "category": "Developer - Internal"
+    },
+    "D_Literjon_03": {
+      "name": "Literjon_03",
+      "category": "Developer - Internal"
+    },
+    "D_Literjon_04": {
+      "name": "Literjon_04",
+      "category": "Developer - Internal"
+    },
+    "D_Literjon_05": {
+      "name": "Literjon_05",
+      "category": "Developer - Internal"
+    },
+    "D_Literjon_06": {
+      "name": "Literjon_06",
+      "category": "Developer - Internal"
+    },
+    "D_Literjon_07": {
+      "name": "Literjon_07",
+      "category": "Developer - Internal"
+    },
+    "D_Literjon_08": {
+      "name": "Literjon_08",
+      "category": "Developer - Internal"
+    },
+    "D_Literjon_09": {
+      "name": "Literjon_09",
+      "category": "Developer - Internal"
+    },
+    "D_ArmorPack_Heavy_T5_RedScorpion": {
+      "name": "Red Scorpion Armor Set",
+      "category": "Developer - Equipment"
+    },
+    "D_ArmorPack_Stillsuit_T5_MaasKharet": {
+      "name": "Maas Kharet Stillsuit Set",
+      "category": "Developer - Equipment"
+    },
+    "D_CamouflagedStilltent": {
+      "name": "Camouflaged Stilltent",
+      "category": "Developer - Internal"
+    },
+    "D_CommuninetTransceiver": {
+      "name": "Transceiver",
+      "category": "Developer - Internal"
+    },
+    "D_CompactSeismicProbe": {
+      "name": "Compact Seismic Probe",
+      "category": "Developer - Internal"
+    },
+    "D_CompactThumper": {
+      "name": "Compact Thumper",
+      "category": "Developer - Internal"
+    },
+    "D_LongDurationThumper": {
+      "name": "Long Duration Thumper",
+      "category": "Developer - Internal"
+    },
+    "D_LongRangeSeismicProbe": {
+      "name": "Long Range Seismic Probe",
+      "category": "Developer - Internal"
+    },
+    "D_ProtectiveStilltent": {
+      "name": "Protective Stilltent",
+      "category": "Developer - Internal"
+    },
+    "D_SeismicProbe": {
+      "name": "Seismic Probe",
+      "category": "Developer - Internal"
+    },
+    "D_Turret": {
+      "name": "Heavy Turret",
+      "category": "Developer - Internal"
+    },
+    "D_Carbon": {
+      "name": "Carbon Block",
+      "category": "Developer - Internal"
+    },
+    "D_ChoamInfluence": {
+      "name": "CHOAM Influence",
+      "category": "Developer - Internal"
+    },
+    "D_MechanicalParts": {
+      "name": "Mechanical Parts",
+      "category": "Developer - Internal"
+    },
+    "D_MissionariaProtectivaDoc1": {
+      "name": "Lisan al-Gaib and Alam al-Mithal",
+      "category": "Developer - Internal"
+    },
+    "D_MissionariaProtectivaDoc2": {
+      "name": "The Mahdi's Blade",
+      "category": "Developer - Internal"
+    },
+    "D_WeldingMaterial2": {
+      "name": "Iron Welding Wire",
+      "category": "Developer - Resources"
+    },
+    "D_JasmiumDust": {
+      "name": "Jasmium Dust",
+      "category": "Developer - Internal"
+    },
+    "D_WeldingMaterial4": {
+      "name": "Aluminum Welding Wire",
+      "category": "Developer - Resources"
+    },
+    "D_FremenComponent3": {
+      "name": "EMF Generator",
+      "category": "Developer - Internal"
+    },
+    "D_FremenComponent4": {
+      "name": "Micro-sandwich Fabric",
+      "category": "Developer - Internal"
+    },
+    "D_OldImperialComponent3": {
+      "name": "Servoks",
+      "category": "Developer - Internal"
+    },
+    "D_OldImperialComponent4": {
+      "name": "Particle Capacitor",
+      "category": "Developer - Internal"
+    },
+    "D_GreatHouseComponent3": {
+      "name": "Plasteel Microflora Fiber",
+      "category": "Developer - Internal"
+    },
+    "D_GreatHouseComponent4": {
+      "name": "Mechanical Parts",
+      "category": "Developer - Internal"
+    },
+    "D_FremenComponent5": {
+      "name": "Enhanced EMF Generator",
+      "category": "Developer - Internal"
+    },
+    "D_FremenComponent6": {
+      "name": "Enhanced Micro-sandwich Fabric",
+      "category": "Developer - Internal"
+    },
+    "D_OldImperialComponent5": {
+      "name": "Enhanced Servoks",
+      "category": "Developer - Internal"
+    },
+    "D_OldImperialComponent6": {
+      "name": "Enhanced Particle Capacitor",
+      "category": "Developer - Internal"
+    },
+    "D_GreatHouseComponent5": {
+      "name": "Enhanced Plasteel Microflora Fiber",
+      "category": "Developer - Internal"
+    },
+    "D_GreatHouseComponent6": {
+      "name": "Enhanced Mechanical Parts",
+      "category": "Developer - Internal"
+    },
+    "D_FremenComponent7": {
+      "name": "Efficient EMF Generator",
+      "category": "Developer - Internal"
+    },
+    "D_FremenComponent8": {
+      "name": "Efficient Micro-sandwich Fabric",
+      "category": "Developer - Internal"
+    },
+    "D_OldImperialComponent7": {
+      "name": "Efficient Servoks",
+      "category": "Developer - Internal"
+    },
+    "D_OldImperialComponent8": {
+      "name": "Efficient Particle Capacitor",
+      "category": "Developer - Internal"
+    },
+    "D_GreatHouseComponent7": {
+      "name": "Efficient Plasteel Microflora Fiber",
+      "category": "Developer - Internal"
+    },
+    "D_GreatHouseComponent8": {
+      "name": "Efficient Mechanical Parts",
+      "category": "Developer - Internal"
+    },
+    "D_FremenComponent9": {
+      "name": "Overtuned EMF Generator",
+      "category": "Developer - Internal"
+    },
+    "D_FremenComponent10": {
+      "name": "Durable Micro-sandwich Fabric",
+      "category": "Developer - Internal"
+    },
+    "D_OldImperialComponent9": {
+      "name": "Optimized Servoks",
+      "category": "Developer - Internal"
+    },
+    "D_OldImperialComponent10": {
+      "name": "Charged Particle Capacitor",
+      "category": "Developer - Internal"
+    },
+    "D_GreatHouseComponent9": {
+      "name": "Braided Plasteel Microflora Fiber",
+      "category": "Developer - Internal"
+    },
+    "D_GreatHouseComponent10": {
+      "name": "Precision Mechanical Parts",
+      "category": "Developer - Internal"
+    },
+    "D_FremenComponent11": {
+      "name": "Advanced EMF Generator",
+      "category": "Developer - Internal"
+    },
+    "D_FremenComponent12": {
+      "name": "Advanced Micro-sandwich Fabric",
+      "category": "Developer - Internal"
+    },
+    "D_OldImperialComponent11": {
+      "name": "Advanced Servoks",
+      "category": "Developer - Internal"
+    },
+    "D_OldImperialComponent12": {
+      "name": "Advanced Particle Capacitor",
+      "category": "Developer - Internal"
+    },
+    "D_GreatHouseComponent11": {
+      "name": "Advanced Plasteel Microflora Fiber",
+      "category": "Developer - Internal"
+    },
+    "D_GreatHouseComponent12": {
+      "name": "Advanced Mechanical Parts",
+      "category": "Developer - Internal"
+    },
+    "D_T3HeavyComponent": {
+      "name": "Thick Armor Plating",
+      "category": "Developer - Internal"
+    },
+    "D_T4HeavyComponent": {
+      "name": "Fortified Armor Plating",
+      "category": "Developer - Internal"
+    },
+    "D_T5HeavyComponent": {
+      "name": "Reinforced Armor Plating",
+      "category": "Developer - Internal"
+    },
+    "D_T6HeavyComponent": {
+      "name": "Advanced Armor Plating",
+      "category": "Developer - Internal"
+    },
+    "D_T2RusherComponent": {
+      "name": "Blade Parts",
+      "category": "Developer - Internal"
+    },
+    "D_T3RusherComponent": {
+      "name": "Serrated Blade Parts",
+      "category": "Developer - Internal"
+    },
+    "D_T4RusherComponent": {
+      "name": "Sharpened Blade Parts",
+      "category": "Developer - Internal"
+    },
+    "D_T5RusherComponent": {
+      "name": "Keen Blade Parts",
+      "category": "Developer - Internal"
+    },
+    "D_T6RusherComponent": {
+      "name": "Advanced Blade Parts",
+      "category": "Developer - Internal"
+    },
+    "D_T2AssaultComponent": {
+      "name": "Gun Parts",
+      "category": "Developer - Internal"
+    },
+    "D_T3AssaultComponent": {
+      "name": "Enhanced Gun Parts",
+      "category": "Developer - Internal"
+    },
+    "D_T4AssaultComponent": {
+      "name": "Lightweight Gun Parts",
+      "category": "Developer - Internal"
+    },
+    "D_T5AssaultComponent": {
+      "name": "Precision Gun Parts",
+      "category": "Developer - Internal"
+    },
+    "D_T6AssaultComponent": {
+      "name": "Advanced Gun Parts",
+      "category": "Developer - Internal"
+    },
+    "D_T5SheolComponent1": {
+      "name": "High-tensile Springs",
+      "category": "Developer - Internal"
+    },
+    "D_T5Station15Component": {
+      "name": "Station 15 Component",
+      "category": "Developer - Internal"
+    },
+    "D_ShieldDissembler_deprecated": {
+      "name": "Shield Dissembler",
+      "category": "Developer - Equipment"
+    },
+    "D_ShigawireGarotte_deprecated": {
+      "name": "Shigawire Garotte",
+      "category": "Developer - Internal"
+    },
+    "D_ChaumasPoison_deprecated": {
+      "name": "Chaumas Poison",
+      "category": "Developer - Internal"
+    },
+    "D_Sub-LeaderKey": {
+      "name": "Sub-Leader Key",
+      "category": "Developer - Internal"
+    },
+    "D_ShieldDissembler": {
+      "name": "Shield Dissembler",
+      "category": "Developer - Equipment"
+    },
+    "D_ChaumasPoison": {
+      "name": "Chaumas Poison",
+      "category": "Developer - Internal"
+    },
+    "D_NPEDesertHandbook": {
+      "name": "Research Manual",
+      "category": "Developer - Internal"
+    },
+    "D_AmmoBlueprint": {
+      "name": "Light Darts",
+      "category": "Developer - Blueprints"
+    },
+    "D_AntiRadiationPill_Schematic": {
+      "name": "Iodine Pill",
+      "category": "Developer - Schematics"
+    },
+    "D_AssaultRifleBlueprint": {
+      "name": "Karpov 38 Battle Rifle",
+      "category": "Developer - Blueprints"
+    },
+    "D_AtreArmorHeavyGlovesSchematic": {
+      "name": "Atreides Heavy Gloves",
+      "category": "Developer - Schematics"
+    },
+    "D_AtreArmorHeavyHeadSchematic": {
+      "name": "Atreides Heavy Helmet",
+      "category": "Developer - Schematics"
+    },
+    "D_AtreArmorHeavyLBootsSchematic": {
+      "name": "Atreides Heavy Boots",
+      "category": "Developer - Schematics"
+    },
+    "D_AtreArmorHeavyLegsSchematic": {
+      "name": "Atreides Heavy Pants",
+      "category": "Developer - Schematics"
+    },
+    "D_AtreArmorHeavyTorsoSchematic": {
+      "name": "Atreides Heavy Chestpiece",
+      "category": "Developer - Schematics"
+    },
+    "D_AtreidesLSVBlueprint": {
+      "name": "Atreides LSV",
+      "category": "Developer - Blueprints"
+    },
+    "D_AtreidesScanner_Schematic": {
+      "name": "Atreides Hand Scanner",
+      "category": "Developer - Schematics"
+    },
+    "D_BasicFuel_v2_Schematic": {
+      "name": "Fuel Mk2",
+      "category": "Developer - Schematics"
+    },
+    "D_Bloodsack_2_Schematic": {
+      "name": "XX_Bloodsack_2_Schematic",
+      "category": "Developer - Schematics"
+    },
+    "D_Bloodsack_3_Schematic": {
+      "name": "XX_Bloodsack_3_Schematic",
+      "category": "Developer - Schematics"
+    },
+    "D_BloodSack_Schematic": {
+      "name": "Small Blood Sack",
+      "category": "Developer - Schematics"
+    },
+    "D_BodyFluidExtractor_2_Schematic": {
+      "name": "XX_BodyFluidExtractor_2_Schem",
+      "category": "Developer - Schematics"
+    },
+    "D_BodyFluidExtractor_3_Schematic": {
+      "name": "XX_BodyFluidExtractor_3_Schem",
+      "category": "Developer - Schematics"
+    },
+    "D_OrnithopterMediumLauncher_5_Schematic": {
+      "name": "Assault Ornithopter Rocket Launcher Mk5",
+      "category": "Developer - Schematics"
+    },
+    "D_ChoamCut1Schematic": {
+      "name": "Cutteray",
+      "category": "Developer - Schematics"
+    },
+    "D_ChoamMaulaPistolSchematic": {
+      "name": "Maula Pistol",
+      "category": "Developer - Schematics"
+    },
+    "D_ChoamMaulaPistolUniqueSchematic": {
+      "name": "Unique Maula Pistol",
+      "category": "Developer - Schematics"
+    },
+    "D_ChoamSda5_Schematic": {
+      "name": "XX_Aluminium Maula Pistol",
+      "category": "Developer - Schematics"
+    },
+    "D_ChoamSda6_Schematic": {
+      "name": "XX_Duraluminum Maula Pistol",
+      "category": "Developer - Schematics"
+    },
+    "D_CHOAMSword_1_Schematic": {
+      "name": "XX_Aluminum Sword",
+      "category": "Developer - Schematics"
+    },
+    "D_CHOAMSword_2_Schematic": {
+      "name": "XX_Duraluminum Sword",
+      "category": "Developer - Schematics"
+    },
+    "D_ChoamTankBoostSchematic": {
+      "name": "Tank Booster",
+      "category": "Developer - Schematics"
+    },
+    "D_ChoamTankInventorySchematic": {
+      "name": "Tank Storage Unit",
+      "category": "Developer - Schematics"
+    },
+    "D_Decajon_Schematic": {
+      "name": "XX_Decajon_Schematic",
+      "category": "Developer - Schematics"
+    },
+    "D_DewReaper_3_Schematic": {
+      "name": "XX_DewReaper_3_Schematic",
+      "category": "Developer - Schematics"
+    },
+    "D_DewReaper1Schematic": {
+      "name": "Dew Reaper",
+      "category": "Developer - Schematics"
+    },
+    "D_DewReaperScythe_Schematic": {
+      "name": "XX_DewReaperScythe_Schematic",
+      "category": "Developer - Schematics"
+    },
+    "D_DirkSchematic": {
+      "name": "Dirk",
+      "category": "Developer - Schematics"
+    },
+    "D_DUPLICATE_DirkSchematic": {
+      "name": "XX_DirkSchematic",
+      "category": "Developer - Schematics"
+    },
+    "D_Exsanguination_Schematic": {
+      "name": "Exsanguination Tool",
+      "category": "Developer - Schematics"
+    },
+    "D_FremenExile_Schematic": {
+      "name": "XX_Fremen Exile Schematic",
+      "category": "Developer - Schematics"
+    },
+    "D_HandHeldTorch_Schematic": {
+      "name": "Hand Held Torch",
+      "category": "Developer - Schematics"
+    },
+    "D_HarkAr3_Schematic": {
+      "name": "Karpov-38 MK l  Battle Rifle",
+      "category": "Developer - Schematics"
+    },
+    "D_HarkAr4_Schematic": {
+      "name": "Karpov-38 MK ll Battle Rifle",
+      "category": "Developer - Schematics"
+    },
+    "D_HarkAr5_Schematic": {
+      "name": "Karpov-38 MK lll Battle Rifle",
+      "category": "Developer - Schematics"
+    },
+    "D_HarkAr6_Schematic": {
+      "name": "XX_Duraluminum Battle Rifle",
+      "category": "Developer - Schematics"
+    },
+    "D_HarkonnenHeavy_Schematic": {
+      "name": "XX_Harkonnen Heavy Schematic",
+      "category": "Developer - Schematics"
+    },
+    "D_HarkonnenScout_Schematic": {
+      "name": "XX_Harkonnen scout schematic",
+      "category": "Developer - Schematics"
+    },
+    "D_HealthPack_Channeled_2_Schematic": {
+      "name": "XX_HealhpackChanneled2Schematic",
+      "category": "Developer - Schematics"
+    },
+    "D_HealthPack_Channeled_3_Schematic": {
+      "name": "XX_HealhpackChanneled3Schematic",
+      "category": "Developer - Schematics"
+    },
+    "D_HeavyAmmoSchematic": {
+      "name": "Heavy Darts",
+      "category": "Developer - Schematics"
+    },
+    "D_HoltzmanShieldBlueprint": {
+      "name": "NOTUSED_Holtzman Shield",
+      "category": "Developer - Blueprints"
+    },
+    "D_HunterSeekerSchematic": {
+      "name": "Hunter-seeker",
+      "category": "Developer - Schematics"
+    },
+    "D_Kindjal_3_Schematic": {
+      "name": "XX_Duraluminum Kindjal",
+      "category": "Developer - Schematics"
+    },
+    "D_KindjalSchematic": {
+      "name": "Atreides Kindjal",
+      "category": "Developer - Schematics"
+    },
+    "D_DUPLICATE_KindjalSchematic": {
+      "name": "XX_KindjalSchematic",
+      "category": "Developer - Schematics"
+    },
+    "D_MiningTool_1h_AdvancedSchematic": {
+      "name": "Cutteray 1h Advanced Schematic",
+      "category": "Developer - Schematics"
+    },
+    "D_MiningTool_1h_HeavySchematic": {
+      "name": "Heavy Industrial Cutteray",
+      "category": "Developer - Schematics"
+    },
+    "D_MiningTool_1h_LightSchematic": {
+      "name": "Light Cutteray",
+      "category": "Developer - Schematics"
+    },
+    "D_MiningTool_2h_AdvancedSchematic": {
+      "name": "Cutteray 2h Advanced Schematic",
+      "category": "Developer - Schematics"
+    },
+    "D_MiningTool_2h_HeavySchematic": {
+      "name": "Cutteray 2h Heavy Schematic",
+      "category": "Developer - Schematics"
+    },
+    "D_MiningTool_2h_LightSchematic": {
+      "name": "Cutteray 2h Light Schematic",
+      "category": "Developer - Schematics"
+    },
+    "D_MiningTool_2h_StandardSchematic": {
+      "name": "Cutteray Mk4",
+      "category": "Developer - Schematics"
+    },
+    "D_NapalmSchematic": {
+      "name": "Incendiary Gel",
+      "category": "Developer - Schematics"
+    },
+    "D_OrnithopterEngine_Schematic": {
+      "name": "Ornithopter Engine",
+      "category": "Developer - Schematics"
+    },
+    "D_OrnithopterInventoryModule_Schematic": {
+      "name": "Ornithopter Storage Unit",
+      "category": "Developer - Schematics"
+    },
+    "D_OrnithopterLightBodyBlueprint": {
+      "name": "Ornithopter Body",
+      "category": "Developer - Blueprints"
+    },
+    "D_OrnithopterLightChassisBlueprint": {
+      "name": "Ornithopter Chassis",
+      "category": "Developer - Blueprints"
+    },
+    "D_OrnithopterLightCockpitBlueprint": {
+      "name": "Ornithopter Cockpit",
+      "category": "Developer - Blueprints"
+    },
+    "D_OrnithopterLightWingsBlueprint": {
+      "name": "Ornithopter Wings",
+      "category": "Developer - Blueprints"
+    },
+    "D_OrnithopterTransportSetSchematic": {
+      "name": "Carrier Ornithopter ",
+      "category": "Developer - Schematics"
+    },
+    "D_PowerUnitLightBlueprint": {
+      "name": "Ornithopter PSU",
+      "category": "Developer - Blueprints"
+    },
+    "D_PowerUnitMediumBlueprint": {
+      "name": "Sand Crawler PSU",
+      "category": "Developer - Blueprints"
+    },
+    "D_PowerUnitVeryLightBlueprint": {
+      "name": "Sandbike PSU",
+      "category": "Developer - Blueprints"
+    },
+    "D_RadiationSuitSchematic": {
+      "name": "Radiation Suit",
+      "category": "Developer - Schematics"
+    },
+    "D_RepairTool2_Schematic": {
+      "name": "XX_Iron Repair Tool",
+      "category": "Developer - Schematics"
+    },
+    "D_RepairTool3_Schematic": {
+      "name": "XX_Steel Repair Tool",
+      "category": "Developer - Schematics"
+    },
+    "D_RepairTool4_Schematic": {
+      "name": "XX_Aluminium Repair Tool",
+      "category": "Developer - Schematics"
+    },
+    "D_RepairTool5_Schematic": {
+      "name": "XX_Duraluminum Repair Tool",
+      "category": "Developer - Schematics"
+    },
+    "D_RepairToolSchematic": {
+      "name": "Repair Tool",
+      "category": "Developer - Schematics"
+    },
+    "D_SandbikeChoamPassengerSeatSchematic": {
+      "name": "Sandbike Passenger Seat",
+      "category": "Developer - Schematics"
+    },
+    "D_SandbikeEngine_Schematic": {
+      "name": "Sandbike Engine",
+      "category": "Developer - Schematics"
+    },
+    "D_SandcrawlerBodyBlueprint": {
+      "name": "Sandcrawler Body",
+      "category": "Developer - Blueprints"
+    },
+    "D_SandcrawlerChassisBlueprint": {
+      "name": "Sand Crawler Frame",
+      "category": "Developer - Blueprints"
+    },
+    "D_SandcrawlerCockpitBlueprint": {
+      "name": "Sandcrawler Passenger Cabin",
+      "category": "Developer - Blueprints"
+    },
+    "D_SandcrawlerEngine_Schematic": {
+      "name": "Sandcrawler Engine",
+      "category": "Developer - Schematics"
+    },
+    "D_SandcrawlerHeaderBlueprint": {
+      "name": "Sandcrawler Harvesting Front",
+      "category": "Developer - Blueprints"
+    },
+    "D_SandcrawlerTreadsBlueprint": {
+      "name": "Sandcrawler Treads ",
+      "category": "Developer - Blueprints"
+    },
+    "D_Scanner_Schematic": {
+      "name": "Base Hand Scanner",
+      "category": "Developer - Schematics"
+    },
+    "D_ScavengerRags_Schematic": {
+      "name": "XX_ScavengerRags schematic",
+      "category": "Developer - Schematics"
+    },
+    "D_ScrapMetalKnifeSchematic": {
+      "name": "Scrap Metal Knife",
+      "category": "Developer - Schematics"
+    },
+    "D_SimpleStillsuitSchematic": {
+      "name": "Stillsuit Mk1",
+      "category": "Developer - Schematics"
+    },
+    "D_SmugglerAssault_Schematic": {
+      "name": "XX_Smuggler Assault Schematic",
+      "category": "Developer - Schematics"
+    },
+    "D_SmugglerBuggyCockpit_Schematic": {
+      "name": "Dune Buggy Cockpit",
+      "category": "Developer - Schematics"
+    },
+    "D_SmugglerBuggyInventory_Schematic": {
+      "name": "Dune Buggy Storage",
+      "category": "Developer - Schematics"
+    },
+    "D_SmugglerBuggyPSU_Schematic": {
+      "name": "Dune Buggy PSU",
+      "category": "Developer - Schematics"
+    },
+    "D_SmugglerBuggyTreads_Schematic": {
+      "name": "XX_NOTUESD_Dune Buggy Treads",
+      "category": "Developer - Schematics"
+    },
+    "D_SmugglerPathfinder_Schematic": {
+      "name": "XX_Smuggler pathfinder schematic",
+      "category": "Developer - Schematics"
+    },
+    "D_SmugglerRifleSchematic": {
+      "name": "Longdart Rifle",
+      "category": "Developer - Schematics"
+    },
+    "D_SmugglerScout_Schematic": {
+      "name": "XX_Smuggler Scout schematic",
+      "category": "Developer - Schematics"
+    },
+    "D_SolidoConstructionProjectorSchematic": {
+      "name": "Solido Construction Projector",
+      "category": "Developer - Schematics"
+    },
+    "D_SwordBlueprint": {
+      "name": "Atreides Kindjal",
+      "category": "Developer - Blueprints"
+    },
+    "D_T1_Armor_BanditLeathers_Schematic": {
+      "name": "Woven Fibre Armor",
+      "category": "Developer - Schematics"
+    },
+    "D_T1_Consumables_SpiceHigh_Schematic": {
+      "name": "Spiced Drink",
+      "category": "Developer - Schematics"
+    },
+    "D_T1_Consumables_SpiceLow_Schematic": {
+      "name": "Spiced Food",
+      "category": "Developer - Schematics"
+    },
+    "D_T1_HarkonnenHandScanner_Schematic": {
+      "name": "Harkonnen Hand Scanner",
+      "category": "Developer - Schematics"
+    },
+    "D_T1_MeleeKindjal0_Schematic": {
+      "name": "Atreides Kindjal Mark I",
+      "category": "Developer - Schematics"
+    },
+    "D_T1_MiscEquipment_PassiveReductionSuspensorBelt_Schematic": {
+      "name": "Passive Reduction Suspensor Belt",
+      "category": "Developer - Schematics"
+    },
+    "D_T1_SocialClothing_Jumpsuit_Schematic": {
+      "name": "Jumpsuit",
+      "category": "Developer - Schematics"
+    },
+    "D_T1_SocialClothing_PrisonUniform_Schematic": {
+      "name": "Prison Uniform",
+      "category": "Developer - Schematics"
+    },
+    "D_T1_Structure_RespawnBeacon1_Schematic": {
+      "name": "Respawn Beacon",
+      "category": "Developer - Schematics"
+    },
+    "D_T1_Tool_Binoculars_Schematic": {
+      "name": "Binoculars",
+      "category": "Developer - Schematics"
+    },
+    "D_T1_Tool_MiningTool1hBasic_Schematic": {
+      "name": "Basic Cutterray",
+      "category": "Developer - Schematics"
+    },
+    "D_T1_Vehicle(Air)_CraftedMap_Schematic": {
+      "name": "Crafted Map",
+      "category": "Developer - Schematics"
+    },
+    "D_T2_Armor_AtreidesDeserter_Schematic": {
+      "name": "AtreidesDeserter",
+      "category": "Developer - Schematics"
+    },
+    "D_T2_Armor_SmugglerRenegade_Schematic": {
+      "name": "SmugglerRenegade",
+      "category": "Developer - Schematics"
+    },
+    "D_T2_Clothing_ArrakeenStillsuit_Schematic": {
+      "name": "Arrakeen Stillsuit 02",
+      "category": "Developer - Schematics"
+    },
+    "D_T2_Consumables_Literjon_Schematic": {
+      "name": "Literjon",
+      "category": "Developer - Schematics"
+    },
+    "D_T2_MeleeWeapon_ChoamSword_Schematic": {
+      "name": "CHOAMSword",
+      "category": "Developer - Schematics"
+    },
+    "D_T2_MeleeWeapon_ShortSword_Schematic": {
+      "name": "Atreides Short Sword",
+      "category": "Developer - Schematics"
+    },
+    "D_T2_MiscEquipment_CopyDevice_Schematic": {
+      "name": "Solido Replicator",
+      "category": "Developer - Schematics"
+    },
+    "D_T2_MiscEquipment_HoltzmanShield_Schematic": {
+      "name": "Holtzman Shield",
+      "category": "Developer - Schematics"
+    },
+    "D_T2_MiscEquipment_PartialStabilizationBelt_Schematic": {
+      "name": "Partial Stabilization Suspensor Belt",
+      "category": "Developer - Schematics"
+    },
+    "D_T2_MiscEquipment_SuspensorBelt_Schematic": {
+      "name": "Low Power Suspensor Belt",
+      "category": "Developer - Schematics"
+    },
+    "D_T2_RangedWeapon_Shotgun1_Schematic": {
+      "name": "Shotgun1",
+      "category": "Developer - Schematics"
+    },
+    "D_T2_RangedWeapon_SMG_Schematic": {
+      "name": "Savoy & Mirt M11 Disruptor",
+      "category": "Developer - Schematics"
+    },
+    "D_T2_SocialClothing_WindsackCommoner_Schematic": {
+      "name": "Windsack Civilian - Set",
+      "category": "Developer - Schematics"
+    },
+    "D_T2_UtilityClothing_PatchyStillsuit_Schematic": {
+      "name": "Crude Stillsuit",
+      "category": "Developer - Schematics"
+    },
+    "D_T2_Vehicle(Ground)_SandBike_Set": {
+      "name": "Sandbike",
+      "category": "Developer - Internal"
+    },
+    "D_T2_Vehicle(Ground)_SandBikeBodyHull_Schematic": {
+      "name": "Sandbike Body ",
+      "category": "Developer - Schematics"
+    },
+    "D_T2_Vehicle(Ground)_SandBikeChassis_Schematic": {
+      "name": "Sandbike Chassis",
+      "category": "Developer - Schematics"
+    },
+    "D_T2_Vehicle(Ground)_SandBikeInventoryModule_Schematic": {
+      "name": "Sandbike Storage Unit",
+      "category": "Developer - Schematics"
+    },
+    "D_T2_Vehicle(Ground)_SandBikeTreads_Schematic": {
+      "name": "Sandbike Treads ",
+      "category": "Developer - Schematics"
+    },
+    "D_T2_Vehicle_SandbikeChoamFuelEfficientPSU2_Schematic": {
+      "name": "SandbikeChoamPSUFuelEfficient2",
+      "category": "Developer - Schematics"
+    },
+    "D_T2_Vehicle_SandbikeChoamWindshield_Schematic": {
+      "name": "Sandbike Windshield",
+      "category": "Developer - Schematics"
+    },
+    "D_T2_WeaponMod_BattleRifleCombatSights_Schematic": {
+      "name": "Karpov-38 Combat Sight",
+      "category": "Developer - Schematics"
+    },
+    "D_T2_WeaponMod_SMGCombatSights_Schematic": {
+      "name": "Savoy & Mirt M11 Combat Sight",
+      "category": "Developer - Schematics"
+    },
+    "D_T2_WeaponMod_SmugShot1x5Scope2_Schematic": {
+      "name": "Elephant Gun 1.5x Sight",
+      "category": "Developer - Schematics"
+    },
+    "D_T2_WeaponMod_SmugShotBarrelExplosive2_Schematic": {
+      "name": "Elephant Gun Explosive Gel",
+      "category": "Developer - Schematics"
+    },
+    "D_T2_WeaponMod_SmugShotQuickscope2_Schematic": {
+      "name": "Elephant Gun Combat Sight",
+      "category": "Developer - Schematics"
+    },
+    "D_T3_Armor_CHOAM_Assault_Schematic": {
+      "name": "CHOAM Assault Armor",
+      "category": "Developer - Schematics"
+    },
+    "D_T3_Armor_CHOAM_Scout_Schematic": {
+      "name": "CHOAM Scout",
+      "category": "Developer - Schematics"
+    },
+    "D_T3_Clothing_ArrakeenStillsuit_Schematic": {
+      "name": "Arrakeen Stillsuit 03",
+      "category": "Developer - Schematics"
+    },
+    "D_T3_MeleeWeapon_Dirk1_Schematic": {
+      "name": "Dirk1",
+      "category": "Developer - Schematics"
+    },
+    "D_T3_MeleeWeapon_Kindjal2_Schematic": {
+      "name": "Atreides Honed Kindjal",
+      "category": "Developer - Schematics"
+    },
+    "D_T3_MeleeWeapon_Rapier_Schematic": {
+      "name": "Atreides Rapier",
+      "category": "Developer - Schematics"
+    },
+    "D_T3_MiscEquipment_FullStabilizationBelt_Schematic": {
+      "name": "Responsive Planar Suspensor Belt",
+      "category": "Developer - Schematics"
+    },
+    "D_T3_MiscEquipment_HoltzmanShield2_Schematic": {
+      "name": "Holtzman Shield 2",
+      "category": "Developer - Schematics"
+    },
+    "D_T3_MiscEquipment_PowerPack2_Schematic": {
+      "name": "Power Pack 2",
+      "category": "Developer - Schematics"
+    },
+    "D_T3_Mod_ScannerProbeLauncher_Schematic": {
+      "name": "Scanner Probe Launcher",
+      "category": "Developer - Schematics"
+    },
+    "D_T3_Placeable_CompactSesmicProbe_Schematic": {
+      "name": "Compact Seismic Probe",
+      "category": "Developer - Schematics"
+    },
+    "D_T3_Placeable_CompactThumper_Schematic": {
+      "name": "Compact Thumper",
+      "category": "Developer - Schematics"
+    },
+    "D_T3_RangedWeapon_HeavyPistol1_Schematic": {
+      "name": "Rafiq Snubnose Pistol",
+      "category": "Developer - Schematics"
+    },
+    "D_T3_RangedWeapon_MaulaPistol2_Schematic": {
+      "name": "Maula Pistol MK l",
+      "category": "Developer - Schematics"
+    },
+    "D_T3_RangedWeapon_Scattergun1_Schematic": {
+      "name": "GRDA 44 Scattergun",
+      "category": "Developer - Schematics"
+    },
+    "D_T3_RangedWeapon_SmugglerRifle1_Schematic": {
+      "name": "JABAL Spitdart Rifle",
+      "category": "Developer - Schematics"
+    },
+    "D_T3_SocialClothing_CaladanCasual_Schematic": {
+      "name": "CaladanCasual",
+      "category": "Developer - Schematics"
+    },
+    "D_T3_SocialClothing_EntrepreneurCasual_Schematic": {
+      "name": "EntrepreneurCasual",
+      "category": "Developer - Schematics"
+    },
+    "D_T3_SocialClothing_GlediCasual_Schematic": {
+      "name": "GlediCasual",
+      "category": "Developer - Schematics"
+    },
+    "D_T3_SocialClothing_ImperialCasual_Schematic": {
+      "name": "ImperialCasual",
+      "category": "Developer - Schematics"
+    },
+    "D_T3_Structure_Atreides_Banner_Wall_Schematic": {
+      "name": "Atreides Wall Banner",
+      "category": "Developer - Schematics"
+    },
+    "D_T3_Structure_DirectionalWindTrap_Schematic": {
+      "name": "Directional Moisture Trap",
+      "category": "Developer - Schematics"
+    },
+    "D_T3_Structure_DirectionalWindTurbine_Schematic": {
+      "name": "Directional Wind Turbine",
+      "category": "Developer - Schematics"
+    },
+    "D_T3_Tool_ScannerOmni_Schematic": {
+      "name": "Harkonnen Hand Scanner",
+      "category": "Developer - Schematics"
+    },
+    "D_T3_Tool_SurveyProbeAmmo_Schematic": {
+      "name": "Survey Probe (Tier 1)",
+      "category": "Developer - Schematics"
+    },
+    "D_T3_Tool_SurveyProbeLauncher_Schematic": {
+      "name": "Survey Probe Launcher",
+      "category": "Developer - Schematics"
+    },
+    "D_T3_ToolMod_MiningTool_Durability_Schematic": {
+      "name": "Cutteray Durability Modifier",
+      "category": "Developer - Schematics"
+    },
+    "D_T3_ToolMod_MiningTool_Emission_Schematic": {
+      "name": "Cutteray Efficency Modifier",
+      "category": "Developer - Schematics"
+    },
+    "D_T3_ToolMod_MiningTool_Ergonomy_Schematic": {
+      "name": "Cutteray Control Modifier",
+      "category": "Developer - Schematics"
+    },
+    "D_T3_ToolMod_MiningTool_Yield_Schematic": {
+      "name": "Cutteray Quantity Modifier",
+      "category": "Developer - Schematics"
+    },
+    "D_T3_ToolMod_ScannerBioAmmo_Schematic": {
+      "name": "Scanner Bio Mod (Ammo)",
+      "category": "Developer - Schematics"
+    },
+    "D_T3_ToolMod_ScannerBioBarrel_Schematic": {
+      "name": "Scanner Bio Mod (Barrel)",
+      "category": "Developer - Schematics"
+    },
+    "D_T3_ToolMod_ScannerBioScope_Schematic": {
+      "name": "Scanner Bio Mod (Scope)",
+      "category": "Developer - Schematics"
+    },
+    "D_T3_ToolMod_ScannerChemAmmo_Schematic": {
+      "name": "Scanner Chem Mod (Ammo)",
+      "category": "Developer - Schematics"
+    },
+    "D_T3_ToolMod_ScannerChemBarrel_Schematic": {
+      "name": "Scanner Chem Mod (Barrel)",
+      "category": "Developer - Schematics"
+    },
+    "D_T3_ToolMod_ScannerChemScope_Schematic": {
+      "name": "Scanner Chem Mod (Scope)",
+      "category": "Developer - Schematics"
+    },
+    "D_T3_ToolMod_ScannerTechAmmo_Schematic": {
+      "name": "Scanner Tech Mod (Ammo)",
+      "category": "Developer - Schematics"
+    },
+    "D_T3_ToolMod_ScannerTechBarrel_Schematic": {
+      "name": "Scanner Tech Mod (Barrel)",
+      "category": "Developer - Schematics"
+    },
+    "D_T3_ToolMod_ScannerTechScope_Schematic": {
+      "name": "Scanner Tech Mod (Scope)",
+      "category": "Developer - Schematics"
+    },
+    "D_T3_UtilityClothing_CHOAM_Stillsuit_Schematic": {
+      "name": "CHOAM Stillsuit 03",
+      "category": "Developer - Schematics"
+    },
+    "D_T3_UtilityClothing_RusticCraftsman_Schematic": {
+      "name": "RusticCraftsman",
+      "category": "Developer - Schematics"
+    },
+    "D_T3_UtilityClothing_SandbikeLeathers_Schematic": {
+      "name": "SandbikeLeathers",
+      "category": "Developer - Schematics"
+    },
+    "D_T3_Vehicle(Ground)_ChoamBuggy_Set_Schematic": {
+      "name": "CHOAM Dune Buggy",
+      "category": "Developer - Schematics"
+    },
+    "D_T3_Vehicle(Ground)_SandBikeBoostModule_Schematic": {
+      "name": "Sandbike Booster",
+      "category": "Developer - Schematics"
+    },
+    "D_T3_Vehicle_BuggyChoamBackHull_Schematic": {
+      "name": "Buggy Back Hull",
+      "category": "Developer - Schematics"
+    },
+    "D_T3_Vehicle_BuggyChoamBackInventory_Schematic": {
+      "name": "Buggy Inventory Module 1",
+      "category": "Developer - Schematics"
+    },
+    "D_T3_Vehicle_BuggyChoamBoost_Schematic": {
+      "name": "BuggyChoamBoost",
+      "category": "Developer - Schematics"
+    },
+    "D_T3_Vehicle_BuggyChoamChassis_Schematic": {
+      "name": "Buggy Chassis",
+      "category": "Developer - Schematics"
+    },
+    "D_T3_Vehicle_BuggyChoamEngine_Schematic": {
+      "name": "Buggy Engine",
+      "category": "Developer - Schematics"
+    },
+    "D_T3_Vehicle_BuggyChoamFrontHull_Schematic": {
+      "name": "Buggy Front Hull",
+      "category": "Developer - Schematics"
+    },
+    "D_T3_Vehicle_BuggyChoamPSU_Schematic": {
+      "name": "Buggy PSU",
+      "category": "Developer - Schematics"
+    },
+    "D_T3_Vehicle_BuggyChoamShield_Schematic": {
+      "name": "Buggy Shield Module 1",
+      "category": "Developer - Schematics"
+    },
+    "D_T3_Vehicle_BuggyChoamTreads_Schematic": {
+      "name": "Buggy Treads",
+      "category": "Developer - Schematics"
+    },
+    "D_T3_Vehicle_LightOrniChoamBody1_Schematic": {
+      "name": "Light Thopter Body",
+      "category": "Developer - Schematics"
+    },
+    "D_T3_Vehicle_LightOrniChoamChassis1_Schematic": {
+      "name": "Light Thopter Chassis",
+      "category": "Developer - Schematics"
+    },
+    "D_T3_Vehicle_LightOrniChoamCockpit1_Schematic": {
+      "name": "Light Thopter Cockpit",
+      "category": "Developer - Schematics"
+    },
+    "D_T3_Vehicle_LightOrniChoamEngine1_Schematic": {
+      "name": "Light Thopter Engine",
+      "category": "Developer - Schematics"
+    },
+    "D_T3_Vehicle_LightOrniChoamInventory1_Schematic": {
+      "name": "Light Thopter Storage Module",
+      "category": "Developer - Schematics"
+    },
+    "D_T3_Vehicle_LightOrniChoamPSU1_Schematic": {
+      "name": "Light Thopter PSU",
+      "category": "Developer - Schematics"
+    },
+    "D_T3_Vehicle_LightOrniChoamSet_Schematic": {
+      "name": "CHOAM Light Thopter",
+      "category": "Developer - Schematics"
+    },
+    "D_T3_Vehicle_LightOrniChoamWings1_Schematic": {
+      "name": "Light Thopter Wings",
+      "category": "Developer - Schematics"
+    },
+    "D_T3_Vehicle_SandbikeChoamArmoredHull2_Schematic": {
+      "name": "Sandbike Armored Hull 2",
+      "category": "Developer - Schematics"
+    },
+    "D_T3_Vehicle_SandbikeChoamBackInventory2_Schematic": {
+      "name": "Sandbike Back Inventory 2",
+      "category": "Developer - Schematics"
+    },
+    "D_T3_Vehicle_SandbikeChoamExplorationTreads2_Schematic": {
+      "name": "Sandbike Exploration Treads 2",
+      "category": "Developer - Schematics"
+    },
+    "D_T3_Vehicle_SandbikeChoamFuelEfficienctEngine2_Schematic": {
+      "name": "Sandbike Fuel Efficient Engine 2",
+      "category": "Developer - Schematics"
+    },
+    "D_T3_Vehicle_SandbikeChoamPerformanceTreads2_Schematic": {
+      "name": "Sandbike Performance Treads 2",
+      "category": "Developer - Schematics"
+    },
+    "D_T3_Vehicle_SandbikeChoamScanner2_Schematic": {
+      "name": "Sandbike Scanner",
+      "category": "Developer - Schematics"
+    },
+    "D_T3_Vehicle_SandbikeChoamSpeedEngine2_Schematic": {
+      "name": "Sandbike Speed Engine 2",
+      "category": "Developer - Schematics"
+    },
+    "D_T3_WeaponMod_ChoamMaula1x5Scope2_Schematic": {
+      "name": "Maula Pistol 1.5x Sight",
+      "category": "Developer - Schematics"
+    },
+    "D_T3_WeaponMod_ChoamMaulaBarrelFire1_Schematic": {
+      "name": "Maula Pistol Igniter",
+      "category": "Developer - Schematics"
+    },
+    "D_T3_WeaponMod_CombatSights_Schematic": {
+      "name": "Maula Pistol Combat Sight",
+      "category": "Developer - Schematics"
+    },
+    "D_T3_WeaponMod_ExplosiveGel_Schematic": {
+      "name": "Rafiq Snubnose Explosive Gel",
+      "category": "Developer - Schematics"
+    },
+    "D_T3_WeaponMod_HarkAr1x5Scope2_Schematic": {
+      "name": "Karpov-38 1.5x Sight",
+      "category": "Developer - Schematics"
+    },
+    "D_T3_WeaponMod_HarkHeavyPistolQuickScope1_Schematic": {
+      "name": "Rafiq Snubnose Combat Sight",
+      "category": "Developer - Schematics"
+    },
+    "D_T3_WeaponMod_PoisonCoat_Schematic": {
+      "name": "GRDA 44 Poison Coater",
+      "category": "Developer - Schematics"
+    },
+    "D_T3_WeaponMod_ScattergunBarrelFire1_Schematic": {
+      "name": "GRDA 44 Fire Igniter",
+      "category": "Developer - Schematics"
+    },
+    "D_T3_WeaponMod_SmugDMRQuickScope2_Schematic": {
+      "name": "JABAL Spitdart Combat Sight",
+      "category": "Developer - Schematics"
+    },
+    "D_T4_Ammunition_HeavyTurretDarts_Schematic": {
+      "name": "HeavyTurretDarts",
+      "category": "Developer - Schematics"
+    },
+    "D_T4_Armor_BanditHeavyShell_Schematic": {
+      "name": "BanditHeavyShell",
+      "category": "Developer - Schematics"
+    },
+    "D_T4_Armor_CHOAM_Heavy_Schematic": {
+      "name": "CHOAM Heavy Armor",
+      "category": "Developer - Schematics"
+    },
+    "D_T4_Clothing_ArrakeenStillsuit_Schematic": {
+      "name": "Arrakeen Stillsuit 04",
+      "category": "Developer - Schematics"
+    },
+    "D_T4_Decoration_ChoamLighting_Schematic": {
+      "name": "CHOAM Style Lighting",
+      "category": "Developer - Schematics"
+    },
+    "D_T4_Decoration_HarkonnenLighting_Schematic": {
+      "name": "Harkonnen Style Lighting",
+      "category": "Developer - Schematics"
+    },
+    "D_T4_Gadget_SeismicProbe_Schematic": {
+      "name": "SeismicProbe",
+      "category": "Developer - Schematics"
+    },
+    "D_T4_Literjon_05_Schematic": {
+      "name": "Literjon 05",
+      "category": "Developer - Schematics"
+    },
+    "D_T4_Literjon_06_Schematic": {
+      "name": "Literjon 06",
+      "category": "Developer - Schematics"
+    },
+    "D_T4_MeleeWeapon_ChoamSword0_Schematic": {
+      "name": "CHOAM Sword Mark I",
+      "category": "Developer - Schematics"
+    },
+    "D_T4_MeleeWeapon_ShortSword2_Schematic": {
+      "name": "Atreides Honed Short Sword",
+      "category": "Developer - Schematics"
+    },
+    "D_T4_MiscEquipment_FullSuspensorBelt_Schematic": {
+      "name": "Suspensor Belt",
+      "category": "Developer - Schematics"
+    },
+    "D_T4_MiscEquipment_HoltzmanShield3_Schematic": {
+      "name": "Holtzman Shield 3",
+      "category": "Developer - Schematics"
+    },
+    "D_T4_Mod_ScannerAnalysisScope_Schematic": {
+      "name": "Scanner Analysis Mod",
+      "category": "Developer - Schematics"
+    },
+    "D_T4_RangedWeapon_BattleRifle2_Schematic": {
+      "name": "BattleRifle2",
+      "category": "Developer - Schematics"
+    },
+    "D_T4_RangedWeapon_LMG1_Schematic": {
+      "name": "LMG1",
+      "category": "Developer - Schematics"
+    },
+    "D_T4_RangedWeapon_Scattergun3_Schematic": {
+      "name": "GRDA 44 Scattergun MK II",
+      "category": "Developer - Schematics"
+    },
+    "D_T4_RangedWeapon_Shotgun2_Schematic": {
+      "name": "Shotgun2",
+      "category": "Developer - Schematics"
+    },
+    "D_T4_RangedWeapon_SMG2_Schematic": {
+      "name": "Savoy & Mirt M11 MK l Disruptor",
+      "category": "Developer - Schematics"
+    },
+    "D_T4_RangedWeapon_SMG4_Schematic": {
+      "name": "Savoy & Mirt M11 MK II Disruptor",
+      "category": "Developer - Schematics"
+    },
+    "D_T4_SocialClothing_ArrakeenFormals_Schematic": {
+      "name": "ArrakeenFormals",
+      "category": "Developer - Schematics"
+    },
+    "D_T4_SocialClothing_BeneGesseritVestments_Schematic": {
+      "name": "BeneGesseritVestments",
+      "category": "Developer - Schematics"
+    },
+    "D_T4_SocialClothing_SpiceTraderFinery_Schematic": {
+      "name": "SpiceTraderFinery",
+      "category": "Developer - Schematics"
+    },
+    "D_T4_SocialClothing_ZensunniChivara_Schematic": {
+      "name": "ZensunniChivara",
+      "category": "Developer - Schematics"
+    },
+    "D_T4_SpiceConsumables_Schematic": {
+      "name": "XX_T4_SpiceConsumables_Schematic",
+      "category": "Developer - Schematics"
+    },
+    "D_T4_Structure_Stakingunit_Schematic": {
+      "name": "Staking Unit",
+      "category": "Developer - Schematics"
+    },
+    "D_T4_UtilityClothing_CHOAM_Stillsuit_Schematic": {
+      "name": "CHOAM Stillsuit 04",
+      "category": "Developer - Schematics"
+    },
+    "D_T4_UtilityClothing_ThopterG-Suit_Schematic": {
+      "name": "ThopterG-Suit",
+      "category": "Developer - Schematics"
+    },
+    "D_T4_Vehicle(Air)_LightOrnithopterTwoSeaterCockpit_Schematic": {
+      "name": "XX_NU_Scout OrnithopterTwo",
+      "category": "Developer - Schematics"
+    },
+    "D_T4_Vehicle(Air)_MediumOrnithopter_Set_Schematic": {
+      "name": "XX_NU_Assault Ornithopter",
+      "category": "Developer - Schematics"
+    },
+    "D_T4_Vehicle(Air)_MediumOrnithopterBooster/Thruster_Schematic": {
+      "name": "XX_NU_Assault Ornithopter Booster",
+      "category": "Developer - Schematics"
+    },
+    "D_T4_Vehicle(Air)_MediumOrnithopterHeatSensor_Schematic": {
+      "name": "XX_NU_Assault Ornithopter HeatSensor",
+      "category": "Developer - Schematics"
+    },
+    "D_T4_Vehicle(Air)_MediumOrnithopterTailHullI_Schematic": {
+      "name": "XX_NU_Assault Ornithopter TailHullI",
+      "category": "Developer - Schematics"
+    },
+    "D_T4_Vehicle(Air)_Ornithopter_Set": {
+      "name": "Ornithopter",
+      "category": "Developer - Internal"
+    },
+    "D_T4_Vehicle(Air)_OrnithopterBoostModule_Schematic": {
+      "name": "OrnithopterBoostModule",
+      "category": "Developer - Schematics"
+    },
+    "D_T4_Vehicle(Ground)_Crawler_Set_Schematic": {
+      "name": "Sandcrawler",
+      "category": "Developer - Schematics"
+    },
+    "D_T4_Vehicle_BuggyChoamArmoredTreads2_Schematic": {
+      "name": "Buggy Armored Treads 2",
+      "category": "Developer - Schematics"
+    },
+    "D_T4_Vehicle_BuggyChoamArmoredTurretBackHull2_Schematic": {
+      "name": "Buggy Armored Turret Back Hull 2",
+      "category": "Developer - Schematics"
+    },
+    "D_T4_Vehicle_BuggyChoamExplorationTreads2_Schematic": {
+      "name": "Buggy Exploration Treads 2",
+      "category": "Developer - Schematics"
+    },
+    "D_T4_Vehicle_BuggyChoamFuelChassis2_Schematic": {
+      "name": "Buggy Fuel Efficient Chassis 2",
+      "category": "Developer - Schematics"
+    },
+    "D_T4_Vehicle_BuggyChoamMiningTurret_Schematic": {
+      "name": "Buggy Mining Turret 2",
+      "category": "Developer - Schematics"
+    },
+    "D_T4_Vehicle_BuggyChoamStealthEngine2_Schematic": {
+      "name": "Buggy Stealth Engine 2",
+      "category": "Developer - Schematics"
+    },
+    "D_T4_Vehicle_BuggySmugglerArmoredTreads2_Schematic": {
+      "name": "Buggy Armored Treads 2",
+      "category": "Developer - Schematics"
+    },
+    "D_T4_Vehicle_BuggySmugglerArmoredTurretBackHull2_Schematic": {
+      "name": "Buggy Armored Turret Back Hull 2",
+      "category": "Developer - Schematics"
+    },
+    "D_T4_Vehicle_BuggySmugglerExplorationTreads2_Schematic": {
+      "name": "Buggy Exploration Treads 2",
+      "category": "Developer - Schematics"
+    },
+    "D_T4_Vehicle_BuggySmugglerFuelChassis2_Schematic": {
+      "name": "Buggy Fuel Efficient Chassis 2",
+      "category": "Developer - Schematics"
+    },
+    "D_T4_Vehicle_BuggySmugglerMiningTurret2_Schematic": {
+      "name": "Buggy Mining Turret 2",
+      "category": "Developer - Schematics"
+    },
+    "D_T4_Vehicle_BuggySmugglerShield1_Schematic": {
+      "name": "Buggy Shield Module 1",
+      "category": "Developer - Schematics"
+    },
+    "D_T4_Vehicle_BuggySmugglerStealthEngine2_Schematic": {
+      "name": "Buggy Stealth Engine 2",
+      "category": "Developer - Schematics"
+    },
+    "D_T4_Vehicle_LightOrniAtreidesArmoredCockpit2_Schematic": {
+      "name": "Light Thopter Armored Cockpit",
+      "category": "Developer - Schematics"
+    },
+    "D_T4_Vehicle_LightOrniAtreidesCombatScanner2_Schematic": {
+      "name": "Light Thopter Combat Scanner",
+      "category": "Developer - Schematics"
+    },
+    "D_T4_Vehicle_LightOrniAtreidesDragonflyWings2_Schematic": {
+      "name": "Light Thopter Dragonfly Wings",
+      "category": "Developer - Schematics"
+    },
+    "D_T4_Vehicle_LightOrniAtreidesHazardCockpit_Schematic": {
+      "name": "Light Thopter Hazard Cockpit",
+      "category": "Developer - Schematics"
+    },
+    "D_T4_Vehicle_LightOrniAtreidesHighAltitudeEngine2_Schematic": {
+      "name": "Light Thopter Alt Engine",
+      "category": "Developer - Schematics"
+    },
+    "D_T4_Vehicle_LightOrniAtreidesSpeedEngine2_Schematic": {
+      "name": "Light Thopter Speed Engine",
+      "category": "Developer - Schematics"
+    },
+    "D_T4_Vehicle_LightOrniChoamArmoredCockpit2_Schematic": {
+      "name": "Light Thopter Armored Cockpit",
+      "category": "Developer - Schematics"
+    },
+    "D_T4_Vehicle_LightOrniChoamBoost2_Schematic": {
+      "name": "Light Thopter Boost Module",
+      "category": "Developer - Schematics"
+    },
+    "D_T4_Vehicle_LightOrniChoamCombatScanner2_Schematic": {
+      "name": "Light Thopter Combat Scanner",
+      "category": "Developer - Schematics"
+    },
+    "D_T4_Vehicle_LightOrniChoamDragonflyWings2_Schematic": {
+      "name": "Light Thopter Dragonfly Wings",
+      "category": "Developer - Schematics"
+    },
+    "D_T4_Vehicle_LightOrniChoamHazardCockpit2_Schematic": {
+      "name": "Light Thopter Hazard Cockpit",
+      "category": "Developer - Schematics"
+    },
+    "D_T4_Vehicle_LightOrniChoamHighAltitudeEngine2_Schematic": {
+      "name": "Light Thopter Alt Engine",
+      "category": "Developer - Schematics"
+    },
+    "D_T4_Vehicle_LightOrniChoamSpeedEngine2_Schematic": {
+      "name": "Light Thopter Speed Engine",
+      "category": "Developer - Schematics"
+    },
+    "D_T4_Vehicle_LightOrniSmugglerArmored2_Schematic": {
+      "name": "Light Thopter Armored Cockpit",
+      "category": "Developer - Schematics"
+    },
+    "D_T4_Vehicle_LightOrniSmugglerBody_Schematic": {
+      "name": "Light Thopter Body",
+      "category": "Developer - Schematics"
+    },
+    "D_T4_Vehicle_LightOrniSmugglerBoost2_Schematic": {
+      "name": "Light Thopter Boost Module",
+      "category": "Developer - Schematics"
+    },
+    "D_T4_Vehicle_LightOrniSmugglerChassis_Schematic": {
+      "name": "Light Thopter Chassis",
+      "category": "Developer - Schematics"
+    },
+    "D_T4_Vehicle_LightOrniSmugglerCombatScanner2_Schematic": {
+      "name": "Light Thopter Combat Scanner",
+      "category": "Developer - Schematics"
+    },
+    "D_T4_Vehicle_LightOrniSmugglerDragonflyWings2_Schematic": {
+      "name": "Light Thopter Dragonfly Wings",
+      "category": "Developer - Schematics"
+    },
+    "D_T4_Vehicle_LightOrniSmugglerHazardCockpit_Schematic": {
+      "name": "Light Thopter Hazard Cockpit",
+      "category": "Developer - Schematics"
+    },
+    "D_T4_Vehicle_LightOrniSmugglerHighAltitudeEngine2_Schematic": {
+      "name": "Light Thopter Alt Engine",
+      "category": "Developer - Schematics"
+    },
+    "D_T4_Vehicle_LightOrniSmugglerInventory1_Schematic": {
+      "name": "Light Thopter Inventory Module",
+      "category": "Developer - Schematics"
+    },
+    "D_T4_Vehicle_LightOrniSmugglerPSU_Schematic": {
+      "name": "Light Thopter PSU",
+      "category": "Developer - Schematics"
+    },
+    "D_T4_Vehicle_LightOrniSmugglerSpeedEngine2_Schematic": {
+      "name": "Light Thopter Speed Engine",
+      "category": "Developer - Schematics"
+    },
+    "D_T4_Vehicle_MediumOrniChoamBody_Schematic": {
+      "name": "Medium Thopter Body",
+      "category": "Developer - Schematics"
+    },
+    "D_T4_Vehicle_MediumOrniChoamChassis_Schematic": {
+      "name": "Medium Thopter Chassis",
+      "category": "Developer - Schematics"
+    },
+    "D_T4_Vehicle_MediumOrniChoamCockpit_Schematic": {
+      "name": "Medium Thopter Cockpit",
+      "category": "Developer - Schematics"
+    },
+    "D_T4_Vehicle_MediumOrniChoamEngine_Schematic": {
+      "name": "Medium Thopter Engine",
+      "category": "Developer - Schematics"
+    },
+    "D_T4_Vehicle_MediumOrniChoamGuidedMissileLauncher_Schematic": {
+      "name": "Medium Thopter Missle Launcher",
+      "category": "Developer - Schematics"
+    },
+    "D_T4_Vehicle_MediumOrniChoamLightDartGunRepeater1_Schematic": {
+      "name": "Medium Thopter Light Dart Gun",
+      "category": "Developer - Schematics"
+    },
+    "D_T4_Vehicle_MediumOrniChoamPSU_Schematic": {
+      "name": "Medium Thopter PSU",
+      "category": "Developer - Schematics"
+    },
+    "D_T4_Vehicle_MediumOrniChoamReconScanner1_Schematic": {
+      "name": "Medium Thopter Recon Scanner",
+      "category": "Developer - Schematics"
+    },
+    "D_T4_Vehicle_MediumOrniChoamSet_Schematic": {
+      "name": "Medium Thopter Manual",
+      "category": "Developer - Schematics"
+    },
+    "D_T4_Vehicle_MediumOrniChoamTail_Schematic": {
+      "name": "Medium Thopter Tail",
+      "category": "Developer - Schematics"
+    },
+    "D_T4_Vehicle_MediumOrniChoamUnguidedRocketLauncher_Schematic": {
+      "name": "Medium Thopter Rocket Launcher",
+      "category": "Developer - Schematics"
+    },
+    "D_T4_Vehicle_MediumOrniChoamWings_Schematic": {
+      "name": "Medium Thopter Wings",
+      "category": "Developer - Schematics"
+    },
+    "D_T4_Vehicle_SandbikeChoamArmoredTreads2_Schematic": {
+      "name": "Sandbike Armored Treads 2",
+      "category": "Developer - Schematics"
+    },
+    "D_T4_Vehicle_SandbikeChoamFuelChassis2_Schematic": {
+      "name": "Sandbike Fuel Chassis 2",
+      "category": "Developer - Schematics"
+    },
+    "D_T4_Vehicle_SandbikeChoamStealthChassis2_Schematic": {
+      "name": "Sandbike Stealth Chassis 2",
+      "category": "Developer - Schematics"
+    },
+    "D_T4_Vehicle_SandbikeChoamStealthEngine2_Schematic": {
+      "name": "Sandbike Stealth Engine 2",
+      "category": "Developer - Schematics"
+    },
+    "D_T4_Vehicle_SandcrawlerChoamContainer_Schematic": {
+      "name": "Sand Crawler Container",
+      "category": "Developer - Schematics"
+    },
+    "D_T4_WeaponMod_AtreLMGBarrelExplosive1_Schematic": {
+      "name": "Atreides LMG Explosive Gel",
+      "category": "Developer - Schematics"
+    },
+    "D_T4_WeaponMod_AtreLMGQuickScope1_Schematic": {
+      "name": "Atreides LMG Combat Sight",
+      "category": "Developer - Schematics"
+    },
+    "D_T4_WeaponMod_AtreSMGBarrelFire2_Schematic": {
+      "name": "Savoy & Mirt M11 Fire Igniter",
+      "category": "Developer - Schematics"
+    },
+    "D_T4_WeaponMod_AtreSMGMagQuickLoader2_Schematic": {
+      "name": "Savoy & Mirt M11 Quick Loader",
+      "category": "Developer - Schematics"
+    },
+    "D_T4_WeaponMod_HarkARBarrelFire2_Schematic": {
+      "name": "Karpov-38 Fire Igniter",
+      "category": "Developer - Schematics"
+    },
+    "D_T4_WeaponMod_SmugShotMagCharger2_Schematic": {
+      "name": "Elephant Gun Firing Charger",
+      "category": "Developer - Schematics"
+    },
+    "D_T4_WeaponMod_SmugShotMagQuickLoader2_Schematic": {
+      "name": "Elephant Gun Quick Loader",
+      "category": "Developer - Schematics"
+    },
+    "D_T5_Armor_AtreidesAssault_Schematic": {
+      "name": "Atreides Light Armor",
+      "category": "Developer - Schematics"
+    },
+    "D_T5_Armor_AtreidesScout_Schematic": {
+      "name": "Atreides Scout Armor",
+      "category": "Developer - Schematics"
+    },
+    "D_T5_Armor_HarkonnenAssault_Schematic": {
+      "name": "HarkonnenAssault",
+      "category": "Developer - Schematics"
+    },
+    "D_T5_Armor_HarkonnenScout_Schematic": {
+      "name": "HarkonnenScout",
+      "category": "Developer - Schematics"
+    },
+    "D_T5_Armor_SmugglerAssault_Schematic": {
+      "name": "SmugglerAssault",
+      "category": "Developer - Schematics"
+    },
+    "D_T5_Armor_SmugglerScout_Schematic": {
+      "name": "SmugglerScout",
+      "category": "Developer - Schematics"
+    },
+    "D_T5_Clothing_ArrakeenStillsuit_Schematic": {
+      "name": "Arrakeen Stillsuit 05",
+      "category": "Developer - Schematics"
+    },
+    "D_T5_Clothing_AtreidesDressUniform_Schematic": {
+      "name": "Atreides Dress Uniform ",
+      "category": "Developer - Schematics"
+    },
+    "D_T5_Literjon_07_Schematic": {
+      "name": "Literjon 07",
+      "category": "Developer - Schematics"
+    },
+    "D_T5_MeleeWeapon_Blade2_Schematic": {
+      "name": "Blade2",
+      "category": "Developer - Schematics"
+    },
+    "D_T5_MeleeWeapon_Dirk2_Schematic": {
+      "name": "Dirk2",
+      "category": "Developer - Schematics"
+    },
+    "D_T5_MeleeWeapon_Kindjal3_Schematic": {
+      "name": "Atreides Hardened Kindjal",
+      "category": "Developer - Schematics"
+    },
+    "D_T5_MiscEquipment_HoltzmanShield4_Schematic": {
+      "name": "Holtzman Shield 4",
+      "category": "Developer - Schematics"
+    },
+    "D_T5_MiscEquipment_HighCapacityLiterjon_Schematic": {
+      "name": "Hajra Literjon Mk1",
+      "category": "Developer - Schematics"
+    },
+    "D_T5_MiscEquipment_PowerPack3_Schematic": {
+      "name": "Power Pack 3",
+      "category": "Developer - Schematics"
+    },
+    "D_T5_Placeable_LongDurationThumper_Schematic": {
+      "name": "Long Duration Thumper",
+      "category": "Developer - Schematics"
+    },
+    "D_T5_Placeable_LongRangeSesmicProbe_Schematic": {
+      "name": "Long Range Seismic Probe",
+      "category": "Developer - Schematics"
+    },
+    "D_T5_RangedWeapon_HeavyPistol2_Schematic": {
+      "name": "Rafiq Snubnose MK l Pistol",
+      "category": "Developer - Schematics"
+    },
+    "D_T5_RangedWeapon_HeavyPistol3_Schematic": {
+      "name": "Rafiq Snubnose MK Il Pistol",
+      "category": "Developer - Schematics"
+    },
+    "D_T5_RangedWeapon_LMG2_Schematic": {
+      "name": "LMG2",
+      "category": "Developer - Schematics"
+    },
+    "D_T5_RangedWeapon_MaulaPistol3_Schematic": {
+      "name": "Maula Pistol MK ll",
+      "category": "Developer - Schematics"
+    },
+    "D_T5_RangedWeapon_MaulaPistol4_Schematic": {
+      "name": "MK III Maula Pistol",
+      "category": "Developer - Schematics"
+    },
+    "D_T5_RangedWeapon_Scattergun2_Schematic": {
+      "name": "GRDA 44 MK l Scattergun",
+      "category": "Developer - Schematics"
+    },
+    "D_T5_RangedWeapon_Scattergun4_Schematic": {
+      "name": "GRDA 44 Scattergun MK III",
+      "category": "Developer - Schematics"
+    },
+    "D_T5_RangedWeapon_SmugglerRifle2_Schematic": {
+      "name": "JABAL Spitdart MK l Rifle",
+      "category": "Developer - Schematics"
+    },
+    "D_T5_RangedWeapon_SmugglerRifle3_Schematic": {
+      "name": "JABAL Spitdart Rifle MK II",
+      "category": "Developer - Schematics"
+    },
+    "D_T5_SocialClothing_AtreidesDressUniform_Schematic": {
+      "name": "Atreides Dress Uniform ",
+      "category": "Developer - Schematics"
+    },
+    "D_T5_SocialClothing_CorrinthGalaDress_Schematic": {
+      "name": "CorrinthGalaDress",
+      "category": "Developer - Schematics"
+    },
+    "D_T5_SocialClothing_HarkonnenRegalia_Schematic": {
+      "name": "HarkonnenRegalia",
+      "category": "Developer - Schematics"
+    },
+    "D_T5_SocialClothing_KaitainChic_Schematic": {
+      "name": "KaitainChic",
+      "category": "Developer - Schematics"
+    },
+    "D_T5_SocialClothing_SmugglerCaparison_Schematic": {
+      "name": "SmugglerCaparison",
+      "category": "Developer - Schematics"
+    },
+    "D_T5_SpiceConsuambles_Schematic": {
+      "name": "XX_T5_SpiceConsuambles_Schematic",
+      "category": "Developer - Schematics"
+    },
+    "D_T5_Structure_SpiceResidue_Schematic": {
+      "name": "SpiceResidue",
+      "category": "Developer - Schematics"
+    },
+    "D_T5_Tool_HeavyStaticCompactor_Schematic": {
+      "name": "Industrial Static Compactor",
+      "category": "Developer - Schematics"
+    },
+    "D_T5_UtilityClothing_CHOAM_Stillsuit_Schematic": {
+      "name": "CHOAM Stillsuit 05",
+      "category": "Developer - Schematics"
+    },
+    "D_T5_UtilityClothing_PrimitiveFremenStillsuit_Schematic": {
+      "name": "PrimitiveFremenStillsuit",
+      "category": "Developer - Schematics"
+    },
+    "D_T5_UtilityClothing_SpiceGatherersGarb_Schematic": {
+      "name": "SpiceGatherersGarb",
+      "category": "Developer - Schematics"
+    },
+    "D_T5_UtilityClothing_UrbanArtisan_Schematic": {
+      "name": "UrbanArtisan",
+      "category": "Developer - Schematics"
+    },
+    "D_T5_Vehicle(Air)_LightOrnithopterDashWings_Schematic": {
+      "name": "Scout Ornithopter Dash Wings",
+      "category": "Developer - Schematics"
+    },
+    "D_T5_Vehicle(Air)_LightOrnithopterSpiceSniffer_Schematic": {
+      "name": "XX_NU_Scout OrnithopterSpiceSniffer",
+      "category": "Developer - Schematics"
+    },
+    "D_T5_Vehicle(Air)_LightOrnithopterTopUtilityCockpitorBodyHull_Schematic": {
+      "name": "XX_NU_Scout OrnithopterTopUtility",
+      "category": "Developer - Schematics"
+    },
+    "D_T5_Vehicle(Air)_MediumOrnithopterDashWings_Schematic": {
+      "name": "XX_NU_Assault Ornithopter DashWings",
+      "category": "Developer - Schematics"
+    },
+    "D_T5_Vehicle(Air)_MediumOrnithopterLightDartGun_Schematic": {
+      "name": "XX_NU_Assault Ornithopter LightDart",
+      "category": "Developer - Schematics"
+    },
+    "D_T5_Vehicle(Air)_MediumOrnithopterThreeSeaterCockpit_Schematic": {
+      "name": "XX_NUAssault Ornithopter Three",
+      "category": "Developer - Schematics"
+    },
+    "D_T5_Vehicle(Air)_OrnithopterLasgun_Schematic": {
+      "name": "Ornithopter Lasgun",
+      "category": "Developer - Schematics"
+    },
+    "D_T5_Vehicle(Air)_OrnithopterRocketLauncher_Schematic": {
+      "name": "Ornithopter Rocket Launcher",
+      "category": "Developer - Schematics"
+    },
+    "D_T5_Vehicle(Air)_PowerModule_Schematic": {
+      "name": "PowerModule",
+      "category": "Developer - Schematics"
+    },
+    "D_T5_Vehicle(Air)_TankEngine_Schematic": {
+      "name": "Tank Engine",
+      "category": "Developer - Schematics"
+    },
+    "D_T5_Vehicle(Air)_TransportOrnithopterEngine_Schematic": {
+      "name": "XX_NU_Carrier Ornithopter Engine",
+      "category": "Developer - Schematics"
+    },
+    "D_T5_Vehicle(Air)_TransportOrnithopterPowerSupplyUnit_Schematic": {
+      "name": "XX_NU_Carrier Ornithopter PSU",
+      "category": "Developer - Schematics"
+    },
+    "D_T5_Vehicle(Air)_TransportOrnithopterSideHulls_Schematic": {
+      "name": "XX_NU_Carrier Ornithopter Side",
+      "category": "Developer - Schematics"
+    },
+    "D_T5_Vehicle(Air)_TransportOrnithopterTailHulls_Schematic": {
+      "name": "XX_NU_Carrier Ornithopter Tail",
+      "category": "Developer - Schematics"
+    },
+    "D_T5_Vehicle(Ground)_GrenadeLauncherExtension_Schematic": {
+      "name": "GrenadeLauncherExtension",
+      "category": "Developer - Schematics"
+    },
+    "D_T5_Vehicle(Ground)_SandcrawlerHarvestingModule_Schematic": {
+      "name": "XX_NU_Sandcrawler Harvesting Unit",
+      "category": "Developer - Schematics"
+    },
+    "D_T5_Vehicle(Ground)_TankShieldModule_Schematic": {
+      "name": "Tank Shield  ",
+      "category": "Developer - Schematics"
+    },
+    "D_T5_Vehicle(Ground)_TankTurretModule_Schematic": {
+      "name": "Tank Turret Module",
+      "category": "Developer - Schematics"
+    },
+    "D_T5_Vehicle_BuggyChoamBackInventory2_Schematic": {
+      "name": "Buggy Back Inventory 2",
+      "category": "Developer - Schematics"
+    },
+    "D_T5_Vehicle_BuggyChoamFuelEfficientPSU2_Schematic": {
+      "name": "Buggy Fuel Efficient PSU 2",
+      "category": "Developer - Schematics"
+    },
+    "D_T5_Vehicle_BuggyChoamHazardBackHull2_Schematic": {
+      "name": "Buggy Hazard-Guard Back Hull",
+      "category": "Developer - Schematics"
+    },
+    "D_T5_Vehicle_BuggyChoamHazardFrontHull2_Schematic": {
+      "name": "Buggy Hazard-Guard Front Hull",
+      "category": "Developer - Schematics"
+    },
+    "D_T5_Vehicle_BuggyChoamRocketTurret2_Schematic": {
+      "name": "Buggy Rocket Turret 2",
+      "category": "Developer - Schematics"
+    },
+    "D_T5_Vehicle_BuggyChoamSpeedEngine2_Schematic": {
+      "name": "Buggy Speed Engine 2",
+      "category": "Developer - Schematics"
+    },
+    "D_T5_Vehicle_BuggyChoamStealthChassis2_Schematic": {
+      "name": "Buggy Stealth Chassis 2",
+      "category": "Developer - Schematics"
+    },
+    "D_T5_Vehicle_BuggySmugglerBackInventory2_Schematic": {
+      "name": "Buggy Back Inventory 2",
+      "category": "Developer - Schematics"
+    },
+    "D_T5_Vehicle_BuggySmugglerFuelEfficientPSU2_Schematic": {
+      "name": "Buggy Fuel Efficient PSU 2",
+      "category": "Developer - Schematics"
+    },
+    "D_T5_Vehicle_BuggySmugglerHazardBackHull2_Schematic": {
+      "name": "Buggy Hazard-Guard Back Hull",
+      "category": "Developer - Schematics"
+    },
+    "D_T5_Vehicle_BuggySmugglerHazardFrontHull2_Schematic": {
+      "name": "Buggy Hazard-Guard Front Hull",
+      "category": "Developer - Schematics"
+    },
+    "D_T5_Vehicle_BuggySmugglerRocketTurret2_Schematic": {
+      "name": "Buggy Rocket Turret 2",
+      "category": "Developer - Schematics"
+    },
+    "D_T5_Vehicle_BuggySmugglerSpeedEngine2_Schematic": {
+      "name": "Buggy Speed Engine 2",
+      "category": "Developer - Schematics"
+    },
+    "D_T5_Vehicle_BuggySmugglerStealthChassis2_Schematic": {
+      "name": "Buggy Stealth Chassis 2",
+      "category": "Developer - Schematics"
+    },
+    "D_T5_Vehicle_LightOrniAtreidesFuelEfficientChassis2_Schematic": {
+      "name": "Light Thopter Efficient Chassis",
+      "category": "Developer - Schematics"
+    },
+    "D_T5_Vehicle_LightOrniAtreidesHealthChassis2_Schematic": {
+      "name": "Light Thopter Health Chassis",
+      "category": "Developer - Schematics"
+    },
+    "D_T5_Vehicle_LightOrniAtreidesVultureWings2_Schematic": {
+      "name": "Light Thopter Vulture Wings",
+      "category": "Developer - Schematics"
+    },
+    "D_T5_Vehicle_LightOrniChoamFuelEfficientChassis2_Schematic": {
+      "name": "Light Thopter Efficient Chassis",
+      "category": "Developer - Schematics"
+    },
+    "D_T5_Vehicle_LightOrniChoamFuelEfficientPSU2_Schematic": {
+      "name": "Light Thopter Efficient PSU",
+      "category": "Developer - Schematics"
+    },
+    "D_T5_Vehicle_LightOrniChoamHealthChassis2_Schematic": {
+      "name": "Light Thopter Health Chassis",
+      "category": "Developer - Schematics"
+    },
+    "D_T5_Vehicle_LightOrniChoamHeatEfficientPSU2_Schematic": {
+      "name": "Light Thopter Vented PSU",
+      "category": "Developer - Schematics"
+    },
+    "D_T5_Vehicle_LightOrniChoamRocketLauncher2_Schematic": {
+      "name": "Light Thopter Rocket Launcher",
+      "category": "Developer - Schematics"
+    },
+    "D_T5_Vehicle_LightOrniChoamVultureWings2_Schematic": {
+      "name": "Light Thopter Vulture Wings",
+      "category": "Developer - Schematics"
+    },
+    "D_T5_Vehicle_LightOrniSmugglerFuelChassis2_Schematic": {
+      "name": "Light Thopter Efficient Chassis",
+      "category": "Developer - Schematics"
+    },
+    "D_T5_Vehicle_LightOrniSmugglerHealthChassis2_Schematic": {
+      "name": "Light Thopter Health Chassis",
+      "category": "Developer - Schematics"
+    },
+    "D_T5_Vehicle_LightOrniSmugglerRocketLauncher2_Schematic": {
+      "name": "Light Thopter Rocket Launcher",
+      "category": "Developer - Schematics"
+    },
+    "D_T5_Vehicle_LightOrniSmugglerVultureWings2_Schematic": {
+      "name": "Light Thopter Vulture Wings",
+      "category": "Developer - Schematics"
+    },
+    "D_T5_Vehicle_MediumOrniChoamArmoredCockpitHull2_Schematic": {
+      "name": "Medium Thopter Armored Cockpit",
+      "category": "Developer - Schematics"
+    },
+    "D_T5_Vehicle_MediumOrniChoamBoost1_Schematic": {
+      "name": "Medium Thopter Boost Module",
+      "category": "Developer - Schematics"
+    },
+    "D_T5_Vehicle_MediumOrniChoamDragonflyWings2_Schematic": {
+      "name": "Medium Thopter Dragonfly Wings",
+      "category": "Developer - Schematics"
+    },
+    "D_T5_Vehicle_MediumOrniChoamFuelEfficientChassis2_Schematic": {
+      "name": "Medium Thopter Efficient Chassis",
+      "category": "Developer - Schematics"
+    },
+    "D_T5_Vehicle_MediumOrniChoamFuelEfficientPSU2_Schematic": {
+      "name": "Medium Thopter Efficient PSU",
+      "category": "Developer - Schematics"
+    },
+    "D_T5_Vehicle_MediumOrniChoamHazardFrontHull2_Schematic": {
+      "name": "Medium Thopter Hazard Cockpit",
+      "category": "Developer - Schematics"
+    },
+    "D_T5_Vehicle_MediumOrniChoamHealthChassis2_Schematic": {
+      "name": "Medium Thopter Health Chassis",
+      "category": "Developer - Schematics"
+    },
+    "D_T5_Vehicle_MediumOrniChoamHeatEfficientPSU2_Schematic": {
+      "name": "Medium Thopter Vented PSU",
+      "category": "Developer - Schematics"
+    },
+    "D_T5_Vehicle_MediumOrniChoamHeavyDartCannon2_Schematic": {
+      "name": "Medium Thopter Heavy Dart Cannon",
+      "category": "Developer - Schematics"
+    },
+    "D_T5_Vehicle_MediumOrniChoamShield2_Schematic": {
+      "name": "Medium Thopter Shield Module",
+      "category": "Developer - Schematics"
+    },
+    "D_T5_Vehicle_MediumOrniChoamSpeedEngine2_Schematic": {
+      "name": "Medium Thopter Speed Engine",
+      "category": "Developer - Schematics"
+    },
+    "D_T5_Vehicle_SandbikeChoamExplorationTreads3_Schematic": {
+      "name": "Sandbike Exploration Treads 3",
+      "category": "Developer - Schematics"
+    },
+    "D_T5_Vehicle_SandbikeChoamFuelEfficientEngine3_Schematic": {
+      "name": "Sandbike Fuel Efficient Engine 3",
+      "category": "Developer - Schematics"
+    },
+    "D_T5_Vehicle_SandbikeChoamFuelEfficientPSU3_Schematic": {
+      "name": "Sandbike Fuel Efficient PSU 3",
+      "category": "Developer - Schematics"
+    },
+    "D_T5_Vehicle_TankChoamCockpit_Schematic": {
+      "name": "Tank Cockpit",
+      "category": "Developer - Schematics"
+    },
+    "D_T5_Vehicle_TankChoamFlamethrower_Schematic": {
+      "name": "Tank Flamethrower",
+      "category": "Developer - Schematics"
+    },
+    "D_T5_Vehicle_TankChoamHeavyDartCannon_Schematic": {
+      "name": "Tank Heavy Dart Cannon",
+      "category": "Developer - Schematics"
+    },
+    "D_T5_Vehicle_TankChoamLightDartRepeater_Schematic": {
+      "name": "Tank Light Dart Repeater",
+      "category": "Developer - Schematics"
+    },
+    "D_T5_Vehicle_TankChoamTurretMainHull_Schematic": {
+      "name": "Tank Turret Hull",
+      "category": "Developer - Schematics"
+    },
+    "D_T5_Vehicle_TransportOrniChoamShield1_Schematic": {
+      "name": "Transport Thopter Shield Module",
+      "category": "Developer - Schematics"
+    },
+    "D_T5_Vehicle_TransportOrniChoamTail_Schematic": {
+      "name": "Transport Thopter Tail",
+      "category": "Developer - Schematics"
+    },
+    "D_T5_Vehicle_TransportOrniChoamThruster1_Schematic": {
+      "name": "Transport Thopter Thruster",
+      "category": "Developer - Schematics"
+    },
+    "D_T5_WeaponMod_AtreLMGMagCharger1_Schematic": {
+      "name": "Atreides LMG Firing Charger",
+      "category": "Developer - Schematics"
+    },
+    "D_T5_WeaponMod_AtreLMGMagQuickLoader1_Schematic": {
+      "name": "Atreides LMG Quick Loader",
+      "category": "Developer - Schematics"
+    },
+    "D_T5_WeaponMod_AutoMode_Schematic": {
+      "name": "Maula Pistol Full Auto Converter",
+      "category": "Developer - Schematics"
+    },
+    "D_T5_WeaponMod_BurstMode_Schematic": {
+      "name": "JABAL Spitdart Burst Modifier",
+      "category": "Developer - Schematics"
+    },
+    "D_T5_WeaponMod_ChoamMaulaMagQuickloader1_Schematic": {
+      "name": "Maula Pistol Quick Loader",
+      "category": "Developer - Schematics"
+    },
+    "D_T5_WeaponMod_HarkARMagQuickLoader2_Schematic": {
+      "name": "Karpov-38 Quick Loader",
+      "category": "Developer - Schematics"
+    },
+    "D_T5_WeaponMod_HarkHeavyPistolMagQuickLoader1_Schematic": {
+      "name": "Rafiq Snubnose Quick Loader",
+      "category": "Developer - Schematics"
+    },
+    "D_T5_WeaponMod_ScattergunMagQuickLoader1_Schematic": {
+      "name": "GRDA 44 Quick Loader",
+      "category": "Developer - Schematics"
+    },
+    "D_T5_WeaponMod_SmugDMRMagQuickLoader2_Schematic": {
+      "name": "JABAL Spitdart Quick Loader",
+      "category": "Developer - Schematics"
+    },
+    "D_T5-RangedWeapon_SMG5_Schematic": {
+      "name": "Savoy & Mirt M11 MK III Disruptor",
+      "category": "Developer - Schematics"
+    },
+    "D_TankChassisSchematic": {
+      "name": "Tank Chassis ",
+      "category": "Developer - Schematics"
+    },
+    "D_TankPowerUnitSchematic": {
+      "name": "Tank PSU",
+      "category": "Developer - Schematics"
+    },
+    "D_TankSetSchematic": {
+      "name": "Tank",
+      "category": "Developer - Schematics"
+    },
+    "D_TankTreadsSchematic": {
+      "name": "Tank Treads ",
+      "category": "Developer - Schematics"
+    },
+    "D_TEMP_BloodLoop_SchematicSet": {
+      "name": "XX_BloodLoopSchematics",
+      "category": "Developer - Schematics"
+    },
+    "D_TEST_Phase3_CraftItem_Schematic": {
+      "name": "TEST Phase3 Item Schematic",
+      "category": "Developer - Schematics"
+    },
+    "D_VehicleBackupToolSchematic": {
+      "name": "XX_Vehicle Backup Tool",
+      "category": "Developer - Schematics"
+    },
+    "D_WeaponMod_BattleRifle_PoisonBarrel_Schematic": {
+      "name": "Karpov-38 Poison Coater",
+      "category": "Developer - Schematics"
+    },
+    "D_WeaponMod_BattleRifle_SemiAuto_Schematic": {
+      "name": "Karpov-38 Semi-Auto Coverter",
+      "category": "Developer - Schematics"
+    },
+    "D_WeaponMod_HeavyPistol_BurstMode_Schematic": {
+      "name": "Rafiq Snubnose Burst Modifier",
+      "category": "Developer - Schematics"
+    },
+    "D_WeaponMod_HeavyPistol_Sights_Schematic": {
+      "name": "Rafiq Snubnose 1.5x Sight",
+      "category": "Developer - Schematics"
+    },
+    "D_WeaponMod_Rifle_ExplosiveBarrel_Schematic": {
+      "name": "Rifle - Explosive Barrel",
+      "category": "Developer - Schematics"
+    },
+    "D_WeaponMod_Rifle_Sights_Schematic": {
+      "name": "JABAL Spitdart 1.5x Sight",
+      "category": "Developer - Schematics"
+    },
+    "D_WeaponMod_ScatterGun_ExplosiveBarrel_Schematic": {
+      "name": "Scatter Gun - Explosive Barrel",
+      "category": "Developer - Schematics"
+    },
+    "D_WeaponMod_ScatterGun_FullAuto_Schematic": {
+      "name": "GRDA 44 Full Auto Converter",
+      "category": "Developer - Schematics"
+    },
+    "D_WeaponMod_ScatterGun_Sights_Schematic": {
+      "name": "GRDA 44 Combat Sight",
+      "category": "Developer - Schematics"
+    },
+    "D_WeaponMod_SMG_BurstMode_Schematic": {
+      "name": "Savoy & Mirt M11 Burst Modifier",
+      "category": "Developer - Schematics"
+    },
+    "D_WeaponMod_SMG_PoisonBarrel_Schematic": {
+      "name": "Savoy & Mirt M11 Poison Coater",
+      "category": "Developer - Schematics"
+    },
+    "D_WeldingMaterial3Schematic": {
+      "name": "XX_Steel Welding Material",
+      "category": "Developer - Schematics"
+    },
+    "D_WeldingMaterialSchematic": {
+      "name": "Welding Wire",
+      "category": "Developer - Schematics"
+    },
+    "D_DUPLICATE_WeldingMaterialSchematic": {
+      "name": "XX_Duraluminum Welding Material",
+      "category": "Developer - Schematics"
+    },
+    "D_WindTurbineSchematic": {
+      "name": "XXDELETEME_WindTurbineSchematic",
+      "category": "Developer - Schematics"
+    },
+    "D_OrnithopterLightChassis_5_Schematic": {
+      "name": "XXNOTUSED_OrnithopterLightChassis_5",
+      "category": "Developer - Schematics"
+    },
+    "D_OrnithopterLightChassis_6_Schematic": {
+      "name": "XXNOTUSED_OrnithopterLightChassis_6",
+      "category": "Developer - Schematics"
+    },
+    "D_OrnithopterLightLocomotion_5_Schematic": {
+      "name": "XXNOTUSED_OrnithopterLightLocomotion_5",
+      "category": "Developer - Schematics"
+    },
+    "D_OrnithopterLightLocomotion_6_Schematic": {
+      "name": "XXNOTUSED_OrnithopterLightLocomotion_6",
+      "category": "Developer - Schematics"
+    },
+    "D_OrnithopterLightGenerator_5_Schematic": {
+      "name": "XXNOTUSED_OrnithopterLightGenerator_5",
+      "category": "Developer - Schematics"
+    },
+    "D_OrnithopterLightGenerator_6_Schematic": {
+      "name": "XXNOTUSED_OrnithopterLightGenerator_6",
+      "category": "Developer - Schematics"
+    },
+    "D_OrnithopterLightEngine_5_Schematic": {
+      "name": "XXNOTUSED_OrnithopterLightEngine_5",
+      "category": "Developer - Schematics"
+    },
+    "D_OrnithopterLightEngine_6_Schematic": {
+      "name": "XXNOTUSED_OrnithopterLightEngine_6",
+      "category": "Developer - Schematics"
+    },
+    "D_OrnithopterLightHullFront_5_Schematic": {
+      "name": "XXNOTUSED_OrnithopterLightHullFront_5",
+      "category": "Developer - Schematics"
+    },
+    "D_OrnithopterLightHullFront_6_Schematic": {
+      "name": "XXNOTUSED_OrnithopterLightHullFront_6",
+      "category": "Developer - Schematics"
+    },
+    "D_OrnithopterLightHullBack_5_Schematic": {
+      "name": "XXNOTUSED_OrnithopterLightHullBack_5",
+      "category": "Developer - Schematics"
+    },
+    "D_OrnithopterLightHullBack_6_Schematic": {
+      "name": "XXNOTUSED_OrnithopterLightHullBack_6",
+      "category": "Developer - Schematics"
+    },
+    "D_OrnithopterLightBoost_5_Schematic": {
+      "name": "XXNOTUSED_OrnithopterLightBoost_5",
+      "category": "Developer - Schematics"
+    },
+    "D_OrnithopterLightBoost_6_Schematic": {
+      "name": "XXNOTUSED_OrnithopterLightBoost_6",
+      "category": "Developer - Schematics"
+    },
+    "D_OrnithopterLightLauncher_6_Schematic": {
+      "name": "XXNOTUSED_OrnithopterLightLauncher_6",
+      "category": "Developer - Schematics"
+    },
+    "D_OrnithopterMediumChassis_6_Schematic": {
+      "name": "XXNOTUSED_OrnithopterMediumChassis_6",
+      "category": "Developer - Schematics"
+    },
+    "D_OrnithopterMediumGenerator_6_Schematic": {
+      "name": "XXNOTUSED_OrnithopterMediumGenerator_6",
+      "category": "Developer - Schematics"
+    },
+    "D_OrnithopterMediumEngine_6_Schematic": {
+      "name": "XXNOTUSED_OrnithopterMediumEngine_6",
+      "category": "Developer - Schematics"
+    },
+    "D_OrnithopterMediumLocomotion_6_Schematic": {
+      "name": "XXNOTUSED_OrnithopterMediumLocomotion_6",
+      "category": "Developer - Schematics"
+    },
+    "D_OrnithopterMediumHull_6_Schematic": {
+      "name": "XXNOTUSED_OrnithopterMediumHull_6",
+      "category": "Developer - Schematics"
+    },
+    "D_OrnithopterMediumHullFront_6_Schematic": {
+      "name": "XXNOTUSED_OrnithopterMediumHullFront_6",
+      "category": "Developer - Schematics"
+    },
+    "D_OrnithopterMediumHullBack_6_Schematic": {
+      "name": "XXNOTUSED_OrnithopterMediumHullBack_6",
+      "category": "Developer - Schematics"
+    },
+    "D_OrnithopterMediumBoost_6_Schematic": {
+      "name": "XXNOTUSED_OrnithopterMediumBoost_6",
+      "category": "Developer - Schematics"
+    },
+    "D_OrnithopterMediumLauncher_6_Schematic": {
+      "name": "XXNOTUSED_OrnithopterMediumLauncher_6",
+      "category": "Developer - Schematics"
+    },
+    "D_Medium_T6RefinedResourceA_Schematic": {
+      "name": "NOTUSED Medium plastanium recipe",
+      "category": "Developer - Schematics"
+    },
+    "D_Small_VehicleFuelMedium_Schematic": {
+      "name": "Medium vehicle fuel schematic - small refinery",
+      "category": "Developer - Schematics"
+    },
+    "D_Medium_VehicleFuelMedium_Schematic": {
+      "name": "Medium vehicle fuel schematic - medium refinery",
+      "category": "Developer - Schematics"
+    },
+    "D_Medium_VehicleFuelLarge_Schematic": {
+      "name": "Large vehicle fuel schematic",
+      "category": "Developer - Schematics"
+    },
+    "D_T6ArmorPlating-Schematic": {
+      "name": "Plasteel Composite Armor Plating",
+      "category": "Developer - Schematics"
+    },
+    "D_T6BladePart-Schematic": {
+      "name": "Plasteel Composite Blade Parts",
+      "category": "Developer - Schematics"
+    },
+    "D_T6GunPart-Schematic": {
+      "name": "Plasteel Composite Gun Parts",
+      "category": "Developer - Schematics"
+    },
+    "D_T6HoltzmanActuator-Schematic": {
+      "name": "Improved Holtzman Actuator",
+      "category": "Developer - Schematics"
+    },
+    "D_T6RangeFinder-Schematic": {
+      "name": "Precision Range Finder",
+      "category": "Developer - Schematics"
+    },
+    "D_T6Machinery-Schematic": {
+      "name": "Advanced Machinery",
+      "category": "Developer - Schematics"
+    },
+    "D_T6RayAmplifier-Schematic": {
+      "name": "Thermo-Responsive Ray Amplifier",
+      "category": "Developer - Schematics"
+    },
+    "D_T6IrradiatedCore-Schematic": {
+      "name": "Irradiated Core",
+      "category": "Developer - Schematics"
+    },
+    "D_T6IndustrialPump-Schematic": {
+      "name": "Fluid Efficient Industrial Pump",
+      "category": "Developer - Schematics"
+    },
+    "D_T6HeavyCalliberCompressor-Schematic": {
+      "name": "Fluted Heavy caliber compressor",
+      "category": "Developer - Schematics"
+    },
+    "D_T6LightCalliberCompressor-Schematic": {
+      "name": "Fluted Light Caliber compressor",
+      "category": "Developer - Schematics"
+    },
+    "D_T6FilteredFabric-Schematic": {
+      "name": "Atmospheric Filtered Fabric",
+      "category": "Developer - Schematics"
+    },
+    "D_T6DiamodineBladeParts-Schematic": {
+      "name": "Diamodine blade parts",
+      "category": "Developer - Schematics"
+    },
+    "D_T6CarbidePladeParts-Schematic": {
+      "name": "Carbide blade parts",
+      "category": "Developer - Schematics"
+    },
+    "D_T6BalisticWeave-Schematic": {
+      "name": "Ballistic Weave Fabric",
+      "category": "Developer - Schematics"
+    },
+    "D_T6Watertube-Schematic": {
+      "name": "Improved Watertube",
+      "category": "Developer - Schematics"
+    },
+    "D_T6PowerRegulator-Schematic": {
+      "name": "Overclocked Power Regulator",
+      "category": "Developer - Schematics"
+    },
+    "D_T6HydraulicPiston-Schematic": {
+      "name": "Tri-Forged Hydraulic Piston",
+      "category": "Developer - Schematics"
+    },
+    "D_AccessCard_Vehicle_Atre": {
+      "name": "Vehicle Keycode: Atreides",
+      "category": "Developer - Internal"
+    },
+    "D_AccessCard_Vehicle_Hark": {
+      "name": "Vehicle Keycode: Harkonnen",
+      "category": "Developer - Internal"
+    },
+    "D_BuggyBoost_8": {
+      "name": "Buggy Booster Mk8",
+      "category": "Developer - Internal"
+    },
+    "D_BuggyBoost_9": {
+      "name": "Buggy Booster Mk9",
+      "category": "Developer - Internal"
+    },
+    "D_BuggyChassis_8": {
+      "name": "Buggy Chassis Mk8",
+      "category": "Developer - Internal"
+    },
+    "D_BuggyChassis_9": {
+      "name": "Buggy Chassis Mk9",
+      "category": "Developer - Internal"
+    },
+    "D_BuggyChoamShield": {
+      "name": "Buggy Shield",
+      "category": "Developer - Equipment"
+    },
+    "D_BuggyEngine_8": {
+      "name": "Buggy Engine Mk8",
+      "category": "Developer - Internal"
+    },
+    "D_BuggyEngine_9": {
+      "name": "Buggy Engine Mk9",
+      "category": "Developer - Internal"
+    },
+    "D_BuggyGenerator_8": {
+      "name": "Buggy PSU Mk8",
+      "category": "Developer - Internal"
+    },
+    "D_BuggyGenerator_9": {
+      "name": "Buggy PSU Mk9",
+      "category": "Developer - Internal"
+    },
+    "D_BuggyHullBack_8": {
+      "name": "Buggy Rear Mk8",
+      "category": "Developer - Internal"
+    },
+    "D_BuggyHullBack_9": {
+      "name": "Buggy Rear Mk9",
+      "category": "Developer - Internal"
+    },
+    "D_BuggyHullBackExtra_8": {
+      "name": "Buggy Utility Rear Mk8",
+      "category": "Developer - Internal"
+    },
+    "D_BuggyHullBackExtra_9": {
+      "name": "Buggy Utility Rear Mk9",
+      "category": "Developer - Internal"
+    },
+    "D_BuggyHullFront_8": {
+      "name": "Buggy Hull Mk8",
+      "category": "Developer - Internal"
+    },
+    "D_BuggyHullFront_9": {
+      "name": "Buggy Hull Mk9",
+      "category": "Developer - Internal"
+    },
+    "D_BuggyInventory_8": {
+      "name": "Buggy Storage Mk8",
+      "category": "Developer - Internal"
+    },
+    "D_BuggyInventory_9": {
+      "name": "Buggy Storage Mk9",
+      "category": "Developer - Internal"
+    },
+    "D_BuggyLauncher_3": {
+      "name": "Buggy Rocket Launcher Mk3",
+      "category": "Developer - Internal"
+    },
+    "D_BuggyLauncher_4": {
+      "name": "Buggy Rocket Launcher Mk4",
+      "category": "Developer - Internal"
+    },
+    "D_BuggyLauncher_7": {
+      "name": "Buggy Rocket Launcher Mk7",
+      "category": "Developer - Internal"
+    },
+    "D_BuggyLauncher_8": {
+      "name": "Buggy Rocket Launcher Mk8",
+      "category": "Developer - Internal"
+    },
+    "D_BuggyLauncher_9": {
+      "name": "Buggy Rocket Launcher Mk9",
+      "category": "Developer - Internal"
+    },
+    "D_BuggyLocomotion_8": {
+      "name": "Buggy Tread Mk8",
+      "category": "Developer - Internal"
+    },
+    "D_BuggyLocomotion_9": {
+      "name": "Buggy Tread Mk9",
+      "category": "Developer - Internal"
+    },
+    "D_BuggyMining_7": {
+      "name": "Buggy Cutteray Mk7",
+      "category": "Developer - Internal"
+    },
+    "D_BuggyMining_8": {
+      "name": "Buggy Cutteray Mk8",
+      "category": "Developer - Internal"
+    },
+    "D_BuggyMining_9": {
+      "name": "Buggy Cutteray Mk9",
+      "category": "Developer - Internal"
+    },
+    "D_CruiseModeAbility": {
+      "name": "XX_Vehicle Cruise Mode",
+      "category": "Developer - Internal"
+    },
+    "D_LightOrnithopterAtreidesDash": {
+      "name": "Ornithopter Dash Wings",
+      "category": "Developer - Internal"
+    },
+    "D_LightOrnithopterAtreidesLasgun": {
+      "name": "Ornithopter Lasgun",
+      "category": "Developer - Equipment"
+    },
+    "D_MediumOrnithopterChoamBombBay2": {
+      "name": "Assault Ornithopter Bomb Bay",
+      "category": "Developer - Internal"
+    },
+    "D_MediumOrnithopterChoamHeavyDartCannon2": {
+      "name": "Assault Ornithopter Dart Gun",
+      "category": "Developer - Resources"
+    },
+    "D_MediumOrnithopterChoamLasgun": {
+      "name": "Ornithopter Lasgun",
+      "category": "Developer - Equipment"
+    },
+    "D_MediumOrnithopterChoamLightDartRepeater1": {
+      "name": "Assault Ornithopter Dart Gun",
+      "category": "Developer - Resources"
+    },
+    "D_MediumOrnithopterChoamShield2": {
+      "name": "Assault Ornithopter Shield",
+      "category": "Developer - Equipment"
+    },
+    "D_OrnithopterLightBoost_0": {
+      "name": "Scout Ornithopter Thruster Mk1",
+      "category": "Developer - Internal"
+    },
+    "D_OrnithopterLightBoost_7": {
+      "name": "Scout Ornithopter Thruster Mk7",
+      "category": "Developer - Internal"
+    },
+    "D_OrnithopterLightChassis_7": {
+      "name": "Scout Ornithopter Chassis Mk7",
+      "category": "Developer - Internal"
+    },
+    "D_OrnithopterLightEngine_7": {
+      "name": "Scout Ornithopter Engine Mk7",
+      "category": "Developer - Internal"
+    },
+    "D_OrnithopterLightGenerator_7": {
+      "name": "Scout Ornithopter Generator Mk7",
+      "category": "Developer - Internal"
+    },
+    "D_OrnithopterLightHullBack_0": {
+      "name": "Scrap Scout Ornithopter Body Hull",
+      "category": "Developer - Internal"
+    },
+    "D_OrnithopterLightHullBack_7": {
+      "name": "Scout Ornithopter Hull Mk7",
+      "category": "Developer - Internal"
+    },
+    "D_OrnithopterLightHullFront_7": {
+      "name": "Scout Ornithopter Cockpit Mk7",
+      "category": "Developer - Internal"
+    },
+    "D_OrnithopterLightInventory_0": {
+      "name": "Scrap Scout Ornithopter Inventory",
+      "category": "Developer - Internal"
+    },
+    "D_OrnithopterLightInventory_5": {
+      "name": "Adept Scout Ornithopter Inventory",
+      "category": "Developer - Internal"
+    },
+    "D_OrnithopterLightInventory_6": {
+      "name": "Regis Scout Ornithopter Inventory",
+      "category": "Developer - Internal"
+    },
+    "D_OrnithopterLightInventory_7": {
+      "name": "Scout Ornithopter Inventory 7",
+      "category": "Developer - Internal"
+    },
+    "D_OrnithopterLightLauncher_0": {
+      "name": "Scrap Scout Ornithopter Rocket Launcher",
+      "category": "Developer - Internal"
+    },
+    "D_OrnithopterLightLauncher_4": {
+      "name": "Scout Ornithopter Rocket Launcher Mk4",
+      "category": "Developer - Internal"
+    },
+    "D_OrnithopterLightLauncher_7": {
+      "name": "Scout Ornithopter Rocket Launcher Mk7",
+      "category": "Developer - Internal"
+    },
+    "D_OrnithopterLightLocomotion_7": {
+      "name": "Scout Ornithopter Wing Mk7",
+      "category": "Developer - Internal"
+    },
+    "D_OrnithopterLightScanner_0": {
+      "name": "Scrap Scout Ornithopter Scanner",
+      "category": "Developer - Internal"
+    },
+    "D_OrnithopterLightScanner_5": {
+      "name": "Adept Scout Ornithopter Scanner",
+      "category": "Developer - Internal"
+    },
+    "D_OrnithopterLightScanner_6": {
+      "name": "Regis Scout Ornithopter Scanner",
+      "category": "Developer - Internal"
+    },
+    "D_OrnithopterLightScanner_7": {
+      "name": "Scout Ornithopter Scanner 7",
+      "category": "Developer - Internal"
+    },
+    "D_OrnithopterMediumBoost_0": {
+      "name": "Scrap Assault Ornithopter Thruster",
+      "category": "Developer - Internal"
+    },
+    "D_OrnithopterMediumBoost_7": {
+      "name": "Assault Ornithopter Thruster Mk7",
+      "category": "Developer - Internal"
+    },
+    "D_OrnithopterMediumChassis_0": {
+      "name": "Scrap Assault Ornithopter Chassis",
+      "category": "Developer - Internal"
+    },
+    "D_OrnithopterMediumChassis_7": {
+      "name": "Assault Ornithopter Chassis Mk7",
+      "category": "Developer - Internal"
+    },
+    "D_OrnithopterMediumEngine_0": {
+      "name": "Scrap Assault Ornithopter Engine",
+      "category": "Developer - Internal"
+    },
+    "D_OrnithopterMediumEngine_7": {
+      "name": "Assault Ornithopter Engine Mk7",
+      "category": "Developer - Internal"
+    },
+    "D_OrnithopterMediumGenerator_0": {
+      "name": "Scrap Assault Ornithopter Generator",
+      "category": "Developer - Internal"
+    },
+    "D_OrnithopterMediumGenerator_7": {
+      "name": "Assault Ornithopter Generator Mk7",
+      "category": "Developer - Internal"
+    },
+    "D_OrnithopterMediumHull_0": {
+      "name": "Scrap Assault Ornithopter Cabin",
+      "category": "Developer - Internal"
+    },
+    "D_OrnithopterMediumHull_7": {
+      "name": "Assault Ornithopter Cabin Mk7",
+      "category": "Developer - Internal"
+    },
+    "D_OrnithopterMediumHullBack_0": {
+      "name": "Scrap Assault Ornithopter Tail",
+      "category": "Developer - Internal"
+    },
+    "D_OrnithopterMediumHullBack_7": {
+      "name": "Assault Ornithopter Tail Mk7",
+      "category": "Developer - Internal"
+    },
+    "D_OrnithopterMediumHullFront_0": {
+      "name": "Scrap Assault Ornithopter Cockpit",
+      "category": "Developer - Internal"
+    },
+    "D_OrnithopterMediumHullFront_7": {
+      "name": "Assault Ornithopter Cockpit Mk7",
+      "category": "Developer - Internal"
+    },
+    "D_OrnithopterMediumInventory_0": {
+      "name": "Scrap Assault Ornithopter Inventory",
+      "category": "Developer - Internal"
+    },
+    "D_OrnithopterMediumInventory_6": {
+      "name": "Assault Ornithopter Storage Mk6",
+      "category": "Developer - Internal"
+    },
+    "D_OrnithopterMediumInventory_7": {
+      "name": "Assault Ornithopter Storage Mk7",
+      "category": "Developer - Internal"
+    },
+    "D_OrnithopterMediumLauncher_0": {
+      "name": "Scrap Assault Ornithopter Rocket Launcher",
+      "category": "Developer - Internal"
+    },
+    "D_OrnithopterMediumLauncher_7": {
+      "name": "Assault Ornithopter Rocket Launcher 7",
+      "category": "Developer - Internal"
+    },
+    "D_OrnithopterMediumLocomotion_0": {
+      "name": "Scrap Assault Ornithopter Wing",
+      "category": "Developer - Internal"
+    },
+    "D_OrnithopterMediumLocomotion_7": {
+      "name": "Assault Ornithopter Wing Mk7",
+      "category": "Developer - Internal"
+    },
+    "D_OrnithopterTransportBoost_0": {
+      "name": "Scrap Carrier Ornithopter Thruster",
+      "category": "Developer - Internal"
+    },
+    "D_OrnithopterTransportBoost_7": {
+      "name": "Carrier Ornithopter Thruster 7",
+      "category": "Developer - Internal"
+    },
+    "D_OrnithopterTransportChassis_0": {
+      "name": "Scrap Carrier Ornithopter Chassis",
+      "category": "Developer - Internal"
+    },
+    "D_OrnithopterTransportChassis_7": {
+      "name": "Carrier Ornithopter Chassis 7",
+      "category": "Developer - Internal"
+    },
+    "D_OrnithopterTransportEngine_0": {
+      "name": "Scrap Carrier Ornithopter Engine",
+      "category": "Developer - Internal"
+    },
+    "D_OrnithopterTransportEngine_7": {
+      "name": "Carrier Ornithopter Engine 7",
+      "category": "Developer - Internal"
+    },
+    "D_OrnithopterTransportGenerator_0": {
+      "name": "Scrap Carrier Ornithopter Generator",
+      "category": "Developer - Internal"
+    },
+    "D_OrnithopterTransportGenerator_7": {
+      "name": "Carrier Ornithopter Generator 7",
+      "category": "Developer - Internal"
+    },
+    "D_OrnithopterTransportHarness": {
+      "name": "Carrier Ornithopter Harness",
+      "category": "Developer - Internal"
+    },
+    "D_OrnithopterTransportHull_0": {
+      "name": "Scrap Carrier Ornithopter Main Hull",
+      "category": "Developer - Internal"
+    },
+    "D_OrnithopterTransportHull_7": {
+      "name": "Carrier Ornithopter Main Hull 7",
+      "category": "Developer - Internal"
+    },
+    "D_OrnithopterTransportHullBack_0": {
+      "name": "Scrap Carrier Ornithopter Tail Hull",
+      "category": "Developer - Internal"
+    },
+    "D_OrnithopterTransportHullBack_7": {
+      "name": "Carrier Ornithopter Tail Hull 7",
+      "category": "Developer - Internal"
+    },
+    "D_OrnithopterTransportHullFront_0": {
+      "name": "Scrap Carrier Ornithopter Side Hull",
+      "category": "Developer - Internal"
+    },
+    "D_OrnithopterTransportHullFront_7": {
+      "name": "Carrier Ornithopter Side Hull 7",
+      "category": "Developer - Internal"
+    },
+    "D_OrnithopterTransportLocomotion_0": {
+      "name": "Scrap Carrier Ornithopter Wing",
+      "category": "Developer - Internal"
+    },
+    "D_OrnithopterTransportLocomotion_7": {
+      "name": "Carrier Ornithopter Wing 7",
+      "category": "Developer - Internal"
+    },
+    "D_OrnithopterTransportShield_0": {
+      "name": "Scrap Carrier Ornithopter Shield  Generator",
+      "category": "Developer - Equipment"
+    },
+    "D_OrnithopterTransportShield_6": {
+      "name": "Regis Carrier Ornithopter Shield Generator",
+      "category": "Developer - Equipment"
+    },
+    "D_OrnithopterTransportShield_7": {
+      "name": "Carrier Ornithopter Shield Generator 7",
+      "category": "Developer - Equipment"
+    },
+    "D_SandbikeBoost_1": {
+      "name": "Sandbike Booster Mk1",
+      "category": "Developer - Internal"
+    },
+    "D_SandbikeBoost_8": {
+      "name": "Sandbike Booster Mk8",
+      "category": "Developer - Internal"
+    },
+    "D_SandbikeBoost_9": {
+      "name": "Sandbike Booster Mk9",
+      "category": "Developer - Internal"
+    },
+    "D_SandbikeChassis_8": {
+      "name": "Sandbike Chassis Mk8",
+      "category": "Developer - Internal"
+    },
+    "D_SandbikeChassis_9": {
+      "name": "Sandbike Chassis Mk9",
+      "category": "Developer - Internal"
+    },
+    "D_SandbikeChoamDartGun3": {
+      "name": "Sandbike Mounted Dart Gun",
+      "category": "Developer - Resources"
+    },
+    "D_SandbikeChoamFront": {
+      "name": "Old Sandbike Front",
+      "category": "Developer - Internal"
+    },
+    "D_SandbikeChoamFrontInventory2": {
+      "name": "Sandbike Front Inventory",
+      "category": "Developer - Internal"
+    },
+    "D_SandbikeEngine_8": {
+      "name": "Sandbike Engine Mk8",
+      "category": "Developer - Internal"
+    },
+    "D_SandbikeEngine_9": {
+      "name": "Sandbike Engine Mk9",
+      "category": "Developer - Internal"
+    },
+    "D_SandbikeGenerator_8": {
+      "name": "Sandbike PSU Mk8",
+      "category": "Developer - Internal"
+    },
+    "D_SandbikeGenerator_9": {
+      "name": "Sandbike PSU Mk9",
+      "category": "Developer - Internal"
+    },
+    "D_SandbikeHull_8": {
+      "name": "Sandbike Hull Mk8",
+      "category": "Developer - Internal"
+    },
+    "D_SandbikeHull_9": {
+      "name": "Sandbike Hull Mk9",
+      "category": "Developer - Internal"
+    },
+    "D_SandbikeInventory_3": {
+      "name": "Artisan Sandbike Inventory",
+      "category": "Developer - Internal"
+    },
+    "D_SandbikeInventory_4": {
+      "name": "House Sandbike Inventory",
+      "category": "Developer - Internal"
+    },
+    "D_SandbikeInventory_5": {
+      "name": "Adept Sandbike Inventory",
+      "category": "Developer - Internal"
+    },
+    "D_SandbikeInventory_6": {
+      "name": "Sandbike Inventory Mk6",
+      "category": "Developer - Internal"
+    },
+    "D_SandbikeInventory_8": {
+      "name": "Sandbike Inventory 8",
+      "category": "Developer - Internal"
+    },
+    "D_SandbikeInventory_9": {
+      "name": "Sandbike Inventory 9",
+      "category": "Developer - Internal"
+    },
+    "D_SandbikeLocomotion_8": {
+      "name": "Sandbike Tread 8",
+      "category": "Developer - Internal"
+    },
+    "D_SandbikeLocomotion_9": {
+      "name": "Sandbike Tread 9",
+      "category": "Developer - Internal"
+    },
+    "D_SandbikeScanner_0": {
+      "name": "Scrap Sandbike Scanner",
+      "category": "Developer - Internal"
+    },
+    "D_SandbikeScanner_1": {
+      "name": "Sandbike Scanner Mk1",
+      "category": "Developer - Internal"
+    },
+    "D_SandbikeScanner_3": {
+      "name": "Sandbike Scanner Mk3",
+      "category": "Developer - Internal"
+    },
+    "D_SandbikeScanner_4": {
+      "name": "Sandbike Scanner Mk4",
+      "category": "Developer - Internal"
+    },
+    "D_SandbikeScanner_5": {
+      "name": "Sandbike Scanner Mk5",
+      "category": "Developer - Internal"
+    },
+    "D_SandbikeScanner_6": {
+      "name": "Sandbike Scanner Mk6",
+      "category": "Developer - Internal"
+    },
+    "D_SandbikeScanner_8": {
+      "name": "Sandbike Scanner Mk8",
+      "category": "Developer - Internal"
+    },
+    "D_SandbikeScanner_9": {
+      "name": "Sandbike Scanner Mk9",
+      "category": "Developer - Internal"
+    },
+    "D_SandcrawlerChassis_0": {
+      "name": "Scrap Sandcrawler Chassis",
+      "category": "Developer - Internal"
+    },
+    "D_SandcrawlerChassis_7": {
+      "name": "Sandcrawler Chassis Mk7",
+      "category": "Developer - Internal"
+    },
+    "D_SandcrawlerEngine_0": {
+      "name": "Scrap Sandcrawler Engine",
+      "category": "Developer - Internal"
+    },
+    "D_SandcrawlerEngine_7": {
+      "name": "Sandcrawler Engine Mk7",
+      "category": "Developer - Internal"
+    },
+    "D_SandcrawlerGenerator_0": {
+      "name": "Scrap Sandcrawler PSU",
+      "category": "Developer - Internal"
+    },
+    "D_SandcrawlerGenerator_7": {
+      "name": "Sandcrawler PSU Mk7",
+      "category": "Developer - Internal"
+    },
+    "D_SandcrawlerHull_0": {
+      "name": "Scrap Sandcrawler Cabin",
+      "category": "Developer - Internal"
+    },
+    "D_SandcrawlerHull_7": {
+      "name": "Sandcrawler Cabin Mk7",
+      "category": "Developer - Internal"
+    },
+    "D_SandcrawlerLocomotion_0": {
+      "name": "Scrap Sandcrawler Tread",
+      "category": "Developer - Internal"
+    },
+    "D_SandcrawlerLocomotion_7": {
+      "name": "Sandcrawler Tread Mk7",
+      "category": "Developer - Internal"
+    },
+    "D_SandcrawlerSpiceContainer_0": {
+      "name": "Scrap Sandcrawler Centrifuge",
+      "category": "Developer - Resources"
+    },
+    "D_SandcrawlerSpiceContainer_7": {
+      "name": "Sandcrawler Centrifuge Mk7",
+      "category": "Developer - Resources"
+    },
+    "D_SandcrawlerSpiceHeader_0": {
+      "name": "Scrap Sandcrawler Vacuum",
+      "category": "Developer - Resources"
+    },
+    "D_SandcrawlerSpiceHeader_7": {
+      "name": "Sandcrawler Vacuum Mk6",
+      "category": "Developer - Resources"
+    },
+    "D_TankBoost_0": {
+      "name": "Scrap Tank Turbo Boost",
+      "category": "Developer - Internal"
+    },
+    "D_TankBoost_7": {
+      "name": "Tank Turbo Boost 7",
+      "category": "Developer - Internal"
+    },
+    "D_TankChassis_0": {
+      "name": "Scrap Tank Chassis",
+      "category": "Developer - Internal"
+    },
+    "D_TankChassis_7": {
+      "name": "Tank Chassis 7",
+      "category": "Developer - Internal"
+    },
+    "D_TankChoamShield": {
+      "name": "Tank Shield",
+      "category": "Developer - Equipment"
+    },
+    "D_TankDart_0": {
+      "name": "Scrap Tank Dart Gun",
+      "category": "Developer - Resources"
+    },
+    "D_TankDart_7": {
+      "name": "Tank Dart Gun 7",
+      "category": "Developer - Resources"
+    },
+    "D_TankEngine_0": {
+      "name": "Scrap Tank Engine",
+      "category": "Developer - Internal"
+    },
+    "D_TankEngine_7": {
+      "name": "Tank Engine 7",
+      "category": "Developer - Internal"
+    },
+    "D_TankFire_0": {
+      "name": "Scrap Tank Flamethrower",
+      "category": "Developer - Internal"
+    },
+    "D_TankFire_7": {
+      "name": "Tank Flamethrower 7",
+      "category": "Developer - Internal"
+    },
+    "D_TankGenerator_0": {
+      "name": "Scrap Tank Power Supply Unit",
+      "category": "Developer - Internal"
+    },
+    "D_TankGenerator_6": {
+      "name": "[DEPRECATED] Regis Tank Power Supply Unit",
+      "category": "Developer - Internal"
+    },
+    "D_TankGenerator_7": {
+      "name": "Tank Power Supply Unit 7",
+      "category": "Developer - Internal"
+    },
+    "D_TankGrenadeAbility": {
+      "name": "XX_4MGC Grenade Ability",
+      "category": "Developer - Internal"
+    },
+    "D_TankHull_0": {
+      "name": "Scrap Tank Hull",
+      "category": "Developer - Internal"
+    },
+    "D_TankHull_7": {
+      "name": "Tank Hull 7",
+      "category": "Developer - Internal"
+    },
+    "D_TankHullFront_0": {
+      "name": "Scrap Tank Cockpit",
+      "category": "Developer - Internal"
+    },
+    "D_TankHullFront_7": {
+      "name": "Tank Cockpit 7",
+      "category": "Developer - Internal"
+    },
+    "D_TankInventory_0": {
+      "name": "Scrap Tank Inventory",
+      "category": "Developer - Internal"
+    },
+    "D_TankInventory_7": {
+      "name": "Tank Inventory 7",
+      "category": "Developer - Internal"
+    },
+    "D_TankLocomotion_0": {
+      "name": "Scrap Tank Tread",
+      "category": "Developer - Internal"
+    },
+    "D_TankLocomotion_6": {
+      "name": "[DEPRECATED] Regis Tank Tread",
+      "category": "Developer - Internal"
+    },
+    "D_TankLocomotion_7": {
+      "name": "Tank Tread 7",
+      "category": "Developer - Internal"
+    },
+    "D_TransportOrnithopterChoamShield": {
+      "name": "Carrier Ornithopter Shield",
+      "category": "Developer - Equipment"
+    },
+    "D_UniqueSword_05_Damasteel": {
+      "name": "Damasteel Sword",
+      "category": "Developer - Equipment"
+    },
+    "D_SmugShot2": {
+      "name": "Smuggler Elephant Gun MK I",
+      "category": "Developer - Internal"
+    },
+    "D_SmugShot1": {
+      "name": "Smuggler Elephant Gun",
+      "category": "Developer - Internal"
+    },
+    "D_SmugDmr2": {
+      "name": "JABAL Spitdart Rifle",
+      "category": "Developer - Internal"
+    },
+    "D_SmugDmr1": {
+      "name": "NOTUSED_Rifle",
+      "category": "Developer - Internal"
+    },
+    "D_Scanner_Prototype_ProbeLauncher": {
+      "name": "XX_ScannerPrototype_Probe",
+      "category": "Developer - Internal"
+    },
+    "D_Scanner_Prototype": {
+      "name": "XX_QA_Scanner Prototype",
+      "category": "Developer - Internal"
+    },
+    "D_Scanner_Omni_QA": {
+      "name": "XX_QA_Harkonnen Hand Scanner",
+      "category": "Developer - Internal"
+    },
+    "D_Scanner_Omni_1": {
+      "name": "XX_Harkonnen Hand Scanner",
+      "category": "Developer - Internal"
+    },
+    "D_Scanner_LongRange_QA": {
+      "name": "XX_QA_Atreides Hand Scanner",
+      "category": "Developer - Internal"
+    },
+    "D_Scanner_LongRange_1": {
+      "name": "XX_Long Range Scanner",
+      "category": "Developer - Internal"
+    },
+    "D_Scanner_Efficient_QA": {
+      "name": "XX_QA_Smuggler Hand Scanner",
+      "category": "Developer - Internal"
+    },
+    "D_RocketLauncher": {
+      "name": "Missile Launcher",
+      "category": "Developer - Internal"
+    },
+    "D_Rifle_Long_T4_NPC": {
+      "name": "XX_NPC Explosive Spitdart Rifle",
+      "category": "Developer - Equipment"
+    },
+    "D_Rifle_Long_T3_Explosive_NPC": {
+      "name": "XX_NPC Explosive Spitdart Rifle",
+      "category": "Developer - Equipment"
+    },
+    "D_RepairTool4": {
+      "name": "House Welding Torch",
+      "category": "Developer - Internal"
+    },
+    "D_RepairTool2": {
+      "name": "Welding Torch Mk1",
+      "category": "Developer - Internal"
+    },
+    "D_Rapier_1": {
+      "name": "Atreides Rapier Mark II",
+      "category": "Developer - Internal"
+    },
+    "D_PrototypeTemplate1": {
+      "name": "Prototype Weapon 1",
+      "category": "Developer - Internal"
+    },
+    "D_MiningTool_1h_Advanced": {
+      "name": "Cutteray Mk3",
+      "category": "Developer - Internal"
+    },
+    "D_HarkArNPCT0": {
+      "name": "Harkonnen Assault Rifle NPC",
+      "category": "Developer - Internal"
+    },
+    "D_HarkArNPC2": {
+      "name": "Harkonnen BR_NPC",
+      "category": "Developer - Internal"
+    },
+    "D_HarkAr_T5_Incendiary": {
+      "name": "House Karpov 38",
+      "category": "Developer - Internal"
+    },
+    "D_HarkAr_T4_Incendiary": {
+      "name": "Artisan Karpov 38",
+      "category": "Developer - Internal"
+    },
+    "D_HarkAr_T3_Incendiary": {
+      "name": "Standard Karpov 38",
+      "category": "Developer - Internal"
+    },
+    "D_HarkAr_T2_Incendiary": {
+      "name": "Karpov 38",
+      "category": "Developer - Internal"
+    },
+    "D_DewReaper2": {
+      "name": "Dew Reaper II",
+      "category": "Developer - Internal"
+    },
+    "D_DewReaper_Heavy": {
+      "name": "Heavy Dew Reaper ",
+      "category": "Developer - Internal"
+    },
+    "D_DUPLICATE_ChoamLg1": {
+      "name": "Arhun K-28 Lasgun",
+      "category": "Developer - Internal"
+    },
+    "D_ChoamCut1": {
+      "name": "NOTUSEDCutteray",
+      "category": "Developer - Internal"
+    },
+    "D_BasicDmrProjectile1": {
+      "name": "Basic Rifle Projectile",
+      "category": "Developer - Internal"
+    },
+    "D_BasicDmrHitscan1": {
+      "name": "Basic Rifle Hitscan",
+      "category": "Developer - Internal"
+    },
+    "D_AtreSmgNPC2": {
+      "name": "Atreides SMG_NPC",
+      "category": "Developer - Equipment"
+    },
+    "D_AtreidesShortsword": {
+      "name": "Atreides Shortsword",
+      "category": "Developer - Equipment"
+    },
+    "D_HoltzmanShield": {
+      "name": "Holtzman Shield",
+      "category": "Developer - Equipment"
+    },
+    "D_HoltzmanShield2": {
+      "name": "Holtzman Shield 2",
+      "category": "Developer - Equipment"
+    },
+    "D_HoltzmanShield3": {
+      "name": "Holtzman Shield 3",
+      "category": "Developer - Equipment"
+    },
+    "D_HoltzmanShield4": {
+      "name": "Holtzman Shield 4",
+      "category": "Developer - Equipment"
+    },
+    "D_HoltzmanShieldInfinite": {
+      "name": "Holtzman Shield",
+      "category": "Developer - Equipment"
+    },
+    "D_HoltzmanHalfShieldInfinite": {
+      "name": "Holtzman Shield Infinite",
+      "category": "Developer - Equipment"
+    },
+    "D_PartialAmplificationBelt": {
+      "name": "Partial Amplification Belt",
+      "category": "Developer - Internal"
+    },
+    "D_SuspensorBelt_Unique_Slide_03": {
+      "name": "Advanced Kinetic Suspensor Belt",
+      "category": "Developer - Internal"
+    },
+    "D_SuspensorBelt_Unique_Slide_04": {
+      "name": "Industrial Kinetic Suspensor Belt",
+      "category": "Developer - Internal"
+    },
+    "D_SuspensorBelt_Unique_Slide_05": {
+      "name": "Hyper Kinetic Suspensor Belt",
+      "category": "Developer - Internal"
+    },
+    "D_SuspensorBelt_Unique_Slide_06": {
+      "name": "Omni Kinetic Suspensor Belt",
+      "category": "Developer - Internal"
+    },
+    "D_Atre_Smg_Ammo_Def_1": {
+      "name": "OLD_DONOTUSE",
+      "category": "Developer - Equipment"
+    },
+    "D_Atre_Smg_Ammo_Def_2": {
+      "name": "Atre_Smg_Ammo_Def_2",
+      "category": "Developer - Equipment"
+    },
+    "D_Atre_Smg_Barrel_Def_1": {
+      "name": "OLD_DONOTUSE",
+      "category": "Developer - Equipment"
+    },
+    "D_Atre_Smg_Barrel_Def_2": {
+      "name": "Atre_Smg_Barrel_Def_2",
+      "category": "Developer - Equipment"
+    },
+    "D_Atre_Smg_Barrel_Poison_2": {
+      "name": "Savoy & Mirt M11 Poison Coater",
+      "category": "Developer - Equipment"
+    },
+    "D_Atre_Smg_Mag_Burst_2": {
+      "name": "Savoy & Mirt M11 Burst Modifier",
+      "category": "Developer - Equipment"
+    },
+    "D_Atre_Smg_QuickScope_2": {
+      "name": "Savoy & Mirt M11 Combat Sight",
+      "category": "Developer - Equipment"
+    },
+    "D_Basic_Ammo": {
+      "name": "Basic_Ammo",
+      "category": "Developer - Resources"
+    },
+    "D_Choam_Maula_Ammo_Def_1": {
+      "name": "Choam_Maula_Ammo_Def_1",
+      "category": "Developer - Resources"
+    },
+    "D_Choam_Maula_Barrel_Def_1": {
+      "name": "Choam_Maula_Barrel_Def_1",
+      "category": "Developer - Internal"
+    },
+    "D_Choam_Maula_Barrel_Poison_1": {
+      "name": "Maula Pistol Coater",
+      "category": "Developer - Internal"
+    },
+    "D_Choam_Maula_Mag_FullAuto_1": {
+      "name": "Maula Pistol Full Auto Converter",
+      "category": "Developer - Internal"
+    },
+    "D_Choam_Maula_QuickScope_1": {
+      "name": "Maula Pistol Combat Sight",
+      "category": "Developer - Internal"
+    },
+    "D_Hark_Ar_Ammo_Def_1": {
+      "name": "OLD_DONOTUSE",
+      "category": "Developer - Resources"
+    },
+    "D_Hark_Ar_Ammo_Def_2": {
+      "name": "Hark_Ar_Ammo_Def_2",
+      "category": "Developer - Resources"
+    },
+    "D_Hark_Ar_Ammo_Staggered_1": {
+      "name": "OLD_DONOTUSE",
+      "category": "Developer - Resources"
+    },
+    "D_Hark_Ar_Barrel_Def_1": {
+      "name": "OLD_DONOTUSE",
+      "category": "Developer - Internal"
+    },
+    "D_Hark_Ar_Barrel_Def_2": {
+      "name": "Hark_Ar_Barrel_Def_2",
+      "category": "Developer - Internal"
+    },
+    "D_Hark_Ar_Barrel_Incendiary_1": {
+      "name": "OLD_DONOTUSE",
+      "category": "Developer - Internal"
+    },
+    "D_Hark_Ar_Barrel_Poison_2": {
+      "name": "Karpov-38 Poison Coater",
+      "category": "Developer - Internal"
+    },
+    "D_Hark_Ar_Mag_SemiAuto_2": {
+      "name": "Karpov-38 Semi-Auto Converter",
+      "category": "Developer - Internal"
+    },
+    "D_Hark_Ar_QuickScope_2": {
+      "name": "Karpov-38 Combat Sight",
+      "category": "Developer - Internal"
+    },
+    "D_Prototype_Mod_Template_1": {
+      "name": "Prototype_Mod_Template_1",
+      "category": "Developer - Internal"
+    },
+    "D_Hark_HeavyPistol_Ammo_Def_1": {
+      "name": "Hark_HeavyPistol_Ammo_Def_1",
+      "category": "Developer - Equipment"
+    },
+    "D_Hark_HeavyPistol_Barrel_Def_1": {
+      "name": "Hark_HeavyPistol_Barrel_Def_1",
+      "category": "Developer - Equipment"
+    },
+    "D_Hark_HeavyPistol_Barrel_Explosive_1": {
+      "name": "Rafiq Snubnose Explosive Gel",
+      "category": "Developer - Equipment"
+    },
+    "D_Hark_HeavyPistol_Mag_Burst_1": {
+      "name": "Rafiq Snubnose Burst Modifier",
+      "category": "Developer - Equipment"
+    },
+    "D_Hark_HeavyPistol_Scope_4x_1": {
+      "name": "Rafiq Snubnose 1.5x Sight",
+      "category": "Developer - Equipment"
+    },
+    "D_Scatergun_Mag_FullAuto": {
+      "name": "GRDA 44 Full Auto Converter",
+      "category": "Developer - Internal"
+    },
+    "D_Scattergun_Ammo_Def": {
+      "name": "Scattergun_Ammo_Def",
+      "category": "Developer - Resources"
+    },
+    "D_Scattergun_Barrel_Def": {
+      "name": "Scattergun_Barrel_Def",
+      "category": "Developer - Internal"
+    },
+    "D_Scattergun_Barrel_Explosive": {
+      "name": "GRDA 44 Poison Coater",
+      "category": "Developer - Internal"
+    },
+    "D_Scattergun_QuickScope": {
+      "name": "GRDA 44 Combat Sight",
+      "category": "Developer - Internal"
+    },
+    "D_Smug_Dmr_Ammo_Charged_1": {
+      "name": "OLD_DONOTUSE",
+      "category": "Developer - Resources"
+    },
+    "D_Smug_Dmr_Ammo_Def_1": {
+      "name": "OLD_DONOTUSE",
+      "category": "Developer - Resources"
+    },
+    "D_Smug_Dmr_Ammo_Def_2": {
+      "name": "Smug_Dmr_Ammo_Def_2",
+      "category": "Developer - Resources"
+    },
+    "D_Smug_Dmr_Barrel_Def_1": {
+      "name": "OLD_DONOTUSE",
+      "category": "Developer - Internal"
+    },
+    "D_Smug_Dmr_Barrel_Def_2": {
+      "name": "Smug_Dmr_Barrel_Def_2",
+      "category": "Developer - Internal"
+    },
+    "D_Smug_Dmr_Barrel_Explosive_2": {
+      "name": "Jabal Spitdart Explosive Gel",
+      "category": "Developer - Internal"
+    },
+    "D_Smug_Dmr_Barrel_Poison_1": {
+      "name": "OLD_DONOTUSE",
+      "category": "Developer - Internal"
+    },
+    "D_Smug_Dmr_Mag_Burst_2": {
+      "name": "JABAL Spitdart Burst Modifier",
+      "category": "Developer - Internal"
+    },
+    "D_Smug_Dmr_Scope_4x_2": {
+      "name": "JABAL Spitdart 1.5x Sight",
+      "category": "Developer - Internal"
+    },
+    "D_Choam_Flame_Ammo_Def_1": {
+      "name": "Choam_Flame_Ammo_Def_1",
+      "category": "Developer - Resources"
+    },
+    "D_Choam_Flame_Barrel_Def_1": {
+      "name": "Choam_Flame_Barrel_Def_1",
+      "category": "Developer - Internal"
+    },
+    "D_Choam_Lg_Ammo_Arc_1": {
+      "name": "OLD_DONOTUSE",
+      "category": "Developer - Resources"
+    },
+    "D_Choam_Lg_Ammo_Def_1": {
+      "name": "Choam_Lg_Ammo_Def_1",
+      "category": "Developer - Resources"
+    },
+    "D_Choam_Lg_Barrel_Def_1": {
+      "name": "Choam_Lg_Barrel_Def_1",
+      "category": "Developer - Internal"
+    },
+    "D_Choam_Lg_Barrel_Split_1": {
+      "name": "OLD_DONOTUSE",
+      "category": "Developer - Internal"
+    },
+    "D_Choam_Lg_Sight_Focus_1": {
+      "name": "OLD_DONOTUSE",
+      "category": "Developer - Internal"
+    },
+    "D_Chaom_Dew_Ammo_1": {
+      "name": "Chaom_Dew_Ammo_1",
+      "category": "Developer - Resources"
+    },
+    "D_Choam_Build_Ammo_Def_1": {
+      "name": "Choam_Build_Ammo_Def_1",
+      "category": "Developer - Resources"
+    },
+    "D_Choam_Build_Barrel_Def_1": {
+      "name": "Choam_Build_Barrel_Def_1",
+      "category": "Developer - Internal"
+    },
+    "D_Choam_Com_Ammo_Def_1": {
+      "name": "Choam_Com_Ammo_Def_1",
+      "category": "Developer - Resources"
+    },
+    "D_Choam_Com_Barrel_Def_1": {
+      "name": "Choam_Com_Barrel_Def_1",
+      "category": "Developer - Internal"
+    },
+    "D_Choam_Cut_Ammo_Def_1": {
+      "name": "Choam_Cut_Ammo_Def_1",
+      "category": "Developer - Resources"
+    },
+    "D_Choam_Cut_Barrel_Def_1": {
+      "name": "Choam_Cut_Barrel_Def_1",
+      "category": "Developer - Internal"
+    },
+    "D_C4GC_MainTurret_Ammo": {
+      "name": "C4GC_MainTurret_Ammo",
+      "category": "Developer - Resources"
+    },
+    "D_C4GC_MainTurret_Barrel_Def_1": {
+      "name": "C4GC_MainTurret_Barrel_Def_1",
+      "category": "Developer - Internal"
+    },
+    "D_C4GC_SideTurret_Ammo": {
+      "name": "C4GC_SideTurret_Ammo",
+      "category": "Developer - Resources"
+    },
+    "D_C4GC_SideTurret_Barrel_Def_1": {
+      "name": "C4GC_SideTurret_Barrel_Def_1",
+      "category": "Developer - Internal"
+    },
+    "D_MiningTool_Yield_Barrel": {
+      "name": "LOC_Cutterray Quantity Modification",
+      "category": "Developer - Internal"
+    },
+    "D_MiningTool_Durability_Barrel": {
+      "name": "LOC_Cutterray Durability Modification",
+      "category": "Developer - Internal"
+    },
+    "D_MiningTool_Ergonomy_Barrel": {
+      "name": "LOC_Cutterray Control Modification",
+      "category": "Developer - Internal"
+    },
+    "D_MiningTool_Emission_Barrel": {
+      "name": "LOC_Cutterray Efficiency Modification",
+      "category": "Developer - Internal"
+    },
+    "D_Choam_Maula_Barrel_Fire_1": {
+      "name": "Maula Pistol Igniter",
+      "category": "Developer - Internal"
+    },
+    "D_Choam_Maula_1x5Scope_1": {
+      "name": "Maula Pistol 1.5x Sight",
+      "category": "Developer - Internal"
+    },
+    "D_Choam_Maula_Mag_QuickLoader_1": {
+      "name": "Maula Pistol Quick Loader",
+      "category": "Developer - Internal"
+    },
+    "D_Hark_Ar_Barrel_Fire_2": {
+      "name": "Karpov-38 Fire Igniter",
+      "category": "Developer - Internal"
+    },
+    "D_Hark_Ar_1x5Scope_2": {
+      "name": "Karpov-38 1.5x Sight",
+      "category": "Developer - Internal"
+    },
+    "D_Hark_Ar_Mag_QuickLoader_2": {
+      "name": "Karpov-38 Quick Loader",
+      "category": "Developer - Internal"
+    },
+    "D_Smug_Dmr_QuickScope_2": {
+      "name": "JABAL Spitdart Combat Sight",
+      "category": "Developer - Internal"
+    },
+    "D_Smug_Dmr_Mag_QuickLoader_2": {
+      "name": "JABAL Spitdart Quick Loader",
+      "category": "Developer - Internal"
+    },
+    "D_Atre_Smg_Barrel_Fire_2": {
+      "name": "Savoy & Mirt M11 Fire Igniter",
+      "category": "Developer - Equipment"
+    },
+    "D_Atre_Smg_Mag_QuickLoader_2": {
+      "name": "Savoy & Mirt M11 Quick Loader",
+      "category": "Developer - Equipment"
+    },
+    "D_Hark_HeavyPistol_QuickScope_1": {
+      "name": "Rafiq Snubnose Combat Sight",
+      "category": "Developer - Equipment"
+    },
+    "D_Hark_HeavyPistol_Mag_QuickLoader_1": {
+      "name": "Rafiq Snubnose Quick Loader",
+      "category": "Developer - Equipment"
+    },
+    "D_Scattergun_Barrel_Fire_1": {
+      "name": "GRDA 44 Fire Igniter",
+      "category": "Developer - Internal"
+    },
+    "D_Scatergun_Mag_QuickLoader_1": {
+      "name": "GRDA 44 Quick Loader",
+      "category": "Developer - Internal"
+    },
+    "D_Smug_Shot_Barrel_Explosive_2": {
+      "name": "Elephant Gun Explosive Gel",
+      "category": "Developer - Internal"
+    },
+    "D_Smug_Shot_1x5Scope_2": {
+      "name": "Elephant Gun 1.5x Sight",
+      "category": "Developer - Internal"
+    },
+    "D_Smug_Shot_QuickScope_2": {
+      "name": "Elephant Gun Combat Sight",
+      "category": "Developer - Internal"
+    },
+    "D_Smug_Shot_Mag_QuickLoader_2": {
+      "name": "Elephant Gun Quick Loader",
+      "category": "Developer - Internal"
+    },
+    "D_Smug_Shot_Mag_Charger_2": {
+      "name": "Elephant Gun Firing Charger",
+      "category": "Developer - Internal"
+    },
+    "D_Atre_LMG_Barrel_Explosive_1": {
+      "name": "LMG Explosive Gel",
+      "category": "Developer - Equipment"
+    },
+    "D_Atre_LMG_Mag_QuickLoader_1": {
+      "name": "LMG Quick Loader",
+      "category": "Developer - Equipment"
+    },
+    "D_Atre_LMG_Mag_Charger_1": {
+      "name": "LMG Firing Charger",
+      "category": "Developer - Equipment"
+    },
+    "D_Atre_LMG_QuickScope_1": {
+      "name": "LMG Combat Sight",
+      "category": "Developer - Equipment"
+    },
+    "D_Scanner_BioDetection_Barrel": {
+      "name": "XX_Scanner Bio Mod (Barrel)",
+      "category": "Developer - Internal"
+    },
+    "D_Scanner_BioDetection_Scope": {
+      "name": "XX_Scanner Bio Mod (Scope)",
+      "category": "Developer - Internal"
+    },
+    "D_Scanner_BioDetection_Ammo": {
+      "name": "XX_Scanner Bio Mod (Ammo)",
+      "category": "Developer - Resources"
+    },
+    "D_Scanner_ChemDetection_Barrel": {
+      "name": "XX_Scanner Chem Mod (Barrel)",
+      "category": "Developer - Internal"
+    },
+    "D_Scanner_ChemDetection_Scope": {
+      "name": "XX_Scanner Chem Mod (Scope)",
+      "category": "Developer - Internal"
+    },
+    "D_Scanner_ChemDetection_Ammo": {
+      "name": "XX_Scanner Chem Mod (Ammo)",
+      "category": "Developer - Resources"
+    },
+    "D_Scanner_TechDetection_Barrel": {
+      "name": "XX_Scanner Tech Mod (Barrel)",
+      "category": "Developer - Internal"
+    },
+    "D_Scanner_TechDetection_Scope": {
+      "name": "XX_Scanner Tech Mod (Scope)",
+      "category": "Developer - Internal"
+    },
+    "D_Scanner_TechDetection_Ammo": {
+      "name": "XX_Scanner Tech Mod (Ammo)",
+      "category": "Developer - Resources"
+    },
+    "D_Scanner_AnalysisMod_Scope": {
+      "name": "XX_Scanner Analysis Mod",
+      "category": "Developer - Internal"
+    },
+    "D_Scanner_ProbeLauncher_Barrel": {
+      "name": "XX_Scanner Probe Launcher",
+      "category": "Developer - Internal"
+    },
+    "D_Atre_Smg_Barrel_Poison_3": {
+      "name": "Savoy & Mirt M11 Poison Coater",
+      "category": "Developer - Equipment"
+    },
+    "D_BuildingBlueprint_Md_Choam_Outpost_01": {
+      "name": "CHOAM Outpost 01",
+      "category": "Developer - Blueprints"
+    },
+    "D_BuildingBlueprint_Sm_StressTest_01": {
+      "name": "Stress Test",
+      "category": "Developer - Blueprints"
+    },
+    "D_BuildingBlueprint_Foundation": {
+      "name": "Foundation",
+      "category": "Developer - Blueprints"
+    },
+    "D_TestEmote": {
+      "name": "Test Emote",
+      "category": "Developer - Internal"
+    },
+    "D_Emote_Challenge_01": {
+      "name": "OLD_DONOTUSE_Challenge",
+      "category": "Developer - Internal"
+    },
+    "D_Emote_Signal_01": {
+      "name": "OLD_DONOTUSE_Signal",
+      "category": "Developer - Internal"
+    },
+    "Developer_Storage_Container_Patent": {
+      "name": "Developer Storage Container",
+      "category": "Developer - Building Unlocks"
     }
   }
 }

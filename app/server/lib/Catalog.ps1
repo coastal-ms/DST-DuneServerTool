@@ -1,4 +1,4 @@
-﻿# Catalog lib — exposes the item catalog (app\data\item-catalog.json, ~979
+﻿# Catalog lib — exposes the item catalog (app\data\item-catalog.json
 # items) and the character-domain definitions (stat list, currencies, spec
 # tracks, writable inventory types, stack limits, equipment prefixes).
 #
@@ -37,7 +37,7 @@ function Load-DuneItemCatalog {
         foreach ($prop in $json.items.PSObject.Properties) {
             $entry = @{
                 templateId = $prop.Name
-                name       = $prop.Value.name
+                name       = if ($prop.Value.name) { [string]$prop.Value.name } else { [string]$prop.Name }
                 category   = $prop.Value.category
             }
             if ($prop.Value.PSObject.Properties['gradeable'] -and $prop.Value.gradeable) {

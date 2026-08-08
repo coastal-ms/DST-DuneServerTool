@@ -13,6 +13,15 @@ here cover everything those tags shipped.
 
 ## [Unreleased]
 
+## [13.5.3] - 2026-08-08
+
+### Added
+
+- **Give Item and Cosmetics now expose the complete developer template catalog.** Internal items, blueprints, and schematics are searchable and fully browsable by category in Give Item, while developer appearance and building unlocks remain grouped under Cosmetics. Cosmetics hides character unlocks already persisted by the game by canonicalizing the complete owned-ID set against the complete catalog, accounting for grant wrappers, armor slots, word-order changes, abbreviations, spelling differences, and internal dye IDs instead of maintaining guessed one-off aliases. Learned building sets are included in the same ownership result. Search uses contains matching across names, template IDs, and groups, so searches such as `vehicle` return every Vehicle Skins entry rather than relying on native select prefix matching. A warning explains that developer, test, placeholder, and Polar entries may lack working unlock actions or retail assets, that some developer unlock items appear to require offline inventory delivery before being processed on next login, and that private servers cannot grant Funcom's PowerTester account permission. Gameplay Admin storage now detects real storage inventories instead of filtering by class names, exposing the developer container without misclassifying cosmetic storage-themed placeables.
+- **Game Config can experimentally reveal directly distributed research items.** Crafting now exposes Funcom's `m_bRevealItemOnDistributedToCharacter` switch for testing admin-granted developer blueprints and schematics. The control warns that visibility does not repair schematics whose injected item data lacks research-cost metadata.
+- **Deathstill Conversion Time is promoted to Game Config.** Field testing confirmed the override works, so it now appears under Survival instead of Experimental while retaining restart-time startup injection.
+- **Legacy returning-player popup controls are available again.** Servers that enabled the game popup through an older DST release can now disable it under Experimental → Progression & Contracts; the native DST Welcome back card links operators to that cleanup control.
+
 ## [13.5.2] - 2026-08-07
 
 ### Added
