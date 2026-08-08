@@ -60,6 +60,7 @@ $script:DuneGcSecRespawn   = '/Script/DuneSandbox.RespawnSettings'
 $script:DuneGcSecEncounters = '/Script/DuneSandbox.EncountersSubsystem'
 $script:DuneGcSecContracts = '/Script/DuneSandbox.ContractsSubsystem'
 $script:DuneGcSecCrafting  = '/Script/DuneSandbox.CraftingSettings'
+$script:DuneGcSecTechKnowledge = '/Script/DuneSandbox.TechKnowledgeSettings'
 
 # Funcom stores ALL Landsraad settings as scalar members inside ONE nested struct
 # value: [/Script/DuneSandbox.LandsraadSettings] Data=(m_TaskGoalAmount=5000.0,...).
@@ -113,15 +114,6 @@ $script:DuneGameConfigDeprecatedManagedKeys = @(
     'm_GlobalHarvestAmountMultiplier'
     'm_GlobalHarvestHealthMultiplier'
 
-    # Returning-player reward packs. Removed 2026-08-04 on a FUNCOM DEV's
-    # confirmation that these are not enabled for self-hosted servers: the award
-    # packs are granted by Funcom's own backend, not locally, so a self-host has
-    # nothing to grant from. Corroborated here - the game database carries no
-    # award/reward/entitlement table for them at all. Do not re-expose these
-    # without new evidence that a self-host can source the packs locally.
-    'dw.ReturningPlayer.GiveAward.Enabled'
-    'dw.ReturningPlayer.DaysBeforeEligibleForReward'
-    'dw.ReturningPlayer.GiveAward.TierOverride'
 )
 
 $script:DuneGameConfigSchema = @(
@@ -165,6 +157,7 @@ $script:DuneGameConfigSchema = @(
     # --- Crafting ---
     @{ Section=$script:DuneGcSecCrafting; Key='m_RepairCostWeight'; File='game'; Type='float'; Min=0; Default='1.0'; Label='Repair Cost Weight'; Help='Scales repair costs. Also needs client-side apply.'; ClientApply=$true; Category='Crafting' }
     @{ Section=$script:DuneGcSecCrafting; Key='m_RecyclerOutputWeight'; File='game'; Type='float'; Min=0; Default='1.0'; Label='Recycler Output Weight'; Help='Scales recycler output. Also needs client-side apply.'; ClientApply=$true; Category='Crafting' }
+    @{ Section=$script:DuneGcSecTechKnowledge; Key='m_bRevealItemOnDistributedToCharacter'; File='game'; Type='bool'; Default='False'; Label='Reveal Distributed Research Items (Experimental)'; Help='When enabled, asks the game to reveal research items distributed directly to a character, including admin-granted developer blueprints and schematics. Unconfirmed: this may make hidden entries visible, but it cannot reconstruct missing schematic research-cost metadata. Restart the battlegroup, then grant a fresh copy for testing. Also needs client-side apply.'; ClientApply=$true; Category='Crafting' }
 
     # --- Building ---
     @{ Section=$script:DuneGcSecBuilding; Key='m_MaxNumLandclaimSegments'; File='game'; Type='int'; Min=1; Default='6'; Label='Max Landclaim Segments'; Help='Maximum territory claim segments. Also needs client-side apply.'; ClientApply=$true; Category='Building' }
@@ -326,7 +319,7 @@ $script:DuneGameConfigSchema = @(
     @{ Section=$script:DuneGcSecConsole; Key='dw.PlaceableShelterThresholdOverride'; File='engine'; Type='float'; Min=-1; Max=1; Default='-1'; Label='Placeable Shelter Threshold Override'; Help='Funcom: "The threshold value override for the placeable shelter, from 0 to 1. Negative value means it is disabled". Counterpart to Building Shelter Threshold Override.'; Category='Experimental' }
 
     # Survival and server ruleset.
-    @{ Section=$script:DuneGcSecConsole; Key='Deathstill.ConversionTimeOverride'; File='engine'; Type='float'; Min=0; Unit='sec'; Label='Deathstill Conversion Time'; Help='Funcom: "Override Time for deathstill" - how long a deathstill takes to process a body, in seconds. Community-reported as working; not verified by us. Compiled default was not recovered.'; Category='Experimental' }
+    @{ Section=$script:DuneGcSecConsole; Key='Deathstill.ConversionTimeOverride'; File='engine'; Type='float'; Min=0; Unit='sec'; Label='Deathstill Conversion Time'; Help='Overrides how long a deathstill takes to process a body, in seconds. Field-confirmed; restart the battlegroup to apply it. Compiled default was not recovered.'; Status='Confirmed'; Startup=$true; Category='Survival' }
     @{ Section=$script:DuneGcSecConsole; Key='Dac.DisablePvpDamage'; File='engine'; Type='bool01'; Label='Disable PvP Damage'; Help='Funcom: "If true, pvp damage will be disabled. Pve/Evp damage will always work regardless". Server-wide, unlike the per-partition Deep Desert PvP setting. Compiled default was not recovered.'; Category='Experimental' }
     @{ Section=$script:DuneGcSecConsole; Key='dw.EnableShelterSystem'; File='engine'; Type='bool01'; Label='Shelter System'; Help='Funcom: "Enable and disable the shelter system". Disabling it removes sandstorm shelter requirements entirely; expect wide-reaching effects. Compiled default was not recovered.'; Category='Experimental' }
 
@@ -409,6 +402,9 @@ $script:DuneGameConfigSchema = @(
     @{ Section=$script:DuneGcSecConsole; Key='Journey.EnableSimplifiedChallengeCompletion'; File='engine'; Type='bool01'; Label='Simplified Challenge Completion'; Help='Funcom: "Enable this to complete challenge when interacting with altar. Otherwise, complete on returning from challenge room after succefully completing it. (0) Disabled (default); (1) Enabled".'; Category='Experimental 2' }
     @{ Section=$script:DuneGcSecConsole; Key='Progression.IgnorePrereqs'; File='engine'; Type='bool01'; Label='Ignore Training Module Prerequisites'; Help='Funcom: "If true, Training Modules can be equipped even if pre-reqs aren''t met".'; Category='Experimental 2' }
     @{ Section=$script:DuneGcSecConsole; Key='Progression.ShowAllPerks'; File='engine'; Type='bool01'; Label='Show All Perks'; Help='Funcom: "If true, all Perks defined in data will be shown in the player''s Perks menu". May reveal perks that are defined in data but not finished.'; Category='Experimental 2' }
+    @{ Section=$script:DuneGcSecConsole; Key='dw.ReturningPlayer.GiveAward.Enabled'; File='engine'; Type='bool01'; Label='Legacy Returning Player Popup'; Help='Controls the game''s built-in returning-player popup. Set Disabled, save, then Apply INIs & restart to stop a popup left enabled by an older DST release. Built-in reward delivery may depend on Funcom services; use Gameplay Admin > Overview > Welcome back for DST-managed packages.'; Category='Experimental 2' }
+    @{ Section=$script:DuneGcSecConsole; Key='dw.ReturningPlayer.DaysBeforeEligibleForReward'; File='engine'; Type='int'; Min=0; Unit='days'; Label='Legacy Days Away Before Popup'; Help='Funcom: "How many days a player must be logged out before being eligible for a returning player reward". Applies only while Legacy Returning Player Popup is enabled.'; Category='Experimental 2' }
+    @{ Section=$script:DuneGcSecConsole; Key='dw.ReturningPlayer.GiveAward.TierOverride'; File='engine'; Type='int'; Min=-1; Default='-1'; Label='Legacy Returning Player Reward Tier'; Help='Funcom: "Override the tier used when granting reward packs. If set to -1 (default) the character''s tier is used". Built-in reward delivery may depend on Funcom services.'; Category='Experimental 2' }
     @{ Section=$script:DuneGcSecConsole; Key='NPC.EnableFacingTargetCheck'; File='engine'; Type='bool01'; Label='NPCs Must Face Target To Fire'; Help='Funcom: "If set to 1, NPCs will check if facing their target before firing their weapon".'; Category='Experimental 2' }
     @{ Section=$script:DuneGcSecConsole; Key='NPC.FacingTargetAngleStartThreshold'; File='engine'; Type='float'; Min=0; Label='NPC Facing Angle To Start Firing'; Help='Funcom: "Set yaw angle threshold to prevent NPCs from start shooting their weapon if they aren''t facing their target". Only applies while NPCs Must Face Target To Fire is on.'; Category='Experimental 2' }
     @{ Section=$script:DuneGcSecConsole; Key='NPC.FacingTargetAngleStopThreshold'; File='engine'; Type='float'; Min=0; Label='NPC Facing Angle To Stop Firing'; Help='Funcom: "Set yaw angle threshold to stop NPCs shooting their weapon if they aren''t facing their target". Only applies while NPCs Must Face Target To Fire is on.'; Category='Experimental 2' }

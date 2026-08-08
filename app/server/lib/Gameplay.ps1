@@ -101,8 +101,9 @@ function Get-DuneGameplayItemName {
 # These are NOT in the standard Give Item picker (item-catalog.json), which is
 # why operators can't find them — but they ARE deliverable via the normal
 # give-item path (a plain dune.items insert), so the player unlocks the
-# appearance when it lands. Dev placeholders (D_Test*, PH_* display names) are
-# excluded. Returns @{ templates = @(@{template;name;group}); total }.
+# appearance when it lands. Developer cosmetics remain visible so operators can
+# test every grantable template shipped in the bundled item metadata. Returns
+# @{ templates = @(@{template;name;group}); total }.
 # Authoritative grantable building-set / building-recipe item ids
 # (app/data/building-sets.json): the union of dune.building_progression.learned_building_sets
 # (live cross-check) and every building Patent/Placeable item form in gameplay-item-data.json.
@@ -154,13 +155,12 @@ function Get-DuneCosmeticsCatalog {
     $out = @()
     foreach ($k in $script:DuneGameplayItemNames.Keys) {
         $name = [string]$script:DuneGameplayItemNames[$k]
-        if (-not $name) { continue }
-        if ($k -match '^D_Test' -or $name -match '^(PH_|Test )') { continue }
+        if (-not $name) { $name = [string]$k }
         $group = $null
         if     ($k -match 'SetVariant')        { $group = 'Armor & Suit Sets' }
         elseif ($k -match 'Swatch')            { $group = 'Swatches (Dyes)' }
         elseif ($k -match 'MeshCustomization') { $group = 'Vehicle Skins' }
-        elseif ($k -match '_Variant$') {
+        elseif ($k -match 'Variant$') {
             # `<thing>_Variant` (distinct from the armor `SetVariant`, matched above)
             # is the game's naming for grantable skin cosmetics — vehicles, weapons,
             # and a few armor/mask pieces. None of these matched the groups above, so
@@ -175,6 +175,7 @@ function Get-DuneCosmeticsCatalog {
         }
         elseif ($k -match 'Customization')     { $group = 'Other Customization' }
         elseif ($script:DuneBuildingSetIds.Contains($k)) { $group = Get-DuneBuildingSetGroup -Id $k }
+        elseif ($k -like 'D_*' -and $name -match '\bPatent$') { $group = Get-DuneBuildingSetGroup -Id $k }
         if ($group) {
             $out += @{ template = [string]$k; name = $name; group = $group }
         }

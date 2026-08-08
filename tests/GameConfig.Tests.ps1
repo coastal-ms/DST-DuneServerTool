@@ -677,7 +677,6 @@ Describe 'DuneGameConfigSchema: experimental binary CVars' -Tag 'GameConfig' {
             # Second decode pass (build 2051294-0-shipping), UTF-16 aware.
             'NPC.EnableNpcAttackLimits'
             'dw.PlaceableShelterThresholdOverride'
-            'Deathstill.ConversionTimeOverride'
             'Dac.DisablePvpDamage'
             'dw.EnableShelterSystem'
             'dw.BaseBackupMaxNumberOfBackups'
@@ -732,6 +731,9 @@ Describe 'DuneGameConfigSchema: experimental binary CVars' -Tag 'GameConfig' {
             'Journey.EnableSimplifiedChallengeCompletion'
             'Progression.IgnorePrereqs'
             'Progression.ShowAllPerks'
+            'dw.ReturningPlayer.GiveAward.Enabled'
+            'dw.ReturningPlayer.DaysBeforeEligibleForReward'
+            'dw.ReturningPlayer.GiveAward.TierOverride'
             'NPC.EnableFacingTargetCheck'
             'NPC.FacingTargetAngleStartThreshold'
             'NPC.FacingTargetAngleStopThreshold'
@@ -776,8 +778,8 @@ Describe 'DuneGameConfigSchema: experimental binary CVars' -Tag 'GameConfig' {
         $experimental = @($script:DuneGameConfigSchema | Where-Object Category -eq 'Experimental')
         $experimental2 = @($script:DuneGameConfigSchema | Where-Object Category -eq 'Experimental 2')
 
-        $experimental.Count | Should -Be 57
-        $experimental2.Count | Should -Be 68
+        $experimental.Count | Should -Be 56
+        $experimental2.Count | Should -Be 71
         @($experimental.Key | Sort-Object) | Should -Be @($script:ExperimentalKeys | Sort-Object)
         @($experimental2.Key | Sort-Object) | Should -Be @($script:Experimental2Keys | Sort-Object)
         foreach ($key in @($script:ExperimentalKeys) + @($script:Experimental2Keys)) {
@@ -788,10 +790,10 @@ Describe 'DuneGameConfigSchema: experimental binary CVars' -Tag 'GameConfig' {
             @($script:DuneStartupConsoleVariableKeys) | Should -Contain $key
         }
         # Both lists are applied identically; the split is presentation only.
-        # 125 still on the Experimental pages + the 9 promoted controls + the 12
+        # 127 still on the Experimental pages + the 10 promoted controls + the 12
         # pre-existing console variables in real categories, all of which keep
         # startup injection via Startup=$true.
-        @($script:DuneStartupConsoleVariableKeys).Count | Should -Be 146
+        @($script:DuneStartupConsoleVariableKeys).Count | Should -Be 149
     }
 
     It 'groups every experimental control for the Experimental page' {
@@ -800,7 +802,7 @@ Describe 'DuneGameConfigSchema: experimental binary CVars' -Tag 'GameConfig' {
         # Uncategorized rather than being forced into a neighbouring group.
         $api = @(Get-DuneGameConfigSchemaApi)
         $fields = @($api | Where-Object { $_.category -like 'Experimental*' } | ForEach-Object { $_.fields })
-        $fields.Count | Should -Be 125
+        $fields.Count | Should -Be 127
         foreach ($f in $fields) {
             $f.group | Should -Not -BeNullOrEmpty
             $f.status | Should -BeIn @('Confirmed', 'Unconfirmed')
@@ -825,6 +827,7 @@ Describe 'DuneGameConfigSchema: experimental binary CVars' -Tag 'GameConfig' {
         $promoted = @(
             'Dune.DisableShieldOnShooting'
             'Dune.GiveDoubleDifficultyLoot'
+            'Deathstill.ConversionTimeOverride'
             'dw.FuelBurningMultiplier'
             'dw.FuelsBurningDuration'
             'dw.LandsraadMissionRewardMultiplierFactionXP'
@@ -996,33 +999,19 @@ Describe 'DuneGameConfigSchema: experimental binary CVars' -Tag 'GameConfig' {
         }
     }
 
-    It 'scrubs the retired returning-player rewards out of an engine managed block' {
-        # A Funcom dev confirmed these are not enabled for self-hosted servers -
-        # the award packs come from Funcom's backend, so a self-host has nothing
-        # to grant from. They are gone from the schema, and existing users have
-        # them sitting in UserEngine.ini from earlier versions.
-        #
-        # This is the case the game-file-only pre-pass in Save-DuneGameConfig
-        # does NOT cover: these are engine [ConsoleVariables] keys, so the only
-        # thing that removes them is the section-agnostic scrub inside
-        # ConvertTo-DuneIniManaged. Assert that path directly, because listing an
-        # engine key in the deprecated array while only the game file was cleaned
-        # would look correct and silently do nothing.
-        $retired = @(
+    It 'keeps legacy returning-player popup controls available so old injections can be disabled' {
+        $legacy = @(
             'dw.ReturningPlayer.GiveAward.Enabled'
             'dw.ReturningPlayer.DaysBeforeEligibleForReward'
             'dw.ReturningPlayer.GiveAward.TierOverride'
         )
-        foreach ($key in $retired) {
-            @($script:DuneGameConfigSchema.Key) | Should -Not -Contain $key
-            @($script:DuneGameConfigDeprecatedManagedKeys) | Should -Contain $key
-            @($script:DuneStartupConsoleVariableKeys) | Should -Not -Contain $key
+        foreach ($key in $legacy) {
+            @($script:DuneGameConfigSchema.Key) | Should -Contain $key
+            @($script:DuneGameConfigDeprecatedManagedKeys) | Should -Not -Contain $key
+            @($script:DuneStartupConsoleVariableKeys) | Should -Contain $key
         }
 
         $raw = @"
-[/Script/DuneSandbox.SomeUserSection]
-dw.ReturningPlayer.GiveAward.Enabled=1
-
 ; ===== Dune Server Tool (DST) managed section BEGIN =====
 [ConsoleVariables]
 dw.FuelBurningMultiplier=6
@@ -1031,15 +1020,15 @@ dw.ReturningPlayer.DaysBeforeEligibleForReward=1
 dw.ReturningPlayer.GiveAward.TierOverride=2
 ; ===== Dune Server Tool (DST) managed section END =====
 "@
-        $out = ConvertTo-DuneIniManaged -Raw $raw -Updates @() -QuotedKeys @{}
+        $updates = @(
+            @{ section = $script:DuneGcSecConsole; key = 'dw.ReturningPlayer.GiveAward.Enabled'; value = '0'; quoted = $false }
+        )
+        $out = ConvertTo-DuneIniManaged -Raw $raw -Updates $updates -QuotedKeys @{}
 
-        # Gone from the DST-owned block...
-        $out | Should -Not -Match 'DaysBeforeEligibleForReward'
-        $out | Should -Not -Match 'GiveAward\.TierOverride'
-        # ...and a setting that still works is untouched.
+        $out | Should -Match 'dw\.ReturningPlayer\.GiveAward\.Enabled=0'
+        $out | Should -Match 'dw\.ReturningPlayer\.DaysBeforeEligibleForReward=1'
+        $out | Should -Match 'dw\.ReturningPlayer\.GiveAward\.TierOverride=2'
         $out | Should -Match 'dw\.FuelBurningMultiplier=6'
-        # The user's own section is never touched, even for a dead key.
-        $out | Should -Match '(?m)^\[/Script/DuneSandbox\.SomeUserSection\]'
         @([regex]::Matches($out, 'ReturningPlayer\.GiveAward\.Enabled')).Count | Should -Be 1
     }
 
@@ -1268,6 +1257,30 @@ Describe 'DuneGameConfigSchema: CraftingSettings fields' -Tag 'GameConfig' {
         $cats | Should -Contain 'Crafting'
         ([array]::IndexOf($cats, 'Crafting')) | Should -BeGreaterThan ([array]::IndexOf($cats, 'Resources & Economy'))
         ([array]::IndexOf($cats, 'Crafting')) | Should -BeLessThan ([array]::IndexOf($cats, 'Building'))
+    }
+
+    It 'exposes the distributed research reveal switch as an experimental game setting' {
+        $field = @($script:DuneGameConfigSchema | Where-Object Key -eq 'm_bRevealItemOnDistributedToCharacter')
+
+        $field.Count | Should -Be 1
+        $field[0].Section | Should -Be '/Script/DuneSandbox.TechKnowledgeSettings'
+        $field[0].File | Should -Be 'game'
+        $field[0].Type | Should -Be 'bool'
+        $field[0].Default | Should -Be 'False'
+        $field[0].ClientApply | Should -BeTrue
+        $field[0].Category | Should -Be 'Crafting'
+        $field[0].Label | Should -Match 'Experimental'
+        $field[0].Help | Should -Match '(?i)cannot reconstruct missing schematic research-cost metadata'
+    }
+
+    It 'persists the distributed research reveal switch in TechKnowledgeSettings' {
+        $section = '/Script/DuneSandbox.TechKnowledgeSettings'
+        $out = ConvertTo-DuneIniManaged -Raw '' -Updates @(
+            @{ section=$section; key='m_bRevealItemOnDistributedToCharacter'; value='True' }
+        ) -QuotedKeys @{}
+
+        (Get-HeaderCount -Raw $out -Name $section) | Should -Be 1
+        (Get-EffectiveValue -Raw $out -Section $section -Key 'm_bRevealItemOnDistributedToCharacter') | Should -Be 'True'
     }
 
     It 'returns repair and recycler weights in the client-apply notice after server save' {

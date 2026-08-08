@@ -115,6 +115,135 @@ function Get-DuneProgressionPresetCatalog {
     return $script:DuneProgressionPresetCatalog
 }
 
+# Convert both persisted customization IDs and grant-wrapper catalog entries to
+# the same semantic key. Funcom changes word order, abbreviates vehicle names,
+# stores armor slots instead of set wrappers, and occasionally ships typos.
+function Get-DuneCosmeticCanonicalKey {
+    param([string]$Value)
+    if ([string]::IsNullOrWhiteSpace($Value)) { return '' }
+
+    $expanded = $Value -replace '^(?i:MTX)_B\d+C\d+_', 'MTX_'
+    $expanded = $expanded -creplace '([a-z0-9])([A-Z])', '$1_$2'
+    $tokens = @($expanded.ToLowerInvariant() -split '[^a-z0-9]+' | Where-Object { $_ })
+    $isMtx = $tokens -contains 'mtx'
+    $normalized = [System.Collections.Generic.HashSet[string]]::new([System.StringComparer]::OrdinalIgnoreCase)
+    foreach ($token in $tokens) {
+        if ($token -match '^(?<word>[a-z]+)\d+$') { $token = $Matches['word'] }
+        if ($token -match '^\d+$') { continue }
+        if ($token -in @(
+            'all', 'customization', 'd', 'dyepack', 'free', 'mesh', 'mtx',
+            'set', 'swatch', 'variant',
+            'boots', 'bottom', 'footwear', 'gloves', 'headwear', 'helmet',
+            'mask', 'shoes', 'top'
+        )) { continue }
+        if ($isMtx -and $token -match '^b\d+c\d+$') { continue }
+
+        $canonical = switch ($token) {
+            'artreides' { 'atreides' }
+            'atre'      { 'atreides' }
+            'hark'      { 'harkonnen' }
+            'light'     { 'scout' }
+            'medium'    { 'assault' }
+            'nomad'     { 'raider' }
+            'orni'      { 'ornithopter' }
+            'smug'      { 'smuggler' }
+            'smuggler'  { 'contraband' }
+            default     { $token }
+        }
+        [void]$normalized.Add($canonical)
+    }
+    return (@($normalized | Sort-Object) -join '|')
+}
+
+function Add-DuneCosmeticCatalogOwnership {
+    param(
+        [Parameter(Mandatory)]$Owned,
+        [Parameter(Mandatory)][string[]]$CustomizationIds
+    )
+    if (-not (Get-Command Get-DuneCosmeticsCatalog -ErrorAction SilentlyContinue)) { return }
+    $catalog = Get-DuneCosmeticsCatalog
+    $byKey = @{}
+    foreach ($entry in @($catalog.templates)) {
+        foreach ($source in @([string]$entry.template, [string]$entry.name)) {
+            $key = Get-DuneCosmeticCanonicalKey -Value $source
+            if (-not $key) { continue }
+            if (-not $byKey.ContainsKey($key)) {
+                $byKey[$key] = [System.Collections.Generic.HashSet[string]]::new([System.StringComparer]::OrdinalIgnoreCase)
+            }
+            [void]$byKey[$key].Add([string]$entry.template)
+        }
+    }
+    foreach ($id in $CustomizationIds) {
+        $key = Get-DuneCosmeticCanonicalKey -Value $id
+        if (-not $key -or -not $byKey.ContainsKey($key)) { continue }
+        foreach ($template in $byKey[$key]) { [void]$Owned.Add([string]$template) }
+    }
+}
+
+# Read every cosmetic/building unlock already associated with a character.
+# Appearance customizations persist on the pawn actor, building unlocks persist
+# on building_progression, and newly granted unlock items can remain in inventory
+# until the game consumes them. Returning their union prevents duplicate grants.
+function Get-DunePlayerOwnedCosmeticsLive {
+    param([string]$Ip, [long]$AccountId)
+    if ($AccountId -le 0) { return @{ ok = $false; error = 'account_id is required.' } }
+
+    $sql = @"
+SELECT
+  COALESCE((
+    SELECT jsonb_agg(DISTINCT elem->>'m_CustomizationId')
+    FROM dune.actors a
+    CROSS JOIN LATERAL jsonb_array_elements(
+      COALESCE(a.properties #> '{CustomizationLibraryActorComponent,m_UnlockedCustomizationSerializableList,m_UnlockedCustomizationIds}', '[]'::jsonb)
+    ) elem
+    WHERE a.id = ps.player_pawn_id
+  ), '[]'::jsonb)::text AS customizations,
+  COALESCE(to_jsonb(bp.learned_building_sets), '[]'::jsonb)::text AS building_sets,
+  COALESCE(to_jsonb(bp.new_buildable_pieces), '[]'::jsonb)::text AS buildable_pieces,
+  COALESCE((
+    SELECT jsonb_agg(DISTINCT i.template_id)
+    FROM dune.inventories inv
+    JOIN dune.items i ON i.inventory_id = inv.id
+    WHERE inv.actor_id = ps.player_pawn_id
+  ), '[]'::jsonb)::text AS pending_items
+FROM dune.player_state ps
+LEFT JOIN dune.building_progression bp ON bp.character_id = ps.id
+WHERE ps.account_id = $AccountId::bigint
+LIMIT 1;
+"@
+    $r = Invoke-DuneSqlQuery -Ip $Ip -Sql $sql -ReadOnly $true -MaxRows 1 -TimeoutSec 20
+    if (-not $r.ok) { return @{ ok = $false; error = "read cosmetic ownership: $($r.error)" } }
+    $maps = ConvertTo-DuneRowMaps -Result $r
+    if ($maps.Count -eq 0) {
+        return @{ ok = $true; account_id = $AccountId; owned = @(); total = 0 }
+    }
+
+    $owned = [System.Collections.Generic.HashSet[string]]::new([System.StringComparer]::OrdinalIgnoreCase)
+    $customizationIds = [System.Collections.Generic.List[string]]::new()
+    foreach ($column in @('customizations', 'building_sets', 'buildable_pieces', 'pending_items')) {
+        try {
+            $values = @(([string]$maps[0][$column] | ConvertFrom-Json) | ForEach-Object { [string]$_ })
+            foreach ($id in $values) {
+                if ([string]::IsNullOrWhiteSpace($id)) { continue }
+                [void]$owned.Add($id)
+                if ($column -eq 'customizations') {
+                    $customizationIds.Add($id)
+                }
+                # Some progression rows use the learned set id while the grant
+                # catalog exposes its consumable Patent item form.
+                if ($column -in @('building_sets', 'buildable_pieces') -and $id -notmatch '_Patent$') {
+                    [void]$owned.Add("${id}_Patent")
+                }
+            }
+        } catch {
+            return @{ ok = $false; error = "parse cosmetic ownership column '$column': $($_.Exception.Message)" }
+        }
+    }
+    Add-DuneCosmeticCatalogOwnership -Owned $owned -CustomizationIds $customizationIds.ToArray()
+    $list = @($owned | Sort-Object)
+    return @{ ok = $true; account_id = $AccountId; owned = $list; total = $list.Count }
+}
+
 # NPE (tutorial) completion nodes — the full DA_MQ_ANewBeginning* +
 # DA_MQ_NPEAutocompleted* subtree captured live from a completed character.
 # Setting complete_condition_state + reveal_condition_state to true on every
