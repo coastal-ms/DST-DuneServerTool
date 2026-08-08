@@ -119,7 +119,7 @@ Describe 'Invoke-DunePlayerUpdateTags' -Tag 'TagsDelta' {
     }
     It 'calls dune.update_player_tags with the account id and both text[] args' {
         $r = Invoke-DunePlayerUpdateTags -Ip '1.2.3.4' -AccountId 99 -Add @('vip', 'tester') -Remove @('banned')
-        $r.ok | Should -BeTrue
+        $r.ok | Should -BeTrue -Because $r.error
         $script:capturedSql | Should -Match 'dune\.update_player_tags\(\s*99::bigint'
         $script:capturedSql | Should -Match "ARRAY\['vip','tester'\]::text\[\]"
         $script:capturedSql | Should -Match "ARRAY\['banned'\]::text\[\]"
@@ -181,6 +181,129 @@ Describe 'Invoke-DunePlayerGiveItemsBulk overflow' -Tag 'Pure' {
         $script:liveArgs.AllowOverflow | Should -BeTrue
         $script:liveArgs.Template | Should -Be 'Ammo'
         $script:liveArgs.Quantity | Should -Be 500
+    }
+}
+
+Describe 'Invoke-DunePlayerMaxAugmentAttributes' -Tag 'Pure' {
+    BeforeEach {
+        $script:capturedSql = $null
+        function global:Invoke-DuneSqlQuery {
+            param($Ip, $Sql, $ReadOnly, $MaxRows, $TimeoutSec)
+            $script:capturedSql = $Sql
+            return @{ ok = $true; message = 'UPDATE 2' }
+        }
+    }
+
+    AfterEach {
+        Remove-Item function:global:Invoke-DuneSqlQuery -ErrorAction SilentlyContinue
+    }
+
+    It 'rejects a zero pawn id' {
+        $r = Invoke-DunePlayerMaxAugmentAttributes -Ip '1.2.3.4' -PawnId 0
+        $r.ok | Should -BeFalse
+        $r.error | Should -Match 'pawn_id'
+    }
+
+    It 'scopes augment updates through the selected player inventories' {
+        $r = Invoke-DunePlayerMaxAugmentAttributes -Ip '1.2.3.4' -PawnId 42
+
+        $r.ok | Should -BeTrue
+        $r.updated | Should -Be 2
+        $script:capturedSql | Should -Match 'FROM dune\.inventories inv'
+        $script:capturedSql | Should -Match 'inv\.actor_id = 42::bigint'
+        $script:capturedSql | Should -Match "i\.template_id ILIKE '%Augment%'"
+    }
+
+    It 'preserves zero rolls and sets non-zero numeric rolls to the confirmed maximum' {
+        Invoke-DunePlayerMaxAugmentAttributes -Ip '1.2.3.4' -PawnId 42 | Out-Null
+
+        $script:capturedSql | Should -Match "roll\.value::numeric = 0 THEN roll\.value"
+        $script:capturedSql | Should -Match 'to_jsonb\(1\.003398::numeric\)'
+        $script:capturedSql | Should -Match 'ORDER BY roll\.ordinality'
+    }
+}
+
+Describe 'Invoke-DunePlayerWipeJourneyNodes' -Tag 'Pure' {
+    BeforeEach {
+        $script:capturedSql = New-Object System.Collections.Generic.List[string]
+        function global:Test-DunePlayerOfflineByAccount { return @{ ok = $true; reason = $null } }
+        function global:Get-DunePlayerPawnFromAccount { return 3946L }
+        function global:ConvertTo-DuneRowMaps {
+            param($Result)
+            return @(@{
+                journey_rows = $Result.rows[0][0]
+                story_tags = $Result.rows[0][1]
+                contract_items = $Result.rows[0][2]
+            })
+        }
+        function global:ConvertTo-DuneInt { param($Value) return [int64]$Value }
+        function global:Invoke-DuneSqlQuery {
+            param($Ip, $Sql, $ReadOnly, $MaxRows, $TimeoutSec)
+            $script:capturedSql.Add($Sql)
+            if ($ReadOnly) {
+                return @{
+                    ok = $true
+                    columns = @('journey_rows', 'story_tags', 'contract_items')
+                    rows = ,@('0', '0', '0')
+                }
+            }
+            return @{ ok = $true; message = 'COMMIT' }
+        }
+    }
+
+    AfterEach {
+        Remove-Item function:global:Test-DunePlayerOfflineByAccount -ErrorAction SilentlyContinue
+        Remove-Item function:global:Get-DunePlayerPawnFromAccount -ErrorAction SilentlyContinue
+        Remove-Item function:global:ConvertTo-DuneRowMaps -ErrorAction SilentlyContinue
+        Remove-Item function:global:ConvertTo-DuneInt -ErrorAction SilentlyContinue
+        Remove-Item function:global:Invoke-DuneSqlQuery -ErrorAction SilentlyContinue
+    }
+
+    It 'refuses to wipe an online player' {
+        function global:Test-DunePlayerOfflineByAccount { return @{ ok = $false; reason = 'Hawk-i5 is currently online.' } }
+
+        $r = Invoke-DunePlayerWipeJourneyNodes -Ip '1.2.3.4' -AccountId 605
+
+        $r.ok | Should -BeFalse
+        $r.error | Should -Match 'offline'
+        $script:capturedSql.Count | Should -Be 0
+    }
+
+    It 'wipes journey rows, story tags, contract items, and tracked contract state' {
+        $r = Invoke-DunePlayerWipeJourneyNodes -Ip '1.2.3.4' -AccountId 605
+        $mutation = $script:capturedSql[0]
+
+        $r.ok | Should -BeTrue -Because ([string]$r.error)
+        $mutation | Should -Match 'delete_all_journey_story_nodes\(605::bigint\)'
+        $mutation | Should -Match "tag LIKE 'Journey\.%'"
+        $mutation | Should -Match "tag LIKE 'Contract\.%'"
+        $mutation | Should -Match "tag LIKE 'BigMoments\.%'"
+        $mutation | Should -Match "tag LIKE 'DialogueFlags\.Contracts\.%'"
+        $mutation | Should -Match "tag LIKE 'DialogueFlags\.Factions\.%'"
+        $mutation | Should -Match "tag LIKE 'Faction\.%'"
+        $mutation | Should -Match "tag LIKE 'FactionStoryline%'"
+        $mutation | Should -Match 'inv\.actor_id=3946::bigint'
+        $mutation | Should -Match "i\.template_id='ContractItem'"
+        $mutation | Should -Match 'm_TrackedContractItemUid'
+    }
+
+    It 'fails when post-wipe verification finds residue' {
+        function global:Invoke-DuneSqlQuery {
+            param($Ip, $Sql, $ReadOnly, $MaxRows, $TimeoutSec)
+            if ($ReadOnly) {
+                return @{
+                    ok = $true
+                    columns = @('journey_rows', 'story_tags', 'contract_items')
+                    rows = ,@('1', '2', '3')
+                }
+            }
+            return @{ ok = $true; message = 'COMMIT' }
+        }
+
+        $r = Invoke-DunePlayerWipeJourneyNodes -Ip '1.2.3.4' -AccountId 605
+
+        $r.ok | Should -BeFalse
+        $r.error | Should -Match 'wipe incomplete'
     }
 }
 
