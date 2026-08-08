@@ -507,6 +507,54 @@ RETURNING i.id::text AS item_id;
     }
 }
 
+# Max every non-zero roll on augment items owned by one player. Zero entries
+# are structural placeholders and must remain zero. The roll ceiling comes from
+# the confirmed in-game script; scoping through inventories.actor_id prevents
+# another player's augments or world inventories from being changed.
+function Invoke-DunePlayerMaxAugmentAttributes {
+    param([string]$Ip, [long]$PawnId)
+    if ($PawnId -le 0) { return @{ ok = $false; error = 'pawn_id is required.' } }
+
+    $sql = @"
+UPDATE dune.items i
+SET stats = jsonb_set(
+    i.stats,
+    '{FAugmentItemStats,1,StatRolls}',
+    (
+        SELECT jsonb_agg(
+            CASE
+                WHEN jsonb_typeof(roll.value) <> 'number' OR roll.value::numeric = 0 THEN roll.value
+                ELSE to_jsonb(1.003398::numeric)
+            END
+            ORDER BY roll.ordinality
+        )
+        FROM jsonb_array_elements(
+            i.stats #> '{FAugmentItemStats,1,StatRolls}'
+        ) WITH ORDINALITY AS roll(value, ordinality)
+    ),
+    false
+)
+FROM dune.inventories inv
+WHERE inv.id = i.inventory_id
+  AND inv.actor_id = $PawnId::bigint
+  AND i.template_id ILIKE '%Augment%'
+  AND jsonb_typeof(i.stats #> '{FAugmentItemStats,1,StatRolls}') = 'array'
+  AND jsonb_array_length(i.stats #> '{FAugmentItemStats,1,StatRolls}') > 0;
+"@
+    $r = Invoke-DuneSqlQuery -Ip $Ip -Sql $sql -ReadOnly $false -MaxRows 1 -TimeoutSec 60
+    if (-not $r.ok) { return @{ ok = $false; error = "max augment attributes: $($r.error)" } }
+
+    $updated = Get-DuneSqlAffected $r
+    if ($updated -eq 0) {
+        return @{ ok = $true; message = 'No augments with attribute rolls found for this player.'; updated = 0 }
+    }
+    return @{
+        ok = $true
+        message = "Maximized attributes on $updated augment(s). The player must relog before changes appear in-game."
+        updated = $updated
+    }
+}
+
 # Restore destroyed gear — OFFLINE only. Targets ONLY items that already have an
 # FItemStackAndDurabilityStats block and whose CurrentDurability is 0 or NULL
 # (Chopper's "completely dead" case the standard Repair didn't obviously cover).
@@ -1399,20 +1447,86 @@ function Invoke-DunePlayerWipeJourneyNodes {
     param([string]$Ip, [long]$AccountId)
     if ($AccountId -le 0) { return @{ ok = $false; error = 'account_id is required.' } }
 
-    $sql = "SELECT dune.delete_all_journey_story_nodes($AccountId::bigint);"
-    $r = Invoke-DuneSqlQuery -Ip $Ip -Sql $sql -ReadOnly $false -MaxRows 1 -TimeoutSec 60
-    if (-not $r.ok) { return @{ ok = $false; error = "delete_all_journey_story_nodes: $($r.error)" } }
+    $off = Test-DunePlayerOfflineByAccount -Ip $Ip -AccountId $AccountId
+    if (-not $off.ok) { return @{ ok = $false; error = "Player must be offline to wipe journey progress. $($off.reason)" } }
+    $pawnID = Get-DunePlayerPawnFromAccount -Ip $Ip -AccountId $AccountId
+    if ($pawnID -le 0) { return @{ ok = $false; error = "no pawn for account $AccountId." } }
 
-    $allTags = Get-DuneAllJourneyTags
-    $extra = ''
-    if ($allTags.Count -gt 0) {
-        $arr = ConvertTo-DunePgTextArray $allTags
-        $rt = "SELECT dune.update_player_tags($AccountId::bigint, ARRAY[]::text[], $arr);"
-        $rr = Invoke-DuneSqlQuery -Ip $Ip -Sql $rt -ReadOnly $false -MaxRows 1 -TimeoutSec 60
-        if (-not $rr.ok) { return @{ ok = $false; error = "remove all journey tags: $($rr.error)" } }
-        $extra = ", removed $($allTags.Count) journey tag(s)"
+    # This is a full story restart, not merely a journey-row delete. Contract
+    # progress also lives in player tags and ContractItem inventory rows; leaving
+    # either behind caused a wiped character to retain completed/active quests.
+    $sql = @"
+BEGIN;
+SELECT dune.delete_all_journey_story_nodes($AccountId::bigint);
+DELETE FROM dune.player_tags
+WHERE character_id IN (SELECT id FROM dune.player_state WHERE account_id=$AccountId::bigint)
+  AND (
+      tag LIKE 'Journey.%'
+      OR tag LIKE 'Contract.%'
+      OR tag LIKE 'BigMoments.%'
+      OR tag LIKE 'DialogueFlags.Contracts.%'
+      OR tag LIKE 'DialogueFlags.Factions.%'
+      OR tag LIKE 'Faction.%'
+      OR tag LIKE 'FactionStoryline%'
+  );
+DELETE FROM dune.items i
+USING dune.inventories inv
+WHERE inv.id=i.inventory_id
+  AND inv.actor_id=$pawnID::bigint
+  AND inv.inventory_type=29
+  AND i.template_id='ContractItem';
+UPDATE dune.actors
+SET properties=jsonb_set(
+    properties,
+    '{ContractsCoordinatorComponent,m_TrackedContractItemUid}',
+    to_jsonb('!!itm#0'::text),
+    true
+)
+WHERE id=$pawnID::bigint
+  AND properties ? 'ContractsCoordinatorComponent';
+COMMIT;
+"@
+    $r = Invoke-DuneSqlQuery -Ip $Ip -Sql $sql -ReadOnly $false -MaxRows 1 -TimeoutSec 120
+    if (-not $r.ok) { return @{ ok = $false; error = "wipe journey restart: $($r.error)" } }
+
+    $verifySql = @"
+SELECT
+  (SELECT COUNT(*) FROM dune.journey_story_node
+   WHERE character_id IN (SELECT id FROM dune.player_state WHERE account_id=$AccountId::bigint)) AS journey_rows,
+  (SELECT COUNT(*) FROM dune.player_tags
+   WHERE character_id IN (SELECT id FROM dune.player_state WHERE account_id=$AccountId::bigint)
+     AND (
+         tag LIKE 'Journey.%'
+         OR tag LIKE 'Contract.%'
+         OR tag LIKE 'BigMoments.%'
+         OR tag LIKE 'DialogueFlags.Contracts.%'
+         OR tag LIKE 'DialogueFlags.Factions.%'
+         OR tag LIKE 'Faction.%'
+         OR tag LIKE 'FactionStoryline%'
+     )) AS story_tags,
+  (SELECT COUNT(*) FROM dune.items i JOIN dune.inventories inv ON inv.id=i.inventory_id
+   WHERE inv.actor_id=$pawnID::bigint AND inv.inventory_type=29 AND i.template_id='ContractItem') AS contract_items;
+"@
+    $vr = Invoke-DuneSqlQuery -Ip $Ip -Sql $verifySql -ReadOnly $true -MaxRows 1 -TimeoutSec 30
+    if (-not $vr.ok) { return @{ ok = $false; error = "wipe journey verification: $($vr.error)" } }
+    $rows = @(ConvertTo-DuneRowMaps -Result $vr)
+    if ($rows.Count -ne 1) { return @{ ok = $false; error = 'wipe journey verification returned no result.' } }
+    $journeyRows = [int64](ConvertTo-DuneInt $rows[0]['journey_rows'])
+    $storyTags = [int64](ConvertTo-DuneInt $rows[0]['story_tags'])
+    $contractItems = [int64](ConvertTo-DuneInt $rows[0]['contract_items'])
+    if ($journeyRows -ne 0 -or $storyTags -ne 0 -or $contractItems -ne 0) {
+        return @{
+            ok = $false
+            error = "Journey wipe incomplete: $journeyRows journey row(s), $storyTags story tag(s), and $contractItems contract item(s) remain."
+        }
     }
-    return @{ ok = $true; message = "Wiped all journey nodes for account $AccountId$extra"; tags_removed = $allTags.Count }
+    return @{
+        ok = $true
+        message = 'Wiped journey, journey/contract/faction story tags, and contract items. The player can log back in and restart from the beginning.'
+        journey_rows = 0
+        story_tags = 0
+        contract_items = 0
+    }
 }
 
 # Clear a dangling "tracked contract" pointer on the player's pawn. An Arrakeen

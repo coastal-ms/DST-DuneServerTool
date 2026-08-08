@@ -37,6 +37,18 @@ Register-DuneRoute -Method POST -Path '/api/gameplay/players/repair-gear' -Handl
     }
 }
 
+# POST /api/gameplay/players/max-augment-attributes  { pawn_id }
+Register-DuneRoute -Method POST -Path '/api/gameplay/players/max-augment-attributes' -Handler {
+    param($req, $res, $routeParams, $body)
+    try {
+        $pawn = Get-DuneBodyInt -Body $body -Name 'pawn_id'
+        if ($null -eq $pawn -or $pawn -le 0) { Write-DuneError -Response $res -Status 400 -Message 'pawn_id is required.'; return }
+        Invoke-DunePlayerWriteRoute -Response $res -Action { param($ip) Invoke-DunePlayerMaxAugmentAttributes -Ip $ip -PawnId $pawn }
+    } catch {
+        Write-DuneError -Response $res -Status 500 -Message "Max augment attributes failed: $($_.Exception.Message)"
+    }
+}
+
 # POST /api/gameplay/players/restore-destroyed  { pawn_id }
 # Sister of repair-gear that targets items where CurrentDurability is 0 or NULL
 # (Chopper's "completely dead" case). Same gear-slot scope. Re-seeds durability
@@ -347,7 +359,7 @@ Register-DuneRoute -Method POST -Path '/api/gameplay/players/journey/reset' -Han
     }
 }
 
-# POST /api/gameplay/players/journey/wipe  { account_id }
+# POST /api/gameplay/players/journey/wipe  { account_id } — offline only
 Register-DuneRoute -Method POST -Path '/api/gameplay/players/journey/wipe' -Handler {
     param($req, $res, $routeParams, $body)
     try {

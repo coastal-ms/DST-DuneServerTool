@@ -19,7 +19,7 @@ import {
   fillWater, getPlayerEvents, getPlayerSpecs,
   getPlayerStats, getPlayerTags, giveFactionRep, giveItem,
   giveScrip, giveSolari, grantAllKeystones, grantLive, grantMaxSpec,
-  kickPlayer, refuelVehicle, renamePlayer, repairGear, repairInventoryItem,
+  kickPlayer, maxAugmentAttributes, refuelVehicle, renamePlayer, repairGear, repairInventoryItem,
   getPlayerVehicles,
   setItemDurability, setItemStack, setItemWater,
   resetAllKeystones, resetAllSpecs, resetJourney, resetProgressionLive, resetSpec,
@@ -655,10 +655,10 @@ const ACTIONS: ActionDef[] = [
     confirm: p => `Reset ${p.name}'s journey/quest progress? They'll restart the current journey step. This cannot be undone.\n\n` +
       `This single confirmation is required so the action can't run on an accidental click.`,
     run: p => resetJourney(p.account_id) },
-  { id: 'wipe-journey', group: 'Progression', label: 'Wipe Journey (restart)', icon: 'RefreshCw',
+  { id: 'wipe-journey', group: 'Progression', label: 'Wipe Journey (restart)', icon: 'RefreshCw', offlineOnly: true,
     doubleConfirm: true,
-    rowNote: 'Double confirmation required',
-    confirm: p => `WIPE ${p.name}'s entire journey and restart it from the beginning? All journey/quest progress is lost. This cannot be undone.\n\n` +
+    rowNote: 'Journey nodes + story/contract/faction tags + contract items. Double confirmation. Offline.',
+    confirm: p => `WIPE ${p.name}'s entire journey and restart it from the beginning? Journey nodes, story/contract/faction tags, and contract items will be removed. This cannot be undone.\n\n` +
       `This is the FIRST of two confirmations. If you continue, the next step asks you to type an acknowledgement before the journey is wiped.`,
     run: p => {
       const typed = window.prompt(
@@ -708,6 +708,10 @@ const ACTIONS: ActionDef[] = [
     run: () => Promise.resolve({ message: '' }) },
   { id: 'repair-gear', group: 'Items', label: 'Repair All Items', icon: 'Wrench',
     run: p => repairGear(p.id) },
+  { id: 'max-augment-attributes', group: 'Items', label: 'Max Augment Attributes', icon: 'Sparkles',
+    rowNote: 'Sets every non-zero attribute roll on this player’s augments to maximum. Relog required.',
+    confirm: p => `Max every non-zero attribute roll on ${p.name}'s augments?\n\nThis is intentionally overpowered and changes every augment owned by this player. The player must relog before the changes appear in-game.`,
+    run: p => maxAugmentAttributes(p.id) },
   { id: 'restore-destroyed', group: 'Items', label: 'Restore Destroyed Items', icon: 'Heart',
     confirm: p => `Restore destroyed gear on ${p.name}? Re-seeds CurrentDurability for items at 0/NULL.`,
     run: p => restoreDestroyed(p.id) },
@@ -3149,6 +3153,7 @@ export function JourneySection({ player, canWrite, demo, refreshKey, flash, onCh
   const [err, setErr] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
   const [filter, setFilter] = useState<JourneyFilter>('all')
+  const isOnline = (player.online_status || '').toLowerCase() === 'online'
   const [search, setSearch] = useState('')
   const [page, setPage] = useState(0)
   const [tick, setTick] = useState(0)
@@ -3205,7 +3210,7 @@ export function JourneySection({ player, canWrite, demo, refreshKey, flash, onCh
 
   const wipeAll = () => {
     if (!window.confirm(
-      `WIPE ${player.name}'s entire journey and restart it from the beginning? All journey/quest progress is lost. This cannot be undone.\n\n` +
+      `WIPE ${player.name}'s entire journey and restart it from the beginning? Journey nodes, story/contract/faction tags, and contract items will be removed. This cannot be undone.\n\n` +
       `This is the FIRST of two confirmations. If you continue, the next step asks you to type an acknowledgement before the journey is wiped.`
     )) return
     const typed = window.prompt(
@@ -3249,8 +3254,8 @@ export function JourneySection({ player, canWrite, demo, refreshKey, flash, onCh
             className="w-full px-3 py-1.5 rounded-lg bg-surface-2 border border-border text-text text-sm focus:outline-none focus:ring-2 focus:ring-ibad focus:border-ibad/50" />
         </div>
         {canWrite && (
-          <button type="button" className="btn-secondary shrink-0 text-xs text-error" disabled={busy} onClick={wipeAll}
-            title="Delete every journey node for this account">
+          <button type="button" className="btn-secondary shrink-0 text-xs text-error" disabled={busy || isOnline} onClick={wipeAll}
+            title={isOnline ? 'Player must be offline' : 'Delete journey nodes, story/contract/faction tags, and contract items'}>
             <Icon name="RefreshCw" size={12} /> Wipe All
           </button>
         )}
