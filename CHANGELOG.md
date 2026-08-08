@@ -17,7 +17,7 @@ here cover everything those tags shipped.
 
 ### Changed
 
-- **Wick Maps is now DD Seed Maps.** The new name better describes the page, and its Experimental badge now stays blue across themes.
+- **Renamed Wick Maps to DD Seed Maps.**
 
 - **The Pods page now keeps stale director history out of the way.** Completed and failed director pods are hidden by default, can still be shown when needed, and can be removed with the new Clean history action. DST also clears this terminal history automatically at backend startup and during Start All. Restart counts are now labelled "Lifetime restarts" so old restarts are not mistaken for a current fault.
 
