@@ -26,7 +26,7 @@ import {
   restoreDestroyed,
   setFactionTier, setSkillPoints,
   setStarterClass, teleportToPlayer, teleportToLocation, setRespawn, getTeleportDestinations, getPlayers, updatePlayerTags, wipeCodex, wipeJourney, resetFaction, snapshotBuilds, getFreshStartSnapshots, restoreBuilds, grantAllSkills,
-  chatWhisper, isValidTemplateId, getItemCatalog, getCosmeticsCatalog, type CosmeticEntry,
+  chatWhisper, isValidTemplateId, getItemCatalog, getCosmeticsCatalog, getPlayerOwnedCosmetics, filterCosmeticsCatalog, type CosmeticEntry,
   parseTcnoPackageText,
   giveItems, getItemPackages, saveItemPackage, deleteItemPackage,
   getLandsraadOverview, getLandsraadPlayerContributions, setLandsraadContribution,
@@ -1067,11 +1067,16 @@ function ActionRow({ def, player, busy, stats, open, danger, onToggle, runAction
                 return { message: `Gave package "${pkgName}" — ${n} item${n === 1 ? '' : 's'} to ${player.name}.` }
               })} />
           ) : def.custom === 'grant-cosmetic' ? (
-            <GrantCosmeticForm busy={busy} playerName={player.name}
-              onGrant={(tpl, label) => runAction(def, async () => {
-                const r = await giveItem(player.id, tpl, 1, 0, true)
-                return { message: r.message || `Granted "${label}" to ${player.name}.` }
-              })} />
+            <GrantCosmeticForm busy={busy} playerName={player.name} accountId={player.account_id}
+              onGrant={async (tpl, label) => {
+                let succeeded = false
+                await runAction(def, async () => {
+                  const r = await giveItem(player.id, tpl, 1, 0, true)
+                  succeeded = true
+                  return { message: r.message || `Granted "${label}" to ${player.name}.` }
+                })
+                return succeeded
+              }} />
           ) : def.custom === 'refuel-vehicle' ? (
             <RefuelVehicleForm busy={busy} controllerId={player.controller_id} playerName={player.name}
               onSubmit={vid => runAction(def, () => refuelVehicle(vid))} />
@@ -1335,15 +1340,19 @@ function GrantRewardForm({ busy, submitLabel, onSubmit }: {
 // swatches, vehicle skins) and delivers the chosen template via the normal
 // give-item path so the player unlocks the appearance. Loads the catalog on
 // mount; filters by name/template; groups results by type.
-function GrantCosmeticForm({ busy, playerName, onGrant }: {
+function GrantCosmeticForm({ busy, playerName, accountId, onGrant }: {
   busy: boolean
   playerName: string
-  onGrant: (template: string, label: string) => void
+  accountId: number
+  onGrant: (template: string, label: string) => Promise<boolean>
 }) {
   const [catalog, setCatalog] = useState<CosmeticEntry[] | null>(null)
   const [err, setErr] = useState<string | null>(null)
   const [filter, setFilter] = useState('')
   const [sel, setSel] = useState('')
+  const [owned, setOwned] = useState<Set<string> | null>(null)
+  const [showOwned, setShowOwned] = useState(false)
+  const [ownershipWarning, setOwnershipWarning] = useState('')
   useEffect(() => {
     let alive = true
     getCosmeticsCatalog()
@@ -1351,11 +1360,32 @@ function GrantCosmeticForm({ busy, playerName, onGrant }: {
       .catch(e => { if (alive) setErr(e instanceof Error ? e.message : String(e)) })
     return () => { alive = false }
   }, [])
+  useEffect(() => {
+    let alive = true
+    setOwned(null)
+    setOwnershipWarning('')
+    getPlayerOwnedCosmetics(accountId)
+      .then(r => {
+        if (!alive) return
+        setOwned(new Set((r.owned || []).map(id => id.toLowerCase())))
+        if (r.liveError) setOwnershipWarning(`Ownership unavailable: ${r.liveError}. Showing the full catalog.`)
+      })
+      .catch(e => {
+        if (!alive) return
+        setOwned(new Set())
+        setOwnershipWarning(`Ownership unavailable: ${e instanceof Error ? e.message : String(e)}. Showing the full catalog.`)
+      })
+    return () => { alive = false }
+  }, [accountId])
   const matches = useMemo(() => {
-    const q = filter.trim().toLowerCase()
     const list = catalog || []
-    return q ? list.filter(e => e.name.toLowerCase().includes(q) || e.template.toLowerCase().includes(q)) : list
-  }, [catalog, filter])
+    const available = showOwned || !owned ? list : list.filter(e => !owned.has(e.template.toLowerCase()))
+    return filterCosmeticsCatalog(available, filter)
+  }, [catalog, filter, owned, showOwned])
+  const ownedCatalogCount = useMemo(
+    () => (catalog && owned ? catalog.filter(e => owned.has(e.template.toLowerCase())).length : 0),
+    [catalog, owned],
+  )
   const groups = useMemo(() => {
     const m = new Map<string, CosmeticEntry[]>()
     for (const e of matches) { const a = m.get(e.group); if (a) a.push(e); else m.set(e.group, [e]) }
@@ -1365,15 +1395,30 @@ function GrantCosmeticForm({ busy, playerName, onGrant }: {
   const selectCls = 'w-full px-3 py-2 rounded-lg bg-surface-2 border border-border text-text text-sm focus:outline-none focus:ring-2 focus:ring-ibad focus:border-ibad/50'
 
   if (err) return <ErrorBox msg={err} />
-  if (!catalog) return <div className="text-sm text-text-dim flex items-center gap-2"><Icon name="Loader2" size={13} className="animate-spin" /> Loading catalog…</div>
+  if (!catalog || !owned) return <div className="text-sm text-text-dim flex items-center gap-2"><Icon name="Loader2" size={13} className="animate-spin" /> Loading catalog and player ownership…</div>
 
   return (
     <div className="space-y-3">
       <p className="text-[11px] text-text-dim">Delivers the unlock item to {playerName}'s inventory (online: instant; offline: next login). The unlock applies when acquired in-game.</p>
       <div className="rounded-lg bg-warning/10 border border-warning/40 p-3 text-warning text-xs leading-relaxed">
-        Some entries may be account-entitlement content. Granting one here only unlocks it for this character on this private server; it does not grant account ownership or make it available on official or other servers.
+        <p>Some entries may be account-entitlement content. Granting one here only unlocks it for this character on this private server; it does not grant account ownership or make it available on official or other servers.</p>
+        <p className="mt-2">
+          Developer, test, placeholder, and Polar entries are experimental. Some have no working unlock action or are missing from retail game assets, so they may remain ordinary inventory items and do nothing. Some developer unlock items appear to register only when added to the inventory while the player is offline, then processed on next login. PowerTester is a Funcom account permission that private servers cannot grant; enabling <span className="font-mono">dw.PlayerProgressionUnlockEnabled</span> does not provide it.
+        </p>
       </div>
-      <input type="text" value={filter} disabled={busy} placeholder="Filter cosmetics & building sets by name or id…"
+      {ownershipWarning && <div className="text-xs text-warning">{ownershipWarning}</div>}
+      <label className="flex items-center justify-between gap-3 text-xs text-text-dim">
+        <span className="flex items-center gap-2">
+          <input type="checkbox" checked={showOwned} disabled={busy}
+            onChange={e => {
+              setShowOwned(e.target.checked)
+              if (!e.target.checked && sel && owned.has(sel.toLowerCase())) setSel('')
+            }} />
+          Show already owned
+        </span>
+        <span>{ownedCatalogCount} server-detected owned / {catalog.length - ownedCatalogCount} available</span>
+      </label>
+      <input type="text" value={filter} disabled={busy} placeholder="Contains search: name, id, or group…"
         onChange={e => setFilter(e.target.value)} className={selectCls} />
       <select value={sel} disabled={busy} className={selectCls} onChange={e => setSel(e.target.value)} size={1}>
         <option value="">Select a cosmetic or building set… ({matches.length})</option>
@@ -1385,7 +1430,17 @@ function GrantCosmeticForm({ busy, playerName, onGrant }: {
       </select>
       {chosen && <p className="text-[11px] font-mono text-text-dim truncate">{chosen.template}</p>}
       <button className="btn-primary w-full" disabled={busy || !sel}
-        onClick={() => chosen && onGrant(chosen.template, chosen.name)}>
+        onClick={async () => {
+          if (!chosen) return
+          if (await onGrant(chosen.template, chosen.name)) {
+            setOwned(current => {
+              const next = new Set(current)
+              next.add(chosen.template.toLowerCase())
+              return next
+            })
+            setSel('')
+          }
+        }}>
         {busy ? <Icon name="Loader2" size={13} className="animate-spin" /> : <Icon name="Shirt" size={13} />} Grant
       </button>
     </div>

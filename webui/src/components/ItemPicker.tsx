@@ -3,7 +3,7 @@
 //
 // Behaviour mirrors the reference implementation's item search: lazy-load the catalog on first
 // keystroke, filter on every change with substring match against display
-// name OR template_id (case-insensitive), show up to 200 matches in a scrollable popup
+// name, template_id, or category (case-insensitive), show up to 500 matches in a scrollable popup
 // listing "Name — template_id (category)". Arrow keys + Enter to select,
 // Escape to clear.
 
@@ -11,6 +11,8 @@ import { useCallback, useEffect, useId, useLayoutEffect, useMemo, useRef, useSta
 import { createPortal } from 'react-dom'
 import { Icon } from './Icon'
 import { catalogCategories, filterCatalog, getItemCatalog, isValidTemplateId, type CatalogItem } from '../api/gameplay'
+
+const PICKER_RESULT_LIMIT = 500
 
 interface Props {
   value: string
@@ -66,7 +68,7 @@ export function ItemPicker({ value, onChange, displayValue, label, placeholder, 
   // otherwise the raw value (which is also the live search query).
   const shown = displayValue ?? value
   // Filter against whatever text is currently visible, narrowed by category.
-  const matches: CatalogItem[] = catalog ? filterCatalog(catalog, shown, 200, category) : []
+  const matches: CatalogItem[] = catalog ? filterCatalog(catalog, shown, PICKER_RESULT_LIMIT, category) : []
 
   // Close popup on outside click (treat the portaled popup as "inside").
   useEffect(() => {
