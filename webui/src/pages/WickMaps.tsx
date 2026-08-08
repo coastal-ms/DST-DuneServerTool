@@ -1,4 +1,4 @@
-// Wick Maps — per-seed Deep Desert POI maps.
+// DD Seed Maps - per-seed Deep Desert POI maps.
 //
 // The Deep Desert regenerates on the Coriolis cycle and there are 12 fixed
 // preset layouts (world seeds 0-11). This page draws the POI layout for a
@@ -150,7 +150,7 @@ export function WickMaps() {
   return (
     <div className="flex flex-col gap-4">
       <PageHeader
-        title="Wick Maps"
+        title="DD Seed Maps"
         icon="Map"
         description="Deep Desert point-of-interest layouts for each of the 12 Coriolis world seeds."
       />

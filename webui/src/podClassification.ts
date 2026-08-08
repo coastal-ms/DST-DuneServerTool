@@ -45,3 +45,8 @@ export function backupOpKindLabel(kind: BackupOpKind): string {
 export function isFailedPodStatus(status: string): boolean {
   return /(crash|error|failed|backoff|imagepull|evicted|oomkilled)/i.test(status || '')
 }
+
+/** Terminal battlegroup-director history, not a current workload. */
+export function isHistoricalDirectorPod(name: string, phase: string): boolean {
+  return /-bgd-/.test(name || '') && /^(Succeeded|Failed)$/i.test(phase || '')
+}

@@ -163,7 +163,7 @@ public static extern bool IsIconic(System.IntPtr hWnd);
 }
 
 # Version (one of the 5 sync'd constants; see persistent-notes.md)
-$script:DuneToolVersion = '13.5.0'
+$script:DuneToolVersion = '13.5.1'
 
 # ---------- Restart-on-detach handoff -----------------------------------------
 # When a prior "Web Portal" detach left the server running headless, the
@@ -604,6 +604,20 @@ if (Get-Command Start-DuneGameplayBotScheduler -ErrorAction SilentlyContinue) {
 # blocks or crashes startup.
 if (Get-Command Initialize-DuneMobileBridge -ErrorAction SilentlyContinue) {
     try { Initialize-DuneMobileBridge -ServerDir $serverDir } catch {}
+}
+
+# Funcom's director ReplicaSet can leave terminal Evicted/Unknown pod objects
+# forever after VM power cycles. Remove only terminal -bgd- history; current
+# Running/Pending director pods are never touched.
+if (Get-Command Remove-DuneTerminalDirectorPods -ErrorAction SilentlyContinue) {
+    try {
+        $directorPrune = Remove-DuneTerminalDirectorPods
+        if ($directorPrune.ok -and $directorPrune.count -gt 0) {
+            Write-DuneLog "pod maintenance: $($directorPrune.message)"
+        }
+    } catch {
+        Write-DuneLog "pod maintenance: terminal director cleanup failed: $($_.Exception.Message)" 'WARN'
+    }
 }
 
 # ---------- Token --------------------------------------------------------------
