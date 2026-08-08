@@ -81,19 +81,13 @@ SELECT p.id,
 FROM dune.placeables p
 LEFT JOIN dune.actors a                  ON a.id = p.id
 LEFT JOIN dune.permission_actor pa       ON pa.actor_id = p.id
-LEFT JOIN dune.inventories inv           ON inv.actor_id = p.id
+JOIN dune.inventories inv                ON inv.actor_id = p.id AND inv.inventory_type = 4
 LEFT JOIN dune.items i                   ON i.inventory_id = inv.id
 LEFT JOIN dune.actor_fgl_entities afe    ON afe.entity_id = p.owner_entity_id
 LEFT JOIN dune.permission_actor_rank par ON par.permission_actor_id = afe.actor_id
 LEFT JOIN dune.actors player_a           ON player_a.id = par.player_id
 LEFT JOIN dune.player_state ps           ON ps.account_id = player_a.owner_account_id
-WHERE p.building_type IN (
-    'SpiceSilo_Placeable',
-    'GenericContainer_Placeable',
-    'StorageContainer_Placeable',
-    'MediumStorageContainer_Placeable'
-  )
-  AND p.is_hologram = false
+WHERE p.is_hologram = false
   AND p.owner_entity_id IS NOT NULL
   AND p.owner_entity_id != 0
 GROUP BY p.id, p.building_type, a.map
@@ -121,11 +115,17 @@ function Get-DuneStorageLive {
         $templates = @()
         if ($templatesRaw) { $templates = @($templatesRaw -split ',' | Where-Object { $_ }) }
         $names = @($templates | ForEach-Object { Get-DuneGameplayItemName -TemplateId $_ })
+        $rawClass = [string]$r['class']
+        $displayClass = if ($rawClass -like 'Developer_StorageContainer*' -or $rawClass -like 'Developer_Storage_Container*') {
+            'Developer Storage Container'
+        } else {
+            Get-DuneShortClass $rawClass
+        }
         $containers += [ordered]@{
             id             = (ConvertTo-DuneInt $r['id'])
             name           = [string]$r['name']
-            class          = (Get-DuneShortClass ([string]$r['class']))
-            raw_class      = [string]$r['class']
+            class          = $displayClass
+            raw_class      = $rawClass
             map            = [string]$r['map']
             item_count     = (ConvertTo-DuneInt $r['item_count'])
             item_templates = $templates
