@@ -44,3 +44,14 @@ export function getPodEvents(namespace: string, name: string) {
   const qs = `?namespace=${encodeURIComponent(namespace)}&name=${encodeURIComponent(name)}`
   return api<PodEventsResponse>(`/api/pods/events${qs}`)
 }
+
+export interface PodPruneResponse {
+  ok: boolean
+  count: number
+  deleted: string[]
+  message: string
+}
+
+export function pruneTerminalDirectorPods() {
+  return api<PodPruneResponse>('/api/pods/prune-terminal-director', { method: 'POST' })
+}
