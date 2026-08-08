@@ -161,10 +161,14 @@ export function Sidebar({ collapsed }: Props) {
         }
       >
         <Icon name={item.icon} size={collapsed ? 18 : 16} />
-        {!collapsed && <span>{item.label}</span>}
-        {!collapsed && item.badge && (
-          <span className="ml-auto text-[9px] font-semibold uppercase tracking-wider px-1.5 py-0.5 rounded bg-ibad/15 text-ibad">
-            {item.badge}
+        {!collapsed && (
+          <span className="min-w-0 flex flex-col items-start">
+            <span className="whitespace-nowrap">{item.label}</span>
+            {item.badge && (
+              <span className="mt-0.5 text-[9px] leading-none font-semibold uppercase tracking-wider px-1.5 py-0.5 rounded bg-sky-400/15 text-sky-400 border border-sky-400/40">
+                {item.badge}
+              </span>
+            )}
           </span>
         )}
       </NavLink>

@@ -24,5 +24,8 @@
     "sharp": "^0.35.3",
     "tailwindcss": "^4.0.0",
     "typescript": "~5.7.2"
+  },
+  "overrides": {
+    "nanoid": "3.3.18"
   }
 }

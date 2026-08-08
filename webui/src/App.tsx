@@ -71,8 +71,8 @@ export default function App() {
           <Route path="/broadcasts" element={<Boundary name="Broadcasts"><Broadcasts /></Boundary>} />
           <Route path="/database"   element={<Boundary name="Database"><Database /></Boundary>} />
           <Route path="/sietches"   element={<Boundary name="Sietches"><Sietches /></Boundary>} />
-          <Route path="/dd-map"     element={<Boundary name="Wick Maps"><WickMaps /></Boundary>} />
-          <Route path="/wick-maps"  element={<Boundary name="Wick Maps"><WickMaps /></Boundary>} />
+          <Route path="/dd-map"     element={<Boundary name="DD Seed Maps"><WickMaps /></Boundary>} />
+          <Route path="/wick-maps"  element={<Boundary name="DD Seed Maps"><WickMaps /></Boundary>} />
           <Route path="/map-spinup" element={<Boundary name="Map SpinUp"><MapSpinUp /></Boundary>} />
           <Route path="/settings"   element={<Boundary name="Settings"><Settings /></Boundary>} />
           <Route path="/setup"      element={<Boundary name="Setup Wizard"><SetupWizard /></Boundary>} />

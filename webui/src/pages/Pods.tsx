@@ -7,10 +7,11 @@ import { ApiError } from '../api/client'
 import {
   getPods,
   getPodEvents,
+  pruneTerminalDirectorPods,
   type PodSummary,
   type PodEventsResponse,
 } from '../api/pods'
-import { getBackupOpPodInfo, backupOpKindLabel, isFailedPodStatus } from '../podClassification'
+import { getBackupOpPodInfo, backupOpKindLabel, isFailedPodStatus, isHistoricalDirectorPod } from '../podClassification'
 
 function statusTone(status: string): string {
   const s = (status || '').toLowerCase()
@@ -41,6 +42,8 @@ export function Pods() {
   const [pods, setPods] = useState<PodSummary[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
+  const [showHistory, setShowHistory] = useState(false)
+  const [pruning, setPruning] = useState(false)
 
   const [selected, setSelected] = useState<PodSummary | null>(null)
   const [events, setEvents] = useState<PodEventsResponse | null>(null)
@@ -87,7 +90,29 @@ export function Pods() {
   // flagged — see the Database page's "Completed backup & restore pods" for
   // the same identification + cleanup.
   const opPodCount = useMemo(() => pods.filter(p => getBackupOpPodInfo(p.name)).length, [pods])
+  const historicalDirectorCount = useMemo(
+    () => pods.filter(p => isHistoricalDirectorPod(p.name, p.phase)).length,
+    [pods],
+  )
+  const visiblePods = useMemo(
+    () => showHistory ? pods : pods.filter(p => !isHistoricalDirectorPod(p.name, p.phase)),
+    [pods, showHistory],
+  )
   const selectedOpInfo = selected ? getBackupOpPodInfo(selected.name) : null
+
+  const pruneDirectorHistory = useCallback(async () => {
+    setPruning(true)
+    setError(null)
+    try {
+      await pruneTerminalDirectorPods()
+      setSelected(null)
+      await loadPods()
+    } catch (e) {
+      setError(e instanceof ApiError ? e.message : 'Failed to clean stale director pod history.')
+    } finally {
+      setPruning(false)
+    }
+  }, [loadPods])
 
   return (
     <>
@@ -108,17 +133,34 @@ export function Pods() {
             <div className="flex items-center justify-between mb-3 gap-2">
               <h2 className="text-sm font-semibold uppercase tracking-wider text-text-muted flex items-center gap-2">
                 <Icon name="Boxes" size={14} className="text-accent" /> Pods
-                {pods.length > 0 && <span className="text-[10px] text-text-dim">({pods.length})</span>}
+                {visiblePods.length > 0 && <span className="text-[10px] text-text-dim">({visiblePods.length})</span>}
               </h2>
-              <button
-                type="button"
-                onClick={() => { void loadPods() }}
-                disabled={loading}
-                className="p-1.5 rounded-md border border-border text-text-muted hover:text-text hover:bg-bg-dim transition-colors disabled:opacity-50"
-                title="Refresh pod list"
-              >
-                <Icon name="RefreshCw" size={16} className={loading ? 'animate-spin' : ''} />
-              </button>
+              <div className="flex items-center gap-2">
+                {historicalDirectorCount > 0 && (
+                  <>
+                    <button type="button" onClick={() => setShowHistory(v => !v)} className="text-[10px] text-text-muted hover:text-text">
+                      {showHistory ? 'Hide' : 'Show'} history ({historicalDirectorCount})
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => { void pruneDirectorHistory() }}
+                      disabled={pruning}
+                      className="text-[10px] px-2 py-1 rounded border border-border text-text-muted hover:text-text hover:bg-bg-dim disabled:opacity-50"
+                    >
+                      {pruning ? 'Cleaning…' : 'Clean history'}
+                    </button>
+                  </>
+                )}
+                <button
+                  type="button"
+                  onClick={() => { void loadPods() }}
+                  disabled={loading}
+                  className="p-1.5 rounded-md border border-border text-text-muted hover:text-text hover:bg-bg-dim transition-colors disabled:opacity-50"
+                  title="Refresh pod list"
+                >
+                  <Icon name="RefreshCw" size={16} className={loading ? 'animate-spin' : ''} />
+                </button>
+              </div>
             </div>
 
             {opPodCount > 0 && (
@@ -140,7 +182,7 @@ export function Pods() {
               <p className="text-sm text-text-dim italic">Loading…</p>
             ) : error ? (
               <p className="text-sm text-danger break-words">{error}</p>
-            ) : pods.length === 0 ? (
+            ) : visiblePods.length === 0 ? (
               <p className="text-sm text-text-dim italic">No pods reported.</p>
             ) : (
               <div className="overflow-x-auto">
@@ -150,11 +192,11 @@ export function Pods() {
                       <th className="text-left pb-1 pr-3">Pod</th>
                       <th className="text-left pb-1 pr-3">Ready</th>
                       <th className="text-left pb-1 pr-3">Status</th>
-                      <th className="text-left pb-1">Restarts</th>
+                      <th className="text-left pb-1" title="Lifetime container restarts recorded for this pod">Lifetime restarts</th>
                     </tr>
                   </thead>
                   <tbody>
-                    {pods.map(p => {
+                    {visiblePods.map(p => {
                       const isSel = selected?.namespace === p.namespace && selected?.name === p.name
                       const opInfo = getBackupOpPodInfo(p.name)
                       const opFailed = !!opInfo && isFailedPodStatus(p.status)
