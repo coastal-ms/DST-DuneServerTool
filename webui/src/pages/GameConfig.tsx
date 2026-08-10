@@ -1852,7 +1852,7 @@ export function GameConfig({ mode = 'standard' }: { mode?: 'standard' | 'experim
                       />
                     ) : null
                   ))}
-                  {experimentalPage && (cat.fields ?? []).length > 0 && Array.from({
+                  {experimentalPage && experimentalFilteredFields.length > EXPERIMENTAL_PAGE_SIZE && (cat.fields ?? []).length > 0 && Array.from({
                     length: EXPERIMENTAL_PAGE_SIZE - (cat.fields ?? []).length,
                   }).map((_, index) => (
                     <div key={`empty-slot-${index}`} className="h-32 invisible" aria-hidden="true" />
