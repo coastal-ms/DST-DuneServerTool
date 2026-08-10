@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { buildAllClientBlocks } from '../../src/pages/GameConfig'
+import { buildAllClientBlocks, buildClientShareEntries } from '../../src/pages/GameConfig'
 import type { GameConfigCategory, GameConfigResponse } from '../../src/api/types'
 
 // The "Player config" button promises one thing: exactly the lines a player must
@@ -122,5 +122,41 @@ describe('buildAllClientBlocks', () => {
     const out = buildAllClientBlocks(cats, cfg({}, {}))
     expect(out.count).toBe(0)
     expect(out.entries).toHaveLength(0)
+  })
+
+  it('renders customised struct members as one complete struct line', () => {
+    const section = '/Script/DuneSandbox.LandsraadSettings'
+    const landsraad: GameConfigCategory[] = [{
+      category: 'Landsraad',
+      fields: [
+        { section, key: 'm_LandsraadContractsPerVotingBlock', structKey: 'Data', file: 'game', type: 'int', label: 'Contracts per block', default: '3', clientApply: true },
+        { section, key: 'm_LandsraadContractsDailyBonusMax', structKey: 'Data', file: 'game', type: 'int', label: 'Daily bonus max', default: '35', clientApply: true },
+      ],
+    }] as GameConfigCategory[]
+    const data = '(m_Nested=(Name="KeepMe"),m_LandsraadContractsPerVotingBlock=12,m_LandsraadContractsDailyBonusMax=75)'
+    const out = buildAllClientBlocks(landsraad, cfg({
+      [`${section}||Data`]: data,
+      [`${section}||m_LandsraadContractsPerVotingBlock`]: '12',
+      [`${section}||m_LandsraadContractsDailyBonusMax`]: '75',
+    }, {}))
+
+    expect(out.count).toBe(2)
+    expect(out.entries).toHaveLength(1)
+    expect(out.entries[0].block).toContain(`Data=${data}`)
+    expect(out.entries[0].block.match(/^Data=/gm)).toHaveLength(1)
+    expect(out.entries[0].block).not.toMatch(/^m_LandsraadContractsPerVotingBlock=/m)
+    expect(out.entries[0].block).not.toMatch(/^m_LandsraadContractsDailyBonusMax=/m)
+  })
+
+  it('uses the complete struct for post-save and mismatch share entries', () => {
+    const section = '/Script/DuneSandbox.LandsraadSettings'
+    const data = '(m_Nested=(Name="KeepMe"),m_LandsraadContractsPerVotingBlock=12)'
+    const state = cfg({ [`${section}||Data`]: data }, {})
+    const out = buildClientShareEntries([
+      { file: 'game', section, key: 'm_LandsraadContractsPerVotingBlock', value: '12', structKey: 'Data' },
+    ], state)
+
+    expect(out[0].block).toContain(`Data=${data}`)
+    expect(out[0].block).not.toMatch(/^m_LandsraadContractsPerVotingBlock=/m)
   })
 })

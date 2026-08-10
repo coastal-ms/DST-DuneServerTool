@@ -51,6 +51,7 @@ type ClientMismatch = {
   key: string
   label: string
   section: string
+  structKey?: string
   serverValue: string
   clientValue: string | null
   // True when this entry belongs to a structurally-incomplete client struct box
@@ -131,6 +132,58 @@ function isCustomized(data: GameConfigResponse | null, field: GameConfigField): 
   return lv !== '' && lv !== fieldDefault(field)
 }
 
+type ClientShareValue = {
+  file: 'game' | 'engine'
+  section: string
+  key: string
+  value: string
+  structKey?: string
+}
+
+// Struct members cannot be emitted as standalone key=value lines. UE replaces
+// the whole struct, so copy the complete live struct line once.
+export function buildClientShareEntries(
+  items: ClientShareValue[],
+  cfg: GameConfigResponse | null,
+  paths: Partial<Record<'game' | 'engine', string>> = CLIENT_INI_PATHS,
+): ClientShareEntry[] {
+  const byFile = new Map<'game' | 'engine', Map<string, string[]>>()
+  const seen = new Set<string>()
+  for (const item of items) {
+    const bySection = byFile.get(item.file) ?? new Map<string, string[]>()
+    const lines = bySection.get(item.section) ?? []
+    if (item.structKey) {
+      const id = `${item.file}||${item.section}||${item.structKey}`
+      if (seen.has(id)) continue
+      const bundle = cfg ? bundleFor(cfg, item.file) : null
+      const structValue = bundle?.effective?.[`${item.section}||${item.structKey}`]
+      if (!structValue) continue
+      lines.push(`${item.structKey}=${structValue}`)
+      seen.add(id)
+    } else {
+      const id = `${item.file}||${item.section}||${item.key}`
+      if (seen.has(id)) continue
+      lines.push(`${item.key}=${item.value}`)
+      seen.add(id)
+    }
+    bySection.set(item.section, lines)
+    byFile.set(item.file, bySection)
+  }
+  const entries: ClientShareEntry[] = []
+  for (const file of ['engine', 'game'] as const) {
+    const bySection = byFile.get(file)
+    if (!bySection) continue
+    entries.push({
+      file,
+      path: paths[file] ?? CLIENT_INI_PATHS[file],
+      block: [...bySection.entries()]
+        .map(([section, lines]) => [`[${section}]`, ...lines].join('\r\n'))
+        .join('\r\n\r\n') + '\r\n',
+    })
+  }
+  return entries
+}
+
 // The Experimental lists are console variables read out of the server binary.
 // They share a warning banner, start rolled up, and are the ones that need a
 // battlegroup restart before they do anything. "Experimental 2" is simply the
@@ -148,37 +201,23 @@ export function buildAllClientBlocks(
   cats: GameConfigCategory[] | null,
   cfg: GameConfigResponse | null,
 ): { entries: ClientShareEntry[]; count: number } {
-  const byFile = new Map<'game' | 'engine', Map<string, string[]>>()
+  const items: ClientShareValue[] = []
+  const seen = new Set<string>()
   let count = 0
   for (const cat of cats ?? []) {
     for (const f of cat.fields ?? []) {
-      if (!f?.key || !f.clientApply || f.structKey) continue
+      if (!f?.key || !f.clientApply) continue
       if (!isCustomized(cfg, f)) continue
       const v = liveValue(cfg, f)
       if (v === '') continue
-      const bySection = byFile.get(f.file) ?? new Map<string, string[]>()
-      const arr = bySection.get(f.section) ?? []
-      // A key can appear in more than one category card; only list it once.
-      if (arr.some(line => line.startsWith(`${f.key}=`))) continue
-      arr.push(`${f.key}=${v}`)
-      bySection.set(f.section, arr)
-      byFile.set(f.file, bySection)
+      const id = `${f.file}||${f.section}||${f.key}`
+      if (seen.has(id)) continue
+      seen.add(id)
+      items.push({ file: f.file, section: f.section, key: f.key, value: v, structKey: f.structKey })
       count++
     }
   }
-  const entries: ClientShareEntry[] = []
-  for (const file of ['engine', 'game'] as const) {
-    const bySection = byFile.get(file)
-    if (!bySection) continue
-    const parts: string[] = []
-    for (const [section, lines] of bySection) parts.push(`[${section}]`, ...lines, '')
-    entries.push({
-      file,
-      path: CLIENT_INI_PATHS[file],
-      block: parts.join('\r\n').replace(/\s+$/, '') + '\r\n',
-    })
-  }
-  return { entries, count }
+  return { entries: buildClientShareEntries(items, cfg), count }
 }
 
 function isExperimentalCategory(category: string): boolean {
@@ -391,22 +430,8 @@ export function GameConfig({ mode = 'standard' }: { mode?: 'standard' | 'experim
   // into their own client Game.ini — grouped by section, last-write-wins order.
   const clientSnippetEntries = useMemo<ClientShareEntry[]>(() => {
     if (!clientApply || clientApply.items.length === 0) return []
-    const byFile = new Map<'game' | 'engine', Map<string, string[]>>()
-    for (const it of clientApply.items) {
-      const bySection = byFile.get(it.file) ?? new Map<string, string[]>()
-      const lines = bySection.get(it.section) ?? []
-      lines.push(`${it.key}=${it.value}`)
-      bySection.set(it.section, lines)
-      byFile.set(it.file, bySection)
-    }
-    return [...byFile.entries()].map(([file, bySection]) => ({
-      file,
-      path: clientApply.paths?.[file] ?? CLIENT_INI_PATHS[file],
-      block: [...bySection.entries()]
-        .map(([section, lines]) => [`[${section}]`, ...lines].join('\n'))
-        .join('\n\n'),
-    }))
-  }, [clientApply])
+    return buildClientShareEntries(clientApply.items, cfg, clientApply.paths)
+  }, [clientApply, cfg])
 
   const onCopyClientSnippet = useCallback(async () => {
     if (clientSnippetEntries.length === 0) return
@@ -490,12 +515,12 @@ export function GameConfig({ mode = 'standard' }: { mode?: 'standard' | 'experim
         const clientValue = raw === undefined || raw === null ? null : String(raw)
         if (inStub) {
           if (clientValue !== null && valuesEqual(clientValue, serverValue)) continue
-          out.push({ file: f.file, key: f.key, label: f.label, section: f.section, serverValue, clientValue, structural: true })
+          out.push({ file: f.file, key: f.key, label: f.label, section: f.section, structKey: f.structKey, serverValue, clientValue, structural: true })
           continue
         }
         if (!isCustomized(cfg, f)) continue
         if (clientValue !== null && valuesEqual(clientValue, serverValue)) continue
-        out.push({ file: f.file, key: f.key, label: f.label, section: f.section, serverValue, clientValue })
+        out.push({ file: f.file, key: f.key, label: f.label, section: f.section, structKey: f.structKey, serverValue, clientValue })
       }
     }
     return out
@@ -508,22 +533,21 @@ export function GameConfig({ mode = 'standard' }: { mode?: 'standard' | 'experim
   // INI snippet of the SERVER values for the mismatched keys (manual-merge / share).
   const mismatchSnippetEntries = useMemo<ClientShareEntry[]>(() => {
     if (clientMismatches.length === 0) return []
-    const byFile = new Map<'game' | 'engine', Map<string, string[]>>()
-    for (const m of clientMismatches) {
-      const bySection = byFile.get(m.file) ?? new Map<string, string[]>()
-      const lines = bySection.get(m.section) ?? []
-      lines.push(`${m.key}=${m.serverValue}`)
-      bySection.set(m.section, lines)
-      byFile.set(m.file, bySection)
-    }
-    return [...byFile.entries()].map(([file, bySection]) => ({
-      file,
-      path: clientInfo ? clientBundleFor(clientInfo, file).path : CLIENT_INI_PATHS[file],
-      block: [...bySection.entries()]
-        .map(([section, lines]) => [`[${section}]`, ...lines].join('\n'))
-        .join('\n\n'),
-    }))
-  }, [clientMismatches])
+    return buildClientShareEntries(
+      clientMismatches.map(m => ({
+        file: m.file,
+        section: m.section,
+        key: m.key,
+        value: m.serverValue,
+        structKey: m.structKey,
+      })),
+      cfg,
+      {
+        game: clientInfo ? clientBundleFor(clientInfo, 'game').path : CLIENT_INI_PATHS.game,
+        engine: clientInfo ? clientBundleFor(clientInfo, 'engine').path : CLIENT_INI_PATHS.engine,
+      },
+    )
+  }, [clientMismatches, cfg, clientInfo])
 
   // Stable signature of the current mismatch set: changes only when the set of
   // keys or their server/client values change. Drives "don't re-nag" logic.
