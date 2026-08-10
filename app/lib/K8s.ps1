@@ -463,12 +463,15 @@ function Set-V6ConsoleVariableOverrides {
     [CmdletBinding()]
     param(
         [Parameter(Mandatory)][string]$Ip,
-        [Parameter(Mandatory)][string[]]$Names,
-        [hashtable]$Values = @{}
+        [Parameter(Mandatory)][AllowEmptyCollection()][string[]]$Names,
+        [hashtable]$Values = @{},
+        [hashtable]$ManagedNames = @{}
     )
 
     $normalized = @{}
+    $namesToApply = New-Object 'System.Collections.Generic.List[string]'
     foreach ($name in $Names) {
+        if (-not $namesToApply.Contains($name)) { $namesToApply.Add($name) }
         $raw = if ($Values.ContainsKey($name)) { "$($Values[$name])".Trim() } else { '' }
         if ([string]::IsNullOrWhiteSpace($raw)) {
             $normalized[$name] = $null
@@ -498,6 +501,29 @@ function Set-V6ConsoleVariableOverrides {
     $info = Get-V6Battlegroup -Ip $Ip
     $sets = $info.Bg.spec.serverGroup.template.spec.sets
 
+    # Add only stale DST-managed commands that already exist in pod specs. This
+    # removes cleared overrides without walking every blank catalog key for every
+    # partition. Unrelated ExecCmds entries remain untouched.
+    if ($ManagedNames.Count -gt 0) {
+        foreach ($set in @($sets)) {
+            foreach ($podSpec in @($set.podSpecs)) {
+                foreach ($argument in @($podSpec.arguments)) {
+                    $payload = $null
+                    if ("$argument" -match '^(?i)-execcmds="(.*)"$') { $payload = $Matches[1] }
+                    elseif ("$argument" -match '^(?i)-execcmds=(.*)$') { $payload = $Matches[1] }
+                    if ($null -eq $payload) { continue }
+                    foreach ($command in @(_Split-V6ExecCommands -Payload $payload)) {
+                        if ("$command" -notmatch '^\s*(\S+)') { continue }
+                        $existingName = $Matches[1]
+                        if ($ManagedNames.ContainsKey($existingName) -and -not $normalized.ContainsKey($existingName)) {
+                            $normalized[$existingName] = $null
+                            $namesToApply.Add($existingName)
+                        }
+                    }
+                }
+            }
+        }
+    }
     # Live instances, used to find partition ids for director-managed sets. A
     # dedicatedScaling set (the Deep Desert) carries an EMPTY partitions array
     # and replicas=0 even while its pod is running, so status.servers[] is the
@@ -543,7 +569,7 @@ function Set-V6ConsoleVariableOverrides {
             }
             $arguments = @($podSpec.arguments)
             $before = ($arguments -join "`u{1}")
-            foreach ($name in $Names) {
+            foreach ($name in $namesToApply) {
                 $command = if ($null -ne $normalized[$name]) { "$name $($normalized[$name])" } else { $null }
                 $arguments = @(_Set-V6ExecCommand -Arguments $arguments `
                     -CommandName $name -Command $command)

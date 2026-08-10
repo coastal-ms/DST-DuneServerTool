@@ -274,6 +274,51 @@ Describe 'Fuel burning startup override' -Tag 'GameConfig' {
             Should -Throw '*cannot be encoded in ExecCmds*'
     }
 
+    It 'processes configured and stale managed CVars without scanning blank catalog names' {
+        Mock Get-V6Battlegroup {
+            [pscustomobject]@{
+                Name = 'bg'; Ns = 'dune'
+                Bg = [pscustomobject]@{
+                    spec = [pscustomobject]@{
+                        serverGroup = [pscustomobject]@{
+                            template = [pscustomobject]@{
+                                spec = [pscustomobject]@{ sets = @(
+                                    [pscustomobject]@{
+                                        map = 'Survival_1'
+                                        partitions = @(1)
+                                        podSpecs = @(
+                                            [pscustomobject]@{
+                                                index = 1
+                                                arguments = @('-execcmds="Old.Advanced 1,Bgd.ServerDisplayName ''Hagga''"')
+                                            }
+                                        )
+                                    }
+                                ) }
+                            }
+                        }
+                    }
+                    status = [pscustomobject]@{ servers = @() }
+                }
+            }
+        }
+        $script:optimizedPatches = $null
+        Mock _Invoke-V6BgJsonPatch {
+            param($Ip, $Info, $Patches)
+            $script:optimizedPatches = $Patches
+            @{ Success = $true; Raw = ''; Error = $null }
+        }
+
+        $result = Set-V6ConsoleVariableOverrides -Ip '192.0.2.1' `
+            -Names @('New.Advanced') `
+            -Values @{ 'New.Advanced' = '2' } `
+            -ManagedNames @{ 'New.Advanced' = $true; 'Old.Advanced' = $true; 'Never.Configured' = $true }
+
+        $result.Success | Should -BeTrue
+        @($result.Values.Keys | Sort-Object) | Should -Be @('New.Advanced', 'Old.Advanced')
+        $arguments = @($script:optimizedPatches[0].value[0].arguments)
+        $arguments | Should -Contain '-execcmds="Bgd.ServerDisplayName ''Hagga'',New.Advanced 2"'
+    }
+
     It 'merges fuel and a per-sietch name into one ExecCmds argument' {
         $arguments = @(_Set-V6ExecCommand `
             -Arguments @('-log', '-execcmds="Bgd.ServerDisplayName ''Hagga, Prime''"') `
@@ -811,15 +856,18 @@ Describe 'DuneGameConfigSchema: experimental binary CVars' -Tag 'GameConfig' {
             $fields[$key].Category | Should -BeLike 'Experimental*'
             @($script:DuneStartupConsoleVariableKeys) | Should -Contain $key
         }
-        $lab = @($script:DuneGameConfigSchema | Where-Object Category -eq 'Experimental Lab')
+        @($script:DuneGameConfigSchema | Where-Object Category -eq 'Experimental Lab').Count | Should -Be 0
+        (Test-DuneStartupConsoleVariableKey -Key 'm_TaskGoalAmount') | Should -BeFalse
+        $script:DuneAdvancedCvarCatalogCache | Should -BeNullOrEmpty
+        @($script:DuneStartupConsoleVariableKeys).Count | Should -Be 149
+
+        $lab = @(Get-DuneAdvancedCvarCatalog)
         $lab.Count | Should -BeGreaterThan 4900
-        $script:DuneAdvancedCvarLoadError | Should -BeNullOrEmpty
-        @($script:DuneStartupConsoleVariableKeys).Count | Should -BeGreaterThan 5000
-        ($lab | Where-Object Key -eq 'ak.soundengine.executeActionOnEvent').Group |
+        ($lab | Where-Object key -eq 'ak.soundengine.executeActionOnEvent').group |
             Should -Be 'Audio - engine/internal'
-        ($lab | Where-Object Key -eq 'au.adpcm.DisableSeeking').Group |
+        ($lab | Where-Object key -eq 'au.adpcm.DisableSeeking').group |
             Should -Be 'Audio - engine/internal'
-        ($lab | Where-Object Key -eq 'Ai.Dune.EnableBudgetingSystem').Group |
+        ($lab | Where-Object key -eq 'Ai.Dune.EnableBudgetingSystem').group |
             Should -Be 'AI - engine/internal'
     }
 
@@ -829,13 +877,16 @@ Describe 'DuneGameConfigSchema: experimental binary CVars' -Tag 'GameConfig' {
         # Uncategorized rather than being forced into a neighbouring group.
         $api = @(Get-DuneGameConfigSchemaApi)
         $fields = @($api | Where-Object { $_.category -like 'Experimental*' } | ForEach-Object { $_.fields })
-        $fields.Count | Should -BeGreaterThan 5000
+        $fields.Count | Should -Be 127
         foreach ($f in $fields) {
             $f.group | Should -Not -BeNullOrEmpty
             $f.status | Should -BeIn @('Confirmed', 'Unconfirmed')
             $f.source | Should -BeIn @('Dune', 'Engine')
             $f.risk | Should -BeIn @('experimental', 'diagnostic', 'high', 'critical')
         }
+        $categories = @(Get-DuneAdvancedCvarCategoriesApi)
+        ($categories | Measure-Object count -Sum).Sum | Should -BeGreaterThan 4900
+        @(Get-DuneAdvancedCvarCategoryApi -Category 'Dune gameplay').Count | Should -BeGreaterThan 500
         # Namespace rules must win over keyword ones: a sandworm control that
         # mentions vehicles is a sandworm control.
         (Get-DuneExperimentalGroup -Key 'Sandworm.SandwormCheckIfBreachLocationIsFreeOfVehicles') | Should -Be 'Sandworm'
@@ -849,7 +900,7 @@ Describe 'DuneGameConfigSchema: experimental binary CVars' -Tag 'GameConfig' {
     It 'loads the advanced catalog as individual fields under Windows PowerShell 5.1' -Skip:($env:OS -ne 'Windows_NT') {
         $gameConfigPath = (Resolve-Path (Join-Path $PSScriptRoot '..\app\server\lib\GameConfig.ps1')).Path.Replace("'", "''")
         $command = ". '$gameConfigPath'; " +
-            '$lab = @($script:DuneGameConfigSchema | Where-Object Category -eq ''Experimental Lab''); ' +
+            '$lab = @(Get-DuneAdvancedCvarCatalog); ' +
             'Write-Output $lab.Count; Write-Output ([string]$lab[0].Key).Length'
         $result = @(& powershell.exe -NoProfile -ExecutionPolicy Bypass -Command $command)
 
@@ -988,6 +1039,7 @@ Describe 'DuneGameConfigSchema: experimental binary CVars' -Tag 'GameConfig' {
     }
 
     It 'surfaces dangerous controls with critical risk metadata' {
+        $catalog = @(Get-DuneAdvancedCvarCatalog)
         foreach ($key in @(
             'Hazard.DehydrationZonesEnabled'
             'dw.igw.EnableAuthConfirmGainingCrash'
@@ -998,9 +1050,9 @@ Describe 'DuneGameConfigSchema: experimental binary CVars' -Tag 'GameConfig' {
             'SecurityZones.ForceEnablePvp'
             'dw.EnableDeveloperMode'
         )) {
-            $field = @($script:DuneGameConfigSchema | Where-Object Key -eq $key)
+            $field = @($catalog | Where-Object key -eq $key)
             $field.Count | Should -Be 1
-            $field[0].Risk | Should -Be 'critical'
+            $field[0].risk | Should -Be 'critical'
         }
     }
 
@@ -1168,6 +1220,31 @@ $script:DstManagedEnd
         Test-DuneStartupConsoleVariableValue -Value 'unsafe"value' | Should -BeFalse
     }
 
+    It 'rebuilds restart injection from configured managed CVars only' {
+        Mock Get-DuneGameConfig {
+            @{
+                engine = @{
+                    effectiveByKey = @{
+                        'ak.soundengine.executeActionOnEvent' = '1'
+                        'dw.FuelBurningMultiplier' = '6'
+                        'User.HandEditedSetting' = '9'
+                    }
+                }
+            }
+        }
+        $script:optimizedSyncValues = $null
+        Mock Set-DuneStartupConsoleVariableOverrides {
+            param($Ip, $Values)
+            $script:optimizedSyncValues = $Values
+            @{ Success = $true }
+        }
+
+        Sync-DuneStartupConsoleVariableOverrides -Ip '192.0.2.1' | Out-Null
+
+        @($script:optimizedSyncValues.Keys | Sort-Object) |
+            Should -Be @('ak.soundengine.executeActionOnEvent', 'dw.FuelBurningMultiplier')
+    }
+
     It 'keeps experimental CVars out of local client changes' {
         # Experimental controls are unproven console variables; nothing shows the
         # client reads them, and the server applies them through the startup
@@ -1213,11 +1290,10 @@ $script:DstManagedEnd
         $field[0].ClientApply | Should -BeTrue
     }
 
-    It 'places the Experimental catalogs last in the curated schema API, in order' {
+    It 'places the curated Experimental catalogs last in the schema API, in order' {
         $cats = @((Get-DuneGameConfigSchemaApi) | ForEach-Object { $_.category })
-        $cats[-3] | Should -Be 'Experimental'
-        $cats[-2] | Should -Be 'Experimental 2'
-        $cats[-1] | Should -Be 'Experimental Lab'
+        $cats[-2] | Should -Be 'Experimental'
+        $cats[-1] | Should -Be 'Experimental 2'
     }
 
     It 'persists experimental controls in the UserEngine ConsoleVariables section' {

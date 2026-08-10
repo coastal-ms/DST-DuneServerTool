@@ -18,7 +18,7 @@ here cover everything those tags shipped.
 ### Added
 
 - **Settings now shows the Dune Server Tool install folder.** The host-only card can copy the path or open it in Explorer for antivirus exclusions, file verification, and troubleshooting.
-- **Experimental is now Experimental Lab.** It exposes the complete recovered Dune and Unreal Engine CVar inventory plus every remaining live DefaultGame.ini / DefaultEngine.ini setting that DST does not already surface. Search, source/risk filters, modified-only mode, compact pagination, risk badges, safe string-valued CVar startup injection, and array/struct editing keep the expanded catalog usable.
+- **Experimental is now Experimental Lab.** It exposes the complete recovered Dune and Unreal Engine CVar inventory plus every remaining live DefaultGame.ini / DefaultEngine.ini setting that DST does not already surface. Search, source/risk filters, modified-only mode, category-cached 25-item pagination, risk badges, safe string-valued CVar startup injection, and array/struct editing keep the expanded catalog usable without loading the full catalog at DST startup. Restart injection processes only configured and stale managed CVars rather than scanning every blank catalog entry per partition.
 
 ### Fixed
 
