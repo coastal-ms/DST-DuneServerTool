@@ -1,5 +1,11 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { getDeepDesertPvp, reloadGameConfigPods, saveDeepDesertPvp } from '../../src/api/gameconfig'
+import {
+  getDeepDesertPvp,
+  getGameConfigExperimentalCategories,
+  getGameConfigExperimentalCategory,
+  reloadGameConfigPods,
+  saveDeepDesertPvp,
+} from '../../src/api/gameconfig'
 
 interface FetchCall {
   url: string
@@ -64,5 +70,17 @@ describe('Game Config pod reload API', () => {
       method: 'POST',
       body: undefined,
     })
+  })
+})
+
+describe('Experimental Lab lazy catalog API', () => {
+  it('loads category metadata separately from the normal schema', async () => {
+    await getGameConfigExperimentalCategories()
+    expect(calls.at(-1)?.url).toBe('/api/gameconfig/experimental/categories')
+  })
+
+  it('loads and URL-encodes only the selected category', async () => {
+    await getGameConfigExperimentalCategory('Audio - engine/internal')
+    expect(calls.at(-1)?.url).toBe('/api/gameconfig/experimental/category?name=Audio%20-%20engine%2Finternal')
   })
 })

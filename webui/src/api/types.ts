@@ -160,6 +160,15 @@ export type GameConfigSchemaResponse = {
   schema: GameConfigCategory[]
 }
 
+export type GameConfigExperimentalCategoriesResponse = {
+  categories: Array<{ category: string; count: number }>
+}
+
+export type GameConfigExperimentalCategoryResponse = {
+  category: string
+  fields: GameConfigField[]
+}
+
 export type GameConfigIniKey = {
   key: string
   value: string

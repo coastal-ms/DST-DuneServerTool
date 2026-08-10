@@ -2,6 +2,8 @@
 import { api, withOnlinePlayerGuard } from './client'
 import type {
   GameConfigSchemaResponse,
+  GameConfigExperimentalCategoriesResponse,
+  GameConfigExperimentalCategoryResponse,
   GameConfigResponse,
   GameConfigSaveResponse,
   GameConfigBackupResponse,
@@ -26,6 +28,16 @@ const fq = (force: boolean) => (force ? '?force=true' : '')
 
 export function getGameConfigSchema() {
   return api<GameConfigSchemaResponse>('/api/gameconfig/schema')
+}
+
+export function getGameConfigExperimentalCategories() {
+  return api<GameConfigExperimentalCategoriesResponse>('/api/gameconfig/experimental/categories')
+}
+
+export function getGameConfigExperimentalCategory(category: string) {
+  return api<GameConfigExperimentalCategoryResponse>(
+    `/api/gameconfig/experimental/category?name=${encodeURIComponent(category)}`,
+  )
 }
 
 export function getGameConfig() {

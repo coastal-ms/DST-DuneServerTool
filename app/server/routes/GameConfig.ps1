@@ -11,6 +11,34 @@ Register-DuneRoute -Method GET -Path '/api/gameconfig/schema' -Handler {
     Write-DuneJson -Response $res -Body @{ schema = Get-DuneGameConfigSchemaApi }
 }
 
+# Experimental Lab metadata and category fields are separate from the normal
+# schema so opening DST or Game Config never loads the 5,000-control catalog.
+Register-DuneRoute -Method GET -Path '/api/gameconfig/experimental/categories' -Handler {
+    param($req, $res, $routeParams, $body)
+    try {
+        Write-DuneJson -Response $res -Body @{ categories = Get-DuneAdvancedCvarCategoriesApi }
+    } catch {
+        Write-DuneError -Response $res -Status 500 -Message "Experimental Lab catalog load failed: $($_.Exception.Message)"
+    }
+}
+
+Register-DuneRoute -Method GET -Path '/api/gameconfig/experimental/category' -Handler {
+    param($req, $res, $routeParams, $body)
+    $category = "$($req.QueryString['name'])".Trim()
+    if (-not $category) {
+        Write-DuneError -Response $res -Status 400 -Message 'Category name is required.'
+        return
+    }
+    try {
+        Write-DuneJson -Response $res -Body @{
+            category = $category
+            fields   = @(Get-DuneAdvancedCvarCategoryApi -Category $category)
+        }
+    } catch {
+        Write-DuneError -Response $res -Status 500 -Message "Experimental Lab category load failed: $($_.Exception.Message)"
+    }
+}
+
 # -----------------------------------------------------------------------------
 # GET /api/gameconfig/defaults — full settings catalog from the live image.
 # Reads DefaultGame.ini + DefaultEngine.ini out of a running game-server pod
@@ -144,9 +172,14 @@ Register-DuneRoute -Method PUT -Path '/api/gameconfig' -Handler {
         # Schema-keyed object form: resolve section/file from the schema.
         $keys = if ($updates -is [hashtable]) { $updates.Keys } else { $updates.PSObject.Properties.Name }
         foreach ($k in $keys) {
-            if (-not $schemaMap.ContainsKey($k)) { continue }
             $v = if ($updates -is [hashtable]) { $updates[$k] } else { $updates.$k }
-            $rm = (Test-DuneGameConfigValueIsDefault -Key $k -Value "$v")
+            $isAdvanced = $false
+            if (-not $schemaMap.ContainsKey($k)) {
+                if (-not (Test-DuneAdvancedCvarKey -Key $k)) { continue }
+                $schemaMap[$k] = @{ file = 'engine'; section = $script:DuneGcSecConsole }
+                $isAdvanced = $true
+            }
+            $rm = if ($isAdvanced) { [string]::IsNullOrWhiteSpace("$v") } else { Test-DuneGameConfigValueIsDefault -Key $k -Value "$v" }
             $structured.Add(@{ file = $schemaMap[$k].file; section = $schemaMap[$k].section; key = $k; value = "$v"; remove = $rm })
         }
     }
@@ -156,7 +189,7 @@ Register-DuneRoute -Method PUT -Path '/api/gameconfig' -Handler {
         return
     }
     foreach ($update in $structured) {
-        if ($update.key -in $script:DuneStartupConsoleVariableKeys -and
+        if ((Test-DuneStartupConsoleVariableKey -Key "$($update.key)") -and
             -not $update.remove -and
             -not (Test-DuneStartupConsoleVariableValue -Value "$($update.value)")) {
             Write-DuneError -Response $res -Status 400 -Message "$($update.key) contains a comma, quote, control character, or exceeds 512 characters and cannot be encoded in the saved startup payload."
@@ -171,7 +204,7 @@ Register-DuneRoute -Method PUT -Path '/api/gameconfig' -Handler {
         # at the start of every battlegroup restart. Patching pod specs on save
         # would make the operator replace the Hagga pod and disconnect its players
         # the moment someone hits Save.
-        $restartRequired = [bool]($structured | Where-Object { $_.key -in $script:DuneStartupConsoleVariableKeys } | Select-Object -First 1)
+        $restartRequired = [bool]($structured | Where-Object { Test-DuneStartupConsoleVariableKey -Key "$($_.key)" } | Select-Object -First 1)
         $cfg = Get-DuneGameConfig -Ip $ctx.ip
         $clientApply = Get-DuneGameConfigClientApplyNotice -Updates $structured.ToArray()
 
