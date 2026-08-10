@@ -145,6 +145,10 @@ export type GameConfigField = {
   group?: string
   /** Experimental controls only: 'Confirmed' | 'Unconfirmed'. */
   status?: string
+  /** Experimental Lab metadata derived from the recovered binary catalog. */
+  source?: 'Dune' | 'Engine'
+  scope?: string
+  risk?: 'experimental' | 'diagnostic' | 'high' | 'critical'
 }
 
 export type GameConfigCategory = {

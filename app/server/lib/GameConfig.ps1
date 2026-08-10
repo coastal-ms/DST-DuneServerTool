@@ -93,7 +93,7 @@ $script:DuneGameConfigCategoryOrder = @(
     'Server Identity','Network','Survival','Hydration','Loot & Death',
     'Resources & Economy','Crafting','Building','BaseBackUp','Inventory','Guilds & Economy',
     'Storm Cycle','Landsraad','PvP & Security','Spice','Taxation','Encounters','Sandworm','Vehicles',
-    'Experimental','Experimental 2'
+    'Experimental','Experimental 2','Experimental Lab'
 )
 
 # Keys DST USED to expose but later removed once they were shown not to work.
@@ -478,6 +478,53 @@ $script:DuneGameConfigSchema = @(
     @{ Section=$script:DuneGcSecSandworm; Key='m_GiantWormMinimumPlayersOnSpiceField'; File='game'; Type='int'; Min=0; Unit='players'; Default='4'; Label='Giant Worm Min Players on Field'; Help='Minimum number of players on a spice field to trigger a giant sandworm spawn. Also needs client-side apply.'; ClientApply=$true; Category='Sandworm' }
 )
 
+# Append the complete recovered CVar inventory to Experimental Lab. Curated DST
+# fields win: any key already surfaced elsewhere is skipped, including the older
+# Experimental controls. Unknown defaults intentionally remain blank so clearing
+# a Lab value removes the override rather than inventing a default.
+$script:DuneAdvancedCvarCatalogPath = Join-Path $PSScriptRoot '..\..\data\advanced-cvars.json'
+$script:DuneAdvancedCvarLoadError = ''
+try {
+    $advancedAliasesAlreadySurfaced = @(
+        'Dune.PlayerDeathLootEnabled'
+        'Sandworm.SandwormHibernationActive'
+    )
+    $existingCvars = @{}
+    foreach ($field in $script:DuneGameConfigSchema) {
+        if ($field.Section -eq $script:DuneGcSecConsole) {
+            $existingCvars["$($field.Key)"] = $true
+        }
+    }
+    if (Test-Path -LiteralPath $script:DuneAdvancedCvarCatalogPath) {
+        $catalog = @(Get-Content -LiteralPath $script:DuneAdvancedCvarCatalogPath -Raw -ErrorAction Stop |
+            ConvertFrom-Json -ErrorAction Stop)
+        foreach ($entry in $catalog) {
+            $key = "$($entry.key)".Trim()
+            if (-not $key -or $existingCvars.ContainsKey($key) -or $advancedAliasesAlreadySurfaced -contains $key) { continue }
+            $script:DuneGameConfigSchema += @{
+                Section  = $script:DuneGcSecConsole
+                Key      = $key
+                File     = 'engine'
+                Type     = 'string'
+                Default  = ''
+                Label    = if ($entry.label) { [string]$entry.label } else { $key }
+                Help     = [string]$entry.help
+                Category = 'Experimental Lab'
+                Group    = [string]$entry.group
+                Status   = [string]$entry.status
+                Source   = [string]$entry.source
+                Scope    = [string]$entry.scope
+                Risk     = [string]$entry.risk
+            }
+            $existingCvars[$key] = $true
+        }
+    } else {
+        $script:DuneAdvancedCvarLoadError = "Advanced CVar catalog not found: $script:DuneAdvancedCvarCatalogPath"
+    }
+} catch {
+    $script:DuneAdvancedCvarLoadError = $_.Exception.Message
+}
+
 # Console variables are applied to the SERVER by the Hagga startup command, not
 # by any INI - field-proven 2026-08-02, in both directions: the injection alone
 # applied a value with both INIs blank, and both INIs set with the injection
@@ -547,7 +594,8 @@ foreach ($field in $script:DuneGameConfigSchema) {
 $script:DuneStartupConsoleVariableKeys = @(
     $script:DuneGameConfigSchema |
         Where-Object { $_.File -eq 'engine' -and ($_.Category -like 'Experimental*' -or $_.Startup -eq $true) } |
-        ForEach-Object { $_.Key }
+        ForEach-Object { $_.Key } |
+        Sort-Object -Unique
 )
 
 # Experimental controls live on their own page, grouped by what they affect
@@ -1773,6 +1821,13 @@ function Test-DuneGameConfigValueIsDefault {
     return ($a.ToLowerInvariant() -eq $b.ToLowerInvariant())
 }
 
+function Test-DuneStartupConsoleVariableValue {
+    param([AllowEmptyString()][string]$Value)
+    $raw = "$Value".Trim()
+    if (-not $raw) { return $true }
+    return ($raw.Length -le 512 -and $raw -notmatch '[,\x00-\x1F\x7F"]')
+}
+
 # Build a lookup: key -> @{ section; structKey; default } for every struct-member
 # schema field, so the save path can recognise struct members and fold them.
 function Get-DuneSchemaStructFieldMap {
@@ -2567,8 +2622,11 @@ function Get-DuneGameConfigSchemaApi {
         # Experimental controls are shown on their own page, grouped by what they
         # affect. Everything else keeps its Game Config category as the grouping.
         if ($cat -like 'Experimental*') {
-            $field.group = (Get-DuneExperimentalGroup -Key "$($f.Key)")
+            $field.group = if ($f.ContainsKey('Group') -and $f.Group) { [string]$f.Group } else { (Get-DuneExperimentalGroup -Key "$($f.Key)") }
             $field.status = if ($f.ContainsKey('Status')) { [string]$f.Status } else { 'Unconfirmed' }
+            $field.source = if ($f.ContainsKey('Source')) { [string]$f.Source } else { 'Dune' }
+            $field.scope = if ($f.ContainsKey('Scope')) { [string]$f.Scope } elseif ($f.ContainsKey('ClientApply') -and $f.ClientApply) { 'Server + client' } else { 'Server' }
+            $field.risk = if ($f.ContainsKey('Risk')) { [string]$f.Risk } else { 'experimental' }
         }
         $byCat[$cat].Add($field)
     }

@@ -155,6 +155,14 @@ Register-DuneRoute -Method PUT -Path '/api/gameconfig' -Handler {
         Write-DuneError -Response $res -Status 400 -Message 'No recognized keys in updates.'
         return
     }
+    foreach ($update in $structured) {
+        if ($update.key -in $script:DuneStartupConsoleVariableKeys -and
+            -not $update.remove -and
+            -not (Test-DuneStartupConsoleVariableValue -Value "$($update.value)")) {
+            Write-DuneError -Response $res -Status 400 -Message "$($update.key) contains a comma, quote, control character, or exceeds 512 characters and cannot be encoded in the saved startup payload."
+            return
+        }
+    }
 
     try {
         Save-DuneGameConfig -Ip $ctx.ip -Updates $structured.ToArray()
