@@ -330,6 +330,42 @@ function New-DstDiagnosticBundle {
         $warnings.Add('Game config helpers not loaded — INI snapshot skipped.')
     }
 
+    # 6b2) Local player-client INI snapshot ----------------------------------
+    # Server/client setting mismatches cannot be diagnosed from the VM files
+    # alone. Capture the local files DST actually reads and writes.
+    if (Get-Command Get-DuneGameConfigClient -ErrorAction SilentlyContinue) {
+        try {
+            $clientGc = Get-DuneGameConfigClient
+            foreach ($pair in @(
+                @{ key = 'game';   file = 'ClientGame.ini' },
+                @{ key = 'engine'; file = 'ClientEngine.ini' }
+            )) {
+                $node = $clientGc[$pair.key]
+                if (-not $node -or -not $node.exists) {
+                    $warnings.Add("Local client config: $($pair.file) was not found at the configured path.")
+                    continue
+                }
+                $raw = [string]$node.raw
+                if ([string]::IsNullOrWhiteSpace($raw)) {
+                    $warnings.Add("Local client config: $($pair.file) was empty.")
+                    continue
+                }
+                $dupes   = Get-DstIniDuplicateHeaders -Raw $raw
+                $dupLine = if ($dupes.Count -gt 0) { 'DUPLICATE SECTION HEADERS: ' + ($dupes -join '; ') } else { 'No duplicate section headers detected.' }
+                $header  = "# $($pair.file) snapshot (sanitized; path: $($node.path))`r`n# $dupLine`r`n`r`n"
+                $san     = Invoke-DstRedaction -Text ($header + $raw) @redactArgs
+                $outName = "$($pair.file).snapshot.txt"
+                $out     = Join-Path $stageDir $outName
+                Set-Content -LiteralPath $out -Value $san -Encoding UTF8
+                $included.Add(@{ name = $outName; bytes = (Get-Item -LiteralPath $out).Length })
+            }
+        } catch {
+            $warnings.Add("Local client config snapshot failed: $($_.Exception.Message)")
+        }
+    } else {
+        $warnings.Add('Local client config helpers not loaded — client INI snapshot skipped.')
+    }
+
     # 6c) Scheduled-restart state -------------------------------------------
     # Helps diagnose "my restart didn't fire" / stale Funcom-update badge bugs.
     # The discordWebhookUrl is a secret (grants posting to the user's channel),
@@ -719,6 +755,8 @@ done
     $manLines.Add('')
     $manLines.Add('Game config snapshots (UserGame.ini / UserEngine.ini) are pulled live from')
     $manLines.Add('the VM when reachable, sanitized, and headlined with a duplicate-section check.')
+    $manLines.Add('Local client Game.ini / Engine.ini snapshots are also included when present so')
+    $manLines.Add('client-required settings can be compared with the server values.')
     $manLines.Add('')
     $manLines.Add('gameplay-read-probe.txt re-runs the Players/Bases list queries and records')
     $manLines.Add('COUNTS ONLY (no player names or ids) so "rows but blank detail" bugs are')

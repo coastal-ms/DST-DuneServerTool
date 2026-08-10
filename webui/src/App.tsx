@@ -66,7 +66,7 @@ export default function App() {
               : <Navigate to="/" replace />}
           />
           <Route path="/gameconfig" element={<Boundary name="Game Config"><GameConfig /></Boundary>} />
-          <Route path="/experimental" element={<Boundary name="Experimental"><GameConfig mode="experimental" /></Boundary>} />
+          <Route path="/experimental" element={<Boundary name="Experimental Lab"><GameConfig mode="experimental" /></Boundary>} />
           <Route path="/gameplay"   element={<Boundary name="Gameplay Admin"><GameplayEnvironment /></Boundary>} />
           <Route path="/broadcasts" element={<Boundary name="Broadcasts"><Broadcasts /></Boundary>} />
           <Route path="/database"   element={<Boundary name="Database"><Database /></Boundary>} />
