@@ -840,6 +840,17 @@ Describe 'DuneGameConfigSchema: experimental binary CVars' -Tag 'GameConfig' {
         (Get-DuneExperimentalGroup -Key 'Totally.MadeUpKey') | Should -Be 'Uncategorized'
     }
 
+    It 'loads the advanced catalog as individual fields under Windows PowerShell 5.1' -Skip:($env:OS -ne 'Windows_NT') {
+        $gameConfigPath = (Resolve-Path (Join-Path $PSScriptRoot '..\app\server\lib\GameConfig.ps1')).Path.Replace("'", "''")
+        $command = ". '$gameConfigPath'; " +
+            '$lab = @($script:DuneGameConfigSchema | Where-Object Category -eq ''Experimental Lab''); ' +
+            'Write-Output $lab.Count; Write-Output ([string]$lab[0].Key).Length'
+        $result = @(& powershell.exe -NoProfile -ExecutionPolicy Bypass -Command $command)
+
+        [int]$result[0] | Should -BeGreaterThan 4900
+        [int]$result[1] | Should -BeLessThan 256
+    }
+
     It 'promotes field-confirmed controls out of Experimental without losing startup injection' {
         # Promotion is a metadata flip: a proven control leaves the Experimental
         # pages for a real category. Startup=$true must travel with it, because
