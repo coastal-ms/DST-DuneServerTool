@@ -13,6 +13,11 @@ here cover everything those tags shipped.
 
 ## [Unreleased]
 
+### Fixed
+
+- **Public IP Apply no longer has to capture a co-hosted VPN or relay endpoint.** The Public IP / DDNS card now keeps the existing same-PC public-IP loopback route enabled by default, but provides an explicit opt-out for WireGuard, VPN, and VPS relay hosts. Applying with the option off removes only the matching public-IP `/32` route through the Dune VM and leaves unrelated Windows routes unchanged.
+- **Saved manual relay addresses remain authoritative across restarts and connection repairs.** Public IP Apply now pins K3s startup to the applied address instead of rediscovering another address from the VM interface, and the P34 diagnostic no longer replaces a deliberate manual VPN or VPS relay address with the host's detected WAN IP.
+
 ## [13.5.3] - 2026-08-08
 
 ### Added

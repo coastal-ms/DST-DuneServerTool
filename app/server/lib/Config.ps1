@@ -15,6 +15,7 @@ $script:DuneConfigKeys = @(
     'ManualPublicIp',
     'LastResolvedPublicIp',
     'LastAppliedPublicIp',
+    'PublicIpHostRouteEnabled',
     'OpenInAppWindow',
     'ConsolePresence',
     'ConsolePresenceVersion',
@@ -173,6 +174,23 @@ function Get-DuneLocalBackupMirrorFolder {
     $raw = Read-DuneConfigRaw
     $v = if ($raw.Contains('LocalBackupMirrorFolder')) { [string]$raw['LocalBackupMirrorFolder'] } else { '' }
     return $v.Trim()
+}
+
+# Windows host route used only for same-PC public-IP loopback. Default on keeps
+# existing behavior; relay/VPN hosts can explicitly disable it.
+function Get-DunePublicIpHostRouteEnabled {
+    try {
+        $raw = Read-DuneConfigRaw
+        $v = if ($raw.Contains('PublicIpHostRouteEnabled')) { [string]$raw['PublicIpHostRouteEnabled'] } else { '' }
+        return ($v -notmatch '^(?i:false|0|no|off)$')
+    } catch {}
+    return $true
+}
+
+function Set-DunePublicIpHostRouteEnabled {
+    param([bool]$Enabled)
+    [void](Save-DuneConfig -Config @{ PublicIpHostRouteEnabled = $(if ($Enabled) { 'true' } else { 'false' }) })
+    return (Get-DunePublicIpHostRouteEnabled)
 }
 
 # Hyper-V VM host location. 'local' (default) = the VM runs in Hyper-V on THIS

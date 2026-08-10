@@ -119,6 +119,14 @@ a second router/modem sits in front of yours. In your router's admin, read its
   Tailscale Funnel only exposes the **admin dashboard** to your phone — it does
   **not** route game traffic.)
 
+If the relay's public IP is also the WireGuard or VPN endpoint used by this
+Windows host, turn off **Enable same-PC public-IP loopback route** before
+applying that manual IP. Otherwise Windows sends all host traffic for the relay
+IP to the Dune VM, including the tunnel handshake. With the option off, Apply
+removes only DST's matching `/32` route to the VM; outside players still use the
+relay normally, but this PC may no longer be able to test the server through its
+public IP.
+
 ---
 
 ## Section C — The server dropped off the browser (can't register)
