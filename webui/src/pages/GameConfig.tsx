@@ -221,8 +221,10 @@ export function buildAllClientBlocks(
 }
 
 function isExperimentalCategory(category: string): boolean {
-  return category === 'Experimental' || category === 'Experimental 2'
+  return category.startsWith('Experimental')
 }
+
+const EXPERIMENTAL_PAGE_SIZE = 40
 
 // Build file-aware client blocks for a category's customised scalar fields.
 function buildCategoryClientBlocks(
@@ -379,6 +381,10 @@ export function GameConfig({ mode = 'standard' }: { mode?: 'standard' | 'experim
   const [clientApply, setClientApply] = useState<GameConfigClientApply | null>(null)
   const [sandwormModalOpen, setSandwormModalOpen] = useState(false)
   const [search, setSearch] = useState('')
+  const [experimentalSource, setExperimentalSource] = useState<'all' | 'Dune' | 'Engine'>('all')
+  const [experimentalRisk, setExperimentalRisk] = useState<'all' | 'experimental' | 'diagnostic' | 'high' | 'critical'>('all')
+  const [experimentalModifiedOnly, setExperimentalModifiedOnly] = useState(false)
+  const [experimentalPageIndex, setExperimentalPageIndex] = useState(0)
   // "Give players this" section share popup (client-side Game.ini block).
   const [shareBlock, setShareBlock] = useState<{ title: string; subtitle?: string; entries: ClientShareEntry[] } | null>(null)
   const [backing, setBacking] = useState(false)
@@ -927,6 +933,20 @@ export function GameConfig({ mode = 'standard' }: { mode?: 'standard' | 'experim
     return m
   }, [schema])
 
+  const surfacedIniTargets = useMemo(() => {
+    const keys = new Set<string>()
+    for (const category of schema ?? []) {
+      for (const field of category.fields ?? []) {
+        if (!field?.key) continue
+        keys.add(`${field.file}||${field.section}||${field.key}`.toLowerCase())
+        if (field.structKey) {
+          keys.add(`${field.file}||${field.section}||${field.structKey}`.toLowerCase())
+        }
+      }
+    }
+    return keys
+  }, [schema])
+
   const experimentalStartupKeys = useMemo(() => {
     const keys = new Set<string>()
     for (const category of schema ?? []) {
@@ -967,7 +987,37 @@ export function GameConfig({ mode = 'standard' }: { mode?: 'standard' | 'experim
   // this page, so Game Config and Experimental show the identical list.
   const playerConfig = useMemo(() => buildAllClientBlocks(schema, cfg), [schema, cfg])
 
-  const filteredSchema = useMemo(() => {    if (!visibleSchema) return null
+  const experimentalFilteredFields = useMemo(() => {
+    if (!experimentalPage || !visibleSchema) return [] as GameConfigField[]
+    const q = search.trim().toLowerCase()
+    return visibleSchema
+      .flatMap(category => category.fields ?? [])
+      .filter(field => {
+        if (experimentalSource !== 'all' && field.source !== experimentalSource) return false
+        if (experimentalRisk !== 'all' && field.risk !== experimentalRisk) return false
+        if (experimentalModifiedOnly && !isCustomized(cfg, field)) return false
+        if (!q) return true
+        return (field.label ?? '').toLowerCase().includes(q)
+          || (field.key ?? '').toLowerCase().includes(q)
+          || (field.help ?? '').toLowerCase().includes(q)
+          || (field.group ?? '').toLowerCase().includes(q)
+      })
+      .sort((a, b) => (a.group ?? '').localeCompare(b.group ?? '') || a.key.localeCompare(b.key))
+  }, [experimentalPage, visibleSchema, search, experimentalSource, experimentalRisk, experimentalModifiedOnly, cfg])
+
+  useEffect(() => {
+    setExperimentalPageIndex(0)
+  }, [search, experimentalSource, experimentalRisk, experimentalModifiedOnly])
+
+  const filteredSchema = useMemo(() => {
+    if (!visibleSchema) return null
+    if (experimentalPage) {
+      const start = experimentalPageIndex * EXPERIMENTAL_PAGE_SIZE
+      return [{
+        category: 'Experimental Lab',
+        fields: experimentalFilteredFields.slice(start, start + EXPERIMENTAL_PAGE_SIZE),
+      }]
+    }
     const q = search.trim().toLowerCase()
     if (!q) return visibleSchema
     return visibleSchema
@@ -982,7 +1032,7 @@ export function GameConfig({ mode = 'standard' }: { mode?: 'standard' | 'experim
         ),
       }))
       .filter(cat => cat.fields.length > 0)
-  }, [visibleSchema, search])
+  }, [visibleSchema, search, experimentalPage, experimentalFilteredFields, experimentalPageIndex])
 
   async function onSubmit(e: FormEvent) {
     e.preventDefault()
@@ -997,9 +1047,8 @@ export function GameConfig({ mode = 'standard' }: { mode?: 'standard' | 'experim
         + (experimentalPage
             ? 'These are written to the server UserEngine.ini. Nothing on the server changes until you restart the battlegroup — use “Apply INIs & restart” in the bar at the bottom of this page. Saving on its own does not disconnect anyone.\n\n'
             : 'These are written to the server UserEngine.ini. Nothing on the server changes until you restart the battlegroup — use “Apply INIs & restart”. Saving on its own does not disconnect anyone.\n\n')
-        + 'Confirmed behavior: some Experimental settings require matching client-side Engine.ini values before they take full effect. '
-        + 'Every player may need compatible local values: normally the same value as the server, or an equal/higher value for client-enforced limits. '
-        + 'These client edits do not affect public/live servers; those servers remain authoritative.\n\n'
+        + 'Only controls explicitly marked Client are known to read a local Engine.ini value. '
+        + 'Unknown-scope Lab controls stay server-side so field tests are not contaminated by an unnecessary client override.\n\n'
         + `${engineStatus} Turn it on under “Your client config” at the top of this page to let DST manage those values.`,
       )
       if (!ok) return
@@ -1100,10 +1149,10 @@ export function GameConfig({ mode = 'standard' }: { mode?: 'standard' | 'experim
   return (
     <>
       <PageHeader
-        title={experimentalPage ? 'Experimental' : 'Game Config'}
+        title={experimentalPage ? 'Experimental Lab' : 'Game Config'}
         icon={experimentalPage ? 'FlaskConical' : 'Sliders'}
         description={experimentalPage
-          ? 'Server console variables recovered from the game binary, grouped by what they affect. Saving writes them to UserEngine.ini; apply them from Game Config.'
+          ? 'Complete recovered CVar and live default-INI catalog. Curated DST controls are excluded; saved overrides apply on the next DST battlegroup restart.'
           : 'UserGame.ini + UserEngine.ini editor. Edits are tracked in a DST-managed block written to the live battlegroup.'}
         actions={
           <div className="flex items-center gap-2">
@@ -1168,16 +1217,17 @@ export function GameConfig({ mode = 'standard' }: { mode?: 'standard' | 'experim
           {experimentalPage ? (
             <>
               <p className="text-xs text-text-muted leading-relaxed">
-                These are server console variables read out of the game binary and written to your battlegroup&apos;s{' '}
-                <span className="font-mono">UserEngine.ini</span>. Their descriptions quote Funcom&apos;s own wording, which says what a
-                control was <em>meant</em> to do — several read perfectly and do nothing at all.{' '}
+                Experimental Lab exposes recovered Dune and Unreal Engine console variables plus every setting in the live game&apos;s
+                default INIs that DST does not already surface. CVar overrides are staged in{' '}
+                <span className="font-mono">UserEngine.ini</span>; default-INI overrides keep their original file and section. Descriptions
+                are recovered metadata, not proof the shipped build uses a control.{' '}
                 <span className="text-text font-medium">Back up first and change one setting at a time.</span>
               </p>
               <p className="text-xs text-warning/90 leading-relaxed mt-1.5">
                 Saving here changes nothing on a running server — use “Apply INIs &amp; restart” in the bar at the
-                bottom of this page, or the same
-                command on the Commands page. Many of these also need a matching value on each player&apos;s PC; use
-                “Player config” below to get the exact lines to hand out.
+                bottom of this page, or the same command on the Commands page. Critical and high-risk controls can crash,
+                disconnect, corrupt state, or sharply reduce performance. Client behavior is unknown unless a control is explicitly
+                marked Client.
               </p>
             </>
           ) : (
@@ -1700,6 +1750,44 @@ export function GameConfig({ mode = 'standard' }: { mode?: 'standard' | 'experim
             />
           </div>
 
+          {experimentalPage && (
+            <div className="mb-4 flex flex-wrap items-center gap-2">
+              <select
+                value={experimentalSource}
+                onChange={e => setExperimentalSource(e.target.value as typeof experimentalSource)}
+                className="px-3 py-2 rounded-lg bg-surface-2 border border-border text-text text-xs"
+                aria-label="CVar source"
+              >
+                <option value="all">All sources</option>
+                <option value="Dune">Dune gameplay</option>
+                <option value="Engine">Unreal Engine</option>
+              </select>
+              <select
+                value={experimentalRisk}
+                onChange={e => setExperimentalRisk(e.target.value as typeof experimentalRisk)}
+                className="px-3 py-2 rounded-lg bg-surface-2 border border-border text-text text-xs"
+                aria-label="Risk level"
+              >
+                <option value="all">All risk levels</option>
+                <option value="experimental">Experimental</option>
+                <option value="diagnostic">Diagnostic</option>
+                <option value="high">High risk</option>
+                <option value="critical">Critical</option>
+              </select>
+              <label className="inline-flex items-center gap-2 px-3 py-2 rounded-lg bg-surface-2 border border-border text-xs text-text-muted">
+                <input
+                  type="checkbox"
+                  checked={experimentalModifiedOnly}
+                  onChange={e => setExperimentalModifiedOnly(e.target.checked)}
+                />
+                Modified only
+              </label>
+              <span className="text-xs text-text-dim ml-auto">
+                {experimentalFilteredFields.length.toLocaleString()} recovered controls
+              </span>
+            </div>
+          )}
+
           <div className="space-y-5">
             {(filteredSchema ?? []).map(cat => {
               // On the Experimental page a "category" is a theme built from
@@ -1713,11 +1801,11 @@ export function GameConfig({ mode = 'standard' }: { mode?: 'standard' | 'experim
               <CategoryCard
                 key={cat.category}
                 category={cat.category}
-                count={(cat.fields ?? []).length}
+                count={experimentalPage ? experimentalFilteredFields.length : (cat.fields ?? []).length}
                 clientBlock={share.count > 0 ? 'available' : ''}
                 hasClientFields={share.hasClientFields}
                 onShare={() => setShareBlock({ title: `${cat.category} — give players this`, entries: share.entries })}
-                forceOpen={search.trim() !== ''}
+                forceOpen={experimentalPage || search.trim() !== ''}
                 isExperimental={experimentalPage}
               >
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-x-6 gap-y-4">
@@ -1737,7 +1825,33 @@ export function GameConfig({ mode = 'standard' }: { mode?: 'standard' | 'experim
                       />
                     ) : null
                   ))}
+                  {experimentalPage && (cat.fields ?? []).length === 0 && (
+                    <div className="md:col-span-2 text-sm text-text-muted">No recovered controls match these filters.</div>
+                  )}
                 </div>
+                {experimentalPage && experimentalFilteredFields.length > EXPERIMENTAL_PAGE_SIZE && (
+                  <div className="mt-5 pt-3 border-t border-border flex items-center justify-between gap-3">
+                    <button
+                      type="button"
+                      className="btn-secondary"
+                      disabled={experimentalPageIndex === 0}
+                      onClick={() => setExperimentalPageIndex(i => Math.max(0, i - 1))}
+                    >
+                      Previous
+                    </button>
+                    <span className="text-xs text-text-muted">
+                      Page {experimentalPageIndex + 1} of {Math.ceil(experimentalFilteredFields.length / EXPERIMENTAL_PAGE_SIZE)}
+                    </span>
+                    <button
+                      type="button"
+                      className="btn-secondary"
+                      disabled={(experimentalPageIndex + 1) * EXPERIMENTAL_PAGE_SIZE >= experimentalFilteredFields.length}
+                      onClick={() => setExperimentalPageIndex(i => i + 1)}
+                    >
+                      Next
+                    </button>
+                  </div>
+                )}
                 {/* Not an INI field, but it belongs with the base backup
                     settings: allowing the tool in the Deep Desert without this
                     means a stored base is recyclable-only after every reset. */}
@@ -1759,10 +1873,15 @@ export function GameConfig({ mode = 'standard' }: { mode?: 'standard' | 'experim
 
                 <LandclaimTimerCard vmRunning={vmRunning} />
 
-                <DefaultsCatalogBrowser vmRunning={vmRunning} onSaved={() => void loadAll()} />
-
                 {cfg && <AdvancedIniBrowser cfg={cfg} />}
               </>
+            )}
+            {experimentalPage && (
+              <DefaultsCatalogBrowser
+                vmRunning={vmRunning}
+                onSaved={() => void loadAll()}
+                excludedTargets={surfacedIniTargets}
+              />
             )}
           </div>
 
@@ -2100,7 +2219,7 @@ function CategoryCard({
                 These CVars are written to the battlegroup&apos;s <span className="font-mono text-text">UserEngine.ini</span> under <span className="font-mono text-text">[ConsoleVariables]</span>. Saving changes nothing on a running server: the values are applied to the game servers when the battlegroup restarts, so use <strong className="text-text">Apply INIs &amp; restart</strong> to put them into effect. After saving, DST offers to mirror the same values into this PC&apos;s client <span className="font-mono text-text">Engine.ini</span>; close the game before applying them.
               </p>
               <p className="mt-1.5">
-                Experimental and Experimental 2 together hold 137 controls read out of the server binary — the second list is simply the overflow, applied exactly the same way. Fuel Burning Duration, Double Difficulty Loot, and the three Landsraad reward multipliers have community field confirmation; the rest are unconfirmed, and their descriptions quote Funcom&apos;s own wording rather than a promise about what the shipped build does. Some may have no effect or unintended consequences. Controls that Funcom documents as crashing clients, that exist to crash or disconnect servers on purpose, that guard against item duplication, or that duplicate a setting already on this page are deliberately left out. Back up first and change one setting at a time.
+                Experimental Lab includes recovered Dune and Unreal Engine controls that are not already surfaced by DST. Risk badges identify known crash, persistence, networking, performance, and diagnostic hazards; they do not make lower-risk controls field-confirmed. Back up first and change one setting at a time.
               </p>
             </div>
           )}
@@ -2177,6 +2296,23 @@ function FieldRow({ field, value, onChange, disabled, isDirty, isSet, isCustom, 
               CVar
             </span>
           )}
+          {field.source && (
+            <span className="text-[9px] font-semibold uppercase tracking-wider px-1.5 py-0.5 rounded bg-surface-2 text-text-muted" title={`${field.source} catalog; scope: ${field.scope ?? 'Unknown'}`}>
+              {field.source}
+            </span>
+          )}
+          {field.risk && field.risk !== 'experimental' && (
+            <span className={
+              'text-[9px] font-semibold uppercase tracking-wider px-1.5 py-0.5 rounded ' +
+              (field.risk === 'critical'
+                ? 'bg-danger/20 text-danger'
+                : field.risk === 'high'
+                  ? 'bg-warning/20 text-warning'
+                  : 'bg-surface-2 text-text-dim')
+            } title={`${field.risk} risk; behavior is not validated`}>
+              {field.risk}
+            </span>
+          )}
           {field.clientApply && !field.consoleVar && (
             <span className="text-[9px] font-semibold uppercase tracking-wider px-1.5 py-0.5 rounded bg-surface-2 text-text-muted" title="Client-enforced — each player also needs a matching (or equal/higher) value in their own client INI before this takes full effect. Use “Player config” to get the exact lines to hand out.">
               Client
@@ -2245,7 +2381,9 @@ function FieldRow({ field, value, onChange, disabled, isDirty, isSet, isCustom, 
 
       <div className="mt-1 flex items-center justify-between gap-2">
         {field.help && <p className="text-xs text-text-dim">{field.help}</p>}
-        <span className="text-[10px] font-mono text-text-dim ml-auto truncate" title={`${field.section} / ${field.key}`}>{field.key}</span>
+        {field.label !== field.key && (
+          <span className="text-[10px] font-mono text-text-dim ml-auto truncate" title={`${field.section} / ${field.key}`}>{field.key}</span>
+        )}
       </div>
     </div>
   )
@@ -2286,10 +2424,11 @@ function BoolToggle({ on, off, value, disabled, onChange }: { on: string; off: s
 // -----------------------------------------------------------------------------
 
 function DefaultsCatalogBrowser({
-  vmRunning, onSaved,
+  vmRunning, onSaved, excludedTargets,
 }: {
   vmRunning: boolean
   onSaved: () => void
+  excludedTargets?: Set<string>
 }) {
   const { open, setOpen } = useCardCollapse('gameconfig.defaultsCatalog', false)
   const [data, setData] = useState<GameConfigDefaultsResponse | null>(null)
@@ -2341,13 +2480,22 @@ function DefaultsCatalogBrowser({
   const sectionsFiltered = useMemo(() => {
     if (!data) return [] as GameConfigDefaultSection[]
     const q = search.trim().toLowerCase()
-    return data.sections.filter(s => {
+    return data.sections.map(s => {
+      const keys = s.keys.filter(k => !excludedTargets?.has(`${s.file}||${s.name}||${k.key}`.toLowerCase()))
+      return {
+        ...s,
+        keys,
+        count: keys.length,
+        overriddenCount: keys.filter(k => k.overridden).length,
+      }
+    }).filter(s => {
+      if (s.keys.length === 0) return false
       if (fileFilter !== 'all' && s.file !== fileFilter) return false
       if (!q) return true
       if (s.name.toLowerCase().includes(q)) return true
       return s.keys.some(k => k.key.toLowerCase().includes(q))
     })
-  }, [data, search, fileFilter])
+  }, [data, search, fileFilter, excludedTargets])
 
   const toggleSection = (name: string) => {
     setExpanded(prev => {
@@ -2495,7 +2643,7 @@ function DefaultsCatalogBrowser({
       >
         <span className="flex items-center gap-2">
           <Icon name={open ? 'ChevronDown' : 'ChevronRight'} size={14} />
-          All default settings (browse &amp; override)
+          Remaining default INI settings
         </span>
         <span className="text-[10px] font-normal text-text-dim normal-case tracking-normal">
           {data ? `${data.sections.length} sections` : 'lazy-loaded'}
@@ -2510,7 +2658,8 @@ function DefaultsCatalogBrowser({
 
           {vmRunning && (
             <div className="rounded-lg border border-border/60 bg-surface-2/50 px-3 py-2 text-[11px] text-text-muted leading-relaxed">
-              <span className="text-text-dim font-semibold">Advanced settings.</span> Each row here is one line
+              <span className="text-text-dim font-semibold">Live default INI catalog.</span> Curated Game Config and CVar keys are excluded.
+              Each remaining row is one line
               in <span className="font-mono text-text-dim">DefaultGame.ini</span> or <span className="font-mono text-text-dim">DefaultEngine.ini</span>.
               Rows tagged <span className="font-mono text-warning">[+]</span> or <span className="font-mono text-warning">[-]</span> are
               array entries — one struct value per row. Click <span className="font-semibold text-text-dim">Edit</span> to open a textarea;

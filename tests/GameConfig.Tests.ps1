@@ -245,11 +245,33 @@ Describe 'Fuel burning startup override' -Tag 'GameConfig' {
             Should -BeLike '*dw.FuelBurningMultiplier 6*'
     }
 
-    It 'still rejects a value that is neither numeric nor boolean' {
+    It 'accepts safe string-valued console variables' {
+        Mock Get-V6Battlegroup {
+            [pscustomobject]@{
+                Name = 'bg'; Ns = 'dune'
+                Bg = [pscustomobject]@{
+                    spec = [pscustomobject]@{
+                        serverGroup = [pscustomobject]@{
+                            template = [pscustomobject]@{
+                                spec = [pscustomobject]@{ sets = @() }
+                            }
+                        }
+                    }
+                    status = [pscustomobject]@{ servers = @() }
+                }
+            }
+        }
         { Set-V6ConsoleVariableOverrides -Ip '192.0.2.1' `
-            -Names @('dw.FuelBurningMultiplier') `
-            -Values @{ 'dw.FuelBurningMultiplier' = 'banana' } } |
-            Should -Throw '*finite number or true/false*'
+            -Names @('Bgd.ServerRuleset') `
+            -Values @{ 'Bgd.ServerRuleset' = 'custom-rules' } } |
+            Should -Not -Throw
+    }
+
+    It 'rejects string values that cannot be encoded in ExecCmds' {
+        { Set-V6ConsoleVariableOverrides -Ip '192.0.2.1' `
+            -Names @('Bgd.ServerRuleset') `
+            -Values @{ 'Bgd.ServerRuleset' = 'unsafe,value' } } |
+            Should -Throw '*cannot be encoded in ExecCmds*'
     }
 
     It 'merges fuel and a per-sietch name into one ExecCmds argument' {
@@ -789,11 +811,10 @@ Describe 'DuneGameConfigSchema: experimental binary CVars' -Tag 'GameConfig' {
             $fields[$key].Category | Should -BeLike 'Experimental*'
             @($script:DuneStartupConsoleVariableKeys) | Should -Contain $key
         }
-        # Both lists are applied identically; the split is presentation only.
-        # 127 still on the Experimental pages + the 10 promoted controls + the 12
-        # pre-existing console variables in real categories, all of which keep
-        # startup injection via Startup=$true.
-        @($script:DuneStartupConsoleVariableKeys).Count | Should -Be 149
+        $lab = @($script:DuneGameConfigSchema | Where-Object Category -eq 'Experimental Lab')
+        $lab.Count | Should -BeGreaterThan 4900
+        $script:DuneAdvancedCvarLoadError | Should -BeNullOrEmpty
+        @($script:DuneStartupConsoleVariableKeys).Count | Should -BeGreaterThan 5000
     }
 
     It 'groups every experimental control for the Experimental page' {
@@ -802,10 +823,12 @@ Describe 'DuneGameConfigSchema: experimental binary CVars' -Tag 'GameConfig' {
         # Uncategorized rather than being forced into a neighbouring group.
         $api = @(Get-DuneGameConfigSchemaApi)
         $fields = @($api | Where-Object { $_.category -like 'Experimental*' } | ForEach-Object { $_.fields })
-        $fields.Count | Should -Be 127
+        $fields.Count | Should -BeGreaterThan 5000
         foreach ($f in $fields) {
             $f.group | Should -Not -BeNullOrEmpty
             $f.status | Should -BeIn @('Confirmed', 'Unconfirmed')
+            $f.source | Should -BeIn @('Dune', 'Engine')
+            $f.risk | Should -BeIn @('experimental', 'diagnostic', 'high', 'critical')
         }
         # Namespace rules must win over keyword ones: a sandworm control that
         # mentions vehicles is a sandworm control.
@@ -947,11 +970,7 @@ Describe 'DuneGameConfigSchema: experimental binary CVars' -Tag 'GameConfig' {
         }
     }
 
-    It 'excludes controls that crash clients, inject faults, or guard data integrity' {
-        # Recovered from the binary but deliberately not exposed: the dehydration
-        # zones crash clients (DUNE-76437), the igw Auth* switches exist to crash
-        # or disconnect servers on purpose, and the duplicate-item switches guard
-        # against item duplication.
+    It 'surfaces dangerous controls with critical risk metadata' {
         foreach ($key in @(
             'Hazard.DehydrationZonesEnabled'
             'dw.igw.EnableAuthConfirmGainingCrash'
@@ -962,7 +981,9 @@ Describe 'DuneGameConfigSchema: experimental binary CVars' -Tag 'GameConfig' {
             'SecurityZones.ForceEnablePvp'
             'dw.EnableDeveloperMode'
         )) {
-            @($script:DuneGameConfigSchema.Key) | Should -Not -Contain $key
+            $field = @($script:DuneGameConfigSchema | Where-Object Key -eq $key)
+            $field.Count | Should -Be 1
+            $field[0].Risk | Should -Be 'critical'
         }
     }
 
@@ -1088,6 +1109,7 @@ $script:DstManagedEnd
         )) {
             $fields[$key].Type | Should -Be 'bool01'
         }
+
         foreach ($key in @(
             'dw.LandsraadMissionRewardMultiplierFactionXP',
             'dw.LandsraadMissionRewardMultiplierHouseCredit',
@@ -1120,6 +1142,13 @@ $script:DstManagedEnd
         )) {
             $fields[$key].ContainsKey('Default') | Should -BeFalse -Because "$key has no reliably recovered compiled default"
         }
+    }
+
+    It 'validates advanced CVar values before they can poison the restart payload' {
+        Test-DuneStartupConsoleVariableValue -Value 'custom-rules' | Should -BeTrue
+        Test-DuneStartupConsoleVariableValue -Value 'true' | Should -BeTrue
+        Test-DuneStartupConsoleVariableValue -Value 'unsafe,value' | Should -BeFalse
+        Test-DuneStartupConsoleVariableValue -Value 'unsafe"value' | Should -BeFalse
     }
 
     It 'keeps experimental CVars out of local client changes' {
@@ -1167,10 +1196,11 @@ $script:DstManagedEnd
         $field[0].ClientApply | Should -BeTrue
     }
 
-    It 'places the Experimental lists last in the curated schema API, in order' {
+    It 'places the Experimental catalogs last in the curated schema API, in order' {
         $cats = @((Get-DuneGameConfigSchemaApi) | ForEach-Object { $_.category })
-        $cats[-2] | Should -Be 'Experimental'
-        $cats[-1] | Should -Be 'Experimental 2'
+        $cats[-3] | Should -Be 'Experimental'
+        $cats[-2] | Should -Be 'Experimental 2'
+        $cats[-1] | Should -Be 'Experimental Lab'
     }
 
     It 'persists experimental controls in the UserEngine ConsoleVariables section' {
