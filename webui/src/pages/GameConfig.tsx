@@ -224,7 +224,7 @@ function isExperimentalCategory(category: string): boolean {
   return category.startsWith('Experimental')
 }
 
-const EXPERIMENTAL_PAGE_SIZE = 40
+const EXPERIMENTAL_PAGE_SIZE = 25
 
 // Build file-aware client blocks for a category's customised scalar fields.
 function buildCategoryClientBlocks(
@@ -381,6 +381,7 @@ export function GameConfig({ mode = 'standard' }: { mode?: 'standard' | 'experim
   const [clientApply, setClientApply] = useState<GameConfigClientApply | null>(null)
   const [sandwormModalOpen, setSandwormModalOpen] = useState(false)
   const [search, setSearch] = useState('')
+  const [experimentalGroup, setExperimentalGroup] = useState<string | null>(null)
   const [experimentalSource, setExperimentalSource] = useState<'all' | 'Dune' | 'Engine'>('all')
   const [experimentalRisk, setExperimentalRisk] = useState<'all' | 'experimental' | 'diagnostic' | 'high' | 'critical'>('all')
   const [experimentalModifiedOnly, setExperimentalModifiedOnly] = useState(false)
@@ -987,12 +988,24 @@ export function GameConfig({ mode = 'standard' }: { mode?: 'standard' | 'experim
   // this page, so Game Config and Experimental show the identical list.
   const playerConfig = useMemo(() => buildAllClientBlocks(schema, cfg), [schema, cfg])
 
+  const experimentalGroups = useMemo(
+    () => experimentalPage
+      ? (visibleSchema ?? []).map(category => ({
+          name: category.category,
+          count: (category.fields ?? []).length,
+        }))
+      : [],
+    [experimentalPage, visibleSchema],
+  )
+  const selectedExperimentalGroup = experimentalGroup ?? experimentalGroups[0]?.name ?? 'all'
+
   const experimentalFilteredFields = useMemo(() => {
     if (!experimentalPage || !visibleSchema) return [] as GameConfigField[]
     const q = search.trim().toLowerCase()
     return visibleSchema
       .flatMap(category => category.fields ?? [])
       .filter(field => {
+        if (selectedExperimentalGroup !== 'all' && (field.group || 'Uncategorized') !== selectedExperimentalGroup) return false
         if (experimentalSource !== 'all' && field.source !== experimentalSource) return false
         if (experimentalRisk !== 'all' && field.risk !== experimentalRisk) return false
         if (experimentalModifiedOnly && !isCustomized(cfg, field)) return false
@@ -1003,18 +1016,18 @@ export function GameConfig({ mode = 'standard' }: { mode?: 'standard' | 'experim
           || (field.group ?? '').toLowerCase().includes(q)
       })
       .sort((a, b) => (a.group ?? '').localeCompare(b.group ?? '') || a.key.localeCompare(b.key))
-  }, [experimentalPage, visibleSchema, search, experimentalSource, experimentalRisk, experimentalModifiedOnly, cfg])
+  }, [experimentalPage, visibleSchema, selectedExperimentalGroup, search, experimentalSource, experimentalRisk, experimentalModifiedOnly, cfg])
 
   useEffect(() => {
     setExperimentalPageIndex(0)
-  }, [search, experimentalSource, experimentalRisk, experimentalModifiedOnly])
+  }, [selectedExperimentalGroup, search, experimentalSource, experimentalRisk, experimentalModifiedOnly])
 
   const filteredSchema = useMemo(() => {
     if (!visibleSchema) return null
     if (experimentalPage) {
       const start = experimentalPageIndex * EXPERIMENTAL_PAGE_SIZE
       return [{
-        category: 'Experimental Lab',
+        category: selectedExperimentalGroup === 'all' ? 'All categories' : selectedExperimentalGroup,
         fields: experimentalFilteredFields.slice(start, start + EXPERIMENTAL_PAGE_SIZE),
       }]
     }
@@ -1032,7 +1045,7 @@ export function GameConfig({ mode = 'standard' }: { mode?: 'standard' | 'experim
         ),
       }))
       .filter(cat => cat.fields.length > 0)
-  }, [visibleSchema, search, experimentalPage, experimentalFilteredFields, experimentalPageIndex])
+  }, [visibleSchema, search, experimentalPage, selectedExperimentalGroup, experimentalFilteredFields, experimentalPageIndex])
 
   async function onSubmit(e: FormEvent) {
     e.preventDefault()
@@ -1753,6 +1766,19 @@ export function GameConfig({ mode = 'standard' }: { mode?: 'standard' | 'experim
           {experimentalPage && (
             <div className="mb-4 flex flex-wrap items-center gap-2">
               <select
+                value={selectedExperimentalGroup}
+                onChange={e => setExperimentalGroup(e.target.value)}
+                className="min-w-52 px-3 py-2 rounded-lg bg-surface-2 border border-border text-text text-xs"
+                aria-label="Experimental category"
+              >
+                <option value="all">All categories</option>
+                {experimentalGroups.map(group => (
+                  <option key={group.name} value={group.name}>
+                    {group.name} ({group.count.toLocaleString()})
+                  </option>
+                ))}
+              </select>
+              <select
                 value={experimentalSource}
                 onChange={e => setExperimentalSource(e.target.value as typeof experimentalSource)}
                 className="px-3 py-2 rounded-lg bg-surface-2 border border-border text-text text-xs"
@@ -1822,8 +1848,14 @@ export function GameConfig({ mode = 'standard' }: { mode?: 'standard' | 'experim
                         isCustom={isCustomized(cfg, f)}
                         defaultValue={fieldDefault(f)}
                         managed={cfg ? sectionIsManaged(cfg, f) : false}
+                        fixedHeight={experimentalPage}
                       />
                     ) : null
+                  ))}
+                  {experimentalPage && (cat.fields ?? []).length > 0 && Array.from({
+                    length: EXPERIMENTAL_PAGE_SIZE - (cat.fields ?? []).length,
+                  }).map((_, index) => (
+                    <div key={`empty-slot-${index}`} className="h-32 invisible" aria-hidden="true" />
                   ))}
                   {experimentalPage && (cat.fields ?? []).length === 0 && (
                     <div className="md:col-span-2 text-sm text-text-muted">No recovered controls match these filters.</div>
@@ -2240,6 +2272,7 @@ type FieldRowProps = {
   isCustom: boolean
   defaultValue: string
   managed: boolean
+  fixedHeight?: boolean
 }
 
 // Human-friendly rendering of a raw default value for the grayed "Default:" line.
@@ -2254,7 +2287,7 @@ function formatDefaultDisplay(field: GameConfigField, def: string): string {
   return def
 }
 
-function FieldRow({ field, value, onChange, disabled, isDirty, isSet, isCustom, defaultValue, managed }: FieldRowProps) {
+function FieldRow({ field, value, onChange, disabled, isDirty, isSet, isCustom, defaultValue, managed, fixedHeight = false }: FieldRowProps) {
   const inputBase =
     'w-full px-3 py-2 rounded-lg bg-surface-2 border border-border text-text text-sm ' +
     'placeholder:text-text-dim focus:outline-none focus:ring-2 focus:ring-ibad focus:border-ibad/50 ' +
@@ -2270,7 +2303,7 @@ function FieldRow({ field, value, onChange, disabled, isDirty, isSet, isCustom, 
   const resetToDefault = () => { if (!disabled && !atDefault) onChange(defaultValue) }
 
   return (
-    <div className={wide ? 'md:col-span-2' : ''}>
+    <div className={fixedHeight ? 'h-32 overflow-hidden' : wide ? 'md:col-span-2' : ''}>
       <label className="flex items-center justify-between text-sm font-medium mb-1.5 gap-2">
         <span className="flex items-center gap-2 min-w-0">
           <span className="truncate">{field.label}</span>
@@ -2380,7 +2413,7 @@ function FieldRow({ field, value, onChange, disabled, isDirty, isSet, isCustom, 
       )}
 
       <div className="mt-1 flex items-center justify-between gap-2">
-        {field.help && <p className="text-xs text-text-dim">{field.help}</p>}
+        {field.help && <p className={fixedHeight ? 'text-xs text-text-dim line-clamp-2' : 'text-xs text-text-dim'} title={fixedHeight ? field.help : undefined}>{field.help}</p>}
         {field.label !== field.key && (
           <span className="text-[10px] font-mono text-text-dim ml-auto truncate" title={`${field.section} / ${field.key}`}>{field.key}</span>
         )}
