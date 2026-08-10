@@ -14,6 +14,7 @@ type PublicIpStatus = {
   currentPublicIp?: string | null
   vmIp?: string | null
   k3sExternalIp?: string
+  hostRouteEnabled?: boolean
 }
 
 type PublicIpStep = {
@@ -74,6 +75,7 @@ type P34Diagnostic = {
   vmIp?: string | null
   vmPublicIp?: string | null
   k3sExternalIp?: string | null
+  publicIpSource?: 'manual' | 'vm' | 'host' | 'last-applied' | null
   datacenterIps?: string[]
   datacenterPrivate?: boolean
   datacenterStale?: boolean
@@ -113,6 +115,7 @@ export function PublicIpCard() {
   const [mode, setMode] = useState<PublicIpMode>('ddns')
   const [hostname, setHostname] = useState('')
   const [manualIp, setManualIp] = useState('')
+  const [hostRouteEnabled, setHostRouteEnabled] = useState(true)
   const [targetIp, setTargetIp] = useState('')
   const [validatedInput, setValidatedInput] = useState('')
   const [working, setWorking] = useState<'resolve' | 'save-hostname' | 'validate' | 'apply' | null>(null)
@@ -191,6 +194,7 @@ export function PublicIpCard() {
       setMode(r.mode === 'manual' ? 'manual' : 'ddns')
       setHostname(r.hostname ?? '')
       setManualIp(r.manualPublicIp ?? '')
+      setHostRouteEnabled(r.hostRouteEnabled !== false)
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e))
     } finally {
@@ -337,13 +341,13 @@ export function PublicIpCard() {
     const label = mode === 'ddns' ? `${hostname.trim()} -> ${targetIp}` : targetIp
     if (!window.confirm(
       `Apply public IP change?\n\nTarget: ${label}\n\n`
-      + 'This updates the Windows route, VM public IP alias, Dune settings.conf, K3s ExternalIP, the battlegroup (change-battlegroup-ip), NAT, and restarts the battlegroup. '
+      + `This ${hostRouteEnabled ? 'adds or refreshes' : 'removes the matching DST'} Windows host route, updates the VM public IP alias, Dune settings.conf, K3s ExternalIP, the battlegroup (change-battlegroup-ip), NAT, and restarts the battlegroup. `
       + 'It can take several minutes and will briefly disconnect connected players. You can safely leave this page — it keeps running on the server.',
     )) return
 
     const body = mode === 'ddns'
-      ? { mode, hostname, resolvedIp: targetIp, confirmed: true }
-      : { mode, publicIp: targetIp, confirmed: true }
+      ? { mode, hostname, resolvedIp: targetIp, hostRouteEnabled, confirmed: true }
+      : { mode, publicIp: targetIp, hostRouteEnabled, confirmed: true }
     await startApply(body)
   }
 
@@ -355,8 +359,11 @@ export function PublicIpCard() {
   async function fixP34Now() {
     const ip = p34?.vmPublicIp
     if (!ip || applyRunning) return
+    const targetDescription = p34?.publicIpSource === 'manual'
+      ? 'your saved manual public IP (which may be a VPN or VPS relay address)'
+      : "this server's real current public IP"
     if (!window.confirm(
-      `Fix the connection (P34) problem?\n\nDST will set your servers' public IP to ${ip} (this server's real current public IP) and restart the battlegroup so players are routed to the right address.\n\n`
+      `Fix the connection (P34) problem?\n\nDST will set your servers' public IP to ${ip} (${targetDescription}) and restart the battlegroup so players are routed to the right address.\n\n`
       + 'It can take several minutes and will briefly disconnect anyone currently connected. You can safely leave this page — it keeps running on the server.',
     )) return
 
@@ -366,7 +373,7 @@ export function PublicIpCard() {
     setTargetIp(ip)
     setValidatedInput(ip)
     fixingP34.current = true
-    await startApply({ mode: 'manual', publicIp: ip, confirmed: true })
+    await startApply({ mode: 'manual', publicIp: ip, hostRouteEnabled, confirmed: true })
   }
 
   return (
@@ -437,7 +444,11 @@ export function PublicIpCard() {
 
             {p34.reachable && (
               <div className="flex flex-wrap gap-2 text-xs">
-                {p34.vmPublicIp && <span className="pill-muted">this server’s public IP · {p34.vmPublicIp}</span>}
+                {p34.vmPublicIp && (
+                  <span className="pill-muted">
+                    {p34.publicIpSource === 'manual' ? 'configured public IP' : 'this server’s public IP'} · {p34.vmPublicIp}
+                  </span>
+                )}
                 {p34.k3sExternalIp && (
                   <span className={p34.staleK3sIp ? 'pill-danger' : 'pill-muted'}>K3s ExternalIP · {p34.k3sExternalIp}</span>
                 )}
@@ -604,6 +615,23 @@ export function PublicIpCard() {
           </div>
         </div>
       )}
+
+      <label className="mt-4 flex items-start gap-3 rounded-lg border border-border bg-surface-2/40 p-3 cursor-pointer">
+        <input
+          type="checkbox"
+          checked={hostRouteEnabled}
+          onChange={e => setHostRouteEnabled(e.target.checked)}
+          className="mt-0.5 h-4 w-4"
+        />
+        <span className="text-sm">
+          <strong>Enable same-PC public-IP loopback route</strong>
+          <span className="block text-xs text-text-dim mt-0.5">
+            Leave this on for the default behavior that lets this Windows PC reach the Dune server through its public IP.
+            Turn it off when that public IP is also a VPN, WireGuard, or VPS relay endpoint: Apply removes only the matching
+            DST route to the Dune VM. Disabling it may stop same-PC public-IP testing; outside players are unaffected.
+          </span>
+        </span>
+      </label>
 
       {message && (
         <p className="mt-3 text-sm text-success flex items-center gap-1.5">

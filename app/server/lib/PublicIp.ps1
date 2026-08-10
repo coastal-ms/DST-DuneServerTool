@@ -305,6 +305,7 @@ function Get-DunePublicIpStatus {
         manualPublicIp      = [string]$cfg.ManualPublicIp
         lastResolvedPublicIp= [string]$cfg.LastResolvedPublicIp
         lastAppliedPublicIp = [string]$cfg.LastAppliedPublicIp
+        hostRouteEnabled    = Get-DunePublicIpHostRouteEnabled
         currentPublicIp     = $null
         vmIp                = if ($vm) { [string]$vm.ip } else { '' }
         k3sExternalIp       = ''
@@ -350,6 +351,27 @@ function Get-DuneP34LoginDistribution {
         failures  = $failures
         collapsed = ($failures -gt 0 -and $pods.Count -eq 1)
     }
+}
+
+function Resolve-DunePublicIpDiagnosticTarget {
+    param(
+        $Config,
+        [string]$VmDetectedIp = '',
+        [string]$HostDetectedIp = ''
+    )
+    $manualIp = ''
+    try {
+        if ($Config.PublicIpMode -eq 'manual') { $manualIp = ([string]$Config.ManualPublicIp).Trim() }
+    } catch {}
+    if ($manualIp -and (Test-DunePublicIPv4 -Ip $manualIp).ok) {
+        return @{ ip = $manualIp; source = 'manual' }
+    }
+    if ($VmDetectedIp) { return @{ ip = $VmDetectedIp; source = 'vm' } }
+    if ($HostDetectedIp) { return @{ ip = $HostDetectedIp; source = 'host' } }
+    $lastApplied = ''
+    try { $lastApplied = ([string]$Config.LastAppliedPublicIp).Trim() } catch {}
+    if ($lastApplied) { return @{ ip = $lastApplied; source = 'last-applied' } }
+    return @{ ip = ''; source = $null }
 }
 
 # ----------------------------------------------------------------------------
@@ -417,12 +439,9 @@ function Get-DuneP34Diagnostic {
     $cfg = $null
     try { $cfg = Read-DuneConfig } catch {}
 
-    # 1) VM-side real public IP (what clients must reach) + K3s ExternalIP, one
-    #    SSH round trip. Query the public IP from INSIDE the VM so it reflects
-    #    the server's actual egress/WAN IP, which is what port-forwarding maps
-    #    to. The VM is BusyBox and often has no curl, so try several IP-echo
-    #    endpoints via both wget and curl and take the first that answers — a
-    #    single endpoint being down/blocked must not blank the whole diagnostic.
+    # 1) VM-side egress IP + K3s ExternalIP, one SSH round trip. Manual mode can
+    # intentionally advertise a different address (for example a VPS relay), so
+    # the saved manual target takes precedence over this detected WAN address.
     $probe = @'
 get_ip() {
   for url in https://api.ipify.org https://checkip.amazonaws.com https://ifconfig.me https://icanhazip.com; do
@@ -450,11 +469,12 @@ if [ -n "$BG" ] && [ -n "$NS" ] && command -v jq >/dev/null 2>&1; then
   echo "DC=$DC"
 fi
 '@ -replace "`r", ''
+    $vmDetectedIp = ''
     try {
         $raw = Invoke-V6Ssh -Ip $ctx.ip -Cmd $probe -TimeoutSec 35
         $rawText = ($raw -join "`n")
         $mp = [regex]::Match($rawText, 'PUB=([0-9.]+)')
-        if ($mp.Success) { $result.vmPublicIp = $mp.Groups[1].Value.Trim() }
+        if ($mp.Success) { $vmDetectedIp = $mp.Groups[1].Value.Trim() }
         $me = [regex]::Match($rawText, 'EXT=([0-9.]+)')
         if ($me.Success) { $result.k3sExternalIp = $me.Groups[1].Value.Trim() }
         $md = [regex]::Match($rawText, 'DC=([0-9.,]+)')
@@ -471,30 +491,15 @@ fi
         # below. Only the farm_state query (next) is essential.
     }
 
-    # Fallback chain for the public IP: the VM-side egress IP is best, but if the
-    # VM can't reach any IP-echo service (no curl, blocked egress, flaky DNS), use
-    # the DST host's own detected internet IP — it sits behind the same router/WAN
-    # so it resolves to the same public address — then the last-applied IP from
-    # config. Record where it came from so the summary can be honest.
-    if ($result.vmPublicIp) {
-        $result.publicIpSource = 'vm'
-    } else {
-        $hostIp = $null
-        if (Get-Command Get-DunePublicIp -ErrorAction SilentlyContinue) {
-            try { $hostIp = Get-DunePublicIp } catch {}
-        }
-        if ($hostIp) {
-            $result.vmPublicIp = [string]$hostIp
-            $result.publicIpSource = 'host'
-        } else {
-            $lastApplied = $null
-            try { $lastApplied = [string]$cfg.LastAppliedPublicIp } catch {}
-            if ($lastApplied) {
-                $result.vmPublicIp = $lastApplied
-                $result.publicIpSource = 'last-applied'
-            }
-        }
+    $hostIp = ''
+    $manualConfigured = $false
+    try { $manualConfigured = ($cfg.PublicIpMode -eq 'manual' -and [bool]$cfg.ManualPublicIp) } catch {}
+    if (-not $manualConfigured -and -not $vmDetectedIp -and (Get-Command Get-DunePublicIp -ErrorAction SilentlyContinue)) {
+        try { $hostIp = [string](Get-DunePublicIp) } catch {}
     }
+    $target = Resolve-DunePublicIpDiagnosticTarget -Config $cfg -VmDetectedIp $vmDetectedIp -HostDetectedIp $hostIp
+    $result.vmPublicIp = [string]$target.ip
+    $result.publicIpSource = $target.source
 
     # 2) farm_state — the address/port each map advertises to clients, plus its
     #    readiness. game_addr is the client-facing game port; igw_addr is the
@@ -588,6 +593,7 @@ fi
     # is behind the same router/WAN as the VM so it's a reliable stand-in, but we
     # say so rather than implying we read it from the server itself.
     $srcNote = switch ($result.publicIpSource) {
+        'manual'       { ' (your saved manual public IP; this may intentionally be a VPN or VPS relay address)' }
         'host'         { ' (detected from the DST host, since the VM could not reach an IP-check service)' }
         'last-applied' { ' (your last-applied public IP, since neither the VM nor the DST host could detect a current one)' }
         default        { '' }
@@ -707,6 +713,24 @@ function Invoke-DunePublicIpHostRoute {
     return "Route $PublicIp/32 via $VmIp is present."
 }
 
+function Remove-DunePublicIpHostRoute {
+    param([string]$PublicIp, [string]$VmIp)
+    if (-not (Test-DuneAdminElevated)) { throw 'DST is not elevated. Restart Dune Server Tool as administrator before applying a public IP change.' }
+    $route = $null
+    try { $route = Find-NetRoute -RemoteIPAddress $VmIp -ErrorAction Stop | Select-Object -First 1 } catch {}
+    if (-not $route) { throw "Could not find a Windows route to VM IP $VmIp." }
+    $iface = [int]$route.InterfaceIndex
+    $matching = @(
+        Get-NetRoute -DestinationPrefix "$PublicIp/32" -ErrorAction SilentlyContinue |
+            Where-Object { $_.NextHop -eq $VmIp -and [int]$_.InterfaceIndex -eq $iface }
+    )
+    if ($matching.Count -gt 0) {
+        Remove-NetRoute -DestinationPrefix "$PublicIp/32" -InterfaceIndex $iface -NextHop $VmIp -Confirm:$false -ErrorAction Stop
+        return "Removed route $PublicIp/32 via $VmIp from interface $iface."
+    }
+    return "No matching DST host route for $PublicIp/32 via $VmIp was present; unrelated routes were left unchanged."
+}
+
 function Invoke-DunePublicIpApply {
     param([Parameter(Mandatory)][string]$PublicIp, [string]$Mode = 'manual', [string]$Hostname = '')
 
@@ -763,7 +787,9 @@ function Invoke-DunePublicIpApply {
             $steps[$steps.Count - 1] = New-DunePublicIpStepResult 'preflight' 'Preflight host and VM' 'done' "VM $($vm.ip) reachable."
             & $pub
 
-            $steps.Add((New-DunePublicIpStepResult 'host-route' 'Update Windows host route' 'running' "Adding route for $target.")) | Out-Null
+            $hostRouteEnabled = Get-DunePublicIpHostRouteEnabled
+            $hostRouteAction = if ($hostRouteEnabled) { "Adding route for $target." } else { "Removing the matching DST route for $target." }
+            $steps.Add((New-DunePublicIpStepResult 'host-route' 'Reconcile Windows host route' 'running' $hostRouteAction)) | Out-Null
             & $pub
             # The host route is ONLY a NAT-loopback convenience so this Windows host
             # can reach the server by its public IP; outside players never use it. A
@@ -773,10 +799,14 @@ function Invoke-DunePublicIpApply {
             # and restarting the battlegroup) never runs and the user's P34 stays
             # broken. So we degrade a host-route failure to a non-blocking warning.
             try {
-                $routeMsg = Invoke-DunePublicIpHostRoute -PublicIp $target -VmIp $vm.ip
-                $steps[$steps.Count - 1] = New-DunePublicIpStepResult 'host-route' 'Update Windows host route' 'done' $routeMsg
+                $routeMsg = if ($hostRouteEnabled) {
+                    Invoke-DunePublicIpHostRoute -PublicIp $target -VmIp $vm.ip
+                } else {
+                    Remove-DunePublicIpHostRoute -PublicIp $target -VmIp $vm.ip
+                }
+                $steps[$steps.Count - 1] = New-DunePublicIpStepResult 'host-route' 'Reconcile Windows host route' 'done' $routeMsg
             } catch {
-                $steps[$steps.Count - 1] = New-DunePublicIpStepResult 'host-route' 'Update Windows host route' 'warning' "Skipped (non-blocking): $($_.Exception.Message) This route only lets this PC reach the server by its own public IP (NAT-loopback testing); outside players are unaffected and the IP change still applied. To enable host-side self-testing, clear the conflicting route and re-apply."
+                $steps[$steps.Count - 1] = New-DunePublicIpStepResult 'host-route' 'Reconcile Windows host route' 'warning' "Skipped (non-blocking): $($_.Exception.Message) This route only controls whether this PC reaches the server by its own public IP; outside players are unaffected and the IP change still applied."
             }
             & $pub
 
@@ -894,7 +924,7 @@ fi
 
 step runner
 runner=/usr/local/bin/k3s-custom-runner.sh
-target='dynamic_ip=$(/sbin/ip addr show eth0 | awk '\''/inet / {print $2; exit}'\'' | cut -d/ -f1)'
+target="dynamic_ip=$NEW_IP"
 if [ -f "$runner" ]; then
   sudo cp "$runner" "$runner.bak.$(date -u +%Y%m%d%H%M%S)"
   awk -v target="$target" 'BEGIN{done=0} /^dynamic_ip=/{print target; done=1; next} {print} END{if(!done) print target}' "$runner" > /tmp/dst-runner
