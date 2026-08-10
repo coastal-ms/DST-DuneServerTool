@@ -15,6 +15,7 @@ import { RemoteAccessCard } from './settings/RemoteAccessCard'
 import { MobileAppCard } from './settings/MobileAppCard'
 import { FlsTokenCard } from './settings/FlsTokenCard'
 import { FreshStartSnapshotsCard } from './settings/FreshStartSnapshotsCard'
+import { InstallLocationCard } from './settings/InstallLocationCard'
 import { SectionErrorBoundary } from '../components/SectionErrorBoundary'
 import { CollapsibleCard, useCardCollapse } from '../components/CollapsibleCard'
 
@@ -690,6 +691,8 @@ export function Settings() {
         )}
       </div>
       </SectionErrorBoundary>
+
+      <SectionErrorBoundary name="Dune Server Tool installation"><InstallLocationCard /></SectionErrorBoundary>
 
       <SectionErrorBoundary name="Appearance"><AppearanceCard /></SectionErrorBoundary>
 
