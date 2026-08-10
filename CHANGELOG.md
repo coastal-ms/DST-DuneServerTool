@@ -22,6 +22,7 @@ here cover everything those tags shipped.
 - **Public IP Apply no longer has to capture a co-hosted VPN or relay endpoint.** The Public IP / DDNS card now keeps the existing same-PC public-IP loopback route enabled by default, but provides an explicit opt-out for WireGuard, VPN, and VPS relay hosts. Applying with the option off removes only the matching public-IP `/32` route through the Dune VM and leaves unrelated Windows routes unchanged.
 - **Saved manual relay addresses remain authoritative across restarts and connection repairs.** Public IP Apply now pins both K3s startup inputs to the applied address, overriding a stale `settings.conf` external IP immediately before K3s starts, and the P34 diagnostic no longer replaces a deliberate manual VPN or VPS relay address with the host's detected WAN IP.
 - **Landsraad client settings are shared as a complete valid `Data=(...)` struct.** Player config, post-save guidance, and mismatch repair no longer omit Landsraad values or emit ineffective standalone member lines. Diagnostic bundles now include sanitized local client INI snapshots when available so server/client drift is visible.
+- **Landsraad contract abandon cooldown is configurable.** The field-confirmed timer is available in Game Config and supports values as low as five seconds.
 
 ## [13.5.3] - 2026-08-08
 
