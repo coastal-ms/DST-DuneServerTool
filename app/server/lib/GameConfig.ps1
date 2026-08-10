@@ -478,13 +478,21 @@ $script:DuneGameConfigSchema = @(
     @{ Section=$script:DuneGcSecSandworm; Key='m_GiantWormMinimumPlayersOnSpiceField'; File='game'; Type='int'; Min=0; Unit='players'; Default='4'; Label='Giant Worm Min Players on Field'; Help='Minimum number of players on a spice field to trigger a giant sandworm spawn. Also needs client-side apply.'; ClientApply=$true; Category='Sandworm' }
 )
 
-# Append the complete recovered CVar inventory to Experimental Lab. Curated DST
-# fields win: any key already surfaced elsewhere is skipped, including the older
-# Experimental controls. Unknown defaults intentionally remain blank so clearing
-# a Lab value removes the override rather than inventing a default.
+# Experimental Lab catalog is intentionally lazy. Normal DST startup and Game
+# Config schema requests must not parse or serialize 5,000+ recovered controls.
+# The first Lab category request loads the catalog once; later category requests
+# reuse the process cache.
 $script:DuneAdvancedCvarCatalogPath = Join-Path $PSScriptRoot '..\..\data\advanced-cvars.json'
-$script:DuneAdvancedCvarLoadError = ''
-try {
+$script:DuneAdvancedCvarCatalogCache = $null
+$script:DuneAdvancedCvarKeyMapCache = $null
+
+function Initialize-DuneAdvancedCvarCatalog {
+    if ($null -ne $script:DuneAdvancedCvarCatalogCache) { return }
+
+    if (-not (Test-Path -LiteralPath $script:DuneAdvancedCvarCatalogPath)) {
+        throw "Advanced CVar catalog not found: $script:DuneAdvancedCvarCatalogPath"
+    }
+
     $advancedAliasesAlreadySurfaced = @(
         'Dune.PlayerDeathLootEnabled'
         'Sandworm.SandwormHibernationActive'
@@ -495,37 +503,74 @@ try {
             $existingCvars["$($field.Key)"] = $true
         }
     }
-    if (Test-Path -LiteralPath $script:DuneAdvancedCvarCatalogPath) {
-        # Windows PowerShell 5.1 emits a top-level JSON array as one pipeline
-        # object. Wrapping that pipeline in @() creates a nested array, causing
-        # every catalog property to concatenate into one enormous field.
-        $catalog = Get-Content -LiteralPath $script:DuneAdvancedCvarCatalogPath -Raw -ErrorAction Stop |
-            ConvertFrom-Json -ErrorAction Stop
-        foreach ($entry in $catalog) {
-            $key = "$($entry.key)".Trim()
-            if (-not $key -or $existingCvars.ContainsKey($key) -or $advancedAliasesAlreadySurfaced -contains $key) { continue }
-            $script:DuneGameConfigSchema += @{
-                Section  = $script:DuneGcSecConsole
-                Key      = $key
-                File     = 'engine'
-                Type     = 'string'
-                Default  = ''
-                Label    = if ($entry.label) { [string]$entry.label } else { $key }
-                Help     = [string]$entry.help
-                Category = 'Experimental Lab'
-                Group    = [string]$entry.group
-                Status   = [string]$entry.status
-                Source   = [string]$entry.source
-                Scope    = [string]$entry.scope
-                Risk     = [string]$entry.risk
-            }
-            $existingCvars[$key] = $true
-        }
-    } else {
-        $script:DuneAdvancedCvarLoadError = "Advanced CVar catalog not found: $script:DuneAdvancedCvarCatalogPath"
+
+    # Windows PowerShell 5.1 emits a top-level JSON array as one pipeline object.
+    # Direct assignment preserves its enumerable shape; @(... | ConvertFrom-Json)
+    # would nest it and concatenate every property into one enormous field.
+    $catalog = Get-Content -LiteralPath $script:DuneAdvancedCvarCatalogPath -Raw -ErrorAction Stop |
+        ConvertFrom-Json -ErrorAction Stop
+    $fields = New-Object 'System.Collections.Generic.List[object]'
+    $keyMap = @{}
+    foreach ($entry in $catalog) {
+        $key = "$($entry.key)".Trim()
+        if (-not $key -or $existingCvars.ContainsKey($key) -or $advancedAliasesAlreadySurfaced -contains $key) { continue }
+        $fields.Add(@{
+            section    = $script:DuneGcSecConsole
+            key        = $key
+            file       = 'engine'
+            type       = 'string'
+            default    = ''
+            label      = if ($entry.label) { [string]$entry.label } else { $key }
+            help       = [string]$entry.help
+            group      = [string]$entry.group
+            status     = [string]$entry.status
+            source     = [string]$entry.source
+            scope      = [string]$entry.scope
+            risk       = [string]$entry.risk
+            consoleVar = $true
+        })
+        $keyMap[$key] = $true
+        $existingCvars[$key] = $true
     }
-} catch {
-    $script:DuneAdvancedCvarLoadError = $_.Exception.Message
+    $script:DuneAdvancedCvarCatalogCache = $fields.ToArray()
+    $script:DuneAdvancedCvarKeyMapCache = $keyMap
+}
+
+function Get-DuneAdvancedCvarCatalog {
+    Initialize-DuneAdvancedCvarCatalog
+    return $script:DuneAdvancedCvarCatalogCache
+}
+
+function Get-DuneAdvancedCvarKeyMap {
+    Initialize-DuneAdvancedCvarCatalog
+    return $script:DuneAdvancedCvarKeyMapCache
+}
+
+function Test-DuneAdvancedCvarKey {
+    param([string]$Key)
+    if (-not $Key) { return $false }
+    return (Get-DuneAdvancedCvarKeyMap).ContainsKey($Key)
+}
+
+function Get-DuneAdvancedCvarCategoriesApi {
+    $groups = @{}
+    foreach ($field in @(Get-DuneAdvancedCvarCatalog)) {
+        $group = if ($field.group) { [string]$field.group } else { 'Uncategorized' }
+        if (-not $groups.ContainsKey($group)) { $groups[$group] = 0 }
+        $groups[$group]++
+    }
+    return @($groups.Keys | Sort-Object | ForEach-Object {
+        @{ category = $_; count = [int]$groups[$_] }
+    })
+}
+
+function Get-DuneAdvancedCvarCategoryApi {
+    param([Parameter(Mandatory)][string]$Category)
+    return @(
+        Get-DuneAdvancedCvarCatalog |
+            Where-Object { "$($_.group)" -eq $Category } |
+            Sort-Object key
+    )
 }
 
 # Console variables are applied to the SERVER by the Hagga startup command, not
@@ -600,6 +645,20 @@ $script:DuneStartupConsoleVariableKeys = @(
         ForEach-Object { $_.Key } |
         Sort-Object -Unique
 )
+
+function Get-DuneManagedStartupConsoleVariableKeyMap {
+    $managed = @{}
+    foreach ($key in $script:DuneStartupConsoleVariableKeys) { $managed[$key] = $true }
+    foreach ($key in (Get-DuneAdvancedCvarKeyMap).Keys) { $managed[$key] = $true }
+    return $managed
+}
+
+function Test-DuneStartupConsoleVariableKey {
+    param([string]$Key)
+    if ($script:DuneStartupConsoleVariableKeys -contains $Key) { return $true }
+    if ($script:DuneGameConfigSchema.Key -contains $Key) { return $false }
+    return (Test-DuneAdvancedCvarKey -Key $Key)
+}
 
 # Experimental controls live on their own page, grouped by what they affect
 # rather than by which decode pass found them. Namespace rules come first
@@ -1666,8 +1725,9 @@ function Set-DuneStartupConsoleVariableOverrides {
         throw 'Battlegroup helper unavailable (K8s.ps1 not loaded).'
     }
     $result = Set-V6ConsoleVariableOverrides -Ip $Ip `
-        -Names $script:DuneStartupConsoleVariableKeys `
-        -Values $Values
+        -Names @($Values.Keys | Sort-Object) `
+        -Values $Values `
+        -ManagedNames (Get-DuneManagedStartupConsoleVariableKeyMap)
     if (-not $result.Success) {
         $why = if ($result.Error) { $result.Error } else { $result.Raw }
         throw "Startup CVar override failed: $why"
@@ -1679,7 +1739,9 @@ function Sync-DuneStartupConsoleVariableOverrides {
     param([Parameter(Mandatory)][string]$Ip)
     $config = Get-DuneGameConfig -Ip $Ip
     $values = @{}
-    foreach ($key in $script:DuneStartupConsoleVariableKeys) {
+    $managed = Get-DuneManagedStartupConsoleVariableKeyMap
+    foreach ($key in @($config.engine.effectiveByKey.Keys)) {
+        if (-not $managed.ContainsKey($key)) { continue }
         if ($config.engine.effectiveByKey.ContainsKey($key)) {
             $candidate = "$($config.engine.effectiveByKey[$key])".Trim()
             if (-not (Test-DuneGameConfigValueIsDefault -Key $key -Value $candidate)) {

@@ -9,6 +9,8 @@ import { api } from '../api/client'
 import { ServerNameCard } from './gameconfig/ServerNameCard'
 import {
   getGameConfigSchema,
+  getGameConfigExperimentalCategories,
+  getGameConfigExperimentalCategory,
   getGameConfig,
   saveGameConfig,
   reloadGameConfigPods,
@@ -382,6 +384,10 @@ export function GameConfig({ mode = 'standard' }: { mode?: 'standard' | 'experim
   const [sandwormModalOpen, setSandwormModalOpen] = useState(false)
   const [search, setSearch] = useState('')
   const [experimentalGroup, setExperimentalGroup] = useState<string | null>(null)
+  const [experimentalCatalogCategories, setExperimentalCatalogCategories] = useState<Array<{ category: string; count: number }>>([])
+  const [experimentalCategoryCache, setExperimentalCategoryCache] = useState<Record<string, GameConfigField[]>>({})
+  const [experimentalCategoryLoading, setExperimentalCategoryLoading] = useState<string | null>(null)
+  const [experimentalCategoryError, setExperimentalCategoryError] = useState<string | null>(null)
   const [experimentalSource, setExperimentalSource] = useState<'all' | 'Dune' | 'Engine'>('all')
   const [experimentalRisk, setExperimentalRisk] = useState<'all' | 'experimental' | 'diagnostic' | 'high' | 'critical'>('all')
   const [experimentalModifiedOnly, setExperimentalModifiedOnly] = useState(false)
@@ -919,6 +925,19 @@ export function GameConfig({ mode = 'standard' }: { mode?: 'standard' | 'experim
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [vmRunning])
 
+  useEffect(() => {
+    if (!experimentalPage) return
+    let cancelled = false
+    void getGameConfigExperimentalCategories()
+      .then(response => {
+        if (!cancelled) setExperimentalCatalogCategories(response.categories ?? [])
+      })
+      .catch(error => {
+        if (!cancelled) setExperimentalCategoryError(error instanceof Error ? error.message : String(error))
+      })
+    return () => { cancelled = true }
+  }, [experimentalPage])
+
   const dirtyKeys = useMemo(() => {
     const keys: string[] = []
     for (const k of Object.keys(values)) {
@@ -927,16 +946,27 @@ export function GameConfig({ mode = 'standard' }: { mode?: 'standard' | 'experim
     return keys
   }, [values, originals])
 
+  const loadedExperimentalFields = useMemo(
+    () => Object.values(experimentalCategoryCache).flat(),
+    [experimentalCategoryCache],
+  )
+  const schemaWithLoadedExperimental = useMemo(
+    () => loadedExperimentalFields.length > 0
+      ? [...(schema ?? []), { category: 'Experimental Lab', fields: loadedExperimentalFields }]
+      : (schema ?? []),
+    [schema, loadedExperimentalFields],
+  )
+
   // Flat key -> field lookup (for default values, struct flags, etc.).
   const fieldByKey = useMemo(() => {
     const m: Record<string, GameConfigField> = {}
-    for (const cat of schema ?? []) for (const f of cat?.fields ?? []) if (f?.key) m[f.key] = f
+    for (const cat of schemaWithLoadedExperimental) for (const f of cat?.fields ?? []) if (f?.key) m[f.key] = f
     return m
-  }, [schema])
+  }, [schemaWithLoadedExperimental])
 
   const surfacedIniTargets = useMemo(() => {
     const keys = new Set<string>()
-    for (const category of schema ?? []) {
+    for (const category of schemaWithLoadedExperimental) {
       for (const field of category.fields ?? []) {
         if (!field?.key) continue
         keys.add(`${field.file}||${field.section}||${field.key}`.toLowerCase())
@@ -946,18 +976,18 @@ export function GameConfig({ mode = 'standard' }: { mode?: 'standard' | 'experim
       }
     }
     return keys
-  }, [schema])
+  }, [schemaWithLoadedExperimental])
 
   const experimentalStartupKeys = useMemo(() => {
     const keys = new Set<string>()
-    for (const category of schema ?? []) {
+    for (const category of schemaWithLoadedExperimental) {
       if (!isExperimentalCategory(category.category)) continue
       for (const field of category.fields ?? []) {
         if (field.file === 'engine') keys.add(field.key)
       }
     }
     return keys
-  }, [schema])
+  }, [schemaWithLoadedExperimental])
   const experimentalStartupDirtyKeys = useMemo(
     () => dirtyKeys.filter(k => experimentalStartupKeys.has(k)),
     [dirtyKeys, experimentalStartupKeys],
@@ -986,26 +1016,79 @@ export function GameConfig({ mode = 'standard' }: { mode?: 'standard' | 'experim
 
   // Everything a player must add locally — built from the WHOLE schema, not just
   // this page, so Game Config and Experimental show the identical list.
-  const playerConfig = useMemo(() => buildAllClientBlocks(schema, cfg), [schema, cfg])
-
-  const experimentalGroups = useMemo(
-    () => experimentalPage
-      ? (visibleSchema ?? []).map(category => ({
-          name: category.category,
-          count: (category.fields ?? []).length,
-        }))
-      : [],
-    [experimentalPage, visibleSchema],
+  const playerConfig = useMemo(
+    () => buildAllClientBlocks(schemaWithLoadedExperimental, cfg),
+    [schemaWithLoadedExperimental, cfg],
   )
-  const selectedExperimentalGroup = experimentalGroup ?? experimentalGroups[0]?.name ?? 'all'
+
+  const experimentalGroups = useMemo(() => {
+    if (!experimentalPage) return []
+    const counts = new Map<string, number>()
+    for (const category of visibleSchema ?? []) {
+      counts.set(category.category, (counts.get(category.category) ?? 0) + (category.fields ?? []).length)
+    }
+    for (const category of experimentalCatalogCategories) {
+      counts.set(category.category, (counts.get(category.category) ?? 0) + category.count)
+    }
+    return [...counts.entries()]
+      .map(([name, count]) => ({ name, count }))
+      .sort((a, b) => experimentalGroupRank(a.name) - experimentalGroupRank(b.name) || a.name.localeCompare(b.name))
+  }, [experimentalPage, visibleSchema, experimentalCatalogCategories])
+  const selectedExperimentalGroup = experimentalGroup ?? experimentalGroups[0]?.name ?? ''
+
+  useEffect(() => {
+    if (!experimentalPage || !selectedExperimentalGroup) return
+    if (Object.prototype.hasOwnProperty.call(experimentalCategoryCache, selectedExperimentalGroup)) return
+    let cancelled = false
+    setExperimentalCategoryLoading(selectedExperimentalGroup)
+    setExperimentalCategoryError(null)
+    void getGameConfigExperimentalCategory(selectedExperimentalGroup)
+      .then(response => {
+        if (!cancelled) {
+          setExperimentalCategoryCache(previous => ({
+            ...previous,
+            [selectedExperimentalGroup]: response.fields ?? [],
+          }))
+        }
+      })
+      .catch(error => {
+        if (!cancelled) setExperimentalCategoryError(error instanceof Error ? error.message : String(error))
+      })
+      .finally(() => {
+        if (!cancelled) setExperimentalCategoryLoading(null)
+      })
+    return () => { cancelled = true }
+  }, [experimentalPage, selectedExperimentalGroup, experimentalCategoryCache])
+
+  useEffect(() => {
+    const fields = experimentalCategoryCache[selectedExperimentalGroup]
+    if (!fields || loadState === 'idle' || loadState === 'loading') return
+    const seeded: Record<string, string> = {}
+    for (const field of fields) seeded[field.key] = currentValue(cfg, field)
+    setValues(previous => {
+      const next = { ...previous }
+      for (const [key, value] of Object.entries(seeded)) {
+        if (!(key in next)) next[key] = value
+      }
+      return next
+    })
+    setOriginals(previous => {
+      const next = { ...previous }
+      for (const [key, value] of Object.entries(seeded)) {
+        if (!(key in next)) next[key] = value
+      }
+      return next
+    })
+  }, [experimentalCategoryCache, selectedExperimentalGroup, loadState, cfg])
 
   const experimentalFilteredFields = useMemo(() => {
     if (!experimentalPage || !visibleSchema) return [] as GameConfigField[]
     const q = search.trim().toLowerCase()
-    return visibleSchema
-      .flatMap(category => category.fields ?? [])
+    return [
+      ...(visibleSchema.find(category => category.category === selectedExperimentalGroup)?.fields ?? []),
+      ...(experimentalCategoryCache[selectedExperimentalGroup] ?? []),
+    ]
       .filter(field => {
-        if (selectedExperimentalGroup !== 'all' && (field.group || 'Uncategorized') !== selectedExperimentalGroup) return false
         if (experimentalSource !== 'all' && field.source !== experimentalSource) return false
         if (experimentalRisk !== 'all' && field.risk !== experimentalRisk) return false
         if (experimentalModifiedOnly && !isCustomized(cfg, field)) return false
@@ -1015,8 +1098,8 @@ export function GameConfig({ mode = 'standard' }: { mode?: 'standard' | 'experim
           || (field.help ?? '').toLowerCase().includes(q)
           || (field.group ?? '').toLowerCase().includes(q)
       })
-      .sort((a, b) => (a.group ?? '').localeCompare(b.group ?? '') || a.key.localeCompare(b.key))
-  }, [experimentalPage, visibleSchema, selectedExperimentalGroup, search, experimentalSource, experimentalRisk, experimentalModifiedOnly, cfg])
+      .sort((a, b) => a.key.localeCompare(b.key))
+  }, [experimentalPage, visibleSchema, experimentalCategoryCache, selectedExperimentalGroup, search, experimentalSource, experimentalRisk, experimentalModifiedOnly, cfg])
 
   useEffect(() => {
     setExperimentalPageIndex(0)
@@ -1027,7 +1110,7 @@ export function GameConfig({ mode = 'standard' }: { mode?: 'standard' | 'experim
     if (experimentalPage) {
       const start = experimentalPageIndex * EXPERIMENTAL_PAGE_SIZE
       return [{
-        category: selectedExperimentalGroup === 'all' ? 'All categories' : selectedExperimentalGroup,
+        category: selectedExperimentalGroup,
         fields: experimentalFilteredFields.slice(start, start + EXPERIMENTAL_PAGE_SIZE),
       }]
     }
@@ -1075,7 +1158,7 @@ export function GameConfig({ mode = 'standard' }: { mode?: 'standard' | 'experim
       const out = await saveGameConfig(updates)
       const next: GameConfigResponse = { available: true, source: out.source, game: out.game, engine: out.engine }
       setCfg(next)
-      const seeded = seedValues(schema ?? [], next)
+      const seeded = seedValues(schemaWithLoadedExperimental, next)
       setValues(seeded)
       setOriginals(seeded)
       const n = out.applied ?? dirtyKeys.length
@@ -1771,7 +1854,6 @@ export function GameConfig({ mode = 'standard' }: { mode?: 'standard' | 'experim
                 className="min-w-52 px-3 py-2 rounded-lg bg-surface-2 border border-border text-text text-xs"
                 aria-label="Experimental category"
               >
-                <option value="all">All categories</option>
                 {experimentalGroups.map(group => (
                   <option key={group.name} value={group.name}>
                     {group.name} ({group.count.toLocaleString()})
@@ -1809,9 +1891,14 @@ export function GameConfig({ mode = 'standard' }: { mode?: 'standard' | 'experim
                 Modified only
               </label>
               <span className="text-xs text-text-dim ml-auto">
-                {experimentalFilteredFields.length.toLocaleString()} recovered controls
+                {experimentalCategoryLoading === selectedExperimentalGroup
+                  ? 'Loading category...'
+                  : `${experimentalFilteredFields.length.toLocaleString()} recovered controls`}
               </span>
             </div>
+          )}
+          {experimentalPage && experimentalCategoryError && (
+            <div className="mb-4 text-xs text-danger">{experimentalCategoryError}</div>
           )}
 
           <div className="space-y-5">
@@ -1857,7 +1944,7 @@ export function GameConfig({ mode = 'standard' }: { mode?: 'standard' | 'experim
                   }).map((_, index) => (
                     <div key={`empty-slot-${index}`} className="h-32 invisible" aria-hidden="true" />
                   ))}
-                  {experimentalPage && (cat.fields ?? []).length === 0 && (
+                  {experimentalPage && (cat.fields ?? []).length === 0 && experimentalCategoryLoading !== selectedExperimentalGroup && (
                     <div className="md:col-span-2 text-sm text-text-muted">No recovered controls match these filters.</div>
                   )}
                 </div>
