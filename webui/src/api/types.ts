@@ -242,6 +242,7 @@ export type GameConfigClientApplyItem = {
   label: string
   section: string
   value: string
+  structKey?: string
   remove?: boolean
 }
 

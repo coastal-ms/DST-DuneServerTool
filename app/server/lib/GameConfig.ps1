@@ -679,7 +679,14 @@ function Get-DuneGameConfigClientApplyNotice {
         $k = "$($u.key)"
         if ($byKey.ContainsKey($k)) {
             $f = $byKey[$k]
-            $items.Add(@{ key = $k; label = $f.Label; section = $f.Section; file = $f.File; value = "$($u.value)" })
+            $items.Add(@{
+                key       = $k
+                label     = $f.Label
+                section   = $f.Section
+                file      = $f.File
+                value     = "$($u.value)"
+                structKey = $(if ($f.ContainsKey('StructKey')) { "$($f.StructKey)" } else { '' })
+            })
         }
     }
     return @{

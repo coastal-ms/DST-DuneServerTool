@@ -1149,6 +1149,15 @@ $script:DstManagedEnd
         $notice.paths.engine | Should -Match 'Engine\.ini$'
     }
 
+    It 'marks Landsraad client notices as struct-member updates' {
+        $notice = Get-DuneGameConfigClientApplyNotice -Updates @(
+            @{ file='game'; section=$script:DuneGcSecLandsraad; key='m_LandsraadContractsPerVotingBlock'; value='12' }
+        )
+
+        @($notice.items).Count | Should -Be 1
+        @($notice.items)[0].structKey | Should -Be 'Data'
+    }
+
     It 'places the Experimental lists last in the curated schema API, in order' {
         $cats = @((Get-DuneGameConfigSchemaApi) | ForEach-Object { $_.category })
         $cats[-2] | Should -Be 'Experimental'
