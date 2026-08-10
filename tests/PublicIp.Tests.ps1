@@ -115,6 +115,80 @@ Describe 'settings.conf renderer' {
     }
 }
 
+Describe 'Public IP Windows host route setting' {
+    It 'defaults to enabled and persists an explicit opt-out' {
+        Mock Read-DuneConfigRaw { [ordered]@{ PublicIpHostRouteEnabled = '' } }
+        Get-DunePublicIpHostRouteEnabled | Should -BeTrue
+
+        Mock Save-DuneConfig { param([hashtable]$Config) $script:savedHostRouteConfig = $Config }
+        Mock Read-DuneConfigRaw { [ordered]@{ PublicIpHostRouteEnabled = 'false' } }
+        Set-DunePublicIpHostRouteEnabled -Enabled $false | Should -BeFalse
+        $script:savedHostRouteConfig.PublicIpHostRouteEnabled | Should -Be 'false'
+    }
+
+    It 'removes only the exact public-IP route through the Dune VM interface' {
+        Mock Test-DuneAdminElevated { $true }
+        Mock Find-NetRoute { [pscustomobject]@{ InterfaceIndex = 42 } }
+        $exact = [pscustomobject]@{ DestinationPrefix = '203.0.113.10/32'; NextHop = '192.168.1.20'; InterfaceIndex = 42 }
+        $otherHop = [pscustomobject]@{ DestinationPrefix = '203.0.113.10/32'; NextHop = '192.168.1.1'; InterfaceIndex = 42 }
+        $otherInterface = [pscustomobject]@{ DestinationPrefix = '203.0.113.10/32'; NextHop = '192.168.1.20'; InterfaceIndex = 7 }
+        Mock Get-NetRoute { @($exact, $otherHop, $otherInterface) }
+        Mock Remove-NetRoute {}
+
+        $message = Remove-DunePublicIpHostRoute -PublicIp '203.0.113.10' -VmIp '192.168.1.20'
+
+        $message | Should -Match '^Removed route'
+        Should -Invoke Remove-NetRoute -Times 1 -Exactly -ParameterFilter {
+            $DestinationPrefix -eq '203.0.113.10/32' -and
+            $NextHop -eq '192.168.1.20' -and
+            $InterfaceIndex -eq 42
+        }
+    }
+
+    It 'leaves unrelated routes unchanged when no exact VM route exists' {
+        Mock Test-DuneAdminElevated { $true }
+        Mock Find-NetRoute { [pscustomobject]@{ InterfaceIndex = 42 } }
+        Mock Get-NetRoute {
+            [pscustomobject]@{ DestinationPrefix = '203.0.113.10/32'; NextHop = '192.168.1.1'; InterfaceIndex = 42 }
+        }
+        Mock Remove-NetRoute {}
+
+        $message = Remove-DunePublicIpHostRoute -PublicIp '203.0.113.10' -VmIp '192.168.1.20'
+
+        $message | Should -Match 'unrelated routes were left unchanged'
+        Should -Invoke Remove-NetRoute -Times 0 -Exactly
+    }
+}
+
+Describe 'Public IP diagnostic target selection' {
+    It 'keeps a saved manual relay IP authoritative over detected WAN addresses' {
+        $target = Resolve-DunePublicIpDiagnosticTarget -Config @{
+            PublicIpMode = 'manual'
+            ManualPublicIp = '8.8.8.8'
+            LastAppliedPublicIp = '8.8.8.8'
+        } -VmDetectedIp '1.1.1.1' -HostDetectedIp '1.1.1.1'
+
+        $target.ip | Should -Be '8.8.8.8'
+        $target.source | Should -Be 'manual'
+    }
+
+    It 'uses detected WAN IP for non-manual configurations' {
+        $target = Resolve-DunePublicIpDiagnosticTarget -Config @{
+            PublicIpMode = 'ddns'
+            LastAppliedPublicIp = '8.8.8.8'
+        } -VmDetectedIp '1.1.1.1'
+
+        $target.ip | Should -Be '1.1.1.1'
+        $target.source | Should -Be 'vm'
+    }
+
+    It 'pins the K3s startup runner to the applied public IP' {
+        $source = Get-Content -LiteralPath (Join-Path $PSScriptRoot '..\app\server\lib\PublicIp.ps1') -Raw
+        $source | Should -Match 'target="dynamic_ip=\$NEW_IP"'
+        $source | Should -Not -Match "target='dynamic_ip=\$\(/sbin/ip addr show eth0"
+    }
+}
+
 Describe 'Public IP apply state file' {
     BeforeAll {
         $script:tmpState = Join-Path ([System.IO.Path]::GetTempPath()) ("dst-apply-state-{0}.json" -f ([guid]::NewGuid()))
