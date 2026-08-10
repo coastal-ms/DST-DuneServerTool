@@ -8,9 +8,10 @@ $duneNamespace = '^(Dune|dw|Vehicle|Player|Sandworm|SandwormSubsystem|Hazard|Hyd
 
 function Get-CvarGroup {
     param([string]$Key)
+    if ($Key -match '^(?i:ai)\.') { return 'AI - engine/internal' }
     if ($Key -match $duneNamespace) { return 'Dune gameplay' }
     if ($Key -match '^(r|Lumen|Nanite|Shadow|FX|Hair|Particles|SceneComponent|SmartGI|mutable|foliage)\.') { return 'Rendering & graphics' }
-    if ($Key -match '^(au|ak|Audio)\.') { return 'Audio' }
+    if ($Key -match '^(au|ak|Audio)\.') { return 'Audio - engine/internal' }
     if ($Key -match '^(net|Network|Demo)\.') { return 'Network & replication' }
     if ($Key -match '^(p|Chaos|Physics)\.') { return 'Physics' }
     if ($Key -match '^(wp|Map|World|Landscape|Level)\.') { return 'World & streaming' }
