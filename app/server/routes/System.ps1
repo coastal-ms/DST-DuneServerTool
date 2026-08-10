@@ -6,6 +6,62 @@
 #
 # Detection + the detached winget runner live in lib/Dependencies.ps1.
 
+function Test-DuneSystemLoopbackRequest {
+    param($req)
+    try {
+        $remote = $req.RemoteEndPoint.Address
+        if ($remote) { return [System.Net.IPAddress]::IsLoopback($remote) }
+    } catch {}
+    return $false
+}
+
+# GET /api/system/install-location
+# Host-only: filesystem paths are useful only on the DST PC and should not be
+# disclosed through the LAN/remote portal.
+Register-DuneRoute -Method GET -Path '/api/system/install-location' -Handler {
+    param($req, $res, $routeParams, $body)
+    try {
+        if (-not (Test-DuneSystemLoopbackRequest $req)) {
+            Write-DuneError -Response $res -Status 403 -Message 'The DST install location is available only from the host machine.'
+            return
+        }
+        if (-not $script:AppDir) {
+            throw 'DST application directory is unavailable.'
+        }
+        $path = [IO.Path]::GetFullPath([string]$script:AppDir)
+        Write-DuneJson -Response $res -Body @{
+            ok        = $true
+            path      = $path
+            installed = [bool]$script:DuneIsCompiledExe
+        }
+    } catch {
+        Write-DuneError -Response $res -Status 500 -Message $_.Exception.Message
+    }
+}
+
+# POST /api/system/install-location/open
+Register-DuneRoute -Method POST -Path '/api/system/install-location/open' -Handler {
+    param($req, $res, $routeParams, $body)
+    try {
+        if (-not (Test-DuneSystemLoopbackRequest $req)) {
+            Write-DuneError -Response $res -Status 403 -Message 'The DST install folder can be opened only from the host machine.'
+            return
+        }
+        if (-not $script:AppDir) {
+            throw 'DST application directory is unavailable.'
+        }
+        $path = [IO.Path]::GetFullPath([string]$script:AppDir)
+        if (-not (Test-Path -LiteralPath $path -PathType Container)) {
+            Write-DuneError -Response $res -Status 404 -Message "DST application directory was not found: $path"
+            return
+        }
+        Start-Process -FilePath 'explorer.exe' -ArgumentList "`"$path`"" -ErrorAction Stop | Out-Null
+        Write-DuneJson -Response $res -Body @{ ok=$true; path=$path }
+    } catch {
+        Write-DuneError -Response $res -Status 500 -Message "Failed to open the DST install folder: $($_.Exception.Message)"
+    }
+}
+
 # GET /api/system/dependencies[?names=<dependency>]
 Register-DuneRoute -Method GET -Path '/api/system/dependencies' -Handler {
     param($req, $res, $routeParams, $body)
