@@ -496,8 +496,11 @@ try {
         }
     }
     if (Test-Path -LiteralPath $script:DuneAdvancedCvarCatalogPath) {
-        $catalog = @(Get-Content -LiteralPath $script:DuneAdvancedCvarCatalogPath -Raw -ErrorAction Stop |
-            ConvertFrom-Json -ErrorAction Stop)
+        # Windows PowerShell 5.1 emits a top-level JSON array as one pipeline
+        # object. Wrapping that pipeline in @() creates a nested array, causing
+        # every catalog property to concatenate into one enormous field.
+        $catalog = Get-Content -LiteralPath $script:DuneAdvancedCvarCatalogPath -Raw -ErrorAction Stop |
+            ConvertFrom-Json -ErrorAction Stop
         foreach ($entry in $catalog) {
             $key = "$($entry.key)".Trim()
             if (-not $key -or $existingCvars.ContainsKey($key) -or $advancedAliasesAlreadySurfaced -contains $key) { continue }
