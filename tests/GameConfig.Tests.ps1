@@ -1158,6 +1158,15 @@ $script:DstManagedEnd
         @($notice.items)[0].structKey | Should -Be 'Data'
     }
 
+    It 'exposes the field-confirmed Landsraad abandon cooldown' {
+        $field = @($script:DuneGameConfigSchema | Where-Object { $_.Key -eq 'm_LandsraadContractsAbandonCooldownSeconds' })
+
+        $field.Count | Should -Be 1
+        $field[0].StructKey | Should -Be 'Data'
+        $field[0].Default | Should -Be '3600'
+        $field[0].ClientApply | Should -BeTrue
+    }
+
     It 'places the Experimental lists last in the curated schema API, in order' {
         $cats = @((Get-DuneGameConfigSchemaApi) | ForEach-Object { $_.category })
         $cats[-2] | Should -Be 'Experimental'
