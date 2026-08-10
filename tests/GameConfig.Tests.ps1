@@ -815,6 +815,12 @@ Describe 'DuneGameConfigSchema: experimental binary CVars' -Tag 'GameConfig' {
         $lab.Count | Should -BeGreaterThan 4900
         $script:DuneAdvancedCvarLoadError | Should -BeNullOrEmpty
         @($script:DuneStartupConsoleVariableKeys).Count | Should -BeGreaterThan 5000
+        ($lab | Where-Object Key -eq 'ak.soundengine.executeActionOnEvent').Group |
+            Should -Be 'Audio - engine/internal'
+        ($lab | Where-Object Key -eq 'au.adpcm.DisableSeeking').Group |
+            Should -Be 'Audio - engine/internal'
+        ($lab | Where-Object Key -eq 'Ai.Dune.EnableBudgetingSystem').Group |
+            Should -Be 'AI - engine/internal'
     }
 
     It 'groups every experimental control for the Experimental page' {
