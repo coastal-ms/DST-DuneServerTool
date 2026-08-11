@@ -12,7 +12,7 @@ import { Icon } from '../../../components/Icon'
 import { ItemPicker } from '../../../components/ItemPicker'
 import { TagPicker } from '../../../components/TagPicker'
 import {
-  awardCharXp, awardIntel, setSpecLevel, cheatScript, cleanPlayerInventory,
+  applySpecLevel, awardCharXp, awardIntel, setSpecLevel, cheatScript, cleanPlayerInventory,
   applyProgressionPreset, getProgressionPresets,
   progressionUnlock, progressionReverse,
   deleteAccount, deleteInventoryItem, deleteTutorials,
@@ -127,9 +127,9 @@ export function StatsSection({ player, demo, refreshKey }: SectionProps) {
 
 // ---------------------------------------------------------------------------
 // Specs — 5 tracks + keystone counter. Header buttons grant/reset all
-// keystones; per-row controls: editable Level field (set exact level) +
-// grant max / reset one track. Level is the game-authoritative value (the
-// game keeps level and recomputes xp from it on login); xp is shown read-only.
+// keystones; per-row controls: editable Level field (set exact level), apply
+// every reward available through that level, grant max, and reset one track.
+// Level is game-authoritative; XP is shown read-only.
 // ---------------------------------------------------------------------------
 export function SpecsSection({ player, canWrite, demo, refreshKey, flash, onChanged }: SectionProps) {
   const [tracks, setTracks] = useState<SpecTrackFull[]>([])
@@ -221,6 +221,11 @@ export function SpecsSection({ player, canWrite, demo, refreshKey, flash, onChan
                     void run(() => setSpecLevel(player.controller_id, name, level), 'Set level')
                   }
                 }}
+                onApplyLevel={(level) => {
+                  if (window.confirm(`Set ${name} to level ${level} and apply every ${name} specialization reward available through that level for ${player.name}?\n\nExisting rewards are preserved. Rewards above level ${level} are not removed. The change appears in-game after a full re-login.`)) {
+                    void run(() => applySpecLevel(player.controller_id, name, level), 'Apply level')
+                  }
+                }}
               />
             )
           })}
@@ -232,9 +237,10 @@ export function SpecsSection({ player, canWrite, demo, refreshKey, flash, onChan
 
 const SPEC_TRACK_ORDER = ['Combat', 'Crafting', 'Exploration', 'Gathering', 'Sabotage']
 
-function SpecRow({ name, track, canWrite, busy, onGrantMax, onReset, onSetLevel }: {
+function SpecRow({ name, track, canWrite, busy, onGrantMax, onReset, onSetLevel, onApplyLevel }: {
   name: string; track: SpecTrackFull | undefined; canWrite: boolean; busy: boolean
-  onGrantMax: () => void; onReset: () => void; onSetLevel: (level: number) => void
+  onGrantMax: () => void; onReset: () => void
+  onSetLevel: (level: number) => void; onApplyLevel: (level: number) => void
 }) {
   const xp = track?.xp ?? 0
   const level = Math.round(track?.level ?? 0)
@@ -281,6 +287,9 @@ function SpecRow({ name, track, canWrite, busy, onGrantMax, onReset, onSetLevel 
               />
               <button className="btn-secondary" disabled={busy || !changed} title={`Set level to typed value (0–${levelMax})`} onClick={() => onSetLevel(parsed)}>
                 <Icon name="Check" size={13} /> Set
+              </button>
+              <button className="btn-secondary" disabled={busy || !valid} title={`Set level and apply ${name} rewards available through that level`} onClick={() => onApplyLevel(parsed)}>
+                <Icon name="Sparkles" size={13} /> Apply level
               </button>
               <button className="btn-secondary" disabled={busy} title="Grant max level for this track" onClick={onGrantMax}>
                 <Icon name="ChevronsUp" size={13} /> Max

@@ -998,6 +998,23 @@ function Start-DuneRestartScheduler {
                     try { Write-DuneLog "partition self-heal automation install error: $($_.Exception.Message)" 'WARN' } catch {}
                 }
             }
+            # Funcom's director ReplicaSet can leave terminal Evicted/Unknown pod
+            # objects after VM power cycles. This SSH maintenance is unrelated to
+            # serving the UI, so keep it on this background runspace and off the
+            # listener's cold-start path.
+            try {
+                if (Get-Command Remove-DuneTerminalDirectorPods -ErrorAction SilentlyContinue) {
+                    $directorPrune = Remove-DuneTerminalDirectorPods
+                    if ($directorPrune.ok -and $directorPrune.count -gt 0 -and
+                        (Get-Command Write-DuneLog -ErrorAction SilentlyContinue)) {
+                        Write-DuneLog "pod maintenance: $($directorPrune.message)"
+                    }
+                }
+            } catch {
+                if (Get-Command Write-DuneLog -ErrorAction SilentlyContinue) {
+                    try { Write-DuneLog "pod maintenance: terminal director cleanup failed: $($_.Exception.Message)" 'WARN' } catch {}
+                }
+            }
             while ($true) {
                 try { Invoke-DuneRestartScheduleTick } catch {
                     if (Get-Command Write-DuneLog -ErrorAction SilentlyContinue) {
