@@ -68,3 +68,21 @@ Describe 'Get-DuneVmStatus local mode (unchanged, credential-free)' {
         Should -Invoke Get-VMNetworkAdapter -ParameterFilter { -not $ComputerName -and -not $Credential -and $VMName -eq 'dune-awakening' }
     }
 }
+
+Describe 'Get-DuneBattlegroupSnapshotFresh VM reuse' {
+    It 'uses a supplied VM snapshot instead of repeating Hyper-V discovery' {
+        Mock -CommandName Get-DuneVmStatus -MockWith { throw 'duplicate VM discovery' }
+
+        $r = Get-DuneBattlegroupSnapshotFresh -VmStatus @{
+            exists = $false
+            name = 'dune-awakening'
+            state = 'NotFound'
+            running = $false
+            ip = ''
+        }
+
+        $r.available | Should -BeFalse
+        $r.reason | Should -Match 'does not exist'
+        Should -Invoke Get-DuneVmStatus -Times 0
+    }
+}
