@@ -33,7 +33,7 @@
 
 [CmdletBinding()]
 param(
-    [string]$Version = '13.6.0',
+    [string]$Version = '13.6.1',
     [switch]$Quiet
 )
 
