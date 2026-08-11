@@ -169,6 +169,11 @@ export type GameConfigExperimentalCategoryResponse = {
   fields: GameConfigField[]
 }
 
+export type GameConfigExperimentalSearchResponse = {
+  query: string
+  fields: GameConfigField[]
+}
+
 export type GameConfigIniKey = {
   key: string
   value: string

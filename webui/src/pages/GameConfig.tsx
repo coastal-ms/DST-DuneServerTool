@@ -11,6 +11,7 @@ import {
   getGameConfigSchema,
   getGameConfigExperimentalCategories,
   getGameConfigExperimentalCategory,
+  searchGameConfigExperimental,
   getGameConfig,
   saveGameConfig,
   reloadGameConfigPods,
@@ -388,6 +389,9 @@ export function GameConfig({ mode = 'standard' }: { mode?: 'standard' | 'experim
   const [experimentalCategoryCache, setExperimentalCategoryCache] = useState<Record<string, GameConfigField[]>>({})
   const [experimentalCategoryLoading, setExperimentalCategoryLoading] = useState<string | null>(null)
   const [experimentalCategoryError, setExperimentalCategoryError] = useState<string | null>(null)
+  const [experimentalSearchFields, setExperimentalSearchFields] = useState<GameConfigField[]>([])
+  const [experimentalSearchLoading, setExperimentalSearchLoading] = useState(false)
+  const [experimentalSearchError, setExperimentalSearchError] = useState<string | null>(null)
   const [experimentalSource, setExperimentalSource] = useState<'all' | 'Dune' | 'Engine'>('all')
   const [experimentalRisk, setExperimentalRisk] = useState<'all' | 'experimental' | 'diagnostic' | 'high' | 'critical'>('all')
   const [experimentalModifiedOnly, setExperimentalModifiedOnly] = useState(false)
@@ -947,8 +951,14 @@ export function GameConfig({ mode = 'standard' }: { mode?: 'standard' | 'experim
   }, [values, originals])
 
   const loadedExperimentalFields = useMemo(
-    () => Object.values(experimentalCategoryCache).flat(),
-    [experimentalCategoryCache],
+    () => {
+      const fields = [...Object.values(experimentalCategoryCache).flat(), ...experimentalSearchFields]
+      return [...new Map(fields.map(field => [
+        `${field.file}||${field.section}||${field.key}`.toLowerCase(),
+        field,
+      ] as const)).values()]
+    },
+    [experimentalCategoryCache, experimentalSearchFields],
   )
   const schemaWithLoadedExperimental = useMemo(
     () => loadedExperimentalFields.length > 0
@@ -1030,11 +1040,16 @@ export function GameConfig({ mode = 'standard' }: { mode?: 'standard' | 'experim
     for (const category of experimentalCatalogCategories) {
       counts.set(category.category, (counts.get(category.category) ?? 0) + category.count)
     }
-    return [...counts.entries()]
+    counts.delete('All')
+    const groups = [...counts.entries()]
       .map(([name, count]) => ({ name, count }))
       .sort((a, b) => experimentalGroupRank(a.name) - experimentalGroupRank(b.name) || a.name.localeCompare(b.name))
+    return [{ name: 'All', count: groups.reduce((total, group) => total + group.count, 0) }, ...groups]
   }, [experimentalPage, visibleSchema, experimentalCatalogCategories])
-  const selectedExperimentalGroup = experimentalGroup ?? experimentalGroups[0]?.name ?? ''
+  const selectedExperimentalGroup = experimentalGroup
+    ?? experimentalGroups.find(group => group.name !== 'All')?.name
+    ?? ''
+  const experimentalSearchActive = search.trim() !== ''
 
   useEffect(() => {
     if (!experimentalPage || !selectedExperimentalGroup) return
@@ -1061,10 +1076,44 @@ export function GameConfig({ mode = 'standard' }: { mode?: 'standard' | 'experim
   }, [experimentalPage, selectedExperimentalGroup, experimentalCategoryCache])
 
   useEffect(() => {
-    const fields = experimentalCategoryCache[selectedExperimentalGroup]
-    if (!fields || loadState === 'idle' || loadState === 'loading') return
+    if (!experimentalPage) return
+    const query = search.trim()
+    if (!query) {
+      setExperimentalSearchFields([])
+      setExperimentalSearchLoading(false)
+      setExperimentalSearchError(null)
+      return
+    }
+    let cancelled = false
+    setExperimentalSearchFields([])
+    setExperimentalSearchLoading(true)
+    setExperimentalSearchError(null)
+    const timer = window.setTimeout(() => {
+      void searchGameConfigExperimental(query)
+        .then(response => {
+          if (!cancelled) setExperimentalSearchFields(response.fields ?? [])
+        })
+        .catch(error => {
+          if (!cancelled) setExperimentalSearchError(error instanceof Error ? error.message : String(error))
+        })
+        .finally(() => {
+          if (!cancelled) setExperimentalSearchLoading(false)
+        })
+    }, 250)
+    return () => {
+      cancelled = true
+      window.clearTimeout(timer)
+    }
+  }, [experimentalPage, search])
+
+  const experimentalFieldsToSeed = experimentalSearchActive
+    ? experimentalSearchFields
+    : (experimentalCategoryCache[selectedExperimentalGroup] ?? [])
+
+  useEffect(() => {
+    if (experimentalFieldsToSeed.length === 0 || loadState === 'idle' || loadState === 'loading') return
     const seeded: Record<string, string> = {}
-    for (const field of fields) seeded[field.key] = currentValue(cfg, field)
+    for (const field of experimentalFieldsToSeed) seeded[field.key] = currentValue(cfg, field)
     setValues(previous => {
       const next = { ...previous }
       for (const [key, value] of Object.entries(seeded)) {
@@ -1079,15 +1128,22 @@ export function GameConfig({ mode = 'standard' }: { mode?: 'standard' | 'experim
       }
       return next
     })
-  }, [experimentalCategoryCache, selectedExperimentalGroup, loadState, cfg])
+  }, [experimentalFieldsToSeed, loadState, cfg])
 
   const experimentalFilteredFields = useMemo(() => {
     if (!experimentalPage || !visibleSchema) return [] as GameConfigField[]
     const q = search.trim().toLowerCase()
-    return [
-      ...(visibleSchema.find(category => category.category === selectedExperimentalGroup)?.fields ?? []),
-      ...(experimentalCategoryCache[selectedExperimentalGroup] ?? []),
-    ]
+    const schemaFields = experimentalSearchActive || selectedExperimentalGroup === 'All'
+      ? visibleSchema.flatMap(category => category.fields ?? [])
+      : (visibleSchema.find(category => category.category === selectedExperimentalGroup)?.fields ?? [])
+    const catalogFields = experimentalSearchActive
+      ? experimentalSearchFields
+      : (experimentalCategoryCache[selectedExperimentalGroup] ?? [])
+    const candidates = [...new Map([...schemaFields, ...catalogFields].map(field => [
+      `${field.file}||${field.section}||${field.key}`.toLowerCase(),
+      field,
+    ] as const)).values()]
+    return candidates
       .filter(field => {
         if (experimentalSource !== 'all' && field.source !== experimentalSource) return false
         if (experimentalRisk !== 'all' && field.risk !== experimentalRisk) return false
@@ -1099,7 +1155,7 @@ export function GameConfig({ mode = 'standard' }: { mode?: 'standard' | 'experim
           || (field.group ?? '').toLowerCase().includes(q)
       })
       .sort((a, b) => a.key.localeCompare(b.key))
-  }, [experimentalPage, visibleSchema, experimentalCategoryCache, selectedExperimentalGroup, search, experimentalSource, experimentalRisk, experimentalModifiedOnly, cfg])
+  }, [experimentalPage, visibleSchema, experimentalCategoryCache, experimentalSearchFields, experimentalSearchActive, selectedExperimentalGroup, search, experimentalSource, experimentalRisk, experimentalModifiedOnly, cfg])
 
   useEffect(() => {
     setExperimentalPageIndex(0)
@@ -1110,7 +1166,7 @@ export function GameConfig({ mode = 'standard' }: { mode?: 'standard' | 'experim
     if (experimentalPage) {
       const start = experimentalPageIndex * EXPERIMENTAL_PAGE_SIZE
       return [{
-        category: selectedExperimentalGroup,
+        category: experimentalSearchActive ? 'Search results' : selectedExperimentalGroup,
         fields: experimentalFilteredFields.slice(start, start + EXPERIMENTAL_PAGE_SIZE),
       }]
     }
@@ -1841,7 +1897,7 @@ export function GameConfig({ mode = 'standard' }: { mode?: 'standard' | 'experim
               type="text"
               value={search}
               onChange={e => setSearch(e.target.value)}
-              placeholder="Filter settings…"
+              placeholder={experimentalPage ? 'Search all Experimental Lab settings…' : 'Filter settings…'}
               className="w-full pl-9 pr-3 py-2 rounded-lg bg-surface-2 border border-border text-text text-sm placeholder:text-text-dim focus:outline-none focus:ring-2 focus:ring-ibad focus:border-ibad/50"
             />
           </div>
@@ -1891,14 +1947,18 @@ export function GameConfig({ mode = 'standard' }: { mode?: 'standard' | 'experim
                 Modified only
               </label>
               <span className="text-xs text-text-dim ml-auto">
-                {experimentalCategoryLoading === selectedExperimentalGroup
-                  ? 'Loading category...'
-                  : `${experimentalFilteredFields.length.toLocaleString()} recovered controls`}
+                {experimentalSearchActive && experimentalSearchLoading
+                  ? 'Searching all categories...'
+                  : !experimentalSearchActive && experimentalCategoryLoading === selectedExperimentalGroup
+                    ? 'Loading category...'
+                    : `${experimentalFilteredFields.length.toLocaleString()} recovered controls${experimentalSearchActive ? ' across all categories' : ''}`}
               </span>
             </div>
           )}
-          {experimentalPage && experimentalCategoryError && (
-            <div className="mb-4 text-xs text-danger">{experimentalCategoryError}</div>
+          {experimentalPage && (experimentalSearchActive ? experimentalSearchError : experimentalCategoryError) && (
+            <div className="mb-4 text-xs text-danger">
+              {experimentalSearchActive ? experimentalSearchError : experimentalCategoryError}
+            </div>
           )}
 
           <div className="space-y-5">
@@ -1944,7 +2004,7 @@ export function GameConfig({ mode = 'standard' }: { mode?: 'standard' | 'experim
                   }).map((_, index) => (
                     <div key={`empty-slot-${index}`} className="h-32 invisible" aria-hidden="true" />
                   ))}
-                  {experimentalPage && (cat.fields ?? []).length === 0 && experimentalCategoryLoading !== selectedExperimentalGroup && (
+                  {experimentalPage && (cat.fields ?? []).length === 0 && !experimentalSearchLoading && experimentalCategoryLoading !== selectedExperimentalGroup && (
                     <div className="md:col-span-2 text-sm text-text-muted">No recovered controls match these filters.</div>
                   )}
                 </div>

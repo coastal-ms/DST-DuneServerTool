@@ -566,9 +566,26 @@ function Get-DuneAdvancedCvarCategoriesApi {
 
 function Get-DuneAdvancedCvarCategoryApi {
     param([Parameter(Mandatory)][string]$Category)
+    if ($Category -eq 'All') {
+        return @(Get-DuneAdvancedCvarCatalog | Sort-Object key)
+    }
     return @(
         Get-DuneAdvancedCvarCatalog |
             Where-Object { "$($_.group)" -eq $Category } |
+            Sort-Object key
+    )
+}
+
+function Search-DuneAdvancedCvarCatalogApi {
+    param([Parameter(Mandatory)][string]$Query)
+    $needle = $Query.Trim()
+    if (-not $needle) { return @() }
+    return @(
+        Get-DuneAdvancedCvarCatalog |
+            Where-Object {
+                $haystack = @($_.key, $_.label, $_.help, $_.group) -join "`n"
+                $haystack.IndexOf($needle, [System.StringComparison]::OrdinalIgnoreCase) -ge 0
+            } |
             Sort-Object key
     )
 }
