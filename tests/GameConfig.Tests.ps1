@@ -887,6 +887,15 @@ Describe 'DuneGameConfigSchema: experimental binary CVars' -Tag 'GameConfig' {
         $categories = @(Get-DuneAdvancedCvarCategoriesApi)
         ($categories | Measure-Object count -Sum).Sum | Should -BeGreaterThan 4900
         @(Get-DuneAdvancedCvarCategoryApi -Category 'Dune gameplay').Count | Should -BeGreaterThan 500
+        $fullCatalog = @(Get-DuneAdvancedCvarCatalog)
+        @(Get-DuneAdvancedCvarCategoryApi -Category 'All').Count | Should -Be $fullCatalog.Count
+        $searchResults = @(Search-DuneAdvancedCvarCatalogApi -Query 'EXECUTEACTIONONEVENT')
+        @($searchResults.key) | Should -Contain 'ak.soundengine.executeActionOnEvent'
+        @($searchResults.group | Select-Object -Unique).Count | Should -BeGreaterThan 0
+        @(Search-DuneAdvancedCvarCatalogApi -Query '  ').Count | Should -Be 0
+        $singleResult = [object[]]@(Search-DuneAdvancedCvarCatalogApi -Query 'fuel')
+        $singleResult.Count | Should -Be 1
+        (@{ fields = $singleResult } | ConvertTo-Json -Compress) | Should -Match '"fields":\['
         # Namespace rules must win over keyword ones: a sandworm control that
         # mentions vehicles is a sandworm control.
         (Get-DuneExperimentalGroup -Key 'Sandworm.SandwormCheckIfBreachLocationIsFreeOfVehicles') | Should -Be 'Sandworm'

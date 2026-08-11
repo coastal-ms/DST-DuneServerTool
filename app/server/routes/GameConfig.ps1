@@ -39,6 +39,23 @@ Register-DuneRoute -Method GET -Path '/api/gameconfig/experimental/category' -Ha
     }
 }
 
+Register-DuneRoute -Method GET -Path '/api/gameconfig/experimental/search' -Handler {
+    param($req, $res, $routeParams, $body)
+    $query = "$($req.QueryString['q'])".Trim()
+    try {
+        $fields = [object[]]@()
+        if ($query) {
+            $fields = [object[]]@(Search-DuneAdvancedCvarCatalogApi -Query $query)
+        }
+        Write-DuneJson -Response $res -Body @{
+            query  = $query
+            fields = $fields
+        }
+    } catch {
+        Write-DuneError -Response $res -Status 500 -Message "Experimental Lab search failed: $($_.Exception.Message)"
+    }
+}
+
 # -----------------------------------------------------------------------------
 # GET /api/gameconfig/defaults — full settings catalog from the live image.
 # Reads DefaultGame.ini + DefaultEngine.ini out of a running game-server pod

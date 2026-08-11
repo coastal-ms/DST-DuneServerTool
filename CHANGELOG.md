@@ -13,6 +13,19 @@ here cover everything those tags shipped.
 
 ## [Unreleased]
 
+## [13.6.1] - 2026-08-10
+
+### Changed
+
+- Experimental Lab restores the opt-in **All** category and searches the full
+  settings catalog regardless of the selected category, while still opening on
+  a smaller category so the complete catalog is not loaded at page startup.
+
+### Fixed
+
+- Experimental Lab search results remain a collection when only one setting
+  matches, preventing the page from crashing on searches such as `fuel`.
+
 ## [13.6.0] - 2026-08-10
 
 ### Added
