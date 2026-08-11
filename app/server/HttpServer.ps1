@@ -256,11 +256,14 @@ function Initialize-DuneApiPool {
         }
     }
 
-    $pool = [runspacefactory]::CreateRunspacePool(2, $script:DuneApiMax, $iss, $Host)
+    # One warm worker is enough for the first dashboard request. Additional
+    # workers are created on demand, avoiding a second full startup-script load
+    # before the listener begins accepting requests.
+    $pool = [runspacefactory]::CreateRunspacePool(1, $script:DuneApiMax, $iss, $Host)
     $pool.Open()
     $script:DuneApiPool = $pool
     if (Get-Command Write-DuneLog -ErrorAction SilentlyContinue) {
-        Write-DuneLog "API handler pool ready (2..$($script:DuneApiMax) runspaces)"
+        Write-DuneLog "API handler pool ready (1..$($script:DuneApiMax) runspaces)"
     }
 }
 

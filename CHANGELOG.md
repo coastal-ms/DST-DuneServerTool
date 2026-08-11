@@ -13,6 +13,18 @@ here cover everything those tags shipped.
 
 ## [Unreleased]
 
+## [13.6.0] - 2026-08-10
+
+### Added
+
+- **Specialization levels can apply their available rewards per track.** Gameplay Admin → Players → Specs keeps **Set** as the level/XP-only path for players who want to choose rewards themselves, while the new **Apply level** action grants every reward available through the selected level in that specialization without touching other tracks or removing existing rewards.
+
+### Changed
+
+- Improved cold-start and Server Health load time by moving VM maintenance off
+  the startup path, removing an app-window delay, reducing API warmup work, and
+  eliminating duplicate initial status requests.
+
 ## [13.5.4] - 2026-08-10
 
 ### Added

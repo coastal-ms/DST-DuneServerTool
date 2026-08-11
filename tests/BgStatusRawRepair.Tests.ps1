@@ -71,3 +71,35 @@ Healthy    Healthy    Running    Ready      3d4h
         Repair-DuneBgInfoRawOutput -Text $text -Info $script:Info | Should -Be $text
     }
 }
+
+Describe 'ConvertFrom-DuneBgJsonStatus server title' {
+    It 'returns the title already present in the status SSH payload' {
+        $json = @{
+            items = @(@{
+                metadata = @{ name = 'sh-abc123' }
+                spec = @{ title = 'Dune, my Arrakis' }
+                status = @{ phase = 'Healthy' }
+            })
+        } | ConvertTo-Json -Depth 6
+
+        $result = ConvertFrom-DuneBgJsonStatus -JsonText $json
+
+        $result.name | Should -Be 'sh-abc123'
+        $result.title | Should -Be 'Dune, my Arrakis'
+    }
+
+    It 'falls back to the operator title annotation' {
+        $json = @{
+            items = @(@{
+                metadata = @{
+                    name = 'sh-abc123'
+                    annotations = @{ 'igw.funcom.com/battlegroup-title' = 'Annotated title' }
+                }
+                spec = @{}
+                status = @{ phase = 'Healthy' }
+            })
+        } | ConvertTo-Json -Depth 6
+
+        (ConvertFrom-DuneBgJsonStatus -JsonText $json).title | Should -Be 'Annotated title'
+    }
+}
