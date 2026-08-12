@@ -2756,7 +2756,13 @@ fi
         Invoke-OnDemandPartitionClear -Ip $ip -DelaySec 0 -Phase "post-$cmdName" -Fast
     }
 
-    # After start/restart, resolve director port
+    # One-shot web/CLI commands are complete once the battlegroup command and
+    # fast partition cleanup return. The web dashboard resolves links itself, so
+    # do not hold this detached console for up to 60 more seconds discovering a
+    # Director port it will never use.
+    if ($Cmd) { break }
+
+    # Interactive menu only: resolve Director port for the next menu render.
     if ($cmdName -eq "start" -or $cmdName -eq "restart") {
         $elapsed = 0; $timeout = 60
         while (-not $directorPort -and $elapsed -lt $timeout) {
@@ -2768,7 +2774,6 @@ fi
         if (-not $directorPort) { Write-Warning "Could not determine Director port after $timeout seconds." }
     }
 
-    if ($Cmd) { break }
 }
 
 Stop-Transcript | Out-Null
