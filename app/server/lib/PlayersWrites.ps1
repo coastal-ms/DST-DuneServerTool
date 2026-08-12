@@ -1562,20 +1562,9 @@ WHERE character_id IN (SELECT id FROM dune.player_state WHERE account_id=$Accoun
       OR tag LIKE 'NPE.%'
   );
 $skillResetSql
-UPDATE dune.fgl_entities fe
-SET components = jsonb_set(
-    fe.components,
-    ARRAY['FLevelComponent','1','ActiveAbilityTags'],
-    jsonb_build_array(
-        COALESCE(
-            fe.components->'FLevelComponent'->1->'ActiveAbilityTags'->0,
-            jsonb_build_object('TagName', 'None')
-        )
-    ),
-    true)
-WHERE fe.entity_id=(
-    SELECT entity_id FROM dune.actor_fgl_entities
-    WHERE actor_id=$pawnID::bigint AND slot_name='DuneCharacter'
+SELECT dune.complete_journey_story_nodes_for_player(
+    (SELECT "user" FROM dune.accounts WHERE id=$AccountId::bigint),
+    ARRAY['DA_MQ_ANewBeginning.First Skirmish.Unlock more skills.Equip second ability']::text[]
 );
 DELETE FROM dune.items i
 USING dune.inventories inv
@@ -1600,7 +1589,12 @@ COMMIT;
     $verifySql = @"
 SELECT
   (SELECT COUNT(*) FROM dune.journey_story_node
-   WHERE character_id IN (SELECT id FROM dune.player_state WHERE account_id=$AccountId::bigint)) AS journey_rows,
+   WHERE character_id IN (SELECT id FROM dune.player_state WHERE account_id=$AccountId::bigint)
+     AND story_node_id <> 'DA_MQ_ANewBeginning.First Skirmish.Unlock more skills.Equip second ability') AS unexpected_journey_rows,
+  (SELECT COUNT(*) FROM dune.journey_story_node
+   WHERE character_id IN (SELECT id FROM dune.player_state WHERE account_id=$AccountId::bigint)
+     AND story_node_id = 'DA_MQ_ANewBeginning.First Skirmish.Unlock more skills.Equip second ability'
+     AND complete_condition_state='true'::jsonb) AS equip_objective_seeded,
   (SELECT COUNT(*) FROM dune.player_tags
    WHERE character_id IN (SELECT id FROM dune.player_state WHERE account_id=$AccountId::bigint)
      AND (
@@ -1613,32 +1607,22 @@ SELECT
      )) AS story_tags,
   (SELECT COUNT(*) FROM dune.items i JOIN dune.inventories inv ON inv.id=i.inventory_id
    WHERE inv.actor_id=$pawnID::bigint AND inv.inventory_type=29 AND i.template_id='ContractItem') AS contract_items,
-  $skillVerifySql AS reset_skill_mismatch,
-  (SELECT COUNT(*)
-   FROM dune.fgl_entities fe
-   JOIN dune.actor_fgl_entities afe ON afe.entity_id=fe.entity_id
-   CROSS JOIN LATERAL jsonb_array_elements(
-       COALESCE(fe.components->'FLevelComponent'->1->'ActiveAbilityTags', '[]'::jsonb)
-   ) WITH ORDINALITY slots(value, slot_number)
-   WHERE afe.actor_id=$pawnID::bigint
-     AND afe.slot_name='DuneCharacter'
-     AND slots.slot_number > 1
-     AND COALESCE(slots.value->>'TagName', 'None') <> 'None') AS extra_active_abilities;
+  $skillVerifySql AS reset_skill_mismatch;
 "@
     $vr = Invoke-DuneSqlQuery -Ip $Ip -Sql $verifySql -ReadOnly $true -MaxRows 1 -TimeoutSec 30
     if (-not $vr.ok) { return @{ ok = $false; error = "wipe journey verification: $($vr.error)" } }
     $rows = @(ConvertTo-DuneRowMaps -Result $vr)
     if ($rows.Count -ne 1) { return @{ ok = $false; error = 'wipe journey verification returned no result.' } }
-    $journeyRows = [int64](ConvertTo-DuneInt $rows[0]['journey_rows'])
+    $unexpectedJourneyRows = [int64](ConvertTo-DuneInt $rows[0]['unexpected_journey_rows'])
+    $equipObjectiveSeeded = [int64](ConvertTo-DuneInt $rows[0]['equip_objective_seeded'])
     $storyTags = [int64](ConvertTo-DuneInt $rows[0]['story_tags'])
     $contractItems = [int64](ConvertTo-DuneInt $rows[0]['contract_items'])
     $resetSkillMismatch = [int64](ConvertTo-DuneInt $rows[0]['reset_skill_mismatch'])
-    $extraActiveAbilities = [int64](ConvertTo-DuneInt $rows[0]['extra_active_abilities'])
-    if ($journeyRows -ne 0 -or $storyTags -ne 0 -or $contractItems -ne 0 -or
-        $resetSkillMismatch -ne 0 -or $extraActiveAbilities -ne 0) {
+    if ($unexpectedJourneyRows -ne 0 -or $equipObjectiveSeeded -ne 1 -or
+        $storyTags -ne 0 -or $contractItems -ne 0 -or $resetSkillMismatch -ne 0) {
         return @{
             ok = $false
-            error = "Journey reset incomplete: $journeyRows journey row(s), $storyTags story tag(s), $contractItems contract item(s), reset skill mismatch=$resetSkillMismatch, extra active abilities=$extraActiveAbilities."
+            error = "Journey reset incomplete: $unexpectedJourneyRows unexpected journey row(s), equip objective seeded=$equipObjectiveSeeded, $storyTags story tag(s), $contractItems contract item(s), reset skill mismatch=$resetSkillMismatch."
         }
     }
     $skillPart = if ($resetSkillName) {
@@ -1646,13 +1630,13 @@ SELECT
     } else { ' A learnable starter-tree ability was already available, so skills were preserved.' }
     return @{
         ok = $true
-        message = "Reset journey, NPE/journey/dialogue-contract tags, contract items, and active ability slots 2-3. Faction state and ability slot 1 were preserved.$skillPart The player can log back in and restart from the beginning."
-        journey_rows = 0
+        message = "Reset journey, NPE/journey/dialogue-contract tags, and contract items. Faction state and ability loadout were preserved; the equip-second-ability objective was seeded complete because veteran loadouts rehydrate on login.$skillPart The player can log back in and restart from the beginning."
+        journey_rows = 1
         story_tags = 0
         contract_items = 0
         reset_skill = $resetSkillName
         refunded_skill_points = $resetSkillPoints
-        extra_active_abilities = 0
+        equip_objective_seeded = $true
     }
 }
 

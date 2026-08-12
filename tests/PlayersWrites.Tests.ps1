@@ -247,11 +247,11 @@ Describe 'Invoke-DunePlayerWipeJourneyNodes' -Tag 'Pure' {
             param($Result)
             if ($Result.maps) { return @($Result.maps) }
             return @(@{
-                journey_rows = $Result.rows[0][0]
-                story_tags = $Result.rows[0][1]
-                contract_items = $Result.rows[0][2]
-                reset_skill_mismatch = $Result.rows[0][3]
-                extra_active_abilities = $Result.rows[0][4]
+                unexpected_journey_rows = $Result.rows[0][0]
+                equip_objective_seeded = $Result.rows[0][1]
+                story_tags = $Result.rows[0][2]
+                contract_items = $Result.rows[0][3]
+                reset_skill_mismatch = $Result.rows[0][4]
             })
         }
         function global:ConvertTo-DuneInt { param($Value) return [int64]$Value }
@@ -270,8 +270,8 @@ Describe 'Invoke-DunePlayerWipeJourneyNodes' -Tag 'Pure' {
                 }
                 return @{
                     ok = $true
-                    columns = @('journey_rows', 'story_tags', 'contract_items', 'reset_skill_mismatch', 'extra_active_abilities')
-                    rows = ,@('0', '0', '0', '0', '0')
+                    columns = @('unexpected_journey_rows', 'equip_objective_seeded', 'story_tags', 'contract_items', 'reset_skill_mismatch')
+                    rows = ,@('0', '1', '0', '0', '0')
                 }
             }
             return @{ ok = $true; message = 'COMMIT' }
@@ -316,15 +316,15 @@ Describe 'Invoke-DunePlayerWipeJourneyNodes' -Tag 'Pure' {
         $mutation | Should -Match 'inv\.actor_id=3946::bigint'
         $mutation | Should -Match "i\.template_id='ContractItem'"
         $mutation | Should -Match 'm_TrackedContractItemUid'
-        $mutation | Should -Match 'ActiveAbilityTags'
-        $mutation | Should -Match "jsonb_build_object\('TagName', 'None'\)"
-        $mutation | Should -Not -Match "jsonb_build_object\('TagName', 'None'\),\s*jsonb_build_object"
+        $mutation | Should -Match 'complete_journey_story_nodes_for_player'
+        $mutation | Should -Match 'Unlock more skills\.Equip second ability'
+        $mutation | Should -Not -Match 'ActiveAbilityTags'
         $mutation | Should -Match 'Skills\.Ability\.BattleCry'
         $mutation | Should -Match 'to_jsonb\(7::int\)'
         $mutation | Should -Match '\+ 2::int'
         $r.reset_skill | Should -Be 'Skills.Ability.BattleCry'
         $r.refunded_skill_points | Should -Be 2
-        $r.extra_active_abilities | Should -Be 0
+        $r.equip_objective_seeded | Should -BeTrue
     }
 
     It 'uses the complete wipe path for Reset Journey' {
@@ -370,8 +370,8 @@ Describe 'Invoke-DunePlayerWipeJourneyNodes' -Tag 'Pure' {
                 }
                 return @{
                     ok = $true
-                    columns = @('journey_rows', 'story_tags', 'contract_items', 'reset_skill_mismatch', 'extra_active_abilities')
-                    rows = ,@('1', '2', '3', '1', '2')
+                    columns = @('unexpected_journey_rows', 'equip_objective_seeded', 'story_tags', 'contract_items', 'reset_skill_mismatch')
+                    rows = ,@('1', '0', '2', '3', '1')
                 }
             }
             return @{ ok = $true; message = 'COMMIT' }
