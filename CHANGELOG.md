@@ -13,6 +13,13 @@ here cover everything those tags shipped.
 
 ## [Unreleased]
 
+## [13.6.5] - 2026-08-12
+
+### Fixed
+
+- Scheduled restart checkboxes keep the same visible size beside short and long
+  labels.
+
 ## [13.6.4] - 2026-08-12
 
 ### Added
