@@ -1570,9 +1570,7 @@ SET components = jsonb_set(
         COALESCE(
             fe.components->'FLevelComponent'->1->'ActiveAbilityTags'->0,
             jsonb_build_object('TagName', 'None')
-        ),
-        jsonb_build_object('TagName', 'None'),
-        jsonb_build_object('TagName', 'None')
+        )
     ),
     true)
 WHERE fe.entity_id=(

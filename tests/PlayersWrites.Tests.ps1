@@ -318,6 +318,7 @@ Describe 'Invoke-DunePlayerWipeJourneyNodes' -Tag 'Pure' {
         $mutation | Should -Match 'm_TrackedContractItemUid'
         $mutation | Should -Match 'ActiveAbilityTags'
         $mutation | Should -Match "jsonb_build_object\('TagName', 'None'\)"
+        $mutation | Should -Not -Match "jsonb_build_object\('TagName', 'None'\),\s*jsonb_build_object"
         $mutation | Should -Match 'Skills\.Ability\.BattleCry'
         $mutation | Should -Match 'to_jsonb\(7::int\)'
         $mutation | Should -Match '\+ 2::int'
