@@ -1,13 +1,10 @@
 ﻿# RestartSchedule.ps1
-# DST-driven scheduled battlegroup restarts.
+# DST-managed VM-side scheduled battlegroup maintenance.
 #
-# Unlike BackupSchedule.ps1 (which installs a VM-side crontab entry that fires
-# even when this tool is closed), the restart scheduler runs *inside* the DST
-# server process: a dedicated background runspace wakes every ~30s and, once a
-# day at the configured local time, optionally sends an in-game broadcast a
-# configurable number of minutes ahead, then issues `battlegroup restart` over
-# SSH. Because it lives in this process it ONLY works while DST is open and
-# running - the UI states this plainly.
+# The actual restart/update runs from root's VM crontab and therefore works when
+# DST is closed. DST's background runspace still provides advance broadcasts,
+# Discord notifications, status checks, and startup reconciliation of the VM
+# script/crontab.
 #
 # State (schedule + last-run stamps + last Funcom update check) lives in a JSON
 # file under %LOCALAPPDATA%\DuneServer so it survives restarts of the tool but
@@ -46,6 +43,13 @@ $script:DuneServerSteamAppIdFallback = '4754530'
 # battlegroup restart. The backup guard uses `find -mmin -30`, so the marker
 # only needs its mtime refreshed shortly before / during the restart.
 $script:DuneRestartMarkerPath = '/tmp/dst-restart-active'
+$script:DuneRestartCronBeginMarker = '# DST-DAILY-MAINTENANCE BEGIN'
+$script:DuneRestartCronEndMarker = '# DST-DAILY-MAINTENANCE END'
+$script:DuneRestartVmScriptPath = '/usr/local/bin/dst-daily-maintenance.sh'
+$script:DuneRestartVmLogPath = '/var/log/dst-daily-maintenance.log'
+$script:DuneRestartVmResultPath = '/var/lib/dune-server/daily-maintenance-result'
+$script:DuneRestartVmResultLastPoll = [datetime]::MinValue
+$script:DuneRestartVmResultPollSeconds = 300
 
 function Get-DuneRestartStatePath {
     $dir = Join-Path $env:LOCALAPPDATA 'DuneServer'
@@ -573,72 +577,159 @@ function Invoke-DuneScheduledRestart {
     }
 }
 
-function Invoke-DuneScheduledFuncomUpdate {
-    $ctx = Get-DuneBackupContext
-    if (-not $ctx.ok) {
-        return @{ ok = $false; status = $ctx.status; message = $ctx.message; action = 'update' }
-    }
+function New-DuneVmDailyMaintenanceScript {
+    param([bool]$ApplyFuncomUpdates)
+    $apply = if ($ApplyFuncomUpdates) { '1' } else { '0' }
     $appId = $script:DuneServerSteamAppIdFallback
-    $script = @"
-set -eu
-if [ -d /home/dune/.dune/download/steamapps/downloading/$appId ] || [ -d /home/dune/.dune/download/steamapps/temp ]; then
-  echo '[dst] Cleaning SteamCMD orphan workdir before scheduled update...'
-  rm -rf /home/dune/.dune/download/steamapps/downloading/$appId /home/dune/.dune/download/steamapps/temp
+    $body = @"
+#!/bin/bash
+set -u
+APPLY_UPDATES=$apply
+APPID=$appId
+LOCK=/tmp/dst-daily-maintenance.lock
+LOG=$script:DuneRestartVmLogPath
+RESULT=$script:DuneRestartVmResultPath
+mkdir -p /var/lib/dune-server
+if ! mkdir "`$LOCK" 2>/dev/null; then
+  exit 0
 fi
-touch $script:DuneRestartMarkerPath 2>/dev/null
-/home/dune/.dune/bin/battlegroup update
+trap 'rmdir "`$LOCK" 2>/dev/null || true' EXIT INT TERM
+exec >>"`$LOG" 2>&1
+echo "=== `$(date -u +%Y-%m-%dT%H:%M:%SZ) scheduled maintenance ==="
+MANIFEST=`$(ls /home/dune/.dune/download/steamapps/appmanifest_*.acf 2>/dev/null | head -1 || true)
+INSTALLED=""
+if [ -n "`$MANIFEST" ]; then
+  INSTALLED=`$(grep -E '"buildid"' "`$MANIFEST" 2>/dev/null | head -1 | grep -oE '[0-9]+' | head -1 || true)
+fi
+LATEST=""
+JSON=`$(wget -qO- -T 8 "https://api.steamcmd.net/v1/info/`$APPID" 2>/dev/null || true)
+if [ -n "`$JSON" ]; then
+  LATEST=`$(printf '%s' "`$JSON" | tr -d ' \n' | grep -oE '"public":\{"buildid":"[0-9]+"' | head -1 | grep -oE '[0-9]+' || true)
+fi
+ACTION=restart
+if [ "`$APPLY_UPDATES" = "1" ] && [ -n "`$INSTALLED" ] && [ -n "`$LATEST" ] && [ "`$LATEST" -gt "`$INSTALLED" ]; then
+  ACTION=update
+fi
+touch $script:DuneRestartMarkerPath 2>/dev/null || true
+if [ "`$ACTION" = "update" ]; then
+  ORPHAN_WORKDIR=0
+  [ -d /home/dune/.dune/download/steamapps/downloading/`$APPID ] && ORPHAN_WORKDIR=1
+  [ -d /home/dune/.dune/download/steamapps/temp ] && ORPHAN_WORKDIR=1
+  if [ "`$ORPHAN_WORKDIR" = "1" ]; then
+    echo '[dst] Cleaning SteamCMD orphan workdir before scheduled update...'
+    rm -rf /home/dune/.dune/download/steamapps/downloading/`$APPID /home/dune/.dune/download/steamapps/temp
+  fi
+  /home/dune/.dune/bin/battlegroup update
+  RC=`$?
+else
+  /home/dune/.dune/bin/battlegroup restart
+  RC=`$?
+fi
+printf '%s|%s|%s|%s|%s\n' "`$(date -u +%Y-%m-%dT%H:%M:%SZ)" "`$ACTION" "`$RC" "`$INSTALLED" "`$LATEST" > "`$RESULT"
+exit "`$RC"
 "@
+    return (($body -replace "`r",'').TrimEnd("`n") + "`n")
+}
+
+function ConvertTo-DuneVmCronTime {
+    param([string]$Time, [string]$VmOffset)
+    if ($Time -notmatch '^([01]\d|2[0-3]):([0-5]\d)$') { throw "Invalid schedule time '$Time'." }
+    if ($VmOffset -notmatch '^([+-])(\d{2})(\d{2})$') { throw "Invalid VM timezone offset '$VmOffset'." }
+    $sign = if ($Matches[1] -eq '-') { -1 } else { 1 }
+    $offsetMinutes = $sign * (([int]$Matches[2] * 60) + [int]$Matches[3])
+    $local = [datetime]::Today.AddHours([int]$Time.Substring(0,2)).AddMinutes([int]$Time.Substring(3,2))
+    $utc = $local.ToUniversalTime()
+    $vm = $utc.AddMinutes($offsetMinutes)
+    return @{ hour = $vm.Hour; minute = $vm.Minute; offset = $VmOffset }
+}
+
+function Sync-DuneRestartScheduleAutomation {
+    $state = Get-DuneRestartSchedule
+    $ctx = Get-DuneBackupContext
+    if (-not $ctx.ok) { return @{ ok = $false; message = $ctx.message } }
     try {
-        $r = Invoke-DuneBackupShell -Ip $ctx.ip -Script $script -TimeoutSec 2100
+        $offsetResult = Invoke-DuneBackupShell -Ip $ctx.ip -Script 'date +%z' -TimeoutSec 15
+        if ($offsetResult.rc -ne 0) { return @{ ok = $false; message = 'Could not read VM timezone offset.' } }
+        $cronTime = ConvertTo-DuneVmCronTime -Time $state.time -VmOffset ([string]$offsetResult.out).Trim()
+        $vmScript = New-DuneVmDailyMaintenanceScript -ApplyFuncomUpdates ([bool]$state.applyFuncomUpdates)
+        $scriptB64 = [Convert]::ToBase64String([Text.Encoding]::UTF8.GetBytes($vmScript))
+        $cronLine = "$($cronTime.minute) $($cronTime.hour) * * * $script:DuneRestartVmScriptPath"
+        $enabled = if ($state.enabled) { '1' } else { '0' }
+        $install = @"
+set -eu
+printf '%s' '$scriptB64' | base64 -d > $script:DuneRestartVmScriptPath
+chmod 755 $script:DuneRestartVmScriptPath
+/bin/bash -n $script:DuneRestartVmScriptPath
+OLD=`$(crontab -l 2>/dev/null || true)
+printf '%s\n' "`$OLD" | awk '
+  `$0 == "$script:DuneRestartCronBeginMarker" { skip=1; next }
+  `$0 == "$script:DuneRestartCronEndMarker" { skip=0; next }
+  !skip { print }
+' > /tmp/dst-crontab-clean
+if [ "$enabled" = "1" ]; then
+  {
+    cat /tmp/dst-crontab-clean
+    echo "$script:DuneRestartCronBeginMarker"
+    echo "$cronLine"
+    echo "$script:DuneRestartCronEndMarker"
+  } > /tmp/dst-crontab-new
+else
+  cp /tmp/dst-crontab-clean /tmp/dst-crontab-new
+fi
+crontab /tmp/dst-crontab-new
+rm -f /tmp/dst-crontab-clean /tmp/dst-crontab-new
+if [ -x /sbin/rc-update ]; then /sbin/rc-update add crond default >/dev/null 2>&1 || true; fi
+if [ -x /sbin/rc-service ]; then /sbin/rc-service crond start >/dev/null 2>&1 || true; fi
+crontab -l 2>/dev/null || true
+"@
+        $r = Invoke-DuneBackupShell -Ip $ctx.ip -Script $install -TimeoutSec 30
+        if ($r.rc -ne 0) { return @{ ok = $false; message = "VM cron install exited $($r.rc)." } }
+        $hasBlock = ([string]$r.out -match [regex]::Escape($script:DuneRestartCronBeginMarker))
+        if ($state.enabled -and -not $hasBlock) { return @{ ok = $false; message = 'VM cron verification failed.' } }
+        if (-not $state.enabled -and $hasBlock) { return @{ ok = $false; message = 'VM cron remained after disabling schedule.' } }
+        return @{ ok = $true; message = if ($state.enabled) { "VM cron ensured at $cronLine (VM offset $($cronTime.offset))." } else { 'VM cron disabled.' } }
     } catch {
-        return @{ ok = $false; status = 502; message = "Scheduled Funcom update failed: $($_.Exception.Message)"; action = 'update' }
-    }
-    $rc = if ($r) { [int]$r.rc } else { -1 }
-    $ok = ($rc -eq 0)
-    return @{
-        ok      = $ok
-        rc      = $rc
-        action  = 'update'
-        message = if ($ok) { 'Scheduled Funcom server update completed.' } else { "Scheduled Funcom update exited $rc." }
-        out     = if ($r) { [string]$r.out } else { '' }
+        return @{ ok = $false; message = "VM cron reconciliation failed: $($_.Exception.Message)" }
     }
 }
 
-function Invoke-DuneScheduledMaintenance {
-    param([bool]$ApplyFuncomUpdates)
-
-    $check = $null
+function Sync-DuneVmDailyMaintenanceResult {
+    param([switch]$Force)
+    if (-not $Force -and
+        (([datetime]::UtcNow - $script:DuneRestartVmResultLastPoll).TotalSeconds -lt $script:DuneRestartVmResultPollSeconds)) {
+        return @{ ok = $true; changed = $false; skipped = $true; message = 'VM result poll not due.' }
+    }
+    $script:DuneRestartVmResultLastPoll = [datetime]::UtcNow
+    $ctx = Get-DuneBackupContext
+    if (-not $ctx.ok) { return @{ ok = $false; message = $ctx.message } }
     try {
-        $check = Get-DuneFuncomServerUpdateStatus -Persist
+        $script = @"
+if [ -f $script:DuneRestartVmResultPath ]; then
+  cat $script:DuneRestartVmResultPath
+fi
+"@
+        $r = Invoke-DuneBackupShell -Ip $ctx.ip -Script $script -TimeoutSec 15
+        if ($r.rc -ne 0) { return @{ ok = $false; message = "VM result read exited $($r.rc)." } }
+        $line = ([string]$r.out).Trim()
+        if (-not $line) { return @{ ok = $true; changed = $false; message = 'No VM maintenance result yet.' } }
+        $parts = @($line -split '\|', 5)
+        if ($parts.Count -ne 5) { return @{ ok = $false; message = 'VM maintenance result was malformed.' } }
+        $stamp, $action, $rcText, $installed, $latest = $parts
+        $rc = -1
+        if ($rcText -match '^-?\d+$') { $rc = [int]$rcText }
+        $state = Get-DuneRestartSchedule
+        $resultText = if ($rc -eq 0) { "$action ok @ $stamp" } else { "$action error (rc=$rc) @ $stamp" }
+        $changed = ($state.lastResult -ne $resultText)
+        $state.lastResult = $resultText
+        $state.installedBuild = $installed
+        $state.latestBuild = $latest
+        $state.updateAvailable = (($installed -match '^\d+$') -and ($latest -match '^\d+$') -and ([int64]$latest -gt [int64]$installed) -and $action -ne 'update')
+        $state.updateCheckedAt = $stamp
+        Save-DuneRestartSchedule -State $state
+        return @{ ok = $true; changed = $changed; action = $action; rc = $rc; message = $resultText }
     } catch {
-        $check = @{ ok = $false; available = $false; message = "Update check failed: $($_.Exception.Message)" }
+        return @{ ok = $false; message = "VM result reconciliation failed: $($_.Exception.Message)" }
     }
-
-    if ($ApplyFuncomUpdates -and $check.ok -and $check.available) {
-        if (Get-Command Write-DuneLog -ErrorAction SilentlyContinue) {
-            Write-DuneLog "scheduled maintenance applying Funcom update (installed=$($check.installedBuild) latest=$($check.latestBuild))"
-        }
-        $updated = Invoke-DuneScheduledFuncomUpdate
-        if ($updated.ok) {
-            try { [void](Get-DuneFuncomServerUpdateStatus -Persist) } catch {}
-        }
-        $updated['updateCheck'] = $check
-        return $updated
-    }
-
-    if (Get-Command Write-DuneLog -ErrorAction SilentlyContinue) {
-        if (-not $check.ok) {
-            Write-DuneLog "scheduled maintenance update check unconfirmed: $($check.message); continuing with normal restart" 'WARN'
-        } elseif ($check.available) {
-            Write-DuneLog 'scheduled maintenance found Funcom update; auto-apply is off, continuing with normal restart'
-        } else {
-            Write-DuneLog 'scheduled maintenance found no Funcom update; continuing with normal restart'
-        }
-    }
-    $restarted = Invoke-DuneScheduledRestart
-    $restarted['action'] = 'restart'
-    $restarted['updateCheck'] = $check
-    return $restarted
 }
 
 # One scheduler iteration. Safe to call every ~30s. Sends the pre-restart
@@ -739,47 +830,27 @@ function Invoke-DuneRestartScheduleTick {
         }
     }
 
-    # --- Restart (once/day, only within [restartAt, +30m]) ---
+    # --- VM cron observation (once/day) ---
+    # The VM owns the actual restart/update even while DST is closed. When DST is
+    # open, keep the dashboard update badge fresh and mark that today's cron
+    # window was observed; never issue a second host-side restart.
     $state = Get-DuneRestartSchedule
     if ($state.lastRestartDate -ne $today) {
         if ($now -ge $restartAt -and $now -le $restartWindowEnd) {
             if (Get-Command Write-DuneLog -ErrorAction SilentlyContinue) {
-                Write-DuneLog "scheduled restart firing (time=$($state.time))"
+                Write-DuneLog "VM cron maintenance window reached (host time=$($state.time))"
             }
-            $r = Invoke-DuneScheduledMaintenance -ApplyFuncomUpdates ([bool]$state.applyFuncomUpdates)
+            $serverDir = Get-Variable -Name DuneSchedulerServerDir -Scope Global -ValueOnly -ErrorAction SilentlyContinue
+            if ($serverDir) {
+                try { [void](Start-DuneFuncomUpdateCheckAsync -ServerDir $serverDir) } catch {}
+            }
             $state = Get-DuneRestartSchedule
             $state.lastRestartDate = $today
-            $state.lastResult = if ($r.ok) { "$($r.action) ok @ $today $($state.time)" } else { "$($r.action) error: $($r.message)" }
+            $state.lastResult = "VM cron maintenance scheduled @ $today $($state.time)"
             Save-DuneRestartSchedule -State $state
-            if (Get-Command Write-DuneLog -ErrorAction SilentlyContinue) {
-                Write-DuneLog "scheduled restart result: $($state.lastResult)"
-            }
-
-            # Clear on-demand map partition pins after restart. The restart leaves
-            # stale partitions that prevent DeepDesert/Arrakeen/HarkoVillage from
-            # launching on demand. Wait briefly for pods to initialize, then run
-            # the heal (clears a pinned map only when no pod is Ready, so a live
-            # session is never kicked; also refreshes the VM boot hook + cron).
-            if ($r.ok) {
-                try {
-                    Start-Sleep -Seconds 30
-                    if (Get-Command Invoke-DuneFixOnDemandPartitions -ErrorAction SilentlyContinue) {
-                        $cpResult = Invoke-DuneFixOnDemandPartitions
-                        if (Get-Command Write-DuneLog -ErrorAction SilentlyContinue) {
-                            if ($cpResult.ok) { Write-DuneLog "post-restart partition clear: done" }
-                            else { Write-DuneLog "post-restart partition clear failed: $($cpResult.message)" 'WARN' }
-                        }
-                    }
-                } catch {
-                    if (Get-Command Write-DuneLog -ErrorAction SilentlyContinue) {
-                        Write-DuneLog "post-restart partition clear error: $($_.Exception.Message)" 'WARN'
-                    }
-                }
-            }
-
         } elseif ($now -gt $restartWindowEnd) {
-            # Missed the restart window entirely; skip today so we don't restart
-            # at an unexpected hour.
+            # The VM cron already owned the maintenance window while DST was
+            # closed; only mark the host-side notification/check window complete.
             $state.lastRestartDate = $today
             Save-DuneRestartSchedule -State $state
         }
@@ -1034,6 +1105,30 @@ function Start-DuneRestartScheduler {
             if ($DuneSchedulerLogPath -and (Get-Command Set-DuneLogPath -ErrorAction SilentlyContinue)) {
                 try { Set-DuneLogPath -Path $DuneSchedulerLogPath } catch {}
             }
+            # Reinstall/repair the VM-owned daily maintenance script + root cron
+            # on every DST startup. Normal Funcom battlegroup updates leave host
+            # cron intact; this restores it after VM replacement or reset.
+            try {
+                $restartSync = Sync-DuneRestartScheduleAutomation
+                if (Get-Command Write-DuneLog -ErrorAction SilentlyContinue) {
+                    if ($restartSync.ok) { Write-DuneLog $restartSync.message }
+                    else { Write-DuneLog "VM daily maintenance reconciliation unconfirmed: $($restartSync.message)" 'WARN' }
+                }
+            } catch {
+                if (Get-Command Write-DuneLog -ErrorAction SilentlyContinue) {
+                    try { Write-DuneLog "VM daily maintenance reconciliation error: $($_.Exception.Message)" 'WARN' } catch {}
+                }
+            }
+            try {
+                $resultSync = Sync-DuneVmDailyMaintenanceResult -Force
+                if ($resultSync.changed -and (Get-Command Write-DuneLog -ErrorAction SilentlyContinue)) {
+                    Write-DuneLog "VM daily maintenance result: $($resultSync.message)"
+                }
+            } catch {
+                if (Get-Command Write-DuneLog -ErrorAction SilentlyContinue) {
+                    try { Write-DuneLog "VM daily maintenance result reconciliation error: $($_.Exception.Message)" 'WARN' } catch {}
+                }
+            }
             # One-time on scheduler start: ensure the autonomous partition
             # self-heal (VM boot hook + */15 cron) is installed/refreshed, so a
             # stuck on-demand/warm map pin self-heals even with DST closed (e.g.
@@ -1073,6 +1168,11 @@ function Start-DuneRestartScheduler {
                 try { Invoke-DuneRestartScheduleTick } catch {
                     if (Get-Command Write-DuneLog -ErrorAction SilentlyContinue) {
                         try { Write-DuneLog "restart scheduler tick error: $($_.Exception.Message)" 'WARN' } catch {}
+                    }
+                    try { [void](Sync-DuneVmDailyMaintenanceResult) } catch {
+                        if (Get-Command Write-DuneLog -ErrorAction SilentlyContinue) {
+                            try { Write-DuneLog "VM daily maintenance result tick error: $($_.Exception.Message)" 'WARN' } catch {}
+                        }
                     }
                 }
                 try { Invoke-DuneDiscordStateMonitorTick } catch {

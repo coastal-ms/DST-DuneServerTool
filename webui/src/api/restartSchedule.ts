@@ -20,6 +20,7 @@ export interface RestartSchedule {
   installedBuild: string
   latestBuild: string
   updateCheckedAt: string
+  automationMessage?: string
 }
 
 export interface FuncomUpdateResult {

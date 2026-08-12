@@ -3,7 +3,6 @@ BeforeAll {
     function global:Get-DuneBackupContext { return @{ ok = $false } }
     function global:Invoke-DuneBackupShell { return @{ rc = -1; out = '' } }
     Import-DstLib 'RestartSchedule.ps1'
-    $script:originalScheduledFuncomUpdate = (Get-Command Invoke-DuneScheduledFuncomUpdate).ScriptBlock
 }
 
 AfterAll {
@@ -14,11 +13,6 @@ AfterAll {
 Describe 'Scheduled Funcom updates' -Tag 'RestartSchedule' {
     BeforeEach {
         $script:savedSchedule = $null
-        $script:updateCalls = 0
-        $script:restartCalls = 0
-        $script:updateAvailable = $false
-        $script:updateCheckOk = $true
-
         Mock Get-DuneRestartSchedule {
             $state = Get-DuneRestartScheduleDefault
             $state.time = '04:00'
@@ -27,23 +21,6 @@ Describe 'Scheduled Funcom updates' -Tag 'RestartSchedule' {
         Mock Save-DuneRestartSchedule {
             param($State)
             $script:savedSchedule = $State
-        }
-        Mock Get-DuneFuncomServerUpdateStatus {
-            return @{
-                ok = $script:updateCheckOk
-                available = $script:updateAvailable
-                installedBuild = '100'
-                latestBuild = '200'
-                message = if ($script:updateCheckOk) { 'checked' } else { 'unavailable' }
-            }
-        }
-        Mock Invoke-DuneScheduledFuncomUpdate {
-            $script:updateCalls++
-            return @{ ok = $true; action = 'update'; message = 'updated' }
-        }
-        Mock Invoke-DuneScheduledRestart {
-            $script:restartCalls++
-            return @{ ok = $true; action = 'restart'; message = 'restarted' }
         }
     }
 
@@ -61,62 +38,66 @@ Describe 'Scheduled Funcom updates' -Tag 'RestartSchedule' {
         $script:savedSchedule.applyFuncomUpdates | Should -BeTrue
     }
 
-    It 'checks but performs a normal restart when auto-apply is off' {
-        $script:updateAvailable = $true
+    It 'renders a VM script that always checks and restarts when auto-apply is off' {
+        $scriptText = New-DuneVmDailyMaintenanceScript -ApplyFuncomUpdates $false
 
-        $result = Invoke-DuneScheduledMaintenance -ApplyFuncomUpdates $false
-
-        $result.ok | Should -BeTrue
-        $result.action | Should -Be 'restart'
-        $script:updateCalls | Should -Be 0
-        $script:restartCalls | Should -Be 1
-        Should -Invoke Get-DuneFuncomServerUpdateStatus -Times 1
+        $scriptText | Should -Match '^#!/bin/bash'
+        $scriptText | Should -Match 'APPLY_UPDATES=0'
+        $scriptText | Should -Match 'api\.steamcmd\.net'
+        $scriptText | Should -Match '"public":\\\{"buildid":"\[0-9\]\+"'
+        $scriptText | Should -Match 'battlegroup restart'
+        $scriptText | Should -Match 'battlegroup update'
     }
 
-    It 'applies an available update instead of issuing a second restart' {
-        $script:updateAvailable = $true
-
-        $result = Invoke-DuneScheduledMaintenance -ApplyFuncomUpdates $true
-
-        $result.ok | Should -BeTrue
-        $result.action | Should -Be 'update'
-        $script:updateCalls | Should -Be 1
-        $script:restartCalls | Should -Be 0
+    It 'renders the explicit unattended-update opt-in into the VM script' {
+        (New-DuneVmDailyMaintenanceScript -ApplyFuncomUpdates $true) |
+            Should -Match 'APPLY_UPDATES=1'
     }
 
-    It 'performs a normal restart when no update is available' {
-        $result = Invoke-DuneScheduledMaintenance -ApplyFuncomUpdates $true
+    It 'cleans SteamCMD orphan workdirs before an update' {
+        $scriptText = New-DuneVmDailyMaintenanceScript -ApplyFuncomUpdates $true
 
-        $result.action | Should -Be 'restart'
-        $script:updateCalls | Should -Be 0
-        $script:restartCalls | Should -Be 1
+        $scriptText | Should -Match 'steamapps/downloading/'
+        $scriptText | Should -Match 'steamapps/temp'
+        $scriptText | Should -Match 'rm -rf'
     }
 
-    It 'continues with the normal restart when the update check fails' {
-        $script:updateCheckOk = $false
+    It 'records the VM maintenance result for later DST display' {
+        $scriptText = New-DuneVmDailyMaintenanceScript -ApplyFuncomUpdates $true
 
-        $result = Invoke-DuneScheduledMaintenance -ApplyFuncomUpdates $true
-
-        $result.action | Should -Be 'restart'
-        $script:updateCalls | Should -Be 0
-        $script:restartCalls | Should -Be 1
+        $scriptText | Should -Match 'daily-maintenance-result'
+        $scriptText | Should -Match "printf '%s\|%s\|%s\|%s\|%s"
+        $scriptText.EndsWith("`n") | Should -BeTrue
+        $scriptText.Contains("`r") | Should -BeFalse
     }
 
-    It 'cleans SteamCMD orphan workdirs before running battlegroup update' {
-        Mock Get-DuneBackupContext { @{ ok = $true; ip = '192.0.2.1' } }
-        Mock Invoke-DuneBackupShell {
-            param($Ip, $Script, $TimeoutSec)
-            return @{ rc = 0; out = 'done' }
-        }
+    It 'converts the PC-local schedule to the equivalent VM cron time' {
+        $todayOffset = [TimeZoneInfo]::Local.GetUtcOffset([datetime]::Today)
+        $sign = if ($todayOffset.TotalMinutes -lt 0) { '-' } else { '+' }
+        $absMinutes = [Math]::Abs([int]$todayOffset.TotalMinutes)
+        $offsetText = '{0}{1:00}{2:00}' -f $sign, [int]($absMinutes / 60), ($absMinutes % 60)
 
-        $result = & $script:originalScheduledFuncomUpdate
+        $cron = ConvertTo-DuneVmCronTime -Time '04:15' -VmOffset $offsetText
 
-        $result.ok | Should -BeTrue
-        Should -Invoke Invoke-DuneBackupShell -Times 1
-        $body = $script:originalScheduledFuncomUpdate.ToString()
-        $body | Should -Match 'steamapps/downloading'
-        $body | Should -Match 'steamapps/temp'
-        $body | Should -Match '/home/dune/\.dune/bin/battlegroup update'
-        $body | Should -Match 'TimeoutSec 2100'
+        $cron.hour | Should -Be 4
+        $cron.minute | Should -Be 15
+    }
+
+    It 'reconciles VM cron on every DST scheduler startup' {
+        $body = (Get-Command Start-DuneRestartScheduler).ScriptBlock.ToString()
+
+        $body | Should -Match 'Sync-DuneRestartScheduleAutomation'
+        $body | Should -Match 'Sync-DuneVmDailyMaintenanceResult -Force'
+    }
+
+    It 'installs a persistent root crontab block and enables crond' {
+        $body = (Get-Command Sync-DuneRestartScheduleAutomation).ScriptBlock.ToString()
+
+        $body | Should -Match 'DuneRestartCronBeginMarker'
+        $body | Should -Match 'DuneRestartCronEndMarker'
+        $body | Should -Match 'crontab /tmp/dst-crontab-new'
+        $body | Should -Match '/bin/bash -n'
+        $body | Should -Match '/sbin/rc-update add crond default'
+        $body | Should -Match '/sbin/rc-service crond start'
     }
 }

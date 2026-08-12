@@ -88,6 +88,10 @@ Register-DuneRoute -Method PUT -Path '/api/restart-schedule' -Handler {
             return
         }
         $state = $r.schedule
+        # Persist first, then best-effort reconcile the VM cron immediately.
+        # If the VM is down, startup reconciliation retries when DST next opens.
+        $automation = $null
+        try { $automation = Sync-DuneRestartScheduleAutomation } catch {}
         Write-DuneJson -Response $res -Body @{
             enabled              = [bool]$state.enabled
             time                 = [string]$state.time
@@ -106,6 +110,7 @@ Register-DuneRoute -Method PUT -Path '/api/restart-schedule' -Handler {
             installedBuild       = [string]$state.installedBuild
             latestBuild          = [string]$state.latestBuild
             updateCheckedAt      = [string]$state.updateCheckedAt
+            automationMessage    = if ($automation) { [string]$automation.message } else { '' }
         }
     } catch {
         Write-DuneError -Response $res -Status 500 -Message "Schedule save failed: $($_.Exception.Message)"

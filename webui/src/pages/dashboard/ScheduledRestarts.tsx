@@ -124,7 +124,7 @@ export function ScheduledRestarts() {
       setWebhookInput('')
       setClearWebhook(false)
       setMention(s.discordMentionId || '')
-      setMsg({ kind: 'ok', text: 'Schedule saved.' })
+      setMsg({ kind: 'ok', text: s.automationMessage ? `Schedule saved. ${s.automationMessage}` : 'Schedule saved.' })
     } catch (e) {
       setMsg({ kind: 'err', text: e instanceof ApiError ? e.message : 'Save failed.' })
     } finally {
@@ -199,9 +199,9 @@ export function ScheduledRestarts() {
           <div className="flex items-start gap-2 text-xs text-warning bg-warning/10 border border-warning/30 rounded-md px-3 py-2 mb-4">
             <Icon name="Info" size={14} className="mt-0.5 shrink-0" />
             <span>
-              This runs inside the Dune Server Tool, so scheduled restarts only fire while
-              <span className="font-semibold"> DST is open and running</span> on this PC. Closing the tool
-              pauses the schedule.
+              Daily restart/update maintenance runs from the VM cron even while DST is closed.
+              DST checks and repairs that VM automation whenever it starts. Advance in-game and
+              Discord warnings still require <span className="font-semibold">DST to be open</span>.
             </span>
           </div>
 
@@ -251,7 +251,7 @@ export function ScheduledRestarts() {
                   aria-label="Daily restart time"
                   className={FIELD_CLASS}
                 />
-                <p className="text-[11px] text-text-dim mt-1">One restart per day at this time (this PC's clock).</p>
+                <p className="text-[11px] text-text-dim mt-1">One VM cron maintenance run per day at this time (this PC's clock).</p>
               </div>
               <div>
                 <label className="block text-xs uppercase tracking-wider text-text-dim mb-1">
