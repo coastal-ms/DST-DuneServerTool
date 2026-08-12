@@ -13,6 +13,16 @@ here cover everything those tags shipped.
 
 ## [Unreleased]
 
+### Added
+
+- Confirmed vehicle-recovery durability loss and base currency cost controls now
+  appear under Game Config → Vehicles.
+
+### Changed
+
+- Database backup and restore surfaces warn administrators to move characters
+  out of Deep Desert and log them out before capturing a restorable snapshot.
+
 ## [13.6.1] - 2026-08-10
 
 ### Changed

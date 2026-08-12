@@ -135,6 +135,8 @@ export function Database() {
         'This REPLACES the entire battlegroup database with the backup you pick in the console window. ' +
         'ALL players, bases, inventories, storage, blueprints, and the market will be rolled back to that snapshot. ' +
         'Everything created since the backup is permanently lost. This cannot be undone.\n\n' +
+        'DEEP DESERT SAFETY: before taking a backup intended for restore, have every character return from Deep Desert and log out. ' +
+        'A restored snapshot captured while a character was in Deep Desert may leave that character without carried items.\n\n' +
         'Take a fresh backup first if you have not. The battlegroup must be stopped.\n\n' +
         'CROSS-VM / CROSS-BATTLEGROUP MIGRATION: a full backup can carry characters, inventories, progression, and bases to a different VM or battlegroup. Follow the migration guide on the Database page exactly, keep the old VM and original backup, and verify every character before decommissioning either one.\n\n' +
         'Type RESTORE to continue:',
@@ -323,6 +325,15 @@ export function Database() {
           </div>
         </div>
       )}
+
+      <div className="card border-l-2 border-warning p-3 mb-4 flex gap-2 text-sm text-text-muted">
+        <Icon name="AlertTriangle" size={16} className="mt-0.5 shrink-0 text-warning" />
+        <div>
+          <span className="font-medium text-text">Deep Desert restore safety</span> — before taking a backup intended for restore,
+          have every character return from Deep Desert and log out. Restoring a snapshot captured while a character was in
+          Deep Desert may leave that character without carried items.
+        </div>
+      </div>
 
       {/* Read-only VM facts. Collapsed by default — nothing here interrupts. */}
       <VmInfoCard />

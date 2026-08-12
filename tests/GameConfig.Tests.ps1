@@ -713,8 +713,6 @@ Describe 'DuneGameConfigSchema: experimental binary CVars' -Tag 'GameConfig' {
             'dw.VehicleAbandonedDecayAllowed'
             'dw.VehicleAbandonedDecayTimeMultiplier'
             'Vehicle.DisassemblySpeedMultiplier'
-            'Vehicle.RecoveryChassisDurabilityReductionFraction'
-            'Vehicle.RecoveryCurrencyBaseCost'
             'Vehicle.RecoveryTimeLimit'
             'Vehicle.MaxActiveVehicles'
             'Vehicle.MaxVehicles'
@@ -845,7 +843,7 @@ Describe 'DuneGameConfigSchema: experimental binary CVars' -Tag 'GameConfig' {
         $experimental = @($script:DuneGameConfigSchema | Where-Object Category -eq 'Experimental')
         $experimental2 = @($script:DuneGameConfigSchema | Where-Object Category -eq 'Experimental 2')
 
-        $experimental.Count | Should -Be 56
+        $experimental.Count | Should -Be 54
         $experimental2.Count | Should -Be 71
         @($experimental.Key | Sort-Object) | Should -Be @($script:ExperimentalKeys | Sort-Object)
         @($experimental2.Key | Sort-Object) | Should -Be @($script:Experimental2Keys | Sort-Object)
@@ -877,7 +875,7 @@ Describe 'DuneGameConfigSchema: experimental binary CVars' -Tag 'GameConfig' {
         # Uncategorized rather than being forced into a neighbouring group.
         $api = @(Get-DuneGameConfigSchemaApi)
         $fields = @($api | Where-Object { $_.category -like 'Experimental*' } | ForEach-Object { $_.fields })
-        $fields.Count | Should -Be 127
+        $fields.Count | Should -Be 125
         foreach ($f in $fields) {
             $f.group | Should -Not -BeNullOrEmpty
             $f.status | Should -BeIn @('Confirmed', 'Unconfirmed')
@@ -934,6 +932,8 @@ Describe 'DuneGameConfigSchema: experimental binary CVars' -Tag 'GameConfig' {
             'dw.LandsraadMissionRewardMultiplierHouseCredit'
             'dw.LandsraadMissionRewardMultiplierSpecializationXP'
             'Loot.ShouldAlwaysRegeneratePerPlayerLoot'
+            'Vehicle.RecoveryChassisDurabilityReductionFraction'
+            'Vehicle.RecoveryCurrencyBaseCost'
             'Vehicle.MaxVehiclesPerPlayer'
         )
         foreach ($key in $promoted) {
