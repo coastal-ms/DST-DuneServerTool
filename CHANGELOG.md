@@ -13,6 +13,31 @@ here cover everything those tags shipped.
 
 ## [Unreleased]
 
+## [13.6.2] - 2026-08-11
+
+### Added
+
+- Confirmed vehicle-recovery durability loss and base currency cost controls now
+  appear under Game Config → Vehicles.
+
+### Changed
+
+- Database backup and restore surfaces warn administrators to move characters
+  out of Deep Desert and log them out before capturing a restorable snapshot.
+- DD Seed Maps uses the farm seed while Deep Desert is stopped, then switches
+  to the map's reported running seed once Deep Desert starts.
+
+### Fixed
+
+- Reset Journey now performs a complete offline quest restart, removing all
+  post-NPE journey/contract rows, tags, contract items, and tracked state while
+  preserving faction, research, and active loadout. NPE remains completed so a
+  veteran character restarts at Find the Fremen instead of stalling on one-time
+  tutorial events. Only the chosen starter-class skill tree is reset, with its
+  exact spent points refunded.
+- Reset Faction now also removes singular `DialogueFlags.Faction.*` tags so
+  faction progression fully clears before a player starts over.
+
 ## [13.6.1] - 2026-08-10
 
 ### Changed

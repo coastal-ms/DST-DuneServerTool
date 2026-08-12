@@ -276,12 +276,15 @@ Describe 'Invoke-DunePlayerWipeJourneyNodes' -Tag 'Pure' {
         $r.ok | Should -BeTrue -Because ([string]$r.error)
         $mutation | Should -Match 'delete_all_journey_story_nodes\(605::bigint\)'
         $mutation | Should -Match "tag LIKE 'Journey\.%'"
+        $mutation | Should -Match "tag LIKE 'JourneySets\.%'"
         $mutation | Should -Match "tag LIKE 'Contract\.%'"
         $mutation | Should -Match "tag LIKE 'BigMoments\.%'"
         $mutation | Should -Match "tag LIKE 'DialogueFlags\.Contracts\.%'"
-        $mutation | Should -Match "tag LIKE 'DialogueFlags\.Factions\.%'"
-        $mutation | Should -Match "tag LIKE 'Faction\.%'"
-        $mutation | Should -Match "tag LIKE 'FactionStoryline%'"
+        $mutation | Should -Match "tag LIKE 'NPE\.%'"
+        $mutation | Should -Not -Match "tag LIKE 'Faction\.%'"
+        $mutation | Should -Not -Match "tag LIKE 'FactionStoryline%'"
+        $mutation | Should -Not -Match "tag LIKE 'DialogueFlags\.Faction\.%'"
+        $mutation | Should -Not -Match "tag LIKE 'DialogueFlags\.Factions\.%'"
         $mutation | Should -Match 'inv\.actor_id=3946::bigint'
         $mutation | Should -Match "i\.template_id='ContractItem'"
         $mutation | Should -Match 'm_TrackedContractItemUid'
@@ -304,6 +307,107 @@ Describe 'Invoke-DunePlayerWipeJourneyNodes' -Tag 'Pure' {
 
         $r.ok | Should -BeFalse
         $r.error | Should -Match 'wipe incomplete'
+    }
+}
+
+Describe 'Invoke-DunePlayerResetJourneyNodes orchestration' -Tag 'Pure' {
+    BeforeEach {
+        $script:resetJob = ''
+        $script:originalWipeJourney = (Get-Command Invoke-DunePlayerWipeJourneyNodes).ScriptBlock
+        $script:originalResetJob = (Get-Command Invoke-DunePlayerResetJobSkills).ScriptBlock
+        $script:originalMarkNpe = (Get-Command Invoke-DunePlayerMarkNpeCompleted).ScriptBlock
+        function global:Test-DunePlayerOfflineByAccount { return @{ ok = $true; reason = $null } }
+        function global:Get-DunePlayerPawnFromAccount { return 3946L }
+        function global:ConvertTo-DuneRowMaps { param($Result) return @($Result.maps) }
+        function global:Invoke-DuneSqlQuery {
+            return @{ ok = $true; maps = @(@{ starter_tag = 'Skills.Key.Swordmaster1'; character_id = '8' }) }
+        }
+        function global:Invoke-DunePlayerWipeJourneyNodes { return @{ ok = $true } }
+        function global:Invoke-DunePlayerResetJobSkills {
+            param($Ip, $AccountId, $Job)
+            $script:resetJob = $Job
+            return @{ ok = $true; refunded_points = 186 }
+        }
+        function global:Invoke-DunePlayerMarkNpeCompleted { return @{ ok = $true; nodes_touched = 153 } }
+    }
+
+    AfterEach {
+        Set-Item function:global:Invoke-DunePlayerWipeJourneyNodes $script:originalWipeJourney
+        Set-Item function:global:Invoke-DunePlayerResetJobSkills $script:originalResetJob
+        Set-Item function:global:Invoke-DunePlayerMarkNpeCompleted $script:originalMarkNpe
+        Remove-Item function:global:Test-DunePlayerOfflineByAccount -ErrorAction SilentlyContinue
+        Remove-Item function:global:Get-DunePlayerPawnFromAccount -ErrorAction SilentlyContinue
+        Remove-Item function:global:ConvertTo-DuneRowMaps -ErrorAction SilentlyContinue
+        Remove-Item function:global:Invoke-DuneSqlQuery -ErrorAction SilentlyContinue
+    }
+
+    It 'resets only the chosen starter tree, refunds points, and restores NPE completion' {
+        $r = Invoke-DunePlayerResetJourneyNodes -Ip '1.2.3.4' -AccountId 605
+
+        $r.ok | Should -BeTrue -Because ([string]$r.error)
+        $script:resetJob | Should -Be 'Swordmaster'
+        $r.starter_job_reset | Should -Be 'Swordmaster'
+        $r.refunded_skill_points | Should -Be 186
+        $r.npe_marked | Should -BeTrue
+        $r.npe_nodes | Should -Be 153
+        $r.message | Should -Match 'Find the Fremen'
+    }
+
+    It 'stops after the wipe if the player logs in before starter-tree reset' {
+        function global:Test-DunePlayerOfflineByAccount { return @{ ok = $false; reason = 'player is Online' } }
+
+        $r = Invoke-DunePlayerResetJourneyNodes -Ip '1.2.3.4' -AccountId 605
+
+        $r.ok | Should -BeFalse
+        $r.error | Should -Match 'starter-tree reset stopped'
+        $script:resetJob | Should -BeNullOrEmpty
+    }
+}
+
+Describe 'Invoke-DunePlayerResetJobSkills refund' -Tag 'Pure' {
+    BeforeEach {
+        $script:DuneTagsData = @{ jobAllModules = @{ Swordmaster = @('Skills.Ability.BattleCry', 'Skills.Key.Swordmaster1') } }
+        $script:resetJobSql = ''
+        function global:_Load-DuneTagsData {}
+        function global:Get-DunePlayerPawnFromAccount { return 3946L }
+        function global:ConvertTo-DuneRowMaps { param($Result) return @($Result.maps) }
+        function global:ConvertTo-DuneInt { param($Value) return [int64]$Value }
+        function global:Invoke-DuneSqlQuery {
+            param($Ip, $Sql)
+            $script:resetJobSql = $Sql
+            return @{ ok = $true; maps = @(@{ refund = '16' }) }
+        }
+    }
+
+    AfterEach {
+        Remove-Item function:global:_Load-DuneTagsData -ErrorAction SilentlyContinue
+        Remove-Item function:global:Get-DunePlayerPawnFromAccount -ErrorAction SilentlyContinue
+        Remove-Item function:global:ConvertTo-DuneRowMaps -ErrorAction SilentlyContinue
+        Remove-Item function:global:ConvertTo-DuneInt -ErrorAction SilentlyContinue
+        Remove-Item function:global:Invoke-DuneSqlQuery -ErrorAction SilentlyContinue
+    }
+
+    It 'removes only the selected job modules and refunds their stored points' {
+        $r = Invoke-DunePlayerResetJobSkills -Ip '1.2.3.4' -AccountId 605 -Job 'Swordmaster'
+
+        $r.ok | Should -BeTrue -Because ([string]$r.error)
+        $script:resetJobSql | Should -Match 'Skills\.Ability\.BattleCry'
+        $script:resetJobSql | Should -Match 'Skills\.Key\.Swordmaster1'
+        $script:resetJobSql | Should -Match 'SUM\(COALESCE'
+        $script:resetJobSql | Should -Match 'SkillPointsSpent'
+        $script:resetJobSql | Should -Match 'UnspentSkillPoints'
+        $r.refunded_points | Should -Be 16
+    }
+}
+
+Describe 'Invoke-DunePlayerResetFaction tag coverage' -Tag 'Pure' {
+    It 'removes both singular and plural faction dialogue tag namespaces' {
+        $body = (Get-Command Invoke-DunePlayerResetFaction).ScriptBlock.ToString()
+
+        $body | Should -Match "tag LIKE 'DialogueFlags\.Faction\.%'"
+        $body | Should -Match "tag LIKE 'DialogueFlags\.Factions\.%'"
+        $body | Should -Match "tag LIKE 'Faction\.%'"
+        $body | Should -Match "tag LIKE 'FactionStoryline%'"
     }
 }
 
