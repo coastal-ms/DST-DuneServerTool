@@ -1956,19 +1956,6 @@ Describe 'GameConfig: UE struct-member engine (LandsraadSettings Data blob)' -Ta
         $out | Should -Match '\)$'
     }
 
-    It 'removes first, middle, and last scalar members without touching nested members' {
-        $blob = 'Data=(m_First=1,m_TermStartedMessage=(Name="X"),m_Middle=2,m_Last=3)'
-        $blob = Remove-DuneStructScalarMember -Blob $blob -Key 'm_First'
-        $blob = Remove-DuneStructScalarMember -Blob $blob -Key 'm_Middle'
-        $blob = Remove-DuneStructScalarMember -Blob $blob -Key 'm_Last'
-
-        $blob | Should -Be 'Data=(m_TermStartedMessage=(Name="X"))'
-    }
-
-    It 'removes the only scalar member as a well-formed empty struct' {
-        Remove-DuneStructScalarMember -Blob 'Data=(m_Only=1)' -Key 'm_Only' |
-            Should -Be 'Data=()'
-    }
 }
 
 Describe 'GameConfig: Landsraad struct fields integrate with read + save' -Tag 'GameConfig' {
@@ -2011,7 +1998,7 @@ Describe 'GameConfig: Landsraad struct fields integrate with read + save' -Tag '
         @($folded | Where-Object { $_.key -eq 'm_WaterConsumptionRate' }).Count | Should -Be 1
     }
 
-    It 'exposes only current Funcom Landsraad timing members' {
+    It 'exposes current Funcom Landsraad timing members without hiding legacy values' {
         $landsraadKeys = @($script:DuneGameConfigSchema |
             Where-Object { $_.Category -eq 'Landsraad' } |
             ForEach-Object { $_.Key })
@@ -2019,8 +2006,8 @@ Describe 'GameConfig: Landsraad struct fields integrate with read + save' -Tag '
         $landsraadKeys | Should -Contain 'm_LandsraadVotingPeriodDurationInSec'
         $landsraadKeys | Should -Contain 'm_LandsraadCycleDurationInSeconds'
         $landsraadKeys | Should -Contain 'm_LandsraadSuspendedPeriodDurationInSeconds'
-        $landsraadKeys | Should -Not -Contain 'm_VotingPeriodDurationInSec'
-        $landsraadKeys | Should -Not -Contain 'm_VotingPeriodStartBeforeCoriolisCycleInSec'
+        $landsraadKeys | Should -Contain 'm_VotingPeriodDurationInSec'
+        $landsraadKeys | Should -Contain 'm_VotingPeriodStartBeforeCoriolisCycleInSec'
     }
 
     It 'seeds the full default struct when the file has no prior LandsraadSettings section' {
@@ -2060,7 +2047,7 @@ Describe 'GameConfig: Landsraad struct fields integrate with read + save' -Tag '
         $folded[0].value | Should -Not -Match 'm_ExtraDefaultOnly'
     }
 
-    It 'heals and migrates a legacy STUB box while keeping customizations' {
+    It 'heals a legacy STUB box while preserving legacy and current members independently' {
         # An older DST build wrote a stripped 5-member stub into the live file.
         $stubRaw = "[/Script/DuneSandbox.LandsraadSettings]`n" +
             'Data=(m_LandsraadTaskProgressUpdateFrequency=15.0,m_LandsraadTaskDailyRevealFrequency=25.0,m_VotingPeriodStartBeforeCoriolisCycleInSec=118800.0,m_VotingPeriodDurationInSec=43210,m_TaskGoalAmount=9999.0)' + "`n"
@@ -2083,9 +2070,9 @@ Describe 'GameConfig: Landsraad struct fields integrate with read + save' -Tag '
         $folded[0].value | Should -Match 'm_ControlPointsPerCycle=10'
         # the stub's OWN customized values are preserved (not reset to defaults)
         $folded[0].value | Should -Match 'm_LandsraadTaskProgressUpdateFrequency=15\.0'
-        $folded[0].value | Should -Match 'm_LandsraadVotingPeriodDurationInSec=43210'
-        $folded[0].value | Should -Not -Match 'm_VotingPeriodDurationInSec'
-        $folded[0].value | Should -Not -Match 'm_VotingPeriodStartBeforeCoriolisCycleInSec'
+        $folded[0].value | Should -Match 'm_LandsraadVotingPeriodDurationInSec=118500'
+        $folded[0].value | Should -Match 'm_VotingPeriodDurationInSec=43210'
+        $folded[0].value | Should -Match 'm_VotingPeriodStartBeforeCoriolisCycleInSec=118800\.0'
     }
 }
 

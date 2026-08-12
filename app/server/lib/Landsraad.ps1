@@ -49,6 +49,8 @@ $script:DuneLandsraadIniKeys = @(
     @{ Key='m_NumberOfDecreesToNominate';      Label='Decrees to Nominate';         Help='Number of decrees nominated for voting.' }
     @{ Key='m_NumberOfGuildsInHighscoreList';  Label='Guilds in Highscore List';    Help='How many guilds appear on the highscore list.' }
     @{ Key='m_ControlPointsPerCycle';          Label='Control Points per Cycle';    Help='Territory control points awarded per cycle.' }
+    @{ Key='m_VotingPeriodDurationInSec';      Label='Legacy Voting Period (sec)';  Help='Legacy member retained for existing servers and rollback.' }
+    @{ Key='m_VotingPeriodStartBeforeCoriolisCycleInSec'; Label='Legacy Voting Starts Before Cycle (sec)'; Help='Legacy member retained without automatic mapping.' }
     @{ Key='m_LandsraadVotingPeriodDurationInSec'; Label='Voting Period (sec)';     Help='Length of the Landsraad voting window.' }
     @{ Key='m_LandsraadCycleDurationInSeconds'; Label='Landsraad Cycle (sec)';      Help='Length of a Landsraad term.' }
     @{ Key='m_LandsraadSuspendedPeriodDurationInSeconds'; Label='Suspended Period (sec)'; Help='Gap between Landsraad terms.' }
