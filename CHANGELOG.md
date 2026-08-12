@@ -28,12 +28,11 @@ here cover everything those tags shipped.
 ### Fixed
 
 - Reset Journey now performs a complete offline quest restart, removing all
-  journey rows, NPE/journey-set/dialogue-contract tags, contract items, and
-  tracked contract state while preserving faction state. If the starter tree
-  has no learnable ability left, one multi-level ability is returned to the
-  proven Enable All Skills headroom and its points are refunded so the NPE can
-  advance. The equip-second-ability objective is seeded complete because veteran
-  active loadouts rehydrate on login even after their database array is cleared.
+  post-NPE journey/contract rows, tags, contract items, and tracked state while
+  preserving faction, research, and active loadout. NPE remains completed so a
+  veteran character restarts at Find the Fremen instead of stalling on one-time
+  tutorial events. Only the chosen starter-class skill tree is reset, with its
+  exact spent points refunded.
 - Reset Faction now also removes singular `DialogueFlags.Faction.*` tags so
   faction progression fully clears before a player starts over.
 
