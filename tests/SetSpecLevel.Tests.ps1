@@ -37,6 +37,14 @@ BeforeAll {
         if ($null -eq $Value) { return 0 }
         return [int]$Value
     }
+    function global:Get-DuneKeystoneCatalog {
+        return @{
+            1 = @{ track = 'Combat'; level = 1; name = 'Combat one'; cost = 2 }
+            2 = @{ track = 'Combat'; level = 63; name = 'Combat high'; cost = 20 }
+            3 = @{ track = 'Crafting'; level = 20; name = 'Crafting'; cost = 5 }
+            4 = @{ track = 'Combat'; level = 50; name = 'Combat fifty'; cost = 15 }
+        }
+    }
 
     Import-DstLib 'GameplayPlayers.ps1'
 }
@@ -45,6 +53,40 @@ AfterAll {
     Remove-Item function:global:Invoke-DuneSqlQuery   -ErrorAction SilentlyContinue
     Remove-Item function:global:ConvertTo-DuneRowMaps -ErrorAction SilentlyContinue
     Remove-Item function:global:ConvertTo-DuneInt     -ErrorAction SilentlyContinue
+    Remove-Item function:global:Get-DuneKeystoneCatalog -ErrorAction SilentlyContinue
+}
+
+Describe 'Invoke-DunePlayerApplySpecLevel (apply specialization rewards)' -Tag 'Players' {
+    BeforeEach {
+        $script:lastWriteSql  = $null
+        $script:lastSelectSql = $null
+        $script:writeCount    = 0
+    }
+
+    It 'sets the selected level and grants only rewards in that track through that level' {
+        $r = Invoke-DunePlayerApplySpecLevel -Ip '1.2.3.4' -ControllerId 555 -TrackType 'Combat' -Level 62
+        $r.ok | Should -BeTrue
+        $r.rewards_applied | Should -Be 2
+        $script:lastWriteSql | Should -Match 'set_specialization_xp_and_level'
+        $script:lastWriteSql | Should -Match '62::real'
+        $script:lastWriteSql | Should -Match 'ARRAY\[1,4\]::smallint\[\]'
+        $script:lastWriteSql | Should -Not -Match 'ARRAY\[[^\]]*2'
+        $script:lastWriteSql | Should -Not -Match 'ARRAY\[[^\]]*3'
+    }
+
+    It 'preserves existing and above-level rewards' {
+        $null = Invoke-DunePlayerApplySpecLevel -Ip '1.2.3.4' -ControllerId 555 -TrackType 'Combat' -Level 62
+        $script:lastWriteSql | Should -Match 'ON CONFLICT DO NOTHING'
+        $script:lastWriteSql | Should -Not -Match '\bDELETE\b'
+    }
+
+    It 'sets level zero without attempting an empty reward insert' {
+        $r = Invoke-DunePlayerApplySpecLevel -Ip '1.2.3.4' -ControllerId 555 -TrackType 'Combat' -Level 0
+        $r.ok | Should -BeTrue
+        $r.rewards_applied | Should -Be 0
+        $script:lastWriteSql | Should -Match '0::real'
+        $script:lastWriteSql | Should -Not -Match 'purchased_specialization_keystones'
+    }
 }
 
 Describe 'Invoke-DunePlayerSetSpecLevel (offline spec level set)' -Tag 'Players' {

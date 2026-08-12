@@ -13,10 +13,69 @@ here cover everything those tags shipped.
 
 ## [Unreleased]
 
+## [13.6.2] - 2026-08-11
+
+### Added
+
+- Confirmed vehicle-recovery durability loss and base currency cost controls now
+  appear under Game Config → Vehicles.
+
+### Changed
+
+- Database backup and restore surfaces warn administrators to move characters
+  out of Deep Desert and log them out before capturing a restorable snapshot.
+- DD Seed Maps uses the farm seed while Deep Desert is stopped, then switches
+  to the map's reported running seed once Deep Desert starts.
+
+### Fixed
+
+- Reset Journey now performs a complete offline quest restart, removing all
+  post-NPE journey/contract rows, tags, contract items, and tracked state while
+  preserving faction, research, and active loadout. NPE remains completed so a
+  veteran character restarts at Find the Fremen instead of stalling on one-time
+  tutorial events. Only the chosen starter-class skill tree is reset, with its
+  exact spent points refunded.
+- Reset Faction now also removes singular `DialogueFlags.Faction.*` tags so
+  faction progression fully clears before a player starts over.
+
+## [13.6.1] - 2026-08-10
+
+### Changed
+
+- Experimental Lab restores the opt-in **All** category and searches the full
+  settings catalog regardless of the selected category, while still opening on
+  a smaller category so the complete catalog is not loaded at page startup.
+
+### Fixed
+
+- Experimental Lab search results remain a collection when only one setting
+  matches, preventing the page from crashing on searches such as `fuel`.
+
+## [13.6.0] - 2026-08-10
+
+### Added
+
+- **Specialization levels can apply their available rewards per track.** Gameplay Admin → Players → Specs keeps **Set** as the level/XP-only path for players who want to choose rewards themselves, while the new **Apply level** action grants every reward available through the selected level in that specialization without touching other tracks or removing existing rewards.
+
+### Changed
+
+- Improved cold-start and Server Health load time by moving VM maintenance off
+  the startup path, removing an app-window delay, reducing API warmup work, and
+  eliminating duplicate initial status requests.
+
+## [13.5.4] - 2026-08-10
+
+### Added
+
+- **Settings now shows the Dune Server Tool install folder.** The host-only card can copy the path or open it in Explorer for antivirus exclusions, file verification, and troubleshooting.
+- **Experimental is now Experimental Lab.** It exposes the complete recovered Dune and Unreal Engine CVar inventory plus every remaining live DefaultGame.ini / DefaultEngine.ini setting that DST does not already surface. Search, source/risk filters, modified-only mode, category-cached 25-item pagination, risk badges, safe string-valued CVar startup injection, and array/struct editing keep the expanded catalog usable without loading the full catalog at DST startup. Restart injection processes only configured and stale managed CVars rather than scanning every blank catalog entry per partition.
+
 ### Fixed
 
 - **Public IP Apply no longer has to capture a co-hosted VPN or relay endpoint.** The Public IP / DDNS card now keeps the existing same-PC public-IP loopback route enabled by default, but provides an explicit opt-out for WireGuard, VPN, and VPS relay hosts. Applying with the option off removes only the matching public-IP `/32` route through the Dune VM and leaves unrelated Windows routes unchanged.
-- **Saved manual relay addresses remain authoritative across restarts and connection repairs.** Public IP Apply now pins K3s startup to the applied address instead of rediscovering another address from the VM interface, and the P34 diagnostic no longer replaces a deliberate manual VPN or VPS relay address with the host's detected WAN IP.
+- **Saved manual relay addresses remain authoritative across restarts and connection repairs.** Public IP Apply now pins both K3s startup inputs to the applied address, overriding a stale `settings.conf` external IP immediately before K3s starts, and the P34 diagnostic no longer replaces a deliberate manual VPN or VPS relay address with the host's detected WAN IP.
+- **Landsraad client settings are shared as a complete valid `Data=(...)` struct.** Player config, post-save guidance, and mismatch repair no longer omit Landsraad values or emit ineffective standalone member lines. Diagnostic bundles now include sanitized local client INI snapshots when available so server/client drift is visible.
+- **Landsraad contract abandon cooldown is configurable.** The field-confirmed timer is available in Game Config and supports values as low as five seconds.
 
 ## [13.5.3] - 2026-08-08
 

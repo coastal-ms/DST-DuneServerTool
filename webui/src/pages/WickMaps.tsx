@@ -17,6 +17,8 @@ import { useEffect, useMemo, useState } from 'react'
 import { PageHeader } from '../components/PageHeader'
 import { Icon } from '../components/Icon'
 import { getCoriolisSeeds } from '../api/gameplay'
+import { getMapState } from '../api/maps'
+import { selectWickMapSeed, type WickMapSeedSource } from '../wickMapSeed'
 import data from '../data/wickmaps.json'
 
 type Poi = { sector: string; subx: number; suby: number; type: string }
@@ -79,46 +81,54 @@ const RELIABILITY: Record<SeedEntry['reliability'], { label: string; cls: string
 
 export function WickMaps() {
   const [seed, setSeed] = useState<number>(PAYLOAD.availableSeeds[0] ?? 0)
-  const [liveSeed, setLiveSeed] = useState<number | null>(null)
+  const [currentSeed, setCurrentSeed] = useState<number | null>(null)
+  const [seedSource, setSeedSource] = useState<WickMapSeedSource | null>(null)
   const [liveErr, setLiveErr] = useState<string | null>(null)
   const [hidden, setHidden] = useState<Set<string>>(new Set())
   const [hover, setHover] = useState<{ x: number; y: number; text: string } | null>(null)
 
-  // Read the seed the server is actually running. world_map_reset_seed carries
-  // two naming schemes: partition names (Survival_1 / DeepDesert_1) are what an
-  // admin requested, friendly names (DeepDesert) are what the game wrote back
-  // after loading the map. The friendly row is the truth, so prefer it.
+  // A stopped Deep Desert has no current running-map output: its friendly row
+  // remains stale until the map starts. In that state, show the farm seed that
+  // the server will use when Deep Desert next loads. Once it is running, prefer
+  // the friendly DeepDesert row the game wrote back for the active map.
   //
   // The endpoint answers with sample data when the live database is unreachable,
   // so the source is checked first - showing a stand-in seed and calling it live
   // would be worse than admitting the seed is unknown.
   useEffect(() => {
     let alive = true
-    getCoriolisSeeds()
-      .then(r => {
+    Promise.all([
+      getCoriolisSeeds(),
+      getMapState('deepdesert').catch(() => null),
+    ])
+      .then(([r, deepDesert]) => {
         if (!alive) return
         if (r.source !== 'live') {
           setLiveErr(r.liveError || 'The live database is not reachable.')
           return
         }
-        const maps = r.maps || []
-        const friendly = maps.find(m => m.map === 'DeepDesert')
-        const fallback = maps.find(m => m.map.startsWith('DeepDesert'))
-        const live = friendly?.seed ?? fallback?.seed ?? null
-        if (live === null) {
+        const selected = selectWickMapSeed(
+          r.maps || [],
+          r.farm_seed,
+          deepDesert ? deepDesert.running : null,
+        )
+        if (selected.seed === null) {
           setLiveErr('No Deep Desert row in the seed table.')
           return
         }
-        if (live < 0 || live > 11) {
+        if (selected.seed < 0 || selected.seed > 11) {
           // -1 means no seed is forced; anything else is out of range for the
           // twelve preset layouts and there is no map to show for it.
-          setLiveErr(live === -1
-            ? 'No seed is forced, so the game picks a layout each cycle.'
-            : `The server reports seed ${live}, which is outside 0-11.`)
+          setLiveErr(selected.seed === -1
+            ? selected.source === 'farm'
+              ? 'The farm seed is automatic (-1), so no Deep Desert layout is predetermined while the map is stopped.'
+              : 'No seed is forced, so the game picks a layout each cycle.'
+            : `The server reports seed ${selected.seed}, which is outside 0-11.`)
           return
         }
-        setLiveSeed(live)
-        if (PAYLOAD.availableSeeds.includes(live)) setSeed(live)
+        setCurrentSeed(selected.seed)
+        setSeedSource(selected.source)
+        if (PAYLOAD.availableSeeds.includes(selected.seed)) setSeed(selected.seed)
       })
       .catch(e => { if (alive) setLiveErr(e instanceof Error ? e.message : String(e)) })
     return () => { alive = false }
@@ -315,12 +325,15 @@ export function WickMaps() {
             <div className="grid grid-cols-6 gap-1.5">
               {PAYLOAD.availableSeeds.map(s => {
                 const active = s === seed
-                const isLive = s === liveSeed
+                const isCurrent = s === currentSeed
+                const currentTitle = seedSource === 'farm'
+                  ? `Seed ${s} — current farm seed while Deep Desert is stopped`
+                  : `Seed ${s} — currently live in Deep Desert`
                 return (
                   <button
                     key={s}
                     onClick={() => setSeed(s)}
-                    title={isLive ? `Seed ${s} — currently live on this server` : `Seed ${s}`}
+                    title={isCurrent ? currentTitle : `Seed ${s}`}
                     className={`relative py-2 rounded-lg text-sm font-mono border transition-colors ${
                       active
                         ? 'bg-ibad/20 border-ibad text-text'
@@ -328,8 +341,10 @@ export function WickMaps() {
                     }`}
                   >
                     {s}
-                    {isLive && (
-                      <span className="absolute top-0.5 right-0.5 w-1.5 h-1.5 rounded-full bg-ok" />
+                    {isCurrent && (
+                      <span className={`absolute top-0.5 right-0.5 w-1.5 h-1.5 rounded-full ${
+                        seedSource === 'farm' ? 'bg-warning' : 'bg-ok'
+                      }`} />
                     )}
                   </button>
                 )
@@ -337,13 +352,23 @@ export function WickMaps() {
             </div>
 
             <div className="mt-3 pt-3 border-t border-border/60 text-xs text-text-dim">
-              {liveSeed !== null ? (
+              {currentSeed !== null ? (
                 <span className="flex items-center gap-1.5">
-                  <span className="w-1.5 h-1.5 rounded-full bg-ok inline-block" />
-                  Seed <strong className="text-text font-mono">{liveSeed}</strong> is live on this
-                  server.
-                  {liveSeed !== seed && (
-                    <button className="underline hover:text-text" onClick={() => setSeed(liveSeed)}>
+                  <span className={`w-1.5 h-1.5 rounded-full inline-block ${
+                    seedSource === 'farm' ? 'bg-warning' : 'bg-ok'
+                  }`} />
+                  {seedSource === 'farm' ? (
+                    <>
+                      Deep Desert is stopped. Seed <strong className="text-text font-mono">{currentSeed}</strong> is
+                      the current farm seed.
+                    </>
+                  ) : (
+                    <>
+                      Seed <strong className="text-text font-mono">{currentSeed}</strong> is live in Deep Desert.
+                    </>
+                  )}
+                  {currentSeed !== seed && (
+                    <button className="underline hover:text-text" onClick={() => setSeed(currentSeed)}>
                       Show it
                     </button>
                   )}
@@ -352,11 +377,11 @@ export function WickMaps() {
                 <span className="flex items-start gap-1.5 text-warning">
                   <Icon name="AlertTriangle" size={12} className="mt-0.5 shrink-0" />
                   <span>
-                    Couldn't read the live seed. <span className="text-text-dim">{liveErr}</span>
+                    Couldn't read the current seed. <span className="text-text-dim">{liveErr}</span>
                   </span>
                 </span>
               ) : (
-                <span>Reading the live seed…</span>
+                <span>Reading the current seed…</span>
               )}
             </div>
           </div>
