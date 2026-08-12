@@ -663,10 +663,23 @@ $script:DuneStartupConsoleVariableKeys = @(
         Sort-Object -Unique
 )
 
+$script:DuneStartupConsoleVariableCleanupOnlyKeys = @(
+    'Travel.BgdRetryCount'
+    'Travel.CVarTravelBgdRetrySecondsGap'
+    'Travel.CVarTravelBgdServerStatsTicker'
+)
+
+function Get-DuneStartupConsoleVariableCleanupOnlyKeyMap {
+    $cleanupOnly = @{}
+    foreach ($key in $script:DuneStartupConsoleVariableCleanupOnlyKeys) { $cleanupOnly[$key] = $true }
+    return $cleanupOnly
+}
+
 function Get-DuneManagedStartupConsoleVariableKeyMap {
     $managed = @{}
     foreach ($key in $script:DuneStartupConsoleVariableKeys) { $managed[$key] = $true }
     foreach ($key in (Get-DuneAdvancedCvarKeyMap).Keys) { $managed[$key] = $true }
+    foreach ($key in $script:DuneStartupConsoleVariableCleanupOnlyKeys) { $managed[$key] = $true }
     return $managed
 }
 
@@ -1757,8 +1770,10 @@ function Sync-DuneStartupConsoleVariableOverrides {
     $config = Get-DuneGameConfig -Ip $Ip
     $values = @{}
     $managed = Get-DuneManagedStartupConsoleVariableKeyMap
+    $cleanupOnly = Get-DuneStartupConsoleVariableCleanupOnlyKeyMap
     foreach ($key in @($config.engine.effectiveByKey.Keys)) {
         if (-not $managed.ContainsKey($key)) { continue }
+        if ($cleanupOnly.ContainsKey($key)) { continue }
         if ($config.engine.effectiveByKey.ContainsKey($key)) {
             $candidate = "$($config.engine.effectiveByKey[$key])".Trim()
             if (-not (Test-DuneGameConfigValueIsDefault -Key $key -Value $candidate)) {
