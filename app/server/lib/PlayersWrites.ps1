@@ -1421,11 +1421,56 @@ WHERE character_id IN (SELECT id FROM dune.player_state WHERE account_id = $Acco
 function Invoke-DunePlayerResetJourneyNodes {
     param([string]$Ip, [long]$AccountId)
     if ($AccountId -le 0) { return @{ ok = $false; error = 'account_id is required.' } }
-    # The old reset only flipped completion flags and removed catalogued journey
-    # tags. Contract/faction tags, revealed quest state, ContractItem rows, and
-    # the tracked-contract pointer survived, leaving characters unable to restart
-    # Fremen/faction quest lines. Reset Journey now means a complete clean restart.
-    return Invoke-DunePlayerWipeJourneyNodes -Ip $Ip -AccountId $AccountId
+    # Reset post-tutorial story state, but keep the New Player Experience marked
+    # complete. Veteran characters retain bases, skills, recipes, and equipment;
+    # replaying the tutorial against that retained state repeatedly stalls on
+    # one-time objectives (learn/equip a skill, place shelter pieces, etc.).
+    $pawnId = Get-DunePlayerPawnFromAccount -Ip $Ip -AccountId $AccountId
+    if ($pawnId -le 0) { return @{ ok = $false; error = "no pawn for account $AccountId." } }
+    $starterSql = @"
+SELECT fe.components->'FLevelComponent'->1->'StarterSkillTreeTag'->>'TagName' AS starter_tag
+FROM dune.fgl_entities fe
+JOIN dune.actor_fgl_entities afe ON afe.entity_id=fe.entity_id
+WHERE afe.actor_id=$pawnId::bigint AND afe.slot_name='DuneCharacter'
+LIMIT 1;
+"@
+    $starterResult = Invoke-DuneSqlQuery -Ip $Ip -Sql $starterSql -ReadOnly $true -MaxRows 1 -TimeoutSec 10
+    if (-not $starterResult.ok) { return @{ ok = $false; error = "read starter skill tree: $($starterResult.error)" } }
+    $starterRows = @(ConvertTo-DuneRowMaps -Result $starterResult)
+    if ($starterRows.Count -ne 1) { return @{ ok = $false; error = 'starter skill tree query returned no result.' } }
+    $starterTag = [string]$starterRows[0]['starter_tag']
+    if ($starterTag -notmatch '^Skills\.Key\.(.+)1$') {
+        return @{ ok = $false; error = "unsupported starter skill tree tag '$starterTag'." }
+    }
+    $starterJob = [string]$Matches[1]
+
+    $wipe = Invoke-DunePlayerWipeJourneyNodes -Ip $Ip -AccountId $AccountId
+    if (-not $wipe.ok) { return $wipe }
+
+    $skillReset = Invoke-DunePlayerResetJobSkills -Ip $Ip -AccountId $AccountId -Job $starterJob
+    if (-not $skillReset.ok) { return @{ ok = $false; error = "Journey wiped, but $starterJob skill reset failed: $($skillReset.error)" } }
+
+    $charSql = "SELECT id::text AS character_id FROM dune.player_state WHERE account_id=$AccountId::bigint LIMIT 1;"
+    $cr = Invoke-DuneSqlQuery -Ip $Ip -Sql $charSql -ReadOnly $true -MaxRows 1 -TimeoutSec 10
+    if (-not $cr.ok) { return @{ ok = $false; error = "Journey wiped, but character lookup failed: $($cr.error)" } }
+    $charRows = @(ConvertTo-DuneRowMaps -Result $cr)
+    if ($charRows.Count -ne 1) { return @{ ok = $false; error = 'Journey wiped, but character lookup returned no result.' } }
+    $characterId = [int64](ConvertTo-DuneInt $charRows[0]['character_id'])
+    if ($characterId -le 0) { return @{ ok = $false; error = 'Journey wiped, but character id was invalid.' } }
+
+    $npe = Invoke-DunePlayerMarkNpeCompleted -Ip $Ip -CharacterId $characterId
+    if (-not $npe.ok) { return @{ ok = $false; error = "Journey wiped, but NPE completion failed: $($npe.error)" } }
+    return @{
+        ok = $true
+        message = "Reset post-NPE journey and contract state while preserving faction, research, and active loadout. Reset the chosen $starterJob skill tree and refunded $($skillReset.refunded_points) point(s). NPE remains completed; Find the Fremen can restart on next login."
+        journey_rows = 0
+        story_tags = 0
+        contract_items = 0
+        npe_marked = $true
+        npe_nodes = [int]$npe.nodes_touched
+        starter_job_reset = $starterJob
+        refunded_skill_points = [int]$skillReset.refunded_points
+    }
 }
 
 function Invoke-DunePlayerWipeJourneyNodes {
@@ -1436,114 +1481,6 @@ function Invoke-DunePlayerWipeJourneyNodes {
     if (-not $off.ok) { return @{ ok = $false; error = "Player must be offline to wipe journey progress. $($off.reason)" } }
     $pawnID = Get-DunePlayerPawnFromAccount -Ip $Ip -AccountId $AccountId
     if ($pawnID -le 0) { return @{ ok = $false; error = "no pawn for account $AccountId." } }
-
-    # A fresh NPE includes "Learn a new ability from the Skills menu". Veteran
-    # characters can have every ability already learned, making that objective
-    # impossible after a journey reset. Reopen one non-starter ability in the
-    # character's starter tree using the same intermediate value (7) as Enable
-    # All Skills, then refund exactly the difference. If one is already at that
-    # proven learnable value, leave all skills untouched.
-    _Load-DuneTagsData
-    _Load-DuneProgressionNodesCatalog
-    $skillStateSql = @"
-SELECT fe.components->'FLevelComponent'->1->'StarterSkillTreeTag'->>'TagName' AS starter_tag,
-       COALESCE(fe.components->'FLevelComponent'->1->'ModuleData', '{}'::jsonb)::text AS module_data
-FROM dune.fgl_entities fe
-JOIN dune.actor_fgl_entities afe ON afe.entity_id=fe.entity_id
-WHERE afe.actor_id=$pawnID::bigint AND afe.slot_name='DuneCharacter'
-LIMIT 1;
-"@
-    $sr = Invoke-DuneSqlQuery -Ip $Ip -Sql $skillStateSql -ReadOnly $true -MaxRows 1 -TimeoutSec 15
-    if (-not $sr.ok) { return @{ ok = $false; error = "read starter skill tree: $($sr.error)" } }
-    $skillRows = @(ConvertTo-DuneRowMaps -Result $sr)
-    if ($skillRows.Count -ne 1) { return @{ ok = $false; error = 'starter skill tree query returned no result.' } }
-    $starterTag = [string]$skillRows[0]['starter_tag']
-    if ($starterTag -notmatch '^Skills\.Key\.(.+)1$') {
-        return @{ ok = $false; error = "unsupported starter skill tree tag '$starterTag'." }
-    }
-    $starterJob = [string]$Matches[1]
-    if (-not $script:DuneTagsData.jobAllModules.ContainsKey($starterJob)) {
-        return @{ ok = $false; error = "starter skill tree '$starterJob' is missing from the module catalog." }
-    }
-    if (-not $script:DuneProgressionNodesCatalog.starterAbilityByJob.ContainsKey($starterJob)) {
-        return @{ ok = $false; error = "starter ability for '$starterJob' is missing from the progression catalog." }
-    }
-    try {
-        $moduleData = ([string]$skillRows[0]['module_data']) | ConvertFrom-Json
-    } catch {
-        return @{ ok = $false; error = "starter skill ModuleData is invalid JSON: $($_.Exception.Message)" }
-    }
-    $starterAbility = [string]$script:DuneProgressionNodesCatalog.starterAbilityByJob[$starterJob]
-    $abilityModules = @(
-        $script:DuneTagsData.jobAllModules[$starterJob] |
-            ForEach-Object { [string]$_ } |
-            Where-Object { $_.StartsWith('Skills.Ability.') -and $_ -ne $starterAbility } |
-            Sort-Object
-    )
-    $resetSkillName = ''
-    $resetSkillKey = ''
-    $resetSkillPoints = 0
-    $resetSkillPrevious = 0
-    $openSkillValue = if ($script:DuneGrantAllSkillsLevelValue -gt 0) {
-        [int]$script:DuneGrantAllSkillsLevelValue
-    } else { 7 }
-    $hasLearnableAbility = $false
-    foreach ($ability in $abilityModules) {
-        $key = "(TagName=`"$ability`")"
-        $prop = $moduleData.PSObject.Properties[$key]
-        $spent = if ($prop) { [int](ConvertTo-DuneInt $prop.Value.SkillPointsSpent) } else { 0 }
-        if ($spent -le 0 -or $spent -eq $openSkillValue) { $hasLearnableAbility = $true; break }
-    }
-    if (-not $hasLearnableAbility -and $abilityModules.Count -gt 0) {
-        foreach ($ability in $abilityModules) {
-            $key = "(TagName=`"$ability`")"
-            $prop = $moduleData.PSObject.Properties[$key]
-            $spent = if ($prop) { [int](ConvertTo-DuneInt $prop.Value.SkillPointsSpent) } else { 0 }
-            if ($spent -gt $openSkillValue) {
-                $resetSkillName = [string]$ability
-                $resetSkillKey = $key
-                $resetSkillPrevious = $spent
-                $resetSkillPoints = $spent - $openSkillValue
-                break
-            }
-        }
-    }
-
-    $skillResetSql = ''
-    $skillVerifySql = '0::int'
-    if ($resetSkillKey -and $resetSkillPoints -gt 0) {
-        $safeResetSkillKey = ConvertTo-DuneSqlString $resetSkillKey
-        $skillResetSql = @"
-UPDATE dune.fgl_entities fe
-SET components = jsonb_set(
-    jsonb_set(
-        fe.components,
-        ARRAY['FLevelComponent','1','ModuleData','$safeResetSkillKey','SkillPointsSpent'],
-        to_jsonb($openSkillValue::int),
-        true),
-    ARRAY['FLevelComponent','1','UnspentSkillPoints'],
-    to_jsonb(
-        COALESCE((fe.components->'FLevelComponent'->1->>'UnspentSkillPoints')::int, 0)
-        + $resetSkillPoints::int
-    ),
-    true)
-WHERE fe.entity_id=(
-    SELECT entity_id FROM dune.actor_fgl_entities
-    WHERE actor_id=$pawnID::bigint AND slot_name='DuneCharacter'
-);
-"@
-        $skillVerifySql = @"
-(SELECT CASE WHEN COALESCE(
-                 (fe.components->'FLevelComponent'->1->'ModuleData'->'$safeResetSkillKey'->>'SkillPointsSpent')::int,
-                 -1
-             ) = $openSkillValue
-             THEN 0 ELSE 1 END
- FROM dune.fgl_entities fe
- JOIN dune.actor_fgl_entities afe ON afe.entity_id=fe.entity_id
- WHERE afe.actor_id=$pawnID::bigint AND afe.slot_name='DuneCharacter'
- LIMIT 1)
-"@
-    }
 
     # This is a full story restart, not merely a journey-row delete. Contract
     # progress also lives in player tags and ContractItem inventory rows; leaving
@@ -1561,11 +1498,6 @@ WHERE character_id IN (SELECT id FROM dune.player_state WHERE account_id=$Accoun
       OR tag LIKE 'DialogueFlags.Contracts.%'
       OR tag LIKE 'NPE.%'
   );
-$skillResetSql
-SELECT dune.complete_journey_story_nodes_for_player(
-    (SELECT "user" FROM dune.accounts WHERE id=$AccountId::bigint),
-    ARRAY['DA_MQ_ANewBeginning.First Skirmish.Unlock more skills.Equip second ability']::text[]
-);
 DELETE FROM dune.items i
 USING dune.inventories inv
 WHERE inv.id=i.inventory_id
@@ -1589,12 +1521,7 @@ COMMIT;
     $verifySql = @"
 SELECT
   (SELECT COUNT(*) FROM dune.journey_story_node
-   WHERE character_id IN (SELECT id FROM dune.player_state WHERE account_id=$AccountId::bigint)
-     AND story_node_id <> 'DA_MQ_ANewBeginning.First Skirmish.Unlock more skills.Equip second ability') AS unexpected_journey_rows,
-  (SELECT COUNT(*) FROM dune.journey_story_node
-   WHERE character_id IN (SELECT id FROM dune.player_state WHERE account_id=$AccountId::bigint)
-     AND story_node_id = 'DA_MQ_ANewBeginning.First Skirmish.Unlock more skills.Equip second ability'
-     AND complete_condition_state='true'::jsonb) AS equip_objective_seeded,
+   WHERE character_id IN (SELECT id FROM dune.player_state WHERE account_id=$AccountId::bigint)) AS journey_rows,
   (SELECT COUNT(*) FROM dune.player_tags
    WHERE character_id IN (SELECT id FROM dune.player_state WHERE account_id=$AccountId::bigint)
      AND (
@@ -1606,37 +1533,27 @@ SELECT
          OR tag LIKE 'NPE.%'
      )) AS story_tags,
   (SELECT COUNT(*) FROM dune.items i JOIN dune.inventories inv ON inv.id=i.inventory_id
-   WHERE inv.actor_id=$pawnID::bigint AND inv.inventory_type=29 AND i.template_id='ContractItem') AS contract_items,
-  $skillVerifySql AS reset_skill_mismatch;
+   WHERE inv.actor_id=$pawnID::bigint AND inv.inventory_type=29 AND i.template_id='ContractItem') AS contract_items;
 "@
     $vr = Invoke-DuneSqlQuery -Ip $Ip -Sql $verifySql -ReadOnly $true -MaxRows 1 -TimeoutSec 30
     if (-not $vr.ok) { return @{ ok = $false; error = "wipe journey verification: $($vr.error)" } }
     $rows = @(ConvertTo-DuneRowMaps -Result $vr)
     if ($rows.Count -ne 1) { return @{ ok = $false; error = 'wipe journey verification returned no result.' } }
-    $unexpectedJourneyRows = [int64](ConvertTo-DuneInt $rows[0]['unexpected_journey_rows'])
-    $equipObjectiveSeeded = [int64](ConvertTo-DuneInt $rows[0]['equip_objective_seeded'])
+    $journeyRows = [int64](ConvertTo-DuneInt $rows[0]['journey_rows'])
     $storyTags = [int64](ConvertTo-DuneInt $rows[0]['story_tags'])
     $contractItems = [int64](ConvertTo-DuneInt $rows[0]['contract_items'])
-    $resetSkillMismatch = [int64](ConvertTo-DuneInt $rows[0]['reset_skill_mismatch'])
-    if ($unexpectedJourneyRows -ne 0 -or $equipObjectiveSeeded -ne 1 -or
-        $storyTags -ne 0 -or $contractItems -ne 0 -or $resetSkillMismatch -ne 0) {
+    if ($journeyRows -ne 0 -or $storyTags -ne 0 -or $contractItems -ne 0) {
         return @{
             ok = $false
-            error = "Journey reset incomplete: $unexpectedJourneyRows unexpected journey row(s), equip objective seeded=$equipObjectiveSeeded, $storyTags story tag(s), $contractItems contract item(s), reset skill mismatch=$resetSkillMismatch."
+            error = "Journey wipe incomplete: $journeyRows journey row(s), $storyTags story tag(s), and $contractItems contract item(s) remain."
         }
     }
-    $skillPart = if ($resetSkillName) {
-        " Reopened $resetSkillName from $resetSkillPrevious to $openSkillValue and refunded $resetSkillPoints skill point(s) for the NPE learn-ability objective."
-    } else { ' A learnable starter-tree ability was already available, so skills were preserved.' }
     return @{
         ok = $true
-        message = "Reset journey, NPE/journey/dialogue-contract tags, and contract items. Faction state and ability loadout were preserved; the equip-second-ability objective was seeded complete because veteran loadouts rehydrate on login.$skillPart The player can log back in and restart from the beginning."
-        journey_rows = 1
+        message = 'Wiped journey, NPE/journey/dialogue-contract tags, and contract items. Faction state, skills, research, and active loadout were preserved.'
+        journey_rows = 0
         story_tags = 0
         contract_items = 0
-        reset_skill = $resetSkillName
-        refunded_skill_points = $resetSkillPoints
-        equip_objective_seeded = $true
     }
 }
 
@@ -2389,22 +2306,47 @@ function Invoke-DunePlayerResetJobSkills {
     $keysArr = ConvertTo-DunePgTextArray $keys
 
     $sql = @"
-UPDATE dune.fgl_entities fe
-SET components = jsonb_set(
-    fe.components,
-    ARRAY['FLevelComponent','1','ModuleData'],
-    (fe.components->'FLevelComponent'->1->'ModuleData') - $keysArr)
-WHERE fe.entity_id = (
-    SELECT entity_id FROM dune.actor_fgl_entities
-    WHERE actor_id = $pawnID::bigint AND slot_name = 'DuneCharacter'
-);
+WITH target AS (
+    SELECT fe.entity_id,
+           COALESCE((
+               SELECT SUM(COALESCE((entry.value->>'SkillPointsSpent')::int, 0))
+               FROM jsonb_each(COALESCE(fe.components->'FLevelComponent'->1->'ModuleData', '{}'::jsonb)) entry
+               WHERE entry.key = ANY($keysArr)
+           ), 0)::int AS refund
+    FROM dune.fgl_entities fe
+    JOIN dune.actor_fgl_entities afe ON afe.entity_id=fe.entity_id
+    WHERE afe.actor_id=$pawnID::bigint AND afe.slot_name='DuneCharacter'
+),
+updated AS (
+    UPDATE dune.fgl_entities fe
+    SET components = jsonb_set(
+        jsonb_set(
+            fe.components,
+            ARRAY['FLevelComponent','1','ModuleData'],
+            COALESCE(fe.components->'FLevelComponent'->1->'ModuleData', '{}'::jsonb) - $keysArr),
+        ARRAY['FLevelComponent','1','UnspentSkillPoints'],
+        to_jsonb(
+            COALESCE((fe.components->'FLevelComponent'->1->>'UnspentSkillPoints')::int, 0)
+            + target.refund
+        ),
+        true)
+    FROM target
+    WHERE fe.entity_id=target.entity_id
+    RETURNING target.refund
+)
+SELECT refund FROM updated;
 "@
     $r = Invoke-DuneSqlQuery -Ip $Ip -Sql $sql -ReadOnly $false -MaxRows 1 -TimeoutSec 30
     if (-not $r.ok) { return @{ ok = $false; error = "reset $Job tree: $($r.error)" } }
-    if ((Get-DuneSqlAffected $r) -eq 0) {
-        return @{ ok = $true; message = "Reset $Job skill tree - no ModuleData on pawn" }
+    $rows = @(ConvertTo-DuneRowMaps -Result $r)
+    if ($rows.Count -ne 1) { return @{ ok = $false; error = "reset $Job tree returned no refund result." } }
+    $refund = [int](ConvertTo-DuneInt $rows[0]['refund'])
+    return @{
+        ok = $true
+        message = "Reset $Job skill tree - removed $($modules.Count) module slot(s) and refunded $refund point(s)"
+        modules = $modules.Count
+        refunded_points = $refund
     }
-    return @{ ok = $true; message = "Reset $Job skill tree - scanned $($modules.Count) module slot(s)" }
 }
 
 # Unlock a skill-trainer quest line: completes every DA_CT_Trainer_<Job>* contract

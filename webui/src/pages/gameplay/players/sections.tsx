@@ -661,8 +661,8 @@ const ACTIONS: ActionDef[] = [
     run: p => resetProgressionLive({ actor_id: p.id }) },
   { id: 'reset-journey', group: 'Progression', label: 'Reset Journey', icon: 'RefreshCw', offlineOnly: true,
     doubleConfirm: true,
-    rowNote: 'Full quest restart. Preserves faction/loadout, seeds the equip-slot objective, and leaves one ability learnable for NPE. Offline.',
-    confirm: p => `RESET ${p.name}'s entire journey and restart every quest from the beginning? Journey nodes, NPE/journey/contract tags, and contract items will be cleared. Faction state and the active ability loadout are preserved. The equip-second-ability objective is seeded complete because veteran loadouts rehydrate on login. If needed, one starter-tree ability is lowered to the proven learnable value and its points are refunded so the NPE can advance. This cannot be undone.\n\n` +
+    rowNote: 'Restart post-tutorial story at Find the Fremen. Preserves faction/research/loadout; resets chosen starter tree and refunds points. Offline.',
+    confirm: p => `RESET ${p.name}'s post-tutorial journey and restart at Find the Fremen? Journey/contract tags, rows, and contract items will be cleared. The NPE remains completed because veteran bases, skills, and items cannot reliably replay one-time tutorial events. Faction state, research, and active loadout are preserved. Only the chosen starter-class skill tree is reset, with its points refunded. This cannot be undone.\n\n` +
       `This is the FIRST of two confirmations. If you continue, the next step asks you to type an acknowledgement before the journey is reset.`,
     run: p => {
       const typed = window.prompt(
@@ -3272,7 +3272,7 @@ export function JourneySection({ player, canWrite, demo, refreshKey, flash, onCh
 
   const resetAll = () => {
     if (!window.confirm(
-      `RESET ${player.name}'s entire journey and restart every quest from the beginning? Journey nodes, NPE/journey/contract tags, and contract items will be cleared. Faction state and the active ability loadout are preserved. The equip-second-ability objective is seeded complete because veteran loadouts rehydrate on login. If needed, one starter-tree ability is lowered to the proven learnable value and its points are refunded so the NPE can advance. This cannot be undone.\n\n` +
+      `RESET ${player.name}'s post-tutorial journey and restart at Find the Fremen? Journey/contract tags, rows, and contract items will be cleared. The NPE remains completed because veteran bases, skills, and items cannot reliably replay one-time tutorial events. Faction state, research, and active loadout are preserved. Only the chosen starter-class skill tree is reset, with its points refunded. This cannot be undone.\n\n` +
       `This is the FIRST of two confirmations. If you continue, the next step asks you to type an acknowledgement before the journey is reset.`
     )) return
     const typed = window.prompt(
@@ -3317,7 +3317,7 @@ export function JourneySection({ player, canWrite, demo, refreshKey, flash, onCh
         </div>
         {canWrite && (
           <button type="button" className="btn-secondary shrink-0 text-xs text-error" disabled={busy || isOnline} onClick={resetAll}
-            title={isOnline ? 'Player must be offline' : 'Full quest reset; preserve faction/loadout, seed equip objective, retain skill headroom'}>
+            title={isOnline ? 'Player must be offline' : 'Reset post-NPE story and chosen starter tree; preserve faction, research, and loadout'}>
             <Icon name="RefreshCw" size={12} /> Reset All
           </button>
         )}
