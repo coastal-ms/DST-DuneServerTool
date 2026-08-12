@@ -6,6 +6,7 @@ export interface RestartSchedule {
   enabled: boolean
   time: string                 // 24h HH:mm in the DST host's local time
   broadcastLeadMinutes: number // 0 = no broadcast
+  applyFuncomUpdates: boolean  // opt-in: apply available Funcom updates during daily maintenance
   discordEnabled: boolean
   discordNotifyOnline: boolean
   discordNotifyOffline: boolean
@@ -19,6 +20,7 @@ export interface RestartSchedule {
   installedBuild: string
   latestBuild: string
   updateCheckedAt: string
+  automationMessage?: string
 }
 
 export interface FuncomUpdateResult {
@@ -38,6 +40,7 @@ export function saveRestartSchedule(body: {
   enabled: boolean
   time: string
   broadcastLeadMinutes: number
+  applyFuncomUpdates: boolean
   discordEnabled: boolean
   discordNotifyOnline: boolean
   discordNotifyOffline: boolean

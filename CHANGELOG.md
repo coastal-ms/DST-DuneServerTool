@@ -13,6 +13,16 @@ here cover everything those tags shipped.
 
 ## [Unreleased]
 
+## [13.6.4] - 2026-08-12
+
+### Added
+
+- Scheduled daily restarts can optionally apply an available Funcom self-hosted
+  server update instead of running a normal restart. VM cron owns the daily
+  maintenance so it runs while DST is closed; DST repairs the automation when
+  it starts. The option is off by default, and update checks still run when it
+  is disabled.
+
 ### Changed
 
 - Experimental Lab now uses the current `Bgd.*` names for three travel retry
@@ -22,6 +32,17 @@ here cover everything those tags shipped.
 
 - Restart injection removes stale commands that used the retired `Travel.*`
   names without deleting their saved `UserEngine.ini` values.
+
+## [13.6.3] - 2026-08-12
+
+### Fixed
+
+- Apply level now adds standard, major, and super specialization skill-point
+  rewards to the character's hidden bonus and total point ledgers. It preserves
+  the visible unspent balance when prior live edits created an overallocated
+  character, and running Apply level again does not add duplicate points.
+- Character XP edits now use Funcom's persisted `TotalSkillPoints` field instead
+  of the absent legacy `TotalSkillPointsEarned` name.
 
 ## [13.6.2] - 2026-08-11
 
