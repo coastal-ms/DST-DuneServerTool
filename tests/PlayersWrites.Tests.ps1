@@ -316,6 +316,7 @@ Describe 'Invoke-DunePlayerResetJourneyNodes orchestration' -Tag 'Pure' {
         $script:originalWipeJourney = (Get-Command Invoke-DunePlayerWipeJourneyNodes).ScriptBlock
         $script:originalResetJob = (Get-Command Invoke-DunePlayerResetJobSkills).ScriptBlock
         $script:originalMarkNpe = (Get-Command Invoke-DunePlayerMarkNpeCompleted).ScriptBlock
+        function global:Test-DunePlayerOfflineByAccount { return @{ ok = $true; reason = $null } }
         function global:Get-DunePlayerPawnFromAccount { return 3946L }
         function global:ConvertTo-DuneRowMaps { param($Result) return @($Result.maps) }
         function global:Invoke-DuneSqlQuery {
@@ -334,6 +335,7 @@ Describe 'Invoke-DunePlayerResetJourneyNodes orchestration' -Tag 'Pure' {
         Set-Item function:global:Invoke-DunePlayerWipeJourneyNodes $script:originalWipeJourney
         Set-Item function:global:Invoke-DunePlayerResetJobSkills $script:originalResetJob
         Set-Item function:global:Invoke-DunePlayerMarkNpeCompleted $script:originalMarkNpe
+        Remove-Item function:global:Test-DunePlayerOfflineByAccount -ErrorAction SilentlyContinue
         Remove-Item function:global:Get-DunePlayerPawnFromAccount -ErrorAction SilentlyContinue
         Remove-Item function:global:ConvertTo-DuneRowMaps -ErrorAction SilentlyContinue
         Remove-Item function:global:Invoke-DuneSqlQuery -ErrorAction SilentlyContinue
@@ -349,6 +351,16 @@ Describe 'Invoke-DunePlayerResetJourneyNodes orchestration' -Tag 'Pure' {
         $r.npe_marked | Should -BeTrue
         $r.npe_nodes | Should -Be 153
         $r.message | Should -Match 'Find the Fremen'
+    }
+
+    It 'stops after the wipe if the player logs in before starter-tree reset' {
+        function global:Test-DunePlayerOfflineByAccount { return @{ ok = $false; reason = 'player is Online' } }
+
+        $r = Invoke-DunePlayerResetJourneyNodes -Ip '1.2.3.4' -AccountId 605
+
+        $r.ok | Should -BeFalse
+        $r.error | Should -Match 'starter-tree reset stopped'
+        $script:resetJob | Should -BeNullOrEmpty
     }
 }
 

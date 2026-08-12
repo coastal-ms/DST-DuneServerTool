@@ -1447,6 +1447,10 @@ LIMIT 1;
     $wipe = Invoke-DunePlayerWipeJourneyNodes -Ip $Ip -AccountId $AccountId
     if (-not $wipe.ok) { return $wipe }
 
+    $stillOffline = Test-DunePlayerOfflineByAccount -Ip $Ip -AccountId $AccountId
+    if (-not $stillOffline.ok) {
+        return @{ ok = $false; error = "Journey was wiped, but starter-tree reset stopped because the player logged in: $($stillOffline.reason)" }
+    }
     $skillReset = Invoke-DunePlayerResetJobSkills -Ip $Ip -AccountId $AccountId -Job $starterJob
     if (-not $skillReset.ok) { return @{ ok = $false; error = "Journey wiped, but $starterJob skill reset failed: $($skillReset.error)" } }
 
@@ -1458,6 +1462,10 @@ LIMIT 1;
     $characterId = [int64](ConvertTo-DuneInt $charRows[0]['character_id'])
     if ($characterId -le 0) { return @{ ok = $false; error = 'Journey wiped, but character id was invalid.' } }
 
+    $stillOffline = Test-DunePlayerOfflineByAccount -Ip $Ip -AccountId $AccountId
+    if (-not $stillOffline.ok) {
+        return @{ ok = $false; error = "Journey and starter tree were reset, but NPE restoration stopped because the player logged in: $($stillOffline.reason)" }
+    }
     $npe = Invoke-DunePlayerMarkNpeCompleted -Ip $Ip -CharacterId $characterId
     if (-not $npe.ok) { return @{ ok = $false; error = "Journey wiped, but NPE completion failed: $($npe.error)" } }
     return @{
