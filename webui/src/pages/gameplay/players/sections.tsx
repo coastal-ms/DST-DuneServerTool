@@ -25,7 +25,7 @@ import {
   resetAllKeystones, resetAllSpecs, resetJourney, resetProgressionLive, resetSpec,
   restoreDestroyed,
   setFactionTier, setSkillPoints,
-  setStarterClass, teleportToPlayer, teleportToLocation, setRespawn, getTeleportDestinations, getPlayers, updatePlayerTags, wipeCodex, wipeJourney, resetFaction, snapshotBuilds, getFreshStartSnapshots, restoreBuilds, grantAllSkills,
+  setStarterClass, teleportToPlayer, teleportToLocation, setRespawn, getTeleportDestinations, getPlayers, updatePlayerTags, wipeCodex, resetFaction, snapshotBuilds, getFreshStartSnapshots, restoreBuilds, grantAllSkills,
   chatWhisper, isValidTemplateId, getItemCatalog, getCosmeticsCatalog, getPlayerOwnedCosmetics, filterCosmeticsCatalog, type CosmeticEntry,
   parseTcnoPackageText,
   giveItems, getItemPackages, saveItemPackage, deleteItemPackage,
@@ -659,26 +659,21 @@ const ACTIONS: ActionDef[] = [
     confirm: p => `Reset ALL progression for ${p.name}? Cannot be undone.\n\n` +
       `This single confirmation is required so the action can't run on an accidental click.`,
     run: p => resetProgressionLive({ actor_id: p.id }) },
-  { id: 'reset-journey', group: 'Progression', label: 'Reset Journey', icon: 'Map',
-    rowNote: 'Single confirmation required',
-    confirm: p => `Reset ${p.name}'s journey/quest progress? They'll restart the current journey step. This cannot be undone.\n\n` +
-      `This single confirmation is required so the action can't run on an accidental click.`,
-    run: p => resetJourney(p.account_id) },
-  { id: 'wipe-journey', group: 'Progression', label: 'Wipe Journey (restart)', icon: 'RefreshCw', offlineOnly: true,
+  { id: 'reset-journey', group: 'Progression', label: 'Reset Journey', icon: 'RefreshCw', offlineOnly: true,
     doubleConfirm: true,
-    rowNote: 'Journey nodes + story/contract/faction tags + contract items. Double confirmation. Offline.',
-    confirm: p => `WIPE ${p.name}'s entire journey and restart it from the beginning? Journey nodes, story/contract/faction tags, and contract items will be removed. This cannot be undone.\n\n` +
-      `This is the FIRST of two confirmations. If you continue, the next step asks you to type an acknowledgement before the journey is wiped.`,
+    rowNote: 'Restart post-tutorial story at Find the Fremen. Preserves faction/research/loadout; resets chosen starter tree and refunds points. Offline.',
+    confirm: p => `RESET ${p.name}'s post-tutorial journey and restart at Find the Fremen? Journey/contract tags, rows, and contract items will be cleared. The NPE remains completed because veteran bases, skills, and items cannot reliably replay one-time tutorial events. Faction state, research, and active loadout are preserved. Only the chosen starter-class skill tree is reset, with its points refunded. This cannot be undone.\n\n` +
+      `This is the FIRST of two confirmations. If you continue, the next step asks you to type an acknowledgement before the journey is reset.`,
     run: p => {
       const typed = window.prompt(
-        `SECOND confirmation — WIPE ${p.name}'s journey.\n` +
+        `SECOND confirmation — RESET ${p.name}'s entire journey.\n` +
         `This cannot be undone.\n\n` +
         `Type  i acknowledge  to proceed:`
       ) || ''
       if (typed.trim().toLowerCase() !== 'i acknowledge') {
-        throw new Error('Did not type "i acknowledge" — wipe aborted.')
+        throw new Error('Did not type "i acknowledge" — reset aborted.')
       }
-      return wipeJourney(p.account_id)
+      return resetJourney(p.account_id)
     } },
   { id: 'reset-faction', group: 'Progression', label: 'Reset Faction', icon: 'Swords', custom: 'reset-faction', offlineOnly: true,
     rowNote: 'Wipe faction rep + tags + ClimbTheRanks nodes. Optional Deep also clears codex. Offline.',
@@ -3275,21 +3270,21 @@ export function JourneySection({ player, canWrite, demo, refreshKey, flash, onCh
     }
   }
 
-  const wipeAll = () => {
+  const resetAll = () => {
     if (!window.confirm(
-      `WIPE ${player.name}'s entire journey and restart it from the beginning? Journey nodes, story/contract/faction tags, and contract items will be removed. This cannot be undone.\n\n` +
-      `This is the FIRST of two confirmations. If you continue, the next step asks you to type an acknowledgement before the journey is wiped.`
+      `RESET ${player.name}'s post-tutorial journey and restart at Find the Fremen? Journey/contract tags, rows, and contract items will be cleared. The NPE remains completed because veteran bases, skills, and items cannot reliably replay one-time tutorial events. Faction state, research, and active loadout are preserved. Only the chosen starter-class skill tree is reset, with its points refunded. This cannot be undone.\n\n` +
+      `This is the FIRST of two confirmations. If you continue, the next step asks you to type an acknowledgement before the journey is reset.`
     )) return
     const typed = window.prompt(
-      `SECOND confirmation — WIPE ${player.name}'s journey.\n` +
+      `SECOND confirmation — RESET ${player.name}'s entire journey.\n` +
       `This cannot be undone.\n\n` +
       `Type  i acknowledge  to proceed:`
     ) || ''
     if (typed.trim().toLowerCase() !== 'i acknowledge') {
-      flash('Did not type "i acknowledge" — wipe aborted.', 'err')
+      flash('Did not type "i acknowledge" — reset aborted.', 'err')
       return
     }
-    void run(() => wipeJourney(player.account_id))
+    void run(() => resetJourney(player.account_id))
   }
 
   if (loading) return <Loading label="Loading journey…" />
@@ -3321,9 +3316,9 @@ export function JourneySection({ player, canWrite, demo, refreshKey, flash, onCh
             className="w-full px-3 py-1.5 rounded-lg bg-surface-2 border border-border text-text text-sm focus:outline-none focus:ring-2 focus:ring-ibad focus:border-ibad/50" />
         </div>
         {canWrite && (
-          <button type="button" className="btn-secondary shrink-0 text-xs text-error" disabled={busy || isOnline} onClick={wipeAll}
-            title={isOnline ? 'Player must be offline' : 'Delete journey nodes, story/contract/faction tags, and contract items'}>
-            <Icon name="RefreshCw" size={12} /> Wipe All
+          <button type="button" className="btn-secondary shrink-0 text-xs text-error" disabled={busy || isOnline} onClick={resetAll}
+            title={isOnline ? 'Player must be offline' : 'Reset post-NPE story and chosen starter tree; preserve faction, research, and loadout'}>
+            <Icon name="RefreshCw" size={12} /> Reset All
           </button>
         )}
       </div>
