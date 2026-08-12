@@ -13,11 +13,15 @@ here cover everything those tags shipped.
 
 ## [Unreleased]
 
+## [13.6.4] - 2026-08-12
+
 ### Added
 
 - Scheduled daily restarts can optionally apply an available Funcom self-hosted
-  server update instead of running a normal restart. The option is off by
-  default; update checks still run when it is disabled.
+  server update instead of running a normal restart. VM cron owns the daily
+  maintenance so it runs while DST is closed; DST repairs the automation when
+  it starts. The option is off by default, and update checks still run when it
+  is disabled.
 
 ## [13.6.3] - 2026-08-12
 
