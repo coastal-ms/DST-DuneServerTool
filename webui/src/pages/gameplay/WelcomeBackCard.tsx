@@ -105,7 +105,7 @@ export function WelcomeBackCard() {
       <div className="mb-3 px-3 py-2 rounded border border-warning/35 bg-warning/10 text-xs text-text-muted">
         Still seeing the game&apos;s older returning-player popup? That is separate from
         this DST package feature. Set <b className="text-text">Legacy Returning Player Popup</b> to
-        Disabled under Experimental &rsaquo; Progression &amp; Contracts, then use Apply INIs &amp; restart.
+        Disabled under Experimental Lab, then use Apply INIs &amp; restart.
       </div>
 
       <label className="flex items-center gap-2 text-sm cursor-pointer">

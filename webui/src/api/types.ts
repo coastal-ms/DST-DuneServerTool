@@ -145,6 +145,10 @@ export type GameConfigField = {
   group?: string
   /** Experimental controls only: 'Confirmed' | 'Unconfirmed'. */
   status?: string
+  /** Experimental Lab metadata derived from the recovered binary catalog. */
+  source?: 'Dune' | 'Engine'
+  scope?: string
+  risk?: 'experimental' | 'diagnostic' | 'high' | 'critical'
 }
 
 export type GameConfigCategory = {
@@ -154,6 +158,20 @@ export type GameConfigCategory = {
 
 export type GameConfigSchemaResponse = {
   schema: GameConfigCategory[]
+}
+
+export type GameConfigExperimentalCategoriesResponse = {
+  categories: Array<{ category: string; count: number }>
+}
+
+export type GameConfigExperimentalCategoryResponse = {
+  category: string
+  fields: GameConfigField[]
+}
+
+export type GameConfigExperimentalSearchResponse = {
+  query: string
+  fields: GameConfigField[]
 }
 
 export type GameConfigIniKey = {
@@ -242,6 +260,7 @@ export type GameConfigClientApplyItem = {
   label: string
   section: string
   value: string
+  structKey?: string
   remove?: boolean
 }
 

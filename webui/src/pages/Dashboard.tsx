@@ -141,7 +141,9 @@ export function Dashboard() {
     }
   }, [])
 
-  useEffect(() => { void refreshLinks() }, [refreshLinks, bgReady])
+  // The links endpoint resolves battlegroup state itself. Depending on bgReady
+  // caused a duplicate cold-start request as soon as /api/status completed.
+  useEffect(() => { void refreshLinks() }, [refreshLinks])
 
   // Log exports — run-command wrappers
   const [exportBusy, setExportBusy] = useState<string | null>(null)

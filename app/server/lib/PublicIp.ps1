@@ -927,10 +927,35 @@ runner=/usr/local/bin/k3s-custom-runner.sh
 target="dynamic_ip=$NEW_IP"
 if [ -f "$runner" ]; then
   sudo cp "$runner" "$runner.bak.$(date -u +%Y%m%d%H%M%S)"
-  awk -v target="$target" 'BEGIN{done=0} /^dynamic_ip=/{print target; done=1; next} {print} END{if(!done) print target}' "$runner" > /tmp/dst-runner
+  # DST_K3S_RUNNER_AWK_BEGIN
+  awk -v target="$target" '
+    BEGIN { dynamic_done=0; exec_done=0 }
+    /^dynamic_ip=/ {
+      print target
+      dynamic_done=1
+      next
+    }
+    /# DST_MANAGED_EXTERNAL_IP$/ { next }
+    /^exec[[:space:]]+\/usr\/local\/bin\/k3s[[:space:]]+server/ {
+      if (!dynamic_done) {
+        print target
+        dynamic_done=1
+      }
+      print "external_ip=$dynamic_ip # DST_MANAGED_EXTERNAL_IP"
+      print
+      exec_done=1
+      next
+    }
+    { print }
+    END {
+      if (!exec_done) exit 4
+    }
+  ' "$runner" > /tmp/dst-runner
+  # DST_K3S_RUNNER_AWK_END
   sudo install -m 0755 /tmp/dst-runner "$runner"
   rm -f /tmp/dst-runner
   grep -F "$target" "$runner"
+  grep -F 'external_ip=$dynamic_ip # DST_MANAGED_EXTERNAL_IP' "$runner"
 fi
 
 step k3s

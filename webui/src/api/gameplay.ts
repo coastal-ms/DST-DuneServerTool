@@ -598,6 +598,12 @@ export function setSpecLevel(controllerId: number, trackType: string, level: num
   })
 }
 
+export function applySpecLevel(controllerId: number, trackType: string, level: number) {
+  return api<WriteResult>('/api/gameplay/players/apply-spec-level', {
+    method: 'POST', body: JSON.stringify({ controller_id: controllerId, track_type: trackType, level }),
+  })
+}
+
 export function deleteInventoryItem(itemId: number) {
   return api<WriteResult>('/api/gameplay/players/delete-item', {
     method: 'POST', body: JSON.stringify({ item_id: itemId }),

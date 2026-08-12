@@ -182,10 +182,58 @@ Describe 'Public IP diagnostic target selection' {
         $target.source | Should -Be 'vm'
     }
 
-    It 'pins the K3s startup runner to the applied public IP' {
+    It 'pins both K3s startup IP inputs to the applied public IP' {
         $source = Get-Content -LiteralPath (Join-Path $PSScriptRoot '..\app\server\lib\PublicIp.ps1') -Raw
         $source | Should -Match 'target="dynamic_ip=\$NEW_IP"'
+        $source | Should -Match 'external_ip=\$dynamic_ip # DST_MANAGED_EXTERNAL_IP'
+        $source | Should -Match '(?s)/# DST_MANAGED_EXTERNAL_IP\$/ \{ next \}.*?external_ip=\$dynamic_ip # DST_MANAGED_EXTERNAL_IP.*?exec_done=1'
         $source | Should -Not -Match "target='dynamic_ip=\$\(/sbin/ip addr show eth0"
+    }
+
+    It 'overrides a stale settings.conf external IP immediately before K3s starts' {
+        $awk = Get-Command awk -CommandType Application -ErrorAction SilentlyContinue | Select-Object -First 1
+        if (-not $awk) {
+            $gitAwk = Join-Path $env:ProgramFiles 'Git\usr\bin\awk.exe'
+            if (Test-Path -LiteralPath $gitAwk) { $awk = Get-Item -LiteralPath $gitAwk }
+        }
+        if (-not $awk) {
+            Set-ItResult -Skipped -Because 'awk is unavailable on this test host'
+            return
+        }
+
+        $source = Get-Content -LiteralPath (Join-Path $PSScriptRoot '..\app\server\lib\PublicIp.ps1') -Raw
+        $match = [regex]::Match(
+            $source,
+            "(?s)# DST_K3S_RUNNER_AWK_BEGIN\s+awk -v target=`"\`$target`" '(?<program>.*?)'\s+`"\`$runner`" > /tmp/dst-runner\s+# DST_K3S_RUNNER_AWK_END"
+        )
+        $match.Success | Should -BeTrue
+
+        $programPath = Join-Path $TestDrive 'pin-runner.awk'
+        $runnerPath = Join-Path $TestDrive 'k3s-custom-runner.sh'
+        Set-Content -LiteralPath $programPath -Value $match.Groups['program'].Value -NoNewline
+        @'
+#!/bin/sh
+{ read -r bg_name; read -r image; read -r internal_ip; read -r external_ip; } < /home/dune/.dune/settings.conf
+dynamic_ip=203.0.113.9
+if [[ "$internal_ip" == "$external_ip" ]]; then
+  external_ip=$dynamic_ip
+fi
+exec /usr/local/bin/k3s server --node-external-ip=${external_ip} --advertise-address=${dynamic_ip}
+'@ | Set-Content -LiteralPath $runnerPath -NoNewline
+
+        $awkPath = if ($awk.Source) { $awk.Source } else { $awk.FullName }
+        $result = & $awkPath -v 'target=dynamic_ip=198.51.100.44' -f $programPath $runnerPath
+        $LASTEXITCODE | Should -Be 0
+        $result | Should -Contain 'dynamic_ip=198.51.100.44'
+        $result | Should -Contain 'external_ip=$dynamic_ip # DST_MANAGED_EXTERNAL_IP'
+        [array]::IndexOf([string[]]$result, 'external_ip=$dynamic_ip # DST_MANAGED_EXTERNAL_IP') |
+            Should -BeLessThan ([array]::IndexOf([string[]]$result, 'exec /usr/local/bin/k3s server --node-external-ip=${external_ip} --advertise-address=${dynamic_ip}'))
+        @($result | Where-Object { $_ -eq 'external_ip=$dynamic_ip # DST_MANAGED_EXTERNAL_IP' }).Count | Should -Be 1
+
+        $result | Set-Content -LiteralPath $runnerPath
+        $secondResult = & $awkPath -v 'target=dynamic_ip=198.51.100.44' -f $programPath $runnerPath
+        $LASTEXITCODE | Should -Be 0
+        @($secondResult | Where-Object { $_ -eq 'external_ip=$dynamic_ip # DST_MANAGED_EXTERNAL_IP' }).Count | Should -Be 1
     }
 }
 
