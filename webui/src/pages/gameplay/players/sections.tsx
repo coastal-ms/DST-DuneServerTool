@@ -222,7 +222,7 @@ export function SpecsSection({ player, canWrite, demo, refreshKey, flash, onChan
                   }
                 }}
                 onApplyLevel={(level) => {
-                  if (window.confirm(`Set ${name} to level ${level} and apply every ${name} specialization reward available through that level for ${player.name}?\n\nExisting rewards are preserved. Rewards above level ${level} are not removed. The change appears in-game after a full re-login.`)) {
+                  if (window.confirm(`Set ${name} to level ${level} and apply every ${name} specialization reward available through that level for ${player.name}?\n\nThe player must be fully offline because skill-point rewards update character state. Existing rewards are preserved. Rewards above level ${level} are not removed. The change appears in-game after a full re-login.`)) {
                     void run(() => applySpecLevel(player.controller_id, name, level), 'Apply level')
                   }
                 }}
@@ -764,7 +764,7 @@ const ACTIONS: ActionDef[] = [
   { id: 'rename', group: 'Identity', label: 'Rename Character', icon: 'PenLine',
     fields: [{ key: 'name', label: 'New character name', type: 'text' }],
     run: (p, v) => renamePlayer(p.account_id, String(v.name || '').trim()) },
-  { id: 'set-starter-class', group: 'Identity', label: 'Set Starter Class', icon: 'Compass', custom: 'starter-class',
+  { id: 'set-starter-class', group: 'Identity', label: 'Set Starter Class', icon: 'Compass', custom: 'starter-class', offlineOnly: true,
     doubleConfirm: true,
     rowNote: 'Double confirmation required',
     confirm: p => `Set ${p.name}'s starter class?\n\n` +

@@ -13,6 +13,15 @@ here cover everything those tags shipped.
 
 ## [Unreleased]
 
+### Fixed
+
+- Apply level now adds standard, major, and super specialization skill-point
+  rewards to the character's point pool as well as recording reward ownership.
+  Reapplying the same level remains idempotent.
+- Reset Journey now reads both current and legacy starter-class tag shapes and
+  stops before wiping when the tag is missing. Set Starter Class now requires
+  the player offline, recreates a missing tag object, and verifies the write.
+
 ## [13.6.2] - 2026-08-11
 
 ### Added
