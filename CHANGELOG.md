@@ -13,6 +13,8 @@ here cover everything those tags shipped.
 
 ## [Unreleased]
 
+## [13.6.2] - 2026-08-11
+
 ### Added
 
 - Confirmed vehicle-recovery durability loss and base currency cost controls now
