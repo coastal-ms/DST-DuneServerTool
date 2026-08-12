@@ -13,6 +13,15 @@ here cover everything those tags shipped.
 
 ## [Unreleased]
 
+### Fixed
+
+- Apply level now adds standard, major, and super specialization skill-point
+  rewards to the character's hidden bonus and total point ledgers. It preserves
+  the visible unspent balance when prior live edits created an overallocated
+  character, preventing duplicate points, and remains idempotent.
+- Character XP edits now use Funcom's persisted `TotalSkillPoints` field instead
+  of the absent legacy `TotalSkillPointsEarned` name.
+
 ## [13.6.2] - 2026-08-11
 
 ### Added

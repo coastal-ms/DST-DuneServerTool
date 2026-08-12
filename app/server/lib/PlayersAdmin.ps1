@@ -432,7 +432,7 @@ function Get-DunePlayerLevelComponentRow {
 SELECT fge.entity_id::text AS entity_id,
        fge.components->'FLevelComponent'->1->>'TotalXPEarned' AS xp_text,
        fge.components->'FLevelComponent'->1->>'UnspentSkillPoints' AS sp_unspent_text,
-       fge.components->'FLevelComponent'->1->>'TotalSkillPointsEarned' AS sp_total_text
+       fge.components->'FLevelComponent'->1->>'TotalSkillPoints' AS sp_total_text
 FROM dune.actor_fgl_entities afe
 JOIN dune.fgl_entities fge ON fge.entity_id = afe.entity_id
 WHERE afe.actor_id = $ActorId::bigint AND afe.slot_name = 'DuneCharacter'
@@ -507,7 +507,7 @@ function Invoke-DunePlayerGetCharXp {
     }
 }
 
-# Cascade: writes XP + TotalSkillPointsEarned + UnspentSkillPoints into
+# Cascade: writes XP + TotalSkillPoints + UnspentSkillPoints into
 # FLevelComponent[1], and Intel (TechKnowledgePoints) into actors.properties.
 # {0}=entity_id {1}=xp {2}=total_sp {3}=unspent_sp.
 $script:DuneAwardCharXpFglSqlTpl = @'
@@ -516,7 +516,7 @@ SET components = jsonb_set(
     jsonb_set(
         jsonb_set(components,
             '{{FLevelComponent,1,TotalXPEarned}}', to_jsonb({1}::bigint)),
-        '{{FLevelComponent,1,TotalSkillPointsEarned}}', to_jsonb({2}::int)),
+        '{{FLevelComponent,1,TotalSkillPoints}}', to_jsonb({2}::int)),
     '{{FLevelComponent,1,UnspentSkillPoints}}', to_jsonb({3}::int))
 WHERE entity_id = {0}::bigint;
 '@
