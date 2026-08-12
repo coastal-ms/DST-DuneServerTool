@@ -15,6 +15,14 @@ updates:
     groups:
       webui-minor-patch:
         update-types: [minor, patch]
+    ignore:
+      # Runtime/CI stay on Node 22. Keep declarations on that major until the
+      # actual runtime is intentionally upgraded.
+      - dependency-name: "@types/node"
+        versions: [">=23.0.0"]
+      # typescript-eslint currently requires TypeScript <6.1.
+      - dependency-name: "typescript"
+        versions: [">=7.0.0"]
 
   # --- npm: marketing site (Astro) ---
   - package-ecosystem: npm
