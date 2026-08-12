@@ -68,6 +68,12 @@ $script:DuneGcSecTechKnowledge = '/Script/DuneSandbox.TechKnowledgeSettings'
 # the UE struct-member engine (Get/Set-DuneStructScalarMember), so they edit the
 # member in place and leave the nested members (messages/curves/widgets) intact.
 $script:DuneGcLandsraadStructKey = 'Data'
+$script:DuneGcStructMemberMigrations = @{
+    "$script:DuneGcSecLandsraad||$script:DuneGcLandsraadStructKey" = @{
+        Rename = @{ 'm_VotingPeriodDurationInSec' = 'm_LandsraadVotingPeriodDurationInSec' }
+        Remove = @('m_VotingPeriodStartBeforeCoriolisCycleInSec')
+    }
+}
 
 # -----------------------------------------------------------------------------
 # Land-claim (staking unit) extension timer. A single admin-entered seconds value
@@ -203,8 +209,9 @@ $script:DuneGameConfigSchema = @(
     @{ Section=$script:DuneGcSecLandsraad; StructKey=$script:DuneGcLandsraadStructKey; Key='m_ControlPointsPerCycle'; File='game'; Type='int'; Min=0; Default='2'; Label='Control Points per Cycle'; Help='Territory control points awarded per cycle.'; ClientApply=$true; Category='Landsraad' }
     @{ Section=$script:DuneGcSecLandsraad; StructKey=$script:DuneGcLandsraadStructKey; Key='m_bIsPlayerVotingEnabled'; File='game'; Type='bool'; Default='True'; Label='Player Voting Enabled'; Help='Whether players can vote on Landsraad decrees.'; ClientApply=$true; Category='Landsraad' }
     @{ Section=$script:DuneGcSecLandsraad; StructKey=$script:DuneGcLandsraadStructKey; Key='m_bIsTerritoryControlEnabled'; File='game'; Type='bool'; Default='True'; Label='Territory Control Enabled'; Help='Whether the territory-control mechanic is active.'; ClientApply=$true; Category='Landsraad' }
-    @{ Section=$script:DuneGcSecLandsraad; StructKey=$script:DuneGcLandsraadStructKey; Key='m_VotingPeriodDurationInSec'; File='game'; Type='float'; Min=0; Unit='sec'; Default='118500.0'; Label='Voting Period Duration'; Help='Length of the voting window, in seconds.'; ClientApply=$true; Category='Landsraad' }
-    @{ Section=$script:DuneGcSecLandsraad; StructKey=$script:DuneGcLandsraadStructKey; Key='m_VotingPeriodStartBeforeCoriolisCycleInSec'; File='game'; Type='float'; Min=0; Unit='sec'; Default='118800.0'; Label='Voting Starts Before Cycle'; Help='How many seconds before the Coriolis cycle voting opens.'; ClientApply=$true; Category='Landsraad' }
+    @{ Section=$script:DuneGcSecLandsraad; StructKey=$script:DuneGcLandsraadStructKey; Key='m_LandsraadVotingPeriodDurationInSec'; File='game'; Type='int'; Min=0; Unit='sec'; Default='118500'; Label='Voting Period Duration'; Help='Length of the Landsraad voting window. Applies when the game schedules the next voting period.'; ClientApply=$true; Category='Landsraad' }
+    @{ Section=$script:DuneGcSecLandsraad; StructKey=$script:DuneGcLandsraadStructKey; Key='m_LandsraadCycleDurationInSeconds'; File='game'; Type='int'; Min=1; Unit='sec'; Default='604800'; Label='Landsraad Cycle Duration'; Help='Length of a Landsraad term. Changing this setting does not immediately shorten the term already in progress.'; ClientApply=$true; Category='Landsraad' }
+    @{ Section=$script:DuneGcSecLandsraad; StructKey=$script:DuneGcLandsraadStructKey; Key='m_LandsraadSuspendedPeriodDurationInSeconds'; File='game'; Type='int'; Min=0; Unit='sec'; Default='300'; Label='Suspended Period Duration'; Help='Gap between the end of one Landsraad term and the start of the next.'; ClientApply=$true; Category='Landsraad' }
     @{ Section=$script:DuneGcSecLandsraad; StructKey=$script:DuneGcLandsraadStructKey; Key='m_LandsraadContractsMaxActiveAmount'; File='game'; Type='int'; Min=0; Default='3'; Label='Max Active Contracts'; Help='Maximum simultaneously-active Landsraad contracts per player.'; ClientApply=$true; Category='Landsraad' }
     @{ Section=$script:DuneGcSecLandsraad; StructKey=$script:DuneGcLandsraadStructKey; Key='m_LandsraadContractsPerVotingBlock'; File='game'; Type='int'; Min=0; Default='3'; Label='Contracts per Voting Block'; Help='Number of contracts offered per voting block.'; ClientApply=$true; Category='Landsraad' }
     @{ Section=$script:DuneGcSecLandsraad; StructKey=$script:DuneGcLandsraadStructKey; Key='m_LandsraadContractsAbandonCooldownSeconds'; File='game'; Type='int'; Min=0; Unit='sec'; Default='3600'; Label='Contract Abandon Cooldown'; Help='How long a player must wait after abandoning a Landsraad contract. Field-confirmed at 5 seconds.'; ClientApply=$true; Category='Landsraad' }
@@ -1188,6 +1195,26 @@ function Set-DuneStructScalarMember {
     return $Blob.Substring(0, $open + 1) + "$Key=$Value$sep" + $afterOpen
 }
 
+# Remove one flat scalar member without disturbing nested struct members.
+function Remove-DuneStructScalarMember {
+    param([string]$Blob, [string]$Key)
+    if ([string]::IsNullOrWhiteSpace($Blob) -or [string]::IsNullOrWhiteSpace($Key)) { return $Blob }
+    $escKey = [regex]::Escape($Key)
+    $withTrailingComma = [regex]("(?<pre>^|[(,])\s*" + $escKey + "\s*=\s*[^,()`"]+?\s*,")
+    if ($withTrailingComma.IsMatch($Blob)) {
+        return $withTrailingComma.Replace($Blob, { param($m) $m.Groups['pre'].Value }, 1)
+    }
+    $lastMember = [regex]("(?<pre>^|[(,])\s*" + $escKey + "\s*=\s*[^,()`"]+?\s*(?=\))")
+    if ($lastMember.IsMatch($Blob)) {
+        return $lastMember.Replace($Blob, {
+            param($m)
+            if ($m.Groups['pre'].Value -eq ',') { return '' }
+            return $m.Groups['pre'].Value
+        }, 1)
+    }
+    return $Blob
+}
+
 function Test-DuneIniHeader {
     param([string]$Line)
     $t = $Line.Trim()
@@ -1951,6 +1978,32 @@ function Get-DuneStructBlobFromDoc {
     return $null
 }
 
+function Convert-DuneDeprecatedStructMembers {
+    param(
+        [string]$Blob,
+        [string]$Section,
+        [string]$StructKey,
+        [object[]]$ExplicitMembers
+    )
+    $gid = "$Section||$StructKey"
+    if (-not $script:DuneGcStructMemberMigrations.ContainsKey($gid)) { return $Blob }
+    $migration = $script:DuneGcStructMemberMigrations[$gid]
+    $explicit = @{}
+    foreach ($m in $ExplicitMembers) { $explicit["$($m.key)"] = $true }
+    $existing = Get-DuneStructScalarMembers -Blob $Blob
+    foreach ($oldKey in $migration.Rename.Keys) {
+        $newKey = [string]$migration.Rename[$oldKey]
+        if ($existing.ContainsKey($oldKey) -and -not $explicit.ContainsKey($newKey)) {
+            $Blob = Set-DuneStructScalarMember -Blob $Blob -Key $newKey -Value $existing[$oldKey]
+        }
+        $Blob = Remove-DuneStructScalarMember -Blob $Blob -Key $oldKey
+    }
+    foreach ($oldKey in $migration.Remove) {
+        $Blob = Remove-DuneStructScalarMember -Blob $Blob -Key ([string]$oldKey)
+    }
+    return $Blob
+}
+
 # Fold struct-member updates (e.g. LandsraadSettings Data members) into ONE flat
 # update that sets the parent struct key (Data) to the recomputed blob, leaving
 # every non-struct update as-is. $Raw is the current file content (to read the
@@ -2022,6 +2075,7 @@ function Convert-DuneStructUpdates {
                 $blob = $healed
             }
         }
+        $blob = Convert-DuneDeprecatedStructMembers -Blob $blob -Section $g.section -StructKey $g.structKey -ExplicitMembers $g.members.ToArray()
         foreach ($m in $g.members) { $blob = Set-DuneStructScalarMember -Blob $blob -Key $m.key -Value $m.value }
         $flat.Add(@{ file = $g.file; section = $g.section; key = $g.structKey; value = $blob })
     }
