@@ -661,8 +661,8 @@ const ACTIONS: ActionDef[] = [
     run: p => resetProgressionLive({ actor_id: p.id }) },
   { id: 'reset-journey', group: 'Progression', label: 'Reset Journey', icon: 'RefreshCw', offlineOnly: true,
     doubleConfirm: true,
-    rowNote: 'Full quest restart. Preserves faction state and leaves one starter-tree ability learnable for NPE. Offline.',
-    confirm: p => `RESET ${p.name}'s entire journey and restart every quest from the beginning? Journey nodes, NPE/journey/contract tags, and contract items will be removed. Faction state is preserved. If needed, one starter-tree ability is lowered to the proven learnable value and its points are refunded so the NPE can advance. This cannot be undone.\n\n` +
+    rowNote: 'Full quest restart. Preserves faction and ability slot 1; clears slots 2-3 and leaves one ability learnable for NPE. Offline.',
+    confirm: p => `RESET ${p.name}'s entire journey and restart every quest from the beginning? Journey nodes, NPE/journey/contract tags, contract items, and active ability slots 2-3 will be cleared. Faction state and ability slot 1 are preserved. If needed, one starter-tree ability is lowered to the proven learnable value and its points are refunded so the NPE can advance. This cannot be undone.\n\n` +
       `This is the FIRST of two confirmations. If you continue, the next step asks you to type an acknowledgement before the journey is reset.`,
     run: p => {
       const typed = window.prompt(
@@ -3272,7 +3272,7 @@ export function JourneySection({ player, canWrite, demo, refreshKey, flash, onCh
 
   const resetAll = () => {
     if (!window.confirm(
-      `RESET ${player.name}'s entire journey and restart every quest from the beginning? Journey nodes, NPE/journey/contract tags, and contract items will be removed. Faction state is preserved. If needed, one starter-tree ability is lowered to the proven learnable value and its points are refunded so the NPE can advance. This cannot be undone.\n\n` +
+      `RESET ${player.name}'s entire journey and restart every quest from the beginning? Journey nodes, NPE/journey/contract tags, contract items, and active ability slots 2-3 will be cleared. Faction state and ability slot 1 are preserved. If needed, one starter-tree ability is lowered to the proven learnable value and its points are refunded so the NPE can advance. This cannot be undone.\n\n` +
       `This is the FIRST of two confirmations. If you continue, the next step asks you to type an acknowledgement before the journey is reset.`
     )) return
     const typed = window.prompt(
@@ -3317,7 +3317,7 @@ export function JourneySection({ player, canWrite, demo, refreshKey, flash, onCh
         </div>
         {canWrite && (
           <button type="button" className="btn-secondary shrink-0 text-xs text-error" disabled={busy || isOnline} onClick={resetAll}
-            title={isOnline ? 'Player must be offline' : 'Full quest reset; preserve faction state and starter-tree skill headroom'}>
+            title={isOnline ? 'Player must be offline' : 'Full quest reset; preserve faction and slot 1, clear slots 2-3, retain skill headroom'}>
             <Icon name="RefreshCw" size={12} /> Reset All
           </button>
         )}
