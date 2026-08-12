@@ -29,7 +29,10 @@ here cover everything those tags shipped.
 
 - Reset Journey now performs a complete offline quest restart, removing all
   journey rows, NPE/journey-set/dialogue-contract tags, contract items, and
-  tracked contract state while preserving faction state.
+  tracked contract state while preserving faction state. If the starter tree
+  has no learnable ability left, one multi-level ability is returned to the
+  proven Enable All Skills headroom and its points are refunded so the NPE can
+  advance.
 - Reset Faction now also removes singular `DialogueFlags.Faction.*` tags so
   faction progression fully clears before a player starts over.
 
